@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 import re
 from dataclasses import dataclass, field
@@ -50,11 +51,6 @@ except ImportError:
     from cube_model.merge import materialize_nodes
     from instrumentation import log_event
 
-try:  # pragma: no cover - ComfyUI nodes module may be unavailable in tests
-    import nodes as comfy_nodes  # type: ignore
-except (ImportError, ModuleNotFoundError):  # pragma: no cover - optional host runtime
-    comfy_nodes = None  # type: ignore
-
 try:
     from ..nodes import NODE_CLASS_MAPPINGS as SUGAR_NODE_MAPPINGS
 except ImportError:
@@ -70,6 +66,8 @@ _UUID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
     re.IGNORECASE,
 )
+_COMFY_NODES_RESOLVED = False
+_COMFY_NODES_MODULE: Any = None
 
 
 class CubeImportError(RuntimeError):
@@ -1012,13 +1010,31 @@ def _has_definition(
         return True
     if subgraph_ids and class_type in subgraph_ids:
         return True
+    comfy_nodes = _load_comfy_nodes_module()
     if comfy_nodes and hasattr(comfy_nodes, "NODE_CLASS_MAPPINGS"):
-        mapping = getattr(comfy_nodes, "NODE_CLASS_MAPPINGS")  # type: ignore[attr-defined]
+        mapping = getattr(comfy_nodes, "NODE_CLASS_MAPPINGS")
         if class_type in mapping:
             return True
     if class_type in SUGAR_NODE_MAPPINGS:
         return True
     return False
+
+
+def _load_comfy_nodes_module() -> Any:
+    """Lazily load Comfy's node registry for import validation fallback."""
+
+    global _COMFY_NODES_RESOLVED
+    global _COMFY_NODES_MODULE
+
+    if _COMFY_NODES_RESOLVED:
+        return _COMFY_NODES_MODULE
+
+    try:
+        _COMFY_NODES_MODULE = importlib.import_module("nodes")
+    except (ImportError, ModuleNotFoundError):
+        _COMFY_NODES_MODULE = None
+    _COMFY_NODES_RESOLVED = True
+    return _COMFY_NODES_MODULE
 
 
 def _coerce_symbol(value: Any, context: str) -> str:

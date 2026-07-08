@@ -18,11 +18,14 @@
 from __future__ import annotations
 
 import json
+import logging
+import os
 from pathlib import Path
 
 import pytest
 
 from sugarcubes.backend.responses import BackendError
+from sugarcubes.backend.services import cube_library_service
 from sugarcubes.backend.services.cube_library_service import (
     compute_cube_content_hash_bytes,
 )
@@ -121,6 +124,8 @@ def test_backend_catalog_includes_hash_source_revision_and_dirty_state(
 
         if args == ["rev-parse", "HEAD"]:
             Result.stdout = "abc123\n"
+        elif args == ["status", "--porcelain"]:
+            Result.stdout = " M demo.cube\n"
         elif args == ["status", "--porcelain", "--", "demo.cube"]:
             Result.stdout = " M demo.cube\n"
         return Result()
@@ -244,6 +249,112 @@ def test_backend_catalog_revision_changes_when_cube_content_changes(
     second_revision = services.library.catalog_revision()
 
     assert first_revision != second_revision
+
+
+def test_backend_catalog_revision_changes_for_same_second_same_size_edit(
+    tmp_path: Path,
+    backend_services_factory,
+) -> None:
+    """Nanosecond mtime facts should catch direct same-size cube edits."""
+
+    services = backend_services_factory(tmp_path, git_runner=lambda args, cwd: None)
+    checkout = services.tracked_repos.checkout_path(
+        "Artificial-Sweetener", "Base-Cubes"
+    )
+    cube_path = checkout / "demo.cube"
+    first_payload = _cube_payload(version="1.0.0")
+    second_payload = _cube_payload(version="1.0.0")
+    second_payload["description"] = "Demo cubf"
+    first_text = json.dumps(first_payload, indent=2) + "\n"
+    second_text = json.dumps(second_payload, indent=2) + "\n"
+    assert len(first_text) == len(second_text)
+    cube_path.parent.mkdir(parents=True, exist_ok=True)
+
+    cube_path.write_text(first_text, encoding="utf-8")
+    os.utime(
+        cube_path,
+        ns=(1_700_000_000_100_000_000, 1_700_000_000_100_000_000),
+    )
+    first_revision = services.library.catalog_revision()
+    cube_path.write_text(second_text, encoding="utf-8")
+    os.utime(
+        cube_path,
+        ns=(1_700_000_000_900_000_000, 1_700_000_000_900_000_000),
+    )
+    second_revision = services.library.catalog_revision()
+
+    assert first_revision != second_revision
+
+
+def test_backend_catalog_reuses_hashes_for_unchanged_status_and_catalog(
+    tmp_path: Path,
+    backend_services_factory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Status and catalog calls should share one unchanged catalog snapshot."""
+
+    services = backend_services_factory(tmp_path, git_runner=lambda args, cwd: None)
+    checkout = services.tracked_repos.checkout_path(
+        "Artificial-Sweetener", "Base-Cubes"
+    )
+    _write_cube(checkout / "demo.cube", _cube_payload())
+    original_read = cube_library_service.read_cube_payload_with_hash
+    read_paths: list[Path] = []
+
+    def count_catalog_read(path: Path):
+        """Count catalog row reads while preserving the real digest."""
+
+        read_paths.append(path)
+        return original_read(path)
+
+    monkeypatch.setattr(
+        cube_library_service,
+        "read_cube_payload_with_hash",
+        count_catalog_read,
+    )
+
+    status = services.library.library_status()
+    catalog = services.library.list_library_catalog()
+    second_status = services.library.library_status()
+
+    assert status["catalogRevision"] == catalog["catalogRevision"]
+    assert second_status["catalogRevision"] == catalog["catalogRevision"]
+    assert read_paths == [checkout / "demo.cube"]
+
+
+def test_backend_catalog_invalidation_rebuilds_unchanged_stat_rows(
+    tmp_path: Path,
+    backend_services_factory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Explicit invalidation clears row reuse when stat facts are unchanged."""
+
+    services = backend_services_factory(tmp_path, git_runner=lambda args, cwd: None)
+    checkout = services.tracked_repos.checkout_path(
+        "Artificial-Sweetener", "Base-Cubes"
+    )
+    _write_cube(checkout / "demo.cube", _cube_payload())
+    original_read = cube_library_service.read_cube_payload_with_hash
+    read_paths: list[Path] = []
+
+    def count_catalog_read(path: Path):
+        """Count catalog row reads while preserving the real digest."""
+
+        read_paths.append(path)
+        return original_read(path)
+
+    monkeypatch.setattr(
+        cube_library_service,
+        "read_cube_payload_with_hash",
+        count_catalog_read,
+    )
+
+    first = services.library.catalog_revision()
+    services.library.invalidate_catalog_state(reason="test")
+    second = services.library.catalog_revision()
+
+    assert first == second
+    assert read_paths == [checkout / "demo.cube", checkout / "demo.cube"]
 
 
 def test_backend_load_library_cube_returns_canonical_artifact(
@@ -665,6 +776,7 @@ def test_backend_readiness_reports_target_missing_custom_nodes_without_install(
     checkout = services.tracked_repos.checkout_path(
         "Artificial-Sweetener", "Base-Cubes"
     )
+    (checkout / ".git").mkdir(parents=True)
     _write_cube(checkout / "demo.cube", _cube_payload_with_cnr())
     custom_nodes_root = tmp_path / "custom_nodes"
     custom_nodes_root.mkdir()
@@ -672,6 +784,7 @@ def test_backend_readiness_reports_target_missing_custom_nodes_without_install(
     readiness = services.library.library_readiness(custom_nodes_root)
 
     assert readiness["ready"] is False
+    assert readiness["catalogRevision"] == services.library.catalog_revision()
     assert readiness["requiredCustomNodes"] == ["comfyui-impact-pack"]
     assert readiness["missingCustomNodes"] == ["comfyui-impact-pack"]
     assert readiness["installedCustomNodes"] == []
@@ -692,6 +805,304 @@ def test_backend_readiness_reports_target_missing_custom_nodes_without_install(
             "remediation": "",
         }
     ]
+
+
+def test_backend_readiness_reuses_summary_payload_for_dependency_facts(
+    tmp_path: Path,
+    backend_services_factory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Readiness should not resolve and reread cubes after summarizing them."""
+
+    services = backend_services_factory(tmp_path, git_runner=lambda args, cwd: None)
+    checkout = services.tracked_repos.checkout_path(
+        "Artificial-Sweetener", "Base-Cubes"
+    )
+    cube_path = checkout / "demo.cube"
+    _write_cube(cube_path, _cube_payload_with_cnr())
+    custom_nodes_root = tmp_path / "custom_nodes"
+    custom_nodes_root.mkdir()
+
+    original_read_with_hash = cube_library_service.read_cube_payload_with_hash
+    read_paths: list[Path] = []
+
+    def counted_read_with_hash(path: Path):
+        """Record payload reads used by the readiness summary pass."""
+
+        read_paths.append(path)
+        return original_read_with_hash(path)
+
+    def fail_resolve_after_summary(cube_id: str) -> Path:
+        """Readiness has enough summary facts to avoid this fallback path."""
+
+        raise AssertionError(f"unexpected cube resolve for {cube_id}")
+
+    monkeypatch.setattr(
+        cube_library_service,
+        "read_cube_payload_with_hash",
+        counted_read_with_hash,
+    )
+    monkeypatch.setattr(
+        services.library, "resolve_cube_by_id", fail_resolve_after_summary
+    )
+
+    readiness = services.library.library_readiness(custom_nodes_root)
+
+    assert readiness["requiredCustomNodes"] == ["comfyui-impact-pack"]
+    assert read_paths == [cube_path]
+
+
+def test_backend_readiness_reuses_tracked_repo_lookup_for_pack_summaries(
+    tmp_path: Path,
+    backend_services_factory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Readiness should not reload tracked repo state once per cube in a pack."""
+
+    services = backend_services_factory(tmp_path, git_runner=lambda args, cwd: None)
+    checkout = services.tracked_repos.checkout_path(
+        "Artificial-Sweetener", "Base-Cubes"
+    )
+    _write_cube(checkout / "first.cube", _cube_payload_with_cnr())
+    _write_cube(
+        checkout / "second.cube",
+        _cube_payload_with_cnr(
+            cube_id="Artificial-Sweetener/Base-Cubes/second.cube",
+            cnr_id="comfyui-second-pack",
+        ),
+    )
+    custom_nodes_root = tmp_path / "custom_nodes"
+    custom_nodes_root.mkdir()
+
+    original_get_repo = services.tracked_repos.get_repo
+    get_repo_calls: list[tuple[str, str]] = []
+
+    def counted_get_repo(owner: str, repo: str):
+        """Record tracked-repo lookups while preserving real repo facts."""
+
+        get_repo_calls.append((owner, repo))
+        return original_get_repo(owner, repo)
+
+    monkeypatch.setattr(services.tracked_repos, "get_repo", counted_get_repo)
+
+    readiness = services.library.library_readiness(custom_nodes_root)
+
+    assert "comfyui-second-pack" in readiness["requiredCustomNodes"]
+    assert get_repo_calls == [("Artificial-Sweetener", "Base-Cubes")]
+
+
+def test_backend_readiness_reuses_durable_dependency_requirement_cache(
+    tmp_path: Path,
+    backend_services_factory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Fresh service instances should reuse unchanged dependency requirements."""
+
+    first_services = backend_services_factory(
+        tmp_path, git_runner=lambda args, cwd: None
+    )
+    checkout = first_services.tracked_repos.checkout_path(
+        "Artificial-Sweetener", "Base-Cubes"
+    )
+    cube_path = checkout / "demo.cube"
+    _write_cube(cube_path, _cube_payload_with_cnr())
+    custom_nodes_root = tmp_path / "custom_nodes"
+    custom_nodes_root.mkdir()
+
+    first_readiness = first_services.library.library_readiness(custom_nodes_root)
+
+    assert first_readiness["requiredCustomNodes"] == ["comfyui-impact-pack"]
+
+    second_services = backend_services_factory(
+        tmp_path, git_runner=lambda args, cwd: None
+    )
+
+    def fail_payload_read(path: Path):
+        """Fail if the durable requirement cache misses for an unchanged cube."""
+
+        raise AssertionError(f"unexpected cube payload read for {path}")
+
+    monkeypatch.setattr(
+        cube_library_service,
+        "read_cube_payload_with_hash",
+        fail_payload_read,
+    )
+
+    second_readiness = second_services.library.library_readiness(custom_nodes_root)
+
+    assert second_readiness["requiredCustomNodes"] == ["comfyui-impact-pack"]
+    assert second_readiness["catalogRevision"] == first_readiness["catalogRevision"]
+
+
+def test_backend_readiness_invalidates_durable_dependency_requirement_cache(
+    tmp_path: Path,
+    backend_services_factory,
+) -> None:
+    """Cube stat changes should force dependency requirements to be rebuilt."""
+
+    first_services = backend_services_factory(
+        tmp_path, git_runner=lambda args, cwd: None
+    )
+    checkout = first_services.tracked_repos.checkout_path(
+        "Artificial-Sweetener", "Base-Cubes"
+    )
+    cube_path = checkout / "demo.cube"
+    _write_cube(cube_path, _cube_payload_with_cnr(cnr_id="comfyui-impact-pack"))
+    custom_nodes_root = tmp_path / "custom_nodes"
+    custom_nodes_root.mkdir()
+
+    first_readiness = first_services.library.library_readiness(custom_nodes_root)
+
+    _write_cube(
+        cube_path,
+        _cube_payload_with_cnr(
+            cnr_id="comfyui-second-pack-with-longer-cache-key",
+            python_module="custom_nodes.comfyui-second-pack-with-longer-cache-key",
+        ),
+    )
+    second_services = backend_services_factory(
+        tmp_path, git_runner=lambda args, cwd: None
+    )
+
+    second_readiness = second_services.library.library_readiness(custom_nodes_root)
+
+    assert first_readiness["requiredCustomNodes"] == ["comfyui-impact-pack"]
+    assert second_readiness["requiredCustomNodes"] == [
+        "comfyui-second-pack-with-longer-cache-key"
+    ]
+    assert second_readiness["catalogRevision"] != first_readiness["catalogRevision"]
+
+
+def test_backend_readiness_cache_invalidates_when_cube_dependencies_change(
+    tmp_path: Path,
+    backend_services_factory,
+) -> None:
+    """Process-local readiness reuse must not hide changed cube dependencies."""
+
+    services = backend_services_factory(tmp_path, git_runner=lambda args, cwd: None)
+    checkout = services.tracked_repos.checkout_path(
+        "Artificial-Sweetener", "Base-Cubes"
+    )
+    cube_path = checkout / "demo.cube"
+    _write_cube(cube_path, _cube_payload_with_cnr(cnr_id="comfyui-impact-pack"))
+    custom_nodes_root = tmp_path / "custom_nodes"
+    custom_nodes_root.mkdir()
+
+    first_readiness = services.library.library_readiness(custom_nodes_root)
+    _write_cube(
+        cube_path,
+        _cube_payload_with_cnr(
+            cnr_id="comfyui-new-pack",
+            python_module="custom_nodes.comfyui-new-pack",
+        ),
+    )
+    second_readiness = services.library.library_readiness(custom_nodes_root)
+
+    assert first_readiness["requiredCustomNodes"] == ["comfyui-impact-pack"]
+    assert second_readiness["requiredCustomNodes"] == ["comfyui-new-pack"]
+    assert second_readiness["catalogRevision"] != first_readiness["catalogRevision"]
+
+
+def test_backend_readiness_cache_invalidates_when_new_cube_is_synced(
+    tmp_path: Path,
+    backend_services_factory,
+) -> None:
+    """Process-local readiness reuse must notice newly added cube files."""
+
+    services = backend_services_factory(tmp_path, git_runner=lambda args, cwd: None)
+    checkout = services.tracked_repos.checkout_path(
+        "Artificial-Sweetener", "Base-Cubes"
+    )
+    _write_cube(checkout / "demo.cube", _cube_payload_with_cnr())
+    custom_nodes_root = tmp_path / "custom_nodes"
+    custom_nodes_root.mkdir()
+
+    first_readiness = services.library.library_readiness(custom_nodes_root)
+    _write_cube(
+        checkout / "new.cube",
+        _cube_payload_with_cnr(
+            cube_id="Artificial-Sweetener/Base-Cubes/new.cube",
+            cnr_id="comfyui-new-pack",
+            python_module="custom_nodes.comfyui-new-pack",
+        ),
+    )
+    second_readiness = services.library.library_readiness(custom_nodes_root)
+
+    assert first_readiness["requiredCustomNodes"] == ["comfyui-impact-pack"]
+    assert second_readiness["requiredCustomNodes"] == [
+        "comfyui-impact-pack",
+        "comfyui-new-pack",
+    ]
+    assert second_readiness["catalogRevision"] != first_readiness["catalogRevision"]
+
+
+def test_backend_readiness_logs_dependency_requirement_set_timing(
+    tmp_path: Path,
+    backend_services_factory,
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Readiness diagnostics should expose dependency requirement subphase costs."""
+
+    monkeypatch.setenv("SUGARCUBES_DIAGNOSTICS", "1")
+    services = backend_services_factory(tmp_path, git_runner=lambda args, cwd: None)
+    checkout = services.tracked_repos.checkout_path(
+        "Artificial-Sweetener", "Base-Cubes"
+    )
+    (checkout / ".git").mkdir(parents=True)
+    _write_cube(checkout / "demo.cube", _cube_payload_with_cnr())
+    (tmp_path / "custom_nodes" / "comfyui-impact-pack").mkdir(parents=True)
+
+    with caplog.at_level(logging.INFO):
+        readiness = services.library.library_readiness(tmp_path / "custom_nodes")
+
+    assert readiness["requiredCustomNodes"] == ["comfyui-impact-pack"]
+    messages = [record.message for record in caplog.records]
+    diagnostic = next(
+        message
+        for message in messages
+        if "event=sugarcubes_dependency_requirement_sets_timing" in message
+    )
+    assert "summary_count=1" in diagnostic
+    assert "requirement_record_count=1" in diagnostic
+    assert "version_requirement_count=1" in diagnostic
+    assert "list_catalog_cube_summaries=" in diagnostic
+    assert "source_metadata_for_summary=" in diagnostic
+    assert "readiness_catalog_revision=" in diagnostic
+    assert any(
+        "event=sugarcubes_catalog_summary_listing_timing" in message
+        and "repo_cube_count=1" in message
+        and "total_cube_count=1" in message
+        for message in messages
+    )
+    assert any(
+        "event=sugarcubes_repo_cube_listing_timing" in message
+        and "cube_count=1" in message
+        and "list_cube_files=" in message
+        and "summarize_cube_file=" in message
+        and "annotate_cube_payload=" in message
+        for message in messages
+    )
+    assert any(
+        "event=sugarcubes_repo_dirty_paths_timing" in message
+        and "cached=False" in message
+        and "dirty_path_count=0" in message
+        for message in messages
+    )
+    assert any(
+        "event=sugarcubes_installed_dependency_inventory_timing" in message
+        and "entry_count=1" in message
+        and "list_custom_node_entries=" in message
+        and "read_tracking_metadata=" in message
+        and "probe_git_dir=" in message
+        for message in messages
+    )
+    assert any(
+        "event=sugarcubes_dependency_version_readiness_timing" in message
+        and "installed_dependency_inventory=" in message
+        and "plan_count=1" in message
+        for message in messages
+    )
 
 
 def test_backend_readiness_requires_confirmation_for_non_default_packs(
@@ -792,6 +1203,168 @@ def test_backend_readiness_preserves_versioned_custom_node_requirements(
     )
     assert version_item["status"] == "satisfied"
     assert version_item["requiredByNodes"] == ["Impact Detailer"]
+
+
+def test_backend_readiness_skips_git_runner_for_unrelated_installed_nodes(
+    tmp_path: Path,
+    backend_services_factory,
+) -> None:
+    """Readiness should inspect full git state only for required custom nodes."""
+
+    git_cwds: list[Path] = []
+
+    def fake_git(args, *, cwd):
+        _ = args
+        git_cwds.append(Path(cwd))
+
+        class Result:
+            returncode = 0
+            stdout = "f561f164543f927e0452e14658a0509e8e4866d6\n"
+
+        return Result()
+
+    services = backend_services_factory(tmp_path, git_runner=fake_git)
+    checkout = services.tracked_repos.checkout_path(
+        "Artificial-Sweetener", "Base-Cubes"
+    )
+    _write_cube(
+        checkout / "demo.cube",
+        _cube_payload_with_cnr(
+            cnr_id="SimpleSyrup",
+            version="37bcd403c5172adc2505b38d1d31c05969a69443",
+            python_module="custom_nodes.SimpleSyrup",
+        ),
+    )
+    custom_nodes_root = tmp_path / "custom_nodes"
+    (custom_nodes_root / "SimpleSyrup" / ".git").mkdir(parents=True)
+    unrelated_git = custom_nodes_root / "UnrelatedNode" / ".git"
+    unrelated_git.mkdir(parents=True)
+    (unrelated_git / "HEAD").write_text(
+        "f561f164543f927e0452e14658a0509e8e4866d6\n",
+        encoding="utf-8",
+    )
+
+    services.library.library_readiness(custom_nodes_root)
+
+    assert custom_nodes_root / "SimpleSyrup" in git_cwds
+    assert custom_nodes_root / "UnrelatedNode" not in git_cwds
+
+
+def test_backend_readiness_reads_plain_git_metadata_without_subprocess(
+    tmp_path: Path,
+    backend_services_factory,
+) -> None:
+    """Readiness should avoid git subprocesses for HEAD and origin metadata."""
+
+    head = "f561f164543f927e0452e14658a0509e8e4866d6"
+    git_calls: list[list[str]] = []
+
+    def fake_git(args, *, cwd):
+        _ = cwd
+        git_calls.append(list(args))
+
+        class Result:
+            returncode = 0
+            stdout = ""
+
+        if args == ["status", "--porcelain"]:
+            Result.stdout = ""
+        return Result()
+
+    services = backend_services_factory(tmp_path, git_runner=fake_git)
+    checkout = services.tracked_repos.checkout_path(
+        "Artificial-Sweetener", "Base-Cubes"
+    )
+    _write_cube(
+        checkout / "demo.cube",
+        _cube_payload_with_cnr(
+            cnr_id="SimpleSyrup",
+            version=head,
+            python_module="custom_nodes.SimpleSyrup",
+        ),
+    )
+    custom_nodes_root = tmp_path / "custom_nodes"
+    git_dir = custom_nodes_root / "SimpleSyrup" / ".git"
+    git_dir.mkdir(parents=True)
+    (git_dir / "HEAD").write_text(f"{head}\n", encoding="utf-8")
+    (git_dir / "config").write_text(
+        '[remote "origin"]\n'
+        "\turl = https://github.com/Artificial-Sweetener/SimpleSyrup.git\n",
+        encoding="utf-8",
+    )
+
+    readiness = services.library.library_readiness(custom_nodes_root)
+    version_item = readiness["dependencyVersionPlan"][0]
+
+    assert version_item["installedVersion"] == head
+    assert version_item["installedEvidence"]["repositoryUrl"].endswith(
+        "/SimpleSyrup.git"
+    )
+    assert ["rev-parse", "HEAD"] not in git_calls
+    assert ["config", "--get", "remote.origin.url"] not in git_calls
+
+
+def test_backend_readiness_skips_git_requirement_ancestry_when_checkout_dirty(
+    tmp_path: Path,
+    backend_services_factory,
+) -> None:
+    """Dirty git checkouts should block readiness without merge-base probes."""
+
+    installed_head = "225d0e5024a7751e80692f1c52dd3519be73cbab"
+    git_calls: list[list[str]] = []
+
+    def fake_git(args, *, cwd):
+        _ = cwd
+        git_calls.append(list(args))
+
+        class Result:
+            returncode = 0
+            stdout = ""
+
+        if args == ["status", "--porcelain"]:
+            Result.stdout = " M nodes.py\n"
+        if args[:2] == ["merge-base", "--is-ancestor"]:
+            raise AssertionError("dirty checkout should not require ancestry checks")
+        return Result()
+
+    services = backend_services_factory(tmp_path, git_runner=fake_git)
+    checkout = services.tracked_repos.checkout_path(
+        "Artificial-Sweetener", "Base-Cubes"
+    )
+    _write_cube(
+        checkout / "first.cube",
+        _cube_payload_with_cnr(
+            cube_id="Artificial-Sweetener/Base-Cubes/first.cube",
+            cnr_id="SimpleSyrup",
+            version="37bcd403c5172adc2505b38d1d31c05969a69443",
+            python_module="custom_nodes.SimpleSyrup",
+        ),
+    )
+    _write_cube(
+        checkout / "second.cube",
+        _cube_payload_with_cnr(
+            cube_id="Artificial-Sweetener/Base-Cubes/second.cube",
+            cnr_id="SimpleSyrup",
+            version="f561f164543f927e0452e14658a0509e8e4866d6",
+            python_module="custom_nodes.SimpleSyrup",
+        ),
+    )
+    custom_nodes_root = tmp_path / "custom_nodes"
+    git_dir = custom_nodes_root / "SimpleSyrup" / ".git"
+    git_dir.mkdir(parents=True)
+    (git_dir / "HEAD").write_text(f"{installed_head}\n", encoding="utf-8")
+    (git_dir / "config").write_text(
+        '[remote "origin"]\n'
+        "\turl = https://github.com/Artificial-Sweetener/SimpleSyrup.git\n",
+        encoding="utf-8",
+    )
+
+    readiness = services.library.library_readiness(custom_nodes_root)
+    version_item = readiness["dependencyVersionPlan"][0]
+
+    assert version_item["status"] == "blocked"
+    assert version_item["conflicts"] == []
+    assert not any(call[:2] == ["merge-base", "--is-ancestor"] for call in git_calls)
 
 
 def test_backend_readiness_reports_comfy_core_runtime_requirement(

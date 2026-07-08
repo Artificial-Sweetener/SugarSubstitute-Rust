@@ -17,6 +17,7 @@
 
 from .cube_export_service import CubeExportService
 from .cube_dependency_service import ComfyCliAdapter, CubeDependencyService
+from .cube_catalog_state_service import CubeCatalogStateService
 from .cube_library_service import CubeLibraryService
 from .identity_policy_service import IdentityPolicyService
 from .local_flavor_service import LocalFlavorService
@@ -34,6 +35,7 @@ __all__ = [
     "CubeExportService",
     "ComfyCliAdapter",
     "CubeDependencyService",
+    "CubeCatalogStateService",
     "CubeLibraryService",
     "IdentityPolicyService",
     "LocalFlavorService",

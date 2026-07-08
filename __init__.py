@@ -18,10 +18,11 @@
 from __future__ import annotations
 
 import logging
+import sys
 from pathlib import Path
 
 try:
-    from .backend import build_backend_services
+    from .backend import build_backend_services, set_active_backend_services
     from .backend.routes import register_routes
     from .exporter import (
         CubeValidationError,
@@ -33,7 +34,7 @@ try:
     )
     from .nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
 except ImportError:
-    from backend import build_backend_services
+    from backend import build_backend_services, set_active_backend_services
     from backend.routes import register_routes
     from exporter import (
         CubeValidationError,
@@ -50,13 +51,17 @@ __version__ = "0.9.1"
 _EXTENSION_ROOT = Path(__file__).resolve().parent
 _LOGGER = logging.getLogger(__name__)
 
-try:  # pragma: no cover - PromptServer unavailable in some contexts
-    from server import PromptServer
-except (ImportError, ModuleNotFoundError):  # pragma: no cover - same as above
-    PromptServer = None
-else:
+_prompt_server_module = sys.modules.get("server")
+PromptServer = (
+    getattr(_prompt_server_module, "PromptServer", None)
+    if _prompt_server_module is not None
+    else None
+)
+if PromptServer is not None:
     try:
-        register_routes(PromptServer, build_backend_services(_EXTENSION_ROOT))
+        _backend_services = build_backend_services(_EXTENSION_ROOT)
+        set_active_backend_services(_backend_services)
+        register_routes(PromptServer, _backend_services)
     except (
         AttributeError,
         ImportError,

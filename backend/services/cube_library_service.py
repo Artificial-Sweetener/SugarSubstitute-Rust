@@ -23,6 +23,7 @@ import logging
 import os
 import re
 import shutil
+from copy import deepcopy
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
@@ -54,8 +55,10 @@ try:
         normalize_icon_metadata,
         resolve_icon_asset_path,
     )
+    from .cube_catalog_state_service import CubeCatalogStateService
     from .dependency_versions import (
         CubeDependencyRequirement,
+        classify_version,
         dependency_version_readiness,
         extract_versioned_requirements,
     )
@@ -92,8 +95,10 @@ except ImportError:
         normalize_icon_metadata,
         resolve_icon_asset_path,
     )
+    from backend.services.cube_catalog_state_service import CubeCatalogStateService
     from backend.services.dependency_versions import (
         CubeDependencyRequirement,
+        classify_version,
         dependency_version_readiness,
         extract_versioned_requirements,
     )
@@ -111,6 +116,9 @@ except ImportError:
 
 _logger = logging.getLogger(__name__)
 CUBE_LIBRARY_TRACE_MARKER = "SugarCubes cube library diagnostic"
+_LIBRARY_READINESS_CACHE_TTL_SECONDS = 30.0
+_DEPENDENCY_REQUIREMENT_CACHE_SCHEMA_VERSION = 1
+_DEPENDENCY_REQUIREMENT_CACHE_FILENAME = "dependency-requirements.json"
 
 
 class DuplicateCubeIdConflict(RuntimeError):
@@ -179,6 +187,26 @@ def safe_relative_path(path: Path, base: Path) -> Optional[str]:
     except ValueError:
         return None
     return str(relative).replace(os.sep, "/")
+
+
+def _path_mtime_ns(path: Path) -> int:
+    """Return a file timestamp suitable for cheap cache invalidation."""
+
+    try:
+        return path.stat().st_mtime_ns
+    except OSError:
+        return 0
+
+
+def _git_status_path(line: str) -> str:
+    """Return the normalized path component from one porcelain status line."""
+
+    if len(line) < 4:
+        return ""
+    path = line[3:].strip()
+    if " -> " in path:
+        path = path.rsplit(" -> ", 1)[-1]
+    return path.strip('"').replace("\\", "/")
 
 
 def format_display_path(path: Path, extension_root: Path) -> str:
@@ -503,6 +531,36 @@ def read_cube_payload(path: Path) -> tuple[Optional[Mapping[str, Any]], Optional
     return dict(payload), None
 
 
+def read_cube_payload_with_hash(
+    path: Path,
+) -> tuple[Optional[Mapping[str, Any]], Optional[str], str]:
+    """Read a cube payload and content hash with one filesystem read."""
+
+    try:
+        content = path.read_bytes()
+    except OSError as exc:  # pragma: no cover - diagnostics only
+        _logger.warning("SugarCubes: failed to read cube %s", path, exc_info=exc)
+        return None, str(exc), ""
+    try:
+        payload = json.loads(content.decode("utf-8"))
+    except UnicodeDecodeError as exc:  # pragma: no cover - diagnostics only
+        _logger.warning("SugarCubes: failed to decode cube %s", path, exc_info=exc)
+        return None, str(exc), ""
+    except json.JSONDecodeError:
+        return (
+            None,
+            "Cube file is not valid JSON",
+            compute_cube_content_hash_bytes(content),
+        )
+    if not isinstance(payload, Mapping):
+        return (
+            None,
+            "Cube root must be a JSON object",
+            compute_cube_content_hash_bytes(content),
+        )
+    return dict(payload), None, compute_cube_content_hash_bytes(content)
+
+
 def compute_cube_content_hash(path: Path) -> str:
     """Return a stable content hash for one source-owned cube artifact."""
 
@@ -742,10 +800,15 @@ def summarize_cube_file(
     owner: str = "",
     repo: str = "",
     namespace: str = "",
+    include_internal_payload: bool = False,
 ) -> dict[str, Any]:
     """Return lightweight metadata about one source-owned cube file."""
 
-    payload, error = read_cube_payload(path)
+    if include_internal_payload:
+        payload, error, content_hash = read_cube_payload_with_hash(path)
+    else:
+        payload, error = read_cube_payload(path)
+        content_hash = ""
     stat_info = path.stat()
     description = ""
     metadata: dict[str, Any] = {}
@@ -821,6 +884,7 @@ def summarize_cube_file(
         "relative_path": safe_relative_path(path, base_dir),
         "size_bytes": stat_info.st_size,
         "mtime": format_timestamp(stat_info.st_mtime),
+        "mtime_ns": stat_info.st_mtime_ns,
         "description": description,
         "tags": tags,
         "supported_models": supported_models,
@@ -854,6 +918,10 @@ def summarize_cube_file(
         entry["lineage"] = lineage
     if error:
         entry["error"] = error
+    if include_internal_payload:
+        entry["_absolute_path"] = str(path.resolve())
+        entry["_content_hash"] = content_hash
+        entry["_payload"] = dict(payload) if payload else None
     return entry
 
 
@@ -967,6 +1035,21 @@ class CubeLibraryService:
             thread_name_prefix="sugarcubes-version-warm",
         )
         self._library_change_listeners: list[Callable[[dict[str, Any]], None]] = []
+        self._catalog_state = CubeCatalogStateService(
+            list_summaries=lambda include_disabled: self._list_catalog_cube_summaries(
+                include_disabled=include_disabled
+            ),
+            build_entry=self._catalog_entry_for_summary,
+            revision_pack_facts=lambda include_disabled: self._revision_pack_facts(
+                include_disabled=include_disabled
+            ),
+            pack_counts=self._pack_counts,
+            generated_at=_utc_now,
+        )
+        self._library_readiness_cache: (
+            tuple[float, Path, str, dict[str, Any]] | None
+        ) = None
+        self._repo_dirty_paths_cache: dict[Path, frozenset[str]] = {}
         try:
             self.version_artifact_cache.prune()
         except (OSError, RuntimeError, TypeError, ValueError):
@@ -1002,6 +1085,10 @@ class CubeLibraryService:
     ) -> None:
         """Publish a generic library-change event to in-process consumers."""
 
+        self.invalidate_catalog_state(
+            reason=reason,
+            affected_cube_ids=affected_cube_ids,
+        )
         event = {
             "schemaVersion": 1,
             "affectedCubeIds": list(affected_cube_ids),
@@ -1015,6 +1102,21 @@ class CubeLibraryService:
                 listener(dict(event))
             except (RuntimeError, TypeError, ValueError):
                 _logger.exception("SugarCubes library change listener failed")
+
+    def invalidate_catalog_state(
+        self,
+        *,
+        reason: str,
+        affected_cube_ids: Sequence[str] = (),
+    ) -> None:
+        """Invalidate cached catalog state after a library-visible mutation."""
+
+        self._catalog_state.invalidate(
+            reason,
+            affected_cube_ids=affected_cube_ids,
+        )
+        self._library_readiness_cache = None
+        self._repo_dirty_paths_cache.clear()
 
     def repo_workspace_root(self) -> Path:
         """Return the managed tracked-repo workspace root."""
@@ -1109,23 +1211,34 @@ class CubeLibraryService:
             "errors": errors,
         }
 
+    def library_capabilities_status(self) -> dict[str, Any]:
+        """Return Cube Library capability facts without building catalog state."""
+
+        return {
+            "schemaVersion": 1,
+            "available": True,
+            "source": "SugarCubes",
+            "sugarCubesVersion": _runtime_version(),
+            "catalogRevision": "",
+            "packManagementSupported": True,
+            "localAuthoringSupported": True,
+            "readinessSupported": True,
+            "dependencyReadinessSupported": True,
+            "dependencyRepairSupported": True,
+            "versionedDependencyReadinessSupported": True,
+            "syncDependencyOrchestrationSupported": True,
+            "errors": [],
+        }
+
     def catalog_revision(self, *, include_disabled: bool = False) -> str:
         """Return a deterministic revision for catalog-relevant library state."""
 
-        pack_facts = self._revision_pack_facts(include_disabled=include_disabled)
-        cube_facts = self._revision_cube_facts(include_disabled=include_disabled)
-        facts = {
-            "packs": pack_facts,
-            "cubes": cube_facts,
-        }
-        serialized = json.dumps(facts, sort_keys=True, separators=(",", ":"))
-        digest = hashlib.sha256(serialized.encode("utf-8")).hexdigest()
-        revision = f"sha256:{digest}"
+        revision = self._catalog_state.current_revision(
+            include_disabled=include_disabled
+        )
         _log_cube_library_diagnostic(
             "sugarcubes_catalog_revision",
             include_disabled=include_disabled,
-            pack_fact_count=len(pack_facts),
-            cube_fact_count=len(cube_facts),
             catalog_revision=revision,
         )
         return revision
@@ -1137,40 +1250,11 @@ class CubeLibraryService:
             "sugarcubes_list_catalog_start",
             include_disabled=include_disabled,
         )
-        entries = [
-            self._catalog_entry_for_summary(summary)
-            for summary in self._list_catalog_cube_summaries(
-                include_disabled=include_disabled
-            )
-        ]
-        entries.sort(
-            key=lambda entry: (
-                (
-                    str(entry.get("source", {}).get("kind", "")).casefold()
-                    if isinstance(entry.get("source"), Mapping)
-                    else ""
-                ),
-                (
-                    str(entry.get("source", {}).get("repoRef", "")).casefold()
-                    if isinstance(entry.get("source"), Mapping)
-                    else ""
-                ),
-                str(entry.get("targetModel", "")).casefold(),
-                str(entry.get("displayName", "")).casefold(),
-                str(entry.get("cubeId", "")).casefold(),
-            )
-        )
-        payload = {
-            "schemaVersion": 1,
-            "catalogRevision": self.catalog_revision(include_disabled=include_disabled),
-            "generatedAt": _utc_now(),
-            "cubes": entries,
-            "packs": self._pack_counts(),
-        }
+        payload = self._catalog_state.current_catalog(include_disabled=include_disabled)
         _log_cube_library_diagnostic(
             "sugarcubes_list_catalog_return",
             include_disabled=include_disabled,
-            cube_count=len(entries),
+            cube_count=len(payload["cubes"]),
             catalog_revision=payload["catalogRevision"],
         )
         return payload
@@ -1392,6 +1476,7 @@ class CubeLibraryService:
                     repo=repo,
                 )["repo"],
             }
+        self.invalidate_catalog_state(reason="pack_added")
         return {
             "schemaVersion": 1,
             "pack": self._pack_record(payload["repo"]),
@@ -1417,6 +1502,7 @@ class CubeLibraryService:
             enabled=enabled,
             auto_update=auto_update,
         )
+        self.invalidate_catalog_state(reason="pack_updated")
         return {
             "schemaVersion": 1,
             "pack": self._pack_record(payload["repo"]),
@@ -1427,6 +1513,7 @@ class CubeLibraryService:
         """Remove a tracked Cube Pack through SugarCubes policy enforcement."""
 
         payload = self.tracked_repo_service.remove_repo(owner=owner, repo=repo)
+        self.invalidate_catalog_state(reason="pack_removed")
         return {
             "schemaVersion": 1,
             **payload,
@@ -1437,6 +1524,7 @@ class CubeLibraryService:
         """Synchronously sync one tracked Cube Pack."""
 
         payload = self.tracked_repo_service.sync_repo(owner=owner, repo=repo)
+        self.invalidate_catalog_state(reason="pack_synced")
         return {
             "schemaVersion": 1,
             "pack": self._pack_record(payload["repo"]),
@@ -1447,6 +1535,7 @@ class CubeLibraryService:
         """Synchronously sync all enabled Cube Packs and return per-pack results."""
 
         payload = self.tracked_repo_service.sync_all_repos()
+        self.invalidate_catalog_state(reason="all_packs_synced")
         return {
             "schemaVersion": 1,
             "packs": [self._pack_record(repo) for repo in payload["repos"]],
@@ -1456,7 +1545,37 @@ class CubeLibraryService:
     def library_readiness(self, custom_nodes_root: Path) -> dict[str, Any]:
         """Return target dependency readiness and install plan for enabled cubes."""
 
-        requirement_records = self._dependency_requirement_records()
+        started_at = perf_counter()
+        phase_started_at = started_at
+        phase_timings: dict[str, float] = {}
+        custom_nodes_signature = self._library_readiness_cache_signature(
+            custom_nodes_root
+        )
+        cached_payload = self._cached_library_readiness(
+            custom_nodes_root=custom_nodes_root,
+            custom_nodes_signature=custom_nodes_signature,
+        )
+        if cached_payload is not None:
+            _log_cube_library_diagnostic(
+                "sugarcubes_library_readiness_cache_hit",
+                total_duration_ms=round((perf_counter() - started_at) * 1000, 3),
+            )
+            return cached_payload
+
+        def record_phase(name: str) -> None:
+            """Record elapsed milliseconds for one readiness phase."""
+
+            nonlocal phase_started_at
+            now = perf_counter()
+            phase_timings[name] = round((now - phase_started_at) * 1000, 3)
+            phase_started_at = now
+
+        (
+            requirement_records,
+            version_requirements,
+            catalog_revision,
+        ) = self._dependency_requirement_sets()
+        record_phase("dependency_requirement_sets")
         required = tuple(
             sorted(
                 {record["node_id"] for record in requirement_records},
@@ -1464,6 +1583,7 @@ class CubeLibraryService:
             )
         )
         installed = self._installed_custom_nodes(custom_nodes_root)
+        record_phase("installed_custom_nodes")
         installed_keys = {_normalize_requirement_key(slug) for slug in installed}
         missing = tuple(
             slug
@@ -1474,18 +1594,30 @@ class CubeLibraryService:
             requirement_records=requirement_records,
             installed=installed,
         )
+        record_phase("dependency_install_plan")
         installable_missing = [
             item
             for item in install_plan
             if item["installed"] is False and item["installable"] is True
         ]
-        version_requirements = self._dependency_version_requirement_records()
         version_readiness = dependency_version_readiness(
             requirements=version_requirements,
             custom_nodes_root=custom_nodes_root,
             git_runner=self.tracked_repo_service.git_runner,
         )
-        return {
+        record_phase("dependency_version_readiness")
+        total_duration_ms = round((perf_counter() - started_at) * 1000, 3)
+        _log_cube_library_diagnostic(
+            "sugarcubes_library_readiness_timing",
+            total_duration_ms=total_duration_ms,
+            required_count=len(required),
+            installed_count=len(installed),
+            missing_count=len(missing),
+            install_plan_count=len(install_plan),
+            version_requirement_count=len(version_requirements),
+            **phase_timings,
+        )
+        payload = {
             "schemaVersion": 1,
             "ready": not missing,
             "requiredCustomNodes": list(required),
@@ -1497,7 +1629,7 @@ class CubeLibraryService:
             ],
             "canInstall": bool(installable_missing),
             "installSupported": True,
-            "catalogRevision": self.catalog_revision(),
+            "catalogRevision": catalog_revision,
             "errors": [
                 item["remediation"]
                 for item in install_plan
@@ -1507,6 +1639,69 @@ class CubeLibraryService:
             "restartRequired": bool(missing),
             **version_readiness,
         }
+        self._library_readiness_cache = (
+            perf_counter(),
+            custom_nodes_root.resolve(),
+            custom_nodes_signature,
+            deepcopy(payload),
+        )
+        return payload
+
+    def _cached_library_readiness(
+        self,
+        *,
+        custom_nodes_root: Path,
+        custom_nodes_signature: str,
+    ) -> dict[str, Any] | None:
+        """Return a recent readiness payload when source facts still match."""
+
+        cached = self._library_readiness_cache
+        if cached is None:
+            return None
+        cached_at, cached_root, cached_signature, cached_payload = cached
+        if perf_counter() - cached_at > _LIBRARY_READINESS_CACHE_TTL_SECONDS:
+            self._library_readiness_cache = None
+            return None
+        if cached_root != custom_nodes_root.resolve():
+            return None
+        if cached_signature != custom_nodes_signature:
+            self._library_readiness_cache = None
+            return None
+        return deepcopy(cached_payload)
+
+    def _library_readiness_cache_signature(self, custom_nodes_root: Path) -> str:
+        """Return cheap source facts that guard short-lived readiness reuse."""
+
+        custom_node_facts: list[dict[str, Any]] = []
+        try:
+            entries = sorted(
+                (entry for entry in custom_nodes_root.iterdir() if entry.is_dir()),
+                key=lambda entry: entry.name.casefold(),
+            )
+        except OSError as exc:
+            custom_node_facts.append(
+                {
+                    "error": type(exc).__name__,
+                    "path": str(custom_nodes_root),
+                }
+            )
+            entries = ()
+        for entry in entries:
+            custom_node_facts.append(
+                {
+                    "name": entry.name,
+                    "path_mtime_ns": _path_mtime_ns(entry),
+                    "git_head_mtime_ns": _path_mtime_ns(entry / ".git" / "HEAD"),
+                    "git_index_mtime_ns": _path_mtime_ns(entry / ".git" / "index"),
+                    "tracking_mtime_ns": _path_mtime_ns(entry / ".tracking"),
+                }
+            )
+        facts = {
+            "customNodes": custom_node_facts,
+            "dependencySources": self._dependency_requirement_source_signature(),
+        }
+        serialized = json.dumps(facts, sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
     def summarize_cube(self, cube_path: Path) -> dict[str, Any]:
         """Summarize a single cube file for browser payloads."""
@@ -2348,6 +2543,10 @@ class CubeLibraryService:
                 or normalized_target_cube_id,
             },
         )
+        self.invalidate_catalog_state(
+            reason="cube_imported",
+            affected_cube_ids=[normalized_target_cube_id],
+        )
         return {"cube": self.summarize_cube(dest_path)}
 
     def delete_cube(
@@ -2381,34 +2580,73 @@ class CubeLibraryService:
                 or format_display_path(cube_path, self.extension_root)
             },
         )
+        self.invalidate_catalog_state(
+            reason="cube_deleted", affected_cube_ids=[cube_id]
+        )
         return {
             "status": "deleted",
             "cube": format_display_path(cube_path, self.extension_root),
         }
 
-    def _list_repo_cubes(self, tracked: TrackedRepo) -> list[dict[str, Any]]:
+    def _list_repo_cubes(
+        self,
+        tracked: TrackedRepo,
+        *,
+        include_internal_payload: bool = False,
+    ) -> list[dict[str, Any]]:
         """List all cube files under one tracked repo checkout."""
 
+        started_at = perf_counter()
+        phase_started_at = started_at
+
+        def record_phase(name: str) -> None:
+            """Accumulate elapsed milliseconds for one repo cube listing phase."""
+
+            nonlocal phase_started_at
+            now = perf_counter()
+            phase_timings[name] = round(
+                phase_timings.get(name, 0.0) + ((now - phase_started_at) * 1000),
+                3,
+            )
+            phase_started_at = now
+
+        phase_timings: dict[str, float] = {}
         checkout_path = Path(tracked.local_checkout_path).resolve()
         if not checkout_path.exists():
             return []
-        cubes = [
-            self.ownership_policy_service.annotate_cube_payload(
-                summarize_cube_file(
-                    path,
-                    checkout_path,
-                    self.extension_root,
-                    source_kind="github",
-                    owner=tracked.owner,
-                    repo=tracked.repo,
-                )
-            )
-            for path in list_cube_files(checkout_path)
-            if ".git" not in path.parts
+        cube_files = [
+            path for path in list_cube_files(checkout_path) if ".git" not in path.parts
         ]
+        record_phase("list_cube_files")
+        cubes: list[dict[str, Any]] = []
+        for path in cube_files:
+            summary = summarize_cube_file(
+                path,
+                checkout_path,
+                self.extension_root,
+                source_kind="github",
+                owner=tracked.owner,
+                repo=tracked.repo,
+                include_internal_payload=include_internal_payload,
+            )
+            record_phase("summarize_cube_file")
+            cubes.append(self.ownership_policy_service.annotate_cube_payload(summary))
+            record_phase("annotate_cube_payload")
+        _log_cube_library_diagnostic(
+            "sugarcubes_repo_cube_listing_timing",
+            total_duration_ms=round((perf_counter() - started_at) * 1000, 3),
+            repo_ref=tracked.repo_ref,
+            cube_count=len(cubes),
+            include_internal_payload=include_internal_payload,
+            **phase_timings,
+        )
         return cubes
 
-    def _list_local_cubes(self) -> list[dict[str, Any]]:
+    def _list_local_cubes(
+        self,
+        *,
+        include_internal_payload: bool = False,
+    ) -> list[dict[str, Any]]:
         """List all cube files under the managed local source workspace."""
 
         workspace_root = self.local_workspace_root().resolve()
@@ -2429,6 +2667,7 @@ class CubeLibraryService:
                             self.extension_root,
                             source_kind="local",
                             namespace=namespace,
+                            include_internal_payload=include_internal_payload,
                         )
                     )
                 )
@@ -2438,24 +2677,63 @@ class CubeLibraryService:
         self,
         *,
         include_disabled: bool,
+        include_internal_payload: bool = False,
     ) -> list[dict[str, Any]]:
         """List cube summaries for the backend-facing Cube Library catalog."""
 
+        started_at = perf_counter()
+        phase_started_at = started_at
+        phase_timings: dict[str, float] = {}
+
+        def record_phase(name: str) -> None:
+            """Record elapsed milliseconds for one catalog summary listing phase."""
+
+            nonlocal phase_started_at
+            now = perf_counter()
+            phase_timings[name] = round((now - phase_started_at) * 1000, 3)
+            phase_started_at = now
+
         cubes: list[dict[str, Any]] = []
-        for repo_entry in self.tracked_repo_service.list_repos()["repos"]:
+        repo_entries = self.tracked_repo_service.list_repos()["repos"]
+        record_phase("list_repos")
+        enabled_repo_count = 0
+        repo_cube_count = 0
+        for repo_entry in repo_entries:
             if not include_disabled and not repo_entry.get("enabled"):
                 continue
+            enabled_repo_count += 1
             tracked = self._tracked_repo_from_payload(repo_entry)
-            cubes.extend(self._list_repo_cubes(tracked))
-        cubes.extend(self._list_local_cubes())
+            repo_cubes = self._list_repo_cubes(
+                tracked,
+                include_internal_payload=include_internal_payload,
+            )
+            repo_cube_count += len(repo_cubes)
+            cubes.extend(repo_cubes)
+        record_phase("list_repo_cubes")
+        local_cubes = self._list_local_cubes(
+            include_internal_payload=include_internal_payload
+        )
+        record_phase("list_local_cubes")
+        cubes.extend(local_cubes)
+        _log_cube_library_diagnostic(
+            "sugarcubes_catalog_summary_listing_timing",
+            total_duration_ms=round((perf_counter() - started_at) * 1000, 3),
+            include_disabled=include_disabled,
+            include_internal_payload=include_internal_payload,
+            repo_count=len(repo_entries),
+            enabled_repo_count=enabled_repo_count,
+            repo_cube_count=repo_cube_count,
+            local_cube_count=len(local_cubes),
+            total_cube_count=len(cubes),
+            **phase_timings,
+        )
         return cubes
 
     def _catalog_entry_for_summary(self, summary: Mapping[str, Any]) -> dict[str, Any]:
         """Convert a browser cube summary into a backend catalog entry."""
 
         cube_id = normalize_metadata_string(summary.get("cube_id"))
-        cube_path = self.resolve_cube_by_id(cube_id)
-        payload, _ = read_cube_payload(cube_path)
+        payload, _, content_hash = self._summary_payload_with_hash(summary)
         icon = summary.get("icon") if isinstance(summary.get("icon"), Mapping) else None
         entry: dict[str, Any] = {
             "cubeId": cube_id,
@@ -2466,7 +2744,7 @@ class CubeLibraryService:
             "targetModel": normalize_metadata_string(summary.get("target_model")),
             "supportedModels": list(summary.get("supported_models") or []),
             "source": self._source_metadata_for_summary(summary),
-            "contentHash": compute_cube_content_hash(cube_path),
+            "contentHash": content_hash,
             "updatedAt": normalize_metadata_string(summary.get("mtime")),
         }
         _log_cube_library_diagnostic(
@@ -2493,8 +2771,28 @@ class CubeLibraryService:
                 entry["requiredCustomNodes"] = list(requirements)
         return entry
 
+    def _summary_payload_with_hash(
+        self,
+        summary: Mapping[str, Any],
+    ) -> tuple[Optional[Mapping[str, Any]], Optional[str], str]:
+        """Return payload and hash from internal summary facts or a fallback read."""
+
+        if "_content_hash" in summary:
+            payload = summary.get("_payload")
+            return (
+                dict(payload) if isinstance(payload, Mapping) else None,
+                normalize_metadata_string(summary.get("error")) or None,
+                normalize_metadata_string(summary.get("_content_hash")),
+            )
+        cube_id = normalize_metadata_string(summary.get("cube_id"))
+        cube_path = self.resolve_cube_by_id(cube_id)
+        return read_cube_payload_with_hash(cube_path)
+
     def _source_metadata_for_summary(
-        self, summary: Mapping[str, Any]
+        self,
+        summary: Mapping[str, Any],
+        *,
+        repo_cache: dict[tuple[str, str], TrackedRepo] | None = None,
     ) -> dict[str, Any]:
         """Build API source metadata for one summarized cube."""
 
@@ -2510,7 +2808,11 @@ class CubeLibraryService:
                 source.get("owner") or summary.get("owner")
             )
             repo = normalize_metadata_string(source.get("repo") or summary.get("repo"))
-            tracked = self.tracked_repo_service.get_repo(owner, repo)
+            tracked = self._tracked_repo_for_source(
+                owner=owner,
+                repo=repo,
+                repo_cache=repo_cache,
+            )
             base_dir = Path(tracked.local_checkout_path).resolve()
             relative_path = normalize_metadata_string(
                 source.get("repo_relative_path") or summary.get("relative_path")
@@ -2537,6 +2839,25 @@ class CubeLibraryService:
             "remoteHeadSha": "",
             "dirty": True,
         }
+
+    def _tracked_repo_for_source(
+        self,
+        *,
+        owner: str,
+        repo: str,
+        repo_cache: dict[tuple[str, str], TrackedRepo] | None,
+    ) -> TrackedRepo:
+        """Return tracked repo facts, reusing manifest lookups within one pass."""
+
+        if repo_cache is None:
+            return self.tracked_repo_service.get_repo(owner, repo)
+        cache_key = (owner.casefold(), repo.casefold())
+        cached = repo_cache.get(cache_key)
+        if cached is not None:
+            return cached
+        tracked = self.tracked_repo_service.get_repo(owner, repo)
+        repo_cache[cache_key] = tracked
+        return tracked
 
     def _pack_record(self, repo_entry: Mapping[str, Any]) -> dict[str, Any]:
         """Return an API-safe Cube Pack record from SugarCubes repo state."""
@@ -2618,17 +2939,19 @@ class CubeLibraryService:
         """Return normalized cube facts used to compute catalog revisions."""
 
         facts: list[dict[str, Any]] = []
+        repo_cache: dict[tuple[str, str], TrackedRepo] = {}
         for summary in self._list_catalog_cube_summaries(
-            include_disabled=include_disabled
+            include_disabled=include_disabled,
+            include_internal_payload=True,
         ):
             cube_id = normalize_metadata_string(summary.get("cube_id"))
-            cube_path = self.resolve_cube_by_id(cube_id)
-            source = self._source_metadata_for_summary(summary)
+            _, _, content_hash = self._summary_payload_with_hash(summary)
+            source = self._source_metadata_for_summary(summary, repo_cache=repo_cache)
             facts.append(
                 {
                     "cube_id": cube_id,
                     "version": normalize_metadata_string(summary.get("version")),
-                    "content_hash": compute_cube_content_hash(cube_path),
+                    "content_hash": content_hash,
                     "source": source,
                 }
             )
@@ -2645,19 +2968,102 @@ class CubeLibraryService:
     def _dependency_requirement_records(self) -> list[dict[str, Any]]:
         """Return custom-node requirements with pack and cube ownership facts."""
 
+        requirement_records, _, _ = self._dependency_requirement_sets()
+        return requirement_records
+
+    def _dependency_requirement_sets(
+        self,
+    ) -> tuple[list[dict[str, Any]], tuple[CubeDependencyRequirement, ...], str]:
+        """Return dependency requirements and revision facts from one cube pass."""
+
+        started_at = perf_counter()
+        phase_timings = {
+            "source_signature_build": 0.0,
+            "cache_read": 0.0,
+            "list_catalog_cube_summaries": 0.0,
+            "summary_payload_with_hash": 0.0,
+            "source_metadata_for_summary": 0.0,
+            "iter_custom_node_requirement_ids": 0.0,
+            "extract_versioned_requirements": 0.0,
+            "readiness_catalog_revision": 0.0,
+            "cache_write": 0.0,
+        }
+
+        def add_phase_time(name: str, phase_started_at: float) -> None:
+            """Accumulate elapsed milliseconds for one dependency readiness subphase."""
+
+            phase_timings[name] = round(
+                phase_timings[name] + ((perf_counter() - phase_started_at) * 1000),
+                3,
+            )
+
+        phase_started_at = perf_counter()
+        source_signature = self._dependency_requirement_source_signature()
+        add_phase_time("source_signature_build", phase_started_at)
+        phase_started_at = perf_counter()
+        cached = self._cached_dependency_requirement_sets(source_signature)
+        add_phase_time("cache_read", phase_started_at)
+        if cached is not None:
+            requirement_records, version_requirements, catalog_revision = cached
+            _log_cube_library_diagnostic(
+                "sugarcubes_dependency_requirement_sets_timing",
+                total_duration_ms=round((perf_counter() - started_at) * 1000, 3),
+                cached=True,
+                source_signature=source_signature,
+                summary_count=0,
+                catalog_fact_count=0,
+                requirement_record_count=len(requirement_records),
+                version_requirement_count=len(version_requirements),
+                skipped_payload_count=0,
+                repo_lookup_count=0,
+                **phase_timings,
+            )
+            return requirement_records, version_requirements, catalog_revision
+
         records: list[dict[str, Any]] = []
-        for summary in self._list_catalog_cube_summaries(include_disabled=False):
+        version_records: list[CubeDependencyRequirement] = []
+        catalog_facts: list[tuple[tuple[str, str, str, str, str], dict[str, Any]]] = []
+        repo_cache: dict[tuple[str, str], TrackedRepo] = {}
+        phase_started_at = perf_counter()
+        summaries = self._list_catalog_cube_summaries(
+            include_disabled=False,
+            include_internal_payload=True,
+        )
+        add_phase_time("list_catalog_cube_summaries", phase_started_at)
+        skipped_payload_count = 0
+        for summary in summaries:
             cube_id = normalize_metadata_string(summary.get("cube_id"))
             try:
-                cube_path = self.resolve_cube_by_id(cube_id)
-                payload, error = read_cube_payload(cube_path)
+                phase_started_at = perf_counter()
+                payload, error, content_hash = self._summary_payload_with_hash(summary)
+                add_phase_time("summary_payload_with_hash", phase_started_at)
             except BackendError:
+                skipped_payload_count += 1
                 continue
+            phase_started_at = perf_counter()
+            source = self._source_metadata_for_summary(summary, repo_cache=repo_cache)
+            add_phase_time("source_metadata_for_summary", phase_started_at)
+            catalog_facts.append(
+                (
+                    self._readiness_catalog_sort_key(
+                        summary=summary,
+                        source=source,
+                        cube_id=cube_id,
+                    ),
+                    {
+                        "cube_id": cube_id,
+                        "version": normalize_metadata_string(summary.get("version")),
+                        "content_hash": content_hash,
+                        "source": source,
+                    },
+                )
+            )
             if error or not payload:
                 continue
-            source = self._source_metadata_for_summary(summary)
-            pack_ref = self._dependency_pack_ref(source)
+            dependency_source = self._dependency_source_for_summary(summary)
+            pack_ref = self._dependency_pack_ref(dependency_source)
             default_base_repo = pack_ref == _DEFAULT_BASE_REPO_REF
+            phase_started_at = perf_counter()
             for node_id in iter_custom_node_requirement_ids(payload):
                 records.append(
                     {
@@ -2668,36 +3074,338 @@ class CubeLibraryService:
                         "default_base_repo": default_base_repo,
                     }
                 )
-        return records
+            add_phase_time("iter_custom_node_requirement_ids", phase_started_at)
+            phase_started_at = perf_counter()
+            version_records.extend(
+                extract_versioned_requirements(
+                    payload,
+                    cube_id=cube_id,
+                    pack_ref=pack_ref,
+                    source_path=self._dependency_source_path(dependency_source),
+                    default_base_repo=default_base_repo,
+                )
+            )
+            add_phase_time("extract_versioned_requirements", phase_started_at)
+        phase_started_at = perf_counter()
+        catalog_revision = self._readiness_catalog_revision(catalog_facts)
+        add_phase_time("readiness_catalog_revision", phase_started_at)
+        phase_started_at = perf_counter()
+        self._store_dependency_requirement_sets(
+            source_signature=source_signature,
+            requirement_records=records,
+            version_requirements=tuple(version_records),
+            catalog_revision=catalog_revision,
+        )
+        add_phase_time("cache_write", phase_started_at)
+        _log_cube_library_diagnostic(
+            "sugarcubes_dependency_requirement_sets_timing",
+            total_duration_ms=round((perf_counter() - started_at) * 1000, 3),
+            cached=False,
+            source_signature=source_signature,
+            summary_count=len(summaries),
+            catalog_fact_count=len(catalog_facts),
+            requirement_record_count=len(records),
+            version_requirement_count=len(version_records),
+            skipped_payload_count=skipped_payload_count,
+            repo_lookup_count=len(repo_cache),
+            **phase_timings,
+        )
+        return records, tuple(version_records), catalog_revision
+
+    def _dependency_requirement_source_signature(self) -> str:
+        """Return cheap source facts that validate durable requirement reuse."""
+
+        repo_entries = self.tracked_repo_service.list_repos()["repos"]
+        repo_cube_facts: list[dict[str, Any]] = []
+        for repo_entry in repo_entries:
+            if not repo_entry.get("enabled"):
+                continue
+            tracked = self._tracked_repo_from_payload(repo_entry)
+            checkout_path = Path(tracked.local_checkout_path).resolve()
+            repo_cube_facts.extend(
+                self._dependency_requirement_file_facts(
+                    checkout_path,
+                    source_kind="github",
+                    owner=tracked.owner,
+                    repo=tracked.repo,
+                    namespace="",
+                )
+            )
+
+        local_cube_facts: list[dict[str, Any]] = []
+        local_root = self.local_workspace_root().resolve()
+        if local_root.exists():
+            for namespace_dir in sorted(
+                (path for path in local_root.iterdir() if path.is_dir()),
+                key=lambda path: path.name.casefold(),
+            ):
+                namespace = namespace_dir.name
+                if namespace.lower() in RESERVED_SOURCE_NAMES:
+                    continue
+                local_cube_facts.extend(
+                    self._dependency_requirement_file_facts(
+                        namespace_dir,
+                        source_kind="local",
+                        owner="",
+                        repo="",
+                        namespace=namespace,
+                    )
+                )
+        facts = {
+            "schemaVersion": _DEPENDENCY_REQUIREMENT_CACHE_SCHEMA_VERSION,
+            "packs": self._revision_pack_facts(include_disabled=False),
+            "repoCubes": repo_cube_facts,
+            "localCubes": local_cube_facts,
+        }
+        serialized = json.dumps(facts, sort_keys=True, separators=(",", ":"))
+        return f"sha256:{hashlib.sha256(serialized.encode('utf-8')).hexdigest()}"
+
+    def _dependency_requirement_file_facts(
+        self,
+        root: Path,
+        *,
+        source_kind: str,
+        owner: str,
+        repo: str,
+        namespace: str,
+    ) -> list[dict[str, Any]]:
+        """Return stat-only cube facts for the durable requirements cache key."""
+
+        if not root.exists() or not root.is_dir():
+            return []
+        facts: list[dict[str, Any]] = []
+        for path in list_cube_files(root):
+            if ".git" in path.parts:
+                continue
+            try:
+                stat_info = path.stat()
+            except OSError as exc:
+                facts.append(
+                    {
+                        "source_kind": source_kind,
+                        "owner": owner,
+                        "repo": repo,
+                        "namespace": namespace,
+                        "relative_path": safe_relative_path(path, root) or "",
+                        "error": type(exc).__name__,
+                    }
+                )
+                continue
+            facts.append(
+                {
+                    "source_kind": source_kind,
+                    "owner": owner,
+                    "repo": repo,
+                    "namespace": namespace,
+                    "relative_path": safe_relative_path(path, root) or "",
+                    "size_bytes": stat_info.st_size,
+                    "mtime_ns": stat_info.st_mtime_ns,
+                }
+            )
+        return sorted(
+            facts,
+            key=lambda fact: (
+                str(fact.get("source_kind", "")).casefold(),
+                str(fact.get("owner", "")).casefold(),
+                str(fact.get("repo", "")).casefold(),
+                str(fact.get("namespace", "")).casefold(),
+                str(fact.get("relative_path", "")).casefold(),
+            ),
+        )
+
+    def _cached_dependency_requirement_sets(
+        self,
+        source_signature: str,
+    ) -> tuple[list[dict[str, Any]], tuple[CubeDependencyRequirement, ...], str] | None:
+        """Return durable dependency requirements when source facts still match."""
+
+        cache_path = self._dependency_requirement_cache_path()
+        try:
+            raw = json.loads(cache_path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return None
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError, TypeError):
+            _logger.warning(
+                "SugarCubes: failed to read dependency requirement cache",
+                exc_info=True,
+            )
+            return None
+        if not isinstance(raw, Mapping):
+            return None
+        if raw.get("schemaVersion") != _DEPENDENCY_REQUIREMENT_CACHE_SCHEMA_VERSION:
+            return None
+        if raw.get("sourceSignature") != source_signature:
+            return None
+        requirement_records = raw.get("requirementRecords")
+        version_requirements = raw.get("versionRequirements")
+        catalog_revision = normalize_metadata_string(raw.get("catalogRevision"))
+        if not isinstance(requirement_records, list) or not isinstance(
+            version_requirements, list
+        ):
+            return None
+        try:
+            return (
+                [
+                    dict(record)
+                    for record in requirement_records
+                    if isinstance(record, Mapping)
+                ],
+                tuple(
+                    self._dependency_requirement_from_payload(record)
+                    for record in version_requirements
+                    if isinstance(record, Mapping)
+                ),
+                catalog_revision,
+            )
+        except (TypeError, ValueError):
+            _logger.warning(
+                "SugarCubes: dependency requirement cache payload is invalid",
+                exc_info=True,
+            )
+            return None
+
+    def _store_dependency_requirement_sets(
+        self,
+        *,
+        source_signature: str,
+        requirement_records: Sequence[Mapping[str, Any]],
+        version_requirements: Sequence[CubeDependencyRequirement],
+        catalog_revision: str,
+    ) -> None:
+        """Persist dependency requirements for reuse by the next Comfy process."""
+
+        cache_path = self._dependency_requirement_cache_path()
+        payload = {
+            "schemaVersion": _DEPENDENCY_REQUIREMENT_CACHE_SCHEMA_VERSION,
+            "sourceSignature": source_signature,
+            "catalogRevision": catalog_revision,
+            "requirementRecords": [dict(record) for record in requirement_records],
+            "versionRequirements": [
+                requirement.to_payload() for requirement in version_requirements
+            ],
+        }
+        try:
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            temp_path = cache_path.with_name(f"{cache_path.name}.{os.getpid()}.tmp")
+            temp_path.write_text(
+                json.dumps(payload, sort_keys=True, separators=(",", ":")),
+                encoding="utf-8",
+            )
+            temp_path.replace(cache_path)
+        except OSError:
+            _logger.warning(
+                "SugarCubes: failed to write dependency requirement cache",
+                exc_info=True,
+            )
+
+    def _dependency_requirement_cache_path(self) -> Path:
+        """Return the durable dependency-requirement cache location."""
+
+        return (
+            self.extension_root
+            / ".sugarcubes"
+            / "cache"
+            / _DEPENDENCY_REQUIREMENT_CACHE_FILENAME
+        )
+
+    def _dependency_requirement_from_payload(
+        self,
+        payload: Mapping[str, Any],
+    ) -> CubeDependencyRequirement:
+        """Rehydrate one cached versioned dependency requirement."""
+
+        return CubeDependencyRequirement(
+            node_id=normalize_metadata_string(payload.get("nodeId")),
+            required_version=normalize_metadata_string(payload.get("requiredVersion")),
+            version_kind=classify_version(
+                normalize_metadata_string(payload.get("requiredVersion"))
+            ),
+            cube_id=normalize_metadata_string(payload.get("cubeId")),
+            pack_ref=normalize_metadata_string(payload.get("packRef")),
+            node_name=normalize_metadata_string(payload.get("nodeName")),
+            class_type=normalize_metadata_string(payload.get("classType")),
+            source_path=normalize_metadata_string(payload.get("sourcePath")),
+            default_base_repo=bool(payload.get("defaultBaseRepo")),
+        )
+
+    def _readiness_catalog_sort_key(
+        self,
+        *,
+        summary: Mapping[str, Any],
+        source: Mapping[str, Any],
+        cube_id: str,
+    ) -> tuple[str, str, str, str, str]:
+        """Return the catalog ordering used by readiness revision facts."""
+
+        return (
+            str(source.get("kind", "")).casefold(),
+            str(source.get("repoRef", "")).casefold(),
+            normalize_metadata_string(summary.get("target_model")).casefold(),
+            (
+                normalize_metadata_string(summary.get("display_name"))
+                or normalize_metadata_string(summary.get("name"))
+            ).casefold(),
+            cube_id.casefold(),
+        )
+
+    def _readiness_catalog_revision(
+        self,
+        catalog_facts: Sequence[tuple[tuple[str, str, str, str, str], dict[str, Any]]],
+    ) -> str:
+        """Return the catalog revision from readiness' already-read cube facts."""
+
+        facts = {
+            "packs": self._revision_pack_facts(include_disabled=False),
+            "cubes": [
+                fact for _, fact in sorted(catalog_facts, key=lambda item: item[0])
+            ],
+        }
+        serialized = json.dumps(facts, sort_keys=True, separators=(",", ":"))
+        return f"sha256:{hashlib.sha256(serialized.encode('utf-8')).hexdigest()}"
+
+    def _dependency_source_for_summary(
+        self,
+        summary: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        """Return cheap source facts needed by dependency readiness."""
+
+        source = (
+            summary.get("source") if isinstance(summary.get("source"), Mapping) else {}
+        )
+        source_kind = normalize_metadata_string(
+            source.get("type")
+        ) or normalize_metadata_string(summary.get("source_kind"))
+        if source_kind == "github":
+            owner = normalize_metadata_string(
+                source.get("owner") or summary.get("owner")
+            )
+            repo = normalize_metadata_string(source.get("repo") or summary.get("repo"))
+            relative_path = normalize_metadata_string(
+                source.get("repo_relative_path") or summary.get("relative_path")
+            )
+            return {
+                "kind": "github",
+                "repoRef": f"{owner}/{repo}",
+                "owner": owner,
+                "repo": repo,
+                "path": relative_path,
+            }
+        namespace = normalize_metadata_string(
+            source.get("namespace") or summary.get("namespace")
+        )
+        return {
+            "kind": "local",
+            "namespace": namespace,
+            "path": normalize_metadata_string(summary.get("relative_path")),
+        }
 
     def _dependency_version_requirement_records(
         self,
     ) -> tuple[CubeDependencyRequirement, ...]:
         """Return version-aware dependency facts with cube ownership context."""
 
-        records: list[CubeDependencyRequirement] = []
-        for summary in self._list_catalog_cube_summaries(include_disabled=False):
-            cube_id = normalize_metadata_string(summary.get("cube_id"))
-            try:
-                cube_path = self.resolve_cube_by_id(cube_id)
-                payload, error = read_cube_payload(cube_path)
-            except BackendError:
-                continue
-            if error or not payload:
-                continue
-            source = self._source_metadata_for_summary(summary)
-            pack_ref = self._dependency_pack_ref(source)
-            default_base_repo = pack_ref == _DEFAULT_BASE_REPO_REF
-            records.extend(
-                extract_versioned_requirements(
-                    payload,
-                    cube_id=cube_id,
-                    pack_ref=pack_ref,
-                    source_path=self._dependency_source_path(source),
-                    default_base_repo=default_base_repo,
-                )
-            )
-        return tuple(records)
+        _, version_records, _ = self._dependency_requirement_sets()
+        return version_records
 
     def _dependency_install_plan(
         self,
@@ -2817,14 +3525,45 @@ class CubeLibraryService:
 
         if not relative_path or not (checkout / ".git").exists():
             return False
+        return relative_path.replace("\\", "/") in self._repo_dirty_paths(checkout)
+
+    def _repo_dirty_paths(self, checkout: Path) -> frozenset[str]:
+        """Return dirty repo paths from one cached git status scan."""
+
+        started_at = perf_counter()
+        checkout = checkout.resolve()
+        cached = self._repo_dirty_paths_cache.get(checkout)
+        if cached is not None:
+            _log_cube_library_diagnostic(
+                "sugarcubes_repo_dirty_paths_timing",
+                total_duration_ms=round((perf_counter() - started_at) * 1000, 3),
+                checkout=checkout.name,
+                cached=True,
+                dirty_path_count=len(cached),
+            )
+            return cached
         try:
             result = self.tracked_repo_service.git_runner(
-                ["status", "--porcelain", "--", relative_path],
+                ["status", "--porcelain"],
                 cwd=checkout,
             )
         except (OSError, RuntimeError):
-            return False
-        return bool(normalize_metadata_string(getattr(result, "stdout", "")))
+            dirty_paths: frozenset[str] = frozenset()
+        else:
+            dirty_paths = frozenset(
+                _git_status_path(line)
+                for line in str(getattr(result, "stdout", "")).splitlines()
+                if _git_status_path(line)
+            )
+        self._repo_dirty_paths_cache[checkout] = dirty_paths
+        _log_cube_library_diagnostic(
+            "sugarcubes_repo_dirty_paths_timing",
+            total_duration_ms=round((perf_counter() - started_at) * 1000, 3),
+            checkout=checkout.name,
+            cached=False,
+            dirty_path_count=len(dirty_paths),
+        )
+        return dirty_paths
 
     def _count_cube_files(self, root: Path) -> int:
         """Return the number of loadable cube files under one checkout path."""

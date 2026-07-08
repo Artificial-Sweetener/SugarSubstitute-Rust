@@ -225,7 +225,9 @@ def test_export_filters_cube_ids():
         },
     }
 
-    exported = export_cubes(prompt, cube_ids=[cube_id_a])
+    exported = export_cubes(
+        prompt, cube_ids=[cube_id_a], definition_resolver=lambda _: {}
+    )
 
     assert len(exported) == 1
     assert exported[0].default_alias == "Alpha"

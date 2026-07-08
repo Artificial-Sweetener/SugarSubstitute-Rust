@@ -18,6 +18,7 @@
 import asyncio
 import json
 import logging
+import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -51,6 +52,35 @@ from sugarcubes.backend.validation.request_parsers import (
 from conftest import FakeRequest, ensure_tracked_repo
 
 CANONICAL_CUBE_ID = "artificial-sweetener/base-cubes/automask detailer.cube"
+
+
+def test_entrypoint_import_does_not_load_comfy_host_modules():
+    root = Path(__file__).resolve().parents[1]
+    script = f"""
+import importlib.util
+import sys
+from pathlib import Path
+
+root = Path({str(root)!r})
+spec = importlib.util.spec_from_file_location(
+    'sugarcubes_entrypoint_test',
+    root / '__init__.py',
+    submodule_search_locations=[str(root)],
+)
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+spec.loader.exec_module(module)
+raise SystemExit(1 if 'server' in sys.modules or 'nodes' in sys.modules else 0)
+"""
+
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
 
 
 def test_normalize_tags_and_models():

@@ -120,6 +120,22 @@ class BackendServices:
     dependencies: CubeDependencyService
 
 
+_ACTIVE_BACKEND_SERVICES: BackendServices | None = None
+
+
+def set_active_backend_services(services: BackendServices) -> None:
+    """Store the active SugarCubes service graph for host adapters."""
+
+    global _ACTIVE_BACKEND_SERVICES
+    _ACTIVE_BACKEND_SERVICES = services
+
+
+def active_backend_services() -> BackendServices | None:
+    """Return the active SugarCubes service graph when Comfy registered it."""
+
+    return _ACTIVE_BACKEND_SERVICES
+
+
 def _coerce_node_class_mappings(module: Any) -> Optional[Mapping[str, Any]]:
     """Return `NODE_CLASS_MAPPINGS` when the module exposes a mapping."""
 
@@ -255,4 +271,9 @@ def build_backend_services(
     )
 
 
-__all__ = ["BackendServices", "build_backend_services"]
+__all__ = [
+    "BackendServices",
+    "active_backend_services",
+    "build_backend_services",
+    "set_active_backend_services",
+]

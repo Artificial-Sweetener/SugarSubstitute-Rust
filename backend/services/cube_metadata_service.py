@@ -150,6 +150,10 @@ class CubeMetadataService:
             "update_metadata",
             {"path": safe_relative_path(cube_path, base_dir) or cube_path.name},
         )
+        self.library_service.invalidate_catalog_state(
+            reason="cube_metadata_updated",
+            affected_cube_ids=[normalized_cube_id],
+        )
         return {"cube": self.library_service.summarize_cube(cube_path)}
 
     def rename_cube(
@@ -279,6 +283,10 @@ class CubeMetadataService:
                 "from": normalized_cube_id,
                 "to": normalized_target_cube_id,
             },
+        )
+        self.library_service.invalidate_catalog_state(
+            reason="cube_renamed",
+            affected_cube_ids=[normalized_cube_id, normalized_target_cube_id],
         )
         return {"cube": self.library_service.summarize_cube(target_path)}
 

@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib
 import math
 import re
 from copy import deepcopy
@@ -68,20 +69,6 @@ except ImportError:
     from instrumentation import log_event
 from .graph import CubeAnalysis, CubeData, CubeMarker, Graph, GraphNode, Edge
 from .versioning import resolve_input_type, resolve_output_type_by_slot
-
-try:
-    import nodes  # type: ignore
-except (
-    ImportError,
-    ModuleNotFoundError,
-):  # pragma: no cover - nodes module unavailable
-    nodes = None  # type: ignore
-
-try:
-    from comfy_api.internal import _ComfyNodeInternal  # type: ignore
-except (ImportError, ModuleNotFoundError):  # pragma: no cover - comfy API unavailable
-    _ComfyNodeInternal = None  # type: ignore
-
 
 BindingResolver = Callable[[str], Mapping[str, Any]]
 BINDING_SENTINEL = "@binding"
@@ -144,6 +131,9 @@ _CUBE_LAYOUT_DEFINITION_METADATA_KEYS = (
 )
 _CUBE_LAYOUT_TEMPLATE_METADATA_KEYS = ("markers", "nodes", "bounds")
 _DEFINITION_HELP_KEYS = frozenset({"tooltip", "output_tooltips", "description"})
+_COMFY_RUNTIME_RESOLVED = False
+_COMFY_NODES_MODULE: Any = None
+_COMFY_NODE_INTERNAL_TYPE: Any = None
 
 
 @dataclass
@@ -811,13 +801,15 @@ def _collect_definitions(
 
     for class_type in class_types:
         definition: Optional[Mapping[str, Any]] = None
+        resolver_failed = False
         if resolver is not None:
             try:
                 definition = resolver(class_type)
             except Exception as exc:  # pragma: no cover - resolver is optional
                 warnings.append(f"Definition lookup failed for '{class_type}': {exc}")
+                resolver_failed = True
 
-        if not isinstance(definition, Mapping):
+        if not isinstance(definition, Mapping) and not resolver_failed:
             try:
                 definition = _resolve_definition_via_nodes(class_type)
             except Exception as exc:  # pragma: no cover - defensive
@@ -871,10 +863,11 @@ def _is_subgraph_wrapper_type(class_type: str) -> bool:
 def _resolve_definition_via_nodes(class_type: str) -> Optional[Mapping[str, Any]]:
     """Resolve a node definition through the live Comfy registry when available."""
 
-    if nodes is None or not hasattr(nodes, "NODE_CLASS_MAPPINGS"):
+    nodes_module, comfy_node_internal_type = _load_comfy_runtime()
+    if nodes_module is None or not hasattr(nodes_module, "NODE_CLASS_MAPPINGS"):
         return None
 
-    mapping = getattr(nodes, "NODE_CLASS_MAPPINGS")
+    mapping = getattr(nodes_module, "NODE_CLASS_MAPPINGS")
     if not isinstance(mapping, Mapping):
         return None
 
@@ -883,9 +876,9 @@ def _resolve_definition_via_nodes(class_type: str) -> Optional[Mapping[str, Any]
         return None
 
     if (
-        _ComfyNodeInternal is not None
+        comfy_node_internal_type is not None
         and isinstance(obj_class, type)
-        and issubclass(obj_class, _ComfyNodeInternal)
+        and issubclass(obj_class, comfy_node_internal_type)
     ):
         info = obj_class.GET_NODE_INFO_V1()
         return info if isinstance(info, Mapping) else None
@@ -925,7 +918,7 @@ def _resolve_definition_via_nodes(class_type: str) -> Optional[Mapping[str, Any]
         info["output_name"] = info["output"]
 
     info["name"] = class_type
-    display_map = getattr(nodes, "NODE_DISPLAY_NAME_MAPPINGS", {})
+    display_map = getattr(nodes_module, "NODE_DISPLAY_NAME_MAPPINGS", {})
     if isinstance(display_map, Mapping) and class_type in display_map:
         info["display_name"] = display_map[class_type]
     else:
@@ -950,6 +943,32 @@ def _resolve_definition_via_nodes(class_type: str) -> Optional[Mapping[str, Any]
         info["api_node"] = api_node
 
     return info
+
+
+def _load_comfy_runtime() -> Tuple[Any, Any]:
+    """Lazily load Comfy runtime modules used only for fallback introspection."""
+
+    global _COMFY_RUNTIME_RESOLVED
+    global _COMFY_NODES_MODULE
+    global _COMFY_NODE_INTERNAL_TYPE
+
+    if _COMFY_RUNTIME_RESOLVED:
+        return _COMFY_NODES_MODULE, _COMFY_NODE_INTERNAL_TYPE
+
+    try:
+        _COMFY_NODES_MODULE = importlib.import_module("nodes")
+    except (ImportError, ModuleNotFoundError):
+        _COMFY_NODES_MODULE = None
+
+    try:
+        internal_module = importlib.import_module("comfy_api.internal")
+    except (ImportError, ModuleNotFoundError):
+        _COMFY_NODE_INTERNAL_TYPE = None
+    else:
+        _COMFY_NODE_INTERNAL_TYPE = getattr(internal_module, "_ComfyNodeInternal", None)
+
+    _COMFY_RUNTIME_RESOLVED = True
+    return _COMFY_NODES_MODULE, _COMFY_NODE_INTERNAL_TYPE
 
 
 def _normalize_definition_map(

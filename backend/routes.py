@@ -162,16 +162,15 @@ def build_route_handlers(services: BackendServices) -> RouteHandlers:
                     "allow_system_owner_claim is managed only by environment configuration",
                     status=400,
                 )
-            return json_success(
-                services.ownership.update_identity_policy(
-                    claimed_github_owner=(
-                        str(body.get("claimed_github_owner"))
-                        if "claimed_github_owner" in body
-                        else None
-                    ),
+            payload = services.ownership.update_identity_policy(
+                claimed_github_owner=(
+                    str(body.get("claimed_github_owner"))
+                    if "claimed_github_owner" in body
+                    else None
                 ),
-                status=200,
             )
+            services.library.invalidate_catalog_state(reason="identity_policy_updated")
+            return json_success(payload, status=200)
         except BackendError as error:
             return json_error_from_exception(error)
 
@@ -186,6 +185,7 @@ def build_route_handlers(services: BackendServices) -> RouteHandlers:
                 default_base_repo=False,
                 auto_update=get_bool(body, "auto_update", False),
             )
+            services.library.invalidate_catalog_state(reason="pack_added")
             return json_success(
                 {
                     **payload,
@@ -208,6 +208,7 @@ def build_route_handlers(services: BackendServices) -> RouteHandlers:
                 repo=repo,
                 branch=normalize_metadata_string(body.get("branch")) or "main",
             )
+            services.library.invalidate_catalog_state(reason="authoring_pack_ensured")
             return json_success(
                 {
                     **payload,
@@ -235,6 +236,7 @@ def build_route_handlers(services: BackendServices) -> RouteHandlers:
                     get_bool(body, "auto_update") if "auto_update" in body else None
                 ),
             )
+            services.library.invalidate_catalog_state(reason="pack_updated")
             return json_success(
                 {
                     **payload,
@@ -253,10 +255,9 @@ def build_route_handlers(services: BackendServices) -> RouteHandlers:
                 raise BackendError("'owner' query parameter is required", status=400)
             if not isinstance(repo, str) or not repo.strip():
                 raise BackendError("'repo' query parameter is required", status=400)
-            return json_success(
-                services.tracked_repos.remove_repo(owner=owner, repo=repo),
-                status=200,
-            )
+            payload = services.tracked_repos.remove_repo(owner=owner, repo=repo)
+            services.library.invalidate_catalog_state(reason="pack_removed")
+            return json_success(payload, status=200)
         except BackendError as error:
             return json_error_from_exception(error)
 
@@ -267,6 +268,7 @@ def build_route_handlers(services: BackendServices) -> RouteHandlers:
                 owner=str(body.get("owner") or ""),
                 repo=str(body.get("repo") or ""),
             )
+            services.library.invalidate_catalog_state(reason="pack_synced")
             return json_success(
                 {
                     **payload,
@@ -280,10 +282,10 @@ def build_route_handlers(services: BackendServices) -> RouteHandlers:
     async def sync_all_tracked_repos(request: Any) -> Any:
         _ = request
         try:
+            payload = services.tracked_repos.sync_all_repos()
+            services.library.invalidate_catalog_state(reason="all_packs_synced")
             return json_success(
-                services.ownership.annotate_repo_list_payload(
-                    services.tracked_repos.sync_all_repos()
-                ),
+                services.ownership.annotate_repo_list_payload(payload),
                 status=200,
             )
         except BackendError as error:
@@ -296,6 +298,7 @@ def build_route_handlers(services: BackendServices) -> RouteHandlers:
                 owner=str(body.get("owner") or ""),
                 repo=str(body.get("repo") or ""),
             )
+            services.library.invalidate_catalog_state(reason="pack_checked")
             return json_success(
                 {
                     **payload,
@@ -312,12 +315,12 @@ def build_route_handlers(services: BackendServices) -> RouteHandlers:
             apply_auto_updates = False
             if isinstance(body, Mapping):
                 apply_auto_updates = get_bool(body, "apply_auto_updates", False)
+            payload = services.tracked_repos.check_all_repos(
+                apply_auto_updates=apply_auto_updates
+            )
+            services.library.invalidate_catalog_state(reason="all_packs_checked")
             return json_success(
-                services.ownership.annotate_repo_list_payload(
-                    services.tracked_repos.check_all_repos(
-                        apply_auto_updates=apply_auto_updates
-                    )
-                ),
+                services.ownership.annotate_repo_list_payload(payload),
                 status=200,
             )
         except BackendError as error:

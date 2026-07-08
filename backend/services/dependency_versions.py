@@ -21,12 +21,20 @@ import json
 import logging
 import re
 from collections import defaultdict
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from time import perf_counter
 from typing import Any, Literal
 
+try:
+    from ...instrumentation import log_diagnostic
+except ImportError:
+    from instrumentation import log_diagnostic
+
 _logger = logging.getLogger(__name__)
+CUBE_LIBRARY_TRACE_MARKER = "SugarCubes cube library diagnostic"
+_SLOW_INVENTORY_ENTRY_MS = 250.0
 
 VersionKind = Literal["semver", "git_sha", "unknown", "missing"]
 DependencyStatus = Literal[
@@ -41,6 +49,7 @@ DependencyStatus = Literal[
     "blocked",
 ]
 GitRunner = Callable[..., object]
+GitContainsCache = dict[tuple[str, str, str], bool]
 
 _SEMVER_RE = re.compile(r"^\d+(?:\.\d+){1,3}(?:[-+][0-9A-Za-z.-]+)?$")
 _GIT_SHA_RE = re.compile(r"^[0-9a-fA-F]{7,40}$")
@@ -171,31 +180,53 @@ def dependency_version_readiness(
 ) -> dict[str, Any]:
     """Build an additive version-readiness payload from cube requirements."""
 
-    installed = installed_dependency_inventory(custom_nodes_root, git_runner=git_runner)
-    installed_by_key = {
-        _requirement_key(item.folder_name): item for item in installed.values()
-    }
+    started_at = perf_counter()
+    phase_started_at = started_at
+    phase_timings: dict[str, float] = {}
+
+    def record_phase(name: str) -> None:
+        """Record elapsed milliseconds for one version-readiness phase."""
+
+        nonlocal phase_started_at
+        now = perf_counter()
+        phase_timings[name] = round((now - phase_started_at) * 1000, 3)
+        phase_started_at = now
+
     custom_node_requirements = [
         requirement
         for requirement in requirements
         if _is_external_custom_node_requirement(requirement.node_id)
     ]
+    record_phase("filter_custom_node_requirements")
     grouped: dict[str, list[CubeDependencyRequirement]] = defaultdict(list)
     for requirement in custom_node_requirements:
         grouped[_requirement_key(requirement.node_id)].append(requirement)
+    record_phase("group_requirements")
+    git_contains_cache: GitContainsCache = {}
+    installed = installed_dependency_inventory(
+        custom_nodes_root,
+        git_runner=git_runner,
+        detailed_keys=frozenset(grouped),
+    )
+    record_phase("installed_dependency_inventory")
+    installed_by_key = {
+        _requirement_key(item.folder_name): item for item in installed.values()
+    }
 
     plan = [
         _version_plan_item(
             node_requirements=node_requirements,
             installed=installed_by_key.get(key),
             git_runner=git_runner,
+            git_contains_cache=git_contains_cache,
         )
         for key, node_requirements in sorted(
             grouped.items(),
             key=lambda item: item[0],
         )
     ]
-    return {
+    record_phase("build_version_plan")
+    payload = {
         "versionedRequirementsSupported": True,
         "dependencyRequirements": [
             requirement.to_payload() for requirement in custom_node_requirements
@@ -210,22 +241,104 @@ def dependency_version_readiness(
         "dependencyVersionPlan": plan,
         "comfyRuntimeReadiness": comfy_runtime_readiness(requirements),
     }
+    record_phase("build_payload")
+    log_diagnostic(
+        _logger,
+        CUBE_LIBRARY_TRACE_MARKER,
+        "sugarcubes_dependency_version_readiness_timing",
+        {
+            "total_duration_ms": round((perf_counter() - started_at) * 1000, 3),
+            "requirement_count": len(requirements),
+            "custom_node_requirement_count": len(custom_node_requirements),
+            "installed_count": len(installed),
+            "group_count": len(grouped),
+            "plan_count": len(plan),
+            "git_contains_check_count": len(git_contains_cache),
+            **phase_timings,
+        },
+    )
+    return payload
 
 
 def installed_dependency_inventory(
     custom_nodes_root: Path,
     *,
     git_runner: GitRunner | None,
+    detailed_keys: Collection[str] | None = None,
 ) -> dict[str, InstalledDependency]:
     """Inspect installed custom-node folders without mutating them."""
 
+    started_at = perf_counter()
     if not custom_nodes_root.exists() or not custom_nodes_root.is_dir():
         return {}
     inventory: dict[str, InstalledDependency] = {}
-    for entry in custom_nodes_root.iterdir():
+    slow_entries: list[dict[str, Any]] = []
+    phase_timings = {
+        "list_custom_node_entries": 0.0,
+        "read_tracking_metadata": 0.0,
+        "probe_git_dir": 0.0,
+        "read_git_head": 0.0,
+        "read_git_status": 0.0,
+        "read_git_remote": 0.0,
+    }
+    list_started_at = perf_counter()
+    entries = tuple(custom_nodes_root.iterdir())
+    phase_timings["list_custom_node_entries"] = round(
+        (perf_counter() - list_started_at) * 1000,
+        3,
+    )
+    detailed_git_count = 0
+    cheap_git_count = 0
+    for entry in entries:
         if not entry.is_dir() or not entry.name:
             continue
-        inventory[entry.name] = _installed_dependency(entry, git_runner=git_runner)
+        entry_started_at = perf_counter()
+        detailed_git = (
+            detailed_keys is None or _requirement_key(entry.name) in detailed_keys
+        )
+        dependency = _installed_dependency(
+            entry,
+            git_runner=git_runner,
+            detailed_git=detailed_git,
+            phase_timings=phase_timings,
+        )
+        if dependency.source_kind == "git":
+            if detailed_git:
+                detailed_git_count += 1
+            else:
+                cheap_git_count += 1
+        entry_duration_ms = round((perf_counter() - entry_started_at) * 1000, 3)
+        inventory[entry.name] = dependency
+        if entry_duration_ms >= _SLOW_INVENTORY_ENTRY_MS:
+            slow_entries.append(
+                {
+                    "folder": entry.name,
+                    "duration_ms": entry_duration_ms,
+                    "source_kind": dependency.source_kind,
+                }
+            )
+    log_diagnostic(
+        _logger,
+        CUBE_LIBRARY_TRACE_MARKER,
+        "sugarcubes_installed_dependency_inventory_timing",
+        {
+            "total_duration_ms": round((perf_counter() - started_at) * 1000, 3),
+            "entry_count": len(inventory),
+            "git_entry_count": sum(
+                1 for item in inventory.values() if item.source_kind == "git"
+            ),
+            "tracking_entry_count": sum(
+                1 for item in inventory.values() if item.source_kind == "tracking"
+            ),
+            "directory_entry_count": sum(
+                1 for item in inventory.values() if item.source_kind == "directory"
+            ),
+            "detailed_git_count": detailed_git_count,
+            "cheap_git_count": cheap_git_count,
+            "slow_entries": slow_entries,
+            **phase_timings,
+        },
+    )
     return inventory
 
 
@@ -278,6 +391,7 @@ def _version_plan_item(
     node_requirements: Sequence[CubeDependencyRequirement],
     installed: InstalledDependency | None,
     git_runner: GitRunner | None,
+    git_contains_cache: GitContainsCache,
 ) -> dict[str, Any]:
     """Collapse one node's requirements and installed state into a plan item."""
 
@@ -293,6 +407,7 @@ def _version_plan_item(
         node_requirements=node_requirements,
         installed=installed,
         git_runner=git_runner,
+        git_contains_cache=git_contains_cache,
     )
     if installed is None:
         status: DependencyStatus = "missing"
@@ -319,7 +434,12 @@ def _version_plan_item(
         installed_kind = installed.version_kind
         remediation = _remediation_for_status(status)
     elif required_kind == "git_sha":
-        status = _git_status(required_version, installed, git_runner=git_runner)
+        status = _git_status(
+            required_version,
+            installed,
+            git_runner=git_runner,
+            git_contains_cache=git_contains_cache,
+        )
         repairable = status in {"installed_commit_not_descendant"}
         installed_version = installed.installed_version
         installed_kind = installed.version_kind
@@ -362,6 +482,7 @@ def _requirement_conflicts(
     node_requirements: Sequence[CubeDependencyRequirement],
     installed: InstalledDependency | None,
     git_runner: GitRunner | None,
+    git_contains_cache: GitContainsCache,
 ) -> list[dict[str, Any]]:
     """Return conflicts that make a node requirement group unsafe to compare."""
 
@@ -384,10 +505,13 @@ def _requirement_conflicts(
         and installed is not None
         and installed.source_kind == "git"
     ):
+        if installed.dirty:
+            return []
         divergent = _divergent_git_requirements(
             node_requirements,
             repo_path=Path(installed.source_path),
             git_runner=git_runner,
+            git_contains_cache=git_contains_cache,
         )
         if divergent:
             return [{"reason": "divergent_git_requirements", "versions": divergent}]
@@ -459,6 +583,7 @@ def _git_status(
     installed: InstalledDependency,
     *,
     git_runner: GitRunner | None,
+    git_contains_cache: GitContainsCache,
 ) -> DependencyStatus:
     """Return git commit readiness for one installed dependency."""
 
@@ -468,33 +593,57 @@ def _git_status(
         return "blocked"
     if installed.version_kind != "git_sha":
         return "installed_version_unknown"
+    if required_version == installed.installed_version:
+        return "satisfied"
     if _git_commit_contains(
         repo_path=Path(installed.source_path),
         ancestor=required_version,
         descendant=installed.installed_version,
         git_runner=git_runner,
+        git_contains_cache=git_contains_cache,
     ):
         return "satisfied"
     return "installed_commit_not_descendant"
 
 
 def _installed_dependency(
-    path: Path, *, git_runner: GitRunner | None
+    path: Path,
+    *,
+    git_runner: GitRunner | None,
+    detailed_git: bool,
+    phase_timings: dict[str, float],
 ) -> InstalledDependency:
     """Inspect one installed custom-node folder."""
 
     git_dir = path / ".git"
+    phase_started_at = perf_counter()
     tracking = _read_tracking_metadata(path / ".tracking")
-    if git_dir.exists() and git_runner is not None:
-        head = _git_stdout(["rev-parse", "HEAD"], cwd=path, git_runner=git_runner)
+    _add_phase_time(phase_timings, "read_tracking_metadata", phase_started_at)
+    phase_started_at = perf_counter()
+    git_exists = git_dir.exists()
+    _add_phase_time(phase_timings, "probe_git_dir", phase_started_at)
+    if git_exists and git_runner is not None:
+        if not detailed_git:
+            return _cheap_git_dependency(
+                path,
+                tracking,
+                phase_timings=phase_timings,
+            )
+        phase_started_at = perf_counter()
+        head = _read_git_head(git_dir) or _git_stdout(
+            ["rev-parse", "HEAD"], cwd=path, git_runner=git_runner
+        )
+        _add_phase_time(phase_timings, "read_git_head", phase_started_at)
+        phase_started_at = perf_counter()
         dirty = bool(
             _git_stdout(["status", "--porcelain"], cwd=path, git_runner=git_runner)
         )
-        repository_url = _git_stdout(
-            ["config", "--get", "remote.origin.url"],
-            cwd=path,
-            git_runner=git_runner,
+        _add_phase_time(phase_timings, "read_git_status", phase_started_at)
+        phase_started_at = perf_counter()
+        repository_url = _read_git_remote_origin_url(git_dir) or _git_stdout(
+            ["config", "--get", "remote.origin.url"], cwd=path, git_runner=git_runner
         )
+        _add_phase_time(phase_timings, "read_git_remote", phase_started_at)
         return InstalledDependency(
             folder_name=path.name,
             source_path=str(path),
@@ -513,6 +662,97 @@ def _installed_dependency(
         repository_url=_normalize_text(tracking.get("repository")),
         dirty=False,
     )
+
+
+def _cheap_git_dependency(
+    path: Path,
+    tracking: Mapping[str, Any],
+    *,
+    phase_timings: dict[str, float],
+) -> InstalledDependency:
+    """Return git evidence for non-required nodes without subprocess probes."""
+
+    phase_started_at = perf_counter()
+    head = _read_git_head(path / ".git")
+    _add_phase_time(phase_timings, "read_git_head", phase_started_at)
+    return InstalledDependency(
+        folder_name=path.name,
+        source_path=str(path),
+        installed_version=head,
+        version_kind=classify_version(head),
+        source_kind="git",
+        repository_url=_normalize_text(tracking.get("repository")),
+        dirty=False,
+    )
+
+
+def _add_phase_time(
+    phase_timings: dict[str, float],
+    name: str,
+    started_at: float,
+) -> None:
+    """Accumulate elapsed milliseconds for one inventory subphase."""
+
+    phase_timings[name] = round(
+        phase_timings[name] + ((perf_counter() - started_at) * 1000),
+        3,
+    )
+
+
+def _read_git_head(git_dir: Path) -> str:
+    """Read a git HEAD value directly for non-authoritative evidence."""
+
+    resolved_git_dir = _resolve_git_dir(git_dir)
+    if resolved_git_dir is None:
+        return ""
+    git_dir = resolved_git_dir
+    head = _read_text_file(git_dir / "HEAD")
+    if head.startswith("ref:"):
+        ref_name = head.removeprefix("ref:").strip()
+        return _read_text_file(git_dir / ref_name)
+    return head
+
+
+def _read_git_remote_origin_url(git_dir: Path) -> str:
+    """Read the origin URL directly when the repository uses a plain config."""
+
+    resolved_git_dir = _resolve_git_dir(git_dir)
+    if resolved_git_dir is None:
+        return ""
+    config_path = resolved_git_dir / "config"
+    try:
+        import configparser
+
+        parser = configparser.ConfigParser()
+        parser.read(config_path, encoding="utf-8")
+        return _normalize_text(parser.get('remote "origin"', "url", fallback=""))
+    except (OSError, configparser.Error):
+        return ""
+
+
+def _resolve_git_dir(git_path: Path) -> Path | None:
+    """Return the concrete git metadata directory for repos and worktrees."""
+
+    if git_path.is_dir():
+        return git_path
+    if not git_path.is_file():
+        return None
+    text = _read_text_file(git_path)
+    if not text.startswith("gitdir:"):
+        return None
+    target = Path(text.removeprefix("gitdir:").strip())
+    if not target.is_absolute():
+        target = git_path.parent / target
+    return target
+
+
+def _read_text_file(path: Path) -> str:
+    """Return stripped UTF-8 text from one small metadata file."""
+
+    try:
+        return path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
 
 
 def _read_tracking_metadata(path: Path) -> dict[str, Any]:
@@ -536,6 +776,7 @@ def _divergent_git_requirements(
     *,
     repo_path: Path,
     git_runner: GitRunner | None,
+    git_contains_cache: GitContainsCache,
 ) -> list[str]:
     """Return git SHA requirements that cannot be ordered by ancestry."""
 
@@ -556,11 +797,13 @@ def _divergent_git_requirements(
                 ancestor=left,
                 descendant=right,
                 git_runner=git_runner,
+                git_contains_cache=git_contains_cache,
             ) or _git_commit_contains(
                 repo_path=repo_path,
                 ancestor=right,
                 descendant=left,
                 git_runner=git_runner,
+                git_contains_cache=git_contains_cache,
             ):
                 related = True
                 break
@@ -575,11 +818,18 @@ def _git_commit_contains(
     ancestor: str,
     descendant: str,
     git_runner: GitRunner | None,
+    git_contains_cache: GitContainsCache,
 ) -> bool:
     """Return whether `descendant` contains `ancestor` in a git checkout."""
 
+    if ancestor == descendant:
+        return True
     if git_runner is None:
         return False
+    key = (str(repo_path.resolve()), ancestor, descendant)
+    cached = git_contains_cache.get(key)
+    if cached is not None:
+        return cached
     try:
         result = git_runner(
             ["merge-base", "--is-ancestor", ancestor, descendant],
@@ -596,7 +846,9 @@ def _git_commit_contains(
             },
         )
         return False
-    return int(getattr(result, "returncode", 0) or 0) == 0
+    contains = int(getattr(result, "returncode", 0) or 0) == 0
+    git_contains_cache[key] = contains
+    return contains
 
 
 def _git_stdout(args: Sequence[str], *, cwd: Path, git_runner: GitRunner) -> str:

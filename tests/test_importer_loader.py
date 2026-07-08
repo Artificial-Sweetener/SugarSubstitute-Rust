@@ -270,7 +270,7 @@ def test_load_cube_rejects_legacy_runtime_payload(tmp_path):
 
 
 def test_loader_handles_missing_optional_comfy_nodes_runtime(monkeypatch):
-    monkeypatch.setattr(loader_module, "comfy_nodes", None)
+    monkeypatch.setattr(loader_module, "_load_comfy_nodes_module", lambda: None)
 
     assert loader_module._has_definition("NotInstalled", {}) is False
 

@@ -14,6 +14,9 @@
 #    You should have received a copy of the GNU Affero General Public License
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import re
+import subprocess
+import sys
+from pathlib import Path
 
 import pytest
 
@@ -1505,7 +1508,7 @@ def test_serializer_rejects_duplicate_subgraph_interface_labels():
         export_cubes(prompt, workflow=workflow, definition_resolver=lambda _: {})
 
 
-def test_serializer_reports_definition_lookup_failures_as_warnings():
+def test_serializer_reports_definition_lookup_failures_as_warnings(monkeypatch):
     cube_id = "local/example-user/demo.cube"
     prompt = {
         "1": {
@@ -1525,6 +1528,15 @@ def test_serializer_reports_definition_lookup_failures_as_warnings():
     def resolver(_class_type):
         raise RuntimeError("resolver unavailable")
 
+    def fail_live_lookup(_class_type):
+        raise AssertionError("resolver failures must not load live Comfy definitions")
+
+    monkeypatch.setattr(
+        serializer_module,
+        "_resolve_definition_via_nodes",
+        fail_live_lookup,
+    )
+
     cubes = export_cubes(prompt, definition_resolver=resolver)
 
     assert any(
@@ -1543,7 +1555,23 @@ def test_serializer_coercion_helpers_preserve_current_fallbacks():
 
 
 def test_resolve_definition_via_nodes_degrades_when_runtime_is_missing(monkeypatch):
-    monkeypatch.setattr(serializer_module, "nodes", None)
-    monkeypatch.setattr(serializer_module, "_ComfyNodeInternal", None)
+    monkeypatch.setattr(serializer_module, "_load_comfy_runtime", lambda: (None, None))
 
     assert serializer_module._resolve_definition_via_nodes("KSampler") is None
+
+
+def test_serializer_import_does_not_load_comfy_nodes():
+    script = (
+        "import sys; "
+        "sys.path.insert(0, r'.'); "
+        "import exporter.serializer; "
+        "raise SystemExit(1 if 'nodes' in sys.modules else 0)"
+    )
+
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        check=False,
+        cwd=Path(__file__).resolve().parents[1],
+    )
+
+    assert result.returncode == 0
