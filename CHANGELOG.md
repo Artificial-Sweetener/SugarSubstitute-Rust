@@ -1,3 +1,10 @@
+## [0.9.2](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.9.1...v0.9.2) (2026-07-08)
+
+
+### Bug Fixes
+
+* **startup:** avoid eager host imports and stale readiness cache ([b3bc325](https://github.com/Artificial-Sweetener/SugarCubes/commit/b3bc32506b3d6a71ba127a0482ffef7c9f8fd380))
+
 ## [0.9.1](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.9.0...v0.9.1) (2026-06-22)
 
 
