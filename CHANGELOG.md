@@ -1,3 +1,10 @@
+## [0.9.3](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.9.2...v0.9.3) (2026-07-11)
+
+
+### Bug Fixes
+
+* **export:** validate persisted widget values ([e34ed20](https://github.com/Artificial-Sweetener/SugarCubes/commit/e34ed20a1773fff79103c42c5622f992170845bf))
+
 ## [0.9.2](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.9.1...v0.9.2) (2026-07-08)
 
 

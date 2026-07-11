@@ -47,7 +47,7 @@ except ImportError:
     from nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
 
 WEB_DIRECTORY = "web"
-__version__ = "0.9.2"
+__version__ = "0.9.3"
 _EXTENSION_ROOT = Path(__file__).resolve().parent
 _LOGGER = logging.getLogger(__name__)
 
