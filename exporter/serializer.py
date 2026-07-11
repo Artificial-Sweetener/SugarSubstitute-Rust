@@ -69,6 +69,11 @@ except ImportError:
     from instrumentation import log_event
 from .graph import CubeAnalysis, CubeData, CubeMarker, Graph, GraphNode, Edge
 from .versioning import resolve_input_type, resolve_output_type_by_slot
+from .widget_validation import (
+    serialized_widget_names,
+    validate_serialized_widget_values,
+    validate_subgraph_widget_values,
+)
 
 BindingResolver = Callable[[str], Mapping[str, Any]]
 BINDING_SENTINEL = "@binding"
@@ -200,9 +205,10 @@ def _serialize_cube(
     symbols = _symbolize_nodes(cube, graph)
     subgraphs, subgraph_warnings = _collect_subgraphs(cube, graph, subgraph_defs)
     subgraph_class_types = _collect_subgraph_node_types(subgraphs)
-    definitions, definition_warnings = _collect_definitions(
+    definitions, validation_definitions, definition_warnings = _collect_definitions(
         symbols, graph, resolver, extra_class_types=subgraph_class_types
     )
+    validate_subgraph_widget_values(subgraphs, validation_definitions)
     inputs, alias_lookup, input_warnings = _build_inputs(
         cube, graph, symbols, definitions
     )
@@ -210,7 +216,13 @@ def _serialize_cube(
         cube, graph, symbols, definitions
     )
     nodes = _build_node_payloads(
-        cube, graph, symbols, alias_lookup, layout_ctx, definitions
+        cube,
+        graph,
+        symbols,
+        alias_lookup,
+        layout_ctx,
+        definitions,
+        validation_definitions,
     )
     description, metadata = _describe_cube(cube)
     metadata, version_auto, cube_id, version = _ensure_metadata_defaults(
@@ -380,6 +392,7 @@ def _build_node_payloads(
     alias_lookup: Mapping[str, str],
     layout_ctx: Optional["WorkflowLayoutIndex"],
     definitions: Mapping[str, Any],
+    validation_definitions: Mapping[str, Any],
 ) -> Dict[str, Any]:
     """Build the serialized node map with binding-aware input remapping."""
 
@@ -393,7 +406,7 @@ def _build_node_payloads(
             payload_inputs,
             node,
             layout_ctx.nodes.get(node_id) if layout_ctx else None,
-            definitions,
+            validation_definitions,
         )
         node_payload: Dict[str, Any] = {
             "class_type": node.class_type,
@@ -431,6 +444,16 @@ def _backfill_workflow_widget_inputs(
     definition = definitions.get(node.class_type)
     if not isinstance(definition, Mapping):
         return
+    persisted_names = serialized_widget_names(workflow_node)
+    if not persisted_names:
+        persisted_names = widget_input_names(definition)
+    validate_serialized_widget_values(
+        node_id=node.id,
+        class_type=node.class_type,
+        persisted_widget_names=persisted_names,
+        widget_values=widget_values,
+        live_definition=definition,
+    )
     value_index = 0
     for input_name in widget_input_names(definition):
         if value_index >= len(widget_values):
@@ -771,10 +794,11 @@ def _collect_definitions(
     resolver: Optional[BindingResolver],
     *,
     extra_class_types: Optional[Sequence[str]] = None,
-) -> Tuple[Dict[str, Any], List[str]]:
-    """Collect normalized node definitions required by the serialized cube."""
+) -> Tuple[Dict[str, Any], Dict[str, Any], List[str]]:
+    """Collect persisted and full validation definitions for one cube export."""
 
     definitions: Dict[str, Any] = {}
+    validation_definitions: Dict[str, Any] = {}
     warnings: List[str] = []
     class_types: List[str] = []
     seen_types: set[str] = set()
@@ -822,9 +846,10 @@ def _collect_definitions(
             warnings.append(f"No definition available for '{class_type}'")
             continue
 
+        validation_definitions[class_type] = deepcopy(dict(definition))
         definitions[class_type] = _normalize_definition_map(class_type, definition)
 
-    return definitions, warnings
+    return definitions, validation_definitions, warnings
 
 
 def _collect_subgraph_node_types(subgraphs: Sequence[Mapping[str, Any]]) -> List[str]:

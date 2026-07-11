@@ -988,7 +988,7 @@ def test_serializer_backfills_missing_widget_values_from_workflow():
                 "type": "KSampler",
                 "pos": [100, 100],
                 "size": [180, 60],
-                "widgets_values": [7, "euler_ancestral", "normal"],
+                "widgets_values": [7, "euler", "normal"],
             },
         ],
         "version": 1,
@@ -1001,7 +1001,7 @@ def test_serializer_backfills_missing_widget_values_from_workflow():
     )
     authored_values = cubes[0].cube["flavors"]["authored"][0]["values"]
 
-    assert authored_values["ksampler.sampler_name"] == "euler_ancestral"
+    assert authored_values["ksampler.sampler_name"] == "euler"
     assert authored_values["ksampler.scheduler"] == "normal"
     assert "ksampler.seed" not in authored_values
 
@@ -1009,7 +1009,7 @@ def test_serializer_backfills_missing_widget_values_from_workflow():
 def test_serializer_rejects_misaligned_detailer_widget_values():
     cube_id = "local/example-user/detailer-corrupt.cube"
 
-    with pytest.raises(ValueError, match="Unsafe workflow widget backfill"):
+    with pytest.raises(ValueError, match="Unsafe cube widget serialization"):
         export_cubes(
             _detailer_export_prompt(cube_id),
             workflow=_detailer_export_workflow(
@@ -1439,6 +1439,70 @@ def test_serializer_includes_definitions_for_subgraph_node_types():
     subgraph = cubes[0].cube["implementation"]["subgraphs"][0]
     assert subgraph["inputs"][0]["name"] == "value"
     assert subgraph["inputs"][0]["label"] == "Scale Factor"
+
+
+def test_serializer_rejects_corrupt_subgraph_widget_values():
+    """Save-time validation blocks corrupted nested node widget arrays."""
+
+    cube_id = "local/example-user/corrupt-widget.cube"
+    wrapper_id = "94f725d5-39bf-4060-be68-f573214a2055"
+    prompt = {
+        "1": {"class_type": wrapper_id, "inputs": {}},
+        "2": {
+            "class_type": "SugarCubes.CubeOutput",
+            "inputs": {
+                "cube_id": cube_id,
+                "default_alias": "Corrupt Widget",
+                "value": ["1", 0],
+            },
+        },
+    }
+    workflow = {
+        "definitions": {
+            "subgraphs": [
+                {
+                    "id": wrapper_id,
+                    "nodes": [
+                        {
+                            "id": 101,
+                            "type": "WidgetNode",
+                            "inputs": [
+                                {
+                                    "name": "white_point",
+                                    "type": "FLOAT",
+                                    "widget": {"name": "white_point"},
+                                    "link": None,
+                                }
+                            ],
+                            "outputs": [],
+                            "widgets_values": [2048],
+                        }
+                    ],
+                    "links": [],
+                    "inputs": [],
+                    "outputs": [],
+                }
+            ]
+        }
+    }
+
+    def resolver(class_type: str):
+        if class_type == "WidgetNode":
+            return {
+                "input": {
+                    "required": {
+                        "white_point": [
+                            "FLOAT",
+                            {"default": 0.99, "min": 0.02, "max": 1.0},
+                        ]
+                    }
+                },
+                "input_order": {"required": ["white_point"]},
+            }
+        return {}
+
+    with pytest.raises(ValueError, match="white_point.*maximum 1.0"):
+        export_cubes(prompt, workflow=workflow, definition_resolver=resolver)
 
 
 def test_serializer_backfills_subgraph_interface_label_from_name():
