@@ -20,16 +20,17 @@ Engineering priority is maintainability, clear architecture, behavior safety dur
 ## Core Engineering Principles
 
 - Ship production-quality code with clear intent, predictable behavior, and thorough validation.
-- Use strong separation of concerns and keep architectural boundaries explicit.
-- Assign one authoritative owner per concern; collaborating components must derive behavior from that owner rather than re-implementing the concern in parallel.
-- Reassess ownership before extending an existing structure; if a change introduces a distinct responsibility, change cadence, or collaboration boundary, split or extract it as part of the change instead of deferring cleanup.
+- Enforce strict separation of concerns and explicit architectural boundaries.
+- Assign exactly one authoritative owner to every policy, state transition, persistence rule, and external-system interaction. Other components must call that owner instead of reproducing its behavior.
+- Treat mixed responsibilities and competing owners as architectural defects. Correct the ownership model as part of any change that encounters them.
+- Split a component as soon as it gains a distinct reason to change, lifecycle, policy boundary, persistence concern, or external collaborator. Do not defer known responsibility extraction.
 - Favor DRY when it reduces repeated change risk.
 - Do not force DRY when abstraction harms clarity.
 - Refactors must be complete: update callsites, remove dead code, and remove temporary bridges.
 - Do not preserve backward compatibility for internal code unless the public or host-facing contract requires it.
 - Leave the campsite cleaner: tighten naming, remove dead paths, and align touched code with this file.
 
-## Architecture Rules
+## Architecture and Ownership Rules
 
 - Organize code into clear layers with one-way dependencies.
 - Presentation concerns own UI rendering, user interaction wiring, and host-facing request/response surfaces.
@@ -37,8 +38,15 @@ Engineering priority is maintainability, clear architecture, behavior safety dur
 - Domain concerns own cube semantics, validation rules, bindings, and serialization meaning.
 - Infrastructure and adapter concerns own ComfyUI integration, filesystem IO, browser and runtime hooks, and other external-system boundaries.
 - Higher-level concerns may depend on lower-level concerns; lower-level concerns must not depend on higher-level concerns.
+- Entry points, routes, event handlers, and host registration modules must remain thin. They translate external input, invoke one application use case, and translate the result.
+- Orchestrators may sequence collaborators but must not absorb domain rules, persistence mechanics, rendering behavior, or adapter implementation.
+- Adapters must convert dynamic external values into validated, typed internal values before those values cross into application or domain code.
+- Domain and application code must not import presentation modules, host globals, browser APIs, filesystem implementations, or subprocess implementations.
 - Place code by ownership and dependency direction, not convenience, proximity, or current folder shape.
-- Avoid god classes and monolithic modules; split by responsibility, not by convenience.
+- God classes, monolithic modules, miscellaneous utility collections, and feature dumping grounds are prohibited.
+- File size is a design signal rather than a target. Split by cohesive responsibility and dependency boundary, not by arbitrary line count.
+- A façade may preserve a public or host-facing API, but it must delegate to focused owners and contain no duplicated business logic.
+- New behavior belongs with its authoritative owner. Do not extend the nearest existing module merely because it is convenient.
 
 ## Structural Change Rules
 
@@ -56,7 +64,9 @@ Engineering priority is maintainability, clear architecture, behavior safety dur
 - Write self-documenting code with expressive, concise names.
 - Organize modules, classes, and methods intentionally so code flow is easy to follow.
 - Place new code deliberately, not opportunistically.
-- Keep modules cohesive and avoid mixed responsibilities.
+- Keep every module cohesive around one responsibility and every class cohesive around one state model or collaboration role.
+- Keep cross-layer data flow explicit. Do not use shared mutable state, ambient globals, or broad service locators to bypass ownership boundaries.
+- Prefer small, typed public surfaces between collaborators. Keep implementation details private to the owning module.
 - Optimize for maintainability over cleverness. When performance matters, measure and document the rationale.
 
 ## Docstrings and Comments
@@ -75,11 +85,18 @@ Engineering priority is maintainability, clear architecture, behavior safety dur
 
 ## Typing Policy
 
-- Strong typing is required for new code.
-- Modified code should be typed as part of the change.
-- Type hints are required on new and changed Python function signatures.
-- Prefer explicit domain types and type narrowing over `Any`.
-- Avoid untyped escape hatches unless justified inline.
+- The entire first-party Python codebase is fully typed and passes strict mypy checking, including runtime packages, tests, scripts, and tools.
+- All Python functions, methods, classes, module state, and non-obvious local collections carry precise types where inference is insufficient.
+- Use dataclasses, enums, `TypedDict`, protocols, and focused type aliases to model domain values and collaborator contracts.
+- Receive untrusted or dynamic Python input as `object`, validate it, and narrow it before use. `Any` is permitted only at an unavoidable adapter boundary and must not propagate into application or domain code.
+- The entire authored frontend and JavaScript-tooling codebase uses TypeScript. Product behavior, tests, mocks, maintenance scripts, and build scripts are not authored as untyped JavaScript.
+- TypeScript runs in strict mode with unchecked indexed access and exact optional-property semantics enabled.
+- Receive untrusted browser, network, storage, and host values as `unknown`, validate them, and narrow them before use.
+- Use explicit interfaces and types for ComfyUI host surfaces, graph structures, API payloads, persisted values, and SugarCube documents.
+- Generated JavaScript is build output, not source. Never edit generated JavaScript directly or place source behavior only in generated files.
+- Blanket type-checker exclusions, unscoped ignore rules, `@ts-ignore`, and unjustified casts are prohibited. A narrowly scoped suppression requires an inline explanation of the external constraint.
+- Untyped third-party APIs must be isolated behind typed adapters. Missing upstream types do not justify weakening internal typing.
+- Type errors are blocking failures, including errors in tests, scripts, and tools.
 
 ## Logging, Errors, and Observability
 
@@ -123,10 +140,12 @@ Engineering priority is maintainability, clear architecture, behavior safety dur
 ## Tooling and Verification
 
 - Run `npm run check` before reporting success.
-- `npm run check` is the repository quality gate and must remain green for completed changes unless an explicit blocker is reported.
+- `npm run check` is the repository quality gate. It runs strict TypeScript checking, strict mypy checking, formatting, linting, standards audits, automated tests, and build-output verification.
+- The quality gate must remain green for completed changes unless an explicit blocker is reported.
+- Keep TypeScript source and generated browser JavaScript synchronized through the repository build; never hand-reconcile generated output.
 - Copyright headers must be maintained with `python tools/add_license_headers.py`.
 - Import ComfyUI core modules (`/scripts/app.js`, `/scripts/ui.js`, `/scripts/api.js`) via absolute `/scripts/...` paths to avoid extension-relative 404s.
-- Keep Jest mappings in `jest.config.cjs` aligned with any `/scripts/...` imports used by web modules.
+- Keep test-runner mappings aligned with any `/scripts/...` imports used by frontend modules.
 
 ## Testing Policy
 
@@ -138,6 +157,7 @@ Engineering priority is maintainability, clear architecture, behavior safety dur
 - Keep tests deterministic and isolated.
 - Prefer real behavior tests over excessive mocking; mock only external boundaries.
 - UI-critical behavior should be covered by automated tests when feasible.
+- Type-level contracts should have compile-time coverage where runtime tests cannot prove invalid states are rejected.
 - Failing tests are blocking.
 
 ## Verification Workflow
@@ -155,6 +175,10 @@ Engineering priority is maintainability, clear architecture, behavior safety dur
 - Behavior is safeguarded by tests appropriate to the change.
 - New or modified code follows the architecture, ownership, and safety rules in this file.
 - New or modified code is placed according to responsibility and dependency direction.
+- Python remains fully typed and strict-mypy clean without broad suppressions.
+- Frontend, test, and tooling source remains fully typed TypeScript and strict-TypeScript clean.
+- Generated JavaScript matches its TypeScript source and contains no hand-authored behavior.
+- Touched components have one cohesive responsibility; newly exposed ownership defects are resolved rather than documented for later.
 - Required docstrings are present and meaningful.
 - Logging and error handling are actionable.
 - Applicable verification is complete.
