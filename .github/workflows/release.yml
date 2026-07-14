@@ -30,7 +30,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
-          node-version: 22.14.0
+          node-version: 24
           cache: npm
 
       - name: Setup Python
@@ -80,9 +80,16 @@ jobs:
           git checkout main
           git reset --hard origin/main
 
+      - name: Install Comfy CLI
+        if: steps.release.outputs.released == 'true'
+        run: pip install comfy-cli
+
       - name: Publish Custom Node to Comfy Registry
         if: steps.release.outputs.released == 'true'
-        uses: Comfy-Org/publish-node-action@main
-        with:
-          skip_checkout: true
-          personal_access_token: ${{ secrets.REGISTRY_ACCESS_TOKEN }}
+        env:
+          REGISTRY_ACCESS_TOKEN: ${{ secrets.REGISTRY_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          comfy --skip-prompt --no-enable-telemetry env
+          comfy node publish --token "$REGISTRY_ACCESS_TOKEN"
