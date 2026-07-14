@@ -1,3 +1,15 @@
+# [0.10.0](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.9.3...v0.10.0) (2026-07-14)
+
+
+### Bug Fixes
+
+* **library:** report personal cube git state ([ddcde49](https://github.com/Artificial-Sweetener/SugarCubes/commit/ddcde4978589367a621c03c62df60aec67da38e7))
+
+
+### Features
+
+* **cubes:** streamline personal authoring and pack promotion ([69a8224](https://github.com/Artificial-Sweetener/SugarCubes/commit/69a8224e2a2c5c0b30f9dcbe4f873dfa34b973f4))
+
 ## [0.9.3](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.9.2...v0.9.3) (2026-07-11)
 
 
