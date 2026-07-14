@@ -114,6 +114,14 @@ function flattenMetadataSections(metadata) {
   return flattened;
 }
 
+/** Flatten owned metadata sections while preserving unrelated extension fields. */
+export function flattenCubeGroupMetadata(metadata, preserved = {}) {
+  return {
+    ...readObject(preserved),
+    ...flattenMetadataSections(metadata),
+  };
+}
+
 /**
  * Normalize cube group metadata into explicit ownership sections.
  */

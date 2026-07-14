@@ -106,8 +106,8 @@ async function flushPromises() {
 async function submitFormModal(fieldValues = {}) {
   await flushPromises();
   for (const [labelText, value] of Object.entries(fieldValues)) {
-    const label = Array.from(document.querySelectorAll('.sugarcubes-form-dialog label')).find((node) =>
-      node.textContent.includes(labelText),
+    const label = Array.from(document.querySelectorAll('.sugarcubes-form-dialog label')).find(
+      (node) => node.textContent.includes(labelText),
     );
     const input = label?.querySelector('input');
     expect(input).not.toBeNull();
@@ -254,7 +254,13 @@ describe('ui browser behaviors', () => {
       ok: true,
       json: async () => ({
         cubes: [
-          { name: 'SD Cube', cube_id: 'cube-sd', supported_models: ['SD 1.5'], tags: [], mtime: '' },
+          {
+            name: 'SD Cube',
+            cube_id: 'cube-sd',
+            supported_models: ['SD 1.5'],
+            tags: [],
+            mtime: '',
+          },
           { name: 'XL Cube', cube_id: 'cube-xl', supported_models: ['SDXL'], tags: [], mtime: '' },
         ],
       }),
@@ -630,6 +636,47 @@ describe('ui browser behaviors', () => {
     restore();
   });
 
+  test('tracked pack manager refreshes packs created after initial setup', async () => {
+    const restore = silenceConsole();
+    let repoReadCount = 0;
+    api.fetchApi = async (url, options = {}) => {
+      if (url === '/sugarcubes/list') {
+        return { ok: true, json: async () => ({ cubes: [] }) };
+      }
+      if (url === '/sugarcubes/repos' && (!options.method || options.method === 'GET')) {
+        repoReadCount += 1;
+        const repos = [
+          {
+            owner: 'Artificial-Sweetener',
+            repo: 'Base-Cubes',
+            enabled: true,
+            default_base_repo: true,
+            is_writable: true,
+          },
+        ];
+        if (repoReadCount > 1) {
+          repos.push({
+            owner: 'Artificial-Sweetener',
+            repo: 'New-Pack',
+            enabled: true,
+            default_base_repo: false,
+            is_writable: true,
+          });
+        }
+        return { ok: true, json: async () => ({ repos }) };
+      }
+      return { ok: true, json: async () => ({ repos: [] }) };
+    };
+
+    await setupExtension();
+    await flushPromises();
+    const dialog = await openTrackedPackManagerFromSettings(4);
+
+    expect(repoReadCount).toBeGreaterThan(1);
+    expect(dialog?.textContent).toContain('Artificial-Sweetener/New-Pack');
+    restore();
+  });
+
   test('sidebar shows the picker only and moves management into settings', async () => {
     const restore = silenceConsole();
     api.fetchApi = async (url, options = {}) => {
@@ -892,8 +939,7 @@ describe('ui browser behaviors', () => {
       (entry) => entry.url === '/sugarcubes/repos' && entry.options.method === 'POST',
     );
     const preflightCall = calls.find(
-      (entry) =>
-        entry.url === '/sugarcubes/repos/preflight' && entry.options.method === 'POST',
+      (entry) => entry.url === '/sugarcubes/repos/preflight' && entry.options.method === 'POST',
     );
     expect(preflightCall).toBeTruthy();
     expect(addCall).toBeTruthy();
@@ -1264,9 +1310,9 @@ describe('ui browser behaviors', () => {
 
     expect(versionInput.value).toBe('1.0.0');
     expect(versionInput.getAttribute('aria-expanded')).toBe('false');
-    expect(
-      calls.some((entry) => entry.url.startsWith('/sugarcubes/revisions?cube_id=')),
-    ).toBe(true);
+    expect(calls.some((entry) => entry.url.startsWith('/sugarcubes/revisions?cube_id='))).toBe(
+      true,
+    );
     expect(calls.some((entry) => entry.url === '/sugarcubes/load_revision')).toBe(true);
 
     const previousRevisionLoads = calls.filter(
@@ -1392,7 +1438,9 @@ describe('ui browser behaviors', () => {
     toggle.dispatchEvent(new Event('change', { bubbles: true }));
 
     expect(toggle.checked).toBe(false);
-    expect(row.textContent).toContain('Queueing will not auto-connect nearby compatible cube markers');
+    expect(row.textContent).toContain(
+      'Queueing will not auto-connect nearby compatible cube markers',
+    );
     restore();
   });
 
@@ -1768,7 +1816,9 @@ describe('ui browser behaviors', () => {
     modelInput.setSelectionRange(modelInput.value.length, modelInput.value.length);
     modelInput.dispatchEvent(new Event('input', { bubbles: true }));
 
-    const suggestions = Array.from(document.querySelectorAll('.sugarcubes-browser__model-suggestion'));
+    const suggestions = Array.from(
+      document.querySelectorAll('.sugarcubes-browser__model-suggestion'),
+    );
     expect(suggestions.map((node) => node.textContent)).toEqual(['Flux .1 D', 'Flux .1 Kontext']);
 
     modelInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
@@ -1903,8 +1953,9 @@ describe('ui browser behaviors', () => {
     await flushPromises();
 
     const titleInput = document.querySelector('.sugarcubes-browser__title-input');
-    const targetIdField = Array.from(document.querySelectorAll('.sugarcubes-browser__edit-field'))
-      .find((field) => field.textContent.includes('Target ID'));
+    const targetIdField = Array.from(
+      document.querySelectorAll('.sugarcubes-browser__edit-field'),
+    ).find((field) => field.textContent.includes('Target ID'));
     const newIdInput = Array.from(document.querySelectorAll('.sugarcubes-browser__edit-field'))
       .find((field) => field.textContent.includes('New ID'))
       ?.querySelector('input');
@@ -2005,8 +2056,9 @@ describe('ui browser behaviors', () => {
     await flushPromises();
 
     const titleInput = document.querySelector('.sugarcubes-browser__title-input');
-    const targetIdField = Array.from(document.querySelectorAll('.sugarcubes-browser__edit-field'))
-      .find((field) => field.textContent.includes('Target ID'));
+    const targetIdField = Array.from(
+      document.querySelectorAll('.sugarcubes-browser__edit-field'),
+    ).find((field) => field.textContent.includes('Target ID'));
     const newIdInput = Array.from(document.querySelectorAll('.sugarcubes-browser__edit-field'))
       .find((field) => field.textContent.includes('New ID'))
       ?.querySelector('input');
@@ -2039,7 +2091,7 @@ describe('ui browser behaviors', () => {
         tags: [],
         supported_models: ['SDXL'],
       },
-      version: '1.0.0',
+      version: '1.2.3',
     });
     restore();
   });

@@ -37,6 +37,7 @@ import {
 import { createPublicApi, getSugarCubesUI } from './ui/index.js';
 import { computeInnerBounds } from './ui/graph/CubeBounds.js';
 import { normalizeSubgraphPayload } from './ui/graph/SubgraphSerialization.js';
+import { rebindSubgraphWidgetValues } from './ui/graph/WidgetSnapshots.js';
 import { TrackedPackManagerDialog } from './ui/settings/TrackedPackManagerDialog.js';
 import { applyCubeDefinitionIdentity } from './ui/core/CubeDefinitionKey.js';
 
@@ -567,16 +568,20 @@ function createTrackedPacksSettingRow() {
 
   settingsUiState.trackedPacks = { root, summary };
   refreshTrackedPacksSettingRow();
-  if (!repoPanelState.loading && !repoPanelState.repos.length && !repoPanelState.error) {
-    refreshTrackedRepoPanel().catch((error) => {
+  if (!repoPanelState.loading) {
+    refreshTrackedRepoPanel({ checkForUpdates: false }).catch((error) => {
       logger.warn('SugarCubes: failed to refresh tracked pack summary', error);
     });
   }
   return root;
 }
 
-function openTrackedPackManagerDialog() {
+async function openTrackedPackManagerDialog() {
   if (!documentRef || trackedPackManagerDialog.isOpen) {
+    return;
+  }
+  await refreshTrackedRepoPanel({ checkForUpdates: false });
+  if (trackedPackManagerDialog.isOpen) {
     return;
   }
   trackedPackManagerDialog.open({
@@ -607,7 +612,13 @@ function createTrackedPackManagerSettingRow() {
   const controls = documentRef.createElement('div');
   applySettingsControlsStyle(controls);
   const openButton = createSettingsActionButton('Open Manager', () => {
-    openTrackedPackManagerDialog();
+    openTrackedPackManagerDialog().catch((error) => {
+      pushToastMessage(
+        'error',
+        'Unable to open Cube Pack manager',
+        error?.message || String(error),
+      );
+    });
   });
   controls.appendChild(openButton);
 
@@ -1683,6 +1694,9 @@ function registerSubgraphs(payload, result) {
         result?.warnings?.push(`Subgraph '${subId}' could not be normalized; skipping.`);
         continue;
       }
+      rebindSubgraphWidgetValues(normalized, (classType) =>
+        globalThis.LiteGraph?.createNode?.(classType),
+      );
       const subgraph = graph.createSubgraph(normalized);
       if (subgraph && typeof subgraph.configure === 'function') {
         subgraph.configure(normalized);
@@ -2778,6 +2792,8 @@ ui.cubeBrowser.configure({
     importCubeRevision,
     onCubesUpdated: (cubes) => ui.dirtyManager.updateKnownCubes(cubes),
     openConfirmDialog: (options) => ui.confirmDialog.open(options),
+    promoteCube: (cube) => ui.promotionService.promote(cube),
+    reconcileCubeIdentity: (identity) => ui.identityReconciler.reconcile(identity),
     startCubePlacement: (cubeId, options) => overlayManager.placement.start(cubeId, options),
   },
   helpers: {

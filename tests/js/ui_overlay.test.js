@@ -826,8 +826,8 @@ describe('ui overlay rendering', () => {
     await loadUi();
     const { OverlayManager } = await import('../../web/comfyui/ui/overlays/OverlayManager.js');
     const toast = { push: jest.fn() };
-    const cubeActions = {
-      saveImplementation: jest.fn(),
+    const saveService = { saveImplementation: jest.fn() };
+    const flavorService = {
       saveCurrentFaceValuesAsCubeDefaults: jest.fn(),
       saveCurrentFaceValuesAsAuthoredFlavor: jest.fn(),
       saveCurrentFaceValuesAsLocalFlavor: jest.fn(),
@@ -835,7 +835,8 @@ describe('ui overlay rendering', () => {
     };
     const manager = new OverlayManager({
       adapter: { getApp: () => ({ graph: {} }) },
-      cubeActions,
+      saveService,
+      flavorService,
       toast,
     });
 
@@ -850,7 +851,7 @@ describe('ui overlay rendering', () => {
       cube_revision_ref: 'v1.0.0',
     });
 
-    expect(cubeActions.saveCurrentFaceValuesAsCubeDefaults).not.toHaveBeenCalled();
+    expect(flavorService.saveCurrentFaceValuesAsCubeDefaults).not.toHaveBeenCalled();
     expect(toast.push).toHaveBeenCalledWith(
       'warn',
       'Historical version',

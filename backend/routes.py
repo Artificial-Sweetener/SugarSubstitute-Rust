@@ -94,6 +94,7 @@ class RouteHandlers:
     load_cube: RouteHandler
     update_metadata: RouteHandler
     rename_cube: RouteHandler
+    promote_cube: RouteHandler
     delete_cube: RouteHandler
     import_cube_file: RouteHandler
     save_many: RouteHandler
@@ -445,6 +446,35 @@ def build_route_handlers(services: BackendServices) -> RouteHandlers:
         except BackendError as error:
             return json_error_from_exception(error)
 
+    async def promote_cube(request: Any) -> Any:
+        """Move one personal cube into a claimed writable cube pack."""
+
+        try:
+            body = await parse_json_body(request)
+            destination = body.get("destination")
+            if not isinstance(destination, Mapping):
+                raise BackendError("'destination' field is required", status=400)
+            return json_success(
+                services.promotion.promote(
+                    source_cube_id=str(body.get("source_cube_id") or ""),
+                    owner=str(destination.get("owner") or ""),
+                    repo=str(destination.get("repo") or ""),
+                    name=str(body.get("name") or ""),
+                    target_model=str(body.get("target_model") or ""),
+                    supported_models=body.get("supported_models"),
+                    description_set="description" in body,
+                    description=normalize_metadata_string(body.get("description")),
+                    metadata=(
+                        body.get("metadata")
+                        if isinstance(body.get("metadata"), Mapping)
+                        else {}
+                    ),
+                ),
+                status=200,
+            )
+        except BackendError as error:
+            return json_error_from_exception(error)
+
     async def delete_cube(request: Any) -> Any:
         cube_id = request.query.get("cube_id")
         try:
@@ -497,8 +527,6 @@ def build_route_handlers(services: BackendServices) -> RouteHandlers:
             if workflow_raw is None:
                 raise BackendError("'workflow' field is required", status=400)
             actor = normalize_actor(body.get("actor"))
-            if not actor:
-                raise BackendError("'actor' field is required", status=400)
             return json_success(
                 services.exporter.save_many(
                     graph=normalize_graph_payload(graph_payload),
@@ -506,7 +534,7 @@ def build_route_handlers(services: BackendServices) -> RouteHandlers:
                     workflow_version=coerce_int(
                         body.get("workflow_version"), default=None
                     ),
-                    actor=actor,
+                    actor=actor or {},
                     cube_entries=parse_save_many_cube_entries(body.get("cubes")),
                 ),
                 status=200,
@@ -524,8 +552,6 @@ def build_route_handlers(services: BackendServices) -> RouteHandlers:
             if workflow_raw is None:
                 raise BackendError("'workflow' field is required", status=400)
             actor = normalize_actor(body.get("actor"))
-            if not actor:
-                raise BackendError("'actor' field is required", status=400)
             return json_success(
                 services.exporter.save_implementation(
                     graph=normalize_graph_payload(graph_payload),
@@ -533,7 +559,7 @@ def build_route_handlers(services: BackendServices) -> RouteHandlers:
                     workflow_version=coerce_int(
                         body.get("workflow_version"), default=None
                     ),
-                    actor=actor,
+                    actor=actor or {},
                     cube_entries=parse_save_many_cube_entries(body.get("cubes")),
                 ),
                 status=200,
@@ -709,6 +735,7 @@ def build_route_handlers(services: BackendServices) -> RouteHandlers:
         load_cube=load_cube,
         update_metadata=update_metadata,
         rename_cube=rename_cube,
+        promote_cube=promote_cube,
         delete_cube=delete_cube,
         import_cube_file=import_cube_file,
         save_many=save_many,
@@ -751,6 +778,7 @@ def register_routes(prompt_server: Any, services: BackendServices) -> RouteHandl
     routes.post("/sugarcubes/load")(handlers.load_cube)
     routes.post("/sugarcubes/update_metadata")(handlers.update_metadata)
     routes.post("/sugarcubes/rename")(handlers.rename_cube)
+    routes.post("/sugarcubes/promote")(handlers.promote_cube)
     routes.delete("/sugarcubes")(handlers.delete_cube)
     routes.post("/sugarcubes/import_file")(handlers.import_cube_file)
     routes.post("/sugarcubes/save_many")(handlers.save_many)

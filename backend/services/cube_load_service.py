@@ -26,6 +26,7 @@ try:
     from ...instrumentation import log_diagnostic
     from ..responses import BackendError
     from .cube_icon_service import attach_icon_url, normalize_existing_icon_metadata
+    from .cube_identity_redirect_service import CubeIdentityRedirectService
     from .cube_library_service import (
         CubeLibraryService,
         build_cube_identity_fields,
@@ -44,6 +45,9 @@ except ImportError:
         attach_icon_url,
         normalize_existing_icon_metadata,
     )
+    from backend.services.cube_identity_redirect_service import (
+        CubeIdentityRedirectService,
+    )
 
 _logger = logging.getLogger(__name__)
 CUBE_LOAD_TRACE_MARKER = "SugarCubes cube load diagnostic"
@@ -58,12 +62,14 @@ class CubeLoadService:
         *,
         load_cube_artifact: Callable[[Any], Any],
         prepare_cube_import: Callable[..., Any],
+        redirect_service: CubeIdentityRedirectService,
     ) -> None:
         """Initialize the cube load service."""
 
         self.library_service = library_service
         self.load_cube_artifact = load_cube_artifact
         self.prepare_cube_import = prepare_cube_import
+        self.redirect_service = redirect_service
 
     def load_cube(
         self,
@@ -78,12 +84,39 @@ class CubeLoadService:
         if not normalized_cube_id:
             raise BackendError("'cube_id' field is required", status=400)
 
+        resolved_cube_id = self.redirect_service.resolve(normalized_cube_id)
+        cube_path = self.library_service.resolve_cube_by_id(resolved_cube_id)
+        result = self.load_cube_path(
+            cube_path=cube_path,
+            cube_id=resolved_cube_id,
+            version_pin=version_pin,
+            drop_origin=drop_origin,
+        )
+        if resolved_cube_id != normalized_cube_id:
+            result["identity_redirect"] = {
+                "requested_cube_id": normalized_cube_id,
+                "resolved_cube_id": resolved_cube_id,
+            }
+        return result
+
+    def load_cube_path(
+        self,
+        *,
+        cube_path: Path,
+        cube_id: str,
+        version_pin: str = "",
+        drop_origin: Sequence[float] = (0.0, 0.0),
+    ) -> dict[str, Any]:
+        """Return the canonical prepared definition for one persisted cube path."""
+
+        normalized_cube_id = normalize_metadata_string(cube_id)
+        if not normalized_cube_id:
+            raise BackendError("'cube_id' field is required", status=400)
         _log_cube_library_diagnostic(
             "sugarcubes_frontend_load_cube_start",
             cube_id=normalized_cube_id,
             version_pin=version_pin,
         )
-        cube_path = self.library_service.resolve_cube_by_id(normalized_cube_id)
         try:
             loaded_cube = self.load_cube_artifact(cube_path)
             if version_pin and loaded_cube.version != version_pin:

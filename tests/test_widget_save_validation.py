@@ -13,138 +13,223 @@
 #
 #    You should have received a copy of the GNU Affero General Public License
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""Reject corrupt positional widget data before SugarCubes saves a cube."""
+"""Validate stable widget relationships without relying on current order."""
 
 from __future__ import annotations
 
 import pytest
 
-from sugarcubes.exporter.widget_validation import (
-    WidgetSaveValidationError,
-    validate_serialized_widget_values,
+from sugarcubes.cube_model.authored_default_policy import (
+    sanitize_authored_defaults_payload,
+)
+from sugarcubes.exporter.value_validation import (
+    PersistedValueError,
+    validate_named_node_inputs,
+)
+from sugarcubes.cube_model.widget_values import (
+    WidgetSnapshotError,
+    canonicalize_subgraph_widget_values,
+    decode_workflow_widget_snapshot,
 )
 
 
-def _definition(*fields: tuple[str, object]) -> dict[str, object]:
-    """Build an object-info definition in a deterministic widget order."""
+def test_explicit_snapshot_preserves_names_across_widget_reordering() -> None:
+    """Name-addressed values remain stable regardless of mapping iteration order."""
 
-    required = {name: spec for name, spec in fields}
-    return {
-        "input": {"required": required},
-        "input_order": {"required": list(required)},
+    snapshot = decode_workflow_widget_snapshot(
+        {
+            "sugarcubes_widget_values": {
+                "method": "dpmpp",
+                "steps": 30,
+            }
+        },
+        _definition(),
+    )
+
+    assert snapshot is not None
+    assert snapshot.values == {"method": "dpmpp", "steps": 30}
+
+
+def test_same_snapshot_names_decode_positional_values_without_live_order() -> None:
+    """Stored input identities decode values from their contemporaneous array."""
+
+    snapshot = decode_workflow_widget_snapshot(
+        {
+            "inputs": [
+                {"name": "method", "widget": {"name": "method"}},
+                {"name": "steps", "widget": {"name": "steps"}},
+            ],
+            "widgets_values": ["dpmpp", 30],
+        },
+        _definition(),
+    )
+
+    assert snapshot is not None
+    assert snapshot.values == {"method": "dpmpp", "steps": 30}
+
+
+def test_ambiguous_positional_values_fail_closed() -> None:
+    """Values without same-snapshot names cannot shift into current fields."""
+
+    with pytest.raises(WidgetSnapshotError, match="no same-snapshot"):
+        decode_workflow_widget_snapshot(
+            {"widgets_values": [30, "dpmpp"]},
+            _definition(),
+        )
+
+
+def test_portable_value_validation_rejects_named_range_corruption() -> None:
+    """Portable values remain constrained by their same-named live fields."""
+
+    definition = {
+        "input": {
+            "required": {
+                "white_point": [
+                    "FLOAT",
+                    {"default": 0.99, "min": 0.02, "max": 1.0},
+                ]
+            }
+        }
     }
 
+    with pytest.raises(PersistedValueError, match="white_point.*above maximum 1.0"):
+        validate_named_node_inputs(
+            node_id=10,
+            class_type="Example.Node",
+            inputs={"white_point": 2048},
+            definition=definition,
+        )
 
-def test_validation_accepts_exact_live_widget_order_and_values() -> None:
-    """A fully aligned sequence remains saveable without reinterpretation."""
 
-    definition = _definition(
-        ("steps", ["INT", {"default": 20, "min": 1, "max": 100}]),
-        ("method", [["euler", "dpmpp"], {"default": "euler"}]),
-    )
+def test_portable_picker_validation_rejects_invalid_stable_choice() -> None:
+    """Stable enum values remain validated after positional checks are removed."""
 
-    validate_serialized_widget_values(
+    with pytest.raises(PersistedValueError, match="method.*stable choice"):
+        validate_named_node_inputs(
+            node_id=10,
+            class_type="Example.Node",
+            inputs={"method": "invalid"},
+            definition=_definition(),
+        )
+
+
+def test_machine_local_picker_inventory_does_not_gate_cube_saves() -> None:
+    """Checkpoint inventory membership is outside portable authored validation."""
+
+    definition = {
+        "input": {
+            "required": {
+                "ckpt_name": [["machine-a.safetensors"], {}],
+            }
+        }
+    }
+
+    validate_named_node_inputs(
         node_id=10,
-        class_type="Example.Node",
-        persisted_widget_names=["steps", "method"],
-        widget_values=[30, "dpmpp"],
-        live_definition=definition,
+        class_type="CheckpointLoaderSimple",
+        inputs={"ckpt_name": ""},
+        definition=definition,
     )
 
 
-def test_validation_rejects_type_compatible_out_of_range_value() -> None:
-    """A shifted number cannot evade validation merely because its type fits."""
+def test_subgraph_persistence_removes_local_and_volatile_values_by_name() -> None:
+    """Subgraph arrays retain shape without shipping machine or seed values."""
 
-    definition = _definition(
-        ("white_point", ["FLOAT", {"default": 0.99, "min": 0.02, "max": 1.0}]),
-    )
-
-    with pytest.raises(WidgetSaveValidationError, match="white_point.*maximum 1.0"):
-        validate_serialized_widget_values(
-            node_id=10,
-            class_type="Example.Node",
-            persisted_widget_names=["white_point"],
-            widget_values=[2048],
-            live_definition=definition,
-        )
-
-
-def test_validation_rejects_widget_order_drift() -> None:
-    """Inserted or reordered public inputs must not silently shift saved values."""
-
-    definition = _definition(
-        ("keep_only", ["INT", {"default": 0, "min": 0, "max": 10}]),
-        ("black_point", ["FLOAT", {"default": 0.15, "min": 0.0, "max": 0.98}]),
-    )
-
-    with pytest.raises(WidgetSaveValidationError, match="widget order.*keep_only"):
-        validate_serialized_widget_values(
-            node_id=10,
-            class_type="Example.Node",
-            persisted_widget_names=["black_point"],
-            widget_values=[0.15],
-            live_definition=definition,
-        )
-
-
-def test_validation_rejects_invalid_picker_value() -> None:
-    """Picker values must be among the choices reported by live Comfy."""
-
-    definition = _definition(
-        ("method", [["GuidedFilter", "VITMatte"], {"default": "GuidedFilter"}]),
-    )
-
-    with pytest.raises(WidgetSaveValidationError, match="method.*available choice"):
-        validate_serialized_widget_values(
-            node_id=10,
-            class_type="Example.Node",
-            persisted_widget_names=["method"],
-            widget_values=[6],
-            live_definition=definition,
-        )
-
-
-def test_validation_rejects_stale_control_companion() -> None:
-    """A removed control-after-generate widget cannot shift following fields."""
-
-    definition = _definition(
-        ("seed", ["INT", {"default": 42, "min": 0, "max": 1000}]),
-        ("resolution", ["INT", {"default": 1080, "min": 16, "max": 4096}]),
-    )
-
-    with pytest.raises(WidgetSaveValidationError, match="resolution.*integer"):
-        validate_serialized_widget_values(
-            node_id=10,
-            class_type="Example.Node",
-            persisted_widget_names=["seed", "resolution"],
-            widget_values=[42, "randomize", 1080],
-            live_definition=definition,
-        )
-
-
-def test_validation_accepts_declared_control_after_generate_companion() -> None:
-    """Comfy-declared seed controls count as part of the positional contract."""
-
-    definition = _definition(
-        (
-            "seed",
-            [
-                "INT",
+    subgraphs = [
+        {
+            "id": "subgraph",
+            "nodes": [
                 {
-                    "default": 42,
-                    "min": 0,
-                    "max": 1000,
-                    "control_after_generate": True,
+                    "id": 7,
+                    "type": "SimpleSyrup.SimpleLoadCheckpoint",
+                    "inputs": [
+                        {"name": "ckpt_name", "widget": {"name": "ckpt_name"}},
+                        {"name": "vae_name", "widget": {"name": "vae_name"}},
+                        {"name": "clip_skip", "widget": {"name": "clip_skip"}},
+                    ],
+                    "widgets_values": [
+                        "machine-a.safetensors",
+                        "machine-a.vae.safetensors",
+                        False,
+                    ],
+                },
+                {
+                    "id": 8,
+                    "type": "KSampler",
+                    "inputs": [
+                        {"name": "seed", "widget": {"name": "seed"}},
+                        {"name": "steps", "widget": {"name": "steps"}},
+                    ],
+                    "widgets_values": [1234, "randomize", 30],
                 },
             ],
-        ),
-        ("steps", ["INT", {"default": 20, "min": 1, "max": 100}]),
-    )
+        }
+    ]
+    definitions = {
+        "SimpleSyrup.SimpleLoadCheckpoint": {
+            "input": {
+                "required": {
+                    "ckpt_name": [["machine-a.safetensors"], {}],
+                    "vae_name": [["machine-a.vae.safetensors"], {}],
+                    "clip_skip": ["BOOLEAN", {"default": False}],
+                }
+            }
+        },
+        "KSampler": {
+            "input": {
+                "required": {
+                    "seed": ["INT", {"control_after_generate": True}],
+                    "steps": ["INT", {"default": 20}],
+                }
+            }
+        },
+    }
 
-    validate_serialized_widget_values(
-        node_id=10,
-        class_type="Example.Node",
-        persisted_widget_names=["seed", "steps"],
-        widget_values=[42, "randomize", 30],
-        live_definition=definition,
-    )
+    canonical = canonicalize_subgraph_widget_values(subgraphs, definitions)
+
+    assert canonical[0]["nodes"][0]["widgets_values"] == [None, None, False]
+    assert canonical[0]["nodes"][1]["widgets_values"] == [None, 30]
+    assert subgraphs[0]["nodes"][0]["widgets_values"][0] == "machine-a.safetensors"
+
+
+def test_portability_policy_removes_scalar_resources_but_preserves_connections() -> (
+    None
+):
+    """Resource sockets remain connectable while local scalar choices stay local."""
+
+    payload = {
+        "implementation": {
+            "nodes": {
+                "scalar": {
+                    "class_type": "CheckpointLoaderSimple",
+                    "inputs": {"ckpt_name": "machine-a.safetensors"},
+                },
+                "connected": {
+                    "class_type": "CheckpointLoaderSimple",
+                    "inputs": {"ckpt_name": ["resource_name", 0]},
+                },
+            }
+        },
+        "surface": {"controls": []},
+        "flavors": {"authored": []},
+    }
+
+    sanitize_authored_defaults_payload(payload)
+
+    nodes = payload["implementation"]["nodes"]
+    assert nodes["scalar"]["inputs"] == {}
+    assert nodes["connected"]["inputs"] == {"ckpt_name": ["resource_name", 0]}
+
+
+def _definition() -> dict[str, object]:
+    """Build a stable enum and scalar definition fixture."""
+
+    return {
+        "input": {
+            "required": {
+                "steps": ["INT", {"default": 20, "min": 1, "max": 100}],
+                "method": [["euler", "dpmpp"], {"default": "euler"}],
+            }
+        },
+        "input_order": {"required": ["steps", "method"]},
+    }

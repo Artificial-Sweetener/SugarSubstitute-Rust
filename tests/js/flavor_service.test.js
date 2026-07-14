@@ -783,6 +783,64 @@ describe('flavor service', () => {
     expect(metadata.flavor_options.map((entry) => entry.id)).toEqual(['default']);
   });
 
+  test('finalized-save hydration reapplies the authoritative authored value', async () => {
+    const node = {
+      id: 1,
+      type: 'KSampler',
+      properties: { sugarcubes_symbol: 'ksampler' },
+      widgets: [{ name: 'cfg', value: 99 }],
+    };
+    const graph = {
+      _nodes: [node],
+      _groups: [
+        {
+          properties: {
+            sugarcubes: {
+              managed: true,
+              instance_id: 'inst-1',
+              cube_id: 'cube-1',
+              nodes: ['1'],
+              flavor: 'default',
+              flavor_scope: 'authored',
+              active_flavor_values: { 'ksampler.cfg': 7 },
+            },
+          },
+        },
+      ],
+    };
+    const service = new FlavorService({ api: createFlavorApi() });
+
+    await service.hydrateFromDefinition({
+      cubeId: 'cube-1',
+      graph,
+      forceApply: true,
+      entry: {
+        status: 'ready',
+        payload: {
+          cube: {
+            surface_signature: 'surface-a',
+            surface: {
+              default_flavor_id: 'default',
+              controls: [
+                {
+                  control_id: 'ksampler.cfg',
+                  symbol: 'ksampler',
+                  input_name: 'cfg',
+                  class_type: 'KSampler',
+                },
+              ],
+            },
+            flavors: {
+              authored: [{ id: 'default', name: 'Default', values: { 'ksampler.cfg': 7 } }],
+            },
+          },
+        },
+      },
+    });
+
+    expect(readWidgetValue(node, 'cfg')).toBe(7);
+  });
+
   test('hydrateFromDefinition only updates groups with the matching definition key', async () => {
     const graph = {
       _nodes: [],

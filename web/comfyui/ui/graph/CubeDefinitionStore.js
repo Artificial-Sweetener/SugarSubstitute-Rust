@@ -54,6 +54,23 @@ export class CubeDefinitionStore {
     return this.entries.get(resolved.definitionKey)?.status || null;
   }
 
+  /** Remove every cached revision belonging to one retired cube identity. */
+  invalidateCube(cubeId) {
+    const normalized = typeof cubeId === 'string' ? cubeId.trim() : '';
+    if (!normalized) {
+      return 0;
+    }
+    let removed = 0;
+    for (const [definitionKey, entry] of this.entries) {
+      if (entry?.cubeId !== normalized) {
+        continue;
+      }
+      this.entries.delete(definitionKey);
+      removed += 1;
+    }
+    return removed;
+  }
+
   ensure(request) {
     const resolved = resolveDefinitionRequest(request);
     if (!resolved.cubeId || !resolved.definitionKey) {
@@ -71,6 +88,51 @@ export class CubeDefinitionStore {
     }
     this.loadDefinition(resolved);
     return this.entries.get(resolved.definitionKey) || null;
+  }
+
+  /**
+   * Publish the canonical definition returned by a successful save.
+   *
+   * A save is authoritative even when the same definition key is already
+   * cached. Replacing that entry prevents a remake from continuing to use the
+   * pre-save definition until the normal cache TTL expires.
+   */
+  publishFinalized(request, payload) {
+    const cube = payload?.cube;
+    const resolved = resolveDefinitionRequest({
+      ...request,
+      cubeId: request?.cubeId || cube?.cube_id,
+      cubeVersion: request?.cubeVersion || cube?.version,
+    });
+    const hash = computeDefinitionHash(payload);
+    if (!resolved.cubeId || !resolved.definitionKey || !hash) {
+      throw new Error('Finalized cube definition is invalid');
+    }
+    const now = Date.now();
+    const entry = {
+      status: 'ready',
+      hash,
+      payload,
+      error: null,
+      ...resolved,
+      updatedAt: now,
+      expiresAt: now + this.ttlMs,
+    };
+    this.entries.set(resolved.definitionKey, entry);
+    this.evictCurrentAliases(resolved);
+    this.onUpdate?.(resolved.definitionKey, entry);
+    return entry;
+  }
+
+  /** Remove stale unversioned aliases after publishing a versioned worktree definition. */
+  evictCurrentAliases(resolved) {
+    if (!resolved.cubeVersion || !isCurrentRevisionRef(resolved.revisionRef)) {
+      return;
+    }
+    const unversionedKey = buildCubeDefinitionKey(resolved.cubeId, '');
+    if (unversionedKey !== resolved.definitionKey) {
+      this.entries.delete(unversionedKey);
+    }
   }
 
   async loadDefinition(request) {

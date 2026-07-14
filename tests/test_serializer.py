@@ -404,7 +404,46 @@ def _detailer_export_prompt(cube_id):
     }
 
 
-def _detailer_export_workflow(widget_values):
+def _detailer_export_workflow(widget_values, *, include_snapshot=True):
+    widget_names = [
+        "scale_factor",
+        "upscale_method",
+        "clamp_size",
+        "seed",
+        "steps",
+        "cfg",
+        "sampler_name",
+        "scheduler",
+        "denoise",
+        "feather",
+        "noise_mask",
+        "noise_mask_feather",
+        "tiled_encode",
+        "tiled_decode",
+    ]
+    named_values = {}
+    if include_snapshot:
+        value_index = 0
+        for widget_name in widget_names:
+            named_values[widget_name] = widget_values[value_index]
+            value_index += 1
+            if widget_name == "seed" and value_index < len(widget_values):
+                if widget_values[value_index] in {
+                    "fixed",
+                    "increment",
+                    "decrement",
+                    "randomize",
+                }:
+                    value_index += 1
+    detailer_node = {
+        "id": 2,
+        "type": "SimpleSyrup.DetailSEGSByScaleFactor",
+        "pos": [200, 0],
+        "size": [290, 520],
+        "widgets_values": widget_values,
+    }
+    if include_snapshot:
+        detailer_node["sugarcubes_widget_values"] = named_values
     return {
         "nodes": [
             {
@@ -413,13 +452,7 @@ def _detailer_export_workflow(widget_values):
                 "pos": [0, 0],
                 "size": [140, 46],
             },
-            {
-                "id": 2,
-                "type": "SimpleSyrup.DetailSEGSByScaleFactor",
-                "pos": [200, 0],
-                "size": [290, 520],
-                "widgets_values": widget_values,
-            },
+            detailer_node,
             {
                 "id": 3,
                 "type": "SugarCubes.CubeOutput",
@@ -889,7 +922,7 @@ def test_serializer_compacts_list_definitions_and_removes_help_metadata():
     assert not _contains_nested_choice_array(definitions)
 
 
-def test_serializer_preserves_authored_picker_defaults_without_definition_inventories():
+def test_serializer_preserves_only_portable_authored_picker_defaults():
     cubes = export_cubes(
         _compact_definition_prompt(),
         definition_resolver=_compact_definition_resolver,
@@ -898,13 +931,17 @@ def test_serializer_preserves_authored_picker_defaults_without_definition_invent
     controls = payload["surface"]["controls"]
     authored_values = payload["flavors"]["authored"][0]["values"]
 
-    preserved_fields = {
+    local_resource_fields = {
         ("CheckpointLoaderSimple", "ckpt_name"),
         ("LoadImage", "image"),
         ("LoadImageMask", "image"),
         ("VAELoader", "vae_name"),
         ("UpscaleModelLoader", "model_name"),
         ("UltralyticsDetectorProvider", "model_name"),
+        ("SeedVR2LoadDiTModel", "model"),
+        ("SeedVR2LoadDiTModel", "device"),
+    }
+    portable_fields = {
         ("SimpleSyrup.GroundingDINOModelLoader", "grounding_dino_model"),
         ("SimpleSyrup.GroundingDINOModelLoader", "text_encoder"),
         ("SimpleSyrup.SAMModelLoader", "sam_model"),
@@ -916,8 +953,6 @@ def test_serializer_preserves_authored_picker_defaults_without_definition_invent
         ("VectorscopeCC", "g"),
         ("VectorscopeCC", "b"),
         ("VectorscopeCC", "alt"),
-        ("SeedVR2LoadDiTModel", "model"),
-        ("SeedVR2LoadDiTModel", "device"),
         ("SeedVR2LoadDiTModel", "attention_mode"),
     }
 
@@ -925,8 +960,11 @@ def test_serializer_preserves_authored_picker_defaults_without_definition_invent
         (control["class_type"], control["input_name"]): control for control in controls
     }
 
-    for field in preserved_fields:
+    for field in portable_fields:
         assert controls_by_field[field]["control_id"] in authored_values
+    for field in local_resource_fields:
+        assert field in controls_by_field
+        assert controls_by_field[field]["control_id"] not in authored_values
 
     assert controls_by_field[("KSampler", "seed")]["control_id"] not in authored_values
     assert (
@@ -948,12 +986,6 @@ def test_serializer_preserves_authored_picker_defaults_without_definition_invent
             ]
         ]
         == "BERT base uncased (auto)"
-    )
-    assert (
-        authored_values[
-            controls_by_field[("SeedVR2LoadDiTModel", "model")]["control_id"]
-        ]
-        == "seedvr2_ema_3b_fp8_e4m3fn.safetensors"
     )
 
 
@@ -989,6 +1021,11 @@ def test_serializer_backfills_missing_widget_values_from_workflow():
                 "pos": [100, 100],
                 "size": [180, 60],
                 "widgets_values": [7, "euler", "normal"],
+                "sugarcubes_widget_values": {
+                    "seed": 7,
+                    "sampler_name": "euler",
+                    "scheduler": "normal",
+                },
             },
         ],
         "version": 1,
@@ -1006,10 +1043,10 @@ def test_serializer_backfills_missing_widget_values_from_workflow():
     assert "ksampler.seed" not in authored_values
 
 
-def test_serializer_rejects_misaligned_detailer_widget_values():
+def test_serializer_rejects_ambiguous_positional_widget_values():
     cube_id = "local/example-user/detailer-corrupt.cube"
 
-    with pytest.raises(ValueError, match="Unsafe cube widget serialization"):
+    with pytest.raises(ValueError, match="Unsafe workflow widget snapshot"):
         export_cubes(
             _detailer_export_prompt(cube_id),
             workflow=_detailer_export_workflow(
@@ -1028,7 +1065,8 @@ def test_serializer_rejects_misaligned_detailer_widget_values():
                     False,
                     False,
                     False,
-                ]
+                ],
+                include_snapshot=False,
             ),
             definition_resolver=_detailer_definition_resolver,
         )
@@ -1144,6 +1182,7 @@ def test_serializer_preserves_explicit_blank_text_from_workflow():
                 "pos": [100, 100],
                 "size": [180, 60],
                 "widgets_values": [""],
+                "sugarcubes_widget_values": {"value": ""},
             },
         ],
         "version": 1,

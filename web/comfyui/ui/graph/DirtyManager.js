@@ -18,7 +18,6 @@
  */
 
 import { DirtyTracker } from './DirtyTracker.js';
-import { CubeDefinitionStore } from './CubeDefinitionStore.js';
 import { BaselineStore } from './BaselineStore.js';
 import { BaselineResolver } from './BaselineResolver.js';
 import { getGraphGroups } from './GraphQuery.js';
@@ -30,7 +29,7 @@ import { buildCubeDefinitionKey, normalizeRevisionRef } from '../core/CubeDefini
  * Coordinate dirty manager behavior for the SugarCubes UI.
  */
 export class DirtyManager {
-  constructor({ adapter, events, scheduler, cubeBrowser, cubeApi } = {}) {
+  constructor({ adapter, events, scheduler, cubeBrowser, definitionStore } = {}) {
     this.adapter = adapter;
     this.events = events;
     this.scheduler = scheduler;
@@ -45,23 +44,7 @@ export class DirtyManager {
       baselineStore: this.baselineStore,
       baselineResolver: this.baselineResolver,
     });
-    this.definitionStore = new CubeDefinitionStore({
-      api: cubeApi,
-      logger: adapter?.getConsole?.(),
-      onUpdate: (definitionKey, entry) => {
-        if (entry?.status === 'ready' && entry?.payload) {
-          this.events?.emit?.('cube:definition:loaded', {
-            cubeId: entry.cubeId,
-            definitionKey,
-            entry,
-            graph: this.lastGraph,
-          });
-        }
-        if (this.lastGraph) {
-          this.requestRefresh({ graph: this.lastGraph, reason: 'definition-update' });
-        }
-      },
-    });
+    this.definitionStore = definitionStore;
     this.refreshScheduler = new DirtyRefreshScheduler({
       scheduler: this.scheduler,
       onRefresh: (options) => this.refresh(options),
@@ -194,6 +177,15 @@ export class DirtyManager {
 
   markClean({ graph, cubeIds } = {}) {
     this.tracker.markClean({ graph, cubeIds });
+  }
+
+  /** Install authoritative persisted definition baselines after a save. */
+  acceptFinalizedDefinitions({ entries } = {}) {
+    for (const result of Array.isArray(entries) ? entries : []) {
+      if (result?.definitionKey && result?.entry) {
+        this.baselineStore.setDefinition(result.definitionKey, result.entry);
+      }
+    }
   }
 
   markLocalBaseline({ graph, cubeIds } = {}) {

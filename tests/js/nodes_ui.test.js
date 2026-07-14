@@ -273,7 +273,7 @@ describe('nodes ui integration', () => {
     await loadNodesUi();
     const extension = app._extensions[0];
     const handler = jest.fn();
-    getSugarCubesUI().cubeActions.startCreateCubeFromMarker = handler;
+    getSugarCubesUI().cubeCreation.startCreateCubeFromMarker = handler;
 
     class MarkerType {
       constructor({ cubeId }) {
@@ -329,8 +329,8 @@ describe('nodes ui integration', () => {
     const extension = app._extensions[0];
     const staleHandler = jest.fn();
     const currentHandler = jest.fn();
-    getSugarCubesUI().cubeActions.startCreateCubeFromMarker = staleHandler;
-    getSugarCubesUI({ forceNew: true }).cubeActions.startCreateCubeFromMarker = currentHandler;
+    getSugarCubesUI().cubeCreation.startCreateCubeFromMarker = staleHandler;
+    getSugarCubesUI({ forceNew: true }).cubeCreation.startCreateCubeFromMarker = currentHandler;
 
     class MarkerType {
       constructor() {

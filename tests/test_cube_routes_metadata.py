@@ -34,11 +34,24 @@ SDXL_CUBE_ID = "artificial-sweetener/base-cubes/SDXL/demo.cube"
 def ensure_metadata_repo(services):
     """Create the tracked repo that matches the lowercase metadata test ids."""
 
-    return ensure_tracked_repo(
+    checkout = ensure_tracked_repo(
         services,
         owner="artificial-sweetener",
         repo="base-cubes",
         default_base_repo=False,
+    )
+    if not (checkout / ".git").exists():
+        services.tracked_repos.git_runner(["init", "-b", "main"], cwd=checkout)
+    return checkout
+
+
+def commit_metadata_fixture(services, checkout, cube_path):
+    """Commit one source cube so rename tests exercise real tracked history."""
+
+    services.tracked_repos.commit_file(
+        repo_root=checkout,
+        repo_relative_path=cube_path.relative_to(checkout).as_posix(),
+        commit_message="create metadata fixture",
     )
 
 
@@ -85,7 +98,7 @@ def test_update_metadata_updates_description_metadata_and_version(
         ),
         encoding="utf-8",
     )
-
+    commit_metadata_fixture(services, checkout, cube_path)
     response = asyncio.run(
         build_route_handlers(services).update_metadata(
             FakeRequest(
@@ -149,6 +162,7 @@ def test_update_metadata_updates_default_alias_display_metadata(
         ),
         encoding="utf-8",
     )
+    commit_metadata_fixture(services, checkout, cube_path)
 
     response = asyncio.run(
         build_route_handlers(services).update_metadata(
@@ -445,6 +459,19 @@ def test_rename_route_preserves_response_shape(tmp_path, backend_services_factor
         ),
         encoding="utf-8",
     )
+    commit_metadata_fixture(services, checkout, cube_path)
+    services.local_flavors.write_cube_state(
+        CANONICAL_CUBE_ID,
+        {
+            "cube_id": CANONICAL_CUBE_ID,
+            "surfaces": {
+                "surface": {
+                    "flavors": [{"id": "draft", "name": "Draft", "values": {"cfg": 6}}],
+                    "selected_flavor_id": "draft",
+                }
+            },
+        },
+    )
 
     response = asyncio.run(
         build_route_handlers(services).rename_cube(
@@ -464,6 +491,8 @@ def test_rename_route_preserves_response_shape(tmp_path, backend_services_factor
     assert payload["cube"]["cube_id"] == OTHER_CUBE_ID
     assert payload["cube"]["name"] == "other"
     assert payload["cube"]["display_name"] == "other"
+    assert payload["cube"]["version"] == "1.0.0"
+    assert payload["commit"]["commit_sha"]
     assert stored["cube_id"] == OTHER_CUBE_ID
     assert stored["metadata"]["default_alias"] == "other"
     assert stored["metadata"]["previous_cube_id"] == CANONICAL_CUBE_ID
@@ -472,6 +501,11 @@ def test_rename_route_preserves_response_shape(tmp_path, backend_services_factor
     assert group_metadata["cube_version"] == "1.0.0"
     assert group_metadata["cube_definition_key"] == f"{OTHER_CUBE_ID}@1.0.0"
     assert not cube_path.exists()
+    assert (
+        services.local_flavors.read_cube_state(OTHER_CUBE_ID)["cube_id"]
+        == OTHER_CUBE_ID
+    )
+    assert not services.local_flavors.path_for_cube_id(CANONICAL_CUBE_ID).exists()
 
 
 def test_rename_route_derives_target_from_default_alias(
@@ -525,6 +559,7 @@ def test_rename_route_derives_target_from_default_alias(
         ),
         encoding="utf-8",
     )
+    commit_metadata_fixture(services, checkout, cube_path)
 
     response = asyncio.run(
         build_route_handlers(services).rename_cube(
@@ -583,6 +618,7 @@ def test_rename_route_moves_between_target_model_folders(
         ),
         encoding="utf-8",
     )
+    commit_metadata_fixture(services, checkout, cube_path)
 
     rename_response = asyncio.run(
         build_route_handlers(services).rename_cube(

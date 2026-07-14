@@ -126,11 +126,15 @@ def backend_services_factory():
 
     from sugarcubes.backend import BackendServices
     from sugarcubes.backend.services import (
+        CubeArtifactRepository,
         CubeExportService,
         CubeDependencyService,
+        CubeHistoryService,
+        CubeIdentityRedirectService,
         CubeLibraryService,
         CubeLoadService,
         CubeMetadataService,
+        CubePromotionService,
         CubeRevisionService,
         IdentityPolicyService,
         LocalFlavorService,
@@ -165,6 +169,9 @@ def backend_services_factory():
             preflight_service=preflight_service or AllowingPreflightService(),
         )
         local_flavors = LocalFlavorService(tracked_repos)
+        artifacts = CubeArtifactRepository(tracked_repos)
+        history = CubeHistoryService(tracked_repos)
+        redirects = CubeIdentityRedirectService(tracked_repos)
         identity = IdentityPolicyService(extension_root)
         ownership = OwnershipPolicyService(
             tracked_repo_service=tracked_repos,
@@ -200,6 +207,37 @@ def backend_services_factory():
                     )
                 )
             ),
+            artifacts=artifacts,
+            history=history,
+            local_flavors=local_flavors,
+        )
+        promotion = CubePromotionService(
+            artifacts=artifacts,
+            history=history,
+            redirects=redirects,
+            local_flavors=local_flavors,
+            ownership=ownership,
+            library=library,
+            retarget_cube_payload=(
+                retarget_cube_payload
+                or (
+                    lambda payload, *, previous_cube_id, target_cube_id, previous_default_alias, target_default_alias: (
+                        None
+                    )
+                )
+            ),
+        )
+        dependencies = CubeDependencyService(
+            library_service=library,
+            tracked_repo_service=tracked_repos,
+            workspace_path=tmp_path / "ComfyUI",
+            custom_nodes_root=tmp_path / "custom_nodes",
+        )
+        loader = CubeLoadService(
+            library,
+            load_cube_artifact=load_cube_artifact or (lambda path: None),
+            prepare_cube_import=prepare_cube_import or default_prepared,
+            redirect_service=redirects,
         )
         exporter = CubeExportService(
             library,
@@ -224,24 +262,23 @@ def backend_services_factory():
                     )
                 )
             ),
+            finalized_definition_provider=lambda _path, _cube_id, payload: {
+                "cube": payload,
+                "nodes": [],
+                "markers": [],
+                "connections": [],
+                "layout": None,
+                "warnings": [],
+                "subgraphs": payload.get("implementation", {}).get("subgraphs", []),
+            },
             local_flavor_service=local_flavors,
-        )
-        dependencies = CubeDependencyService(
-            library_service=library,
-            tracked_repo_service=tracked_repos,
-            workspace_path=tmp_path / "ComfyUI",
-            custom_nodes_root=tmp_path / "custom_nodes",
-        )
-        loader = CubeLoadService(
-            library,
-            load_cube_artifact=load_cube_artifact or (lambda path: None),
-            prepare_cube_import=prepare_cube_import or default_prepared,
         )
         revisions = CubeRevisionService(
             library,
             tracked_repos,
             load_cube_artifact=load_cube_artifact or (lambda path: None),
             prepare_cube_import=prepare_cube_import or default_prepared,
+            redirect_service=redirects,
         )
         return BackendServices(
             library=library,
@@ -249,6 +286,8 @@ def backend_services_factory():
             identity=identity,
             ownership=ownership,
             metadata=metadata,
+            promotion=promotion,
+            redirects=redirects,
             exporter=exporter,
             loader=loader,
             revisions=revisions,

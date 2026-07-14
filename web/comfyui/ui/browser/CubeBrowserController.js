@@ -197,6 +197,7 @@ export class CubeBrowserController {
       onEditSave: () => this.saveEdit(),
       onEditCancel: () => this.cancelEdit(),
       onDelete: () => this.requestDelete(),
+      onPromote: () => this.requestPromotion(),
       onSearchChange: (value) => this.updateSearch(value),
       onSelect: (cubeKey, options) => this.selectCube(cubeKey, options),
       onToggleAuthorGroup: (key) => this.toggleAuthorGroup(key),
@@ -933,18 +934,13 @@ export class CubeBrowserController {
           title: 'Rename SugarCube?',
           message: [
             'Changing the default alias renames this cube and updates its canonical ID.',
-            'The version will reset to 1.0.0.',
+            `Version ${version || selected.version || 'history'} and local flavors will be preserved.`,
           ],
           confirmLabel: 'Rename',
         });
         if (!confirmed) {
           return;
         }
-        const resetVersion = '1.0.0';
-        if (inputs.version) {
-          inputs.version.value = resetVersion;
-        }
-        version = resetVersion;
         const { response: renameResponse, data: renameData } = await this.api.rename(
           JSON.stringify({
             cube_id: selected.cube_id,
@@ -960,6 +956,11 @@ export class CubeBrowserController {
           return;
         }
         activeCubeId = renameData?.cube?.cube_id || targetCubeId;
+        this.actions.reconcileCubeIdentity?.({
+          previousCubeId: selected.cube_id,
+          cubeId: activeCubeId,
+          defaultAlias: renameData?.cube?.default_alias || routeAlias,
+        });
       }
       const payload = {
         cube_id: activeCubeId,
@@ -1085,6 +1086,22 @@ export class CubeBrowserController {
     } catch (error) {
       const message = error?.message || String(error);
       this.toast?.push('error', 'Delete failed', message);
+    } finally {
+      this.store.setBusy(false);
+      this.render();
+    }
+  }
+
+  async requestPromotion() {
+    const selected = this.getCubeBySelectionKey(this.store.state.selected);
+    if (!selected) {
+      this.toast?.push('warn', 'Select a cube', 'Choose a personal cube before moving it.');
+      return;
+    }
+    this.store.setBusy(true);
+    this.render();
+    try {
+      await this.actions.promoteCube?.(selected);
     } finally {
       this.store.setBusy(false);
       this.render();

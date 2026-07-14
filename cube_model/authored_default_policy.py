@@ -20,6 +20,7 @@ from __future__ import annotations
 from typing import Any, Mapping, MutableMapping
 
 from .document import CubeDocument
+from .input_persistence import should_store_authored_value
 from .surface_value_policy import volatile_surface_control_ids
 
 
@@ -34,6 +35,7 @@ def sanitize_authored_defaults_document(document: CubeDocument) -> CubeDocument:
 def sanitize_authored_defaults_payload(payload: MutableMapping[str, Any]) -> None:
     """Remove authored values that should not be stored in portable cube files."""
 
+    _strip_unshippable_node_inputs(payload.get("implementation"))
     surface = payload.get("surface")
     flavors = payload.get("flavors")
     if not isinstance(surface, Mapping) or not isinstance(flavors, Mapping):
@@ -56,13 +58,48 @@ def sanitize_authored_defaults_payload(payload: MutableMapping[str, Any]) -> Non
             values.pop(control_id, None)
 
 
+def _strip_unshippable_node_inputs(implementation: Any) -> None:
+    """Remove scalar local and volatile defaults while retaining graph bindings."""
+
+    if not isinstance(implementation, Mapping):
+        return
+    nodes = implementation.get("nodes")
+    if not isinstance(nodes, Mapping):
+        return
+    for node in nodes.values():
+        if not isinstance(node, Mapping):
+            continue
+        class_type = node.get("class_type")
+        inputs = node.get("inputs")
+        if not isinstance(class_type, str) or not isinstance(inputs, MutableMapping):
+            continue
+        for input_name, value in list(inputs.items()):
+            if not isinstance(input_name, str) or _contains_runtime_reference(value):
+                continue
+            if not should_store_authored_value(class_type, input_name):
+                inputs.pop(input_name, None)
+
+
+def _contains_runtime_reference(value: Any) -> bool:
+    """Return whether a node input contains a serialized graph relationship."""
+
+    if isinstance(value, list):
+        if (
+            len(value) == 2
+            and isinstance(value[0], str | int)
+            and isinstance(value[1], str | int)
+        ):
+            return True
+        return any(_contains_runtime_reference(entry) for entry in value)
+    if isinstance(value, Mapping):
+        return any(_contains_runtime_reference(entry) for entry in value.values())
+    return False
+
+
 def should_strip_authored_default(class_type: str, input_name: str) -> bool:
     """Return whether authored defaults for one volatile control should be omitted."""
 
-    _ = class_type
-    if input_name.strip() == "seed":
-        return True
-    return False
+    return not should_store_authored_value(class_type, input_name)
 
 
 def _stripped_control_ids(controls: Any) -> set[str]:

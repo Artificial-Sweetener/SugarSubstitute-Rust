@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
-import { CubeActionService } from '../../web/comfyui/ui/CubeActionService.js';
+import { CubeCreationService } from '../../web/comfyui/ui/create/CubeCreationService.js';
 import { ComfyAdapter } from '../../web/comfyui/ui/core/ComfyAdapter.js';
 import { CreateCubeModal } from '../../web/comfyui/ui/dialogs/CreateCubeModal.js';
 
@@ -552,30 +552,30 @@ describe('marker create cube flow', () => {
     setWidgetValue(outputMarker, 'default_alias', '');
     setWidgetValue(outputMarker, 'instance_alias', '');
     const toast = { push: jest.fn() };
-    const openCreateCube = jest.fn(async ({ candidate }) => {
+    const openCreatePersonalCube = jest.fn(async ({ candidate }) => {
       expect(candidate.defaultAlias).toBe('');
-      expect(candidate.cubeId).toBe('local/personal/SDXL/SugarCube.cube');
-      expect(candidate.targetModel).toBe('SDXL');
-      expect(candidate.supportedModels).toEqual(['SDXL', 'SD 1.5']);
+      expect(candidate.cubeId).toBe('local/personal/SugarCube.cube');
+      expect(candidate.targetModel).toBe('');
+      expect(candidate.supportedModels).toEqual([]);
       expect(candidate.markerIds).toEqual([1, 3]);
       expect(candidate.nodeIds).toEqual([2]);
       expect(candidate.markers).toEqual([inputMarker, outputMarker]);
       expect(candidate.nodes).toEqual([graph._nodes[1]]);
       return null;
     });
-    const service = new CubeActionService({
+    const service = new CubeCreationService({
       adapter: {
         getApp: () => ({ graph }),
         getConsole: () => ({ error: jest.fn() }),
       },
-      dialogs: { openCreateCube },
+      dialogs: { openCreatePersonalCube },
       toast,
     });
 
     const result = await service.startCreateCubeFromMarker(inputMarker);
 
     expect(result).toBeNull();
-    expect(openCreateCube).toHaveBeenCalledTimes(1);
+    expect(openCreatePersonalCube).toHaveBeenCalledTimes(1);
     expect(toast.push).not.toHaveBeenCalledWith(
       'error',
       'Default alias is required.',
@@ -583,30 +583,18 @@ describe('marker create cube flow', () => {
     );
   });
 
-  test('create action offers writable pack destinations and saves with selected pack identity', async () => {
+  test('create action saves locally without loading packs or requiring sharing metadata', async () => {
     const { graph, inputMarker } = makeGraph();
     let saveBody = null;
-    const openCreateCube = jest.fn(async ({ destinations, deriveCubeId }) => {
-      expect(destinations.map((destination) => destination.key)).toEqual([
-        'local/personal',
-        'github/ExampleUser/Example-Cubes',
-        'new-pack',
-      ]);
-      const packDestination = destinations.find(
-        (destination) => destination.key === 'github/ExampleUser/Example-Cubes',
-      );
-      expect(deriveCubeId('text to image', packDestination)).toBe(
-        'ExampleUser/Example-Cubes/SDXL/Text to Image.cube',
-      );
-      return {
-        defaultAlias: 'text to image',
-        cubeId: deriveCubeId('text to image', packDestination),
-        targetModel: 'SDXL',
-        supportedModels: ['SDXL', 'SD 1.5'],
-        description: '',
-      };
+    const openCreatePersonalCube = jest.fn(async ({ deriveIdentity }) => {
+      expect(deriveIdentity('text to image')).toEqual({
+        name: 'Text to Image',
+        defaultAlias: 'Text to Image',
+        cubeId: 'local/personal/Text to Image.cube',
+      });
+      return deriveIdentity('text to image');
     });
-    const service = new CubeActionService({
+    const service = new CubeCreationService({
       adapter: {
         getApp: () => ({
           graph,
@@ -621,37 +609,21 @@ describe('marker create cube flow', () => {
         listCubePacks: jest.fn(async () => ({
           response: { ok: true },
           data: {
-            repos: [
-              {
-                owner: 'ExampleUser',
-                repo: 'Example-Cubes',
-                enabled: true,
-                is_writable: true,
-              },
-              {
-                owner: 'Other',
-                repo: 'Read-Only',
-                enabled: true,
-                is_writable: false,
-              },
-            ],
-            identity_policy: { claimed_github_owner: 'ExampleUser' },
+            repos: [],
           },
         })),
         saveImplementation: jest.fn(async (body) => {
           saveBody = JSON.parse(body);
           return {
             response: { ok: true },
-            data: { saved: [{ cube_id: 'ExampleUser/Example-Cubes/SDXL/Text to Image.cube' }] },
+            data: { saved: [{ cube_id: 'local/personal/Text to Image.cube' }] },
           };
         }),
       },
-      storage: {
-        readJson: () => ({ author: 'Tester', author_url: '' }),
-      },
       toast: { push: jest.fn() },
-      dialogs: { openCreateCube },
+      dialogs: { openCreatePersonalCube },
       instanceManager: { refresh: jest.fn(), scheduleRefresh: jest.fn() },
+      saveReconciler: { reconcile: jest.fn(async () => {}) },
       dirtyManager: {
         addSavedIds: jest.fn(),
         markClean: jest.fn(),
@@ -662,99 +634,16 @@ describe('marker create cube flow', () => {
 
     const result = await service.startCreateCubeFromMarker(inputMarker);
 
-    expect(result.cubeId).toBe('ExampleUser/Example-Cubes/SDXL/Text to Image.cube');
-    expect(result.defaultAlias).toBe('SDXL/Text to Image');
-    expect(result.targetModel).toBe('SDXL');
-    expect(result.supportedModels).toEqual(['SDXL', 'SD 1.5']);
-    expect(saveBody.cubes[0].cube_id).toBe('ExampleUser/Example-Cubes/SDXL/Text to Image.cube');
+    expect(result.cubeId).toBe('local/personal/Text to Image.cube');
+    expect(result.defaultAlias).toBe('Text to Image');
+    expect(result.targetModel).toBe('');
+    expect(result.supportedModels).toEqual([]);
+    expect(service.api.listCubePacks).not.toHaveBeenCalled();
+    expect(saveBody.actor).toBeUndefined();
+    expect(saveBody.cubes[0].cube_id).toBe('local/personal/Text to Image.cube');
     expect(saveBody.cubes[0].metadata).toEqual({
-      default_alias: 'SDXL/Text to Image',
-      target_model: 'SDXL',
-      supported_models: ['SDXL', 'SD 1.5'],
+      default_alias: 'Text to Image',
     });
-  });
-
-  test('create action creates and returns a new authoring pack destination', async () => {
-    const api = {
-      createAuthoringCubePack: jest.fn(async (body) => {
-        expect(JSON.parse(body)).toEqual({
-          owner: 'ExampleUser',
-          repo: 'Example-Cubes',
-          enabled: true,
-        });
-        return {
-          response: { ok: true },
-          data: {
-            repo: {
-              owner: 'ExampleUser',
-              repo: 'Example-Cubes',
-              enabled: true,
-              is_writable: true,
-            },
-          },
-        };
-      }),
-    };
-    const service = new CubeActionService({
-      api,
-      dialogs: {
-        openForm: jest.fn(async ({ fields }) => {
-          expect(fields.map((field) => field.key)).toEqual(['repo']);
-          return { repo: 'Example-Cubes' };
-        }),
-      },
-      toast: { push: jest.fn() },
-    });
-    const context = {
-      identityPolicy: { claimed_github_owner: 'ExampleUser' },
-      destinations: [
-        {
-          key: 'local/personal',
-          sourceKind: 'local',
-          namespace: 'personal',
-          label: 'local',
-          detail: 'personal',
-        },
-        { key: 'new-pack', action: 'create-pack' },
-      ],
-    };
-
-    const destination = await service.createAuthoringPackFromModal(context);
-
-    expect(destination).toEqual(
-      expect.objectContaining({
-        key: 'github/ExampleUser/Example-Cubes',
-        sourceKind: 'github',
-        owner: 'ExampleUser',
-        repo: 'Example-Cubes',
-      }),
-    );
-    expect(context.destinations.map((entry) => entry.key)).toEqual([
-      'local/personal',
-      'github/ExampleUser/Example-Cubes',
-      'new-pack',
-    ]);
-  });
-
-  test('create action blocks new pack creation when no GitHub owner is claimed', async () => {
-    const service = new CubeActionService({
-      api: {
-        createAuthoringCubePack: jest.fn(),
-      },
-      dialogs: {
-        openForm: jest.fn(),
-      },
-      toast: { push: jest.fn() },
-    });
-
-    await expect(
-      service.createAuthoringPackFromModal({
-        identityPolicy: { claimed_github_owner: '' },
-        destinations: [{ key: 'new-pack', action: 'create-pack' }],
-      }),
-    ).rejects.toThrow('Set a claimed GitHub owner');
-    expect(service.dialogs.openForm).not.toHaveBeenCalled();
-    expect(service.api.createAuthoringCubePack).not.toHaveBeenCalled();
   });
 
   test('named marker discovery stops at nonmatching marker boundaries', () => {
@@ -797,7 +686,7 @@ describe('marker create cube flow', () => {
       target_slot: 0,
       type: 'IMAGE',
     };
-    const service = new CubeActionService({
+    const service = new CubeCreationService({
       adapter: { getApp: () => ({ graph }) },
     });
 
@@ -834,7 +723,7 @@ describe('marker create cube flow', () => {
       target_slot: 0,
       type: 'IMAGE',
     };
-    const service = new CubeActionService({
+    const service = new CubeCreationService({
       adapter: { getApp: () => ({ graph }) },
     });
 
@@ -849,7 +738,7 @@ describe('marker create cube flow', () => {
     const { graph, inputMarker, node, outputMarker, unrelatedMarker } = makeGraph();
     let saveBody = null;
     const canvas = { setDirty: jest.fn() };
-    const service = new CubeActionService({
+    const service = new CubeCreationService({
       adapter: {
         getApp: () => ({
           graph,
@@ -889,7 +778,7 @@ describe('marker create cube flow', () => {
       },
       toast: { push: jest.fn() },
       dialogs: {
-        openCreateCube: jest.fn(async ({ candidate }) => {
+        openCreatePersonalCube: jest.fn(async ({ candidate }) => {
           expect(candidate.markerIds.sort()).toEqual([1, 3]);
           expect(candidate.nodeIds).toEqual([2]);
           return {
@@ -900,6 +789,7 @@ describe('marker create cube flow', () => {
         }),
       },
       instanceManager: { scheduleRefresh: jest.fn() },
+      saveReconciler: { reconcile: jest.fn(async () => {}) },
       dirtyManager: {
         addSavedIds: jest.fn(),
         markClean: jest.fn(),
@@ -933,7 +823,7 @@ describe('marker create cube flow', () => {
     setWidgetValue(outputMarker, 'default_alias', '');
     setWidgetValue(outputMarker, 'instance_alias', '');
     let saveBody = null;
-    const service = new CubeActionService({
+    const service = new CubeCreationService({
       adapter: {
         getApp: () => ({
           graph,
@@ -949,7 +839,7 @@ describe('marker create cube flow', () => {
           saveBody = JSON.parse(body);
           return {
             response: { ok: true },
-            data: { saved: [{ cube_id: 'local/personal/SDXL/Text to Image.cube' }] },
+            data: { saved: [{ cube_id: 'local/personal/Text to Image.cube' }] },
           };
         }),
       },
@@ -958,18 +848,19 @@ describe('marker create cube flow', () => {
       },
       toast: { push: jest.fn() },
       dialogs: {
-        openCreateCube: jest.fn(async ({ candidate }) => {
+        openCreatePersonalCube: jest.fn(async ({ candidate }) => {
           expect(candidate.defaultAlias).toBe('');
           expect(candidate.markerIds).toEqual([1, 3]);
           return {
-            defaultAlias: 'SDXL/Text to Image',
+            defaultAlias: 'Text to Image',
             cubeName: 'Text to Image',
-            cubeId: 'local/personal/SDXL/Text to Image.cube',
+            cubeId: 'local/personal/Text to Image.cube',
             description: '',
           };
         }),
       },
       instanceManager: { refresh: jest.fn(), scheduleRefresh: jest.fn() },
+      saveReconciler: { reconcile: jest.fn(async () => {}) },
       dirtyManager: {
         addSavedIds: jest.fn(),
         markClean: jest.fn(),
@@ -980,12 +871,12 @@ describe('marker create cube flow', () => {
 
     const result = await service.startCreateCubeFromMarker(inputMarker);
 
-    expect(result.cubeId).toBe('local/personal/SDXL/Text to Image.cube');
-    expect(widgetValue(inputMarker, 'default_alias')).toBe('SDXL/Text to Image');
-    expect(widgetValue(outputMarker, 'default_alias')).toBe('SDXL/Text to Image');
-    expect(widgetValue(inputMarker, 'instance_alias')).toBe('SDXL/Text to Image');
-    expect(widgetValue(outputMarker, 'instance_alias')).toBe('SDXL/Text to Image');
-    expect(saveBody.cubes[0].cube_id).toBe('local/personal/SDXL/Text to Image.cube');
+    expect(result.cubeId).toBe('local/personal/Text to Image.cube');
+    expect(widgetValue(inputMarker, 'default_alias')).toBe('Text to Image');
+    expect(widgetValue(outputMarker, 'default_alias')).toBe('Text to Image');
+    expect(widgetValue(inputMarker, 'instance_alias')).toBe('Text to Image');
+    expect(widgetValue(outputMarker, 'instance_alias')).toBe('Text to Image');
+    expect(saveBody.cubes[0].cube_id).toBe('local/personal/Text to Image.cube');
   });
 
   test('create action refreshes managed cube chrome before graph serialization', async () => {
@@ -1010,7 +901,10 @@ describe('marker create cube flow', () => {
       }),
       scheduleRefresh: jest.fn(),
     };
-    const service = new CubeActionService({
+    const saveReconciler = {
+      reconcile: jest.fn(async () => order.push('reconcile')),
+    };
+    const service = new CubeCreationService({
       adapter: {
         getApp: () => ({
           graph,
@@ -1037,6 +931,7 @@ describe('marker create cube flow', () => {
         readJson: () => ({ author: 'Tester', author_url: '' }),
       },
       instanceManager,
+      saveReconciler,
       dirtyManager: {
         addSavedIds: jest.fn(),
         markClean: jest.fn(),
@@ -1059,10 +954,16 @@ describe('marker create cube flow', () => {
       },
     );
 
-    expect(order).toEqual(['refresh', 'graphToPrompt']);
+    expect(order).toEqual(['refresh', 'graphToPrompt', 'reconcile']);
     expect(instanceManager.refresh).toHaveBeenCalledWith({ graph, reason: 'cube-create' });
     expect(saveBody.workflow.groups).toEqual([managedGroup]);
-    expect(instanceManager.scheduleRefresh).toHaveBeenCalledWith({ graph, reason: 'cube-create' });
+    expect(saveReconciler.reconcile).toHaveBeenCalledWith({
+      graph,
+      saved: [{ cube_id: 'local/personal/Text to Image.cube' }],
+      fallbackCubeIds: ['local/personal/Text to Image.cube'],
+      markerIdsByCubeId: { 'local/personal/Text to Image.cube': [1, 3] },
+      reason: 'cube-create',
+    });
   });
 
   test('create action restores markers and managed chrome when serialization fails', async () => {
@@ -1082,7 +983,7 @@ describe('marker create cube flow', () => {
       }),
       scheduleRefresh: jest.fn(),
     };
-    const service = new CubeActionService({
+    const service = new CubeCreationService({
       adapter: {
         getApp: () => ({
           graph,
@@ -1139,7 +1040,7 @@ describe('marker create cube flow', () => {
         workflow: { nodes: [], groups: [], version: 1 },
       }),
     };
-    const service = new CubeActionService({
+    const service = new CubeCreationService({
       adapter,
       api: {
         saveImplementation: jest.fn(async (body) => {
@@ -1155,13 +1056,14 @@ describe('marker create cube flow', () => {
       },
       toast: { push: jest.fn() },
       dialogs: {
-        openCreateCube: jest.fn(async () => ({
+        openCreatePersonalCube: jest.fn(async () => ({
           defaultAlias: 'Text to Image',
           cubeId: 'local/personal/Text to Image.cube',
           description: '',
         })),
       },
       instanceManager: { scheduleRefresh: jest.fn() },
+      saveReconciler: { reconcile: jest.fn(async () => {}) },
       dirtyManager: {
         addSavedIds: jest.fn(),
         markClean: jest.fn(),
@@ -1188,7 +1090,7 @@ describe('marker create cube flow', () => {
     const originalBackground = canvas.onDrawBackground;
     const originalForeground = canvas.onDrawForeground;
     let resolveModal;
-    const service = new CubeActionService({
+    const service = new CubeCreationService({
       adapter: {
         getWindow: () => window,
         getApp: () => ({
@@ -1203,7 +1105,7 @@ describe('marker create cube flow', () => {
         }),
       },
       dialogs: {
-        openCreateCube: jest.fn(
+        openCreatePersonalCube: jest.fn(
           () =>
             new Promise((resolve) => {
               resolveModal = resolve;
@@ -1253,7 +1155,7 @@ describe('marker create cube flow', () => {
     };
     window.app = { canvas };
     let resolveModal;
-    const service = new CubeActionService({
+    const service = new CubeCreationService({
       adapter: {
         getWindow: () => window,
         getApp: () => null,
@@ -1261,7 +1163,7 @@ describe('marker create cube flow', () => {
         getConsole: () => ({ error: jest.fn() }),
       },
       dialogs: {
-        openCreateCube: jest.fn(
+        openCreatePersonalCube: jest.fn(
           () =>
             new Promise((resolve) => {
               resolveModal = resolve;
@@ -1306,7 +1208,7 @@ describe('marker create cube flow', () => {
       _collapsed_width: 90,
       getBounding: () => [200, 60, 90, 30],
     };
-    const service = new CubeActionService({
+    const service = new CubeCreationService({
       adapter: {
         getApp: () => ({ graph, canvas }),
       },

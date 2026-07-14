@@ -21,7 +21,7 @@ import { ConfirmDialog } from './ConfirmDialog.js';
 import { FormModal } from './FormModal.js';
 import { InputModal } from './InputModal.js';
 import { SelectionModal } from './SelectionModal.js';
-import { CreateCubeModal } from './CreateCubeModal.js';
+import { CreatePersonalCubeModal } from './CreatePersonalCubeModal.js';
 import { HistoricalVersionSaveModal } from './HistoricalVersionSaveModal.js';
 
 /**
@@ -34,7 +34,7 @@ export class ModalService {
     this.inputModal = new InputModal({ adapter });
     this.formModal = new FormModal({ adapter });
     this.selectionModal = new SelectionModal({ adapter });
-    this.createCubeModal = new CreateCubeModal({ adapter });
+    this.createPersonalCubeModal = new CreatePersonalCubeModal({ adapter });
     this.historicalVersionSaveModal = new HistoricalVersionSaveModal({ adapter });
   }
 
@@ -65,8 +65,8 @@ export class ModalService {
     return this.selectionModal.open(options);
   }
 
-  openCreateCube(options = {}) {
-    return this.createCubeModal.open(options);
+  openCreatePersonalCube(options = {}) {
+    return this.createPersonalCubeModal.open(options);
   }
 
   chooseHistoricalVersionSaveAction(options = {}) {

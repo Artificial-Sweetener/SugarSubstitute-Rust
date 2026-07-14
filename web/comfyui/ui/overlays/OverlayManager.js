@@ -22,6 +22,7 @@ import { PlacementOverlay } from './PlacementOverlay.js';
 import { CubeChromeOverlay } from './CubeChromeOverlay.js';
 import { readGroupBounds } from '../graph/Bounds.js';
 import { writeCanonicalBounds } from '../graph/CubeBounds.js';
+import { parseCanonicalCubeId } from '../core/CubeId.js';
 
 /**
  * Coordinate overlay manager behavior for the SugarCubes UI.
@@ -35,7 +36,8 @@ export class OverlayManager {
     api,
     cubeApi,
     cubeBrowser,
-    cubeActions,
+    saveService,
+    flavorService,
     toast,
     applyPreparedImport,
     reportImportOutcome,
@@ -69,7 +71,7 @@ export class OverlayManager {
     });
     this.layoutService = layoutService || null;
     const chromeActions = {
-      onSaveImplementation: cubeActions?.saveImplementation
+      onSaveImplementation: saveService?.saveImplementation
         ? (metadata) => {
             if (!metadata?.cube_id) {
               return;
@@ -82,10 +84,10 @@ export class OverlayManager {
               );
               return;
             }
-            cubeActions.saveImplementation({ cubeIds: [metadata.cube_id] });
+            saveService.saveImplementation({ cubeIds: [metadata.cube_id] });
           }
         : null,
-      onSaveCubeDefaults: cubeActions?.saveCurrentFaceValuesAsCubeDefaults
+      onSaveCubeDefaults: flavorService?.saveCurrentFaceValuesAsCubeDefaults
         ? (metadata) => {
             if (isHistoricalCubeMetadata(metadata)) {
               toast?.push?.(
@@ -95,7 +97,7 @@ export class OverlayManager {
               );
               return null;
             }
-            return cubeActions.saveCurrentFaceValuesAsCubeDefaults(metadata);
+            return flavorService.saveCurrentFaceValuesAsCubeDefaults(metadata);
           }
         : null,
       onSwapLeft: (metadata) => this.swapLayout(metadata, -1),
@@ -110,12 +112,16 @@ export class OverlayManager {
         if (entrySource) {
           return entrySource;
         }
+        try {
+          const parsed = parseCanonicalCubeId(cubeId);
+          return parsed.sourceKind === 'github'
+            ? buildGithubSource(parsed.owner, parsed.repo)
+            : buildLocalSource(parsed.namespace);
+        } catch (_error) {
+          return { sourceKind: '', author: '', pack: '', namespace: '' };
+        }
       }
-      const profile = cubeActions?.getAuthorProfile?.();
-      const profileAuthor = typeof profile?.author === 'string' ? profile.author.trim() : '';
-      return profileAuthor
-        ? { sourceKind: '', author: profileAuthor, pack: '', namespace: '' }
-        : { sourceKind: '', author: '', pack: '', namespace: '' };
+      return { sourceKind: '', author: '', pack: '', namespace: '' };
     };
     this.chrome = new CubeChromeOverlay({ adapter, actions: chromeActions, resolveSource });
     this.overlayDrawHooked = false;

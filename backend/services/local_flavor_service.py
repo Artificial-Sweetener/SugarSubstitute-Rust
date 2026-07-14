@@ -137,6 +137,45 @@ class LocalFlavorService:
                 )
         return normalized
 
+    def move_cube_state(
+        self, source_cube_id: str, target_cube_id: str
+    ) -> dict[str, Any]:
+        """Move machine-local flavor state after a canonical cube identity change."""
+
+        source_id = self._canonical_cube_id(source_cube_id)
+        target_id = self._canonical_cube_id(target_cube_id)
+        source_path = self.path_for_cube_id(source_id)
+        target_path = self.path_for_cube_id(target_id)
+        if not source_path.exists():
+            return {
+                "moved": False,
+                "source_cube_id": source_id,
+                "target_cube_id": target_id,
+            }
+        if target_path.exists():
+            raise BackendError(
+                "Local flavor state already exists for the target cube", status=409
+            )
+        state = self.read_cube_state(source_id)
+        state["cube_id"] = target_id
+        self.write_cube_state(target_id, state)
+        try:
+            source_path.unlink()
+        except OSError as exc:
+            try:
+                target_path.unlink()
+            except OSError:
+                _logger.warning(
+                    "SugarCubes: failed to roll back target flavor state",
+                    exc_info=True,
+                )
+            _logger.exception(
+                "SugarCubes: failed to retire local flavor state for '%s'",
+                source_id,
+            )
+            raise BackendError("Failed to move local flavor state", status=500) from exc
+        return {"moved": True, "source_cube_id": source_id, "target_cube_id": target_id}
+
     def save_local_flavor(
         self,
         *,

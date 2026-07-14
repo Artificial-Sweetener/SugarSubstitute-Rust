@@ -28,6 +28,7 @@ try:
     from ...instrumentation import log_diagnostic
     from ..responses import BackendError
     from .cube_icon_service import attach_icon_url, normalize_existing_icon_metadata
+    from .cube_identity_redirect_service import CubeIdentityRedirectService
     from .cube_git_context import CubeGitContext, resolve_cube_git_context
     from .cube_library_service import (
         CubeLibraryService,
@@ -44,6 +45,9 @@ except ImportError:
     from backend.services.cube_icon_service import (
         attach_icon_url,
         normalize_existing_icon_metadata,
+    )
+    from backend.services.cube_identity_redirect_service import (
+        CubeIdentityRedirectService,
     )
     from backend.services.cube_git_context import (
         CubeGitContext,
@@ -73,6 +77,7 @@ class CubeRevisionService:
         *,
         load_cube_artifact: Callable[[Any], Any],
         prepare_cube_import: Callable[..., Any],
+        redirect_service: CubeIdentityRedirectService,
     ) -> None:
         """Initialize the revision service."""
 
@@ -80,15 +85,32 @@ class CubeRevisionService:
         self.tracked_repo_service = tracked_repo_service
         self.load_cube_artifact = load_cube_artifact
         self.prepare_cube_import = prepare_cube_import
+        self.redirect_service = redirect_service
 
     def list_revisions(self, *, cube_id: str) -> dict[str, Any]:
         """Return available git-backed revisions for one canonical cube id."""
 
         _log_cube_library_diagnostic("sugarcubes_revision_list_start", cube_id=cube_id)
-        context = self._resolve_git_context(cube_id)
+        requested_cube_id = normalize_metadata_string(cube_id)
+        context = self._resolve_git_context(requested_cube_id)
         revisions = [self._build_current_revision(context)]
         revisions.extend(self._list_committed_revisions(context))
         revisions = self._drop_redundant_current_head_revision(revisions, context)
+        redirect = self.redirect_service.get(requested_cube_id)
+        if redirect and requested_cube_id != context.cube_id:
+            source_context = resolve_cube_git_context(
+                self.tracked_repo_service, requested_cube_id
+            )
+            personal_history = [
+                {
+                    **entry,
+                    "label": f"Personal {entry['label']}",
+                    "history_origin": "personal",
+                }
+                for entry in self._list_committed_revisions(source_context)
+                if entry.get("version")
+            ]
+            revisions.extend(personal_history)
         _log_cube_library_diagnostic(
             "sugarcubes_revision_list_return",
             cube_id=context.cube_id,
@@ -98,12 +120,18 @@ class CubeRevisionService:
                 for revision in revisions
             ],
         )
-        return {
+        result = {
             "cube_id": context.cube_id,
             "revisions": revisions,
             "count": len(revisions),
             "duplicate_version_omissions": [],
         }
+        if requested_cube_id != context.cube_id:
+            result["identity_redirect"] = {
+                "requested_cube_id": requested_cube_id,
+                "resolved_cube_id": context.cube_id,
+            }
+        return result
 
     def load_revision(
         self,
@@ -121,7 +149,8 @@ class CubeRevisionService:
             revision_ref=revision_ref,
             version_pin=version_pin,
         )
-        context = self._resolve_git_context(cube_id)
+        requested_cube_id = normalize_metadata_string(cube_id)
+        context = self._resolve_git_context(requested_cube_id)
         normalized_revision_ref = (
             normalize_metadata_string(revision_ref) or _CURRENT_REVISION_REF
         )
@@ -131,7 +160,11 @@ class CubeRevisionService:
                 version_pin=version_pin,
                 drop_origin=drop_origin,
             )
-        payload_text = self._git_show(context, normalized_revision_ref)
+        revision_context, payload_text = self._load_historical_payload(
+            requested_cube_id=requested_cube_id,
+            current_context=context,
+            revision_ref=normalized_revision_ref,
+        )
         try:
             payload = json.loads(payload_text)
         except json.JSONDecodeError as exc:
@@ -139,11 +172,11 @@ class CubeRevisionService:
                 "Revision payload is not valid JSON", status=500
             ) from exc
         with TemporaryDirectory(prefix="sugarcubes-revision-") as temp_dir:
-            temp_path = Path(temp_dir) / Path(context.repo_relative_path).name
+            temp_path = Path(temp_dir) / Path(revision_context.repo_relative_path).name
             temp_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
             return self._load_path(
                 temp_path,
-                context,
+                revision_context,
                 revision_ref=normalized_revision_ref,
                 current=False,
                 version_pin=version_pin,
@@ -273,12 +306,34 @@ class CubeRevisionService:
         normalized_cube_id = normalize_metadata_string(cube_id)
         if not normalized_cube_id:
             raise BackendError("'cube_id' field is required", status=400)
-        context = resolve_cube_git_context(
-            self.tracked_repo_service, normalized_cube_id
-        )
+        resolved_cube_id = self.redirect_service.resolve(normalized_cube_id)
+        context = resolve_cube_git_context(self.tracked_repo_service, resolved_cube_id)
         if not context.cube_path.exists() or not context.cube_path.is_file():
-            raise BackendError(f"Cube '{normalized_cube_id}' not found", status=404)
+            raise BackendError(f"Cube '{resolved_cube_id}' not found", status=404)
         return context
+
+    def _load_historical_payload(
+        self,
+        *,
+        requested_cube_id: str,
+        current_context: CubeGitContext,
+        revision_ref: str,
+    ) -> tuple[CubeGitContext, str]:
+        """Load a revision from current history or redirected personal history."""
+
+        try:
+            return current_context, self._git_show(current_context, revision_ref)
+        except BackendError as current_error:
+            redirect = self.redirect_service.get(requested_cube_id)
+            if not redirect or requested_cube_id == current_context.cube_id:
+                raise current_error
+            source_context = resolve_cube_git_context(
+                self.tracked_repo_service, requested_cube_id
+            )
+            try:
+                return source_context, self._git_show(source_context, revision_ref)
+            except BackendError:
+                raise current_error
 
     def _build_current_revision(self, context: CubeGitContext) -> dict[str, Any]:
         """Build the synthetic current working-tree revision entry."""

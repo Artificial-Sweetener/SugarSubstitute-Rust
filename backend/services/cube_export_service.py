@@ -93,6 +93,9 @@ _UUID_CLASS_RE = re.compile(
     re.IGNORECASE,
 )
 NodeClassMappingsProvider = Callable[[], Mapping[str, Any]]
+FinalizedDefinitionProvider = Callable[
+    [Path, str, Mapping[str, Any]], Mapping[str, Any]
+]
 
 
 @dataclass(frozen=True)
@@ -126,6 +129,17 @@ class CubeSaveCommitState:
     previous_cube_id: str = ""
     commit_result: Optional[CubeCommitResult] = None
     commit_error: str = ""
+
+
+@dataclass(frozen=True)
+class FinalizedCubeSave:
+    """Represent one persisted cube and its authoritative read model."""
+
+    target: CubeSaveTarget
+    document: CubeDocument
+    artifact: Mapping[str, Any]
+    commit_state: CubeSaveCommitState
+    definition: Mapping[str, Any]
 
 
 def extract_uuid_wrapper_classes(graph: Mapping[str, Any]) -> set[str]:
@@ -415,6 +429,7 @@ class CubeExportService:
         write_cubes_to_paths: Callable[..., Sequence[Mapping[str, Any]]],
         suggest_version: Callable[[Mapping[str, Any], Mapping[str, Any]], Any],
         node_class_mappings_provider: NodeClassMappingsProvider,
+        finalized_definition_provider: FinalizedDefinitionProvider,
         local_flavor_service: Optional[LocalFlavorService] = None,
     ) -> None:
         """Initialize the export service."""
@@ -427,6 +442,7 @@ class CubeExportService:
         self.write_cubes_to_paths = write_cubes_to_paths
         self.suggest_version = suggest_version
         self.node_class_mappings_provider = node_class_mappings_provider
+        self.finalized_definition_provider = finalized_definition_provider
         self.local_flavor_service = local_flavor_service
 
     def _resolve_node_class_mappings(self) -> Mapping[str, Any]:
@@ -619,29 +635,23 @@ class CubeExportService:
             save_target=save_target,
             commit_state=commit_state,
         )
+        persisted_document = CubeDocument.from_dict(next_payload)
+        definition = self.finalized_definition_provider(
+            cube_path,
+            normalized_cube_id,
+            persisted_document.to_dict(),
+        )
+        finalized = FinalizedCubeSave(
+            target=save_target,
+            document=persisted_document,
+            artifact=dict(saved),
+            commit_state=finalized_commit_state,
+            definition=definition,
+        )
         response = {
             "saved": {
-                **saved,
-                "cube_id": normalized_cube_id,
+                **self._build_finalized_save_response(finalized),
                 "flavor_id": saved_flavor_id,
-                "version": next_payload["version"],
-                "committed": bool(finalized_commit_state.commit_result),
-                "commit_sha": (
-                    finalized_commit_state.commit_result.commit_sha
-                    if finalized_commit_state.commit_result
-                    else ""
-                ),
-                "commit_short_sha": (
-                    finalized_commit_state.commit_result.commit_short_sha
-                    if finalized_commit_state.commit_result
-                    else ""
-                ),
-                "commit_message": (
-                    finalized_commit_state.commit_result.commit_message
-                    if finalized_commit_state.commit_result
-                    else ""
-                ),
-                "commit_error": finalized_commit_state.commit_error,
             }
         }
         self.library_service.notify_library_changed(
@@ -704,10 +714,11 @@ class CubeExportService:
                 metadata["default_alias"] = derive_route_from_cube_id(cube_id)
             except CubeIdentityError:
                 pass
-            if actor.get("author_url"):
-                metadata["author_url"] = actor["author_url"]
-            else:
-                metadata.pop("author_url", None)
+            if actor:
+                if actor.get("author_url"):
+                    metadata["author_url"] = actor["author_url"]
+                else:
+                    metadata.pop("author_url", None)
 
             if entry["forked"]:
                 lineage = normalize_lineage_payload(entry.get("lineage"))
@@ -793,33 +804,20 @@ class CubeExportService:
                     save_target=save_target,
                     commit_state=commit_state,
                 )
-                saved.append(
-                    {
-                        **saved_entry,
-                        "cube_id": save_target.cube_id,
-                        "forked": False,
-                        "committed": bool(finalized_commit_state.commit_result),
-                        "commit_sha": (
-                            finalized_commit_state.commit_result.commit_sha
-                            if finalized_commit_state.commit_result
-                            else ""
-                        ),
-                        "commit_short_sha": (
-                            finalized_commit_state.commit_result.commit_short_sha
-                            if finalized_commit_state.commit_result
-                            else ""
-                        ),
-                        "commit_message": (
-                            finalized_commit_state.commit_result.commit_message
-                            if finalized_commit_state.commit_result
-                            else ""
-                        ),
-                        "commit_error": finalized_commit_state.commit_error,
-                        "version": normalize_metadata_string(
-                            save_target.exported.cube.get("version")
-                        ),
-                    }
+                document = CubeDocument.from_dict(save_target.exported.cube)
+                definition = self.finalized_definition_provider(
+                    save_target.target_path,
+                    save_target.cube_id,
+                    document.to_dict(),
                 )
+                finalized = FinalizedCubeSave(
+                    target=save_target,
+                    document=document,
+                    artifact=dict(saved_entry),
+                    commit_state=finalized_commit_state,
+                    definition=dict(definition),
+                )
+                saved.append(self._build_finalized_save_response(finalized))
 
         warnings = [
             f"{cube.default_alias}: {warning}"
@@ -849,6 +847,27 @@ class CubeExportService:
                 reason="cube_saved",
             )
         return response
+
+    def _build_finalized_save_response(
+        self, finalized: FinalizedCubeSave
+    ) -> dict[str, Any]:
+        """Project one authoritative persisted save into the HTTP response."""
+
+        commit_result = finalized.commit_state.commit_result
+        return {
+            **finalized.artifact,
+            "cube_id": finalized.target.cube_id,
+            "forked": False,
+            "committed": bool(commit_result),
+            "commit_sha": commit_result.commit_sha if commit_result else "",
+            "commit_short_sha": (
+                commit_result.commit_short_sha if commit_result else ""
+            ),
+            "commit_message": commit_result.commit_message if commit_result else "",
+            "commit_error": finalized.commit_state.commit_error,
+            "version": normalize_metadata_string(finalized.document.version),
+            "definition": deepcopy(dict(finalized.definition)),
+        }
 
     def _preserve_authored_flavors_on_existing_implementation_save(
         self,

@@ -28,6 +28,7 @@ try:
         apply_cube_identity_projection,
         derive_cube_id_from_route,
         derive_route_from_cube_id,
+        parse_canonical_cube_id,
         validate_cube_route_identity,
     )
     from ...instrumentation import log_event
@@ -40,12 +41,16 @@ try:
         read_cube_payload,
         safe_relative_path,
     )
+    from .cube_artifact_repository import CubeArtifactRepository
+    from .cube_history_service import CubeHistoryService
+    from .local_flavor_service import LocalFlavorService
 except ImportError:
     from cube_model import (
         CubeIdentityError,
         apply_cube_identity_projection,
         derive_cube_id_from_route,
         derive_route_from_cube_id,
+        parse_canonical_cube_id,
         validate_cube_route_identity,
     )
     from instrumentation import log_event
@@ -58,6 +63,9 @@ except ImportError:
         read_cube_payload,
         safe_relative_path,
     )
+    from backend.services.cube_artifact_repository import CubeArtifactRepository
+    from backend.services.cube_history_service import CubeHistoryService
+    from backend.services.local_flavor_service import LocalFlavorService
 
 _logger = logging.getLogger(__name__)
 
@@ -70,11 +78,17 @@ class CubeMetadataService:
         library_service: CubeLibraryService,
         *,
         retarget_cube_payload: Callable[..., None],
+        artifacts: CubeArtifactRepository,
+        history: CubeHistoryService,
+        local_flavors: LocalFlavorService,
     ) -> None:
         """Initialize the metadata service."""
 
         self.library_service = library_service
         self.retarget_cube_payload = retarget_cube_payload
+        self.artifacts = artifacts
+        self.history = history
+        self.local_flavors = local_flavors
 
     def update_metadata(
         self,
@@ -173,6 +187,16 @@ class CubeMetadataService:
         if not normalized_target_cube_id:
             raise BackendError("'target_cube_id' field is required", status=400)
         try:
+            source_identity = parse_canonical_cube_id(normalized_cube_id)
+            target_identity = parse_canonical_cube_id(normalized_target_cube_id)
+            if (
+                source_identity.source_root.lower()
+                != target_identity.source_root.lower()
+            ):
+                raise BackendError(
+                    "Move personal cubes to managed packs with the promotion flow",
+                    status=400,
+                )
             resolved_route_alias = (
                 normalized_target_default_alias
                 or derive_route_from_cube_id(normalized_target_cube_id)
@@ -244,37 +268,48 @@ class CubeMetadataService:
             target_default_alias=resolved_target_default_alias,
         )
 
-        if target_path.resolve() == cube_path.resolve():
-            self._write_payload(
-                cube_path,
-                payload,
-                "Failed to update cube identity",
-                previous_cube_id=normalized_cube_id,
+        source_payload = json.loads(json.dumps(read_cube_payload(cube_path)[0]))
+        source_context = self.artifacts.context(normalized_cube_id)
+        target_context = self.artifacts.context(normalized_target_cube_id)
+        flavor_moved = False
+        try:
+            apply_cube_identity_projection(payload, previous_cube_id=normalized_cube_id)
+            self.artifacts.write(target_context, payload)
+            if target_path.resolve() != cube_path.resolve():
+                self.artifacts.delete(source_context)
+            flavor_result = self.local_flavors.move_cube_state(
+                normalized_cube_id, normalized_target_cube_id
             )
-        else:
-            target_path.parent.mkdir(parents=True, exist_ok=True)
-            self._write_payload(
-                target_path,
-                payload,
-                "Failed to update cube identity",
-                previous_cube_id=normalized_cube_id,
+            flavor_moved = bool(flavor_result.get("moved"))
+            commit_paths = [target_context.repo_relative_path]
+            if source_context.repo_relative_path != target_context.repo_relative_path:
+                commit_paths.append(source_context.repo_relative_path)
+            commit = self.history.commit_paths(
+                repo_root=target_context.repo_root,
+                relative_paths=commit_paths,
+                message=(
+                    f"rename {cube_path.name} to {target_path.name} at "
+                    f"v{normalize_metadata_string(payload.get('version'))}"
+                ),
             )
-            try:
-                cube_path.unlink()
-            except OSError as exc:
+        except BackendError:
+            if target_path.resolve() != cube_path.resolve():
+                self.artifacts.delete(target_context)
+            self.artifacts.restore(source_context, source_payload)
+            if flavor_moved:
                 try:
-                    target_path.unlink()
-                except OSError:
-                    _logger.warning(
-                        "SugarCubes: failed to clean up target cube after source removal error",
-                        exc_info=True,
+                    self.local_flavors.move_cube_state(
+                        normalized_target_cube_id, normalized_cube_id
                     )
-                _logger.exception(
-                    "SugarCubes: failed to remove renamed cube source %s after writing %s",
-                    cube_path,
-                    target_path,
-                )
-                raise BackendError("Failed to finalize cube move", status=500) from exc
+                except BackendError:
+                    _logger.exception(
+                        "SugarCubes: failed to roll back renamed flavor state"
+                    )
+            self._unstage_paths(
+                source_context.repo_root,
+                [source_context.repo_relative_path, target_context.repo_relative_path],
+            )
+            raise
 
         log_event(
             "frontend.phase5",
@@ -288,7 +323,14 @@ class CubeMetadataService:
             reason="cube_renamed",
             affected_cube_ids=[normalized_cube_id, normalized_target_cube_id],
         )
-        return {"cube": self.library_service.summarize_cube(target_path)}
+        return {
+            "cube": self.library_service.summarize_cube(target_path),
+            "commit": {
+                "commit_sha": commit.commit_sha,
+                "commit_short_sha": commit.commit_short_sha,
+                "commit_message": commit.commit_message,
+            },
+        }
 
     def rename_cube_from_default_alias(
         self,
@@ -341,3 +383,15 @@ class CubeMetadataService:
                 cube_path,
             )
             raise BackendError(failure_message, status=500) from exc
+
+    def _unstage_paths(self, repo_root: Path, relative_paths: list[str]) -> None:
+        """Best-effort unstage paths after restoring a failed rename mutation."""
+
+        try:
+            self.history.tracked_repo_service.git_runner(
+                ["reset", "HEAD", "--", *relative_paths], cwd=repo_root
+            )
+        except RuntimeError:
+            _logger.warning(
+                "SugarCubes: failed to unstage rolled-back rename", exc_info=True
+            )

@@ -30,12 +30,18 @@ import { ModalService } from './dialogs/ModalService.js';
 import { VersionDialog } from './dialogs/VersionDialog.js';
 import { InstanceManager } from './graph/InstanceManager.js';
 import { DirtyManager } from './graph/DirtyManager.js';
-import { CubeActionService } from './CubeActionService.js';
+import { CubeSaveService } from './save/CubeSaveService.js';
 import { CubeLayoutService } from './layout/CubeLayoutService.js';
 import { CubeContainmentService } from './layout/CubeContainmentService.js';
 import { CubeCollisionService } from './layout/CubeCollisionService.js';
 import { CubeBoundsReconciler } from './layout/CubeBoundsReconciler.js';
 import { FlavorService } from './flavors/FlavorService.js';
+import { CubeDefinitionStore } from './graph/CubeDefinitionStore.js';
+import { CubeSaveReconciler } from './save/CubeSaveReconciler.js';
+import { CubeCreationService } from './create/CubeCreationService.js';
+import { CubePackService } from './packs/CubePackService.js';
+import { CubeIdentityReconciler } from './graph/CubeIdentityReconciler.js';
+import { CubePromotionService } from './promotion/CubePromotionService.js';
 
 /**
  * Coordinate sugar cubes ui behavior for the SugarCubes UI.
@@ -62,6 +68,12 @@ export class SugarCubesUI {
       scheduler: this.scheduler,
     });
 
+    this.definitionStore = new CubeDefinitionStore({
+      api: this.api,
+      logger: this.adapter?.getConsole?.(),
+      onUpdate: (definitionKey, entry) => this.handleDefinitionUpdate(definitionKey, entry),
+    });
+
     this.instanceManager = new InstanceManager({
       adapter: this.adapter,
       events: this.events,
@@ -74,7 +86,7 @@ export class SugarCubesUI {
       events: this.events,
       scheduler: this.scheduler,
       cubeBrowser: this.cubeBrowser,
-      cubeApi: this.api,
+      definitionStore: this.definitionStore,
     });
 
     this.flavorService = new FlavorService({
@@ -88,17 +100,55 @@ export class SugarCubesUI {
       cubeBrowser: this.cubeBrowser,
     });
 
-    this.cubeActions = new CubeActionService({
+    this.saveReconciler = new CubeSaveReconciler({
+      definitionStore: this.definitionStore,
+      instanceManager: this.instanceManager,
+      flavorService: this.flavorService,
+      dirtyManager: this.dirtyManager,
+    });
+
+    this.packService = new CubePackService({
+      api: this.api,
+      dialogs: this.dialogs,
+      toast: this.toast,
+    });
+
+    this.identityReconciler = new CubeIdentityReconciler({
+      adapter: this.adapter,
+      instanceManager: this.instanceManager,
+      dirtyManager: this.dirtyManager,
+      definitionStore: this.definitionStore,
+    });
+
+    this.promotionService = new CubePromotionService({
+      api: this.api,
+      dialogs: this.dialogs,
+      toast: this.toast,
+      packService: this.packService,
+      identityReconciler: this.identityReconciler,
+      cubeBrowser: this.cubeBrowser,
+    });
+
+    this.cubeSave = new CubeSaveService({
       adapter: this.adapter,
       api: this.api,
-      storage: this.storage,
       toast: this.toast,
       instanceManager: this.instanceManager,
       dirtyManager: this.dirtyManager,
       cubeBrowser: this.cubeBrowser,
       versionDialog: this.versionDialog,
       dialogs: this.dialogs,
-      flavorService: this.flavorService,
+      saveReconciler: this.saveReconciler,
+    });
+
+    this.cubeCreation = new CubeCreationService({
+      adapter: this.adapter,
+      api: this.api,
+      toast: this.toast,
+      instanceManager: this.instanceManager,
+      cubeBrowser: this.cubeBrowser,
+      dialogs: this.dialogs,
+      saveReconciler: this.saveReconciler,
     });
 
     this.layoutService = new CubeLayoutService({
@@ -119,7 +169,7 @@ export class SugarCubesUI {
       api: this.adapter?.getApi?.(),
       cubeApi: this.api,
       cubeBrowser: this.cubeBrowser,
-      cubeActions: this.cubeActions,
+      saveService: this.cubeSave,
       flavorService: this.flavorService,
       toast: this.toast,
       applyPreparedImport: options.applyPreparedImport,
@@ -131,6 +181,22 @@ export class SugarCubesUI {
       collisionService: this.collisionService,
       boundsReconciler: this.boundsReconciler,
     });
+  }
+
+  /** Publish definition updates to consumers without assigning them cache ownership. */
+  handleDefinitionUpdate(definitionKey, entry) {
+    const graph = this.adapter?.getApp?.()?.graph || null;
+    if (entry?.status === 'ready' && entry?.payload) {
+      this.events?.emit?.('cube:definition:loaded', {
+        cubeId: entry.cubeId,
+        definitionKey,
+        entry,
+        graph,
+      });
+    }
+    if (graph) {
+      this.dirtyManager?.requestRefresh?.({ graph, reason: 'definition-update' });
+    }
   }
 
   async setup() {

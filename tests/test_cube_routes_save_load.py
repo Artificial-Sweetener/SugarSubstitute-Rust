@@ -209,6 +209,61 @@ def test_save_many_persists_to_tracked_repo_checkout(
     assert exported.cube["metadata"]["author_url"] == "https://example.com"
 
 
+def test_save_many_accepts_omitted_actor_and_preserves_existing_author_url(
+    tmp_path, backend_services_factory
+):
+    """Keep personal saves zero-setup without erasing previously authored links."""
+
+    exported = ExportedCube(
+        default_alias="Demo",
+        cube=_surface_cube_payload(
+            version="1.0.0",
+            metadata={"author_url": "https://example.com/existing"},
+        ),
+        warnings=[],
+        version_auto=False,
+    )
+    services = backend_services_factory(
+        tmp_path,
+        export_cubes=lambda *args, **kwargs: [exported],
+        write_cubes_to_paths=lambda cube_targets, overwrite=True: [
+            {
+                "path": str(target_path),
+                "filename": target_path.name,
+                "default_alias": exported.default_alias,
+            }
+            for _, target_path in cube_targets
+        ],
+        node_class_mappings={"KSampler": object()},
+    )
+    claim_github_owner(
+        services, owner="Artificial-Sweetener", allow_system_owner_claim=True
+    )
+    checkout = ensure_tracked_repo(services)
+    _init_git_repo(services, checkout)
+    _write_current_cube(
+        checkout / "demo.cube",
+        metadata={"author_url": "https://example.com/existing"},
+    )
+    _commit_all(services, checkout)
+
+    response = asyncio.run(
+        build_route_handlers(services).save_many(
+            FakeRequest(
+                body={
+                    "graph": {"1": {"class_type": "KSampler", "inputs": {}}},
+                    "workflow": {"definitions": {"subgraphs": []}},
+                    "workflow_version": 1,
+                    "cubes": [{"cube_id": CANONICAL_CUBE_ID, "forked": False}],
+                }
+            )
+        )
+    )
+
+    assert response.status == 200
+    assert exported.cube["metadata"]["author_url"] == "https://example.com/existing"
+
+
 def test_save_many_applies_explicit_description_override(
     tmp_path, backend_services_factory
 ):
@@ -658,6 +713,7 @@ def test_save_many_existing_implementation_save_preserves_authored_flavors(
         )
     )
     saved_payload = json.loads(cube_path.read_text(encoding="utf-8"))
+    response_payload = decode_json_response(response)
 
     assert response.status == 200
     assert saved_payload["flavors"]["authored"] == [
@@ -675,6 +731,10 @@ def test_save_many_existing_implementation_save_preserves_authored_flavors(
     assert "ksampler.steps" not in saved_payload["flavors"]["authored"][0]["values"]
     assert "ksampler.seed" not in saved_payload["flavors"]["authored"][0]["values"]
     assert saved_payload["surface"]["controls"] == exported_controls
+    finalized_cube = response_payload["saved"][0]["definition"]["cube"]
+    assert finalized_cube["surface"] == saved_payload["surface"]
+    assert finalized_cube["flavors"] == saved_payload["flavors"]
+    assert finalized_cube["implementation"] == saved_payload["implementation"]
 
 
 def test_save_many_existing_implementation_save_reorders_authored_values_to_exported_surface(
@@ -826,7 +886,7 @@ def test_save_many_first_time_save_keeps_exported_default_flavor_values(
     assert saved_payload["flavors"]["authored"][0]["values"] == {"ksampler.cfg": 11}
 
 
-def test_save_many_first_time_save_preserves_authored_picker_defaults(
+def test_save_many_first_time_save_strips_machine_local_authored_defaults(
     tmp_path, backend_services_factory
 ):
     controls = [
@@ -906,14 +966,12 @@ def test_save_many_first_time_save_preserves_authored_picker_defaults(
     assert response.status == 200
     assert saved_payload["flavors"]["authored"][0]["values"] == {
         "ksampler.cfg": 11,
-        "checkpoint.ckpt_name": "local.safetensors",
-        "vae.vae_name": "local-vae.safetensors",
         "sam.sam_model": "sam_vit_b",
     }
     assert saved_payload["surface"]["controls"] == controls
 
 
-def test_save_many_existing_implementation_save_preserves_authored_picker_defaults(
+def test_save_many_existing_implementation_strips_machine_local_defaults(
     tmp_path, backend_services_factory
 ):
     controls = [
@@ -1028,8 +1086,6 @@ def test_save_many_existing_implementation_save_preserves_authored_picker_defaul
             "name": "Default",
             "values": {
                 "ksampler.cfg": 7,
-                "checkpoint.ckpt_name": "existing.safetensors",
-                "vae.vae_name": "existing-vae.safetensors",
                 "sam.sam_model": "sam_vit_l",
             },
         },
@@ -1038,8 +1094,6 @@ def test_save_many_existing_implementation_save_preserves_authored_picker_defaul
             "name": "Portrait",
             "values": {
                 "ksampler.cfg": 8,
-                "checkpoint.ckpt_name": "portrait.safetensors",
-                "vae.vae_name": "exported-vae.safetensors",
                 "sam.sam_model": "sam_vit_h",
             },
         },
@@ -1135,7 +1189,7 @@ def test_save_authored_flavor_updates_tracked_cube(tmp_path, backend_services_fa
     assert group_metadata["cube_definition_key"] == f"{CANONICAL_CUBE_ID}@1.0.1"
 
 
-def test_save_authored_flavor_preserves_authored_picker_defaults(
+def test_save_authored_flavor_strips_machine_local_defaults(
     tmp_path, backend_services_factory
 ):
     services = backend_services_factory(
@@ -1210,7 +1264,6 @@ def test_save_authored_flavor_preserves_authored_picker_defaults(
     assert response.status == 200
     assert saved_payload["flavors"]["authored"][0]["values"] == {
         "ksampler.cfg": 8,
-        "checkpoint.ckpt_name": "new.safetensors",
         "sam.sam_model": "sam_vit_b",
     }
     assert any(
@@ -1525,7 +1578,7 @@ def test_save_many_persists_to_new_authoring_pack_checkout(
     cube_id = "ExampleUser/Example-Cubes/text_to_image.cube"
     exported = ExportedCube(
         default_alias="Text to Image",
-        cube={"cube_id": cube_id, "version": "", "metadata": {}},
+        cube=_surface_cube_payload(cube_id=cube_id, version="1.0.0"),
         warnings=[],
         version_auto=False,
     )

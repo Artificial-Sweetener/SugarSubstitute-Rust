@@ -27,12 +27,16 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from cube_model.document import CubeDocument, CubeSchemaError
-from cube_model.picker_fields import find_input_field_spec, widget_input_names
-from exporter.widget_validation import (
-    WidgetSaveValidationError,
-    invalid_widget_value_reason,
-    serialized_widget_names,
-    validate_serialized_widget_values,
+from cube_model.input_persistence import should_store_authored_value
+from cube_model.picker_fields import find_input_field_spec
+from exporter.value_validation import (
+    PersistedValueError,
+    invalid_named_value_reason,
+    validate_named_node_inputs,
+)
+from cube_model.widget_values import (
+    WidgetSnapshotError,
+    decode_workflow_widget_snapshot,
 )
 
 
@@ -151,29 +155,26 @@ class CubePackAuditor:
                 )
                 continue
             persisted_definition = embedded_definitions.get(class_type)
-            if isinstance(persisted_definition, Mapping):
-                persisted_order = widget_input_names(persisted_definition)
-                live_order = widget_input_names(live_definition)
-                if persisted_order != live_order:
-                    findings.append(
-                        CubeAuditFinding(
-                            cube_path,
-                            node_location,
-                            "embedded widget order differs from live Comfy: "
-                            f"embedded={persisted_order!r}; live={live_order!r}",
-                        )
-                    )
+            snapshot_definition = (
+                persisted_definition
+                if isinstance(persisted_definition, Mapping)
+                else live_definition
+            )
             widget_values = node.get("widgets_values")
             if _is_sequence(widget_values):
                 try:
-                    validate_serialized_widget_values(
-                        node_id=node_id,
-                        class_type=class_type,
-                        persisted_widget_names=serialized_widget_names(node),
-                        widget_values=widget_values,
-                        live_definition=live_definition,
+                    snapshot = decode_workflow_widget_snapshot(
+                        node,
+                        snapshot_definition,
                     )
-                except WidgetSaveValidationError as exc:
+                    if snapshot is not None:
+                        validate_named_node_inputs(
+                            node_id=node_id,
+                            class_type=class_type,
+                            inputs=snapshot.values,
+                            definition=live_definition,
+                        )
+                except (PersistedValueError, WidgetSnapshotError) as exc:
                     findings.append(
                         CubeAuditFinding(cube_path, node_location, str(exc))
                     )
@@ -224,8 +225,6 @@ class CubePackAuditor:
                 if not isinstance(values, Mapping):
                     continue
                 for control_id, value in values.items():
-                    if value == "":
-                        continue
                     symbol, separator, input_name = str(control_id).partition(".")
                     raw_node = nodes.get(symbol)
                     if not separator or not isinstance(raw_node, Mapping):
@@ -237,10 +236,22 @@ class CubePackAuditor:
                             )
                         )
                         continue
-                    live_definition = self._live_definitions.get(
-                        raw_node.get("class_type")
-                    )
+                    class_type = raw_node.get("class_type")
+                    if not isinstance(class_type, str):
+                        continue
+                    live_definition = self._live_definitions.get(class_type)
                     if not isinstance(live_definition, Mapping):
+                        continue
+                    if not should_store_authored_value(class_type, input_name):
+                        findings.append(
+                            CubeAuditFinding(
+                                cube_path,
+                                f"flavors.authored[{flavor_id!r}].values.{control_id}",
+                                "machine-local or volatile value must not be authored",
+                            )
+                        )
+                        continue
+                    if value == "":
                         continue
                     findings.extend(
                         _named_value_findings(
@@ -324,7 +335,7 @@ def _named_value_findings(
         return [
             CubeAuditFinding(cube_path, location, "input is absent from live Comfy")
         ]
-    reason = invalid_widget_value_reason(value, field_spec)
+    reason = invalid_named_value_reason(value, field_spec)
     if reason is None:
         return []
     return [CubeAuditFinding(cube_path, location, f"value {value!r} {reason}")]

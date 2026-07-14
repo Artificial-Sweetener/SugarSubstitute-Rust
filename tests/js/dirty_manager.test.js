@@ -45,7 +45,17 @@ function buildManager({ cubes = [] } = {}) {
   const events = { on: jest.fn(), emit: jest.fn() };
   const scheduler = { raf: (callback) => callback() };
   const cubeBrowser = { getCubes: () => cubes, setDirtyCubeIds: jest.fn() };
-  const manager = new DirtyManager({ adapter, events, scheduler, cubeBrowser, cubeApi: {} });
+  const definitionStore = {
+    ensure: jest.fn(),
+    getEntry: jest.fn(() => null),
+  };
+  const manager = new DirtyManager({
+    adapter,
+    events,
+    scheduler,
+    cubeBrowser,
+    definitionStore,
+  });
 
   const ensureSpy = jest.fn();
   manager.definitionStore = {

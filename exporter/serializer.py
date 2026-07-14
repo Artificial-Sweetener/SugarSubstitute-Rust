@@ -47,9 +47,8 @@ try:
         compact_picker_field_spec,
         find_input_field_spec,
         is_picker_field_spec,
-        picker_options,
-        widget_input_names,
     )
+    from ..cube_model.widget_values import canonicalize_subgraph_widget_values
     from ..instrumentation import log_event
 except ImportError:
     from cube_model import (
@@ -63,15 +62,15 @@ except ImportError:
         compact_picker_field_spec,
         find_input_field_spec,
         is_picker_field_spec,
-        picker_options,
-        widget_input_names,
     )
+    from cube_model.widget_values import canonicalize_subgraph_widget_values
     from instrumentation import log_event
 from .graph import CubeAnalysis, CubeData, CubeMarker, Graph, GraphNode, Edge
 from .versioning import resolve_input_type, resolve_output_type_by_slot
-from .widget_validation import (
-    serialized_widget_names,
-    validate_serialized_widget_values,
+from .node_inputs import backfill_missing_widget_inputs
+from .value_validation import (
+    invalid_named_value_reason,
+    validate_named_node_inputs,
     validate_subgraph_widget_values,
 )
 
@@ -88,24 +87,6 @@ _DEFAULT_CHROME_PADDING_X = 2.0
 _DEFAULT_CHROME_PADDING_Y = 2.0
 _DEFAULT_CHROME_PADDING_TOP_EXTRA = 0.0
 _DEFAULT_CHROME_HEADER_HEIGHT = 32.0
-_CONTROL_AFTER_GENERATE_VALUES = frozenset(
-    {"fixed", "increment", "decrement", "randomize"}
-)
-_SOCKET_ONLY_INPUT_TYPES = frozenset(
-    {
-        "CLIP",
-        "CONDITIONING",
-        "CONDITIONING,CONDITIONING_BATCH",
-        "DETECTOR_MODEL",
-        "IMAGE",
-        "LATENT",
-        "MASK",
-        "MODEL",
-        "SAM_MODEL",
-        "SEGS",
-        "VAE",
-    }
-)
 _SURFACE_VALUE_TYPES_BY_INPUT_TYPE = {
     "BOOLEAN": "boolean",
     "COMBO": "string",
@@ -208,6 +189,7 @@ def _serialize_cube(
     definitions, validation_definitions, definition_warnings = _collect_definitions(
         symbols, graph, resolver, extra_class_types=subgraph_class_types
     )
+    subgraphs = canonicalize_subgraph_widget_values(subgraphs, validation_definitions)
     validate_subgraph_widget_values(subgraphs, validation_definitions)
     inputs, alias_lookup, input_warnings = _build_inputs(
         cube, graph, symbols, definitions
@@ -402,12 +384,20 @@ def _build_node_payloads(
         payload_inputs: Dict[str, Any] = {}
         for key, value in node.inputs.items():
             payload_inputs[key] = _remap_value(value, symbols, alias_lookup)
-        _backfill_workflow_widget_inputs(
+        definition = validation_definitions.get(node.class_type)
+        backfill_missing_widget_inputs(
             payload_inputs,
             node,
             layout_ctx.nodes.get(node_id) if layout_ctx else None,
-            validation_definitions,
+            definition if isinstance(definition, Mapping) else None,
         )
+        if isinstance(definition, Mapping):
+            validate_named_node_inputs(
+                node_id=node.id,
+                class_type=node.class_type,
+                inputs=payload_inputs,
+                definition=definition,
+            )
         node_payload: Dict[str, Any] = {
             "class_type": node.class_type,
             "label": _resolve_node_label(
@@ -426,148 +416,6 @@ def _build_node_payloads(
     return nodes
 
 
-def _backfill_workflow_widget_inputs(
-    payload_inputs: MutableMapping[str, Any],
-    node: GraphNode,
-    workflow_node: Optional[Mapping[str, Any]],
-    definitions: Mapping[str, Any],
-) -> None:
-    """Recover widget values omitted from prompt inputs using workflow metadata."""
-
-    if not isinstance(workflow_node, Mapping):
-        return
-    widget_values = workflow_node.get("widgets_values")
-    if not isinstance(widget_values, Sequence) or isinstance(
-        widget_values, (str, bytes)
-    ):
-        return
-    definition = definitions.get(node.class_type)
-    if not isinstance(definition, Mapping):
-        return
-    persisted_names = serialized_widget_names(workflow_node)
-    if not persisted_names:
-        persisted_names = widget_input_names(definition)
-    validate_serialized_widget_values(
-        node_id=node.id,
-        class_type=node.class_type,
-        persisted_widget_names=persisted_names,
-        widget_values=widget_values,
-        live_definition=definition,
-    )
-    value_index = 0
-    for input_name in widget_input_names(definition):
-        if value_index >= len(widget_values):
-            return
-        field_spec = find_input_field_spec(definition, input_name)
-        value = widget_values[value_index]
-        if input_name in payload_inputs:
-            value_index = _advance_widget_value_index(
-                widget_values, value_index, field_spec
-            )
-            continue
-        if _is_control_after_generate_value(value):
-            if _field_has_serialized_control_widget(field_spec):
-                value_index += 1
-                continue
-            _raise_widget_backfill_error(
-                node=node,
-                input_name=input_name,
-                field_spec=field_spec,
-                value=value,
-                reason="control-after-generate value cannot populate this input",
-            )
-        compatible, coerced_value = _coerce_widget_backfill_value(value, field_spec)
-        if not compatible:
-            _raise_widget_backfill_error(
-                node=node,
-                input_name=input_name,
-                field_spec=field_spec,
-                value=value,
-                reason="workflow widget value is incompatible with input definition",
-            )
-        payload_inputs[input_name] = _jsonify_definition_value(coerced_value)
-        value_index += 1
-        if _field_has_serialized_control_widget(field_spec) and value_index < len(
-            widget_values
-        ):
-            if _is_control_after_generate_value(widget_values[value_index]):
-                value_index += 1
-
-
-def _advance_widget_value_index(
-    widget_values: Sequence[Any],
-    value_index: int,
-    field_spec: Any,
-) -> int:
-    """Advance over a serialized widget value and its optional control companion."""
-
-    next_index = value_index + 1
-    if _field_has_serialized_control_widget(field_spec) and next_index < len(
-        widget_values
-    ):
-        if _is_control_after_generate_value(widget_values[next_index]):
-            return next_index + 1
-    return next_index
-
-
-def _coerce_widget_backfill_value(value: Any, field_spec: Any) -> Tuple[bool, Any]:
-    """Return whether a workflow widget value matches a definition field."""
-
-    input_type = _field_type_name(field_spec)
-    if input_type is None:
-        return True, _jsonify_definition_value(value)
-    normalized_type = input_type.upper()
-    if normalized_type in _SOCKET_ONLY_INPUT_TYPES:
-        return False, None
-    if is_picker_field_spec(field_spec):
-        return _coerce_picker_widget_value(value, field_spec)
-    if normalized_type in {"STRING", "TEXT"}:
-        return (True, value) if isinstance(value, str) else (False, None)
-    if normalized_type == "BOOLEAN":
-        return (True, value) if isinstance(value, bool) else (False, None)
-    if normalized_type == "INT":
-        if isinstance(value, bool):
-            return False, None
-        coerced = _coerce_int_value(value)
-        return (True, coerced) if coerced is not None else (False, None)
-    if normalized_type in {"FLOAT", "NUMBER"}:
-        coerced_float = _coerce_widget_float(value)
-        return (True, coerced_float) if coerced_float is not None else (False, None)
-    return True, _jsonify_definition_value(value)
-
-
-def _coerce_picker_widget_value(value: Any, field_spec: Any) -> Tuple[bool, Any]:
-    """Return whether a picker widget value is safe to persist by name."""
-
-    if not isinstance(value, str):
-        return False, None
-    options = picker_options(field_spec)
-    if options and value not in options:
-        return False, None
-    return True, value
-
-
-def _coerce_widget_float(value: Any) -> Optional[float]:
-    """Coerce a workflow widget value to float only when conversion is safe."""
-
-    if value is None or isinstance(value, bool):
-        return None
-    if isinstance(value, (int, float)):
-        return float(value)
-    if isinstance(value, str):
-        stripped = value.strip()
-        if not stripped:
-            return None
-        try:
-            return float(stripped)
-        except ValueError:
-            return None
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
-
 def _field_type_name(field_spec: Any) -> Optional[str]:
     """Return the declared scalar input type for a field spec."""
 
@@ -579,54 +427,6 @@ def _field_type_name(field_spec: Any) -> Optional[str]:
         return None
     first = field_spec[0]
     return first if isinstance(first, str) else None
-
-
-def _field_metadata(field_spec: Any) -> Optional[Mapping[str, Any]]:
-    """Return the metadata mapping for a field spec when present."""
-
-    if (
-        isinstance(field_spec, Sequence)
-        and not isinstance(field_spec, (str, bytes))
-        and len(field_spec) > 1
-        and isinstance(field_spec[1], Mapping)
-    ):
-        return field_spec[1]
-    return None
-
-
-def _field_has_serialized_control_widget(field_spec: Any) -> bool:
-    """Return whether Comfy serializes a control value after this widget."""
-
-    metadata = _field_metadata(field_spec)
-    return bool(metadata and metadata.get("control_after_generate") is True)
-
-
-def _is_control_after_generate_value(value: Any) -> bool:
-    """Return whether a value is Comfy seed control metadata."""
-
-    return (
-        isinstance(value, str)
-        and value.strip().lower() in _CONTROL_AFTER_GENERATE_VALUES
-    )
-
-
-def _raise_widget_backfill_error(
-    *,
-    node: GraphNode,
-    input_name: str,
-    field_spec: Any,
-    value: Any,
-    reason: str,
-) -> None:
-    """Raise a diagnostic error for unsafe positional widget backfill."""
-
-    expected = _field_type_name(field_spec) or "unknown"
-    raise ValueError(
-        "Unsafe workflow widget backfill: "
-        f"{reason}; node_id={node.id}; class_type={node.class_type}; "
-        f"input={input_name}; expected={expected}; "
-        f"actual_type={type(value).__name__}; actual_value={value!r}"
-    )
 
 
 def _validate_authored_values_against_definitions(payload: Mapping[str, Any]) -> None:
@@ -722,8 +522,8 @@ def _validate_authored_control_value(
     field_spec = _control_field_spec(control, definitions)
     if field_spec is None:
         return
-    compatible, _coerced = _coerce_widget_backfill_value(value, field_spec)
-    if compatible:
+    reason = invalid_named_value_reason(value, field_spec)
+    if reason is None:
         return
     _raise_authored_value_error(
         payload=payload,
@@ -731,7 +531,7 @@ def _validate_authored_control_value(
         field_spec=field_spec,
         flavor_id=flavor_id,
         value=value,
-        reason="authored default does not match node definition",
+        reason=f"authored default does not match node definition ({reason})",
     )
 
 

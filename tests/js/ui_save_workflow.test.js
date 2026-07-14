@@ -19,7 +19,9 @@ import { api } from './mocks/api.js';
 import { getSugarCubesUI } from '../../web/comfyui/ui/index.js';
 
 const CANONICAL_DEMO_ID = 'artificial-sweetener/base-cubes/demo.cube';
-const CANONICAL_LOOSE_ID = 'local/personal/loose_cube.cube';
+const PERSONAL_DEMO_ID = 'local/personal/Demo Cube.cube';
+const PERSONAL_LOOSE_ID = 'local/personal/Loose Cube.cube';
+const PERSONAL_DEMO_FORK_ID = 'local/personal/Demo (Fork).cube';
 const HISTORICAL_REVISION_REF = 'abc123456789';
 const CURRENT_REVISION_REF = 'WORKTREE';
 
@@ -96,6 +98,22 @@ function makeCubeGroup({ cubeId, defaultAlias, version, revisionRef, markerIds, 
   };
 }
 
+function makeFinalizedDefinition(cubeId, version) {
+  return {
+    cube: {
+      cube_id: cubeId,
+      default_alias: 'Demo',
+      version,
+      surface: null,
+      flavors: { authored: [{ id: 'default', name: 'Default', values: {} }] },
+    },
+    nodes: [],
+    markers: [],
+    connections: [],
+    layout: { groups: [] },
+  };
+}
+
 beforeEach(() => {
   setupBaseApp();
   localStorage.clear();
@@ -138,13 +156,6 @@ beforeEach(() => {
 });
 
 describe('save workflow payload', () => {
-  const seedAuthorProfile = () => {
-    localStorage.setItem(
-      'sugarcubes.author_profile',
-      JSON.stringify({ author: 'Tester', author_url: '' }),
-    );
-  };
-
   const configureGraphToPrompt = ({ withWorkflow }) => {
     app.graphToPrompt = () => {
       const output = {
@@ -163,7 +174,6 @@ describe('save workflow payload', () => {
   };
 
   test('save includes workflow payload', async () => {
-    seedAuthorProfile();
     configureGraphToPrompt({ withWorkflow: true });
 
     let saveBody = null;
@@ -183,7 +193,7 @@ describe('save workflow payload', () => {
     ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
     ui.cubeBrowser.getCubes = () => [];
 
-    await ui.cubeActions.save();
+    await ui.cubeSave.save();
     await flushPromises();
 
     expect(saveBody).not.toBeNull();
@@ -194,7 +204,6 @@ describe('save workflow payload', () => {
 
   test('save includes target metadata from browser catalog entries', async () => {
     const targetCubeId = 'artificial-sweetener/base-cubes/SDXL/demo.cube';
-    seedAuthorProfile();
     configureGraphToPrompt({ withWorkflow: true });
 
     let saveBody = null;
@@ -221,7 +230,7 @@ describe('save workflow payload', () => {
       },
     ];
 
-    await ui.cubeActions.save();
+    await ui.cubeSave.save();
     await flushPromises();
 
     expect(saveBody.cubes[0].metadata).toEqual({
@@ -232,8 +241,6 @@ describe('save workflow payload', () => {
   });
 
   test('save enriches workflow subgraphs from live graph state', async () => {
-    seedAuthorProfile();
-
     const subgraphId = '94f725d5-39bf-4060-be68-f573214a2055';
     app.graph._subgraphs = new Map([
       [
@@ -317,7 +324,7 @@ describe('save workflow payload', () => {
     ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
     ui.cubeBrowser.getCubes = () => [];
 
-    await ui.cubeActions.save();
+    await ui.cubeSave.save();
     await flushPromises();
 
     const subgraphs = saveBody?.workflow?.definitions?.subgraphs;
@@ -338,8 +345,6 @@ describe('save workflow payload', () => {
   });
 
   test('save drops subgraphs with empty ids during normalization', async () => {
-    seedAuthorProfile();
-
     const validSubgraphId = '94f725d5-39bf-4060-be68-f573214a2055';
     app.graph._subgraphs = new Map([
       [
@@ -399,7 +404,7 @@ describe('save workflow payload', () => {
     ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
     ui.cubeBrowser.getCubes = () => [];
 
-    await ui.cubeActions.save();
+    await ui.cubeSave.save();
     await flushPromises();
 
     const subgraphIds = (saveBody?.workflow?.definitions?.subgraphs || []).map((entry) => entry.id);
@@ -408,7 +413,6 @@ describe('save workflow payload', () => {
   });
 
   test('save assigns cube_id for unsaved cubes', async () => {
-    seedAuthorProfile();
     configureGraphToPrompt({ withWorkflow: true });
 
     let saveBody = null;
@@ -484,19 +488,15 @@ describe('save workflow payload', () => {
     const ui = getSugarCubesUI();
     ui.dirtyManager.getDirtyCubeIds = () => new Set();
     ui.cubeBrowser.getCubes = () => [];
-    ui.dialogs.promptText = jest.fn(async () => CANONICAL_DEMO_ID);
-    ui.cubeActions.dialogs = ui.dialogs;
-
-    await ui.cubeActions.save();
+    await ui.cubeSave.save();
 
     const cubeIdWidget = inputMarker.widgets.find((widget) => widget.name === 'cube_id');
     const assignedCubeId = cubeIdWidget?.value || '';
-    expect(assignedCubeId).toBe(CANONICAL_DEMO_ID);
-    expect(saveBody.cubes[0].cube_id).toBe(CANONICAL_DEMO_ID);
+    expect(assignedCubeId).toBe(PERSONAL_DEMO_ID);
+    expect(saveBody.cubes[0].cube_id).toBe(PERSONAL_DEMO_ID);
   });
 
   test('save assigns cube_id when markers are disconnected', async () => {
-    seedAuthorProfile();
     configureGraphToPrompt({ withWorkflow: true });
 
     let saveBody = null;
@@ -546,19 +546,15 @@ describe('save workflow payload', () => {
     const ui = getSugarCubesUI();
     ui.dirtyManager.getDirtyCubeIds = () => new Set();
     ui.cubeBrowser.getCubes = () => [];
-    ui.dialogs.promptText = jest.fn(async () => CANONICAL_LOOSE_ID);
-    ui.cubeActions.dialogs = ui.dialogs;
-
-    await ui.cubeActions.save();
+    await ui.cubeSave.save();
 
     const assignedCubeId =
       inputMarker.widgets.find((widget) => widget.name === 'cube_id')?.value || '';
-    expect(assignedCubeId).toBe(CANONICAL_LOOSE_ID);
-    expect(saveBody.cubes[0].cube_id).toBe(CANONICAL_LOOSE_ID);
+    expect(assignedCubeId).toBe(PERSONAL_LOOSE_ID);
+    expect(saveBody.cubes[0].cube_id).toBe(PERSONAL_LOOSE_ID);
   });
 
   test('save reports missing workflow payload', async () => {
-    seedAuthorProfile();
     configureGraphToPrompt({ withWorkflow: false });
 
     api.fetchApi = async () => ({ ok: true, json: async () => ({ saved: [] }) });
@@ -572,7 +568,7 @@ describe('save workflow payload', () => {
     ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
     ui.cubeBrowser.getCubes = () => [];
 
-    await ui.cubeActions.save();
+    await ui.cubeSave.save();
     await flushPromises();
 
     expect(errorSpy).toHaveBeenCalled();
@@ -581,8 +577,7 @@ describe('save workflow payload', () => {
     errorSpy.mockRestore();
   });
 
-  test('save marks local baseline for saved cubes', async () => {
-    seedAuthorProfile();
+  test('save delegates finalized graph state to the save reconciler', async () => {
     configureGraphToPrompt({ withWorkflow: true });
 
     api.fetchApi = async (url, options = {}) => {
@@ -610,21 +605,23 @@ describe('save workflow payload', () => {
     const ui = getSugarCubesUI();
     ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
     ui.cubeBrowser.getCubes = () => [];
-    ui.dirtyManager.markClean = jest.fn();
+    ui.saveReconciler.reconcile = jest.fn(async () => {});
 
-    await ui.cubeActions.save();
+    await ui.cubeSave.save();
     await flushPromises();
 
-    expect(ui.dirtyManager.markClean).toHaveBeenCalledWith({
-      graph: app.graph,
-      cubeIds: [CANONICAL_DEMO_ID],
-    });
+    expect(ui.saveReconciler.reconcile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        graph: app.graph,
+        fallbackCubeIds: [CANONICAL_DEMO_ID],
+        reason: 'save',
+      }),
+    );
   });
 
   test('save toast reports committed entries distinctly', async () => {
     const toastAdd = jest.fn();
     window.comfyAPI = { vueApp: { config: { globalProperties: { $toast: { add: toastAdd } } } } };
-    seedAuthorProfile();
     configureGraphToPrompt({ withWorkflow: true });
 
     api.fetchApi = async (url, options = {}) => {
@@ -658,7 +655,7 @@ describe('save workflow payload', () => {
     ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
     ui.cubeBrowser.getCubes = () => [];
 
-    await ui.cubeActions.save();
+    await ui.cubeSave.save();
     await flushPromises();
 
     expect(toastAdd).toHaveBeenCalledWith(
@@ -677,7 +674,6 @@ describe('save workflow payload', () => {
 
   test('version-bumped save updates only the saved instance chrome metadata', async () => {
     app.extensionManager.registerSidebarTab = () => {};
-    seedAuthorProfile();
     configureGraphToPrompt({ withWorkflow: true });
 
     api.fetchApi = async (url) => {
@@ -694,6 +690,7 @@ describe('save workflow payload', () => {
                 committed: true,
                 commit_message: 'update demo.cube v1.1.1',
                 version: '1.1.1',
+                definition: makeFinalizedDefinition(CANONICAL_DEMO_ID, '1.1.1'),
               },
             ],
           }),
@@ -765,7 +762,7 @@ describe('save workflow payload', () => {
     ];
     ui.instanceManager.scheduleRefresh = jest.fn();
 
-    await ui.cubeActions.save();
+    await ui.cubeSave.save();
 
     expect(savedGroup.properties.sugarcubes).toEqual(
       expect.objectContaining({
@@ -789,15 +786,11 @@ describe('save workflow payload', () => {
     expect(untouchedInput.properties.sugarcubes_cube_revision_ref).toBe(CURRENT_REVISION_REF);
     expect(untouchedOutput.properties.sugarcubes_cube_version).toBe('1.1.0');
     expect(untouchedOutput.properties.sugarcubes_cube_revision_ref).toBe(CURRENT_REVISION_REF);
-    expect(ui.instanceManager.scheduleRefresh).toHaveBeenCalledWith({
-      graph: app.graph,
-      reason: 'save-version-metadata',
-    });
+    expect(ui.instanceManager.scheduleRefresh).not.toHaveBeenCalled();
   });
 
   test('versionless save response leaves chrome metadata unchanged', async () => {
     app.extensionManager.registerSidebarTab = () => {};
-    seedAuthorProfile();
     configureGraphToPrompt({ withWorkflow: true });
 
     api.fetchApi = async (url) => {
@@ -860,7 +853,7 @@ describe('save workflow payload', () => {
     ];
     ui.instanceManager.scheduleRefresh = jest.fn();
 
-    await ui.cubeActions.save();
+    await ui.cubeSave.save();
 
     expect(group.properties.sugarcubes).toEqual(
       expect.objectContaining({
@@ -880,7 +873,6 @@ describe('save workflow payload', () => {
   });
 
   test('save forks read-only tracked cubes even when author metadata matches', async () => {
-    seedAuthorProfile();
     configureGraphToPrompt({ withWorkflow: true });
 
     let saveBody = null;
@@ -936,16 +928,12 @@ describe('save workflow payload', () => {
         write_block_reason: 'Tracked GitHub repos are read-only until you claim one GitHub owner.',
       },
     ];
-    ui.dialogs.promptText = jest.fn(async () => CANONICAL_LOOSE_ID);
-    ui.cubeActions.dialogs = ui.dialogs;
-
-    await ui.cubeActions.save();
+    await ui.cubeSave.save();
     await flushPromises();
 
-    expect(ui.dialogs.promptText).toHaveBeenCalled();
     expect(saveBody?.cubes).toEqual([
       expect.objectContaining({
-        cube_id: CANONICAL_LOOSE_ID,
+        cube_id: PERSONAL_DEMO_FORK_ID,
         forked: true,
         previous_cube_id: CANONICAL_DEMO_ID,
       }),
@@ -954,7 +942,6 @@ describe('save workflow payload', () => {
 
   test('current save does not show historical save modal', async () => {
     app.extensionManager.registerSidebarTab = () => {};
-    seedAuthorProfile();
     configureGraphToPrompt({ withWorkflow: true });
 
     api.fetchApi = async (url, options = {}) => {
@@ -986,16 +973,15 @@ describe('save workflow payload', () => {
       { cube_id: CANONICAL_DEMO_ID, name: 'Demo', version: '1.2.1', is_writable: true },
     ];
     ui.dialogs.chooseHistoricalVersionSaveAction = jest.fn(async () => 'latest');
-    ui.cubeActions.dialogs = ui.dialogs;
+    ui.cubeSave.dialogs = ui.dialogs;
 
-    await ui.cubeActions.save();
+    await ui.cubeSave.save();
 
     expect(ui.dialogs.chooseHistoricalVersionSaveAction).not.toHaveBeenCalled();
   });
 
   test('stale historical save as latest sends source metadata and refreshes graph identity', async () => {
     app.extensionManager.registerSidebarTab = () => {};
-    seedAuthorProfile();
     configureGraphToPrompt({ withWorkflow: true });
 
     let saveBody = null;
@@ -1012,6 +998,8 @@ describe('save workflow payload', () => {
                 path: 'demo.cube',
                 forked: false,
                 commit_message: 'update demo.cube v1.2.2',
+                version: '1.2.2',
+                definition: makeFinalizedDefinition(CANONICAL_DEMO_ID, '1.2.2'),
               },
             ],
           }),
@@ -1058,9 +1046,9 @@ describe('save workflow payload', () => {
       { cube_id: CANONICAL_DEMO_ID, name: 'Demo', version: '1.2.1', is_writable: true },
     ];
     ui.dialogs.chooseHistoricalVersionSaveAction = jest.fn(async () => 'latest');
-    ui.cubeActions.dialogs = ui.dialogs;
+    ui.cubeSave.dialogs = ui.dialogs;
 
-    await ui.cubeActions.save();
+    await ui.cubeSave.save();
 
     expect(ui.dialogs.chooseHistoricalVersionSaveAction).toHaveBeenCalledWith({
       entries: [
@@ -1097,7 +1085,6 @@ describe('save workflow payload', () => {
 
   test('stale historical save cancel skips backend save and graph mutation', async () => {
     app.extensionManager.registerSidebarTab = () => {};
-    seedAuthorProfile();
     configureGraphToPrompt({ withWorkflow: true });
 
     let saveCalls = 0;
@@ -1148,9 +1135,9 @@ describe('save workflow payload', () => {
     ];
     ui.dialogs.chooseHistoricalVersionSaveAction = jest.fn(async () => null);
     ui.dirtyManager.markClean = jest.fn();
-    ui.cubeActions.dialogs = ui.dialogs;
+    ui.cubeSave.dialogs = ui.dialogs;
 
-    await ui.cubeActions.save();
+    await ui.cubeSave.save();
 
     expect(saveCalls).toBe(0);
     expect(ui.dirtyManager.markClean).not.toHaveBeenCalled();
@@ -1160,9 +1147,8 @@ describe('save workflow payload', () => {
     expect(inputMarker.properties.sugarcubes_cube_revision_ref).toBe(HISTORICAL_REVISION_REF);
   });
 
-  test('stale historical save as latest falls back to current browser version on no-op save', async () => {
+  test('stale historical save as latest uses the finalized persisted version', async () => {
     app.extensionManager.registerSidebarTab = () => {};
-    seedAuthorProfile();
     configureGraphToPrompt({ withWorkflow: true });
 
     api.fetchApi = async (url) => {
@@ -1178,6 +1164,8 @@ describe('save workflow payload', () => {
                 forked: false,
                 committed: false,
                 commit_message: '',
+                version: '1.2.1',
+                definition: makeFinalizedDefinition(CANONICAL_DEMO_ID, '1.2.1'),
               },
             ],
           }),
@@ -1224,9 +1212,9 @@ describe('save workflow payload', () => {
       { cube_id: CANONICAL_DEMO_ID, name: 'Demo', version: '1.2.1', is_writable: true },
     ];
     ui.dialogs.chooseHistoricalVersionSaveAction = jest.fn(async () => 'latest');
-    ui.cubeActions.dialogs = ui.dialogs;
+    ui.cubeSave.dialogs = ui.dialogs;
 
-    await ui.cubeActions.save();
+    await ui.cubeSave.save();
 
     expect(group.properties.sugarcubes).toEqual(
       expect.objectContaining({
@@ -1243,7 +1231,6 @@ describe('save workflow payload', () => {
 
   test('stale historical fork updates only stale instance markers and preserves revision lineage', async () => {
     app.extensionManager.registerSidebarTab = () => {};
-    seedAuthorProfile();
     configureGraphToPrompt({ withWorkflow: true });
 
     let saveBody = null;
@@ -1324,14 +1311,11 @@ describe('save workflow payload', () => {
       },
     ];
     ui.dialogs.chooseHistoricalVersionSaveAction = jest.fn(async () => 'fork');
-    ui.dialogs.promptText = jest.fn(async () => CANONICAL_LOOSE_ID);
-    ui.cubeActions.dialogs = ui.dialogs;
-
-    await ui.cubeActions.save();
+    await ui.cubeSave.save();
 
     expect(saveBody?.cubes[0]).toEqual(
       expect.objectContaining({
-        cube_id: CANONICAL_LOOSE_ID,
+        cube_id: PERSONAL_DEMO_FORK_ID,
         forked: true,
         previous_cube_id: CANONICAL_DEMO_ID,
         lineage: expect.objectContaining({
@@ -1345,18 +1329,18 @@ describe('save workflow payload', () => {
       }),
     );
     expect(staleInput.widgets.find((widget) => widget.name === 'cube_id')?.value).toBe(
-      CANONICAL_LOOSE_ID,
+      PERSONAL_DEMO_FORK_ID,
     );
     expect(staleOutput.widgets.find((widget) => widget.name === 'cube_id')?.value).toBe(
-      CANONICAL_LOOSE_ID,
+      PERSONAL_DEMO_FORK_ID,
     );
     expect(staleGroup.properties.sugarcubes).toEqual(
       expect.objectContaining({
-        cube_id: CANONICAL_LOOSE_ID,
+        cube_id: PERSONAL_DEMO_FORK_ID,
         default_alias: 'Demo (fork)',
         cube_version: '',
         cube_revision_ref: CURRENT_REVISION_REF,
-        cube_definition_key: CANONICAL_LOOSE_ID,
+        cube_definition_key: PERSONAL_DEMO_FORK_ID,
       }),
     );
     expect(staleInput.properties.sugarcubes_cube_version).toBe('');

@@ -183,6 +183,10 @@ export class CubeLibraryApi {
     return this.fetchJson('/sugarcubes/rename', { method: 'POST', body: payload, ...options });
   }
 
+  async promote(payload, options = {}) {
+    return this.fetchJson('/sugarcubes/promote', { method: 'POST', body: payload, ...options });
+  }
+
   async updateMetadata(payload, options = {}) {
     return this.fetchJson('/sugarcubes/update_metadata', {
       method: 'POST',

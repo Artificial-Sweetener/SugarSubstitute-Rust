@@ -23,7 +23,7 @@ import json
 import logging
 from pathlib import Path
 import subprocess
-from typing import Any, Callable, Iterable, Optional
+from typing import Any, Callable, Iterable, Optional, Sequence
 
 try:
     from ...cube_model.cube_identity import (
@@ -199,13 +199,37 @@ class TrackedRepoService:
     ) -> CubeCommitResult:
         """Stage and commit one file without including unrelated staged changes."""
 
-        normalized_path = self._normalize_repo_relative_path(repo_relative_path)
+        return self.commit_paths(
+            repo_root=repo_root,
+            repo_relative_paths=[repo_relative_path],
+            commit_message=commit_message,
+        )
+
+    def commit_paths(
+        self,
+        *,
+        repo_root: Path,
+        repo_relative_paths: Sequence[str],
+        commit_message: str,
+    ) -> CubeCommitResult:
+        """Commit one cohesive path set without including unrelated staged changes."""
+
+        normalized_paths = tuple(
+            dict.fromkeys(
+                self._normalize_repo_relative_path(path) for path in repo_relative_paths
+            )
+        )
+        if not normalized_paths:
+            raise BackendError(
+                "At least one repo-relative path is required", status=400
+            )
+        allowed_paths = set(normalized_paths)
         try:
             staged_before = self.list_staged_paths(repo_root=repo_root)
             unrelated_staged = [
                 path
                 for path in staged_before
-                if self._normalize_repo_relative_path(path) != normalized_path
+                if self._normalize_repo_relative_path(path) not in allowed_paths
             ]
             if unrelated_staged:
                 raise BackendError(
@@ -217,12 +241,12 @@ class TrackedRepoService:
                     },
                 )
 
-            self.git_runner(["add", "--", normalized_path], cwd=repo_root)
+            self.git_runner(["add", "--", *normalized_paths], cwd=repo_root)
             staged_after = self.list_staged_paths(repo_root=repo_root)
             unrelated_after = [
                 path
                 for path in staged_after
-                if self._normalize_repo_relative_path(path) != normalized_path
+                if self._normalize_repo_relative_path(path) not in allowed_paths
             ]
             if unrelated_after:
                 raise BackendError(
@@ -233,15 +257,16 @@ class TrackedRepoService:
                         "staged_paths": unrelated_after,
                     },
                 )
-            if normalized_path not in {
+            staged_normalized = {
                 self._normalize_repo_relative_path(path) for path in staged_after
-            }:
+            }
+            if not staged_normalized.intersection(allowed_paths):
                 raise BackendError(
-                    "Saved cube did not produce a staged git diff",
+                    "Saved cube mutation did not produce a staged git diff",
                     status=409,
                     details={
                         "repo_root": str(repo_root),
-                        "repo_relative_path": normalized_path,
+                        "repo_relative_paths": list(normalized_paths),
                     },
                 )
             self.git_runner(
@@ -265,7 +290,7 @@ class TrackedRepoService:
                 status=500,
                 details={
                     "repo_root": str(repo_root),
-                    "repo_relative_path": normalized_path,
+                    "repo_relative_paths": list(normalized_paths),
                     "reason": str(exc),
                 },
             ) from exc

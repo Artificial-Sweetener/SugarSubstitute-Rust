@@ -36,6 +36,10 @@ try:
         validate_cube_route_identity,
     )
     from ..cube_model.merge import materialize_nodes
+    from ..cube_model.widget_values import (
+        WidgetSnapshotError,
+        canonicalize_subgraph_widget_values,
+    )
     from ..instrumentation import log_event
 except ImportError:
     from cube_model import (
@@ -49,6 +53,10 @@ except ImportError:
         validate_cube_route_identity,
     )
     from cube_model.merge import materialize_nodes
+    from cube_model.widget_values import (
+        WidgetSnapshotError,
+        canonicalize_subgraph_widget_values,
+    )
     from instrumentation import log_event
 
 try:
@@ -226,6 +234,10 @@ def load_cube(path: Path | str) -> LoadedCube:
     metadata = dict(document.metadata)
     definitions = dict(document.implementation.definitions)
     subgraphs = _parse_subgraphs(document.implementation.subgraphs, warnings)
+    try:
+        subgraphs = canonicalize_subgraph_widget_values(subgraphs, definitions)
+    except WidgetSnapshotError as exc:
+        raise CubeImportError(f"Unsafe subgraph widget snapshot: {exc}") from exc
 
     subgraph_ids = {
         subgraph_id

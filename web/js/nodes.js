@@ -349,7 +349,7 @@ function toggleCreateCubeDecoration(node, enabled) {
 
 async function startCreateCubeFromMarker(node) {
   const ui = getCurrentUi();
-  await ui?.cubeActions?.startCreateCubeFromMarker?.(node);
+  await ui?.cubeCreation?.startCreateCubeFromMarker?.(node);
   schedule(() => refreshNode(node));
 }
 

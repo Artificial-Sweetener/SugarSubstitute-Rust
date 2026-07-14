@@ -19,7 +19,13 @@
  */
 
 import { getGraphGroups } from '../graph/GraphQuery.js';
-import { getGroupSugarcubes, setGroupSugarcubes } from '../graph/GroupMetadata.js';
+import {
+  flattenCubeGroupMetadata,
+  getGroupSugarcubes,
+  setGroupSugarcubes,
+  writeCubeDefinitionMetadata,
+  writeCubePresetMetadata,
+} from '../graph/GroupMetadata.js';
 import { readWidgetValue, writeWidgetValue } from '../graph/Markers.js';
 import { buildSurfaceNodesBySymbol } from '../graph/SurfaceNodeResolver.js';
 import { buildCubeDefinitionKey } from '../core/CubeDefinitionKey.js';
@@ -224,16 +230,17 @@ export class FlavorService {
     };
   }
 
-  async hydrateFromDefinition({ cubeId, definitionKey, entry, graph } = {}) {
+  async hydrateFromDefinition({ cubeId, definitionKey, entry, graph, forceApply = false } = {}) {
     const definitionCube = entry?.payload?.cube;
     if (!graph || !cubeId || !definitionCube) {
-      return;
+      return 0;
     }
     const targetDefinitionKey =
       typeof definitionKey === 'string' && definitionKey.trim()
         ? definitionKey.trim()
         : buildCubeDefinitionKey(cubeId, definitionCube.version);
     const importedMetadata = this.buildImportedMetadata(definitionCube);
+    let hydratedCount = 0;
     for (const group of getGraphGroups(graph)) {
       const metadata = getGroupSugarcubes(group);
       if (!metadata?.managed || metadata?.cube_id !== cubeId) {
@@ -252,13 +259,27 @@ export class FlavorService {
       ) {
         continue;
       }
-      const nextMetadata = {
+      const definitionMetadata = writeCubeDefinitionMetadata(metadata, {
+        surface: importedMetadata.surface,
+        surface_signature: importedMetadata.surface_signature,
+      });
+      const presetMetadata = writeCubePresetMetadata(definitionMetadata, {
+        flavor: importedMetadata.flavor,
+        flavor_scope: importedMetadata.flavor_scope,
+        active_flavor_values: importedMetadata.active_flavor_values,
+      });
+      const nextMetadata = flattenCubeGroupMetadata(presetMetadata, {
         ...metadata,
-        ...importedMetadata,
-      };
+        authored_flavors: importedMetadata.authored_flavors,
+        flavor_options: importedMetadata.flavor_options,
+        flavors: importedMetadata.flavors,
+        local_flavors: importedMetadata.local_flavors,
+      });
       setGroupSugarcubes(group, nextMetadata);
-      this.refreshGroupMetadata(graph, group, getGroupSugarcubes(group));
+      this.refreshGroupMetadata(graph, group, getGroupSugarcubes(group), { forceApply });
+      hydratedCount += 1;
     }
+    return hydratedCount;
   }
 
   refreshGraph(graph) {
@@ -277,7 +298,7 @@ export class FlavorService {
     }
   }
 
-  refreshGroupMetadata(graph, group, metadata) {
+  refreshGroupMetadata(graph, group, metadata, { forceApply = false } = {}) {
     const authoredFlavors = normalizeAuthoredFlavorEntries(
       metadata?.authored_flavors || metadata?.flavors,
       metadata?.surface,
@@ -288,18 +309,26 @@ export class FlavorService {
       values: filterTrackedSurfaceValues(metadata?.surface, options[0]?.values),
     };
     const selectedOptions = [{ ...selectedFlavor, selected: true }];
-    const nextMetadata = {
+    const preservedMetadata = {
       ...metadata,
       authored_flavors: authoredFlavors,
       local_flavors: [],
       flavor_options: selectedOptions,
       flavors: selectedOptions.map((entry) => entry.name),
-      flavor: 'default',
-      flavor_scope: 'authored',
-      active_flavor_values: cloneValue(selectedFlavor.values || {}),
     };
+    const nextMetadata = flattenCubeGroupMetadata(
+      writeCubePresetMetadata(metadata, {
+        flavor: 'default',
+        flavor_scope: 'authored',
+        active_flavor_values: cloneValue(selectedFlavor.values || {}),
+      }),
+      preservedMetadata,
+    );
     setGroupSugarcubes(group, nextMetadata);
-    if (selectedFlavor && this.selectionNeedsApplication(metadata, selectedFlavor)) {
+    if (
+      selectedFlavor &&
+      (forceApply || this.selectionNeedsApplication(metadata, selectedFlavor))
+    ) {
       this.applyFlavorValues(graph, nextMetadata, selectedFlavor);
       this.dirtyManager?.requestRefresh?.({ graph, reason: 'flavor-refresh' });
     }

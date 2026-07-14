@@ -149,6 +149,9 @@ def widget_input_names(definition: Mapping[str, Any]) -> list[str]:
 def is_widget_field_spec(field_spec: Any) -> bool:
     """Return whether a field spec is normally represented as a widget value."""
 
+    metadata = _field_metadata(field_spec)
+    if metadata and metadata.get("forceInput") is True:
+        return False
     if is_picker_field_spec(field_spec):
         return True
     if not isinstance(field_spec, Sequence) or isinstance(field_spec, (str, bytes)):

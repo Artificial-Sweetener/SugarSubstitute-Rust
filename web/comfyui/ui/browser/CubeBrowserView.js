@@ -35,6 +35,11 @@ function isLocalCubeEntry(cube) {
   return sourceType === 'local' || cubeId.startsWith('local/');
 }
 
+function isPersonalCubeEntry(cube) {
+  const cubeId = typeof cube?.cube_id === 'string' ? cube.cube_id.trim().toLowerCase() : '';
+  return cubeId.startsWith('local/personal/');
+}
+
 /**
  * Coordinate cube browser view behavior for the SugarCubes UI.
  */
@@ -133,6 +138,13 @@ export class CubeBrowserView {
       filledIcon: 'mdi-trash-can',
       disabled: true,
     });
+    const promoteButton = createActionButton({
+      className: 'sugarcubes-browser__promote',
+      title: 'Move to cube pack',
+      outlineIcon: 'mdi-package-up',
+      filledIcon: 'mdi-package-up',
+      disabled: true,
+    });
     const placeButton = createActionButton({
       className: 'sugarcubes-browser__place',
       title: 'Place',
@@ -184,6 +196,7 @@ export class CubeBrowserView {
     const detailActions = $el('div.sugarcubes-browser__detail-actions', [
       editButton,
       editSaveButton,
+      promoteButton,
       deleteButton,
       editCancelButton,
       placeButton,
@@ -217,6 +230,7 @@ export class CubeBrowserView {
     editSaveButton.addEventListener('click', () => this.handlers.onEditSave?.());
     editCancelButton.addEventListener('click', () => this.handlers.onEditCancel?.());
     deleteButton.addEventListener('click', () => this.handlers.onDelete?.());
+    promoteButton.addEventListener('click', () => this.handlers.onPromote?.());
     versionInput.addEventListener('focus', () => this.openVersionCombobox());
     versionInput.addEventListener('click', () => this.openVersionCombobox());
     versionInput.addEventListener('input', () => this.handleVersionInput());
@@ -310,6 +324,7 @@ export class CubeBrowserView {
       previewStatus,
       favoriteButton,
       deleteButton,
+      promoteButton,
       editButton,
       editSaveButton,
       editCancelButton,
@@ -505,6 +520,7 @@ export class CubeBrowserView {
     const detailIcon = this.elements.detailIcon;
     const favoriteButton = this.elements.favoriteButton;
     const deleteButton = this.elements.deleteButton;
+    const promoteButton = this.elements.promoteButton;
     const editButton = this.elements.editButton;
     const editSaveButton = this.elements.editSaveButton;
     const editCancelButton = this.elements.editCancelButton;
@@ -530,6 +546,10 @@ export class CubeBrowserView {
       }
       if (deleteButton) {
         deleteButton.disabled = true;
+      }
+      if (promoteButton) {
+        promoteButton.disabled = true;
+        promoteButton.classList.add('sugarcubes-browser__action-hidden');
       }
       if (editButton) {
         editButton.disabled = true;
@@ -582,6 +602,14 @@ export class CubeBrowserView {
       deleteButton.classList.toggle(
         'sugarcubes-browser__action-hidden',
         state.editing || !selectedWritable,
+      );
+    }
+    if (promoteButton) {
+      const promotable = selectedWritable && isPersonalCubeEntry(selected);
+      promoteButton.disabled = state.busy || !state.selected || !promotable;
+      promoteButton.classList.toggle(
+        'sugarcubes-browser__action-hidden',
+        state.editing || !promotable,
       );
     }
     if (editButton) {
@@ -903,6 +931,7 @@ export class CubeBrowserView {
   updateActionState(state) {
     const placeButton = this.elements.placeButton;
     const deleteButton = this.elements.deleteButton;
+    const promoteButton = this.elements.promoteButton;
     const editButton = this.elements.editButton;
     const editSaveButton = this.elements.editSaveButton;
     const editCancelButton = this.elements.editCancelButton;
@@ -914,6 +943,9 @@ export class CubeBrowserView {
     }
     if (deleteButton) {
       deleteButton.disabled = disabled || !selectedWritable;
+    }
+    if (promoteButton) {
+      promoteButton.disabled = disabled || !selectedWritable || !isPersonalCubeEntry(selected);
     }
     if (editButton) {
       editButton.disabled = disabled || !selectedWritable;

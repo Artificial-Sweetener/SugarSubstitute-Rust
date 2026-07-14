@@ -42,11 +42,15 @@ try:
     from ..nodes import NODE_CLASS_MAPPINGS as SUGAR_NODE_CLASS_MAPPINGS
     from ..payloads import retarget_cube_payload
     from .services import (
+        CubeArtifactRepository,
         CubeExportService,
         CubeDependencyService,
+        CubeHistoryService,
+        CubeIdentityRedirectService,
         CubeLibraryService,
         CubeLoadService,
         CubeMetadataService,
+        CubePromotionService,
         CubeRevisionService,
         IdentityPolicyService,
         LocalFlavorService,
@@ -69,11 +73,15 @@ except ImportError:
     from nodes import NODE_CLASS_MAPPINGS as SUGAR_NODE_CLASS_MAPPINGS
     from payloads import retarget_cube_payload
     from backend.services import (
+        CubeArtifactRepository,
         CubeExportService,
         CubeDependencyService,
+        CubeHistoryService,
+        CubeIdentityRedirectService,
         CubeLibraryService,
         CubeLoadService,
         CubeMetadataService,
+        CubePromotionService,
         CubeRevisionService,
         IdentityPolicyService,
         LocalFlavorService,
@@ -113,6 +121,8 @@ class BackendServices:
     identity: IdentityPolicyService
     ownership: OwnershipPolicyService
     metadata: CubeMetadataService
+    promotion: CubePromotionService
+    redirects: CubeIdentityRedirectService
     exporter: CubeExportService
     loader: CubeLoadService
     revisions: CubeRevisionService
@@ -211,6 +221,9 @@ def build_backend_services(
         protected_owner_provider=lambda: identity.get_policy().claimed_github_owner,
     )
     local_flavors = LocalFlavorService(tracked_repos)
+    artifacts = CubeArtifactRepository(tracked_repos)
+    history = CubeHistoryService(tracked_repos)
+    redirects = CubeIdentityRedirectService(tracked_repos)
     ownership = OwnershipPolicyService(
         tracked_repo_service=tracked_repos,
         identity_policy_service=identity,
@@ -226,6 +239,24 @@ def build_backend_services(
     metadata = CubeMetadataService(
         library,
         retarget_cube_payload=retarget_cube_payload,
+        artifacts=artifacts,
+        history=history,
+        local_flavors=local_flavors,
+    )
+    promotion = CubePromotionService(
+        artifacts=artifacts,
+        history=history,
+        redirects=redirects,
+        local_flavors=local_flavors,
+        ownership=ownership,
+        library=library,
+        retarget_cube_payload=retarget_cube_payload,
+    )
+    loader = CubeLoadService(
+        library,
+        load_cube_artifact=load_cube_artifact,
+        prepare_cube_import=prepare_cube_import,
+        redirect_service=redirects,
     )
     exporter = CubeExportService(
         library,
@@ -238,18 +269,18 @@ def build_backend_services(
         node_class_mappings_provider=lambda: _resolve_active_comfy_node_class_mappings(
             extension_root
         ),
+        finalized_definition_provider=lambda path, cube_id, _payload: loader.load_cube_path(
+            cube_path=path,
+            cube_id=cube_id,
+        ),
         local_flavor_service=local_flavors,
-    )
-    loader = CubeLoadService(
-        library,
-        load_cube_artifact=load_cube_artifact,
-        prepare_cube_import=prepare_cube_import,
     )
     revisions = CubeRevisionService(
         library,
         tracked_repos,
         load_cube_artifact=load_cube_artifact,
         prepare_cube_import=prepare_cube_import,
+        redirect_service=redirects,
     )
     dependencies = CubeDependencyService(
         library_service=library,
@@ -263,6 +294,8 @@ def build_backend_services(
         identity=identity,
         ownership=ownership,
         metadata=metadata,
+        promotion=promotion,
+        redirects=redirects,
         exporter=exporter,
         loader=loader,
         revisions=revisions,

@@ -42,9 +42,12 @@ import {
 } from './InstanceAliasSync.js';
 import {
   ensureGroupSerialization,
+  flattenCubeGroupMetadata,
   getGroupSugarcubes,
   setGroupSugarcubes,
   resolveInstanceDisplayName,
+  writeCubeDefinitionMetadata,
+  writeCubeInstanceMetadata,
 } from './GroupMetadata.js';
 import { updateMarkersForIds } from './CubeMarkers.js';
 import { buildCubeDefinitionKey, normalizeRevisionRef } from '../core/CubeDefinitionKey.js';
@@ -314,9 +317,12 @@ function applyInstanceGroup(
       minimumMargins,
     );
   }
-  const metadata = {
+  const metadataSeed = {
+    ...(cleanedExisting || {}),
     schema: CUBE_INSTANCE_SCHEMA,
-    instance_id: canonicalInstanceId,
+    managed: true,
+  };
+  const definitionMetadata = writeCubeDefinitionMetadata(metadataSeed, {
     cube_id: instance.cubeId,
     default_alias: canonicalDefaultAlias,
     target_model: canonicalTargetModel,
@@ -324,33 +330,10 @@ function applyInstanceGroup(
     cube_revision_ref: cubeRevisionRef,
     cube_definition_key: cubeDefinitionKey,
     icon: definitionIcon,
+  });
+  const ownedMetadata = writeCubeInstanceMetadata(definitionMetadata, {
+    instance_id: canonicalInstanceId,
     instance_alias: canonicalInstanceAlias,
-    managed: true,
-    flavor: cleanedExisting?.flavor ?? null,
-    flavor_scope: cleanedExisting?.flavor_scope ?? 'authored',
-    flavors: Array.isArray(cleanedExisting?.flavors) ? cleanedExisting.flavors : [],
-    flavor_options: Array.isArray(cleanedExisting?.flavor_options)
-      ? cleanedExisting.flavor_options
-      : [],
-    authored_flavors: Array.isArray(cleanedExisting?.authored_flavors)
-      ? cleanedExisting.authored_flavors
-      : [],
-    local_flavors: Array.isArray(cleanedExisting?.local_flavors)
-      ? cleanedExisting.local_flavors
-      : [],
-    surface:
-      cleanedExisting?.surface && typeof cleanedExisting.surface === 'object'
-        ? cleanedExisting.surface
-        : null,
-    surface_signature:
-      typeof cleanedExisting?.surface_signature === 'string'
-        ? cleanedExisting.surface_signature
-        : '',
-    active_flavor_values:
-      cleanedExisting?.active_flavor_values &&
-      typeof cleanedExisting.active_flavor_values === 'object'
-        ? cleanedExisting.active_flavor_values
-        : {},
     markers: instance.markerLookup,
     nodes: instance.nodeIds,
     bounds: {
@@ -361,11 +344,8 @@ function applyInstanceGroup(
       padding: { ...resolvedPadding },
       header: { ...resolvedHeader },
     },
-    implementation_dirty: Boolean(cleanedExisting?.implementation_dirty),
-    surface_values_changed: Boolean(cleanedExisting?.surface_values_changed),
-    cosmetic_dirty: Boolean(cleanedExisting?.cosmetic_dirty),
-    has_saveable_changes: Boolean(cleanedExisting?.has_saveable_changes),
-  };
+  });
+  const metadata = flattenCubeGroupMetadata(ownedMetadata, cleanedExisting);
 
   let targetGroup = group;
   if (!targetGroup) {

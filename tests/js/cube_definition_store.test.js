@@ -30,6 +30,40 @@ function makeDefinition(version) {
 }
 
 describe('CubeDefinitionStore', () => {
+  test('replaces a ready same-key definition with the finalized save result', () => {
+    const onUpdate = jest.fn();
+    const store = new CubeDefinitionStore({ onUpdate });
+    const request = {
+      cubeId: 'cube-1',
+      cubeVersion: '1.0.0',
+      definitionKey: 'cube-1@1.0.0',
+    };
+    const first = makeDefinition('1.0.0');
+    first.cube.surface = { controls: [{ name: 'prompt', default: 'first' }] };
+    const finalized = makeDefinition('1.0.0');
+    finalized.cube.surface = { controls: [{ name: 'prompt', default: 'persisted' }] };
+
+    store.publishFinalized(request, first);
+    const entry = store.publishFinalized(request, finalized);
+
+    expect(store.getEntry(request)).toBe(entry);
+    expect(entry.payload.cube.surface.controls[0].default).toBe('persisted');
+    expect(onUpdate).toHaveBeenLastCalledWith('cube-1@1.0.0', entry);
+  });
+
+  test('evicts the stale unversioned worktree alias after a finalized save', () => {
+    const store = new CubeDefinitionStore();
+    store.publishFinalized({ cubeId: 'cube-1' }, makeDefinition(''));
+
+    store.publishFinalized(
+      { cubeId: 'cube-1', cubeVersion: '1.0.0' },
+      makeDefinition('1.0.0'),
+    );
+
+    expect(store.getEntry('cube-1')).toBeNull();
+    expect(store.getEntry('cube-1@1.0.0')).toMatchObject({ status: 'ready' });
+  });
+
   test('loads and caches historical definitions by version-aware key', async () => {
     const calls = [];
     const onUpdate = jest.fn();
