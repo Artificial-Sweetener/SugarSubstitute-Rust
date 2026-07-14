@@ -2251,14 +2251,12 @@ class CubeLibraryService:
                     context.repo_root, context.repo_relative_path
                 ),
             }
-        return {
-            "kind": "local",
-            "namespace": context.namespace,
-            "path": context.repo_relative_path,
-            "localHeadSha": "",
-            "remoteHeadSha": "",
-            "dirty": True,
-        }
+        return self._local_source_metadata(
+            namespace=context.namespace,
+            source_path=context.repo_relative_path,
+            repo_root=context.repo_root,
+            repo_relative_path=context.repo_relative_path,
+        )
 
     def resolve_cube_by_id(self, cube_id: str) -> Path:
         """Resolve a source-owned cube path by canonical cube id."""
@@ -2831,14 +2829,13 @@ class CubeLibraryService:
         namespace = normalize_metadata_string(
             source.get("namespace") or summary.get("namespace")
         )
-        return {
-            "kind": "local",
-            "namespace": namespace,
-            "path": self._local_source_relative_path(cube_id),
-            "localHeadSha": "",
-            "remoteHeadSha": "",
-            "dirty": True,
-        }
+        source_path = self._local_source_relative_path(cube_id)
+        return self._local_source_metadata(
+            namespace=namespace,
+            source_path=source_path,
+            repo_root=self.local_workspace_root().resolve(),
+            repo_relative_path=f"{namespace}/{source_path}",
+        )
 
     def _tracked_repo_for_source(
         self,
@@ -3510,6 +3507,30 @@ class CubeLibraryService:
         if tracked.local_head_sha:
             return tracked.local_head_sha
         checkout = Path(tracked.local_checkout_path).resolve()
+        return self._repo_head_sha(checkout)
+
+    def _local_source_metadata(
+        self,
+        *,
+        namespace: str,
+        source_path: str,
+        repo_root: Path,
+        repo_relative_path: str,
+    ) -> dict[str, Any]:
+        """Report one local cube against its shared repository state."""
+
+        return {
+            "kind": "local",
+            "namespace": namespace,
+            "path": source_path,
+            "localHeadSha": self._repo_head_sha(repo_root),
+            "remoteHeadSha": "",
+            "dirty": self._is_repo_path_dirty(repo_root, repo_relative_path),
+        }
+
+    def _repo_head_sha(self, checkout: Path) -> str:
+        """Return HEAD for one initialized local repository when available."""
+
         if not (checkout / ".git").exists():
             return ""
         try:

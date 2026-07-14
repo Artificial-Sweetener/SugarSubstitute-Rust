@@ -161,6 +161,60 @@ def test_backend_catalog_includes_hash_source_revision_and_dirty_state(
     assert catalog["cubes"][0]["requiredCustomNodes"] == ["ComfyUI-Impact-Pack"]
 
 
+def test_backend_local_cube_sources_report_shared_repo_git_state(
+    tmp_path: Path,
+    backend_services_factory,
+) -> None:
+    """Local catalog and load payloads should report their shared Git state."""
+
+    def fake_git(args, *, cwd):
+        class Result:
+            stdout = ""
+
+        if args == ["rev-parse", "HEAD"]:
+            Result.stdout = "local123\n"
+        elif args == ["status", "--porcelain"]:
+            Result.stdout = " M personal/dirty.cube\n"
+        return Result()
+
+    services = backend_services_factory(tmp_path, git_runner=fake_git)
+    local_root = services.library.local_workspace_root()
+    (local_root / ".git").mkdir()
+    personal_root = local_root / "personal"
+    _write_cube(
+        personal_root / "clean.cube",
+        _cube_payload(
+            cube_id="local/personal/clean.cube",
+            default_alias="Clean",
+        ),
+    )
+    _write_cube(
+        personal_root / "dirty.cube",
+        _cube_payload(
+            cube_id="local/personal/dirty.cube",
+            default_alias="Dirty",
+        ),
+    )
+
+    catalog = services.library.list_library_catalog()
+    entries = {entry["cubeId"]: entry for entry in catalog["cubes"]}
+
+    assert entries["local/personal/clean.cube"]["source"] == {
+        "kind": "local",
+        "namespace": "personal",
+        "path": "clean.cube",
+        "localHeadSha": "local123",
+        "remoteHeadSha": "",
+        "dirty": False,
+    }
+    assert entries["local/personal/dirty.cube"]["source"]["dirty"] is True
+
+    loaded = services.library.load_library_cube("local/personal/clean.cube")
+
+    assert loaded["source"]["localHeadSha"] == "local123"
+    assert loaded["source"]["dirty"] is False
+
+
 def test_backend_catalog_includes_target_model_fields(
     tmp_path: Path,
     backend_services_factory,
