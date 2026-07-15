@@ -17,69 +17,65 @@
  * Own the SugarCubes surface snapshotting layer in
  * `web/comfyui/ui/graph/SurfaceSnapshotter.js`.
  */
-
 import { readWidgetValue } from './Markers.js';
 import { buildSurfaceNodesBySymbol } from './SurfaceNodeResolver.js';
 import { trackedSurfaceControls } from '../core/SurfaceValuePolicy.js';
-
+import { isRecord } from '../types/common.js';
 function readPropertyValue(node, inputName) {
-  if (!node || typeof inputName !== 'string') {
+    if (!node || typeof inputName !== 'string') {
+        return null;
+    }
+    if (node.properties && Object.prototype.hasOwnProperty.call(node.properties, inputName)) {
+        return node.properties[inputName];
+    }
     return null;
-  }
-  if (node.properties && Object.prototype.hasOwnProperty.call(node.properties, inputName)) {
-    return node.properties[inputName];
-  }
-  return null;
 }
-
 /**
  * Build a stable surface-value snapshot from current live nodes.
  */
 export function snapshotSurfaceInstance(graph, nodeIds, surface) {
-  const controls = trackedSurfaceControls(surface);
-  if (!controls.length) {
-    return { controls: [] };
-  }
-  const nodesBySymbol = buildSurfaceNodesBySymbol(graph, nodeIds, surface);
-  const values = [];
-  for (const control of controls) {
-    const controlId = typeof control?.control_id === 'string' ? control.control_id.trim() : '';
-    const symbol = typeof control?.symbol === 'string' ? control.symbol.trim() : '';
-    const inputName = typeof control?.input_name === 'string' ? control.input_name.trim() : '';
-    if (!controlId || !symbol || !inputName) {
-      continue;
+    const controls = trackedSurfaceControls(surface);
+    if (!controls.length) {
+        return { controls: [] };
     }
-    const node = nodesBySymbol.get(symbol);
-    if (!node) {
-      values.push({ control_id: controlId, value: null });
-      continue;
+    const nodesBySymbol = buildSurfaceNodesBySymbol(graph, nodeIds, surface);
+    const values = [];
+    for (const control of controls) {
+        const controlId = typeof control?.control_id === 'string' ? control.control_id.trim() : '';
+        const symbol = typeof control?.symbol === 'string' ? control.symbol.trim() : '';
+        const inputName = typeof control?.input_name === 'string' ? control.input_name.trim() : '';
+        if (!controlId || !symbol || !inputName) {
+            continue;
+        }
+        const node = nodesBySymbol.get(symbol);
+        if (!node) {
+            values.push({ control_id: controlId, value: null });
+            continue;
+        }
+        const widgetValue = readWidgetValue(node, inputName);
+        const value = widgetValue !== '' || readPropertyValue(node, inputName) == null
+            ? widgetValue
+            : readPropertyValue(node, inputName);
+        values.push({ control_id: controlId, value });
     }
-    const widgetValue = readWidgetValue(node, inputName);
-    const value =
-      widgetValue !== '' || readPropertyValue(node, inputName) == null
-        ? widgetValue
-        : readPropertyValue(node, inputName);
-    values.push({ control_id: controlId, value });
-  }
-  return { controls: values };
+    return { controls: values };
 }
-
 /**
  * Build a stable surface-value snapshot from persisted flavor values.
  */
 export function snapshotSurfaceValues(surface, values) {
-  const controls = trackedSurfaceControls(surface);
-  const lookup = values && typeof values === 'object' ? values : {};
-  const entries = [];
-  for (const control of controls) {
-    const controlId = typeof control?.control_id === 'string' ? control.control_id.trim() : '';
-    if (!controlId) {
-      continue;
+    const controls = trackedSurfaceControls(surface);
+    const lookup = isRecord(values) ? values : {};
+    const entries = [];
+    for (const control of controls) {
+        const controlId = typeof control?.control_id === 'string' ? control.control_id.trim() : '';
+        if (!controlId) {
+            continue;
+        }
+        entries.push({
+            control_id: controlId,
+            value: Object.prototype.hasOwnProperty.call(lookup, controlId) ? lookup[controlId] : null,
+        });
     }
-    entries.push({
-      control_id: controlId,
-      value: Object.prototype.hasOwnProperty.call(lookup, controlId) ? lookup[controlId] : null,
-    });
-  }
-  return { controls: entries };
+    return { controls: entries };
 }

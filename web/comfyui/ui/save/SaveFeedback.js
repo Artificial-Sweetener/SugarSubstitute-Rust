@@ -14,84 +14,81 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Normalize save errors and user-facing summaries. */
-
+import { isRecord } from '../types/common.js';
 /** Represent one structured backend export failure. */
 export class SugarCubeExportError extends Error {
-  constructor(message, detail = '', violations = undefined) {
-    super(message);
-    this.detail = detail;
-    this.violations = violations;
-  }
-
-  static from(error) {
-    if (!error) {
-      return new SugarCubeExportError('Export failed');
+    detail;
+    violations;
+    constructor(message, detail = '', violations) {
+        super(message);
+        this.detail = detail;
+        this.violations = violations;
     }
-    if (error instanceof SugarCubeExportError) {
-      return error;
+    static from(error) {
+        if (!error) {
+            return new SugarCubeExportError('Export failed');
+        }
+        if (error instanceof SugarCubeExportError) {
+            return error;
+        }
+        if (isRecord(error)) {
+            return new SugarCubeExportError(typeof error.message === 'string' ? error.message : 'Export failed', typeof error.detail === 'string' ? error.detail : '', error.violations);
+        }
+        return new SugarCubeExportError(String(error));
     }
-    if (typeof error === 'object') {
-      return new SugarCubeExportError(
-        error.message || 'Export failed',
-        error.detail || '',
-        error.violations,
-      );
-    }
-    return new SugarCubeExportError(String(error));
-  }
 }
-
 /** Format one saved artifact and its optional Git result. */
 export function formatSaveSummaryEntry(entry) {
-  const prefix = entry?.committed ? 'saved and committed' : 'saved only';
-  const defaultAlias = entry?.default_alias || 'SugarCube';
-  const path = typeof entry?.path === 'string' ? entry.path : '';
-  const commitSuffix =
-    entry?.committed && entry?.commit_short_sha
-      ? ` (${entry.commit_short_sha}: ${entry.commit_message || 'committed'})`
-      : entry?.commit_error
-        ? ` (commit failed: ${entry.commit_error})`
-        : '';
-  return `${prefix}: ${defaultAlias} -> ${path}${commitSuffix}`;
+    const prefix = entry?.committed ? 'saved and committed' : 'saved only';
+    const defaultAlias = entry?.default_alias || 'SugarCube';
+    const path = typeof entry?.path === 'string' ? entry.path : '';
+    const commitSuffix = entry?.committed && entry?.commit_short_sha
+        ? ` (${entry.commit_short_sha}: ${entry.commit_message || 'committed'})`
+        : entry?.commit_error
+            ? ` (commit failed: ${entry.commit_error})`
+            : '';
+    return `${prefix}: ${defaultAlias} -> ${path}${commitSuffix}`;
 }
-
 /** Extract a readable detail string from one backend error payload. */
 export function buildErrorDetail(errorPayload) {
-  if (!errorPayload) {
-    return '';
-  }
-  if (typeof errorPayload.detail === 'string' && errorPayload.detail) {
-    return errorPayload.detail;
-  }
-  if (errorPayload.details && typeof errorPayload.details === 'object') {
-    try {
-      return JSON.stringify(errorPayload.details);
-    } catch (_error) {
-      return '';
+    if (!isRecord(errorPayload)) {
+        return '';
     }
-  }
-  return '';
+    if (typeof errorPayload.detail === 'string' && errorPayload.detail) {
+        return errorPayload.detail;
+    }
+    if (errorPayload.details && typeof errorPayload.details === 'object') {
+        try {
+            return JSON.stringify(errorPayload.details);
+        }
+        catch (_error) {
+            return '';
+        }
+    }
+    return '';
 }
-
 /** Format graph-boundary violations as endpoint pairs. */
 export function formatViolations(violations) {
-  if (!Array.isArray(violations) || violations.length === 0) {
-    return '';
-  }
-  return violations
-    .map((entry) => `${formatEndpoint(entry?.from)} -> ${formatEndpoint(entry?.to)}`)
-    .join('\n');
+    if (!Array.isArray(violations) || violations.length === 0) {
+        return '';
+    }
+    return violations
+        .map((entry) => `${formatEndpoint(entry?.from)} -> ${formatEndpoint(entry?.to)}`)
+        .join('\n');
 }
-
 /** Format one graph endpoint without trusting optional backend fields. */
 export function formatEndpoint(endpoint) {
-  if (!endpoint || typeof endpoint !== 'object') {
-    return '<unknown>';
-  }
-  const parts = [];
-  if (endpoint.title) parts.push(endpoint.title);
-  if (endpoint.cube) parts.push(`[${endpoint.cube}]`);
-  if (endpoint.port !== undefined) parts.push(`(${endpoint.port})`);
-  if (!parts.length && endpoint.id) parts.push(String(endpoint.id));
-  return parts.join(' ') || '<unknown>';
+    if (!isRecord(endpoint)) {
+        return '<unknown>';
+    }
+    const parts = [];
+    if (endpoint.title)
+        parts.push(String(endpoint.title));
+    if (endpoint.cube)
+        parts.push(`[${String(endpoint.cube)}]`);
+    if (endpoint.port !== undefined)
+        parts.push(`(${endpoint.port})`);
+    if (!parts.length && endpoint.id)
+        parts.push(String(endpoint.id));
+    return parts.join(' ') || '<unknown>';
 }

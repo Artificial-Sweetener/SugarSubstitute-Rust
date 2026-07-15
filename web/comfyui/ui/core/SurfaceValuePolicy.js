@@ -16,44 +16,39 @@
 /**
  * Own surface-value persistence policy for SugarCube UI state.
  */
-
+import { isRecord } from '../types/common.js';
 function readControlString(control, key) {
-  const value = control?.[key];
-  return typeof value === 'string' ? value.trim() : '';
+    const value = isRecord(control) ? control[key] : undefined;
+    return typeof value === 'string' ? value.trim() : '';
 }
-
 /**
  * Return whether one surface control represents live seed runtime state.
  */
 export function isVolatileSeedControl(control) {
-  return readControlString(control, 'input_name') === 'seed';
+    return readControlString(control, 'input_name') === 'seed';
 }
-
 /**
  * Return controls whose values are tracked by flavors and dirty comparison.
  */
 export function trackedSurfaceControls(surface) {
-  const controls = Array.isArray(surface?.controls) ? surface.controls : [];
-  return controls.filter((control) => !isVolatileSeedControl(control));
+    const controls = Array.isArray(surface?.controls) ? surface.controls : [];
+    return controls.filter((control) => !isVolatileSeedControl(control));
 }
-
 /**
  * Remove volatile seed values from a persisted surface-value map.
  */
 export function filterTrackedSurfaceValues(surface, values) {
-  const lookup = values && typeof values === 'object' ? values : {};
-  const volatileIds = new Set(
-    (Array.isArray(surface?.controls) ? surface.controls : [])
-      .filter((control) => isVolatileSeedControl(control))
-      .map((control) => readControlString(control, 'control_id'))
-      .filter(Boolean),
-  );
-  const filtered = {};
-  for (const [controlId, value] of Object.entries(lookup)) {
-    if (volatileIds.has(controlId)) {
-      continue;
+    const lookup = isRecord(values) ? values : {};
+    const volatileIds = new Set((Array.isArray(surface?.controls) ? surface.controls : [])
+        .filter((control) => isVolatileSeedControl(control))
+        .map((control) => readControlString(control, 'control_id'))
+        .filter(Boolean));
+    const filtered = {};
+    for (const [controlId, value] of Object.entries(lookup)) {
+        if (volatileIds.has(controlId)) {
+            continue;
+        }
+        filtered[controlId] = value;
     }
-    filtered[controlId] = value;
-  }
-  return filtered;
+    return filtered;
 }

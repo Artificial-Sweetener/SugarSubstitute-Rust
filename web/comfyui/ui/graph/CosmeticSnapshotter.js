@@ -17,35 +17,35 @@
  * Own the SugarCubes cosmetic snapshotting layer in
  * `web/comfyui/ui/graph/CosmeticSnapshotter.js`.
  */
-
 import { snapshotGroup, snapshotInstance } from './DirtySnapshotter.js';
-
+import { isRecord } from '../types/common.js';
 function normalizeCosmeticNode(node) {
-  return {
-    id: node?.id || '',
-    title: node?.title || '',
-    pos: Array.isArray(node?.pos) ? node.pos : null,
-    size: Array.isArray(node?.size) ? node.size : null,
-    flags: node?.flags ?? null,
-  };
+    const record = isRecord(node) ? node : {};
+    return {
+        id: record.id || '',
+        title: record.title || '',
+        pos: Array.isArray(record.pos) ? record.pos : null,
+        size: Array.isArray(record.size) ? record.size : null,
+        flags: record.flags ?? null,
+    };
 }
-
 /**
  * Snapshot runtime cosmetic state for one managed cube instance.
  */
 export function snapshotCosmeticInstance(graph, nodeIds, markerIds, anchor, group) {
-  const groupSnapshot = snapshotGroup(group, false);
-  const payload = snapshotInstance(graph, nodeIds, markerIds, anchor, groupSnapshot, {
-    useSymbols: false,
-    useInputNames: false,
-    stripSugarcubesProperties: true,
-  });
-  const nodes = Array.isArray(payload?.nodes)
-    ? payload.nodes.map((node) => normalizeCosmeticNode(node))
-    : [];
-  nodes.sort((left, right) => String(left.id).localeCompare(String(right.id)));
-  return {
-    nodes,
-    group: payload?.group || null,
-  };
+    const groupSnapshot = snapshotGroup(group, false);
+    const rawPayload = snapshotInstance(graph, nodeIds, markerIds, anchor, groupSnapshot, {
+        useSymbols: false,
+        useInputNames: false,
+        stripSugarcubesProperties: true,
+    });
+    const payload = isRecord(rawPayload) ? rawPayload : {};
+    const nodes = Array.isArray(payload.nodes)
+        ? payload.nodes.map((node) => normalizeCosmeticNode(node))
+        : [];
+    nodes.sort((left, right) => String(left.id).localeCompare(String(right.id)));
+    return {
+        nodes,
+        group: payload.group || null,
+    };
 }

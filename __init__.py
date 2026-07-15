@@ -21,30 +21,18 @@ import logging
 import sys
 from pathlib import Path
 
-try:
-    from .backend import build_backend_services, set_active_backend_services
-    from .backend.routes import register_routes
-    from .exporter import (
-        CubeValidationError,
-        DefinitionResolver,
-        ExportedCube,
-        export as export_cubes,
-        write_cube,
-        write_cubes,
-    )
-    from .nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
-except ImportError:
-    from backend import build_backend_services, set_active_backend_services
-    from backend.routes import register_routes
-    from exporter import (
-        CubeValidationError,
-        DefinitionResolver,
-        ExportedCube,
-        export as export_cubes,
-        write_cube,
-        write_cubes,
-    )
-    from nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
+from .sugarcubes import (
+    NODE_CLASS_MAPPINGS,
+    NODE_DISPLAY_NAME_MAPPINGS,
+    CubeValidationError,
+    DefinitionResolver,
+    ExportedCube,
+    export_cubes,
+    write_cube,
+    write_cubes,
+)
+from .sugarcubes.backend import build_backend_services, set_active_backend_services
+from .sugarcubes.backend.routes import register_routes
 
 WEB_DIRECTORY = "web"
 __version__ = "0.10.0"

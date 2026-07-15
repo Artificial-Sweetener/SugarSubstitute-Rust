@@ -23,6 +23,7 @@ Repository = "https://github.com/Artificial-Sweetener/SugarCubes"
 [project.optional-dependencies]
 dev = [
     "black",
+    "mypy",
     "pytest",
     "ruff",
 ]
@@ -33,18 +34,23 @@ DisplayName = "SugarCubes"
 Icon = ""
 includes = []
 
-[tool.setuptools]
-py-modules = ["nodes", "payloads"]
-
 [tool.setuptools.packages.find]
 include = [
-    "backend*",
-    "cube_model*",
-    "exporter*",
-    "importer*",
-    "instrumentation*",
-    "runtime*",
+    "sugarcubes*",
 ]
 
 [tool.black]
 target-version = ["py312"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+explicit_package_bases = true
+mypy_path = "stubs"
+show_error_codes = true
+show_column_numbers = true
+warn_unreachable = true
+exclude = [
+    "^node_modules/",
+    "^cubes/",
+]

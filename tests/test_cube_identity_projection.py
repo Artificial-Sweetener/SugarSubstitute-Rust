@@ -17,7 +17,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import json
+from typing import Any
 
 import pytest
 
@@ -33,7 +36,7 @@ CANONICAL_CUBE_ID = "Artificial-Sweetener/Base-Cubes/Anima/Diffusion Upscale.cub
 OTHER_CUBE_ID = "Artificial-Sweetener/Base-Cubes/SDXL/Diffusion Upscale.cube"
 
 
-def _payload_with_layout(*, cube_id: str = CANONICAL_CUBE_ID) -> dict:
+def _payload_with_layout(*, cube_id: str = CANONICAL_CUBE_ID) -> dict[str, Any]:
     """Build one compact payload with stale embedded identity metadata."""
 
     return {
@@ -104,7 +107,7 @@ def test_identity_projection_rewrites_same_cube_embedded_identity() -> None:
 def test_identity_projection_rewrites_structured_definition_metadata() -> None:
     """Handle structured group metadata without depending on frontend flattening."""
 
-    payload = {
+    payload: dict[str, Any] = {
         "cube_id": CANONICAL_CUBE_ID,
         "version": "2.0.0",
         "implementation": {
@@ -168,7 +171,7 @@ def test_identity_projection_leaves_versionless_bare_payloads_unchanged() -> Non
     assert payload == {"cube_id": CANONICAL_CUBE_ID, "metadata": {}}
 
 
-def test_write_cube_to_path_persists_projected_identity(tmp_path) -> None:
+def test_write_cube_to_path_persists_projected_identity(tmp_path: Path) -> None:
     """Normalize embedded identity at the exporter file write boundary."""
 
     target_path = tmp_path / "Diffusion Upscale.cube"

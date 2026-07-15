@@ -16,149 +16,128 @@
 /**
  * Resolve live graph nodes that own SugarCubes surface controls.
  */
-
 import { getGraphNodes } from './GraphQuery.js';
-
 /**
  * Return a live node id as the string form used by instance metadata.
  */
 function readNodeId(node) {
-  return node?.id != null ? String(node.id) : '';
+    return node?.id != null ? String(node.id) : '';
 }
-
 /**
  * Return the persisted SugarCubes symbol assigned to a live node.
  */
 function readNodeSymbol(node) {
-  return typeof node?.properties?.sugarcubes_symbol === 'string'
-    ? node.properties.sugarcubes_symbol.trim()
-    : '';
+    return typeof node?.properties?.sugarcubes_symbol === 'string'
+        ? node.properties.sugarcubes_symbol.trim()
+        : '';
 }
-
 /**
  * Return the node class type used by surface control metadata.
  */
 function readNodeClassType(node) {
-  if (typeof node?.type === 'string' && node.type.trim()) {
-    return node.type.trim();
-  }
-  if (typeof node?.class_type === 'string' && node.class_type.trim()) {
-    return node.class_type.trim();
-  }
-  return '';
+    if (typeof node?.type === 'string' && node.type.trim()) {
+        return node.type.trim();
+    }
+    if (typeof node?.class_type === 'string' && node.class_type.trim()) {
+        return node.class_type.trim();
+    }
+    return '';
 }
-
 /**
  * Read a normalized string field from a surface control.
  */
 function readControlString(control, key) {
-  const value = control?.[key];
-  return typeof value === 'string' ? value.trim() : '';
+    const value = control?.[key];
+    return typeof value === 'string' ? value.trim() : '';
 }
-
 /**
  * Group surface controls by their declared owner symbol.
  */
 function groupControlsBySymbol(surface) {
-  const groups = new Map();
-  const controls = Array.isArray(surface?.controls) ? surface.controls : [];
-  for (const control of controls) {
-    const symbol = readControlString(control, 'symbol');
-    if (!symbol) {
-      continue;
+    const groups = new Map();
+    const controls = Array.isArray(surface?.controls) ? surface.controls : [];
+    for (const control of controls) {
+        const symbol = readControlString(control, 'symbol');
+        if (!symbol) {
+            continue;
+        }
+        const entries = groups.get(symbol) || [];
+        entries.push(control);
+        groups.set(symbol, entries);
     }
-    const entries = groups.get(symbol) || [];
-    entries.push(control);
-    groups.set(symbol, entries);
-  }
-  return groups;
+    return groups;
 }
-
 /**
  * Return whether a live node exposes a widget-backed or property-backed input.
  */
 function nodeHasInputName(node, inputName) {
-  if (!node || !inputName) {
-    return false;
-  }
-  if (Array.isArray(node.widgets) && node.widgets.some((widget) => widget?.name === inputName)) {
-    return true;
-  }
-  if (
-    Array.isArray(node.inputs) &&
-    node.inputs.some((input) => input?.name === inputName || input?.widget?.name === inputName)
-  ) {
-    return true;
-  }
-  return Boolean(
-    node.properties && Object.prototype.hasOwnProperty.call(node.properties, inputName),
-  );
+    if (!node || !inputName) {
+        return false;
+    }
+    if (Array.isArray(node.widgets) && node.widgets.some((widget) => widget?.name === inputName)) {
+        return true;
+    }
+    if (Array.isArray(node.inputs) &&
+        node.inputs.some((input) => input?.name === inputName || input?.widget?.name === inputName)) {
+        return true;
+    }
+    return Boolean(node.properties && Object.prototype.hasOwnProperty.call(node.properties, inputName));
 }
-
 /**
  * Return whether a node can satisfy the declared control class type.
  */
 function nodeMatchesControlClass(node, controls) {
-  const classTypes = new Set(
-    controls.map((control) => readControlString(control, 'class_type')).filter(Boolean),
-  );
-  if (!classTypes.size) {
-    return true;
-  }
-  return classTypes.has(readNodeClassType(node));
+    const classTypes = new Set(controls.map((control) => readControlString(control, 'class_type')).filter(Boolean));
+    if (!classTypes.size) {
+        return true;
+    }
+    return classTypes.has(readNodeClassType(node));
 }
-
 /**
  * Return whether a node exposes all inputs for one surface-control owner.
  */
 function nodeOwnsSurfaceControls(node, controls) {
-  const inputNames = controls
-    .map((control) => readControlString(control, 'input_name'))
-    .filter(Boolean);
-  return (
-    inputNames.length > 0 && inputNames.every((inputName) => nodeHasInputName(node, inputName))
-  );
+    const inputNames = controls
+        .map((control) => readControlString(control, 'input_name'))
+        .filter(Boolean);
+    return (inputNames.length > 0 && inputNames.every((inputName) => nodeHasInputName(node, inputName)));
 }
-
 /**
  * Infer a missing symbol only when the managed instance has one clear owner.
  */
 function inferMissingSymbolNode(nodes, symbol, controls) {
-  const candidates = nodes.filter((node) => {
-    const nodeSymbol = readNodeSymbol(node);
-    return (
-      (!nodeSymbol || nodeSymbol === symbol) &&
-      nodeMatchesControlClass(node, controls) &&
-      nodeOwnsSurfaceControls(node, controls)
-    );
-  });
-  return candidates.length === 1 ? candidates[0] : null;
+    const candidates = nodes.filter((node) => {
+        const nodeSymbol = readNodeSymbol(node);
+        return ((!nodeSymbol || nodeSymbol === symbol) &&
+            nodeMatchesControlClass(node, controls) &&
+            nodeOwnsSurfaceControls(node, controls));
+    });
+    return candidates.length === 1 ? (candidates[0] ?? null) : null;
 }
-
 /**
  * Build a live-node lookup for surface controls.
  */
 export function buildSurfaceNodesBySymbol(graph, nodeIds, surface) {
-  const nodeIdSet = new Set((Array.isArray(nodeIds) ? nodeIds : []).map((value) => String(value)));
-  const nodes = getGraphNodes(graph).filter((node) => {
-    const nodeId = readNodeId(node);
-    return nodeId && nodeIdSet.has(nodeId);
-  });
-  const nodesBySymbol = new Map();
-  for (const node of nodes) {
-    const symbol = readNodeSymbol(node);
-    if (symbol && !nodesBySymbol.has(symbol)) {
-      nodesBySymbol.set(symbol, node);
+    const nodeIdSet = new Set((Array.isArray(nodeIds) ? nodeIds : []).map((value) => String(value)));
+    const nodes = getGraphNodes(graph).filter((node) => {
+        const nodeId = readNodeId(node);
+        return nodeId && nodeIdSet.has(nodeId);
+    });
+    const nodesBySymbol = new Map();
+    for (const node of nodes) {
+        const symbol = readNodeSymbol(node);
+        if (symbol && !nodesBySymbol.has(symbol)) {
+            nodesBySymbol.set(symbol, node);
+        }
     }
-  }
-  for (const [symbol, controls] of groupControlsBySymbol(surface)) {
-    if (nodesBySymbol.has(symbol)) {
-      continue;
+    for (const [symbol, controls] of groupControlsBySymbol(surface)) {
+        if (nodesBySymbol.has(symbol)) {
+            continue;
+        }
+        const inferred = inferMissingSymbolNode(nodes, symbol, controls);
+        if (inferred) {
+            nodesBySymbol.set(symbol, inferred);
+        }
     }
-    const inferred = inferMissingSymbolNode(nodes, symbol, controls);
-    if (inferred) {
-      nodesBySymbol.set(symbol, inferred);
-    }
-  }
-  return nodesBySymbol;
+    return nodesBySymbol;
 }

@@ -17,12 +17,15 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+from .typing_support import BackendServicesFactory
+
 from sugarcubes.backend import active_backend_services, set_active_backend_services
 
 
 def test_active_backend_services_returns_registered_service_graph(
-    tmp_path,
-    backend_services_factory,
+    tmp_path: Path,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """Host adapters should retrieve the same service graph Comfy registered."""
 

@@ -16,60 +16,57 @@
 /**
  * Own modal orchestration in `web/comfyui/ui/dialogs/ModalService.js`.
  */
-
 import { ConfirmDialog } from './ConfirmDialog.js';
 import { FormModal } from './FormModal.js';
 import { InputModal } from './InputModal.js';
 import { SelectionModal } from './SelectionModal.js';
 import { CreatePersonalCubeModal } from './CreatePersonalCubeModal.js';
 import { HistoricalVersionSaveModal } from './HistoricalVersionSaveModal.js';
-
 /**
  * Coordinate reusable dialog entry points for SugarCubes.
  */
 export class ModalService {
-  constructor({ adapter } = {}) {
-    this.adapter = adapter || null;
-    this.confirmDialog = new ConfirmDialog({ adapter });
-    this.inputModal = new InputModal({ adapter });
-    this.formModal = new FormModal({ adapter });
-    this.selectionModal = new SelectionModal({ adapter });
-    this.createPersonalCubeModal = new CreatePersonalCubeModal({ adapter });
-    this.historicalVersionSaveModal = new HistoricalVersionSaveModal({ adapter });
-  }
-
-  confirm(options = {}) {
-    return this.confirmDialog.open(options);
-  }
-
-  alert(options = {}) {
-    return this.confirmDialog.open({
-      ...options,
-      title: options.title || 'SugarCubes',
-      confirmLabel: options.confirmLabel || 'OK',
-      showCancel: false,
-      confirmClassName: options.confirmClassName || 'sugarcubes-confirm__confirm',
-      cancelResult: true,
-    });
-  }
-
-  promptText(options = {}) {
-    return this.inputModal.open(options);
-  }
-
-  openForm(options = {}) {
-    return this.formModal.open(options);
-  }
-
-  selectItem(options = {}) {
-    return this.selectionModal.open(options);
-  }
-
-  openCreatePersonalCube(options = {}) {
-    return this.createPersonalCubeModal.open(options);
-  }
-
-  chooseHistoricalVersionSaveAction(options = {}) {
-    return this.historicalVersionSaveModal.open(options);
-  }
+    confirmDialog;
+    inputModal;
+    formModal;
+    selectionModal;
+    createPersonalCubeModal;
+    historicalVersionSaveModal;
+    constructor({ adapter } = {}) {
+        const resolvedAdapter = adapter ?? null;
+        this.confirmDialog = new ConfirmDialog({ adapter: resolvedAdapter });
+        this.inputModal = new InputModal({ adapter: resolvedAdapter });
+        this.formModal = new FormModal({ adapter: resolvedAdapter });
+        this.selectionModal = new SelectionModal({ adapter: resolvedAdapter });
+        this.createPersonalCubeModal = new CreatePersonalCubeModal({ adapter: resolvedAdapter });
+        this.historicalVersionSaveModal = new HistoricalVersionSaveModal({ adapter: resolvedAdapter });
+    }
+    confirm(options = {}) {
+        return this.confirmDialog.open(options);
+    }
+    alert(options = {}) {
+        return this.confirmDialog.open({
+            ...options,
+            title: options.title || 'SugarCubes',
+            confirmLabel: options.confirmLabel || 'OK',
+            showCancel: false,
+            confirmClassName: options.confirmClassName || 'sugarcubes-confirm__confirm',
+            cancelResult: true,
+        });
+    }
+    promptText(options = {}) {
+        return this.inputModal.open(options);
+    }
+    openForm(options = {}) {
+        return this.formModal.open(options);
+    }
+    selectItem(options = {}) {
+        return this.selectionModal.open(options);
+    }
+    openCreatePersonalCube(options = {}) {
+        return this.createPersonalCubeModal.open(options);
+    }
+    chooseHistoricalVersionSaveAction(options = {}) {
+        return this.historicalVersionSaveModal.open(options);
+    }
 }

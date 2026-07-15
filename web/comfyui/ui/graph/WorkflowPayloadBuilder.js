@@ -14,68 +14,77 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Build save-ready ComfyUI workflow payloads from live graph state. */
-
 import { normalizeSubgraphPayload } from './SubgraphSerialization.js';
 import { attachWorkflowWidgetSnapshots } from './WidgetSnapshots.js';
-
+import { isRecord } from '../types/common.js';
+function cloneWorkflowPayload(value) {
+    if (!isRecord(value)) {
+        return {};
+    }
+    const cloned = JSON.parse(JSON.stringify(value));
+    return isRecord(cloned) ? cloned : {};
+}
 /** Clone and enrich one workflow with authoritative subgraphs and widget snapshots. */
 export function enrichWorkflowPayload(workflowPayload, graph) {
-  const cloned =
-    workflowPayload && typeof workflowPayload === 'object'
-      ? JSON.parse(JSON.stringify(workflowPayload))
-      : {};
-  const definitions =
-    cloned.definitions && typeof cloned.definitions === 'object' ? { ...cloned.definitions } : {};
-  definitions.subgraphs = collectWorkflowSubgraphs(workflowPayload, graph);
-  cloned.definitions = definitions;
-  return attachWorkflowWidgetSnapshots(cloned, graph);
+    const cloned = cloneWorkflowPayload(workflowPayload);
+    const definitions = isRecord(cloned.definitions) ? { ...cloned.definitions } : {};
+    definitions.subgraphs = collectWorkflowSubgraphs(workflowPayload, graph);
+    cloned.definitions = definitions;
+    return attachWorkflowWidgetSnapshots(cloned, graph);
 }
-
 /** Merge declared and live subgraph definitions by stable id. */
 export function collectWorkflowSubgraphs(workflowPayload, graph) {
-  const merged = new Map();
-  const declared = workflowPayload?.definitions?.subgraphs;
-  if (Array.isArray(declared)) {
-    for (const entry of declared) {
-      const normalized = normalizeSubgraphEntry(entry, entry?.id);
-      if (normalized) {
-        merged.set(normalized.id, normalized);
-      }
+    const merged = new Map();
+    const payload = isRecord(workflowPayload) ? workflowPayload : {};
+    const definitions = isRecord(payload.definitions) ? payload.definitions : {};
+    const declared = definitions.subgraphs;
+    if (Array.isArray(declared)) {
+        for (const entry of declared) {
+            const normalized = normalizeSubgraphEntry(entry, isRecord(entry) ? entry.id : undefined);
+            if (normalized) {
+                merged.set(normalized.id, normalized);
+            }
+        }
     }
-  }
-  const liveSubgraphs = graph?._subgraphs instanceof Map ? graph._subgraphs : null;
-  if (liveSubgraphs) {
-    for (const [subgraphId, subgraph] of liveSubgraphs.entries()) {
-      const normalized = normalizeSubgraphEntry(subgraph, subgraphId);
-      if (normalized) {
-        merged.set(normalized.id, normalized);
-      }
+    const liveSubgraphs = graph?._subgraphs instanceof Map ? graph._subgraphs : null;
+    if (liveSubgraphs) {
+        for (const [subgraphId, subgraph] of liveSubgraphs.entries()) {
+            const normalized = normalizeSubgraphEntry(subgraph, subgraphId);
+            if (normalized) {
+                merged.set(normalized.id, normalized);
+            }
+        }
     }
-  }
-  return Array.from(merged.values());
+    return Array.from(merged.values());
 }
-
 /** Normalize any supported LiteGraph subgraph representation. */
 export function normalizeSubgraphEntry(rawEntry, fallbackId) {
-  if (!rawEntry) {
-    return null;
-  }
-  let entry = rawEntry;
-  try {
-    if (typeof rawEntry?.asSerialisable === 'function') {
-      entry = rawEntry.asSerialisable();
-    } else if (typeof rawEntry?.serialize === 'function') {
-      entry = rawEntry.serialize();
-    } else if (typeof rawEntry?.graph?.asSerialisable === 'function') {
-      entry = rawEntry.graph.asSerialisable();
-    } else if (typeof rawEntry?.graph?.serialize === 'function') {
-      entry = rawEntry.graph.serialize();
+    if (!isRecord(rawEntry)) {
+        return null;
     }
-  } catch (_error) {
-    return null;
-  }
-  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
-    return null;
-  }
-  return normalizeSubgraphPayload(entry, fallbackId);
+    let entry = rawEntry;
+    try {
+        if (typeof rawEntry.asSerialisable === 'function') {
+            entry = rawEntry.asSerialisable.call(rawEntry);
+        }
+        else if (typeof rawEntry.serialize === 'function') {
+            entry = rawEntry.serialize.call(rawEntry);
+        }
+        else if (isRecord(rawEntry.graph) && typeof rawEntry.graph.asSerialisable === 'function') {
+            entry = rawEntry.graph.asSerialisable.call(rawEntry.graph);
+        }
+        else if (isRecord(rawEntry.graph) && typeof rawEntry.graph.serialize === 'function') {
+            entry = rawEntry.graph.serialize.call(rawEntry.graph);
+        }
+    }
+    catch (_error) {
+        return null;
+    }
+    if (!isRecord(entry)) {
+        return null;
+    }
+    const normalized = normalizeSubgraphPayload(entry, fallbackId);
+    return isRecord(normalized) && typeof normalized.id === 'string'
+        ? normalized
+        : null;
 }

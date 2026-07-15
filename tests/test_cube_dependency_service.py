@@ -17,6 +17,10 @@
 
 from __future__ import annotations
 
+from typing import Any
+
+from .typing_support import BackendServicesFactory
+
 import json
 import subprocess
 from pathlib import Path
@@ -27,7 +31,7 @@ from sugarcubes.backend.services.cube_dependency_service import (
     CubeDependencyService,
 )
 
-from test_cube_library_backend_contract import _cube_payload_with_cnr, _write_cube
+from .test_cube_library_backend_contract import _cube_payload_with_cnr, _write_cube
 
 
 def _completed(
@@ -43,9 +47,18 @@ def _completed(
     )
 
 
+def _recorded_completed(
+    commands: list[list[str]], command: Sequence[str]
+) -> subprocess.CompletedProcess[str]:
+    """Record one command and return a successful subprocess result."""
+
+    commands.append(list(command))
+    return _completed(command)
+
+
 def test_repair_installs_baseline_nodes_without_prompt(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """Base-Cubes-only dependency repair runs under the silent baseline policy."""
 
@@ -90,7 +103,7 @@ def test_repair_installs_baseline_nodes_without_prompt(
 
 def test_repair_refuses_non_default_nodes_without_approval(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """Non-default cube pack dependencies are skipped until approved."""
 
@@ -118,8 +131,8 @@ def test_repair_refuses_non_default_nodes_without_approval(
         workspace_path=tmp_path / "ComfyUI",
         custom_nodes_root=tmp_path / "custom_nodes",
         cli_adapter=ComfyCliAdapter(
-            runner=lambda command, cwd, timeout_seconds: (
-                commands.append(list(command)) or _completed(command)
+            runner=lambda command, cwd, timeout_seconds: _recorded_completed(
+                commands, command
             ),
         ),
     )
@@ -133,7 +146,7 @@ def test_repair_refuses_non_default_nodes_without_approval(
 
 def test_repair_reports_missing_comfy_cli_without_raising(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """Missing Comfy CLI is reported as failed repair work."""
 
@@ -163,11 +176,11 @@ def test_repair_reports_missing_comfy_cli_without_raising(
 
 def test_sync_and_check_keeps_readiness_when_default_pack_sync_fails(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """Startup dependency checks should not fail hard when Base-Cubes cannot sync."""
 
-    def fake_git(args: Sequence[str], *, cwd: Path):
+    def fake_git(args: Sequence[str], *, cwd: Path) -> Any:
         _ = cwd
 
         class Result:
@@ -212,7 +225,7 @@ def test_sync_and_check_keeps_readiness_when_default_pack_sync_fails(
 
 def test_repair_preserves_failed_install_output(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """Comfy CLI install failures remain visible in the repair result."""
 
@@ -248,7 +261,7 @@ def test_repair_preserves_failed_install_output(
 
 def test_repair_checks_out_approved_baseline_git_version(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """Baseline git version repair should fetch and checkout the required commit."""
 
@@ -256,7 +269,7 @@ def test_repair_checks_out_approved_baseline_git_version(
     installed_commit = "f561f164543f927e0452e14658a0509e8e4866d6"
     git_commands: list[tuple[str, ...]] = []
 
-    def fake_git(args: Sequence[str], *, cwd: Path):
+    def fake_git(args: Sequence[str], *, cwd: Path) -> Any:
         git_commands.append(tuple(args))
 
         class Result:
@@ -315,14 +328,14 @@ def test_repair_checks_out_approved_baseline_git_version(
 
 def test_repair_blocks_git_checkout_without_repository_provenance(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """Version mutation must fail closed when installed repository provenance is missing."""
 
     required_commit = "37bcd403c5172adc2505b38d1d31c05969a69443"
     installed_commit = "f561f164543f927e0452e14658a0509e8e4866d6"
 
-    def fake_git(args: Sequence[str], *, cwd: Path):
+    def fake_git(args: Sequence[str], *, cwd: Path) -> Any:
         _ = cwd
 
         class Result:
@@ -377,14 +390,14 @@ def test_repair_blocks_git_checkout_without_repository_provenance(
 
 def test_repair_reports_git_runner_exception_as_failed_version_item(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """Git command launch failures should stay inside the repair payload."""
 
     required_commit = "37bcd403c5172adc2505b38d1d31c05969a69443"
     installed_commit = "f561f164543f927e0452e14658a0509e8e4866d6"
 
-    def fake_git(args: Sequence[str], *, cwd: Path):
+    def fake_git(args: Sequence[str], *, cwd: Path) -> Any:
         _ = cwd
 
         class Result:
@@ -446,7 +459,7 @@ def test_repair_reports_git_runner_exception_as_failed_version_item(
 
 def test_repair_updates_baseline_semver_node_with_repository_provenance(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """Baseline semver version repair should use Comfy CLI when provenance exists."""
 
@@ -475,8 +488,8 @@ def test_repair_updates_baseline_semver_node_with_repository_provenance(
         workspace_path=tmp_path / "ComfyUI",
         custom_nodes_root=custom_nodes_root,
         cli_adapter=ComfyCliAdapter(
-            runner=lambda command, cwd, timeout_seconds: (
-                commands.append(list(command)) or _completed(command)
+            runner=lambda command, cwd, timeout_seconds: _recorded_completed(
+                commands, command
             ),
         ),
     )
@@ -490,7 +503,7 @@ def test_repair_updates_baseline_semver_node_with_repository_provenance(
 
 def test_repair_skips_non_default_version_update_without_approval(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """Non-default version updates should be planned but not executed silently."""
 
@@ -525,8 +538,8 @@ def test_repair_skips_non_default_version_update_without_approval(
         workspace_path=tmp_path / "ComfyUI",
         custom_nodes_root=custom_nodes_root,
         cli_adapter=ComfyCliAdapter(
-            runner=lambda command, cwd, timeout_seconds: (
-                commands.append(list(command)) or _completed(command)
+            runner=lambda command, cwd, timeout_seconds: _recorded_completed(
+                commands, command
             ),
         ),
     )

@@ -16,66 +16,60 @@
 /**
  * Own historical-version save choice dialog behavior.
  */
-
 import { $el } from '/scripts/ui.js';
 import { ModalShell } from './ModalShell.js';
-
 /**
  * Coordinate the save-as-latest versus fork choice for historical revisions.
  */
 export class HistoricalVersionSaveModal {
-  constructor({ adapter } = {}) {
-    this.adapter = adapter || null;
-    this.documentRef = adapter?.getDocument?.() || null;
-    this.shell = new ModalShell({
-      adapter,
-      variantClassName: 'sugarcubes-historical-save-overlay',
-      dialogClassName: 'sugarcubes-historical-save-dialog',
-    });
-  }
-
-  open({ entries = [] } = {}) {
-    const staleEntries = Array.isArray(entries) ? entries.filter(Boolean) : [];
-    const message = buildHistoricalSaveMessage(staleEntries);
-    const forkButton = $el('button.p-button.p-component.p-button-text.p-button-secondary', {
-      type: 'button',
-      textContent: 'Fork instead',
-    });
-    forkButton.addEventListener('click', () => this.shell.close('fork'));
-    const result = this.shell.open({
-      title: 'Save older version?',
-      description: message,
-      footerMeta: [forkButton],
-      confirmLabel: 'Save as latest',
-      cancelLabel: 'Cancel',
-      cancelResult: null,
-      onConfirm: () => this.shell.close('latest'),
-      initialFocus: () => this.shell.elements.confirmButton,
-    });
-    return result;
-  }
-
-  close(result) {
-    this.shell.close(result);
-  }
+    shell;
+    constructor({ adapter } = {}) {
+        this.shell = new ModalShell({
+            adapter: adapter ?? null,
+            variantClassName: 'sugarcubes-historical-save-overlay',
+            dialogClassName: 'sugarcubes-historical-save-dialog',
+        });
+    }
+    open({ entries = [] } = {}) {
+        const staleEntries = Array.isArray(entries) ? entries.filter(Boolean) : [];
+        const message = buildHistoricalSaveMessage(staleEntries);
+        const forkButton = $el('button.p-button.p-component.p-button-text.p-button-secondary', {
+            type: 'button',
+            textContent: 'Fork instead',
+        });
+        forkButton.addEventListener('click', () => this.shell.close('fork'));
+        const result = this.shell.open({
+            title: 'Save older version?',
+            description: message,
+            footerMeta: [forkButton],
+            confirmLabel: 'Save as latest',
+            cancelLabel: 'Cancel',
+            cancelResult: null,
+            onConfirm: () => this.shell.close('latest'),
+            initialFocus: () => this.shell.elements.confirmButton,
+        });
+        return result;
+    }
+    close(result) {
+        this.shell.close(result);
+    }
 }
-
 function buildHistoricalSaveMessage(entries) {
-  if (entries.length > 1) {
-    const names = entries
-      .map((entry) => (typeof entry?.defaultAlias === 'string' ? entry.defaultAlias.trim() : ''))
-      .filter(Boolean)
-      .slice(0, 3);
-    const suffix = names.length ? ` Included: ${names.join(', ')}.` : '';
+    if (entries.length > 1) {
+        const names = entries
+            .map((entry) => (typeof entry?.defaultAlias === 'string' ? entry.defaultAlias.trim() : ''))
+            .filter(Boolean)
+            .slice(0, 3);
+        const suffix = names.length ? ` Included: ${names.join(', ')}.` : '';
+        return [
+            `${entries.length} SugarCubes were loaded from older versions.`,
+            `Saving will apply these changes as new latest versions of their cubes.${suffix}`,
+            'Fork instead if this work should stay separate.',
+        ];
+    }
     return [
-      `${entries.length} SugarCubes were loaded from older versions.`,
-      `Saving will apply these changes as new latest versions of their cubes.${suffix}`,
-      'Fork instead if this work should stay separate.',
+        'This SugarCube was loaded from an older version.',
+        'Saving will apply your changes as a new latest version of the cube.',
+        'Fork instead if you want to keep this work separate.',
     ];
-  }
-  return [
-    'This SugarCube was loaded from an older version.',
-    'Saving will apply your changes as a new latest version of the cube.',
-    'Fork instead if you want to keep this work separate.',
-  ];
 }

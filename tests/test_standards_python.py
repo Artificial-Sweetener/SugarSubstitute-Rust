@@ -17,11 +17,13 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import importlib.util
 from pathlib import Path
 
 
-def _load_audit_module():
+def _load_audit_module() -> Any:
     """Load the standards audit script as a reusable test helper."""
 
     root = Path(__file__).resolve().parents[1]
@@ -34,7 +36,7 @@ def _load_audit_module():
     return module
 
 
-def test_python_standards_audit_passes():
+def test_python_standards_audit_passes() -> None:
     """Keep Python exception and docstring policy regressions out of the repo."""
 
     audit_module = _load_audit_module()

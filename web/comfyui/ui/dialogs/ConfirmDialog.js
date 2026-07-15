@@ -16,59 +16,47 @@
 /**
  * Own the SugarCubes dialog presentation layer in `web/comfyui/ui/dialogs/ConfirmDialog.js`.
  */
-
 import { $el } from '/scripts/ui.js';
 import { ModalShell } from './ModalShell.js';
-
 /**
  * Coordinate confirm dialog behavior for the SugarCubes UI.
  */
 export class ConfirmDialog {
-  constructor({ adapter } = {}) {
-    this.adapter = adapter || null;
-    this.shell = new ModalShell({
-      adapter,
-      variantClassName: 'sugarcubes-confirm-overlay',
-      dialogClassName: 'sugarcubes-confirm-dialog',
-    });
-    this.elements = this.shell.elements;
-  }
-
-  open({
-    title,
-    message,
-    confirmLabel,
-    cancelLabel = 'Cancel',
-    showCancel = true,
-    confirmClassName = 'p-button-danger sugarcubes-confirm__confirm',
-    cancelResult = false,
-  } = {}) {
-    const messageEl = $el('div.sugarcubes-confirm__message');
-    this.renderMessage(messageEl, message);
-    const promise = this.shell.open({
-      title: title || 'Confirm',
-      body: messageEl,
-      confirmLabel: confirmLabel || 'Confirm',
-      cancelLabel,
-      confirmClassName,
-      cancelResult,
-      showCancel,
-      onConfirm: () => this.shell.close(true),
-      initialFocus: () => this.shell.elements.confirmButton,
-    });
-    this.elements = this.shell.elements;
-    return promise;
-  }
-
-  close(result) {
-    this.shell.close(Boolean(result));
-  }
-
-  renderMessage(messageEl, message) {
-    const lines = (Array.isArray(message) ? message : [message])
-      .map((value) => (typeof value === 'string' ? value : ''))
-      .filter((value) => value.length);
-    const nodes = lines.map((value) => $el('p', { textContent: value }));
-    messageEl.replaceChildren(...nodes);
-  }
+    shell;
+    elements;
+    constructor({ adapter } = {}) {
+        this.shell = new ModalShell({
+            adapter: adapter ?? null,
+            variantClassName: 'sugarcubes-confirm-overlay',
+            dialogClassName: 'sugarcubes-confirm-dialog',
+        });
+        this.elements = this.shell.elements;
+    }
+    open({ title, message, confirmLabel, cancelLabel = 'Cancel', showCancel = true, confirmClassName = 'p-button-danger sugarcubes-confirm__confirm', cancelResult = false, } = {}) {
+        const messageEl = $el('div.sugarcubes-confirm__message');
+        this.renderMessage(messageEl, message);
+        const promise = this.shell.open({
+            title: title || 'Confirm',
+            body: messageEl,
+            confirmLabel: confirmLabel || 'Confirm',
+            cancelLabel,
+            confirmClassName,
+            cancelResult,
+            showCancel,
+            onConfirm: () => this.shell.close(true),
+            initialFocus: () => this.shell.elements.confirmButton,
+        });
+        this.elements = this.shell.elements;
+        return promise;
+    }
+    close(result) {
+        this.shell.close(Boolean(result));
+    }
+    renderMessage(messageEl, message) {
+        const lines = (Array.isArray(message) ? message : [message])
+            .map((value) => (typeof value === 'string' ? value : ''))
+            .filter((value) => value.length);
+        const nodes = lines.map((value) => $el('p', { textContent: value }));
+        messageEl.replaceChildren(...nodes);
+    }
 }

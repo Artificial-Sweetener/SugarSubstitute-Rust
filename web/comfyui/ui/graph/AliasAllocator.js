@@ -16,118 +16,99 @@
 /**
  * Own graph-wide SugarCubes instance alias allocation.
  */
-
 import { getGroupSugarcubes } from './GroupMetadata.js';
-
 function readName(value) {
-  return typeof value === 'string' ? value.trim() : '';
+    return typeof value === 'string' ? value.trim() : '';
 }
-
 function normalizeInstanceAlias(value) {
-  return readName(value).toLowerCase();
+    return readName(value).toLowerCase();
 }
-
 function readMatchInstanceId(match) {
-  return (
-    readName(match?.instance?.instanceId) || readName(getGroupSugarcubes(match?.group)?.instance_id)
-  );
+    return (readName(match?.instance?.instanceId) || readName(getGroupSugarcubes(match?.group)?.instance_id));
 }
-
 function isImportedGroup(group) {
-  return Boolean(group?.__sugarcubes_imported);
+    return Boolean(group?.__sugarcubes_imported);
 }
-
 function isExistingMatch(match) {
-  const metadata = getGroupSugarcubes(match?.group);
-  const instanceId = readMatchInstanceId(match);
-  const metadataInstanceId = readName(metadata?.instance_id);
-  return Boolean(
-    match?.group &&
-      metadata?.managed &&
-      instanceId &&
-      metadataInstanceId &&
-      instanceId === metadataInstanceId &&
-      !isImportedGroup(match.group),
-  );
+    const metadata = getGroupSugarcubes(match?.group);
+    const instanceId = readMatchInstanceId(match);
+    const metadataInstanceId = readName(metadata?.instance_id);
+    return Boolean(match?.group &&
+        metadata?.managed &&
+        instanceId &&
+        metadataInstanceId &&
+        instanceId === metadataInstanceId &&
+        !isImportedGroup(match.group));
 }
-
 function readInstanceAliasSeed(match) {
-  const metadata = getGroupSugarcubes(match?.group);
-  const metadataAlias = readName(metadata?.instance_alias);
-  const instanceAlias = readName(match?.instance?.instanceAlias);
-  const defaultAlias = readName(metadata?.default_alias) || readName(match?.instance?.defaultAlias);
-  if (isExistingMatch(match)) {
-    return (
-      metadataAlias ||
-      instanceAlias ||
-      defaultAlias ||
-      readName(match?.instance?.cubeId) ||
-      'SugarCube'
-    );
-  }
-  return (
-    instanceAlias ||
-    metadataAlias ||
-    defaultAlias ||
-    readName(match?.instance?.cubeId) ||
-    'SugarCube'
-  );
-}
-
-function allocateInstanceAlias(seed, taken) {
-  const base = readName(seed) || 'SugarCube';
-  const baseKey = normalizeInstanceAlias(base);
-  if (!baseKey || !taken.has(baseKey)) {
-    return base;
-  }
-  let index = 2;
-  while (index < 1000) {
-    const next = `${base} ${index}`;
-    if (!taken.has(normalizeInstanceAlias(next))) {
-      return next;
+    const metadata = getGroupSugarcubes(match?.group);
+    const metadataAlias = readName(metadata?.instance_alias);
+    const instanceAlias = readName(match?.instance?.instanceAlias);
+    const defaultAlias = readName(metadata?.default_alias) || readName(match?.instance?.defaultAlias);
+    if (isExistingMatch(match)) {
+        return (metadataAlias ||
+            instanceAlias ||
+            defaultAlias ||
+            readName(match?.instance?.cubeId) ||
+            'SugarCube');
     }
-    index += 1;
-  }
-  return `${base} ${Date.now()}`;
+    return (instanceAlias ||
+        metadataAlias ||
+        defaultAlias ||
+        readName(match?.instance?.cubeId) ||
+        'SugarCube');
 }
-
+function allocateInstanceAlias(seed, taken) {
+    const base = readName(seed) || 'SugarCube';
+    const baseKey = normalizeInstanceAlias(base);
+    if (!baseKey || !taken.has(baseKey)) {
+        return base;
+    }
+    let index = 2;
+    while (index < 1000) {
+        const next = `${base} ${index}`;
+        if (!taken.has(normalizeInstanceAlias(next))) {
+            return next;
+        }
+        index += 1;
+    }
+    return `${base} ${Date.now()}`;
+}
 /**
  * Allocate instance aliases for all matched live instances in a deterministic graph-wide pass.
  */
 export function allocateGraphInstanceAliases(instanceMatches = [], options = {}) {
-  const ignoreGroup = typeof options.ignoreGroup === 'function' ? options.ignoreGroup : null;
-  const matches = Array.isArray(instanceMatches)
-    ? instanceMatches
-        .filter((match) => match?.instance)
-        .map((match, index) => ({
-          ...match,
-          order: Number.isInteger(match.order) ? match.order : index,
+    const ignoreGroup = typeof options.ignoreGroup === 'function' ? options.ignoreGroup : null;
+    const matches = Array.isArray(instanceMatches)
+        ? instanceMatches
+            .filter((match) => Boolean(match.instance))
+            .map((match, index) => ({
+            ...match,
+            order: typeof match.order === 'number' && Number.isInteger(match.order) ? match.order : index,
         }))
-    : [];
-  const instanceAliases = new Map();
-  const taken = new Set();
-  const ordered = matches.sort((left, right) => {
-    const leftExisting = isExistingMatch(left);
-    const rightExisting = isExistingMatch(right);
-    if (leftExisting !== rightExisting) {
-      return leftExisting ? -1 : 1;
+        : [];
+    const instanceAliases = new Map();
+    const taken = new Set();
+    const ordered = matches.sort((left, right) => {
+        const leftExisting = isExistingMatch(left);
+        const rightExisting = isExistingMatch(right);
+        if (leftExisting !== rightExisting) {
+            return leftExisting ? -1 : 1;
+        }
+        return left.order - right.order;
+    });
+    for (const match of ordered) {
+        const metadata = getGroupSugarcubes(match.group);
+        if (ignoreGroup?.(match.group, metadata)) {
+            continue;
+        }
+        const instanceId = readMatchInstanceId(match);
+        if (!instanceId) {
+            continue;
+        }
+        const instanceAlias = allocateInstanceAlias(readInstanceAliasSeed(match), taken);
+        instanceAliases.set(instanceId, instanceAlias);
+        taken.add(normalizeInstanceAlias(instanceAlias));
     }
-    return left.order - right.order;
-  });
-
-  for (const match of ordered) {
-    const metadata = getGroupSugarcubes(match.group);
-    if (ignoreGroup?.(match.group, metadata)) {
-      continue;
-    }
-    const instanceId = readMatchInstanceId(match);
-    if (!instanceId) {
-      continue;
-    }
-    const instanceAlias = allocateInstanceAlias(readInstanceAliasSeed(match), taken);
-    instanceAliases.set(instanceId, instanceAlias);
-    taken.add(normalizeInstanceAlias(instanceAlias));
-  }
-
-  return instanceAliases;
+    return instanceAliases;
 }

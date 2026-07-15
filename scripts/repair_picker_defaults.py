@@ -25,13 +25,13 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from cube_model.picker_fields import (  # noqa: E402
+from sugarcubes.cube_model.picker_fields import (  # noqa: E402
     compact_picker_field_spec,
     find_input_field_spec,
     is_picker_field_spec,
@@ -51,6 +51,13 @@ class RepairResult:
     path: Path
     changed: bool
     notes: tuple[str, ...]
+
+
+class ObjectInfoProvider(Protocol):
+    """Resolve live Comfy definitions for picker repair."""
+
+    def definition_for(self, class_type: str) -> dict[str, Any] | None:
+        """Return one node definition when available."""
 
 
 class ObjectInfoClient:
@@ -107,7 +114,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def repair_cube_tree(
-    root: Path, *, client: ObjectInfoClient, dry_run: bool = False
+    root: Path, *, client: ObjectInfoProvider, dry_run: bool = False
 ) -> tuple[RepairResult, ...]:
     """Repair every cube file under the supplied root directory."""
 
@@ -118,7 +125,7 @@ def repair_cube_tree(
 
 
 def repair_cube_file(
-    path: Path, *, client: ObjectInfoClient, dry_run: bool = False
+    path: Path, *, client: ObjectInfoProvider, dry_run: bool = False
 ) -> RepairResult:
     """Repair one cube file in place unless dry-run mode is active."""
 
@@ -131,7 +138,7 @@ def repair_cube_file(
 
 
 def repair_cube_payload(
-    payload: dict[str, Any], *, client: ObjectInfoClient
+    payload: dict[str, Any], *, client: ObjectInfoProvider
 ) -> tuple[dict[str, Any], list[str]]:
     """Return a repaired cube payload and concise notes about changed values."""
 
@@ -176,7 +183,7 @@ def _compact_definition_value(value: Any) -> Any:
 
 
 def _repair_blank_authored_values(
-    payload: dict[str, Any], *, client: ObjectInfoClient
+    payload: dict[str, Any], *, client: ObjectInfoProvider
 ) -> list[str]:
     """Replace invalid authored blanks while preserving text-field blanks."""
 
@@ -213,7 +220,7 @@ def _repair_blank_control_value(
     control_id: str,
     *,
     control: dict[str, Any],
-    client: ObjectInfoClient,
+    client: ObjectInfoProvider,
 ) -> str | None:
     """Repair one authored blank control value from local object info."""
 

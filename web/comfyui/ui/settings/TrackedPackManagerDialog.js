@@ -16,57 +16,52 @@
 /**
  * Own the tracked pack manager dialog shell in `web/comfyui/ui/settings/TrackedPackManagerDialog.js`.
  */
-
 import { ModalShell } from '../dialogs/ModalShell.js';
-
 /**
  * Coordinate the tracked pack manager dialog lifecycle.
  */
 export class TrackedPackManagerDialog {
-  constructor({ adapter } = {}) {
-    this.shell = new ModalShell({
-      adapter,
-      variantClassName: 'sugarcubes-pack-manager-overlay',
-      dialogClassName: 'sugarcubes-pack-manager-dialog',
-    });
-    this.isOpen = false;
-  }
-
-  open({ title = 'Manage tracked packs', description = [], body = null, footerMeta = [] } = {}) {
-    this.isOpen = true;
-    const result = this.shell.open({
-      title,
-      description,
-      body,
-      footerMeta,
-      confirmLabel: 'Done',
-      cancelLabel: 'Close',
-      confirmClassName: 'p-button-primary',
-      cancelResult: false,
-      onConfirm: () => this.close(true),
-      initialFocus: () => this.shell.elements.cancelButton || this.shell.elements.confirmButton,
-    });
-    result.finally(() => {
-      this.isOpen = false;
-    });
-    return result;
-  }
-
-  update({ body = null, footerMeta = [] } = {}) {
-    this.shell.setBody(body);
-    this.shell.setFooterMeta(footerMeta);
-  }
-
-  setBusy(busy) {
-    this.shell.setBusy(busy);
-  }
-
-  setError(message) {
-    this.shell.setError(message);
-  }
-
-  close(result = false) {
-    this.shell.close(result);
-    this.isOpen = false;
-  }
+    shell;
+    isOpen;
+    constructor({ adapter } = {}) {
+        this.shell = new ModalShell({
+            adapter: adapter ?? null,
+            variantClassName: 'sugarcubes-pack-manager-overlay',
+            dialogClassName: 'sugarcubes-pack-manager-dialog',
+        });
+        this.isOpen = false;
+    }
+    open({ title = 'Manage tracked packs', description = [], body = null, footerMeta = [], } = {}) {
+        this.isOpen = true;
+        const result = this.shell.open({
+            title,
+            description,
+            body,
+            footerMeta,
+            confirmLabel: 'Done',
+            cancelLabel: 'Close',
+            confirmClassName: 'p-button-primary',
+            cancelResult: false,
+            onConfirm: () => this.close(true),
+            initialFocus: () => this.shell.elements.cancelButton || this.shell.elements.confirmButton,
+        });
+        void result.finally(() => {
+            this.isOpen = false;
+        });
+        return result;
+    }
+    update({ body = null, footerMeta = [] } = {}) {
+        this.shell.setBody(body);
+        this.shell.setFooterMeta(footerMeta);
+    }
+    setBusy(busy) {
+        this.shell.setBusy(busy);
+    }
+    setError(message) {
+        this.shell.setError(message);
+    }
+    close(result = false) {
+        this.shell.close(result);
+        this.isOpen = false;
+    }
 }

@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "exactOptionalPropertyTypes": false,
+    "noUncheckedIndexedAccess": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false
+  },
+  "include": ["web/**/*.ts", "tests/**/*.ts", "types/**/*.d.ts"],
+  "exclude": ["scripts"]
+}

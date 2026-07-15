@@ -16,30 +16,28 @@
 /**
  * Own the SugarCubes graph integration layer in `web/comfyui/ui/graph/VectorUtils.js`.
  */
-
 /**
  * Read vector2.
  */
 export function readVector2(vec, fallbackX = 0, fallbackY = 0) {
-  if (!Array.isArray(vec) || vec.length < 2) {
-    return [fallbackX, fallbackY];
-  }
-  const x = Number(vec[0]);
-  const y = Number(vec[1]);
-  return [Number.isFinite(x) ? x : fallbackX, Number.isFinite(y) ? y : fallbackY];
+    if (!Array.isArray(vec) || vec.length < 2) {
+        return [fallbackX, fallbackY];
+    }
+    const x = Number(vec[0]);
+    const y = Number(vec[1]);
+    return [Number.isFinite(x) ? x : fallbackX, Number.isFinite(y) ? y : fallbackY];
 }
-
 /**
  * Coerce vec2.
  */
 export function coerceVec2(value) {
-  if (!Array.isArray(value) || value.length < 2) {
-    return null;
-  }
-  const x = Number(value[0]);
-  const y = Number(value[1]);
-  if (!Number.isFinite(x) || !Number.isFinite(y)) {
-    return null;
-  }
-  return [x, y];
+    if (!Array.isArray(value) || value.length < 2) {
+        return null;
+    }
+    const x = Number(value[0]);
+    const y = Number(value[1]);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+        return null;
+    }
+    return [x, y];
 }

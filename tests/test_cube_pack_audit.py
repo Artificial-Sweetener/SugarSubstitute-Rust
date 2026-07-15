@@ -17,12 +17,14 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import json
 
 from sugarcubes.tools.audit_cube_pack import CubePackAuditor
 
 
-def test_cube_pack_audit_accepts_aligned_widget_values(tmp_path) -> None:
+def test_cube_pack_audit_accepts_aligned_widget_values(tmp_path: Path) -> None:
     """A valid cube produces no release-blocking findings."""
 
     cube_path = tmp_path / "valid.cube"
@@ -33,7 +35,9 @@ def test_cube_pack_audit_accepts_aligned_widget_values(tmp_path) -> None:
     assert findings == []
 
 
-def test_cube_pack_audit_reports_type_compatible_range_corruption(tmp_path) -> None:
+def test_cube_pack_audit_reports_type_compatible_range_corruption(
+    tmp_path: Path,
+) -> None:
     """The audit catches numeric shifts that ordinary type checks would accept."""
 
     cube_path = tmp_path / "corrupt.cube"

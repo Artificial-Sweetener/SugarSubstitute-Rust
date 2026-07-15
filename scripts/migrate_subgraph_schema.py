@@ -29,7 +29,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from cube_model import (  # noqa: E402
+from sugarcubes.cube_model import (  # noqa: E402
     CubeDocument,
     looks_like_current_cube_payload,
     migrate_legacy_payload,
@@ -256,7 +256,8 @@ def _normalize_state(
 ) -> dict[str, int]:
     """Normalize graph state counters."""
 
-    raw_state = entry.get("state") if isinstance(entry.get("state"), Mapping) else {}
+    raw_state_value = entry.get("state")
+    raw_state = raw_state_value if isinstance(raw_state_value, Mapping) else {}
     return {
         "lastNodeId": max(
             _coerce_int(raw_state.get("lastNodeId"), 0),
@@ -293,9 +294,10 @@ def _compute_graph_bounds(
         pos = node.get("pos")
         if not isinstance(pos, list) or len(pos) < 2:
             continue
+        size_value = node.get("size")
         size = (
-            node.get("size")
-            if isinstance(node.get("size"), list)
+            size_value
+            if isinstance(size_value, list) and len(size_value) >= 2
             else DEFAULT_NODE_SIZE
         )
         x = _coerce_float(pos[0], 0.0)
@@ -532,7 +534,7 @@ def _resolve_legacy_boundary_slot(
             if 0 <= slot_index < len(inputs) and isinstance(
                 inputs[slot_index], Mapping
             ):
-                return inputs[slot_index]
+                return dict(inputs[slot_index])
         return None
 
     origin = node_index.get(_coerce_int(link.get("origin_id"), -1))
@@ -540,7 +542,7 @@ def _resolve_legacy_boundary_slot(
     if isinstance(outputs, list):
         slot_index = _coerce_int(link.get("origin_slot"), -1)
         if 0 <= slot_index < len(outputs) and isinstance(outputs[slot_index], Mapping):
-            return outputs[slot_index]
+            return dict(outputs[slot_index])
     return None
 
 

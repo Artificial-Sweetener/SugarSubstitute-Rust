@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "allowJs": false,
+    "allowSyntheticDefaultImports": true,
+    "exactOptionalPropertyTypes": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "baseUrl": ".",
+    "paths": {
+      "/scripts/app.js": ["types/comfyui/app.d.ts"],
+      "/scripts/api.js": ["types/comfyui/api.d.ts"],
+      "/scripts/ui.js": ["types/comfyui/ui.d.ts"],
+      "/scripts/ui/components/button.js": ["types/comfyui/button.d.ts"]
+    },
+    "noEmit": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+    "noUncheckedIndexedAccess": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ES2022",
+    "types": ["jest", "node"]
+  },
+  "include": ["web/**/*.ts", "scripts/**/*.ts", "types/**/*.d.ts"]
+}

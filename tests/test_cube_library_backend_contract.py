@@ -17,6 +17,10 @@
 
 from __future__ import annotations
 
+from typing import Any
+
+from .typing_support import BackendServicesFactory
+
 import json
 import logging
 import os
@@ -25,8 +29,8 @@ from pathlib import Path
 import pytest
 
 from sugarcubes.backend.responses import BackendError
-from sugarcubes.backend.services import cube_library_service
-from sugarcubes.backend.services.cube_library_service import (
+from sugarcubes.backend.services import cube_library_service, cube_summary
+from sugarcubes.backend.services.cube_file_io import (
     compute_cube_content_hash_bytes,
 )
 
@@ -114,11 +118,11 @@ def _revision_text(payload: dict[str, object]) -> str:
 
 def test_backend_catalog_includes_hash_source_revision_and_dirty_state(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """Catalog entries should be remote-safe and diagnostic enough for Substitute."""
 
-    def fake_git(args, *, cwd):
+    def fake_git(args: Any, *, cwd: Any) -> Any:
         class Result:
             stdout = ""
 
@@ -163,11 +167,11 @@ def test_backend_catalog_includes_hash_source_revision_and_dirty_state(
 
 def test_backend_local_cube_sources_report_shared_repo_git_state(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """Local catalog and load payloads should report their shared Git state."""
 
-    def fake_git(args, *, cwd):
+    def fake_git(args: Any, *, cwd: Any) -> Any:
         class Result:
             stdout = ""
 
@@ -217,7 +221,7 @@ def test_backend_local_cube_sources_report_shared_repo_git_state(
 
 def test_backend_catalog_includes_target_model_fields(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """Catalog entries expose the target namespace separately from display text."""
 
@@ -245,7 +249,7 @@ def test_backend_catalog_includes_target_model_fields(
 
 def test_backend_catalog_repairs_stale_managed_checkout_path(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """Catalog listing should survive extension directory renames."""
 
@@ -287,7 +291,7 @@ def test_backend_catalog_repairs_stale_managed_checkout_path(
 
 def test_backend_catalog_revision_changes_when_cube_content_changes(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """Catalog revision should track artifact content without using generatedAt."""
 
@@ -307,7 +311,7 @@ def test_backend_catalog_revision_changes_when_cube_content_changes(
 
 def test_backend_catalog_revision_changes_for_same_second_same_size_edit(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """Nanosecond mtime facts should catch direct same-size cube edits."""
 
@@ -342,7 +346,7 @@ def test_backend_catalog_revision_changes_for_same_second_same_size_edit(
 
 def test_backend_catalog_reuses_hashes_for_unchanged_status_and_catalog(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Status and catalog calls should share one unchanged catalog snapshot."""
@@ -355,7 +359,7 @@ def test_backend_catalog_reuses_hashes_for_unchanged_status_and_catalog(
     original_read = cube_library_service.read_cube_payload_with_hash
     read_paths: list[Path] = []
 
-    def count_catalog_read(path: Path):
+    def count_catalog_read(path: Path) -> Any:
         """Count catalog row reads while preserving the real digest."""
 
         read_paths.append(path)
@@ -378,7 +382,7 @@ def test_backend_catalog_reuses_hashes_for_unchanged_status_and_catalog(
 
 def test_backend_catalog_invalidation_rebuilds_unchanged_stat_rows(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Explicit invalidation clears row reuse when stat facts are unchanged."""
@@ -391,7 +395,7 @@ def test_backend_catalog_invalidation_rebuilds_unchanged_stat_rows(
     original_read = cube_library_service.read_cube_payload_with_hash
     read_paths: list[Path] = []
 
-    def count_catalog_read(path: Path):
+    def count_catalog_read(path: Path) -> Any:
         """Count catalog row reads while preserving the real digest."""
 
         read_paths.append(path)
@@ -413,7 +417,7 @@ def test_backend_catalog_invalidation_rebuilds_unchanged_stat_rows(
 
 def test_backend_load_library_cube_returns_canonical_artifact(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """Loaded artifacts should contain raw cube JSON plus remote-safe metadata."""
 
@@ -437,13 +441,13 @@ def test_backend_load_library_cube_returns_canonical_artifact(
 
 def test_backend_lists_current_and_committed_cube_refs(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """Cube refs expose exact revision and content identity."""
 
     historical = _revision_text(_cube_payload(version="0.9.0"))
 
-    def fake_git(args, *, cwd):
+    def fake_git(args: Any, *, cwd: Any) -> Any:
         class Result:
             stdout = ""
 
@@ -472,14 +476,14 @@ def test_backend_lists_current_and_committed_cube_refs(
 
 def test_backend_lists_unique_cube_versions_newest_first(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """Version listing should collapse same-version refs in newest-first order."""
 
     historical_same = _revision_text(_cube_payload(version="1.0.0"))
     historical_old = _revision_text(_cube_payload(version="0.9.0"))
 
-    def fake_git(args, *, cwd):
+    def fake_git(args: Any, *, cwd: Any) -> Any:
         class Result:
             stdout = ""
 
@@ -513,13 +517,13 @@ def test_backend_lists_unique_cube_versions_newest_first(
 
 def test_backend_loads_cube_artifact_by_revision_ref(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """Revision selector returns the historical artifact, not the current file."""
 
     historical = _revision_text(_cube_payload(version="0.9.0"))
 
-    def fake_git(args, *, cwd):
+    def fake_git(args: Any, *, cwd: Any) -> Any:
         class Result:
             stdout = ""
 
@@ -553,13 +557,13 @@ def test_backend_loads_cube_artifact_by_revision_ref(
 
 def test_backend_loads_cube_artifact_by_unique_version(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """A version selector loads the newest matching artifact."""
 
     historical = _revision_text(_cube_payload(version="0.9.0"))
 
-    def fake_git(args, *, cwd):
+    def fake_git(args: Any, *, cwd: Any) -> Any:
         class Result:
             stdout = ""
 
@@ -586,14 +590,14 @@ def test_backend_loads_cube_artifact_by_unique_version(
 
 def test_backend_loads_current_artifact_for_duplicate_current_version(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """A duplicate version selector should choose the current artifact first."""
 
     historical = _revision_text(_cube_payload(version="1.0.0"))
     historical_hash = compute_cube_content_hash_bytes(historical.encode("utf-8"))
 
-    def fake_git(args, *, cwd):
+    def fake_git(args: Any, *, cwd: Any) -> Any:
         if args[0] in {"log", "show"}:
             raise AssertionError("current-version load must not query git history")
 
@@ -623,14 +627,14 @@ def test_backend_loads_current_artifact_for_duplicate_current_version(
 
 def test_backend_warm_historical_version_uses_disk_cache_without_git_show(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """Repeated historical version loads should reuse the durable artifact cache."""
 
     historical = _revision_text(_cube_payload(version="1.0.0", default_alias="old"))
     calls: list[tuple[str, ...]] = []
 
-    def fake_git(args, *, cwd):
+    def fake_git(args: Any, *, cwd: Any) -> Any:
         calls.append(tuple(args))
 
         class Result:
@@ -668,14 +672,14 @@ def test_backend_warm_historical_version_uses_disk_cache_without_git_show(
 
 def test_backend_historical_version_cache_rebuilds_corrupt_artifact(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """Corrupt cache files are treated as misses and rebuilt from git."""
 
     historical = _revision_text(_cube_payload(version="1.0.0", default_alias="old"))
     show_count = 0
 
-    def fake_git(args, *, cwd):
+    def fake_git(args: Any, *, cwd: Any) -> Any:
         nonlocal show_count
 
         class Result:
@@ -702,7 +706,7 @@ def test_backend_historical_version_cache_rebuilds_corrupt_artifact(
         version="1.0.0",
     )
     cache_files = list(
-        (services.library.version_artifact_cache.artifact_root).glob("*.json")
+        (services.library.artifacts.version_artifact_cache.artifact_root).glob("*.json")
     )
     assert cache_files
     cache_files[0].write_text("not json", encoding="utf-8")
@@ -718,7 +722,7 @@ def test_backend_historical_version_cache_rebuilds_corrupt_artifact(
 
 def test_backend_loads_newest_committed_artifact_for_duplicate_version(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """When current has another version, duplicate commits resolve by log order."""
 
@@ -726,7 +730,7 @@ def test_backend_loads_newest_committed_artifact_for_duplicate_version(
     older = _revision_text(_cube_payload(version="1.0.0", default_alias="older"))
     newest_hash = compute_cube_content_hash_bytes(newest.encode("utf-8"))
 
-    def fake_git(args, *, cwd):
+    def fake_git(args: Any, *, cwd: Any) -> Any:
         class Result:
             stdout = ""
 
@@ -758,7 +762,7 @@ def test_backend_loads_newest_committed_artifact_for_duplicate_version(
 
 def test_backend_library_change_subscription_receives_notification(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """Generic library-change listeners should receive immediate save metadata."""
 
@@ -787,13 +791,13 @@ def test_backend_library_change_subscription_receives_notification(
 
 def test_backend_rejects_revision_hash_mismatch(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """Exact selectors must identify the same artifact payload."""
 
     historical = _revision_text(_cube_payload(version="0.9.0"))
 
-    def fake_git(args, *, cwd):
+    def fake_git(args: Any, *, cwd: Any) -> Any:
         class Result:
             stdout = ""
 
@@ -822,7 +826,7 @@ def test_backend_rejects_revision_hash_mismatch(
 
 def test_backend_readiness_reports_target_missing_custom_nodes_without_install(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """Readiness reports install-capable Base-Cubes dependency plans."""
 
@@ -863,7 +867,7 @@ def test_backend_readiness_reports_target_missing_custom_nodes_without_install(
 
 def test_backend_readiness_reuses_summary_payload_for_dependency_facts(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Readiness should not resolve and reread cubes after summarizing them."""
@@ -877,10 +881,10 @@ def test_backend_readiness_reuses_summary_payload_for_dependency_facts(
     custom_nodes_root = tmp_path / "custom_nodes"
     custom_nodes_root.mkdir()
 
-    original_read_with_hash = cube_library_service.read_cube_payload_with_hash
+    original_read_with_hash = cube_summary.read_cube_payload_with_hash
     read_paths: list[Path] = []
 
-    def counted_read_with_hash(path: Path):
+    def counted_read_with_hash(path: Path) -> Any:
         """Record payload reads used by the readiness summary pass."""
 
         read_paths.append(path)
@@ -892,7 +896,7 @@ def test_backend_readiness_reuses_summary_payload_for_dependency_facts(
         raise AssertionError(f"unexpected cube resolve for {cube_id}")
 
     monkeypatch.setattr(
-        cube_library_service,
+        cube_summary,
         "read_cube_payload_with_hash",
         counted_read_with_hash,
     )
@@ -908,7 +912,7 @@ def test_backend_readiness_reuses_summary_payload_for_dependency_facts(
 
 def test_backend_readiness_reuses_tracked_repo_lookup_for_pack_summaries(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Readiness should not reload tracked repo state once per cube in a pack."""
@@ -931,7 +935,7 @@ def test_backend_readiness_reuses_tracked_repo_lookup_for_pack_summaries(
     original_get_repo = services.tracked_repos.get_repo
     get_repo_calls: list[tuple[str, str]] = []
 
-    def counted_get_repo(owner: str, repo: str):
+    def counted_get_repo(owner: str, repo: str) -> Any:
         """Record tracked-repo lookups while preserving real repo facts."""
 
         get_repo_calls.append((owner, repo))
@@ -947,7 +951,7 @@ def test_backend_readiness_reuses_tracked_repo_lookup_for_pack_summaries(
 
 def test_backend_readiness_reuses_durable_dependency_requirement_cache(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Fresh service instances should reuse unchanged dependency requirements."""
@@ -971,13 +975,13 @@ def test_backend_readiness_reuses_durable_dependency_requirement_cache(
         tmp_path, git_runner=lambda args, cwd: None
     )
 
-    def fail_payload_read(path: Path):
+    def fail_payload_read(path: Path) -> None:
         """Fail if the durable requirement cache misses for an unchanged cube."""
 
         raise AssertionError(f"unexpected cube payload read for {path}")
 
     monkeypatch.setattr(
-        cube_library_service,
+        cube_summary,
         "read_cube_payload_with_hash",
         fail_payload_read,
     )
@@ -990,7 +994,7 @@ def test_backend_readiness_reuses_durable_dependency_requirement_cache(
 
 def test_backend_readiness_invalidates_durable_dependency_requirement_cache(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """Cube stat changes should force dependency requirements to be rebuilt."""
 
@@ -1029,7 +1033,7 @@ def test_backend_readiness_invalidates_durable_dependency_requirement_cache(
 
 def test_backend_readiness_cache_invalidates_when_cube_dependencies_change(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """Process-local readiness reuse must not hide changed cube dependencies."""
 
@@ -1059,7 +1063,7 @@ def test_backend_readiness_cache_invalidates_when_cube_dependencies_change(
 
 def test_backend_readiness_cache_invalidates_when_new_cube_is_synced(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """Process-local readiness reuse must notice newly added cube files."""
 
@@ -1092,7 +1096,7 @@ def test_backend_readiness_cache_invalidates_when_new_cube_is_synced(
 
 def test_backend_readiness_logs_dependency_requirement_set_timing(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
     caplog: pytest.LogCaptureFixture,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1161,7 +1165,7 @@ def test_backend_readiness_logs_dependency_requirement_set_timing(
 
 def test_backend_readiness_requires_confirmation_for_non_default_packs(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """Dependencies from non-default cube packs require user approval."""
 
@@ -1193,7 +1197,7 @@ def test_backend_readiness_requires_confirmation_for_non_default_packs(
 
 def test_backend_readiness_omits_core_and_sugarcubes_markers(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """Core Comfy nodes and SugarCubes marker modules are not install targets."""
 
@@ -1216,11 +1220,11 @@ def test_backend_readiness_omits_core_and_sugarcubes_markers(
 
 def test_backend_readiness_preserves_versioned_custom_node_requirements(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """Version readiness keeps cube `cnr_id` and sibling `ver` facts."""
 
-    def fake_git(args, *, cwd):
+    def fake_git(args: Any, *, cwd: Any) -> Any:
         class Result:
             returncode = 0
             stdout = ""
@@ -1261,13 +1265,13 @@ def test_backend_readiness_preserves_versioned_custom_node_requirements(
 
 def test_backend_readiness_skips_git_runner_for_unrelated_installed_nodes(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """Readiness should inspect full git state only for required custom nodes."""
 
     git_cwds: list[Path] = []
 
-    def fake_git(args, *, cwd):
+    def fake_git(args: Any, *, cwd: Any) -> Any:
         _ = args
         git_cwds.append(Path(cwd))
 
@@ -1306,14 +1310,14 @@ def test_backend_readiness_skips_git_runner_for_unrelated_installed_nodes(
 
 def test_backend_readiness_reads_plain_git_metadata_without_subprocess(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """Readiness should avoid git subprocesses for HEAD and origin metadata."""
 
     head = "f561f164543f927e0452e14658a0509e8e4866d6"
     git_calls: list[list[str]] = []
 
-    def fake_git(args, *, cwd):
+    def fake_git(args: Any, *, cwd: Any) -> Any:
         _ = cwd
         git_calls.append(list(args))
 
@@ -1360,14 +1364,14 @@ def test_backend_readiness_reads_plain_git_metadata_without_subprocess(
 
 def test_backend_readiness_skips_git_requirement_ancestry_when_checkout_dirty(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """Dirty git checkouts should block readiness without merge-base probes."""
 
     installed_head = "225d0e5024a7751e80692f1c52dd3519be73cbab"
     git_calls: list[list[str]] = []
 
-    def fake_git(args, *, cwd):
+    def fake_git(args: Any, *, cwd: Any) -> Any:
         _ = cwd
         git_calls.append(list(args))
 
@@ -1423,7 +1427,7 @@ def test_backend_readiness_skips_git_requirement_ancestry_when_checkout_dirty(
 
 def test_backend_readiness_reports_comfy_core_runtime_requirement(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """`comfy-core` is runtime readiness, not a custom-node install target."""
 
@@ -1451,7 +1455,7 @@ def test_backend_readiness_reports_comfy_core_runtime_requirement(
 
 def test_backend_pack_records_do_not_expose_local_checkout_paths(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """Pack list payloads should not leak absolute target checkout paths."""
 

@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "declaration": false,
+    "noEmit": false,
+    "noEmitOnError": true,
+    "outDir": ".generated/web",
+    "rootDir": "web",
+    "sourceMap": false,
+    "types": []
+  },
+  "include": ["web/**/*.ts", "types/**/*.d.ts"],
+  "exclude": ["tests", "scripts"]
+}

@@ -16,47 +16,48 @@
 /**
  * Reconcile live graph identity references after a durable cube move.
  */
-
 import { updateMarkersForCubeId } from './CubeMarkers.js';
 import { getGraphGroups } from './GraphQuery.js';
 import { getGroupSugarcubes, setGroupSugarcubes } from './GroupMetadata.js';
-
 /** Own graph-local marker and managed-group identity retargeting. */
 export class CubeIdentityReconciler {
-  constructor({ adapter, instanceManager, dirtyManager, definitionStore } = {}) {
-    this.adapter = adapter;
-    this.instanceManager = instanceManager;
-    this.dirtyManager = dirtyManager;
-    this.definitionStore = definitionStore;
-  }
-
-  /** Retarget all live references after the backend has committed the move. */
-  reconcile({ previousCubeId, cubeId, defaultAlias } = {}) {
-    const graph = this.adapter?.getApp?.()?.graph;
-    if (!graph || !previousCubeId || !cubeId) {
-      return { markers: 0, groups: 0 };
+    adapter;
+    instanceManager;
+    dirtyManager;
+    definitionStore;
+    constructor({ adapter, instanceManager, dirtyManager, definitionStore, } = {}) {
+        this.adapter = adapter ?? null;
+        this.instanceManager = instanceManager ?? null;
+        this.dirtyManager = dirtyManager ?? null;
+        this.definitionStore = definitionStore ?? null;
     }
-    const markers = updateMarkersForCubeId(graph, previousCubeId, {
-      cubeId,
-      defaultAlias,
-    });
-    let groups = 0;
-    for (const group of getGraphGroups(graph)) {
-      const metadata = getGroupSugarcubes(group);
-      if (metadata?.cube_id !== previousCubeId) {
-        continue;
-      }
-      setGroupSugarcubes(group, {
-        ...metadata,
-        cube_id: cubeId,
-        ...(defaultAlias ? { default_alias: defaultAlias } : {}),
-      });
-      groups += 1;
+    /** Retarget all live references after the backend has committed the move. */
+    reconcile({ previousCubeId, cubeId, defaultAlias, } = {}) {
+        const graph = this.adapter?.getApp?.()?.graph;
+        if (!graph || !previousCubeId || !cubeId) {
+            return { markers: 0, groups: 0 };
+        }
+        const markers = updateMarkersForCubeId(graph, previousCubeId, {
+            cubeId,
+            ...(defaultAlias ? { defaultAlias } : {}),
+        });
+        let groups = 0;
+        for (const group of getGraphGroups(graph)) {
+            const metadata = getGroupSugarcubes(group);
+            if (metadata?.cube_id !== previousCubeId) {
+                continue;
+            }
+            setGroupSugarcubes(group, {
+                ...metadata,
+                cube_id: cubeId,
+                ...(defaultAlias ? { default_alias: defaultAlias } : {}),
+            });
+            groups += 1;
+        }
+        this.definitionStore?.invalidateCube?.(previousCubeId);
+        this.instanceManager?.scheduleRefresh?.({ graph, reason: 'cube-promoted' });
+        this.dirtyManager?.requestRefresh?.({ graph, reason: 'cube-promoted' });
+        graph.setDirtyCanvas?.(true, true);
+        return { markers, groups };
     }
-    this.definitionStore?.invalidateCube?.(previousCubeId);
-    this.instanceManager?.scheduleRefresh?.({ graph, reason: 'cube-promoted' });
-    this.dirtyManager?.requestRefresh?.({ graph, reason: 'cube-promoted' });
-    graph.setDirtyCanvas?.(true, true);
-    return { markers, groups };
-  }
 }

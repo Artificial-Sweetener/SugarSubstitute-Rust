@@ -13,6 +13,11 @@
 #
 #    You should have received a copy of the GNU Affero General Public License
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+from __future__ import annotations
+
+from collections.abc import Iterator, Mapping
+from typing import Any
 import re
 import subprocess
 import sys
@@ -21,16 +26,15 @@ from pathlib import Path
 import pytest
 
 from sugarcubes.exporter import export_cubes
-from sugarcubes.exporter import serializer as serializer_module
+from sugarcubes.exporter import definition_snapshot
+from sugarcubes.exporter.layout_serializer import coerce_float, coerce_int_value
 from sugarcubes.exporter.serializer import (
     BINDING_SENTINEL,
-    _coerce_float,
-    _coerce_int_value,
     _validate_authored_values_against_definitions,
 )
 
 
-def _walk_json(value):
+def _walk_json(value: Any) -> Iterator[Any]:
     if isinstance(value, dict):
         yield value
         for entry in value.values():
@@ -41,7 +45,7 @@ def _walk_json(value):
             yield from _walk_json(entry)
 
 
-def _contains_nested_choice_array(value):
+def _contains_nested_choice_array(value: Any) -> Any:
     if isinstance(value, list):
         if value and isinstance(value[0], list):
             return True
@@ -51,11 +55,11 @@ def _contains_nested_choice_array(value):
     return False
 
 
-def _definition_resolver(_class_type):
+def _definition_resolver(_class_type: Any) -> Any:
     return {}
 
 
-def _compact_definition_resolver(class_type):
+def _compact_definition_resolver(class_type: Any) -> Any:
     if class_type == "KSampler":
         return {
             "input": {
@@ -317,7 +321,7 @@ def _compact_definition_resolver(class_type):
     return {}
 
 
-def _detail_segs_by_scale_factor_definition():
+def _detail_segs_by_scale_factor_definition() -> Any:
     return {
         "input": {
             "required": {
@@ -377,13 +381,13 @@ def _detail_segs_by_scale_factor_definition():
     }
 
 
-def _detailer_definition_resolver(class_type):
+def _detailer_definition_resolver(class_type: Any) -> Any:
     if class_type == "SimpleSyrup.DetailSEGSByScaleFactor":
         return _detail_segs_by_scale_factor_definition()
     return _compact_definition_resolver(class_type)
 
 
-def _detailer_export_prompt(cube_id):
+def _detailer_export_prompt(cube_id: Any) -> Any:
     return {
         "1": {
             "class_type": "SugarCubes.CubeInput",
@@ -404,7 +408,9 @@ def _detailer_export_prompt(cube_id):
     }
 
 
-def _detailer_export_workflow(widget_values, *, include_snapshot=True):
+def _detailer_export_workflow(
+    widget_values: Any, *, include_snapshot: Any = True
+) -> Any:
     widget_names = [
         "scale_factor",
         "upscale_method",
@@ -464,7 +470,7 @@ def _detailer_export_workflow(widget_values, *, include_snapshot=True):
     }
 
 
-def _control_id_by_input(cube, input_name):
+def _control_id_by_input(cube: Any, input_name: Any) -> Any:
     for control in cube["surface"]["controls"]:
         if (
             control["class_type"] == "SimpleSyrup.DetailSEGSByScaleFactor"
@@ -474,7 +480,7 @@ def _control_id_by_input(cube, input_name):
     raise AssertionError(f"Missing detailer control for {input_name}")
 
 
-def _compact_definition_prompt():
+def _compact_definition_prompt() -> Any:
     cube_id = "local/example-user/compact.cube"
     return {
         "1": {
@@ -626,7 +632,7 @@ def _compact_definition_prompt():
     }
 
 
-def test_serializer_remaps_marker_inputs_to_bindings():
+def test_serializer_remaps_marker_inputs_to_bindings() -> None:
     cube_id = "local/example-user/demo.cube"
     prompt = {
         "1": {
@@ -655,7 +661,7 @@ def test_serializer_remaps_marker_inputs_to_bindings():
     assert re.match(r"^input\.[a-z0-9_]+(\d+)?$", binding[1]) is not None
 
 
-def test_serializer_layout_groups_and_flags():
+def test_serializer_layout_groups_and_flags() -> None:
     cube_id = "local/example-user/demo.cube"
     prompt = {
         "1": {
@@ -711,7 +717,7 @@ def test_serializer_layout_groups_and_flags():
     assert layout["groups"][0]["title"] == "In Group"
 
 
-def test_serializer_persists_non_default_node_execution_mode():
+def test_serializer_persists_non_default_node_execution_mode() -> None:
     cube_id = "local/example-user/demo.cube"
     prompt = {
         "1": {
@@ -748,7 +754,7 @@ def test_serializer_persists_non_default_node_execution_mode():
     assert "mode" not in layout_node
 
 
-def test_serializer_omits_default_or_invalid_node_execution_modes():
+def test_serializer_omits_default_or_invalid_node_execution_modes() -> None:
     cube_id = "local/example-user/demo.cube"
     prompt = {
         "1": {
@@ -790,7 +796,7 @@ def test_serializer_omits_default_or_invalid_node_execution_modes():
     assert all("mode" not in node for node in nodes)
 
 
-def test_serializer_canonicalizes_existing_cube_identity_from_lookup():
+def test_serializer_canonicalizes_existing_cube_identity_from_lookup() -> None:
     cube_id = "Artificial-Sweetener/Base-Cubes/automask detailer.cube"
     prompt = {
         "1": {
@@ -848,7 +854,7 @@ def test_serializer_canonicalizes_existing_cube_identity_from_lookup():
     assert "alias" not in group["sugarcubes"]
 
 
-def test_serializer_persists_route_default_alias_without_lookup():
+def test_serializer_persists_route_default_alias_without_lookup() -> None:
     cube_id = "Artificial-Sweetener/Base-Cubes/image to image.cube"
     prompt = {
         "1": {
@@ -874,7 +880,7 @@ def test_serializer_persists_route_default_alias_without_lookup():
     assert cubes[0].cube["metadata"]["default_alias"] == "image to image"
 
 
-def test_serializer_compacts_list_definitions_and_removes_help_metadata():
+def test_serializer_compacts_list_definitions_and_removes_help_metadata() -> None:
     cubes = export_cubes(
         _compact_definition_prompt(),
         definition_resolver=_compact_definition_resolver,
@@ -922,7 +928,7 @@ def test_serializer_compacts_list_definitions_and_removes_help_metadata():
     assert not _contains_nested_choice_array(definitions)
 
 
-def test_serializer_preserves_only_portable_authored_picker_defaults():
+def test_serializer_preserves_only_portable_authored_picker_defaults() -> None:
     cubes = export_cubes(
         _compact_definition_prompt(),
         definition_resolver=_compact_definition_resolver,
@@ -989,7 +995,7 @@ def test_serializer_preserves_only_portable_authored_picker_defaults():
     )
 
 
-def test_serializer_backfills_missing_widget_values_from_workflow():
+def test_serializer_backfills_missing_widget_values_from_workflow() -> None:
     cube_id = "local/example-user/widgets.cube"
     prompt = {
         "1": {
@@ -1043,7 +1049,7 @@ def test_serializer_backfills_missing_widget_values_from_workflow():
     assert "ksampler.seed" not in authored_values
 
 
-def test_serializer_rejects_ambiguous_positional_widget_values():
+def test_serializer_rejects_ambiguous_positional_widget_values() -> None:
     cube_id = "local/example-user/detailer-corrupt.cube"
 
     with pytest.raises(ValueError, match="Unsafe workflow widget snapshot"):
@@ -1072,7 +1078,7 @@ def test_serializer_rejects_ambiguous_positional_widget_values():
         )
 
 
-def test_serializer_backfills_detailer_seed_control_companion_safely():
+def test_serializer_backfills_detailer_seed_control_companion_safely() -> None:
     cube_id = "local/example-user/detailer-valid.cube"
 
     cubes = export_cubes(
@@ -1115,7 +1121,7 @@ def test_serializer_backfills_detailer_seed_control_companion_safely():
     assert authored_values[_control_id_by_input(payload, "noise_mask_feather")] == 20
 
 
-def test_serializer_rejects_authored_values_that_contradict_definitions():
+def test_serializer_rejects_authored_values_that_contradict_definitions() -> None:
     cube_id = "local/example-user/detailer-validator.cube"
     cubes = export_cubes(
         _detailer_export_prompt(cube_id),
@@ -1149,10 +1155,10 @@ def test_serializer_rejects_authored_values_that_contradict_definitions():
         _validate_authored_values_against_definitions(payload)
 
 
-def test_serializer_preserves_explicit_blank_text_from_workflow():
+def test_serializer_preserves_explicit_blank_text_from_workflow() -> None:
     cube_id = "local/example-user/blank-prompt.cube"
 
-    def resolver(class_type):
+    def resolver(class_type: Any) -> Any:
         if class_type == "PrimitiveStringMultiline":
             return {
                 "input": {"required": {"value": ["STRING", {"multiline": True}]}},
@@ -1194,7 +1200,7 @@ def test_serializer_preserves_explicit_blank_text_from_workflow():
     assert authored_values == {"primitivestringmultiline.value": ""}
 
 
-def test_serializer_does_not_synthesize_empty_picker_defaults():
+def test_serializer_does_not_synthesize_empty_picker_defaults() -> None:
     cube_id = "local/example-user/missing-picker.cube"
     prompt = {
         "1": {"class_type": "CheckpointLoaderSimple", "inputs": {}},
@@ -1229,7 +1235,7 @@ def test_serializer_does_not_synthesize_empty_picker_defaults():
     assert "checkpoint_loader_simple.ckpt_name" not in authored_values
 
 
-def test_serializer_sanitizes_cube_layout_group_metadata():
+def test_serializer_sanitizes_cube_layout_group_metadata() -> None:
     cube_id = "local/example-user/demo.cube"
     prompt = {
         "1": {
@@ -1332,7 +1338,9 @@ def test_serializer_sanitizes_cube_layout_group_metadata():
         [-120, -160, 900, 500],
     ),
 )
-def test_serializer_derives_reusable_group_chrome_from_content(source_bounding):
+def test_serializer_derives_reusable_group_chrome_from_content(
+    source_bounding: Any,
+) -> None:
     cube_id = "local/example-user/demo.cube"
     prompt = {
         "1": {
@@ -1403,7 +1411,7 @@ def test_serializer_derives_reusable_group_chrome_from_content(source_bounding):
     }
 
 
-def test_serializer_accepts_empty_workflow_mapping():
+def test_serializer_accepts_empty_workflow_mapping() -> None:
     cube_id = "local/example-user/demo.cube"
     prompt = {
         "1": {
@@ -1429,7 +1437,7 @@ def test_serializer_accepts_empty_workflow_mapping():
     )
 
 
-def test_serializer_includes_definitions_for_subgraph_node_types():
+def test_serializer_includes_definitions_for_subgraph_node_types() -> None:
     cube_id = "local/example-user/demo.cube"
     wrapper_id = "94f725d5-39bf-4060-be68-f573214a2055"
     prompt = {
@@ -1463,7 +1471,7 @@ def test_serializer_includes_definitions_for_subgraph_node_types():
         }
     }
 
-    def resolver(class_type: str):
+    def resolver(class_type: str) -> Any:
         if class_type == "RegexExtract":
             return {"input": {"required": {"regex_pattern": ["STRING"]}}}
         if class_type == "StringConcatenate":
@@ -1480,7 +1488,7 @@ def test_serializer_includes_definitions_for_subgraph_node_types():
     assert subgraph["inputs"][0]["label"] == "Scale Factor"
 
 
-def test_serializer_rejects_corrupt_subgraph_widget_values():
+def test_serializer_rejects_corrupt_subgraph_widget_values() -> None:
     """Save-time validation blocks corrupted nested node widget arrays."""
 
     cube_id = "local/example-user/corrupt-widget.cube"
@@ -1525,7 +1533,7 @@ def test_serializer_rejects_corrupt_subgraph_widget_values():
         }
     }
 
-    def resolver(class_type: str):
+    def resolver(class_type: str) -> Any:
         if class_type == "WidgetNode":
             return {
                 "input": {
@@ -1544,7 +1552,7 @@ def test_serializer_rejects_corrupt_subgraph_widget_values():
         export_cubes(prompt, workflow=workflow, definition_resolver=resolver)
 
 
-def test_serializer_backfills_subgraph_interface_label_from_name():
+def test_serializer_backfills_subgraph_interface_label_from_name() -> None:
     cube_id = "local/example-user/demo.cube"
     wrapper_id = "94f725d5-39bf-4060-be68-f573214a2055"
     prompt = {
@@ -1577,7 +1585,7 @@ def test_serializer_backfills_subgraph_interface_label_from_name():
     assert subgraph["inputs"][0]["label"] == "value"
 
 
-def test_serializer_rejects_duplicate_subgraph_interface_labels():
+def test_serializer_rejects_duplicate_subgraph_interface_labels() -> None:
     cube_id = "local/example-user/demo.cube"
     wrapper_id = "94f725d5-39bf-4060-be68-f573214a2055"
     prompt = {
@@ -1611,7 +1619,9 @@ def test_serializer_rejects_duplicate_subgraph_interface_labels():
         export_cubes(prompt, workflow=workflow, definition_resolver=lambda _: {})
 
 
-def test_serializer_reports_definition_lookup_failures_as_warnings(monkeypatch):
+def test_serializer_reports_definition_lookup_failures_as_warnings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     cube_id = "local/example-user/demo.cube"
     prompt = {
         "1": {
@@ -1628,15 +1638,15 @@ def test_serializer_reports_definition_lookup_failures_as_warnings(monkeypatch):
         },
     }
 
-    def resolver(_class_type):
+    def resolver(_class_type: str) -> Mapping[str, Any]:
         raise RuntimeError("resolver unavailable")
 
-    def fail_live_lookup(_class_type):
+    def fail_live_lookup(_class_type: str) -> Mapping[str, Any]:
         raise AssertionError("resolver failures must not load live Comfy definitions")
 
     monkeypatch.setattr(
-        serializer_module,
-        "_resolve_definition_via_nodes",
+        definition_snapshot,
+        "resolve_definition_via_nodes",
         fail_live_lookup,
     )
 
@@ -1648,26 +1658,30 @@ def test_serializer_reports_definition_lookup_failures_as_warnings(monkeypatch):
     )
 
 
-def test_serializer_coercion_helpers_preserve_current_fallbacks():
-    assert _coerce_float("1.5", 0.0) == 1.5
-    assert _coerce_float("bad", 2.0) == 2.0
-    assert _coerce_int_value(3.9) == 3
-    assert _coerce_int_value("4") == 4
-    assert _coerce_int_value("4.8") == 4
-    assert _coerce_int_value("bad") is None
+def test_serializer_coercion_helpers_preserve_current_fallbacks() -> None:
+    assert coerce_float("1.5", 0.0) == 1.5
+    assert coerce_float("bad", 2.0) == 2.0
+    assert coerce_int_value(3.9) == 3
+    assert coerce_int_value("4") == 4
+    assert coerce_int_value("4.8") == 4
+    assert coerce_int_value("bad") is None
 
 
-def test_resolve_definition_via_nodes_degrades_when_runtime_is_missing(monkeypatch):
-    monkeypatch.setattr(serializer_module, "_load_comfy_runtime", lambda: (None, None))
+def test_resolve_definition_via_nodes_degrades_when_runtime_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        definition_snapshot, "_load_comfy_runtime", lambda: (None, None)
+    )
 
-    assert serializer_module._resolve_definition_via_nodes("KSampler") is None
+    assert definition_snapshot.resolve_definition_via_nodes("KSampler") is None
 
 
-def test_serializer_import_does_not_load_comfy_nodes():
+def test_serializer_import_does_not_load_comfy_nodes() -> None:
     script = (
         "import sys; "
         "sys.path.insert(0, r'.'); "
-        "import exporter.serializer; "
+        "import sugarcubes.exporter.serializer; "
         "raise SystemExit(1 if 'nodes' in sys.modules else 0)"
     )
 

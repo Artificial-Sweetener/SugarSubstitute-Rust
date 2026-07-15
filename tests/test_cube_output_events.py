@@ -13,6 +13,12 @@
 #
 #    You should have received a copy of the GNU Affero General Public License
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+from __future__ import annotations
+
+from typing import Any
+
+import pytest
 import importlib.util
 import logging
 import sys
@@ -30,10 +36,10 @@ from sugarcubes.runtime.cube_output_events import notify_cube_output_observers
 class RecordingObserver:
     """Record cube output events delivered by the registry."""
 
-    def __init__(self):
-        self.events = []
+    def __init__(self) -> None:
+        self.events: list[CubeOutputEvent] = []
 
-    def on_cube_output(self, event):
+    def on_cube_output(self, event: Any) -> None:
         """Record one delivered event."""
 
         self.events.append(event)
@@ -42,13 +48,13 @@ class RecordingObserver:
 class FailingObserver:
     """Raise during delivery to verify registry isolation."""
 
-    def on_cube_output(self, event):
+    def on_cube_output(self, event: Any) -> None:
         """Fail while handling one event."""
 
         raise RuntimeError("delivery failed")
 
 
-def make_event():
+def make_event() -> Any:
     """Build a minimal cube output event for registry tests."""
 
     return CubeOutputEvent(
@@ -66,7 +72,7 @@ def make_event():
     )
 
 
-def test_registering_observer_receives_event():
+def test_registering_observer_receives_event() -> None:
     observer = RecordingObserver()
     event = make_event()
     register_cube_output_observer(observer)
@@ -78,7 +84,7 @@ def test_registering_observer_receives_event():
     assert observer.events == [event]
 
 
-def test_runtime_event_bus_is_shared_across_import_identities():
+def test_runtime_event_bus_is_shared_across_import_identities() -> None:
     """Observer state should stay canonical when Comfy imports runtime under another name."""
 
     first = load_cube_output_events_module("sugarcubes_test_runtime_first")
@@ -108,7 +114,7 @@ def test_runtime_event_bus_is_shared_across_import_identities():
     assert first.CUBE_OUTPUT_OBSERVER_API_VERSION == CUBE_OUTPUT_OBSERVER_API_VERSION
 
 
-def test_unregistering_observer_stops_delivery():
+def test_unregistering_observer_stops_delivery() -> None:
     observer = RecordingObserver()
     register_cube_output_observer(observer)
     unregister_cube_output_observer(observer)
@@ -118,7 +124,7 @@ def test_unregistering_observer_stops_delivery():
     assert observer.events == []
 
 
-def test_duplicate_registration_is_ignored():
+def test_duplicate_registration_is_ignored() -> None:
     observer = RecordingObserver()
     event = make_event()
     register_cube_output_observer(observer)
@@ -131,7 +137,9 @@ def test_duplicate_registration_is_ignored():
     assert observer.events == [event]
 
 
-def test_observer_exception_does_not_propagate(caplog):
+def test_observer_exception_does_not_propagate(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     failing = FailingObserver()
     recording = RecordingObserver()
     event = make_event()
@@ -148,11 +156,14 @@ def test_observer_exception_does_not_propagate(caplog):
     assert "Cube output observer failed" in caplog.text
 
 
-def load_cube_output_events_module(module_name):
+def load_cube_output_events_module(module_name: Any) -> Any:
     """Load cube output events under a synthetic module identity for regression tests."""
 
     module_path = (
-        Path(__file__).resolve().parents[1] / "runtime" / "cube_output_events.py"
+        Path(__file__).resolve().parents[1]
+        / "sugarcubes"
+        / "runtime"
+        / "cube_output_events.py"
     )
     spec = importlib.util.spec_from_file_location(module_name, module_path)
     assert spec is not None

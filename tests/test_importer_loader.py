@@ -13,6 +13,12 @@
 #
 #    You should have received a copy of the GNU Affero General Public License
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+from __future__ import annotations
+
+from typing import Any
+
+from pathlib import Path
 import json
 
 import pytest
@@ -21,7 +27,7 @@ from sugarcubes.importer import CubeImportError, load_cube, prepare_import
 from sugarcubes.importer import loader as loader_module
 
 
-def _build_current_payload() -> dict:
+def _build_current_payload() -> dict[str, Any]:
     return {
         "description": "demo",
         "cube_id": "artificial-sweetener/base-cubes/demo.cube",
@@ -43,7 +49,7 @@ PARENT_SUBGRAPH_ID = "644694cf-354b-4cc8-8a67-a78145a8180e"
 CHILD_SUBGRAPH_ID = "8f6c43da-07af-4666-9e9a-0b4c7f83bdad"
 
 
-def test_load_cube_warns_on_invalid_input_targets(tmp_path):
+def test_load_cube_warns_on_invalid_input_targets(tmp_path: Path) -> None:
     payload = _build_current_payload()
     payload["implementation"]["inputs"] = {
         "input.value": {
@@ -58,7 +64,7 @@ def test_load_cube_warns_on_invalid_input_targets(tmp_path):
     assert any("target #1 is invalid" in warning for warning in loaded.warnings)
 
 
-def test_load_cube_rejects_inherit_input_kind(tmp_path):
+def test_load_cube_rejects_inherit_input_kind(tmp_path: Path) -> None:
     payload = _build_current_payload()
     payload["implementation"]["inputs"] = {
         "input.model": {
@@ -73,7 +79,7 @@ def test_load_cube_rejects_inherit_input_kind(tmp_path):
         load_cube(path)
 
 
-def test_prepare_import_includes_route_identity_metadata(tmp_path):
+def test_prepare_import_includes_route_identity_metadata(tmp_path: Path) -> None:
     payload = _build_current_payload()
     payload["cube_id"] = "artificial-sweetener/base-cubes/SDXL/Text to Image.cube"
     payload["metadata"] = {
@@ -96,7 +102,9 @@ def test_prepare_import_includes_route_identity_metadata(tmp_path):
     )
 
 
-def test_load_cube_rejects_default_alias_that_conflicts_with_route(tmp_path):
+def test_load_cube_rejects_default_alias_that_conflicts_with_route(
+    tmp_path: Path,
+) -> None:
     payload = _build_current_payload()
     payload["cube_id"] = "artificial-sweetener/base-cubes/SDXL/Text to Image.cube"
     payload["metadata"] = {"default_alias": "Text to Image"}
@@ -107,7 +115,7 @@ def test_load_cube_rejects_default_alias_that_conflicts_with_route(tmp_path):
         load_cube(path)
 
 
-def test_load_cube_layout_warnings(tmp_path):
+def test_load_cube_layout_warnings(tmp_path: Path) -> None:
     payload = _build_current_payload()
     payload["implementation"]["nodes"] = {
         "node": {"class_type": "KSampler", "inputs": {}}
@@ -121,7 +129,7 @@ def test_load_cube_layout_warnings(tmp_path):
     assert any("Layout missing node entry" in warning for warning in loaded.warnings)
 
 
-def test_prepare_import_preserves_valid_node_execution_mode(tmp_path):
+def test_prepare_import_preserves_valid_node_execution_mode(tmp_path: Path) -> None:
     payload = _build_current_payload()
     payload["implementation"]["nodes"] = {
         "vae_override": {"class_type": "VAELoader", "inputs": {}, "mode": 4}
@@ -148,7 +156,7 @@ def test_prepare_import_preserves_valid_node_execution_mode(tmp_path):
     assert prepared.nodes[0]["mode"] == 4
 
 
-def test_load_cube_ignores_invalid_node_execution_mode(tmp_path):
+def test_load_cube_ignores_invalid_node_execution_mode(tmp_path: Path) -> None:
     payload = _build_current_payload()
     payload["implementation"]["nodes"] = {
         "vae_override": {"class_type": "VAELoader", "inputs": {}, "mode": "4"}
@@ -178,7 +186,9 @@ def test_load_cube_ignores_invalid_node_execution_mode(tmp_path):
     )
 
 
-def test_load_cube_does_not_promote_group_title_to_default_alias(tmp_path):
+def test_load_cube_does_not_promote_group_title_to_default_alias(
+    tmp_path: Path,
+) -> None:
     payload = _build_current_payload()
     payload["metadata"] = {"cube_name": "Ignored Legacy Name"}
     payload["implementation"]["inputs"] = {
@@ -208,7 +218,7 @@ def test_load_cube_does_not_promote_group_title_to_default_alias(tmp_path):
     assert loaded.markers["input.value"].widget_values["instance_alias"] == "demo"
 
 
-def test_load_cube_rejects_bad_outputs(tmp_path):
+def test_load_cube_rejects_bad_outputs(tmp_path: Path) -> None:
     payload = _build_current_payload()
     payload["implementation"]["outputs"] = {"output.value": []}
     path = tmp_path / "outputs.cube"
@@ -218,7 +228,9 @@ def test_load_cube_rejects_bad_outputs(tmp_path):
         load_cube(path)
 
 
-def test_load_cube_uses_unique_group_default_alias_when_metadata_is_absent(tmp_path):
+def test_load_cube_uses_unique_group_default_alias_when_metadata_is_absent(
+    tmp_path: Path,
+) -> None:
     payload = _build_current_payload()
     payload["metadata"] = {}
     payload["implementation"]["inputs"] = {
@@ -247,7 +259,7 @@ def test_load_cube_uses_unique_group_default_alias_when_metadata_is_absent(tmp_p
     assert loaded.markers["input.value"].widget_values["default_alias"] == "demo"
 
 
-def test_load_cube_rejects_legacy_runtime_payload(tmp_path):
+def test_load_cube_rejects_legacy_runtime_payload(tmp_path: Path) -> None:
     payload = {
         "cube_id": "artificial-sweetener/base-cubes/demo.cube",
         "version": "1.0.0",
@@ -269,13 +281,17 @@ def test_load_cube_rejects_legacy_runtime_payload(tmp_path):
     }
 
 
-def test_loader_handles_missing_optional_comfy_nodes_runtime(monkeypatch):
+def test_loader_handles_missing_optional_comfy_nodes_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(loader_module, "_load_comfy_nodes_module", lambda: None)
 
     assert loader_module._has_definition("NotInstalled", {}) is False
 
 
-def test_load_cube_treats_uuid_wrapper_nodes_as_defined_subgraphs(tmp_path):
+def test_load_cube_treats_uuid_wrapper_nodes_as_defined_subgraphs(
+    tmp_path: Path,
+) -> None:
     payload = _build_current_payload()
     subgraph_id = "bc2b2877-06d7-4b9f-881a-9263df411f13"
     payload["implementation"]["nodes"] = {
@@ -306,7 +322,7 @@ def test_load_cube_treats_uuid_wrapper_nodes_as_defined_subgraphs(tmp_path):
     )
 
 
-def test_load_cube_accepts_complete_nested_subgraph_definitions(tmp_path):
+def test_load_cube_accepts_complete_nested_subgraph_definitions(tmp_path: Path) -> None:
     payload = _build_current_payload()
     payload["implementation"]["nodes"] = {
         "wrapper": {"class_type": PARENT_SUBGRAPH_ID, "inputs": {}}
@@ -341,7 +357,7 @@ def test_load_cube_accepts_complete_nested_subgraph_definitions(tmp_path):
     ]
 
 
-def test_prepare_import_preserves_text_to_image_prompt_nodes(tmp_path):
+def test_prepare_import_preserves_text_to_image_prompt_nodes(tmp_path: Path) -> None:
     payload = _build_current_payload()
     payload["cube_id"] = "Artificial-Sweetener/Base-Cubes/SDXL/Text to Image.cube"
     payload["version"] = "1.1.1"

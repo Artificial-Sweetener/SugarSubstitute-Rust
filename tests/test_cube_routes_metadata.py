@@ -13,13 +13,20 @@
 #
 #    You should have received a copy of the GNU Affero General Public License
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+from __future__ import annotations
+
+from typing import Any
+
+from pathlib import Path
+from .typing_support import BackendServicesFactory
 import asyncio
 import json
 from json import JSONDecodeError
 
 from sugarcubes.backend.routes import build_route_handlers
 
-from conftest import (
+from .conftest import (
     FakeRequest,
     claim_github_owner,
     decode_json_response,
@@ -31,7 +38,7 @@ OTHER_CUBE_ID = "artificial-sweetener/base-cubes/other.cube"
 SDXL_CUBE_ID = "artificial-sweetener/base-cubes/SDXL/demo.cube"
 
 
-def ensure_metadata_repo(services):
+def ensure_metadata_repo(services: Any) -> Any:
     """Create the tracked repo that matches the lowercase metadata test ids."""
 
     checkout = ensure_tracked_repo(
@@ -45,7 +52,7 @@ def ensure_metadata_repo(services):
     return checkout
 
 
-def commit_metadata_fixture(services, checkout, cube_path):
+def commit_metadata_fixture(services: Any, checkout: Any, cube_path: Any) -> None:
     """Commit one source cube so rename tests exercise real tracked history."""
 
     services.tracked_repos.commit_file(
@@ -56,8 +63,8 @@ def commit_metadata_fixture(services, checkout, cube_path):
 
 
 def test_update_metadata_updates_description_metadata_and_version(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     services = backend_services_factory(tmp_path)
     claim_github_owner(
         services, owner="artificial-sweetener", allow_system_owner_claim=True
@@ -132,8 +139,8 @@ def test_update_metadata_updates_description_metadata_and_version(
 
 
 def test_update_metadata_updates_default_alias_display_metadata(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     services = backend_services_factory(tmp_path)
     claim_github_owner(
         services, owner="artificial-sweetener", allow_system_owner_claim=True
@@ -183,8 +190,8 @@ def test_update_metadata_updates_default_alias_display_metadata(
 
 
 def test_update_metadata_rejects_target_model_that_conflicts_with_cube_path(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     services = backend_services_factory(tmp_path)
     claim_github_owner(
         services, owner="artificial-sweetener", allow_system_owner_claim=True
@@ -235,7 +242,9 @@ def test_update_metadata_rejects_target_model_that_conflicts_with_cube_path(
     )
 
 
-def test_update_metadata_accepts_safe_icon_metadata(tmp_path, backend_services_factory):
+def test_update_metadata_accepts_safe_icon_metadata(
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     services = backend_services_factory(tmp_path)
     claim_github_owner(
         services, owner="artificial-sweetener", allow_system_owner_claim=True
@@ -290,7 +299,9 @@ def test_update_metadata_accepts_safe_icon_metadata(tmp_path, backend_services_f
     }
 
 
-def test_update_metadata_rejects_unsafe_icon_paths(tmp_path, backend_services_factory):
+def test_update_metadata_rejects_unsafe_icon_paths(
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     services = backend_services_factory(tmp_path)
     claim_github_owner(
         services, owner="artificial-sweetener", allow_system_owner_claim=True
@@ -345,12 +356,14 @@ def test_update_metadata_rejects_unsafe_icon_paths(tmp_path, backend_services_fa
         assert "metadata.icon.path" in payload["error"]["message"]
 
 
-def test_update_metadata_handles_cube_id_mismatch(tmp_path, backend_services_factory):
+def test_update_metadata_handles_cube_id_mismatch(
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     class FakeRegistry:
-        def __init__(self, base_dir):
+        def __init__(self, base_dir: Any) -> None:
             self.base_dir = base_dir
 
-        def get_path(self, cube_id):
+        def get_path(self, cube_id: Any) -> Any:
             if cube_id == CANONICAL_CUBE_ID:
                 return self.base_dir / "demo.cube"
             raise RuntimeError("missing")
@@ -403,15 +416,17 @@ def test_update_metadata_handles_cube_id_mismatch(tmp_path, backend_services_fac
     }
 
 
-def test_rename_route_preserves_response_shape(tmp_path, backend_services_factory):
+def test_rename_route_preserves_response_shape(
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     def retarget_payload(
-        payload,
+        payload: Any,
         *,
-        previous_cube_id,
-        target_cube_id,
-        previous_default_alias,
-        target_default_alias,
-    ):
+        previous_cube_id: Any,
+        target_cube_id: Any,
+        previous_default_alias: Any,
+        target_default_alias: Any,
+    ) -> None:
         payload.setdefault("metadata", {})
         payload["metadata"]["default_alias"] = target_default_alias
         payload["metadata"]["previous_cube_id"] = previous_cube_id
@@ -509,16 +524,16 @@ def test_rename_route_preserves_response_shape(tmp_path, backend_services_factor
 
 
 def test_rename_route_derives_target_from_default_alias(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     def retarget_payload(
-        payload,
+        payload: Any,
         *,
-        previous_cube_id,
-        target_cube_id,
-        previous_default_alias,
-        target_default_alias,
-    ):
+        previous_cube_id: Any,
+        target_cube_id: Any,
+        previous_default_alias: Any,
+        target_default_alias: Any,
+    ) -> None:
         payload.setdefault("metadata", {})
         payload["metadata"]["default_alias"] = target_default_alias
         payload["metadata"]["previous_cube_id"] = previous_cube_id
@@ -585,8 +600,8 @@ def test_rename_route_derives_target_from_default_alias(
 
 
 def test_rename_route_moves_between_target_model_folders(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     services = backend_services_factory(tmp_path)
     claim_github_owner(
         services, owner="artificial-sweetener", allow_system_owner_claim=True
@@ -655,8 +670,8 @@ def test_rename_route_moves_between_target_model_folders(
 
 
 def test_rename_route_derived_target_rejects_collision(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     services = backend_services_factory(tmp_path)
     claim_github_owner(
         services, owner="artificial-sweetener", allow_system_owner_claim=True
@@ -709,7 +724,9 @@ def test_rename_route_derived_target_rejects_collision(
     )
 
 
-def test_delete_route_rejects_malformed_json_body(tmp_path, backend_services_factory):
+def test_delete_route_rejects_malformed_json_body(
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     services = backend_services_factory(tmp_path)
 
     response = asyncio.run(
@@ -724,8 +741,8 @@ def test_delete_route_rejects_malformed_json_body(tmp_path, backend_services_fac
 
 
 def test_delete_route_preserves_missing_identifier_response(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     services = backend_services_factory(tmp_path)
 
     response = asyncio.run(build_route_handlers(services).delete_cube(FakeRequest()))
@@ -735,7 +752,9 @@ def test_delete_route_preserves_missing_identifier_response(
     assert payload["error"]["message"] == "'cube_id' is required"
 
 
-def test_delete_route_blocks_read_only_tracked_cube(tmp_path, backend_services_factory):
+def test_delete_route_blocks_read_only_tracked_cube(
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     services = backend_services_factory(tmp_path)
     checkout = ensure_metadata_repo(services)
     cube_path = checkout / "demo.cube"

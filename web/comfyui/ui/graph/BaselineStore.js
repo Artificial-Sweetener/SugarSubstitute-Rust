@@ -16,111 +16,120 @@
 /**
  * Own the SugarCubes graph integration layer in `web/comfyui/ui/graph/BaselineStore.js`.
  */
-
 /**
  * Coordinate baseline store behavior for the SugarCubes UI.
  */
 export class BaselineStore {
-  constructor() {
-    this.definitionImplementationHashByCubeId = new Map();
-    this.definitionStatusByCubeId = new Map();
-    this.localImplementationHashByInstanceId = new Map();
-    this.localCosmeticHashByInstanceId = new Map();
-  }
-
-  setDefinition(cubeId, entry = {}) {
-    if (!cubeId) {
-      return;
+    definitionImplementationHashByCubeId;
+    definitionStatusByCubeId;
+    localImplementationHashByInstanceId;
+    localCosmeticHashByInstanceId;
+    constructor() {
+        this.definitionImplementationHashByCubeId = new Map();
+        this.definitionStatusByCubeId = new Map();
+        this.localImplementationHashByInstanceId = new Map();
+        this.localCosmeticHashByInstanceId = new Map();
     }
-    if (entry?.hash) {
-      this.definitionImplementationHashByCubeId.set(cubeId, entry.hash);
-    } else {
-      this.definitionImplementationHashByCubeId.delete(cubeId);
+    setDefinition(cubeId, entry = {}) {
+        if (!cubeId) {
+            return;
+        }
+        const definition = entry && typeof entry === 'object' ? entry : {};
+        const hash = typeof definition.hash === 'string' ? definition.hash : '';
+        const status = typeof definition.status === 'string' ? definition.status : '';
+        if (hash) {
+            this.definitionImplementationHashByCubeId.set(cubeId, hash);
+        }
+        else {
+            this.definitionImplementationHashByCubeId.delete(cubeId);
+        }
+        if (status) {
+            this.definitionStatusByCubeId.set(cubeId, status);
+        }
+        else {
+            this.definitionStatusByCubeId.delete(cubeId);
+        }
     }
-    if (entry?.status) {
-      this.definitionStatusByCubeId.set(cubeId, entry.status);
-    } else {
-      this.definitionStatusByCubeId.delete(cubeId);
+    getDefinitionHash(cubeId) {
+        if (!cubeId) {
+            return null;
+        }
+        return this.definitionImplementationHashByCubeId.get(cubeId) || null;
     }
-  }
-
-  getDefinitionHash(cubeId) {
-    return this.definitionImplementationHashByCubeId.get(cubeId) || null;
-  }
-
-  getDefinitionStatus(cubeId) {
-    return this.definitionStatusByCubeId.get(cubeId) || null;
-  }
-
-  setLocalBaselineHash(instanceId, hash) {
-    this.setLocalImplementationHash(instanceId, hash);
-  }
-
-  getLocalBaselineHash(instanceId) {
-    return this.getLocalImplementationHash(instanceId);
-  }
-
-  clearLocalBaseline(instanceId) {
-    this.clearLocalImplementationHash(instanceId);
-  }
-
-  setLocalImplementationHash(instanceId, hash) {
-    if (!instanceId) {
-      return;
+    getDefinitionStatus(cubeId) {
+        if (!cubeId) {
+            return null;
+        }
+        return this.definitionStatusByCubeId.get(cubeId) || null;
     }
-    if (hash) {
-      this.localImplementationHashByInstanceId.set(instanceId, hash);
-    } else {
-      this.localImplementationHashByInstanceId.delete(instanceId);
+    setLocalBaselineHash(instanceId, hash) {
+        this.setLocalImplementationHash(instanceId, hash);
     }
-  }
-
-  getLocalImplementationHash(instanceId) {
-    return this.localImplementationHashByInstanceId.get(instanceId) || null;
-  }
-
-  clearLocalImplementationHash(instanceId) {
-    if (!instanceId) {
-      return;
+    getLocalBaselineHash(instanceId) {
+        return this.getLocalImplementationHash(instanceId);
     }
-    this.localImplementationHashByInstanceId.delete(instanceId);
-  }
-
-  setLocalCosmeticHash(instanceId, hash) {
-    if (!instanceId) {
-      return;
+    clearLocalBaseline(instanceId) {
+        this.clearLocalImplementationHash(instanceId);
     }
-    if (hash) {
-      this.localCosmeticHashByInstanceId.set(instanceId, hash);
-    } else {
-      this.localCosmeticHashByInstanceId.delete(instanceId);
+    setLocalImplementationHash(instanceId, hash) {
+        if (!instanceId) {
+            return;
+        }
+        if (typeof hash === 'string' && hash) {
+            this.localImplementationHashByInstanceId.set(instanceId, hash);
+        }
+        else {
+            this.localImplementationHashByInstanceId.delete(instanceId);
+        }
     }
-  }
-
-  getLocalCosmeticHash(instanceId) {
-    return this.localCosmeticHashByInstanceId.get(instanceId) || null;
-  }
-
-  clearLocalCosmeticHash(instanceId) {
-    if (!instanceId) {
-      return;
+    getLocalImplementationHash(instanceId) {
+        if (!instanceId) {
+            return null;
+        }
+        return this.localImplementationHashByInstanceId.get(instanceId) || null;
     }
-    this.localCosmeticHashByInstanceId.delete(instanceId);
-  }
-
-  pruneLocalBaselines(activeInstanceIds) {
-    if (!(activeInstanceIds instanceof Set)) {
-      return;
-    }
-    for (const instanceId of this.localImplementationHashByInstanceId.keys()) {
-      if (!activeInstanceIds.has(instanceId)) {
+    clearLocalImplementationHash(instanceId) {
+        if (!instanceId) {
+            return;
+        }
         this.localImplementationHashByInstanceId.delete(instanceId);
-      }
     }
-    for (const instanceId of this.localCosmeticHashByInstanceId.keys()) {
-      if (!activeInstanceIds.has(instanceId)) {
+    setLocalCosmeticHash(instanceId, hash) {
+        if (!instanceId) {
+            return;
+        }
+        if (typeof hash === 'string' && hash) {
+            this.localCosmeticHashByInstanceId.set(instanceId, hash);
+        }
+        else {
+            this.localCosmeticHashByInstanceId.delete(instanceId);
+        }
+    }
+    getLocalCosmeticHash(instanceId) {
+        if (!instanceId) {
+            return null;
+        }
+        return this.localCosmeticHashByInstanceId.get(instanceId) || null;
+    }
+    clearLocalCosmeticHash(instanceId) {
+        if (!instanceId) {
+            return;
+        }
         this.localCosmeticHashByInstanceId.delete(instanceId);
-      }
     }
-  }
+    pruneLocalBaselines(activeInstanceIds) {
+        if (!(activeInstanceIds instanceof Set)) {
+            return;
+        }
+        for (const instanceId of this.localImplementationHashByInstanceId.keys()) {
+            if (!activeInstanceIds.has(instanceId)) {
+                this.localImplementationHashByInstanceId.delete(instanceId);
+            }
+        }
+        for (const instanceId of this.localCosmeticHashByInstanceId.keys()) {
+            if (!activeInstanceIds.has(instanceId)) {
+                this.localCosmeticHashByInstanceId.delete(instanceId);
+            }
+        }
+    }
 }

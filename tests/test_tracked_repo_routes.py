@@ -15,19 +15,27 @@
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """Tracked repo and identity policy route tests."""
 
+from __future__ import annotations
+
+from typing import Any
+
+from pathlib import Path
+
+from .typing_support import BackendServicesFactory
+
 import asyncio
 
 from sugarcubes.backend.routes import build_route_handlers
 from sugarcubes.backend.responses import BackendError
 from sugarcubes.backend.services import TrackedRepoPreflightResult
 
-from conftest import FakeRequest, claim_github_owner, decode_json_response
+from .conftest import FakeRequest, claim_github_owner, decode_json_response
 
 
 class FixedPreflightService:
     """Return a deterministic preflight result for route tests."""
 
-    def __init__(self, *, result=None, error=None):
+    def __init__(self, *, result: Any = None, error: Any = None) -> None:
         self.result = result or TrackedRepoPreflightResult(
             owner="artificial-sweetener",
             repo="custom-cubes",
@@ -38,7 +46,7 @@ class FixedPreflightService:
         )
         self.error = error
 
-    def inspect_repo(self, *, owner, repo, branch):
+    def inspect_repo(self, *, owner: Any, repo: Any, branch: Any) -> Any:
         """Return or raise the configured preflight result."""
 
         if self.error:
@@ -53,18 +61,18 @@ class FixedPreflightService:
             checked_via=self.result.checked_via,
         )
 
-    def require_cubes(self, *, owner, repo, branch):
+    def require_cubes(self, *, owner: Any, repo: Any, branch: Any) -> Any:
         """Return or raise the configured preflight result."""
 
         return self.inspect_repo(owner=owner, repo=repo, branch=branch)
 
 
 def test_tracked_repo_routes_cover_crud_check_and_sync(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     git_calls = []
 
-    def fake_git(args, *, cwd):
+    def fake_git(args: Any, *, cwd: Any) -> Any:
         git_calls.append((list(args), str(cwd)))
         if args[:1] == ["clone"]:
             checkout = args[-1]
@@ -164,8 +172,8 @@ def test_tracked_repo_routes_cover_crud_check_and_sync(
 
 
 def test_preflight_tracked_repo_route_does_not_write_manifest(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     services = backend_services_factory(
         tmp_path,
         git_runner=lambda args, cwd: None,
@@ -187,8 +195,8 @@ def test_preflight_tracked_repo_route_does_not_write_manifest(
 
 
 def test_add_tracked_repo_route_rejects_no_cube_repo_before_manifest_write(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     services = backend_services_factory(
         tmp_path,
         git_runner=lambda args, cwd: None,
@@ -226,8 +234,8 @@ def test_add_tracked_repo_route_rejects_no_cube_repo_before_manifest_write(
 
 
 def test_route_ignores_attempts_to_change_default_base_repo(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     services = backend_services_factory(tmp_path, git_runner=lambda args, cwd: None)
     handlers = build_route_handlers(services)
 
@@ -263,11 +271,11 @@ def test_route_ignores_attempts_to_change_default_base_repo(
 
 
 def test_authoring_repo_route_creates_writable_checkout(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     git_calls = []
 
-    def fake_git(args, *, cwd):
+    def fake_git(args: Any, *, cwd: Any) -> Any:
         git_calls.append((list(args), str(cwd)))
 
         class Result:
@@ -299,7 +307,9 @@ def test_authoring_repo_route_creates_writable_checkout(
     ]
 
 
-def test_authoring_repo_route_rejects_without_claim(tmp_path, backend_services_factory):
+def test_authoring_repo_route_rejects_without_claim(
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     services = backend_services_factory(tmp_path, git_runner=lambda args, cwd: None)
     handlers = build_route_handlers(services)
 
@@ -315,8 +325,8 @@ def test_authoring_repo_route_rejects_without_claim(tmp_path, backend_services_f
 
 
 def test_authoring_repo_route_rejects_mismatched_owner(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     services = backend_services_factory(tmp_path, git_runner=lambda args, cwd: None)
     claim_github_owner(services, owner="OtherOwner")
     handlers = build_route_handlers(services)
@@ -333,8 +343,8 @@ def test_authoring_repo_route_rejects_mismatched_owner(
 
 
 def test_authoring_repo_route_respects_system_owner_gate(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     services = backend_services_factory(tmp_path, git_runner=lambda args, cwd: None)
     (services.identity.extension_root / ".env").write_text(
         "SUGARCUBES_CLAIMED_GITHUB_OWNER=Artificial-Sweetener\n",
@@ -354,8 +364,8 @@ def test_authoring_repo_route_respects_system_owner_gate(
 
 
 def test_identity_policy_routes_persist_claimed_owner(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     services = backend_services_factory(tmp_path, git_runner=lambda args, cwd: None)
     handlers = build_route_handlers(services)
 
@@ -382,8 +392,8 @@ def test_identity_policy_routes_persist_claimed_owner(
 
 
 def test_identity_policy_route_reports_env_managed_sources(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     services = backend_services_factory(tmp_path, git_runner=lambda args, cwd: None)
     (services.identity.extension_root / ".env").write_text(
         "SUGARCUBES_CLAIMED_GITHUB_OWNER=Artificial-Sweetener\n"
@@ -404,8 +414,8 @@ def test_identity_policy_route_reports_env_managed_sources(
 
 
 def test_identity_policy_route_rejects_file_backed_system_owner_gate_updates(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     services = backend_services_factory(tmp_path, git_runner=lambda args, cwd: None)
     handlers = build_route_handlers(services)
 
@@ -421,8 +431,8 @@ def test_identity_policy_route_rejects_file_backed_system_owner_gate_updates(
 
 
 def test_identity_policy_route_rejects_updates_to_env_managed_fields(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     services = backend_services_factory(tmp_path, git_runner=lambda args, cwd: None)
     (services.identity.extension_root / ".env").write_text(
         "SUGARCUBES_CLAIMED_GITHUB_OWNER=Artificial-Sweetener\n"
@@ -443,8 +453,8 @@ def test_identity_policy_route_rejects_updates_to_env_managed_fields(
 
 
 def test_identity_policy_route_blocks_system_owner_without_gate(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     services = backend_services_factory(tmp_path, git_runner=lambda args, cwd: None)
     handlers = build_route_handlers(services)
 
@@ -460,8 +470,8 @@ def test_identity_policy_route_blocks_system_owner_without_gate(
 
 
 def test_tracked_repo_list_marks_base_pack_writable_from_env_managed_identity(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     services = backend_services_factory(tmp_path, git_runner=lambda args, cwd: None)
     (services.identity.extension_root / ".env").write_text(
         "SUGARCUBES_CLAIMED_GITHUB_OWNER=Artificial-Sweetener\n"

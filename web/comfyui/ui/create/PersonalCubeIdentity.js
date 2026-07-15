@@ -16,34 +16,28 @@
 /**
  * Derive collision-safe identities for zero-setup personal cube creation.
  */
-
 import { normalizeDefaultAliasTitle, suggestCanonicalCubePath } from '../core/CubeId.js';
-
 const PERSONAL_SOURCE_ROOT = 'local/personal';
-
 /** Return a collision-safe personal identity and display name. */
 export function suggestPersonalCubeIdentity(name, existingCubeIds = []) {
-  const requestedName = normalizeDefaultAliasTitle(name) || 'SugarCube';
-  const usedIds = new Set(
-    (Array.isArray(existingCubeIds) ? existingCubeIds : [])
-      .filter((cubeId) => typeof cubeId === 'string')
-      .map((cubeId) => cubeId.trim().toLowerCase())
-      .filter(Boolean),
-  );
-  let resolvedName = requestedName;
-  let suffix = 2;
-  while (usedIds.has(buildPersonalCubeId(resolvedName).toLowerCase())) {
-    resolvedName = `${requestedName} ${suffix}`;
-    suffix += 1;
-  }
-  return {
-    name: resolvedName,
-    defaultAlias: resolvedName,
-    cubeId: buildPersonalCubeId(resolvedName),
-  };
+    const requestedName = normalizeDefaultAliasTitle(name) || 'SugarCube';
+    const usedIds = new Set((Array.isArray(existingCubeIds) ? existingCubeIds : [])
+        .filter((cubeId) => typeof cubeId === 'string')
+        .map((cubeId) => cubeId.trim().toLowerCase())
+        .filter(Boolean));
+    let resolvedName = requestedName;
+    let suffix = 2;
+    while (usedIds.has(buildPersonalCubeId(resolvedName).toLowerCase())) {
+        resolvedName = `${requestedName} ${suffix}`;
+        suffix += 1;
+    }
+    return {
+        name: resolvedName,
+        defaultAlias: resolvedName,
+        cubeId: buildPersonalCubeId(resolvedName),
+    };
 }
-
 /** Build one canonical flat personal cube id. */
 export function buildPersonalCubeId(name) {
-  return `${PERSONAL_SOURCE_ROOT}/${suggestCanonicalCubePath(name)}`;
+    return `${PERSONAL_SOURCE_ROOT}/${suggestCanonicalCubePath(name)}`;
 }

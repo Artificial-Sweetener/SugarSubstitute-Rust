@@ -16,98 +16,92 @@
 /**
  * Own the SugarCubes dialog presentation layer in `web/comfyui/ui/dialogs/VersionDialog.js`.
  */
-
 import { $el } from '/scripts/ui.js';
 import { ModalShell } from './ModalShell.js';
-
 const CUBE_VERSION_PROMPT_KEY = 'sugarcubes.version_prompt.dismissed';
-
 /**
  * Coordinate version dialog behavior for the SugarCubes UI.
  */
 export class VersionDialog {
-  constructor({ adapter, storage } = {}) {
-    this.adapter = adapter || null;
-    this.storage = storage || null;
-    this.shell = new ModalShell({
-      adapter,
-      variantClassName: 'sugarcubes-version-overlay',
-      dialogClassName: 'sugarcubes-version-dialog',
-    });
-    this.elements = this.shell.elements;
-  }
-
-  isDismissed() {
-    try {
-      if (!this.storage) {
-        return false;
-      }
-      return this.storage.readValue(CUBE_VERSION_PROMPT_KEY) === 'true';
-    } catch (_error) {
-      return false;
+    storage;
+    shell;
+    elements;
+    constructor({ adapter, storage, } = {}) {
+        this.storage = storage || null;
+        this.shell = new ModalShell({
+            adapter: adapter ?? null,
+            variantClassName: 'sugarcubes-version-overlay',
+            dialogClassName: 'sugarcubes-version-dialog',
+        });
+        this.elements = this.shell.elements;
     }
-  }
-
-  setDismissed(value) {
-    try {
-      if (!this.storage) {
-        return;
-      }
-      this.storage.writeValue(CUBE_VERSION_PROMPT_KEY, value ? 'true' : 'false');
-    } catch (_error) {
-      return;
+    isDismissed() {
+        try {
+            if (!this.storage) {
+                return false;
+            }
+            return this.storage.readValue(CUBE_VERSION_PROMPT_KEY) === 'true';
+        }
+        catch (_error) {
+            return false;
+        }
     }
-  }
-
-  open(suggestions) {
-    if (!Array.isArray(suggestions) || !suggestions.length) {
-      return Promise.resolve(false);
+    setDismissed(value) {
+        try {
+            if (!this.storage) {
+                return;
+            }
+            this.storage.writeValue(CUBE_VERSION_PROMPT_KEY, value ? 'true' : 'false');
+        }
+        catch (_error) {
+            return;
+        }
     }
-    if (this.isDismissed()) {
-      return Promise.resolve(false);
+    open(suggestions) {
+        if (!Array.isArray(suggestions) || !suggestions.length) {
+            return Promise.resolve(false);
+        }
+        if (this.isDismissed()) {
+            return Promise.resolve(false);
+        }
+        const intro = $el('p', 'We detected manual version edits. Suggested versions are shown below based on cube changes.');
+        const list = $el('ul');
+        suggestions.forEach((entry) => {
+            const defaultAlias = entry?.default_alias || 'Unknown cube';
+            const currentVersion = entry?.current_version || 'unknown';
+            const suggested = entry?.suggested_version || 'unknown';
+            const reason = entry?.reason || 'Update recommended';
+            const item = $el('li', `${defaultAlias}: ${currentVersion} -> ${suggested} (${reason})`);
+            list.appendChild(item);
+        });
+        const dismissCheckbox = $el('input', { type: 'checkbox' });
+        const dismissLabel = $el('label.sugarcubes-version-dialog__dismiss', [
+            dismissCheckbox,
+            $el('span', "Don't show again"),
+        ]);
+        const promise = this.shell.open({
+            title: 'Version suggestions',
+            body: [intro, list],
+            footerMeta: dismissLabel,
+            confirmLabel: 'OK',
+            cancelLabel: 'Close',
+            showCancel: false,
+            cancelResult: false,
+            onConfirm: () => {
+                if (dismissCheckbox.checked) {
+                    this.setDismissed(true);
+                }
+                this.shell.close(true);
+            },
+            initialFocus: () => this.shell.elements.confirmButton,
+        });
+        this.elements = { ...this.shell.elements, dismissCheckbox };
+        return promise;
     }
-    const intro = $el(
-      'p',
-      'We detected manual version edits. Suggested versions are shown below based on cube changes.',
-    );
-    const list = $el('ul');
-    suggestions.forEach((entry) => {
-      const defaultAlias = entry?.default_alias || 'Unknown cube';
-      const currentVersion = entry?.current_version || 'unknown';
-      const suggested = entry?.suggested_version || 'unknown';
-      const reason = entry?.reason || 'Update recommended';
-      const item = $el('li', `${defaultAlias}: ${currentVersion} -> ${suggested} (${reason})`);
-      list.appendChild(item);
-    });
-    const dismissCheckbox = $el('input', { type: 'checkbox' });
-    const dismissLabel = $el('label.sugarcubes-version-dialog__dismiss', [
-      dismissCheckbox,
-      $el('span', "Don't show again"),
-    ]);
-    const promise = this.shell.open({
-      title: 'Version suggestions',
-      body: [intro, list],
-      footerMeta: dismissLabel,
-      confirmLabel: 'OK',
-      cancelLabel: 'Close',
-      showCancel: false,
-      cancelResult: false,
-      onConfirm: () => {
-        if (dismissCheckbox.checked) {
-          this.setDismissed(true);
+    close() {
+        if (this.elements.dismissCheckbox?.checked) {
+            this.setDismissed(true);
         }
         this.shell.close(true);
-      },
-      initialFocus: () => this.shell.elements.confirmButton,
-    });
-    this.elements = { ...this.shell.elements, dismissCheckbox };
-    return promise;
-  }
-
-  close() {
-    if (this.elements.dismissCheckbox?.checked) {
-      this.setDismissed(true);
     }
-    this.shell.close(true);
-  }
 }

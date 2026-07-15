@@ -16,47 +16,44 @@
 /**
  * Own the SugarCubes graph integration layer in `web/comfyui/ui/graph/Markers.js`.
  */
-
 const WIDGET_NAME_ALIASES = Object.freeze({
-  default_alias: ['default_alias', 'cube_name'],
+    default_alias: ['default_alias', 'cube_name'],
 });
-
 function resolveWidgetNames(name) {
-  return WIDGET_NAME_ALIASES[name] || [name];
+    return WIDGET_NAME_ALIASES[name] || [name];
 }
-
 function findWidget(node, name) {
-  if (!node || !Array.isArray(node.widgets)) {
-    return null;
-  }
-  const names = resolveWidgetNames(name);
-  return node.widgets.find((entry) => entry && names.includes(entry.name)) || null;
+    if (!node || !Array.isArray(node.widgets)) {
+        return null;
+    }
+    const names = resolveWidgetNames(name);
+    return node.widgets.find((entry) => entry && names.includes(entry.name)) || null;
 }
-
 /**
  * Read widget value.
  */
 export function readWidgetValue(node, name) {
-  const widget = findWidget(node, name);
-  if (!widget) {
-    return '';
-  }
-  return widget.value ?? widget.last_value ?? widget.options?.value;
+    const widget = findWidget(node, name);
+    if (!widget) {
+        return '';
+    }
+    return widget.value ?? widget.last_value ?? widget.options?.value;
 }
-
 /**
  * Write widget value.
  */
 export function writeWidgetValue(node, name, value) {
-  const widget = findWidget(node, name);
-  if (!widget) return false;
-  widget.value = value;
-  if (typeof widget.callback === 'function') {
-    try {
-      widget.callback(value);
-    } catch (_error) {
-      // ignore widget callback failures
+    const widget = findWidget(node, name);
+    if (!widget)
+        return false;
+    widget.value = value;
+    if (typeof widget.callback === 'function') {
+        try {
+            widget.callback(value);
+        }
+        catch (_error) {
+            // ignore widget callback failures
+        }
     }
-  }
-  return true;
+    return true;
 }

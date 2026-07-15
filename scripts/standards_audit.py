@@ -24,26 +24,32 @@ from typing import Iterable
 
 DOCSTRING_TARGETS = (
     "__init__.py",
-    "backend/routes.py",
-    "backend/services/cube_export_service.py",
-    "backend/services/cube_library_service.py",
-    "backend/services/cube_load_service.py",
-    "backend/services/cube_metadata_service.py",
-    "backend/validation/request_parsers.py",
-    "exporter/graph.py",
-    "exporter/io.py",
-    "exporter/serializer.py",
-    "exporter/validation.py",
-    "exporter/versioning.py",
-    "importer/loader.py",
-    "nodes.py",
+    "sugarcubes/backend/routes.py",
+    "sugarcubes/backend/services/cube_export_service.py",
+    "sugarcubes/backend/services/cube_library_service.py",
+    "sugarcubes/backend/services/cube_load_service.py",
+    "sugarcubes/backend/services/cube_metadata_service.py",
+    "sugarcubes/backend/validation/request_parsers.py",
+    "sugarcubes/exporter/graph.py",
+    "sugarcubes/exporter/io.py",
+    "sugarcubes/exporter/serializer.py",
+    "sugarcubes/exporter/validation.py",
+    "sugarcubes/exporter/versioning.py",
+    "sugarcubes/importer/loader.py",
+    "sugarcubes/nodes.py",
 )
 
-RUNTIME_ROOTS = ("backend", "exporter", "importer", "instrumentation")
-ROOT_RUNTIME_FILES = ("__init__.py", "nodes.py", "payloads.py")
+RUNTIME_ROOTS = ("sugarcubes",)
+ROOT_RUNTIME_FILES = ("__init__.py",)
 OPTIONAL_FALLBACK_CONTEXTS = {
-    ("backend/services/cube_library_service.py", ("_create_registry_or_none",)),
-    ("exporter/serializer.py", ("_collect_definitions",)),
+    (
+        "sugarcubes/exporter/definition_snapshot.py",
+        ("collect_definitions",),
+    ),
+    (
+        "sugarcubes/runtime/cube_output_events.py",
+        ("CubeOutputEventBus", "notify"),
+    ),
 }
 
 
@@ -65,7 +71,7 @@ def _iter_runtime_python_files(root: Path) -> Iterable[Path]:
             yield path
 
 
-def _read_tree(path: Path) -> ast.AST:
+def _read_tree(path: Path) -> ast.Module:
     """Parse one Python file using the repository's source encoding."""
 
     return ast.parse(path.read_text(encoding="utf-8-sig"), filename=str(path))
@@ -185,7 +191,9 @@ class _ExceptionVisitor(ast.NodeVisitor):
             if (self.relative_path, context) in OPTIONAL_FALLBACK_CONTEXTS:
                 if not (
                     _handler_has_call(node, {"warnings.append", "_logger.warning"})
-                    or _handler_has_call(node, {"_logger.exception"})
+                    or _handler_has_call(
+                        node, {"_logger.exception", "LOGGER.exception"}
+                    )
                 ):
                     self.failures.append(
                         f"{self.relative_path}:{node.lineno} broad catch in {'.'.join(context)} is missing diagnostics"

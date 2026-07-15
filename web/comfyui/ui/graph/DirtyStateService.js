@@ -17,39 +17,26 @@
  * Own the SugarCubes dirty-state evaluation layer in
  * `web/comfyui/ui/graph/DirtyStateService.js`.
  */
-
-/**
- * Coordinate typed dirty-state evaluation for managed cube instances.
- */
+/** Evaluate implementation, cosmetic, and surface dirty-state concerns. */
 export class DirtyStateService {
-  evaluate({
-    implementationCurrentHash,
-    implementationBaselineHash,
-    cosmeticCurrentHash,
-    cosmeticBaselineHash,
-    surfaceCurrentHash,
-    surfaceBaselineHash,
-    isKnown,
-    missingSymbols,
-    previousDirtyAt,
-  } = {}) {
-    const implementationReasons = [];
-    if (!isKnown) {
-      implementationReasons.push('unknown');
+    evaluate({ implementationCurrentHash, implementationBaselineHash, cosmeticCurrentHash, cosmeticBaselineHash, surfaceCurrentHash, surfaceBaselineHash, isKnown, missingSymbols, previousDirtyAt, } = {}) {
+        const implementationReasons = [];
+        if (!isKnown) {
+            implementationReasons.push('unknown');
+        }
+        if (missingSymbols) {
+            implementationReasons.push('missing-symbols');
+        }
+        if (implementationCurrentHash !== implementationBaselineHash) {
+            implementationReasons.push('hash-mismatch');
+        }
+        const implementationDirty = implementationReasons.length > 0;
+        return {
+            implementationDirty,
+            implementationReasons,
+            dirtyAt: implementationDirty ? previousDirtyAt || new Date().toISOString() : null,
+            cosmeticDirty: cosmeticCurrentHash !== cosmeticBaselineHash,
+            surfaceValuesChanged: surfaceCurrentHash !== surfaceBaselineHash,
+        };
     }
-    if (missingSymbols) {
-      implementationReasons.push('missing-symbols');
-    }
-    if (implementationCurrentHash !== implementationBaselineHash) {
-      implementationReasons.push('hash-mismatch');
-    }
-    const implementationDirty = implementationReasons.length > 0;
-    return {
-      implementationDirty,
-      implementationReasons,
-      dirtyAt: implementationDirty ? previousDirtyAt || new Date().toISOString() : null,
-      cosmeticDirty: cosmeticCurrentHash !== cosmeticBaselineHash,
-      surfaceValuesChanged: surfaceCurrentHash !== surfaceBaselineHash,
-    };
-  }
 }

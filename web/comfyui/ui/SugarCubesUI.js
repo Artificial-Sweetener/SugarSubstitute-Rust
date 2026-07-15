@@ -16,7 +16,6 @@
 /**
  * Own the SugarCubes UI orchestration layer in `web/comfyui/ui/SugarCubesUI.js`.
  */
-
 import { ComfyAdapter } from './core/ComfyAdapter.js';
 import { EventBus } from './core/EventBus.js';
 import { Scheduler } from './core/Scheduler.js';
@@ -42,204 +41,212 @@ import { CubeCreationService } from './create/CubeCreationService.js';
 import { CubePackService } from './packs/CubePackService.js';
 import { CubeIdentityReconciler } from './graph/CubeIdentityReconciler.js';
 import { CubePromotionService } from './promotion/CubePromotionService.js';
-
 /**
  * Coordinate sugar cubes ui behavior for the SugarCubes UI.
  */
 export class SugarCubesUI {
-  constructor(options = {}) {
-    this.adapter = options.adapter || new ComfyAdapter(options);
-    this.events = options.events || new EventBus();
-    this.scheduler = options.scheduler || new Scheduler(this.adapter);
-    this.storage = options.storage || new StorageService(this.adapter);
-    this.api = options.cubeApi || new CubeLibraryApi(this.adapter);
-    this.dialogs = options.dialogs || new ModalService({ adapter: this.adapter });
-    this.toast = options.toast || new ToastService(this.adapter, { dialogs: this.dialogs });
-    this.confirmDialog = this.dialogs.confirmDialog || new ConfirmDialog({ adapter: this.adapter });
-    this.versionDialog = new VersionDialog({ adapter: this.adapter, storage: this.storage });
-    this._setupDone = false;
-
-    this.cubeBrowser = new CubeBrowserController({
-      adapter: this.adapter,
-      api: this.api,
-      events: this.events,
-      storage: this.storage,
-      toast: this.toast,
-      scheduler: this.scheduler,
-    });
-
-    this.definitionStore = new CubeDefinitionStore({
-      api: this.api,
-      logger: this.adapter?.getConsole?.(),
-      onUpdate: (definitionKey, entry) => this.handleDefinitionUpdate(definitionKey, entry),
-    });
-
-    this.instanceManager = new InstanceManager({
-      adapter: this.adapter,
-      events: this.events,
-      scheduler: this.scheduler,
-      requestDirtyRefresh: (opts) => this.dirtyManager.requestRefresh(opts),
-    });
-
-    this.dirtyManager = new DirtyManager({
-      adapter: this.adapter,
-      events: this.events,
-      scheduler: this.scheduler,
-      cubeBrowser: this.cubeBrowser,
-      definitionStore: this.definitionStore,
-    });
-
-    this.flavorService = new FlavorService({
-      adapter: this.adapter,
-      dialogs: this.dialogs,
-      events: this.events,
-      storage: this.storage,
-      toast: this.toast,
-      api: this.api,
-      dirtyManager: this.dirtyManager,
-      cubeBrowser: this.cubeBrowser,
-    });
-
-    this.saveReconciler = new CubeSaveReconciler({
-      definitionStore: this.definitionStore,
-      instanceManager: this.instanceManager,
-      flavorService: this.flavorService,
-      dirtyManager: this.dirtyManager,
-    });
-
-    this.packService = new CubePackService({
-      api: this.api,
-      dialogs: this.dialogs,
-      toast: this.toast,
-    });
-
-    this.identityReconciler = new CubeIdentityReconciler({
-      adapter: this.adapter,
-      instanceManager: this.instanceManager,
-      dirtyManager: this.dirtyManager,
-      definitionStore: this.definitionStore,
-    });
-
-    this.promotionService = new CubePromotionService({
-      api: this.api,
-      dialogs: this.dialogs,
-      toast: this.toast,
-      packService: this.packService,
-      identityReconciler: this.identityReconciler,
-      cubeBrowser: this.cubeBrowser,
-    });
-
-    this.cubeSave = new CubeSaveService({
-      adapter: this.adapter,
-      api: this.api,
-      toast: this.toast,
-      instanceManager: this.instanceManager,
-      dirtyManager: this.dirtyManager,
-      cubeBrowser: this.cubeBrowser,
-      versionDialog: this.versionDialog,
-      dialogs: this.dialogs,
-      saveReconciler: this.saveReconciler,
-    });
-
-    this.cubeCreation = new CubeCreationService({
-      adapter: this.adapter,
-      api: this.api,
-      toast: this.toast,
-      instanceManager: this.instanceManager,
-      cubeBrowser: this.cubeBrowser,
-      dialogs: this.dialogs,
-      saveReconciler: this.saveReconciler,
-    });
-
-    this.layoutService = new CubeLayoutService({
-      adapter: this.adapter,
-      instanceManager: this.instanceManager,
-      dirtyManager: this.dirtyManager,
-    });
-
-    this.containmentService = new CubeContainmentService();
-    this.collisionService = new CubeCollisionService();
-    this.boundsReconciler = new CubeBoundsReconciler();
-
-    this.overlayManager = new OverlayManager({
-      adapter: this.adapter,
-      events: this.events,
-      scheduler: this.scheduler,
-      storage: this.storage,
-      api: this.adapter?.getApi?.(),
-      cubeApi: this.api,
-      cubeBrowser: this.cubeBrowser,
-      saveService: this.cubeSave,
-      flavorService: this.flavorService,
-      toast: this.toast,
-      applyPreparedImport: options.applyPreparedImport,
-      reportImportOutcome: options.reportImportOutcome,
-      buildShiftedPlacementPayload: options.buildShiftedPlacementPayload,
-      requestDirtyRefresh: (opts) => this.dirtyManager.requestRefresh(opts),
-      layoutService: this.layoutService,
-      containmentService: this.containmentService,
-      collisionService: this.collisionService,
-      boundsReconciler: this.boundsReconciler,
-    });
-  }
-
-  /** Publish definition updates to consumers without assigning them cache ownership. */
-  handleDefinitionUpdate(definitionKey, entry) {
-    const graph = this.adapter?.getApp?.()?.graph || null;
-    if (entry?.status === 'ready' && entry?.payload) {
-      this.events?.emit?.('cube:definition:loaded', {
-        cubeId: entry.cubeId,
-        definitionKey,
-        entry,
-        graph,
-      });
+    adapter;
+    events;
+    scheduler;
+    storage;
+    api;
+    dialogs;
+    toast;
+    confirmDialog;
+    versionDialog;
+    cubeBrowser;
+    definitionStore;
+    instanceManager;
+    dirtyManager;
+    flavorService;
+    saveReconciler;
+    packService;
+    identityReconciler;
+    promotionService;
+    cubeSave;
+    cubeCreation;
+    layoutService;
+    containmentService;
+    collisionService;
+    boundsReconciler;
+    overlayManager;
+    _setupDone;
+    constructor(options = {}) {
+        this.adapter = options.adapter || new ComfyAdapter(options.adapterOptions);
+        this.events = options.events || new EventBus();
+        this.scheduler = options.scheduler || new Scheduler(this.adapter);
+        this.storage = options.storage || new StorageService(this.adapter);
+        this.api = options.cubeApi || new CubeLibraryApi(this.adapter);
+        this.dialogs = options.dialogs || new ModalService({ adapter: this.adapter });
+        this.toast = options.toast || new ToastService(this.adapter, { dialogs: this.dialogs });
+        this.confirmDialog = this.dialogs.confirmDialog || new ConfirmDialog({ adapter: this.adapter });
+        this.versionDialog = new VersionDialog({ adapter: this.adapter, storage: this.storage });
+        this._setupDone = false;
+        this.cubeBrowser = new CubeBrowserController({
+            adapter: this.adapter,
+            api: this.api,
+            events: this.events,
+            storage: this.storage,
+            toast: this.toast,
+            scheduler: this.scheduler,
+        });
+        this.definitionStore = new CubeDefinitionStore({
+            api: this.api,
+            logger: this.adapter?.getConsole?.(),
+            onUpdate: (definitionKey, entry) => this.handleDefinitionUpdate(definitionKey, entry),
+        });
+        this.instanceManager = new InstanceManager({
+            adapter: this.adapter,
+            events: this.events,
+            scheduler: this.scheduler,
+            requestDirtyRefresh: (opts) => this.dirtyManager.requestRefresh(opts),
+        });
+        this.dirtyManager = new DirtyManager({
+            adapter: this.adapter,
+            events: this.events,
+            scheduler: this.scheduler,
+            cubeBrowser: this.cubeBrowser,
+            definitionStore: this.definitionStore,
+        });
+        this.flavorService = new FlavorService({
+            adapter: this.adapter,
+            dialogs: this.dialogs,
+            events: this.events,
+            storage: this.storage,
+            toast: this.toast,
+            api: this.api,
+            dirtyManager: this.dirtyManager,
+            cubeBrowser: this.cubeBrowser,
+        });
+        this.saveReconciler = new CubeSaveReconciler({
+            definitionStore: this.definitionStore,
+            instanceManager: this.instanceManager,
+            flavorService: this.flavorService,
+            dirtyManager: this.dirtyManager,
+        });
+        this.packService = new CubePackService({
+            api: this.api,
+            dialogs: this.dialogs,
+            toast: this.toast,
+        });
+        this.identityReconciler = new CubeIdentityReconciler({
+            adapter: this.adapter,
+            instanceManager: this.instanceManager,
+            dirtyManager: this.dirtyManager,
+            definitionStore: this.definitionStore,
+        });
+        this.promotionService = new CubePromotionService({
+            api: this.api,
+            dialogs: this.dialogs,
+            toast: this.toast,
+            packService: this.packService,
+            identityReconciler: this.identityReconciler,
+            cubeBrowser: this.cubeBrowser,
+        });
+        this.cubeSave = new CubeSaveService({
+            adapter: this.adapter,
+            api: this.api,
+            toast: this.toast,
+            instanceManager: this.instanceManager,
+            dirtyManager: this.dirtyManager,
+            cubeBrowser: this.cubeBrowser,
+            versionDialog: this.versionDialog,
+            dialogs: this.dialogs,
+            saveReconciler: this.saveReconciler,
+        });
+        this.cubeCreation = new CubeCreationService({
+            adapter: this.adapter,
+            api: this.api,
+            toast: this.toast,
+            instanceManager: this.instanceManager,
+            cubeBrowser: this.cubeBrowser,
+            dialogs: this.dialogs,
+            saveReconciler: this.saveReconciler,
+        });
+        this.layoutService = new CubeLayoutService({
+            adapter: this.adapter,
+            instanceManager: this.instanceManager,
+            dirtyManager: this.dirtyManager,
+        });
+        this.containmentService = new CubeContainmentService();
+        this.collisionService = new CubeCollisionService();
+        this.boundsReconciler = new CubeBoundsReconciler();
+        this.overlayManager = new OverlayManager({
+            adapter: this.adapter,
+            events: this.events,
+            scheduler: this.scheduler,
+            storage: this.storage,
+            api: this.adapter?.getApi?.(),
+            cubeApi: this.api,
+            cubeBrowser: this.cubeBrowser,
+            saveService: this.cubeSave,
+            flavorService: this.flavorService,
+            toast: this.toast,
+            ...(options.applyPreparedImport ? { applyPreparedImport: options.applyPreparedImport } : {}),
+            ...(options.reportImportOutcome ? { reportImportOutcome: options.reportImportOutcome } : {}),
+            ...(options.buildShiftedPlacementPayload
+                ? { buildShiftedPlacementPayload: options.buildShiftedPlacementPayload }
+                : {}),
+            requestDirtyRefresh: (opts) => this.dirtyManager.requestRefresh(opts),
+            layoutService: this.layoutService,
+            containmentService: this.containmentService,
+            collisionService: this.collisionService,
+            boundsReconciler: this.boundsReconciler,
+        });
     }
-    if (graph) {
-      this.dirtyManager?.requestRefresh?.({ graph, reason: 'definition-update' });
+    /** Publish definition updates to consumers without assigning them cache ownership. */
+    handleDefinitionUpdate(definitionKey, entry) {
+        const graph = this.adapter?.getApp?.()?.graph || null;
+        if (entry?.status === 'ready' && entry?.payload) {
+            this.events?.emit?.('cube:definition:loaded', {
+                cubeId: entry.cubeId,
+                definitionKey,
+                entry,
+                graph,
+            });
+        }
+        if (graph) {
+            this.dirtyManager?.requestRefresh?.({ graph, reason: 'definition-update' });
+        }
     }
-  }
-
-  async setup() {
-    if (this._setupDone) {
-      return;
+    async setup() {
+        if (this._setupDone) {
+            return;
+        }
+        await this.cubeBrowser.setup();
+        this.instanceManager.setup();
+        this.dirtyManager.setup();
+        await this.flavorService.setup();
+        this.events.on('cube:instances:refresh', (options) => {
+            if (!options || typeof options !== 'object') {
+                return;
+            }
+            this.instanceManager.scheduleRefresh(options);
+        });
+        this.overlayManager.setup();
+        this._setupDone = true;
     }
-    await this.cubeBrowser.setup();
-    this.instanceManager.setup();
-    this.dirtyManager.setup();
-    await this.flavorService.setup();
-    this.events.on('cube:instances:refresh', (options) => {
-      this.instanceManager.scheduleRefresh(options);
-    });
-    this.overlayManager.setup();
-    this._setupDone = true;
-  }
-
-  dispose() {
-    this.overlayManager.dispose();
-    this.cubeBrowser.dispose();
-    this.dirtyManager.dispose();
-    this.flavorService.dispose();
-  }
-
-  async listCubes() {
-    const { data } = await this.api.list();
-    return data;
-  }
-
-  async previewCube(cubeId) {
-    const { data } = await this.api.preview(cubeId);
-    return data;
-  }
-
-  openLibrary(options = {}) {
-    return this.cubeBrowser.open(options);
-  }
-
-  scheduleCubeInstanceRefresh(options = {}) {
-    this.instanceManager.scheduleRefresh(options);
-  }
-
-  scheduleCubeDirtyRefresh(options = {}) {
-    this.dirtyManager.requestRefresh(options);
-  }
+    dispose() {
+        this.overlayManager.dispose();
+        this.cubeBrowser.dispose();
+        this.dirtyManager.dispose();
+        this.flavorService.dispose();
+    }
+    async listCubes() {
+        const { data } = await this.api.list();
+        return data;
+    }
+    async previewCube(cubeId) {
+        const { data } = await this.api.preview(cubeId);
+        return data;
+    }
+    openLibrary(options = {}) {
+        return this.cubeBrowser.open(options);
+    }
+    scheduleCubeInstanceRefresh(options = {}) {
+        this.instanceManager.scheduleRefresh(options);
+    }
+    scheduleCubeDirtyRefresh(options = {}) {
+        this.dirtyManager.requestRefresh(options);
+    }
 }

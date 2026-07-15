@@ -16,241 +16,219 @@
 /**
  * Own route-based cube identity helpers and model-family metadata normalization.
  */
-
 import { parseCanonicalCubeId, suggestCanonicalCubePath } from './CubeId.js';
-
 /**
  * Target model label for cubes that are intentionally cross-family.
  */
 export const ANY_TARGET_MODEL = 'Any';
-
 /**
  * Default target model for new authored cubes.
  */
 export const DEFAULT_TARGET_MODEL = 'SDXL';
-
 /**
  * Initial user-facing target model choices for cube authoring.
  */
 export const TARGET_MODEL_OPTIONS = Object.freeze([
-  'Aura Flow',
-  'Anima',
-  'Chroma',
-  'Flux',
-  ANY_TARGET_MODEL,
-  'SD 1.5',
-  'SDXL',
-  'SeedVR2',
-  'Wan Video',
+    'Aura Flow',
+    'Anima',
+    'Chroma',
+    'Flux',
+    ANY_TARGET_MODEL,
+    'SD 1.5',
+    'SDXL',
+    'SeedVR2',
+    'Wan Video',
 ]);
-
 const DEFAULT_SUPPORTED_MODELS = Object.freeze({
-  SDXL: Object.freeze(['SDXL', 'SD 1.5']),
+    SDXL: Object.freeze(['SDXL', 'SD 1.5']),
 });
-
 const MODEL_LABEL_ALIASES = Object.freeze({
-  'sdxl 1.0': 'SDXL',
+    'sdxl 1.0': 'SDXL',
 });
-
 const WINDOWS_UNSAFE_PATH_SEGMENT_RE = /[<>:"|?*]/;
-
 function hasAsciiControlCharacter(value) {
-  for (const char of value) {
-    if (char.charCodeAt(0) <= 31) {
-      return true;
+    for (const char of value) {
+        if (char.charCodeAt(0) <= 31) {
+            return true;
+        }
     }
-  }
-  return false;
+    return false;
 }
-
 /**
  * Return a path-safe target model label or an empty string.
  */
 export function normalizeTargetModel(value) {
-  if (typeof value !== 'string') {
-    return '';
-  }
-  const normalized = normalizeModelLabel(value);
-  if (!normalized) {
-    return '';
-  }
-  validateTargetModelSegment(normalized);
-  return normalized;
+    if (typeof value !== 'string') {
+        return '';
+    }
+    const normalized = normalizeModelLabel(value);
+    if (!normalized) {
+        return '';
+    }
+    validateTargetModelSegment(normalized);
+    return normalized;
 }
-
 /**
  * Return ordered supported model labels, including the target model when required.
  */
 export function normalizeSupportedModels(value, { targetModel = '' } = {}) {
-  const rawItems = typeof value === 'string' ? value.split(',') : Array.isArray(value) ? value : [];
-  const models = rawItems
-    .filter((entry) => typeof entry === 'string')
-    .map((entry) => normalizeModelLabel(entry))
-    .filter(Boolean);
-  const normalizedTarget = normalizeTargetModel(targetModel);
-  if (normalizedTarget && normalizedTarget !== ANY_TARGET_MODEL) {
-    models.unshift(normalizedTarget);
-  }
-  return dedupePreservingOrder(models);
+    const rawItems = typeof value === 'string' ? value.split(',') : Array.isArray(value) ? value : [];
+    const models = rawItems
+        .filter((entry) => typeof entry === 'string')
+        .map((entry) => normalizeModelLabel(entry))
+        .filter(Boolean);
+    const normalizedTarget = normalizeTargetModel(targetModel);
+    if (normalizedTarget && normalizedTarget !== ANY_TARGET_MODEL) {
+        models.unshift(normalizedTarget);
+    }
+    return dedupePreservingOrder(models);
 }
-
 /**
  * Return the default supported model labels for a target model.
  */
 export function defaultSupportedModelsForTarget(targetModel) {
-  const normalizedTarget = normalizeTargetModel(targetModel);
-  if (DEFAULT_SUPPORTED_MODELS[normalizedTarget]) {
-    return [...DEFAULT_SUPPORTED_MODELS[normalizedTarget]];
-  }
-  return normalizeSupportedModels([], { targetModel: normalizedTarget });
+    const normalizedTarget = normalizeTargetModel(targetModel);
+    if (DEFAULT_SUPPORTED_MODELS[normalizedTarget]) {
+        return [...DEFAULT_SUPPORTED_MODELS[normalizedTarget]];
+    }
+    return normalizeSupportedModels([], { targetModel: normalizedTarget });
 }
-
 /**
  * Return a path-safe cube route without a `.cube` suffix.
  */
 export function normalizeCubeRoute(value) {
-  if (typeof value !== 'string') {
-    return '';
-  }
-  const normalized = value.trim().replace(/\\/g, '/').replace(/\s+/g, ' ');
-  const withoutSuffix = normalized.toLowerCase().endsWith('.cube')
-    ? normalized.slice(0, -5)
-    : normalized;
-  if (!withoutSuffix) {
-    return '';
-  }
-  return withoutSuffix
-    .split('/')
-    .map((segment) => {
-      const cleaned = segment.trim().replace(/\s+/g, ' ');
-      validateRouteSegment(cleaned);
-      return cleaned;
+    if (typeof value !== 'string') {
+        return '';
+    }
+    const normalized = value.trim().replace(/\\/g, '/').replace(/\s+/g, ' ');
+    const withoutSuffix = normalized.toLowerCase().endsWith('.cube')
+        ? normalized.slice(0, -5)
+        : normalized;
+    if (!withoutSuffix) {
+        return '';
+    }
+    return withoutSuffix
+        .split('/')
+        .map((segment) => {
+        const cleaned = segment.trim().replace(/\s+/g, ' ');
+        validateRouteSegment(cleaned);
+        return cleaned;
     })
-    .join('/');
+        .join('/');
 }
-
 /**
  * Return the source-relative cube route used as the default alias.
  */
 export function deriveRouteFromCubeId(cubeId) {
-  const parsed = parseCanonicalCubeId(cubeId);
-  return normalizeCubeRoute(parsed.path.replace(/\.cube$/i, ''));
+    const parsed = parseCanonicalCubeId(cubeId);
+    return normalizeCubeRoute(parsed.path.replace(/\.cube$/i, ''));
 }
-
 /**
  * Return the target model segment implied by a cube route.
  */
 export function deriveTargetModelFromRoute(route) {
-  const normalized = normalizeCubeRoute(route);
-  if (!normalized.includes('/')) {
-    return '';
-  }
-  return normalizeTargetModel(normalized.split('/')[0]);
+    const normalized = normalizeCubeRoute(route);
+    if (!normalized.includes('/')) {
+        return '';
+    }
+    return normalizeTargetModel(normalized.split('/')[0]);
 }
-
 /**
  * Return the target model segment implied by a canonical cube id route.
  */
 export function deriveTargetModelFromCubeId(cubeId) {
-  return deriveTargetModelFromRoute(deriveRouteFromCubeId(cubeId));
+    return deriveTargetModelFromRoute(deriveRouteFromCubeId(cubeId));
 }
-
 /**
  * Return the cube filename implied by a route.
  */
 export function deriveFilenameFromRoute(route) {
-  const normalized = normalizeCubeRoute(route);
-  if (!normalized) {
-    throw new Error('Cube route is required.');
-  }
-  return suggestCanonicalCubePath(normalized.split('/').pop() || '');
+    const normalized = normalizeCubeRoute(route);
+    if (!normalized) {
+        throw new Error('Cube route is required.');
+    }
+    return suggestCanonicalCubePath(normalized.split('/').pop() || '');
 }
-
 /**
  * Build a canonical cube id with the same source and a route-derived path.
  */
 export function deriveCubeIdFromRoute({ sourceCubeId, route }) {
-  const parsed = parseCanonicalCubeId(sourceCubeId);
-  const normalized = normalizeCubeRoute(route);
-  if (!normalized) {
-    throw new Error('Cube route is required.');
-  }
-  const segments = normalized.split('/');
-  segments[segments.length - 1] = deriveFilenameFromRoute(segments[segments.length - 1]);
-  return `${parsed.sourceRoot}/${segments.join('/')}`;
+    const parsed = parseCanonicalCubeId(sourceCubeId);
+    const normalized = normalizeCubeRoute(route);
+    if (!normalized) {
+        throw new Error('Cube route is required.');
+    }
+    const segments = normalized.split('/');
+    const lastIndex = segments.length - 1;
+    segments[lastIndex] = deriveFilenameFromRoute(segments[lastIndex]);
+    return `${parsed.sourceRoot}/${segments.join('/')}`;
 }
-
 /**
  * Validate that a persisted default alias matches its canonical cube id route.
  */
 export function validateCubeRouteIdentity(cubeId, defaultAlias) {
-  const expected = deriveRouteFromCubeId(cubeId);
-  const actual = normalizeCubeRoute(defaultAlias);
-  if (actual !== expected) {
-    throw new Error(`Cube default_alias must match cube route '${expected}'.`);
-  }
+    const expected = deriveRouteFromCubeId(cubeId);
+    const actual = normalizeCubeRoute(defaultAlias);
+    if (actual !== expected) {
+        throw new Error(`Cube default_alias must match cube route '${expected}'.`);
+    }
 }
-
 /**
  * Build a canonical cube id under the target-model folder.
  */
-export function deriveTargetModelCubeId({ sourceCubeId, targetModel, defaultAlias }) {
-  const parsed = parseCanonicalCubeId(sourceCubeId);
-  const normalizedTarget = normalizeTargetModel(targetModel);
-  if (!normalizedTarget) {
-    throw new Error('Cube target model is required.');
-  }
-  const nameRoute = normalizeCubeRoute(defaultAlias);
-  const name = nameRoute ? nameRoute.split('/').pop() : 'cube';
-  const filename = suggestCanonicalCubePath(name);
-  return `${parsed.sourceRoot}/${normalizedTarget}/${filename}`;
-}
-
-function validateRouteSegment(value) {
-  if (!value) {
-    throw new Error('Cube route must not contain empty segments.');
-  }
-  if (value === '.' || value === '..') {
-    throw new Error('Cube route segment is invalid.');
-  }
-  if (/[ .]$/.test(value)) {
-    throw new Error('Cube route segment must not end with a space or dot.');
-  }
-  if (WINDOWS_UNSAFE_PATH_SEGMENT_RE.test(value) || hasAsciiControlCharacter(value)) {
-    throw new Error('Cube route segment contains invalid characters.');
-  }
-}
-
-function validateTargetModelSegment(value) {
-  if (!value || value === '.' || value === '..') {
-    throw new Error('Cube target model is invalid.');
-  }
-  if (value.includes('/') || value.includes('\\')) {
-    throw new Error('Cube target model must be one path segment.');
-  }
-  if (/[ .]$/.test(value)) {
-    throw new Error('Cube target model must not end with a space or dot.');
-  }
-  if (WINDOWS_UNSAFE_PATH_SEGMENT_RE.test(value) || hasAsciiControlCharacter(value)) {
-    throw new Error('Cube target model contains invalid characters.');
-  }
-}
-
-function normalizeModelLabel(value) {
-  const normalized = value.trim().replace(/\s+/g, ' ');
-  return MODEL_LABEL_ALIASES[normalized.toLowerCase()] || normalized;
-}
-
-function dedupePreservingOrder(values) {
-  const seen = new Set();
-  const result = [];
-  for (const value of values) {
-    const key = value.toLowerCase();
-    if (seen.has(key)) {
-      continue;
+export function deriveTargetModelCubeId({ sourceCubeId, targetModel, defaultAlias, }) {
+    const parsed = parseCanonicalCubeId(sourceCubeId);
+    const normalizedTarget = normalizeTargetModel(targetModel);
+    if (!normalizedTarget) {
+        throw new Error('Cube target model is required.');
     }
-    seen.add(key);
-    result.push(value);
-  }
-  return result;
+    const nameRoute = normalizeCubeRoute(defaultAlias);
+    const name = nameRoute ? nameRoute.split('/').pop() : 'cube';
+    const filename = suggestCanonicalCubePath(name);
+    return `${parsed.sourceRoot}/${normalizedTarget}/${filename}`;
+}
+function validateRouteSegment(value) {
+    if (!value) {
+        throw new Error('Cube route must not contain empty segments.');
+    }
+    if (value === '.' || value === '..') {
+        throw new Error('Cube route segment is invalid.');
+    }
+    if (/[ .]$/.test(value)) {
+        throw new Error('Cube route segment must not end with a space or dot.');
+    }
+    if (WINDOWS_UNSAFE_PATH_SEGMENT_RE.test(value) || hasAsciiControlCharacter(value)) {
+        throw new Error('Cube route segment contains invalid characters.');
+    }
+}
+function validateTargetModelSegment(value) {
+    if (!value || value === '.' || value === '..') {
+        throw new Error('Cube target model is invalid.');
+    }
+    if (value.includes('/') || value.includes('\\')) {
+        throw new Error('Cube target model must be one path segment.');
+    }
+    if (/[ .]$/.test(value)) {
+        throw new Error('Cube target model must not end with a space or dot.');
+    }
+    if (WINDOWS_UNSAFE_PATH_SEGMENT_RE.test(value) || hasAsciiControlCharacter(value)) {
+        throw new Error('Cube target model contains invalid characters.');
+    }
+}
+function normalizeModelLabel(value) {
+    const normalized = value.trim().replace(/\s+/g, ' ');
+    return MODEL_LABEL_ALIASES[normalized.toLowerCase()] || normalized;
+}
+function dedupePreservingOrder(values) {
+    const seen = new Set();
+    const result = [];
+    for (const value of values) {
+        const key = value.toLowerCase();
+        if (seen.has(key)) {
+            continue;
+        }
+        seen.add(key);
+        result.push(value);
+    }
+    return result;
 }

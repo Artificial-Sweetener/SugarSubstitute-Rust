@@ -15,6 +15,13 @@
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """Local flavor service and route tests."""
 
+from __future__ import annotations
+
+from typing import Any
+
+from pathlib import Path
+from .typing_support import BackendServicesFactory
+
 import asyncio
 
 import pytest
@@ -22,15 +29,15 @@ import pytest
 from sugarcubes.backend.routes import build_route_handlers
 from sugarcubes.backend.responses import BackendError
 
-from conftest import FakeRequest, decode_json_response
+from .conftest import FakeRequest, decode_json_response
 
 LOCAL_CUBE_ID = "local/personal/demo.cube"
 SURFACE_SIGNATURE = "surface-a"
 
 
 def test_local_flavor_service_reads_empty_state_for_missing_cube(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     """Missing local flavor JSON behaves like an empty local catalog."""
 
     services = backend_services_factory(tmp_path)
@@ -43,8 +50,8 @@ def test_local_flavor_service_reads_empty_state_for_missing_cube(
 
 
 def test_local_flavor_service_writes_and_reads_local_flavor(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     """Saved local flavors persist to the hashed disk-backed store."""
 
     services = backend_services_factory(tmp_path)
@@ -68,8 +75,8 @@ def test_local_flavor_service_writes_and_reads_local_flavor(
 
 @pytest.mark.parametrize("cube_id", ["invalid", "local/flavors/demo.cube"])
 def test_local_flavor_service_rejects_invalid_cube_ids(
-    tmp_path, backend_services_factory, cube_id
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory, cube_id: Any
+) -> None:
     """The local flavor store honors canonical cube id validation."""
 
     services = backend_services_factory(tmp_path)
@@ -79,8 +86,8 @@ def test_local_flavor_service_rejects_invalid_cube_ids(
 
 
 def test_local_flavor_service_rejects_authored_collisions(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     """Local flavors cannot reuse authored flavor names or ids."""
 
     services = backend_services_factory(tmp_path)
@@ -96,8 +103,8 @@ def test_local_flavor_service_rejects_authored_collisions(
 
 
 def test_local_flavor_service_reconciles_authored_collisions(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     """Collision reconciliation renames local flavors deterministically."""
 
     services = backend_services_factory(tmp_path)
@@ -122,8 +129,8 @@ def test_local_flavor_service_reconciles_authored_collisions(
 
 
 def test_local_flavor_routes_cover_save_delete_select_migrate_and_reconcile(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     """HTTP routes expose the backend local flavor store."""
 
     services = backend_services_factory(tmp_path)

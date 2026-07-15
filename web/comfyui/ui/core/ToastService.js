@@ -16,37 +16,39 @@
 /**
  * Own the SugarCubes core UI service layer in `web/comfyui/ui/core/ToastService.js`.
  */
-
 /**
  * Coordinate toast service behavior for the SugarCubes UI.
  */
 export class ToastService {
-  constructor(adapter, { dialogs } = {}) {
-    this.adapter = adapter;
-    this.dialogs = dialogs || null;
-  }
-
-  push(severity, summary, detail) {
-    const toast = this.adapter?.getToast?.() || null;
-    if (toast?.add) {
-      toast.add({ severity, summary, detail, life: 5000 });
-      return;
+    adapter;
+    dialogs;
+    constructor(adapter, { dialogs } = {}) {
+        this.adapter = adapter;
+        this.dialogs = dialogs || null;
     }
-    const message = detail ? `${summary}: ${detail}` : summary;
-    const consoleRef = this.adapter?.getConsole?.() || null;
-    if (severity === 'error') {
-      consoleRef?.error?.(message);
-      this.dialogs
-        ?.alert?.({
-          title: summary || 'SugarCubes error',
-          message: detail ? [detail] : [],
-          confirmLabel: 'OK',
-        })
-        ?.catch?.((error) => consoleRef?.error?.(error));
-    } else if (severity === 'warn' || severity === 'warning') {
-      consoleRef?.warn?.(message);
-    } else {
-      consoleRef?.info?.(message);
+    push(severity, summary, detail) {
+        const toast = this.adapter?.getToast?.() || null;
+        if (toast?.add) {
+            toast.add({ severity, summary, detail, life: 5000 });
+            return;
+        }
+        const message = detail ? `${summary}: ${detail}` : summary;
+        const consoleRef = this.adapter?.getConsole?.() || null;
+        if (severity === 'error') {
+            consoleRef?.error?.(message);
+            this.dialogs
+                ?.alert?.({
+                title: summary || 'SugarCubes error',
+                message: detail ? [detail] : [],
+                confirmLabel: 'OK',
+            })
+                ?.catch?.((error) => consoleRef?.error?.(error));
+        }
+        else if (severity === 'warn' || severity === 'warning') {
+            consoleRef?.warn?.(message);
+        }
+        else {
+            consoleRef?.info?.(message);
+        }
     }
-  }
 }

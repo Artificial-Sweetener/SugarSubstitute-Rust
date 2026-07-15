@@ -16,95 +16,76 @@
 /**
  * Own item-selection modal behavior in `web/comfyui/ui/dialogs/SelectionModal.js`.
  */
-
 import { $el } from '/scripts/ui.js';
 import { ModalShell } from './ModalShell.js';
-
 /**
  * Coordinate list-selection modal behavior for SugarCubes.
  */
 export class SelectionModal {
-  constructor({ adapter } = {}) {
-    this.adapter = adapter || null;
-    this.documentRef = adapter?.getDocument?.() || null;
-    this.shell = new ModalShell({
-      adapter,
-      variantClassName: 'sugarcubes-selection-overlay',
-      dialogClassName: 'sugarcubes-selection-dialog',
-    });
-    this.selectedValue = '';
-  }
-
-  open({
-    title = 'Select',
-    message = [],
-    items = [],
-    confirmLabel = 'Select',
-    cancelLabel = 'Cancel',
-    emptyMessage = 'No options available.',
-  } = {}) {
-    this.selectedValue = '';
-    const list = $el('div.sugarcubes-selection-dialog__list');
-    const options = Array.isArray(items) ? items : [];
-
-    if (!options.length) {
-      list.appendChild(
-        $el('p.sugarcubes-selection-dialog__empty', { textContent: emptyMessage || '' }),
-      );
+    shell;
+    selectedValue;
+    constructor({ adapter } = {}) {
+        this.shell = new ModalShell({
+            adapter: adapter ?? null,
+            variantClassName: 'sugarcubes-selection-overlay',
+            dialogClassName: 'sugarcubes-selection-dialog',
+        });
+        this.selectedValue = '';
     }
-
-    for (const item of options) {
-      const option = $el('label.sugarcubes-selection-dialog__option');
-      const radio = $el('input', {
-        type: 'radio',
-        name: 'sugarcubes-selection',
-        value: typeof item?.value === 'string' ? item.value : '',
-      });
-      const labelWrap = $el('div.sugarcubes-selection-dialog__option-copy');
-      const titleEl = $el('div.sugarcubes-selection-dialog__option-title', {
-        textContent: item?.label || item?.value || '',
-      });
-      labelWrap.appendChild(titleEl);
-      if (item?.description) {
-        labelWrap.appendChild(
-          $el('div.sugarcubes-selection-dialog__option-description', {
-            textContent: item.description,
-          }),
-        );
-      }
-      option.append(radio, labelWrap);
-      radio.addEventListener('change', () => {
-        this.selectedValue = radio.value;
-        this.shell.setConfirmEnabled(Boolean(this.selectedValue));
-        this.shell.setError('');
-      });
-      list.appendChild(option);
+    open({ title = 'Select', message = [], items = [], confirmLabel = 'Select', cancelLabel = 'Cancel', emptyMessage = 'No options available.', } = {}) {
+        this.selectedValue = '';
+        const list = $el('div.sugarcubes-selection-dialog__list');
+        const options = Array.isArray(items) ? items : [];
+        if (!options.length) {
+            list.appendChild($el('p.sugarcubes-selection-dialog__empty', { textContent: emptyMessage || '' }));
+        }
+        for (const item of options) {
+            const option = $el('label.sugarcubes-selection-dialog__option');
+            const radio = $el('input', {
+                type: 'radio',
+                name: 'sugarcubes-selection',
+                value: typeof item?.value === 'string' ? item.value : '',
+            });
+            const labelWrap = $el('div.sugarcubes-selection-dialog__option-copy');
+            const titleEl = $el('div.sugarcubes-selection-dialog__option-title', {
+                textContent: item?.label || item?.value || '',
+            });
+            labelWrap.appendChild(titleEl);
+            if (item?.description) {
+                labelWrap.appendChild($el('div.sugarcubes-selection-dialog__option-description', {
+                    textContent: item.description,
+                }));
+            }
+            option.append(radio, labelWrap);
+            radio.addEventListener('change', () => {
+                this.selectedValue = radio.value;
+                this.shell.setConfirmEnabled(Boolean(this.selectedValue));
+                this.shell.setError('');
+            });
+            list.appendChild(option);
+        }
+        const handleConfirm = () => {
+            if (!this.selectedValue) {
+                this.shell.setError('Select an option to continue.');
+                return;
+            }
+            this.shell.close(this.selectedValue);
+        };
+        const result = this.shell.open({
+            title,
+            description: message,
+            body: list,
+            confirmLabel,
+            cancelLabel,
+            confirmClassName: 'p-button-danger',
+            cancelResult: null,
+            onConfirm: handleConfirm,
+            initialFocus: () => list.querySelector('input[type="radio"]'),
+        });
+        this.shell.setConfirmEnabled(false);
+        return result;
     }
-
-    const handleConfirm = () => {
-      if (!this.selectedValue) {
-        this.shell.setError('Select an option to continue.');
-        return;
-      }
-      this.shell.close(this.selectedValue);
-    };
-
-    const result = this.shell.open({
-      title,
-      description: message,
-      body: list,
-      confirmLabel,
-      cancelLabel,
-      confirmClassName: 'p-button-danger',
-      cancelResult: null,
-      onConfirm: handleConfirm,
-      initialFocus: () => list.querySelector('input[type="radio"]'),
-    });
-    this.shell.setConfirmEnabled(false);
-    return result;
-  }
-
-  close(result) {
-    this.shell.close(result);
-  }
+    close(result) {
+        this.shell.close(result);
+    }
 }

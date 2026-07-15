@@ -16,7 +16,6 @@
 /**
  * Own the SugarCubes graph integration layer in `web/comfyui/ui/graph/DirtyManager.js`.
  */
-
 import { DirtyTracker } from './DirtyTracker.js';
 import { BaselineStore } from './BaselineStore.js';
 import { BaselineResolver } from './BaselineResolver.js';
@@ -24,188 +23,206 @@ import { getGraphGroups } from './GraphQuery.js';
 import { getGroupSugarcubes } from './GroupMetadata.js';
 import { DirtyRefreshScheduler } from './DirtyRefreshScheduler.js';
 import { buildCubeDefinitionKey, normalizeRevisionRef } from '../core/CubeDefinitionKey.js';
-
+import { isRecord } from '../types/common.js';
 /**
  * Coordinate dirty manager behavior for the SugarCubes UI.
  */
 export class DirtyManager {
-  constructor({ adapter, events, scheduler, cubeBrowser, definitionStore } = {}) {
-    this.adapter = adapter;
-    this.events = events;
-    this.scheduler = scheduler;
-    this.cubeBrowser = cubeBrowser;
-    this.savedIds = new Set();
-    this.unsubscribe = null;
-    this.lastGraph = null;
-    this.baselineStore = new BaselineStore();
-    this.baselineResolver = new BaselineResolver({ baselineStore: this.baselineStore });
-    this.tracker = new DirtyTracker({
-      logger: adapter?.getConsole?.(),
-      baselineStore: this.baselineStore,
-      baselineResolver: this.baselineResolver,
-    });
-    this.definitionStore = definitionStore;
-    this.refreshScheduler = new DirtyRefreshScheduler({
-      scheduler: this.scheduler,
-      onRefresh: (options) => this.refresh(options),
-    });
-  }
-
-  setup() {
-    if (this.unsubscribe) {
-      return;
+    events;
+    scheduler;
+    cubeBrowser;
+    savedIds;
+    unsubscribe;
+    lastGraph;
+    baselineStore;
+    baselineResolver;
+    tracker;
+    definitionStore;
+    refreshScheduler;
+    constructor({ adapter, events = null, scheduler, cubeBrowser = null, definitionStore, }) {
+        this.events = events;
+        this.scheduler = scheduler;
+        this.cubeBrowser = cubeBrowser;
+        this.savedIds = new Set();
+        this.unsubscribe = null;
+        this.lastGraph = null;
+        this.baselineStore = new BaselineStore();
+        this.baselineResolver = new BaselineResolver({ baselineStore: this.baselineStore });
+        this.tracker = new DirtyTracker({
+            logger: adapter.getConsole?.() ?? null,
+            baselineStore: this.baselineStore,
+            baselineResolver: this.baselineResolver,
+        });
+        this.definitionStore = definitionStore;
+        this.refreshScheduler = new DirtyRefreshScheduler({
+            scheduler: this.scheduler,
+            onRefresh: (options) => this.refresh(options),
+        });
     }
-    this.unsubscribe = this.tracker.onChange((dirtyIds) => {
-      this.cubeBrowser?.setDirtyCubeIds?.(dirtyIds);
-      this.events?.emit?.('cube:dirty:changed', { dirtyIds });
-    });
-    this.events?.on?.('cube:instances:updated', (payload) => {
-      const graph = payload?.graph;
-      this.requestRefresh({ graph, reason: 'instances-updated' });
-    });
-  }
-
-  dispose() {
-    if (this.unsubscribe) {
-      this.unsubscribe();
-      this.unsubscribe = null;
+    setup() {
+        if (this.unsubscribe) {
+            return;
+        }
+        this.unsubscribe = this.tracker.onChange((dirtyIds) => {
+            this.cubeBrowser?.setDirtyCubeIds?.(dirtyIds);
+            this.events?.emit?.('cube:dirty:changed', { dirtyIds });
+        });
+        this.events?.on?.('cube:instances:updated', (payload) => {
+            const graph = isRecord(payload.graph) ? payload.graph : null;
+            this.requestRefresh({ graph, reason: 'instances-updated' });
+        });
     }
-  }
-
-  addSavedIds(cubeIds) {
-    for (const cubeId of cubeIds || []) {
-      if (cubeId) {
-        this.savedIds.add(cubeId);
-      }
+    dispose() {
+        if (this.unsubscribe) {
+            this.unsubscribe();
+            this.unsubscribe = null;
+        }
     }
-  }
-
-  updateKnownCubes(cubes) {
-    const knownIds = new Set(
-      (Array.isArray(cubes) ? cubes : [])
-        .map((entry) => (typeof entry?.cube_id === 'string' ? entry.cube_id.trim() : ''))
-        .filter(Boolean),
-    );
-    for (const cubeId of Array.from(this.savedIds)) {
-      if (knownIds.has(cubeId)) {
-        this.savedIds.delete(cubeId);
-      }
+    addSavedIds(cubeIds) {
+        for (const cubeId of cubeIds || []) {
+            if (cubeId) {
+                this.savedIds.add(cubeId);
+            }
+        }
     }
-    if (this.lastGraph) {
-      this.requestRefresh({ graph: this.lastGraph, reason: 'library-update' });
+    updateKnownCubes(cubes) {
+        const knownIds = new Set((Array.isArray(cubes) ? cubes : [])
+            .map((entry) => (typeof entry?.cube_id === 'string' ? entry.cube_id.trim() : ''))
+            .filter(Boolean));
+        for (const cubeId of Array.from(this.savedIds)) {
+            if (knownIds.has(cubeId)) {
+                this.savedIds.delete(cubeId);
+            }
+        }
+        if (this.lastGraph) {
+            this.requestRefresh({ graph: this.lastGraph, reason: 'library-update' });
+        }
     }
-  }
-
-  buildKnownCubeIdSet() {
-    const known = new Set();
-    const entries = Array.isArray(this.cubeBrowser?.getCubes?.())
-      ? this.cubeBrowser.getCubes()
-      : [];
-    for (const entry of entries) {
-      const cubeId = typeof entry?.cube_id === 'string' ? entry.cube_id.trim() : '';
-      if (cubeId) {
-        known.add(cubeId);
-      }
+    buildKnownCubeIdSet() {
+        const known = new Set();
+        const entries = Array.isArray(this.cubeBrowser?.getCubes?.())
+            ? this.cubeBrowser.getCubes()
+            : [];
+        for (const entry of entries) {
+            const cubeId = typeof entry?.cube_id === 'string' ? entry.cube_id.trim() : '';
+            if (cubeId) {
+                known.add(cubeId);
+            }
+        }
+        for (const cubeId of this.savedIds) {
+            known.add(cubeId);
+        }
+        return known;
     }
-    for (const cubeId of this.savedIds) {
-      known.add(cubeId);
+    getDirtyCubeIds() {
+        return this.tracker.getDirtyCubeIds();
     }
-    return known;
-  }
-
-  getDirtyCubeIds() {
-    return this.tracker.getDirtyCubeIds();
-  }
-
-  getImplementationDirtyCubeIds() {
-    return this.tracker.getImplementationDirtyCubeIds();
-  }
-
-  getSaveableCubeIds() {
-    return this.tracker.getSaveableCubeIds();
-  }
-
-  requestRefresh({ graph, reason } = {}) {
-    this.refreshScheduler.requestRefresh({ graph, reason });
-  }
-
-  scheduleRefresh({ graph, reason } = {}) {
-    this.requestRefresh({ graph, reason });
-  }
-
-  refresh({ graph } = {}) {
-    if (graph) {
-      this.lastGraph = graph;
+    getImplementationDirtyCubeIds() {
+        return this.tracker.getImplementationDirtyCubeIds();
     }
-    if (!graph) {
-      return { dirtyCubeIds: new Set() };
+    getSaveableCubeIds() {
+        return this.tracker.getSaveableCubeIds();
     }
-    const groups = getGraphGroups(graph);
-    if (!groups.length) {
-      this.tracker.refresh({ graph, knownCubeIds: null });
-      this.cubeBrowser?.setDirtyCubeIds?.(new Set());
-      return { dirtyCubeIds: new Set() };
+    /** Return a diagnostic snapshot without exposing mutable tracker ownership. */
+    getDebugState(instanceId) {
+        const key = typeof instanceId === 'string' ? instanceId.trim() : '';
+        if (!key)
+            return null;
+        const entry = this.tracker.instances.get(key);
+        if (!entry)
+            return null;
+        const definitionHash = this.baselineStore.getDefinitionHash(entry.cubeId);
+        const localBaselineHash = this.baselineStore.getLocalBaselineHash(key);
+        const baselineSource = localBaselineHash && entry.baselineHash === localBaselineHash
+            ? 'local'
+            : definitionHash && entry.baselineHash === definitionHash
+                ? 'definition'
+                : null;
+        return {
+            instanceId: key,
+            cubeId: entry.cubeId || null,
+            baselineHash: entry.baselineHash || null,
+            currentHash: entry.currentHash || null,
+            baselineSource,
+            reasons: Array.isArray(entry.reasons) ? entry.reasons : [],
+            dirty: Boolean(entry.dirty),
+            dirtyAt: entry.dirtyAt || null,
+            initializedAt: entry.initializedAt || null,
+        };
     }
-    const hasSugarcubes = groups.some((group) => {
-      const metadata = getGroupSugarcubes(group);
-      return Boolean(metadata?.managed && metadata.cube_id);
-    });
-    if (!hasSugarcubes) {
-      this.tracker.refresh({ graph, knownCubeIds: null });
-      this.cubeBrowser?.setDirtyCubeIds?.(new Set());
-      return { dirtyCubeIds: new Set() };
+    requestRefresh({ graph, reason } = {}) {
+        this.refreshScheduler.requestRefresh({ graph, reason });
     }
-    for (const group of groups) {
-      const metadata = getGroupSugarcubes(group);
-      const cubeId = typeof metadata?.cube_id === 'string' ? metadata.cube_id : '';
-      if (!cubeId) {
-        continue;
-      }
-      const definitionRequest = buildDefinitionRequest(metadata);
-      this.definitionStore.ensure(definitionRequest);
-      const entry = this.definitionStore.getEntry(definitionRequest);
-      this.baselineStore.setDefinition(definitionRequest.definitionKey, entry);
+    scheduleRefresh({ graph, reason } = {}) {
+        this.requestRefresh({ graph, reason });
     }
-    const knownCubeIds = this.buildKnownCubeIdSet();
-    const result = this.tracker.refresh({
-      graph,
-      knownCubeIds: knownCubeIds.size ? knownCubeIds : null,
-    });
-    this.cubeBrowser?.setDirtyCubeIds?.(result?.dirtyCubeIds || new Set());
-    return result;
-  }
-
-  markClean({ graph, cubeIds } = {}) {
-    this.tracker.markClean({ graph, cubeIds });
-  }
-
-  /** Install authoritative persisted definition baselines after a save. */
-  acceptFinalizedDefinitions({ entries } = {}) {
-    for (const result of Array.isArray(entries) ? entries : []) {
-      if (result?.definitionKey && result?.entry) {
-        this.baselineStore.setDefinition(result.definitionKey, result.entry);
-      }
+    refresh({ graph } = {}) {
+        if (graph) {
+            this.lastGraph = graph;
+        }
+        if (!graph) {
+            return { dirtyCubeIds: new Set() };
+        }
+        const groups = getGraphGroups(graph);
+        if (!groups.length) {
+            this.tracker.refresh({ graph, knownCubeIds: null });
+            this.cubeBrowser?.setDirtyCubeIds?.(new Set());
+            return { dirtyCubeIds: new Set() };
+        }
+        const hasSugarcubes = groups.some((group) => {
+            const metadata = getGroupSugarcubes(group);
+            return Boolean(metadata?.managed && metadata.cube_id);
+        });
+        if (!hasSugarcubes) {
+            this.tracker.refresh({ graph, knownCubeIds: null });
+            this.cubeBrowser?.setDirtyCubeIds?.(new Set());
+            return { dirtyCubeIds: new Set() };
+        }
+        for (const group of groups) {
+            const metadata = getGroupSugarcubes(group);
+            const cubeId = typeof metadata?.cube_id === 'string' ? metadata.cube_id : '';
+            if (!metadata || !cubeId) {
+                continue;
+            }
+            const definitionRequest = buildDefinitionRequest(metadata);
+            this.definitionStore.ensure(definitionRequest);
+            const entry = this.definitionStore.getEntry(definitionRequest);
+            this.baselineStore.setDefinition(definitionRequest.definitionKey, entry);
+        }
+        const knownCubeIds = this.buildKnownCubeIdSet();
+        const result = this.tracker.refresh({
+            graph,
+            knownCubeIds: knownCubeIds.size ? knownCubeIds : null,
+        });
+        this.cubeBrowser?.setDirtyCubeIds?.(result?.dirtyCubeIds || new Set());
+        return result;
     }
-  }
-
-  markLocalBaseline({ graph, cubeIds } = {}) {
-    this.tracker.markLocalBaseline({ graph, cubeIds });
-  }
+    markClean({ graph, cubeIds } = {}) {
+        this.tracker.markClean({ graph, cubeIds });
+    }
+    /** Install authoritative persisted definition baselines after a save. */
+    acceptFinalizedDefinitions({ entries, } = {}) {
+        for (const result of Array.isArray(entries) ? entries : []) {
+            if (result?.definitionKey && result?.entry) {
+                this.baselineStore.setDefinition(result.definitionKey, result.entry);
+            }
+        }
+    }
+    markLocalBaseline({ graph, cubeIds } = {}) {
+        this.tracker.markLocalBaseline({ graph, cubeIds });
+    }
 }
-
 function buildDefinitionRequest(metadata) {
-  const cubeId = typeof metadata?.cube_id === 'string' ? metadata.cube_id.trim() : '';
-  const cubeVersion =
-    typeof metadata?.cube_version === 'string' ? metadata.cube_version.trim() : '';
-  const revisionRef = normalizeRevisionRef(metadata?.cube_revision_ref);
-  const definitionKey =
-    typeof metadata?.cube_definition_key === 'string' && metadata.cube_definition_key.trim()
-      ? metadata.cube_definition_key.trim()
-      : buildCubeDefinitionKey(cubeId, cubeVersion);
-  return {
-    cubeId,
-    cubeVersion,
-    revisionRef,
-    definitionKey,
-  };
+    const cubeId = typeof metadata?.cube_id === 'string' ? metadata.cube_id.trim() : '';
+    const cubeVersion = typeof metadata?.cube_version === 'string' ? metadata.cube_version.trim() : '';
+    const revisionRef = normalizeRevisionRef(metadata?.cube_revision_ref);
+    const definitionKey = typeof metadata?.cube_definition_key === 'string' && metadata.cube_definition_key.trim()
+        ? metadata.cube_definition_key.trim()
+        : buildCubeDefinitionKey(cubeId, cubeVersion);
+    return {
+        cubeId,
+        cubeVersion,
+        revisionRef,
+        definitionKey,
+    };
 }

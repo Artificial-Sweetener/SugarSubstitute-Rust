@@ -15,7 +15,12 @@
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """Tracked GitHub repo service tests."""
 
+from __future__ import annotations
+
+from typing import Any
+
 import json
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
@@ -33,10 +38,24 @@ from sugarcubes.backend.services.tracked_repo_preflight_service import (
 )
 
 
+@dataclass(frozen=True)
+class _GitResult:
+    """Provide the stdout surface consumed by temporary preflight fallback."""
+
+    stdout: str = ""
+
+
+def _unused_git_runner(args: list[str], *, cwd: Path) -> _GitResult:
+    """Return an inert result for tests whose HTTP preflight never invokes git."""
+
+    _ = args, cwd
+    return _GitResult()
+
+
 class AllowingPreflightService:
     """Permit tracked repo tests to opt out of remote GitHub calls."""
 
-    def inspect_repo(self, *, owner, repo, branch):
+    def inspect_repo(self, *, owner: Any, repo: Any, branch: Any) -> Any:
         """Return one successful preflight result."""
 
         return TrackedRepoPreflightResult(
@@ -48,19 +67,19 @@ class AllowingPreflightService:
             cube_paths=("demo.cube",),
         )
 
-    def require_cubes(self, *, owner, repo, branch):
+    def require_cubes(self, *, owner: Any, repo: Any, branch: Any) -> Any:
         """Return one successful preflight result."""
 
         return self.inspect_repo(owner=owner, repo=repo, branch=branch)
 
 
 def make_tracked_repo_service(
-    extension_root,
+    extension_root: Any,
     *,
-    git_runner,
-    preflight_service=None,
-    protected_owner_provider=None,
-):
+    git_runner: Any,
+    preflight_service: Any = None,
+    protected_owner_provider: Any = None,
+) -> Any:
     """Create a tracked repo service with remote preflight isolated for tests."""
 
     return TrackedRepoService(
@@ -71,7 +90,7 @@ def make_tracked_repo_service(
     )
 
 
-def make_tree_response(paths, *, truncated=False, status=200):
+def make_tree_response(paths: Any, *, truncated: Any = False, status: Any = 200) -> Any:
     """Build one fake GitHub tree response for preflight tests."""
 
     return HttpJsonResponse(
@@ -84,12 +103,12 @@ def make_tree_response(paths, *, truncated=False, status=200):
     )
 
 
-def test_preflight_succeeds_and_counts_nested_cube_paths(tmp_path):
+def test_preflight_succeeds_and_counts_nested_cube_paths(tmp_path: Path) -> None:
     extension_root = tmp_path / "extension"
     extension_root.mkdir()
     service = TrackedRepoPreflightService(
         workspace_root=extension_root / ".sugarcubes",
-        git_runner=lambda args, cwd: None,
+        git_runner=_unused_git_runner,
         http_json_loader=lambda url, headers, timeout: make_tree_response(
             ["demo.cube", "nested/alpha.cube", "notes/readme.md"]
         ),
@@ -105,12 +124,12 @@ def test_preflight_succeeds_and_counts_nested_cube_paths(tmp_path):
     assert result.checked_via == "github_tree"
 
 
-def test_preflight_ignores_backup_cube_paths(tmp_path):
+def test_preflight_ignores_backup_cube_paths(tmp_path: Path) -> None:
     extension_root = tmp_path / "extension"
     extension_root.mkdir()
     service = TrackedRepoPreflightService(
         workspace_root=extension_root / ".sugarcubes",
-        git_runner=lambda args, cwd: None,
+        git_runner=_unused_git_runner,
         http_json_loader=lambda url, headers, timeout: make_tree_response(
             [
                 "old/demo.cube",
@@ -130,12 +149,12 @@ def test_preflight_ignores_backup_cube_paths(tmp_path):
     assert result.cube_paths == ("current/demo.cube",)
 
 
-def test_preflight_rejects_repo_without_cube_paths(tmp_path):
+def test_preflight_rejects_repo_without_cube_paths(tmp_path: Path) -> None:
     extension_root = tmp_path / "extension"
     extension_root.mkdir()
     service = TrackedRepoPreflightService(
         workspace_root=extension_root / ".sugarcubes",
-        git_runner=lambda args, cwd: None,
+        git_runner=_unused_git_runner,
         http_json_loader=lambda url, headers, timeout: make_tree_response(
             ["README.md", "workflow.json"]
         ),
@@ -150,19 +169,19 @@ def test_preflight_rejects_repo_without_cube_paths(tmp_path):
     assert error.value.details["reason"] == "no_cubes"
 
 
-def test_preflight_maps_github_404_and_rate_limit(tmp_path):
+def test_preflight_maps_github_404_and_rate_limit(tmp_path: Path) -> None:
     extension_root = tmp_path / "extension"
     extension_root.mkdir()
     missing = TrackedRepoPreflightService(
         workspace_root=extension_root / ".sugarcubes",
-        git_runner=lambda args, cwd: None,
+        git_runner=_unused_git_runner,
         http_json_loader=lambda url, headers, timeout: HttpJsonResponse(
             status=404, headers={}, payload={}
         ),
     )
     limited = TrackedRepoPreflightService(
         workspace_root=extension_root / ".sugarcubes",
-        git_runner=lambda args, cwd: None,
+        git_runner=_unused_git_runner,
         http_json_loader=lambda url, headers, timeout: HttpJsonResponse(
             status=403, headers={}, payload={}
         ),
@@ -181,12 +200,14 @@ def test_preflight_maps_github_404_and_rate_limit(tmp_path):
     assert limited_error.value.status == 503
 
 
-def test_preflight_uses_temporary_git_fallback_for_truncated_tree(tmp_path):
+def test_preflight_uses_temporary_git_fallback_for_truncated_tree(
+    tmp_path: Path,
+) -> None:
     extension_root = tmp_path / "extension"
     extension_root.mkdir()
     calls = []
 
-    def fake_git(args, *, cwd):
+    def fake_git(args: Any, *, cwd: Any) -> Any:
         calls.append((list(args), Path(cwd)))
         if args[:1] == ["clone"]:
             checkout = Path(args[-1])
@@ -232,12 +253,10 @@ def test_preflight_uses_temporary_git_fallback_for_truncated_tree(tmp_path):
     )
 
 
-def test_add_list_update_and_remove_tracked_repo(tmp_path):
+def test_add_list_update_and_remove_tracked_repo(tmp_path: Path) -> None:
     extension_root = tmp_path / "extension"
     extension_root.mkdir()
-    service = make_tracked_repo_service(
-        extension_root, git_runner=lambda args, cwd: None
-    )
+    service = make_tracked_repo_service(extension_root, git_runner=_unused_git_runner)
 
     initial = service.list_repos()
     assert initial["count"] == 1
@@ -274,12 +293,10 @@ def test_add_list_update_and_remove_tracked_repo(tmp_path):
     assert service.list_repos()["count"] == 1
 
 
-def test_add_repo_returns_preflight_summary(tmp_path):
+def test_add_repo_returns_preflight_summary(tmp_path: Path) -> None:
     extension_root = tmp_path / "extension"
     extension_root.mkdir()
-    service = make_tracked_repo_service(
-        extension_root, git_runner=lambda args, cwd: None
-    )
+    service = make_tracked_repo_service(extension_root, git_runner=_unused_git_runner)
 
     created = service.add_repo(
         owner="artificial-sweetener",
@@ -294,11 +311,11 @@ def test_add_repo_returns_preflight_summary(tmp_path):
     assert created["preflight"]["cube_paths"] == ["demo.cube"]
 
 
-def test_add_repo_does_not_write_manifest_when_preflight_fails(tmp_path):
+def test_add_repo_does_not_write_manifest_when_preflight_fails(tmp_path: Path) -> None:
     class DenyingPreflightService:
         """Reject every repo as containing no cubes."""
 
-        def require_cubes(self, *, owner, repo, branch):
+        def require_cubes(self, *, owner: Any, repo: Any, branch: Any) -> None:
             raise BackendError(
                 f"Repository '{owner}/{repo}' does not contain any .cube files on branch '{branch}'.",
                 status=422,
@@ -313,7 +330,7 @@ def test_add_repo_does_not_write_manifest_when_preflight_fails(tmp_path):
     extension_root.mkdir()
     service = make_tracked_repo_service(
         extension_root,
-        git_runner=lambda args, cwd: None,
+        git_runner=_unused_git_runner,
         preflight_service=DenyingPreflightService(),
     )
 
@@ -330,12 +347,10 @@ def test_add_repo_does_not_write_manifest_when_preflight_fails(tmp_path):
     assert service.list_repos()["count"] == 1
 
 
-def test_non_base_repo_cannot_become_default_base_repo(tmp_path):
+def test_non_base_repo_cannot_become_default_base_repo(tmp_path: Path) -> None:
     extension_root = tmp_path / "extension"
     extension_root.mkdir()
-    service = make_tracked_repo_service(
-        extension_root, git_runner=lambda args, cwd: None
-    )
+    service = make_tracked_repo_service(extension_root, git_runner=_unused_git_runner)
 
     created = service.add_repo(
         owner="artificial-sweetener",
@@ -352,12 +367,10 @@ def test_non_base_repo_cannot_become_default_base_repo(tmp_path):
     assert listed["artificial-sweetener/custom-cubes"]["default_base_repo"] is False
 
 
-def test_base_cubes_cannot_be_removed_or_disabled(tmp_path):
+def test_base_cubes_cannot_be_removed_or_disabled(tmp_path: Path) -> None:
     extension_root = tmp_path / "extension"
     extension_root.mkdir()
-    service = make_tracked_repo_service(
-        extension_root, git_runner=lambda args, cwd: None
-    )
+    service = make_tracked_repo_service(extension_root, git_runner=_unused_git_runner)
 
     updated = service.update_repo(
         owner="Artificial-Sweetener",
@@ -371,8 +384,8 @@ def test_base_cubes_cannot_be_removed_or_disabled(tmp_path):
 
 
 def test_manifest_load_repairs_missing_managed_checkout_path_after_folder_rename(
-    tmp_path,
-):
+    tmp_path: Path,
+) -> None:
     """Stale managed checkout paths should follow the active extension root."""
 
     extension_root = tmp_path / "SugarCubes"
@@ -384,9 +397,7 @@ def test_manifest_load_repairs_missing_managed_checkout_path_after_folder_rename
         / "Artificial-Sweetener"
         / "Base-Cubes"
     )
-    service = make_tracked_repo_service(
-        extension_root, git_runner=lambda args, cwd: None
-    )
+    service = make_tracked_repo_service(extension_root, git_runner=_unused_git_runner)
     service.manifest_path().parent.mkdir(parents=True, exist_ok=True)
     service.manifest_path().write_text(
         json.dumps(
@@ -414,10 +425,10 @@ def test_manifest_load_repairs_missing_managed_checkout_path_after_folder_rename
     assert persisted["repos"][0]["local_checkout_path"] == str(expected_checkout)
 
 
-def test_ensure_authoring_repo_initializes_checkout_git_repo(tmp_path):
+def test_ensure_authoring_repo_initializes_checkout_git_repo(tmp_path: Path) -> None:
     calls = []
 
-    def fake_git(args, *, cwd):
+    def fake_git(args: Any, *, cwd: Any) -> Any:
         calls.append((list(args), Path(cwd)))
         if args[:2] == ["init", "-b"]:
             (Path(cwd) / ".git").mkdir(parents=True)
@@ -440,10 +451,10 @@ def test_ensure_authoring_repo_initializes_checkout_git_repo(tmp_path):
     assert calls == [(["init", "-b", "main"], checkout)]
 
 
-def test_ensure_authoring_repo_reuses_existing_enabled_repo(tmp_path):
+def test_ensure_authoring_repo_reuses_existing_enabled_repo(tmp_path: Path) -> None:
     calls = []
 
-    def fake_git(args, *, cwd):
+    def fake_git(args: Any, *, cwd: Any) -> Any:
         calls.append((list(args), Path(cwd)))
         if args[:1] == ["clone"]:
             checkout = Path(args[-1])
@@ -475,12 +486,10 @@ def test_ensure_authoring_repo_reuses_existing_enabled_repo(tmp_path):
     assert calls == []
 
 
-def test_ensure_authoring_repo_rejects_disabled_existing_repo(tmp_path):
+def test_ensure_authoring_repo_rejects_disabled_existing_repo(tmp_path: Path) -> None:
     extension_root = tmp_path / "extension"
     extension_root.mkdir()
-    service = make_tracked_repo_service(
-        extension_root, git_runner=lambda args, cwd: None
-    )
+    service = make_tracked_repo_service(extension_root, git_runner=_unused_git_runner)
     service.add_repo(
         owner="ExampleUser",
         repo="Example-Cubes",
@@ -493,10 +502,10 @@ def test_ensure_authoring_repo_rejects_disabled_existing_repo(tmp_path):
         service.ensure_authoring_repo(owner="ExampleUser", repo="Example-Cubes")
 
 
-def test_sync_repo_clones_when_checkout_is_missing(tmp_path):
+def test_sync_repo_clones_when_checkout_is_missing(tmp_path: Path) -> None:
     calls = []
 
-    def fake_git(args, *, cwd):
+    def fake_git(args: Any, *, cwd: Any) -> Any:
         calls.append((list(args), Path(cwd)))
         if args[:1] == ["clone"]:
             checkout = Path(args[-1])
@@ -518,10 +527,10 @@ def test_sync_repo_clones_when_checkout_is_missing(tmp_path):
     assert calls[0][0][:3] == ["clone", "--branch", "main"]
 
 
-def test_sync_repo_falls_back_to_plain_clone_for_empty_remote(tmp_path):
+def test_sync_repo_falls_back_to_plain_clone_for_empty_remote(tmp_path: Path) -> None:
     calls = []
 
-    def fake_git(args, *, cwd):
+    def fake_git(args: Any, *, cwd: Any) -> Any:
         calls.append((list(args), Path(cwd)))
         if args[:3] == ["clone", "--branch", "main"]:
             raise RuntimeError("Remote branch main not found in upstream origin")
@@ -547,8 +556,8 @@ def test_sync_repo_falls_back_to_plain_clone_for_empty_remote(tmp_path):
     assert "--branch" not in calls[1][0]
 
 
-def test_sync_repo_rejects_dirty_worktree(tmp_path):
-    def fake_git(args, *, cwd):
+def test_sync_repo_rejects_dirty_worktree(tmp_path: Path) -> None:
+    def fake_git(args: Any, *, cwd: Any) -> Any:
         class Result:
             stdout = " M demo.cube" if args == ["status", "--porcelain"] else ""
 
@@ -564,10 +573,12 @@ def test_sync_repo_rejects_dirty_worktree(tmp_path):
         service.sync_repo(owner="Artificial-Sweetener", repo="Base-Cubes")
 
 
-def test_sync_repo_rejects_claimed_author_repo_with_local_commits_ahead(tmp_path):
+def test_sync_repo_rejects_claimed_author_repo_with_local_commits_ahead(
+    tmp_path: Path,
+) -> None:
     calls = []
 
-    def fake_git(args, *, cwd):
+    def fake_git(args: Any, *, cwd: Any) -> Any:
         calls.append((list(args), Path(cwd)))
         if args[:3] == ["merge-base", "--is-ancestor", "HEAD"]:
             raise RuntimeError("not ancestor")
@@ -600,12 +611,14 @@ def test_sync_repo_rejects_claimed_author_repo_with_local_commits_ahead(tmp_path
     assert not any(call[0][:2] == ["reset", "--hard"] for call in calls)
 
 
-def test_sync_repo_rejects_default_base_repo_with_local_commits_ahead(tmp_path):
+def test_sync_repo_rejects_default_base_repo_with_local_commits_ahead(
+    tmp_path: Path,
+) -> None:
     """Base-Cubes sync must not discard local repair commits."""
 
     calls = []
 
-    def fake_git(args, *, cwd):
+    def fake_git(args: Any, *, cwd: Any) -> Any:
         calls.append((list(args), Path(cwd)))
         if args[:3] == ["merge-base", "--is-ancestor", "HEAD"]:
             raise RuntimeError("not ancestor")
@@ -638,10 +651,12 @@ def test_sync_repo_rejects_default_base_repo_with_local_commits_ahead(tmp_path):
     assert not any(call[0][:2] == ["reset", "--hard"] for call in calls)
 
 
-def test_sync_repo_allows_nondefault_external_repo_with_local_commits_ahead(tmp_path):
+def test_sync_repo_allows_nondefault_external_repo_with_local_commits_ahead(
+    tmp_path: Path,
+) -> None:
     calls = []
 
-    def fake_git(args, *, cwd):
+    def fake_git(args: Any, *, cwd: Any) -> Any:
         calls.append((list(args), Path(cwd)))
 
         class Result:
@@ -677,8 +692,8 @@ def test_sync_repo_allows_nondefault_external_repo_with_local_commits_ahead(tmp_
     assert any(call[0][:2] == ["reset", "--hard"] for call in calls)
 
 
-def test_sync_repo_rejects_checkout_without_cubes(tmp_path):
-    def fake_git(args, *, cwd):
+def test_sync_repo_rejects_checkout_without_cubes(tmp_path: Path) -> None:
+    def fake_git(args: Any, *, cwd: Any) -> Any:
         class Result:
             stdout = ""
 
@@ -705,12 +720,10 @@ def test_sync_repo_rejects_checkout_without_cubes(tmp_path):
     assert "does not contain any .cube files" in repo.last_sync_error
 
 
-def test_add_repo_rejects_reserved_local_owner(tmp_path):
+def test_add_repo_rejects_reserved_local_owner(tmp_path: Path) -> None:
     extension_root = tmp_path / "extension"
     extension_root.mkdir()
-    service = make_tracked_repo_service(
-        extension_root, git_runner=lambda args, cwd: None
-    )
+    service = make_tracked_repo_service(extension_root, git_runner=_unused_git_runner)
 
     with pytest.raises(BackendError, match="reserved"):
         service.add_repo(
@@ -722,10 +735,10 @@ def test_add_repo_rejects_reserved_local_owner(tmp_path):
         )
 
 
-def test_ensure_local_repo_initializes_main_branch_git_repo(tmp_path):
+def test_ensure_local_repo_initializes_main_branch_git_repo(tmp_path: Path) -> None:
     calls = []
 
-    def fake_git(args, *, cwd):
+    def fake_git(args: Any, *, cwd: Any) -> Any:
         calls.append((list(args), Path(cwd)))
 
         class Result:
@@ -744,10 +757,12 @@ def test_ensure_local_repo_initializes_main_branch_git_repo(tmp_path):
     assert calls == [(["init", "-b", "main"], local_root)]
 
 
-def test_check_repo_persists_update_metadata_without_mutating_checkout(tmp_path):
+def test_check_repo_persists_update_metadata_without_mutating_checkout(
+    tmp_path: Path,
+) -> None:
     calls = []
 
-    def fake_git(args, *, cwd):
+    def fake_git(args: Any, *, cwd: Any) -> Any:
         calls.append((list(args), Path(cwd)))
 
         class Result:
@@ -775,10 +790,12 @@ def test_check_repo_persists_update_metadata_without_mutating_checkout(tmp_path)
     assert not any(call[0][0] == "reset" for call in calls)
 
 
-def test_check_all_repos_applies_auto_update_only_to_enabled_packs(tmp_path):
+def test_check_all_repos_applies_auto_update_only_to_enabled_packs(
+    tmp_path: Path,
+) -> None:
     calls = []
 
-    def fake_git(args, *, cwd):
+    def fake_git(args: Any, *, cwd: Any) -> Any:
         calls.append((list(args), Path(cwd)))
 
         class Result:
@@ -826,7 +843,7 @@ def test_check_all_repos_applies_auto_update_only_to_enabled_packs(tmp_path):
     assert len(reset_calls) == 1
 
 
-def test_identity_policy_persists_single_claimed_owner(tmp_path):
+def test_identity_policy_persists_single_claimed_owner(tmp_path: Path) -> None:
     extension_root = tmp_path / "extension"
     extension_root.mkdir()
     service = IdentityPolicyService(extension_root)
@@ -843,7 +860,7 @@ def test_identity_policy_persists_single_claimed_owner(tmp_path):
     assert persisted.claimed_github_owner == "ExampleUser"
 
 
-def test_identity_policy_rejects_reserved_local_owner(tmp_path):
+def test_identity_policy_rejects_reserved_local_owner(tmp_path: Path) -> None:
     extension_root = tmp_path / "extension"
     extension_root.mkdir()
     service = IdentityPolicyService(extension_root)
@@ -852,7 +869,7 @@ def test_identity_policy_rejects_reserved_local_owner(tmp_path):
         service.set_policy(claimed_github_owner="local")
 
 
-def test_identity_policy_blocks_system_owner_without_env_gate(tmp_path):
+def test_identity_policy_blocks_system_owner_without_env_gate(tmp_path: Path) -> None:
     extension_root = tmp_path / "extension"
     extension_root.mkdir()
     service = IdentityPolicyService(extension_root)
@@ -863,7 +880,7 @@ def test_identity_policy_blocks_system_owner_without_env_gate(tmp_path):
     assert updated["claimed_github_owner"] == ""
 
 
-def test_identity_policy_ignores_file_backed_system_owner_gate(tmp_path):
+def test_identity_policy_ignores_file_backed_system_owner_gate(tmp_path: Path) -> None:
     extension_root = tmp_path / "extension"
     extension_root.mkdir()
     policy_path = extension_root / ".sugarcubes" / "identity_policy.json"
@@ -886,7 +903,7 @@ def test_identity_policy_ignores_file_backed_system_owner_gate(tmp_path):
     )
 
 
-def test_identity_policy_reads_repo_root_dotenv_override(tmp_path):
+def test_identity_policy_reads_repo_root_dotenv_override(tmp_path: Path) -> None:
     extension_root = tmp_path / "extension"
     extension_root.mkdir()
     (extension_root / ".env").write_text(
@@ -905,7 +922,9 @@ def test_identity_policy_reads_repo_root_dotenv_override(tmp_path):
     assert policy.env_override_active is True
 
 
-def test_identity_policy_process_env_overrides_dotenv(tmp_path, monkeypatch):
+def test_identity_policy_process_env_overrides_dotenv(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     extension_root = tmp_path / "extension"
     extension_root.mkdir()
     (extension_root / ".env").write_text(
@@ -925,7 +944,7 @@ def test_identity_policy_process_env_overrides_dotenv(tmp_path, monkeypatch):
     assert policy.allow_system_owner_claim_source == "process_env"
 
 
-def test_identity_policy_env_system_owner_still_requires_gate(tmp_path):
+def test_identity_policy_env_system_owner_still_requires_gate(tmp_path: Path) -> None:
     extension_root = tmp_path / "extension"
     extension_root.mkdir()
     (extension_root / ".env").write_text(
@@ -943,7 +962,7 @@ def test_identity_policy_env_system_owner_still_requires_gate(tmp_path):
     assert policy.allow_system_owner_claim_source == "dotenv"
 
 
-def test_identity_policy_rejects_updates_to_env_managed_fields(tmp_path):
+def test_identity_policy_rejects_updates_to_env_managed_fields(tmp_path: Path) -> None:
     extension_root = tmp_path / "extension"
     extension_root.mkdir()
     (extension_root / ".env").write_text(
@@ -957,11 +976,13 @@ def test_identity_policy_rejects_updates_to_env_managed_fields(tmp_path):
         service.set_policy(claimed_github_owner="ExampleUser")
 
 
-def test_ownership_policy_marks_local_cubes_writable_without_claim(tmp_path):
+def test_ownership_policy_marks_local_cubes_writable_without_claim(
+    tmp_path: Path,
+) -> None:
     extension_root = tmp_path / "extension"
     extension_root.mkdir()
     tracked_repos = make_tracked_repo_service(
-        extension_root, git_runner=lambda args, cwd: None
+        extension_root, git_runner=_unused_git_runner
     )
     identity = IdentityPolicyService(extension_root)
     ownership = OwnershipPolicyService(
@@ -981,11 +1002,13 @@ def test_ownership_policy_marks_local_cubes_writable_without_claim(tmp_path):
     assert payload["write_target_kind"] == "local"
 
 
-def test_ownership_policy_requires_matching_claim_and_tracked_repo(tmp_path):
+def test_ownership_policy_requires_matching_claim_and_tracked_repo(
+    tmp_path: Path,
+) -> None:
     extension_root = tmp_path / "extension"
     extension_root.mkdir()
     tracked_repos = make_tracked_repo_service(
-        extension_root, git_runner=lambda args, cwd: None
+        extension_root, git_runner=_unused_git_runner
     )
     tracked_repos.add_repo(
         owner="example-user",
@@ -1013,11 +1036,13 @@ def test_ownership_policy_requires_matching_claim_and_tracked_repo(tmp_path):
     assert "does not match" in external["write_block_reason"]
 
 
-def test_ownership_policy_blocks_system_owner_without_advanced_gate(tmp_path):
+def test_ownership_policy_blocks_system_owner_without_advanced_gate(
+    tmp_path: Path,
+) -> None:
     extension_root = tmp_path / "extension"
     extension_root.mkdir()
     tracked_repos = make_tracked_repo_service(
-        extension_root, git_runner=lambda args, cwd: None
+        extension_root, git_runner=_unused_git_runner
     )
     identity = IdentityPolicyService(extension_root)
     ownership = OwnershipPolicyService(
@@ -1034,7 +1059,9 @@ def test_ownership_policy_blocks_system_owner_without_advanced_gate(tmp_path):
     assert payload["is_writable"] is False
 
 
-def test_ownership_policy_uses_env_managed_owner_for_tracked_repo_writes(tmp_path):
+def test_ownership_policy_uses_env_managed_owner_for_tracked_repo_writes(
+    tmp_path: Path,
+) -> None:
     extension_root = tmp_path / "extension"
     extension_root.mkdir()
     (extension_root / ".env").write_text(
@@ -1043,7 +1070,7 @@ def test_ownership_policy_uses_env_managed_owner_for_tracked_repo_writes(tmp_pat
         encoding="utf-8",
     )
     tracked_repos = make_tracked_repo_service(
-        extension_root, git_runner=lambda args, cwd: None
+        extension_root, git_runner=_unused_git_runner
     )
     identity = IdentityPolicyService(extension_root)
     ownership = OwnershipPolicyService(

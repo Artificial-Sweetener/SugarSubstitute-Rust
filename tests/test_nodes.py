@@ -13,11 +13,16 @@
 #
 #    You should have received a copy of the GNU Affero General Public License
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+from __future__ import annotations
+
+from typing import Any
 import pytest
 
 from sugarcubes.nodes import CubeInput, CubeOutput
 from sugarcubes.runtime import (
     CubeOutputArtifact,
+    CubeOutputEvent,
     register_cube_output_observer,
     unregister_cube_output_observer,
 )
@@ -26,10 +31,10 @@ from sugarcubes.runtime import (
 class RecordingObserver:
     """Record cube output events emitted by a node under test."""
 
-    def __init__(self):
-        self.events = []
+    def __init__(self) -> None:
+        self.events: list[CubeOutputEvent] = []
 
-    def on_cube_output(self, event):
+    def on_cube_output(self, event: CubeOutputEvent) -> None:
         """Record one cube output event."""
 
         self.events.append(event)
@@ -38,20 +43,20 @@ class RecordingObserver:
 class FailingObserver:
     """Raise during cube output delivery."""
 
-    def on_cube_output(self, event):
+    def on_cube_output(self, event: Any) -> None:
         """Fail while handling one cube output event."""
 
         raise RuntimeError("observer failed")
 
 
-def test_cube_input_requires_id_and_name():
+def test_cube_input_requires_id_and_name() -> None:
     node = CubeInput()
     node.forward("value", "", "Demo")
     with pytest.raises(ValueError):
         node.forward("value", "local/demo", "")
 
 
-def test_cube_output_requires_id_and_name():
+def test_cube_output_requires_id_and_name() -> None:
     node = CubeOutput()
     result = node.forward("value", "", "Demo")
     assert result["result"] == ("value",)
@@ -59,18 +64,18 @@ def test_cube_output_requires_id_and_name():
         node.forward("value", "local/demo", "")
 
 
-def test_cube_output_is_output_node():
+def test_cube_output_is_output_node() -> None:
     assert CubeOutput.OUTPUT_NODE is True
 
 
-def test_marker_nodes_declare_graph_passthrough_outputs():
+def test_marker_nodes_declare_graph_passthrough_outputs() -> None:
     """Marker nodes publish exact value pass-through provenance metadata."""
 
     assert CubeInput.GRAPH_PASSTHROUGH_OUTPUTS == {0: "value"}
     assert CubeOutput.GRAPH_PASSTHROUGH_OUTPUTS == {0: "value"}
 
 
-def test_cube_output_emits_event_with_metadata():
+def test_cube_output_emits_event_with_metadata() -> None:
     observer = RecordingObserver()
     register_cube_output_observer(observer)
     try:
@@ -100,7 +105,9 @@ def test_cube_output_emits_event_with_metadata():
     assert event.artifacts == ()
 
 
-def test_cube_output_uses_comfy_execution_context(monkeypatch):
+def test_cube_output_uses_comfy_execution_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     observer = RecordingObserver()
     register_cube_output_observer(observer)
     monkeypatch.setattr(
@@ -122,7 +129,9 @@ def test_cube_output_uses_comfy_execution_context(monkeypatch):
     assert event.list_index == 3
 
 
-def test_cube_output_image_value_produces_preview_and_artifacts(monkeypatch):
+def test_cube_output_image_value_produces_preview_and_artifacts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     artifact = CubeOutputArtifact(
         filename="ComfyUI_temp_demo_00001_.png",
         subfolder="",
@@ -158,7 +167,7 @@ def test_cube_output_image_value_produces_preview_and_artifacts(monkeypatch):
     assert event.artifacts == (artifact,)
 
 
-def test_cube_output_observer_failure_does_not_fail_forward():
+def test_cube_output_observer_failure_does_not_fail_forward() -> None:
     failing = FailingObserver()
     register_cube_output_observer(failing)
     try:

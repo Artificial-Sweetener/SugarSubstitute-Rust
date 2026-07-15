@@ -15,6 +15,13 @@
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """Save/load route tests for the tracked-repo cube model."""
 
+from __future__ import annotations
+
+from typing import Any
+
+from pathlib import Path
+from .typing_support import BackendServicesFactory
+
 import asyncio
 import json
 import logging
@@ -26,7 +33,7 @@ from sugarcubes.importer import CubeImportError
 from sugarcubes.backend.routes import build_route_handlers
 from sugarcubes.exporter import ExportedCube, write_cube_to_path, write_cubes_to_paths
 
-from conftest import (
+from .conftest import (
     FakeRequest,
     claim_github_owner,
     decode_json_response,
@@ -37,8 +44,12 @@ CANONICAL_CUBE_ID = "Artificial-Sweetener/Base-Cubes/demo.cube"
 
 
 def _write_current_cube(
-    path, *, cube_id=CANONICAL_CUBE_ID, version="1.0.0", metadata=None
-):
+    path: Any,
+    *,
+    cube_id: Any = CANONICAL_CUBE_ID,
+    version: Any = "1.0.0",
+    metadata: Any = None,
+) -> None:
     payload = {
         "cube_id": cube_id,
         "version": version,
@@ -59,14 +70,14 @@ def _write_current_cube(
 
 
 def _surface_control(
-    control_id,
+    control_id: Any,
     *,
-    input_name,
-    label=None,
-    class_type="KSampler",
-    symbol="ksampler",
-    value_type="number",
-):
+    input_name: Any,
+    label: Any = None,
+    class_type: Any = "KSampler",
+    symbol: Any = "ksampler",
+    value_type: Any = "number",
+) -> Any:
     """Build one compact numeric surface-control fixture."""
 
     return {
@@ -81,13 +92,13 @@ def _surface_control(
 
 def _surface_cube_payload(
     *,
-    cube_id=CANONICAL_CUBE_ID,
-    version="1.0.0",
-    description="",
-    metadata=None,
-    controls=None,
-    authored=None,
-):
+    cube_id: Any = CANONICAL_CUBE_ID,
+    version: Any = "1.0.0",
+    description: Any = "",
+    metadata: Any = None,
+    controls: Any = None,
+    authored: Any = None,
+) -> Any:
     """Build one current-format cube fixture with surface controls."""
 
     return {
@@ -127,14 +138,14 @@ def _surface_cube_payload(
     }
 
 
-def _init_git_repo(services, repo_root):
+def _init_git_repo(services: Any, repo_root: Any) -> None:
     """Initialize one isolated git repo for backend save tests."""
 
     repo_root.mkdir(parents=True, exist_ok=True)
     services.tracked_repos.git_runner(["init", "-b", "main"], cwd=repo_root)
 
 
-def _commit_all(services, repo_root, message="baseline"):
+def _commit_all(services: Any, repo_root: Any, message: Any = "baseline") -> None:
     """Commit all current fixture files in one isolated git repo."""
 
     services.tracked_repos.git_runner(["add", "--all"], cwd=repo_root)
@@ -153,8 +164,8 @@ def _commit_all(services, repo_root, message="baseline"):
 
 
 def test_save_many_persists_to_tracked_repo_checkout(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     exported = ExportedCube(
         default_alias="Demo",
         cube=_surface_cube_payload(version="1.0.0"),
@@ -210,8 +221,8 @@ def test_save_many_persists_to_tracked_repo_checkout(
 
 
 def test_save_many_accepts_omitted_actor_and_preserves_existing_author_url(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     """Keep personal saves zero-setup without erasing previously authored links."""
 
     exported = ExportedCube(
@@ -265,8 +276,8 @@ def test_save_many_accepts_omitted_actor_and_preserves_existing_author_url(
 
 
 def test_save_many_applies_explicit_description_override(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     exported = ExportedCube(
         default_alias="Demo",
         cube=_surface_cube_payload(
@@ -320,8 +331,8 @@ def test_save_many_applies_explicit_description_override(
 
 
 def test_save_many_applies_entry_target_model_metadata(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     cube_id = "Artificial-Sweetener/Base-Cubes/SDXL/Demo.cube"
     exported = ExportedCube(
         default_alias="Demo",
@@ -377,8 +388,8 @@ def test_save_many_applies_entry_target_model_metadata(
 
 
 def test_save_many_preserves_catalog_metadata_on_implementation_save(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     exported = ExportedCube(
         default_alias="Demo",
         cube=_surface_cube_payload(
@@ -438,8 +449,8 @@ def test_save_many_preserves_catalog_metadata_on_implementation_save(
 
 
 def test_save_many_repairs_missing_default_alias_on_implementation_save(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     exported = ExportedCube(
         default_alias="Image to Image",
         cube=_surface_cube_payload(
@@ -499,8 +510,8 @@ def test_save_many_repairs_missing_default_alias_on_implementation_save(
 
 
 def test_save_many_commits_version_changed_github_cube(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     exported = ExportedCube(
         default_alias="Demo",
         cube=_surface_cube_payload(version="1.0.1"),
@@ -551,8 +562,8 @@ def test_save_many_commits_version_changed_github_cube(
 
 
 def test_save_many_stale_latest_uses_current_version_suggestion(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     seen_versions = {}
     exported = ExportedCube(
         default_alias="Demo",
@@ -572,7 +583,7 @@ def test_save_many_stale_latest_uses_current_version_suggestion(
         ]
     }
 
-    def suggest_version(existing, current):
+    def suggest_version(existing: Any, current: Any) -> Any:
         seen_versions["existing"] = existing.get("version")
         seen_versions["current"] = current.get("version")
         return SimpleNamespace(suggested="1.2.2", reason="patch", bump="patch")
@@ -637,8 +648,8 @@ def test_save_many_stale_latest_uses_current_version_suggestion(
 
 
 def test_save_many_existing_implementation_save_preserves_authored_flavors(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     existing_controls = [
         _surface_control("ksampler.cfg", input_name="cfg"),
         _surface_control("ksampler.steps", input_name="steps"),
@@ -738,8 +749,8 @@ def test_save_many_existing_implementation_save_preserves_authored_flavors(
 
 
 def test_save_many_existing_implementation_save_reorders_authored_values_to_exported_surface(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     """Implementation save uses exported surface order while preserving values."""
 
     exported_controls = [
@@ -838,8 +849,8 @@ def test_save_many_existing_implementation_save_reorders_authored_values_to_expo
 
 
 def test_save_many_first_time_save_keeps_exported_default_flavor_values(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     exported = ExportedCube(
         default_alias="Demo",
         cube=_surface_cube_payload(
@@ -887,8 +898,8 @@ def test_save_many_first_time_save_keeps_exported_default_flavor_values(
 
 
 def test_save_many_first_time_save_strips_machine_local_authored_defaults(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     controls = [
         _surface_control("ksampler.cfg", input_name="cfg"),
         _surface_control("ksampler.seed", input_name="seed"),
@@ -972,8 +983,8 @@ def test_save_many_first_time_save_strips_machine_local_authored_defaults(
 
 
 def test_save_many_existing_implementation_strips_machine_local_defaults(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     controls = [
         _surface_control("ksampler.cfg", input_name="cfg"),
         _surface_control(
@@ -1100,7 +1111,9 @@ def test_save_many_existing_implementation_strips_machine_local_defaults(
     ]
 
 
-def test_save_authored_flavor_updates_tracked_cube(tmp_path, backend_services_factory):
+def test_save_authored_flavor_updates_tracked_cube(
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     services = backend_services_factory(
         tmp_path,
         write_cube_to_path=write_cube_to_path,
@@ -1190,8 +1203,8 @@ def test_save_authored_flavor_updates_tracked_cube(tmp_path, backend_services_fa
 
 
 def test_save_authored_flavor_strips_machine_local_defaults(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     services = backend_services_factory(
         tmp_path,
         write_cube_to_path=write_cube_to_path,
@@ -1273,8 +1286,8 @@ def test_save_authored_flavor_strips_machine_local_defaults(
 
 
 def test_save_authored_flavor_commits_version_changed_cube(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     services = backend_services_factory(
         tmp_path,
         write_cube_to_path=write_cube_to_path,
@@ -1350,8 +1363,8 @@ def test_save_authored_flavor_commits_version_changed_cube(
 
 
 def test_save_many_persists_to_managed_local_workspace(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     local_cube_id = "local/example-user/private/demo.cube"
     exported = ExportedCube(
         default_alias="Demo",
@@ -1395,8 +1408,8 @@ def test_save_many_persists_to_managed_local_workspace(
 
 
 def test_save_many_commits_same_version_changed_local_cube(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     local_cube_id = "local/example-user/private/demo.cube"
     exported = ExportedCube(
         default_alias="Demo",
@@ -1449,7 +1462,9 @@ def test_save_many_commits_same_version_changed_local_cube(
     )
 
 
-def test_save_many_does_not_commit_noop_local_cube(tmp_path, backend_services_factory):
+def test_save_many_does_not_commit_noop_local_cube(
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     local_cube_id = "local/example-user/private/demo.cube"
     cube_payload = _surface_cube_payload(
         cube_id=local_cube_id,
@@ -1501,8 +1516,8 @@ def test_save_many_does_not_commit_noop_local_cube(tmp_path, backend_services_fa
 
 
 def test_save_many_commits_same_version_layout_only_github_cube(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     existing_payload = _surface_cube_payload(
         version="1.1.0",
         metadata={"default_alias": "demo"},
@@ -1573,8 +1588,8 @@ def test_save_many_commits_same_version_layout_only_github_cube(
 
 
 def test_save_many_persists_to_new_authoring_pack_checkout(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     cube_id = "ExampleUser/Example-Cubes/text_to_image.cube"
     exported = ExportedCube(
         default_alias="Text to Image",
@@ -1619,8 +1634,8 @@ def test_save_many_persists_to_new_authoring_pack_checkout(
 
 
 def test_save_many_reports_commit_failure_when_repo_has_unrelated_staged_changes(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     exported = ExportedCube(
         default_alias="Demo",
         cube=_surface_cube_payload(version="1.0.1"),
@@ -1670,7 +1685,9 @@ def test_save_many_reports_commit_failure_when_repo_has_unrelated_staged_changes
     assert saved_payload["version"] == "1.0.1"
 
 
-def test_save_many_rejects_noncanonical_cube_ids(tmp_path, backend_services_factory):
+def test_save_many_rejects_noncanonical_cube_ids(
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     services = backend_services_factory(
         tmp_path, node_class_mappings={"KSampler": object()}
     )
@@ -1696,7 +1713,9 @@ def test_save_many_rejects_noncanonical_cube_ids(tmp_path, backend_services_fact
     )
 
 
-def test_save_many_rejects_unknown_stale_save_mode(tmp_path, backend_services_factory):
+def test_save_many_rejects_unknown_stale_save_mode(
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     services = backend_services_factory(
         tmp_path, node_class_mappings={"KSampler": object()}
     )
@@ -1729,8 +1748,8 @@ def test_save_many_rejects_unknown_stale_save_mode(tmp_path, backend_services_fa
 
 
 def test_save_many_rejects_target_model_metadata_that_conflicts_with_cube_path(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     services = backend_services_factory(
         tmp_path, node_class_mappings={"KSampler": object()}
     )
@@ -1762,8 +1781,8 @@ def test_save_many_rejects_target_model_metadata_that_conflicts_with_cube_path(
 
 
 def test_load_route_uses_tracked_repo_source_metadata(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     loaded_cube = SimpleNamespace(version="1.0.0")
     prepared = SimpleNamespace(
         cube={"cube_id": CANONICAL_CUBE_ID, "version": "1.0.0"},
@@ -1805,8 +1824,11 @@ def test_load_route_uses_tracked_repo_source_metadata(
 
 
 def test_import_cube_file_preserves_original_import_error_when_cleanup_fails(
-    tmp_path, backend_services_factory, monkeypatch, caplog
-):
+    tmp_path: Path,
+    backend_services_factory: BackendServicesFactory,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     source_path = tmp_path / "source.cube"
     source_path.write_text(
         json.dumps({"cube_id": CANONICAL_CUBE_ID, "version": "1.0.0", "nodes": {}}),
@@ -1827,7 +1849,7 @@ def test_import_cube_file_preserves_original_import_error_when_cleanup_fails(
     )
     original_unlink = type(destination).unlink
 
-    def failing_unlink(path, *args, **kwargs):
+    def failing_unlink(path: Any, *args: Any, **kwargs: Any) -> Any:
         if path == destination:
             raise PermissionError("locked")
         return original_unlink(path, *args, **kwargs)
@@ -1852,8 +1874,8 @@ def test_import_cube_file_preserves_original_import_error_when_cleanup_fails(
 
 
 def test_import_cube_file_rehomes_to_canonical_local_cube_id(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     source_path = tmp_path / "source.cube"
     source_cube_id = "artificial-sweetener/base-cubes/demo.cube"
     source_path.write_text(
@@ -1924,8 +1946,8 @@ def test_import_cube_file_rehomes_to_canonical_local_cube_id(
 
 
 def test_save_many_rejects_read_only_tracked_repo_targets(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     exported = ExportedCube(
         default_alias="Demo",
         cube={"cube_id": CANONICAL_CUBE_ID, "version": "1.0.0", "metadata": {}},

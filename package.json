@@ -7,11 +7,14 @@
     "test": "tests"
   },
   "scripts": {
+    "build": "tsx scripts/build-web.ts",
+    "build:check": "tsx scripts/build-web.ts --check",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
-    "audit:standards": "python scripts/standards_audit.py && node scripts/standards-audit.mjs",
-    "lint": "eslint \"web/**/*.js\"",
-    "format": "prettier --write \"web/**/*.js\"",
-    "check": "python -m black . --exclude \"node_modules|cubes\" && python -m ruff check . --exclude node_modules,cubes && npm run audit:standards && npm run format && npm run lint && node scripts/run-tests.mjs",
+    "typecheck": "tsc --project tsconfig.json --noEmit && tsc --project tsconfig.tests.json --noEmit && python scripts/run_mypy.py",
+    "audit:standards": "python scripts/standards_audit.py && tsx scripts/standards-audit.ts",
+    "lint": "eslint \"web/**/*.ts\" \"tests/**/*.ts\" \"scripts/**/*.ts\"",
+    "format": "prettier --write \"web/**/*.ts\" \"tests/**/*.ts\" \"scripts/**/*.ts\" \"*.json\"",
+    "check": "python -m black . --exclude \"node_modules|cubes\" && python -m ruff check . --exclude node_modules,cubes && npm run audit:standards && npm run format && npm run typecheck && npm run lint && npm run build:check && tsx scripts/run-tests.ts",
     "release": "semantic-release"
   },
   "keywords": [],
@@ -24,12 +27,19 @@
     "@semantic-release/exec": "^7.1.0",
     "@semantic-release/git": "^10.0.1",
     "@semantic-release/release-notes-generator": "^14.1.1",
-    "eslint": "^8.56.0",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.20.1",
+    "@typescript-eslint/eslint-plugin": "^8.64.0",
+    "@typescript-eslint/parser": "^8.64.0",
+    "eslint": "^8.57.1",
     "eslint-config-prettier": "^9.1.0",
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^29.7.0",
     "prettier": "^3.3.3",
-    "semantic-release": "^25.0.3"
+    "semantic-release": "^25.0.3",
+    "ts-jest": "^29.4.11",
+    "tsx": "^4.23.1",
+    "typescript": "^5.9.3"
   },
   "private": true
 }

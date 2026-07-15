@@ -13,13 +13,15 @@
 #
 #    You should have received a copy of the GNU Affero General Public License
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+from __future__ import annotations
 import pytest
 
 from sugarcubes.exporter.graph import analyze_cubes
 from sugarcubes.exporter.validation import CubeValidationError, validate
 
 
-def test_marker_boundary_links_are_allowed():
+def test_marker_boundary_links_are_allowed() -> None:
     cube_id = "local/example-user/demo.cube"
     prompt = {
         "1": {
@@ -42,7 +44,7 @@ def test_marker_boundary_links_are_allowed():
     validate(analysis)
 
 
-def test_direct_cross_cube_links_fail():
+def test_direct_cross_cube_links_fail() -> None:
     prompt = {
         "1": {
             "class_type": "SugarCubes.CubeInput",

@@ -13,14 +13,19 @@
 #
 #    You should have received a copy of the GNU Affero General Public License
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+from __future__ import annotations
+
+from pathlib import Path
 import json
+from typing import Any
 
 import pytest
 
 from sugarcubes.importer import CubeImportError, load_cube
 
 
-def _base_current_payload() -> dict:
+def _base_current_payload() -> dict[str, Any]:
     return {
         "description": "demo",
         "cube_id": "artificial-sweetener/base-cubes/demo.cube",
@@ -43,7 +48,7 @@ PARENT_SUBGRAPH_ID = "644694cf-354b-4cc8-8a67-a78145a8180e"
 CHILD_SUBGRAPH_ID = "8f6c43da-07af-4666-9e9a-0b4c7f83bdad"
 
 
-def test_load_cube_rejects_invalid_json(tmp_path):
+def test_load_cube_rejects_invalid_json(tmp_path: Path) -> None:
     path = tmp_path / "bad.cube"
     path.write_text("{not json}", encoding="utf-8")
 
@@ -51,7 +56,7 @@ def test_load_cube_rejects_invalid_json(tmp_path):
         load_cube(path)
 
 
-def test_load_cube_rejects_invalid_nodes_shape(tmp_path):
+def test_load_cube_rejects_invalid_nodes_shape(tmp_path: Path) -> None:
     payload = _base_current_payload()
     payload["implementation"]["nodes"] = []
     path = tmp_path / "bad_nodes.cube"
@@ -61,7 +66,7 @@ def test_load_cube_rejects_invalid_nodes_shape(tmp_path):
         load_cube(path)
 
 
-def test_load_cube_requires_cube_id(tmp_path):
+def test_load_cube_requires_cube_id(tmp_path: Path) -> None:
     payload = _base_current_payload()
     del payload["cube_id"]
     path = tmp_path / "missing_id.cube"
@@ -71,7 +76,7 @@ def test_load_cube_requires_cube_id(tmp_path):
         load_cube(path)
 
 
-def test_load_cube_rejects_non_array_subgraphs(tmp_path):
+def test_load_cube_rejects_non_array_subgraphs(tmp_path: Path) -> None:
     payload = _base_current_payload()
     payload["implementation"]["subgraphs"] = {}
     path = tmp_path / "bad_subgraphs.cube"
@@ -81,7 +86,7 @@ def test_load_cube_rejects_non_array_subgraphs(tmp_path):
         load_cube(path)
 
 
-def test_load_cube_rejects_subgraph_without_nodes(tmp_path):
+def test_load_cube_rejects_subgraph_without_nodes(tmp_path: Path) -> None:
     payload = _base_current_payload()
     payload["implementation"]["subgraphs"] = [
         {"id": "94f725d5-39bf-4060-be68-f573214a2055", "nodes": []}
@@ -93,7 +98,7 @@ def test_load_cube_rejects_subgraph_without_nodes(tmp_path):
         load_cube(path)
 
 
-def test_load_cube_rejects_missing_nested_subgraph_definition(tmp_path):
+def test_load_cube_rejects_missing_nested_subgraph_definition(tmp_path: Path) -> None:
     payload = _base_current_payload()
     payload["implementation"]["nodes"] = {
         "wrapper": {"class_type": PARENT_SUBGRAPH_ID, "inputs": {}}

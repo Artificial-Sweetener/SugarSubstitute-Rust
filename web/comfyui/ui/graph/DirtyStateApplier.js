@@ -16,87 +16,61 @@
 /**
  * Own the SugarCubes graph integration layer in `web/comfyui/ui/graph/DirtyStateApplier.js`.
  */
-
 import { setGroupSugarcubes } from './GroupMetadata.js';
-
 /**
  * Coordinate dirty state applier behavior for the SugarCubes UI.
  */
 export class DirtyStateApplier {
-  constructor({ tracker } = {}) {
-    this.tracker = tracker || null;
-  }
-
-  applyInstanceState({
-    group,
-    metadata,
-    instanceId,
-    cubeId,
-    definitionKey,
-    implementationBaselineHash,
-    implementationCurrentHash,
-    cosmeticBaselineHash,
-    cosmeticCurrentHash,
-    surfaceBaselineHash,
-    surfaceCurrentHash,
-    dirty,
-    dirtyAt,
-    implementationDirty,
-    implementationReasons,
-    cosmeticDirty,
-    surfaceValuesChanged,
-    hasSaveableChanges,
-    initializedAt,
-  } = {}) {
-    if (!this.tracker || !instanceId) {
-      return;
+    tracker;
+    constructor({ tracker } = {}) {
+        this.tracker = tracker || null;
     }
-    this.tracker.instances.set(instanceId, {
-      cubeId,
-      definitionKey,
-      baselineHash: implementationBaselineHash,
-      currentHash: implementationCurrentHash,
-      implementationBaselineHash,
-      implementationCurrentHash,
-      cosmeticBaselineHash,
-      cosmeticCurrentHash,
-      surfaceBaselineHash,
-      surfaceCurrentHash,
-      dirty,
-      dirtyAt,
-      implementationDirty,
-      cosmeticDirty,
-      surfaceValuesChanged,
-      hasSaveableChanges,
-      initializedAt,
-      reasons: Array.isArray(implementationReasons) ? implementationReasons : [],
-    });
-
-    if (!group || !metadata) {
-      return;
+    applyInstanceState({ group, metadata, instanceId, cubeId, definitionKey, implementationBaselineHash, implementationCurrentHash, cosmeticBaselineHash, cosmeticCurrentHash, surfaceBaselineHash, surfaceCurrentHash, dirty, dirtyAt, implementationDirty, implementationReasons, cosmeticDirty, surfaceValuesChanged, hasSaveableChanges, initializedAt, } = {}) {
+        if (!this.tracker || !instanceId) {
+            return;
+        }
+        this.tracker.instances.set(instanceId, {
+            cubeId,
+            definitionKey,
+            baselineHash: implementationBaselineHash,
+            currentHash: implementationCurrentHash,
+            implementationBaselineHash,
+            implementationCurrentHash,
+            cosmeticBaselineHash,
+            cosmeticCurrentHash,
+            surfaceBaselineHash,
+            surfaceCurrentHash,
+            dirty,
+            dirtyAt,
+            implementationDirty,
+            cosmeticDirty,
+            surfaceValuesChanged,
+            hasSaveableChanges,
+            initializedAt,
+            reasons: Array.isArray(implementationReasons) ? implementationReasons : [],
+        });
+        if (!group || !metadata) {
+            return;
+        }
+        if (metadata.dirty !== dirty ||
+            metadata.dirty_at !== dirtyAt ||
+            metadata.implementation_dirty !== implementationDirty ||
+            metadata.surface_values_changed !== surfaceValuesChanged ||
+            metadata.cosmetic_dirty !== cosmeticDirty ||
+            metadata.has_saveable_changes !== hasSaveableChanges) {
+            const next = {
+                ...metadata,
+                dirty,
+                dirty_at: dirtyAt,
+                implementation_dirty: implementationDirty,
+                surface_values_changed: surfaceValuesChanged,
+                cosmetic_dirty: cosmeticDirty,
+                has_saveable_changes: hasSaveableChanges,
+            };
+            setGroupSugarcubes(group, next);
+        }
     }
-    if (
-      metadata.dirty !== dirty ||
-      metadata.dirty_at !== dirtyAt ||
-      metadata.implementation_dirty !== implementationDirty ||
-      metadata.surface_values_changed !== surfaceValuesChanged ||
-      metadata.cosmetic_dirty !== cosmeticDirty ||
-      metadata.has_saveable_changes !== hasSaveableChanges
-    ) {
-      const next = {
-        ...metadata,
-        dirty,
-        dirty_at: dirtyAt,
-        implementation_dirty: implementationDirty,
-        surface_values_changed: surfaceValuesChanged,
-        cosmetic_dirty: cosmeticDirty,
-        has_saveable_changes: hasSaveableChanges,
-      };
-      setGroupSugarcubes(group, next);
+    finalize() {
+        this.tracker?.updateDirtyCubeIds?.();
     }
-  }
-
-  finalize() {
-    this.tracker?.updateDirtyCubeIds?.();
-  }
 }

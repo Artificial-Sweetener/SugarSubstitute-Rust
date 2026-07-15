@@ -13,13 +13,19 @@
 #
 #    You should have received a copy of the GNU Affero General Public License
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+from __future__ import annotations
+
+from typing import Any
+
+from pathlib import Path
 import pytest
 
 from sugarcubes.exporter import ExportedCube, export_cubes, write_cubes
 from sugarcubes.importer import load_cube, prepare_import
 
 
-def _build_prompt():
+def _build_prompt() -> Any:
     cube_id = "artificial-sweetener/base-cubes/demo.cube"
     return {
         "1": {
@@ -37,7 +43,7 @@ def _build_prompt():
     }
 
 
-def _definition_resolver(_class_type):
+def _definition_resolver(_class_type: Any) -> Any:
     return {}
 
 
@@ -46,7 +52,7 @@ CHILD_SUBGRAPH_ID = "8f6c43da-07af-4666-9e9a-0b4c7f83bdad"
 CYCLIC_SUBGRAPH_ID = "53f09d1e-0364-4cb3-b5e7-535f63d1323f"
 
 
-def _build_subgraph_wrapper_prompt():
+def _build_subgraph_wrapper_prompt() -> Any:
     cube_id = "artificial-sweetener/base-cubes/demo.cube"
     return {
         "1": {
@@ -62,10 +68,10 @@ def _build_subgraph_wrapper_prompt():
 
 def _build_nested_subgraph_workflow(
     *,
-    parent_id=PARENT_SUBGRAPH_ID,
-    child_id=CHILD_SUBGRAPH_ID,
-    include_child=True,
-):
+    parent_id: Any = PARENT_SUBGRAPH_ID,
+    child_id: Any = CHILD_SUBGRAPH_ID,
+    include_child: Any = True,
+) -> Any:
     subgraphs = [
         {
             "id": parent_id,
@@ -100,7 +106,7 @@ def _build_nested_subgraph_workflow(
     }
 
 
-def test_exporter_builds_cube_payload():
+def test_exporter_builds_cube_payload() -> None:
     cubes = export_cubes(_build_prompt(), definition_resolver=_definition_resolver)
     assert len(cubes) == 1
 
@@ -118,7 +124,7 @@ def test_exporter_builds_cube_payload():
     assert node_payload["class_type"] == "KSampler"
 
 
-def test_exporter_includes_subgraph_definitions():
+def test_exporter_includes_subgraph_definitions() -> None:
     subgraph_id = "94f725d5-39bf-4060-be68-f573214a2055"
     subgraph_node_id = "subnode-1"
     cube_id = "artificial-sweetener/base-cubes/demo.cube"
@@ -168,7 +174,7 @@ def test_exporter_includes_subgraph_definitions():
     assert "mode" not in payload["implementation"]["subgraphs"][0]["nodes"][0]
 
 
-def test_exporter_rejects_missing_wrapper_subgraph_definition():
+def test_exporter_rejects_missing_wrapper_subgraph_definition() -> None:
     subgraph_id = "94f725d5-39bf-4060-be68-f573214a2055"
     cube_id = "artificial-sweetener/base-cubes/demo.cube"
     prompt = {
@@ -199,7 +205,7 @@ def test_exporter_rejects_missing_wrapper_subgraph_definition():
         )
 
 
-def test_exporter_rejects_subgraph_without_executable_nodes():
+def test_exporter_rejects_subgraph_without_executable_nodes() -> None:
     subgraph_id = "94f725d5-39bf-4060-be68-f573214a2055"
     cube_id = "artificial-sweetener/base-cubes/demo.cube"
     prompt = {
@@ -230,7 +236,7 @@ def test_exporter_rejects_subgraph_without_executable_nodes():
         )
 
 
-def test_exporter_includes_nested_subgraph_definitions_in_dependency_order():
+def test_exporter_includes_nested_subgraph_definitions_in_dependency_order() -> None:
     cubes = export_cubes(
         _build_subgraph_wrapper_prompt(),
         workflow=_build_nested_subgraph_workflow(),
@@ -246,7 +252,7 @@ def test_exporter_includes_nested_subgraph_definitions_in_dependency_order():
     assert subgraphs[1]["nodes"][0]["type"] == CHILD_SUBGRAPH_ID
 
 
-def test_exporter_rejects_missing_nested_subgraph_definition():
+def test_exporter_rejects_missing_nested_subgraph_definition() -> None:
     with pytest.raises(ValueError, match=CHILD_SUBGRAPH_ID):
         export_cubes(
             _build_subgraph_wrapper_prompt(),
@@ -255,7 +261,7 @@ def test_exporter_rejects_missing_nested_subgraph_definition():
         )
 
 
-def test_exporter_rejects_cyclic_nested_subgraph_definitions():
+def test_exporter_rejects_cyclic_nested_subgraph_definitions() -> None:
     workflow = _build_nested_subgraph_workflow(
         parent_id=PARENT_SUBGRAPH_ID,
         child_id=CHILD_SUBGRAPH_ID,
@@ -290,7 +296,7 @@ def test_exporter_rejects_cyclic_nested_subgraph_definitions():
         )
 
 
-def test_exporter_collects_real_node_definitions_inside_nested_subgraphs():
+def test_exporter_collects_real_node_definitions_inside_nested_subgraphs() -> None:
     cubes = export_cubes(
         _build_subgraph_wrapper_prompt(),
         workflow=_build_nested_subgraph_workflow(),
@@ -303,7 +309,7 @@ def test_exporter_collects_real_node_definitions_inside_nested_subgraphs():
     assert PARENT_SUBGRAPH_ID not in definitions
 
 
-def test_export_import_roundtrip(tmp_path):
+def test_export_import_roundtrip(tmp_path: Path) -> None:
     cubes = export_cubes(_build_prompt(), definition_resolver=_definition_resolver)
     saved = write_cubes(cubes, tmp_path, overwrite=True)
     cube_path = saved[0]["path"]
@@ -314,13 +320,14 @@ def test_export_import_roundtrip(tmp_path):
     assert prepared.nodes
     assert prepared.markers
     assert prepared.connections
+    assert prepared.layout is not None
     assert prepared.layout["origin"] == [10, 20]
     assert any(
         "Layout origin missing or invalid" in warning for warning in prepared.warnings
     )
 
 
-def test_write_cubes_uses_exact_filename_from_canonical_cube_id(tmp_path):
+def test_write_cubes_uses_exact_filename_from_canonical_cube_id(tmp_path: Path) -> None:
     exported = ExportedCube(
         default_alias="Text to Image",
         cube={"cube_id": "local/personal/Text to Image.cube"},
@@ -333,7 +340,7 @@ def test_write_cubes_uses_exact_filename_from_canonical_cube_id(tmp_path):
     assert (tmp_path / "Text to Image.cube").exists()
 
 
-def test_export_import_roundtrip_preserves_subgraph_bodies(tmp_path):
+def test_export_import_roundtrip_preserves_subgraph_bodies(tmp_path: Path) -> None:
     subgraph_id = "94f725d5-39bf-4060-be68-f573214a2055"
     cube_id = "artificial-sweetener/base-cubes/demo.cube"
     prompt = {
@@ -380,7 +387,9 @@ def test_export_import_roundtrip_preserves_subgraph_bodies(tmp_path):
     assert prepared.subgraphs[0]["nodes"][0]["type"] == "KSampler"
 
 
-def test_export_import_roundtrip_preserves_nested_subgraph_bodies(tmp_path):
+def test_export_import_roundtrip_preserves_nested_subgraph_bodies(
+    tmp_path: Path,
+) -> None:
     cubes = export_cubes(
         _build_subgraph_wrapper_prompt(),
         workflow=_build_nested_subgraph_workflow(),
@@ -397,7 +406,7 @@ def test_export_import_roundtrip_preserves_nested_subgraph_bodies(tmp_path):
     assert not any("subgraph" in warning.lower() for warning in prepared.warnings)
 
 
-def test_export_preserves_group_metadata():
+def test_export_preserves_group_metadata() -> None:
     prompt = _build_prompt()
     workflow = {
         "nodes": [
@@ -446,7 +455,7 @@ def test_export_preserves_group_metadata():
     assert "alias" not in groups[0]["sugarcubes"]
 
 
-def test_export_allows_alias_divergence():
+def test_export_allows_alias_divergence() -> None:
     prompt = _build_prompt()
     workflow = {
         "nodes": [

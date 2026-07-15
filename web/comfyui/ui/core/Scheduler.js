@@ -16,36 +16,30 @@
 /**
  * Own the SugarCubes core UI service layer in `web/comfyui/ui/core/Scheduler.js`.
  */
-
-/**
- * Coordinate scheduler behavior for the SugarCubes UI.
- */
+/** Schedule cancellable UI work through the injected host timing boundary. */
 export class Scheduler {
-  constructor(adapter) {
-    this.adapter = adapter;
-  }
-
-  raf(callback) {
-    const raf = this.adapter?.getRaf?.() || null;
-    return raf ? raf(callback) : null;
-  }
-
-  cancelRaf(id) {
-    const cancel = this.adapter?.getCancelRaf?.() || null;
-    if (cancel) {
-      cancel(id);
+    adapter;
+    constructor(adapter) {
+        this.adapter = adapter;
     }
-  }
-
-  timeout(callback, delayMs) {
-    const setTimer = this.adapter?.getSetTimeout?.() || null;
-    return setTimer ? setTimer(callback, delayMs) : null;
-  }
-
-  clearTimeout(id) {
-    const clearTimer = this.adapter?.getClearTimeout?.() || null;
-    if (clearTimer) {
-      clearTimer(id);
+    raf(callback) {
+        const raf = this.adapter?.getRaf?.() || null;
+        return raf ? raf(callback) : null;
     }
-  }
+    cancelRaf(id) {
+        const cancel = this.adapter?.getCancelRaf?.() || null;
+        if (cancel) {
+            cancel(id);
+        }
+    }
+    timeout(callback, delayMs) {
+        const setTimer = this.adapter?.getSetTimeout?.() || null;
+        return setTimer ? setTimer(callback, delayMs) : null;
+    }
+    clearTimeout(id) {
+        const clearTimer = this.adapter?.getClearTimeout?.() || null;
+        if (clearTimer) {
+            clearTimer(id);
+        }
+    }
 }

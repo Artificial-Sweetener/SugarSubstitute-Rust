@@ -13,20 +13,25 @@
 #
 #    You should have received a copy of the GNU Affero General Public License
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+from __future__ import annotations
+
+from pathlib import Path
+from .typing_support import BackendServicesFactory
 import asyncio
 import json
 from types import SimpleNamespace
 
 from sugarcubes.backend.routes import build_route_handlers
 
-from conftest import FakeRequest, claim_github_owner, decode_json_response
+from .conftest import FakeRequest, claim_github_owner, decode_json_response
 
 CANONICAL_GITHUB_CUBE_ID = "Artificial-Sweetener/Base-Cubes/demo.cube"
 
 
 def test_list_route_preserves_library_response_shape(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     services = backend_services_factory(tmp_path)
     checkout = services.tracked_repos.checkout_path(
         "Artificial-Sweetener", "Base-Cubes"
@@ -81,8 +86,8 @@ def test_list_route_preserves_library_response_shape(
 
 
 def test_list_route_returns_route_based_default_alias(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     services = backend_services_factory(tmp_path)
     checkout = services.tracked_repos.checkout_path(
         "Artificial-Sweetener", "Base-Cubes"
@@ -127,7 +132,9 @@ def test_list_route_returns_route_based_default_alias(
     assert cube["supported_models"] == ["SDXL", "SD 1.5"]
 
 
-def test_list_route_includes_safe_icon_descriptor(tmp_path, backend_services_factory):
+def test_list_route_includes_safe_icon_descriptor(
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     services = backend_services_factory(tmp_path)
     checkout = services.tracked_repos.checkout_path(
         "Artificial-Sweetener", "Base-Cubes"
@@ -176,8 +183,8 @@ def test_list_route_includes_safe_icon_descriptor(tmp_path, backend_services_fac
 
 
 def test_list_route_ignores_invalid_existing_icon_metadata(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     services = backend_services_factory(tmp_path)
     checkout = services.tracked_repos.checkout_path(
         "Artificial-Sweetener", "Base-Cubes"
@@ -220,8 +227,8 @@ def test_list_route_ignores_invalid_existing_icon_metadata(
 
 
 def test_icon_asset_route_serves_only_declared_cube_icon(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     services = backend_services_factory(tmp_path)
     checkout = services.tracked_repos.checkout_path(
         "Artificial-Sweetener", "Base-Cubes"
@@ -269,8 +276,8 @@ def test_icon_asset_route_serves_only_declared_cube_icon(
 
 
 def test_icon_asset_route_returns_404_for_missing_icon(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     services = backend_services_factory(tmp_path)
     checkout = services.tracked_repos.checkout_path(
         "Artificial-Sweetener", "Base-Cubes"
@@ -313,7 +320,9 @@ def test_icon_asset_route_returns_404_for_missing_icon(
     assert "not found" in payload["error"]["message"].lower()
 
 
-def test_preview_route_preserves_preview_shape(tmp_path, backend_services_factory):
+def test_preview_route_preserves_preview_shape(
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     loaded_cube = SimpleNamespace(
         description="Preview me",
         metadata={
@@ -399,7 +408,9 @@ def test_preview_route_preserves_preview_shape(tmp_path, backend_services_factor
     assert payload["source"]["repo_ref"] == "Artificial-Sweetener/Base-Cubes"
 
 
-def test_list_route_includes_local_workspace_cubes(tmp_path, backend_services_factory):
+def test_list_route_includes_local_workspace_cubes(
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     services = backend_services_factory(tmp_path)
     local_root = services.library.local_workspace_root() / "example-user" / "private"
     local_root.mkdir(parents=True, exist_ok=True)
@@ -443,8 +454,8 @@ def test_list_route_includes_local_workspace_cubes(tmp_path, backend_services_fa
 
 
 def test_list_route_marks_matching_claimed_owner_repo_writable(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     services = backend_services_factory(tmp_path)
     claim_github_owner(
         services, owner="Artificial-Sweetener", allow_system_owner_claim=True
@@ -484,7 +495,9 @@ def test_list_route_marks_matching_claimed_owner_repo_writable(
     assert payload["cubes"][0]["ownership_mode"] == "mine"
 
 
-def test_load_route_uses_local_source_metadata(tmp_path, backend_services_factory):
+def test_load_route_uses_local_source_metadata(
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     loaded_cube = SimpleNamespace(version="1.0.0")
     prepared = SimpleNamespace(
         cube={

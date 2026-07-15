@@ -16,95 +16,114 @@
 /**
  * Own the SugarCubes core UI service layer in `web/comfyui/ui/core/StorageService.js`.
  */
-
+import { isRecord } from '../types/common.js';
 /**
  * Coordinate storage service behavior for the SugarCubes UI.
  */
 export class StorageService {
-  constructor(adapter) {
-    this.adapter = adapter;
-    this.storage = adapter?.getStorage?.() || null;
-  }
-
-  readList(key) {
-    if (!this.storage) return [];
-    try {
-      const raw = this.storage.getItem(key);
-      const parsed = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
-    } catch (_error) {
-      return [];
+    storage;
+    constructor(adapter) {
+        this.storage = adapter?.getStorage?.() || null;
     }
-  }
-
-  writeList(key, values) {
-    if (!this.storage) return;
-    try {
-      const payload = Array.isArray(values) ? values.filter(Boolean) : [];
-      this.storage.setItem(key, JSON.stringify(payload));
-    } catch (_error) {
-      return;
+    /** Return the host storage boundary for migration-oriented consumers. */
+    getStorage() {
+        return this.storage;
     }
-  }
-
-  readSet(key) {
-    if (!this.storage) return new Set();
-    try {
-      const raw = this.storage.getItem(key);
-      const parsed = raw ? JSON.parse(raw) : [];
-      return new Set(Array.isArray(parsed) ? parsed.filter(Boolean) : []);
-    } catch (_error) {
-      return new Set();
+    readList(key) {
+        if (!this.storage)
+            return [];
+        try {
+            const raw = this.storage.getItem(key);
+            const parsed = raw ? JSON.parse(raw) : [];
+            return Array.isArray(parsed)
+                ? parsed.filter((entry) => typeof entry === 'string' && Boolean(entry))
+                : [];
+        }
+        catch (_error) {
+            return [];
+        }
     }
-  }
-
-  writeSet(key, setValue) {
-    if (!this.storage) return;
-    try {
-      const values = Array.from(setValue ?? []).filter(Boolean);
-      this.storage.setItem(key, JSON.stringify(values));
-    } catch (_error) {
-      return;
+    writeList(key, values) {
+        if (!this.storage)
+            return;
+        try {
+            const payload = Array.isArray(values)
+                ? values.filter((entry) => typeof entry === 'string' && Boolean(entry))
+                : [];
+            this.storage.setItem(key, JSON.stringify(payload));
+        }
+        catch (_error) {
+            return;
+        }
     }
-  }
-
-  readJson(key) {
-    if (!this.storage) return null;
-    try {
-      const raw = this.storage.getItem(key);
-      return raw ? JSON.parse(raw) : null;
-    } catch (_error) {
-      return null;
+    readSet(key) {
+        if (!this.storage)
+            return new Set();
+        try {
+            const raw = this.storage.getItem(key);
+            const parsed = raw ? JSON.parse(raw) : [];
+            return new Set(Array.isArray(parsed)
+                ? parsed.filter((entry) => typeof entry === 'string' && Boolean(entry))
+                : []);
+        }
+        catch (_error) {
+            return new Set();
+        }
     }
-  }
-
-  writeJson(key, value) {
-    if (!this.storage) return;
-    try {
-      this.storage.setItem(key, JSON.stringify(value));
-    } catch (_error) {
-      return;
+    writeSet(key, setValue) {
+        if (!this.storage)
+            return;
+        try {
+            const values = Array.from(setValue ?? []).filter(Boolean);
+            this.storage.setItem(key, JSON.stringify(values));
+        }
+        catch (_error) {
+            return;
+        }
     }
-  }
-
-  readValue(key) {
-    if (!this.storage) return null;
-    try {
-      return this.storage.getItem(key);
-    } catch (_error) {
-      return null;
+    readJson(key) {
+        if (!this.storage)
+            return null;
+        try {
+            const raw = this.storage.getItem(key);
+            const parsed = raw ? JSON.parse(raw) : null;
+            return isRecord(parsed) ? parsed : null;
+        }
+        catch (_error) {
+            return null;
+        }
     }
-  }
-
-  writeValue(key, value) {
-    if (!this.storage) return;
-    try {
-      if (value == null) {
-        return;
-      }
-      this.storage.setItem(key, String(value));
-    } catch (_error) {
-      return;
+    writeJson(key, value) {
+        if (!this.storage)
+            return;
+        try {
+            this.storage.setItem(key, JSON.stringify(value));
+        }
+        catch (_error) {
+            return;
+        }
     }
-  }
+    readValue(key) {
+        if (!this.storage)
+            return null;
+        try {
+            return this.storage.getItem(key);
+        }
+        catch (_error) {
+            return null;
+        }
+    }
+    writeValue(key, value) {
+        if (!this.storage)
+            return;
+        try {
+            if (value == null) {
+                return;
+            }
+            this.storage.setItem(key, String(value));
+        }
+        catch (_error) {
+            return;
+        }
+    }
 }

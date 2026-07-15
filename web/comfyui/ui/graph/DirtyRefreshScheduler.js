@@ -16,29 +16,31 @@
 /**
  * Own the SugarCubes graph integration layer in `web/comfyui/ui/graph/DirtyRefreshScheduler.js`.
  */
-
 /**
  * Coordinate dirty refresh scheduler behavior for the SugarCubes UI.
  */
 export class DirtyRefreshScheduler {
-  constructor({ scheduler, onRefresh } = {}) {
-    this.scheduler = scheduler || null;
-    this.onRefresh = typeof onRefresh === 'function' ? onRefresh : null;
-    this.pending = false;
-    this.latestOptions = null;
-  }
-
-  requestRefresh(options = {}) {
-    this.latestOptions = options || {};
-    if (this.pending) {
-      return;
+    scheduler;
+    onRefresh;
+    pending;
+    latestOptions;
+    constructor({ scheduler, onRefresh } = {}) {
+        this.scheduler = scheduler || null;
+        this.onRefresh = typeof onRefresh === 'function' ? onRefresh : null;
+        this.pending = false;
+        this.latestOptions = null;
     }
-    this.pending = true;
-    this.scheduler?.raf?.(() => {
-      this.pending = false;
-      const optionsToUse = this.latestOptions;
-      this.latestOptions = null;
-      this.onRefresh?.(optionsToUse);
-    });
-  }
+    requestRefresh(options = {}) {
+        this.latestOptions = options || {};
+        if (this.pending) {
+            return;
+        }
+        this.pending = true;
+        this.scheduler?.raf?.(() => {
+            this.pending = false;
+            const optionsToUse = this.latestOptions ?? {};
+            this.latestOptions = null;
+            this.onRefresh?.(optionsToUse);
+        });
+    }
 }

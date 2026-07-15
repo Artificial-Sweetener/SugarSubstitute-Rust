@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from cube_model import (  # noqa: E402
+from sugarcubes.cube_model import (  # noqa: E402
     CubeDocument,
     looks_like_current_cube_payload,
     migrate_legacy_payload,
@@ -55,7 +55,6 @@ class MigrationSummary:
     results: tuple[MigrationResult, ...]
 
 
-_ALREADY_CURRENT = object()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -101,7 +100,7 @@ def migrate_cube_file(path: Path) -> MigrationResult:
         migrated = _normalize_payload(payload)
     except Exception as exc:
         return MigrationResult(path=path, status="failed", detail=str(exc))
-    if migrated is _ALREADY_CURRENT:
+    if migrated is None:
         return MigrationResult(
             path=path, status="skipped", detail="already current format"
         )
@@ -113,13 +112,13 @@ def migrate_cube_file(path: Path) -> MigrationResult:
     return MigrationResult(path=path, status="migrated")
 
 
-def _normalize_payload(payload: dict[str, Any]) -> dict[str, Any] | object:
+def _normalize_payload(payload: dict[str, Any]) -> dict[str, Any] | None:
     """Normalize one legacy or transitional payload into the current format."""
 
     if looks_like_current_cube_payload(payload):
         normalized = CubeDocument.from_dict(payload).to_dict()
         if normalized == payload:
-            return _ALREADY_CURRENT
+            return None
         return normalized
     return migrate_legacy_payload(payload).to_dict()
 

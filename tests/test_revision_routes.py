@@ -17,16 +17,21 @@
 
 from __future__ import annotations
 
+from typing import Any
+
+from pathlib import Path
+from .typing_support import BackendServicesFactory
+
 import asyncio
 import json
 from types import SimpleNamespace
 
 from sugarcubes.backend.routes import build_route_handlers
 
-from conftest import FakeRequest, decode_json_response
+from .conftest import FakeRequest, decode_json_response
 
 
-def _make_loaded_cube(path):
+def _make_loaded_cube(path: Any) -> Any:
     payload = json.loads(path.read_text(encoding="utf-8"))
     return SimpleNamespace(
         description=payload.get("description", ""),
@@ -43,7 +48,7 @@ def _make_loaded_cube(path):
     )
 
 
-def _make_prepared_import(loaded, drop_origin=(0.0, 0.0)):
+def _make_prepared_import(loaded: Any, drop_origin: Any = (0.0, 0.0)) -> Any:
     return SimpleNamespace(
         cube={
             "cube_id": loaded.cube_id,
@@ -60,8 +65,8 @@ def _make_prepared_import(loaded, drop_origin=(0.0, 0.0)):
 
 
 def test_list_revisions_route_returns_current_and_commits_for_github_cube(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     historical_payload = {
         "cube_id": "Artificial-Sweetener/Base-Cubes/demo.cube",
         "version": "1.0.0",
@@ -81,7 +86,7 @@ def test_list_revisions_route_returns_current_and_commits_for_github_cube(
         "version": "1.0.1",
     }
 
-    def fake_git(args, *, cwd):
+    def fake_git(args: Any, *, cwd: Any) -> Any:
         command = list(args)
         if command[0] == "log":
             return SimpleNamespace(
@@ -121,8 +126,8 @@ def test_list_revisions_route_returns_current_and_commits_for_github_cube(
 
 
 def test_list_revisions_route_keeps_same_version_commits(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     first_historical_payload = {
         "cube_id": "Artificial-Sweetener/Base-Cubes/demo.cube",
         "version": "1.0.0",
@@ -143,7 +148,7 @@ def test_list_revisions_route_keeps_same_version_commits(
     }
     current_payload = {**first_historical_payload, "version": "1.1.0"}
 
-    def fake_git(args, *, cwd):
+    def fake_git(args: Any, *, cwd: Any) -> Any:
         command = list(args)
         if command[0] == "log":
             return SimpleNamespace(
@@ -199,8 +204,8 @@ def test_list_revisions_route_keeps_same_version_commits(
 
 
 def test_list_revisions_route_returns_current_for_uncommitted_local_cube(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     current_payload = {
         "cube_id": "local/example-user/private/demo.cube",
         "version": "0.1.0",
@@ -216,7 +221,7 @@ def test_list_revisions_route_returns_current_for_uncommitted_local_cube(
         "flavors": {"authored": [{"id": "default", "name": "Default", "values": {}}]},
     }
 
-    def fake_git(args, *, cwd):
+    def fake_git(args: Any, *, cwd: Any) -> Any:
         command = list(args)
         if command[:3] == ["init", "-b", "main"]:
             return SimpleNamespace(stdout="")
@@ -252,8 +257,8 @@ def test_list_revisions_route_returns_current_for_uncommitted_local_cube(
 
 
 def test_load_revision_route_returns_historical_prepared_import(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     historical_payload = {
         "cube_id": "Artificial-Sweetener/Base-Cubes/SDXL/Demo.cube",
         "version": "1.0.0",
@@ -274,7 +279,7 @@ def test_load_revision_route_returns_historical_prepared_import(
         "version": "1.0.2",
     }
 
-    def fake_git(args, *, cwd):
+    def fake_git(args: Any, *, cwd: Any) -> Any:
         command = list(args)
         if command[0] == "show":
             return SimpleNamespace(stdout=json.dumps(historical_payload))

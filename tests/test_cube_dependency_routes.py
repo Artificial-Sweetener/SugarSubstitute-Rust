@@ -17,6 +17,8 @@
 
 from __future__ import annotations
 
+from .typing_support import BackendServicesFactory
+
 import asyncio
 import subprocess
 from pathlib import Path
@@ -28,13 +30,13 @@ from sugarcubes.backend.services.cube_dependency_service import (
     CubeDependencyService,
 )
 
-from conftest import FakeRequest, decode_json_response
-from test_cube_library_backend_contract import _cube_payload_with_cnr, _write_cube
+from .conftest import FakeRequest, decode_json_response
+from .test_cube_library_backend_contract import _cube_payload_with_cnr, _write_cube
 
 
 def test_dependency_readiness_route_has_no_install_side_effect(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """Readiness route returns the plan without invoking Comfy CLI."""
 
@@ -55,7 +57,7 @@ def test_dependency_readiness_route_has_no_install_side_effect(
 
 def test_dependency_repair_route_installs_approved_nodes(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """Repair route forwards approved node ids into the dependency service."""
 
@@ -110,7 +112,7 @@ def test_dependency_repair_route_installs_approved_nodes(
 
 def test_dependency_sync_and_check_route_returns_readiness_plan(
     tmp_path: Path,
-    backend_services_factory,
+    backend_services_factory: BackendServicesFactory,
 ) -> None:
     """Shared orchestration route recomputes readiness after the requested sync."""
 

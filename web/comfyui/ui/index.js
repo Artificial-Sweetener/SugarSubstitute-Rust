@@ -16,42 +16,37 @@
 /**
  * Own the SugarCubes UI orchestration layer in `web/comfyui/ui/index.js`.
  */
-
 import { SugarCubesUI } from './SugarCubesUI.js';
-
 let instance = null;
-
 /**
  * Create sugar cubes ui.
  */
 export function createSugarCubesUI(options = {}) {
-  return new SugarCubesUI(options);
+    return new SugarCubesUI(options);
 }
-
 /**
  * Get sugar cubes ui.
  */
 export function getSugarCubesUI(options = {}) {
-  const forceNew = options.forceNew === true;
-  if (!instance || forceNew) {
-    const { forceNew: _ignored, ...rest } = options;
-    instance = new SugarCubesUI(rest);
-  }
-  return instance;
+    const forceNew = options.forceNew === true;
+    if (!instance || forceNew) {
+        const { forceNew: _ignored, ...rest } = options;
+        instance = new SugarCubesUI(rest);
+    }
+    return instance;
 }
-
 /**
  * Create public api.
  */
 export function createPublicApi(uiInstance) {
-  if (!uiInstance) {
-    throw new Error('SugarCubes UI instance required for public API.');
-  }
-  return Object.freeze({
-    listCubes: uiInstance.listCubes.bind(uiInstance),
-    previewCube: uiInstance.previewCube.bind(uiInstance),
-    scheduleCubeInstanceRefresh: uiInstance.scheduleCubeInstanceRefresh.bind(uiInstance),
-    scheduleCubeDirtyRefresh: uiInstance.scheduleCubeDirtyRefresh.bind(uiInstance),
-    openLibrary: uiInstance.openLibrary.bind(uiInstance),
-  });
+    if (!uiInstance) {
+        throw new Error('SugarCubes UI instance required for public API.');
+    }
+    return Object.freeze({
+        listCubes: uiInstance.listCubes.bind(uiInstance),
+        previewCube: uiInstance.previewCube.bind(uiInstance),
+        scheduleCubeInstanceRefresh: uiInstance.scheduleCubeInstanceRefresh.bind(uiInstance),
+        scheduleCubeDirtyRefresh: uiInstance.scheduleCubeDirtyRefresh.bind(uiInstance),
+        openLibrary: uiInstance.openLibrary.bind(uiInstance),
+    });
 }

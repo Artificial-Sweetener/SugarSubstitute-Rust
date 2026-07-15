@@ -16,76 +16,68 @@
 /**
  * Own version-aware SugarCube definition identity helpers.
  */
-
+import { isRecord } from '../types/common.js';
+/** Identify the mutable working-tree revision at the host boundary. */
 export const CURRENT_REVISION_REF = 'WORKTREE';
-
 /**
  * Normalize one semantic cube version string.
  */
 export function normalizeCubeVersion(value) {
-  const raw = typeof value === 'string' ? value.trim() : '';
-  if (!raw) {
-    return '';
-  }
-  return raw.replace(/^v/i, '').trim();
+    const raw = typeof value === 'string' ? value.trim() : '';
+    if (!raw) {
+        return '';
+    }
+    return raw.replace(/^v/i, '').trim();
 }
-
 /**
  * Format one cube version for compact UI display.
  */
 export function formatCubeVersionLabel(value) {
-  const version = normalizeCubeVersion(value);
-  return version ? `v${version}` : '';
+    const version = normalizeCubeVersion(value);
+    return version ? `v${version}` : '';
 }
-
 /**
  * Normalize one revision ref for frontend routing and metadata.
  */
 export function normalizeRevisionRef(value) {
-  const ref = typeof value === 'string' && value.trim() ? value.trim() : CURRENT_REVISION_REF;
-  return ref || CURRENT_REVISION_REF;
+    const ref = typeof value === 'string' && value.trim() ? value.trim() : CURRENT_REVISION_REF;
+    return ref || CURRENT_REVISION_REF;
 }
-
 /**
  * Return whether the revision ref points at the current working tree.
  */
 export function isCurrentRevisionRef(value) {
-  return normalizeRevisionRef(value) === CURRENT_REVISION_REF;
+    return normalizeRevisionRef(value) === CURRENT_REVISION_REF;
 }
-
 /**
  * Build the frontend definition key used for version-aware caches.
  */
 export function buildCubeDefinitionKey(cubeId, version) {
-  const id = typeof cubeId === 'string' ? cubeId.trim() : '';
-  if (!id) {
-    return '';
-  }
-  const normalizedVersion = normalizeCubeVersion(version);
-  return normalizedVersion ? `${id}@${normalizedVersion}` : id;
+    const id = typeof cubeId === 'string' ? cubeId.trim() : '';
+    if (!id) {
+        return '';
+    }
+    const normalizedVersion = normalizeCubeVersion(version);
+    return normalizedVersion ? `${id}@${normalizedVersion}` : id;
 }
-
-/**
- * Enrich one SugarCubes metadata payload with version-aware identity.
- */
+/** Apply normalized definition identity fields to one metadata record. */
 export function applyCubeDefinitionIdentity(metadata, { cubeId, version, revisionRef } = {}) {
-  if (!metadata || typeof metadata !== 'object') {
-    return metadata;
-  }
-  const resolvedCubeId =
-    typeof cubeId === 'string' && cubeId.trim()
-      ? cubeId.trim()
-      : typeof metadata.cube_id === 'string'
-        ? metadata.cube_id.trim()
-        : '';
-  const resolvedVersion =
-    normalizeCubeVersion(version) || normalizeCubeVersion(metadata.cube_version);
-  const resolvedRevisionRef = normalizeRevisionRef(revisionRef || metadata.cube_revision_ref);
-  return {
-    ...metadata,
-    cube_id: resolvedCubeId || metadata.cube_id,
-    cube_version: resolvedVersion || metadata.cube_version || '',
-    cube_revision_ref: resolvedRevisionRef,
-    cube_definition_key: buildCubeDefinitionKey(resolvedCubeId, resolvedVersion),
-  };
+    if (!isRecord(metadata)) {
+        return metadata;
+    }
+    const resolvedCubeId = typeof cubeId === 'string' && cubeId.trim()
+        ? cubeId.trim()
+        : typeof metadata.cube_id === 'string'
+            ? metadata.cube_id.trim()
+            : '';
+    const resolvedVersion = normalizeCubeVersion(version) || normalizeCubeVersion(metadata.cube_version);
+    const resolvedRevisionRef = normalizeRevisionRef(revisionRef || metadata.cube_revision_ref);
+    const identified = {
+        ...metadata,
+        cube_id: resolvedCubeId || metadata.cube_id,
+        cube_version: resolvedVersion || metadata.cube_version || '',
+        cube_revision_ref: resolvedRevisionRef,
+        cube_definition_key: buildCubeDefinitionKey(resolvedCubeId, resolvedVersion),
+    };
+    return identified;
 }

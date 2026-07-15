@@ -17,6 +17,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from sugarcubes.cube_model.authored_default_policy import (
@@ -135,7 +137,7 @@ def test_machine_local_picker_inventory_does_not_gate_cube_saves() -> None:
 def test_subgraph_persistence_removes_local_and_volatile_values_by_name() -> None:
     """Subgraph arrays retain shape without shipping machine or seed values."""
 
-    subgraphs = [
+    subgraphs: list[dict[str, Any]] = [
         {
             "id": "subgraph",
             "nodes": [
@@ -197,7 +199,7 @@ def test_portability_policy_removes_scalar_resources_but_preserves_connections()
 ):
     """Resource sockets remain connectable while local scalar choices stay local."""
 
-    payload = {
+    payload: dict[str, Any] = {
         "implementation": {
             "nodes": {
                 "scalar": {

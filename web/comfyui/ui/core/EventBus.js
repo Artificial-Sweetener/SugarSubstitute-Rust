@@ -16,23 +16,26 @@
 /**
  * Own the SugarCubes core UI service layer in `web/comfyui/ui/core/EventBus.js`.
  */
-
 /**
  * Coordinate event bus behavior for the SugarCubes UI.
  */
 export class EventBus {
-  constructor() {
-    this.target = new EventTarget();
-  }
-
-  on(name, handler) {
-    if (typeof handler !== 'function') return () => {};
-    const listener = (event) => handler(event.detail);
-    this.target.addEventListener(name, listener);
-    return () => this.target.removeEventListener(name, listener);
-  }
-
-  emit(name, detail) {
-    this.target.dispatchEvent(new CustomEvent(name, { detail }));
-  }
+    target;
+    constructor() {
+        this.target = new EventTarget();
+    }
+    on(name, handler) {
+        if (typeof handler !== 'function')
+            return () => { };
+        const listener = (event) => {
+            if (event instanceof CustomEvent) {
+                handler(event.detail);
+            }
+        };
+        this.target.addEventListener(name, listener);
+        return () => this.target.removeEventListener(name, listener);
+    }
+    emit(name, detail) {
+        this.target.dispatchEvent(new CustomEvent(name, { detail }));
+    }
 }

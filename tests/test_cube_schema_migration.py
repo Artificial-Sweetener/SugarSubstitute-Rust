@@ -17,6 +17,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import importlib.util
 import json
 from pathlib import Path
@@ -25,7 +27,7 @@ import sys
 from sugarcubes.cube_model import CubeDocument, migrate_legacy_payload
 
 
-def test_migrate_legacy_payload_synthesizes_default_authored_flavor():
+def test_migrate_legacy_payload_synthesizes_default_authored_flavor() -> None:
     legacy = {
         "cube_id": "artificial-sweetener/base-cubes/text to image.cube",
         "version": "1.0.2",
@@ -99,7 +101,9 @@ def test_migrate_legacy_payload_synthesizes_default_authored_flavor():
     ]
 
 
-def test_migrate_legacy_payload_preserves_widget_input_order_for_surface_controls():
+def test_migrate_legacy_payload_preserves_widget_input_order_for_surface_controls() -> (
+    None
+):
     """Legacy migration keeps Comfy input order for persisted controls and values."""
 
     legacy = {
@@ -174,7 +178,7 @@ def test_migrate_legacy_payload_preserves_widget_input_order_for_surface_control
     ]
 
 
-def test_cube_document_round_trips_current_payload():
+def test_cube_document_round_trips_current_payload() -> None:
     payload = {
         "cube_id": "artificial-sweetener/base-cubes/text to image.cube",
         "version": "1.0.2",
@@ -223,7 +227,7 @@ def test_cube_document_round_trips_current_payload():
     assert document.to_dict() == payload
 
 
-def test_cube_document_rejects_authored_values_for_unknown_surface_controls():
+def test_cube_document_rejects_authored_values_for_unknown_surface_controls() -> None:
     payload = {
         "cube_id": "artificial-sweetener/base-cubes/text to image.cube",
         "version": "1.0.2",
@@ -273,7 +277,7 @@ def test_cube_document_rejects_authored_values_for_unknown_surface_controls():
         raise AssertionError("Unknown authored flavor controls should be rejected")
 
 
-def test_cube_document_rejects_surface_controls_without_labels():
+def test_cube_document_rejects_surface_controls_without_labels() -> None:
     payload = _current_payload_with_surface_control(
         {
             "control_id": "vectorscopecc.brightness",
@@ -292,7 +296,7 @@ def test_cube_document_rejects_surface_controls_without_labels():
         raise AssertionError("Missing surface control labels should be rejected")
 
 
-def test_cube_document_rejects_duplicate_surface_control_labels():
+def test_cube_document_rejects_duplicate_surface_control_labels() -> None:
     payload = _current_payload_with_surface_control(
         {
             "control_id": "vectorscopecc.brightness",
@@ -321,7 +325,7 @@ def test_cube_document_rejects_duplicate_surface_control_labels():
         raise AssertionError("Duplicate surface control labels should be rejected")
 
 
-def test_cube_document_rejects_duplicate_node_labels():
+def test_cube_document_rejects_duplicate_node_labels() -> None:
     payload = _current_payload_with_surface_control(
         {
             "control_id": "vectorscopecc.brightness",
@@ -347,7 +351,7 @@ def test_cube_document_rejects_duplicate_node_labels():
         raise AssertionError("Duplicate implementation node labels should be rejected")
 
 
-def test_cube_document_rejects_subgraph_interface_without_labels():
+def test_cube_document_rejects_subgraph_interface_without_labels() -> None:
     payload = _current_payload_with_surface_control(
         {
             "control_id": "vectorscopecc.brightness",
@@ -370,7 +374,9 @@ def test_cube_document_rejects_subgraph_interface_without_labels():
         raise AssertionError("Missing subgraph IO labels should be rejected")
 
 
-def test_migration_tool_rewrites_file_without_creating_history_backup(tmp_path):
+def test_migration_tool_rewrites_file_without_creating_history_backup(
+    tmp_path: Path,
+) -> None:
     legacy_path = tmp_path / "demo.cube"
     legacy_path.write_text(
         json.dumps(
@@ -396,7 +402,9 @@ def test_migration_tool_rewrites_file_without_creating_history_backup(tmp_path):
     assert not (tmp_path / "_history").exists()
 
 
-def test_migration_tool_reports_transform_failures_without_rewriting(tmp_path):
+def test_migration_tool_reports_transform_failures_without_rewriting(
+    tmp_path: Path,
+) -> None:
     legacy_path = tmp_path / "broken.cube"
     legacy_path.write_text(
         json.dumps(
@@ -418,7 +426,7 @@ def test_migration_tool_reports_transform_failures_without_rewriting(tmp_path):
     assert not (tmp_path / "_history").exists()
 
 
-def _load_migration_tool():
+def _load_migration_tool() -> Any:
     """Load the migration script as a test module."""
 
     script_path = (
@@ -434,8 +442,8 @@ def _load_migration_tool():
 
 
 def _current_payload_with_surface_control(
-    *controls, authored_values=None
-) -> dict[str, object]:
+    *controls: Any, authored_values: Any = None
+) -> dict[str, Any]:
     """Build a current-format payload for schema validation tests."""
 
     values = {"vectorscopecc.brightness": -0.2}
@@ -468,7 +476,7 @@ def _current_payload_with_surface_control(
     }
 
 
-def _control_input_names(payload, symbol):
+def _control_input_names(payload: Any, symbol: Any) -> Any:
     """Read persisted surface input names for one symbol."""
 
     return [
@@ -478,7 +486,7 @@ def _control_input_names(payload, symbol):
     ]
 
 
-def _authored_value_input_names(payload, symbol):
+def _authored_value_input_names(payload: Any, symbol: Any) -> Any:
     """Read persisted authored flavor value names for one symbol."""
 
     prefix = f"{symbol}."

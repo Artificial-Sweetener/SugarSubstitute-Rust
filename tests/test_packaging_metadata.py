@@ -51,17 +51,28 @@ def test_comfy_registry_metadata_matches_public_project_identity() -> None:
 def test_runtime_identity_uses_canonical_sugarcubes_distribution_name() -> None:
     """Runtime version reporting should never use legacy package identities."""
 
-    backend_source = (_REPO_ROOT / "backend" / "__init__.py").read_text(
+    package_root = _REPO_ROOT / "sugarcubes"
+    backend_source = (package_root / "backend" / "__init__.py").read_text(
         encoding="utf-8"
     )
-    cube_library_source = (
-        _REPO_ROOT / "backend" / "services" / "cube_library_service.py"
+    dependency_manifest_source = (
+        package_root / "backend" / "services" / "cube_dependency_manifest.py"
     ).read_text(encoding="utf-8")
     dependency_versions_source = (
-        _REPO_ROOT / "backend" / "services" / "dependency_versions.py"
+        package_root / "backend" / "services" / "dependency_versions.py"
     ).read_text(encoding="utf-8")
 
     assert '_DISTRIBUTION_NAME = "SugarCubes"' in backend_source
     assert "_FALLBACK_VERSION" not in backend_source
-    assert 'frozenset({"sugarcubes"})' in cube_library_source
+    assert 'frozenset({"sugarcubes"})' in dependency_manifest_source
     assert 'frozenset({"sugarcubes"})' in dependency_versions_source
+
+
+def test_backend_version_resolves_from_source_tree_without_generated_metadata() -> None:
+    """Read the canonical version directly from the repository project metadata."""
+
+    from sugarcubes.backend import __version__
+
+    project = tomllib.loads((_REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+
+    assert __version__ == project["project"]["version"]

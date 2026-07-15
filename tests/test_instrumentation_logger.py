@@ -13,6 +13,13 @@
 #
 #    You should have received a copy of the GNU Affero General Public License
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+from __future__ import annotations
+
+from typing import Any
+
+from pathlib import Path
+import pytest
 import json
 import logging
 
@@ -21,11 +28,13 @@ from sugarcubes.instrumentation import log_diagnostic
 from sugarcubes.importer import load_cube
 
 
-def _definition_resolver(_class_type):
+def _definition_resolver(_class_type: Any) -> Any:
     return {}
 
 
-def test_exporter_structured_log_is_quiet_at_info_by_default(caplog, monkeypatch):
+def test_exporter_structured_log_is_quiet_at_info_by_default(
+    caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.delenv("SUGARCUBES_DIAGNOSTICS", raising=False)
     cube_id = "artificial-sweetener/base-cubes/demo.cube"
     prompt = {
@@ -49,7 +58,9 @@ def test_exporter_structured_log_is_quiet_at_info_by_default(caplog, monkeypatch
     assert not any("sugarcubes.event" in record.message for record in caplog.records)
 
 
-def test_exporter_structured_log_is_debug_by_default(caplog, monkeypatch):
+def test_exporter_structured_log_is_debug_by_default(
+    caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.delenv("SUGARCUBES_DIAGNOSTICS", raising=False)
     cube_id = "artificial-sweetener/base-cubes/demo.cube"
     prompt = {
@@ -79,8 +90,8 @@ def test_exporter_structured_log_is_debug_by_default(caplog, monkeypatch):
 
 
 def test_importer_structured_log_promotes_to_info_when_diagnostics_enabled(
-    tmp_path, caplog, monkeypatch
-):
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("SUGARCUBES_DIAGNOSTICS", "1")
     payload = {
         "description": "demo",
@@ -110,7 +121,9 @@ def test_importer_structured_log_promotes_to_info_when_diagnostics_enabled(
     assert any('"event": "load_cube"' in record.message for record in caplog.records)
 
 
-def test_marker_diagnostic_is_quiet_at_info_by_default(caplog, monkeypatch):
+def test_marker_diagnostic_is_quiet_at_info_by_default(
+    caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.delenv("SUGARCUBES_DIAGNOSTICS", raising=False)
     logger = logging.getLogger("sugarcubes.test_diagnostics")
 
@@ -125,7 +138,9 @@ def test_marker_diagnostic_is_quiet_at_info_by_default(caplog, monkeypatch):
     assert "SugarCubes test diagnostic" not in caplog.text
 
 
-def test_marker_diagnostic_is_debug_by_default(caplog, monkeypatch):
+def test_marker_diagnostic_is_debug_by_default(
+    caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.delenv("SUGARCUBES_DIAGNOSTICS", raising=False)
     logger = logging.getLogger("sugarcubes.test_diagnostics")
 
@@ -141,8 +156,8 @@ def test_marker_diagnostic_is_debug_by_default(caplog, monkeypatch):
 
 
 def test_marker_diagnostic_promotes_to_info_when_diagnostics_enabled(
-    caplog, monkeypatch
-):
+    caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("SUGARCUBES_DIAGNOSTICS", "true")
     logger = logging.getLogger("sugarcubes.test_diagnostics")
 

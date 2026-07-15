@@ -17,6 +17,11 @@
 
 from __future__ import annotations
 
+from typing import Any
+
+from pathlib import Path
+from .typing_support import BackendServicesFactory
+
 import asyncio
 import json
 from types import SimpleNamespace
@@ -26,13 +31,13 @@ import pytest
 from sugarcubes.backend.responses import BackendError
 from sugarcubes.backend.routes import build_route_handlers
 from sugarcubes.payloads import retarget_cube_payload
-from conftest import FakeRequest, claim_github_owner, decode_json_response
+from .conftest import FakeRequest, claim_github_owner, decode_json_response
 
 SOURCE_CUBE_ID = "local/personal/Text to Image.cube"
 TARGET_CUBE_ID = "ExampleUser/Example-Cubes/SDXL/Text to Image.cube"
 
 
-def _payload() -> dict:
+def _payload() -> dict[str, Any]:
     """Build one persisted personal cube with embedded identity references."""
 
     return {
@@ -65,14 +70,16 @@ def _payload() -> dict:
     }
 
 
-def _prepare_services(tmp_path, backend_services_factory):
+def _prepare_services(
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> Any:
     """Create isolated personal and authoring Git repos for promotion tests."""
 
-    def load_cube_artifact(path):
+    def load_cube_artifact(path: Any) -> Any:
         payload = json.loads(path.read_text(encoding="utf-8"))
         return SimpleNamespace(version=payload["version"], payload=payload)
 
-    def prepare_cube_import(loaded, drop_origin=(0.0, 0.0)):
+    def prepare_cube_import(loaded: Any, drop_origin: Any = (0.0, 0.0)) -> Any:
         return SimpleNamespace(
             cube=loaded.payload,
             nodes=[],
@@ -103,8 +110,8 @@ def _prepare_services(tmp_path, backend_services_factory):
 
 
 def test_promote_moves_personal_cube_with_version_flavors_and_redirect(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     """Promote all identity-owned state after the target commit is durable."""
 
     services, source_context = _prepare_services(tmp_path, backend_services_factory)
@@ -185,8 +192,8 @@ def test_promote_moves_personal_cube_with_version_flavors_and_redirect(
 
 
 def test_promote_is_idempotent_after_completed_cleanup(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     """Return the completed target when a client retries the same promotion."""
 
     services, _source_context = _prepare_services(tmp_path, backend_services_factory)
@@ -212,15 +219,17 @@ def test_promote_is_idempotent_after_completed_cleanup(
 
 
 def test_promote_resumes_when_redirect_persistence_was_interrupted(
-    tmp_path, backend_services_factory, monkeypatch
-):
+    tmp_path: Path,
+    backend_services_factory: BackendServicesFactory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Recover a committed target without overwriting it or losing the personal source."""
 
     services, source_context = _prepare_services(tmp_path, backend_services_factory)
     original_record = services.redirects.record_promotion
     attempts = 0
 
-    def interrupt_first_redirect(**kwargs):
+    def interrupt_first_redirect(**kwargs: Any) -> Any:
         nonlocal attempts
         attempts += 1
         if attempts == 1:
@@ -262,8 +271,8 @@ def test_promote_resumes_when_redirect_persistence_was_interrupted(
 
 
 def test_promote_route_accepts_the_explicit_destination_contract(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     """Expose promotion as one backend-owned application operation."""
 
     services, _source_context = _prepare_services(tmp_path, backend_services_factory)
@@ -291,7 +300,9 @@ def test_promote_route_accepts_the_explicit_destination_contract(
     assert payload["cube"]["cube_id"] == TARGET_CUBE_ID
 
 
-def test_promote_rejects_nonpersonal_sources(tmp_path, backend_services_factory):
+def test_promote_rejects_nonpersonal_sources(
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     """Keep cross-source moves behind the explicit personal promotion boundary."""
 
     services = backend_services_factory(tmp_path)
@@ -307,8 +318,8 @@ def test_promote_rejects_nonpersonal_sources(tmp_path, backend_services_factory)
 
 
 def test_redirect_store_is_machine_local_and_resolves_chains(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     """Persist promotion provenance outside cube repos and resolve chained identities."""
 
     services = backend_services_factory(tmp_path)

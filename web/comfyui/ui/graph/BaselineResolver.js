@@ -16,31 +16,25 @@
 /**
  * Own the SugarCubes graph integration layer in `web/comfyui/ui/graph/BaselineResolver.js`.
  */
-
-/**
- * Coordinate baseline resolver behavior for the SugarCubes UI.
- */
+/** Resolve the authoritative dirty-state baseline for one cube instance. */
 export class BaselineResolver {
-  constructor({ baselineStore } = {}) {
-    this.baselineStore = baselineStore || null;
-  }
-
-  resolve({ cubeId, definitionKey, instanceId, missingSymbols } = {}) {
-    const key = definitionKey || cubeId;
-    const definitionHash = this.baselineStore?.getDefinitionHash(key) || null;
-    const definitionStatus = this.baselineStore?.getDefinitionStatus(key) || null;
-    const definitionReady = definitionStatus == null || definitionStatus === 'ready';
-    const canUseDefinition = Boolean(definitionHash && definitionReady && !missingSymbols);
-
-    const localBaselineHash = this.baselineStore?.getLocalBaselineHash(instanceId) || null;
-    if (localBaselineHash) {
-      return { baselineHash: localBaselineHash, baselineSource: 'local', useDefinition: false };
+    baselineStore;
+    constructor({ baselineStore } = {}) {
+        this.baselineStore = baselineStore || null;
     }
-
-    if (canUseDefinition) {
-      return { baselineHash: definitionHash, baselineSource: 'definition', useDefinition: true };
+    resolve({ cubeId, definitionKey, instanceId, missingSymbols, } = {}) {
+        const key = definitionKey || cubeId;
+        const definitionHash = this.baselineStore?.getDefinitionHash(key) || null;
+        const definitionStatus = this.baselineStore?.getDefinitionStatus(key) || null;
+        const definitionReady = definitionStatus == null || definitionStatus === 'ready';
+        const canUseDefinition = Boolean(definitionHash && definitionReady && !missingSymbols);
+        const localBaselineHash = this.baselineStore?.getLocalBaselineHash(instanceId) || null;
+        if (localBaselineHash) {
+            return { baselineHash: localBaselineHash, baselineSource: 'local', useDefinition: false };
+        }
+        if (canUseDefinition) {
+            return { baselineHash: definitionHash, baselineSource: 'definition', useDefinition: true };
+        }
+        return { baselineHash: null, baselineSource: 'local', useDefinition: false };
     }
-
-    return { baselineHash: null, baselineSource: 'local', useDefinition: false };
-  }
 }

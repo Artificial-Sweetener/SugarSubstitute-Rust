@@ -15,6 +15,10 @@
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """Canonical cube identity tests."""
 
+from __future__ import annotations
+
+from typing import Any
+
 import pytest
 
 from sugarcubes.cube_model import (
@@ -26,7 +30,7 @@ from sugarcubes.cube_model import (
 )
 
 
-def test_parse_canonical_cube_id_accepts_github_qualified_cube_path():
+def test_parse_canonical_cube_id_accepts_github_qualified_cube_path() -> None:
     parsed = parse_canonical_cube_id(
         "artificial-sweetener/base-cubes/workflows/text_to_image.cube"
     )
@@ -40,7 +44,7 @@ def test_parse_canonical_cube_id_accepts_github_qualified_cube_path():
     )
 
 
-def test_parse_canonical_cube_id_accepts_local_cube_path():
+def test_parse_canonical_cube_id_accepts_local_cube_path() -> None:
     parsed = parse_canonical_cube_id("local/example-user/private/text_to_image.cube")
 
     assert parsed.source_kind == "local"
@@ -65,12 +69,12 @@ def test_parse_canonical_cube_id_accepts_local_cube_path():
         "local/flavors/foo.cube",
     ],
 )
-def test_parse_canonical_cube_id_rejects_invalid_shapes(cube_id):
+def test_parse_canonical_cube_id_rejects_invalid_shapes(cube_id: Any) -> None:
     with pytest.raises(CubeIdentityError):
         parse_canonical_cube_id(cube_id)
 
 
-def test_derive_cube_id_from_default_alias_updates_root_filename():
+def test_derive_cube_id_from_default_alias_updates_root_filename() -> None:
     assert (
         derive_cube_id_from_default_alias(
             "Artificial-Sweetener/Base-Cubes/text to image.cube",
@@ -80,7 +84,7 @@ def test_derive_cube_id_from_default_alias_updates_root_filename():
     )
 
 
-def test_derive_cube_id_from_default_alias_preserves_parent_folder():
+def test_derive_cube_id_from_default_alias_preserves_parent_folder() -> None:
     assert (
         derive_cube_id_from_default_alias(
             "Artificial-Sweetener/Base-Cubes/generation/text_to_image.cube",
@@ -90,7 +94,7 @@ def test_derive_cube_id_from_default_alias_preserves_parent_folder():
     )
 
 
-def test_derive_cube_id_from_default_alias_updates_local_filename():
+def test_derive_cube_id_from_default_alias_updates_local_filename() -> None:
     assert (
         derive_cube_id_from_default_alias(
             "local/personal/text_to_image.cube",
@@ -100,7 +104,7 @@ def test_derive_cube_id_from_default_alias_updates_local_filename():
     )
 
 
-def test_suggest_canonical_cube_path_preserves_exact_alias_text():
+def test_suggest_canonical_cube_path_preserves_exact_alias_text() -> None:
     assert suggest_canonical_cube_path("  Text to Image XL  ") == (
         "Text to Image XL.cube"
     )
@@ -113,7 +117,7 @@ def test_suggest_canonical_cube_path_preserves_exact_alias_text():
 
 
 @pytest.mark.parametrize("alias", ["Bad/Name", "Bad\\Name", "Bad:Name", "Bad*Name"])
-def test_suggest_canonical_cube_path_rejects_unsafe_filename_text(alias):
+def test_suggest_canonical_cube_path_rejects_unsafe_filename_text(alias: Any) -> None:
     with pytest.raises(CubeIdentityError):
         suggest_canonical_cube_path(alias)
 
@@ -127,19 +131,21 @@ def test_suggest_canonical_cube_path_rejects_unsafe_filename_text(alias):
         "local/personal/Bad Name..cube",
     ],
 )
-def test_parse_canonical_cube_id_rejects_unsafe_path_segments(cube_id):
+def test_parse_canonical_cube_id_rejects_unsafe_path_segments(cube_id: Any) -> None:
     with pytest.raises(CubeIdentityError):
         parse_canonical_cube_id(cube_id)
 
 
-def test_parse_canonical_cube_id_allows_flavors_filename_under_valid_namespace():
+def test_parse_canonical_cube_id_allows_flavors_filename_under_valid_namespace() -> (
+    None
+):
     parsed = parse_canonical_cube_id("local/personal/flavors.cube")
 
     assert parsed.namespace == "personal"
     assert parsed.path == "flavors.cube"
 
 
-def test_derive_source_author_label_reads_identity_source():
+def test_derive_source_author_label_reads_identity_source() -> None:
     assert (
         derive_source_author_label("Artificial-Sweetener/Base-Cubes/text to image.cube")
         == "Artificial-Sweetener/Base-Cubes"
@@ -147,6 +153,6 @@ def test_derive_source_author_label_reads_identity_source():
     assert derive_source_author_label("local/personal/text_to_image.cube") == "local"
 
 
-def test_derive_cube_id_from_default_alias_rejects_invalid_current_id():
+def test_derive_cube_id_from_default_alias_rejects_invalid_current_id() -> None:
     with pytest.raises(CubeIdentityError):
         derive_cube_id_from_default_alias("invalid", "Demo")

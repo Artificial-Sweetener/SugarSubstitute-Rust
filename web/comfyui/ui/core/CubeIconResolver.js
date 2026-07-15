@@ -16,213 +16,188 @@
 /**
  * Own cube definition icon resolution and placeholder derivation.
  */
-
-import {
-  FALLBACK_ICON_STYLE,
-  createFallbackIconModel,
-  drawFallbackInitialsElementCanvas,
-} from './CubeFallbackIconRenderer.js';
-
+import { FALLBACK_ICON_STYLE, createFallbackIconModel, drawFallbackInitialsElementCanvas, } from './CubeFallbackIconRenderer.js';
+import { isRecord } from '../types/common.js';
 const SUPPORTED_MEDIA_TYPES = new Set(['image/png', 'image/svg+xml']);
 export { FALLBACK_ICON_STYLE };
-
 function readText(value) {
-  return typeof value === 'string' ? value.trim() : '';
+    return typeof value === 'string' ? value.trim() : '';
 }
-
 function readIconDescriptor(source) {
-  const icon = source && typeof source === 'object' && !Array.isArray(source) ? source : null;
-  if (!icon || icon.kind !== 'asset') {
-    return null;
-  }
-  const mediaType = readText(icon.media_type);
-  if (mediaType && !SUPPORTED_MEDIA_TYPES.has(mediaType)) {
-    return null;
-  }
-  const url = readText(icon.url);
-  const path = readText(icon.path) || readText(icon.repo_relative_path);
-  if (url) {
-    return { kind: 'asset', url, media_type: mediaType || '' };
-  }
-  return path ? { kind: 'asset', path, media_type: mediaType || '' } : null;
+    const icon = isRecord(source) ? source : null;
+    if (!icon || icon.kind !== 'asset') {
+        return null;
+    }
+    const mediaType = readText(icon.media_type);
+    if (mediaType && !SUPPORTED_MEDIA_TYPES.has(mediaType)) {
+        return null;
+    }
+    const url = readText(icon.url);
+    const path = readText(icon.path) || readText(icon.repo_relative_path);
+    if (url) {
+        return { kind: 'asset', url, media_type: mediaType || '' };
+    }
+    return path ? { kind: 'asset', path, media_type: mediaType || '' } : null;
 }
-
 function buildIconAssetUrl(cubeId) {
-  const normalized = readText(cubeId);
-  return normalized ? `/sugarcubes/assets/icon?cube_id=${encodeURIComponent(normalized)}` : '';
+    const normalized = readText(cubeId);
+    return normalized ? `/sugarcubes/assets/icon?cube_id=${encodeURIComponent(normalized)}` : '';
 }
-
 /**
  * Split a styled cube alias into one optional leading prefix and display body.
  */
 export function splitCubeAliasPrefix(alias) {
-  const stripped = readText(alias);
-  const slashIndex = stripped.indexOf('/');
-  if (slashIndex <= 0 || slashIndex >= stripped.length - 1) {
-    return { prefix: '', body: stripped };
-  }
-
-  const prefixBody = stripped.slice(0, slashIndex).trim();
-  const body = stripped.slice(slashIndex + 1).trim();
-  if (!prefixBody || !body) {
-    return { prefix: '', body: stripped };
-  }
-
-  return {
-    prefix: stripped.slice(0, slashIndex + 1),
-    body,
-  };
+    const stripped = readText(alias);
+    const slashIndex = stripped.indexOf('/');
+    if (slashIndex <= 0 || slashIndex >= stripped.length - 1) {
+        return { prefix: '', body: stripped };
+    }
+    const prefixBody = stripped.slice(0, slashIndex).trim();
+    const body = stripped.slice(slashIndex + 1).trim();
+    if (!prefixBody || !body) {
+        return { prefix: '', body: stripped };
+    }
+    return {
+        prefix: stripped.slice(0, slashIndex + 1),
+        body,
+    };
 }
-
 function fallbackInitialsLabel(label) {
-  const parts = splitCubeAliasPrefix(label);
-  return parts.prefix ? parts.body : readText(label);
+    const parts = splitCubeAliasPrefix(label);
+    return parts.prefix ? parts.body : readText(label);
 }
-
 function initialWords(label) {
-  return fallbackInitialsLabel(label)
-    .split(/[\s/_-]+/)
-    .map((word) => word.replace(/[^0-9a-zA-Z]/g, ''))
-    .filter(Boolean);
+    return fallbackInitialsLabel(label)
+        .split(/[\s/_-]+/)
+        .map((word) => word.replace(/[^0-9a-zA-Z]/g, ''))
+        .filter(Boolean);
 }
-
 /**
  * Derive SugarSubstitute-compatible fallback initials for a cube label.
  */
 export function deriveCubeInitials(label, { fallbackText = '?' } = {}) {
-  let words = initialWords(label);
-  if (!words.length) {
-    words = initialWords(fallbackText);
-  }
-  if (!words.length) {
-    return '?';
-  }
-  if (words.length === 1) {
-    return words[0].slice(0, 2).toUpperCase();
-  }
-  return `${words[0][0] || ''}${words[words.length - 1][0] || ''}`.toUpperCase();
+    let words = initialWords(label);
+    if (!words.length) {
+        words = initialWords(fallbackText);
+    }
+    if (!words.length) {
+        return '?';
+    }
+    if (words.length === 1) {
+        return (words[0] ?? '').slice(0, 2).toUpperCase();
+    }
+    const first = words[0] ?? '';
+    const last = words.at(-1) ?? '';
+    return `${first[0] || ''}${last[0] || ''}`.toUpperCase();
 }
-
 /**
  * Derive default icon initials from a cube definition default alias.
  */
 export function deriveDefaultAliasInitials(defaultAlias, { fallbackText = '' } = {}) {
-  return deriveCubeInitials(defaultAlias, { fallbackText });
+    return deriveCubeInitials(defaultAlias, { fallbackText });
 }
-
 /**
  * Resolve the display model for one cube definition icon.
  */
 export function resolveCubeIconModel(source = {}) {
-  const metadata = source && typeof source === 'object' ? source : {};
-  const defaultAlias = readText(metadata.default_alias);
-  const cubeId = readText(metadata.cube_id);
-  const iconSource =
-    readIconDescriptor(metadata.icon) ||
-    readIconDescriptor(
-      metadata.metadata && typeof metadata.metadata === 'object' ? metadata.metadata.icon : null,
-    );
-  const initials = deriveDefaultAliasInitials(defaultAlias, { fallbackText: cubeId });
-  const fallback = { ...FALLBACK_ICON_STYLE };
-  if (iconSource) {
-    const url = iconSource.url || buildIconAssetUrl(cubeId);
-    if (url) {
-      return {
-        kind: 'asset',
-        url,
-        mediaType: iconSource.media_type || '',
-        initials,
-        fallback,
-      };
+    const metadata = isRecord(source) ? source : {};
+    const defaultAlias = readText(metadata.default_alias);
+    const cubeId = readText(metadata.cube_id);
+    const iconSource = readIconDescriptor(metadata.icon) ||
+        readIconDescriptor(isRecord(metadata.metadata) ? metadata.metadata.icon : null);
+    const initials = deriveDefaultAliasInitials(defaultAlias, { fallbackText: cubeId });
+    const fallback = { ...FALLBACK_ICON_STYLE };
+    if (iconSource) {
+        const url = iconSource.url || buildIconAssetUrl(cubeId);
+        if (url) {
+            return {
+                kind: 'asset',
+                url,
+                mediaType: iconSource.media_type || '',
+                initials,
+                fallback,
+            };
+        }
     }
-  }
-  return createFallbackIconModel(initials);
+    return createFallbackIconModel(initials);
 }
-
 /**
  * Cache image objects for repeated chrome rendering.
  */
 export class CubeIconResolver {
-  constructor({ imageFactory, onImageLoad } = {}) {
-    this.imageFactory = typeof imageFactory === 'function' ? imageFactory : null;
-    this.onImageLoad = typeof onImageLoad === 'function' ? onImageLoad : null;
-    this.images = new Map();
-  }
-
-  resolve(source = {}) {
-    return resolveCubeIconModel(source);
-  }
-
-  getImage(model) {
-    if (!model || model.kind !== 'asset' || !model.url) {
-      return { status: 'unavailable', image: null };
+    imageFactory;
+    onImageLoad;
+    images;
+    constructor({ imageFactory, onImageLoad } = {}) {
+        this.imageFactory = typeof imageFactory === 'function' ? imageFactory : null;
+        this.onImageLoad = typeof onImageLoad === 'function' ? onImageLoad : null;
+        this.images = new Map();
     }
-    const existing = this.images.get(model.url);
-    if (existing) {
-      return existing;
+    resolve(source = {}) {
+        return resolveCubeIconModel(source);
     }
-    const ImageRef =
-      this.imageFactory ||
-      (typeof globalThis !== 'undefined' && typeof globalThis.Image === 'function'
-        ? () => new globalThis.Image()
-        : null);
-    if (!ImageRef) {
-      const unavailable = { status: 'error', image: null };
-      this.images.set(model.url, unavailable);
-      return unavailable;
+    getImage(model) {
+        if (!model || model.kind !== 'asset' || !model.url) {
+            return { status: 'unavailable', image: null };
+        }
+        const existing = this.images.get(model.url);
+        if (existing) {
+            return existing;
+        }
+        const ImageRef = this.imageFactory ||
+            (typeof globalThis !== 'undefined' && typeof globalThis.Image === 'function'
+                ? () => new globalThis.Image()
+                : null);
+        if (!ImageRef) {
+            const unavailable = { status: 'error', image: null };
+            this.images.set(model.url, unavailable);
+            return unavailable;
+        }
+        const image = ImageRef();
+        const entry = { status: 'loading', image };
+        image.onload = () => {
+            entry.status = 'ready';
+            this.onImageLoad?.(model.url, entry);
+        };
+        image.onerror = () => {
+            entry.status = 'error';
+            this.onImageLoad?.(model.url, entry);
+        };
+        image.src = model.url;
+        this.images.set(model.url, entry);
+        return entry;
     }
-    const image = ImageRef();
-    const entry = { status: 'loading', image };
-    image.onload = () => {
-      entry.status = 'ready';
-      this.onImageLoad?.(model.url, entry);
-    };
-    image.onerror = () => {
-      entry.status = 'error';
-      this.onImageLoad?.(model.url, entry);
-    };
-    image.src = model.url;
-    this.images.set(model.url, entry);
-    return entry;
-  }
 }
-
-/**
- * Build a DOM icon node for browser surfaces.
- */
-export function createCubeIconElement(
-  documentRef,
-  source = {},
-  className = 'sugarcubes-cube-icon',
-) {
-  const doc = documentRef || (typeof document !== 'undefined' ? document : null);
-  if (!doc) {
-    return null;
-  }
-  const model = resolveCubeIconModel(source);
-  const root = doc.createElement('span');
-  root.className = className;
-  if (model.kind === 'asset' && model.url) {
-    const image = doc.createElement('img');
-    image.alt = '';
-    image.decoding = 'async';
-    image.loading = 'lazy';
-    image.src = model.url;
-    root.appendChild(image);
+/** Resolve and render a safe cube icon element for the supplied document. */
+export function createCubeIconElement(documentRef, source = {}, className = 'sugarcubes-cube-icon') {
+    const doc = documentRef || (typeof document !== 'undefined' ? document : null);
+    if (!doc) {
+        return null;
+    }
+    const model = resolveCubeIconModel(source);
+    const root = doc.createElement('span');
+    root.className = className;
+    if (model.kind === 'asset' && model.url) {
+        const image = doc.createElement('img');
+        image.alt = '';
+        image.decoding = 'async';
+        image.loading = 'lazy';
+        image.src = model.url;
+        root.appendChild(image);
+        return root;
+    }
+    if (model.kind === 'initials' && model.initials) {
+        const canvas = doc.createElement('canvas');
+        canvas.setAttribute('aria-hidden', 'true');
+        canvas.className = 'sugarcubes-cube-icon__fallback';
+        drawFallbackInitialsElementCanvas(canvas, model);
+        root.dataset.initials = model.initials;
+        root.setAttribute('aria-hidden', 'true');
+        root.classList.add('is-initials');
+        root.appendChild(canvas);
+        return root;
+    }
+    root.classList.add('is-generic');
+    root.textContent = '';
     return root;
-  }
-  if (model.kind === 'initials' && model.initials) {
-    const canvas = doc.createElement('canvas');
-    canvas.setAttribute('aria-hidden', 'true');
-    canvas.className = 'sugarcubes-cube-icon__fallback';
-    drawFallbackInitialsElementCanvas(canvas, model);
-    root.dataset.initials = model.initials;
-    root.setAttribute('aria-hidden', 'true');
-    root.classList.add('is-initials');
-    root.appendChild(canvas);
-    return root;
-  }
-  root.classList.add('is-generic');
-  root.textContent = '';
-  return root;
 }

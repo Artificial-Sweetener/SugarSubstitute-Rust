@@ -15,6 +15,12 @@
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """Backend helper characterization tests aligned to the tracked-repo model."""
 
+from __future__ import annotations
+
+from typing import Any
+
+from .typing_support import BackendServicesFactory
+
 import asyncio
 import json
 import logging
@@ -32,13 +38,17 @@ from sugarcubes.backend.services.cube_export_service import (
     collect_required_node_class_types,
     collect_subgraph_contract_violations,
 )
-from sugarcubes.backend.services.cube_library_service import (
-    CubeVersionArtifactCache,
+from sugarcubes.backend.services.cube_summary import (
     derive_cube_display_name,
+)
+from sugarcubes.backend.services.cube_metadata import (
     normalize_default_alias,
     normalize_metadata_update,
     normalize_supported_models,
     normalize_tags,
+)
+from sugarcubes.backend.services.cube_version_artifact_cache import (
+    CubeVersionArtifactCache,
 )
 from sugarcubes.backend.validation.request_parsers import (
     coerce_int,
@@ -49,12 +59,12 @@ from sugarcubes.backend.validation.request_parsers import (
     parse_save_many_cube_entries,
 )
 
-from conftest import FakeRequest, ensure_tracked_repo
+from .conftest import FakeRequest, ensure_tracked_repo
 
 CANONICAL_CUBE_ID = "artificial-sweetener/base-cubes/automask detailer.cube"
 
 
-def test_entrypoint_import_does_not_load_comfy_host_modules():
+def test_entrypoint_import_does_not_load_comfy_host_modules() -> None:
     root = Path(__file__).resolve().parents[1]
     script = f"""
 import importlib.util
@@ -83,7 +93,7 @@ raise SystemExit(1 if 'server' in sys.modules or 'nodes' in sys.modules else 0)
     assert result.returncode == 0, result.stderr
 
 
-def test_normalize_tags_and_models():
+def test_normalize_tags_and_models() -> None:
     assert normalize_tags(["Foo Bar", "", 1]) == ["foo-bar"]
     assert normalize_tags("a, b c") == ["a", "bc"]
     assert normalize_supported_models([" sd ", "", 123]) == ["sd"]
@@ -104,13 +114,15 @@ def test_normalize_tags_and_models():
         ("Flux .1 D", "Flux .1 D"),
     ],
 )
-def test_normalize_default_alias_preserves_route_text(value, expected):
+def test_normalize_default_alias_preserves_route_text(
+    value: Any, expected: Any
+) -> None:
     assert normalize_default_alias(value) == expected
 
 
 def test_build_default_alias_lookup_reads_tracked_repo_display_name(
-    tmp_path, backend_services_factory
-):
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
     services = backend_services_factory(tmp_path)
     checkout = ensure_tracked_repo(
         services,
@@ -156,7 +168,9 @@ def test_build_default_alias_lookup_reads_tracked_repo_display_name(
     assert lookup[CANONICAL_CUBE_ID] == "automask detailer"
 
 
-def test_derive_cube_display_name_ignores_group_title_without_definition_alias():
+def test_derive_cube_display_name_ignores_group_title_without_definition_alias() -> (
+    None
+):
     payload = {
         "implementation": {
             "layout": {
@@ -176,13 +190,13 @@ def test_derive_cube_display_name_ignores_group_title_without_definition_alias()
     assert derive_cube_display_name(payload, "automask detailer") == "automask detailer"
 
 
-def test_extract_drop_origin():
+def test_extract_drop_origin() -> None:
     assert extract_drop_origin({"x": 1, "y": 2}) == [1, 2]
     assert extract_drop_origin([3, 4]) == [3, 4]
     assert extract_drop_origin("bad") is None
 
 
-def test_normalize_metadata_update():
+def test_normalize_metadata_update() -> None:
     updates, removals = normalize_metadata_update(
         {"author": "", "tags": "foo, bar", "supported_models": []}
     )
@@ -192,7 +206,7 @@ def test_normalize_metadata_update():
     assert "supported_models" in removals
 
 
-def test_normalize_metadata_update_validates_target_model_against_cube_path():
+def test_normalize_metadata_update_validates_target_model_against_cube_path() -> None:
     updates, _removals = normalize_metadata_update(
         {
             "target_model": "SDXL",
@@ -216,7 +230,7 @@ def test_normalize_metadata_update_validates_target_model_against_cube_path():
         )
 
 
-def test_parse_save_many_cube_entries_preserves_normalized_metadata():
+def test_parse_save_many_cube_entries_preserves_normalized_metadata() -> None:
     entries = parse_save_many_cube_entries(
         [
             {
@@ -237,35 +251,35 @@ def test_parse_save_many_cube_entries_preserves_normalized_metadata():
     }
 
 
-def test_normalize_workflow_payload_requires_value():
+def test_normalize_workflow_payload_requires_value() -> None:
     with pytest.raises(Exception):
         normalize_workflow_payload(None)
 
 
-def test_parse_json_body_requires_object():
+def test_parse_json_body_requires_object() -> None:
     with pytest.raises(BackendError, match="Request body must be a JSON object"):
         asyncio.run(parse_json_body(FakeRequest(body=["bad"])))
 
 
-def test_parse_optional_json_body_allows_empty_body():
+def test_parse_optional_json_body_allows_empty_body() -> None:
     assert asyncio.run(parse_optional_json_body(FakeRequest(body=None))) is None
 
 
-def test_parse_json_body_rejects_malformed_json():
+def test_parse_json_body_rejects_malformed_json() -> None:
     with pytest.raises(BackendError, match="Invalid JSON body"):
         asyncio.run(
             parse_json_body(FakeRequest(json_error=json.JSONDecodeError("bad", "", 0)))
         )
 
 
-def test_coerce_int_preserves_supported_inputs():
+def test_coerce_int_preserves_supported_inputs() -> None:
     assert coerce_int(4) == 4
     assert coerce_int(4.8) == 4
     assert coerce_int("5") == 5
     assert coerce_int("bad", default=9) == 9
 
 
-def test_collect_subgraph_contract_violations_for_uuid_wrappers():
+def test_collect_subgraph_contract_violations_for_uuid_wrappers() -> None:
     subgraph_id = "94f725d5-39bf-4060-be68-f573214a2055"
     graph = {
         "1": {"class_type": subgraph_id, "inputs": {}},
@@ -276,15 +290,15 @@ def test_collect_subgraph_contract_violations_for_uuid_wrappers():
     assert violations == {"empty_subgraph_bodies": [subgraph_id]}
 
 
-def test_collect_subgraph_contract_violations_reports_missing_definition():
+def test_collect_subgraph_contract_violations_reports_missing_definition() -> None:
     subgraph_id = "94f725d5-39bf-4060-be68-f573214a2055"
     graph = {"1": {"class_type": subgraph_id, "inputs": {}}}
-    workflow = {"definitions": {"subgraphs": []}}
+    workflow: dict[str, Any] = {"definitions": {"subgraphs": []}}
     violations = collect_subgraph_contract_violations(graph, workflow)
     assert violations == {"missing_subgraphs": [subgraph_id]}
 
 
-def test_collect_subgraph_contract_violations_reports_missing_labels():
+def test_collect_subgraph_contract_violations_reports_missing_labels() -> None:
     subgraph_id = "94f725d5-39bf-4060-be68-f573214a2055"
     graph = {"1": {"class_type": subgraph_id, "inputs": {}}}
     workflow = {
@@ -303,7 +317,7 @@ def test_collect_subgraph_contract_violations_reports_missing_labels():
     assert violations == {"missing_subgraph_labels": [f"{subgraph_id}.inputs.value"]}
 
 
-def test_collect_required_node_class_types_includes_subgraph_node_classes():
+def test_collect_required_node_class_types_includes_subgraph_node_classes() -> None:
     subgraph_id = "94f725d5-39bf-4060-be68-f573214a2055"
     graph = {
         "1": {"class_type": "KSampler", "inputs": {}},
@@ -327,14 +341,16 @@ def test_collect_required_node_class_types_includes_subgraph_node_classes():
     assert required == {"KSampler", "RegexExtract"}
 
 
-def test_collect_missing_node_class_types_uses_registry_mapping():
+def test_collect_missing_node_class_types_uses_registry_mapping() -> None:
     missing = collect_missing_node_class_types(
         {"KSampler", "RegexExtract"}, {"KSampler": object()}
     )
     assert missing == ["RegexExtract"]
 
 
-def test_resolve_active_comfy_node_class_mappings_prefers_host_registry(monkeypatch):
+def test_resolve_active_comfy_node_class_mappings_prefers_host_registry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     extension_root = Path(__file__).resolve().parents[1]
     host_registry = {"KSampler": object(), "VAELoader": object()}
     host_nodes_module = SimpleNamespace(
@@ -352,11 +368,11 @@ def test_resolve_active_comfy_node_class_mappings_prefers_host_registry(monkeypa
 
 
 def test_resolve_active_comfy_node_class_mappings_ignores_local_shadowing(
-    monkeypatch, caplog
-):
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
     extension_root = Path(__file__).resolve().parents[1]
     local_shadow_module = SimpleNamespace(
-        __file__=str(extension_root / "nodes.py"),
+        __file__=str(extension_root / "sugarcubes" / "nodes.py"),
         NODE_CLASS_MAPPINGS={"WrongLocalRegistry": object()},
     )
 
@@ -377,14 +393,14 @@ def test_resolve_active_comfy_node_class_mappings_ignores_local_shadowing(
 
 
 def test_cube_library_service_continues_when_version_cache_prune_fails(
-    monkeypatch,
-    caplog,
-    tmp_path,
-    backend_services_factory,
-):
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path,
+    backend_services_factory: BackendServicesFactory,
+) -> None:
     """Version-cache cleanup failures must not block backend service construction."""
 
-    def fail_prune(self):
+    def fail_prune(self: CubeVersionArtifactCache) -> None:
         """Raise a deterministic cache cleanup failure."""
 
         _ = self

@@ -1,0 +1,26 @@
+{
+  "testEnvironment": "jsdom",
+  "testMatch": ["**/tests/**/*.test.ts", "**/tests/**/*.spec.ts"],
+  "extensionsToTreatAsEsm": [".ts"],
+  "moduleFileExtensions": ["ts", "js", "json"],
+  "transform": {
+    "^.+\\.ts$": [
+      "ts-jest",
+      {
+        "useESM": true,
+        "tsconfig": "tsconfig.tests.json"
+      }
+    ]
+  },
+  "moduleNameMapper": {
+    "^/scripts/app\\.js$": "<rootDir>/tests/js/mocks/app.ts",
+    "^/scripts/api\\.js$": "<rootDir>/tests/js/mocks/api.ts",
+    "^/scripts/ui\\.js$": "<rootDir>/tests/js/mocks/ui.ts",
+    "^/scripts/ui/components/button\\.js$": "<rootDir>/tests/js/mocks/button.ts",
+    "^\\.\\./\\.\\./\\.\\./scripts/app\\.js$": "<rootDir>/tests/js/mocks/app.ts",
+    "^\\.\\./\\.\\./\\.\\./scripts/api\\.js$": "<rootDir>/tests/js/mocks/api.ts",
+    "^\\.\\./\\.\\./\\.\\./scripts/ui\\.js$": "<rootDir>/tests/js/mocks/ui.ts",
+    "^\\.\\./\\.\\./\\.\\./scripts/ui/components/button\\.js$": "<rootDir>/tests/js/mocks/button.ts",
+    "^(\\.{1,2}/.*)\\.js$": "$1"
+  }
+}

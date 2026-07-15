@@ -13,11 +13,15 @@
 #
 #    You should have received a copy of the GNU Affero General Public License
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+from __future__ import annotations
+from typing import Any
+
 from sugarcubes.payloads import retarget_cube_payload
 
 
-def test_retarget_payload_updates_sugarcubes_metadata():
-    payload = {
+def test_retarget_payload_updates_sugarcubes_metadata() -> None:
+    payload: dict[str, Any] = {
         "nodes": {
             "1": {
                 "class_type": "SugarCubes.CubeInput",
@@ -60,8 +64,8 @@ def test_retarget_payload_updates_sugarcubes_metadata():
     assert group["title"] == "Old Group"
 
 
-def test_retarget_payload_skips_invalid_entries():
-    payload = {
+def test_retarget_payload_skips_invalid_entries() -> None:
+    payload: dict[str, Any] = {
         "nodes": {"1": {"class_type": "NotSugar", "inputs": {"default_alias": "Old"}}},
         "layout": {"groups": [{"sugarcubes": "nope"}]},
     }

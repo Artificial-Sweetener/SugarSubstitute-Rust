@@ -13,13 +13,15 @@
 #
 #    You should have received a copy of the GNU Affero General Public License
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+from __future__ import annotations
 import pytest
 
 from sugarcubes.exporter import export as export_cubes
 from sugarcubes.exporter.graph import analyze_cubes, build_graph
 
 
-def test_build_graph_ignores_non_numeric_keys():
+def test_build_graph_ignores_non_numeric_keys() -> None:
     prompt = {
         "workflow": {"nodes": []},
         "1": {"class_type": "KSampler", "inputs": {}},
@@ -30,7 +32,7 @@ def test_build_graph_ignores_non_numeric_keys():
     assert "workflow" not in graph.nodes
 
 
-def test_analyze_cubes_requires_default_alias():
+def test_analyze_cubes_requires_default_alias() -> None:
     prompt = {
         "1": {
             "class_type": "SugarCubes.CubeInput",
@@ -51,7 +53,7 @@ def test_analyze_cubes_requires_default_alias():
         analyze_cubes(prompt)
 
 
-def test_analyze_cubes_requires_cube_id():
+def test_analyze_cubes_requires_cube_id() -> None:
     prompt = {
         "1": {
             "class_type": "SugarCubes.CubeInput",
@@ -68,7 +70,7 @@ def test_analyze_cubes_requires_cube_id():
         analyze_cubes(prompt)
 
 
-def test_analyze_cubes_allows_mismatched_default_aliass():
+def test_analyze_cubes_allows_mismatched_default_aliass() -> None:
     cube_id = "local/example-user/demo.cube"
     prompt = {
         "1": {
@@ -87,7 +89,7 @@ def test_analyze_cubes_allows_mismatched_default_aliass():
     assert analysis.cubes[cube_id].name == "Alpha"
 
 
-def test_analyze_cubes_prefers_lookup_when_live_name_matches_cube_id():
+def test_analyze_cubes_prefers_lookup_when_live_name_matches_cube_id() -> None:
     cube_id = "local/example-user/demo.cube"
     prompt = {
         "1": {
@@ -106,7 +108,7 @@ def test_analyze_cubes_prefers_lookup_when_live_name_matches_cube_id():
     assert analysis.cubes[cube_id].name == "Canonical Name"
 
 
-def test_analyze_cubes_preserves_human_live_name_over_slug_lookup():
+def test_analyze_cubes_preserves_human_live_name_over_slug_lookup() -> None:
     cube_id = "local/example-user/demo.cube"
     prompt = {
         "1": {
@@ -129,7 +131,7 @@ def test_analyze_cubes_preserves_human_live_name_over_slug_lookup():
     assert analysis.cubes[cube_id].name == "Demo Cube"
 
 
-def test_analyze_cubes_preserves_underscore_live_name_over_space_lookup():
+def test_analyze_cubes_preserves_underscore_live_name_over_space_lookup() -> None:
     cube_id = "local/example-user/demo.cube"
     prompt = {
         "1": {
@@ -152,7 +154,7 @@ def test_analyze_cubes_preserves_underscore_live_name_over_space_lookup():
     assert analysis.cubes[cube_id].name == "demo_cube"
 
 
-def test_workflow_links_update_existing_nodes():
+def test_workflow_links_update_existing_nodes() -> None:
     cube_id = "local/example-user/demo.cube"
     prompt = {
         "1": {
@@ -193,7 +195,7 @@ def test_workflow_links_update_existing_nodes():
     assert "10" in cube.subgraph_nodes
 
 
-def test_export_filters_cube_ids():
+def test_export_filters_cube_ids() -> None:
     cube_id_a = "local/example-user/alpha.cube"
     cube_id_b = "local/example-user/beta.cube"
     prompt = {

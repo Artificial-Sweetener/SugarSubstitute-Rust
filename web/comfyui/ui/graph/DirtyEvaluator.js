@@ -16,24 +16,21 @@
 /**
  * Own the SugarCubes graph integration layer in `web/comfyui/ui/graph/DirtyEvaluator.js`.
  */
-
-/**
- * Coordinate dirty evaluator behavior for the SugarCubes UI.
- */
+/** Evaluate implementation dirtiness against an authoritative baseline. */
 export class DirtyEvaluator {
-  evaluate({ currentHash, baselineHash, isKnown, missingSymbols, previousDirtyAt } = {}) {
-    const reasons = [];
-    if (!isKnown) {
-      reasons.push('unknown');
+    evaluate({ currentHash, baselineHash, isKnown, missingSymbols, previousDirtyAt, } = {}) {
+        const reasons = [];
+        if (!isKnown) {
+            reasons.push('unknown');
+        }
+        if (missingSymbols) {
+            reasons.push('missing-symbols');
+        }
+        if (currentHash !== baselineHash) {
+            reasons.push('hash-mismatch');
+        }
+        const dirty = reasons.length > 0;
+        const dirtyAt = dirty ? previousDirtyAt || new Date().toISOString() : null;
+        return { dirty, reasons, dirtyAt };
     }
-    if (missingSymbols) {
-      reasons.push('missing-symbols');
-    }
-    if (currentHash !== baselineHash) {
-      reasons.push('hash-mismatch');
-    }
-    const dirty = reasons.length > 0;
-    const dirtyAt = dirty ? previousDirtyAt || new Date().toISOString() : null;
-    return { dirty, reasons, dirtyAt };
-  }
 }

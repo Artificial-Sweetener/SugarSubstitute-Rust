@@ -16,109 +16,73 @@
 /**
  * Own the SugarCubes graph integration layer in `web/comfyui/ui/graph/DirtyHasher.js`.
  */
-
 import { sanitizeValue } from './DirtySnapshotter.js';
-import {
-  snapshotImplementationDefinition,
-  snapshotImplementationInstance,
-} from './ImplementationSnapshotter.js';
+import { snapshotImplementationDefinition, snapshotImplementationInstance, } from './ImplementationSnapshotter.js';
 import { snapshotSurfaceInstance, snapshotSurfaceValues } from './SurfaceSnapshotter.js';
 import { snapshotCosmeticInstance } from './CosmeticSnapshotter.js';
-
+import { isRecord } from '../types/common.js';
 /**
  * Hash text.
  */
 export function hashText(text) {
-  let hash = 5381;
-  const value = String(text || '');
-  for (let i = 0; i < value.length; i += 1) {
-    hash = (hash * 33) ^ value.charCodeAt(i);
-  }
-  return (hash >>> 0).toString(36);
+    let hash = 5381;
+    const value = String(text || '');
+    for (let i = 0; i < value.length; i += 1) {
+        hash = (hash * 33) ^ value.charCodeAt(i);
+    }
+    return (hash >>> 0).toString(36);
 }
-
 /**
  * Build stable stringify.
  */
 export function stableStringify(value) {
-  const seen = new WeakSet();
-  const sanitized = sanitizeValue(value, seen, 0);
-  return JSON.stringify(sanitized);
+    const seen = new WeakSet();
+    const sanitized = sanitizeValue(value, seen, 0);
+    return JSON.stringify(sanitized);
 }
-
 /**
  * Compute definition hash.
  */
 export function computeDefinitionHash(definition) {
-  const snapshot = snapshotImplementationDefinition(definition, definition?.cube?.surface || null);
-  if (!snapshot) {
-    return null;
-  }
-  return hashText(stableStringify(snapshot));
+    const record = isRecord(definition) ? definition : {};
+    const cube = isRecord(record.cube) ? record.cube : {};
+    const surface = isRecord(cube.surface) ? cube.surface : null;
+    const snapshot = snapshotImplementationDefinition(definition, surface);
+    if (!snapshot) {
+        return null;
+    }
+    return hashText(stableStringify(snapshot));
 }
-
 /**
  * Compute instance hash.
  */
-export function computeInstanceHash(
-  graph,
-  nodeIds,
-  markerIds,
-  anchor,
-  groupSnapshot,
-  options = {},
-) {
-  const payload =
-    groupSnapshot && groupSnapshot.__surface_snapshot
-      ? snapshotSurfaceValues(groupSnapshot.surface, groupSnapshot.values)
-      : snapshotImplementationInstance(
-          graph,
-          nodeIds,
-          markerIds,
-          anchor,
-          options.surface || null,
-          options,
-        );
-  return hashText(stableStringify(payload));
+export function computeInstanceHash(graph, nodeIds, markerIds, anchor, groupSnapshot, options = {}) {
+    const payload = groupSnapshot && groupSnapshot.__surface_snapshot
+        ? snapshotSurfaceValues(groupSnapshot.surface, groupSnapshot.values)
+        : snapshotImplementationInstance(graph, nodeIds, markerIds, anchor, options.surface || null, options);
+    return hashText(stableStringify(payload));
 }
-
 /**
  * Compute implementation hash.
  */
-export function computeImplementationHash(
-  graph,
-  nodeIds,
-  markerIds,
-  anchor,
-  surface,
-  options = {},
-) {
-  return hashText(
-    stableStringify(
-      snapshotImplementationInstance(graph, nodeIds, markerIds, anchor, surface, options),
-    ),
-  );
+export function computeImplementationHash(graph, nodeIds, markerIds, anchor, surface, options = {}) {
+    return hashText(stableStringify(snapshotImplementationInstance(graph, nodeIds, markerIds, anchor, surface, options)));
 }
-
 /**
  * Compute cosmetic hash.
  */
 export function computeCosmeticHash(graph, nodeIds, markerIds, anchor, group) {
-  return hashText(
-    stableStringify(snapshotCosmeticInstance(graph, nodeIds, markerIds, anchor, group)),
-  );
+    return hashText(stableStringify(snapshotCosmeticInstance(graph, nodeIds, markerIds, anchor, group)));
 }
-
 /**
  * Compute surface hash from live nodes.
  */
 export function computeSurfaceHash(graph, nodeIds, surface) {
-  return hashText(stableStringify(snapshotSurfaceInstance(graph, nodeIds, surface)));
+    return hashText(stableStringify(snapshotSurfaceInstance(graph, nodeIds, surface)));
 }
-
 /**
  * Compute baseline surface hash from persisted flavor values.
  */
 export function computeSurfaceValuesHash(surface, values) {
-  return hashText(stableStringify(snapshotSurfaceValues(surface, values)));
+    return hashText(stableStringify(snapshotSurfaceValues(surface, values)));
 }

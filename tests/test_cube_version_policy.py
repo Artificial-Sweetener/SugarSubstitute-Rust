@@ -18,11 +18,12 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from typing import Any
 
 from sugarcubes.cube_model.version_policy import suggest_version
 
 
-def _build_document_payload() -> dict:
+def _build_document_payload() -> dict[str, Any]:
     return {
         "cube_id": "artificial-sweetener/base-cubes/text to image.cube",
         "version": "1.0.2",
@@ -89,7 +90,7 @@ def _build_document_payload() -> dict:
     }
 
 
-def test_version_policy_reports_patch_for_authored_flavor_change():
+def test_version_policy_reports_patch_for_authored_flavor_change() -> None:
     old_cube = _build_document_payload()
     new_cube = deepcopy(old_cube)
     new_cube["flavors"]["authored"][0]["values"]["ksampler.cfg"] = 8
@@ -101,7 +102,7 @@ def test_version_policy_reports_patch_for_authored_flavor_change():
     assert suggestion.reason == "Authored flavor changed"
 
 
-def test_version_policy_reports_minor_for_implementation_change():
+def test_version_policy_reports_minor_for_implementation_change() -> None:
     old_cube = _build_document_payload()
     new_cube = deepcopy(old_cube)
     new_cube["implementation"]["nodes"]["ksampler"]["class_type"] = "KSamplerAdvanced"
@@ -113,7 +114,7 @@ def test_version_policy_reports_minor_for_implementation_change():
     assert suggestion.reason == "Implementation changed"
 
 
-def test_version_policy_reports_major_for_interface_change():
+def test_version_policy_reports_major_for_interface_change() -> None:
     old_cube = _build_document_payload()
     new_cube = deepcopy(old_cube)
     new_cube["implementation"]["outputs"]["output.mask"] = "ksampler"
@@ -125,7 +126,7 @@ def test_version_policy_reports_major_for_interface_change():
     assert suggestion.reason == "Interface changed"
 
 
-def test_version_policy_ignores_cosmetic_only_changes():
+def test_version_policy_ignores_cosmetic_only_changes() -> None:
     old_cube = _build_document_payload()
     new_cube = deepcopy(old_cube)
     new_cube["implementation"]["layout"]["origin"] = [100, 200]
