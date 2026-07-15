@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
  * Own the SugarCubes local flavor persistence layer in
- * `web/comfyui/ui/flavors/FlavorStorage.js`.
+ * `frontend/comfyui/ui/flavors/FlavorStorage.js`.
  */
 import { isRecord } from '../types/common.js';
 const LOCAL_FLAVOR_SCHEMA = 1;

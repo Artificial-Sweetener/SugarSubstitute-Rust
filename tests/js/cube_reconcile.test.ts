@@ -19,9 +19,9 @@ import {
   CUBE_INSTANCE_HEADER_HEIGHT,
   CUBE_INSTANCE_PADDING,
   CUBE_INSTANCE_TOP_EXTRA,
-} from '../../web/comfyui/ui/graph/CubeBounds.js';
-import { CubeBoundsReconciler } from '../../web/comfyui/ui/layout/CubeBoundsReconciler.js';
-import type { CubeGroupMetadataRecord } from '../../web/comfyui/ui/graph/GroupMetadata.js';
+} from '../../frontend/comfyui/ui/graph/CubeBounds.js';
+import { CubeBoundsReconciler } from '../../frontend/comfyui/ui/layout/CubeBoundsReconciler.js';
+import type { CubeGroupMetadataRecord } from '../../frontend/comfyui/ui/graph/GroupMetadata.js';
 
 describe('CubeBoundsReconciler', () => {
   test('treats canonical metadata bounds as source of truth', () => {

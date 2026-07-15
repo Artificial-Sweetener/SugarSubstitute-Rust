@@ -17,8 +17,8 @@ import { describe, expect, test, beforeEach, jest } from '@jest/globals';
 import { app as hostApp } from '/scripts/app.js';
 import { api as hostApi } from '/scripts/api.js';
 import type { MockSettingDefinition, MockSidebarTab } from './mocks/app.js';
-import type { UnknownRecord } from '../../web/comfyui/ui/types/common.js';
-import type { SugarCubesUI } from '../../web/comfyui/ui/SugarCubesUI.js';
+import type { UnknownRecord } from '../../frontend/comfyui/ui/types/common.js';
+import type { SugarCubesUI } from '../../frontend/comfyui/ui/SugarCubesUI.js';
 
 let app = hostApp as unknown as (typeof import('./mocks/app.js'))['app'];
 let api = hostApi as unknown as (typeof import('./mocks/api.js'))['api'];
@@ -74,9 +74,9 @@ function setupBaseApp() {
 }
 
 async function loadUi() {
-  const loaded: { value?: typeof import('../../web/comfyui/ui.js') } = {};
+  const loaded: { value?: typeof import('../../frontend/comfyui/ui.js') } = {};
   await jest.isolateModulesAsync(async () => {
-    loaded.value = await import('../../web/comfyui/ui.js');
+    loaded.value = await import('../../frontend/comfyui/ui.js');
   });
   if (!loaded.value) throw new Error('SugarCubes UI module did not load');
   const { sugarCubesExtension, sugarCubesUI } = loaded.value;

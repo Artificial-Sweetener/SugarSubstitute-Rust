@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
- * Own the SugarCubes host integration layer in `web/comfyui/ui.js`.
+ * Own the SugarCubes host integration layer in `frontend/comfyui/ui.js`.
  */
 import { app } from '/scripts/app.js';
 import { api } from '/scripts/api.js';

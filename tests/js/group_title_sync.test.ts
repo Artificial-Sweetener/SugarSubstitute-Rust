@@ -14,12 +14,12 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { describe, expect, test, jest } from '@jest/globals';
-import { InstanceBuilder } from '../../web/comfyui/ui/graph/InstanceBuilder.js';
-import { InstanceManager } from '../../web/comfyui/ui/graph/InstanceManager.js';
-import { syncInstanceAlias } from '../../web/comfyui/ui/graph/InstanceAliasSync.js';
-import { readWidgetValue } from '../../web/comfyui/ui/graph/Markers.js';
-import type { CubeGroupMetadataRecord } from '../../web/comfyui/ui/graph/GroupMetadata.js';
-import type { InstanceAdapter } from '../../web/comfyui/ui/graph/InstanceManager.js';
+import { InstanceBuilder } from '../../frontend/comfyui/ui/graph/InstanceBuilder.js';
+import { InstanceManager } from '../../frontend/comfyui/ui/graph/InstanceManager.js';
+import { syncInstanceAlias } from '../../frontend/comfyui/ui/graph/InstanceAliasSync.js';
+import { readWidgetValue } from '../../frontend/comfyui/ui/graph/Markers.js';
+import type { CubeGroupMetadataRecord } from '../../frontend/comfyui/ui/graph/GroupMetadata.js';
+import type { InstanceAdapter } from '../../frontend/comfyui/ui/graph/InstanceManager.js';
 import type {
   ComfyGraph,
   ComfyGroup,
@@ -28,7 +28,7 @@ import type {
   ComfyNode,
   ComfyOutput,
   ComfyWidget,
-} from '../../web/comfyui/ui/types/graph.js';
+} from '../../frontend/comfyui/ui/types/graph.js';
 
 interface TestGroup extends ComfyGroup {
   title: string;

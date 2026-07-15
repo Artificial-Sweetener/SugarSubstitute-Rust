@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
- * Own the SugarCubes UI orchestration layer in `web/comfyui/ui/SugarCubesUI.js`.
+ * Own the SugarCubes UI orchestration layer in `frontend/comfyui/ui/SugarCubesUI.js`.
  */
 import { ComfyAdapter } from './core/ComfyAdapter.js';
 import { EventBus } from './core/EventBus.js';

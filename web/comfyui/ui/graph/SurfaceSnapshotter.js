@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
  * Own the SugarCubes surface snapshotting layer in
- * `web/comfyui/ui/graph/SurfaceSnapshotter.js`.
+ * `frontend/comfyui/ui/graph/SurfaceSnapshotter.js`.
  */
 import { readWidgetValue } from './Markers.js';
 import { buildSurfaceNodesBySymbol } from './SurfaceNodeResolver.js';

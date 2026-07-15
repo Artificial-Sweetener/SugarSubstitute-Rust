@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
- * Own the SugarCubes layout orchestration layer in `web/comfyui/ui/layout/CubeLayoutEngine.js`.
+ * Own the SugarCubes layout orchestration layer in `frontend/comfyui/ui/layout/CubeLayoutEngine.js`.
  */
 import { CUBE_MARKER_KINDS } from '../graph/CubeMarkers.js';
 import { buildLinkIndex } from '../graph/GraphQuery.js';

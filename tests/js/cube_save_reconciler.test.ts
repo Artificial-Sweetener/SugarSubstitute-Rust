@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { describe, expect, jest, test } from '@jest/globals';
-import { CubeSaveReconciler } from '../../web/comfyui/ui/save/CubeSaveReconciler.js';
+import { CubeSaveReconciler } from '../../frontend/comfyui/ui/save/CubeSaveReconciler.js';
 
 function markerNode() {
   const values = {

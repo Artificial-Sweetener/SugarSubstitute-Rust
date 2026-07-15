@@ -23,7 +23,7 @@ import {
   resolveCollapsedPreviewSize,
   resolvePreviewRect,
   resolvePreviewSize,
-} from '../../web/comfyui/ui/overlays/PlacementHelpers.js';
+} from '../../frontend/comfyui/ui/overlays/PlacementHelpers.js';
 
 function createDrawingContext() {
   const context = {

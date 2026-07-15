@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { describe, expect, test } from '@jest/globals';
-import { InstanceBuilder } from '../../web/comfyui/ui/graph/InstanceBuilder.js';
+import { InstanceBuilder } from '../../frontend/comfyui/ui/graph/InstanceBuilder.js';
 import type {
   ComfyGraph,
   ComfyInput,
@@ -22,8 +22,8 @@ import type {
   ComfyNode,
   ComfyOutput,
   ComfyWidget,
-} from '../../web/comfyui/ui/types/graph.js';
-import type { UnknownRecord } from '../../web/comfyui/ui/types/common.js';
+} from '../../frontend/comfyui/ui/types/graph.js';
+import type { UnknownRecord } from '../../frontend/comfyui/ui/types/common.js';
 
 interface TestNode extends ComfyNode {
   id: number;

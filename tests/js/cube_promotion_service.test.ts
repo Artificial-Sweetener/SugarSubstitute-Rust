@@ -16,10 +16,10 @@
 /** Verify the polished personal-to-pack UI application flow. */
 
 import { describe, expect, jest, test } from '@jest/globals';
-import { CubePackService } from '../../web/comfyui/ui/packs/CubePackService.js';
-import { CubePromotionService } from '../../web/comfyui/ui/promotion/CubePromotionService.js';
-import { CubeIdentityReconciler } from '../../web/comfyui/ui/graph/CubeIdentityReconciler.js';
-import type { FormValues } from '../../web/comfyui/ui/dialogs/FormModal.js';
+import { CubePackService } from '../../frontend/comfyui/ui/packs/CubePackService.js';
+import { CubePromotionService } from '../../frontend/comfyui/ui/promotion/CubePromotionService.js';
+import { CubeIdentityReconciler } from '../../frontend/comfyui/ui/graph/CubeIdentityReconciler.js';
+import type { FormValues } from '../../frontend/comfyui/ui/dialogs/FormModal.js';
 
 const PERSONAL_CUBE = {
   cube_id: 'local/personal/Text to Image.cube',

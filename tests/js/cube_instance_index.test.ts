@@ -18,11 +18,11 @@ import {
   CUBE_INSTANCE_HEADER_HEIGHT,
   CUBE_INSTANCE_PADDING,
   CUBE_INSTANCE_TOP_EXTRA,
-} from '../../web/comfyui/ui/graph/CubeBounds.js';
-import { InstanceBuilder } from '../../web/comfyui/ui/graph/InstanceBuilder.js';
-import { setGroupSugarcubes } from '../../web/comfyui/ui/graph/GroupMetadata.js';
-import { CubeInstanceIndex } from '../../web/comfyui/ui/layout/CubeInstanceIndex.js';
-import type { CubeGroupMetadataRecord } from '../../web/comfyui/ui/graph/GroupMetadata.js';
+} from '../../frontend/comfyui/ui/graph/CubeBounds.js';
+import { InstanceBuilder } from '../../frontend/comfyui/ui/graph/InstanceBuilder.js';
+import { setGroupSugarcubes } from '../../frontend/comfyui/ui/graph/GroupMetadata.js';
+import { CubeInstanceIndex } from '../../frontend/comfyui/ui/layout/CubeInstanceIndex.js';
+import type { CubeGroupMetadataRecord } from '../../frontend/comfyui/ui/graph/GroupMetadata.js';
 import type {
   ComfyGraph,
   ComfyGroup,
@@ -31,7 +31,7 @@ import type {
   ComfyWidget,
   GraphId,
   NumericVector,
-} from '../../web/comfyui/ui/types/graph.js';
+} from '../../frontend/comfyui/ui/types/graph.js';
 
 interface MarkerOptions {
   id: GraphId;

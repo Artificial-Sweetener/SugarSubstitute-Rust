@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
- * Own the SugarCubes host integration layer in `web/js/cube_creation.js`.
+ * Own the SugarCubes host integration layer in `frontend/js/cube_creation.js`.
  */
 import { app } from '/scripts/app.js';
 import { buildLinkIndex, getGraphNodes } from '../comfyui/ui/graph/GraphQuery.js';

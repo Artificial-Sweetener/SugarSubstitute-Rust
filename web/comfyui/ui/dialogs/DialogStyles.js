@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
- * Own the SugarCubes dialog presentation layer in `web/comfyui/ui/dialogs/DialogStyles.js`.
+ * Own the SugarCubes dialog presentation layer in `frontend/comfyui/ui/dialogs/DialogStyles.js`.
  */
 const STYLE_ID = 'sugarcubes-dialog-styles';
 const dialogStyles = [

@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
- * Own the SugarCubes cube browser layer in `web/comfyui/ui/browser/CubeBrowserView.js`.
+ * Own the SugarCubes cube browser layer in `frontend/comfyui/ui/browser/CubeBrowserView.js`.
  */
 import { $el } from '/scripts/ui.js';
 import { deriveCubeIdFromDefaultAlias, normalizeDefaultAliasTitle } from '../core/CubeId.js';

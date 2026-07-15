@@ -27,5 +27,5 @@
     "target": "ES2022",
     "types": ["jest", "node"]
   },
-  "include": ["web/**/*.ts", "scripts/**/*.ts", "types/**/*.d.ts"]
+  "include": ["frontend/**/*.ts", "scripts/**/*.ts", "types/**/*.d.ts"]
 }

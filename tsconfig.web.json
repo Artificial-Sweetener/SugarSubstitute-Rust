@@ -5,10 +5,10 @@
     "noEmit": false,
     "noEmitOnError": true,
     "outDir": ".generated/web",
-    "rootDir": "web",
+    "rootDir": "frontend",
     "sourceMap": false,
     "types": []
   },
-  "include": ["web/**/*.ts", "types/**/*.d.ts"],
+  "include": ["frontend/**/*.ts", "types/**/*.d.ts"],
   "exclude": ["tests", "scripts"]
 }

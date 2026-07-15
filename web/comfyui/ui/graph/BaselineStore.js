@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
- * Own the SugarCubes graph integration layer in `web/comfyui/ui/graph/BaselineStore.js`.
+ * Own the SugarCubes graph integration layer in `frontend/comfyui/ui/graph/BaselineStore.js`.
  */
 /**
  * Coordinate baseline store behavior for the SugarCubes UI.

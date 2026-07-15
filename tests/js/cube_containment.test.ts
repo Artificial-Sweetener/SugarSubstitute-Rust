@@ -17,7 +17,7 @@ import { describe, expect, test } from '@jest/globals';
 import {
   CubeContainmentService,
   type ContainmentInstance,
-} from '../../web/comfyui/ui/layout/CubeContainmentService.js';
+} from '../../frontend/comfyui/ui/layout/CubeContainmentService.js';
 
 function buildInstance({
   bounds,

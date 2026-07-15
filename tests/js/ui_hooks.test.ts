@@ -18,12 +18,13 @@ import { app } from './mocks/app.js';
 import { api } from './mocks/api.js';
 import type { MockSidebarTab } from './mocks/app.js';
 import type { MockCanvas } from './mocks/app.js';
-import type { ComfyGraph } from '../../web/comfyui/ui/types/graph.js';
+import type { ComfyGraph } from '../../frontend/comfyui/ui/types/graph.js';
 import type {
   CubeContainmentService,
   ContainmentIndex,
-} from '../../web/comfyui/ui/layout/CubeContainmentService.js';
-import type { CubeCollisionService } from '../../web/comfyui/ui/layout/CubeCollisionService.js';
+} from '../../frontend/comfyui/ui/layout/CubeContainmentService.js';
+import type { CubeCollisionService } from '../../frontend/comfyui/ui/layout/CubeCollisionService.js';
+import type * as UiIndexModule from '../../frontend/comfyui/ui/index.js';
 
 type EnforceForNodes = CubeContainmentService['enforceForNodes'];
 type BuildContainmentIndex = CubeContainmentService['buildIndex'];
@@ -94,6 +95,14 @@ class TestLGraphNode {
 async function loadUi() {
   const cacheBust = `?v=${Math.random().toString(36).slice(2)}`;
   return import(`../../web/comfyui/ui.js${cacheBust}`);
+}
+
+/** Resolve the generated singleton used by the cache-busted runtime entry point. */
+async function getRuntimeSugarCubesUI(): Promise<ReturnType<typeof UiIndexModule.getSugarCubesUI>> {
+  const runtimeModulePath = '../../web/comfyui/ui/index.js';
+  // The compiled runtime boundary is proven equivalent by build:check.
+  const runtimeModule = (await import(runtimeModulePath)) as typeof UiIndexModule;
+  return runtimeModule.getSugarCubesUI();
 }
 
 beforeEach(() => {
@@ -209,7 +218,7 @@ describe('ui hooks and scheduling', () => {
     await loadUi();
     app.graph = null;
     const graph = { _nodes: [], _groups: [] };
-    const ui = (await import('../../web/comfyui/ui/index.js')).getSugarCubesUI();
+    const ui = await getRuntimeSugarCubesUI();
     const refreshSpy = jest.spyOn(ui.dirtyManager, 'refresh');
 
     window.SugarCubes.scheduleCubeDirtyRefresh({ graph });
@@ -331,7 +340,7 @@ describe('ui hooks and scheduling', () => {
     const extension = app._extensions[0];
     await extension.setup!();
 
-    const ui = (await import('../../web/comfyui/ui/index.js')).getSugarCubesUI();
+    const ui = await getRuntimeSugarCubesUI();
     const enforce = jest.fn<EnforceForNodes>(() => containmentResult(new Set(['inst-1'])));
     const collide = jest.fn<ResolveCollisions>(() => collisionResult(true));
     ui.containmentService.enforceForNodes = enforce;
@@ -359,7 +368,7 @@ describe('ui hooks and scheduling', () => {
     const extension = app._extensions[0];
     await extension.setup!();
 
-    const ui = (await import('../../web/comfyui/ui/index.js')).getSugarCubesUI();
+    const ui = await getRuntimeSugarCubesUI();
     const enforce = jest.fn<EnforceForNodes>(() => containmentResult());
     ui.containmentService.enforceForNodes = enforce;
     ui.collisionService.resolveCollisions = jest.fn<ResolveCollisions>(() => collisionResult());
@@ -380,7 +389,7 @@ describe('ui hooks and scheduling', () => {
     const extension = app._extensions[0];
     await extension.setup!();
 
-    const ui = (await import('../../web/comfyui/ui/index.js')).getSugarCubesUI();
+    const ui = await getRuntimeSugarCubesUI();
     const enforce = jest.fn<EnforceForNodes>(() => containmentResult());
     ui.containmentService.enforceForNodes = enforce;
     ui.collisionService.resolveCollisions = jest.fn<ResolveCollisions>(() => collisionResult());
@@ -405,7 +414,7 @@ describe('ui hooks and scheduling', () => {
     const extension = app._extensions[0];
     await extension.setup!();
 
-    const ui = (await import('../../web/comfyui/ui/index.js')).getSugarCubesUI();
+    const ui = await getRuntimeSugarCubesUI();
     const enforce = jest.fn<EnforceForNodes>(() => containmentResult());
     ui.containmentService.enforceForNodes = enforce;
     ui.collisionService.resolveCollisions = jest.fn<ResolveCollisions>(() => collisionResult());
@@ -440,7 +449,7 @@ describe('ui hooks and scheduling', () => {
     const extension = app._extensions[0];
     await extension.setup!();
 
-    const ui = (await import('../../web/comfyui/ui/index.js')).getSugarCubesUI();
+    const ui = await getRuntimeSugarCubesUI();
     const indexStub = emptyContainmentIndex();
     ui.containmentService.buildIndex = jest.fn<BuildContainmentIndex>(() => indexStub);
     const collide = jest.fn<ResolveCollisions>(() => collisionResult());
@@ -644,7 +653,7 @@ describe('ui hooks and scheduling', () => {
     const extension = app._extensions[0];
     await extension.setup!();
 
-    const ui = (await import('../../web/comfyui/ui/index.js')).getSugarCubesUI();
+    const ui = await getRuntimeSugarCubesUI();
     const indexStub = emptyContainmentIndex();
     ui.containmentService.buildIndex = jest.fn<BuildContainmentIndex>(() => indexStub);
     ui.containmentService.enforceForNodes = jest.fn<EnforceForNodes>(() => containmentResult());
@@ -692,7 +701,7 @@ describe('ui hooks and scheduling', () => {
     const extension = app._extensions[0];
     await extension.setup!();
 
-    const ui = (await import('../../web/comfyui/ui/index.js')).getSugarCubesUI();
+    const ui = await getRuntimeSugarCubesUI();
     const indexStub = emptyContainmentIndex();
     ui.containmentService.buildIndex = jest.fn<BuildContainmentIndex>(() => indexStub);
     ui.containmentService.enforceForNodes = jest.fn<EnforceForNodes>(() => containmentResult());

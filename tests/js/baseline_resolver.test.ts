@@ -14,8 +14,8 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { describe, expect, test } from '@jest/globals';
-import { BaselineResolver } from '../../web/comfyui/ui/graph/BaselineResolver.js';
-import { BaselineStore } from '../../web/comfyui/ui/graph/BaselineStore.js';
+import { BaselineResolver } from '../../frontend/comfyui/ui/graph/BaselineResolver.js';
+import { BaselineStore } from '../../frontend/comfyui/ui/graph/BaselineStore.js';
 
 describe('baseline resolver', () => {
   test('local baseline overrides definition', () => {

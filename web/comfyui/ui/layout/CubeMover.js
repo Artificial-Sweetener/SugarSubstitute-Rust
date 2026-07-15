@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
- * Own the SugarCubes layout orchestration layer in `web/comfyui/ui/layout/CubeMover.js`.
+ * Own the SugarCubes layout orchestration layer in `frontend/comfyui/ui/layout/CubeMover.js`.
  */
 import { readGroupBounds } from '../graph/Bounds.js';
 import { computeInstanceBounds, inflateInstanceBounds, resolveCanonicalPadding, writeCanonicalBounds, } from '../graph/CubeBounds.js';

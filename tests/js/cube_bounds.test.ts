@@ -26,7 +26,7 @@ import {
   resolveInstanceBounds,
   resolveNewInstanceBounds,
   writeCanonicalBounds,
-} from '../../web/comfyui/ui/graph/CubeBounds.js';
+} from '../../frontend/comfyui/ui/graph/CubeBounds.js';
 
 describe('cube bounds', () => {
   test('computeInstanceBounds combines node and marker bounds', () => {

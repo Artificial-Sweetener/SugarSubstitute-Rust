@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
- * Own the SugarCubes core UI service layer in `web/comfyui/ui/core/Scheduler.js`.
+ * Own the SugarCubes core UI service layer in `frontend/comfyui/ui/core/Scheduler.js`.
  */
 /** Schedule cancellable UI work through the injected host timing boundary. */
 export class Scheduler {

@@ -14,14 +14,14 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
-import { PlacementOverlay } from '../../web/comfyui/ui/overlays/PlacementOverlay.js';
+import { PlacementOverlay } from '../../frontend/comfyui/ui/overlays/PlacementOverlay.js';
 import type {
   PlacementAdapter,
   PlacementApi,
   PlacementCanvas,
   PlacementPayload,
-} from '../../web/comfyui/ui/overlays/PlacementOverlay.js';
-import type { Vec2 } from '../../web/comfyui/ui/types/common.js';
+} from '../../frontend/comfyui/ui/overlays/PlacementOverlay.js';
+import type { Vec2 } from '../../frontend/comfyui/ui/types/common.js';
 
 type MockPlacementApi = {
   [K in keyof PlacementApi]: jest.MockedFunction<PlacementApi[K]>;

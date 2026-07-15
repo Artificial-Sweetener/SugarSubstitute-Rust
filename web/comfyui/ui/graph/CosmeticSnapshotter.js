@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
  * Own the SugarCubes cosmetic snapshotting layer in
- * `web/comfyui/ui/graph/CosmeticSnapshotter.js`.
+ * `frontend/comfyui/ui/graph/CosmeticSnapshotter.js`.
  */
 import { snapshotGroup, snapshotInstance } from './DirtySnapshotter.js';
 import { isRecord } from '../types/common.js';

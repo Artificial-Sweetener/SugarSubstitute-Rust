@@ -22,14 +22,14 @@ import {
   layoutFromOrder,
   replaceCube,
   swapOrder,
-} from '../../web/comfyui/ui/layout/CubeLayoutEngine.js';
+} from '../../frontend/comfyui/ui/layout/CubeLayoutEngine.js';
 import type {
   LayoutEntry,
   LayoutIndex,
   LayoutPlacement,
-} from '../../web/comfyui/ui/layout/CubeLayoutEngine.js';
-import type { RectBounds } from '../../web/comfyui/ui/types/common.js';
-import type { ComfyGraph, ComfyNode, GraphId } from '../../web/comfyui/ui/types/graph.js';
+} from '../../frontend/comfyui/ui/layout/CubeLayoutEngine.js';
+import type { RectBounds } from '../../frontend/comfyui/ui/types/common.js';
+import type { ComfyGraph, ComfyNode, GraphId } from '../../frontend/comfyui/ui/types/graph.js';
 
 interface TestLayoutEntry extends LayoutEntry {
   bounds: RectBounds;

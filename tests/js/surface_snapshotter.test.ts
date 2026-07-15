@@ -17,7 +17,7 @@ import { describe, expect, test } from '@jest/globals';
 import {
   snapshotSurfaceInstance,
   snapshotSurfaceValues,
-} from '../../web/comfyui/ui/graph/SurfaceSnapshotter.js';
+} from '../../frontend/comfyui/ui/graph/SurfaceSnapshotter.js';
 
 function makeSurface() {
   return {

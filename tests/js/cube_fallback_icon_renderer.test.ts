@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { describe, expect, jest, test } from '@jest/globals';
-import { drawFallbackInitialsCanvas } from '../../web/comfyui/ui/core/CubeFallbackIconRenderer.js';
+import { drawFallbackInitialsCanvas } from '../../frontend/comfyui/ui/core/CubeFallbackIconRenderer.js';
 
 /**
  * Build the minimal canvas context needed to inspect fallback icon drawing.

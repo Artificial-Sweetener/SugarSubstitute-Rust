@@ -26,7 +26,7 @@ import {
   writeCubeInstanceMetadata,
   writeCubePresetMetadata,
   writeCubeRuntimeMetadata,
-} from '../../web/comfyui/ui/graph/GroupMetadata.js';
+} from '../../frontend/comfyui/ui/graph/GroupMetadata.js';
 
 describe('cube group metadata model', () => {
   test('normalizes legacy flat metadata into explicit ownership sections', () => {

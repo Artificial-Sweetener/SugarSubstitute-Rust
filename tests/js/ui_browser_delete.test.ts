@@ -14,11 +14,11 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { describe, expect, test, jest } from '@jest/globals';
-import { CubeBrowserController } from '../../web/comfyui/ui/browser/CubeBrowserController.js';
+import { CubeBrowserController } from '../../frontend/comfyui/ui/browser/CubeBrowserController.js';
 import type {
   BrowserActions,
   BrowserApi,
-} from '../../web/comfyui/ui/browser/CubeBrowserController.js';
+} from '../../frontend/comfyui/ui/browser/CubeBrowserController.js';
 
 function createDeleteApi() {
   return {

@@ -65,11 +65,14 @@ function hasExportJsdoc(lines: readonly string[], exportIdx: number): boolean {
   return previousIdx >= 0 && Boolean(lines[previousIdx]?.trim().endsWith('*/'));
 }
 
+/** Audit authored frontend and tooling code against repository standards. */
 export function auditStandards(rootDir: string = process.cwd()): string[] {
   const root = repoRoot(rootDir);
   const failures: string[] = [];
-  const webFiles = walkFiles(path.join(root, 'web'), (fullPath) => fullPath.endsWith('.ts'));
-  for (const fullPath of webFiles) {
+  const frontendFiles = walkFiles(path.join(root, 'frontend'), (fullPath) =>
+    fullPath.endsWith('.ts'),
+  );
+  for (const fullPath of frontendFiles) {
     const relativePath = path.relative(root, fullPath).replaceAll('\\', '/');
     const content = readFileSync(fullPath, 'utf8');
     if (!hasLeadingJsdoc(content)) {
@@ -84,6 +87,24 @@ export function auditStandards(rootDir: string = process.cwd()): string[] {
         failures.push(`${relativePath}:${idx + 1} is missing JSDoc for an exported API`);
       }
     });
+  }
+
+  const authoredJavaScript = walkFiles(path.join(root, 'frontend'), (fullPath) =>
+    fullPath.endsWith('.js'),
+  );
+  for (const fullPath of authoredJavaScript) {
+    failures.push(
+      `${path.relative(root, fullPath).replaceAll('\\', '/')} is JavaScript in the TypeScript source tree`,
+    );
+  }
+
+  const runtimeTypeScript = walkFiles(path.join(root, 'web'), (fullPath) =>
+    fullPath.endsWith('.ts'),
+  );
+  for (const fullPath of runtimeTypeScript) {
+    failures.push(
+      `${path.relative(root, fullPath).replaceAll('\\', '/')} is TypeScript in the generated runtime tree`,
+    );
   }
 
   const scriptFiles = walkFiles(path.join(root, 'scripts'), (fullPath) => fullPath.endsWith('.ts'));

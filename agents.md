@@ -142,6 +142,7 @@ Engineering priority is maintainability, clear architecture, behavior safety dur
 - Run `npm run check` before reporting success.
 - `npm run check` is the repository quality gate. It runs strict TypeScript checking, strict mypy checking, formatting, linting, standards audits, automated tests, and build-output verification.
 - The quality gate must remain green for completed changes unless an explicit blocker is reported.
+- Author frontend TypeScript and static inputs under `frontend`; treat `web` as the compiler-owned ComfyUI deployment tree.
 - Keep TypeScript source and generated browser JavaScript synchronized through the repository build; never hand-reconcile generated output.
 - Copyright headers must be maintained with `python tools/add_license_headers.py`.
 - Import ComfyUI core modules (`/scripts/app.js`, `/scripts/ui.js`, `/scripts/api.js`) via absolute `/scripts/...` paths to avoid extension-relative 404s.

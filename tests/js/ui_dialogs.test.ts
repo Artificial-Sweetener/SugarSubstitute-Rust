@@ -14,13 +14,13 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { describe, expect, test, beforeEach } from '@jest/globals';
-import { ConfirmDialog } from '../../web/comfyui/ui/dialogs/ConfirmDialog.js';
-import { FormModal } from '../../web/comfyui/ui/dialogs/FormModal.js';
-import { InputModal } from '../../web/comfyui/ui/dialogs/InputModal.js';
-import { ModalService } from '../../web/comfyui/ui/dialogs/ModalService.js';
-import { SelectionModal } from '../../web/comfyui/ui/dialogs/SelectionModal.js';
-import { VersionDialog } from '../../web/comfyui/ui/dialogs/VersionDialog.js';
-import { StorageService } from '../../web/comfyui/ui/core/StorageService.js';
+import { ConfirmDialog } from '../../frontend/comfyui/ui/dialogs/ConfirmDialog.js';
+import { FormModal } from '../../frontend/comfyui/ui/dialogs/FormModal.js';
+import { InputModal } from '../../frontend/comfyui/ui/dialogs/InputModal.js';
+import { ModalService } from '../../frontend/comfyui/ui/dialogs/ModalService.js';
+import { SelectionModal } from '../../frontend/comfyui/ui/dialogs/SelectionModal.js';
+import { VersionDialog } from '../../frontend/comfyui/ui/dialogs/VersionDialog.js';
+import { StorageService } from '../../frontend/comfyui/ui/core/StorageService.js';
 
 const adapter = {
   getDocument: () => document,

@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
- * Own the SugarCubes overlay rendering layer in `web/comfyui/ui/overlays/PlacementHelpers.js`.
+ * Own the SugarCubes overlay rendering layer in `frontend/comfyui/ui/overlays/PlacementHelpers.js`.
  */
 import { coerceVec2 } from '../graph/VectorUtils.js';
 import { resolveInstanceDisplayName } from '../graph/GroupMetadata.js';

@@ -14,15 +14,15 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { afterEach, beforeEach, describe, expect, jest, test } from '@jest/globals';
-import { CubePreviewRenderer } from '../../web/comfyui/ui/browser/CubePreviewRenderer.js';
+import { CubePreviewRenderer } from '../../frontend/comfyui/ui/browser/CubePreviewRenderer.js';
 import type {
   PreviewAdapter,
   PreviewBounds,
   PreviewHelpers,
   PreviewPayload,
   PreviewPlacementActions,
-} from '../../web/comfyui/ui/browser/CubePreviewRenderer.js';
-import type { Vec2 } from '../../web/comfyui/ui/types/common.js';
+} from '../../frontend/comfyui/ui/browser/CubePreviewRenderer.js';
+import type { Vec2 } from '../../frontend/comfyui/ui/types/common.js';
 
 interface HarnessOverrides {
   placement?: Partial<PreviewPlacementActions>;

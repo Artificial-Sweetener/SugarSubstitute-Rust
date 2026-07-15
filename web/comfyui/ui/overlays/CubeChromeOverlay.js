@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
- * Own the SugarCubes overlay rendering layer in `web/comfyui/ui/overlays/CubeChromeOverlay.js`.
+ * Own the SugarCubes overlay rendering layer in `frontend/comfyui/ui/overlays/CubeChromeOverlay.js`.
  */
 import { getGraphGroups } from '../graph/GraphQuery.js';
 import { getGroupSugarcubes, resolveCubeDisplayName, resolveInstanceDisplayName, } from '../graph/GroupMetadata.js';

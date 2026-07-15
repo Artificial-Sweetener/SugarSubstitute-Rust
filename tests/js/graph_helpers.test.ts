@@ -19,21 +19,21 @@ import {
   collectGraphLinks,
   getGraphGroups,
   getGraphNodes,
-} from '../../web/comfyui/ui/graph/GraphQuery.js';
+} from '../../frontend/comfyui/ui/graph/GraphQuery.js';
 import {
   getNodeCenter,
   isPointInBounds,
   readGroupBounds,
   readNodeBounds,
-} from '../../web/comfyui/ui/graph/Bounds.js';
-import { readWidgetValue, writeWidgetValue } from '../../web/comfyui/ui/graph/Markers.js';
-import { coerceVec2, readVector2 } from '../../web/comfyui/ui/graph/VectorUtils.js';
+} from '../../frontend/comfyui/ui/graph/Bounds.js';
+import { readWidgetValue, writeWidgetValue } from '../../frontend/comfyui/ui/graph/Markers.js';
+import { coerceVec2, readVector2 } from '../../frontend/comfyui/ui/graph/VectorUtils.js';
 import {
   readCubeMarkerInstanceId,
   updateMarkersForCubeId,
   writeCubeMarkerInstanceId,
-} from '../../web/comfyui/ui/graph/CubeMarkers.js';
-import { resolveInstanceDisplayName } from '../../web/comfyui/ui/graph/GroupMetadata.js';
+} from '../../frontend/comfyui/ui/graph/CubeMarkers.js';
+import { resolveInstanceDisplayName } from '../../frontend/comfyui/ui/graph/GroupMetadata.js';
 
 describe('graph helpers', () => {
   test('getGraphNodes returns _nodes or nodes arrays', () => {

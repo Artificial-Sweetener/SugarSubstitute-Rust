@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
- * Own multi-field form modal behavior in `web/comfyui/ui/dialogs/FormModal.js`.
+ * Own multi-field form modal behavior in `frontend/comfyui/ui/dialogs/FormModal.js`.
  */
 import { $el } from '/scripts/ui.js';
 import { ModalShell } from './ModalShell.js';

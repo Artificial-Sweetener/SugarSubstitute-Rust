@@ -21,9 +21,9 @@ import type {
   ComfyNode,
   ComfyOutput,
   ComfyWidget,
-} from '../../web/comfyui/ui/types/graph.js';
+} from '../../frontend/comfyui/ui/types/graph.js';
 
-type CubeCreationModule = typeof import('../../web/js/cube_creation.js');
+type CubeCreationModule = typeof import('../../frontend/js/cube_creation.js');
 let createCubeFromSelection: CubeCreationModule['createCubeFromSelection'];
 let wrapMarkerToCube: CubeCreationModule['wrapMarkerToCube'];
 
@@ -146,7 +146,7 @@ beforeEach(async () => {
     },
   } as unknown as LiteGraphHost;
   globalThis.window = {} as Window & typeof globalThis;
-  const module = await import('../../web/js/cube_creation.js');
+  const module = await import('../../frontend/js/cube_creation.js');
   createCubeFromSelection = module.createCubeFromSelection;
   wrapMarkerToCube = module.wrapMarkerToCube;
 });

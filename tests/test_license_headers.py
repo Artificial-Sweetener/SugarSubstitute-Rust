@@ -55,10 +55,10 @@ def test_copyright_years_expands_after_start_year() -> None:
     assert _copyright_years(datetime(2030, 1, 1, tzinfo=UTC)) == "2026 - 2030"
 
 
-def test_header_uses_javascript_comment_prefix_for_web_modules() -> None:
-    """Use JavaScript comments for browser source modules."""
+def test_header_uses_javascript_comment_prefix_for_frontend_modules() -> None:
+    """Use JavaScript comments for TypeScript browser source modules."""
 
-    header = _header(path=Path("web/comfyui/ui.js"))
+    header = _header(path=Path("frontend/comfyui/ui.ts"))
 
     assert header.startswith("//    SugarCubes - composable workflow units for ComfyUI")
     assert "GNU Affero General Public License" in header

@@ -14,10 +14,10 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { describe, expect, test, beforeEach, jest } from '@jest/globals';
-import { CubeBrowserController } from '../../web/comfyui/ui/browser/CubeBrowserController.js';
-import { ComfyAdapter } from '../../web/comfyui/ui/core/ComfyAdapter.js';
-import type { HostWindow } from '../../web/comfyui/ui/core/ComfyAdapter.js';
-import { StorageService } from '../../web/comfyui/ui/core/StorageService.js';
+import { CubeBrowserController } from '../../frontend/comfyui/ui/browser/CubeBrowserController.js';
+import { ComfyAdapter } from '../../frontend/comfyui/ui/core/ComfyAdapter.js';
+import type { HostWindow } from '../../frontend/comfyui/ui/core/ComfyAdapter.js';
+import { StorageService } from '../../frontend/comfyui/ui/core/StorageService.js';
 
 function buildController() {
   const adapter = new ComfyAdapter({

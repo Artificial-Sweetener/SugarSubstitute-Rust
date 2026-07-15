@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
  * Own the SugarCubes implementation snapshotting layer in
- * `web/comfyui/ui/graph/ImplementationSnapshotter.js`.
+ * `frontend/comfyui/ui/graph/ImplementationSnapshotter.js`.
  */
 import { buildDefinitionSnapshot, snapshotInstance } from './DirtySnapshotter.js';
 import { isRecord } from '../types/common.js';

@@ -16,20 +16,20 @@
 import { describe, expect, test, beforeEach, jest } from '@jest/globals';
 import { app } from './mocks/app.js';
 import { api } from './mocks/api.js';
-import { ProximityOverlay } from '../../web/comfyui/ui/overlays/ProximityOverlay.js';
-import type { ProximityMatch } from '../../web/comfyui/ui/overlays/ProximityOverlay.js';
-import type { OverlayManagerOptions } from '../../web/comfyui/ui/overlays/OverlayManager.js';
-import type { CubeChromeOverlay as CubeChromeOverlayType } from '../../web/comfyui/ui/overlays/CubeChromeOverlay.js';
+import { ProximityOverlay } from '../../frontend/comfyui/ui/overlays/ProximityOverlay.js';
+import type { ProximityMatch } from '../../frontend/comfyui/ui/overlays/ProximityOverlay.js';
+import type { OverlayManagerOptions } from '../../frontend/comfyui/ui/overlays/OverlayManager.js';
+import type { CubeChromeOverlay as CubeChromeOverlayType } from '../../frontend/comfyui/ui/overlays/CubeChromeOverlay.js';
 import type { MockCanvas } from './mocks/app.js';
 import type {
   ComfyGraph,
   ComfyLink,
   ComfyNode,
   GraphId,
-} from '../../web/comfyui/ui/types/graph.js';
-import type { Vec2 } from '../../web/comfyui/ui/types/common.js';
-import type { ComfyApplication } from '../../web/comfyui/ui/types/graph.js';
-import { createFallbackIconModel } from '../../web/comfyui/ui/core/CubeFallbackIconRenderer.js';
+} from '../../frontend/comfyui/ui/types/graph.js';
+import type { Vec2 } from '../../frontend/comfyui/ui/types/common.js';
+import type { ComfyApplication } from '../../frontend/comfyui/ui/types/graph.js';
+import { createFallbackIconModel } from '../../frontend/comfyui/ui/core/CubeFallbackIconRenderer.js';
 
 interface TestGraph extends ComfyGraph {
   _nodes: ComfyNode[];
@@ -238,7 +238,7 @@ describe('ui overlay rendering', () => {
   test('chrome overlay draws centered name and source badge text', async () => {
     await loadUi();
     const { CubeChromeOverlay } = await import(
-      '../../web/comfyui/ui/overlays/CubeChromeOverlay.js'
+      '../../frontend/comfyui/ui/overlays/CubeChromeOverlay.js'
     );
     const overlay = new CubeChromeOverlay();
     const ctx = {
@@ -304,7 +304,7 @@ describe('ui overlay rendering', () => {
   test('chrome overlay strips leading v from version badge text', async () => {
     await loadUi();
     const { CubeChromeOverlay } = await import(
-      '../../web/comfyui/ui/overlays/CubeChromeOverlay.js'
+      '../../frontend/comfyui/ui/overlays/CubeChromeOverlay.js'
     );
     const overlay = new CubeChromeOverlay();
     const ctx = {
@@ -350,7 +350,7 @@ describe('ui overlay rendering', () => {
   test('chrome overlay preserves centered definition badge when instance title matches', async () => {
     await loadUi();
     const { CubeChromeOverlay } = await import(
-      '../../web/comfyui/ui/overlays/CubeChromeOverlay.js'
+      '../../frontend/comfyui/ui/overlays/CubeChromeOverlay.js'
     );
     const overlay = new CubeChromeOverlay();
     const ctx = {
@@ -404,7 +404,7 @@ describe('ui overlay rendering', () => {
   test('managed group draw places cube icon before current title without mutating title', async () => {
     await loadUi();
     const { CubeChromeOverlay } = await import(
-      '../../web/comfyui/ui/overlays/CubeChromeOverlay.js'
+      '../../frontend/comfyui/ui/overlays/CubeChromeOverlay.js'
     );
     class LGraphGroup extends TestLGraphGroup {
       draw(
@@ -474,7 +474,7 @@ describe('ui overlay rendering', () => {
   test('chrome definition initials use normalized fallback font without decorative box chrome', async () => {
     await loadUi();
     const { CubeChromeOverlay } = await import(
-      '../../web/comfyui/ui/overlays/CubeChromeOverlay.js'
+      '../../frontend/comfyui/ui/overlays/CubeChromeOverlay.js'
     );
     const overlay = new CubeChromeOverlay();
     const fontCalls: string[] = [];
@@ -516,7 +516,7 @@ describe('ui overlay rendering', () => {
   test('chrome overlay hit regions exclude badge and badge hover is non-interactive', async () => {
     await loadUi();
     const { CubeChromeOverlay } = await import(
-      '../../web/comfyui/ui/overlays/CubeChromeOverlay.js'
+      '../../frontend/comfyui/ui/overlays/CubeChromeOverlay.js'
     );
     const adapter = chromeAdapter();
     const actions = { onSave: jest.fn(), onClone: jest.fn() };
@@ -580,7 +580,7 @@ describe('ui overlay rendering', () => {
   test('chrome overlay falls back to Unknown source', async () => {
     await loadUi();
     const { CubeChromeOverlay } = await import(
-      '../../web/comfyui/ui/overlays/CubeChromeOverlay.js'
+      '../../frontend/comfyui/ui/overlays/CubeChromeOverlay.js'
     );
     const overlay = new CubeChromeOverlay();
     const ctx = {
@@ -625,7 +625,7 @@ describe('ui overlay rendering', () => {
   test('chrome overlay uses structured fallback source for malformed cube ids', async () => {
     await loadUi();
     const { CubeChromeOverlay } = await import(
-      '../../web/comfyui/ui/overlays/CubeChromeOverlay.js'
+      '../../frontend/comfyui/ui/overlays/CubeChromeOverlay.js'
     );
     const overlay = new CubeChromeOverlay({
       resolveSource: () => ({
@@ -677,7 +677,7 @@ describe('ui overlay rendering', () => {
   test('chrome overlay renders local cubes as local source text', async () => {
     await loadUi();
     const { CubeChromeOverlay } = await import(
-      '../../web/comfyui/ui/overlays/CubeChromeOverlay.js'
+      '../../frontend/comfyui/ui/overlays/CubeChromeOverlay.js'
     );
     const overlay = new CubeChromeOverlay();
     const ctx = {
@@ -728,7 +728,7 @@ describe('ui overlay rendering', () => {
   test('chrome overlay builds menu options with implementation and cube defaults only', async () => {
     await loadUi();
     const { CubeChromeOverlay } = await import(
-      '../../web/comfyui/ui/overlays/CubeChromeOverlay.js'
+      '../../frontend/comfyui/ui/overlays/CubeChromeOverlay.js'
     );
     const actions = {
       onSaveImplementation: jest.fn(),
@@ -768,7 +768,7 @@ describe('ui overlay rendering', () => {
   test('chrome overlay keeps menu actions available when clean', async () => {
     await loadUi();
     const { CubeChromeOverlay } = await import(
-      '../../web/comfyui/ui/overlays/CubeChromeOverlay.js'
+      '../../frontend/comfyui/ui/overlays/CubeChromeOverlay.js'
     );
     const actions = {
       onSaveImplementation: jest.fn(),
@@ -792,7 +792,7 @@ describe('ui overlay rendering', () => {
   test('chrome overlay opens LiteGraph context menu from menu pill', async () => {
     await loadUi();
     const { CubeChromeOverlay } = await import(
-      '../../web/comfyui/ui/overlays/CubeChromeOverlay.js'
+      '../../frontend/comfyui/ui/overlays/CubeChromeOverlay.js'
     );
     const adapter = chromeAdapter();
     const overlay = new CubeChromeOverlay({ adapter, actions: {} });
@@ -848,7 +848,7 @@ describe('ui overlay rendering', () => {
   test('chrome overlay menu no-ops when LiteGraph context menu missing', async () => {
     await loadUi();
     const { CubeChromeOverlay } = await import(
-      '../../web/comfyui/ui/overlays/CubeChromeOverlay.js'
+      '../../frontend/comfyui/ui/overlays/CubeChromeOverlay.js'
     );
     const adapter = chromeAdapter();
     const overlay = new CubeChromeOverlay({ adapter, actions: {} });
@@ -901,7 +901,7 @@ describe('ui overlay rendering', () => {
 
   test('overlay manager wires only visible defaults action for cube chrome', async () => {
     await loadUi();
-    const { OverlayManager } = await import('../../web/comfyui/ui/overlays/OverlayManager.js');
+    const { OverlayManager } = await import('../../frontend/comfyui/ui/overlays/OverlayManager.js');
     const toast = { push: jest.fn() };
     const saveService = { saveImplementation: jest.fn() };
     const flavorService = {
@@ -940,7 +940,7 @@ describe('ui overlay rendering', () => {
   test('chrome overlay does not render or trigger flavor action pill', async () => {
     await loadUi();
     const { CubeChromeOverlay } = await import(
-      '../../web/comfyui/ui/overlays/CubeChromeOverlay.js'
+      '../../frontend/comfyui/ui/overlays/CubeChromeOverlay.js'
     );
     const adapter = chromeAdapter();
     const actions = {
@@ -991,7 +991,7 @@ describe('ui overlay rendering', () => {
   test('chrome overlay swap buttons trigger layout actions', async () => {
     await loadUi();
     const { CubeChromeOverlay } = await import(
-      '../../web/comfyui/ui/overlays/CubeChromeOverlay.js'
+      '../../frontend/comfyui/ui/overlays/CubeChromeOverlay.js'
     );
     const adapter = chromeAdapter();
     const actions = {
@@ -1062,7 +1062,7 @@ describe('ui overlay rendering', () => {
   test('chrome overlay hides swap buttons when cube lacks input/output markers', async () => {
     await loadUi();
     const { CubeChromeOverlay } = await import(
-      '../../web/comfyui/ui/overlays/CubeChromeOverlay.js'
+      '../../frontend/comfyui/ui/overlays/CubeChromeOverlay.js'
     );
     const adapter = chromeAdapter();
     const actions = {
@@ -1113,7 +1113,7 @@ describe('ui overlay rendering', () => {
 
   test('overlay manager swap uses computed gap and origin', async () => {
     await loadUi();
-    const { OverlayManager } = await import('../../web/comfyui/ui/overlays/OverlayManager.js');
+    const { OverlayManager } = await import('../../frontend/comfyui/ui/overlays/OverlayManager.js');
     const adapter = { getApp: () => ({ graph: {} }) };
     const layoutService: NonNullable<OverlayManagerOptions['layoutService']> = {
       buildIndex: () => ({}),
@@ -1161,7 +1161,7 @@ describe('ui overlay rendering', () => {
 
   test('overlay manager swap scopes neighbor selection to anchored chain order', async () => {
     await loadUi();
-    const { OverlayManager } = await import('../../web/comfyui/ui/overlays/OverlayManager.js');
+    const { OverlayManager } = await import('../../frontend/comfyui/ui/overlays/OverlayManager.js');
     const adapter = { getApp: () => ({ graph: {} }) };
     const index = {};
     const globalOrder = [
@@ -1227,7 +1227,7 @@ describe('ui overlay rendering', () => {
 
   test('overlay manager passes proximity matches into anchored order strategy', async () => {
     await loadUi();
-    const { OverlayManager } = await import('../../web/comfyui/ui/overlays/OverlayManager.js');
+    const { OverlayManager } = await import('../../frontend/comfyui/ui/overlays/OverlayManager.js');
     const graph = {};
     const adapter = { getApp: () => ({ graph }) };
     const index = {};
@@ -1278,7 +1278,7 @@ describe('ui overlay rendering', () => {
 
   test('overlay manager swap ignores cubes without input/output markers', async () => {
     await loadUi();
-    const { OverlayManager } = await import('../../web/comfyui/ui/overlays/OverlayManager.js');
+    const { OverlayManager } = await import('../../frontend/comfyui/ui/overlays/OverlayManager.js');
     const adapter = { getApp: () => ({ graph: {} }) };
     const layoutService: NonNullable<OverlayManagerOptions['layoutService']> = {
       buildIndex: () => ({}),
@@ -1306,7 +1306,7 @@ describe('ui overlay rendering', () => {
   test('chrome overlay renders cube icon for menu pill', async () => {
     await loadUi();
     const { CubeChromeOverlay } = await import(
-      '../../web/comfyui/ui/overlays/CubeChromeOverlay.js'
+      '../../frontend/comfyui/ui/overlays/CubeChromeOverlay.js'
     );
     const overlay = new CubeChromeOverlay();
     const ctx = {

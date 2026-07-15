@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
- * Own the SugarCubes graph integration layer in `web/comfyui/ui/graph/InstanceManager.js`.
+ * Own the SugarCubes graph integration layer in `frontend/comfyui/ui/graph/InstanceManager.js`.
  */
 import { getNodeCenter, isPointInBounds, readGroupBounds } from './Bounds.js';
 import { CUBE_INSTANCE_HEADER_HEIGHT, CUBE_INSTANCE_AUTO_MIN_MARGINS, CUBE_INSTANCE_PADDING, CUBE_INSTANCE_TOP_EXTRA, computeInstanceBounds, computeVisualContentBounds, contentFitsWithinBounds, expandBoundsForContentMargins, inflateInstanceBounds, resolveChromeBoundsFromContent, resolveNewInstanceBounds, } from './CubeBounds.js';

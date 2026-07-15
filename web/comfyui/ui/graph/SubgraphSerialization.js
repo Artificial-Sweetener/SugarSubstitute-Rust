@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
  * Own the SugarCubes subgraph serialization compatibility helpers in
- * `web/comfyui/ui/graph/SubgraphSerialization.js`.
+ * `frontend/comfyui/ui/graph/SubgraphSerialization.js`.
  */
 import { isRecord } from '../types/common.js';
 const SUBGRAPH_INPUT_ID = -10;

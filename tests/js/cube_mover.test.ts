@@ -20,10 +20,10 @@ import {
   CUBE_INSTANCE_TOP_EXTRA,
   computeInstanceBounds,
   inflateInstanceBounds,
-} from '../../web/comfyui/ui/graph/CubeBounds.js';
-import { applyMoves } from '../../web/comfyui/ui/layout/CubeMover.js';
-import type { CubeBoundsPayload } from '../../web/comfyui/ui/graph/CubeBounds.js';
-import type { RectBounds } from '../../web/comfyui/ui/types/common.js';
+} from '../../frontend/comfyui/ui/graph/CubeBounds.js';
+import { applyMoves } from '../../frontend/comfyui/ui/layout/CubeMover.js';
+import type { CubeBoundsPayload } from '../../frontend/comfyui/ui/graph/CubeBounds.js';
+import type { RectBounds } from '../../frontend/comfyui/ui/types/common.js';
 
 function makeTypedVec2(x: number, y: number): Float32Array {
   return new Float32Array([x, y]);

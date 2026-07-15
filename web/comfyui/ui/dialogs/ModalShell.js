@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
- * Own the shared SugarCubes modal shell in `web/comfyui/ui/dialogs/ModalShell.js`.
+ * Own the shared SugarCubes modal shell in `frontend/comfyui/ui/dialogs/ModalShell.js`.
  */
 import { $el } from '/scripts/ui.js';
 import { injectDialogStyles } from './DialogStyles.js';

@@ -12,8 +12,8 @@
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "typecheck": "tsc --project tsconfig.json --noEmit && tsc --project tsconfig.tests.json --noEmit && python scripts/run_mypy.py",
     "audit:standards": "python scripts/standards_audit.py && tsx scripts/standards-audit.ts",
-    "lint": "eslint \"web/**/*.ts\" \"tests/**/*.ts\" \"scripts/**/*.ts\"",
-    "format": "prettier --write \"web/**/*.ts\" \"tests/**/*.ts\" \"scripts/**/*.ts\" \"*.json\"",
+    "lint": "eslint \"frontend/**/*.ts\" \"tests/**/*.ts\" \"scripts/**/*.ts\"",
+    "format": "prettier --write \"frontend/**/*.ts\" \"tests/**/*.ts\" \"scripts/**/*.ts\" \"*.json\"",
     "check": "python -m black . --exclude \"node_modules|cubes\" && python -m ruff check . --exclude node_modules,cubes && npm run audit:standards && npm run format && npm run typecheck && npm run lint && npm run build:check && tsx scripts/run-tests.ts",
     "release": "semantic-release"
   },

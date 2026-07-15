@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
- * Own the tracked pack manager dialog shell in `web/comfyui/ui/settings/TrackedPackManagerDialog.js`.
+ * Own the tracked pack manager dialog shell in `frontend/comfyui/ui/settings/TrackedPackManagerDialog.js`.
  */
 import { ModalShell } from '../dialogs/ModalShell.js';
 /**

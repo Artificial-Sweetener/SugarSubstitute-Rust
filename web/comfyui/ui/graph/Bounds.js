@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
- * Own the SugarCubes graph integration layer in `web/comfyui/ui/graph/Bounds.js`.
+ * Own the SugarCubes graph integration layer in `frontend/comfyui/ui/graph/Bounds.js`.
  */
 import { isRecord } from '../types/common.js';
 function isNumericSequence(value, minimumLength) {

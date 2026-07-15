@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
- * Own the SugarCubes host integration layer in `web/js/nodes.js`.
+ * Own the SugarCubes host integration layer in `frontend/js/nodes.js`.
  */
 import { app } from '/scripts/app.js';
 import { wrapMarkerToCube } from './cube_creation.js';

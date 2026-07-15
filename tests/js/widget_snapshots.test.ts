@@ -20,7 +20,7 @@ import {
   attachWorkflowWidgetSnapshots,
   captureNodeWidgetValues,
   rebindSubgraphWidgetValues,
-} from '../../web/comfyui/ui/graph/WidgetSnapshots.js';
+} from '../../frontend/comfyui/ui/graph/WidgetSnapshots.js';
 
 describe('widget snapshots', () => {
   test('captures serializable live widgets by stable name', () => {

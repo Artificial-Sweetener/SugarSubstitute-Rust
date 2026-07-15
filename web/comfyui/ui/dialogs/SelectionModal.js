@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
- * Own item-selection modal behavior in `web/comfyui/ui/dialogs/SelectionModal.js`.
+ * Own item-selection modal behavior in `frontend/comfyui/ui/dialogs/SelectionModal.js`.
  */
 import { $el } from '/scripts/ui.js';
 import { ModalShell } from './ModalShell.js';

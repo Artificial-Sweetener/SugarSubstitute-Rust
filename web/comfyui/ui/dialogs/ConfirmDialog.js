@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
- * Own the SugarCubes dialog presentation layer in `web/comfyui/ui/dialogs/ConfirmDialog.js`.
+ * Own the SugarCubes dialog presentation layer in `frontend/comfyui/ui/dialogs/ConfirmDialog.js`.
  */
 import { $el } from '/scripts/ui.js';
 import { ModalShell } from './ModalShell.js';

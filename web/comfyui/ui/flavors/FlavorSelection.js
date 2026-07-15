@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
  * Own the SugarCubes flavor-selection helpers in
- * `web/comfyui/ui/flavors/FlavorSelection.js`.
+ * `frontend/comfyui/ui/flavors/FlavorSelection.js`.
  */
 import { isRecord } from '../types/common.js';
 function cloneValues(values) {

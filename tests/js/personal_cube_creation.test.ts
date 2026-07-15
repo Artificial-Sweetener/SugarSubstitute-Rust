@@ -19,8 +19,8 @@ import { beforeEach, describe, expect, test } from '@jest/globals';
 import {
   buildPersonalCubeId,
   suggestPersonalCubeIdentity,
-} from '../../web/comfyui/ui/create/PersonalCubeIdentity.js';
-import { CreatePersonalCubeModal } from '../../web/comfyui/ui/dialogs/CreatePersonalCubeModal.js';
+} from '../../frontend/comfyui/ui/create/PersonalCubeIdentity.js';
+import { CreatePersonalCubeModal } from '../../frontend/comfyui/ui/dialogs/CreatePersonalCubeModal.js';
 
 beforeEach(() => {
   document.body.replaceChildren();

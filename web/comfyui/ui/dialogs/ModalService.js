@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
- * Own modal orchestration in `web/comfyui/ui/dialogs/ModalService.js`.
+ * Own modal orchestration in `frontend/comfyui/ui/dialogs/ModalService.js`.
  */
 import { ConfirmDialog } from './ConfirmDialog.js';
 import { FormModal } from './FormModal.js';

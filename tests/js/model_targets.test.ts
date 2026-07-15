@@ -28,7 +28,7 @@ import {
   normalizeTargetModel,
   TARGET_MODEL_OPTIONS,
   validateCubeRouteIdentity,
-} from '../../web/comfyui/ui/core/ModelTargets.js';
+} from '../../frontend/comfyui/ui/core/ModelTargets.js';
 
 describe('ModelTargets helpers', () => {
   test('normalizes path-safe target model labels', () => {

@@ -14,11 +14,11 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { describe, expect, test, jest } from '@jest/globals';
-import { FlavorStorage } from '../../web/comfyui/ui/flavors/FlavorStorage.js';
-import { FlavorService } from '../../web/comfyui/ui/flavors/FlavorService.js';
-import type { FlavorMetadata } from '../../web/comfyui/ui/flavors/FlavorService.js';
-import { StorageService } from '../../web/comfyui/ui/core/StorageService.js';
-import { readWidgetValue } from '../../web/comfyui/ui/graph/Markers.js';
+import { FlavorStorage } from '../../frontend/comfyui/ui/flavors/FlavorStorage.js';
+import { FlavorService } from '../../frontend/comfyui/ui/flavors/FlavorService.js';
+import type { FlavorMetadata } from '../../frontend/comfyui/ui/flavors/FlavorService.js';
+import { StorageService } from '../../frontend/comfyui/ui/core/StorageService.js';
+import { readWidgetValue } from '../../frontend/comfyui/ui/graph/Markers.js';
 
 interface TestFlavor {
   id: string;

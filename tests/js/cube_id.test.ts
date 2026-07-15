@@ -20,7 +20,7 @@ import {
   normalizeDefaultAliasTitle,
   parseCanonicalCubeId,
   suggestCanonicalCubePath,
-} from '../../web/comfyui/ui/core/CubeId.js';
+} from '../../frontend/comfyui/ui/core/CubeId.js';
 
 describe('CubeId identity derivation', () => {
   test.each([

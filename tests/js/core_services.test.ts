@@ -14,13 +14,13 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { describe, expect, test, beforeEach, jest } from '@jest/globals';
-import { ComfyAdapter } from '../../web/comfyui/ui/core/ComfyAdapter.js';
-import type { HostToast, HostWindow } from '../../web/comfyui/ui/core/ComfyAdapter.js';
-import type { ComfyApplication, ComfyHostApi } from '../../web/comfyui/ui/types/graph.js';
-import { CubeLibraryApi } from '../../web/comfyui/ui/core/CubeLibraryApi.js';
-import { EventBus } from '../../web/comfyui/ui/core/EventBus.js';
-import { StorageService } from '../../web/comfyui/ui/core/StorageService.js';
-import { ToastService } from '../../web/comfyui/ui/core/ToastService.js';
+import { ComfyAdapter } from '../../frontend/comfyui/ui/core/ComfyAdapter.js';
+import type { HostToast, HostWindow } from '../../frontend/comfyui/ui/core/ComfyAdapter.js';
+import type { ComfyApplication, ComfyHostApi } from '../../frontend/comfyui/ui/types/graph.js';
+import { CubeLibraryApi } from '../../frontend/comfyui/ui/core/CubeLibraryApi.js';
+import { EventBus } from '../../frontend/comfyui/ui/core/EventBus.js';
+import { StorageService } from '../../frontend/comfyui/ui/core/StorageService.js';
+import { ToastService } from '../../frontend/comfyui/ui/core/ToastService.js';
 
 describe('core services', () => {
   beforeEach(() => {

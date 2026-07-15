@@ -3,6 +3,7 @@
 
 # Keep source, config, docs, and cube payloads on LF across platforms.
 *.py text eol=lf
+*.ts text eol=lf
 *.js text eol=lf
 *.mjs text eol=lf
 *.cjs text eol=lf
@@ -12,6 +13,9 @@
 *.yml text eol=lf
 *.yaml text eol=lf
 *.cube text eol=lf
+
+# ComfyUI consumes this compiler-owned deployment tree.
+web/** linguist-generated=true
 
 # Windows-native scripts should keep CRLF.
 *.bat text eol=crlf

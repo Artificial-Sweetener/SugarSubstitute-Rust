@@ -14,10 +14,10 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { describe, expect, test } from '@jest/globals';
-import { CubeCollisionService } from '../../web/comfyui/ui/layout/CubeCollisionService.js';
-import type { RectBounds } from '../../web/comfyui/ui/types/common.js';
-import type { IndexedCubeInstance } from '../../web/comfyui/ui/layout/CubeInstanceIndex.js';
-import type { ComfyGroup } from '../../web/comfyui/ui/types/graph.js';
+import { CubeCollisionService } from '../../frontend/comfyui/ui/layout/CubeCollisionService.js';
+import type { RectBounds } from '../../frontend/comfyui/ui/types/common.js';
+import type { IndexedCubeInstance } from '../../frontend/comfyui/ui/layout/CubeInstanceIndex.js';
+import type { ComfyGroup } from '../../frontend/comfyui/ui/types/graph.js';
 
 type TestIndexedCubeInstance = IndexedCubeInstance & {
   bounds: RectBounds;

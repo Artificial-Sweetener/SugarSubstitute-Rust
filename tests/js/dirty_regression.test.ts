@@ -14,11 +14,11 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { describe, expect, test } from '@jest/globals';
-import { BaselineResolver } from '../../web/comfyui/ui/graph/BaselineResolver.js';
-import { BaselineStore } from '../../web/comfyui/ui/graph/BaselineStore.js';
-import { DirtyTracker } from '../../web/comfyui/ui/graph/DirtyTracker.js';
-import { computeDefinitionHash } from '../../web/comfyui/ui/graph/DirtyHasher.js';
-import type { CubeGroupMetadataRecord } from '../../web/comfyui/ui/graph/GroupMetadata.js';
+import { BaselineResolver } from '../../frontend/comfyui/ui/graph/BaselineResolver.js';
+import { BaselineStore } from '../../frontend/comfyui/ui/graph/BaselineStore.js';
+import { DirtyTracker } from '../../frontend/comfyui/ui/graph/DirtyTracker.js';
+import { computeDefinitionHash } from '../../frontend/comfyui/ui/graph/DirtyHasher.js';
+import type { CubeGroupMetadataRecord } from '../../frontend/comfyui/ui/graph/GroupMetadata.js';
 
 function createTracker() {
   const baselineStore = new BaselineStore();

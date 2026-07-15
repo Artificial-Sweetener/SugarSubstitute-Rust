@@ -6,6 +6,6 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false
   },
-  "include": ["web/**/*.ts", "tests/**/*.ts", "types/**/*.d.ts"],
+  "include": ["frontend/**/*.ts", "tests/**/*.ts", "types/**/*.d.ts"],
   "exclude": ["scripts"]
 }

@@ -14,16 +14,16 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
-import { CubeCreationService } from '../../web/comfyui/ui/create/CubeCreationService.js';
-import { ComfyAdapter } from '../../web/comfyui/ui/core/ComfyAdapter.js';
-import type { HostWindow } from '../../web/comfyui/ui/core/ComfyAdapter.js';
+import { CubeCreationService } from '../../frontend/comfyui/ui/create/CubeCreationService.js';
+import { ComfyAdapter } from '../../frontend/comfyui/ui/core/ComfyAdapter.js';
+import type { HostWindow } from '../../frontend/comfyui/ui/core/ComfyAdapter.js';
 import type {
   CreationApi,
   CreateCubeValues,
-} from '../../web/comfyui/ui/create/CubeCreationService.js';
-import { CreateCubeModal } from '../../web/comfyui/ui/dialogs/CreateCubeModal.js';
-import type { CreateCubeModalCandidate } from '../../web/comfyui/ui/dialogs/CreateCubeModal.js';
-import type { ModalAdapter } from '../../web/comfyui/ui/dialogs/ModalShell.js';
+} from '../../frontend/comfyui/ui/create/CubeCreationService.js';
+import { CreateCubeModal } from '../../frontend/comfyui/ui/dialogs/CreateCubeModal.js';
+import type { CreateCubeModalCandidate } from '../../frontend/comfyui/ui/dialogs/CreateCubeModal.js';
+import type { ModalAdapter } from '../../frontend/comfyui/ui/dialogs/ModalShell.js';
 import type {
   ComfyCanvas,
   ComfyGraph,
@@ -31,7 +31,7 @@ import type {
   ComfyLink,
   ComfyNode,
   ComfyWidget,
-} from '../../web/comfyui/ui/types/graph.js';
+} from '../../frontend/comfyui/ui/types/graph.js';
 
 interface MarkerOptions {
   id: number;

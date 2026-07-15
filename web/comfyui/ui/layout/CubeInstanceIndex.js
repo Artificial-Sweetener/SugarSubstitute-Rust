@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
- * Own the SugarCubes layout orchestration layer in `web/comfyui/ui/layout/CubeInstanceIndex.js`.
+ * Own the SugarCubes layout orchestration layer in `frontend/comfyui/ui/layout/CubeInstanceIndex.js`.
  */
 import { resolveInstanceBounds } from '../graph/CubeBounds.js';
 import { getGraphGroups } from '../graph/GraphQuery.js';

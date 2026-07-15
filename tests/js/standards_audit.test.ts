@@ -14,12 +14,32 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { describe, expect, test } from '@jest/globals';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { auditStandards } from '../../scripts/standards-audit.js';
 
 describe('standards audit', () => {
-  test('web modules and tooling comply with the baseline standards', () => {
+  test('frontend modules and tooling comply with the baseline standards', () => {
     const failures = auditStandards(path.resolve('.'));
     expect(failures).toEqual([]);
+  });
+
+  test('rejects source and runtime files that cross the generated boundary', () => {
+    const fixtureRoot = mkdtempSync(path.join(os.tmpdir(), 'sugarcubes-frontend-boundary-'));
+    try {
+      mkdirSync(path.join(fixtureRoot, 'frontend'), { recursive: true });
+      mkdirSync(path.join(fixtureRoot, 'web'), { recursive: true });
+      mkdirSync(path.join(fixtureRoot, 'scripts'), { recursive: true });
+      writeFileSync(path.join(fixtureRoot, 'frontend', 'authored.js'), 'export {};\n');
+      writeFileSync(path.join(fixtureRoot, 'web', 'generated.ts'), 'export {};\n');
+
+      expect(auditStandards(fixtureRoot)).toEqual([
+        'frontend/authored.js is JavaScript in the TypeScript source tree',
+        'web/generated.ts is TypeScript in the generated runtime tree',
+      ]);
+    } finally {
+      rmSync(fixtureRoot, { force: true, recursive: true });
+    }
   });
 });

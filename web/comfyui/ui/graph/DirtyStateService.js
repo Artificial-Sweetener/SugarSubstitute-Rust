@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
  * Own the SugarCubes dirty-state evaluation layer in
- * `web/comfyui/ui/graph/DirtyStateService.js`.
+ * `frontend/comfyui/ui/graph/DirtyStateService.js`.
  */
 /** Evaluate implementation, cosmetic, and surface dirty-state concerns. */
 export class DirtyStateService {

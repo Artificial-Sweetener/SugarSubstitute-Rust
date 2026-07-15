@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
- * Own the SugarCubes core UI service layer in `web/comfyui/ui/core/CubeId.js`.
+ * Own the SugarCubes core UI service layer in `frontend/comfyui/ui/core/CubeId.js`.
  */
 const OWNER_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
 const REPO_RE = /^[A-Za-z0-9._-]+$/;

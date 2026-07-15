@@ -13,8 +13,12 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-import type { UnknownRecord } from '../../../web/comfyui/ui/types/common.js';
-import type { ComfyCanvas, ComfyGraph, ComfyNode } from '../../../web/comfyui/ui/types/graph.js';
+import type { UnknownRecord } from '../../../frontend/comfyui/ui/types/common.js';
+import type {
+  ComfyCanvas,
+  ComfyGraph,
+  ComfyNode,
+} from '../../../frontend/comfyui/ui/types/graph.js';
 
 interface MockNodeConstructor {
   prototype: ComfyNode;

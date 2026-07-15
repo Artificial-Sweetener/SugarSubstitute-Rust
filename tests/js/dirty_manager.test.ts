@@ -14,10 +14,10 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { describe, expect, test, jest } from '@jest/globals';
-import { DirtyManager } from '../../web/comfyui/ui/graph/DirtyManager.js';
-import type { CubeGroupMetadataRecord } from '../../web/comfyui/ui/graph/GroupMetadata.js';
-import type { CubeDefinitionEntry } from '../../web/comfyui/ui/graph/CubeDefinitionStore.js';
-import type { UnknownRecord } from '../../web/comfyui/ui/types/common.js';
+import { DirtyManager } from '../../frontend/comfyui/ui/graph/DirtyManager.js';
+import type { CubeGroupMetadataRecord } from '../../frontend/comfyui/ui/graph/GroupMetadata.js';
+import type { CubeDefinitionEntry } from '../../frontend/comfyui/ui/graph/CubeDefinitionStore.js';
+import type { UnknownRecord } from '../../frontend/comfyui/ui/types/common.js';
 
 function makeGraph(metadata: CubeGroupMetadataRecord) {
   return {

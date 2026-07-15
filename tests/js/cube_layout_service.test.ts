@@ -14,10 +14,10 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { describe, expect, test, jest } from '@jest/globals';
-import { CubeLayoutService } from '../../web/comfyui/ui/layout/CubeLayoutService.js';
-import type { LayoutEntry } from '../../web/comfyui/ui/layout/CubeLayoutEngine.js';
-import type { LayoutServiceIndex } from '../../web/comfyui/ui/layout/CubeLayoutService.js';
-import type { RectBounds } from '../../web/comfyui/ui/types/common.js';
+import { CubeLayoutService } from '../../frontend/comfyui/ui/layout/CubeLayoutService.js';
+import type { LayoutEntry } from '../../frontend/comfyui/ui/layout/CubeLayoutEngine.js';
+import type { LayoutServiceIndex } from '../../frontend/comfyui/ui/layout/CubeLayoutService.js';
+import type { RectBounds } from '../../frontend/comfyui/ui/types/common.js';
 
 type TestLayoutEntry = LayoutEntry & { bounds: RectBounds };
 

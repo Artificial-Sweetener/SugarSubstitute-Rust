@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
- * Own the SugarCubes graph integration layer in `web/comfyui/ui/graph/DirtyRefreshScheduler.js`.
+ * Own the SugarCubes graph integration layer in `frontend/comfyui/ui/graph/DirtyRefreshScheduler.js`.
  */
 /**
  * Coordinate dirty refresh scheduler behavior for the SugarCubes UI.

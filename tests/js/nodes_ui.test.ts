@@ -15,9 +15,9 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { describe, expect, test, beforeEach, jest } from '@jest/globals';
 import { app } from './mocks/app.js';
-import { getGroupSugarcubes } from '../../web/comfyui/ui/graph/GroupMetadata.js';
-import { getSugarCubesUI } from '../../web/comfyui/ui/index.js';
-import type { CubeGroupMetadataRecord } from '../../web/comfyui/ui/graph/GroupMetadata.js';
+import { getGroupSugarcubes } from '../../frontend/comfyui/ui/graph/GroupMetadata.js';
+import type { CubeGroupMetadataRecord } from '../../frontend/comfyui/ui/graph/GroupMetadata.js';
+import type * as UiIndexModule from '../../frontend/comfyui/ui/index.js';
 import type {
   ComfyGraph,
   ComfyGroup,
@@ -26,7 +26,7 @@ import type {
   ComfyOutput,
   ComfyWidget,
   GraphId,
-} from '../../web/comfyui/ui/types/graph.js';
+} from '../../frontend/comfyui/ui/types/graph.js';
 
 interface TestWidget extends ComfyWidget {
   hidden?: boolean;
@@ -37,6 +37,16 @@ interface TestWidget extends ComfyWidget {
 interface RequiredTestWidget extends TestWidget {
   options: { hidden?: boolean; serialize?: boolean; [key: string]: unknown };
   callback: (...args: unknown[]) => unknown;
+}
+
+/** Resolve the generated module instance shared by the runtime entry point. */
+async function getRuntimeSugarCubesUI(
+  options?: Parameters<typeof UiIndexModule.getSugarCubesUI>[0],
+): Promise<ReturnType<typeof UiIndexModule.getSugarCubesUI>> {
+  const runtimeModulePath = '../../web/comfyui/ui/index.js';
+  // The compiled runtime boundary is proven equivalent by build:check.
+  const runtimeModule = (await import(runtimeModulePath)) as typeof UiIndexModule;
+  return runtimeModule.getSugarCubesUI(options);
 }
 
 function requiredWidget(node: TestNodeBase, name: string): RequiredTestWidget {
@@ -340,7 +350,8 @@ describe('nodes ui integration', () => {
     await loadNodesUi();
     const extension = app._extensions[0];
     const handler = jest.fn(async () => null);
-    getSugarCubesUI().cubeCreation.startCreateCubeFromMarker = handler;
+    const ui = await getRuntimeSugarCubesUI();
+    ui.cubeCreation.startCreateCubeFromMarker = handler;
 
     class MarkerType extends TestNodeBase {
       constructor({ cubeId }: { cubeId: string }) {
@@ -403,8 +414,10 @@ describe('nodes ui integration', () => {
     const extension = app._extensions[0];
     const staleHandler = jest.fn(async () => null);
     const currentHandler = jest.fn(async () => null);
-    getSugarCubesUI().cubeCreation.startCreateCubeFromMarker = staleHandler;
-    getSugarCubesUI({ forceNew: true }).cubeCreation.startCreateCubeFromMarker = currentHandler;
+    const staleUi = await getRuntimeSugarCubesUI();
+    staleUi.cubeCreation.startCreateCubeFromMarker = staleHandler;
+    const currentUi = await getRuntimeSugarCubesUI({ forceNew: true });
+    currentUi.cubeCreation.startCreateCubeFromMarker = currentHandler;
 
     class MarkerType extends TestNodeBase {
       constructor() {

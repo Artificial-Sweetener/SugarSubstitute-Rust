@@ -17,7 +17,7 @@ import { describe, expect, test } from '@jest/globals';
 import {
   allocateUniqueInstanceAlias,
   syncInstanceAlias,
-} from '../../web/comfyui/ui/graph/InstanceAliasSync.js';
+} from '../../frontend/comfyui/ui/graph/InstanceAliasSync.js';
 
 function makeGroup({ name, instanceId }: { name?: string; instanceId?: string } = {}) {
   return {

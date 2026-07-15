@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
- * Own the SugarCubes cube browser layer in `web/comfyui/ui/browser/CubeBrowserStore.js`.
+ * Own the SugarCubes cube browser layer in `frontend/comfyui/ui/browser/CubeBrowserStore.js`.
  */
 import { isRecord } from '../types/common.js';
 function readRecords(value) {

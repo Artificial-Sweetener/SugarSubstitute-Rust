@@ -14,9 +14,9 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { describe, expect, test, jest } from '@jest/globals';
-import { InstanceManager } from '../../web/comfyui/ui/graph/InstanceManager.js';
-import { getGroupSugarcubes } from '../../web/comfyui/ui/graph/GroupMetadata.js';
-import type { CubeBoundsPayload } from '../../web/comfyui/ui/graph/CubeBounds.js';
+import { InstanceManager } from '../../frontend/comfyui/ui/graph/InstanceManager.js';
+import { getGroupSugarcubes } from '../../frontend/comfyui/ui/graph/GroupMetadata.js';
+import type { CubeBoundsPayload } from '../../frontend/comfyui/ui/graph/CubeBounds.js';
 import type {
   ComfyGraph,
   ComfyGroup,
@@ -24,7 +24,7 @@ import type {
   ComfyNode,
   ComfyOutput,
   ComfyWidget,
-} from '../../web/comfyui/ui/types/graph.js';
+} from '../../frontend/comfyui/ui/types/graph.js';
 
 interface TestInput extends ComfyInput {
   link: number | null;

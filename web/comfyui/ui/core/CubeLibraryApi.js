@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
- * Own the SugarCubes core UI service layer in `web/comfyui/ui/core/CubeLibraryApi.js`.
+ * Own the SugarCubes core UI service layer in `frontend/comfyui/ui/core/CubeLibraryApi.js`.
  */
 import { isRecord } from '../types/common.js';
 /**

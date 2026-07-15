@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
- * Own the SugarCubes graph integration layer in `web/comfyui/ui/graph/CubeDefinitionStore.js`.
+ * Own the SugarCubes graph integration layer in `frontend/comfyui/ui/graph/CubeDefinitionStore.js`.
  */
 import { computeDefinitionHash } from './DirtyHasher.js';
 import { buildCubeDefinitionKey, isCurrentRevisionRef, normalizeCubeVersion, normalizeRevisionRef, } from '../core/CubeDefinitionKey.js';

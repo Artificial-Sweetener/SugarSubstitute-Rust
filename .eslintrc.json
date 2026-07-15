@@ -65,7 +65,7 @@
     "app": "readonly",
     "comfyAPI": "readonly"
   },
-  "ignorePatterns": ["node_modules/", "cubes/", ".generated/", "web/**/*.js"],
+  "ignorePatterns": ["node_modules/", "cubes/", ".generated/", "web/"],
   "overrides": [
     {
       "files": ["tests/**/*.ts"],

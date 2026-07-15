@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
  * Own the SugarCubes flavor domain orchestration layer in
- * `web/comfyui/ui/flavors/FlavorService.js`.
+ * `frontend/comfyui/ui/flavors/FlavorService.js`.
  */
 import { getGraphGroups } from '../graph/GraphQuery.js';
 import { flattenCubeGroupMetadata, getGroupSugarcubes, setGroupSugarcubes, writeCubeDefinitionMetadata, writeCubePresetMetadata, } from '../graph/GroupMetadata.js';

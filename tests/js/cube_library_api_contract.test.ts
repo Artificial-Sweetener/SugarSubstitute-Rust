@@ -14,9 +14,9 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { describe, expect, jest, test } from '@jest/globals';
-import { CubeLibraryApi } from '../../web/comfyui/ui/core/CubeLibraryApi.js';
-import type { ApiJsonResult } from '../../web/comfyui/ui/core/CubeLibraryApi.js';
-import type { UnknownRecord } from '../../web/comfyui/ui/types/common.js';
+import { CubeLibraryApi } from '../../frontend/comfyui/ui/core/CubeLibraryApi.js';
+import type { ApiJsonResult } from '../../frontend/comfyui/ui/core/CubeLibraryApi.js';
+import type { UnknownRecord } from '../../frontend/comfyui/ui/types/common.js';
 
 interface CapturedRequest {
   url: string;

@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
- * Own the SugarCubes graph integration layer in `web/comfyui/ui/graph/InstanceBuilder.js`.
+ * Own the SugarCubes graph integration layer in `frontend/comfyui/ui/graph/InstanceBuilder.js`.
  */
 import { buildLinkIndex, getGraphGroups, getGraphNodes } from './GraphQuery.js';
 import { CUBE_MARKER_KINDS, isCubeMarkerType, readCubeMarkerId, readCubeMarkerInstanceId, readCubeMarkerInstanceAlias, readCubeMarkerDefaultAlias, readCubeMarkerRevisionRef, readCubeMarkerVersion, } from './CubeMarkers.js';

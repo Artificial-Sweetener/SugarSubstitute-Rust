@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
- * Own the SugarCubes graph integration layer in `web/comfyui/ui/graph/Markers.js`.
+ * Own the SugarCubes graph integration layer in `frontend/comfyui/ui/graph/Markers.js`.
  */
 const WIDGET_NAME_ALIASES = Object.freeze({
     default_alias: ['default_alias', 'cube_name'],

@@ -20,7 +20,7 @@ import {
   formatEndpoint,
   formatSaveSummaryEntry,
   formatViolations,
-} from '../../web/comfyui/ui/save/SaveFeedback.js';
+} from '../../frontend/comfyui/ui/save/SaveFeedback.js';
 
 describe('save feedback characterization', () => {
   test('export error normalization preserves structured backend fields', () => {

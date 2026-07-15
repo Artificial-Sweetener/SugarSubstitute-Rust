@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { describe, expect, test } from '@jest/globals';
-import { DirtyStateService } from '../../web/comfyui/ui/graph/DirtyStateService.js';
+import { DirtyStateService } from '../../frontend/comfyui/ui/graph/DirtyStateService.js';
 
 describe('dirty state service', () => {
   test('separates implementation, cosmetic, and surface changes', () => {

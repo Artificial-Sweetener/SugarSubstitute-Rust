@@ -19,7 +19,7 @@ import {
   createCubeIconElement,
   deriveDefaultAliasInitials,
   resolveCubeIconModel,
-} from '../../web/comfyui/ui/core/CubeIconResolver.js';
+} from '../../frontend/comfyui/ui/core/CubeIconResolver.js';
 
 describe('cube icon resolver', () => {
   beforeEach(() => {

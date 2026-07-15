@@ -27,7 +27,7 @@ from pathlib import Path
 PROJECT_LINE = "SugarCubes - composable workflow units for ComfyUI"
 COPYRIGHT_HOLDER = "Artificial Sweetener and contributors"
 START_YEAR = 2026
-SUPPORTED_SUFFIXES = frozenset((".py", ".pyi", ".js", ".mjs", ".cjs"))
+SUPPORTED_SUFFIXES = frozenset((".py", ".pyi", ".ts", ".js", ".mjs", ".cjs"))
 HEADER_END_TEXT = (
     "along with this program.  If not, see <https://www.gnu.org/licenses/>."
 )
@@ -62,7 +62,7 @@ def _copyright_years(now: datetime | None = None) -> str:
 def _comment_prefix(path: Path) -> str:
     """Return the line comment prefix for a supported source file."""
 
-    if path.suffix in {".js", ".mjs", ".cjs"}:
+    if path.suffix in {".ts", ".js", ".mjs", ".cjs"}:
         return "//"
     return "#"
 
