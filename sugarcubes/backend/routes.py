@@ -24,7 +24,7 @@ from typing import Any, Callable, Coroutine, Mapping
 from aiohttp import web
 
 from ..importer import CubeImportError
-from . import BackendServices
+from .composition import BackendServices
 from .responses import (
     BackendError,
     json_error,

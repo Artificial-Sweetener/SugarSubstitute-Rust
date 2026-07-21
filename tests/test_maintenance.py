@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-from sugarcubes.backend import maintenance
+from sugarcubes import maintenance
 from sugarcubes.backend.responses import BackendError
 
 
@@ -171,6 +171,7 @@ def test_maintenance_preflight_resolves_workspace_and_returns_success(
     assert payload == {"ready": True, "requirements": []}
     assert dependencies.calls == [("preflight", None)]
     assert capture.extension_root == Path(maintenance.__file__).resolve().parents[1]
+    assert capture.extension_root == Path(__file__).resolve().parents[1]
     assert capture.workspace_path == expected_workspace
     assert capture.custom_nodes_root == expected_workspace / "custom_nodes"
 

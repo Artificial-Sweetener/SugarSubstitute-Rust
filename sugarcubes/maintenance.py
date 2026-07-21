@@ -13,7 +13,7 @@
 #
 #    You should have received a copy of the GNU Affero General Public License
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""Machine-readable offline maintenance entrypoints for SugarCubes."""
+"""Provide the public machine-readable SugarCubes maintenance command."""
 
 from __future__ import annotations
 
@@ -24,17 +24,18 @@ import sys
 from pathlib import Path
 from typing import Sequence
 
-from . import build_backend_services
-from .responses import BackendError
+from .backend.composition import build_backend_services
+from .backend.responses import BackendError
+from .extension_layout import extension_root
 
 _SUCCESS = 0
 _USER_ACTION_REQUIRED = 2
 _HARD_FAILURE = 1
-_logger = logging.getLogger(__name__)
+_LOGGER = logging.getLogger(__name__)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Run the offline maintenance command and write JSON to stdout."""
+    """Run offline maintenance while preserving its machine-readable contract."""
 
     parser = _build_parser()
     args = parser.parse_args(argv)
@@ -43,7 +44,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise BackendError("Unsupported maintenance area", status=400)
         workspace_path = Path(args.workspace).expanduser().resolve()
         services = build_backend_services(
-            _extension_root(),
+            extension_root(),
             workspace_path=workspace_path,
             custom_nodes_root=workspace_path / "custom_nodes",
         )
@@ -101,7 +102,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         TypeError,
         ValueError,
     ) as exc:
-        _logger.exception("SugarCubes maintenance crashed")
+        _LOGGER.exception("SugarCubes maintenance crashed")
         _write_json(
             {
                 "schemaVersion": 1,
@@ -125,9 +126,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    """Build the command parser for the documented maintenance interface."""
+    """Build the parser for the public maintenance interface."""
 
-    parser = argparse.ArgumentParser(prog="python -m sugarcubes.backend.maintenance")
+    parser = argparse.ArgumentParser(prog="python -m sugarcubes.maintenance")
     parser.add_argument("area", choices=("cube-deps",))
     parser.add_argument("action", choices=("preflight", "repair", "sync-and-check"))
     parser.add_argument("--workspace", required=True)
@@ -135,12 +136,6 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--approve", action="append", default=[])
     parser.add_argument("--sync-enabled-repos", action="store_true")
     return parser
-
-
-def _extension_root() -> Path:
-    """Return the SugarCubes extension root from this module location."""
-
-    return Path(__file__).resolve().parents[1]
 
 
 def _write_json(payload: object) -> None:

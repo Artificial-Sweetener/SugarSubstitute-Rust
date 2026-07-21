@@ -20,7 +20,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol
 
-from sugarcubes.backend import BackendServices
+from sugarcubes.backend.composition import BackendServices
 
 
 class BackendServicesFactory(Protocol):

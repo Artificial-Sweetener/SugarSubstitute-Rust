@@ -31,7 +31,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from sugarcubes.backend import _resolve_active_comfy_node_class_mappings
+from sugarcubes.backend.comfy_node_registry import (
+    resolve_active_comfy_node_class_mappings,
+)
 from sugarcubes.backend.responses import BackendError
 from sugarcubes.backend.services.cube_export_service import (
     collect_missing_node_class_types,
@@ -80,7 +82,9 @@ spec = importlib.util.spec_from_file_location(
 module = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = module
 spec.loader.exec_module(module)
-raise SystemExit(1 if 'server' in sys.modules or 'nodes' in sys.modules else 0)
+host_api = sys.modules.get('sugarcubes.host_api')
+failed = 'server' in sys.modules or 'nodes' in sys.modules or host_api is None
+raise SystemExit(1 if failed else 0)
 """
 
     result = subprocess.run(
@@ -360,7 +364,7 @@ def test_resolve_active_comfy_node_class_mappings_prefers_host_registry(
 
     monkeypatch.setitem(sys.modules, "nodes", host_nodes_module)
 
-    resolved = _resolve_active_comfy_node_class_mappings(extension_root)
+    resolved = resolve_active_comfy_node_class_mappings(extension_root)
 
     assert "KSampler" in resolved
     assert "VAELoader" in resolved
@@ -378,8 +382,11 @@ def test_resolve_active_comfy_node_class_mappings_ignores_local_shadowing(
 
     monkeypatch.setitem(sys.modules, "nodes", local_shadow_module)
 
-    with caplog.at_level(logging.WARNING, logger="sugarcubes.backend"):
-        resolved = _resolve_active_comfy_node_class_mappings(extension_root)
+    with caplog.at_level(
+        logging.WARNING,
+        logger="sugarcubes.backend.comfy_node_registry",
+    ):
+        resolved = resolve_active_comfy_node_class_mappings(extension_root)
 
     assert "WrongLocalRegistry" not in resolved
     assert set(resolved) == {

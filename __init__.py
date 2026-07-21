@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import logging
 import sys
-from pathlib import Path
 
 from .sugarcubes import (
     NODE_CLASS_MAPPINGS,
@@ -31,12 +30,14 @@ from .sugarcubes import (
     write_cube,
     write_cubes,
 )
-from .sugarcubes.backend import build_backend_services, set_active_backend_services
+from .sugarcubes.backend.composition import build_backend_services
 from .sugarcubes.backend.routes import register_routes
+from .sugarcubes.extension_layout import extension_root
+from .sugarcubes.host_api import set_active_backend_services
 
 WEB_DIRECTORY = "web"
 __version__ = "0.10.0"
-_EXTENSION_ROOT = Path(__file__).resolve().parent
+_EXTENSION_ROOT = extension_root()
 _LOGGER = logging.getLogger(__name__)
 
 _prompt_server_module = sys.modules.get("server")

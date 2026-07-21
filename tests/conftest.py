@@ -22,7 +22,7 @@ from typing import Any
 
 import pytest
 
-from sugarcubes.backend import BackendServices
+from sugarcubes.backend.composition import BackendServices
 from sugarcubes.backend.services import TrackedRepoPreflightResult
 from .typing_support import BackendServicesFactory
 

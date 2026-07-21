@@ -13,14 +13,18 @@
 #
 #    You should have received a copy of the GNU Affero General Public License
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""Active SugarCubes backend service registry tests."""
+"""Public SugarCubes host API registry tests."""
 
 from __future__ import annotations
 
 from pathlib import Path
 from .typing_support import BackendServicesFactory
 
-from sugarcubes.backend import active_backend_services, set_active_backend_services
+from sugarcubes.host_api import (
+    HOST_API_VERSION,
+    active_backend_services,
+    set_active_backend_services,
+)
 
 
 def test_active_backend_services_returns_registered_service_graph(
@@ -34,3 +38,9 @@ def test_active_backend_services_returns_registered_service_graph(
     set_active_backend_services(services)
 
     assert active_backend_services() is services
+
+
+def test_host_api_exposes_a_versioned_public_contract() -> None:
+    """Cross-extension consumers should negotiate one explicit API version."""
+
+    assert HOST_API_VERSION == 1
