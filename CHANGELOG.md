@@ -1,3 +1,10 @@
+# [0.11.0](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.10.0...v0.11.0) (2026-07-21)
+
+
+### Features
+
+* **api:** publish versioned host integration ([f00ef72](https://github.com/Artificial-Sweetener/SugarCubes/commit/f00ef72534bef41cdea60bc02ffb2fb920ddf317))
+
 # [0.10.0](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.9.3...v0.10.0) (2026-07-14)
 
 
