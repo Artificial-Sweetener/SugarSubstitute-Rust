@@ -24,6 +24,8 @@ Repository = "https://github.com/Artificial-Sweetener/SugarCubes"
 dev = [
     "black",
     "mypy",
+    "numpy",
+    "Pillow",
     "pytest",
     "ruff",
 ]
