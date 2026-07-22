@@ -101,6 +101,29 @@ describe('core services', () => {
     expect(adapter.getApi()).toBe(api);
   });
 
+  test('ComfyAdapter reads renderer state from Comfy settings before stale LiteGraph state', () => {
+    const getSettingValue = jest.fn(() => true);
+    const app = { ui: { settings: { getSettingValue } } } as unknown as ComfyApplication;
+    const liteGraph = { vueNodesMode: false } as LiteGraphHost;
+    const adapter = new ComfyAdapter({ app, liteGraph });
+
+    expect(adapter.getNodeRenderer()).toBe('vue');
+    expect(getSettingValue).toHaveBeenCalledWith('Comfy.VueNodes.Enabled');
+  });
+
+  test('ComfyAdapter falls back to mounted Nodes 2 cards when settings are unavailable', () => {
+    const element = document.createElement('article');
+    element.dataset.nodeId = '1';
+    document.body.append(element);
+    const adapter = new ComfyAdapter({
+      document,
+      liteGraph: { vueNodesMode: false } as LiteGraphHost,
+    });
+
+    expect(adapter.getNodeRenderer()).toBe('vue');
+    element.remove();
+  });
+
   test('CubeLibraryApi wraps fetch responses', async () => {
     const api = new CubeLibraryApi({
       getApi: () => ({

@@ -23,7 +23,7 @@ import type { Vec2 } from '../types/common.js';
  * Read vector2.
  */
 export function readVector2(vec: unknown, fallbackX = 0, fallbackY = 0): Vec2 {
-  if (!Array.isArray(vec) || vec.length < 2) {
+  if (!isNumericVector(vec) || vec.length < 2) {
     return [fallbackX, fallbackY];
   }
   const x = Number(vec[0]);
@@ -35,7 +35,7 @@ export function readVector2(vec: unknown, fallbackX = 0, fallbackY = 0): Vec2 {
  * Coerce vec2.
  */
 export function coerceVec2(value: unknown): Vec2 | null {
-  if (!Array.isArray(value) || value.length < 2) {
+  if (!isNumericVector(value) || value.length < 2) {
     return null;
   }
   const x = Number(value[0]);
@@ -44,4 +44,9 @@ export function coerceVec2(value: unknown): Vec2 | null {
     return null;
   }
   return [x, y];
+}
+
+/** Recognize every vector representation declared by the Comfy host boundary. */
+function isNumericVector(value: unknown): value is number[] | Float32Array | Float64Array {
+  return Array.isArray(value) || value instanceof Float32Array || value instanceof Float64Array;
 }

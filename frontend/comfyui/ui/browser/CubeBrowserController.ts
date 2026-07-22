@@ -36,6 +36,9 @@ import {
   normalizeRevisionRef,
 } from '../core/CubeDefinitionKey.js';
 import { isRecord } from '../types/common.js';
+import { planPlacementGeometry } from '../geometry/PlacementGeometryPlanner.js';
+import { resolveRendererGeometryPolicy } from '../geometry/RendererGeometryPolicy.js';
+import { readImportPayload } from '../import/PlacementPayload.js';
 import type { UnknownRecord, Vec2 } from '../types/common.js';
 import type { ApiJsonResult } from '../core/CubeLibraryApi.js';
 import type {
@@ -52,6 +55,7 @@ interface BrowserAdapter {
   getFetch?(): typeof fetch | null;
   getConsole?(): Console | null;
   getLiteGraph?(): LiteGraphHost | null;
+  getNodeRenderer?(): 'litegraph' | 'vue';
 }
 
 export interface BrowserApi {
@@ -1557,10 +1561,27 @@ export class CubeBrowserController {
         });
         return;
       }
+      const importPayload = readImportPayload(data);
+      if (!importPayload) {
+        this.preview.update({
+          name: key,
+          requestKey: previewKey,
+          payload: null,
+          loading: false,
+          error: 'Importer payload missing.',
+        });
+        return;
+      }
       this.preview.update({
         name: key,
         requestKey: previewKey,
-        payload: data,
+        payload: planPlacementGeometry(
+          importPayload,
+          resolveRendererGeometryPolicy(
+            this.adapter?.getLiteGraph?.(),
+            this.adapter?.getNodeRenderer?.(),
+          ),
+        ),
         loading: false,
         error: null,
       });

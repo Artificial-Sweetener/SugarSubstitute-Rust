@@ -24,6 +24,9 @@ import { deriveCubeIdFromDefaultAlias, normalizeDefaultAliasTitle } from '../cor
 import { deriveTargetModelCubeId, deriveTargetModelFromCubeId, normalizeSupportedModels, normalizeTargetModel, } from '../core/ModelTargets.js';
 import { CURRENT_REVISION_REF, formatCubeVersionLabel, isCurrentRevisionRef, normalizeCubeVersion, normalizeRevisionRef, } from '../core/CubeDefinitionKey.js';
 import { isRecord } from '../types/common.js';
+import { planPlacementGeometry } from '../geometry/PlacementGeometryPlanner.js';
+import { resolveRendererGeometryPolicy } from '../geometry/RendererGeometryPolicy.js';
+import { readImportPayload } from '../import/PlacementPayload.js';
 const unavailableApiCall = async () => {
     throw new Error('Cube library API unavailable');
 };
@@ -1299,10 +1302,21 @@ export class CubeBrowserController {
                 });
                 return;
             }
+            const importPayload = readImportPayload(data);
+            if (!importPayload) {
+                this.preview.update({
+                    name: key,
+                    requestKey: previewKey,
+                    payload: null,
+                    loading: false,
+                    error: 'Importer payload missing.',
+                });
+                return;
+            }
             this.preview.update({
                 name: key,
                 requestKey: previewKey,
-                payload: data,
+                payload: planPlacementGeometry(importPayload, resolveRendererGeometryPolicy(this.adapter?.getLiteGraph?.(), this.adapter?.getNodeRenderer?.())),
                 loading: false,
                 error: null,
             });

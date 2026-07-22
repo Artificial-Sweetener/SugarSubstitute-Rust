@@ -41,6 +41,7 @@ import { CubeCreationService } from './create/CubeCreationService.js';
 import { CubePackService } from './packs/CubePackService.js';
 import { CubeIdentityReconciler } from './graph/CubeIdentityReconciler.js';
 import { CubePromotionService } from './promotion/CubePromotionService.js';
+import { RendererGeometryCoordinator } from './geometry/RendererGeometryCoordinator.js';
 /**
  * Coordinate sugar cubes ui behavior for the SugarCubes UI.
  */
@@ -69,6 +70,7 @@ export class SugarCubesUI {
     containmentService;
     collisionService;
     boundsReconciler;
+    rendererGeometry;
     overlayManager;
     _setupDone;
     constructor(options = {}) {
@@ -171,6 +173,14 @@ export class SugarCubesUI {
         this.containmentService = new CubeContainmentService();
         this.collisionService = new CubeCollisionService();
         this.boundsReconciler = new CubeBoundsReconciler();
+        this.rendererGeometry = new RendererGeometryCoordinator({
+            adapter: this.adapter,
+            scheduler: this.scheduler,
+            onStabilized: (graph) => {
+                this.instanceManager.refresh({ graph, reason: 'renderer-geometry', force: true });
+                this.dirtyManager.requestRefresh({ graph, reason: 'renderer-geometry' });
+            },
+        });
         this.overlayManager = new OverlayManager({
             adapter: this.adapter,
             events: this.events,
@@ -217,6 +227,7 @@ export class SugarCubesUI {
         this.instanceManager.setup();
         this.dirtyManager.setup();
         await this.flavorService.setup();
+        this.rendererGeometry.setup();
         this.events.on('cube:instances:refresh', (options) => {
             if (!options || typeof options !== 'object') {
                 return;
@@ -227,6 +238,7 @@ export class SugarCubesUI {
         this._setupDone = true;
     }
     dispose() {
+        this.rendererGeometry.dispose();
         this.overlayManager.dispose();
         this.cubeBrowser.dispose();
         this.dirtyManager.dispose();

@@ -92,6 +92,16 @@ export class ComfyAdapter {
     getLiteGraph() {
         return this.liteGraph;
     }
+    /** Read the active renderer from Comfy's authoritative settings boundary. */
+    getNodeRenderer() {
+        const settings = this.getApp()?.ui?.settings;
+        const enabled = settings?.getSettingValue?.('Comfy.VueNodes.Enabled');
+        if (typeof enabled === 'boolean')
+            return enabled ? 'vue' : 'litegraph';
+        if (this.documentRef?.querySelector('[data-node-id]'))
+            return 'vue';
+        return this.liteGraph?.vueNodesMode === true ? 'vue' : 'litegraph';
+    }
     getWindow() {
         return this.windowRef;
     }

@@ -20,7 +20,7 @@
  * Read vector2.
  */
 export function readVector2(vec, fallbackX = 0, fallbackY = 0) {
-    if (!Array.isArray(vec) || vec.length < 2) {
+    if (!isNumericVector(vec) || vec.length < 2) {
         return [fallbackX, fallbackY];
     }
     const x = Number(vec[0]);
@@ -31,7 +31,7 @@ export function readVector2(vec, fallbackX = 0, fallbackY = 0) {
  * Coerce vec2.
  */
 export function coerceVec2(value) {
-    if (!Array.isArray(value) || value.length < 2) {
+    if (!isNumericVector(value) || value.length < 2) {
         return null;
     }
     const x = Number(value[0]);
@@ -40,4 +40,8 @@ export function coerceVec2(value) {
         return null;
     }
     return [x, y];
+}
+/** Recognize every vector representation declared by the Comfy host boundary. */
+function isNumericVector(value) {
+    return Array.isArray(value) || value instanceof Float32Array || value instanceof Float64Array;
 }

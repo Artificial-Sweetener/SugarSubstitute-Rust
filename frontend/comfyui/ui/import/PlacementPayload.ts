@@ -22,11 +22,13 @@ import { isRecord } from '../types/common.js';
 import type { PreviewLayout } from '../overlays/PlacementHelpers.js';
 import type { UnknownRecord, Vec2 } from '../types/common.js';
 import type { GraphId } from '../types/graph.js';
+import { shiftAuthoredLayoutBaseline } from '../geometry/AuthoredLayoutBaseline.js';
 
 export interface ImportEntryLayout extends PreviewLayout {
   id?: unknown;
   pos?: unknown;
   size?: unknown;
+  presentation?: unknown;
 }
 
 export interface ImportEntry extends UnknownRecord {
@@ -57,6 +59,7 @@ export interface ImportGroupMetadata extends UnknownRecord {
 export interface ImportLayoutGroup extends UnknownRecord {
   title?: unknown;
   bounds?: unknown;
+  bounding?: unknown;
   sugarcubes?: ImportGroupMetadata | null;
 }
 
@@ -64,6 +67,7 @@ export interface ImportLayout extends UnknownRecord {
   origin?: unknown;
   groups?: ImportLayoutGroup[];
   cube?: UnknownRecord;
+  geometry?: UnknownRecord;
 }
 
 export interface ImportPayload extends UnknownRecord {
@@ -253,6 +257,14 @@ export function prepareGraphInsertionPayload(
     if (layout && Array.isArray(layout.size)) {
       layout.size = [Number(layout.size[0]), Number(layout.size[1])];
     }
+    if (layout && isRecord(layout.presentation)) {
+      const presentation = { ...layout.presentation };
+      const x = Number(presentation.x);
+      const y = Number(presentation.y);
+      if (Number.isFinite(x)) presentation.x = x + shiftX;
+      if (Number.isFinite(y)) presentation.y = y + shiftY;
+      layout.presentation = presentation;
+    }
     return { ...entry, layout };
   };
   const nodes = (payload.nodes ?? []).map(shiftEntry);
@@ -273,6 +285,7 @@ export function prepareGraphInsertionPayload(
             if (Number.isFinite(boundY)) bounds.y = boundY + shiftY;
             sugarcubes.bounds = bounds;
           }
+          shiftAuthoredLayoutBaseline(sugarcubes, shift);
           shiftedGroup.sugarcubes = sugarcubes;
         }
         return shiftedGroup;

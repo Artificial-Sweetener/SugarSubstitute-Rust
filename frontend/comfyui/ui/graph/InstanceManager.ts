@@ -35,6 +35,7 @@ import { buildMarkerSignature, readMarkerIdsFromMetadata } from '../layout/CubeI
 import { getGraphGroups } from './GraphQuery.js';
 import { InstanceBuilder } from './InstanceBuilder.js';
 import { allocateGraphInstanceAliases } from './AliasAllocator.js';
+import { hasAuthoredGroupGeometry } from '../geometry/AuthoredGroupGeometry.js';
 import {
   allocateUniqueInstanceAlias,
   ensureGroupTitleWatcher,
@@ -326,9 +327,10 @@ function applyInstanceGroup(
     padding: resolvedPadding,
     header: resolvedHeader,
   });
+  const preserveAuthoredBounds = hasAuthoredGroupGeometry(cleanedExisting);
   let canonicalBounds = existingGroupBounds || existingBounds;
   let usedNewBoundsResolver = false;
-  if (contentDerivedBounds) {
+  if (contentDerivedBounds && !preserveAuthoredBounds) {
     canonicalBounds = contentDerivedBounds;
     usedNewBoundsResolver = true;
   } else if (!canonicalBounds) {

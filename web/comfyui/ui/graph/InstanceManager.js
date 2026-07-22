@@ -22,6 +22,7 @@ import { buildMarkerSignature, readMarkerIdsFromMetadata } from '../layout/CubeI
 import { getGraphGroups } from './GraphQuery.js';
 import { InstanceBuilder } from './InstanceBuilder.js';
 import { allocateGraphInstanceAliases } from './AliasAllocator.js';
+import { hasAuthoredGroupGeometry } from '../geometry/AuthoredGroupGeometry.js';
 import { allocateUniqueInstanceAlias, ensureGroupTitleWatcher, syncInstanceAlias, } from './InstanceAliasSync.js';
 import { ensureGroupSerialization, flattenCubeGroupMetadata, getGroupSugarcubes, setGroupSugarcubes, resolveInstanceDisplayName, writeCubeDefinitionMetadata, writeCubeInstanceMetadata, } from './GroupMetadata.js';
 import { updateMarkersForIds } from './CubeMarkers.js';
@@ -209,9 +210,10 @@ function applyInstanceGroup(instance, group, graph, adapter, events, requestDirt
         padding: resolvedPadding,
         header: resolvedHeader,
     });
+    const preserveAuthoredBounds = hasAuthoredGroupGeometry(cleanedExisting);
     let canonicalBounds = existingGroupBounds || existingBounds;
     let usedNewBoundsResolver = false;
-    if (contentDerivedBounds) {
+    if (contentDerivedBounds && !preserveAuthoredBounds) {
         canonicalBounds = contentDerivedBounds;
         usedNewBoundsResolver = true;
     }

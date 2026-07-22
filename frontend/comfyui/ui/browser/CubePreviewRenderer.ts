@@ -18,7 +18,6 @@
  */
 
 import type { RectBounds, UnknownRecord, Vec2 } from '../types/common.js';
-import type { ComfyGroup } from '../types/graph.js';
 import type { GhostStyle } from '../overlays/PlacementHelpers.js';
 
 export interface PreviewBounds {
@@ -28,14 +27,14 @@ export interface PreviewBounds {
   maxY: number;
 }
 type PreviewRect = RectBounds;
-interface PreviewEntry extends ComfyGroup {
+interface PreviewEntry extends UnknownRecord {
   kind?: unknown;
-  layout?: { pos?: unknown; size?: unknown };
+  layout?: { pos?: unknown; size?: unknown } | null;
 }
 export interface PreviewPayload extends UnknownRecord {
   nodes?: PreviewEntry[];
   markers?: PreviewEntry[];
-  layout?: { origin?: unknown; groups?: PreviewEntry[] };
+  layout?: { origin?: unknown; groups?: PreviewEntry[] } | null;
 }
 export interface PreviewHelpers {
   computePayloadBounds?(

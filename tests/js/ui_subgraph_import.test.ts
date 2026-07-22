@@ -401,6 +401,34 @@ beforeEach(() => {
 });
 
 describe('legacy subgraph import compatibility', () => {
+  test('LiteGraph commit rectangles exactly match authored preview rectangles', async () => {
+    await loadUi();
+    const applyPreparedImport = getPreparedImporter();
+    const payload = {
+      cube: { cube_id: 'local/example-user/geometry.cube', version: '1.0.0' },
+      nodes: [
+        {
+          symbol: 'body',
+          class_type: 'String',
+          inputs: {},
+          layout: { id: 1, pos: [25, 35], size: [120, 40], title: 'Body' },
+        },
+      ],
+      markers: [],
+      connections: [],
+      layout: { origin: [0, 0], groups: [] },
+      warnings: [],
+    };
+
+    const result = await applyPreparedImport(payload, { dropOrigin: [0, 0] });
+
+    expect(result.success).toBe(true);
+    expect(testGraph._nodes).toHaveLength(1);
+    expect(testGraph._nodes[0]?.pos).toEqual([25, 35]);
+    expect(testGraph._nodes[0]?.size).toEqual([120, 40]);
+    expect(result.bounds).toEqual({ minX: 25, minY: 35, maxX: 145, maxY: 75 });
+  });
+
   test('applyPreparedImport normalizes legacy subgraphs before registering wrapper nodes', async () => {
     await loadUi();
     await setupRegisteredExtension();

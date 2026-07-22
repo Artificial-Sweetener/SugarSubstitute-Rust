@@ -21,6 +21,9 @@ import { readVector2 } from '../graph/VectorUtils.js';
 import { computePayloadBounds, drawGhostRect, getPlacementGroupLabel, resolvePreviewRect, } from './PlacementHelpers.js';
 import { isCurrentRevisionRef, normalizeRevisionRef } from '../core/CubeDefinitionKey.js';
 import { isRecord } from '../types/common.js';
+import { planPlacementGeometry } from '../geometry/PlacementGeometryPlanner.js';
+import { resolveRendererGeometryPolicy } from '../geometry/RendererGeometryPolicy.js';
+import { readImportPayload } from '../import/PlacementPayload.js';
 const PLACEMENT_GROUP_FILL = 'rgba(70, 120, 150, 0.12)';
 const PLACEMENT_GROUP_STROKE = 'rgba(70, 120, 150, 0.55)';
 const PLACEMENT_NODE_FILL = 'rgba(120, 180, 210, 0.16)';
@@ -528,7 +531,12 @@ export class PlacementOverlay {
             this.state.active = true;
             this.state.cubeId = trimmed;
             this.state.defaultAlias = displayName;
-            const placementPayload = data;
+            const importPayload = readImportPayload(data);
+            if (!importPayload) {
+                this.toast?.push?.('error', 'Placement preview failed', 'Importer payload missing.');
+                return;
+            }
+            const placementPayload = planPlacementGeometry(importPayload, resolveRendererGeometryPolicy(this.adapter?.getLiteGraph?.(), this.adapter?.getNodeRenderer?.()));
             this.state.payload = placementPayload;
             this.state.cubeVersion =
                 typeof options.version === 'string' && options.version.trim()

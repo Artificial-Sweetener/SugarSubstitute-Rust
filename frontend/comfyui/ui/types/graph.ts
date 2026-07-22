@@ -63,9 +63,13 @@ export interface ComfyNode {
   inputs?: ComfyInput[];
   outputs?: ComfyOutput[];
   properties?: UnknownRecord;
+  flags?: UnknownRecord;
   widgets_values?: unknown[];
   graph?: ComfyGraph | null;
   getBounding?(): number[];
+  computeSize?(minimum?: number[]): number[];
+  setSize?(size: number[]): void;
+  onResize?(size: number[]): void;
   getConnectionPos?(isInput: boolean, slot: number, output?: Float32Array): unknown;
   [key: string]: unknown;
 }

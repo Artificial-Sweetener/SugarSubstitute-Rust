@@ -27,6 +27,9 @@ import {
 } from './PlacementHelpers.js';
 import { isCurrentRevisionRef, normalizeRevisionRef } from '../core/CubeDefinitionKey.js';
 import { isRecord } from '../types/common.js';
+import { planPlacementGeometry } from '../geometry/PlacementGeometryPlanner.js';
+import { resolveRendererGeometryPolicy } from '../geometry/RendererGeometryPolicy.js';
+import { readImportPayload } from '../import/PlacementPayload.js';
 import type { ApiJsonResult } from '../core/CubeLibraryApi.js';
 import type { PreviewEntry } from './PlacementHelpers.js';
 import type { ComfyApplication, ComfyCanvas, ComfyGroup } from '../types/graph.js';
@@ -54,11 +57,13 @@ export interface PlacementAdapter {
   getWindow?(): Window | null;
   getConsole?(): { warn(...values: unknown[]): void } | null;
   getLiteGraph?(): {
+    vueNodesMode?: boolean;
     NODE_TITLE_HEIGHT?: number;
     NODE_COLLAPSED_WIDTH?: number;
     NODE_TEXT_SIZE?: number;
     NODE_FONT?: string;
   } | null;
+  getNodeRenderer?(): 'litegraph' | 'vue';
 }
 interface PlacementScheduler {
   raf?(callback: FrameRequestCallback): number | null;
@@ -705,7 +710,18 @@ export class PlacementOverlay {
       this.state.active = true;
       this.state.cubeId = trimmed;
       this.state.defaultAlias = displayName;
-      const placementPayload = data as PlacementPayload;
+      const importPayload = readImportPayload(data);
+      if (!importPayload) {
+        this.toast?.push?.('error', 'Placement preview failed', 'Importer payload missing.');
+        return;
+      }
+      const placementPayload = planPlacementGeometry(
+        importPayload,
+        resolveRendererGeometryPolicy(
+          this.adapter?.getLiteGraph?.(),
+          this.adapter?.getNodeRenderer?.(),
+        ),
+      ) as PlacementPayload;
       this.state.payload = placementPayload;
       this.state.cubeVersion =
         typeof options.version === 'string' && options.version.trim()

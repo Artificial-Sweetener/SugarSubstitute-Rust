@@ -31,10 +31,11 @@ export interface PreviewLayout extends UnknownRecord {
   flags?: unknown;
   style?: unknown;
   extra?: unknown;
+  presentation?: unknown;
 }
 
 export interface PreviewEntry extends UnknownRecord {
-  layout?: PreviewLayout;
+  layout?: PreviewLayout | null;
 }
 
 interface PreviewGraphMetrics {
@@ -134,6 +135,22 @@ export function resolvePreviewRect(
   liteGraph: PreviewGraphMetrics | null | undefined,
 ): RectBounds {
   const layout = entry?.layout;
+  if (isRecord(layout?.presentation)) {
+    const values = [
+      layout.presentation.x,
+      layout.presentation.y,
+      layout.presentation.w,
+      layout.presentation.h,
+    ].map(Number);
+    if (values.every(Number.isFinite)) {
+      return {
+        x: values[0] ?? 0,
+        y: values[1] ?? 0,
+        w: values[2] ?? 0,
+        h: values[3] ?? 0,
+      };
+    }
+  }
   const flags = readLayoutFlags(layout);
   const resolvedSize = resolvePreviewSize(entry, size, ctx, liteGraph);
   const titleHeight = Number(liteGraph?.NODE_TITLE_HEIGHT) || 30;

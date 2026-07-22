@@ -165,7 +165,10 @@ describe('graph helpers', () => {
     expect(readVector2(null, 1, 2)).toEqual([1, 2]);
     expect(readVector2(['3', '4'])).toEqual([3, 4]);
     expect(readVector2(['x', 2], 9, 9)).toEqual([9, 2]);
+    expect(readVector2(new Float32Array([3, 4]))).toEqual([3, 4]);
+    expect(readVector2(new Float64Array([5, 6]))).toEqual([5, 6]);
     expect(coerceVec2([1, 2])).toEqual([1, 2]);
+    expect(coerceVec2(new Float32Array([7, 8]))).toEqual([7, 8]);
     expect(coerceVec2([1, 'x'])).toBeNull();
   });
 

@@ -18,6 +18,7 @@
  */
 import { readVector2 } from '../graph/VectorUtils.js';
 import { isRecord } from '../types/common.js';
+import { shiftAuthoredLayoutBaseline } from '../geometry/AuthoredLayoutBaseline.js';
 /** Return only object records from an untrusted collection boundary. */
 function readRecordArray(value) {
     return Array.isArray(value) ? value.filter(isRecord) : [];
@@ -167,6 +168,16 @@ export function prepareGraphInsertionPayload(payloadValue, { shift = [0, 0], tar
         if (layout && Array.isArray(layout.size)) {
             layout.size = [Number(layout.size[0]), Number(layout.size[1])];
         }
+        if (layout && isRecord(layout.presentation)) {
+            const presentation = { ...layout.presentation };
+            const x = Number(presentation.x);
+            const y = Number(presentation.y);
+            if (Number.isFinite(x))
+                presentation.x = x + shiftX;
+            if (Number.isFinite(y))
+                presentation.y = y + shiftY;
+            layout.presentation = presentation;
+        }
         return { ...entry, layout };
     };
     const nodes = (payload.nodes ?? []).map(shiftEntry);
@@ -189,6 +200,7 @@ export function prepareGraphInsertionPayload(payloadValue, { shift = [0, 0], tar
                             bounds.y = boundY + shiftY;
                         sugarcubes.bounds = bounds;
                     }
+                    shiftAuthoredLayoutBaseline(sugarcubes, shift);
                     shiftedGroup.sugarcubes = sugarcubes;
                 }
                 return shiftedGroup;

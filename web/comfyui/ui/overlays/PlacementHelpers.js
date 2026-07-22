@@ -76,6 +76,22 @@ export function resolvePreviewSize(entry, size, ctx, liteGraph) {
  */
 export function resolvePreviewRect(entry, pos, size, ctx, liteGraph) {
     const layout = entry?.layout;
+    if (isRecord(layout?.presentation)) {
+        const values = [
+            layout.presentation.x,
+            layout.presentation.y,
+            layout.presentation.w,
+            layout.presentation.h,
+        ].map(Number);
+        if (values.every(Number.isFinite)) {
+            return {
+                x: values[0] ?? 0,
+                y: values[1] ?? 0,
+                w: values[2] ?? 0,
+                h: values[3] ?? 0,
+            };
+        }
+    }
     const flags = readLayoutFlags(layout);
     const resolvedSize = resolvePreviewSize(entry, size, ctx, liteGraph);
     const titleHeight = Number(liteGraph?.NODE_TITLE_HEIGHT) || 30;

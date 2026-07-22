@@ -59,6 +59,14 @@ export interface ComfyAdapterOptions {
   clearTimeout?: BrowserClearTimeout | null;
 }
 
+interface RendererSettingsApp extends ComfyApplication {
+  ui?: {
+    settings?: {
+      getSettingValue?(id: string): unknown;
+    };
+  };
+}
+
 /**
  * Coordinate comfy adapter behavior for the SugarCubes UI.
  */
@@ -141,6 +149,15 @@ export class ComfyAdapter {
 
   getLiteGraph(): LiteGraphHost | null {
     return this.liteGraph;
+  }
+
+  /** Read the active renderer from Comfy's authoritative settings boundary. */
+  getNodeRenderer(): 'litegraph' | 'vue' {
+    const settings = (this.getApp() as RendererSettingsApp | null)?.ui?.settings;
+    const enabled = settings?.getSettingValue?.('Comfy.VueNodes.Enabled');
+    if (typeof enabled === 'boolean') return enabled ? 'vue' : 'litegraph';
+    if (this.documentRef?.querySelector('[data-node-id]')) return 'vue';
+    return this.liteGraph?.vueNodesMode === true ? 'vue' : 'litegraph';
   }
 
   getWindow(): HostWindow | null {

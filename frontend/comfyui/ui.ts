@@ -71,6 +71,9 @@ import { applyCubeDefinitionIdentity } from './ui/core/CubeDefinitionKey.js';
 import type { CubeFlavorPayload } from './ui/flavors/FlavorService.js';
 import type { CubeGroupMetadataRecord } from './ui/graph/GroupMetadata.js';
 import { isRecord } from './ui/types/common.js';
+import { applyComfyNodeSize } from './ui/geometry/ComfyNodeGeometry.js';
+import { planPlacementGeometry } from './ui/geometry/PlacementGeometryPlanner.js';
+import { resolveRendererGeometryPolicy } from './ui/geometry/RendererGeometryPolicy.js';
 import type { UnknownRecord, Vec2 } from './ui/types/common.js';
 import type {
   ComfyApplication,
@@ -639,8 +642,8 @@ async function applyPreparedImport(
     bounds: null,
   };
 
-  const payload = readImportPayload(payloadValue);
-  if (!payload) {
+  const parsedPayload = readImportPayload(payloadValue);
+  if (!parsedPayload) {
     result.message = 'Importer payload missing';
     return result;
   }
@@ -656,6 +659,9 @@ async function applyPreparedImport(
     result.message = 'LiteGraph unavailable';
     return result;
   }
+
+  const rendererPolicy = resolveRendererGeometryPolicy(LiteGraphRef, adapter.getNodeRenderer?.());
+  const payload = planPlacementGeometry(parsedPayload, rendererPolicy);
 
   registerSubgraphs(payload, result);
 
@@ -750,16 +756,7 @@ async function applyPreparedImport(
         liteNode.pos = [posX, posY];
       }
 
-      if (Array.isArray(liteNode.size)) {
-        if (Number.isFinite(sizeVec[0])) {
-          liteNode.size[0] = sizeVec[0];
-        }
-        if (Number.isFinite(sizeVec[1])) {
-          liteNode.size[1] = sizeVec[1];
-        }
-      } else {
-        liteNode.size = [sizeVec[0], sizeVec[1]];
-      }
+      applyComfyNodeSize(liteNode, sizeVec, rendererPolicy, logger);
 
       if (typeof layout?.title === 'string' && layout.title) {
         liteNode.title = layout.title;
@@ -792,7 +789,6 @@ async function applyPreparedImport(
       applyExecutionMode(liteNode, entry?.mode ?? entry?.extras?.mode);
 
       createdNodes.set(symbol, liteNode);
-      updateBoundsWithNode(bounds, liteNode);
       result.nodesAdded += 1;
       if (result.primaryNodeId == null) {
         result.primaryNodeId = liteNode.id;
@@ -811,6 +807,8 @@ async function applyPreparedImport(
       if (extras && typeof extras === 'object') {
         applyExtrasToNode(liteNode, extras);
       }
+      applyComfyNodeSize(liteNode, sizeVec, rendererPolicy, logger);
+      updateBoundsWithNode(bounds, liteNode);
     }
 
     for (const entry of markerEntries) {
@@ -843,16 +841,7 @@ async function applyPreparedImport(
         markerNode.pos = [posX, posY];
       }
 
-      if (Array.isArray(markerNode.size)) {
-        if (Number.isFinite(sizeVec[0])) {
-          markerNode.size[0] = sizeVec[0];
-        }
-        if (Number.isFinite(sizeVec[1])) {
-          markerNode.size[1] = sizeVec[1];
-        }
-      } else {
-        markerNode.size = [sizeVec[0], sizeVec[1]];
-      }
+      applyComfyNodeSize(markerNode, sizeVec, rendererPolicy, logger);
 
       if (typeof layout?.title === 'string' && layout.title) {
         markerNode.title = layout.title;
@@ -889,6 +878,8 @@ async function applyPreparedImport(
       for (const [widgetName, widgetValue] of Object.entries(widgetValues)) {
         writeWidgetValue(markerNode, widgetName, widgetValue);
       }
+
+      applyComfyNodeSize(markerNode, sizeVec, rendererPolicy, logger);
 
       createdMarkers.set(alias, markerNode);
       updateBoundsWithNode(bounds, markerNode);
@@ -965,6 +956,14 @@ async function applyPreparedImport(
         );
       }
     }
+
+    bounds.minX = Infinity;
+    bounds.minY = Infinity;
+    bounds.maxX = -Infinity;
+    bounds.maxY = -Infinity;
+    for (const node of [...createdNodes.values(), ...createdMarkers.values()]) {
+      updateBoundsWithNode(bounds, node);
+    }
   } catch (error: unknown) {
     const message = readErrorMessage(error);
     result.message = message;
@@ -996,6 +995,7 @@ async function applyPreparedImport(
     ...(payload.cube ? { cube: payload.cube } : {}),
     ...(isRecord(payload.revision) ? { revision: payload.revision } : {}),
   });
+  ui.rendererGeometry.scheduleStabilization([...createdNodes.values(), ...createdMarkers.values()]);
   result.summary = `nodes ${result.nodesAdded}, markers ${result.markersAdded}, links ${result.connectionsMade}`;
   result.success = result.nodesAdded + result.markersAdded > 0;
   ui.instanceManager.refresh({ graph, reason: 'import', force: true });

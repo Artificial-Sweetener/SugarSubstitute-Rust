@@ -305,4 +305,135 @@ describe('InstanceManager metadata', () => {
     expect(targetGroup.pos[1]).toBe(bounds.y);
     expect(targetGroup.size[1]).toBe(bounds.h);
   });
+
+  test('preserves authored group geometry while refreshing a placed instance', () => {
+    const cubeId = 'local/authored';
+    const inputMarker = makeMarker({
+      id: 20,
+      type: 'SugarCubes.CubeInput',
+      cubeId,
+      defaultAlias: 'Authored',
+      instanceId: 'inst-authored',
+      alias: 'Authored',
+    });
+    const outputMarker = makeMarker({
+      id: 21,
+      type: 'SugarCubes.CubeOutput',
+      cubeId,
+      defaultAlias: 'Authored',
+      instanceId: 'inst-authored',
+      alias: 'Authored',
+    });
+    const node = makeInternalNode(22);
+    inputMarker.pos = [0, 0];
+    inputMarker.size = [320, 90];
+    outputMarker.pos = [1000, 0];
+    outputMarker.size = [300, 130];
+    node.pos = [690, 0];
+    node.size = [290, 620];
+
+    const links = {
+      31: { id: 31, origin_id: inputMarker.id, origin_slot: 0, target_id: node.id, target_slot: 0 },
+      32: {
+        id: 32,
+        origin_id: node.id,
+        origin_slot: 0,
+        target_id: outputMarker.id,
+        target_slot: 0,
+      },
+    };
+    inputMarker.outputs[0].links.push(31);
+    node.inputs[0].link = 31;
+    node.outputs[0].links.push(32);
+    outputMarker.inputs[0].link = 32;
+
+    const targetGroup: ComfyGroup = {
+      title: 'Authored',
+      pos: [-10, -60],
+      size: [1320, 860],
+      properties: {
+        sugarcubes: {
+          schema: 5,
+          managed: true,
+          instance_id: 'inst-authored',
+          cube_id: cubeId,
+          default_alias: 'Authored',
+          instance_alias: 'Authored',
+          markers: { inputs: [inputMarker.id], outputs: [outputMarker.id] },
+          nodes: [node.id],
+          bounds: {
+            x: -10,
+            y: -60,
+            w: 1320,
+            h: 860,
+            padding: { x: 2, y: 2, top_extra: 0 },
+            header: { height: 32 },
+          },
+          authored_layout: {
+            schema: 1,
+            origin: [0, 0],
+            entries: {
+              'input.value': {
+                x: 0,
+                y: 0,
+                w: 320,
+                h: 90,
+                collapsed: false,
+                title: 'IMAGE Input',
+              },
+              detailer: {
+                x: 690,
+                y: 0,
+                w: 290,
+                h: 620,
+                collapsed: false,
+                title: 'Detailer',
+              },
+              'output.image': {
+                x: 1000,
+                y: 0,
+                w: 300,
+                h: 130,
+                collapsed: false,
+                title: 'IMAGE Output',
+              },
+            },
+            group: { x: -10, y: -60, w: 1320, h: 860 },
+          },
+        },
+      },
+    };
+    const graph = {
+      _nodes: [inputMarker, outputMarker, node],
+      _groups: [targetGroup],
+      links,
+      remove: jest.fn(),
+    };
+    for (const entry of graph._nodes) entry.graph = graph;
+
+    class LGraphGroup implements ComfyGroup {
+      [key: string]: unknown;
+      title = '';
+      pos: number[] = [0, 0];
+      size: number[] = [640, 480];
+      properties = {};
+    }
+    const manager = new InstanceManager({
+      adapter: { getLiteGraph: () => ({ LGraphGroup }) },
+      events: { emit: jest.fn() },
+      scheduler: { raf: (callback) => (callback(0), 1) },
+      requestDirtyRefresh: jest.fn(),
+    });
+
+    manager.refresh({ graph, force: true });
+
+    expect(targetGroup.pos).toEqual([-10, -60]);
+    expect(targetGroup.size).toEqual([1320, 860]);
+    expect(getGroupSugarcubes(targetGroup)?.bounds).toMatchObject({
+      x: -10,
+      y: -60,
+      w: 1320,
+      h: 860,
+    });
+  });
 });
