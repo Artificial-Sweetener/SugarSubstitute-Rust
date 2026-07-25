@@ -182,20 +182,19 @@ def build_graph(
         if not isinstance(node_id, str):
             raise TypeError("Prompt node ids must be strings")
 
-        if not node_id.isdigit():
-            # Non-numeric keys (e.g. 'workflow', 'output') are metadata in the modern ComfyUI prompt
-            continue
-
         if not isinstance(node_data, Mapping):
-            raise TypeError(f"Node '{node_id}' payload must be a mapping")
+            if node_id.isdigit():
+                raise TypeError(f"Node '{node_id}' payload must be a mapping")
+            continue
 
         class_type = node_data.get("class_type")
 
         if not isinstance(class_type, str):
-            if node_id == "workflow":
-                # ComfyUI (Sept 2025) wraps graph metadata under a workflow key
-                continue
-            raise TypeError(f"Node '{node_id}' is missing a string class_type")
+            if node_id.isdigit():
+                raise TypeError(f"Node '{node_id}' is missing a string class_type")
+            # Modern Comfy prompt metadata uses non-numeric keys while flattened
+            # native subgraphs use colon-delimited execution ids.
+            continue
 
         inputs = node_data.get("inputs", {})
 

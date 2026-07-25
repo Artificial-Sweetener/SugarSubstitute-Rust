@@ -97,77 +97,18 @@ async function loadUi() {
   return import(`../../web/comfyui/ui.js${cacheBust}`);
 }
 
-function createGraphWithMarkers(): TestGraph {
+function createTestGraph(): TestGraph {
   const graph = {
     _nodes: [] as ComfyNode[],
     links: {} as Record<string, ComfyLink>,
     getLink: (id: GraphId) => graph.links[String(id)] || null,
   };
-  const source: ComfyNode = {
-    id: 1,
-    type: 'KSampler',
-    pos: [0, 0],
-    size: [100, 50],
-    outputs: [{ type: 'IMAGE', links: [] }],
-    inputs: [],
-    graph,
-  };
-  const outputMarker: ComfyNode = {
-    id: 2,
-    type: 'SugarCubes.CubeOutput',
-    pos: [120, 0],
-    size: [80, 40],
-    inputs: [{ type: 'IMAGE', link: 1 }],
-    outputs: [{ type: 'IMAGE', links: [] }],
-    widgets: [{ name: 'cube_id', value: 'local/example-user/out.cube' }],
-    graph,
-    getConnectionPos: (isInput: boolean, _slot: number, out?: Float32Array) => {
-      const pos = isInput ? [120, 20] : [200, 20];
-      if (out) {
-        out[0] = pos[0];
-        out[1] = pos[1];
-        return out;
-      }
-      return pos;
-    },
-  };
-  const inputMarker: ComfyNode = {
-    id: 3,
-    type: 'SugarCubes.CubeInput',
-    pos: [200, 0],
-    size: [80, 40],
-    inputs: [{ type: 'IMAGE', link: null }],
-    outputs: [{ type: 'IMAGE', links: [] }],
-    widgets: [{ name: 'cube_id', value: 'local/example-user/in.cube' }],
-    graph,
-    getConnectionPos: (isInput: boolean, _slot: number, out?: Float32Array) => {
-      const pos = isInput ? [200, 20] : [280, 20];
-      if (out) {
-        out[0] = pos[0];
-        out[1] = pos[1];
-        return out;
-      }
-      return pos;
-    },
-  };
-
-  graph.links[1] = {
-    id: 1,
-    origin_id: source.id,
-    origin_slot: 0,
-    target_id: outputMarker.id,
-    target_slot: 0,
-    type: 'IMAGE',
-  };
-  source.outputs![0]!.links!.push(1);
-
-  graph._nodes.push(source, outputMarker, inputMarker);
   return graph;
 }
 
 beforeEach(() => {
   app.reset();
-  app.graph = createGraphWithMarkers();
+  app.graph = createTestGraph();
   const ctx = {
     save: () => {},
     restore: () => {},
@@ -216,14 +157,152 @@ beforeEach(() => {
 });
 
 describe('ui overlay rendering', () => {
-  test('drawConnections renders proximity overlay links', async () => {
+  test('drawConnections does not fabricate Cube links before a container runtime exists', async () => {
     await loadUi();
     const extension = app._extensions[0];
     await extension.setup!();
 
     testCanvas().drawConnections(testCanvas().__testCtx);
 
-    expect(testCanvas().renderLink).toHaveBeenCalled();
+    expect(testCanvas().renderLink).not.toHaveBeenCalled();
+  });
+
+  test('paints proximity through the stable canvas background hook', async () => {
+    const { OverlayManager } = await import('../../frontend/comfyui/ui/overlays/OverlayManager.js');
+    const outputNode: ComfyNode = {
+      id: 'output',
+      graph: app.graph,
+      outputs: [{ name: 'image', type: 'IMAGE' }],
+    };
+    const inputNode: ComfyNode = {
+      id: 'input',
+      graph: app.graph,
+      inputs: [{ name: 'image', type: 'IMAGE' }],
+    };
+    const manager = new OverlayManager({
+      adapter: {
+        getApp: () => app as unknown as ComfyApplication,
+        getLiteGraph: () => globalThis.LiteGraph,
+        getConsole: () => console,
+      },
+    });
+    manager.proximity.setEndpointSource({
+      discover: () => ({
+        outputs: [
+          {
+            key: 'output',
+            endpointId: 'output',
+            node: outputNode,
+            slot: 0,
+            cube: 'cube-output',
+            instanceId: 'output',
+            alias: 'image',
+            type: 'IMAGE',
+            slotPos: [0, 20],
+            slotName: 'image',
+            originId: 'output:leaf',
+            originSlot: 0,
+          },
+        ],
+        inputs: [
+          {
+            key: 'input',
+            endpointId: 'input',
+            node: inputNode,
+            slot: 0,
+            cube: 'cube-input',
+            instanceId: 'input',
+            alias: 'image',
+            type: 'IMAGE',
+            slotPos: [80, 20],
+            slotName: 'image',
+            promptTargets: [{ nodeId: 'input:leaf', inputSlot: 0, inputName: 'image' }],
+          },
+        ],
+      }),
+    });
+    manager.proximity.runPreview({ graph: app.graph });
+    manager.ensureOverlayHook();
+
+    const drawBackground = testCanvas().onDrawBackground;
+    expect(typeof drawBackground).toBe('function');
+    Reflect.apply(drawBackground as (...args: unknown[]) => unknown, testCanvas(), [
+      testCanvas().__testCtx,
+    ]);
+
+    expect(testCanvas().renderLink).toHaveBeenCalledTimes(1);
+  });
+
+  test('refreshes proximity endpoints after Nodes 2.0 moves a real graph node', async () => {
+    const { OverlayManager } = await import('../../frontend/comfyui/ui/overlays/OverlayManager.js');
+    const canvasElement = document.createElement('canvas');
+    testCanvas().canvas = canvasElement;
+    const outputNode: ComfyNode = {
+      id: 'output',
+      graph: app.graph,
+      outputs: [{ name: 'image', type: 'IMAGE' }],
+    };
+    const inputNode: ComfyNode = {
+      id: 'input',
+      graph: app.graph,
+      inputs: [{ name: 'image', type: 'IMAGE' }],
+    };
+    let inputPosition: Vec2 = [80, 20];
+    const manager = new OverlayManager({
+      adapter: {
+        getApp: () => app as unknown as ComfyApplication,
+        getLiteGraph: () => globalThis.LiteGraph,
+        getConsole: () => console,
+      },
+      scheduler: {
+        raf: (callback) => {
+          callback(0);
+          return 1;
+        },
+        timeout: () => 1,
+      },
+    });
+    manager.proximity.setEndpointSource({
+      discover: () => ({
+        outputs: [
+          {
+            key: 'output',
+            endpointId: 'output',
+            node: outputNode,
+            slot: 0,
+            cube: 'cube-output',
+            instanceId: 'output',
+            alias: 'image',
+            type: 'IMAGE',
+            slotPos: [0, 20],
+            slotName: 'image',
+            originId: 'output:leaf',
+            originSlot: 0,
+          },
+        ],
+        inputs: [
+          {
+            key: 'input',
+            endpointId: 'input',
+            node: inputNode,
+            slot: 0,
+            cube: 'cube-input',
+            instanceId: 'input',
+            alias: 'image',
+            type: 'IMAGE',
+            slotPos: inputPosition,
+            slotName: 'image',
+            promptTargets: [{ nodeId: 'input:leaf', inputSlot: 0, inputName: 'image' }],
+          },
+        ],
+      }),
+    });
+    manager.ensureGraphHooks();
+    inputPosition = [120, 40];
+
+    canvasElement.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+
+    expect(manager.proximity.overlayMatches[0]?.inputPos).toEqual([120, 40]);
   });
 
   test('chrome overlay does not create DOM roots', async () => {
@@ -1343,100 +1422,152 @@ describe('ui overlay rendering', () => {
     expect(drawCubeIconSpy).toHaveBeenCalled();
   });
 
-  test('proximity overlay matches across instances of same cube id', () => {
+  test('proximity overlay matches compatible Cube node boundaries', () => {
     const adapter = {
       getLiteGraph: () => ({ isValidConnection: () => true }),
       getConsole: () => console,
     };
     const overlay = new ProximityOverlay({ adapter });
-    const graph: TestGraph = {
-      _nodes: [],
-      links: {},
-      getLink(id: GraphId) {
-        return this.links[String(id)] || null;
-      },
-    };
-    graph.links[1] = { id: 1, origin_id: 100, origin_slot: 0, target_id: 1, target_slot: 0 };
+    overlay.setEndpointSource({
+      discover: () => ({
+        outputs: [
+          {
+            key: 'cube-output',
+            endpointId: 'cube-output',
+            slot: 0,
+            cube: 'out-definition',
+            instanceId: 'output-container',
+            alias: 'image',
+            type: 'IMAGE',
+            slotPos: [80, 20],
+            slotName: 'image',
+            originId: 'cube@output-container|inner-output',
+            originSlot: 0,
+          },
+        ],
+        inputs: [
+          {
+            key: 'cube-input',
+            endpointId: 'cube-input',
+            slot: 0,
+            cube: 'in-definition',
+            instanceId: 'input-container',
+            alias: 'image',
+            type: 'IMAGE',
+            slotPos: [120, 20],
+            slotName: 'image',
+            promptTargets: [
+              {
+                nodeId: 'cube@input-container|inner-input',
+                inputSlot: 0,
+                inputName: 'image',
+              },
+            ],
+          },
+        ],
+      }),
+    });
 
-    const outputMarker: ComfyNode = {
-      id: 1,
-      type: 'SugarCubes.CubeOutput',
-      pos: [0, 0],
-      size: [80, 40],
-      inputs: [{ type: 'IMAGE', link: 1 }],
-      outputs: [{ type: 'IMAGE', links: [] }],
-      widgets: [
-        { name: 'cube_id', value: 'cube-1' },
-        { name: 'instance_id', value: 'inst-a' },
-      ],
-      graph,
-    };
-    const inputMarker: ComfyNode = {
-      id: 2,
-      type: 'SugarCubes.CubeInput',
-      pos: [120, 0],
-      size: [80, 40],
-      inputs: [{ type: 'IMAGE', link: null }],
-      outputs: [],
-      widgets: [
-        { name: 'cube_id', value: 'cube-1' },
-        { name: 'instance_id', value: 'inst-b' },
-      ],
-      graph,
-    };
-    graph._nodes.push(outputMarker, inputMarker);
-
-    const matches = overlay.computeMatches(graph, { radius: 200, strict: true });
+    const matches = overlay.computeMatches(createTestGraph(), { radius: 200, strict: true });
 
     expect(matches.length).toBe(1);
-    expect(matches[0]!.outputId).toBe(1);
-    expect(matches[0]!.inputId).toBe(2);
+    expect(matches[0]!.outputId).toBe('cube-output');
+    expect(matches[0]!.inputId).toBe('cube-input');
   });
 
-  test('proximity overlay ignores same-instance markers', () => {
+  test('prompt-effective proximity routes survive visual overlay refreshes', () => {
+    const overlay = new ProximityOverlay();
+    const match: ProximityMatch = {
+      outputId: 10,
+      outputSlot: 0,
+      outputPos: [0, 0],
+      inputId: 20,
+      inputSlot: 0,
+      inputName: 'image',
+      inputPos: [10, 0],
+      originId: '10:producer',
+      originSlot: 1,
+      promptTargets: [{ nodeId: '20:consumer', inputSlot: 0, inputName: 'image' }],
+      distance: 10,
+    };
+    jest.spyOn(overlay, 'computeMatches').mockReturnValue([match]);
+
+    const result = overlay.applyProximityToPrompt({
+      output: {
+        '10:producer': { inputs: {}, class_type: 'Producer' },
+        '20:consumer': { inputs: {}, class_type: 'Consumer' },
+      },
+    });
+
+    expect(result).toEqual({
+      output: {
+        '10:producer': { inputs: {}, class_type: 'Producer' },
+        '20:consumer': {
+          inputs: { image: ['10:producer', 1] },
+          class_type: 'Consumer',
+        },
+      },
+    });
+    expect(overlay.promptMatches).toEqual([match]);
+
+    overlay.updateOverlay([]);
+
+    expect(overlay.overlayMatches).toEqual([]);
+    expect(overlay.promptMatches).toEqual([match]);
+
+    overlay.settings.enabled = false;
+    overlay.applyProximityToPrompt(result);
+
+    expect(overlay.promptMatches).toEqual([]);
+  });
+
+  test('proximity overlay does not connect one Cube node to itself', () => {
     const adapter = {
       getLiteGraph: () => ({ isValidConnection: () => true }),
       getConsole: () => console,
     };
     const overlay = new ProximityOverlay({ adapter });
-    const graph: TestGraph = {
-      _nodes: [],
-      links: {},
-      getLink(id: GraphId) {
-        return this.links[String(id)] || null;
-      },
-    };
-    graph.links[1] = { id: 1, origin_id: 100, origin_slot: 0, target_id: 1, target_slot: 0 };
+    overlay.setEndpointSource({
+      discover: () => ({
+        outputs: [
+          {
+            key: 'output',
+            endpointId: 'cube',
+            slot: 0,
+            cube: 'definition',
+            instanceId: 'same-container',
+            alias: 'image',
+            type: 'IMAGE',
+            slotPos: [80, 20],
+            slotName: 'image',
+            originId: 'cube@same-container|inner',
+            originSlot: 0,
+          },
+        ],
+        inputs: [
+          {
+            key: 'input',
+            endpointId: 'cube',
+            slot: 0,
+            cube: 'definition',
+            instanceId: 'same-container',
+            alias: 'image',
+            type: 'IMAGE',
+            slotPos: [0, 20],
+            slotName: 'image',
+            promptTargets: [
+              {
+                nodeId: 'cube@same-container|inner',
+                inputSlot: 0,
+                inputName: 'image',
+              },
+            ],
+          },
+        ],
+      }),
+    });
 
-    const outputMarker: ComfyNode = {
-      id: 1,
-      type: 'SugarCubes.CubeOutput',
-      pos: [0, 0],
-      size: [80, 40],
-      inputs: [{ type: 'IMAGE', link: 1 }],
-      outputs: [{ type: 'IMAGE', links: [] }],
-      widgets: [
-        { name: 'cube_id', value: 'cube-1' },
-        { name: 'instance_id', value: 'inst-a' },
-      ],
-      graph,
-    };
-    const inputMarker: ComfyNode = {
-      id: 2,
-      type: 'SugarCubes.CubeInput',
-      pos: [120, 0],
-      size: [80, 40],
-      inputs: [{ type: 'IMAGE', link: null }],
-      outputs: [],
-      widgets: [
-        { name: 'cube_id', value: 'cube-1' },
-        { name: 'instance_id', value: 'inst-a' },
-      ],
-      graph,
-    };
-    graph._nodes.push(outputMarker, inputMarker);
-
-    const matches = overlay.computeMatches(graph, { radius: 200, strict: true });
+    const matches = overlay.computeMatches(createTestGraph(), { radius: 200, strict: true });
 
     expect(matches.length).toBe(0);
   });

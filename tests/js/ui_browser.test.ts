@@ -344,6 +344,22 @@ describe('ui browser behaviors', () => {
     restore();
   });
 
+  test('browser header starts native Cube authoring from the current selection', async () => {
+    const restore = silenceConsole();
+    const container = await mountSidebar();
+    if (!loadedUi) throw new Error('SugarCubes UI module is not loaded');
+    const createCube = jest
+      .spyOn(loadedUi.cubeCreation, 'startCreateCubeFromSelection')
+      .mockResolvedValue(null);
+
+    const createButton = requiredElement(container, '.sugarcubes-browser__create-from-selection');
+    expect(createButton.getAttribute('aria-label')).toBe('Create Cube from selected nodes');
+
+    createButton.click();
+    expect(createCube).toHaveBeenCalledTimes(1);
+    restore();
+  });
+
   test('zebra row styles do not override hover and selected row colors', async () => {
     const restore = silenceConsole();
     await mountSidebar();

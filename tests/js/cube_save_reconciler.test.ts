@@ -15,6 +15,10 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { describe, expect, jest, test } from '@jest/globals';
 import { CubeSaveReconciler } from '../../frontend/comfyui/ui/save/CubeSaveReconciler.js';
+import { ComfyCubeSaveAdapter } from '../../frontend/comfyui/ui/cube/node/ComfyCubeSaveAdapter.js';
+import type { NativeCubeSubgraph } from '../../frontend/comfyui/ui/cube/ComfyCubeGraphBuilder.js';
+import type { CubeNode } from '../../frontend/comfyui/ui/cube/node/ComfyCubeNodeFactory.js';
+import { CubeNodeCatalog } from '../../frontend/comfyui/ui/cube/node/CubeNodeCatalog.js';
 
 function markerNode() {
   const values = {
@@ -108,5 +112,72 @@ describe('CubeSaveReconciler', () => {
         fallbackCubeIds: ['local/author/Model/Test.cube'],
       }),
     ).rejects.toThrow('missing finalized definitions');
+  });
+
+  test('reconciles finalized identity directly onto a Cube node', async () => {
+    const cubeId = 'local/author/Model/Native.cube';
+    const subgraph = {
+      id: 'native-definition',
+      name: 'Cube: Native',
+      extra: {},
+    } as unknown as NativeCubeSubgraph;
+    const cube: CubeNode = {
+      id: 'root-node-81',
+      type: subgraph.id,
+      title: 'Native',
+      pos: [0, 0],
+      size: [720, 480],
+      properties: {
+        sugarcubes_kind: 'cube',
+        sugarcubes_cube: {
+          instance_id: 'container-81',
+          cube_id: cubeId,
+          default_alias: 'Native',
+          cube_version: '1.0.0',
+        },
+        sugarcubes_surface: {},
+      },
+      inputs: [],
+      outputs: [],
+      subgraph,
+      isSubgraphNode: () => true,
+      connect() {},
+      serialize: () => ({}),
+    };
+    const nodes = new CubeNodeCatalog();
+    nodes.add(cube);
+    const definition = {
+      cube: {
+        cube_id: cubeId,
+        version: '1.1.0',
+      },
+      nodes: [],
+      markers: [],
+      connections: [],
+      layout: { groups: [] },
+    };
+    const reconciler = new CubeSaveReconciler({
+      definitionStore: {
+        publishFinalized: jest.fn((_request, payload) => payload),
+      },
+      cubeNodeSave: new ComfyCubeSaveAdapter({ getCatalog: () => nodes }),
+    });
+
+    await reconciler.reconcile({
+      graph: { _nodes: [] },
+      saved: [{ cube_id: cubeId, definition }],
+      markerIdsByCubeId: {},
+      cubeNodeInstanceIdsByCubeId: { [cubeId]: ['container-81'] },
+    });
+
+    expect(cube.properties.sugarcubes_cube).toMatchObject({
+      cube_id: cubeId,
+      cube_version: '1.1.0',
+      cube_revision_ref: 'WORKTREE',
+      cube_definition_key: `${cubeId}@1.1.0`,
+    });
+    expect((cube.subgraph.extra as Record<string, unknown>).sugarcubes_cube).toEqual(
+      cube.properties.sugarcubes_cube,
+    );
   });
 });

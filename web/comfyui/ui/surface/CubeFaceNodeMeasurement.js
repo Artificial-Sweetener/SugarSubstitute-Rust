@@ -1,0 +1,74 @@
+//    SugarCubes - composable workflow units for ComfyUI
+//    Copyright (C) 2026  Artificial Sweetener and contributors
+//
+//    This program is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU Affero General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU Affero General Public License for more details.
+//
+//    You should have received a copy of the GNU Affero General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/** Measure Nodes 1.0 face bodies without mutating graph-owned slot collections. */
+import { isRecord } from '../types/common.js';
+import { cubeFaceNodeHasVisibleWidgets } from './CubeFaceNodePresentationPolicy.js';
+const HEADER_ONLY_BODY_HEIGHT = 1;
+const LEGACY_SLOT_HEIGHT = 20;
+const LEGACY_WIDGET_HEIGHT = 20;
+const LEGACY_WIDGET_GAP = 4;
+const LEGACY_WIDGET_PADDING = 8;
+const LEGACY_NODE_MARGIN = 6;
+/** Measure the native expanded widget body while excluding graph boundary rows. */
+export function measureCubeFaceNodeBodyHeight(node) {
+    if (!cubeFaceNodeHasVisibleWidgets(node))
+        return HEADER_ONLY_BODY_HEIGHT;
+    const width = positiveNumber(node.size?.[0]) ?? 200;
+    let widgetsHeight = LEGACY_WIDGET_PADDING;
+    for (const widget of visibleWidgets(node)) {
+        widgetsHeight += measureWidgetHeight(widget, node, width) + LEGACY_WIDGET_GAP;
+    }
+    const constructorState = Reflect.get(node, 'constructor');
+    const slotStart = nonNegativeNumber(readMember(constructorState, 'slot_start_y')) ?? 0;
+    const minimumHeight = nonNegativeNumber(readMember(constructorState, 'min_height')) ?? 0;
+    return (Math.max(slotStart + LEGACY_SLOT_HEIGHT, widgetsHeight, minimumHeight) + LEGACY_NODE_MARGIN);
+}
+/** Return only widgets Comfy currently presents on the real graph node. */
+function visibleWidgets(node) {
+    const widgets = node.widgets ?? [];
+    const isWidgetVisible = node.isWidgetVisible;
+    if (typeof isWidgetVisible !== 'function')
+        return widgets;
+    return widgets.filter((widget) => isWidgetVisible.call(node, widget) !== false);
+}
+/** Measure one native widget through its current Comfy sizing primitive. */
+function measureWidgetHeight(widget, node, width) {
+    if (typeof widget.computeSize === 'function') {
+        const size = widget.computeSize(width);
+        if (Array.isArray(size))
+            return positiveNumber(size[1]) ?? LEGACY_WIDGET_HEIGHT;
+    }
+    if (typeof widget.computeLayoutSize === 'function') {
+        const size = widget.computeLayoutSize(node);
+        if (isRecord(size))
+            return positiveNumber(size.minHeight) ?? LEGACY_WIDGET_HEIGHT;
+    }
+    return LEGACY_WIDGET_HEIGHT;
+}
+/** Narrow one dynamic positive dimension. */
+function positiveNumber(value) {
+    return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
+}
+/** Narrow one dynamic non-negative dimension. */
+function nonNegativeNumber(value) {
+    return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+}
+/** Read one dynamic object or constructor member. */
+function readMember(value, key) {
+    if (typeof value === 'function' || isRecord(value))
+        return Reflect.get(value, key);
+    return undefined;
+}

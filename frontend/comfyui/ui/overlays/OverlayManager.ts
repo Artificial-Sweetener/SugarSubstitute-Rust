@@ -32,7 +32,9 @@ import type { CubeContainmentService } from '../layout/CubeContainmentService.js
 import type { CubeCollisionService } from '../layout/CubeCollisionService.js';
 import type { CubeBoundsReconciler } from '../layout/CubeBoundsReconciler.js';
 import type { ChromeMetadata } from './CubeChromeOverlay.js';
+import type { CubeFaceChromeMetadata } from '../surface/CubeFaceChromeActions.js';
 import { createCubeSourceResolver } from './CubeSourceResolver.js';
+import { ProximityPointerMoveTracker } from './proximity/ProximityPointerMoveTracker.js';
 
 type PlacementOptions = NonNullable<ConstructorParameters<typeof PlacementOverlay>[0]>;
 
@@ -92,7 +94,6 @@ export interface OverlayManagerOptions {
   events?: OverlayEvents | null;
   scheduler?: OverlayScheduler | null;
   storage?: NonNullable<ConstructorParameters<typeof ProximityOverlay>[0]>['storage'];
-  api?: NonNullable<ConstructorParameters<typeof ProximityOverlay>[0]>['api'];
   cubeApi?: PlacementOptions['cubeApi'];
   cubeBrowser?: (PlacementOptions['cubeBrowser'] & CubeCatalog) | null;
   saveService?: SaveService | null;
@@ -169,11 +170,6 @@ interface HookedDrawCallback {
 }
 
 interface MutablePrototype extends UnknownRecord {
-  drawConnections?: (
-    this: OverlayCanvas,
-    ctx: CanvasRenderingContext2D,
-    ...args: unknown[]
-  ) => unknown;
   drawForeground?: (
     this: OverlayCanvas,
     ctx: CanvasRenderingContext2D,
@@ -212,6 +208,7 @@ export class OverlayManager {
   private readonly events: OverlayEvents | null;
   private readonly scheduler: OverlayScheduler | null;
   readonly proximity: ProximityOverlay;
+  private readonly proximityPointerMoves: ProximityPointerMoveTracker;
   readonly placement: PlacementOverlay;
   private readonly layoutService: LayoutCoordinator | null;
   private readonly chrome: CubeChromeOverlay;
@@ -237,7 +234,6 @@ export class OverlayManager {
     events = null,
     scheduler = null,
     storage = null,
-    api = null,
     cubeApi = null,
     cubeBrowser = null,
     saveService = null,
@@ -260,8 +256,8 @@ export class OverlayManager {
       events,
       scheduler,
       storage,
-      api,
     });
+    this.proximityPointerMoves = new ProximityPointerMoveTracker(this.proximity);
     this.placement = new PlacementOverlay({
       adapter,
       events,
@@ -491,8 +487,19 @@ export class OverlayManager {
     return this.chrome.getDebugState();
   }
 
+  /** Open the existing Cube menu for a first-class Cube node titlebar. */
+  openCubeMenu(metadata: CubeFaceChromeMetadata, event: MouseEvent): void {
+    const liteGraph = typeof globalThis !== 'undefined' ? globalThis.LiteGraph : null;
+    if (!liteGraph?.ContextMenu) return;
+    const options = this.chrome.buildMenuOptions({
+      metadata: metadata as ChromeMetadata,
+      isDirty: Boolean(metadata.dirty),
+      flavors: [],
+    });
+    new liteGraph.ContextMenu(options, { event });
+  }
+
   setup(): void {
-    this.proximity.installInterceptors();
     this.chrome.setup();
     this.ensureOverlayHook();
     this.startOverlayWatchdog();
@@ -542,28 +549,6 @@ export class OverlayManager {
     const canvasProto =
       (liteGraph?.LGraphCanvas?.prototype as MutablePrototype | undefined) ?? null;
     const manager = this;
-    if (canvasProto && typeof canvasProto.drawConnections === 'function') {
-      if (!canvasProto.__sugarcubes_proximity_hooked) {
-        canvasProto.__sugarcubes_proximity_hooked = true;
-        const originalDrawConnections = canvasProto.drawConnections;
-        canvasProto.drawConnections = function drawConnections(
-          this: OverlayCanvas,
-          ctx: CanvasRenderingContext2D,
-          ...args: unknown[]
-        ) {
-          const result = originalDrawConnections.call(this, ctx, ...args);
-          try {
-            manager.proximity.render(ctx, this);
-          } catch (error) {
-            manager.adapter
-              ?.getConsole?.()
-              ?.error?.('SugarCubes: drawConnections overlay failed', error);
-          }
-          return result;
-        };
-      }
-      this.overlayDrawHooked = true;
-    }
     if (canvasProto && typeof canvasProto.drawForeground === 'function') {
       if (!canvasProto.__sugarcubes_overlay_hooked) {
         canvasProto.__sugarcubes_overlay_hooked = true;
@@ -624,7 +609,12 @@ export class OverlayManager {
           ?.getConsole?.()
           ?.error?.('SugarCubes: onDrawBackground wrapper failed', error);
       }
-      manager.placement.render(ctx, this);
+      try {
+        manager.proximity.render(ctx, this);
+        manager.placement.render(ctx, this);
+      } catch (error) {
+        manager.adapter?.getConsole?.()?.error?.('SugarCubes: background overlays failed', error);
+      }
     };
     wrappedBackground.__sugarcubes_overlay_hooked = true;
     canvas.onDrawBackground = wrappedBackground;
@@ -1047,6 +1037,7 @@ export class OverlayManager {
     const manager = this;
 
     const canvasElement = (canvas.canvas as HookedCanvasElement | undefined) ?? null;
+    if (canvasElement) this.proximityPointerMoves.attach(canvasElement, canvas);
     if (canvasElement && !canvasElement.__sugarcubes_chrome_listener) {
       const handler = (event: MouseEvent | PointerEvent): boolean => {
         if (manager.chrome?.handleMouseDown?.(event, canvas)) {
@@ -1198,13 +1189,7 @@ export class OverlayManager {
         }
         graph[key] = function wrappedGraphHook(this: ComfyGraph, ...args: unknown[]) {
           const result = original.call(this, ...args);
-          const changedNode = isRecord(args[0]) ? args[0] : null;
-          if (
-            manager.proximity.isOverlayEnabled() &&
-            key === 'onNodeConnectionChange' &&
-            (changedNode?.type === 'SugarCubes.CubeInput' ||
-              changedNode?.type === 'SugarCubes.CubeOutput')
-          ) {
+          if (manager.proximity.isOverlayEnabled() && key === 'onNodeConnectionChange') {
             manager.proximity.schedulePreview({ immediate: true, graph: this });
           }
           manager.requestDirtyRefresh?.({ graph: this, reason: key });

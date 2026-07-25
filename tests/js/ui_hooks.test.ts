@@ -296,7 +296,7 @@ describe('ui hooks and scheduling', () => {
     expect(payload.markers[0].widget_values.instance_id).toBe('legacy-inst');
   });
 
-  test('overlay hooks wrap drawConnections and drawForeground', async () => {
+  test('overlay hook leaves native connection drawing untouched', async () => {
     const proto = TestLGraphCanvas.prototype;
     const originalConnections = proto.drawConnections;
     const originalForeground = proto.drawForeground;
@@ -305,25 +305,27 @@ describe('ui hooks and scheduling', () => {
     const extension = app._extensions[0];
     await extension.setup!();
 
-    expect(proto.__sugarcubes_proximity_hooked).toBe(true);
+    expect(proto.__sugarcubes_proximity_hooked).toBeUndefined();
     expect(proto.__sugarcubes_overlay_hooked).toBe(true);
-    expect(proto.drawConnections).not.toBe(originalConnections);
+    expect(proto.drawConnections).toBe(originalConnections);
     expect(proto.drawForeground).not.toBe(originalForeground);
   });
 
-  test('connection hook triggers proximity preview only for cube markers', async () => {
-    const setDirty = hookedCanvas().setDirty;
+  test('connection hook refreshes container proximity for native graph changes', async () => {
     await loadUi();
     const extension = app._extensions[0];
     await extension.setup!();
-
-    setDirty.mockClear();
+    const ui = await getRuntimeSugarCubesUI();
+    const schedulePreview = jest
+      .spyOn(ui.overlayManager.proximity, 'schedulePreview')
+      .mockImplementation(() => {});
 
     hookedGraph().onNodeConnectionChange({ type: 'KSampler' });
-    expect(setDirty).not.toHaveBeenCalled();
-
-    hookedGraph().onNodeConnectionChange({ type: 'SugarCubes.CubeInput' });
-    expect(setDirty).toHaveBeenCalled();
+    expect(schedulePreview).toHaveBeenCalledTimes(1);
+    expect(schedulePreview).toHaveBeenCalledWith({
+      graph: hookedGraph(),
+      immediate: true,
+    });
   });
 
   test('node moved triggers containment before collision and dedupes per raf', async () => {

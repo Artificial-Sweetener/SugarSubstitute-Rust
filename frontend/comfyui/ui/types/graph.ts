@@ -56,6 +56,7 @@ export interface ComfyNode {
   id?: GraphId;
   type?: string;
   class_type?: string;
+  mode?: unknown;
   title?: string;
   pos?: Vec2 | NumericVector;
   size?: Vec2 | NumericVector;
@@ -66,10 +67,13 @@ export interface ComfyNode {
   flags?: UnknownRecord;
   widgets_values?: unknown[];
   graph?: ComfyGraph | null;
+  isSubgraphNode?(): boolean;
   getBounding?(): number[];
   computeSize?(minimum?: number[]): number[];
+  setPos?(x: number, y: number): void;
   setSize?(size: number[]): void;
   onResize?(size: number[]): void;
+  getSlotPosition?(slot: number, isInput: boolean): unknown;
   getConnectionPos?(isInput: boolean, slot: number, output?: Float32Array): unknown;
   [key: string]: unknown;
 }
@@ -99,6 +103,7 @@ export interface ComfyLink {
 }
 
 export interface ComfyGraph {
+  id?: GraphId;
   _nodes?: ComfyNode[];
   nodes?: ComfyNode[];
   _groups?: ComfyGroup[];

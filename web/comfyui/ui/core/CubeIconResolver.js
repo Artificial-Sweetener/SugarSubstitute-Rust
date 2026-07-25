@@ -175,6 +175,13 @@ export function createCubeIconElement(documentRef, source = {}, className = 'sug
         return null;
     }
     const model = resolveCubeIconModel(source);
+    return createResolvedCubeIconElement(doc, model, className);
+}
+/**
+ * Build a DOM icon node from one already-resolved shared icon model.
+ */
+export function createResolvedCubeIconElement(documentRef, model, className = 'sugarcubes-cube-icon') {
+    const doc = documentRef;
     const root = doc.createElement('span');
     root.className = className;
     if (model.kind === 'asset' && model.url) {

@@ -250,9 +250,10 @@ class _ImageBatch(Protocol):
 
 
 class CubeInput:
-    """Marker node that marks the start of a SugarCube subgraph."""
+    """Load legacy marker workflows before frontend Cube migration."""
 
     CATEGORY = "SugarCubes/Markers"
+    DEPRECATED = True
     GRAPH_PASSTHROUGH_OUTPUTS = {0: "value"}
     RETURN_TYPES: tuple[AnyType, ...] = (ANY,)
     RETURN_NAMES = ("value",)
@@ -289,9 +290,10 @@ class CubeInput:
 
 
 class CubeOutput:
-    """Output node that marks a SugarCube runtime output boundary."""
+    """Load legacy output markers before frontend Cube migration."""
 
     CATEGORY = "SugarCubes/Markers"
+    DEPRECATED = True
     GRAPH_PASSTHROUGH_OUTPUTS = {0: "value"}
     RETURN_TYPES: tuple[AnyType, ...] = (ANY,)
     RETURN_NAMES = ("value",)

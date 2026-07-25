@@ -38,6 +38,7 @@ import { FlavorService } from './flavors/FlavorService.js';
 import { CubeDefinitionStore } from './graph/CubeDefinitionStore.js';
 import { CubeSaveReconciler } from './save/CubeSaveReconciler.js';
 import { CubeCreationService } from './create/CubeCreationService.js';
+import { ComfyCubeSaveAdapter } from './cube/node/ComfyCubeSaveAdapter.js';
 import { CubePackService } from './packs/CubePackService.js';
 import { CubeIdentityReconciler } from './graph/CubeIdentityReconciler.js';
 import { CubePromotionService } from './promotion/CubePromotionService.js';
@@ -120,11 +121,15 @@ export class SugarCubesUI {
             dirtyManager: this.dirtyManager,
             cubeBrowser: this.cubeBrowser,
         });
+        const cubeNodeSave = new ComfyCubeSaveAdapter({
+            getCatalog: options.getCubeNodeCatalog ?? (() => null),
+        });
         this.saveReconciler = new CubeSaveReconciler({
             definitionStore: this.definitionStore,
             instanceManager: this.instanceManager,
             flavorService: this.flavorService,
             dirtyManager: this.dirtyManager,
+            cubeNodeSave,
         });
         this.packService = new CubePackService({
             api: this.api,
@@ -155,15 +160,18 @@ export class SugarCubesUI {
             versionDialog: this.versionDialog,
             dialogs: this.dialogs,
             saveReconciler: this.saveReconciler,
+            cubeNodeSave,
         });
         this.cubeCreation = new CubeCreationService({
-            adapter: this.adapter,
-            api: this.api,
+            getAuthoring: options.getCubeAuthoring ??
+                (() => {
+                    throw new Error('SugarCubes native authoring is unavailable.');
+                }),
+            cubeSave: this.cubeSave,
             toast: this.toast,
-            instanceManager: this.instanceManager,
             cubeBrowser: this.cubeBrowser,
             dialogs: this.dialogs,
-            saveReconciler: this.saveReconciler,
+            logger: this.adapter.getConsole?.(),
         });
         this.layoutService = new CubeLayoutService({
             adapter: this.adapter,
@@ -186,7 +194,6 @@ export class SugarCubesUI {
             events: this.events,
             scheduler: this.scheduler,
             storage: this.storage,
-            api: this.adapter?.getApi?.(),
             cubeApi: this.api,
             cubeBrowser: this.cubeBrowser,
             saveService: this.cubeSave,

@@ -20,12 +20,12 @@
 import { writeWidgetValue } from '../graph/Markers.js';
 import { isRecord } from '../types/common.js';
 import type { UnknownRecord, Vec2 } from '../types/common.js';
-import type { ComfyInput, ComfyNode, ComfyOutput, GraphId } from '../types/graph.js';
+import type { ComfyInput, ComfyNode, ComfyOutput, GraphId, NumericVector } from '../types/graph.js';
 
 export interface WritableImportNode extends ComfyNode {
   id: GraphId;
-  pos: number[];
-  size: number[];
+  pos: NumericVector;
+  size: NumericVector;
   properties: UnknownRecord;
   addInput?(name: string, type: string): unknown;
   mode?: unknown;
@@ -50,8 +50,8 @@ export function computeGridPosition(origin: Vec2, index: number): Vec2 {
 
 /** Expand aggregate import bounds to include one live node. */
 export function updateBoundsWithNode(bounds: MutableImportBounds, node: WritableImportNode): void {
-  const pos = Array.isArray(node.pos) ? node.pos : [0, 0];
-  const size = Array.isArray(node.size) ? node.size : [140, 60];
+  const pos = node.pos;
+  const size = node.size;
   const x = Number(pos[0]) || 0;
   const y = Number(pos[1]) || 0;
   const width = Number(size[0]) || 140;

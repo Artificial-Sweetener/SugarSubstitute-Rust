@@ -80,7 +80,12 @@ export class CubeBrowserView {
         });
         const listHeader = $el('div.sugarcubes-browser__list-header');
         const searchWrap = $el('div.sugarcubes-browser__search', [searchInput]);
-        listHeader.append(searchWrap);
+        const createFromSelectionButton = $el('button.sugarcubes-browser__create-from-selection', {
+            type: 'button',
+            title: 'Create Cube from selected nodes',
+        }, [createIcon('mdi', 'mdi-cube-outline')]);
+        createFromSelectionButton.setAttribute('aria-label', 'Create Cube from selected nodes');
+        listHeader.append(searchWrap, createFromSelectionButton);
         const listBody = $el('div', { className: 'sugarcubes-browser__list-body' });
         const emptyState = $el('div.sugarcubes-browser__empty', 'No cubes found. Try exporting one.');
         const listContainer = $el('div.sugarcubes-browser__list', [listHeader, listBody, emptyState]);
@@ -201,6 +206,7 @@ export class CubeBrowserView {
         }, [detailContainer, previewContainer]);
         const content = $el('div.sugarcubes-browser__content', [listContainer, detailStack]);
         dialog.append(content);
+        createFromSelectionButton.addEventListener('click', () => this.handlers.onCreateFromSelection?.());
         placeButton.addEventListener('click', () => this.handlers.onPlace?.());
         favoriteButton.addEventListener('click', () => this.handlers.onFavoriteToggle?.());
         editButton.addEventListener('click', () => this.handlers.onEditToggle?.());
@@ -295,6 +301,7 @@ export class CubeBrowserView {
         this.elements = {
             dialog,
             listBody,
+            createFromSelectionButton,
             detailContainer,
             detailTitle,
             detailIcon,

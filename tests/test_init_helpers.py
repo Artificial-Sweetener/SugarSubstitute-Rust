@@ -255,6 +255,25 @@ def test_parse_save_many_cube_entries_preserves_normalized_metadata() -> None:
     }
 
 
+def test_parse_save_many_cube_entries_accepts_non_node_container_ids() -> None:
+    """Container-backed Cubes should cross the public save boundary explicitly."""
+
+    cube_id = "local/personal/Detailer.cube"
+    entries = parse_save_many_cube_entries(
+        [
+            {
+                "cube_id": cube_id,
+                "definition_id": "definition-1",
+                "instance_container_ids": ["container-1"],
+            }
+        ]
+    )
+
+    assert entries[cube_id]["definition_id"] == "definition-1"
+    assert entries[cube_id]["instance_container_ids"] == ["container-1"]
+    assert entries[cube_id]["instance_node_ids"] == []
+
+
 def test_normalize_workflow_payload_requires_value() -> None:
     with pytest.raises(Exception):
         normalize_workflow_payload(None)

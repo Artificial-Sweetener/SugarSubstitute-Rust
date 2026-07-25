@@ -16,8 +16,10 @@
 /**
  * Own the SugarCubes overlay rendering layer in `frontend/comfyui/ui/overlays/ProximityOverlay.js`.
  */
-import { readWidgetValue } from '../graph/Markers.js';
 import { isRecord } from '../types/common.js';
+import { ComfyGraphGeometry } from './proximity/ComfyGraphGeometry.js';
+import { ProximityMatcher, } from './proximity/ProximityMatcher.js';
+import { ProximityPromptPatcher } from './proximity/ProximityPromptPatcher.js';
 const PROXIMITY_STORAGE_KEY = 'SugarCubes.Proximity.Settings';
 const DEFAULT_PROXIMITY_SETTINGS = Object.freeze({
     enabled: true,
@@ -28,58 +30,6 @@ const DEFAULT_PROXIMITY_SETTINGS = Object.freeze({
 function clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
 }
-function normalizePortType(type) {
-    if (!type || type === '*') {
-        return '*';
-    }
-    return String(type).trim().toUpperCase();
-}
-function normalizeLinkId(value) {
-    if (value == null) {
-        return null;
-    }
-    if (typeof value === 'number') {
-        return Number.isFinite(value) && value >= 0 ? value : null;
-    }
-    if (typeof value === 'string') {
-        const parsed = Number(value.trim());
-        return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
-    }
-    return null;
-}
-function getFirstLinkId(slot) {
-    if (!slot) {
-        return null;
-    }
-    if (Array.isArray(slot.links) && slot.links.length) {
-        for (const candidate of slot.links) {
-            const normalized = normalizeLinkId(candidate);
-            if (normalized != null) {
-                return normalized;
-            }
-        }
-    }
-    const primary = normalizeLinkId(slot.link);
-    return primary != null ? primary : null;
-}
-function clonePromptOutput(output) {
-    const result = {};
-    for (const [key, value] of Object.entries(output)) {
-        const entry = { ...value };
-        if (Array.isArray(value.inputs)) {
-            entry.inputs = value.inputs.map((input) => (Array.isArray(input) ? [...input] : input));
-        }
-        else if (value && typeof value.inputs === 'object') {
-            const clonedInputs = {};
-            for (const [inputKey, inputValue] of Object.entries(value.inputs)) {
-                clonedInputs[inputKey] = Array.isArray(inputValue) ? [...inputValue] : inputValue;
-            }
-            entry.inputs = clonedInputs;
-        }
-        result[key] = entry;
-    }
-    return result;
-}
 /**
  * Coordinate proximity overlay behavior for the SugarCubes UI.
  */
@@ -88,28 +38,38 @@ export class ProximityOverlay {
     events;
     scheduler;
     storage;
-    api;
     logger;
+    graphGeometry;
+    matcher;
+    promptPatcher = new ProximityPromptPatcher();
     settings;
     overlayMatches;
+    promptMatches;
     previewScheduled;
     overlayActive;
-    interceptorsInstalled;
-    originalQueuePrompt;
-    slotPositionBuffer = new Float32Array(2);
-    constructor({ adapter = null, events = null, scheduler = null, storage = null, api = null, } = {}) {
+    lastReportedMatchSignature = '';
+    lastReportedRenderSignature = '';
+    constructor({ adapter = null, events = null, scheduler = null, storage = null, } = {}) {
         this.adapter = adapter;
         this.events = events;
         this.scheduler = scheduler;
         this.storage = storage;
-        this.api = api;
         this.logger = adapter?.getConsole?.() || null;
+        this.graphGeometry = new ComfyGraphGeometry(this.logger ?? console);
+        this.matcher = new ProximityMatcher({ discover: () => ({ outputs: [], inputs: [] }) }, () => this.adapter?.getLiteGraph?.() ?? null, this.logger ?? console);
         this.settings = this.loadSettings();
         this.overlayMatches = [];
+        this.promptMatches = [];
         this.previewScheduled = false;
         this.overlayActive = this.isOverlayEnabled();
-        this.interceptorsInstalled = false;
-        this.originalQueuePrompt = null;
+    }
+    /** Replace endpoint discovery when the current graph-scoped Cube runtime changes. */
+    setEndpointSource(source) {
+        this.matcher = new ProximityMatcher(source, () => this.adapter?.getLiteGraph?.() ?? null, this.logger ?? console);
+        this.refreshOverlayState({
+            recompute: true,
+            graph: this.adapter?.getApp?.()?.graph ?? null,
+        });
     }
     loadSettings() {
         try {
@@ -144,6 +104,9 @@ export class ProximityOverlay {
     }
     setEnabled(enabled) {
         this.settings.enabled = Boolean(enabled);
+        if (!this.settings.enabled) {
+            this.promptMatches = [];
+        }
         this.persistSettings();
         this.refreshOverlayState({ recompute: true });
         return this.settings.enabled;
@@ -151,32 +114,14 @@ export class ProximityOverlay {
     toggle() {
         return this.setEnabled(!this.settings.enabled);
     }
-    installInterceptors() {
-        if (this.interceptorsInstalled || !this.api?.queuePrompt) {
-            return;
-        }
-        this.originalQueuePrompt = this.api.queuePrompt;
-        this.api.queuePrompt = (position, payload) => {
-            if (!this.settings.enabled) {
-                return this.originalQueuePrompt?.call(this.api, position, payload) ?? Promise.resolve(null);
-            }
-            let patchedPayload = payload;
-            try {
-                patchedPayload = this.applyProximityToPrompt(payload);
-            }
-            catch (error) {
-                this.logger?.error?.('SugarCubes proximity bridge failed', error);
-            }
-            return (this.originalQueuePrompt?.call(this.api, position, patchedPayload) ?? Promise.resolve(null));
-        };
-        this.interceptorsInstalled = true;
-    }
     applyProximityToPrompt(data) {
         if (!this.settings.enabled) {
+            this.promptMatches = [];
             this.updateOverlay([]);
             return data;
         }
         if (!isRecord(data) || !isRecord(data.output)) {
+            this.promptMatches = [];
             this.updateOverlay([]);
             return data;
         }
@@ -188,334 +133,24 @@ export class ProximityOverlay {
             this.updateOverlay([]);
         }
         if (!matches.length) {
+            this.promptMatches = [];
             return data;
         }
-        const promptData = data;
-        const clonedOutput = clonePromptOutput(promptData.output);
-        const applied = [];
-        for (const match of matches) {
-            if (match.originId == null || match.originSlot == null) {
-                continue;
-            }
-            const nodeEntry = clonedOutput[String(match.inputId)];
-            if (!nodeEntry) {
-                continue;
-            }
-            const originTuple = [String(match.originId), match.originSlot];
-            if (Array.isArray(nodeEntry.inputs)) {
-                const existing = nodeEntry.inputs[match.inputSlot];
-                if (Array.isArray(existing) && existing.length === 2) {
-                    continue;
-                }
-                nodeEntry.inputs[match.inputSlot] = originTuple;
-                applied.push({ ...match, originTuple });
-                continue;
-            }
-            if (nodeEntry.inputs == null) {
-                nodeEntry.inputs = {};
-            }
-            if (typeof nodeEntry.inputs === 'object') {
-                const inputKey = match.inputName || Object.keys(nodeEntry.inputs)[match.inputSlot] || 'value';
-                const existing = nodeEntry.inputs[inputKey];
-                if (Array.isArray(existing) && existing.length === 2) {
-                    continue;
-                }
-                nodeEntry.inputs[inputKey] = originTuple;
-                applied.push({ ...match, originTuple, inputKey });
-            }
-        }
-        if (!applied.length) {
+        const patch = this.promptPatcher.apply(data, matches);
+        this.promptMatches = patch.applied;
+        if (!patch.applied.length)
             return data;
-        }
         if (this.settings.showOverlay) {
-            this.updateOverlay(applied);
+            this.updateOverlay(patch.applied);
         }
-        return {
-            ...data,
-            output: clonedOutput,
-        };
+        return patch.payload;
     }
     computeMatches(graph, settings) {
-        if (!graph || !Array.isArray(graph._nodes) || !settings) {
-            return [];
-        }
-        const radius = Number(settings.radius) || DEFAULT_PROXIMITY_SETTINGS.radius;
-        const radiusSq = radius * radius;
-        const strict = Boolean(settings.strict);
-        const liteGraph = this.adapter?.getLiteGraph?.() || null;
-        const outputs = [];
-        const inputs = [];
-        for (const node of graph._nodes) {
-            if (!node?.type) {
-                continue;
-            }
-            if (node.type === 'SugarCubes.CubeOutput') {
-                if (this.hasExplicitOutputLink(node)) {
-                    continue;
-                }
-                const source = this.resolveOutputSource(node);
-                if (!source) {
-                    continue;
-                }
-                const snapshot = this.buildMarkerSnapshot(node, true);
-                outputs.push({
-                    id: node.id,
-                    cube: snapshot.cube,
-                    instanceId: snapshot.instanceId,
-                    alias: snapshot.alias,
-                    type: snapshot.type,
-                    slotPos: snapshot.slotPos,
-                    slotName: snapshot.slotName,
-                    node,
-                    originId: source.origin_id,
-                    originSlot: source.origin_slot,
-                });
-            }
-            else if (node.type === 'SugarCubes.CubeInput') {
-                if (this.hasExplicitInputLink(node)) {
-                    continue;
-                }
-                const snapshot = this.buildMarkerSnapshot(node, false);
-                inputs.push({
-                    id: node.id,
-                    cube: snapshot.cube,
-                    instanceId: snapshot.instanceId,
-                    alias: snapshot.alias,
-                    type: snapshot.type,
-                    slotPos: snapshot.slotPos,
-                    slotName: snapshot.slotName,
-                    node,
-                });
-            }
-        }
-        if (!outputs.length || !inputs.length) {
-            return [];
-        }
-        const candidates = [];
-        for (const out of outputs) {
-            if (out.originId == null || out.originSlot == null) {
-                continue;
-            }
-            for (const input of inputs) {
-                if (!out.slotPos || !input.slotPos) {
-                    continue;
-                }
-                if (this.isSameInstanceOrCube(out, input)) {
-                    continue;
-                }
-                const dx = out.slotPos[0] - input.slotPos[0];
-                const dy = out.slotPos[1] - input.slotPos[1];
-                const distanceSq = dx * dx + dy * dy;
-                if (distanceSq > radiusSq) {
-                    continue;
-                }
-                if (!this.isTypePairCompatible(out.type, input.type, strict, liteGraph)) {
-                    continue;
-                }
-                const aliasMatch = Boolean(out.alias && input.alias && out.alias === input.alias);
-                const typeMatch = normalizePortType(out.type) === normalizePortType(input.type);
-                const score = Math.sqrt(distanceSq) - (aliasMatch ? 40 : 0) - (typeMatch ? 20 : 0);
-                candidates.push({
-                    score,
-                    out,
-                    input,
-                    distanceSq,
-                });
-            }
-        }
-        candidates.sort((a, b) => a.score - b.score);
-        const usedOutputs = new Set();
-        const usedInputs = new Set();
-        const matches = [];
-        for (const candidate of candidates) {
-            const outId = candidate.out.id;
-            const inId = candidate.input.id;
-            if (usedOutputs.has(outId) || usedInputs.has(inId)) {
-                continue;
-            }
-            usedOutputs.add(outId);
-            usedInputs.add(inId);
-            matches.push({
-                outputId: outId,
-                outputCube: candidate.out.cube,
-                outputSlot: 0,
-                outputNode: candidate.out.node,
-                outputPos: candidate.out.slotPos,
-                outputType: candidate.out.type,
-                inputId: inId,
-                inputCube: candidate.input.cube,
-                inputSlot: 0,
-                inputName: candidate.input.slotName || 'value',
-                inputNode: candidate.input.node,
-                inputPos: candidate.input.slotPos,
-                inputType: candidate.input.type,
-                originId: candidate.out.originId,
-                originSlot: candidate.out.originSlot,
-                distance: Math.sqrt(candidate.distanceSq),
-                candidateDetails: {
-                    outSlotPresent: Boolean(candidate.out?.slotPos),
-                    inSlotPresent: Boolean(candidate.input?.slotPos),
-                    outType: candidate.out?.type,
-                    inType: candidate.input?.type,
-                    aliasMatch: Boolean(candidate.out?.alias && candidate.out.alias === candidate.input?.alias),
-                    typeMatch: normalizePortType(candidate.out?.type) === normalizePortType(candidate.input?.type),
-                },
-            });
-        }
-        return matches;
+        return this.matcher.compute(graph, settings);
     }
-    resolveGraphLink(graph, linkId) {
-        if (!graph || linkId == null) {
-            return null;
-        }
-        if (typeof graph.getLink === 'function') {
-            return graph.getLink(linkId) || null;
-        }
-        if (graph.links && typeof graph.links === 'object') {
-            if (graph.links instanceof Map) {
-                return graph.links.get(linkId) || null;
-            }
-            if (Array.isArray(graph.links)) {
-                return graph.links.find((link) => String(link.id) === String(linkId)) || null;
-            }
-            return graph.links[String(linkId)] || null;
-        }
-        return null;
-    }
-    resolveOutputSource(node) {
-        const graph = node?.graph ?? this.adapter?.getApp?.()?.graph;
-        const preferOutput = getFirstLinkId(node?.outputs?.[0]);
-        if (preferOutput != null) {
-            return this.resolveGraphLink(graph, preferOutput);
-        }
-        const fallback = getFirstLinkId(node?.inputs?.[0]);
-        if (fallback != null) {
-            return this.resolveGraphLink(graph, fallback);
-        }
-        return null;
-    }
-    hasExplicitInputLink(node) {
-        const slot = node?.inputs?.[0];
-        if (!slot) {
-            return false;
-        }
-        const linkId = getFirstLinkId(slot);
-        if (linkId == null) {
-            return false;
-        }
-        const graph = node?.graph ?? this.adapter?.getApp?.()?.graph;
-        const link = this.resolveGraphLink(graph, linkId);
-        return Boolean(link);
-    }
-    hasExplicitOutputLink(node) {
-        const slot = node?.outputs?.[0];
-        if (!slot) {
-            return false;
-        }
-        const linkId = getFirstLinkId(slot);
-        if (linkId == null) {
-            return false;
-        }
-        const graph = node?.graph ?? this.adapter?.getApp?.()?.graph;
-        const link = this.resolveGraphLink(graph, linkId);
-        return Boolean(link);
-    }
-    readSlotName(node, isOutput) {
-        const slots = isOutput ? node.outputs : node.inputs;
-        if (Array.isArray(slots) && slots.length && slots[0]) {
-            const slot = slots[0];
-            if (typeof slot.name === 'string' && slot.name) {
-                return slot.name;
-            }
-            if (typeof slot.label === 'string' && slot.label) {
-                return slot.label;
-            }
-        }
-        return 'value';
-    }
-    getSlotPosition(node, isOutput) {
-        try {
-            if (typeof node.getConnectionPos === 'function') {
-                const temp = this.slotPositionBuffer;
-                const isInput = !isOutput;
-                node.getConnectionPos(isInput, 0, temp);
-                if (Number.isFinite(temp[0]) && Number.isFinite(temp[1])) {
-                    return [temp[0] ?? 0, temp[1] ?? 0];
-                }
-                const pos = node.getConnectionPos(isInput, 0);
-                if (Array.isArray(pos) && pos.length === 2) {
-                    return [Number(pos[0]) || 0, Number(pos[1]) || 0];
-                }
-                if (pos instanceof Float32Array || pos instanceof Float64Array) {
-                    return [pos[0] ?? 0, pos[1] ?? 0];
-                }
-            }
-        }
-        catch (error) {
-            this.logger?.warn?.('SugarCubes: failed to read connection pos', error);
-        }
-        const base = Array.isArray(node.pos) ? node.pos : [0, 0];
-        const size = Array.isArray(node.size) ? node.size : [0, 0];
-        const baseX = Number(base[0]) || 0;
-        const baseY = Number(base[1]) || 0;
-        const width = Number(size[0]) || 0;
-        const height = Number(size[1]) || 0;
-        return [isOutput ? baseX + width : baseX, baseY + height / 2];
-    }
-    buildMarkerSnapshot(node, isOutput) {
-        const cube = readWidgetValue(node, 'cube_id');
-        const instanceId = readWidgetValue(node, 'instance_id');
-        const slotName = this.readSlotName(node, isOutput);
-        const slotPos = this.getSlotPosition(node, isOutput);
-        const slot = isOutput ? node.outputs?.[0] : node.inputs?.[0];
-        const type = slot?.type ?? null;
-        return {
-            cube: cube || null,
-            instanceId: instanceId || null,
-            alias: slotName,
-            slotPos,
-            slotName,
-            type,
-            node,
-            isOutput,
-        };
-    }
-    isSameInstanceOrCube(output, input) {
-        if (output?.instanceId && input?.instanceId) {
-            return output.instanceId === input.instanceId;
-        }
-        if (output?.cube && input?.cube) {
-            return output.cube === input.cube;
-        }
-        return false;
-    }
-    isTypePairCompatible(outputType, inputType, strict, liteGraph) {
-        const out = normalizePortType(outputType);
-        const inn = normalizePortType(inputType);
-        try {
-            if (liteGraph && typeof liteGraph.isValidConnection === 'function') {
-                if (strict) {
-                    if (out === '*' || inn === '*') {
-                        return false;
-                    }
-                    return liteGraph.isValidConnection(out, inn) && liteGraph.isValidConnection(inn, out);
-                }
-                return liteGraph.isValidConnection(out || '*', inn || '*');
-            }
-        }
-        catch (error) {
-            this.logger?.debug?.('SugarCubes: type compatibility check failed', error);
-        }
-        if (strict) {
-            if (out === '*' || inn === '*') {
-                return false;
-            }
-            return out === inn;
-        }
-        if (out === '*' || inn === '*') {
-            return true;
-        }
-        return out === inn;
+    /** Read one current Comfy surface slot through the shared geometry adapter. */
+    getSlotPosition(node, isOutput, slot = 0) {
+        return this.graphGeometry.slotPosition(node, isOutput, slot);
     }
     refreshOverlayState({ recompute = false, graph = null, } = {}) {
         this.overlayActive = this.isOverlayEnabled();
@@ -557,10 +192,24 @@ export class ProximityOverlay {
     }
     updateOverlay(matches) {
         this.overlayMatches = Array.isArray(matches) ? matches : [];
+        const signature = this.overlayMatches
+            .map((match) => `${String(match.outputId)}:${String(match.outputSlot)}>` +
+            `${String(match.inputId)}:${String(match.inputSlot)}`)
+            .join('|');
+        if (signature !== this.lastReportedMatchSignature) {
+            this.lastReportedMatchSignature = signature;
+            const positions = this.overlayMatches
+                .map((match) => `${match.outputPos.map((value) => Math.round(value)).join(',')}>` +
+                match.inputPos.map((value) => Math.round(value)).join(','))
+                .join(';');
+            this.logger?.debug?.(`SugarCubes resolved ${String(this.overlayMatches.length)} proximity matches` +
+                `${positions ? ` at ${positions}` : ''}.`);
+        }
         this.adapter?.getApp?.()?.canvas?.setDirty?.(true, true);
     }
     resetOverlayState() {
         this.previewScheduled = false;
+        this.promptMatches = [];
         this.updateOverlay([]);
     }
     /** Schedule the initial preview only when no preview state exists. */
@@ -653,6 +302,8 @@ export class ProximityOverlay {
         const radius = Number(this.settings.radius) || DEFAULT_PROXIMITY_SETTINGS.radius;
         const radiusSq = radius * radius;
         const liteGraph = this.adapter?.getLiteGraph?.() || null;
+        let graphMismatchCount = 0;
+        let renderedCount = 0;
         const readColor = (slotType) => {
             if (typeof canvasInstance?.getLinkColor === 'function') {
                 try {
@@ -673,14 +324,15 @@ export class ProximityOverlay {
         for (const match of this.overlayMatches) {
             const outputNode = match.outputNode;
             const inputNode = match.inputNode;
-            if (!outputNode || !inputNode) {
+            if ((outputNode && outputNode.graph !== canvasInstance.graph) ||
+                (inputNode && inputNode.graph !== canvasInstance.graph)) {
+                graphMismatchCount += 1;
                 continue;
             }
-            if (outputNode.graph !== canvasInstance.graph || inputNode.graph !== canvasInstance.graph) {
-                continue;
-            }
-            const outPos = this.getSlotPosition(outputNode, true);
-            const inPos = this.getSlotPosition(inputNode, false);
+            const slotIndexOut = match.outputSlot ?? 0;
+            const slotIndexIn = match.inputSlot ?? 0;
+            const outPos = match.outputPos;
+            const inPos = match.inputPos;
             if (!outPos || !inPos) {
                 continue;
             }
@@ -689,11 +341,9 @@ export class ProximityOverlay {
             if (dx * dx + dy * dy > radiusSq) {
                 continue;
             }
-            const slotIndexOut = match.outputSlot ?? 0;
-            const slotIndexIn = match.inputSlot ?? 0;
-            const outputSlot = outputNode.outputs?.[slotIndexOut];
-            const inputSlot = inputNode.inputs?.[slotIndexIn];
-            const slotType = outputSlot?.type ?? inputSlot?.type;
+            const outputSlot = outputNode?.outputs?.[slotIndexOut];
+            const inputSlot = inputNode?.inputs?.[slotIndexIn];
+            const slotType = match.outputType ?? match.inputType ?? outputSlot?.type ?? inputSlot?.type;
             const linkColor = readColor(slotType);
             const linkWidthFallback = Math.max(1, canvasInstance?.connections_width ?? 3);
             const startPoint = { x: outPos[0], y: outPos[1] };
@@ -712,6 +362,14 @@ export class ProximityOverlay {
             if (!rendered) {
                 continue;
             }
+            renderedCount += 1;
+        }
+        const renderSignature = `${renderedCount}:${graphMismatchCount}:${this.overlayMatches.length}`;
+        if (renderSignature !== this.lastReportedRenderSignature) {
+            this.lastReportedRenderSignature = renderSignature;
+            this.logger?.debug?.(`SugarCubes painted ${String(renderedCount)} of ` +
+                `${String(this.overlayMatches.length)} proximity matches` +
+                `${graphMismatchCount ? `; ${String(graphMismatchCount)} had a graph mismatch` : ''}.`);
         }
     }
 }

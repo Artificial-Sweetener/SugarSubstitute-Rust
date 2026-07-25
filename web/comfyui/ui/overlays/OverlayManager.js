@@ -23,6 +23,7 @@ import { readGroupBounds } from '../graph/Bounds.js';
 import { writeCanonicalBounds } from '../graph/CubeBounds.js';
 import { isRecord } from '../types/common.js';
 import { createCubeSourceResolver } from './CubeSourceResolver.js';
+import { ProximityPointerMoveTracker } from './proximity/ProximityPointerMoveTracker.js';
 function readManagedMetadata(group) {
     const sugarcubes = isRecord(group?.properties) ? group.properties.sugarcubes : null;
     if (!isRecord(sugarcubes) || sugarcubes.managed !== true || !sugarcubes.instance_id) {
@@ -38,6 +39,7 @@ export class OverlayManager {
     events;
     scheduler;
     proximity;
+    proximityPointerMoves;
     placement;
     layoutService;
     chrome;
@@ -54,7 +56,7 @@ export class OverlayManager {
     reconcileScheduled;
     expandContainmentRevisionByNodeId;
     groupDragState;
-    constructor({ adapter = null, events = null, scheduler = null, storage = null, api = null, cubeApi = null, cubeBrowser = null, saveService = null, flavorService = null, toast = null, applyPreparedImport, reportImportOutcome, buildShiftedPlacementPayload, requestDirtyRefresh = null, layoutService = null, containmentService = null, collisionService = null, boundsReconciler = null, } = {}) {
+    constructor({ adapter = null, events = null, scheduler = null, storage = null, cubeApi = null, cubeBrowser = null, saveService = null, flavorService = null, toast = null, applyPreparedImport, reportImportOutcome, buildShiftedPlacementPayload, requestDirtyRefresh = null, layoutService = null, containmentService = null, collisionService = null, boundsReconciler = null, } = {}) {
         this.adapter = adapter;
         this.events = events;
         this.scheduler = scheduler;
@@ -63,8 +65,8 @@ export class OverlayManager {
             events,
             scheduler,
             storage,
-            api,
         });
+        this.proximityPointerMoves = new ProximityPointerMoveTracker(this.proximity);
         this.placement = new PlacementOverlay({
             adapter,
             events,
@@ -274,8 +276,19 @@ export class OverlayManager {
     getChromeDebugState() {
         return this.chrome.getDebugState();
     }
+    /** Open the existing Cube menu for a first-class Cube node titlebar. */
+    openCubeMenu(metadata, event) {
+        const liteGraph = typeof globalThis !== 'undefined' ? globalThis.LiteGraph : null;
+        if (!liteGraph?.ContextMenu)
+            return;
+        const options = this.chrome.buildMenuOptions({
+            metadata: metadata,
+            isDirty: Boolean(metadata.dirty),
+            flavors: [],
+        });
+        new liteGraph.ContextMenu(options, { event });
+    }
     setup() {
-        this.proximity.installInterceptors();
         this.chrome.setup();
         this.ensureOverlayHook();
         this.startOverlayWatchdog();
@@ -319,25 +332,6 @@ export class OverlayManager {
         const liteGraph = this.adapter?.getLiteGraph?.() || null;
         const canvasProto = liteGraph?.LGraphCanvas?.prototype ?? null;
         const manager = this;
-        if (canvasProto && typeof canvasProto.drawConnections === 'function') {
-            if (!canvasProto.__sugarcubes_proximity_hooked) {
-                canvasProto.__sugarcubes_proximity_hooked = true;
-                const originalDrawConnections = canvasProto.drawConnections;
-                canvasProto.drawConnections = function drawConnections(ctx, ...args) {
-                    const result = originalDrawConnections.call(this, ctx, ...args);
-                    try {
-                        manager.proximity.render(ctx, this);
-                    }
-                    catch (error) {
-                        manager.adapter
-                            ?.getConsole?.()
-                            ?.error?.('SugarCubes: drawConnections overlay failed', error);
-                    }
-                    return result;
-                };
-            }
-            this.overlayDrawHooked = true;
-        }
         if (canvasProto && typeof canvasProto.drawForeground === 'function') {
             if (!canvasProto.__sugarcubes_overlay_hooked) {
                 canvasProto.__sugarcubes_overlay_hooked = true;
@@ -389,7 +383,13 @@ export class OverlayManager {
                     ?.getConsole?.()
                     ?.error?.('SugarCubes: onDrawBackground wrapper failed', error);
             }
-            manager.placement.render(ctx, this);
+            try {
+                manager.proximity.render(ctx, this);
+                manager.placement.render(ctx, this);
+            }
+            catch (error) {
+                manager.adapter?.getConsole?.()?.error?.('SugarCubes: background overlays failed', error);
+            }
         };
         wrappedBackground.__sugarcubes_overlay_hooked = true;
         canvas.onDrawBackground = wrappedBackground;
@@ -772,6 +772,8 @@ export class OverlayManager {
         this.graphHooksWrapped = true;
         const manager = this;
         const canvasElement = canvas.canvas ?? null;
+        if (canvasElement)
+            this.proximityPointerMoves.attach(canvasElement, canvas);
         if (canvasElement && !canvasElement.__sugarcubes_chrome_listener) {
             const handler = (event) => {
                 if (manager.chrome?.handleMouseDown?.(event, canvas)) {
@@ -903,11 +905,7 @@ export class OverlayManager {
                 }
                 graph[key] = function wrappedGraphHook(...args) {
                     const result = original.call(this, ...args);
-                    const changedNode = isRecord(args[0]) ? args[0] : null;
-                    if (manager.proximity.isOverlayEnabled() &&
-                        key === 'onNodeConnectionChange' &&
-                        (changedNode?.type === 'SugarCubes.CubeInput' ||
-                            changedNode?.type === 'SugarCubes.CubeOutput')) {
+                    if (manager.proximity.isOverlayEnabled() && key === 'onNodeConnectionChange') {
                         manager.proximity.schedulePreview({ immediate: true, graph: this });
                     }
                     manager.requestDirtyRefresh?.({ graph: this, reason: key });

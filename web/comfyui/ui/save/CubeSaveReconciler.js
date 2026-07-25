@@ -28,15 +28,17 @@ export class CubeSaveReconciler {
     instanceManager;
     flavorService;
     dirtyManager;
-    constructor({ definitionStore, instanceManager = null, flavorService = null, dirtyManager = null, }) {
+    cubeNodeSave;
+    constructor({ definitionStore, instanceManager = null, flavorService = null, dirtyManager = null, cubeNodeSave = null, }) {
         this.definitionStore = definitionStore;
         this.instanceManager = instanceManager;
         this.flavorService = flavorService;
         this.dirtyManager = dirtyManager;
+        this.cubeNodeSave = cubeNodeSave;
     }
     /** Reconcile successful save results before control returns to the caller. */
-    async reconcile({ graph, saved, fallbackCubeIds = [], markerIdsByCubeId = {}, reason = 'cube-save', }) {
-        const finalized = this.publishDefinitions(graph, saved, markerIdsByCubeId);
+    async reconcile({ graph, saved, fallbackCubeIds = [], markerIdsByCubeId = {}, cubeNodeInstanceIdsByCubeId = {}, reason = 'cube-save', }) {
+        const finalized = this.publishDefinitions(graph, saved, markerIdsByCubeId, cubeNodeInstanceIdsByCubeId);
         const savedCubeIds = finalized.map(({ cubeId }) => cubeId);
         const cubeIds = savedCubeIds.length ? savedCubeIds : normalizeCubeIds(fallbackCubeIds);
         if (!finalized.length && cubeIds.length) {
@@ -58,7 +60,7 @@ export class CubeSaveReconciler {
         return { cubeIds, entries: finalized };
     }
     /** Publish each persisted definition and align marker definition identity. */
-    publishDefinitions(graph, saved, markerIdsByCubeId) {
+    publishDefinitions(graph, saved, markerIdsByCubeId, cubeNodeInstanceIdsByCubeId = {}) {
         const results = [];
         for (const savedEntry of Array.isArray(saved) ? saved : []) {
             const definition = isRecord(savedEntry.definition) ? savedEntry.definition : null;
@@ -70,13 +72,21 @@ export class CubeSaveReconciler {
             }
             const definitionKey = buildCubeDefinitionKey(cubeId, cubeVersion);
             const markerIds = markerIdsByCubeId[cubeId] ?? [];
-            if (!markerIds.length) {
+            const cubeNodeInstanceIds = cubeNodeInstanceIdsByCubeId[cubeId] ?? [];
+            if (!markerIds.length && !cubeNodeInstanceIds.length) {
                 throw new Error(`Cube save reconciliation targets are missing for '${cubeId}'`);
             }
             updateMarkersForIds(graph, markerIds, {
                 cubeVersion,
                 cubeRevisionRef: WORKTREE_REVISION,
             });
+            if (cubeNodeInstanceIds.length) {
+                this.cubeNodeSave?.updateIdentities(cubeNodeInstanceIds, {
+                    cubeVersion,
+                    cubeRevisionRef: WORKTREE_REVISION,
+                    cubeDefinitionKey: definitionKey,
+                });
+            }
             this.alignTargetGroupIdentity({
                 graph,
                 cubeId,

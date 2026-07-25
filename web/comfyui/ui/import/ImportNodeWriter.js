@@ -29,8 +29,8 @@ export function computeGridPosition(origin, index) {
 }
 /** Expand aggregate import bounds to include one live node. */
 export function updateBoundsWithNode(bounds, node) {
-    const pos = Array.isArray(node.pos) ? node.pos : [0, 0];
-    const size = Array.isArray(node.size) ? node.size : [140, 60];
+    const pos = node.pos;
+    const size = node.size;
     const x = Number(pos[0]) || 0;
     const y = Number(pos[1]) || 0;
     const width = Number(size[0]) || 140;

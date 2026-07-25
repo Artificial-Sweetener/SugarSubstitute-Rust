@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import re
+import math
 from typing import Any, Mapping, Optional, Sequence
 
 from ...cube_model import (
@@ -336,6 +337,18 @@ def normalize_metadata_update(
             normalized["lineage"] = lineage
         else:
             remove_keys.add("lineage")
+    if "surface_size" in payload:
+        surface_size = _normalize_surface_size(payload.get("surface_size"))
+        if surface_size:
+            normalized["surface_size"] = surface_size
+        else:
+            remove_keys.add("surface_size")
+    if "surface_state" in payload:
+        surface_state = _normalize_surface_state(payload.get("surface_state"))
+        if surface_state:
+            normalized["surface_state"] = surface_state
+        else:
+            remove_keys.add("surface_state")
     if "icon" in payload:
         icon_value = payload.get("icon")
         if icon_value is None:
@@ -351,5 +364,72 @@ def normalize_metadata_update(
                 remove_keys.add("icon")
     return normalized, remove_keys
 
+
+def _normalize_surface_size(value: object) -> list[float]:
+    """Validate one persisted finite Cube parent size."""
+
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+        return []
+    if len(value) != 2:
+        raise BackendError("metadata.surface_size must contain width and height", status=400)
+    result: list[float] = []
+    for entry in value:
+        if isinstance(entry, bool) or not isinstance(entry, (int, float)):
+            raise BackendError("metadata.surface_size must be numeric", status=400)
+        number = float(entry)
+        if not math.isfinite(number) or number <= 0:
+            raise BackendError(
+                "metadata.surface_size must contain positive finite values",
+                status=400,
+            )
+        result.append(number)
+    return result
+
+
+def _normalize_surface_state(value: object) -> dict[str, Any]:
+    """Copy the bounded Cube-face state accepted by the frontend parser."""
+
+    if value is None:
+        return {}
+    if not isinstance(value, Mapping):
+        raise BackendError("metadata.surface_state must be an object", status=400)
+    normalized: dict[str, Any] = {"schema": 1}
+    revealed = value.get("revealed")
+    if isinstance(revealed, bool):
+        normalized["revealed"] = revealed
+    node_order = value.get("node_order")
+    if isinstance(node_order, Sequence) and not isinstance(node_order, (str, bytes)):
+        normalized["node_order"] = list(
+            dict.fromkeys(
+                entry.strip()
+                for entry in node_order
+                if isinstance(entry, str) and entry.strip()
+            )
+        )
+    for key in ("minimum_column_width", "gap"):
+        entry = value.get(key)
+        if isinstance(entry, bool) or not isinstance(entry, (int, float)):
+            continue
+        number = float(entry)
+        if math.isfinite(number) and number >= 0:
+            normalized[key] = number
+    preview = value.get("preview")
+    if isinstance(preview, Mapping):
+        normalized_preview: dict[str, Any] = {}
+        visible = preview.get("visible")
+        if isinstance(visible, bool):
+            normalized_preview["visible"] = visible
+        width = preview.get("width")
+        if (
+            not isinstance(width, bool)
+            and isinstance(width, (int, float))
+            and math.isfinite(float(width))
+            and float(width) >= 0
+        ):
+            normalized_preview["width"] = float(width)
+        selected_output = normalize_metadata_string(preview.get("selected_output"))
+        normalized_preview["selected_output"] = selected_output or None
+        normalized["preview"] = normalized_preview
+    return normalized
 
 

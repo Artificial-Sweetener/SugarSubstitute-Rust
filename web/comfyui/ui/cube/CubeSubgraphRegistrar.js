@@ -1,0 +1,86 @@
+//    SugarCubes - composable workflow units for ComfyUI
+//    Copyright (C) 2026  Artificial Sweetener and contributors
+//
+//    This program is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU Affero General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU Affero General Public License for more details.
+//
+//    You should have received a copy of the GNU Affero General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/** Register nested subgraph definitions embedded in an imported Cube payload. */
+import { normalizeSubgraphPayload } from '../graph/SubgraphSerialization.js';
+import { rebindSubgraphWidgetValues } from '../graph/WidgetSnapshots.js';
+import { isRecord } from '../types/common.js';
+/** Own normalization and host registration of Cube-embedded nested subgraphs. */
+export class CubeSubgraphRegistrar {
+    #host;
+    /** Bind the narrow native graph and node-construction boundary. */
+    constructor(host) {
+        this.#host = host;
+    }
+    /** Register every absent nested definition and return actionable warnings. */
+    register(payload) {
+        const warnings = [];
+        const hints = buildHintLookup(payload);
+        for (const entry of payload.subgraphs ?? []) {
+            const id = readString(entry.id);
+            if (!id) {
+                warnings.push('Subgraph entry missing id; skipping.');
+                continue;
+            }
+            if (this.#host.hasSubgraph(id))
+                continue;
+            try {
+                const hint = hints.get(id) ?? { fallbackName: '', expectedInputNames: [] };
+                const normalized = normalizeSubgraphPayload(entry, id, hint);
+                if (!normalized) {
+                    warnings.push(`Subgraph '${id}' could not be normalized; skipping.`);
+                    continue;
+                }
+                rebindSubgraphWidgetValues(normalized, (type) => type ? this.#host.createNode(type) : null);
+                const subgraph = this.#host.createSubgraph(normalized);
+                if (!subgraph) {
+                    warnings.push(`Subgraph '${id}' could not be created; skipping.`);
+                    continue;
+                }
+                subgraph.configure?.(normalized);
+            }
+            catch (error) {
+                warnings.push(`Failed to register subgraph '${id}': ${readErrorMessage(error)}`);
+            }
+        }
+        return warnings;
+    }
+}
+/** Index wrapper-authored names needed to normalize older subgraph payloads. */
+function buildHintLookup(payload) {
+    const lookup = new Map();
+    for (const entry of payload.nodes ?? []) {
+        const type = readString(entry.class_type);
+        if (!type)
+            continue;
+        const metadata = isRecord(entry.extras?._meta) ? entry.extras._meta : {};
+        const existing = lookup.get(type);
+        const title = readString(entry.layout?.title) || readString(metadata.title);
+        const inputs = isRecord(entry.inputs) ? Object.keys(entry.inputs) : [];
+        lookup.set(type, {
+            fallbackName: title || existing?.fallbackName || '',
+            expectedInputNames: inputs.length > 0 ? inputs : (existing?.expectedInputNames ?? []),
+        });
+    }
+    return lookup;
+}
+/** Read one non-empty dynamic string. */
+function readString(value) {
+    return typeof value === 'string' ? value.trim() : '';
+}
+/** Preserve error context at the host registration boundary. */
+function readErrorMessage(error) {
+    return error instanceof Error ? error.message : String(error);
+}

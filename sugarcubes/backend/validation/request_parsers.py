@@ -236,6 +236,22 @@ def parse_save_many_cube_entries(value: Any) -> dict[str, dict[str, Any]]:
                 metadata_payload,
                 cube_id=cube_id,
             )
+        definition_id = normalize_metadata_string(entry.get("definition_id"))
+        instance_node_ids = _normalize_string_sequence(
+            entry.get("instance_node_ids"), field_name="instance_node_ids"
+        )
+        instance_container_ids = _normalize_string_sequence(
+            entry.get("instance_container_ids"), field_name="instance_container_ids"
+        )
+        instance_ids = [*instance_node_ids, *instance_container_ids]
+        if definition_id and not instance_ids:
+            raise BackendError(
+                "Cube entry requires at least one instance identifier", status=400
+            )
+        if instance_ids and not definition_id:
+            raise BackendError(
+                "Cube entry requires definition_id", status=400
+            )
         entries[cube_id] = {
             "forked": get_bool(entry, "forked", False),
             "lineage": normalize_lineage_payload(entry.get("lineage")),
@@ -251,5 +267,27 @@ def parse_save_many_cube_entries(value: Any) -> dict[str, dict[str, Any]]:
                 entry.get("source_definition_key")
             ),
             "stale_save_mode": stale_save_mode,
+            "definition_id": definition_id,
+            "instance_node_ids": instance_node_ids,
+            "instance_container_ids": instance_container_ids,
         }
     return entries
+
+
+def _normalize_string_sequence(value: Any, *, field_name: str) -> list[str]:
+    """Normalize one optional sequence of non-empty host identifiers."""
+
+    if value is None:
+        return []
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+        raise BackendError(f"'{field_name}' must be a list", status=400)
+    result: list[str] = []
+    for entry in value:
+        normalized = normalize_metadata_string(entry)
+        if not normalized:
+            raise BackendError(
+                f"'{field_name}' entries must be non-empty strings", status=400
+            )
+        if normalized not in result:
+            result.append(normalized)
+    return result

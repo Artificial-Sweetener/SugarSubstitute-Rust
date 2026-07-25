@@ -40,6 +40,7 @@ from ...cube_model import (
 )
 from ...exporter import CubeValidationError, ExportedCube
 from ...exporter.graph import CubeAnalysis, analyze_cubes
+from ...exporter.native_subgraph_adapter import project_native_cube_exports
 from ..responses import BackendError
 from .cube_git_context import CubeGitContext, resolve_cube_git_context
 from .cube_file_io import apply_cube_version, read_cube_payload
@@ -435,14 +436,19 @@ class CubeExportService:
             default_alias_lookup = self.library_service.build_default_alias_lookup(
                 cube_entries.keys()
             )
-            analysis = analyze_cubes(
+            projected_graph, projected_workflow = project_native_cube_exports(
                 graph,
-                workflow=workflow,
+                workflow,
+                cube_entries,
+            )
+            analysis = analyze_cubes(
+                projected_graph,
+                workflow=projected_workflow,
                 default_alias_lookup=default_alias_lookup,
             )
             subgraph_violations = collect_selected_cube_subgraph_contract_violations(
                 analysis,
-                workflow,
+                projected_workflow,
                 cube_entries.keys(),
             )
             if subgraph_violations:
@@ -454,7 +460,7 @@ class CubeExportService:
 
             required_class_types = collect_selected_cube_required_node_class_types(
                 analysis,
-                workflow,
+                projected_workflow,
                 cube_entries.keys(),
             )
             missing_class_types = collect_missing_node_class_types(
@@ -469,8 +475,8 @@ class CubeExportService:
                 )
 
             cubes = self.export_cubes(
-                graph,
-                workflow=workflow,
+                projected_graph,
+                workflow=projected_workflow,
                 workflow_version=workflow_version,
                 default_alias_lookup=default_alias_lookup,
                 cube_ids=list(cube_entries.keys()),

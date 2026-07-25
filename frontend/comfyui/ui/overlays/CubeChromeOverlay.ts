@@ -24,13 +24,13 @@ import {
   resolveInstanceDisplayName,
 } from '../graph/GroupMetadata.js';
 import { readGroupBounds } from '../graph/Bounds.js';
-import { parseCanonicalCubeId } from '../core/CubeId.js';
 import { CubeIconResolver } from '../core/CubeIconResolver.js';
 import { drawFallbackInitialsCanvas } from '../core/CubeFallbackIconRenderer.js';
 import type { CubeIconModel } from '../core/CubeIconResolver.js';
 import type { CubeGroupMetadataRecord } from '../graph/GroupMetadata.js';
 import type { ComfyApplication, ComfyCanvas, ComfyGraph, ComfyGroup } from '../types/graph.js';
 import type { RectBounds, UnknownRecord, Vec2 } from '../types/common.js';
+import { formatCubeSourceText, formatCubeVersionText } from '../cube/CubeIdentityPresentation.js';
 
 interface Rgb {
   r: number;
@@ -471,76 +471,6 @@ function computeCenteredBadgeSlot({
   };
 }
 
-/**
- * Resolve cube source identity for the badge from canonical metadata first.
- */
-function resolveCubeBadgeSource(
-  metadata: ChromeMetadata,
-  fallbackSource: BadgeSource | null,
-): BadgeSource {
-  const cubeId = typeof metadata?.cube_id === 'string' ? metadata.cube_id.trim() : '';
-  if (cubeId) {
-    try {
-      const parsed = parseCanonicalCubeId(cubeId);
-      if (parsed.sourceKind === 'github') {
-        return {
-          sourceKind: 'github',
-          author: parsed.owner,
-          pack: parsed.repo,
-          namespace: '',
-        };
-      }
-      if (parsed.sourceKind === 'local') {
-        return {
-          sourceKind: 'local',
-          author: '',
-          pack: '',
-          namespace: parsed.namespace,
-        };
-      }
-    } catch (_error) {
-      // Chrome rendering must not fail because persisted metadata is malformed.
-    }
-  }
-  return fallbackSource || { sourceKind: '', author: '', pack: '', namespace: '' };
-}
-
-/**
- * Format the badge source line from parsed cube source identity.
- */
-function formatSourceBadgeText(source: BadgeSource): string {
-  const pack = typeof source?.pack === 'string' ? source.pack.trim() : '';
-  const author = typeof source?.author === 'string' ? source.author.trim() : '';
-  const namespace = typeof source?.namespace === 'string' ? source.namespace.trim() : '';
-  const sourceKind = typeof source?.sourceKind === 'string' ? source.sourceKind : '';
-
-  if (sourceKind === 'local') {
-    return namespace ? `from local ${namespace}` : 'from local';
-  }
-  if (pack && author) {
-    return `from ${pack} by ${author}`;
-  }
-  if (pack) {
-    return `from ${pack}`;
-  }
-  if (author) {
-    return `by ${author}`;
-  }
-  return 'from Unknown';
-}
-
-/**
- * Format the cube version badge with explicit product wording.
- */
-function formatVersionBadgeText(metadata: ChromeMetadata): string {
-  const version = typeof metadata?.cube_version === 'string' ? metadata.cube_version.trim() : '';
-  if (!version) {
-    return '';
-  }
-  const normalized = version.replace(/^[vV](?=\d)/, '');
-  return `version ${normalized}`;
-}
-
 function computePillLayout(
   ctx: CanvasRenderingContext2D,
   items: ChromeItem[],
@@ -941,11 +871,11 @@ export class CubeChromeOverlay {
       instanceTitleWidth = ctx.measureText(currentInstanceTitle).width;
       ctx.restore();
     }
-    const versionText = formatVersionBadgeText(metadata);
+    const versionText = formatCubeVersionText(metadata);
     const displayName = versionText ? `${resolvedDisplayName} ${versionText}` : resolvedDisplayName;
     const fallbackSource =
       typeof this.resolveSource === 'function' ? this.resolveSource(metadata) : null;
-    const sourceLine = formatSourceBadgeText(resolveCubeBadgeSource(metadata, fallbackSource));
+    const sourceLine = formatCubeSourceText(metadata, fallbackSource);
     const badgeSizes = { name: nameSize, author: authorSize };
     const iconSize = clampNumber(Math.floor(availableHeight), 18, 32);
     const iconGap = 7;

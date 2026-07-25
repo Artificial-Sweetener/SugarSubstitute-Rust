@@ -19,37 +19,14 @@
 
 import { readVector2 } from '../graph/VectorUtils.js';
 import { isRecord } from '../types/common.js';
-import {
-  buildImportSummary,
-  prepareGraphInsertionPayload,
-  readImportPayload,
-} from './PlacementPayload.js';
+import { prepareGraphInsertionPayload, readImportPayload } from './PlacementPayload.js';
 import type { ApiJsonResult } from '../core/CubeLibraryApi.js';
+import type { CubeImportOutcome } from './CubeImportOutcomeReporter.js';
+import type { ImportOptions, ImportResult } from './CubeImportTypes.js';
 import type { ImportPayload } from './PlacementPayload.js';
 import type { UnknownRecord, Vec2 } from '../types/common.js';
-import type { GraphId } from '../types/graph.js';
 
 type ToastSeverity = 'success' | 'info' | 'warn' | 'error';
-
-export interface ImportResult {
-  success: boolean;
-  summary: string;
-  message: string;
-  warnings: string[];
-  missingTypes: string[];
-  nodesAdded: number;
-  markersAdded: number;
-  connectionsMade: number;
-  primaryNodeId: GraphId | null;
-  bounds: { minX: number; minY: number; maxX: number; maxY: number } | null;
-}
-
-export interface ImportOptions {
-  dropOrigin?: Vec2;
-  focus?: boolean;
-  setBusy?(busy: boolean): void;
-  button?: { enabled: boolean; element: HTMLElement };
-}
 
 export interface CubeImportCommandResult extends UnknownRecord {
   success: boolean;
@@ -68,7 +45,12 @@ interface CubeImportCommandDependencies {
     options: { instanceAlias: string; dropOrigin: Vec2 },
   ): Promise<ImportResult | null>;
   computeDropOrigin(): Vec2;
-  focusImportedNode(result: ImportResult): void;
+  reportOutcome(
+    defaultAlias: string,
+    backendWarnings: readonly unknown[],
+    result: ImportResult | null,
+    payload: ImportPayload,
+  ): CubeImportOutcome;
   persistLastCubeId(cubeId: string): void;
   pushToast(severity: ToastSeverity, summary: string, detail: string): void;
   readErrorMessage(error: unknown): string;
@@ -177,45 +159,14 @@ export class CubeImportCommandService {
         dropOrigin,
       });
       const backendWarnings = readWarningMessages(data.warnings);
-      if (backendWarnings.length) {
-        this.dependencies.pushToast(
-          'warn',
-          historical ? 'SugarCube revision import warnings' : 'SugarCube import warnings',
-          backendWarnings.join('\n'),
-        );
-      }
-
-      const frontendWarnings = Array.isArray(importResult?.warnings)
-        ? importResult.warnings.filter(Boolean)
-        : [];
-      if (Array.isArray(importResult?.missingTypes) && importResult.missingTypes.length) {
-        frontendWarnings.push(`Missing node types: ${importResult.missingTypes.join(', ')}`);
-      }
-      if (importResult?.message && importResult.success)
-        frontendWarnings.push(importResult.message);
-      if (frontendWarnings.length) {
-        this.dependencies.pushToast(
-          'warn',
-          historical ? 'SugarCube revision import notes' : 'SugarCube import notes',
-          frontendWarnings.join('\n'),
-        );
-      }
-
-      const summary = importResult?.summary ?? buildImportSummary(preparedData);
-      if (!importResult?.success) {
-        this.dependencies.pushToast(
-          'warn',
-          `SugarCube ${cubeId}${historical ? ' revision' : ''} import incomplete`,
-          importResult?.message || summary,
-        );
-      } else {
-        this.dependencies.pushToast(
-          'success',
-          `Imported ${cubeId}${historical ? ' revision' : ''}`,
-          summary,
-        );
-        this.dependencies.focusImportedNode(importResult);
-      }
+      const displayName = `${cubeId}${historical ? ' revision' : ''}`;
+      const outcome = this.dependencies.reportOutcome(
+        displayName,
+        backendWarnings,
+        importResult,
+        preparedData,
+      );
+      const { frontendWarnings, summary } = outcome;
 
       return {
         success: Boolean(importResult?.success),

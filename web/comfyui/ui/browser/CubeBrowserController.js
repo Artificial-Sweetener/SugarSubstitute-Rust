@@ -202,6 +202,9 @@ export class CubeBrowserController {
     bindHandlers() {
         this.view.setHandlers({
             onClose: () => this.close(),
+            onCreateFromSelection: () => {
+                this.actions.createCubeFromSelection?.();
+            },
             onPlace: () => this.placeCube(),
             onFavoriteToggle: () => this.toggleFavorite(),
             onEditToggle: () => this.toggleEdit(),

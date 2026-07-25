@@ -26,7 +26,6 @@ import type { PersonalCubeIdentity } from '../create/PersonalCubeIdentity.js';
 interface PersonalCubeCandidate {
   defaultAlias?: string;
   nodeIds?: unknown[];
-  markerIds?: unknown[];
   warnings?: unknown[];
 }
 
@@ -72,7 +71,7 @@ export class CreatePersonalCubeModal {
     ]);
     const identityValue = $el('code.sugarcubes-create-cube__value');
     const selectionValue = $el('span.sugarcubes-create-cube__value', {
-      textContent: `${candidate?.nodeIds?.length || 0} nodes, ${candidate?.markerIds?.length || 0} markers`,
+      textContent: `${candidate?.nodeIds?.length || 0} selected nodes`,
     });
     const preview = $el('div.sugarcubes-create-cube__preview', [
       this.buildPreviewRow('Personal ID', identityValue),

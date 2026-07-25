@@ -27,6 +27,7 @@ import {
   writeCubeDefinitionMetadata,
 } from '../graph/GroupMetadata.js';
 import { isRecord } from '../types/common.js';
+import type { CubeNodeIdentityUpdates } from '../cube/node/CubeNodeIdentityWriter.js';
 import type { UnknownRecord } from '../types/common.js';
 import type { ComfyGraph, GraphId } from '../types/graph.js';
 
@@ -59,11 +60,16 @@ interface DirtyStateCoordinator {
   markClean?(options: { graph: ComfyGraph; cubeIds: readonly string[] }): unknown;
 }
 
+interface CubeNodeIdentityPort {
+  updateIdentities(instanceIds: readonly string[], updates: CubeNodeIdentityUpdates): number;
+}
+
 interface CubeSaveReconcilerDependencies {
   definitionStore: DefinitionStore;
   instanceManager?: InstanceRefresher | null;
   flavorService?: FlavorHydrator | null;
   dirtyManager?: DirtyStateCoordinator | null;
+  cubeNodeSave?: CubeNodeIdentityPort | null;
 }
 
 interface DefinitionRequest {
@@ -91,6 +97,7 @@ export interface SaveReconciliationOptions {
   saved?: readonly SavedCubeResult[];
   fallbackCubeIds?: readonly unknown[];
   markerIdsByCubeId?: Readonly<Record<string, readonly GraphId[] | undefined>>;
+  cubeNodeInstanceIdsByCubeId?: Readonly<Record<string, readonly string[] | undefined>>;
   reason?: string;
 }
 
@@ -113,17 +120,20 @@ export class CubeSaveReconciler {
   private readonly instanceManager: InstanceRefresher | null;
   private readonly flavorService: FlavorHydrator | null;
   private readonly dirtyManager: DirtyStateCoordinator | null;
+  private readonly cubeNodeSave: CubeNodeIdentityPort | null;
 
   constructor({
     definitionStore,
     instanceManager = null,
     flavorService = null,
     dirtyManager = null,
+    cubeNodeSave = null,
   }: CubeSaveReconcilerDependencies) {
     this.definitionStore = definitionStore;
     this.instanceManager = instanceManager;
     this.flavorService = flavorService;
     this.dirtyManager = dirtyManager;
+    this.cubeNodeSave = cubeNodeSave;
   }
 
   /** Reconcile successful save results before control returns to the caller. */
@@ -132,9 +142,15 @@ export class CubeSaveReconciler {
     saved,
     fallbackCubeIds = [],
     markerIdsByCubeId = {},
+    cubeNodeInstanceIdsByCubeId = {},
     reason = 'cube-save',
   }: SaveReconciliationOptions): Promise<SaveReconciliationResult> {
-    const finalized = this.publishDefinitions(graph, saved, markerIdsByCubeId);
+    const finalized = this.publishDefinitions(
+      graph,
+      saved,
+      markerIdsByCubeId,
+      cubeNodeInstanceIdsByCubeId,
+    );
     const savedCubeIds = finalized.map(({ cubeId }) => cubeId);
     const cubeIds = savedCubeIds.length ? savedCubeIds : normalizeCubeIds(fallbackCubeIds);
     if (!finalized.length && cubeIds.length) {
@@ -162,6 +178,7 @@ export class CubeSaveReconciler {
     graph: ComfyGraph,
     saved: readonly SavedCubeResult[] | undefined,
     markerIdsByCubeId: Readonly<Record<string, readonly GraphId[] | undefined>>,
+    cubeNodeInstanceIdsByCubeId: Readonly<Record<string, readonly string[] | undefined>> = {},
   ): FinalizedDefinition[] {
     const results: FinalizedDefinition[] = [];
     for (const savedEntry of Array.isArray(saved) ? saved : []) {
@@ -174,13 +191,21 @@ export class CubeSaveReconciler {
       }
       const definitionKey = buildCubeDefinitionKey(cubeId, cubeVersion);
       const markerIds = markerIdsByCubeId[cubeId] ?? [];
-      if (!markerIds.length) {
+      const cubeNodeInstanceIds = cubeNodeInstanceIdsByCubeId[cubeId] ?? [];
+      if (!markerIds.length && !cubeNodeInstanceIds.length) {
         throw new Error(`Cube save reconciliation targets are missing for '${cubeId}'`);
       }
       updateMarkersForIds(graph, markerIds, {
         cubeVersion,
         cubeRevisionRef: WORKTREE_REVISION,
       });
+      if (cubeNodeInstanceIds.length) {
+        this.cubeNodeSave?.updateIdentities(cubeNodeInstanceIds, {
+          cubeVersion,
+          cubeRevisionRef: WORKTREE_REVISION,
+          cubeDefinitionKey: definitionKey,
+        });
+      }
       this.alignTargetGroupIdentity({
         graph,
         cubeId,

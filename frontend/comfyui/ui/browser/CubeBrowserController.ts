@@ -88,6 +88,7 @@ interface BusyImportOptions {
 }
 
 export interface BrowserActions {
+  createCubeFromSelection?(): unknown;
   computeDropOrigin?(): Vec2;
   emitProximityLog?(name: string, detail: UnknownRecord): void;
   onCubesUpdated?(cubes: CubeLibraryEntry[]): void;
@@ -362,6 +363,9 @@ export class CubeBrowserController {
   bindHandlers(): void {
     this.view.setHandlers({
       onClose: () => this.close(),
+      onCreateFromSelection: () => {
+        this.actions.createCubeFromSelection?.();
+      },
       onPlace: () => this.placeCube(),
       onFavoriteToggle: () => this.toggleFavorite(),
       onEditToggle: () => this.toggleEdit(),

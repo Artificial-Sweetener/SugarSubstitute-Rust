@@ -42,7 +42,8 @@ export class CubeSaveService {
     versionDialog;
     dialogs;
     saveReconciler;
-    constructor({ adapter, api, toast, instanceManager, dirtyManager, cubeBrowser, versionDialog, dialogs, saveReconciler, }) {
+    cubeNodeSave;
+    constructor({ adapter, api, toast, instanceManager, dirtyManager, cubeBrowser, versionDialog, dialogs, saveReconciler, cubeNodeSave, }) {
         this.adapter = adapter;
         this.api = api;
         this.toast = toast ?? null;
@@ -52,6 +53,7 @@ export class CubeSaveService {
         this.versionDialog = versionDialog ?? null;
         this.dialogs = dialogs ?? null;
         this.saveReconciler = saveReconciler ?? null;
+        this.cubeNodeSave = cubeNodeSave ?? null;
     }
     async save({ cubeIds = null, button = null } = {}) {
         return this.saveImplementation({ cubeIds, button });
@@ -138,8 +140,15 @@ export class CubeSaveService {
                     cubeId: forkedId,
                     defaultAlias: forkedName,
                 });
-                if (!updatedMarkers) {
-                    throw new Error(`Unable to fork cube '${entry.name || cubeId}' (markers missing).`);
+                const cubeNodeInstanceIds = sourceMetadata.sourceEntries
+                    .map((source) => source.cubeNodeInstanceId)
+                    .filter((instanceId) => Boolean(instanceId));
+                const updatedCubeNodes = this.cubeNodeSave?.updateIdentities(cubeNodeInstanceIds, {
+                    cubeId: forkedId,
+                    defaultAlias: forkedName,
+                }) ?? 0;
+                if (!updatedMarkers && !updatedCubeNodes) {
+                    throw new Error(`Unable to fork cube '${entry.name || cubeId}' (instances missing).`);
                 }
                 savePlan.push({
                     cubeId: forkedId,
@@ -148,19 +157,21 @@ export class CubeSaveService {
                     metadata: this.buildSaveEntryMetadata({
                         cubeId: forkedId,
                         browserEntry: { ...entry, target_model: '', supported_models: [] },
+                        sourceMetadata,
                     }),
                     previousCubeId: cubeId,
                     staleRevision: false,
-                    sourceEntries: [],
+                    sourceEntries: sourceMetadata.sourceEntries,
                     sourceRevisionRef: '',
                     sourceVersion: '',
                     sourceDefinitionKey: '',
                     staleSaveMode: '',
-                    selectedSourceEntry: null,
+                    selectedSourceEntry: sourceMetadata.selectedSourceEntry,
                     defaultAlias: forkedName,
                     targetModel: '',
                     supportedModels: [],
                     latestVersion: normalizeCubeVersion(entry.version),
+                    reconciliationCubeNodeInstanceIds: cubeNodeInstanceIds,
                 });
             }
             const historicalChoice = await this.resolveHistoricalSaveChoice(savePlan);
@@ -205,6 +216,15 @@ export class CubeSaveService {
                     source_version: entry.sourceVersion || '',
                     source_definition_key: entry.sourceDefinitionKey || '',
                     stale_save_mode: entry.staleSaveMode || '',
+                    ...(entry.selectedSourceEntry?.definitionId
+                        ? {
+                            definition_id: entry.selectedSourceEntry.definitionId,
+                            instance_container_ids: entry.sourceEntries
+                                .filter((source) => source.definitionId === entry.selectedSourceEntry?.definitionId &&
+                                source.cubeNodeInstanceId != null)
+                                .map((source) => String(source.cubeNodeInstanceId)),
+                        }
+                        : {}),
                     ...(entry.metadata ? { metadata: entry.metadata } : {}),
                 })),
                 workflow: enrichedWorkflowPayload,
@@ -253,6 +273,7 @@ export class CubeSaveService {
                     saved,
                     fallbackCubeIds: savedIds,
                     markerIdsByCubeId: this.buildSaveReconciliationTargets(savePlan),
+                    cubeNodeInstanceIdsByCubeId: this.buildCubeNodeSaveReconciliationTargets(savePlan),
                     reason: 'save',
                 });
             }
@@ -284,6 +305,27 @@ export class CubeSaveService {
             list.push(entry);
             byCubeId.set(cubeId, list);
         };
+        for (const instance of this.cubeNodeSave?.listInstances() ?? []) {
+            const sourceRevisionRef = normalizeRevisionRef(instance.cubeRevisionRef);
+            const sourceVersion = normalizeCubeVersion(instance.cubeVersion);
+            addEntry({
+                cubeId: instance.cubeId,
+                defaultAlias: instance.defaultAlias,
+                sourceVersion,
+                sourceRevisionRef,
+                sourceDefinitionKey: instance.cubeDefinitionKey || buildCubeDefinitionKey(instance.cubeId, sourceVersion),
+                staleRevision: !isCurrentRevisionRef(sourceRevisionRef),
+                targetModel: instance.targetModel,
+                supportedModels: instance.supportedModels,
+                markerIds: [],
+                group: null,
+                instanceId: instance.instanceId,
+                definitionId: instance.definitionId,
+                cubeNodeInstanceId: instance.instanceId,
+                surfaceSize: instance.surfaceSize,
+                surfaceState: instance.surfaceState,
+            });
+        }
         for (const group of getGraphGroups(graph)) {
             const metadata = getGroupSugarcubes(group);
             if (!metadata?.managed) {
@@ -318,6 +360,10 @@ export class CubeSaveService {
                 instanceId: typeof metadata.instance_id === 'string' && metadata.instance_id.trim()
                     ? metadata.instance_id.trim()
                     : '',
+                definitionId: '',
+                cubeNodeInstanceId: null,
+                surfaceSize: null,
+                surfaceState: null,
             });
         }
         const builder = this.instanceManager?.instanceBuilder ||
@@ -340,6 +386,10 @@ export class CubeSaveService {
                 markerIds: Array.isArray(instance.markerIds) ? instance.markerIds : [],
                 group: null,
                 instanceId: instance.instanceId || '',
+                definitionId: '',
+                cubeNodeInstanceId: null,
+                surfaceSize: null,
+                surfaceState: null,
             });
         }
         return byCubeId;
@@ -394,6 +444,12 @@ export class CubeSaveService {
             ...(defaultAlias ? { default_alias: defaultAlias } : {}),
             target_model: targetModel,
             supported_models: normalizeSupportedModels(supportedSource, { targetModel }),
+            ...(sourceMetadata?.selectedSourceEntry?.surfaceSize
+                ? { surface_size: [...sourceMetadata.selectedSourceEntry.surfaceSize] }
+                : {}),
+            ...(sourceMetadata?.selectedSourceEntry?.surfaceState
+                ? { surface_state: sourceMetadata.selectedSourceEntry.surfaceState }
+                : {}),
         };
     }
     deriveTargetModelFromCubeIdSafe(cubeId) {
@@ -431,8 +487,11 @@ export class CubeSaveService {
                 ? entry.sourceEntries.filter((source) => source.staleRevision)
                 : [];
             const markerIds = Array.from(new Set(sourceEntries.flatMap((source) => source.markerIds || []).filter(Boolean)));
-            if (!markerIds.length) {
-                throw new Error(`Unable to fork '${entry.defaultAlias || entry.cubeId}' (markers missing).`);
+            const cubeNodeInstanceIds = Array.from(new Set(sourceEntries
+                .map((source) => source.cubeNodeInstanceId)
+                .filter((instanceId) => Boolean(instanceId))));
+            if (!markerIds.length && !cubeNodeInstanceIds.length) {
+                throw new Error(`Unable to fork '${entry.defaultAlias || entry.cubeId}' (instances missing).`);
             }
             const browserEntry = cubeIndex.get(entry.cubeId) || {};
             const forkedName = this.buildForkedName(entry.defaultAlias || browserEntry.name || 'SugarCube', usedNames);
@@ -445,8 +504,13 @@ export class CubeSaveService {
                 cubeVersion: '',
                 cubeRevisionRef: CURRENT_REVISION_REF,
             });
-            if (!updatedMarkers) {
-                throw new Error(`Unable to fork '${forkedName}' (markers missing).`);
+            const updatedCubeNodes = this.cubeNodeSave?.updateIdentities(cubeNodeInstanceIds, {
+                cubeId: forkedId,
+                defaultAlias: forkedName,
+                cubeRevisionRef: CURRENT_REVISION_REF,
+            }) ?? 0;
+            if (!updatedMarkers && !updatedCubeNodes) {
+                throw new Error(`Unable to fork '${forkedName}' (instances missing).`);
             }
             for (const source of sourceEntries) {
                 this.updateSourceGroupIdentity(source, {
@@ -460,6 +524,7 @@ export class CubeSaveService {
             entry.cubeId = forkedId;
             entry.forked = true;
             entry.reconciliationMarkerIds = markerIds;
+            entry.reconciliationCubeNodeInstanceIds = cubeNodeInstanceIds;
             entry.lineage = this.buildHistoricalLineagePayload(browserEntry, entry);
             entry.metadata = this.buildSaveEntryMetadata({
                 cubeId: forkedId,
@@ -509,6 +574,28 @@ export class CubeSaveService {
                         : [];
                 targets[entry.cubeId] = Array.from(new Set(sources.flatMap((source) => source?.markerIds || []).map(String)));
             }
+        }
+        return targets;
+    }
+    /** Resolve native Cube nodes that supplied each persisted save. */
+    buildCubeNodeSaveReconciliationTargets(savePlan) {
+        const targets = {};
+        for (const entry of savePlan) {
+            if (!entry.cubeId)
+                continue;
+            if (entry.forked && entry.reconciliationCubeNodeInstanceIds) {
+                targets[entry.cubeId] = entry.reconciliationCubeNodeInstanceIds.map(String);
+                continue;
+            }
+            const sources = entry.staleSaveMode === STALE_SAVE_MODE_LATEST
+                ? entry.sourceEntries.filter((source) => source.staleRevision)
+                : entry.selectedSourceEntry
+                    ? [entry.selectedSourceEntry]
+                    : [];
+            targets[entry.cubeId] = Array.from(new Set(sources
+                .map((source) => source.cubeNodeInstanceId)
+                .filter((instanceId) => Boolean(instanceId))
+                .map(String)));
         }
         return targets;
     }

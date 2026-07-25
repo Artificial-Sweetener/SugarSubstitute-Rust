@@ -15,14 +15,25 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import type { ApiResponse } from '../../../frontend/comfyui/ui/types/graph.js';
 
-interface MockApi {
+interface MockApi
+  extends Pick<EventTarget, 'addEventListener' | 'removeEventListener' | 'dispatchEvent'> {
   fetchApi(path: string, options?: RequestInit): Promise<ApiResponse>;
   queuePrompt(position?: number, payload?: unknown): Promise<unknown>;
 }
 
 const mockHost = globalThis as typeof globalThis & { __sugarCubesMockApi?: MockApi };
-export const api: MockApi = mockHost.__sugarCubesMockApi ?? {
-  fetchApi: async () => ({ ok: true, json: async () => ({}) }),
-  queuePrompt: async () => ({}),
-};
+
+/** Create the Comfy API surface consumed by browser integration tests. */
+function createMockApi(): MockApi {
+  const events = new EventTarget();
+  return {
+    fetchApi: async () => ({ ok: true, json: async () => ({}) }),
+    queuePrompt: async () => ({}),
+    addEventListener: events.addEventListener.bind(events),
+    removeEventListener: events.removeEventListener.bind(events),
+    dispatchEvent: events.dispatchEvent.bind(events),
+  };
+}
+
+export const api: MockApi = mockHost.__sugarCubesMockApi ?? createMockApi();
 mockHost.__sugarCubesMockApi = api;

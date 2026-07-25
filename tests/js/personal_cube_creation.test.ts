@@ -54,7 +54,6 @@ describe('personal cube modal', () => {
       candidate: {
         defaultAlias: '',
         nodeIds: [1],
-        markerIds: [2, 3],
         warnings: ['<img src=x onerror=alert(1)>'],
       },
       deriveIdentity: (name) => suggestPersonalCubeIdentity(name),
@@ -65,6 +64,7 @@ describe('personal cube modal', () => {
     const inputs = form!.querySelectorAll<HTMLInputElement>('input');
     expect(inputs).toHaveLength(1);
     expect(document.body.textContent).toContain('Saved privately');
+    expect(document.body.textContent).toContain('1 selected nodes');
     expect(document.body.textContent).toContain('<img src=x onerror=alert(1)>');
     expect(document.querySelector('img')).toBeNull();
 
