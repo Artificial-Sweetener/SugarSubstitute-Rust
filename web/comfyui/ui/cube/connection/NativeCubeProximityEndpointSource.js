@@ -23,12 +23,14 @@ export class NativeCubeProximityEndpointSource {
     #geometry;
     #logger;
     #boundaryResolver;
+    #portPresentation;
     #lastDiscoverySignature = '';
     /** Bind native graph geometry and actionable traversal diagnostics. */
-    constructor(logger, boundaryResolver) {
+    constructor(logger, boundaryResolver, portPresentation = null) {
         this.#logger = logger;
         this.#geometry = new ComfyGraphGeometry(logger);
         this.#boundaryResolver = boundaryResolver;
+        this.#portPresentation = portPresentation;
     }
     /** Discover every currently unlinked root slot that can participate with a Cube. */
     discover(graphValue) {
@@ -58,7 +60,7 @@ export class NativeCubeProximityEndpointSource {
                     instanceId: identity.instanceId,
                     alias: readAlias(slotName),
                     type: output.type,
-                    slotPos: this.#geometry.slotPosition(node, true, slot),
+                    slotPos: this.#resolveStablePosition(node, true, slot),
                     slotName,
                     originId: origin.nodeId,
                     originSlot: origin.slot,
@@ -81,7 +83,7 @@ export class NativeCubeProximityEndpointSource {
                     instanceId: identity.instanceId,
                     alias: readAlias(slotName),
                     type: input.type,
-                    slotPos: this.#geometry.slotPosition(node, false, slot),
+                    slotPos: this.#resolveStablePosition(node, false, slot),
                     slotName,
                     promptTargets,
                 });
@@ -89,6 +91,11 @@ export class NativeCubeProximityEndpointSource {
         }
         this.#reportChangedInventory(outputs, inputs);
         return { outputs, inputs };
+    }
+    /** Match from canonical anchors so animated slots cannot feed back into policy. */
+    #resolveStablePosition(node, isOutput, slot) {
+        const fallback = this.#geometry.slotPosition(node, isOutput, slot);
+        return (this.#portPresentation?.resolveDefaultGraphPosition(node, isOutput ? 'output' : 'input', slot, fallback) ?? fallback);
     }
     /** Log endpoint ownership only when graph mutations change the inventory. */
     #reportChangedInventory(outputs, inputs) {

@@ -155,11 +155,44 @@ describe('ComfyVueCubeNodeHost', () => {
     node.onResize = jest.fn();
     host.mount(node);
 
-    expect(host.reconcileMinimumHeight(node, 475.2)).toBe(true);
+    expect(host.reconcileMinimumSize(node, 475.2)).toBe(true);
     expect([...node.size]).toEqual([640, 476]);
     expect(node.setSize).toHaveBeenCalledWith([640, 476]);
-    expect(host.reconcileMinimumHeight(node, 475.2)).toBe(false);
+    expect(host.reconcileMinimumSize(node, 475.2)).toBe(false);
 
+    host.dispose();
+  });
+
+  test('remeasures output anchors after Cube preview titles mount', () => {
+    const { root, body } = nativeCubeRoot('cube-node');
+    const row = body.firstElementChild as HTMLElement;
+    const output = document.createElement('div');
+    output.className = 'lg-slot lg-slot--output';
+    row.append(output);
+    setRect(root, { top: 0, left: 0, width: 500, height: 340 });
+    setRect(body, { top: 30, left: 0, width: 500, height: 300 });
+    setRect(row, { top: 30, left: 0, width: 500, height: 300 });
+    Object.defineProperty(body, 'offsetWidth', { configurable: true, value: 500 });
+    const requestSlotLayoutSync = jest.fn();
+    const host = new ComfyVueCubeNodeHost({
+      document,
+      titleHeight: 30,
+      history: {},
+      getScale: () => 1,
+      openEditor: () => undefined,
+      requestSlotLayoutSync,
+    });
+    const node = cubeNode('cube-node');
+    const face = host.mount(node);
+    const title = document.createElement('div');
+    title.dataset.cubePreviewOutputTitle = '';
+    setRect(title, { top: 100, left: 300, width: 100, height: 20 });
+    face?.append(title);
+
+    host.reconcileBoundary(node);
+
+    expect(output.style.getPropertyValue('--sugarcube-boundary-position')).toBe('80px');
+    expect(requestSlotLayoutSync).toHaveBeenCalledTimes(2);
     host.dispose();
   });
 });
@@ -168,6 +201,7 @@ describe('ComfyVueCubeNodeHost', () => {
 function createHost(openEditor: (node: CubeNode) => void = () => undefined): ComfyVueCubeNodeHost {
   return new ComfyVueCubeNodeHost({
     document,
+    titleHeight: 30,
     history: {},
     getScale: () => 1,
     openEditor,
@@ -250,4 +284,23 @@ function cubeNode(id: string): CubeNode {
     connect(): void {},
     serialize: () => ({}),
   } as unknown as CubeNode;
+}
+
+/** Give one JSDOM element finite viewport geometry. */
+function setRect(
+  element: HTMLElement,
+  rect: { top: number; left: number; width: number; height: number },
+): void {
+  element.getBoundingClientRect = () =>
+    ({
+      x: rect.left,
+      y: rect.top,
+      top: rect.top,
+      left: rect.left,
+      width: rect.width,
+      height: rect.height,
+      right: rect.left + rect.width,
+      bottom: rect.top + rect.height,
+      toJSON: () => ({}),
+    }) as DOMRect;
 }

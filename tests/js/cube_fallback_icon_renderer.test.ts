@@ -20,17 +20,26 @@ import { drawFallbackInitialsCanvas } from '../../frontend/comfyui/ui/core/CubeF
  * Build the minimal canvas context needed to inspect fallback icon drawing.
  */
 function createCanvasContext(measurement: TextMetrics) {
+  const savedFonts: string[] = [];
+  const drawnFonts: string[] = [];
   const context = {
     font: '',
     fillStyle: '',
     textAlign: '',
     textBaseline: '',
-    save: jest.fn(),
-    restore: jest.fn(),
+    save: jest.fn(function save(this: { font: string }) {
+      savedFonts.push(this.font);
+    }),
+    restore: jest.fn(function restore(this: { font: string }) {
+      this.font = savedFonts.pop() ?? '';
+    }),
     translate: jest.fn(),
     scale: jest.fn(),
     measureText: jest.fn(() => measurement),
-    fillText: jest.fn(),
+    fillText: jest.fn(function fillText(this: { font: string }) {
+      drawnFonts.push(this.font);
+    }),
+    drawnFonts,
   };
   return context as typeof context & CanvasRenderingContext2D;
 }
@@ -55,8 +64,10 @@ describe('cube fallback icon renderer', () => {
     drawFallbackInitialsCanvas(narrowContext, { initials: 'TI' }, 0, 0, 96);
     drawFallbackInitialsCanvas(wideContext, { initials: 'DA' }, 0, 0, 96);
 
-    expect(narrowContext.font).toContain('62px');
-    expect(wideContext.font).toContain('62px');
+    expect(narrowContext.drawnFonts.at(-1)).toContain('62px');
+    expect(wideContext.drawnFonts.at(-1)).toContain('62px');
+    expect(narrowContext.font).toBe('');
+    expect(wideContext.font).toBe('');
     expect(narrowContext.scale.mock.calls).toContainEqual([1, 1]);
     expect(wideContext.scale.mock.calls).toContainEqual([1, 1]);
   });
@@ -72,7 +83,8 @@ describe('cube fallback icon renderer', () => {
 
     drawFallbackInitialsCanvas(context, { initials: 'WW' }, 0, 0, 96);
 
-    expect(context.font).toContain('62px');
+    expect(context.drawnFonts.at(-1)).toContain('62px');
+    expect(context.font).toBe('');
     expect(context.scale.mock.calls).toContainEqual([1, 1]);
     expect(context.scale.mock.calls).toContainEqual([92 / 130, 92 / 130]);
   });

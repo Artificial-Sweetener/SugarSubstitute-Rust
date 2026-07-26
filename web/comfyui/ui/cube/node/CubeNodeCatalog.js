@@ -43,6 +43,8 @@ export class CubeNodeCatalog {
             }
             replacement.set(instanceId, value);
         }
+        if (sameEntries(this.#nodes, replacement))
+            return;
         this.#nodes.clear();
         for (const [instanceId, node] of replacement)
             this.#nodes.set(instanceId, node);
@@ -80,6 +82,17 @@ export class CubeNodeCatalog {
         for (const listener of this.#listeners)
             listener();
     }
+}
+/** Compare stable identity and order without waking presentation for an unchanged graph. */
+function sameEntries(current, replacement) {
+    if (current.size !== replacement.size)
+        return false;
+    const currentEntries = [...current.entries()];
+    const replacementEntries = [...replacement.entries()];
+    return currentEntries.every(([instanceId, node], index) => {
+        const replacementEntry = replacementEntries[index];
+        return replacementEntry?.[0] === instanceId && replacementEntry[1] === node;
+    });
 }
 /** Require the stable extension instance identity stored on one native node. */
 export function readInstanceId(node) {

@@ -19,12 +19,14 @@ import { drawNativeLiteGraphCubeCard } from './ComfyLiteGraphNodeCardRenderer.js
 import { computeCubeCanvasCardMenuLayout } from './CubeCanvasCardMenuLayout.js';
 import { CubeCanvasChromeRenderer, } from './CubeCanvasChromeRenderer.js';
 import { drawComfyPrimeIcon } from './ComfyPrimeIcons.js';
+import { CubeCanvasPortRenderer } from './CubeCanvasPortRenderer.js';
 import { CUBE_PREVIEW_SECTION_GAP, CUBE_PREVIEW_SECTION_INSET, CUBE_PREVIEW_TITLE_LINE_HEIGHT, dividePreviewIntoHorizontalSegments, resolveCubeCanvasPreviewSections, } from './CubePreviewSections.js';
 /** Own only visual composition for legacy canvas Cube surfaces. */
 export class ComfyLiteGraphCubeRenderer {
     #host;
     #previewImages;
     #chrome;
+    #ports = new CubeCanvasPortRenderer();
     /** Bind Comfy's exact active node and boundary render surfaces. */
     constructor(host, previewImages, icons) {
         this.#host = host;
@@ -50,6 +52,7 @@ export class ComfyLiteGraphCubeRenderer {
             this.#drawNativeCard(context, card);
         if (layout.preview)
             this.#drawPreview(context, layout.preview, item);
+        this.#ports.draw(context, layout);
         if (item.cardMenuOpen)
             this.#drawCardMenu(context, layout);
         context.restore();
@@ -117,10 +120,11 @@ export class ComfyLiteGraphCubeRenderer {
             if (!section)
                 continue;
             context.font = '14px sans-serif';
-            context.textBaseline = 'top';
+            context.textBaseline = 'middle';
             context.fillStyle = '#f0f2f5';
-            context.fillText(output.canonicalName, section.x, section.y, Math.max(1, section.width));
+            context.fillText(output.canonicalName, section.x, section.y + CUBE_PREVIEW_TITLE_LINE_HEIGHT / 2, Math.max(1, section.width));
             const media = output.item;
+            context.textBaseline = 'top';
             if (!media) {
                 context.font = '12px sans-serif';
                 context.fillStyle = '#aeb5c0';

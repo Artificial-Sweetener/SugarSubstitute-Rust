@@ -311,7 +311,7 @@ describe('ui hooks and scheduling', () => {
     expect(proto.drawForeground).not.toBe(originalForeground);
   });
 
-  test('connection hook refreshes container proximity for native graph changes', async () => {
+  test('connection hook coalesces proximity refreshes for native graph changes', async () => {
     await loadUi();
     const extension = app._extensions[0];
     await extension.setup!();
@@ -322,10 +322,7 @@ describe('ui hooks and scheduling', () => {
 
     hookedGraph().onNodeConnectionChange({ type: 'KSampler' });
     expect(schedulePreview).toHaveBeenCalledTimes(1);
-    expect(schedulePreview).toHaveBeenCalledWith({
-      graph: hookedGraph(),
-      immediate: true,
-    });
+    expect(schedulePreview).toHaveBeenCalledWith({ graph: hookedGraph() });
   });
 
   test('node moved triggers containment before collision and dedupes per raf', async () => {

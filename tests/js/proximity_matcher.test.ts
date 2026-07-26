@@ -73,4 +73,147 @@ describe('ProximityMatcher', () => {
       }),
     ]);
   });
+
+  test('prefers canonical compatible slots on horizontally adjacent Cubes', () => {
+    const outputNode: ComfyNode = {
+      id: 10,
+      pos: [100, 100],
+      size: [400, 320],
+      outputs: [],
+    };
+    const inputNode: ComfyNode = {
+      id: 20,
+      pos: [540, 100],
+      size: [400, 320],
+      inputs: [],
+    };
+    const outputs = [
+      outputEndpoint(outputNode, 0, 'MASK', [500, 160]),
+      outputEndpoint(outputNode, 1, 'IMAGE', [500, 360]),
+    ];
+    const inputs = [
+      inputEndpoint(inputNode, 0, 'IMAGE', [540, 160]),
+      inputEndpoint(inputNode, 1, 'IMAGE', [540, 360]),
+    ];
+    const matcher = new ProximityMatcher(
+      { discover: () => ({ outputs, inputs }) },
+      () => ({ isValidConnection: (output, input) => output === input }),
+      console,
+    );
+
+    expect(
+      matcher
+        .compute({ _nodes: [outputNode, inputNode] }, { radius: 160, strict: true })
+        .map((match) => [match.outputSlot, match.inputSlot]),
+    ).toEqual([[1, 0]]);
+  });
+
+  test('retains a selected pair inside the release radius and drops it after hysteresis', () => {
+    const outputNode: ComfyNode = { id: 10, pos: [100, 100], size: [400, 320] };
+    const inputNode: ComfyNode = { id: 20, pos: [540, 100], size: [400, 320] };
+    const output = outputEndpoint(outputNode, 0, 'IMAGE', [500, 160]);
+    const input = inputEndpoint(inputNode, 0, 'IMAGE', [540, 160]);
+    const matcher = new ProximityMatcher(
+      { discover: () => ({ outputs: [output], inputs: [input] }) },
+      () => ({ isValidConnection: () => true }),
+      console,
+    );
+
+    expect(matcher.compute({ _nodes: [] }, { radius: 160, strict: true })).toHaveLength(1);
+    inputNode.pos = [670, 100];
+    input.slotPos = [670, 160];
+    expect(matcher.compute({ _nodes: [] }, { radius: 160, strict: true })).toHaveLength(1);
+    inputNode.pos = [710, 100];
+    input.slotPos = [710, 160];
+    expect(matcher.compute({ _nodes: [] }, { radius: 160, strict: true })).toHaveLength(0);
+  });
+
+  test('connects distinct nodes even when imported metadata repeats an instance id', () => {
+    const outputNode: ComfyNode = { id: 10, pos: [100, 100], size: [400, 320] };
+    const inputNode: ComfyNode = { id: 20, pos: [540, 100], size: [400, 320] };
+    const output = outputEndpoint(outputNode, 0, 'IMAGE', [500, 160]);
+    const input = inputEndpoint(inputNode, 0, 'IMAGE', [540, 160]);
+    output.instanceId = 'duplicated-import-id';
+    input.instanceId = 'duplicated-import-id';
+    const matcher = new ProximityMatcher(
+      { discover: () => ({ outputs: [output], inputs: [input] }) },
+      () => ({ isValidConnection: () => true }),
+      console,
+    );
+
+    expect(matcher.compute({ _nodes: [] }, { radius: 160, strict: true })).toHaveLength(1);
+  });
+
+  test('checks compatibility only for horizontally nearby inputs', () => {
+    const outputNode: ComfyNode = { id: 10, pos: [0, 0], size: [100, 100] };
+    const output = outputEndpoint(outputNode, 0, 'IMAGE', [100, 40]);
+    const nearbyNode: ComfyNode = { id: 20, pos: [140, 0], size: [100, 100] };
+    const nearby = inputEndpoint(nearbyNode, 0, 'IMAGE', [140, 40]);
+    const distant = Array.from({ length: 1_000 }, (_, index) => {
+      const node: ComfyNode = {
+        id: index + 100,
+        pos: [10_000 + index * 200, 0],
+        size: [100, 100],
+      };
+      return inputEndpoint(node, 0, 'IMAGE', [10_000 + index * 200, 40]);
+    });
+    let compatibilityChecks = 0;
+    const isValidConnection = (): boolean => {
+      compatibilityChecks += 1;
+      return true;
+    };
+    const matcher = new ProximityMatcher(
+      { discover: () => ({ outputs: [output], inputs: [...distant, nearby] }) },
+      () => ({ isValidConnection }),
+      console,
+    );
+
+    expect(matcher.compute({ _nodes: [] }, { radius: 160, strict: true })).toHaveLength(1);
+    expect(compatibilityChecks).toBe(2);
+  });
 });
+
+/** Build one canonical Cube output endpoint. */
+function outputEndpoint(
+  node: ComfyNode,
+  slot: number,
+  type: string,
+  slotPos: [number, number],
+): ProximityOutputEndpoint {
+  return {
+    key: `${String(node.id)}:output:${String(slot)}`,
+    endpointId: node.id ?? '',
+    node,
+    slot,
+    cube: 'output-definition',
+    instanceId: String(node.id),
+    alias: type.toLowerCase(),
+    type,
+    slotPos,
+    slotName: type.toLowerCase(),
+    originId: `producer-${String(slot)}`,
+    originSlot: slot,
+  };
+}
+
+/** Build one canonical Cube input endpoint. */
+function inputEndpoint(
+  node: ComfyNode,
+  slot: number,
+  type: string,
+  slotPos: [number, number],
+): ProximityInputEndpoint {
+  return {
+    key: `${String(node.id)}:input:${String(slot)}`,
+    endpointId: node.id ?? '',
+    node,
+    slot,
+    cube: 'input-definition',
+    instanceId: String(node.id),
+    alias: type.toLowerCase(),
+    type,
+    slotPos,
+    slotName: type.toLowerCase(),
+    promptTargets: [{ nodeId: `consumer-${String(slot)}`, inputSlot: slot, inputName: 'image' }],
+  };
+}

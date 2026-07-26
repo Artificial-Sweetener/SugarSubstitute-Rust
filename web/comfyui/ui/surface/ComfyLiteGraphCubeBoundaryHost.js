@@ -14,34 +14,39 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Position Nodes 1.0 native output slots across from Cube preview titles. */
+import { resolveCubeCanvasInputSocketCenterX, resolveCubeCanvasOutputSocketCenterX, } from './CubeCanvasBoundaryGeometry.js';
 /** Own reversible presentation changes to real LiteGraph output slots. */
 export class ComfyLiteGraphCubeBoundaryHost {
     #presentations = new Map();
-    #inputClipRight = new Map();
     #slotHeight;
     /** Bind Comfy's native slot geometry without owning its visual styling. */
     constructor(options = {}) {
         this.#slotHeight = readPositiveNumber(options.slotHeight, readPositiveNumber(globalThis.LiteGraph?.NODE_SLOT_HEIGHT, 20));
     }
-    /** Synchronize native output hit targets with current preview-title geometry. */
-    sync(node, outputs, inputClipRight) {
+    /** Synchronize native hit targets with current transient boundary geometry. */
+    sync(node, inputs, outputs) {
         const presentations = this.#presentations.get(node) ?? new Map();
         this.#presentations.set(node, presentations);
-        this.#inputClipRight.set(node, Math.max(0, inputClipRight ?? Number(node.size[0]) / 2));
         const current = new Set();
+        for (const input of inputs) {
+            const slot = asLiteGraphSlot(node.inputs[input.index]);
+            if (!slot)
+                continue;
+            current.add(slot);
+            rememberSlot(presentations, slot);
+            slot.pos = [
+                resolveCubeCanvasInputSocketCenterX(0, this.#slotHeight),
+                input.y - Number(node.pos[1]),
+            ];
+        }
         for (const output of outputs) {
             const slot = asLiteGraphSlot(node.outputs[output.index]);
             if (!slot)
                 continue;
             current.add(slot);
-            if (!presentations.has(slot)) {
-                presentations.set(slot, {
-                    hadPosition: Object.hasOwn(slot, 'pos'),
-                    position: slot.pos,
-                });
-            }
+            rememberSlot(presentations, slot);
             slot.pos = [
-                resolveNativeOutputSlotX(Number(node.size[0]), this.#slotHeight),
+                resolveCubeCanvasOutputSocketCenterX(Number(node.size[0]), this.#slotHeight),
                 output.y - Number(node.pos[1]),
             ];
         }
@@ -52,15 +57,11 @@ export class ComfyLiteGraphCubeBoundaryHost {
             }
         }
     }
-    /** Draw native slots through geometry that excludes duplicate output labels. */
-    drawNativeSlotsWithoutOutputLabels(node, context, drawSlots) {
-        const width = Number(node.size[0]);
-        const height = Number(node.size[1]);
-        const inputClipRight = Math.min(width, this.#inputClipRight.get(node) ?? width / 2);
+    /** Draw only native dots while Cube-owned gutters render readable labels. */
+    drawNativeSlotDots(node, context, drawSlots) {
         context.save();
         context.beginPath();
-        context.rect(-16, -64, inputClipRight + 16, height + 128);
-        for (const value of node.outputs) {
+        for (const value of [...node.inputs, ...node.outputs]) {
             const slot = asLiteGraphSlot(value);
             const position = asPosition(slot?.pos);
             if (!position)
@@ -84,7 +85,6 @@ export class ComfyLiteGraphCubeBoundaryHost {
         for (const [slot, presentation] of presentations)
             restoreSlot(slot, presentation);
         this.#presentations.delete(node);
-        this.#inputClipRight.delete(node);
     }
     /** Restore all mounted Cube output slots. */
     dispose() {
@@ -92,9 +92,14 @@ export class ComfyLiteGraphCubeBoundaryHost {
             this.release(node);
     }
 }
-/** Match LiteGraph's native output-slot inset for ordinary Nodes 1.0 cards. */
-function resolveNativeOutputSlotX(nodeWidth, slotHeight) {
-    return nodeWidth + 1 - slotHeight / 2;
+/** Retain one slot's exact optional presentation before moving it. */
+function rememberSlot(presentations, slot) {
+    if (presentations.has(slot))
+        return;
+    presentations.set(slot, {
+        hadPosition: Object.hasOwn(slot, 'pos'),
+        position: slot.pos,
+    });
 }
 /** Narrow one dynamic host slot to the presentation surface LiteGraph reads. */
 function asLiteGraphSlot(value) {

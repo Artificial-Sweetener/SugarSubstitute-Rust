@@ -218,6 +218,8 @@ function cubeItemForNode(node: ComfyNode): {
       frame: { x: 90, y: 130, width: 720, height: 510 },
       header: { x: 90, y: 130, width: 720, height: 42 },
       content: { x: 102, y: 172, width: 696, height: 456 },
+      inputGutter: { x: 90, y: 172, width: 84, height: 456 },
+      outputGutter: { x: 770, y: 172, width: 40, height: 456 },
       masonry: { x: 102, y: 172, width: 696, height: 456 },
       preview: null,
       editAction: { x: 650, y: 139, width: 68, height: 24 },
@@ -243,7 +245,7 @@ function cubeItemForNode(node: ComfyNode): {
       ],
       inputs: [],
       outputs: [],
-      minimumSize: [320, 180],
+      minimumSize: [440, 180],
     },
   };
 }

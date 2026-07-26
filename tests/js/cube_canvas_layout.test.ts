@@ -50,7 +50,7 @@ describe('computeCubeCanvasLayout', () => {
     expect(layout.cards[0]?.bodyHeight).toBe(96);
     expect(layout.cards[0]?.rect.height).toBe(126);
     expect(layout.cards[0]?.rect.y).toBe(layout.header.y + layout.header.height + state.gap);
-    expect(layout.minimumSize).toEqual([320, 180]);
+    expect(layout.minimumSize).toEqual([440, 180]);
     expect(inner.inputs).toBe(inputs);
     expect(inner.outputs).toBe(outputs);
     expect(inner.flags).toBe(flags);
@@ -82,7 +82,7 @@ describe('computeCubeCanvasLayout', () => {
     const layout = computeCubeCanvasLayout(cube, state, 30);
 
     expect(layout.cards.map((card) => card.rect.height)).toEqual([128, 128, 128]);
-    expect(layout.minimumSize).toEqual([320, 476]);
+    expect(layout.minimumSize).toEqual([440, 476]);
   });
 
   test('aligns output ports with equal preview-section title rows', () => {
@@ -110,9 +110,72 @@ describe('computeCubeCanvasLayout', () => {
     expect(layout.preview).not.toBeNull();
     expect(layout.outputs.map((output) => output.slot)).toEqual([firstOutput, secondOutput]);
     expect(layout.outputs.map((output) => output.y)).toEqual([180, 400]);
-    expect(layout.outputs.every((output) => output.x === layout.frame.x + layout.frame.width)).toBe(
-      true,
+    expect(
+      layout.outputs.every((output) => output.x === layout.frame.x + layout.frame.width - 9),
+    ).toBe(true);
+    expect(layout.inputGutter.width).toBe(0);
+    expect(layout.outputGutter.width).toBeGreaterThanOrEqual(32);
+    expect(layout.preview?.x).toBeGreaterThanOrEqual(
+      layout.inputGutter.x + layout.inputGutter.width,
     );
+    expect((layout.preview?.x ?? 0) + (layout.preview?.width ?? 0)).toBeLessThan(
+      layout.outputGutter.x,
+    );
+    expect(
+      layout.outputs.every(
+        (output) =>
+          output.minY <= output.y && output.y <= output.maxY && output.labelY === output.y,
+      ),
+    ).toBe(true);
+  });
+
+  test('packs input ports from the native top row instead of centering them on the Cube', () => {
+    const state = createDefaultCubeSurfaceState();
+    const cube = cubeNode({
+      id: 'inner',
+      type: 'Upscale',
+      pos: [0, 0],
+      size: [240, 100],
+      inputs: [],
+      outputs: [],
+      widgets: [],
+      properties: {},
+      connect() {},
+    });
+    const imageInput = { name: 'image', type: 'IMAGE' };
+    cube.inputs = [imageInput];
+    cube.subgraph.inputs = [imageInput];
+
+    const layout = computeCubeCanvasLayout(cube, state, 30);
+
+    expect(layout.inputs[0]?.y).toBe(layout.inputs[0]?.minY);
+    expect(layout.inputs[0]?.y).toBeLessThan(layout.frame.y + layout.frame.height / 2);
+  });
+
+  test('does not reserve either boundary affordance when the Cube has no ports', () => {
+    const state = createDefaultCubeSurfaceState();
+    const cube = cubeNode({
+      id: 'inner',
+      type: 'PreviewImage',
+      pos: [0, 0],
+      size: [240, 100],
+      inputs: [],
+      outputs: [],
+      widgets: [],
+      properties: {},
+      connect() {},
+    });
+    cube.inputs = [];
+    cube.outputs = [];
+    cube.subgraph.inputs = [];
+    cube.subgraph.outputs = [];
+
+    const layout = computeCubeCanvasLayout(cube, state, 30);
+
+    expect(layout.inputGutter.width).toBe(0);
+    expect(layout.outputGutter.width).toBe(0);
+    expect(layout.content.x).toBe(layout.frame.x + 12);
+    expect(layout.content.x + layout.content.width).toBe(layout.frame.x + layout.frame.width - 12);
   });
 
   test('reserves a compact hit target for the native Nodes 1.0 SubgraphNode editor button', () => {

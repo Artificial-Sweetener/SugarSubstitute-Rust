@@ -27,6 +27,7 @@ import { isRecord } from '../../types/common.js';
 import type { ComfyGraph, ComfyInput, ComfyNode, ComfyOutput } from '../../types/graph.js';
 import type { NativeSubgraphBoundaryResolver } from '../graph/NativeSubgraphBoundaryResolver.js';
 import { isCubeNode, requireCubeIdentity } from '../node/ComfyCubeNodeFactory.js';
+import type { CubePortPresentationController } from './CubePortPresentationController.js';
 
 interface EndpointIdentity {
   cube: string | null;
@@ -38,16 +39,19 @@ export class NativeCubeProximityEndpointSource implements ProximityEndpointSourc
   readonly #geometry: ComfyGraphGeometry;
   readonly #logger: Pick<Console, 'debug' | 'warn'>;
   readonly #boundaryResolver: NativeSubgraphBoundaryResolver;
+  readonly #portPresentation: CubePortPresentationController | null;
   #lastDiscoverySignature = '';
 
   /** Bind native graph geometry and actionable traversal diagnostics. */
   constructor(
     logger: Pick<Console, 'debug' | 'warn'>,
     boundaryResolver: NativeSubgraphBoundaryResolver,
+    portPresentation: CubePortPresentationController | null = null,
   ) {
     this.#logger = logger;
     this.#geometry = new ComfyGraphGeometry(logger);
     this.#boundaryResolver = boundaryResolver;
+    this.#portPresentation = portPresentation;
   }
 
   /** Discover every currently unlinked root slot that can participate with a Cube. */
@@ -74,7 +78,7 @@ export class NativeCubeProximityEndpointSource implements ProximityEndpointSourc
           instanceId: identity.instanceId,
           alias: readAlias(slotName),
           type: output.type,
-          slotPos: this.#geometry.slotPosition(node, true, slot),
+          slotPos: this.#resolveStablePosition(node, true, slot),
           slotName,
           originId: origin.nodeId,
           originSlot: origin.slot,
@@ -95,7 +99,7 @@ export class NativeCubeProximityEndpointSource implements ProximityEndpointSourc
           instanceId: identity.instanceId,
           alias: readAlias(slotName),
           type: input.type,
-          slotPos: this.#geometry.slotPosition(node, false, slot),
+          slotPos: this.#resolveStablePosition(node, false, slot),
           slotName,
           promptTargets,
         });
@@ -103,6 +107,19 @@ export class NativeCubeProximityEndpointSource implements ProximityEndpointSourc
     }
     this.#reportChangedInventory(outputs, inputs);
     return { outputs, inputs };
+  }
+
+  /** Match from canonical anchors so animated slots cannot feed back into policy. */
+  #resolveStablePosition(node: ComfyNode, isOutput: boolean, slot: number): [number, number] {
+    const fallback = this.#geometry.slotPosition(node, isOutput, slot);
+    return (
+      this.#portPresentation?.resolveDefaultGraphPosition(
+        node,
+        isOutput ? 'output' : 'input',
+        slot,
+        fallback,
+      ) ?? fallback
+    );
   }
 
   /** Log endpoint ownership only when graph mutations change the inventory. */

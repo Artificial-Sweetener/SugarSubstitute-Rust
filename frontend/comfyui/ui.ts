@@ -163,6 +163,11 @@ function createCubeRuntime(): ComfyCubeRuntime {
     previewRetention: cubePreviewRetention,
     openCubeMenu: (metadata, event) => overlayManager.openCubeMenu(metadata, event),
     getCubeOutput: (executionId) => cubeOutputExecutionStore.read(executionId),
+    subscribePreviewChanges: (listener) => cubeOutputExecutionStore.subscribe(listener),
+    onBoundaryGeometryChange: () =>
+      overlayManager.proximity.schedulePreview({
+        graph: appRef.canvas?.graph ?? appRef.graph,
+      }),
     getPreviewLinks: () =>
       overlayManager.proximity.settings.enabled
         ? overlayManager.proximity.promptMatches.flatMap((match) =>
@@ -179,6 +184,7 @@ function createCubeRuntime(): ComfyCubeRuntime {
         : [],
   });
   overlayManager.proximity.setEndpointSource(runtime.proximityEndpoints);
+  overlayManager.proximity.setMatchSink(runtime.proximityPresentation);
   return runtime;
 }
 
@@ -363,7 +369,7 @@ export const sugarCubesExtension: SugarCubesExtension = {
       cubeOutputHistoryAdapter.install();
       await cubeOutputHistoryAdapter.hydrateRecent();
       await hostSettingsController.refresh({ checkForUpdates: false });
-      const graph = appRef?.graph;
+      const graph = appRef?.canvas?.graph ?? appRef?.graph;
       overlayManager.proximity.refreshOverlayState({
         recompute: true,
         ...(graph ? { graph } : {}),
@@ -392,7 +398,7 @@ export const sugarCubesExtension: SugarCubesExtension = {
     try {
       requireCubeRuntime().restoreLegacy(cubePreconfiguration.takeLegacyBatch());
       void cubeOutputHistoryAdapter.hydrateRecent();
-      const graph = comfyApp.graph ?? appRef?.graph;
+      const graph = appRef?.canvas?.graph ?? comfyApp.graph ?? appRef?.graph;
       overlayManager.proximity.refreshOverlayState({
         recompute: true,
         ...(graph ? { graph } : {}),

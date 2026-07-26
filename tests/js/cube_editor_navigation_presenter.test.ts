@@ -67,7 +67,7 @@ test('returns through Cube context instead of skipping from nested graph to root
   });
   presenter.open(cube);
   currentGraph = { id: 'nested', name: 'Restored nested graph' };
-  jest.advanceTimersByTime(100);
+  presenter.refresh();
 
   const bar = document.querySelector('.sugarcubes-cube-editor-navigation');
   expect(bar?.textContent).toContain('Cube Editor');
@@ -77,7 +77,7 @@ test('returns through Cube context instead of skipping from nested graph to root
 
   buttons[0]?.click();
   expect(setGraph).toHaveBeenLastCalledWith(cubeGraph);
-  jest.advanceTimersByTime(100);
+  presenter.refresh();
   expect(bar?.textContent).toContain('Detailer');
   expect(bar?.textContent).not.toContain('Nested Detail');
 
@@ -90,7 +90,7 @@ test('returns through Cube context instead of skipping from nested graph to root
     scale: 0.75,
     offset: [80, 120],
   });
-  jest.advanceTimersByTime(100);
+  presenter.refresh();
   expect(restoreView).toHaveBeenCalledTimes(2);
   expect(restoreSelection).toHaveBeenCalledTimes(2);
   expect(restoreSelection).toHaveBeenLastCalledWith([selected]);
@@ -141,9 +141,9 @@ test('returns to the live Cube graph object after Comfy replaces definition inst
 
   presenter.open(cube);
   currentGraph = liveCubeGraph;
-  jest.advanceTimersByTime(100);
+  presenter.refresh();
   currentGraph = nested;
-  jest.advanceTimersByTime(100);
+  presenter.refresh();
 
   const back = [
     ...document.querySelectorAll<HTMLButtonElement>('.sugarcubes-cube-editor-navigation button'),
@@ -152,7 +152,7 @@ test('returns to the live Cube graph object after Comfy replaces definition inst
   back?.click();
 
   expect(setGraph).toHaveBeenLastCalledWith(liveCubeGraph);
-  jest.advanceTimersByTime(100);
+  presenter.refresh();
   expect(document.querySelector('.sugarcubes-cube-editor-navigation')?.textContent).toContain(
     'Detailer',
   );
@@ -209,6 +209,40 @@ test('contains Cube navigation actions so the host cannot apply a second back tr
   back?.click();
 
   expect(setGraph).toHaveBeenLastCalledWith(cubeGraph);
+  presenter.dispose();
+  jest.useRealTimers();
+});
+
+test('does not traverse Cube definitions while the root graph is idle', () => {
+  jest.useFakeTimers();
+  document.body.replaceChildren();
+  const rootGraph = { id: 'root' };
+  const isSubgraphNode = jest.fn(() => true);
+  const cubeGraph = {
+    id: 'cube-definition',
+    name: 'Idle Cube',
+    _nodes: [{ isSubgraphNode, subgraph: { id: 'nested', _nodes: [] } }],
+  } as unknown as NativeCubeSubgraph;
+  const nodes = new CubeNodeCatalog();
+  nodes.add(cubeNode('container', 'Idle Cube', cubeGraph));
+  const presenter = new CubeEditorNavigationPresenter({
+    document,
+    canvas: {
+      setGraph() {},
+      captureView: () => null,
+      restoreView() {},
+      captureSelection: () => [],
+      restoreSelection() {},
+    },
+    rootGraph,
+    getCurrentGraph: () => rootGraph,
+    nodes,
+  });
+  isSubgraphNode.mockClear();
+
+  jest.advanceTimersByTime(1_000);
+
+  expect(isSubgraphNode).not.toHaveBeenCalled();
   presenter.dispose();
   jest.useRealTimers();
 });

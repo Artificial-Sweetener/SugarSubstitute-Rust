@@ -29,9 +29,14 @@ import { computeCubeMasonry, orderCubeSurfaceCards } from './CubeMasonryLayout.j
 import { cubeMinimumSize, resolveCubeSurfaceMinimumHeight } from './CubeSurfaceMinimumHeight.js';
 import { resolveCubeSurfaceCardSpacing } from './CubeSurfaceSpacing.js';
 import type { CubeSurfaceState } from './CubeSurfaceState.js';
-import { resolveCubePreviewTitleAnchors } from './CubePreviewSections.js';
 import type { CubeFaceTitlebarActionKey } from './CubeFaceChromeActions.js';
 import { layoutCubeCanvasChrome } from './CubeCanvasChromeLayout.js';
+import {
+  layoutCubeInputPorts,
+  layoutCubeOutputPorts,
+  resolveCubePortGutters,
+  type CubePortLayout,
+} from './CubePortGutterLayout.js';
 
 export interface CubeCanvasRect {
   x: number;
@@ -51,14 +56,8 @@ export interface CubeCanvasCard {
   activationAction: CubeCanvasRect | null;
 }
 
-export interface CubeCanvasPort {
-  index: number;
-  name: string;
-  type: string;
-  x: number;
-  y: number;
-  slot: unknown;
-}
+/** Reuse renderer-neutral port geometry on the LiteGraph canvas surface. */
+export type CubeCanvasPort = CubePortLayout;
 
 export interface CubeCanvasResizeHandle {
   edge: CubeResizeEdge;
@@ -69,6 +68,8 @@ export interface CubeCanvasLayout {
   frame: CubeCanvasRect;
   header: CubeCanvasRect;
   content: CubeCanvasRect;
+  inputGutter: CubeCanvasRect;
+  outputGutter: CubeCanvasRect;
   masonry: CubeCanvasRect;
   preview: CubeCanvasRect | null;
   editAction: CubeCanvasRect;
@@ -103,12 +104,17 @@ export function computeCubeCanvasLayout(
   );
   const header = rect(frame.x, frame.y, frame.width, HEADER_HEIGHT);
   const spacing = resolveCubeSurfaceCardSpacing(state);
-  const content = rect(
+  const baseContent = rect(
     frame.x + FRAME_PADDING,
     frame.y + HEADER_HEIGHT + spacing.headerInset,
     Math.max(1, frame.width - FRAME_PADDING * 2),
     Math.max(1, frame.height - HEADER_HEIGHT - spacing.headerInset - spacing.footerInset),
   );
+  const gutters = resolveCubePortGutters(frame, baseContent, {
+    hasInputs: node.inputs.length > 0,
+    hasOutputs: node.outputs.length > 0,
+  });
+  const content = gutters.content;
   const minimumMasonryWidth = Math.min(content.width, Math.max(1, state.minimumColumnWidth));
   const previewWidth = state.preview.visible
     ? Math.min(state.preview.width, Math.max(0, content.width - CONTENT_GAP - minimumMasonryWidth))
@@ -188,6 +194,8 @@ export function computeCubeCanvasLayout(
     frame,
     header,
     content,
+    inputGutter: gutters.inputGutter,
+    outputGutter: gutters.outputGutter,
     masonry,
     preview,
     editAction: chrome.editAction,
@@ -196,8 +204,8 @@ export function computeCubeCanvasLayout(
     cardMenuEntries: presentation.menuEntries,
     resizeHandles: layoutResizeHandles(frame),
     cards,
-    inputs: layoutPorts(node.subgraph.inputs, frame, 'input'),
-    outputs: layoutOutputPorts(node.outputs, frame, preview),
+    inputs: layoutCubeInputPorts(node.subgraph.inputs, frame, HEADER_HEIGHT),
+    outputs: layoutCubeOutputPorts(node.outputs, frame, preview, HEADER_HEIGHT),
     minimumSize,
   };
 }
@@ -273,50 +281,6 @@ function orderNodes(nodes: readonly ComfyNode[], persistedOrder: readonly string
     .filter((node): node is ComfyNode => node !== undefined);
 }
 
-/** Distribute graph-owned boundary slots down the outer Cube edge. */
-function layoutPorts(
-  slots: readonly unknown[],
-  frame: CubeCanvasRect,
-  kind: 'input' | 'output',
-): CubeCanvasPort[] {
-  return slots.map((slot, index) => {
-    const record = isPortRecord(slot) ? slot : {};
-    return {
-      index,
-      name: readString(record.name) || `${kind} ${String(index + 1)}`,
-      type: readString(record.type) || '*',
-      x: kind === 'input' ? frame.x : frame.x + frame.width,
-      y:
-        frame.y +
-        HEADER_HEIGHT +
-        ((index + 1) * (frame.height - HEADER_HEIGHT)) / (slots.length + 1),
-      slot,
-    };
-  });
-}
-
-/** Place graph-owned outputs across from their ordered preview-section titles. */
-function layoutOutputPorts(
-  slots: readonly unknown[],
-  frame: CubeCanvasRect,
-  preview: CubeCanvasRect | null,
-): CubeCanvasPort[] {
-  const anchors = preview
-    ? resolveCubePreviewTitleAnchors(preview, slots.length)
-    : layoutPorts(slots, frame, 'output').map((port) => port.y);
-  return slots.map((slot, index) => {
-    const record = isPortRecord(slot) ? slot : {};
-    return {
-      index,
-      name: readString(record.name) || `output ${String(index + 1)}`,
-      type: readString(record.type) || '*',
-      x: frame.x + frame.width,
-      y: anchors[index] ?? frame.y + HEADER_HEIGHT,
-      slot,
-    };
-  });
-}
-
 /** Build a finite rectangle without allowing invalid host geometry inward. */
 function rect(x: number, y: number, width: number, height: number): CubeCanvasRect {
   return {
@@ -325,14 +289,4 @@ function rect(x: number, y: number, width: number, height: number): CubeCanvasRe
     width: Number.isFinite(width) ? Math.max(1, width) : 1,
     height: Number.isFinite(height) ? Math.max(1, height) : 1,
   };
-}
-
-/** Narrow one native slot enough to read its visible metadata. */
-function isPortRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-/** Read a trimmed native slot value. */
-function readString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
 }

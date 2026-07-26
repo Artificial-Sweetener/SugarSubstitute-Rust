@@ -17,6 +17,10 @@
 
 import type { CubeNode } from '../cube/node/ComfyCubeNodeFactory.js';
 import type { CubeCanvasPort } from './CubeCanvasLayout.js';
+import {
+  resolveCubeCanvasInputSocketCenterX,
+  resolveCubeCanvasOutputSocketCenterX,
+} from './CubeCanvasBoundaryGeometry.js';
 
 interface LiteGraphSlot {
   pos?: unknown;
@@ -34,7 +38,6 @@ export interface ComfyLiteGraphCubeBoundaryHostOptions {
 /** Own reversible presentation changes to real LiteGraph output slots. */
 export class ComfyLiteGraphCubeBoundaryHost {
   readonly #presentations = new Map<CubeNode, Map<LiteGraphSlot, SlotPresentation>>();
-  readonly #inputClipRight = new Map<CubeNode, number>();
   readonly #slotHeight: number;
 
   /** Bind Comfy's native slot geometry without owning its visual styling. */
@@ -45,24 +48,32 @@ export class ComfyLiteGraphCubeBoundaryHost {
     );
   }
 
-  /** Synchronize native output hit targets with current preview-title geometry. */
-  sync(node: CubeNode, outputs: readonly CubeCanvasPort[], inputClipRight?: number): void {
+  /** Synchronize native hit targets with current transient boundary geometry. */
+  sync(
+    node: CubeNode,
+    inputs: readonly CubeCanvasPort[],
+    outputs: readonly CubeCanvasPort[],
+  ): void {
     const presentations = this.#presentations.get(node) ?? new Map();
     this.#presentations.set(node, presentations);
-    this.#inputClipRight.set(node, Math.max(0, inputClipRight ?? Number(node.size[0]) / 2));
     const current = new Set<LiteGraphSlot>();
+    for (const input of inputs) {
+      const slot = asLiteGraphSlot(node.inputs[input.index]);
+      if (!slot) continue;
+      current.add(slot);
+      rememberSlot(presentations, slot);
+      slot.pos = [
+        resolveCubeCanvasInputSocketCenterX(0, this.#slotHeight),
+        input.y - Number(node.pos[1]),
+      ];
+    }
     for (const output of outputs) {
       const slot = asLiteGraphSlot(node.outputs[output.index]);
       if (!slot) continue;
       current.add(slot);
-      if (!presentations.has(slot)) {
-        presentations.set(slot, {
-          hadPosition: Object.hasOwn(slot, 'pos'),
-          position: slot.pos,
-        });
-      }
+      rememberSlot(presentations, slot);
       slot.pos = [
-        resolveNativeOutputSlotX(Number(node.size[0]), this.#slotHeight),
+        resolveCubeCanvasOutputSocketCenterX(Number(node.size[0]), this.#slotHeight),
         output.y - Number(node.pos[1]),
       ];
     }
@@ -74,19 +85,15 @@ export class ComfyLiteGraphCubeBoundaryHost {
     }
   }
 
-  /** Draw native slots through geometry that excludes duplicate output labels. */
-  drawNativeSlotsWithoutOutputLabels(
+  /** Draw only native dots while Cube-owned gutters render readable labels. */
+  drawNativeSlotDots(
     node: CubeNode,
     context: CanvasRenderingContext2D,
     drawSlots: () => void,
   ): void {
-    const width = Number(node.size[0]);
-    const height = Number(node.size[1]);
-    const inputClipRight = Math.min(width, this.#inputClipRight.get(node) ?? width / 2);
     context.save();
     context.beginPath();
-    context.rect(-16, -64, inputClipRight + 16, height + 128);
-    for (const value of node.outputs) {
+    for (const value of [...node.inputs, ...node.outputs]) {
       const slot = asLiteGraphSlot(value);
       const position = asPosition(slot?.pos);
       if (!position) continue;
@@ -107,7 +114,6 @@ export class ComfyLiteGraphCubeBoundaryHost {
     if (!presentations) return;
     for (const [slot, presentation] of presentations) restoreSlot(slot, presentation);
     this.#presentations.delete(node);
-    this.#inputClipRight.delete(node);
   }
 
   /** Restore all mounted Cube output slots. */
@@ -116,9 +122,16 @@ export class ComfyLiteGraphCubeBoundaryHost {
   }
 }
 
-/** Match LiteGraph's native output-slot inset for ordinary Nodes 1.0 cards. */
-function resolveNativeOutputSlotX(nodeWidth: number, slotHeight: number): number {
-  return nodeWidth + 1 - slotHeight / 2;
+/** Retain one slot's exact optional presentation before moving it. */
+function rememberSlot(
+  presentations: Map<LiteGraphSlot, SlotPresentation>,
+  slot: LiteGraphSlot,
+): void {
+  if (presentations.has(slot)) return;
+  presentations.set(slot, {
+    hadPosition: Object.hasOwn(slot, 'pos'),
+    position: slot.pos,
+  });
 }
 
 /** Narrow one dynamic host slot to the presentation surface LiteGraph reads. */

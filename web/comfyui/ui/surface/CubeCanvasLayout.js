@@ -21,8 +21,8 @@ import { measureCubeFaceNodeBodyHeight } from './CubeFaceNodeMeasurement.js';
 import { computeCubeMasonry, orderCubeSurfaceCards } from './CubeMasonryLayout.js';
 import { cubeMinimumSize, resolveCubeSurfaceMinimumHeight } from './CubeSurfaceMinimumHeight.js';
 import { resolveCubeSurfaceCardSpacing } from './CubeSurfaceSpacing.js';
-import { resolveCubePreviewTitleAnchors } from './CubePreviewSections.js';
 import { layoutCubeCanvasChrome } from './CubeCanvasChromeLayout.js';
+import { layoutCubeInputPorts, layoutCubeOutputPorts, resolveCubePortGutters, } from './CubePortGutterLayout.js';
 const FRAME_PADDING = 12;
 const HEADER_HEIGHT = 42;
 const CONTENT_GAP = 12;
@@ -33,7 +33,12 @@ export function computeCubeCanvasLayout(node, state, titleHeight, titlebarAction
     const frame = rect(Number(node.pos[0]), Number(node.pos[1]) - titleHeight, Number(node.size[0]), Number(node.size[1]) + titleHeight);
     const header = rect(frame.x, frame.y, frame.width, HEADER_HEIGHT);
     const spacing = resolveCubeSurfaceCardSpacing(state);
-    const content = rect(frame.x + FRAME_PADDING, frame.y + HEADER_HEIGHT + spacing.headerInset, Math.max(1, frame.width - FRAME_PADDING * 2), Math.max(1, frame.height - HEADER_HEIGHT - spacing.headerInset - spacing.footerInset));
+    const baseContent = rect(frame.x + FRAME_PADDING, frame.y + HEADER_HEIGHT + spacing.headerInset, Math.max(1, frame.width - FRAME_PADDING * 2), Math.max(1, frame.height - HEADER_HEIGHT - spacing.headerInset - spacing.footerInset));
+    const gutters = resolveCubePortGutters(frame, baseContent, {
+        hasInputs: node.inputs.length > 0,
+        hasOutputs: node.outputs.length > 0,
+    });
+    const content = gutters.content;
     const minimumMasonryWidth = Math.min(content.width, Math.max(1, state.minimumColumnWidth));
     const previewWidth = state.preview.visible
         ? Math.min(state.preview.width, Math.max(0, content.width - CONTENT_GAP - minimumMasonryWidth))
@@ -95,6 +100,8 @@ export function computeCubeCanvasLayout(node, state, titleHeight, titlebarAction
         frame,
         header,
         content,
+        inputGutter: gutters.inputGutter,
+        outputGutter: gutters.outputGutter,
         masonry,
         preview,
         editAction: chrome.editAction,
@@ -103,8 +110,8 @@ export function computeCubeCanvasLayout(node, state, titleHeight, titlebarAction
         cardMenuEntries: presentation.menuEntries,
         resizeHandles: layoutResizeHandles(frame),
         cards,
-        inputs: layoutPorts(node.subgraph.inputs, frame, 'input'),
-        outputs: layoutOutputPorts(node.outputs, frame, preview),
+        inputs: layoutCubeInputPorts(node.subgraph.inputs, frame, HEADER_HEIGHT),
+        outputs: layoutCubeOutputPorts(node.outputs, frame, preview, HEADER_HEIGHT),
         minimumSize,
     };
 }
@@ -136,39 +143,6 @@ function orderNodes(nodes, persistedOrder) {
         .map((id) => byId.get(id))
         .filter((node) => node !== undefined);
 }
-/** Distribute graph-owned boundary slots down the outer Cube edge. */
-function layoutPorts(slots, frame, kind) {
-    return slots.map((slot, index) => {
-        const record = isPortRecord(slot) ? slot : {};
-        return {
-            index,
-            name: readString(record.name) || `${kind} ${String(index + 1)}`,
-            type: readString(record.type) || '*',
-            x: kind === 'input' ? frame.x : frame.x + frame.width,
-            y: frame.y +
-                HEADER_HEIGHT +
-                ((index + 1) * (frame.height - HEADER_HEIGHT)) / (slots.length + 1),
-            slot,
-        };
-    });
-}
-/** Place graph-owned outputs across from their ordered preview-section titles. */
-function layoutOutputPorts(slots, frame, preview) {
-    const anchors = preview
-        ? resolveCubePreviewTitleAnchors(preview, slots.length)
-        : layoutPorts(slots, frame, 'output').map((port) => port.y);
-    return slots.map((slot, index) => {
-        const record = isPortRecord(slot) ? slot : {};
-        return {
-            index,
-            name: readString(record.name) || `output ${String(index + 1)}`,
-            type: readString(record.type) || '*',
-            x: frame.x + frame.width,
-            y: anchors[index] ?? frame.y + HEADER_HEIGHT,
-            slot,
-        };
-    });
-}
 /** Build a finite rectangle without allowing invalid host geometry inward. */
 function rect(x, y, width, height) {
     return {
@@ -177,12 +151,4 @@ function rect(x, y, width, height) {
         width: Number.isFinite(width) ? Math.max(1, width) : 1,
         height: Number.isFinite(height) ? Math.max(1, height) : 1,
     };
-}
-/** Narrow one native slot enough to read its visible metadata. */
-function isPortRecord(value) {
-    return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-/** Read a trimmed native slot value. */
-function readString(value) {
-    return typeof value === 'string' ? value.trim() : '';
 }

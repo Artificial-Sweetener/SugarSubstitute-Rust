@@ -27,6 +27,7 @@ function createRuntime(dispose: () => void): ComfyCubeRuntime {
     authoring: {} as ComfyCubeRuntime['authoring'],
     nodes: new CubeNodeCatalog(),
     proximityEndpoints: { discover: () => ({ outputs: [], inputs: [] }) },
+    proximityPresentation: { updateMatches: () => undefined },
     registerSubgraphs: () => [],
     restoreLegacy: () => ({ migrated: 0, connected: 0, warnings: [] }),
     dispose,

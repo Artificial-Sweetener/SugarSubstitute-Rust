@@ -71,12 +71,14 @@ export function ensureCubeSurfaceStyles(documentRef) {
       min-width: 0;
       min-height: 0;
       overflow: clip;
+      contain: layout paint style;
       pointer-events: auto;
     }
     [data-sugarcube-cube-body] {
+      position: relative;
       padding-top: 0 !important;
       padding-bottom: 0 !important;
-      overflow: clip !important;
+      overflow: visible !important;
     }
     .lg-node[data-sugarcube-node="true"]
       [data-sugarcube-boundary-row] {
@@ -98,22 +100,49 @@ export function ensureCubeSurfaceStyles(documentRef) {
       width: max-content;
       min-width: 2rem;
       min-height: 2rem;
+      overflow: visible;
       pointer-events: auto;
       transform: translateY(-50%);
     }
     .lg-node[data-sugarcube-node="true"]
       [data-sugarcube-boundary-direction="input"] {
       left: 0;
+      box-sizing: border-box;
+      width: 5.25rem;
+      max-width: 5.25rem;
+      padding-right: 0.5rem;
+      overflow: visible;
+    }
+    .lg-node[data-sugarcube-node="true"]
+      [data-sugarcube-boundary-direction="input"]
+      > :not([data-testid="slot-connection-dot"]) {
+      min-width: 0;
+      max-width: 3.75rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
     .lg-node[data-sugarcube-node="true"]
       [data-sugarcube-boundary-direction="output"] {
       right: 0;
+      width: 2.5rem;
+      min-width: 2.5rem;
       padding-left: 0 !important;
     }
     .lg-node[data-sugarcube-node="true"]
       [data-sugarcube-boundary-direction="output"]
       > :not([data-testid="slot-connection-dot"]) {
       display: none !important;
+    }
+    .sugarcubes-cube-port-leaders {
+      position: absolute;
+      z-index: 1002;
+      inset: 0;
+      display: block;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+      pointer-events: none;
     }
     .sugarcubes-cube-face {
       box-sizing: border-box;
@@ -176,6 +205,7 @@ export function ensureCubeSurfaceStyles(documentRef) {
       object-fit: contain;
     }
     .sugarcubes-cube-face__title {
+      min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -186,6 +216,7 @@ export function ensureCubeSurfaceStyles(documentRef) {
       flex-direction: column;
       align-items: center;
       grid-column: 2;
+      width: 100%;
       min-width: 0;
       overflow: hidden;
       color: color-mix(in srgb, currentColor 86%, transparent);
@@ -208,6 +239,7 @@ export function ensureCubeSurfaceStyles(documentRef) {
     .sugarcubes-cube-face__actions {
       position: relative;
       display: flex;
+      grid-column: 3;
       gap: 0.375rem;
       justify-self: end;
     }
@@ -284,6 +316,13 @@ export function ensureCubeSurfaceStyles(documentRef) {
       gap: 0.75rem;
       overflow: clip;
       isolation: isolate;
+      width: calc(
+        100% -
+        var(--sugarcubes-cube-input-gutter-width, 0px) -
+        var(--sugarcubes-cube-output-gutter-width, 0px)
+      );
+      margin-right: var(--sugarcubes-cube-output-gutter-width, 0px);
+      margin-left: var(--sugarcubes-cube-input-gutter-width, 0px);
       padding:
         var(--sugarcubes-cube-masonry-header-inset, 0px)
         0.5rem
@@ -418,6 +457,12 @@ export function ensureCubeSurfaceStyles(documentRef) {
     }
     .sugarcubes-cube-face__preview-output-title {
       flex: 0 0 auto;
+      min-width: 0;
+    }
+    .sugarcubes-cube-face__preview-output-title [data-cube-preview-output-label] {
+      display: block;
+      width: fit-content;
+      max-width: 100%;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;

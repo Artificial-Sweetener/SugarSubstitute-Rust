@@ -205,21 +205,23 @@ export function drawFallbackInitialsCanvas(
   ) {
     return;
   }
-  const layout = fallbackInitialsSourceLayout(ctx, initials, model ?? {});
-  const targetScale = size / layout.sourceSize;
-
   ctx.save();
-  ctx.translate(x, y);
-  ctx.scale(targetScale, targetScale);
-  ctx.translate(layout.offsetX, layout.offsetY);
-  ctx.scale(layout.scale, layout.scale);
-  ctx.translate(-(layout.bounds.x ?? 0), -(layout.bounds.y ?? 0));
-  ctx.font = resolveFallbackIconFont(model, layout.fontSize);
-  ctx.fillStyle = typeof options.color === 'string' ? options.color : '#ffffff';
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'alphabetic';
-  ctx.fillText(initials, 0, 0);
-  ctx.restore();
+  try {
+    const layout = fallbackInitialsSourceLayout(ctx, initials, model ?? {});
+    const targetScale = size / layout.sourceSize;
+    ctx.translate(x, y);
+    ctx.scale(targetScale, targetScale);
+    ctx.translate(layout.offsetX, layout.offsetY);
+    ctx.scale(layout.scale, layout.scale);
+    ctx.translate(-(layout.bounds.x ?? 0), -(layout.bounds.y ?? 0));
+    ctx.font = resolveFallbackIconFont(model, layout.fontSize);
+    ctx.fillStyle = typeof options.color === 'string' ? options.color : '#ffffff';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText(initials, 0, 0);
+  } finally {
+    ctx.restore();
+  }
 }
 
 function resolveDevicePixelRatio(): number {

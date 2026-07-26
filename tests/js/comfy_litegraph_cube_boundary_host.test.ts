@@ -33,10 +33,14 @@ describe('ComfyLiteGraphCubeBoundaryHost', () => {
     } as unknown as CubeNode;
     const host = new ComfyLiteGraphCubeBoundaryHost({ slotHeight: 20 });
 
-    host.sync(node, [
-      { index: 0, name: 'output.image', type: 'IMAGE', x: 820, y: 190, slot: first },
-      { index: 1, name: 'output.mask', type: 'MASK', x: 820, y: 410, slot: second },
-    ]);
+    host.sync(
+      node,
+      [],
+      [
+        port(0, 'output.image', 'IMAGE', 820, 190, first),
+        port(1, 'output.mask', 'MASK', 820, 410, second),
+      ],
+    );
 
     expect(first.pos).toEqual([751, 50]);
     expect(second.pos).toEqual([751, 270]);
@@ -50,12 +54,17 @@ describe('ComfyLiteGraphCubeBoundaryHost', () => {
     expect('label' in second).toBe(false);
   });
 
-  test('clips native slot drawing to the input region and output dots', () => {
+  test('clips native slot drawing to moved input and output dots', () => {
     const host = new ComfyLiteGraphCubeBoundaryHost();
+    const input: { name: string; type: string; pos?: unknown } = {
+      name: 'image',
+      type: 'IMAGE',
+    };
     const output = { name: 'output.image', type: 'IMAGE', pos: [720, 50] };
     const node = {
       pos: [100, 140],
       size: [760, 500],
+      inputs: [input],
       outputs: [output],
     } as unknown as CubeNode;
     const context = {
@@ -69,13 +78,34 @@ describe('ComfyLiteGraphCubeBoundaryHost', () => {
     } as unknown as CanvasRenderingContext2D;
     const drawSlots = jest.fn();
 
-    host.sync(node, [], 440);
-    host.drawNativeSlotsWithoutOutputLabels(node, context, drawSlots);
+    host.sync(
+      node,
+      [port(0, 'image', 'IMAGE', 100, 220, input)],
+      [port(0, 'output.image', 'IMAGE', 860, 190, output)],
+    );
+    host.drawNativeSlotDots(node, context, drawSlots);
 
-    expect(context.rect).toHaveBeenCalledWith(-16, -64, 456, 628);
-    expect(context.arc).toHaveBeenCalledWith(720, 50, 8, 0, Math.PI * 2);
+    expect(input.pos).toEqual([9, 80]);
+    expect(context.arc).toHaveBeenCalledWith(9, 80, 8, 0, Math.PI * 2);
+    expect(context.arc).toHaveBeenCalledWith(751, 50, 8, 0, Math.PI * 2);
     expect(context.clip).toHaveBeenCalledTimes(1);
     expect(drawSlots).toHaveBeenCalledTimes(1);
     expect(context.restore).toHaveBeenCalledTimes(1);
   });
 });
+
+/** Build complete canvas presentation geometry for one test slot. */
+function port(index: number, name: string, type: string, x: number, y: number, slotValue: unknown) {
+  return {
+    index,
+    name,
+    type,
+    x,
+    y,
+    defaultY: y,
+    minY: 150,
+    maxY: 620,
+    labelY: y,
+    slot: slotValue,
+  };
+}

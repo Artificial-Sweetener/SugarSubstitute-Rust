@@ -55,6 +55,11 @@ export interface ProximityEndpointSource {
   discover(graph: unknown): ProximityEndpointSet;
 }
 
+/** Receive the one authoritative transient match set without owning routing. */
+export interface ProximityMatchSink {
+  updateMatches(matches: readonly ProximityMatch[]): void;
+}
+
 export interface ProximityMatch extends UnknownRecord {
   outputId: GraphId | undefined;
   outputCube?: unknown;

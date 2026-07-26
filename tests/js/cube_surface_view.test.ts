@@ -252,6 +252,34 @@ describe('CubeSurfaceView', () => {
     expect(onOpenMenu).toHaveBeenCalledWith({ instance_id: 'cube-1' }, expect.any(MouseEvent));
   });
 
+  test('always shows the Cube title independently from definition metadata', () => {
+    const repeated = new CubeSurfaceView({
+      document,
+      renderer: createRenderer(),
+      identity: cubeIdentity('SDXL/Text to Image'),
+      nodes: [],
+      state: createDefaultCubeSurfaceState(),
+      onStateChange: jest.fn(),
+    });
+    const aliased = new CubeSurfaceView({
+      document,
+      renderer: createRenderer(),
+      identity: cubeIdentity('My portrait pipeline'),
+      nodes: [],
+      state: createDefaultCubeSurfaceState(),
+      onStateChange: jest.fn(),
+    });
+
+    expect(
+      repeated.element.querySelector<HTMLElement>('.sugarcubes-cube-face__title')?.hidden,
+    ).toBe(false);
+    expect(aliased.element.querySelector<HTMLElement>('.sugarcubes-cube-face__title')?.hidden).toBe(
+      false,
+    );
+    repeated.dispose();
+    aliased.dispose();
+  });
+
   test('does not offer ordinary cards through the reveal action', () => {
     const view = new CubeSurfaceView({
       document,
@@ -418,6 +446,25 @@ describe('CubeSurfaceView', () => {
     expect(view.element.querySelector('[data-cube-action="resize"]')).toBeNull();
   });
 
+  test('applies exact conditional gutter widths supplied by the boundary owner', () => {
+    const view = new CubeSurfaceView({
+      document,
+      renderer: createRenderer(),
+      identity: cubeIdentity('Output-only Cube'),
+      nodes: [],
+      state: createDefaultCubeSurfaceState(),
+      onStateChange: jest.fn(),
+    });
+
+    view.setPortGutterWidths(0, 40);
+
+    expect(view.element.style.getPropertyValue('--sugarcubes-cube-input-gutter-width')).toBe('0px');
+    expect(view.element.style.getPropertyValue('--sugarcubes-cube-output-gutter-width')).toBe(
+      '40px',
+    );
+    view.dispose();
+  });
+
   test('dedicates a one-output rail to media without a selector or visible caption', () => {
     const onStateChange = jest.fn();
     const state = createDefaultCubeSurfaceState();
@@ -447,6 +494,9 @@ describe('CubeSurfaceView', () => {
     expect(rail?.querySelector('.sugarcubes-cube-face__preview-internal')).not.toBeNull();
     expect(rail?.querySelector('select')).toBeNull();
     expect(rail?.querySelector('figcaption')).toBeNull();
+    expect(rail?.querySelector('[data-cube-preview-output-label]')?.textContent).toBe(
+      'output.image',
+    );
     expect([...(rail?.querySelectorAll('img') ?? [])].map((image) => image.loading)).toEqual([
       'eager',
       'eager',

@@ -20,6 +20,7 @@ import type { CubeNode } from '../cube/node/ComfyCubeNodeFactory.js';
 import type { CubeNodeCatalog } from '../cube/node/CubeNodeCatalog.js';
 import { readInstanceId } from '../cube/node/CubeNodeCatalog.js';
 import type { CubeCanvasViewState } from './ComfyCanvasViewStateAdapter.js';
+import type { CanvasGraphChangeSource } from './ComfyCanvasGraphChangeAdapter.js';
 
 interface CubeEditorCanvas {
   setGraph(graph: object): void;
@@ -36,6 +37,7 @@ export interface CubeEditorNavigationPresenterOptions {
   getCurrentGraph(): object | null;
   nodes: CubeNodeCatalog;
   logger?: Pick<Console, 'debug'>;
+  graphChanges?: CanvasGraphChangeSource;
 }
 
 interface CubeEditorContext {
@@ -51,7 +53,7 @@ export class CubeEditorNavigationPresenter {
   readonly #getCurrentGraph: () => object | null;
   readonly #nodes: CubeNodeCatalog;
   readonly #logger: Pick<Console, 'debug'> | null;
-  readonly #pollId: number | null;
+  readonly #unsubscribeGraphChanges: () => void;
   #bar: HTMLElement | null = null;
   #signature = '';
   #activeCubeInstanceId = '';
@@ -68,13 +70,14 @@ export class CubeEditorNavigationPresenter {
     this.#getCurrentGraph = options.getCurrentGraph;
     this.#nodes = options.nodes;
     this.#logger = options.logger ?? null;
-    this.#pollId = options.document.defaultView?.setInterval(() => this.#sync(), 100) ?? null;
+    this.#unsubscribeGraphChanges =
+      options.graphChanges?.subscribe(() => this.#sync()) ?? (() => undefined);
     this.#sync();
   }
 
   /** Release the editor bar and its navigation observer. */
   dispose(): void {
-    if (this.#pollId !== null) this.#document.defaultView?.clearInterval(this.#pollId);
+    this.#unsubscribeGraphChanges();
     this.#bar?.remove();
     this.#bar = null;
     this.#signature = '';
@@ -83,6 +86,11 @@ export class CubeEditorNavigationPresenter {
     this.#lastGraph = null;
     this.#rootView = null;
     this.#rootSelection = [];
+  }
+
+  /** Reconcile after an explicit host navigation event. */
+  refresh(): void {
+    this.#sync();
   }
 
   /** Open one Cube through Comfy's native editor while retaining Cube context. */

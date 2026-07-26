@@ -34,6 +34,9 @@ import { CubeNodeSwapCoordinator } from './node/CubeNodeSwapCoordinator.js';
 import { ComfyCubeNodeLifecycleAdapter } from './node/ComfyCubeNodeLifecycleAdapter.js';
 import { LegacyCubeContainerMigrationAdapter } from './migration/LegacyCubeContainerMigrationAdapter.js';
 import { NativeCubeProximityEndpointSource } from './connection/NativeCubeProximityEndpointSource.js';
+import { CubePortPresentationController } from './connection/CubePortPresentationController.js';
+import { ComfyCanvasGraphChangeAdapter } from '../surface/ComfyCanvasGraphChangeAdapter.js';
+import { resolveComfyRendererMode } from '../core/ComfyRendererMode.js';
 /** Construct the graph-bound SugarCubes integration around native SubgraphNodes. */
 export function createComfyCubeRuntime(options) {
     const app = requireRecord(options.app, 'Comfy application');
@@ -48,7 +51,6 @@ export function createComfyCubeRuntime(options) {
     const getNodeByIdFunction = requireFunction(graph.getNodeById, 'LGraph.getNodeById');
     const selectedItems = requireSet(canvas.selectedItems, 'LGraphCanvas.selectedItems');
     const updateSelectedItemsFunction = typeof canvas.updateSelectedItems === 'function' ? canvas.updateSelectedItems : null;
-    const setGraphFunction = requireFunction(canvas.setGraph, 'LGraphCanvas.setGraph');
     const apiUrlFunction = requireFunction(api.apiURL, 'Comfy API.apiURL');
     const runtimeGraph = requireRuntimeGraph(graph);
     const legacyCanvas = requireLiteGraphCubeNodeCanvas(canvas);
@@ -72,7 +74,11 @@ export function createComfyCubeRuntime(options) {
     };
     const history = createComfyCubeHistoryAdapter({ canvas, graph });
     const nodes = new CubeNodeCatalog();
-    const proximityEndpoints = new NativeCubeProximityEndpointSource(options.logger, options.boundaryResolver);
+    const portPresentation = new CubePortPresentationController({
+        requestFrame: (callback) => options.document.defaultView?.requestAnimationFrame(callback) ?? null,
+        invalidate: () => history.setDirtyCanvas?.(true, true),
+    });
+    const proximityEndpoints = new NativeCubeProximityEndpointSource(options.logger, options.boundaryResolver, portPresentation);
     const nodeLifecycle = new ComfyCubeNodeLifecycleAdapter({
         graph: runtimeGraph,
         catalog: nodes,
@@ -109,11 +115,12 @@ export function createComfyCubeRuntime(options) {
     });
     const canvasView = new ComfyCanvasViewStateAdapter(canvas, (foreground, background) => history.setDirtyCanvas?.(foreground, background), options.logger);
     const canvasSelection = new ComfyCanvasSelectionStateAdapter(selectedItems, updateSelectedItemsFunction ? () => updateSelectedItemsFunction.call(canvas) : null, options.logger);
+    const canvasGraphChanges = new ComfyCanvasGraphChangeAdapter(canvas);
     const editorNavigation = new CubeEditorNavigationPresenter({
         document: options.document,
         canvas: {
             setGraph(targetGraph) {
-                setGraphFunction.call(canvas, targetGraph);
+                canvasGraphChanges.setGraph(targetGraph);
             },
             captureView: () => canvasView.capture(),
             restoreView: (state) => canvasView.restore(state),
@@ -124,6 +131,7 @@ export function createComfyCubeRuntime(options) {
         getCurrentGraph: () => (isRecord(canvas.graph) ? canvas.graph : null),
         nodes,
         logger: options.logger,
+        graphChanges: canvasGraphChanges,
     });
     const presenter = new CubeSurfacePresenter({
         document: options.document,
@@ -160,11 +168,23 @@ export function createComfyCubeRuntime(options) {
                 return typeof value === 'string' ? value : null;
             },
         }),
-        getRendererMode: () => (liteGraph.vueNodesMode === true ? 'vue' : 'litegraph'),
+        getRendererMode: () => resolveComfyRendererMode(app, liteGraph, options.document),
         legacyCanvas,
-        legacyTitleHeight: titleHeight,
+        titleHeight,
         history,
         chromeActions,
+        portPresentation,
+        graphChanges: canvasGraphChanges,
+        ...(options.onBoundaryGeometryChange
+            ? { onBoundaryGeometryChange: options.onBoundaryGeometryChange }
+            : {}),
+        ...(options.subscribePreviewChanges
+            ? {
+                previewChanges: {
+                    subscribe: options.subscribePreviewChanges,
+                },
+            }
+            : {}),
     });
     const graphBuilder = new ComfyCubeGraphBuilder(graphBuilderHost);
     const placement = new CubePlacementService({
@@ -218,6 +238,7 @@ export function createComfyCubeRuntime(options) {
         authoring,
         nodes,
         proximityEndpoints,
+        proximityPresentation: portPresentation,
         registerSubgraphs: (payload) => subgraphRegistrar.register(payload),
         restoreLegacy: (batch) => legacyMigration.restore(batch),
         dispose: () => {
@@ -225,6 +246,7 @@ export function createComfyCubeRuntime(options) {
             presenter.dispose();
             legacyContainerMigration.dispose();
             nodeLifecycle.dispose();
+            canvasGraphChanges.dispose();
         },
     };
 }

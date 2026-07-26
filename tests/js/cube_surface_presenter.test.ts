@@ -26,6 +26,14 @@ import type {
 } from '../../frontend/comfyui/ui/surface/NativeNodeCardRenderer.js';
 
 describe('CubeSurfacePresenter', () => {
+  beforeEach(() => {
+    jest.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => null);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   test('mounts the custom face inside the real node while preserving shell edges and controls', async () => {
     const pane = createTransformPane();
     const shell = createNativeNodeShell('9');
@@ -44,6 +52,7 @@ describe('CubeSurfacePresenter', () => {
       return { refresh() {}, unmount() {} };
     });
     const openEditor = jest.fn();
+    const onBoundaryGeometryChange = jest.fn();
     const presenter = new CubeSurfacePresenter({
       document,
       openEditor,
@@ -52,6 +61,8 @@ describe('CubeSurfacePresenter', () => {
       nodes,
       logger: console,
       renderer: { mount, dispose() {} },
+      requestSlotLayoutSync: () => undefined,
+      onBoundaryGeometryChange,
     });
 
     await flushMount();
@@ -73,6 +84,7 @@ describe('CubeSurfacePresenter', () => {
     expect(faceHost?.querySelector('[data-cube-resize-edge]')).toBeNull();
     expect(faceHost?.querySelector('[data-cube-port-direction]')).toBeNull();
     expect(mount).toHaveBeenCalledWith(expect.any(HTMLElement), internalNode);
+    expect(onBoundaryGeometryChange).toHaveBeenCalledTimes(1);
 
     const replacementHeader = document.createElement('div');
     replacementHeader.dataset.testid = `node-header-${String(node.id)}`;
@@ -121,6 +133,7 @@ describe('CubeSurfacePresenter', () => {
         },
         dispose() {},
       },
+      requestSlotLayoutSync: () => undefined,
     });
     await flushMount();
     const firstHost = shell.root.querySelector<HTMLElement>('[data-sugarcube-face-host]');
@@ -149,13 +162,13 @@ describe('CubeSurfacePresenter', () => {
     expect(readMountedFaceGeometry(firstContent, firstCard)).toEqual(resizedGeometry);
 
     currentGraph = node.subgraph;
-    jest.advanceTimersByTime(100);
+    presenter.refresh();
     expect(shell.root.querySelector('[data-sugarcube-face-host]')).toBeNull();
     expect(shell.genericContent.hidden).toBe(false);
     expect(unmount).toHaveBeenCalledTimes(1);
 
     currentGraph = rootGraph;
-    jest.advanceTimersByTime(100);
+    presenter.refresh();
     await flushMount();
     const remountedHost = shell.root.querySelector<HTMLElement>('[data-sugarcube-face-host]');
     const remountedContent = remountedHost?.querySelector<HTMLElement>('[data-cube-content]');
@@ -196,6 +209,7 @@ describe('CubeSurfacePresenter', () => {
       nodes,
       logger: console,
       renderer: { mount, dispose() {} },
+      requestSlotLayoutSync: () => undefined,
     });
     await flushMount();
 
@@ -226,6 +240,7 @@ describe('CubeSurfacePresenter', () => {
         mount: () => ({ refresh() {}, unmount() {} }),
         dispose() {},
       },
+      requestSlotLayoutSync: () => undefined,
       chromeActions: {
         onSwapLeft,
         canSwap: (_metadata, direction) => direction === 'left',
@@ -240,6 +255,44 @@ describe('CubeSurfacePresenter', () => {
       cube_id: 'example.cube',
     });
     activePresenter.dispose();
+  });
+
+  test('performs no Cube DOM work while graph and renderer state remain idle', async () => {
+    jest.useFakeTimers();
+    const pane = createTransformPane();
+    const node = cubeNode(9, 'cube-1', [nativeNode('inner', 'KSampler')]);
+    const shell = createNativeNodeShell(String(node.id));
+    pane.append(shell.root);
+    const nodes = new CubeNodeCatalog();
+    nodes.add(node);
+    const rootGraph = {};
+    const mount = jest.fn(() => ({ refresh() {}, unmount() {} }));
+    const presenter = new CubeSurfacePresenter({
+      document,
+      openEditor: jest.fn(),
+      rootGraph,
+      getCurrentGraph: () => rootGraph,
+      nodes,
+      logger: console,
+      renderer: { mount, dispose() {} },
+      requestSlotLayoutSync: () => undefined,
+    });
+    await flushMount();
+    const observer = new MutationObserver(jest.fn());
+    observer.observe(shell.root, {
+      attributes: true,
+      childList: true,
+      subtree: true,
+    });
+
+    jest.advanceTimersByTime(1_000);
+    await flushMount();
+
+    expect(observer.takeRecords()).toEqual([]);
+    expect(mount).toHaveBeenCalledTimes(1);
+    observer.disconnect();
+    presenter.dispose();
+    jest.useRealTimers();
   });
 });
 

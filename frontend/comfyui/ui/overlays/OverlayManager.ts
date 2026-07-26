@@ -35,6 +35,7 @@ import type { ChromeMetadata } from './CubeChromeOverlay.js';
 import type { CubeFaceChromeMetadata } from '../surface/CubeFaceChromeActions.js';
 import { createCubeSourceResolver } from './CubeSourceResolver.js';
 import { ProximityPointerMoveTracker } from './proximity/ProximityPointerMoveTracker.js';
+import { ProximityGraphMutationTracker } from './proximity/ProximityGraphMutationTracker.js';
 
 type PlacementOptions = NonNullable<ConstructorParameters<typeof PlacementOverlay>[0]>;
 
@@ -209,6 +210,7 @@ export class OverlayManager {
   private readonly scheduler: OverlayScheduler | null;
   readonly proximity: ProximityOverlay;
   private readonly proximityPointerMoves: ProximityPointerMoveTracker;
+  private readonly proximityGraphMutations: ProximityGraphMutationTracker;
   readonly placement: PlacementOverlay;
   private readonly layoutService: LayoutCoordinator | null;
   private readonly chrome: CubeChromeOverlay;
@@ -257,7 +259,11 @@ export class OverlayManager {
       scheduler,
       storage,
     });
-    this.proximityPointerMoves = new ProximityPointerMoveTracker(this.proximity);
+    this.proximityPointerMoves = new ProximityPointerMoveTracker(this.proximity, this.scheduler);
+    this.proximityGraphMutations = new ProximityGraphMutationTracker(
+      this.proximity,
+      this.scheduler,
+    );
     this.placement = new PlacementOverlay({
       adapter,
       events,
@@ -610,6 +616,8 @@ export class OverlayManager {
           ?.error?.('SugarCubes: onDrawBackground wrapper failed', error);
       }
       try {
+        manager.proximityGraphMutations.attach(this.graph);
+        manager.proximity.ensurePreview(this.graph);
         manager.proximity.render(ctx, this);
         manager.placement.render(ctx, this);
       } catch (error) {
@@ -1123,17 +1131,6 @@ export class OverlayManager {
       return response;
     };
 
-    const originalProcessMouseMove = canvas.processMouseMove;
-    if (typeof originalProcessMouseMove === 'function') {
-      canvas.processMouseMove = function processMouseMove(this: OverlayCanvas, ...args: unknown[]) {
-        const res = originalProcessMouseMove.call(this, ...args);
-        if (manager.proximity.isOverlayEnabled()) {
-          manager.proximity.schedulePreview({ immediate: true, verbose: true, graph: this.graph });
-        }
-        return res;
-      };
-    }
-
     const originalProcessMouseDown = canvas.processMouseDown;
     if (typeof originalProcessMouseDown === 'function') {
       canvas.processMouseDown = function processMouseDown(
@@ -1178,42 +1175,28 @@ export class OverlayManager {
     }
 
     const graph = canvas.graph;
+    this.proximityGraphMutations.attach(graph);
     if (graph && !graph.__sugarcubes_dirty_wrapped) {
       graph.__sugarcubes_dirty_wrapped = true;
       const wrapGraphHook = (
-        key: 'onNodeAdded' | 'onNodeRemoved' | 'onNodeConnectionChange',
+        key: 'onNodeAdded' | 'onNodeRemoved' | 'onConnectionChange' | 'onNodeConnectionChange',
       ): void => {
         const original = graph[key];
-        if (typeof original !== 'function') {
-          return;
-        }
         graph[key] = function wrappedGraphHook(this: ComfyGraph, ...args: unknown[]) {
-          const result = original.call(this, ...args);
-          if (manager.proximity.isOverlayEnabled() && key === 'onNodeConnectionChange') {
-            manager.proximity.schedulePreview({ immediate: true, graph: this });
-          }
+          const result = typeof original === 'function' ? original.call(this, ...args) : undefined;
           manager.requestDirtyRefresh?.({ graph: this, reason: key });
           return result;
         };
       };
       wrapGraphHook('onNodeAdded');
       wrapGraphHook('onNodeRemoved');
+      wrapGraphHook('onConnectionChange');
       wrapGraphHook('onNodeConnectionChange');
     }
 
-    if (this.proximity.isOverlayEnabled()) {
+    if (this.proximity.isProximityEnabled()) {
       this.proximity.schedulePreview({ immediate: true, verbose: true, graph: canvas.graph });
     }
-
-    const originalBackground = canvas.onDrawBackground;
-    canvas.onDrawBackground = function onDrawBackground(
-      this: OverlayCanvas,
-      ctx: CanvasRenderingContext2D,
-      ...args: unknown[]
-    ) {
-      manager.proximity.ensurePreview(this.graph);
-      return originalBackground?.call(this, ctx, ...args);
-    };
   }
 
   isMovableNodeCandidate(node: unknown): node is ComfyNode & { id: string | number } {

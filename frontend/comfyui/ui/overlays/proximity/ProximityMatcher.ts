@@ -27,18 +27,25 @@ import type {
   ProximityMatch,
   ProximityOutputEndpoint,
 } from './ProximityModel.js';
+import { ProximityInputIndex } from './ProximityInputIndex.js';
 
 export interface ProximityMatchSettings {
   radius?: number;
   strict?: boolean;
 }
 
-export type ProximityLiteGraph = CubeConnectionLiteGraph;
+export interface ProximityLiteGraph extends CubeConnectionLiteGraph {
+  LinkDirection?: { LEFT?: unknown; RIGHT?: unknown };
+  LinkMarkerShape?: { None?: unknown };
+  EVENT?: unknown;
+  EVENT_LINK_COLOR?: string;
+}
 
 /** Own deterministic distance, alias, type, and one-to-one matching policy. */
 export class ProximityMatcher {
   readonly #endpoints: ProximityEndpointSource;
   readonly #compatibility: CubeConnectionTypePolicy;
+  #previousPairs = new Set<string>();
 
   /** Bind endpoint discovery and Comfy's authoritative type-compatibility API. */
   constructor(
@@ -57,41 +64,58 @@ export class ProximityMatcher {
   ): ProximityMatch[] {
     if (!graph || !Array.isArray(graph._nodes)) return [];
     const radius = Number(settings.radius) || 160;
-    const radiusSquared = radius * radius;
     const strict = Boolean(settings.strict);
     const endpoints = this.#endpoints.discover(graph);
+    const inputIndex = new ProximityInputIndex(endpoints.inputs);
     const candidates: Candidate[] = [];
     for (const output of endpoints.outputs) {
-      for (const input of endpoints.inputs) {
+      for (const input of inputIndex.query(output, radius + 40)) {
         if (isSameInstance(output, input)) continue;
         if (!output.cube && !input.cube) continue;
+        const pairKey = `${output.key}>${input.key}`;
+        const releaseRadius = this.#previousPairs.has(pairKey) ? radius + 40 : radius;
         const dx = output.slotPos[0] - input.slotPos[0];
         const dy = output.slotPos[1] - input.slotPos[1];
         const distanceSquared = dx * dx + dy * dy;
-        if (distanceSquared > radiusSquared) continue;
+        const cubePair = output.cube != null && input.cube != null;
+        const adjacency = cubePair
+          ? resolveHorizontalAdjacency(output, input)
+          : Math.sqrt(distanceSquared);
+        if (
+          adjacency > releaseRadius ||
+          (cubePair && !hasVerticalAdjacency(output.node, input.node, releaseRadius))
+        ) {
+          continue;
+        }
         if (!this.#compatibility.accepts(output.type, input.type, strict)) continue;
         const aliasMatch = Boolean(output.alias && input.alias && output.alias === input.alias);
         const typeMatch = normalizeCubePortType(output.type) === normalizeCubePortType(input.type);
         candidates.push({
           output,
           input,
+          pairKey,
+          cubePair,
+          adjacency,
           distanceSquared,
           score: Math.sqrt(distanceSquared) - (aliasMatch ? 40 : 0) - (typeMatch ? 20 : 0),
         });
       }
     }
-    candidates.sort((left, right) => left.score - right.score);
+    candidates.sort(compareCandidates);
     const usedOutputs = new Set<string>();
     const usedInputs = new Set<string>();
     const matches: ProximityMatch[] = [];
+    const selectedPairs = new Set<string>();
     for (const candidate of candidates) {
       if (usedOutputs.has(candidate.output.key) || usedInputs.has(candidate.input.key)) {
         continue;
       }
       usedOutputs.add(candidate.output.key);
       usedInputs.add(candidate.input.key);
+      selectedPairs.add(candidate.pairKey);
       matches.push(toMatch(candidate));
     }
+    this.#previousPairs = selectedPairs;
     return matches;
   }
 }
@@ -99,8 +123,26 @@ export class ProximityMatcher {
 interface Candidate {
   output: ProximityOutputEndpoint;
   input: ProximityInputEndpoint;
+  pairKey: string;
+  cubePair: boolean;
+  adjacency: number;
   distanceSquared: number;
   score: number;
+}
+
+/** Prefer adjacent Cube pairs and then preserve canonical slot ordering. */
+function compareCandidates(left: Candidate, right: Candidate): number {
+  if (left.cubePair !== right.cubePair) return left.cubePair ? -1 : 1;
+  if (left.cubePair && right.cubePair) {
+    return (
+      left.adjacency - right.adjacency ||
+      left.output.slot - right.output.slot ||
+      left.input.slot - right.input.slot ||
+      left.distanceSquared - right.distanceSquared ||
+      left.pairKey.localeCompare(right.pairKey)
+    );
+  }
+  return left.score - right.score || left.pairKey.localeCompare(right.pairKey);
 }
 
 /** Convert one selected candidate into overlay and prompt-routing data. */
@@ -135,8 +177,63 @@ function toMatch(candidate: Candidate): ProximityMatch {
 
 /** Exclude a Cube from auto-connecting to another boundary on itself. */
 function isSameInstance(output: ProximityOutputEndpoint, input: ProximityInputEndpoint): boolean {
-  if (output.instanceId && input.instanceId) {
-    return String(output.instanceId) === String(input.instanceId);
+  if (output.node && input.node) return output.node === input.node;
+  return (
+    output.endpointId !== undefined &&
+    input.endpointId !== undefined &&
+    String(output.endpointId) === String(input.endpointId)
+  );
+}
+
+/** Measure only the connector-facing horizontal gap for Cube adjacency. */
+function resolveHorizontalAdjacency(
+  output: ProximityOutputEndpoint,
+  input: ProximityInputEndpoint,
+): number {
+  const outputRight = readNodeEdge(output.node, 'right', output.slotPos[0]);
+  const inputLeft = readNodeEdge(input.node, 'left', input.slotPos[0]);
+  if (outputRight > inputLeft) return Number.POSITIVE_INFINITY;
+  return inputLeft - outputRight;
+}
+
+/** Accept vertically overlapping Cubes plus the configured release margin. */
+function hasVerticalAdjacency(
+  outputNode: ProximityOutputEndpoint['node'],
+  inputNode: ProximityInputEndpoint['node'],
+  margin: number,
+): boolean {
+  if (!outputNode || !inputNode) return true;
+  const outputTop = readNodeEdge(outputNode, 'top', 0);
+  const outputBottom = readNodeEdge(outputNode, 'bottom', outputTop);
+  const inputTop = readNodeEdge(inputNode, 'top', 0);
+  const inputBottom = readNodeEdge(inputNode, 'bottom', inputTop);
+  return Math.max(outputTop, inputTop) <= Math.min(outputBottom, inputBottom) + margin;
+}
+
+/** Read one finite node edge with an endpoint-coordinate fallback. */
+function readNodeEdge(
+  node: ProximityOutputEndpoint['node'],
+  edge: 'left' | 'right' | 'top' | 'bottom',
+  fallback: number,
+): number {
+  const x = finite(node?.pos?.[0], fallback);
+  const y = finite(node?.pos?.[1], fallback);
+  const width = Math.max(0, finite(node?.size?.[0], 0));
+  const height = Math.max(0, finite(node?.size?.[1], 0));
+  switch (edge) {
+    case 'left':
+      return x;
+    case 'right':
+      return x + width;
+    case 'top':
+      return y;
+    case 'bottom':
+      return y + height;
   }
-  return Boolean(output.cube && input.cube && output.cube === input.cube);
+}
+
+/** Read one finite host number. */
+function finite(value: unknown, fallback: number): number {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
 }

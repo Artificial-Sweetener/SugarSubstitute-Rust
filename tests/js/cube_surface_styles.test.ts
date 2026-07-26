@@ -31,7 +31,10 @@ describe('ensureCubeSurfaceStyles', () => {
     );
     expect(css).not.toContain('.sugarcubes-native-node-card .lg-node-content');
     expect(css).toMatch(
-      /\[data-sugarcube-cube-body\]\s*\{[^}]*padding-top:\s*0\s*!important;[^}]*padding-bottom:\s*0\s*!important;[^}]*overflow:\s*clip\s*!important;/s,
+      /\[data-sugarcube-cube-body\]\s*\{[^}]*padding-top:\s*0\s*!important;[^}]*padding-bottom:\s*0\s*!important;[^}]*overflow:\s*visible\s*!important;/s,
+    );
+    expect(css).toMatch(
+      /\.sugarcubes-cube-node-face-host\s*\{[^}]*overflow:\s*clip;[^}]*contain:\s*layout paint style;/s,
     );
     expect(css).toMatch(
       /\[data-cube-face-body="header-only"\]\s+\[data-testid="node-inner-wrapper"\]\s*\{[^}]*overflow:\s*hidden;/s,
@@ -72,7 +75,30 @@ describe('ensureCubeSurfaceStyles', () => {
       /\.sugarcubes-cube-face__definition-source\s*\{[^}]*font-size:\s*0\.625rem;/s,
     );
     expect(css).toMatch(
+      /\.sugarcubes-cube-face__actions\s*\{[^}]*grid-column:\s*3;[^}]*justify-self:\s*end;/s,
+    );
+    expect(css).toMatch(
       /\.sugarcubes-cube-face__icon img,\s*\.sugarcubes-cube-face__icon canvas\s*\{[^}]*object-fit:\s*contain;/s,
+    );
+  });
+
+  test('reserves only boundary gutters that have actual ports', () => {
+    ensureCubeSurfaceStyles(document);
+
+    const css = document.getElementById('sugarcubes-cube-surface-styles')?.textContent ?? '';
+    const contentRule =
+      css.match(
+        /\.sugarcubes-cube-face__content\s*\{\s*box-sizing:\s*border-box;([^}]*)\}/s,
+      )?.[1] ?? '';
+
+    expect(contentRule).toMatch(
+      /width:\s*calc\(\s*100%\s*-\s*var\(--sugarcubes-cube-input-gutter-width,\s*0px\)\s*-\s*var\(--sugarcubes-cube-output-gutter-width,\s*0px\)\s*\);/,
+    );
+    expect(contentRule).toMatch(
+      /margin-left:\s*var\(--sugarcubes-cube-input-gutter-width,\s*0px\);/,
+    );
+    expect(contentRule).toMatch(
+      /margin-right:\s*var\(--sugarcubes-cube-output-gutter-width,\s*0px\);/,
     );
   });
 

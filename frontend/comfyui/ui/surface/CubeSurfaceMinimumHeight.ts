@@ -17,8 +17,8 @@
 
 import type { Vec2 } from '../types/common.js';
 
-/** Preserve Comfy's established minimum width for a usable Cube face. */
-export const CUBE_MINIMUM_WIDTH = 320;
+/** Reserve enough width for both port gutters and usable Cube face content. */
+export const CUBE_MINIMUM_WIDTH = 440;
 
 /** Preserve the smallest useful Cube height when its face content is shorter. */
 export const CUBE_BASE_MINIMUM_HEIGHT = 180;

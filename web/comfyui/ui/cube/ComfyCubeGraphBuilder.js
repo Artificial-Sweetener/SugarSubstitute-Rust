@@ -17,6 +17,7 @@
 import { applyExecutionMode, applyExtrasToNode, applyInputValueToNode, resolveInputSlotIndex, } from '../import/ImportNodeWriter.js';
 import { isRecord } from '../types/common.js';
 import { buildCubePayloadTopology } from './CubePayloadTopology.js';
+import { resolveCubeInputBoundaryType } from './CubeBoundaryTypeResolver.js';
 /** Own translation from a prepared Cube import to one native Comfy subgraph. */
 export class ComfyCubeGraphBuilder {
     #host;
@@ -91,7 +92,7 @@ export class ComfyCubeGraphBuilder {
                 warnings.push(`Cube input '${input.name}' has no compatible internal target.`);
                 continue;
             }
-            const boundary = subgraph.addInput(input.name, '*');
+            const boundary = subgraph.addInput(input.name, resolveCubeInputBoundaryType(resolvedTargets.map((target) => target.slot)));
             for (const target of resolvedTargets)
                 boundary.connect(target.slot, target.node);
         }

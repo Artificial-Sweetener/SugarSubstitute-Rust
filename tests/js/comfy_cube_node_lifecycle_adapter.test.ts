@@ -22,6 +22,21 @@ import { ComfyCubeNodeLifecycleAdapter } from '../../frontend/comfyui/ui/cube/no
 import { CubeNodeCatalog } from '../../frontend/comfyui/ui/cube/node/CubeNodeCatalog.js';
 
 describe('ComfyCubeNodeLifecycleAdapter', () => {
+  test('does not wake presentation when authoritative graph membership is unchanged', () => {
+    const first = cubeNode('first-instance');
+    const second = cubeNode('second-instance');
+    const catalog = new CubeNodeCatalog();
+    const changed = jest.fn();
+    catalog.subscribe(changed);
+
+    catalog.replace([first, second]);
+    catalog.replace([first, second]);
+
+    expect(changed).toHaveBeenCalledTimes(1);
+    catalog.replace([second, first]);
+    expect(changed).toHaveBeenCalledTimes(2);
+  });
+
   test('reidentifies a copied Cube after Comfy finishes configuring the paste', () => {
     const original = cubeNode('original-instance');
     const pasted = cubeNode('original-instance');

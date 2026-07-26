@@ -37,6 +37,7 @@ export interface ComfyVueCubeNodeResizeHostOptions {
   node: CubeNode;
   history: LiteGraphCubeNodeInteractionHistory;
   getScale(): number;
+  onGeometryChange?(): void;
 }
 
 /** Own only the four edge gestures absent from Comfy's native corner handles. */
@@ -45,6 +46,7 @@ export class ComfyVueCubeNodeResizeHost {
   readonly #node: CubeNode;
   readonly #history: LiteGraphCubeNodeInteractionHistory;
   readonly #getScale: () => number;
+  readonly #onGeometryChange: () => void;
   readonly #events: Window;
   readonly #handles: HTMLDivElement[] = [];
   #session: ResizeSession | null = null;
@@ -56,6 +58,7 @@ export class ComfyVueCubeNodeResizeHost {
     this.#node = options.node;
     this.#history = options.history;
     this.#getScale = options.getScale;
+    this.#onGeometryChange = options.onGeometryChange ?? (() => undefined);
     const events = this.#root.ownerDocument.defaultView;
     if (!events) throw new Error('Cube edge resizing requires an active browser window.');
     this.#events = events;
@@ -65,16 +68,11 @@ export class ComfyVueCubeNodeResizeHost {
       handle.dataset.sugarcubeEdgeResize = edge;
       handle.setAttribute('role', 'button');
       handle.setAttribute('aria-label', edgeLabel(edge));
+      handle.addEventListener('pointerdown', this.#handlePointerDown, true);
+      handle.addEventListener('mousedown', this.#handleMouseDown, true);
       this.#handles.push(handle);
     }
     this.ensureMounted();
-    this.#events.addEventListener('pointerdown', this.#handlePointerDown, true);
-    this.#events.addEventListener('pointermove', this.#handlePointerMove, true);
-    this.#events.addEventListener('pointerup', this.#handlePointerUp, true);
-    this.#events.addEventListener('pointercancel', this.#handlePointerCancel, true);
-    this.#events.addEventListener('mousedown', this.#handleMouseDown, true);
-    this.#events.addEventListener('mousemove', this.#handleMouseMove, true);
-    this.#events.addEventListener('mouseup', this.#handleMouseUp, true);
   }
 
   /** Reattach edge handles if a native Vue patch replaces root children. */
@@ -92,15 +90,11 @@ export class ComfyVueCubeNodeResizeHost {
   /** Release edge handles and close an unfinished history transaction once. */
   dispose(): void {
     if (this.#session) this.#history.afterChange?.();
+    this.#detachSessionListeners();
     this.#session = null;
-    this.#events.removeEventListener('pointerdown', this.#handlePointerDown, true);
-    this.#events.removeEventListener('pointermove', this.#handlePointerMove, true);
-    this.#events.removeEventListener('pointerup', this.#handlePointerUp, true);
-    this.#events.removeEventListener('pointercancel', this.#handlePointerCancel, true);
-    this.#events.removeEventListener('mousedown', this.#handleMouseDown, true);
-    this.#events.removeEventListener('mousemove', this.#handleMouseMove, true);
-    this.#events.removeEventListener('mouseup', this.#handleMouseUp, true);
     for (const handle of this.#handles) {
+      handle.removeEventListener('pointerdown', this.#handlePointerDown, true);
+      handle.removeEventListener('mousedown', this.#handleMouseDown, true);
       handle.remove();
     }
     this.#handles.length = 0;
@@ -110,6 +104,7 @@ export class ComfyVueCubeNodeResizeHost {
   readonly #handlePointerDown = (event: PointerEvent): void => {
     this.#start(event, 'pointer', event.pointerId);
     if (this.#session?.input === 'pointer') {
+      this.#attachSessionListeners('pointer');
       this.#resolveHandle(event.target)?.setPointerCapture?.(event.pointerId);
     }
   };
@@ -121,7 +116,29 @@ export class ComfyVueCubeNodeResizeHost {
       return;
     }
     this.#start(event, 'mouse', 0);
+    if (this.#session?.input === 'mouse') this.#attachSessionListeners('mouse');
   };
+
+  /** Listen globally only for the duration of one active edge gesture. */
+  #attachSessionListeners(input: ResizeSession['input']): void {
+    if (input === 'pointer') {
+      this.#events.addEventListener('pointermove', this.#handlePointerMove, true);
+      this.#events.addEventListener('pointerup', this.#handlePointerUp, true);
+      this.#events.addEventListener('pointercancel', this.#handlePointerCancel, true);
+      return;
+    }
+    this.#events.addEventListener('mousemove', this.#handleMouseMove, true);
+    this.#events.addEventListener('mouseup', this.#handleMouseUp, true);
+  }
+
+  /** Remove both input variants idempotently at finish or disposal. */
+  #detachSessionListeners(): void {
+    this.#events.removeEventListener('pointermove', this.#handlePointerMove, true);
+    this.#events.removeEventListener('pointerup', this.#handlePointerUp, true);
+    this.#events.removeEventListener('pointercancel', this.#handlePointerCancel, true);
+    this.#events.removeEventListener('mousemove', this.#handleMouseMove, true);
+    this.#events.removeEventListener('mouseup', this.#handleMouseUp, true);
+  }
 
   /** Begin one resize session from a native event target. */
   #start(event: MouseEvent | PointerEvent, input: ResizeSession['input'], pointerId: number): void {
@@ -185,6 +202,7 @@ export class ComfyVueCubeNodeResizeHost {
     this.#node.setSize?.([...frame.size]);
     writePair(this.#node.size, frame.size);
     this.#node.onResize?.([...frame.size]);
+    this.#onGeometryChange();
     this.#history.setDirtyCanvas?.(true, true);
   }
 
@@ -207,6 +225,7 @@ export class ComfyVueCubeNodeResizeHost {
   #finish(event: MouseEvent | PointerEvent, pointerId: number): void {
     if (!this.#session || this.#session.pointerId !== pointerId) return;
     consume(event);
+    this.#detachSessionListeners();
     this.#session = null;
     this.#history.afterChange?.();
     this.#history.setDirtyCanvas?.(true, true);

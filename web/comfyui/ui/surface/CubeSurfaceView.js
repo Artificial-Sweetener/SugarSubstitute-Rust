@@ -96,6 +96,11 @@ export class CubeSurfaceView {
     renderPreview(snapshot) {
         this.#previewView.render(snapshot);
     }
+    /** Reserve only the boundary gutters backed by real Cube ports. */
+    setPortGutterWidths(inputWidth, outputWidth) {
+        this.element.style.setProperty('--sugarcubes-cube-input-gutter-width', `${String(Math.max(0, inputWidth))}px`);
+        this.element.style.setProperty('--sugarcubes-cube-output-gutter-width', `${String(Math.max(0, outputWidth))}px`);
+    }
     /** Reflow masonry columns and the preview rail for the Cube's current width. */
     layout(width) {
         const safeWidth = Number.isFinite(width) ? Math.max(1, width) : 1;

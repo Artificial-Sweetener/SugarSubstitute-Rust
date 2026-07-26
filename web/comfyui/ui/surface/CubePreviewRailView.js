@@ -45,7 +45,10 @@ export class CubePreviewRailView {
             const title = documentRef.createElement('header');
             title.className = 'sugarcubes-cube-face__preview-output-title';
             title.dataset.cubePreviewOutputTitle = '';
-            title.textContent = output.id;
+            const label = documentRef.createElement('span');
+            label.dataset.cubePreviewOutputLabel = '';
+            label.textContent = output.id;
+            title.append(label);
             section.append(title);
             for (const item of output.items)
                 section.append(buildPreviewFigure(documentRef, item));

@@ -113,6 +113,7 @@ describe('core services', () => {
 
   test('ComfyAdapter falls back to mounted Nodes 2 cards when settings are unavailable', () => {
     const element = document.createElement('article');
+    element.className = 'lg-node';
     element.dataset.nodeId = '1';
     document.body.append(element);
     const adapter = new ComfyAdapter({

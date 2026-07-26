@@ -18,6 +18,7 @@
  */
 
 import type { ComfyApplication, ComfyCanvas, ComfyGraph, ComfyHostApi } from '../types/graph.js';
+import { resolveComfyRendererMode } from './ComfyRendererMode.js';
 
 export interface HostToast {
   add(message: { severity: string; summary: string; detail: string; life: number }): void;
@@ -57,14 +58,6 @@ export interface ComfyAdapterOptions {
   cancelRaf?: typeof cancelAnimationFrame | null;
   setTimeout?: BrowserSetTimeout | null;
   clearTimeout?: BrowserClearTimeout | null;
-}
-
-interface RendererSettingsApp extends ComfyApplication {
-  ui?: {
-    settings?: {
-      getSettingValue?(id: string): unknown;
-    };
-  };
 }
 
 /**
@@ -153,11 +146,7 @@ export class ComfyAdapter {
 
   /** Read the active renderer from Comfy's authoritative settings boundary. */
   getNodeRenderer(): 'litegraph' | 'vue' {
-    const settings = (this.getApp() as RendererSettingsApp | null)?.ui?.settings;
-    const enabled = settings?.getSettingValue?.('Comfy.VueNodes.Enabled');
-    if (typeof enabled === 'boolean') return enabled ? 'vue' : 'litegraph';
-    if (this.documentRef?.querySelector('[data-node-id]')) return 'vue';
-    return this.liteGraph?.vueNodesMode === true ? 'vue' : 'litegraph';
+    return resolveComfyRendererMode(this.getApp(), this.liteGraph, this.documentRef);
   }
 
   getWindow(): HostWindow | null {

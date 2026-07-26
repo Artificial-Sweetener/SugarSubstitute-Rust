@@ -18,6 +18,7 @@ import { isCubeOutputExecutionId } from './CubeOutputExecutionIdentity.js';
 /** Own Cube output results that Comfy cannot associate with a graph node. */
 export class CubeOutputExecutionStore {
     #outputs = new Map();
+    #listeners = new Set();
     /** Return the number of currently retained Cube output results. */
     get size() {
         return this.#outputs.size;
@@ -27,6 +28,7 @@ export class CubeOutputExecutionStore {
         if (!isCubeOutputExecutionId(executionId))
             return false;
         this.#outputs.set(executionId, output);
+        this.#notify();
         return true;
     }
     /** Read the last result for one ordered Cube output boundary. */
@@ -35,6 +37,19 @@ export class CubeOutputExecutionStore {
     }
     /** Discard results when Comfy replaces the root workflow. */
     clear() {
+        if (this.#outputs.size === 0)
+            return;
         this.#outputs.clear();
+        this.#notify();
+    }
+    /** Observe coherent output changes without polling Comfy's media maps. */
+    subscribe(listener) {
+        this.#listeners.add(listener);
+        return () => this.#listeners.delete(listener);
+    }
+    /** Wake preview presentation only after retained output state changes. */
+    #notify() {
+        for (const listener of this.#listeners)
+            listener();
     }
 }

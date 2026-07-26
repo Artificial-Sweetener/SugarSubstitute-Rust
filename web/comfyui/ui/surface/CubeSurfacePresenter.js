@@ -25,6 +25,10 @@ import { CubeSurfaceView } from './CubeSurfaceView.js';
 import { parseCubeSurfaceState, serializeCubeSurfaceState } from './CubeSurfaceState.js';
 import { NativeSubgraphChangeObserver } from './NativeSubgraphChangeObserver.js';
 import { ComfyLiteGraphCubeNodeHost, } from './ComfyLiteGraphCubeNodeHost.js';
+import { CUBE_INPUT_GUTTER_WIDTH, CUBE_OUTPUT_GUTTER_WIDTH } from './CubePortGutterLayout.js';
+import { ComfyRendererPresenceObserver } from './ComfyRendererPresenceObserver.js';
+import { ComfyNativeSlotLayoutCoordinator } from './ComfyNativeSlotLayoutCoordinator.js';
+import { CubeRendererTransitionStabilizer } from './CubeRendererTransitionStabilizer.js';
 /** Own custom Cube-node face mounts across renderer and graph navigation changes. */
 export class CubeSurfacePresenter {
     #document;
@@ -39,13 +43,19 @@ export class CubeSurfacePresenter {
     #host;
     #legacyHost;
     #chromeActions;
+    #onBoundaryGeometryChange;
     #views = new Map();
     #observers = new Map();
     #renderer;
     #runtime = null;
-    #unsubscribe;
-    #pollId;
+    #unsubscribeNodes;
+    #unsubscribePreviews;
+    #unsubscribeGraphChanges;
+    #nodePresenceObserver;
+    #slotLayoutCoordinator;
+    #rendererStabilizer;
     #mountGenerations = new Map();
+    #presentedRendererMode = null;
     /** Bind native Cube nodes to their Nodes 2.0 custom-content seam. */
     constructor(options) {
         this.#document = options.document;
@@ -58,12 +68,27 @@ export class CubeSurfacePresenter {
         this.#previewCatalog = options.previewCatalog ?? null;
         this.#getRendererMode = options.getRendererMode ?? (() => 'vue');
         this.#chromeActions = options.chromeActions ?? null;
+        this.#onBoundaryGeometryChange = options.onBoundaryGeometryChange ?? (() => undefined);
+        const windowRef = options.document.defaultView;
+        this.#rendererStabilizer = new CubeRendererTransitionStabilizer({
+            requestFrame: (callback) => windowRef?.requestAnimationFrame(callback) ?? null,
+            cancelFrame: (handle) => windowRef?.cancelAnimationFrame(handle),
+        });
+        this.#slotLayoutCoordinator = new ComfyNativeSlotLayoutCoordinator({
+            getRuntime: () => this.#getRuntime(),
+            requestFrame: (callback) => windowRef?.requestAnimationFrame(callback) ?? null,
+            cancelFrame: (handle) => windowRef?.cancelAnimationFrame(handle),
+            logger: options.logger,
+        });
         this.#host = new ComfyVueCubeNodeHost({
             document: options.document,
+            titleHeight: options.titleHeight ?? 30,
             history: options.history ?? {},
             getScale: () => Number(options.legacyCanvas?.ds?.scale) || 1,
             openEditor: (node) => this.#beginEditing(node),
-            requestSlotLayoutSync: options.requestSlotLayoutSync ?? (() => this.#requestNativeSlotLayoutSync()),
+            onGeometryChange: (node) => this.#handleNodeGeometryChange(node),
+            requestSlotLayoutSync: options.requestSlotLayoutSync ?? (() => this.#slotLayoutCoordinator.request()),
+            ...(options.portPresentation ? { portPresentation: options.portPresentation } : {}),
         });
         this.#legacyHost = options.legacyCanvas
             ? new ComfyLiteGraphCubeNodeHost({
@@ -72,24 +97,36 @@ export class CubeSurfacePresenter {
                 rootGraph: options.rootGraph,
                 nodes: options.nodes,
                 history: options.history ?? {},
-                titleHeight: options.legacyTitleHeight ?? 30,
+                titleHeight: options.titleHeight ?? 30,
                 openEditor: (node) => this.#beginEditing(node),
                 logger: options.logger,
                 ...(options.previewCatalog ? { previewCatalog: options.previewCatalog } : {}),
                 ...(options.chromeActions ? { chromeActions: options.chromeActions } : {}),
+                ...(options.portPresentation ? { portPresentation: options.portPresentation } : {}),
             })
             : null;
         this.#renderer = options.renderer ? Promise.resolve(options.renderer) : null;
-        this.#unsubscribe = options.nodes.subscribe(() => this.#sync());
+        this.#unsubscribeNodes = options.nodes.subscribe(() => this.#stabilizeSync());
+        this.#unsubscribePreviews =
+            options.previewChanges?.subscribe(() => this.#refreshPreviews()) ?? (() => undefined);
+        this.#unsubscribeGraphChanges =
+            options.graphChanges?.subscribe(() => this.#stabilizeSync()) ?? (() => undefined);
+        this.#nodePresenceObserver = new ComfyRendererPresenceObserver({
+            document: options.document,
+            ownsNodeId: (nodeId) => this.#nodes.list().some((node) => String(node.id) === nodeId),
+            onPresenceChange: () => this.#stabilizeSync(),
+        });
         ensureCubeSurfaceStyles(options.document);
-        this.#pollId = options.document.defaultView?.setInterval(() => this.#sync(), 100) ?? null;
-        this.#sync();
+        this.#stabilizeSync();
     }
     /** Dispose all native card mounts and host observers. */
     dispose() {
-        this.#unsubscribe();
-        if (this.#pollId !== null)
-            this.#document.defaultView?.clearInterval(this.#pollId);
+        this.#unsubscribeNodes();
+        this.#unsubscribePreviews();
+        this.#unsubscribeGraphChanges();
+        this.#nodePresenceObserver.dispose();
+        this.#slotLayoutCoordinator.dispose();
+        this.#rendererStabilizer.dispose();
         this.#mountGenerations.clear();
         for (const surface of this.#views.values())
             surface.view.dispose();
@@ -100,6 +137,15 @@ export class CubeSurfacePresenter {
         this.#legacyHost?.dispose();
         this.#host.dispose();
     }
+    /** Reconcile presentation after an explicit host geometry or lifecycle event. */
+    refresh() {
+        this.#stabilizeSync();
+    }
+    /** Reconcile now and across Comfy's short renderer hook replacement window. */
+    #stabilizeSync() {
+        this.#sync();
+        this.#rendererStabilizer.run(() => this.#sync());
+    }
     /** Keep presentation aligned with renderer mode, graph navigation, and collection state. */
     #sync() {
         const nodes = new Set(this.#nodes.list());
@@ -109,6 +155,14 @@ export class CubeSurfacePresenter {
         }
         const atRoot = this.#getCurrentGraph() === this.#rootGraph;
         const rendererMode = this.#getRendererMode();
+        if (rendererMode !== this.#presentedRendererMode) {
+            this.#presentedRendererMode = rendererMode;
+            this.#logger.debug('SugarCubes reconciled Cube renderer presentation.', {
+                rendererMode,
+                atRoot,
+                nodeCount: nodes.size,
+            });
+        }
         const shouldPresentVue = rendererMode === 'vue' && atRoot;
         const shouldPresentLegacy = rendererMode === 'litegraph' && atRoot;
         this.#legacyHost?.setEnabled(shouldPresentLegacy);
@@ -120,8 +174,11 @@ export class CubeSurfacePresenter {
         }
         for (const node of nodes) {
             const root = this.#host.mount(node);
-            if (!root)
+            if (!root) {
+                if (this.#views.has(node))
+                    this.#unmount(node);
                 continue;
+            }
             const surface = this.#views.get(node);
             if (!surface || surface.root !== root) {
                 void this.#mountView(node, root);
@@ -132,10 +189,7 @@ export class CubeSurfacePresenter {
                 void this.#mountView(node, root);
                 continue;
             }
-            surface.view.layout(Math.max(1, Number(node.size[0]) - 16));
-            if (this.#previewCatalog) {
-                surface.view.renderPreview(this.#previewCatalog.snapshot(node));
-            }
+            this.#layoutMountedView(node);
         }
     }
     /** Mount exact internal nodes using Comfy's active native component. */
@@ -169,7 +223,7 @@ export class CubeSurfacePresenter {
                     this.#setDirtyCanvas(true, true);
                 },
                 onMinimumHeightChange: (minimumHeight) => {
-                    if (!this.#host.reconcileMinimumHeight(node, minimumHeight))
+                    if (!this.#host.reconcileMinimumSize(node, minimumHeight))
                         return;
                     this.#nodes.changed(node);
                     this.#setDirtyCanvas(true, true);
@@ -184,12 +238,15 @@ export class CubeSurfacePresenter {
                 root,
                 topologySignature: buildTopologySignature(node),
                 view,
+                layoutWidth: Number.NaN,
             });
             this.#observers.get(node)?.dispose();
             this.#observers.set(node, new NativeSubgraphChangeObserver(node.subgraph, () => this.#sync()));
-            view.layout(Math.max(1, Number(node.size[0]) - 16));
+            this.#layoutMountedView(node);
             if (this.#previewCatalog)
                 view.renderPreview(this.#previewCatalog.snapshot(node));
+            this.#host.reconcileBoundary(node);
+            this.#onBoundaryGeometryChange();
         }
         catch (error) {
             this.#logger.error('SugarCubes failed to mount a Cube node surface.', {
@@ -197,6 +254,35 @@ export class CubeSurfacePresenter {
                 reason: error instanceof Error ? error.message : String(error),
                 error,
             });
+        }
+    }
+    /** Reflow one mounted Cube only when its usable width changes. */
+    #layoutMountedView(node) {
+        const surface = this.#views.get(node);
+        if (!surface)
+            return;
+        surface.view.setPortGutterWidths(node.inputs.length > 0 ? CUBE_INPUT_GUTTER_WIDTH : 0, node.outputs.length > 0 ? CUBE_OUTPUT_GUTTER_WIDTH : 0);
+        const width = resolveVueContentWidth(node);
+        if (Number.isFinite(surface.layoutWidth) && Math.abs(surface.layoutWidth - width) < 0.5) {
+            return;
+        }
+        surface.layoutWidth = width;
+        surface.view.layout(width);
+    }
+    /** Reconcile responsive face content and its dependent boundary anchors together. */
+    #handleNodeGeometryChange(node) {
+        this.#layoutMountedView(node);
+        this.#host.reconcileBoundary(node);
+        this.#onBoundaryGeometryChange();
+    }
+    /** Refresh media only when the execution-output owner reports a change. */
+    #refreshPreviews() {
+        if (!this.#previewCatalog)
+            return;
+        for (const [node, surface] of this.#views) {
+            surface.view.renderPreview(this.#previewCatalog.snapshot(node));
+            this.#host.reconcileBoundary(node);
+            this.#onBoundaryGeometryChange();
         }
     }
     /** Remove one mounted face without touching its native definition. */
@@ -252,17 +338,6 @@ export class CubeSurfacePresenter {
         this.#runtime ??= loadComfyVueRuntime(this.#document);
         return this.#runtime;
     }
-    /** Ask Comfy to remeasure its real slot elements after Cube presentation changes. */
-    #requestNativeSlotLayoutSync() {
-        void this.#getRuntime()
-            .then((runtime) => runtime.requestSlotLayoutSync())
-            .catch((error) => {
-            this.#logger.error('SugarCubes could not synchronize native Cube boundary slots.', {
-                reason: error instanceof Error ? error.message : String(error),
-                error,
-            });
-        });
-    }
 }
 /** Describe exact internal node identity without projecting it onto the root graph. */
 function buildTopologySignature(node) {
@@ -273,4 +348,10 @@ function replaceRecord(target, source) {
     for (const key of Object.keys(target))
         Reflect.deleteProperty(target, key);
     Object.assign(target, source);
+}
+/** Exclude dedicated port gutters from responsive card and preview width. */
+function resolveVueContentWidth(node) {
+    const inputGutterWidth = node.inputs.length > 0 ? CUBE_INPUT_GUTTER_WIDTH : 0;
+    const outputGutterWidth = node.outputs.length > 0 ? CUBE_OUTPUT_GUTTER_WIDTH : 0;
+    return Math.max(1, Number(node.size[0]) - 16 - inputGutterWidth - outputGutterWidth);
 }

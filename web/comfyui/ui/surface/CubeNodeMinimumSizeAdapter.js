@@ -13,15 +13,20 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Adapt content-derived minimum height to Comfy's real Cube node geometry. */
-import { CUBE_BASE_MINIMUM_HEIGHT } from './CubeSurfaceMinimumHeight.js';
-/** Expand an undersized Cube without changing its width or graph origin. */
-export function enforceCubeNodeMinimumHeight(node, minimumHeight) {
+/** Adapt presentation-derived minimum size to Comfy's real Cube node geometry. */
+import { CUBE_BASE_MINIMUM_HEIGHT, CUBE_MINIMUM_WIDTH } from './CubeSurfaceMinimumHeight.js';
+/** Expand an undersized Cube without changing its graph origin. */
+export function enforceCubeNodeMinimumSize(node, minimumSize) {
+    const currentWidth = finitePositive(Number(node.size[0]), CUBE_MINIMUM_WIDTH);
     const currentHeight = finitePositive(Number(node.size[1]), CUBE_BASE_MINIMUM_HEIGHT);
-    const requiredHeight = Math.ceil(Math.max(CUBE_BASE_MINIMUM_HEIGHT, finitePositive(minimumHeight, CUBE_BASE_MINIMUM_HEIGHT)));
-    if (currentHeight >= requiredHeight)
+    const requiredWidth = Math.ceil(Math.max(CUBE_MINIMUM_WIDTH, finitePositive(minimumSize[0], CUBE_MINIMUM_WIDTH)));
+    const requiredHeight = Math.ceil(Math.max(CUBE_BASE_MINIMUM_HEIGHT, finitePositive(minimumSize[1], CUBE_BASE_MINIMUM_HEIGHT)));
+    if (currentWidth >= requiredWidth && currentHeight >= requiredHeight)
         return false;
-    const size = [finitePositive(Number(node.size[0]), 1), requiredHeight];
+    const size = [
+        Math.max(currentWidth, requiredWidth),
+        Math.max(currentHeight, requiredHeight),
+    ];
     node.setSize?.([...size]);
     node.size[0] = size[0];
     node.size[1] = size[1];

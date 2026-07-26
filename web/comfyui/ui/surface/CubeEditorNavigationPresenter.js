@@ -24,7 +24,7 @@ export class CubeEditorNavigationPresenter {
     #getCurrentGraph;
     #nodes;
     #logger;
-    #pollId;
+    #unsubscribeGraphChanges;
     #bar = null;
     #signature = '';
     #activeCubeInstanceId = '';
@@ -40,13 +40,13 @@ export class CubeEditorNavigationPresenter {
         this.#getCurrentGraph = options.getCurrentGraph;
         this.#nodes = options.nodes;
         this.#logger = options.logger ?? null;
-        this.#pollId = options.document.defaultView?.setInterval(() => this.#sync(), 100) ?? null;
+        this.#unsubscribeGraphChanges =
+            options.graphChanges?.subscribe(() => this.#sync()) ?? (() => undefined);
         this.#sync();
     }
     /** Release the editor bar and its navigation observer. */
     dispose() {
-        if (this.#pollId !== null)
-            this.#document.defaultView?.clearInterval(this.#pollId);
+        this.#unsubscribeGraphChanges();
         this.#bar?.remove();
         this.#bar = null;
         this.#signature = '';
@@ -55,6 +55,10 @@ export class CubeEditorNavigationPresenter {
         this.#lastGraph = null;
         this.#rootView = null;
         this.#rootSelection = [];
+    }
+    /** Reconcile after an explicit host navigation event. */
+    refresh() {
+        this.#sync();
     }
     /** Open one Cube through Comfy's native editor while retaining Cube context. */
     open(node) {

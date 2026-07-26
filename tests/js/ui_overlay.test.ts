@@ -233,7 +233,7 @@ describe('ui overlay rendering', () => {
     expect(testCanvas().renderLink).toHaveBeenCalledTimes(1);
   });
 
-  test('refreshes proximity endpoints after Nodes 2.0 moves a real graph node', async () => {
+  test('refreshes proximity only after Nodes 2.0 changes real node geometry', async () => {
     const { OverlayManager } = await import('../../frontend/comfyui/ui/overlays/OverlayManager.js');
     const canvasElement = document.createElement('canvas');
     testCanvas().canvas = canvasElement;
@@ -298,11 +298,127 @@ describe('ui overlay rendering', () => {
       }),
     });
     manager.ensureGraphHooks();
-    inputPosition = [120, 40];
 
     canvasElement.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
 
+    expect(manager.proximity.overlayMatches[0]?.inputPos).toEqual([80, 20]);
+
+    inputPosition = [120, 40];
+    inputNode.pos = [120, 40];
+    testCanvas().node_dragged = inputNode;
+    canvasElement.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+
     expect(manager.proximity.overlayMatches[0]?.inputPos).toEqual([120, 40]);
+
+    inputPosition = [140, 60];
+    inputNode.pos = [140, 60];
+    testCanvas().node_dragged = null;
+    canvasElement.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+
+    expect(manager.proximity.overlayMatches[0]?.inputPos).toEqual([140, 60]);
+  });
+
+  test('does not rediscover proximity while the pointer only hovers the graph', async () => {
+    const { OverlayManager } = await import('../../frontend/comfyui/ui/overlays/OverlayManager.js');
+    const canvasElement = document.createElement('canvas');
+    const canvasContainer = document.createElement('div');
+    canvasContainer.className = 'graph-canvas-container';
+    canvasContainer.append(canvasElement);
+    document.body.append(canvasContainer);
+    testCanvas().canvas = canvasElement;
+    const discover = jest.fn(() => ({ outputs: [], inputs: [] }));
+    const manager = new OverlayManager({
+      adapter: {
+        getApp: () => app as unknown as ComfyApplication,
+        getLiteGraph: () => globalThis.LiteGraph,
+        getConsole: () => console,
+      },
+      scheduler: {
+        raf: (callback) => {
+          callback(0);
+          return 1;
+        },
+        timeout: () => 1,
+      },
+    });
+    manager.proximity.setEndpointSource({ discover });
+    manager.ensureGraphHooks();
+    discover.mockClear();
+
+    canvasElement.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+    canvasElement.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+
+    expect(discover).not.toHaveBeenCalled();
+    canvasContainer.remove();
+  });
+
+  test('attaches proximity graph mutation tracking', async () => {
+    const { OverlayManager } = await import('../../frontend/comfyui/ui/overlays/OverlayManager.js');
+    const graph = app.graph as TestGraph & {
+      onNodeAdded(node: unknown): void;
+    };
+    const manager = new OverlayManager({
+      adapter: {
+        getApp: () => app as unknown as ComfyApplication,
+        getLiteGraph: () => globalThis.LiteGraph,
+        getConsole: () => console,
+      },
+      scheduler: {
+        raf: () => 1,
+        timeout: () => 1,
+      },
+    });
+    manager.ensureGraphHooks();
+    const schedulePreview = jest
+      .spyOn(manager.proximity, 'schedulePreview')
+      .mockImplementation(() => undefined);
+    graph.onNodeAdded?.({});
+
+    expect(schedulePreview).toHaveBeenCalledTimes(1);
+    expect(schedulePreview).toHaveBeenCalledWith({ graph });
+  });
+
+  test('tracks link removal after Comfy switches the active workflow graph', async () => {
+    const { OverlayManager } = await import('../../frontend/comfyui/ui/overlays/OverlayManager.js');
+    const frames: FrameRequestCallback[] = [];
+    const manager = new OverlayManager({
+      adapter: {
+        getApp: () => app as unknown as ComfyApplication,
+        getLiteGraph: () => globalThis.LiteGraph,
+        getConsole: () => console,
+      },
+      scheduler: {
+        raf: (callback) => {
+          frames.push(callback);
+          return frames.length;
+        },
+        timeout: () => 1,
+      },
+    });
+    manager.ensureGraphHooks();
+    manager.ensureOverlayHook();
+    const switchedGraph = createTestGraph() as TestGraph & {
+      removeLink(linkId: unknown): unknown;
+    };
+    const removeLink = jest.fn((linkId: unknown) => linkId);
+    switchedGraph.removeLink = removeLink;
+    testCanvas().graph = switchedGraph;
+    const drawBackground = testCanvas().onDrawBackground;
+    expect(typeof drawBackground).toBe('function');
+    Reflect.apply(drawBackground as (...args: unknown[]) => unknown, testCanvas(), [
+      testCanvas().__testCtx,
+    ]);
+    frames.length = 0;
+    const schedulePreview = jest
+      .spyOn(manager.proximity, 'schedulePreview')
+      .mockImplementation(() => undefined);
+
+    expect(switchedGraph.removeLink('link-1')).toBe('link-1');
+    expect(removeLink).toHaveBeenCalledWith('link-1');
+    expect(schedulePreview).not.toHaveBeenCalled();
+    frames.splice(0).forEach((callback) => callback(0));
+    frames.splice(0).forEach((callback) => callback(16));
+    expect(schedulePreview).toHaveBeenCalledWith({ graph: switchedGraph });
   });
 
   test('chrome overlay does not create DOM roots', async () => {
@@ -1519,6 +1635,123 @@ describe('ui overlay rendering', () => {
     overlay.applyProximityToPrompt(result);
 
     expect(overlay.promptMatches).toEqual([]);
+  });
+
+  test('does not invalidate presentation for an unchanged proximity result', () => {
+    const setDirty = jest.fn();
+    const updateMatches = jest.fn();
+    const overlay = new ProximityOverlay({
+      adapter: {
+        getApp: () => ({ canvas: { setDirty } }),
+      },
+    });
+    overlay.setMatchSink({ updateMatches });
+    updateMatches.mockClear();
+    const match: ProximityMatch = {
+      outputId: 10,
+      outputSlot: 0,
+      outputPos: [0, 20],
+      inputId: 20,
+      inputSlot: 0,
+      inputName: 'image',
+      inputPos: [80, 20],
+      originId: 'producer',
+      originSlot: 0,
+      promptTargets: [{ nodeId: 'consumer', inputSlot: 0, inputName: 'image' }],
+      distance: 80,
+    };
+
+    overlay.updateOverlay([match]);
+    overlay.updateOverlay([{ ...match }]);
+
+    expect(updateMatches).toHaveBeenCalledTimes(1);
+    expect(setDirty).toHaveBeenCalledTimes(1);
+  });
+
+  test('keeps magnetic matches active when dotted-line visibility is disabled', () => {
+    const updateMatches = jest.fn();
+    const overlay = new ProximityOverlay();
+    overlay.settings.showOverlay = false;
+    overlay.setMatchSink({ updateMatches });
+    updateMatches.mockClear();
+    const match: ProximityMatch = {
+      outputId: 10,
+      outputSlot: 0,
+      outputPos: [0, 20],
+      inputId: 20,
+      inputSlot: 0,
+      inputName: 'image',
+      inputPos: [80, 20],
+      originId: 'producer',
+      originSlot: 0,
+      promptTargets: [{ nodeId: 'consumer', inputSlot: 0, inputName: 'image' }],
+      distance: 80,
+    };
+
+    overlay.updateOverlay([match]);
+
+    expect(overlay.isProximityEnabled()).toBe(true);
+    expect(overlay.overlayMatches).toEqual([]);
+    expect(updateMatches).toHaveBeenCalledWith([match]);
+  });
+
+  test('invalidates the visible workflow graph when proximity state changes', () => {
+    const setDirtyCanvas = jest.fn();
+    const overlay = new ProximityOverlay({
+      adapter: {
+        getApp: () => ({ canvas: { graph: { setDirtyCanvas } } }),
+      },
+    });
+
+    overlay.updateOverlay([]);
+
+    expect(setDirtyCanvas).toHaveBeenCalledWith(true, true);
+  });
+
+  test('initializes an unmatched graph once instead of rediscovering on every draw', () => {
+    const graph = createTestGraph();
+    const overlay = new ProximityOverlay({
+      adapter: {
+        getApp: () => ({ graph }),
+      },
+      scheduler: {
+        raf: jest.fn(() => 1),
+      },
+    });
+    const compute = jest.spyOn(overlay, 'computeMatches').mockReturnValue([]);
+
+    overlay.ensurePreview(graph);
+    overlay.ensurePreview(graph);
+    overlay.ensurePreview(graph);
+
+    expect(compute).toHaveBeenCalledTimes(1);
+  });
+
+  test('recomputes a replaced endpoint source against the visible workflow graph', () => {
+    const rootGraph = createTestGraph();
+    const visibleGraph = createTestGraph();
+    const discover = jest.fn(() => ({ outputs: [], inputs: [] }));
+    const overlay = new ProximityOverlay({
+      adapter: {
+        getApp: () => ({ graph: rootGraph, canvas: { graph: visibleGraph } }),
+      },
+    });
+
+    overlay.setEndpointSource({ discover });
+
+    expect(discover).toHaveBeenCalledWith(visibleGraph);
+  });
+
+  test('reset allows every previously initialized workflow graph to initialize again', () => {
+    const graph = createTestGraph();
+    const overlay = new ProximityOverlay();
+    const compute = jest.spyOn(overlay, 'computeMatches').mockReturnValue([]);
+
+    overlay.ensurePreview(graph);
+    overlay.resetOverlayState();
+    overlay.ensurePreview(graph);
+
+    expect(compute).toHaveBeenCalledTimes(2);
   });
 
   test('proximity overlay does not connect one Cube node to itself', () => {

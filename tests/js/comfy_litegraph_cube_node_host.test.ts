@@ -166,6 +166,40 @@ describe('ComfyLiteGraphCubeNodeHost', () => {
     host.dispose();
   });
 
+  test('remounts after Comfy replaces Nodes 1 draw hooks and preserves the replacement', () => {
+    const rootGraph = {};
+    const node = cubeNode(nativeInnerNode());
+    const nodes = new CubeNodeCatalog();
+    nodes.add(node);
+    const replacementForeground = jest.fn();
+    const canvasElement = document.createElement('canvas');
+    const canvas = {
+      canvas: canvasElement,
+      graph: rootGraph,
+      graph_mouse: [0, 0],
+      drawNode: jest.fn(),
+      processWidgetClick: jest.fn(),
+      setDirty: jest.fn(),
+    };
+    const host = new ComfyLiteGraphCubeNodeHost({
+      canvas,
+      document,
+      rootGraph,
+      nodes,
+      history: {},
+      titleHeight: 30,
+      openEditor: jest.fn(),
+    });
+
+    host.setEnabled(true);
+    node.onDrawForeground = replacementForeground;
+    host.sync();
+
+    expect(node.onDrawForeground).not.toBe(replacementForeground);
+    host.dispose();
+    expect(node.onDrawForeground).toBe(replacementForeground);
+  });
+
   test('mounts and restores a real multiline DOM widget across Cube editor navigation', () => {
     const rootGraph = {};
     const inner = nativeInnerNode();

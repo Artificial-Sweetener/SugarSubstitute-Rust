@@ -16,6 +16,7 @@
 /**
  * Own the SugarCubes core UI service layer in `frontend/comfyui/ui/core/ComfyAdapter.js`.
  */
+import { resolveComfyRendererMode } from './ComfyRendererMode.js';
 /**
  * Coordinate comfy adapter behavior for the SugarCubes UI.
  */
@@ -94,13 +95,7 @@ export class ComfyAdapter {
     }
     /** Read the active renderer from Comfy's authoritative settings boundary. */
     getNodeRenderer() {
-        const settings = this.getApp()?.ui?.settings;
-        const enabled = settings?.getSettingValue?.('Comfy.VueNodes.Enabled');
-        if (typeof enabled === 'boolean')
-            return enabled ? 'vue' : 'litegraph';
-        if (this.documentRef?.querySelector('[data-node-id]'))
-            return 'vue';
-        return this.liteGraph?.vueNodesMode === true ? 'vue' : 'litegraph';
+        return resolveComfyRendererMode(this.getApp(), this.liteGraph, this.documentRef);
     }
     getWindow() {
         return this.windowRef;

@@ -32,6 +32,7 @@ import type {
   NumericVector,
 } from '../types/graph.js';
 import { buildCubePayloadTopology } from './CubePayloadTopology.js';
+import { resolveCubeInputBoundaryType } from './CubeBoundaryTypeResolver.js';
 
 interface NativeBoundaryInput {
   connect(slot: ComfyInput, node: NativeGraphNode): unknown;
@@ -173,7 +174,10 @@ export class ComfyCubeGraphBuilder {
         warnings.push(`Cube input '${input.name}' has no compatible internal target.`);
         continue;
       }
-      const boundary = subgraph.addInput(input.name, '*');
+      const boundary = subgraph.addInput(
+        input.name,
+        resolveCubeInputBoundaryType(resolvedTargets.map((target) => target.slot)),
+      );
       for (const target of resolvedTargets) boundary.connect(target.slot, target.node);
     }
 

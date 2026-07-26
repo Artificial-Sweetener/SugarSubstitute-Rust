@@ -20,23 +20,30 @@ import { ComfyVueCubeEditorFooter } from './ComfyVueCubeEditorFooter.js';
 import { ComfyVueCubeNodeResizeHost, } from './ComfyVueCubeNodeResizeHost.js';
 import { ComfyVueCubeBoundaryHost } from './ComfyVueCubeBoundaryHost.js';
 import { resolveComfyVueCubeMinimumHeight } from './ComfyVueCubeMinimumHeight.js';
-import { enforceCubeNodeMinimumHeight } from './CubeNodeMinimumHeightAdapter.js';
+import { enforceCubeNodeMinimumSize } from './CubeNodeMinimumSizeAdapter.js';
+import { cubeMinimumSize } from './CubeSurfaceMinimumHeight.js';
 const NATIVE_ROOT_OWNERS = new WeakMap();
 /** Own only the custom-content seam inside a native Comfy node component. */
 export class ComfyVueCubeNodeHost {
     #document;
+    #titleHeight;
     #history;
     #getScale;
     #openEditor;
     #requestSlotLayoutSync;
+    #onGeometryChange;
+    #portPresentation;
     #mounts = new Map();
     /** Bind the active Comfy document and graph geometry collaborators. */
     constructor(options) {
         this.#document = options.document;
+        this.#titleHeight = Math.max(0, options.titleHeight);
         this.#history = options.history;
         this.#getScale = options.getScale;
         this.#openEditor = options.openEditor;
         this.#requestSlotLayoutSync = options.requestSlotLayoutSync;
+        this.#onGeometryChange = options.onGeometryChange ?? (() => undefined);
+        this.#portPresentation = options.portPresentation ?? null;
     }
     /** Mount a face within the matching native node body, preserving native shell behavior. */
     mount(node) {
@@ -52,7 +59,6 @@ export class ComfyVueCubeNodeHost {
             existing.faceHost.isConnected &&
             existing.faceHost.parentElement !== null) {
             removeOrphanFaceHosts(existing.faceHost.parentElement, existing.faceHost);
-            this.#reconcile(node, existing);
             return existing.faceHost;
         }
         if (existing)
@@ -77,14 +83,28 @@ export class ComfyVueCubeNodeHost {
             node,
             history: this.#history,
             getScale: this.#getScale,
+            onGeometryChange: () => this.#onGeometryChange(node),
         });
-        const boundaryHost = new ComfyVueCubeBoundaryHost(body, this.#requestSlotLayoutSync);
+        const boundaryHost = new ComfyVueCubeBoundaryHost({
+            body,
+            node,
+            titleHeight: this.#titleHeight,
+            requestSlotLayoutSync: this.#requestSlotLayoutSync,
+            ...(this.#portPresentation ? { portPresentation: this.#portPresentation } : {}),
+        });
         const editorFooter = new ComfyVueCubeEditorFooter(nodeRoot, node, this.#openEditor);
-        const observer = new MutationObserver(() => {
+        const observer = new MutationObserver((records) => {
             const mounted = this.#mounts.get(node);
-            if (mounted)
+            if (mounted && records.some((record) => requiresNativeHostReconcile(record, mounted))) {
                 this.#reconcile(node, mounted);
+            }
         });
+        const viewRecord = isRecord(this.#document.defaultView) ? this.#document.defaultView : null;
+        const ResizeObserverValue = viewRecord?.ResizeObserver;
+        const geometryObserver = typeof ResizeObserverValue === 'function'
+            ? // Browser globals are validated here because detached test windows omit this constructor.
+                new ResizeObserverValue(() => this.#onGeometryChange(node))
+            : null;
         const mounted = {
             nodeRoot,
             faceHost,
@@ -94,10 +114,12 @@ export class ComfyVueCubeNodeHost {
             boundaryHost,
             editorFooter,
             observer,
+            geometryObserver,
         };
         this.#mounts.set(node, mounted);
         NATIVE_ROOT_OWNERS.set(nodeRoot, { owner: this, node });
         observer.observe(nodeRoot, { childList: true, subtree: true });
+        geometryObserver?.observe(nodeRoot);
         return faceHost;
     }
     /** Mount Cube chrome inside Comfy's actual header interaction surface. */
@@ -114,8 +136,12 @@ export class ComfyVueCubeNodeHost {
     getRoot(node) {
         return this.#mounts.get(node)?.faceHost ?? null;
     }
+    /** Remeasure boundary anchors after Cube-owned face content changes. */
+    reconcileBoundary(node) {
+        this.#mounts.get(node)?.boundaryHost.reconcile();
+    }
     /** Synchronize measured face constraints with native and supplemental resizing. */
-    reconcileMinimumHeight(node, minimumHeight) {
+    reconcileMinimumSize(node, minimumHeight) {
         const mount = this.#mounts.get(node);
         if (!mount)
             return false;
@@ -130,7 +156,8 @@ export class ComfyVueCubeNodeHost {
             })
             : minimumHeight;
         mount.resizeHost.setMinimumHeight(resolvedMinimumHeight);
-        return enforceCubeNodeMinimumHeight(node, resolvedMinimumHeight);
+        const minimumSize = cubeMinimumSize(resolvedMinimumHeight);
+        return enforceCubeNodeMinimumSize(node, [Math.max(1, Number(node.size[0])), minimumSize[1]]);
     }
     /** Restore the generic native body when the custom face is released. */
     unmount(node) {
@@ -138,6 +165,7 @@ export class ComfyVueCubeNodeHost {
         if (!mount)
             return;
         mount.observer.disconnect();
+        mount.geometryObserver?.disconnect();
         for (const [element, wasHidden] of mount.hiddenElements) {
             if (element.isConnected)
                 element.hidden = wasHidden;
@@ -192,6 +220,17 @@ function removeOrphanFaceHosts(body, preserve) {
             child.remove();
         }
     }
+}
+/** Ignore Cube-owned face mutations while retaining repairs for native shell replacement. */
+function requiresNativeHostReconcile(record, mount) {
+    const target = record.target;
+    if (target === mount.faceHost || mount.faceHost.contains(target))
+        return false;
+    if (mount.header && (target === mount.header || mount.header.contains(target)))
+        return false;
+    if (!(target instanceof Element))
+        return true;
+    return (target.closest('[data-sugarcube-edge-resize], [data-sugarcube-port-leaders], [data-sugarcube-output-leader]') === null);
 }
 /** Locate the exact Nodes 2.0 root by native graph-node identity. */
 function findNativeNodeRoot(documentRef, node) {

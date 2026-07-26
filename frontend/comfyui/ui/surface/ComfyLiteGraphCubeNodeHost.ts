@@ -42,7 +42,7 @@ import {
   CubeCanvasPreviewImageCache,
   type CubeCanvasPreviewImageProvider,
 } from './CubeCanvasPreviewImageCache.js';
-import { enforceCubeNodeMinimumHeight } from './CubeNodeMinimumHeightAdapter.js';
+import { enforceCubeNodeMinimumSize } from './CubeNodeMinimumSizeAdapter.js';
 import { ComfyGraphPreviewImageSource } from './ComfyGraphPreviewImageSource.js';
 import type { CubePreviewCatalog, CubePreviewSnapshot } from './CubePreviewModel.js';
 import {
@@ -55,6 +55,7 @@ import {
   serializeCubeSurfaceState,
   type CubeSurfaceState,
 } from './CubeSurfaceState.js';
+import type { CubePortPresentationController } from '../cube/connection/CubePortPresentationController.js';
 
 export interface LiteGraphCubeNodeCanvas
   extends LiteGraphCubeDrawHost,
@@ -80,6 +81,7 @@ export interface ComfyLiteGraphCubeNodeHostOptions {
   previewCatalog?: CubePreviewCatalog;
   previewImages?: CubeCanvasPreviewImageProvider;
   chromeActions?: CubeFaceChromeActions;
+  portPresentation?: CubePortPresentationController;
   logger?: Pick<Console, 'debug' | 'warn'>;
 }
 
@@ -99,6 +101,10 @@ interface MountedDrawHooks {
   drawWidgets: CubeDrawNode['drawWidgets'];
   drawSlots: CubeDrawNode['drawSlots'];
   titleButtons: unknown[] | undefined;
+  installedForeground: NonNullable<CubeDrawNode['onDrawForeground']>;
+  installedDrawWidgets: NonNullable<CubeDrawNode['drawWidgets']>;
+  installedDrawSlots: NonNullable<CubeDrawNode['drawSlots']>;
+  installedTitleButtons: unknown[];
 }
 
 interface RenderItem {
@@ -119,6 +125,8 @@ export class ComfyLiteGraphCubeNodeHost {
   readonly #titleHeight: number;
   readonly #previewCatalog: CubePreviewCatalog | null;
   readonly #chromeActions: CubeFaceChromeActions | null;
+  readonly #portPresentation: CubePortPresentationController | null;
+  readonly #logger: Pick<Console, 'debug' | 'warn'>;
   readonly #renderer: ComfyLiteGraphCubeRenderer;
   readonly #boundaryHost = new ComfyLiteGraphCubeBoundaryHost();
   readonly #interaction: ComfyLiteGraphCubeNodeInteraction;
@@ -137,6 +145,8 @@ export class ComfyLiteGraphCubeNodeHost {
     this.#titleHeight = Math.max(1, options.titleHeight);
     this.#previewCatalog = options.previewCatalog ?? null;
     this.#chromeActions = options.chromeActions ?? null;
+    this.#portPresentation = options.portPresentation ?? null;
+    this.#logger = options.logger ?? console;
     const graphImages = new ComfyGraphPreviewImageSource(
       options.document,
       options.rootGraph,
@@ -191,6 +201,12 @@ export class ComfyLiteGraphCubeNodeHost {
 
   /** Enable the custom draw face only while Nodes 1.0 displays the root graph. */
   setEnabled(enabled: boolean): void {
+    if (this.#enabled !== enabled) {
+      this.#logger.debug('SugarCubes changed Nodes 1 Cube-face presentation state.', {
+        enabled,
+        nodeCount: this.#nodes.list().length,
+      });
+    }
     this.#enabled = enabled;
     this.sync();
   }
@@ -209,6 +225,16 @@ export class ComfyLiteGraphCubeNodeHost {
       return;
     }
     for (const node of nodes) {
+      const hooks = this.#hooks.get(node);
+      if (hooks && !ownsInstalledHooks(node as CubeDrawNode, hooks)) {
+        this.#logger.debug(
+          'SugarCubes remounted a Nodes 1 Cube face after host hook replacement.',
+          {
+            nodeId: node.id,
+          },
+        );
+        this.#abandonLostHooks(node);
+      }
       if (!this.#hooks.has(node)) this.#mount(node);
     }
     this.#items = [...nodes].map((node) => this.#renderItem(node));
@@ -230,15 +256,15 @@ export class ComfyLiteGraphCubeNodeHost {
   /** Replace only generic subgraph face drawing on one real node. */
   #mount(node: CubeNode): void {
     const drawNode = node as CubeDrawNode;
-    const hooks: MountedDrawHooks = {
+    const originalHooks = {
       foreground: drawNode.onDrawForeground,
       drawWidgets: drawNode.drawWidgets,
       drawSlots: drawNode.drawSlots,
       titleButtons: drawNode.title_buttons,
     };
-    drawNode.onDrawForeground = (context) => {
+    const installedForeground: NonNullable<CubeDrawNode['onDrawForeground']> = (context) => {
       if (!this.#enabled || this.#canvas.graph !== this.#rootGraph) {
-        hooks.foreground?.call(drawNode, context, this.#canvas, this.#canvas.canvas);
+        originalHooks.foreground?.call(drawNode, context, this.#canvas, this.#canvas.canvas);
         return;
       }
       const item = this.#renderItem(node);
@@ -249,13 +275,25 @@ export class ComfyLiteGraphCubeNodeHost {
       context.restore();
       this.#domWidgets.sync(this.#items);
     };
-    drawNode.drawWidgets = () => undefined;
-    drawNode.drawSlots = (context, drawOptions) =>
-      this.#boundaryHost.drawNativeSlotsWithoutOutputLabels(node, context, () =>
-        hooks.drawSlots?.call(drawNode, context, drawOptions),
+    const installedDrawWidgets: NonNullable<CubeDrawNode['drawWidgets']> = () => undefined;
+    const installedDrawSlots: NonNullable<CubeDrawNode['drawSlots']> = (context, drawOptions) =>
+      this.#boundaryHost.drawNativeSlotDots(node, context, () =>
+        originalHooks.drawSlots?.call(drawNode, context, drawOptions),
       );
-    drawNode.title_buttons = [];
+    const installedTitleButtons: unknown[] = [];
+    const hooks: MountedDrawHooks = {
+      ...originalHooks,
+      installedForeground,
+      installedDrawWidgets,
+      installedDrawSlots,
+      installedTitleButtons,
+    };
+    drawNode.onDrawForeground = installedForeground;
+    drawNode.drawWidgets = installedDrawWidgets;
+    drawNode.drawSlots = installedDrawSlots;
+    drawNode.title_buttons = installedTitleButtons;
     this.#hooks.set(node, hooks);
+    this.#logger.debug('SugarCubes mounted a Nodes 1 Cube face.', { nodeId: node.id });
   }
 
   /** Restore one node's original generic subgraph presentation hooks. */
@@ -263,11 +301,27 @@ export class ComfyLiteGraphCubeNodeHost {
     const hooks = this.#hooks.get(node);
     if (!hooks) return;
     const drawNode = node as CubeDrawNode;
-    restoreOptional(drawNode, 'onDrawForeground', hooks.foreground);
-    restoreOptional(drawNode, 'drawWidgets', hooks.drawWidgets);
-    restoreOptional(drawNode, 'drawSlots', hooks.drawSlots);
-    restoreOptional(drawNode, 'title_buttons', hooks.titleButtons);
+    if (drawNode.onDrawForeground === hooks.installedForeground) {
+      restoreOptional(drawNode, 'onDrawForeground', hooks.foreground);
+    }
+    if (drawNode.drawWidgets === hooks.installedDrawWidgets) {
+      restoreOptional(drawNode, 'drawWidgets', hooks.drawWidgets);
+    }
+    if (drawNode.drawSlots === hooks.installedDrawSlots) {
+      restoreOptional(drawNode, 'drawSlots', hooks.drawSlots);
+    }
+    if (drawNode.title_buttons === hooks.installedTitleButtons) {
+      restoreOptional(drawNode, 'title_buttons', hooks.titleButtons);
+    }
     this.#boundaryHost.release(node);
+    this.#portPresentation?.release(node);
+    this.#hooks.delete(node);
+  }
+
+  /** Release presentation state after Comfy replaces draw hooks it now owns. */
+  #abandonLostHooks(node: CubeNode): void {
+    this.#boundaryHost.release(node);
+    this.#portPresentation?.release(node);
     this.#hooks.delete(node);
   }
 
@@ -279,16 +333,15 @@ export class ComfyLiteGraphCubeNodeHost {
       this.#chromeActions,
     ).map((action) => action.key);
     let layout = computeCubeCanvasLayout(node, state, this.#titleHeight, titlebarActionKeys);
-    if (enforceCubeNodeMinimumHeight(node, layout.minimumSize[1])) {
+    if (
+      enforceCubeNodeMinimumSize(node, [Math.max(1, Number(node.size[0])), layout.minimumSize[1]])
+    ) {
       layout = computeCubeCanvasLayout(node, state, this.#titleHeight, titlebarActionKeys);
       this.#history.setDirtyCanvas?.(true, true);
       this.#refresh();
     }
-    this.#boundaryHost.sync(
-      node,
-      layout.outputs,
-      layout.preview ? layout.preview.x - Number(node.pos[0]) : undefined,
-    );
+    this.#applyPortPresentation(node, layout);
+    this.#boundaryHost.sync(node, layout.inputs, layout.outputs);
     return {
       node,
       layout,
@@ -297,6 +350,30 @@ export class ComfyLiteGraphCubeNodeHost {
       chromeActions: this.#chromeActions,
       editorButton: findNativeEditorButton(this.#hooks.get(node)?.titleButtons),
     };
+  }
+
+  /** Apply transient Y values after registering stable canonical anchors. */
+  #applyPortPresentation(node: CubeNode, layout: ReturnType<typeof computeCubeCanvasLayout>): void {
+    if (!this.#portPresentation) return;
+    const nodeY = Number(node.pos[1]);
+    for (const direction of ['input', 'output'] as const) {
+      const ports = layout[direction === 'input' ? 'inputs' : 'outputs'];
+      this.#portPresentation.register(
+        node,
+        direction,
+        ports.map((port) => ({
+          index: port.index,
+          defaultY: port.defaultY - nodeY,
+          minY: port.minY - nodeY,
+          maxY: port.maxY - nodeY,
+          labelY: port.labelY - nodeY,
+        })),
+      );
+      for (const port of ports) {
+        const localY = this.#portPresentation.resolveLocalY(node, direction, port.index);
+        if (localY !== null) port.y = nodeY + localY;
+      }
+    }
   }
 
   /** Keep DOM-widget reconciliation on the same freshly rendered geometry. */
@@ -326,6 +403,16 @@ export class ComfyLiteGraphCubeNodeHost {
   #refresh(): void {
     this.#canvas.setDirty?.(true, true);
   }
+}
+
+/** Confirm every behavior-critical node hook still belongs to this host mount. */
+function ownsInstalledHooks(node: CubeDrawNode, hooks: MountedDrawHooks): boolean {
+  return (
+    node.onDrawForeground === hooks.installedForeground &&
+    node.drawWidgets === hooks.installedDrawWidgets &&
+    node.drawSlots === hooks.installedDrawSlots &&
+    node.title_buttons === hooks.installedTitleButtons
+  );
 }
 
 /** Replace persisted face state while retaining node-property ownership. */

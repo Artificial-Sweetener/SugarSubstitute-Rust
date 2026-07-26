@@ -119,6 +119,29 @@ describe('ComfyVueCubeNodeResizeHost', () => {
     expect([...node.size]).toEqual([720, 420]);
     host.dispose();
   });
+
+  test('adds no window move listeners while Cube resize handles are idle', () => {
+    document.body.replaceChildren();
+    const addEventListener = jest.spyOn(window, 'addEventListener');
+    const hosts = Array.from({ length: 20 }, () => {
+      const root = document.createElement('div');
+      document.body.append(root);
+      return new ComfyVueCubeNodeResizeHost({
+        root,
+        node: cubeNode(),
+        history: {},
+        getScale: () => 1,
+      });
+    });
+
+    const idleMoveListeners = addEventListener.mock.calls.filter(
+      ([type]) => type === 'pointermove' || type === 'mousemove',
+    );
+    expect(idleMoveListeners).toHaveLength(0);
+
+    for (const host of hosts) host.dispose();
+    addEventListener.mockRestore();
+  });
 });
 
 /** Build one real Cube node whose graph geometry is authoritative. */

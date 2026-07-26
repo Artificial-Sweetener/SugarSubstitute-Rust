@@ -23,7 +23,7 @@ import { CubeIconResolver } from '../core/CubeIconResolver.js';
 import { ComfyLiteGraphWidgetInteraction } from './ComfyLiteGraphWidgetInteraction.js';
 import { computeCubeCanvasLayout } from './CubeCanvasLayout.js';
 import { CubeCanvasPreviewImageCache, } from './CubeCanvasPreviewImageCache.js';
-import { enforceCubeNodeMinimumHeight } from './CubeNodeMinimumHeightAdapter.js';
+import { enforceCubeNodeMinimumSize } from './CubeNodeMinimumSizeAdapter.js';
 import { ComfyGraphPreviewImageSource } from './ComfyGraphPreviewImageSource.js';
 import { resolveCubeFaceTitlebarActions, } from './CubeFaceChromeActions.js';
 import { setCubeFaceCardRevealed, setCubeFaceNodeEnabled } from './CubeFaceCardStateController.js';
@@ -37,6 +37,8 @@ export class ComfyLiteGraphCubeNodeHost {
     #titleHeight;
     #previewCatalog;
     #chromeActions;
+    #portPresentation;
+    #logger;
     #renderer;
     #boundaryHost = new ComfyLiteGraphCubeBoundaryHost();
     #interaction;
@@ -54,6 +56,8 @@ export class ComfyLiteGraphCubeNodeHost {
         this.#titleHeight = Math.max(1, options.titleHeight);
         this.#previewCatalog = options.previewCatalog ?? null;
         this.#chromeActions = options.chromeActions ?? null;
+        this.#portPresentation = options.portPresentation ?? null;
+        this.#logger = options.logger ?? console;
         const graphImages = new ComfyGraphPreviewImageSource(options.document, options.rootGraph, options.logger ?? null);
         const previewImages = options.previewImages ??
             new CubeCanvasPreviewImageCache({
@@ -93,6 +97,12 @@ export class ComfyLiteGraphCubeNodeHost {
     }
     /** Enable the custom draw face only while Nodes 1.0 displays the root graph. */
     setEnabled(enabled) {
+        if (this.#enabled !== enabled) {
+            this.#logger.debug('SugarCubes changed Nodes 1 Cube-face presentation state.', {
+                enabled,
+                nodeCount: this.#nodes.list().length,
+            });
+        }
         this.#enabled = enabled;
         this.sync();
     }
@@ -111,6 +121,13 @@ export class ComfyLiteGraphCubeNodeHost {
             return;
         }
         for (const node of nodes) {
+            const hooks = this.#hooks.get(node);
+            if (hooks && !ownsInstalledHooks(node, hooks)) {
+                this.#logger.debug('SugarCubes remounted a Nodes 1 Cube face after host hook replacement.', {
+                    nodeId: node.id,
+                });
+                this.#abandonLostHooks(node);
+            }
             if (!this.#hooks.has(node))
                 this.#mount(node);
         }
@@ -132,15 +149,15 @@ export class ComfyLiteGraphCubeNodeHost {
     /** Replace only generic subgraph face drawing on one real node. */
     #mount(node) {
         const drawNode = node;
-        const hooks = {
+        const originalHooks = {
             foreground: drawNode.onDrawForeground,
             drawWidgets: drawNode.drawWidgets,
             drawSlots: drawNode.drawSlots,
             titleButtons: drawNode.title_buttons,
         };
-        drawNode.onDrawForeground = (context) => {
+        const installedForeground = (context) => {
             if (!this.#enabled || this.#canvas.graph !== this.#rootGraph) {
-                hooks.foreground?.call(drawNode, context, this.#canvas, this.#canvas.canvas);
+                originalHooks.foreground?.call(drawNode, context, this.#canvas, this.#canvas.canvas);
                 return;
             }
             const item = this.#renderItem(node);
@@ -151,10 +168,22 @@ export class ComfyLiteGraphCubeNodeHost {
             context.restore();
             this.#domWidgets.sync(this.#items);
         };
-        drawNode.drawWidgets = () => undefined;
-        drawNode.drawSlots = (context, drawOptions) => this.#boundaryHost.drawNativeSlotsWithoutOutputLabels(node, context, () => hooks.drawSlots?.call(drawNode, context, drawOptions));
-        drawNode.title_buttons = [];
+        const installedDrawWidgets = () => undefined;
+        const installedDrawSlots = (context, drawOptions) => this.#boundaryHost.drawNativeSlotDots(node, context, () => originalHooks.drawSlots?.call(drawNode, context, drawOptions));
+        const installedTitleButtons = [];
+        const hooks = {
+            ...originalHooks,
+            installedForeground,
+            installedDrawWidgets,
+            installedDrawSlots,
+            installedTitleButtons,
+        };
+        drawNode.onDrawForeground = installedForeground;
+        drawNode.drawWidgets = installedDrawWidgets;
+        drawNode.drawSlots = installedDrawSlots;
+        drawNode.title_buttons = installedTitleButtons;
         this.#hooks.set(node, hooks);
+        this.#logger.debug('SugarCubes mounted a Nodes 1 Cube face.', { nodeId: node.id });
     }
     /** Restore one node's original generic subgraph presentation hooks. */
     #unmount(node) {
@@ -162,11 +191,26 @@ export class ComfyLiteGraphCubeNodeHost {
         if (!hooks)
             return;
         const drawNode = node;
-        restoreOptional(drawNode, 'onDrawForeground', hooks.foreground);
-        restoreOptional(drawNode, 'drawWidgets', hooks.drawWidgets);
-        restoreOptional(drawNode, 'drawSlots', hooks.drawSlots);
-        restoreOptional(drawNode, 'title_buttons', hooks.titleButtons);
+        if (drawNode.onDrawForeground === hooks.installedForeground) {
+            restoreOptional(drawNode, 'onDrawForeground', hooks.foreground);
+        }
+        if (drawNode.drawWidgets === hooks.installedDrawWidgets) {
+            restoreOptional(drawNode, 'drawWidgets', hooks.drawWidgets);
+        }
+        if (drawNode.drawSlots === hooks.installedDrawSlots) {
+            restoreOptional(drawNode, 'drawSlots', hooks.drawSlots);
+        }
+        if (drawNode.title_buttons === hooks.installedTitleButtons) {
+            restoreOptional(drawNode, 'title_buttons', hooks.titleButtons);
+        }
         this.#boundaryHost.release(node);
+        this.#portPresentation?.release(node);
+        this.#hooks.delete(node);
+    }
+    /** Release presentation state after Comfy replaces draw hooks it now owns. */
+    #abandonLostHooks(node) {
+        this.#boundaryHost.release(node);
+        this.#portPresentation?.release(node);
         this.#hooks.delete(node);
     }
     /** Build one current face layout from the graph-owned node and persisted state. */
@@ -174,12 +218,13 @@ export class ComfyLiteGraphCubeNodeHost {
         const state = parseCubeSurfaceState(requireCubeSurface(node));
         const titlebarActionKeys = resolveCubeFaceTitlebarActions(requireCubeIdentity(node), this.#chromeActions).map((action) => action.key);
         let layout = computeCubeCanvasLayout(node, state, this.#titleHeight, titlebarActionKeys);
-        if (enforceCubeNodeMinimumHeight(node, layout.minimumSize[1])) {
+        if (enforceCubeNodeMinimumSize(node, [Math.max(1, Number(node.size[0])), layout.minimumSize[1]])) {
             layout = computeCubeCanvasLayout(node, state, this.#titleHeight, titlebarActionKeys);
             this.#history.setDirtyCanvas?.(true, true);
             this.#refresh();
         }
-        this.#boundaryHost.sync(node, layout.outputs, layout.preview ? layout.preview.x - Number(node.pos[0]) : undefined);
+        this.#applyPortPresentation(node, layout);
+        this.#boundaryHost.sync(node, layout.inputs, layout.outputs);
         return {
             node,
             layout,
@@ -188,6 +233,27 @@ export class ComfyLiteGraphCubeNodeHost {
             chromeActions: this.#chromeActions,
             editorButton: findNativeEditorButton(this.#hooks.get(node)?.titleButtons),
         };
+    }
+    /** Apply transient Y values after registering stable canonical anchors. */
+    #applyPortPresentation(node, layout) {
+        if (!this.#portPresentation)
+            return;
+        const nodeY = Number(node.pos[1]);
+        for (const direction of ['input', 'output']) {
+            const ports = layout[direction === 'input' ? 'inputs' : 'outputs'];
+            this.#portPresentation.register(node, direction, ports.map((port) => ({
+                index: port.index,
+                defaultY: port.defaultY - nodeY,
+                minY: port.minY - nodeY,
+                maxY: port.maxY - nodeY,
+                labelY: port.labelY - nodeY,
+            })));
+            for (const port of ports) {
+                const localY = this.#portPresentation.resolveLocalY(node, direction, port.index);
+                if (localY !== null)
+                    port.y = nodeY + localY;
+            }
+        }
     }
     /** Keep DOM-widget reconciliation on the same freshly rendered geometry. */
     #replaceItem(item) {
@@ -214,6 +280,13 @@ export class ComfyLiteGraphCubeNodeHost {
     #refresh() {
         this.#canvas.setDirty?.(true, true);
     }
+}
+/** Confirm every behavior-critical node hook still belongs to this host mount. */
+function ownsInstalledHooks(node, hooks) {
+    return (node.onDrawForeground === hooks.installedForeground &&
+        node.drawWidgets === hooks.installedDrawWidgets &&
+        node.drawSlots === hooks.installedDrawSlots &&
+        node.title_buttons === hooks.installedTitleButtons);
 }
 /** Replace persisted face state while retaining node-property ownership. */
 function replaceRecord(target, source) {

@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Characterize Cube output reconciliation from Comfy's authoritative history. */
 
+import { jest } from '@jest/globals';
 import {
   ComfyCubeOutputHistoryAdapter,
   type ComfyExecutionSuccessListener,
@@ -23,6 +24,26 @@ import { buildCubeOutputExecutionId } from '../../frontend/comfyui/ui/cube/execu
 import { CubeOutputExecutionStore } from '../../frontend/comfyui/ui/cube/execution/CubeOutputExecutionStore.js';
 
 describe('ComfyCubeOutputHistoryAdapter', () => {
+  test('publishes only validated changes to preview subscribers', () => {
+    const executionId = buildCubeOutputExecutionId('cube-instance', 0);
+    const store = new CubeOutputExecutionStore();
+    const changed = jest.fn();
+    const unsubscribe = store.subscribe(changed);
+
+    expect(store.retain('ordinary-node', { text: ['ignored'] })).toBe(false);
+    expect(changed).not.toHaveBeenCalled();
+    expect(store.retain(executionId, { text: ['preview'] })).toBe(true);
+    expect(changed).toHaveBeenCalledTimes(1);
+    store.clear();
+    expect(changed).toHaveBeenCalledTimes(2);
+    store.clear();
+    expect(changed).toHaveBeenCalledTimes(2);
+
+    unsubscribe();
+    store.retain(executionId, { text: ['later'] });
+    expect(changed).toHaveBeenCalledTimes(2);
+  });
+
   test('reconciles the completed prompt output Comfy cannot map to a graph node', async () => {
     const executionId = buildCubeOutputExecutionId('cube-instance', 0);
     const output = { images: [{ filename: 'history-result.png', type: 'temp' }] };

@@ -17,24 +17,24 @@
 
 import { jest } from '@jest/globals';
 import type { CubeNode } from '../../frontend/comfyui/ui/cube/node/ComfyCubeNodeFactory.js';
-import { enforceCubeNodeMinimumHeight } from '../../frontend/comfyui/ui/surface/CubeNodeMinimumHeightAdapter.js';
+import { enforceCubeNodeMinimumSize } from '../../frontend/comfyui/ui/surface/CubeNodeMinimumSizeAdapter.js';
 
-describe('enforceCubeNodeMinimumHeight', () => {
-  test('expands height while preserving width and graph origin', () => {
-    const node = cubeNode([80, 120], [640, 200]);
+describe('enforceCubeNodeMinimumSize', () => {
+  test('expands both undersized dimensions while preserving graph origin', () => {
+    const node = cubeNode([80, 120], [320, 200]);
 
-    expect(enforceCubeNodeMinimumHeight(node, 475.2)).toBe(true);
+    expect(enforceCubeNodeMinimumSize(node, [440, 475.2])).toBe(true);
 
     expect([...node.pos]).toEqual([80, 120]);
-    expect([...node.size]).toEqual([640, 476]);
-    expect(node.setSize).toHaveBeenCalledWith([640, 476]);
-    expect(node.onResize).toHaveBeenCalledWith([640, 476]);
+    expect([...node.size]).toEqual([440, 476]);
+    expect(node.setSize).toHaveBeenCalledWith([440, 476]);
+    expect(node.onResize).toHaveBeenCalledWith([440, 476]);
   });
 
   test('does not shrink a node that already fits its contents', () => {
     const node = cubeNode([80, 120], [640, 520]);
 
-    expect(enforceCubeNodeMinimumHeight(node, 476)).toBe(false);
+    expect(enforceCubeNodeMinimumSize(node, [440, 476])).toBe(false);
 
     expect([...node.size]).toEqual([640, 520]);
     expect(node.setSize).not.toHaveBeenCalled();
