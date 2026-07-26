@@ -17,7 +17,9 @@
 
 import { jest } from '@jest/globals';
 import { NativeCubeProximityEndpointSource } from '../../frontend/comfyui/ui/cube/connection/NativeCubeProximityEndpointSource.js';
+import { CubePortPresentationController } from '../../frontend/comfyui/ui/cube/connection/CubePortPresentationController.js';
 import { NativeSubgraphBoundaryResolver } from '../../frontend/comfyui/ui/cube/graph/NativeSubgraphBoundaryResolver.js';
+import type { ProximityMatch } from '../../frontend/comfyui/ui/overlays/proximity/ProximityModel.js';
 import type { ComfyGraph, ComfyNode } from '../../frontend/comfyui/ui/types/graph.js';
 
 describe('NativeCubeProximityEndpointSource', () => {
@@ -135,6 +137,60 @@ describe('NativeCubeProximityEndpointSource', () => {
     expect(endpoints.inputs[0]?.slotPos).toEqual([380, 290]);
     expect(output.getConnectionPos).not.toHaveBeenCalled();
     expect(input.getConnectionPos).not.toHaveBeenCalled();
+  });
+
+  test('discovers the settled magnetic target after a Cube resize changes its default anchor', () => {
+    const producer = node('producer', [], [{ name: 'image', type: 'IMAGE', links: [1] }]);
+    const outputBoundary = boundaryNode(-20);
+    const outputCube = subgraphNode('cube-output', [], [{ name: 'image', type: 'IMAGE' }], {
+      graph: graph([producer], [link(1, producer.id, 0, outputBoundary.id, 0)]),
+      inputLinks: [],
+      outputLink: resolvedOutput(producer, 0),
+      cubeId: 'definition-output',
+      instanceId: 'instance-output',
+    });
+    outputCube.pos = [0, 100];
+    const ordinaryInput = node(
+      'ordinary-input',
+      [{ name: 'image', type: 'IMAGE', link: null }],
+      [],
+    );
+    const controller = new CubePortPresentationController({ requestFrame: () => null });
+    controller.register(outputCube, 'output', [
+      { index: 0, defaultY: 80, minY: 40, maxY: 220, labelY: 80 },
+    ]);
+    controller.updateMatches([
+      {
+        outputId: outputCube.id,
+        outputNode: outputCube,
+        outputCube: 'definition-output',
+        outputSlot: 0,
+        outputPos: [110, 180],
+        inputId: ordinaryInput.id,
+        inputNode: ordinaryInput,
+        inputCube: null,
+        inputSlot: 0,
+        inputName: 'image',
+        inputPos: [150, 240],
+        originId: 'producer',
+        originSlot: 0,
+        promptTargets: [
+          { nodeId: ordinaryInput.id ?? 'ordinary-input', inputSlot: 0, inputName: 'image' },
+        ],
+        distance: 72,
+      } satisfies ProximityMatch,
+    ]);
+    controller.register(outputCube, 'output', [
+      { index: 0, defaultY: 260, minY: 40, maxY: 400, labelY: 40 },
+    ]);
+
+    const endpoints = new NativeCubeProximityEndpointSource(
+      console,
+      new NativeSubgraphBoundaryResolver(console),
+      controller,
+    ).discover(graph([outputCube, ordinaryInput]));
+
+    expect(endpoints.outputs[0]?.slotPos).toEqual([110, 240]);
   });
 });
 

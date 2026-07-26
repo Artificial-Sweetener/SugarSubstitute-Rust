@@ -92,10 +92,10 @@ export class NativeCubeProximityEndpointSource {
         this.#reportChangedInventory(outputs, inputs);
         return { outputs, inputs };
     }
-    /** Match from canonical anchors so animated slots cannot feed back into policy. */
+    /** Match from settled targets so animation cannot feed back or detach during resize. */
     #resolveStablePosition(node, isOutput, slot) {
         const fallback = this.#geometry.slotPosition(node, isOutput, slot);
-        return (this.#portPresentation?.resolveDefaultGraphPosition(node, isOutput ? 'output' : 'input', slot, fallback) ?? fallback);
+        return (this.#portPresentation?.resolveMatchingGraphPosition(node, isOutput ? 'output' : 'input', slot, fallback) ?? fallback);
     }
     /** Log endpoint ownership only when graph mutations change the inventory. */
     #reportChangedInventory(outputs, inputs) {

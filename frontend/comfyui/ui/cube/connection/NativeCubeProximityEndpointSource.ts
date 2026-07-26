@@ -109,11 +109,11 @@ export class NativeCubeProximityEndpointSource implements ProximityEndpointSourc
     return { outputs, inputs };
   }
 
-  /** Match from canonical anchors so animated slots cannot feed back into policy. */
+  /** Match from settled targets so animation cannot feed back or detach during resize. */
   #resolveStablePosition(node: ComfyNode, isOutput: boolean, slot: number): [number, number] {
     const fallback = this.#geometry.slotPosition(node, isOutput, slot);
     return (
-      this.#portPresentation?.resolveDefaultGraphPosition(
+      this.#portPresentation?.resolveMatchingGraphPosition(
         node,
         isOutput ? 'output' : 'input',
         slot,

@@ -141,11 +141,13 @@ describe('CubePortPresentationController', () => {
     expect(controller.resolveLocalY(outputCube, 'output', 1)).toBe(170);
   });
 
-  test('does not magnetize a Cube to an ordinary node or persist transient state', () => {
+  test('magnetizes a Cube output to an ordinary node input without persisting transient state', () => {
+    let now = 0;
     const controller = new CubePortPresentationController({
-      now: () => 0,
+      now: () => now,
       requestFrame: () => null,
       invalidate: () => undefined,
+      durationMs: 100,
     });
     const cubeNode = cube('cube', 100);
     const ordinaryNode = { id: 'ordinary', pos: [600, 100] } as ComfyNode;
@@ -165,8 +167,111 @@ describe('CubePortPresentationController', () => {
       }),
     ]);
 
-    expect(controller.resolveLocalY(cubeNode, 'output', 0)).toBe(80);
+    now = 100;
+
+    expect(controller.resolveLocalY(cubeNode, 'output', 0)).toBe(140);
     expect(controller.serialize()).toEqual({});
+  });
+
+  test('magnetizes a Cube input to an ordinary node output', () => {
+    let now = 0;
+    const controller = new CubePortPresentationController({
+      now: () => now,
+      requestFrame: () => null,
+      invalidate: () => undefined,
+      durationMs: 100,
+    });
+    const ordinaryNode = { id: 'ordinary', pos: [100, 100] } as ComfyNode;
+    const cubeNode = cube('cube', 100);
+    controller.register(cubeNode, 'input', [
+      { index: 0, defaultY: 160, minY: 40, maxY: 220, labelY: 160 },
+    ]);
+    controller.updateMatches([
+      match({
+        outputNode: ordinaryNode,
+        outputCube: null,
+        outputSlot: 0,
+        outputPos: [500, 180],
+        inputNode: cubeNode,
+        inputCube: 'definition',
+        inputSlot: 0,
+        inputPos: [540, 260],
+      }),
+    ]);
+
+    now = 100;
+
+    expect(controller.resolveLocalY(cubeNode, 'input', 0)).toBe(80);
+  });
+
+  test('lifts a resized previewless Cube output above its new midpoint anchor', () => {
+    let now = 0;
+    const controller = new CubePortPresentationController({
+      now: () => now,
+      requestFrame: () => null,
+      invalidate: () => undefined,
+      durationMs: 100,
+    });
+    const cubeNode = cube('cube', 100);
+    const ordinaryNode = { id: 'ordinary', pos: [600, 100] } as ComfyNode;
+    controller.register(cubeNode, 'output', [
+      { index: 0, defaultY: 300, minY: 40, maxY: 520, labelY: 40 },
+    ]);
+    controller.updateMatches([
+      match({
+        outputNode: cubeNode,
+        outputCube: 'definition',
+        outputSlot: 0,
+        outputPos: [500, 400],
+        inputNode: ordinaryNode,
+        inputCube: null,
+        inputSlot: 0,
+        inputPos: [540, 240],
+      }),
+    ]);
+
+    now = 100;
+
+    expect(controller.resolveLocalY(cubeNode, 'output', 0)).toBe(140);
+  });
+
+  test('keeps matching geometry attached while a magnetized Cube is resized', () => {
+    let now = 0;
+    const controller = new CubePortPresentationController({
+      now: () => now,
+      requestFrame: () => null,
+      invalidate: () => undefined,
+      durationMs: 100,
+    });
+    const cubeNode = cube('cube', 100);
+    const ordinaryNode = { id: 'ordinary', pos: [600, 100] } as ComfyNode;
+    controller.register(cubeNode, 'output', [
+      { index: 0, defaultY: 80, minY: 40, maxY: 220, labelY: 80 },
+    ]);
+    controller.updateMatches([
+      match({
+        outputNode: cubeNode,
+        outputCube: 'definition',
+        outputSlot: 0,
+        outputPos: [500, 180],
+        inputNode: ordinaryNode,
+        inputCube: null,
+        inputSlot: 0,
+        inputPos: [540, 240],
+      }),
+    ]);
+    now = 100;
+
+    controller.register(cubeNode, 'output', [
+      { index: 0, defaultY: 260, minY: 40, maxY: 400, labelY: 40 },
+    ]);
+
+    expect(controller.resolveDefaultGraphPosition(cubeNode, 'output', 0, [500, 0])).toEqual([
+      500, 360,
+    ]);
+    expect(controller.resolveMatchingGraphPosition(cubeNode, 'output', 0, [500, 0])).toEqual([
+      500, 240,
+    ]);
   });
 
   test('keeps every temporarily reordered port inside a collision-free travel range', () => {

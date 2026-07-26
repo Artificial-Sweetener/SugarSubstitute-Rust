@@ -199,6 +199,18 @@ export class CubePortPresentationController implements ProximityMatchSink {
     return [fallback[0], this.#resolveOriginY(node) + port.defaultY];
   }
 
+  /** Resolve the settled target used for matching without animation feedback. */
+  resolveMatchingGraphPosition(
+    node: ComfyNode,
+    direction: CubePortDirection,
+    index: number,
+    fallback: Vec2,
+  ): Vec2 {
+    const port = this.#presentations.get(node)?.[direction].get(index);
+    if (!port) return fallback;
+    return [fallback[0], this.#resolveOriginY(node) + port.targetY];
+  }
+
   /** Resolve the authoritative rendered graph position for guides and hit targets. */
   resolveGraphPosition(
     node: ComfyNode,
@@ -326,26 +338,40 @@ export class CubePortPresentationController implements ProximityMatchSink {
   }
 }
 
-/** Collect Cube-to-Cube attractions and choose the earlier canonical side as the anchor. */
+/** Collect attractions for every presented Cube endpoint in an authoritative match. */
 function collectAttractions(
   matches: readonly ProximityMatch[],
   presentations: ReadonlyMap<ComfyNode, NodePresentation>,
 ): Map<ComfyNode, { input: PortAttraction[]; output: PortAttraction[] }> {
   const result = new Map<ComfyNode, { input: PortAttraction[]; output: PortAttraction[] }>();
   for (const match of matches) {
-    if (
-      match.outputCube == null ||
-      match.inputCube == null ||
-      !match.outputNode ||
-      !match.inputNode ||
-      !presentations.has(match.outputNode) ||
-      !presentations.has(match.inputNode)
-    ) {
-      continue;
-    }
+    if (!match.outputNode || !match.inputNode) continue;
     const outputPresentation = presentations.get(match.outputNode);
     const inputPresentation = presentations.get(match.inputNode);
-    if (!outputPresentation || !inputPresentation) continue;
+    if (!outputPresentation && !inputPresentation) continue;
+    if (!outputPresentation || !inputPresentation) {
+      if (outputPresentation && match.outputCube != null) {
+        pushAttraction(
+          result,
+          match.outputNode,
+          'output',
+          match.outputSlot,
+          match.inputPos[1],
+          match.inputPos[1],
+        );
+      }
+      if (inputPresentation && match.inputCube != null) {
+        pushAttraction(
+          result,
+          match.inputNode,
+          'input',
+          match.inputSlot,
+          match.outputPos[1],
+          match.outputPos[1],
+        );
+      }
+      continue;
+    }
     const outputDefault = resolveDefaultGraphY(
       presentations,
       match.outputNode,
