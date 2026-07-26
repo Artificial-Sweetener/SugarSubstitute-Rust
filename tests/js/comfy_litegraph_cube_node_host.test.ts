@@ -128,7 +128,7 @@ describe('ComfyLiteGraphCubeNodeHost', () => {
     expect(inner.title_buttons).toBe(innerTitleButtons);
     expect(inner.color).toBe('#171718');
     expect(inner.bgcolor).toBe('#262729');
-    expect(recordedFillStyles(context)).toContain('rgb(27 28 33)');
+    expect(recordedFillStyles(context)).toContain('rgb(22 23 27)');
 
     host.dispose();
     expect(node.onDrawForeground).toBe(originalForeground);

@@ -28,7 +28,7 @@ interface RgbaColor {
 }
 
 const FALLBACK_BACKDROP = '#0d1117';
-const BACKDROP_BRIGHTNESS = 0.84;
+const BACKDROP_BRIGHTNESS = 0.7;
 
 /** Return the complete explicit theme written by Comfy's node-color action. */
 export function resolveCubeNodeColorTheme(node: object): CubeNodeColorTheme | null {
@@ -37,7 +37,7 @@ export function resolveCubeNodeColorTheme(node: object): CubeNodeColorTheme | nu
   return header && body ? { header, body } : null;
 }
 
-/** Slightly darken the selected native body color for the enclosing Cube surface. */
+/** Render the enclosing Cube surface at 70% of the selected native body brightness. */
 export function deriveCubeBackdropColor(body: string): string {
   const color = parseColor(body);
   if (!color) return FALLBACK_BACKDROP;

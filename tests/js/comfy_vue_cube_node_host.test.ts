@@ -33,7 +33,7 @@ describe('ComfyVueCubeNodeHost', () => {
     expect(root.style.getPropertyValue('--sugarcubes-cube-card-body')).toBe(
       'rgba(32, 33, 39, 0.9)',
     );
-    expect(root.style.getPropertyValue('--sugarcubes-cube-backdrop')).toBe('rgb(27 28 33 / 0.9)');
+    expect(root.style.getPropertyValue('--sugarcubes-cube-backdrop')).toBe('rgb(22 23 27 / 0.9)');
 
     inner.style.backgroundColor = '#43335c';
     inner.style.setProperty('--component-node-background', '#24202d');
@@ -42,7 +42,7 @@ describe('ComfyVueCubeNodeHost', () => {
 
     expect(root.style.getPropertyValue('--sugarcubes-cube-card-header')).toBe('rgb(67, 51, 92)');
     expect(root.style.getPropertyValue('--sugarcubes-cube-card-body')).toBe('#24202d');
-    expect(root.style.getPropertyValue('--sugarcubes-cube-backdrop')).toBe('rgb(30 27 38)');
+    expect(root.style.getPropertyValue('--sugarcubes-cube-backdrop')).toBe('rgb(25 22 31)');
 
     host.unmount(node);
 

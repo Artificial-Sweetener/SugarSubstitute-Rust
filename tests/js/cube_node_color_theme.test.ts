@@ -37,8 +37,8 @@ describe('CubeNodeColorTheme', () => {
     expect(resolveCubeNodeColorTheme({ color: ' ', bgcolor: undefined })).toBeNull();
   });
 
-  test('slightly darkens the native card body for the enclosing Cube backdrop', () => {
-    expect(deriveCubeBackdropColor('rgba(32, 33, 39, 0.9)')).toBe('rgb(27 28 33 / 0.9)');
+  test('uses 70% of the native card body brightness for the enclosing Cube backdrop', () => {
+    expect(deriveCubeBackdropColor('rgba(32, 33, 39, 0.9)')).toBe('rgb(22 23 27 / 0.9)');
   });
 
   test('keeps the established safe backdrop when the host color is unsupported', () => {
