@@ -23,6 +23,7 @@ import type {
 } from './ComfyLiteGraphWidgetInteraction.js';
 import { measureCubeFaceNodeBodyHeight } from './CubeFaceNodeMeasurement.js';
 import { withCubeFaceNodePresentation } from './CubeFaceNodePresentationPolicy.js';
+import type { CubeNodeColorTheme } from './CubeNodeColorTheme.js';
 
 interface LiteGraphNodeRenderer {
   ds?: {
@@ -46,6 +47,12 @@ type PreviewField = 'imgs' | 'animatedImages' | 'imageIndex';
 
 interface PreviewFieldPresentation {
   field: PreviewField;
+  owned: boolean;
+  value: unknown;
+}
+
+interface ColorFieldPresentation {
+  field: 'color' | 'bgcolor';
   owned: boolean;
   value: unknown;
 }
@@ -150,6 +157,7 @@ export function drawNativeLiteGraphCubeCard(
     normalizeRendererScale?: boolean;
     presentationWidth?: number;
     presentationHeight?: number;
+    theme?: CubeNodeColorTheme;
   } = {},
 ): void {
   const presentationNode = node as LegacyPresentationNode;
@@ -162,6 +170,7 @@ export function drawNativeLiteGraphCubeCard(
     options.presentationWidth,
     options.presentationHeight,
   );
+  const colors = applyPresentationTheme(presentationNode, options.theme);
   const activeGraphScale = canvasRenderer.ds?.scale;
   try {
     if (canvasRenderer.ds && options.normalizeRendererScale === true) {
@@ -187,7 +196,35 @@ export function drawNativeLiteGraphCubeCard(
     presentationNode.drawCollapsedSlots = drawCollapsedSlots;
     presentationNode.title_buttons = titleButtons;
     restorePreviewMedia(presentationNode, previews);
+    restorePresentationTheme(presentationNode, colors);
     restorePresentationSize(presentationNode, originalSize, context);
+  }
+}
+
+/** Apply the parent Cube colors only while Comfy draws one projected card. */
+function applyPresentationTheme(
+  node: LegacyPresentationNode,
+  theme: CubeNodeColorTheme | undefined,
+): ColorFieldPresentation[] {
+  if (!theme) return [];
+  const presentations = (['color', 'bgcolor'] as const).map((field) => ({
+    field,
+    owned: Object.prototype.hasOwnProperty.call(node, field),
+    value: node[field],
+  }));
+  node.color = theme.header;
+  node.bgcolor = theme.body;
+  return presentations;
+}
+
+/** Restore exact internal-node color values and property ownership after drawing. */
+function restorePresentationTheme(
+  node: LegacyPresentationNode,
+  presentations: readonly ColorFieldPresentation[],
+): void {
+  for (const presentation of presentations) {
+    if (presentation.owned) Reflect.set(node, presentation.field, presentation.value);
+    else Reflect.deleteProperty(node, presentation.field);
   }
 }
 

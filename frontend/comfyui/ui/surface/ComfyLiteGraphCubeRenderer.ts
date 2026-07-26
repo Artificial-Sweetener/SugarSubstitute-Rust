@@ -32,6 +32,11 @@ import {
 import { drawComfyPrimeIcon } from './ComfyPrimeIcons.js';
 import { CubeCanvasPortRenderer } from './CubeCanvasPortRenderer.js';
 import {
+  deriveCubeBackdropColor,
+  resolveCubeNodeColorTheme,
+  type CubeNodeColorTheme,
+} from './CubeNodeColorTheme.js';
+import {
   CUBE_PREVIEW_SECTION_GAP,
   CUBE_PREVIEW_SECTION_INSET,
   CUBE_PREVIEW_TITLE_LINE_HEIGHT,
@@ -85,6 +90,7 @@ export class ComfyLiteGraphCubeRenderer {
   /** Draw one frame, native cards, preview rail, and graph-owned ports. */
   #drawCube(context: CanvasRenderingContext2D, item: ComfyLiteGraphCubeRenderItem): void {
     const { layout } = item;
+    const theme = resolveCubeNodeColorTheme(item.node);
     context.save();
     context.beginPath();
     context.roundRect(
@@ -94,12 +100,12 @@ export class ComfyLiteGraphCubeRenderer {
       Math.max(1, layout.frame.height - 2),
       13,
     );
-    context.fillStyle = '#0d1117';
+    context.fillStyle = theme ? deriveCubeBackdropColor(theme.body) : '#0d1117';
     context.fill();
     context.clip();
 
     this.#chrome.draw(context, item);
-    for (const card of layout.cards) this.#drawNativeCard(context, card);
+    for (const card of layout.cards) this.#drawNativeCard(context, card, theme);
     if (layout.preview) this.#drawPreview(context, layout.preview, item);
     this.#ports.draw(context, layout);
     if (item.cardMenuOpen) this.#drawCardMenu(context, layout);
@@ -107,7 +113,11 @@ export class ComfyLiteGraphCubeRenderer {
   }
 
   /** Invoke Comfy's exact Nodes 1.0 draw against the real internal node. */
-  #drawNativeCard(context: CanvasRenderingContext2D, card: CubeCanvasCard): void {
+  #drawNativeCard(
+    context: CanvasRenderingContext2D,
+    card: CubeCanvasCard,
+    theme: CubeNodeColorTheme | null,
+  ): void {
     const { node, rect: target, bodyHeight } = card;
     const titleHeight = Math.max(1, target.height - bodyHeight);
     context.save();
@@ -118,6 +128,7 @@ export class ComfyLiteGraphCubeRenderer {
     drawNativeLiteGraphCubeCard(this.#host, node, context, {
       presentationWidth: target.width,
       presentationHeight: bodyHeight,
+      ...(theme ? { theme } : {}),
     });
     context.restore();
     if (card.activationAction) {

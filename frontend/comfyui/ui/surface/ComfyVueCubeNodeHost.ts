@@ -29,6 +29,7 @@ import { resolveComfyVueCubeMinimumHeight } from './ComfyVueCubeMinimumHeight.js
 import { enforceCubeNodeMinimumSize } from './CubeNodeMinimumSizeAdapter.js';
 import { cubeMinimumSize } from './CubeSurfaceMinimumHeight.js';
 import type { CubePortPresentationController } from '../cube/connection/CubePortPresentationController.js';
+import { ComfyVueCubeColorScope } from './ComfyVueCubeColorScope.js';
 
 interface MountedCubeNode {
   nodeRoot: HTMLElement;
@@ -38,6 +39,7 @@ interface MountedCubeNode {
   resizeHost: ComfyVueCubeNodeResizeHost;
   boundaryHost: ComfyVueCubeBoundaryHost;
   editorFooter: ComfyVueCubeEditorFooter;
+  colorScope: ComfyVueCubeColorScope;
   observer: MutationObserver;
   geometryObserver: ResizeObserver | null;
 }
@@ -100,6 +102,7 @@ export class ComfyVueCubeNodeHost {
       existing.faceHost.parentElement !== null
     ) {
       removeOrphanFaceHosts(existing.faceHost.parentElement, existing.faceHost);
+      existing.colorScope.refresh();
       return existing.faceHost;
     }
     if (existing) this.unmount(node);
@@ -110,6 +113,8 @@ export class ComfyVueCubeNodeHost {
     const body = findNativeNodeBody(nodeRoot);
     if (!body) return null;
     body.dataset.sugarcubeCubeBody = '';
+    const colorScope = new ComfyVueCubeColorScope(nodeRoot);
+    colorScope.mount();
     removeOrphanFaceHosts(body);
     const faceHost = this.#document.createElement('div');
     faceHost.className = 'sugarcubes-cube-node-face-host';
@@ -153,6 +158,7 @@ export class ComfyVueCubeNodeHost {
       resizeHost,
       boundaryHost,
       editorFooter,
+      colorScope,
       observer,
       geometryObserver,
     };
@@ -214,6 +220,7 @@ export class ComfyVueCubeNodeHost {
     mount.resizeHost.dispose();
     mount.boundaryHost.dispose();
     mount.editorFooter.dispose();
+    mount.colorScope.dispose();
     mount.header?.remove();
     mount.faceHost.remove();
     const body = findNativeNodeBody(mount.nodeRoot);
@@ -244,6 +251,7 @@ export class ComfyVueCubeNodeHost {
     mount.resizeHost.ensureMounted();
     mount.boundaryHost.reconcile();
     mount.editorFooter.reconcile();
+    mount.colorScope.refresh();
     reconcileNativeHeader(mount);
   }
 }

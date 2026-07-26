@@ -79,6 +79,10 @@ export function ensureCubeSurfaceStyles(documentRef) {
       padding-top: 0 !important;
       padding-bottom: 0 !important;
       overflow: visible !important;
+      background-color: var(
+        --sugarcubes-cube-backdrop,
+        var(--component-node-background)
+      ) !important;
     }
     .lg-node[data-sugarcube-node="true"]
       [data-sugarcube-boundary-row] {
@@ -384,6 +388,12 @@ export function ensureCubeSurfaceStyles(documentRef) {
     .sugarcubes-native-node-card [data-testid^="node-inner-wrapper"] {
       min-width: 0 !important;
       max-width: 100%;
+    }
+    .sugarcubes-native-node-card [data-testid="node-inner-wrapper"] {
+      background-color: var(--sugarcubes-cube-card-header) !important;
+    }
+    .sugarcubes-native-node-card [data-testid^="node-body-"] {
+      background-color: var(--sugarcubes-cube-card-body) !important;
     }
     .sugarcubes-native-node-card
       [data-cube-face-body="header-only"]

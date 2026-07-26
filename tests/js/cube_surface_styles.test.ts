@@ -61,6 +61,31 @@ describe('ensureCubeSurfaceStyles', () => {
     );
   });
 
+  test('projects the selected Cube colors onto cards and uses the darker body backdrop', () => {
+    ensureCubeSurfaceStyles(document);
+
+    const css = document.getElementById('sugarcubes-cube-surface-styles')?.textContent ?? '';
+    const cubeBodyRule = css.match(/\[data-sugarcube-cube-body\]\s*\{([^}]*)\}/s)?.[1] ?? '';
+    const cardHeaderRule =
+      css.match(
+        /\.sugarcubes-native-node-card\s+\[data-testid="node-inner-wrapper"\]\s*\{([^}]*)\}/s,
+      )?.[1] ?? '';
+    const cardBodyRule =
+      css.match(
+        /\.sugarcubes-native-node-card\s+\[data-testid\^="node-body-"\]\s*\{([^}]*)\}/s,
+      )?.[1] ?? '';
+
+    expect(cubeBodyRule).toMatch(
+      /background-color:\s*var\(\s*--sugarcubes-cube-backdrop,\s*var\(--component-node-background\)\s*\)\s*!important;/,
+    );
+    expect(cardHeaderRule).toMatch(
+      /background-color:\s*var\(--sugarcubes-cube-card-header\)\s*!important;/,
+    );
+    expect(cardBodyRule).toMatch(
+      /background-color:\s*var\(--sugarcubes-cube-card-body\)\s*!important;/,
+    );
+  });
+
   test('centers definition identity independently of left title and right actions', () => {
     ensureCubeSurfaceStyles(document);
 

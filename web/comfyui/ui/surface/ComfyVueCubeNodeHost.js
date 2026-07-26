@@ -22,6 +22,7 @@ import { ComfyVueCubeBoundaryHost } from './ComfyVueCubeBoundaryHost.js';
 import { resolveComfyVueCubeMinimumHeight } from './ComfyVueCubeMinimumHeight.js';
 import { enforceCubeNodeMinimumSize } from './CubeNodeMinimumSizeAdapter.js';
 import { cubeMinimumSize } from './CubeSurfaceMinimumHeight.js';
+import { ComfyVueCubeColorScope } from './ComfyVueCubeColorScope.js';
 const NATIVE_ROOT_OWNERS = new WeakMap();
 /** Own only the custom-content seam inside a native Comfy node component. */
 export class ComfyVueCubeNodeHost {
@@ -59,6 +60,7 @@ export class ComfyVueCubeNodeHost {
             existing.faceHost.isConnected &&
             existing.faceHost.parentElement !== null) {
             removeOrphanFaceHosts(existing.faceHost.parentElement, existing.faceHost);
+            existing.colorScope.refresh();
             return existing.faceHost;
         }
         if (existing)
@@ -71,6 +73,8 @@ export class ComfyVueCubeNodeHost {
         if (!body)
             return null;
         body.dataset.sugarcubeCubeBody = '';
+        const colorScope = new ComfyVueCubeColorScope(nodeRoot);
+        colorScope.mount();
         removeOrphanFaceHosts(body);
         const faceHost = this.#document.createElement('div');
         faceHost.className = 'sugarcubes-cube-node-face-host';
@@ -113,6 +117,7 @@ export class ComfyVueCubeNodeHost {
             resizeHost,
             boundaryHost,
             editorFooter,
+            colorScope,
             observer,
             geometryObserver,
         };
@@ -174,6 +179,7 @@ export class ComfyVueCubeNodeHost {
         mount.resizeHost.dispose();
         mount.boundaryHost.dispose();
         mount.editorFooter.dispose();
+        mount.colorScope.dispose();
         mount.header?.remove();
         mount.faceHost.remove();
         const body = findNativeNodeBody(mount.nodeRoot);
@@ -208,6 +214,7 @@ export class ComfyVueCubeNodeHost {
         mount.resizeHost.ensureMounted();
         mount.boundaryHost.reconcile();
         mount.editorFooter.reconcile();
+        mount.colorScope.refresh();
         reconcileNativeHeader(mount);
     }
 }

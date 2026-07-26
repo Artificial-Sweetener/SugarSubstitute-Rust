@@ -20,6 +20,7 @@ import { computeCubeCanvasCardMenuLayout } from './CubeCanvasCardMenuLayout.js';
 import { CubeCanvasChromeRenderer, } from './CubeCanvasChromeRenderer.js';
 import { drawComfyPrimeIcon } from './ComfyPrimeIcons.js';
 import { CubeCanvasPortRenderer } from './CubeCanvasPortRenderer.js';
+import { deriveCubeBackdropColor, resolveCubeNodeColorTheme, } from './CubeNodeColorTheme.js';
 import { CUBE_PREVIEW_SECTION_GAP, CUBE_PREVIEW_SECTION_INSET, CUBE_PREVIEW_TITLE_LINE_HEIGHT, dividePreviewIntoHorizontalSegments, resolveCubeCanvasPreviewSections, } from './CubePreviewSections.js';
 /** Own only visual composition for legacy canvas Cube surfaces. */
 export class ComfyLiteGraphCubeRenderer {
@@ -41,15 +42,16 @@ export class ComfyLiteGraphCubeRenderer {
     /** Draw one frame, native cards, preview rail, and graph-owned ports. */
     #drawCube(context, item) {
         const { layout } = item;
+        const theme = resolveCubeNodeColorTheme(item.node);
         context.save();
         context.beginPath();
         context.roundRect(layout.frame.x + 1, layout.frame.y + 1, Math.max(1, layout.frame.width - 2), Math.max(1, layout.frame.height - 2), 13);
-        context.fillStyle = '#0d1117';
+        context.fillStyle = theme ? deriveCubeBackdropColor(theme.body) : '#0d1117';
         context.fill();
         context.clip();
         this.#chrome.draw(context, item);
         for (const card of layout.cards)
-            this.#drawNativeCard(context, card);
+            this.#drawNativeCard(context, card, theme);
         if (layout.preview)
             this.#drawPreview(context, layout.preview, item);
         this.#ports.draw(context, layout);
@@ -58,7 +60,7 @@ export class ComfyLiteGraphCubeRenderer {
         context.restore();
     }
     /** Invoke Comfy's exact Nodes 1.0 draw against the real internal node. */
-    #drawNativeCard(context, card) {
+    #drawNativeCard(context, card, theme) {
         const { node, rect: target, bodyHeight } = card;
         const titleHeight = Math.max(1, target.height - bodyHeight);
         context.save();
@@ -69,6 +71,7 @@ export class ComfyLiteGraphCubeRenderer {
         drawNativeLiteGraphCubeCard(this.#host, node, context, {
             presentationWidth: target.width,
             presentationHeight: bodyHeight,
+            ...(theme ? { theme } : {}),
         });
         context.restore();
         if (card.activationAction) {

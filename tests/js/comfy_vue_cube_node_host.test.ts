@@ -20,6 +20,37 @@ import type { CubeNode } from '../../frontend/comfyui/ui/cube/node/ComfyCubeNode
 import { ComfyVueCubeNodeHost } from '../../frontend/comfyui/ui/surface/ComfyVueCubeNodeHost.js';
 
 describe('ComfyVueCubeNodeHost', () => {
+  test('tracks the native Cube colors as inherited card theme tokens', async () => {
+    const { root, inner } = nativeCubeRoot('cube-node');
+    inner.style.backgroundColor = '#2b2859';
+    inner.style.setProperty('--component-node-background', 'rgba(32, 33, 39, 0.9)');
+    const host = createHost();
+    const node = cubeNode('cube-node');
+
+    host.mount(node);
+
+    expect(root.style.getPropertyValue('--sugarcubes-cube-card-header')).toBe('rgb(43, 40, 89)');
+    expect(root.style.getPropertyValue('--sugarcubes-cube-card-body')).toBe(
+      'rgba(32, 33, 39, 0.9)',
+    );
+    expect(root.style.getPropertyValue('--sugarcubes-cube-backdrop')).toBe('rgb(27 28 33 / 0.9)');
+
+    inner.style.backgroundColor = '#43335c';
+    inner.style.setProperty('--component-node-background', '#24202d');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(root.style.getPropertyValue('--sugarcubes-cube-card-header')).toBe('rgb(67, 51, 92)');
+    expect(root.style.getPropertyValue('--sugarcubes-cube-card-body')).toBe('#24202d');
+    expect(root.style.getPropertyValue('--sugarcubes-cube-backdrop')).toBe('rgb(30 27 38)');
+
+    host.unmount(node);
+
+    expect(root.style.getPropertyValue('--sugarcubes-cube-card-header')).toBe('');
+    expect(root.style.getPropertyValue('--sugarcubes-cube-card-body')).toBe('');
+    expect(root.style.getPropertyValue('--sugarcubes-cube-backdrop')).toBe('');
+  });
+
   test('replaces stale object-identity mounts without duplicating the native face host', () => {
     const { body } = nativeCubeRoot('cube-node');
     const host = createHost();
@@ -212,6 +243,7 @@ function createHost(openEditor: (node: CubeNode) => void = () => undefined): Com
 /** Mount the minimum native Nodes 2.0 shell consumed by the host seam. */
 function nativeCubeRoot(id: string): {
   root: HTMLDivElement;
+  inner: HTMLDivElement;
   header: HTMLDivElement;
   nativeHeaderContent: HTMLDivElement;
   body: HTMLDivElement;
@@ -222,6 +254,8 @@ function nativeCubeRoot(id: string): {
   const root = document.createElement('div');
   root.className = 'lg-node';
   root.dataset.nodeId = id;
+  const inner = document.createElement('div');
+  inner.dataset.testid = 'node-inner-wrapper';
   const header = document.createElement('div');
   header.dataset.testid = `node-header-${id}`;
   const nativeHeaderContent = document.createElement('div');
@@ -237,9 +271,10 @@ function nativeCubeRoot(id: string): {
   const footer = document.createElement('div');
   const { button: footerButton, label: footerLabel } = createFooterButton();
   footer.append(footerButton);
-  root.append(header, body, footer);
+  inner.append(header, body);
+  root.append(inner, footer);
   document.body.append(root);
-  return { root, header, nativeHeaderContent, body, footerButton, footerLabel };
+  return { root, inner, header, nativeHeaderContent, body, footerButton, footerLabel };
 }
 
 /** Create one native footer subtree that Comfy may replace independently. */

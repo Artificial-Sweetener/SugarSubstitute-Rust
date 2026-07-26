@@ -104,6 +104,7 @@ export function drawNativeLiteGraphCubeCard(canvasRenderer, node, context, optio
     const titleButtons = presentationNode.title_buttons;
     const previews = maskPreviewMedia(presentationNode);
     const originalSize = applyPresentationSize(presentationNode, options.presentationWidth, options.presentationHeight);
+    const colors = applyPresentationTheme(presentationNode, options.theme);
     const activeGraphScale = canvasRenderer.ds?.scale;
     try {
         if (canvasRenderer.ds && options.normalizeRendererScale === true) {
@@ -128,7 +129,30 @@ export function drawNativeLiteGraphCubeCard(canvasRenderer, node, context, optio
         presentationNode.drawCollapsedSlots = drawCollapsedSlots;
         presentationNode.title_buttons = titleButtons;
         restorePreviewMedia(presentationNode, previews);
+        restorePresentationTheme(presentationNode, colors);
         restorePresentationSize(presentationNode, originalSize, context);
+    }
+}
+/** Apply the parent Cube colors only while Comfy draws one projected card. */
+function applyPresentationTheme(node, theme) {
+    if (!theme)
+        return [];
+    const presentations = ['color', 'bgcolor'].map((field) => ({
+        field,
+        owned: Object.prototype.hasOwnProperty.call(node, field),
+        value: node[field],
+    }));
+    node.color = theme.header;
+    node.bgcolor = theme.body;
+    return presentations;
+}
+/** Restore exact internal-node color values and property ownership after drawing. */
+function restorePresentationTheme(node, presentations) {
+    for (const presentation of presentations) {
+        if (presentation.owned)
+            Reflect.set(node, presentation.field, presentation.value);
+        else
+            Reflect.deleteProperty(node, presentation.field);
     }
 }
 /** Apply one temporary body size so Comfy lays out the exact face card. */

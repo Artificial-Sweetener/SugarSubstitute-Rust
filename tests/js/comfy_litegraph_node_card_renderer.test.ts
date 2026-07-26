@@ -164,6 +164,32 @@ describe('ComfyLiteGraphNodeCardRenderer', () => {
     expect(updateArea).toHaveBeenNthCalledWith(2, context);
   });
 
+  test('applies one parent Cube theme only during the native card draw', () => {
+    const node = {
+      id: 'inside',
+      type: 'KSampler',
+      size: [240, 180],
+      color: '#171718',
+      bgcolor: '#262729',
+      drawSlots: jest.fn(),
+      drawCollapsedSlots: jest.fn(),
+      onDrawBackground: jest.fn(),
+      title_buttons: [],
+      strokeStyles: {},
+    };
+    const drawNode = jest.fn(() => {
+      expect(node.color).toBe('#2b2859');
+      expect(node.bgcolor).toBe('#202127');
+    });
+
+    drawNativeLiteGraphCubeCard({ drawNode }, node, {} as CanvasRenderingContext2D, {
+      theme: { header: '#2b2859', body: '#202127' },
+    });
+
+    expect(node.color).toBe('#171718');
+    expect(node.bgcolor).toBe('#262729');
+  });
+
   test('restores LiteGraph text baselines before Comfy draws titles and widgets', () => {
     const node = {
       id: 'inside',

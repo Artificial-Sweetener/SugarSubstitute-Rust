@@ -36,12 +36,16 @@ describe('ComfyLiteGraphCubeNodeHost', () => {
       drawSlots: jest.fn(),
       drawCollapsedSlots: jest.fn(),
       onDrawBackground: jest.fn(),
+      color: '#171718',
+      bgcolor: '#262729',
       title_buttons: [{ name: 'inner-action' }],
       strokeStyles: {} as Record<string, () => object | undefined>,
       updateArea: jest.fn(),
       widgets: [{ name: 'steps' }] as Array<{ name: string; [key: string]: unknown }>,
     };
     const node = cubeNode(inner);
+    node.color = '#2b2859';
+    node.bgcolor = '#202127';
     const originalForeground = jest.fn();
     const originalWidgets = jest.fn();
     const nativeEditorButton = {
@@ -69,6 +73,8 @@ describe('ComfyLiteGraphCubeNodeHost', () => {
       expect(inner.onDrawBackground).toBe(innerBackground);
       expect(inner.title_buttons).toEqual([]);
       expect(inner.strokeStyles.sugarcubesCubeFace).toBeUndefined();
+      expect(inner.color).toBe('#2b2859');
+      expect(inner.bgcolor).toBe('#202127');
     });
     const canvas = {
       canvas: canvasElement,
@@ -120,6 +126,9 @@ describe('ComfyLiteGraphCubeNodeHost', () => {
     expect(inner.drawSlots).toBe(innerDrawSlots);
     expect(inner.onDrawBackground).toBe(innerBackground);
     expect(inner.title_buttons).toBe(innerTitleButtons);
+    expect(inner.color).toBe('#171718');
+    expect(inner.bgcolor).toBe('#262729');
+    expect(recordedFillStyles(context)).toContain('rgb(27 28 33)');
 
     host.dispose();
     expect(node.onDrawForeground).toBe(originalForeground);
@@ -460,7 +469,7 @@ function nativeInnerNode() {
 
 /** Provide the finite Canvas 2D surface exercised by Cube composition. */
 function drawingContext(): CanvasRenderingContext2D {
-  return {
+  const context = {
     save: jest.fn(),
     restore: jest.fn(),
     translate: jest.fn(),
@@ -478,5 +487,18 @@ function drawingContext(): CanvasRenderingContext2D {
     drawImage: jest.fn(),
     measureText: jest.fn(() => ({ width: 12 }) as TextMetrics),
     scale: jest.fn(),
-  } as unknown as CanvasRenderingContext2D;
+  } as Record<string, unknown>;
+  const fillStyles: string[] = [];
+  Object.defineProperty(context, 'fillStyle', {
+    configurable: true,
+    get: () => fillStyles.at(-1) ?? '',
+    set: (value: unknown) => fillStyles.push(String(value)),
+  });
+  context.sugarcubesFillStyles = fillStyles;
+  return context as unknown as CanvasRenderingContext2D;
+}
+
+/** Return every fill assigned while the Cube and its native cards were drawn. */
+function recordedFillStyles(context: CanvasRenderingContext2D): readonly string[] {
+  return (context as unknown as { sugarcubesFillStyles: readonly string[] }).sugarcubesFillStyles;
 }
