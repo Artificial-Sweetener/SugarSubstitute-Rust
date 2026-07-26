@@ -106,6 +106,7 @@ describe('CubeSurfaceView', () => {
     const content = view.element.querySelector<HTMLElement>('[data-cube-content]');
     const cards = [...view.element.querySelectorAll<HTMLElement>('[data-cube-node-id]')];
     expect(content?.style.getPropertyValue('--sugarcubes-cube-masonry-header-inset')).toBe('19px');
+    expect(content?.style.getPropertyValue('--sugarcubes-cube-preview-row-gap')).toBe('19px');
     expect(cards.map((card) => card.style.top)).toEqual(['0px', '119px']);
     view.dispose();
   });
@@ -146,6 +147,7 @@ describe('CubeSurfaceView', () => {
     expect(content.scrollLeft).toBe(12);
     expect(content.style.getPropertyValue('--sugarcubes-cube-masonry-header-inset')).toBe('19px');
     expect(content.style.getPropertyValue('--sugarcubes-cube-masonry-footer-inset')).toBe('19px');
+    expect(content.style.getPropertyValue('--sugarcubes-cube-preview-row-gap')).toBe('19px');
     expect(content.style.minHeight).toBe('376px');
     expect(onMinimumHeightChange).toHaveBeenLastCalledWith(376);
     view.dispose();

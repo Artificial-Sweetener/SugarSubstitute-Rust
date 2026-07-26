@@ -15,7 +15,11 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Maintain presentation-only DOM leaders between output labels and sockets. */
 
-import { resolveCubeOutputPortY } from './CubeOutputLeaderGeometry.js';
+import {
+  CUBE_OUTPUT_LEADER_LABEL_INSET,
+  CUBE_PREVIEW_EDGE_INSET,
+  resolveCubeOutputPortY,
+} from './CubeOutputLeaderGeometry.js';
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 
@@ -54,7 +58,7 @@ export class CubeDomPortLeaderHost {
     const bodyRect = this.#body.getBoundingClientRect();
     const scale = this.#body.offsetWidth > 0 ? bodyRect.width / this.#body.offsetWidth : 1;
     const safeScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
-    const elbowX = Math.max(0, this.#body.offsetWidth - 30);
+    const elbowX = Math.max(0, this.#body.offsetWidth - CUBE_PREVIEW_EDGE_INSET / 2);
     for (const leader of leaders) {
       const path = this.#paths.get(leader.index) ?? this.#createPath(leader.index);
       const label =
@@ -62,7 +66,7 @@ export class CubeDomPortLeaderHost {
       const titleRect = label.getBoundingClientRect();
       const labelEndX = Math.min(
         elbowX,
-        Math.max(0, (titleRect.right - bodyRect.left) / safeScale + 6),
+        Math.max(0, (titleRect.right - bodyRect.left) / safeScale + CUBE_OUTPUT_LEADER_LABEL_INSET),
       );
       const labelY = (titleRect.top + titleRect.height / 2 - bodyRect.top) / safeScale;
       const portY = resolveCubeOutputPortY(labelY, leader.portY);

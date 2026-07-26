@@ -75,6 +75,16 @@ export function ensureCubeSurfaceStyles(documentRef: Document): void {
       contain: layout paint style;
       pointer-events: auto;
     }
+    /* Comfy's select uses an in-tree fixed Reka popper. Let that active popup
+       leave the Cube's normal paint-containment boundary without making every
+       Cube face an uncontained paint surface. */
+    .lg-node[data-sugarcube-node="true"]:has([data-reka-popper-content-wrapper]) {
+      z-index: 10000 !important;
+    }
+    .sugarcubes-cube-node-face-host:has([data-reka-popper-content-wrapper]) {
+      overflow: visible;
+      contain: layout style;
+    }
     [data-sugarcube-cube-body] {
       position: relative;
       padding-top: 0 !important;
@@ -161,6 +171,9 @@ export function ensureCubeSurfaceStyles(documentRef: Document): void {
       min-height: 0;
       overflow: clip;
       color: inherit;
+    }
+    .sugarcubes-cube-face:has([data-reka-popper-content-wrapper]) {
+      overflow: visible;
     }
     .sugarcubes-cube-face__header {
       position: relative;
@@ -333,6 +346,11 @@ export function ensureCubeSurfaceStyles(documentRef: Document): void {
         0.5rem
         var(--sugarcubes-cube-masonry-footer-inset, 0px);
     }
+    .sugarcubes-cube-face__content:has([data-reka-popper-content-wrapper]) {
+      z-index: 10;
+      overflow: visible;
+      isolation: auto;
+    }
     .sugarcubes-cube-face__masonry {
       flex: 0 0 auto;
       min-width: 0;
@@ -417,7 +435,7 @@ export function ensureCubeSurfaceStyles(documentRef: Document): void {
       min-height: 0;
       overflow: hidden;
       border-left: 1px solid color-mix(in srgb, currentColor 20%, transparent);
-      padding-left: 0.75rem;
+      --sugarcubes-cube-preview-edge-inset: 1.125rem;
     }
     .sugarcubes-cube-face__content[data-preview-layout="stacked"] {
       gap: 0.75rem;
@@ -427,11 +445,15 @@ export function ensureCubeSurfaceStyles(documentRef: Document): void {
       border-top: 1px solid color-mix(in srgb, currentColor 20%, transparent);
       border-left: 0;
       padding-top: 0.75rem;
-      padding-left: 0;
+      --sugarcubes-cube-preview-edge-inset: 0;
+    }
+    .sugarcubes-cube-face__content[data-preview-layout="rail"]
+      .sugarcubes-cube-face__preview {
+      transform: translateX(0.375rem);
     }
     .sugarcubes-cube-face__preview-media {
       position: absolute;
-      inset: 0;
+      inset: 0 var(--sugarcubes-cube-preview-edge-inset);
       display: flex;
       flex-direction: column;
       gap: 0.75rem;
@@ -454,7 +476,7 @@ export function ensureCubeSurfaceStyles(documentRef: Document): void {
     .sugarcubes-cube-face__preview-internal {
       display: flex;
       flex-direction: column;
-      gap: 0.75rem;
+      gap: var(--sugarcubes-cube-preview-row-gap, 0.75rem);
       min-width: 0;
       min-height: 0;
       overflow: hidden;
@@ -500,12 +522,13 @@ export function ensureCubeSurfaceStyles(documentRef: Document): void {
       height: 100% !important;
       min-height: 0;
       max-height: 100% !important;
-      object-fit: contain;
+      object-fit: cover;
+      object-position: center top;
       position: relative;
       z-index: 1;
       opacity: 1 !important;
       visibility: visible !important;
-      border-radius: 0.5rem;
+      border-radius: 0;
     }
     .sugarcubes-cube-editor-navigation {
       box-sizing: border-box;

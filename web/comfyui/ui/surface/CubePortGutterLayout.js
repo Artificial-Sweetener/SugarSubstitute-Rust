@@ -14,27 +14,26 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Reserve Cube boundary gutters and lay out canonical port anchors. */
+import { CUBE_PREVIEW_EDGE_INSET } from './CubePreviewRailGeometry.js';
 import { resolveCubePreviewTitleAnchors } from './CubePreviewSections.js';
 import { resolveCubeCanvasInputSocketCenterX, resolveCubeCanvasOutputSocketCenterX, } from './CubeCanvasBoundaryGeometry.js';
 /** Reserve enough width for common input type labels and their socket. */
 export const CUBE_INPUT_GUTTER_WIDTH = 84;
-/** Reserve a compact output socket lane beside preview-title leaders. */
-export const CUBE_OUTPUT_GUTTER_WIDTH = 40;
+/** Reserve the right-side rail that contains the output socket and leader elbow. */
+export const CUBE_OUTPUT_GUTTER_WIDTH = CUBE_PREVIEW_EDGE_INSET;
 const PORT_VERTICAL_INSET = 12;
 const PORT_ROW_HEIGHT = 20;
-const OUTPUT_MEDIA_GAP = 6;
-/** Remove dedicated label and leader gutters from the face content rectangle. */
+/** Remove only the input label gutter from face content; outputs overlay the preview rail. */
 export function resolveCubePortGutters(frame, content, presence) {
     const contentRight = content.x + content.width;
     const inputRight = presence.hasInputs
         ? Math.min(contentRight, Math.max(content.x, frame.x + CUBE_INPUT_GUTTER_WIDTH))
         : content.x;
     const outputLeft = presence.hasOutputs
-        ? Math.max(inputRight + 1, Math.min(contentRight, frame.x + frame.width - CUBE_OUTPUT_GUTTER_WIDTH))
+        ? Math.max(inputRight, frame.x + frame.width - CUBE_OUTPUT_GUTTER_WIDTH)
         : contentRight;
-    const outputGap = presence.hasOutputs ? OUTPUT_MEDIA_GAP : 0;
     return {
-        content: rect(inputRight, content.y, Math.max(1, outputLeft - outputGap - inputRight), content.height),
+        content: rect(inputRight, content.y, Math.max(1, contentRight - inputRight), content.height),
         inputGutter: presence.hasInputs
             ? rect(frame.x, content.y, Math.max(0, inputRight - frame.x), content.height)
             : emptyRect(content.x, content.y, content.height),
@@ -71,14 +70,15 @@ export function layoutCubeOutputPorts(slots, frame, preview, headerHeight) {
         : slots.map((_, index) => distribute(minY, maxY, index, slots.length));
     return slots.map((slot, index) => {
         const record = isPortRecord(slot) ? slot : {};
-        const labelY = clamp(anchors[index] ?? minY, minY, maxY);
+        const defaultY = clamp(anchors[index] ?? minY, minY, maxY);
+        const labelY = preview ? defaultY : minY;
         return {
             index,
             name: readString(record.name) || `output ${String(index + 1)}`,
             type: readString(record.type) || '*',
             x: resolveCubeCanvasOutputSocketCenterX(frame.x + frame.width),
-            y: labelY,
-            defaultY: labelY,
+            y: defaultY,
+            defaultY,
             minY,
             maxY,
             labelY,

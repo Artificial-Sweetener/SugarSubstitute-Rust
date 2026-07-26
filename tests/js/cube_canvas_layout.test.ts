@@ -114,12 +114,12 @@ describe('computeCubeCanvasLayout', () => {
       layout.outputs.every((output) => output.x === layout.frame.x + layout.frame.width - 9),
     ).toBe(true);
     expect(layout.inputGutter.width).toBe(0);
-    expect(layout.outputGutter.width).toBeGreaterThanOrEqual(32);
+    expect(layout.outputGutter.width).toBe(18);
     expect(layout.preview?.x).toBeGreaterThanOrEqual(
       layout.inputGutter.x + layout.inputGutter.width,
     );
-    expect((layout.preview?.x ?? 0) + (layout.preview?.width ?? 0)).toBeLessThan(
-      layout.outputGutter.x,
+    expect((layout.preview?.x ?? 0) + (layout.preview?.width ?? 0)).toBe(
+      layout.frame.x + layout.frame.width,
     );
     expect(
       layout.outputs.every(
@@ -150,6 +150,33 @@ describe('computeCubeCanvasLayout', () => {
 
     expect(layout.inputs[0]?.y).toBe(layout.inputs[0]?.minY);
     expect(layout.inputs[0]?.y).toBeLessThan(layout.frame.y + layout.frame.height / 2);
+  });
+
+  test('does not constrain a previewless output to its resize-dependent default anchor', () => {
+    const state = createDefaultCubeSurfaceState();
+    state.preview.visible = false;
+    const cube = cubeNode({
+      id: 'inner',
+      type: 'Producer',
+      pos: [0, 0],
+      size: [240, 100],
+      inputs: [],
+      outputs: [],
+      widgets: [],
+      properties: {},
+      connect() {},
+    });
+    const imageOutput = { name: 'image', type: 'IMAGE' };
+    cube.outputs = [imageOutput];
+    cube.subgraph.outputs = [imageOutput];
+    cube.size[1] = 600;
+
+    const layout = computeCubeCanvasLayout(cube, state, 30);
+    const output = layout.outputs[0];
+
+    expect(layout.preview).toBeNull();
+    expect(output?.defaultY).toBeGreaterThan(output?.minY ?? Number.POSITIVE_INFINITY);
+    expect(output?.labelY).toBe(output?.minY);
   });
 
   test('does not reserve either boundary affordance when the Cube has no ports', () => {

@@ -25,7 +25,7 @@ import { CubeSurfaceView } from './CubeSurfaceView.js';
 import { parseCubeSurfaceState, serializeCubeSurfaceState } from './CubeSurfaceState.js';
 import { NativeSubgraphChangeObserver } from './NativeSubgraphChangeObserver.js';
 import { ComfyLiteGraphCubeNodeHost, } from './ComfyLiteGraphCubeNodeHost.js';
-import { CUBE_INPUT_GUTTER_WIDTH, CUBE_OUTPUT_GUTTER_WIDTH } from './CubePortGutterLayout.js';
+import { CUBE_INPUT_GUTTER_WIDTH } from './CubePortGutterLayout.js';
 import { ComfyRendererPresenceObserver } from './ComfyRendererPresenceObserver.js';
 import { ComfyNativeSlotLayoutCoordinator } from './ComfyNativeSlotLayoutCoordinator.js';
 import { CubeRendererTransitionStabilizer } from './CubeRendererTransitionStabilizer.js';
@@ -261,7 +261,7 @@ export class CubeSurfacePresenter {
         const surface = this.#views.get(node);
         if (!surface)
             return;
-        surface.view.setPortGutterWidths(node.inputs.length > 0 ? CUBE_INPUT_GUTTER_WIDTH : 0, node.outputs.length > 0 ? CUBE_OUTPUT_GUTTER_WIDTH : 0);
+        surface.view.setPortGutterWidths(node.inputs.length > 0 ? CUBE_INPUT_GUTTER_WIDTH : 0, 0);
         const width = resolveVueContentWidth(node);
         if (Number.isFinite(surface.layoutWidth) && Math.abs(surface.layoutWidth - width) < 0.5) {
             return;
@@ -349,9 +349,8 @@ function replaceRecord(target, source) {
         Reflect.deleteProperty(target, key);
     Object.assign(target, source);
 }
-/** Exclude dedicated port gutters from responsive card and preview width. */
+/** Exclude only input labels because output slots overlay the preview's right rail. */
 function resolveVueContentWidth(node) {
     const inputGutterWidth = node.inputs.length > 0 ? CUBE_INPUT_GUTTER_WIDTH : 0;
-    const outputGutterWidth = node.outputs.length > 0 ? CUBE_OUTPUT_GUTTER_WIDTH : 0;
-    return Math.max(1, Number(node.size[0]) - 16 - inputGutterWidth - outputGutterWidth);
+    return Math.max(1, Number(node.size[0]) - 16 - inputGutterWidth);
 }

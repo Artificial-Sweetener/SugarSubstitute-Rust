@@ -36,9 +36,9 @@ import {
   resolveCubeNodeColorTheme,
   type CubeNodeColorTheme,
 } from './CubeNodeColorTheme.js';
+import { CUBE_PREVIEW_EDGE_INSET } from './CubePreviewRailGeometry.js';
 import {
   CUBE_PREVIEW_SECTION_GAP,
-  CUBE_PREVIEW_SECTION_INSET,
   CUBE_PREVIEW_TITLE_LINE_HEIGHT,
   dividePreviewIntoHorizontalSegments,
   resolveCubeCanvasPreviewSections,
@@ -174,8 +174,8 @@ export class ComfyLiteGraphCubeRenderer {
     context.strokeStyle = 'rgba(220, 225, 235, 0.22)';
     context.lineWidth = 1;
     context.beginPath();
-    context.moveTo(preview.x - 6, preview.y);
-    context.lineTo(preview.x - 6, preview.y + preview.height);
+    context.moveTo(preview.x, preview.y);
+    context.lineTo(preview.x, preview.y + preview.height);
     context.stroke();
     const outputSections = resolveCubeCanvasPreviewSections(item.preview);
     if (outputSections.length === 0) {
@@ -187,10 +187,10 @@ export class ComfyLiteGraphCubeRenderer {
     }
     const sections = dividePreviewIntoHorizontalSegments(
       {
-        x: preview.x + CUBE_PREVIEW_SECTION_INSET,
-        y: preview.y + CUBE_PREVIEW_SECTION_INSET,
-        width: Math.max(1, preview.width - CUBE_PREVIEW_SECTION_INSET * 2),
-        height: Math.max(1, preview.height - CUBE_PREVIEW_SECTION_INSET * 2),
+        x: preview.x + CUBE_PREVIEW_EDGE_INSET,
+        y: preview.y,
+        width: Math.max(1, preview.width - CUBE_PREVIEW_EDGE_INSET * 2),
+        height: Math.max(1, preview.height),
       },
       outputSections.length,
       CUBE_PREVIEW_SECTION_GAP,
@@ -226,7 +226,7 @@ export class ComfyLiteGraphCubeRenderer {
         context.fillText('Loading output…', section.x, section.y + CUBE_PREVIEW_TITLE_LINE_HEIGHT);
         continue;
       }
-      const target = containImage(
+      const target = coverImage(
         image.naturalWidth,
         image.naturalHeight,
         section.x,
@@ -239,8 +239,8 @@ export class ComfyLiteGraphCubeRenderer {
   }
 }
 
-/** Fit one image inside the available rail while preserving its aspect ratio. */
-function containImage(
+/** Fill one preview rail while preserving aspect ratio and the shared edge inset. */
+function coverImage(
   sourceWidth: number,
   sourceHeight: number,
   x: number,
@@ -248,12 +248,12 @@ function containImage(
   width: number,
   height: number,
 ): CubeCanvasRect {
-  const scale = Math.min(width / sourceWidth, height / sourceHeight);
+  const scale = Math.max(width / sourceWidth, height / sourceHeight);
   const targetWidth = Math.max(1, sourceWidth * scale);
   const targetHeight = Math.max(1, sourceHeight * scale);
   return {
     x: x + (width - targetWidth) / 2,
-    y: y + (height - targetHeight) / 2,
+    y,
     width: targetWidth,
     height: targetHeight,
   };

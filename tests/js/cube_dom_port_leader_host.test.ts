@@ -36,7 +36,7 @@ describe('CubeDomPortLeaderHost', () => {
 
     expect(
       body.querySelector<SVGPathElement>('[data-sugarcube-output-leader="0"]')?.getAttribute('d'),
-    ).toBe('M 146.00 50.00 H 570.00 V 170.00 H 594.00');
+    ).toBe('M 152.00 50.00 H 591.00 V 170.00 H 594.00');
     host.dispose();
   });
 });

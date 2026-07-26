@@ -15,8 +15,9 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Draw Cube input labels and output-to-preview association leaders. */
 import { resolveCubeCanvasOutputSocketRimX } from './CubeCanvasBoundaryGeometry.js';
-import { resolveCubeOutputLeader } from './CubeOutputLeaderGeometry.js';
-export { resolveCubeOutputLeader } from './CubeOutputLeaderGeometry.js';
+import { CUBE_OUTPUT_LEADER_LABEL_INSET, resolveCubeOutputLeader, } from './CubeOutputLeaderGeometry.js';
+import { CUBE_PREVIEW_EDGE_INSET } from './CubePreviewRailGeometry.js';
+export { CUBE_OUTPUT_LEADER_LABEL_INSET, resolveCubeOutputLeader, } from './CubeOutputLeaderGeometry.js';
 const INPUT_LABEL_INSET = 16;
 /** Draw presentation-only boundary context without impersonating graph noodles. */
 export class CubeCanvasPortRenderer {
@@ -48,10 +49,10 @@ export class CubeCanvasPortRenderer {
         context.lineJoin = 'round';
         context.font = '14px sans-serif';
         for (const port of layout.outputs) {
-            const titleX = layout.preview.x + 6;
-            const labelEndX = Math.min(layout.outputGutter.x - 8, titleX + context.measureText(port.name).width + 8);
+            const titleX = layout.preview.x + CUBE_PREVIEW_EDGE_INSET;
+            const labelEndX = Math.min(layout.frame.x + layout.frame.width - CUBE_PREVIEW_EDGE_INSET / 2, titleX + context.measureText(port.name).width + CUBE_OUTPUT_LEADER_LABEL_INSET);
             const socketX = resolveCubeCanvasOutputSocketRimX(layout.frame.x + layout.frame.width);
-            const elbowX = layout.outputGutter.x + 8;
+            const elbowX = layout.frame.x + layout.frame.width - CUBE_PREVIEW_EDGE_INSET / 2;
             const points = resolveCubeOutputLeader(labelEndX, port.labelY, socketX, port.y, elbowX);
             strokePolyline(context, points);
         }

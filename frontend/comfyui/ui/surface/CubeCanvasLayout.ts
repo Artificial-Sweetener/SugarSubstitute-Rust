@@ -116,17 +116,23 @@ export function computeCubeCanvasLayout(
   });
   const content = gutters.content;
   const minimumMasonryWidth = Math.min(content.width, Math.max(1, state.minimumColumnWidth));
+  const previewRight = state.preview.visible ? frame.x + frame.width : content.x + content.width;
   const previewWidth = state.preview.visible
-    ? Math.min(state.preview.width, Math.max(0, content.width - CONTENT_GAP - minimumMasonryWidth))
+    ? Math.min(
+        state.preview.width,
+        Math.max(0, previewRight - content.x - CONTENT_GAP - minimumMasonryWidth),
+      )
     : 0;
   const masonryWidth = Math.max(
     1,
-    content.width - (previewWidth > 0 ? previewWidth + CONTENT_GAP : 0),
+    (previewWidth > 0 ? previewRight : content.x + content.width) -
+      content.x -
+      (previewWidth > 0 ? previewWidth + CONTENT_GAP : 0),
   );
   const masonry = rect(content.x, content.y, masonryWidth, content.height);
   const preview =
     previewWidth > 0
-      ? rect(content.x + masonryWidth + CONTENT_GAP, content.y, previewWidth, content.height)
+      ? rect(previewRight - previewWidth, content.y, previewWidth, content.height)
       : null;
   const orderedNodes = orderNodes(node.subgraph._nodes, state.nodeOrder);
   const presentation = resolveCubeFaceCardPresentation(orderedNodes, state);

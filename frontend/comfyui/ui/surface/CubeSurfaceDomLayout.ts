@@ -87,6 +87,7 @@ export function layoutCubeSurfaceDom(
     '--sugarcubes-cube-masonry-footer-inset',
     `${spacing.footerInset}px`,
   );
+  options.content.style.setProperty('--sugarcubes-cube-preview-row-gap', `${spacing.gap}px`);
   options.content.dataset.previewLayout = stackPreview
     ? 'stacked'
     : canShowPreviewRail

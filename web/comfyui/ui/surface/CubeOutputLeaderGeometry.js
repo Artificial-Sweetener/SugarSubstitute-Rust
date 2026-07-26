@@ -14,6 +14,9 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Define the renderer-neutral geometry invariant for output association leaders. */
+export { CUBE_PREVIEW_EDGE_INSET } from './CubePreviewRailGeometry.js';
+/** Match Comfy's native chevron-to-title gap for output association leaders. */
+export const CUBE_OUTPUT_LEADER_LABEL_INSET = 12;
 /** Keep an output socket level with or below the center of its associated label. */
 export function resolveCubeOutputPortY(labelY, requestedPortY) {
     return Math.max(labelY, requestedPortY);

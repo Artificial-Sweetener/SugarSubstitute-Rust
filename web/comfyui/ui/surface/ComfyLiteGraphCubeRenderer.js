@@ -21,7 +21,8 @@ import { CubeCanvasChromeRenderer, } from './CubeCanvasChromeRenderer.js';
 import { drawComfyPrimeIcon } from './ComfyPrimeIcons.js';
 import { CubeCanvasPortRenderer } from './CubeCanvasPortRenderer.js';
 import { deriveCubeBackdropColor, resolveCubeNodeColorTheme, } from './CubeNodeColorTheme.js';
-import { CUBE_PREVIEW_SECTION_GAP, CUBE_PREVIEW_SECTION_INSET, CUBE_PREVIEW_TITLE_LINE_HEIGHT, dividePreviewIntoHorizontalSegments, resolveCubeCanvasPreviewSections, } from './CubePreviewSections.js';
+import { CUBE_PREVIEW_EDGE_INSET } from './CubePreviewRailGeometry.js';
+import { CUBE_PREVIEW_SECTION_GAP, CUBE_PREVIEW_TITLE_LINE_HEIGHT, dividePreviewIntoHorizontalSegments, resolveCubeCanvasPreviewSections, } from './CubePreviewSections.js';
 /** Own only visual composition for legacy canvas Cube surfaces. */
 export class ComfyLiteGraphCubeRenderer {
     #host;
@@ -101,8 +102,8 @@ export class ComfyLiteGraphCubeRenderer {
         context.strokeStyle = 'rgba(220, 225, 235, 0.22)';
         context.lineWidth = 1;
         context.beginPath();
-        context.moveTo(preview.x - 6, preview.y);
-        context.lineTo(preview.x - 6, preview.y + preview.height);
+        context.moveTo(preview.x, preview.y);
+        context.lineTo(preview.x, preview.y + preview.height);
         context.stroke();
         const outputSections = resolveCubeCanvasPreviewSections(item.preview);
         if (outputSections.length === 0) {
@@ -113,10 +114,10 @@ export class ComfyLiteGraphCubeRenderer {
             return;
         }
         const sections = dividePreviewIntoHorizontalSegments({
-            x: preview.x + CUBE_PREVIEW_SECTION_INSET,
-            y: preview.y + CUBE_PREVIEW_SECTION_INSET,
-            width: Math.max(1, preview.width - CUBE_PREVIEW_SECTION_INSET * 2),
-            height: Math.max(1, preview.height - CUBE_PREVIEW_SECTION_INSET * 2),
+            x: preview.x + CUBE_PREVIEW_EDGE_INSET,
+            y: preview.y,
+            width: Math.max(1, preview.width - CUBE_PREVIEW_EDGE_INSET * 2),
+            height: Math.max(1, preview.height),
         }, outputSections.length, CUBE_PREVIEW_SECTION_GAP);
         for (const [index, output] of outputSections.entries()) {
             const section = sections[index];
@@ -141,19 +142,19 @@ export class ComfyLiteGraphCubeRenderer {
                 context.fillText('Loading output…', section.x, section.y + CUBE_PREVIEW_TITLE_LINE_HEIGHT);
                 continue;
             }
-            const target = containImage(image.naturalWidth, image.naturalHeight, section.x, section.y + CUBE_PREVIEW_TITLE_LINE_HEIGHT, section.width, Math.max(1, section.height - CUBE_PREVIEW_TITLE_LINE_HEIGHT));
+            const target = coverImage(image.naturalWidth, image.naturalHeight, section.x, section.y + CUBE_PREVIEW_TITLE_LINE_HEIGHT, section.width, Math.max(1, section.height - CUBE_PREVIEW_TITLE_LINE_HEIGHT));
             context.drawImage(image, target.x, target.y, target.width, target.height);
         }
     }
 }
-/** Fit one image inside the available rail while preserving its aspect ratio. */
-function containImage(sourceWidth, sourceHeight, x, y, width, height) {
-    const scale = Math.min(width / sourceWidth, height / sourceHeight);
+/** Fill one preview rail while preserving aspect ratio and the shared edge inset. */
+function coverImage(sourceWidth, sourceHeight, x, y, width, height) {
+    const scale = Math.max(width / sourceWidth, height / sourceHeight);
     const targetWidth = Math.max(1, sourceWidth * scale);
     const targetHeight = Math.max(1, sourceHeight * scale);
     return {
         x: x + (width - targetWidth) / 2,
-        y: y + (height - targetHeight) / 2,
+        y,
         width: targetWidth,
         height: targetHeight,
     };

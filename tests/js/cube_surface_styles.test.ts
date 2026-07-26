@@ -164,6 +164,38 @@ describe('ensureCubeSurfaceStyles', () => {
     expect(contentRule).not.toMatch(/overflow-[xy]:\s*hidden;/);
   });
 
+  test('releases only an active native combo popup from Cube clipping and stacking boundaries', () => {
+    ensureCubeSurfaceStyles(document);
+
+    const css = document.getElementById('sugarcubes-cube-surface-styles')?.textContent ?? '';
+    const popperSelector = '\\[data-reka-popper-content-wrapper\\]';
+
+    expect(css).toMatch(
+      new RegExp(
+        `\\.sugarcubes-cube-node-face-host:has\\(${popperSelector}\\)\\s*\\{[^}]*overflow:\\s*visible;[^}]*contain:\\s*layout style;`,
+        's',
+      ),
+    );
+    expect(css).toMatch(
+      new RegExp(
+        `\\.sugarcubes-cube-face:has\\(${popperSelector}\\)\\s*\\{[^}]*overflow:\\s*visible;`,
+        's',
+      ),
+    );
+    expect(css).toMatch(
+      new RegExp(
+        `\\.sugarcubes-cube-face__content:has\\(${popperSelector}\\)\\s*\\{[^}]*z-index:\\s*10;[^}]*overflow:\\s*visible;[^}]*isolation:\\s*auto;`,
+        's',
+      ),
+    );
+    expect(css).toMatch(
+      new RegExp(
+        `\\.lg-node\\[data-sugarcube-node="true"\\]:has\\(${popperSelector}\\)\\s*\\{[^}]*z-index:\\s*10000\\s*!important;`,
+        's',
+      ),
+    );
+  });
+
   test('stretches the Cube face through the full resized native body', () => {
     ensureCubeSurfaceStyles(document);
 
@@ -230,8 +262,9 @@ describe('ensureCubeSurfaceStyles', () => {
     expect(railRule).toMatch(/height:\s*auto;/);
     expect(railRule).toMatch(/min-height:\s*0;/);
     expect(railRule).toMatch(/overflow:\s*hidden;/);
+    expect(railRule).toMatch(/--sugarcubes-cube-preview-edge-inset:\s*1\.125rem;/);
     expect(mediaRule).toMatch(/position:\s*absolute;/);
-    expect(mediaRule).toMatch(/inset:\s*0;/);
+    expect(mediaRule).toMatch(/inset:\s*0\s+var\(--sugarcubes-cube-preview-edge-inset\);/);
     expect(mediaRule).toMatch(/height:\s*100%;/);
     expect(mediaRule).toMatch(/min-height:\s*0;/);
     expect(mediaRule).toMatch(/overflow:\s*hidden;/);
@@ -242,9 +275,15 @@ describe('ensureCubeSurfaceStyles', () => {
     expect(imageRule).toMatch(/max-height:\s*100%\s*!important;/);
     expect(imageRule).not.toMatch(/aspect-ratio:/);
     expect(imageRule).not.toMatch(/background:/);
+    expect(imageRule).toMatch(/object-fit:\s*cover;/);
+    expect(imageRule).toMatch(/object-position:\s*center top;/);
+    expect(imageRule).toMatch(/border-radius:\s*0;/);
     expect(imageRule).toMatch(/opacity:\s*1\s*!important;/);
     expect(imageRule).toMatch(/visibility:\s*visible\s*!important;/);
     expect(imageRule).toMatch(/z-index:\s*1;/);
+    expect(css).toMatch(
+      /data-preview-layout="rail"\][\s\S]*?transform:\s*translateX\(0\.375rem\);/,
+    );
   });
 
   test('stretches output sections into equal full-width horizontal bands', () => {
@@ -257,6 +296,9 @@ describe('ensureCubeSurfaceStyles', () => {
     expect(outputGridRule).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\);/);
     expect(outputGridRule).toMatch(/align-items:\s*stretch;/);
     expect(outputGridRule).toMatch(/flex:\s*1\s+1\s+0;/);
+    expect(css).toMatch(
+      /\.sugarcubes-cube-face__preview-output,\s*\.sugarcubes-cube-face__preview-internal\s*\{[^}]*gap:\s*var\(--sugarcubes-cube-preview-row-gap,\s*0\.75rem\);/s,
+    );
     expect(css).toMatch(
       /\.sugarcubes-cube-face__preview-internal:not\(:empty\)\s*\{[^}]*flex:\s*0\s+1\s+25%;/s,
     );

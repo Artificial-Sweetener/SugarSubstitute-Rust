@@ -17,8 +17,16 @@
 
 import type { CubeCanvasLayout } from './CubeCanvasLayout.js';
 import { resolveCubeCanvasOutputSocketRimX } from './CubeCanvasBoundaryGeometry.js';
-import { resolveCubeOutputLeader, type CubeLeaderPoint } from './CubeOutputLeaderGeometry.js';
-export { resolveCubeOutputLeader } from './CubeOutputLeaderGeometry.js';
+import {
+  CUBE_OUTPUT_LEADER_LABEL_INSET,
+  resolveCubeOutputLeader,
+  type CubeLeaderPoint,
+} from './CubeOutputLeaderGeometry.js';
+import { CUBE_PREVIEW_EDGE_INSET } from './CubePreviewRailGeometry.js';
+export {
+  CUBE_OUTPUT_LEADER_LABEL_INSET,
+  resolveCubeOutputLeader,
+} from './CubeOutputLeaderGeometry.js';
 
 const INPUT_LABEL_INSET = 16;
 
@@ -57,13 +65,13 @@ export class CubeCanvasPortRenderer {
     context.lineJoin = 'round';
     context.font = '14px sans-serif';
     for (const port of layout.outputs) {
-      const titleX = layout.preview.x + 6;
+      const titleX = layout.preview.x + CUBE_PREVIEW_EDGE_INSET;
       const labelEndX = Math.min(
-        layout.outputGutter.x - 8,
-        titleX + context.measureText(port.name).width + 8,
+        layout.frame.x + layout.frame.width - CUBE_PREVIEW_EDGE_INSET / 2,
+        titleX + context.measureText(port.name).width + CUBE_OUTPUT_LEADER_LABEL_INSET,
       );
       const socketX = resolveCubeCanvasOutputSocketRimX(layout.frame.x + layout.frame.width);
-      const elbowX = layout.outputGutter.x + 8;
+      const elbowX = layout.frame.x + layout.frame.width - CUBE_PREVIEW_EDGE_INSET / 2;
       const points = resolveCubeOutputLeader(labelEndX, port.labelY, socketX, port.y, elbowX);
       strokePolyline(context, points);
     }
