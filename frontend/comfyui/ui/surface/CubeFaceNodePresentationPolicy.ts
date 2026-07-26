@@ -20,10 +20,12 @@ import type { UnknownRecord } from '../types/common.js';
 import type { ComfyNode } from '../types/graph.js';
 
 interface RememberedNodeProperty {
-  key: 'flags' | 'widgets_up';
+  key: 'flags' | 'widgets_start_y' | 'widgets_up';
   owned: boolean;
   value: unknown;
 }
+
+const NATIVE_SLOTLESS_WIDGET_START_Y = 2;
 
 /** Create face flags that retain native state except graph collapse. */
 function createCubeFaceFlags(flags: unknown): UnknownRecord {
@@ -48,9 +50,10 @@ export function withCubeFaceNodePresentation<Result>(
   node: ComfyNode,
   operation: () => Result,
 ): Result {
-  const remembered = rememberNodeProperties(node, ['flags', 'widgets_up']);
+  const remembered = rememberNodeProperties(node, ['flags', 'widgets_start_y', 'widgets_up']);
   node.flags = createCubeFaceFlags(node.flags);
   Reflect.set(node, 'widgets_up', true);
+  Reflect.set(node, 'widgets_start_y', NATIVE_SLOTLESS_WIDGET_START_Y);
   try {
     return operation();
   } finally {

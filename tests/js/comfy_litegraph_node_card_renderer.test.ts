@@ -224,6 +224,7 @@ describe('ComfyLiteGraphNodeCardRenderer', () => {
       flags,
       inputs,
       outputs,
+      widgets_start_y: 0,
       widgets_up: false,
       drawSlots: jest.fn(),
       drawCollapsedSlots: jest.fn(),
@@ -237,6 +238,7 @@ describe('ComfyLiteGraphNodeCardRenderer', () => {
       expect(node.flags).toEqual({ collapsed: false, pinned: true });
       expect(node.inputs).toBe(inputs);
       expect(node.outputs).toBe(outputs);
+      expect(node.widgets_start_y).toBe(2);
       expect(node.widgets_up).toBe(true);
     });
 
@@ -246,6 +248,7 @@ describe('ComfyLiteGraphNodeCardRenderer', () => {
     expect(node.flags.collapsed).toBe(true);
     expect(node.inputs).toBe(inputs);
     expect(node.outputs).toBe(outputs);
+    expect(node.widgets_start_y).toBe(0);
     expect(node.widgets_up).toBe(false);
   });
 

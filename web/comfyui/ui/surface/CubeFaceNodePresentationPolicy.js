@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own transient native-node state used only while presenting Cube-face cards. */
 import { isRecord } from '../types/common.js';
+const NATIVE_SLOTLESS_WIDGET_START_Y = 2;
 /** Create face flags that retain native state except graph collapse. */
 function createCubeFaceFlags(flags) {
     return {
@@ -33,9 +34,10 @@ export function createCubeFaceNodeData(nodeData) {
 }
 /** Expose expanded slotless state during one native operation, then restore exact ownership. */
 export function withCubeFaceNodePresentation(node, operation) {
-    const remembered = rememberNodeProperties(node, ['flags', 'widgets_up']);
+    const remembered = rememberNodeProperties(node, ['flags', 'widgets_start_y', 'widgets_up']);
     node.flags = createCubeFaceFlags(node.flags);
     Reflect.set(node, 'widgets_up', true);
+    Reflect.set(node, 'widgets_start_y', NATIVE_SLOTLESS_WIDGET_START_Y);
     try {
         return operation();
     }
