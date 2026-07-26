@@ -60,13 +60,19 @@ describe('CubePayloadTopology', () => {
       ],
       inputs: [
         {
+          id: 'input.image',
           name: 'input.image',
+          label: 'input.image',
+          type: null,
           targets: [{ symbol: 'loader', input: 'image' }],
         },
       ],
       outputs: [
         {
+          id: 'output.image',
           name: 'output.image',
+          label: 'output.image',
+          type: null,
           sourceSymbol: 'sampler',
           sourceSlot: 0,
         },
@@ -89,5 +95,38 @@ describe('CubePayloadTopology', () => {
     expect(topology.nodes).toEqual(payload.nodes);
     expect(topology.nodes).not.toContain(payload.markers?.[0]);
     expect(topology.nodes).not.toContain(payload.markers?.[1]);
+  });
+
+  test('prefers the explicit read-only boundary contract over marker-era inference', () => {
+    const payload: ImportPayload = {
+      nodes: [{ symbol: 'nested', class_type: 'nested-subgraph-id' }],
+      boundaries: {
+        inputs: [
+          {
+            id: 'input.image',
+            name: 'input.image',
+            label: 'IMAGE Input',
+            type: 'IMAGE',
+            targets: [{ symbol: 'nested', input: 'image' }],
+          },
+        ],
+        outputs: [
+          {
+            id: 'output.image',
+            name: 'output.image',
+            label: 'IMAGE Output',
+            type: 'IMAGE',
+            source: { symbol: 'nested', slot: 0 },
+          },
+        ],
+      },
+      markers: [],
+      connections: [],
+    };
+
+    expect(buildCubePayloadTopology(payload)).toMatchObject({
+      inputs: [{ id: 'input.image', type: 'IMAGE', targets: [{ input: 'image' }] }],
+      outputs: [{ id: 'output.image', type: 'IMAGE', sourceSymbol: 'nested' }],
+    });
   });
 });

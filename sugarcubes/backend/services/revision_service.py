@@ -242,7 +242,7 @@ class CubeRevisionService:
             loaded_cube_id=normalize_metadata_string(cube_payload.get("cube_id")),
             loaded_version=normalize_metadata_string(cube_payload.get("version")),
         )
-        return {
+        response = {
             "cube": cube_payload,
             "nodes": prepared.nodes,
             "markers": prepared.markers,
@@ -269,6 +269,10 @@ class CubeRevisionService:
                 "current": current,
             },
         }
+        boundaries = getattr(prepared, "boundaries", None)
+        if boundaries is not None:
+            response["boundaries"] = boundaries
+        return response
 
     def _resolve_git_context(self, cube_id: str) -> CubeGitContext:
         """Resolve the owning git repo and repo-relative cube path."""

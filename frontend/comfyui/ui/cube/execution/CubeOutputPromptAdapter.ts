@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Restore saved CubeOutput execution behavior after Comfy flattens native boundaries. */
+/** Project native Cube output boundaries into Comfy's prompt-only history sink. */
 
 import { isRecord } from '../../types/common.js';
 import type { UnknownRecord } from '../../types/common.js';
@@ -34,7 +34,7 @@ interface CubeExecutionIdentity {
   instanceId: string;
 }
 
-/** Own runtime-only projection of persisted output markers into prompt sinks. */
+/** Own runtime-only projection of native output boundaries into prompt sinks. */
 export class CubeOutputPromptAdapter {
   readonly #getCubes: () => readonly CubeNode[];
   readonly #boundaryResolver: NativeSubgraphBoundaryResolver;
@@ -45,7 +45,7 @@ export class CubeOutputPromptAdapter {
     this.#boundaryResolver = options.boundaryResolver;
   }
 
-  /** Add one non-persisted CubeOutput sink for every loaded output boundary. */
+  /** Add one non-persisted history sink for every loaded output boundary. */
   apply(payloadValue: unknown): unknown {
     if (!isRecord(payloadValue) || !isRecord(payloadValue.output)) return payloadValue;
     const additions = new Map<string, UnknownRecord>();

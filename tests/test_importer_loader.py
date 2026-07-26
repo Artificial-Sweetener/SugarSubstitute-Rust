@@ -357,6 +357,71 @@ def test_load_cube_accepts_complete_nested_subgraph_definitions(tmp_path: Path) 
     ]
 
 
+def test_prepare_import_projects_nested_subgraph_boundary_types(tmp_path: Path) -> None:
+    """Keep IMAGE interfaces exact when a Cube targets a nested subgraph wrapper."""
+
+    payload = _build_current_payload()
+    payload["implementation"]["nodes"] = {
+        "upscale_by_factor": {"class_type": PARENT_SUBGRAPH_ID, "inputs": {}}
+    }
+    payload["implementation"]["inputs"] = {
+        "input.value": {
+            "kind": "input",
+            "targets": [["upscale_by_factor", "image"]],
+        }
+    }
+    payload["implementation"]["outputs"] = {"output.image": ["upscale_by_factor", 0]}
+    payload["implementation"]["subgraphs"] = [
+        {
+            "id": PARENT_SUBGRAPH_ID,
+            "name": "Upscale by Factor",
+            "nodes": [{"id": 1, "type": "KSampler"}],
+            "links": [],
+            "inputs": [
+                {
+                    "id": "input-image",
+                    "name": "image",
+                    "label": "image",
+                    "type": "IMAGE",
+                }
+            ],
+            "outputs": [
+                {
+                    "id": "output-image",
+                    "name": "image",
+                    "label": "image",
+                    "type": "IMAGE",
+                }
+            ],
+        }
+    ]
+    path = tmp_path / "Diffusion Upscale.cube"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    prepared = prepare_import(load_cube(path))
+
+    assert prepared.boundaries == {
+        "inputs": [
+            {
+                "id": "input.value",
+                "name": "input.value",
+                "label": "input.value",
+                "type": "IMAGE",
+                "targets": [{"symbol": "upscale_by_factor", "input": "image"}],
+            }
+        ],
+        "outputs": [
+            {
+                "id": "output.image",
+                "name": "output.image",
+                "label": "output.image",
+                "type": "IMAGE",
+                "source": {"symbol": "upscale_by_factor", "slot": 0},
+            }
+        ],
+    }
+
+
 def test_prepare_import_preserves_text_to_image_prompt_nodes(tmp_path: Path) -> None:
     payload = _build_current_payload()
     payload["cube_id"] = "Artificial-Sweetener/Base-Cubes/SDXL/Text to Image.cube"

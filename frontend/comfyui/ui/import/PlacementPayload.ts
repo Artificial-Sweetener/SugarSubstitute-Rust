@@ -75,6 +75,7 @@ export interface ImportPayload extends UnknownRecord {
   markers?: ImportEntry[];
   connections?: ImportConnection[];
   subgraphs?: UnknownRecord[];
+  boundaries?: UnknownRecord;
   layout?: ImportLayout | null;
   cube?: UnknownRecord;
   warnings?: unknown[];
@@ -135,6 +136,7 @@ export function readImportPayload(value: unknown): ImportPayload | null {
     markers: readRecordArray(value.markers).map(readImportEntry),
     connections: readRecordArray(value.connections),
     subgraphs: readRecordArray(value.subgraphs),
+    ...(isRecord(value.boundaries) ? { boundaries: value.boundaries } : {}),
     ...(layout ? { layout } : {}),
     ...(isRecord(value.cube) ? { cube: value.cube } : {}),
   };

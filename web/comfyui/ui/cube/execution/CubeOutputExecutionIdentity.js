@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Own stable prompt-only identities for loaded Cube output marker semantics. */
+/** Own stable prompt-only identities for loaded Cube output boundary semantics. */
 const CUBE_OUTPUT_EXECUTION_PREFIX = '__sugarcubes_cube_output__';
 const CUBE_OUTPUT_EXECUTION_LEADER = `${CUBE_OUTPUT_EXECUTION_PREFIX}:`;
 /** Build the prompt and media-map key for one ordered Cube output boundary. */

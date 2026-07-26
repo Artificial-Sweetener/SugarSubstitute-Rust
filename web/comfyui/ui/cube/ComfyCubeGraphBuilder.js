@@ -92,14 +92,14 @@ export class ComfyCubeGraphBuilder {
                 warnings.push(`Cube input '${input.name}' has no compatible internal target.`);
                 continue;
             }
-            const boundary = subgraph.addInput(input.name, resolveCubeInputBoundaryType(resolvedTargets.map((target) => target.slot)));
+            const boundary = subgraph.addInput(input.name, input.type ?? resolveCubeInputBoundaryType(resolvedTargets.map((target) => target.slot)));
             for (const target of resolvedTargets)
                 boundary.connect(target.slot, target.node);
         }
         for (const output of topology.outputs) {
             const source = nodesBySymbol.get(output.sourceSymbol);
             const slot = source?.outputs[output.sourceSlot];
-            const type = readString(slot?.type);
+            const type = output.type ?? readString(slot?.type);
             if (!source || !slot || !type) {
                 warnings.push(`Cube output '${output.name}' has no compatible internal source.`);
                 continue;

@@ -61,6 +61,7 @@ export function readImportPayload(value) {
         markers: readRecordArray(value.markers).map(readImportEntry),
         connections: readRecordArray(value.connections),
         subgraphs: readRecordArray(value.subgraphs),
+        ...(isRecord(value.boundaries) ? { boundaries: value.boundaries } : {}),
         ...(layout ? { layout } : {}),
         ...(isRecord(value.cube) ? { cube: value.cube } : {}),
     };

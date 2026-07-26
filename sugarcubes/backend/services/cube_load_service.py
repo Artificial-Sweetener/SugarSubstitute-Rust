@@ -169,7 +169,7 @@ class CubeLoadService:
             source_type=source_info["type"],
             relative_path=source_info.get("relative_path", ""),
         )
-        return {
+        response = {
             "cube": cube_payload,
             "nodes": prepared.nodes,
             "markers": prepared.markers,
@@ -179,6 +179,10 @@ class CubeLoadService:
             "subgraphs": prepared.subgraphs,
             "source": source_info,
         }
+        boundaries = getattr(prepared, "boundaries", None)
+        if boundaries is not None:
+            response["boundaries"] = boundaries
+        return response
 
 
 def _log_cube_library_diagnostic(event: str, **fields: object) -> None:

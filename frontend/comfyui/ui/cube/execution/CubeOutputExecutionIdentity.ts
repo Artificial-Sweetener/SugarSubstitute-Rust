@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Own stable prompt-only identities for loaded Cube output marker semantics. */
+/** Own stable prompt-only identities for loaded Cube output boundary semantics. */
 
 import type { GraphId } from '../../types/graph.js';
 

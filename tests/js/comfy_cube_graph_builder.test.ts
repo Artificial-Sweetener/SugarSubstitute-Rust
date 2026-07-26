@@ -135,6 +135,63 @@ describe('ComfyCubeGraphBuilder', () => {
     expect(internalNodes[0]?.isSubgraphNode?.()).toBe(true);
   });
 
+  test('uses the persisted nested-boundary type instead of a transient wildcard slot', () => {
+    const internalNodes: NativeGraphNode[] = [];
+    const inputConnect = jest.fn();
+    const outputConnect = jest.fn();
+    const subgraph = {
+      id: 'cube-definition',
+      name: 'Cube',
+      _nodes: internalNodes,
+      inputNode: {},
+      outputNode: {},
+      add: (node: NativeGraphNode) => internalNodes.push(node),
+      addInput: jest.fn(() => ({ connect: inputConnect })),
+      addOutput: jest.fn(() => ({ connect: outputConnect })),
+    } as unknown as NativeCubeSubgraph;
+    const nested = makeNode('nested-subgraph-id');
+    nested.inputs[0] = { name: 'image', type: '*', link: null };
+    const builder = new ComfyCubeGraphBuilder({
+      rootGraph: { createSubgraph: () => subgraph },
+      createNode: () => nested,
+      createUuid: () => 'nested-node-id',
+    });
+
+    builder.build(
+      {
+        nodes: [{ symbol: 'nested', class_type: 'nested-subgraph-id', inputs: {} }],
+        boundaries: {
+          inputs: [
+            {
+              id: 'input.value',
+              name: 'input.value',
+              label: 'IMAGE Input',
+              type: 'IMAGE',
+              targets: [{ symbol: 'nested', input: 'image' }],
+            },
+          ],
+          outputs: [
+            {
+              id: 'output.image',
+              name: 'output.image',
+              label: 'IMAGE Output',
+              type: 'IMAGE',
+              source: { symbol: 'nested', slot: 0 },
+            },
+          ],
+        },
+        markers: [],
+        connections: [],
+      },
+      'Nested Cube',
+    );
+
+    expect(subgraph.addInput).toHaveBeenCalledWith('input.value', 'IMAGE');
+    expect(subgraph.addOutput).toHaveBeenCalledWith('output.image', 'IMAGE');
+    expect(inputConnect).toHaveBeenCalledWith(nested.inputs[0], nested);
+    expect(outputConnect).toHaveBeenCalledWith(nested.outputs[0], nested);
+  });
+
   test('restores authored values, execution mode, identity, and editor presentation', () => {
     const internalNodes: NativeGraphNode[] = [];
     const subgraph = {

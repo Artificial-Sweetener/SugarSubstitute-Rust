@@ -17,6 +17,11 @@
 
 import type { ImportConnection, ImportEntry, ImportPayload } from '../import/PlacementPayload.js';
 import { isRecord } from '../types/common.js';
+import {
+  readCubeBoundaryDefinitions,
+  type CubeInputBoundaryDefinition,
+  type CubeOutputBoundaryDefinition,
+} from './CubeBoundaryDefinitions.js';
 
 export interface CubeNodeConnection {
   sourceSymbol: string;
@@ -26,12 +31,18 @@ export interface CubeNodeConnection {
 }
 
 export interface CubeInputBinding {
+  id: string;
   name: string;
+  label: string;
+  type: string | null;
   targets: Array<{ symbol: string; input: string }>;
 }
 
 export interface CubeOutputBinding {
+  id: string;
   name: string;
+  label: string;
+  type: string | null;
   sourceSymbol: string;
   sourceSlot: number;
 }
@@ -45,6 +56,8 @@ export interface CubePayloadTopology {
 
 /** Parse marker-era payloads without preserving marker nodes as runtime objects. */
 export function buildCubePayloadTopology(payload: ImportPayload): CubePayloadTopology {
+  const canonical = readCubeBoundaryDefinitions(payload.boundaries);
+  if (canonical) return buildCanonicalTopology(payload, canonical.inputs, canonical.outputs);
   const nodeSymbols = new Set(
     (payload.nodes ?? [])
       .map((entry) => readString(entry.symbol))
@@ -75,7 +88,10 @@ export function buildCubePayloadTopology(payload: ImportPayload): CubePayloadTop
     }
     if (targetKind === 'output' && nodeSymbols.has(parsed.sourceSymbol)) {
       outputs.push({
+        id: parsed.targetSymbol,
         name: parsed.targetSymbol,
+        label: parsed.targetSymbol,
+        type: null,
         sourceSymbol: parsed.sourceSymbol,
         sourceSlot: parsed.sourceSlot,
       });
@@ -89,8 +105,53 @@ export function buildCubePayloadTopology(payload: ImportPayload): CubePayloadTop
   return {
     nodes: [...(payload.nodes ?? [])],
     nodeConnections,
-    inputs: [...inputTargets].map(([name, targets]) => ({ name, targets })),
+    inputs: [...inputTargets].map(([name, targets]) => ({
+      id: name,
+      name,
+      label: name,
+      type: null,
+      targets,
+    })),
     outputs,
+  };
+}
+
+/** Preserve explicit boundary semantics while retaining marker-era payload compatibility. */
+function buildCanonicalTopology(
+  payload: ImportPayload,
+  inputs: readonly CubeInputBoundaryDefinition[],
+  outputs: readonly CubeOutputBoundaryDefinition[],
+): CubePayloadTopology {
+  const nodeSymbols = new Set(
+    (payload.nodes ?? [])
+      .map((entry) => readString(entry.symbol))
+      .filter((symbol): symbol is string => symbol !== null),
+  );
+  const nodeConnections = (payload.connections ?? [])
+    .map(parseConnection)
+    .filter((connection): connection is CubeNodeConnection => connection !== null)
+    .filter(
+      (connection) =>
+        nodeSymbols.has(connection.sourceSymbol) && nodeSymbols.has(connection.targetSymbol),
+    );
+  return {
+    nodes: [...(payload.nodes ?? [])],
+    nodeConnections,
+    inputs: inputs.map((boundary) => ({
+      id: boundary.id,
+      name: boundary.name,
+      label: boundary.label,
+      type: boundary.type,
+      targets: boundary.targets.map((target) => ({ ...target })),
+    })),
+    outputs: outputs.map((boundary) => ({
+      id: boundary.id,
+      name: boundary.name,
+      label: boundary.label,
+      type: boundary.type,
+      sourceSymbol: boundary.source.symbol,
+      sourceSlot: boundary.source.slot,
+    })),
   };
 }
 

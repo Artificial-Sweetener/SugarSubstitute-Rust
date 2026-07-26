@@ -41,6 +41,12 @@ from ..cube_model.widget_values import (
 )
 from ..instrumentation import log_event
 
+from .boundary_projection import (
+    CubeBoundaryProjection,
+    empty_cube_boundary_projection,
+    project_cube_boundaries,
+)
+
 from ..nodes import NODE_CLASS_MAPPINGS as SUGAR_NODE_MAPPINGS
 
 BINDING_SENTINEL = "@binding"
@@ -163,6 +169,9 @@ class PreparedImport:
     warnings: List[str]
     cube: Dict[str, Any] = field(default_factory=dict)
     subgraphs: List[Dict[str, Any]] = field(default_factory=list)
+    boundaries: CubeBoundaryProjection = field(
+        default_factory=empty_cube_boundary_projection
+    )
 
 
 _MARKER_KIND_TO_CLASS = {
@@ -349,6 +358,15 @@ def prepare_import(
 
     connections = _collect_node_connections(loaded.nodes)
     connections.extend(_collect_output_connections(loaded.outputs))
+    boundaries = project_cube_boundaries(
+        nodes=loaded.nodes,
+        inputs=loaded.inputs,
+        outputs=loaded.outputs,
+        definitions=loaded.definitions,
+        subgraphs=loaded.subgraphs,
+        marker_titles=_collect_marker_titles(loaded.markers),
+        warnings=warnings,
+    )
 
     default_alias = (
         _coerce_str(loaded.metadata.get("default_alias")) or Path(loaded.cube_id).stem
@@ -375,6 +393,7 @@ def prepare_import(
         warnings=warnings,
         cube=cube_payload,
         subgraphs=list(loaded.subgraphs),
+        boundaries=boundaries,
     )
 
     log_event(
@@ -384,6 +403,8 @@ def prepare_import(
             "node_count": len(node_entries),
             "marker_count": len(marker_entries),
             "connection_count": len(connections),
+            "boundary_inputs": len(boundaries["inputs"]),
+            "boundary_outputs": len(boundaries["outputs"]),
             "layout_present": bool(loaded.layout),
             "base_origin": [base_origin[0], base_origin[1]],
             "drop_origin": [dx, dy],
@@ -391,6 +412,18 @@ def prepare_import(
         },
     )
     return prepared
+
+
+def _collect_marker_titles(markers: Mapping[str, CubeMarker]) -> Dict[str, str]:
+    """Return optional legacy marker titles for native boundary presentation."""
+
+    return {
+        alias: marker.layout.title.strip()
+        for alias, marker in markers.items()
+        if marker.layout
+        and isinstance(marker.layout.title, str)
+        and marker.layout.title.strip()
+    }
 
 
 def _parse_nodes(
