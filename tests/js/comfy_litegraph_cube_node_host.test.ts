@@ -289,6 +289,7 @@ describe('ComfyLiteGraphCubeNodeHost', () => {
   test('draws multiple outputs as horizontal segments without captions in Nodes 1.0', () => {
     const rootGraph = {};
     const node = cubeNode(nativeInnerNode());
+    node.outputs = [{ name: 'output.image', type: 'IMAGE' }];
     node.properties.sugarcubes_surface = {
       schema: 1,
       revealed: true,
@@ -378,6 +379,14 @@ describe('ComfyLiteGraphCubeNodeHost', () => {
     expect(visibleText).not.toContain('Output');
     expect(visibleText).not.toContain('Output: output.image');
     expect(visibleText).not.toContain('Output: output.mask');
+    const outputLabel = (
+      context.fillText as jest.MockedFunction<CanvasRenderingContext2D['fillText']>
+    ).mock.calls.find(([text]) => text === 'output.image');
+    const outputLabelY = Number(outputLabel?.[2]);
+    expect(Number.isFinite(outputLabelY)).toBe(true);
+    expect(
+      (context.moveTo as jest.MockedFunction<CanvasRenderingContext2D['moveTo']>).mock.calls,
+    ).toContainEqual([expect.any(Number), outputLabelY]);
 
     host.dispose();
   });

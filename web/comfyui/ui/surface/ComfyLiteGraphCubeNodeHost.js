@@ -45,6 +45,7 @@ export class ComfyLiteGraphCubeNodeHost {
     #domWidgets;
     #hooks = new Map();
     #enabled = false;
+    #promptGeometryQueued = false;
     #items = [];
     #openCardMenu = null;
     /** Bind native draw hooks and focused face interactions. */
@@ -73,6 +74,7 @@ export class ComfyLiteGraphCubeNodeHost {
         this.#domWidgets = new ComfyLiteGraphCubeDomWidgetHost({
             document: options.document,
             canvas: options.canvas,
+            onGeometryChange: () => this.#requestPromptGeometryReflow(),
             ...(options.logger ? { logger: options.logger } : {}),
         });
         const widgetInteraction = new ComfyLiteGraphWidgetInteraction({
@@ -279,6 +281,17 @@ export class ComfyLiteGraphCubeNodeHost {
     /** Request one native canvas repaint. */
     #refresh() {
         this.#canvas.setDirty?.(true, true);
+    }
+    /** Reflow after native prompt input returns control to Comfy's own widget callback. */
+    #requestPromptGeometryReflow() {
+        if (this.#promptGeometryQueued)
+            return;
+        this.#promptGeometryQueued = true;
+        queueMicrotask(() => {
+            this.#promptGeometryQueued = false;
+            if (this.#enabled)
+                this.sync();
+        });
     }
 }
 /** Confirm every behavior-critical node hook still belongs to this host mount. */

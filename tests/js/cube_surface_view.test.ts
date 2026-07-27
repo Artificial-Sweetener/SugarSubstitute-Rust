@@ -54,6 +54,29 @@ describe('CubeSurfaceView', () => {
     expect(view.element.querySelector('script')).toBeNull();
   });
 
+  test('does not let legacy persisted card order override the native Cube graph order', () => {
+    const state = createDefaultCubeSurfaceState();
+    state.nodeOrder = ['2', '1'];
+    const models = createNode(1);
+    const sampler = createNode(2);
+    const view = new CubeSurfaceView({
+      document,
+      renderer: createRenderer(),
+      identity: cubeIdentity('Cube'),
+      nodes: [models, sampler],
+      state,
+      onStateChange: jest.fn(),
+    });
+
+    expect(
+      [...view.element.querySelectorAll<HTMLElement>('[data-cube-node-id]')].map(
+        (card) => card.dataset.cubeNodeId,
+      ),
+    ).toEqual(['1', '2']);
+    expect(state.nodeOrder).toEqual(['2', '1']);
+    view.dispose();
+  });
+
   test('lays out cards from unscaled native dimensions under canvas zoom', () => {
     const renderer: NativeNodeCardRenderer = {
       mount: jest.fn((target: HTMLElement) => {

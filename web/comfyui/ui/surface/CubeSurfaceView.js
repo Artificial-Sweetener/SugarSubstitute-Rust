@@ -17,7 +17,6 @@
 import { CubeFaceActionsView } from './CubeFaceActionsView.js';
 import { resolveCubeFaceCardPresentation, } from './CubeFaceCardPolicy.js';
 import { setCubeFaceCardRevealed, setCubeFaceNodeEnabled } from './CubeFaceCardStateController.js';
-import { orderCubeSurfaceCards } from './CubeMasonryLayout.js';
 import { NativeNodeCardHost } from './NativeNodeCardHost.js';
 import { CubePreviewRailView } from './CubePreviewRailView.js';
 import { layoutCubeSurfaceDom } from './CubeSurfaceDomLayout.js';
@@ -29,6 +28,7 @@ export class CubeSurfaceView {
     header;
     #state;
     #nodes;
+    #graph;
     #onStateChange;
     #onMinimumHeightChange;
     #cardHost;
@@ -44,8 +44,8 @@ export class CubeSurfaceView {
     /** Build a Cube view without assuming ownership of Comfy's renderer service. */
     constructor(options) {
         this.#state = options.state;
-        this.#nodes = orderNodes(options.nodes, options.state.nodeOrder);
-        this.#state.nodeOrder = this.#nodes.map((node) => String(node.id ?? ''));
+        this.#nodes = [...options.nodes];
+        this.#graph = options.graph;
         this.#onStateChange = options.onStateChange;
         this.#onMinimumHeightChange = options.onMinimumHeightChange ?? null;
         this.#cardHost = new NativeNodeCardHost(options.renderer);
@@ -126,7 +126,7 @@ export class CubeSurfaceView {
     }
     /** Reconcile exact native card mounts from the shared presentation policy. */
     #renderCards() {
-        const presentation = resolveCubeFaceCardPresentation(this.#nodes, this.#state);
+        const presentation = resolveCubeFaceCardPresentation(this.#nodes, this.#state, this.#graph);
         this.#visibleCards = presentation.cards.filter((card) => card.visible);
         this.#cells = this.#cardHost.mount(this.#masonry, this.#visibleCards, (node, enabled) => {
             setCubeFaceNodeEnabled(this.#state, node, enabled);
@@ -147,11 +147,4 @@ export class CubeSurfaceView {
         this.#renderCards();
         this.layout(this.#lastLayoutWidth);
     }
-}
-/** Order real internal nodes by persisted Cube surface order. */
-function orderNodes(nodes, persistedOrder) {
-    const byId = new Map(nodes.map((node, index) => [String(node.id ?? index), node]));
-    return orderCubeSurfaceCards(persistedOrder, [...byId.keys()])
-        .map((id) => byId.get(id))
-        .filter((node) => node !== undefined);
 }

@@ -36,11 +36,11 @@ import {
   resolveCubeNodeColorTheme,
   type CubeNodeColorTheme,
 } from './CubeNodeColorTheme.js';
-import { CUBE_PREVIEW_EDGE_INSET } from './CubePreviewRailGeometry.js';
 import {
   CUBE_PREVIEW_SECTION_GAP,
   CUBE_PREVIEW_TITLE_LINE_HEIGHT,
   dividePreviewIntoHorizontalSegments,
+  resolveCubePreviewContentRect,
   resolveCubeCanvasPreviewSections,
 } from './CubePreviewSections.js';
 
@@ -186,12 +186,7 @@ export class ComfyLiteGraphCubeRenderer {
       return;
     }
     const sections = dividePreviewIntoHorizontalSegments(
-      {
-        x: preview.x + CUBE_PREVIEW_EDGE_INSET,
-        y: preview.y,
-        width: Math.max(1, preview.width - CUBE_PREVIEW_EDGE_INSET * 2),
-        height: Math.max(1, preview.height),
-      },
+      resolveCubePreviewContentRect(preview),
       outputSections.length,
       CUBE_PREVIEW_SECTION_GAP,
     );

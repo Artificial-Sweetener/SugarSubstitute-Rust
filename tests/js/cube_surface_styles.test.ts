@@ -283,9 +283,13 @@ describe('ensureCubeSurfaceStyles', () => {
     expect(imageRule).toMatch(/opacity:\s*1\s*!important;/);
     expect(imageRule).toMatch(/visibility:\s*visible\s*!important;/);
     expect(imageRule).toMatch(/z-index:\s*1;/);
-    expect(css).toMatch(
-      /data-preview-layout="rail"\][\s\S]*?transform:\s*translateX\(0\.375rem\);/,
-    );
+    const contentRule =
+      css.match(
+        /\.sugarcubes-cube-face__content\s*\{\s*box-sizing:\s*border-box;([^}]*)\}/s,
+      )?.[1] ?? '';
+    expect(contentRule).toMatch(/gap:\s*0\.5rem;/);
+    expect(contentRule).toMatch(/padding:\s*[\s\S]*?0\.5rem/);
+    expect(css).not.toMatch(/data-preview-layout="rail"\][\s\S]*?transform:/);
   });
 
   test('stretches output sections into equal full-width horizontal bands', () => {

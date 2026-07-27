@@ -137,6 +137,149 @@ describe('ComfyLiteGraphNodeCardRenderer', () => {
     getContext.mockRestore();
   });
 
+  test('replaces the subgraph workflow glyph with the normal three-line title decoration', () => {
+    const subgraphTitleBox = jest.fn();
+    const onDrawTitleBox = jest.fn();
+    const subgraphNodePrototype = {
+      drawTitleBox: subgraphTitleBox,
+    };
+    const node = Object.assign(Object.create(subgraphNodePrototype) as Record<string, unknown>, {
+      id: 'nested',
+      type: 'Subgraph',
+      size: [240, 180],
+      drawSlots: jest.fn(),
+      drawCollapsedSlots: jest.fn(),
+      onDrawTitleBox,
+      onDrawBackground: jest.fn(),
+      title_buttons: [],
+      skip_subgraph_button: false,
+      strokeStyles: {},
+      isSubgraphNode: () => true,
+    });
+    const drawNode = jest.fn((drawnNode: typeof node) => {
+      expect(drawnNode.drawTitleBox).not.toBe(subgraphTitleBox);
+      expect(drawnNode.onDrawTitleBox).toBe(onDrawTitleBox);
+      expect(drawnNode.skip_subgraph_button).toBe(true);
+      const context = {
+        save: jest.fn(),
+        restore: jest.fn(),
+        beginPath: jest.fn(),
+        moveTo: jest.fn(),
+        lineTo: jest.fn(),
+        stroke: jest.fn(),
+      } as unknown as CanvasRenderingContext2D;
+      const titleBox = drawnNode.drawTitleBox;
+      if (typeof titleBox !== 'function') throw new Error('Expected a Cube-face title renderer.');
+      titleBox(context, { title_height: 24 });
+      expect(context.moveTo).toHaveBeenCalledTimes(3);
+      expect(context.lineTo).toHaveBeenCalledTimes(3);
+    });
+
+    drawNativeLiteGraphCubeCard({ drawNode }, node as never, {} as CanvasRenderingContext2D);
+
+    expect(subgraphTitleBox).not.toHaveBeenCalled();
+    expect(onDrawTitleBox).not.toHaveBeenCalled();
+    expect(node.drawTitleBox).toBe(subgraphTitleBox);
+    expect(node.onDrawTitleBox).toBe(onDrawTitleBox);
+    expect(node.skip_subgraph_button).toBe(false);
+  });
+
+  test('leaves a normal card title box untouched', () => {
+    const drawTitleBox = jest.fn();
+    const onDrawTitleBox = jest.fn();
+    const node = {
+      id: 'regular',
+      type: 'KSampler',
+      size: [240, 180],
+      drawSlots: jest.fn(),
+      drawCollapsedSlots: jest.fn(),
+      drawTitleBox,
+      onDrawTitleBox,
+      onDrawBackground: jest.fn(),
+      title_buttons: [],
+      skip_subgraph_button: false,
+      strokeStyles: {},
+    };
+    const drawNode = jest.fn((drawnNode: typeof node) => {
+      expect(drawnNode.drawTitleBox).toBe(drawTitleBox);
+      expect(drawnNode.onDrawTitleBox).toBe(onDrawTitleBox);
+      expect(drawnNode.skip_subgraph_button).toBe(false);
+    });
+
+    drawNativeLiteGraphCubeCard({ drawNode }, node, {} as CanvasRenderingContext2D);
+
+    expect(node.drawTitleBox).toBe(drawTitleBox);
+    expect(node.onDrawTitleBox).toBe(onDrawTitleBox);
+    expect(node.skip_subgraph_button).toBe(false);
+  });
+
+  test('recognizes the native enter-subgraph title action when the host omits isSubgraphNode', () => {
+    const drawTitleBox = jest.fn();
+    const node = {
+      id: 'nested',
+      type: 'Subgraph',
+      size: [240, 180],
+      drawSlots: jest.fn(),
+      drawCollapsedSlots: jest.fn(),
+      drawTitleBox,
+      onDrawBackground: jest.fn(),
+      title_buttons: [{ name: 'enter_subgraph' }],
+      strokeStyles: {},
+    };
+    const drawNode = jest.fn((drawnNode: typeof node) => {
+      expect(drawnNode.drawTitleBox).not.toBe(drawTitleBox);
+    });
+
+    drawNativeLiteGraphCubeCard({ drawNode }, node, {} as CanvasRenderingContext2D);
+
+    expect(node.drawTitleBox).toBe(drawTitleBox);
+  });
+
+  test('recognizes a UUID-backed subgraph node when the host omits subgraph helpers', () => {
+    const drawTitleBox = jest.fn();
+    const node = {
+      id: 'nested',
+      type: '244188e0-95d8-45d9-9beb-adafccf862d6',
+      size: [240, 180],
+      drawSlots: jest.fn(),
+      drawCollapsedSlots: jest.fn(),
+      drawTitleBox,
+      onDrawBackground: jest.fn(),
+      title_buttons: [],
+      strokeStyles: {},
+    };
+    const drawNode = jest.fn((drawnNode: typeof node) => {
+      expect(drawnNode.drawTitleBox).not.toBe(drawTitleBox);
+    });
+
+    drawNativeLiteGraphCubeCard({ drawNode }, node, {} as CanvasRenderingContext2D);
+
+    expect(node.drawTitleBox).toBe(drawTitleBox);
+  });
+
+  test('recognizes a native subgraph object when the host omits helper methods', () => {
+    const drawTitleBox = jest.fn();
+    const node = {
+      id: 'nested',
+      type: 'KSampler',
+      size: [240, 180],
+      drawSlots: jest.fn(),
+      drawCollapsedSlots: jest.fn(),
+      drawTitleBox,
+      onDrawBackground: jest.fn(),
+      title_buttons: [],
+      strokeStyles: {},
+      subgraph: {},
+    };
+    const drawNode = jest.fn((drawnNode: typeof node) => {
+      expect(drawnNode.drawTitleBox).not.toBe(drawTitleBox);
+    });
+
+    drawNativeLiteGraphCubeCard({ drawNode }, node, {} as CanvasRenderingContext2D);
+
+    expect(node.drawTitleBox).toBe(drawTitleBox);
+  });
+
   test('lays out at a requested card width and restores internal graph geometry', () => {
     const updateArea = jest.fn();
     const node = {
@@ -250,6 +393,29 @@ describe('ComfyLiteGraphNodeCardRenderer', () => {
     expect(node.outputs).toBe(outputs);
     expect(node.widgets_start_y).toBe(0);
     expect(node.widgets_up).toBe(false);
+  });
+
+  test('does not reserve the hidden-slot gutter twice for a semantic prompt textarea', () => {
+    const node = {
+      id: 'prompt',
+      title: 'Positive prompt',
+      type: 'CLIPTextEncode',
+      size: [320, 240],
+      widgets_start_y: 0,
+      widgets: [{ name: 'text', type: 'customtext' }],
+      drawSlots: jest.fn(),
+      drawCollapsedSlots: jest.fn(),
+      onDrawBackground: jest.fn(),
+      title_buttons: [],
+      strokeStyles: {},
+    };
+    const drawNode = jest.fn(() => {
+      expect(node.widgets_start_y).toBe(2);
+    });
+
+    drawNativeLiteGraphCubeCard({ drawNode }, node, {} as CanvasRenderingContext2D);
+
+    expect(node.widgets_start_y).toBe(0);
   });
 
   test('uses a slotless native body height without changing graph geometry', () => {

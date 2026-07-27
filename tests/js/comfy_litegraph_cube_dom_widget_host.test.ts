@@ -158,10 +158,40 @@ describe('ComfyLiteGraphCubeDomWidgetHost', () => {
 
     host.dispose();
   });
+
+  test('grows a semantic prompt textarea and requests a new Cube layout on input', () => {
+    const textarea = document.createElement('textarea');
+    Object.defineProperty(textarea, 'scrollHeight', { configurable: true, value: 80 });
+    const widget = {
+      name: 'text',
+      type: 'customtext',
+      element: textarea,
+      y: 20,
+      computedHeight: 100,
+      margin: 10,
+    };
+    const node = faceNode([widget]);
+    node.title = 'Positive prompt';
+    const onGeometryChange = jest.fn();
+    const { host } = createHost(onGeometryChange);
+
+    host.sync([cubeItemForNode(node)]);
+
+    expect(textarea.style.height).toBe('80px');
+    expect(textarea.style.overflowY).toBe('hidden');
+    expect(widget.computedHeight).toBe(100);
+    onGeometryChange.mockClear();
+    Object.defineProperty(textarea, 'scrollHeight', { configurable: true, value: 170 });
+    textarea.dispatchEvent(new Event('input'));
+    expect(textarea.style.height).toBe('170px');
+    expect(onGeometryChange).toHaveBeenCalled();
+
+    host.dispose();
+  });
 });
 
 /** Build one transformed canvas and its focused DOM-widget host. */
-function createHost(): {
+function createHost(onGeometryChange = jest.fn()): {
   canvas: HTMLCanvasElement;
   host: ComfyLiteGraphCubeDomWidgetHost;
 } {
@@ -189,6 +219,7 @@ function createHost(): {
         canvas,
         ds: { scale: 2, offset: [10, -5] },
       },
+      onGeometryChange,
     }),
   };
 }

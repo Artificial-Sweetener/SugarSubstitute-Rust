@@ -29,17 +29,20 @@ export function computeCubeMasonry(cards, options) {
     const placements = [];
     for (const card of cards) {
         const height = finiteNonNegative(card.height);
-        const column = indexOfMinimum(columnHeights);
-        const y = columnHeights[column] ?? 0;
+        const columnSpan = normalizedColumnSpan(card.columnSpan, columnCount);
+        const column = indexOfLowestSpanWindow(columnHeights, columnSpan);
+        const y = maximum(columnHeights.slice(column, column + columnSpan));
         placements.push({
             id: card.id,
             column,
             x: column * (columnWidth + gap),
             y,
-            width: columnWidth,
+            width: columnWidth * columnSpan + gap * (columnSpan - 1),
             height,
         });
-        columnHeights[column] = y + height + gap;
+        for (let index = column; index < column + columnSpan; index += 1) {
+            columnHeights[index] = y + height + gap;
+        }
     }
     const occupiedHeights = columnHeights.map((height) => Math.max(0, height - gap));
     return {
@@ -51,6 +54,10 @@ export function computeCubeMasonry(cards, options) {
 }
 /** Preserve saved editor columns while splitting or merging them responsively. */
 function computeSpatialPlacements(cards, columnCount, columnWidth, minimumColumnWidth, gap) {
+    // Saved editor columns describe independent single-column cards; a spanning prompt owns a
+    // contiguous responsive window instead, so it must use the shared span-aware placement path.
+    if (cards.some((card) => normalizedColumnSpan(card.columnSpan, columnCount) > 1))
+        return null;
     const spatialCards = cards.map(toSpatialCard);
     if (spatialCards.some((card) => card === null))
         return null;
@@ -190,13 +197,25 @@ export function orderCubeSurfaceCards(persistedOrder, availableNodeIds) {
 function finiteNonNegative(value) {
     return Number.isFinite(value) ? Math.max(0, value) : 0;
 }
-/** Return the first column with the smallest accumulated height. */
-function indexOfMinimum(values) {
-    let minimumIndex = 0;
-    for (let index = 1; index < values.length; index += 1) {
-        if ((values[index] ?? Infinity) < (values[minimumIndex] ?? Infinity)) {
-            minimumIndex = index;
+/** Clamp one requested masonry span to the currently available responsive columns. */
+function normalizedColumnSpan(value, columnCount) {
+    const candidate = Number.isFinite(value) ? Math.floor(value ?? 1) : 1;
+    return Math.max(1, Math.min(columnCount, candidate));
+}
+/** Find the contiguous span whose tallest occupied column is lowest. */
+function indexOfLowestSpanWindow(values, span) {
+    let winner = 0;
+    let winningHeight = Number.POSITIVE_INFINITY;
+    for (let column = 0; column <= values.length - span; column += 1) {
+        const height = maximum(values.slice(column, column + span));
+        if (height < winningHeight) {
+            winner = column;
+            winningHeight = height;
         }
     }
-    return minimumIndex;
+    return winner;
+}
+/** Return a finite greatest value for a non-empty collection of column heights. */
+function maximum(values) {
+    return Math.max(0, ...values);
 }

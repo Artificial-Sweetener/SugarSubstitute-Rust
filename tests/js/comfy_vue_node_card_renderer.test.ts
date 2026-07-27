@@ -195,6 +195,32 @@ describe('ComfyVueNodeCardRenderer', () => {
     expect(nativeRoot.dataset.cubeFaceBody).toBe('header-only');
   });
 
+  test('hides the native Nodes 2 collapse control from a Cube card header', () => {
+    const nativeRoot = document.createElement('div');
+    nativeRoot.className = 'lg-node';
+    const collapseButton = document.createElement('button');
+    collapseButton.dataset.testid = 'node-collapse-button';
+    nativeRoot.append(collapseButton);
+    const target = document.createElement('div');
+    const renderer = new ComfyVueNodeCardRenderer({
+      component: { __name: 'LGraphNode' },
+      appContext: {},
+      runtime: {
+        render: (vnode) => {
+          if (vnode !== null) target.append(nativeRoot);
+        },
+        h: () => ({ type: 'node' }),
+        extractVueNodeData: () => ({ id: 'inside-collapse-control' }),
+      },
+    });
+
+    renderer.mount(target, { id: 'inside-collapse-control', type: 'KSampler' });
+
+    expect(collapseButton.hidden).toBe(true);
+    expect(collapseButton.style.getPropertyValue('display')).toBe('none');
+    expect(collapseButton.style.getPropertyPriority('display')).toBe('important');
+  });
+
   test('preserves the native node body when Comfy mounts it after the initial render', async () => {
     const nativeRoot = document.createElement('div');
     nativeRoot.className = 'lg-node';
@@ -276,7 +302,9 @@ describe('ComfyVueNodeCardRenderer', () => {
     const enterSubgraph = document.createElement('button');
     enterSubgraph.textContent = 'Localized subgraph action';
     nativeFooter.append(enterSubgraph);
-    nativeRoot.append(nativeFooter);
+    const subgraphIcon = document.createElement('i');
+    subgraphIcon.className = 'icon-[comfy--workflow]';
+    nativeRoot.append(subgraphIcon, nativeFooter);
     const target = document.createElement('div');
     const renderer = new ComfyVueNodeCardRenderer({
       component: { __name: 'LGraphNode' },
@@ -299,6 +327,41 @@ describe('ComfyVueNodeCardRenderer', () => {
     expect(nativeFooter.hidden).toBe(true);
     expect(nativeFooter.style.getPropertyValue('display')).toBe('none');
     expect(nativeRoot.hidden).toBe(false);
+    expect(subgraphIcon.hidden).toBe(true);
+    expect(subgraphIcon.style.getPropertyValue('display')).toBe('none');
+  });
+
+  test('expands a semantic prompt textarea inside a Nodes 2.0 Cube card', () => {
+    const nativeRoot = document.createElement('div');
+    nativeRoot.className = 'lg-node';
+    const textarea = document.createElement('textarea');
+    Object.defineProperty(textarea, 'scrollHeight', { configurable: true, value: 164 });
+    nativeRoot.append(textarea);
+    const target = document.createElement('div');
+    const renderer = new ComfyVueNodeCardRenderer({
+      component: { __name: 'LGraphNode' },
+      appContext: {},
+      runtime: {
+        render: (vnode) => {
+          if (vnode !== null) target.append(nativeRoot);
+        },
+        h: () => ({ type: 'node' }),
+        extractVueNodeData: () => ({ id: 'prompt' }),
+      },
+    });
+
+    renderer.mount(target, {
+      id: 'prompt',
+      type: 'CLIPTextEncode',
+      title: 'Positive prompt',
+      widgets: [{ name: 'text', type: 'customtext' }],
+    });
+
+    expect(textarea.style.height).toBe('164px');
+    expect(textarea.style.overflowY).toBe('hidden');
+    Object.defineProperty(textarea, 'scrollHeight', { configurable: true, value: 220 });
+    textarea.dispatchEvent(new Event('input'));
+    expect(textarea.style.height).toBe('220px');
   });
 });
 

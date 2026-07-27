@@ -21,7 +21,7 @@ import { resolveCubeSurfaceMinimumHeight } from './CubeSurfaceMinimumHeight.js';
 import { resolveCubeSurfaceCardSpacing } from './CubeSurfaceSpacing.js';
 import type { CubeSurfaceState } from './CubeSurfaceState.js';
 
-const CONTENT_GAP = 12;
+const CONTENT_GAP = 8;
 const DEFAULT_CARD_HEIGHT = 120;
 const MINIMUM_SIDE_PREVIEW_WIDTH = 240;
 const STACKED_PREVIEW_MINIMUM_HEIGHT = 160;
@@ -65,6 +65,7 @@ export function layoutCubeSurfaceDom(
     options.cards.map((card, index) => ({
       id: card.id,
       height: readCardHeight(options.cells[index], card),
+      ...(card.columnSpan === undefined ? {} : { columnSpan: card.columnSpan }),
       sourceX: Number(card.node.pos?.[0]),
       sourceY: Number(card.node.pos?.[1]),
       sourceWidth: Number(card.node.size?.[0]),

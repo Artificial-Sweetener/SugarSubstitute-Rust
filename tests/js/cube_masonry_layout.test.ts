@@ -68,6 +68,45 @@ describe('computeCubeMasonry', () => {
     expect(Number.isFinite(layout.height)).toBe(true);
   });
 
+  test('reserves a contiguous double-width window for a prompt card', () => {
+    const layout = computeCubeMasonry(
+      [
+        { id: 'settings', height: 100 },
+        { id: 'prompt', height: 80, columnSpan: 2 },
+        { id: 'sampler', height: 60 },
+      ],
+      {
+        availableWidth: 410,
+        minimumColumnWidth: 200,
+        gap: 10,
+      },
+    );
+
+    expect(layout.placements).toEqual([
+      { id: 'settings', column: 0, x: 0, y: 0, width: 200, height: 100 },
+      { id: 'prompt', column: 0, x: 0, y: 110, width: 410, height: 80 },
+      { id: 'sampler', column: 0, x: 0, y: 200, width: 200, height: 60 },
+    ]);
+    expect(layout.height).toBe(260);
+  });
+
+  test('falls back to one column when a prompt card cannot span two columns', () => {
+    const layout = computeCubeMasonry([{ id: 'prompt', height: 80, columnSpan: 2 }], {
+      availableWidth: 200,
+      minimumColumnWidth: 200,
+      gap: 10,
+    });
+
+    expect(layout.placements[0]).toEqual({
+      id: 'prompt',
+      column: 0,
+      x: 0,
+      y: 0,
+      width: 200,
+      height: 80,
+    });
+  });
+
   test('preserves saved editor columns and vertical order when spatial geometry is available', () => {
     const layout = computeCubeMasonry(
       [

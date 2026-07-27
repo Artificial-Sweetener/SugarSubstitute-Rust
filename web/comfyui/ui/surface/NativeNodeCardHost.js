@@ -33,6 +33,7 @@ export class NativeNodeCardHost {
             const cell = container.ownerDocument.createElement('div');
             cell.className = 'sugarcubes-cube-face__node-card';
             cell.dataset.cubeNodeId = String(node.id ?? '');
+            cell.dataset.cubeColumnSpan = String(card.columnSpan ?? 1);
             const graphId = node.graph?.id;
             if (graphId !== undefined) {
                 cell.dataset.cubeNodeLocator = `${String(graphId)}:${String(node.id ?? '')}`;

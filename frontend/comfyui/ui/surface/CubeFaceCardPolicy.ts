@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Resolve renderer-neutral Cube-face card visibility and activation controls. */
 
-import type { ComfyNode } from '../types/graph.js';
+import type { ComfyGraph, ComfyLink, ComfyNode, GraphId } from '../types/graph.js';
 import { cubeFaceNodeHasVisibleWidgets } from './CubeFaceNodePresentationPolicy.js';
 import {
   cubeFaceNodeAllowsActivationControl,
@@ -24,6 +24,7 @@ import {
 } from './CubeFaceNodeSemantics.js';
 import { resolveCubeFaceRevealDecision } from './CubeFaceRevealPolicy.js';
 import type { CubeSurfaceState } from './CubeSurfaceState.js';
+import { cubeFaceCardColumnSpan, cubeFaceCardMasonryPriority } from './CubeFacePromptPolicy.js';
 
 export interface CubeFaceCardDecision {
   id: string;
@@ -32,6 +33,7 @@ export interface CubeFaceCardDecision {
   visible: boolean;
   enabled: boolean;
   showActivationControl: boolean;
+  columnSpan?: number;
 }
 
 export interface CubeFaceCardMenuEntry {
@@ -49,6 +51,7 @@ export interface CubeFaceCardPresentation {
 export function resolveCubeFaceCardPresentation(
   nodes: readonly ComfyNode[],
   state: CubeSurfaceState,
+  graph?: ComfyGraph,
 ): CubeFaceCardPresentation {
   const cards: CubeFaceCardDecision[] = [];
   const menuEntries: CubeFaceCardMenuEntry[] = [];
@@ -75,8 +78,107 @@ export function resolveCubeFaceCardPresentation(
       visible: reveal.visible,
       enabled: reveal.enabled,
       showActivationControl,
+      columnSpan: cubeFaceCardColumnSpan(node),
     });
   });
 
-  return { cards, menuEntries };
+  return { cards: orderCubeFaceMasonryCards(cards, nodes, graph), menuEntries };
+}
+
+/** Match Substitute's upstream-first card order, then pin semantic prompts above masonry. */
+function orderCubeFaceMasonryCards(
+  cards: readonly CubeFaceCardDecision[],
+  nodes: readonly ComfyNode[],
+  graph: ComfyGraph | undefined,
+): CubeFaceCardDecision[] {
+  const graphOrder = new Map(orderNodesUpstreamFirst(nodes, graph).map((id, index) => [id, index]));
+  return cards
+    .map((card, index) => ({
+      card,
+      index,
+      priority: cubeFaceCardMasonryPriority(card.node),
+      graphIndex: graphOrder.get(card.id) ?? index,
+    }))
+    .sort(
+      (left, right) =>
+        left.priority - right.priority ||
+        left.graphIndex - right.graphIndex ||
+        left.index - right.index,
+    )
+    .map(({ card }) => card);
+}
+
+/** Return a stable complete-graph order so hidden intermediaries retain dependency chronology. */
+function orderNodesUpstreamFirst(
+  nodes: readonly ComfyNode[],
+  graph: ComfyGraph | undefined,
+): string[] {
+  const nodeIds = nodes.map((node, index) => nodeId(node, index));
+  const nodesById = new Map(nodes.map((node, index) => [nodeId(node, index), node]));
+  const inDegree = new Map(nodeIds.map((id) => [id, 0]));
+  const dependents = new Map(nodeIds.map((id) => [id, new Set<string>()]));
+
+  for (const [targetId, node] of nodesById) {
+    for (const originId of linkedOriginNodeIds(node, graph)) {
+      const sourceId = String(originId);
+      if (!nodesById.has(sourceId) || sourceId === targetId) continue;
+      const downstream = dependents.get(sourceId);
+      if (!downstream || downstream.has(targetId)) continue;
+      downstream.add(targetId);
+      inDegree.set(targetId, (inDegree.get(targetId) ?? 0) + 1);
+    }
+  }
+
+  const queue = nodeIds.filter((id) => inDegree.get(id) === 0);
+  const ordered: string[] = [];
+  const orderedIds = new Set<string>();
+  while (queue.length > 0) {
+    const currentId = queue.shift();
+    if (!currentId) continue;
+    ordered.push(currentId);
+    orderedIds.add(currentId);
+    for (const dependentId of dependents.get(currentId) ?? []) {
+      const remaining = (inDegree.get(dependentId) ?? 0) - 1;
+      inDegree.set(dependentId, remaining);
+      if (remaining === 0) queue.push(dependentId);
+    }
+  }
+
+  return [...ordered, ...nodeIds.filter((id) => !orderedIds.has(id))];
+}
+
+/** Return a stable string identifier even when a host node has not received an id yet. */
+function nodeId(node: ComfyNode, index: number): string {
+  return String(node.id ?? index);
+}
+
+/** Return source node identifiers for every resolvable incoming connection on one card. */
+function linkedOriginNodeIds(node: ComfyNode, graph: ComfyGraph | undefined): GraphId[] {
+  const ownerGraph = graph ?? node.graph;
+  if (!ownerGraph) return [];
+  return (node.inputs ?? []).flatMap((input) =>
+    inputLinkIds(input).flatMap((linkId) => {
+      const link = resolveGraphLink(ownerGraph, linkId);
+      const originId = link?.origin_id ?? link?.origin;
+      return originId === null || originId === undefined ? [] : [originId];
+    }),
+  );
+}
+
+/** Normalize Comfy's singular and plural input-link shapes into one stable sequence. */
+function inputLinkIds(input: { link?: GraphId | null; links?: GraphId[] | null }): GraphId[] {
+  return [
+    ...(input.links ?? []),
+    ...(input.link === null || input.link === undefined ? [] : [input.link]),
+  ];
+}
+
+/** Resolve one host graph link without coupling the ordering policy to a graph implementation. */
+function resolveGraphLink(graph: ComfyGraph, id: GraphId): ComfyLink | null {
+  const fromMethod = graph.getLink?.(id);
+  if (fromMethod) return fromMethod;
+  const links = graph.links ?? graph._links;
+  if (links instanceof Map) return links.get(id) ?? null;
+  if (Array.isArray(links)) return links.find((link) => link.id === id) ?? null;
+  return links?.[String(id)] ?? null;
 }

@@ -208,6 +208,112 @@ describe('CubeFaceCardPolicy', () => {
       { id: 'sampler', label: 'KSampler', revealed: false },
     ]);
   });
+
+  test('double-spans exactly one semantic prompt editor while keeping ordinary multiline text narrow', () => {
+    const state = createDefaultCubeSurfaceState();
+    const prompt = node('positive', 'CLIPTextEncode', {
+      widgets: [{ name: 'text', type: 'customtext' }],
+      title: 'Positive prompt',
+    });
+    const note = node('notes', 'Notes', {
+      widgets: [{ name: 'text', type: 'customtext' }],
+      title: 'Notes',
+    });
+
+    const cards = resolveCubeFaceCardPresentation([prompt, note], state).cards;
+
+    expect(cards.map(({ id, columnSpan }) => ({ id, columnSpan }))).toEqual([
+      { id: 'positive', columnSpan: 2 },
+      { id: 'notes', columnSpan: 1 },
+    ]);
+  });
+
+  test('uses CONDITIONING flow to recognize an unlabeled standard Comfy prompt editor', () => {
+    const state = createDefaultCubeSurfaceState();
+    const prompt = node('encode', 'CLIPTextEncode', {
+      widgets: [{ name: 'text', type: 'customtext' }],
+      outputs: [{ type: 'CONDITIONING', links: ['conditioning-link'] }],
+    });
+    const sampler = node('sampler', 'KSampler', {
+      inputs: [{ name: 'positive', type: 'CONDITIONING', link: 'conditioning-link' }],
+    });
+    const graph = {
+      _nodes: [prompt, sampler],
+      links: {
+        'conditioning-link': {
+          id: 'conditioning-link',
+          origin_id: 'encode',
+          target_id: 'sampler',
+          target_slot: 0,
+        },
+      },
+    };
+    prompt.graph = graph;
+    sampler.graph = graph;
+
+    expect(decision([prompt], state, 'encode').columnSpan).toBe(2);
+  });
+
+  test('does not promote an ambiguous pair of multiline fields into prompt cards', () => {
+    const state = createDefaultCubeSurfaceState();
+    const ambiguous = node('prompt', 'PromptPair', {
+      title: 'Prompt pair',
+      widgets: [
+        { name: 'first', type: 'customtext' },
+        { name: 'second', type: 'customtext' },
+      ],
+    });
+
+    expect(decision([ambiguous], state, 'prompt').columnSpan).toBe(1);
+  });
+
+  test('pins positive and negative prompts above every ordinary masonry card', () => {
+    const state = createDefaultCubeSurfaceState();
+    const sampler = node('sampler', 'KSampler', {
+      inputs: [{ name: 'model', type: 'MODEL', link: 'scheduled-model-link' }],
+      widgets: [{ name: 'steps' }],
+    });
+    const negative = node('negative', 'CLIPTextEncode', {
+      title: 'Negative prompt',
+      widgets: [{ name: 'text', type: 'customtext' }],
+    });
+    const models = node('models', 'Models', {
+      outputs: [{ name: 'model', type: 'MODEL', links: ['model-link'] }],
+      widgets: [{ name: 'model_name' }],
+    });
+    const schedule = node('schedule', 'SimpleSyrup.ScheduleAndEncodePromptsWithPromptControl', {
+      inputs: [{ name: 'model', type: 'MODEL', link: 'model-link' }],
+      outputs: [{ name: 'model', type: 'MODEL', links: ['scheduled-model-link'] }],
+    });
+    const positive = node('positive', 'CLIPTextEncode', {
+      title: 'Positive prompt',
+      widgets: [{ name: 'text', type: 'customtext' }],
+    });
+    const graph = {
+      _nodes: [sampler, negative, models, positive, schedule],
+      links: {
+        'model-link': {
+          id: 'model-link',
+          origin_id: 'models',
+          target_id: 'schedule',
+          target_slot: 0,
+        },
+        'scheduled-model-link': {
+          id: 'scheduled-model-link',
+          origin_id: 'schedule',
+          target_id: 'sampler',
+          target_slot: 0,
+        },
+      },
+    };
+    expect(
+      resolveCubeFaceCardPresentation(
+        [sampler, negative, models, positive, schedule],
+        state,
+        graph,
+      ).cards.map(({ id }) => id),
+    ).toEqual(['positive', 'negative', 'models', 'sampler']);
+  });
 });
 
 /** Build one narrowly typed graph node fixture. */

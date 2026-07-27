@@ -40,6 +40,16 @@ export const CUBE_PREVIEW_SECTION_INSET = 6;
 /** Reserve the shared title-row height used to anchor native output ports. */
 export const CUBE_PREVIEW_TITLE_LINE_HEIGHT = 20;
 
+/** Inset every canvas preview section consistently from its rail boundary. */
+export function resolveCubePreviewContentRect(area: CubePreviewRect): CubePreviewRect {
+  return {
+    x: area.x + CUBE_PREVIEW_SECTION_INSET,
+    y: area.y + CUBE_PREVIEW_SECTION_INSET,
+    width: Math.max(1, area.width - CUBE_PREVIEW_SECTION_INSET * 2),
+    height: Math.max(1, area.height - CUBE_PREVIEW_SECTION_INSET * 2),
+  };
+}
+
 /** Return every boundary output in stable graph order. */
 export function resolveCubeOutputSections(
   snapshot: CubePreviewSnapshot,
@@ -91,12 +101,7 @@ export function resolveCubePreviewTitleAnchors(
   area: CubePreviewRect,
   sectionCount: number,
 ): readonly number[] {
-  const content = {
-    x: area.x + CUBE_PREVIEW_SECTION_INSET,
-    y: area.y + CUBE_PREVIEW_SECTION_INSET,
-    width: Math.max(1, area.width - CUBE_PREVIEW_SECTION_INSET * 2),
-    height: Math.max(1, area.height - CUBE_PREVIEW_SECTION_INSET * 2),
-  };
+  const content = resolveCubePreviewContentRect(area);
   return dividePreviewIntoHorizontalSegments(content, sectionCount, CUBE_PREVIEW_SECTION_GAP).map(
     (section) => section.y + CUBE_PREVIEW_TITLE_LINE_HEIGHT / 2,
   );

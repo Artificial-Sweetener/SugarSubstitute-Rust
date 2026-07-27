@@ -18,7 +18,7 @@ import { CUBE_CANVAS_ACTIVATION_SIZE } from './CubeCanvasActivationControl.js';
 import { CUBE_RESIZE_EDGES } from '../cube/geometry/CubeResizeGeometry.js';
 import { resolveCubeFaceCardPresentation, } from './CubeFaceCardPolicy.js';
 import { measureCubeFaceNodeBodyHeight } from './CubeFaceNodeMeasurement.js';
-import { computeCubeMasonry, orderCubeSurfaceCards } from './CubeMasonryLayout.js';
+import { computeCubeMasonry } from './CubeMasonryLayout.js';
 import { cubeMinimumSize, resolveCubeSurfaceMinimumHeight } from './CubeSurfaceMinimumHeight.js';
 import { resolveCubeSurfaceCardSpacing } from './CubeSurfaceSpacing.js';
 import { layoutCubeCanvasChrome } from './CubeCanvasChromeLayout.js';
@@ -51,8 +51,7 @@ export function computeCubeCanvasLayout(node, state, titleHeight, titlebarAction
     const preview = previewWidth > 0
         ? rect(previewRight - previewWidth, content.y, previewWidth, content.height)
         : null;
-    const orderedNodes = orderNodes(node.subgraph._nodes, state.nodeOrder);
-    const presentation = resolveCubeFaceCardPresentation(orderedNodes, state);
+    const presentation = resolveCubeFaceCardPresentation(node.subgraph._nodes, state, node.subgraph);
     const chrome = layoutCubeCanvasChrome(header, {
         showCardMenu: presentation.menuEntries.length > 0,
         titlebarActionKeys,
@@ -66,6 +65,7 @@ export function computeCubeCanvasLayout(node, state, titleHeight, titlebarAction
     const masonryLayout = computeCubeMasonry(measuredCards.map((card) => ({
         id: card.id,
         height: card.bodyHeight + titleHeight,
+        ...(card.columnSpan === undefined ? {} : { columnSpan: card.columnSpan }),
         sourceX: Number(card.node.pos?.[0]),
         sourceY: Number(card.node.pos?.[1]),
         sourceWidth: Number(card.node.size?.[0]),
@@ -138,13 +138,6 @@ export function containsCubeCanvasPoint(target, point) {
         point[0] <= target.x + target.width &&
         point[1] >= target.y &&
         point[1] <= target.y + target.height);
-}
-/** Reconcile real internal node objects with persisted card order. */
-function orderNodes(nodes, persistedOrder) {
-    const byId = new Map(nodes.map((node, index) => [String(node.id ?? index), node]));
-    return orderCubeSurfaceCards(persistedOrder, [...byId.keys()])
-        .map((id) => byId.get(id))
-        .filter((node) => node !== undefined);
 }
 /** Build a finite rectangle without allowing invalid host geometry inward. */
 function rect(x, y, width, height) {

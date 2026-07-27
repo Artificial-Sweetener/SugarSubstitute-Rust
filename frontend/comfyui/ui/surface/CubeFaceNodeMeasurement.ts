@@ -17,10 +17,8 @@
 
 import { isRecord } from '../types/common.js';
 import type { ComfyNode, ComfyWidget } from '../types/graph.js';
-import {
-  CUBE_FACE_WIDGET_GUTTER,
-  cubeFaceNodeHasVisibleWidgets,
-} from './CubeFaceNodePresentationPolicy.js';
+import { cubeFaceNodeHasVisibleWidgets } from './CubeFaceNodePresentationPolicy.js';
+import { cubeFacePromptWidgetHeight } from './CubeFacePromptTextarea.js';
 
 const HEADER_ONLY_BODY_HEIGHT = 1;
 const LEGACY_SLOT_HEIGHT = 20;
@@ -39,7 +37,7 @@ export function measureCubeFaceNodeBodyHeight(node: ComfyNode): number {
   if (!cubeFaceNodeHasVisibleWidgets(node)) return HEADER_ONLY_BODY_HEIGHT;
 
   const width = positiveNumber(node.size?.[0]) ?? 200;
-  let widgetsHeight = LEGACY_WIDGET_PADDING + CUBE_FACE_WIDGET_GUTTER;
+  let widgetsHeight = LEGACY_WIDGET_PADDING;
   for (const widget of visibleWidgets(node)) {
     widgetsHeight += measureWidgetHeight(widget, node, width) + LEGACY_WIDGET_GAP;
   }
@@ -62,6 +60,10 @@ function visibleWidgets(node: ComfyNode): MeasurableWidget[] {
 
 /** Measure one native widget through its current Comfy sizing primitive. */
 function measureWidgetHeight(widget: MeasurableWidget, node: ComfyNode, width: number): number {
+  const promptHeight = cubeFacePromptWidgetHeight(widget);
+  if (promptHeight !== null) return promptHeight;
+  const computedHeight = positiveNumber(widget.computedHeight);
+  if (computedHeight !== null) return computedHeight;
   if (typeof widget.computeSize === 'function') {
     const size = widget.computeSize(width);
     if (Array.isArray(size)) return positiveNumber(size[1]) ?? LEGACY_WIDGET_HEIGHT;

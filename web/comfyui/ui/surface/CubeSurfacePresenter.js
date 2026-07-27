@@ -227,6 +227,7 @@ export class CubeSurfacePresenter {
                 metadata: requireCubeIdentity(node),
                 chromeActions: this.#chromeActions,
                 nodes: node.subgraph._nodes,
+                graph: node.subgraph,
                 state,
                 onStateChange: (nextState) => {
                     replaceRecord(surfaceState, serializeCubeSurfaceState(nextState));

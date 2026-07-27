@@ -18,6 +18,7 @@
 import { isRecord } from '../types/common.js';
 import type { UnknownRecord } from '../types/common.js';
 import type { ComfyNode } from '../types/graph.js';
+import { findCubeFacePromptWidget } from './CubeFacePromptPolicy.js';
 
 interface RememberedNodeProperty {
   key: 'flags' | 'widgets_start_y' | 'widgets_up';
@@ -28,6 +29,11 @@ interface RememberedNodeProperty {
 /** Reserve one normal LiteGraph slot row above slot-suppressed Cube-face widgets. */
 export const CUBE_FACE_WIDGET_GUTTER = 20;
 const NATIVE_WIDGET_INSET = 2;
+
+/** Reserve a hidden-slot row only for widgets that do not provide their own native top placement. */
+export function cubeFaceNodeWidgetGutter(node: ComfyNode): number {
+  return findCubeFacePromptWidget(node) ? 0 : CUBE_FACE_WIDGET_GUTTER;
+}
 
 /** Create face flags that retain native state except graph collapse. */
 function createCubeFaceFlags(flags: unknown): UnknownRecord {
@@ -55,8 +61,8 @@ export function withCubeFaceNodePresentation<Result>(
   const remembered = rememberNodeProperties(node, ['flags', 'widgets_start_y', 'widgets_up']);
   node.flags = createCubeFaceFlags(node.flags);
   Reflect.set(node, 'widgets_up', true);
-  // Preserve the first native slot row as spacing when Cube cards suppress their graph slots.
-  Reflect.set(node, 'widgets_start_y', CUBE_FACE_WIDGET_GUTTER + NATIVE_WIDGET_INSET);
+  // Preserve the first native slot row only when its widget does not already own that top spacing.
+  Reflect.set(node, 'widgets_start_y', cubeFaceNodeWidgetGutter(node) + NATIVE_WIDGET_INSET);
   try {
     return operation();
   } finally {

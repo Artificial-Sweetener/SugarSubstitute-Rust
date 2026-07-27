@@ -101,6 +101,7 @@ export function drawNativeLiteGraphCubeCard(canvasRenderer, node, context, optio
     const presentationNode = node;
     const drawSlots = presentationNode.drawSlots;
     const drawCollapsedSlots = presentationNode.drawCollapsedSlots;
+    const titleBox = maskSubgraphTitleBox(presentationNode);
     const titleButtons = presentationNode.title_buttons;
     const previews = maskPreviewMedia(presentationNode);
     const originalSize = applyPresentationSize(presentationNode, options.presentationWidth, options.presentationHeight);
@@ -127,10 +128,99 @@ export function drawNativeLiteGraphCubeCard(canvasRenderer, node, context, optio
         }
         presentationNode.drawSlots = drawSlots;
         presentationNode.drawCollapsedSlots = drawCollapsedSlots;
+        restoreSubgraphTitleBox(presentationNode, titleBox);
         presentationNode.title_buttons = titleButtons;
         restorePreviewMedia(presentationNode, previews);
         restorePresentationTheme(presentationNode, colors);
         restorePresentationSize(presentationNode, originalSize, context);
+    }
+}
+const SUBGRAPH_TYPE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+/** Replace the subgraph workflow glyph with the standard Cube-face title decoration. */
+function maskSubgraphTitleBox(node) {
+    if (!hasSubgraphTitleBox(node))
+        return null;
+    const presentation = {
+        drawTitleBoxOwned: Object.prototype.hasOwnProperty.call(node, 'drawTitleBox'),
+        drawTitleBox: node.drawTitleBox,
+        onDrawTitleBoxOwned: Object.prototype.hasOwnProperty.call(node, 'onDrawTitleBox'),
+        onDrawTitleBox: node.onDrawTitleBox,
+        skipSubgraphButtonOwned: Object.prototype.hasOwnProperty.call(node, 'skip_subgraph_button'),
+        skipSubgraphButton: node.skip_subgraph_button,
+    };
+    node.drawTitleBox = drawCubeFaceTitleBox;
+    node.skip_subgraph_button = true;
+    return presentation;
+}
+/** Draw the unobtrusive three-line title decoration used by Cube-face node cards. */
+function drawCubeFaceTitleBox(...args) {
+    const context = args[0];
+    if (!isTitleBoxContext(context))
+        return;
+    const titleHeight = readTitleBoxHeight(args[1]);
+    context.save();
+    context.strokeStyle = 'rgba(255, 255, 255, 0.75)';
+    context.lineWidth = 1.5;
+    context.lineCap = 'round';
+    for (const y of [-17, -13, -9]) {
+        context.beginPath();
+        context.moveTo(10, y + titleHeight - 24);
+        context.lineTo(20, y + titleHeight - 24);
+        context.stroke();
+    }
+    context.restore();
+}
+/** Validate the narrow Canvas API surface used by the face-card title decoration. */
+function isTitleBoxContext(value) {
+    if (typeof value !== 'object' || value === null)
+        return false;
+    return ('save' in value &&
+        typeof value.save === 'function' &&
+        'restore' in value &&
+        typeof value.restore === 'function' &&
+        'beginPath' in value &&
+        typeof value.beginPath === 'function' &&
+        'moveTo' in value &&
+        typeof value.moveTo === 'function' &&
+        'lineTo' in value &&
+        typeof value.lineTo === 'function' &&
+        'stroke' in value &&
+        typeof value.stroke === 'function');
+}
+/** Read LiteGraph's title height without coupling to its private draw-options type. */
+function readTitleBoxHeight(options) {
+    if (typeof options !== 'object' || options === null || !('title_height' in options))
+        return 24;
+    const titleHeight = Number(options.title_height);
+    return Number.isFinite(titleHeight) && titleHeight > 0 ? titleHeight : 24;
+}
+/** Identify Comfy subgraph nodes across host versions before suppressing their workflow glyph. */
+function hasSubgraphTitleBox(node) {
+    if (node.isSubgraphNode?.())
+        return true;
+    if ('subgraph' in node)
+        return true;
+    if (node.title_buttons?.some((button) => typeof button === 'object' &&
+        button !== null &&
+        'name' in button &&
+        button.name === 'enter_subgraph') === true) {
+        return true;
+    }
+    return typeof node.type === 'string' && SUBGRAPH_TYPE_ID.test(node.type);
+}
+/** Restore the exact title-box method ownership after one projected card draw. */
+function restoreSubgraphTitleBox(node, presentation) {
+    if (!presentation)
+        return;
+    Reflect.set(node, 'drawTitleBox', presentation.drawTitleBox);
+    if (!presentation.drawTitleBoxOwned)
+        Reflect.deleteProperty(node, 'drawTitleBox');
+    Reflect.set(node, 'onDrawTitleBox', presentation.onDrawTitleBox);
+    if (!presentation.onDrawTitleBoxOwned)
+        Reflect.deleteProperty(node, 'onDrawTitleBox');
+    Reflect.set(node, 'skip_subgraph_button', presentation.skipSubgraphButton);
+    if (!presentation.skipSubgraphButtonOwned) {
+        Reflect.deleteProperty(node, 'skip_subgraph_button');
     }
 }
 /** Apply the parent Cube colors only while Comfy draws one projected card. */

@@ -133,6 +133,7 @@ export class ComfyLiteGraphCubeNodeHost {
   readonly #domWidgets: ComfyLiteGraphCubeDomWidgetHost;
   readonly #hooks = new Map<CubeNode, MountedDrawHooks>();
   #enabled = false;
+  #promptGeometryQueued = false;
   #items: RenderItem[] = [];
   #openCardMenu: CubeNode | null = null;
 
@@ -171,6 +172,7 @@ export class ComfyLiteGraphCubeNodeHost {
     this.#domWidgets = new ComfyLiteGraphCubeDomWidgetHost({
       document: options.document,
       canvas: options.canvas,
+      onGeometryChange: () => this.#requestPromptGeometryReflow(),
       ...(options.logger ? { logger: options.logger } : {}),
     });
     const widgetInteraction = new ComfyLiteGraphWidgetInteraction({
@@ -402,6 +404,16 @@ export class ComfyLiteGraphCubeNodeHost {
   /** Request one native canvas repaint. */
   #refresh(): void {
     this.#canvas.setDirty?.(true, true);
+  }
+
+  /** Reflow after native prompt input returns control to Comfy's own widget callback. */
+  #requestPromptGeometryReflow(): void {
+    if (this.#promptGeometryQueued) return;
+    this.#promptGeometryQueued = true;
+    queueMicrotask(() => {
+      this.#promptGeometryQueued = false;
+      if (this.#enabled) this.sync();
+    });
   }
 }
 

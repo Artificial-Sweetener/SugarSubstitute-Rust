@@ -329,7 +329,7 @@ export function ensureCubeSurfaceStyles(documentRef) {
       flex: 1 1 auto;
       min-width: 0;
       min-height: 0;
-      gap: 0.75rem;
+      gap: 0.5rem;
       overflow: clip;
       isolation: isolate;
       width: calc(
@@ -444,10 +444,6 @@ export function ensureCubeSurfaceStyles(documentRef) {
       border-left: 0;
       padding-top: 0.75rem;
       --sugarcubes-cube-preview-edge-inset: 0;
-    }
-    .sugarcubes-cube-face__content[data-preview-layout="rail"]
-      .sugarcubes-cube-face__preview {
-      transform: translateX(0.375rem);
     }
     .sugarcubes-cube-face__preview-media {
       position: absolute;

@@ -21,8 +21,7 @@ import { CubeCanvasChromeRenderer, } from './CubeCanvasChromeRenderer.js';
 import { drawComfyPrimeIcon } from './ComfyPrimeIcons.js';
 import { CubeCanvasPortRenderer } from './CubeCanvasPortRenderer.js';
 import { deriveCubeBackdropColor, resolveCubeNodeColorTheme, } from './CubeNodeColorTheme.js';
-import { CUBE_PREVIEW_EDGE_INSET } from './CubePreviewRailGeometry.js';
-import { CUBE_PREVIEW_SECTION_GAP, CUBE_PREVIEW_TITLE_LINE_HEIGHT, dividePreviewIntoHorizontalSegments, resolveCubeCanvasPreviewSections, } from './CubePreviewSections.js';
+import { CUBE_PREVIEW_SECTION_GAP, CUBE_PREVIEW_TITLE_LINE_HEIGHT, dividePreviewIntoHorizontalSegments, resolveCubePreviewContentRect, resolveCubeCanvasPreviewSections, } from './CubePreviewSections.js';
 /** Own only visual composition for legacy canvas Cube surfaces. */
 export class ComfyLiteGraphCubeRenderer {
     #host;
@@ -113,12 +112,7 @@ export class ComfyLiteGraphCubeRenderer {
             context.fillText('No preview available', preview.x + 6, preview.y + 6);
             return;
         }
-        const sections = dividePreviewIntoHorizontalSegments({
-            x: preview.x + CUBE_PREVIEW_EDGE_INSET,
-            y: preview.y,
-            width: Math.max(1, preview.width - CUBE_PREVIEW_EDGE_INSET * 2),
-            height: Math.max(1, preview.height),
-        }, outputSections.length, CUBE_PREVIEW_SECTION_GAP);
+        const sections = dividePreviewIntoHorizontalSegments(resolveCubePreviewContentRect(preview), outputSections.length, CUBE_PREVIEW_SECTION_GAP);
         for (const [index, output] of outputSections.entries()) {
             const section = sections[index];
             if (!section)

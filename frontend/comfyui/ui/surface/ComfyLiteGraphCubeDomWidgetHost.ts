@@ -17,6 +17,12 @@
 
 import type { ComfyNode, ComfyWidget } from '../types/graph.js';
 import type { CubeCanvasCard, CubeCanvasLayout } from './CubeCanvasLayout.js';
+import { findCubeFacePromptWidget } from './CubeFacePromptPolicy.js';
+import {
+  clearCubeFacePromptWidgetHeight,
+  fitCubeFacePromptTextarea,
+  setCubeFacePromptWidgetHeight,
+} from './CubeFacePromptTextarea.js';
 
 export interface LiteGraphCubeDomWidgetCanvas {
   canvas: HTMLCanvasElement;
@@ -35,6 +41,7 @@ export interface ComfyLiteGraphCubeDomWidgetHostOptions {
   document: Document;
   canvas: LiteGraphCubeDomWidgetCanvas;
   logger?: Pick<Console, 'warn'>;
+  onGeometryChange?(): void;
 }
 
 interface NativeDomWidget extends ComfyWidget {
@@ -52,6 +59,17 @@ interface MountedNativeWidget {
   element: HTMLElement;
   origin: NativeElementOrigin;
   wrapper: HTMLDivElement;
+  promptTextarea: PromptTextareaPresentation | null;
+}
+
+interface PromptTextareaPresentation {
+  widget: NativeDomWidget;
+  input: HTMLTextAreaElement;
+  onInput(): void;
+  height: string;
+  heightPriority: string;
+  overflowY: string;
+  overflowYPriority: string;
 }
 
 interface WidgetGeometry {
@@ -61,6 +79,7 @@ interface WidgetGeometry {
   height: number;
   scale: number;
   disabled: boolean;
+  promptWidget: NativeDomWidget | null;
 }
 
 const DEFAULT_WIDGET_MARGIN = 10;
@@ -71,6 +90,7 @@ export class ComfyLiteGraphCubeDomWidgetHost {
   readonly #document: Document;
   readonly #canvas: LiteGraphCubeDomWidgetCanvas;
   readonly #logger: Pick<Console, 'warn'> | null;
+  readonly #onGeometryChange: () => void;
   readonly #mounted = new Map<HTMLElement, MountedNativeWidget>();
   #root: HTMLDivElement | null = null;
 
@@ -79,6 +99,7 @@ export class ComfyLiteGraphCubeDomWidgetHost {
     this.#document = options.document;
     this.#canvas = options.canvas;
     this.#logger = options.logger ?? null;
+    this.#onGeometryChange = options.onGeometryChange ?? (() => undefined);
   }
 
   /** Reconcile exact native elements with the currently revealed Cube cards. */
@@ -95,6 +116,7 @@ export class ComfyLiteGraphCubeDomWidgetHost {
     for (const [element, geometry] of desired) {
       const mounted = this.#mounted.get(element) ?? this.#mount(element);
       this.#reclaimElement(mounted);
+      this.#reconcilePromptTextarea(mounted, geometry.promptWidget);
       this.#position(mounted.wrapper, geometry);
     }
     this.#removeEmptyRoot();
@@ -163,6 +185,7 @@ export class ComfyLiteGraphCubeDomWidgetHost {
       height: Math.max(1, computedHeight - margin * 2),
       scale,
       disabled: this.#canvas.read_only === true || widget.computedDisabled === true,
+      promptWidget: findCubeFacePromptWidget(card.node) === widget ? widget : null,
     };
   }
 
@@ -183,7 +206,7 @@ export class ComfyLiteGraphCubeDomWidgetHost {
     element.classList.add('h-full', 'w-full');
     wrapper.append(element);
     this.#ensureRoot().append(wrapper);
-    const mounted = { element, origin, wrapper };
+    const mounted: MountedNativeWidget = { element, origin, wrapper, promptTextarea: null };
     this.#mounted.set(element, mounted);
     return mounted;
   }
@@ -208,6 +231,7 @@ export class ComfyLiteGraphCubeDomWidgetHost {
   /** Restore one exact native element to its prior DOM owner and class state. */
   #restore(mounted: MountedNativeWidget): void {
     const { element, origin, wrapper } = mounted;
+    this.#removePromptTextareaPresentation(mounted);
     if (!origin.hadFullHeight) element.classList.remove('h-full');
     if (!origin.hadFullWidth) element.classList.remove('w-full');
     if (origin.parent) {
@@ -219,6 +243,68 @@ export class ComfyLiteGraphCubeDomWidgetHost {
     }
     wrapper.remove();
     this.#mounted.delete(element);
+  }
+
+  /** Install Cube-only autosizing for a semantic prompt textarea and restore it on exit. */
+  #reconcilePromptTextarea(mounted: MountedNativeWidget, widget: NativeDomWidget | null): void {
+    if (!widget || !this.#isTextarea(mounted.element)) {
+      this.#removePromptTextareaPresentation(mounted);
+      return;
+    }
+    const existing = mounted.promptTextarea;
+    if (existing?.widget === widget) {
+      this.#fitPromptTextarea(existing, false);
+      return;
+    }
+    this.#removePromptTextareaPresentation(mounted);
+    const input = mounted.element;
+    const presentation: PromptTextareaPresentation = {
+      widget,
+      input,
+      onInput: () => this.#fitPromptTextarea(presentation, true),
+      height: input.style.height,
+      heightPriority: input.style.getPropertyPriority('height'),
+      overflowY: input.style.overflowY,
+      overflowYPriority: input.style.getPropertyPriority('overflow-y'),
+    };
+    input.addEventListener('input', presentation.onInput);
+    mounted.promptTextarea = presentation;
+    this.#fitPromptTextarea(presentation, true);
+  }
+
+  /** Convert a textarea's content height into the complete native DOM-widget allocation. */
+  #fitPromptTextarea(presentation: PromptTextareaPresentation, notify: boolean): void {
+    const contentHeight = fitCubeFacePromptTextarea(presentation.input);
+    const margin = Math.max(0, finiteNumber(presentation.widget.margin) ?? DEFAULT_WIDGET_MARGIN);
+    const changed = setCubeFacePromptWidgetHeight(presentation.widget, contentHeight + margin * 2);
+    if (notify && changed) this.#onGeometryChange();
+  }
+
+  /** Release one prompt-only listener, transient height, and inline style ownership. */
+  #removePromptTextareaPresentation(mounted: MountedNativeWidget): void {
+    const presentation = mounted.promptTextarea;
+    if (!presentation) return;
+    presentation.input.removeEventListener('input', presentation.onInput);
+    restoreStyleProperty(
+      presentation.input.style,
+      'height',
+      presentation.height,
+      presentation.heightPriority,
+    );
+    restoreStyleProperty(
+      presentation.input.style,
+      'overflow-y',
+      presentation.overflowY,
+      presentation.overflowYPriority,
+    );
+    clearCubeFacePromptWidgetHeight(presentation.widget);
+    mounted.promptTextarea = null;
+  }
+
+  /** Narrow one mounted element to a textarea from this active document. */
+  #isTextarea(element: HTMLElement): element is HTMLTextAreaElement {
+    const textareaType = this.#document.defaultView?.HTMLTextAreaElement;
+    return textareaType !== undefined && element instanceof textareaType;
   }
 
   /** Create the pointer-transparent overlay without intercepting graph input. */
@@ -241,6 +327,17 @@ export class ComfyLiteGraphCubeDomWidgetHost {
     this.#root?.remove();
     this.#root = null;
   }
+}
+
+/** Restore exact inline style value and priority without leaving a blank owned property behind. */
+function restoreStyleProperty(
+  style: CSSStyleDeclaration,
+  property: string,
+  value: string,
+  priority: string,
+): void {
+  if (value) style.setProperty(property, value, priority);
+  else style.removeProperty(property);
 }
 
 /** Read one finite dynamic host number without letting invalid values inward. */

@@ -17,6 +17,8 @@
 import { isRecord } from '../types/common.js';
 import { findVueComponent } from './ComfyVueTree.js';
 import { createCubeFaceNodeData, cubeFaceNodeHasVisibleWidgets, } from './CubeFaceNodePresentationPolicy.js';
+import { findCubeFacePromptWidget } from './CubeFacePromptPolicy.js';
+import { fitCubeFacePromptTextarea } from './CubeFacePromptTextarea.js';
 /** Own native Vue mounts while leaving component rendering and widget UI to Comfy. */
 export class ComfyVueNodeCardRenderer {
     #component;
@@ -24,6 +26,7 @@ export class ComfyVueNodeCardRenderer {
     #runtime;
     #mounts = new Set();
     #interactiveRoots = new WeakSet();
+    #promptTextareas = new WeakSet();
     /** Bind the installed Comfy component, application context, and renderer functions. */
     constructor(options) {
         this.#component = options.component;
@@ -80,8 +83,13 @@ export class ComfyVueNodeCardRenderer {
             for (const handle of nativeRoot.querySelectorAll(':scope > [role="button"]')) {
                 handle.hidden = true;
             }
-            if (node.isSubgraphNode?.())
+            const collapseButton = nativeRoot.querySelector('[data-testid="node-collapse-button"]');
+            if (collapseButton)
+                hideComponentRoot(collapseButton);
+            if (node.isSubgraphNode?.()) {
+                hideNativeSubgraphIcon(nativeRoot);
                 hideNativeSubgraphFooter(nativeRoot);
+            }
         }
         const targetRecord = isRecord(target) ? target : {};
         for (const componentName of [
@@ -99,6 +107,7 @@ export class ComfyVueNodeCardRenderer {
         }
         if (nativeRoot)
             reconcileNativeBody(nativeRoot, node);
+        this.#fitPromptTextareas(target, node);
         const widgetsVNode = findVueComponent(targetRecord._vnode, 'NodeWidgets');
         const widgetsRoot = resolveComponentElement(widgetsVNode);
         if (widgetsRoot && !this.#interactiveRoots.has(widgetsRoot)) {
@@ -108,6 +117,21 @@ export class ComfyVueNodeCardRenderer {
             widgetsRoot.addEventListener('wheel', stopAtWidgets);
             widgetsRoot.addEventListener('contextmenu', stopAtWidgets);
             this.#interactiveRoots.add(widgetsRoot);
+        }
+    }
+    /** Let only semantic prompt editors grow their card instead of scrolling in place. */
+    #fitPromptTextareas(target, node) {
+        if (!findCubeFacePromptWidget(node))
+            return;
+        for (const textarea of target.querySelectorAll('textarea')) {
+            const fit = () => {
+                fitCubeFacePromptTextarea(textarea);
+            };
+            if (!this.#promptTextareas.has(textarea)) {
+                textarea.addEventListener('input', fit);
+                this.#promptTextareas.add(textarea);
+            }
+            fit();
         }
     }
 }
@@ -136,6 +160,13 @@ function hideNativeSubgraphFooter(nativeRoot) {
         nativeRoot.querySelector(':scope > .isolate.-z-1.-mt-5');
     if (footer)
         hideComponentRoot(footer);
+}
+/** Hide the native subgraph glyph from one projected Cube-face card header. */
+function hideNativeSubgraphIcon(nativeRoot) {
+    for (const element of nativeRoot.querySelectorAll('*')) {
+        if (element.classList.contains('icon-[comfy--workflow]'))
+            hideComponentRoot(element);
+    }
 }
 /** Hide one Comfy-owned presentation root without replacing its renderer. */
 function hideComponentRoot(element) {

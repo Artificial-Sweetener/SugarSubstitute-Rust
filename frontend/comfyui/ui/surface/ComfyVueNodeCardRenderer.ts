@@ -24,6 +24,8 @@ import {
   createCubeFaceNodeData,
   cubeFaceNodeHasVisibleWidgets,
 } from './CubeFaceNodePresentationPolicy.js';
+import { findCubeFacePromptWidget } from './CubeFacePromptPolicy.js';
+import { fitCubeFacePromptTextarea } from './CubeFacePromptTextarea.js';
 import type { NativeNodeCardMount, NativeNodeCardRenderer } from './NativeNodeCardRenderer.js';
 
 export interface ComfyVueNodeCardRendererOptions {
@@ -39,6 +41,7 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
   readonly #runtime: ComfyVueNodeRenderRuntime;
   readonly #mounts = new Set<NativeNodeCardMount>();
   readonly #interactiveRoots = new WeakSet<HTMLElement>();
+  readonly #promptTextareas = new WeakSet<HTMLTextAreaElement>();
 
   /** Bind the installed Comfy component, application context, and renderer functions. */
   constructor(options: ComfyVueNodeCardRendererOptions) {
@@ -96,7 +99,14 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
       for (const handle of nativeRoot.querySelectorAll<HTMLElement>(':scope > [role="button"]')) {
         handle.hidden = true;
       }
-      if (node.isSubgraphNode?.()) hideNativeSubgraphFooter(nativeRoot);
+      const collapseButton = nativeRoot.querySelector<HTMLElement>(
+        '[data-testid="node-collapse-button"]',
+      );
+      if (collapseButton) hideComponentRoot(collapseButton);
+      if (node.isSubgraphNode?.()) {
+        hideNativeSubgraphIcon(nativeRoot);
+        hideNativeSubgraphFooter(nativeRoot);
+      }
     }
 
     const targetRecord: UnknownRecord = isRecord(target) ? target : {};
@@ -113,6 +123,7 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
       if (element) hideComponentRoot(element);
     }
     if (nativeRoot) reconcileNativeBody(nativeRoot, node);
+    this.#fitPromptTextareas(target, node);
 
     const widgetsVNode = findVueComponent(targetRecord._vnode, 'NodeWidgets');
     const widgetsRoot = resolveComponentElement(widgetsVNode);
@@ -123,6 +134,21 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
       widgetsRoot.addEventListener('wheel', stopAtWidgets);
       widgetsRoot.addEventListener('contextmenu', stopAtWidgets);
       this.#interactiveRoots.add(widgetsRoot);
+    }
+  }
+
+  /** Let only semantic prompt editors grow their card instead of scrolling in place. */
+  #fitPromptTextareas(target: HTMLElement, node: ComfyNode): void {
+    if (!findCubeFacePromptWidget(node)) return;
+    for (const textarea of target.querySelectorAll<HTMLTextAreaElement>('textarea')) {
+      const fit = (): void => {
+        fitCubeFacePromptTextarea(textarea);
+      };
+      if (!this.#promptTextareas.has(textarea)) {
+        textarea.addEventListener('input', fit);
+        this.#promptTextareas.add(textarea);
+      }
+      fit();
     }
   }
 }
@@ -153,6 +179,13 @@ function hideNativeSubgraphFooter(nativeRoot: HTMLElement): void {
     testIdButton?.parentElement ??
     nativeRoot.querySelector<HTMLElement>(':scope > .isolate.-z-1.-mt-5');
   if (footer) hideComponentRoot(footer);
+}
+
+/** Hide the native subgraph glyph from one projected Cube-face card header. */
+function hideNativeSubgraphIcon(nativeRoot: HTMLElement): void {
+  for (const element of nativeRoot.querySelectorAll<HTMLElement>('*')) {
+    if (element.classList.contains('icon-[comfy--workflow]')) hideComponentRoot(element);
+  }
 }
 
 /** Hide one Comfy-owned presentation root without replacing its renderer. */

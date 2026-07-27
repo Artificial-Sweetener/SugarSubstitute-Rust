@@ -15,14 +15,13 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Compose one Cube face around host-rendered native node cards. */
 
-import type { ComfyNode } from '../types/graph.js';
+import type { ComfyGraph, ComfyNode } from '../types/graph.js';
 import { CubeFaceActionsView } from './CubeFaceActionsView.js';
 import {
   resolveCubeFaceCardPresentation,
   type CubeFaceCardDecision,
 } from './CubeFaceCardPolicy.js';
 import { setCubeFaceCardRevealed, setCubeFaceNodeEnabled } from './CubeFaceCardStateController.js';
-import { orderCubeSurfaceCards } from './CubeMasonryLayout.js';
 import { NativeNodeCardHost } from './NativeNodeCardHost.js';
 import type { NativeNodeCardRenderer } from './NativeNodeCardRenderer.js';
 import type { CubePreviewSnapshot } from './CubePreviewModel.js';
@@ -41,6 +40,7 @@ export interface CubeSurfaceViewOptions {
   metadata?: CubeFaceChromeMetadata;
   chromeActions?: CubeFaceChromeActions | null;
   nodes: readonly ComfyNode[];
+  graph?: ComfyGraph;
   state: CubeSurfaceState;
   onStateChange(state: CubeSurfaceState): void;
   onMinimumHeightChange?(minimumHeight: number): void;
@@ -52,6 +52,7 @@ export class CubeSurfaceView {
   readonly header: HTMLElement;
   readonly #state: CubeSurfaceState;
   readonly #nodes: ComfyNode[];
+  readonly #graph: ComfyGraph | undefined;
   readonly #onStateChange: (state: CubeSurfaceState) => void;
   readonly #onMinimumHeightChange: ((minimumHeight: number) => void) | null;
   readonly #cardHost: NativeNodeCardHost;
@@ -68,8 +69,8 @@ export class CubeSurfaceView {
   /** Build a Cube view without assuming ownership of Comfy's renderer service. */
   constructor(options: CubeSurfaceViewOptions) {
     this.#state = options.state;
-    this.#nodes = orderNodes(options.nodes, options.state.nodeOrder);
-    this.#state.nodeOrder = this.#nodes.map((node) => String(node.id ?? ''));
+    this.#nodes = [...options.nodes];
+    this.#graph = options.graph;
     this.#onStateChange = options.onStateChange;
     this.#onMinimumHeightChange = options.onMinimumHeightChange ?? null;
     this.#cardHost = new NativeNodeCardHost(options.renderer);
@@ -177,7 +178,7 @@ export class CubeSurfaceView {
 
   /** Reconcile exact native card mounts from the shared presentation policy. */
   #renderCards(): void {
-    const presentation = resolveCubeFaceCardPresentation(this.#nodes, this.#state);
+    const presentation = resolveCubeFaceCardPresentation(this.#nodes, this.#state, this.#graph);
     this.#visibleCards = presentation.cards.filter((card) => card.visible);
     this.#cells = this.#cardHost.mount(this.#masonry, this.#visibleCards, (node, enabled) => {
       setCubeFaceNodeEnabled(this.#state, node, enabled);
@@ -198,12 +199,4 @@ export class CubeSurfaceView {
     this.#renderCards();
     this.layout(this.#lastLayoutWidth);
   }
-}
-
-/** Order real internal nodes by persisted Cube surface order. */
-function orderNodes(nodes: readonly ComfyNode[], persistedOrder: readonly string[]): ComfyNode[] {
-  const byId = new Map(nodes.map((node, index) => [String(node.id ?? index), node]));
-  return orderCubeSurfaceCards(persistedOrder, [...byId.keys()])
-    .map((id) => byId.get(id))
-    .filter((node): node is ComfyNode => node !== undefined);
 }
