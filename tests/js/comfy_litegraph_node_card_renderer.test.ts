@@ -238,7 +238,7 @@ describe('ComfyLiteGraphNodeCardRenderer', () => {
       expect(node.flags).toEqual({ collapsed: false, pinned: true });
       expect(node.inputs).toBe(inputs);
       expect(node.outputs).toBe(outputs);
-      expect(node.widgets_start_y).toBe(2);
+      expect(node.widgets_start_y).toBe(22);
       expect(node.widgets_up).toBe(true);
     });
 

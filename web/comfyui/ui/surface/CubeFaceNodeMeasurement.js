@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Measure Nodes 1.0 face bodies without mutating graph-owned slot collections. */
 import { isRecord } from '../types/common.js';
-import { cubeFaceNodeHasVisibleWidgets } from './CubeFaceNodePresentationPolicy.js';
+import { CUBE_FACE_WIDGET_GUTTER, cubeFaceNodeHasVisibleWidgets, } from './CubeFaceNodePresentationPolicy.js';
 const HEADER_ONLY_BODY_HEIGHT = 1;
 const LEGACY_SLOT_HEIGHT = 20;
 const LEGACY_WIDGET_HEIGHT = 20;
@@ -27,7 +27,7 @@ export function measureCubeFaceNodeBodyHeight(node) {
     if (!cubeFaceNodeHasVisibleWidgets(node))
         return HEADER_ONLY_BODY_HEIGHT;
     const width = positiveNumber(node.size?.[0]) ?? 200;
-    let widgetsHeight = LEGACY_WIDGET_PADDING;
+    let widgetsHeight = LEGACY_WIDGET_PADDING + CUBE_FACE_WIDGET_GUTTER;
     for (const widget of visibleWidgets(node)) {
         widgetsHeight += measureWidgetHeight(widget, node, width) + LEGACY_WIDGET_GAP;
     }

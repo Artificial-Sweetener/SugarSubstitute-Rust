@@ -17,7 +17,10 @@
 
 import { isRecord } from '../types/common.js';
 import type { ComfyNode, ComfyWidget } from '../types/graph.js';
-import { cubeFaceNodeHasVisibleWidgets } from './CubeFaceNodePresentationPolicy.js';
+import {
+  CUBE_FACE_WIDGET_GUTTER,
+  cubeFaceNodeHasVisibleWidgets,
+} from './CubeFaceNodePresentationPolicy.js';
 
 const HEADER_ONLY_BODY_HEIGHT = 1;
 const LEGACY_SLOT_HEIGHT = 20;
@@ -36,7 +39,7 @@ export function measureCubeFaceNodeBodyHeight(node: ComfyNode): number {
   if (!cubeFaceNodeHasVisibleWidgets(node)) return HEADER_ONLY_BODY_HEIGHT;
 
   const width = positiveNumber(node.size?.[0]) ?? 200;
-  let widgetsHeight = LEGACY_WIDGET_PADDING;
+  let widgetsHeight = LEGACY_WIDGET_PADDING + CUBE_FACE_WIDGET_GUTTER;
   for (const widget of visibleWidgets(node)) {
     widgetsHeight += measureWidgetHeight(widget, node, width) + LEGACY_WIDGET_GAP;
   }

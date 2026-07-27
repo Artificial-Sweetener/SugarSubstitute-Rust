@@ -178,6 +178,7 @@ export class ComfyVueCubeNodeHost {
         }
         mount.resizeHost.dispose();
         mount.boundaryHost.dispose();
+        this.#portPresentation?.release(node);
         mount.editorFooter.dispose();
         mount.colorScope.dispose();
         mount.header?.remove();

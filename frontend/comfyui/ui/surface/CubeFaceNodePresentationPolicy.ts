@@ -25,7 +25,9 @@ interface RememberedNodeProperty {
   value: unknown;
 }
 
-const NATIVE_SLOTLESS_WIDGET_START_Y = 2;
+/** Reserve one normal LiteGraph slot row above slot-suppressed Cube-face widgets. */
+export const CUBE_FACE_WIDGET_GUTTER = 20;
+const NATIVE_WIDGET_INSET = 2;
 
 /** Create face flags that retain native state except graph collapse. */
 function createCubeFaceFlags(flags: unknown): UnknownRecord {
@@ -53,7 +55,8 @@ export function withCubeFaceNodePresentation<Result>(
   const remembered = rememberNodeProperties(node, ['flags', 'widgets_start_y', 'widgets_up']);
   node.flags = createCubeFaceFlags(node.flags);
   Reflect.set(node, 'widgets_up', true);
-  Reflect.set(node, 'widgets_start_y', NATIVE_SLOTLESS_WIDGET_START_Y);
+  // Preserve the first native slot row as spacing when Cube cards suppress their graph slots.
+  Reflect.set(node, 'widgets_start_y', CUBE_FACE_WIDGET_GUTTER + NATIVE_WIDGET_INSET);
   try {
     return operation();
   } finally {

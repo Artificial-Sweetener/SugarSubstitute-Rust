@@ -90,9 +90,11 @@ describe('ensureCubeSurfaceStyles', () => {
     ensureCubeSurfaceStyles(document);
 
     const css = document.getElementById('sugarcubes-cube-surface-styles')?.textContent ?? '';
+    const headerRule = css.match(/\.sugarcubes-cube-face__header\s*\{([^}]*)\}/s)?.[1] ?? '';
     expect(css).toMatch(
       /\.sugarcubes-cube-face__header\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto\s+minmax\(0,\s*1fr\);/s,
     );
+    expect(headerRule).not.toMatch(/cursor:/);
     expect(css).toMatch(
       /\.sugarcubes-cube-face__definition-badge\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*grid-column:\s*2;[^}]*text-align:\s*center;/s,
     );

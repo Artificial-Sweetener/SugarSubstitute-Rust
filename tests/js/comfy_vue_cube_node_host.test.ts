@@ -16,6 +16,7 @@
 /** Verify one Nodes 2.0 host owns each native Cube node root. */
 
 import { jest } from '@jest/globals';
+import { CubePortPresentationController } from '../../frontend/comfyui/ui/cube/connection/CubePortPresentationController.js';
 import type { CubeNode } from '../../frontend/comfyui/ui/cube/node/ComfyCubeNodeFactory.js';
 import { ComfyVueCubeNodeHost } from '../../frontend/comfyui/ui/surface/ComfyVueCubeNodeHost.js';
 
@@ -64,6 +65,21 @@ describe('ComfyVueCubeNodeHost', () => {
     expect(firstFace?.isConnected).toBe(false);
     expect(body.querySelectorAll(':scope > [data-sugarcube-face-host]')).toHaveLength(1);
     host.dispose();
+  });
+
+  test('releases renderer-owned port geometry when its native face unmounts', () => {
+    nativeCubeRoot('cube-node');
+    const portPresentation = new CubePortPresentationController({
+      requestFrame: () => null,
+    });
+    const release = jest.spyOn(portPresentation, 'release');
+    const host = createHost(() => undefined, portPresentation);
+    const node = cubeNode('cube-node');
+
+    host.mount(node);
+    host.unmount(node);
+
+    expect(release).toHaveBeenCalledWith(node);
   });
 
   test('removes an orphaned face host before taking ownership of a native root', () => {
@@ -229,7 +245,10 @@ describe('ComfyVueCubeNodeHost', () => {
 });
 
 /** Create one host with inert graph collaborators. */
-function createHost(openEditor: (node: CubeNode) => void = () => undefined): ComfyVueCubeNodeHost {
+function createHost(
+  openEditor: (node: CubeNode) => void = () => undefined,
+  portPresentation?: CubePortPresentationController,
+): ComfyVueCubeNodeHost {
   return new ComfyVueCubeNodeHost({
     document,
     titleHeight: 30,
@@ -237,6 +256,7 @@ function createHost(openEditor: (node: CubeNode) => void = () => undefined): Com
     getScale: () => 1,
     openEditor,
     requestSlotLayoutSync: () => undefined,
+    ...(portPresentation ? { portPresentation } : {}),
   });
 }
 

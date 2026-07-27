@@ -61,6 +61,7 @@ export interface CubeSurfacePresenterOptions {
   setDirtyCanvas?(foreground?: boolean, background?: boolean): void;
   logger: Pick<Console, 'debug' | 'error' | 'warn'>;
   renderer?: NativeNodeCardRenderer;
+  createRenderer?(): Promise<NativeNodeCardRenderer>;
   previewCatalog?: CubePreviewCatalog;
   getRendererMode?(): CubeRendererMode;
   legacyCanvas?: LiteGraphCubeNodeCanvas;
@@ -96,6 +97,7 @@ export class CubeSurfacePresenter {
   readonly #legacyHost: ComfyLiteGraphCubeNodeHost | null;
   readonly #chromeActions: CubeFaceChromeActions | null;
   readonly #onBoundaryGeometryChange: () => void;
+  readonly #createRenderer: () => Promise<NativeNodeCardRenderer>;
   readonly #views = new Map<CubeNode, MountedCubeSurface>();
   readonly #observers = new Map<CubeNode, NativeSubgraphChangeObserver>();
   #renderer: Promise<NativeNodeCardRenderer> | null;
@@ -159,7 +161,11 @@ export class CubeSurfacePresenter {
           ...(options.portPresentation ? { portPresentation: options.portPresentation } : {}),
         })
       : null;
-    this.#renderer = options.renderer ? Promise.resolve(options.renderer) : null;
+    const providedRenderer = options.renderer;
+    this.#createRenderer =
+      options.createRenderer ??
+      (providedRenderer ? async () => providedRenderer : () => this.#loadRenderer());
+    this.#renderer = null;
     this.#unsubscribeNodes = options.nodes.subscribe(() => this.#stabilizeSync());
     this.#unsubscribePreviews =
       options.previewChanges?.subscribe(() => this.#refreshPreviews()) ?? (() => undefined);
@@ -185,6 +191,7 @@ export class CubeSurfacePresenter {
     this.#mountGenerations.clear();
     for (const surface of this.#views.values()) surface.view.dispose();
     this.#views.clear();
+    this.#releaseRenderer();
     for (const observer of this.#observers.values()) observer.dispose();
     this.#observers.clear();
     this.#legacyHost?.dispose();
@@ -210,7 +217,9 @@ export class CubeSurfacePresenter {
     }
     const atRoot = this.#getCurrentGraph() === this.#rootGraph;
     const rendererMode = this.#getRendererMode();
-    if (rendererMode !== this.#presentedRendererMode) {
+    const previousRendererMode = this.#presentedRendererMode;
+    const rendererChanged = rendererMode !== previousRendererMode;
+    if (rendererChanged) {
       this.#presentedRendererMode = rendererMode;
       this.#logger.debug('SugarCubes reconciled Cube renderer presentation.', {
         rendererMode,
@@ -220,12 +229,13 @@ export class CubeSurfacePresenter {
     }
     const shouldPresentVue = rendererMode === 'vue' && atRoot;
     const shouldPresentLegacy = rendererMode === 'litegraph' && atRoot;
-    this.#legacyHost?.setEnabled(shouldPresentLegacy);
-    this.#legacyHost?.sync();
     if (!shouldPresentVue) {
       for (const node of [...this.#views.keys()]) this.#unmount(node);
-      return;
     }
+    if (rendererChanged && previousRendererMode === 'vue') this.#releaseRenderer();
+    this.#legacyHost?.setEnabled(shouldPresentLegacy);
+    this.#legacyHost?.sync();
+    if (!shouldPresentVue) return;
     for (const node of nodes) {
       const root = this.#host.mount(node);
       if (!root) {
@@ -387,7 +397,7 @@ export class CubeSurfacePresenter {
 
   /** Lazily resolve Comfy's Vue renderer only while Nodes 2.0 is active. */
   #getRenderer(): Promise<NativeNodeCardRenderer> {
-    this.#renderer ??= this.#loadRenderer();
+    this.#renderer ??= this.#createRenderer();
     return this.#renderer;
   }
 
@@ -395,6 +405,22 @@ export class CubeSurfacePresenter {
   #getRuntime(): Promise<ComfyVueRuntime> {
     this.#runtime ??= loadComfyVueRuntime(this.#document);
     return this.#runtime;
+  }
+
+  /** Drop renderer state tied to the Vue graph application that Comfy replaced. */
+  #releaseRenderer(): void {
+    const renderer = this.#renderer;
+    this.#renderer = null;
+    this.#runtime = null;
+    if (!renderer) return;
+    void renderer
+      .then((resolved) => resolved.dispose())
+      .catch((error: unknown) => {
+        this.#logger.warn('SugarCubes failed to dispose a replaced Nodes 2 renderer.', {
+          reason: error instanceof Error ? error.message : String(error),
+          error,
+        });
+      });
   }
 }
 

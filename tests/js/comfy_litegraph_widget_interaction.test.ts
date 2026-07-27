@@ -170,7 +170,7 @@ describe('ComfyLiteGraphWidgetInteraction', () => {
         expect(node.flags).toEqual({ collapsed: false, pinned: true });
         expect(node.inputs).toBe(inputs);
         expect(node.outputs).toBe(outputs);
-        expect(node.widgets_start_y).toBe(2);
+        expect(node.widgets_start_y).toBe(22);
         expect(node.widgets_up).toBe(true);
         return widget;
       }),
@@ -181,13 +181,13 @@ describe('ComfyLiteGraphWidgetInteraction', () => {
         expect(activeNode.flags).toEqual({ collapsed: false, pinned: true });
         expect(activeNode.inputs).toBe(inputs);
         expect(activeNode.outputs).toBe(outputs);
-        expect(activeNode.widgets_start_y).toBe(2);
+        expect(activeNode.widgets_start_y).toBe(22);
         expect(activeNode.widgets_up).toBe(true);
         nativePointer.onClick = () => {
           expect(activeNode.flags).toEqual({ collapsed: false, pinned: true });
           expect(activeNode.inputs).toBe(inputs);
           expect(activeNode.outputs).toBe(outputs);
-          expect(activeNode.widgets_start_y).toBe(2);
+          expect(activeNode.widgets_start_y).toBe(22);
           expect(activeNode.widgets_up).toBe(true);
           widget.value += 1;
         };

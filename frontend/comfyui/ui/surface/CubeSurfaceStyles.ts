@@ -186,7 +186,6 @@ export function ensureCubeSurfaceStyles(documentRef: Document): void {
       padding: 0.25rem 0.5rem 0.5rem;
       background: var(--comfy-menu-bg, #171b20);
       border-bottom: 1px solid color-mix(in srgb, currentColor 14%, transparent);
-      cursor: move;
       user-select: none;
     }
     .lg-node[data-sugarcube-node="true"]

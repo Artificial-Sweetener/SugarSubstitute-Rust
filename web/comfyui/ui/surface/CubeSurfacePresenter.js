@@ -44,6 +44,7 @@ export class CubeSurfacePresenter {
     #legacyHost;
     #chromeActions;
     #onBoundaryGeometryChange;
+    #createRenderer;
     #views = new Map();
     #observers = new Map();
     #renderer;
@@ -105,7 +106,11 @@ export class CubeSurfacePresenter {
                 ...(options.portPresentation ? { portPresentation: options.portPresentation } : {}),
             })
             : null;
-        this.#renderer = options.renderer ? Promise.resolve(options.renderer) : null;
+        const providedRenderer = options.renderer;
+        this.#createRenderer =
+            options.createRenderer ??
+                (providedRenderer ? async () => providedRenderer : () => this.#loadRenderer());
+        this.#renderer = null;
         this.#unsubscribeNodes = options.nodes.subscribe(() => this.#stabilizeSync());
         this.#unsubscribePreviews =
             options.previewChanges?.subscribe(() => this.#refreshPreviews()) ?? (() => undefined);
@@ -131,6 +136,7 @@ export class CubeSurfacePresenter {
         for (const surface of this.#views.values())
             surface.view.dispose();
         this.#views.clear();
+        this.#releaseRenderer();
         for (const observer of this.#observers.values())
             observer.dispose();
         this.#observers.clear();
@@ -155,7 +161,9 @@ export class CubeSurfacePresenter {
         }
         const atRoot = this.#getCurrentGraph() === this.#rootGraph;
         const rendererMode = this.#getRendererMode();
-        if (rendererMode !== this.#presentedRendererMode) {
+        const previousRendererMode = this.#presentedRendererMode;
+        const rendererChanged = rendererMode !== previousRendererMode;
+        if (rendererChanged) {
             this.#presentedRendererMode = rendererMode;
             this.#logger.debug('SugarCubes reconciled Cube renderer presentation.', {
                 rendererMode,
@@ -165,13 +173,16 @@ export class CubeSurfacePresenter {
         }
         const shouldPresentVue = rendererMode === 'vue' && atRoot;
         const shouldPresentLegacy = rendererMode === 'litegraph' && atRoot;
-        this.#legacyHost?.setEnabled(shouldPresentLegacy);
-        this.#legacyHost?.sync();
         if (!shouldPresentVue) {
             for (const node of [...this.#views.keys()])
                 this.#unmount(node);
-            return;
         }
+        if (rendererChanged && previousRendererMode === 'vue')
+            this.#releaseRenderer();
+        this.#legacyHost?.setEnabled(shouldPresentLegacy);
+        this.#legacyHost?.sync();
+        if (!shouldPresentVue)
+            return;
         for (const node of nodes) {
             const root = this.#host.mount(node);
             if (!root) {
@@ -330,13 +341,29 @@ export class CubeSurfacePresenter {
     }
     /** Lazily resolve Comfy's Vue renderer only while Nodes 2.0 is active. */
     #getRenderer() {
-        this.#renderer ??= this.#loadRenderer();
+        this.#renderer ??= this.#createRenderer();
         return this.#renderer;
     }
     /** Resolve Comfy's slot-layout owner once for rendering and boundary remeasurement. */
     #getRuntime() {
         this.#runtime ??= loadComfyVueRuntime(this.#document);
         return this.#runtime;
+    }
+    /** Drop renderer state tied to the Vue graph application that Comfy replaced. */
+    #releaseRenderer() {
+        const renderer = this.#renderer;
+        this.#renderer = null;
+        this.#runtime = null;
+        if (!renderer)
+            return;
+        void renderer
+            .then((resolved) => resolved.dispose())
+            .catch((error) => {
+            this.#logger.warn('SugarCubes failed to dispose a replaced Nodes 2 renderer.', {
+                reason: error instanceof Error ? error.message : String(error),
+                error,
+            });
+        });
     }
 }
 /** Describe exact internal node identity without projecting it onto the root graph. */

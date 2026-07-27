@@ -17,6 +17,7 @@
 
 import { jest } from '@jest/globals';
 import type { NativeCubeSubgraph } from '../../frontend/comfyui/ui/cube/ComfyCubeGraphBuilder.js';
+import { CubePortPresentationController } from '../../frontend/comfyui/ui/cube/connection/CubePortPresentationController.js';
 import type { CubeNode } from '../../frontend/comfyui/ui/cube/node/ComfyCubeNodeFactory.js';
 import { CubeNodeCatalog } from '../../frontend/comfyui/ui/cube/node/CubeNodeCatalog.js';
 import { CubeSurfacePresenter } from '../../frontend/comfyui/ui/surface/CubeSurfacePresenter.js';
@@ -293,6 +294,116 @@ describe('CubeSurfacePresenter', () => {
     observer.disconnect();
     presenter.dispose();
     jest.useRealTimers();
+  });
+
+  test('releases Nodes 2 port geometry before Nodes 1 registers its canvas geometry', async () => {
+    const pane = createTransformPane();
+    const node = cubeNode(9, 'cube-1', [nativeNode('inner', 'KSampler')]);
+    pane.append(createNativeNodeShell(String(node.id)).root);
+    const nodes = new CubeNodeCatalog();
+    nodes.add(node);
+    const rootGraph = {};
+    let rendererMode: 'vue' | 'litegraph' = 'vue';
+    const portPresentation = new CubePortPresentationController({
+      requestFrame: () => null,
+    });
+    const release = jest.spyOn(portPresentation, 'release');
+    const register = jest.spyOn(portPresentation, 'register');
+    const canvasElement = document.createElement('canvas');
+    const presenter = new CubeSurfacePresenter({
+      document,
+      openEditor: jest.fn(),
+      rootGraph,
+      getCurrentGraph: () => rootGraph,
+      nodes,
+      logger: console,
+      renderer: {
+        mount: () => ({ refresh() {}, unmount() {} }),
+        dispose() {},
+      },
+      getRendererMode: () => rendererMode,
+      legacyCanvas: {
+        canvas: canvasElement,
+        graph: rootGraph,
+        graph_mouse: [0, 0],
+        drawNode: jest.fn(),
+        processWidgetClick: jest.fn(),
+        setDirty: jest.fn(),
+      },
+      portPresentation,
+      requestSlotLayoutSync: () => undefined,
+    });
+    await flushMount();
+    release.mockClear();
+    register.mockClear();
+
+    rendererMode = 'litegraph';
+    presenter.refresh();
+
+    expect(release).toHaveBeenCalledWith(node);
+    expect(register).toHaveBeenCalledWith(node, 'input', expect.any(Array));
+    expect(release.mock.invocationCallOrder[0]).toBeLessThan(register.mock.invocationCallOrder[0]!);
+    presenter.dispose();
+  });
+
+  test('creates a fresh Nodes 2 renderer after returning from Nodes 1', async () => {
+    const pane = createTransformPane();
+    const node = cubeNode(9, 'cube-1', [nativeNode('inner', 'KSampler')]);
+    pane.append(createNativeNodeShell(String(node.id)).root);
+    const nodes = new CubeNodeCatalog();
+    nodes.add(node);
+    const rootGraph = {};
+    let rendererMode: 'vue' | 'litegraph' = 'vue';
+    const firstMount = jest.fn(() => ({ refresh() {}, unmount() {} }));
+    const secondMount = jest.fn(() => ({ refresh() {}, unmount() {} }));
+    const firstRenderer: NativeNodeCardRenderer = {
+      mount: firstMount,
+      dispose: jest.fn(),
+    };
+    const secondRenderer: NativeNodeCardRenderer = {
+      mount: secondMount,
+      dispose: jest.fn(),
+    };
+    const rendererQueue = [firstRenderer, secondRenderer];
+    const createRenderer = jest.fn(async () => {
+      const renderer = rendererQueue.shift();
+      if (!renderer) throw new Error('Unexpected renderer request.');
+      return renderer;
+    });
+    const canvasElement = document.createElement('canvas');
+    const presenter = new CubeSurfacePresenter({
+      document,
+      openEditor: jest.fn(),
+      rootGraph,
+      getCurrentGraph: () => rootGraph,
+      nodes,
+      logger: console,
+      createRenderer,
+      getRendererMode: () => rendererMode,
+      legacyCanvas: {
+        canvas: canvasElement,
+        graph: rootGraph,
+        graph_mouse: [0, 0],
+        drawNode: jest.fn(),
+        processWidgetClick: jest.fn(),
+        setDirty: jest.fn(),
+      },
+      requestSlotLayoutSync: () => undefined,
+    });
+    await flushMount();
+    expect(firstMount).toHaveBeenCalled();
+
+    rendererMode = 'litegraph';
+    presenter.refresh();
+    await flushMount();
+    rendererMode = 'vue';
+    presenter.refresh();
+    await flushMount();
+
+    expect(firstRenderer.dispose).toHaveBeenCalledTimes(1);
+    expect(createRenderer).toHaveBeenCalledTimes(2);
+    expect(secondMount).toHaveBeenCalled();
+    presenter.dispose();
   });
 });
 
