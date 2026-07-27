@@ -97,7 +97,7 @@ describe('ComfyCubeGraphBuilder', () => {
     expect(internalNodes[0]?.pos).toEqual([30, 40]);
     expect(internalNodes[0]?.size).toEqual([220, 160]);
     expect(subgraph.addInput).toHaveBeenCalledWith('input.value', 'IMAGE');
-    expect(subgraph.addOutput).toHaveBeenCalledWith('output.value', 'IMAGE');
+    expect(subgraph.addOutput).toHaveBeenCalledWith('value', 'IMAGE');
     expect(inputConnect).toHaveBeenCalledWith(internalNodes[0]?.inputs[0], internalNodes[0]);
     expect(outputConnect).toHaveBeenCalledWith(internalNodes[0]?.outputs[0], internalNodes[0]);
   });
@@ -187,7 +187,7 @@ describe('ComfyCubeGraphBuilder', () => {
     );
 
     expect(subgraph.addInput).toHaveBeenCalledWith('input.value', 'IMAGE');
-    expect(subgraph.addOutput).toHaveBeenCalledWith('output.image', 'IMAGE');
+    expect(subgraph.addOutput).toHaveBeenCalledWith('image', 'IMAGE');
     expect(inputConnect).toHaveBeenCalledWith(nested.inputs[0], nested);
     expect(outputConnect).toHaveBeenCalledWith(nested.outputs[0], nested);
   });

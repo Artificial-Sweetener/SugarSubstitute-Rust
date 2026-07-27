@@ -29,6 +29,7 @@ import type {
 } from './ComfyCubeGraphBuilder.js';
 import { CubePlacementService } from './CubePlacementService.js';
 import { CubeSubgraphRegistrar } from './CubeSubgraphRegistrar.js';
+import { CubeOutputSurfaceSynchronizer } from './CubeOutputSurfaceSynchronizer.js';
 import type { ImportPayload } from '../import/PlacementPayload.js';
 import { LegacyCubeDefinitionSerializer } from './migration/LegacyCubeDefinitionSerializer.js';
 import { LegacyCubeGraphBuilder } from './migration/LegacyCubeGraphBuilder.js';
@@ -160,6 +161,7 @@ export function createComfyCubeRuntime(options: ComfyCubeRuntimeOptions): ComfyC
     createInstanceId: createUuid,
     logger: options.logger,
   });
+  const outputSurfaceSynchronizer = new CubeOutputSurfaceSynchronizer(nodes, legacyCanvas.canvas);
   const nodeFactory = new ComfyCubeNodeFactory({
     graph: {
       add(node) {
@@ -326,6 +328,7 @@ export function createComfyCubeRuntime(options: ComfyCubeRuntimeOptions): ComfyC
     registerSubgraphs: (payload) => subgraphRegistrar.register(payload),
     restoreLegacy: (batch) => legacyMigration.restore(batch),
     dispose: () => {
+      outputSurfaceSynchronizer.dispose();
       editorNavigation.dispose();
       presenter.dispose();
       legacyContainerMigration.dispose();

@@ -47,10 +47,10 @@ describe('computeCubeCanvasLayout', () => {
     const layout = computeCubeCanvasLayout(cube, state, 30);
 
     expect(layout.cards).toHaveLength(1);
-    expect(layout.cards[0]?.bodyHeight).toBe(116);
-    expect(layout.cards[0]?.rect.height).toBe(146);
+    expect(layout.cards[0]?.bodyHeight).toBe(96);
+    expect(layout.cards[0]?.rect.height).toBe(126);
     expect(layout.cards[0]?.rect.y).toBe(layout.header.y + layout.header.height + state.gap);
-    expect(layout.minimumSize).toEqual([440, 182]);
+    expect(layout.minimumSize).toEqual([440, 180]);
     expect(inner.inputs).toBe(inputs);
     expect(inner.outputs).toBe(outputs);
     expect(inner.flags).toBe(flags);
@@ -81,8 +81,8 @@ describe('computeCubeCanvasLayout', () => {
 
     const layout = computeCubeCanvasLayout(cube, state, 30);
 
-    expect(layout.cards.map((card) => card.rect.height)).toEqual([148, 148, 148]);
-    expect(layout.minimumSize).toEqual([440, 536]);
+    expect(layout.cards.map((card) => card.rect.height)).toEqual([128, 128, 128]);
+    expect(layout.minimumSize).toEqual([440, 476]);
   });
 
   test('aligns output ports with equal preview-section title rows', () => {

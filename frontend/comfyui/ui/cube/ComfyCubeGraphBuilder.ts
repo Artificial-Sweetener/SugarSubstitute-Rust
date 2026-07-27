@@ -33,6 +33,7 @@ import type {
 } from '../types/graph.js';
 import { buildCubePayloadTopology } from './CubePayloadTopology.js';
 import { resolveCubeInputBoundaryType } from './CubeBoundaryTypeResolver.js';
+import { deriveCubeOutputSurfaceNames } from './CubeOutputSurfaceNames.js';
 
 interface NativeBoundaryInput {
   connect(slot: ComfyInput, node: NativeGraphNode): unknown;
@@ -181,7 +182,8 @@ export class ComfyCubeGraphBuilder {
       for (const target of resolvedTargets) boundary.connect(target.slot, target.node);
     }
 
-    for (const output of topology.outputs) {
+    const surfaceOutputNames = deriveCubeOutputSurfaceNames(topology.outputs);
+    for (const [index, output] of topology.outputs.entries()) {
       const source = nodesBySymbol.get(output.sourceSymbol);
       const slot = source?.outputs[output.sourceSlot];
       const type = output.type ?? readString(slot?.type);
@@ -189,7 +191,7 @@ export class ComfyCubeGraphBuilder {
         warnings.push(`Cube output '${output.name}' has no compatible internal source.`);
         continue;
       }
-      subgraph.addOutput(output.name, type).connect(slot, source);
+      subgraph.addOutput(surfaceOutputNames[index] ?? output.name, type).connect(slot, source);
     }
 
     subgraph.inputNode.arrange?.();
