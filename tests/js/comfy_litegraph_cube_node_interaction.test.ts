@@ -115,6 +115,32 @@ describe('ComfyLiteGraphCubeNodeInteraction', () => {
     interaction.dispose();
   });
 
+  test('does not clear the native resize cursor while the pointer is over a normal node', () => {
+    const canvasElement = document.createElement('canvas');
+    canvasElement.style.cursor = 'nwse-resize';
+    Object.defineProperty(canvasElement, 'getBoundingClientRect', {
+      value: () => ({ left: 0, top: 0, width: 1200, height: 900 }),
+    });
+    const interaction = new ComfyLiteGraphCubeNodeInteraction({
+      canvas: {
+        canvas: canvasElement,
+        convertCanvasToOffset: (point) => point,
+      },
+      history: {},
+      widgetInteraction: inertWidgetInteraction(),
+      getItems: () => [],
+      onEdit: jest.fn(),
+      onCardMenuToggle: jest.fn(),
+      onCardRevealChange: jest.fn(),
+      onCardActivationChange: jest.fn(),
+    });
+
+    canvasElement.dispatchEvent(pointer('pointermove', 480, 320));
+
+    expect(canvasElement.style.cursor).toBe('nwse-resize');
+    interaction.dispose();
+  });
+
   test('leaves boundary output port pointerdown available to native linking', () => {
     const node = cubeNode();
     const outputSlot = { name: 'output.image', type: 'IMAGE' };

@@ -32,6 +32,7 @@ export class ComfyLiteGraphCubeNodeInteraction {
     #onCardRevealChange;
     #onCardActivationChange;
     #session = null;
+    #appliedCursor = null;
     /** Bind focused face hit testing ahead of LiteGraph's native node handlers. */
     constructor(options) {
         this.#canvas = options.canvas;
@@ -231,10 +232,21 @@ export class ComfyLiteGraphCubeNodeInteraction {
         ];
         return point.every(Number.isFinite) ? point : null;
     }
-    /** Show the corresponding native resize cursor without owning selection. */
+    /** Limit cursor ownership to the Cube resize handle currently under the pointer. */
     #syncCursor(point) {
         const handle = point ? findResizeHandle(this.#itemAt(point)?.layout ?? null, point) : null;
-        this.#canvas.canvas.style.cursor = handle ? resizeCursor(handle.edge) : '';
+        if (handle) {
+            const cursor = resizeCursor(handle.edge);
+            this.#canvas.canvas.style.cursor = cursor;
+            this.#appliedCursor = cursor;
+            return;
+        }
+        if (this.#appliedCursor === null)
+            return;
+        if (this.#canvas.canvas.style.cursor === this.#appliedCursor) {
+            this.#canvas.canvas.style.cursor = '';
+        }
+        this.#appliedCursor = null;
     }
     /** Record one Cube-owned face interaction through the host history boundary. */
     #markDirty() {
