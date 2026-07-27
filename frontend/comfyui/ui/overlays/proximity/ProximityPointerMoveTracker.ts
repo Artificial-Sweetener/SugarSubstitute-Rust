@@ -30,6 +30,12 @@ interface FrameScheduler {
 interface GraphSurface {
   graph: ComfyGraph;
   node_dragged?: ComfyNode | null;
+  selectedItems?: {
+    values(): Iterable<unknown>;
+  };
+  state?: {
+    draggingItems?: boolean;
+  };
 }
 
 interface NodeGeometry {
@@ -62,9 +68,12 @@ export class ProximityPointerMoveTracker {
     this.#snapshot(surface.graph);
     const refresh = (event: Event): void => {
       if (!this.#proximity.isProximityEnabled()) return;
-      const node = resolveMovedNode(event, surface);
-      if (!node || !this.#geometryChanged(node)) return;
-      this.#lastMoved.set(eventTarget, node);
+      let movedNode: ComfyNode | null = null;
+      for (const node of resolveMovedNodes(event, surface)) {
+        if (this.#geometryChanged(node)) movedNode ??= node;
+      }
+      if (!movedNode) return;
+      this.#lastMoved.set(eventTarget, movedNode);
       this.#proximity.schedulePreview({ graph: surface.graph });
     };
     const settle = (): void => {
@@ -114,14 +123,21 @@ export class ProximityPointerMoveTracker {
   }
 }
 
-/** Resolve the one node owned by a native or DOM drag event. */
-function resolveMovedNode(event: Event, surface: GraphSurface): ComfyNode | null {
-  if (surface.node_dragged) return surface.node_dragged;
+/** Resolve every graph node owned by the active canvas or DOM drag event. */
+function resolveMovedNodes(event: Event, surface: GraphSurface): ComfyNode[] {
+  if (surface.node_dragged) return [surface.node_dragged];
   const target = event.target;
-  if (!(target instanceof Element)) return null;
-  const nodeRoot = target.closest<HTMLElement>('.lg-node[data-node-id]');
-  const nodeId = nodeRoot?.dataset.nodeId;
-  return nodeId ? findNode(surface.graph, nodeId) : null;
+  if (target instanceof Element) {
+    const nodeRoot = target.closest<HTMLElement>('.lg-node[data-node-id]');
+    const nodeId = nodeRoot?.dataset.nodeId;
+    const node = nodeId ? findNode(surface.graph, nodeId) : null;
+    if (node) return [node];
+  }
+  if (surface.state?.draggingItems !== true) return [];
+  const graphNodes = getGraphNodes(surface.graph);
+  const selectedItems = new Set(surface.selectedItems?.values() ?? []);
+  const selectedNodes = graphNodes.filter((node) => selectedItems.has(node));
+  return selectedNodes.length > 0 ? selectedNodes : graphNodes;
 }
 
 /** Find one node without assuming Comfy's concrete graph implementation. */

@@ -56,6 +56,39 @@ describe('CubePortPresentationController', () => {
       600, 300,
     ]);
   });
+
+  test('keeps disjoint Cube ports on their nearest boundary edges', () => {
+    let now = 0;
+    const controller = new CubePortPresentationController({
+      now: () => now,
+      requestFrame: () => null,
+      durationMs: 1,
+    });
+    const output = cube('output', 100);
+    const input = cube('input', 405);
+    controller.register(output, 'output', [
+      { index: 0, defaultY: 80, minY: 40, maxY: 300, labelY: 80 },
+    ]);
+    controller.register(input, 'input', [
+      { index: 0, defaultY: 40, minY: 40, maxY: 300, labelY: 40 },
+    ]);
+
+    controller.updateMatches([
+      match({
+        outputNode: output,
+        outputCube: 'output-definition',
+        outputSlot: 0,
+        inputNode: input,
+        inputCube: 'input-definition',
+        inputSlot: 0,
+      }),
+    ]);
+    now = 1;
+
+    expect(controller.resolveGraphPosition(output, 'output', 0, [500, 180])).toEqual([500, 400]);
+    expect(controller.resolveGraphPosition(input, 'input', 0, [530, 445])).toEqual([530, 445]);
+  });
+
   test('swaps visual output order without lifting a socket above its own label', () => {
     let now = 0;
     const invalidate = jest.fn();

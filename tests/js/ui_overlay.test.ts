@@ -233,7 +233,7 @@ describe('ui overlay rendering', () => {
     expect(testCanvas().renderLink).toHaveBeenCalledTimes(1);
   });
 
-  test('refreshes proximity only after Nodes 2.0 changes real node geometry', async () => {
+  test('refreshes proximity continuously from current Nodes 1 canvas drag state', async () => {
     const { OverlayManager } = await import('../../frontend/comfyui/ui/overlays/OverlayManager.js');
     const canvasElement = document.createElement('canvas');
     testCanvas().canvas = canvasElement;
@@ -247,6 +247,8 @@ describe('ui overlay rendering', () => {
       graph: app.graph,
       inputs: [{ name: 'image', type: 'IMAGE' }],
     };
+    const graph = app.graph as TestGraph;
+    graph._nodes.push(outputNode, inputNode);
     let inputPosition: Vec2 = [80, 20];
     const manager = new OverlayManager({
       adapter: {
@@ -305,17 +307,23 @@ describe('ui overlay rendering', () => {
 
     inputPosition = [120, 40];
     inputNode.pos = [120, 40];
-    testCanvas().node_dragged = inputNode;
+    testCanvas().state = { draggingItems: true };
+    testCanvas().selectedItems = new Set([inputNode]);
     canvasElement.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
 
     expect(manager.proximity.overlayMatches[0]?.inputPos).toEqual([120, 40]);
 
-    inputPosition = [140, 60];
-    inputNode.pos = [140, 60];
-    testCanvas().node_dragged = null;
+    inputPosition = [500, 500];
+    inputNode.pos = [500, 500];
+    canvasElement.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+
+    expect(manager.proximity.overlayMatches).toEqual([]);
+
+    testCanvas().state = { draggingItems: false };
+    testCanvas().selectedItems = new Set();
     canvasElement.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
 
-    expect(manager.proximity.overlayMatches[0]?.inputPos).toEqual([140, 60]);
+    expect(manager.proximity.overlayMatches).toEqual([]);
   });
 
   test('does not rediscover proximity while the pointer only hovers the graph', async () => {

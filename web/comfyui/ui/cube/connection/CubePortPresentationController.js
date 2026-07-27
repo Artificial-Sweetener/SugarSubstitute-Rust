@@ -370,9 +370,18 @@ function resolvePortTargets(ports, attractions, nodeY, direction) {
 function resolveFeasibleMatchY(preferredY, outputNodeY, output, inputNodeY, input) {
     if (!output || !input)
         return preferredY;
-    const minimum = Math.max(outputNodeY + output.labelY, inputNodeY + input.minY);
-    const maximum = Math.min(outputNodeY + output.maxY, inputNodeY + input.maxY);
-    return minimum <= maximum ? clamp(preferredY, minimum, maximum) : preferredY;
+    const outputMinimum = outputNodeY + output.labelY;
+    const outputMaximum = outputNodeY + output.maxY;
+    const inputMinimum = inputNodeY + input.minY;
+    const inputMaximum = inputNodeY + input.maxY;
+    const sharedMinimum = Math.max(outputMinimum, inputMinimum);
+    const sharedMaximum = Math.min(outputMaximum, inputMaximum);
+    if (sharedMinimum <= sharedMaximum) {
+        return clamp(preferredY, sharedMinimum, sharedMaximum);
+    }
+    const corridorMinimum = Math.min(outputMaximum, inputMaximum);
+    const corridorMaximum = Math.max(outputMinimum, inputMinimum);
+    return clamp(preferredY, corridorMinimum, corridorMaximum);
 }
 /** Reduce separation only when the registered travel range cannot hold every port. */
 function resolveFeasibleSeparation(ports) {
