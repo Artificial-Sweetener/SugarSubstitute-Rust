@@ -18,7 +18,7 @@
 import { measureCubeFaceNodeBodyHeight } from '../../frontend/comfyui/ui/surface/CubeFaceNodeMeasurement.js';
 
 describe('CubeFaceNodeMeasurement', () => {
-  test('does not count the hidden-slot top gutter as bottom body space', () => {
+  test('reserves the hidden-slot gutter only for ordinary widget cards', () => {
     const prompt = {
       id: 'prompt',
       title: 'Positive prompt',
@@ -32,7 +32,18 @@ describe('CubeFaceNodeMeasurement', () => {
       widgets: [{ name: 'text', type: 'customtext', computedHeight: 80 }],
     };
 
-    expect(measureCubeFaceNodeBodyHeight(ordinary)).toBe(measureCubeFaceNodeBodyHeight(prompt));
+    expect(measureCubeFaceNodeBodyHeight(prompt)).toBe(88);
+    expect(measureCubeFaceNodeBodyHeight(ordinary)).toBe(92);
+  });
+
+  test('fits one compact combo below its native hidden-slot gutter', () => {
+    const combo = {
+      id: 'style',
+      type: 'PromptEncodeStyle',
+      widgets: [{ name: 'encode_style', computedHeight: 24 }],
+    };
+
+    expect(measureCubeFaceNodeBodyHeight(combo)).toBe(36);
   });
 
   test('leaves one native bottom margin after a compact widget stack', () => {
@@ -42,6 +53,6 @@ describe('CubeFaceNodeMeasurement', () => {
       widgets: Array.from({ length: 7 }, (_, index) => ({ name: `widget-${String(index)}` })),
     };
 
-    expect(measureCubeFaceNodeBodyHeight(sampler)).toBe(182);
+    expect(measureCubeFaceNodeBodyHeight(sampler)).toBe(180);
   });
 });

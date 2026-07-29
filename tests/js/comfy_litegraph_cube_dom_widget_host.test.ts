@@ -180,6 +180,9 @@ describe('ComfyLiteGraphCubeDomWidgetHost', () => {
     expect(textarea.style.height).toBe('80px');
     expect(textarea.style.overflowY).toBe('hidden');
     expect(widget.computedHeight).toBe(100);
+    const wrapper = document.querySelector<HTMLElement>('[data-sugarcubes-cube-face-dom-widget]');
+    expect(wrapper?.style.top).toBe('514px');
+    expect(wrapper?.style.height).toBe('128px');
     onGeometryChange.mockClear();
     Object.defineProperty(textarea, 'scrollHeight', { configurable: true, value: 170 });
     textarea.dispatchEvent(new Event('input'));

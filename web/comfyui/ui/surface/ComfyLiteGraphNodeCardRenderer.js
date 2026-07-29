@@ -116,6 +116,7 @@ export function drawNativeLiteGraphCubeCard(canvasRenderer, node, context, optio
         presentationNode.title_buttons = [];
         withCubeFaceNodePresentation(presentationNode, () => {
             context.textBaseline = 'alphabetic';
+            presentationNode.arrange?.();
             presentationNode.updateArea?.(context);
             canvasRenderer.drawNode(node, context);
         });
@@ -268,6 +269,7 @@ function restorePresentationSize(node, originalSize, context) {
         node.size[0] = originalSize[0];
         node.size[1] = originalSize[1];
     }
+    node.arrange?.();
     node.updateArea?.(context);
 }
 /** Suppress only Comfy's standard local preview state during a Cube-face draw. */

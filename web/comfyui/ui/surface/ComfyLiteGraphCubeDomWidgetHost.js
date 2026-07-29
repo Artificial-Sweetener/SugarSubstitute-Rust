@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Mount Comfy's exact Nodes 1.0 DOM widgets over native Cube-face cards. */
 import { findCubeFacePromptWidget } from './CubeFacePromptPolicy.js';
+import { cubeFaceNodeWidgetStartY } from './CubeFaceNodePresentationPolicy.js';
 import { clearCubeFacePromptWidgetHeight, fitCubeFacePromptTextarea, setCubeFacePromptWidgetHeight, } from './CubeFacePromptTextarea.js';
 const DEFAULT_WIDGET_MARGIN = 10;
 const DEFAULT_WIDGET_HEIGHT = 50;
@@ -100,11 +101,16 @@ export class ComfyLiteGraphCubeDomWidgetHost {
     }
     /** Translate Comfy's native widget layout into fixed viewport geometry. */
     #geometry(card, widget) {
-        const widgetY = finiteNumber(widget.y) ?? finiteNumber(widget.last_y);
+        const promptWidget = findCubeFacePromptWidget(card.node) === widget ? widget : null;
+        const widgetY = promptWidget === null
+            ? (finiteNumber(widget.y) ?? finiteNumber(widget.last_y))
+            : cubeFaceNodeWidgetStartY(card.node);
         if (widgetY === null)
             return null;
         const margin = Math.max(0, finiteNumber(widget.margin) ?? DEFAULT_WIDGET_MARGIN);
-        const computedHeight = finiteNumber(widget.computedHeight) ?? DEFAULT_WIDGET_HEIGHT;
+        const computedHeight = promptWidget === null
+            ? (finiteNumber(widget.computedHeight) ?? DEFAULT_WIDGET_HEIGHT)
+            : Math.max(1, card.bodyHeight - widgetY);
         const titleHeight = Math.max(1, card.rect.height - card.bodyHeight);
         const scale = Math.max(0.01, finiteNumber(this.#canvas.ds?.scale) ?? 1);
         const offset = this.#canvas.ds?.offset;
@@ -118,7 +124,7 @@ export class ComfyLiteGraphCubeDomWidgetHost {
             height: Math.max(1, computedHeight - margin * 2),
             scale,
             disabled: this.#canvas.read_only === true || widget.computedDisabled === true,
-            promptWidget: findCubeFacePromptWidget(card.node) === widget ? widget : null,
+            promptWidget,
         };
     }
     /** Move one exact element into a native-compatible positioning wrapper. */

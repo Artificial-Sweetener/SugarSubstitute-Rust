@@ -17,14 +17,16 @@
 
 import { isRecord } from '../types/common.js';
 import type { ComfyNode, ComfyWidget } from '../types/graph.js';
-import { cubeFaceNodeHasVisibleWidgets } from './CubeFaceNodePresentationPolicy.js';
+import {
+  cubeFaceNodeHasVisibleWidgets,
+  cubeFaceNodeWidgetStartY,
+} from './CubeFaceNodePresentationPolicy.js';
 import { cubeFacePromptWidgetHeight } from './CubeFacePromptTextarea.js';
 
 const HEADER_ONLY_BODY_HEIGHT = 1;
 const LEGACY_SLOT_HEIGHT = 20;
 const LEGACY_WIDGET_HEIGHT = 20;
 const LEGACY_WIDGET_GAP = 4;
-const LEGACY_WIDGET_PADDING = 8;
 const LEGACY_NODE_MARGIN = 6;
 
 interface MeasurableWidget extends ComfyWidget {
@@ -37,9 +39,9 @@ export function measureCubeFaceNodeBodyHeight(node: ComfyNode): number {
   if (!cubeFaceNodeHasVisibleWidgets(node)) return HEADER_ONLY_BODY_HEIGHT;
 
   const width = positiveNumber(node.size?.[0]) ?? 200;
-  let widgetsHeight = LEGACY_WIDGET_PADDING;
+  let widgetsHeight = cubeFaceNodeWidgetStartY(node);
   for (const widget of visibleWidgets(node)) {
-    widgetsHeight += measureWidgetHeight(widget, node, width) + LEGACY_WIDGET_GAP;
+    widgetsHeight += measureWidgetAllocation(widget, node, width);
   }
 
   const constructorState = Reflect.get(node, 'constructor');
@@ -58,21 +60,23 @@ function visibleWidgets(node: ComfyNode): MeasurableWidget[] {
   return widgets.filter((widget) => isWidgetVisible.call(node, widget) !== false);
 }
 
-/** Measure one native widget through its current Comfy sizing primitive. */
-function measureWidgetHeight(widget: MeasurableWidget, node: ComfyNode, width: number): number {
+/** Measure the complete vertical allocation Comfy's arrange pass assigns one widget. */
+function measureWidgetAllocation(widget: MeasurableWidget, node: ComfyNode, width: number): number {
   const promptHeight = cubeFacePromptWidgetHeight(widget);
   if (promptHeight !== null) return promptHeight;
   const computedHeight = positiveNumber(widget.computedHeight);
   if (computedHeight !== null) return computedHeight;
   if (typeof widget.computeSize === 'function') {
     const size = widget.computeSize(width);
-    if (Array.isArray(size)) return positiveNumber(size[1]) ?? LEGACY_WIDGET_HEIGHT;
+    if (Array.isArray(size)) {
+      return (positiveNumber(size[1]) ?? LEGACY_WIDGET_HEIGHT) + LEGACY_WIDGET_GAP;
+    }
   }
   if (typeof widget.computeLayoutSize === 'function') {
     const size = widget.computeLayoutSize(node);
     if (isRecord(size)) return positiveNumber(size.minHeight) ?? LEGACY_WIDGET_HEIGHT;
   }
-  return LEGACY_WIDGET_HEIGHT;
+  return LEGACY_WIDGET_HEIGHT + LEGACY_WIDGET_GAP;
 }
 
 /** Narrow one dynamic positive dimension. */

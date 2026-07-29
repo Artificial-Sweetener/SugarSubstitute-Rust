@@ -33,6 +33,7 @@ interface LiteGraphNodeRenderer {
 }
 
 interface LegacyPresentationNode extends ComfyNode {
+  arrange?(): void;
   drawSlots: ((...args: unknown[]) => void) | undefined;
   drawCollapsedSlots: ((...args: unknown[]) => void) | undefined;
   drawTitleBox?: (...args: unknown[]) => void;
@@ -185,6 +186,7 @@ export function drawNativeLiteGraphCubeCard(
     presentationNode.title_buttons = [];
     withCubeFaceNodePresentation(presentationNode, () => {
       context.textBaseline = 'alphabetic';
+      presentationNode.arrange?.();
       presentationNode.updateArea?.(context);
       canvasRenderer.drawNode(node, context);
     });
@@ -380,6 +382,7 @@ function restorePresentationSize(
     node.size[0] = originalSize[0];
     node.size[1] = originalSize[1];
   }
+  node.arrange?.();
   node.updateArea?.(context);
 }
 

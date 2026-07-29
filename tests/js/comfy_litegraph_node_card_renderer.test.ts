@@ -307,6 +307,44 @@ describe('ComfyLiteGraphNodeCardRenderer', () => {
     expect(updateArea).toHaveBeenNthCalledWith(2, context);
   });
 
+  test('arranges widgets against compact face geometry before restoring editor geometry', () => {
+    const widget = { name: 'encode_style', y: 144 };
+    const arrangedSizes: Array<[number, number]> = [];
+    const node = {
+      id: 'inside',
+      type: 'PromptEncodeStyle',
+      pos: [0, 0],
+      size: [360, 180],
+      widgets: [widget],
+      drawSlots: jest.fn(),
+      drawCollapsedSlots: jest.fn(),
+      onDrawBackground: jest.fn(),
+      title_buttons: [],
+      strokeStyles: {},
+      arrange: jest.fn(() => {
+        arrangedSizes.push([node.size[0], node.size[1]]);
+        widget.y = node.size[1] - 20;
+      }),
+      updateArea: jest.fn(),
+    };
+    const drawNode = jest.fn(() => {
+      expect(node.size).toEqual([260, 38]);
+      expect(widget.y).toBe(18);
+    });
+
+    drawNativeLiteGraphCubeCard({ drawNode }, node, {} as CanvasRenderingContext2D, {
+      presentationWidth: 260,
+      presentationHeight: 38,
+    });
+
+    expect(arrangedSizes).toEqual([
+      [260, 38],
+      [360, 180],
+    ]);
+    expect(node.size).toEqual([360, 180]);
+    expect(widget.y).toBe(160);
+  });
+
   test('applies one parent Cube theme only during the native card draw', () => {
     const node = {
       id: 'inside',
@@ -381,7 +419,7 @@ describe('ComfyLiteGraphNodeCardRenderer', () => {
       expect(node.flags).toEqual({ collapsed: false, pinned: true });
       expect(node.inputs).toBe(inputs);
       expect(node.outputs).toBe(outputs);
-      expect(node.widgets_start_y).toBe(22);
+      expect(node.widgets_start_y).toBe(6);
       expect(node.widgets_up).toBe(true);
     });
 

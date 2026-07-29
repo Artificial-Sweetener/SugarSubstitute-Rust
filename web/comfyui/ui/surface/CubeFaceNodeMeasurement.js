@@ -15,22 +15,21 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Measure Nodes 1.0 face bodies without mutating graph-owned slot collections. */
 import { isRecord } from '../types/common.js';
-import { cubeFaceNodeHasVisibleWidgets } from './CubeFaceNodePresentationPolicy.js';
+import { cubeFaceNodeHasVisibleWidgets, cubeFaceNodeWidgetStartY, } from './CubeFaceNodePresentationPolicy.js';
 import { cubeFacePromptWidgetHeight } from './CubeFacePromptTextarea.js';
 const HEADER_ONLY_BODY_HEIGHT = 1;
 const LEGACY_SLOT_HEIGHT = 20;
 const LEGACY_WIDGET_HEIGHT = 20;
 const LEGACY_WIDGET_GAP = 4;
-const LEGACY_WIDGET_PADDING = 8;
 const LEGACY_NODE_MARGIN = 6;
 /** Measure the native expanded widget body while excluding graph boundary rows. */
 export function measureCubeFaceNodeBodyHeight(node) {
     if (!cubeFaceNodeHasVisibleWidgets(node))
         return HEADER_ONLY_BODY_HEIGHT;
     const width = positiveNumber(node.size?.[0]) ?? 200;
-    let widgetsHeight = LEGACY_WIDGET_PADDING;
+    let widgetsHeight = cubeFaceNodeWidgetStartY(node);
     for (const widget of visibleWidgets(node)) {
-        widgetsHeight += measureWidgetHeight(widget, node, width) + LEGACY_WIDGET_GAP;
+        widgetsHeight += measureWidgetAllocation(widget, node, width);
     }
     const constructorState = Reflect.get(node, 'constructor');
     const slotStart = nonNegativeNumber(readMember(constructorState, 'slot_start_y')) ?? 0;
@@ -45,8 +44,8 @@ function visibleWidgets(node) {
         return widgets;
     return widgets.filter((widget) => isWidgetVisible.call(node, widget) !== false);
 }
-/** Measure one native widget through its current Comfy sizing primitive. */
-function measureWidgetHeight(widget, node, width) {
+/** Measure the complete vertical allocation Comfy's arrange pass assigns one widget. */
+function measureWidgetAllocation(widget, node, width) {
     const promptHeight = cubeFacePromptWidgetHeight(widget);
     if (promptHeight !== null)
         return promptHeight;
@@ -55,15 +54,16 @@ function measureWidgetHeight(widget, node, width) {
         return computedHeight;
     if (typeof widget.computeSize === 'function') {
         const size = widget.computeSize(width);
-        if (Array.isArray(size))
-            return positiveNumber(size[1]) ?? LEGACY_WIDGET_HEIGHT;
+        if (Array.isArray(size)) {
+            return (positiveNumber(size[1]) ?? LEGACY_WIDGET_HEIGHT) + LEGACY_WIDGET_GAP;
+        }
     }
     if (typeof widget.computeLayoutSize === 'function') {
         const size = widget.computeLayoutSize(node);
         if (isRecord(size))
             return positiveNumber(size.minHeight) ?? LEGACY_WIDGET_HEIGHT;
     }
-    return LEGACY_WIDGET_HEIGHT;
+    return LEGACY_WIDGET_HEIGHT + LEGACY_WIDGET_GAP;
 }
 /** Narrow one dynamic positive dimension. */
 function positiveNumber(value) {

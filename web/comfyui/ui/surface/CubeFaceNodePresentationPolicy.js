@@ -16,12 +16,12 @@
 /** Own transient native-node state used only while presenting Cube-face cards. */
 import { isRecord } from '../types/common.js';
 import { findCubeFacePromptWidget } from './CubeFacePromptPolicy.js';
-/** Reserve one normal LiteGraph slot row above slot-suppressed Cube-face widgets. */
-export const CUBE_FACE_WIDGET_GUTTER = 20;
-const NATIVE_WIDGET_INSET = 2;
-/** Reserve a hidden-slot row only for widgets that do not provide their own native top placement. */
-export function cubeFaceNodeWidgetGutter(node) {
-    return findCubeFacePromptWidget(node) ? 0 : CUBE_FACE_WIDGET_GUTTER;
+/** Match the compact native bottom margin above ordinary Cube-face widget stacks. */
+export const CUBE_FACE_WIDGET_PADDING = 6;
+const PROMPT_WIDGET_TOP_PADDING = 2;
+/** Resolve balanced compact padding while preserving multiline prompt placement. */
+export function cubeFaceNodeWidgetStartY(node) {
+    return findCubeFacePromptWidget(node) ? PROMPT_WIDGET_TOP_PADDING : CUBE_FACE_WIDGET_PADDING;
 }
 /** Create face flags that retain native state except graph collapse. */
 function createCubeFaceFlags(flags) {
@@ -44,8 +44,7 @@ export function withCubeFaceNodePresentation(node, operation) {
     const remembered = rememberNodeProperties(node, ['flags', 'widgets_start_y', 'widgets_up']);
     node.flags = createCubeFaceFlags(node.flags);
     Reflect.set(node, 'widgets_up', true);
-    // Preserve the first native slot row only when its widget does not already own that top spacing.
-    Reflect.set(node, 'widgets_start_y', cubeFaceNodeWidgetGutter(node) + NATIVE_WIDGET_INSET);
+    Reflect.set(node, 'widgets_start_y', cubeFaceNodeWidgetStartY(node));
     try {
         return operation();
     }

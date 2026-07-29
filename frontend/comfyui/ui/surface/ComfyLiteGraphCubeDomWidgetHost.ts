@@ -18,6 +18,7 @@
 import type { ComfyNode, ComfyWidget } from '../types/graph.js';
 import type { CubeCanvasCard, CubeCanvasLayout } from './CubeCanvasLayout.js';
 import { findCubeFacePromptWidget } from './CubeFacePromptPolicy.js';
+import { cubeFaceNodeWidgetStartY } from './CubeFaceNodePresentationPolicy.js';
 import {
   clearCubeFacePromptWidgetHeight,
   fitCubeFacePromptTextarea,
@@ -168,10 +169,17 @@ export class ComfyLiteGraphCubeDomWidgetHost {
 
   /** Translate Comfy's native widget layout into fixed viewport geometry. */
   #geometry(card: CubeCanvasCard, widget: NativeDomWidget): WidgetGeometry | null {
-    const widgetY = finiteNumber(widget.y) ?? finiteNumber(widget.last_y);
+    const promptWidget = findCubeFacePromptWidget(card.node) === widget ? widget : null;
+    const widgetY =
+      promptWidget === null
+        ? (finiteNumber(widget.y) ?? finiteNumber(widget.last_y))
+        : cubeFaceNodeWidgetStartY(card.node);
     if (widgetY === null) return null;
     const margin = Math.max(0, finiteNumber(widget.margin) ?? DEFAULT_WIDGET_MARGIN);
-    const computedHeight = finiteNumber(widget.computedHeight) ?? DEFAULT_WIDGET_HEIGHT;
+    const computedHeight =
+      promptWidget === null
+        ? (finiteNumber(widget.computedHeight) ?? DEFAULT_WIDGET_HEIGHT)
+        : Math.max(1, card.bodyHeight - widgetY);
     const titleHeight = Math.max(1, card.rect.height - card.bodyHeight);
     const scale = Math.max(0.01, finiteNumber(this.#canvas.ds?.scale) ?? 1);
     const offset = this.#canvas.ds?.offset;
@@ -185,7 +193,7 @@ export class ComfyLiteGraphCubeDomWidgetHost {
       height: Math.max(1, computedHeight - margin * 2),
       scale,
       disabled: this.#canvas.read_only === true || widget.computedDisabled === true,
-      promptWidget: findCubeFacePromptWidget(card.node) === widget ? widget : null,
+      promptWidget,
     };
   }
 
