@@ -51,9 +51,10 @@ export class ComfyCubeNodeFactory {
         const size = constrainedSize(configuration.size);
         node.setSize?.([...size]);
         writePair(node.size, size);
+        const kind = configuration.kind === 'draft' ? 'cube_draft' : 'cube';
         node.properties = {
             ...node.properties,
-            sugarcubes_kind: 'cube',
+            sugarcubes_kind: kind,
             sugarcubes_cube: identity,
             sugarcubes_surface: cloneRecord(configuration.surface),
         };
@@ -63,7 +64,7 @@ export class ComfyCubeNodeFactory {
 export function isCubeNode(value) {
     if (!isRecord(value) || !isRecord(value.properties))
         return false;
-    return (value.properties.sugarcubes_kind === 'cube' &&
+    return (isCubeKind(value.properties.sugarcubes_kind) &&
         typeof value.isSubgraphNode === 'function' &&
         value.isSubgraphNode.call(value) === true &&
         isNativeSubgraph(value.subgraph) &&
@@ -73,6 +74,10 @@ export function isCubeNode(value) {
         Array.isArray(value.outputs) &&
         typeof value.connect === 'function' &&
         typeof value.serialize === 'function');
+}
+/** Return whether the native Cube face represents a workflow-only draft. */
+export function isDraftCubeNode(value) {
+    return isCubeNode(value) && value.properties.sugarcubes_kind === 'cube_draft';
 }
 /** Return the mutable face state serialized with one native Cube node. */
 export function requireCubeSurface(node) {
@@ -148,4 +153,8 @@ function cloneRecord(value) {
 /** Accept LiteGraph's mutable array and typed-array geometry vectors. */
 function isNumericVector(value) {
     return Array.isArray(value) || value instanceof Float32Array || value instanceof Float64Array;
+}
+/** Recognize both persisted Cubes and workflow-only draft Cube faces. */
+function isCubeKind(value) {
+    return value === 'cube' || value === 'cube_draft';
 }

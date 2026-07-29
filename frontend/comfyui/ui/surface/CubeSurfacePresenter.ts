@@ -49,12 +49,15 @@ import { ComfyRendererPresenceObserver } from './ComfyRendererPresenceObserver.j
 import { ComfyNativeSlotLayoutCoordinator } from './ComfyNativeSlotLayoutCoordinator.js';
 import type { CanvasGraphChangeSource } from './ComfyCanvasGraphChangeAdapter.js';
 import { CubeRendererTransitionStabilizer } from './CubeRendererTransitionStabilizer.js';
+import { resolveCubeExternalInterface } from '../cube/graph/CubeExternalInterface.js';
+import { filterCubePreviewOutputs } from './CubePreviewModel.js';
 
 type CubeRendererMode = 'litegraph' | 'vue';
 
 export interface CubeSurfacePresenterOptions {
   document: Document;
   openEditor(node: CubeNode): void;
+  prepareEditor?(node: CubeNode): void;
   rootGraph: object;
   getCurrentGraph(): object | null;
   nodes: CubeNodeCatalog;
@@ -78,6 +81,7 @@ export interface CubeSurfacePresenterOptions {
 interface MountedCubeSurface {
   root: HTMLElement;
   topologySignature: string;
+  presentationSignature: string;
   view: CubeSurfaceView;
   layoutWidth: number;
 }
@@ -86,6 +90,7 @@ interface MountedCubeSurface {
 export class CubeSurfacePresenter {
   readonly #document: Document;
   readonly #openEditor: (node: CubeNode) => void;
+  readonly #prepareEditor: (node: CubeNode) => void;
   readonly #rootGraph: object;
   readonly #getCurrentGraph: () => object | null;
   readonly #nodes: CubeNodeCatalog;
@@ -115,6 +120,7 @@ export class CubeSurfacePresenter {
   constructor(options: CubeSurfacePresenterOptions) {
     this.#document = options.document;
     this.#openEditor = options.openEditor;
+    this.#prepareEditor = options.prepareEditor ?? (() => undefined);
     this.#rootGraph = options.rootGraph;
     this.#getCurrentGraph = options.getCurrentGraph;
     this.#nodes = options.nodes;
@@ -140,7 +146,7 @@ export class CubeSurfacePresenter {
       titleHeight: options.titleHeight ?? 30,
       history: options.history ?? {},
       getScale: () => Number(options.legacyCanvas?.ds?.scale) || 1,
-      openEditor: (node) => this.#beginEditing(node),
+      prepareEditor: (node) => this.#prepareEditor(node),
       onGeometryChange: (node) => this.#handleNodeGeometryChange(node),
       requestSlotLayoutSync:
         options.requestSlotLayoutSync ?? (() => this.#slotLayoutCoordinator.request()),
@@ -248,11 +254,16 @@ export class CubeSurfacePresenter {
         continue;
       }
       const signature = buildTopologySignature(node);
-      if (surface.topologySignature !== signature) {
+      const presentationSignature = buildPresentationSignature(node);
+      if (
+        surface.topologySignature !== signature ||
+        surface.presentationSignature !== presentationSignature
+      ) {
         void this.#mountView(node, root);
         continue;
       }
       this.#layoutMountedView(node);
+      this.#host.reconcileBoundary(node);
     }
   }
 
@@ -303,6 +314,7 @@ export class CubeSurfacePresenter {
       this.#views.set(node, {
         root,
         topologySignature: buildTopologySignature(node),
+        presentationSignature: buildPresentationSignature(node),
         view,
         layoutWidth: Number.NaN,
       });
@@ -312,7 +324,15 @@ export class CubeSurfacePresenter {
         new NativeSubgraphChangeObserver(node.subgraph, () => this.#sync()),
       );
       this.#layoutMountedView(node);
-      if (this.#previewCatalog) view.renderPreview(this.#previewCatalog.snapshot(node));
+      if (this.#previewCatalog) {
+        const externalInterface = resolveCubeExternalInterface(node);
+        view.renderPreview(
+          filterCubePreviewOutputs(
+            this.#previewCatalog.snapshot(node),
+            externalInterface.outputSlots,
+          ),
+        );
+      }
       this.#host.reconcileBoundary(node);
       this.#onBoundaryGeometryChange();
     } catch (error: unknown) {
@@ -328,7 +348,12 @@ export class CubeSurfacePresenter {
   #layoutMountedView(node: CubeNode): void {
     const surface = this.#views.get(node);
     if (!surface) return;
-    surface.view.setPortGutterWidths(node.inputs.length > 0 ? CUBE_INPUT_GUTTER_WIDTH : 0, 0);
+    const externalInterface = resolveCubeExternalInterface(node);
+    surface.view.setPortGutterWidths(
+      externalInterface.inputSlots.length > 0 ? CUBE_INPUT_GUTTER_WIDTH : 0,
+      0,
+    );
+    surface.view.setPreviewAvailable(externalInterface.outputSlots.length > 0);
     const width = resolveVueContentWidth(node);
     if (Number.isFinite(surface.layoutWidth) && Math.abs(surface.layoutWidth - width) < 0.5) {
       return;
@@ -348,7 +373,13 @@ export class CubeSurfacePresenter {
   #refreshPreviews(): void {
     if (!this.#previewCatalog) return;
     for (const [node, surface] of this.#views) {
-      surface.view.renderPreview(this.#previewCatalog.snapshot(node));
+      const externalInterface = resolveCubeExternalInterface(node);
+      surface.view.renderPreview(
+        filterCubePreviewOutputs(
+          this.#previewCatalog.snapshot(node),
+          externalInterface.outputSlots,
+        ),
+      );
       this.#host.reconcileBoundary(node);
       this.#onBoundaryGeometryChange();
     }
@@ -430,6 +461,20 @@ function buildTopologySignature(node: CubeNode): string {
   return JSON.stringify(
     node.subgraph._nodes.map((innerNode) => [String(innerNode.id ?? ''), innerNode.type ?? '']),
   );
+}
+
+/** Detect titlebar identity and persistence changes without remounting for unrelated graph state. */
+function buildPresentationSignature(node: CubeNode): string {
+  const identity = requireCubeIdentity(node);
+  return JSON.stringify([
+    node.title ?? '',
+    node.subgraph.name,
+    identity.cube_id ?? '',
+    identity.default_alias ?? '',
+    identity.cube_version ?? '',
+    identity.has_saveable_changes ?? false,
+    identity.icon ?? null,
+  ]);
 }
 
 /** Replace persisted surface state while retaining domain ownership of the record. */

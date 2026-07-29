@@ -16,7 +16,10 @@
 /** Verify Nodes 1.0 Cube chrome reuses native and PrimeIcons drawing primitives. */
 
 import { jest } from '@jest/globals';
-import type { CubeNode } from '../../frontend/comfyui/ui/cube/node/ComfyCubeNodeFactory.js';
+import {
+  requireCubeIdentity,
+  type CubeNode,
+} from '../../frontend/comfyui/ui/cube/node/ComfyCubeNodeFactory.js';
 import { CubeIconResolver } from '../../frontend/comfyui/ui/core/CubeIconResolver.js';
 import { computeCubeCanvasLayout } from '../../frontend/comfyui/ui/surface/CubeCanvasLayout.js';
 import { CubeCanvasChromeRenderer } from '../../frontend/comfyui/ui/surface/CubeCanvasChromeRenderer.js';
@@ -73,15 +76,60 @@ describe('CubeCanvasChromeRenderer', () => {
     ).mock.calls.map(([text]) => text);
     expect(texts).toEqual(
       expect.arrayContaining([
+        'from Base-Cubes by Artificial-Sweetener',
         comfyPrimeIconGlyph('eye'),
         comfyPrimeIconGlyph('arrow-left'),
         comfyPrimeIconGlyph('arrow-right'),
         comfyPrimeIconGlyph('box'),
       ]),
     );
+    expect(texts).not.toEqual(
+      expect.arrayContaining([comfyPrimeIconGlyph('save'), comfyPrimeIconGlyph('ban')]),
+    );
     expect(texts).not.toEqual(expect.arrayContaining(['⇦', '⇨', '▱', '◉']));
     expect(context.stroke).not.toHaveBeenCalled();
     expect(context.roundRect).not.toHaveBeenCalled();
+  });
+
+  test('draws the crossed-out save mark only for a Cube awaiting its first save', () => {
+    const inner = {
+      id: 'inner',
+      type: 'OptionalPatch',
+      mode: 4,
+      pos: [0, 0],
+      size: [240, 100],
+      inputs: [],
+      outputs: [],
+      widgets: [],
+      properties: {},
+      connect() {},
+    };
+    const node = cubeNode(inner);
+    node.properties.sugarcubes_kind = 'cube_draft';
+    delete requireCubeIdentity(node).cube_id;
+    const state = createDefaultCubeSurfaceState();
+    state.preview.visible = false;
+    const layout = computeCubeCanvasLayout(node, state, 30);
+    const context = drawingContext();
+
+    new CubeCanvasChromeRenderer(new CubeIconResolver()).draw(context, {
+      node,
+      layout,
+      chromeActions: null,
+      editorButton: null,
+    });
+
+    const texts = (
+      context.fillText as jest.MockedFunction<CanvasRenderingContext2D['fillText']>
+    ).mock.calls.map(([text]) => text);
+    expect(texts).toEqual(
+      expect.arrayContaining([
+        'Workflow only',
+        comfyPrimeIconGlyph('save'),
+        comfyPrimeIconGlyph('ban'),
+      ]),
+    );
+    expect(texts).not.toEqual(expect.arrayContaining(['Saved', 'Unsaved']));
   });
 });
 

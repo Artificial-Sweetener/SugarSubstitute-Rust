@@ -129,6 +129,7 @@ interface ChromeInstanceState {
 }
 export interface ChromeActions extends UnknownRecord {
   onSaveImplementation?(metadata: ChromeMetadata): void;
+  onSaveDraft?(metadata: ChromeMetadata): void;
   onSaveCubeDefaults?(metadata: ChromeMetadata): void;
   onSwapLeft?(metadata: ChromeMetadata): void;
   onSwapRight?(metadata: ChromeMetadata): void;
@@ -564,6 +565,14 @@ export class CubeChromeOverlay {
     isDirty?: boolean;
     flavors?: unknown;
   }): Array<{ title: string; callback: () => void }> {
+    if (metadata.kind === 'draft') {
+      return [
+        {
+          title: 'Save SugarCube',
+          callback: () => this.actions.onSaveDraft?.(metadata),
+        },
+      ];
+    }
     return [
       {
         title: 'Save cube implementation',

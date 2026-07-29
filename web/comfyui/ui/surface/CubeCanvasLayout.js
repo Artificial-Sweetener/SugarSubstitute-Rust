@@ -14,6 +14,8 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Compute renderer-independent Nodes 1.0 Cube surface geometry. */
+import { requireCubeIdentity } from '../cube/node/ComfyCubeNodeFactory.js';
+import { isCubeAwaitingFirstSave } from '../cube/CubeIdentityPresentation.js';
 import { CUBE_CANVAS_ACTIVATION_SIZE } from './CubeCanvasActivationControl.js';
 import { CUBE_RESIZE_EDGES } from '../cube/geometry/CubeResizeGeometry.js';
 import { resolveCubeFaceCardPresentation, } from './CubeFaceCardPolicy.js';
@@ -29,19 +31,23 @@ const CONTENT_GAP = 12;
 const RESIZE_HANDLE_SIZE = 18;
 const RESIZE_EDGE_THICKNESS = 10;
 /** Lay out one finite canvas Cube using the same persisted masonry policy as Nodes 2.0. */
-export function computeCubeCanvasLayout(node, state, titleHeight, titlebarActionKeys = []) {
+export function computeCubeCanvasLayout(node, state, titleHeight, titlebarActionKeys = [], externalInterface = {
+    inputSlots: node.inputs.map((_, index) => index),
+    outputSlots: node.outputs.map((_, index) => index),
+}) {
     const frame = rect(Number(node.pos[0]), Number(node.pos[1]) - titleHeight, Number(node.size[0]), Number(node.size[1]) + titleHeight);
     const header = rect(frame.x, frame.y, frame.width, HEADER_HEIGHT);
     const spacing = resolveCubeSurfaceCardSpacing(state);
     const baseContent = rect(frame.x + FRAME_PADDING, frame.y + HEADER_HEIGHT + spacing.headerInset, Math.max(1, frame.width - FRAME_PADDING * 2), Math.max(1, frame.height - HEADER_HEIGHT - spacing.headerInset - spacing.footerInset));
     const gutters = resolveCubePortGutters(frame, baseContent, {
-        hasInputs: node.inputs.length > 0,
-        hasOutputs: node.outputs.length > 0,
+        hasInputs: externalInterface.inputSlots.length > 0,
+        hasOutputs: externalInterface.outputSlots.length > 0,
     });
     const content = gutters.content;
     const minimumMasonryWidth = Math.min(content.width, Math.max(1, state.minimumColumnWidth));
-    const previewRight = state.preview.visible ? frame.x + frame.width : content.x + content.width;
-    const previewWidth = state.preview.visible
+    const previewVisible = state.preview.visible && externalInterface.outputSlots.length > 0;
+    const previewRight = previewVisible ? frame.x + frame.width : content.x + content.width;
+    const previewWidth = previewVisible
         ? Math.min(state.preview.width, Math.max(0, previewRight - content.x - CONTENT_GAP - minimumMasonryWidth))
         : 0;
     const masonryWidth = Math.max(1, (previewWidth > 0 ? previewRight : content.x + content.width) -
@@ -54,6 +60,7 @@ export function computeCubeCanvasLayout(node, state, titleHeight, titlebarAction
     const presentation = resolveCubeFaceCardPresentation(node.subgraph._nodes, state, node.subgraph);
     const chrome = layoutCubeCanvasChrome(header, {
         showCardMenu: presentation.menuEntries.length > 0,
+        showUnsavedIndicator: isCubeAwaitingFirstSave(requireCubeIdentity(node)),
         titlebarActionKeys,
     });
     const measuredCards = presentation.cards
@@ -66,9 +73,6 @@ export function computeCubeCanvasLayout(node, state, titleHeight, titlebarAction
         id: card.id,
         height: card.bodyHeight + titleHeight,
         ...(card.columnSpan === undefined ? {} : { columnSpan: card.columnSpan }),
-        sourceX: Number(card.node.pos?.[0]),
-        sourceY: Number(card.node.pos?.[1]),
-        sourceWidth: Number(card.node.size?.[0]),
     })), {
         availableWidth: masonry.width,
         minimumColumnWidth: state.minimumColumnWidth,
@@ -108,13 +112,14 @@ export function computeCubeCanvasLayout(node, state, titleHeight, titlebarAction
         masonry,
         preview,
         editAction: chrome.editAction,
+        unsavedIndicator: chrome.unsavedIndicator,
         cardMenuAction: chrome.cardMenuAction,
         chromeActions: chrome.chromeActions,
         cardMenuEntries: presentation.menuEntries,
         resizeHandles: layoutResizeHandles(frame),
         cards,
-        inputs: layoutCubeInputPorts(node.subgraph.inputs, frame, HEADER_HEIGHT),
-        outputs: layoutCubeOutputPorts(node.outputs, frame, preview, HEADER_HEIGHT),
+        inputs: layoutCubeInputPorts(externalInterface.inputSlots.map((index) => node.subgraph.inputs[index]), frame, HEADER_HEIGHT, externalInterface.inputSlots),
+        outputs: layoutCubeOutputPorts(externalInterface.outputSlots.map((index) => node.outputs[index]), frame, preview, HEADER_HEIGHT, externalInterface.outputSlots),
         minimumSize,
     };
 }

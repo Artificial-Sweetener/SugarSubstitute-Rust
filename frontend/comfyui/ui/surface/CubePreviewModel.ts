@@ -39,3 +39,17 @@ export interface CubePreviewSnapshot {
 export interface CubePreviewCatalog {
   snapshot(cube: CubeNode): CubePreviewSnapshot;
 }
+
+/** Keep preview sections aligned with the externally active output boundaries. */
+export function filterCubePreviewOutputs(
+  snapshot: CubePreviewSnapshot,
+  outputSlots: readonly number[],
+): CubePreviewSnapshot {
+  return {
+    outputs: outputSlots.flatMap((index) => {
+      const output = snapshot.outputs[index];
+      return output ? [output] : [];
+    }),
+    internalItems: snapshot.internalItems,
+  };
+}

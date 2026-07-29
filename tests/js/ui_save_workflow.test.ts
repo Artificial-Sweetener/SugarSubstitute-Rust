@@ -24,9 +24,9 @@ let app = hostApp as unknown as (typeof import('./mocks/app.js'))['app'];
 let api = hostApi as unknown as (typeof import('./mocks/api.js'))['api'];
 
 const CANONICAL_DEMO_ID = 'artificial-sweetener/base-cubes/demo.cube';
-const PERSONAL_DEMO_ID = 'local/personal/Demo Cube.cube';
-const PERSONAL_LOOSE_ID = 'local/personal/Loose Cube.cube';
-const PERSONAL_DEMO_FORK_ID = 'local/personal/Demo (Fork).cube';
+const PERSONAL_DEMO_ID = 'local/personal/Any/Demo Cube.cube';
+const PERSONAL_LOOSE_ID = 'local/personal/Any/Loose Cube.cube';
+const PERSONAL_DEMO_FORK_ID = 'local/personal/Any/Demo (Fork).cube';
 const HISTORICAL_REVISION_REF = 'abc123456789';
 const CURRENT_REVISION_REF = 'WORKTREE';
 let loadedUi: SugarCubesUI | null = null;

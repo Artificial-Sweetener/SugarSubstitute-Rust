@@ -18,6 +18,7 @@
  */
 
 import { normalizeDefaultAliasTitle, suggestCanonicalCubePath } from '../core/CubeId.js';
+import { normalizeTargetModel } from '../core/ModelTargets.js';
 
 const PERSONAL_SOURCE_ROOT = 'local/personal';
 
@@ -27,12 +28,17 @@ export interface PersonalCubeIdentity {
   cubeId: string;
 }
 
-/** Return a collision-safe personal identity and display name. */
+/** Return a collision-safe personal identity scoped to its target-model folder. */
 export function suggestPersonalCubeIdentity(
   name: unknown,
+  targetModel: unknown,
   existingCubeIds: readonly unknown[] = [],
 ): PersonalCubeIdentity {
   const requestedName = normalizeDefaultAliasTitle(name) || 'SugarCube';
+  const normalizedTargetModel = normalizeTargetModel(targetModel);
+  if (!normalizedTargetModel) {
+    throw new Error('Target model is required.');
+  }
   const usedIds = new Set(
     (Array.isArray(existingCubeIds) ? existingCubeIds : [])
       .filter((cubeId) => typeof cubeId === 'string')
@@ -41,18 +47,22 @@ export function suggestPersonalCubeIdentity(
   );
   let resolvedName = requestedName;
   let suffix = 2;
-  while (usedIds.has(buildPersonalCubeId(resolvedName).toLowerCase())) {
+  while (usedIds.has(buildPersonalCubeId(resolvedName, normalizedTargetModel).toLowerCase())) {
     resolvedName = `${requestedName} ${suffix}`;
     suffix += 1;
   }
   return {
     name: resolvedName,
-    defaultAlias: resolvedName,
-    cubeId: buildPersonalCubeId(resolvedName),
+    defaultAlias: `${normalizedTargetModel}/${resolvedName}`,
+    cubeId: buildPersonalCubeId(resolvedName, normalizedTargetModel),
   };
 }
 
-/** Build one canonical flat personal cube id. */
-export function buildPersonalCubeId(name: unknown): string {
-  return `${PERSONAL_SOURCE_ROOT}/${suggestCanonicalCubePath(name)}`;
+/** Build one canonical personal cube id under its target-model folder. */
+export function buildPersonalCubeId(name: unknown, targetModel: unknown): string {
+  const normalizedTargetModel = normalizeTargetModel(targetModel);
+  if (!normalizedTargetModel) {
+    throw new Error('Target model is required.');
+  }
+  return `${PERSONAL_SOURCE_ROOT}/${normalizedTargetModel}/${suggestCanonicalCubePath(name)}`;
 }

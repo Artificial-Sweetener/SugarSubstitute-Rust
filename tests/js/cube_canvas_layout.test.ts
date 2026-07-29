@@ -205,6 +205,34 @@ describe('computeCubeCanvasLayout', () => {
     expect(layout.content.x + layout.content.width).toBe(layout.frame.x + layout.frame.width - 12);
   });
 
+  test('does not expose dormant native draft boundaries on the closed face', () => {
+    const state = createDefaultCubeSurfaceState();
+    const cube = cubeNode({
+      id: 'inner',
+      type: 'Draft content',
+      pos: [0, 0],
+      size: [240, 100],
+      inputs: [],
+      outputs: [],
+      widgets: [],
+      properties: {},
+      connect() {},
+    });
+    cube.inputs = [{ name: 'input', type: '*' }];
+    cube.outputs = [{ name: 'output', type: '*' }];
+
+    const layout = computeCubeCanvasLayout(cube, state, 30, [], {
+      inputSlots: [],
+      outputSlots: [],
+    });
+
+    expect(layout.inputs).toEqual([]);
+    expect(layout.outputs).toEqual([]);
+    expect(layout.preview).toBeNull();
+    expect(layout.inputGutter.width).toBe(0);
+    expect(layout.outputGutter.width).toBe(0);
+  });
+
   test('reserves a compact hit target for the native Nodes 1.0 SubgraphNode editor button', () => {
     const state = createDefaultCubeSurfaceState();
     const cube = cubeNode({
@@ -229,6 +257,7 @@ describe('computeCubeCanvasLayout', () => {
       { x: 100, y: 110, width: 720, height: 42 },
       {
         showCardMenu: true,
+        showUnsavedIndicator: false,
         titlebarActionKeys: ['swap-left', 'cube-menu'],
       },
     );
@@ -240,6 +269,28 @@ describe('computeCubeCanvasLayout', () => {
       (chrome.chromeActions['cube-menu']?.x ?? 0) - 6 - 28,
     );
     expect(chrome.cardMenuAction.x).toBe((chrome.chromeActions['swap-left']?.x ?? 0) - 6 - 28);
+  });
+
+  test('reserves a titlebar corner slot only for a Cube awaiting its first save', () => {
+    const saved = layoutCubeCanvasChrome(
+      { x: 100, y: 110, width: 720, height: 42 },
+      {
+        showCardMenu: false,
+        showUnsavedIndicator: false,
+        titlebarActionKeys: [],
+      },
+    );
+    const draft = layoutCubeCanvasChrome(
+      { x: 100, y: 110, width: 720, height: 42 },
+      {
+        showCardMenu: false,
+        showUnsavedIndicator: true,
+        titlebarActionKeys: [],
+      },
+    );
+
+    expect(saved.unsavedIndicator).toBeNull();
+    expect(draft.unsavedIndicator?.x).toBe(draft.editAction.x - 6 - 28);
   });
 });
 

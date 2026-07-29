@@ -19,9 +19,6 @@ export interface CubeMasonryCard {
   id: string;
   height: number;
   columnSpan?: number;
-  sourceX?: number;
-  sourceY?: number;
-  sourceWidth?: number;
 }
 
 export interface CubeMasonryOptions {
@@ -44,7 +41,7 @@ export interface CubeMasonryResult {
   placements: CubeMasonryPlacement[];
 }
 
-/** Compute a finite shortest-column masonry layout for the available width. */
+/** Match SugarSubstitute's responsive shortest-column masonry geometry. */
 export function computeCubeMasonry(
   cards: readonly CubeMasonryCard[],
   options: CubeMasonryOptions,
@@ -56,16 +53,8 @@ export function computeCubeMasonry(
     1,
     Math.floor((availableWidth + gap) / (minimumColumnWidth + gap)),
   );
-  const columnCount = Math.max(1, Math.min(widthColumnCapacity, Math.max(1, cards.length)));
-  const columnWidth = (availableWidth - gap * (columnCount - 1)) / columnCount;
-  const spatialPlacements = computeSpatialPlacements(
-    cards,
-    columnCount,
-    columnWidth,
-    minimumColumnWidth,
-    gap,
-  );
-  if (spatialPlacements) return spatialPlacements;
+  const columnCount = widthColumnCapacity;
+  const columnWidth = Math.floor((availableWidth - gap * (columnCount - 1)) / columnCount);
   const columnHeights = Array.from({ length: columnCount }, () => 0);
   const placements: CubeMasonryPlacement[] = [];
 
@@ -94,169 +83,6 @@ export function computeCubeMasonry(
     height: Math.max(0, ...occupiedHeights),
     placements,
   };
-}
-
-interface SpatialCard {
-  card: CubeMasonryCard;
-  index: number;
-  centerX: number;
-  sourceY: number;
-}
-
-/** Preserve saved editor columns while splitting or merging them responsively. */
-function computeSpatialPlacements(
-  cards: readonly CubeMasonryCard[],
-  columnCount: number,
-  columnWidth: number,
-  minimumColumnWidth: number,
-  gap: number,
-): CubeMasonryResult | null {
-  // Saved editor columns describe independent single-column cards; a spanning prompt owns a
-  // contiguous responsive window instead, so it must use the shared span-aware placement path.
-  if (cards.some((card) => normalizedColumnSpan(card.columnSpan, columnCount) > 1)) return null;
-  const spatialCards = cards.map(toSpatialCard);
-  if (spatialCards.some((card) => card === null)) return null;
-  const ordered = (spatialCards as SpatialCard[]).sort(
-    (left, right) =>
-      left.centerX - right.centerX || left.sourceY - right.sourceY || left.index - right.index,
-  );
-  let columns = clusterSpatialColumns(ordered, Math.max(24, minimumColumnWidth / 2));
-  while (columns.length > columnCount) columns = mergeShortestAdjacentColumns(columns, gap);
-  while (columns.length < columnCount) {
-    const splitIndex = indexOfTallestSplittableColumn(columns, gap);
-    if (splitIndex < 0) break;
-    const source = columns[splitIndex];
-    if (!source) break;
-    const [left, right] = splitBalancedColumn(source, gap);
-    columns.splice(splitIndex, 1, left, right);
-  }
-
-  const placements = new Array<CubeMasonryPlacement>(cards.length);
-  let layoutHeight = 0;
-  for (const [column, groupedCards] of columns.entries()) {
-    let y = 0;
-    for (const spatialCard of groupedCards) {
-      const height = finiteNonNegative(spatialCard.card.height);
-      placements[spatialCard.index] = {
-        ...spatialCard.card,
-        column,
-        x: column * (columnWidth + gap),
-        y,
-        width: columnWidth,
-        height,
-      };
-      y += height + gap;
-    }
-    layoutHeight = Math.max(layoutHeight, Math.max(0, y - gap));
-  }
-  return {
-    columnCount: columns.length,
-    columnWidth,
-    height: layoutHeight,
-    placements,
-  };
-}
-
-/** Narrow one card's persisted editor geometry. */
-function toSpatialCard(card: CubeMasonryCard, index: number): SpatialCard | null {
-  const sourceX = Number(card.sourceX);
-  const sourceY = Number(card.sourceY);
-  const sourceWidth = Number(card.sourceWidth ?? 0);
-  if (!Number.isFinite(sourceX) || !Number.isFinite(sourceY)) return null;
-  return {
-    card,
-    index,
-    centerX: sourceX + (Number.isFinite(sourceWidth) ? Math.max(0, sourceWidth) / 2 : 0),
-    sourceY,
-  };
-}
-
-/** Group horizontally adjacent editor nodes into their saved visual columns. */
-function clusterSpatialColumns(cards: readonly SpatialCard[], tolerance: number): SpatialCard[][] {
-  const columns: SpatialCard[][] = [];
-  let activeCenter = Number.NEGATIVE_INFINITY;
-  for (const card of cards) {
-    const active = columns.at(-1);
-    if (!active || card.centerX - activeCenter > tolerance) {
-      columns.push([card]);
-      activeCenter = card.centerX;
-      continue;
-    }
-    active.push(card);
-    activeCenter = active.reduce((sum, item) => sum + item.centerX, 0) / active.length;
-  }
-  for (const column of columns) {
-    column.sort(
-      (left, right) =>
-        left.sourceY - right.sourceY || left.centerX - right.centerX || left.index - right.index,
-    );
-  }
-  return columns;
-}
-
-/** Merge the least expensive adjacent editor columns while preserving horizontal order. */
-function mergeShortestAdjacentColumns(
-  columns: readonly SpatialCard[][],
-  gap: number,
-): SpatialCard[][] {
-  let mergeIndex = 0;
-  let minimumHeight = Number.POSITIVE_INFINITY;
-  for (let index = 0; index < columns.length - 1; index += 1) {
-    const height =
-      columnHeight(columns[index] ?? [], gap) + columnHeight(columns[index + 1] ?? [], gap);
-    if (height < minimumHeight) {
-      minimumHeight = height;
-      mergeIndex = index;
-    }
-  }
-  return columns.flatMap((column, index) =>
-    index === mergeIndex
-      ? [[...column, ...(columns[index + 1] ?? [])]]
-      : index === mergeIndex + 1
-        ? []
-        : [column],
-  );
-}
-
-/** Find the tallest column that can supply one additional responsive column. */
-function indexOfTallestSplittableColumn(columns: readonly SpatialCard[][], gap: number): number {
-  let result = -1;
-  let maximumHeight = Number.NEGATIVE_INFINITY;
-  for (const [index, column] of columns.entries()) {
-    const height = column.length > 1 ? columnHeight(column, gap) : Number.NEGATIVE_INFINITY;
-    if (height > maximumHeight) {
-      maximumHeight = height;
-      result = index;
-    }
-  }
-  return result;
-}
-
-/** Split one ordered column at the most balanced contiguous boundary. */
-function splitBalancedColumn(
-  column: readonly SpatialCard[],
-  gap: number,
-): [SpatialCard[], SpatialCard[]] {
-  let splitIndex = 1;
-  let minimumDifference = Number.POSITIVE_INFINITY;
-  for (let index = 1; index < column.length; index += 1) {
-    const difference = Math.abs(
-      columnHeight(column.slice(0, index), gap) - columnHeight(column.slice(index), gap),
-    );
-    if (difference < minimumDifference) {
-      minimumDifference = difference;
-      splitIndex = index;
-    }
-  }
-  return [column.slice(0, splitIndex), column.slice(splitIndex)];
-}
-
-/** Measure one finite stacked column. */
-function columnHeight(column: readonly SpatialCard[], gap: number): number {
-  return column.reduce(
-    (height, card, index) => height + finiteNonNegative(card.card.height) + (index > 0 ? gap : 0),
-    0,
-  );
 }
 
 /** Reconcile persisted card order with the nodes currently owned by the Cube graph. */

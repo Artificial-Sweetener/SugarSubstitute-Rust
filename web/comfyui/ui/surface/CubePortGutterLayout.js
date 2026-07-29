@@ -43,9 +43,10 @@ export function resolveCubePortGutters(frame, content, presence) {
     };
 }
 /** Pack canonical inputs from the native top slot row through their label gutter. */
-export function layoutCubeInputPorts(slots, frame, headerHeight) {
+export function layoutCubeInputPorts(slots, frame, headerHeight, slotIndexes = slots.map((_, index) => index)) {
     const [minY, maxY] = portRange(frame, headerHeight);
-    return slots.map((slot, index) => {
+    return slots.map((slot, position) => {
+        const index = slotIndexes[position] ?? position;
         const record = isPortRecord(slot) ? slot : {};
         const y = clamp(minY + index * PORT_ROW_HEIGHT, minY, maxY);
         return {
@@ -63,14 +64,15 @@ export function layoutCubeInputPorts(slots, frame, headerHeight) {
     });
 }
 /** Align canonical outputs to preview labels inside the movable leader gutter. */
-export function layoutCubeOutputPorts(slots, frame, preview, headerHeight) {
+export function layoutCubeOutputPorts(slots, frame, preview, headerHeight, slotIndexes = slots.map((_, index) => index)) {
     const [minY, maxY] = portRange(frame, headerHeight);
     const anchors = preview
         ? resolveCubePreviewTitleAnchors(preview, slots.length)
-        : slots.map((_, index) => distribute(minY, maxY, index, slots.length));
-    return slots.map((slot, index) => {
+        : slots.map((_, position) => distribute(minY, maxY, position, slots.length));
+    return slots.map((slot, position) => {
+        const index = slotIndexes[position] ?? position;
         const record = isPortRecord(slot) ? slot : {};
-        const defaultY = clamp(anchors[index] ?? minY, minY, maxY);
+        const defaultY = clamp(anchors[position] ?? minY, minY, maxY);
         const labelY = preview ? defaultY : minY;
         return {
             index,

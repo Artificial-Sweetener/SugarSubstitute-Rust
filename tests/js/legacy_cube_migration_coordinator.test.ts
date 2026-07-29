@@ -98,6 +98,7 @@ function plan(key: string, title: string): LegacyCubePlan {
     cubeId: `cube-${key}`,
     cubeVersion: '1.0.0',
     title,
+    metadata: {},
     position: [10, 20],
     size: [700, 500],
     nodes: [],

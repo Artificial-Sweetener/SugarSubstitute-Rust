@@ -280,6 +280,29 @@ export function ensureCubeSurfaceStyles(documentRef) {
       font-size: 1rem;
       line-height: 1;
     }
+    .sugarcubes-cube-unsaved-indicator {
+      position: relative;
+      display: inline-grid;
+      flex: 0 0 auto;
+      place-items: center;
+      width: 1.25rem;
+      height: 1.25rem;
+      color: inherit;
+    }
+    .sugarcubes-cube-unsaved-indicator .pi {
+      position: absolute;
+      inset: auto;
+      line-height: 1;
+    }
+    .sugarcubes-cube-unsaved-indicator__save.pi {
+      font-size: 0.875rem;
+      opacity: 0.9;
+    }
+    .sugarcubes-cube-unsaved-indicator__ban.pi {
+      color: var(--p-orange-400, #fb923c);
+      font-size: 1.1875rem;
+      filter: drop-shadow(0 0 1px var(--comfy-menu-bg, #171b20));
+    }
     .sugarcubes-cube-face__card-menu {
       box-sizing: border-box;
       position: fixed;
@@ -345,7 +368,9 @@ export function ensureCubeSurfaceStyles(documentRef) {
         var(--sugarcubes-cube-masonry-footer-inset, 0px);
     }
     .sugarcubes-cube-face__content:has([data-reka-popper-content-wrapper]) {
-      z-index: 10;
+      /* The activation switch is a sibling overlay at z-index 12. An open
+         native combo belongs above that overlay so its choices remain usable. */
+      z-index: 13;
       overflow: visible;
       isolation: auto;
     }
@@ -524,45 +549,127 @@ export function ensureCubeSurfaceStyles(documentRef) {
       visibility: visible !important;
       border-radius: 0;
     }
-    .sugarcubes-cube-editor-navigation {
+    .sugarcubes-cube-editor-metadata {
       box-sizing: border-box;
+      position: fixed;
+      top: var(--sugarcubes-cube-editor-metadata-top, 7.5rem);
+      left: var(--sugarcubes-cube-editor-metadata-left, 1rem);
+      z-index: 1000;
+      width: min(
+        21rem,
+        calc(100vw - var(--sugarcubes-cube-editor-metadata-left, 1rem) - 1rem)
+      );
+      overflow: hidden;
+      border: 1px solid var(--border-color, color-mix(in srgb, var(--fg-color, #ddd) 20%, transparent));
+      border-radius: var(--p-border-radius-md, 0.5rem);
+      background: var(--comfy-menu-bg, var(--p-content-background, #171b20));
+      box-shadow: var(--shadow-lg, 0 2px 12px rgb(0 0 0 / 28%));
+      color: var(--fg-color, var(--p-text-color, #ddd));
+      pointer-events: auto;
+    }
+    .dark-theme .sugarcubes-cube-editor-metadata {
+      box-shadow: var(--shadow-xl, var(--shadow-lg, 0 4px 20px rgb(0 0 0 / 45%)));
+    }
+    .sugarcubes-cube-editor-metadata__titlebar {
       display: flex;
       align-items: center;
       gap: 0.5rem;
-      min-width: 0;
-      height: 2.25rem;
-      padding: 0 0.5rem;
-      border: 1px solid color-mix(in srgb, var(--p-primary-color, #b58cff) 45%, transparent);
-      border-radius: 0.5rem;
-      background: color-mix(in srgb, var(--comfy-menu-bg, #171b20) 92%, var(--p-primary-color, #b58cff));
-      color: var(--fg-color, #ddd);
-      pointer-events: auto;
+      min-height: 2.25rem;
+      padding: 0 0.5rem 0 0.75rem;
+      border-bottom: 1px solid var(--border-color, color-mix(in srgb, var(--fg-color, #ddd) 15%, transparent));
+      background: var(--comfy-menu-bg, var(--p-content-background, #171b20));
     }
-    .sugarcubes-cube-editor-navigation__label {
-      color: var(--p-primary-color, #b58cff);
-      font-weight: 700;
-      white-space: nowrap;
+    .sugarcubes-cube-editor-metadata.is-collapsed .sugarcubes-cube-editor-metadata__titlebar {
+      border-bottom: 0;
     }
-    .sugarcubes-cube-editor-navigation__trail {
+    .sugarcubes-cube-editor-metadata__titlebar strong {
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      font-size: 0.875rem;
     }
-    .sugarcubes-cube-editor-navigation__actions {
-      display: flex;
-      gap: 0.375rem;
-      margin-left: auto;
-    }
-    .sugarcubes-cube-editor-navigation__actions button {
-      appearance: none;
-      border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-      border-radius: 0.375rem;
+    .sugarcubes-cube-editor-metadata__save,
+    .sugarcubes-cube-editor-metadata__collapse {
+      flex: 0 0 auto;
+      border: 0;
+      border-radius: var(--p-border-radius-sm, 0.25rem);
       background: transparent;
       color: inherit;
-      padding: 0.2rem 0.5rem;
+      display: inline-grid;
+      place-items: center;
+      width: 2rem;
+      height: 2rem;
+      padding: 0;
       cursor: pointer;
-      pointer-events: auto;
+      font: inherit;
+      font-size: 0.75rem;
+    }
+    .sugarcubes-cube-editor-metadata__save {
+      margin-left: auto;
+      background: var(--p-primary-color, #b58cff);
+      color: var(--p-primary-contrast-color, #111);
+    }
+    .sugarcubes-cube-editor-metadata__save:disabled {
+      cursor: default;
+      opacity: 0.55;
+    }
+    .sugarcubes-cube-editor-metadata__collapse:hover,
+    .sugarcubes-cube-editor-metadata__collapse:focus-visible {
+      background: var(--p-content-hover-background, rgb(255 255 255 / 10%));
+    }
+    .sugarcubes-cube-editor-metadata__save .pi,
+    .sugarcubes-cube-editor-metadata__collapse .pi {
+      font-size: 0.875rem;
+      line-height: 1;
+    }
+    .sugarcubes-cube-editor-metadata__body {
+      display: grid;
+      gap: 0.625rem;
+      padding: 0.75rem;
+    }
+    .sugarcubes-cube-editor-metadata__field {
+      display: grid;
+      gap: 0.25rem;
+      min-width: 0;
+      color: var(--fg-color, var(--p-text-color, #ddd));
+      font-size: 0.8125rem;
+    }
+    .sugarcubes-cube-editor-metadata__field > span {
+      color: var(--p-text-muted-color, var(--fg-color, #aaa));
+      font-size: 0.75rem;
+    }
+    .sugarcubes-cube-editor-metadata__field > strong {
+      overflow-wrap: anywhere;
+      font-weight: 500;
+    }
+    .sugarcubes-cube-editor-metadata__field .p-inputtext {
+      box-sizing: border-box;
+      width: 100%;
+      border: 1px solid var(--p-inputtext-border-color, var(--border-color, #444));
+      border-radius: var(--p-border-radius-sm, 0.25rem);
+      background: var(--p-inputtext-background, var(--comfy-menu-bg, #171b20));
+      color: var(--p-inputtext-color, var(--fg-color, #ddd));
+      padding: 0.4rem 0.5rem;
+      font: inherit;
+    }
+    .sugarcubes-cube-editor-metadata__target-model,
+    .sugarcubes-cube-editor-metadata__model-support {
+      display: grid;
+      gap: 0.375rem;
+      min-width: 0;
+    }
+    .sugarcubes-cube-editor-metadata__field textarea.p-inputtext {
+      resize: vertical;
+    }
+    .sugarcubes-cube-editor-metadata__error {
+      margin: 0;
+      border-left: 0.2rem solid var(--p-red-400, #f87171);
+      color: var(--p-red-300, #fca5a5);
+      font-size: 0.75rem;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+      padding-left: 0.5rem;
     }
   `;
     documentRef.head.append(style);

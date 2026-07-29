@@ -58,7 +58,7 @@ export class OverlayManager {
     reconcileScheduled;
     expandContainmentRevisionByNodeId;
     groupDragState;
-    constructor({ adapter = null, events = null, scheduler = null, storage = null, cubeApi = null, cubeBrowser = null, saveService = null, flavorService = null, toast = null, applyPreparedImport, reportImportOutcome, buildShiftedPlacementPayload, requestDirtyRefresh = null, layoutService = null, containmentService = null, collisionService = null, boundsReconciler = null, } = {}) {
+    constructor({ adapter = null, events = null, scheduler = null, storage = null, cubeApi = null, cubeBrowser = null, saveService = null, saveDraft, flavorService = null, toast = null, applyPreparedImport, reportImportOutcome, buildShiftedPlacementPayload, requestDirtyRefresh = null, layoutService = null, containmentService = null, collisionService = null, boundsReconciler = null, } = {}) {
         this.adapter = adapter;
         this.events = events;
         this.scheduler = scheduler;
@@ -82,7 +82,7 @@ export class OverlayManager {
             ...(buildShiftedPlacementPayload ? { buildShiftedPlacementPayload } : {}),
         });
         this.layoutService = layoutService || null;
-        const saveImplementation = saveService?.saveImplementation;
+        const saveImplementation = saveService?.saveImplementation?.bind(saveService);
         const saveCubeDefaults = flavorService?.saveCurrentFaceValuesAsCubeDefaults;
         const chromeActions = {
             ...(saveImplementation
@@ -95,7 +95,16 @@ export class OverlayManager {
                             toast?.push?.('warn', 'Historical version', 'Spawned historical versions cannot overwrite the current cube.');
                             return;
                         }
-                        saveImplementation({ cubeIds: [metadata.cube_id] });
+                        void saveImplementation({ cubeIds: [metadata.cube_id] });
+                    },
+                }
+                : {}),
+            ...(typeof saveDraft === 'function'
+                ? {
+                    onSaveDraft: (metadata) => {
+                        const instanceId = typeof metadata.instance_id === 'string' ? metadata.instance_id : '';
+                        if (metadata.kind === 'draft' && instanceId)
+                            void saveDraft(instanceId);
                     },
                 }
                 : {}),

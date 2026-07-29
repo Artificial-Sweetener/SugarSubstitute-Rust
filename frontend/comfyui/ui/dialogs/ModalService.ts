@@ -21,16 +21,18 @@ import { ConfirmDialog } from './ConfirmDialog.js';
 import { FormModal } from './FormModal.js';
 import { InputModal } from './InputModal.js';
 import { SelectionModal } from './SelectionModal.js';
-import { CreatePersonalCubeModal } from './CreatePersonalCubeModal.js';
+import { CubeAuthoringModal } from './CubeAuthoringModal.js';
 import { HistoricalVersionSaveModal } from './HistoricalVersionSaveModal.js';
 import type { ConfirmDialogOptions } from './ConfirmDialog.js';
 import type { FormModalOptions, FormValues } from './FormModal.js';
 import type { InputModalOptions } from './InputModal.js';
 import type { SelectionModalOptions } from './SelectionModal.js';
-import type { CreatePersonalCubeModalOptions } from './CreatePersonalCubeModal.js';
+import type {
+  CubeAuthoringDialogOptions,
+  CubeAuthoringValues,
+} from '../create/CubeAuthoringDialog.js';
 import type { HistoricalVersionSaveOptions } from './HistoricalVersionSaveModal.js';
 import type { ModalAdapter } from './ModalShell.js';
-import type { PersonalCubeIdentity } from '../create/PersonalCubeIdentity.js';
 
 /**
  * Coordinate reusable dialog entry points for SugarCubes.
@@ -40,7 +42,7 @@ export class ModalService {
   private readonly inputModal: InputModal;
   private readonly formModal: FormModal;
   private readonly selectionModal: SelectionModal;
-  private readonly createPersonalCubeModal: CreatePersonalCubeModal;
+  private readonly cubeAuthoringModal: CubeAuthoringModal;
   private readonly historicalVersionSaveModal: HistoricalVersionSaveModal;
 
   constructor({ adapter }: { adapter?: ModalAdapter | null } = {}) {
@@ -49,7 +51,7 @@ export class ModalService {
     this.inputModal = new InputModal({ adapter: resolvedAdapter });
     this.formModal = new FormModal({ adapter: resolvedAdapter });
     this.selectionModal = new SelectionModal({ adapter: resolvedAdapter });
-    this.createPersonalCubeModal = new CreatePersonalCubeModal({ adapter: resolvedAdapter });
+    this.cubeAuthoringModal = new CubeAuthoringModal({ adapter: resolvedAdapter });
     this.historicalVersionSaveModal = new HistoricalVersionSaveModal({ adapter: resolvedAdapter });
   }
 
@@ -80,10 +82,8 @@ export class ModalService {
     return this.selectionModal.open(options);
   }
 
-  openCreatePersonalCube(
-    options: CreatePersonalCubeModalOptions = {},
-  ): Promise<PersonalCubeIdentity | null> {
-    return this.createPersonalCubeModal.open(options);
+  openCubeAuthoring(options: CubeAuthoringDialogOptions = {}): Promise<CubeAuthoringValues | null> {
+    return this.cubeAuthoringModal.open(options);
   }
 
   chooseHistoricalVersionSaveAction(options: HistoricalVersionSaveOptions = {}): Promise<unknown> {

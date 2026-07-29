@@ -18,10 +18,14 @@ const PRIME_ICON_FONT = "'PrimeIcons'";
 const ICONS = Object.freeze({
     'arrow-left': { className: 'pi-arrow-left', glyph: '\uE91A' },
     'arrow-right': { className: 'pi-arrow-right', glyph: '\uE91B' },
+    ban: { className: 'pi-ban', glyph: '\uE935' },
     box: { className: 'pi-box', glyph: '\uE9D9' },
+    'chevron-down': { className: 'pi-chevron-down', glyph: '\uE930' },
+    'chevron-up': { className: 'pi-chevron-up', glyph: '\uE933' },
     circle: { className: 'pi-circle', glyph: '\uE9DC' },
     'circle-fill': { className: 'pi-circle-fill', glyph: '\uE9DD' },
     eye: { className: 'pi-eye', glyph: '\uE966' },
+    save: { className: 'pi-save', glyph: '\uE92B' },
     'window-maximize': { className: 'pi-window-maximize', glyph: '\uE93B' },
 });
 /** Create one host-styled PrimeIcons element without reproducing its vector geometry. */

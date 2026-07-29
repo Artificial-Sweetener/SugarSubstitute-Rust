@@ -254,6 +254,7 @@ function cubeItemForNode(node: ComfyNode): {
       masonry: { x: 102, y: 172, width: 696, height: 456 },
       preview: null,
       editAction: { x: 650, y: 139, width: 68, height: 24 },
+      unsavedIndicator: null,
       cardMenuAction: { x: 724, y: 139, width: 54, height: 24 },
       chromeActions: {
         'swap-left': { x: 618, y: 139, width: 28, height: 24 },

@@ -21,6 +21,11 @@ import { app } from '/scripts/app.js';
 import type { ComfyApp, ComfyExtension } from '/scripts/app.js';
 import { api } from '/scripts/api.js';
 import { createComfyCubeRuntime, type ComfyCubeRuntime } from './ui/cube/ComfyCubeRuntime.js';
+import {
+  isDraftCubeNode,
+  requireCubeIdentity,
+  type CubeNode,
+} from './ui/cube/node/ComfyCubeNodeFactory.js';
 import { ComfyCubeRuntimeLifecycle } from './ui/cube/ComfyCubeRuntimeLifecycle.js';
 import { CubePreviewRetentionStore } from './ui/surface/CubePreviewRetentionStore.js';
 import { CubeWorkflowPreconfiguration } from './ui/cube/CubeWorkflowPreconfiguration.js';
@@ -83,6 +88,7 @@ export interface SugarCubesExtension extends ComfyExtension, UnknownRecord {
   setup(): Promise<void>;
   beforeConfigureGraph(graphData?: unknown): void;
   afterConfigureGraph(missingNodeTypes: string[], comfyApp: ComfyApp): void;
+  getCanvasMenuItems(canvas: unknown): unknown[];
 }
 
 const EXTENSION_NAME = 'SugarCubes.UI';
@@ -99,8 +105,10 @@ export const sugarCubesUI = getSugarCubesUI({
   getCubeNodeCatalog: () => cubeRuntimeLifecycle.current()?.nodes ?? null,
 });
 const ui = sugarCubesUI;
-const cubeAuthoringCommands = new CubeAuthoringHostCommands(() =>
-  ui.cubeCreation.startCreateCubeFromSelection(),
+const cubeAuthoringCommands = new CubeAuthoringHostCommands(
+  () => ui.cubeCreation.startCreateCubeFromSelection(),
+  () => ui.cubeCreation.startCreateCubeFromSelectedSubgraph(),
+  () => ui.cubeCreation.startCreateEmptyCube(),
 );
 const adapter = ui.adapter;
 const storage = ui.storage;
@@ -153,12 +161,22 @@ function createCubeRuntime(): ComfyCubeRuntime {
   if (!appRef || !liteGraph || !documentRef) {
     throw new Error('SugarCubes native Cube runtime dependencies are unavailable.');
   }
-  const runtime = createComfyCubeRuntime({
+  let runtime: ComfyCubeRuntime | null = null;
+  runtime = createComfyCubeRuntime({
     app: appRef,
     api,
     liteGraph,
     document: documentRef,
     logger,
+    editorMetadata: {
+      canEdit: async (node) => {
+        if (isDraftCubeNode(node)) return true;
+        const cubeId = readCubeMetadataString(node, 'cube_id');
+        return cubeId ? ui.packService.canWriteCube(cubeId) : false;
+      },
+      save: async (node, values) => ui.cubeEditorSave.save(node, values),
+      modelSuggestions: () => ui.cubeBrowser.getModelSuggestions(),
+    },
     boundaryResolver: nativeBoundaryResolver,
     previewRetention: cubePreviewRetention,
     openCubeMenu: (metadata, event) => overlayManager.openCubeMenu(metadata, event),
@@ -186,6 +204,12 @@ function createCubeRuntime(): ComfyCubeRuntime {
   overlayManager.proximity.setEndpointSource(runtime.proximityEndpoints);
   overlayManager.proximity.setMatchSink(runtime.proximityPresentation);
   return runtime;
+}
+
+/** Read one graph-owned Cube metadata field without leaking dynamic values upward. */
+function readCubeMetadataString(node: CubeNode, key: string): string {
+  const value = requireCubeIdentity(node)[key];
+  return typeof value === 'string' ? value.trim() : '';
 }
 
 /** Resolve the first-class Cube runtime only when the active graph requires it. */
@@ -316,7 +340,6 @@ const importCommandService = new CubeImportCommandService({
 });
 ui.cubeBrowser.configure({
   actions: {
-    createCubeFromSelection: () => ui.cubeCreation.startCreateCubeFromSelection(),
     computeDropOrigin,
     importCubeByName: (cubeId, options) => importCommandService.importCurrent(cubeId, options),
     importCubeRevision: (cubeId, revisionRef, options) =>
@@ -358,7 +381,9 @@ ui.cubeBrowser.configure({
 /** Define the ComfyUI extension lifecycle owned by SugarCubes. */
 export const sugarCubesExtension: SugarCubesExtension = {
   name: EXTENSION_NAME,
-  commands: [...cubeAuthoringCommands.commands],
+  getCanvasMenuItems(canvas) {
+    return cubeAuthoringCommands.getCanvasMenuItems(canvas);
+  },
   async setup() {
     try {
       sidebarHost.register();

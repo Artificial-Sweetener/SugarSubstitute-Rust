@@ -30,6 +30,7 @@ import { VersionDialog } from './dialogs/VersionDialog.js';
 import { InstanceManager } from './graph/InstanceManager.js';
 import { DirtyManager } from './graph/DirtyManager.js';
 import { CubeSaveService } from './save/CubeSaveService.js';
+import { CubeEditorSaveService } from './save/CubeEditorSaveService.js';
 import { CubeLayoutService } from './layout/CubeLayoutService.js';
 import { CubeContainmentService } from './layout/CubeContainmentService.js';
 import { CubeCollisionService } from './layout/CubeCollisionService.js';
@@ -67,6 +68,7 @@ export class SugarCubesUI {
     promotionService;
     cubeSave;
     cubeCreation;
+    cubeEditorSave;
     layoutService;
     containmentService;
     collisionService;
@@ -172,6 +174,14 @@ export class SugarCubesUI {
             cubeBrowser: this.cubeBrowser,
             dialogs: this.dialogs,
             logger: this.adapter.getConsole?.(),
+            packService: this.packService,
+        });
+        this.cubeEditorSave = new CubeEditorSaveService({
+            getCatalog: options.getCubeNodeCatalog ?? (() => null),
+            cubeCreation: this.cubeCreation,
+            cubeSave: this.cubeSave,
+            dialogs: this.dialogs,
+            modelSuggestions: () => this.cubeBrowser.getModelSuggestions(),
         });
         this.layoutService = new CubeLayoutService({
             adapter: this.adapter,
@@ -197,6 +207,7 @@ export class SugarCubesUI {
             cubeApi: this.api,
             cubeBrowser: this.cubeBrowser,
             saveService: this.cubeSave,
+            saveDraft: (instanceId) => this.cubeCreation.saveDraft(instanceId),
             flavorService: this.flavorService,
             toast: this.toast,
             ...(options.applyPreparedImport ? { applyPreparedImport: options.applyPreparedImport } : {}),

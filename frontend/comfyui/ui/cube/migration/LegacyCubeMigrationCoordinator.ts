@@ -24,6 +24,7 @@ import type {
   LegacyCubeMigrationBatch,
   LegacyRootConnection,
 } from './LegacyCubeWorkflowExtractor.js';
+import { mapLegacyCubeIdentity } from './LegacyCubeIdentityMapper.js';
 
 export interface LegacyCubeMigrationGraph {
   setDirtyCanvas?(foreground?: boolean, background?: boolean): void;
@@ -81,14 +82,7 @@ export class LegacyCubeMigrationCoordinator {
         const placed = this.#placement.placeBuilt({
           built,
           title: plan.title,
-          identity: {
-            cubeId: plan.cubeId,
-            cubeVersion: plan.cubeVersion,
-            instanceId: plan.key,
-            defaultAlias: plan.title,
-            instanceAlias: plan.title,
-            metadata: {},
-          },
+          identity: mapLegacyCubeIdentity(plan),
           geometry: { position: plan.position, size: plan.size },
           recordHistory: false,
         });

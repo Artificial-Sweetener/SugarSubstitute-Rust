@@ -17,6 +17,7 @@
 
 import { readVector2 } from '../graph/VectorUtils.js';
 import { isRecord } from '../types/common.js';
+import type { ComfyNode } from '../types/graph.js';
 import {
   translateAuthoredLayoutBaseline,
   type AuthoredLayoutBaseline,
@@ -45,9 +46,37 @@ export function applyMeasuredInstanceGeometry(
   measurement: InstanceGeometryMeasurementContext,
 ): boolean {
   const baseline = alignBaselineWithLiveGroup(instance);
+  const solved = solveMeasuredNodeGeometry(baseline, instance.nodes, measurement);
+  const nodesChanged = writeSolvedNodePositions(solved, measurement);
+  const groupChanged = writeSolvedGroup(
+    { ...instance, baseline },
+    solved.map(({ solved: rect }) => rect),
+    measurement.renderer,
+  );
+  return groupChanged || nodesChanged;
+}
+
+/** Rebuild native subgraph node positions from renderer-measured card geometry. */
+export function applyMeasuredNodeGeometry(
+  baseline: AuthoredLayoutBaseline,
+  nodes: ReadonlyMap<string, ComfyNode>,
+  measurement: InstanceGeometryMeasurementContext,
+): boolean {
+  return writeSolvedNodePositions(
+    solveMeasuredNodeGeometry(baseline, nodes, measurement),
+    measurement,
+  );
+}
+
+/** Solve one node collection while preserving its renderer-neutral authored relations. */
+function solveMeasuredNodeGeometry(
+  baseline: AuthoredLayoutBaseline,
+  nodes: ReadonlyMap<string, ComfyNode>,
+  measurement: InstanceGeometryMeasurementContext,
+) {
   const measurements = Object.entries(baseline.entries)
     .map(([identity, entry]) => {
-      const node = instance.nodes.get(identity);
+      const node = nodes.get(identity);
       const measured = node ? measureNodePresentationRect(node, measurement) : null;
       if (!node || !measured) return null;
       const authored = authoredNodePresentationRect(
@@ -63,8 +92,14 @@ export function applyMeasuredInstanceGeometry(
       return { identity, item: node, authored, measured: { w: measured.w, h: measured.h } };
     })
     .filter((value): value is NonNullable<typeof value> => value !== null);
-  if (!measurements.length) return false;
-  const solved = solveAuthoredLayout(measurements);
+  return solveAuthoredLayout(measurements);
+}
+
+/** Write solved presentation positions through Comfy's renderer convention. */
+function writeSolvedNodePositions(
+  solved: ReturnType<typeof solveMeasuredNodeGeometry>,
+  measurement: InstanceGeometryMeasurementContext,
+): boolean {
   let changed = false;
   for (const item of solved) {
     const current = measureNodePresentationRect(item.item, measurement);
@@ -73,12 +108,7 @@ export function applyMeasuredInstanceGeometry(
       changed = true;
     }
   }
-  const groupChanged = writeSolvedGroup(
-    { ...instance, baseline },
-    solved.map(({ solved: rect }) => rect),
-    measurement.renderer,
-  );
-  return groupChanged || changed;
+  return changed;
 }
 
 /** Preserve instance translation while keeping authored shape data unchanged. */

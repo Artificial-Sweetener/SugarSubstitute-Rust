@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Any, Mapping, MutableMapping, Sequence
+from typing import Any, Iterable, Mapping, MutableMapping, Sequence
 
 from .graph import MARKER_CLASS_TYPES
 
@@ -81,11 +81,9 @@ def project_native_cube_exports(
     workflow_nodes = _mutable_list(projected_workflow, "nodes")
     workflow_links = _mutable_list(projected_workflow, "links")
     definitions = _subgraph_index(projected_workflow)
-    root_nodes = {
-        str(node.get("id")): node
-        for node in workflow_nodes
-        if isinstance(node, Mapping) and node.get("id") is not None
-    }
+    native_instance_nodes = _native_instance_node_index(
+        workflow_nodes, definitions.values()
+    )
     containers = _container_index(projected_workflow)
     state = _ProjectionState(
         prompt=prompt,
@@ -118,8 +116,8 @@ def project_native_cube_exports(
                 (
                     candidate
                     for candidate in node_ids
-                    if candidate in root_nodes
-                    and _nonempty_string(root_nodes[candidate].get("type"))
+                    if candidate in native_instance_nodes
+                    and _nonempty_string(native_instance_nodes[candidate].get("type"))
                     == definition_id
                 ),
                 "",
@@ -158,6 +156,25 @@ def _container_index(workflow: Mapping[str, Any]) -> dict[str, Mapping[str, Any]
         if isinstance(item, Mapping)
         and (container_id := _nonempty_string(item.get("id")))
     }
+
+
+def _native_instance_node_index(
+    root_nodes: Sequence[Any], definitions: Iterable[Mapping[str, Any]]
+) -> dict[str, Mapping[str, Any]]:
+    """Index serialized native wrappers at the root and in every subgraph body."""
+
+    nodes: dict[str, Mapping[str, Any]] = {}
+    for raw_node in root_nodes:
+        if isinstance(raw_node, Mapping) and raw_node.get("id") is not None:
+            nodes[str(raw_node["id"])] = raw_node
+    for definition in definitions:
+        raw_nodes = definition.get("nodes")
+        if not isinstance(raw_nodes, Sequence) or isinstance(raw_nodes, (str, bytes)):
+            continue
+        for raw_node in raw_nodes:
+            if isinstance(raw_node, Mapping) and raw_node.get("id") is not None:
+                nodes[str(raw_node["id"])] = raw_node
+    return nodes
 
 
 def _project_definition(
@@ -271,6 +288,14 @@ def _project_definition(
                 link_type=link.link_type,
             )
 
+    _add_anchor(
+        state,
+        marker_id=_marker_id(cube_index, "anchor", 0),
+        cube_id=cube_id,
+        default_alias=default_alias,
+        projected_node_ids=projected_ids.values(),
+    )
+
 
 def _add_marker(
     state: _ProjectionState,
@@ -306,6 +331,42 @@ def _add_marker(
             "size": [140, 46],
             "inputs": [{"name": "value", "type": "*", "link": None}],
             "outputs": [{"name": "value", "type": "*", "links": []}],
+        }
+    )
+
+
+def _add_anchor(
+    state: _ProjectionState,
+    *,
+    marker_id: str,
+    cube_id: str,
+    default_alias: str,
+    projected_node_ids: Iterable[str],
+) -> None:
+    """Add an export-only ownership anchor without creating a public Cube port."""
+
+    node_inputs: dict[str, Any] = {
+        "cube_id": cube_id,
+        "default_alias": default_alias,
+        "instance_alias": default_alias,
+        "instance_id": "",
+    }
+    for index, node_id in enumerate(sorted(set(projected_node_ids))):
+        node_inputs[f"node_{index}"] = [node_id, 0]
+    state.prompt[marker_id] = {
+        "class_type": "SugarCubes.CubeAnchor",
+        "inputs": node_inputs,
+        "_meta": {"title": "Cube ownership anchor"},
+    }
+    state.workflow_nodes.append(
+        {
+            "id": marker_id,
+            "type": "SugarCubes.CubeAnchor",
+            "title": "Cube ownership anchor",
+            "pos": [0, 0],
+            "size": [0, 0],
+            "inputs": [],
+            "outputs": [],
         }
     )
 

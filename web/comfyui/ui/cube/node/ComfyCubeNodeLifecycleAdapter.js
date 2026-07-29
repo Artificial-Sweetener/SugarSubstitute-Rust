@@ -15,7 +15,8 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Keep Cube identity and the presentation index aligned with Comfy's root graph. */
 import { isRecord } from '../../types/common.js';
-import { isCubeNode, requireCubeIdentity } from './ComfyCubeNodeFactory.js';
+import { labelEmptyCubeBoundaryAffordances } from '../geometry/NativeCubeBoundaryLayout.js';
+import { isCubeNode, isDraftCubeNode, requireCubeIdentity, } from './ComfyCubeNodeFactory.js';
 import { readInstanceId } from './CubeNodeCatalog.js';
 /** Own host lifecycle hooks, pasted identity, and the non-authoritative Cube index. */
 export class ComfyCubeNodeLifecycleAdapter {
@@ -42,7 +43,7 @@ export class ComfyCubeNodeLifecycleAdapter {
         this.#previousNodeRemoved = options.graph.onNodeRemoved ?? null;
         this.#configureHook = (data) => {
             this.#previousConfigure?.call(this.#graph, data);
-            this.#catalog.replace(this.#graph._nodes ?? []);
+            this.#reconcile();
         };
         this.#nodeAddedHook = (node) => {
             this.#previousNodeAdded?.call(this.#graph, node);
@@ -59,7 +60,7 @@ export class ComfyCubeNodeLifecycleAdapter {
         options.graph.onNodeAdded = this.#nodeAddedHook;
         options.graph.onNodeRemoved = this.#nodeRemovedHook;
         options.events.addEventListener('litegraph:canvas', this.#handleCanvasChange);
-        this.#catalog.replace(options.graph._nodes ?? []);
+        this.#reconcile();
     }
     /** Restore callbacks when the graph-bound runtime is replaced. */
     dispose() {
@@ -96,6 +97,8 @@ export class ComfyCubeNodeLifecycleAdapter {
         for (const value of values) {
             if (!isCubeNode(value))
                 continue;
+            if (isDraftCubeNode(value))
+                labelEmptyCubeBoundaryAffordances(value.subgraph);
             let instanceId = readInstanceId(value);
             const existing = seen.get(instanceId);
             if (existing && existing !== value) {

@@ -29,6 +29,7 @@ export function layoutCubeCanvasChrome(header, options) {
         return slot;
     };
     const editAction = takeSlot();
+    const unsavedIndicator = options.showUnsavedIndicator ? takeSlot() : null;
     const chromeActions = {};
     for (const key of [...options.titlebarActionKeys].reverse()) {
         chromeActions[key] = takeSlot();
@@ -36,5 +37,5 @@ export function layoutCubeCanvasChrome(header, options) {
     const cardMenuAction = options.showCardMenu
         ? takeSlot()
         : { x: right - ACTION_WIDTH, y, width: ACTION_WIDTH, height: ACTION_HEIGHT };
-    return { editAction, cardMenuAction, chromeActions };
+    return { editAction, unsavedIndicator, cardMenuAction, chromeActions };
 }

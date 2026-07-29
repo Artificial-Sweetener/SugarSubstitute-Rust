@@ -37,6 +37,7 @@ export function listCubeNodeInstances(nodes) {
             cubeDefinitionKey: readString(metadata.cube_definition_key),
             targetModel: readString(metadata.target_model),
             supportedModels: readStrings(metadata.supported_models),
+            description: readOptionalString(metadata, 'description'),
             surfaceSize: [Number(node.size[0]), Number(node.size[1])],
             surfaceState: cloneRecord(requireCubeSurface(node)),
         });
@@ -59,6 +60,12 @@ function readStrings(value) {
 /** Read one trimmed string. */
 function readString(value) {
     return typeof value === 'string' ? value.trim() : '';
+}
+/** Preserve an intentionally empty description while omitting unavailable legacy metadata. */
+function readOptionalString(metadata, key) {
+    if (!Object.prototype.hasOwnProperty.call(metadata, key))
+        return null;
+    return readString(metadata[key]);
 }
 /** Clone JSON-safe face state before crossing into save orchestration. */
 function cloneRecord(value) {

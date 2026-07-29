@@ -61,8 +61,7 @@ export class ComfyLiteGraphCubeBoundaryHost {
     drawNativeSlotDots(node, context, drawSlots) {
         context.save();
         context.beginPath();
-        for (const value of [...node.inputs, ...node.outputs]) {
-            const slot = asLiteGraphSlot(value);
+        for (const slot of this.#presentations.get(node)?.keys() ?? []) {
             const position = asPosition(slot?.pos);
             if (!position)
                 continue;

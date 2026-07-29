@@ -45,7 +45,7 @@ describe('computeCubeMasonry', () => {
     ).toBe(5);
   });
 
-  test('places each card in the currently shortest column', () => {
+  test('uses the compact column when column occupancy is already even', () => {
     const layout = computeCubeMasonry(
       [
         { id: 'a', height: 300 },
@@ -68,7 +68,32 @@ describe('computeCubeMasonry', () => {
     expect(Number.isFinite(layout.height)).toBe(true);
   });
 
-  test('reserves a contiguous double-width window for a prompt card', () => {
+  test('matches SugarSubstitute shortest-column compaction even when later cards rise visually', () => {
+    const layout = computeCubeMasonry(
+      [
+        { id: 'positive', height: 100, columnSpan: 2 },
+        { id: 'negative', height: 100, columnSpan: 2 },
+        { id: 'checkpoint', height: 180 },
+        { id: 'encode-style', height: 90 },
+        { id: 'mahiro', height: 70 },
+        { id: 'sampler', height: 300 },
+      ],
+      {
+        availableWidth: 410,
+        minimumColumnWidth: 200,
+        gap: 10,
+      },
+    );
+    const byId = new Map(layout.placements.map((placement) => [placement.id, placement]));
+
+    expect(byId.get('checkpoint')?.column).toBe(0);
+    expect(byId.get('encode-style')?.column).toBe(1);
+    expect(byId.get('mahiro')?.column).toBe(1);
+    expect(byId.get('sampler')?.column).toBe(1);
+    expect(byId.get('sampler')?.y).toBe(400);
+  });
+
+  test('reserves the earliest lowest contiguous window exactly like SugarSubstitute', () => {
     const layout = computeCubeMasonry(
       [
         { id: 'settings', height: 100 },
@@ -90,6 +115,27 @@ describe('computeCubeMasonry', () => {
     expect(layout.height).toBe(260);
   });
 
+  test('derives columns from width and uses SugarSubstitute integer column widths', () => {
+    const layout = computeCubeMasonry(
+      [
+        { id: 'a', height: 100 },
+        { id: 'b', height: 100 },
+      ],
+      {
+        availableWidth: 652,
+        minimumColumnWidth: 200,
+        gap: 10,
+      },
+    );
+
+    expect(layout.columnCount).toBe(3);
+    expect(layout.columnWidth).toBe(210);
+    expect(layout.placements).toEqual([
+      { id: 'a', column: 0, x: 0, y: 0, width: 210, height: 100 },
+      { id: 'b', column: 1, x: 220, y: 0, width: 210, height: 100 },
+    ]);
+  });
+
   test('falls back to one column when a prompt card cannot span two columns', () => {
     const layout = computeCubeMasonry([{ id: 'prompt', height: 80, columnSpan: 2 }], {
       availableWidth: 200,
@@ -107,39 +153,27 @@ describe('computeCubeMasonry', () => {
     });
   });
 
-  test('preserves saved editor columns and vertical order when spatial geometry is available', () => {
+  test('distributes cards from the authoritative insertion order', () => {
     const layout = computeCubeMasonry(
       [
-        { id: 'checkpoint', height: 180, sourceX: 0, sourceY: 560, sourceWidth: 320 },
-        { id: 'ksampler', height: 300, sourceX: 620, sourceY: 0, sourceWidth: 270 },
-        { id: 'mahiro', height: 70, sourceX: 350, sourceY: 0, sourceWidth: 190 },
-        { id: 'negative', height: 190, sourceX: 0, sourceY: 340, sourceWidth: 320 },
-        { id: 'positive', height: 210, sourceX: 0, sourceY: 110, sourceWidth: 320 },
-        { id: 'schedule', height: 150, sourceX: 350, sourceY: 50, sourceWidth: 287 },
-        { id: 'style', height: 90, sourceX: 0, sourceY: 0, sourceWidth: 320 },
-        { id: 'vae', height: 80, sourceX: 760, sourceY: 310, sourceWidth: 140 },
-        { id: 'vectorscope', height: 280, sourceX: 350, sourceY: 100, sourceWidth: 220 },
+        { id: 'first', height: 180 },
+        { id: 'second', height: 300 },
+        { id: 'third', height: 70 },
+        { id: 'fourth', height: 90 },
       ],
       {
-        availableWidth: 740,
-        minimumColumnWidth: 240,
+        availableWidth: 650,
+        minimumColumnWidth: 200,
         gap: 10,
       },
     );
-    const byId = new Map(layout.placements.map((placement) => [placement.id, placement]));
 
-    expect(layout.columnCount).toBe(3);
-    expect(byId.get('style')?.column).toBe(0);
-    expect(byId.get('positive')?.column).toBe(0);
-    expect(byId.get('negative')?.column).toBe(0);
-    expect(byId.get('checkpoint')?.column).toBe(0);
-    expect(byId.get('mahiro')?.column).toBe(1);
-    expect(byId.get('schedule')?.column).toBe(1);
-    expect(byId.get('vectorscope')?.column).toBe(1);
-    expect(byId.get('ksampler')?.column).toBe(2);
-    expect(byId.get('vae')?.column).toBe(2);
-    expect(byId.get('style')?.y).toBeLessThan(byId.get('positive')?.y ?? 0);
-    expect(byId.get('ksampler')?.y).toBeLessThan(byId.get('vae')?.y ?? 0);
+    expect(layout.placements.map(({ id, column, y }) => ({ id, column, y }))).toEqual([
+      { id: 'first', column: 0, y: 0 },
+      { id: 'second', column: 1, y: 0 },
+      { id: 'third', column: 2, y: 0 },
+      { id: 'fourth', column: 2, y: 80 },
+    ]);
   });
 });
 

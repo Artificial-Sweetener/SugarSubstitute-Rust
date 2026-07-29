@@ -289,7 +289,10 @@ describe('ComfyLiteGraphCubeNodeHost', () => {
   test('draws multiple outputs as horizontal segments without captions in Nodes 1.0', () => {
     const rootGraph = {};
     const node = cubeNode(nativeInnerNode());
-    node.outputs = [{ name: 'output.image', type: 'IMAGE' }];
+    node.outputs = [
+      { name: 'output.image', type: 'IMAGE' },
+      { name: 'output.mask', type: 'MASK' },
+    ];
     node.properties.sugarcubes_surface = {
       schema: 1,
       revealed: true,

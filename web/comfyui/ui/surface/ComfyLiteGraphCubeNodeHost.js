@@ -28,6 +28,8 @@ import { ComfyGraphPreviewImageSource } from './ComfyGraphPreviewImageSource.js'
 import { resolveCubeFaceTitlebarActions, } from './CubeFaceChromeActions.js';
 import { setCubeFaceCardRevealed, setCubeFaceNodeEnabled } from './CubeFaceCardStateController.js';
 import { parseCubeSurfaceState, serializeCubeSurfaceState, } from './CubeSurfaceState.js';
+import { resolveCubeExternalInterface } from '../cube/graph/CubeExternalInterface.js';
+import { filterCubePreviewOutputs } from './CubePreviewModel.js';
 /** Own the narrow Nodes 1.0 draw and interaction seam for native Cube nodes. */
 export class ComfyLiteGraphCubeNodeHost {
     #canvas;
@@ -219,9 +221,10 @@ export class ComfyLiteGraphCubeNodeHost {
     #renderItem(node) {
         const state = parseCubeSurfaceState(requireCubeSurface(node));
         const titlebarActionKeys = resolveCubeFaceTitlebarActions(requireCubeIdentity(node), this.#chromeActions).map((action) => action.key);
-        let layout = computeCubeCanvasLayout(node, state, this.#titleHeight, titlebarActionKeys);
+        const externalInterface = resolveCubeExternalInterface(node);
+        let layout = computeCubeCanvasLayout(node, state, this.#titleHeight, titlebarActionKeys, externalInterface);
         if (enforceCubeNodeMinimumSize(node, [Math.max(1, Number(node.size[0])), layout.minimumSize[1]])) {
-            layout = computeCubeCanvasLayout(node, state, this.#titleHeight, titlebarActionKeys);
+            layout = computeCubeCanvasLayout(node, state, this.#titleHeight, titlebarActionKeys, externalInterface);
             this.#history.setDirtyCanvas?.(true, true);
             this.#refresh();
         }
@@ -231,7 +234,9 @@ export class ComfyLiteGraphCubeNodeHost {
             node,
             layout,
             cardMenuOpen: this.#openCardMenu === node,
-            preview: this.#previewCatalog?.snapshot(node) ?? null,
+            preview: this.#previewCatalog
+                ? filterCubePreviewOutputs(this.#previewCatalog.snapshot(node), externalInterface.outputSlots)
+                : null,
             chromeActions: this.#chromeActions,
             editorButton: findNativeEditorButton(this.#hooks.get(node)?.titleButtons),
         };

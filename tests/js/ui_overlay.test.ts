@@ -819,7 +819,7 @@ describe('ui overlay rendering', () => {
     overlay.renderHeader(canvasContext(ctx), [0, 0, 480, 60], metadata);
 
     expect(ctx.fillText).toHaveBeenCalledWith(
-      'from Unknown',
+      'Unknown source',
       expect.any(Number),
       expect.any(Number),
     );
@@ -917,7 +917,7 @@ describe('ui overlay rendering', () => {
     overlay.renderHeader(canvasContext(ctx), [0, 0, 480, 60], metadata);
 
     expect(ctx.fillText).toHaveBeenCalledWith(
-      'from local personal',
+      'Personal Cube',
       expect.any(Number),
       expect.any(Number),
     );
@@ -1138,6 +1138,32 @@ describe('ui overlay rendering', () => {
       'Spawned historical versions cannot overwrite cube defaults.',
     );
     expect(toast.push.mock.calls[0].join(' ')).not.toMatch(/flavor/i);
+  });
+
+  test('overlay manager retains the save service receiver for Cube implementation saves', async () => {
+    await loadUi();
+    const { OverlayManager } = await import('../../frontend/comfyui/ui/overlays/OverlayManager.js');
+    const saveService = {
+      receiver: null as unknown,
+      savedCubeIds: [] as string[],
+      saveImplementation(
+        this: { receiver: unknown; savedCubeIds: string[] },
+        options: {
+          cubeIds: string[];
+        },
+      ): void {
+        this.receiver = this;
+        this.savedCubeIds = options.cubeIds;
+      },
+    };
+    const manager = new OverlayManager({ saveService });
+
+    manager.getChromeDebugState().actions.onSaveImplementation?.({
+      cube_id: 'local/personal/Saveable.cube',
+    });
+
+    expect(saveService.receiver).toBe(saveService);
+    expect(saveService.savedCubeIds).toEqual(['local/personal/Saveable.cube']);
   });
 
   test('chrome overlay does not render or trigger flavor action pill', async () => {

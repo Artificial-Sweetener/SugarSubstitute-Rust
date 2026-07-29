@@ -73,7 +73,7 @@ describe('ComfyVueCubeNodeHost', () => {
       requestFrame: () => null,
     });
     const release = jest.spyOn(portPresentation, 'release');
-    const host = createHost(() => undefined, portPresentation);
+    const host = createHost(portPresentation);
     const node = cubeNode('cube-node');
 
     host.mount(node);
@@ -147,10 +147,10 @@ describe('ComfyVueCubeNodeHost', () => {
 
   test('adopts the native Nodes 2.0 footer as the Cube editor entry point', async () => {
     const { root, footerButton, footerLabel } = nativeCubeRoot('cube-node');
-    const openEditor = jest.fn();
+    const prepareEditor = jest.fn();
     const nativeEnterSubgraph = jest.fn();
     footerButton.addEventListener('click', nativeEnterSubgraph);
-    const host = createHost(openEditor);
+    const host = createHost(undefined, prepareEditor);
     const node = cubeNode('cube-node');
 
     host.mount(node);
@@ -158,6 +158,7 @@ describe('ComfyVueCubeNodeHost', () => {
     expect(footerButton.hidden).toBe(false);
     expect(footerLabel.textContent).toBe('Edit Cube');
     expect(footerButton.getAttribute('aria-label')).toBe('Edit Cube');
+    expect(footerButton.getAttribute('title')).toBe('Edit Cube');
 
     const footerMutations = jest.fn();
     const observer = new MutationObserver(footerMutations);
@@ -170,26 +171,28 @@ describe('ComfyVueCubeNodeHost', () => {
 
     footerButton.click();
 
-    expect(openEditor).toHaveBeenCalledWith(node);
-    expect(nativeEnterSubgraph).not.toHaveBeenCalled();
+    expect(prepareEditor).toHaveBeenCalledWith(node);
+    expect(nativeEnterSubgraph).toHaveBeenCalledTimes(1);
 
     host.unmount(node);
     expect(footerLabel.textContent).toBe('Enter Subgraph');
     expect(footerButton.hasAttribute('aria-label')).toBe(false);
+    expect(footerButton.hasAttribute('title')).toBe(false);
   });
 
   test('keeps the Cube editor action live while Vue replaces the footer subtree', () => {
     const { footerButton } = nativeCubeRoot('cube-node');
-    const openEditor = jest.fn();
-    const host = createHost(openEditor);
+    const nativeEnterSubgraph = jest.fn();
+    const host = createHost();
     const node = cubeNode('cube-node');
     host.mount(node);
     const replacement = createFooterButton();
 
     footerButton.replaceWith(replacement.button);
+    replacement.button.addEventListener('click', nativeEnterSubgraph);
     replacement.button.click();
 
-    expect(openEditor).toHaveBeenCalledWith(node);
+    expect(nativeEnterSubgraph).toHaveBeenCalledTimes(1);
     host.dispose();
   });
 
@@ -226,10 +229,12 @@ describe('ComfyVueCubeNodeHost', () => {
       titleHeight: 30,
       history: {},
       getScale: () => 1,
-      openEditor: () => undefined,
       requestSlotLayoutSync,
     });
     const node = cubeNode('cube-node');
+    node.outputs = [{ name: 'output', type: '*' }];
+    node.subgraph.outputs = [{ name: 'output', type: '*' }];
+    node.subgraph.outputNode = { slots: [{ linkIds: ['linked'] }] };
     const face = host.mount(node);
     const title = document.createElement('div');
     title.dataset.cubePreviewOutputTitle = '';
@@ -246,15 +251,15 @@ describe('ComfyVueCubeNodeHost', () => {
 
 /** Create one host with inert graph collaborators. */
 function createHost(
-  openEditor: (node: CubeNode) => void = () => undefined,
   portPresentation?: CubePortPresentationController,
+  prepareEditor: (node: CubeNode) => void = () => undefined,
 ): ComfyVueCubeNodeHost {
   return new ComfyVueCubeNodeHost({
     document,
     titleHeight: 30,
     history: {},
     getScale: () => 1,
-    openEditor,
+    prepareEditor,
     requestSlotLayoutSync: () => undefined,
     ...(portPresentation ? { portPresentation } : {}),
   });

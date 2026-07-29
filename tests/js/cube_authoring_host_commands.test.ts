@@ -17,17 +17,23 @@ import { describe, expect, jest, test } from '@jest/globals';
 import { CubeAuthoringHostCommands } from '../../frontend/comfyui/ui/cube/CubeAuthoringHostCommands.js';
 
 describe('CubeAuthoringHostCommands', () => {
-  test('publishes one Comfy command for the visible authoring action', () => {
-    const createCube = jest.fn<() => void>();
-    const adapter = new CubeAuthoringHostCommands(createCube);
+  test("places direct Cube authoring entry points in Comfy's canvas context menu", () => {
+    const createCubeFromSelection = jest.fn<() => void>();
+    const createCubeFromSubgraph = jest.fn<() => void>();
+    const createEmptyCube = jest.fn<() => void>();
+    const adapter = new CubeAuthoringHostCommands(
+      createCubeFromSelection,
+      createCubeFromSubgraph,
+      createEmptyCube,
+    );
 
-    expect(adapter.commands).toEqual([
-      expect.objectContaining({
-        id: 'SugarCubes.Graph.ConvertSelectionToCube',
-        label: 'Convert Selection to SugarCube',
-      }),
+    expect(adapter.getCanvasMenuItems({ selectedItems: { size: 0 } })).toEqual([
+      expect.objectContaining({ content: 'Create Empty SugarCube' }),
     ]);
-    adapter.commands[0]?.function();
-    expect(createCube).toHaveBeenCalledTimes(1);
+    const items = adapter.getCanvasMenuItems({ selectedItems: { size: 1 } });
+    items.forEach((entry) => entry.callback?.());
+    expect(createEmptyCube).toHaveBeenCalledTimes(1);
+    expect(createCubeFromSelection).toHaveBeenCalledTimes(1);
+    expect(createCubeFromSubgraph).toHaveBeenCalledTimes(1);
   });
 });

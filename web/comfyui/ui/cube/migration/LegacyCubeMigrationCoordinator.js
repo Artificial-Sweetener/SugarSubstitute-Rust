@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Coordinate two-phase restoration of persisted group-era Cube instances. */
+import { mapLegacyCubeIdentity } from './LegacyCubeIdentityMapper.js';
 /** Own the lifecycle bridge between pre-configure extraction and post-configure restore. */
 export class LegacyCubeMigrationCoordinator {
     #graphBuilder;
@@ -39,14 +40,7 @@ export class LegacyCubeMigrationCoordinator {
                 const placed = this.#placement.placeBuilt({
                     built,
                     title: plan.title,
-                    identity: {
-                        cubeId: plan.cubeId,
-                        cubeVersion: plan.cubeVersion,
-                        instanceId: plan.key,
-                        defaultAlias: plan.title,
-                        instanceAlias: plan.title,
-                        metadata: {},
-                    },
+                    identity: mapLegacyCubeIdentity(plan),
                     geometry: { position: plan.position, size: plan.size },
                     recordHistory: false,
                 });

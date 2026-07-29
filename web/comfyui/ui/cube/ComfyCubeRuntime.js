@@ -26,7 +26,9 @@ import { LegacyCubeMigrationCoordinator, } from './migration/LegacyCubeMigration
 import { CubeSurfacePresenter } from '../surface/CubeSurfacePresenter.js';
 import { ComfyCubePreviewCatalog } from '../surface/ComfyCubePreviewCatalog.js';
 import { CubeEditorNavigationPresenter } from '../surface/CubeEditorNavigationPresenter.js';
+import { CubeEditorMetadataHud, } from '../surface/CubeEditorMetadataHud.js';
 import { ComfyCanvasViewStateAdapter } from '../surface/ComfyCanvasViewStateAdapter.js';
+import { ComfyCanvasGraphFocusAdapter } from '../surface/ComfyCanvasGraphFocusAdapter.js';
 import { ComfyCanvasSelectionStateAdapter } from '../surface/ComfyCanvasSelectionStateAdapter.js';
 import { createComfyCubeHistoryAdapter } from './ComfyCubeHistoryAdapter.js';
 import { ComfyCubeNodeFactory } from './node/ComfyCubeNodeFactory.js';
@@ -38,6 +40,7 @@ import { NativeCubeProximityEndpointSource } from './connection/NativeCubeProxim
 import { CubePortPresentationController } from './connection/CubePortPresentationController.js';
 import { ComfyCanvasGraphChangeAdapter } from '../surface/ComfyCanvasGraphChangeAdapter.js';
 import { resolveComfyRendererMode } from '../core/ComfyRendererMode.js';
+import { NativeCubeGeometryCoordinator } from './geometry/NativeCubeGeometryCoordinator.js';
 /** Construct the graph-bound SugarCubes integration around native SubgraphNodes. */
 export function createComfyCubeRuntime(options) {
     const app = requireRecord(options.app, 'Comfy application');
@@ -47,12 +50,12 @@ export function createComfyCubeRuntime(options) {
     const canvas = requireRecord(app.canvas, 'Comfy canvas');
     const createNodeFunction = requireFunction(liteGraph.createNode, 'LiteGraph.createNode');
     const createSubgraphFunction = requireFunction(graph.createSubgraph, 'LGraph.createSubgraph');
-    const convertToSubgraphFunction = requireFunction(graph.convertToSubgraph, 'LGraph.convertToSubgraph');
     const addFunction = requireFunction(graph.add, 'LGraph.add');
     const getNodeByIdFunction = requireFunction(graph.getNodeById, 'LGraph.getNodeById');
     const selectedItems = requireSet(canvas.selectedItems, 'LGraphCanvas.selectedItems');
     const updateSelectedItemsFunction = typeof canvas.updateSelectedItems === 'function' ? canvas.updateSelectedItems : null;
     const apiUrlFunction = requireFunction(api.apiURL, 'Comfy API.apiURL');
+    const openSubgraphFunction = typeof canvas.openSubgraph === 'function' ? canvas.openSubgraph : null;
     const runtimeGraph = requireRuntimeGraph(graph);
     const legacyCanvas = requireLiteGraphCubeNodeCanvas(canvas);
     const titleHeight = readPositiveNumber(liteGraph.NODE_TITLE_HEIGHT, 30);
@@ -116,28 +119,61 @@ export function createComfyCubeRuntime(options) {
         setDirtyCanvas: (foreground, background) => history.setDirtyCanvas?.(foreground, background),
     });
     const canvasView = new ComfyCanvasViewStateAdapter(canvas, (foreground, background) => history.setDirtyCanvas?.(foreground, background), options.logger);
+    const canvasFocus = new ComfyCanvasGraphFocusAdapter(canvas, (foreground, background) => history.setDirtyCanvas?.(foreground, background));
     const canvasSelection = new ComfyCanvasSelectionStateAdapter(selectedItems, updateSelectedItemsFunction ? () => updateSelectedItemsFunction.call(canvas) : null, options.logger);
     const canvasGraphChanges = new ComfyCanvasGraphChangeAdapter(canvas);
-    const editorNavigation = new CubeEditorNavigationPresenter({
+    const metadataHud = options.editorMetadata
+        ? new CubeEditorMetadataHud(options.document, options.editorMetadata)
+        : null;
+    const geometryWindow = options.document.defaultView;
+    const nativeGeometry = new NativeCubeGeometryCoordinator({
         document: options.document,
+        nodes,
+        graphChanges: canvasGraphChanges,
+        getCurrentGraph: () => (isRecord(canvas.graph) ? canvas.graph : null),
+        getRenderer: () => resolveComfyRendererMode(app, liteGraph, options.document),
+        scheduler: {
+            schedule: (callback, delayMs) => geometryWindow?.setTimeout(callback, delayMs) ?? globalThis.setTimeout(callback, delayMs),
+            cancel: (handle) => {
+                const timer = Number(handle);
+                if (Number.isFinite(timer)) {
+                    if (geometryWindow)
+                        geometryWindow.clearTimeout(timer);
+                    else
+                        globalThis.clearTimeout(timer);
+                }
+            },
+        },
+        logger: options.logger,
+    });
+    const editorNavigation = new CubeEditorNavigationPresenter({
         canvas: {
             setGraph(targetGraph) {
                 canvasGraphChanges.setGraph(targetGraph);
             },
+            ...(openSubgraphFunction
+                ? {
+                    openSubgraph(targetGraph, fromNode) {
+                        openSubgraphFunction.call(canvas, targetGraph, fromNode);
+                    },
+                }
+                : {}),
             captureView: () => canvasView.capture(),
             restoreView: (state) => canvasView.restore(state),
+            focusBounds: (bounds) => canvasFocus.focus(bounds),
             captureSelection: () => canvasSelection.capture(),
             restoreSelection: (items) => canvasSelection.restore(items),
         },
         rootGraph: graph,
         getCurrentGraph: () => (isRecord(canvas.graph) ? canvas.graph : null),
         nodes,
-        logger: options.logger,
         graphChanges: canvasGraphChanges,
+        ...(metadataHud ? { metadataHud } : {}),
     });
     const presenter = new CubeSurfacePresenter({
         document: options.document,
         openEditor: (node) => editorNavigation.open(node),
+        prepareEditor: (node) => editorNavigation.prepare(node),
         rootGraph: graph,
         getCurrentGraph: () => (isRecord(canvas.graph) ? canvas.graph : null),
         nodes,
@@ -196,10 +232,11 @@ export function createComfyCubeRuntime(options) {
         history,
     });
     const authoring = new ComfyCubeAuthoringAdapter({
-        graph,
         subgraphs: runtimeGraph.subgraphs,
         convertToSubgraph(items) {
-            return convertToSubgraphFunction.call(graph, items);
+            const activeGraph = readActiveGraph(canvas, graph);
+            const convert = requireFunction(activeGraph.convertToSubgraph, 'LGraph.convertToSubgraph');
+            return convert.call(activeGraph, items);
         },
         canvas: {
             selectedItems,
@@ -209,6 +246,8 @@ export function createComfyCubeRuntime(options) {
         },
         nodeFactory,
         catalog: nodes,
+        createEmptySubgraph: (title) => graphBuilder.createEmptyDraft(title),
+        getDraftPosition: () => readGraphPoint(legacyCanvas.graph_mouse, [0, 0]),
     });
     const subgraphRegistrar = new CubeSubgraphRegistrar({
         hasSubgraph(id) {
@@ -246,9 +285,11 @@ export function createComfyCubeRuntime(options) {
         dispose: () => {
             outputSurfaceSynchronizer.dispose();
             editorNavigation.dispose();
+            metadataHud?.dispose();
             presenter.dispose();
             legacyContainerMigration.dispose();
             nodeLifecycle.dispose();
+            nativeGeometry.dispose();
             canvasGraphChanges.dispose();
         },
     };
@@ -259,6 +300,10 @@ function createUuid() {
         return globalThis.crypto.randomUUID();
     }
     return `sugarcube-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+/** Read the graph currently displayed by Comfy's canvas, falling back to the workflow root. */
+function readActiveGraph(canvas, fallback) {
+    return isRecord(canvas.graph) ? canvas.graph : fallback;
 }
 /** Validate the node surface required by native Cube graph construction. */
 function isNativeGraphNode(value) {
@@ -314,6 +359,12 @@ function isConnectableNode(value) {
 /** Accept LiteGraph's array and typed-array geometry vectors. */
 function isNumericVector(value) {
     return Array.isArray(value) || value instanceof Float32Array || value instanceof Float64Array;
+}
+/** Read one finite graph-space point from Comfy's mutable coordinate vector. */
+function readGraphPoint(value, fallback) {
+    const x = Number(value[0]);
+    const y = Number(value[1]);
+    return [Number.isFinite(x) ? x : fallback[0], Number.isFinite(y) ? y : fallback[1]];
 }
 /** Require one record-valued host capability. */
 function requireRecord(value, name) {

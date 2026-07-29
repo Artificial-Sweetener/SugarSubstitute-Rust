@@ -23,6 +23,9 @@ import type { CubeNodeCatalog } from './CubeNodeCatalog.js';
 export interface CubeNodeIdentityUpdates {
   cubeId?: string;
   defaultAlias?: string;
+  targetModel?: string;
+  supportedModels?: string[];
+  description?: string;
   cubeVersion?: string;
   cubeRevisionRef?: string;
   cubeDefinitionKey?: string;
@@ -60,6 +63,9 @@ function applyUpdates(current: UnknownRecord, updates: CubeNodeIdentityUpdates):
     ...current,
     ...(updates.cubeId ? { cube_id: updates.cubeId } : {}),
     ...(updates.defaultAlias ? { default_alias: updates.defaultAlias } : {}),
+    ...(updates.targetModel !== undefined ? { target_model: updates.targetModel } : {}),
+    ...(updates.supportedModels ? { supported_models: [...updates.supportedModels] } : {}),
+    ...(updates.description !== undefined ? { description: updates.description } : {}),
     ...(updates.cubeVersion ? { cube_version: updates.cubeVersion } : {}),
     ...(updates.cubeRevisionRef ? { cube_revision_ref: updates.cubeRevisionRef } : {}),
     ...(updates.cubeDefinitionKey ? { cube_definition_key: updates.cubeDefinitionKey } : {}),

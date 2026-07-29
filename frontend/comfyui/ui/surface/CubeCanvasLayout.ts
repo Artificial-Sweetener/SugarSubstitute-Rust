@@ -15,7 +15,9 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Compute renderer-independent Nodes 1.0 Cube surface geometry. */
 
-import type { CubeNode } from '../cube/node/ComfyCubeNodeFactory.js';
+import { requireCubeIdentity, type CubeNode } from '../cube/node/ComfyCubeNodeFactory.js';
+import { isCubeAwaitingFirstSave } from '../cube/CubeIdentityPresentation.js';
+import type { CubeExternalInterface } from '../cube/graph/CubeExternalInterface.js';
 import { CUBE_CANVAS_ACTIVATION_SIZE } from './CubeCanvasActivationControl.js';
 import { CUBE_RESIZE_EDGES, type CubeResizeEdge } from '../cube/geometry/CubeResizeGeometry.js';
 import type { Vec2 } from '../types/common.js';
@@ -73,6 +75,7 @@ export interface CubeCanvasLayout {
   masonry: CubeCanvasRect;
   preview: CubeCanvasRect | null;
   editAction: CubeCanvasRect;
+  unsavedIndicator: CubeCanvasRect | null;
   cardMenuAction: CubeCanvasRect;
   chromeActions: Readonly<Partial<Record<CubeFaceTitlebarActionKey, CubeCanvasRect>>>;
   cardMenuEntries: CubeFaceCardMenuEntry[];
@@ -95,6 +98,10 @@ export function computeCubeCanvasLayout(
   state: CubeSurfaceState,
   titleHeight: number,
   titlebarActionKeys: readonly CubeFaceTitlebarActionKey[] = [],
+  externalInterface: CubeExternalInterface = {
+    inputSlots: node.inputs.map((_, index) => index),
+    outputSlots: node.outputs.map((_, index) => index),
+  },
 ): CubeCanvasLayout {
   const frame = rect(
     Number(node.pos[0]),
@@ -111,13 +118,14 @@ export function computeCubeCanvasLayout(
     Math.max(1, frame.height - HEADER_HEIGHT - spacing.headerInset - spacing.footerInset),
   );
   const gutters = resolveCubePortGutters(frame, baseContent, {
-    hasInputs: node.inputs.length > 0,
-    hasOutputs: node.outputs.length > 0,
+    hasInputs: externalInterface.inputSlots.length > 0,
+    hasOutputs: externalInterface.outputSlots.length > 0,
   });
   const content = gutters.content;
   const minimumMasonryWidth = Math.min(content.width, Math.max(1, state.minimumColumnWidth));
-  const previewRight = state.preview.visible ? frame.x + frame.width : content.x + content.width;
-  const previewWidth = state.preview.visible
+  const previewVisible = state.preview.visible && externalInterface.outputSlots.length > 0;
+  const previewRight = previewVisible ? frame.x + frame.width : content.x + content.width;
+  const previewWidth = previewVisible
     ? Math.min(
         state.preview.width,
         Math.max(0, previewRight - content.x - CONTENT_GAP - minimumMasonryWidth),
@@ -137,6 +145,7 @@ export function computeCubeCanvasLayout(
   const presentation = resolveCubeFaceCardPresentation(node.subgraph._nodes, state, node.subgraph);
   const chrome = layoutCubeCanvasChrome(header, {
     showCardMenu: presentation.menuEntries.length > 0,
+    showUnsavedIndicator: isCubeAwaitingFirstSave(requireCubeIdentity(node)),
     titlebarActionKeys,
   });
   const measuredCards = presentation.cards
@@ -150,9 +159,6 @@ export function computeCubeCanvasLayout(
       id: card.id,
       height: card.bodyHeight + titleHeight,
       ...(card.columnSpan === undefined ? {} : { columnSpan: card.columnSpan }),
-      sourceX: Number(card.node.pos?.[0]),
-      sourceY: Number(card.node.pos?.[1]),
-      sourceWidth: Number(card.node.size?.[0]),
     })),
     {
       availableWidth: masonry.width,
@@ -205,13 +211,25 @@ export function computeCubeCanvasLayout(
     masonry,
     preview,
     editAction: chrome.editAction,
+    unsavedIndicator: chrome.unsavedIndicator,
     cardMenuAction: chrome.cardMenuAction,
     chromeActions: chrome.chromeActions,
     cardMenuEntries: presentation.menuEntries,
     resizeHandles: layoutResizeHandles(frame),
     cards,
-    inputs: layoutCubeInputPorts(node.subgraph.inputs, frame, HEADER_HEIGHT),
-    outputs: layoutCubeOutputPorts(node.outputs, frame, preview, HEADER_HEIGHT),
+    inputs: layoutCubeInputPorts(
+      externalInterface.inputSlots.map((index) => node.subgraph.inputs[index]),
+      frame,
+      HEADER_HEIGHT,
+      externalInterface.inputSlots,
+    ),
+    outputs: layoutCubeOutputPorts(
+      externalInterface.outputSlots.map((index) => node.outputs[index]),
+      frame,
+      preview,
+      HEADER_HEIGHT,
+      externalInterface.outputSlots,
+    ),
     minimumSize,
   };
 }

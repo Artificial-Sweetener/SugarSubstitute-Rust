@@ -51,7 +51,34 @@ describe('CubeSurfaceView', () => {
     expect(view.element.getAttribute('aria-label')).toBe(
       'Text <script>alert(1)</script> Cube contents',
     );
+    expect(view.element.querySelector('.sugarcubes-cube-unsaved-indicator')).toBeNull();
+    expect(view.element.querySelector('[data-cube-definition-source]')?.textContent).toBe(
+      'from Base-Cubes by Artificial-Sweetener',
+    );
     expect(view.element.querySelector('script')).toBeNull();
+  });
+
+  test('shows a crossed-out native save icon only before the Cube has been saved', () => {
+    const identity = cubeIdentity('Draft Cube');
+    identity.awaitingFirstSave = true;
+    identity.sourceLine = 'Workflow only';
+    const view = new CubeSurfaceView({
+      document,
+      renderer: createRenderer(),
+      identity,
+      nodes: [],
+      state: createDefaultCubeSurfaceState(),
+      onStateChange: jest.fn(),
+    });
+
+    const indicator = view.element.querySelector<HTMLElement>('.sugarcubes-cube-unsaved-indicator');
+    expect(indicator?.getAttribute('aria-label')).toBe('Not saved yet');
+    expect(indicator?.querySelector('.pi-save')).not.toBeNull();
+    expect(indicator?.querySelector('.pi-ban')).not.toBeNull();
+    expect(view.element.querySelector('[data-cube-definition-source]')?.textContent).toBe(
+      'Workflow only',
+    );
+    view.dispose();
   });
 
   test('does not let legacy persisted card order override the native Cube graph order', () => {
@@ -490,6 +517,26 @@ describe('CubeSurfaceView', () => {
     view.dispose();
   });
 
+  test('hides the output rail when no authored output is exposed', () => {
+    const view = new CubeSurfaceView({
+      document,
+      renderer: createRenderer(),
+      identity: cubeIdentity('Empty Cube'),
+      nodes: [],
+      state: createDefaultCubeSurfaceState(),
+      onStateChange: jest.fn(),
+    });
+
+    view.setPreviewAvailable(false);
+    view.layout(900);
+
+    expect(view.element.querySelector<HTMLElement>('[data-cube-preview-rail]')?.hidden).toBe(true);
+    expect(
+      view.element.querySelector<HTMLElement>('[data-cube-content]')?.dataset.previewLayout,
+    ).toBe('hidden');
+    view.dispose();
+  });
+
   test('dedicates a one-output rail to media without a selector or visible caption', () => {
     const onStateChange = jest.fn();
     const state = createDefaultCubeSurfaceState();
@@ -604,6 +651,7 @@ function cubeIdentity(instanceTitle: string): CubeIdentityPresentation {
     definitionTitle: 'SDXL/Text to Image',
     versionText: 'version 2.0.0',
     definitionLine: 'SDXL/Text to Image version 2.0.0',
+    awaitingFirstSave: false,
     sourceLine: 'from Base-Cubes by Artificial-Sweetener',
     icon: {
       kind: 'asset',

@@ -40,6 +40,7 @@ from typing import (
 MARKER_CLASS_TYPES = {
     "SugarCubes.CubeInput": "input",
     "SugarCubes.CubeOutput": "output",
+    "SugarCubes.CubeAnchor": "anchor",
 }
 
 
@@ -133,6 +134,8 @@ class CubeData:
 
     outputs: List[CubeMarker] = field(default_factory=list)
 
+    anchors: List[CubeMarker] = field(default_factory=list)
+
     subgraph_nodes: Set[str] = field(default_factory=set)
 
     def marker_ids(self) -> Set[str]:
@@ -141,6 +144,8 @@ class CubeData:
         ids: Set[str] = {m.node_id for m in self.inputs}
 
         ids.update(m.node_id for m in self.outputs)
+
+        ids.update(m.node_id for m in self.anchors)
 
         return ids
 
@@ -341,6 +346,8 @@ def _collect_markers(
             cube.inputs.append(marker)
         elif marker_kind == "output":
             cube.outputs.append(marker)
+        elif marker_kind == "anchor":
+            cube.anchors.append(marker)
 
         markers_by_id[node.id] = marker
 
@@ -368,7 +375,7 @@ def _compute_subgraphs(graph: Graph, cubes: Dict[str, CubeData]) -> None:
         elif has_sources:
             combined = set(forward)
 
-        elif has_sinks:
+        elif has_sinks or cube.anchors:
             combined = set(backward)
 
         else:
@@ -428,7 +435,7 @@ def _backward_reachable(graph: Graph, cube: CubeData) -> Set[str]:
 
     queue: Deque[str] = deque()
 
-    for marker in cube.outputs:
+    for marker in [*cube.outputs, *cube.anchors]:
         for edge in graph.edges_to(marker.node_id):
             source_node = graph.nodes.get(edge.source)
 

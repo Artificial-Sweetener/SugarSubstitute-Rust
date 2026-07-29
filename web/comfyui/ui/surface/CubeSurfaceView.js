@@ -22,6 +22,7 @@ import { CubePreviewRailView } from './CubePreviewRailView.js';
 import { layoutCubeSurfaceDom } from './CubeSurfaceDomLayout.js';
 import { NativeCardGeometryObserver } from './NativeCardGeometryObserver.js';
 import { createResolvedCubeIconElement } from '../core/CubeIconResolver.js';
+import { createCubeUnsavedIndicator } from './CubeUnsavedIndicator.js';
 /** Own DOM composition, actions, and responsive geometry for one Cube face. */
 export class CubeSurfaceView {
     element;
@@ -41,6 +42,7 @@ export class CubeSurfaceView {
     #cells = [];
     #visibleCards = [];
     #lastLayoutWidth = 1;
+    #previewAvailable = true;
     /** Build a Cube view without assuming ownership of Comfy's renderer service. */
     constructor(options) {
         this.#state = options.state;
@@ -71,9 +73,15 @@ export class CubeSurfaceView {
         const definitionSource = options.document.createElement('span');
         definitionSource.className = 'sugarcubes-cube-face__definition-source';
         definitionSource.dataset.cubeDefinitionSource = '';
-        definitionSource.textContent = options.identity.sourceLine;
+        const source = options.document.createElement('span');
+        source.className = 'sugarcubes-cube-face__source';
+        source.textContent = options.identity.sourceLine;
+        definitionSource.append(source);
         definitionBadge.append(definitionName, definitionSource);
         this.#actions = new CubeFaceActionsView(options.document, options.metadata ?? {}, options.chromeActions);
+        if (options.identity.awaitingFirstSave) {
+            this.#actions.element.prepend(createCubeUnsavedIndicator(options.document));
+        }
         this.header.append(identity, definitionBadge, this.#actions.element);
         this.#content = options.document.createElement('div');
         this.#content.className = 'sugarcubes-cube-face__content';
@@ -101,6 +109,13 @@ export class CubeSurfaceView {
         this.element.style.setProperty('--sugarcubes-cube-input-gutter-width', `${String(Math.max(0, inputWidth))}px`);
         this.element.style.setProperty('--sugarcubes-cube-output-gutter-width', `${String(Math.max(0, outputWidth))}px`);
     }
+    /** Hide preview presentation when no authored output is exposed externally. */
+    setPreviewAvailable(available) {
+        if (this.#previewAvailable === available)
+            return;
+        this.#previewAvailable = available;
+        this.layout(this.#lastLayoutWidth);
+    }
     /** Reflow masonry columns and the preview rail for the Cube's current width. */
     layout(width) {
         const safeWidth = Number.isFinite(width) ? Math.max(1, width) : 1;
@@ -113,6 +128,7 @@ export class CubeSurfaceView {
             content: this.#content,
             masonry: this.#masonry,
             previewRail: this.#previewRail,
+            previewAvailable: this.#previewAvailable,
         });
         if (result.minimumHeight !== null) {
             this.#onMinimumHeightChange?.(result.minimumHeight);

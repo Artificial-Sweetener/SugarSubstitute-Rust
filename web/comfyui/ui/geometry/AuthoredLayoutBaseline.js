@@ -35,6 +35,15 @@ export function attachAuthoredLayoutBaselines(payload) {
         },
     };
 }
+/** Return the first managed authored baseline carried by a prepared Cube payload. */
+export function readPayloadAuthoredLayoutBaseline(payload) {
+    for (const group of payload.layout?.groups ?? []) {
+        const baseline = readAuthoredLayoutBaseline(group.sugarcubes?.[AUTHORED_LAYOUT_KEY]);
+        if (baseline)
+            return baseline;
+    }
+    return null;
+}
 /** Shift persisted instance origin while keeping local authored geometry immutable. */
 export function shiftAuthoredLayoutBaseline(metadata, shift) {
     const baseline = readAuthoredLayoutBaseline(metadata[AUTHORED_LAYOUT_KEY]);

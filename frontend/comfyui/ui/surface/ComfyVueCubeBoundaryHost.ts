@@ -16,6 +16,10 @@
 /** Position graph-owned Nodes 2.0 slots on animated Cube boundary gutters. */
 
 import type { CubePortPresentationController } from '../cube/connection/CubePortPresentationController.js';
+import {
+  resolveCubeExternalInterface,
+  type CubeExternalInterfaceNode,
+} from '../cube/graph/CubeExternalInterface.js';
 import type { ComfyNode } from '../types/graph.js';
 import {
   measureCubeBoundary,
@@ -28,9 +32,15 @@ import { CubeDomPortLeaderHost } from './CubeDomPortLeaderHost.js';
 
 interface ElementPresentation {
   style: string | null;
+  hidden: boolean;
   boundaryRow: string | undefined;
   boundaryDirection: string | undefined;
   boundaryIndex: string | undefined;
+}
+
+interface BoundarySlotBinding {
+  element: HTMLElement;
+  index: number;
 }
 
 export interface ComfyVueCubeBoundaryHostOptions {
@@ -87,11 +97,20 @@ export class ComfyVueCubeBoundaryHost {
     if (!row) return;
     const inputSlots = [...row.querySelectorAll<HTMLElement>('.lg-slot--input')];
     const outputSlots = [...row.querySelectorAll<HTMLElement>('.lg-slot--output')];
-    const outputTitles = measureOutputTitles(this.#body, row, outputSlots.length);
+    const externalInterface = resolveNativeCubeExternalInterface(this.#node);
+    const inputs = this.#applySlotVisibility(
+      inputSlots,
+      externalInterface?.inputSlots ?? inputSlots.map((_, index) => index),
+    );
+    const outputs = this.#applySlotVisibility(
+      outputSlots,
+      externalInterface?.outputSlots ?? outputSlots.map((_, index) => index),
+    );
+    const outputTitles = measureOutputTitles(this.#body, row, outputs.length);
     const nodeRoot = this.#body.closest<HTMLElement>('.lg-node') ?? this.#body;
     const priorInputMeasurement = this.#measurements.input;
     const stableInputRowPositions =
-      priorInputMeasurement?.anchors.length === inputSlots.length
+      priorInputMeasurement?.anchors.length === inputs.length
         ? priorInputMeasurement.anchors.map(
             (anchor) =>
               anchor.defaultY +
@@ -103,7 +122,7 @@ export class ComfyVueCubeBoundaryHost {
       this.#body,
       nodeRoot,
       row,
-      inputSlots,
+      inputs.map(({ element }) => element),
       stableInputRowPositions,
       this.#titleHeight,
     );
@@ -111,16 +130,16 @@ export class ComfyVueCubeBoundaryHost {
       this.#body,
       nodeRoot,
       row,
-      outputSlots,
+      outputs.map(({ element }) => element),
       outputTitles.map((item) => item.y),
       this.#titleHeight,
     );
     this.#remember(row);
     row.dataset.sugarcubeBoundaryRow = '';
-    this.#markSlots('input', inputSlots, true);
-    this.#markSlots('output', outputSlots, true);
-    this.#renderLeaders(row, outputSlots, outputTitles);
-    this.#requestLayoutSyncForNewGeometry(inputSlots, outputSlots);
+    this.#markSlots('input', inputs, true);
+    this.#markSlots('output', outputs, true);
+    this.#renderLeaders(row, outputs, outputTitles);
+    this.#requestLayoutSyncForNewGeometry(inputs, outputs);
   }
 
   /** Paint transient positions without feeding animated geometry back into anchor measurement. */
@@ -132,22 +151,37 @@ export class ComfyVueCubeBoundaryHost {
     if (!row) return;
     const inputSlots = [...row.querySelectorAll<HTMLElement>('.lg-slot--input')];
     const outputSlots = [...row.querySelectorAll<HTMLElement>('.lg-slot--output')];
-    const outputTitles = measureOutputTitles(this.#body, row, outputSlots.length);
-    this.#markSlots('input', inputSlots, false);
-    this.#markSlots('output', outputSlots, false);
-    this.#renderLeaders(row, outputSlots, outputTitles);
-    this.#requestLayoutSyncForNewGeometry(inputSlots, outputSlots);
+    const externalInterface = resolveNativeCubeExternalInterface(this.#node);
+    const inputs = this.#applySlotVisibility(
+      inputSlots,
+      externalInterface?.inputSlots ?? inputSlots.map((_, index) => index),
+    );
+    const outputs = this.#applySlotVisibility(
+      outputSlots,
+      externalInterface?.outputSlots ?? outputSlots.map((_, index) => index),
+    );
+    const outputTitles = measureOutputTitles(this.#body, row, outputs.length);
+    this.#markSlots('input', inputs, false);
+    this.#markSlots('output', outputs, false);
+    this.#renderLeaders(row, outputs, outputTitles);
+    this.#requestLayoutSyncForNewGeometry(inputs, outputs);
   }
 
   /** Ask Comfy to remeasure once per semantic boundary geometry revision. */
   #requestLayoutSyncForNewGeometry(
-    inputSlots: readonly HTMLElement[],
-    outputSlots: readonly HTMLElement[],
+    inputSlots: readonly BoundarySlotBinding[],
+    outputSlots: readonly BoundarySlotBinding[],
   ): void {
     if (this.#portPresentation?.isAnimating(this.#node)) return;
     const signature = [
-      serializeSlotPositions('input', inputSlots),
-      serializeSlotPositions('output', outputSlots),
+      serializeSlotPositions(
+        'input',
+        inputSlots.map(({ element }) => element),
+      ),
+      serializeSlotPositions(
+        'output',
+        outputSlots.map(({ element }) => element),
+      ),
     ].join('|');
     if (signature === this.#lastSyncedLayout) return;
     this.#lastSyncedLayout = signature;
@@ -157,21 +191,22 @@ export class ComfyVueCubeBoundaryHost {
   /** Update stable leader elements from current title and socket positions. */
   #renderLeaders(
     row: HTMLElement,
-    outputSlots: readonly HTMLElement[],
+    outputSlots: readonly BoundarySlotBinding[],
     outputTitles: readonly MeasuredOutputTitle[],
   ): void {
     const rowOffset = readLocalOffset(this.#body, row);
     this.#leaders.render(
-      outputTitles.flatMap((item, index) => {
-        const portY = readBoundaryPosition(outputSlots[index]);
+      outputTitles.flatMap((item, position) => {
+        const binding = outputSlots[position];
+        const portY = readBoundaryPosition(binding?.element);
         return portY === null
           ? []
           : [
               {
-                index,
+                index: binding?.index ?? position,
                 title: item.title,
                 portY: rowOffset + portY,
-                socketRadius: measureSocketRadius(this.#body, outputSlots[index]),
+                socketRadius: measureSocketRadius(this.#body, binding?.element),
               },
             ];
       }),
@@ -186,6 +221,7 @@ export class ComfyVueCubeBoundaryHost {
     this.#inputLabels.clear();
     for (const [element, presentation] of this.#presentations) {
       restoreAttribute(element, 'style', presentation.style);
+      element.hidden = presentation.hidden;
       restoreDataset(element, 'sugarcubeBoundaryRow', presentation.boundaryRow);
       restoreDataset(element, 'sugarcubeBoundaryDirection', presentation.boundaryDirection);
       restoreDataset(element, 'sugarcubeBoundaryIndex', presentation.boundaryIndex);
@@ -196,21 +232,28 @@ export class ComfyVueCubeBoundaryHost {
   /** Mark one direction's native slots from its stable measured geometry. */
   #markSlots(
     direction: 'input' | 'output',
-    slots: readonly HTMLElement[],
+    slots: readonly BoundarySlotBinding[],
     registerAnchors: boolean,
   ): boolean {
     const measurement = this.#measurements[direction];
     if (!measurement) return false;
     if (registerAnchors) {
-      this.#portPresentation?.register(this.#node, direction, measurement.anchors);
+      this.#portPresentation?.register(
+        this.#node,
+        direction,
+        measurement.anchors.map((anchor, position) => ({
+          ...anchor,
+          index: slots[position]?.index ?? position,
+        })),
+      );
     }
     let changed = false;
-    for (const [index, slot] of slots.entries()) {
+    for (const [position, { element: slot, index }] of slots.entries()) {
       this.#remember(slot);
       const boundaryIndex = String(index);
       const boundaryPosition =
         (this.#portPresentation?.resolveLocalY(this.#node, direction, index) ??
-          measurement.anchors[index]?.defaultY ??
+          measurement.anchors[position]?.defaultY ??
           measurement.rowMinimumY + measurement.rowOffset - measurement.graphOriginOffset) +
         measurement.graphOriginOffset -
         measurement.rowOffset;
@@ -230,6 +273,28 @@ export class ComfyVueCubeBoundaryHost {
     return changed;
   }
 
+  /** Keep dormant authoring boundaries in the editor but out of the closed face. */
+  #applySlotVisibility(
+    slots: readonly HTMLElement[],
+    visibleIndexes: readonly number[],
+  ): BoundarySlotBinding[] {
+    const visible = new Set(visibleIndexes);
+    return slots.flatMap((element, index) => {
+      this.#remember(element);
+      const isVisible = visible.has(index);
+      element.hidden = !isVisible;
+      if (isVisible) {
+        element.style.removeProperty('display');
+        return [{ element, index }];
+      }
+      // Comfy's utility classes set display:flex, which overrides the HTML
+      // hidden attribute in Nodes 2.0. Use an explicit priority so dormant
+      // draft ports cannot leak onto the closed Cube face.
+      element.style.setProperty('display', 'none', 'important');
+      return [];
+    });
+  }
+
   /** Render a concise type label without mutating native slot metadata. */
   #presentInputLabel(slot: HTMLElement, index: number): void {
     const label = slot.querySelector<HTMLElement>('.text-node-component-slot-text');
@@ -244,11 +309,31 @@ export class ComfyVueCubeBoundaryHost {
     if (this.#presentations.has(element)) return;
     this.#presentations.set(element, {
       style: element.getAttribute('style'),
+      hidden: element.hidden,
       boundaryRow: element.dataset.sugarcubeBoundaryRow,
       boundaryDirection: element.dataset.sugarcubeBoundaryDirection,
       boundaryIndex: element.dataset.sugarcubeBoundaryIndex,
     });
   }
+}
+
+/** Degrade safely when a host replaces a Cube node during native reconciliation. */
+function resolveNativeCubeExternalInterface(node: ComfyNode) {
+  const subgraph = node.subgraph;
+  if (!isCubeExternalInterfaceNode(subgraph)) return null;
+  return resolveCubeExternalInterface({
+    ...(node.inputs ? { inputs: node.inputs } : {}),
+    ...(node.outputs ? { outputs: node.outputs } : {}),
+    ...(node.properties ? { properties: node.properties } : {}),
+    subgraph,
+  });
+}
+
+/** Validate only the native object boundary consumed by the interface policy. */
+function isCubeExternalInterfaceNode(
+  value: unknown,
+): value is CubeExternalInterfaceNode['subgraph'] {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 /** Restore one nullable host attribute. */

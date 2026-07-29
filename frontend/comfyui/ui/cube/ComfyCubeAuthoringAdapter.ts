@@ -15,12 +15,15 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Convert a native Comfy selection into a real Cube subgraph node. */
 
-import { buildLinkIndex } from '../graph/GraphQuery.js';
 import { isRecord } from '../types/common.js';
 import type { UnknownRecord, Vec2 } from '../types/common.js';
 import type { ComfyGraph, GraphId, NumericVector } from '../types/graph.js';
 import type { NativeCubeSubgraph } from './ComfyCubeGraphBuilder.js';
-import type { ComfyCubeNodeFactory, CubeNode } from './node/ComfyCubeNodeFactory.js';
+import {
+  isDraftCubeNode,
+  type ComfyCubeNodeFactory,
+  type CubeNode,
+} from './node/ComfyCubeNodeFactory.js';
 import type { CubeNodeCatalog } from './node/CubeNodeCatalog.js';
 
 const DEFAULT_CUBE_SURFACE_SIZE: Vec2 = [720, 480];
@@ -34,11 +37,19 @@ export interface AuthoredCubeIdentity {
   description: string;
 }
 
+/** Identify one graph-only Cube draft before it receives a persistent Cube id. */
+export interface CubeDraftIdentity {
+  instanceId: string;
+  defaultAlias: string;
+}
+
 interface NativeConversionNode {
   id: GraphId;
   pos: NumericVector;
   size: NumericVector;
   subgraph: NativeCubeSubgraph;
+  properties?: UnknownRecord;
+  isSubgraphNode?: () => boolean;
 }
 
 interface NativeConversionResult {
@@ -46,7 +57,13 @@ interface NativeConversionResult {
   node: NativeConversionNode;
 }
 
+interface NativeSubgraphNode extends NativeConversionNode {
+  properties: UnknownRecord;
+  isSubgraphNode(): boolean;
+}
+
 export interface CubeAuthoringCanvas {
+  graph?: ComfyGraph;
   selectedItems: Set<unknown>;
   updateSelectedItems?(): void;
 }
@@ -57,32 +74,47 @@ export interface AuthoredCube {
   identity: AuthoredCubeIdentity;
 }
 
+/** Retain the real native subgraph used by one unsaved Cube draft. */
+export interface AuthoredCubeDraft {
+  node: CubeNode;
+  subgraph: NativeCubeSubgraph;
+  identity: CubeDraftIdentity;
+}
+
 export interface ComfyCubeAuthoringAdapterOptions {
-  graph: ComfyGraph;
+  graph?: ComfyGraph;
   subgraphs: Map<string, NativeCubeSubgraph>;
   convertToSubgraph(items: Set<unknown>): unknown;
   canvas: CubeAuthoringCanvas;
   nodeFactory: ComfyCubeNodeFactory;
   catalog: CubeNodeCatalog;
+  createEmptySubgraph?(title: string): NativeCubeSubgraph;
+  getDraftPosition?(): Vec2;
 }
 
 /** Reuse native conversion and retain its generated surface node. */
 export class ComfyCubeAuthoringAdapter {
-  readonly #graph: ComfyGraph;
   readonly #subgraphs: Map<string, NativeCubeSubgraph>;
   readonly #convertToSubgraph: (items: Set<unknown>) => unknown;
   readonly #canvas: CubeAuthoringCanvas;
   readonly #nodeFactory: ComfyCubeNodeFactory;
   readonly #catalog: CubeNodeCatalog;
+  readonly #createEmptySubgraph: (title: string) => NativeCubeSubgraph;
+  readonly #getDraftPosition: () => Vec2;
 
   /** Bind native selection conversion and Cube-node presentation metadata. */
   constructor(options: ComfyCubeAuthoringAdapterOptions) {
-    this.#graph = options.graph;
     this.#subgraphs = options.subgraphs;
     this.#convertToSubgraph = options.convertToSubgraph;
     this.#canvas = options.canvas;
     this.#nodeFactory = options.nodeFactory;
     this.#catalog = options.catalog;
+    this.#createEmptySubgraph =
+      options.createEmptySubgraph ??
+      (() => {
+        throw new Error('Native empty Cube draft creation is unavailable.');
+      });
+    this.#getDraftPosition = options.getDraftPosition ?? (() => [0, 0]);
   }
 
   /** Return the current native selection count. */
@@ -90,7 +122,7 @@ export class ComfyCubeAuthoringAdapter {
     return this.#canvas.selectedItems.size;
   }
 
-  /** Require native incoming and outgoing boundaries before graph mutation. */
+  /** Require a non-empty native node selection before graph mutation. */
   validateSelection(): void {
     if (this.#canvas.selectedItems.size === 0) {
       throw new Error('Select at least one node to create a SugarCube.');
@@ -102,59 +134,132 @@ export class ComfyCubeAuthoringAdapter {
       }
       selectedIds.add(String(item.id));
     }
-    let hasInput = false;
-    let hasOutput = false;
-    const graphLinks = buildLinkIndex(this.#graph).links;
-    for (const link of graphLinks) {
-      const originId = link.origin_id ?? link.origin;
-      const targetId = link.target_id ?? link.target;
-      if (originId == null || targetId == null) continue;
-      const originSelected = selectedIds.has(String(originId));
-      const targetSelected = selectedIds.has(String(targetId));
-      hasInput ||= !originSelected && targetSelected;
-      hasOutput ||= originSelected && !targetSelected;
-    }
-    if (!hasInput || !hasOutput) {
-      const missing = [...(!hasInput ? ['input'] : []), ...(!hasOutput ? ['output'] : [])].join(
-        ' and ',
-      );
-      throw new Error(
-        'A SugarCube requires at least one graph input and one graph output. ' +
-          `Missing ${missing} boundary after examining ${String(graphLinks.length)} graph links.`,
-      );
-    }
+    if (!selectedIds.size) throw new Error('Select graph nodes only to create a SugarCube.');
   }
 
-  /** Convert through Comfy while retaining its native node and boundary links. */
-  createFromSelection(identity: AuthoredCubeIdentity): AuthoredCube {
+  /** Create an empty graph-only Cube draft with its real native subgraph boundary. */
+  createEmptyDraft(identity: CubeDraftIdentity): AuthoredCubeDraft {
+    const subgraph = this.#createEmptySubgraph(`Cube: ${identity.defaultAlias}`);
+    const metadata = buildDraftMetadata(identity);
+    markSubgraphAsDraft(subgraph, metadata);
+    const node = this.#nodeFactory.create({
+      instanceId: identity.instanceId,
+      subgraph,
+      title: identity.defaultAlias,
+      position: this.#getDraftPosition(),
+      size: DEFAULT_CUBE_SURFACE_SIZE,
+      identity: metadata,
+      surface: {},
+      kind: 'draft',
+    });
+    this.#subgraphs.set(subgraph.id, subgraph);
+    this.#catalog.add(node);
+    return { node, subgraph, identity };
+  }
+
+  /** Convert through Comfy while retaining its authoritative native boundary links. */
+  createDraftFromSelection(identity: CubeDraftIdentity): AuthoredCubeDraft {
     this.validateSelection();
     const converted = readConversionResult(
       this.#convertToSubgraph(new Set(this.#canvas.selectedItems)),
     );
+    return this.#finalizeDraft(converted.node, identity);
+  }
+
+  /** Require exactly one unconverted native subgraph. */
+  validateSelectedSubgraph(): void {
+    readSelectedSubgraphNode(this.#canvas.selectedItems);
+  }
+
+  /** Mark one existing native subgraph as a graph-only draft without changing its interface. */
+  createDraftFromSelectedSubgraph(identity: CubeDraftIdentity): AuthoredCubeDraft {
+    const node = readSelectedSubgraphNode(this.#canvas.selectedItems);
+    return this.#finalizeDraft(node, identity);
+  }
+
+  /** Promote exactly one saved draft without rebuilding its internal native subgraph. */
+  promoteDraft(instanceId: string, identity: AuthoredCubeIdentity): AuthoredCube {
+    const node = this.#catalog.get(instanceId);
+    if (!node || !isDraftCubeNode(node)) {
+      throw new Error('The selected Cube draft is no longer available.');
+    }
     const metadata = buildCubeMetadata(identity);
-    converted.subgraph.name = `Cube: ${identity.defaultAlias}`;
-    converted.subgraph.extra = {
-      ...(isRecord(converted.subgraph.extra) ? converted.subgraph.extra : {}),
+    node.subgraph.name = `Cube: ${identity.defaultAlias}`;
+    node.subgraph.extra = {
+      ...(isRecord(node.subgraph.extra) ? node.subgraph.extra : {}),
       sugarcubes_kind: 'cube',
       sugarcubes_cube: cloneRecord(metadata),
     };
-    const node = this.#nodeFactory.adopt(converted.node, {
+    this.#nodeFactory.adopt(node, {
       instanceId: identity.instanceId,
-      subgraph: converted.subgraph,
+      subgraph: node.subgraph,
       title: identity.defaultAlias,
-      position: readPair(converted.node.pos, [0, 0]),
-      size: initialCubeSurfaceSize(converted.node.size),
+      position: readPair(node.pos, [0, 0]),
+      size: initialCubeSurfaceSize(node.size),
       identity: metadata,
       surface: {},
     });
+    this.#catalog.changed(node);
+    return { node, subgraph: node.subgraph, identity };
+  }
 
-    this.#subgraphs.set(converted.subgraph.id, converted.subgraph);
+  /** Restore a failed first-save promotion to its workflow-only draft state. */
+  restoreDraft(instanceId: string): void {
+    const node = this.#catalog.get(instanceId);
+    if (!node) return;
+    const identity: CubeDraftIdentity = {
+      instanceId,
+      defaultAlias: node.title?.trim() || 'Untitled Cube',
+    };
+    const metadata = buildDraftMetadata(identity);
+    markSubgraphAsDraft(node.subgraph, metadata);
+    this.#nodeFactory.adopt(node, {
+      instanceId,
+      subgraph: node.subgraph,
+      title: identity.defaultAlias,
+      position: readPair(node.pos, [0, 0]),
+      size: initialCubeSurfaceSize(node.size),
+      identity: metadata,
+      surface: {},
+      kind: 'draft',
+    });
+    this.#catalog.changed(node);
+  }
+
+  /** Apply Cube identity and presentation metadata to a native subgraph node. */
+  #finalizeDraft(nativeNode: NativeConversionNode, identity: CubeDraftIdentity): AuthoredCubeDraft {
+    const metadata = buildDraftMetadata(identity);
+    nativeNode.subgraph.name = `Cube: ${identity.defaultAlias}`;
+    markSubgraphAsDraft(nativeNode.subgraph, metadata);
+    const node = this.#nodeFactory.adopt(nativeNode, {
+      instanceId: identity.instanceId,
+      subgraph: nativeNode.subgraph,
+      title: identity.defaultAlias,
+      position: readPair(nativeNode.pos, [0, 0]),
+      size: initialCubeSurfaceSize(nativeNode.size),
+      identity: metadata,
+      surface: {},
+      kind: 'draft',
+    });
+
+    this.#subgraphs.set(nativeNode.subgraph.id, nativeNode.subgraph);
     this.#catalog.add(node);
     this.#canvas.selectedItems.clear();
     this.#canvas.updateSelectedItems?.();
-    return { node, subgraph: converted.subgraph, identity };
+    return { node, subgraph: nativeNode.subgraph, identity };
   }
 }
+
+/** Persist the draft marker where both native Comfy renderers can read it. */
+function markSubgraphAsDraft(subgraph: NativeCubeSubgraph, metadata: UnknownRecord): void {
+  subgraph.extra = {
+    ...(isRecord(subgraph.extra) ? subgraph.extra : {}),
+    sugarcubes_kind: 'cube_draft',
+    sugarcubes_cube: cloneRecord(metadata),
+  };
+}
+
+/** Infer editor-local boundaries when Comfy stores them only on native node slots. */
 
 /** Validate Comfy's native selection-to-subgraph result. */
 function readConversionResult(value: unknown): NativeConversionResult {
@@ -165,6 +270,39 @@ function readConversionResult(value: unknown): NativeConversionResult {
     throw new TypeError('Comfy returned a wrapper for a different subgraph definition.');
   }
   return { subgraph: value.subgraph, node: value.node };
+}
+
+/** Validate the one selected native subgraph node that will be promoted in place. */
+function readSelectedSubgraphNode(items: Set<unknown>): NativeConversionNode {
+  if (items.size !== 1) {
+    throw new Error('Select exactly one subgraph node to convert it to a SugarCube.');
+  }
+  const selected = items.values().next().value;
+  if (!isNativeSubgraphNode(selected)) {
+    throw new Error('Select a native Comfy subgraph node to convert it to a SugarCube.');
+  }
+  if (
+    selected.properties.sugarcubes_kind === 'cube' ||
+    selected.properties.sugarcubes_kind === 'cube_draft'
+  ) {
+    throw new Error('The selected subgraph is already a SugarCube.');
+  }
+  if (selected.isSubgraphNode.call(selected) !== true) {
+    throw new Error('Select a native Comfy subgraph node to convert it to a SugarCube.');
+  }
+  if (!Array.isArray(selected.subgraph.inputs) || !Array.isArray(selected.subgraph.outputs)) {
+    throw new Error('The selected subgraph does not expose native input and output boundaries.');
+  }
+  return selected;
+}
+
+/** Narrow a selected host value to the native subgraph members used for promotion. */
+function isNativeSubgraphNode(value: unknown): value is NativeSubgraphNode {
+  return (
+    isConversionNode(value) &&
+    isRecord(value.properties) &&
+    typeof value.isSubgraphNode === 'function'
+  );
 }
 
 /** Validate the native subgraph members used after conversion. */
@@ -227,6 +365,17 @@ function buildCubeMetadata(identity: AuthoredCubeIdentity): UnknownRecord {
     description: identity.description,
     ...(identity.targetModel ? { target_model: identity.targetModel } : {}),
     ...(identity.supportedModels.length ? { supported_models: [...identity.supportedModels] } : {}),
+  };
+}
+
+/** Build workflow-only draft metadata with no persistent Cube id. */
+function buildDraftMetadata(identity: CubeDraftIdentity): UnknownRecord {
+  return {
+    schema: 1,
+    kind: 'draft',
+    instance_id: identity.instanceId,
+    default_alias: identity.defaultAlias,
+    instance_alias: identity.defaultAlias,
   };
 }
 

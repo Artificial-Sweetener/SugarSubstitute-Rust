@@ -358,6 +358,14 @@ export class CubeChromeOverlay {
         this.iconResolver = new CubeIconResolver({ onImageLoad: () => this.requestRedraw() });
     }
     buildMenuOptions({ metadata, }) {
+        if (metadata.kind === 'draft') {
+            return [
+                {
+                    title: 'Save SugarCube',
+                    callback: () => this.actions.onSaveDraft?.(metadata),
+                },
+            ];
+        }
         return [
             {
                 title: 'Save cube implementation',

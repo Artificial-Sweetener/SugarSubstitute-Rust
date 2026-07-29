@@ -50,6 +50,7 @@ test('saves one semantic Cube through its native definition and real node', asyn
         instance_id: 'instance-1',
         cube_version: '1.0.0',
         cube_revision_ref: 'WORKTREE',
+        description: 'Native save description',
       },
       sugarcubes_surface: {
         schema: 1,
@@ -67,7 +68,7 @@ test('saves one semantic Cube through its native definition and real node', asyn
   const graph: ComfyGraph = { _nodes: [cubeNode], _groups: [], links: {} };
   const workflow: UnknownRecord = {
     version: 1,
-    nodes: [],
+    nodes: [{ id: 'root-node-1', type: definitionId }],
     links: [],
     groups: [],
     definitions: {
@@ -102,7 +103,7 @@ test('saves one semantic Cube through its native definition and real node', asyn
     requests.push(JSON.parse(body) as UnknownRecord);
     return {
       response: { ok: true, status: 200, statusText: '' },
-      data: { saved: [] },
+      data: { saved: [{ cube_id: cubeId }] },
     };
   });
   const service = new CubeSaveService({
@@ -115,18 +116,21 @@ test('saves one semantic Cube through its native definition and real node', asyn
       getCubes: () => [{ cube_id: cubeId, name: 'Detailer', is_writable: true }],
     },
     cubeNodeSave: new ComfyCubeSaveAdapter({ getCatalog: () => nodes }),
+    saveReconciler: { reconcile: jest.fn(async () => ({ cubeIds: [cubeId], entries: [] })) },
   });
 
-  await service.save();
+  const outcome = await service.save();
 
   expect(saveImplementation).toHaveBeenCalledTimes(1);
+  expect(outcome).toEqual({ status: 'saved', savedCubeIds: [cubeId] });
   const savedRequest = requests[0];
   const cubes = Array.isArray(savedRequest?.cubes) ? savedRequest.cubes : [];
   expect(cubes).toEqual([
     expect.objectContaining({
       cube_id: cubeId,
       definition_id: definitionId,
-      instance_container_ids: ['instance-1'],
+      instance_node_ids: ['root-node-1'],
+      description: 'Native save description',
       metadata: expect.objectContaining({
         surface_size: [840, 520],
         surface_state: {

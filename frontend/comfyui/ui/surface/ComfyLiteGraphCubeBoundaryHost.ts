@@ -93,8 +93,7 @@ export class ComfyLiteGraphCubeBoundaryHost {
   ): void {
     context.save();
     context.beginPath();
-    for (const value of [...node.inputs, ...node.outputs]) {
-      const slot = asLiteGraphSlot(value);
+    for (const slot of this.#presentations.get(node)?.keys() ?? []) {
       const position = asPosition(slot?.pos);
       if (!position) continue;
       context.moveTo(position[0] + 8, position[1]);

@@ -20,6 +20,7 @@
 import type { CubeLibraryApi } from '../core/CubeLibraryApi.js';
 import type { ToastService } from '../core/ToastService.js';
 import type { ModalService } from '../dialogs/ModalService.js';
+import { parseCanonicalCubeId } from '../core/CubeId.js';
 import { isRecord } from '../types/common.js';
 import type { UnknownRecord } from '../types/common.js';
 
@@ -106,6 +107,22 @@ export class CubePackService {
       return this.createAuthoringPack(owner);
     }
     return matchingPacks.find((pack) => pack.repoRef === selected) || null;
+  }
+
+  /** Determine whether the active installation can save one persisted Cube in place. */
+  async canWriteCube(cubeId: string): Promise<boolean> {
+    try {
+      const identity = parseCanonicalCubeId(cubeId);
+      if (identity.sourceKind === 'local') return true;
+      const { packs } = await this.loadCatalog();
+      return packs.some(
+        (pack) =>
+          pack.owner.localeCompare(identity.owner, undefined, { sensitivity: 'accent' }) === 0 &&
+          pack.repo.localeCompare(identity.repo, undefined, { sensitivity: 'accent' }) === 0,
+      );
+    } catch (_error) {
+      return false;
+    }
   }
 
   /** Load writable packs and the authoritative claimed-owner policy. */

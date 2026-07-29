@@ -17,7 +17,7 @@
  * Coordinate implementation saves and personal forks for SugarCubes.
  */
 import { isCanonicalCubeId } from '../core/CubeId.js';
-import { defaultSupportedModelsForTarget, deriveRouteFromCubeId, deriveTargetModelFromCubeId, normalizeSupportedModels, normalizeTargetModel, } from '../core/ModelTargets.js';
+import { ANY_TARGET_MODEL, defaultSupportedModelsForTarget, deriveRouteFromCubeId, deriveTargetModelFromCubeId, normalizeSupportedModels, normalizeTargetModel, } from '../core/ModelTargets.js';
 import { isCubeMarkerType, updateMarkersForCubeId, updateMarkersForIds, } from '../graph/CubeMarkers.js';
 import { InstanceBuilder } from '../graph/InstanceBuilder.js';
 import { getGraphGroups } from '../graph/GraphQuery.js';
@@ -55,10 +55,12 @@ export class CubeSaveService {
         this.saveReconciler = saveReconciler ?? null;
         this.cubeNodeSave = cubeNodeSave ?? null;
     }
+    /** Save requested Cubes and report whether their persisted identities were finalized. */
     async save({ cubeIds = null, button = null } = {}) {
         return this.saveImplementation({ cubeIds, button });
     }
-    async saveImplementation({ cubeIds = null, button = null } = {}) {
+    /** Execute the save workflow while retaining user-facing error feedback at this boundary. */
+    async saveImplementation({ cubeIds = null, button = null, } = {}) {
         const setBusy = typeof button?.enabled === 'boolean'
             ? (busy) => {
                 button.enabled = !busy;
@@ -98,7 +100,7 @@ export class CubeSaveService {
             ]));
             if (!finalCubeIds.length) {
                 this.pushToastMessage('info', 'No changes', 'No dirty SugarCubes to save.');
-                return;
+                return { status: 'no_changes', savedCubeIds: [] };
             }
             for (const cubeId of finalCubeIds) {
                 const entry = cubeIndex.get(cubeId);
@@ -135,7 +137,7 @@ export class CubeSaveService {
                 const forkedName = this.buildForkedName(entry.name || 'SugarCube', usedNames);
                 usedNames.add(forkedName);
                 const reservedIds = [...cubeIndex.keys(), ...savePlan.map((candidate) => candidate.cubeId)];
-                const forkedId = suggestPersonalCubeIdentity(forkedName, reservedIds).cubeId;
+                const forkedId = suggestPersonalCubeIdentity(forkedName, this.resolvePersonalTargetModel(entry.target_model, sourceMetadata.targetModel, cubeId), reservedIds).cubeId;
                 const updatedMarkers = updateMarkersForCubeId(graph, cubeId, {
                     cubeId: forkedId,
                     defaultAlias: forkedName,
@@ -176,7 +178,7 @@ export class CubeSaveService {
             }
             const historicalChoice = await this.resolveHistoricalSaveChoice(savePlan);
             if (historicalChoice === null) {
-                return;
+                return { status: 'cancelled', savedCubeIds: [] };
             }
             if (historicalChoice === 'fork') {
                 await this.forkStaleSaveEntries({ graph, savePlan, cubeIndex, usedNames });
@@ -216,13 +218,16 @@ export class CubeSaveService {
                     source_version: entry.sourceVersion || '',
                     source_definition_key: entry.sourceDefinitionKey || '',
                     stale_save_mode: entry.staleSaveMode || '',
+                    ...(entry.selectedSourceEntry?.description != null
+                        ? { description: entry.selectedSourceEntry.description }
+                        : {}),
                     ...(entry.selectedSourceEntry?.definitionId
                         ? {
                             definition_id: entry.selectedSourceEntry.definitionId,
-                            instance_container_ids: entry.sourceEntries
+                            instance_node_ids: entry.sourceEntries
                                 .filter((source) => source.definitionId === entry.selectedSourceEntry?.definitionId &&
-                                source.cubeNodeInstanceId != null)
-                                .map((source) => String(source.cubeNodeInstanceId)),
+                                source.cubeNodeId != null)
+                                .map((source) => String(source.cubeNodeId)),
                         }
                         : {}),
                     ...(entry.metadata ? { metadata: entry.metadata } : {}),
@@ -264,25 +269,29 @@ export class CubeSaveService {
             const savedIds = saved
                 .map((entry) => (typeof entry?.cube_id === 'string' ? entry.cube_id : ''))
                 .filter(Boolean);
-            if (savedIds.length) {
-                if (!this.saveReconciler?.reconcile) {
-                    throw new Error('Cube save reconciler is unavailable');
-                }
-                await this.saveReconciler.reconcile({
-                    graph,
-                    saved,
-                    fallbackCubeIds: savedIds,
-                    markerIdsByCubeId: this.buildSaveReconciliationTargets(savePlan),
-                    cubeNodeInstanceIdsByCubeId: this.buildCubeNodeSaveReconciliationTargets(savePlan),
-                    reason: 'save',
-                });
+            if (!savedIds.length) {
+                this.pushToastMessage('info', 'No changes', 'The save operation did not persist any SugarCubes.');
+                return { status: 'no_changes', savedCubeIds: [] };
             }
+            if (!this.saveReconciler?.reconcile) {
+                throw new Error('Cube save reconciler is unavailable');
+            }
+            await this.saveReconciler.reconcile({
+                graph,
+                saved,
+                fallbackCubeIds: savedIds,
+                markerIdsByCubeId: this.buildSaveReconciliationTargets(savePlan),
+                cubeNodeInstanceIdsByCubeId: this.buildCubeNodeSaveReconciliationTargets(savePlan),
+                reason: 'save',
+            });
+            return { status: 'saved', savedCubeIds: savedIds };
         }
         catch (error) {
             const exportError = error instanceof SugarCubeExportError ? error : SugarCubeExportError.from(error);
             const detail = exportError.detail || formatViolations(exportError.violations);
             this.pushToastMessage('error', exportError.message, detail);
             this.adapter?.getConsole?.()?.error?.(exportError.message);
+            return { status: 'failed', savedCubeIds: [], message: exportError.message };
         }
         finally {
             setBusy(false);
@@ -317,11 +326,13 @@ export class CubeSaveService {
                 staleRevision: !isCurrentRevisionRef(sourceRevisionRef),
                 targetModel: instance.targetModel,
                 supportedModels: instance.supportedModels,
+                description: instance.description,
                 markerIds: [],
                 group: null,
                 instanceId: instance.instanceId,
                 definitionId: instance.definitionId,
                 cubeNodeInstanceId: instance.instanceId,
+                cubeNodeId: instance.nodeId,
                 surfaceSize: instance.surfaceSize,
                 surfaceState: instance.surfaceState,
             });
@@ -355,6 +366,7 @@ export class CubeSaveService {
                 supportedModels: Array.isArray(metadata.supported_models)
                     ? metadata.supported_models.filter((value) => typeof value === 'string')
                     : [],
+                description: null,
                 markerIds: this.extractMetadataMarkerIds(metadata),
                 group,
                 instanceId: typeof metadata.instance_id === 'string' && metadata.instance_id.trim()
@@ -362,6 +374,7 @@ export class CubeSaveService {
                     : '',
                 definitionId: '',
                 cubeNodeInstanceId: null,
+                cubeNodeId: null,
                 surfaceSize: null,
                 surfaceState: null,
             });
@@ -383,11 +396,13 @@ export class CubeSaveService {
                 staleRevision: !isCurrentRevisionRef(sourceRevisionRef),
                 targetModel: instance.targetModel || '',
                 supportedModels: readInstanceSupportedModels(instance),
+                description: null,
                 markerIds: Array.isArray(instance.markerIds) ? instance.markerIds : [],
                 group: null,
                 instanceId: instance.instanceId || '',
                 definitionId: '',
                 cubeNodeInstanceId: null,
+                cubeNodeId: null,
                 surfaceSize: null,
                 surfaceState: null,
             });
@@ -422,12 +437,14 @@ export class CubeSaveService {
         };
     }
     buildSaveEntryMetadata({ cubeId, browserEntry = null, sourceMetadata = null, }) {
-        let defaultAlias = '';
-        try {
-            defaultAlias = deriveRouteFromCubeId(cubeId);
-        }
-        catch (_error) {
-            defaultAlias = '';
+        let defaultAlias = sourceMetadata?.defaultAlias?.trim() || '';
+        if (!defaultAlias) {
+            try {
+                defaultAlias = deriveRouteFromCubeId(cubeId);
+            }
+            catch (_error) {
+                defaultAlias = '';
+            }
         }
         const targetModel = normalizeTargetModel(browserEntry?.target_model) ||
             normalizeTargetModel(sourceMetadata?.targetModel) ||
@@ -459,6 +476,25 @@ export class CubeSaveService {
         catch (_error) {
             return '';
         }
+    }
+    /** Resolve a valid target model before assigning a new personal Cube identity. */
+    resolvePersonalTargetModel(...candidates) {
+        for (const candidate of candidates) {
+            try {
+                const direct = normalizeTargetModel(candidate);
+                if (direct)
+                    return direct;
+            }
+            catch (_error) {
+                // A cube id is evaluated through the route parser below.
+            }
+            if (typeof candidate === 'string' && candidate.trim()) {
+                const fromCubeId = this.deriveTargetModelFromCubeIdSafe(candidate);
+                if (fromCubeId)
+                    return fromCubeId;
+            }
+        }
+        return ANY_TARGET_MODEL;
     }
     async resolveHistoricalSaveChoice(savePlan) {
         const staleEntries = savePlan.filter((entry) => entry.staleRevision);
@@ -497,7 +533,7 @@ export class CubeSaveService {
             const forkedName = this.buildForkedName(entry.defaultAlias || browserEntry.name || 'SugarCube', usedNames);
             usedNames.add(forkedName);
             const reservedIds = [...cubeIndex.keys(), ...savePlan.map((candidate) => candidate.cubeId)];
-            const forkedId = suggestPersonalCubeIdentity(forkedName, reservedIds).cubeId;
+            const forkedId = suggestPersonalCubeIdentity(forkedName, this.resolvePersonalTargetModel(entry.targetModel, browserEntry.target_model, entry.cubeId), reservedIds).cubeId;
             const updatedMarkers = updateMarkersForIds(graph, markerIds, {
                 cubeId: forkedId,
                 defaultAlias: forkedName,
@@ -638,7 +674,7 @@ export class CubeSaveService {
                 continue;
             }
             const defaultAlias = instance.defaultAlias || 'SugarCube';
-            const cubeId = suggestPersonalCubeIdentity(defaultAlias, Array.from(reservedCubeIds)).cubeId;
+            const cubeId = suggestPersonalCubeIdentity(defaultAlias, this.resolvePersonalTargetModel(instance.targetModel, instance.cubeId), Array.from(reservedCubeIds)).cubeId;
             reservedCubeIds.add(cubeId);
             if (instance.cubeId) {
                 replacements.set(instance.cubeId, cubeId);
@@ -682,14 +718,14 @@ export class CubeSaveService {
             }
             const shouldReplace = entry.cubeId && !isCanonicalCubeId(entry.cubeId);
             const cubeId = shouldReplace
-                ? suggestPersonalCubeIdentity(entry.defaultAlias, Array.from(reservedCubeIds)).cubeId
+                ? suggestPersonalCubeIdentity(entry.defaultAlias, this.resolvePersonalTargetModel(entry.cubeId), Array.from(reservedCubeIds)).cubeId
                 : entry.cubeId;
             if (shouldReplace) {
                 replacements.set(entry.cubeId, cubeId);
                 reservedCubeIds.add(cubeId);
             }
             if (!cubeId) {
-                const personalId = suggestPersonalCubeIdentity(entry.defaultAlias, Array.from(reservedCubeIds)).cubeId;
+                const personalId = suggestPersonalCubeIdentity(entry.defaultAlias, this.resolvePersonalTargetModel(entry.cubeId), Array.from(reservedCubeIds)).cubeId;
                 reservedCubeIds.add(personalId);
                 const updated = updateMarkersForIds(graph, entry.markerIds, { cubeId: personalId });
                 if (updated && !assignedIds.has(personalId)) {

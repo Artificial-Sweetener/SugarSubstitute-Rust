@@ -14,8 +14,8 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Orchestrate creation of one first-class Cube from the native graph selection. */
-import { normalizeDefaultAliasTitle } from '../core/CubeId.js';
-import { suggestPersonalCubeIdentity } from './PersonalCubeIdentity.js';
+import { suggestCubeAuthoringIdentity } from './CubeAuthoringIdentity.js';
+/** Describe the metadata a Cube-editor HUD needs before its first persistence. */
 /** Coordinate identity confirmation, native conversion, and initial persistence. */
 export class CubeCreationService {
     #getAuthoring;
@@ -24,6 +24,7 @@ export class CubeCreationService {
     #dialogs;
     #toast;
     #logger;
+    #packService;
     #createInstanceId;
     /** Bind focused application collaborators without importing host globals. */
     constructor(options) {
@@ -33,38 +34,82 @@ export class CubeCreationService {
         this.#dialogs = options.dialogs ?? null;
         this.#toast = options.toast ?? null;
         this.#logger = options.logger ?? null;
+        this.#packService = options.packService ?? null;
         this.#createInstanceId = options.createInstanceId ?? createUuid;
     }
-    /** Create and save one Cube using Comfy's authoritative native conversion. */
+    /** Create a workflow-only draft from Comfy's authoritative selection conversion. */
     async startCreateCubeFromSelection() {
+        return this.#startCreation({
+            validate: (authoring) => authoring.validateSelection(),
+            create: (authoring, identity) => authoring.createDraftFromSelection(identity),
+        });
+    }
+    /** Mark an existing native subgraph as a workflow-only Cube draft. */
+    async startCreateCubeFromSelectedSubgraph() {
+        return this.#startCreation({
+            validate: (authoring) => authoring.validateSelectedSubgraph(),
+            create: (authoring, identity) => authoring.createDraftFromSelectedSubgraph(identity),
+        });
+    }
+    /** Create an empty workflow-only Cube draft ready for native subgraph editing. */
+    async startCreateEmptyCube() {
+        return this.#startCreation({
+            validate: () => undefined,
+            create: (authoring, identity) => authoring.createEmptyDraft(identity),
+        });
+    }
+    /** Collect first-save metadata, promote a draft in place, and use the established save contract. */
+    async saveDraft(instanceId) {
         try {
-            const authoring = this.#getAuthoring();
-            authoring.validateSelection();
-            const selectedCount = authoring.selectedCount();
-            const existingCubeIds = (this.#cubeBrowser?.getCubes?.() ?? [])
-                .map((entry) => (typeof entry.cube_id === 'string' ? entry.cube_id : ''))
-                .filter(Boolean);
-            const identity = await this.#dialogs?.openCreatePersonalCube?.({
+            const existingCubeIds = this.#existingCubeIds();
+            const values = await this.#dialogs?.openCubeAuthoring?.({
+                candidate: { defaultAlias: 'SugarCube', targetModel: 'SDXL', warnings: [] },
+                modelSuggestions: this.#cubeBrowser?.getModelSuggestions?.() ?? [],
+                deriveIdentity: async (name, targetModel, destination) => this.#deriveIdentity(name, targetModel, destination, existingCubeIds),
+            });
+            if (!values)
+                return null;
+            return await this.#persistDraft(instanceId, values);
+        }
+        catch (error) {
+            this.#reportDraftSaveFailure(error);
+            return null;
+        }
+    }
+    /** Save a draft directly from the Cube-editor metadata HUD. */
+    async saveDraftFromEditor(instanceId, request) {
+        try {
+            const values = await this.#dialogs?.openCubeAuthoring?.({
                 candidate: {
-                    defaultAlias: 'SugarCube',
-                    nodeIds: Array.from({ length: selectedCount }, (_, index) => index),
+                    defaultAlias: request.defaultAlias,
+                    description: request.description,
+                    destination: request.destination,
+                    supportedModels: request.supportedModels,
+                    targetModel: request.targetModel,
                     warnings: [],
                 },
-                deriveIdentity: (name) => suggestPersonalCubeIdentity(name, existingCubeIds),
+                modelSuggestions: this.#cubeBrowser?.getModelSuggestions?.() ?? [],
+                deriveIdentity: async (name, targetModel, destination) => this.#deriveIdentity(name, targetModel, destination, this.#existingCubeIds()),
             });
-            if (!identity)
+            if (!values)
                 return null;
-            const defaultAlias = normalizeDefaultAliasTitle(identity.defaultAlias);
-            const authored = authoring.createFromSelection({
-                cubeId: identity.cubeId,
-                defaultAlias,
+            return await this.#persistDraft(instanceId, values);
+        }
+        catch (error) {
+            this.#reportDraftSaveFailure(error);
+            throw error;
+        }
+    }
+    /** Perform one native authoring operation without assigning a persistent Cube identity. */
+    async #startCreation(operation) {
+        try {
+            const authoring = this.#getAuthoring();
+            operation.validate(authoring);
+            const authored = operation.create(authoring, {
+                defaultAlias: 'Untitled Cube',
                 instanceId: this.#createInstanceId(),
-                targetModel: '',
-                supportedModels: [],
-                description: '',
             });
-            await this.#cubeSave.save({ cubeIds: [identity.cubeId] });
-            this.#toast?.push?.('success', 'SugarCube created', `${defaultAlias} is now a native Cube.`);
+            this.#toast?.push?.('info', 'Cube draft created', 'Wire its native subgraph, then choose Save Cube from the Cube actions menu.');
             return authored;
         }
         catch (error) {
@@ -73,6 +118,58 @@ export class CubeCreationService {
             this.#logger?.error?.('SugarCubes: native Cube creation failed', error);
             return null;
         }
+    }
+    /** Promote one graph-only draft and route it through the established Cube save contract. */
+    async #persistDraft(instanceId, values) {
+        const authoring = this.#getAuthoring();
+        let promotionStarted = false;
+        try {
+            const authored = authoring.promoteDraft(instanceId, {
+                cubeId: values.cubeId,
+                defaultAlias: values.defaultAlias,
+                instanceId,
+                targetModel: values.targetModel,
+                supportedModels: values.supportedModels,
+                description: values.description,
+            });
+            promotionStarted = true;
+            const saveOutcome = await this.#cubeSave.save({ cubeIds: [values.cubeId] });
+            if (saveOutcome.status === 'saved' && saveOutcome.savedCubeIds.includes(values.cubeId)) {
+                this.#toast?.push?.('success', 'SugarCube saved', `${values.defaultAlias} is ready to reuse.`);
+                return authored;
+            }
+            authoring.restoreDraft(instanceId);
+            throw new Error(saveOutcome.message ||
+                'The Cube remains in the graph. Use Save Cube after resolving the issue.');
+        }
+        catch (error) {
+            if (promotionStarted)
+                authoring.restoreDraft(instanceId);
+            throw error;
+        }
+    }
+    /** Report a first-save failure through the same application feedback owner. */
+    #reportDraftSaveFailure(error) {
+        const message = error instanceof Error ? error.message : 'Unable to save SugarCube.';
+        this.#toast?.push?.('error', 'SugarCube save failed', message);
+        this.#logger?.error?.('SugarCubes: first Cube save failed', error);
+    }
+    /** Return the library identities reserved before a first-save destination is chosen. */
+    #existingCubeIds() {
+        return (this.#cubeBrowser?.getCubes?.() ?? [])
+            .map((entry) => (typeof entry.cube_id === 'string' ? entry.cube_id : ''))
+            .filter(Boolean);
+    }
+    /** Resolve a local or selected author-pack destination into the established canonical id. */
+    async #deriveIdentity(name, targetModel, destination, existingCubeIds) {
+        let resolvedDestination = destination;
+        if (destination.kind === 'pack' && (!destination.owner || !destination.repo)) {
+            const pack = await this.#packService?.chooseWritablePack();
+            if (!pack)
+                throw new Error('Choose a writable author-owned Cube Pack to continue.');
+            resolvedDestination = { kind: 'pack', ...pack };
+        }
+        return suggestCubeAuthoringIdentity(name, targetModel, resolvedDestination, existingCubeIds);
     }
 }
 /** Create a stable instance id without importing a host-private UUID helper. */

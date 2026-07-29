@@ -59,6 +59,10 @@ interface SaveService {
   saveImplementation?(options: { cubeIds: string[] }): unknown;
 }
 
+interface DraftSaveService {
+  saveDraft?(instanceId: string): unknown;
+}
+
 interface FlavorService {
   saveCurrentFaceValuesAsCubeDefaults?: unknown;
 }
@@ -98,6 +102,7 @@ export interface OverlayManagerOptions {
   cubeApi?: PlacementOptions['cubeApi'];
   cubeBrowser?: (PlacementOptions['cubeBrowser'] & CubeCatalog) | null;
   saveService?: SaveService | null;
+  saveDraft?: DraftSaveService['saveDraft'];
   flavorService?: FlavorService | null;
   toast?: (PlacementOptions['toast'] & ToastService) | null;
   applyPreparedImport?: PlacementOptions['applyPreparedImport'];
@@ -239,6 +244,7 @@ export class OverlayManager {
     cubeApi = null,
     cubeBrowser = null,
     saveService = null,
+    saveDraft,
     flavorService = null,
     toast = null,
     applyPreparedImport,
@@ -276,7 +282,7 @@ export class OverlayManager {
       ...(buildShiftedPlacementPayload ? { buildShiftedPlacementPayload } : {}),
     });
     this.layoutService = layoutService || null;
-    const saveImplementation = saveService?.saveImplementation;
+    const saveImplementation = saveService?.saveImplementation?.bind(saveService);
     const saveCubeDefaults = flavorService?.saveCurrentFaceValuesAsCubeDefaults;
     const chromeActions = {
       ...(saveImplementation
@@ -293,7 +299,16 @@ export class OverlayManager {
                 );
                 return;
               }
-              saveImplementation({ cubeIds: [metadata.cube_id] });
+              void saveImplementation({ cubeIds: [metadata.cube_id] });
+            },
+          }
+        : {}),
+      ...(typeof saveDraft === 'function'
+        ? {
+            onSaveDraft: (metadata: ChromeMetadata) => {
+              const instanceId =
+                typeof metadata.instance_id === 'string' ? metadata.instance_id : '';
+              if (metadata.kind === 'draft' && instanceId) void saveDraft(instanceId);
             },
           }
         : {}),

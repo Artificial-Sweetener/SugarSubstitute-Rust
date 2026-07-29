@@ -25,6 +25,7 @@ import {
   type CubeFaceChromeActions,
 } from './CubeFaceChromeActions.js';
 import { drawComfyPrimeIcon, type ComfyPrimeIconName } from './ComfyPrimeIcons.js';
+import { drawCubeUnsavedIndicator } from './CubeUnsavedIndicator.js';
 
 /** Describe the native LiteGraph button retained from the real SubgraphNode. */
 export interface NativeLiteGraphTitleButton {
@@ -90,7 +91,7 @@ export class CubeCanvasChromeRenderer {
       definitionMaxWidth,
     );
     context.font = '10px sans-serif';
-    context.fillStyle = '#9aa2ad';
+    context.fillStyle = '#aeb4bd';
     context.fillText(
       identity.sourceLine,
       definitionCenterX,
@@ -100,6 +101,13 @@ export class CubeCanvasChromeRenderer {
     context.restore();
 
     drawNativeEditorButton(context, layout.editAction, item.editorButton);
+    if (layout.unsavedIndicator) {
+      drawCubeUnsavedIndicator(
+        context,
+        layout.unsavedIndicator.x + layout.unsavedIndicator.width / 2,
+        layout.unsavedIndicator.y + layout.unsavedIndicator.height / 2,
+      );
+    }
     if (layout.cardMenuEntries.length > 0) {
       drawPrimeIconAction(context, layout.cardMenuAction, 'eye');
     }

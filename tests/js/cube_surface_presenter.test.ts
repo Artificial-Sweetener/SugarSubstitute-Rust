@@ -53,6 +53,8 @@ describe('CubeSurfacePresenter', () => {
       return { refresh() {}, unmount() {} };
     });
     const openEditor = jest.fn();
+    const nativeEnterSubgraph = jest.fn();
+    shell.footerButton.addEventListener('click', nativeEnterSubgraph);
     const onBoundaryGeometryChange = jest.fn();
     const presenter = new CubeSurfacePresenter({
       document,
@@ -77,9 +79,8 @@ describe('CubeSurfacePresenter', () => {
     expect(shell.root.querySelector('[data-native-resize]')).not.toBeNull();
     expect(shell.header.hidden).toBe(false);
     expect(shell.header.querySelector<HTMLElement>('.sugarcubes-cube-face__header')).not.toBeNull();
-    expect(shell.slot.hidden).toBe(false);
-    expect(shell.slot.dataset.sugarcubeBoundaryDirection).toBe('input');
-    expect(shell.slot.closest('[data-sugarcube-boundary-row]')).not.toBeNull();
+    expect(shell.slot.hidden).toBe(true);
+    expect(shell.slot.style.getPropertyValue('display')).toBe('none');
     expect(shell.genericContent.hidden).toBe(true);
     expect(shell.root.querySelectorAll('[data-sugarcube-edge-resize]')).toHaveLength(4);
     expect(faceHost?.querySelector('[data-cube-resize-edge]')).toBeNull();
@@ -99,7 +100,8 @@ describe('CubeSurfacePresenter', () => {
     expect(shell.root.querySelectorAll('[data-sugarcube-edge-resize]')).toHaveLength(4);
 
     shell.footerButton.click();
-    expect(openEditor).toHaveBeenCalledWith(node);
+    expect(openEditor).not.toHaveBeenCalled();
+    expect(nativeEnterSubgraph).toHaveBeenCalledTimes(1);
     presenter.dispose();
     expect(shell.root.querySelector('[data-sugarcube-edge-resize]')).toBeNull();
     expect(replacementHeader.hidden).toBe(false);

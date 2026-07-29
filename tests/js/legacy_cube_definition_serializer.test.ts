@@ -25,6 +25,7 @@ describe('LegacyCubeDefinitionSerializer', () => {
       cubeId: 'cube-a',
       cubeVersion: '1.2.3',
       title: 'Legacy Cube',
+      metadata: {},
       position: [100, 200],
       size: [700, 500],
       nodes: [

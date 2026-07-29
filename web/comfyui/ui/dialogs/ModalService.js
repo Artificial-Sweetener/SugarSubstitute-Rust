@@ -20,7 +20,7 @@ import { ConfirmDialog } from './ConfirmDialog.js';
 import { FormModal } from './FormModal.js';
 import { InputModal } from './InputModal.js';
 import { SelectionModal } from './SelectionModal.js';
-import { CreatePersonalCubeModal } from './CreatePersonalCubeModal.js';
+import { CubeAuthoringModal } from './CubeAuthoringModal.js';
 import { HistoricalVersionSaveModal } from './HistoricalVersionSaveModal.js';
 /**
  * Coordinate reusable dialog entry points for SugarCubes.
@@ -30,7 +30,7 @@ export class ModalService {
     inputModal;
     formModal;
     selectionModal;
-    createPersonalCubeModal;
+    cubeAuthoringModal;
     historicalVersionSaveModal;
     constructor({ adapter } = {}) {
         const resolvedAdapter = adapter ?? null;
@@ -38,7 +38,7 @@ export class ModalService {
         this.inputModal = new InputModal({ adapter: resolvedAdapter });
         this.formModal = new FormModal({ adapter: resolvedAdapter });
         this.selectionModal = new SelectionModal({ adapter: resolvedAdapter });
-        this.createPersonalCubeModal = new CreatePersonalCubeModal({ adapter: resolvedAdapter });
+        this.cubeAuthoringModal = new CubeAuthoringModal({ adapter: resolvedAdapter });
         this.historicalVersionSaveModal = new HistoricalVersionSaveModal({ adapter: resolvedAdapter });
     }
     confirm(options = {}) {
@@ -63,8 +63,8 @@ export class ModalService {
     selectItem(options = {}) {
         return this.selectionModal.open(options);
     }
-    openCreatePersonalCube(options = {}) {
-        return this.createPersonalCubeModal.open(options);
+    openCubeAuthoring(options = {}) {
+        return this.cubeAuthoringModal.open(options);
     }
     chooseHistoricalVersionSaveAction(options = {}) {
         return this.historicalVersionSaveModal.open(options);

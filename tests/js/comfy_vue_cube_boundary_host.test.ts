@@ -170,6 +170,45 @@ describe('ComfyVueCubeBoundaryHost', () => {
     expect(requestSlotLayoutSync).toHaveBeenCalledTimes(2);
   });
 
+  test('hides dormant draft sockets until their internal boundary is wired', () => {
+    const body = document.createElement('div');
+    const row = document.createElement('div');
+    const input = slot('input');
+    const output = slot('output');
+    row.append(input, output);
+    body.append(row);
+    const inputLinks: number[] = [];
+    const outputLinks: number[] = [];
+    const cube = {
+      ...node([{ type: '*' }]),
+      outputs: [{ type: '*' }],
+      subgraph: {
+        inputNode: { slots: [{ linkIds: inputLinks }] },
+        outputNode: { slots: [{ linkIds: outputLinks }] },
+      },
+    };
+
+    const host = new ComfyVueCubeBoundaryHost({ body, node: cube });
+
+    expect(input.hidden).toBe(true);
+    expect(output.hidden).toBe(true);
+    expect(input.style.getPropertyValue('display')).toBe('none');
+    expect(input.style.getPropertyPriority('display')).toBe('important');
+    expect(output.style.getPropertyValue('display')).toBe('none');
+    expect(output.dataset.sugarcubeBoundaryIndex).toBeUndefined();
+
+    inputLinks.push(1);
+    outputLinks.push(2);
+    host.reconcile();
+
+    expect(input.hidden).toBe(false);
+    expect(output.hidden).toBe(false);
+    expect(input.style.getPropertyValue('display')).toBe('');
+    expect(output.style.getPropertyValue('display')).toBe('');
+    expect(output.dataset.sugarcubeBoundaryIndex).toBe('0');
+    host.dispose();
+  });
+
   test('does not remeasure when Vue replaces slots with identical semantic geometry', () => {
     const body = document.createElement('div');
     const row = document.createElement('div');

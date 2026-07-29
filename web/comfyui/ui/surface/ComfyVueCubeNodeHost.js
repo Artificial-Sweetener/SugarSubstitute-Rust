@@ -30,7 +30,7 @@ export class ComfyVueCubeNodeHost {
     #titleHeight;
     #history;
     #getScale;
-    #openEditor;
+    #prepareEditor;
     #requestSlotLayoutSync;
     #onGeometryChange;
     #portPresentation;
@@ -41,7 +41,7 @@ export class ComfyVueCubeNodeHost {
         this.#titleHeight = Math.max(0, options.titleHeight);
         this.#history = options.history;
         this.#getScale = options.getScale;
-        this.#openEditor = options.openEditor;
+        this.#prepareEditor = options.prepareEditor ?? (() => undefined);
         this.#requestSlotLayoutSync = options.requestSlotLayoutSync;
         this.#onGeometryChange = options.onGeometryChange ?? (() => undefined);
         this.#portPresentation = options.portPresentation ?? null;
@@ -96,7 +96,7 @@ export class ComfyVueCubeNodeHost {
             requestSlotLayoutSync: this.#requestSlotLayoutSync,
             ...(this.#portPresentation ? { portPresentation: this.#portPresentation } : {}),
         });
-        const editorFooter = new ComfyVueCubeEditorFooter(nodeRoot, node, this.#openEditor);
+        const editorFooter = new ComfyVueCubeEditorFooter(nodeRoot, node, this.#prepareEditor);
         const observer = new MutationObserver((records) => {
             const mounted = this.#mounts.get(node);
             if (mounted && records.some((record) => requiresNativeHostReconcile(record, mounted))) {

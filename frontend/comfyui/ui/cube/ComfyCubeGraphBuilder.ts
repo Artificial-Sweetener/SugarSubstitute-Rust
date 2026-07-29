@@ -34,6 +34,15 @@ import type {
 import { buildCubePayloadTopology } from './CubePayloadTopology.js';
 import { resolveCubeInputBoundaryType } from './CubeBoundaryTypeResolver.js';
 import { deriveCubeOutputSurfaceNames } from './CubeOutputSurfaceNames.js';
+import { attachNativeCubeAuthoredLayout } from './geometry/NativeCubeAuthoredLayout.js';
+import {
+  applyEmptyCubeBoundaryLayout,
+  applyNativeCubeBoundaryLayout,
+  attachNativeCubeBoundaryLayout,
+  EMPTY_CUBE_INPUT_POSITION,
+  EMPTY_CUBE_OUTPUT_POSITION,
+  labelEmptyCubeBoundaryAffordances,
+} from './geometry/NativeCubeBoundaryLayout.js';
 
 interface NativeBoundaryInput {
   connect(slot: ComfyInput, node: NativeGraphNode): unknown;
@@ -44,7 +53,19 @@ interface NativeBoundaryOutput {
 }
 
 interface NativeBoundaryNode {
+  bounding?: NumericVector;
+  boundingRect?: NumericVector;
+  emptySlot?: NativeBoundarySlot & { name: string };
+  pos?: NumericVector;
+  size?: NumericVector;
+  slots?: NativeBoundarySlot[];
   arrange?(): void;
+}
+
+interface NativeBoundarySlot {
+  boundingRect?: NumericVector;
+  linkIds?: unknown[];
+  pos?: NumericVector;
 }
 
 export interface NativeGraphNode extends ComfyNode {
@@ -98,15 +119,29 @@ export class ComfyCubeGraphBuilder {
     this.#host = host;
   }
 
+  /** Register a blank native definition for importing an already-defined Cube. */
+  createEmptyDefinition(title: string): NativeCubeSubgraph {
+    return this.#createSubgraph(title);
+  }
+
+  /** Register an authoring draft whose editor creates bindings only when wired. */
+  createEmptyDraft(title: string): NativeCubeSubgraph {
+    const subgraph = this.#createSubgraph(title);
+    labelEmptyCubeBoundaryAffordances(subgraph);
+    applyEmptyCubeBoundaryLayout(subgraph);
+    return subgraph;
+  }
+
   /** Build and connect real nodes wholly inside a registered Comfy subgraph. */
   build(payload: ImportPayload, title: string): BuiltCubeGraph {
     const topology = buildCubePayloadTopology(payload);
-    const subgraph = this.#host.rootGraph.createSubgraph(
-      createEmptySubgraph(this.#host.createUuid(), title),
-    );
+    const subgraph = this.createEmptyDefinition(title);
     const nodesBySymbol = new Map<string, NativeGraphNode>();
     const warnings: string[] = [];
     const origin = readOrigin(payload);
+    attachNativeCubeAuthoredLayout(subgraph, payload);
+    const inputBoundaryNodes = new Set<NativeGraphNode>();
+    const outputBoundaryNodes = new Set<NativeGraphNode>();
     const linkedInputs = new Set(
       topology.nodeConnections.map(
         ({ targetSymbol, targetInput }) => `${targetSymbol}\u0000${targetInput}`,
@@ -145,6 +180,7 @@ export class ComfyCubeGraphBuilder {
         }
       }
       if (entry.extras) applyExtrasToNode(node, entry.extras);
+      applyAuthoredGeometry(node, entry.layout, origin);
     }
 
     for (const connection of topology.nodeConnections) {
@@ -180,6 +216,7 @@ export class ComfyCubeGraphBuilder {
         input.type ?? resolveCubeInputBoundaryType(resolvedTargets.map((target) => target.slot)),
       );
       for (const target of resolvedTargets) boundary.connect(target.slot, target.node);
+      for (const target of resolvedTargets) inputBoundaryNodes.add(target.node);
     }
 
     const surfaceOutputNames = deriveCubeOutputSurfaceNames(topology.outputs);
@@ -192,11 +229,19 @@ export class ComfyCubeGraphBuilder {
         continue;
       }
       subgraph.addOutput(surfaceOutputNames[index] ?? output.name, type).connect(slot, source);
+      outputBoundaryNodes.add(source);
     }
 
     subgraph.inputNode.arrange?.();
     subgraph.outputNode.arrange?.();
+    attachNativeCubeBoundaryLayout(subgraph, inputBoundaryNodes, outputBoundaryNodes);
+    applyNativeCubeBoundaryLayout(subgraph);
     return { subgraph, nodesBySymbol, warnings };
+  }
+
+  /** Create one native subgraph record with the boundary surface required by its use case. */
+  #createSubgraph(title: string): NativeCubeSubgraph {
+    return this.#host.rootGraph.createSubgraph(createEmptySubgraph(this.#host.createUuid(), title));
   }
 }
 
@@ -205,8 +250,8 @@ function createEmptySubgraph(id: string, title: string): UnknownRecord {
   return {
     id,
     name: title,
-    inputNode: { id: -10, bounding: [0, 0, 75, 100] },
-    outputNode: { id: -20, bounding: [0, 0, 75, 100] },
+    inputNode: { id: -10, bounding: [...EMPTY_CUBE_INPUT_POSITION, 75, 100] },
+    outputNode: { id: -20, bounding: [...EMPTY_CUBE_OUTPUT_POSITION, 75, 100] },
     inputs: [],
     outputs: [],
     widgets: [],

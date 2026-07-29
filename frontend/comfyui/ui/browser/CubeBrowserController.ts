@@ -88,7 +88,6 @@ interface BusyImportOptions {
 }
 
 export interface BrowserActions {
-  createCubeFromSelection?(): unknown;
   computeDropOrigin?(): Vec2;
   emitProximityLog?(name: string, detail: UnknownRecord): void;
   onCubesUpdated?(cubes: CubeLibraryEntry[]): void;
@@ -301,6 +300,11 @@ export class CubeBrowserController {
     return Boolean(cube?.is_writable);
   }
 
+  /** Return the model catalog already loaded for authored Cube metadata editing. */
+  getModelSuggestions(): readonly string[] {
+    return this.store.state.modelOptions.slice();
+  }
+
   setDirtyCubeIds(dirtyCubeIds: Set<string> | null | undefined): void {
     this.store.setDirtyCubeIds(dirtyCubeIds);
     this.render();
@@ -363,9 +367,6 @@ export class CubeBrowserController {
   bindHandlers(): void {
     this.view.setHandlers({
       onClose: () => this.close(),
-      onCreateFromSelection: () => {
-        this.actions.createCubeFromSelection?.();
-      },
       onPlace: () => this.placeCube(),
       onFavoriteToggle: () => this.toggleFavorite(),
       onEditToggle: () => this.toggleEdit(),

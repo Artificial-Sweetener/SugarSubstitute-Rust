@@ -56,6 +56,8 @@ import {
   type CubeSurfaceState,
 } from './CubeSurfaceState.js';
 import type { CubePortPresentationController } from '../cube/connection/CubePortPresentationController.js';
+import { resolveCubeExternalInterface } from '../cube/graph/CubeExternalInterface.js';
+import { filterCubePreviewOutputs } from './CubePreviewModel.js';
 
 export interface LiteGraphCubeNodeCanvas
   extends LiteGraphCubeDrawHost,
@@ -334,11 +336,24 @@ export class ComfyLiteGraphCubeNodeHost {
       requireCubeIdentity(node),
       this.#chromeActions,
     ).map((action) => action.key);
-    let layout = computeCubeCanvasLayout(node, state, this.#titleHeight, titlebarActionKeys);
+    const externalInterface = resolveCubeExternalInterface(node);
+    let layout = computeCubeCanvasLayout(
+      node,
+      state,
+      this.#titleHeight,
+      titlebarActionKeys,
+      externalInterface,
+    );
     if (
       enforceCubeNodeMinimumSize(node, [Math.max(1, Number(node.size[0])), layout.minimumSize[1]])
     ) {
-      layout = computeCubeCanvasLayout(node, state, this.#titleHeight, titlebarActionKeys);
+      layout = computeCubeCanvasLayout(
+        node,
+        state,
+        this.#titleHeight,
+        titlebarActionKeys,
+        externalInterface,
+      );
       this.#history.setDirtyCanvas?.(true, true);
       this.#refresh();
     }
@@ -348,7 +363,12 @@ export class ComfyLiteGraphCubeNodeHost {
       node,
       layout,
       cardMenuOpen: this.#openCardMenu === node,
-      preview: this.#previewCatalog?.snapshot(node) ?? null,
+      preview: this.#previewCatalog
+        ? filterCubePreviewOutputs(
+            this.#previewCatalog.snapshot(node),
+            externalInterface.outputSlots,
+          )
+        : null,
       chromeActions: this.#chromeActions,
       editorButton: findNativeEditorButton(this.#hooks.get(node)?.titleButtons),
     };

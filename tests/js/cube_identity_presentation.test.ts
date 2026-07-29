@@ -34,23 +34,37 @@ describe('resolveCubeIdentityPresentation', () => {
     expect(identity.definitionTitle).toBe('SDXL/Text to Image');
     expect(identity.versionText).toBe('version 2.3.1');
     expect(identity.definitionLine).toBe('SDXL/Text to Image version 2.3.1');
+    expect(identity.awaitingFirstSave).toBe(false);
     expect(identity.sourceLine).toBe('from Base-Cubes by Artificial-Sweetener');
     expect(identity.icon.kind).toBe('initials');
     expect(identity.icon.initials).toBe('TI');
   });
 
-  test('retains the former local namespace source line', () => {
+  test('describes personal Cubes naturally without treating later changes as a first save', () => {
     const identity = resolveCubeIdentityPresentation({
       metadata: {
         cube_id: 'local/personal/Detailer.cube',
         default_alias: 'Detailer',
+        has_saveable_changes: true,
       },
       instanceTitle: 'Detailer',
       fallbackDefinitionTitle: 'Fallback',
     });
 
     expect(identity.definitionLine).toBe('Detailer');
-    expect(identity.sourceLine).toBe('from local personal');
+    expect(identity.awaitingFirstSave).toBe(false);
+    expect(identity.sourceLine).toBe('Personal Cube');
+  });
+
+  test('labels a workflow-only Cube draft as unsaved', () => {
+    const identity = resolveCubeIdentityPresentation({
+      metadata: { default_alias: 'Untitled Cube' },
+      instanceTitle: 'Untitled Cube',
+      fallbackDefinitionTitle: 'Untitled Cube',
+    });
+
+    expect(identity.awaitingFirstSave).toBe(true);
+    expect(identity.sourceLine).toBe('Workflow only');
   });
 
   test('retains the definition asset icon used by former group chrome', () => {
@@ -73,6 +87,7 @@ describe('resolveCubeIdentityPresentation', () => {
       url: '/sugarcubes/assets/icon?cube_id=demo',
       initials: 'DE',
     });
-    expect(identity.sourceLine).toBe('from Unknown');
+    expect(identity.sourceLine).toBe('Unknown source');
+    expect(identity.awaitingFirstSave).toBe(false);
   });
 });

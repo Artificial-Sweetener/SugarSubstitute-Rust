@@ -19,6 +19,8 @@ import { isRecord } from '../types/common.js';
 import { buildCubePayloadTopology } from './CubePayloadTopology.js';
 import { resolveCubeInputBoundaryType } from './CubeBoundaryTypeResolver.js';
 import { deriveCubeOutputSurfaceNames } from './CubeOutputSurfaceNames.js';
+import { attachNativeCubeAuthoredLayout } from './geometry/NativeCubeAuthoredLayout.js';
+import { applyEmptyCubeBoundaryLayout, applyNativeCubeBoundaryLayout, attachNativeCubeBoundaryLayout, EMPTY_CUBE_INPUT_POSITION, EMPTY_CUBE_OUTPUT_POSITION, labelEmptyCubeBoundaryAffordances, } from './geometry/NativeCubeBoundaryLayout.js';
 /** Own translation from a prepared Cube import to one native Comfy subgraph. */
 export class ComfyCubeGraphBuilder {
     #host;
@@ -26,13 +28,27 @@ export class ComfyCubeGraphBuilder {
     constructor(host) {
         this.#host = host;
     }
+    /** Register a blank native definition for importing an already-defined Cube. */
+    createEmptyDefinition(title) {
+        return this.#createSubgraph(title);
+    }
+    /** Register an authoring draft whose editor creates bindings only when wired. */
+    createEmptyDraft(title) {
+        const subgraph = this.#createSubgraph(title);
+        labelEmptyCubeBoundaryAffordances(subgraph);
+        applyEmptyCubeBoundaryLayout(subgraph);
+        return subgraph;
+    }
     /** Build and connect real nodes wholly inside a registered Comfy subgraph. */
     build(payload, title) {
         const topology = buildCubePayloadTopology(payload);
-        const subgraph = this.#host.rootGraph.createSubgraph(createEmptySubgraph(this.#host.createUuid(), title));
+        const subgraph = this.createEmptyDefinition(title);
         const nodesBySymbol = new Map();
         const warnings = [];
         const origin = readOrigin(payload);
+        attachNativeCubeAuthoredLayout(subgraph, payload);
+        const inputBoundaryNodes = new Set();
+        const outputBoundaryNodes = new Set();
         const linkedInputs = new Set(topology.nodeConnections.map(({ targetSymbol, targetInput }) => `${targetSymbol}\u0000${targetInput}`));
         for (const binding of topology.inputs) {
             for (const target of binding.targets) {
@@ -67,6 +83,7 @@ export class ComfyCubeGraphBuilder {
             }
             if (entry.extras)
                 applyExtrasToNode(node, entry.extras);
+            applyAuthoredGeometry(node, entry.layout, origin);
         }
         for (const connection of topology.nodeConnections) {
             const source = nodesBySymbol.get(connection.sourceSymbol);
@@ -96,6 +113,8 @@ export class ComfyCubeGraphBuilder {
             const boundary = subgraph.addInput(input.name, input.type ?? resolveCubeInputBoundaryType(resolvedTargets.map((target) => target.slot)));
             for (const target of resolvedTargets)
                 boundary.connect(target.slot, target.node);
+            for (const target of resolvedTargets)
+                inputBoundaryNodes.add(target.node);
         }
         const surfaceOutputNames = deriveCubeOutputSurfaceNames(topology.outputs);
         for (const [index, output] of topology.outputs.entries()) {
@@ -107,10 +126,17 @@ export class ComfyCubeGraphBuilder {
                 continue;
             }
             subgraph.addOutput(surfaceOutputNames[index] ?? output.name, type).connect(slot, source);
+            outputBoundaryNodes.add(source);
         }
         subgraph.inputNode.arrange?.();
         subgraph.outputNode.arrange?.();
+        attachNativeCubeBoundaryLayout(subgraph, inputBoundaryNodes, outputBoundaryNodes);
+        applyNativeCubeBoundaryLayout(subgraph);
         return { subgraph, nodesBySymbol, warnings };
+    }
+    /** Create one native subgraph record with the boundary surface required by its use case. */
+    #createSubgraph(title) {
+        return this.#host.rootGraph.createSubgraph(createEmptySubgraph(this.#host.createUuid(), title));
     }
 }
 /** Create the minimum current Comfy subgraph record before native mutation. */
@@ -118,8 +144,8 @@ function createEmptySubgraph(id, title) {
     return {
         id,
         name: title,
-        inputNode: { id: -10, bounding: [0, 0, 75, 100] },
-        outputNode: { id: -20, bounding: [0, 0, 75, 100] },
+        inputNode: { id: -10, bounding: [...EMPTY_CUBE_INPUT_POSITION, 75, 100] },
+        outputNode: { id: -20, bounding: [...EMPTY_CUBE_OUTPUT_POSITION, 75, 100] },
         inputs: [],
         outputs: [],
         widgets: [],

@@ -19,6 +19,7 @@ import { requireCubeIdentity } from '../cube/node/ComfyCubeNodeFactory.js';
 import { drawFallbackInitialsCanvas } from '../core/CubeFallbackIconRenderer.js';
 import { resolveCubeFaceTitlebarActions, } from './CubeFaceChromeActions.js';
 import { drawComfyPrimeIcon } from './ComfyPrimeIcons.js';
+import { drawCubeUnsavedIndicator } from './CubeUnsavedIndicator.js';
 /** Own Cube header composition without owning cards, previews, or interaction. */
 export class CubeCanvasChromeRenderer {
     #icons;
@@ -53,10 +54,13 @@ export class CubeCanvasChromeRenderer {
         context.fillStyle = '#d7dbe2';
         context.fillText(identity.definitionLine, definitionCenterX, layout.header.y + layout.header.height / 2 - 6, definitionMaxWidth);
         context.font = '10px sans-serif';
-        context.fillStyle = '#9aa2ad';
+        context.fillStyle = '#aeb4bd';
         context.fillText(identity.sourceLine, definitionCenterX, layout.header.y + layout.header.height / 2 + 7, definitionMaxWidth);
         context.restore();
         drawNativeEditorButton(context, layout.editAction, item.editorButton);
+        if (layout.unsavedIndicator) {
+            drawCubeUnsavedIndicator(context, layout.unsavedIndicator.x + layout.unsavedIndicator.width / 2, layout.unsavedIndicator.y + layout.unsavedIndicator.height / 2);
+        }
         if (layout.cardMenuEntries.length > 0) {
             drawPrimeIconAction(context, layout.cardMenuAction, 'eye');
         }

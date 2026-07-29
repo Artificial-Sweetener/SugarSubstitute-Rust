@@ -23,9 +23,20 @@ import { authoredNodePresentationRect, measureNodePresentationRect, writeNodePre
 /** Rebuild one live instance's node and group presentation from authored relations. */
 export function applyMeasuredInstanceGeometry(instance, measurement) {
     const baseline = alignBaselineWithLiveGroup(instance);
+    const solved = solveMeasuredNodeGeometry(baseline, instance.nodes, measurement);
+    const nodesChanged = writeSolvedNodePositions(solved, measurement);
+    const groupChanged = writeSolvedGroup({ ...instance, baseline }, solved.map(({ solved: rect }) => rect), measurement.renderer);
+    return groupChanged || nodesChanged;
+}
+/** Rebuild native subgraph node positions from renderer-measured card geometry. */
+export function applyMeasuredNodeGeometry(baseline, nodes, measurement) {
+    return writeSolvedNodePositions(solveMeasuredNodeGeometry(baseline, nodes, measurement), measurement);
+}
+/** Solve one node collection while preserving its renderer-neutral authored relations. */
+function solveMeasuredNodeGeometry(baseline, nodes, measurement) {
     const measurements = Object.entries(baseline.entries)
         .map(([identity, entry]) => {
-        const node = instance.nodes.get(identity);
+        const node = nodes.get(identity);
         const measured = node ? measureNodePresentationRect(node, measurement) : null;
         if (!node || !measured)
             return null;
@@ -38,9 +49,10 @@ export function applyMeasuredInstanceGeometry(instance, measurement) {
         return { identity, item: node, authored, measured: { w: measured.w, h: measured.h } };
     })
         .filter((value) => value !== null);
-    if (!measurements.length)
-        return false;
-    const solved = solveAuthoredLayout(measurements);
+    return solveAuthoredLayout(measurements);
+}
+/** Write solved presentation positions through Comfy's renderer convention. */
+function writeSolvedNodePositions(solved, measurement) {
     let changed = false;
     for (const item of solved) {
         const current = measureNodePresentationRect(item.item, measurement);
@@ -49,8 +61,7 @@ export function applyMeasuredInstanceGeometry(instance, measurement) {
             changed = true;
         }
     }
-    const groupChanged = writeSolvedGroup({ ...instance, baseline }, solved.map(({ solved: rect }) => rect), measurement.renderer);
-    return groupChanged || changed;
+    return changed;
 }
 /** Preserve instance translation while keeping authored shape data unchanged. */
 function alignBaselineWithLiveGroup(instance) {

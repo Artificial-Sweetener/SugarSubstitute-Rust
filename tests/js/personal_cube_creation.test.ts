@@ -13,38 +13,40 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Verify the name-only personal cube entry point. */
+/** Verify full personal Cube authoring before its first save. */
 
-import { beforeEach, describe, expect, test } from '@jest/globals';
+import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 import {
   buildPersonalCubeId,
   suggestPersonalCubeIdentity,
 } from '../../frontend/comfyui/ui/create/PersonalCubeIdentity.js';
-import { CreatePersonalCubeModal } from '../../frontend/comfyui/ui/dialogs/CreatePersonalCubeModal.js';
+import { CubeAuthoringModal } from '../../frontend/comfyui/ui/dialogs/CubeAuthoringModal.js';
 
 beforeEach(() => {
   document.body.replaceChildren();
 });
 
 describe('personal cube identity', () => {
-  test('builds flat collision-safe local identities without pack metadata', () => {
-    expect(buildPersonalCubeId('Text to Image')).toBe('local/personal/Text to Image.cube');
+  test('builds collision-safe local identities under the selected model family', () => {
+    expect(buildPersonalCubeId('Text to Image', 'SDXL')).toBe(
+      'local/personal/SDXL/Text to Image.cube',
+    );
     expect(
-      suggestPersonalCubeIdentity('text to image', [
-        'local/personal/Text to Image.cube',
-        'local/personal/Text to Image 2.cube',
+      suggestPersonalCubeIdentity('text to image', 'SDXL', [
+        'local/personal/SDXL/Text to Image.cube',
+        'local/personal/SDXL/Text to Image 2.cube',
       ]),
     ).toEqual({
       name: 'Text to Image 3',
-      defaultAlias: 'Text to Image 3',
-      cubeId: 'local/personal/Text to Image 3.cube',
+      defaultAlias: 'SDXL/Text to Image 3',
+      cubeId: 'local/personal/SDXL/Text to Image 3.cube',
     });
   });
 });
 
-describe('personal cube modal', () => {
-  test('asks only for a name and renders warning-like markup literally', async () => {
-    const modal = new CreatePersonalCubeModal({
+describe('Cube authoring modal', () => {
+  test('collects persisted metadata and renders warning-like markup literally', async () => {
+    const modal = new CubeAuthoringModal({
       adapter: {
         getDocument: () => document,
         getWindow: () => window,
@@ -56,28 +58,86 @@ describe('personal cube modal', () => {
         nodeIds: [1],
         warnings: ['<img src=x onerror=alert(1)>'],
       },
-      deriveIdentity: (name) => suggestPersonalCubeIdentity(name),
+      modelSuggestions: ['Flux .1 D'],
+      deriveIdentity: async (name, targetModel, destination) => {
+        expect(destination).toEqual({ kind: 'local' });
+        return suggestPersonalCubeIdentity(name, targetModel);
+      },
     });
 
-    const form = document.querySelector<HTMLFormElement>('.sugarcubes-create-personal__form');
+    const form = document.querySelector<HTMLFormElement>('.sugarcubes-create-cube__form');
     expect(form).not.toBeNull();
     const inputs = form!.querySelectorAll<HTMLInputElement>('input');
-    expect(inputs).toHaveLength(1);
-    expect(document.body.textContent).toContain('Saved privately');
+    expect(inputs).toHaveLength(3);
+    expect(document.body.textContent).toContain('Supported models');
+    expect(
+      form!.querySelector<HTMLDataListElement>('#sugarcubes-cube-authoring-model-suggestions')
+        ?.textContent,
+    ).toContain('Flux .1 D');
     expect(document.body.textContent).toContain('1 selected nodes');
     expect(document.body.textContent).toContain('<img src=x onerror=alert(1)>');
     expect(document.querySelector('img')).toBeNull();
 
     inputs[0]!.value = 'My useful cube';
     inputs[0]!.dispatchEvent(new Event('input', { bubbles: true }));
+    const description = form!.querySelector<HTMLTextAreaElement>('textarea')!;
+    description.value = 'A <strong>safe</strong> Cube.';
+    description.dispatchEvent(new Event('input', { bubbles: true }));
     document
-      .querySelector<HTMLButtonElement>('.sugarcubes-create-personal-dialog button:last-child')!
+      .querySelector<HTMLButtonElement>('.sugarcubes-create-cube-dialog button:last-child')!
       .click();
 
     await expect(promise).resolves.toEqual({
       name: 'My Useful Cube',
-      defaultAlias: 'My Useful Cube',
-      cubeId: 'local/personal/My Useful Cube.cube',
+      defaultAlias: 'SDXL/My Useful Cube',
+      cubeId: 'local/personal/SDXL/My Useful Cube.cube',
+      targetModel: 'SDXL',
+      supportedModels: ['SDXL', 'SD 1.5'],
+      description: 'A <strong>safe</strong> Cube.',
+      destination: { kind: 'local' },
     });
+  });
+
+  test('confirms an existing Cube without pretending it is a new selection or destination', async () => {
+    const modal = new CubeAuthoringModal({
+      adapter: {
+        getDocument: () => document,
+        getWindow: () => window,
+      },
+    });
+    const deriveIdentity = jest.fn(async (name: string) => ({
+      name,
+      defaultAlias: `SDXL/${name}`,
+      cubeId: 'local/personal/SDXL/Existing.cube',
+    }));
+    const promise = modal.open({
+      candidate: {
+        cubeId: 'local/personal/SDXL/Existing.cube',
+        defaultAlias: 'SDXL/Existing',
+        targetModel: 'SDXL',
+        supportedModels: ['SDXL'],
+      },
+      destinationLocked: true,
+      deriveIdentity,
+    });
+
+    expect(document.body.textContent).not.toContain('selected nodes');
+    expect(document.body.textContent).toContain('local/personal/SDXL/Existing.cube');
+    expect(document.body.textContent).toContain('Review the Cube metadata before saving changes.');
+    expect(document.body.textContent).not.toContain('before its first save');
+    expect(
+      document.querySelectorAll<HTMLSelectElement>('.sugarcubes-create-cube__form select')[1]
+        ?.disabled,
+    ).toBe(true);
+    document
+      .querySelector<HTMLButtonElement>('.sugarcubes-create-cube-dialog button:last-child')!
+      .click();
+
+    await expect(promise).resolves.toEqual(
+      expect.objectContaining({
+        cubeId: 'local/personal/SDXL/Existing.cube',
+        defaultAlias: 'SDXL/Existing',
+      }),
+    );
   });
 });

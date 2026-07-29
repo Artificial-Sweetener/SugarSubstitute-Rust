@@ -88,8 +88,10 @@ export class LegacyCubeWorkflowExtractor {
         const metadata = isRecord(group.sugarcubes) ? group.sugarcubes : null;
         if (!metadata || metadata.managed === false)
             return null;
-        const memberIds = readIdSet(metadata.nodes);
-        const markers = isRecord(metadata.markers) ? metadata.markers : {};
+        const definition = readRecord(metadata.definition);
+        const instance = readRecord(metadata.instance);
+        const memberIds = readIdSet(instance.nodes || metadata.nodes);
+        const markers = readRecord(instance.markers || metadata.markers);
         const inputMarkerIds = readIdSet(markers.inputs);
         const outputMarkerIds = readIdSet(markers.outputs);
         if (memberIds.size === 0 && inputMarkerIds.size === 0 && outputMarkerIds.size === 0) {
@@ -97,8 +99,14 @@ export class LegacyCubeWorkflowExtractor {
         }
         const bounds = readBounds(group.bounding);
         const groupId = readIdKey(group.id);
-        const key = readString(metadata.instance_id) || (groupId ? `legacy-group-${groupId}` : fallbackKey);
-        const title = readString(metadata.alias) ||
+        const key = readString(instance.instance_id) ||
+            readString(metadata.instance_id) ||
+            (groupId ? `legacy-group-${groupId}` : fallbackKey);
+        const title = readString(instance.instance_alias) ||
+            readString(metadata.instance_alias) ||
+            readString(definition.default_alias) ||
+            readString(metadata.default_alias) ||
+            readString(metadata.alias) ||
             readString(metadata.cube_name) ||
             readString(group.title) ||
             'SugarCube';
@@ -118,9 +126,10 @@ export class LegacyCubeWorkflowExtractor {
             bounds,
             plan: {
                 key,
-                cubeId: readString(metadata.cube_id),
-                cubeVersion: readString(metadata.cube_version),
+                cubeId: readString(definition.cube_id) || readString(metadata.cube_id),
+                cubeVersion: readString(definition.cube_version) || readString(metadata.cube_version),
                 title,
+                metadata: cloneRecord(metadata),
                 position: [bounds[0], bounds[1]],
                 size: [bounds[2], bounds[3]],
                 nodes: ownedNodes,
@@ -318,6 +327,10 @@ function indexRecordsById(records) {
 /** Return only record entries from an untrusted workflow collection. */
 function readRecords(value) {
     return Array.isArray(value) ? value.filter(isRecord) : [];
+}
+/** Read one persisted metadata section without trusting its shape. */
+function readRecord(value) {
+    return isRecord(value) ? value : {};
 }
 /** Read one marker's stable symbolic boundary name. */
 function readMarkerName(marker, fallback) {

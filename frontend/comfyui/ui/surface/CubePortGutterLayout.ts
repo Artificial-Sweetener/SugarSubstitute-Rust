@@ -85,9 +85,11 @@ export function layoutCubeInputPorts(
   slots: readonly unknown[],
   frame: CubePortRect,
   headerHeight: number,
+  slotIndexes: readonly number[] = slots.map((_, index) => index),
 ): CubePortLayout[] {
   const [minY, maxY] = portRange(frame, headerHeight);
-  return slots.map((slot, index) => {
+  return slots.map((slot, position) => {
+    const index = slotIndexes[position] ?? position;
     const record = isPortRecord(slot) ? slot : {};
     const y = clamp(minY + index * PORT_ROW_HEIGHT, minY, maxY);
     return {
@@ -111,14 +113,16 @@ export function layoutCubeOutputPorts(
   frame: CubePortRect,
   preview: CubePortRect | null,
   headerHeight: number,
+  slotIndexes: readonly number[] = slots.map((_, index) => index),
 ): CubePortLayout[] {
   const [minY, maxY] = portRange(frame, headerHeight);
   const anchors = preview
     ? resolveCubePreviewTitleAnchors(preview, slots.length)
-    : slots.map((_, index) => distribute(minY, maxY, index, slots.length));
-  return slots.map((slot, index) => {
+    : slots.map((_, position) => distribute(minY, maxY, position, slots.length));
+  return slots.map((slot, position) => {
+    const index = slotIndexes[position] ?? position;
     const record = isPortRecord(slot) ? slot : {};
-    const defaultY = clamp(anchors[index] ?? minY, minY, maxY);
+    const defaultY = clamp(anchors[position] ?? minY, minY, maxY);
     const labelY = preview ? defaultY : minY;
     return {
       index,

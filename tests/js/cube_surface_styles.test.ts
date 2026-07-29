@@ -39,10 +39,7 @@ describe('ensureCubeSurfaceStyles', () => {
     expect(css).toMatch(
       /\[data-cube-face-body="header-only"\]\s+\[data-testid="node-inner-wrapper"\]\s*\{[^}]*overflow:\s*hidden;/s,
     );
-    expect(css).toMatch(/\.sugarcubes-cube-editor-navigation\s*\{[^}]*pointer-events:\s*auto;/s);
-    expect(css).toMatch(
-      /\.sugarcubes-cube-editor-navigation__actions button\s*\{[^}]*pointer-events:\s*auto;/s,
-    );
+    expect(css).not.toContain('sugarcubes-cube-editor-navigation');
   });
 
   test('keeps frame resize hit zones above card controls and boundary slots above resizing', () => {
@@ -101,11 +98,25 @@ describe('ensureCubeSurfaceStyles', () => {
     expect(css).toMatch(
       /\.sugarcubes-cube-face__definition-source\s*\{[^}]*font-size:\s*0\.625rem;/s,
     );
+    expect(css).toMatch(/\.sugarcubes-cube-unsaved-indicator__ban\.pi\s*\{[^}]*--p-orange-400/s);
+    expect(css).not.toContain('sugarcubes-cube-face__save-state');
     expect(css).toMatch(
       /\.sugarcubes-cube-face__actions\s*\{[^}]*grid-column:\s*3;[^}]*justify-self:\s*end;/s,
     );
     expect(css).toMatch(
       /\.sugarcubes-cube-face__icon img,\s*\.sugarcubes-cube-face__icon canvas\s*\{[^}]*object-fit:\s*contain;/s,
+    );
+  });
+
+  test('uses Comfy elevation tokens for the pinned Cube metadata card', () => {
+    ensureCubeSurfaceStyles(document);
+
+    const css = document.getElementById('sugarcubes-cube-surface-styles')?.textContent ?? '';
+    expect(css).toMatch(
+      /\.sugarcubes-cube-editor-metadata\s*\{[^}]*box-shadow:\s*var\(--shadow-lg,/s,
+    );
+    expect(css).toMatch(
+      /\.dark-theme\s+\.sugarcubes-cube-editor-metadata\s*\{[^}]*box-shadow:\s*var\(--shadow-xl,/s,
     );
   });
 
@@ -186,7 +197,7 @@ describe('ensureCubeSurfaceStyles', () => {
     );
     expect(css).toMatch(
       new RegExp(
-        `\\.sugarcubes-cube-face__content:has\\(${popperSelector}\\)\\s*\\{[^}]*z-index:\\s*10;[^}]*overflow:\\s*visible;[^}]*isolation:\\s*auto;`,
+        `\\.sugarcubes-cube-face__content:has\\(${popperSelector}\\)\\s*\\{[^}]*z-index:\\s*13;[^}]*overflow:\\s*visible;[^}]*isolation:\\s*auto;`,
         's',
       ),
     );
@@ -246,6 +257,21 @@ describe('ensureCubeSurfaceStyles', () => {
     const css = document.getElementById('sugarcubes-cube-surface-styles')?.textContent ?? '';
     expect(css).toMatch(/\.sugarcubes-cube-face__node-card:focus-within\s*\{[^}]*z-index:\s*10;/s);
     expect(css).not.toContain('.sugarcubes-native-node-card [role="listbox"]');
+  });
+
+  test('raises an open native combo above Cube activation controls', () => {
+    ensureCubeSurfaceStyles(document);
+
+    const css = document.getElementById('sugarcubes-cube-surface-styles')?.textContent ?? '';
+    const popperSelector = '\\[data-reka-popper-content-wrapper\\]';
+
+    expect(css).toMatch(
+      new RegExp(
+        `\\.sugarcubes-cube-face__content:has\\(${popperSelector}\\)\\s*\\{[^}]*z-index:\\s*13;`,
+        's',
+      ),
+    );
+    expect(css).toMatch(/\.sugarcubes-cube-face__activation\s*\{[^}]*z-index:\s*12;/s);
   });
 
   test('fits preview media inside layout-owned rail height without enlarging the Cube', () => {

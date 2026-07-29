@@ -30,20 +30,22 @@ interface PointerStart {
 export class ComfyVueCubeEditorFooter {
   readonly #root: HTMLElement;
   readonly #node: CubeNode;
-  readonly #openEditor: (node: CubeNode) => void;
+  readonly #prepareEditor: (node: CubeNode) => void;
   #button: HTMLButtonElement | null = null;
   #label: HTMLElement | null = null;
   #originalLabel = '';
   #originalAriaLabel: string | null = null;
   #hadAriaLabel = false;
+  #originalTitle: string | null = null;
+  #hadTitle = false;
   #pointerStart: PointerStart | null = null;
   #suppressClick = false;
 
-  /** Bind one native node root to the dedicated Cube editor command. */
-  constructor(root: HTMLElement, node: CubeNode, openEditor: (node: CubeNode) => void) {
+  /** Bind one native node root while preserving Comfy's subgraph navigation command. */
+  constructor(root: HTMLElement, node: CubeNode, prepareEditor: (node: CubeNode) => void) {
     this.#root = root;
     this.#node = node;
-    this.#openEditor = openEditor;
+    this.#prepareEditor = prepareEditor;
     root.addEventListener('pointerdown', this.#onPointerDown, true);
     root.addEventListener('pointerup', this.#onPointerUp, true);
     root.addEventListener('pointercancel', this.#onPointerCancel, true);
@@ -63,6 +65,9 @@ export class ComfyVueCubeEditorFooter {
     }
     if (this.#button?.getAttribute('aria-label') !== EDIT_LABEL) {
       this.#button?.setAttribute('aria-label', EDIT_LABEL);
+    }
+    if (this.#button?.getAttribute('title') !== EDIT_LABEL) {
+      this.#button?.setAttribute('title', EDIT_LABEL);
     }
   }
 
@@ -113,14 +118,17 @@ export class ComfyVueCubeEditorFooter {
     this.#suppressClick = true;
   };
 
-  /** Replace only the native navigation command while preserving native presentation. */
+  /** Suppress only a post-drag click and otherwise leave Comfy's native command untouched. */
   readonly #onClick = (event: MouseEvent): void => {
     if (!findOwningFooterButtonFromTarget(this.#root, event.target)) return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
     const suppress = this.#suppressClick;
     this.#suppressClick = false;
-    if (!suppress) this.#openEditor(this.#node);
+    if (suppress) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
+    this.#prepareEditor(this.#node);
   };
 
   /** Take ownership of one current native footer button. */
@@ -130,8 +138,11 @@ export class ComfyVueCubeEditorFooter {
     this.#originalLabel = this.#label?.textContent ?? '';
     this.#hadAriaLabel = button.hasAttribute('aria-label');
     this.#originalAriaLabel = button.getAttribute('aria-label');
+    this.#hadTitle = button.hasAttribute('title');
+    this.#originalTitle = button.getAttribute('title');
     if (this.#label) this.#label.textContent = EDIT_LABEL;
     button.setAttribute('aria-label', EDIT_LABEL);
+    button.setAttribute('title', EDIT_LABEL);
   }
 
   /** Release listeners and restore host-owned text and accessibility state. */
@@ -143,6 +154,11 @@ export class ComfyVueCubeEditorFooter {
       button.setAttribute('aria-label', this.#originalAriaLabel);
     } else {
       button.removeAttribute('aria-label');
+    }
+    if (this.#hadTitle && this.#originalTitle !== null) {
+      button.setAttribute('title', this.#originalTitle);
+    } else {
+      button.removeAttribute('title');
     }
     this.#button = null;
     this.#label = null;

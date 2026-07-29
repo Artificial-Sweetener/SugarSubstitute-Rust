@@ -20,19 +20,21 @@ const DRAG_THRESHOLD = 4;
 export class ComfyVueCubeEditorFooter {
     #root;
     #node;
-    #openEditor;
+    #prepareEditor;
     #button = null;
     #label = null;
     #originalLabel = '';
     #originalAriaLabel = null;
     #hadAriaLabel = false;
+    #originalTitle = null;
+    #hadTitle = false;
     #pointerStart = null;
     #suppressClick = false;
-    /** Bind one native node root to the dedicated Cube editor command. */
-    constructor(root, node, openEditor) {
+    /** Bind one native node root while preserving Comfy's subgraph navigation command. */
+    constructor(root, node, prepareEditor) {
         this.#root = root;
         this.#node = node;
-        this.#openEditor = openEditor;
+        this.#prepareEditor = prepareEditor;
         root.addEventListener('pointerdown', this.#onPointerDown, true);
         root.addEventListener('pointerup', this.#onPointerUp, true);
         root.addEventListener('pointercancel', this.#onPointerCancel, true);
@@ -52,6 +54,9 @@ export class ComfyVueCubeEditorFooter {
         }
         if (this.#button?.getAttribute('aria-label') !== EDIT_LABEL) {
             this.#button?.setAttribute('aria-label', EDIT_LABEL);
+        }
+        if (this.#button?.getAttribute('title') !== EDIT_LABEL) {
+            this.#button?.setAttribute('title', EDIT_LABEL);
         }
     }
     /** Return the footer's net flex-column contribution, including negative margins. */
@@ -96,16 +101,18 @@ export class ComfyVueCubeEditorFooter {
         this.#pointerStart = null;
         this.#suppressClick = true;
     };
-    /** Replace only the native navigation command while preserving native presentation. */
+    /** Suppress only a post-drag click and otherwise leave Comfy's native command untouched. */
     #onClick = (event) => {
         if (!findOwningFooterButtonFromTarget(this.#root, event.target))
             return;
-        event.preventDefault();
-        event.stopImmediatePropagation();
         const suppress = this.#suppressClick;
         this.#suppressClick = false;
-        if (!suppress)
-            this.#openEditor(this.#node);
+        if (suppress) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            return;
+        }
+        this.#prepareEditor(this.#node);
     };
     /** Take ownership of one current native footer button. */
     #bindButton(button) {
@@ -114,9 +121,12 @@ export class ComfyVueCubeEditorFooter {
         this.#originalLabel = this.#label?.textContent ?? '';
         this.#hadAriaLabel = button.hasAttribute('aria-label');
         this.#originalAriaLabel = button.getAttribute('aria-label');
+        this.#hadTitle = button.hasAttribute('title');
+        this.#originalTitle = button.getAttribute('title');
         if (this.#label)
             this.#label.textContent = EDIT_LABEL;
         button.setAttribute('aria-label', EDIT_LABEL);
+        button.setAttribute('title', EDIT_LABEL);
     }
     /** Release listeners and restore host-owned text and accessibility state. */
     #releaseButton() {
@@ -130,6 +140,12 @@ export class ComfyVueCubeEditorFooter {
         }
         else {
             button.removeAttribute('aria-label');
+        }
+        if (this.#hadTitle && this.#originalTitle !== null) {
+            button.setAttribute('title', this.#originalTitle);
+        }
+        else {
+            button.removeAttribute('title');
         }
         this.#button = null;
         this.#label = null;

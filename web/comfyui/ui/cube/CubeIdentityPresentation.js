@@ -34,7 +34,9 @@ export function formatCubeSourceText(metadata, fallbackSource = null) {
             if (parsed.sourceKind === 'github') {
                 return `from ${parsed.repo} by ${parsed.owner}`;
             }
-            return parsed.namespace ? `from local ${parsed.namespace}` : 'from local';
+            if (parsed.namespace === 'personal')
+                return 'Personal Cube';
+            return parsed.namespace ? `Local Cube · ${parsed.namespace}` : 'Local Cube';
         }
         catch (_error) {
             // Presentation remains available for legacy or malformed persisted identifiers.
@@ -44,7 +46,9 @@ export function formatCubeSourceText(metadata, fallbackSource = null) {
     const author = typeof fallbackSource?.author === 'string' ? fallbackSource.author.trim() : '';
     const namespace = typeof fallbackSource?.namespace === 'string' ? fallbackSource.namespace.trim() : '';
     if (fallbackSource?.sourceKind === 'local') {
-        return namespace ? `from local ${namespace}` : 'from local';
+        if (namespace === 'personal')
+            return 'Personal Cube';
+        return namespace ? `Local Cube · ${namespace}` : 'Local Cube';
     }
     if (pack && author)
         return `from ${pack} by ${author}`;
@@ -52,7 +56,7 @@ export function formatCubeSourceText(metadata, fallbackSource = null) {
         return `from ${pack}`;
     if (author)
         return `by ${author}`;
-    return 'from Unknown';
+    return 'Unknown source';
 }
 /** Build the one identity model consumed by canvas and DOM Cube headers. */
 export function resolveCubeIdentityPresentation(input) {
@@ -69,12 +73,23 @@ export function resolveCubeIdentityPresentation(input) {
             fallback: definitionTitle,
         });
     const versionText = formatCubeVersionText(metadata);
+    const cubeId = typeof metadata.cube_id === 'string' ? metadata.cube_id.trim() : '';
+    const sourceLine = cubeId
+        ? formatCubeSourceText(metadata, input.fallbackSource ?? null)
+        : 'Workflow only';
     return {
         instanceTitle,
         definitionTitle,
         versionText,
         definitionLine: versionText ? `${definitionTitle} ${versionText}` : definitionTitle,
-        sourceLine: formatCubeSourceText(metadata, input.fallbackSource ?? null),
+        awaitingFirstSave: isCubeAwaitingFirstSave(metadata),
+        sourceLine,
         icon: resolveCubeIconModel(metadata),
     };
+}
+/** Return whether Cube chrome should expose the one-time first-save warning. */
+export function isCubeAwaitingFirstSave(metadata) {
+    if (!isRecord(metadata))
+        return true;
+    return !(typeof metadata.cube_id === 'string' && Boolean(metadata.cube_id.trim()));
 }

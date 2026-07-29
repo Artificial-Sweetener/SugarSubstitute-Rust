@@ -14,4 +14,13 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Define the renderer-neutral preview model consumed by a Cube surface. */
-export {};
+/** Keep preview sections aligned with the externally active output boundaries. */
+export function filterCubePreviewOutputs(snapshot, outputSlots) {
+    return {
+        outputs: outputSlots.flatMap((index) => {
+            const output = snapshot.outputs[index];
+            return output ? [output] : [];
+        }),
+        internalItems: snapshot.internalItems,
+    };
+}

@@ -34,6 +34,7 @@ export interface CubeSurfaceDomLayoutOptions {
   content: HTMLElement;
   masonry: HTMLElement;
   previewRail: HTMLElement;
+  previewAvailable?: boolean;
 }
 
 export interface CubeSurfaceDomLayoutResult {
@@ -47,9 +48,9 @@ export function layoutCubeSurfaceDom(
   const safeWidth = Number.isFinite(options.width) ? Math.max(1, options.width) : 1;
   const spacing = resolveCubeSurfaceCardSpacing(options.state);
   const minimumMasonryWidth = Math.min(safeWidth, Math.max(1, options.state.minimumColumnWidth));
+  const previewEnabled = options.state.preview.visible && (options.previewAvailable ?? true);
   const canShowPreviewRail =
-    options.state.preview.visible &&
-    safeWidth >= minimumMasonryWidth + MINIMUM_SIDE_PREVIEW_WIDTH + CONTENT_GAP;
+    previewEnabled && safeWidth >= minimumMasonryWidth + MINIMUM_SIDE_PREVIEW_WIDTH + CONTENT_GAP;
   const previewWidth = canShowPreviewRail
     ? Math.min(
         options.state.preview.width,
@@ -60,15 +61,12 @@ export function layoutCubeSurfaceDom(
     1,
     safeWidth - (canShowPreviewRail ? previewWidth + CONTENT_GAP : 0),
   );
-  const stackPreview = options.state.preview.visible && !canShowPreviewRail;
+  const stackPreview = previewEnabled && !canShowPreviewRail;
   const layout = computeCubeMasonry(
     options.cards.map((card, index) => ({
       id: card.id,
       height: readCardHeight(options.cells[index], card),
       ...(card.columnSpan === undefined ? {} : { columnSpan: card.columnSpan }),
-      sourceX: Number(card.node.pos?.[0]),
-      sourceY: Number(card.node.pos?.[1]),
-      sourceWidth: Number(card.node.size?.[0]),
     })),
     {
       availableWidth: masonryWidth,
@@ -100,7 +98,7 @@ export function layoutCubeSurfaceDom(
     ? `${String(STACKED_PREVIEW_MINIMUM_HEIGHT)}px`
     : 'auto';
   options.previewRail.style.minHeight = '0px';
-  options.previewRail.hidden = !options.state.preview.visible;
+  options.previewRail.hidden = !previewEnabled;
   const stackedPreviewHeight = stackPreview
     ? (layout.height > 0 ? CONTENT_GAP : 0) + STACKED_PREVIEW_MINIMUM_HEIGHT
     : 0;

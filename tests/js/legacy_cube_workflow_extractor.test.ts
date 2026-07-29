@@ -151,6 +151,49 @@ describe('LegacyCubeWorkflowExtractor', () => {
     expect(workflow.links).toEqual([]);
     expect(workflow.groups).toEqual([]);
   });
+
+  test('preserves structured legacy Cube identity when extracting a managed group', () => {
+    const workflow = {
+      nodes: [node(11, 'Processor', [100, 100], 'processor')],
+      links: [],
+      groups: [
+        {
+          id: 5,
+          title: 'Ignored group title',
+          bounding: [50, 80, 700, 500],
+          sugarcubes: {
+            managed: true,
+            definition: {
+              cube_id: 'local/personal/Detailer.cube',
+              cube_version: '1.2.3',
+              default_alias: 'Detailer',
+            },
+            instance: {
+              instance_id: 'instance-detailer',
+              instance_alias: 'My Detailer',
+              nodes: ['11'],
+              markers: { inputs: [], outputs: [] },
+            },
+            surface_state: { schema: 1 },
+          },
+        },
+      ],
+    };
+
+    const batch = new LegacyCubeWorkflowExtractor().extractInPlace(workflow);
+
+    expect(batch.plans).toEqual([
+      expect.objectContaining({
+        key: 'instance-detailer',
+        cubeId: 'local/personal/Detailer.cube',
+        cubeVersion: '1.2.3',
+        title: 'My Detailer',
+        metadata: expect.objectContaining({ surface_state: { schema: 1 } }),
+      }),
+    ]);
+    expect(workflow.nodes).toEqual([]);
+    expect(workflow.groups).toEqual([]);
+  });
 });
 
 function node(id: number, type: string, pos: [number, number], symbol: string) {

@@ -114,6 +114,7 @@ export interface ComfyGraph {
   canvas?: ComfyCanvas;
   add?(item: ComfyNode | ComfyGroup): void;
   remove?(item: ComfyNode | ComfyGroup): void;
+  convertToSubgraph?(items: Set<unknown>): unknown;
   afterChange?(): void;
   getLink?(id: GraphId): ComfyLink | null;
   setDirtyCanvas?(foreground?: boolean, background?: boolean): void;

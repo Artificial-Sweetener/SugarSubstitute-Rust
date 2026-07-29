@@ -143,6 +143,10 @@ export class CubeBrowserController {
     isWritableCube(cube) {
         return Boolean(cube?.is_writable);
     }
+    /** Return the model catalog already loaded for authored Cube metadata editing. */
+    getModelSuggestions() {
+        return this.store.state.modelOptions.slice();
+    }
     setDirtyCubeIds(dirtyCubeIds) {
         this.store.setDirtyCubeIds(dirtyCubeIds);
         this.render();
@@ -202,9 +206,6 @@ export class CubeBrowserController {
     bindHandlers() {
         this.view.setHandlers({
             onClose: () => this.close(),
-            onCreateFromSelection: () => {
-                this.actions.createCubeFromSelection?.();
-            },
             onPlace: () => this.placeCube(),
             onFavoriteToggle: () => this.toggleFavorite(),
             onEditToggle: () => this.toggleEdit(),

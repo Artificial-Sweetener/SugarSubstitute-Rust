@@ -32,6 +32,7 @@ import { NativeCardGeometryObserver } from './NativeCardGeometryObserver.js';
 import type { CubeIdentityPresentation } from '../cube/CubeIdentityPresentation.js';
 import { createResolvedCubeIconElement } from '../core/CubeIconResolver.js';
 import type { CubeFaceChromeActions, CubeFaceChromeMetadata } from './CubeFaceChromeActions.js';
+import { createCubeUnsavedIndicator } from './CubeUnsavedIndicator.js';
 
 export interface CubeSurfaceViewOptions {
   document: Document;
@@ -65,6 +66,7 @@ export class CubeSurfaceView {
   #cells: HTMLElement[] = [];
   #visibleCards: CubeFaceCardDecision[] = [];
   #lastLayoutWidth = 1;
+  #previewAvailable = true;
 
   /** Build a Cube view without assuming ownership of Comfy's renderer service. */
   constructor(options: CubeSurfaceViewOptions) {
@@ -102,13 +104,19 @@ export class CubeSurfaceView {
     const definitionSource = options.document.createElement('span');
     definitionSource.className = 'sugarcubes-cube-face__definition-source';
     definitionSource.dataset.cubeDefinitionSource = '';
-    definitionSource.textContent = options.identity.sourceLine;
+    const source = options.document.createElement('span');
+    source.className = 'sugarcubes-cube-face__source';
+    source.textContent = options.identity.sourceLine;
+    definitionSource.append(source);
     definitionBadge.append(definitionName, definitionSource);
     this.#actions = new CubeFaceActionsView(
       options.document,
       options.metadata ?? {},
       options.chromeActions,
     );
+    if (options.identity.awaitingFirstSave) {
+      this.#actions.element.prepend(createCubeUnsavedIndicator(options.document));
+    }
     this.header.append(identity, definitionBadge, this.#actions.element);
 
     this.#content = options.document.createElement('div');
@@ -151,6 +159,13 @@ export class CubeSurfaceView {
     );
   }
 
+  /** Hide preview presentation when no authored output is exposed externally. */
+  setPreviewAvailable(available: boolean): void {
+    if (this.#previewAvailable === available) return;
+    this.#previewAvailable = available;
+    this.layout(this.#lastLayoutWidth);
+  }
+
   /** Reflow masonry columns and the preview rail for the Cube's current width. */
   layout(width: number): void {
     const safeWidth = Number.isFinite(width) ? Math.max(1, width) : 1;
@@ -163,6 +178,7 @@ export class CubeSurfaceView {
       content: this.#content,
       masonry: this.#masonry,
       previewRail: this.#previewRail,
+      previewAvailable: this.#previewAvailable,
     });
     if (result.minimumHeight !== null) {
       this.#onMinimumHeightChange?.(result.minimumHeight);
