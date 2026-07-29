@@ -136,6 +136,47 @@ describe('ComfyLiteGraphCubeNodeHost', () => {
     expect(node.title_buttons).toBe(originalTitleButtons);
   });
 
+  test('leaves uncolored cards on Comfy native node colors', () => {
+    const rootGraph = {};
+    const inner = nativeInnerNode();
+    inner.widgets.push({ name: 'steps' });
+    const node = cubeNode(inner);
+    const nodes = new CubeNodeCatalog();
+    nodes.add(node);
+    const canvasElement = document.createElement('canvas');
+    const drawNode = jest.fn(() => {
+      expect(inner.color).toBeUndefined();
+      expect(inner.bgcolor).toBeUndefined();
+    });
+    const host = new ComfyLiteGraphCubeNodeHost({
+      canvas: {
+        canvas: canvasElement,
+        graph: rootGraph,
+        graph_mouse: [0, 0],
+        drawNode,
+        processWidgetClick: jest.fn(),
+        setDirty: jest.fn(),
+      },
+      document,
+      rootGraph,
+      nodes,
+      history: {},
+      titleHeight: 30,
+      openEditor: jest.fn(),
+    });
+
+    host.setEnabled(true);
+    const context = drawingContext();
+    node.onDrawForeground?.(context, {}, canvasElement);
+
+    expect(drawNode).toHaveBeenCalled();
+    expect(inner.color).toBeUndefined();
+    expect(inner.bgcolor).toBeUndefined();
+    expect(recordedFillStyles(context)).toContain('#333');
+    expect(recordedFillStyles(context)).toContain('rgb(37 37 37)');
+    host.dispose();
+  });
+
   test('disables the custom hook inside the Cube graph and restores it on return', () => {
     const rootGraph = {};
     const inner = nativeInnerNode();
@@ -469,6 +510,8 @@ function nativeInnerNode() {
     inputs: [],
     outputs: [],
     connect() {},
+    color: undefined as string | undefined,
+    bgcolor: undefined as string | undefined,
     drawSlots: jest.fn(),
     drawCollapsedSlots: jest.fn(),
     onDrawBackground: jest.fn(),

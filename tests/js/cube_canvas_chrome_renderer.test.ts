@@ -68,6 +68,7 @@ describe('CubeCanvasChromeRenderer', () => {
         onOpenMenu() {},
       },
       editorButton,
+      headerColor: '#333',
     });
 
     expect(editorButton.draw).toHaveBeenCalledWith(context, expect.any(Number), expect.any(Number));
@@ -117,6 +118,7 @@ describe('CubeCanvasChromeRenderer', () => {
       layout,
       chromeActions: null,
       editorButton: null,
+      headerColor: '#333',
     });
 
     const texts = (

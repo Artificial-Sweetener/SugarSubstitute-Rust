@@ -26,6 +26,8 @@ interface SugarCubesDebugApi {
 
 interface LiteGraphHost {
   vueNodesMode?: boolean;
+  NODE_DEFAULT_COLOR?: string;
+  NODE_DEFAULT_BGCOLOR?: string;
   NODE_SLOT_HEIGHT: number;
   NODE_TITLE_HEIGHT: number;
   NODE_COLLAPSED_WIDTH?: number;

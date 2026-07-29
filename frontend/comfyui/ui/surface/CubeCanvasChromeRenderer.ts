@@ -43,6 +43,7 @@ export interface CubeCanvasChromeRenderItem {
   layout: CubeCanvasLayout;
   chromeActions: CubeFaceChromeActions | null;
   editorButton: NativeLiteGraphTitleButton | null;
+  headerColor: string;
 }
 
 /** Own Cube header composition without owning cards, previews, or interaction. */
@@ -62,7 +63,7 @@ export class CubeCanvasChromeRenderer {
       instanceTitle: node.title?.trim() || node.subgraph.name,
       fallbackDefinitionTitle: node.subgraph.name,
     });
-    context.fillStyle = '#12161b';
+    context.fillStyle = item.headerColor;
     context.fillRect(layout.header.x, layout.header.y, layout.header.width, layout.header.height);
     context.font = '600 16px sans-serif';
     context.textBaseline = 'middle';

@@ -21,6 +21,7 @@ import { CubeCanvasChromeRenderer, } from './CubeCanvasChromeRenderer.js';
 import { drawComfyPrimeIcon } from './ComfyPrimeIcons.js';
 import { CubeCanvasPortRenderer } from './CubeCanvasPortRenderer.js';
 import { deriveCubeBackdropColor, resolveCubeNodeColorTheme, } from './CubeNodeColorTheme.js';
+import { resolveComfyLiteGraphCubeSurfaceTheme } from './ComfyLiteGraphNodeColorTheme.js';
 import { CUBE_PREVIEW_SECTION_GAP, CUBE_PREVIEW_TITLE_LINE_HEIGHT, dividePreviewIntoHorizontalSegments, resolveCubePreviewContentRect, resolveCubeCanvasPreviewSections, } from './CubePreviewSections.js';
 /** Own only visual composition for legacy canvas Cube surfaces. */
 export class ComfyLiteGraphCubeRenderer {
@@ -42,16 +43,17 @@ export class ComfyLiteGraphCubeRenderer {
     /** Draw one frame, native cards, preview rail, and graph-owned ports. */
     #drawCube(context, item) {
         const { layout } = item;
-        const theme = resolveCubeNodeColorTheme(item.node);
+        const cardTheme = resolveCubeNodeColorTheme(item.node);
+        const surfaceTheme = resolveComfyLiteGraphCubeSurfaceTheme(item.node);
         context.save();
         context.beginPath();
         context.roundRect(layout.frame.x + 1, layout.frame.y + 1, Math.max(1, layout.frame.width - 2), Math.max(1, layout.frame.height - 2), 13);
-        context.fillStyle = theme ? deriveCubeBackdropColor(theme.body) : '#0d1117';
+        context.fillStyle = deriveCubeBackdropColor(surfaceTheme.body);
         context.fill();
         context.clip();
-        this.#chrome.draw(context, item);
+        this.#chrome.draw(context, { ...item, headerColor: surfaceTheme.header });
         for (const card of layout.cards)
-            this.#drawNativeCard(context, card, theme);
+            this.#drawNativeCard(context, card, cardTheme);
         if (layout.preview)
             this.#drawPreview(context, layout.preview, item);
         this.#ports.draw(context, layout);

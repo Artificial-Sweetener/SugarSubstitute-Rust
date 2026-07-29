@@ -36,6 +36,7 @@ import {
   resolveCubeNodeColorTheme,
   type CubeNodeColorTheme,
 } from './CubeNodeColorTheme.js';
+import { resolveComfyLiteGraphCubeSurfaceTheme } from './ComfyLiteGraphNodeColorTheme.js';
 import {
   CUBE_PREVIEW_SECTION_GAP,
   CUBE_PREVIEW_TITLE_LINE_HEIGHT,
@@ -90,7 +91,8 @@ export class ComfyLiteGraphCubeRenderer {
   /** Draw one frame, native cards, preview rail, and graph-owned ports. */
   #drawCube(context: CanvasRenderingContext2D, item: ComfyLiteGraphCubeRenderItem): void {
     const { layout } = item;
-    const theme = resolveCubeNodeColorTheme(item.node);
+    const cardTheme = resolveCubeNodeColorTheme(item.node);
+    const surfaceTheme = resolveComfyLiteGraphCubeSurfaceTheme(item.node);
     context.save();
     context.beginPath();
     context.roundRect(
@@ -100,12 +102,12 @@ export class ComfyLiteGraphCubeRenderer {
       Math.max(1, layout.frame.height - 2),
       13,
     );
-    context.fillStyle = theme ? deriveCubeBackdropColor(theme.body) : '#0d1117';
+    context.fillStyle = deriveCubeBackdropColor(surfaceTheme.body);
     context.fill();
     context.clip();
 
-    this.#chrome.draw(context, item);
-    for (const card of layout.cards) this.#drawNativeCard(context, card, theme);
+    this.#chrome.draw(context, { ...item, headerColor: surfaceTheme.header });
+    for (const card of layout.cards) this.#drawNativeCard(context, card, cardTheme);
     if (layout.preview) this.#drawPreview(context, layout.preview, item);
     this.#ports.draw(context, layout);
     if (item.cardMenuOpen) this.#drawCardMenu(context, layout);
