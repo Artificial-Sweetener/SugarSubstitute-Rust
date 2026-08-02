@@ -103,8 +103,9 @@ export class OverlayManager {
                 ? {
                     onSaveDraft: (metadata) => {
                         const instanceId = typeof metadata.instance_id === 'string' ? metadata.instance_id : '';
-                        if (metadata.kind === 'draft' && instanceId)
-                            void saveDraft(instanceId);
+                        if (metadata.kind === 'draft' && instanceId) {
+                            void saveDraft(instanceId, metadata.graphSummary);
+                        }
                     },
                 }
                 : {}),

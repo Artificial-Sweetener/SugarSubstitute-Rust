@@ -26,6 +26,7 @@ import {
   requireCubeIdentity,
   type CubeNode,
 } from './ui/cube/node/ComfyCubeNodeFactory.js';
+import { readCubeNodeAuthoringCandidate } from './ui/cube/node/CubeNodeAuthoringCandidate.js';
 import { ComfyCubeRuntimeLifecycle } from './ui/cube/ComfyCubeRuntimeLifecycle.js';
 import { CubePreviewRetentionStore } from './ui/surface/CubePreviewRetentionStore.js';
 import { CubeWorkflowPreconfiguration } from './ui/cube/CubeWorkflowPreconfiguration.js';
@@ -179,7 +180,20 @@ function createCubeRuntime(): ComfyCubeRuntime {
     },
     boundaryResolver: nativeBoundaryResolver,
     previewRetention: cubePreviewRetention,
-    openCubeMenu: (metadata, event) => overlayManager.openCubeMenu(metadata, event),
+    openCubeMenu: (metadata, event) => {
+      const instanceId =
+        typeof metadata.instance_id === 'string' ? metadata.instance_id.trim() : '';
+      const node = instanceId ? runtime?.nodes.get(instanceId) : null;
+      overlayManager.openCubeMenu(
+        node
+          ? {
+              ...metadata,
+              graphSummary: readCubeNodeAuthoringCandidate(node),
+            }
+          : metadata,
+        event,
+      );
+    },
     getCubeOutput: (executionId) => cubeOutputExecutionStore.read(executionId),
     subscribePreviewChanges: (listener) => cubeOutputExecutionStore.subscribe(listener),
     onBoundaryGeometryChange: () =>

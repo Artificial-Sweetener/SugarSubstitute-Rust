@@ -70,6 +70,157 @@ def test_same_snapshot_names_decode_positional_values_without_live_order() -> No
     assert snapshot.values == {"method": "dpmpp", "steps": 30}
 
 
+def test_linked_widget_inputs_do_not_require_positional_values() -> None:
+    """Connected subgraph widgets receive values from links, not widget arrays."""
+
+    snapshot = decode_workflow_widget_snapshot(
+        {
+            "inputs": [
+                {
+                    "name": "sampler_name",
+                    "link": 272,
+                    "widget": {"name": "sampler_name"},
+                },
+                {"name": "width", "link": 273, "widget": {"name": "width"}},
+                {"name": "steps", "link": 275, "widget": {"name": "steps"}},
+            ],
+            "widgets_values": [],
+        },
+        _definition(),
+    )
+
+    assert snapshot is not None
+    assert snapshot.values == {}
+
+
+def test_linked_widget_inputs_preserve_unlinked_definition_values() -> None:
+    """Definition order recovers only values not supplied by graph links."""
+
+    subgraphs: list[dict[str, Any]] = [
+        {
+            "id": "sampler",
+            "nodes": [
+                {
+                    "id": 156,
+                    "type": "EmptyFlux2LatentImage",
+                    "inputs": [
+                        {"name": "width", "link": 211, "widget": {"name": "width"}},
+                        {
+                            "name": "height",
+                            "link": 213,
+                            "widget": {"name": "height"},
+                        },
+                        {
+                            "name": "batch_size",
+                            "type": "INT",
+                            "widget": {"name": "batch_size"},
+                        },
+                    ],
+                    "widgets_values": [1024, 1024, 1],
+                }
+            ],
+        }
+    ]
+    definitions = {
+        "EmptyFlux2LatentImage": {
+            "input": {
+                "required": {
+                    "width": ["INT", {"default": 1024}],
+                    "height": ["INT", {"default": 1024}],
+                    "batch_size": ["INT", {"default": 1}],
+                }
+            },
+            "input_order": {"required": ["width", "height", "batch_size"]},
+        }
+    }
+
+    canonical = canonicalize_subgraph_widget_values(subgraphs, definitions)
+    node = canonical[0]["nodes"][0]
+
+    assert node["widgets_values"] == [1]
+    assert node["inputs"][-1] == {
+        "name": "batch_size",
+        "type": "INT",
+        "widget": {"name": "batch_size"},
+    }
+
+
+def test_linked_widget_inputs_ignore_stale_positional_values() -> None:
+    """Connected widgets may retain stale UI values that do not drive execution."""
+
+    snapshot = decode_workflow_widget_snapshot(
+        {
+            "inputs": [
+                {
+                    "name": "sampler_name",
+                    "link": 272,
+                    "widget": {"name": "sampler_name"},
+                }
+            ],
+            "widgets_values": ["euler"],
+        },
+        {
+            "input": {
+                "required": {"sampler_name": [["euler", "dpmpp"], {"default": "euler"}]}
+            },
+            "input_order": {"required": ["sampler_name"]},
+        },
+    )
+
+    assert snapshot is not None
+    assert snapshot.values == {}
+
+
+def test_explicit_subgraph_snapshot_adds_persisted_widget_identities() -> None:
+    """Live name maps make imported Comfy subgraph widgets safe to persist."""
+
+    subgraphs: list[dict[str, Any]] = [
+        {
+            "id": "subgraph",
+            "nodes": [
+                {
+                    "id": 125,
+                    "type": "UNETLoader",
+                    "inputs": [],
+                    "widgets_values": ["stale.safetensors", "default"],
+                    "sugarcubes_widget_values": {
+                        "unet_name": "model.safetensors",
+                        "weight_dtype": "default",
+                    },
+                }
+            ],
+        }
+    ]
+    definitions = {
+        "UNETLoader": {
+            "input": {
+                "required": {
+                    "unet_name": [["model.safetensors"], {}],
+                    "weight_dtype": [["default"], {}],
+                }
+            }
+        }
+    }
+
+    canonical = canonicalize_subgraph_widget_values(subgraphs, definitions)
+    node = canonical[0]["nodes"][0]
+
+    assert node["inputs"] == [
+        {
+            "name": "unet_name",
+            "type": ["model.safetensors"],
+            "widget": {"name": "unet_name"},
+        },
+        {
+            "name": "weight_dtype",
+            "type": ["default"],
+            "widget": {"name": "weight_dtype"},
+        },
+    ]
+    assert node["widgets_values"] == [None, "default"]
+    assert "sugarcubes_widget_values" not in node
+
+
 def test_ambiguous_positional_values_fail_closed() -> None:
     """Values without same-snapshot names cannot shift into current fields."""
 

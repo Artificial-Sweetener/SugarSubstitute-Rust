@@ -26,12 +26,23 @@ export interface CubeAuthoringMetadataDraft {
   destination: CubeSaveDestination['kind'];
 }
 
+export interface CubeAuthoringDestinationOption {
+  action?: 'create-pack';
+  destination?: CubeSaveDestination;
+  detail?: string;
+  key: string;
+  label: string;
+}
+
 export interface CubeAuthoringCandidate {
   cubeId?: string;
   defaultAlias?: string;
   description?: string;
-  destination?: CubeSaveDestination['kind'];
+  destination?: CubeSaveDestination | CubeSaveDestination['kind'];
+  inputCount?: number;
+  markerIds?: unknown[];
   nodeIds?: unknown[];
+  outputCount?: number;
   supportedModels?: string[];
   targetModel?: string;
   warnings?: unknown[];
@@ -47,12 +58,14 @@ export interface CubeAuthoringValues extends PersonalCubeIdentity {
 export interface CubeAuthoringDialogOptions {
   candidate?: CubeAuthoringCandidate | null;
   destinationLocked?: boolean;
+  destinations?: readonly CubeAuthoringDestinationOption[];
   modelSuggestions?: readonly string[];
+  onCreateDestination?: () => Promise<CubeAuthoringDestinationOption | null>;
   deriveIdentity?: (
     name: string,
     targetModel: string,
     destination: CubeSaveDestination,
-  ) => Promise<PersonalCubeIdentity>;
+  ) => PersonalCubeIdentity;
 }
 
 export interface CubeAuthoringDialog {

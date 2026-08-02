@@ -374,3 +374,131 @@ def test_projection_accepts_a_cube_wrapper_inside_a_parent_subgraph() -> None:
     assert analysis.cubes[
         "local/personal/Flux/Nested Detailer.cube"
     ].subgraph_nodes == {"21:inner"}
+
+
+def test_projection_persists_nested_wrappers_without_flattened_descendants() -> None:
+    """Keep nested execution nodes inside their embedded subgraph definition."""
+
+    cube_definition_id = "11111111-1111-4111-8111-111111111111"
+    nested_definition_id = "22222222-2222-4222-8222-222222222222"
+    workflow = _workflow()
+    cube_definition = workflow["definitions"]["subgraphs"][0]
+    cube_definition["id"] = cube_definition_id
+    cube_definition["inputs"] = []
+    cube_definition["outputs"] = []
+    cube_definition["nodes"] = [
+        {
+            "id": "source",
+            "type": "ModelSource",
+            "title": "Model Source",
+            "pos": [0, 20],
+            "size": [220, 100],
+            "inputs": [],
+            "outputs": [{"name": "MODEL", "type": "MODEL", "links": [1]}],
+        },
+        {
+            "id": "nested",
+            "type": nested_definition_id,
+            "title": "Nested Sampler",
+            "pos": [300, 20],
+            "size": [260, 180],
+            "inputs": [{"name": "model", "type": "MODEL", "link": 1}],
+            "outputs": [],
+        },
+    ]
+    cube_definition["links"] = [
+        {
+            "id": 1,
+            "origin_id": "source",
+            "origin_slot": 0,
+            "target_id": "nested",
+            "target_slot": 0,
+            "type": "MODEL",
+        }
+    ]
+    workflow["definitions"]["subgraphs"].append(
+        {
+            "id": nested_definition_id,
+            "name": "Nested Sampler",
+            "inputNode": {"id": -10, "bounding": [-120, 20, 75, 100]},
+            "outputNode": {"id": -20, "bounding": [420, 20, 75, 100]},
+            "inputs": [{"name": "model", "type": "MODEL"}],
+            "outputs": [],
+            "widgets": [],
+            "nodes": [
+                {
+                    "id": "inner",
+                    "type": "ConcreteSampler",
+                    "title": "Concrete Sampler",
+                    "pos": [0, 20],
+                    "size": [260, 180],
+                    "inputs": [{"name": "model", "type": "MODEL", "link": 2}],
+                    "outputs": [],
+                    "widgets_values": [],
+                }
+            ],
+            "links": [
+                {
+                    "id": 2,
+                    "origin_id": -10,
+                    "origin_slot": 0,
+                    "target_id": "inner",
+                    "target_slot": 0,
+                    "type": "MODEL",
+                }
+            ],
+            "groups": [],
+            "reroutes": [],
+        }
+    )
+    graph = {
+        "7:source": {
+            "class_type": "ModelSource",
+            "inputs": {},
+            "_meta": {"title": "Model Source"},
+        },
+        "7:nested": {
+            "class_type": nested_definition_id,
+            "inputs": {"model": ["7:source", 0]},
+            "_meta": {"title": "Nested Sampler"},
+        },
+        "7:nested:inner": {
+            "class_type": "ConcreteSampler",
+            "inputs": {"model": ["7:source", 0]},
+            "_meta": {"title": "Concrete Sampler"},
+        },
+    }
+    entries = {
+        "local/personal/Nested Export.cube": {
+            "definition_id": cube_definition_id,
+            "instance_node_ids": ["7"],
+            "metadata": {"default_alias": "Nested Export"},
+        }
+    }
+
+    projected_graph, projected_workflow = project_native_cube_exports(
+        graph, workflow, entries
+    )
+    analysis = analyze_cubes(projected_graph, workflow=projected_workflow)
+    exported = export(
+        projected_graph,
+        workflow=projected_workflow,
+        cube_ids=["local/personal/Nested Export.cube"],
+        definition_resolver=lambda _class_type: {},
+    )[0]
+
+    assert analysis.cubes["local/personal/Nested Export.cube"].subgraph_nodes == {
+        "7:source",
+        "7:nested",
+    }
+    implementation = exported.cube["implementation"]
+    assert {node["class_type"] for node in implementation["nodes"].values()} == {
+        "ModelSource",
+        nested_definition_id,
+    }
+    assert [subgraph["id"] for subgraph in implementation["subgraphs"]] == [
+        nested_definition_id
+    ]
+    assert not any(
+        "Layout missing node entry" in warning for warning in exported.warnings
+    )

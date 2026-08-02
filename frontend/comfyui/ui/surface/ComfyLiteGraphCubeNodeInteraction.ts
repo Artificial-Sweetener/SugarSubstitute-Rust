@@ -36,6 +36,7 @@ import {
   type CubeFaceChromeActions,
 } from './CubeFaceChromeActions.js';
 import { requireCubeIdentity } from '../cube/node/ComfyCubeNodeFactory.js';
+import { buildCubeFaceChromeMetadata } from '../cube/node/CubeNodeAuthoringCandidate.js';
 
 const BOUNDARY_PORT_HIT_RADIUS = 12;
 
@@ -199,7 +200,7 @@ export class ComfyLiteGraphCubeNodeInteraction {
         this.#consume(event);
         dispatchCubeFaceTitlebarAction(
           action.key,
-          requireCubeIdentity(item.node),
+          buildCubeFaceChromeMetadata(item.node),
           this.#chromeActions,
           event,
         );

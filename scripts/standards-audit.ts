@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -65,6 +65,19 @@ function hasExportJsdoc(lines: readonly string[], exportIdx: number): boolean {
   return previousIdx >= 0 && Boolean(lines[previousIdx]?.trim().endsWith('*/'));
 }
 
+const SETTINGS_SELECT_OWNER_PATHS = [
+  'frontend/comfyui/ui/controls/CubeDestinationControl.ts',
+  'frontend/comfyui/ui/dialogs/CubeAuthoringModal.ts',
+  'frontend/comfyui/ui/surface/CubeEditorMetadataHud.ts',
+] as const;
+
+const NON_COMFY_DROPDOWN_PATTERNS = [
+  /createElement\s*\(\s*['"]select['"]/,
+  /\$el\s*\(\s*['"]select(?:[.#'"])/,
+  /\bModelAutocompleteControl\b/,
+  /setAttribute\s*\(\s*['"]role['"]\s*,\s*['"](?:combobox|listbox)['"]/,
+] as const;
+
 /** Audit authored frontend and tooling code against repository standards. */
 export function auditStandards(rootDir: string = process.cwd()): string[] {
   const root = repoRoot(rootDir);
@@ -105,6 +118,17 @@ export function auditStandards(rootDir: string = process.cwd()): string[] {
     failures.push(
       `${path.relative(root, fullPath).replaceAll('\\', '/')} is TypeScript in the generated runtime tree`,
     );
+  }
+
+  for (const relativePath of SETTINGS_SELECT_OWNER_PATHS) {
+    const fullPath = path.join(root, relativePath);
+    if (!existsSync(fullPath)) continue;
+    const content = readFileSync(fullPath, 'utf8');
+    if (NON_COMFY_DROPDOWN_PATTERNS.some((pattern) => pattern.test(content))) {
+      failures.push(
+        `${relativePath} must use the shared Comfy Settings select controls instead of browser or custom dropdowns`,
+      );
+    }
   }
 
   const scriptFiles = walkFiles(path.join(root, 'scripts'), (fullPath) => fullPath.endsWith('.ts'));

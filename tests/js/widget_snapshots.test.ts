@@ -61,6 +61,74 @@ describe('widget snapshots', () => {
     });
   });
 
+  test('attaches snapshots to live subgraph nodes by definition id', () => {
+    const workflow: {
+      nodes: Array<Record<string, unknown>>;
+      definitions: {
+        subgraphs: Array<{ id: string; nodes: Array<Record<string, unknown>> }>;
+      };
+    } = {
+      nodes: [],
+      definitions: {
+        subgraphs: [
+          {
+            id: 'cube-definition',
+            nodes: [
+              {
+                id: 124,
+                type: 'KSamplerSelect',
+                inputs: [
+                  {
+                    name: 'sampler_name',
+                    link: 267,
+                    widget: { name: 'sampler_name' },
+                  },
+                ],
+                widgets_values: ['euler'],
+              },
+              {
+                id: 125,
+                type: 'UNETLoader',
+                inputs: [],
+                widgets_values: ['model.safetensors', 'default'],
+              },
+            ],
+          },
+        ],
+      },
+    };
+    const graph = {
+      _nodes: [],
+      _subgraphs: new Map([
+        [
+          'cube-definition',
+          {
+            _nodes: [
+              { id: 124, widgets: [{ name: 'sampler_name', value: 'euler' }] },
+              {
+                id: 125,
+                widgets: [
+                  { name: 'unet_name', value: 'model.safetensors' },
+                  { name: 'weight_dtype', value: 'default' },
+                ],
+              },
+            ],
+          },
+        ],
+      ]),
+    };
+
+    attachWorkflowWidgetSnapshots(workflow, graph);
+
+    expect(workflow.definitions.subgraphs[0].nodes[0][WORKFLOW_WIDGET_VALUES_KEY]).toEqual({
+      sampler_name: 'euler',
+    });
+    expect(workflow.definitions.subgraphs[0].nodes[1][WORKFLOW_WIDGET_VALUES_KEY]).toEqual({
+      unet_name: 'model.safetensors',
+      weight_dtype: 'default',
+    });
+  });
+
   test('rejects duplicate widget identities instead of shifting values', () => {
     const node = {
       id: 42,
@@ -168,5 +236,51 @@ describe('widget snapshots', () => {
     }));
 
     expect(subgraph.nodes[0].widgets_values).toEqual([99, 'randomize', 30]);
+  });
+
+  test('does not invent positional values for widget inputs supplied by links', () => {
+    const subgraph = {
+      nodes: [
+        {
+          id: 146,
+          type: 'NestedSamplerSubgraph',
+          inputs: [
+            { name: 'sampler_name', link: 272, widget: { name: 'sampler_name' } },
+            { name: 'width', link: 273, widget: { name: 'width' } },
+            { name: 'steps', link: 275, widget: { name: 'steps' } },
+          ],
+          widgets_values: [],
+        },
+      ],
+    };
+
+    rebindSubgraphWidgetValues(subgraph, () => ({
+      widgets: [
+        { name: 'sampler_name', value: 'euler' },
+        { name: 'width', value: 1024 },
+        { name: 'steps', value: 20 },
+      ],
+    }));
+
+    expect(subgraph.nodes[0].widgets_values).toEqual([]);
+  });
+
+  test('discards stale positional values for widget inputs supplied by links', () => {
+    const subgraph = {
+      nodes: [
+        {
+          id: 124,
+          type: 'KSamplerSelect',
+          inputs: [{ name: 'sampler_name', link: 267, widget: { name: 'sampler_name' } }],
+          widgets_values: ['euler'],
+        },
+      ],
+    };
+
+    rebindSubgraphWidgetValues(subgraph, () => ({
+      widgets: [{ name: 'sampler_name', value: 'euler' }],
+    }));
+
+    expect(subgraph.nodes[0].widgets_values).toEqual([]);
   });
 });

@@ -18,11 +18,13 @@
  */
 
 import { getGraphNodes } from './GraphQuery.js';
+import { isRecord } from '../types/common.js';
 import type { UnknownRecord } from '../types/common.js';
 import type { ComfyGraph, ComfyNode, ComfyWidget } from '../types/graph.js';
 
 export interface WorkflowWithNodes extends UnknownRecord {
   nodes?: ComfyNode[];
+  definitions?: UnknownRecord;
 }
 
 /** Request-only workflow field carrying widget values keyed by stable name. */
@@ -53,6 +55,9 @@ function cloneJsonValue(value: unknown): unknown | undefined {
 function serializedWidgetNames(node: ComfyNode): string[] {
   const names: string[] = [];
   for (const input of Array.isArray(node?.inputs) ? node.inputs : []) {
+    if (input?.link != null) {
+      continue;
+    }
     const name =
       typeof input?.widget?.name === 'string' && input.widget.name.trim()
         ? input.widget.name.trim()
@@ -74,6 +79,9 @@ function decodeSerializedWidgetValues(
 ): Map<string, unknown> {
   const names = serializedWidgetNames(node);
   const persisted = Array.isArray(node?.widgets_values) ? node.widgets_values : [];
+  if (!names.length && persisted.length && linkedWidgetNames(node).size) {
+    return new Map();
+  }
   const values = new Map<string, unknown>();
   let valueIndex = 0;
   let companionValuesRemaining = Math.max(0, persisted.length - names.length);
@@ -134,8 +142,35 @@ export function attachWorkflowWidgetSnapshots(
   workflow: WorkflowWithNodes,
   graph: ComfyGraph | null | undefined,
 ): WorkflowWithNodes {
-  if (!Array.isArray(workflow.nodes)) {
+  attachNodeWidgetSnapshots(workflow, graph);
+  const definitions = isRecord(workflow.definitions) ? workflow.definitions : {};
+  const subgraphs = Array.isArray(definitions.subgraphs) ? definitions.subgraphs : [];
+  const liveSubgraphs = graph?._subgraphs instanceof Map ? graph._subgraphs : null;
+  if (!liveSubgraphs) {
     return workflow;
+  }
+  for (const subgraph of subgraphs) {
+    if (
+      !isRecord(subgraph) ||
+      (typeof subgraph.id !== 'string' && typeof subgraph.id !== 'number')
+    ) {
+      continue;
+    }
+    const liveSubgraph = findLiveSubgraph(liveSubgraphs, subgraph.id);
+    if (liveSubgraph) {
+      attachNodeWidgetSnapshots(subgraph, liveSubgraph);
+    }
+  }
+  return workflow;
+}
+
+/** Attach live widget values to one serialized graph's matching nodes. */
+function attachNodeWidgetSnapshots(
+  workflow: WorkflowWithNodes,
+  graph: ComfyGraph | null | undefined,
+): void {
+  if (!Array.isArray(workflow.nodes)) {
+    return;
   }
   const nodesById = new Map(
     getGraphNodes(graph)
@@ -155,7 +190,24 @@ export function attachWorkflowWidgetSnapshots(
       workflowNode[WORKFLOW_WIDGET_VALUES_KEY] = values;
     }
   }
-  return workflow;
+}
+
+/** Resolve a live subgraph without assuming the host map's key representation. */
+function findLiveSubgraph(
+  subgraphs: Map<string | number, unknown>,
+  id: string | number,
+): ComfyGraph | null {
+  const direct = subgraphs.get(id);
+  if (isRecord(direct)) {
+    return direct;
+  }
+  const expected = String(id);
+  for (const [candidateId, candidate] of subgraphs) {
+    if (String(candidateId) === expected && isRecord(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
 }
 
 /**
@@ -182,13 +234,48 @@ export function rebindSubgraphWidgetValues(
     }
     const liveWidgets = Array.isArray(liveNode.widgets) ? liveNode.widgets : [];
     const persistedByName = decodeSerializedWidgetValues(node, liveWidgets);
-    node.widgets_values = liveWidgets.map((widget) => {
-      const persisted = persistedByName.get(widget?.name);
-      if (isSerializedWidget(widget) && persisted !== undefined && persisted !== null) {
-        return cloneJsonValue(persisted);
-      }
-      return cloneJsonValue(widget?.value ?? widget?.last_value ?? widget?.options?.value) ?? null;
-    });
+    node.widgets_values = rebuildWidgetValues(node, liveWidgets, persistedByName);
   }
   return subgraph;
+}
+
+/** Rebuild only widget positions that are not supplied by graph links. */
+function rebuildWidgetValues(
+  node: ComfyNode,
+  liveWidgets: readonly ComfyWidget[],
+  persistedByName: ReadonlyMap<string, unknown>,
+): unknown[] {
+  const linkedNames = linkedWidgetNames(node);
+  const values: unknown[] = [];
+  for (let index = 0; index < liveWidgets.length; index += 1) {
+    const widget = liveWidgets[index];
+    if (!widget) {
+      values.push(null);
+      continue;
+    }
+    if (isSerializedWidget(widget) && linkedNames.has(widget.name.trim())) {
+      const companion = liveWidgets[index + 1];
+      if (companion && !isSerializedWidget(companion)) {
+        index += 1;
+      }
+      continue;
+    }
+    const persisted = persistedByName.get(widget.name);
+    values.push(
+      isSerializedWidget(widget) && persisted !== undefined && persisted !== null
+        ? cloneJsonValue(persisted)
+        : (cloneJsonValue(widget?.value ?? widget?.last_value ?? widget?.options?.value) ?? null),
+    );
+  }
+  return values;
+}
+
+/** Return widget identities whose values are supplied by graph links. */
+function linkedWidgetNames(node: ComfyNode): Set<string> {
+  return new Set(
+    (Array.isArray(node.inputs) ? node.inputs : [])
+      .filter((input) => input?.link != null)
+      .map((input) => input.widget?.name?.trim() ?? '')
+      .filter(Boolean),
+  );
 }

@@ -31,6 +31,7 @@ import type { CubeGroupMetadataRecord } from '../graph/GroupMetadata.js';
 import type { ComfyApplication, ComfyCanvas, ComfyGraph, ComfyGroup } from '../types/graph.js';
 import type { RectBounds, UnknownRecord, Vec2 } from '../types/common.js';
 import { formatCubeSourceText, formatCubeVersionText } from '../cube/CubeIdentityPresentation.js';
+import type { CubeFaceGraphSummary } from '../surface/CubeFaceChromeActions.js';
 
 interface Rgb {
   r: number;
@@ -52,6 +53,7 @@ export interface ChromeMetadata extends CubeGroupMetadataRecord {
   has_saveable_changes?: boolean;
   markers?: { inputs?: unknown[]; outputs?: unknown[] };
   bounds?: { header?: { height?: number } };
+  graphSummary?: CubeFaceGraphSummary;
 }
 export interface BadgeSource {
   sourceKind?: string;

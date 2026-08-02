@@ -21,16 +21,10 @@ import type {
   AuthoredCubeIdentity,
   CubeDraftIdentity,
 } from '../cube/ComfyCubeAuthoringAdapter.js';
-import type {
-  CubeAuthoringDialogOptions,
-  CubeAuthoringMetadataDraft,
-  CubeAuthoringValues,
-} from './CubeAuthoringDialog.js';
-import { suggestCubeAuthoringIdentity } from './CubeAuthoringIdentity.js';
-import type { CubeSaveDestination } from './CubeAuthoringIdentity.js';
-import type { WritableCubePack } from '../packs/CubePackService.js';
-import type { UnknownRecord } from '../types/common.js';
+import type { CubeAuthoringMetadataDraft, CubeAuthoringValues } from './CubeAuthoringDialog.js';
 import type { CubeSaveOutcome } from '../save/CubeSaveService.js';
+import type { CubeAuthoringService } from './CubeAuthoringService.js';
+import type { CubeNodeAuthoringCandidate } from '../cube/node/CubeNodeAuthoringCandidate.js';
 
 export interface CubeCreationAuthoring {
   selectedCount(): number;
@@ -41,15 +35,6 @@ export interface CubeCreationAuthoring {
   createDraftFromSelectedSubgraph(identity: CubeDraftIdentity): AuthoredCubeDraft;
   promoteDraft(instanceId: string, identity: AuthoredCubeIdentity): AuthoredCube;
   restoreDraft(instanceId: string): void;
-}
-
-interface CreationBrowser {
-  getCubes?(): UnknownRecord[];
-  getModelSuggestions?(): readonly string[];
-}
-
-interface CreationDialogs {
-  openCubeAuthoring?(options: CubeAuthoringDialogOptions): Promise<CubeAuthoringValues | null>;
 }
 
 interface CreationToast {
@@ -64,47 +49,36 @@ interface CreationSave {
   save(options: { cubeIds: string[] }): Promise<CubeSaveOutcome>;
 }
 
-interface CreationPackService {
-  chooseWritablePack(): Promise<WritableCubePack | null>;
-}
-
 interface CreationOperation {
   validate(authoring: CubeCreationAuthoring): void;
   create(authoring: CubeCreationAuthoring, identity: CubeDraftIdentity): AuthoredCubeDraft;
 }
 
 export interface CubeCreationDependencies {
+  authoring: Pick<CubeAuthoringService, 'openFirstSave'>;
   getAuthoring(): CubeCreationAuthoring;
   cubeSave: CreationSave;
-  cubeBrowser?: CreationBrowser | null;
-  dialogs?: CreationDialogs | null;
   toast?: CreationToast | null;
   logger?: CreationLogger | null;
-  packService?: CreationPackService | null;
   createInstanceId?: () => string;
 }
 
-/** Describe the metadata a Cube-editor HUD needs before its first persistence. */
 /** Coordinate identity confirmation, native conversion, and initial persistence. */
 export class CubeCreationService {
+  readonly #authoring: Pick<CubeAuthoringService, 'openFirstSave'>;
   readonly #getAuthoring: () => CubeCreationAuthoring;
   readonly #cubeSave: CreationSave;
-  readonly #cubeBrowser: CreationBrowser | null;
-  readonly #dialogs: CreationDialogs | null;
   readonly #toast: CreationToast | null;
   readonly #logger: CreationLogger | null;
-  readonly #packService: CreationPackService | null;
   readonly #createInstanceId: () => string;
 
   /** Bind focused application collaborators without importing host globals. */
   constructor(options: CubeCreationDependencies) {
+    this.#authoring = options.authoring;
     this.#getAuthoring = options.getAuthoring;
     this.#cubeSave = options.cubeSave;
-    this.#cubeBrowser = options.cubeBrowser ?? null;
-    this.#dialogs = options.dialogs ?? null;
     this.#toast = options.toast ?? null;
     this.#logger = options.logger ?? null;
-    this.#packService = options.packService ?? null;
     this.#createInstanceId = options.createInstanceId ?? createUuid;
   }
 
@@ -133,14 +107,16 @@ export class CubeCreationService {
   }
 
   /** Collect first-save metadata, promote a draft in place, and use the established save contract. */
-  async saveDraft(instanceId: string): Promise<AuthoredCube | null> {
+  async saveDraft(
+    instanceId: string,
+    candidateDetails: CubeNodeAuthoringCandidate = {},
+  ): Promise<AuthoredCube | null> {
     try {
-      const existingCubeIds = this.#existingCubeIds();
-      const values = await this.#dialogs?.openCubeAuthoring?.({
-        candidate: { defaultAlias: 'SugarCube', targetModel: 'SDXL', warnings: [] },
-        modelSuggestions: this.#cubeBrowser?.getModelSuggestions?.() ?? [],
-        deriveIdentity: async (name, targetModel, destination) =>
-          this.#deriveIdentity(name, targetModel, destination, existingCubeIds),
+      const values = await this.#authoring.openFirstSave({
+        ...candidateDetails,
+        defaultAlias: 'SugarCube',
+        targetModel: 'SDXL',
+        warnings: [],
       });
       if (!values) return null;
       return await this.#persistDraft(instanceId, values);
@@ -154,20 +130,17 @@ export class CubeCreationService {
   async saveDraftFromEditor(
     instanceId: string,
     request: CubeAuthoringMetadataDraft,
+    candidateDetails: CubeNodeAuthoringCandidate = {},
   ): Promise<AuthoredCube | null> {
     try {
-      const values = await this.#dialogs?.openCubeAuthoring?.({
-        candidate: {
-          defaultAlias: request.defaultAlias,
-          description: request.description,
-          destination: request.destination,
-          supportedModels: request.supportedModels,
-          targetModel: request.targetModel,
-          warnings: [],
-        },
-        modelSuggestions: this.#cubeBrowser?.getModelSuggestions?.() ?? [],
-        deriveIdentity: async (name, targetModel, destination) =>
-          this.#deriveIdentity(name, targetModel, destination, this.#existingCubeIds()),
+      const values = await this.#authoring.openFirstSave({
+        ...candidateDetails,
+        defaultAlias: request.defaultAlias,
+        description: request.description,
+        destination: request.destination,
+        supportedModels: request.supportedModels,
+        targetModel: request.targetModel,
+        warnings: [],
       });
       if (!values) return null;
       return await this.#persistDraft(instanceId, values);
@@ -242,29 +215,6 @@ export class CubeCreationService {
     const message = error instanceof Error ? error.message : 'Unable to save SugarCube.';
     this.#toast?.push?.('error', 'SugarCube save failed', message);
     this.#logger?.error?.('SugarCubes: first Cube save failed', error);
-  }
-
-  /** Return the library identities reserved before a first-save destination is chosen. */
-  #existingCubeIds(): string[] {
-    return (this.#cubeBrowser?.getCubes?.() ?? [])
-      .map((entry) => (typeof entry.cube_id === 'string' ? entry.cube_id : ''))
-      .filter(Boolean);
-  }
-
-  /** Resolve a local or selected author-pack destination into the established canonical id. */
-  async #deriveIdentity(
-    name: string,
-    targetModel: string,
-    destination: CubeSaveDestination,
-    existingCubeIds: readonly string[],
-  ) {
-    let resolvedDestination = destination;
-    if (destination.kind === 'pack' && (!destination.owner || !destination.repo)) {
-      const pack = await this.#packService?.chooseWritablePack();
-      if (!pack) throw new Error('Choose a writable author-owned Cube Pack to continue.');
-      resolvedDestination = { kind: 'pack', ...pack };
-    }
-    return suggestCubeAuthoringIdentity(name, targetModel, resolvedDestination, existingCubeIds);
   }
 }
 

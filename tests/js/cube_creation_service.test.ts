@@ -17,13 +17,22 @@ import type {
   AuthoredCubeDraft,
 } from '../../frontend/comfyui/ui/cube/ComfyCubeAuthoringAdapter.js';
 import type {
-  CubeAuthoringDialogOptions,
+  CubeAuthoringCandidate,
   CubeAuthoringValues,
 } from '../../frontend/comfyui/ui/create/CubeAuthoringDialog.js';
 import type { CubeSaveOutcome } from '../../frontend/comfyui/ui/save/CubeSaveService.js';
 
 const draft = { node: {}, subgraph: {}, identity: {} } as unknown as AuthoredCubeDraft;
 const cube = { node: {}, subgraph: {}, identity: {} } as unknown as AuthoredCube;
+const localValues: CubeAuthoringValues = {
+  name: 'Detailer',
+  defaultAlias: 'SDXL/Detailer',
+  cubeId: 'local/personal/SDXL/Detailer.cube',
+  targetModel: 'SDXL',
+  supportedModels: ['SDXL'],
+  description: 'Detail images.',
+  destination: { kind: 'local' },
+};
 
 function createAuthoring(overrides: Partial<CubeCreationAuthoring> = {}): CubeCreationAuthoring {
   return {
@@ -39,21 +48,22 @@ function createAuthoring(overrides: Partial<CubeCreationAuthoring> = {}): CubeCr
   };
 }
 
-async function emptySave(): Promise<CubeSaveOutcome> {
-  return { status: 'no_changes', savedCubeIds: [] };
+function authoringSession(values: CubeAuthoringValues | null = null) {
+  return { openFirstSave: jest.fn(async (_candidate: CubeAuthoringCandidate) => values) };
 }
 
-async function cancelledAuthoring(): Promise<CubeAuthoringValues | null> {
-  return null;
+async function emptySave(): Promise<CubeSaveOutcome> {
+  return { status: 'no_changes', savedCubeIds: [] };
 }
 
 describe('CubeCreationService', () => {
   test('creates an empty draft without opening metadata or saving', async () => {
     const createEmptyDraft = jest.fn(() => draft);
+    const authoring = authoringSession();
     const service = new CubeCreationService({
+      authoring,
       getAuthoring: () => createAuthoring({ createEmptyDraft }),
       cubeSave: { save: emptySave },
-      dialogs: { openCubeAuthoring: cancelledAuthoring },
       createInstanceId: () => 'draft-1',
     });
 
@@ -62,12 +72,14 @@ describe('CubeCreationService', () => {
       instanceId: 'draft-1',
       defaultAlias: 'Untitled Cube',
     });
+    expect(authoring.openFirstSave).not.toHaveBeenCalled();
   });
 
   test('extracts a selection as a draft without guessing metadata or saving', async () => {
     const validateSelection = jest.fn();
     const createDraftFromSelection = jest.fn(() => draft);
     const service = new CubeCreationService({
+      authoring: authoringSession(),
       getAuthoring: () =>
         createAuthoring({ selectedCount: () => 2, validateSelection, createDraftFromSelection }),
       cubeSave: { save: emptySave },
@@ -82,178 +94,85 @@ describe('CubeCreationService', () => {
     });
   });
 
-  test('promotes a draft through the established local save contract on first save', async () => {
+  test('promotes a draft through the established save contract after the shared authoring session', async () => {
     const promoteDraft = jest.fn(() => cube);
     const save = jest.fn(async () => ({
       status: 'saved' as const,
-      savedCubeIds: ['local/personal/SDXL/Detailer.cube'],
+      savedCubeIds: [localValues.cubeId],
     }));
+    const authoring = authoringSession(localValues);
     const service = new CubeCreationService({
+      authoring,
       getAuthoring: () => createAuthoring({ promoteDraft }),
       cubeSave: { save },
-      dialogs: {
-        openCubeAuthoring: jest.fn(async () => ({
-          name: 'Detailer',
-          defaultAlias: 'SDXL/Detailer',
-          cubeId: 'local/personal/SDXL/Detailer.cube',
-          targetModel: 'SDXL',
-          supportedModels: ['SDXL'],
-          description: 'Detail images.',
-          destination: { kind: 'local' as const },
-        })),
-      },
     });
 
-    await expect(service.saveDraft('draft-3')).resolves.toBe(cube);
+    await expect(
+      service.saveDraft('draft-3', {
+        nodeIds: [],
+        markerIds: [],
+        inputCount: 0,
+        outputCount: 0,
+      }),
+    ).resolves.toBe(cube);
+    expect(authoring.openFirstSave).toHaveBeenCalledWith({
+      defaultAlias: 'SugarCube',
+      targetModel: 'SDXL',
+      warnings: [],
+      nodeIds: [],
+      markerIds: [],
+      inputCount: 0,
+      outputCount: 0,
+    });
     expect(promoteDraft).toHaveBeenCalledWith(
       'draft-3',
       expect.objectContaining({
-        cubeId: 'local/personal/SDXL/Detailer.cube',
+        cubeId: localValues.cubeId,
         instanceId: 'draft-3',
         description: 'Detail images.',
       }),
     );
-    expect(save).toHaveBeenCalledWith({ cubeIds: ['local/personal/SDXL/Detailer.cube'] });
+    expect(save).toHaveBeenCalledWith({ cubeIds: [localValues.cubeId] });
   });
 
-  test('derives a direct author-pack identity when the first-save destination is a pack', async () => {
-    const openCubeAuthoring = async (
-      options: CubeAuthoringDialogOptions,
-    ): Promise<CubeAuthoringValues> => {
-      if (!options.deriveIdentity) throw new Error('Missing identity derivation.');
-      const identity = await options.deriveIdentity('Shared', 'SDXL', {
-        kind: 'pack',
-        owner: '',
-        repo: '',
-        repoRef: '',
-      });
-      return {
-        ...identity,
-        targetModel: 'SDXL',
-        supportedModels: ['SDXL'],
-        description: '',
-        destination: {
-          kind: 'pack' as const,
-          owner: 'artist',
-          repo: 'cubes',
-          repoRef: 'artist/cubes',
-        },
-      };
-    };
-    const promoteDraft = jest.fn(() => cube);
-    const service = new CubeCreationService({
-      getAuthoring: () => createAuthoring({ promoteDraft }),
-      cubeSave: {
-        save: jest.fn(async () => ({
-          status: 'saved' as const,
-          savedCubeIds: ['artist/cubes/SDXL/Shared.cube'],
-        })),
-      },
-      dialogs: { openCubeAuthoring },
-      packService: {
-        chooseWritablePack: jest.fn(async () => ({
-          owner: 'artist',
-          repo: 'cubes',
-          repoRef: 'artist/cubes',
-        })),
-      },
-    });
-
-    await service.saveDraft('draft-pack');
-    expect(promoteDraft).toHaveBeenCalledWith(
-      'draft-pack',
-      expect.objectContaining({ cubeId: 'artist/cubes/SDXL/Shared.cube' }),
-    );
-  });
-
-  test('routes editor metadata through the established first-save authoring flow', async () => {
+  test('routes editor metadata and graph counts through the same first-save session', async () => {
     const promoteDraft = jest.fn(() => cube);
     const save = jest.fn(async () => ({
       status: 'saved' as const,
-      savedCubeIds: ['local/personal/SDXL/Editor Cube.cube'],
+      savedCubeIds: [localValues.cubeId],
     }));
+    const authoring = authoringSession(localValues);
     const service = new CubeCreationService({
+      authoring,
       getAuthoring: () => createAuthoring({ promoteDraft }),
       cubeSave: { save },
-      dialogs: {
-        openCubeAuthoring: jest.fn(async () => ({
-          name: 'Editor Cube',
-          defaultAlias: 'SDXL/Editor Cube',
-          cubeId: 'local/personal/SDXL/Editor Cube.cube',
-          targetModel: 'SDXL',
-          supportedModels: ['SDXL'],
-          description: 'Saved from the editor HUD.',
-          destination: { kind: 'local' as const },
-        })),
-      },
     });
 
-    await service.saveDraftFromEditor('draft-editor', {
-      defaultAlias: 'Editor Cube',
-      targetModel: 'SDXL',
-      supportedModels: ['SDXL'],
-      description: 'Saved from the editor HUD.',
-      destination: 'local',
-    });
-
-    expect(promoteDraft).toHaveBeenCalledWith(
+    await service.saveDraftFromEditor(
       'draft-editor',
-      expect.objectContaining({
-        cubeId: 'local/personal/SDXL/Editor Cube.cube',
-        description: 'Saved from the editor HUD.',
-      }),
-    );
-    expect(save).toHaveBeenCalledWith({ cubeIds: ['local/personal/SDXL/Editor Cube.cube'] });
-  });
-
-  test('chooses a writable author pack once when the editor saves a draft', async () => {
-    const chooseWritablePack = jest.fn(async () => ({
-      owner: 'artist',
-      repo: 'cubes',
-      repoRef: 'artist/cubes',
-    }));
-    const promoteDraft = jest.fn(() => cube);
-    const openCubeAuthoring = jest.fn(async (options: CubeAuthoringDialogOptions) => {
-      const deriveIdentity = options.deriveIdentity;
-      if (!deriveIdentity) throw new Error('Expected Cube identity derivation.');
-      const identity = await deriveIdentity('Editor Cube', 'SDXL', {
-        kind: 'pack',
-        owner: '',
-        repo: '',
-        repoRef: '',
-      });
-      return {
-        ...identity,
+      {
+        defaultAlias: 'Detailer',
         targetModel: 'SDXL',
         supportedModels: ['SDXL'],
-        description: '',
-        destination: { kind: 'pack' as const, owner: '', repo: '', repoRef: '' },
-      };
-    });
-    const service = new CubeCreationService({
-      getAuthoring: () => createAuthoring({ promoteDraft }),
-      cubeSave: {
-        save: jest.fn(async () => ({
-          status: 'saved' as const,
-          savedCubeIds: ['artist/cubes/SDXL/Editor Cube.cube'],
-        })),
+        description: 'Detail images.',
+        destination: 'local',
       },
-      dialogs: { openCubeAuthoring },
-      packService: { chooseWritablePack },
-    });
-
-    await service.saveDraftFromEditor('draft-editor', {
-      defaultAlias: 'Editor Cube',
-      targetModel: 'SDXL',
-      supportedModels: ['SDXL'],
-      description: '',
-      destination: 'pack',
-    });
-
-    expect(chooseWritablePack).toHaveBeenCalledTimes(1);
-    expect(promoteDraft).toHaveBeenCalledWith(
-      'draft-editor',
-      expect.objectContaining({ cubeId: 'artist/cubes/SDXL/Editor Cube.cube' }),
+      {
+        nodeIds: ['node-a', 'node-b'],
+        markerIds: ['input-a', 'output-a'],
+        inputCount: 1,
+        outputCount: 1,
+      },
     );
+
+    expect(authoring.openFirstSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        defaultAlias: 'Detailer',
+        nodeIds: ['node-a', 'node-b'],
+        inputCount: 1,
+        outputCount: 1,
+      }),
+    );
+    expect(save).toHaveBeenCalledWith({ cubeIds: [localValues.cubeId] });
   });
 });

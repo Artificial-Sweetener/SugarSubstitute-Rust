@@ -18,27 +18,49 @@
 import type { ComfyNode } from '../types/graph.js';
 import type { UnknownRecord } from '../types/common.js';
 import { isRecord } from '../types/common.js';
+import {
+  discoverComfyFrontendModules,
+  type ComfyFrontendModule,
+  type ComfyRuntimeTextFetcher,
+} from './ComfyFrontendModuleGraph.js';
 
-const ENTRY_PATTERN = /\/assets\/index-[^/?]+\.js(?:\?.*)?$/;
-const VUE_RUNTIME_PATTERN = /["']\.\/(vendor-vue-core-[^"']+\.js)["']/;
-const HOST_RUNTIME_PATTERN = /["']\.\/(dialogService-[^"']+\.js)["']/;
-const GRAPH_VIEW_PATTERN = /["']\.\/(GraphView-[^"']+\.js)["']/;
+const VUE_RUNTIME_URL_PATTERN = /\/vendor-vue-core-[^/?]+\.js(?:\?.*)?$/;
+const PRIME_VUE_RUNTIME_URL_PATTERN = /\/vendor-primevue-[^/?]+\.js(?:\?.*)?$/;
 const NATIVE_NODE_COMPONENT_PATTERN =
   /([A-Za-z_$][\w$]*)=[A-Za-z_$][\w$]*\(\{__name:[`'"]LGraphNode[`'"]/;
+const NODE_DATA_CAPABILITY = 'extractVueNodeData';
+const SLOT_LAYOUT_CAPABILITY = 'requestSlotLayoutSyncForAllNodes';
 const RELATIVE_MODULE_SPECIFIER_PATTERN = /((?:from|import)\s*(?:\(\s*)?)(["'])\.\/([^"'`]+)\2/g;
+const RELATIVE_ASSET_URL_PATTERN = /new URL\((["'`])([^"'`]+)\1,\s*import\.meta\.url\)/g;
 const FETCH_TIMEOUT_MS = 5_000;
 const NATIVE_NODE_COMPONENT_EXPORT = 'sugarcubesNativeNodeComponent';
+const NODE_DATA_FUNCTION_EXPORT = 'sugarcubesExtractVueNodeData';
 
-export interface ComfyRuntimeAssets {
+export interface ComfyNodes2RuntimeAssets {
   entry: string;
   vueRuntime: string;
-  hostRuntime: string;
+  nodeDataRuntime: string;
+  slotLayoutRuntime: string | null;
   graphView: string;
 }
 
-export interface ComfyVueNodeRenderRuntime {
+export interface ComfySettingsRuntimeAssets {
+  entry: string;
+  vueRuntime: string;
+  primeVueRuntime: string;
+}
+
+interface ComfyVueRuntimeAsset {
+  entry: string;
+  vueRuntime: string;
+}
+
+export interface ComfyVueRenderRuntime {
   render(vnode: unknown, target: HTMLElement): void;
   h(component: unknown, props: UnknownRecord): unknown;
+}
+
+export interface ComfyVueNodeRenderRuntime extends ComfyVueRenderRuntime {
   extractVueNodeData(node: ComfyNode): UnknownRecord;
 }
 
@@ -47,7 +69,7 @@ export interface ComfyVueRuntime extends ComfyVueNodeRenderRuntime {
 }
 
 export type RuntimeModuleImporter = (url: string) => Promise<UnknownRecord>;
-export type RuntimeTextFetcher = (url: string) => Promise<string>;
+export type RuntimeTextFetcher = ComfyRuntimeTextFetcher;
 
 /** Report an installed Comfy runtime that no longer matches the guarded contract. */
 export class NativeRendererCompatibilityError extends Error {
@@ -58,31 +80,39 @@ export class NativeRendererCompatibilityError extends Error {
   }
 }
 
-/** Discover current hashed assets without hard-coding one Comfy build. */
-export async function discoverComfyRuntimeAssets(
+/** Discover Nodes 2 assets by their semantic capabilities across Comfy's module graph. */
+export async function discoverComfyNodes2RuntimeAssets(
   documentRef: Document,
   fetchText: RuntimeTextFetcher = fetchRuntimeText,
-): Promise<ComfyRuntimeAssets> {
-  const entry = Array.from(documentRef.scripts)
-    .map((script) => script.src)
-    .find((source) => ENTRY_PATTERN.test(source));
-  if (!entry) {
-    throw new NativeRendererCompatibilityError('Comfy entry module was not found.');
-  }
-  const source = await fetchText(entry);
-  const vueMatch = source.match(VUE_RUNTIME_PATTERN);
-  const hostMatch = source.match(HOST_RUNTIME_PATTERN);
-  const graphViewMatch = source.match(GRAPH_VIEW_PATTERN);
-  if (!vueMatch?.[1] || !hostMatch?.[1] || !graphViewMatch?.[1]) {
-    throw new NativeRendererCompatibilityError(
-      'Comfy native renderer modules do not match the supported runtime contract.',
-    );
-  }
+): Promise<ComfyNodes2RuntimeAssets> {
+  const discovery = await discoverModules(documentRef, fetchText, [
+    { key: 'vue', matches: (module) => VUE_RUNTIME_URL_PATTERN.test(module.url) },
+    { key: 'nodeData', matches: exposesNodeDataCapability },
+    { key: 'slotLayout', required: false, matches: exposesSlotLayoutCapability },
+    { key: 'graphView', matches: exposesNativeNodeComponent },
+  ]);
   return {
-    entry,
-    vueRuntime: new URL(vueMatch[1], entry).href,
-    hostRuntime: new URL(hostMatch[1], entry).href,
-    graphView: new URL(graphViewMatch[1], entry).href,
+    entry: discovery.entry,
+    vueRuntime: requireModule(discovery.modules, 'vue').url,
+    nodeDataRuntime: requireModule(discovery.modules, 'nodeData').url,
+    slotLayoutRuntime: discovery.modules.get('slotLayout')?.url ?? null,
+    graphView: requireModule(discovery.modules, 'graphView').url,
+  };
+}
+
+/** Discover Settings renderer assets independently of Nodes 2 internals. */
+export async function discoverComfySettingsRuntimeAssets(
+  documentRef: Document,
+  fetchText: RuntimeTextFetcher = fetchRuntimeText,
+): Promise<ComfySettingsRuntimeAssets> {
+  const discovery = await discoverModules(documentRef, fetchText, [
+    { key: 'vue', matches: (module) => VUE_RUNTIME_URL_PATTERN.test(module.url) },
+    { key: 'primeVue', matches: (module) => PRIME_VUE_RUNTIME_URL_PATTERN.test(module.url) },
+  ]);
+  return {
+    entry: discovery.entry,
+    vueRuntime: requireModule(discovery.modules, 'vue').url,
+    primeVueRuntime: requireModule(discovery.modules, 'primeVue').url,
   };
 }
 
@@ -92,9 +122,11 @@ export async function loadComfyNativeNodeComponent(
   fetchText: RuntimeTextFetcher = fetchRuntimeText,
   importModule: RuntimeModuleImporter = importRuntimeModule,
 ): Promise<UnknownRecord> {
-  const assets = await discoverComfyRuntimeAssets(documentRef, fetchText);
-  const installedSource = await fetchText(assets.graphView);
-  const moduleSource = buildNativeNodeComponentModule(installedSource, assets.graphView);
+  const discovery = await discoverModules(documentRef, fetchText, [
+    { key: 'graphView', matches: exposesNativeNodeComponent },
+  ]);
+  const graphView = requireModule(discovery.modules, 'graphView');
+  const moduleSource = buildNativeNodeComponentModule(graphView.source, graphView.url);
   const moduleUrl = URL.createObjectURL(new Blob([moduleSource], { type: 'text/javascript' }));
   try {
     const loaded = await importModule(moduleUrl);
@@ -108,6 +140,24 @@ export async function loadComfyNativeNodeComponent(
   } finally {
     URL.revokeObjectURL(moduleUrl);
   }
+}
+
+/** Load the PrimeVue Select used by Comfy's Settings panel. */
+export async function loadComfySettingsSelectComponent(
+  documentRef: Document,
+  fetchText: RuntimeTextFetcher = fetchRuntimeText,
+  importModule: RuntimeModuleImporter = importRuntimeModule,
+): Promise<UnknownRecord> {
+  return await loadComfyPrimeVueComponent(documentRef, 'Select', fetchText, importModule);
+}
+
+/** Load the PrimeVue AutoComplete used by Comfy's Settings component family. */
+export async function loadComfySettingsAutoCompleteComponent(
+  documentRef: Document,
+  fetchText: RuntimeTextFetcher = fetchRuntimeText,
+  importModule: RuntimeModuleImporter = importRuntimeModule,
+): Promise<UnknownRecord> {
+  return await loadComfyPrimeVueComponent(documentRef, 'AutoComplete', fetchText, importModule);
 }
 
 /**
@@ -125,12 +175,77 @@ export function buildNativeNodeComponentModule(source: string, graphViewUrl: str
       'Comfy GraphView no longer contains the native LGraphNode component boundary.',
     );
   }
-  const resolvedSource = source.replace(
-    RELATIVE_MODULE_SPECIFIER_PATTERN,
-    (_match, prefix: string, quote: string, relativePath: string) =>
-      `${prefix}${quote}${new URL(relativePath, graphViewUrl).href}${quote}`,
-  );
+  const resolvedSource = resolveInstalledModuleReferences(source, graphViewUrl);
   return `${resolvedSource}\nexport{${componentIdentifier} as ${NATIVE_NODE_COMPONENT_EXPORT}};\n`;
+}
+
+/** Expose Comfy's retained private node-data function from its installed chunk. */
+export function buildPrivateNodeDataModule(source: string, moduleUrl: string): string {
+  const declarationPattern = new RegExp(`function\\s+${NODE_DATA_CAPABILITY}\\s*\\(`);
+  if (!declarationPattern.test(source)) {
+    throw new NativeRendererCompatibilityError(
+      'Comfy no longer retains the native node-data function boundary.',
+    );
+  }
+  const resolvedSource = resolveInstalledModuleReferences(source, moduleUrl);
+  return `${resolvedSource}\nexport{${NODE_DATA_CAPABILITY} as ${NODE_DATA_FUNCTION_EXPORT}};\n`;
+}
+
+/** Resolve imports and module-relative assets before executing an installed chunk as a blob. */
+function resolveInstalledModuleReferences(source: string, moduleUrl: string): string {
+  return source
+    .replace(
+      RELATIVE_MODULE_SPECIFIER_PATTERN,
+      (_match, prefix: string, quote: string, relativePath: string) =>
+        `${prefix}${quote}${new URL(relativePath, moduleUrl).href}${quote}`,
+    )
+    .replace(
+      RELATIVE_ASSET_URL_PATTERN,
+      (_match, _quote: string, relativePath: string) =>
+        `new URL(${JSON.stringify(new URL(relativePath, moduleUrl).href)})`,
+    );
+}
+
+/** Resolve one named component from Comfy's installed PrimeVue bundle. */
+async function loadComfyPrimeVueComponent(
+  documentRef: Document,
+  componentName: string,
+  fetchText: RuntimeTextFetcher,
+  importModule: RuntimeModuleImporter,
+): Promise<UnknownRecord> {
+  const assets = await discoverComfySettingsRuntimeAssets(documentRef, fetchText);
+  const loaded = await importModule(assets.primeVueRuntime);
+  for (const value of Object.values(loaded)) {
+    if (isRecord(value) && (value.name === componentName || value.__name === componentName)) {
+      return value;
+    }
+  }
+  throw new NativeRendererCompatibilityError(
+    `Comfy PrimeVue runtime no longer exports the ${componentName} component.`,
+  );
+}
+
+/** Load only Vue's render primitives for non-node Comfy component mounts. */
+export async function loadComfyVueRenderRuntime(
+  documentRef: Document,
+  fetchText: RuntimeTextFetcher = fetchRuntimeText,
+  importModule: RuntimeModuleImporter = importRuntimeModule,
+): Promise<ComfyVueRenderRuntime> {
+  const assets = await discoverComfyVueRuntimeAsset(documentRef, fetchText);
+  const vueModule = await importModule(assets.vueRuntime);
+  const render = findNamedFunction(vueModule, 'render');
+  const h = findNamedFunction(vueModule, 'h');
+  if (!render || !h) {
+    throw new NativeRendererCompatibilityError(
+      'Comfy Vue render capabilities changed; refusing a non-native fallback.',
+    );
+  }
+  return {
+    render: (vnode, target) => {
+      render(vnode, target);
+    },
+    h: (component, props) => h(component, props),
+  };
 }
 
 /** Load and capability-check the actual renderer functions from installed Comfy. */
@@ -139,19 +254,27 @@ export async function loadComfyVueRuntime(
   fetchText: RuntimeTextFetcher = fetchRuntimeText,
   importModule: RuntimeModuleImporter = importRuntimeModule,
 ): Promise<ComfyVueRuntime> {
-  const assets = await discoverComfyRuntimeAssets(documentRef, fetchText);
-  const [vueModule, hostModule] = await Promise.all([
+  const assets = await discoverComfyNodes2RuntimeAssets(documentRef, fetchText);
+  const nodeDataModulePromise = importModule(assets.nodeDataRuntime);
+  const [vueModule, nodeDataModule, slotLayoutModule] = await Promise.all([
     importModule(assets.vueRuntime),
-    importModule(assets.hostRuntime),
+    nodeDataModulePromise,
+    assets.slotLayoutRuntime === null
+      ? Promise.resolve(null)
+      : assets.slotLayoutRuntime === assets.nodeDataRuntime
+        ? nodeDataModulePromise
+        : importModule(assets.slotLayoutRuntime),
   ]);
   const render = findNamedFunction(vueModule, 'render');
   const h = findNamedFunction(vueModule, 'h');
-  const extractVueNodeData = findNamedFunction(hostModule, 'extractVueNodeData');
+  const extractVueNodeData =
+    findNamedFunction(nodeDataModule, NODE_DATA_CAPABILITY) ??
+    (await loadPrivateNodeDataFunction(assets.nodeDataRuntime, fetchText, importModule));
   const requestSlotLayoutSyncForAllNodes = findNamedFunction(
-    hostModule,
-    'requestSlotLayoutSyncForAllNodes',
+    slotLayoutModule ?? {},
+    SLOT_LAYOUT_CAPABILITY,
   );
-  if (!render || !h || !extractVueNodeData || !requestSlotLayoutSyncForAllNodes) {
+  if (!render || !h || !extractVueNodeData) {
     throw new NativeRendererCompatibilityError(
       'Comfy native renderer capabilities changed; refusing a non-native fallback.',
     );
@@ -171,9 +294,102 @@ export async function loadComfyVueRuntime(
       return value;
     },
     requestSlotLayoutSync: () => {
-      requestSlotLayoutSyncForAllNodes();
+      requestSlotLayoutSyncForAllNodes?.();
     },
   };
+}
+
+/** Load a retained private node-data function when the chunk does not export it. */
+async function loadPrivateNodeDataFunction(
+  moduleUrl: string,
+  fetchText: RuntimeTextFetcher,
+  importModule: RuntimeModuleImporter,
+): Promise<((...args: unknown[]) => unknown) | null> {
+  const source = await fetchText(moduleUrl);
+  const moduleSource = buildPrivateNodeDataModule(source, moduleUrl);
+  const transformedUrl = URL.createObjectURL(new Blob([moduleSource], { type: 'text/javascript' }));
+  try {
+    const loaded = await importModule(transformedUrl);
+    const value = loaded[NODE_DATA_FUNCTION_EXPORT];
+    if (typeof value !== 'function') return null;
+    return (...args: unknown[]) => Reflect.apply(value, undefined, args) as unknown;
+  } finally {
+    URL.revokeObjectURL(transformedUrl);
+  }
+}
+
+/** Discover Vue alone so unrelated private capabilities cannot block component rendering. */
+async function discoverComfyVueRuntimeAsset(
+  documentRef: Document,
+  fetchText: RuntimeTextFetcher,
+): Promise<ComfyVueRuntimeAsset> {
+  const discovery = await discoverModules(documentRef, fetchText, [
+    { key: 'vue', matches: (module) => VUE_RUNTIME_URL_PATTERN.test(module.url) },
+  ]);
+  return {
+    entry: discovery.entry,
+    vueRuntime: requireModule(discovery.modules, 'vue').url,
+  };
+}
+
+/** Translate generic graph-discovery failures into the renderer compatibility contract. */
+async function discoverModules(
+  documentRef: Document,
+  fetchText: RuntimeTextFetcher,
+  requirements: ReadonlyArray<{
+    key: string;
+    required?: boolean;
+    matches(module: ComfyFrontendModule): boolean;
+  }>,
+): Promise<{
+  entry: string;
+  modules: ReadonlyMap<string, ComfyFrontendModule>;
+}> {
+  try {
+    const discovery = await discoverComfyFrontendModules(documentRef, requirements, fetchText);
+    const missing = requirements
+      .filter((requirement) => requirement.required !== false)
+      .map((requirement) => requirement.key)
+      .filter((key) => !discovery.modules.has(key));
+    if (missing.length > 0) {
+      throw new NativeRendererCompatibilityError(
+        `Comfy native renderer is missing capabilities: ${missing.join(', ')}.`,
+      );
+    }
+    return discovery;
+  } catch (error: unknown) {
+    if (error instanceof NativeRendererCompatibilityError) throw error;
+    throw new NativeRendererCompatibilityError(
+      error instanceof Error ? error.message : 'Comfy frontend module discovery failed.',
+    );
+  }
+}
+
+/** Require one capability match after a successful bounded discovery. */
+function requireModule(
+  modules: ReadonlyMap<string, ComfyFrontendModule>,
+  key: string,
+): ComfyFrontendModule {
+  const module = modules.get(key);
+  if (!module) {
+    throw new NativeRendererCompatibilityError(`Comfy runtime capability '${key}' was not found.`);
+  }
+  return module;
+}
+
+/** Recognize the installed owner of Comfy's native node-data conversion. */
+function exposesNodeDataCapability(module: ComfyFrontendModule): boolean {
+  return module.source.includes(NODE_DATA_CAPABILITY);
+}
+
+/** Recognize Comfy's optional global slot-layout coordinator. */
+function exposesSlotLayoutCapability(module: ComfyFrontendModule): boolean {
+  return module.source.includes(SLOT_LAYOUT_CAPABILITY);
+}
+
+/** Recognize GraphView by the native component definition SugarCubes reuses. */
+function exposesNativeNodeComponent(module: ComfyFrontendModule): boolean {
+  return NATIVE_NODE_COMPONENT_PATTERN.test(module.source);
 }
 
 /** Fetch a same-origin runtime module with an explicit timeout. */

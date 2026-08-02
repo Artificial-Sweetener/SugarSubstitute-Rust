@@ -19,6 +19,13 @@ import { isRecord } from '../types/common.js';
 
 export type ComfyRendererMode = 'litegraph' | 'vue';
 
+const VUE_NODES_SETTING_ID = 'Comfy.VueNodes.Enabled';
+const VUE_NODES_CHANGE_EVENT = `${VUE_NODES_SETTING_ID}.change`;
+
+export interface ComfyRendererModeChangeSource {
+  subscribe(listener: () => void): () => void;
+}
+
 /** Read renderer state without allowing stale LiteGraph compatibility flags to win. */
 export function resolveComfyRendererMode(
   app: unknown,
@@ -30,10 +37,31 @@ export function resolveComfyRendererMode(
   const settings = isRecord(ui.settings) ? ui.settings : {};
   const getSettingValue = settings.getSettingValue;
   if (typeof getSettingValue === 'function') {
-    const enabled: unknown = getSettingValue.call(settings, 'Comfy.VueNodes.Enabled');
+    const enabled: unknown = getSettingValue.call(settings, VUE_NODES_SETTING_ID);
     if (typeof enabled === 'boolean') return enabled ? 'vue' : 'litegraph';
   }
   if (documentRef?.querySelector('.lg-node[data-node-id]')) return 'vue';
   const liteGraphRecord = isRecord(liteGraph) ? liteGraph : {};
   return liteGraphRecord.vueNodesMode === true ? 'vue' : 'litegraph';
+}
+
+/** Publish Comfy's renderer setting transition through its host event contract. */
+export function createComfyRendererModeChangeSource(app: unknown): ComfyRendererModeChangeSource {
+  const appRecord = isRecord(app) ? app : {};
+  const ui = isRecord(appRecord.ui) ? appRecord.ui : {};
+  const settings = isRecord(ui.settings) ? ui.settings : {};
+  const addEventListener = settings.addEventListener;
+  const removeEventListener = settings.removeEventListener;
+  return {
+    subscribe(listener) {
+      if (typeof addEventListener !== 'function' || typeof removeEventListener !== 'function') {
+        return () => undefined;
+      }
+      const handleChange: EventListener = () => listener();
+      addEventListener.call(settings, VUE_NODES_CHANGE_EVENT, handleChange);
+      return () => {
+        removeEventListener.call(settings, VUE_NODES_CHANGE_EVENT, handleChange);
+      };
+    },
+  };
 }

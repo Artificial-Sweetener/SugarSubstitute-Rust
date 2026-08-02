@@ -69,7 +69,10 @@ import type {
 import { CubePortPresentationController } from './connection/CubePortPresentationController.js';
 import type { ProximityMatchSink } from '../overlays/proximity/ProximityModel.js';
 import { ComfyCanvasGraphChangeAdapter } from '../surface/ComfyCanvasGraphChangeAdapter.js';
-import { resolveComfyRendererMode } from '../core/ComfyRendererMode.js';
+import {
+  createComfyRendererModeChangeSource,
+  resolveComfyRendererMode,
+} from '../core/ComfyRendererMode.js';
 import { NativeCubeGeometryCoordinator } from './geometry/NativeCubeGeometryCoordinator.js';
 
 export interface ComfyCubeRuntimeOptions {
@@ -209,6 +212,7 @@ export function createComfyCubeRuntime(options: ComfyCubeRuntimeOptions): ComfyC
     options.logger,
   );
   const canvasGraphChanges = new ComfyCanvasGraphChangeAdapter(canvas);
+  const rendererChanges = createComfyRendererModeChangeSource(app);
   const metadataHud = options.editorMetadata
     ? new CubeEditorMetadataHud(options.document, options.editorMetadata)
     : null;
@@ -296,6 +300,7 @@ export function createComfyCubeRuntime(options: ComfyCubeRuntimeOptions): ComfyC
     chromeActions,
     portPresentation,
     graphChanges: canvasGraphChanges,
+    rendererChanges,
     ...(options.onBoundaryGeometryChange
       ? { onBoundaryGeometryChange: options.onBoundaryGeometryChange }
       : {}),

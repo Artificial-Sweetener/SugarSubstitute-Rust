@@ -18,39 +18,61 @@
 import { $el } from '/scripts/ui.js';
 import {
   DEFAULT_TARGET_MODEL,
-  TARGET_MODEL_OPTIONS,
   defaultSupportedModelsForTarget,
   normalizeSupportedModels,
   normalizeTargetModel,
 } from '../core/ModelTargets.js';
 import { normalizeDefaultAliasTitle } from '../core/CubeId.js';
+import {
+  ComfySettingsAutocompleteControl,
+  ComfySettingsSingleSelectControl,
+  InstalledComfySettingsSelectRenderer,
+  type ComfySettingsSelectRenderer,
+} from '../controls/ComfySettingsSelect.js';
+import {
+  CUSTOM_TARGET_MODEL_VALUE,
+  isCustomTargetModel,
+  supportedModelSuggestions,
+  targetModelSelectOptions,
+} from '../controls/CubeModelSelection.js';
+import { CubeDestinationControl } from '../controls/CubeDestinationControl.js';
 import type {
   CubeAuthoringDialogOptions,
   CubeAuthoringValues,
 } from '../create/CubeAuthoringDialog.js';
 import { ModalShell } from './ModalShell.js';
 import type { ModalAdapter } from './ModalShell.js';
-import type { CubeSaveDestination } from '../create/CubeAuthoringIdentity.js';
-
-const CUSTOM_TARGET_MODEL_VALUE = '__sugarcubes_custom_target_model__';
-const MODEL_SUGGESTIONS_ID = 'sugarcubes-cube-authoring-model-suggestions';
+import { CubeAuthoringPreview } from './CubeAuthoringPreview.js';
+import { CreateModalGraphNavigator } from './CreateModalGraphNavigator.js';
 
 /** Render the complete Cube-authoring form before persistence. */
 export class CubeAuthoringModal {
   private readonly shell: ModalShell;
+  private readonly navigator: CreateModalGraphNavigator;
+  private readonly settingsSelectRenderer: ComfySettingsSelectRenderer | null;
 
-  constructor({ adapter }: { adapter?: ModalAdapter | null } = {}) {
+  constructor({
+    adapter,
+    settingsSelectRenderer = null,
+  }: {
+    adapter?: ModalAdapter | null;
+    settingsSelectRenderer?: ComfySettingsSelectRenderer | null;
+  } = {}) {
     this.shell = new ModalShell({
       adapter: adapter ?? null,
       variantClassName: 'sugarcubes-create-cube-overlay',
       dialogClassName: 'sugarcubes-create-cube-dialog',
     });
+    this.navigator = new CreateModalGraphNavigator({ adapter: adapter ?? null });
+    this.settingsSelectRenderer = settingsSelectRenderer;
   }
 
   open({
     candidate,
     destinationLocked = false,
+    destinations = [],
     modelSuggestions = [],
+    onCreateDestination,
     deriveIdentity,
   }: CubeAuthoringDialogOptions = {}): Promise<CubeAuthoringValues | null> {
     const resolveIdentity = typeof deriveIdentity === 'function' ? deriveIdentity : null;
@@ -59,26 +81,51 @@ export class CubeAuthoringModal {
     const initialTargetModel = normalizeTargetModel(candidate?.targetModel) || DEFAULT_TARGET_MODEL;
     let supportedModelsTouched = false;
     const form = $el('form.sugarcubes-modal__form.sugarcubes-create-cube__form');
+    const renderer =
+      this.settingsSelectRenderer ?? new InstalledComfySettingsSelectRenderer(form.ownerDocument);
     const nameInput = this.createInput(initialName, 'Name');
-    const targetModelSelect = this.createTargetModelSelect(initialTargetModel);
+    let updateTargetModel = (): void => undefined;
+    const targetModelControl = new ComfySettingsSingleSelectControl(form.ownerDocument, renderer, {
+      ariaLabel: 'Target model',
+      options: targetModelSelectOptions(modelSuggestions),
+      value: isCustomTargetModel(initialTargetModel, modelSuggestions)
+        ? CUSTOM_TARGET_MODEL_VALUE
+        : initialTargetModel,
+      onChange: () => updateTargetModel(),
+    });
+    targetModelControl.element.classList.add('sugarcubes-create-cube__target-model-select');
     const customTargetModelInput = this.createInput('', 'Enter target model');
-    if (!TARGET_MODEL_OPTIONS.includes(initialTargetModel)) {
+    if (isCustomTargetModel(initialTargetModel, modelSuggestions)) {
       customTargetModelInput.value = initialTargetModel;
     }
-    const supportedModelsInput = this.createInput(
-      (candidate?.supportedModels?.length
-        ? candidate.supportedModels
-        : defaultSupportedModelsForTarget(initialTargetModel)
-      ).join(', '),
-      'SDXL, SD 1.5',
+    const initialSupportedModels = candidate?.supportedModels?.length
+      ? candidate.supportedModels
+      : defaultSupportedModelsForTarget(initialTargetModel);
+    const supportedModelsControl = new ComfySettingsAutocompleteControl(
+      form.ownerDocument,
+      renderer,
+      {
+        ariaLabel: 'Supported models',
+        options: supportedModelSuggestions(modelSuggestions, initialSupportedModels),
+        placeholder: 'Type a model family and press Enter',
+        values: initialSupportedModels,
+        onChange: () => {
+          supportedModelsTouched = true;
+          this.shell.setError('');
+        },
+      },
     );
-    supportedModelsInput.setAttribute('list', MODEL_SUGGESTIONS_ID);
-    const modelSuggestionList = this.createModelSuggestionList([
-      ...modelSuggestions,
-      ...(candidate?.supportedModels ?? []),
-    ]);
-    const destinationSelect = this.createDestinationSelect(candidate?.destination);
-    destinationSelect.disabled = destinationLocked;
+    supportedModelsControl.element.classList.add('sugarcubes-create-cube__model-support');
+    const destinationControl = new CubeDestinationControl({
+      destinations,
+      documentRef: form.ownerDocument,
+      locked: destinationLocked,
+      onChange: () => update(),
+      renderer,
+      ...(candidate?.destination ? { candidateDestination: candidate.destination } : {}),
+      ...(onCreateDestination ? { onCreateDestination } : {}),
+      onError: (message) => this.shell.setError(message),
+    });
     const descriptionInput = $el(
       'textarea.p-inputtextarea.p-inputtext.p-component.sugarcubes-create-cube__description',
       {
@@ -86,76 +133,60 @@ export class CubeAuthoringModal {
         placeholder: 'Describe what this cube does.',
       },
     ) as HTMLTextAreaElement;
-    const identityValue = $el('code.sugarcubes-create-cube__value');
-    const preview = $el('div.sugarcubes-create-cube__preview');
-    preview.append(this.previewRow('Cube ID', identityValue));
-    if (candidate?.nodeIds) {
-      preview.append(
-        this.previewRow(
-          'Selection',
-          $el('span.sugarcubes-create-cube__value', {
-            textContent: `${candidate.nodeIds.length} selected nodes`,
-          }),
-        ),
-      );
-    }
+    const preview = new CubeAuthoringPreview(form.ownerDocument, candidate);
     const customTargetField = this.field('Custom target model', customTargetModelInput);
+    customTargetField.classList.add('sugarcubes-create-cube__custom-target-model');
     form.append(
       this.field('Name', nameInput),
-      this.field('Target model', targetModelSelect),
+      this.field('Target model', targetModelControl.element),
       customTargetField,
       this.field(
         'Supported models',
-        $el('div.sugarcubes-create-cube__model-support', [
-          supportedModelsInput,
-          modelSuggestionList,
-        ]),
-        'Comma-separated model families this cube can run with.',
+        supportedModelsControl.element,
+        'Choose suggestions or type a custom model family and press Enter.',
       ),
       this.field(
         'Save to',
-        destinationSelect,
+        destinationControl.element,
         destinationLocked
           ? 'The existing Cube remains in its current library.'
           : 'Personal cubes stay local; packs are authored directly.',
       ),
+      preview.element,
       this.field('Description', descriptionInput, 'Leave blank to save an empty description.'),
-      preview,
       this.warnings(candidate?.warnings),
     );
 
     const readTargetModel = (): string =>
-      targetModelSelect.value === CUSTOM_TARGET_MODEL_VALUE
+      targetModelControl.value() === CUSTOM_TARGET_MODEL_VALUE
         ? customTargetModelInput.value
-        : targetModelSelect.value;
-    const destination = (): CubeSaveDestination =>
-      destinationSelect.value === 'pack'
-        ? { kind: 'pack', owner: '', repo: '', repoRef: '' }
-        : { kind: 'local' };
+        : targetModelControl.value();
     const update = (): void => {
       const name = normalizeDefaultAliasTitle(nameInput.value);
       const targetModel = this.tryNormalizeTargetModel(readTargetModel());
-      customTargetField.hidden = targetModelSelect.value !== CUSTOM_TARGET_MODEL_VALUE;
+      customTargetField.hidden = targetModelControl.value() !== CUSTOM_TARGET_MODEL_VALUE;
       customTargetModelInput.disabled = customTargetField.hidden;
-      if (!supportedModelsTouched) {
-        supportedModelsInput.value = targetModel
-          ? defaultSupportedModelsForTarget(targetModel).join(', ')
-          : '';
-      }
       try {
-        identityValue.textContent =
-          name && targetModel
-            ? candidate?.cubeId ||
-              (destination().kind === 'pack'
-                ? 'Choose an author pack after review'
-                : 'Personal Cube — saved locally')
-            : targetModel
-              ? 'Name required'
-              : 'Target model required';
-        this.shell.setConfirmEnabled(Boolean(name && targetModel && resolveIdentity));
+        const destination = destinationControl.destination();
+        const identity =
+          name && targetModel && destination && resolveIdentity
+            ? resolveIdentity(name, targetModel, destination)
+            : null;
+        preview.update({
+          destination: destinationControl.presentation(),
+          identity,
+          name,
+          targetModel,
+        });
+        this.shell.setConfirmEnabled(Boolean(identity?.cubeId));
         this.shell.setError('');
       } catch (error) {
-        identityValue.textContent = 'Invalid authoring details';
+        preview.update({
+          destination: destinationControl.presentation(),
+          identity: null,
+          name,
+          targetModel,
+        });
         this.shell.setConfirmEnabled(false);
         this.shell.setError(
           error instanceof Error ? error.message : 'Authoring details are invalid.',
@@ -163,13 +194,21 @@ export class CubeAuthoringModal {
       }
     };
     nameInput.addEventListener('input', update);
-    targetModelSelect.addEventListener('change', update);
-    destinationSelect.addEventListener('change', update);
-    customTargetModelInput.addEventListener('input', update);
-    supportedModelsInput.addEventListener('input', () => {
-      supportedModelsTouched = true;
-      this.shell.setError('');
-    });
+    updateTargetModel = (): void => {
+      const targetModel = this.tryNormalizeTargetModel(readTargetModel());
+      if (!supportedModelsTouched) {
+        const values = targetModel ? defaultSupportedModelsForTarget(targetModel) : [];
+        supportedModelsControl.update({
+          options: supportedModelSuggestions(modelSuggestions, [
+            ...(candidate?.supportedModels ?? []),
+            ...values,
+          ]),
+          values,
+        });
+      }
+      update();
+    };
+    customTargetModelInput.addEventListener('input', updateTargetModel);
     descriptionInput.addEventListener('input', () => this.shell.setError(''));
     const result = this.shell.open({
       title: 'Save SugarCube',
@@ -181,38 +220,50 @@ export class CubeAuthoringModal {
       body: form,
       confirmLabel: 'Save Cube',
       cancelLabel: 'Cancel',
+      confirmClassName: 'p-button-primary',
       cancelResult: null,
+      allowOverlayClose: false,
       onConfirm: () => {
         const name = normalizeDefaultAliasTitle(nameInput.value);
         const targetModel = this.tryNormalizeTargetModel(readTargetModel());
-        if (!name || !targetModel || !resolveIdentity) {
-          this.shell.setError(!name ? 'Name is required.' : 'Target model is required.');
+        const destination = destinationControl.destination();
+        if (!name || !targetModel || !destination || !resolveIdentity) {
+          this.shell.setError(
+            !name
+              ? 'Name is required.'
+              : !targetModel
+                ? 'Target model is required.'
+                : 'Choose a save destination.',
+          );
           return;
         }
-        this.shell.setBusy(true);
-        void resolveIdentity(name, targetModel, destination())
-          .then((identity) => {
-            this.shell.close({
-              ...identity,
+        try {
+          const identity = resolveIdentity(name, targetModel, destination);
+          this.shell.close({
+            ...identity,
+            targetModel,
+            supportedModels: normalizeSupportedModels(supportedModelsControl.values(), {
               targetModel,
-              supportedModels: normalizeSupportedModels(supportedModelsInput.value, {
-                targetModel,
-              }),
-              description: descriptionInput.value.trim(),
-              destination: destination(),
-            });
-          })
-          .catch((error: unknown) => {
-            this.shell.setBusy(false);
-            this.shell.setError(
-              error instanceof Error ? error.message : 'Authoring details are invalid.',
-            );
+            }),
+            description: descriptionInput.value.trim(),
+            destination,
           });
+        } catch (error: unknown) {
+          this.shell.setError(
+            error instanceof Error ? error.message : 'Authoring details are invalid.',
+          );
+        }
       },
       initialFocus: () => nameInput,
     });
     update();
-    return result as Promise<CubeAuthoringValues | null>;
+    this.navigator.attach(this.shell.elements.overlay, this.shell.elements.dialog);
+    return result.finally(() => {
+      this.navigator.detach();
+      supportedModelsControl.dispose();
+      targetModelControl.dispose();
+      destinationControl.dispose();
+    }) as Promise<CubeAuthoringValues | null>;
   }
 
   private createInput(value: string, placeholder: string): HTMLInputElement {
@@ -221,43 +272,6 @@ export class CubeAuthoringModal {
       value,
       placeholder,
     }) as HTMLInputElement;
-  }
-
-  private createTargetModelSelect(initialTargetModel: string): HTMLSelectElement {
-    const select = $el(
-      'select.p-inputtext.p-component.sugarcubes-modal__text-input',
-    ) as HTMLSelectElement;
-    const isCustom = !TARGET_MODEL_OPTIONS.includes(initialTargetModel);
-    select.replaceChildren(
-      ...TARGET_MODEL_OPTIONS.map((model) => $el('option', { value: model, textContent: model })),
-      $el('option', { value: CUSTOM_TARGET_MODEL_VALUE, textContent: 'A different model' }),
-    );
-    select.value = isCustom ? CUSTOM_TARGET_MODEL_VALUE : initialTargetModel;
-    return select;
-  }
-
-  /** Build native browser suggestions from Comfy's loaded Cube model catalog. */
-  private createModelSuggestionList(values: readonly string[]): HTMLDataListElement {
-    const list = $el('datalist', { id: MODEL_SUGGESTIONS_ID }) as HTMLDataListElement;
-    const unique = new Set(values.map((value) => value.trim()).filter(Boolean));
-    list.replaceChildren(
-      ...[...unique].map((value) => $el('option', { value, textContent: value })),
-    );
-    return list;
-  }
-
-  private createDestinationSelect(
-    destination: CubeSaveDestination['kind'] | undefined,
-  ): HTMLSelectElement {
-    const select = $el(
-      'select.p-inputtext.p-component.sugarcubes-modal__text-input',
-    ) as HTMLSelectElement;
-    select.replaceChildren(
-      $el('option', { value: 'local', textContent: 'Personal (local)' }),
-      $el('option', { value: 'pack', textContent: 'Author-owned Cube Pack' }),
-    );
-    select.value = destination === 'pack' ? 'pack' : 'local';
-    return select;
   }
 
   private tryNormalizeTargetModel(value: unknown): string {
@@ -276,20 +290,18 @@ export class CubeAuthoringModal {
     ]);
   }
 
-  private previewRow(label: string, value: Node): HTMLElement {
-    return $el('div.sugarcubes-create-cube__preview-row', [
-      $el('span.sugarcubes-create-cube__label', { textContent: label }),
-      value,
-    ]);
-  }
-
   private warnings(values: unknown): HTMLElement {
     const messages = (Array.isArray(values) ? values : []).filter(
       (value): value is string => typeof value === 'string' && Boolean(value.trim()),
     );
-    const list = $el('ul.sugarcubes-create-cube__warnings');
-    list.replaceChildren(...messages.map((message) => $el('li', { textContent: message })));
-    list.hidden = !messages.length;
-    return list;
+    if (!messages.length) {
+      return $el('div.sugarcubes-create-cube__warnings', {
+        textContent: 'No blocking warnings detected.',
+      });
+    }
+    return $el(
+      'ul.sugarcubes-create-cube__warnings',
+      messages.map((message) => $el('li', { textContent: message })),
+    );
   }
 }

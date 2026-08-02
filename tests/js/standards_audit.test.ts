@@ -42,4 +42,24 @@ describe('standards audit', () => {
       rmSync(fixtureRoot, { force: true, recursive: true });
     }
   });
+
+  test('rejects browser-native dropdowns in Cube authoring metadata surfaces', () => {
+    const fixtureRoot = mkdtempSync(path.join(os.tmpdir(), 'sugarcubes-settings-select-'));
+    try {
+      const ownerDirectory = path.join(fixtureRoot, 'frontend', 'comfyui', 'ui', 'dialogs');
+      mkdirSync(ownerDirectory, { recursive: true });
+      mkdirSync(path.join(fixtureRoot, 'web'), { recursive: true });
+      mkdirSync(path.join(fixtureRoot, 'scripts'), { recursive: true });
+      writeFileSync(
+        path.join(ownerDirectory, 'CubeAuthoringModal.ts'),
+        "/** Test module. */\ndocument.createElement('select');\n",
+      );
+
+      expect(auditStandards(fixtureRoot)).toEqual([
+        'frontend/comfyui/ui/dialogs/CubeAuthoringModal.ts must use the shared Comfy Settings select controls instead of browser or custom dropdowns',
+      ]);
+    } finally {
+      rmSync(fixtureRoot, { force: true, recursive: true });
+    }
+  });
 });

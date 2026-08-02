@@ -19,6 +19,7 @@ import { containsCubeCanvasPoint, } from './CubeCanvasLayout.js';
 import { computeCubeCanvasCardMenuLayout } from './CubeCanvasCardMenuLayout.js';
 import { dispatchCubeFaceTitlebarAction, resolveCubeFaceTitlebarActions, } from './CubeFaceChromeActions.js';
 import { requireCubeIdentity } from '../cube/node/ComfyCubeNodeFactory.js';
+import { buildCubeFaceChromeMetadata } from '../cube/node/CubeNodeAuthoringCandidate.js';
 const BOUNDARY_PORT_HIT_RADIUS = 12;
 /** Own custom face actions while native canvas code owns the parent node. */
 export class ComfyLiteGraphCubeNodeInteraction {
@@ -114,7 +115,7 @@ export class ComfyLiteGraphCubeNodeInteraction {
             const target = item.layout.chromeActions[action.key];
             if (target && containsCubeCanvasPoint(target, point)) {
                 this.#consume(event);
-                dispatchCubeFaceTitlebarAction(action.key, requireCubeIdentity(item.node), this.#chromeActions, event);
+                dispatchCubeFaceTitlebarAction(action.key, buildCubeFaceChromeMetadata(item.node), this.#chromeActions, event);
                 return;
             }
         }

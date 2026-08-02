@@ -9,7 +9,7 @@
 
 import { jest } from '@jest/globals';
 import type {
-  CubeAuthoringDialogOptions,
+  CubeAuthoringCandidate,
   CubeAuthoringValues,
 } from '../../frontend/comfyui/ui/create/CubeAuthoringDialog.js';
 import type { CubeNode } from '../../frontend/comfyui/ui/cube/node/ComfyCubeNodeFactory.js';
@@ -33,24 +33,22 @@ describe('CubeEditorSaveService', () => {
       status: 'saved' as const,
       savedCubeIds: ['local/personal/SDXL/Existing.cube'],
     }));
-    const openCubeAuthoring = jest.fn(
-      async (options: CubeAuthoringDialogOptions): Promise<CubeAuthoringValues> => {
-        expect(options).toEqual(
+    const openExistingSave = jest.fn(
+      async (candidate: CubeAuthoringCandidate): Promise<CubeAuthoringValues> => {
+        expect(candidate).toEqual(
           expect.objectContaining({
-            destinationLocked: true,
-            modelSuggestions: ['SDXL', 'Flux .1 D'],
-            candidate: expect.objectContaining({
-              cubeId: 'local/personal/SDXL/Existing.cube',
-              description: 'Edited from the Cube graph.',
-              supportedModels: ['SDXL', 'Flux .1 D'],
-            }),
+            cubeId: 'local/personal/SDXL/Existing.cube',
+            description: 'Edited from the Cube graph.',
+            supportedModels: ['SDXL', 'Flux .1 D'],
+            nodeIds: [],
+            inputCount: 0,
+            outputCount: 0,
           }),
         );
-        const deriveIdentity = options.deriveIdentity;
-        if (!deriveIdentity) throw new Error('Expected identity confirmation.');
-        const identity = await deriveIdentity('Edited', 'SDXL', { kind: 'local' });
         return {
-          ...identity,
+          name: 'Edited',
+          defaultAlias: 'SDXL/Edited',
+          cubeId: 'local/personal/SDXL/Existing.cube',
           targetModel: 'SDXL',
           supportedModels: ['SDXL', 'Flux .1 D'],
           description: 'Confirmed in the save modal.',
@@ -60,15 +58,14 @@ describe('CubeEditorSaveService', () => {
     );
     const service = new CubeEditorSaveService({
       getCatalog: () => catalog,
+      authoring: { openExistingSave },
       cubeCreation: { saveDraftFromEditor: jest.fn(async () => null) },
       cubeSave: { save },
-      dialogs: { openCubeAuthoring },
-      modelSuggestions: () => ['SDXL', 'Flux .1 D'],
     });
 
     await expect(service.save(node, editorValues)).resolves.toBe('saved');
 
-    expect(openCubeAuthoring).toHaveBeenCalledTimes(1);
+    expect(openExistingSave).toHaveBeenCalledTimes(1);
     expect(save).toHaveBeenCalledWith({
       cubeIds: ['local/personal/SDXL/Existing.cube'],
     });
@@ -90,9 +87,9 @@ describe('CubeEditorSaveService', () => {
     const before = JSON.parse(JSON.stringify(node.properties.sugarcubes_cube)) as unknown;
     const service = new CubeEditorSaveService({
       getCatalog: () => catalog,
+      authoring: { openExistingSave: jest.fn(async () => null) },
       cubeCreation: { saveDraftFromEditor: jest.fn(async () => null) },
       cubeSave: { save },
-      dialogs: { openCubeAuthoring: jest.fn(async () => null) },
     });
 
     await expect(service.save(node, editorValues)).resolves.toBe('cancelled');
@@ -105,15 +102,20 @@ describe('CubeEditorSaveService', () => {
     const saveDraftFromEditor = jest.fn(async () => ({ node: {} }));
     const service = new CubeEditorSaveService({
       getCatalog: () => null,
+      authoring: { openExistingSave: jest.fn(async () => null) },
       cubeCreation: { saveDraftFromEditor },
       cubeSave: {
         save: jest.fn(async () => ({ status: 'no_changes' as const, savedCubeIds: [] })),
       },
-      dialogs: { openCubeAuthoring: jest.fn(async () => null) },
     });
 
     await expect(service.save(node, editorValues)).resolves.toBe('saved');
-    expect(saveDraftFromEditor).toHaveBeenCalledWith('cube-instance', editorValues);
+    expect(saveDraftFromEditor).toHaveBeenCalledWith('cube-instance', editorValues, {
+      nodeIds: [],
+      markerIds: [],
+      inputCount: 0,
+      outputCount: 0,
+    });
   });
 });
 

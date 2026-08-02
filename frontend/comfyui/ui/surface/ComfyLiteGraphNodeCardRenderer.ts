@@ -33,6 +33,7 @@ interface LiteGraphNodeRenderer {
 }
 
 interface LegacyPresentationNode extends ComfyNode {
+  _concreteInputs?: unknown[];
   arrange?(): void;
   drawSlots: ((...args: unknown[]) => void) | undefined;
   drawCollapsedSlots: ((...args: unknown[]) => void) | undefined;
@@ -186,7 +187,7 @@ export function drawNativeLiteGraphCubeCard(
     presentationNode.title_buttons = [];
     withCubeFaceNodePresentation(presentationNode, () => {
       context.textBaseline = 'alphabetic';
-      presentationNode.arrange?.();
+      arrangePresentationNode(presentationNode);
       presentationNode.updateArea?.(context);
       canvasRenderer.drawNode(node, context);
     });
@@ -382,8 +383,21 @@ function restorePresentationSize(
     node.size[0] = originalSize[0];
     node.size[1] = originalSize[1];
   }
-  node.arrange?.();
+  arrangePresentationNode(node);
   node.updateArea?.(context);
+}
+
+/** Arrange only when Comfy's private concrete-slot mirror is internally complete. */
+function arrangePresentationNode(node: LegacyPresentationNode): void {
+  const concreteInputs = node._concreteInputs;
+  if (
+    Array.isArray(concreteInputs) &&
+    Array.isArray(node.inputs) &&
+    concreteInputs.length < node.inputs.length
+  ) {
+    return;
+  }
+  node.arrange?.();
 }
 
 /** Suppress only Comfy's standard local preview state during a Cube-face draw. */

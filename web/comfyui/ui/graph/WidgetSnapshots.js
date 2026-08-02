@@ -17,6 +17,7 @@
  * Capture request-only, name-addressed Comfy widget values.
  */
 import { getGraphNodes } from './GraphQuery.js';
+import { isRecord } from '../types/common.js';
 /** Request-only workflow field carrying widget values keyed by stable name. */
 export const WORKFLOW_WIDGET_VALUES_KEY = 'sugarcubes_widget_values';
 function isSerializedWidget(widget) {
@@ -43,6 +44,9 @@ function cloneJsonValue(value) {
 function serializedWidgetNames(node) {
     const names = [];
     for (const input of Array.isArray(node?.inputs) ? node.inputs : []) {
+        if (input?.link != null) {
+            continue;
+        }
         const name = typeof input?.widget?.name === 'string' && input.widget.name.trim()
             ? input.widget.name.trim()
             : '';
@@ -59,6 +63,9 @@ function serializedWidgetNames(node) {
 function decodeSerializedWidgetValues(node, liveWidgets) {
     const names = serializedWidgetNames(node);
     const persisted = Array.isArray(node?.widgets_values) ? node.widgets_values : [];
+    if (!names.length && persisted.length && linkedWidgetNames(node).size) {
+        return new Map();
+    }
     const values = new Map();
     let valueIndex = 0;
     let companionValuesRemaining = Math.max(0, persisted.length - names.length);
@@ -107,8 +114,29 @@ export function captureNodeWidgetValues(node) {
  * Attach request-only widget snapshots to matching workflow nodes.
  */
 export function attachWorkflowWidgetSnapshots(workflow, graph) {
-    if (!Array.isArray(workflow.nodes)) {
+    attachNodeWidgetSnapshots(workflow, graph);
+    const definitions = isRecord(workflow.definitions) ? workflow.definitions : {};
+    const subgraphs = Array.isArray(definitions.subgraphs) ? definitions.subgraphs : [];
+    const liveSubgraphs = graph?._subgraphs instanceof Map ? graph._subgraphs : null;
+    if (!liveSubgraphs) {
         return workflow;
+    }
+    for (const subgraph of subgraphs) {
+        if (!isRecord(subgraph) ||
+            (typeof subgraph.id !== 'string' && typeof subgraph.id !== 'number')) {
+            continue;
+        }
+        const liveSubgraph = findLiveSubgraph(liveSubgraphs, subgraph.id);
+        if (liveSubgraph) {
+            attachNodeWidgetSnapshots(subgraph, liveSubgraph);
+        }
+    }
+    return workflow;
+}
+/** Attach live widget values to one serialized graph's matching nodes. */
+function attachNodeWidgetSnapshots(workflow, graph) {
+    if (!Array.isArray(workflow.nodes)) {
+        return;
     }
     const nodesById = new Map(getGraphNodes(graph)
         .filter((node) => node?.id != null)
@@ -126,7 +154,20 @@ export function attachWorkflowWidgetSnapshots(workflow, graph) {
             workflowNode[WORKFLOW_WIDGET_VALUES_KEY] = values;
         }
     }
-    return workflow;
+}
+/** Resolve a live subgraph without assuming the host map's key representation. */
+function findLiveSubgraph(subgraphs, id) {
+    const direct = subgraphs.get(id);
+    if (isRecord(direct)) {
+        return direct;
+    }
+    const expected = String(id);
+    for (const [candidateId, candidate] of subgraphs) {
+        if (String(candidateId) === expected && isRecord(candidate)) {
+            return candidate;
+        }
+    }
+    return null;
 }
 /**
  * Rebuild subgraph widget arrays from persisted names and current host defaults.
@@ -148,13 +189,38 @@ export function rebindSubgraphWidgetValues(subgraph, createNode) {
         }
         const liveWidgets = Array.isArray(liveNode.widgets) ? liveNode.widgets : [];
         const persistedByName = decodeSerializedWidgetValues(node, liveWidgets);
-        node.widgets_values = liveWidgets.map((widget) => {
-            const persisted = persistedByName.get(widget?.name);
-            if (isSerializedWidget(widget) && persisted !== undefined && persisted !== null) {
-                return cloneJsonValue(persisted);
-            }
-            return cloneJsonValue(widget?.value ?? widget?.last_value ?? widget?.options?.value) ?? null;
-        });
+        node.widgets_values = rebuildWidgetValues(node, liveWidgets, persistedByName);
     }
     return subgraph;
+}
+/** Rebuild only widget positions that are not supplied by graph links. */
+function rebuildWidgetValues(node, liveWidgets, persistedByName) {
+    const linkedNames = linkedWidgetNames(node);
+    const values = [];
+    for (let index = 0; index < liveWidgets.length; index += 1) {
+        const widget = liveWidgets[index];
+        if (!widget) {
+            values.push(null);
+            continue;
+        }
+        if (isSerializedWidget(widget) && linkedNames.has(widget.name.trim())) {
+            const companion = liveWidgets[index + 1];
+            if (companion && !isSerializedWidget(companion)) {
+                index += 1;
+            }
+            continue;
+        }
+        const persisted = persistedByName.get(widget.name);
+        values.push(isSerializedWidget(widget) && persisted !== undefined && persisted !== null
+            ? cloneJsonValue(persisted)
+            : (cloneJsonValue(widget?.value ?? widget?.last_value ?? widget?.options?.value) ?? null));
+    }
+    return values;
+}
+/** Return widget identities whose values are supplied by graph links. */
+function linkedWidgetNames(node) {
+    return new Set((Array.isArray(node.inputs) ? node.inputs : [])
+        .filter((input) => input?.link != null)
+        .map((input) => input.widget?.name?.trim() ?? '')
+        .filter(Boolean));
 }

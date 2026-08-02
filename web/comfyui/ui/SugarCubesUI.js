@@ -39,6 +39,7 @@ import { FlavorService } from './flavors/FlavorService.js';
 import { CubeDefinitionStore } from './graph/CubeDefinitionStore.js';
 import { CubeSaveReconciler } from './save/CubeSaveReconciler.js';
 import { CubeCreationService } from './create/CubeCreationService.js';
+import { CubeAuthoringService } from './create/CubeAuthoringService.js';
 import { ComfyCubeSaveAdapter } from './cube/node/ComfyCubeSaveAdapter.js';
 import { CubePackService } from './packs/CubePackService.js';
 import { CubeIdentityReconciler } from './graph/CubeIdentityReconciler.js';
@@ -67,6 +68,7 @@ export class SugarCubesUI {
     identityReconciler;
     promotionService;
     cubeSave;
+    cubeAuthoring;
     cubeCreation;
     cubeEditorSave;
     layoutService;
@@ -123,9 +125,8 @@ export class SugarCubesUI {
             dirtyManager: this.dirtyManager,
             cubeBrowser: this.cubeBrowser,
         });
-        const cubeNodeSave = new ComfyCubeSaveAdapter({
-            getCatalog: options.getCubeNodeCatalog ?? (() => null),
-        });
+        const getCubeNodeCatalog = options.getCubeNodeCatalog ?? (() => null);
+        const cubeNodeSave = new ComfyCubeSaveAdapter({ getCatalog: getCubeNodeCatalog });
         this.saveReconciler = new CubeSaveReconciler({
             definitionStore: this.definitionStore,
             instanceManager: this.instanceManager,
@@ -164,24 +165,27 @@ export class SugarCubesUI {
             saveReconciler: this.saveReconciler,
             cubeNodeSave,
         });
+        this.cubeAuthoring = new CubeAuthoringService({
+            browser: this.cubeBrowser,
+            dialogs: this.dialogs,
+            packService: this.packService,
+            toast: this.toast,
+        });
         this.cubeCreation = new CubeCreationService({
+            authoring: this.cubeAuthoring,
             getAuthoring: options.getCubeAuthoring ??
                 (() => {
                     throw new Error('SugarCubes native authoring is unavailable.');
                 }),
             cubeSave: this.cubeSave,
             toast: this.toast,
-            cubeBrowser: this.cubeBrowser,
-            dialogs: this.dialogs,
             logger: this.adapter.getConsole?.(),
-            packService: this.packService,
         });
         this.cubeEditorSave = new CubeEditorSaveService({
-            getCatalog: options.getCubeNodeCatalog ?? (() => null),
+            getCatalog: getCubeNodeCatalog,
+            authoring: this.cubeAuthoring,
             cubeCreation: this.cubeCreation,
             cubeSave: this.cubeSave,
-            dialogs: this.dialogs,
-            modelSuggestions: () => this.cubeBrowser.getModelSuggestions(),
         });
         this.layoutService = new CubeLayoutService({
             adapter: this.adapter,
@@ -207,7 +211,7 @@ export class SugarCubesUI {
             cubeApi: this.api,
             cubeBrowser: this.cubeBrowser,
             saveService: this.cubeSave,
-            saveDraft: (instanceId) => this.cubeCreation.saveDraft(instanceId),
+            saveDraft: (instanceId, graphSummary) => this.cubeCreation.saveDraft(instanceId, graphSummary ?? {}),
             flavorService: this.flavorService,
             toast: this.toast,
             ...(options.applyPreparedImport ? { applyPreparedImport: options.applyPreparedImport } : {}),

@@ -21,6 +21,7 @@ import { CubeLibraryApi } from '../../frontend/comfyui/ui/core/CubeLibraryApi.js
 import { EventBus } from '../../frontend/comfyui/ui/core/EventBus.js';
 import { StorageService } from '../../frontend/comfyui/ui/core/StorageService.js';
 import { ToastService } from '../../frontend/comfyui/ui/core/ToastService.js';
+import { createComfyRendererModeChangeSource } from '../../frontend/comfyui/ui/core/ComfyRendererMode.js';
 
 describe('core services', () => {
   beforeEach(() => {
@@ -123,6 +124,20 @@ describe('core services', () => {
 
     expect(adapter.getNodeRenderer()).toBe('vue');
     element.remove();
+  });
+
+  test('renderer mode changes follow Comfy settings events and unsubscribe cleanly', () => {
+    const settings = new EventTarget();
+    const source = createComfyRendererModeChangeSource({ ui: { settings } });
+    const listener = jest.fn();
+    const unsubscribe = source.subscribe(listener);
+
+    settings.dispatchEvent(new CustomEvent('Comfy.VueNodes.Enabled.change'));
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    unsubscribe();
+    settings.dispatchEvent(new CustomEvent('Comfy.VueNodes.Enabled.change'));
+    expect(listener).toHaveBeenCalledTimes(1);
   });
 
   test('CubeLibraryApi wraps fetch responses', async () => {

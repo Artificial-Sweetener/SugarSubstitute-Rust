@@ -41,3 +41,27 @@ test('allows local Cubes and only Cube Packs reported writable by the backend', 
   await expect(service.canWriteCube('me/authoring/SDXL/mine.cube')).resolves.toBe(true);
   await expect(service.canWriteCube('else/readonly/SDXL/theirs.cube')).resolves.toBe(false);
 });
+
+test('lists only writable packs owned by the claimed author for the save modal', async () => {
+  const service = new CubePackService({
+    api: {
+      listCubePacks: async () => ({
+        response: { ok: true, statusText: '' },
+        data: {
+          repos: [
+            { owner: 'Me', repo: 'Authoring', enabled: true, is_writable: true },
+            { owner: 'Else', repo: 'AlsoWritable', enabled: true, is_writable: true },
+            { owner: 'Me', repo: 'Disabled', enabled: false, is_writable: true },
+          ],
+          identity_policy: { claimed_github_owner: 'me' },
+        },
+      }),
+      updateIdentityPolicy: async () => ({ response: { ok: true }, data: {} }),
+      createAuthoringCubePack: async () => ({ response: { ok: true }, data: {} }),
+    } as never,
+  });
+
+  await expect(service.listAuthoringPacks()).resolves.toEqual([
+    { owner: 'Me', repo: 'Authoring', repoRef: 'Me/Authoring' },
+  ]);
+});

@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from typing import Any, TypeGuard
 
 from .input_persistence import should_store_authored_value
-from .picker_fields import find_input_field_spec
+from .picker_fields import find_input_field_spec, widget_input_names
 
 WORKFLOW_WIDGET_VALUES_KEY = "sugarcubes_widget_values"
 _CONTROL_AFTER_GENERATE_VALUES = frozenset(
@@ -60,6 +60,28 @@ def decode_workflow_widget_snapshot(
     if not _is_sequence(widget_values):
         return None
     names = serialized_widget_names(node)
+    linked_names = _linked_widget_names(node)
+    if widget_values and linked_names:
+        try:
+            named_values = _decode_positional_values(names, widget_values, definition)
+        except WidgetSnapshotError:
+            definition_names = widget_input_names(definition)
+            if definition_names:
+                values = _decode_positional_values(
+                    definition_names,
+                    widget_values,
+                    definition,
+                )
+                return WidgetSnapshot(
+                    values={
+                        name: value
+                        for name, value in values.items()
+                        if name not in linked_names
+                    },
+                    source="definition_order_with_link_anchors",
+                )
+        else:
+            return WidgetSnapshot(values=named_values, source="serialized_inputs")
     if not names and not widget_values:
         return WidgetSnapshot(values={}, source="serialized_inputs")
     return WidgetSnapshot(
@@ -77,6 +99,8 @@ def serialized_widget_names(node: Mapping[str, Any]) -> list[str]:
     names: list[str] = []
     for entry in inputs:
         if not isinstance(entry, Mapping):
+            continue
+        if entry.get("link") is not None:
             continue
         widget = entry.get("widget")
         if not isinstance(widget, Mapping):
@@ -113,9 +137,23 @@ def canonicalize_subgraph_widget_values(
                 continue
             definition = definitions.get(class_type)
             live_definition = definition if isinstance(definition, Mapping) else {}
-            snapshot = decode_workflow_widget_snapshot(node, live_definition)
+            try:
+                snapshot = decode_workflow_widget_snapshot(node, live_definition)
+            except WidgetSnapshotError as exc:
+                raise WidgetSnapshotError(
+                    f"node_id={node.get('id')!r}; class_type={class_type}; {exc}"
+                ) from exc
             if snapshot is None:
                 continue
+            if snapshot.source in {
+                "live_name_map",
+                "definition_order_with_link_anchors",
+            }:
+                _attach_explicit_widget_identities(
+                    node,
+                    snapshot.values,
+                    live_definition,
+                )
             names = serialized_widget_names(node)
             node["widgets_values"] = [
                 (
@@ -127,6 +165,68 @@ def canonicalize_subgraph_widget_values(
             ]
             node.pop(WORKFLOW_WIDGET_VALUES_KEY, None)
     return canonical
+
+
+def _attach_explicit_widget_identities(
+    node: dict[str, Any],
+    values: Mapping[str, Any],
+    definition: Mapping[str, Any],
+) -> None:
+    """Persist live widget names beside values missing Comfy input identities."""
+
+    raw_inputs = node.get("inputs")
+    inputs = list(raw_inputs) if _is_sequence(raw_inputs) else []
+    identified: set[str] = set()
+    linked = _linked_widget_names(node)
+    for entry in inputs:
+        if not isinstance(entry, Mapping):
+            continue
+        name = _widget_input_name(entry)
+        if name is not None:
+            identified.add(name)
+    for name in values:
+        if name in identified or name in linked:
+            continue
+        inputs.append(
+            {
+                "name": name,
+                "type": _field_type(find_input_field_spec(definition, name)),
+                "widget": {"name": name},
+            }
+        )
+    node["inputs"] = inputs
+
+
+def _linked_widget_names(node: Mapping[str, Any]) -> set[str]:
+    """Return widget identities whose runtime values arrive through links."""
+
+    inputs = node.get("inputs")
+    if not _is_sequence(inputs):
+        return set()
+    return {
+        name
+        for entry in inputs
+        if isinstance(entry, Mapping) and entry.get("link") is not None
+        if (name := _widget_input_name(entry)) is not None
+    }
+
+
+def _widget_input_name(entry: Mapping[str, Any]) -> str | None:
+    """Return one serialized widget identity from an input entry."""
+
+    widget = entry.get("widget")
+    if not isinstance(widget, Mapping):
+        return None
+    widget_name = widget.get("name")
+    input_name = entry.get("name")
+    name = widget_name if isinstance(widget_name, str) else input_name
+    return name.strip() if isinstance(name, str) and name.strip() else None
+
+
+def _field_type(field_spec: Any) -> Any:
+    """Return the Comfy input type paired with a synthesized widget identity."""
+
+    return deepcopy(field_spec[0]) if _is_sequence(field_spec) and field_spec else "*"
 
 
 def _normalize_explicit_values(values: Mapping[Any, Any]) -> dict[str, Any]:

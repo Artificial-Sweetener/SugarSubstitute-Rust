@@ -27,6 +27,7 @@ import {
   deriveTargetModelFromCubeId,
   normalizeTargetModel,
 } from '../core/ModelTargets.js';
+import { ModelAutocompleteControl } from '../controls/ModelAutocompleteControl.js';
 import type {
   CubeBrowserState,
   CubeEditDraft,
@@ -37,11 +38,6 @@ import type {
 interface VersionEntry {
   option: CubeVersionOption;
   index: number;
-}
-interface ModelTokenBounds {
-  tokenStart: number;
-  tokenEnd: number;
-  token: string;
 }
 interface DerivedCubeId {
   value: string;
@@ -104,7 +100,7 @@ export interface BrowserEditInputs {
     | HTMLInputElement
     | HTMLTextAreaElement
     | HTMLSelectElement
-    | ModelAutocomplete
+    | ModelAutocompleteControl
     | undefined;
   name?: HTMLInputElement;
   current_cube_id?: HTMLInputElement;
@@ -114,18 +110,12 @@ export interface BrowserEditInputs {
   author_url?: HTMLInputElement;
   tags?: HTMLInputElement;
   target_model?: HTMLSelectElement;
-  supported_models?: ModelAutocomplete;
+  supported_models?: ModelAutocompleteControl;
 }
 
-interface ModelAutocomplete {
+interface SupportedModelsEditor {
   container: HTMLElement;
-  input: HTMLInputElement;
-  listbox: HTMLElement;
-  options: string[];
-  suggestions: string[];
-  highlightedIndex: number;
-  tokenStart: number;
-  tokenEnd: number;
+  control: ModelAutocompleteControl;
 }
 
 interface TargetModelEditor {
@@ -670,7 +660,7 @@ export class CubeBrowserView {
       }
       detailMeta.replaceChildren();
       detailDescription.textContent = '';
-      this.editInputs = null;
+      this.disposeEditControls();
       if (favoriteButton) {
         favoriteButton.classList.add('is-empty');
         favoriteButton.textContent = '\u2606';
@@ -1201,7 +1191,7 @@ export class CubeBrowserView {
     }
     detailMeta.replaceChildren(...rows.map((row) => $el('div', row)));
     detailDescription.textContent = selected.description || '';
-    this.editInputs = null;
+    this.disposeEditControls();
   }
 
   renderCubeMetadataEditor(selected: CubeLibraryEntry, state: CubeBrowserState): void {
@@ -1211,6 +1201,7 @@ export class CubeBrowserView {
     if (!detailMeta || !detailDescription) {
       return;
     }
+    this.disposeEditControls();
     if (detailTitle) {
       const nameInput = $el('input', {
         type: 'text',
@@ -1301,7 +1292,7 @@ export class CubeBrowserView {
 
     const modelsRow = this.renderSupportedModelsEditor(draft.supported_models || [], state);
     detailMeta.appendChild(modelsRow.container);
-    inputs.supported_models = modelsRow;
+    inputs.supported_models = modelsRow.control;
 
     for (const field of trailingFields) {
       const draftValue = draft[field.key as keyof CubeEditDraft];
@@ -1363,243 +1354,35 @@ export class CubeBrowserView {
     };
   }
 
-  renderSupportedModelsEditor(models: unknown, state: CubeBrowserState): ModelAutocomplete {
+  /** Render the shared repeated-entry model autocomplete inside the library editor. */
+  renderSupportedModelsEditor(models: unknown, state: CubeBrowserState): SupportedModelsEditor {
     const label = $el('label', 'Model(s)');
-    const field = $el('div', { className: 'sugarcubes-browser__model-autocomplete' });
-    const input = $el('input', {
-      className: 'sugarcubes-browser__model-text-input',
-      type: 'text',
+    const control = new ModelAutocompleteControl({
+      documentRef: this.documentRef ?? document,
+      options: Array.isArray(state.modelOptions) ? state.modelOptions : [],
       placeholder: 'SDXL, Flux .1 D',
-      autocomplete: 'off',
       value: Array.isArray(models) ? models.filter(Boolean).join(', ') : '',
+      legacyClassNames: {
+        container: 'sugarcubes-browser__model-autocomplete',
+        input: 'sugarcubes-browser__model-text-input',
+        listbox: 'sugarcubes-browser__model-suggestions',
+        suggestion: 'sugarcubes-browser__model-suggestion',
+      },
     });
-    const listbox = $el('div', {
-      className: 'sugarcubes-browser__model-suggestions',
-      id: 'sugarcubes-browser-model-suggestions',
-      role: 'listbox',
-      hidden: true,
-    });
-    field.append(input, listbox);
-    const container = $el('div.sugarcubes-browser__edit-field', [label, field]);
-
-    const autocomplete: ModelAutocomplete = {
-      container,
-      input,
-      listbox,
-      options: Array.isArray(state.modelOptions) ? state.modelOptions.slice() : [],
-      suggestions: [],
-      highlightedIndex: -1,
-      tokenStart: 0,
-      tokenEnd: 0,
-    };
-
-    const closeSuggestions = () => {
-      autocomplete.suggestions = [];
-      autocomplete.highlightedIndex = -1;
-      autocomplete.listbox.hidden = true;
-      autocomplete.listbox.replaceChildren();
-      autocomplete.input.removeAttribute('aria-activedescendant');
-      autocomplete.input.setAttribute('aria-expanded', 'false');
-    };
-
-    const commitSuggestion = (value: string | undefined): void => {
-      if (!value) {
-        return;
-      }
-      const { tokenStart, tokenEnd } = this.resolveModelTokenBounds(
-        autocomplete.input.value,
-        autocomplete.input.selectionStart ?? autocomplete.input.value.length,
-        autocomplete.input.selectionEnd ?? autocomplete.input.value.length,
-      );
-      const before = autocomplete.input.value.slice(0, tokenStart);
-      const after = autocomplete.input.value.slice(tokenEnd);
-      const normalizedBefore = before.endsWith(',') ? `${before} ` : before;
-      const normalizedAfter = after.replace(/^\s*/, '');
-      autocomplete.input.value = `${normalizedBefore}${value}${normalizedAfter}`;
-      const caretPosition = (normalizedBefore + value).length;
-      autocomplete.input.setSelectionRange(caretPosition, caretPosition);
-      closeSuggestions();
-      autocomplete.input.dispatchEvent(new Event('input', { bubbles: true }));
-      autocomplete.input.focus();
-    };
-
-    const renderSuggestions = ({
-      preserveHighlight = false,
-    }: { preserveHighlight?: boolean } = {}): void => {
-      const { input: editorInput } = autocomplete;
-      const { tokenStart, tokenEnd, token } = this.resolveModelTokenBounds(
-        editorInput.value,
-        editorInput.selectionStart ?? editorInput.value.length,
-        editorInput.selectionEnd ?? editorInput.value.length,
-      );
-      autocomplete.tokenStart = tokenStart;
-      autocomplete.tokenEnd = tokenEnd;
-      const matches = this.buildModelSuggestions(token, autocomplete.options, editorInput.value);
-      const previousValue =
-        preserveHighlight && autocomplete.highlightedIndex >= 0
-          ? autocomplete.suggestions[autocomplete.highlightedIndex]
-          : '';
-      autocomplete.suggestions = matches;
-      if (!matches.length) {
-        autocomplete.highlightedIndex = -1;
-      } else if (previousValue) {
-        const preservedIndex = matches.indexOf(previousValue);
-        autocomplete.highlightedIndex = preservedIndex >= 0 ? preservedIndex : 0;
-      } else if (autocomplete.highlightedIndex >= 0) {
-        autocomplete.highlightedIndex = Math.min(autocomplete.highlightedIndex, matches.length - 1);
-      } else {
-        autocomplete.highlightedIndex = 0;
-      }
-
-      if (!matches.length) {
-        closeSuggestions();
-        return;
-      }
-
-      const children = matches.map((option, index) => {
-        const suggestionId = `sugarcubes-browser-model-suggestion-${index}`;
-        const button = $el('button', {
-          id: suggestionId,
-          className: 'sugarcubes-browser__model-suggestion',
-          type: 'button',
-          role: 'option',
-          'aria-selected': index === autocomplete.highlightedIndex ? 'true' : 'false',
-          textContent: option,
-        });
-        if (index === autocomplete.highlightedIndex) {
-          button.classList.add('is-highlighted');
-          editorInput.setAttribute('aria-activedescendant', suggestionId);
-        }
-        button.addEventListener('mousedown', (event) => {
-          event.preventDefault();
-          commitSuggestion(option);
-        });
-        return button;
-      });
-      autocomplete.listbox.replaceChildren(...children);
-      autocomplete.listbox.hidden = false;
-      editorInput.setAttribute('aria-expanded', 'true');
-    };
-
-    input.addEventListener('input', () => {
-      renderSuggestions();
-    });
-    input.addEventListener('focus', () => {
-      renderSuggestions();
-    });
-    input.addEventListener('blur', () => {
-      this.windowRef?.setTimeout?.(() => {
-        if (
-          this.documentRef?.activeElement &&
-          autocomplete.listbox.contains(this.documentRef.activeElement)
-        ) {
-          return;
-        }
-        closeSuggestions();
-      }, 0);
-    });
-    input.addEventListener('keydown', (event) => {
-      if (!autocomplete.suggestions.length) {
-        return;
-      }
-      if (event.key === 'ArrowDown') {
-        event.preventDefault();
-        autocomplete.highlightedIndex =
-          (autocomplete.highlightedIndex + 1) % autocomplete.suggestions.length;
-        renderSuggestions({ preserveHighlight: true });
-        return;
-      }
-      if (event.key === 'ArrowUp') {
-        event.preventDefault();
-        autocomplete.highlightedIndex =
-          (autocomplete.highlightedIndex - 1 + autocomplete.suggestions.length) %
-          autocomplete.suggestions.length;
-        renderSuggestions({ preserveHighlight: true });
-        return;
-      }
-      if (event.key === 'Enter' || event.key === 'Tab') {
-        if (autocomplete.highlightedIndex < 0) {
-          return;
-        }
-        event.preventDefault();
-        commitSuggestion(autocomplete.suggestions[autocomplete.highlightedIndex]);
-        return;
-      }
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        closeSuggestions();
-      }
-    });
-
-    input.setAttribute('aria-autocomplete', 'list');
-    input.setAttribute('aria-controls', listbox.id);
-    input.setAttribute('role', 'combobox');
-    input.setAttribute('aria-expanded', 'false');
-
-    return autocomplete;
-  }
-
-  buildModelSuggestions(token: unknown, options: readonly string[], fullValue: string): string[] {
-    const normalizedToken = typeof token === 'string' ? token.trim().toLowerCase() : '';
-    if (!normalizedToken) {
-      return [];
-    }
-    const existingValues = new Set(
-      this.parseModelInputValue(fullValue)
-        .map((entry) => entry.toLowerCase())
-        .filter((entry) => entry !== normalizedToken),
-    );
-    return options.filter((option) => {
-      const normalizedOption = String(option).toLowerCase();
-      if (!normalizedOption.includes(normalizedToken)) {
-        return false;
-      }
-      if (existingValues.has(normalizedOption)) {
-        return false;
-      }
-      return true;
-    });
-  }
-
-  parseModelInputValue(value: unknown): string[] {
-    if (typeof value !== 'string') {
-      return [];
-    }
-    return value
-      .split(',')
-      .map((entry) => entry.trim())
-      .filter(Boolean);
-  }
-
-  resolveModelTokenBounds(
-    value: unknown,
-    selectionStart: number | null,
-    selectionEnd: number | null,
-  ): ModelTokenBounds {
-    const safeValue = typeof value === 'string' ? value : '';
-    const start =
-      typeof selectionStart === 'number' && Number.isInteger(selectionStart)
-        ? selectionStart
-        : safeValue.length;
-    const end =
-      typeof selectionEnd === 'number' && Number.isInteger(selectionEnd) ? selectionEnd : start;
-    const tokenStart = safeValue.lastIndexOf(',', Math.max(0, start - 1)) + 1;
-    let tokenEnd = safeValue.indexOf(',', end);
-    if (tokenEnd < 0) {
-      tokenEnd = safeValue.length;
-    }
-    const rawToken = safeValue.slice(tokenStart, tokenEnd);
-    const leadingWhitespace = rawToken.match(/^\s*/)?.[0].length || 0;
-    const trailingWhitespace = rawToken.match(/\s*$/)?.[0].length || 0;
     return {
-      tokenStart: tokenStart + leadingWhitespace,
-      tokenEnd: Math.max(tokenStart + leadingWhitespace, tokenEnd - trailingWhitespace),
-      token: rawToken.trim(),
+      container: $el('div.sugarcubes-browser__edit-field', [label, control.element]),
+      control,
     };
   }
 
   getEditInputs(): BrowserEditInputs | null {
     return this.editInputs || null;
+  }
+
+  /** Dispose stateful editor controls before their browser detail DOM is replaced. */
+  private disposeEditControls(): void {
+    this.editInputs?.supported_models?.dispose();
+    this.editInputs = null;
   }
 
   getPreviewElements(): {

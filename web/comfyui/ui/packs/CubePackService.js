@@ -36,6 +36,20 @@ export class CubePackService {
         this.dialogs = dialogs ?? null;
         this.toast = toast ?? null;
     }
+    /** List writable packs owned by the installation's claimed author identity. */
+    async listAuthoringPacks() {
+        const catalog = await this.loadCatalog();
+        const owner = String(catalog.identityPolicy.claimed_github_owner || '').trim();
+        if (!owner)
+            return [];
+        return catalog.packs.filter((pack) => pack.owner.localeCompare(owner, undefined, { sensitivity: 'accent' }) === 0);
+    }
+    /** Create one writable pack under the claimed author identity. */
+    async createAuthoringPackForClaimedOwner() {
+        const catalog = await this.loadCatalog();
+        const owner = await this.ensureClaimedOwner(catalog.identityPolicy);
+        return owner ? this.createAuthoringPack(owner) : null;
+    }
     /** Return a selected writable pack, creating or claiming prerequisites when requested. */
     async chooseWritablePack() {
         let catalog = await this.loadCatalog();

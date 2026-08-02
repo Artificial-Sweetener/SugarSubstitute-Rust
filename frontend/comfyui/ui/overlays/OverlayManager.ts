@@ -32,7 +32,10 @@ import type { CubeContainmentService } from '../layout/CubeContainmentService.js
 import type { CubeCollisionService } from '../layout/CubeCollisionService.js';
 import type { CubeBoundsReconciler } from '../layout/CubeBoundsReconciler.js';
 import type { ChromeMetadata } from './CubeChromeOverlay.js';
-import type { CubeFaceChromeMetadata } from '../surface/CubeFaceChromeActions.js';
+import type {
+  CubeFaceChromeMetadata,
+  CubeFaceGraphSummary,
+} from '../surface/CubeFaceChromeActions.js';
 import { createCubeSourceResolver } from './CubeSourceResolver.js';
 import { ProximityPointerMoveTracker } from './proximity/ProximityPointerMoveTracker.js';
 import { ProximityGraphMutationTracker } from './proximity/ProximityGraphMutationTracker.js';
@@ -60,7 +63,7 @@ interface SaveService {
 }
 
 interface DraftSaveService {
-  saveDraft?(instanceId: string): unknown;
+  saveDraft?(instanceId: string, graphSummary?: CubeFaceGraphSummary): unknown;
 }
 
 interface FlavorService {
@@ -308,7 +311,9 @@ export class OverlayManager {
             onSaveDraft: (metadata: ChromeMetadata) => {
               const instanceId =
                 typeof metadata.instance_id === 'string' ? metadata.instance_id : '';
-              if (metadata.kind === 'draft' && instanceId) void saveDraft(instanceId);
+              if (metadata.kind === 'draft' && instanceId) {
+                void saveDraft(instanceId, metadata.graphSummary);
+              }
             },
           }
         : {}),

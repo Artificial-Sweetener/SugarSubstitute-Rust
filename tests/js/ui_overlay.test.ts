@@ -1166,6 +1166,27 @@ describe('ui overlay rendering', () => {
     expect(saveService.savedCubeIds).toEqual(['local/personal/Saveable.cube']);
   });
 
+  test('overlay manager forwards the live graph summary for draft Cube saves', async () => {
+    await loadUi();
+    const { OverlayManager } = await import('../../frontend/comfyui/ui/overlays/OverlayManager.js');
+    const saveDraft = jest.fn();
+    const manager = new OverlayManager({ saveDraft });
+    const graphSummary = {
+      nodeIds: ['node-1', 'node-2'],
+      markerIds: ['input-1', 'output-1'],
+      inputCount: 1,
+      outputCount: 1,
+    };
+
+    manager.getChromeDebugState().actions.onSaveDraft?.({
+      kind: 'draft',
+      instance_id: 'draft-1',
+      graphSummary,
+    });
+
+    expect(saveDraft).toHaveBeenCalledWith('draft-1', graphSummary);
+  });
+
   test('chrome overlay does not render or trigger flavor action pill', async () => {
     await loadUi();
     const { CubeChromeOverlay } = await import(

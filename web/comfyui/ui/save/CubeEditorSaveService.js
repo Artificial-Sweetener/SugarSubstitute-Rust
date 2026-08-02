@@ -14,54 +14,40 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Coordinate modal-confirmed saves initiated from the native Cube editor. */
-import { normalizeDefaultAliasTitle } from '../core/CubeId.js';
 import { isDraftCubeNode, requireCubeIdentity, } from '../cube/node/ComfyCubeNodeFactory.js';
 import { updateCubeNodeIdentityForIds } from '../cube/node/CubeNodeIdentityWriter.js';
+import { readCubeNodeAuthoringCandidate, } from '../cube/node/CubeNodeAuthoringCandidate.js';
 /** Preserve the original authoring modal while saving exactly one edited Cube. */
 export class CubeEditorSaveService {
     #getCatalog;
+    #authoring;
     #cubeCreation;
     #cubeSave;
-    #dialogs;
-    #modelSuggestions;
     constructor(options) {
         this.#getCatalog = options.getCatalog;
+        this.#authoring = options.authoring;
         this.#cubeCreation = options.cubeCreation;
         this.#cubeSave = options.cubeSave;
-        this.#dialogs = options.dialogs;
-        this.#modelSuggestions = options.modelSuggestions ?? (() => []);
     }
     /** Confirm metadata in the full modal before invoking the established save owner. */
     async save(node, metadataDraft) {
         const identity = requireCubeIdentity(node);
         const instanceId = readRequiredIdentity(identity.instance_id, 'instance');
+        const candidateDetails = readCubeNodeAuthoringCandidate(node);
         if (isDraftCubeNode(node)) {
-            const saved = await this.#cubeCreation.saveDraftFromEditor(instanceId, metadataDraft);
+            const saved = await this.#cubeCreation.saveDraftFromEditor(instanceId, metadataDraft, candidateDetails);
             return saved ? 'saved' : 'cancelled';
         }
         const cubeId = readRequiredIdentity(identity.cube_id, 'saved');
-        const values = await this.#dialogs.openCubeAuthoring({
-            candidate: {
-                cubeId,
-                defaultAlias: metadataDraft.defaultAlias,
-                description: metadataDraft.description,
-                destination: metadataDraft.destination,
-                supportedModels: metadataDraft.supportedModels,
-                targetModel: metadataDraft.targetModel,
-                warnings: [],
-            },
-            destinationLocked: true,
-            modelSuggestions: this.#modelSuggestions(),
-            deriveIdentity: async (name, targetModel) => {
-                const normalizedName = normalizeDefaultAliasTitle(name);
-                if (!normalizedName)
-                    throw new Error('Name is required.');
-                return {
-                    name: normalizedName,
-                    defaultAlias: `${targetModel}/${normalizedName}`,
-                    cubeId,
-                };
-            },
+        const values = await this.#authoring.openExistingSave({
+            ...candidateDetails,
+            cubeId,
+            defaultAlias: metadataDraft.defaultAlias,
+            description: metadataDraft.description,
+            destination: metadataDraft.destination,
+            supportedModels: metadataDraft.supportedModels,
+            targetModel: metadataDraft.targetModel,
+            warnings: [],
         });
         if (!values)
             return 'cancelled';

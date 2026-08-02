@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, MutableMapping, Sequence
 
 from .graph import MARKER_CLASS_TYPES
+from .native_execution_nodes import remove_nested_execution_nodes
 
 
 @dataclass(frozen=True)
@@ -205,6 +206,12 @@ def _project_definition(
         projected_node["id"] = projected_id
         _clear_definition_local_links(projected_node)
         state.workflow_nodes.append(projected_node)
+
+    remove_nested_execution_nodes(
+        state.prompt,
+        instance_id=instance_id,
+        immediate_node_ids=projected_ids.values(),
+    )
 
     input_node_id = str(_io_node_id(definition.get("inputNode"), -10))
     output_node_id = str(_io_node_id(definition.get("outputNode"), -20))

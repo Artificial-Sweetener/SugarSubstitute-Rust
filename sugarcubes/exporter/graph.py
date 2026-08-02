@@ -358,6 +358,10 @@ def _compute_subgraphs(graph: Graph, cubes: Dict[str, CubeData]) -> None:
     """Discover the executable node set that belongs to each cube."""
 
     for cube in cubes.values():
+        if cube.anchors:
+            cube.subgraph_nodes = _anchor_owned_nodes(graph, cube)
+            continue
+
         forward = _forward_reachable(graph, cube)
 
         backward = _backward_reachable(graph, cube)
@@ -385,6 +389,18 @@ def _compute_subgraphs(graph: Graph, cubes: Dict[str, CubeData]) -> None:
             combined = _expand_subgraph(graph, combined, cube.marker_ids())
 
         cube.subgraph_nodes = combined
+
+
+def _anchor_owned_nodes(graph: Graph, cube: CubeData) -> Set[str]:
+    """Return the exact non-marker nodes named by ownership anchors."""
+
+    owned: Set[str] = set()
+    for anchor in cube.anchors:
+        for edge in graph.edges_to(anchor.node_id):
+            source = graph.nodes.get(edge.source)
+            if source and not _is_marker(source):
+                owned.add(source.id)
+    return owned
 
 
 def _forward_reachable(graph: Graph, cube: CubeData) -> Set[str]:

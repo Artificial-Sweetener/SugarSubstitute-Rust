@@ -21,6 +21,7 @@ import {
   requireCubeIdentity,
   type CubeNode,
 } from '../../frontend/comfyui/ui/cube/node/ComfyCubeNodeFactory.js';
+import { TestComfySettingsSelectRenderer } from './helpers/ComfySettingsSelectTestRenderer.js';
 
 test('retains a dirty Save control after the editable metadata card is rolled up', async () => {
   document.body.replaceChildren();
@@ -92,6 +93,149 @@ test('retains text focus and selection across metadata card refreshes', async ()
   expect(
     document.querySelector<HTMLInputElement>('.sugarcubes-cube-editor-metadata input')?.value,
   ).toBe('AB');
+  hud.dispose();
+});
+
+test('retains unsaved metadata while navigating away from and back into a cube graph', async () => {
+  document.body.replaceChildren();
+  const settingsSelect = new TestComfySettingsSelectRenderer();
+  const hud = new CubeEditorMetadataHud(
+    document,
+    {
+      canEdit: async () => true,
+      save: async () => 'saved',
+    },
+    { settingsSelectRenderer: settingsSelect },
+  );
+  const node = cubeNode();
+
+  hud.show(node);
+  await Promise.resolve();
+  const name = document.querySelector<HTMLInputElement>(
+    '[data-sugarcubes-focus-key="defaultAlias"]',
+  );
+  const description = document.querySelector<HTMLTextAreaElement>(
+    '[data-sugarcubes-focus-key="description"]',
+  );
+  if (!name || !description) throw new Error('Expected editable Cube metadata fields.');
+  name.value = 'Unsaved Navigation Draft';
+  name.dispatchEvent(new Event('input'));
+  description.value = 'Keep this description while navigating.';
+  description.dispatchEvent(new Event('input'));
+  settingsSelect.enterAutocomplete('Supported models', ['SDXL', 'Custom Runtime']);
+
+  hud.hide();
+  expect(document.querySelector('.sugarcubes-cube-editor-metadata')).toBeNull();
+  hud.show(node);
+  await Promise.resolve();
+
+  expect(
+    document.querySelector<HTMLInputElement>('[data-sugarcubes-focus-key="defaultAlias"]')?.value,
+  ).toBe('Unsaved Navigation Draft');
+  expect(
+    document.querySelector<HTMLTextAreaElement>('[data-sugarcubes-focus-key="description"]')?.value,
+  ).toBe('Keep this description while navigating.');
+  expect(settingsSelect.autocomplete('Supported models').values).toEqual([
+    'SDXL',
+    'Custom Runtime',
+  ]);
+  expect(
+    document.querySelector<HTMLButtonElement>('.sugarcubes-cube-editor-metadata__save')?.disabled,
+  ).toBe(false);
+  hud.dispose();
+});
+
+test('uses Comfy Settings AutoComplete for suggested and custom model support', async () => {
+  document.body.replaceChildren();
+  const settingsSelect = new TestComfySettingsSelectRenderer();
+  const hud = new CubeEditorMetadataHud(
+    document,
+    {
+      canEdit: async () => true,
+      save: async () => 'saved',
+      modelSuggestions: () => ['SDXL', 'Flux .1 D', 'Flux .1 Kontext', 'SD 1.5'],
+    },
+    { settingsSelectRenderer: settingsSelect },
+  );
+
+  hud.show(cubeNode());
+  await Promise.resolve();
+
+  settingsSelect.completeAutocomplete('Supported models', 'flux');
+  expect(settingsSelect.autocomplete('Supported models').suggestions).toEqual(
+    expect.arrayContaining(['Flux .1 D', 'Flux .1 Kontext']),
+  );
+  settingsSelect.completeAutocomplete('Supported models', '');
+  expect(settingsSelect.autocomplete('Supported models').suggestions).toEqual(
+    expect.arrayContaining(['Flux .1 D', 'Flux .1 Kontext', 'SD 1.5']),
+  );
+  expect(settingsSelect.autocomplete('Supported models').suggestions).not.toContain('SDXL');
+  settingsSelect.completeAutocomplete('Supported models', 'My Bespoke Model');
+  expect(settingsSelect.autocomplete('Supported models').suggestions[0]).toBe('My Bespoke Model');
+  settingsSelect.enterAutocomplete('Supported models', [
+    'SDXL',
+    'Flux .1 D',
+    'SD 1.5',
+    'My Bespoke Model',
+  ]);
+  document.querySelector<HTMLButtonElement>('.sugarcubes-cube-editor-metadata__collapse')?.click();
+  document.querySelector<HTMLButtonElement>('.sugarcubes-cube-editor-metadata__collapse')?.click();
+  expect(settingsSelect.autocomplete('Supported models').values).toEqual([
+    'SDXL',
+    'Flux .1 D',
+    'SD 1.5',
+    'My Bespoke Model',
+  ]);
+  expect(document.querySelector('.sugarcubes-cube-editor-metadata select')).toBeNull();
+  expect(document.querySelector('[role="listbox"]')).toBeNull();
+  hud.dispose();
+});
+
+test('uses Another model as the explicit HUD path for a custom target model', async () => {
+  document.body.replaceChildren();
+  const settingsSelect = new TestComfySettingsSelectRenderer();
+  const save = jest.fn(async () => 'saved' as const);
+  const hud = new CubeEditorMetadataHud(
+    document,
+    {
+      canEdit: async () => true,
+      save,
+      modelSuggestions: () => ['Flux .1 D', 'Flux .1 Kontext'],
+    },
+    { settingsSelectRenderer: settingsSelect },
+  );
+  const node = cubeNode();
+
+  hud.show(node);
+  await Promise.resolve();
+
+  const target = settingsSelect.single('Target model');
+  expect(target.options.map((option) => option.label)).toEqual(
+    expect.arrayContaining(['Flux .1 D', 'Flux .1 Kontext', 'Another model…']),
+  );
+  const anotherModel = target.options.find((option) => option.label === 'Another model…');
+  if (!anotherModel) throw new Error('Expected the custom target-model option.');
+  settingsSelect.selectSingle('Target model', anotherModel.value);
+
+  const customTarget = document.querySelector<HTMLInputElement>(
+    '[data-sugarcubes-focus-key="customTargetModel"]',
+  );
+  if (!customTarget) throw new Error('Expected the custom target-model input.');
+  expect(customTarget.disabled).toBe(false);
+  customTarget.value = 'Flux2 Klein';
+  customTarget.dispatchEvent(new Event('input', { bubbles: true }));
+  expect(settingsSelect.autocomplete('Supported models').values).toEqual(['Flux2 Klein']);
+
+  document.querySelector<HTMLButtonElement>('.sugarcubes-cube-editor-metadata__save')?.click();
+  await Promise.resolve();
+
+  expect(save).toHaveBeenCalledWith(
+    node,
+    expect.objectContaining({
+      targetModel: 'Flux2 Klein',
+      supportedModels: ['Flux2 Klein'],
+    }),
+  );
   hud.dispose();
 });
 
@@ -264,10 +408,17 @@ test('keeps a dismissed first-save dialog actionable without reporting an error'
 
 test('uses the established first-save model defaults for a blank Cube draft', async () => {
   document.body.replaceChildren();
-  const hud = new CubeEditorMetadataHud(document, {
-    canEdit: async () => true,
-    save: async () => 'saved',
-  });
+  const settingsSelect = new TestComfySettingsSelectRenderer();
+  const hud = new CubeEditorMetadataHud(
+    document,
+    {
+      canEdit: async () => true,
+      save: async () => 'saved',
+    },
+    {
+      settingsSelectRenderer: settingsSelect,
+    },
+  );
   const node = cubeNode();
   const identity = requireCubeIdentity(node);
   node.properties.sugarcubes_kind = 'cube_draft';
@@ -285,14 +436,14 @@ test('uses the established first-save model defaults for a blank Cube draft', as
   hud.show(node);
   await Promise.resolve();
 
-  const targetModel = document.querySelector<HTMLSelectElement>(
-    '.sugarcubes-cube-editor-metadata__target-model select',
+  const targetModel = document.querySelector<HTMLButtonElement>(
+    '.sugarcubes-cube-editor-metadata__target-model [role="combobox"]',
   );
-  const supportedModels = document.querySelector<HTMLInputElement>(
-    '.sugarcubes-cube-editor-metadata__model-support input',
-  );
-  expect(targetModel?.value).toBe('SDXL');
-  expect(supportedModels?.value).toBe('SDXL');
+  expect(targetModel?.textContent).toBe('SDXL');
+  expect(
+    document.querySelector('.sugarcubes-cube-editor-metadata__target-model select'),
+  ).toBeNull();
+  expect(settingsSelect.autocomplete('Supported models').values).toEqual(['SDXL']);
   const indicator = document.querySelector<HTMLElement>('.sugarcubes-cube-unsaved-indicator');
   expect(indicator?.getAttribute('aria-label')).toBe('Not saved yet');
   expect(indicator?.querySelector('.pi-save')).not.toBeNull();
@@ -300,6 +451,45 @@ test('uses the established first-save model defaults for a blank Cube draft', as
   expect(
     document.querySelector<HTMLButtonElement>('.sugarcubes-cube-editor-metadata__save')?.disabled,
   ).toBe(false);
+  hud.dispose();
+});
+
+test('derives the alias from the native target-model combo and basename-only name', async () => {
+  document.body.replaceChildren();
+  const settingsSelect = new TestComfySettingsSelectRenderer();
+  const hud = new CubeEditorMetadataHud(
+    document,
+    {
+      canEdit: async () => true,
+      save: async () => 'saved',
+    },
+    { settingsSelectRenderer: settingsSelect },
+  );
+  const node = cubeNode();
+  requireCubeIdentity(node).default_alias = 'SDXL/Text to Image';
+
+  hud.show(node);
+  await Promise.resolve();
+
+  const name = document.querySelector<HTMLInputElement>(
+    `[data-sugarcubes-focus-key="defaultAlias"]`,
+  );
+  expect(name?.value).toBe('Text to Image');
+  expect(
+    document.querySelector('.sugarcubes-cube-editor-metadata__titlebar')?.textContent,
+  ).toContain('SDXL/Text to Image');
+
+  settingsSelect.selectSingle('Target model', 'Flux');
+
+  expect(
+    document.querySelector<HTMLButtonElement>(
+      '.sugarcubes-cube-editor-metadata__target-model [role="combobox"]',
+    )?.textContent,
+  ).toBe('Flux');
+  expect(
+    document.querySelector('.sugarcubes-cube-editor-metadata__titlebar')?.textContent,
+  ).toContain('Flux/Text to Image');
+  expect(settingsSelect.autocomplete('Supported models').values).toEqual(['Flux']);
   hud.dispose();
 });
 

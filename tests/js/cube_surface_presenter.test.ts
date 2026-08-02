@@ -231,6 +231,7 @@ describe('CubeSurfacePresenter', () => {
     const nodes = new CubeNodeCatalog();
     nodes.add(node);
     const onSwapLeft = jest.fn();
+    const onOpenMenu = jest.fn();
     const rootGraph = {};
     const activePresenter = new CubeSurfacePresenter({
       document,
@@ -246,17 +247,37 @@ describe('CubeSurfacePresenter', () => {
       requestSlotLayoutSync: () => undefined,
       chromeActions: {
         onSwapLeft,
+        onOpenMenu,
         canSwap: (_metadata, direction) => direction === 'left',
       },
     });
     await flushMount();
 
     document.querySelector<HTMLButtonElement>('[data-cube-action="swap-left"]')?.click();
+    document.querySelector<HTMLButtonElement>('[data-cube-action="cube-menu"]')?.click();
 
     expect(onSwapLeft).toHaveBeenCalledWith({
       instance_id: 'cube-1',
       cube_id: 'example.cube',
+      graphSummary: {
+        nodeIds: ['inner'],
+        markerIds: [],
+        inputCount: 0,
+        outputCount: 0,
+      },
     });
+    expect(onOpenMenu).toHaveBeenCalledWith(
+      expect.objectContaining({
+        instance_id: 'cube-1',
+        graphSummary: {
+          nodeIds: ['inner'],
+          markerIds: [],
+          inputCount: 0,
+          outputCount: 0,
+        },
+      }),
+      expect.any(MouseEvent),
+    );
     activePresenter.dispose();
   });
 
@@ -367,6 +388,7 @@ describe('CubeSurfacePresenter', () => {
       dispose: jest.fn(),
     };
     const rendererQueue = [firstRenderer, secondRenderer];
+    let publishRendererChange: () => void = () => undefined;
     const createRenderer = jest.fn(async () => {
       const renderer = rendererQueue.shift();
       if (!renderer) throw new Error('Unexpected renderer request.');
@@ -382,6 +404,14 @@ describe('CubeSurfacePresenter', () => {
       logger: console,
       createRenderer,
       getRendererMode: () => rendererMode,
+      rendererChanges: {
+        subscribe(listener) {
+          publishRendererChange = listener;
+          return () => {
+            publishRendererChange = () => undefined;
+          };
+        },
+      },
       legacyCanvas: {
         canvas: canvasElement,
         graph: rootGraph,
@@ -396,15 +426,55 @@ describe('CubeSurfacePresenter', () => {
     expect(firstMount).toHaveBeenCalled();
 
     rendererMode = 'litegraph';
-    presenter.refresh();
+    publishRendererChange();
     await flushMount();
     rendererMode = 'vue';
-    presenter.refresh();
+    publishRendererChange();
     await flushMount();
 
     expect(firstRenderer.dispose).toHaveBeenCalledTimes(1);
     expect(createRenderer).toHaveBeenCalledTimes(2);
     expect(secondMount).toHaveBeenCalled();
+    presenter.dispose();
+  });
+
+  test('retains native node content and reports one failure when renderer loading fails', async () => {
+    const pane = createTransformPane();
+    const node = cubeNode(9, 'cube-1', [nativeNode('inner', 'KSampler')]);
+    const shell = createNativeNodeShell(String(node.id));
+    pane.append(shell.root);
+    const nodes = new CubeNodeCatalog();
+    nodes.add(node);
+    const rootGraph = {};
+    const error = jest.fn();
+    const createRenderer = jest.fn(async (): Promise<NativeNodeCardRenderer> => {
+      throw new Error('Unsupported Comfy renderer');
+    });
+    const presenter = new CubeSurfacePresenter({
+      document,
+      openEditor: jest.fn(),
+      rootGraph,
+      getCurrentGraph: () => rootGraph,
+      nodes,
+      logger: { debug: jest.fn(), error, warn: jest.fn() },
+      createRenderer,
+      requestSlotLayoutSync: () => undefined,
+    });
+
+    await flushMount();
+    presenter.refresh();
+    presenter.refresh();
+    await flushMount();
+
+    expect(createRenderer).toHaveBeenCalledTimes(1);
+    expect(shell.root.querySelector('[data-sugarcube-face-host]')).toBeNull();
+    expect(shell.root.dataset.sugarcubeNode).toBeUndefined();
+    expect(shell.genericContent.hidden).toBe(false);
+    expect(error).toHaveBeenCalledTimes(1);
+    expect(error).toHaveBeenCalledWith(
+      'SugarCubes failed to mount a Cube node surface: Unsupported Comfy renderer',
+      expect.objectContaining({ nodeId: node.id, reason: 'Unsupported Comfy renderer' }),
+    );
     presenter.dispose();
   });
 });

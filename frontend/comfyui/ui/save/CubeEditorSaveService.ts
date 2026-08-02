@@ -15,11 +15,8 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Coordinate modal-confirmed saves initiated from the native Cube editor. */
 
-import { normalizeDefaultAliasTitle } from '../core/CubeId.js';
-import type {
-  CubeAuthoringDialog,
-  CubeAuthoringMetadataDraft,
-} from '../create/CubeAuthoringDialog.js';
+import type { CubeAuthoringMetadataDraft } from '../create/CubeAuthoringDialog.js';
+import type { CubeAuthoringService } from '../create/CubeAuthoringService.js';
 import {
   isDraftCubeNode,
   requireCubeIdentity,
@@ -27,6 +24,10 @@ import {
 } from '../cube/node/ComfyCubeNodeFactory.js';
 import { updateCubeNodeIdentityForIds } from '../cube/node/CubeNodeIdentityWriter.js';
 import type { CubeNodeCatalog } from '../cube/node/CubeNodeCatalog.js';
+import {
+  readCubeNodeAuthoringCandidate,
+  type CubeNodeAuthoringCandidate,
+} from '../cube/node/CubeNodeAuthoringCandidate.js';
 import type { CubeSaveOutcome } from './CubeSaveService.js';
 
 export type CubeEditorSaveOutcome = 'saved' | 'cancelled';
@@ -35,6 +36,7 @@ interface DraftSave {
   saveDraftFromEditor(
     instanceId: string,
     request: CubeAuthoringMetadataDraft,
+    candidateDetails: CubeNodeAuthoringCandidate,
   ): Promise<unknown | null>;
 }
 
@@ -44,26 +46,23 @@ interface ExistingCubeSave {
 
 export interface CubeEditorSaveServiceOptions {
   getCatalog(): CubeNodeCatalog | null;
+  authoring: Pick<CubeAuthoringService, 'openExistingSave'>;
   cubeCreation: DraftSave;
   cubeSave: ExistingCubeSave;
-  dialogs: CubeAuthoringDialog;
-  modelSuggestions?(): readonly string[];
 }
 
 /** Preserve the original authoring modal while saving exactly one edited Cube. */
 export class CubeEditorSaveService {
   readonly #getCatalog: () => CubeNodeCatalog | null;
+  readonly #authoring: Pick<CubeAuthoringService, 'openExistingSave'>;
   readonly #cubeCreation: DraftSave;
   readonly #cubeSave: ExistingCubeSave;
-  readonly #dialogs: CubeAuthoringDialog;
-  readonly #modelSuggestions: () => readonly string[];
 
   constructor(options: CubeEditorSaveServiceOptions) {
     this.#getCatalog = options.getCatalog;
+    this.#authoring = options.authoring;
     this.#cubeCreation = options.cubeCreation;
     this.#cubeSave = options.cubeSave;
-    this.#dialogs = options.dialogs;
-    this.#modelSuggestions = options.modelSuggestions ?? (() => []);
   }
 
   /** Confirm metadata in the full modal before invoking the established save owner. */
@@ -73,33 +72,26 @@ export class CubeEditorSaveService {
   ): Promise<CubeEditorSaveOutcome> {
     const identity = requireCubeIdentity(node);
     const instanceId = readRequiredIdentity(identity.instance_id, 'instance');
+    const candidateDetails = readCubeNodeAuthoringCandidate(node);
     if (isDraftCubeNode(node)) {
-      const saved = await this.#cubeCreation.saveDraftFromEditor(instanceId, metadataDraft);
+      const saved = await this.#cubeCreation.saveDraftFromEditor(
+        instanceId,
+        metadataDraft,
+        candidateDetails,
+      );
       return saved ? 'saved' : 'cancelled';
     }
 
     const cubeId = readRequiredIdentity(identity.cube_id, 'saved');
-    const values = await this.#dialogs.openCubeAuthoring({
-      candidate: {
-        cubeId,
-        defaultAlias: metadataDraft.defaultAlias,
-        description: metadataDraft.description,
-        destination: metadataDraft.destination,
-        supportedModels: metadataDraft.supportedModels,
-        targetModel: metadataDraft.targetModel,
-        warnings: [],
-      },
-      destinationLocked: true,
-      modelSuggestions: this.#modelSuggestions(),
-      deriveIdentity: async (name, targetModel) => {
-        const normalizedName = normalizeDefaultAliasTitle(name);
-        if (!normalizedName) throw new Error('Name is required.');
-        return {
-          name: normalizedName,
-          defaultAlias: `${targetModel}/${normalizedName}`,
-          cubeId,
-        };
-      },
+    const values = await this.#authoring.openExistingSave({
+      ...candidateDetails,
+      cubeId,
+      defaultAlias: metadataDraft.defaultAlias,
+      description: metadataDraft.description,
+      destination: metadataDraft.destination,
+      supportedModels: metadataDraft.supportedModels,
+      targetModel: metadataDraft.targetModel,
+      warnings: [],
     });
     if (!values) return 'cancelled';
 

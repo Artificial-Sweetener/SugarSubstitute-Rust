@@ -20,7 +20,15 @@ import type { ComfyPrimeIconName } from './ComfyPrimeIcons.js';
 
 export type CubeSwapDirection = 'left' | 'right';
 
+export interface CubeFaceGraphSummary {
+  inputCount?: number;
+  markerIds?: unknown[];
+  nodeIds?: unknown[];
+  outputCount?: number;
+}
+
 export interface CubeFaceChromeMetadata extends UnknownRecord {
+  graphSummary?: CubeFaceGraphSummary;
   instance_id?: string;
 }
 

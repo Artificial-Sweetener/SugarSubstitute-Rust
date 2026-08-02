@@ -660,6 +660,13 @@ export function ensureCubeSurfaceStyles(documentRef: Document): void {
       gap: 0.375rem;
       min-width: 0;
     }
+    .sugarcubes-cube-editor-metadata .sugarcubes-comfy-settings-select-host,
+    .sugarcubes-cube-editor-metadata .sugarcubes-comfy-settings-autocomplete-host {
+      min-width: 0;
+    }
+    .sugarcubes-cube-editor-metadata__target-model-combo {
+      min-width: 0;
+    }
     .sugarcubes-cube-editor-metadata__field textarea.p-inputtext {
       resize: vertical;
     }

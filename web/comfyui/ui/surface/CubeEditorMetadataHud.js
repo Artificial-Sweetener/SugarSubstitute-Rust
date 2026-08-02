@@ -16,17 +16,21 @@
 /** Present a pinned, native-styled Cube metadata card inside Comfy's editor viewport. */
 import { isDraftCubeNode, requireCubeIdentity, } from '../cube/node/ComfyCubeNodeFactory.js';
 import { isCubeAwaitingFirstSave } from '../cube/CubeIdentityPresentation.js';
-import { TARGET_MODEL_OPTIONS, defaultSupportedModelsForTarget } from '../core/ModelTargets.js';
+import { defaultSupportedModelsForTarget } from '../core/ModelTargets.js';
+import { ComfySettingsAutocompleteControl, ComfySettingsSingleSelectControl, InstalledComfySettingsSelectRenderer, } from '../controls/ComfySettingsSelect.js';
+import { CUSTOM_TARGET_MODEL_VALUE, isCustomTargetModel, supportedModelSuggestions, targetModelSelectOptions, } from '../controls/CubeModelSelection.js';
 import { createComfyPrimeIconElement } from './ComfyPrimeIcons.js';
+import { CubeEditorMetadataDraftStore, } from './CubeEditorMetadataDraftStore.js';
 import { CubeEditorHudPositioner } from './CubeEditorHudPositioner.js';
 import { createCubeUnsavedIndicator } from './CubeUnsavedIndicator.js';
-const CUSTOM_TARGET_MODEL_VALUE = '__sugarcubes_custom_target_model__';
-const MODEL_SUGGESTIONS_ID = 'sugarcubes-cube-editor-model-suggestions';
 const FOCUS_KEY_ATTRIBUTE = 'data-sugarcubes-focus-key';
 /** Own the non-graph, viewport-pinned Cube metadata surface for one active Cube editor. */
 export class CubeEditorMetadataHud {
     #document;
     #actions;
+    #settingsSelectRenderer;
+    #drafts = new CubeEditorMetadataDraftStore();
+    #settingsSelectControls = new Set();
     #root = null;
     #activeNode = null;
     #editable = false;
@@ -36,21 +40,27 @@ export class CubeEditorMetadataHud {
     #saveError = '';
     #requestId = 0;
     #supportedModelsTouched = false;
+    #customTargetModelSelected = false;
     #positioner = null;
     /** Bind the HUD to its document and authoritative metadata actions. */
-    constructor(documentRef, actions) {
+    constructor(documentRef, actions, options = {}) {
         this.#document = documentRef;
         this.#actions = actions;
+        this.#settingsSelectRenderer =
+            options.settingsSelectRenderer ?? new InstalledComfySettingsSelectRenderer(documentRef);
     }
     /** Clear the viewport card when the user returns to the root workflow. */
     hide() {
+        this.#retainActiveDraft();
         this.#activeNode = null;
         this.#values = null;
         this.#dirty = false;
         this.#saveError = '';
         this.#supportedModelsTouched = false;
+        this.#customTargetModelSelected = false;
         this.#positioner?.dispose();
         this.#positioner = null;
+        this.#releaseMountedControls();
         this.#root?.remove();
         this.#root = null;
     }
@@ -58,11 +68,16 @@ export class CubeEditorMetadataHud {
     show(node) {
         if (this.#activeNode === node)
             return;
+        this.#retainActiveDraft();
+        const retained = this.#drafts.get(node);
         this.#activeNode = node;
-        this.#values = readValues(node);
-        this.#dirty = false;
-        this.#saveError = '';
-        this.#supportedModelsTouched = false;
+        this.#values = retained?.values ?? readValues(node);
+        this.#dirty = retained?.dirty ?? false;
+        this.#saveError = retained?.saveError ?? '';
+        this.#supportedModelsTouched = retained?.supportedModelsTouched ?? false;
+        this.#customTargetModelSelected =
+            retained?.customTargetModelSelected ??
+                isCustomTargetModel(this.#values.targetModel, this.#actions.modelSuggestions?.());
         this.#editable = false;
         const requestId = ++this.#requestId;
         this.#render();
@@ -81,6 +96,7 @@ export class CubeEditorMetadataHud {
     /** Release the pinned viewport element. */
     dispose() {
         this.hide();
+        this.#drafts.clear();
     }
     /** Render a title-only rolled-up card or the full metadata editor. */
     #render() {
@@ -92,12 +108,13 @@ export class CubeEditorMetadataHud {
         }
         const root = this.#root ?? this.#createRoot();
         const focusedControl = captureFocusedControl(this.#document, root);
+        this.#releaseMountedControls();
         root.classList.toggle('is-collapsed', this.#collapsed);
         root.classList.toggle('is-readonly', !this.#editable);
         const titlebar = this.#document.createElement('header');
         titlebar.className = 'sugarcubes-cube-editor-metadata__titlebar';
         const title = this.#document.createElement('strong');
-        title.textContent = values.defaultAlias || node.title || 'Untitled Cube';
+        title.textContent = deriveDefaultAlias(values) || node.title || 'Untitled Cube';
         titlebar.append(title);
         if (isCubeAwaitingFirstSave(requireCubeIdentity(node))) {
             titlebar.append(createCubeUnsavedIndicator(this.#document));
@@ -175,63 +192,58 @@ export class CubeEditorMetadataHud {
         input.addEventListener('input', () => this.#updateValue(name, input.value));
         return input;
     }
-    /** Reuse known Cube-library model names as native suggestions for model support. */
+    /** Reuse Comfy's editable Settings AutoComplete for model support. */
     #createSupportedModelsEditor(models) {
-        const container = this.#document.createElement('div');
-        container.className = 'sugarcubes-cube-editor-metadata__model-support';
-        const input = this.#document.createElement('input');
-        input.className = 'p-inputtext p-component';
-        input.setAttribute(FOCUS_KEY_ATTRIBUTE, 'supportedModels');
-        input.value = models.join(', ');
-        input.placeholder = 'SDXL, Flux .1 D';
-        input.setAttribute('list', MODEL_SUGGESTIONS_ID);
-        input.addEventListener('input', () => this.#updateValue('supportedModels', input.value.split(',')));
-        const suggestions = this.#document.createElement('datalist');
-        suggestions.id = MODEL_SUGGESTIONS_ID;
-        for (const model of modelSuggestions(this.#actions.modelSuggestions?.(), models)) {
-            const option = this.#document.createElement('option');
-            option.value = model;
-            suggestions.append(option);
-        }
-        container.append(input, suggestions);
-        return container;
+        const control = new ComfySettingsAutocompleteControl(this.#document, this.#settingsSelectRenderer, {
+            ariaLabel: 'Supported models',
+            options: supportedModelSuggestions(this.#actions.modelSuggestions?.() ?? [], models),
+            placeholder: 'Type a model family and press Enter',
+            values: models,
+            onChange: (values) => {
+                this.#supportedModelsTouched = true;
+                this.#updateValues({ supportedModels: [...values] }, false);
+            },
+        });
+        control.element.classList.add('sugarcubes-cube-editor-metadata__model-support');
+        this.#settingsSelectControls.add(control);
+        return control.element;
     }
     /** Reuse the established authoring target-model selector and automatic defaults. */
     #createTargetModelEditor(value) {
         const container = this.#document.createElement('div');
         container.className = 'sugarcubes-cube-editor-metadata__target-model';
-        const select = this.#document.createElement('select');
-        select.className = 'p-inputtext p-component';
-        select.setAttribute(FOCUS_KEY_ATTRIBUTE, 'targetModel');
+        const combo = this.#document.createElement('div');
+        combo.className = 'sugarcubes-cube-editor-metadata__target-model-combo';
         const custom = this.#document.createElement('input');
         custom.className = 'p-inputtext p-component';
         custom.setAttribute(FOCUS_KEY_ATTRIBUTE, 'customTargetModel');
         custom.placeholder = 'Enter target model';
-        const isCustom = Boolean(value) && !TARGET_MODEL_OPTIONS.includes(value);
-        for (const model of TARGET_MODEL_OPTIONS) {
-            const option = this.#document.createElement('option');
-            option.value = model;
-            option.textContent = model;
-            select.append(option);
-        }
-        const customOption = this.#document.createElement('option');
-        customOption.value = CUSTOM_TARGET_MODEL_VALUE;
-        customOption.textContent = 'A different model';
-        select.append(customOption);
-        select.value = isCustom ? CUSTOM_TARGET_MODEL_VALUE : value;
+        const suggestions = this.#actions.modelSuggestions?.() ?? [];
+        const isCustom = this.#customTargetModelSelected || isCustomTargetModel(value, suggestions);
         custom.value = isCustom ? value : '';
         custom.hidden = !isCustom;
         custom.disabled = !isCustom;
-        select.addEventListener('change', () => {
-            const customSelected = select.value === CUSTOM_TARGET_MODEL_VALUE;
-            custom.hidden = !customSelected;
-            custom.disabled = !customSelected;
-            this.#updateTargetModel(customSelected ? custom.value : select.value);
-            if (customSelected)
-                custom.focus();
+        const control = new ComfySettingsSingleSelectControl(this.#document, this.#settingsSelectRenderer, {
+            ariaLabel: 'Target model',
+            options: targetModelSelectOptions(suggestions),
+            value: isCustom ? CUSTOM_TARGET_MODEL_VALUE : value,
+            onChange: (selected) => {
+                const customSelected = selected === CUSTOM_TARGET_MODEL_VALUE;
+                this.#customTargetModelSelected = customSelected;
+                this.#updateTargetModel(customSelected ? custom.value : selected);
+                if (customSelected) {
+                    queueMicrotask(() => {
+                        this.#root
+                            ?.querySelector(`[${FOCUS_KEY_ATTRIBUTE}="customTargetModel"]`)
+                            ?.focus();
+                    });
+                }
+            },
         });
+        combo.replaceChildren(control.element);
+        this.#settingsSelectControls.add(control);
         custom.addEventListener('input', () => this.#updateTargetModel(custom.value));
-        container.append(select, custom);
+        container.append(combo, custom);
         return container;
     }
     /** Create one description editor using Comfy's existing text-control classes. */
@@ -257,36 +269,51 @@ export class CubeEditorMetadataHud {
     }
     /** Let first-save authors choose a local Cube or a writable author pack. */
     #createDestinationSelect(value) {
-        const select = this.#document.createElement('select');
-        select.className = 'p-inputtext p-component';
-        select.setAttribute(FOCUS_KEY_ATTRIBUTE, 'destination');
-        for (const [optionValue, label] of [
-            ['local', 'Personal cubes'],
-            ['pack', 'Author pack'],
-        ]) {
-            const option = this.#document.createElement('option');
-            option.value = optionValue;
-            option.textContent = label;
-            option.selected = optionValue === value;
-            select.append(option);
-        }
-        select.addEventListener('change', () => this.#updateValue('destination', select.value === 'pack' ? 'pack' : 'local'));
-        return select;
+        const control = new ComfySettingsSingleSelectControl(this.#document, this.#settingsSelectRenderer, {
+            ariaLabel: 'Save to',
+            options: [
+                { label: 'Personal cubes', value: 'local' },
+                { label: 'Author pack', value: 'pack' },
+            ],
+            value,
+            onChange: (selected) => this.#updateValue('destination', selected === 'pack' ? 'pack' : 'local'),
+        });
+        this.#settingsSelectControls.add(control);
+        return control.element;
     }
     /** Persist one input value in the HUD state while retaining the rolled-up save action. */
     #updateValue(key, value) {
         if (key === 'supportedModels')
             this.#supportedModelsTouched = true;
-        this.#updateValues({ [key]: value });
+        this.#updateValues({ [key]: value }, false);
     }
     /** Persist one form update while preserving the rolled-up save action. */
-    #updateValues(values) {
+    #updateValues(values, render = true) {
         if (!this.#values)
             return;
         this.#values = { ...this.#values, ...values };
         this.#dirty = true;
         this.#saveError = '';
-        this.#render();
+        this.#retainActiveDraft();
+        if (render) {
+            this.#render();
+            return;
+        }
+        this.#refreshEditedState();
+    }
+    /** Refresh stateful chrome without replacing the field the user is actively editing. */
+    #refreshEditedState() {
+        const root = this.#root;
+        const values = this.#values;
+        if (!root || !values)
+            return;
+        const title = root.querySelector('.sugarcubes-cube-editor-metadata__titlebar strong');
+        if (title)
+            title.textContent = deriveDefaultAlias(values);
+        const save = root.querySelector('.sugarcubes-cube-editor-metadata__save');
+        if (save)
+            save.disabled = false;
+        root.querySelector('.sugarcubes-cube-editor-metadata__error')?.remove();
     }
     /** Create the save control that remains visible in both expanded and rolled-up states. */
     #createSaveButton() {
@@ -304,12 +331,15 @@ export class CubeEditorMetadataHud {
                 return;
             button.disabled = true;
             void this.#actions.save(node, normalizeValues(values)).then((outcome) => {
-                if (node !== this.#activeNode)
-                    return;
                 if (outcome === 'cancelled') {
+                    if (node !== this.#activeNode)
+                        return;
                     this.#render();
                     return;
                 }
+                this.#drafts.delete(node);
+                if (node !== this.#activeNode)
+                    return;
                 this.#values = readValues(node);
                 this.#dirty = false;
                 this.#saveError = '';
@@ -318,6 +348,7 @@ export class CubeEditorMetadataHud {
                 if (node !== this.#activeNode)
                     return;
                 this.#saveError = readErrorMessage(error);
+                this.#retainActiveDraft();
                 this.#render();
             });
         });
@@ -338,6 +369,24 @@ export class CubeEditorMetadataHud {
             this.#render();
         });
         return button;
+    }
+    /** Release every mounted control before replacing or removing its DOM host. */
+    #releaseMountedControls() {
+        for (const control of this.#settingsSelectControls)
+            control.dispose();
+        this.#settingsSelectControls.clear();
+    }
+    /** Retain dirty authoring state before navigation removes the viewport card. */
+    #retainActiveDraft() {
+        if (!this.#activeNode || !this.#values || !this.#dirty)
+            return;
+        this.#drafts.set(this.#activeNode, {
+            customTargetModelSelected: this.#customTargetModelSelected,
+            dirty: this.#dirty,
+            saveError: this.#saveError,
+            supportedModelsTouched: this.#supportedModelsTouched,
+            values: this.#values,
+        });
     }
 }
 /** Capture one typed field before a state refresh replaces the metadata card contents. */
@@ -374,13 +423,26 @@ function readValues(node) {
     const metadata = requireCubeIdentity(node);
     const targetModel = readString(metadata.target_model) || (isDraftCubeNode(node) ? 'SDXL' : '');
     const supportedModels = readStringArray(metadata.supported_models);
+    const defaultAlias = readString(metadata.default_alias) || node.title || 'Untitled Cube';
     return {
-        defaultAlias: readString(metadata.default_alias) || node.title || 'Untitled Cube',
+        defaultAlias: deriveAuthoringName(defaultAlias),
         targetModel,
         supportedModels: supportedModels.length || !isDraftCubeNode(node) ? supportedModels : [targetModel],
         description: readString(metadata.description),
         destination: readDestination(metadata.cube_id),
     };
+}
+/** Retain the original save flow's basename-only editable Cube name. */
+function deriveAuthoringName(defaultAlias) {
+    return defaultAlias.split('/').pop()?.trim() || defaultAlias.trim();
+}
+/** Derive the persisted-style alias from the target model and authoring name. */
+function deriveDefaultAlias(values) {
+    const name = values.defaultAlias.trim();
+    const targetModel = values.targetModel.trim();
+    if (!name)
+        return '';
+    return targetModel ? `${targetModel}/${name}` : name;
 }
 /** Normalize user-entered fields once, immediately before the authoritative save action. */
 function normalizeValues(values) {
@@ -410,18 +472,6 @@ function readStringArray(value) {
         .filter((entry) => typeof entry === 'string')
         .map((entry) => entry.trim())
         .filter(Boolean);
-}
-/** Combine the browser's loaded model catalog with durable authoring choices. */
-function modelSuggestions(source, selected) {
-    const suggestions = [...TARGET_MODEL_OPTIONS, ...(source ?? []), ...selected];
-    const seen = new Set();
-    return suggestions.filter((value) => {
-        const normalized = value.trim();
-        if (!normalized || seen.has(normalized.toLowerCase()))
-            return false;
-        seen.add(normalized.toLowerCase());
-        return true;
-    });
 }
 /** Preserve actionable errors from the authoritative save workflow. */
 function readErrorMessage(error) {

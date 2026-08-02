@@ -39,7 +39,7 @@ import { LegacyCubeContainerMigrationAdapter } from './migration/LegacyCubeConta
 import { NativeCubeProximityEndpointSource } from './connection/NativeCubeProximityEndpointSource.js';
 import { CubePortPresentationController } from './connection/CubePortPresentationController.js';
 import { ComfyCanvasGraphChangeAdapter } from '../surface/ComfyCanvasGraphChangeAdapter.js';
-import { resolveComfyRendererMode } from '../core/ComfyRendererMode.js';
+import { createComfyRendererModeChangeSource, resolveComfyRendererMode, } from '../core/ComfyRendererMode.js';
 import { NativeCubeGeometryCoordinator } from './geometry/NativeCubeGeometryCoordinator.js';
 /** Construct the graph-bound SugarCubes integration around native SubgraphNodes. */
 export function createComfyCubeRuntime(options) {
@@ -122,6 +122,7 @@ export function createComfyCubeRuntime(options) {
     const canvasFocus = new ComfyCanvasGraphFocusAdapter(canvas, (foreground, background) => history.setDirtyCanvas?.(foreground, background));
     const canvasSelection = new ComfyCanvasSelectionStateAdapter(selectedItems, updateSelectedItemsFunction ? () => updateSelectedItemsFunction.call(canvas) : null, options.logger);
     const canvasGraphChanges = new ComfyCanvasGraphChangeAdapter(canvas);
+    const rendererChanges = createComfyRendererModeChangeSource(app);
     const metadataHud = options.editorMetadata
         ? new CubeEditorMetadataHud(options.document, options.editorMetadata)
         : null;
@@ -213,6 +214,7 @@ export function createComfyCubeRuntime(options) {
         chromeActions,
         portPresentation,
         graphChanges: canvasGraphChanges,
+        rendererChanges,
         ...(options.onBoundaryGeometryChange
             ? { onBoundaryGeometryChange: options.onBoundaryGeometryChange }
             : {}),

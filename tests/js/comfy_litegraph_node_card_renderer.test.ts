@@ -345,6 +345,34 @@ describe('ComfyLiteGraphNodeCardRenderer', () => {
     expect(widget.y).toBe(160);
   });
 
+  test('skips unsafe floor-version arrangement when concrete input mirrors are incomplete', () => {
+    const arrange = jest.fn(() => {
+      throw new Error('floor Comfy would dereference a missing concrete input');
+    });
+    const drawNode = jest.fn();
+    const node = {
+      id: 'inside',
+      type: 'PromptEncodeStyle',
+      pos: [0, 0],
+      size: [360, 180],
+      inputs: [{ name: 'prompt' }],
+      _concreteInputs: [],
+      widgets: [{ name: 'prompt', y: 10 }],
+      drawSlots: jest.fn(),
+      drawCollapsedSlots: jest.fn(),
+      onDrawBackground: jest.fn(),
+      title_buttons: [],
+      strokeStyles: {},
+      arrange,
+      updateArea: jest.fn(),
+    };
+
+    drawNativeLiteGraphCubeCard({ drawNode }, node as never, {} as CanvasRenderingContext2D);
+
+    expect(drawNode).toHaveBeenCalledTimes(1);
+    expect(arrange).not.toHaveBeenCalled();
+  });
+
   test('applies one parent Cube theme only during the native card draw', () => {
     const node = {
       id: 'inside',

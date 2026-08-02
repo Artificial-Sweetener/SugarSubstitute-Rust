@@ -16,6 +16,7 @@
 /** Present Cube faces inside their real native graph nodes. */
 import { requireCubeIdentity, requireCubeSurface, } from '../cube/node/ComfyCubeNodeFactory.js';
 import { resolveCubeIdentityPresentation } from '../cube/CubeIdentityPresentation.js';
+import { buildCubeFaceChromeMetadata } from '../cube/node/CubeNodeAuthoringCandidate.js';
 import { loadComfyNativeNodeComponent, loadComfyVueRuntime, } from './ComfyRuntimeModuleLoader.js';
 import { ComfyVueNodeCardRenderer } from './ComfyVueNodeCardRenderer.js';
 import { findComfyNativeNodeMount, findComfyVueAppContext } from './ComfyVueTree.js';
@@ -55,10 +56,13 @@ export class CubeSurfacePresenter {
     #unsubscribeNodes;
     #unsubscribePreviews;
     #unsubscribeGraphChanges;
+    #unsubscribeRendererChanges;
     #nodePresenceObserver;
     #slotLayoutCoordinator;
     #rendererStabilizer;
     #mountGenerations = new Map();
+    #mountsInFlight = new Set();
+    #mountFailureSignatures = new Map();
     #presentedRendererMode = null;
     /** Bind native Cube nodes to their Nodes 2.0 custom-content seam. */
     constructor(options) {
@@ -120,6 +124,8 @@ export class CubeSurfacePresenter {
             options.previewChanges?.subscribe(() => this.#refreshPreviews()) ?? (() => undefined);
         this.#unsubscribeGraphChanges =
             options.graphChanges?.subscribe(() => this.#stabilizeSync()) ?? (() => undefined);
+        this.#unsubscribeRendererChanges =
+            options.rendererChanges?.subscribe(() => this.#stabilizeSync()) ?? (() => undefined);
         this.#nodePresenceObserver = new ComfyRendererPresenceObserver({
             document: options.document,
             ownsNodeId: (nodeId) => this.#nodes.list().some((node) => String(node.id) === nodeId),
@@ -133,10 +139,13 @@ export class CubeSurfacePresenter {
         this.#unsubscribeNodes();
         this.#unsubscribePreviews();
         this.#unsubscribeGraphChanges();
+        this.#unsubscribeRendererChanges();
         this.#nodePresenceObserver.dispose();
         this.#slotLayoutCoordinator.dispose();
         this.#rendererStabilizer.dispose();
         this.#mountGenerations.clear();
+        this.#mountsInFlight.clear();
+        this.#mountFailureSignatures.clear();
         for (const surface of this.#views.values())
             surface.view.dispose();
         this.#views.clear();
@@ -188,22 +197,24 @@ export class CubeSurfacePresenter {
         if (!shouldPresentVue)
             return;
         for (const node of nodes) {
-            const root = this.#host.mount(node);
-            if (!root) {
-                if (this.#views.has(node))
-                    this.#unmount(node);
-                continue;
-            }
             const surface = this.#views.get(node);
-            if (!surface || surface.root !== root) {
-                void this.#mountView(node, root);
+            const root = this.#host.getRoot(node);
+            const failureSignature = buildMountAttemptSignature(node);
+            if (!surface || !root || surface.root !== root) {
+                if (surface)
+                    this.#unmount(node);
+                if (this.#mountFailureSignatures.get(node) !== failureSignature) {
+                    void this.#mountView(node);
+                }
                 continue;
             }
             const signature = buildTopologySignature(node);
             const presentationSignature = buildPresentationSignature(node);
             if (surface.topologySignature !== signature ||
                 surface.presentationSignature !== presentationSignature) {
-                void this.#mountView(node, root);
+                if (this.#mountFailureSignatures.get(node) !== failureSignature) {
+                    void this.#mountView(node);
+                }
                 continue;
             }
             this.#layoutMountedView(node);
@@ -211,19 +222,24 @@ export class CubeSurfacePresenter {
         }
     }
     /** Mount exact internal nodes using Comfy's active native component. */
-    async #mountView(node, root) {
+    async #mountView(node) {
+        if (this.#mountsInFlight.has(node))
+            return;
+        this.#mountsInFlight.add(node);
         const generation = (this.#mountGenerations.get(node) ?? 0) + 1;
         this.#mountGenerations.set(node, generation);
+        let pendingView = null;
         try {
             const renderer = await this.#getRenderer();
             if (generation !== this.#mountGenerations.get(node) ||
                 !this.#nodes.list().includes(node) ||
-                this.#getCurrentGraph() !== this.#rootGraph) {
+                this.#getCurrentGraph() !== this.#rootGraph ||
+                this.#getRendererMode() !== 'vue') {
                 return;
             }
             const surfaceState = requireCubeSurface(node);
             const state = parseCubeSurfaceState(surfaceState);
-            const view = new CubeSurfaceView({
+            pendingView = new CubeSurfaceView({
                 document: this.#document,
                 renderer,
                 identity: resolveCubeIdentityPresentation({
@@ -231,7 +247,7 @@ export class CubeSurfacePresenter {
                     instanceTitle: node.title?.trim() || node.subgraph.name,
                     fallbackDefinitionTitle: node.subgraph.name,
                 }),
-                metadata: requireCubeIdentity(node),
+                metadata: buildCubeFaceChromeMetadata(node),
                 chromeActions: this.#chromeActions,
                 nodes: node.subgraph._nodes,
                 graph: node.subgraph,
@@ -248,16 +264,22 @@ export class CubeSurfacePresenter {
                     this.#setDirtyCanvas(true, true);
                 },
             });
+            const root = this.#host.getRoot(node) ?? this.#host.mount(node);
+            if (!root) {
+                pendingView.dispose();
+                pendingView = null;
+                return;
+            }
             this.#views.get(node)?.view.dispose();
-            root.replaceChildren(view.element);
-            if (!this.#host.mountHeader(node, view.header)) {
+            root.replaceChildren(pendingView.element);
+            if (!this.#host.mountHeader(node, pendingView.header)) {
                 throw new Error('Comfy native Cube header is not mounted.');
             }
             this.#views.set(node, {
                 root,
                 topologySignature: buildTopologySignature(node),
                 presentationSignature: buildPresentationSignature(node),
-                view,
+                view: pendingView,
                 layoutWidth: Number.NaN,
             });
             this.#observers.get(node)?.dispose();
@@ -265,17 +287,35 @@ export class CubeSurfacePresenter {
             this.#layoutMountedView(node);
             if (this.#previewCatalog) {
                 const externalInterface = resolveCubeExternalInterface(node);
-                view.renderPreview(filterCubePreviewOutputs(this.#previewCatalog.snapshot(node), externalInterface.outputSlots));
+                pendingView.renderPreview(filterCubePreviewOutputs(this.#previewCatalog.snapshot(node), externalInterface.outputSlots));
             }
             this.#host.reconcileBoundary(node);
             this.#onBoundaryGeometryChange();
+            this.#mountFailureSignatures.delete(node);
+            pendingView = null;
         }
         catch (error) {
-            this.#logger.error('SugarCubes failed to mount a Cube node surface.', {
-                nodeId: node.id,
-                reason: error instanceof Error ? error.message : String(error),
-                error,
-            });
+            const mounted = this.#views.get(node);
+            if (pendingView && mounted?.view === pendingView) {
+                this.#views.delete(node);
+                this.#observers.get(node)?.dispose();
+                this.#observers.delete(node);
+            }
+            pendingView?.dispose();
+            this.#host.unmount(node);
+            const failureSignature = buildMountAttemptSignature(node);
+            if (this.#mountFailureSignatures.get(node) !== failureSignature) {
+                this.#mountFailureSignatures.set(node, failureSignature);
+                const reason = error instanceof Error ? error.message : String(error);
+                this.#logger.error(`SugarCubes failed to mount a Cube node surface: ${reason}`, {
+                    nodeId: node.id,
+                    reason,
+                    error,
+                });
+            }
+        }
+        finally {
+            this.#mountsInFlight.delete(node);
         }
     }
     /** Reflow one mounted Cube only when its usable width changes. */
@@ -317,6 +357,7 @@ export class CubeSurfacePresenter {
         this.#observers.get(node)?.dispose();
         this.#observers.delete(node);
         this.#mountGenerations.delete(node);
+        this.#mountFailureSignatures.delete(node);
         this.#host.unmount(node);
     }
     /** Remove every native face mount before Comfy activates the same internal nodes. */
@@ -368,13 +409,15 @@ export class CubeSurfacePresenter {
         const renderer = this.#renderer;
         this.#renderer = null;
         this.#runtime = null;
+        this.#mountFailureSignatures.clear();
         if (!renderer)
             return;
         void renderer
             .then((resolved) => resolved.dispose())
             .catch((error) => {
-            this.#logger.warn('SugarCubes failed to dispose a replaced Nodes 2 renderer.', {
-                reason: error instanceof Error ? error.message : String(error),
+            const reason = error instanceof Error ? error.message : String(error);
+            this.#logger.warn(`SugarCubes failed to dispose a replaced Nodes 2 renderer: ${reason}`, {
+                reason,
                 error,
             });
         });
@@ -396,6 +439,10 @@ function buildPresentationSignature(node) {
         identity.has_saveable_changes ?? false,
         identity.icon ?? null,
     ]);
+}
+/** Retry a failed mount only after its renderer-relevant node contract changes. */
+function buildMountAttemptSignature(node) {
+    return `${buildTopologySignature(node)}|${buildPresentationSignature(node)}`;
 }
 /** Replace persisted surface state while retaining domain ownership of the record. */
 function replaceRecord(target, source) {
