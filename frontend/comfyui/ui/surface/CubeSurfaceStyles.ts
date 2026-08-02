@@ -369,9 +369,6 @@ export function ensureCubeSurfaceStyles(documentRef: Document): void {
         var(--sugarcubes-cube-masonry-footer-inset, 0px);
     }
     .sugarcubes-cube-face__content:has([data-reka-popper-content-wrapper]) {
-      /* The activation switch is a sibling overlay at z-index 12. An open
-         native combo belongs above that overlay so its choices remain usable. */
-      z-index: 13;
       overflow: visible;
       isolation: auto;
     }
@@ -389,15 +386,22 @@ export function ensureCubeSurfaceStyles(documentRef: Document): void {
     .sugarcubes-cube-face__node-card:focus-within {
       z-index: 10;
     }
+    .sugarcubes-native-node-card
+      [data-testid^="node-header-"][data-sugarcube-card-header-accessory] {
+      overflow: clip;
+    }
     .sugarcubes-cube-face__activation {
-      position: absolute;
-      z-index: 12;
-      top: 0.25rem;
-      right: 0.5rem;
+      position: static;
+      z-index: auto;
       display: inline-flex;
+      flex: 0 0 auto;
       align-items: center;
+      align-self: center;
       gap: 0.45rem;
-      padding: 0.15rem 0.25rem;
+      min-width: 0;
+      max-height: 100%;
+      margin-inline-start: auto;
+      padding: 0 0.25rem;
       border-radius: 999px;
       background: transparent;
       color: inherit;

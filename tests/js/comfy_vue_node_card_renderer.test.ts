@@ -221,6 +221,49 @@ describe('ComfyVueNodeCardRenderer', () => {
     expect(collapseButton.style.getPropertyPriority('display')).toBe('important');
   });
 
+  test('adopts a header accessory into the exact native title row and reconciles replacement', async () => {
+    const nativeRoot = document.createElement('div');
+    nativeRoot.className = 'lg-node';
+    const first = nativeCardHeader('inside-accessory');
+    const projected = nativeCardHeader('projected-child');
+    nativeRoot.append(first.header, projected.header);
+    const target = document.createElement('div');
+    const accessory = document.createElement('label');
+    accessory.dataset.cubeCardActivation = 'inside-accessory';
+    const renderer = new ComfyVueNodeCardRenderer({
+      component: { __name: 'LGraphNode' },
+      appContext: {},
+      runtime: {
+        render: (vnode) => {
+          if (vnode !== null) target.append(nativeRoot);
+        },
+        h: () => ({ type: 'node' }),
+        extractVueNodeData: () => ({ id: 'inside-accessory' }),
+      },
+    });
+
+    const mount = renderer.mount(
+      target,
+      { id: 'inside-accessory', type: 'MahiroCFG' },
+      { headerAccessory: accessory },
+    );
+
+    expect(accessory.parentElement).toBe(first.row);
+    expect(first.header.dataset.sugarcubeCardHeaderAccessory).toBe('');
+    expect(projected.header.contains(accessory)).toBe(false);
+
+    const replacement = nativeCardHeader('inside-accessory');
+    first.header.replaceWith(replacement.header);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(accessory.parentElement).toBe(replacement.row);
+    expect(replacement.header.dataset.sugarcubeCardHeaderAccessory).toBe('');
+
+    mount.unmount();
+    expect(accessory.isConnected).toBe(false);
+    expect(replacement.header.dataset.sugarcubeCardHeaderAccessory).toBeUndefined();
+  });
+
   test('preserves the native node body when Comfy mounts it after the initial render', async () => {
     const nativeRoot = document.createElement('div');
     nativeRoot.className = 'lg-node';
@@ -374,4 +417,21 @@ function componentVNode(name: string, element: HTMLElement): unknown {
       },
     },
   };
+}
+
+/** Build the semantic title hierarchy shared by supported Comfy NodeHeader releases. */
+function nativeCardHeader(nodeId: string): {
+  header: HTMLDivElement;
+  row: HTMLDivElement;
+} {
+  const header = document.createElement('div');
+  header.dataset.testid = `node-header-${nodeId}`;
+  const row = document.createElement('div');
+  const titleOwner = document.createElement('div');
+  const title = document.createElement('div');
+  title.dataset.testid = 'node-title';
+  titleOwner.append(title);
+  row.append(titleOwner);
+  header.append(row);
+  return { header, row };
 }

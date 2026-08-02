@@ -19,6 +19,7 @@ import { findVueComponent } from './ComfyVueTree.js';
 import { createCubeFaceNodeData, cubeFaceNodeHasVisibleWidgets, } from './CubeFaceNodePresentationPolicy.js';
 import { findCubeFacePromptWidget } from './CubeFacePromptPolicy.js';
 import { fitCubeFacePromptTextarea } from './CubeFacePromptTextarea.js';
+import { ComfyVueNodeHeaderAccessoryHost } from './ComfyVueNodeHeaderAccessoryHost.js';
 /** Own native Vue mounts while leaving component rendering and widget UI to Comfy. */
 export class ComfyVueNodeCardRenderer {
     #component;
@@ -34,11 +35,14 @@ export class ComfyVueNodeCardRenderer {
         this.#runtime = options.runtime;
     }
     /** Mount one exact internal graph node through Comfy's active native renderer. */
-    mount(target, node) {
+    mount(target, node, options = {}) {
         let disposed = false;
+        const headerAccessoryHost = options.headerAccessory
+            ? new ComfyVueNodeHeaderAccessoryHost(options.headerAccessory)
+            : null;
         const observer = new MutationObserver(() => {
             if (!disposed)
-                this.#applyPresentation(target, node);
+                this.#applyPresentation(target, node, headerAccessoryHost);
         });
         const renderCard = () => {
             if (disposed)
@@ -52,7 +56,7 @@ export class ComfyVueNodeCardRenderer {
             this.#runtime.render(vnodeValue, target);
             target.classList.add('sugarcubes-native-node-card');
             target.dataset.cubeFaceNative = 'nodes-2';
-            this.#applyPresentation(target, node);
+            this.#applyPresentation(target, node, headerAccessoryHost);
         };
         renderCard();
         observer.observe(target, { childList: true, subtree: true });
@@ -63,6 +67,7 @@ export class ComfyVueNodeCardRenderer {
                     return;
                 disposed = true;
                 observer.disconnect();
+                headerAccessoryHost?.dispose();
                 this.#runtime.render(null, target);
                 this.#mounts.delete(mount);
             },
@@ -76,7 +81,7 @@ export class ComfyVueNodeCardRenderer {
             mount.unmount();
     }
     /** Apply the narrow Cube-face mode to Comfy-owned component roots. */
-    #applyPresentation(target, node) {
+    #applyPresentation(target, node, headerAccessoryHost) {
         const nativeRoot = target.querySelector('.lg-node');
         if (nativeRoot) {
             nativeRoot.dataset.cubeFacePresentation = 'true';
@@ -90,6 +95,7 @@ export class ComfyVueNodeCardRenderer {
                 hideNativeSubgraphIcon(nativeRoot);
                 hideNativeSubgraphFooter(nativeRoot);
             }
+            headerAccessoryHost?.reconcile(nativeRoot, node);
         }
         const targetRecord = isRecord(target) ? target : {};
         for (const componentName of [

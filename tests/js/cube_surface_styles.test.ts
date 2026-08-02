@@ -197,7 +197,7 @@ describe('ensureCubeSurfaceStyles', () => {
     );
     expect(css).toMatch(
       new RegExp(
-        `\\.sugarcubes-cube-face__content:has\\(${popperSelector}\\)\\s*\\{[^}]*z-index:\\s*13;[^}]*overflow:\\s*visible;[^}]*isolation:\\s*auto;`,
+        `\\.sugarcubes-cube-face__content:has\\(${popperSelector}\\)\\s*\\{[^}]*overflow:\\s*visible;[^}]*isolation:\\s*auto;`,
         's',
       ),
     );
@@ -259,19 +259,20 @@ describe('ensureCubeSurfaceStyles', () => {
     expect(css).not.toContain('.sugarcubes-native-node-card [role="listbox"]');
   });
 
-  test('raises an open native combo above Cube activation controls', () => {
+  test('keeps activation controls in native header flow without overlay stacking', () => {
     ensureCubeSurfaceStyles(document);
 
     const css = document.getElementById('sugarcubes-cube-surface-styles')?.textContent ?? '';
-    const popperSelector = '\\[data-reka-popper-content-wrapper\\]';
+    const activationRule =
+      css.match(/\.sugarcubes-cube-face__activation\s*\{([^}]*)\}/s)?.[1] ?? '';
 
-    expect(css).toMatch(
-      new RegExp(
-        `\\.sugarcubes-cube-face__content:has\\(${popperSelector}\\)\\s*\\{[^}]*z-index:\\s*13;`,
-        's',
-      ),
-    );
-    expect(css).toMatch(/\.sugarcubes-cube-face__activation\s*\{[^}]*z-index:\s*12;/s);
+    expect(activationRule).toMatch(/position:\s*static;/);
+    expect(activationRule).toMatch(/z-index:\s*auto;/);
+    expect(activationRule).toMatch(/flex:\s*0\s+0\s+auto;/);
+    expect(activationRule).toMatch(/margin-inline-start:\s*auto;/);
+    expect(activationRule).not.toMatch(/\btop\s*:/);
+    expect(activationRule).not.toMatch(/\bright\s*:/);
+    expect(css).not.toMatch(/content:has\([^)]*popper[^)]*\)\s*\{[^}]*z-index:/s);
   });
 
   test('fits preview media inside layout-owned rail height without enlarging the Cube', () => {

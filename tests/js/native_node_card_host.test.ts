@@ -20,6 +20,7 @@ import { describe, expect, jest, test } from '@jest/globals';
 import { NativeNodeCardHost } from '../../frontend/comfyui/ui/surface/NativeNodeCardHost.js';
 import type {
   NativeNodeCardMount,
+  NativeNodeCardMountOptions,
   NativeNodeCardRenderer,
 } from '../../frontend/comfyui/ui/surface/NativeNodeCardRenderer.js';
 import type { ComfyNode } from '../../frontend/comfyui/ui/types/graph.js';
@@ -73,9 +74,15 @@ describe('NativeNodeCardHost', () => {
     expect(renderer.dispose).not.toHaveBeenCalled();
   });
 
-  test('renders the Cube activation control as a labeled Nodes 2.0 switch', () => {
+  test('delegates the labeled activation switch as a native header accessory', () => {
+    const mountedAccessories: HTMLElement[] = [];
     const renderer: NativeNodeCardRenderer = {
-      mount: jest.fn(() => createMount()),
+      mount: jest.fn(
+        (_target: HTMLElement, _node: ComfyNode, options: NativeNodeCardMountOptions = {}) => {
+          if (options.headerAccessory) mountedAccessories.push(options.headerAccessory);
+          return createMount();
+        },
+      ),
       dispose: jest.fn(),
     };
     const node: ComfyNode = { id: 'patch', type: 'MahiroCFG', mode: 4 };
@@ -95,10 +102,10 @@ describe('NativeNodeCardHost', () => {
       onActivationChange,
     );
 
-    const nativeTarget = root.querySelector('.sugarcubes-cube-face__native-card-mount');
-    const activation = root.querySelector<HTMLElement>('[data-cube-card-activation="patch"]');
+    const activation = mountedAccessories[0];
     const input = activation?.querySelector<HTMLInputElement>('[role="switch"]');
-    expect(nativeTarget?.contains(activation)).toBe(false);
+    expect(mountedAccessories).toHaveLength(1);
+    expect(root.contains(activation ?? null)).toBe(false);
     expect(activation?.textContent).toContain('Disabled');
     expect(input?.checked).toBe(false);
     expect(input?.getAttribute('aria-checked')).toBe('false');

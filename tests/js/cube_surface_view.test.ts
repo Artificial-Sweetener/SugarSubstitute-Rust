@@ -19,7 +19,10 @@ import { describe, expect, jest, test } from '@jest/globals';
 
 import { CubeSurfaceView } from '../../frontend/comfyui/ui/surface/CubeSurfaceView.js';
 import { createDefaultCubeSurfaceState } from '../../frontend/comfyui/ui/surface/CubeSurfaceState.js';
-import type { NativeNodeCardRenderer } from '../../frontend/comfyui/ui/surface/NativeNodeCardRenderer.js';
+import type {
+  NativeNodeCardMountOptions,
+  NativeNodeCardRenderer,
+} from '../../frontend/comfyui/ui/surface/NativeNodeCardRenderer.js';
 import type { ComfyNode } from '../../frontend/comfyui/ui/types/graph.js';
 import type { CubeIdentityPresentation } from '../../frontend/comfyui/ui/cube/CubeIdentityPresentation.js';
 
@@ -633,13 +636,18 @@ function createNode(index: number): ComfyNode {
 
 function createRenderer(): NativeNodeCardRenderer {
   return {
-    mount: jest.fn((target: HTMLElement, node: ComfyNode) => {
-      target.textContent = node.type ?? '';
-      return {
-        refresh: jest.fn(),
-        unmount: jest.fn(),
-      };
-    }),
+    mount: jest.fn(
+      (target: HTMLElement, node: ComfyNode, options: NativeNodeCardMountOptions = {}) => {
+        target.textContent = node.type ?? '';
+        if (options.headerAccessory) {
+          target.append(options.headerAccessory);
+        }
+        return {
+          refresh: jest.fn(),
+          unmount: jest.fn(),
+        };
+      },
+    ),
     dispose: jest.fn(),
   };
 }

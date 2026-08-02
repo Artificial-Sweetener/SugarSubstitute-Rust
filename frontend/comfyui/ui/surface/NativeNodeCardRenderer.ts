@@ -22,7 +22,15 @@ export interface NativeNodeCardMount {
   unmount(): void;
 }
 
+export interface NativeNodeCardMountOptions {
+  headerAccessory?: HTMLElement;
+}
+
 export interface NativeNodeCardRenderer {
-  mount(target: HTMLElement, node: ComfyNode): NativeNodeCardMount;
+  mount(
+    target: HTMLElement,
+    node: ComfyNode,
+    options?: NativeNodeCardMountOptions,
+  ): NativeNodeCardMount;
   dispose(): void;
 }

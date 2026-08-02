@@ -42,10 +42,10 @@ export class NativeNodeCardHost {
             nativeTarget.className = 'sugarcubes-cube-face__native-card-mount';
             cell.append(nativeTarget);
             container.appendChild(cell);
-            this.#mounts.push(this.#renderer.mount(nativeTarget, node));
-            if (card.showActivationControl) {
-                cell.append(createCubeFaceActivationControl(cell.ownerDocument, card, onActivationChange));
-            }
+            const headerAccessory = card.showActivationControl
+                ? createCubeFaceActivationControl(cell.ownerDocument, card, onActivationChange)
+                : null;
+            this.#mounts.push(this.#renderer.mount(nativeTarget, node, headerAccessory ? { headerAccessory } : {}));
             cells.push(cell);
         }
         return cells;

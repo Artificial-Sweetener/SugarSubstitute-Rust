@@ -85,7 +85,7 @@ describe('CubeSurfacePresenter', () => {
     expect(shell.root.querySelectorAll('[data-sugarcube-edge-resize]')).toHaveLength(4);
     expect(faceHost?.querySelector('[data-cube-resize-edge]')).toBeNull();
     expect(faceHost?.querySelector('[data-cube-port-direction]')).toBeNull();
-    expect(mount).toHaveBeenCalledWith(expect.any(HTMLElement), internalNode);
+    expect(mount).toHaveBeenCalledWith(expect.any(HTMLElement), internalNode, {});
     expect(onBoundaryGeometryChange).toHaveBeenCalledTimes(1);
 
     const replacementHeader = document.createElement('div');
@@ -220,7 +220,7 @@ describe('CubeSurfacePresenter', () => {
     node.subgraph.onAfterChange?.(node.subgraph);
     await flushMount();
 
-    expect(mount).toHaveBeenLastCalledWith(expect.any(HTMLElement), second);
+    expect(mount).toHaveBeenLastCalledWith(expect.any(HTMLElement), second, {});
     presenter.dispose();
   });
 
