@@ -58,7 +58,17 @@ export class ComfyVueNodeCardRenderer {
             target.dataset.cubeFaceNative = 'nodes-2';
             this.#applyPresentation(target, node, headerAccessoryHost);
         };
+        const refreshAfterAdvancedInputsToggle = (event) => {
+            const eventTarget = event.target;
+            if (!(eventTarget instanceof Element))
+                return;
+            const toggle = eventTarget.closest('[data-testid="advanced-inputs-button"]');
+            if (!toggle || !target.contains(toggle))
+                return;
+            queueMicrotask(renderCard);
+        };
         renderCard();
+        target.addEventListener('click', refreshAfterAdvancedInputsToggle, true);
         observer.observe(target, { childList: true, subtree: true });
         const mount = {
             refresh: renderCard,
@@ -67,6 +77,7 @@ export class ComfyVueNodeCardRenderer {
                     return;
                 disposed = true;
                 observer.disconnect();
+                target.removeEventListener('click', refreshAfterAdvancedInputsToggle, true);
                 headerAccessoryHost?.dispose();
                 this.#runtime.render(null, target);
                 this.#mounts.delete(mount);
@@ -104,26 +115,35 @@ export class ComfyVueNodeCardRenderer {
             'LivePreview',
             'ImagePreview',
             'NodeBadges',
-            'NodeFooter',
         ]) {
             const vnode = findVueComponent(targetRecord._vnode, componentName);
             const element = resolveComponentElement(vnode);
             if (element)
                 hideComponentRoot(element);
         }
+        const footerVNode = findVueComponent(targetRecord._vnode, 'NodeFooter');
+        const footerRoot = resolveComponentElement(footerVNode);
+        const advancedInputs = footerRoot ? reconcileNativeFooter(footerRoot) : null;
+        if (advancedInputs)
+            this.#isolateInteractiveRoot(advancedInputs);
         if (nativeRoot)
             reconcileNativeBody(nativeRoot, node);
         this.#fitPromptTextareas(target, node);
         const widgetsVNode = findVueComponent(targetRecord._vnode, 'NodeWidgets');
         const widgetsRoot = resolveComponentElement(widgetsVNode);
-        if (widgetsRoot && !this.#interactiveRoots.has(widgetsRoot)) {
-            const stopAtWidgets = (event) => event.stopPropagation();
-            widgetsRoot.addEventListener('pointerdown', stopAtWidgets);
-            widgetsRoot.addEventListener('mousedown', stopAtWidgets);
-            widgetsRoot.addEventListener('wheel', stopAtWidgets);
-            widgetsRoot.addEventListener('contextmenu', stopAtWidgets);
-            this.#interactiveRoots.add(widgetsRoot);
-        }
+        if (widgetsRoot)
+            this.#isolateInteractiveRoot(widgetsRoot);
+    }
+    /** Keep embedded controls from initiating the projected native node's drag behavior. */
+    #isolateInteractiveRoot(root) {
+        if (this.#interactiveRoots.has(root))
+            return;
+        const stopAtControl = (event) => event.stopPropagation();
+        root.addEventListener('pointerdown', stopAtControl);
+        root.addEventListener('mousedown', stopAtControl);
+        root.addEventListener('wheel', stopAtControl);
+        root.addEventListener('contextmenu', stopAtControl);
+        this.#interactiveRoots.add(root);
     }
     /** Let only semantic prompt editors grow their card instead of scrolling in place. */
     #fitPromptTextareas(target, node) {
@@ -140,6 +160,16 @@ export class ComfyVueNodeCardRenderer {
             fit();
         }
     }
+}
+/** Preserve and return only the native footer control for advanced inputs. */
+function reconcileNativeFooter(footerRoot) {
+    const advancedInputs = footerRoot.querySelector('[data-testid="advanced-inputs-button"]');
+    if (!advancedInputs) {
+        hideComponentRoot(footerRoot);
+        return null;
+    }
+    showComponentRoot(footerRoot);
+    return advancedInputs;
 }
 /** Remove the native body when Cube-face policy leaves only the title row. */
 function reconcileNativeBody(nativeRoot, node) {
@@ -178,6 +208,11 @@ function hideNativeSubgraphIcon(nativeRoot) {
 function hideComponentRoot(element) {
     element.hidden = true;
     element.style.setProperty('display', 'none', 'important');
+}
+/** Restore a Comfy-owned root previously hidden by Cube-face reconciliation. */
+function showComponentRoot(element) {
+    element.hidden = false;
+    element.style.removeProperty('display');
 }
 /** Resolve the rendered root element for one mounted component VNode. */
 function resolveComponentElement(vnode) {

@@ -18,13 +18,15 @@
 import { ensureCubeSurfaceStyles } from '../../frontend/comfyui/ui/surface/CubeSurfaceStyles.js';
 
 describe('ensureCubeSurfaceStyles', () => {
-  test('suppresses native ports and advanced footers only inside Cube cards', () => {
+  test('suppresses native ports and subgraph footers while preserving advanced inputs', () => {
     ensureCubeSurfaceStyles(document);
 
     const css = document.getElementById('sugarcubes-cube-surface-styles')?.textContent;
     expect(css).toContain('.sugarcubes-native-node-card .lg-node-slots');
     expect(css).toContain('.sugarcubes-native-node-card .lg-slot');
-    expect(css).toContain('.sugarcubes-native-node-card [data-testid="advanced-inputs-button"]');
+    expect(css).not.toContain(
+      '.sugarcubes-native-node-card [data-testid="advanced-inputs-button"]',
+    );
     expect(css).toContain('.sugarcubes-native-node-card [data-testid="subgraph-enter-button"]');
     expect(css).not.toContain(
       '.lg-node[data-sugarcube-node="true"] [data-testid="subgraph-enter-button"]',

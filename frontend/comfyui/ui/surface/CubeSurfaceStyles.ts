@@ -450,7 +450,6 @@ export function ensureCubeSurfaceStyles(documentRef: Document): void {
     .sugarcubes-native-node-card .lg-node-slots,
     .sugarcubes-native-node-card .lg-slot,
     .sugarcubes-native-node-card [data-testid="slot-connection-dot"],
-    .sugarcubes-native-node-card [data-testid="advanced-inputs-button"],
     .sugarcubes-native-node-card [data-testid="subgraph-enter-button"] {
       display: none !important;
     }

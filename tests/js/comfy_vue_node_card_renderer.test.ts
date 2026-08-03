@@ -152,6 +152,98 @@ describe('ComfyVueNodeCardRenderer', () => {
     expect(nativeRoot.style.getPropertyValue('--min-node-width')).toBe('');
   });
 
+  test('preserves Comfy native advanced-input controls and refreshes after interaction', async () => {
+    const node: ComfyNode = {
+      id: 'advanced-node',
+      type: 'KSampler',
+      showAdvanced: false,
+    };
+    const nativeRoot = document.createElement('div');
+    nativeRoot.className = 'lg-node';
+    const footer = document.createElement('div');
+    const advancedInputs = document.createElement('button');
+    advancedInputs.dataset.testid = 'advanced-inputs-button';
+    advancedInputs.textContent = 'Show advanced inputs';
+    const toggleAdvanced = jest.fn();
+    let draggingNativeNode = false;
+    let suppressNextClick = false;
+    nativeRoot.addEventListener('pointerdown', () => {
+      draggingNativeNode = true;
+    });
+    nativeRoot.addEventListener('pointerup', () => {
+      draggingNativeNode = false;
+    });
+    advancedInputs.addEventListener('pointerup', () => {
+      suppressNextClick = draggingNativeNode;
+    });
+    advancedInputs.addEventListener('click', () => {
+      if (suppressNextClick) {
+        suppressNextClick = false;
+        return;
+      }
+      node.showAdvanced = !node.showAdvanced;
+      toggleAdvanced();
+    });
+    footer.append(advancedInputs);
+    nativeRoot.append(footer);
+    const target = document.createElement('div') as HTMLDivElement & { _vnode?: unknown };
+    const extractVueNodeData = jest.fn(() => ({
+      id: 'advanced-node',
+      showAdvanced: node.showAdvanced,
+    }));
+    const h = jest.fn((_component: unknown, props: unknown) => ({ type: 'node', props }));
+    const renderer = new ComfyVueNodeCardRenderer({
+      component: { __name: 'LGraphNode' },
+      appContext: {},
+      runtime: {
+        render: (vnode) => {
+          if (vnode === null) return;
+          target.append(nativeRoot);
+          target._vnode = {
+            component: {
+              subTree: {
+                children: [componentVNode('NodeFooter', footer)],
+              },
+            },
+          };
+        },
+        h,
+        extractVueNodeData,
+      },
+    });
+
+    const mount = renderer.mount(target, node);
+    clickNativeControl(advancedInputs);
+    await Promise.resolve();
+
+    expect(footer.hidden).toBe(false);
+    expect(footer.style.getPropertyValue('display')).toBe('');
+    expect(advancedInputs.hidden).toBe(false);
+    expect(toggleAdvanced).toHaveBeenCalledTimes(1);
+    expect(extractVueNodeData).toHaveBeenCalledTimes(2);
+    expect(h).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        nodeData: expect.objectContaining({ showAdvanced: true }),
+      }),
+    );
+
+    clickNativeControl(advancedInputs);
+    await Promise.resolve();
+    expect(extractVueNodeData).toHaveBeenCalledTimes(3);
+    expect(h).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        nodeData: expect.objectContaining({ showAdvanced: false }),
+      }),
+    );
+
+    mount.unmount();
+    clickNativeControl(advancedInputs);
+    await Promise.resolve();
+    expect(extractVueNodeData).toHaveBeenCalledTimes(3);
+  });
+
   test('collapses a badge-only card to its native title row', () => {
     const nativeRoot = document.createElement('div');
     nativeRoot.className = 'lg-node';
@@ -417,6 +509,13 @@ function componentVNode(name: string, element: HTMLElement): unknown {
       },
     },
   };
+}
+
+/** Dispatch the complete pointer sequence produced by a real control click. */
+function clickNativeControl(control: HTMLElement): void {
+  control.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+  control.dispatchEvent(new Event('pointerup', { bubbles: true }));
+  control.click();
 }
 
 /** Build the semantic title hierarchy shared by supported Comfy NodeHeader releases. */
