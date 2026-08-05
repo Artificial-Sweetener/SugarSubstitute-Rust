@@ -21,6 +21,8 @@ from typing import Any, Mapping, MutableMapping
 
 from .document import CubeDocument
 from .input_persistence import should_store_authored_value
+from .picker_fields import find_input_field_spec
+from .runtime_references import contains_runtime_reference
 from .surface_value_policy import volatile_surface_control_ids
 
 
@@ -32,16 +34,24 @@ def sanitize_authored_defaults_document(document: CubeDocument) -> CubeDocument:
     return CubeDocument.from_dict(payload)
 
 
-def sanitize_authored_defaults_payload(payload: MutableMapping[str, Any]) -> None:
+def sanitize_authored_defaults_payload(
+    payload: MutableMapping[str, Any],
+    *,
+    definitions: Mapping[str, Any] | None = None,
+) -> None:
     """Remove authored values that should not be stored in portable cube files."""
 
-    _strip_unshippable_node_inputs(payload.get("implementation"))
+    live_definitions = definitions or {}
+    _strip_unshippable_node_inputs(payload.get("implementation"), live_definitions)
     surface = payload.get("surface")
     flavors = payload.get("flavors")
     if not isinstance(surface, Mapping) or not isinstance(flavors, Mapping):
         return
 
-    stripped_control_ids = _stripped_control_ids(surface.get("controls"))
+    stripped_control_ids = _stripped_control_ids(
+        surface.get("controls"),
+        live_definitions,
+    )
     if not stripped_control_ids:
         return
 
@@ -58,7 +68,10 @@ def sanitize_authored_defaults_payload(payload: MutableMapping[str, Any]) -> Non
             values.pop(control_id, None)
 
 
-def _strip_unshippable_node_inputs(implementation: Any) -> None:
+def _strip_unshippable_node_inputs(
+    implementation: Any,
+    definitions: Mapping[str, Any],
+) -> None:
     """Remove scalar local and volatile defaults while retaining graph bindings."""
 
     if not isinstance(implementation, Mapping):
@@ -73,27 +86,17 @@ def _strip_unshippable_node_inputs(implementation: Any) -> None:
         inputs = node.get("inputs")
         if not isinstance(class_type, str) or not isinstance(inputs, MutableMapping):
             continue
+        definition = definitions.get(class_type)
+        live_definition = definition if isinstance(definition, Mapping) else {}
         for input_name, value in list(inputs.items()):
-            if not isinstance(input_name, str) or _contains_runtime_reference(value):
+            if not isinstance(input_name, str) or contains_runtime_reference(value):
                 continue
-            if not should_store_authored_value(class_type, input_name):
+            if not should_store_authored_value(
+                class_type,
+                input_name,
+                field_spec=find_input_field_spec(live_definition, input_name),
+            ):
                 inputs.pop(input_name, None)
-
-
-def _contains_runtime_reference(value: Any) -> bool:
-    """Return whether a node input contains a serialized graph relationship."""
-
-    if isinstance(value, list):
-        if (
-            len(value) == 2
-            and isinstance(value[0], str | int)
-            and isinstance(value[1], str | int)
-        ):
-            return True
-        return any(_contains_runtime_reference(entry) for entry in value)
-    if isinstance(value, Mapping):
-        return any(_contains_runtime_reference(entry) for entry in value.values())
-    return False
 
 
 def should_strip_authored_default(class_type: str, input_name: str) -> bool:
@@ -102,7 +105,10 @@ def should_strip_authored_default(class_type: str, input_name: str) -> bool:
     return not should_store_authored_value(class_type, input_name)
 
 
-def _stripped_control_ids(controls: Any) -> set[str]:
+def _stripped_control_ids(
+    controls: Any,
+    definitions: Mapping[str, Any],
+) -> set[str]:
     """Return surface control ids whose authored defaults should be stripped."""
 
     stripped: set[str] = volatile_surface_control_ids(controls)
@@ -114,11 +120,22 @@ def _stripped_control_ids(controls: Any) -> set[str]:
         class_type = control.get("class_type")
         input_name = control.get("input_name")
         control_id = control.get("control_id")
+        definition = (
+            definitions.get(class_type) if isinstance(class_type, str) else None
+        )
+        field_spec = find_input_field_spec(
+            definition if isinstance(definition, Mapping) else {},
+            input_name if isinstance(input_name, str) else "",
+        )
         if (
             isinstance(class_type, str)
             and isinstance(input_name, str)
             and isinstance(control_id, str)
-            and should_strip_authored_default(class_type, input_name)
+            and not should_store_authored_value(
+                class_type,
+                input_name,
+                field_spec=field_spec,
+            )
         ):
             stripped.add(control_id)
     return stripped

@@ -158,7 +158,11 @@ def canonicalize_subgraph_widget_values(
             node["widgets_values"] = [
                 (
                     snapshot.values.get(name)
-                    if should_store_authored_value(class_type, name)
+                    if should_store_authored_value(
+                        class_type,
+                        name,
+                        field_spec=find_input_field_spec(live_definition, name),
+                    )
                     else None
                 )
                 for name in names

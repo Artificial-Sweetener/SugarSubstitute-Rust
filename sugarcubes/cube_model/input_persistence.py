@@ -17,7 +17,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from enum import Enum
+from typing import Any
 
 
 class InputPersistence(str, Enum):
@@ -54,10 +56,15 @@ _LOCAL_RESOURCE_FIELDS = frozenset(
     }
 )
 
+_LOCAL_FILE_METADATA_KEYS = frozenset({"image_folder"})
+_LOCAL_FILE_METADATA_SUFFIXES = ("_path_extensions",)
+
 
 def classify_input_persistence(
     class_type: str,
     input_name: str,
+    *,
+    field_spec: Any = None,
 ) -> InputPersistence:
     """Return the canonical persistence disposition for one node input."""
 
@@ -65,6 +72,8 @@ def classify_input_persistence(
     normalized_name = input_name.strip()
     if normalized_name == "seed":
         return InputPersistence.VOLATILE
+    if is_local_file_field_spec(field_spec):
+        return InputPersistence.LOCAL_RESOURCE
     if normalized_name in _LOCAL_RESOURCE_INPUT_NAMES:
         return InputPersistence.LOCAL_RESOURCE
     if (normalized_class, normalized_name) in _LOCAL_RESOURCE_FIELDS:
@@ -72,10 +81,47 @@ def classify_input_persistence(
     return InputPersistence.PORTABLE_AUTHORED
 
 
-def should_store_authored_value(class_type: str, input_name: str) -> bool:
+def should_store_authored_value(
+    class_type: str,
+    input_name: str,
+    *,
+    field_spec: Any = None,
+) -> bool:
     """Return whether a cube may ship an authored value for one input."""
 
     return (
-        classify_input_persistence(class_type, input_name)
+        classify_input_persistence(
+            class_type,
+            input_name,
+            field_spec=field_spec,
+        )
         is InputPersistence.PORTABLE_AUTHORED
     )
+
+
+def is_local_file_field_spec(field_spec: Any) -> bool:
+    """Return whether Comfy metadata declares one filesystem-backed input."""
+
+    metadata = _field_metadata(field_spec)
+    for key, value in metadata.items():
+        normalized_key = str(key).strip().lower()
+        if normalized_key.endswith("_upload") and value is True:
+            return True
+        if normalized_key in _LOCAL_FILE_METADATA_KEYS:
+            return True
+        if normalized_key.endswith(_LOCAL_FILE_METADATA_SUFFIXES):
+            return True
+    return False
+
+
+def _field_metadata(field_spec: Any) -> Mapping[str, Any]:
+    """Return metadata paired with one Comfy input field specification."""
+
+    if (
+        isinstance(field_spec, Sequence)
+        and not isinstance(field_spec, (str, bytes))
+        and len(field_spec) > 1
+        and isinstance(field_spec[1], Mapping)
+    ):
+        return field_spec[1]
+    return {}

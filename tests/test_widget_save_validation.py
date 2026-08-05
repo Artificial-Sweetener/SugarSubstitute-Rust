@@ -315,6 +315,15 @@ def test_subgraph_persistence_removes_local_and_volatile_values_by_name() -> Non
                     ],
                     "widgets_values": [1234, "randomize", 30],
                 },
+                {
+                    "id": 9,
+                    "type": "Example.FileBatch",
+                    "inputs": [
+                        {"name": "files", "widget": {"name": "files"}},
+                        {"name": "mode", "widget": {"name": "mode"}},
+                    ],
+                    "widgets_values": [["a.png", "b.png"], "alpha"],
+                },
             ],
         }
     ]
@@ -336,12 +345,29 @@ def test_subgraph_persistence_removes_local_and_volatile_values_by_name() -> Non
                 }
             }
         },
+        "Example.FileBatch": {
+            "input": {
+                "required": {
+                    "files": [
+                        "COMBO",
+                        {
+                            "file_upload": True,
+                            "default": [],
+                            "multiselect": True,
+                            "options": ["a.png", "b.png"],
+                        },
+                    ],
+                    "mode": [["alpha", "red"], {"default": "alpha"}],
+                }
+            }
+        },
     }
 
     canonical = canonicalize_subgraph_widget_values(subgraphs, definitions)
 
     assert canonical[0]["nodes"][0]["widgets_values"] == [None, None, False]
     assert canonical[0]["nodes"][1]["widgets_values"] == [None, 30]
+    assert canonical[0]["nodes"][2]["widgets_values"] == [None, "alpha"]
     assert subgraphs[0]["nodes"][0]["widgets_values"][0] == "machine-a.safetensors"
 
 

@@ -17,11 +17,15 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
+
+import pytest
 
 from sugarcubes.exporter import export_cubes
 
 CHECKPOINT_CLASS = "SimpleSyrup.SimpleLoadCheckpoint"
+MASK_BATCH_CLASS = "SimpleSyrup.LoadMaskBatch"
 PROMPT_CLASS = "SimpleSyrup.ScheduleAndEncodePromptsWithPromptControl"
 
 
@@ -77,6 +81,42 @@ def test_export_accepts_unconnected_widgets_and_force_input_socket() -> None:
 
     assert {"positive_prompt", "negative_prompt"} <= controls.keys()
     assert "encode_style" not in controls
+
+
+@pytest.mark.parametrize(
+    "selected_files",
+    [[], ["mask-a.png", "mask-b.png"]],
+)
+def test_export_wipes_filesystem_backed_multiselect_values(
+    selected_files: list[str],
+) -> None:
+    """Filesystem upload selections never become portable Cube defaults."""
+
+    cube = _export_single_node(
+        class_type=MASK_BATCH_CLASS,
+        prompt_inputs={
+            "image": {"**value**": selected_files},
+            "channel": "alpha",
+        },
+        workflow_inputs=[
+            {"name": "image", "type": "COMBO", "widget": {"name": "image"}},
+            {
+                "name": "channel",
+                "type": "COMBO",
+                "widget": {"name": "channel"},
+            },
+        ],
+        widget_values=[selected_files, "alpha"],
+    )
+
+    controls = _controls_by_input(cube)
+    authored_values = cube["flavors"]["authored"][0]["values"]
+    serialized = json.dumps(cube)
+
+    assert controls["image"]["control_id"] not in authored_values
+    assert authored_values[controls["channel"]["control_id"]] == "alpha"
+    assert "**value**" not in serialized
+    assert all(filename not in serialized for filename in selected_files)
 
 
 def _export_single_node(
@@ -147,6 +187,34 @@ def _definition(class_type: str) -> dict[str, Any]:
             "output": ["MODEL", "CLIP", "VAE"],
             "output_name": ["model", "clip", "vae"],
             "output_is_list": [False, False, False],
+        }
+    if class_type == MASK_BATCH_CLASS:
+        return {
+            "input": {
+                "required": {
+                    "image": [
+                        "COMBO",
+                        {
+                            "image_upload": True,
+                            "image_folder": "input",
+                            "default": [],
+                            "multiselect": True,
+                            "options": ["mask-a.png", "mask-b.png"],
+                        },
+                    ],
+                    "channel": [
+                        "COMBO",
+                        {
+                            "default": "alpha",
+                            "options": ["alpha", "red", "green", "blue"],
+                        },
+                    ],
+                }
+            },
+            "input_order": {"required": ["image", "channel"]},
+            "output": ["MASK"],
+            "output_name": ["mask"],
+            "output_is_list": [False],
         }
     if class_type == PROMPT_CLASS:
         return {

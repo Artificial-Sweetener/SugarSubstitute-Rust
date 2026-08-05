@@ -24,8 +24,7 @@ from .document import CubeDocument
 from .flavors import AuthoredFlavor, AuthoredFlavorSet
 from .implementation import CubeImplementation
 from .surface import CubeSurface, SurfaceControl, infer_value_type
-
-BINDING_SENTINEL = "@binding"
+from .runtime_references import contains_runtime_reference
 
 
 def migrate_legacy_payload(payload: Mapping[str, Any]) -> CubeDocument:
@@ -104,7 +103,7 @@ def migrate_legacy_payload(payload: Mapping[str, Any]) -> CubeDocument:
 def _is_surface_value(value: Any) -> bool:
     """Return whether one legacy node input should move into the Default flavor."""
 
-    return not _contains_runtime_reference(value)
+    return not contains_runtime_reference(value)
 
 
 def _resolve_input_label(
@@ -168,30 +167,6 @@ def _read_definition_label(spec: Any) -> str:
                 if value:
                     return value
     return ""
-
-
-def _contains_runtime_reference(value: Any) -> bool:
-    """Return whether one legacy input value embeds links or binding references."""
-
-    if _is_direct_reference(value):
-        return True
-    if isinstance(value, list):
-        return any(_contains_runtime_reference(entry) for entry in value)
-    if isinstance(value, Mapping):
-        return any(_contains_runtime_reference(entry) for entry in value.values())
-    return False
-
-
-def _is_direct_reference(value: Any) -> bool:
-    """Return whether one value is a direct serialized link or binding sentinel."""
-
-    if not isinstance(value, list) or len(value) != 2:
-        return False
-    source = value[0]
-    slot = value[1]
-    if source == BINDING_SENTINEL and isinstance(slot, str):
-        return True
-    return isinstance(source, (str, int)) and isinstance(slot, int)
 
 
 def _read_required_string(payload: Mapping[str, Any], key: str) -> str:

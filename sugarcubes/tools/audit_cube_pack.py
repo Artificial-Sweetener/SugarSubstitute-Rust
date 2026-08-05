@@ -245,7 +245,14 @@ class CubePackAuditor:
                     live_definition = self._live_definitions.get(class_type)
                     if not isinstance(live_definition, Mapping):
                         continue
-                    if not should_store_authored_value(class_type, input_name):
+                    if not should_store_authored_value(
+                        class_type,
+                        input_name,
+                        field_spec=find_input_field_spec(
+                            live_definition,
+                            input_name,
+                        ),
+                    ):
                         findings.append(
                             CubeAuditFinding(
                                 cube_path,

@@ -26,6 +26,7 @@ from ..cube_model.picker_fields import (
     is_picker_field_spec,
     picker_options,
 )
+from ..cube_model.runtime_references import contains_runtime_reference
 from ..cube_model.widget_values import (
     WidgetSnapshotError,
     decode_workflow_widget_snapshot,
@@ -46,11 +47,15 @@ def validate_named_node_inputs(
     """Validate portable scalar values against the same named live inputs."""
 
     for input_name, value in inputs.items():
-        if _contains_runtime_reference(value):
-            continue
-        if not should_store_authored_value(class_type, input_name):
-            continue
         field_spec = find_input_field_spec(definition, input_name)
+        if not should_store_authored_value(
+            class_type,
+            input_name,
+            field_spec=field_spec,
+        ):
+            continue
+        if contains_runtime_reference(value):
+            continue
         reason = invalid_named_value_reason(value, field_spec)
         if reason is not None:
             _raise_value_error(
@@ -152,22 +157,6 @@ def _raise_value_error(
         f"node_id={node_id!r}; class_type={class_type}; input={input_name}; "
         f"value={value!r} {reason}"
     )
-
-
-def _contains_runtime_reference(value: Any) -> bool:
-    """Return whether one input value contains a node or cube binding reference."""
-
-    if isinstance(value, list):
-        if (
-            len(value) == 2
-            and isinstance(value[0], str | int)
-            and isinstance(value[1], str | int)
-        ):
-            return True
-        return any(_contains_runtime_reference(entry) for entry in value)
-    if isinstance(value, Mapping):
-        return any(_contains_runtime_reference(entry) for entry in value.values())
-    return False
 
 
 def _field_metadata(field_spec: Any) -> Mapping[str, Any]:

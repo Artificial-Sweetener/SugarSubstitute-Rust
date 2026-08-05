@@ -43,6 +43,7 @@ from ..cube_model.picker_fields import (
     find_input_field_spec,
     is_picker_field_spec,
 )
+from ..cube_model.input_persistence import should_store_authored_value
 from ..cube_model.widget_values import canonicalize_subgraph_widget_values
 from ..instrumentation import log_event
 
@@ -194,8 +195,11 @@ def _serialize_cube(
         legacy_payload["subgraphs"] = subgraphs
 
     payload = migrate_legacy_payload(legacy_payload).to_dict()
-    sanitize_authored_defaults_payload(payload)
-    _validate_authored_values_against_definitions(payload)
+    sanitize_authored_defaults_payload(
+        payload,
+        definitions=validation_definitions,
+    )
+    _validate_authored_values_against_definitions(payload, validation_definitions)
 
     warnings = (
         input_warnings
@@ -268,7 +272,9 @@ def _build_inputs(
     warnings: List[str] = []
     counters: Dict[Tuple[str, str], int] = {}
 
-    for marker in sorted(cube.inputs, key=lambda entry: natural_node_key(entry.node_id)):
+    for marker in sorted(
+        cube.inputs, key=lambda entry: natural_node_key(entry.node_id)
+    ):
         edges = _downstream_edges(marker, graph, cube.subgraph_nodes)
         connections = _downstream_connections(edges, symbols)
         binding_type = _resolve_input_binding_type(edges, graph, definitions)
@@ -299,7 +305,9 @@ def _build_outputs(
     warnings: List[str] = []
     counters: Dict[Tuple[str, str], int] = {}
 
-    for marker in sorted(cube.outputs, key=lambda entry: natural_node_key(entry.node_id)):
+    for marker in sorted(
+        cube.outputs, key=lambda entry: natural_node_key(entry.node_id)
+    ):
         upstream = _upstream_edges(marker, graph, cube.subgraph_nodes)
         if not upstream:
             warnings.append(f"CubeOutput '{marker.node_id}' has no upstream source")
@@ -380,7 +388,10 @@ def _field_type_name(field_spec: Any) -> Optional[str]:
     return first if isinstance(first, str) else None
 
 
-def _validate_authored_values_against_definitions(payload: Mapping[str, Any]) -> None:
+def _validate_authored_values_against_definitions(
+    payload: Mapping[str, Any],
+    definitions: Mapping[str, Any] | None = None,
+) -> None:
     """Reject cube payloads with surface values that contradict definitions."""
 
     implementation = payload.get("implementation")
@@ -393,12 +404,15 @@ def _validate_authored_values_against_definitions(payload: Mapping[str, Any]) ->
     ):
         return
     nodes = implementation.get("nodes")
-    definitions = implementation.get("definitions")
+    embedded_definitions = implementation.get("definitions")
+    selected_definitions = (
+        definitions if definitions is not None else embedded_definitions
+    )
     controls = surface.get("controls")
     authored = flavors.get("authored")
     if not (
         isinstance(nodes, Mapping)
-        and isinstance(definitions, Mapping)
+        and isinstance(selected_definitions, Mapping)
         and isinstance(controls, Sequence)
         and not isinstance(controls, (str, bytes))
         and isinstance(authored, Sequence)
@@ -413,7 +427,7 @@ def _validate_authored_values_against_definitions(payload: Mapping[str, Any]) ->
         if isinstance(control_id, str):
             control_index[control_id] = control
     for control in control_index.values():
-        _validate_surface_control_type(payload, control, definitions)
+        _validate_surface_control_type(payload, control, selected_definitions)
     for flavor in authored:
         if not isinstance(flavor, Mapping):
             continue
@@ -430,7 +444,7 @@ def _validate_authored_values_against_definitions(payload: Mapping[str, Any]) ->
             _validate_authored_control_value(
                 payload,
                 selected_control,
-                definitions,
+                selected_definitions,
                 flavor_id=flavor_id,
                 value=value,
             )
@@ -445,6 +459,18 @@ def _validate_surface_control_type(
 
     field_spec = _control_field_spec(control, definitions)
     if field_spec is None:
+        return
+    class_type = control.get("class_type")
+    input_name = control.get("input_name")
+    if (
+        isinstance(class_type, str)
+        and isinstance(input_name, str)
+        and not should_store_authored_value(
+            class_type,
+            input_name,
+            field_spec=field_spec,
+        )
+    ):
         return
     expected_value_type = _expected_surface_value_type(field_spec)
     if expected_value_type is None:
@@ -476,6 +502,18 @@ def _validate_authored_control_value(
 
     field_spec = _control_field_spec(control, definitions)
     if field_spec is None:
+        return
+    class_type = control.get("class_type")
+    input_name = control.get("input_name")
+    if (
+        isinstance(class_type, str)
+        and isinstance(input_name, str)
+        and not should_store_authored_value(
+            class_type,
+            input_name,
+            field_spec=field_spec,
+        )
+    ):
         return
     reason = invalid_named_value_reason(value, field_spec)
     if reason is None:
@@ -541,8 +579,6 @@ def _raise_authored_value_error(
         f"input={input_name}; expected={expected}; "
         f"actual_type={type(value).__name__}; actual_value={value!r}"
     )
-
-
 
 
 def _describe_cube(cube: CubeData) -> Tuple[str, Dict[str, Any]]:
@@ -623,8 +659,6 @@ def _short_hash(value: str) -> str:
     return digest[:6]
 
 
-
-
 def _downstream_edges(
     marker: CubeMarker, graph: Graph, subgraph: Collection[str]
 ) -> List[Edge]:
@@ -649,7 +683,9 @@ def _upstream_edges(
     edges = [
         edge for edge in graph.edges_to(marker.node_id) if edge.source in subgraph_set
     ]
-    edges.sort(key=lambda edge: (natural_node_key(edge.source), int(edge.source_slot or 0)))
+    edges.sort(
+        key=lambda edge: (natural_node_key(edge.source), int(edge.source_slot or 0))
+    )
     return edges
 
 
