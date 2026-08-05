@@ -158,6 +158,8 @@ Engineering priority is maintainability, clear architecture, behavior safety dur
 - Keep tests deterministic and isolated.
 - Prefer real behavior tests over excessive mocking; mock only external boundaries.
 - UI-critical behavior should be covered by automated tests when feasible.
+- Web features must be tested against both ComfyUI Nodes 1.0 and Nodes 2.0 renderers, including switching between them when renderer lifecycle can affect behavior.
+- Manually verify user-visible web interactions in both Chrome and Firefox when the behavior depends on browser rendering, native controls, file selection, drag-and-drop, previews, or renderer integration. Assistant-led implementation work must include this manual cross-browser, cross-renderer verification before completion is reported.
 - Type-level contracts should have compile-time coverage where runtime tests cannot prove invalid states are rejected.
 - Failing tests are blocking.
 
@@ -165,6 +167,7 @@ Engineering priority is maintainability, clear architecture, behavior safety dur
 
 - Run focused checks during implementation.
 - Verify the specific reported behavior directly when feasible; do not declare a UI or interaction issue fixed from code inspection alone.
+- Record which Nodes renderer and browser combinations were manually observed for applicable web changes; Nodes 1.0 and Nodes 2.0 in both Chrome and Firefox are the required matrix unless the change is demonstrably browser- or renderer-independent.
 - Run the full repository gate before reporting completion.
 - Distinguish observed results from inferred results in progress updates and completion reports.
 - Do not introduce new lint, format, or test failures in modified files.
