@@ -24,6 +24,7 @@ const ICONS = Object.freeze({
     'chevron-up': { className: 'pi-chevron-up', glyph: '\uE933' },
     circle: { className: 'pi-circle', glyph: '\uE9DC' },
     'circle-fill': { className: 'pi-circle-fill', glyph: '\uE9DD' },
+    download: { className: 'pi-download', glyph: '\uE956' },
     eye: { className: 'pi-eye', glyph: '\uE966' },
     save: { className: 'pi-save', glyph: '\uE92B' },
     'window-maximize': { className: 'pi-window-maximize', glyph: '\uE93B' },

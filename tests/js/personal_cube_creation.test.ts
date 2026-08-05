@@ -20,7 +20,13 @@ import {
   buildPersonalCubeId,
   suggestPersonalCubeIdentity,
 } from '../../frontend/comfyui/ui/create/PersonalCubeIdentity.js';
+import { createComfySettingsOverlayProps } from '../../frontend/comfyui/ui/controls/ComfySettingsSelect.js';
 import { CubeAuthoringModal } from '../../frontend/comfyui/ui/dialogs/CubeAuthoringModal.js';
+import {
+  COMFY_SETTINGS_OVERLAY_BASE_Z_INDEX,
+  DIALOG_OVERLAY_Z_INDEX,
+} from '../../frontend/comfyui/ui/core/OverlayStacking.js';
+import { injectDialogStyles } from '../../frontend/comfyui/ui/dialogs/DialogStyles.js';
 import { TestComfySettingsSelectRenderer } from './helpers/ComfySettingsSelectTestRenderer.js';
 
 beforeEach(() => {
@@ -65,6 +71,7 @@ describe('Cube authoring modal', () => {
       .querySelector<HTMLTextAreaElement>('.sugarcubes-create-cube__description')!
       .closest('label')!;
     expect(overlay.style.cursor).toBe('grab');
+    expect(window.getComputedStyle(overlay).alignItems).toBe('center');
     expect(
       preview.compareDocumentPosition(descriptionField) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
@@ -152,12 +159,20 @@ describe('Cube authoring modal', () => {
     });
 
     const target = settingsSelect.single('Target model');
+    const customTargetField = document.querySelector<HTMLElement>(
+      '.sugarcubes-create-cube__custom-target-model',
+    );
+    if (!customTargetField) throw new Error('Expected the custom target-model field.');
+    expect(customTargetField.hidden).toBe(true);
+    expect(window.getComputedStyle(customTargetField).display).toBe('none');
     expect(target.options.map((option) => option.label)).toEqual(
       expect.arrayContaining(['Flux .1 D', 'Flux .1 Kontext', 'Another model…']),
     );
     const anotherModel = target.options.find((option) => option.label === 'Another model…');
     if (!anotherModel) throw new Error('Expected the custom target-model option.');
     settingsSelect.selectSingle('Target model', anotherModel.value);
+    expect(customTargetField.hidden).toBe(false);
+    expect(window.getComputedStyle(customTargetField).display).toBe('grid');
 
     const customTarget = document.querySelector<HTMLInputElement>(
       '.sugarcubes-create-cube__custom-target-model input',
@@ -182,6 +197,21 @@ describe('Cube authoring modal', () => {
         cubeId: 'local/personal/Flux2 Klein/Klein Cube.cube',
       }),
     );
+  });
+
+  test('stacks installed Settings overlays above the modal backdrop', () => {
+    expect(createComfySettingsOverlayProps()).toEqual({
+      appendTo: 'body',
+      autoZIndex: true,
+      baseZIndex: COMFY_SETTINGS_OVERLAY_BASE_Z_INDEX,
+      overlayClass: 'sugarcubes-comfy-settings-overlay',
+    });
+    expect(COMFY_SETTINGS_OVERLAY_BASE_Z_INDEX).toBeGreaterThan(DIALOG_OVERLAY_Z_INDEX);
+    injectDialogStyles(document);
+    const dialogStyles = document.getElementById('sugarcubes-dialog-styles')?.textContent;
+    expect(dialogStyles).toContain('.sugarcubes-comfy-settings-overlay,');
+    expect(dialogStyles).toContain('.sugarcubes-modal-overlay.is-visible ~ .p-select-overlay,');
+    expect(dialogStyles).toContain(`z-index: ${COMFY_SETTINGS_OVERLAY_BASE_Z_INDEX} !important;`);
   });
 
   test('keeps destination selection and pack creation inside the complete save modal', async () => {

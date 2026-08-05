@@ -62,6 +62,8 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
     options: NativeNodeCardMountOptions = {},
   ): NativeNodeCardMount {
     let disposed = false;
+    let advancedInputsRefreshTimer: number | null = null;
+    const windowRef = target.ownerDocument.defaultView;
     const headerAccessoryHost = options.headerAccessory
       ? new ComfyVueNodeHeaderAccessoryHost(options.headerAccessory)
       : null;
@@ -86,7 +88,17 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
       if (!(eventTarget instanceof Element)) return;
       const toggle = eventTarget.closest('[data-testid="advanced-inputs-button"]');
       if (!toggle || !target.contains(toggle)) return;
-      queueMicrotask(renderCard);
+      if (!windowRef) {
+        queueMicrotask(() => queueMicrotask(renderCard));
+        return;
+      }
+      if (advancedInputsRefreshTimer !== null) {
+        windowRef.clearTimeout(advancedInputsRefreshTimer);
+      }
+      advancedInputsRefreshTimer = windowRef.setTimeout(() => {
+        advancedInputsRefreshTimer = null;
+        renderCard();
+      }, 0);
     };
     renderCard();
     target.addEventListener('click', refreshAfterAdvancedInputsToggle, true);
@@ -97,6 +109,10 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
       unmount: () => {
         if (disposed) return;
         disposed = true;
+        if (advancedInputsRefreshTimer !== null) {
+          windowRef?.clearTimeout(advancedInputsRefreshTimer);
+          advancedInputsRefreshTimer = null;
+        }
         observer.disconnect();
         target.removeEventListener('click', refreshAfterAdvancedInputsToggle, true);
         headerAccessoryHost?.dispose();
@@ -137,13 +153,7 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
     }
 
     const targetRecord: UnknownRecord = isRecord(target) ? target : {};
-    for (const componentName of [
-      'NodeSlots',
-      'NodeContent',
-      'LivePreview',
-      'ImagePreview',
-      'NodeBadges',
-    ]) {
+    for (const componentName of ['NodeSlots', 'NodeBadges']) {
       const vnode = findVueComponent(targetRecord._vnode, componentName);
       const element = resolveComponentElement(vnode);
       if (element) hideComponentRoot(element);

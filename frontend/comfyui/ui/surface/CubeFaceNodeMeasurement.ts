@@ -36,7 +36,10 @@ interface MeasurableWidget extends ComfyWidget {
 
 /** Measure the native expanded widget body while excluding graph boundary rows. */
 export function measureCubeFaceNodeBodyHeight(node: ComfyNode): number {
-  if (!cubeFaceNodeHasVisibleWidgets(node)) return HEADER_ONLY_BODY_HEIGHT;
+  const nativePreviewHeight = hasNativePreviewMedia(node) ? positiveNumber(node.size?.[1]) : null;
+  if (!cubeFaceNodeHasVisibleWidgets(node)) {
+    return nativePreviewHeight ?? HEADER_ONLY_BODY_HEIGHT;
+  }
 
   const width = positiveNumber(node.size?.[0]) ?? 200;
   let widgetsHeight = cubeFaceNodeWidgetStartY(node);
@@ -47,8 +50,20 @@ export function measureCubeFaceNodeBodyHeight(node: ComfyNode): number {
   const constructorState = Reflect.get(node, 'constructor');
   const slotStart = nonNegativeNumber(readMember(constructorState, 'slot_start_y')) ?? 0;
   const minimumHeight = nonNegativeNumber(readMember(constructorState, 'min_height')) ?? 0;
+  const widgetBodyHeight =
+    Math.max(slotStart + LEGACY_SLOT_HEIGHT, widgetsHeight, minimumHeight) + LEGACY_NODE_MARGIN;
+  return nativePreviewHeight === null
+    ? widgetBodyHeight
+    : Math.max(widgetBodyHeight, nativePreviewHeight);
+}
+
+/** Detect native card media that must retain Comfy's authored preview allocation. */
+function hasNativePreviewMedia(node: ComfyNode): boolean {
+  const imgs = Reflect.get(node, 'imgs');
+  const animatedImages = Reflect.get(node, 'animatedImages');
   return (
-    Math.max(slotStart + LEGACY_SLOT_HEIGHT, widgetsHeight, minimumHeight) + LEGACY_NODE_MARGIN
+    (Array.isArray(imgs) && imgs.length > 0) ||
+    (Array.isArray(animatedImages) && animatedImages.length > 0)
   );
 }
 

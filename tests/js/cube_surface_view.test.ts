@@ -25,6 +25,7 @@ import type {
 } from '../../frontend/comfyui/ui/surface/NativeNodeCardRenderer.js';
 import type { ComfyNode } from '../../frontend/comfyui/ui/types/graph.js';
 import type { CubeIdentityPresentation } from '../../frontend/comfyui/ui/cube/CubeIdentityPresentation.js';
+import type { CubePreviewActions } from '../../frontend/comfyui/ui/surface/CubePreviewActions.js';
 
 describe('CubeSurfaceView', () => {
   test('builds one Cube composition with native-card masonry and a preview rail', () => {
@@ -560,20 +561,17 @@ describe('CubeSurfaceView', () => {
           items: [{ key: 'output', url: '/output.png', label: 'Cube output' }],
         },
       ],
-      internalItems: [{ key: 'sample', url: 'blob:sample', label: '<script>sample</script>' }],
     });
 
     const rail = view.element.querySelector('[data-cube-preview-rail]');
-    expect(rail?.querySelectorAll('img')).toHaveLength(2);
+    expect(rail?.querySelectorAll('img')).toHaveLength(1);
     expect(rail?.querySelectorAll('[data-cube-preview-output]')).toHaveLength(1);
-    expect(rail?.querySelector('.sugarcubes-cube-face__preview-internal')).not.toBeNull();
     expect(rail?.querySelector('select')).toBeNull();
     expect(rail?.querySelector('figcaption')).toBeNull();
     expect(rail?.querySelector('[data-cube-preview-output-label]')?.textContent).toBe(
       'output.image',
     );
     expect([...(rail?.querySelectorAll('img') ?? [])].map((image) => image.loading)).toEqual([
-      'eager',
       'eager',
     ]);
     expect(rail?.textContent).toBe('output.image');
@@ -605,7 +603,6 @@ describe('CubeSurfaceView', () => {
           items: [{ key: 'right-image', url: '/right.png', label: 'Right output' }],
         },
       ],
-      internalItems: [],
     });
 
     const rail = view.element.querySelector<HTMLElement>('[data-cube-preview-rail]');
@@ -623,7 +620,85 @@ describe('CubeSurfaceView', () => {
     ).toEqual(['output.image', 'output.mask']);
     expect(rail?.textContent).toBe('output.imageoutput.mask');
   });
+
+  test('offers native image actions from the output rail', () => {
+    const previewActions: CubePreviewActions = {
+      openContextMenu: jest.fn(),
+      download: jest.fn(),
+    };
+    const item = { key: 'proof', url: '/proof.png', label: 'image' };
+    const view = new CubeSurfaceView({
+      document,
+      renderer: createRenderer(),
+      identity: cubeIdentity('Cube'),
+      nodes: [createNode(1)],
+      state: createDefaultCubeSurfaceState(),
+      previewActions,
+      onStateChange: jest.fn(),
+    });
+    view.renderPreview({ outputs: [{ id: 'image', label: 'image', items: [item] }] });
+    const figure = view.element.querySelector<HTMLElement>('[data-cube-preview-item="proof"]');
+    const download = view.element.querySelector<HTMLButtonElement>('[data-cube-preview-download]');
+    const contextMenu = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+
+    figure?.dispatchEvent(contextMenu);
+    download?.click();
+
+    expect(previewActions.openContextMenu).toHaveBeenCalledWith(item, contextMenu);
+    expect(previewActions.download).toHaveBeenCalledWith(item);
+    expect(download?.getAttribute('aria-label')).toBe('Download image');
+    expect(download?.querySelector('.pi.pi-download')).not.toBeNull();
+    view.dispose();
+  });
+
+  test('resizes and persists the output rail through its dedicated divider', () => {
+    const state = createDefaultCubeSurfaceState();
+    state.minimumColumnWidth = 240;
+    state.preview.width = 320;
+    const onStateChange = jest.fn();
+    const view = new CubeSurfaceView({
+      document,
+      renderer: createRenderer(),
+      identity: cubeIdentity('Cube'),
+      nodes: [createNode(1)],
+      state,
+      getScale: () => 0.5,
+      onStateChange,
+    });
+    view.layout(900);
+    const divider = view.element.querySelector<HTMLButtonElement>('[data-cube-preview-divider]');
+    if (!divider) throw new Error('Missing output preview divider.');
+
+    divider.dispatchEvent(pointerEvent('pointerdown', 500, 7));
+    window.dispatchEvent(pointerEvent('pointermove', 460, 7));
+    window.dispatchEvent(pointerEvent('pointerup', 460, 7));
+
+    expect(state.preview.width).toBe(400);
+    expect(view.element.querySelector<HTMLElement>('[data-cube-preview-rail]')?.style.width).toBe(
+      '400px',
+    );
+    expect(onStateChange).toHaveBeenCalledTimes(1);
+    expect(onStateChange).toHaveBeenCalledWith(state);
+
+    view.layout(250);
+    expect(divider.hidden).toBe(true);
+    expect(
+      view.element.querySelector<HTMLElement>('[data-cube-content]')?.dataset.previewLayout,
+    ).toBe('stacked');
+    view.dispose();
+  });
 });
+
+/** Build one pointer-shaped event for divider interaction tests. */
+function pointerEvent(type: string, clientX: number, pointerId: number): PointerEvent {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperties(event, {
+    button: { value: 0 },
+    clientX: { value: clientX },
+    pointerId: { value: pointerId },
+  });
+  return event as PointerEvent;
+}
 
 function createNode(index: number): ComfyNode {
   return {

@@ -58,6 +58,9 @@ import {
 import type { CubePortPresentationController } from '../cube/connection/CubePortPresentationController.js';
 import { resolveCubeExternalInterface } from '../cube/graph/CubeExternalInterface.js';
 import { filterCubePreviewOutputs } from './CubePreviewModel.js';
+import { ComfyLiteGraphCubeFaceProjectionHost } from './ComfyLiteGraphCubeFaceProjectionHost.js';
+import type { CubePreviewActions } from './CubePreviewActions.js';
+import { ComfyLiteGraphCubeDropTargetBridge } from './ComfyLiteGraphCubeDropTargetBridge.js';
 
 export interface LiteGraphCubeNodeCanvas
   extends LiteGraphCubeDrawHost,
@@ -82,6 +85,7 @@ export interface ComfyLiteGraphCubeNodeHostOptions {
   openEditor(node: CubeNode): void;
   previewCatalog?: CubePreviewCatalog;
   previewImages?: CubeCanvasPreviewImageProvider;
+  previewActions?: CubePreviewActions;
   chromeActions?: CubeFaceChromeActions;
   portPresentation?: CubePortPresentationController;
   logger?: Pick<Console, 'debug' | 'warn'>;
@@ -133,6 +137,8 @@ export class ComfyLiteGraphCubeNodeHost {
   readonly #boundaryHost = new ComfyLiteGraphCubeBoundaryHost();
   readonly #interaction: ComfyLiteGraphCubeNodeInteraction;
   readonly #domWidgets: ComfyLiteGraphCubeDomWidgetHost;
+  readonly #faceProjections: ComfyLiteGraphCubeFaceProjectionHost;
+  readonly #dropTargets = new ComfyLiteGraphCubeDropTargetBridge();
   readonly #hooks = new Map<CubeNode, MountedDrawHooks>();
   #enabled = false;
   #promptGeometryQueued = false;
@@ -177,6 +183,11 @@ export class ComfyLiteGraphCubeNodeHost {
       onGeometryChange: () => this.#requestPromptGeometryReflow(),
       ...(options.logger ? { logger: options.logger } : {}),
     });
+    this.#faceProjections = new ComfyLiteGraphCubeFaceProjectionHost({
+      document: options.document,
+      canvas: options.canvas,
+      ...(options.logger ? { logger: options.logger } : {}),
+    });
     const widgetInteraction = new ComfyLiteGraphWidgetInteraction({
       graphMouse: options.canvas.graph_mouse,
       processWidgetClick: (event, node, widget, pointer) =>
@@ -189,6 +200,7 @@ export class ComfyLiteGraphCubeNodeHost {
       widgetInteraction,
       getItems: () => this.#items,
       chromeActions: this.#chromeActions,
+      previewActions: options.previewActions ?? null,
       onEdit: options.openEditor,
       onCardMenuToggle: (node) => {
         this.#openCardMenu = this.#openCardMenu === node ? null : node;
@@ -200,6 +212,7 @@ export class ComfyLiteGraphCubeNodeHost {
         ),
       onCardActivationChange: (node, internalNode, enabled) =>
         this.#updateSurface(node, (state) => setCubeFaceNodeEnabled(state, internalNode, enabled)),
+      onPreviewWidthChange: (node, width) => this.#writePreviewWidth(node, width),
     });
   }
 
@@ -225,6 +238,8 @@ export class ComfyLiteGraphCubeNodeHost {
     if (!active) {
       this.#items = [];
       this.#domWidgets.sync([]);
+      this.#faceProjections.sync([]);
+      this.#dropTargets.sync([]);
       this.#refresh();
       return;
     }
@@ -243,6 +258,8 @@ export class ComfyLiteGraphCubeNodeHost {
     }
     this.#items = [...nodes].map((node) => this.#renderItem(node));
     this.#domWidgets.sync(this.#items);
+    this.#faceProjections.sync(this.#items);
+    this.#syncDropTargets();
     this.#refresh();
   }
 
@@ -250,6 +267,8 @@ export class ComfyLiteGraphCubeNodeHost {
   dispose(): void {
     this.#interaction.dispose();
     this.#domWidgets.dispose();
+    this.#faceProjections.dispose();
+    this.#dropTargets.dispose();
     for (const node of [...this.#hooks.keys()]) this.#unmount(node);
     this.#boundaryHost.dispose();
     this.#items = [];
@@ -278,6 +297,8 @@ export class ComfyLiteGraphCubeNodeHost {
       this.#renderer.draw(context, [item]);
       context.restore();
       this.#domWidgets.sync(this.#items);
+      this.#faceProjections.sync(this.#items);
+      this.#syncDropTargets();
     };
     const installedDrawWidgets: NonNullable<CubeDrawNode['drawWidgets']> = () => undefined;
     const installedDrawSlots: NonNullable<CubeDrawNode['drawSlots']> = (context, drawOptions) =>
@@ -408,6 +429,13 @@ export class ComfyLiteGraphCubeNodeHost {
     this.#items[index] = item;
   }
 
+  /** Keep native drop routing aligned with the latest face-card geometry. */
+  #syncDropTargets(): void {
+    this.#dropTargets.sync(
+      this.#items.map((item) => ({ node: item.node, cards: item.layout.cards })),
+    );
+  }
+
   /** Persist one focused Cube-face state transition through native history. */
   #updateSurface(node: CubeNode, update: (state: CubeSurfaceState) => void): void {
     const surface = requireCubeSurface(node);
@@ -419,6 +447,16 @@ export class ComfyLiteGraphCubeNodeHost {
     this.#history.setDirtyCanvas?.(true, true);
     this.#history.afterChange?.();
     this.sync();
+  }
+
+  /** Persist live divider width inside the interaction-owned history transaction. */
+  #writePreviewWidth(node: CubeNode, width: number): void {
+    const surface = requireCubeSurface(node);
+    const state = parseCubeSurfaceState(surface);
+    state.preview.width = width;
+    replaceRecord(surface, serializeCubeSurfaceState(state));
+    this.#nodes.changed(node);
+    this.#refresh();
   }
 
   /** Request one native canvas repaint. */

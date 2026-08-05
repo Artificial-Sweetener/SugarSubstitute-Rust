@@ -24,6 +24,8 @@ import type { ComfyLiteGraphWidgetInteraction } from '../../frontend/comfyui/ui/
 import { computeCubeCanvasLayout } from '../../frontend/comfyui/ui/surface/CubeCanvasLayout.js';
 import { computeCubeCanvasCardMenuLayout } from '../../frontend/comfyui/ui/surface/CubeCanvasCardMenuLayout.js';
 import { createDefaultCubeSurfaceState } from '../../frontend/comfyui/ui/surface/CubeSurfaceState.js';
+import type { CubePreviewActions } from '../../frontend/comfyui/ui/surface/CubePreviewActions.js';
+import { layoutCubeCanvasPreviewSections } from '../../frontend/comfyui/ui/surface/CubePreviewSections.js';
 
 const EDGES: CubeResizeEdge[] = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'];
 
@@ -88,6 +90,7 @@ describe('ComfyLiteGraphCubeNodeInteraction', () => {
     state.preview.visible = false;
     const layout = computeCubeCanvasLayout(node, state, 30);
     const canvasElement = document.createElement('canvas');
+    document.body.replaceChildren(canvasElement);
     Object.defineProperty(canvasElement, 'getBoundingClientRect', {
       value: () => ({ left: 0, top: 0, width: 1200, height: 900 }),
     });
@@ -117,6 +120,7 @@ describe('ComfyLiteGraphCubeNodeInteraction', () => {
 
   test('does not clear the native resize cursor while the pointer is over a normal node', () => {
     const canvasElement = document.createElement('canvas');
+    document.body.replaceChildren(canvasElement);
     canvasElement.style.cursor = 'nwse-resize';
     Object.defineProperty(canvasElement, 'getBoundingClientRect', {
       value: () => ({ left: 0, top: 0, width: 1200, height: 900 }),
@@ -152,6 +156,7 @@ describe('ComfyLiteGraphCubeNodeInteraction', () => {
     const output = layout.outputs[0];
     if (!output) throw new Error('Missing output boundary slot.');
     const canvasElement = document.createElement('canvas');
+    document.body.replaceChildren(canvasElement);
     Object.defineProperty(canvasElement, 'getBoundingClientRect', {
       value: () => ({ left: 0, top: 0, width: 1200, height: 900 }),
     });
@@ -206,6 +211,7 @@ describe('ComfyLiteGraphCubeNodeInteraction', () => {
     const menuItem = computeCubeCanvasCardMenuLayout(layout).items[0];
     if (!menuItem) throw new Error('Missing card menu hit target.');
     const canvasElement = document.createElement('canvas');
+    document.body.replaceChildren(canvasElement);
     Object.defineProperty(canvasElement, 'getBoundingClientRect', {
       value: () => ({ left: 0, top: 0, width: 1200, height: 900 }),
     });
@@ -236,6 +242,95 @@ describe('ComfyLiteGraphCubeNodeInteraction', () => {
     cardMenuOpen = false;
     clickCenter(canvasElement, card.activationAction);
     expect(onCardActivationChange).toHaveBeenCalledWith(node, inner, true);
+    interaction.dispose();
+  });
+
+  test('resizes the persisted preview width without resizing the Cube frame', () => {
+    const node = cubeNode();
+    const outputSlot = { name: 'image', type: 'IMAGE' };
+    node.outputs = [outputSlot];
+    node.subgraph.outputs = [outputSlot];
+    const state = createDefaultCubeSurfaceState();
+    const layout = computeCubeCanvasLayout(node, state, 30);
+    if (!layout.previewDivider || !layout.preview) throw new Error('Missing preview divider.');
+    const canvasElement = interactionCanvas();
+    const beforeChange = jest.fn();
+    const afterChange = jest.fn();
+    const onPreviewWidthChange = jest.fn();
+    const interaction = new ComfyLiteGraphCubeNodeInteraction({
+      canvas: { canvas: canvasElement, convertCanvasToOffset: (point) => point },
+      history: { beforeChange, afterChange },
+      widgetInteraction: inertWidgetInteraction(),
+      getItems: () => [{ node, layout, cardMenuOpen: false }],
+      onEdit: jest.fn(),
+      onCardMenuToggle: jest.fn(),
+      onCardRevealChange: jest.fn(),
+      onCardActivationChange: jest.fn(),
+      onPreviewWidthChange,
+    });
+    const startX = layout.previewDivider.x + layout.previewDivider.width / 2;
+    const startY = layout.previewDivider.y + layout.previewDivider.height / 2;
+
+    canvasElement.dispatchEvent(pointer('pointerdown', startX, startY));
+    canvasElement.dispatchEvent(pointer('pointermove', startX - 40, startY));
+    canvasElement.dispatchEvent(pointer('pointerup', startX - 40, startY));
+
+    expect(onPreviewWidthChange).toHaveBeenLastCalledWith(node, layout.preview.width + 40);
+    expect([...node.size]).toEqual([720, 480]);
+    expect(beforeChange).toHaveBeenCalledTimes(1);
+    expect(afterChange).toHaveBeenCalledTimes(1);
+    interaction.dispose();
+  });
+
+  test('routes download and context-menu actions from canvas preview sections', () => {
+    const node = cubeNode();
+    const outputSlot = { name: 'image', type: 'IMAGE' };
+    node.outputs = [outputSlot];
+    node.subgraph.outputs = [outputSlot];
+    const layout = computeCubeCanvasLayout(node, createDefaultCubeSurfaceState(), 30);
+    const item = { key: 'proof', url: '/proof.png', label: 'image' };
+    const preview = { outputs: [{ id: 'image', label: 'image', items: [item] }] };
+    const section = layoutCubeCanvasPreviewSections(layout.preview, preview)[0];
+    if (!section) throw new Error('Missing preview section.');
+    const previewActions: CubePreviewActions = {
+      openContextMenu: jest.fn(),
+      download: jest.fn(),
+    };
+    const canvasElement = interactionCanvas();
+    const nativePointerDown = jest.fn();
+    canvasElement.addEventListener('pointerdown', nativePointerDown);
+    const interaction = new ComfyLiteGraphCubeNodeInteraction({
+      canvas: { canvas: canvasElement, convertCanvasToOffset: (point) => point },
+      history: {},
+      widgetInteraction: inertWidgetInteraction(),
+      getItems: () => [{ node, layout, cardMenuOpen: false, preview }],
+      previewActions,
+      onEdit: jest.fn(),
+      onCardMenuToggle: jest.fn(),
+      onCardRevealChange: jest.fn(),
+      onCardActivationChange: jest.fn(),
+    });
+
+    clickCenter(canvasElement, section.downloadAction);
+    const rightPointerEvent = pointer(
+      'pointerdown',
+      section.rect.x + section.rect.width / 2,
+      section.rect.y + section.rect.height / 2,
+      2,
+    );
+    canvasElement.dispatchEvent(rightPointerEvent);
+    const menuEvent = pointer(
+      'contextmenu',
+      section.rect.x + section.rect.width / 2,
+      section.rect.y + section.rect.height / 2,
+      2,
+    );
+    canvasElement.dispatchEvent(menuEvent);
+
+    expect(previewActions.download).toHaveBeenCalledWith(item);
+    expect(rightPointerEvent.defaultPrevented).toBe(true);
+    expect(nativePointerDown).not.toHaveBeenCalled();
+    expect(previewActions.openContextMenu).toHaveBeenCalledWith(item, menuEvent);
     interaction.dispose();
   });
 });
@@ -298,11 +393,23 @@ function inertWidgetInteraction(): ComfyLiteGraphWidgetInteraction {
   } as unknown as ComfyLiteGraphWidgetInteraction;
 }
 
+/** Build a finite canvas surface with pointer-capture seams. */
+function interactionCanvas(): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  document.body.append(canvas);
+  Object.defineProperty(canvas, 'getBoundingClientRect', {
+    value: () => ({ left: 0, top: 0, width: 1200, height: 900 }),
+  });
+  Object.defineProperty(canvas, 'setPointerCapture', { value: jest.fn() });
+  Object.defineProperty(canvas, 'releasePointerCapture', { value: jest.fn() });
+  return canvas;
+}
+
 /** Build one jsdom pointer-shaped event with stable graph coordinates. */
-function pointer(type: string, clientX: number, clientY: number): Event {
+function pointer(type: string, clientX: number, clientY: number, button = 0): Event {
   const event = new Event(type, { bubbles: true, cancelable: true });
   Object.defineProperties(event, {
-    button: { value: 0 },
+    button: { value: button },
     clientX: { value: clientX },
     clientY: { value: clientY },
     pointerId: { value: 1 },

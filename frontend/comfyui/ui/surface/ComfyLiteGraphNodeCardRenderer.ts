@@ -48,14 +48,6 @@ interface LegacyPresentationNode extends ComfyNode {
   imageIndex?: unknown;
 }
 
-type PreviewField = 'imgs' | 'animatedImages' | 'imageIndex';
-
-interface PreviewFieldPresentation {
-  field: PreviewField;
-  owned: boolean;
-  value: unknown;
-}
-
 interface ColorFieldPresentation {
   field: 'color' | 'bgcolor';
   owned: boolean;
@@ -170,7 +162,6 @@ export function drawNativeLiteGraphCubeCard(
   const drawCollapsedSlots = presentationNode.drawCollapsedSlots;
   const titleBox = maskSubgraphTitleBox(presentationNode);
   const titleButtons = presentationNode.title_buttons;
-  const previews = maskPreviewMedia(presentationNode);
   const originalSize = applyPresentationSize(
     presentationNode,
     options.presentationWidth,
@@ -203,7 +194,6 @@ export function drawNativeLiteGraphCubeCard(
     presentationNode.drawCollapsedSlots = drawCollapsedSlots;
     restoreSubgraphTitleBox(presentationNode, titleBox);
     presentationNode.title_buttons = titleButtons;
-    restorePreviewMedia(presentationNode, previews);
     restorePresentationTheme(presentationNode, colors);
     restorePresentationSize(presentationNode, originalSize, context);
   }
@@ -398,34 +388,4 @@ function arrangePresentationNode(node: LegacyPresentationNode): void {
     return;
   }
   node.arrange?.();
-}
-
-/** Suppress only Comfy's standard local preview state during a Cube-face draw. */
-function maskPreviewMedia(node: LegacyPresentationNode): PreviewFieldPresentation[] {
-  const presentations: PreviewFieldPresentation[] = [];
-  for (const field of ['imgs', 'animatedImages', 'imageIndex'] as const) {
-    presentations.push({
-      field,
-      owned: Object.prototype.hasOwnProperty.call(node, field),
-      value: node[field],
-    });
-  }
-  node.imgs = [];
-  node.animatedImages = [];
-  node.imageIndex = null;
-  return presentations;
-}
-
-/** Restore preview fields without changing their original ownership semantics. */
-function restorePreviewMedia(
-  node: LegacyPresentationNode,
-  presentations: readonly PreviewFieldPresentation[],
-): void {
-  for (const presentation of presentations) {
-    if (!presentation.owned) {
-      Reflect.deleteProperty(node, presentation.field);
-      continue;
-    }
-    node[presentation.field] = presentation.value;
-  }
 }

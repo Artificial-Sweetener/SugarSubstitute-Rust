@@ -256,6 +256,8 @@ function cubeItemForNode(node: ComfyNode): {
       outputGutter: { x: 770, y: 172, width: 40, height: 456 },
       masonry: { x: 102, y: 172, width: 696, height: 456 },
       preview: null,
+      previewDivider: null,
+      previewWidthRange: { minimum: 160, maximum: 444 },
       editAction: { x: 650, y: 139, width: 68, height: 24 },
       unsavedIndicator: null,
       cardMenuAction: { x: 724, y: 139, width: 54, height: 24 },

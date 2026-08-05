@@ -17,6 +17,7 @@
 
 import { isRecord } from '../types/common.js';
 import type { UnknownRecord } from '../types/common.js';
+import { COMFY_SETTINGS_OVERLAY_BASE_Z_INDEX } from '../core/OverlayStacking.js';
 import {
   loadComfySettingsAutoCompleteComponent,
   loadComfySettingsSelectComponent,
@@ -71,6 +72,21 @@ interface ComfySettingsSelectRuntime {
   vue: ComfyVueRenderRuntime;
 }
 
+/** Build the shared PrimeVue overlay policy for installed Settings controls. */
+export function createComfySettingsOverlayProps(): {
+  appendTo: 'body';
+  autoZIndex: true;
+  baseZIndex: number;
+  overlayClass: string;
+} {
+  return {
+    appendTo: 'body',
+    autoZIndex: true,
+    baseZIndex: COMFY_SETTINGS_OVERLAY_BASE_Z_INDEX,
+    overlayClass: 'sugarcubes-comfy-settings-overlay',
+  };
+}
+
 /** Own native Settings component discovery and every resulting Vue mount. */
 export class InstalledComfySettingsSelectRenderer implements ComfySettingsSelectRenderer {
   readonly #document: Document;
@@ -89,7 +105,7 @@ export class InstalledComfySettingsSelectRenderer implements ComfySettingsSelect
     return this.#mount(target, props, ({ appContext, select, vue }, currentProps) => {
       const vnode = vue.h(select, {
         'aria-label': currentProps.ariaLabel,
-        appendTo: 'body',
+        ...createComfySettingsOverlayProps(),
         class: 'sugarcubes-comfy-settings-select',
         disabled: currentProps.disabled ?? false,
         modelValue: currentProps.value,
@@ -110,7 +126,7 @@ export class InstalledComfySettingsSelectRenderer implements ComfySettingsSelect
     return this.#mount(target, props, ({ appContext, autoComplete, vue }, currentProps) => {
       const vnode = vue.h(autoComplete, {
         'aria-label': currentProps.ariaLabel,
-        appendTo: 'body',
+        ...createComfySettingsOverlayProps(),
         autoOptionFocus: true,
         class: 'sugarcubes-comfy-settings-autocomplete',
         delay: 0,

@@ -463,6 +463,39 @@ export function ensureCubeSurfaceStyles(documentRef) {
       border-left: 1px solid color-mix(in srgb, currentColor 20%, transparent);
       --sugarcubes-cube-preview-edge-inset: 1.125rem;
     }
+    .sugarcubes-cube-face__preview-divider {
+      appearance: none;
+      position: relative;
+      z-index: 3;
+      display: block;
+      align-self: stretch;
+      flex: 0 0 0.5rem;
+      min-width: 0.5rem;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      cursor: col-resize;
+      touch-action: none;
+    }
+    .sugarcubes-cube-face__preview-divider[hidden] {
+      display: none;
+    }
+    .sugarcubes-cube-face__preview-divider::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: 1px;
+      background: color-mix(in srgb, currentColor 20%, transparent);
+      transition: background-color 120ms ease;
+    }
+    .sugarcubes-cube-face__preview-divider:hover::after,
+    .sugarcubes-cube-face__preview-divider:focus-visible::after {
+      background: color-mix(in srgb, currentColor 62%, transparent);
+    }
     .sugarcubes-cube-face__content[data-preview-layout="stacked"] {
       gap: 0.75rem;
     }
@@ -494,8 +527,7 @@ export function ensureCubeSurfaceStyles(documentRef) {
       overflow: hidden;
       flex: 1 1 0;
     }
-    .sugarcubes-cube-face__preview-output,
-    .sugarcubes-cube-face__preview-internal {
+    .sugarcubes-cube-face__preview-output {
       display: flex;
       flex-direction: column;
       gap: var(--sugarcubes-cube-preview-row-gap, 0.75rem);
@@ -527,16 +559,41 @@ export function ensureCubeSurfaceStyles(documentRef) {
       margin: 0;
       overflow: hidden;
     }
-    .sugarcubes-cube-face__preview-internal:not(:empty) {
-      flex: 0 1 25%;
-      margin-top: 0.75rem;
-    }
     .sugarcubes-cube-face__preview-media figure {
+      position: relative;
       display: flex;
       flex: 1 1 0;
       min-height: 0;
       overflow: hidden;
       margin: 0;
+    }
+    .sugarcubes-cube-face__preview-download {
+      appearance: none;
+      position: absolute;
+      top: 0.5rem;
+      right: 0.5rem;
+      z-index: 2;
+      display: inline-grid;
+      place-items: center;
+      width: 2rem;
+      height: 2rem;
+      padding: 0;
+      border: 0;
+      border-radius: 0.5rem;
+      background: var(--fg-color, #f2f2f2);
+      box-shadow: 0 0.125rem 0.5rem rgb(0 0 0 / 35%);
+      color: var(--bg-color, #151515);
+      cursor: pointer;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 120ms ease;
+    }
+    .sugarcubes-cube-face__preview-media figure:hover
+      .sugarcubes-cube-face__preview-download,
+    .sugarcubes-cube-face__preview-media figure:focus-within
+      .sugarcubes-cube-face__preview-download {
+      opacity: 1;
+      pointer-events: auto;
     }
     .sugarcubes-cube-face__preview-media img {
       display: block;
@@ -544,13 +601,21 @@ export function ensureCubeSurfaceStyles(documentRef) {
       height: 100% !important;
       min-height: 0;
       max-height: 100% !important;
-      object-fit: cover;
+      object-fit: contain;
       object-position: center top;
       position: relative;
       z-index: 1;
       opacity: 1 !important;
       visibility: visible !important;
       border-radius: 0;
+    }
+    body.sugarcubes-cube-editor-workspace
+      .p-splitter:has(.sugarcubes-sidebar-panel)
+      > .side-bar-panel,
+    body.sugarcubes-cube-editor-workspace
+      .p-splitter:has(.sugarcubes-sidebar-panel)
+      > .p-splitter-gutter {
+      display: none !important;
     }
     .sugarcubes-cube-editor-metadata {
       box-sizing: border-box;

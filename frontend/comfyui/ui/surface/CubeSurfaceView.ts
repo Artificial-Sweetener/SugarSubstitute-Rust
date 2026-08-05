@@ -26,6 +26,8 @@ import { NativeNodeCardHost } from './NativeNodeCardHost.js';
 import type { NativeNodeCardRenderer } from './NativeNodeCardRenderer.js';
 import type { CubePreviewSnapshot } from './CubePreviewModel.js';
 import { CubePreviewRailView } from './CubePreviewRailView.js';
+import type { CubePreviewActions } from './CubePreviewActions.js';
+import { CubePreviewDividerController } from './CubePreviewDividerController.js';
 import { layoutCubeSurfaceDom } from './CubeSurfaceDomLayout.js';
 import type { CubeSurfaceState } from './CubeSurfaceState.js';
 import { NativeCardGeometryObserver } from './NativeCardGeometryObserver.js';
@@ -43,6 +45,8 @@ export interface CubeSurfaceViewOptions {
   nodes: readonly ComfyNode[];
   graph?: ComfyGraph;
   state: CubeSurfaceState;
+  previewActions?: CubePreviewActions;
+  getScale?(): number;
   onStateChange(state: CubeSurfaceState): void;
   onMinimumHeightChange?(minimumHeight: number): void;
 }
@@ -60,9 +64,11 @@ export class CubeSurfaceView {
   readonly #actions: CubeFaceActionsView;
   readonly #content: HTMLDivElement;
   readonly #masonry: HTMLDivElement;
+  readonly #previewDivider: HTMLButtonElement;
   readonly #previewRail: HTMLElement;
   readonly #previewView: CubePreviewRailView;
   readonly #geometryObserver: NativeCardGeometryObserver;
+  readonly #previewDividerController: CubePreviewDividerController | null;
   #cells: HTMLElement[] = [];
   #visibleCards: CubeFaceCardDecision[] = [];
   #lastLayoutWidth = 1;
@@ -132,9 +138,28 @@ export class CubeSurfaceView {
     this.#previewRail.className = 'sugarcubes-cube-face__preview';
     this.#previewRail.dataset.cubePreviewRail = '';
     this.#previewRail.setAttribute('aria-label', 'Cube output preview');
-    this.#previewView = new CubePreviewRailView(this.#previewRail);
+    this.#previewView = new CubePreviewRailView(this.#previewRail, options.previewActions ?? null);
 
-    this.#content.append(this.#masonry, this.#previewRail);
+    this.#previewDivider = options.document.createElement('button');
+    this.#previewDivider.type = 'button';
+    this.#previewDivider.className = 'sugarcubes-cube-face__preview-divider';
+    this.#previewDivider.dataset.cubePreviewDivider = '';
+    this.#previewDivider.setAttribute('aria-label', 'Resize Cube output preview');
+    const windowRef = options.document.defaultView;
+    this.#previewDividerController = windowRef
+      ? new CubePreviewDividerController({
+          element: this.#previewDivider,
+          events: windowRef,
+          getScale: options.getScale ?? (() => 1),
+          onResize: (width, committed) => {
+            this.#state.preview.width = width;
+            this.layout(this.#lastLayoutWidth);
+            if (committed) this.#onStateChange(this.#state);
+          },
+        })
+      : null;
+
+    this.#content.append(this.#masonry, this.#previewDivider, this.#previewRail);
     this.element.append(this.header, this.#content);
     this.#geometryObserver = new NativeCardGeometryObserver(options.document, () =>
       this.layout(this.#lastLayoutWidth),
@@ -177,17 +202,24 @@ export class CubeSurfaceView {
       cells: this.#cells,
       content: this.#content,
       masonry: this.#masonry,
+      previewDivider: this.#previewDivider,
       previewRail: this.#previewRail,
       previewAvailable: this.#previewAvailable,
     });
     if (result.minimumHeight !== null) {
       this.#onMinimumHeightChange?.(result.minimumHeight);
     }
+    this.#previewDividerController?.setGeometry(
+      result.previewWidth,
+      result.previewWidthRange,
+      result.previewResizable,
+    );
   }
 
   /** Remove native card mounts owned by this view. */
   dispose(): void {
     this.#actions.dispose();
+    this.#previewDividerController?.dispose();
     this.#geometryObserver.dispose();
     this.#cardHost.dispose();
   }

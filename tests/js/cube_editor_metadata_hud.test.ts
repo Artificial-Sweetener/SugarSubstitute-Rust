@@ -22,6 +22,57 @@ import {
   type CubeNode,
 } from '../../frontend/comfyui/ui/cube/node/ComfyCubeNodeFactory.js';
 import { TestComfySettingsSelectRenderer } from './helpers/ComfySettingsSelectTestRenderer.js';
+import {
+  CUBE_EDITOR_WORKSPACE_CLASS,
+  CubeEditorWorkspaceChromeAdapter,
+} from '../../frontend/comfyui/ui/surface/CubeEditorWorkspaceChromeAdapter.js';
+
+test('marks only the active Cube editor workspace for sidebar suppression', async () => {
+  document.body.replaceChildren();
+  document.body.className = '';
+  const hud = new CubeEditorMetadataHud(
+    document,
+    {
+      canEdit: async () => true,
+      save: async () => 'saved',
+    },
+    { workspaceChrome: new CubeEditorWorkspaceChromeAdapter(document) },
+  );
+
+  hud.show(cubeNode());
+  await Promise.resolve();
+  expect(document.body.classList.contains(CUBE_EDITOR_WORKSPACE_CLASS)).toBe(true);
+
+  hud.hide();
+  expect(document.body.classList.contains(CUBE_EDITOR_WORKSPACE_CLASS)).toBe(false);
+  hud.dispose();
+});
+
+test('rolls up persisted Cube metadata while keeping first-save metadata available', async () => {
+  document.body.replaceChildren();
+  const hud = new CubeEditorMetadataHud(document, {
+    canEdit: async () => true,
+    save: async () => 'saved',
+  });
+  const persisted = cubeNode();
+
+  hud.show(persisted);
+  await Promise.resolve();
+
+  expect(document.querySelector('[aria-label="Expand"]')).not.toBeNull();
+  expect(document.querySelector('.sugarcubes-cube-editor-metadata__body')).toBeNull();
+
+  hud.hide();
+  const draft = cubeNode();
+  draft.properties.sugarcubes_kind = 'cube_draft';
+  delete requireCubeIdentity(draft).cube_id;
+  hud.show(draft);
+  await Promise.resolve();
+
+  expect(document.querySelector('[aria-label="Minimize"]')).not.toBeNull();
+  expect(document.querySelector('.sugarcubes-cube-editor-metadata__body')).not.toBeNull();
+  hud.dispose();
+});
 
 test('retains a dirty Save control after the editable metadata card is rolled up', async () => {
   document.body.replaceChildren();
@@ -32,8 +83,7 @@ test('retains a dirty Save control after the editable metadata card is rolled up
   });
   const node = cubeNode();
 
-  hud.show(node);
-  await Promise.resolve();
+  await showExpanded(hud, node);
 
   const name = document.querySelector<HTMLInputElement>('.sugarcubes-cube-editor-metadata input');
   if (!name) throw new Error('Expected editable Cube name input.');
@@ -66,8 +116,7 @@ test('retains text focus and selection across metadata card refreshes', async ()
     save: async () => 'saved',
   });
 
-  hud.show(cubeNode());
-  await Promise.resolve();
+  await showExpanded(hud, cubeNode());
   const initialName = document.querySelector<HTMLInputElement>(
     '.sugarcubes-cube-editor-metadata input',
   );
@@ -109,8 +158,7 @@ test('retains unsaved metadata while navigating away from and back into a cube g
   );
   const node = cubeNode();
 
-  hud.show(node);
-  await Promise.resolve();
+  await showExpanded(hud, node);
   const name = document.querySelector<HTMLInputElement>(
     '[data-sugarcubes-focus-key="defaultAlias"]',
   );
@@ -126,8 +174,7 @@ test('retains unsaved metadata while navigating away from and back into a cube g
 
   hud.hide();
   expect(document.querySelector('.sugarcubes-cube-editor-metadata')).toBeNull();
-  hud.show(node);
-  await Promise.resolve();
+  await showExpanded(hud, node);
 
   expect(
     document.querySelector<HTMLInputElement>('[data-sugarcubes-focus-key="defaultAlias"]')?.value,
@@ -158,8 +205,7 @@ test('uses Comfy Settings AutoComplete for suggested and custom model support', 
     { settingsSelectRenderer: settingsSelect },
   );
 
-  hud.show(cubeNode());
-  await Promise.resolve();
+  await showExpanded(hud, cubeNode());
 
   settingsSelect.completeAutocomplete('Supported models', 'flux');
   expect(settingsSelect.autocomplete('Supported models').suggestions).toEqual(
@@ -206,8 +252,7 @@ test('uses Another model as the explicit HUD path for a custom target model', as
   );
   const node = cubeNode();
 
-  hud.show(node);
-  await Promise.resolve();
+  await showExpanded(hud, node);
 
   const target = settingsSelect.single('Target model');
   expect(target.options.map((option) => option.label)).toEqual(
@@ -262,8 +307,7 @@ test('uses Comfy PrimeIcons and clears the native toolbar, sidebar, and breadcru
     save: async () => 'saved',
   });
 
-  hud.show(cubeNode());
-  await Promise.resolve();
+  await showExpanded(hud, cubeNode());
 
   const card = document.querySelector<HTMLElement>('.sugarcubes-cube-editor-metadata');
   expect(card?.style.getPropertyValue('--sugarcubes-cube-editor-metadata-left')).toBe('296px');
@@ -301,8 +345,7 @@ test('repositions when Comfy expands a left panel after the HUD mounts', async (
     save: async () => 'saved',
   });
 
-  hud.show(cubeNode());
-  await Promise.resolve();
+  await showExpanded(hud, cubeNode());
   const card = document.querySelector<HTMLElement>('.sugarcubes-cube-editor-metadata');
   expect(card?.style.getPropertyValue('--sugarcubes-cube-editor-metadata-left')).toBe('90px');
 
@@ -340,8 +383,7 @@ test('renders non-owned Cube metadata as read only', async () => {
     save: async () => 'saved',
   });
 
-  hud.show(cubeNode());
-  await Promise.resolve();
+  await showExpanded(hud, cubeNode());
 
   expect(document.querySelectorAll('.sugarcubes-cube-editor-metadata input')).toHaveLength(0);
   expect(document.querySelector('.sugarcubes-cube-editor-metadata')?.textContent).toContain(
@@ -359,8 +401,7 @@ test('keeps a failed save actionable and explains why it failed', async () => {
   });
   const node = cubeNode();
 
-  hud.show(node);
-  await Promise.resolve();
+  await showExpanded(hud, node);
   const name = document.querySelector<HTMLInputElement>('.sugarcubes-cube-editor-metadata input');
   if (!name) throw new Error('Expected editable Cube name input.');
   name.value = 'Retry Cube';
@@ -386,8 +427,7 @@ test('keeps a dismissed first-save dialog actionable without reporting an error'
   });
   const node = cubeNode();
 
-  hud.show(node);
-  await Promise.resolve();
+  await showExpanded(hud, node);
   const name = document.querySelector<HTMLInputElement>('.sugarcubes-cube-editor-metadata input');
   if (!name) throw new Error('Expected editable Cube name input.');
   name.value = 'Still Editing Cube';
@@ -433,8 +473,7 @@ test('uses the established first-save model defaults for a blank Cube draft', as
     outputs: [],
   } as never;
 
-  hud.show(node);
-  await Promise.resolve();
+  await showExpanded(hud, node);
 
   const targetModel = document.querySelector<HTMLButtonElement>(
     '.sugarcubes-cube-editor-metadata__target-model [role="combobox"]',
@@ -468,8 +507,7 @@ test('derives the alias from the native target-model combo and basename-only nam
   const node = cubeNode();
   requireCubeIdentity(node).default_alias = 'SDXL/Text to Image';
 
-  hud.show(node);
-  await Promise.resolve();
+  await showExpanded(hud, node);
 
   const name = document.querySelector<HTMLInputElement>(
     `[data-sugarcubes-focus-key="defaultAlias"]`,
@@ -513,9 +551,23 @@ function cubeNode(): CubeNode {
     },
     inputs: [],
     outputs: [],
-    subgraph: {} as never,
+    subgraph: {
+      id: 'cube-definition',
+      name: 'Cube: Untitled Cube',
+      _nodes: [],
+      inputs: [],
+      outputs: [],
+    } as never,
     connect() {},
     isSubgraphNode: () => true,
     serialize: () => ({}),
   } as CubeNode;
+}
+
+/** Expand a persisted Cube card for tests concerned with its detailed controls. */
+async function showExpanded(hud: CubeEditorMetadataHud, node: CubeNode): Promise<void> {
+  hud.show(node);
+  await Promise.resolve();
+  document.querySelector<HTMLButtonElement>('[aria-label="Expand"]')?.click();
+  await Promise.resolve();
 }

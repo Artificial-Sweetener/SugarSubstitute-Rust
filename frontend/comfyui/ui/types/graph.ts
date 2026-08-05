@@ -73,6 +73,8 @@ export interface ComfyNode {
   setPos?(x: number, y: number): void;
   setSize?(size: number[]): void;
   onResize?(size: number[]): void;
+  onDragOver?(event: DragEvent): boolean;
+  onDragDrop?(event: DragEvent): boolean | Promise<boolean>;
   getSlotPosition?(slot: number, isInput: boolean): unknown;
   getConnectionPos?(isInput: boolean, slot: number, output?: Float32Array): unknown;
   [key: string]: unknown;

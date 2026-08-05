@@ -107,6 +107,85 @@ describe('CubeSurfacePresenter', () => {
     expect(replacementHeader.hidden).toBe(false);
   });
 
+  test('refreshes the Cube preview rail when Comfy publishes native node media', async () => {
+    const pane = createTransformPane();
+    const shell = createNativeNodeShell('9');
+    pane.append(shell.root);
+    const rootGraph = {};
+    const node = cubeNode(9, 'cube-1', [nativeNode('load-mask-batch', 'LoadMaskBatch')]);
+    const nodes = new CubeNodeCatalog();
+    nodes.add(node);
+    const previewEvents = new EventTarget();
+    const snapshot = jest.fn(() => ({ outputs: [] }));
+    const presenter = new CubeSurfacePresenter({
+      document,
+      openEditor: jest.fn(),
+      rootGraph,
+      getCurrentGraph: () => rootGraph,
+      nodes,
+      logger: console,
+      renderer: {
+        mount: () => ({ refresh() {}, unmount() {} }),
+        dispose() {},
+      },
+      previewCatalog: { snapshot },
+      previewEvents,
+    });
+    await flushMount();
+    const initialCalls = snapshot.mock.calls.length;
+
+    previewEvents.dispatchEvent(
+      new CustomEvent('executed', {
+        detail: { node: 'load-mask-batch', output: { images: [] } },
+      }),
+    );
+
+    expect(snapshot).toHaveBeenCalledTimes(initialCalls + 1);
+    presenter.dispose();
+    previewEvents.dispatchEvent(new CustomEvent('executed', { detail: {} }));
+    expect(snapshot).toHaveBeenCalledTimes(initialCalls + 1);
+  });
+
+  test('repaints Nodes 1 while native preview images decode after execution', async () => {
+    const rootGraph = {};
+    const node = cubeNode(9, 'cube-1', [nativeNode('load-mask-batch', 'LoadMaskBatch')]);
+    const nodes = new CubeNodeCatalog();
+    nodes.add(node);
+    const previewEvents = new EventTarget();
+    const setDirtyCanvas = jest.fn();
+    const canvasElement = document.createElement('canvas');
+    const presenter = new CubeSurfacePresenter({
+      document,
+      openEditor: jest.fn(),
+      rootGraph,
+      getCurrentGraph: () => rootGraph,
+      nodes,
+      logger: console,
+      renderer: {
+        mount: () => ({ refresh() {}, unmount() {} }),
+        dispose() {},
+      },
+      getRendererMode: () => 'litegraph',
+      legacyCanvas: {
+        canvas: canvasElement,
+        graph: rootGraph,
+        graph_mouse: [0, 0],
+        drawNode: jest.fn(),
+        processWidgetClick: jest.fn(),
+        setDirty: jest.fn(),
+      },
+      setDirtyCanvas,
+      previewEvents,
+    });
+    await flushMount();
+    setDirtyCanvas.mockClear();
+
+    previewEvents.dispatchEvent(new CustomEvent('executed', { detail: { node: 'inside' } }));
+
+    expect(setDirtyCanvas).toHaveBeenCalledWith(true, true);
+    presenter.dispose();
+  });
+
   test('preserves the face origin through movement, menu cycles, and Cube editor return', async () => {
     jest.useFakeTimers();
     const pane = createTransformPane();
@@ -371,7 +450,16 @@ describe('CubeSurfacePresenter', () => {
 
   test('creates a fresh Nodes 2 renderer after returning from Nodes 1', async () => {
     const pane = createTransformPane();
-    const node = cubeNode(9, 'cube-1', [nativeNode('inner', 'KSampler')]);
+    const previewImages = [{ src: 'mask-one.png' }, { src: 'mask-two.png' }];
+    const onGraphConfigured = jest.fn();
+    const internalNode = {
+      ...nativeNode('inner', 'LoadMaskBatch'),
+      imgs: previewImages,
+      animatedImages: [false, false],
+      imageIndex: null,
+      onGraphConfigured,
+    };
+    const node = cubeNode(9, 'cube-1', [internalNode]);
     pane.append(createNativeNodeShell(String(node.id)).root);
     const nodes = new CubeNodeCatalog();
     nodes.add(node);
@@ -424,10 +512,12 @@ describe('CubeSurfacePresenter', () => {
     });
     await flushMount();
     expect(firstMount).toHaveBeenCalled();
+    expect(onGraphConfigured).not.toHaveBeenCalled();
 
     rendererMode = 'litegraph';
     publishRendererChange();
     await flushMount();
+    expect(onGraphConfigured).not.toHaveBeenCalled();
     rendererMode = 'vue';
     publishRendererChange();
     await flushMount();
@@ -435,6 +525,13 @@ describe('CubeSurfacePresenter', () => {
     expect(firstRenderer.dispose).toHaveBeenCalledTimes(1);
     expect(createRenderer).toHaveBeenCalledTimes(2);
     expect(secondMount).toHaveBeenCalled();
+    expect(onGraphConfigured).toHaveBeenCalledTimes(1);
+    expect(onGraphConfigured.mock.invocationCallOrder[0]).toBeLessThan(
+      secondMount.mock.invocationCallOrder[0]!,
+    );
+    expect(internalNode.imgs).toBe(previewImages);
+    expect(internalNode.animatedImages).toEqual([false, false]);
+    expect(internalNode.imageIndex).toBeNull();
     presenter.dispose();
   });
 

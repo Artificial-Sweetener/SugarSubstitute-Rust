@@ -21,6 +21,5 @@ export function filterCubePreviewOutputs(snapshot, outputSlots) {
             const output = snapshot.outputs[index];
             return output ? [output] : [];
         }),
-        internalItems: snapshot.internalItems,
     };
 }

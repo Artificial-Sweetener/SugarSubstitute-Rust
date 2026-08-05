@@ -32,7 +32,6 @@ export interface CubeOutputPreview {
 
 export interface CubePreviewSnapshot {
   outputs: CubeOutputPreview[];
-  internalItems: CubePreviewItem[];
 }
 
 /** Provide media snapshots without coupling presentation to Comfy stores. */
@@ -50,6 +49,5 @@ export function filterCubePreviewOutputs(
       const output = snapshot.outputs[index];
       return output ? [output] : [];
     }),
-    internalItems: snapshot.internalItems,
   };
 }

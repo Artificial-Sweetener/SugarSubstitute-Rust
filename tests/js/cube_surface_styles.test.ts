@@ -18,6 +18,15 @@
 import { ensureCubeSurfaceStyles } from '../../frontend/comfyui/ui/surface/CubeSurfaceStyles.js';
 
 describe('ensureCubeSurfaceStyles', () => {
+  test('removes SugarCubes sidebar chrome from the active Cube editor viewport', () => {
+    ensureCubeSurfaceStyles(document);
+
+    const css = document.getElementById('sugarcubes-cube-surface-styles')?.textContent ?? '';
+    expect(css).toMatch(
+      /body\.sugarcubes-cube-editor-workspace[\s\S]*?\.p-splitter:has\(\.sugarcubes-sidebar-panel\)[\s\S]*?> \.side-bar-panel,[\s\S]*?> \.p-splitter-gutter\s*\{[^}]*display:\s*none\s*!important;/s,
+    );
+  });
+
   test('suppresses native ports and subgraph footers while preserving advanced inputs', () => {
     ensureCubeSurfaceStyles(document);
 
@@ -277,7 +286,7 @@ describe('ensureCubeSurfaceStyles', () => {
     expect(css).not.toMatch(/content:has\([^)]*popper[^)]*\)\s*\{[^}]*z-index:/s);
   });
 
-  test('fits preview media inside layout-owned rail height without enlarging the Cube', () => {
+  test('fits complete preview media inside the rail without cropping or enlarging the Cube', () => {
     ensureCubeSurfaceStyles(document);
 
     const css = document.getElementById('sugarcubes-cube-surface-styles')?.textContent ?? '';
@@ -306,7 +315,7 @@ describe('ensureCubeSurfaceStyles', () => {
     expect(imageRule).toMatch(/max-height:\s*100%\s*!important;/);
     expect(imageRule).not.toMatch(/aspect-ratio:/);
     expect(imageRule).not.toMatch(/background:/);
-    expect(imageRule).toMatch(/object-fit:\s*cover;/);
+    expect(imageRule).toMatch(/object-fit:\s*contain;/);
     expect(imageRule).toMatch(/object-position:\s*center top;/);
     expect(imageRule).toMatch(/border-radius:\s*0;/);
     expect(imageRule).toMatch(/opacity:\s*1\s*!important;/);
@@ -332,11 +341,10 @@ describe('ensureCubeSurfaceStyles', () => {
     expect(outputGridRule).toMatch(/align-items:\s*stretch;/);
     expect(outputGridRule).toMatch(/flex:\s*1\s+1\s+0;/);
     expect(css).toMatch(
-      /\.sugarcubes-cube-face__preview-output,\s*\.sugarcubes-cube-face__preview-internal\s*\{[^}]*gap:\s*var\(--sugarcubes-cube-preview-row-gap,\s*0\.75rem\);/s,
+      /\.sugarcubes-cube-face__preview-output\s*\{[^}]*gap:\s*var\(--sugarcubes-cube-preview-row-gap,\s*0\.75rem\);/s,
     );
-    expect(css).toMatch(
-      /\.sugarcubes-cube-face__preview-internal:not\(:empty\)\s*\{[^}]*flex:\s*0\s+1\s+25%;/s,
-    );
+    expect(css).not.toContain('sugarcubes-cube-face__preview-internal');
+    expect(css).not.toContain('internal-primary');
     expect(css).toMatch(
       /\.sugarcubes-cube-face__preview-output\s*\+\s*\.sugarcubes-cube-face__preview-output\s*\{[^}]*border-top:/s,
     );

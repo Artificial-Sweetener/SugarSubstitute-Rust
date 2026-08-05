@@ -40,6 +40,7 @@ import {
   type CubeEditorMetadataValues,
 } from './CubeEditorMetadataDraftStore.js';
 import { CubeEditorHudPositioner } from './CubeEditorHudPositioner.js';
+import type { CubeEditorWorkspaceChromeAdapter } from './CubeEditorWorkspaceChromeAdapter.js';
 import { createCubeUnsavedIndicator } from './CubeUnsavedIndicator.js';
 
 const FOCUS_KEY_ATTRIBUTE = 'data-sugarcubes-focus-key';
@@ -57,6 +58,7 @@ export interface CubeEditorMetadataHudActions {
 
 export interface CubeEditorMetadataHudOptions {
   settingsSelectRenderer?: ComfySettingsSelectRenderer;
+  workspaceChrome?: CubeEditorWorkspaceChromeAdapter;
 }
 
 /** Own the non-graph, viewport-pinned Cube metadata surface for one active Cube editor. */
@@ -64,6 +66,7 @@ export class CubeEditorMetadataHud {
   readonly #document: Document;
   readonly #actions: CubeEditorMetadataHudActions;
   readonly #settingsSelectRenderer: ComfySettingsSelectRenderer;
+  readonly #workspaceChrome: CubeEditorWorkspaceChromeAdapter | null;
   readonly #drafts = new CubeEditorMetadataDraftStore();
   readonly #settingsSelectControls = new Set<
     ComfySettingsAutocompleteControl | ComfySettingsSingleSelectControl
@@ -90,10 +93,12 @@ export class CubeEditorMetadataHud {
     this.#actions = actions;
     this.#settingsSelectRenderer =
       options.settingsSelectRenderer ?? new InstalledComfySettingsSelectRenderer(documentRef);
+    this.#workspaceChrome = options.workspaceChrome ?? null;
   }
 
   /** Clear the viewport card when the user returns to the root workflow. */
   hide(): void {
+    this.#workspaceChrome?.leave();
     this.#retainActiveDraft();
     this.#activeNode = null;
     this.#values = null;
@@ -111,9 +116,11 @@ export class CubeEditorMetadataHud {
   /** Reconcile the card with the Cube currently active in Comfy's native editor. */
   show(node: CubeNode): void {
     if (this.#activeNode === node) return;
+    this.#workspaceChrome?.enter();
     this.#retainActiveDraft();
     const retained = this.#drafts.get(node);
     this.#activeNode = node;
+    this.#collapsed = !isDraftCubeNode(node);
     this.#values = retained?.values ?? readValues(node);
     this.#dirty = retained?.dirty ?? false;
     this.#saveError = retained?.saveError ?? '';

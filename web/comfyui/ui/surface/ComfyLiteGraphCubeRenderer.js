@@ -22,7 +22,7 @@ import { drawComfyPrimeIcon } from './ComfyPrimeIcons.js';
 import { CubeCanvasPortRenderer } from './CubeCanvasPortRenderer.js';
 import { deriveCubeBackdropColor, resolveCubeNodeColorTheme, } from './CubeNodeColorTheme.js';
 import { resolveComfyLiteGraphCubeSurfaceTheme } from './ComfyLiteGraphNodeColorTheme.js';
-import { CUBE_PREVIEW_SECTION_GAP, CUBE_PREVIEW_TITLE_LINE_HEIGHT, dividePreviewIntoHorizontalSegments, resolveCubePreviewContentRect, resolveCubeCanvasPreviewSections, } from './CubePreviewSections.js';
+import { CUBE_PREVIEW_TITLE_LINE_HEIGHT, layoutCubeCanvasPreviewSections, } from './CubePreviewSections.js';
 /** Own only visual composition for legacy canvas Cube surfaces. */
 export class ComfyLiteGraphCubeRenderer {
     #host;
@@ -106,7 +106,7 @@ export class ComfyLiteGraphCubeRenderer {
         context.moveTo(preview.x, preview.y);
         context.lineTo(preview.x, preview.y + preview.height);
         context.stroke();
-        const outputSections = resolveCubeCanvasPreviewSections(item.preview);
+        const outputSections = layoutCubeCanvasPreviewSections(preview, item.preview);
         if (outputSections.length === 0) {
             context.font = '12px sans-serif';
             context.textBaseline = 'top';
@@ -114,11 +114,8 @@ export class ComfyLiteGraphCubeRenderer {
             context.fillText('No preview available', preview.x + 6, preview.y + 6);
             return;
         }
-        const sections = dividePreviewIntoHorizontalSegments(resolveCubePreviewContentRect(preview), outputSections.length, CUBE_PREVIEW_SECTION_GAP);
-        for (const [index, output] of outputSections.entries()) {
-            const section = sections[index];
-            if (!section)
-                continue;
+        for (const output of outputSections) {
+            const section = output.rect;
             context.font = '14px sans-serif';
             context.textBaseline = 'middle';
             context.fillStyle = '#f0f2f5';
@@ -138,16 +135,43 @@ export class ComfyLiteGraphCubeRenderer {
                 context.fillText('Loading output…', section.x, section.y + CUBE_PREVIEW_TITLE_LINE_HEIGHT);
                 continue;
             }
-            const target = coverImage(image.naturalWidth, image.naturalHeight, section.x, section.y + CUBE_PREVIEW_TITLE_LINE_HEIGHT, section.width, Math.max(1, section.height - CUBE_PREVIEW_TITLE_LINE_HEIGHT));
+            const target = fitCubePreviewImage(image.naturalWidth, image.naturalHeight, section.x, section.y + CUBE_PREVIEW_TITLE_LINE_HEIGHT, section.width, Math.max(1, section.height - CUBE_PREVIEW_TITLE_LINE_HEIGHT));
             context.drawImage(image, target.x, target.y, target.width, target.height);
+            if (containsPoint(section, this.#host.graph_mouse)) {
+                drawPreviewDownloadAction(context, output.downloadAction);
+            }
         }
     }
 }
-/** Fill one preview rail while preserving aspect ratio and the shared edge inset. */
-function coverImage(sourceWidth, sourceHeight, x, y, width, height) {
-    const scale = Math.max(width / sourceWidth, height / sourceHeight);
-    const targetWidth = Math.max(1, sourceWidth * scale);
-    const targetHeight = Math.max(1, sourceHeight * scale);
+/** Draw Comfy's compact hover download affordance over one canvas preview. */
+function drawPreviewDownloadAction(context, action) {
+    context.save();
+    context.fillStyle = '#f2f2f2';
+    context.beginPath();
+    context.roundRect(action.x, action.y, action.width, action.height, 6);
+    context.fill();
+    context.fillStyle = '#151515';
+    drawComfyPrimeIcon(context, 'download', action.x + action.width / 2, action.y + action.height / 2, 14);
+    context.restore();
+}
+/** Return whether the current graph pointer is inside one finite rectangle. */
+function containsPoint(area, point) {
+    const x = Number(point?.[0]);
+    const y = Number(point?.[1]);
+    return (Number.isFinite(x) &&
+        Number.isFinite(y) &&
+        x >= area.x &&
+        x <= area.x + area.width &&
+        y >= area.y &&
+        y <= area.y + area.height);
+}
+/** Fit one complete image inside the rail with centered horizontal and top vertical alignment. */
+export function fitCubePreviewImage(sourceWidth, sourceHeight, x, y, width, height) {
+    const safeSourceWidth = Math.max(1, sourceWidth);
+    const safeSourceHeight = Math.max(1, sourceHeight);
+    const scale = Math.min(width / safeSourceWidth, height / safeSourceHeight);
+    const targetWidth = Math.max(1, safeSourceWidth * scale);
+    const targetHeight = Math.max(1, safeSourceHeight * scale);
     return {
         x: x + (width - targetWidth) / 2,
         y,

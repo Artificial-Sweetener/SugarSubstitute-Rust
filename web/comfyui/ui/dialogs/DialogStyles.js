@@ -16,13 +16,14 @@
 /**
  * Own the SugarCubes dialog presentation layer in `frontend/comfyui/ui/dialogs/DialogStyles.js`.
  */
+import { COMFY_SETTINGS_OVERLAY_BASE_Z_INDEX, DIALOG_OVERLAY_Z_INDEX, } from '../core/OverlayStacking.js';
 const STYLE_ID = 'sugarcubes-dialog-styles';
 const dialogStyles = [
     '.sugarcubes-modal-overlay,',
     '.sugarcubes-version-overlay {',
     '  position: fixed;',
     '  inset: 0;',
-    '  z-index: 2000;',
+    `  z-index: ${DIALOG_OVERLAY_Z_INDEX};`,
     '  display: none;',
     '  align-items: center;',
     '  justify-content: center;',
@@ -35,8 +36,7 @@ const dialogStyles = [
     '}',
     '',
     '.sugarcubes-create-cube-overlay {',
-    '  align-items: flex-end;',
-    '  padding: 0 16px min(12vh, 96px);',
+    '  padding: 16px;',
     '  box-sizing: border-box;',
     '}',
     '',
@@ -90,6 +90,10 @@ const dialogStyles = [
     '  gap: 10px;',
     '}',
     '',
+    '.sugarcubes-modal__field[hidden] {',
+    '  display: none;',
+    '}',
+    '',
     '.sugarcubes-modal__field-label,',
     '.sugarcubes-modal__checkbox-label,',
     '.sugarcubes-selection-dialog__option-title {',
@@ -104,6 +108,12 @@ const dialogStyles = [
     '.sugarcubes-comfy-settings-select-host,',
     '.sugarcubes-comfy-settings-autocomplete-host {',
     '  min-width: 0;',
+    '}',
+    '',
+    '.sugarcubes-comfy-settings-overlay,',
+    '.sugarcubes-modal-overlay.is-visible ~ .p-select-overlay,',
+    '.sugarcubes-modal-overlay.is-visible ~ .p-autocomplete-overlay {',
+    `  z-index: ${COMFY_SETTINGS_OVERLAY_BASE_Z_INDEX} !important;`,
     '}',
     '',
     '.sugarcubes-modal__field--checkbox {',

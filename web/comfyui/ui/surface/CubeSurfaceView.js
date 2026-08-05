@@ -19,6 +19,7 @@ import { resolveCubeFaceCardPresentation, } from './CubeFaceCardPolicy.js';
 import { setCubeFaceCardRevealed, setCubeFaceNodeEnabled } from './CubeFaceCardStateController.js';
 import { NativeNodeCardHost } from './NativeNodeCardHost.js';
 import { CubePreviewRailView } from './CubePreviewRailView.js';
+import { CubePreviewDividerController } from './CubePreviewDividerController.js';
 import { layoutCubeSurfaceDom } from './CubeSurfaceDomLayout.js';
 import { NativeCardGeometryObserver } from './NativeCardGeometryObserver.js';
 import { createResolvedCubeIconElement } from '../core/CubeIconResolver.js';
@@ -36,9 +37,11 @@ export class CubeSurfaceView {
     #actions;
     #content;
     #masonry;
+    #previewDivider;
     #previewRail;
     #previewView;
     #geometryObserver;
+    #previewDividerController;
     #cells = [];
     #visibleCards = [];
     #lastLayoutWidth = 1;
@@ -94,8 +97,27 @@ export class CubeSurfaceView {
         this.#previewRail.className = 'sugarcubes-cube-face__preview';
         this.#previewRail.dataset.cubePreviewRail = '';
         this.#previewRail.setAttribute('aria-label', 'Cube output preview');
-        this.#previewView = new CubePreviewRailView(this.#previewRail);
-        this.#content.append(this.#masonry, this.#previewRail);
+        this.#previewView = new CubePreviewRailView(this.#previewRail, options.previewActions ?? null);
+        this.#previewDivider = options.document.createElement('button');
+        this.#previewDivider.type = 'button';
+        this.#previewDivider.className = 'sugarcubes-cube-face__preview-divider';
+        this.#previewDivider.dataset.cubePreviewDivider = '';
+        this.#previewDivider.setAttribute('aria-label', 'Resize Cube output preview');
+        const windowRef = options.document.defaultView;
+        this.#previewDividerController = windowRef
+            ? new CubePreviewDividerController({
+                element: this.#previewDivider,
+                events: windowRef,
+                getScale: options.getScale ?? (() => 1),
+                onResize: (width, committed) => {
+                    this.#state.preview.width = width;
+                    this.layout(this.#lastLayoutWidth);
+                    if (committed)
+                        this.#onStateChange(this.#state);
+                },
+            })
+            : null;
+        this.#content.append(this.#masonry, this.#previewDivider, this.#previewRail);
         this.element.append(this.header, this.#content);
         this.#geometryObserver = new NativeCardGeometryObserver(options.document, () => this.layout(this.#lastLayoutWidth));
         this.#renderCards();
@@ -127,16 +149,19 @@ export class CubeSurfaceView {
             cells: this.#cells,
             content: this.#content,
             masonry: this.#masonry,
+            previewDivider: this.#previewDivider,
             previewRail: this.#previewRail,
             previewAvailable: this.#previewAvailable,
         });
         if (result.minimumHeight !== null) {
             this.#onMinimumHeightChange?.(result.minimumHeight);
         }
+        this.#previewDividerController?.setGeometry(result.previewWidth, result.previewWidthRange, result.previewResizable);
     }
     /** Remove native card mounts owned by this view. */
     dispose() {
         this.#actions.dispose();
+        this.#previewDividerController?.dispose();
         this.#geometryObserver.dispose();
         this.#cardHost.dispose();
     }

@@ -26,6 +26,12 @@ interface RememberedNodeProperty {
   value: unknown;
 }
 
+interface RememberedWidgetLabel {
+  widget: Record<string, unknown>;
+  owned: boolean;
+  value: unknown;
+}
+
 /** Match the compact native bottom margin above ordinary Cube-face widget stacks. */
 export const CUBE_FACE_WIDGET_PADDING = 6;
 const PROMPT_WIDGET_TOP_PADDING = 2;
@@ -59,13 +65,40 @@ export function withCubeFaceNodePresentation<Result>(
   operation: () => Result,
 ): Result {
   const remembered = rememberNodeProperties(node, ['flags', 'widgets_start_y', 'widgets_up']);
+  const widgetLabels = applyDurableWidgetLabels(node);
   node.flags = createCubeFaceFlags(node.flags);
   Reflect.set(node, 'widgets_up', true);
   Reflect.set(node, 'widgets_start_y', cubeFaceNodeWidgetStartY(node));
   try {
     return operation();
   } finally {
+    restoreWidgetLabels(widgetLabels);
     restoreNodeProperties(node, remembered);
+  }
+}
+
+/** Prefer a durable user-facing tooltip when a transient canvas label was lost. */
+function applyDurableWidgetLabels(node: ComfyNode): RememberedWidgetLabel[] {
+  const remembered: RememberedWidgetLabel[] = [];
+  for (const widget of node.widgets ?? []) {
+    const tooltip = widget.options?.tooltip;
+    if (typeof tooltip !== 'string' || tooltip.trim() === '') continue;
+    if (typeof widget.label === 'string' && widget.label !== widget.name) continue;
+    remembered.push({
+      widget,
+      owned: Object.prototype.hasOwnProperty.call(widget, 'label'),
+      value: widget.label,
+    });
+    widget.label = tooltip;
+  }
+  return remembered;
+}
+
+/** Restore widget labels without manufacturing persistent graph state. */
+function restoreWidgetLabels(remembered: readonly RememberedWidgetLabel[]): void {
+  for (const entry of remembered) {
+    Reflect.set(entry.widget, 'label', entry.value);
+    if (!entry.owned) Reflect.deleteProperty(entry.widget, 'label');
   }
 }
 

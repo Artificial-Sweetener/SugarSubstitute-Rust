@@ -55,4 +55,20 @@ describe('CubeFaceNodeMeasurement', () => {
 
     expect(measureCubeFaceNodeBodyHeight(sampler)).toBe(180);
   });
+
+  test('retains native preview height for an ordered mask loader in Nodes 1.0', () => {
+    const maskLoader = {
+      id: 'mask-loader',
+      type: 'SimpleSyrup.LoadMaskBatch',
+      size: [320, 420],
+      imgs: [{ src: 'mask-one.png' }, { src: 'mask-two.png' }],
+      widgets: [
+        { name: 'channel', computedHeight: 24 },
+        { name: 'replace', computedHeight: 24 },
+        { name: 'add', computedHeight: 24 },
+      ],
+    };
+
+    expect(measureCubeFaceNodeBodyHeight(maskLoader)).toBe(420);
+  });
 });

@@ -19,6 +19,13 @@ import { resizeCubeFrame, type CubeResizeEdge } from '../cube/geometry/CubeResiz
 import type { CubeNode } from '../cube/node/ComfyCubeNodeFactory.js';
 import type { Vec2 } from '../types/common.js';
 import type { ComfyNode } from '../types/graph.js';
+import type { CubePreviewActions } from './CubePreviewActions.js';
+import type { CubePreviewSnapshot } from './CubePreviewModel.js';
+import { clampCubePreviewWidth } from './CubePreviewResizeGeometry.js';
+import {
+  layoutCubeCanvasPreviewSections,
+  type CubeCanvasPreviewSectionLayout,
+} from './CubePreviewSections.js';
 import type {
   ComfyLiteGraphWidgetInteraction,
   LiteGraphWidgetPointerSession,
@@ -57,6 +64,7 @@ export interface LiteGraphCubeNodeInteractionItem {
   node: CubeNode;
   layout: CubeCanvasLayout;
   cardMenuOpen: boolean;
+  preview?: CubePreviewSnapshot | null;
 }
 
 export interface ComfyLiteGraphCubeNodeInteractionOptions {
@@ -65,10 +73,12 @@ export interface ComfyLiteGraphCubeNodeInteractionOptions {
   widgetInteraction: ComfyLiteGraphWidgetInteraction;
   getItems(): readonly LiteGraphCubeNodeInteractionItem[];
   chromeActions?: CubeFaceChromeActions | null;
+  previewActions?: CubePreviewActions | null;
   onEdit(node: CubeNode): void;
   onCardMenuToggle(node: CubeNode): void;
   onCardRevealChange(node: CubeNode, internalNode: ComfyNode, revealed: boolean): void;
   onCardActivationChange(node: CubeNode, internalNode: ComfyNode, enabled: boolean): void;
+  onPreviewWidthChange?(node: CubeNode, width: number): void;
 }
 
 type PointerSession =
@@ -83,6 +93,14 @@ type PointerSession =
       minimumSize: Vec2;
     }
   | {
+      kind: 'preview-resize';
+      pointerId: number;
+      node: CubeNode;
+      startPoint: Vec2;
+      startWidth: number;
+      range: CubeCanvasLayout['previewWidthRange'];
+    }
+  | {
       kind: 'widget';
       pointerId: number;
       card: CubeCanvasLayout['cards'][number];
@@ -92,10 +110,12 @@ type PointerSession =
 /** Own custom face actions while native canvas code owns the parent node. */
 export class ComfyLiteGraphCubeNodeInteraction {
   readonly #canvas: LiteGraphCubeNodeInteractionCanvas;
+  readonly #eventRoot: Document;
   readonly #history: LiteGraphCubeNodeInteractionHistory;
   readonly #widgetInteraction: ComfyLiteGraphWidgetInteraction;
   readonly #getItems: () => readonly LiteGraphCubeNodeInteractionItem[];
   readonly #chromeActions: CubeFaceChromeActions | null;
+  readonly #previewActions: CubePreviewActions | null;
   readonly #onEdit: (node: CubeNode) => void;
   readonly #onCardMenuToggle: (node: CubeNode) => void;
   readonly #onCardRevealChange: (
@@ -108,45 +128,59 @@ export class ComfyLiteGraphCubeNodeInteraction {
     internalNode: ComfyNode,
     enabled: boolean,
   ) => void;
+  readonly #onPreviewWidthChange: (node: CubeNode, width: number) => void;
   #session: PointerSession | null = null;
   #appliedCursor: string | null = null;
 
   /** Bind focused face hit testing ahead of LiteGraph's native node handlers. */
   constructor(options: ComfyLiteGraphCubeNodeInteractionOptions) {
     this.#canvas = options.canvas;
+    this.#eventRoot = options.canvas.canvas.ownerDocument;
     this.#history = options.history;
     this.#widgetInteraction = options.widgetInteraction;
     this.#getItems = options.getItems;
     this.#chromeActions = options.chromeActions ?? null;
+    this.#previewActions = options.previewActions ?? null;
     this.#onEdit = options.onEdit;
     this.#onCardMenuToggle = options.onCardMenuToggle;
     this.#onCardRevealChange = options.onCardRevealChange;
     this.#onCardActivationChange = options.onCardActivationChange;
-    options.canvas.canvas.addEventListener('pointerdown', this.#handlePointerDown, true);
+    this.#onPreviewWidthChange = options.onPreviewWidthChange ?? (() => undefined);
+    this.#eventRoot.addEventListener('pointerdown', this.#handlePointerDown, true);
     options.canvas.canvas.addEventListener('pointermove', this.#handlePointerMove, true);
     options.canvas.canvas.addEventListener('pointerup', this.#handlePointerUp, true);
     options.canvas.canvas.addEventListener('pointercancel', this.#handlePointerCancel, true);
+    this.#eventRoot.addEventListener('contextmenu', this.#handleContextMenu, true);
     options.canvas.canvas.addEventListener('dblclick', this.#handleDoubleClick, true);
   }
 
   /** Release capture listeners and close any pending resize history transaction. */
   dispose(): void {
-    if (this.#session?.kind === 'resize') this.#history.afterChange?.();
+    if (this.#session?.kind === 'resize' || this.#session?.kind === 'preview-resize') {
+      this.#history.afterChange?.();
+    }
     this.#session = null;
-    this.#canvas.canvas.removeEventListener('pointerdown', this.#handlePointerDown, true);
+    this.#eventRoot.removeEventListener('pointerdown', this.#handlePointerDown, true);
     this.#canvas.canvas.removeEventListener('pointermove', this.#handlePointerMove, true);
     this.#canvas.canvas.removeEventListener('pointerup', this.#handlePointerUp, true);
     this.#canvas.canvas.removeEventListener('pointercancel', this.#handlePointerCancel, true);
+    this.#eventRoot.removeEventListener('contextmenu', this.#handleContextMenu, true);
     this.#canvas.canvas.removeEventListener('dblclick', this.#handleDoubleClick, true);
   }
 
   /** Consume only Cube-owned actions, embedded widgets, and eight-way resizing. */
   readonly #handlePointerDown = (event: PointerEvent): void => {
-    if (event.button !== 0) return;
+    if (event.target !== this.#canvas.canvas) return;
     const point = this.#graphPoint(event);
     if (!point) return;
     const item = this.#itemAt(point);
     if (!item) return;
+    if (event.button === 2) {
+      const preview = findPreviewSection(item, point);
+      if (preview?.item && this.#previewActions) this.#consume(event);
+      return;
+    }
+    if (event.button !== 0) return;
     if (item.cardMenuOpen) {
       const menuItem = computeCubeCanvasCardMenuLayout(item.layout).items.find((candidate) =>
         containsCubeCanvasPoint(candidate.rect, point),
@@ -160,6 +194,30 @@ export class ComfyLiteGraphCubeNodeInteraction {
         this.#onCardRevealChange(item.node, internalNode, !menuItem.entry.revealed);
         return;
       }
+    }
+    if (item.layout.previewDivider && containsCubeCanvasPoint(item.layout.previewDivider, point)) {
+      this.#consume(event);
+      this.#history.beforeChange?.();
+      this.#session = {
+        kind: 'preview-resize',
+        pointerId: event.pointerId,
+        node: item.node,
+        startPoint: point,
+        startWidth: item.layout.preview?.width ?? item.layout.previewWidthRange.minimum,
+        range: item.layout.previewWidthRange,
+      };
+      this.#canvas.canvas.setPointerCapture?.(event.pointerId);
+      return;
+    }
+    const preview = findPreviewSection(item, point);
+    if (
+      preview?.item &&
+      this.#previewActions &&
+      containsCubeCanvasPoint(preview.downloadAction, point)
+    ) {
+      this.#consume(event);
+      this.#previewActions.download(preview.item);
+      return;
     }
     const resizeHandle = findResizeHandle(item.layout, point);
     if (resizeHandle) {
@@ -239,6 +297,15 @@ export class ComfyLiteGraphCubeNodeInteraction {
       this.#markDirty();
       return;
     }
+    if (session.kind === 'preview-resize') {
+      const width = clampCubePreviewWidth(
+        session.startWidth - (point[0] - session.startPoint[0]),
+        session.range,
+      );
+      this.#onPreviewWidthChange(session.node, width);
+      this.#markDirty();
+      return;
+    }
     const frame = resizeCubeFrame({
       edge: session.edge,
       startPosition: session.startPosition,
@@ -261,6 +328,20 @@ export class ComfyLiteGraphCubeNodeInteraction {
   /** Cancel one focused pointer session. */
   readonly #handlePointerCancel = (event: PointerEvent): void => {
     this.#finish(event, true);
+  };
+
+  /** Open Comfy's media actions when a Cube output preview owns the click. */
+  readonly #handleContextMenu = (event: MouseEvent): void => {
+    if (event.target !== this.#canvas.canvas) return;
+    if (!this.#previewActions) return;
+    const point = this.#graphPoint(event);
+    if (!point) return;
+    const item = this.#itemAt(point);
+    if (!item) return;
+    const preview = findPreviewSection(item, point);
+    if (!preview?.item) return;
+    this.#consume(event);
+    this.#previewActions.openContextMenu(preview.item, event);
   };
 
   /** Open Cube editing instead of Comfy's generic SubgraphNode double-click path. */
@@ -295,7 +376,7 @@ export class ComfyLiteGraphCubeNodeInteraction {
     if (session.kind === 'widget' && point) {
       const [x, y] = childGraphPoint(session.card, point);
       session.session.finish(event, x, y, cancelled);
-    } else if (session.kind === 'resize') {
+    } else if (session.kind === 'resize' || session.kind === 'preview-resize') {
       this.#history.afterChange?.();
     }
     this.#canvas.canvas.releasePointerCapture?.(event.pointerId);
@@ -333,7 +414,21 @@ export class ComfyLiteGraphCubeNodeInteraction {
 
   /** Limit cursor ownership to the Cube resize handle currently under the pointer. */
   #syncCursor(point: Vec2 | null): void {
-    const handle = point ? findResizeHandle(this.#itemAt(point)?.layout ?? null, point) : null;
+    const item = point ? this.#itemAt(point) : null;
+    if (point && item?.layout.previewDivider) {
+      if (containsCubeCanvasPoint(item.layout.previewDivider, point)) {
+        this.#canvas.canvas.style.cursor = 'col-resize';
+        this.#appliedCursor = 'col-resize';
+        return;
+      }
+      const preview = findPreviewSection(item, point);
+      if (preview?.item && containsCubeCanvasPoint(preview.downloadAction, point)) {
+        this.#canvas.canvas.style.cursor = 'pointer';
+        this.#appliedCursor = 'pointer';
+        return;
+      }
+    }
+    const handle = point ? findResizeHandle(item?.layout ?? null, point) : null;
     if (handle) {
       const cursor = resizeCursor(handle.edge);
       this.#canvas.canvas.style.cursor = cursor;
@@ -359,6 +454,18 @@ export class ComfyLiteGraphCubeNodeInteraction {
     event.stopPropagation();
     event.stopImmediatePropagation();
   }
+}
+
+/** Return the preview section currently owning one graph-space point. */
+function findPreviewSection(
+  item: LiteGraphCubeNodeInteractionItem,
+  point: Vec2,
+): CubeCanvasPreviewSectionLayout | null {
+  return (
+    layoutCubeCanvasPreviewSections(item.layout.preview, item.preview ?? null).find((section) =>
+      containsCubeCanvasPoint(section.rect, point),
+    ) ?? null
+  );
 }
 
 /** Resolve real child-node coordinates for one masonry card point. */

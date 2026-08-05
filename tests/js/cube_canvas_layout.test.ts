@@ -108,6 +108,9 @@ describe('computeCubeCanvasLayout', () => {
     const layout = computeCubeCanvasLayout(cube, state, 30);
 
     expect(layout.preview).not.toBeNull();
+    expect(layout.previewDivider).not.toBeNull();
+    expect(layout.previewWidthRange).toEqual({ minimum: 160, maximum: 456 });
+    expect(layout.previewDivider?.x).toBeLessThan(layout.preview?.x ?? 0);
     expect(layout.outputs.map((output) => output.slot)).toEqual([firstOutput, secondOutput]);
     expect(layout.outputs.map((output) => output.y)).toEqual([180, 400]);
     expect(

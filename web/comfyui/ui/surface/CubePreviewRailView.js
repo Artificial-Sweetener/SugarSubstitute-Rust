@@ -13,15 +13,17 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Render all Cube outputs and suppressed internal previews in one rail. */
+/** Render Cube output previews in one rail. */
 import { resolveCubeOutputSections } from './CubePreviewSections.js';
 /** Own safe preview media DOM for one Cube face. */
 export class CubePreviewRailView {
     element;
+    #actions;
     #signature = '';
     /** Bind one dedicated rail without owning preview collection. */
-    constructor(element) {
+    constructor(element, actions = null) {
         this.element = element;
+        this.#actions = actions;
     }
     /** Render one immutable preview snapshot without output-selection state. */
     render(snapshot) {
@@ -50,8 +52,9 @@ export class CubePreviewRailView {
             label.textContent = output.id;
             title.append(label);
             section.append(title);
-            for (const item of output.items)
-                section.append(buildPreviewFigure(documentRef, item));
+            for (const item of output.items) {
+                section.append(buildPreviewFigure(documentRef, item, this.#actions));
+            }
             if (output.items.length === 0) {
                 const empty = documentRef.createElement('p');
                 empty.textContent = 'No preview available';
@@ -59,27 +62,19 @@ export class CubePreviewRailView {
             }
             outputGrid.append(section);
         }
-        const internal = snapshot.internalItems.length > 0 ? documentRef.createElement('div') : null;
-        if (internal) {
-            internal.className = 'sugarcubes-cube-face__preview-internal';
-            for (const item of snapshot.internalItems)
-                internal.append(buildPreviewFigure(documentRef, item));
-        }
-        if (outputs.length === 0 && snapshot.internalItems.length === 0) {
+        if (outputs.length === 0) {
             const empty = documentRef.createElement('p');
             empty.textContent = 'No preview available';
             media.append(empty);
         }
         else {
             media.append(outputGrid);
-            if (internal)
-                media.append(internal);
         }
         this.element.replaceChildren(media);
     }
 }
 /** Build one safe media figure without parsing dynamic host values as markup. */
-function buildPreviewFigure(documentRef, item) {
+function buildPreviewFigure(documentRef, item, actions) {
     const figure = documentRef.createElement('figure');
     figure.dataset.cubePreviewItem = item.key;
     figure.setAttribute('aria-label', item.label);
@@ -88,5 +83,25 @@ function buildPreviewFigure(documentRef, item) {
     image.alt = '';
     image.loading = 'eager';
     figure.append(image);
+    if (actions) {
+        figure.addEventListener('contextmenu', (event) => actions.openContextMenu(item, event));
+        const download = documentRef.createElement('button');
+        download.type = 'button';
+        download.className = 'sugarcubes-cube-face__preview-download';
+        download.dataset.cubePreviewDownload = item.key;
+        download.setAttribute('aria-label', 'Download image');
+        download.title = 'Download image';
+        const icon = documentRef.createElement('i');
+        icon.classList.add('pi', 'pi-download');
+        icon.setAttribute('aria-hidden', 'true');
+        download.append(icon);
+        download.addEventListener('pointerdown', (event) => event.stopPropagation());
+        download.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            actions.download(item);
+        });
+        figure.append(download);
+    }
     return figure;
 }

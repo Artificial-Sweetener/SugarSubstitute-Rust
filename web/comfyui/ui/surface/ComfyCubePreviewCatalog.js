@@ -31,12 +31,11 @@ export class ComfyCubePreviewCatalog {
         this.#host = host;
         this.#retention = host.retention ?? new CubePreviewRetentionStore();
     }
-    /** Collect selected-output candidates and suppressed internal previews. */
+    /** Collect media belonging to the Cube's output boundaries. */
     snapshot(cube) {
         const instanceId = readInstanceId(cube);
         const locatedNodes = locateInternalNodes(cube);
         const locatorByNode = new Map(locatedNodes.map(({ node, locator }) => [node, locator]));
-        const outputItems = new Set();
         const outputs = cube.subgraph.outputs.map((output, index) => {
             const id = readString(output.name) || String(index);
             const executionId = buildCubeOutputExecutionId(cube.id, index);
@@ -44,27 +43,19 @@ export class ComfyCubePreviewCatalog {
             const markerItems = capturedItems.length > 0 ? capturedItems : this.#readNodeItems(executionId, id);
             const source = resolveOutputNode(cube, index);
             const locator = source ? (locatorByNode.get(source) ?? '') : '';
-            const directItems = source && locator ? this.#readNodeItems(locator, id) : [];
+            const directItems = source && locator ? this.#readLocatedNodeItems({ node: source, locator }, id) : [];
             const items = markerItems.length > 0
                 ? markerItems
                 : directItems.length > 0
                     ? directItems
                     : this.#readDownstreamOutputItems(cube, index, id);
-            for (const item of items)
-                outputItems.add(item.url);
             return { id, label: id, items };
         });
-        const internalItems = locatedNodes
-            .flatMap(({ node, locator }) => {
-            const label = readString(node.title) || readString(node.type) || 'Internal node';
-            return this.#readNodeItems(locator, label);
-        })
-            .filter((item) => !outputItems.has(item.url));
-        const current = { outputs, internalItems: deduplicateItems(internalItems) };
+        const current = { outputs };
         const outputSignature = outputs.map((output) => output.id).join('\u0000');
         this.#rootGraphScope ??= this.#host.getRootGraph?.() ?? this.#fallbackRootGraph;
         const rootGraph = this.#rootGraphScope;
-        const hasMedia = outputs.some((output) => output.items.length > 0) || current.internalItems.length > 0;
+        const hasMedia = outputs.some((output) => output.items.length > 0);
         if (hasMedia) {
             this.#retention.retain(rootGraph, instanceId, outputSignature, current);
         }
@@ -118,8 +109,7 @@ export class ComfyCubePreviewCatalog {
     #reportUnmatchedMedia(cube, locatedNodes, snapshot) {
         if (!this.#host.logger)
             return;
-        if (snapshot.outputs.some((output) => output.items.length > 0) ||
-            snapshot.internalItems.length > 0) {
+        if (snapshot.outputs.some((output) => output.items.length > 0)) {
             this.#lastUnmatchedSignature.delete(cube);
             return;
         }
@@ -138,6 +128,16 @@ export class ComfyCubePreviewCatalog {
             outputKeys,
             previewKeys,
         }));
+    }
+    /** Prefer composite execution identity before a transient internal-node preview identity. */
+    #readLocatedNodeItems(located, label) {
+        const scopedItems = this.#readNodeItems(located.locator, label);
+        if (scopedItems.length > 0)
+            return scopedItems;
+        const localNodeId = readNodeId(located.node.id);
+        return localNodeId && localNodeId !== located.locator
+            ? this.#readNodeItems(localNodeId, label)
+            : [];
     }
     /** Read durable execution media before renderer-owned transient previews. */
     #readNodeItems(locator, label) {

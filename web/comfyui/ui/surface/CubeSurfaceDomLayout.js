@@ -17,6 +17,7 @@
 import { computeCubeMasonry } from './CubeMasonryLayout.js';
 import { resolveCubeSurfaceMinimumHeight } from './CubeSurfaceMinimumHeight.js';
 import { resolveCubeSurfaceCardSpacing } from './CubeSurfaceSpacing.js';
+import { clampCubePreviewWidth, resolveCubePreviewWidthRange, } from './CubePreviewResizeGeometry.js';
 const CONTENT_GAP = 8;
 const DEFAULT_CARD_HEIGHT = 120;
 const MINIMUM_SIDE_PREVIEW_WIDTH = 240;
@@ -27,9 +28,10 @@ export function layoutCubeSurfaceDom(options) {
     const spacing = resolveCubeSurfaceCardSpacing(options.state);
     const minimumMasonryWidth = Math.min(safeWidth, Math.max(1, options.state.minimumColumnWidth));
     const previewEnabled = options.state.preview.visible && (options.previewAvailable ?? true);
+    const previewWidthRange = resolveCubePreviewWidthRange(safeWidth, minimumMasonryWidth, CONTENT_GAP);
     const canShowPreviewRail = previewEnabled && safeWidth >= minimumMasonryWidth + MINIMUM_SIDE_PREVIEW_WIDTH + CONTENT_GAP;
     const previewWidth = canShowPreviewRail
-        ? Math.min(options.state.preview.width, Math.max(0, safeWidth - CONTENT_GAP - minimumMasonryWidth))
+        ? clampCubePreviewWidth(options.state.preview.width, previewWidthRange)
         : 0;
     const masonryWidth = Math.max(1, safeWidth - (canShowPreviewRail ? previewWidth + CONTENT_GAP : 0));
     const stackPreview = previewEnabled && !canShowPreviewRail;
@@ -54,6 +56,9 @@ export function layoutCubeSurfaceDom(options) {
             ? 'rail'
             : 'hidden';
     options.content.style.flexDirection = stackPreview ? 'column' : 'row';
+    options.content.style.gap = canShowPreviewRail ? '0px' : '';
+    options.previewDivider.hidden = !canShowPreviewRail;
+    options.previewDivider.style.flexBasis = canShowPreviewRail ? `${String(CONTENT_GAP)}px` : '0px';
     options.previewRail.style.width = `${stackPreview ? safeWidth : previewWidth}px`;
     options.previewRail.style.height = stackPreview
         ? `${String(STACKED_PREVIEW_MINIMUM_HEIGHT)}px`
@@ -80,6 +85,9 @@ export function layoutCubeSurfaceDom(options) {
     }
     return {
         minimumHeight: cardsAreMeasured(options.cards, options.cells) ? minimumHeight : null,
+        previewWidth,
+        previewWidthRange,
+        previewResizable: canShowPreviewRail,
     };
 }
 /** Resolve measured native-card height with a finite graph-size fallback. */

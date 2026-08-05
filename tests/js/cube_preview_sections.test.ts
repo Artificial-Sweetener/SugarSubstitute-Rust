@@ -17,6 +17,7 @@
 
 import {
   dividePreviewIntoHorizontalSegments,
+  resolveCubeCanvasPreviewContentRect,
   resolveCubeCanvasPreviewSections,
   resolveCubeOutputSections,
 } from '../../frontend/comfyui/ui/surface/CubePreviewSections.js';
@@ -28,7 +29,6 @@ describe('CubePreviewSections', () => {
         { id: 'image', label: 'image', items: [] },
         { id: 'mask', label: 'mask', items: [] },
       ],
-      internalItems: [],
     };
 
     expect(resolveCubeOutputSections(snapshot).map((output) => output.id)).toEqual([
@@ -37,9 +37,8 @@ describe('CubePreviewSections', () => {
     ]);
   });
 
-  test('uses internal previews only to fill empty canvas output sections', () => {
+  test('leaves a Cube output empty until that boundary produces media', () => {
     const outputItem = { key: 'image', url: '/image.png', label: 'image' };
-    const internalItem = { key: 'mask', url: '/mask.png', label: 'mask' };
 
     expect(
       resolveCubeCanvasPreviewSections({
@@ -47,11 +46,10 @@ describe('CubePreviewSections', () => {
           { id: 'image', label: 'image', items: [outputItem] },
           { id: 'mask', label: 'mask', items: [] },
         ],
-        internalItems: [internalItem],
       }),
     ).toEqual([
       { canonicalName: 'image', item: outputItem },
-      { canonicalName: 'mask', item: internalItem },
+      { canonicalName: 'mask', item: null },
     ]);
   });
 
@@ -62,5 +60,14 @@ describe('CubePreviewSections', () => {
       { x: 10, y: 20, width: 100, height: 100 },
       { x: 10, y: 130, width: 100, height: 100 },
     ]);
+  });
+
+  test('reserves the authored Nodes 1 output-port corridor outside preview media', () => {
+    const rail = { x: 100, y: 200, width: 320, height: 600 };
+
+    const media = resolveCubeCanvasPreviewContentRect(rail);
+
+    expect(media).toEqual({ x: 118, y: 206, width: 284, height: 588 });
+    expect(rail.x + rail.width - (media.x + media.width)).toBe(18);
   });
 });

@@ -22,7 +22,7 @@ import type { CubeNode } from '../../frontend/comfyui/ui/cube/node/ComfyCubeNode
 import { buildCubeOutputExecutionId } from '../../frontend/comfyui/ui/cube/execution/CubeOutputExecutionIdentity.js';
 
 describe('ComfyCubePreviewCatalog', () => {
-  test('collects selected boundary output and suppressed internal previews', () => {
+  test('collects only media belonging to a Cube output boundary', () => {
     const outputNode = { id: 'save', type: 'PreviewImage', title: 'Saved image' };
     const sampler = { id: 'sampler', type: 'KSampler', title: 'Sampler' };
     const cube = container('definition', [outputNode, sampler], ['image'], outputNode);
@@ -53,15 +53,27 @@ describe('ComfyCubePreviewCatalog', () => {
           ],
         },
       ],
-      internalItems: [
-        {
-          key: 'container-definition:sampler:preview:0',
-          url: 'blob:live-sample',
-          label: 'Sampler',
-          sourceLocator: 'container-definition:sampler',
-        },
-      ],
     });
+  });
+
+  test('does not route transient internal upload previews into the Cube output rail', () => {
+    const maskLoader = {
+      id: 'load-mask-batch',
+      type: 'SimpleSyrup.LoadMaskBatch',
+      title: 'Load Mask Batch',
+    };
+    const cube = container('definition', [maskLoader], []);
+    const catalog = new ComfyCubePreviewCatalog({
+      getNodeOutputs: () => ({
+        'load-mask-batch': {
+          images: [{ filename: 'selected-mask.png', subfolder: '', type: 'temp' }],
+        },
+      }),
+      getNodePreviewImages: () => ({}),
+      buildOutputImageUrl: (image) => `/view?filename=${String(image.filename)}`,
+    });
+
+    expect(catalog.snapshot(cube)).toEqual({ outputs: [] });
   });
 
   test('reads the selected boundary preview from its restored CubeOutput execution sink', () => {
@@ -208,7 +220,7 @@ describe('ComfyCubePreviewCatalog', () => {
     expect(catalog.snapshot(cube).outputs[0]?.items[0]?.url).toBe('/view?filename=live.png');
   });
 
-  test('collects previews from subgraphs nested inside the Cube graph', () => {
+  test('does not route nested internal previews into the Cube output rail', () => {
     const nestedSampler = { id: 'sampler', type: 'KSampler', title: 'Nested sampler' };
     const nestedSubgraph = {
       id: 'nested',
@@ -224,14 +236,7 @@ describe('ComfyCubePreviewCatalog', () => {
       buildOutputImageUrl: () => null,
     });
 
-    expect(catalog.snapshot(cube).internalItems).toEqual([
-      {
-        key: 'container-cube-definition:nested:sampler:preview:0',
-        url: 'blob:nested-sample',
-        label: 'Nested sampler',
-        sourceLocator: 'container-cube-definition:nested:sampler',
-      },
-    ]);
+    expect(catalog.snapshot(cube)).toEqual({ outputs: [] });
   });
 
   test('uses the nearest downstream native media output for a Cube boundary', () => {

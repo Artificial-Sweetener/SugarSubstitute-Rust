@@ -29,6 +29,7 @@ export class CubeEditorMetadataHud {
     #document;
     #actions;
     #settingsSelectRenderer;
+    #workspaceChrome;
     #drafts = new CubeEditorMetadataDraftStore();
     #settingsSelectControls = new Set();
     #root = null;
@@ -48,9 +49,11 @@ export class CubeEditorMetadataHud {
         this.#actions = actions;
         this.#settingsSelectRenderer =
             options.settingsSelectRenderer ?? new InstalledComfySettingsSelectRenderer(documentRef);
+        this.#workspaceChrome = options.workspaceChrome ?? null;
     }
     /** Clear the viewport card when the user returns to the root workflow. */
     hide() {
+        this.#workspaceChrome?.leave();
         this.#retainActiveDraft();
         this.#activeNode = null;
         this.#values = null;
@@ -68,9 +71,11 @@ export class CubeEditorMetadataHud {
     show(node) {
         if (this.#activeNode === node)
             return;
+        this.#workspaceChrome?.enter();
         this.#retainActiveDraft();
         const retained = this.#drafts.get(node);
         this.#activeNode = node;
+        this.#collapsed = !isDraftCubeNode(node);
         this.#values = retained?.values ?? readValues(node);
         this.#dirty = retained?.dirty ?? false;
         this.#saveError = retained?.saveError ?? '';

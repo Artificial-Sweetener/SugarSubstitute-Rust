@@ -22,7 +22,7 @@ import {
 } from '../../frontend/comfyui/ui/surface/ComfyLiteGraphNodeCardRenderer.js';
 
 describe('ComfyLiteGraphNodeCardRenderer', () => {
-  test('passes the exact internal node to Comfy and restores masked host callbacks', () => {
+  test('preserves native preview media while restoring masked host callbacks', () => {
     const drawSlots = jest.fn();
     const drawCollapsedSlots = jest.fn();
     const onDrawBackground = jest.fn();
@@ -62,9 +62,9 @@ describe('ComfyLiteGraphNodeCardRenderer', () => {
       expect(drawnNode.drawSlots).not.toBe(drawSlots);
       expect(drawnNode.onDrawBackground).toBe(onDrawBackground);
       expect(drawnNode.title_buttons).toEqual([]);
-      expect(drawnNode.imgs).toEqual([]);
-      expect(drawnNode.animatedImages).toEqual([]);
-      expect(drawnNode.imageIndex).toBeNull();
+      expect(drawnNode.imgs).toBe(imgs);
+      expect(drawnNode.animatedImages).toBe(animatedImages);
+      expect(drawnNode.imageIndex).toBe(2);
       expect(drawnNode.strokeStyles).toBe(strokeStyles);
       expect(drawnNode.strokeStyles.sugarcubesCubeFace).toBeUndefined();
     });
@@ -93,7 +93,7 @@ describe('ComfyLiteGraphNodeCardRenderer', () => {
     expect(
       target.querySelector<HTMLCanvasElement>('[data-cube-face-native="nodes-1"]')?.style
         .aspectRatio,
-    ).toBe('240 / 43');
+    ).toBe('240 / 222');
     getContext.mockRestore();
   });
 
@@ -517,6 +517,37 @@ describe('ComfyLiteGraphNodeCardRenderer', () => {
     expect(node.inputs).toBe(inputs);
     expect(node.outputs).toBe(outputs);
     expect(node.widgets_up).toBe(false);
+  });
+
+  test('uses durable widget tooltips when Nodes 1 loses transient button labels', () => {
+    const missingLabel: { name: string; label?: string; options: { tooltip: string } } = {
+      name: 'simple_syrup_replace_media',
+      options: { tooltip: 'Replace masks...' },
+    };
+    const internalLabel = {
+      name: 'simple_syrup_add_media',
+      label: 'simple_syrup_add_media',
+      options: { tooltip: 'Add masks...' },
+    };
+    const node = {
+      id: 'inside',
+      type: 'LoadMaskBatch',
+      size: [240, 100],
+      widgets: [missingLabel, internalLabel],
+      drawSlots: jest.fn(),
+      drawCollapsedSlots: jest.fn(),
+      title_buttons: [],
+      strokeStyles: {},
+    };
+    const drawNode = jest.fn(() => {
+      expect(missingLabel.label).toBe('Replace masks...');
+      expect(internalLabel.label).toBe('Add masks...');
+    });
+
+    drawNativeLiteGraphCubeCard({ drawNode }, node as never, {} as CanvasRenderingContext2D);
+
+    expect(Object.prototype.hasOwnProperty.call(missingLabel, 'label')).toBe(false);
+    expect(internalLabel.label).toBe('simple_syrup_add_media');
   });
 
   test('restores inherited accessor-backed graph slots after a native face draw', () => {

@@ -103,7 +103,6 @@ export function drawNativeLiteGraphCubeCard(canvasRenderer, node, context, optio
     const drawCollapsedSlots = presentationNode.drawCollapsedSlots;
     const titleBox = maskSubgraphTitleBox(presentationNode);
     const titleButtons = presentationNode.title_buttons;
-    const previews = maskPreviewMedia(presentationNode);
     const originalSize = applyPresentationSize(presentationNode, options.presentationWidth, options.presentationHeight);
     const colors = applyPresentationTheme(presentationNode, options.theme);
     const activeGraphScale = canvasRenderer.ds?.scale;
@@ -131,7 +130,6 @@ export function drawNativeLiteGraphCubeCard(canvasRenderer, node, context, optio
         presentationNode.drawCollapsedSlots = drawCollapsedSlots;
         restoreSubgraphTitleBox(presentationNode, titleBox);
         presentationNode.title_buttons = titleButtons;
-        restorePreviewMedia(presentationNode, previews);
         restorePresentationTheme(presentationNode, colors);
         restorePresentationSize(presentationNode, originalSize, context);
     }
@@ -281,29 +279,4 @@ function arrangePresentationNode(node) {
         return;
     }
     node.arrange?.();
-}
-/** Suppress only Comfy's standard local preview state during a Cube-face draw. */
-function maskPreviewMedia(node) {
-    const presentations = [];
-    for (const field of ['imgs', 'animatedImages', 'imageIndex']) {
-        presentations.push({
-            field,
-            owned: Object.prototype.hasOwnProperty.call(node, field),
-            value: node[field],
-        });
-    }
-    node.imgs = [];
-    node.animatedImages = [];
-    node.imageIndex = null;
-    return presentations;
-}
-/** Restore preview fields without changing their original ownership semantics. */
-function restorePreviewMedia(node, presentations) {
-    for (const presentation of presentations) {
-        if (!presentation.owned) {
-            Reflect.deleteProperty(node, presentation.field);
-            continue;
-        }
-        node[presentation.field] = presentation.value;
-    }
 }

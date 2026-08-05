@@ -24,6 +24,7 @@ import type { CubeCanvasPreviewImageProvider } from '../../frontend/comfyui/ui/s
 describe('ComfyLiteGraphCubeNodeHost', () => {
   test('replaces only the generic face hooks while native shell drawing remains owned by Comfy', () => {
     const rootGraph = {};
+    const maskPreviews = [{ src: 'mask-one.png' }, { src: 'mask-two.png' }];
     const inner = {
       id: 'inner',
       type: 'KSampler',
@@ -39,6 +40,9 @@ describe('ComfyLiteGraphCubeNodeHost', () => {
       color: '#171718',
       bgcolor: '#262729',
       title_buttons: [{ name: 'inner-action' }],
+      imgs: maskPreviews,
+      animatedImages: [false, false],
+      imageIndex: null,
       strokeStyles: {} as Record<string, () => object | undefined>,
       updateArea: jest.fn(),
       widgets: [{ name: 'steps' }] as Array<{ name: string; [key: string]: unknown }>,
@@ -72,6 +76,9 @@ describe('ComfyLiteGraphCubeNodeHost', () => {
       expect(inner.drawSlots).not.toBe(innerDrawSlots);
       expect(inner.onDrawBackground).toBe(innerBackground);
       expect(inner.title_buttons).toEqual([]);
+      expect(inner.imgs).toBe(maskPreviews);
+      expect(inner.animatedImages).toEqual([false, false]);
+      expect(inner.imageIndex).toBeNull();
       expect(inner.strokeStyles.sugarcubesCubeFace).toBeUndefined();
       expect(inner.color).toBe('#2b2859');
       expect(inner.bgcolor).toBe('#202127');
@@ -126,6 +133,9 @@ describe('ComfyLiteGraphCubeNodeHost', () => {
     expect(inner.drawSlots).toBe(innerDrawSlots);
     expect(inner.onDrawBackground).toBe(innerBackground);
     expect(inner.title_buttons).toBe(innerTitleButtons);
+    expect(inner.imgs).toBe(maskPreviews);
+    expect(inner.animatedImages).toEqual([false, false]);
+    expect(inner.imageIndex).toBeNull();
     expect(inner.color).toBe('#171718');
     expect(inner.bgcolor).toBe('#262729');
     expect(recordedFillStyles(context)).toContain('rgb(22 23 27)');
@@ -399,7 +409,6 @@ describe('ComfyLiteGraphCubeNodeHost', () => {
               ],
             },
           ],
-          internalItems: [],
         }),
       },
     });

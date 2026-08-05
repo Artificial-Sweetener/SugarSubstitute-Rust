@@ -37,6 +37,8 @@ export class ComfyVueNodeCardRenderer {
     /** Mount one exact internal graph node through Comfy's active native renderer. */
     mount(target, node, options = {}) {
         let disposed = false;
+        let advancedInputsRefreshTimer = null;
+        const windowRef = target.ownerDocument.defaultView;
         const headerAccessoryHost = options.headerAccessory
             ? new ComfyVueNodeHeaderAccessoryHost(options.headerAccessory)
             : null;
@@ -65,7 +67,17 @@ export class ComfyVueNodeCardRenderer {
             const toggle = eventTarget.closest('[data-testid="advanced-inputs-button"]');
             if (!toggle || !target.contains(toggle))
                 return;
-            queueMicrotask(renderCard);
+            if (!windowRef) {
+                queueMicrotask(() => queueMicrotask(renderCard));
+                return;
+            }
+            if (advancedInputsRefreshTimer !== null) {
+                windowRef.clearTimeout(advancedInputsRefreshTimer);
+            }
+            advancedInputsRefreshTimer = windowRef.setTimeout(() => {
+                advancedInputsRefreshTimer = null;
+                renderCard();
+            }, 0);
         };
         renderCard();
         target.addEventListener('click', refreshAfterAdvancedInputsToggle, true);
@@ -76,6 +88,10 @@ export class ComfyVueNodeCardRenderer {
                 if (disposed)
                     return;
                 disposed = true;
+                if (advancedInputsRefreshTimer !== null) {
+                    windowRef?.clearTimeout(advancedInputsRefreshTimer);
+                    advancedInputsRefreshTimer = null;
+                }
                 observer.disconnect();
                 target.removeEventListener('click', refreshAfterAdvancedInputsToggle, true);
                 headerAccessoryHost?.dispose();
@@ -109,13 +125,7 @@ export class ComfyVueNodeCardRenderer {
             headerAccessoryHost?.reconcile(nativeRoot, node);
         }
         const targetRecord = isRecord(target) ? target : {};
-        for (const componentName of [
-            'NodeSlots',
-            'NodeContent',
-            'LivePreview',
-            'ImagePreview',
-            'NodeBadges',
-        ]) {
+        for (const componentName of ['NodeSlots', 'NodeBadges']) {
             const vnode = findVueComponent(targetRecord._vnode, componentName);
             const element = resolveComponentElement(vnode);
             if (element)

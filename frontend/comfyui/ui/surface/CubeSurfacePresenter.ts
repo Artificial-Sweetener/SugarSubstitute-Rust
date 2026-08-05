@@ -56,6 +56,9 @@ import type {
   ComfyRendererMode,
   ComfyRendererModeChangeSource,
 } from '../core/ComfyRendererMode.js';
+import type { CubePreviewActions } from './CubePreviewActions.js';
+import { ComfyVueCubeDropTargetBridge } from './ComfyVueCubeDropTargetBridge.js';
+import type { ComfyNode } from '../types/graph.js';
 
 export interface CubeSurfacePresenterOptions {
   document: Document;
@@ -65,10 +68,12 @@ export interface CubeSurfacePresenterOptions {
   getCurrentGraph(): object | null;
   nodes: CubeNodeCatalog;
   setDirtyCanvas?(foreground?: boolean, background?: boolean): void;
+  setDropTarget?(node: ComfyNode): void;
   logger: Pick<Console, 'debug' | 'error' | 'warn'>;
   renderer?: NativeNodeCardRenderer;
   createRenderer?(): Promise<NativeNodeCardRenderer>;
   previewCatalog?: CubePreviewCatalog;
+  previewActions?: CubePreviewActions;
   getRendererMode?(): ComfyRendererMode;
   legacyCanvas?: LiteGraphCubeNodeCanvas;
   titleHeight?: number;
@@ -78,8 +83,15 @@ export interface CubeSurfacePresenterOptions {
   chromeActions?: CubeFaceChromeActions;
   portPresentation?: CubePortPresentationController;
   previewChanges?: { subscribe(listener: () => void): () => void };
+  previewEvents?: ComfyNodePreviewEventSource;
   graphChanges?: CanvasGraphChangeSource;
   rendererChanges?: ComfyRendererModeChangeSource;
+}
+
+/** Expose Comfy's native execution events as a renderer-neutral preview signal. */
+export interface ComfyNodePreviewEventSource {
+  addEventListener(type: 'executed', listener: EventListener): void;
+  removeEventListener(type: 'executed', listener: EventListener): void;
 }
 
 interface MountedCubeSurface {
@@ -87,6 +99,7 @@ interface MountedCubeSurface {
   topologySignature: string;
   presentationSignature: string;
   view: CubeSurfaceView;
+  dropTargets: ComfyVueCubeDropTargetBridge | null;
   layoutWidth: number;
 }
 
@@ -99,9 +112,14 @@ export class CubeSurfacePresenter {
   readonly #getCurrentGraph: () => object | null;
   readonly #nodes: CubeNodeCatalog;
   readonly #setDirtyCanvas: (foreground?: boolean, background?: boolean) => void;
+  readonly #setDropTarget: ((node: ComfyNode) => void) | null;
   readonly #logger: Pick<Console, 'debug' | 'error' | 'warn'>;
   readonly #previewCatalog: CubePreviewCatalog | null;
+  readonly #previewActions: CubePreviewActions | null;
+  readonly #previewEvents: ComfyNodePreviewEventSource | null;
+  readonly #onPreviewEvent: EventListener;
   readonly #getRendererMode: () => ComfyRendererMode;
+  readonly #getScale: () => number;
   readonly #host: ComfyVueCubeNodeHost;
   readonly #legacyHost: ComfyLiteGraphCubeNodeHost | null;
   readonly #chromeActions: CubeFaceChromeActions | null;
@@ -118,6 +136,7 @@ export class CubeSurfacePresenter {
   readonly #nodePresenceObserver: ComfyRendererPresenceObserver;
   readonly #slotLayoutCoordinator: ComfyNativeSlotLayoutCoordinator;
   readonly #rendererStabilizer: CubeRendererTransitionStabilizer;
+  readonly #legacyPreviewStabilizer: CubeRendererTransitionStabilizer;
   readonly #mountGenerations = new Map<CubeNode, number>();
   readonly #mountsInFlight = new Set<CubeNode>();
   readonly #mountFailureSignatures = new Map<CubeNode, string>();
@@ -132,15 +151,25 @@ export class CubeSurfacePresenter {
     this.#getCurrentGraph = options.getCurrentGraph;
     this.#nodes = options.nodes;
     this.#setDirtyCanvas = options.setDirtyCanvas ?? (() => undefined);
+    this.#setDropTarget = options.setDropTarget ?? null;
     this.#logger = options.logger;
     this.#previewCatalog = options.previewCatalog ?? null;
+    this.#previewActions = options.previewActions ?? null;
+    this.#previewEvents = options.previewEvents ?? null;
+    this.#onPreviewEvent = () => this.#handlePreviewEvent();
     this.#getRendererMode = options.getRendererMode ?? (() => 'vue');
+    this.#getScale = () => Number(options.legacyCanvas?.ds?.scale) || 1;
     this.#chromeActions = options.chromeActions ?? null;
     this.#onBoundaryGeometryChange = options.onBoundaryGeometryChange ?? (() => undefined);
     const windowRef = options.document.defaultView;
     this.#rendererStabilizer = new CubeRendererTransitionStabilizer({
       requestFrame: (callback) => windowRef?.requestAnimationFrame(callback) ?? null,
       cancelFrame: (handle) => windowRef?.cancelAnimationFrame(handle),
+    });
+    this.#legacyPreviewStabilizer = new CubeRendererTransitionStabilizer({
+      requestFrame: (callback) => windowRef?.requestAnimationFrame(callback) ?? null,
+      cancelFrame: (handle) => windowRef?.cancelAnimationFrame(handle),
+      frameCount: 120,
     });
     this.#slotLayoutCoordinator = new ComfyNativeSlotLayoutCoordinator({
       getRuntime: () => this.#getRuntime(),
@@ -170,6 +199,7 @@ export class CubeSurfacePresenter {
           openEditor: (node) => this.#beginEditing(node),
           logger: options.logger,
           ...(options.previewCatalog ? { previewCatalog: options.previewCatalog } : {}),
+          ...(options.previewActions ? { previewActions: options.previewActions } : {}),
           ...(options.chromeActions ? { chromeActions: options.chromeActions } : {}),
           ...(options.portPresentation ? { portPresentation: options.portPresentation } : {}),
         })
@@ -191,12 +221,14 @@ export class CubeSurfacePresenter {
       ownsNodeId: (nodeId) => this.#nodes.list().some((node) => String(node.id) === nodeId),
       onPresenceChange: () => this.#stabilizeSync(),
     });
+    this.#previewEvents?.addEventListener('executed', this.#onPreviewEvent);
     ensureCubeSurfaceStyles(options.document);
     this.#stabilizeSync();
   }
 
   /** Dispose all native card mounts and host observers. */
   dispose(): void {
+    this.#previewEvents?.removeEventListener('executed', this.#onPreviewEvent);
     this.#unsubscribeNodes();
     this.#unsubscribePreviews();
     this.#unsubscribeGraphChanges();
@@ -204,10 +236,14 @@ export class CubeSurfacePresenter {
     this.#nodePresenceObserver.dispose();
     this.#slotLayoutCoordinator.dispose();
     this.#rendererStabilizer.dispose();
+    this.#legacyPreviewStabilizer.dispose();
     this.#mountGenerations.clear();
     this.#mountsInFlight.clear();
     this.#mountFailureSignatures.clear();
-    for (const surface of this.#views.values()) surface.view.dispose();
+    for (const surface of this.#views.values()) {
+      surface.dropTargets?.dispose();
+      surface.view.dispose();
+    }
     this.#views.clear();
     this.#releaseRenderer();
     for (const observer of this.#observers.values()) observer.dispose();
@@ -244,6 +280,9 @@ export class CubeSurfacePresenter {
         atRoot,
         nodeCount: nodes.size,
       });
+      if (previousRendererMode === 'litegraph' && rendererMode === 'vue' && atRoot) {
+        for (const node of nodes) this.#rehydrateInternalNodes(node);
+      }
     }
     const shouldPresentVue = rendererMode === 'vue' && atRoot;
     const shouldPresentLegacy = rendererMode === 'litegraph' && atRoot;
@@ -253,6 +292,7 @@ export class CubeSurfacePresenter {
     if (rendererChanged && previousRendererMode === 'vue') this.#releaseRenderer();
     this.#legacyHost?.setEnabled(shouldPresentLegacy);
     this.#legacyHost?.sync();
+    if (rendererChanged && shouldPresentLegacy) this.#scheduleLegacyPreviewRedraw();
     if (!shouldPresentVue) return;
     for (const node of nodes) {
       const surface = this.#views.get(node);
@@ -288,6 +328,7 @@ export class CubeSurfacePresenter {
     const generation = (this.#mountGenerations.get(node) ?? 0) + 1;
     this.#mountGenerations.set(node, generation);
     let pendingView: CubeSurfaceView | null = null;
+    let pendingDropTargets: ComfyVueCubeDropTargetBridge | null = null;
     try {
       const renderer = await this.#getRenderer();
       if (
@@ -313,6 +354,8 @@ export class CubeSurfacePresenter {
         nodes: node.subgraph._nodes,
         graph: node.subgraph,
         state,
+        ...(this.#previewActions ? { previewActions: this.#previewActions } : {}),
+        getScale: this.#getScale,
         onStateChange: (nextState) => {
           replaceRecord(surfaceState, serializeCubeSurfaceState(nextState));
           this.#nodes.changed(node);
@@ -330,8 +373,17 @@ export class CubeSurfacePresenter {
         pendingView = null;
         return;
       }
-      this.#views.get(node)?.view.dispose();
+      const existing = this.#views.get(node);
+      existing?.dropTargets?.dispose();
+      existing?.view.dispose();
       root.replaceChildren(pendingView.element);
+      pendingDropTargets = this.#setDropTarget
+        ? new ComfyVueCubeDropTargetBridge({
+            face: pendingView.element,
+            nodes: node.subgraph._nodes,
+            setDropTarget: this.#setDropTarget,
+          })
+        : null;
       if (!this.#host.mountHeader(node, pendingView.header)) {
         throw new Error('Comfy native Cube header is not mounted.');
       }
@@ -340,6 +392,7 @@ export class CubeSurfacePresenter {
         topologySignature: buildTopologySignature(node),
         presentationSignature: buildPresentationSignature(node),
         view: pendingView,
+        dropTargets: pendingDropTargets,
         layoutWidth: Number.NaN,
       });
       this.#observers.get(node)?.dispose();
@@ -361,13 +414,16 @@ export class CubeSurfacePresenter {
       this.#onBoundaryGeometryChange();
       this.#mountFailureSignatures.delete(node);
       pendingView = null;
+      pendingDropTargets = null;
     } catch (error: unknown) {
       const mounted = this.#views.get(node);
       if (pendingView && mounted?.view === pendingView) {
+        mounted.dropTargets?.dispose();
         this.#views.delete(node);
         this.#observers.get(node)?.dispose();
         this.#observers.delete(node);
       }
+      pendingDropTargets?.dispose();
       pendingView?.dispose();
       this.#host.unmount(node);
       const failureSignature = buildMountAttemptSignature(node);
@@ -410,6 +466,28 @@ export class CubeSurfacePresenter {
     this.#onBoundaryGeometryChange();
   }
 
+  /** Re-run Comfy's graph-configured lifecycle before remounting internal Nodes 2 cards. */
+  #rehydrateInternalNodes(node: CubeNode): void {
+    for (const internalNode of node.subgraph._nodes) {
+      const onGraphConfigured = internalNode.onGraphConfigured;
+      if (typeof onGraphConfigured !== 'function') continue;
+      try {
+        onGraphConfigured.call(internalNode);
+      } catch (error: unknown) {
+        const reason = error instanceof Error ? error.message : String(error);
+        this.#logger.warn(
+          `SugarCubes could not rehydrate an internal node after a renderer change: ${reason}`,
+          {
+            cubeNodeId: node.id,
+            internalNodeId: internalNode.id,
+            reason,
+            error,
+          },
+        );
+      }
+    }
+  }
+
   /** Refresh media only when the execution-output owner reports a change. */
   #refreshPreviews(): void {
     if (!this.#previewCatalog) return;
@@ -426,9 +504,29 @@ export class CubeSurfacePresenter {
     }
   }
 
+  /** Refresh both preview rails and delayed Nodes 1 image decoding after execution. */
+  #handlePreviewEvent(): void {
+    this.#refreshPreviews();
+    if (this.#getRendererMode() === 'litegraph') this.#scheduleLegacyPreviewRedraw();
+  }
+
+  /** Repaint through the bounded window in which Comfy decodes native preview images. */
+  #scheduleLegacyPreviewRedraw(): void {
+    const redraw = (): void => {
+      if (this.#getRendererMode() !== 'litegraph' || this.#getCurrentGraph() !== this.#rootGraph) {
+        return;
+      }
+      this.#setDirtyCanvas(true, true);
+    };
+    redraw();
+    this.#legacyPreviewStabilizer.run(redraw);
+  }
+
   /** Remove one mounted face without touching its native definition. */
   #unmount(node: CubeNode): void {
-    this.#views.get(node)?.view.dispose();
+    const surface = this.#views.get(node);
+    surface?.dropTargets?.dispose();
+    surface?.view.dispose();
     this.#views.delete(node);
     this.#observers.get(node)?.dispose();
     this.#observers.delete(node);

@@ -38,14 +38,12 @@ import {
 } from './CubeNodeColorTheme.js';
 import { resolveComfyLiteGraphCubeSurfaceTheme } from './ComfyLiteGraphNodeColorTheme.js';
 import {
-  CUBE_PREVIEW_SECTION_GAP,
   CUBE_PREVIEW_TITLE_LINE_HEIGHT,
-  dividePreviewIntoHorizontalSegments,
-  resolveCubePreviewContentRect,
-  resolveCubeCanvasPreviewSections,
+  layoutCubeCanvasPreviewSections,
 } from './CubePreviewSections.js';
 
 export interface LiteGraphCubeDrawHost {
+  graph_mouse?: ArrayLike<number>;
   ds?: {
     scale?: number;
     offset?: ArrayLike<number>;
@@ -179,7 +177,7 @@ export class ComfyLiteGraphCubeRenderer {
     context.moveTo(preview.x, preview.y);
     context.lineTo(preview.x, preview.y + preview.height);
     context.stroke();
-    const outputSections = resolveCubeCanvasPreviewSections(item.preview);
+    const outputSections = layoutCubeCanvasPreviewSections(preview, item.preview);
     if (outputSections.length === 0) {
       context.font = '12px sans-serif';
       context.textBaseline = 'top';
@@ -187,14 +185,8 @@ export class ComfyLiteGraphCubeRenderer {
       context.fillText('No preview available', preview.x + 6, preview.y + 6);
       return;
     }
-    const sections = dividePreviewIntoHorizontalSegments(
-      resolveCubePreviewContentRect(preview),
-      outputSections.length,
-      CUBE_PREVIEW_SECTION_GAP,
-    );
-    for (const [index, output] of outputSections.entries()) {
-      const section = sections[index];
-      if (!section) continue;
+    for (const output of outputSections) {
+      const section = output.rect;
       context.font = '14px sans-serif';
       context.textBaseline = 'middle';
       context.fillStyle = '#f0f2f5';
@@ -223,7 +215,7 @@ export class ComfyLiteGraphCubeRenderer {
         context.fillText('Loading output…', section.x, section.y + CUBE_PREVIEW_TITLE_LINE_HEIGHT);
         continue;
       }
-      const target = coverImage(
+      const target = fitCubePreviewImage(
         image.naturalWidth,
         image.naturalHeight,
         section.x,
@@ -232,12 +224,50 @@ export class ComfyLiteGraphCubeRenderer {
         Math.max(1, section.height - CUBE_PREVIEW_TITLE_LINE_HEIGHT),
       );
       context.drawImage(image, target.x, target.y, target.width, target.height);
+      if (containsPoint(section, this.#host.graph_mouse)) {
+        drawPreviewDownloadAction(context, output.downloadAction);
+      }
     }
   }
 }
 
-/** Fill one preview rail while preserving aspect ratio and the shared edge inset. */
-function coverImage(
+/** Draw Comfy's compact hover download affordance over one canvas preview. */
+function drawPreviewDownloadAction(
+  context: CanvasRenderingContext2D,
+  action: CubeCanvasRect,
+): void {
+  context.save();
+  context.fillStyle = '#f2f2f2';
+  context.beginPath();
+  context.roundRect(action.x, action.y, action.width, action.height, 6);
+  context.fill();
+  context.fillStyle = '#151515';
+  drawComfyPrimeIcon(
+    context,
+    'download',
+    action.x + action.width / 2,
+    action.y + action.height / 2,
+    14,
+  );
+  context.restore();
+}
+
+/** Return whether the current graph pointer is inside one finite rectangle. */
+function containsPoint(area: CubeCanvasRect, point: ArrayLike<number> | undefined): boolean {
+  const x = Number(point?.[0]);
+  const y = Number(point?.[1]);
+  return (
+    Number.isFinite(x) &&
+    Number.isFinite(y) &&
+    x >= area.x &&
+    x <= area.x + area.width &&
+    y >= area.y &&
+    y <= area.y + area.height
+  );
+}
+
+/** Fit one complete image inside the rail with centered horizontal and top vertical alignment. */
+export function fitCubePreviewImage(
   sourceWidth: number,
   sourceHeight: number,
   x: number,
@@ -245,9 +275,11 @@ function coverImage(
   width: number,
   height: number,
 ): CubeCanvasRect {
-  const scale = Math.max(width / sourceWidth, height / sourceHeight);
-  const targetWidth = Math.max(1, sourceWidth * scale);
-  const targetHeight = Math.max(1, sourceHeight * scale);
+  const safeSourceWidth = Math.max(1, sourceWidth);
+  const safeSourceHeight = Math.max(1, sourceHeight);
+  const scale = Math.min(width / safeSourceWidth, height / safeSourceHeight);
+  const targetWidth = Math.max(1, safeSourceWidth * scale);
+  const targetHeight = Math.max(1, safeSourceHeight * scale);
   return {
     x: x + (width - targetWidth) / 2,
     y,

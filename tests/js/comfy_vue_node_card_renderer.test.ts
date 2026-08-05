@@ -139,9 +139,9 @@ describe('ComfyVueNodeCardRenderer', () => {
     renderer.mount(target, { id: 'inside-1', type: 'KSampler' });
 
     expect(componentRoots.slots.hidden).toBe(true);
-    expect(componentRoots.content.hidden).toBe(true);
-    expect(componentRoots.preview.hidden).toBe(true);
-    expect(componentRoots.imagePreview.hidden).toBe(true);
+    expect(componentRoots.content.hidden).toBe(false);
+    expect(componentRoots.preview.hidden).toBe(false);
+    expect(componentRoots.imagePreview.hidden).toBe(false);
     expect(componentRoots.badges.hidden).toBe(true);
     expect(componentRoots.footer.hidden).toBe(true);
     expect(componentRoots.slots.style.getPropertyValue('display')).toBe('none');
@@ -176,13 +176,20 @@ describe('ComfyVueNodeCardRenderer', () => {
     advancedInputs.addEventListener('pointerup', () => {
       suppressNextClick = draggingNativeNode;
     });
-    advancedInputs.addEventListener('click', () => {
+    advancedInputs.addEventListener('click', (event) => {
+      event.stopPropagation();
       if (suppressNextClick) {
         suppressNextClick = false;
         return;
       }
-      node.showAdvanced = !node.showAdvanced;
+      const nextShowAdvanced = !node.showAdvanced;
       toggleAdvanced();
+      queueMicrotask(() => {
+        node.showAdvanced = nextShowAdvanced;
+        advancedInputs.textContent = nextShowAdvanced
+          ? 'Hide advanced inputs'
+          : 'Show advanced inputs';
+      });
     });
     footer.append(advancedInputs);
     nativeRoot.append(footer);
@@ -214,7 +221,7 @@ describe('ComfyVueNodeCardRenderer', () => {
 
     const mount = renderer.mount(target, node);
     clickNativeControl(advancedInputs);
-    await Promise.resolve();
+    await flushNativeControlUpdate();
 
     expect(footer.hidden).toBe(false);
     expect(footer.style.getPropertyValue('display')).toBe('');
@@ -229,7 +236,7 @@ describe('ComfyVueNodeCardRenderer', () => {
     );
 
     clickNativeControl(advancedInputs);
-    await Promise.resolve();
+    await flushNativeControlUpdate();
     expect(extractVueNodeData).toHaveBeenCalledTimes(3);
     expect(h).toHaveBeenLastCalledWith(
       expect.anything(),
@@ -240,7 +247,7 @@ describe('ComfyVueNodeCardRenderer', () => {
 
     mount.unmount();
     clickNativeControl(advancedInputs);
-    await Promise.resolve();
+    await flushNativeControlUpdate();
     expect(extractVueNodeData).toHaveBeenCalledTimes(3);
   });
 
@@ -516,6 +523,12 @@ function clickNativeControl(control: HTMLElement): void {
   control.dispatchEvent(new Event('pointerdown', { bubbles: true }));
   control.dispatchEvent(new Event('pointerup', { bubbles: true }));
   control.click();
+}
+
+/** Flush Comfy's reactive state update and SugarCubes' deferred card refresh. */
+async function flushNativeControlUpdate(): Promise<void> {
+  await Promise.resolve();
+  await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
 }
 
 /** Build the semantic title hierarchy shared by supported Comfy NodeHeader releases. */

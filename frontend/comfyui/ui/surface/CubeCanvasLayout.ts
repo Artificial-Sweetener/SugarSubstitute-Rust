@@ -39,6 +39,10 @@ import {
   resolveCubePortGutters,
   type CubePortLayout,
 } from './CubePortGutterLayout.js';
+import {
+  resolveCubePreviewWidthRange,
+  type CubePreviewWidthRange,
+} from './CubePreviewResizeGeometry.js';
 
 export interface CubeCanvasRect {
   x: number;
@@ -74,6 +78,8 @@ export interface CubeCanvasLayout {
   outputGutter: CubeCanvasRect;
   masonry: CubeCanvasRect;
   preview: CubeCanvasRect | null;
+  previewDivider: CubeCanvasRect | null;
+  previewWidthRange: CubePreviewWidthRange;
   editAction: CubeCanvasRect;
   unsavedIndicator: CubeCanvasRect | null;
   cardMenuAction: CubeCanvasRect;
@@ -91,6 +97,7 @@ const HEADER_HEIGHT = 42;
 const CONTENT_GAP = 12;
 const RESIZE_HANDLE_SIZE = 18;
 const RESIZE_EDGE_THICKNESS = 10;
+const PREVIEW_DIVIDER_HIT_WIDTH = 10;
 
 /** Lay out one finite canvas Cube using the same persisted masonry policy as Nodes 2.0. */
 export function computeCubeCanvasLayout(
@@ -125,11 +132,13 @@ export function computeCubeCanvasLayout(
   const minimumMasonryWidth = Math.min(content.width, Math.max(1, state.minimumColumnWidth));
   const previewVisible = state.preview.visible && externalInterface.outputSlots.length > 0;
   const previewRight = previewVisible ? frame.x + frame.width : content.x + content.width;
+  const previewWidthRange = resolveCubePreviewWidthRange(
+    Math.max(0, previewRight - content.x),
+    minimumMasonryWidth,
+    CONTENT_GAP,
+  );
   const previewWidth = previewVisible
-    ? Math.min(
-        state.preview.width,
-        Math.max(0, previewRight - content.x - CONTENT_GAP - minimumMasonryWidth),
-      )
+    ? Math.min(state.preview.width, previewWidthRange.maximum)
     : 0;
   const masonryWidth = Math.max(
     1,
@@ -142,6 +151,14 @@ export function computeCubeCanvasLayout(
     previewWidth > 0
       ? rect(previewRight - previewWidth, content.y, previewWidth, content.height)
       : null;
+  const previewDivider = preview
+    ? rect(
+        preview.x - CONTENT_GAP / 2 - PREVIEW_DIVIDER_HIT_WIDTH / 2,
+        preview.y,
+        PREVIEW_DIVIDER_HIT_WIDTH,
+        preview.height,
+      )
+    : null;
   const presentation = resolveCubeFaceCardPresentation(node.subgraph._nodes, state, node.subgraph);
   const chrome = layoutCubeCanvasChrome(header, {
     showCardMenu: presentation.menuEntries.length > 0,
@@ -210,6 +227,8 @@ export function computeCubeCanvasLayout(
     outputGutter: gutters.outputGutter,
     masonry,
     preview,
+    previewDivider,
+    previewWidthRange,
     editAction: chrome.editAction,
     unsavedIndicator: chrome.unsavedIndicator,
     cardMenuAction: chrome.cardMenuAction,
