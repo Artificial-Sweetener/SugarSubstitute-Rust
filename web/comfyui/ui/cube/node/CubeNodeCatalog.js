@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Index live native Cube nodes without owning their graph lifecycle. */
 import { isCubeNode, requireCubeIdentity } from './ComfyCubeNodeFactory.js';
-/** Provide stable instance lookup while the root graph remains authoritative. */
+/** Provide stable instance lookup while Comfy's graph registry remains authoritative. */
 export class CubeNodeCatalog {
     #nodes = new Map();
     #listeners = new Set();
@@ -31,7 +31,7 @@ export class CubeNodeCatalog {
         this.#nodes.set(instanceId, node);
         this.#notify();
     }
-    /** Rebuild the index from Comfy's authoritative root-node collection. */
+    /** Rebuild the index from Comfy's authoritative graph-node collection. */
     replace(nodes) {
         const replacement = new Map();
         for (const value of nodes) {

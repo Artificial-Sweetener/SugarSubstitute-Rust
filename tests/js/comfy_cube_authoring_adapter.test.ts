@@ -85,7 +85,6 @@ describe('ComfyCubeAuthoringAdapter', () => {
     });
     const updateSelectedItems = jest.fn();
     const nodeFactory = new ComfyCubeNodeFactory({
-      graph: { add: jest.fn() },
       createNode: jest.fn(() => null),
     });
     const catalog = new CubeNodeCatalog();
@@ -169,7 +168,6 @@ describe('ComfyCubeAuthoringAdapter', () => {
       convertToSubgraph,
       canvas: { selectedItems: new Set([selected]) },
       nodeFactory: new ComfyCubeNodeFactory({
-        graph: { add: jest.fn() },
         createNode: jest.fn(() => null),
       }),
       catalog: new CubeNodeCatalog(),
@@ -191,7 +189,6 @@ describe('ComfyCubeAuthoringAdapter', () => {
       convertToSubgraph: jest.fn(),
       canvas: { selectedItems: new Set([selected]) },
       nodeFactory: new ComfyCubeNodeFactory({
-        graph: { add: jest.fn() },
         createNode: jest.fn(() => null),
       }),
       catalog: new CubeNodeCatalog(),
@@ -214,7 +211,6 @@ describe('ComfyCubeAuthoringAdapter', () => {
       convertToSubgraph: jest.fn(),
       canvas: { graph: nestedGraph, selectedItems: new Set([selected]) },
       nodeFactory: new ComfyCubeNodeFactory({
-        graph: { add: jest.fn() },
         createNode: jest.fn(() => null),
       }),
       catalog: new CubeNodeCatalog(),
@@ -231,7 +227,6 @@ describe('ComfyCubeAuthoringAdapter', () => {
       convertToSubgraph,
       canvas: { selectedItems: new Set() },
       nodeFactory: new ComfyCubeNodeFactory({
-        graph: { add: jest.fn() },
         createNode: jest.fn(() => null),
       }),
       catalog: new CubeNodeCatalog(),
@@ -266,13 +261,12 @@ describe('ComfyCubeAuthoringAdapter', () => {
       serialize: () => ({}),
     };
     const adapter = new ComfyCubeAuthoringAdapter({
-      graph: {},
+      graph: { add: jest.fn() },
       subgraphs: new Map(),
       convertToSubgraph: jest.fn(),
       canvas: { selectedItems: new Set() },
       createEmptySubgraph: jest.fn(() => subgraph),
       nodeFactory: new ComfyCubeNodeFactory({
-        graph: { add: jest.fn() },
         createNode: jest.fn(() => nativeNode),
       }),
       catalog: new CubeNodeCatalog(),
@@ -322,7 +316,6 @@ describe('ComfyCubeAuthoringAdapter', () => {
       convertToSubgraph,
       canvas: { selectedItems: new Set([nativeNode]) },
       nodeFactory: new ComfyCubeNodeFactory({
-        graph: { add: jest.fn() },
         createNode: jest.fn(() => null),
       }),
       catalog,
@@ -369,7 +362,6 @@ describe('ComfyCubeAuthoringAdapter', () => {
       convertToSubgraph: jest.fn(),
       canvas: { selectedItems: new Set([nativeNode]) },
       nodeFactory: new ComfyCubeNodeFactory({
-        graph: { add: jest.fn() },
         createNode: jest.fn(() => null),
       }),
       catalog: new CubeNodeCatalog(),

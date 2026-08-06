@@ -32,6 +32,7 @@ import { resolveCubeExternalInterface } from '../cube/graph/CubeExternalInterfac
 import { filterCubePreviewOutputs } from './CubePreviewModel.js';
 import { ComfyLiteGraphCubeFaceProjectionHost } from './ComfyLiteGraphCubeFaceProjectionHost.js';
 import { ComfyLiteGraphCubeDropTargetBridge } from './ComfyLiteGraphCubeDropTargetBridge.js';
+import { CubePreviewFrameResizePolicy } from './CubePreviewFrameResizePolicy.js';
 /** Own the narrow Nodes 1.0 draw and interaction seam for native Cube nodes. */
 export class ComfyLiteGraphCubeNodeHost {
     #canvas;
@@ -50,6 +51,7 @@ export class ComfyLiteGraphCubeNodeHost {
     #faceProjections;
     #dropTargets = new ComfyLiteGraphCubeDropTargetBridge();
     #hooks = new Map();
+    #previewFrameResizePolicies = new Map();
     #enabled = false;
     #promptGeometryQueued = false;
     #items = [];
@@ -108,6 +110,7 @@ export class ComfyLiteGraphCubeNodeHost {
             onCardRevealChange: (node, internalNode, revealed) => this.#updateSurface(node, (state) => setCubeFaceCardRevealed(state, internalNode, revealed)),
             onCardActivationChange: (node, internalNode, enabled) => this.#updateSurface(node, (state) => setCubeFaceNodeEnabled(state, internalNode, enabled)),
             onPreviewWidthChange: (node, width) => this.#writePreviewWidth(node, width),
+            onGeometryChange: (node) => this.#synchronizeLiveGeometry(node),
         });
     }
     /** Enable the custom draw face only while Nodes 1.0 displays the root graph. */
@@ -228,12 +231,14 @@ export class ComfyLiteGraphCubeNodeHost {
         }
         this.#boundaryHost.release(node);
         this.#portPresentation?.release(node);
+        this.#previewFrameResizePolicies.delete(node);
         this.#hooks.delete(node);
     }
     /** Release presentation state after Comfy replaces draw hooks it now owns. */
     #abandonLostHooks(node) {
         this.#boundaryHost.release(node);
         this.#portPresentation?.release(node);
+        this.#previewFrameResizePolicies.delete(node);
         this.#hooks.delete(node);
     }
     /** Build one current face layout from the graph-owned node and persisted state. */
@@ -242,6 +247,19 @@ export class ComfyLiteGraphCubeNodeHost {
         const titlebarActionKeys = resolveCubeFaceTitlebarActions(requireCubeIdentity(node), this.#chromeActions).map((action) => action.key);
         const externalInterface = resolveCubeExternalInterface(node);
         let layout = computeCubeCanvasLayout(node, state, this.#titleHeight, titlebarActionKeys, externalInterface);
+        const previewFrameResize = this.#previewFrameResizePolicies.get(node) ?? new CubePreviewFrameResizePolicy();
+        this.#previewFrameResizePolicies.set(node, previewFrameResize);
+        const resizedPreviewWidth = previewFrameResize.resolve({
+            frameWidth: layout.frame.width,
+            previewWidth: layout.preview?.width ?? state.preview.width,
+            range: layout.previewWidthRange,
+            active: layout.preview !== null,
+        });
+        if (layout.preview && Math.abs(resizedPreviewWidth - layout.preview.width) >= 0.5) {
+            state.preview.width = resizedPreviewWidth;
+            replaceRecord(requireCubeSurface(node), serializeCubeSurfaceState(state));
+            layout = computeCubeCanvasLayout(node, state, this.#titleHeight, titlebarActionKeys, externalInterface);
+        }
         if (enforceCubeNodeMinimumSize(node, [Math.max(1, Number(node.size[0])), layout.minimumSize[1]])) {
             layout = computeCubeCanvasLayout(node, state, this.#titleHeight, titlebarActionKeys, externalInterface);
             this.#history.setDirtyCanvas?.(true, true);
@@ -314,6 +332,14 @@ export class ComfyLiteGraphCubeNodeHost {
         replaceRecord(surface, serializeCubeSurfaceState(state));
         this.#nodes.changed(node);
         this.#refresh();
+    }
+    /** Move native sockets before Comfy paints links for the next resize frame. */
+    #synchronizeLiveGeometry(node) {
+        const item = this.#renderItem(node);
+        this.#replaceItem(item);
+        this.#domWidgets.sync(this.#items);
+        this.#faceProjections.sync(this.#items);
+        this.#syncDropTargets();
     }
     /** Request one native canvas repaint. */
     #refresh() {

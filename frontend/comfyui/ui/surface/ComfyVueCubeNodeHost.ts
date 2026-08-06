@@ -166,6 +166,7 @@ export class ComfyVueCubeNodeHost {
     NATIVE_ROOT_OWNERS.set(nodeRoot, { owner: this, node });
     observer.observe(nodeRoot, { childList: true, subtree: true });
     geometryObserver?.observe(nodeRoot);
+    geometryObserver?.observe(body);
     return faceHost;
   }
 
@@ -244,6 +245,7 @@ export class ComfyVueCubeNodeHost {
     if (mount.nodeRoot !== findNativeNodeRoot(this.#document, node)) return;
     const body = findNativeNodeBody(mount.nodeRoot);
     if (!body) return;
+    mount.geometryObserver?.observe(body);
     body.dataset.sugarcubeCubeBody = '';
     if (mount.faceHost.parentElement !== body) body.append(mount.faceHost);
     for (const [element, wasHidden] of hideNativeCubeContent(mount.nodeRoot, body)) {

@@ -43,6 +43,7 @@ import {
   resolveCubePreviewWidthRange,
   type CubePreviewWidthRange,
 } from './CubePreviewResizeGeometry.js';
+import { CUBE_SURFACE_FRAME_PADDING, CUBE_SURFACE_SECTION_GAP } from './CubeSurfaceGeometry.js';
 
 export interface CubeCanvasRect {
   x: number;
@@ -92,9 +93,7 @@ export interface CubeCanvasLayout {
   minimumSize: Vec2;
 }
 
-const FRAME_PADDING = 12;
 const HEADER_HEIGHT = 42;
-const CONTENT_GAP = 12;
 const RESIZE_HANDLE_SIZE = 18;
 const RESIZE_EDGE_THICKNESS = 10;
 const PREVIEW_DIVIDER_HIT_WIDTH = 10;
@@ -119,9 +118,9 @@ export function computeCubeCanvasLayout(
   const header = rect(frame.x, frame.y, frame.width, HEADER_HEIGHT);
   const spacing = resolveCubeSurfaceCardSpacing(state);
   const baseContent = rect(
-    frame.x + FRAME_PADDING,
+    frame.x + CUBE_SURFACE_FRAME_PADDING,
     frame.y + HEADER_HEIGHT + spacing.headerInset,
-    Math.max(1, frame.width - FRAME_PADDING * 2),
+    Math.max(1, frame.width - CUBE_SURFACE_FRAME_PADDING * 2),
     Math.max(1, frame.height - HEADER_HEIGHT - spacing.headerInset - spacing.footerInset),
   );
   const gutters = resolveCubePortGutters(frame, baseContent, {
@@ -130,12 +129,12 @@ export function computeCubeCanvasLayout(
   });
   const content = gutters.content;
   const minimumMasonryWidth = Math.min(content.width, Math.max(1, state.minimumColumnWidth));
-  const previewVisible = state.preview.visible && externalInterface.outputSlots.length > 0;
+  const previewVisible = state.preview.visible;
   const previewRight = previewVisible ? frame.x + frame.width : content.x + content.width;
   const previewWidthRange = resolveCubePreviewWidthRange(
     Math.max(0, previewRight - content.x),
     minimumMasonryWidth,
-    CONTENT_GAP,
+    CUBE_SURFACE_SECTION_GAP,
   );
   const previewWidth = previewVisible
     ? Math.min(state.preview.width, previewWidthRange.maximum)
@@ -144,7 +143,7 @@ export function computeCubeCanvasLayout(
     1,
     (previewWidth > 0 ? previewRight : content.x + content.width) -
       content.x -
-      (previewWidth > 0 ? previewWidth + CONTENT_GAP : 0),
+      (previewWidth > 0 ? previewWidth + CUBE_SURFACE_SECTION_GAP : 0),
   );
   const masonry = rect(content.x, content.y, masonryWidth, content.height);
   const preview =
@@ -153,7 +152,7 @@ export function computeCubeCanvasLayout(
       : null;
   const previewDivider = preview
     ? rect(
-        preview.x - CONTENT_GAP / 2 - PREVIEW_DIVIDER_HIT_WIDTH / 2,
+        preview.x - CUBE_SURFACE_SECTION_GAP / 2 - PREVIEW_DIVIDER_HIT_WIDTH / 2,
         preview.y,
         PREVIEW_DIVIDER_HIT_WIDTH,
         preview.height,

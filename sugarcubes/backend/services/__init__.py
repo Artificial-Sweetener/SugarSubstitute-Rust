@@ -25,6 +25,7 @@ from .cube_identity_redirect_service import CubeIdentityRedirectService
 from .identity_policy_service import IdentityPolicyService
 from .local_flavor_service import LocalFlavorService
 from .cube_load_service import CubeLoadService
+from .cube_picker_catalog_service import CubePickerCatalogService
 from .cube_metadata_service import CubeMetadataService
 from .cube_promotion_service import CubePromotionService
 from .ownership_policy_service import OwnershipPolicyService
@@ -47,6 +48,7 @@ __all__ = [
     "IdentityPolicyService",
     "LocalFlavorService",
     "CubeLoadService",
+    "CubePickerCatalogService",
     "CubeMetadataService",
     "CubePromotionService",
     "OwnershipPolicyService",

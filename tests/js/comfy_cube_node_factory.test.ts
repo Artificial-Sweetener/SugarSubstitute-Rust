@@ -23,12 +23,11 @@ import {
 import type { NativeCubeSubgraph } from '../../frontend/comfyui/ui/cube/ComfyCubeGraphBuilder.js';
 
 describe('ComfyCubeNodeFactory', () => {
-  test('creates one real subgraph node and lets the root graph own it', () => {
+  test('creates one detached real subgraph node for an insertion owner', () => {
     const subgraph = nativeSubgraph('cube-definition');
     const node = nativeSubgraphNode(subgraph);
-    const add = jest.fn();
     const createNode = jest.fn(() => node);
-    const factory = new ComfyCubeNodeFactory({ graph: { add }, createNode });
+    const factory = new ComfyCubeNodeFactory({ createNode });
 
     const cube = factory.create({
       subgraph,
@@ -41,7 +40,6 @@ describe('ComfyCubeNodeFactory', () => {
     });
 
     expect(createNode).toHaveBeenCalledWith('cube-definition');
-    expect(add).toHaveBeenCalledWith(node);
     expect(cube).toBe(node);
     expect(cube).toMatchObject({
       id: 'cube-instance',
@@ -61,9 +59,7 @@ describe('ComfyCubeNodeFactory', () => {
     const subgraph = nativeSubgraph('authored-definition');
     const node = nativeSubgraphNode(subgraph);
     node.id = 27;
-    const add = jest.fn();
     const factory = new ComfyCubeNodeFactory({
-      graph: { add },
       createNode: jest.fn(() => null),
     });
 
@@ -78,7 +74,6 @@ describe('ComfyCubeNodeFactory', () => {
     });
 
     expect(cube).toBe(node);
-    expect(add).not.toHaveBeenCalled();
     expect(cube.id).toBe(27);
     expect(cube.properties.sugarcubes_cube).toMatchObject({
       cube_id: 'local/Authored.cube',
@@ -93,7 +88,6 @@ describe('ComfyCubeNodeFactory', () => {
       isSubgraphNode: () => false,
     };
     const factory = new ComfyCubeNodeFactory({
-      graph: { add: jest.fn() },
       createNode: () => generic,
     });
 

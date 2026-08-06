@@ -20,6 +20,7 @@ import type {
   ComfyCubeGraphBuilder,
   NativeCubeSubgraph,
 } from '../../frontend/comfyui/ui/cube/ComfyCubeGraphBuilder.js';
+import { CubeConstructionService } from '../../frontend/comfyui/ui/cube/CubeConstructionService.js';
 import { CubePlacementService } from '../../frontend/comfyui/ui/cube/CubePlacementService.js';
 import {
   ComfyCubeNodeFactory,
@@ -44,9 +45,10 @@ describe('CubePlacementService', () => {
     const add = jest.fn();
     const createNode = jest.fn(() => nativeSubgraphNode(subgraph));
     const catalog = new CubeNodeCatalog();
+    const graphBuilder = { build } as unknown as ComfyCubeGraphBuilder;
     const service = new CubePlacementService({
-      graphBuilder: { build } as unknown as ComfyCubeGraphBuilder,
-      nodeFactory: new ComfyCubeNodeFactory({ graph: { add }, createNode }),
+      construction: constructionFor(graphBuilder, new ComfyCubeNodeFactory({ createNode })),
+      graph: { add },
       catalog,
       history: { beforeChange, afterChange, setDirtyCanvas },
     });
@@ -73,7 +75,7 @@ describe('CubePlacementService', () => {
     expect(catalog.list()).toEqual([placed.node]);
     expect(createNode).toHaveBeenCalledWith('definition');
     expect(placed.node.pos).toEqual([40, 60]);
-    expect(placed.node.size).toEqual([1200, 700]);
+    expect(placed.node.size).toEqual([920, 600]);
     expect(placed.node.connect).toBeDefined();
     expect(placed.node.serialize).toBeDefined();
     expect(placed.node.isSubgraphNode()).toBe(true);
@@ -96,13 +98,14 @@ describe('CubePlacementService', () => {
     });
   });
 
-  test('restores persisted face geometry and reveal state onto the native node', () => {
+  test('restores face state without inheriting persisted artifact frame geometry', () => {
     const subgraph = nativeSubgraph('definition');
+    const graphBuilder = {
+      build: () => ({ subgraph, nodesBySymbol: new Map(), warnings: [] }),
+    } as unknown as ComfyCubeGraphBuilder;
     const service = new CubePlacementService({
-      graphBuilder: {
-        build: () => ({ subgraph, nodesBySymbol: new Map(), warnings: [] }),
-      } as unknown as ComfyCubeGraphBuilder,
-      nodeFactory: nodeFactoryFor(subgraph),
+      construction: constructionFor(graphBuilder, nodeFactoryFor(subgraph)),
+      graph: { add: jest.fn() },
       catalog: new CubeNodeCatalog(),
       history: {},
     });
@@ -122,7 +125,7 @@ describe('CubePlacementService', () => {
       },
     });
 
-    expect(placed.node.size).toEqual([760, 440]);
+    expect(placed.node.size).toEqual([920, 600]);
     expect(placed.node.properties.sugarcubes_surface).toEqual({
       schema: 1,
       revealed: false,
@@ -134,13 +137,14 @@ describe('CubePlacementService', () => {
     expect(placed.node.id).not.toBe('cube-1');
   });
 
-  test('keeps a feasible thin surface without inheriting node geometry', () => {
+  test('standardizes a thin artifact on the fresh-instance frame policy', () => {
     const subgraph = nativeSubgraph('definition');
+    const graphBuilder = {
+      build: () => ({ subgraph, nodesBySymbol: new Map(), warnings: [] }),
+    } as unknown as ComfyCubeGraphBuilder;
     const service = new CubePlacementService({
-      graphBuilder: {
-        build: () => ({ subgraph, nodesBySymbol: new Map(), warnings: [] }),
-      } as unknown as ComfyCubeGraphBuilder,
-      nodeFactory: nodeFactoryFor(subgraph),
+      construction: constructionFor(graphBuilder, nodeFactoryFor(subgraph)),
+      graph: { add: jest.fn() },
       catalog: new CubeNodeCatalog(),
       history: {},
     });
@@ -153,29 +157,32 @@ describe('CubePlacementService', () => {
       },
     });
 
-    expect(placed.node.size).toEqual([320, 180]);
+    expect(placed.node.size).toEqual([920, 600]);
   });
 
   test('allocates a fresh surface instance every time the same Cube is placed', () => {
     let buildIndex = 0;
     let currentSubgraph = nativeSubgraph('initial');
     const add = jest.fn();
+    const graphBuilder = {
+      build: () => {
+        buildIndex += 1;
+        currentSubgraph = nativeSubgraph(`definition-${String(buildIndex)}`);
+        return {
+          subgraph: currentSubgraph,
+          nodesBySymbol: new Map(),
+          warnings: [],
+        };
+      },
+    } as unknown as ComfyCubeGraphBuilder;
     const service = new CubePlacementService({
-      graphBuilder: {
-        build: () => {
-          buildIndex += 1;
-          currentSubgraph = nativeSubgraph(`definition-${String(buildIndex)}`);
-          return {
-            subgraph: currentSubgraph,
-            nodesBySymbol: new Map(),
-            warnings: [],
-          };
-        },
-      } as unknown as ComfyCubeGraphBuilder,
-      nodeFactory: new ComfyCubeNodeFactory({
-        graph: { add },
-        createNode: () => nativeSubgraphNode(currentSubgraph),
-      }),
+      construction: constructionFor(
+        graphBuilder,
+        new ComfyCubeNodeFactory({
+          createNode: () => nativeSubgraphNode(currentSubgraph),
+        }),
+      ),
+      graph: { add },
       catalog: new CubeNodeCatalog(),
       history: {},
     });
@@ -225,8 +232,22 @@ function nativeSubgraph(id: string, nodeIds: string[] = []): NativeCubeSubgraph 
 /** Bind a native-node factory to one registered definition. */
 function nodeFactoryFor(subgraph: NativeCubeSubgraph): ComfyCubeNodeFactory {
   return new ComfyCubeNodeFactory({
-    graph: { add: jest.fn() },
     createNode: () => nativeSubgraphNode(subgraph),
+  });
+}
+
+/** Bind deterministic detached construction to one graph-builder test double. */
+function constructionFor(
+  graphBuilder: ComfyCubeGraphBuilder,
+  nodeFactory: ComfyCubeNodeFactory,
+): CubeConstructionService {
+  let instanceIndex = 0;
+  return new CubeConstructionService({
+    graphBuilder,
+    nodeFactory,
+    definitions: { discard: jest.fn() },
+    resolveInitialSize: () => [920, 600],
+    createInstanceId: () => `runtime-instance-${String(++instanceIndex)}`,
   });
 }
 

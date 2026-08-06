@@ -40,6 +40,7 @@ from .services import (
     CubeIdentityRedirectService,
     CubeLibraryService,
     CubeLoadService,
+    CubePickerCatalogService,
     CubeMetadataService,
     CubePromotionService,
     CubeRevisionService,
@@ -55,6 +56,7 @@ class BackendServices:
     """Bundle the services shared by host routes and public integrations."""
 
     library: CubeLibraryService
+    picker_catalog: CubePickerCatalogService
     tracked_repos: TrackedRepoService
     identity: IdentityPolicyService
     ownership: OwnershipPolicyService
@@ -119,6 +121,14 @@ def build_backend_services(
         prepare_cube_import=prepare_cube_import,
         redirect_service=redirects,
     )
+    picker_catalog = CubePickerCatalogService(
+        list_catalog=library.list_library_catalog,
+        load_cube=lambda cube_id: loader.load_cube(
+            cube_id=cube_id,
+            version_pin="",
+            drop_origin=(0.0, 0.0),
+        ),
+    )
     exporter = CubeExportService(
         library,
         export_cubes=export_cubes,
@@ -151,6 +161,7 @@ def build_backend_services(
     )
     return BackendServices(
         library=library,
+        picker_catalog=picker_catalog,
         tracked_repos=tracked_repos,
         identity=identity,
         ownership=ownership,

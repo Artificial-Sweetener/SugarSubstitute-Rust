@@ -145,6 +145,36 @@ export class CubeEditorMetadataHud {
     );
   }
 
+  /** Focus the existing Cube metadata owner instead of opening native Subgraph metadata UI. */
+  focus(): void {
+    if (!this.#activeNode || !this.#values) return;
+    this.#collapsed = false;
+    this.#render();
+    this.#root
+      ?.querySelector<HTMLInputElement>(`[${FOCUS_KEY_ATTRIBUTE}="default-alias"]`)
+      ?.focus({ preventScroll: true });
+  }
+
+  /** Route the active editor save shortcut through the visible metadata owner. */
+  requestSave(): boolean {
+    const button = this.#root?.querySelector<HTMLButtonElement>(
+      '.sugarcubes-cube-editor-metadata__save',
+    );
+    if (!button || button.disabled) return false;
+    button.click();
+    return true;
+  }
+
+  /** Apply command-provided description text to the active Cube metadata draft. */
+  setDescription(description: string): boolean {
+    if (!this.#activeNode || !this.#values || !this.#editable) return false;
+    this.#values = { ...this.#values, description };
+    this.#dirty = true;
+    this.#saveError = '';
+    this.#render();
+    return true;
+  }
+
   /** Release the pinned viewport element. */
   dispose(): void {
     this.hide();

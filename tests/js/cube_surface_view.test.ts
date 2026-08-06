@@ -521,23 +521,57 @@ describe('CubeSurfaceView', () => {
     view.dispose();
   });
 
-  test('hides the output rail when no authored output is exposed', () => {
+  test('keeps face preview presentation independent from canonical output sockets', () => {
+    const state = createDefaultCubeSurfaceState();
+    state.preview.width = 513.6844451311475;
     const view = new CubeSurfaceView({
       document,
       renderer: createRenderer(),
       identity: cubeIdentity('Empty Cube'),
-      nodes: [],
-      state: createDefaultCubeSurfaceState(),
+      nodes: [createNode(1), createNode(2)],
+      state,
       onStateChange: jest.fn(),
     });
 
-    view.setPreviewAvailable(false);
-    view.layout(900);
+    view.renderPreview({ outputs: [] });
+    view.layout(1_014);
 
-    expect(view.element.querySelector<HTMLElement>('[data-cube-preview-rail]')?.hidden).toBe(true);
+    const masonry = view.element.querySelector<HTMLElement>('[data-cube-masonry]');
+    const rail = view.element.querySelector<HTMLElement>('[data-cube-preview-rail]');
+    expect(masonry?.dataset.columns).toBe('2');
+    expect(Number.parseFloat(masonry?.style.width ?? '')).toBeCloseTo(492.3155548688525);
+    expect(rail?.hidden).toBe(false);
+    expect(Number.parseFloat(rail?.style.width ?? '')).toBeCloseTo(513.6844451311475);
+    expect(rail?.textContent).toContain('No preview available');
     expect(
       view.element.querySelector<HTMLElement>('[data-cube-content]')?.dataset.previewLayout,
-    ).toBe('hidden');
+    ).toBe('rail');
+    view.dispose();
+  });
+
+  test('allocates outer frame growth to preview without widening masonry', () => {
+    const state = createDefaultCubeSurfaceState();
+    const onStateChange = jest.fn();
+    const view = new CubeSurfaceView({
+      document,
+      renderer: createRenderer(),
+      identity: cubeIdentity('Expandable preview'),
+      nodes: [createNode(1), createNode(2)],
+      state,
+      onStateChange,
+    });
+
+    view.layout(900);
+    const masonry = view.element.querySelector<HTMLElement>('[data-cube-masonry]');
+    const rail = view.element.querySelector<HTMLElement>('[data-cube-preview-rail]');
+    const initialMasonryWidth = Number.parseFloat(masonry?.style.width ?? '');
+
+    view.layout(1_100);
+
+    expect(Number.parseFloat(masonry?.style.width ?? '')).toBe(initialMasonryWidth);
+    expect(Number.parseFloat(rail?.style.width ?? '')).toBe(520);
+    expect(state.preview.width).toBe(520);
+    expect(onStateChange).toHaveBeenCalledTimes(1);
     view.dispose();
   });
 
@@ -679,6 +713,14 @@ describe('CubeSurfaceView', () => {
     );
     expect(onStateChange).toHaveBeenCalledTimes(1);
     expect(onStateChange).toHaveBeenCalledWith(state);
+
+    const masonry = view.element.querySelector<HTMLElement>('[data-cube-masonry]');
+    const dividerAdjustedMasonryWidth = Number.parseFloat(masonry?.style.width ?? '');
+    view.layout(1_100);
+    expect(Number.parseFloat(masonry?.style.width ?? '')).toBe(dividerAdjustedMasonryWidth);
+    expect(view.element.querySelector<HTMLElement>('[data-cube-preview-rail]')?.style.width).toBe(
+      '600px',
+    );
 
     view.layout(250);
     expect(divider.hidden).toBe(true);

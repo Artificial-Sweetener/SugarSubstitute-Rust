@@ -156,7 +156,7 @@ export function ensureCubeSurfaceStyles(documentRef: Document): void {
       display: block;
       width: 100%;
       height: 100%;
-      overflow: visible;
+      overflow: hidden;
       pointer-events: none;
     }
     .sugarcubes-cube-face {

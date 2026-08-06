@@ -38,6 +38,10 @@ export class CubeLibraryApi {
     async list(options = {}) {
         return this.fetchJson('/sugarcubes/list', options);
     }
+    /** Fetch the host-neutral catalog used by Comfy node-picker adapters. */
+    async listPickerCatalog(options = {}) {
+        return this.fetchJson('/sugarcubes/picker_catalog', options);
+    }
     async listTrackedRepos(options = {}) {
         return this.fetchJson('/sugarcubes/repos', options);
     }

@@ -60,8 +60,8 @@ export class CubeEditorHudPositioner {
     sync() {
         const left = occupiedLeftEdge(this.#document);
         const top = occupiedTopEdge(this.#document);
-        this.#root.style.setProperty('--sugarcubes-cube-editor-metadata-left', `${String(Math.max(VIEWPORT_GUTTER_PX, Math.ceil(left + VIEWPORT_GUTTER_PX)))}px`);
-        this.#root.style.setProperty('--sugarcubes-cube-editor-metadata-top', `${String(Math.max(VIEWPORT_GUTTER_PX, Math.ceil(top + VIEWPORT_GUTTER_PX)))}px`);
+        setStyleProperty(this.#root, '--sugarcubes-cube-editor-metadata-left', `${String(Math.max(VIEWPORT_GUTTER_PX, Math.ceil(left + VIEWPORT_GUTTER_PX)))}px`);
+        setStyleProperty(this.#root, '--sugarcubes-cube-editor-metadata-top', `${String(Math.max(VIEWPORT_GUTTER_PX, Math.ceil(top + VIEWPORT_GUTTER_PX)))}px`);
     }
     /** Batch native-chrome DOM changes into one layout read. */
     #schedule() {
@@ -81,6 +81,11 @@ export class CubeEditorHudPositioner {
         for (const element of chromeElements(this.#document))
             this.#resizeObserver.observe(element);
     }
+}
+/** Avoid waking the document observer for an unchanged owned style value. */
+function setStyleProperty(element, name, value) {
+    if (element.style.getPropertyValue(name) !== value)
+        element.style.setProperty(name, value);
 }
 /** Return the rightmost edge claimed by Comfy's permanent toolbar or expanded panel. */
 function occupiedLeftEdge(documentRef) {

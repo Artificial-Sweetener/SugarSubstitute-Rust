@@ -43,6 +43,7 @@ export class CubeDomPortLeaderHost {
     this.#svg.classList.add('sugarcubes-cube-port-leaders');
     this.#svg.dataset.sugarcubePortLeaders = '';
     this.#svg.setAttribute('aria-hidden', 'true');
+    this.#svg.style.overflow = 'hidden';
     body.append(this.#svg);
   }
 

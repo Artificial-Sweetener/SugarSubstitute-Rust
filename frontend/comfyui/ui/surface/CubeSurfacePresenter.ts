@@ -46,6 +46,7 @@ import type { LiteGraphCubeNodeInteractionHistory } from './ComfyLiteGraphCubeNo
 import type { CubeFaceChromeActions } from './CubeFaceChromeActions.js';
 import type { CubePortPresentationController } from '../cube/connection/CubePortPresentationController.js';
 import { CUBE_INPUT_GUTTER_WIDTH } from './CubePortGutterLayout.js';
+import { CUBE_VUE_CONTENT_HORIZONTAL_INSET } from './CubeSurfaceGeometry.js';
 import { ComfyRendererPresenceObserver } from './ComfyRendererPresenceObserver.js';
 import { ComfyNativeSlotLayoutCoordinator } from './ComfyNativeSlotLayoutCoordinator.js';
 import type { CanvasGraphChangeSource } from './ComfyCanvasGraphChangeAdapter.js';
@@ -450,7 +451,6 @@ export class CubeSurfacePresenter {
       externalInterface.inputSlots.length > 0 ? CUBE_INPUT_GUTTER_WIDTH : 0,
       0,
     );
-    surface.view.setPreviewAvailable(externalInterface.outputSlots.length > 0);
     const width = resolveVueContentWidth(node);
     if (Number.isFinite(surface.layoutWidth) && Math.abs(surface.layoutWidth - width) < 0.5) {
       return;
@@ -633,5 +633,5 @@ function replaceRecord(target: UnknownRecord, source: object): void {
 /** Exclude only input labels because output slots overlay the preview's right rail. */
 function resolveVueContentWidth(node: CubeNode): number {
   const inputGutterWidth = node.inputs.length > 0 ? CUBE_INPUT_GUTTER_WIDTH : 0;
-  return Math.max(1, Number(node.size[0]) - 16 - inputGutterWidth);
+  return Math.max(1, Number(node.size[0]) - CUBE_VUE_CONTENT_HORIZONTAL_INSET - inputGutterWidth);
 }

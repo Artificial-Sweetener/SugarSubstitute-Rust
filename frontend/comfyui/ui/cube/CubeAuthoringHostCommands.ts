@@ -15,6 +15,8 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Adapt Cube authoring to Comfy's command contract. */
 
+import { isCubeNode } from './node/ComfyCubeNodeFactory.js';
+
 /** Describe one declarative Comfy canvas context-menu item. */
 export interface CubeAuthoringCanvasMenuItem {
   content: string;
@@ -40,20 +42,21 @@ export class CubeAuthoringHostCommands {
 
   /** Build graph-authoring actions for Comfy's native canvas context menu. */
   getCanvasMenuItems(canvas: unknown): CubeAuthoringCanvasMenuItem[] {
-    const selectedCount = readSelectedItemCount(canvas);
+    const selectedItems = readSelectedItems(canvas);
+    const selectedCount = selectedItems.length;
     const options: CubeAuthoringCanvasMenuItem[] = [
       {
         content: 'Create Empty SugarCube',
         callback: this.#createEmptyCube,
       },
     ];
-    if (selectedCount > 0) {
+    if (selectedCount > 0 && !selectedItems.some(isCubeNode)) {
       options.push({
         content: 'Create SugarCube from Selection',
         callback: this.#createCubeFromSelection,
       });
     }
-    if (selectedCount === 1) {
+    if (selectedCount === 1 && isOrdinarySubgraphNode(selectedItems[0])) {
       options.push({
         content: 'Convert Selected Subgraph to SugarCube',
         callback: this.#createCubeFromSubgraph,
@@ -64,10 +67,17 @@ export class CubeAuthoringHostCommands {
 }
 
 /** Read only the selected-item count exposed by Comfy's untyped canvas host. */
-function readSelectedItemCount(canvas: unknown): number {
-  if (!canvas || typeof canvas !== 'object') return 0;
+function readSelectedItems(canvas: unknown): unknown[] {
+  if (!canvas || typeof canvas !== 'object') return [];
   const selectedItems = Reflect.get(canvas, 'selectedItems');
-  if (!selectedItems || typeof selectedItems !== 'object') return 0;
-  const count = Number(Reflect.get(selectedItems, 'size'));
-  return Number.isFinite(count) && count > 0 ? count : 0;
+  if (!selectedItems || typeof selectedItems !== 'object') return [];
+  const iterator = Reflect.get(selectedItems, Symbol.iterator);
+  return typeof iterator === 'function' ? Array.from(selectedItems as Iterable<unknown>) : [];
+}
+
+/** Accept one native Subgraph only when it has not already become a Cube. */
+function isOrdinarySubgraphNode(value: unknown): boolean {
+  if (isCubeNode(value) || !value || typeof value !== 'object') return false;
+  const isSubgraphNode = Reflect.get(value, 'isSubgraphNode');
+  return typeof isSubgraphNode === 'function' && isSubgraphNode.call(value) === true;
 }

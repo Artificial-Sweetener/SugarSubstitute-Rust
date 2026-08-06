@@ -26,6 +26,9 @@ interface MockNodeConstructor {
 
 export interface MockExtension extends UnknownRecord {
   name?: string;
+  addCustomNodeDefs?(definitions: Record<string, UnknownRecord>): void | Promise<void>;
+  beforeRegisterVueAppNodeDefs?(definitions: UnknownRecord[]): void;
+  registerCustomNodes?(): void | Promise<void>;
   setup?(): void | Promise<void>;
   beforeRegisterNodeDef?(nodeType: MockNodeConstructor, nodeData: UnknownRecord): unknown;
   nodeCreated?(node: ComfyNode): unknown;
@@ -46,6 +49,9 @@ export interface MockExtensionManager extends UnknownRecord {
 }
 
 export interface MockCanvas extends ComfyCanvas {
+  selectedItems: Set<unknown>;
+  getNodeMenuOptions(node: unknown): unknown[];
+  getCanvasMenuOptions(): unknown[];
   onAfterChange(...args: unknown[]): unknown;
   onDrawForeground(...args: unknown[]): unknown;
   processMouseMove(...args: unknown[]): unknown;
@@ -74,6 +80,9 @@ const createMockApp = (): MockApp => ({
   _extensions: [],
   graph: null,
   canvas: {
+    selectedItems: new Set(),
+    getNodeMenuOptions: () => [],
+    getCanvasMenuOptions: () => [],
     onAfterChange: () => undefined,
     onDrawForeground: () => undefined,
     processMouseMove: () => undefined,
@@ -91,6 +100,9 @@ const createMockApp = (): MockApp => ({
     this._extensions = [];
     this.graph = null;
     this.canvas = {
+      selectedItems: new Set(),
+      getNodeMenuOptions: () => [],
+      getCanvasMenuOptions: () => [],
       onAfterChange: () => undefined,
       onDrawForeground: () => undefined,
       processMouseMove: () => undefined,

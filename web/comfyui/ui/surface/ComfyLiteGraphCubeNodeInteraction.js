@@ -37,6 +37,7 @@ export class ComfyLiteGraphCubeNodeInteraction {
     #onCardRevealChange;
     #onCardActivationChange;
     #onPreviewWidthChange;
+    #onGeometryChange;
     #session = null;
     #appliedCursor = null;
     /** Bind focused face hit testing ahead of LiteGraph's native node handlers. */
@@ -53,6 +54,7 @@ export class ComfyLiteGraphCubeNodeInteraction {
         this.#onCardRevealChange = options.onCardRevealChange;
         this.#onCardActivationChange = options.onCardActivationChange;
         this.#onPreviewWidthChange = options.onPreviewWidthChange ?? (() => undefined);
+        this.#onGeometryChange = options.onGeometryChange ?? (() => undefined);
         this.#eventRoot.addEventListener('pointerdown', this.#handlePointerDown, true);
         options.canvas.canvas.addEventListener('pointermove', this.#handlePointerMove, true);
         options.canvas.canvas.addEventListener('pointerup', this.#handlePointerUp, true);
@@ -209,6 +211,7 @@ export class ComfyLiteGraphCubeNodeInteraction {
         session.node.setSize?.([...frame.size]);
         writePair(session.node.size, frame.size);
         session.node.onResize?.([...frame.size]);
+        this.#onGeometryChange(session.node);
         this.#markDirty();
     };
     /** Complete one focused pointer session. */

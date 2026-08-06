@@ -26,9 +26,8 @@ import { resolveCubeSurfaceCardSpacing } from './CubeSurfaceSpacing.js';
 import { layoutCubeCanvasChrome } from './CubeCanvasChromeLayout.js';
 import { layoutCubeInputPorts, layoutCubeOutputPorts, resolveCubePortGutters, } from './CubePortGutterLayout.js';
 import { resolveCubePreviewWidthRange, } from './CubePreviewResizeGeometry.js';
-const FRAME_PADDING = 12;
+import { CUBE_SURFACE_FRAME_PADDING, CUBE_SURFACE_SECTION_GAP } from './CubeSurfaceGeometry.js';
 const HEADER_HEIGHT = 42;
-const CONTENT_GAP = 12;
 const RESIZE_HANDLE_SIZE = 18;
 const RESIZE_EDGE_THICKNESS = 10;
 const PREVIEW_DIVIDER_HIT_WIDTH = 10;
@@ -40,28 +39,28 @@ export function computeCubeCanvasLayout(node, state, titleHeight, titlebarAction
     const frame = rect(Number(node.pos[0]), Number(node.pos[1]) - titleHeight, Number(node.size[0]), Number(node.size[1]) + titleHeight);
     const header = rect(frame.x, frame.y, frame.width, HEADER_HEIGHT);
     const spacing = resolveCubeSurfaceCardSpacing(state);
-    const baseContent = rect(frame.x + FRAME_PADDING, frame.y + HEADER_HEIGHT + spacing.headerInset, Math.max(1, frame.width - FRAME_PADDING * 2), Math.max(1, frame.height - HEADER_HEIGHT - spacing.headerInset - spacing.footerInset));
+    const baseContent = rect(frame.x + CUBE_SURFACE_FRAME_PADDING, frame.y + HEADER_HEIGHT + spacing.headerInset, Math.max(1, frame.width - CUBE_SURFACE_FRAME_PADDING * 2), Math.max(1, frame.height - HEADER_HEIGHT - spacing.headerInset - spacing.footerInset));
     const gutters = resolveCubePortGutters(frame, baseContent, {
         hasInputs: externalInterface.inputSlots.length > 0,
         hasOutputs: externalInterface.outputSlots.length > 0,
     });
     const content = gutters.content;
     const minimumMasonryWidth = Math.min(content.width, Math.max(1, state.minimumColumnWidth));
-    const previewVisible = state.preview.visible && externalInterface.outputSlots.length > 0;
+    const previewVisible = state.preview.visible;
     const previewRight = previewVisible ? frame.x + frame.width : content.x + content.width;
-    const previewWidthRange = resolveCubePreviewWidthRange(Math.max(0, previewRight - content.x), minimumMasonryWidth, CONTENT_GAP);
+    const previewWidthRange = resolveCubePreviewWidthRange(Math.max(0, previewRight - content.x), minimumMasonryWidth, CUBE_SURFACE_SECTION_GAP);
     const previewWidth = previewVisible
         ? Math.min(state.preview.width, previewWidthRange.maximum)
         : 0;
     const masonryWidth = Math.max(1, (previewWidth > 0 ? previewRight : content.x + content.width) -
         content.x -
-        (previewWidth > 0 ? previewWidth + CONTENT_GAP : 0));
+        (previewWidth > 0 ? previewWidth + CUBE_SURFACE_SECTION_GAP : 0));
     const masonry = rect(content.x, content.y, masonryWidth, content.height);
     const preview = previewWidth > 0
         ? rect(previewRight - previewWidth, content.y, previewWidth, content.height)
         : null;
     const previewDivider = preview
-        ? rect(preview.x - CONTENT_GAP / 2 - PREVIEW_DIVIDER_HIT_WIDTH / 2, preview.y, PREVIEW_DIVIDER_HIT_WIDTH, preview.height)
+        ? rect(preview.x - CUBE_SURFACE_SECTION_GAP / 2 - PREVIEW_DIVIDER_HIT_WIDTH / 2, preview.y, PREVIEW_DIVIDER_HIT_WIDTH, preview.height)
         : null;
     const presentation = resolveCubeFaceCardPresentation(node.subgraph._nodes, state, node.subgraph);
     const chrome = layoutCubeCanvasChrome(header, {

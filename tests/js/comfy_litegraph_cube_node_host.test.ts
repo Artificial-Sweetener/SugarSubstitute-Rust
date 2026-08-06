@@ -337,6 +337,108 @@ describe('ComfyLiteGraphCubeNodeHost', () => {
     nativeOwner.remove();
   });
 
+  test('allocates Nodes 1 outer frame growth to the persisted preview width', () => {
+    const rootGraph = {};
+    const node = cubeNode(nativeInnerNode());
+    node.size = [900, 480];
+    node.properties.sugarcubes_surface = {
+      schema: 3,
+      node_order: [],
+      cards: {},
+      minimum_column_width: 240,
+      gap: 12,
+      preview: { visible: true, width: 320, selected_output: null },
+    };
+    const nodes = new CubeNodeCatalog();
+    nodes.add(node);
+    const canvasElement = document.createElement('canvas');
+    const canvas = {
+      canvas: canvasElement,
+      graph: rootGraph,
+      graph_mouse: [0, 0],
+      drawNode: jest.fn(),
+      processWidgetClick: jest.fn(),
+      setDirty: jest.fn(),
+    };
+    const host = new ComfyLiteGraphCubeNodeHost({
+      canvas,
+      document,
+      rootGraph,
+      nodes,
+      history: {},
+      titleHeight: 30,
+      openEditor: jest.fn(),
+    });
+
+    host.setEnabled(true);
+    node.onDrawForeground?.(drawingContext(), canvas, canvasElement);
+    node.size[0] = 1_100;
+    node.onDrawForeground?.(drawingContext(), canvas, canvasElement);
+
+    const surface = node.properties.sugarcubes_surface as {
+      preview: { width: number };
+    };
+    expect(surface.preview.width).toBe(520);
+    host.dispose();
+  });
+
+  test('moves Nodes 1 native output geometry during the active resize gesture', () => {
+    const rootGraph = {};
+    const node = cubeNode(nativeInnerNode());
+    const output = { name: 'output.image', type: 'IMAGE', pos: [0, 0] };
+    node.outputs = [output];
+    node.properties.sugarcubes_surface = {
+      schema: 3,
+      node_order: [],
+      cards: {},
+      minimum_column_width: 240,
+      gap: 12,
+      preview: { visible: true, width: 320, selected_output: null },
+    };
+    const nodes = new CubeNodeCatalog();
+    nodes.add(node);
+    const canvasElement = document.createElement('canvas');
+    document.body.replaceChildren(canvasElement);
+    Object.defineProperty(canvasElement, 'getBoundingClientRect', {
+      value: () => ({ left: 0, top: 0, width: 1_200, height: 900 }),
+    });
+    Object.defineProperty(canvasElement, 'setPointerCapture', { value: jest.fn() });
+    Object.defineProperty(canvasElement, 'releasePointerCapture', { value: jest.fn() });
+    const afterChange = jest.fn();
+    const canvas = {
+      canvas: canvasElement,
+      graph: rootGraph,
+      graph_mouse: [0, 0],
+      convertCanvasToOffset: (point: [number, number]) => point,
+      drawNode: jest.fn(),
+      processWidgetClick: jest.fn(),
+      setDirty: jest.fn(),
+    };
+    const host = new ComfyLiteGraphCubeNodeHost({
+      canvas,
+      document,
+      rootGraph,
+      nodes,
+      history: { afterChange },
+      titleHeight: 30,
+      openEditor: jest.fn(),
+    });
+
+    host.setEnabled(true);
+    node.onDrawForeground?.(drawingContext(), canvas, canvasElement);
+    const initialSocketX = Number(output.pos[0]);
+    canvasElement.dispatchEvent(pointer('pointerdown', 818, 380));
+    canvasElement.dispatchEvent(pointer('pointermove', 898, 380));
+
+    expect(node.size[0]).toBe(800);
+    expect(Number(output.pos[0])).toBeGreaterThan(initialSocketX);
+    expect(afterChange).not.toHaveBeenCalled();
+
+    canvasElement.dispatchEvent(pointer('pointerup', 898, 380));
+    expect(afterChange).toHaveBeenCalledTimes(1);
+    host.dispose();
+  });
+
   test('draws multiple outputs as horizontal segments without captions in Nodes 1.0', () => {
     const rootGraph = {};
     const node = cubeNode(nativeInnerNode());
@@ -560,6 +662,18 @@ function drawingContext(): CanvasRenderingContext2D {
   });
   context.sugarcubesFillStyles = fillStyles;
   return context as unknown as CanvasRenderingContext2D;
+}
+
+/** Build one pointer event with finite graph-space coordinates. */
+function pointer(type: string, clientX: number, clientY: number): Event {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperties(event, {
+    button: { value: 0 },
+    clientX: { value: clientX },
+    clientY: { value: clientY },
+    pointerId: { value: 1 },
+  });
+  return event;
 }
 
 /** Return every fill assigned while the Cube and its native cards were drawn. */

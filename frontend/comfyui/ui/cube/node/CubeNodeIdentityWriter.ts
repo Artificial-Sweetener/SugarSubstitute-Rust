@@ -15,10 +15,10 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Write save identity changes to graph-owned Cube nodes. */
 
-import { isRecord } from '../../types/common.js';
 import type { UnknownRecord } from '../../types/common.js';
 import { requireCubeIdentity } from './ComfyCubeNodeFactory.js';
 import type { CubeNodeCatalog } from './CubeNodeCatalog.js';
+import { writeCubeDefinitionIdentity } from './CubeDefinitionIdentityWriter.js';
 
 export interface CubeNodeIdentityUpdates {
   cubeId?: string;
@@ -45,11 +45,7 @@ export function updateCubeNodeIdentityForIds(
     const identity = requireCubeIdentity(node);
     const metadata = applyUpdates(identity, updates);
     replaceRecord(identity, metadata);
-    node.subgraph.extra = {
-      ...(isRecord(node.subgraph.extra) ? node.subgraph.extra : {}),
-      sugarcubes_kind: 'cube',
-      sugarcubes_cube: { ...metadata },
-    };
+    writeCubeDefinitionIdentity(node.subgraph, 'cube', metadata);
     if (updates.defaultAlias) node.title = updates.defaultAlias;
     catalog.changed(node);
     updated += 1;

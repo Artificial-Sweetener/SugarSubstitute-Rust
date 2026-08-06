@@ -19,17 +19,23 @@ import { jest } from '@jest/globals';
 import { ComfyCubeRuntimeLifecycle } from '../../frontend/comfyui/ui/cube/ComfyCubeRuntimeLifecycle.js';
 import type { ComfyCubeRuntime } from '../../frontend/comfyui/ui/cube/ComfyCubeRuntime.js';
 import { CubeNodeCatalog } from '../../frontend/comfyui/ui/cube/node/CubeNodeCatalog.js';
+import { CubeEditorContextResolver } from '../../frontend/comfyui/ui/surface/CubeEditorContextResolver.js';
 
 /** Build the smallest graph-bound runtime needed by the lifecycle owner. */
 function createRuntime(dispose: () => void): ComfyCubeRuntime {
+  const nodes = new CubeNodeCatalog();
   return {
+    construction: {} as ComfyCubeRuntime['construction'],
     placement: {} as ComfyCubeRuntime['placement'],
     authoring: {} as ComfyCubeRuntime['authoring'],
-    nodes: new CubeNodeCatalog(),
+    nodes,
+    contexts: new CubeEditorContextResolver(nodes),
+    metadataHud: null,
     proximityEndpoints: { discover: () => ({ outputs: [], inputs: [] }) },
     proximityPresentation: { updateMatches: () => undefined },
     registerSubgraphs: () => [],
     restoreLegacy: () => ({ migrated: 0, connected: 0, warnings: [] }),
+    detectLegacyBlueprints: () => 0,
     dispose,
   };
 }

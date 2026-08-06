@@ -135,6 +135,9 @@ function setupBaseApp() {
   app.reset();
   app.graph = { _nodes: [], _groups: [] };
   app.canvas = {
+    selectedItems: new Set(),
+    getNodeMenuOptions: () => [],
+    getCanvasMenuOptions: () => [],
     graph: app.graph,
     setDirty: jest.fn(),
     onAfterChange: () => {},

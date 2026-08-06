@@ -25,6 +25,8 @@ import {
   type CubeNode,
 } from './node/ComfyCubeNodeFactory.js';
 import type { CubeNodeCatalog } from './node/CubeNodeCatalog.js';
+import { writeCubeDefinitionIdentity } from './node/CubeDefinitionIdentityWriter.js';
+import { resolveCubeDefinitionDescription } from './node/CubeDefinitionIdentityWriter.js';
 
 const DEFAULT_CUBE_SURFACE_SIZE: Vec2 = [720, 480];
 
@@ -88,22 +90,24 @@ export interface ComfyCubeAuthoringAdapterOptions {
   canvas: CubeAuthoringCanvas;
   nodeFactory: ComfyCubeNodeFactory;
   catalog: CubeNodeCatalog;
-  createEmptySubgraph?(title: string): NativeCubeSubgraph;
+  createEmptySubgraph?(title: string, description: string): NativeCubeSubgraph;
   getDraftPosition?(): Vec2;
 }
 
 /** Reuse native conversion and retain its generated surface node. */
 export class ComfyCubeAuthoringAdapter {
+  readonly #graph: ComfyGraph | undefined;
   readonly #subgraphs: Map<string, NativeCubeSubgraph>;
   readonly #convertToSubgraph: (items: Set<unknown>) => unknown;
   readonly #canvas: CubeAuthoringCanvas;
   readonly #nodeFactory: ComfyCubeNodeFactory;
   readonly #catalog: CubeNodeCatalog;
-  readonly #createEmptySubgraph: (title: string) => NativeCubeSubgraph;
+  readonly #createEmptySubgraph: (title: string, description: string) => NativeCubeSubgraph;
   readonly #getDraftPosition: () => Vec2;
 
   /** Bind native selection conversion and Cube-node presentation metadata. */
   constructor(options: ComfyCubeAuthoringAdapterOptions) {
+    this.#graph = options.graph;
     this.#subgraphs = options.subgraphs;
     this.#convertToSubgraph = options.convertToSubgraph;
     this.#canvas = options.canvas;
@@ -139,8 +143,11 @@ export class ComfyCubeAuthoringAdapter {
 
   /** Create an empty graph-only Cube draft with its real native subgraph boundary. */
   createEmptyDraft(identity: CubeDraftIdentity): AuthoredCubeDraft {
-    const subgraph = this.#createEmptySubgraph(`Cube: ${identity.defaultAlias}`);
     const metadata = buildDraftMetadata(identity);
+    const subgraph = this.#createEmptySubgraph(
+      `Cube: ${identity.defaultAlias}`,
+      resolveCubeDefinitionDescription(metadata),
+    );
     markSubgraphAsDraft(subgraph, metadata);
     const node = this.#nodeFactory.create({
       instanceId: identity.instanceId,
@@ -152,6 +159,10 @@ export class ComfyCubeAuthoringAdapter {
       surface: {},
       kind: 'draft',
     });
+    if (typeof this.#graph?.add !== 'function') {
+      throw new Error('Native root graph insertion is unavailable.');
+    }
+    this.#graph.add(node);
     this.#subgraphs.set(subgraph.id, subgraph);
     this.#catalog.add(node);
     return { node, subgraph, identity };
@@ -185,11 +196,7 @@ export class ComfyCubeAuthoringAdapter {
     }
     const metadata = buildCubeMetadata(identity);
     node.subgraph.name = `Cube: ${identity.defaultAlias}`;
-    node.subgraph.extra = {
-      ...(isRecord(node.subgraph.extra) ? node.subgraph.extra : {}),
-      sugarcubes_kind: 'cube',
-      sugarcubes_cube: cloneRecord(metadata),
-    };
+    writeCubeDefinitionIdentity(node.subgraph, 'cube', metadata);
     this.#nodeFactory.adopt(node, {
       instanceId: identity.instanceId,
       subgraph: node.subgraph,
@@ -252,11 +259,7 @@ export class ComfyCubeAuthoringAdapter {
 
 /** Persist the draft marker where both native Comfy renderers can read it. */
 function markSubgraphAsDraft(subgraph: NativeCubeSubgraph, metadata: UnknownRecord): void {
-  subgraph.extra = {
-    ...(isRecord(subgraph.extra) ? subgraph.extra : {}),
-    sugarcubes_kind: 'cube_draft',
-    sugarcubes_cube: cloneRecord(metadata),
-  };
+  writeCubeDefinitionIdentity(subgraph, 'cube_draft', metadata);
 }
 
 /** Infer editor-local boundaries when Comfy stores them only on native node slots. */
@@ -377,10 +380,4 @@ function buildDraftMetadata(identity: CubeDraftIdentity): UnknownRecord {
     default_alias: identity.defaultAlias,
     instance_alias: identity.defaultAlias,
   };
-}
-
-/** Clone JSON-safe metadata before assigning domain ownership. */
-function cloneRecord(value: UnknownRecord): UnknownRecord {
-  const parsed: unknown = JSON.parse(JSON.stringify(value));
-  return isRecord(parsed) ? parsed : {};
 }

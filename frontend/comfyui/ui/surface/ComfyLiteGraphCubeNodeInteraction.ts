@@ -79,6 +79,7 @@ export interface ComfyLiteGraphCubeNodeInteractionOptions {
   onCardRevealChange(node: CubeNode, internalNode: ComfyNode, revealed: boolean): void;
   onCardActivationChange(node: CubeNode, internalNode: ComfyNode, enabled: boolean): void;
   onPreviewWidthChange?(node: CubeNode, width: number): void;
+  onGeometryChange?(node: CubeNode): void;
 }
 
 type PointerSession =
@@ -129,6 +130,7 @@ export class ComfyLiteGraphCubeNodeInteraction {
     enabled: boolean,
   ) => void;
   readonly #onPreviewWidthChange: (node: CubeNode, width: number) => void;
+  readonly #onGeometryChange: (node: CubeNode) => void;
   #session: PointerSession | null = null;
   #appliedCursor: string | null = null;
 
@@ -146,6 +148,7 @@ export class ComfyLiteGraphCubeNodeInteraction {
     this.#onCardRevealChange = options.onCardRevealChange;
     this.#onCardActivationChange = options.onCardActivationChange;
     this.#onPreviewWidthChange = options.onPreviewWidthChange ?? (() => undefined);
+    this.#onGeometryChange = options.onGeometryChange ?? (() => undefined);
     this.#eventRoot.addEventListener('pointerdown', this.#handlePointerDown, true);
     options.canvas.canvas.addEventListener('pointermove', this.#handlePointerMove, true);
     options.canvas.canvas.addEventListener('pointerup', this.#handlePointerUp, true);
@@ -317,6 +320,7 @@ export class ComfyLiteGraphCubeNodeInteraction {
     session.node.setSize?.([...frame.size]);
     writePair(session.node.size, frame.size);
     session.node.onResize?.([...frame.size]);
+    this.#onGeometryChange(session.node);
     this.#markDirty();
   };
 

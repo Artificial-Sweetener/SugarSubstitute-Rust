@@ -15,16 +15,20 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Extract only group-era Cubes before Comfy configures a workflow. */
 import { LegacyCubeWorkflowExtractor, } from './migration/LegacyCubeWorkflowExtractor.js';
+import { CubeSerializedDefinitionPresentationAdapter } from './CubeSerializedDefinitionPresentationAdapter.js';
 /** Own the serialized workflow phase and its one pending legacy migration batch. */
 export class CubeWorkflowPreconfiguration {
     #legacyExtractor;
+    #definitionPresentation;
     #legacyBatch = null;
     /** Bind the focused legacy extraction collaborator. */
-    constructor(legacyExtractor = new LegacyCubeWorkflowExtractor()) {
+    constructor(legacyExtractor = new LegacyCubeWorkflowExtractor(), definitionPresentation = new CubeSerializedDefinitionPresentationAdapter()) {
         this.#legacyExtractor = legacyExtractor;
+        this.#definitionPresentation = definitionPresentation;
     }
     /** Detach legacy records before graph construction. */
     prepare(workflow) {
+        this.#definitionPresentation.prepare(workflow);
         const batch = this.#legacyExtractor.extractInPlace(workflow);
         this.#legacyBatch = batch.plans.length > 0 ? batch : null;
         return batch.plans.length;

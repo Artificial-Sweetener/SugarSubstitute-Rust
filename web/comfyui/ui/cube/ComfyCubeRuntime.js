@@ -18,6 +18,8 @@ import { isRecord } from '../types/common.js';
 import { ComfyCubeAuthoringAdapter, } from './ComfyCubeAuthoringAdapter.js';
 import { ComfyCubeGraphBuilder } from './ComfyCubeGraphBuilder.js';
 import { CubePlacementService } from './CubePlacementService.js';
+import { CubeConstructionService } from './CubeConstructionService.js';
+import { resolveCubeInitialSurfaceSize } from '../surface/CubeInitialSurfaceSize.js';
 import { CubeSubgraphRegistrar } from './CubeSubgraphRegistrar.js';
 import { CubeOutputSurfaceSynchronizer } from './CubeOutputSurfaceSynchronizer.js';
 import { LegacyCubeDefinitionSerializer } from './migration/LegacyCubeDefinitionSerializer.js';
@@ -43,6 +45,10 @@ import { createComfyRendererModeChangeSource, resolveComfyRendererMode, } from '
 import { NativeCubeGeometryCoordinator } from './geometry/NativeCubeGeometryCoordinator.js';
 import { CubeEditorWorkspaceChromeAdapter } from '../surface/CubeEditorWorkspaceChromeAdapter.js';
 import { createComfyCubePreviewActions } from '../surface/ComfyCubePreviewActions.js';
+import { CubeEditorContextResolver } from '../surface/CubeEditorContextResolver.js';
+import { CubeStructuralOperationGuard } from '../affordance/CubeStructuralOperationGuard.js';
+import { CubeNodeProductIdentityPresenter } from '../affordance/CubeNodeProductIdentityPresenter.js';
+import { CubeBlueprintMigrationDetector } from '../affordance/CubeBlueprintMigrationDetector.js';
 /** Construct the graph-bound SugarCubes integration around native SubgraphNodes. */
 export function createComfyCubeRuntime(options) {
     const app = requireRecord(options.app, 'Comfy application');
@@ -71,6 +77,12 @@ export function createComfyCubeRuntime(options) {
         const value = createNodeFunction.call(liteGraph, type);
         return isNativeGraphNode(value) ? value : null;
     };
+    const discardSubgraph = (subgraph) => {
+        runtimeGraph.subgraphs.delete(subgraph.id);
+        if (typeof liteGraph.unregisterNodeType === 'function') {
+            liteGraph.unregisterNodeType.call(liteGraph, subgraph.id);
+        }
+    };
     const graphBuilderHost = {
         rootGraph: {
             createSubgraph(data) {
@@ -83,9 +95,11 @@ export function createComfyCubeRuntime(options) {
         },
         createNode,
         createUuid,
+        discardSubgraph,
     };
     const history = createComfyCubeHistoryAdapter({ canvas, graph });
     const nodes = new CubeNodeCatalog();
+    const contexts = new CubeEditorContextResolver(nodes);
     const portPresentation = new CubePortPresentationController({
         requestFrame: (callback) => options.document.defaultView?.requestAnimationFrame(callback) ?? null,
         invalidate: () => history.setDirtyCanvas?.(true, true),
@@ -99,14 +113,7 @@ export function createComfyCubeRuntime(options) {
         logger: options.logger,
     });
     const outputSurfaceSynchronizer = new CubeOutputSurfaceSynchronizer(nodes, legacyCanvas.canvas);
-    const nodeFactory = new ComfyCubeNodeFactory({
-        graph: {
-            add(node) {
-                addFunction.call(graph, node);
-            },
-        },
-        createNode,
-    });
+    const nodeFactory = new ComfyCubeNodeFactory({ createNode });
     const nodeSwap = new CubeNodeSwapCoordinator({
         graph,
         nodes,
@@ -178,6 +185,7 @@ export function createComfyCubeRuntime(options) {
         rootGraph: graph,
         getCurrentGraph: () => (isRecord(canvas.graph) ? canvas.graph : null),
         nodes,
+        contexts,
         graphChanges: canvasGraphChanges,
         ...(metadataHud ? { metadataHud } : {}),
     });
@@ -242,13 +250,27 @@ export function createComfyCubeRuntime(options) {
             : {}),
     });
     const graphBuilder = new ComfyCubeGraphBuilder(graphBuilderHost);
-    const placement = new CubePlacementService({
+    const construction = new CubeConstructionService({
         graphBuilder,
         nodeFactory,
+        resolveInitialSize: resolveCubeInitialSurfaceSize,
+        createInstanceId: createUuid,
+        definitions: {
+            discard: discardSubgraph,
+        },
+    });
+    const placement = new CubePlacementService({
+        construction,
+        graph: {
+            add(node) {
+                addFunction.call(graph, node);
+            },
+        },
         catalog: nodes,
         history,
     });
     const authoring = new ComfyCubeAuthoringAdapter({
+        graph,
         subgraphs: runtimeGraph.subgraphs,
         convertToSubgraph(items) {
             const activeGraph = readActiveGraph(canvas, graph);
@@ -263,7 +285,7 @@ export function createComfyCubeRuntime(options) {
         },
         nodeFactory,
         catalog: nodes,
-        createEmptySubgraph: (title) => graphBuilder.createEmptyDraft(title),
+        createEmptySubgraph: (title, description) => graphBuilder.createEmptyDraft(title, description),
         getDraftPosition: () => readGraphPoint(legacyCanvas.graph_mouse, [0, 0]),
     });
     const subgraphRegistrar = new CubeSubgraphRegistrar({
@@ -291,14 +313,28 @@ export function createComfyCubeRuntime(options) {
         },
         logger: options.logger,
     });
+    const structuralGuard = new CubeStructuralOperationGuard({
+        rootGraph: graph,
+        nodes,
+        ...(options.feedback ? { feedback: options.feedback } : {}),
+    });
+    const productIdentity = new CubeNodeProductIdentityPresenter(nodes);
+    const blueprintMigration = new CubeBlueprintMigrationDetector({
+        logger: options.logger,
+        ...(options.feedback ? { feedback: options.feedback } : {}),
+    });
     return {
+        construction,
         placement,
         authoring,
         nodes,
+        contexts,
+        metadataHud,
         proximityEndpoints,
         proximityPresentation: portPresentation,
         registerSubgraphs: (payload) => subgraphRegistrar.register(payload),
         restoreLegacy: (batch) => legacyMigration.restore(batch),
+        detectLegacyBlueprints: () => blueprintMigration.scan(graph),
         dispose: () => {
             outputSurfaceSynchronizer.dispose();
             editorNavigation.dispose();
@@ -308,6 +344,8 @@ export function createComfyCubeRuntime(options) {
             nodeLifecycle.dispose();
             nativeGeometry.dispose();
             canvasGraphChanges.dispose();
+            structuralGuard.dispose();
+            productIdentity.dispose();
         },
     };
 }

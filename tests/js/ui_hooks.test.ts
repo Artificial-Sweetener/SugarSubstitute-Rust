@@ -19,6 +19,7 @@ import { api } from './mocks/api.js';
 import type { MockSidebarTab } from './mocks/app.js';
 import type { MockCanvas } from './mocks/app.js';
 import type { ComfyGraph } from '../../frontend/comfyui/ui/types/graph.js';
+import type { UnknownRecord } from '../../frontend/comfyui/ui/types/common.js';
 import type {
   CubeContainmentService,
   ContainmentIndex,
@@ -115,6 +116,9 @@ beforeEach(() => {
     onNodeConnectionChange: () => {},
   };
   app.canvas = {
+    selectedItems: new Set(),
+    getNodeMenuOptions: () => [],
+    getCanvasMenuOptions: () => [],
     graph: app.graph,
     setDirty: jest.fn(),
     onAfterChange: () => {},
@@ -168,6 +172,72 @@ beforeEach(() => {
 });
 
 describe('ui hooks and scheduling', () => {
+  test('picker hooks contribute, order, and preserve ordinary node creation', async () => {
+    const key = 'a'.repeat(64);
+    const cubeId = 'local/demo.cube';
+    const type = `SugarCubes.Cube.${key}`;
+    api.fetchApi = async (url) => ({
+      ok: true,
+      status: 200,
+      json: async () =>
+        url === '/sugarcubes/picker_catalog'
+          ? {
+              schemaVersion: 1,
+              catalogRevision: 'picker-revision',
+              entries: [
+                {
+                  key,
+                  cubeId,
+                  version: '1.0.0',
+                  displayName: 'Demo Cube',
+                  description: 'Picker demo',
+                  searchTerms: ['Demo Cube'],
+                  targetModel: '',
+                  supportedModels: [],
+                  requiredCustomNodes: [],
+                  source: { kind: 'local' },
+                  inputs: [],
+                  outputs: [],
+                },
+              ],
+              errors: [],
+            }
+          : {
+              cube: { cube_id: cubeId, version: '1.0.0', default_alias: 'Demo Cube' },
+              nodes: [],
+              markers: [],
+              connections: [],
+              subgraphs: [],
+              layout: { origin: [0, 0], groups: [] },
+              boundaries: { inputs: [], outputs: [] },
+            },
+    });
+    const ordinary = { type: 'ordinary' };
+    const createNode = jest.fn(() => ordinary);
+    Object.assign(globalThis.LiteGraph, { createNode });
+    await loadUi();
+    const extension = app._extensions[0];
+    const definitions: Record<string, UnknownRecord> = { Ordinary: { name: 'Ordinary' } };
+
+    await extension.addCustomNodeDefs?.(definitions);
+    expect(definitions[type]).toMatchObject({
+      name: type,
+      display_name: 'Demo Cube',
+      category: 'SugarCubes',
+      python_module: 'custom_nodes.SugarCubes',
+    });
+
+    const vueDefinitions: UnknownRecord[] = [{ name: 'Ordinary' }];
+    extension.beforeRegisterVueAppNodeDefs?.(vueDefinitions);
+    expect(vueDefinitions.map(({ name }) => name)).toEqual([type, 'Ordinary']);
+
+    await extension.registerCustomNodes?.();
+    const installedCreateNode = Reflect.get(globalThis.LiteGraph, 'createNode');
+    expect(typeof installedCreateNode).toBe('function');
+    expect(Reflect.apply(installedCreateNode, globalThis.LiteGraph, ['Ordinary'])).toBe(ordinary);
+    expect(createNode).toHaveBeenCalledWith('Ordinary');
+  });
+
   test('registerSidebarTab is called only once', async () => {
     const calls: MockSidebarTab[] = [];
     app.extensionManager.registerSidebarTab = (payload) => calls.push(payload);

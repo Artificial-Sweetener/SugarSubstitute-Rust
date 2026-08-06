@@ -18,7 +18,7 @@
  */
 
 import { app } from '/scripts/app.js';
-import type { ComfyApp, ComfyExtension } from '/scripts/app.js';
+import type { ComfyApp, ComfyExtension, ComfyNodeDefinition } from '/scripts/app.js';
 import { api } from '/scripts/api.js';
 import { createComfyCubeRuntime, type ComfyCubeRuntime } from './ui/cube/ComfyCubeRuntime.js';
 import {
@@ -74,6 +74,12 @@ import { createHostSettingsController } from './ui/settings/HostSettingsControll
 import type { SettingsManager } from './ui/settings/HostSettingsController.js';
 import type { UnknownRecord, Vec2 } from './ui/types/common.js';
 import type { ComfyApplication } from './ui/types/graph.js';
+import { CubeBlueprintPersistenceGuard } from './ui/affordance/CubeBlueprintPersistenceGuard.js';
+import { CubeHostAffordanceController } from './ui/affordance/CubeHostAffordanceController.js';
+import { CubeAffordanceHostLifecycle } from './ui/affordance/CubeAffordanceHostLifecycle.js';
+import { notifyComfyGraphCleared } from './ui/affordance/ComfyGraphClearNotifier.js';
+import { createComfyCubePickerIntegration } from './ui/picker/ComfyCubePickerComposition.js';
+import { CubeCatalogInvalidationCoordinator } from './ui/core/CubeCatalogInvalidationCoordinator.js';
 
 export { buildShiftedPlacementPayload };
 
@@ -82,14 +88,19 @@ type ToastSeverity = 'success' | 'info' | 'warn' | 'error';
 interface SugarCubesHostApp extends ComfyApplication {
   ui?: { settings?: SettingsManager };
   extensionManager?: SugarCubesSidebarManager;
+  clean?(): void;
   registerExtension?(extension: UnknownRecord): void;
 }
 
 export interface SugarCubesExtension extends ComfyExtension, UnknownRecord {
+  addCustomNodeDefs(definitions: Record<string, ComfyNodeDefinition>): Promise<void>;
+  beforeRegisterVueAppNodeDefs(definitions: ComfyNodeDefinition[]): void;
+  registerCustomNodes(): void;
   setup(): Promise<void>;
   beforeConfigureGraph(graphData?: unknown): void;
-  afterConfigureGraph(missingNodeTypes: string[], comfyApp: ComfyApp): void;
+  afterConfigureGraph(missingNodeTypes: unknown[], comfyApp: ComfyApp): void;
   getCanvasMenuItems(canvas: unknown): unknown[];
+  getNodeMenuItems(node: unknown): unknown[];
 }
 
 const EXTENSION_NAME = 'SugarCubes.UI';
@@ -131,6 +142,20 @@ const logger = consoleRef || {
 const cubePreconfiguration = new CubeWorkflowPreconfiguration();
 const cubePreviewRetention = new CubePreviewRetentionStore();
 const cubeRuntimeLifecycle = new ComfyCubeRuntimeLifecycle(createCubeRuntime);
+const cubePicker = createComfyCubePickerIntegration({
+  api: cubeApi,
+  app,
+  getLiteGraph: () => adapter.getLiteGraph?.(),
+  getNodeRenderer: () => adapter.getNodeRenderer?.(),
+  getRuntime: requireCubeRuntime,
+  logger,
+  reportError: (summary, detail) => pushToastMessage('error', summary, detail),
+});
+const cubeCatalogInvalidation = new CubeCatalogInvalidationCoordinator({
+  refreshPicker: () => cubePicker.refresh(),
+  refreshBrowser: () => ui.cubeBrowser.refresh({ force: true }),
+  logger,
+});
 const nativeBoundaryResolver = new NativeSubgraphBoundaryResolver(logger);
 const cubeOutputExecutionStore = new CubeOutputExecutionStore();
 const cubeOutputEventBridge = new ComfyCubeOutputEventBridge({
@@ -147,6 +172,7 @@ const cubeOutputPromptAdapter = new CubeOutputPromptAdapter({
   getCubes: () => cubeRuntimeLifecycle.current()?.nodes.list() ?? [],
   boundaryResolver: nativeBoundaryResolver,
 });
+let blueprintPersistenceGuard: CubeBlueprintPersistenceGuard | null = null;
 const cubePromptPipeline = new CubePromptPipeline({
   applyProximity: (payload) => overlayManager.proximity.applyProximityToPrompt(payload),
   adaptCubeOutputs: (payload) => cubeOutputPromptAdapter.apply(payload),
@@ -154,6 +180,26 @@ const cubePromptPipeline = new CubePromptPipeline({
 const promptQueueBridge = new ComfyPromptQueueBridge({
   api: api as unknown as ComfyPromptQueueApi,
   transform: (payload) => cubePromptPipeline.transform(payload),
+});
+const cubeAffordanceController = new CubeHostAffordanceController({
+  getRuntime: () => cubeRuntimeLifecycle.current(),
+  cubeCreation: ui.cubeCreation,
+  cubeSave: ui.cubeSave,
+  confirm: ui.confirmDialog,
+  feedback: toastService,
+  prepareGraphClear: () => appRef?.clean?.(),
+  markGraphDirty: () => {
+    appRef?.canvas?.setDirty?.(true, true);
+    const graph = appRef?.canvas?.graph ?? appRef?.graph;
+    ui.dirtyManager.requestRefresh({ ...(graph ? { graph } : {}), reason: 'cube-affordance' });
+  },
+  announceGraphCleared: () => notifyComfyGraphCleared(api, logger),
+});
+const cubeAffordances = new CubeAffordanceHostLifecycle({
+  getDocument: () => documentRef,
+  getCanvas: () => appRef?.canvas ?? null,
+  controller: cubeAffordanceController,
+  logger,
 });
 
 /** Construct graph-bound Cube collaborators only after Comfy initializes its graph. */
@@ -178,6 +224,7 @@ function createCubeRuntime(): ComfyCubeRuntime {
       save: async (node, values) => ui.cubeEditorSave.save(node, values),
       modelSuggestions: () => ui.cubeBrowser.getModelSuggestions(),
     },
+    feedback: toastService,
     boundaryResolver: nativeBoundaryResolver,
     previewRetention: cubePreviewRetention,
     openCubeMenu: (metadata, event) => {
@@ -266,12 +313,6 @@ function pushToastMessage(severity: ToastSeverity, summary: string, detail: stri
   toastService?.push?.(severity, summary, detail);
 }
 
-function invalidateDependentCatalogs(): void {
-  ui.cubeBrowser.refresh({ force: true }).catch((error: unknown) => {
-    logger.warn('SugarCubes: failed to refresh the Cube browser catalog.', error);
-  });
-}
-
 const hostSettingsController = createHostSettingsController({
   adapter,
   appRef,
@@ -280,7 +321,9 @@ const hostSettingsController = createHostSettingsController({
   logger,
   pushToast: pushToastMessage,
   readErrorMessage,
-  invalidateDependentCatalogs,
+  invalidateDependentCatalogs: () => {
+    void cubeCatalogInvalidation.invalidate();
+  },
 });
 
 const sidebarHost = new SugarCubesSidebarHostAdapter({
@@ -395,14 +438,32 @@ ui.cubeBrowser.configure({
 /** Define the ComfyUI extension lifecycle owned by SugarCubes. */
 export const sugarCubesExtension: SugarCubesExtension = {
   name: EXTENSION_NAME,
+  addCustomNodeDefs(definitions) {
+    return cubePicker.contribute(definitions);
+  },
+  beforeRegisterVueAppNodeDefs(definitions) {
+    cubePicker.orderForVue(definitions);
+  },
+  registerCustomNodes() {
+    cubePicker.activate();
+  },
   getCanvasMenuItems(canvas) {
     return cubeAuthoringCommands.getCanvasMenuItems(canvas);
+  },
+  getNodeMenuItems(node) {
+    return cubeAffordances.getNodeMenuItems(node);
   },
   async setup() {
     try {
       sidebarHost.register();
       hostSettingsController.register();
       await ui.setup();
+      if (typeof Reflect.get(api as object, 'storeUserData') === 'function') {
+        blueprintPersistenceGuard ??= new CubeBlueprintPersistenceGuard(api);
+        blueprintPersistenceGuard.install();
+      } else {
+        logger.warn('SugarCubes: Comfy Blueprint persistence guard is unavailable.');
+      }
       promptQueueBridge.install();
       cubeOutputEventBridge.install();
       cubeOutputHistoryAdapter.install();
@@ -426,16 +487,19 @@ export const sugarCubesExtension: SugarCubesExtension = {
       cubeRuntimeLifecycle.reset();
       cubeOutputExecutionStore.clear();
       cubePreconfiguration.prepare(graphData);
-      requireCubeRuntime();
+      cubeAffordances.attach(requireCubeRuntime());
       overlayManager.proximity.resetOverlayState();
     } catch (error: unknown) {
       logger.error(`SugarCubes: Cube preconfiguration failed: ${readErrorMessage(error)}`, error);
       throw error;
     }
   },
-  afterConfigureGraph(_missingNodeTypes: string[], comfyApp) {
+  afterConfigureGraph(missingNodeTypes: unknown[], comfyApp) {
     try {
-      requireCubeRuntime().restoreLegacy(cubePreconfiguration.takeLegacyBatch());
+      const runtime = requireCubeRuntime();
+      runtime.restoreLegacy(cubePreconfiguration.takeLegacyBatch());
+      runtime.detectLegacyBlueprints();
+      cubeAffordances.adaptMissingNodes(missingNodeTypes);
       void cubeOutputHistoryAdapter.hydrateRecent();
       const graph = appRef?.canvas?.graph ?? comfyApp.graph ?? appRef?.graph;
       overlayManager.proximity.refreshOverlayState({

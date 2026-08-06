@@ -74,6 +74,7 @@ export interface LegacyCubeContainerMigrationGraph {
   subgraphs: Map<string, NativeCubeSubgraph>;
   onConfigure?: ((data: UnknownRecord) => void) | null;
   onSerialize?: ((data: UnknownRecord) => void) | null;
+  add(node: CubeNode): void;
   getNodeById(id: GraphId): unknown;
 }
 
@@ -168,7 +169,9 @@ export class LegacyCubeContainerMigrationAdapter {
           identity: snapshot.identity,
           surface: snapshot.surface,
         };
-        migrated.set(snapshot.id, this.#factory.create(configuration));
+        const node = this.#factory.create(configuration);
+        this.#graph.add(node);
+        migrated.set(snapshot.id, node);
       } catch (error: unknown) {
         this.#logger.error(`SugarCubes failed to migrate legacy Cube '${snapshot.id}'.`, {
           reason: readErrorMessage(error),

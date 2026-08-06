@@ -125,6 +125,7 @@ export class ComfyVueCubeNodeHost {
         NATIVE_ROOT_OWNERS.set(nodeRoot, { owner: this, node });
         observer.observe(nodeRoot, { childList: true, subtree: true });
         geometryObserver?.observe(nodeRoot);
+        geometryObserver?.observe(body);
         return faceHost;
     }
     /** Mount Cube chrome inside Comfy's actual header interaction surface. */
@@ -205,6 +206,7 @@ export class ComfyVueCubeNodeHost {
         const body = findNativeNodeBody(mount.nodeRoot);
         if (!body)
             return;
+        mount.geometryObserver?.observe(body);
         body.dataset.sugarcubeCubeBody = '';
         if (mount.faceHost.parentElement !== body)
             body.append(mount.faceHost);

@@ -46,6 +46,7 @@ describe('ComfyLiteGraphCubeNodeInteraction', () => {
     Object.defineProperty(canvasElement, 'releasePointerCapture', { value: jest.fn() });
     const beforeChange = jest.fn();
     const afterChange = jest.fn();
+    const onGeometryChange = jest.fn();
     const interaction = new ComfyLiteGraphCubeNodeInteraction({
       canvas: {
         canvas: canvasElement,
@@ -59,6 +60,7 @@ describe('ComfyLiteGraphCubeNodeInteraction', () => {
       onCardMenuToggle: jest.fn(),
       onCardRevealChange: jest.fn(),
       onCardActivationChange: jest.fn(),
+      onGeometryChange,
     });
     const start: [number, number] = [
       handle.rect.x + handle.rect.width / 2,
@@ -75,6 +77,10 @@ describe('ComfyLiteGraphCubeNodeInteraction', () => {
 
     canvasElement.dispatchEvent(pointer('pointerdown', start[0], start[1]));
     canvasElement.dispatchEvent(pointer('pointermove', start[0] + delta[0], start[1] + delta[1]));
+
+    expect(onGeometryChange).toHaveBeenCalledWith(node);
+    expect(afterChange).not.toHaveBeenCalled();
+
     canvasElement.dispatchEvent(pointer('pointerup', start[0] + delta[0], start[1] + delta[1]));
 
     expect([...node.pos]).toEqual(expected.position);

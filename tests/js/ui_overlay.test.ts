@@ -39,6 +39,13 @@ interface TestGraph extends ComfyGraph {
 
 class TestLGraphCanvas implements MockCanvas {
   [key: string]: unknown;
+  selectedItems = new Set<unknown>();
+  getNodeMenuOptions(_node: unknown): unknown[] {
+    return [];
+  }
+  getCanvasMenuOptions(): unknown[] {
+    return [];
+  }
   onAfterChange(): void {}
   onDrawForeground(): void {}
   processMouseMove(): void {}

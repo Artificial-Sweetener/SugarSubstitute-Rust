@@ -17,7 +17,7 @@
 
 import { isRecord } from '../../types/common.js';
 import type { UnknownRecord } from '../../types/common.js';
-import type { CubeIdentity } from '../CubePlacementService.js';
+import type { CubeIdentity } from '../CubeConstructionService.js';
 import type { LegacyCubePlan } from './LegacyCubeWorkflowExtractor.js';
 
 /** Preserve a legacy Cube's identity and presentation metadata during migration. */

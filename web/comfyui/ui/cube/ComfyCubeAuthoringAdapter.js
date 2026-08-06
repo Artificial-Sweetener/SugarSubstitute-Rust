@@ -16,9 +16,12 @@
 /** Convert a native Comfy selection into a real Cube subgraph node. */
 import { isRecord } from '../types/common.js';
 import { isDraftCubeNode, } from './node/ComfyCubeNodeFactory.js';
+import { writeCubeDefinitionIdentity } from './node/CubeDefinitionIdentityWriter.js';
+import { resolveCubeDefinitionDescription } from './node/CubeDefinitionIdentityWriter.js';
 const DEFAULT_CUBE_SURFACE_SIZE = [720, 480];
 /** Reuse native conversion and retain its generated surface node. */
 export class ComfyCubeAuthoringAdapter {
+    #graph;
     #subgraphs;
     #convertToSubgraph;
     #canvas;
@@ -28,6 +31,7 @@ export class ComfyCubeAuthoringAdapter {
     #getDraftPosition;
     /** Bind native selection conversion and Cube-node presentation metadata. */
     constructor(options) {
+        this.#graph = options.graph;
         this.#subgraphs = options.subgraphs;
         this.#convertToSubgraph = options.convertToSubgraph;
         this.#canvas = options.canvas;
@@ -61,8 +65,8 @@ export class ComfyCubeAuthoringAdapter {
     }
     /** Create an empty graph-only Cube draft with its real native subgraph boundary. */
     createEmptyDraft(identity) {
-        const subgraph = this.#createEmptySubgraph(`Cube: ${identity.defaultAlias}`);
         const metadata = buildDraftMetadata(identity);
+        const subgraph = this.#createEmptySubgraph(`Cube: ${identity.defaultAlias}`, resolveCubeDefinitionDescription(metadata));
         markSubgraphAsDraft(subgraph, metadata);
         const node = this.#nodeFactory.create({
             instanceId: identity.instanceId,
@@ -74,6 +78,10 @@ export class ComfyCubeAuthoringAdapter {
             surface: {},
             kind: 'draft',
         });
+        if (typeof this.#graph?.add !== 'function') {
+            throw new Error('Native root graph insertion is unavailable.');
+        }
+        this.#graph.add(node);
         this.#subgraphs.set(subgraph.id, subgraph);
         this.#catalog.add(node);
         return { node, subgraph, identity };
@@ -101,11 +109,7 @@ export class ComfyCubeAuthoringAdapter {
         }
         const metadata = buildCubeMetadata(identity);
         node.subgraph.name = `Cube: ${identity.defaultAlias}`;
-        node.subgraph.extra = {
-            ...(isRecord(node.subgraph.extra) ? node.subgraph.extra : {}),
-            sugarcubes_kind: 'cube',
-            sugarcubes_cube: cloneRecord(metadata),
-        };
+        writeCubeDefinitionIdentity(node.subgraph, 'cube', metadata);
         this.#nodeFactory.adopt(node, {
             instanceId: identity.instanceId,
             subgraph: node.subgraph,
@@ -165,11 +169,7 @@ export class ComfyCubeAuthoringAdapter {
 }
 /** Persist the draft marker where both native Comfy renderers can read it. */
 function markSubgraphAsDraft(subgraph, metadata) {
-    subgraph.extra = {
-        ...(isRecord(subgraph.extra) ? subgraph.extra : {}),
-        sugarcubes_kind: 'cube_draft',
-        sugarcubes_cube: cloneRecord(metadata),
-    };
+    writeCubeDefinitionIdentity(subgraph, 'cube_draft', metadata);
 }
 /** Infer editor-local boundaries when Comfy stores them only on native node slots. */
 /** Validate Comfy's native selection-to-subgraph result. */
@@ -269,9 +269,4 @@ function buildDraftMetadata(identity) {
         default_alias: identity.defaultAlias,
         instance_alias: identity.defaultAlias,
     };
-}
-/** Clone JSON-safe metadata before assigning domain ownership. */
-function cloneRecord(value) {
-    const parsed = JSON.parse(JSON.stringify(value));
-    return isRecord(parsed) ? parsed : {};
 }

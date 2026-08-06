@@ -43,6 +43,8 @@ test('persists editable metadata fields including cleared target model', () => {
       description: 'Updated description.',
     }),
   );
+  expect(node.subgraph.description).toBe('Updated description.');
+  expect(node.subgraph.extra?.sugarcubes_kind).toBe('cube');
   expect(changed).toHaveBeenCalledTimes(1);
 });
 

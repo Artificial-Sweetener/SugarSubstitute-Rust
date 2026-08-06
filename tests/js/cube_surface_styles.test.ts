@@ -67,6 +67,7 @@ describe('ensureCubeSurfaceStyles', () => {
     expect(css).toMatch(
       /\[data-sugarcube-boundary-direction="output"\]\s*>\s*:not\(\[data-testid="slot-connection-dot"\]\)\s*\{[^}]*display:\s*none\s*!important;/s,
     );
+    expect(css).toMatch(/\.sugarcubes-cube-port-leaders\s*\{[^}]*overflow:\s*hidden;/s);
   });
 
   test('projects the selected Cube colors onto cards and uses the darker body backdrop', () => {

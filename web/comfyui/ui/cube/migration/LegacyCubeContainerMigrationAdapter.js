@@ -96,7 +96,9 @@ export class LegacyCubeContainerMigrationAdapter {
                     identity: snapshot.identity,
                     surface: snapshot.surface,
                 };
-                migrated.set(snapshot.id, this.#factory.create(configuration));
+                const node = this.#factory.create(configuration);
+                this.#graph.add(node);
+                migrated.set(snapshot.id, node);
             }
             catch (error) {
                 this.#logger.error(`SugarCubes failed to migrate legacy Cube '${snapshot.id}'.`, {

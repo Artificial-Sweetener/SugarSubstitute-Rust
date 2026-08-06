@@ -89,6 +89,30 @@ describe('ComfyCubeNodeLifecycleAdapter', () => {
     adapter.dispose();
   });
 
+  test('indexes and reidentifies Cubes placed inside native subgraphs', () => {
+    const rootCube = cubeNode('shared-instance');
+    const nestedCube = cubeNode('shared-instance');
+    const graph = {
+      _nodes: [rootCube] as unknown[],
+      subgraphs: new Map([['editor-definition', { _nodes: [nestedCube] as unknown[] }]]),
+    };
+    const events = new EventTarget();
+    const catalog = new CubeNodeCatalog();
+    const adapter = new ComfyCubeNodeLifecycleAdapter({
+      graph,
+      catalog,
+      events,
+      createInstanceId: () => 'nested-instance',
+      logger: { debug: jest.fn(), error: jest.fn() },
+    });
+
+    expect(nestedCube.properties.sugarcubes_cube).toMatchObject({
+      instance_id: 'nested-instance',
+    });
+    expect(catalog.list()).toEqual([rootCube, nestedCube]);
+    adapter.dispose();
+  });
+
   test('restores graph hooks and stops event reconciliation on disposal', () => {
     const previousAdded = jest.fn();
     const graph = {

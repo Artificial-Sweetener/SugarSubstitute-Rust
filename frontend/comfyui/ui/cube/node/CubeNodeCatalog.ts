@@ -17,7 +17,7 @@
 
 import { isCubeNode, requireCubeIdentity, type CubeNode } from './ComfyCubeNodeFactory.js';
 
-/** Provide stable instance lookup while the root graph remains authoritative. */
+/** Provide stable instance lookup while Comfy's graph registry remains authoritative. */
 export class CubeNodeCatalog {
   readonly #nodes = new Map<string, CubeNode>();
   readonly #listeners = new Set<() => void>();
@@ -34,7 +34,7 @@ export class CubeNodeCatalog {
     this.#notify();
   }
 
-  /** Rebuild the index from Comfy's authoritative root-node collection. */
+  /** Rebuild the index from Comfy's authoritative graph-node collection. */
   replace(nodes: Iterable<unknown>): void {
     const replacement = new Map<string, CubeNode>();
     for (const value of nodes) {

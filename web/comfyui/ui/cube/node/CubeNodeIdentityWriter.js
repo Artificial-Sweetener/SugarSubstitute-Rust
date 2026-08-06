@@ -14,8 +14,8 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Write save identity changes to graph-owned Cube nodes. */
-import { isRecord } from '../../types/common.js';
 import { requireCubeIdentity } from './ComfyCubeNodeFactory.js';
+import { writeCubeDefinitionIdentity } from './CubeDefinitionIdentityWriter.js';
 /** Update exactly the native Cube nodes identified by instance id. */
 export function updateCubeNodeIdentityForIds(catalog, instanceIds, updates) {
     const targets = new Set(instanceIds.map((value) => value.trim()).filter(Boolean));
@@ -27,11 +27,7 @@ export function updateCubeNodeIdentityForIds(catalog, instanceIds, updates) {
         const identity = requireCubeIdentity(node);
         const metadata = applyUpdates(identity, updates);
         replaceRecord(identity, metadata);
-        node.subgraph.extra = {
-            ...(isRecord(node.subgraph.extra) ? node.subgraph.extra : {}),
-            sugarcubes_kind: 'cube',
-            sugarcubes_cube: { ...metadata },
-        };
+        writeCubeDefinitionIdentity(node.subgraph, 'cube', metadata);
         if (updates.defaultAlias)
             node.title = updates.defaultAlias;
         catalog.changed(node);

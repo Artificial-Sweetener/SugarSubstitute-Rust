@@ -56,6 +56,9 @@ function setupBaseApp() {
   app.graph = { _nodes: [], _groups: [] };
   app.canvas = {
     graph: app.graph,
+    selectedItems: new Set(),
+    getNodeMenuOptions: () => [],
+    getCanvasMenuOptions: () => [],
     setDirty: jest.fn(),
     onAfterChange: () => {},
     onDrawForeground: () => {},

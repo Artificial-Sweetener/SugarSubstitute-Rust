@@ -34,6 +34,9 @@ describe('CubeDomPortLeaderHost', () => {
 
     host.render([{ index: 0, title, portY: 170, socketRadius: 6 }]);
 
+    expect(body.querySelector<SVGSVGElement>('[data-sugarcube-port-leaders]')?.style.overflow).toBe(
+      'hidden',
+    );
     expect(
       body.querySelector<SVGPathElement>('[data-sugarcube-output-leader="0"]')?.getAttribute('d'),
     ).toBe('M 152.00 50.00 H 591.00 V 170.00 H 594.00');

@@ -54,6 +54,7 @@ class RouteHandlers:
     """Concrete route callables used for registration and tests."""
 
     list_cubes: RouteHandler
+    list_picker_catalog: RouteHandler
     get_identity_policy: RouteHandler
     update_identity_policy: RouteHandler
     list_tracked_repos: RouteHandler
@@ -102,6 +103,20 @@ def build_route_handlers(services: BackendServices) -> RouteHandlers:
         except Exception:  # pragma: no cover - defensive
             _logger.exception("SugarCubes: failed to list cubes")
             return json_error("Failed to list SugarCubes", status=500)
+
+    async def list_picker_catalog(request: Any) -> Any:
+        """Return host-neutral Cube descriptors for native node discovery."""
+
+        _ = request
+        try:
+            return json_success(
+                services.picker_catalog.list_picker_catalog(), status=200
+            )
+        except BackendError as error:
+            return json_error_from_exception(error)
+        except Exception:  # pragma: no cover - defensive
+            _logger.exception("SugarCubes: failed to list native picker catalog")
+            return json_error("Failed to list SugarCubes picker catalog", status=500)
 
     async def list_tracked_repos(request: Any) -> Any:
         _ = request
@@ -694,6 +709,7 @@ def build_route_handlers(services: BackendServices) -> RouteHandlers:
 
     return RouteHandlers(
         list_cubes=list_cubes,
+        list_picker_catalog=list_picker_catalog,
         get_identity_policy=get_identity_policy,
         update_identity_policy=update_identity_policy,
         list_tracked_repos=list_tracked_repos,
@@ -737,6 +753,7 @@ def register_routes(prompt_server: Any, services: BackendServices) -> RouteHandl
     handlers = build_route_handlers(services)
     routes = getattr(prompt_server, "instance", prompt_server).routes
     routes.get("/sugarcubes/list")(handlers.list_cubes)
+    routes.get("/sugarcubes/picker_catalog")(handlers.list_picker_catalog)
     routes.get("/sugarcubes/identity_policy")(handlers.get_identity_policy)
     routes.patch("/sugarcubes/identity_policy")(handlers.update_identity_policy)
     routes.get("/sugarcubes/repos")(handlers.list_tracked_repos)

@@ -27,13 +27,37 @@ describe('CubeAuthoringHostCommands', () => {
       createEmptyCube,
     );
 
-    expect(adapter.getCanvasMenuItems({ selectedItems: { size: 0 } })).toEqual([
+    expect(adapter.getCanvasMenuItems({ selectedItems: new Set() })).toEqual([
       expect.objectContaining({ content: 'Create Empty SugarCube' }),
     ]);
-    const items = adapter.getCanvasMenuItems({ selectedItems: { size: 1 } });
+    const selectedSubgraph = { isSubgraphNode: () => true, subgraph: {} };
+    const items = adapter.getCanvasMenuItems({ selectedItems: new Set([selectedSubgraph]) });
     items.forEach((entry) => entry.callback?.());
     expect(createEmptyCube).toHaveBeenCalledTimes(1);
     expect(createCubeFromSelection).toHaveBeenCalledTimes(1);
     expect(createCubeFromSubgraph).toHaveBeenCalledTimes(1);
+  });
+
+  test('does not offer Subgraph-to-Cube conversion for an existing Cube', () => {
+    const adapter = new CubeAuthoringHostCommands(jest.fn(), jest.fn(), jest.fn());
+    const cube = {
+      id: 'cube-1',
+      pos: [0, 0],
+      size: [720, 480],
+      properties: {
+        sugarcubes_kind: 'cube',
+        sugarcubes_cube: { instance_id: 'cube-1' },
+      },
+      inputs: [],
+      outputs: [],
+      subgraph: { id: 'definition', name: 'Cube', _nodes: [], inputs: [], outputs: [] },
+      isSubgraphNode: () => true,
+      connect() {},
+      serialize: () => ({}),
+    };
+
+    expect(
+      adapter.getCanvasMenuItems({ selectedItems: new Set([cube]) }).map((item) => item.content),
+    ).not.toContain('Convert Selected Subgraph to SugarCube');
   });
 });

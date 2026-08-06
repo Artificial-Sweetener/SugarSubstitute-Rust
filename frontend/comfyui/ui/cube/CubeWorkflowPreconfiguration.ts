@@ -19,19 +19,26 @@ import {
   LegacyCubeWorkflowExtractor,
   type LegacyCubeMigrationBatch,
 } from './migration/LegacyCubeWorkflowExtractor.js';
+import { CubeSerializedDefinitionPresentationAdapter } from './CubeSerializedDefinitionPresentationAdapter.js';
 
 /** Own the serialized workflow phase and its one pending legacy migration batch. */
 export class CubeWorkflowPreconfiguration {
   readonly #legacyExtractor: LegacyCubeWorkflowExtractor;
+  readonly #definitionPresentation: CubeSerializedDefinitionPresentationAdapter;
   #legacyBatch: LegacyCubeMigrationBatch | null = null;
 
   /** Bind the focused legacy extraction collaborator. */
-  constructor(legacyExtractor = new LegacyCubeWorkflowExtractor()) {
+  constructor(
+    legacyExtractor = new LegacyCubeWorkflowExtractor(),
+    definitionPresentation = new CubeSerializedDefinitionPresentationAdapter(),
+  ) {
     this.#legacyExtractor = legacyExtractor;
+    this.#definitionPresentation = definitionPresentation;
   }
 
   /** Detach legacy records before graph construction. */
   prepare(workflow: unknown): number {
+    this.#definitionPresentation.prepare(workflow);
     const batch = this.#legacyExtractor.extractInPlace(workflow);
     this.#legacyBatch = batch.plans.length > 0 ? batch : null;
     return batch.plans.length;

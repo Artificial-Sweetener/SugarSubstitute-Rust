@@ -20,6 +20,9 @@ import type { MockSidebarTab } from './mocks/app.js';
 function setupCanvas() {
   return {
     graph: { onNodeAdded: () => {}, onNodeRemoved: () => {}, onNodeConnectionChange: () => {} },
+    selectedItems: new Set(),
+    getNodeMenuOptions: () => [],
+    getCanvasMenuOptions: () => [],
     onAfterChange: () => {},
     onDrawForeground: () => {},
     onDrawBackground: () => {},

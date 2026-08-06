@@ -22,6 +22,88 @@ import { layoutCubeCanvasChrome } from '../../frontend/comfyui/ui/surface/CubeCa
 import { createDefaultCubeSurfaceState } from '../../frontend/comfyui/ui/surface/CubeSurfaceState.js';
 
 describe('computeCubeCanvasLayout', () => {
+  test('fits two masonry columns beside the default preview at fresh input-output size', () => {
+    const state = createDefaultCubeSurfaceState();
+    const innerNodes = [
+      {
+        id: 'first',
+        type: 'FirstNode',
+        pos: [0, 0],
+        size: [240, 100],
+        widgets: [{ name: 'first_value', computeSize: () => [240, 40] }],
+        inputs: [],
+        outputs: [],
+        properties: {},
+        connect() {},
+      },
+      {
+        id: 'second',
+        type: 'SecondNode',
+        pos: [260, 0],
+        size: [240, 100],
+        widgets: [{ name: 'second_value', computeSize: () => [240, 40] }],
+        inputs: [],
+        outputs: [],
+        properties: {},
+        connect() {},
+      },
+    ];
+    const cube = cubeNode(innerNodes[0]!);
+    cube.subgraph._nodes = innerNodes;
+    cube.size = [920, 600];
+    const input = { name: 'model', type: 'MODEL' };
+    const output = { name: 'image', type: 'IMAGE' };
+    cube.inputs = [input];
+    cube.subgraph.inputs = [input];
+    cube.outputs = [output];
+    cube.subgraph.outputs = [output];
+
+    const layout = computeCubeCanvasLayout(cube, state, 30);
+
+    expect(layout.masonry.width).toBe(504);
+    expect(layout.preview?.width).toBe(320);
+    expect(layout.cards.map((card) => card.rect.x)).toEqual([184, 442]);
+  });
+
+  test('keeps the authored preview rail when the Cube advertises no output sockets', () => {
+    const state = createDefaultCubeSurfaceState();
+    state.preview.width = 513.6844451311475;
+    const innerNodes = [
+      {
+        id: 'first',
+        type: 'FirstNode',
+        pos: [0, 0],
+        size: [240, 100],
+        widgets: [{ name: 'first_value', computeSize: () => [240, 40] }],
+        inputs: [],
+        outputs: [],
+        properties: {},
+        connect() {},
+      },
+      {
+        id: 'second',
+        type: 'SecondNode',
+        pos: [260, 0],
+        size: [240, 100],
+        widgets: [{ name: 'second_value', computeSize: () => [240, 40] }],
+        inputs: [],
+        outputs: [],
+        properties: {},
+        connect() {},
+      },
+    ];
+    const cube = cubeNode(innerNodes[0]!);
+    cube.subgraph._nodes = innerNodes;
+    cube.size = [1_030, 600];
+
+    const layout = computeCubeCanvasLayout(cube, state, 30);
+
+    expect(layout.outputs).toEqual([]);
+    expect(layout.preview?.width).toBeCloseTo(513.6844451311475);
+    expect(layout.masonry.width).toBeCloseTo(492.3155548688525);
+    expect(new Set(layout.cards.map((card) => card.rect.x)).size).toBe(2);
+  });
+
   test('measures native widgets without changing internal graph state', () => {
     const inputs = [{ name: 'model' }, { name: 'positive' }, { name: 'negative' }];
     const outputs = [{ name: 'LATENT' }];
@@ -231,7 +313,7 @@ describe('computeCubeCanvasLayout', () => {
 
     expect(layout.inputs).toEqual([]);
     expect(layout.outputs).toEqual([]);
-    expect(layout.preview).toBeNull();
+    expect(layout.preview?.width).toBe(320);
     expect(layout.inputGutter.width).toBe(0);
     expect(layout.outputGutter.width).toBe(0);
   });

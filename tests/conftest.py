@@ -140,6 +140,7 @@ def backend_services_factory() -> BackendServicesFactory:
         CubeIdentityRedirectService,
         CubeLibraryService,
         CubeLoadService,
+        CubePickerCatalogService,
         CubeMetadataService,
         CubePromotionService,
         CubeRevisionService,
@@ -248,6 +249,14 @@ def backend_services_factory() -> BackendServicesFactory:
             prepare_cube_import=prepare_cube_import or default_prepared,
             redirect_service=redirects,
         )
+        picker_catalog = CubePickerCatalogService(
+            list_catalog=library.list_library_catalog,
+            load_cube=lambda cube_id: loader.load_cube(
+                cube_id=cube_id,
+                version_pin="",
+                drop_origin=(0.0, 0.0),
+            ),
+        )
         exporter = CubeExportService(
             library,
             export_cubes=export_cubes or (lambda *args, **kwargs: []),
@@ -291,6 +300,7 @@ def backend_services_factory() -> BackendServicesFactory:
         )
         return BackendServices(
             library=library,
+            picker_catalog=picker_catalog,
             tracked_repos=tracked_repos,
             identity=identity,
             ownership=ownership,

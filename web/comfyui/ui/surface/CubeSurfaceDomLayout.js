@@ -17,8 +17,8 @@
 import { computeCubeMasonry } from './CubeMasonryLayout.js';
 import { resolveCubeSurfaceMinimumHeight } from './CubeSurfaceMinimumHeight.js';
 import { resolveCubeSurfaceCardSpacing } from './CubeSurfaceSpacing.js';
+import { CUBE_DOM_SURFACE_SECTION_GAP } from './CubeSurfaceGeometry.js';
 import { clampCubePreviewWidth, resolveCubePreviewWidthRange, } from './CubePreviewResizeGeometry.js';
-const CONTENT_GAP = 8;
 const DEFAULT_CARD_HEIGHT = 120;
 const MINIMUM_SIDE_PREVIEW_WIDTH = 240;
 const STACKED_PREVIEW_MINIMUM_HEIGHT = 160;
@@ -27,13 +27,14 @@ export function layoutCubeSurfaceDom(options) {
     const safeWidth = Number.isFinite(options.width) ? Math.max(1, options.width) : 1;
     const spacing = resolveCubeSurfaceCardSpacing(options.state);
     const minimumMasonryWidth = Math.min(safeWidth, Math.max(1, options.state.minimumColumnWidth));
-    const previewEnabled = options.state.preview.visible && (options.previewAvailable ?? true);
-    const previewWidthRange = resolveCubePreviewWidthRange(safeWidth, minimumMasonryWidth, CONTENT_GAP);
-    const canShowPreviewRail = previewEnabled && safeWidth >= minimumMasonryWidth + MINIMUM_SIDE_PREVIEW_WIDTH + CONTENT_GAP;
+    const previewEnabled = options.state.preview.visible;
+    const previewWidthRange = resolveCubePreviewWidthRange(safeWidth, minimumMasonryWidth, CUBE_DOM_SURFACE_SECTION_GAP);
+    const canShowPreviewRail = previewEnabled &&
+        safeWidth >= minimumMasonryWidth + MINIMUM_SIDE_PREVIEW_WIDTH + CUBE_DOM_SURFACE_SECTION_GAP;
     const previewWidth = canShowPreviewRail
         ? clampCubePreviewWidth(options.state.preview.width, previewWidthRange)
         : 0;
-    const masonryWidth = Math.max(1, safeWidth - (canShowPreviewRail ? previewWidth + CONTENT_GAP : 0));
+    const masonryWidth = Math.max(1, safeWidth - (canShowPreviewRail ? previewWidth + CUBE_DOM_SURFACE_SECTION_GAP : 0));
     const stackPreview = previewEnabled && !canShowPreviewRail;
     const layout = computeCubeMasonry(options.cards.map((card, index) => ({
         id: card.id,
@@ -58,7 +59,9 @@ export function layoutCubeSurfaceDom(options) {
     options.content.style.flexDirection = stackPreview ? 'column' : 'row';
     options.content.style.gap = canShowPreviewRail ? '0px' : '';
     options.previewDivider.hidden = !canShowPreviewRail;
-    options.previewDivider.style.flexBasis = canShowPreviewRail ? `${String(CONTENT_GAP)}px` : '0px';
+    options.previewDivider.style.flexBasis = canShowPreviewRail
+        ? `${String(CUBE_DOM_SURFACE_SECTION_GAP)}px`
+        : '0px';
     options.previewRail.style.width = `${stackPreview ? safeWidth : previewWidth}px`;
     options.previewRail.style.height = stackPreview
         ? `${String(STACKED_PREVIEW_MINIMUM_HEIGHT)}px`
@@ -66,7 +69,7 @@ export function layoutCubeSurfaceDom(options) {
     options.previewRail.style.minHeight = '0px';
     options.previewRail.hidden = !previewEnabled;
     const stackedPreviewHeight = stackPreview
-        ? (layout.height > 0 ? CONTENT_GAP : 0) + STACKED_PREVIEW_MINIMUM_HEIGHT
+        ? (layout.height > 0 ? CUBE_DOM_SURFACE_SECTION_GAP : 0) + STACKED_PREVIEW_MINIMUM_HEIGHT
         : 0;
     const minimumHeight = resolveCubeSurfaceMinimumHeight({
         contentHeight: layout.height + stackedPreviewHeight,

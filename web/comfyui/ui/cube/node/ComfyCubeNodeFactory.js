@@ -19,20 +19,17 @@ const DEFAULT_SIZE = [720, 480];
 const MINIMUM_SIZE = [320, 180];
 /** Own the narrow integration boundary between Cube semantics and native nodes. */
 export class ComfyCubeNodeFactory {
-    #graph;
     #createNode;
-    /** Bind native node construction and root-graph ownership. */
+    /** Bind native node construction without taking graph insertion ownership. */
     constructor(options) {
-        this.#graph = options.graph;
         this.#createNode = options.createNode;
     }
-    /** Create and add one registered subgraph instance as a real root node. */
+    /** Create one detached registered subgraph instance as a real native node. */
     create(configuration) {
         const candidate = this.#createNode(configuration.subgraph.id);
         const node = requireSubgraphNode(candidate, configuration.subgraph);
         node.id = requireIdentifier(configuration.instanceId);
         this.#configure(node, configuration);
-        this.#graph.add(node);
         return node;
     }
     /** Decorate Comfy's already-added selection-conversion node in place. */
@@ -64,7 +61,8 @@ export class ComfyCubeNodeFactory {
 export function isCubeNode(value) {
     if (!isRecord(value) || !isRecord(value.properties))
         return false;
-    return (isCubeKind(value.properties.sugarcubes_kind) &&
+    return (!isSugarMarkedBlueprintNode(value) &&
+        isCubeKind(value.properties.sugarcubes_kind) &&
         typeof value.isSubgraphNode === 'function' &&
         value.isSubgraphNode.call(value) === true &&
         isNativeSubgraph(value.subgraph) &&
@@ -74,6 +72,18 @@ export function isCubeNode(value) {
         Array.isArray(value.outputs) &&
         typeof value.connect === 'function' &&
         typeof value.serialize === 'function');
+}
+/** Detect a legacy Blueprint wrapper that retained Sugar markers after native publish. */
+export function isSugarMarkedBlueprintNode(value) {
+    if (!isRecord(value) || !isRecord(value.properties))
+        return false;
+    const constructor = Reflect.get(value, 'constructor');
+    const comfyClass = (typeof constructor === 'object' && constructor !== null) || typeof constructor === 'function'
+        ? Reflect.get(constructor, 'comfyClass')
+        : undefined;
+    return (typeof comfyClass === 'string' &&
+        comfyClass.startsWith('SubgraphBlueprint.') &&
+        isCubeKind(value.properties.sugarcubes_kind));
 }
 /** Return whether the native Cube face represents a workflow-only draft. */
 export function isDraftCubeNode(value) {

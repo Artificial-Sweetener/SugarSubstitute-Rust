@@ -30,6 +30,7 @@ describe('LegacyCubeContainerMigrationAdapter', () => {
     const target = connectableNode('target', 1, 0);
     const graph: LegacyCubeContainerMigrationGraph = {
       subgraphs: new Map([[subgraph.id, subgraph]]),
+      add: jest.fn(),
       onConfigure: jest.fn(),
       onSerialize: jest.fn(),
       getNodeById: jest.fn((id: string | number) =>
@@ -58,6 +59,7 @@ describe('LegacyCubeContainerMigrationAdapter', () => {
       identity: { cube_id: 'local/legacy.cube', instance_id: 'legacy-cube' },
       surface: { schema: 1, revealed: true },
     });
+    expect(graph.add).toHaveBeenCalledWith(cube);
     expect(origin.connect).toHaveBeenCalledWith(0, cube, 0);
     expect(cube.connect).toHaveBeenCalledWith(0, target, 0);
 
@@ -75,6 +77,7 @@ describe('LegacyCubeContainerMigrationAdapter', () => {
     const create = jest.fn(() => cube);
     const graph: LegacyCubeContainerMigrationGraph = {
       subgraphs: new Map([[subgraph.id, subgraph]]),
+      add: jest.fn(),
       getNodeById: jest.fn(() => null),
     };
     const adapter = new LegacyCubeContainerMigrationAdapter({

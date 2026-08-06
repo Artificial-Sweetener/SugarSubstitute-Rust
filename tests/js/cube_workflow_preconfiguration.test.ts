@@ -19,18 +19,25 @@ import { jest } from '@jest/globals';
 
 import { CubeWorkflowPreconfiguration } from '../../frontend/comfyui/ui/cube/CubeWorkflowPreconfiguration.js';
 import type { LegacyCubeWorkflowExtractor } from '../../frontend/comfyui/ui/cube/migration/LegacyCubeWorkflowExtractor.js';
+import type { CubeSerializedDefinitionPresentationAdapter } from '../../frontend/comfyui/ui/cube/CubeSerializedDefinitionPresentationAdapter.js';
 
 describe('CubeWorkflowPreconfiguration', () => {
   test('transfers legacy extraction exactly once without registering node types', () => {
     const batch = { plans: [{ key: 'legacy' }], connections: [], warnings: [] };
     const extractInPlace = jest.fn(() => batch);
-    const service = new CubeWorkflowPreconfiguration({
-      extractInPlace,
-    } as unknown as LegacyCubeWorkflowExtractor);
+    const prepareDefinitions = jest.fn(() => 1);
+    const service = new CubeWorkflowPreconfiguration(
+      { extractInPlace } as unknown as LegacyCubeWorkflowExtractor,
+      { prepare: prepareDefinitions } as unknown as CubeSerializedDefinitionPresentationAdapter,
+    );
     const workflow = {};
 
     expect(service.prepare(workflow)).toBe(1);
+    expect(prepareDefinitions).toHaveBeenCalledWith(workflow);
     expect(extractInPlace).toHaveBeenCalledWith(workflow);
+    expect(prepareDefinitions.mock.invocationCallOrder[0]).toBeLessThan(
+      extractInPlace.mock.invocationCallOrder[0]!,
+    );
     expect(service.takeLegacyBatch()).toBe(batch);
     expect(service.takeLegacyBatch()).toBeNull();
   });

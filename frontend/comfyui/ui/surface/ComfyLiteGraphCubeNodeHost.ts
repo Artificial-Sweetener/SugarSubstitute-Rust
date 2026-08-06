@@ -61,6 +61,7 @@ import { filterCubePreviewOutputs } from './CubePreviewModel.js';
 import { ComfyLiteGraphCubeFaceProjectionHost } from './ComfyLiteGraphCubeFaceProjectionHost.js';
 import type { CubePreviewActions } from './CubePreviewActions.js';
 import { ComfyLiteGraphCubeDropTargetBridge } from './ComfyLiteGraphCubeDropTargetBridge.js';
+import { CubePreviewFrameResizePolicy } from './CubePreviewFrameResizePolicy.js';
 
 export interface LiteGraphCubeNodeCanvas
   extends LiteGraphCubeDrawHost,
@@ -140,6 +141,7 @@ export class ComfyLiteGraphCubeNodeHost {
   readonly #faceProjections: ComfyLiteGraphCubeFaceProjectionHost;
   readonly #dropTargets = new ComfyLiteGraphCubeDropTargetBridge();
   readonly #hooks = new Map<CubeNode, MountedDrawHooks>();
+  readonly #previewFrameResizePolicies = new Map<CubeNode, CubePreviewFrameResizePolicy>();
   #enabled = false;
   #promptGeometryQueued = false;
   #items: RenderItem[] = [];
@@ -213,6 +215,7 @@ export class ComfyLiteGraphCubeNodeHost {
       onCardActivationChange: (node, internalNode, enabled) =>
         this.#updateSurface(node, (state) => setCubeFaceNodeEnabled(state, internalNode, enabled)),
       onPreviewWidthChange: (node, width) => this.#writePreviewWidth(node, width),
+      onGeometryChange: (node) => this.#synchronizeLiveGeometry(node),
     });
   }
 
@@ -340,6 +343,7 @@ export class ComfyLiteGraphCubeNodeHost {
     }
     this.#boundaryHost.release(node);
     this.#portPresentation?.release(node);
+    this.#previewFrameResizePolicies.delete(node);
     this.#hooks.delete(node);
   }
 
@@ -347,6 +351,7 @@ export class ComfyLiteGraphCubeNodeHost {
   #abandonLostHooks(node: CubeNode): void {
     this.#boundaryHost.release(node);
     this.#portPresentation?.release(node);
+    this.#previewFrameResizePolicies.delete(node);
     this.#hooks.delete(node);
   }
 
@@ -365,6 +370,26 @@ export class ComfyLiteGraphCubeNodeHost {
       titlebarActionKeys,
       externalInterface,
     );
+    const previewFrameResize =
+      this.#previewFrameResizePolicies.get(node) ?? new CubePreviewFrameResizePolicy();
+    this.#previewFrameResizePolicies.set(node, previewFrameResize);
+    const resizedPreviewWidth = previewFrameResize.resolve({
+      frameWidth: layout.frame.width,
+      previewWidth: layout.preview?.width ?? state.preview.width,
+      range: layout.previewWidthRange,
+      active: layout.preview !== null,
+    });
+    if (layout.preview && Math.abs(resizedPreviewWidth - layout.preview.width) >= 0.5) {
+      state.preview.width = resizedPreviewWidth;
+      replaceRecord(requireCubeSurface(node), serializeCubeSurfaceState(state));
+      layout = computeCubeCanvasLayout(
+        node,
+        state,
+        this.#titleHeight,
+        titlebarActionKeys,
+        externalInterface,
+      );
+    }
     if (
       enforceCubeNodeMinimumSize(node, [Math.max(1, Number(node.size[0])), layout.minimumSize[1]])
     ) {
@@ -457,6 +482,15 @@ export class ComfyLiteGraphCubeNodeHost {
     replaceRecord(surface, serializeCubeSurfaceState(state));
     this.#nodes.changed(node);
     this.#refresh();
+  }
+
+  /** Move native sockets before Comfy paints links for the next resize frame. */
+  #synchronizeLiveGeometry(node: CubeNode): void {
+    const item = this.#renderItem(node);
+    this.#replaceItem(item);
+    this.#domWidgets.sync(this.#items);
+    this.#faceProjections.sync(this.#items);
+    this.#syncDropTargets();
   }
 
   /** Request one native canvas repaint. */

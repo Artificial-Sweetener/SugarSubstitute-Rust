@@ -24,6 +24,7 @@ import { layoutCubeSurfaceDom } from './CubeSurfaceDomLayout.js';
 import { NativeCardGeometryObserver } from './NativeCardGeometryObserver.js';
 import { createResolvedCubeIconElement } from '../core/CubeIconResolver.js';
 import { createCubeUnsavedIndicator } from './CubeUnsavedIndicator.js';
+import { CubePreviewFrameResizePolicy } from './CubePreviewFrameResizePolicy.js';
 /** Own DOM composition, actions, and responsive geometry for one Cube face. */
 export class CubeSurfaceView {
     element;
@@ -42,10 +43,10 @@ export class CubeSurfaceView {
     #previewView;
     #geometryObserver;
     #previewDividerController;
+    #previewFrameResize = new CubePreviewFrameResizePolicy();
     #cells = [];
     #visibleCards = [];
     #lastLayoutWidth = 1;
-    #previewAvailable = true;
     /** Build a Cube view without assuming ownership of Comfy's renderer service. */
     constructor(options) {
         this.#state = options.state;
@@ -131,19 +132,31 @@ export class CubeSurfaceView {
         this.element.style.setProperty('--sugarcubes-cube-input-gutter-width', `${String(Math.max(0, inputWidth))}px`);
         this.element.style.setProperty('--sugarcubes-cube-output-gutter-width', `${String(Math.max(0, outputWidth))}px`);
     }
-    /** Hide preview presentation when no authored output is exposed externally. */
-    setPreviewAvailable(available) {
-        if (this.#previewAvailable === available)
-            return;
-        this.#previewAvailable = available;
-        this.layout(this.#lastLayoutWidth);
-    }
-    /** Reflow masonry columns and the preview rail for the Cube's current width. */
+    /** Reflow while assigning ordinary outer width changes to the preview rail. */
     layout(width) {
         const safeWidth = Number.isFinite(width) ? Math.max(1, width) : 1;
         this.#lastLayoutWidth = safeWidth;
-        const result = layoutCubeSurfaceDom({
-            width: safeWidth,
+        let result = this.#applyLayout(safeWidth);
+        const resizedPreviewWidth = this.#previewFrameResize.resolve({
+            frameWidth: safeWidth,
+            previewWidth: result.previewWidth,
+            range: result.previewWidthRange,
+            active: result.previewResizable,
+        });
+        if (Math.abs(resizedPreviewWidth - result.previewWidth) >= 0.5) {
+            this.#state.preview.width = resizedPreviewWidth;
+            result = this.#applyLayout(safeWidth);
+            this.#onStateChange(this.#state);
+        }
+        if (result.minimumHeight !== null) {
+            this.#onMinimumHeightChange?.(result.minimumHeight);
+        }
+        this.#previewDividerController?.setGeometry(result.previewWidth, result.previewWidthRange, result.previewResizable);
+    }
+    /** Apply one DOM layout pass without owning allocation policy. */
+    #applyLayout(width) {
+        return layoutCubeSurfaceDom({
+            width,
             state: this.#state,
             cards: this.#visibleCards,
             cells: this.#cells,
@@ -151,12 +164,7 @@ export class CubeSurfaceView {
             masonry: this.#masonry,
             previewDivider: this.#previewDivider,
             previewRail: this.#previewRail,
-            previewAvailable: this.#previewAvailable,
         });
-        if (result.minimumHeight !== null) {
-            this.#onMinimumHeightChange?.(result.minimumHeight);
-        }
-        this.#previewDividerController?.setGeometry(result.previewWidth, result.previewWidthRange, result.previewResizable);
     }
     /** Remove native card mounts owned by this view. */
     dispose() {

@@ -28,6 +28,12 @@ export interface ComfyNodeDefinition {
 
 export interface ComfyExtension {
   name: string;
+  addCustomNodeDefs?(
+    definitions: Record<string, ComfyNodeDefinition>,
+    app: ComfyApp,
+  ): void | Promise<void>;
+  beforeRegisterVueAppNodeDefs?(definitions: ComfyNodeDefinition[], app: ComfyApp): void;
+  registerCustomNodes?(app: ComfyApp): void | Promise<void>;
   setup?(): void | Promise<void>;
   beforeRegisterNodeDef?(nodeType: ComfyNodeConstructor, nodeData: ComfyNodeDefinition): void;
   nodeCreated?(node: ComfyNode): void;
@@ -39,6 +45,8 @@ export interface ComfyExtension {
 export interface ComfyApp {
   graph: ComfyGraph;
   registerExtension(extension: ComfyExtension): void;
+  registerNodeDef?(type: string, definition: ComfyNodeDefinition): unknown | Promise<unknown>;
+  reloadNodeDefs?(): unknown | Promise<unknown>;
 }
 
 export const app: ComfyApp;

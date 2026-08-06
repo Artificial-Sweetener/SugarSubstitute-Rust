@@ -40,33 +40,25 @@ export interface CubeNodeConfiguration {
   kind?: 'cube' | 'draft';
 }
 
-export interface CubeNodeGraph {
-  add(node: CubeNode): void;
-}
-
 export interface ComfyCubeNodeFactoryOptions {
-  graph: CubeNodeGraph;
   createNode(type: string): NativeGraphNode | null;
 }
 
 /** Own the narrow integration boundary between Cube semantics and native nodes. */
 export class ComfyCubeNodeFactory {
-  readonly #graph: CubeNodeGraph;
   readonly #createNode: (type: string) => NativeGraphNode | null;
 
-  /** Bind native node construction and root-graph ownership. */
+  /** Bind native node construction without taking graph insertion ownership. */
   constructor(options: ComfyCubeNodeFactoryOptions) {
-    this.#graph = options.graph;
     this.#createNode = options.createNode;
   }
 
-  /** Create and add one registered subgraph instance as a real root node. */
+  /** Create one detached registered subgraph instance as a real native node. */
   create(configuration: CubeNodeConfiguration): CubeNode {
     const candidate = this.#createNode(configuration.subgraph.id);
     const node = requireSubgraphNode(candidate, configuration.subgraph);
     node.id = requireIdentifier(configuration.instanceId);
     this.#configure(node, configuration);
-    this.#graph.add(node);
     return node;
   }
 
@@ -101,6 +93,7 @@ export class ComfyCubeNodeFactory {
 export function isCubeNode(value: unknown): value is CubeNode {
   if (!isRecord(value) || !isRecord(value.properties)) return false;
   return (
+    !isSugarMarkedBlueprintNode(value) &&
     isCubeKind(value.properties.sugarcubes_kind) &&
     typeof value.isSubgraphNode === 'function' &&
     value.isSubgraphNode.call(value) === true &&
@@ -111,6 +104,21 @@ export function isCubeNode(value: unknown): value is CubeNode {
     Array.isArray(value.outputs) &&
     typeof value.connect === 'function' &&
     typeof value.serialize === 'function'
+  );
+}
+
+/** Detect a legacy Blueprint wrapper that retained Sugar markers after native publish. */
+export function isSugarMarkedBlueprintNode(value: unknown): boolean {
+  if (!isRecord(value) || !isRecord(value.properties)) return false;
+  const constructor = Reflect.get(value, 'constructor');
+  const comfyClass =
+    (typeof constructor === 'object' && constructor !== null) || typeof constructor === 'function'
+      ? Reflect.get(constructor, 'comfyClass')
+      : undefined;
+  return (
+    typeof comfyClass === 'string' &&
+    comfyClass.startsWith('SubgraphBlueprint.') &&
+    isCubeKind(value.properties.sugarcubes_kind)
   );
 }
 

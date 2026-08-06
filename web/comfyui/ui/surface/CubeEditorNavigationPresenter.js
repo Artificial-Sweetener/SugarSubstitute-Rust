@@ -14,9 +14,10 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Coordinate Cube editor sessions around Comfy's native graph editor. */
-import { isRecord } from '../types/common.js';
 import { readInstanceId } from '../cube/node/CubeNodeCatalog.js';
+import { isRecord } from '../types/common.js';
 import { EMPTY_CUBE_BOUNDARY_VIEWPORT_BOUNDS } from '../cube/geometry/NativeCubeBoundaryLayout.js';
+import { CubeEditorContextResolver } from './CubeEditorContextResolver.js';
 const DRAFT_FRAME_ATTEMPTS = 12;
 /** Preserve Cube editing context without replacing Comfy's native graph navigation. */
 export class CubeEditorNavigationPresenter {
@@ -24,6 +25,7 @@ export class CubeEditorNavigationPresenter {
     #rootGraph;
     #getCurrentGraph;
     #nodes;
+    #contexts;
     #scheduleFrame;
     #metadataHud;
     #unsubscribeGraphChanges;
@@ -42,6 +44,7 @@ export class CubeEditorNavigationPresenter {
         this.#rootGraph = options.rootGraph;
         this.#getCurrentGraph = options.getCurrentGraph;
         this.#nodes = options.nodes;
+        this.#contexts = options.contexts ?? new CubeEditorContextResolver(options.nodes);
         this.#scheduleFrame = options.scheduleFrame ?? scheduleBrowserFrame;
         this.#metadataHud = options.metadataHud ?? null;
         this.#unsubscribeGraphChanges =
@@ -142,12 +145,13 @@ export class CubeEditorNavigationPresenter {
                 ? {
                     node: activeNode,
                     path: this.#reconcileSessionPath(activeNode, currentGraph),
+                    isCubeRoot: sameGraph(activeNode.subgraph, currentGraph),
                 }
-                : findEditorContext(this.#nodes.list(), currentGraph)
+                : this.#contexts.resolveEditor(currentGraph)
             : null;
         if (context && currentGraph) {
             this.#activeCubeInstanceId = readInstanceId(context.node);
-            this.#sessionPath = context.path;
+            this.#sessionPath = [...context.path];
             this.#scheduleEmptyCubeFrameFromActiveGraph(context, currentGraph);
             this.#metadataHud?.show(context.node);
         }
@@ -177,9 +181,9 @@ export class CubeEditorNavigationPresenter {
             path[visitedIndex] = currentGraph;
             return path;
         }
-        const definitionPath = findGraphPath(node.subgraph, currentGraph);
+        const definitionPath = this.#contexts.resolveEditor(currentGraph)?.path;
         if (definitionPath)
-            return definitionPath;
+            return [...definitionPath];
         const previousGraph = this.#lastGraph;
         const sessionTail = this.#sessionPath.at(-1);
         if (previousGraph && sessionTail && sameGraph(previousGraph, sessionTail)) {
@@ -200,53 +204,13 @@ function scheduleBrowserFrame(callback) {
     }
     setTimeout(callback, 0);
 }
-/** Find a current native graph within one Cube definition hierarchy. */
-function findEditorContext(nodes, currentGraph) {
-    for (const node of nodes) {
-        const path = findGraphPath(node.subgraph, currentGraph);
-        if (path)
-            return { node, path };
-    }
-    return null;
-}
-/** Traverse actual nested SubgraphNodes without projecting them onto the root. */
-function findGraphPath(graph, target, visited = new Set()) {
-    if (sameGraph(graph, target))
-        return [graph];
-    if (visited.has(graph))
-        return null;
-    visited.add(graph);
-    if (!isRecord(graph) || !Array.isArray(graph._nodes))
-        return null;
-    for (const node of graph._nodes) {
-        if (!isRecord(node) || !isRecord(node.subgraph))
-            continue;
-        const isSubgraph = typeof node.isSubgraphNode === 'function' ? node.isSubgraphNode.call(node) === true : false;
-        if (!isSubgraph)
-            continue;
-        const nestedPath = findGraphPath(node.subgraph, target, visited);
-        if (nestedPath)
-            return [graph, ...nestedPath];
-    }
-    return null;
-}
 /** Match restored Comfy subgraphs by their globally unique definition identity. */
 function sameGraph(left, right) {
     if (left === right)
         return true;
-    const leftId = readGraphId(left);
-    if (leftId && leftId === readGraphId(right))
-        return true;
-    const leftName = readGraphName(left);
-    return leftName !== 'Subgraph' && leftName === readGraphName(right);
+    return readGraphId(left) !== '' && readGraphId(left) === readGraphId(right);
 }
 /** Read one stable graph identity for render invalidation. */
 function readGraphId(graph) {
     return isRecord(graph) && typeof graph.id === 'string' ? graph.id : '';
-}
-/** Read one native subgraph name for the Cube editor trail. */
-function readGraphName(graph) {
-    return isRecord(graph) && typeof graph.name === 'string' && graph.name.trim()
-        ? graph.name.trim()
-        : 'Subgraph';
 }

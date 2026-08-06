@@ -35,6 +35,7 @@ import type { CubeIdentityPresentation } from '../cube/CubeIdentityPresentation.
 import { createResolvedCubeIconElement } from '../core/CubeIconResolver.js';
 import type { CubeFaceChromeActions, CubeFaceChromeMetadata } from './CubeFaceChromeActions.js';
 import { createCubeUnsavedIndicator } from './CubeUnsavedIndicator.js';
+import { CubePreviewFrameResizePolicy } from './CubePreviewFrameResizePolicy.js';
 
 export interface CubeSurfaceViewOptions {
   document: Document;
@@ -69,10 +70,10 @@ export class CubeSurfaceView {
   readonly #previewView: CubePreviewRailView;
   readonly #geometryObserver: NativeCardGeometryObserver;
   readonly #previewDividerController: CubePreviewDividerController | null;
+  readonly #previewFrameResize = new CubePreviewFrameResizePolicy();
   #cells: HTMLElement[] = [];
   #visibleCards: CubeFaceCardDecision[] = [];
   #lastLayoutWidth = 1;
-  #previewAvailable = true;
 
   /** Build a Cube view without assuming ownership of Comfy's renderer service. */
   constructor(options: CubeSurfaceViewOptions) {
@@ -184,28 +185,22 @@ export class CubeSurfaceView {
     );
   }
 
-  /** Hide preview presentation when no authored output is exposed externally. */
-  setPreviewAvailable(available: boolean): void {
-    if (this.#previewAvailable === available) return;
-    this.#previewAvailable = available;
-    this.layout(this.#lastLayoutWidth);
-  }
-
-  /** Reflow masonry columns and the preview rail for the Cube's current width. */
+  /** Reflow while assigning ordinary outer width changes to the preview rail. */
   layout(width: number): void {
     const safeWidth = Number.isFinite(width) ? Math.max(1, width) : 1;
     this.#lastLayoutWidth = safeWidth;
-    const result = layoutCubeSurfaceDom({
-      width: safeWidth,
-      state: this.#state,
-      cards: this.#visibleCards,
-      cells: this.#cells,
-      content: this.#content,
-      masonry: this.#masonry,
-      previewDivider: this.#previewDivider,
-      previewRail: this.#previewRail,
-      previewAvailable: this.#previewAvailable,
+    let result = this.#applyLayout(safeWidth);
+    const resizedPreviewWidth = this.#previewFrameResize.resolve({
+      frameWidth: safeWidth,
+      previewWidth: result.previewWidth,
+      range: result.previewWidthRange,
+      active: result.previewResizable,
     });
+    if (Math.abs(resizedPreviewWidth - result.previewWidth) >= 0.5) {
+      this.#state.preview.width = resizedPreviewWidth;
+      result = this.#applyLayout(safeWidth);
+      this.#onStateChange(this.#state);
+    }
     if (result.minimumHeight !== null) {
       this.#onMinimumHeightChange?.(result.minimumHeight);
     }
@@ -214,6 +209,20 @@ export class CubeSurfaceView {
       result.previewWidthRange,
       result.previewResizable,
     );
+  }
+
+  /** Apply one DOM layout pass without owning allocation policy. */
+  #applyLayout(width: number): ReturnType<typeof layoutCubeSurfaceDom> {
+    return layoutCubeSurfaceDom({
+      width,
+      state: this.#state,
+      cards: this.#visibleCards,
+      cells: this.#cells,
+      content: this.#content,
+      masonry: this.#masonry,
+      previewDivider: this.#previewDivider,
+      previewRail: this.#previewRail,
+    });
   }
 
   /** Remove native card mounts owned by this view. */

@@ -52,6 +52,12 @@ const requestOptions = { headers: { 'Content-Type': 'application/json' } };
 
 const endpointCases: EndpointCase[] = [
   ['list', (api) => api.list({ cache: 'reload' }), '/sugarcubes/list', { cache: 'reload' }],
+  [
+    'picker catalog',
+    (api) => api.listPickerCatalog({ cache: 'reload' }),
+    '/sugarcubes/picker_catalog',
+    { cache: 'reload' },
+  ],
   ['tracked repos', (api) => api.listTrackedRepos(), '/sugarcubes/repos', {}],
   ['identity policy', (api) => api.getIdentityPolicy(), '/sugarcubes/identity_policy', {}],
   [

@@ -247,6 +247,62 @@ describe('ComfyVueCubeNodeHost', () => {
     expect(requestSlotLayoutSync).toHaveBeenCalledTimes(2);
     host.dispose();
   });
+
+  test('observes the live and replacement native bodies that own output leader width', async () => {
+    const { root, body } = nativeCubeRoot('cube-node');
+    const observed = new Set<Element>();
+    let notify: ResizeObserverCallback = () => undefined;
+    const disconnect = jest.fn();
+    class TestResizeObserver {
+      constructor(callback: ResizeObserverCallback) {
+        notify = callback;
+      }
+
+      observe(element: Element): void {
+        observed.add(element);
+      }
+
+      disconnect(): void {
+        disconnect();
+      }
+    }
+    const originalResizeObserver = window.ResizeObserver;
+    window.ResizeObserver = TestResizeObserver as unknown as typeof ResizeObserver;
+    const onGeometryChange = jest.fn();
+    const host = new ComfyVueCubeNodeHost({
+      document,
+      titleHeight: 30,
+      history: {},
+      getScale: () => 1,
+      onGeometryChange,
+      requestSlotLayoutSync: () => undefined,
+    });
+    const node = cubeNode('cube-node');
+
+    try {
+      host.mount(node);
+
+      expect(observed).toEqual(new Set([root, body]));
+      const replacementBody = body.cloneNode(false) as HTMLDivElement;
+      const replacementRow = document.createElement('div');
+      const replacementInput = document.createElement('div');
+      replacementInput.className = 'lg-slot lg-slot--input';
+      replacementRow.append(replacementInput);
+      replacementBody.append(replacementRow);
+      body.replaceWith(replacementBody);
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(observed).toContain(replacementBody);
+      notify([], {} as ResizeObserver);
+      expect(onGeometryChange).toHaveBeenCalledWith(node);
+
+      host.dispose();
+      expect(disconnect).toHaveBeenCalledTimes(1);
+    } finally {
+      window.ResizeObserver = originalResizeObserver;
+    }
+  });
 });
 
 /** Create one host with inert graph collaborators. */

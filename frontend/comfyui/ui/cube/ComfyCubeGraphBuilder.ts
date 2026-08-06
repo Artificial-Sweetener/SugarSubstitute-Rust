@@ -34,6 +34,7 @@ import type {
 import { buildCubePayloadTopology } from './CubePayloadTopology.js';
 import { resolveCubeInputBoundaryType } from './CubeBoundaryTypeResolver.js';
 import { deriveCubeOutputSurfaceNames } from './CubeOutputSurfaceNames.js';
+import { resolveCubeDefinitionDescription } from './node/CubeDefinitionIdentityWriter.js';
 import { attachNativeCubeAuthoredLayout } from './geometry/NativeCubeAuthoredLayout.js';
 import {
   applyEmptyCubeBoundaryLayout,
@@ -102,6 +103,7 @@ export interface CubeGraphBuilderHost {
   };
   createNode(type: string): NativeGraphNode | null;
   createUuid(): string;
+  discardSubgraph?(subgraph: NativeCubeSubgraph): void;
 }
 
 export interface BuiltCubeGraph {
@@ -120,13 +122,13 @@ export class ComfyCubeGraphBuilder {
   }
 
   /** Register a blank native definition for importing an already-defined Cube. */
-  createEmptyDefinition(title: string): NativeCubeSubgraph {
-    return this.#createSubgraph(title);
+  createEmptyDefinition(title: string, description?: string): NativeCubeSubgraph {
+    return this.#createSubgraph(title, description);
   }
 
   /** Register an authoring draft whose editor creates bindings only when wired. */
-  createEmptyDraft(title: string): NativeCubeSubgraph {
-    const subgraph = this.#createSubgraph(title);
+  createEmptyDraft(title: string, description?: string): NativeCubeSubgraph {
+    const subgraph = this.#createSubgraph(title, description);
     labelEmptyCubeBoundaryAffordances(subgraph);
     applyEmptyCubeBoundaryLayout(subgraph);
     return subgraph;
@@ -135,121 +137,136 @@ export class ComfyCubeGraphBuilder {
   /** Build and connect real nodes wholly inside a registered Comfy subgraph. */
   build(payload: ImportPayload, title: string): BuiltCubeGraph {
     const topology = buildCubePayloadTopology(payload);
-    const subgraph = this.createEmptyDefinition(title);
-    const nodesBySymbol = new Map<string, NativeGraphNode>();
-    const warnings: string[] = [];
-    const origin = readOrigin(payload);
-    attachNativeCubeAuthoredLayout(subgraph, payload);
-    const inputBoundaryNodes = new Set<NativeGraphNode>();
-    const outputBoundaryNodes = new Set<NativeGraphNode>();
-    const linkedInputs = new Set(
-      topology.nodeConnections.map(
-        ({ targetSymbol, targetInput }) => `${targetSymbol}\u0000${targetInput}`,
-      ),
-    );
-    for (const binding of topology.inputs) {
-      for (const target of binding.targets) {
-        linkedInputs.add(`${target.symbol}\u0000${target.input}`);
-      }
-    }
-
-    for (const entry of topology.nodes) {
-      const symbol = readString(entry.symbol);
-      const classType = readString(entry.class_type);
-      if (!symbol || !classType) {
-        warnings.push('Cube node entry is missing symbol or class_type.');
-        continue;
-      }
-      const node = this.#host.createNode(classType);
-      if (!node) {
-        warnings.push(`Cube node type '${classType}' is unavailable.`);
-        continue;
-      }
-      node.id = this.#host.createUuid();
-      applyAuthoredGeometry(node, entry.layout, origin);
-      node.properties.sugarcubes_symbol = symbol;
-      const titleValue = readString(entry.layout?.title);
-      if (titleValue) node.title = titleValue;
-      subgraph.add(node);
-      nodesBySymbol.set(symbol, node);
-      applyExecutionMode(node, entry.mode ?? entry.extras?.mode);
-
-      for (const [inputName, value] of Object.entries(entry.inputs ?? {})) {
-        if (!linkedInputs.has(`${symbol}\u0000${inputName}`)) {
-          applyInputValueToNode(node, inputName, value);
+    const subgraph = this.createEmptyDefinition(title, readCubeDescription(payload));
+    try {
+      const nodesBySymbol = new Map<string, NativeGraphNode>();
+      const warnings: string[] = [];
+      const origin = readOrigin(payload);
+      attachNativeCubeAuthoredLayout(subgraph, payload);
+      const inputBoundaryNodes = new Set<NativeGraphNode>();
+      const outputBoundaryNodes = new Set<NativeGraphNode>();
+      const linkedInputs = new Set(
+        topology.nodeConnections.map(
+          ({ targetSymbol, targetInput }) => `${targetSymbol}\u0000${targetInput}`,
+        ),
+      );
+      for (const binding of topology.inputs) {
+        for (const target of binding.targets) {
+          linkedInputs.add(`${target.symbol}\u0000${target.input}`);
         }
       }
-      if (entry.extras) applyExtrasToNode(node, entry.extras);
-      applyAuthoredGeometry(node, entry.layout, origin);
-    }
 
-    for (const connection of topology.nodeConnections) {
-      const source = nodesBySymbol.get(connection.sourceSymbol);
-      const target = nodesBySymbol.get(connection.targetSymbol);
-      const targetSlot = target ? resolveInputSlotIndex(target, connection.targetInput) : -1;
-      if (!source || !target || targetSlot < 0 || connection.sourceSlot >= source.outputs.length) {
-        warnings.push(
-          `Cube connection '${connection.sourceSymbol}' -> ` +
-            `'${connection.targetSymbol}.${connection.targetInput}' is unavailable.`,
+      for (const entry of topology.nodes) {
+        const symbol = readString(entry.symbol);
+        const classType = readString(entry.class_type);
+        if (!symbol || !classType) {
+          warnings.push('Cube node entry is missing symbol or class_type.');
+          continue;
+        }
+        const node = this.#host.createNode(classType);
+        if (!node) {
+          warnings.push(`Cube node type '${classType}' is unavailable.`);
+          continue;
+        }
+        node.id = this.#host.createUuid();
+        applyAuthoredGeometry(node, entry.layout, origin);
+        node.properties.sugarcubes_symbol = symbol;
+        const titleValue = readString(entry.layout?.title);
+        if (titleValue) node.title = titleValue;
+        subgraph.add(node);
+        nodesBySymbol.set(symbol, node);
+        applyExecutionMode(node, entry.mode ?? entry.extras?.mode);
+
+        for (const [inputName, value] of Object.entries(entry.inputs ?? {})) {
+          if (!linkedInputs.has(`${symbol}\u0000${inputName}`)) {
+            applyInputValueToNode(node, inputName, value);
+          }
+        }
+        if (entry.extras) applyExtrasToNode(node, entry.extras);
+        applyAuthoredGeometry(node, entry.layout, origin);
+      }
+
+      for (const connection of topology.nodeConnections) {
+        const source = nodesBySymbol.get(connection.sourceSymbol);
+        const target = nodesBySymbol.get(connection.targetSymbol);
+        const targetSlot = target ? resolveInputSlotIndex(target, connection.targetInput) : -1;
+        if (
+          !source ||
+          !target ||
+          targetSlot < 0 ||
+          connection.sourceSlot >= source.outputs.length
+        ) {
+          warnings.push(
+            `Cube connection '${connection.sourceSymbol}' -> ` +
+              `'${connection.targetSymbol}.${connection.targetInput}' is unavailable.`,
+          );
+          continue;
+        }
+        source.connect(connection.sourceSlot, target, targetSlot);
+      }
+
+      for (const input of topology.inputs) {
+        const resolvedTargets = input.targets
+          .map((target) => {
+            const node = nodesBySymbol.get(target.symbol);
+            const slotIndex = node ? resolveInputSlotIndex(node, target.input) : -1;
+            const slot = slotIndex >= 0 ? node?.inputs[slotIndex] : undefined;
+            return node && slot ? { node, slot } : null;
+          })
+          .filter(
+            (target): target is { node: NativeGraphNode; slot: ComfyInput } => target !== null,
+          );
+        const firstTarget = resolvedTargets[0];
+        if (!firstTarget) {
+          warnings.push(`Cube input '${input.name}' has no compatible internal target.`);
+          continue;
+        }
+        const boundary = subgraph.addInput(
+          input.name,
+          input.type ?? resolveCubeInputBoundaryType(resolvedTargets.map((target) => target.slot)),
         );
-        continue;
+        for (const target of resolvedTargets) boundary.connect(target.slot, target.node);
+        for (const target of resolvedTargets) inputBoundaryNodes.add(target.node);
       }
-      source.connect(connection.sourceSlot, target, targetSlot);
-    }
 
-    for (const input of topology.inputs) {
-      const resolvedTargets = input.targets
-        .map((target) => {
-          const node = nodesBySymbol.get(target.symbol);
-          const slotIndex = node ? resolveInputSlotIndex(node, target.input) : -1;
-          const slot = slotIndex >= 0 ? node?.inputs[slotIndex] : undefined;
-          return node && slot ? { node, slot } : null;
-        })
-        .filter((target): target is { node: NativeGraphNode; slot: ComfyInput } => target !== null);
-      const firstTarget = resolvedTargets[0];
-      if (!firstTarget) {
-        warnings.push(`Cube input '${input.name}' has no compatible internal target.`);
-        continue;
+      const surfaceOutputNames = deriveCubeOutputSurfaceNames(topology.outputs);
+      for (const [index, output] of topology.outputs.entries()) {
+        const source = nodesBySymbol.get(output.sourceSymbol);
+        const slot = source?.outputs[output.sourceSlot];
+        const type = output.type ?? readString(slot?.type);
+        if (!source || !slot || !type) {
+          warnings.push(`Cube output '${output.name}' has no compatible internal source.`);
+          continue;
+        }
+        subgraph.addOutput(surfaceOutputNames[index] ?? output.name, type).connect(slot, source);
+        outputBoundaryNodes.add(source);
       }
-      const boundary = subgraph.addInput(
-        input.name,
-        input.type ?? resolveCubeInputBoundaryType(resolvedTargets.map((target) => target.slot)),
-      );
-      for (const target of resolvedTargets) boundary.connect(target.slot, target.node);
-      for (const target of resolvedTargets) inputBoundaryNodes.add(target.node);
-    }
 
-    const surfaceOutputNames = deriveCubeOutputSurfaceNames(topology.outputs);
-    for (const [index, output] of topology.outputs.entries()) {
-      const source = nodesBySymbol.get(output.sourceSymbol);
-      const slot = source?.outputs[output.sourceSlot];
-      const type = output.type ?? readString(slot?.type);
-      if (!source || !slot || !type) {
-        warnings.push(`Cube output '${output.name}' has no compatible internal source.`);
-        continue;
-      }
-      subgraph.addOutput(surfaceOutputNames[index] ?? output.name, type).connect(slot, source);
-      outputBoundaryNodes.add(source);
+      subgraph.inputNode.arrange?.();
+      subgraph.outputNode.arrange?.();
+      attachNativeCubeBoundaryLayout(subgraph, inputBoundaryNodes, outputBoundaryNodes);
+      applyNativeCubeBoundaryLayout(subgraph);
+      return { subgraph, nodesBySymbol, warnings };
+    } catch (error: unknown) {
+      this.#host.discardSubgraph?.(subgraph);
+      throw error;
     }
-
-    subgraph.inputNode.arrange?.();
-    subgraph.outputNode.arrange?.();
-    attachNativeCubeBoundaryLayout(subgraph, inputBoundaryNodes, outputBoundaryNodes);
-    applyNativeCubeBoundaryLayout(subgraph);
-    return { subgraph, nodesBySymbol, warnings };
   }
 
   /** Create one native subgraph record with the boundary surface required by its use case. */
-  #createSubgraph(title: string): NativeCubeSubgraph {
-    return this.#host.rootGraph.createSubgraph(createEmptySubgraph(this.#host.createUuid(), title));
+  #createSubgraph(title: string, description?: string): NativeCubeSubgraph {
+    return this.#host.rootGraph.createSubgraph(
+      createEmptySubgraph(this.#host.createUuid(), title, description),
+    );
   }
 }
 
 /** Create the minimum current Comfy subgraph record before native mutation. */
-function createEmptySubgraph(id: string, title: string): UnknownRecord {
+function createEmptySubgraph(id: string, title: string, description?: string): UnknownRecord {
   return {
     id,
     name: title,
+    ...(description ? { description } : {}),
     inputNode: { id: -10, bounding: [...EMPTY_CUBE_INPUT_POSITION, 75, 100] },
     outputNode: { id: -20, bounding: [...EMPTY_CUBE_OUTPUT_POSITION, 75, 100] },
     inputs: [],
@@ -265,6 +282,13 @@ function createEmptySubgraph(id: string, title: string): UnknownRecord {
     groups: [],
     extra: {},
   };
+}
+
+/** Resolve imported Cube metadata before Comfy registers its generated node definition. */
+function readCubeDescription(payload: ImportPayload): string {
+  const cube = isRecord(payload.cube) ? payload.cube : {};
+  const metadata = isRecord(cube.metadata) ? { ...cube, ...cube.metadata } : cube;
+  return resolveCubeDefinitionDescription(metadata);
 }
 
 /** Apply authored editor geometry relative to the Cube graph origin. */
