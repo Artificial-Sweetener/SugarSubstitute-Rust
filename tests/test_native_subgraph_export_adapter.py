@@ -19,6 +19,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
+
 from sugarcubes.exporter import export
 from sugarcubes.exporter.graph import analyze_cubes, build_graph
 from sugarcubes.exporter.native_subgraph_adapter import (
@@ -160,6 +162,240 @@ def test_projection_builds_export_boundaries_without_mutating_live_payloads() ->
     assert list(analysis.graph.edges_from(projected_inner.id))[0].target.startswith(
         "sugarcubes:native:"
     )
+
+
+def test_projection_exports_native_output_with_its_source_slot() -> None:
+    """The native output boundary must become an explicit canonical source pair."""
+
+    internal_id = "953141f7-f9a8-4ab5-8337-861a09c07ea2"
+    graph: dict[str, Any] = {
+        f"7:{internal_id}": {
+            "class_type": "ImageScale",
+            "inputs": {"upscale_method": "nearest-exact", "scale_by": 1.0},
+            "_meta": {"title": "Scale"},
+        }
+    }
+    workflow = _workflow()
+    definition = workflow["definitions"]["subgraphs"][0]
+    definition["nodes"][0]["id"] = internal_id
+    definition["links"][0]["target_id"] = internal_id
+    definition["links"][1]["origin_id"] = internal_id
+    entries = {
+        "local/personal/Detailer.cube": {
+            "definition_id": "11111111-1111-4111-8111-111111111111",
+            "instance_node_ids": ["7"],
+            "metadata": {"default_alias": "Detailer"},
+        }
+    }
+
+    projected_graph, projected_workflow = project_native_cube_exports(
+        graph, workflow, entries
+    )
+    exported = export(
+        projected_graph,
+        workflow=projected_workflow,
+        cube_ids=["local/personal/Detailer.cube"],
+        definition_resolver=lambda _class_type: {
+            "output": ["IMAGE"],
+            "output_name": ["IMAGE"],
+        },
+    )[0]
+
+    assert exported.cube["implementation"]["outputs"] == {"output.image": ["scale", 0]}
+
+
+def test_projection_rejects_a_declared_output_whose_link_lost_its_uuid_target() -> None:
+    """A corrupted native endpoint must stop saving instead of deleting the output."""
+
+    workflow = _workflow()
+    output_link = workflow["definitions"]["subgraphs"][0]["links"][1]
+    output_link["target_id"] = 0
+    entries = {
+        "local/personal/Detailer.cube": {
+            "definition_id": "11111111-1111-4111-8111-111111111111",
+            "instance_node_ids": ["7"],
+            "metadata": {"default_alias": "Detailer"},
+        }
+    }
+
+    with pytest.raises(ValueError, match="declared output slot 0"):
+        project_native_cube_exports(
+            {
+                "7:inner": {
+                    "class_type": "ImageScale",
+                    "inputs": {},
+                }
+            },
+            workflow,
+            entries,
+        )
+
+
+def test_projection_rejects_a_declared_output_whose_link_disappeared() -> None:
+    """Declared link ids must not survive without their native boundary link."""
+
+    workflow = _workflow()
+    workflow["definitions"]["subgraphs"][0]["links"].pop()
+    entries = {
+        "local/personal/Detailer.cube": {
+            "definition_id": "11111111-1111-4111-8111-111111111111",
+            "instance_node_ids": ["7"],
+            "metadata": {"default_alias": "Detailer"},
+        }
+    }
+
+    with pytest.raises(ValueError, match="declared output slot 0"):
+        project_native_cube_exports(
+            {
+                "7:inner": {
+                    "class_type": "ImageScale",
+                    "inputs": {},
+                }
+            },
+            workflow,
+            entries,
+        )
+
+
+def test_projection_rejects_a_declared_input_whose_link_lost_its_uuid_target() -> None:
+    """Current input metadata must agree with a real internal target node."""
+
+    workflow = _workflow()
+    input_link = workflow["definitions"]["subgraphs"][0]["links"][0]
+    input_link["target_id"] = 0
+    entries = {
+        "local/personal/Detailer.cube": {
+            "definition_id": "11111111-1111-4111-8111-111111111111",
+            "instance_node_ids": ["7"],
+            "metadata": {"default_alias": "Detailer"},
+        }
+    }
+
+    with pytest.raises(ValueError, match="declared input slot 0"):
+        project_native_cube_exports(
+            {
+                "7:inner": {
+                    "class_type": "ImageScale",
+                    "inputs": {},
+                }
+            },
+            workflow,
+            entries,
+        )
+
+
+def test_projection_rejects_malformed_links_instead_of_skipping_them() -> None:
+    """Invalid host topology must not be normalized into a smaller Cube graph."""
+
+    workflow = _workflow()
+    workflow["definitions"]["subgraphs"][0]["links"][1]["origin_slot"] = "0"
+    entries = {
+        "local/personal/Detailer.cube": {
+            "definition_id": "11111111-1111-4111-8111-111111111111",
+            "instance_node_ids": ["7"],
+            "metadata": {"default_alias": "Detailer"},
+        }
+    }
+
+    with pytest.raises(ValueError, match="invalid serialized link at index 1"):
+        project_native_cube_exports(
+            {
+                "7:inner": {
+                    "class_type": "ImageScale",
+                    "inputs": {},
+                }
+            },
+            workflow,
+            entries,
+        )
+
+
+def test_projection_rejects_output_source_slot_missing_from_implementation() -> None:
+    """A boundary output cannot name a slot absent from its source node."""
+
+    workflow = _workflow()
+    definition = workflow["definitions"]["subgraphs"][0]
+    definition["links"][1]["origin_slot"] = 1
+    entries = {
+        "local/personal/Detailer.cube": {
+            "definition_id": "11111111-1111-4111-8111-111111111111",
+            "instance_node_ids": ["7"],
+            "metadata": {"default_alias": "Detailer"},
+        }
+    }
+
+    with pytest.raises(ValueError, match="source node 'inner' output slot 1"):
+        project_native_cube_exports(
+            {"7:inner": {"class_type": "ImageScale", "inputs": {}}},
+            workflow,
+            entries,
+        )
+
+
+def test_projection_rejects_input_target_slot_missing_from_implementation() -> None:
+    """A boundary input cannot name a slot absent from its target node."""
+
+    workflow = _workflow()
+    definition = workflow["definitions"]["subgraphs"][0]
+    definition["links"][0]["target_slot"] = 1
+    entries = {
+        "local/personal/Detailer.cube": {
+            "definition_id": "11111111-1111-4111-8111-111111111111",
+            "instance_node_ids": ["7"],
+            "metadata": {"default_alias": "Detailer"},
+        }
+    }
+
+    with pytest.raises(ValueError, match="target node 'inner' input slot 1"):
+        project_native_cube_exports(
+            {"7:inner": {"class_type": "ImageScale", "inputs": {}}},
+            workflow,
+            entries,
+        )
+
+
+def test_projection_rejects_link_identity_missing_from_node_endpoint() -> None:
+    """Node endpoint metadata must own every serialized topology link it uses."""
+
+    workflow = _workflow()
+    definition = workflow["definitions"]["subgraphs"][0]
+    definition["nodes"][0]["outputs"][0]["links"] = []
+    entries = {
+        "local/personal/Detailer.cube": {
+            "definition_id": "11111111-1111-4111-8111-111111111111",
+            "instance_node_ids": ["7"],
+            "metadata": {"default_alias": "Detailer"},
+        }
+    }
+
+    with pytest.raises(ValueError, match="source node 'inner' output slot 0"):
+        project_native_cube_exports(
+            {"7:inner": {"class_type": "ImageScale", "inputs": {}}},
+            workflow,
+            entries,
+        )
+
+
+def test_projection_rejects_input_link_identity_missing_from_node_endpoint() -> None:
+    """A target input must name the same serialized link as graph topology."""
+
+    workflow = _workflow()
+    definition = workflow["definitions"]["subgraphs"][0]
+    definition["nodes"][0]["inputs"][0]["link"] = 99
+    entries = {
+        "local/personal/Detailer.cube": {
+            "definition_id": "11111111-1111-4111-8111-111111111111",
+            "instance_node_ids": ["7"],
+            "metadata": {"default_alias": "Detailer"},
+        }
+    }
+
+    with pytest.raises(ValueError, match="target node 'inner' input slot 0"):
+        project_native_cube_exports(
+            {"7:inner": {"class_type": "ImageScale", "inputs": {}}},
+            workflow,
+            entries,
+        )
 
 
 def test_projection_uses_non_node_container_identity_without_root_wrapper() -> None:

@@ -20,20 +20,17 @@
 
 import { isRecord } from '../types/common.js';
 import type { Bounds, UnknownRecord, Vec2 } from '../types/common.js';
+import {
+  normalizeSubgraphLinks,
+  normalizeSubgraphSlotType,
+  readSerializedGraphId,
+  type NormalizedSubgraphLink,
+} from './SubgraphConnectionSerialization.js';
+import type { GraphId } from '../types/graph.js';
 
 interface NormalizeSubgraphOptions {
   fallbackName?: unknown;
   expectedInputNames?: readonly unknown[];
-}
-
-interface NormalizedLink extends UnknownRecord {
-  id: number;
-  origin_id: number;
-  origin_slot: number;
-  target_id: number;
-  target_slot: number;
-  type: string;
-  parentId?: number;
 }
 
 interface GraphLayoutBounds {
@@ -73,7 +70,7 @@ export interface NormalizedSubgraphPayload extends UnknownRecord {
   outputs: NormalizedSubgraphIo[];
   widgets: UnknownRecord[];
   nodes: UnknownRecord[];
-  links: NormalizedLink[];
+  links: NormalizedSubgraphLink[];
   floatingLinks: UnknownRecord[];
   reroutes: UnknownRecord[];
   groups: UnknownRecord[];
@@ -145,7 +142,7 @@ function normalizeCurrentSubgraphPayload(
   options: NormalizeSubgraphOptions,
 ): NormalizedSubgraphPayload {
   const nodes = normalizeNodeEntries(entry.nodes);
-  const links = normalizeLinkEntries(entry.links);
+  const links = normalizeSubgraphLinks(entry.links);
   const groups = normalizeObjectArray(entry.groups);
   const reroutes = normalizeObjectArray(entry.reroutes);
   const floatingLinks = normalizeObjectArray(entry.floatingLinks);
@@ -191,7 +188,7 @@ function normalizeLegacySubgraphPayload(
   options: NormalizeSubgraphOptions,
 ): NormalizedSubgraphPayload {
   const nodes = normalizeNodeEntries(entry.nodes);
-  const links = normalizeLinkEntries(entry.links);
+  const links = normalizeSubgraphLinks(entry.links);
   const groups = normalizeObjectArray(entry.groups);
   const reroutes = normalizeObjectArray(entry.reroutes);
   const layoutBounds = computeGraphBounds(nodes, groups);
@@ -223,7 +220,7 @@ function normalizeLegacySubgraphPayload(
 function normalizeGraphState(
   entry: UnknownRecord,
   nodes: readonly UnknownRecord[],
-  links: readonly NormalizedLink[],
+  links: readonly NormalizedSubgraphLink[],
   groups: readonly UnknownRecord[],
   reroutes: readonly UnknownRecord[],
 ): GraphState {
@@ -309,51 +306,6 @@ function normalizeNodeEntries(rawNodes: unknown): UnknownRecord[] {
 }
 
 /**
- * Normalize link entries into object-shaped LiteGraph links.
- */
-function normalizeLinkEntries(rawLinks: unknown): NormalizedLink[] {
-  if (!Array.isArray(rawLinks)) {
-    return [];
-  }
-
-  return rawLinks
-    .map((link, index) => normalizeLinkEntry(link, index))
-    .filter((link): link is NormalizedLink => link !== null);
-}
-
-/**
- * Normalize one serialized link entry.
- */
-function normalizeLinkEntry(rawLink: unknown, index: number): NormalizedLink | null {
-  if (Array.isArray(rawLink)) {
-    const [id, originId, originSlot, targetId, targetSlot, type, parentId] = rawLink;
-    return {
-      id: coerceInteger(id, index + 1),
-      origin_id: coerceInteger(originId, 0),
-      origin_slot: coerceInteger(originSlot, 0),
-      target_id: coerceInteger(targetId, 0),
-      target_slot: coerceInteger(targetSlot, 0),
-      type: normalizeSlotType(type),
-      ...(parentId != null ? { parentId: coerceInteger(parentId, 0) } : {}),
-    };
-  }
-
-  if (!isRecord(rawLink)) {
-    return null;
-  }
-
-  return {
-    id: coerceInteger(rawLink.id, index + 1),
-    origin_id: coerceInteger(rawLink.origin_id, 0),
-    origin_slot: coerceInteger(rawLink.origin_slot, 0),
-    target_id: coerceInteger(rawLink.target_id, 0),
-    target_slot: coerceInteger(rawLink.target_slot, 0),
-    type: normalizeSlotType(rawLink.type),
-    ...(rawLink.parentId != null ? { parentId: coerceInteger(rawLink.parentId, 0) } : {}),
-  };
-}
-
-/**
  * Normalize an array of current subgraph IO entries.
  */
 function normalizeSubgraphIoArray(
@@ -386,7 +338,7 @@ function normalizeSubgraphIoEntry(
   const label = resolveDisplayLabel(entry, name);
   return {
     id: readTrimmedString(entry.id) || `${subgraphId}:${kind}:${index}`,
-    type: normalizeSlotType(entry.type),
+    type: normalizeSubgraphSlotType(entry.type),
     linkIds: normalizeLinkIdArray(entry.linkIds),
     name,
     label,
@@ -405,7 +357,7 @@ function normalizeSubgraphIoEntry(
  * Reconstruct current subgraph inputs from legacy boundary links.
  */
 function buildLegacySubgraphInputs(
-  links: readonly NormalizedLink[],
+  links: readonly NormalizedSubgraphLink[],
   nodes: readonly UnknownRecord[],
   subgraphId: string,
   expectedNames: readonly unknown[] = [],
@@ -421,7 +373,7 @@ function buildLegacySubgraphInputs(
  * Reconstruct current subgraph outputs from legacy boundary links.
  */
 function buildLegacySubgraphOutputs(
-  links: readonly NormalizedLink[],
+  links: readonly NormalizedSubgraphLink[],
   nodes: readonly UnknownRecord[],
   subgraphId: string,
 ): NormalizedSubgraphIo[] {
@@ -436,14 +388,18 @@ function buildLegacySubgraphOutputs(
  * Build current subgraph IO entries from grouped legacy boundary links.
  */
 function buildLegacySubgraphIo(
-  groupedLinks: ReadonlyMap<number, NormalizedLink[]>,
+  groupedLinks: ReadonlyMap<number, NormalizedSubgraphLink[]>,
   nodes: readonly UnknownRecord[],
   subgraphId: string,
   kind: 'input' | 'output',
   expectedNames: readonly unknown[] = [],
 ): NormalizedSubgraphIo[] {
   const seenNames = new Set<string>();
-  const nodeIndex = new Map(nodes.map((node) => [coerceInteger(node.id, Number.NaN), node]));
+  const nodeIndex = new Map<GraphId, UnknownRecord>();
+  for (const node of nodes) {
+    const nodeId = readSerializedGraphId(node.id);
+    if (nodeId !== null) nodeIndex.set(nodeId, node);
+  }
   const ioEntries: NormalizedSubgraphIo[] = [];
 
   for (const [slotIndex, slotLinks] of groupedLinks.entries()) {
@@ -460,7 +416,7 @@ function buildLegacySubgraphIo(
 
     ioEntries.push({
       id: `${subgraphId}:${kind}:${slotIndex}`,
-      type: normalizeSlotType(slotMeta?.type),
+      type: normalizeSubgraphSlotType(slotMeta?.type),
       linkIds: slotLinks.map((link) => link.id),
       name,
       label,
@@ -480,8 +436,8 @@ function buildLegacySubgraphIo(
  * Resolve legacy slot metadata from one boundary link.
  */
 function resolveLegacyBoundarySlot(
-  link: NormalizedLink | undefined,
-  nodeIndex: ReadonlyMap<number, UnknownRecord>,
+  link: NormalizedSubgraphLink | undefined,
+  nodeIndex: ReadonlyMap<GraphId, UnknownRecord>,
   kind: 'input' | 'output',
 ): UnknownRecord | null {
   if (!link) {
@@ -569,10 +525,10 @@ function computeGraphBounds(
  * Group links by one slot property.
  */
 function groupLinksBySlot(
-  links: readonly NormalizedLink[],
+  links: readonly NormalizedSubgraphLink[],
   key: 'origin_slot' | 'target_slot',
-): Map<number, NormalizedLink[]> {
-  const grouped = new Map<number, NormalizedLink[]>();
+): Map<number, NormalizedSubgraphLink[]> {
+  const grouped = new Map<number, NormalizedSubgraphLink[]>();
   for (const link of links) {
     const slot = coerceInteger(link?.[key], -1);
     if (slot < 0) {
@@ -605,16 +561,6 @@ function normalizeLinkIdArray(linkIds: unknown): number[] {
     return [];
   }
   return linkIds.map((linkId, index) => coerceInteger(linkId, index));
-}
-
-/**
- * Normalize optional slot type values.
- */
-function normalizeSlotType(value: unknown): string {
-  if (typeof value === 'string' && value.trim()) {
-    return value.trim();
-  }
-  return '*';
 }
 
 /**

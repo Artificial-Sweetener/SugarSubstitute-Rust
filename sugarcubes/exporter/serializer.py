@@ -18,12 +18,10 @@
 from __future__ import annotations
 
 import hashlib
-import re
 from dataclasses import dataclass
 from typing import (
     Any,
     Callable,
-    Collection,
     Dict,
     List,
     Mapping,
@@ -51,7 +49,9 @@ from .definition_snapshot import (
     collect_definitions,
     collect_subgraph_node_types,
 )
-from .graph import CubeAnalysis, CubeData, CubeMarker, Graph, GraphNode, Edge
+from .boundary_bindings import build_input_bindings, build_output_bindings
+from .graph import CubeAnalysis, CubeData, Graph, GraphNode
+from .identifiers import sanitize_identifier
 from .layout_serializer import (
     WorkflowLayoutIndex,
     build_layout_payload,
@@ -59,7 +59,6 @@ from .layout_serializer import (
     extract_execution_mode,
     resolve_node_label,
 )
-from .versioning import resolve_input_type, resolve_output_type_by_slot
 from .node_inputs import backfill_missing_widget_inputs
 from .ordering import natural_node_key
 from .subgraph_serializer import build_subgraph_index, collect_subgraphs
@@ -143,10 +142,10 @@ def _serialize_cube(
     )
     subgraphs = canonicalize_subgraph_widget_values(subgraphs, validation_definitions)
     validate_subgraph_widget_values(subgraphs, validation_definitions)
-    inputs, alias_lookup, input_warnings = _build_inputs(
+    inputs, alias_lookup, input_warnings = build_input_bindings(
         cube, graph, symbols, definitions
     )
-    outputs, output_alias_lookup, output_warnings = _build_outputs(
+    outputs, output_alias_lookup, output_warnings = build_output_bindings(
         cube, graph, symbols, definitions
     )
     nodes = _build_node_payloads(
@@ -257,73 +256,6 @@ def _symbolize_nodes(cube: CubeData, graph: Graph) -> Dict[str, str]:
         base = _symbol_base(graph.nodes[node_id])
         symbols[node_id] = _dedupe(base, used)
     return symbols
-
-
-def _build_inputs(
-    cube: CubeData,
-    graph: Graph,
-    symbols: Mapping[str, str],
-    definitions: Mapping[str, Any],
-) -> Tuple[Dict[str, Any], Dict[str, str], List[str]]:
-    """Build serialized input bindings for the cube payload."""
-
-    inputs: Dict[str, Any] = {}
-    alias_lookup: Dict[str, str] = {}
-    warnings: List[str] = []
-    counters: Dict[Tuple[str, str], int] = {}
-
-    for marker in sorted(
-        cube.inputs, key=lambda entry: natural_node_key(entry.node_id)
-    ):
-        edges = _downstream_edges(marker, graph, cube.subgraph_nodes)
-        connections = _downstream_connections(edges, symbols)
-        binding_type = _resolve_input_binding_type(edges, graph, definitions)
-        alias = _make_binding_key("input", binding_type, counters)
-        alias_lookup[marker.node_id] = alias
-        inputs[alias] = {
-            "kind": "input",
-            "targets": connections,
-        }
-        if not connections:
-            warnings.append(
-                f"CubeInput '{marker.node_id}' has no downstream connections"
-            )
-
-    return inputs, alias_lookup, warnings
-
-
-def _build_outputs(
-    cube: CubeData,
-    graph: Graph,
-    symbols: Mapping[str, str],
-    definitions: Mapping[str, Any],
-) -> Tuple[Dict[str, Any], Dict[str, str], List[str]]:
-    """Build serialized output bindings for the cube payload."""
-
-    outputs: Dict[str, Any] = {}
-    alias_lookup: Dict[str, str] = {}
-    warnings: List[str] = []
-    counters: Dict[Tuple[str, str], int] = {}
-
-    for marker in sorted(
-        cube.outputs, key=lambda entry: natural_node_key(entry.node_id)
-    ):
-        upstream = _upstream_edges(marker, graph, cube.subgraph_nodes)
-        if not upstream:
-            warnings.append(f"CubeOutput '{marker.node_id}' has no upstream source")
-            continue
-        if len(upstream) > 1:
-            warnings.append(
-                f"CubeOutput '{marker.node_id}' has multiple upstream sources; taking the first"
-            )
-        edge = upstream[0]
-        symbol = symbols[edge.source]
-        binding_type = _resolve_output_binding_type(edge, graph, definitions)
-        alias = _make_binding_key("output", binding_type, counters)
-        outputs[alias] = symbol
-        alias_lookup[marker.node_id] = alias
-
-    return outputs, alias_lookup, warnings
 
 
 def _build_node_payloads(
@@ -594,7 +526,7 @@ def _ensure_metadata_defaults(
 
     cube_id = cube.cube_id.strip() if isinstance(cube.cube_id, str) else ""
     if not cube_id:
-        slug = _sanitize_identifier(cube.name).replace("_", "-")
+        slug = sanitize_identifier(cube.name).replace("_", "-")
         fingerprint = _cube_fingerprint(cube, graph)
         suffix = _short_hash(fingerprint)
         cube_id = f"{slug}-{suffix}" if suffix else slug
@@ -659,86 +591,6 @@ def _short_hash(value: str) -> str:
     return digest[:6]
 
 
-def _downstream_edges(
-    marker: CubeMarker, graph: Graph, subgraph: Collection[str]
-) -> List[Edge]:
-    """Collect edges from a marker into executable nodes within the cube."""
-
-    subgraph_set = set(subgraph)
-    edges = [
-        edge for edge in graph.edges_from(marker.node_id) if edge.target in subgraph_set
-    ]
-    edges.sort(
-        key=lambda edge: (natural_node_key(edge.target), str(edge.target_port or ""))
-    )
-    return edges
-
-
-def _upstream_edges(
-    marker: CubeMarker, graph: Graph, subgraph: Collection[str]
-) -> List[Edge]:
-    """Collect edges from executable nodes into an output marker."""
-
-    subgraph_set = set(subgraph)
-    edges = [
-        edge for edge in graph.edges_to(marker.node_id) if edge.source in subgraph_set
-    ]
-    edges.sort(
-        key=lambda edge: (natural_node_key(edge.source), int(edge.source_slot or 0))
-    )
-    return edges
-
-
-def _downstream_connections(
-    edges: Sequence[Edge], symbols: Mapping[str, str]
-) -> List[List[Any]]:
-    """Convert downstream edges into serialized binding targets."""
-
-    return [[symbols[edge.target], edge.target_port] for edge in edges]
-
-
-def _resolve_input_binding_type(
-    edges: Sequence[Edge], graph: Graph, definitions: Mapping[str, Any]
-) -> str:
-    """Resolve the normalized type label for one serialized input binding."""
-
-    if not edges:
-        return "value"
-    edge = edges[0]
-    node = graph.nodes.get(edge.target)
-    if not node:
-        return "value"
-    resolved = resolve_input_type(definitions, node.class_type, edge.target_port)
-    return _sanitize_identifier(resolved or "value")
-
-
-def _resolve_output_binding_type(
-    edge: Edge, graph: Graph, definitions: Mapping[str, Any]
-) -> str:
-    """Resolve the normalized type label for one serialized output binding."""
-
-    node = graph.nodes.get(edge.source)
-    if not node:
-        return "value"
-    resolved = resolve_output_type_by_slot(
-        definitions, node.class_type, edge.source_slot
-    )
-    return _sanitize_identifier(resolved or "value")
-
-
-def _make_binding_key(
-    direction: str, binding_type: str, counters: Dict[Tuple[str, str], int]
-) -> str:
-    """Build a stable binding alias that stays unique within one cube."""
-
-    base = _sanitize_identifier(binding_type) or "value"
-    key = (direction, base)
-    count = counters.get(key, 0) + 1
-    counters[key] = count
-    suffix = "" if count == 1 else str(count)
-    return f"{direction}.{base}{suffix}"
-
-
 def _remap_value(
     value: Any,
     symbols: Mapping[str, str],
@@ -766,16 +618,9 @@ def _symbol_base(node: GraphNode) -> str:
 
     title = node.meta.get("title")
     if isinstance(title, str) and title.strip():
-        return _sanitize_identifier(title)
+        return sanitize_identifier(title)
     class_type = node.class_type.split(".")[-1]
-    return _sanitize_identifier(class_type)
-
-
-def _sanitize_identifier(text: str) -> str:
-    """Normalize arbitrary text into a stable symbol-safe identifier."""
-
-    cleaned = re.sub(r"[^0-9a-zA-Z_]+", "_", text).strip("_")
-    return cleaned.lower() or "node"
+    return sanitize_identifier(class_type)
 
 
 def _dedupe(base: str, used: MutableMapping[str, int]) -> str:

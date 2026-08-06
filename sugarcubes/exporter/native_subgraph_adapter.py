@@ -22,18 +22,13 @@ from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, MutableMapping, Sequence
 
 from .graph import MARKER_CLASS_TYPES
+from .native_boundary_contract import validate_native_boundary_contract
 from .native_execution_nodes import remove_nested_execution_nodes
-
-
-@dataclass(frozen=True)
-class _Link:
-    """Describe one validated serialized Comfy subgraph link."""
-
-    origin_id: object
-    origin_slot: int
-    target_id: object
-    target_slot: int
-    link_type: object
+from .native_subgraph_links import (
+    SerializedGraphId,
+    read_native_subgraph_links,
+    read_serialized_graph_id,
+)
 
 
 @dataclass
@@ -195,17 +190,35 @@ def _project_definition(
     ):
         raise ValueError(f"Native Cube '{cube_id}' has no serialized subgraph nodes")
 
-    projected_ids: dict[str, str] = {}
+    definition_node_index: dict[SerializedGraphId, Mapping[str, object]] = {}
+    projected_ids: dict[SerializedGraphId, str] = {}
+    allocated_projected_ids: set[str] = set()
     for raw_node in definition_nodes:
-        if not isinstance(raw_node, Mapping) or raw_node.get("id") is None:
+        if not isinstance(raw_node, Mapping):
             continue
-        internal_id = str(raw_node["id"])
+        internal_id = read_serialized_graph_id(raw_node.get("id"))
+        if internal_id is None:
+            continue
         projected_id = f"{instance_id}:{internal_id}"
+        if projected_id in allocated_projected_ids:
+            raise ValueError(
+                f"Native Cube '{cube_id}' has colliding serialized body-node ids"
+            )
+        allocated_projected_ids.add(projected_id)
+        definition_node_index[internal_id] = raw_node
         projected_ids[internal_id] = projected_id
         projected_node = deepcopy(dict(raw_node))
         projected_node["id"] = projected_id
         _clear_definition_local_links(projected_node)
         state.workflow_nodes.append(projected_node)
+
+    links = read_native_subgraph_links(definition.get("links"), cube_id=cube_id)
+    validate_native_boundary_contract(
+        definition,
+        links,
+        body_nodes=definition_node_index,
+        cube_id=cube_id,
+    )
 
     remove_nested_execution_nodes(
         state.prompt,
@@ -213,25 +226,17 @@ def _project_definition(
         immediate_node_ids=projected_ids.values(),
     )
 
-    input_node_id = str(_io_node_id(definition.get("inputNode"), -10))
-    output_node_id = str(_io_node_id(definition.get("outputNode"), -20))
+    input_node_id = _io_node_id(definition.get("inputNode"), -10)
+    output_node_id = _io_node_id(definition.get("outputNode"), -20)
     input_markers: dict[int, str] = {}
     output_markers: dict[int, str] = {}
     input_names = _boundary_names(definition.get("inputs"))
     output_names = _boundary_names(definition.get("outputs"))
 
-    raw_links = definition.get("links")
-    if not isinstance(raw_links, Sequence) or isinstance(raw_links, (str, bytes)):
-        raw_links = []
-    for raw_link in raw_links:
-        link = _read_link(raw_link)
-        if link is None:
-            continue
-        origin_key = str(link.origin_id)
-        target_key = str(link.target_id)
-        projected_origin = projected_ids.get(origin_key)
-        projected_target = projected_ids.get(target_key)
-        if origin_key == input_node_id and projected_target:
+    for link in links:
+        projected_origin = projected_ids.get(link.origin_id)
+        projected_target = projected_ids.get(link.target_id)
+        if _same_graph_id(link.origin_id, input_node_id) and projected_target:
             marker_id = input_markers.get(link.origin_slot)
             if marker_id is None:
                 marker_id = _marker_id(cube_index, "input", link.origin_slot)
@@ -258,7 +263,7 @@ def _project_definition(
                 link_type=link.link_type,
             )
             continue
-        if target_key == output_node_id and projected_origin:
+        if _same_graph_id(link.target_id, output_node_id) and projected_origin:
             marker_id = output_markers.get(link.target_slot)
             if marker_id is None:
                 marker_id = _marker_id(cube_index, "output", link.target_slot)
@@ -408,37 +413,6 @@ def _add_projected_link(
             target_inputs[target_name] = [origin_id, origin_slot]
 
 
-def _read_link(value: object) -> _Link | None:
-    """Validate one object- or tuple-shaped Comfy serialized link."""
-
-    if isinstance(value, Mapping):
-        origin_id = value.get("origin_id")
-        origin_slot = value.get("origin_slot")
-        target_id = value.get("target_id")
-        target_slot = value.get("target_slot")
-        link_type = value.get("type", "*")
-    elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
-        if len(value) < 5:
-            return None
-        origin_id = value[1]
-        origin_slot = value[2]
-        target_id = value[3]
-        target_slot = value[4]
-        link_type = value[5] if len(value) > 5 else "*"
-    else:
-        return None
-    if (
-        origin_id is None
-        or target_id is None
-        or isinstance(origin_slot, bool)
-        or not isinstance(origin_slot, int)
-        or isinstance(target_slot, bool)
-        or not isinstance(target_slot, int)
-    ):
-        return None
-    return _Link(origin_id, origin_slot, target_id, target_slot, link_type)
-
-
 def _mutable_prompt(graph: MutableMapping[str, Any]) -> MutableMapping[str, Any]:
     """Return the mutable prompt mapping from wrapped or direct graph data."""
 
@@ -508,10 +482,18 @@ def _boundary_position(value: object, slot: int) -> list[float]:
     return [0.0, slot * 54.0]
 
 
-def _io_node_id(value: object, fallback: int) -> object:
-    """Return a serialized graph IO node id."""
+def _io_node_id(value: object, fallback: int) -> SerializedGraphId:
+    """Return a validated serialized graph IO node id."""
 
-    return value.get("id", fallback) if isinstance(value, Mapping) else fallback
+    node_id = value.get("id") if isinstance(value, Mapping) else None
+    parsed_node_id = read_serialized_graph_id(node_id)
+    return fallback if parsed_node_id is None else parsed_node_id
+
+
+def _same_graph_id(left: SerializedGraphId, right: SerializedGraphId) -> bool:
+    """Compare graph identities without conflating numeric and string values."""
+
+    return type(left) is type(right) and left == right
 
 
 def _marker_id(cube_index: int, kind: str, slot: int) -> str:
@@ -625,11 +607,7 @@ def _string_list(value: object) -> list[str]:
 
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
         return []
-    return [
-        normalized
-        for entry in value
-        if (normalized := _nonempty_string(entry))
-    ]
+    return [normalized for entry in value if (normalized := _nonempty_string(entry))]
 
 
 def _nonempty_string(value: object) -> str:
