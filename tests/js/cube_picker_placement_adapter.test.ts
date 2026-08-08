@@ -37,6 +37,7 @@ describe('CubePickerPlacementAdapter', () => {
     const runtime = {
       construction: { construct },
       registerSubgraphs,
+      graphScope: { assertCurrentRoot: jest.fn() },
     } as unknown as ComfyCubeRuntime;
     const cachedPayload = {
       cube: { cube_id: 'local/demo.cube', version: '1.0.0' },
@@ -85,6 +86,41 @@ describe('CubePickerPlacementAdapter', () => {
 
     expect(() => adapter.create(type)).toThrow('no longer available');
     expect(getRuntime).not.toHaveBeenCalled();
+  });
+
+  test('rejects nested picker placement before definition registration or construction', () => {
+    const registerSubgraphs = jest.fn();
+    const construct = jest.fn();
+    const adapter = new CubePickerPlacementAdapter({
+      registry: {
+        descriptor: () => descriptor(),
+        preparedPayload: () => ({
+          cube: { cube_id: 'local/demo.cube', version: '1.0.0' },
+          nodes: [],
+          markers: [],
+          connections: [],
+          subgraphs: [],
+          layout: { origin: [0, 0], groups: [] },
+        }),
+      } as unknown as CubePickerCatalogRegistry,
+      getRuntime: () =>
+        ({
+          graphScope: {
+            assertCurrentRoot: () => {
+              throw new Error('SugarCubes can only be placed on the top-level workflow.');
+            },
+          },
+          construction: { construct },
+          registerSubgraphs,
+        }) as unknown as ComfyCubeRuntime,
+      getLiteGraph: () => ({ createNode: jest.fn() }),
+      getNodeRenderer: () => 'litegraph',
+      logger: { warn: jest.fn() },
+    });
+
+    expect(() => adapter.create(type)).toThrow('top-level workflow');
+    expect(registerSubgraphs).not.toHaveBeenCalled();
+    expect(construct).not.toHaveBeenCalled();
   });
 });
 

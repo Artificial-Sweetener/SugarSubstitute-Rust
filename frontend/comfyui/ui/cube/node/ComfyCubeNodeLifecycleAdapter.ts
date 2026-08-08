@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Keep Cube identity and presentation aligned across Comfy's complete graph registry. */
+/** Keep root Cube identity and presentation aligned with Comfy's workflow graph. */
 
 import { isRecord } from '../../types/common.js';
 import type { UnknownRecord } from '../../types/common.js';
@@ -25,10 +25,10 @@ import {
   type CubeNode,
 } from './ComfyCubeNodeFactory.js';
 import { CubeNodeCatalog, readInstanceId } from './CubeNodeCatalog.js';
+import type { CubeGraphInventory } from './CubeGraphInventory.js';
 
 export interface CubeNodeLifecycleGraph {
   _nodes?: unknown[];
-  subgraphs?: ReadonlyMap<string, { _nodes?: unknown[] }>;
   onConfigure?: ((data: UnknownRecord) => void) | null;
   onNodeAdded?: ((node: unknown) => void) | null;
   onNodeRemoved?: ((node: unknown) => void) | null;
@@ -36,6 +36,7 @@ export interface CubeNodeLifecycleGraph {
 
 export interface ComfyCubeNodeLifecycleAdapterOptions {
   graph: CubeNodeLifecycleGraph;
+  inventory: CubeGraphInventory;
   catalog: CubeNodeCatalog;
   events: EventTarget;
   createInstanceId(): string;
@@ -46,6 +47,7 @@ export interface ComfyCubeNodeLifecycleAdapterOptions {
 export class ComfyCubeNodeLifecycleAdapter {
   readonly #graph: CubeNodeLifecycleGraph;
   readonly #catalog: CubeNodeCatalog;
+  readonly #inventory: CubeGraphInventory;
   readonly #events: EventTarget;
   readonly #createInstanceId: () => string;
   readonly #logger: Pick<Console, 'debug' | 'error'>;
@@ -60,6 +62,7 @@ export class ComfyCubeNodeLifecycleAdapter {
   constructor(options: ComfyCubeNodeLifecycleAdapterOptions) {
     this.#graph = options.graph;
     this.#catalog = options.catalog;
+    this.#inventory = options.inventory;
     this.#events = options.events;
     this.#createInstanceId = options.createInstanceId;
     this.#logger = options.logger;
@@ -119,7 +122,7 @@ export class ComfyCubeNodeLifecycleAdapter {
   /** Assign fresh per-instance identities to copied Cubes before rebuilding the index. */
   #reconcile(): void {
     const seen = new Map<string, CubeNode>();
-    const values = collectGraphNodes(this.#graph);
+    const values = this.#inventory.snapshot().rootCubes;
     for (const value of values) {
       if (!isCubeNode(value)) continue;
       if (isDraftCubeNode(value)) labelEmptyCubeBoundaryAffordances(value.subgraph);
@@ -149,13 +152,4 @@ export class ComfyCubeNodeLifecycleAdapter {
     }
     throw new Error(`Could not allocate a unique identity for copied Cube '${String(node.id)}'.`);
   }
-}
-
-/** Collect root and native-subgraph nodes exactly once from Comfy's global definition map. */
-function collectGraphNodes(graph: CubeNodeLifecycleGraph): unknown[] {
-  const values = [...(graph._nodes ?? [])];
-  for (const subgraph of graph.subgraphs?.values() ?? []) {
-    values.push(...(subgraph._nodes ?? []));
-  }
-  return values;
 }

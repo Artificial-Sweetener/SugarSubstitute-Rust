@@ -48,6 +48,7 @@ export interface CubePreparedImportDependencies {
   getLiteGraph(): PreparedImportLiteGraph | null | undefined;
   getNodeRenderer(): NodeRenderer | undefined;
   getRuntime(): PreparedImportRuntime;
+  assertRootPlacement(): void;
   readErrorMessage(error: unknown): string;
 }
 
@@ -91,9 +92,10 @@ export class CubePreparedImportService {
       return result;
     }
 
-    const runtime = this.#dependencies.getRuntime();
-    result.warnings.push(...runtime.registerSubgraphs(payload));
     try {
+      this.#dependencies.assertRootPlacement();
+      const runtime = this.#dependencies.getRuntime();
+      result.warnings.push(...runtime.registerSubgraphs(payload));
       const placed = runtime.placement.place(payload, {
         ...(options.instanceAlias ? { instanceAlias: options.instanceAlias } : {}),
       });

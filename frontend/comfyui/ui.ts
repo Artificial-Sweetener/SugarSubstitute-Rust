@@ -80,6 +80,7 @@ import { CubeAffordanceHostLifecycle } from './ui/affordance/CubeAffordanceHostL
 import { notifyComfyGraphCleared } from './ui/affordance/ComfyGraphClearNotifier.js';
 import { createComfyCubePickerIntegration } from './ui/picker/ComfyCubePickerComposition.js';
 import { CubeCatalogInvalidationCoordinator } from './ui/core/CubeCatalogInvalidationCoordinator.js';
+import { CubeGraphInventory, type CubeInventoryGraph } from './ui/cube/node/CubeGraphInventory.js';
 
 export { buildShiftedPlacementPayload };
 
@@ -115,13 +116,15 @@ export const sugarCubesUI = getSugarCubesUI({
   buildShiftedPlacementPayload,
   getCubeAuthoring: () => requireCubeRuntime().authoring,
   getCubeNodeCatalog: () => cubeRuntimeLifecycle.current()?.nodes ?? null,
+  validateCubePersistence: () => assertNoNestedCubes('save SugarCubes'),
 });
 const ui = sugarCubesUI;
-const cubeAuthoringCommands = new CubeAuthoringHostCommands(
-  () => ui.cubeCreation.startCreateCubeFromSelection(),
-  () => ui.cubeCreation.startCreateCubeFromSelectedSubgraph(),
-  () => ui.cubeCreation.startCreateEmptyCube(),
-);
+const cubeAuthoringCommands = new CubeAuthoringHostCommands({
+  canAuthor: () => requireCubeRuntime().graphScope.isCurrentRoot(),
+  createCubeFromSelection: () => ui.cubeCreation.startCreateCubeFromSelection(),
+  createCubeFromSubgraph: () => ui.cubeCreation.startCreateCubeFromSelectedSubgraph(),
+  createEmptyCube: () => ui.cubeCreation.startCreateEmptyCube(),
+});
 const adapter = ui.adapter;
 const storage = ui.storage;
 const toastService = ui.toast;
@@ -180,8 +183,23 @@ const cubePromptPipeline = new CubePromptPipeline({
 });
 const promptQueueBridge = new ComfyPromptQueueBridge({
   api: api as unknown as ComfyPromptQueueApi,
+  preflight: () => {
+    try {
+      assertNoNestedCubes('run this workflow');
+    } catch (error: unknown) {
+      pushToastMessage('error', 'SugarCube execution blocked', readErrorMessage(error));
+      throw error;
+    }
+  },
   transform: (payload) => cubePromptPipeline.transform(payload),
 });
+
+/** Validate persisted nesting without requiring renderer or node-factory capabilities. */
+function assertNoNestedCubes(action: string): void {
+  const rootGraph = appRef?.graph;
+  if (!rootGraph) return;
+  new CubeGraphInventory(rootGraph as CubeInventoryGraph).assertNoNestedCubes(action);
+}
 const cubeAffordanceController = new CubeHostAffordanceController({
   getRuntime: () => cubeRuntimeLifecycle.current(),
   cubeCreation: ui.cubeCreation,
@@ -361,6 +379,7 @@ const preparedImportService = new CubePreparedImportService({
   getLiteGraph: () => adapter.getLiteGraph?.(),
   getNodeRenderer: () => adapter.getNodeRenderer?.(),
   getRuntime: requireCubeRuntime,
+  assertRootPlacement: () => requireCubeRuntime().graphScope.assertCurrentRoot('imported'),
   readErrorMessage,
 });
 
@@ -498,8 +517,19 @@ export const sugarCubesExtension: SugarCubesExtension = {
   afterConfigureGraph(missingNodeTypes: unknown[], comfyApp) {
     try {
       const runtime = requireCubeRuntime();
+      runtime.hostPlacementGuard.completeHydration();
       runtime.restoreLegacy(cubePreconfiguration.takeLegacyBatch());
       runtime.detectLegacyBlueprints();
+      const nestedCubes = runtime.graphInventory.snapshot().nestedCubes;
+      if (nestedCubes.length) {
+        pushToastMessage(
+          'error',
+          'Nested SugarCubes need attention',
+          `${String(nestedCubes.length)} SugarCube${nestedCubes.length === 1 ? '' : 's'} ` +
+            `${nestedCubes.length === 1 ? 'is' : 'are'} inside a Subgraph. ` +
+            'The workflow was preserved, but execution and Cube saving are blocked until the nested wrapper is removed.',
+        );
+      }
       cubeAffordances.adaptMissingNodes(missingNodeTypes);
       void cubeOutputHistoryAdapter.hydrateRecent();
       const graph = appRef?.canvas?.graph ?? comfyApp.graph ?? appRef?.graph;

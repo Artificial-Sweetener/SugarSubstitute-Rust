@@ -47,9 +47,10 @@ export class CubePreparedImportService {
             result.message = 'Importer payload is missing Cube identity';
             return result;
         }
-        const runtime = this.#dependencies.getRuntime();
-        result.warnings.push(...runtime.registerSubgraphs(payload));
         try {
+            this.#dependencies.assertRootPlacement();
+            const runtime = this.#dependencies.getRuntime();
+            result.warnings.push(...runtime.registerSubgraphs(payload));
             const placed = runtime.placement.place(payload, {
                 ...(options.instanceAlias ? { instanceAlias: options.instanceAlias } : {}),
             });

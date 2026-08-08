@@ -20,14 +20,18 @@ export class CubeAuthoringHostCommands {
     #createCubeFromSelection;
     #createCubeFromSubgraph;
     #createEmptyCube;
+    #canAuthor;
     /** Bind the application operations exposed through Comfy's canvas context menu. */
-    constructor(createCubeFromSelection, createCubeFromSubgraph, createEmptyCube) {
-        this.#createCubeFromSelection = createCubeFromSelection;
-        this.#createCubeFromSubgraph = createCubeFromSubgraph;
-        this.#createEmptyCube = createEmptyCube;
+    constructor(options) {
+        this.#canAuthor = options.canAuthor;
+        this.#createCubeFromSelection = options.createCubeFromSelection;
+        this.#createCubeFromSubgraph = options.createCubeFromSubgraph;
+        this.#createEmptyCube = options.createEmptyCube;
     }
     /** Build graph-authoring actions for Comfy's native canvas context menu. */
     getCanvasMenuItems(canvas) {
+        if (!this.#canAuthor())
+            return [];
         const selectedItems = readSelectedItems(canvas);
         const selectedCount = selectedItems.length;
         const options = [

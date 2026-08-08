@@ -37,6 +37,7 @@ import { ComfyCubeNodeFactory } from './node/ComfyCubeNodeFactory.js';
 import { CubeNodeCatalog } from './node/CubeNodeCatalog.js';
 import { CubeNodeSwapCoordinator } from './node/CubeNodeSwapCoordinator.js';
 import { ComfyCubeNodeLifecycleAdapter } from './node/ComfyCubeNodeLifecycleAdapter.js';
+import { createComfyCubePlacementRuntime, } from './placement/ComfyCubePlacementRuntime.js';
 import { LegacyCubeContainerMigrationAdapter } from './migration/LegacyCubeContainerMigrationAdapter.js';
 import { NativeCubeProximityEndpointSource } from './connection/NativeCubeProximityEndpointSource.js';
 import { CubePortPresentationController } from './connection/CubePortPresentationController.js';
@@ -71,6 +72,12 @@ export function createComfyCubeRuntime(options) {
     const openSubgraphFunction = typeof canvas.openSubgraph === 'function' ? canvas.openSubgraph : null;
     const runtimeGraph = requireRuntimeGraph(graph);
     const legacyCanvas = requireLiteGraphCubeNodeCanvas(canvas);
+    const { graphScope, graphInventory, hostPlacementGuard } = createComfyCubePlacementRuntime({
+        rootGraph: graph,
+        canvas,
+        logger: options.logger,
+        ...(options.feedback ? { feedback: options.feedback } : {}),
+    });
     const titleHeight = readPositiveNumber(liteGraph.NODE_TITLE_HEIGHT, 30);
     const previewEvents = readPreviewEventSource(api);
     const createNode = (type) => {
@@ -107,6 +114,7 @@ export function createComfyCubeRuntime(options) {
     const proximityEndpoints = new NativeCubeProximityEndpointSource(options.logger, options.boundaryResolver, portPresentation);
     const nodeLifecycle = new ComfyCubeNodeLifecycleAdapter({
         graph: runtimeGraph,
+        inventory: graphInventory,
         catalog: nodes,
         events: legacyCanvas.canvas,
         createInstanceId: createUuid,
@@ -285,6 +293,7 @@ export function createComfyCubeRuntime(options) {
         },
         nodeFactory,
         catalog: nodes,
+        graphScope,
         createEmptySubgraph: (title, description) => graphBuilder.createEmptyDraft(title, description),
         getDraftPosition: () => readGraphPoint(legacyCanvas.graph_mouse, [0, 0]),
     });
@@ -328,6 +337,9 @@ export function createComfyCubeRuntime(options) {
         placement,
         authoring,
         nodes,
+        graphScope,
+        graphInventory,
+        hostPlacementGuard,
         contexts,
         metadataHud,
         proximityEndpoints,
@@ -346,6 +358,7 @@ export function createComfyCubeRuntime(options) {
             canvasGraphChanges.dispose();
             structuralGuard.dispose();
             productIdentity.dispose();
+            hostPlacementGuard.dispose();
         },
     };
 }

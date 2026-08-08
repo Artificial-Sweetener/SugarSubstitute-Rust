@@ -59,6 +59,10 @@ import { ComfyCubeNodeFactory } from './node/ComfyCubeNodeFactory.js';
 import { CubeNodeCatalog } from './node/CubeNodeCatalog.js';
 import { CubeNodeSwapCoordinator } from './node/CubeNodeSwapCoordinator.js';
 import { ComfyCubeNodeLifecycleAdapter } from './node/ComfyCubeNodeLifecycleAdapter.js';
+import {
+  createComfyCubePlacementRuntime,
+  type ComfyCubePlacementRuntime,
+} from './placement/ComfyCubePlacementRuntime.js';
 import type { LiteGraphCubeNodeCanvas } from '../surface/ComfyLiteGraphCubeNodeHost.js';
 import { LegacyCubeContainerMigrationAdapter } from './migration/LegacyCubeContainerMigrationAdapter.js';
 import { NativeCubeProximityEndpointSource } from './connection/NativeCubeProximityEndpointSource.js';
@@ -106,6 +110,9 @@ export interface ComfyCubeRuntime {
   placement: CubePlacementService;
   authoring: ComfyCubeAuthoringAdapter;
   nodes: CubeNodeCatalog;
+  graphScope: ComfyCubePlacementRuntime['graphScope'];
+  graphInventory: ComfyCubePlacementRuntime['graphInventory'];
+  hostPlacementGuard: ComfyCubePlacementRuntime['hostPlacementGuard'];
   contexts: CubeEditorContextResolver;
   metadataHud: CubeEditorMetadataHud | null;
   proximityEndpoints: ProximityEndpointSource;
@@ -151,6 +158,12 @@ export function createComfyCubeRuntime(options: ComfyCubeRuntimeOptions): ComfyC
     typeof canvas.openSubgraph === 'function' ? canvas.openSubgraph : null;
   const runtimeGraph = requireRuntimeGraph(graph);
   const legacyCanvas = requireLiteGraphCubeNodeCanvas(canvas);
+  const { graphScope, graphInventory, hostPlacementGuard } = createComfyCubePlacementRuntime({
+    rootGraph: graph,
+    canvas,
+    logger: options.logger,
+    ...(options.feedback ? { feedback: options.feedback } : {}),
+  });
   const titleHeight = readPositiveNumber(liteGraph.NODE_TITLE_HEIGHT, 30);
   const previewEvents = readPreviewEventSource(api);
 
@@ -194,6 +207,7 @@ export function createComfyCubeRuntime(options: ComfyCubeRuntimeOptions): ComfyC
   );
   const nodeLifecycle = new ComfyCubeNodeLifecycleAdapter({
     graph: runtimeGraph,
+    inventory: graphInventory,
     catalog: nodes,
     events: legacyCanvas.canvas,
     createInstanceId: createUuid,
@@ -378,6 +392,7 @@ export function createComfyCubeRuntime(options: ComfyCubeRuntimeOptions): ComfyC
     } satisfies CubeAuthoringCanvas,
     nodeFactory,
     catalog: nodes,
+    graphScope,
     createEmptySubgraph: (title, description) => graphBuilder.createEmptyDraft(title, description),
     getDraftPosition: () => readGraphPoint(legacyCanvas.graph_mouse, [0, 0]),
   });
@@ -426,6 +441,9 @@ export function createComfyCubeRuntime(options: ComfyCubeRuntimeOptions): ComfyC
     placement,
     authoring,
     nodes,
+    graphScope,
+    graphInventory,
+    hostPlacementGuard,
     contexts,
     metadataHud,
     proximityEndpoints,
@@ -444,6 +462,7 @@ export function createComfyCubeRuntime(options: ComfyCubeRuntimeOptions): ComfyC
       canvasGraphChanges.dispose();
       structuralGuard.dispose();
       productIdentity.dispose();
+      hostPlacementGuard.dispose();
     },
   };
 }

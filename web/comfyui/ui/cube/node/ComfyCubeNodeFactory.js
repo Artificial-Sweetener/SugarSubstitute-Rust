@@ -73,6 +73,19 @@ export function isCubeNode(value) {
         typeof value.connect === 'function' &&
         typeof value.serialize === 'function');
 }
+/** Identify a Cube before native graph insertion, including unconfigured copied wrappers. */
+export function isCubePlacementCandidate(value) {
+    if (!isRecord(value) || isSugarMarkedBlueprintNode(value))
+        return false;
+    const isSubgraphNode = value.isSubgraphNode;
+    if (typeof isSubgraphNode !== 'function' || isSubgraphNode.call(value) !== true)
+        return false;
+    if (isRecord(value.properties) && isCubeKind(value.properties.sugarcubes_kind))
+        return true;
+    return (isRecord(value.subgraph) &&
+        isRecord(value.subgraph.extra) &&
+        isCubeKind(value.subgraph.extra.sugarcubes_kind));
+}
 /** Detect a legacy Blueprint wrapper that retained Sugar markers after native publish. */
 export function isSugarMarkedBlueprintNode(value) {
     if (!isRecord(value) || !isRecord(value.properties))

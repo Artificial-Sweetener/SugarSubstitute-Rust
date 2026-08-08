@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Keep Cube identity and presentation aligned across Comfy's complete graph registry. */
+/** Keep root Cube identity and presentation aligned with Comfy's workflow graph. */
 import { isRecord } from '../../types/common.js';
 import { labelEmptyCubeBoundaryAffordances } from '../geometry/NativeCubeBoundaryLayout.js';
 import { isCubeNode, isDraftCubeNode, requireCubeIdentity, } from './ComfyCubeNodeFactory.js';
@@ -22,6 +22,7 @@ import { readInstanceId } from './CubeNodeCatalog.js';
 export class ComfyCubeNodeLifecycleAdapter {
     #graph;
     #catalog;
+    #inventory;
     #events;
     #createInstanceId;
     #logger;
@@ -35,6 +36,7 @@ export class ComfyCubeNodeLifecycleAdapter {
     constructor(options) {
         this.#graph = options.graph;
         this.#catalog = options.catalog;
+        this.#inventory = options.inventory;
         this.#events = options.events;
         this.#createInstanceId = options.createInstanceId;
         this.#logger = options.logger;
@@ -93,7 +95,7 @@ export class ComfyCubeNodeLifecycleAdapter {
     /** Assign fresh per-instance identities to copied Cubes before rebuilding the index. */
     #reconcile() {
         const seen = new Map();
-        const values = collectGraphNodes(this.#graph);
+        const values = this.#inventory.snapshot().rootCubes;
         for (const value of values) {
             if (!isCubeNode(value))
                 continue;
@@ -125,12 +127,4 @@ export class ComfyCubeNodeLifecycleAdapter {
         }
         throw new Error(`Could not allocate a unique identity for copied Cube '${String(node.id)}'.`);
     }
-}
-/** Collect root and native-subgraph nodes exactly once from Comfy's global definition map. */
-function collectGraphNodes(graph) {
-    const values = [...(graph._nodes ?? [])];
-    for (const subgraph of graph.subgraphs?.values() ?? []) {
-        values.push(...(subgraph._nodes ?? []));
-    }
-    return values;
 }

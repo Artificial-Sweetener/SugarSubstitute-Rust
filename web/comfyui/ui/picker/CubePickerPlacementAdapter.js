@@ -39,6 +39,8 @@ export class CubePickerPlacementAdapter {
         if (!descriptor || !cached) {
             throw new Error(`SugarCube picker type '${type}' is no longer available.`);
         }
+        const runtime = this.#getRuntime();
+        runtime.graphScope.assertCurrentRoot('placed');
         const liteGraph = this.#getLiteGraph();
         if (!liteGraph || typeof liteGraph.createNode !== 'function') {
             throw new Error('LiteGraph is unavailable for SugarCube placement.');
@@ -52,7 +54,6 @@ export class CubePickerPlacementAdapter {
         }
         const geometryPolicy = resolveRendererGeometryPolicy(liteGraph, this.#getNodeRenderer());
         const payload = planPlacementGeometry(insertionPayload, geometryPolicy);
-        const runtime = this.#getRuntime();
         const registrationWarnings = runtime.registerSubgraphs(payload);
         for (const warning of registrationWarnings) {
             this.#logger.warn('SugarCubes picker registered a nested definition with a warning.', {

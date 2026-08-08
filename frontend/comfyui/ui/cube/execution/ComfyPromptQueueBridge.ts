@@ -23,12 +23,14 @@ export interface ComfyPromptQueueApi {
 
 export interface ComfyPromptQueueBridgeOptions {
   api: ComfyPromptQueueApi;
+  preflight?(): void;
   transform(payload: unknown): Promise<unknown>;
 }
 
 /** Own the sole SugarCubes host queue interaction across workflow lifecycles. */
 export class ComfyPromptQueueBridge {
   readonly #api: ComfyPromptQueueApi;
+  readonly #preflight: () => void;
   readonly #transform: (payload: unknown) => Promise<unknown>;
   #original: QueuePrompt | null = null;
   #installed = false;
@@ -36,6 +38,7 @@ export class ComfyPromptQueueBridge {
   /** Bind one stable host API and one application-level prompt pipeline. */
   constructor(options: ComfyPromptQueueBridgeOptions) {
     this.#api = options.api;
+    this.#preflight = options.preflight ?? (() => undefined);
     this.#transform = options.transform;
   }
 
@@ -63,6 +66,7 @@ export class ComfyPromptQueueBridge {
   readonly #queueWrapper: QueuePrompt = async (position, payload) => {
     const original = this.#original;
     if (!original) throw new Error('SugarCubes prompt queue bridge is not installed.');
+    this.#preflight();
     const transformed = await this.#transform(payload);
     return await original.call(this.#api, position, transformed);
   };

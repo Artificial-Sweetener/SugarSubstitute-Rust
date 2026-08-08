@@ -21,11 +21,12 @@ describe('CubeAuthoringHostCommands', () => {
     const createCubeFromSelection = jest.fn<() => void>();
     const createCubeFromSubgraph = jest.fn<() => void>();
     const createEmptyCube = jest.fn<() => void>();
-    const adapter = new CubeAuthoringHostCommands(
+    const adapter = new CubeAuthoringHostCommands({
+      canAuthor: () => true,
       createCubeFromSelection,
       createCubeFromSubgraph,
       createEmptyCube,
-    );
+    });
 
     expect(adapter.getCanvasMenuItems({ selectedItems: new Set() })).toEqual([
       expect.objectContaining({ content: 'Create Empty SugarCube' }),
@@ -39,7 +40,12 @@ describe('CubeAuthoringHostCommands', () => {
   });
 
   test('does not offer Subgraph-to-Cube conversion for an existing Cube', () => {
-    const adapter = new CubeAuthoringHostCommands(jest.fn(), jest.fn(), jest.fn());
+    const adapter = new CubeAuthoringHostCommands({
+      canAuthor: () => true,
+      createCubeFromSelection: jest.fn(),
+      createCubeFromSubgraph: jest.fn(),
+      createEmptyCube: jest.fn(),
+    });
     const cube = {
       id: 'cube-1',
       pos: [0, 0],
@@ -59,5 +65,16 @@ describe('CubeAuthoringHostCommands', () => {
     expect(
       adapter.getCanvasMenuItems({ selectedItems: new Set([cube]) }).map((item) => item.content),
     ).not.toContain('Convert Selected Subgraph to SugarCube');
+  });
+
+  test('hides every Cube authoring command in a non-root graph', () => {
+    const adapter = new CubeAuthoringHostCommands({
+      canAuthor: () => false,
+      createCubeFromSelection: jest.fn(),
+      createCubeFromSubgraph: jest.fn(),
+      createEmptyCube: jest.fn(),
+    });
+
+    expect(adapter.getCanvasMenuItems({ selectedItems: new Set([{}]) })).toEqual([]);
   });
 });

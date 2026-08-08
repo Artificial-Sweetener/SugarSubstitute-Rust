@@ -33,6 +33,7 @@ import { VersionDialog } from './dialogs/VersionDialog.js';
 import { InstanceManager } from './graph/InstanceManager.js';
 import { DirtyManager } from './graph/DirtyManager.js';
 import { CubeSaveService } from './save/CubeSaveService.js';
+import { CubeSavePreflightService } from './save/CubeSavePreflightService.js';
 import { CubeEditorSaveService } from './save/CubeEditorSaveService.js';
 import { CubeLayoutService } from './layout/CubeLayoutService.js';
 import { CubeContainmentService } from './layout/CubeContainmentService.js';
@@ -67,6 +68,7 @@ interface SugarCubesUIOptions extends UnknownRecord {
   buildShiftedPlacementPayload?: OverlayManagerOptions['buildShiftedPlacementPayload'];
   getCubeAuthoring?: () => CubeCreationAuthoring;
   getCubeNodeCatalog?: () => CubeNodeCatalog | null;
+  validateCubePersistence?: () => void;
 }
 
 type InstanceRefreshOptions = Parameters<InstanceManager['scheduleRefresh']>[0];
@@ -94,7 +96,7 @@ export class SugarCubesUI {
   readonly packService: CubePackService;
   readonly identityReconciler: CubeIdentityReconciler;
   readonly promotionService: CubePromotionService;
-  readonly cubeSave: CubeSaveService;
+  readonly cubeSave: CubeSavePreflightService;
   readonly cubeAuthoring: CubeAuthoringService;
   readonly cubeCreation: CubeCreationService;
   readonly cubeEditorSave: CubeEditorSaveService;
@@ -192,7 +194,7 @@ export class SugarCubesUI {
       cubeBrowser: this.cubeBrowser,
     });
 
-    this.cubeSave = new CubeSaveService({
+    const cubeSaveWorkflow = new CubeSaveService({
       adapter: this.adapter,
       api: this.api,
       toast: this.toast,
@@ -203,6 +205,11 @@ export class SugarCubesUI {
       dialogs: this.dialogs,
       saveReconciler: this.saveReconciler,
       cubeNodeSave,
+    });
+    this.cubeSave = new CubeSavePreflightService({
+      workflow: cubeSaveWorkflow,
+      validate: options.validateCubePersistence ?? (() => undefined),
+      feedback: this.toast,
     });
 
     this.cubeAuthoring = new CubeAuthoringService({

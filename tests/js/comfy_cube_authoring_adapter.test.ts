@@ -197,7 +197,7 @@ describe('ComfyCubeAuthoringAdapter', () => {
     expect(() => adapter.validateSelection()).not.toThrow();
   });
 
-  test('uses the active native subgraph instead of the root graph for selection boundaries', () => {
+  test('rejects selection authoring while the active canvas is a nested Subgraph', () => {
     const nestedGraph = {
       links: new Map([
         [1, { id: 1, origin_id: 'input', target_id: 'image-scale' }],
@@ -216,7 +216,7 @@ describe('ComfyCubeAuthoringAdapter', () => {
       catalog: new CubeNodeCatalog(),
     });
 
-    expect(() => adapter.validateSelection()).not.toThrow();
+    expect(() => adapter.validateSelection()).toThrow('top-level workflow');
   });
 
   test('rejects an empty selection before invoking Comfy conversion', () => {
@@ -234,6 +234,37 @@ describe('ComfyCubeAuthoringAdapter', () => {
 
     expect(() => adapter.validateSelection()).toThrow('Select at least one node');
     expect(convertToSubgraph).not.toHaveBeenCalled();
+  });
+
+  test('rejects empty Cube authoring before creating a definition in a nested graph', () => {
+    const createEmptySubgraph = jest.fn(
+      (_title: string, _description: string): NativeCubeSubgraph => {
+        throw new Error('The root-placement preflight must run first.');
+      },
+    );
+    const createNode = jest.fn((_type: string) => null);
+    const add = jest.fn();
+    const adapter = new ComfyCubeAuthoringAdapter({
+      graph: { add },
+      subgraphs: new Map(),
+      convertToSubgraph: jest.fn(),
+      canvas: { selectedItems: new Set() },
+      nodeFactory: new ComfyCubeNodeFactory({ createNode }),
+      catalog: new CubeNodeCatalog(),
+      createEmptySubgraph,
+      graphScope: {
+        assertCurrentRoot() {
+          throw new Error('SugarCubes can only be created on the top-level workflow.');
+        },
+      },
+    });
+
+    expect(() =>
+      adapter.createEmptyDraft({ defaultAlias: 'Nested', instanceId: 'nested-instance' }),
+    ).toThrow('top-level workflow');
+    expect(createEmptySubgraph).not.toHaveBeenCalled();
+    expect(createNode).not.toHaveBeenCalled();
+    expect(add).not.toHaveBeenCalled();
   });
 
   test('persists an empty draft marker on its native subgraph for Nodes 2 presentation', () => {

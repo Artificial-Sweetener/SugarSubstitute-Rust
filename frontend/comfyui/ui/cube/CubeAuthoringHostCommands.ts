@@ -23,25 +23,31 @@ export interface CubeAuthoringCanvasMenuItem {
   callback?: () => unknown;
 }
 
+export interface CubeAuthoringHostCommandsOptions {
+  canAuthor(): boolean;
+  createCubeFromSelection(): unknown;
+  createCubeFromSubgraph(): unknown;
+  createEmptyCube(): unknown;
+}
+
 /** Own the host-visible entry points for creating and promoting native Cubes. */
 export class CubeAuthoringHostCommands {
   readonly #createCubeFromSelection: () => unknown;
   readonly #createCubeFromSubgraph: () => unknown;
   readonly #createEmptyCube: () => unknown;
+  readonly #canAuthor: () => boolean;
 
   /** Bind the application operations exposed through Comfy's canvas context menu. */
-  constructor(
-    createCubeFromSelection: () => unknown,
-    createCubeFromSubgraph: () => unknown,
-    createEmptyCube: () => unknown,
-  ) {
-    this.#createCubeFromSelection = createCubeFromSelection;
-    this.#createCubeFromSubgraph = createCubeFromSubgraph;
-    this.#createEmptyCube = createEmptyCube;
+  constructor(options: CubeAuthoringHostCommandsOptions) {
+    this.#canAuthor = options.canAuthor;
+    this.#createCubeFromSelection = options.createCubeFromSelection;
+    this.#createCubeFromSubgraph = options.createCubeFromSubgraph;
+    this.#createEmptyCube = options.createEmptyCube;
   }
 
   /** Build graph-authoring actions for Comfy's native canvas context menu. */
   getCanvasMenuItems(canvas: unknown): CubeAuthoringCanvasMenuItem[] {
+    if (!this.#canAuthor()) return [];
     const selectedItems = readSelectedItems(canvas);
     const selectedCount = selectedItems.length;
     const options: CubeAuthoringCanvasMenuItem[] = [

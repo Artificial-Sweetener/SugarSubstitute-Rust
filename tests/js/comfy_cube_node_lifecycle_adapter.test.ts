@@ -19,6 +19,7 @@ import { jest } from '@jest/globals';
 import type { NativeCubeSubgraph } from '../../frontend/comfyui/ui/cube/ComfyCubeGraphBuilder.js';
 import type { CubeNode } from '../../frontend/comfyui/ui/cube/node/ComfyCubeNodeFactory.js';
 import { ComfyCubeNodeLifecycleAdapter } from '../../frontend/comfyui/ui/cube/node/ComfyCubeNodeLifecycleAdapter.js';
+import { CubeGraphInventory } from '../../frontend/comfyui/ui/cube/node/CubeGraphInventory.js';
 import { CubeNodeCatalog } from '../../frontend/comfyui/ui/cube/node/CubeNodeCatalog.js';
 
 describe('ComfyCubeNodeLifecycleAdapter', () => {
@@ -46,6 +47,7 @@ describe('ComfyCubeNodeLifecycleAdapter', () => {
     const createInstanceId = jest.fn(() => 'pasted-instance');
     const adapter = new ComfyCubeNodeLifecycleAdapter({
       graph,
+      inventory: new CubeGraphInventory(graph),
       catalog,
       events,
       createInstanceId,
@@ -74,6 +76,7 @@ describe('ComfyCubeNodeLifecycleAdapter', () => {
     const createInstanceId = jest.fn(() => 'unused-instance');
     const adapter = new ComfyCubeNodeLifecycleAdapter({
       graph,
+      inventory: new CubeGraphInventory(graph),
       catalog,
       events,
       createInstanceId,
@@ -89,7 +92,7 @@ describe('ComfyCubeNodeLifecycleAdapter', () => {
     adapter.dispose();
   });
 
-  test('indexes and reidentifies Cubes placed inside native subgraphs', () => {
+  test('excludes invalid nested Cubes from identity normalization and the root catalog', () => {
     const rootCube = cubeNode('shared-instance');
     const nestedCube = cubeNode('shared-instance');
     const graph = {
@@ -100,6 +103,7 @@ describe('ComfyCubeNodeLifecycleAdapter', () => {
     const catalog = new CubeNodeCatalog();
     const adapter = new ComfyCubeNodeLifecycleAdapter({
       graph,
+      inventory: new CubeGraphInventory(graph),
       catalog,
       events,
       createInstanceId: () => 'nested-instance',
@@ -107,9 +111,9 @@ describe('ComfyCubeNodeLifecycleAdapter', () => {
     });
 
     expect(nestedCube.properties.sugarcubes_cube).toMatchObject({
-      instance_id: 'nested-instance',
+      instance_id: 'shared-instance',
     });
-    expect(catalog.list()).toEqual([rootCube, nestedCube]);
+    expect(catalog.list()).toEqual([rootCube]);
     adapter.dispose();
   });
 
@@ -123,6 +127,7 @@ describe('ComfyCubeNodeLifecycleAdapter', () => {
     const catalog = new CubeNodeCatalog();
     const adapter = new ComfyCubeNodeLifecycleAdapter({
       graph,
+      inventory: new CubeGraphInventory(graph),
       catalog,
       events,
       createInstanceId: () => 'unused-instance',

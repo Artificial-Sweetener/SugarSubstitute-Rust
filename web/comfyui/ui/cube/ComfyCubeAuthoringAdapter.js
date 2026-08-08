@@ -18,6 +18,7 @@ import { isRecord } from '../types/common.js';
 import { isDraftCubeNode, } from './node/ComfyCubeNodeFactory.js';
 import { writeCubeDefinitionIdentity } from './node/CubeDefinitionIdentityWriter.js';
 import { resolveCubeDefinitionDescription } from './node/CubeDefinitionIdentityWriter.js';
+import { ComfyCubeGraphScope } from './placement/ComfyCubeGraphScope.js';
 const DEFAULT_CUBE_SURFACE_SIZE = [720, 480];
 /** Reuse native conversion and retain its generated surface node. */
 export class ComfyCubeAuthoringAdapter {
@@ -27,6 +28,7 @@ export class ComfyCubeAuthoringAdapter {
     #canvas;
     #nodeFactory;
     #catalog;
+    #graphScope;
     #createEmptySubgraph;
     #getDraftPosition;
     /** Bind native selection conversion and Cube-node presentation metadata. */
@@ -37,6 +39,10 @@ export class ComfyCubeAuthoringAdapter {
         this.#canvas = options.canvas;
         this.#nodeFactory = options.nodeFactory;
         this.#catalog = options.catalog;
+        const fallbackRoot = options.graph ?? {};
+        this.#graphScope =
+            options.graphScope ??
+                new ComfyCubeGraphScope(fallbackRoot, () => options.canvas.graph ?? fallbackRoot);
         this.#createEmptySubgraph =
             options.createEmptySubgraph ??
                 (() => {
@@ -50,6 +56,7 @@ export class ComfyCubeAuthoringAdapter {
     }
     /** Require a non-empty native node selection before graph mutation. */
     validateSelection() {
+        this.#graphScope.assertCurrentRoot('created');
         if (this.#canvas.selectedItems.size === 0) {
             throw new Error('Select at least one node to create a SugarCube.');
         }
@@ -65,6 +72,7 @@ export class ComfyCubeAuthoringAdapter {
     }
     /** Create an empty graph-only Cube draft with its real native subgraph boundary. */
     createEmptyDraft(identity) {
+        this.#graphScope.assertCurrentRoot('created');
         const metadata = buildDraftMetadata(identity);
         const subgraph = this.#createEmptySubgraph(`Cube: ${identity.defaultAlias}`, resolveCubeDefinitionDescription(metadata));
         markSubgraphAsDraft(subgraph, metadata);
@@ -94,10 +102,12 @@ export class ComfyCubeAuthoringAdapter {
     }
     /** Require exactly one unconverted native subgraph. */
     validateSelectedSubgraph() {
+        this.#graphScope.assertCurrentRoot('converted');
         readSelectedSubgraphNode(this.#canvas.selectedItems);
     }
     /** Mark one existing native subgraph as a graph-only draft without changing its interface. */
     createDraftFromSelectedSubgraph(identity) {
+        this.#graphScope.assertCurrentRoot('converted');
         const node = readSelectedSubgraphNode(this.#canvas.selectedItems);
         return this.#finalizeDraft(node, identity);
     }

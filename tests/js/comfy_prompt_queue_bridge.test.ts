@@ -33,3 +33,24 @@ test('transforms prompts and restores only its own queue wrapper', async () => {
   bridge.dispose();
   expect(api.queuePrompt).toBe(queuePrompt);
 });
+
+test('rejects invalid nesting before transformation or host queue mutation', async () => {
+  const queuePrompt = jest.fn(async (_position: number, payload: unknown) => payload);
+  const transform = jest.fn(async (payload: unknown) => payload);
+  const api = { queuePrompt };
+  const bridge = new ComfyPromptQueueBridge({
+    api,
+    preflight: () => {
+      throw new Error('Remove the nested SugarCube wrapper.');
+    },
+    transform,
+  });
+  bridge.install();
+
+  await expect(api.queuePrompt(0, { output: {} })).rejects.toThrow(
+    'Remove the nested SugarCube wrapper.',
+  );
+  expect(transform).not.toHaveBeenCalled();
+  expect(queuePrompt).not.toHaveBeenCalled();
+  bridge.dispose();
+});

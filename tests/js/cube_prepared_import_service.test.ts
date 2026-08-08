@@ -38,6 +38,7 @@ describe('CubePreparedImportService', () => {
         registerSubgraphs,
         placement: { place },
       }),
+      assertRootPlacement: () => undefined,
       readErrorMessage: (error) => String(error),
     });
 
@@ -84,6 +85,7 @@ describe('CubePreparedImportService', () => {
       getLiteGraph: () => liteGraph,
       getNodeRenderer: () => undefined,
       getRuntime,
+      assertRootPlacement: () => undefined,
       readErrorMessage: (error) => String(error),
     });
 
@@ -104,6 +106,7 @@ describe('CubePreparedImportService', () => {
           },
         },
       }),
+      assertRootPlacement: () => undefined,
       readErrorMessage: (error) => (error instanceof Error ? error.message : String(error)),
     });
 
@@ -112,5 +115,27 @@ describe('CubePreparedImportService', () => {
       message: 'host rejected placement',
       warnings: ['Cube placement failed: host rejected placement'],
     });
+  });
+
+  test('rejects a nested import before runtime registration or placement', () => {
+    const getRuntime = jest.fn<() => never>(() => {
+      throw new Error('Runtime must not be resolved.');
+    });
+    const service = new CubePreparedImportService({
+      getGraph: () => ({}),
+      getLiteGraph: () => ({ createNode() {} }),
+      getNodeRenderer: () => 'litegraph',
+      getRuntime,
+      assertRootPlacement: () => {
+        throw new Error('SugarCubes can only be imported on the top-level workflow.');
+      },
+      readErrorMessage: (error) => (error instanceof Error ? error.message : String(error)),
+    });
+
+    expect(service.apply({ cube: { cube_id: 'example.cube' } })).toMatchObject({
+      success: false,
+      message: 'SugarCubes can only be imported on the top-level workflow.',
+    });
+    expect(getRuntime).not.toHaveBeenCalled();
   });
 });
