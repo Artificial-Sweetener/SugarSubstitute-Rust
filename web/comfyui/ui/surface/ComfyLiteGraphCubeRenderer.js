@@ -21,7 +21,7 @@ import { CubeCanvasChromeRenderer, } from './CubeCanvasChromeRenderer.js';
 import { drawComfyPrimeIcon } from './ComfyPrimeIcons.js';
 import { CubeCanvasPortRenderer } from './CubeCanvasPortRenderer.js';
 import { deriveCubeBackdropColor, resolveCubeNodeColorTheme, } from './CubeNodeColorTheme.js';
-import { resolveComfyLiteGraphCubeSurfaceTheme } from './ComfyLiteGraphNodeColorTheme.js';
+import { resolveComfyLiteGraphCubeSurfaceTheme, resolveComfyLiteGraphTitleTextColor, } from './ComfyLiteGraphNodeColorTheme.js';
 import { CUBE_PREVIEW_TITLE_LINE_HEIGHT, layoutCubeCanvasPreviewSections, } from './CubePreviewSections.js';
 /** Own only visual composition for legacy canvas Cube surfaces. */
 export class ComfyLiteGraphCubeRenderer {
@@ -51,7 +51,11 @@ export class ComfyLiteGraphCubeRenderer {
         context.fillStyle = deriveCubeBackdropColor(surfaceTheme.body);
         context.fill();
         context.clip();
-        this.#chrome.draw(context, { ...item, headerColor: surfaceTheme.header });
+        this.#chrome.draw(context, {
+            ...item,
+            headerColor: surfaceTheme.header,
+            titleTextColor: resolveComfyLiteGraphTitleTextColor(),
+        });
         for (const card of layout.cards)
             this.#drawNativeCard(context, card, cardTheme);
         if (layout.preview)

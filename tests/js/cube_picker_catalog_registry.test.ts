@@ -25,7 +25,13 @@ function response(data: UnknownRecord, ok = true): ApiJsonResult {
   return { response: { ok, status: ok ? 200 : 500 }, data };
 }
 
-function descriptor(key: string, cubeId: string, version = '1.0.0'): UnknownRecord {
+function descriptor(
+  key: string,
+  cubeId: string,
+  version = '1.0.0',
+  targetModel = '',
+  source: UnknownRecord = { kind: 'local' },
+): UnknownRecord {
   return {
     key,
     cubeId,
@@ -33,10 +39,10 @@ function descriptor(key: string, cubeId: string, version = '1.0.0'): UnknownReco
     displayName: cubeId,
     description: '',
     searchTerms: [cubeId],
-    targetModel: '',
+    targetModel,
     supportedModels: [],
     requiredCustomNodes: [],
-    source: { kind: 'local' },
+    source,
     inputs: [],
     outputs: [],
   };
@@ -104,6 +110,32 @@ describe('Cube picker catalog registry', () => {
       'SugarCubes picker payload is unavailable.',
       expect.objectContaining({ cubeId: cubeB }),
     );
+  });
+
+  test('projects native model categories and pack provenance from catalog metadata', async () => {
+    const cubeA = 'Artificial-Sweetener/Base-Cubes/Anima/demo.cube';
+    const { registry } = setup(
+      [
+        response(
+          catalog('revision-models', [
+            descriptor(keyA, cubeA, '1.0.0', 'Anima', {
+              kind: 'github',
+              repoRef: 'Artificial-Sweetener/Base-Cubes',
+            }),
+          ]),
+        ),
+      ],
+      { [cubeA]: response(payload(cubeA)) },
+    );
+
+    const result = await registry.refresh();
+
+    expect(result.definitions[0]).toMatchObject({
+      category: 'SugarCubes/Anima',
+      python_module: 'custom_nodes.Base-Cubes',
+      sugarcubes_pack_name: 'Base-Cubes',
+      sugarcubes_target_model: 'Anima',
+    });
   });
 
   test('coalesces concurrent refresh and skips unchanged revisions', async () => {

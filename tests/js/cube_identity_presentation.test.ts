@@ -23,6 +23,7 @@ describe('resolveCubeIdentityPresentation', () => {
       metadata: {
         cube_id: 'Artificial-Sweetener/Base-Cubes/Text to Image.cube',
         default_alias: 'SDXL/Text to Image',
+        target_model: 'SDXL',
         instance_alias: 'Hero image',
         cube_version: 'v2.3.1',
       },
@@ -34,6 +35,13 @@ describe('resolveCubeIdentityPresentation', () => {
     expect(identity.definitionTitle).toBe('SDXL/Text to Image');
     expect(identity.versionText).toBe('version 2.3.1');
     expect(identity.definitionLine).toBe('SDXL/Text to Image version 2.3.1');
+    expect(identity.definitionModelTitle).toMatchObject({
+      modelText: 'SDXL',
+      nameText: 'Text to Image',
+      suffixText: 'version 2.3.1',
+      usesModelPill: true,
+    });
+    expect(identity.instanceModelTitle.usesModelPill).toBe(false);
     expect(identity.awaitingFirstSave).toBe(false);
     expect(identity.sourceLine).toBe('from Base-Cubes by Artificial-Sweetener');
     expect(identity.icon.kind).toBe('initials');
@@ -45,6 +53,7 @@ describe('resolveCubeIdentityPresentation', () => {
       metadata: {
         cube_id: 'local/personal/Detailer.cube',
         default_alias: 'Detailer',
+        target_model: 'SDXL',
         has_saveable_changes: true,
       },
       instanceTitle: 'Detailer',
@@ -52,6 +61,7 @@ describe('resolveCubeIdentityPresentation', () => {
     });
 
     expect(identity.definitionLine).toBe('Detailer');
+    expect(identity.definitionModelTitle.usesModelPill).toBe(false);
     expect(identity.awaitingFirstSave).toBe(false);
     expect(identity.sourceLine).toBe('Personal Cube');
   });

@@ -20,6 +20,8 @@ import type { CubeNodeColorTheme } from './CubeNodeColorTheme.js';
 interface LiteGraphNodeColorSource {
   NODE_DEFAULT_COLOR?: unknown;
   NODE_DEFAULT_BGCOLOR?: unknown;
+  NODE_SELECTED_TITLE_COLOR?: unknown;
+  NODE_TITLE_COLOR?: unknown;
 }
 
 const LITEGRAPH_NATIVE_DEFAULT_THEME: CubeNodeColorTheme = {
@@ -42,6 +44,15 @@ export function resolveComfyLiteGraphCubeSurfaceTheme(
       readColor(source?.NODE_DEFAULT_BGCOLOR) ??
       LITEGRAPH_NATIVE_DEFAULT_THEME.body,
   };
+}
+
+/** Resolve the live LiteGraph title-text token used as the model-pill fill. */
+export function resolveComfyLiteGraphTitleTextColor(
+  source: LiteGraphNodeColorSource | null | undefined = globalThis.LiteGraph,
+): string {
+  return (
+    readColor(source?.NODE_SELECTED_TITLE_COLOR) ?? readColor(source?.NODE_TITLE_COLOR) ?? '#f0f2f5'
+  );
 }
 
 /** Narrow one dynamic host color to a non-empty Canvas color string. */

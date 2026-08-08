@@ -18,12 +18,14 @@
 export class CubePickerHostIntegration {
     #definitions;
     #creation;
+    #results;
     #logger;
     #reportError;
     /** Bind current-version host adapters to one extension-facing coordinator. */
     constructor(options) {
         this.#definitions = options.definitions;
         this.#creation = options.creation;
+        this.#results = options.results;
         this.#logger = options.logger;
         this.#reportError = options.reportError;
     }
@@ -41,10 +43,12 @@ export class CubePickerHostIntegration {
     /** Restore Sugar definitions and compatibility ordering on each Vue refresh. */
     orderForVue(definitions) {
         this.#definitions.orderForVue(definitions);
+        this.#results.schedule();
     }
     /** Activate the single shared native creation compatibility seam. */
     activate() {
         try {
+            this.#results.install();
             this.#creation.install();
         }
         catch (error) {
@@ -60,6 +64,7 @@ export class CubePickerHostIntegration {
     async refresh() {
         try {
             await this.#definitions.reconcile();
+            this.#results.schedule();
         }
         catch (error) {
             const detail = readErrorMessage(error);

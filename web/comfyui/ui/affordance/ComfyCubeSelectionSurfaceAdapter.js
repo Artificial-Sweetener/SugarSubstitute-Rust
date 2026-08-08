@@ -32,16 +32,17 @@ export class ComfyCubeSelectionSurfaceAdapter {
     #document;
     #canvas;
     #contexts;
+    #saveButton;
     #observer;
     #hiddenStates = new Map();
-    #labelStates = new Map();
-    #textStates = new Map();
+    #saveButtonStates = new Map();
     #scheduled = false;
     /** Bind the document surface and shared semantic selection resolver. */
     constructor(options) {
         this.#document = options.document;
         this.#canvas = options.canvas;
         this.#contexts = options.contexts;
+        this.#saveButton = options.saveButton;
         this.#observer = new MutationObserver(() => this.#schedule());
     }
     /** Observe Vue mounts and renderer switches, then reconcile immediately. */
@@ -99,14 +100,10 @@ export class ComfyCubeSelectionSurfaceAdapter {
             element.removeAttribute(HIDDEN_ATTRIBUTE);
         }
         this.#hiddenStates.clear();
-        for (const [element, state] of this.#labelStates) {
-            restoreAttribute(element, 'aria-label', state.ariaLabel);
-            element.title = state.title;
+        for (const [element, state] of this.#saveButtonStates) {
+            this.#saveButton.restore(element, state);
         }
-        this.#labelStates.clear();
-        for (const [element, text] of this.#textStates)
-            element.textContent = text;
-        this.#textStates.clear();
+        this.#saveButtonStates.clear();
     }
     /** Hide one hard-coded host affordance without removing Vue-owned DOM. */
     #hide(element) {
@@ -127,37 +124,16 @@ export class ComfyCubeSelectionSurfaceAdapter {
         if (button)
             this.#hide(button);
     }
-    /** Adapt one native icon button and its mounted PrimeVue tooltip. */
+    /** Adapt one native icon button through the focused PrimeVue host boundary. */
     #labelIconButton(container, selector, label) {
         const icon = container.querySelector(selector);
-        const button = icon?.closest('button');
+        if (!icon)
+            return;
+        const button = icon.closest('button');
         if (!button)
             return;
-        if (!this.#labelStates.has(button)) {
-            this.#labelStates.set(button, {
-                ariaLabel: button.getAttribute('aria-label'),
-                title: button.title,
-            });
-        }
-        button.setAttribute('aria-label', label);
-        button.title = label;
-        const tooltipId = button.getAttribute('aria-describedby');
-        const tooltipText = tooltipId
-            ? this.#document.getElementById(tooltipId)?.querySelector('.p-tooltip-text')
-            : null;
-        if (!tooltipText)
-            return;
-        if (!this.#textStates.has(tooltipText)) {
-            this.#textStates.set(tooltipText, tooltipText.textContent ?? '');
-        }
-        if (tooltipText.textContent !== label)
-            tooltipText.textContent = label;
+        const state = this.#saveButton.present(button, icon, label, this.#saveButtonStates.get(button));
+        if (!this.#saveButtonStates.has(button))
+            this.#saveButtonStates.set(button, state);
     }
-}
-/** Restore one optional host attribute exactly. */
-function restoreAttribute(element, name, value) {
-    if (value === null)
-        element.removeAttribute(name);
-    else
-        element.setAttribute(name, value);
 }

@@ -16,6 +16,10 @@
 /** Adapt Comfy's hard-coded Vue selection affordances for Cube selections. */
 
 import type { CubeEditorContextResolver } from '../surface/CubeEditorContextResolver.js';
+import type {
+  ComfyCubeSaveButtonPresentationState,
+  ComfyCubeSaveButtonPresenter,
+} from './ComfyCubeSaveButtonPresenter.js';
 
 const HIDDEN_ATTRIBUTE = 'data-sugarcubes-hidden-affordance';
 const QUICK_ACTION_SELECTORS = [
@@ -40,10 +44,10 @@ export class ComfyCubeSelectionSurfaceAdapter {
   readonly #document: Document;
   readonly #canvas: SelectionCanvas;
   readonly #contexts: CubeEditorContextResolver;
+  readonly #saveButton: ComfyCubeSaveButtonPresenter;
   readonly #observer: MutationObserver;
   readonly #hiddenStates = new Map<HTMLElement, HiddenState>();
-  readonly #labelStates = new Map<HTMLElement, LabelState>();
-  readonly #textStates = new Map<HTMLElement, string>();
+  readonly #saveButtonStates = new Map<HTMLButtonElement, ComfyCubeSaveButtonPresentationState>();
   #scheduled = false;
 
   /** Bind the document surface and shared semantic selection resolver. */
@@ -51,10 +55,12 @@ export class ComfyCubeSelectionSurfaceAdapter {
     document: Document;
     canvas: SelectionCanvas;
     contexts: CubeEditorContextResolver;
+    saveButton: ComfyCubeSaveButtonPresenter;
   }) {
     this.#document = options.document;
     this.#canvas = options.canvas;
     this.#contexts = options.contexts;
+    this.#saveButton = options.saveButton;
     this.#observer = new MutationObserver(() => this.#schedule());
   }
 
@@ -112,13 +118,10 @@ export class ComfyCubeSelectionSurfaceAdapter {
       element.removeAttribute(HIDDEN_ATTRIBUTE);
     }
     this.#hiddenStates.clear();
-    for (const [element, state] of this.#labelStates) {
-      restoreAttribute(element, 'aria-label', state.ariaLabel);
-      element.title = state.title;
+    for (const [element, state] of this.#saveButtonStates) {
+      this.#saveButton.restore(element, state);
     }
-    this.#labelStates.clear();
-    for (const [element, text] of this.#textStates) element.textContent = text;
-    this.#textStates.clear();
+    this.#saveButtonStates.clear();
   }
 
   /** Hide one hard-coded host affordance without removing Vue-owned DOM. */
@@ -141,28 +144,14 @@ export class ComfyCubeSelectionSurfaceAdapter {
     if (button) this.#hide(button);
   }
 
-  /** Adapt one native icon button and its mounted PrimeVue tooltip. */
+  /** Adapt one native icon button through the focused PrimeVue host boundary. */
   #labelIconButton(container: HTMLElement, selector: string, label: string): void {
     const icon = container.querySelector<HTMLElement>(selector);
-    const button = icon?.closest<HTMLButtonElement>('button');
+    if (!icon) return;
+    const button = icon.closest<HTMLButtonElement>('button');
     if (!button) return;
-    if (!this.#labelStates.has(button)) {
-      this.#labelStates.set(button, {
-        ariaLabel: button.getAttribute('aria-label'),
-        title: button.title,
-      });
-    }
-    button.setAttribute('aria-label', label);
-    button.title = label;
-    const tooltipId = button.getAttribute('aria-describedby');
-    const tooltipText = tooltipId
-      ? this.#document.getElementById(tooltipId)?.querySelector<HTMLElement>('.p-tooltip-text')
-      : null;
-    if (!tooltipText) return;
-    if (!this.#textStates.has(tooltipText)) {
-      this.#textStates.set(tooltipText, tooltipText.textContent ?? '');
-    }
-    if (tooltipText.textContent !== label) tooltipText.textContent = label;
+    const state = this.#saveButton.present(button, icon, label, this.#saveButtonStates.get(button));
+    if (!this.#saveButtonStates.has(button)) this.#saveButtonStates.set(button, state);
   }
 }
 
@@ -170,15 +159,4 @@ interface HiddenState {
   hidden: boolean;
   display: string;
   priority: string;
-}
-
-interface LabelState {
-  ariaLabel: string | null;
-  title: string;
-}
-
-/** Restore one optional host attribute exactly. */
-function restoreAttribute(element: HTMLElement, name: string, value: string | null): void {
-  if (value === null) element.removeAttribute(name);
-  else element.setAttribute(name, value);
 }

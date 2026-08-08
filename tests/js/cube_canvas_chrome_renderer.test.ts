@@ -69,6 +69,7 @@ describe('CubeCanvasChromeRenderer', () => {
       },
       editorButton,
       headerColor: '#333',
+      titleTextColor: '#f0f2f5',
     });
 
     expect(editorButton.draw).toHaveBeenCalledWith(context, expect.any(Number), expect.any(Number));
@@ -78,6 +79,8 @@ describe('CubeCanvasChromeRenderer', () => {
     expect(texts).toEqual(
       expect.arrayContaining([
         'from Base-Cubes by Artificial-Sweetener',
+        'SDXL',
+        'Text to Image version 2.0.0',
         comfyPrimeIconGlyph('eye'),
         comfyPrimeIconGlyph('arrow-left'),
         comfyPrimeIconGlyph('arrow-right'),
@@ -89,7 +92,13 @@ describe('CubeCanvasChromeRenderer', () => {
     );
     expect(texts).not.toEqual(expect.arrayContaining(['⇦', '⇨', '▱', '◉']));
     expect(context.stroke).not.toHaveBeenCalled();
-    expect(context.roundRect).not.toHaveBeenCalled();
+    expect(context.roundRect).toHaveBeenCalledWith(
+      expect.any(Number),
+      expect.any(Number),
+      expect.any(Number),
+      expect.any(Number),
+      expect.any(Number),
+    );
   });
 
   test('draws the crossed-out save mark only for a Cube awaiting its first save', () => {
@@ -119,6 +128,7 @@ describe('CubeCanvasChromeRenderer', () => {
       chromeActions: null,
       editorButton: null,
       headerColor: '#333',
+      titleTextColor: '#f0f2f5',
     });
 
     const texts = (
@@ -149,6 +159,7 @@ function cubeNode(inner: CubeNode['subgraph']['_nodes'][number]): CubeNode {
         instance_id: 'cube-instance',
         cube_id: 'Artificial-Sweetener/Base-Cubes/Text to Image.cube',
         default_alias: 'SDXL/Text to Image',
+        target_model: 'SDXL',
         cube_version: 'v2.0.0',
       },
       sugarcubes_surface: {},
@@ -191,6 +202,8 @@ function drawingContext(): CanvasRenderingContext2D {
     translate: jest.fn(),
     scale: jest.fn(),
     fillRect: jest.fn(),
+    beginPath: jest.fn(),
+    fill: jest.fn(),
     fillText: jest.fn(),
     measureText: jest.fn(
       () =>

@@ -87,6 +87,7 @@ const cubeRuntimeLifecycle = new ComfyCubeRuntimeLifecycle(createCubeRuntime);
 const cubePicker = createComfyCubePickerIntegration({
     api: cubeApi,
     app,
+    document: documentRef ?? document,
     getLiteGraph: () => adapter.getLiteGraph?.(),
     getNodeRenderer: () => adapter.getNodeRenderer?.(),
     getRuntime: requireCubeRuntime,

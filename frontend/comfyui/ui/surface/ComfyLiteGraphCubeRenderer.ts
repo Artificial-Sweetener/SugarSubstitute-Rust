@@ -36,7 +36,10 @@ import {
   resolveCubeNodeColorTheme,
   type CubeNodeColorTheme,
 } from './CubeNodeColorTheme.js';
-import { resolveComfyLiteGraphCubeSurfaceTheme } from './ComfyLiteGraphNodeColorTheme.js';
+import {
+  resolveComfyLiteGraphCubeSurfaceTheme,
+  resolveComfyLiteGraphTitleTextColor,
+} from './ComfyLiteGraphNodeColorTheme.js';
 import {
   CUBE_PREVIEW_TITLE_LINE_HEIGHT,
   layoutCubeCanvasPreviewSections,
@@ -104,7 +107,11 @@ export class ComfyLiteGraphCubeRenderer {
     context.fill();
     context.clip();
 
-    this.#chrome.draw(context, { ...item, headerColor: surfaceTheme.header });
+    this.#chrome.draw(context, {
+      ...item,
+      headerColor: surfaceTheme.header,
+      titleTextColor: resolveComfyLiteGraphTitleTextColor(),
+    });
     for (const card of layout.cards) this.#drawNativeCard(context, card, cardTheme);
     if (layout.preview) this.#drawPreview(context, layout.preview, item);
     this.#ports.draw(context, layout);

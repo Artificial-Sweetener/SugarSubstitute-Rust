@@ -192,10 +192,13 @@ describe('ui hooks and scheduling', () => {
                   displayName: 'Demo Cube',
                   description: 'Picker demo',
                   searchTerms: ['Demo Cube'],
-                  targetModel: '',
+                  targetModel: 'Anima',
                   supportedModels: [],
                   requiredCustomNodes: [],
-                  source: { kind: 'local' },
+                  source: {
+                    kind: 'github',
+                    repoRef: 'Artificial-Sweetener/Base-Cubes',
+                  },
                   inputs: [],
                   outputs: [],
                 },
@@ -223,8 +226,10 @@ describe('ui hooks and scheduling', () => {
     expect(definitions[type]).toMatchObject({
       name: type,
       display_name: 'Demo Cube',
-      category: 'SugarCubes',
-      python_module: 'custom_nodes.SugarCubes',
+      category: 'SugarCubes/Anima',
+      python_module: 'custom_nodes.Base-Cubes',
+      sugarcubes_pack_name: 'Base-Cubes',
+      sugarcubes_target_model: 'Anima',
     });
 
     const vueDefinitions: UnknownRecord[] = [{ name: 'Ordinary' }];

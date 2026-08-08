@@ -16,7 +16,6 @@
 /** Compose one Cube face around host-rendered native node cards. */
 
 import type { ComfyGraph, ComfyNode } from '../types/graph.js';
-import { CubeFaceActionsView } from './CubeFaceActionsView.js';
 import {
   resolveCubeFaceCardPresentation,
   type CubeFaceCardDecision,
@@ -32,10 +31,9 @@ import { layoutCubeSurfaceDom } from './CubeSurfaceDomLayout.js';
 import type { CubeSurfaceState } from './CubeSurfaceState.js';
 import { NativeCardGeometryObserver } from './NativeCardGeometryObserver.js';
 import type { CubeIdentityPresentation } from '../cube/CubeIdentityPresentation.js';
-import { createResolvedCubeIconElement } from '../core/CubeIconResolver.js';
 import type { CubeFaceChromeActions, CubeFaceChromeMetadata } from './CubeFaceChromeActions.js';
-import { createCubeUnsavedIndicator } from './CubeUnsavedIndicator.js';
 import { CubePreviewFrameResizePolicy } from './CubePreviewFrameResizePolicy.js';
+import { CubeFaceHeaderView } from './CubeFaceHeaderView.js';
 
 export interface CubeSurfaceViewOptions {
   document: Document;
@@ -62,7 +60,7 @@ export class CubeSurfaceView {
   readonly #onStateChange: (state: CubeSurfaceState) => void;
   readonly #onMinimumHeightChange: ((minimumHeight: number) => void) | null;
   readonly #cardHost: NativeNodeCardHost;
-  readonly #actions: CubeFaceActionsView;
+  readonly #headerView: CubeFaceHeaderView;
   readonly #content: HTMLDivElement;
   readonly #masonry: HTMLDivElement;
   readonly #previewDivider: HTMLButtonElement;
@@ -88,43 +86,13 @@ export class CubeSurfaceView {
     this.element.className = 'sugarcubes-cube-face';
     this.element.setAttribute('aria-label', `${options.identity.instanceTitle} Cube contents`);
 
-    this.header = options.document.createElement('header');
-    this.header.className = 'sugarcubes-cube-face__header';
-    const identity = options.document.createElement('div');
-    identity.className = 'sugarcubes-cube-face__identity';
-    const icon = createResolvedCubeIconElement(
-      options.document,
-      options.identity.icon,
-      'sugarcubes-cube-face__icon',
-    );
-    const title = options.document.createElement('strong');
-    title.className = 'sugarcubes-cube-face__title';
-    title.textContent = options.identity.instanceTitle;
-    identity.append(icon, title);
-    const definitionBadge = options.document.createElement('div');
-    definitionBadge.className = 'sugarcubes-cube-face__definition-badge';
-    definitionBadge.dataset.cubeDefinitionBadge = '';
-    const definitionName = options.document.createElement('span');
-    definitionName.className = 'sugarcubes-cube-face__definition-name';
-    definitionName.dataset.cubeDefinitionName = '';
-    definitionName.textContent = options.identity.definitionLine;
-    const definitionSource = options.document.createElement('span');
-    definitionSource.className = 'sugarcubes-cube-face__definition-source';
-    definitionSource.dataset.cubeDefinitionSource = '';
-    const source = options.document.createElement('span');
-    source.className = 'sugarcubes-cube-face__source';
-    source.textContent = options.identity.sourceLine;
-    definitionSource.append(source);
-    definitionBadge.append(definitionName, definitionSource);
-    this.#actions = new CubeFaceActionsView(
-      options.document,
-      options.metadata ?? {},
-      options.chromeActions,
-    );
-    if (options.identity.awaitingFirstSave) {
-      this.#actions.element.prepend(createCubeUnsavedIndicator(options.document));
-    }
-    this.header.append(identity, definitionBadge, this.#actions.element);
+    this.#headerView = new CubeFaceHeaderView({
+      document: options.document,
+      identity: options.identity,
+      metadata: options.metadata ?? {},
+      chromeActions: options.chromeActions ?? null,
+    });
+    this.header = this.#headerView.element;
 
     this.#content = options.document.createElement('div');
     this.#content.className = 'sugarcubes-cube-face__content';
@@ -227,7 +195,7 @@ export class CubeSurfaceView {
 
   /** Remove native card mounts owned by this view. */
   dispose(): void {
-    this.#actions.dispose();
+    this.#headerView.dispose();
     this.#previewDividerController?.dispose();
     this.#geometryObserver.dispose();
     this.#cardHost.dispose();
@@ -242,7 +210,7 @@ export class CubeSurfaceView {
       this.#commitCardChange();
     });
     this.#geometryObserver.observe(this.#cells);
-    this.#actions.render(presentation.menuEntries, (nodeId, revealed) => {
+    this.#headerView.renderActions(presentation.menuEntries, (nodeId, revealed) => {
       const node = this.#nodes.find((candidate) => String(candidate.id ?? '') === nodeId);
       if (!node) return;
       setCubeFaceCardRevealed(this.#state, node, revealed);

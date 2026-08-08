@@ -22,6 +22,7 @@ import { CubeBrowserView } from './CubeBrowserView.js';
 import { CubePreviewRenderer } from './CubePreviewRenderer.js';
 import { injectBrowserStyles } from './BrowserStyles.js';
 import { deriveCubeIdFromDefaultAlias, normalizeDefaultAliasTitle } from '../core/CubeId.js';
+import { resolveCubePackIdentity } from '../core/CubePackIdentity.js';
 import {
   deriveTargetModelCubeId,
   deriveTargetModelFromCubeId,
@@ -152,11 +153,6 @@ interface SemverParts {
 }
 interface ModelEditor {
   input: HTMLInputElement;
-}
-interface CubePackGroup {
-  key: string;
-  label: string;
-  authorLabel: string;
 }
 
 const unavailableApiCall = async (): Promise<ApiJsonResult> => {
@@ -708,7 +704,7 @@ export class CubeBrowserController {
       if (!cube || typeof cube !== 'object') {
         continue;
       }
-      const pack = deriveCubePackGroup(cube);
+      const pack = resolveCubePackIdentity(cube);
       const entry = groups.get(pack.key) || { ...pack, cubes: [] };
       entry.cubes.push(cube);
       groups.set(pack.key, entry);
@@ -1768,74 +1764,6 @@ export class CubeBrowserController {
       // ignore storage failures
     }
   }
-}
-
-/**
- * Return the browser list group label with pack name ahead of author.
- */
-function deriveCubePackGroup(cube: CubeLibraryEntry): CubePackGroup {
-  const source = isRecord(cube.source) ? cube.source : {};
-  const sourceType = normalizeText(source.type);
-  const owner = normalizeText(cube?.owner) || normalizeText(source.owner);
-  const repo = normalizeText(cube?.repo) || normalizeText(source.repo);
-  const namespace = normalizeText(cube?.namespace) || normalizeText(source.namespace);
-  const repoRef = normalizeText(source.repo_ref);
-  if (repo && owner) {
-    return {
-      key: `github:${owner.toLowerCase()}/${repo.toLowerCase()}`,
-      label: repo,
-      authorLabel: owner,
-    };
-  }
-  if (repoRef.includes('/')) {
-    const [repoOwner, repoName] = repoRef.split('/', 2).map((part) => part.trim());
-    if (repoOwner && repoName) {
-      return {
-        key: `github:${repoOwner.toLowerCase()}/${repoName.toLowerCase()}`,
-        label: repoName,
-        authorLabel: repoOwner,
-      };
-    }
-  }
-  if (sourceType === 'local' || namespace) {
-    const localAuthor = namespace || 'local';
-    return {
-      key: `local:${localAuthor.toLowerCase()}`,
-      label: 'local',
-      authorLabel: namespace,
-    };
-  }
-  return deriveLegacyAuthorPackGroup(cube);
-}
-
-/**
- * Preserve useful grouping for older payloads that only expose author text.
- */
-function deriveLegacyAuthorPackGroup(cube: CubeLibraryEntry): CubePackGroup {
-  const author = normalizeText(cube?.author);
-  if (author.includes('/')) {
-    const [owner, repo] = author.split('/', 2).map((part) => part.trim());
-    if (owner && repo) {
-      return {
-        key: `legacy:${owner.toLowerCase()}/${repo.toLowerCase()}`,
-        label: repo,
-        authorLabel: owner,
-      };
-    }
-  }
-  const label = author || 'Unknown';
-  return {
-    key: `legacy:${label.toLowerCase()}`,
-    label,
-    authorLabel: '',
-  };
-}
-
-/**
- * Normalize optional payload text before deriving browser group labels.
- */
-function normalizeText(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
 }
 
 /** Return whether an API payload contains a structured error. */

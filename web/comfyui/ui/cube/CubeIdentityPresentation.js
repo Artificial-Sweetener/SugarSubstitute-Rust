@@ -18,6 +18,7 @@ import { resolveCubeIconModel } from '../core/CubeIconResolver.js';
 import { parseCanonicalCubeId } from '../core/CubeId.js';
 import { resolveCubeDisplayName, resolveInstanceDisplayName, } from '../graph/GroupMetadata.js';
 import { isRecord } from '../types/common.js';
+import { resolveCubeModelTitle, resolveDefaultInstanceModelTitle, } from './CubeModelTitlePresentation.js';
 /** Format one persisted Cube version with the former group-chrome wording. */
 export function formatCubeVersionText(metadata) {
     const version = typeof metadata.cube_version === 'string' ? metadata.cube_version.trim() : '';
@@ -73,6 +74,17 @@ export function resolveCubeIdentityPresentation(input) {
             fallback: definitionTitle,
         });
     const versionText = formatCubeVersionText(metadata);
+    const targetModel = typeof metadata.target_model === 'string' ? metadata.target_model.trim() : '';
+    const instanceModelTitle = resolveDefaultInstanceModelTitle({
+        targetModel,
+        instanceTitle,
+        defaultAlias: definitionTitle,
+    });
+    const definitionModelTitle = resolveCubeModelTitle({
+        targetModel,
+        title: definitionTitle,
+        suffix: versionText,
+    });
     const cubeId = typeof metadata.cube_id === 'string' ? metadata.cube_id.trim() : '';
     const sourceLine = cubeId
         ? formatCubeSourceText(metadata, input.fallbackSource ?? null)
@@ -81,7 +93,9 @@ export function resolveCubeIdentityPresentation(input) {
         instanceTitle,
         definitionTitle,
         versionText,
-        definitionLine: versionText ? `${definitionTitle} ${versionText}` : definitionTitle,
+        definitionLine: definitionModelTitle.accessibleText,
+        instanceModelTitle,
+        definitionModelTitle,
         awaitingFirstSave: isCubeAwaitingFirstSave(metadata),
         sourceLine,
         icon: resolveCubeIconModel(metadata),

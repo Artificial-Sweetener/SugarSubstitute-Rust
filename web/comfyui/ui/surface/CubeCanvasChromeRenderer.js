@@ -20,9 +20,11 @@ import { drawFallbackInitialsCanvas } from '../core/CubeFallbackIconRenderer.js'
 import { resolveCubeFaceTitlebarActions, } from './CubeFaceChromeActions.js';
 import { drawComfyPrimeIcon } from './ComfyPrimeIcons.js';
 import { drawCubeUnsavedIndicator } from './CubeUnsavedIndicator.js';
+import { CubeModelPillCanvasRenderer } from './CubeModelPillCanvasRenderer.js';
 /** Own Cube header composition without owning cards, previews, or interaction. */
 export class CubeCanvasChromeRenderer {
     #icons;
+    #modelTitles = new CubeModelPillCanvasRenderer();
     /** Bind Cube-definition icon loading to the header renderer. */
     constructor(icons) {
         this.#icons = icons;
@@ -37,22 +39,37 @@ export class CubeCanvasChromeRenderer {
         });
         context.fillStyle = item.headerColor;
         context.fillRect(layout.header.x, layout.header.y, layout.header.width, layout.header.height);
-        context.font = '600 16px sans-serif';
-        context.textBaseline = 'middle';
         const iconSize = 24;
         const iconX = layout.header.x + 12;
         const iconY = layout.header.y + (layout.header.height - iconSize) / 2;
         this.#drawDefinitionIcon(context, identity.icon, iconX, iconY, iconSize);
-        context.fillStyle = '#f0f2f5';
-        context.fillText(identity.instanceTitle, iconX + iconSize + 7, layout.header.y + layout.header.height / 2, Math.max(1, layout.header.width / 2 - iconSize - 34));
+        this.#modelTitles.draw(context, identity.instanceModelTitle, {
+            x: iconX + iconSize + 7,
+            y: layout.header.y + layout.header.height / 2,
+            maxWidth: Math.max(1, layout.header.width / 2 - iconSize - 34),
+            font: '600 16px sans-serif',
+            fontFamily: 'sans-serif',
+            fontSize: 16,
+            textColor: item.titleTextColor,
+            punchoutColor: item.headerColor,
+            align: 'left',
+        });
         context.save();
         context.textAlign = 'center';
         context.textBaseline = 'middle';
         const definitionCenterX = layout.header.x + layout.header.width / 2;
         const definitionMaxWidth = Math.max(1, layout.editAction.x - definitionCenterX - 8);
-        context.font = '12px sans-serif';
-        context.fillStyle = '#d7dbe2';
-        context.fillText(identity.definitionLine, definitionCenterX, layout.header.y + layout.header.height / 2 - 6, definitionMaxWidth);
+        this.#modelTitles.draw(context, identity.definitionModelTitle, {
+            x: definitionCenterX,
+            y: layout.header.y + layout.header.height / 2 - 6,
+            maxWidth: definitionMaxWidth,
+            font: '12px sans-serif',
+            fontFamily: 'sans-serif',
+            fontSize: 12,
+            textColor: item.titleTextColor,
+            punchoutColor: item.headerColor,
+            align: 'center',
+        });
         context.font = '10px sans-serif';
         context.fillStyle = '#aeb4bd';
         context.fillText(identity.sourceLine, definitionCenterX, layout.header.y + layout.header.height / 2 + 7, definitionMaxWidth);

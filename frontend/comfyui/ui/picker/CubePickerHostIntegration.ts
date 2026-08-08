@@ -18,10 +18,12 @@
 import type { UnknownRecord } from '../types/common.js';
 import type { ComfyCubePickerCreationAdapter } from './ComfyCubePickerCreationAdapter.js';
 import type { ComfyCubePickerDefinitionAdapter } from './ComfyCubePickerDefinitionAdapter.js';
+import type { ComfyCubePickerResultPresenter } from './ComfyCubePickerResultPresenter.js';
 
 export interface CubePickerHostIntegrationOptions {
   definitions: ComfyCubePickerDefinitionAdapter;
   creation: ComfyCubePickerCreationAdapter;
+  results: ComfyCubePickerResultPresenter;
   logger: Pick<Console, 'error'>;
   reportError(summary: string, detail: string): void;
 }
@@ -30,6 +32,7 @@ export interface CubePickerHostIntegrationOptions {
 export class CubePickerHostIntegration {
   readonly #definitions: ComfyCubePickerDefinitionAdapter;
   readonly #creation: ComfyCubePickerCreationAdapter;
+  readonly #results: ComfyCubePickerResultPresenter;
   readonly #logger: Pick<Console, 'error'>;
   readonly #reportError: (summary: string, detail: string) => void;
 
@@ -37,6 +40,7 @@ export class CubePickerHostIntegration {
   constructor(options: CubePickerHostIntegrationOptions) {
     this.#definitions = options.definitions;
     this.#creation = options.creation;
+    this.#results = options.results;
     this.#logger = options.logger;
     this.#reportError = options.reportError;
   }
@@ -55,11 +59,13 @@ export class CubePickerHostIntegration {
   /** Restore Sugar definitions and compatibility ordering on each Vue refresh. */
   orderForVue(definitions: UnknownRecord[]): void {
     this.#definitions.orderForVue(definitions);
+    this.#results.schedule();
   }
 
   /** Activate the single shared native creation compatibility seam. */
   activate(): void {
     try {
+      this.#results.install();
       this.#creation.install();
     } catch (error: unknown) {
       const detail = readErrorMessage(error);
@@ -75,6 +81,7 @@ export class CubePickerHostIntegration {
   async refresh(): Promise<void> {
     try {
       await this.#definitions.reconcile();
+      this.#results.schedule();
     } catch (error: unknown) {
       const detail = readErrorMessage(error);
       this.#logger.error('SugarCubes picker catalog reconciliation failed.', { detail, error });

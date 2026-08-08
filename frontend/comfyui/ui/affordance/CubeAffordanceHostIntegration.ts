@@ -23,11 +23,13 @@ import type { CubeHostAffordanceController } from './CubeHostAffordanceControlle
 import { ComfyCubeCommandAdapter } from './ComfyCubeCommandAdapter.js';
 import { ComfyCubeEditorChromeAdapter } from './ComfyCubeEditorChromeAdapter.js';
 import { ComfyCubeNativeMenuAdapter } from './ComfyCubeNativeMenuAdapter.js';
+import { ComfyCubeSaveButtonPresenter } from './ComfyCubeSaveButtonPresenter.js';
 import { ComfyCubeSelectionSurfaceAdapter } from './ComfyCubeSelectionSurfaceAdapter.js';
 import { ComfyCubeWorkflowActionsMenuAdapter } from './ComfyCubeWorkflowActionsMenuAdapter.js';
 import { CubeMissingNodeLabelAdapter } from './CubeMissingNodeLabelAdapter.js';
 import { CubeInstanceRenameGuard } from './CubeInstanceRenameGuard.js';
 import { CubeNodeTooltipAdapter } from './CubeNodeTooltipAdapter.js';
+import { PrimeVueTooltipPresentationAdapter } from './PrimeVueTooltipPresentationAdapter.js';
 
 interface AffordanceCanvas {
   graph?: object;
@@ -95,10 +97,18 @@ export class CubeAffordanceHostIntegration {
       this.#commands?.dispose();
       this.#commands = null;
     }
+    const tooltips = new PrimeVueTooltipPresentationAdapter({
+      document: this.#document,
+      logger: this.#logger,
+    });
     this.#selectionSurface = new ComfyCubeSelectionSurfaceAdapter({
       document: this.#document,
       canvas: this.#canvas,
       contexts: runtime.contexts,
+      saveButton: new ComfyCubeSaveButtonPresenter({
+        document: this.#document,
+        tooltips,
+      }),
     });
     this.#selectionSurface.install();
     this.#instanceRename = new CubeInstanceRenameGuard({

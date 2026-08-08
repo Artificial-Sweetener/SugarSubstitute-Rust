@@ -16,6 +16,8 @@
 /** Verify Vue toolbox and More Options adaptation through stable host anchors. */
 
 import { ComfyCubeSelectionSurfaceAdapter } from '../../frontend/comfyui/ui/affordance/ComfyCubeSelectionSurfaceAdapter.js';
+import { ComfyCubeSaveButtonPresenter } from '../../frontend/comfyui/ui/affordance/ComfyCubeSaveButtonPresenter.js';
+import { PrimeVueTooltipPresentationAdapter } from '../../frontend/comfyui/ui/affordance/PrimeVueTooltipPresentationAdapter.js';
 import type { CubeNode } from '../../frontend/comfyui/ui/cube/node/ComfyCubeNodeFactory.js';
 import { CubeNodeCatalog } from '../../frontend/comfyui/ui/cube/node/CubeNodeCatalog.js';
 import { CubeEditorContextResolver } from '../../frontend/comfyui/ui/surface/CubeEditorContextResolver.js';
@@ -27,7 +29,8 @@ test('hides structural actions and relabels native Cube actions without parsing 
   unpack.setAttribute('data-testid', 'convert-to-subgraph-button');
   const publish = buttonWithIcon('icon-[lucide--book-open]');
   publish.setAttribute('aria-label', 'Publish Subgraph');
-  publish.setAttribute('aria-describedby', 'publish-tooltip');
+  Reflect.set(publish, '$_ptooltipValue', 'Publish Subgraph');
+  publish.firstElementChild?.setAttribute('style', 'display: inline-flex !important');
   const configure = buttonWithIcon('icon-[lucide--settings-2]');
   toolbox.append(unpack, publish, configure);
   const menu = element('div', { class: 'p-contextmenu' });
@@ -36,15 +39,16 @@ test('hides structural actions and relabels native Cube actions without parsing 
   const infoItem = element('li');
   infoItem.append(element('i', { class: 'pi pi-info-circle' }));
   menu.append(libraryItem, infoItem);
-  const tooltip = element('div', { id: 'publish-tooltip' });
-  tooltip.append(element('span', { class: 'p-tooltip-text' }));
-  tooltip.querySelector<HTMLElement>('.p-tooltip-text')!.textContent = 'Publish Subgraph';
-  document.body.append(toolbox, menu, tooltip);
+  document.body.append(toolbox, menu);
   const canvas = { selectedItems: new Set<unknown>([cubeNode()]) };
   const adapter = new ComfyCubeSelectionSurfaceAdapter({
     document,
     canvas,
     contexts: new CubeEditorContextResolver(new CubeNodeCatalog()),
+    saveButton: new ComfyCubeSaveButtonPresenter({
+      document,
+      tooltips: new PrimeVueTooltipPresentationAdapter({ document, logger: console }),
+    }),
   });
 
   adapter.refresh();
@@ -53,7 +57,26 @@ test('hides structural actions and relabels native Cube actions without parsing 
   expect(libraryItem.style.getPropertyPriority('display')).toBe('important');
   expect(infoItem.hidden).toBe(true);
   expect(publish.getAttribute('aria-label')).toBe('Save Cube');
-  expect(tooltip.textContent).toBe('Save Cube');
+  expect(Reflect.get(publish, '$_ptooltipValue')).toBe('Save Cube');
+  expect(publish.hasAttribute('title')).toBe(false);
+  expect(publish.querySelector<HTMLElement>('i[class="icon-[lucide--book-open]"]')?.hidden).toBe(
+    true,
+  );
+  expect(
+    publish
+      .querySelector<HTMLElement>('i[class="icon-[lucide--book-open]"]')
+      ?.style.getPropertyValue('display'),
+  ).toBe('none');
+  const saveIcon = publish.querySelector<HTMLElement>('[data-sugarcubes-save-cube-icon]');
+  expect(saveIcon?.getAttribute('aria-hidden')).toBe('true');
+  expect(saveIcon?.querySelector('i[class="icon-[lucide--box]"]')).not.toBeNull();
+  const saveBadge = saveIcon?.querySelector<HTMLElement>('[data-sugarcubes-save-cube-badge]');
+  expect(document.getElementById('sugarcubes-save-cube-button-styles')?.textContent).toContain(
+    'background: var(--comfy-menu-bg, rgb(24 24 27))',
+  );
+  expect(saveBadge?.querySelector('i[class="icon-[lucide--save]"]')).not.toBeNull();
+  adapter.refresh();
+  expect(publish.querySelectorAll('[data-sugarcubes-save-cube-icon]')).toHaveLength(1);
   expect(configure.hidden).toBe(true);
   canvas.selectedItems = new Set();
   adapter.refresh();
@@ -61,7 +84,22 @@ test('hides structural actions and relabels native Cube actions without parsing 
   expect(libraryItem.hidden).toBe(false);
   expect(libraryItem.style.display).toBe('');
   expect(publish.getAttribute('aria-label')).toBe('Publish Subgraph');
-  expect(tooltip.textContent).toBe('Publish Subgraph');
+  expect(Reflect.get(publish, '$_ptooltipValue')).toBe('Publish Subgraph');
+  expect(publish.hasAttribute('title')).toBe(false);
+  expect(publish.querySelector<HTMLElement>('i[class="icon-[lucide--book-open]"]')?.hidden).toBe(
+    false,
+  );
+  expect(
+    publish
+      .querySelector<HTMLElement>('i[class="icon-[lucide--book-open]"]')
+      ?.style.getPropertyValue('display'),
+  ).toBe('inline-flex');
+  expect(
+    publish
+      .querySelector<HTMLElement>('i[class="icon-[lucide--book-open]"]')
+      ?.style.getPropertyPriority('display'),
+  ).toBe('important');
+  expect(publish.querySelector('[data-sugarcubes-save-cube-icon]')).toBeNull();
   expect(configure.hidden).toBe(false);
 });
 

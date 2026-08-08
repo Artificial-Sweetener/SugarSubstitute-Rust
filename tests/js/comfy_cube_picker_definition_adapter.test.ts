@@ -46,12 +46,12 @@ describe('ComfyCubePickerDefinitionAdapter', () => {
     };
 
     await adapter.contribute(startupDefinitions);
-    expect(startupDefinitions[typeA]?.category).toBe('SugarCubes');
+    expect(startupDefinitions[typeA]?.category).toBe('SugarCubes/Unspecified');
 
     current = [definition(typeB, 'Cube B')];
     const vueDefinitions: UnknownRecord[] = [
       { name: 'Ordinary' },
-      { name: typeA, category: 'SugarCubes' },
+      { name: typeA, category: 'SugarCubes/Unspecified' },
     ];
     adapter.orderForVue(vueDefinitions);
     expect(vueDefinitions.map(({ name }) => name)).toEqual([typeB, 'Ordinary']);
@@ -76,7 +76,7 @@ describe('ComfyCubePickerDefinitionAdapter', () => {
 
     expect(definitions.map(({ category }) => category)).toEqual([
       'Subgraph Blueprints',
-      'SugarCubes',
+      'SugarCubes/Unspecified',
       'sampling',
       'image',
     ]);
@@ -141,8 +141,10 @@ function definition(name: string, displayName: string): ComfyCubeNodeDefinition 
     name,
     display_name: displayName,
     description: '',
-    category: 'SugarCubes',
-    python_module: 'custom_nodes.SugarCubes',
+    category: 'SugarCubes/Unspecified',
+    python_module: 'custom_nodes.local',
+    sugarcubes_pack_name: 'local',
+    sugarcubes_target_model: 'Unspecified',
     output_node: false,
     input: { required: {} },
     input_order: { required: [] },

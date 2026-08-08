@@ -16,11 +16,14 @@
 /** Translate host-neutral picker descriptors into Comfy V1 node definitions. */
 
 import type { CubePickerDescriptor } from './CubePickerDescriptor.js';
+import { resolveCubePackIdentity } from '../core/CubePackIdentity.js';
 
 /** Reserve one collision-resistant namespace for picker-only Cube definitions. */
 export const CUBE_NODE_TYPE_PREFIX = 'SugarCubes.Cube.';
 /** Advertise Cubes as their own truthful top-level Comfy category. */
 export const CUBE_NODE_CATEGORY = 'SugarCubes';
+/** Keep legacy Cubes discoverable without pretending they target a known model. */
+export const CUBE_UNSPECIFIED_MODEL_CATEGORY = 'Unspecified';
 
 export interface ComfyCubeInputOptions {
   forceInput: true;
@@ -33,8 +36,10 @@ export interface ComfyCubeNodeDefinition {
   name: string;
   display_name: string;
   description: string;
-  category: typeof CUBE_NODE_CATEGORY;
-  python_module: 'custom_nodes.SugarCubes';
+  category: string;
+  python_module: string;
+  sugarcubes_pack_name: string;
+  sugarcubes_target_model: string;
   output_node: false;
   input: { required: Record<string, ComfyCubeInputSpec> };
   input_order: { required: string[] };
@@ -50,12 +55,16 @@ export function projectComfyCubeNodeDef(descriptor: CubePickerDescriptor): Comfy
   for (const boundary of descriptor.inputs) {
     required[boundary.name] = [boundary.type, { forceInput: true, display_name: boundary.label }];
   }
+  const targetModel = descriptor.targetModel || CUBE_UNSPECIFIED_MODEL_CATEGORY;
+  const pack = resolveCubePackIdentity(descriptor);
   return {
     name: `${CUBE_NODE_TYPE_PREFIX}${descriptor.key}`,
     display_name: descriptor.displayName,
     description: descriptor.description,
-    category: CUBE_NODE_CATEGORY,
-    python_module: 'custom_nodes.SugarCubes',
+    category: `${CUBE_NODE_CATEGORY}/${targetModel}`,
+    python_module: `custom_nodes.${pack.label}`,
+    sugarcubes_pack_name: pack.label,
+    sugarcubes_target_model: targetModel,
     output_node: false,
     input: { required },
     input_order: { required: descriptor.inputs.map((boundary) => boundary.name) },

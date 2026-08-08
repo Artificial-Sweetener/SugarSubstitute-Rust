@@ -48,8 +48,10 @@ describe('Comfy Cube node-definition projection', () => {
       name: `${CUBE_NODE_TYPE_PREFIX}${KEY}`,
       display_name: 'Demo',
       description: 'Demo Cube',
-      category: 'SugarCubes',
-      python_module: 'custom_nodes.SugarCubes',
+      category: 'SugarCubes/SDXL',
+      python_module: 'custom_nodes.repo',
+      sugarcubes_pack_name: 'repo',
+      sugarcubes_target_model: 'SDXL',
       output_node: false,
       input: {
         required: {
@@ -70,6 +72,12 @@ describe('Comfy Cube node-definition projection', () => {
     expect(definition.input.required).toEqual({});
     expect(definition.output).toEqual([]);
     expect(definition.output_name).toEqual([]);
+  });
+
+  test('keeps legacy descriptors discoverable under an explicit model fallback', () => {
+    const definition = projectComfyCubeNodeDef(descriptor({ targetModel: '' }));
+
+    expect(definition.category).toBe('SugarCubes/Unspecified');
   });
 
   test('rejects incompatible schemas and duplicate boundary names', () => {

@@ -14,7 +14,6 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Compose one Cube face around host-rendered native node cards. */
-import { CubeFaceActionsView } from './CubeFaceActionsView.js';
 import { resolveCubeFaceCardPresentation, } from './CubeFaceCardPolicy.js';
 import { setCubeFaceCardRevealed, setCubeFaceNodeEnabled } from './CubeFaceCardStateController.js';
 import { NativeNodeCardHost } from './NativeNodeCardHost.js';
@@ -22,9 +21,8 @@ import { CubePreviewRailView } from './CubePreviewRailView.js';
 import { CubePreviewDividerController } from './CubePreviewDividerController.js';
 import { layoutCubeSurfaceDom } from './CubeSurfaceDomLayout.js';
 import { NativeCardGeometryObserver } from './NativeCardGeometryObserver.js';
-import { createResolvedCubeIconElement } from '../core/CubeIconResolver.js';
-import { createCubeUnsavedIndicator } from './CubeUnsavedIndicator.js';
 import { CubePreviewFrameResizePolicy } from './CubePreviewFrameResizePolicy.js';
+import { CubeFaceHeaderView } from './CubeFaceHeaderView.js';
 /** Own DOM composition, actions, and responsive geometry for one Cube face. */
 export class CubeSurfaceView {
     element;
@@ -35,7 +33,7 @@ export class CubeSurfaceView {
     #onStateChange;
     #onMinimumHeightChange;
     #cardHost;
-    #actions;
+    #headerView;
     #content;
     #masonry;
     #previewDivider;
@@ -58,35 +56,13 @@ export class CubeSurfaceView {
         this.element = options.document.createElement('div');
         this.element.className = 'sugarcubes-cube-face';
         this.element.setAttribute('aria-label', `${options.identity.instanceTitle} Cube contents`);
-        this.header = options.document.createElement('header');
-        this.header.className = 'sugarcubes-cube-face__header';
-        const identity = options.document.createElement('div');
-        identity.className = 'sugarcubes-cube-face__identity';
-        const icon = createResolvedCubeIconElement(options.document, options.identity.icon, 'sugarcubes-cube-face__icon');
-        const title = options.document.createElement('strong');
-        title.className = 'sugarcubes-cube-face__title';
-        title.textContent = options.identity.instanceTitle;
-        identity.append(icon, title);
-        const definitionBadge = options.document.createElement('div');
-        definitionBadge.className = 'sugarcubes-cube-face__definition-badge';
-        definitionBadge.dataset.cubeDefinitionBadge = '';
-        const definitionName = options.document.createElement('span');
-        definitionName.className = 'sugarcubes-cube-face__definition-name';
-        definitionName.dataset.cubeDefinitionName = '';
-        definitionName.textContent = options.identity.definitionLine;
-        const definitionSource = options.document.createElement('span');
-        definitionSource.className = 'sugarcubes-cube-face__definition-source';
-        definitionSource.dataset.cubeDefinitionSource = '';
-        const source = options.document.createElement('span');
-        source.className = 'sugarcubes-cube-face__source';
-        source.textContent = options.identity.sourceLine;
-        definitionSource.append(source);
-        definitionBadge.append(definitionName, definitionSource);
-        this.#actions = new CubeFaceActionsView(options.document, options.metadata ?? {}, options.chromeActions);
-        if (options.identity.awaitingFirstSave) {
-            this.#actions.element.prepend(createCubeUnsavedIndicator(options.document));
-        }
-        this.header.append(identity, definitionBadge, this.#actions.element);
+        this.#headerView = new CubeFaceHeaderView({
+            document: options.document,
+            identity: options.identity,
+            metadata: options.metadata ?? {},
+            chromeActions: options.chromeActions ?? null,
+        });
+        this.header = this.#headerView.element;
         this.#content = options.document.createElement('div');
         this.#content.className = 'sugarcubes-cube-face__content';
         this.#content.dataset.cubeContent = '';
@@ -168,7 +144,7 @@ export class CubeSurfaceView {
     }
     /** Remove native card mounts owned by this view. */
     dispose() {
-        this.#actions.dispose();
+        this.#headerView.dispose();
         this.#previewDividerController?.dispose();
         this.#geometryObserver.dispose();
         this.#cardHost.dispose();
@@ -182,7 +158,7 @@ export class CubeSurfaceView {
             this.#commitCardChange();
         });
         this.#geometryObserver.observe(this.#cells);
-        this.#actions.render(presentation.menuEntries, (nodeId, revealed) => {
+        this.#headerView.renderActions(presentation.menuEntries, (nodeId, revealed) => {
             const node = this.#nodes.find((candidate) => String(candidate.id ?? '') === nodeId);
             if (!node)
                 return;

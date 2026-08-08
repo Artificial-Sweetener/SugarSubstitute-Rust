@@ -23,6 +23,7 @@ import { ComfyCubePickerCreationAdapter } from './ComfyCubePickerCreationAdapter
 import type { CubePickerLiteGraphHost } from './ComfyCubePickerCreationAdapter.js';
 import { ComfyCubePickerDefinitionAdapter } from './ComfyCubePickerDefinitionAdapter.js';
 import type { CubePickerDefinitionHost } from './ComfyCubePickerDefinitionAdapter.js';
+import { ComfyCubePickerResultPresenter } from './ComfyCubePickerResultPresenter.js';
 import { CubePickerCatalogRegistry } from './CubePickerCatalogRegistry.js';
 import { CubePickerHostIntegration } from './CubePickerHostIntegration.js';
 import { CubePickerPlacementAdapter } from './CubePickerPlacementAdapter.js';
@@ -30,6 +31,7 @@ import { CubePickerPlacementAdapter } from './CubePickerPlacementAdapter.js';
 export interface ComfyCubePickerCompositionOptions {
   api: CubeLibraryApi;
   app: unknown;
+  document: Document;
   getLiteGraph(): unknown;
   getNodeRenderer(): NodeRenderer | undefined;
   getRuntime(): ComfyCubeRuntime;
@@ -68,9 +70,14 @@ export function createComfyCubePickerIntegration(
       },
     },
   });
+  const results = new ComfyCubePickerResultPresenter({
+    document: options.document,
+    definitions: () => registry.definitions(),
+  });
   return new CubePickerHostIntegration({
     definitions,
     creation,
+    results,
     logger: options.logger,
     reportError: options.reportError,
   });

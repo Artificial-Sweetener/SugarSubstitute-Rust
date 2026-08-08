@@ -26,6 +26,10 @@ import type {
 import type { ComfyNode } from '../../frontend/comfyui/ui/types/graph.js';
 import type { CubeIdentityPresentation } from '../../frontend/comfyui/ui/cube/CubeIdentityPresentation.js';
 import type { CubePreviewActions } from '../../frontend/comfyui/ui/surface/CubePreviewActions.js';
+import {
+  resolveCubeModelTitle,
+  resolveDefaultInstanceModelTitle,
+} from '../../frontend/comfyui/ui/cube/CubeModelTitlePresentation.js';
 
 describe('CubeSurfaceView', () => {
   test('builds one Cube composition with native-card masonry and a preview rail', () => {
@@ -292,7 +296,9 @@ describe('CubeSurfaceView', () => {
     expect(cardMenu?.getAttribute('aria-label')).toBe('Reveal optional Cube cards');
     expect(cardMenu?.hidden).toBe(true);
     expect(
-      view.element.querySelector<HTMLElement>('[data-cube-definition-name]')?.textContent,
+      view.element
+        .querySelector<HTMLElement>('[data-cube-definition-name] .sugarcubes-model-title')
+        ?.getAttribute('aria-label'),
     ).toBe('SDXL/Text to Image version 2.0.0');
     expect(
       view.element.querySelector<HTMLElement>('[data-cube-definition-source]')?.textContent,
@@ -332,6 +338,30 @@ describe('CubeSurfaceView', () => {
     expect(aliased.element.querySelector<HTMLElement>('.sugarcubes-cube-face__title')?.hidden).toBe(
       false,
     );
+    expect(
+      repeated.element.querySelector('.sugarcubes-cube-face__title [data-sugarcubes-model-pill]')
+        ?.textContent,
+    ).toBe('SDXL');
+    expect(
+      repeated.element
+        .querySelector<HTMLElement>('.sugarcubes-cube-face__title .sugarcubes-model-title')
+        ?.style.getPropertyValue('--sugarcubes-model-pill-punchout'),
+    ).toBe('');
+    expect(
+      aliased.element.querySelector('.sugarcubes-cube-face__title [data-sugarcubes-model-pill]'),
+    ).toBeNull();
+    expect(
+      aliased.element.querySelector('[data-cube-definition-name] [data-sugarcubes-model-pill]')
+        ?.textContent,
+    ).toBe('SDXL');
+    expect(
+      aliased.element.querySelector('[data-cube-definition-name]')?.getAttribute('aria-label'),
+    ).toBeNull();
+    expect(
+      aliased.element
+        .querySelector('[data-cube-definition-name] .sugarcubes-model-title')
+        ?.getAttribute('aria-label'),
+    ).toBe('SDXL/Text to Image version 2.0.0');
     repeated.dispose();
     aliased.dispose();
   });
@@ -771,11 +801,23 @@ function createRenderer(): NativeNodeCardRenderer {
 
 /** Build the fully resolved header model supplied by the Cube presenter. */
 function cubeIdentity(instanceTitle: string): CubeIdentityPresentation {
+  const definitionTitle = 'SDXL/Text to Image';
+  const versionText = 'version 2.0.0';
   return {
     instanceTitle,
-    definitionTitle: 'SDXL/Text to Image',
-    versionText: 'version 2.0.0',
-    definitionLine: 'SDXL/Text to Image version 2.0.0',
+    definitionTitle,
+    versionText,
+    definitionLine: `${definitionTitle} ${versionText}`,
+    instanceModelTitle: resolveDefaultInstanceModelTitle({
+      targetModel: 'SDXL',
+      instanceTitle,
+      defaultAlias: definitionTitle,
+    }),
+    definitionModelTitle: resolveCubeModelTitle({
+      targetModel: 'SDXL',
+      title: definitionTitle,
+      suffix: versionText,
+    }),
     awaitingFirstSave: false,
     sourceLine: 'from Base-Cubes by Artificial-Sweetener',
     icon: {

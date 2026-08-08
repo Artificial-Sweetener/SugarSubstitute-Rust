@@ -17,6 +17,7 @@
 import { isRecord } from '../types/common.js';
 import { ComfyCubePickerCreationAdapter } from './ComfyCubePickerCreationAdapter.js';
 import { ComfyCubePickerDefinitionAdapter } from './ComfyCubePickerDefinitionAdapter.js';
+import { ComfyCubePickerResultPresenter } from './ComfyCubePickerResultPresenter.js';
 import { CubePickerCatalogRegistry } from './CubePickerCatalogRegistry.js';
 import { CubePickerHostIntegration } from './CubePickerHostIntegration.js';
 import { CubePickerPlacementAdapter } from './CubePickerPlacementAdapter.js';
@@ -49,9 +50,14 @@ export function createComfyCubePickerIntegration(options) {
             },
         },
     });
+    const results = new ComfyCubePickerResultPresenter({
+        document: options.document,
+        definitions: () => registry.definitions(),
+    });
     return new CubePickerHostIntegration({
         definitions,
         creation,
+        results,
         logger: options.logger,
         reportError: options.reportError,
     });
