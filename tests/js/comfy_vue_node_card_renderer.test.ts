@@ -473,11 +473,15 @@ describe('ComfyVueNodeCardRenderer', () => {
     expect(subgraphIcon.style.getPropertyValue('display')).toBe('none');
   });
 
-  test('expands a semantic prompt textarea inside a Nodes 2.0 Cube card', () => {
+  test('expands a semantic prompt textarea after workflow hydration without an input event', () => {
     const nativeRoot = document.createElement('div');
     nativeRoot.className = 'lg-node';
     const textarea = document.createElement('textarea');
-    Object.defineProperty(textarea, 'scrollHeight', { configurable: true, value: 164 });
+    let contentHeight = 1;
+    Object.defineProperty(textarea, 'scrollHeight', {
+      configurable: true,
+      get: () => contentHeight,
+    });
     nativeRoot.append(textarea);
     const target = document.createElement('div');
     const renderer = new ComfyVueNodeCardRenderer({
@@ -499,9 +503,12 @@ describe('ComfyVueNodeCardRenderer', () => {
       widgets: [{ name: 'text', type: 'customtext' }],
     });
 
+    expect(textarea.style.height).toBe('1px');
+    contentHeight = 164;
+    textarea.value = 'hydrated multiline workflow prompt';
     expect(textarea.style.height).toBe('164px');
     expect(textarea.style.overflowY).toBe('hidden');
-    Object.defineProperty(textarea, 'scrollHeight', { configurable: true, value: 220 });
+    contentHeight = 220;
     textarea.dispatchEvent(new Event('input'));
     expect(textarea.style.height).toBe('220px');
   });

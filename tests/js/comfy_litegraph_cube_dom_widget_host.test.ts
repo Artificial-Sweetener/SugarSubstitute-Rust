@@ -191,6 +191,38 @@ describe('ComfyLiteGraphCubeDomWidgetHost', () => {
 
     host.dispose();
   });
+
+  test('remeasures a Nodes 1 prompt after property-only workflow hydration', () => {
+    const textarea = document.createElement('textarea');
+    let contentHeight = 1;
+    Object.defineProperty(textarea, 'scrollHeight', {
+      configurable: true,
+      get: () => contentHeight,
+    });
+    const widget = {
+      name: 'text',
+      type: 'customtext',
+      element: textarea,
+      y: 20,
+      computedHeight: 100,
+      margin: 10,
+    };
+    const node = faceNode([widget]);
+    node.title = 'Positive prompt';
+    const onGeometryChange = jest.fn();
+    const { host } = createHost(onGeometryChange);
+
+    host.sync([cubeItemForNode(node)]);
+    expect(textarea.style.height).toBe('1px');
+    onGeometryChange.mockClear();
+
+    contentHeight = 170;
+    textarea.value = 'hydrated multiline workflow prompt';
+
+    expect(textarea.style.height).toBe('170px');
+    expect(onGeometryChange).toHaveBeenCalledTimes(1);
+    host.dispose();
+  });
 });
 
 /** Build one transformed canvas and its focused DOM-widget host. */

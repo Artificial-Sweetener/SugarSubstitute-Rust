@@ -21,7 +21,7 @@ import {
   cubeFaceNodeHasVisibleWidgets,
   cubeFaceNodeWidgetStartY,
 } from './CubeFaceNodePresentationPolicy.js';
-import { cubeFacePromptWidgetHeight } from './CubeFacePromptTextarea.js';
+import { cubePromptWidgetHeight } from './CubePromptWidgetHeightStore.js';
 
 const HEADER_ONLY_BODY_HEIGHT = 1;
 const LEGACY_SLOT_HEIGHT = 20;
@@ -77,7 +77,7 @@ function visibleWidgets(node: ComfyNode): MeasurableWidget[] {
 
 /** Measure the complete vertical allocation Comfy's arrange pass assigns one widget. */
 function measureWidgetAllocation(widget: MeasurableWidget, node: ComfyNode, width: number): number {
-  const promptHeight = cubeFacePromptWidgetHeight(widget);
+  const promptHeight = cubePromptWidgetHeight(widget);
   if (promptHeight !== null) return promptHeight;
   const computedHeight = positiveNumber(widget.computedHeight);
   if (computedHeight !== null) return computedHeight;

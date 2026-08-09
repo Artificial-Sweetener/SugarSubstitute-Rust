@@ -25,7 +25,7 @@ import {
   cubeFaceNodeHasVisibleWidgets,
 } from './CubeFaceNodePresentationPolicy.js';
 import { findCubeFacePromptWidget } from './CubeFacePromptPolicy.js';
-import { fitCubeFacePromptTextarea } from './CubeFacePromptTextarea.js';
+import { CubePromptTextareaScope } from './CubePromptTextareaScope.js';
 import { ComfyVueNodeHeaderAccessoryHost } from './ComfyVueNodeHeaderAccessoryHost.js';
 import type {
   NativeNodeCardMount,
@@ -46,7 +46,6 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
   readonly #runtime: ComfyVueNodeRenderRuntime;
   readonly #mounts = new Set<NativeNodeCardMount>();
   readonly #interactiveRoots = new WeakSet<HTMLElement>();
-  readonly #promptTextareas = new WeakSet<HTMLTextAreaElement>();
 
   /** Bind the installed Comfy component, application context, and renderer functions. */
   constructor(options: ComfyVueNodeCardRendererOptions) {
@@ -67,8 +66,11 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
     const headerAccessoryHost = options.headerAccessory
       ? new ComfyVueNodeHeaderAccessoryHost(options.headerAccessory)
       : null;
+    const promptTextareaScope = new CubePromptTextareaScope(target);
     const observer = new MutationObserver(() => {
-      if (!disposed) this.#applyPresentation(target, node, headerAccessoryHost);
+      if (!disposed) {
+        this.#applyPresentation(target, node, headerAccessoryHost, promptTextareaScope);
+      }
     });
     const renderCard = (): void => {
       if (disposed) return;
@@ -81,7 +83,7 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
       this.#runtime.render(vnodeValue, target);
       target.classList.add('sugarcubes-native-node-card');
       target.dataset.cubeFaceNative = 'nodes-2';
-      this.#applyPresentation(target, node, headerAccessoryHost);
+      this.#applyPresentation(target, node, headerAccessoryHost, promptTextareaScope);
     };
     const refreshAfterAdvancedInputsToggle = (event: Event): void => {
       const eventTarget = event.target;
@@ -115,6 +117,7 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
         }
         observer.disconnect();
         target.removeEventListener('click', refreshAfterAdvancedInputsToggle, true);
+        promptTextareaScope.dispose();
         headerAccessoryHost?.dispose();
         this.#runtime.render(null, target);
         this.#mounts.delete(mount);
@@ -134,6 +137,7 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
     target: HTMLElement,
     node: ComfyNode,
     headerAccessoryHost: ComfyVueNodeHeaderAccessoryHost | null,
+    promptTextareaScope: CubePromptTextareaScope,
   ): void {
     const nativeRoot = target.querySelector<HTMLElement>('.lg-node');
     if (nativeRoot) {
@@ -163,7 +167,7 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
     const advancedInputs = footerRoot ? reconcileNativeFooter(footerRoot) : null;
     if (advancedInputs) this.#isolateInteractiveRoot(advancedInputs);
     if (nativeRoot) reconcileNativeBody(nativeRoot, node);
-    this.#fitPromptTextareas(target, node);
+    promptTextareaScope.reconcile(findCubeFacePromptWidget(node) !== null);
 
     const widgetsVNode = findVueComponent(targetRecord._vnode, 'NodeWidgets');
     const widgetsRoot = resolveComponentElement(widgetsVNode);
@@ -179,21 +183,6 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
     root.addEventListener('wheel', stopAtControl);
     root.addEventListener('contextmenu', stopAtControl);
     this.#interactiveRoots.add(root);
-  }
-
-  /** Let only semantic prompt editors grow their card instead of scrolling in place. */
-  #fitPromptTextareas(target: HTMLElement, node: ComfyNode): void {
-    if (!findCubeFacePromptWidget(node)) return;
-    for (const textarea of target.querySelectorAll<HTMLTextAreaElement>('textarea')) {
-      const fit = (): void => {
-        fitCubeFacePromptTextarea(textarea);
-      };
-      if (!this.#promptTextareas.has(textarea)) {
-        textarea.addEventListener('input', fit);
-        this.#promptTextareas.add(textarea);
-      }
-      fit();
-    }
   }
 }
 

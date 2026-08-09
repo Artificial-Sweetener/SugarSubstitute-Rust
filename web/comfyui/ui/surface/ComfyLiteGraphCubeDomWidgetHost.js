@@ -16,7 +16,7 @@
 /** Mount Comfy's exact Nodes 1.0 DOM widgets over native Cube-face cards. */
 import { findCubeFacePromptWidget } from './CubeFacePromptPolicy.js';
 import { cubeFaceNodeWidgetStartY } from './CubeFaceNodePresentationPolicy.js';
-import { clearCubeFacePromptWidgetHeight, fitCubeFacePromptTextarea, setCubeFacePromptWidgetHeight, } from './CubeFacePromptTextarea.js';
+import { CubePromptDomWidgetSizingHost } from './CubePromptDomWidgetSizingHost.js';
 const DEFAULT_WIDGET_MARGIN = 10;
 const DEFAULT_WIDGET_HEIGHT = 50;
 /** Own reparenting and graph-to-viewport positioning for native DOM widgets. */
@@ -24,7 +24,7 @@ export class ComfyLiteGraphCubeDomWidgetHost {
     #document;
     #canvas;
     #logger;
-    #onGeometryChange;
+    #promptSizing;
     #mounted = new Map();
     #root = null;
     /** Bind one focused adapter to Comfy's canvas transform and document. */
@@ -32,7 +32,7 @@ export class ComfyLiteGraphCubeDomWidgetHost {
         this.#document = options.document;
         this.#canvas = options.canvas;
         this.#logger = options.logger ?? null;
-        this.#onGeometryChange = options.onGeometryChange ?? (() => undefined);
+        this.#promptSizing = new CubePromptDomWidgetSizingHost(options.document, options.onGeometryChange ?? (() => undefined));
     }
     /** Reconcile exact native elements with the currently revealed Cube cards. */
     sync(items) {
@@ -49,7 +49,7 @@ export class ComfyLiteGraphCubeDomWidgetHost {
         for (const [element, geometry] of desired) {
             const mounted = this.#mounted.get(element) ?? this.#mount(element);
             this.#reclaimElement(mounted);
-            this.#reconcilePromptTextarea(mounted, geometry.promptWidget);
+            this.#promptSizing.reconcile(mounted.element, geometry.promptWidget);
             this.#position(mounted.wrapper, geometry);
         }
         this.#removeEmptyRoot();
@@ -58,6 +58,7 @@ export class ComfyLiteGraphCubeDomWidgetHost {
     dispose() {
         for (const mounted of [...this.#mounted.values()])
             this.#restore(mounted);
+        this.#promptSizing.dispose();
         this.#root?.remove();
         this.#root = null;
     }
@@ -144,7 +145,7 @@ export class ComfyLiteGraphCubeDomWidgetHost {
         element.classList.add('h-full', 'w-full');
         wrapper.append(element);
         this.#ensureRoot().append(wrapper);
-        const mounted = { element, origin, wrapper, promptTextarea: null };
+        const mounted = { element, origin, wrapper };
         this.#mounted.set(element, mounted);
         return mounted;
     }
@@ -167,7 +168,7 @@ export class ComfyLiteGraphCubeDomWidgetHost {
     /** Restore one exact native element to its prior DOM owner and class state. */
     #restore(mounted) {
         const { element, origin, wrapper } = mounted;
-        this.#removePromptTextareaPresentation(mounted);
+        this.#promptSizing.release(element);
         if (!origin.hadFullHeight)
             element.classList.remove('h-full');
         if (!origin.hadFullWidth)
@@ -181,56 +182,6 @@ export class ComfyLiteGraphCubeDomWidgetHost {
         }
         wrapper.remove();
         this.#mounted.delete(element);
-    }
-    /** Install Cube-only autosizing for a semantic prompt textarea and restore it on exit. */
-    #reconcilePromptTextarea(mounted, widget) {
-        if (!widget || !this.#isTextarea(mounted.element)) {
-            this.#removePromptTextareaPresentation(mounted);
-            return;
-        }
-        const existing = mounted.promptTextarea;
-        if (existing?.widget === widget) {
-            this.#fitPromptTextarea(existing, false);
-            return;
-        }
-        this.#removePromptTextareaPresentation(mounted);
-        const input = mounted.element;
-        const presentation = {
-            widget,
-            input,
-            onInput: () => this.#fitPromptTextarea(presentation, true),
-            height: input.style.height,
-            heightPriority: input.style.getPropertyPriority('height'),
-            overflowY: input.style.overflowY,
-            overflowYPriority: input.style.getPropertyPriority('overflow-y'),
-        };
-        input.addEventListener('input', presentation.onInput);
-        mounted.promptTextarea = presentation;
-        this.#fitPromptTextarea(presentation, true);
-    }
-    /** Convert a textarea's content height into the complete native DOM-widget allocation. */
-    #fitPromptTextarea(presentation, notify) {
-        const contentHeight = fitCubeFacePromptTextarea(presentation.input);
-        const margin = Math.max(0, finiteNumber(presentation.widget.margin) ?? DEFAULT_WIDGET_MARGIN);
-        const changed = setCubeFacePromptWidgetHeight(presentation.widget, contentHeight + margin * 2);
-        if (notify && changed)
-            this.#onGeometryChange();
-    }
-    /** Release one prompt-only listener, transient height, and inline style ownership. */
-    #removePromptTextareaPresentation(mounted) {
-        const presentation = mounted.promptTextarea;
-        if (!presentation)
-            return;
-        presentation.input.removeEventListener('input', presentation.onInput);
-        restoreStyleProperty(presentation.input.style, 'height', presentation.height, presentation.heightPriority);
-        restoreStyleProperty(presentation.input.style, 'overflow-y', presentation.overflowY, presentation.overflowYPriority);
-        clearCubeFacePromptWidgetHeight(presentation.widget);
-        mounted.promptTextarea = null;
-    }
-    /** Narrow one mounted element to a textarea from this active document. */
-    #isTextarea(element) {
-        const textareaType = this.#document.defaultView?.HTMLTextAreaElement;
-        return textareaType !== undefined && element instanceof textareaType;
     }
     /** Create the pointer-transparent overlay without intercepting graph input. */
     #ensureRoot() {
@@ -253,13 +204,6 @@ export class ComfyLiteGraphCubeDomWidgetHost {
         this.#root?.remove();
         this.#root = null;
     }
-}
-/** Restore exact inline style value and priority without leaving a blank owned property behind. */
-function restoreStyleProperty(style, property, value, priority) {
-    if (value)
-        style.setProperty(property, value, priority);
-    else
-        style.removeProperty(property);
 }
 /** Read one finite dynamic host number without letting invalid values inward. */
 function finiteNumber(value) {

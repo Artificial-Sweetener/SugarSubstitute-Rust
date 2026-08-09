@@ -18,7 +18,7 @@ import { isRecord } from '../types/common.js';
 import { findVueComponent } from './ComfyVueTree.js';
 import { createCubeFaceNodeData, cubeFaceNodeHasVisibleWidgets, } from './CubeFaceNodePresentationPolicy.js';
 import { findCubeFacePromptWidget } from './CubeFacePromptPolicy.js';
-import { fitCubeFacePromptTextarea } from './CubeFacePromptTextarea.js';
+import { CubePromptTextareaScope } from './CubePromptTextareaScope.js';
 import { ComfyVueNodeHeaderAccessoryHost } from './ComfyVueNodeHeaderAccessoryHost.js';
 /** Own native Vue mounts while leaving component rendering and widget UI to Comfy. */
 export class ComfyVueNodeCardRenderer {
@@ -27,7 +27,6 @@ export class ComfyVueNodeCardRenderer {
     #runtime;
     #mounts = new Set();
     #interactiveRoots = new WeakSet();
-    #promptTextareas = new WeakSet();
     /** Bind the installed Comfy component, application context, and renderer functions. */
     constructor(options) {
         this.#component = options.component;
@@ -42,9 +41,11 @@ export class ComfyVueNodeCardRenderer {
         const headerAccessoryHost = options.headerAccessory
             ? new ComfyVueNodeHeaderAccessoryHost(options.headerAccessory)
             : null;
+        const promptTextareaScope = new CubePromptTextareaScope(target);
         const observer = new MutationObserver(() => {
-            if (!disposed)
-                this.#applyPresentation(target, node, headerAccessoryHost);
+            if (!disposed) {
+                this.#applyPresentation(target, node, headerAccessoryHost, promptTextareaScope);
+            }
         });
         const renderCard = () => {
             if (disposed)
@@ -58,7 +59,7 @@ export class ComfyVueNodeCardRenderer {
             this.#runtime.render(vnodeValue, target);
             target.classList.add('sugarcubes-native-node-card');
             target.dataset.cubeFaceNative = 'nodes-2';
-            this.#applyPresentation(target, node, headerAccessoryHost);
+            this.#applyPresentation(target, node, headerAccessoryHost, promptTextareaScope);
         };
         const refreshAfterAdvancedInputsToggle = (event) => {
             const eventTarget = event.target;
@@ -94,6 +95,7 @@ export class ComfyVueNodeCardRenderer {
                 }
                 observer.disconnect();
                 target.removeEventListener('click', refreshAfterAdvancedInputsToggle, true);
+                promptTextareaScope.dispose();
                 headerAccessoryHost?.dispose();
                 this.#runtime.render(null, target);
                 this.#mounts.delete(mount);
@@ -108,7 +110,7 @@ export class ComfyVueNodeCardRenderer {
             mount.unmount();
     }
     /** Apply the narrow Cube-face mode to Comfy-owned component roots. */
-    #applyPresentation(target, node, headerAccessoryHost) {
+    #applyPresentation(target, node, headerAccessoryHost, promptTextareaScope) {
         const nativeRoot = target.querySelector('.lg-node');
         if (nativeRoot) {
             nativeRoot.dataset.cubeFacePresentation = 'true';
@@ -138,7 +140,7 @@ export class ComfyVueNodeCardRenderer {
             this.#isolateInteractiveRoot(advancedInputs);
         if (nativeRoot)
             reconcileNativeBody(nativeRoot, node);
-        this.#fitPromptTextareas(target, node);
+        promptTextareaScope.reconcile(findCubeFacePromptWidget(node) !== null);
         const widgetsVNode = findVueComponent(targetRecord._vnode, 'NodeWidgets');
         const widgetsRoot = resolveComponentElement(widgetsVNode);
         if (widgetsRoot)
@@ -154,21 +156,6 @@ export class ComfyVueNodeCardRenderer {
         root.addEventListener('wheel', stopAtControl);
         root.addEventListener('contextmenu', stopAtControl);
         this.#interactiveRoots.add(root);
-    }
-    /** Let only semantic prompt editors grow their card instead of scrolling in place. */
-    #fitPromptTextareas(target, node) {
-        if (!findCubeFacePromptWidget(node))
-            return;
-        for (const textarea of target.querySelectorAll('textarea')) {
-            const fit = () => {
-                fitCubeFacePromptTextarea(textarea);
-            };
-            if (!this.#promptTextareas.has(textarea)) {
-                textarea.addEventListener('input', fit);
-                this.#promptTextareas.add(textarea);
-            }
-            fit();
-        }
     }
 }
 /** Preserve and return only the native footer control for advanced inputs. */

@@ -13,18 +13,10 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Own Cube-only prompt textarea growth without changing Comfy's normal node policy. */
+/** Own transient Cube-face height requirements for graph-owned prompt widgets. */
 const promptWidgetHeights = new WeakMap();
-/** Fit one prompt textarea to its full content and suppress its internal scrollbar. */
-export function fitCubeFacePromptTextarea(textarea) {
-    textarea.style.setProperty('height', 'auto', 'important');
-    textarea.style.setProperty('overflow-y', 'hidden', 'important');
-    const contentHeight = Math.max(textarea.scrollHeight, textarea.clientHeight, textarea.offsetHeight, 1);
-    textarea.style.setProperty('height', `${String(contentHeight)}px`, 'important');
-    return contentHeight;
-}
-/** Persist one Cube-face-only widget minimum without altering the graph-owned widget shape. */
-export function setCubeFacePromptWidgetHeight(widget, height) {
+/** Record one normalized prompt allocation and report material changes. */
+export function setCubePromptWidgetHeight(widget, height) {
     const normalized = Number.isFinite(height) ? Math.max(1, height) : 1;
     const previous = promptWidgetHeights.get(widget);
     if (previous !== undefined && Math.abs(previous - normalized) < 0.5)
@@ -32,11 +24,11 @@ export function setCubeFacePromptWidgetHeight(widget, height) {
     promptWidgetHeights.set(widget, normalized);
     return true;
 }
-/** Read the currently required Cube-face height for one grown prompt widget. */
-export function cubeFacePromptWidgetHeight(widget) {
+/** Read one prompt allocation without mutating the graph-owned widget. */
+export function cubePromptWidgetHeight(widget) {
     return promptWidgetHeights.get(widget) ?? null;
 }
-/** Release transient face sizing when the prompt leaves the Cube surface. */
-export function clearCubeFacePromptWidgetHeight(widget) {
+/** Release prompt allocation when its Cube presentation ends. */
+export function clearCubePromptWidgetHeight(widget) {
     promptWidgetHeights.delete(widget);
 }

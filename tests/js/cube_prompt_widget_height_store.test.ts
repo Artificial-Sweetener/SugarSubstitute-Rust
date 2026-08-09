@@ -13,20 +13,26 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Verify Cube-only prompt textarea expansion. */
+/** Verify transient prompt widget height ownership. */
 
 import { describe, expect, test } from '@jest/globals';
 
-import { fitCubeFacePromptTextarea } from '../../frontend/comfyui/ui/surface/CubeFacePromptTextarea.js';
+import {
+  clearCubePromptWidgetHeight,
+  cubePromptWidgetHeight,
+  setCubePromptWidgetHeight,
+} from '../../frontend/comfyui/ui/surface/CubePromptWidgetHeightStore.js';
 
-describe('fitCubeFacePromptTextarea', () => {
-  test('uses the complete content height and disables the internal scrollbar', () => {
-    const textarea = document.createElement('textarea');
-    Object.defineProperty(textarea, 'scrollHeight', { configurable: true, value: 168 });
+describe('CubePromptWidgetHeightStore', () => {
+  test('normalizes, deduplicates, and releases one graph-owned widget allocation', () => {
+    const widget = { name: 'text', type: 'customtext' };
 
-    expect(fitCubeFacePromptTextarea(textarea)).toBe(168);
-    expect(textarea.style.height).toBe('168px');
-    expect(textarea.style.overflowY).toBe('hidden');
-    expect(textarea.style.getPropertyPriority('height')).toBe('important');
+    expect(setCubePromptWidgetHeight(widget, 168)).toBe(true);
+    expect(setCubePromptWidgetHeight(widget, 168.25)).toBe(false);
+    expect(cubePromptWidgetHeight(widget)).toBe(168);
+
+    clearCubePromptWidgetHeight(widget);
+
+    expect(cubePromptWidgetHeight(widget)).toBeNull();
   });
 });

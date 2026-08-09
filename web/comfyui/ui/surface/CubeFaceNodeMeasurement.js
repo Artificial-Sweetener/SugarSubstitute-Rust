@@ -16,7 +16,7 @@
 /** Measure Nodes 1.0 face bodies without mutating graph-owned slot collections. */
 import { isRecord } from '../types/common.js';
 import { cubeFaceNodeHasVisibleWidgets, cubeFaceNodeWidgetStartY, } from './CubeFaceNodePresentationPolicy.js';
-import { cubeFacePromptWidgetHeight } from './CubeFacePromptTextarea.js';
+import { cubePromptWidgetHeight } from './CubePromptWidgetHeightStore.js';
 const HEADER_ONLY_BODY_HEIGHT = 1;
 const LEGACY_SLOT_HEIGHT = 20;
 const LEGACY_WIDGET_HEIGHT = 20;
@@ -58,7 +58,7 @@ function visibleWidgets(node) {
 }
 /** Measure the complete vertical allocation Comfy's arrange pass assigns one widget. */
 function measureWidgetAllocation(widget, node, width) {
-    const promptHeight = cubeFacePromptWidgetHeight(widget);
+    const promptHeight = cubePromptWidgetHeight(widget);
     if (promptHeight !== null)
         return promptHeight;
     const computedHeight = positiveNumber(widget.computedHeight);
