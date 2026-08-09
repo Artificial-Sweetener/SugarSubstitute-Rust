@@ -128,6 +128,7 @@ export class CubeSurfaceView {
             this.#onMinimumHeightChange?.(result.minimumHeight);
         }
         this.#previewDividerController?.setGeometry(result.previewWidth, result.previewWidthRange, result.previewResizable);
+        this.#previewView.reflow();
     }
     /** Apply one DOM layout pass without owning allocation policy. */
     #applyLayout(width) {
@@ -146,6 +147,7 @@ export class CubeSurfaceView {
     dispose() {
         this.#headerView.dispose();
         this.#previewDividerController?.dispose();
+        this.#previewView.dispose();
         this.#geometryObserver.dispose();
         this.#cardHost.dispose();
     }

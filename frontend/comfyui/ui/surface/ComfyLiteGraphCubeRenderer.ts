@@ -171,9 +171,8 @@ export class ComfyLiteGraphCubeRenderer {
         section.y + CUBE_PREVIEW_TITLE_LINE_HEIGHT / 2,
         Math.max(1, section.width),
       );
-      const media = output.item;
       context.textBaseline = 'top';
-      if (!media) {
+      if (output.items.length === 0) {
         context.font = '12px sans-serif';
         context.fillStyle = '#aeb5c0';
         context.fillText(
@@ -183,24 +182,27 @@ export class ComfyLiteGraphCubeRenderer {
         );
         continue;
       }
-      const image = this.#previewImages.get(media.url, media.sourceLocator);
-      if (!image) {
-        context.font = '12px sans-serif';
-        context.fillStyle = '#aeb5c0';
-        context.fillText('Loading output…', section.x, section.y + CUBE_PREVIEW_TITLE_LINE_HEIGHT);
-        continue;
-      }
-      const target = fitCubePreviewImage(
-        image.naturalWidth,
-        image.naturalHeight,
-        section.x,
-        section.y + CUBE_PREVIEW_TITLE_LINE_HEIGHT,
-        section.width,
-        Math.max(1, section.height - CUBE_PREVIEW_TITLE_LINE_HEIGHT),
-      );
-      context.drawImage(image, target.x, target.y, target.width, target.height);
-      if (containsPoint(section, this.#host.graph_mouse)) {
-        drawPreviewDownloadAction(context, output.downloadAction);
+      for (const previewItem of output.items) {
+        const media = previewItem.item;
+        const image = this.#previewImages.get(media.url, media.sourceLocator);
+        if (!image) {
+          context.font = '12px sans-serif';
+          context.fillStyle = '#aeb5c0';
+          context.fillText('Loading output…', previewItem.rect.x, previewItem.rect.y);
+          continue;
+        }
+        const target = fitCubePreviewImage(
+          image.naturalWidth,
+          image.naturalHeight,
+          previewItem.rect.x,
+          previewItem.rect.y,
+          previewItem.rect.width,
+          previewItem.rect.height,
+        );
+        context.drawImage(image, target.x, target.y, target.width, target.height);
+        if (containsPoint(previewItem.rect, this.#host.graph_mouse)) {
+          drawPreviewDownloadAction(context, previewItem.downloadAction);
+        }
       }
     }
   }

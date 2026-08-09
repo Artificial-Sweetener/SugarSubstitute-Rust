@@ -17,8 +17,10 @@
 
 import {
   dividePreviewIntoHorizontalSegments,
+  layoutCubeCanvasPreviewSections,
   resolveCubeCanvasPreviewContentRect,
   resolveCubeCanvasPreviewSections,
+  resolveCubePreviewItemGrid,
   resolveCubeOutputSections,
 } from '../../frontend/comfyui/ui/surface/CubePreviewSections.js';
 
@@ -37,20 +39,56 @@ describe('CubePreviewSections', () => {
     ]);
   });
 
-  test('leaves a Cube output empty until that boundary produces media', () => {
-    const outputItem = { key: 'image', url: '/image.png', label: 'image' };
+  test('retains every item produced by each boundary output', () => {
+    const firstItem = { key: 'image-one', url: '/image-one.png', label: 'image one' };
+    const secondItem = { key: 'image-two', url: '/image-two.png', label: 'image two' };
 
     expect(
       resolveCubeCanvasPreviewSections({
         outputs: [
-          { id: 'image', label: 'image', items: [outputItem] },
+          { id: 'image', label: 'image', items: [firstItem, secondItem] },
           { id: 'mask', label: 'mask', items: [] },
         ],
       }),
     ).toEqual([
-      { canonicalName: 'image', item: outputItem },
-      { canonicalName: 'mask', item: null },
+      { canonicalName: 'image', items: [firstItem, secondItem] },
+      { canonicalName: 'mask', items: [] },
     ]);
+  });
+
+  test('places two items side by side when that maximizes usable cell size', () => {
+    expect(resolveCubePreviewItemGrid({ width: 450, height: 400 }, 2, 12)).toEqual({
+      columns: 2,
+      rows: 1,
+    });
+  });
+
+  test('stacks two items when a narrow area makes rows more useful', () => {
+    expect(resolveCubePreviewItemGrid({ width: 200, height: 400 }, 2, 12)).toEqual({
+      columns: 1,
+      rows: 2,
+    });
+  });
+
+  test('lays out every canvas item while keeping output sections vertical', () => {
+    const firstMask = { key: 'mask-one', url: '/mask-one.png', label: 'mask one' };
+    const secondMask = { key: 'mask-two', url: '/mask-two.png', label: 'mask two' };
+    const image = { key: 'image', url: '/image.png', label: 'image' };
+    const sections = layoutCubeCanvasPreviewSections(
+      { x: 0, y: 0, width: 500, height: 600 },
+      {
+        outputs: [
+          { id: 'image', label: 'image', items: [image] },
+          { id: 'mask', label: 'mask', items: [firstMask, secondMask] },
+        ],
+      },
+    );
+
+    expect(sections).toHaveLength(2);
+    expect(sections[0]?.rect.y).toBeLessThan(sections[1]?.rect.y ?? 0);
+    expect(sections[1]?.items.map(({ item }) => item)).toEqual([firstMask, secondMask]);
+    expect(sections[1]?.items[0]?.rect.y).toBe(sections[1]?.items[1]?.rect.y);
+    expect(sections[1]?.items[0]?.rect.x).toBeLessThan(sections[1]?.items[1]?.rect.x ?? 0);
   });
 
   test('divides the available height into equal full-width horizontal segments', () => {

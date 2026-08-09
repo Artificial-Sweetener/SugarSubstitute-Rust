@@ -531,6 +531,55 @@ describe('CubeSurfaceView', () => {
     expect(onStateChange).not.toHaveBeenCalled();
   });
 
+  test('responsively tiles every item within one Nodes 2.0 output', () => {
+    const view = new CubeSurfaceView({
+      document,
+      renderer: createRenderer(),
+      identity: cubeIdentity('Cube'),
+      nodes: [createNode(1)],
+      state: createDefaultCubeSurfaceState(),
+      onStateChange: jest.fn(),
+    });
+    view.renderPreview({
+      outputs: [
+        {
+          id: 'output.mask',
+          label: 'mask',
+          items: [
+            { key: 'mask-one', url: '/mask-one.png', label: 'Mask one' },
+            { key: 'mask-two', url: '/mask-two.png', label: 'Mask two' },
+          ],
+        },
+      ],
+    });
+    const itemGrid = view.element.querySelector<HTMLElement>('[data-cube-preview-items]');
+    if (!itemGrid) throw new Error('Missing responsive preview item grid.');
+    let gridSize = { width: 450, height: 400 };
+    itemGrid.getBoundingClientRect = () =>
+      ({
+        x: 0,
+        y: 0,
+        top: 0,
+        left: 0,
+        right: gridSize.width,
+        bottom: gridSize.height,
+        ...gridSize,
+      }) as DOMRect;
+
+    view.layout(900);
+
+    expect(itemGrid.querySelectorAll('[data-cube-preview-item]')).toHaveLength(2);
+    expect(itemGrid.style.gridTemplateColumns).toBe('repeat(2, minmax(0, 1fr))');
+    expect(itemGrid.style.gridTemplateRows).toBe('repeat(1, minmax(0, 1fr))');
+
+    gridSize = { width: 200, height: 400 };
+    view.layout(900);
+
+    expect(itemGrid.style.gridTemplateColumns).toBe('repeat(1, minmax(0, 1fr))');
+    expect(itemGrid.style.gridTemplateRows).toBe('repeat(2, minmax(0, 1fr))');
+    view.dispose();
+  });
+
   test('subdivides multiple Cube outputs into equal horizontal sections', () => {
     const view = new CubeSurfaceView({
       document,

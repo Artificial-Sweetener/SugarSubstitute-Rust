@@ -177,6 +177,7 @@ export class CubeSurfaceView {
       result.previewWidthRange,
       result.previewResizable,
     );
+    this.#previewView.reflow();
   }
 
   /** Apply one DOM layout pass without owning allocation policy. */
@@ -197,6 +198,7 @@ export class CubeSurfaceView {
   dispose(): void {
     this.#headerView.dispose();
     this.#previewDividerController?.dispose();
+    this.#previewView.dispose();
     this.#geometryObserver.dispose();
     this.#cardHost.dispose();
   }

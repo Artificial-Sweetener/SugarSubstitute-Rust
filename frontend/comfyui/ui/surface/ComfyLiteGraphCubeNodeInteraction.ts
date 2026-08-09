@@ -24,7 +24,7 @@ import type { CubePreviewSnapshot } from './CubePreviewModel.js';
 import { clampCubePreviewWidth } from './CubePreviewResizeGeometry.js';
 import {
   layoutCubeCanvasPreviewSections,
-  type CubeCanvasPreviewSectionLayout,
+  type CubeCanvasPreviewItemLayout,
 } from './CubePreviewSections.js';
 import type {
   ComfyLiteGraphWidgetInteraction,
@@ -167,8 +167,8 @@ export class ComfyLiteGraphCubeNodeInteraction {
     const item = this.#itemAt(point);
     if (!item) return;
     if (event.button === 2) {
-      const preview = findPreviewSection(item, point);
-      if (preview?.item && this.#previewActions) this.#consume(event);
+      const previewItem = findPreviewItem(item, point);
+      if (previewItem && this.#previewActions) this.#consume(event);
       return;
     }
     if (event.button !== 0) return;
@@ -186,14 +186,14 @@ export class ComfyLiteGraphCubeNodeInteraction {
       this.#canvas.canvas.setPointerCapture?.(event.pointerId);
       return;
     }
-    const preview = findPreviewSection(item, point);
+    const previewItem = findPreviewItem(item, point);
     if (
-      preview?.item &&
+      previewItem &&
       this.#previewActions &&
-      containsCubeCanvasPoint(preview.downloadAction, point)
+      containsCubeCanvasPoint(previewItem.downloadAction, point)
     ) {
       this.#consume(event);
-      this.#previewActions.download(preview.item);
+      this.#previewActions.download(previewItem.item);
       return;
     }
     const resizeHandle = findResizeHandle(item.layout, point);
@@ -307,10 +307,10 @@ export class ComfyLiteGraphCubeNodeInteraction {
     if (!point) return;
     const item = this.#itemAt(point);
     if (!item) return;
-    const preview = findPreviewSection(item, point);
-    if (!preview?.item) return;
+    const previewItem = findPreviewItem(item, point);
+    if (!previewItem) return;
     this.#consume(event);
-    this.#previewActions.openContextMenu(preview.item, event);
+    this.#previewActions.openContextMenu(previewItem.item, event);
   };
 
   /** Open Cube editing instead of Comfy's generic SubgraphNode double-click path. */
@@ -390,8 +390,8 @@ export class ComfyLiteGraphCubeNodeInteraction {
         this.#appliedCursor = 'col-resize';
         return;
       }
-      const preview = findPreviewSection(item, point);
-      if (preview?.item && containsCubeCanvasPoint(preview.downloadAction, point)) {
+      const previewItem = findPreviewItem(item, point);
+      if (previewItem && containsCubeCanvasPoint(previewItem.downloadAction, point)) {
         this.#canvas.canvas.style.cursor = 'pointer';
         this.#appliedCursor = 'pointer';
         return;
@@ -425,16 +425,21 @@ export class ComfyLiteGraphCubeNodeInteraction {
   }
 }
 
-/** Return the preview section currently owning one graph-space point. */
-function findPreviewSection(
+/** Return the specific preview item currently owning one graph-space point. */
+function findPreviewItem(
   item: LiteGraphCubeNodeInteractionItem,
   point: Vec2,
-): CubeCanvasPreviewSectionLayout | null {
-  return (
-    layoutCubeCanvasPreviewSections(item.layout.preview, item.preview ?? null).find((section) =>
-      containsCubeCanvasPoint(section.rect, point),
-    ) ?? null
-  );
+): CubeCanvasPreviewItemLayout | null {
+  for (const section of layoutCubeCanvasPreviewSections(
+    item.layout.preview,
+    item.preview ?? null,
+  )) {
+    const previewItem = section.items.find((candidate) =>
+      containsCubeCanvasPoint(candidate.rect, point),
+    );
+    if (previewItem) return previewItem;
+  }
+  return null;
 }
 
 /** Resolve real child-node coordinates for one masonry card point. */

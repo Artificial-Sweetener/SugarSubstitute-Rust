@@ -31,12 +31,24 @@ export interface CubePreviewRect {
 
 export interface CubeCanvasPreviewSection {
   canonicalName: string;
-  item: CubePreviewItem | null;
+  items: readonly CubePreviewItem[];
 }
 
-export interface CubeCanvasPreviewSectionLayout extends CubeCanvasPreviewSection {
+export interface CubeCanvasPreviewItemLayout {
+  item: CubePreviewItem;
   rect: CubePreviewRect;
   downloadAction: CubePreviewRect;
+}
+
+export interface CubeCanvasPreviewSectionLayout {
+  canonicalName: string;
+  rect: CubePreviewRect;
+  items: readonly CubeCanvasPreviewItemLayout[];
+}
+
+export interface CubePreviewItemGrid {
+  columns: number;
+  rows: number;
 }
 
 /** Separate adjacent Cube output sections in either native renderer. */
@@ -47,6 +59,8 @@ export const CUBE_PREVIEW_SECTION_INSET = 6;
 export const CUBE_PREVIEW_TITLE_LINE_HEIGHT = 20;
 /** Match Comfy's compact hover action size on the canvas surface. */
 export const CUBE_PREVIEW_ACTION_SIZE = 28;
+/** Separate responsive media cells consistently in either native renderer. */
+export const CUBE_PREVIEW_ITEM_GAP = 12;
 
 /** Inset every canvas preview section consistently from its rail boundary. */
 export function resolveCubePreviewContentRect(area: CubePreviewRect): CubePreviewRect {
@@ -75,20 +89,82 @@ export function resolveCubeOutputSections(
   return snapshot.outputs;
 }
 
-/**
- * Resolve one canvas media item per boundary output.
- */
+/** Preserve every canvas media item produced by each boundary output. */
 export function resolveCubeCanvasPreviewSections(
   snapshot: CubePreviewSnapshot | null,
 ): readonly CubeCanvasPreviewSection[] {
   if (!snapshot) return [];
   return snapshot.outputs.map((output) => ({
     canonicalName: output.id,
-    item: output.items[0] ?? null,
+    items: output.items,
   }));
 }
 
-/** Lay out output sections and their native-style hover download targets. */
+/**
+ * Choose the grid whose smallest cell dimension is largest.
+ *
+ * This keeps the policy independent of media aspect-ratio metadata while still
+ * preferring side-by-side cells whenever a wide output section can use them.
+ */
+export function resolveCubePreviewItemGrid(
+  area: Pick<CubePreviewRect, 'width' | 'height'>,
+  itemCount: number,
+  gap = CUBE_PREVIEW_ITEM_GAP,
+): CubePreviewItemGrid {
+  const count = Math.max(0, Math.floor(itemCount));
+  if (count === 0) return { columns: 0, rows: 0 };
+  const width = Math.max(1, area.width);
+  const height = Math.max(1, area.height);
+  const safeGap = Math.max(0, gap);
+  let best = { columns: 1, rows: count };
+  let bestScore = Number.NEGATIVE_INFINITY;
+  for (let columns = 1; columns <= count; columns += 1) {
+    const rows = Math.ceil(count / columns);
+    const cellWidth = Math.max(1, (width - safeGap * (columns - 1)) / columns);
+    const cellHeight = Math.max(1, (height - safeGap * (rows - 1)) / rows);
+    const score = Math.min(cellWidth, cellHeight);
+    if (score > bestScore) {
+      best = { columns, rows };
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
+/** Lay out every item in row-major order using the shared responsive grid. */
+export function layoutCubePreviewItems(
+  area: CubePreviewRect,
+  items: readonly CubePreviewItem[],
+  gap = CUBE_PREVIEW_ITEM_GAP,
+): readonly CubeCanvasPreviewItemLayout[] {
+  const grid = resolveCubePreviewItemGrid(area, items.length, gap);
+  if (grid.columns === 0 || grid.rows === 0) return [];
+  const safeGap = Math.max(0, gap);
+  const cellWidth = Math.max(1, (area.width - safeGap * (grid.columns - 1)) / grid.columns);
+  const cellHeight = Math.max(1, (area.height - safeGap * (grid.rows - 1)) / grid.rows);
+  return items.map((item, index) => {
+    const column = index % grid.columns;
+    const row = Math.floor(index / grid.columns);
+    const rect = {
+      x: area.x + column * (cellWidth + safeGap),
+      y: area.y + row * (cellHeight + safeGap),
+      width: cellWidth,
+      height: cellHeight,
+    };
+    return {
+      item,
+      rect,
+      downloadAction: {
+        x: rect.x + Math.max(0, rect.width - CUBE_PREVIEW_ACTION_SIZE),
+        y: rect.y + Math.min(6, Math.max(0, rect.height - 1)),
+        width: Math.min(CUBE_PREVIEW_ACTION_SIZE, rect.width),
+        height: Math.min(CUBE_PREVIEW_ACTION_SIZE, rect.height),
+      },
+    };
+  });
+}
+
+/** Lay out vertical output sections and every responsive media cell within them. */
 export function layoutCubeCanvasPreviewSections(
   area: CubePreviewRect | null,
   snapshot: CubePreviewSnapshot | null,
@@ -103,16 +179,17 @@ export function layoutCubeCanvasPreviewSections(
   return outputs.flatMap((output, index) => {
     const rect = rects[index];
     if (!rect) return [];
+    const itemArea = {
+      x: rect.x,
+      y: rect.y + CUBE_PREVIEW_TITLE_LINE_HEIGHT + CUBE_PREVIEW_ITEM_GAP,
+      width: rect.width,
+      height: Math.max(1, rect.height - CUBE_PREVIEW_TITLE_LINE_HEIGHT - CUBE_PREVIEW_ITEM_GAP),
+    };
     return [
       {
         ...output,
         rect,
-        downloadAction: {
-          x: rect.x + Math.max(0, rect.width - CUBE_PREVIEW_ACTION_SIZE),
-          y: rect.y + CUBE_PREVIEW_TITLE_LINE_HEIGHT + 6,
-          width: Math.min(CUBE_PREVIEW_ACTION_SIZE, rect.width),
-          height: Math.min(CUBE_PREVIEW_ACTION_SIZE, Math.max(1, rect.height - 6)),
-        },
+        items: layoutCubePreviewItems(itemArea, output.items),
       },
     ];
   });

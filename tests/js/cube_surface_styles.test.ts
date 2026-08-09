@@ -291,6 +291,8 @@ describe('ensureCubeSurfaceStyles', () => {
     const css = document.getElementById('sugarcubes-cube-surface-styles')?.textContent ?? '';
     const railRule = css.match(/\.sugarcubes-cube-face__preview\s*\{([^}]*)\}/s)?.[1] ?? '';
     const mediaRule = css.match(/\.sugarcubes-cube-face__preview-media\s*\{([^}]*)\}/s)?.[1] ?? '';
+    const itemGridRule =
+      css.match(/\.sugarcubes-cube-face__preview-items\s*\{([^}]*)\}/s)?.[1] ?? '';
     const figureRule =
       css.match(/\.sugarcubes-cube-face__preview-media figure\s*\{([^}]*)\}/s)?.[1] ?? '';
     const imageRule =
@@ -307,7 +309,12 @@ describe('ensureCubeSurfaceStyles', () => {
     expect(mediaRule).toMatch(/height:\s*100%;/);
     expect(mediaRule).toMatch(/min-height:\s*0;/);
     expect(mediaRule).toMatch(/overflow:\s*hidden;/);
-    expect(figureRule).toMatch(/flex:\s*1\s+1\s+0;/);
+    expect(itemGridRule).toMatch(/display:\s*grid;/);
+    expect(itemGridRule).toMatch(/flex:\s*1\s+1\s+0;/);
+    expect(itemGridRule).toMatch(/min-width:\s*0;/);
+    expect(itemGridRule).toMatch(/min-height:\s*0;/);
+    expect(figureRule).toMatch(/width:\s*100%;/);
+    expect(figureRule).toMatch(/height:\s*100%;/);
     expect(figureRule).toMatch(/min-height:\s*0;/);
     expect(imageRule).toMatch(/height:\s*100%\s*!important;/);
     expect(imageRule).toMatch(/min-height:\s*0;/);

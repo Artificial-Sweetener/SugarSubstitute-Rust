@@ -503,8 +503,14 @@ describe('ComfyLiteGraphCubeNodeHost', () => {
               label: 'output.mask',
               items: [
                 {
-                  key: 'mask-preview',
-                  url: '/api/view?filename=mask.png',
+                  key: 'mask-preview-one',
+                  url: '/api/view?filename=mask-one.png',
+                  label: 'Output: output.mask',
+                  sourceLocator: 'mask-node',
+                },
+                {
+                  key: 'mask-preview-two',
+                  url: '/api/view?filename=mask-two.png',
                   label: 'Output: output.mask',
                   sourceLocator: 'mask-node',
                 },
@@ -519,13 +525,15 @@ describe('ComfyLiteGraphCubeNodeHost', () => {
     node.onDrawForeground?.(context, canvas, canvasElement);
 
     expect(previewImages.get).toHaveBeenCalledWith('/api/view?filename=proof.png', 'preview-node');
-    expect(previewImages.get).toHaveBeenCalledWith('/api/view?filename=mask.png', 'mask-node');
-    expect(context.drawImage).toHaveBeenCalledTimes(2);
+    expect(previewImages.get).toHaveBeenCalledWith('/api/view?filename=mask-one.png', 'mask-node');
+    expect(previewImages.get).toHaveBeenCalledWith('/api/view?filename=mask-two.png', 'mask-node');
+    expect(context.drawImage).toHaveBeenCalledTimes(3);
     const drawCalls = (
       context.drawImage as jest.MockedFunction<CanvasRenderingContext2D['drawImage']>
     ).mock.calls;
-    expect(Number(drawCalls[0]?.[1])).toBe(Number(drawCalls[1]?.[1]));
     expect(Number(drawCalls[0]?.[2])).toBeLessThan(Number(drawCalls[1]?.[2]));
+    expect(Number(drawCalls[1]?.[1])).toBeLessThan(Number(drawCalls[2]?.[1]));
+    expect(Number(drawCalls[1]?.[2])).toBe(Number(drawCalls[2]?.[2]));
     const visibleText = (
       context.fillText as jest.MockedFunction<CanvasRenderingContext2D['fillText']>
     ).mock.calls.map(([text]) => text);

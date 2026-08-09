@@ -520,6 +520,13 @@ export function ensureCubeSurfaceStyles(documentRef: Document): void {
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+    .sugarcubes-cube-face__preview-items {
+      display: grid;
+      flex: 1 1 0;
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+    }
     .sugarcubes-cube-face__preview-output p {
       min-height: 0;
       margin: 0;
@@ -528,7 +535,8 @@ export function ensureCubeSurfaceStyles(documentRef: Document): void {
     .sugarcubes-cube-face__preview-media figure {
       position: relative;
       display: flex;
-      flex: 1 1 0;
+      width: 100%;
+      height: 100%;
       min-height: 0;
       overflow: hidden;
       margin: 0;

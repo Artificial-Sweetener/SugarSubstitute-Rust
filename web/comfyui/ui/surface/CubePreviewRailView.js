@@ -14,16 +14,21 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Render Cube output previews in one rail. */
-import { resolveCubeOutputSections } from './CubePreviewSections.js';
+import { CUBE_PREVIEW_ITEM_GAP, resolveCubeOutputSections, resolveCubePreviewItemGrid, } from './CubePreviewSections.js';
 /** Own safe preview media DOM for one Cube face. */
 export class CubePreviewRailView {
     element;
     #actions;
+    #resizeObserver;
     #signature = '';
     /** Bind one dedicated rail without owning preview collection. */
     constructor(element, actions = null) {
         this.element = element;
         this.#actions = actions;
+        const ResizeObserverConstructor = element.ownerDocument.defaultView?.ResizeObserver;
+        this.#resizeObserver = ResizeObserverConstructor
+            ? new ResizeObserverConstructor(() => this.reflow())
+            : null;
     }
     /** Render one immutable preview snapshot without output-selection state. */
     render(snapshot) {
@@ -52,10 +57,17 @@ export class CubePreviewRailView {
             label.textContent = output.id;
             title.append(label);
             section.append(title);
-            for (const item of output.items) {
-                section.append(buildPreviewFigure(documentRef, item, this.#actions));
+            if (output.items.length > 0) {
+                const itemGrid = documentRef.createElement('div');
+                itemGrid.className = 'sugarcubes-cube-face__preview-items';
+                itemGrid.dataset.cubePreviewItems = output.id;
+                itemGrid.style.gap = `${String(CUBE_PREVIEW_ITEM_GAP)}px`;
+                for (const item of output.items) {
+                    itemGrid.append(buildPreviewFigure(documentRef, item, this.#actions));
+                }
+                section.append(itemGrid);
             }
-            if (output.items.length === 0) {
+            else {
                 const empty = documentRef.createElement('p');
                 empty.textContent = 'No preview available';
                 section.append(empty);
@@ -71,6 +83,34 @@ export class CubePreviewRailView {
             media.append(outputGrid);
         }
         this.element.replaceChildren(media);
+        this.#observeItemGrids();
+        this.reflow();
+    }
+    /** Recompute every item grid from its currently rendered dimensions. */
+    reflow() {
+        for (const itemGrid of this.element.querySelectorAll('[data-cube-preview-items]')) {
+            const bounds = itemGrid.getBoundingClientRect();
+            const grid = resolveCubePreviewItemGrid(bounds, itemGrid.childElementCount);
+            const columns = `repeat(${String(grid.columns)}, minmax(0, 1fr))`;
+            const rows = `repeat(${String(grid.rows)}, minmax(0, 1fr))`;
+            if (itemGrid.style.gridTemplateColumns !== columns) {
+                itemGrid.style.gridTemplateColumns = columns;
+            }
+            if (itemGrid.style.gridTemplateRows !== rows) {
+                itemGrid.style.gridTemplateRows = rows;
+            }
+        }
+    }
+    /** Release responsive layout observation owned by this rail. */
+    dispose() {
+        this.#resizeObserver?.disconnect();
+    }
+    /** Observe the current immutable snapshot's item-grid elements. */
+    #observeItemGrids() {
+        this.#resizeObserver?.disconnect();
+        for (const itemGrid of this.element.querySelectorAll('[data-cube-preview-items]')) {
+            this.#resizeObserver?.observe(itemGrid);
+        }
     }
 }
 /** Build one safe media figure without parsing dynamic host values as markup. */

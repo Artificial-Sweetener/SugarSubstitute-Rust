@@ -263,16 +263,21 @@ describe('ComfyLiteGraphCubeNodeInteraction', () => {
     interaction.dispose();
   });
 
-  test('routes download and context-menu actions from canvas preview sections', () => {
+  test('routes download and context-menu actions from each canvas preview item', () => {
     const node = cubeNode();
     const outputSlot = { name: 'image', type: 'IMAGE' };
     node.outputs = [outputSlot];
     node.subgraph.outputs = [outputSlot];
     const layout = computeCubeCanvasLayout(node, createDefaultCubeSurfaceState(), 30);
-    const item = { key: 'proof', url: '/proof.png', label: 'image' };
-    const preview = { outputs: [{ id: 'image', label: 'image', items: [item] }] };
+    const firstItem = { key: 'proof-one', url: '/proof-one.png', label: 'image one' };
+    const secondItem = { key: 'proof-two', url: '/proof-two.png', label: 'image two' };
+    const preview = {
+      outputs: [{ id: 'image', label: 'image', items: [firstItem, secondItem] }],
+    };
     const section = layoutCubeCanvasPreviewSections(layout.preview, preview)[0];
     if (!section) throw new Error('Missing preview section.');
+    const secondLayout = section.items[1];
+    if (!secondLayout) throw new Error('Missing second preview item.');
     const previewActions: CubePreviewActions = {
       openContextMenu: jest.fn(),
       download: jest.fn(),
@@ -290,26 +295,26 @@ describe('ComfyLiteGraphCubeNodeInteraction', () => {
       onCardActivationChange: jest.fn(),
     });
 
-    clickCenter(canvasElement, section.downloadAction);
+    clickCenter(canvasElement, secondLayout.downloadAction);
     const rightPointerEvent = pointer(
       'pointerdown',
-      section.rect.x + section.rect.width / 2,
-      section.rect.y + section.rect.height / 2,
+      secondLayout.rect.x + secondLayout.rect.width / 2,
+      secondLayout.rect.y + secondLayout.rect.height / 2,
       2,
     );
     canvasElement.dispatchEvent(rightPointerEvent);
     const menuEvent = pointer(
       'contextmenu',
-      section.rect.x + section.rect.width / 2,
-      section.rect.y + section.rect.height / 2,
+      secondLayout.rect.x + secondLayout.rect.width / 2,
+      secondLayout.rect.y + secondLayout.rect.height / 2,
       2,
     );
     canvasElement.dispatchEvent(menuEvent);
 
-    expect(previewActions.download).toHaveBeenCalledWith(item);
+    expect(previewActions.download).toHaveBeenCalledWith(secondItem);
     expect(rightPointerEvent.defaultPrevented).toBe(true);
     expect(nativePointerDown).not.toHaveBeenCalled();
-    expect(previewActions.openContextMenu).toHaveBeenCalledWith(item, menuEvent);
+    expect(previewActions.openContextMenu).toHaveBeenCalledWith(secondItem, menuEvent);
     interaction.dispose();
   });
 });
