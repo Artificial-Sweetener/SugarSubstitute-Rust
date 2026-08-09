@@ -18,6 +18,7 @@
 import { isRecord } from '../../types/common.js';
 import type { UnknownRecord, Vec2 } from '../../types/common.js';
 import type { NativeCubeSubgraph, NativeGraphNode } from '../ComfyCubeGraphBuilder.js';
+import { initializePromotedWidgetIdentity } from './PromotedWidgetIdentityInitializer.js';
 
 const DEFAULT_SIZE: Vec2 = [720, 480];
 const MINIMUM_SIZE: Vec2 = [320, 180];
@@ -58,6 +59,7 @@ export class ComfyCubeNodeFactory {
     const candidate = this.#createNode(configuration.subgraph.id);
     const node = requireSubgraphNode(candidate, configuration.subgraph);
     node.id = requireIdentifier(configuration.instanceId);
+    initializePromotedWidgetIdentity(node);
     this.#configure(node, configuration);
     return node;
   }

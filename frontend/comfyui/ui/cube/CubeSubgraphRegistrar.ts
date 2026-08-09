@@ -16,7 +16,7 @@
 /** Register nested subgraph definitions embedded in an imported Cube payload. */
 
 import { normalizeSubgraphPayload } from '../graph/SubgraphSerialization.js';
-import { rebindSubgraphWidgetValues } from '../graph/WidgetSnapshots.js';
+import { rebindSubgraphWidgetValues } from '../graph/SubgraphWidgetValueRebinder.js';
 import type { ImportPayload } from '../import/PlacementPayload.js';
 import { isRecord } from '../types/common.js';
 import type { UnknownRecord } from '../types/common.js';
@@ -27,9 +27,10 @@ interface ImportedSubgraph {
 }
 
 export interface CubeSubgraphRegistrationHost {
-  hasSubgraph(id: string): boolean;
+  getSubgraph(id: string): ImportedSubgraph | null;
   createSubgraph(data: UnknownRecord): ImportedSubgraph | null;
   createNode(type: string): ComfyNode | null;
+  discardSubgraph(id: string): void;
 }
 
 interface SubgraphHint {
@@ -46,7 +47,7 @@ export class CubeSubgraphRegistrar {
     this.#host = host;
   }
 
-  /** Register every absent nested definition and return actionable warnings. */
+  /** Synchronize every nested definition and return actionable warnings. */
   register(payload: ImportPayload): string[] {
     const warnings: string[] = [];
     const hints = buildHintLookup(payload);
@@ -56,7 +57,6 @@ export class CubeSubgraphRegistrar {
         warnings.push('Subgraph entry missing id; skipping.');
         continue;
       }
-      if (this.#host.hasSubgraph(id)) continue;
       try {
         const hint = hints.get(id) ?? { fallbackName: '', expectedInputNames: [] };
         const normalized = normalizeSubgraphPayload(entry, id, hint);
@@ -67,9 +67,9 @@ export class CubeSubgraphRegistrar {
         rebindSubgraphWidgetValues(normalized, (type) =>
           type ? this.#host.createNode(type) : null,
         );
-        const subgraph = this.#host.createSubgraph(normalized);
+        const subgraph = this.#host.getSubgraph(id) ?? this.#host.createSubgraph(normalized);
         if (!subgraph) {
-          warnings.push(`Subgraph '${id}' could not be created; skipping.`);
+          warnings.push(`Subgraph '${id}' could not be synchronized; skipping.`);
           continue;
         }
         subgraph.configure?.(normalized);
@@ -78,6 +78,11 @@ export class CubeSubgraphRegistrar {
       }
     }
     return warnings;
+  }
+
+  /** Discard isolated definitions that did not reach a committed Cube version. */
+  discard(ids: readonly string[]): void {
+    for (const id of ids) this.#host.discardSubgraph(id);
   }
 }
 

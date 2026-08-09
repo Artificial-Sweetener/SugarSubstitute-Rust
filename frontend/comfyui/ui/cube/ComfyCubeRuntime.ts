@@ -68,10 +68,7 @@ import { LegacyCubeContainerMigrationAdapter } from './migration/LegacyCubeConta
 import { NativeCubeProximityEndpointSource } from './connection/NativeCubeProximityEndpointSource.js';
 import type { ProximityEndpointSource } from '../overlays/proximity/ProximityModel.js';
 import type { NativeSubgraphBoundaryResolver } from './graph/NativeSubgraphBoundaryResolver.js';
-import type {
-  CubeFaceChromeActions,
-  CubeFaceChromeMetadata,
-} from '../surface/CubeFaceChromeActions.js';
+import type { CubeFaceChromeActions } from '../surface/CubeFaceChromeActions.js';
 import { CubePortPresentationController } from './connection/CubePortPresentationController.js';
 import type { ProximityMatchSink } from '../overlays/proximity/ProximityModel.js';
 import { ComfyCanvasGraphChangeAdapter } from '../surface/ComfyCanvasGraphChangeAdapter.js';
@@ -87,10 +84,18 @@ import { CubeEditorContextResolver } from '../surface/CubeEditorContextResolver.
 import { CubeStructuralOperationGuard } from '../affordance/CubeStructuralOperationGuard.js';
 import { CubeNodeProductIdentityPresenter } from '../affordance/CubeNodeProductIdentityPresenter.js';
 import { CubeBlueprintMigrationDetector } from '../affordance/CubeBlueprintMigrationDetector.js';
+import { CubeCardRevealService } from '../surface/CubeCardRevealService.js';
+import { CubeVersionRepository, type CubeVersionApi } from './version/CubeVersionRepository.js';
+import { CubeVersionAvailabilityService } from './version/CubeVersionAvailabilityService.js';
+import { ComfyCubeVersionReplacementAdapter } from './version/ComfyCubeVersionReplacementAdapter.js';
+import { ComfyCubeVersionSelectionAdapter } from './version/ComfyCubeVersionSelectionAdapter.js';
+import { CubeVersionSwitchService } from './version/CubeVersionSwitchService.js';
+import { CubeVersionDefinitionStager } from './version/CubeVersionDefinitionStager.js';
 
 export interface ComfyCubeRuntimeOptions {
   app: unknown;
   api: unknown;
+  cubeApi: CubeVersionApi;
   liteGraph: unknown;
   document: Document;
   logger: Pick<Console, 'debug' | 'error' | 'warn'>;
@@ -98,7 +103,6 @@ export interface ComfyCubeRuntimeOptions {
   getCubeOutput?(executionId: string): unknown;
   previewRetention?: CubePreviewRetentionStore;
   boundaryResolver: NativeSubgraphBoundaryResolver;
-  openCubeMenu?(metadata: CubeFaceChromeMetadata, event: MouseEvent): void;
   subscribePreviewChanges?(listener: () => void): () => void;
   onBoundaryGeometryChange?(): void;
   editorMetadata?: CubeEditorMetadataHudActions;
@@ -110,6 +114,9 @@ export interface ComfyCubeRuntime {
   placement: CubePlacementService;
   authoring: ComfyCubeAuthoringAdapter;
   nodes: CubeNodeCatalog;
+  cardReveal: CubeCardRevealService;
+  versionAvailability: CubeVersionAvailabilityService;
+  versionSwitch: CubeVersionSwitchService;
   graphScope: ComfyCubePlacementRuntime['graphScope'];
   graphInventory: ComfyCubePlacementRuntime['graphInventory'];
   hostPlacementGuard: ComfyCubePlacementRuntime['hostPlacementGuard'];
@@ -131,6 +138,8 @@ interface CubeRuntimeGraph {
   onNodeAdded?: ((node: unknown) => void) | null;
   onNodeRemoved?: ((node: unknown) => void) | null;
   add(node: NativeGraphNode): void;
+  remove(node: NativeGraphNode): void;
+  getLink(id: string | number): import('../types/graph.js').ComfyLink | null;
   getNodeById(id: string | number): unknown;
 }
 
@@ -149,8 +158,11 @@ export function createComfyCubeRuntime(options: ComfyCubeRuntimeOptions): ComfyC
   const createNodeFunction = requireFunction(liteGraph.createNode, 'LiteGraph.createNode');
   const createSubgraphFunction = requireFunction(graph.createSubgraph, 'LGraph.createSubgraph');
   const addFunction = requireFunction(graph.add, 'LGraph.add');
+  const removeFunction = requireFunction(graph.remove, 'LGraph.remove');
+  const getLinkFunction = requireFunction(graph.getLink, 'LGraph.getLink');
   const getNodeByIdFunction = requireFunction(graph.getNodeById, 'LGraph.getNodeById');
   const selectedItems = requireSet(canvas.selectedItems, 'LGraphCanvas.selectedItems');
+  const processSelectFunction = requireFunction(canvas.processSelect, 'LGraphCanvas.processSelect');
   const updateSelectedItemsFunction =
     typeof canvas.updateSelectedItems === 'function' ? canvas.updateSelectedItems : null;
   const apiUrlFunction = requireFunction(api.apiURL, 'Comfy API.apiURL');
@@ -194,6 +206,7 @@ export function createComfyCubeRuntime(options: ComfyCubeRuntimeOptions): ComfyC
 
   const history = createComfyCubeHistoryAdapter({ canvas, graph });
   const nodes = new CubeNodeCatalog();
+  const cardReveal = new CubeCardRevealService({ nodes, history });
   const contexts = new CubeEditorContextResolver(nodes);
   const portPresentation = new CubePortPresentationController({
     requestFrame: (callback) =>
@@ -225,7 +238,6 @@ export function createComfyCubeRuntime(options: ComfyCubeRuntimeOptions): ComfyC
     onSwapLeft: (metadata) => nodeSwap.swap(metadata, 'left'),
     onSwapRight: (metadata) => nodeSwap.swap(metadata, 'right'),
     canSwap: (metadata, direction) => nodeSwap.canSwap(metadata, direction),
-    ...(options.openCubeMenu ? { onOpenMenu: options.openCubeMenu } : {}),
   };
   const legacyContainerMigration = new LegacyCubeContainerMigrationAdapter({
     graph: runtimeGraph,
@@ -357,6 +369,19 @@ export function createComfyCubeRuntime(options: ComfyCubeRuntimeOptions): ComfyC
       : {}),
   });
   const graphBuilder = new ComfyCubeGraphBuilder(graphBuilderHost);
+  const subgraphRegistrar = new CubeSubgraphRegistrar({
+    getSubgraph(id) {
+      return runtimeGraph.subgraphs.get(id) ?? null;
+    },
+    createSubgraph(data) {
+      return graphBuilderHost.rootGraph.createSubgraph(data);
+    },
+    createNode,
+    discardSubgraph(id) {
+      const subgraph = runtimeGraph.subgraphs.get(id);
+      if (subgraph) discardSubgraph(subgraph);
+    },
+  });
   const construction = new CubeConstructionService({
     graphBuilder,
     nodeFactory,
@@ -365,6 +390,43 @@ export function createComfyCubeRuntime(options: ComfyCubeRuntimeOptions): ComfyC
     definitions: {
       discard: discardSubgraph,
     },
+  });
+  const versionRepository = new CubeVersionRepository(options.cubeApi, options.logger);
+  const versionAvailability = new CubeVersionAvailabilityService(versionRepository);
+  const versionSelection = new ComfyCubeVersionSelectionAdapter({
+    selectedItems,
+    processSelect: (node) => void processSelectFunction.call(canvas, node),
+  });
+  const versionReplacement = new ComfyCubeVersionReplacementAdapter({
+    graph: {
+      add(node) {
+        addFunction.call(graph, node);
+      },
+      remove(node) {
+        removeFunction.call(graph, node);
+      },
+      getNodeById(id) {
+        return getNodeByIdFunction.call(graph, id);
+      },
+      getLink(id) {
+        const value = getLinkFunction.call(graph, id);
+        return isRecord(value) ? value : null;
+      },
+    },
+    catalog: nodes,
+    history,
+    selection: versionSelection,
+    logger: options.logger,
+  });
+  const versionSwitch = new CubeVersionSwitchService({
+    availability: versionAvailability,
+    repository: versionRepository,
+    construction,
+    replacement: versionReplacement,
+    definitions: new CubeVersionDefinitionStager({
+      registrar: subgraphRegistrar,
+      createId: createUuid,
+    }),
   });
   const placement = new CubePlacementService({
     construction,
@@ -395,15 +457,6 @@ export function createComfyCubeRuntime(options: ComfyCubeRuntimeOptions): ComfyC
     graphScope,
     createEmptySubgraph: (title, description) => graphBuilder.createEmptyDraft(title, description),
     getDraftPosition: () => readGraphPoint(legacyCanvas.graph_mouse, [0, 0]),
-  });
-  const subgraphRegistrar = new CubeSubgraphRegistrar({
-    hasSubgraph(id) {
-      return runtimeGraph.subgraphs.has(id);
-    },
-    createSubgraph(data) {
-      return graphBuilderHost.rootGraph.createSubgraph(data);
-    },
-    createNode,
   });
   const legacyMigration = new LegacyCubeMigrationCoordinator({
     graphBuilder: new LegacyCubeGraphBuilder(
@@ -441,6 +494,9 @@ export function createComfyCubeRuntime(options: ComfyCubeRuntimeOptions): ComfyC
     placement,
     authoring,
     nodes,
+    cardReveal,
+    versionAvailability,
+    versionSwitch,
     graphScope,
     graphInventory,
     hostPlacementGuard,

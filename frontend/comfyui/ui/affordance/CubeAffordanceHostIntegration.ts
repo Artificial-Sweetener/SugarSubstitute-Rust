@@ -25,11 +25,18 @@ import { ComfyCubeEditorChromeAdapter } from './ComfyCubeEditorChromeAdapter.js'
 import { ComfyCubeNativeMenuAdapter } from './ComfyCubeNativeMenuAdapter.js';
 import { ComfyCubeSaveButtonPresenter } from './ComfyCubeSaveButtonPresenter.js';
 import { ComfyCubeSelectionSurfaceAdapter } from './ComfyCubeSelectionSurfaceAdapter.js';
+import { ComfyCubeSelectionToolboxAdapter } from './ComfyCubeSelectionToolboxAdapter.js';
+import { ComfyCubeSelectionMenuVisibilityAdapter } from './ComfyCubeSelectionMenuVisibilityAdapter.js';
+import { ComfyCubeCardVisibilityToolboxPresenter } from './ComfyCubeCardVisibilityToolboxPresenter.js';
 import { ComfyCubeWorkflowActionsMenuAdapter } from './ComfyCubeWorkflowActionsMenuAdapter.js';
 import { CubeMissingNodeLabelAdapter } from './CubeMissingNodeLabelAdapter.js';
 import { CubeInstanceRenameGuard } from './CubeInstanceRenameGuard.js';
 import { CubeNodeTooltipAdapter } from './CubeNodeTooltipAdapter.js';
 import { PrimeVueTooltipPresentationAdapter } from './PrimeVueTooltipPresentationAdapter.js';
+import { ComfyToolboxTooltipPresenter } from './ComfyToolboxTooltipPresenter.js';
+import { ComfyCubeVersionToolboxPresenter } from './ComfyCubeVersionToolboxPresenter.js';
+import { CubeVersionToolboxController } from './CubeVersionToolboxController.js';
+import { ComfyToolboxCheckMenuPresenter } from './ComfyToolboxCheckMenuPresenter.js';
 
 interface AffordanceCanvas {
   graph?: object;
@@ -105,10 +112,39 @@ export class CubeAffordanceHostIntegration {
       document: this.#document,
       canvas: this.#canvas,
       contexts: runtime.contexts,
-      saveButton: new ComfyCubeSaveButtonPresenter({
+      toolbox: new ComfyCubeSelectionToolboxAdapter({
         document: this.#document,
-        tooltips,
+        saveButton: new ComfyCubeSaveButtonPresenter({
+          document: this.#document,
+          tooltips,
+        }),
+        cardVisibility: new ComfyCubeCardVisibilityToolboxPresenter({
+          document: this.#document,
+          owner: runtime.cardReveal,
+          tooltip: new ComfyToolboxTooltipPresenter(this.#document),
+          menu: new ComfyToolboxCheckMenuPresenter({
+            document: this.#document,
+            featureMenuAttribute: 'data-sugarcubes-card-visibility-menu',
+            featureItemAttribute: 'data-sugarcubes-card-visibility-row',
+          }),
+        }),
+        versions: new CubeVersionToolboxController({
+          availability: runtime.versionAvailability,
+          switcher: runtime.versionSwitch,
+          presenter: new ComfyCubeVersionToolboxPresenter({
+            document: this.#document,
+            tooltip: new ComfyToolboxTooltipPresenter(this.#document),
+            menu: new ComfyToolboxCheckMenuPresenter({
+              document: this.#document,
+              featureMenuAttribute: 'data-sugarcubes-version-menu',
+              featureItemAttribute: 'data-sugarcubes-version-option',
+            }),
+          }),
+          logger: this.#logger,
+          reportError: (message) => this.#controller.reportVersionError(message),
+        }),
       }),
+      menus: new ComfyCubeSelectionMenuVisibilityAdapter(this.#document),
     });
     this.#selectionSurface.install();
     this.#instanceRename = new CubeInstanceRenameGuard({
@@ -143,12 +179,7 @@ export class CubeAffordanceHostIntegration {
   /** Supply Cube replacements through Comfy's supported additive node-menu hook. */
   getNodeMenuItems(node: unknown): CubeAffordanceMenuItem[] {
     if (!isCubeNode(node)) return [];
-    return [
-      {
-        content: 'Save Cube',
-        callback: () => this.#controller.saveCube(node),
-      },
-    ];
+    return [{ content: 'Save Cube', callback: () => this.#controller.saveCube(node) }];
   }
 
   /** Adapt missing-node hints before Comfy transfers them into warning stores. */

@@ -15,12 +15,10 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Compose Cube-owned header actions without owning popup geometry. */
 import { dispatchCubeFaceTitlebarAction, resolveCubeFaceTitlebarActions, } from './CubeFaceChromeActions.js';
-import { CubeFaceRevealMenuView } from './CubeFaceRevealMenuView.js';
 import { createComfyPrimeIconElement } from './ComfyPrimeIcons.js';
 /** Own the accessible Cube header controls without owning card policy. */
 export class CubeFaceActionsView {
     element;
-    #revealMenu;
     #chromeButtons;
     #metadata;
     #chromeActions;
@@ -30,21 +28,20 @@ export class CubeFaceActionsView {
         this.element.className = 'sugarcubes-cube-face__actions';
         this.#metadata = metadata;
         this.#chromeActions = chromeActions ?? null;
-        this.#chromeButtons = new Map(['swap-left', 'swap-right', 'cube-menu'].map((key) => {
+        this.#chromeButtons = new Map(['swap-left', 'swap-right'].map((key) => {
             const button = createChromeButton(documentRef, key);
             button.addEventListener('click', (event) => {
-                if (dispatchCubeFaceTitlebarAction(key, this.#metadata, this.#chromeActions, event)) {
+                if (dispatchCubeFaceTitlebarAction(key, this.#metadata, this.#chromeActions)) {
                     event.preventDefault();
                     event.stopPropagation();
                 }
             });
             return [key, button];
         }));
-        this.#revealMenu = new CubeFaceRevealMenuView(documentRef);
-        this.element.append(...this.#chromeButtons.values(), this.#revealMenu.button);
+        this.element.append(...this.#chromeButtons.values());
     }
-    /** Replace menu rows from the current shared card decisions. */
-    render(entries, onRevealChange) {
+    /** Reconcile the renderer-owned Cube header actions. */
+    render() {
         const visibleActions = resolveCubeFaceTitlebarActions(this.#metadata, this.#chromeActions);
         for (const button of this.#chromeButtons.values())
             button.hidden = true;
@@ -57,11 +54,6 @@ export class CubeFaceActionsView {
             button.title = action.title;
             button.setAttribute('aria-label', action.ariaLabel);
         }
-        this.#revealMenu.render(entries, onRevealChange);
-    }
-    /** Close transient menu state when the owning Cube view is released. */
-    dispose() {
-        this.#revealMenu.dispose();
     }
 }
 /** Build one persistent button whose behavior delegates to the shared action owner. */

@@ -19,11 +19,12 @@
 import { CubeBrowserStore } from './CubeBrowserStore.js';
 import { CubeBrowserView } from './CubeBrowserView.js';
 import { CubePreviewRenderer } from './CubePreviewRenderer.js';
+import { projectCubeVersionOptions } from '../cube/version/CubeVersionOptionProjection.js';
 import { injectBrowserStyles } from './BrowserStyles.js';
 import { deriveCubeIdFromDefaultAlias, normalizeDefaultAliasTitle } from '../core/CubeId.js';
 import { resolveCubePackIdentity } from '../core/CubePackIdentity.js';
 import { deriveTargetModelCubeId, deriveTargetModelFromCubeId, normalizeSupportedModels, normalizeTargetModel, } from '../core/ModelTargets.js';
-import { CURRENT_REVISION_REF, formatCubeVersionLabel, isCurrentRevisionRef, normalizeCubeVersion, normalizeRevisionRef, } from '../core/CubeDefinitionKey.js';
+import { CURRENT_REVISION_REF, isCurrentRevisionRef, normalizeCubeVersion, normalizeRevisionRef, } from '../core/CubeDefinitionKey.js';
 import { isRecord } from '../types/common.js';
 import { planPlacementGeometry } from '../geometry/PlacementGeometryPlanner.js';
 import { resolveRendererGeometryPolicy } from '../geometry/RendererGeometryPolicy.js';
@@ -590,12 +591,6 @@ export class CubeBrowserController {
                 const message = readApiErrorMessage(data, response.statusText || 'Failed to load revisions');
                 this.store.setRevisions([], cubeId);
                 this.store.setSelectedRevision(CURRENT_REVISION_REF);
-                if (this.isDuplicateVersionHistoryError(data)) {
-                    this.applyFallbackVersionOptions(selected);
-                    this.store.setVersionError(null);
-                    this.toast?.push('warn', 'Revision history normalized', 'Duplicate historical versions were ignored; the current version remains available.');
-                    return;
-                }
                 this.store.setVersionError(message);
                 this.toast?.push('warn', 'Revision history unavailable', message);
                 return;
@@ -605,28 +600,18 @@ export class CubeBrowserController {
                 return;
             }
             const revisions = Array.isArray(data?.revisions) ? data.revisions : [];
-            const normalized = this.normalizeVersionOptions(revisions, selected);
-            if (normalized.error) {
-                this.store.setRevisions([], cubeId);
-                this.store.setVersionOptions([]);
-                this.store.setVersionError(normalized.error);
-                this.store.setSelectedRevision(CURRENT_REVISION_REF);
-                this.toast?.push('warn', 'Revision history unavailable', normalized.error);
-                return;
-            }
-            if (normalized.warning) {
-                this.toast?.push('warn', 'Revision history normalized', normalized.warning);
-            }
+            const versionRevisions = Array.isArray(data?.version_revisions)
+                ? data.version_revisions
+                : revisions;
+            const options = projectCubeVersionOptions(versionRevisions, selected?.version);
             this.store.setRevisions(revisions, cubeId);
-            this.store.setVersionOptions(normalized.options);
+            this.store.setVersionOptions(options);
             this.store.setVersionError(null);
-            const activeRevision = normalized.options.some((entry) => entry?.revisionRef === this.store.state.selectedRevision)
+            const activeRevision = options.some((entry) => entry?.revisionRef === this.store.state.selectedRevision)
                 ? this.store.state.selectedRevision
                 : CURRENT_REVISION_REF;
             this.store.setSelectedRevision(activeRevision);
-            const activeOption = normalized.options.find((entry) => entry.revisionRef === activeRevision) ||
-                normalized.options[0] ||
-                null;
+            const activeOption = options.find((entry) => entry.revisionRef === activeRevision) || options[0] || null;
             if (activeOption) {
                 this.store.setSelectedVersion(activeOption.value);
             }
@@ -655,70 +640,13 @@ export class CubeBrowserController {
         void this.requestPreview(this.store.state.selected);
     }
     applyFallbackVersionOptions(selected) {
-        const version = normalizeCubeVersion(selected?.version);
-        if (!version) {
+        const options = projectCubeVersionOptions([], selected?.version);
+        const option = options[0];
+        if (!option) {
             return;
         }
-        this.store.setVersionOptions([
-            {
-                label: formatCubeVersionLabel(version),
-                value: version,
-                revisionRef: CURRENT_REVISION_REF,
-                current: true,
-                raw: null,
-            },
-        ]);
-        this.store.setSelectedVersion(version);
-    }
-    normalizeVersionOptions(revisions, selected) {
-        const options = [];
-        const seen = new Map();
-        const duplicateVersions = new Set();
-        for (const entry of Array.isArray(revisions) ? revisions : []) {
-            const version = normalizeCubeVersion(entry?.version);
-            if (!version) {
-                continue;
-            }
-            const revisionRef = normalizeRevisionRef(entry?.revision_ref);
-            if (seen.has(version)) {
-                duplicateVersions.add(version);
-                continue;
-            }
-            seen.set(version, revisionRef);
-            options.push({
-                label: formatCubeVersionLabel(version),
-                value: version,
-                revisionRef,
-                current: Boolean(entry?.current) || isCurrentRevisionRef(revisionRef),
-                raw: entry,
-            });
-        }
-        if (!options.length) {
-            const version = normalizeCubeVersion(selected?.version);
-            if (version) {
-                options.push({
-                    label: formatCubeVersionLabel(version),
-                    value: version,
-                    revisionRef: CURRENT_REVISION_REF,
-                    current: true,
-                    raw: null,
-                });
-            }
-        }
-        const duplicateLabels = Array.from(duplicateVersions)
-            .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
-            .map((version) => formatCubeVersionLabel(version));
-        const warning = duplicateLabels.length
-            ? `Ignored duplicate revision entries for ${duplicateLabels.join(', ')}.`
-            : '';
-        return { options, error: '', warning };
-    }
-    isDuplicateVersionHistoryError(data) {
-        if (!isRecord(data) || !isRecord(data.error) || !isRecord(data.error.details)) {
-            return false;
-        }
-        return (data.error.message === 'Cube history contains duplicate version entries' &&
-            Array.isArray(data.error.details.duplicates));
+        this.store.setVersionOptions(options);
+        this.store.setSelectedVersion(option.value);
     }
     selectVersion(version) {
         const normalized = normalizeCubeVersion(version);

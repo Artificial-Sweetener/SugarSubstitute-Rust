@@ -40,6 +40,7 @@ from .cube_metadata import (
     normalize_supported_models,
 )
 from .cube_summary import build_cube_identity_fields, derive_cube_display_name
+from .cube_revision_version_projection import project_unique_cube_versions
 from .cube_version_artifact_cache import (
     CubeVersionArtifactCache,
     CubeVersionArtifactCacheKey,
@@ -140,7 +141,9 @@ class CubeLibraryArtifactService:
             loaded_cube_id=response["cubeId"],
             loaded_version=response["version"],
             content_hash=response["contentHash"],
-            cube_path=format_display_path(context.cube_path, self._library.extension_root),
+            cube_path=format_display_path(
+                context.cube_path, self._library.extension_root
+            ),
             duration_ms=round((perf_counter() - started_at) * 1000, 3),
         )
         return response
@@ -164,11 +167,11 @@ class CubeLibraryArtifactService:
         context = self._resolve_cube_ref_context(cube_id)
         refs = [self._current_cube_ref(context)]
         refs.extend(self._committed_cube_refs(context))
-        versions: list[str] = []
-        for ref in refs:
-            version = normalize_metadata_string(ref.get("version"))
-            if version and version not in versions:
-                versions.append(version)
+        projection = project_unique_cube_versions(refs)
+        versions = [
+            normalize_metadata_string(ref.get("version"))
+            for ref in projection.revisions
+        ]
         return {
             "schemaVersion": 1,
             "cubeId": context.cube_id,
@@ -287,7 +290,9 @@ class CubeLibraryArtifactService:
         normalized = normalize_metadata_string(cube_id)
         if not normalized:
             raise BackendError("Cube id is required", status=400)
-        context = resolve_cube_git_context(self._library.tracked_repo_service, normalized)
+        context = resolve_cube_git_context(
+            self._library.tracked_repo_service, normalized
+        )
         if not context.cube_path.exists() or not context.cube_path.is_file():
             raise BackendError(f"Cube '{normalized}' not found", status=404)
         return context
@@ -422,9 +427,7 @@ class CubeLibraryArtifactService:
     ) -> dict[str, Any]:
         """Select one exact cube ref or fail closed with typed details."""
 
-        refs = _mapping_list(
-            self.list_library_cube_refs(context.cube_id).get("refs")
-        )
+        refs = _mapping_list(self.list_library_cube_refs(context.cube_id).get("refs"))
         matches = refs
         exact_selector_present = bool(revision_ref or content_hash)
         if revision_ref:
@@ -496,9 +499,7 @@ class CubeLibraryArtifactService:
     ) -> dict[str, Any]:
         """Select the newest artifact matching one cube version."""
 
-        refs = _mapping_list(
-            self.list_library_cube_refs(context.cube_id).get("refs")
-        )
+        refs = _mapping_list(self.list_library_cube_refs(context.cube_id).get("refs"))
         for ref in refs:
             if normalize_metadata_string(ref.get("version")) == version:
                 return ref
@@ -712,7 +713,9 @@ class CubeLibraryArtifactService:
         """Return the source revision fact used to invalidate version selection."""
 
         if context.source_kind == "github":
-            tracked = self._library.tracked_repo_service.get_repo(context.owner, context.repo)
+            tracked = self._library.tracked_repo_service.get_repo(
+                context.owner, context.repo
+            )
             return self._library._local_head_sha(tracked)
         if not (context.repo_root / ".git").exists():
             return "nogit"
@@ -804,7 +807,9 @@ class CubeLibraryArtifactService:
         """Build source metadata directly from resolved cube ownership context."""
 
         if context.source_kind == "github":
-            tracked = self._library.tracked_repo_service.get_repo(context.owner, context.repo)
+            tracked = self._library.tracked_repo_service.get_repo(
+                context.owner, context.repo
+            )
             return {
                 "kind": "github",
                 "repoRef": f"{context.owner}/{context.repo}",

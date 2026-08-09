@@ -170,6 +170,37 @@ describe('CubeConstructionService', () => {
     });
     expect(node.size).toEqual([1_040, 600]);
   });
+
+  test('accepts explicit instance geometry and surface state for version replacement', () => {
+    const subgraph = nativeSubgraph('replacement-definition');
+    const node = nativeSubgraphNode(subgraph);
+    const resolveInitialSize = jest.fn((): [number, number] => [920, 600]);
+    const service = new CubeConstructionService({
+      graphBuilder: builderReturning(subgraph),
+      nodeFactory: new ComfyCubeNodeFactory({ createNode: () => node }),
+      definitions: { discard: jest.fn() },
+      resolveInitialSize,
+      createInstanceId: () => 'unused-instance',
+    });
+
+    service.construct(
+      { cube: { cube_id: 'local/demo.cube', version: '2.0.0', default_alias: 'Demo' } },
+      {
+        instanceId: 'stable-instance',
+        instanceAlias: 'My Demo',
+        position: [125, 250],
+        size: [735, 415],
+        surface: { schema: 3, node_order: [] },
+      },
+    );
+
+    expect(node.id).toBe('stable-instance');
+    expect(node.title).toBe('My Demo');
+    expect(node.pos).toEqual([125, 250]);
+    expect(node.size).toEqual([735, 415]);
+    expect(node.properties.sugarcubes_surface).toEqual({ schema: 3, node_order: [] });
+    expect(resolveInitialSize).not.toHaveBeenCalled();
+  });
 });
 
 /** Build one graph-builder double whose definition is already registered. */
@@ -214,6 +245,7 @@ function nativeSubgraphNode(subgraph: NativeCubeSubgraph): CubeNode {
     outputs: [],
     subgraph,
     isSubgraphNode: () => true,
+    configure: jest.fn(),
     connect() {},
     serialize: () => ({}),
     setSize(size) {

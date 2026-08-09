@@ -35,6 +35,7 @@ import { buildCubePayloadTopology } from './CubePayloadTopology.js';
 import { resolveCubeInputBoundaryType } from './CubeBoundaryTypeResolver.js';
 import { deriveCubeOutputSurfaceNames } from './CubeOutputSurfaceNames.js';
 import { resolveCubeDefinitionDescription } from './node/CubeDefinitionIdentityWriter.js';
+import { initializePromotedWidgetIdentity } from './node/PromotedWidgetIdentityInitializer.js';
 import { attachNativeCubeAuthoredLayout } from './geometry/NativeCubeAuthoredLayout.js';
 import {
   applyEmptyCubeBoundaryLayout,
@@ -169,6 +170,7 @@ export class ComfyCubeGraphBuilder {
           continue;
         }
         node.id = this.#host.createUuid();
+        initializePromotedWidgetIdentity(node);
         applyAuthoredGeometry(node, entry.layout, origin);
         node.properties.sugarcubes_symbol = symbol;
         const titleValue = readString(entry.layout?.title);

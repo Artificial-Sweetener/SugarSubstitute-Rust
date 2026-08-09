@@ -350,6 +350,7 @@ describe('ComfyCubeGraphBuilder', () => {
     } as unknown as NativeCubeSubgraph;
     const nested = makeNode('nested-subgraph-id');
     nested.isSubgraphNode = () => true;
+    nested.configure = jest.fn();
     const builder = new ComfyCubeGraphBuilder({
       rootGraph: { createSubgraph: () => subgraph },
       createNode: () => nested,
@@ -367,6 +368,7 @@ describe('ComfyCubeGraphBuilder', () => {
 
     expect(internalNodes).toEqual([nested]);
     expect(internalNodes[0]?.isSubgraphNode?.()).toBe(true);
+    expect(nested.configure).toHaveBeenCalledWith({});
   });
 
   test('uses the persisted nested-boundary type instead of a transient wildcard slot', () => {

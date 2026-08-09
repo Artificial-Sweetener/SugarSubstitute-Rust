@@ -289,18 +289,6 @@ export class OverlayManager {
     getChromeDebugState() {
         return this.chrome.getDebugState();
     }
-    /** Open the existing Cube menu for a first-class Cube node titlebar. */
-    openCubeMenu(metadata, event) {
-        const liteGraph = typeof globalThis !== 'undefined' ? globalThis.LiteGraph : null;
-        if (!liteGraph?.ContextMenu)
-            return;
-        const options = this.chrome.buildMenuOptions({
-            metadata: metadata,
-            isDirty: Boolean(metadata.dirty),
-            flavors: [],
-        });
-        new liteGraph.ContextMenu(options, { event });
-    }
     setup() {
         this.chrome.setup();
         this.ensureOverlayHook();

@@ -22,7 +22,6 @@ import type { CubeNode } from '../../frontend/comfyui/ui/cube/node/ComfyCubeNode
 import { ComfyLiteGraphCubeNodeInteraction } from '../../frontend/comfyui/ui/surface/ComfyLiteGraphCubeNodeInteraction.js';
 import type { ComfyLiteGraphWidgetInteraction } from '../../frontend/comfyui/ui/surface/ComfyLiteGraphWidgetInteraction.js';
 import { computeCubeCanvasLayout } from '../../frontend/comfyui/ui/surface/CubeCanvasLayout.js';
-import { computeCubeCanvasCardMenuLayout } from '../../frontend/comfyui/ui/surface/CubeCanvasCardMenuLayout.js';
 import { createDefaultCubeSurfaceState } from '../../frontend/comfyui/ui/surface/CubeSurfaceState.js';
 import type { CubePreviewActions } from '../../frontend/comfyui/ui/surface/CubePreviewActions.js';
 import { layoutCubeCanvasPreviewSections } from '../../frontend/comfyui/ui/surface/CubePreviewSections.js';
@@ -55,10 +54,8 @@ describe('ComfyLiteGraphCubeNodeInteraction', () => {
       },
       history: { beforeChange, afterChange, setDirtyCanvas: jest.fn() },
       widgetInteraction: inertWidgetInteraction(),
-      getItems: () => [{ node, layout, cardMenuOpen: false }],
+      getItems: () => [{ node, layout }],
       onEdit: jest.fn(),
-      onCardMenuToggle: jest.fn(),
-      onCardRevealChange: jest.fn(),
       onCardActivationChange: jest.fn(),
       onGeometryChange,
     });
@@ -108,10 +105,8 @@ describe('ComfyLiteGraphCubeNodeInteraction', () => {
       },
       history: {},
       widgetInteraction: inertWidgetInteraction(),
-      getItems: () => [{ node, layout, cardMenuOpen: false }],
+      getItems: () => [{ node, layout }],
       onEdit: openEditor,
-      onCardMenuToggle: jest.fn(),
-      onCardRevealChange: jest.fn(),
       onCardActivationChange: jest.fn(),
     });
     const movePoint: [number, number] = [layout.header.x + 180, layout.header.y + 20];
@@ -140,8 +135,6 @@ describe('ComfyLiteGraphCubeNodeInteraction', () => {
       widgetInteraction: inertWidgetInteraction(),
       getItems: () => [],
       onEdit: jest.fn(),
-      onCardMenuToggle: jest.fn(),
-      onCardRevealChange: jest.fn(),
       onCardActivationChange: jest.fn(),
     });
 
@@ -174,10 +167,8 @@ describe('ComfyLiteGraphCubeNodeInteraction', () => {
       },
       history: { beforeChange },
       widgetInteraction: inertWidgetInteraction(),
-      getItems: () => [{ node, layout, cardMenuOpen: false }],
+      getItems: () => [{ node, layout }],
       onEdit: jest.fn(),
-      onCardMenuToggle: jest.fn(),
-      onCardRevealChange: jest.fn(),
       onCardActivationChange: jest.fn(),
     });
     const down = pointer('pointerdown', output.x, output.y);
@@ -189,7 +180,7 @@ describe('ComfyLiteGraphCubeNodeInteraction', () => {
     interaction.dispose();
   });
 
-  test('routes card menu and activation hit targets independently', () => {
+  test('routes card activation without renderer-owned visibility controls', () => {
     const inner: CubeNode['subgraph']['_nodes'][number] = {
       id: 'patch',
       type: 'MahiroCFG',
@@ -214,17 +205,12 @@ describe('ComfyLiteGraphCubeNodeInteraction', () => {
     const layout = computeCubeCanvasLayout(node, state, 30);
     const card = layout.cards[0];
     if (!card?.activationAction) throw new Error('Missing card activation hit target.');
-    const menuItem = computeCubeCanvasCardMenuLayout(layout).items[0];
-    if (!menuItem) throw new Error('Missing card menu hit target.');
     const canvasElement = document.createElement('canvas');
     document.body.replaceChildren(canvasElement);
     Object.defineProperty(canvasElement, 'getBoundingClientRect', {
       value: () => ({ left: 0, top: 0, width: 1200, height: 900 }),
     });
-    const onCardMenuToggle = jest.fn();
-    const onCardRevealChange = jest.fn();
     const onCardActivationChange = jest.fn();
-    let cardMenuOpen = true;
     const interaction = new ComfyLiteGraphCubeNodeInteraction({
       canvas: {
         canvas: canvasElement,
@@ -232,20 +218,11 @@ describe('ComfyLiteGraphCubeNodeInteraction', () => {
       },
       history: {},
       widgetInteraction: inertWidgetInteraction(),
-      getItems: () => [{ node, layout, cardMenuOpen }],
+      getItems: () => [{ node, layout }],
       onEdit: jest.fn(),
-      onCardMenuToggle,
-      onCardRevealChange,
       onCardActivationChange,
     });
 
-    clickCenter(canvasElement, layout.cardMenuAction);
-    expect(onCardMenuToggle).toHaveBeenCalledWith(node);
-
-    clickCenter(canvasElement, menuItem.rect);
-    expect(onCardRevealChange).toHaveBeenCalledWith(node, inner, false);
-
-    cardMenuOpen = false;
     clickCenter(canvasElement, card.activationAction);
     expect(onCardActivationChange).toHaveBeenCalledWith(node, inner, true);
     interaction.dispose();
@@ -267,10 +244,8 @@ describe('ComfyLiteGraphCubeNodeInteraction', () => {
       canvas: { canvas: canvasElement, convertCanvasToOffset: (point) => point },
       history: { beforeChange, afterChange },
       widgetInteraction: inertWidgetInteraction(),
-      getItems: () => [{ node, layout, cardMenuOpen: false }],
+      getItems: () => [{ node, layout }],
       onEdit: jest.fn(),
-      onCardMenuToggle: jest.fn(),
-      onCardRevealChange: jest.fn(),
       onCardActivationChange: jest.fn(),
       onPreviewWidthChange,
     });
@@ -309,11 +284,9 @@ describe('ComfyLiteGraphCubeNodeInteraction', () => {
       canvas: { canvas: canvasElement, convertCanvasToOffset: (point) => point },
       history: {},
       widgetInteraction: inertWidgetInteraction(),
-      getItems: () => [{ node, layout, cardMenuOpen: false, preview }],
+      getItems: () => [{ node, layout, preview }],
       previewActions,
       onEdit: jest.fn(),
-      onCardMenuToggle: jest.fn(),
-      onCardRevealChange: jest.fn(),
       onCardActivationChange: jest.fn(),
     });
 

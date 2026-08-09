@@ -13,36 +13,23 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Adapt Comfy's hard-coded Vue selection affordances for Cube selections. */
-const HIDDEN_ATTRIBUTE = 'data-sugarcubes-hidden-affordance';
-const QUICK_ACTION_SELECTORS = [
-    '[data-testid="convert-to-subgraph-button"]',
-    '[data-testid="info-button"]',
-];
-const MENU_ICON_SELECTORS = [
-    'i[class*="lucide--shrink"]',
-    'i[class*="lucide--expand"]',
-    'i[class*="lucide--folder-plus"]',
-    'i[class*="lucide--settings-2"]:not(.sugarcubes-configure-cube-command)',
-    'i[class*="lucide--info"]',
-    'i.pi-info-circle',
-];
-/** Own DOM-only suppression and accessible labels around stable Comfy anchors. */
+/** Reconcile focused Cube adapters when Comfy remounts selection surfaces. */
+/** Own selection resolution and mutation-observer lifecycle without rendering feature UI. */
 export class ComfyCubeSelectionSurfaceAdapter {
     #document;
     #canvas;
     #contexts;
-    #saveButton;
+    #toolbox;
+    #menus;
     #observer;
-    #hiddenStates = new Map();
-    #saveButtonStates = new Map();
     #scheduled = false;
-    /** Bind the document surface and shared semantic selection resolver. */
+    /** Bind selection semantics to focused host-surface adapters. */
     constructor(options) {
         this.#document = options.document;
         this.#canvas = options.canvas;
         this.#contexts = options.contexts;
-        this.#saveButton = options.saveButton;
+        this.#toolbox = options.toolbox;
+        this.#menus = options.menus;
         this.#observer = new MutationObserver(() => this.#schedule());
     }
     /** Observe Vue mounts and renderer switches, then reconcile immediately. */
@@ -53,34 +40,16 @@ export class ComfyCubeSelectionSurfaceAdapter {
     /** Restore presentation mutations when Comfy replaces the Cube runtime. */
     dispose() {
         this.#observer.disconnect();
-        this.#restoreMutations();
+        this.#toolbox.dispose();
+        this.#menus.clear();
     }
-    /** Reconcile the mounted selection toolbox and More Options menu. */
+    /** Reconcile each focused host surface from one semantic selection snapshot. */
     refresh() {
         this.#scheduled = false;
         const selection = this.#contexts.resolveSelection(this.#canvas.selectedItems);
-        if (!selection.containsCube) {
-            this.#restoreMutations();
-            return;
-        }
-        const toolbox = this.#document.querySelector('[data-testid="selection-toolbox"]');
-        if (toolbox) {
-            for (const selector of QUICK_ACTION_SELECTORS) {
-                for (const element of toolbox.querySelectorAll(selector))
-                    this.#hide(element);
-            }
-            this.#labelIconButton(toolbox, 'i[class*="lucide--book-open"]', 'Save Cube');
-            this.#hideIconButton(toolbox, 'i[class*="lucide--settings-2"]');
-        }
-        for (const menu of this.#document.querySelectorAll('.p-contextmenu')) {
-            for (const selector of MENU_ICON_SELECTORS) {
-                for (const icon of menu.querySelectorAll(selector)) {
-                    const item = icon.closest('li');
-                    if (item)
-                        this.#hide(item);
-                }
-            }
-        }
+        const cube = selection.isSingleCube ? (selection.cubeNodes[0] ?? null) : null;
+        this.#toolbox.present(cube);
+        this.#menus.present(selection.containsCube);
     }
     /** Coalesce mutation bursts produced by PrimeVue menu mounting. */
     #schedule() {
@@ -88,52 +57,5 @@ export class ComfyCubeSelectionSurfaceAdapter {
             return;
         this.#scheduled = true;
         queueMicrotask(() => this.refresh());
-    }
-    /** Undo only mutations owned by this adapter. */
-    #restoreMutations() {
-        for (const [element, state] of this.#hiddenStates) {
-            element.hidden = state.hidden;
-            if (state.display)
-                element.style.setProperty('display', state.display, state.priority);
-            else
-                element.style.removeProperty('display');
-            element.removeAttribute(HIDDEN_ATTRIBUTE);
-        }
-        this.#hiddenStates.clear();
-        for (const [element, state] of this.#saveButtonStates) {
-            this.#saveButton.restore(element, state);
-        }
-        this.#saveButtonStates.clear();
-    }
-    /** Hide one hard-coded host affordance without removing Vue-owned DOM. */
-    #hide(element) {
-        if (!this.#hiddenStates.has(element)) {
-            this.#hiddenStates.set(element, {
-                hidden: element.hidden,
-                display: element.style.getPropertyValue('display'),
-                priority: element.style.getPropertyPriority('display'),
-            });
-        }
-        element.hidden = true;
-        element.style.setProperty('display', 'none', 'important');
-        element.setAttribute(HIDDEN_ATTRIBUTE, 'true');
-    }
-    /** Hide one icon-identified toolbox button owned by Comfy. */
-    #hideIconButton(container, selector) {
-        const button = container.querySelector(selector)?.closest('button');
-        if (button)
-            this.#hide(button);
-    }
-    /** Adapt one native icon button through the focused PrimeVue host boundary. */
-    #labelIconButton(container, selector, label) {
-        const icon = container.querySelector(selector);
-        if (!icon)
-            return;
-        const button = icon.closest('button');
-        if (!button)
-            return;
-        const state = this.#saveButton.present(button, icon, label, this.#saveButtonStates.get(button));
-        if (!this.#saveButtonStates.has(button))
-            this.#saveButtonStates.set(button, state);
     }
 }

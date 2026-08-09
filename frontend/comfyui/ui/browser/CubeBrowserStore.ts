@@ -19,6 +19,9 @@
 
 import { isRecord } from '../types/common.js';
 import type { UnknownRecord, Vec2 } from '../types/common.js';
+import type { CubeRevision, CubeVersionOption } from '../cube/version/CubeVersionTypes.js';
+
+export type { CubeRevision, CubeVersionOption } from '../cube/version/CubeVersionTypes.js';
 
 export interface CubeLibraryEntry extends UnknownRecord {
   cube_id?: string;
@@ -50,19 +53,6 @@ export interface CubeAuthorGroup {
   label: string;
   authorLabel: string;
   cubes: CubeLibraryEntry[];
-}
-
-export interface CubeRevision extends UnknownRecord {
-  revision_ref?: string;
-  version?: string;
-}
-
-export interface CubeVersionOption extends UnknownRecord {
-  label: string;
-  value: string;
-  revisionRef: string;
-  current: boolean;
-  raw: CubeRevision | null;
 }
 
 export interface CubeEditDraft extends UnknownRecord {

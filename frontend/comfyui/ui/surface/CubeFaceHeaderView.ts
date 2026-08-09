@@ -18,7 +18,6 @@
 import type { CubeIdentityPresentation } from '../cube/CubeIdentityPresentation.js';
 import { createResolvedCubeIconElement } from '../core/CubeIconResolver.js';
 import { CubeFaceActionsView } from './CubeFaceActionsView.js';
-import type { CubeFaceCardMenuEntry } from './CubeFaceCardPolicy.js';
 import type { CubeFaceChromeActions, CubeFaceChromeMetadata } from './CubeFaceChromeActions.js';
 import { createCubeModelTitleElement } from './CubeModelPillDomRenderer.js';
 import { createCubeUnsavedIndicator } from './CubeUnsavedIndicator.js';
@@ -54,17 +53,14 @@ export class CubeFaceHeaderView {
     );
   }
 
-  /** Reconcile action and reveal-menu rows without rebuilding identity DOM. */
-  renderActions(
-    entries: readonly CubeFaceCardMenuEntry[],
-    onRevealChange: (nodeId: string, revealed: boolean) => void,
-  ): void {
-    this.#actions.render(entries, onRevealChange);
+  /** Reconcile header actions without rebuilding identity DOM. */
+  renderActions(): void {
+    this.#actions.render();
   }
 
-  /** Release transient action-menu state. */
+  /** Release header-owned presentation state. */
   dispose(): void {
-    this.#actions.dispose();
+    this.element.remove();
   }
 }
 

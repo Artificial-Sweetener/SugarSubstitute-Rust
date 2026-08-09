@@ -21,7 +21,6 @@ import type { ComfyNode } from '../types/graph.js';
 import { drawCubeCanvasActivationControl } from './CubeCanvasActivationControl.js';
 import { drawNativeLiteGraphCubeCard } from './ComfyLiteGraphNodeCardRenderer.js';
 import type { CubeCanvasCard, CubeCanvasLayout, CubeCanvasRect } from './CubeCanvasLayout.js';
-import { computeCubeCanvasCardMenuLayout } from './CubeCanvasCardMenuLayout.js';
 import type { CubeCanvasPreviewImageProvider } from './CubeCanvasPreviewImageCache.js';
 import type { CubePreviewSnapshot } from './CubePreviewModel.js';
 import { type CubeFaceChromeActions } from './CubeFaceChromeActions.js';
@@ -60,7 +59,6 @@ export interface LiteGraphCubeDrawHost {
 export interface ComfyLiteGraphCubeRenderItem {
   node: CubeNode;
   layout: CubeCanvasLayout;
-  cardMenuOpen: boolean;
   preview: CubePreviewSnapshot | null;
   chromeActions: CubeFaceChromeActions | null;
   editorButton: NativeLiteGraphTitleButton | null;
@@ -115,7 +113,6 @@ export class ComfyLiteGraphCubeRenderer {
     for (const card of layout.cards) this.#drawNativeCard(context, card, cardTheme);
     if (layout.preview) this.#drawPreview(context, layout.preview, item);
     this.#ports.draw(context, layout);
-    if (item.cardMenuOpen) this.#drawCardMenu(context, layout);
     context.restore();
   }
 
@@ -140,35 +137,6 @@ export class ComfyLiteGraphCubeRenderer {
     context.restore();
     if (card.activationAction) {
       drawCubeCanvasActivationControl(context, card.activationAction, card.enabled);
-    }
-  }
-
-  /** Draw Cube-owned optional-card reveal choices above the native masonry. */
-  #drawCardMenu(context: CanvasRenderingContext2D, layout: CubeCanvasLayout): void {
-    const menu = computeCubeCanvasCardMenuLayout(layout);
-    context.fillStyle = '#171b20';
-    context.strokeStyle = 'rgba(220, 225, 235, 0.3)';
-    context.lineWidth = 1;
-    context.beginPath();
-    context.roundRect(menu.rect.x, menu.rect.y, menu.rect.width, menu.rect.height, 6);
-    context.fill();
-    context.stroke();
-    context.font = '12px sans-serif';
-    context.textBaseline = 'middle';
-    for (const item of menu.items) {
-      context.fillStyle = item.entry.revealed ? '#f0f2f5' : '#7f8792';
-      drawComfyPrimeIcon(
-        context,
-        item.entry.revealed ? 'circle-fill' : 'circle',
-        item.rect.x + 4,
-        item.rect.y + item.rect.height / 2,
-      );
-      context.fillText(
-        item.entry.label,
-        item.rect.x + 24,
-        item.rect.y + item.rect.height / 2,
-        Math.max(1, item.rect.width - 28),
-      );
     }
   }
 

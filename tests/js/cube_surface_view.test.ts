@@ -249,10 +249,9 @@ describe('CubeSurfaceView', () => {
     ).toBe('rail');
   });
 
-  test('renders old Cube chrome actions in the Nodes 2.0 Cube header', () => {
+  test('renders only swap actions in the Nodes 2.0 Cube header', () => {
     const onSwapLeft = jest.fn();
     const onSwapRight = jest.fn();
-    const onOpenMenu = jest.fn();
     const view = new CubeSurfaceView({
       document,
       renderer: createRenderer(),
@@ -262,7 +261,6 @@ describe('CubeSurfaceView', () => {
         onSwapLeft,
         onSwapRight,
         canSwap: (_metadata, direction) => direction === 'left',
-        onOpenMenu,
       },
       nodes: [createNode(1)],
       state: createDefaultCubeSurfaceState(),
@@ -275,26 +273,13 @@ describe('CubeSurfaceView', () => {
     const swapRight = view.element.querySelector<HTMLButtonElement>(
       '[data-cube-action="swap-right"]',
     );
-    const cubeMenu = view.element.querySelector<HTMLButtonElement>(
-      '[data-cube-action="cube-menu"]',
-    );
-    const cardMenu = view.element.querySelector<HTMLButtonElement>(
-      '[data-cube-action="card-menu"]',
-    );
-
     expect(view.element.querySelector('[data-cube-action="edit"]')).toBeNull();
     expect(swapLeft?.querySelector('.pi.pi-arrow-left')).not.toBeNull();
     expect(swapLeft?.textContent).toBe('');
     expect(swapLeft?.hidden).toBe(false);
     expect(swapRight?.hidden).toBe(true);
-    expect(cubeMenu?.getAttribute('aria-label')).toBe('Open Cube actions');
-    expect(cubeMenu?.hidden).toBe(false);
-    expect(cubeMenu?.querySelector('.pi.pi-box')).not.toBeNull();
-    expect(cubeMenu?.querySelector('svg')).toBeNull();
-    expect(cardMenu?.querySelector('.pi.pi-eye')).not.toBeNull();
-    expect(cardMenu?.textContent).toBe('');
-    expect(cardMenu?.getAttribute('aria-label')).toBe('Reveal optional Cube cards');
-    expect(cardMenu?.hidden).toBe(true);
+    expect(view.element.querySelector('[data-cube-action="cube-menu"]')).toBeNull();
+    expect(view.element.querySelector('[data-cube-action="card-menu"]')).toBeNull();
     expect(
       view.element
         .querySelector<HTMLElement>('[data-cube-definition-name] .sugarcubes-model-title')
@@ -308,10 +293,8 @@ describe('CubeSurfaceView', () => {
     );
 
     swapLeft?.click();
-    cubeMenu?.click();
     expect(onSwapLeft).toHaveBeenCalledWith({ instance_id: 'cube-1' });
     expect(onSwapRight).not.toHaveBeenCalled();
-    expect(onOpenMenu).toHaveBeenCalledWith({ instance_id: 'cube-1' }, expect.any(MouseEvent));
   });
 
   test('always shows the Cube title independently from definition metadata', () => {
@@ -366,7 +349,7 @@ describe('CubeSurfaceView', () => {
     aliased.dispose();
   });
 
-  test('does not offer ordinary cards through the reveal action', () => {
+  test('does not render card visibility controls in Cube-owned chrome', () => {
     const view = new CubeSurfaceView({
       document,
       renderer: createRenderer(),
@@ -377,110 +360,20 @@ describe('CubeSurfaceView', () => {
     });
 
     expect(view.element.querySelectorAll('[data-cube-node-id]')).toHaveLength(1);
-    expect(
-      view.element.querySelector<HTMLButtonElement>('[data-cube-action="card-menu"]')?.hidden,
-    ).toBe(true);
+    expect(view.element.querySelector('[data-cube-action="card-menu"]')).toBeNull();
     expect(view.element.querySelector('[data-cube-card-reveal]')).toBeNull();
   });
 
-  test('keeps the card menu action after the header moves into the native node shell', () => {
-    const state = createDefaultCubeSurfaceState();
-    const view = new CubeSurfaceView({
-      document,
-      renderer: createRenderer(),
-      identity: cubeIdentity('Cube'),
-      nodes: [{ ...createNode(1), mode: 4 }],
-      state,
-      onStateChange: jest.fn(),
-    });
-    const nativeHeader = document.createElement('div');
-    const nativeRoot = document.createElement('section');
-    nativeRoot.className = 'lg-node';
-    nativeRoot.append(nativeHeader, view.element);
-    nativeHeader.append(view.header);
-    const cardMenu = nativeHeader.querySelector<HTMLButtonElement>(
-      '[data-cube-action="card-menu"]',
-    );
-
-    cardMenu?.click();
-
-    const menu = document.querySelector<HTMLElement>('[data-cube-card-menu]');
-    expect(menu?.hidden).toBe(false);
-    expect(menu?.closest('.lg-node')).toBeNull();
-    expect(menu?.closest('.sugarcubes-cube-face')).toBeNull();
-    expect(cardMenu?.getAttribute('aria-expanded')).toBe('true');
-    view.dispose();
-  });
-
-  test('keeps face geometry invariant through repeated external reveal-menu cycles', () => {
-    const renderer: NativeNodeCardRenderer = {
-      mount: jest.fn((target: HTMLElement) => {
-        Object.defineProperty(target.parentElement, 'offsetHeight', {
-          configurable: true,
-          value: 100,
-        });
-        return { refresh: jest.fn(), unmount: jest.fn() };
-      }),
-      dispose: jest.fn(),
-    };
-    const optionalNode = createNode(2);
-    optionalNode.mode = 4;
-    const state = createDefaultCubeSurfaceState();
-    state.preview.visible = false;
-    const minimumHeights: number[] = [];
-    const view = new CubeSurfaceView({
-      document,
-      renderer,
-      identity: cubeIdentity('Invariant Cube'),
-      nodes: [createNode(1), optionalNode],
-      state,
-      onStateChange: jest.fn(),
-      onMinimumHeightChange: (height) => minimumHeights.push(height),
-    });
-    const nativeHeader = document.createElement('div');
-    const nativeRoot = document.createElement('section');
-    nativeRoot.className = 'lg-node';
-    nativeRoot.append(nativeHeader, view.element);
-    nativeHeader.append(view.header);
-    const content = view.element.querySelector<HTMLElement>('[data-cube-content]');
-    const card = view.element.querySelector<HTMLElement>('[data-cube-node-id="1"]');
-    const button = nativeHeader.querySelector<HTMLButtonElement>('[data-cube-action="card-menu"]');
-    if (!content || !card || !button) throw new Error('Missing invariant-test Cube elements.');
-    content.scrollTop = 47;
-    content.scrollLeft = 11;
-    view.layout(320);
-    const baseline = readFaceGeometry(content, card, minimumHeights);
-
-    for (let cycle = 0; cycle < 3; cycle += 1) {
-      button.click();
-      const openMenu = document.querySelector<HTMLElement>('[data-cube-card-menu]');
-      expect(openMenu?.parentElement).toBe(document.body);
-      expect(openMenu?.closest('.lg-node')).toBeNull();
-      expect(openMenu?.closest('.sugarcubes-cube-face')).toBeNull();
-      view.layout(320);
-      expect(readFaceGeometry(content, card, minimumHeights)).toEqual(baseline);
-
-      button.click();
-      expect(document.querySelector('[data-cube-card-menu]')).toBeNull();
-      view.layout(320);
-      expect(readFaceGeometry(content, card, minimumHeights)).toEqual(baseline);
-    }
-
-    nativeRoot.style.transform = 'translate(240px, 180px)';
-    view.layout(560);
-    const resizedBaseline = readFaceGeometry(content, card, minimumHeights);
-    button.click();
-    button.click();
-    view.layout(560);
-    expect(readFaceGeometry(content, card, minimumHeights)).toEqual(resizedBaseline);
-
-    view.dispose();
-  });
-
-  test('reveals bypassed cards without changing activation, then toggles activation separately', () => {
+  test('toggles activation separately for an externally revealed bypassed card', () => {
     const state = createDefaultCubeSurfaceState();
     const bypassed = createNode(7);
     bypassed.mode = 4;
+    state.cards['7'] = {
+      authoredBypass: true,
+      revealed: true,
+      enabledOverride: false,
+      activeMode: 0,
+    };
     const onStateChange = jest.fn();
     const view = new CubeSurfaceView({
       document,
@@ -491,13 +384,7 @@ describe('CubeSurfaceView', () => {
       onStateChange,
     });
 
-    expect(view.element.querySelectorAll('[data-cube-node-id]')).toHaveLength(0);
-    view.element.querySelector<HTMLButtonElement>('[data-cube-action="card-menu"]')?.click();
-    const checkbox = document.querySelector<HTMLInputElement>('[data-cube-card-reveal="7"]');
-    if (!checkbox) throw new Error('Missing bypassed card reveal control.');
-    checkbox.checked = true;
-    checkbox.dispatchEvent(new Event('change'));
-
+    expect(view.element.querySelectorAll('[data-cube-node-id]')).toHaveLength(1);
     expect(bypassed.mode).toBe(4);
     const activation = view.element.querySelector<HTMLElement>('[data-cube-card-activation="7"]');
     const activationInput = activation?.querySelector<HTMLInputElement>('[role="switch"]');
@@ -514,7 +401,7 @@ describe('CubeSurfaceView', () => {
       enabledOverride: true,
       activeMode: 0,
     });
-    expect(onStateChange).toHaveBeenCalledTimes(2);
+    expect(onStateChange).toHaveBeenCalledTimes(1);
     view.dispose();
   });
 
@@ -832,22 +719,5 @@ function cubeIdentity(instanceTitle: string): CubeIdentityPresentation {
         renderSize: 96,
       },
     },
-  };
-}
-
-/** Snapshot only geometry that transient header UI must never own. */
-function readFaceGeometry(
-  content: HTMLElement,
-  card: HTMLElement,
-  minimumHeights: readonly number[],
-): object {
-  return {
-    contentMinHeight: content.style.minHeight,
-    contentScrollLeft: content.scrollLeft,
-    contentScrollTop: content.scrollTop,
-    cardLeft: card.style.left,
-    cardTop: card.style.top,
-    cardWidth: card.style.width,
-    minimumHeight: minimumHeights.at(-1),
   };
 }

@@ -20,7 +20,6 @@ import { app } from '/scripts/app.js';
 import { api } from '/scripts/api.js';
 import { createComfyCubeRuntime } from './ui/cube/ComfyCubeRuntime.js';
 import { isDraftCubeNode, requireCubeIdentity, } from './ui/cube/node/ComfyCubeNodeFactory.js';
-import { readCubeNodeAuthoringCandidate } from './ui/cube/node/CubeNodeAuthoringCandidate.js';
 import { ComfyCubeRuntimeLifecycle } from './ui/cube/ComfyCubeRuntimeLifecycle.js';
 import { CubePreviewRetentionStore } from './ui/surface/CubePreviewRetentionStore.js';
 import { CubeWorkflowPreconfiguration } from './ui/cube/CubeWorkflowPreconfiguration.js';
@@ -177,6 +176,7 @@ function createCubeRuntime() {
     runtime = createComfyCubeRuntime({
         app: appRef,
         api,
+        cubeApi,
         liteGraph,
         document: documentRef,
         logger,
@@ -193,16 +193,6 @@ function createCubeRuntime() {
         feedback: toastService,
         boundaryResolver: nativeBoundaryResolver,
         previewRetention: cubePreviewRetention,
-        openCubeMenu: (metadata, event) => {
-            const instanceId = typeof metadata.instance_id === 'string' ? metadata.instance_id.trim() : '';
-            const node = instanceId ? runtime?.nodes.get(instanceId) : null;
-            overlayManager.openCubeMenu(node
-                ? {
-                    ...metadata,
-                    graphSummary: readCubeNodeAuthoringCandidate(node),
-                }
-                : metadata, event);
-        },
         getCubeOutput: (executionId) => cubeOutputExecutionStore.read(executionId),
         subscribePreviewChanges: (listener) => cubeOutputExecutionStore.subscribe(listener),
         onBoundaryGeometryChange: () => overlayManager.proximity.schedulePreview({

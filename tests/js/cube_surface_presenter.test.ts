@@ -20,6 +20,7 @@ import type { NativeCubeSubgraph } from '../../frontend/comfyui/ui/cube/ComfyCub
 import { CubePortPresentationController } from '../../frontend/comfyui/ui/cube/connection/CubePortPresentationController.js';
 import type { CubeNode } from '../../frontend/comfyui/ui/cube/node/ComfyCubeNodeFactory.js';
 import { CubeNodeCatalog } from '../../frontend/comfyui/ui/cube/node/CubeNodeCatalog.js';
+import { CubeCardRevealService } from '../../frontend/comfyui/ui/surface/CubeCardRevealService.js';
 import { CubeSurfacePresenter } from '../../frontend/comfyui/ui/surface/CubeSurfacePresenter.js';
 import type {
   NativeNodeCardMount,
@@ -186,7 +187,7 @@ describe('CubeSurfacePresenter', () => {
     presenter.dispose();
   });
 
-  test('preserves the face origin through movement, menu cycles, and Cube editor return', async () => {
+  test('preserves the face origin through movement, resizing, and Cube editor return', async () => {
     jest.useFakeTimers();
     const pane = createTransformPane();
     const optionalNode = { ...nativeNode('optional', 'MahiroCFG'), mode: 4 };
@@ -221,10 +222,7 @@ describe('CubeSurfacePresenter', () => {
     const firstHost = shell.root.querySelector<HTMLElement>('[data-sugarcube-face-host]');
     const firstContent = firstHost?.querySelector<HTMLElement>('[data-cube-content]');
     const firstCard = firstHost?.querySelector<HTMLElement>('[data-cube-node-id="inner"]');
-    const firstMenuButton = shell.header.querySelector<HTMLButtonElement>(
-      '[data-cube-action="card-menu"]',
-    );
-    if (!firstHost || !firstContent || !firstCard || !firstMenuButton) {
+    if (!firstHost || !firstContent || !firstCard) {
       throw new Error('Missing initial Cube face invariants.');
     }
     const firstGeometry = readMountedFaceGeometry(firstContent, firstCard);
@@ -236,8 +234,6 @@ describe('CubeSurfacePresenter', () => {
     node.size = [880, 640];
     jest.advanceTimersByTime(100);
     const resizedGeometry = readMountedFaceGeometry(firstContent, firstCard);
-    firstMenuButton.click();
-    firstMenuButton.click();
 
     expect(firstHost.parentElement).toBe(shell.body);
     expect(shell.header.contains(firstHost)).toBe(false);
@@ -255,15 +251,10 @@ describe('CubeSurfacePresenter', () => {
     const remountedHost = shell.root.querySelector<HTMLElement>('[data-sugarcube-face-host]');
     const remountedContent = remountedHost?.querySelector<HTMLElement>('[data-cube-content]');
     const remountedCard = remountedHost?.querySelector<HTMLElement>('[data-cube-node-id="inner"]');
-    const remountedMenuButton = shell.header.querySelector<HTMLButtonElement>(
-      '[data-cube-action="card-menu"]',
-    );
-    if (!remountedHost || !remountedContent || !remountedCard || !remountedMenuButton) {
+    if (!remountedHost || !remountedContent || !remountedCard) {
       throw new Error('Missing remounted Cube face invariants.');
     }
     const remountedGeometry = readMountedFaceGeometry(remountedContent, remountedCard);
-    remountedMenuButton.click();
-    remountedMenuButton.click();
 
     expect(remountedHost.parentElement).toBe(shell.body);
     expect(shell.header.contains(remountedHost)).toBe(false);
@@ -271,6 +262,43 @@ describe('CubeSurfacePresenter', () => {
 
     presenter.dispose();
     jest.useRealTimers();
+  });
+
+  test('remounts Nodes 2 cards after an external reveal transition', async () => {
+    const pane = createTransformPane();
+    const shell = createNativeNodeShell('9');
+    pane.append(shell.root);
+    const rootGraph = {};
+    const optionalNode = { ...nativeNode('optional', 'Models'), mode: 4 };
+    const node = cubeNode(9, 'cube-1', [optionalNode]);
+    const nodes = new CubeNodeCatalog();
+    nodes.add(node);
+    const mountedNodeIds: string[] = [];
+    const presenter = new CubeSurfacePresenter({
+      document,
+      openEditor: jest.fn(),
+      rootGraph,
+      getCurrentGraph: () => rootGraph,
+      nodes,
+      logger: console,
+      renderer: {
+        mount: (_target, mountedNode) => {
+          mountedNodeIds.push(String(mountedNode.id));
+          return { refresh() {}, unmount() {} };
+        },
+        dispose() {},
+      },
+      requestSlotLayoutSync: () => undefined,
+    });
+    await flushMount();
+    expect(mountedNodeIds).toEqual([]);
+
+    const reveal = new CubeCardRevealService({ nodes, history: {} });
+    reveal.setRevealed(node, 'optional', true);
+    await flushMount();
+
+    expect(mountedNodeIds).toEqual(['optional']);
+    presenter.dispose();
   });
 
   test('remounts exact native child cards after internal topology changes', async () => {
@@ -310,7 +338,6 @@ describe('CubeSurfacePresenter', () => {
     const nodes = new CubeNodeCatalog();
     nodes.add(node);
     const onSwapLeft = jest.fn();
-    const onOpenMenu = jest.fn();
     const rootGraph = {};
     const activePresenter = new CubeSurfacePresenter({
       document,
@@ -326,14 +353,12 @@ describe('CubeSurfacePresenter', () => {
       requestSlotLayoutSync: () => undefined,
       chromeActions: {
         onSwapLeft,
-        onOpenMenu,
         canSwap: (_metadata, direction) => direction === 'left',
       },
     });
     await flushMount();
 
     document.querySelector<HTMLButtonElement>('[data-cube-action="swap-left"]')?.click();
-    document.querySelector<HTMLButtonElement>('[data-cube-action="cube-menu"]')?.click();
 
     expect(onSwapLeft).toHaveBeenCalledWith({
       instance_id: 'cube-1',
@@ -345,18 +370,8 @@ describe('CubeSurfacePresenter', () => {
         outputCount: 0,
       },
     });
-    expect(onOpenMenu).toHaveBeenCalledWith(
-      expect.objectContaining({
-        instance_id: 'cube-1',
-        graphSummary: {
-          nodeIds: ['inner'],
-          markerIds: [],
-          inputCount: 0,
-          outputCount: 0,
-        },
-      }),
-      expect.any(MouseEvent),
-    );
+    expect(document.querySelector('[data-cube-action="cube-menu"]')).toBeNull();
+    expect(document.querySelector('[data-cube-action="card-menu"]')).toBeNull();
     activePresenter.dispose();
   });
 

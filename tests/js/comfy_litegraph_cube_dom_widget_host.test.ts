@@ -260,13 +260,10 @@ function cubeItemForNode(node: ComfyNode): {
       previewWidthRange: { minimum: 160, maximum: 444 },
       editAction: { x: 650, y: 139, width: 68, height: 24 },
       unsavedIndicator: null,
-      cardMenuAction: { x: 724, y: 139, width: 54, height: 24 },
       chromeActions: {
         'swap-left': { x: 618, y: 139, width: 28, height: 24 },
         'swap-right': { x: 652, y: 139, width: 28, height: 24 },
-        'cube-menu': { x: 686, y: 139, width: 28, height: 24 },
       },
-      cardMenuEntries: [],
       resizeHandles: [],
       cards: [
         {

@@ -24,6 +24,7 @@ import { ComfyVueCubeNodeHost } from './ComfyVueCubeNodeHost.js';
 import { ensureCubeSurfaceStyles } from './CubeSurfaceStyles.js';
 import { CubeSurfaceView } from './CubeSurfaceView.js';
 import { parseCubeSurfaceState, serializeCubeSurfaceState } from './CubeSurfaceState.js';
+import { buildCubeCardVisibilitySignature } from './CubeCardVisibilitySignature.js';
 import { NativeSubgraphChangeObserver } from './NativeSubgraphChangeObserver.js';
 import { ComfyLiteGraphCubeNodeHost, } from './ComfyLiteGraphCubeNodeHost.js';
 import { CUBE_INPUT_GUTTER_WIDTH } from './CubePortGutterLayout.js';
@@ -522,6 +523,7 @@ function buildPresentationSignature(node) {
         identity.cube_version ?? '',
         identity.has_saveable_changes ?? false,
         identity.icon ?? null,
+        buildCubeCardVisibilitySignature(requireCubeSurface(node)),
     ]);
 }
 /** Retry a failed mount only after its renderer-relevant node contract changes. */

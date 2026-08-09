@@ -18,7 +18,6 @@ import { resizeCubeFrame } from '../cube/geometry/CubeResizeGeometry.js';
 import { clampCubePreviewWidth } from './CubePreviewResizeGeometry.js';
 import { layoutCubeCanvasPreviewSections, } from './CubePreviewSections.js';
 import { containsCubeCanvasPoint, } from './CubeCanvasLayout.js';
-import { computeCubeCanvasCardMenuLayout } from './CubeCanvasCardMenuLayout.js';
 import { dispatchCubeFaceTitlebarAction, resolveCubeFaceTitlebarActions, } from './CubeFaceChromeActions.js';
 import { requireCubeIdentity } from '../cube/node/ComfyCubeNodeFactory.js';
 import { buildCubeFaceChromeMetadata } from '../cube/node/CubeNodeAuthoringCandidate.js';
@@ -33,8 +32,6 @@ export class ComfyLiteGraphCubeNodeInteraction {
     #chromeActions;
     #previewActions;
     #onEdit;
-    #onCardMenuToggle;
-    #onCardRevealChange;
     #onCardActivationChange;
     #onPreviewWidthChange;
     #onGeometryChange;
@@ -50,8 +47,6 @@ export class ComfyLiteGraphCubeNodeInteraction {
         this.#chromeActions = options.chromeActions ?? null;
         this.#previewActions = options.previewActions ?? null;
         this.#onEdit = options.onEdit;
-        this.#onCardMenuToggle = options.onCardMenuToggle;
-        this.#onCardRevealChange = options.onCardRevealChange;
         this.#onCardActivationChange = options.onCardActivationChange;
         this.#onPreviewWidthChange = options.onPreviewWidthChange ?? (() => undefined);
         this.#onGeometryChange = options.onGeometryChange ?? (() => undefined);
@@ -93,17 +88,6 @@ export class ComfyLiteGraphCubeNodeInteraction {
         }
         if (event.button !== 0)
             return;
-        if (item.cardMenuOpen) {
-            const menuItem = computeCubeCanvasCardMenuLayout(item.layout).items.find((candidate) => containsCubeCanvasPoint(candidate.rect, point));
-            if (menuItem) {
-                const internalNode = item.node.subgraph._nodes.find((candidate) => String(candidate.id ?? '') === menuItem.entry.id);
-                if (!internalNode)
-                    return;
-                this.#consume(event);
-                this.#onCardRevealChange(item.node, internalNode, !menuItem.entry.revealed);
-                return;
-            }
-        }
         if (item.layout.previewDivider && containsCubeCanvasPoint(item.layout.previewDivider, point)) {
             this.#consume(event);
             this.#history.beforeChange?.();
@@ -148,17 +132,11 @@ export class ComfyLiteGraphCubeNodeInteraction {
             this.#onEdit(item.node);
             return;
         }
-        if (item.layout.cardMenuEntries.length > 0 &&
-            containsCubeCanvasPoint(item.layout.cardMenuAction, point)) {
-            this.#consume(event);
-            this.#onCardMenuToggle(item.node);
-            return;
-        }
         for (const action of resolveCubeFaceTitlebarActions(requireCubeIdentity(item.node), this.#chromeActions)) {
             const target = item.layout.chromeActions[action.key];
             if (target && containsCubeCanvasPoint(target, point)) {
                 this.#consume(event);
-                dispatchCubeFaceTitlebarAction(action.key, buildCubeFaceChromeMetadata(item.node), this.#chromeActions, event);
+                dispatchCubeFaceTitlebarAction(action.key, buildCubeFaceChromeMetadata(item.node), this.#chromeActions);
                 return;
             }
         }

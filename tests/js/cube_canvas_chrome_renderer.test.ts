@@ -43,11 +43,7 @@ describe('CubeCanvasChromeRenderer', () => {
     const node = cubeNode(inner);
     const state = createDefaultCubeSurfaceState();
     state.preview.visible = false;
-    const layout = computeCubeCanvasLayout(node, state, 30, [
-      'swap-left',
-      'swap-right',
-      'cube-menu',
-    ]);
+    const layout = computeCubeCanvasLayout(node, state, 30, ['swap-left', 'swap-right']);
     const context = drawingContext();
     const editorButton = {
       name: 'enter_subgraph',
@@ -65,7 +61,6 @@ describe('CubeCanvasChromeRenderer', () => {
       chromeActions: {
         onSwapLeft() {},
         onSwapRight() {},
-        onOpenMenu() {},
       },
       editorButton,
       headerColor: '#333',
@@ -81,11 +76,12 @@ describe('CubeCanvasChromeRenderer', () => {
         'from Base-Cubes by Artificial-Sweetener',
         'SDXL',
         'Text to Image version 2.0.0',
-        comfyPrimeIconGlyph('eye'),
         comfyPrimeIconGlyph('arrow-left'),
         comfyPrimeIconGlyph('arrow-right'),
-        comfyPrimeIconGlyph('box'),
       ]),
+    );
+    expect(texts).not.toEqual(
+      expect.arrayContaining([comfyPrimeIconGlyph('eye'), comfyPrimeIconGlyph('box')]),
     );
     expect(texts).not.toEqual(
       expect.arrayContaining([comfyPrimeIconGlyph('save'), comfyPrimeIconGlyph('ban')]),

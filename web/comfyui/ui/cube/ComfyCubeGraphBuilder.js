@@ -20,6 +20,7 @@ import { buildCubePayloadTopology } from './CubePayloadTopology.js';
 import { resolveCubeInputBoundaryType } from './CubeBoundaryTypeResolver.js';
 import { deriveCubeOutputSurfaceNames } from './CubeOutputSurfaceNames.js';
 import { resolveCubeDefinitionDescription } from './node/CubeDefinitionIdentityWriter.js';
+import { initializePromotedWidgetIdentity } from './node/PromotedWidgetIdentityInitializer.js';
 import { attachNativeCubeAuthoredLayout } from './geometry/NativeCubeAuthoredLayout.js';
 import { applyEmptyCubeBoundaryLayout, applyNativeCubeBoundaryLayout, attachNativeCubeBoundaryLayout, EMPTY_CUBE_INPUT_POSITION, EMPTY_CUBE_OUTPUT_POSITION, labelEmptyCubeBoundaryAffordances, } from './geometry/NativeCubeBoundaryLayout.js';
 /** Own translation from a prepared Cube import to one native Comfy subgraph. */
@@ -70,6 +71,7 @@ export class ComfyCubeGraphBuilder {
                     continue;
                 }
                 node.id = this.#host.createUuid();
+                initializePromotedWidgetIdentity(node);
                 applyAuthoredGeometry(node, entry.layout, origin);
                 node.properties.sugarcubes_symbol = symbol;
                 const titleValue = readString(entry.layout?.title);

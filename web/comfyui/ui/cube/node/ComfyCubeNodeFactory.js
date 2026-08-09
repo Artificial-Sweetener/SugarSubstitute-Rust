@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Create and identify real Comfy subgraph nodes presented as SugarCubes. */
 import { isRecord } from '../../types/common.js';
+import { initializePromotedWidgetIdentity } from './PromotedWidgetIdentityInitializer.js';
 const DEFAULT_SIZE = [720, 480];
 const MINIMUM_SIZE = [320, 180];
 /** Own the narrow integration boundary between Cube semantics and native nodes. */
@@ -29,6 +30,7 @@ export class ComfyCubeNodeFactory {
         const candidate = this.#createNode(configuration.subgraph.id);
         const node = requireSubgraphNode(candidate, configuration.subgraph);
         node.id = requireIdentifier(configuration.instanceId);
+        initializePromotedWidgetIdentity(node);
         this.#configure(node, configuration);
         return node;
     }

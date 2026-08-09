@@ -37,17 +37,18 @@ export class CubeConstructionService {
     construct(payload, options = {}) {
         const title = resolveTitle(payload, options.instanceAlias);
         const built = this.#graphBuilder.build(payload, `Cube: ${title}`);
-        const identity = readPayloadIdentity(payload, this.#createInstanceId(), options.instanceAlias);
+        const identity = readPayloadIdentity(payload, options.instanceId ?? this.#createInstanceId(), options.instanceAlias, options.surface, options.revisionRef);
         return this.constructBuilt({
             built,
             title,
             identity,
             geometry: {
                 position: readPayloadPosition(payload, options.position),
-                size: this.#resolveInitialSize({
-                    surface: readSurfaceState(identity.metadata),
-                    hasInputs: built.subgraph.inputs.length > 0,
-                }),
+                size: options.size ??
+                    this.#resolveInitialSize({
+                        surface: readSurfaceState(identity.metadata),
+                        hasInputs: built.subgraph.inputs.length > 0,
+                    }),
             },
         });
     }
@@ -77,9 +78,13 @@ export class CubeConstructionService {
             throw error;
         }
     }
+    /** Discard a detached construction that will not enter the root graph. */
+    discard(constructed) {
+        this.#definitions.discard(constructed.subgraph);
+    }
 }
 /** Parse stable instance identity at the prepared-import boundary. */
-function readPayloadIdentity(payload, instanceId, instanceAlias) {
+function readPayloadIdentity(payload, instanceId, instanceAlias, surface, revisionRef) {
     const cube = isRecord(payload.cube) ? payload.cube : {};
     const cubeMetadata = isRecord(cube.metadata) ? cube.metadata : {};
     return {
@@ -88,7 +93,12 @@ function readPayloadIdentity(payload, instanceId, instanceAlias) {
         instanceId: requireInstanceId(instanceId),
         defaultAlias: readString(cube.default_alias),
         instanceAlias: readString(instanceAlias) || readString(cube.default_alias),
-        metadata: cloneRecord({ ...cube, ...cubeMetadata }),
+        metadata: cloneRecord({
+            ...cube,
+            ...cubeMetadata,
+            ...(surface ? { surface_state: surface } : {}),
+            ...(revisionRef ? { cube_revision_ref: revisionRef } : {}),
+        }),
     };
 }
 /** Build persisted metadata from one validated Cube identity. */

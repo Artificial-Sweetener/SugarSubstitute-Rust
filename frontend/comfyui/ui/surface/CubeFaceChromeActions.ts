@@ -36,10 +36,9 @@ export interface CubeFaceChromeActions {
   onSwapLeft?(metadata: CubeFaceChromeMetadata): void;
   onSwapRight?(metadata: CubeFaceChromeMetadata): void;
   canSwap?(metadata: CubeFaceChromeMetadata, direction: CubeSwapDirection): boolean;
-  onOpenMenu?(metadata: CubeFaceChromeMetadata, event: MouseEvent): void;
 }
 
-export type CubeFaceTitlebarActionKey = 'swap-left' | 'swap-right' | 'cube-menu';
+export type CubeFaceTitlebarActionKey = 'swap-left' | 'swap-right';
 
 export interface CubeFaceTitlebarAction {
   key: CubeFaceTitlebarActionKey;
@@ -89,14 +88,6 @@ export function resolveCubeFaceTitlebarActions(
       title: action.ariaLabel,
     });
   }
-  if (actions?.onOpenMenu) {
-    result.push({
-      key: 'cube-menu',
-      icon: 'box',
-      ariaLabel: 'Open Cube actions',
-      title: 'Cubes',
-    });
-  }
   return result;
 }
 
@@ -105,7 +96,6 @@ export function dispatchCubeFaceTitlebarAction(
   key: CubeFaceTitlebarActionKey,
   metadata: CubeFaceChromeMetadata,
   actions: CubeFaceChromeActions | null | undefined,
-  event: MouseEvent,
 ): boolean {
   if (key === 'swap-left') {
     if (!actions?.onSwapLeft) return false;
@@ -115,11 +105,6 @@ export function dispatchCubeFaceTitlebarAction(
   if (key === 'swap-right') {
     if (!actions?.onSwapRight) return false;
     actions.onSwapRight(metadata);
-    return true;
-  }
-  if (key === 'cube-menu') {
-    if (!actions?.onOpenMenu) return false;
-    actions.onOpenMenu(metadata, event);
     return true;
   }
   return false;

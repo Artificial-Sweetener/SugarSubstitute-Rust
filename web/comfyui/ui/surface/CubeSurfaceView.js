@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Compose one Cube face around host-rendered native node cards. */
 import { resolveCubeFaceCardPresentation, } from './CubeFaceCardPolicy.js';
-import { setCubeFaceCardRevealed, setCubeFaceNodeEnabled } from './CubeFaceCardStateController.js';
+import { setCubeFaceNodeEnabled } from './CubeFaceCardStateController.js';
 import { NativeNodeCardHost } from './NativeNodeCardHost.js';
 import { CubePreviewRailView } from './CubePreviewRailView.js';
 import { CubePreviewDividerController } from './CubePreviewDividerController.js';
@@ -158,13 +158,7 @@ export class CubeSurfaceView {
             this.#commitCardChange();
         });
         this.#geometryObserver.observe(this.#cells);
-        this.#headerView.renderActions(presentation.menuEntries, (nodeId, revealed) => {
-            const node = this.#nodes.find((candidate) => String(candidate.id ?? '') === nodeId);
-            if (!node)
-                return;
-            setCubeFaceCardRevealed(this.#state, node, revealed);
-            this.#commitCardChange();
-        });
+        this.#headerView.renderActions();
     }
     /** Persist one card change, then remount against the resulting policy. */
     #commitCardChange() {

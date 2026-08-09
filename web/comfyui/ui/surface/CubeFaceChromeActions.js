@@ -47,18 +47,10 @@ export function resolveCubeFaceTitlebarActions(metadata, actions) {
             title: action.ariaLabel,
         });
     }
-    if (actions?.onOpenMenu) {
-        result.push({
-            key: 'cube-menu',
-            icon: 'box',
-            ariaLabel: 'Open Cube actions',
-            title: 'Cubes',
-        });
-    }
     return result;
 }
 /** Invoke one available titlebar action through the authoritative action owner. */
-export function dispatchCubeFaceTitlebarAction(key, metadata, actions, event) {
+export function dispatchCubeFaceTitlebarAction(key, metadata, actions) {
     if (key === 'swap-left') {
         if (!actions?.onSwapLeft)
             return false;
@@ -69,12 +61,6 @@ export function dispatchCubeFaceTitlebarAction(key, metadata, actions, event) {
         if (!actions?.onSwapRight)
             return false;
         actions.onSwapRight(metadata);
-        return true;
-    }
-    if (key === 'cube-menu') {
-        if (!actions?.onOpenMenu)
-            return false;
-        actions.onOpenMenu(metadata, event);
         return true;
     }
     return false;

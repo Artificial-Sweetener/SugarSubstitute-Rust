@@ -26,7 +26,7 @@ import { CubeCanvasPreviewImageCache, } from './CubeCanvasPreviewImageCache.js';
 import { enforceCubeNodeMinimumSize } from './CubeNodeMinimumSizeAdapter.js';
 import { ComfyGraphPreviewImageSource } from './ComfyGraphPreviewImageSource.js';
 import { resolveCubeFaceTitlebarActions, } from './CubeFaceChromeActions.js';
-import { setCubeFaceCardRevealed, setCubeFaceNodeEnabled } from './CubeFaceCardStateController.js';
+import { setCubeFaceNodeEnabled } from './CubeFaceCardStateController.js';
 import { parseCubeSurfaceState, serializeCubeSurfaceState, } from './CubeSurfaceState.js';
 import { resolveCubeExternalInterface } from '../cube/graph/CubeExternalInterface.js';
 import { filterCubePreviewOutputs } from './CubePreviewModel.js';
@@ -55,7 +55,6 @@ export class ComfyLiteGraphCubeNodeHost {
     #enabled = false;
     #promptGeometryQueued = false;
     #items = [];
-    #openCardMenu = null;
     /** Bind native draw hooks and focused face interactions. */
     constructor(options) {
         this.#canvas = options.canvas;
@@ -103,11 +102,6 @@ export class ComfyLiteGraphCubeNodeHost {
             chromeActions: this.#chromeActions,
             previewActions: options.previewActions ?? null,
             onEdit: options.openEditor,
-            onCardMenuToggle: (node) => {
-                this.#openCardMenu = this.#openCardMenu === node ? null : node;
-                this.sync();
-            },
-            onCardRevealChange: (node, internalNode, revealed) => this.#updateSurface(node, (state) => setCubeFaceCardRevealed(state, internalNode, revealed)),
             onCardActivationChange: (node, internalNode, enabled) => this.#updateSurface(node, (state) => setCubeFaceNodeEnabled(state, internalNode, enabled)),
             onPreviewWidthChange: (node, width) => this.#writePreviewWidth(node, width),
             onGeometryChange: (node) => this.#synchronizeLiveGeometry(node),
@@ -270,7 +264,6 @@ export class ComfyLiteGraphCubeNodeHost {
         return {
             node,
             layout,
-            cardMenuOpen: this.#openCardMenu === node,
             preview: this.#previewCatalog
                 ? filterCubePreviewOutputs(this.#previewCatalog.snapshot(node), externalInterface.outputSlots)
                 : null,

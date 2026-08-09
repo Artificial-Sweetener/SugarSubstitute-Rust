@@ -18,7 +18,7 @@ import { requireCubeIdentity } from '../cube/node/ComfyCubeNodeFactory.js';
 import { isCubeAwaitingFirstSave } from '../cube/CubeIdentityPresentation.js';
 import { CUBE_CANVAS_ACTIVATION_SIZE } from './CubeCanvasActivationControl.js';
 import { CUBE_RESIZE_EDGES } from '../cube/geometry/CubeResizeGeometry.js';
-import { resolveCubeFaceCardPresentation, } from './CubeFaceCardPolicy.js';
+import { resolveCubeFaceCardPresentation } from './CubeFaceCardPolicy.js';
 import { measureCubeFaceNodeBodyHeight } from './CubeFaceNodeMeasurement.js';
 import { computeCubeMasonry } from './CubeMasonryLayout.js';
 import { cubeMinimumSize, resolveCubeSurfaceMinimumHeight } from './CubeSurfaceMinimumHeight.js';
@@ -64,7 +64,6 @@ export function computeCubeCanvasLayout(node, state, titleHeight, titlebarAction
         : null;
     const presentation = resolveCubeFaceCardPresentation(node.subgraph._nodes, state, node.subgraph);
     const chrome = layoutCubeCanvasChrome(header, {
-        showCardMenu: presentation.menuEntries.length > 0,
         showUnsavedIndicator: isCubeAwaitingFirstSave(requireCubeIdentity(node)),
         titlebarActionKeys,
     });
@@ -120,9 +119,7 @@ export function computeCubeCanvasLayout(node, state, titleHeight, titlebarAction
         previewWidthRange,
         editAction: chrome.editAction,
         unsavedIndicator: chrome.unsavedIndicator,
-        cardMenuAction: chrome.cardMenuAction,
         chromeActions: chrome.chromeActions,
-        cardMenuEntries: presentation.menuEntries,
         resizeHandles: layoutResizeHandles(frame),
         cards,
         inputs: layoutCubeInputPorts(externalInterface.inputSlots.map((index) => node.subgraph.inputs[index]), frame, HEADER_HEIGHT, externalInterface.inputSlots),

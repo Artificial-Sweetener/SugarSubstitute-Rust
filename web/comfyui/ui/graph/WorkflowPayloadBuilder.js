@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Build save-ready ComfyUI workflow payloads from live graph state. */
 import { normalizeSubgraphPayload } from './SubgraphSerialization.js';
-import { attachWorkflowWidgetSnapshots } from './WidgetSnapshots.js';
+import { attachWorkflowWidgetSnapshots } from './WorkflowWidgetSnapshotCapture.js';
 import { isRecord } from '../types/common.js';
 function cloneWorkflowPayload(value) {
     if (!isRecord(value)) {

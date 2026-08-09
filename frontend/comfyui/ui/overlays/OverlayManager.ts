@@ -32,10 +32,7 @@ import type { CubeContainmentService } from '../layout/CubeContainmentService.js
 import type { CubeCollisionService } from '../layout/CubeCollisionService.js';
 import type { CubeBoundsReconciler } from '../layout/CubeBoundsReconciler.js';
 import type { ChromeMetadata } from './CubeChromeOverlay.js';
-import type {
-  CubeFaceChromeMetadata,
-  CubeFaceGraphSummary,
-} from '../surface/CubeFaceChromeActions.js';
+import type { CubeFaceGraphSummary } from '../surface/CubeFaceChromeActions.js';
 import { createCubeSourceResolver } from './CubeSourceResolver.js';
 import { ProximityPointerMoveTracker } from './proximity/ProximityPointerMoveTracker.js';
 import { ProximityGraphMutationTracker } from './proximity/ProximityGraphMutationTracker.js';
@@ -511,18 +508,6 @@ export class OverlayManager {
   /** Return observable chrome state without exposing mutable overlay ownership. */
   getChromeDebugState() {
     return this.chrome.getDebugState();
-  }
-
-  /** Open the existing Cube menu for a first-class Cube node titlebar. */
-  openCubeMenu(metadata: CubeFaceChromeMetadata, event: MouseEvent): void {
-    const liteGraph = typeof globalThis !== 'undefined' ? globalThis.LiteGraph : null;
-    if (!liteGraph?.ContextMenu) return;
-    const options = this.chrome.buildMenuOptions({
-      metadata: metadata as ChromeMetadata,
-      isDirty: Boolean(metadata.dirty),
-      flavors: [],
-    });
-    new liteGraph.ContextMenu(options, { event });
   }
 
   setup(): void {

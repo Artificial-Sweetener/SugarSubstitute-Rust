@@ -78,9 +78,6 @@ export class CubeCanvasChromeRenderer {
         if (layout.unsavedIndicator) {
             drawCubeUnsavedIndicator(context, layout.unsavedIndicator.x + layout.unsavedIndicator.width / 2, layout.unsavedIndicator.y + layout.unsavedIndicator.height / 2);
         }
-        if (layout.cardMenuEntries.length > 0) {
-            drawPrimeIconAction(context, layout.cardMenuAction, 'eye');
-        }
         for (const action of resolveCubeFaceTitlebarActions(requireCubeIdentity(node), item.chromeActions)) {
             const target = layout.chromeActions[action.key];
             if (target)

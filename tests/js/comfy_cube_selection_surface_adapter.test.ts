@@ -15,9 +15,15 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Verify Vue toolbox and More Options adaptation through stable host anchors. */
 
+import { jest } from '@jest/globals';
 import { ComfyCubeSelectionSurfaceAdapter } from '../../frontend/comfyui/ui/affordance/ComfyCubeSelectionSurfaceAdapter.js';
+import { ComfyCubeSelectionToolboxAdapter } from '../../frontend/comfyui/ui/affordance/ComfyCubeSelectionToolboxAdapter.js';
+import { ComfyCubeSelectionMenuVisibilityAdapter } from '../../frontend/comfyui/ui/affordance/ComfyCubeSelectionMenuVisibilityAdapter.js';
+import { ComfyCubeCardVisibilityToolboxPresenter } from '../../frontend/comfyui/ui/affordance/ComfyCubeCardVisibilityToolboxPresenter.js';
 import { ComfyCubeSaveButtonPresenter } from '../../frontend/comfyui/ui/affordance/ComfyCubeSaveButtonPresenter.js';
 import { PrimeVueTooltipPresentationAdapter } from '../../frontend/comfyui/ui/affordance/PrimeVueTooltipPresentationAdapter.js';
+import { ComfyToolboxTooltipPresenter } from '../../frontend/comfyui/ui/affordance/ComfyToolboxTooltipPresenter.js';
+import { ComfyToolboxCheckMenuPresenter } from '../../frontend/comfyui/ui/affordance/ComfyToolboxCheckMenuPresenter.js';
 import type { CubeNode } from '../../frontend/comfyui/ui/cube/node/ComfyCubeNodeFactory.js';
 import { CubeNodeCatalog } from '../../frontend/comfyui/ui/cube/node/CubeNodeCatalog.js';
 import { CubeEditorContextResolver } from '../../frontend/comfyui/ui/surface/CubeEditorContextResolver.js';
@@ -40,15 +46,39 @@ test('hides structural actions and relabels native Cube actions without parsing 
   infoItem.append(element('i', { class: 'pi pi-info-circle' }));
   menu.append(libraryItem, infoItem);
   document.body.append(toolbox, menu);
-  const canvas = { selectedItems: new Set<unknown>([cubeNode()]) };
+  const cube = cubeNode();
+  const canvas = { selectedItems: new Set<unknown>([cube]) };
+  const setRevealed = jest.fn();
   const adapter = new ComfyCubeSelectionSurfaceAdapter({
     document,
     canvas,
     contexts: new CubeEditorContextResolver(new CubeNodeCatalog()),
-    saveButton: new ComfyCubeSaveButtonPresenter({
+    toolbox: new ComfyCubeSelectionToolboxAdapter({
       document,
-      tooltips: new PrimeVueTooltipPresentationAdapter({ document, logger: console }),
+      saveButton: new ComfyCubeSaveButtonPresenter({
+        document,
+        tooltips: new PrimeVueTooltipPresentationAdapter({ document, logger: console }),
+      }),
+      cardVisibility: new ComfyCubeCardVisibilityToolboxPresenter({
+        document,
+        owner: {
+          list: () => [{ id: 'models', label: 'Models', revealed: false }],
+          setRevealed,
+        },
+        tooltip: new ComfyToolboxTooltipPresenter(document),
+        menu: new ComfyToolboxCheckMenuPresenter({
+          document,
+          featureMenuAttribute: 'data-sugarcubes-card-visibility-menu',
+          featureItemAttribute: 'data-sugarcubes-card-visibility-row',
+        }),
+      }),
+      versions: {
+        present: (anchor) => anchor,
+        clear: jest.fn(),
+        dispose: jest.fn(),
+      },
     }),
+    menus: new ComfyCubeSelectionMenuVisibilityAdapter(document),
   });
 
   adapter.refresh();
@@ -75,8 +105,38 @@ test('hides structural actions and relabels native Cube actions without parsing 
     'background: var(--comfy-menu-bg, rgb(24 24 27))',
   );
   expect(saveBadge?.querySelector('i[class="icon-[lucide--save]"]')).not.toBeNull();
+  const visibility = toolbox.querySelector<HTMLButtonElement>(
+    '[data-sugarcubes-card-visibility-button]',
+  );
+  expect(visibility?.previousElementSibling).toBe(publish);
+  expect(visibility?.getAttribute('aria-label')).toBe('Manage optional nodes');
+  expect(visibility?.querySelector('.pi.pi-eye')).not.toBeNull();
+  visibility?.dispatchEvent(new Event('pointerenter'));
+  const visibilityTooltip = document.querySelector<HTMLElement>(
+    '[data-sugarcubes-toolbox-tooltip]',
+  );
+  expect(visibilityTooltip?.getAttribute('role')).toBe('tooltip');
+  expect(visibilityTooltip?.classList.contains('p-tooltip')).toBe(true);
+  expect(visibilityTooltip?.querySelector('.p-tooltip-text')?.textContent).toBe(
+    'Manage optional nodes',
+  );
+  visibility?.click();
+  expect(document.querySelector('[data-sugarcubes-toolbox-tooltip]')).toBeNull();
+  const visibilityMenu = document.querySelector<HTMLElement>(
+    '[data-sugarcubes-card-visibility-menu]',
+  );
+  expect(visibilityMenu?.parentElement).toBe(document.body);
+  expect(visibilityMenu?.getAttribute('role')).toBe('menu');
+  const models = visibilityMenu?.querySelector<HTMLButtonElement>(
+    '[data-sugarcubes-card-visibility-row="models"]',
+  );
+  expect(models?.textContent).toBe('Models');
+  expect(models?.getAttribute('aria-checked')).toBe('false');
+  models?.click();
+  expect(setRevealed).toHaveBeenCalledWith(cube, 'models', true);
   adapter.refresh();
   expect(publish.querySelectorAll('[data-sugarcubes-save-cube-icon]')).toHaveLength(1);
+  expect(toolbox.querySelectorAll('[data-sugarcubes-card-visibility-button]')).toHaveLength(1);
   expect(configure.hidden).toBe(true);
   canvas.selectedItems = new Set();
   adapter.refresh();
@@ -100,6 +160,8 @@ test('hides structural actions and relabels native Cube actions without parsing 
       ?.style.getPropertyPriority('display'),
   ).toBe('important');
   expect(publish.querySelector('[data-sugarcubes-save-cube-icon]')).toBeNull();
+  expect(document.querySelector('[data-sugarcubes-card-visibility-button]')).toBeNull();
+  expect(document.querySelector('[data-sugarcubes-card-visibility-menu]')).toBeNull();
   expect(configure.hidden).toBe(false);
 });
 
@@ -138,7 +200,7 @@ function cubeNode(): CubeNode {
     subgraph: {
       id: 'definition',
       name: 'Cube',
-      _nodes: [],
+      _nodes: [{ id: 'models', type: 'Models', mode: 4 }],
       inputs: [],
       outputs: [],
     } as unknown as CubeNode['subgraph'],

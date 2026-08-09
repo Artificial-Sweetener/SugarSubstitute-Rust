@@ -288,6 +288,7 @@ describe('ComfyCubeAuthoringAdapter', () => {
       outputs: [{ name: 'output', type: '*' }],
       subgraph,
       isSubgraphNode: () => true,
+      configure: jest.fn(),
       connect() {},
       serialize: () => ({}),
     };

@@ -32,7 +32,11 @@ const MINIMUM_CUBE_HEIGHT = 160;
 
 export interface CubeConstructionOptions {
   instanceAlias?: string;
+  instanceId?: string;
   position?: Vec2;
+  revisionRef?: string;
+  size?: Vec2;
+  surface?: UnknownRecord;
 }
 
 export interface CubeIdentity {
@@ -96,17 +100,25 @@ export class CubeConstructionService {
   construct(payload: ImportPayload, options: CubeConstructionOptions = {}): ConstructedCube {
     const title = resolveTitle(payload, options.instanceAlias);
     const built = this.#graphBuilder.build(payload, `Cube: ${title}`);
-    const identity = readPayloadIdentity(payload, this.#createInstanceId(), options.instanceAlias);
+    const identity = readPayloadIdentity(
+      payload,
+      options.instanceId ?? this.#createInstanceId(),
+      options.instanceAlias,
+      options.surface,
+      options.revisionRef,
+    );
     return this.constructBuilt({
       built,
       title,
       identity,
       geometry: {
         position: readPayloadPosition(payload, options.position),
-        size: this.#resolveInitialSize({
-          surface: readSurfaceState(identity.metadata),
-          hasInputs: built.subgraph.inputs.length > 0,
-        }),
+        size:
+          options.size ??
+          this.#resolveInitialSize({
+            surface: readSurfaceState(identity.metadata),
+            hasInputs: built.subgraph.inputs.length > 0,
+          }),
       },
     });
   }
@@ -136,6 +148,11 @@ export class CubeConstructionService {
       throw error;
     }
   }
+
+  /** Discard a detached construction that will not enter the root graph. */
+  discard(constructed: ConstructedCube): void {
+    this.#definitions.discard(constructed.subgraph);
+  }
 }
 
 /** Parse stable instance identity at the prepared-import boundary. */
@@ -143,6 +160,8 @@ function readPayloadIdentity(
   payload: ImportPayload,
   instanceId: string,
   instanceAlias?: string,
+  surface?: UnknownRecord,
+  revisionRef?: string,
 ): CubeIdentity {
   const cube = isRecord(payload.cube) ? payload.cube : {};
   const cubeMetadata = isRecord(cube.metadata) ? cube.metadata : {};
@@ -152,7 +171,12 @@ function readPayloadIdentity(
     instanceId: requireInstanceId(instanceId),
     defaultAlias: readString(cube.default_alias),
     instanceAlias: readString(instanceAlias) || readString(cube.default_alias),
-    metadata: cloneRecord({ ...cube, ...cubeMetadata }),
+    metadata: cloneRecord({
+      ...cube,
+      ...cubeMetadata,
+      ...(surface ? { surface_state: surface } : {}),
+      ...(revisionRef ? { cube_revision_ref: revisionRef } : {}),
+    }),
   };
 }
 

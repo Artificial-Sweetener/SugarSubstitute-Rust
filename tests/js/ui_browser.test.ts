@@ -1273,11 +1273,6 @@ describe('ui browser behaviors', () => {
                 version: '1.0.0',
                 current: false,
               },
-              {
-                revision_ref: 'def123456789',
-                version: '1.0.0',
-                current: false,
-              },
             ],
           }),
         };
@@ -1414,7 +1409,7 @@ describe('ui browser behaviors', () => {
     restore();
   });
 
-  test('browser version combobox stays enabled when backend reports duplicate history', async () => {
+  test('browser version combobox accepts backend duplicate omission diagnostics', async () => {
     const restore = silenceConsole();
     api.fetchApi = async (url) => {
       if (url === '/sugarcubes/list') {
@@ -1437,21 +1432,44 @@ describe('ui browser behaviors', () => {
       }
       if (url.startsWith('/sugarcubes/revisions?cube_id=')) {
         return {
-          ok: false,
-          statusText: 'Conflict',
+          ok: true,
           json: async () => ({
-            error: {
-              message: 'Cube history contains duplicate version entries',
-              details: {
-                duplicates: [
-                  {
-                    version: '1.1.0',
-                    first_revision_ref: 'abc123456789',
-                    duplicate_revision_ref: 'def123456789',
-                  },
-                ],
+            revisions: [
+              {
+                revision_ref: 'WORKTREE',
+                version: '1.1.1',
+                current: true,
               },
-            },
+              {
+                revision_ref: 'abc123456789',
+                version: '1.1.0',
+                current: false,
+              },
+              {
+                revision_ref: 'def123456789',
+                version: '1.1.0',
+                current: false,
+              },
+            ],
+            version_revisions: [
+              {
+                revision_ref: 'WORKTREE',
+                version: '1.1.1',
+                current: true,
+              },
+              {
+                revision_ref: 'abc123456789',
+                version: '1.1.0',
+                current: false,
+              },
+            ],
+            duplicate_version_omissions: [
+              {
+                version: '1.1.0',
+                selected_revision_ref: 'abc123456789',
+                omitted_revision_ref: 'def123456789',
+              },
+            ],
           }),
         };
       }
@@ -1496,7 +1514,7 @@ describe('ui browser behaviors', () => {
       Array.from(versionListbox.querySelectorAll('.sugarcubes-browser__version-option')).map(
         (entry) => entry.textContent,
       ),
-    ).toEqual(['1.1.1']);
+    ).toEqual(['1.1.1', '1.1.0']);
     restore();
   });
 

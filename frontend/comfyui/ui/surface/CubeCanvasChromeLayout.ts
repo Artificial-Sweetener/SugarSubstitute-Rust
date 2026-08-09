@@ -25,7 +25,6 @@ export interface CubeCanvasChromeRect {
 }
 
 export interface CubeCanvasChromeLayoutOptions {
-  showCardMenu: boolean;
   showUnsavedIndicator: boolean;
   titlebarActionKeys: readonly CubeFaceTitlebarActionKey[];
 }
@@ -33,7 +32,6 @@ export interface CubeCanvasChromeLayoutOptions {
 export interface CubeCanvasChromeLayout {
   editAction: CubeCanvasChromeRect;
   unsavedIndicator: CubeCanvasChromeRect | null;
-  cardMenuAction: CubeCanvasChromeRect;
   chromeActions: Readonly<Partial<Record<CubeFaceTitlebarActionKey, CubeCanvasChromeRect>>>;
 }
 
@@ -62,9 +60,6 @@ export function layoutCubeCanvasChrome(
   for (const key of [...options.titlebarActionKeys].reverse()) {
     chromeActions[key] = takeSlot();
   }
-  const cardMenuAction = options.showCardMenu
-    ? takeSlot()
-    : { x: right - ACTION_WIDTH, y, width: ACTION_WIDTH, height: ACTION_HEIGHT };
 
-  return { editAction, unsavedIndicator, cardMenuAction, chromeActions };
+  return { editAction, unsavedIndicator, chromeActions };
 }

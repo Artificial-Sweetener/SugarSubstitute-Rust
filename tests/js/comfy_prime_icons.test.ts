@@ -55,14 +55,12 @@ describe('ComfyPrimeIcons', () => {
       {
         onSwapLeft() {},
         onSwapRight() {},
-        onOpenMenu() {},
       },
     );
 
     expect(actions.map(({ key, icon }) => [key, icon])).toEqual([
       ['swap-left', 'arrow-left'],
       ['swap-right', 'arrow-right'],
-      ['cube-menu', 'box'],
     ]);
   });
 });

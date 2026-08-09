@@ -30,9 +30,10 @@ describe('CubeSubgraphRegistrar', () => {
       },
     );
     const registrar = new CubeSubgraphRegistrar({
-      hasSubgraph: () => false,
+      getSubgraph: () => null,
       createSubgraph,
       createNode: () => null,
+      discardSubgraph: jest.fn(),
     });
 
     const warnings = registrar.register({
@@ -71,15 +72,105 @@ describe('CubeSubgraphRegistrar', () => {
     expect(configure).toHaveBeenCalledWith(createdData);
   });
 
-  test('does not replace an already registered nested definition', () => {
+  test('reconfigures an already registered definition from the current cube payload', () => {
+    const configure = jest.fn();
     const createSubgraph = jest.fn<(data: UnknownRecord) => null>(() => null);
     const registrar = new CubeSubgraphRegistrar({
-      hasSubgraph: (id) => id === 'existing',
+      getSubgraph: (id) => (id === 'existing' ? { configure } : null),
       createSubgraph,
-      createNode: () => null,
+      createNode: () => ({ widgets: [{ name: 'width', value: 512 }] }),
+      discardSubgraph: jest.fn(),
     });
 
-    expect(registrar.register({ subgraphs: [{ id: 'existing' }] })).toEqual([]);
+    expect(
+      registrar.register({
+        subgraphs: [
+          {
+            id: 'existing',
+            nodes: [
+              {
+                id: 7,
+                type: 'EmptyLatentImage',
+                inputs: [{ name: 'width', link: 41, widget: { name: 'width' } }],
+                widgets_values: [1080],
+              },
+            ],
+            links: [
+              {
+                id: 41,
+                origin_id: -10,
+                origin_slot: 0,
+                target_id: 7,
+                target_slot: 0,
+                type: 'INT',
+              },
+            ],
+            groups: [],
+          },
+        ],
+      }),
+    ).toEqual([]);
     expect(createSubgraph).not.toHaveBeenCalled();
+    expect(configure).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'existing',
+        nodes: [expect.objectContaining({ widgets_values: [1080] })],
+      }),
+    );
+  });
+
+  test('configures interleaved linked widgets without shifting named values', () => {
+    const createdEntries: UnknownRecord[] = [];
+    const registrar = new CubeSubgraphRegistrar({
+      getSubgraph: () => null,
+      createSubgraph: (data) => {
+        createdEntries.push(data);
+        return {};
+      },
+      createNode: () => ({
+        widgets: [
+          { name: 'width', value: 512 },
+          { name: 'height', value: 512 },
+          { name: 'resize_mode', value: 'Crop' },
+          { name: 'sampling', value: 'lanczos' },
+          { name: 'processor', value: 'cpu' },
+          { name: 'divisible_by', value: 8 },
+          { name: 'crop_position', value: 'top' },
+        ],
+      }),
+      discardSubgraph: jest.fn(),
+    });
+
+    const warnings = registrar.register({
+      subgraphs: [
+        {
+          id: 'resize-subgraph',
+          nodes: [
+            {
+              id: 151,
+              type: 'SimpleSyrup.ResizeImageToTarget',
+              inputs: [
+                { name: 'width', link: 3478, widget: { name: 'width' } },
+                { name: 'height', link: 3482, widget: { name: 'height' } },
+                { name: 'resize_mode', widget: { name: 'resize_mode' } },
+                { name: 'sampling', link: 3213, widget: { name: 'sampling' } },
+                { name: 'processor', widget: { name: 'processor' } },
+                { name: 'divisible_by', widget: { name: 'divisible_by' } },
+                { name: 'crop_position', widget: { name: 'crop_position' } },
+              ],
+              widgets_values: ['Keep AR', 'gpu', 2, 'center'],
+            },
+          ],
+          links: [],
+          groups: [],
+        },
+      ],
+    });
+
+    expect(warnings).toEqual([]);
+    const createdData = createdEntries[0];
+    expect(createdData).toBeDefined();
+    const nodes = Array.isArray(createdData?.nodes) ? createdData.nodes : [];
+    expect(nodes[0]?.widgets_values).toEqual([512, 512, 'Keep AR', 'lanczos', 'gpu', 2, 'center']);
   });
 });

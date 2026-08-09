@@ -171,6 +171,11 @@ export class CubeHostAffordanceController {
     };
     this.#feedback?.push?.('info', 'SugarCube action unavailable', details[operation]);
   }
+
+  /** Report a failed version switch through SugarCubes feedback ownership. */
+  reportVersionError(message: string): void {
+    this.#feedback?.push?.('error', 'Cube version switch failed', message);
+  }
 }
 
 /** Require one saved Cube identity without weakening save-service invariants. */

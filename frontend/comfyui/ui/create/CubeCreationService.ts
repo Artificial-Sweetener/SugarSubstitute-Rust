@@ -162,7 +162,7 @@ export class CubeCreationService {
       this.#toast?.push?.(
         'info',
         'Cube draft created',
-        'Edit its Cube implementation, then choose Save Cube from the Cube actions menu.',
+        "Edit its Cube implementation, then choose Save Cube from Comfy's selection toolbox.",
       );
       return authored;
     } catch (error: unknown) {

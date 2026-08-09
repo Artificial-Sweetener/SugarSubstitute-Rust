@@ -16,11 +16,11 @@
 /** Build save-ready ComfyUI workflow payloads from live graph state. */
 
 import { normalizeSubgraphPayload } from './SubgraphSerialization.js';
-import { attachWorkflowWidgetSnapshots } from './WidgetSnapshots.js';
+import { attachWorkflowWidgetSnapshots } from './WorkflowWidgetSnapshotCapture.js';
 import { isRecord } from '../types/common.js';
 import type { UnknownRecord } from '../types/common.js';
 import type { ComfyGraph } from '../types/graph.js';
-import type { WorkflowWithNodes } from './WidgetSnapshots.js';
+import type { WorkflowWithNodes } from './WorkflowWidgetSnapshotCapture.js';
 
 interface WorkflowPayload extends WorkflowWithNodes {
   definitions?: UnknownRecord;

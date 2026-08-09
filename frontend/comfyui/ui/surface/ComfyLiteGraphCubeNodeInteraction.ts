@@ -36,7 +36,6 @@ import {
   type CubeCanvasPort,
   type CubeCanvasResizeHandle,
 } from './CubeCanvasLayout.js';
-import { computeCubeCanvasCardMenuLayout } from './CubeCanvasCardMenuLayout.js';
 import {
   dispatchCubeFaceTitlebarAction,
   resolveCubeFaceTitlebarActions,
@@ -63,7 +62,6 @@ export interface LiteGraphCubeNodeInteractionHistory {
 export interface LiteGraphCubeNodeInteractionItem {
   node: CubeNode;
   layout: CubeCanvasLayout;
-  cardMenuOpen: boolean;
   preview?: CubePreviewSnapshot | null;
 }
 
@@ -75,8 +73,6 @@ export interface ComfyLiteGraphCubeNodeInteractionOptions {
   chromeActions?: CubeFaceChromeActions | null;
   previewActions?: CubePreviewActions | null;
   onEdit(node: CubeNode): void;
-  onCardMenuToggle(node: CubeNode): void;
-  onCardRevealChange(node: CubeNode, internalNode: ComfyNode, revealed: boolean): void;
   onCardActivationChange(node: CubeNode, internalNode: ComfyNode, enabled: boolean): void;
   onPreviewWidthChange?(node: CubeNode, width: number): void;
   onGeometryChange?(node: CubeNode): void;
@@ -118,12 +114,6 @@ export class ComfyLiteGraphCubeNodeInteraction {
   readonly #chromeActions: CubeFaceChromeActions | null;
   readonly #previewActions: CubePreviewActions | null;
   readonly #onEdit: (node: CubeNode) => void;
-  readonly #onCardMenuToggle: (node: CubeNode) => void;
-  readonly #onCardRevealChange: (
-    node: CubeNode,
-    internalNode: ComfyNode,
-    revealed: boolean,
-  ) => void;
   readonly #onCardActivationChange: (
     node: CubeNode,
     internalNode: ComfyNode,
@@ -144,8 +134,6 @@ export class ComfyLiteGraphCubeNodeInteraction {
     this.#chromeActions = options.chromeActions ?? null;
     this.#previewActions = options.previewActions ?? null;
     this.#onEdit = options.onEdit;
-    this.#onCardMenuToggle = options.onCardMenuToggle;
-    this.#onCardRevealChange = options.onCardRevealChange;
     this.#onCardActivationChange = options.onCardActivationChange;
     this.#onPreviewWidthChange = options.onPreviewWidthChange ?? (() => undefined);
     this.#onGeometryChange = options.onGeometryChange ?? (() => undefined);
@@ -184,20 +172,6 @@ export class ComfyLiteGraphCubeNodeInteraction {
       return;
     }
     if (event.button !== 0) return;
-    if (item.cardMenuOpen) {
-      const menuItem = computeCubeCanvasCardMenuLayout(item.layout).items.find((candidate) =>
-        containsCubeCanvasPoint(candidate.rect, point),
-      );
-      if (menuItem) {
-        const internalNode = item.node.subgraph._nodes.find(
-          (candidate) => String(candidate.id ?? '') === menuItem.entry.id,
-        );
-        if (!internalNode) return;
-        this.#consume(event);
-        this.#onCardRevealChange(item.node, internalNode, !menuItem.entry.revealed);
-        return;
-      }
-    }
     if (item.layout.previewDivider && containsCubeCanvasPoint(item.layout.previewDivider, point)) {
       this.#consume(event);
       this.#history.beforeChange?.();
@@ -244,14 +218,6 @@ export class ComfyLiteGraphCubeNodeInteraction {
       this.#onEdit(item.node);
       return;
     }
-    if (
-      item.layout.cardMenuEntries.length > 0 &&
-      containsCubeCanvasPoint(item.layout.cardMenuAction, point)
-    ) {
-      this.#consume(event);
-      this.#onCardMenuToggle(item.node);
-      return;
-    }
     for (const action of resolveCubeFaceTitlebarActions(
       requireCubeIdentity(item.node),
       this.#chromeActions,
@@ -263,7 +229,6 @@ export class ComfyLiteGraphCubeNodeInteraction {
           action.key,
           buildCubeFaceChromeMetadata(item.node),
           this.#chromeActions,
-          event,
         );
         return;
       }

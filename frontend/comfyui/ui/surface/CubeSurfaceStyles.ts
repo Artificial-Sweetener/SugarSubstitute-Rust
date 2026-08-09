@@ -304,41 +304,6 @@ export function ensureCubeSurfaceStyles(documentRef: Document): void {
       font-size: 1.1875rem;
       filter: drop-shadow(0 0 1px var(--comfy-menu-bg, #171b20));
     }
-    .sugarcubes-cube-face__card-menu {
-      box-sizing: border-box;
-      position: fixed;
-      z-index: 100000;
-      display: flex;
-      flex-direction: column;
-      min-width: 13rem;
-      max-width: min(22rem, 70vw);
-      overflow: auto;
-      padding: 0.375rem;
-      border: 1px solid color-mix(in srgb, currentColor 24%, transparent);
-      border-radius: 0.5rem;
-      background: var(--comfy-menu-bg, #171b20);
-      box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 45%);
-    }
-    .sugarcubes-cube-face__card-menu[hidden] {
-      display: none;
-    }
-    .sugarcubes-cube-face__card-menu-row {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      min-width: 0;
-      padding: 0.375rem 0.5rem;
-      border-radius: 0.375rem;
-      cursor: pointer;
-      white-space: nowrap;
-    }
-    .sugarcubes-cube-face__card-menu-row:hover {
-      background: color-mix(in srgb, currentColor 8%, transparent);
-    }
-    .sugarcubes-cube-face__card-menu-row span {
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
     .sugarcubes-cube-face__actions,
     .sugarcubes-cube-face__actions button,
     .sugarcubes-cube-face__content {

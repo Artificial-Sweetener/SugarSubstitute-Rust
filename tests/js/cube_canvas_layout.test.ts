@@ -341,26 +341,22 @@ describe('computeCubeCanvasLayout', () => {
     const chrome = layoutCubeCanvasChrome(
       { x: 100, y: 110, width: 720, height: 42 },
       {
-        showCardMenu: true,
         showUnsavedIndicator: false,
-        titlebarActionKeys: ['swap-left', 'cube-menu'],
+        titlebarActionKeys: ['swap-left', 'swap-right'],
       },
     );
 
-    expect(chrome.chromeActions['swap-right']).toBeUndefined();
     expect(chrome.editAction.x + chrome.editAction.width).toBe(808);
-    expect(chrome.chromeActions['cube-menu']?.x).toBe(chrome.editAction.x - 6 - 28);
+    expect(chrome.chromeActions['swap-right']?.x).toBe(chrome.editAction.x - 6 - 28);
     expect(chrome.chromeActions['swap-left']?.x).toBe(
-      (chrome.chromeActions['cube-menu']?.x ?? 0) - 6 - 28,
+      (chrome.chromeActions['swap-right']?.x ?? 0) - 6 - 28,
     );
-    expect(chrome.cardMenuAction.x).toBe((chrome.chromeActions['swap-left']?.x ?? 0) - 6 - 28);
   });
 
   test('reserves a titlebar corner slot only for a Cube awaiting its first save', () => {
     const saved = layoutCubeCanvasChrome(
       { x: 100, y: 110, width: 720, height: 42 },
       {
-        showCardMenu: false,
         showUnsavedIndicator: false,
         titlebarActionKeys: [],
       },
@@ -368,7 +364,6 @@ describe('computeCubeCanvasLayout', () => {
     const draft = layoutCubeCanvasChrome(
       { x: 100, y: 110, width: 720, height: 42 },
       {
-        showCardMenu: false,
         showUnsavedIndicator: true,
         titlebarActionKeys: [],
       },

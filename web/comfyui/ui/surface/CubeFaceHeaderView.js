@@ -32,13 +32,13 @@ export class CubeFaceHeaderView {
         }
         this.element.append(createInstanceIdentity(options.document, options.identity), createDefinitionIdentity(options.document, options.identity), this.#actions.element);
     }
-    /** Reconcile action and reveal-menu rows without rebuilding identity DOM. */
-    renderActions(entries, onRevealChange) {
-        this.#actions.render(entries, onRevealChange);
+    /** Reconcile header actions without rebuilding identity DOM. */
+    renderActions() {
+        this.#actions.render();
     }
-    /** Release transient action-menu state. */
+    /** Release header-owned presentation state. */
     dispose() {
-        this.#actions.dispose();
+        this.element.remove();
     }
 }
 /** Build the graph-local instance title lane. */

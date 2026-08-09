@@ -34,8 +34,5 @@ export function layoutCubeCanvasChrome(header, options) {
     for (const key of [...options.titlebarActionKeys].reverse()) {
         chromeActions[key] = takeSlot();
     }
-    const cardMenuAction = options.showCardMenu
-        ? takeSlot()
-        : { x: right - ACTION_WIDTH, y, width: ACTION_WIDTH, height: ACTION_HEIGHT };
-    return { editAction, unsavedIndicator, cardMenuAction, chromeActions };
+    return { editAction, unsavedIndicator, chromeActions };
 }

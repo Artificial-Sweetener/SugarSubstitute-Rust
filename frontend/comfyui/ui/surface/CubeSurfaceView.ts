@@ -20,7 +20,7 @@ import {
   resolveCubeFaceCardPresentation,
   type CubeFaceCardDecision,
 } from './CubeFaceCardPolicy.js';
-import { setCubeFaceCardRevealed, setCubeFaceNodeEnabled } from './CubeFaceCardStateController.js';
+import { setCubeFaceNodeEnabled } from './CubeFaceCardStateController.js';
 import { NativeNodeCardHost } from './NativeNodeCardHost.js';
 import type { NativeNodeCardRenderer } from './NativeNodeCardRenderer.js';
 import type { CubePreviewSnapshot } from './CubePreviewModel.js';
@@ -210,12 +210,7 @@ export class CubeSurfaceView {
       this.#commitCardChange();
     });
     this.#geometryObserver.observe(this.#cells);
-    this.#headerView.renderActions(presentation.menuEntries, (nodeId, revealed) => {
-      const node = this.#nodes.find((candidate) => String(candidate.id ?? '') === nodeId);
-      if (!node) return;
-      setCubeFaceCardRevealed(this.#state, node, revealed);
-      this.#commitCardChange();
-    });
+    this.#headerView.renderActions();
   }
 
   /** Persist one card change, then remount against the resulting policy. */

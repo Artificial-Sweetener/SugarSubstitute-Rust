@@ -15,7 +15,6 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Compose Cube-owned header actions without owning popup geometry. */
 
-import type { CubeFaceCardMenuEntry } from './CubeFaceCardPolicy.js';
 import {
   dispatchCubeFaceTitlebarAction,
   resolveCubeFaceTitlebarActions,
@@ -23,13 +22,11 @@ import {
   type CubeFaceChromeMetadata,
   type CubeFaceTitlebarActionKey,
 } from './CubeFaceChromeActions.js';
-import { CubeFaceRevealMenuView } from './CubeFaceRevealMenuView.js';
 import { createComfyPrimeIconElement } from './ComfyPrimeIcons.js';
 
 /** Own the accessible Cube header controls without owning card policy. */
 export class CubeFaceActionsView {
   readonly element: HTMLDivElement;
-  readonly #revealMenu: CubeFaceRevealMenuView;
   readonly #chromeButtons: Map<CubeFaceTitlebarActionKey, HTMLButtonElement>;
   readonly #metadata: CubeFaceChromeMetadata;
   readonly #chromeActions: CubeFaceChromeActions | null;
@@ -45,10 +42,10 @@ export class CubeFaceActionsView {
     this.#metadata = metadata;
     this.#chromeActions = chromeActions ?? null;
     this.#chromeButtons = new Map(
-      (['swap-left', 'swap-right', 'cube-menu'] as const).map((key) => {
+      (['swap-left', 'swap-right'] as const).map((key) => {
         const button = createChromeButton(documentRef, key);
         button.addEventListener('click', (event) => {
-          if (dispatchCubeFaceTitlebarAction(key, this.#metadata, this.#chromeActions, event)) {
+          if (dispatchCubeFaceTitlebarAction(key, this.#metadata, this.#chromeActions)) {
             event.preventDefault();
             event.stopPropagation();
           }
@@ -56,15 +53,11 @@ export class CubeFaceActionsView {
         return [key, button];
       }),
     );
-    this.#revealMenu = new CubeFaceRevealMenuView(documentRef);
-    this.element.append(...this.#chromeButtons.values(), this.#revealMenu.button);
+    this.element.append(...this.#chromeButtons.values());
   }
 
-  /** Replace menu rows from the current shared card decisions. */
-  render(
-    entries: readonly CubeFaceCardMenuEntry[],
-    onRevealChange: (nodeId: string, revealed: boolean) => void,
-  ): void {
+  /** Reconcile the renderer-owned Cube header actions. */
+  render(): void {
     const visibleActions = resolveCubeFaceTitlebarActions(this.#metadata, this.#chromeActions);
     for (const button of this.#chromeButtons.values()) button.hidden = true;
     for (const action of visibleActions) {
@@ -75,12 +68,6 @@ export class CubeFaceActionsView {
       button.title = action.title;
       button.setAttribute('aria-label', action.ariaLabel);
     }
-    this.#revealMenu.render(entries, onRevealChange);
-  }
-
-  /** Close transient menu state when the owning Cube view is released. */
-  dispose(): void {
-    this.#revealMenu.dispose();
   }
 }
 

@@ -254,13 +254,11 @@ describe('ensureCubeSurfaceStyles', () => {
     expect(geometryRule?.style.getPropertyPriority('transform')).toBe('important');
   });
 
-  test('keeps the reveal popup outside Cube flow in a fixed viewport layer', () => {
+  test('does not ship renderer-owned reveal popup styles', () => {
     ensureCubeSurfaceStyles(document);
 
     const css = document.getElementById('sugarcubes-cube-surface-styles')?.textContent ?? '';
-    expect(css).toMatch(
-      /\.sugarcubes-cube-face__card-menu\s*\{[^}]*position:\s*fixed;[^}]*z-index:\s*100000;/s,
-    );
+    expect(css).not.toContain('.sugarcubes-cube-face__card-menu');
   });
 
   test('raises the focused native card so Comfy popovers clear sibling cards', () => {

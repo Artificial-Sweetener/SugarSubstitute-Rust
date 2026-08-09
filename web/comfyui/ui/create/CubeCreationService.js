@@ -100,7 +100,7 @@ export class CubeCreationService {
                 defaultAlias: 'Untitled Cube',
                 instanceId: this.#createInstanceId(),
             });
-            this.#toast?.push?.('info', 'Cube draft created', 'Edit its Cube implementation, then choose Save Cube from the Cube actions menu.');
+            this.#toast?.push?.('info', 'Cube draft created', "Edit its Cube implementation, then choose Save Cube from Comfy's selection toolbox.");
             return authored;
         }
         catch (error) {

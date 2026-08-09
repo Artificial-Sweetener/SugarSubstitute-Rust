@@ -33,6 +33,7 @@ from .cube_library_service import CubeLibraryService
 from .cube_file_io import format_timestamp, read_cube_payload
 from .cube_summary import build_cube_identity_fields
 from .cube_metadata import normalize_metadata_string
+from .cube_revision_version_projection import project_unique_cube_versions
 from .tracked_repo_service import TrackedRepoService
 
 _logger = logging.getLogger(__name__)
@@ -84,10 +85,13 @@ class CubeRevisionService:
                 if entry.get("version")
             ]
             revisions.extend(personal_history)
+        projection = project_unique_cube_versions(revisions)
         _log_cube_library_diagnostic(
             "sugarcubes_revision_list_return",
             cube_id=context.cube_id,
             revision_count=len(revisions),
+            version_revision_count=len(projection.revisions),
+            duplicate_version_omission_count=len(projection.omissions),
             revision_refs=[
                 normalize_metadata_string(revision.get("revision_ref"))
                 for revision in revisions
@@ -97,7 +101,9 @@ class CubeRevisionService:
             "cube_id": context.cube_id,
             "revisions": revisions,
             "count": len(revisions),
-            "duplicate_version_omissions": [],
+            "version_revisions": list(projection.revisions),
+            "version_count": len(projection.revisions),
+            "duplicate_version_omissions": list(projection.omissions),
         }
         if requested_cube_id != context.cube_id:
             result["identity_redirect"] = {
@@ -403,7 +409,7 @@ class CubeRevisionService:
         revisions: Sequence[dict[str, Any]],
         context: CubeGitContext,
     ) -> list[dict[str, Any]]:
-        """Remove the committed HEAD mirror when it has the same version as WORKTREE."""
+        """Remove a committed HEAD entry that exactly mirrors the working tree."""
 
         entries = list(revisions)
         if len(entries) < 2:
@@ -428,7 +434,7 @@ class CubeRevisionService:
         context: CubeGitContext,
         revision: Mapping[str, Any],
     ) -> bool:
-        """Return whether the current cube file exactly matches one git revision."""
+        """Return whether the current cube file exactly matches one Git revision."""
 
         revision_ref = normalize_metadata_string(revision.get("revision_ref"))
         if not revision_ref:

@@ -49,7 +49,7 @@ import {
   resolveCubeFaceTitlebarActions,
   type CubeFaceChromeActions,
 } from './CubeFaceChromeActions.js';
-import { setCubeFaceCardRevealed, setCubeFaceNodeEnabled } from './CubeFaceCardStateController.js';
+import { setCubeFaceNodeEnabled } from './CubeFaceCardStateController.js';
 import {
   parseCubeSurfaceState,
   serializeCubeSurfaceState,
@@ -117,7 +117,6 @@ interface MountedDrawHooks {
 interface RenderItem {
   node: CubeNode;
   layout: ReturnType<typeof computeCubeCanvasLayout>;
-  cardMenuOpen: boolean;
   preview: CubePreviewSnapshot | null;
   chromeActions: CubeFaceChromeActions | null;
   editorButton: NativeLiteGraphTitleButton | null;
@@ -145,7 +144,6 @@ export class ComfyLiteGraphCubeNodeHost {
   #enabled = false;
   #promptGeometryQueued = false;
   #items: RenderItem[] = [];
-  #openCardMenu: CubeNode | null = null;
 
   /** Bind native draw hooks and focused face interactions. */
   constructor(options: ComfyLiteGraphCubeNodeHostOptions) {
@@ -204,14 +202,6 @@ export class ComfyLiteGraphCubeNodeHost {
       chromeActions: this.#chromeActions,
       previewActions: options.previewActions ?? null,
       onEdit: options.openEditor,
-      onCardMenuToggle: (node) => {
-        this.#openCardMenu = this.#openCardMenu === node ? null : node;
-        this.sync();
-      },
-      onCardRevealChange: (node, internalNode, revealed) =>
-        this.#updateSurface(node, (state) =>
-          setCubeFaceCardRevealed(state, internalNode, revealed),
-        ),
       onCardActivationChange: (node, internalNode, enabled) =>
         this.#updateSurface(node, (state) => setCubeFaceNodeEnabled(state, internalNode, enabled)),
       onPreviewWidthChange: (node, width) => this.#writePreviewWidth(node, width),
@@ -408,7 +398,6 @@ export class ComfyLiteGraphCubeNodeHost {
     return {
       node,
       layout,
-      cardMenuOpen: this.#openCardMenu === node,
       preview: this.#previewCatalog
         ? filterCubePreviewOutputs(
             this.#previewCatalog.snapshot(node),

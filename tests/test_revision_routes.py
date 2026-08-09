@@ -125,7 +125,7 @@ def test_list_revisions_route_returns_current_and_commits_for_github_cube(
     assert payload["revisions"][1]["version"] == "1.0.0"
 
 
-def test_list_revisions_route_keeps_same_version_commits(
+def test_list_revisions_route_projects_one_revision_per_version(
     tmp_path: Path, backend_services_factory: BackendServicesFactory
 ) -> None:
     first_historical_payload = {
@@ -195,12 +195,38 @@ def test_list_revisions_route_keeps_same_version_commits(
         "1.0.0",
         "1.0.0",
     ]
-    assert [entry["revision_ref"] for entry in payload["revisions"]] == [
+    assert payload["version_count"] == 2
+    assert [entry["version"] for entry in payload["version_revisions"]] == [
+        "1.1.0",
+        "1.0.0",
+    ]
+    assert [entry["revision_ref"] for entry in payload["version_revisions"]] == [
         "WORKTREE",
         "def123456789",
-        "abc123456789",
     ]
-    assert payload["duplicate_version_omissions"] == []
+    assert payload["duplicate_version_omissions"] == [
+        {
+            "version": "1.0.0",
+            "selected_revision_ref": "def123456789",
+            "omitted_revision_ref": "abc123456789",
+        }
+    ]
+
+    hidden_response = asyncio.run(
+        build_route_handlers(services).load_revision(
+            FakeRequest(
+                body={
+                    "cube_id": "Artificial-Sweetener/Base-Cubes/demo.cube",
+                    "revision_ref": "abc123456789",
+                }
+            )
+        )
+    )
+    hidden_payload = decode_json_response(hidden_response)
+
+    assert hidden_response.status == 200
+    assert hidden_payload["revision"]["revision_ref"] == "abc123456789"
+    assert hidden_payload["cube"]["version"] == "1.0.0"
 
 
 def test_list_revisions_route_returns_current_for_uncommitted_local_cube(

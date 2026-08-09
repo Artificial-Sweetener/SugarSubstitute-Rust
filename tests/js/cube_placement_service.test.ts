@@ -264,6 +264,7 @@ function nativeSubgraphNode(subgraph: NativeCubeSubgraph): CubeNode {
     outputs: [],
     subgraph,
     isSubgraphNode: () => true,
+    configure: jest.fn(),
     connect() {},
     serialize: () => ({}),
     setSize(size) {

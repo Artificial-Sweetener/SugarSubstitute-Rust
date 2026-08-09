@@ -35,6 +35,7 @@ import { ComfyVueCubeNodeHost } from './ComfyVueCubeNodeHost.js';
 import { ensureCubeSurfaceStyles } from './CubeSurfaceStyles.js';
 import { CubeSurfaceView } from './CubeSurfaceView.js';
 import { parseCubeSurfaceState, serializeCubeSurfaceState } from './CubeSurfaceState.js';
+import { buildCubeCardVisibilitySignature } from './CubeCardVisibilitySignature.js';
 import type { NativeNodeCardRenderer } from './NativeNodeCardRenderer.js';
 import type { CubePreviewCatalog } from './CubePreviewModel.js';
 import { NativeSubgraphChangeObserver } from './NativeSubgraphChangeObserver.js';
@@ -616,6 +617,7 @@ function buildPresentationSignature(node: CubeNode): string {
     identity.cube_version ?? '',
     identity.has_saveable_changes ?? false,
     identity.icon ?? null,
+    buildCubeCardVisibilitySignature(requireCubeSurface(node)),
   ]);
 }
 
