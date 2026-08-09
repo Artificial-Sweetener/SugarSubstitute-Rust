@@ -17,13 +17,14 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping, Sequence, Set as AbstractSet
 from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, TypeGuard
 
 from .input_persistence import should_store_authored_value
 from .picker_fields import find_input_field_spec, widget_input_names
+from .subgraph_boundary_widgets import index_boundary_widget_names
 
 WORKFLOW_WIDGET_VALUES_KEY = "sugarcubes_widget_values"
 _CONTROL_AFTER_GENERATE_VALUES = frozenset(
@@ -46,6 +47,8 @@ class WidgetSnapshot:
 def decode_workflow_widget_snapshot(
     node: Mapping[str, Any],
     definition: Mapping[str, Any],
+    *,
+    included_linked_names: AbstractSet[str] = frozenset(),
 ) -> WidgetSnapshot | None:
     """Decode request or same-snapshot workflow widget values by input name."""
 
@@ -59,8 +62,8 @@ def decode_workflow_widget_snapshot(
     widget_values = node.get("widgets_values")
     if not _is_sequence(widget_values):
         return None
-    names = serialized_widget_names(node)
-    linked_names = _linked_widget_names(node)
+    names = serialized_widget_names(node, included_linked_names=included_linked_names)
+    linked_names = _linked_widget_names(node) - included_linked_names
     if widget_values and linked_names:
         try:
             named_values = _decode_positional_values(names, widget_values, definition)
@@ -74,9 +77,9 @@ def decode_workflow_widget_snapshot(
                 )
                 return WidgetSnapshot(
                     values={
-                        name: value
-                        for name, value in values.items()
-                        if name not in linked_names
+                        name: values[name]
+                        for name in names
+                        if name in values
                     },
                     source="definition_order_with_link_anchors",
                 )
@@ -90,7 +93,11 @@ def decode_workflow_widget_snapshot(
     )
 
 
-def serialized_widget_names(node: Mapping[str, Any]) -> list[str]:
+def serialized_widget_names(
+    node: Mapping[str, Any],
+    *,
+    included_linked_names: AbstractSet[str] = frozenset(),
+) -> list[str]:
     """Return widget identities stored in the same workflow node snapshot."""
 
     inputs = node.get("inputs")
@@ -100,16 +107,11 @@ def serialized_widget_names(node: Mapping[str, Any]) -> list[str]:
     for entry in inputs:
         if not isinstance(entry, Mapping):
             continue
-        if entry.get("link") is not None:
+        name = _widget_input_name(entry)
+        if entry.get("link") is not None and name not in included_linked_names:
             continue
-        widget = entry.get("widget")
-        if not isinstance(widget, Mapping):
-            continue
-        widget_name = widget.get("name")
-        input_name = entry.get("name")
-        name = widget_name if isinstance(widget_name, str) else input_name
-        if isinstance(name, str) and name.strip():
-            names.append(name.strip())
+        if name is not None:
+            names.append(name)
     return names
 
 
@@ -126,6 +128,7 @@ def canonicalize_subgraph_widget_values(
 
     canonical = [deepcopy(dict(subgraph)) for subgraph in subgraphs]
     for subgraph in canonical:
+        boundary_names_by_node = index_boundary_widget_names(subgraph)
         nodes = subgraph.get("nodes")
         if not _is_sequence(nodes):
             continue
@@ -137,8 +140,18 @@ def canonicalize_subgraph_widget_values(
                 continue
             definition = definitions.get(class_type)
             live_definition = definition if isinstance(definition, Mapping) else {}
+            node_id = node.get("id")
+            boundary_names = (
+                boundary_names_by_node.get(node_id, frozenset())
+                if isinstance(node_id, str | int) and not isinstance(node_id, bool)
+                else frozenset()
+            )
             try:
-                snapshot = decode_workflow_widget_snapshot(node, live_definition)
+                snapshot = decode_workflow_widget_snapshot(
+                    node,
+                    live_definition,
+                    included_linked_names=boundary_names,
+                )
             except WidgetSnapshotError as exc:
                 raise WidgetSnapshotError(
                     f"node_id={node.get('id')!r}; class_type={class_type}; {exc}"
@@ -154,7 +167,10 @@ def canonicalize_subgraph_widget_values(
                     snapshot.values,
                     live_definition,
                 )
-            names = serialized_widget_names(node)
+            names = serialized_widget_names(
+                node,
+                included_linked_names=boundary_names,
+            )
             node["widgets_values"] = [
                 (
                     snapshot.values.get(name)

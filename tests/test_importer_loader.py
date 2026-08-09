@@ -64,6 +64,82 @@ def test_load_cube_warns_on_invalid_input_targets(tmp_path: Path) -> None:
     assert any("target #1 is invalid" in warning for warning in loaded.warnings)
 
 
+def test_load_cube_omits_legacy_machine_local_authored_defaults(
+    tmp_path: Path,
+) -> None:
+    """Keep installed picker defaults while preserving portable empty values."""
+
+    payload = _build_current_payload()
+    payload["implementation"]["nodes"] = {
+        "checkpoint": {
+            "class_type": "SimpleSyrup.SimpleLoadCheckpoint",
+            "inputs": {"ckpt_name": "", "vae_name": "", "clip_skip": False},
+        },
+        "positive_prompt": {
+            "class_type": "PrimitiveStringMultiline",
+            "inputs": {"value": ""},
+        },
+    }
+    payload["implementation"]["definitions"] = {
+        "SimpleSyrup.SimpleLoadCheckpoint": {},
+        "PrimitiveStringMultiline": {},
+    }
+    payload["surface"] = {
+        "default_flavor_id": "default",
+        "controls": [
+            {
+                "control_id": "checkpoint.ckpt_name",
+                "symbol": "checkpoint",
+                "input_name": "ckpt_name",
+                "label": "ckpt_name",
+                "class_type": "SimpleSyrup.SimpleLoadCheckpoint",
+                "value_type": "string",
+            },
+            {
+                "control_id": "checkpoint.vae_name",
+                "symbol": "checkpoint",
+                "input_name": "vae_name",
+                "label": "vae_name",
+                "class_type": "SimpleSyrup.SimpleLoadCheckpoint",
+                "value_type": "string",
+            },
+            {
+                "control_id": "checkpoint.clip_skip",
+                "symbol": "checkpoint",
+                "input_name": "clip_skip",
+                "label": "clip_skip",
+                "class_type": "SimpleSyrup.SimpleLoadCheckpoint",
+                "value_type": "boolean",
+            },
+            {
+                "control_id": "positive_prompt.value",
+                "symbol": "positive_prompt",
+                "input_name": "value",
+                "label": "value",
+                "class_type": "PrimitiveStringMultiline",
+                "value_type": "string",
+            },
+        ],
+    }
+    payload["flavors"]["authored"][0]["values"] = {
+        "checkpoint.ckpt_name": "",
+        "checkpoint.vae_name": "",
+        "checkpoint.clip_skip": False,
+        "positive_prompt.value": "",
+    }
+    path = tmp_path / "legacy-picker-defaults.cube"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    loaded = load_cube(path)
+
+    assert loaded.nodes["checkpoint"].inputs == {"clip_skip": False}
+    assert loaded.nodes["positive_prompt"].inputs == {"value": ""}
+    assert loaded.flavors["authored"][0]["values"] == {
+        "checkpoint.clip_skip": False,
+        "positive_prompt.value": "",
+    }
+
+
 def test_load_cube_rejects_inherit_input_kind(tmp_path: Path) -> None:
     payload = _build_current_payload()
     payload["implementation"]["inputs"] = {

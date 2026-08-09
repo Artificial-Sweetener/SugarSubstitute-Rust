@@ -32,6 +32,7 @@ from ..cube_model import (
     derive_route_from_cube_id,
     derive_target_model_from_cube_id,
     looks_like_legacy_cube_payload,
+    sanitize_authored_defaults_payload,
     validate_cube_route_identity,
 )
 from ..cube_model.merge import materialize_nodes
@@ -214,6 +215,13 @@ def load_cube(path: Path | str) -> LoadedCube:
         document = CubeDocument.from_dict(payload)
     except CubeSchemaError as exc:
         raise CubeImportError(str(exc), details={"path": str(cube_path)}) from exc
+
+    portable_payload = document.to_dict()
+    sanitize_authored_defaults_payload(
+        portable_payload,
+        definitions=document.implementation.definitions,
+    )
+    document = CubeDocument.from_dict(portable_payload)
 
     warnings: List[str] = []
     description = document.description

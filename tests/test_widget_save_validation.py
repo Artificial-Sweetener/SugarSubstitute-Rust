@@ -145,6 +145,66 @@ def test_linked_widget_inputs_preserve_unlinked_definition_values() -> None:
     }
 
 
+def test_subgraph_boundary_widget_inputs_preserve_authored_defaults() -> None:
+    """Keep boundary defaults while discarding ordinary internal-link anchors."""
+
+    subgraphs: list[dict[str, Any]] = [
+        {
+            "id": "sampler",
+            "links": [
+                {
+                    "id": 41,
+                    "origin_id": -10,
+                    "origin_slot": 0,
+                    "target_id": 7,
+                    "target_slot": 0,
+                    "type": "INT",
+                },
+                {
+                    "id": 42,
+                    "origin_id": 6,
+                    "origin_slot": 0,
+                    "target_id": 7,
+                    "target_slot": 1,
+                    "type": "INT",
+                },
+            ],
+            "nodes": [
+                {
+                    "id": 7,
+                    "type": "Example.Node",
+                    "inputs": [
+                        {"name": "width", "link": 41, "widget": {"name": "width"}},
+                        {
+                            "name": "internal_height",
+                            "link": 42,
+                            "widget": {"name": "internal_height"},
+                        },
+                        {"name": "steps", "widget": {"name": "steps"}},
+                    ],
+                    "widgets_values": [1080, 777, 30],
+                }
+            ],
+        }
+    ]
+    definitions = {
+        "Example.Node": {
+            "input": {
+                "required": {
+                    "width": ["INT", {"default": 512}],
+                    "internal_height": ["INT", {"default": 512}],
+                    "steps": ["INT", {"default": 20}],
+                }
+            },
+            "input_order": {"required": ["width", "internal_height", "steps"]},
+        }
+    }
+
+    canonical = canonicalize_subgraph_widget_values(subgraphs, definitions)
+
+    assert canonical[0]["nodes"][0]["widgets_values"] == [1080, 30]
+
+
 def test_linked_widget_inputs_ignore_stale_positional_values() -> None:
     """Connected widgets may retain stale UI values that do not drive execution."""
 
