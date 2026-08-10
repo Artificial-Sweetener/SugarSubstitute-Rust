@@ -132,7 +132,6 @@ interface ChromeInstanceState {
 export interface ChromeActions extends UnknownRecord {
   onSaveImplementation?(metadata: ChromeMetadata): void;
   onSaveDraft?(metadata: ChromeMetadata): void;
-  onSaveCubeDefaults?(metadata: ChromeMetadata): void;
   onSwapLeft?(metadata: ChromeMetadata): void;
   onSwapRight?(metadata: ChromeMetadata): void;
   canSwap?(metadata: ChromeMetadata, direction: 'left' | 'right'): boolean;
@@ -579,10 +578,6 @@ export class CubeChromeOverlay {
       {
         title: 'Save cube implementation',
         callback: () => this.actions.onSaveImplementation?.(metadata),
-      },
-      {
-        title: 'Save current values as cube defaults',
-        callback: () => this.actions.onSaveCubeDefaults?.(metadata),
       },
     ];
   }

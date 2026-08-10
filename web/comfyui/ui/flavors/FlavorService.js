@@ -521,12 +521,6 @@ export class FlavorService {
         this.applyFlavorValues(graph, currentMetadata, nextFlavor);
         this.dirtyManager?.requestRefresh?.({ graph, reason: 'flavor-select' });
     }
-    async saveCurrentFaceValuesAsDefault(metadata) {
-        return this.saveAuthoredFlavor(metadata, { flavorId: 'default', flavorName: 'Default' });
-    }
-    async saveCurrentFaceValuesAsCubeDefaults(metadata) {
-        return this.saveCurrentFaceValuesAsDefault(metadata);
-    }
     async saveCurrentFaceValuesAsAuthoredFlavor(metadata) {
         const flavorName = (await this.dialogs?.promptText?.({
             title: 'Save Authored Flavor',

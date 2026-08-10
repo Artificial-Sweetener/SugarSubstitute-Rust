@@ -60,6 +60,7 @@ import type { SavedCubeResult, SaveReconciliationResult } from './CubeSaveReconc
 import type { UnknownRecord } from '../types/common.js';
 import type { Vec2 } from '../types/common.js';
 import type { VersionSuggestion } from '../dialogs/VersionDialog.js';
+import type { CubeDefaultReviewService } from './CubeDefaultReviewService.js';
 import type { ComfyApplication, ComfyGraph, ComfyGroup, GraphId } from '../types/graph.js';
 
 const STALE_SAVE_MODE_LATEST = 'latest';
@@ -205,6 +206,10 @@ interface CubeNodeSavePort {
   updateIdentities(instanceIds: readonly string[], updates: CubeNodeIdentityUpdates): number;
 }
 
+interface SaveCatalogInvalidator {
+  invalidate(): Promise<void>;
+}
+
 interface CubeSaveDependencies {
   adapter: SaveAdapter;
   api: SaveApi;
@@ -216,6 +221,8 @@ interface CubeSaveDependencies {
   dialogs?: SaveDialogs | null;
   saveReconciler?: SaveReconciler | null;
   cubeNodeSave?: CubeNodeSavePort | null;
+  defaultReview?: CubeDefaultReviewService | null;
+  catalogInvalidator?: SaveCatalogInvalidator | null;
 }
 
 interface AssignedCubeId {
@@ -237,6 +244,8 @@ export class CubeSaveService {
   private readonly dialogs: SaveDialogs | null;
   private readonly saveReconciler: SaveReconciler | null;
   private readonly cubeNodeSave: CubeNodeSavePort | null;
+  private readonly defaultReview: CubeDefaultReviewService | null;
+  private readonly catalogInvalidator: SaveCatalogInvalidator | null;
 
   constructor({
     adapter,
@@ -249,6 +258,8 @@ export class CubeSaveService {
     dialogs,
     saveReconciler,
     cubeNodeSave,
+    defaultReview,
+    catalogInvalidator,
   }: CubeSaveDependencies) {
     this.adapter = adapter;
     this.api = api;
@@ -260,6 +271,8 @@ export class CubeSaveService {
     this.dialogs = dialogs ?? null;
     this.saveReconciler = saveReconciler ?? null;
     this.cubeNodeSave = cubeNodeSave ?? null;
+    this.defaultReview = defaultReview ?? null;
+    this.catalogInvalidator = catalogInvalidator ?? null;
   }
 
   /** Save requested Cubes and report whether their persisted identities were finalized. */
@@ -468,9 +481,18 @@ export class CubeSaveService {
         workflow_version: enrichedWorkflowPayload?.version ?? null,
       };
 
-      const { response, data } = await this.api.saveImplementation(JSON.stringify(requestBody), {
-        headers: { 'Content-Type': 'application/json' },
-      });
+      const reviewedRequest = this.defaultReview
+        ? await this.defaultReview.review(requestBody)
+        : requestBody;
+      if (reviewedRequest === null) {
+        return { status: 'cancelled', savedCubeIds: [] };
+      }
+      const { response, data } = await this.api.saveImplementation(
+        JSON.stringify(reviewedRequest),
+        {
+          headers: { 'Content-Type': 'application/json' },
+        },
+      );
       const errorPayload = isRecord(data.error) ? data.error : null;
       if (!response.ok || errorPayload) {
         const message =
@@ -488,8 +510,6 @@ export class CubeSaveService {
         ? saved.map((entry) => formatSaveSummaryEntry(toSaveSummaryEntry(entry))).join('\n')
         : 'No cubes were saved';
       this.pushToastMessage('success', 'SugarCubes exported', summary);
-      void this.cubeBrowser?.refresh?.({ force: true }).catch((_error: unknown) => {});
-
       const warnings = Array.isArray(data.warnings)
         ? data.warnings.filter(Boolean).map(String)
         : [];
@@ -526,6 +546,7 @@ export class CubeSaveService {
         cubeNodeInstanceIdsByCubeId: this.buildCubeNodeSaveReconciliationTargets(savePlan),
         reason: 'save',
       });
+      await this.catalogInvalidator?.invalidate();
       return { status: 'saved', savedCubeIds: savedIds };
     } catch (error: unknown) {
       const exportError =

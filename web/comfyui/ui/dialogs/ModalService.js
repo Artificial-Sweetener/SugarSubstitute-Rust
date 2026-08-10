@@ -22,6 +22,7 @@ import { InputModal } from './InputModal.js';
 import { SelectionModal } from './SelectionModal.js';
 import { CubeAuthoringModal } from './CubeAuthoringModal.js';
 import { HistoricalVersionSaveModal } from './HistoricalVersionSaveModal.js';
+import { CubeDefaultChangesModal } from './CubeDefaultChangesModal.js';
 /**
  * Coordinate reusable dialog entry points for SugarCubes.
  */
@@ -32,6 +33,7 @@ export class ModalService {
     selectionModal;
     cubeAuthoringModal;
     historicalVersionSaveModal;
+    cubeDefaultChangesModal;
     constructor({ adapter } = {}) {
         const resolvedAdapter = adapter ?? null;
         this.confirmDialog = new ConfirmDialog({ adapter: resolvedAdapter });
@@ -40,6 +42,7 @@ export class ModalService {
         this.selectionModal = new SelectionModal({ adapter: resolvedAdapter });
         this.cubeAuthoringModal = new CubeAuthoringModal({ adapter: resolvedAdapter });
         this.historicalVersionSaveModal = new HistoricalVersionSaveModal({ adapter: resolvedAdapter });
+        this.cubeDefaultChangesModal = new CubeDefaultChangesModal({ adapter: resolvedAdapter });
     }
     confirm(options = {}) {
         return this.confirmDialog.open(options);
@@ -68,5 +71,9 @@ export class ModalService {
     }
     chooseHistoricalVersionSaveAction(options = {}) {
         return this.historicalVersionSaveModal.open(options);
+    }
+    /** Review aggregate choices that may replace authored cube defaults. */
+    reviewImplementationDefaults(reviews) {
+        return this.cubeDefaultChangesModal.open(reviews);
     }
 }

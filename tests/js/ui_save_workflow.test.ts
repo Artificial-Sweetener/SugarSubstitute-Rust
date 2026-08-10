@@ -30,6 +30,8 @@ const PERSONAL_DEMO_FORK_ID = 'local/personal/Any/Demo (Fork).cube';
 const HISTORICAL_REVISION_REF = 'abc123456789';
 const CURRENT_REVISION_REF = 'WORKTREE';
 let loadedUi: SugarCubesUI | null = null;
+let pickerCatalogRequests = 0;
+let browserCatalogRequests = 0;
 
 function getLoadedUi(): SugarCubesUI {
   if (!loadedUi) throw new Error('SugarCubes UI module is not loaded');
@@ -151,6 +153,43 @@ function setupBaseApp() {
 }
 
 async function loadUi() {
+  const configuredFetch = api.fetchApi;
+  api.fetchApi = async (url, options = {}) => {
+    if (url === '/sugarcubes/picker_catalog') {
+      pickerCatalogRequests += 1;
+      return {
+        ok: true,
+        json: async () => ({
+          schemaVersion: 1,
+          catalogRevision: 'test-catalog',
+          entries: [],
+          errors: [],
+        }),
+      };
+    }
+    if (url === '/sugarcubes/list') browserCatalogRequests += 1;
+    if (url === '/sugarcubes/save_implementation/preview') {
+      const payload = parseSavePayload(options.body);
+      return {
+        ok: true,
+        json: async () => ({
+          reviews: payload.cubes.map((cube) => ({
+            cube_id: cube.cube_id,
+            display_name: String(cube.cube_id ?? 'Cube')
+              .split('/')
+              .at(-1)
+              ?.replace(/\.cube$/u, ''),
+            fingerprint: `test-${String(cube.cube_id)}`,
+            requires_default_decision: false,
+            overwrite_default_count: 0,
+            prompt_default_count: 0,
+            changes: [],
+          })),
+        }),
+      };
+    }
+    return configuredFetch(url, options);
+  };
   const loaded: { value?: typeof import('../../frontend/comfyui/ui.js') } = {};
   await jest.isolateModulesAsync(async () => {
     loaded.value = await import('../../frontend/comfyui/ui.js');
@@ -259,6 +298,8 @@ function makeFinalizedDefinition(cubeId: string, version: string): UnknownRecord
 beforeEach(() => {
   jest.resetModules();
   loadedUi = null;
+  pickerCatalogRequests = 0;
+  browserCatalogRequests = 0;
   jest.restoreAllMocks();
   setupBaseApp();
   localStorage.clear();
@@ -326,7 +367,21 @@ describe('save workflow payload', () => {
     api.fetchApi = async (url, options = {}) => {
       if (url === '/sugarcubes/save_implementation') {
         saveBody = parseSavePayload(options.body);
-        return { ok: true, json: async () => ({ saved: [] }) };
+        return {
+          ok: true,
+          json: async () => ({
+            saved: [
+              {
+                cube_id: CANONICAL_DEMO_ID,
+                default_alias: 'Demo',
+                path: 'demo.cube',
+                forked: false,
+                version: '1.0.1',
+                definition: makeFinalizedDefinition(CANONICAL_DEMO_ID, '1.0.1'),
+              },
+            ],
+          }),
+        };
       }
       return { ok: true, json: async () => ({ cubes: [] }) };
     };
@@ -335,8 +390,39 @@ describe('save workflow payload', () => {
     await setupRegisteredExtension();
 
     const ui = getLoadedUi();
+    const inputMarker = makeMarker({
+      id: 101,
+      type: 'SugarCubes.CubeInput',
+      cubeId: CANONICAL_DEMO_ID,
+      defaultAlias: 'Demo',
+      version: '1.0.0',
+      revisionRef: CURRENT_REVISION_REF,
+    });
+    const outputMarker = makeMarker({
+      id: 102,
+      type: 'SugarCubes.CubeOutput',
+      cubeId: CANONICAL_DEMO_ID,
+      defaultAlias: 'Demo',
+      version: '1.0.0',
+      revisionRef: CURRENT_REVISION_REF,
+    });
+    const graph = app.graph;
+    if (!graph) throw new Error('Test graph is unavailable');
+    graph._nodes = [inputMarker, outputMarker];
+    graph._groups = [
+      makeCubeGroup({
+        cubeId: CANONICAL_DEMO_ID,
+        defaultAlias: 'Demo',
+        version: '1.0.0',
+        revisionRef: CURRENT_REVISION_REF,
+        markerIds: [101, 102],
+        instanceId: 'workflow-payload-instance',
+      }),
+    ];
     ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
     ui.cubeBrowser.getCubes = () => [];
+    const pickerRequestsBeforeSave = pickerCatalogRequests;
+    const browserRequestsBeforeSave = browserCatalogRequests;
 
     await ui.cubeSave.save();
     await flushPromises();
@@ -344,6 +430,8 @@ describe('save workflow payload', () => {
     expect(saveBody).not.toBeNull();
     expect(Array.isArray(requireSavedWorkflow(saveBody).nodes)).toBe(true);
     expect(requireSavePayload(saveBody).workflow_version).toBe(1);
+    expect(pickerCatalogRequests).toBeGreaterThan(pickerRequestsBeforeSave);
+    expect(browserCatalogRequests).toBeGreaterThan(browserRequestsBeforeSave);
   });
 
   test('save includes target metadata from browser catalog entries', async () => {

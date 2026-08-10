@@ -182,6 +182,14 @@ export class CubeLibraryApi {
             ...options,
         });
     }
+    /** Preview implementation-default changes without mutating cube artifacts. */
+    async previewImplementation(payload, options = {}) {
+        return this.fetchJson('/sugarcubes/save_implementation/preview', {
+            method: 'POST',
+            body: payload,
+            ...options,
+        });
+    }
     async saveAuthoredFlavor(payload, options = {}) {
         return this.fetchJson('/sugarcubes/save_authored_flavor', {
             method: 'POST',

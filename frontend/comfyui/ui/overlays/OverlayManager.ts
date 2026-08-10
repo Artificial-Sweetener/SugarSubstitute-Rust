@@ -63,10 +63,6 @@ interface DraftSaveService {
   saveDraft?(instanceId: string, graphSummary?: CubeFaceGraphSummary): unknown;
 }
 
-interface FlavorService {
-  saveCurrentFaceValuesAsCubeDefaults?: unknown;
-}
-
 interface ToastService {
   push?(severity: string, summary: string, detail: string): void;
 }
@@ -103,7 +99,6 @@ export interface OverlayManagerOptions {
   cubeBrowser?: (PlacementOptions['cubeBrowser'] & CubeCatalog) | null;
   saveService?: SaveService | null;
   saveDraft?: DraftSaveService['saveDraft'];
-  flavorService?: FlavorService | null;
   toast?: (PlacementOptions['toast'] & ToastService) | null;
   applyPreparedImport?: PlacementOptions['applyPreparedImport'];
   reportImportOutcome?: PlacementOptions['reportImportOutcome'];
@@ -245,7 +240,6 @@ export class OverlayManager {
     cubeBrowser = null,
     saveService = null,
     saveDraft,
-    flavorService = null,
     toast = null,
     applyPreparedImport,
     reportImportOutcome,
@@ -283,7 +277,6 @@ export class OverlayManager {
     });
     this.layoutService = layoutService || null;
     const saveImplementation = saveService?.saveImplementation?.bind(saveService);
-    const saveCubeDefaults = flavorService?.saveCurrentFaceValuesAsCubeDefaults;
     const chromeActions = {
       ...(saveImplementation
         ? {
@@ -311,21 +304,6 @@ export class OverlayManager {
               if (metadata.kind === 'draft' && instanceId) {
                 void saveDraft(instanceId, metadata.graphSummary);
               }
-            },
-          }
-        : {}),
-      ...(typeof saveCubeDefaults === 'function'
-        ? {
-            onSaveCubeDefaults: (metadata: ChromeMetadata) => {
-              if (isHistoricalCubeMetadata(metadata)) {
-                toast?.push?.(
-                  'warn',
-                  'Historical version',
-                  'Spawned historical versions cannot overwrite cube defaults.',
-                );
-                return null;
-              }
-              return Reflect.apply(saveCubeDefaults, flavorService, [metadata]);
             },
           }
         : {}),

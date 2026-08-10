@@ -58,7 +58,7 @@ export class OverlayManager {
     reconcileScheduled;
     expandContainmentRevisionByNodeId;
     groupDragState;
-    constructor({ adapter = null, events = null, scheduler = null, storage = null, cubeApi = null, cubeBrowser = null, saveService = null, saveDraft, flavorService = null, toast = null, applyPreparedImport, reportImportOutcome, buildShiftedPlacementPayload, requestDirtyRefresh = null, layoutService = null, containmentService = null, collisionService = null, boundsReconciler = null, } = {}) {
+    constructor({ adapter = null, events = null, scheduler = null, storage = null, cubeApi = null, cubeBrowser = null, saveService = null, saveDraft, toast = null, applyPreparedImport, reportImportOutcome, buildShiftedPlacementPayload, requestDirtyRefresh = null, layoutService = null, containmentService = null, collisionService = null, boundsReconciler = null, } = {}) {
         this.adapter = adapter;
         this.events = events;
         this.scheduler = scheduler;
@@ -83,7 +83,6 @@ export class OverlayManager {
         });
         this.layoutService = layoutService || null;
         const saveImplementation = saveService?.saveImplementation?.bind(saveService);
-        const saveCubeDefaults = flavorService?.saveCurrentFaceValuesAsCubeDefaults;
         const chromeActions = {
             ...(saveImplementation
                 ? {
@@ -106,17 +105,6 @@ export class OverlayManager {
                         if (metadata.kind === 'draft' && instanceId) {
                             void saveDraft(instanceId, metadata.graphSummary);
                         }
-                    },
-                }
-                : {}),
-            ...(typeof saveCubeDefaults === 'function'
-                ? {
-                    onSaveCubeDefaults: (metadata) => {
-                        if (isHistoricalCubeMetadata(metadata)) {
-                            toast?.push?.('warn', 'Historical version', 'Spawned historical versions cannot overwrite cube defaults.');
-                            return null;
-                        }
-                        return Reflect.apply(saveCubeDefaults, flavorService, [metadata]);
                     },
                 }
                 : {}),

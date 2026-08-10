@@ -34,6 +34,7 @@ import { InstanceManager } from './graph/InstanceManager.js';
 import { DirtyManager } from './graph/DirtyManager.js';
 import { CubeSaveService } from './save/CubeSaveService.js';
 import { CubeSavePreflightService } from './save/CubeSavePreflightService.js';
+import { CubeDefaultReviewService } from './save/CubeDefaultReviewService.js';
 import { CubeEditorSaveService } from './save/CubeEditorSaveService.js';
 import { CubeLayoutService } from './layout/CubeLayoutService.js';
 import { CubeContainmentService } from './layout/CubeContainmentService.js';
@@ -69,6 +70,7 @@ interface SugarCubesUIOptions extends UnknownRecord {
   getCubeAuthoring?: () => CubeCreationAuthoring;
   getCubeNodeCatalog?: () => CubeNodeCatalog | null;
   validateCubePersistence?: () => void;
+  invalidateCubeCatalogs?: () => Promise<void>;
 }
 
 type InstanceRefreshOptions = Parameters<InstanceManager['scheduleRefresh']>[0];
@@ -167,8 +169,8 @@ export class SugarCubesUI {
     this.saveReconciler = new CubeSaveReconciler({
       definitionStore: this.definitionStore,
       instanceManager: this.instanceManager,
-      flavorService: this.flavorService,
       dirtyManager: this.dirtyManager,
+      flavorService: this.flavorService,
       cubeNodeSave,
     });
 
@@ -205,6 +207,14 @@ export class SugarCubesUI {
       dialogs: this.dialogs,
       saveReconciler: this.saveReconciler,
       cubeNodeSave,
+      defaultReview: new CubeDefaultReviewService({ api: this.api, dialogs: this.dialogs }),
+      catalogInvalidator: {
+        invalidate:
+          options.invalidateCubeCatalogs ??
+          (async () => {
+            await this.cubeBrowser.refresh({ force: true });
+          }),
+      },
     });
     this.cubeSave = new CubeSavePreflightService({
       workflow: cubeSaveWorkflow,
@@ -266,7 +276,6 @@ export class SugarCubesUI {
       saveService: this.cubeSave,
       saveDraft: (instanceId, graphSummary) =>
         this.cubeCreation.saveDraft(instanceId, graphSummary ?? {}),
-      flavorService: this.flavorService,
       toast: this.toast,
       ...(options.applyPreparedImport ? { applyPreparedImport: options.applyPreparedImport } : {}),
       ...(options.reportImportOutcome ? { reportImportOutcome: options.reportImportOutcome } : {}),

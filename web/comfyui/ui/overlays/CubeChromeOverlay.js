@@ -371,10 +371,6 @@ export class CubeChromeOverlay {
                 title: 'Save cube implementation',
                 callback: () => this.actions.onSaveImplementation?.(metadata),
             },
-            {
-                title: 'Save current values as cube defaults',
-                callback: () => this.actions.onSaveCubeDefaults?.(metadata),
-            },
         ];
     }
     setup() {

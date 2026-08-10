@@ -272,6 +272,18 @@ export class CubeLibraryApi {
     });
   }
 
+  /** Preview implementation-default changes without mutating cube artifacts. */
+  async previewImplementation(
+    payload: BodyInit | null,
+    options: RequestInit = {},
+  ): Promise<ApiJsonResult> {
+    return this.fetchJson('/sugarcubes/save_implementation/preview', {
+      method: 'POST',
+      body: payload,
+      ...options,
+    });
+  }
+
   async saveAuthoredFlavor(
     payload: BodyInit | null,
     options: RequestInit = {},

@@ -226,6 +226,140 @@ describe('dialogs', () => {
     await expect(promise).resolves.toBe('fork');
   });
 
+  test('default review presents only aggregate choices and hides repository identity', async () => {
+    const dialogs = new ModalService({ adapter });
+    const promise = dialogs.reviewImplementationDefaults([
+      {
+        cubeId: 'local/me/prompt.cube',
+        displayName: 'Prompt <img src=x onerror=1>',
+        fingerprint: 'fingerprint',
+        requiresDefaultDecision: true,
+        overwriteDefaultCount: 1,
+        promptDefaultCount: 1,
+        changes: [
+          {
+            section: 'Defaults',
+            label: 'Prompt',
+            path: 'flavors.authored.default.values.prompt.text',
+            previousValue: '',
+            proposedValue: 'authored prompt',
+            previousExists: true,
+            proposedExists: true,
+            decision: 'save_prompt_fields',
+          },
+          {
+            section: 'Defaults',
+            label: 'Width',
+            path: 'flavors.authored.default.values.size.width',
+            previousValue: 960,
+            proposedValue: 1080,
+            previousExists: true,
+            proposedExists: true,
+            decision: 'overwrite_defaults',
+          },
+        ],
+      },
+    ]);
+
+    const dialog = requiredElement('.sugarcubes-default-review-dialog');
+    const checkboxes = dialog.querySelectorAll<HTMLInputElement>('input[type="checkbox"]');
+    if (checkboxes.length !== 2) throw new Error('Missing aggregate default choices');
+    const [overwriteDefaults, savePromptFields] = checkboxes;
+    if (!overwriteDefaults || !savePromptFields) throw new Error('Missing aggregate choices');
+    expect(overwriteDefaults.checked).toBe(false);
+    expect(savePromptFields.checked).toBe(false);
+    expect(dialog.textContent).toContain('Overwrite current defaults');
+    expect(dialog.textContent).toContain('Save prompt fields as cube defaults');
+    expect(dialog.textContent).not.toContain('local/me/prompt.cube');
+    const details = requiredElement('.sugarcubes-default-review__details') as HTMLElement;
+    expect(details.hidden).toBe(true);
+    expect(details.textContent).toContain('Width');
+    expect(details.textContent).toContain('960');
+    expect(dialog.querySelector('img')).toBeNull();
+
+    overwriteDefaults.click();
+    savePromptFields.click();
+    requiredElement('.sugarcubes-default-review-dialog button:last-child').click();
+
+    await expect(promise).resolves.toEqual({
+      'local/me/prompt.cube': {
+        overwriteDefaults: true,
+        savePromptFields: true,
+      },
+    });
+  });
+
+  test('More info reveals the complete read-only implementation diff', async () => {
+    const dialogs = new ModalService({ adapter });
+    const promise = dialogs.reviewImplementationDefaults([
+      {
+        cubeId: 'local/me/prompt.cube',
+        displayName: 'Prompt by Region',
+        fingerprint: 'fingerprint',
+        requiresDefaultDecision: true,
+        overwriteDefaultCount: 1,
+        promptDefaultCount: 1,
+        changes: [
+          {
+            section: 'Defaults',
+            label: 'Prompt',
+            path: 'flavors.authored.default.values.prompt.text',
+            previousValue: '',
+            proposedValue: '<img src=x onerror=1>',
+            previousExists: true,
+            proposedExists: true,
+            decision: 'save_prompt_fields',
+          },
+          {
+            section: 'Defaults',
+            label: 'Width',
+            path: 'flavors.authored.default.values.size.width',
+            previousValue: 960,
+            proposedValue: 1080,
+            previousExists: true,
+            proposedExists: true,
+            decision: 'overwrite_defaults',
+          },
+          {
+            section: 'Nodes',
+            label: 'Regional latent',
+            path: 'implementation.nodes.regional_latent',
+            previousValue: null,
+            proposedValue: { class_type: 'EmptyLatentImage' },
+            previousExists: false,
+            proposedExists: true,
+            decision: 'always',
+          },
+        ],
+      },
+    ]);
+
+    const dialog = requiredElement('.sugarcubes-default-review-dialog');
+    const details = requiredElement('.sugarcubes-default-review__details') as HTMLElement;
+    expect(details.hidden).toBe(true);
+    const moreInfo = Array.from(dialog.querySelectorAll('button')).find(
+      (button) => button.textContent === 'More info',
+    );
+    if (!moreInfo) throw new Error('Missing More info action');
+    moreInfo.click();
+
+    expect(details.hidden).toBe(false);
+    expect(details.textContent).toContain('Width');
+    expect(details.textContent).toContain('960 → 1080');
+    expect(details.textContent).toContain('Regional latent');
+    expect(details.textContent).toContain('<img src=x onerror=1>');
+    expect(dialog.querySelector('img')).toBeNull();
+    expect(dialog.querySelectorAll('input[type="checkbox"]')).toHaveLength(2);
+
+    requiredElement('.sugarcubes-default-review-dialog button:last-child').click();
+    await expect(promise).resolves.toEqual({
+      'local/me/prompt.cube': {
+        overwriteDefaults: false,
+        savePromptFields: false,
+      },
+    });
+  });
+
   test('version dialog persists dismissal', async () => {
     const storage = new StorageService({
       getStorage: () => localStorage,

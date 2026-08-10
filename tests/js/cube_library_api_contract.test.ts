@@ -169,6 +169,12 @@ const endpointCases: EndpointCase[] = [
     { method: 'POST', body: payload, ...requestOptions },
   ],
   [
+    'implementation default preview',
+    (api) => api.previewImplementation(payload, requestOptions),
+    '/sugarcubes/save_implementation/preview',
+    { method: 'POST', body: payload, ...requestOptions },
+  ],
+  [
     'authored flavor save',
     (api) => api.saveAuthoredFlavor(payload, requestOptions),
     '/sugarcubes/save_authored_flavor',

@@ -23,6 +23,7 @@ import { InputModal } from './InputModal.js';
 import { SelectionModal } from './SelectionModal.js';
 import { CubeAuthoringModal } from './CubeAuthoringModal.js';
 import { HistoricalVersionSaveModal } from './HistoricalVersionSaveModal.js';
+import { CubeDefaultChangesModal } from './CubeDefaultChangesModal.js';
 import type { ConfirmDialogOptions } from './ConfirmDialog.js';
 import type { FormModalOptions, FormValues } from './FormModal.js';
 import type { InputModalOptions } from './InputModal.js';
@@ -32,6 +33,7 @@ import type {
   CubeAuthoringValues,
 } from '../create/CubeAuthoringDialog.js';
 import type { HistoricalVersionSaveOptions } from './HistoricalVersionSaveModal.js';
+import type { CubeDefaultDecisions, CubeDefaultReview } from '../save/CubeDefaultReviewService.js';
 import type { ModalAdapter } from './ModalShell.js';
 
 /**
@@ -44,6 +46,7 @@ export class ModalService {
   private readonly selectionModal: SelectionModal;
   private readonly cubeAuthoringModal: CubeAuthoringModal;
   private readonly historicalVersionSaveModal: HistoricalVersionSaveModal;
+  private readonly cubeDefaultChangesModal: CubeDefaultChangesModal;
 
   constructor({ adapter }: { adapter?: ModalAdapter | null } = {}) {
     const resolvedAdapter = adapter ?? null;
@@ -53,6 +56,7 @@ export class ModalService {
     this.selectionModal = new SelectionModal({ adapter: resolvedAdapter });
     this.cubeAuthoringModal = new CubeAuthoringModal({ adapter: resolvedAdapter });
     this.historicalVersionSaveModal = new HistoricalVersionSaveModal({ adapter: resolvedAdapter });
+    this.cubeDefaultChangesModal = new CubeDefaultChangesModal({ adapter: resolvedAdapter });
   }
 
   confirm(options: ConfirmDialogOptions = {}): Promise<boolean> {
@@ -88,5 +92,12 @@ export class ModalService {
 
   chooseHistoricalVersionSaveAction(options: HistoricalVersionSaveOptions = {}): Promise<unknown> {
     return this.historicalVersionSaveModal.open(options);
+  }
+
+  /** Review aggregate choices that may replace authored cube defaults. */
+  reviewImplementationDefaults(
+    reviews: readonly CubeDefaultReview[],
+  ): Promise<CubeDefaultDecisions | null> {
+    return this.cubeDefaultChangesModal.open(reviews);
   }
 }

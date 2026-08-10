@@ -774,14 +774,6 @@ export class FlavorService {
     this.dirtyManager?.requestRefresh?.({ graph, reason: 'flavor-select' });
   }
 
-  async saveCurrentFaceValuesAsDefault(metadata: FlavorMetadata): Promise<boolean> {
-    return this.saveAuthoredFlavor(metadata, { flavorId: 'default', flavorName: 'Default' });
-  }
-
-  async saveCurrentFaceValuesAsCubeDefaults(metadata: FlavorMetadata): Promise<boolean> {
-    return this.saveCurrentFaceValuesAsDefault(metadata);
-  }
-
   async saveCurrentFaceValuesAsAuthoredFlavor(metadata: FlavorMetadata): Promise<boolean> {
     const flavorName =
       (await this.dialogs?.promptText?.({

@@ -43,7 +43,9 @@ export class CubeSaveService {
     dialogs;
     saveReconciler;
     cubeNodeSave;
-    constructor({ adapter, api, toast, instanceManager, dirtyManager, cubeBrowser, versionDialog, dialogs, saveReconciler, cubeNodeSave, }) {
+    defaultReview;
+    catalogInvalidator;
+    constructor({ adapter, api, toast, instanceManager, dirtyManager, cubeBrowser, versionDialog, dialogs, saveReconciler, cubeNodeSave, defaultReview, catalogInvalidator, }) {
         this.adapter = adapter;
         this.api = api;
         this.toast = toast ?? null;
@@ -54,6 +56,8 @@ export class CubeSaveService {
         this.dialogs = dialogs ?? null;
         this.saveReconciler = saveReconciler ?? null;
         this.cubeNodeSave = cubeNodeSave ?? null;
+        this.defaultReview = defaultReview ?? null;
+        this.catalogInvalidator = catalogInvalidator ?? null;
     }
     /** Save requested Cubes and report whether their persisted identities were finalized. */
     async save({ cubeIds = null, button = null } = {}) {
@@ -235,7 +239,13 @@ export class CubeSaveService {
                 workflow: enrichedWorkflowPayload,
                 workflow_version: enrichedWorkflowPayload?.version ?? null,
             };
-            const { response, data } = await this.api.saveImplementation(JSON.stringify(requestBody), {
+            const reviewedRequest = this.defaultReview
+                ? await this.defaultReview.review(requestBody)
+                : requestBody;
+            if (reviewedRequest === null) {
+                return { status: 'cancelled', savedCubeIds: [] };
+            }
+            const { response, data } = await this.api.saveImplementation(JSON.stringify(reviewedRequest), {
                 headers: { 'Content-Type': 'application/json' },
             });
             const errorPayload = isRecord(data.error) ? data.error : null;
@@ -253,7 +263,6 @@ export class CubeSaveService {
                 ? saved.map((entry) => formatSaveSummaryEntry(toSaveSummaryEntry(entry))).join('\n')
                 : 'No cubes were saved';
             this.pushToastMessage('success', 'SugarCubes exported', summary);
-            void this.cubeBrowser?.refresh?.({ force: true }).catch((_error) => { });
             const warnings = Array.isArray(data.warnings)
                 ? data.warnings.filter(Boolean).map(String)
                 : [];
@@ -284,6 +293,7 @@ export class CubeSaveService {
                 cubeNodeInstanceIdsByCubeId: this.buildCubeNodeSaveReconciliationTargets(savePlan),
                 reason: 'save',
             });
+            await this.catalogInvalidator?.invalidate();
             return { status: 'saved', savedCubeIds: savedIds };
         }
         catch (error) {

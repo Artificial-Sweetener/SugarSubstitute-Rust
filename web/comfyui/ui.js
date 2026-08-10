@@ -53,6 +53,7 @@ import { CubeGraphInventory } from './ui/cube/node/CubeGraphInventory.js';
 export { buildShiftedPlacementPayload };
 const EXTENSION_NAME = 'SugarCubes.UI';
 const IMPORT_STORAGE_KEY = 'SugarCubes.Import.LastCube';
+let invalidateCubeCatalogs = async () => undefined;
 /** Provide the authoritative UI service graph for this host extension instance. */
 export const sugarCubesUI = getSugarCubesUI({
     forceNew: true,
@@ -63,6 +64,7 @@ export const sugarCubesUI = getSugarCubesUI({
     getCubeAuthoring: () => requireCubeRuntime().authoring,
     getCubeNodeCatalog: () => cubeRuntimeLifecycle.current()?.nodes ?? null,
     validateCubePersistence: () => assertNoNestedCubes('save SugarCubes'),
+    invalidateCubeCatalogs: () => invalidateCubeCatalogs(),
 });
 const ui = sugarCubesUI;
 const cubeAuthoringCommands = new CubeAuthoringHostCommands({
@@ -105,6 +107,7 @@ const cubeCatalogInvalidation = new CubeCatalogInvalidationCoordinator({
     refreshBrowser: () => ui.cubeBrowser.refresh({ force: true }),
     logger,
 });
+invalidateCubeCatalogs = () => cubeCatalogInvalidation.invalidate();
 const nativeBoundaryResolver = new NativeSubgraphBoundaryResolver(logger);
 const cubeOutputExecutionStore = new CubeOutputExecutionStore();
 const cubeOutputEventBridge = new ComfyCubeOutputEventBridge({

@@ -935,14 +935,13 @@ describe('ui overlay rendering', () => {
     );
   });
 
-  test('chrome overlay builds menu options with implementation and cube defaults only', async () => {
+  test('chrome overlay routes defaults through implementation save', async () => {
     await loadUi();
     const { CubeChromeOverlay } = await import(
       '../../frontend/comfyui/ui/overlays/CubeChromeOverlay.js'
     );
     const actions = {
       onSaveImplementation: jest.fn(),
-      onSaveCubeDefaults: jest.fn(),
       onSaveAuthoredFlavor: jest.fn(),
       onSaveLocalFlavor: jest.fn(),
       onManageFlavors: jest.fn(),
@@ -961,14 +960,12 @@ describe('ui overlay rendering', () => {
     });
     const titles = options.map((entry) => entry.title);
 
-    expect(titles).toEqual(['Save cube implementation', 'Save current values as cube defaults']);
+    expect(titles).toEqual(['Save cube implementation']);
     expect(titles.some((title) => /flavor/i.test(title))).toBe(false);
 
     options[0].callback();
-    options[1].callback();
 
     expect(actions.onSaveImplementation).toHaveBeenCalledWith(metadata);
-    expect(actions.onSaveCubeDefaults).toHaveBeenCalledWith(metadata);
     expect(actions.onSaveAuthoredFlavor).not.toHaveBeenCalled();
     expect(actions.onSaveLocalFlavor).not.toHaveBeenCalled();
     expect(actions.onManageFlavors).not.toHaveBeenCalled();
@@ -982,7 +979,6 @@ describe('ui overlay rendering', () => {
     );
     const actions = {
       onSaveImplementation: jest.fn(),
-      onSaveCubeDefaults: jest.fn(),
     };
     const overlay = new CubeChromeOverlay({ actions });
     const metadata = { cube_id: 'cube-2', dirty: false };
@@ -993,10 +989,7 @@ describe('ui overlay rendering', () => {
       flavors: [],
     });
 
-    expect(options.map((entry) => entry.title)).toEqual([
-      'Save cube implementation',
-      'Save current values as cube defaults',
-    ]);
+    expect(options.map((entry) => entry.title)).toEqual(['Save cube implementation']);
   });
 
   test('chrome overlay opens LiteGraph context menu from menu pill', async () => {
@@ -1109,42 +1102,24 @@ describe('ui overlay rendering', () => {
     expect(handled).toBe(true);
   });
 
-  test('overlay manager wires only visible defaults action for cube chrome', async () => {
+  test('overlay manager exposes no separate cube-default action', async () => {
     await loadUi();
     const { OverlayManager } = await import('../../frontend/comfyui/ui/overlays/OverlayManager.js');
     const toast = { push: jest.fn() };
     const saveService = { saveImplementation: jest.fn() };
-    const flavorService = {
-      saveCurrentFaceValuesAsCubeDefaults: jest.fn(),
-      saveCurrentFaceValuesAsAuthoredFlavor: jest.fn(),
-      saveCurrentFaceValuesAsLocalFlavor: jest.fn(),
-      manageFlavors: jest.fn(),
-    };
     const manager = new OverlayManager({
       adapter: { getApp: () => ({ graph: {} }) },
       saveService,
-      flavorService,
       toast,
     });
 
-    expect(manager.getChromeDebugState().actions.onSaveCubeDefaults).toEqual(expect.any(Function));
+    expect(manager.getChromeDebugState().actions).not.toHaveProperty('onSaveCubeDefaults');
     expect(manager.getChromeDebugState().actions.onSaveAuthoredFlavor).toBeUndefined();
     expect(manager.getChromeDebugState().actions.onSaveLocalFlavor).toBeUndefined();
     expect(manager.getChromeDebugState().actions.onManageFlavors).toBeUndefined();
     expect(manager.getChromeDebugState().actions.onFlavorChange).toBeUndefined();
 
-    manager.getChromeDebugState().actions.onSaveCubeDefaults?.({
-      cube_id: 'cube-1',
-      cube_revision_ref: 'v1.0.0',
-    });
-
-    expect(flavorService.saveCurrentFaceValuesAsCubeDefaults).not.toHaveBeenCalled();
-    expect(toast.push).toHaveBeenCalledWith(
-      'warn',
-      'Historical version',
-      'Spawned historical versions cannot overwrite cube defaults.',
-    );
-    expect(toast.push.mock.calls[0].join(' ')).not.toMatch(/flavor/i);
+    expect(toast.push).not.toHaveBeenCalled();
   });
 
   test('overlay manager retains the save service receiver for Cube implementation saves', async () => {
