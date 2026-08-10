@@ -48,8 +48,18 @@ from .flavors import (
     dedupe_flavor_id,
     normalize_flavor_id,
 )
-from .flavor_merge import preserve_authored_flavors_for_implementation_save
+from .default_change_plan import (
+    DefaultChangePlan,
+    DefaultControlChange,
+    build_default_change_plan,
+)
+from .default_merge import merge_implementation_save_defaults
 from .implementation import CubeImplementation
+from .implementation_change_plan import (
+    ImplementationChange,
+    ImplementationChangePlan,
+    build_implementation_change_plan,
+)
 from .migrate import migrate_legacy_payload
 from .model_targets import (
     ANY_TARGET_MODEL,
@@ -89,6 +99,8 @@ __all__ = [
     "CubeIdentityError",
     "RESERVED_SOURCE_NAMES",
     "CubeImplementation",
+    "ImplementationChange",
+    "ImplementationChangePlan",
     "CubeSchemaError",
     "CubeSurface",
     "PickerFallback",
@@ -121,7 +133,11 @@ __all__ = [
     "normalize_target_model",
     "parse_canonical_cube_id",
     "picker_options",
-    "preserve_authored_flavors_for_implementation_save",
+    "DefaultChangePlan",
+    "DefaultControlChange",
+    "build_default_change_plan",
+    "build_implementation_change_plan",
+    "merge_implementation_save_defaults",
     "resolve_picker_fallback",
     "sanitize_authored_defaults_document",
     "sanitize_authored_defaults_payload",
