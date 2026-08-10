@@ -34,8 +34,6 @@ from ...cube_model import (
     compute_surface_signature,
     normalize_flavor_id,
     parse_canonical_cube_id,
-    preserve_authored_flavors_for_implementation_save,
-    sanitize_authored_defaults_document,
     sanitize_authored_defaults_payload,
 )
 from ...exporter import CubeValidationError, ExportedCube
@@ -45,6 +43,10 @@ from ..responses import BackendError
 from .cube_git_context import CubeGitContext, resolve_cube_git_context
 from .cube_file_io import apply_cube_version, read_cube_payload
 from .cube_library_service import CubeLibraryService
+from .cube_implementation_defaults_service import (
+    CubeImplementationDefaultsService,
+    DefaultSaveDecision,
+)
 from .cube_summary import derive_cube_display_name
 from .cube_metadata import (
     normalize_lineage_payload,
@@ -411,6 +413,7 @@ class CubeExportService:
         self.node_class_mappings_provider = node_class_mappings_provider
         self.finalized_definition_provider = finalized_definition_provider
         self.local_flavor_service = local_flavor_service
+        self.implementation_defaults = CubeImplementationDefaultsService()
 
     def _resolve_node_class_mappings(self) -> Mapping[str, Any]:
         """Resolve the current Comfy node registry for this export attempt."""
@@ -433,53 +436,11 @@ class CubeExportService:
             return {"saved": []}
 
         try:
-            default_alias_lookup = self.library_service.build_default_alias_lookup(
-                cube_entries.keys()
-            )
-            projected_graph, projected_workflow = project_native_cube_exports(
-                graph,
-                workflow,
-                cube_entries,
-            )
-            analysis = analyze_cubes(
-                projected_graph,
-                workflow=projected_workflow,
-                default_alias_lookup=default_alias_lookup,
-            )
-            subgraph_violations = collect_selected_cube_subgraph_contract_violations(
-                analysis,
-                projected_workflow,
-                cube_entries.keys(),
-            )
-            if subgraph_violations:
-                raise BackendError(
-                    "Workflow definitions.subgraphs must include executable bodies and labeled public IO for all UUID wrapper nodes.",
-                    status=400,
-                    details=subgraph_violations,
-                )
-
-            required_class_types = collect_selected_cube_required_node_class_types(
-                analysis,
-                projected_workflow,
-                cube_entries.keys(),
-            )
-            missing_class_types = collect_missing_node_class_types(
-                sorted(required_class_types),
-                self._resolve_node_class_mappings(),
-            )
-            if missing_class_types:
-                raise BackendError(
-                    "Cannot export cube(s): required node class definitions are missing from the active Comfy registry.",
-                    status=400,
-                    details={"missing_class_types": missing_class_types},
-                )
-
-            cubes = self.export_cubes(
-                projected_graph,
-                workflow=projected_workflow,
+            cubes = self._prepare_exports(
+                graph=graph,
+                workflow=workflow,
                 workflow_version=workflow_version,
-                default_alias_lookup=default_alias_lookup,
-                cube_ids=list(cube_entries.keys()),
+                cube_entries=cube_entries,
             )
             if not cubes:
                 return {"saved": []}
@@ -507,6 +468,133 @@ class CubeExportService:
                 status=500,
                 details={"reason": str(exc)},
             ) from exc
+
+    def preview_implementation(
+        self,
+        *,
+        graph: Mapping[str, Any],
+        workflow: Mapping[str, Any],
+        workflow_version: Optional[int],
+        actor: Mapping[str, str],
+        cube_entries: Mapping[str, Mapping[str, Any]],
+    ) -> dict[str, Any]:
+        """Return authoritative default-change plans without writing artifacts."""
+
+        try:
+            cubes = self._prepare_exports(
+                graph=graph,
+                workflow=workflow,
+                workflow_version=workflow_version,
+                cube_entries=cube_entries,
+            )
+            exported_lookup = {
+                cube_id: exported
+                for exported in cubes
+                if (cube_id := normalize_metadata_string(exported.cube.get("cube_id")))
+            }
+            reviews: list[dict[str, Any]] = []
+            for cube_id, entry in cube_entries.items():
+                exported = exported_lookup.get(cube_id)
+                if exported is None:
+                    raise BackendError(
+                        "Cube id missing from implementation preview",
+                        status=400,
+                        details={"cube_id": cube_id},
+                    )
+                self._apply_entry_metadata(exported, cube_id, entry, actor)
+                sanitize_authored_defaults_payload(exported.cube)
+                save_target = self._build_author_save_target(
+                    cube_id=cube_id,
+                    exported=exported,
+                    previous_cube_id=normalize_metadata_string(
+                        entry.get("previous_cube_id")
+                    ),
+                    forked=bool(entry.get("forked")),
+                    source_revision_ref=normalize_metadata_string(
+                        entry.get("source_revision_ref")
+                    ),
+                    source_version=normalize_metadata_string(entry.get("source_version")),
+                    source_definition_key=normalize_metadata_string(
+                        entry.get("source_definition_key")
+                    ),
+                    stale_save_mode=normalize_metadata_string(
+                        entry.get("stale_save_mode")
+                    ),
+                )
+                reviews.append(
+                    self.implementation_defaults.review(
+                        existing_payload=save_target.existing_payload,
+                        exported=exported,
+                        preserve_description=not bool(entry.get("description_set")),
+                    )
+                )
+            return {"reviews": reviews}
+        except CubeValidationError as exc:
+            raise BackendError(
+                exc.message,
+                status=400,
+                details=exc.details or None,
+                extra={"violations": exc.violations},
+            ) from exc
+        except ValueError as exc:
+            raise BackendError(str(exc), status=400) from exc
+
+    def _prepare_exports(
+        self,
+        *,
+        graph: Mapping[str, Any],
+        workflow: Mapping[str, Any],
+        workflow_version: Optional[int],
+        cube_entries: Mapping[str, Mapping[str, Any]],
+    ) -> list[ExportedCube]:
+        """Validate and project one immutable set of implementation candidates."""
+
+        default_alias_lookup = self.library_service.build_default_alias_lookup(
+            cube_entries.keys()
+        )
+        projected_graph, projected_workflow = project_native_cube_exports(
+            graph,
+            workflow,
+            cube_entries,
+        )
+        analysis = analyze_cubes(
+            projected_graph,
+            workflow=projected_workflow,
+            default_alias_lookup=default_alias_lookup,
+        )
+        subgraph_violations = collect_selected_cube_subgraph_contract_violations(
+            analysis,
+            projected_workflow,
+            cube_entries.keys(),
+        )
+        if subgraph_violations:
+            raise BackendError(
+                "Workflow definitions.subgraphs must include executable bodies and labeled public IO for all UUID wrapper nodes.",
+                status=400,
+                details=subgraph_violations,
+            )
+        required_class_types = collect_selected_cube_required_node_class_types(
+            analysis,
+            projected_workflow,
+            cube_entries.keys(),
+        )
+        missing_class_types = collect_missing_node_class_types(
+            sorted(required_class_types),
+            self._resolve_node_class_mappings(),
+        )
+        if missing_class_types:
+            raise BackendError(
+                "Cannot export cube(s): required node class definitions are missing from the active Comfy registry.",
+                status=400,
+                details={"missing_class_types": missing_class_types},
+            )
+        return self.export_cubes(
+            projected_graph,
+            workflow=projected_workflow,
+            workflow_version=workflow_version,
+            default_alias_lookup=default_alias_lookup,
+            cube_ids=list(cube_entries.keys()),
+        )
 
     def save_implementation(
         self,
@@ -658,41 +746,7 @@ class CubeExportService:
         for cube_id in cube_entries.keys():
             exported = exported_lookup[cube_id]
             entry = cube_entries[cube_id]
-            if entry.get("description_set"):
-                exported.cube["description"] = normalize_metadata_string(
-                    entry.get("description")
-                )
-            metadata = exported.cube.get("metadata")
-            if not isinstance(metadata, dict):
-                metadata = {}
-                exported.cube["metadata"] = metadata
-            entry_metadata = (
-                entry.get("metadata")
-                if isinstance(entry.get("metadata"), Mapping)
-                else {}
-            )
-            if entry_metadata:
-                updates, _removals = normalize_metadata_update(
-                    entry_metadata,
-                    cube_id=cube_id,
-                )
-                metadata.update(updates)
-            try:
-                metadata["default_alias"] = derive_route_from_cube_id(cube_id)
-            except CubeIdentityError:
-                pass
-            if actor:
-                if actor.get("author_url"):
-                    metadata["author_url"] = actor["author_url"]
-                else:
-                    metadata.pop("author_url", None)
-
-            if entry["forked"]:
-                lineage = normalize_lineage_payload(entry.get("lineage"))
-                if lineage:
-                    metadata["lineage"] = lineage
-                else:
-                    metadata.pop("lineage", None)
+            self._apply_entry_metadata(exported, cube_id, entry, actor)
 
             sanitize_authored_defaults_payload(exported.cube)
             save_target = self._build_author_save_target(
@@ -713,17 +767,18 @@ class CubeExportService:
             )
             author_targets.append(save_target)
             existing_payload = save_target.existing_payload
+            self.implementation_defaults.apply(
+                existing_payload=existing_payload,
+                exported=exported,
+                preserve_description=not bool(entry.get("description_set")),
+                decision=DefaultSaveDecision.from_entry(entry),
+            )
             if existing_payload is None:
                 commit_states[cube_id] = self._build_commit_state(
                     save_target=save_target,
                     previous_payload=None,
                 )
                 continue
-            self._preserve_authored_flavors_on_existing_implementation_save(
-                existing_payload=existing_payload,
-                exported=exported,
-                preserve_description=not bool(entry.get("description_set")),
-            )
             suggestion = self.suggest_version(existing_payload, exported.cube)
             current_version = normalize_metadata_string(exported.cube.get("version"))
             if save_target.stale_save_mode == "latest":
@@ -815,6 +870,48 @@ class CubeExportService:
             )
         return response
 
+    def _apply_entry_metadata(
+        self,
+        exported: ExportedCube,
+        cube_id: str,
+        entry: Mapping[str, Any],
+        actor: Mapping[str, str],
+    ) -> None:
+        """Apply one save entry's catalog metadata to an export candidate."""
+
+        if entry.get("description_set"):
+            exported.cube["description"] = normalize_metadata_string(
+                entry.get("description")
+            )
+        metadata = exported.cube.get("metadata")
+        if not isinstance(metadata, dict):
+            metadata = {}
+            exported.cube["metadata"] = metadata
+        entry_metadata = (
+            entry.get("metadata") if isinstance(entry.get("metadata"), Mapping) else {}
+        )
+        if entry_metadata:
+            updates, _removals = normalize_metadata_update(
+                entry_metadata,
+                cube_id=cube_id,
+            )
+            metadata.update(updates)
+        try:
+            metadata["default_alias"] = derive_route_from_cube_id(cube_id)
+        except CubeIdentityError:
+            pass
+        if actor:
+            if actor.get("author_url"):
+                metadata["author_url"] = actor["author_url"]
+            else:
+                metadata.pop("author_url", None)
+        if entry["forked"]:
+            lineage = normalize_lineage_payload(entry.get("lineage"))
+            if lineage:
+                metadata["lineage"] = lineage
+            else:
+                metadata.pop("lineage", None)
+
     def _build_finalized_save_response(
         self, finalized: FinalizedCubeSave
     ) -> dict[str, Any]:
@@ -835,70 +932,6 @@ class CubeExportService:
             "version": normalize_metadata_string(finalized.document.version),
             "definition": deepcopy(dict(finalized.definition)),
         }
-
-    def _preserve_authored_flavors_on_existing_implementation_save(
-        self,
-        *,
-        existing_payload: Mapping[str, Any],
-        exported: ExportedCube,
-        preserve_description: bool = True,
-    ) -> None:
-        """Keep catalog metadata and authored presets while replacing implementation data."""
-
-        try:
-            existing_document = CubeDocument.from_dict(existing_payload)
-            exported_document = CubeDocument.from_dict(exported.cube)
-            exported_document = self._preserve_catalog_metadata_on_implementation_save(
-                existing_document=existing_document,
-                exported_document=exported_document,
-                exported_default_alias=exported.default_alias,
-                preserve_description=preserve_description,
-            )
-            merged_document = preserve_authored_flavors_for_implementation_save(
-                existing_document,
-                exported_document,
-            )
-            merged_document = sanitize_authored_defaults_document(merged_document)
-        except CubeSchemaError as exc:
-            raise BackendError(str(exc), status=400) from exc
-
-        exported.cube.clear()
-        exported.cube.update(merged_document.to_dict())
-
-    def _preserve_catalog_metadata_on_implementation_save(
-        self,
-        *,
-        existing_document: CubeDocument,
-        exported_document: CubeDocument,
-        exported_default_alias: str,
-        preserve_description: bool,
-    ) -> CubeDocument:
-        """Preserve existing catalog fields that the implementation export omitted."""
-
-        payload = exported_document.to_dict()
-        existing_description = normalize_metadata_string(existing_document.description)
-        exported_description = normalize_metadata_string(exported_document.description)
-        if (
-            preserve_description
-            and existing_description
-            and exported_description.startswith("Auto-converted cube for ")
-        ):
-            payload["description"] = existing_description
-
-        metadata = {
-            **existing_document.metadata,
-            **exported_document.metadata,
-        }
-        default_alias = normalize_metadata_string(metadata.get("default_alias"))
-        normalized_exported_default_alias = normalize_metadata_string(
-            exported_default_alias
-        )
-        if not default_alias and normalized_exported_default_alias:
-            metadata["default_alias"] = normalized_exported_default_alias
-        metadata.pop("author", None)
-        if metadata:
-            payload["metadata"] = metadata
-        return CubeDocument.from_dict(payload)
 
     def _build_author_save_target(
         self,

@@ -270,8 +270,30 @@ def parse_save_many_cube_entries(value: Any) -> dict[str, dict[str, Any]]:
             "definition_id": definition_id,
             "instance_node_ids": instance_node_ids,
             "instance_container_ids": instance_container_ids,
+            "default_review": _normalize_default_review(entry.get("default_review")),
         }
     return entries
+
+
+def _normalize_default_review(value: Any) -> dict[str, Any] | None:
+    """Validate one optional aggregate implementation-default decision."""
+
+    if value is None:
+        return None
+    if not isinstance(value, Mapping):
+        raise BackendError("'default_review' must be an object", status=400)
+    fingerprint = normalize_metadata_string(value.get("fingerprint"))
+    overwrite_defaults = value.get("overwrite_defaults", False)
+    save_prompt_fields = value.get("save_prompt_fields", False)
+    if not isinstance(overwrite_defaults, bool):
+        raise BackendError("'overwrite_defaults' must be a boolean", status=400)
+    if not isinstance(save_prompt_fields, bool):
+        raise BackendError("'save_prompt_fields' must be a boolean", status=400)
+    return {
+        "fingerprint": fingerprint,
+        "overwrite_defaults": overwrite_defaults,
+        "save_prompt_fields": save_prompt_fields,
+    }
 
 
 def _normalize_string_sequence(value: Any, *, field_name: str) -> list[str]:

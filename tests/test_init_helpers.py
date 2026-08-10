@@ -274,6 +274,39 @@ def test_parse_save_many_cube_entries_accepts_non_node_container_ids() -> None:
     assert entries[cube_id]["instance_node_ids"] == []
 
 
+def test_parse_save_many_cube_entries_validates_aggregate_default_choices() -> None:
+    """Keep per-control selections out of the public implementation-save contract."""
+
+    cube_id = "local/personal/Detailer.cube"
+    entries = parse_save_many_cube_entries(
+        [
+            {
+                "cube_id": cube_id,
+                "default_review": {
+                    "fingerprint": "stable",
+                    "overwrite_defaults": True,
+                    "save_prompt_fields": False,
+                },
+            }
+        ]
+    )
+
+    assert entries[cube_id]["default_review"] == {
+        "fingerprint": "stable",
+        "overwrite_defaults": True,
+        "save_prompt_fields": False,
+    }
+    with pytest.raises(BackendError, match="overwrite_defaults.*boolean"):
+        parse_save_many_cube_entries(
+            [
+                {
+                    "cube_id": cube_id,
+                    "default_review": {"overwrite_defaults": ["size.width"]},
+                }
+            ]
+        )
+
+
 def test_normalize_workflow_payload_requires_value() -> None:
     with pytest.raises(Exception):
         normalize_workflow_payload(None)

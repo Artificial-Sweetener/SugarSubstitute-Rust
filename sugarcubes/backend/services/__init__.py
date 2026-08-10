@@ -22,6 +22,7 @@ from .cube_catalog_state_service import CubeCatalogStateService
 from .cube_library_service import CubeLibraryService
 from .cube_history_service import CubeHistoryService
 from .cube_identity_redirect_service import CubeIdentityRedirectService
+from .cube_implementation_defaults_service import CubeImplementationDefaultsService
 from .identity_policy_service import IdentityPolicyService
 from .local_flavor_service import LocalFlavorService
 from .cube_load_service import CubeLoadService
@@ -45,6 +46,7 @@ __all__ = [
     "CubeLibraryService",
     "CubeHistoryService",
     "CubeIdentityRedirectService",
+    "CubeImplementationDefaultsService",
     "IdentityPolicyService",
     "LocalFlavorService",
     "CubeLoadService",

@@ -25,6 +25,7 @@ from aiohttp import web
 
 from ..importer import CubeImportError
 from .composition import BackendServices
+from .implementation_save_routes import build_implementation_save_route_handlers
 from .responses import (
     BackendError,
     json_error,
@@ -78,6 +79,7 @@ class RouteHandlers:
     delete_cube: RouteHandler
     import_cube_file: RouteHandler
     save_many: RouteHandler
+    preview_implementation: RouteHandler
     save_implementation: RouteHandler
     save_authored_flavor: RouteHandler
     get_local_flavors: RouteHandler
@@ -93,6 +95,8 @@ class RouteHandlers:
 
 def build_route_handlers(services: BackendServices) -> RouteHandlers:
     """Build thin HTTP handlers over the backend services."""
+
+    implementation_save = build_implementation_save_route_handlers(services)
 
     async def list_cubes(request: Any) -> Any:
         _ = request
@@ -535,31 +539,6 @@ def build_route_handlers(services: BackendServices) -> RouteHandlers:
         except BackendError as error:
             return json_error_from_exception(error)
 
-    async def save_implementation(request: Any) -> Any:
-        try:
-            body = await parse_json_body(request)
-            graph_payload = body.get("graph")
-            if graph_payload is None:
-                raise BackendError("'graph' field is required", status=400)
-            workflow_raw = body.get("workflow")
-            if workflow_raw is None:
-                raise BackendError("'workflow' field is required", status=400)
-            actor = normalize_actor(body.get("actor"))
-            return json_success(
-                services.exporter.save_implementation(
-                    graph=normalize_graph_payload(graph_payload),
-                    workflow=normalize_workflow_payload(workflow_raw),
-                    workflow_version=coerce_int(
-                        body.get("workflow_version"), default=None
-                    ),
-                    actor=actor or {},
-                    cube_entries=parse_save_many_cube_entries(body.get("cubes")),
-                ),
-                status=200,
-            )
-        except BackendError as error:
-            return json_error_from_exception(error)
-
     async def save_authored_flavor(request: Any) -> Any:
         try:
             body = await parse_json_body(request)
@@ -733,7 +712,8 @@ def build_route_handlers(services: BackendServices) -> RouteHandlers:
         delete_cube=delete_cube,
         import_cube_file=import_cube_file,
         save_many=save_many,
-        save_implementation=save_implementation,
+        preview_implementation=implementation_save.preview,
+        save_implementation=implementation_save.save,
         save_authored_flavor=save_authored_flavor,
         get_local_flavors=get_local_flavors,
         save_local_flavor=save_local_flavor,
@@ -777,6 +757,9 @@ def register_routes(prompt_server: Any, services: BackendServices) -> RouteHandl
     routes.delete("/sugarcubes")(handlers.delete_cube)
     routes.post("/sugarcubes/import_file")(handlers.import_cube_file)
     routes.post("/sugarcubes/save_many")(handlers.save_many)
+    routes.post("/sugarcubes/save_implementation/preview")(
+        handlers.preview_implementation
+    )
     routes.post("/sugarcubes/save_implementation")(handlers.save_implementation)
     routes.post("/sugarcubes/save_authored_flavor")(handlers.save_authored_flavor)
     routes.get("/sugarcubes/local_flavors")(handlers.get_local_flavors)
