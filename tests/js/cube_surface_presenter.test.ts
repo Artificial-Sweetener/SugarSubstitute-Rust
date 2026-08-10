@@ -338,6 +338,8 @@ describe('CubeSurfacePresenter', () => {
     const nodes = new CubeNodeCatalog();
     nodes.add(node);
     const onSwapLeft = jest.fn();
+    const onSwapRight = jest.fn();
+    let allowedDirection: 'left' | 'right' = 'left';
     const rootGraph = {};
     const activePresenter = new CubeSurfacePresenter({
       document,
@@ -353,7 +355,8 @@ describe('CubeSurfacePresenter', () => {
       requestSlotLayoutSync: () => undefined,
       chromeActions: {
         onSwapLeft,
-        canSwap: (_metadata, direction) => direction === 'left',
+        onSwapRight,
+        canSwap: (_metadata, direction) => direction === allowedDirection,
       },
     });
     await flushMount();
@@ -372,6 +375,17 @@ describe('CubeSurfacePresenter', () => {
     });
     expect(document.querySelector('[data-cube-action="cube-menu"]')).toBeNull();
     expect(document.querySelector('[data-cube-action="card-menu"]')).toBeNull();
+
+    allowedDirection = 'right';
+    nodes.changed(node);
+    await flushMount();
+
+    const swapLeft = document.querySelector<HTMLButtonElement>('[data-cube-action="swap-left"]');
+    const swapRight = document.querySelector<HTMLButtonElement>('[data-cube-action="swap-right"]');
+    expect(swapLeft?.hidden).toBe(true);
+    expect(swapRight?.hidden).toBe(false);
+    swapRight?.click();
+    expect(onSwapRight).toHaveBeenCalledWith(expect.objectContaining({ instance_id: 'cube-1' }));
     activePresenter.dispose();
   });
 

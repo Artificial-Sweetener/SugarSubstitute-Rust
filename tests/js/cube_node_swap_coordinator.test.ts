@@ -22,9 +22,9 @@ import type { CubeNode } from '../../frontend/comfyui/ui/cube/node/ComfyCubeNode
 import type { ComfyGraph } from '../../frontend/comfyui/ui/types/graph.js';
 
 describe('CubeNodeSwapCoordinator', () => {
-  test('swaps real Cube node positions through history and dirty graph state', () => {
-    const first = cubeNode('first', [20, 40]);
-    const second = cubeNode('second', [300, 40]);
+  test('swaps real Cube node bounds through history and dirty graph state', () => {
+    const first = cubeNode('first', [20, 40], { size: [220, 160] });
+    const second = cubeNode('second', [300, 80], { size: [360, 240] });
     const graph: ComfyGraph = {
       _nodes: [first, second],
       afterChange: jest.fn(),
@@ -48,7 +48,7 @@ describe('CubeNodeSwapCoordinator', () => {
     expect(coordinator.canSwap({ instance_id: 'first' }, 'right')).toBe(true);
     coordinator.swap({ instance_id: 'first' }, 'right');
 
-    expect([...first.pos]).toEqual([300, 40]);
+    expect([...first.pos]).toEqual([440, 80]);
     expect([...second.pos]).toEqual([20, 40]);
     expect(beforeChange).toHaveBeenCalledTimes(1);
     expect(afterChange).toHaveBeenCalledTimes(1);
@@ -58,7 +58,29 @@ describe('CubeNodeSwapCoordinator', () => {
     expect(changed).toHaveLength(2);
   });
 
-  test('swaps Cube nodes without relying on legacy input and output marker eligibility', () => {
+  test('uses Cube widths read at click time so resized neighbors remain separated', () => {
+    const first = cubeNode('first', [20, 40], { size: [220, 160] });
+    const second = cubeNode('second', [300, 40], { size: [220, 160] });
+    const catalog = new CubeNodeCatalog();
+    catalog.add(first);
+    catalog.add(second);
+    const coordinator = new CubeNodeSwapCoordinator({
+      graph: {},
+      nodes: catalog,
+      history: {},
+    });
+
+    expect(coordinator.canSwap({ instance_id: 'first' }, 'right')).toBe(true);
+    first.size[0] = 480;
+    second.size[0] = 340;
+    coordinator.swap({ instance_id: 'first' }, 'right');
+
+    expect([...first.pos]).toEqual([384, 40]);
+    expect([...second.pos]).toEqual([20, 40]);
+    expect(second.pos[0] + second.size[0]).toBeLessThanOrEqual(first.pos[0]);
+  });
+
+  test('keeps outputless Cubes eligible when they still expose an input', () => {
     const first = cubeNode('first', [20, 40], { outputs: [] });
     const second = cubeNode('second', [300, 40]);
     const catalog = new CubeNodeCatalog();
@@ -71,10 +93,28 @@ describe('CubeNodeSwapCoordinator', () => {
     });
 
     expect(coordinator.canSwap({ instance_id: 'first' }, 'right')).toBe(true);
-    coordinator.swap({ instance_id: 'first' }, 'right');
+  });
 
-    expect([...first.pos]).toEqual([300, 40]);
-    expect([...second.pos]).toEqual([20, 40]);
+  test('does not offer arrows on inputless Cubes or allow another Cube to move them', () => {
+    const source = cubeNode('source', [20, 40], { inputs: [] });
+    const middle = cubeNode('middle', [300, 40]);
+    const catalog = new CubeNodeCatalog();
+    catalog.add(source);
+    catalog.add(middle);
+    const coordinator = new CubeNodeSwapCoordinator({
+      graph: {},
+      nodes: catalog,
+      history: {},
+    });
+
+    expect(coordinator.canSwap({ instance_id: 'source' }, 'right')).toBe(false);
+    expect(coordinator.canSwap({ instance_id: 'middle' }, 'left')).toBe(false);
+
+    coordinator.swap({ instance_id: 'source' }, 'right');
+    coordinator.swap({ instance_id: 'middle' }, 'left');
+
+    expect([...source.pos]).toEqual([20, 40]);
+    expect([...middle.pos]).toEqual([300, 40]);
   });
 });
 
@@ -82,21 +122,21 @@ describe('CubeNodeSwapCoordinator', () => {
 function cubeNode(
   instanceId: string,
   position: [number, number],
-  slots: { inputs?: unknown[]; outputs?: unknown[] } = {},
+  options: { inputs?: unknown[]; outputs?: unknown[]; size?: [number, number] } = {},
 ): CubeNode {
   return {
     id: instanceId,
     type: `cube-${instanceId}`,
     title: instanceId,
     pos: [...position],
-    size: [220, 160],
+    size: [...(options.size ?? [220, 160])],
     properties: {
       sugarcubes_kind: 'cube',
       sugarcubes_cube: { instance_id: instanceId },
       sugarcubes_surface: {},
     },
-    inputs: (slots.inputs ?? [{ name: 'input.value' }]) as CubeNode['inputs'],
-    outputs: (slots.outputs ?? [{ name: 'output.image' }]) as CubeNode['outputs'],
+    inputs: (options.inputs ?? [{ name: 'input.value' }]) as CubeNode['inputs'],
+    outputs: (options.outputs ?? [{ name: 'output.image' }]) as CubeNode['outputs'],
     subgraph: {
       id: `definition-${instanceId}`,
       name: instanceId,

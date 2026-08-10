@@ -103,6 +103,10 @@ export class CubeSurfaceView {
     renderPreview(snapshot) {
         this.#previewView.render(snapshot);
     }
+    /** Reconcile live action eligibility without rebuilding the mounted Cube face. */
+    renderHeaderActions() {
+        this.#headerView.renderActions();
+    }
     /** Reserve only the boundary gutters backed by real Cube ports. */
     setPortGutterWidths(inputWidth, outputWidth) {
         this.element.style.setProperty('--sugarcubes-cube-input-gutter-width', `${String(Math.max(0, inputWidth))}px`);

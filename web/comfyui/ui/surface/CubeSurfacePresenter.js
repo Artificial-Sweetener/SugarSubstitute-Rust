@@ -248,6 +248,7 @@ export class CubeSurfacePresenter {
                 }
                 continue;
             }
+            surface.view.renderHeaderActions();
             this.#layoutMountedView(node);
             this.#host.reconcileBoundary(node);
         }

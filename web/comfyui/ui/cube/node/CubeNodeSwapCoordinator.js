@@ -14,6 +14,8 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Swap first-class Cube nodes without depending on legacy group chrome state. */
+import { resolveCubeNodeSwapPlacements } from './CubeNodeSwapGeometry.js';
+const MINIMUM_SWAP_GAP = 24;
 /** Own node-based Cube swap eligibility and state transitions. */
 export class CubeNodeSwapCoordinator {
     #graph;
@@ -36,11 +38,12 @@ export class CubeNodeSwapCoordinator {
         const plan = this.#resolvePlan(metadata, direction);
         if (!plan)
             return;
-        const currentPosition = readPosition(plan.current);
-        const neighborPosition = readPosition(plan.neighbor);
+        const formerLeft = direction === 'left' ? plan.neighbor : plan.current;
+        const formerRight = direction === 'left' ? plan.current : plan.neighbor;
+        const placements = resolveCubeNodeSwapPlacements(readSwapBounds(formerLeft), readSwapBounds(formerRight), MINIMUM_SWAP_GAP);
         this.#history.beforeChange?.();
-        writePosition(plan.current, neighborPosition);
-        writePosition(plan.neighbor, currentPosition);
+        writePosition(formerLeft, placements.formerLeft);
+        writePosition(formerRight, placements.formerRight);
         this.#graph.afterChange?.();
         this.#graph.setDirtyCanvas?.(true, true);
         this.#setDirtyCanvas(true, true);
@@ -61,8 +64,14 @@ export class CubeNodeSwapCoordinator {
         if (index < 0)
             return null;
         const neighbor = ordered[index + (direction === 'left' ? -1 : 1)] ?? null;
-        return neighbor ? { current, neighbor } : null;
+        return neighbor && hasReorderableInput(current) && hasReorderableInput(neighbor)
+            ? { current, neighbor }
+            : null;
     }
+}
+/** Keep source Cubes fixed at the start of a series. */
+function hasReorderableInput(node) {
+    return node.inputs.length > 0;
 }
 /** Sort left-to-right with a vertical tie-breaker for stable row-independent swaps. */
 function compareCubeNodePosition(left, right) {
@@ -73,6 +82,13 @@ function compareCubeNodePosition(left, right) {
 /** Read a native Cube node position as finite graph-space coordinates. */
 function readPosition(node) {
     return [finite(node.pos[0]), finite(node.pos[1])];
+}
+/** Read the live node width at the moment a swap is executed. */
+function readSwapBounds(node) {
+    return {
+        position: readPosition(node),
+        width: Math.max(0, finite(node.size[0])),
+    };
 }
 /** Write a native Cube node position through its native API when present. */
 function writePosition(node, position) {

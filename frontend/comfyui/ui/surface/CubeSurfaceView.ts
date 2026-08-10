@@ -141,6 +141,11 @@ export class CubeSurfaceView {
     this.#previewView.render(snapshot);
   }
 
+  /** Reconcile live action eligibility without rebuilding the mounted Cube face. */
+  renderHeaderActions(): void {
+    this.#headerView.renderActions();
+  }
+
   /** Reserve only the boundary gutters backed by real Cube ports. */
   setPortGutterWidths(inputWidth: number, outputWidth: number): void {
     this.element.style.setProperty(
