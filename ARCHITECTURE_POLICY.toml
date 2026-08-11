@@ -1,0 +1,78 @@
+schema = 1
+
+[structure]
+source_roots = [
+  "__init__.py",
+  "sugarcubes",
+  "frontend",
+  "scripts",
+  "tools",
+  "stubs",
+  "types",
+]
+extensions = [".py", ".pyi", ".ts", ".tsx"]
+excluded_prefixes = [
+  ".generated/",
+  "artifacts/",
+  "node_modules/",
+  "web/",
+]
+soft_lines = 350
+hard_lines = 500
+
+[[dependency]]
+name = "PYTHON_DOMAIN"
+paths = ["sugarcubes/cube_model/**/*.py", "sugarcubes/cube_model/*.py"]
+forbidden_python_imports = [
+  "sugarcubes.backend",
+  "sugarcubes.exporter",
+  "sugarcubes.importer",
+  "sugarcubes.runtime",
+]
+
+[[dependency]]
+name = "PYTHON_EXPORT"
+paths = ["sugarcubes/exporter/**/*.py", "sugarcubes/exporter/*.py"]
+forbidden_python_imports = [
+  "sugarcubes.backend",
+  "sugarcubes.importer",
+  "sugarcubes.runtime",
+]
+
+[[dependency]]
+name = "TYPESCRIPT_CORE"
+paths = ["frontend/comfyui/ui/core/**/*.ts", "frontend/comfyui/ui/core/*.ts"]
+forbidden_typescript_paths = [
+  "frontend/comfyui/ui/browser",
+  "frontend/comfyui/ui/dialogs",
+  "frontend/comfyui/ui/overlays",
+  "frontend/comfyui/ui/save",
+  "frontend/comfyui/ui/settings",
+  "frontend/comfyui/ui/surface",
+]
+
+[[dependency]]
+name = "TYPESCRIPT_GRAPH"
+paths = ["frontend/comfyui/ui/graph/**/*.ts", "frontend/comfyui/ui/graph/*.ts"]
+forbidden_typescript_paths = [
+  "frontend/comfyui/ui/browser",
+  "frontend/comfyui/ui/dialogs",
+  "frontend/comfyui/ui/overlays",
+  "frontend/comfyui/ui/save",
+  "frontend/comfyui/ui/settings",
+]
+
+[[dependency]]
+name = "TYPESCRIPT_EXECUTION"
+paths = [
+  "frontend/comfyui/ui/cube/execution/**/*.ts",
+  "frontend/comfyui/ui/cube/execution/*.ts",
+]
+forbidden_typescript_paths = [
+  "frontend/comfyui/ui/browser",
+  "frontend/comfyui/ui/dialogs",
+  "frontend/comfyui/ui/overlays",
+  "frontend/comfyui/ui/save",
+  "frontend/comfyui/ui/settings",
+  "frontend/comfyui/ui/surface",
+]

@@ -56,3 +56,7 @@ exclude = [
     "^node_modules/",
     "^cubes/",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

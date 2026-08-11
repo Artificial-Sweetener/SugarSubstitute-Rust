@@ -44,9 +44,19 @@ Engineering priority is maintainability, clear architecture, behavior safety dur
 - Domain and application code must not import presentation modules, host globals, browser APIs, filesystem implementations, or subprocess implementations.
 - Place code by ownership and dependency direction, not convenience, proximity, or current folder shape.
 - God classes, monolithic modules, miscellaneous utility collections, and feature dumping grounds are prohibited.
-- File size is a design signal rather than a target. Split by cohesive responsibility and dependency boundary, not by arbitrary line count.
+- File size is an ownership alarm rather than proof of cohesion. Authored production modules have a 350-line structural warning and a 500-line hard gate, measured as nonblank, noncomment lines. Split by cohesive responsibility and dependency boundary, not merely to satisfy a line count.
 - A façade may preserve a public or host-facing API, but it must delegate to focused owners and contain no duplicated business logic.
 - New behavior belongs with its authoritative owner. Do not extend the nearest existing module merely because it is convenient.
+
+## Architecture Debt and Waivers
+
+- `ARCHITECTURE_POLICY.toml` is the executable ownership, structure, and dependency-direction policy.
+- `ARCHITECTURE_DEBT.toml` records exact current mixed-responsibility facts. Each record names the paths, current fingerprint, owner, review date, mixed responsibilities, and next extraction.
+- `ARCHITECTURE_WAIVERS.toml` records exact current exceptions to one rule and path. Structural waivers attest that an oversized module remains cohesive. Remediation waivers link to mixed-responsibility debt and ratchet both current and next size limits.
+- Debt and waiver registries are current-state snapshots, not history. Replace stale facts, delete resolved records, and rely on Git for history.
+- A waiver may exempt a justified structural gate. It never authorizes mixed ownership or new behavior in a mixed-responsibility module.
+- Do not add behavior to a mixed-responsibility file. When work touches one, first characterize behavior, identify authoritative owners, extract every touched responsibility, migrate callers completely, remove replaced paths and bridges, update governance records, and verify the resulting boundaries.
+- Worktree architecture validation inventories Git-tracked and unignored authored files. Commit validation reads source, policy, debt, and waivers from the exact Git index so an unstaged registry edit cannot reconcile staged source.
 
 ## Structural Change Rules
 
@@ -140,7 +150,10 @@ Engineering priority is maintainability, clear architecture, behavior safety dur
 ## Tooling and Verification
 
 - Run `npm run check` before reporting success.
-- `npm run check` is the repository quality gate. It runs strict TypeScript checking, strict mypy checking, formatting, linting, standards audits, automated tests, and build-output verification.
+- `npm run check` is the non-mutating repository quality gate. It runs strict TypeScript checking, strict mypy checking, formatting validation, linting, standards audits, architecture governance, automated tests, and build-output verification.
+- Use `npm run format` only to apply formatting. Validation and CI use `npm run format:check` and must not rewrite source.
+- Run `npm run architecture` for the worktree and `npm run architecture:staged` for the exact Git index.
+- Run `npm run check:commit` for the complete commit-ready repository gate. CI runs the same command and rejects tracked-file mutation.
 - The quality gate must remain green for completed changes unless an explicit blocker is reported.
 - Author frontend TypeScript and static inputs under `frontend`; treat `web` as the compiler-owned ComfyUI deployment tree.
 - Keep TypeScript source and generated browser JavaScript synchronized through the repository build; never hand-reconcile generated output.
@@ -150,6 +163,9 @@ Engineering priority is maintainability, clear architecture, behavior safety dur
 
 ## Testing Policy
 
+- Treat tests, fixtures, selectors, and `TEST_POLICY.toml` as production code with explicit ownership.
+- Runtime tests live at `tests/<behavioral-area>/<proof-kind>/`. Supported proof kinds include `unit`, `contract`, and `integration`; test support lives under its owning area's `support` directory. Root test files are limited to repository-wide collection configuration.
+- Organize tests around behavior and proof, not source filename history or private implementation layout. Each test module owns one behavioral concern.
 - Add or update tests for every behavior change and every bug fix.
 - Add characterization tests before structural changes in behavior-critical areas.
 - New behavior must not be left unverified.
@@ -163,9 +179,22 @@ Engineering priority is maintainability, clear architecture, behavior safety dur
 - Type-level contracts should have compile-time coverage where runtime tests cannot prove invalid states are rejected.
 - Failing tests are blocking.
 
+## Test Selection and Gates
+
+- `TEST_POLICY.toml` maps every authored production path to exactly one behavioral area, declares its proof groups and public boundaries, and records consumer subscriptions to those boundaries.
+- Run `npm run test:list` to discover supported area/proof targets. Run `npm run test:explain -- <path>` to see the exact owner and subscription rules for a path. Run `npm run test:run -- <area> [proof]` for direct iteration without private test node IDs.
+- End behavioral work with `npm run test:changed`. It selects policy-required proofs from staged, unstaged, and untracked worktree paths and prints the reason for every selected group.
+- Before committing runtime or test work, stage the intended snapshot and run `npm run test:commit`. The staged commit selector validates architecture from the same index and expands an affected SugarCubes area to the complete product suite.
+- Use `npm run test:staged` for focused staged proof and `npm run test:isolated` to run every proof group in a fresh test process when diagnosing shared-state or order dependence.
+- Direct pytest or Jest commands are appropriate for diagnosis and rapid iteration. They do not replace the policy-selected changed or staged command.
+- A changed runtime path must map to exactly one behavioral owner and may never silently select zero tests. Public-boundary changes select the owner's proofs and every declared consumer subscription.
+- Adding changed paths may only retain or expand the required proof. Reconcile `TEST_POLICY.toml` in the same change when source ownership, test ownership, boundaries, or proof obligations move.
+- Test-policy meta-tests enforce complete source mapping, `area/proof` placement, unique module identities, nonempty groups, exact Git-index handling, boundary fan-out, monotonic selection, and fail-closed unknown or ambiguous paths.
+
 ## Verification Workflow
 
-- Run focused checks during implementation.
+- Run focused checks during implementation, preferably through `npm run test:run -- <area> [proof]`.
+- Run `npm run test:changed` before ending a behavioral work turn; do not claim coverage from a manually narrowed command alone.
 - Verify the specific reported behavior directly when feasible; do not declare a UI or interaction issue fixed from code inspection alone.
 - Record which Nodes renderer and browser combinations were manually observed for applicable web changes; Nodes 1.0 and Nodes 2.0 in both Chrome and Firefox are the required matrix unless the change is demonstrably browser- or renderer-independent.
 - Run the full repository gate before reporting completion.

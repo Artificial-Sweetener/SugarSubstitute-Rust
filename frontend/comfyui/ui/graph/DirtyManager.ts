@@ -26,7 +26,7 @@ import { DirtyRefreshScheduler } from './DirtyRefreshScheduler.js';
 import { buildCubeDefinitionKey, normalizeRevisionRef } from '../core/CubeDefinitionKey.js';
 import type { CubeDefinitionEntry, CubeDefinitionRequest } from './CubeDefinitionStore.js';
 import type { DirtyRefreshOptions } from './DirtyRefreshScheduler.js';
-import type { FinalizedDefinition } from '../save/CubeSaveReconciler.js';
+import type { FinalizedDefinition } from '../core/FinalizedDefinition.js';
 import type { CubeGroupMetadataRecord } from './GroupMetadata.js';
 import type { UnknownRecord } from '../types/common.js';
 import type { ComfyGraph } from '../types/graph.js';

@@ -1,0 +1,248 @@
+schema = 1
+
+[[debt]]
+id = "SC-ARCH-001"
+owner = "SugarCubes frontend composition"
+paths = ["frontend/comfyui/ui.ts"]
+fingerprint = "a2b8ed952d4f099733f328a2fd2a2fd5437f22703faec1e1acace8770bacbc06"
+review_by = 2026-11-30
+responsibilities = [
+  "extension and host lifecycle composition",
+  "Cube import command orchestration and outcome feedback",
+  "prompt queue, output, settings, sidebar, and debug integration wiring",
+]
+next_extraction = "Extract import orchestration and host feedback into application owners, leaving ui.ts as declarative extension composition."
+
+[[debt]]
+id = "SC-ARCH-002"
+owner = "SugarCubes Cube browser"
+paths = ["frontend/comfyui/ui/browser/CubeBrowserController.ts"]
+fingerprint = "ce674ce5667a6e9a3699c3c488c08edca044b3d77796daf6d29a235da3e84c33"
+review_by = 2026-11-30
+responsibilities = [
+  "catalog retrieval, refresh, filtering, and selection state",
+  "favorite, recent, and author-group persistence",
+  "metadata editing, revision loading, deletion, promotion, and preview workflows",
+]
+next_extraction = "Separate catalog state/persistence from Cube mutation commands and revision/preview coordination."
+
+[[debt]]
+id = "SC-ARCH-003"
+owner = "SugarCubes Cube browser presentation"
+paths = ["frontend/comfyui/ui/browser/CubeBrowserView.ts"]
+fingerprint = "d5058731c5a6084eb09cdf2b347804052804221ef1a9316e62dd7642409b7a4d"
+review_by = 2026-11-30
+responsibilities = [
+  "browser shell and list DOM construction",
+  "version combobox interaction and selection state",
+  "Cube detail, metadata editor, model editor, and preview presentation",
+]
+next_extraction = "Extract version selection and metadata editor views from the browser shell/list presenter."
+
+[[debt]]
+id = "SC-ARCH-004"
+owner = "SugarCubes flavor workflows"
+paths = ["frontend/comfyui/ui/flavors/FlavorService.ts"]
+fingerprint = "ac73f571cb1dd5cbbc38a73a2ddbfa67bd2d2f1642e5de6aef08eae546bb150e"
+review_by = 2026-11-30
+responsibilities = [
+  "definition and graph flavor hydration",
+  "authored and local flavor persistence commands",
+  "flavor dialogs, collision decisions, selection, and graph mutation",
+]
+next_extraction = "Split graph flavor application, persistence commands, and collision/dialog orchestration into separate owners."
+
+[[debt]]
+id = "SC-ARCH-005"
+owner = "SugarCubes graph instances"
+paths = ["frontend/comfyui/ui/graph/InstanceManager.ts"]
+fingerprint = "ddd42f309d94a429a541d5899ac130275b1a3203e62d82bfba4bca18df0d865a"
+review_by = 2026-11-30
+responsibilities = [
+  "instance refresh scheduling and lifecycle",
+  "reusable group discovery and metadata reconciliation",
+  "group geometry, title, alias, and schema migration projection",
+]
+next_extraction = "Move reusable-group reconciliation and group presentation projection out of the refresh lifecycle manager."
+
+[[debt]]
+id = "SC-ARCH-006"
+owner = "SugarCubes Cube chrome"
+paths = ["frontend/comfyui/ui/overlays/CubeChromeOverlay.ts"]
+fingerprint = "8cd0f7ae5cf82903b094c289da2b7b6310b2179758ae9fa76da54d60c8075d0f"
+review_by = 2026-11-30
+responsibilities = [
+  "group draw-hook installation and lifecycle",
+  "badge, icon, tooltip, color, and layout rendering",
+  "pointer hit testing, hover state, and chrome action dispatch",
+]
+next_extraction = "Separate group hook lifecycle, immutable chrome layout/rendering, and pointer interaction routing."
+
+[[debt]]
+id = "SC-ARCH-007"
+owner = "SugarCubes overlay orchestration"
+paths = ["frontend/comfyui/ui/overlays/OverlayManager.ts"]
+fingerprint = "c36c67d9be24daa540fc5d75d0dbc6cc717b707071dfb1cb3a847442bdbf244b"
+review_by = 2026-11-30
+responsibilities = [
+  "canvas, graph, collapse, and draw hook lifecycle",
+  "group dragging and canonical bounds reconciliation",
+  "node movement queues, swap planning, layout commands, and save coordination",
+]
+next_extraction = "Extract hook lifecycle, movement/bounds reconciliation, and swap command coordination into focused collaborators."
+
+[[debt]]
+id = "SC-ARCH-008"
+owner = "SugarCubes placement workflow"
+paths = ["frontend/comfyui/ui/overlays/PlacementOverlay.ts"]
+fingerprint = "b926b157818c703d3360684216be31c15ecd3e6d1450df3c7392936c37b7381c"
+review_by = 2026-11-30
+responsibilities = [
+  "Cube revision loading and placement commit orchestration",
+  "pointer capture, canvas coordinate conversion, and placement state",
+  "DOM overlay lifecycle and canvas preview rendering",
+]
+next_extraction = "Separate the placement application workflow from pointer/geometry control and overlay rendering."
+
+[[debt]]
+id = "SC-ARCH-009"
+owner = "SugarCubes save workflow"
+paths = ["frontend/comfyui/ui/save/CubeSaveService.ts"]
+fingerprint = "ef4b29a4dafea9939d116f8843bc126ffdb351f4a48be0c6ffe4e9f61fff13a8"
+review_by = 2026-11-30
+responsibilities = [
+  "save source discovery, metadata projection, and plan construction",
+  "Cube identity assignment, stale-save decisions, and forking",
+  "backend save orchestration, reconciliation, catalog invalidation, and feedback",
+]
+next_extraction = "Extract save planning and identity/staleness policy from backend command execution and presentation feedback."
+
+[[debt]]
+id = "SC-ARCH-010"
+owner = "SugarCubes host settings"
+paths = ["frontend/comfyui/ui/settings/HostSettingsController.ts"]
+fingerprint = "fe32cda8bb29a203ee86182aa925acebcdc8fc92e5f0e34a5413ab94f98dce2c"
+review_by = 2026-11-30
+responsibilities = [
+  "Comfy settings registration and UI state rendering",
+  "identity, proximity, pack, and repository settings commands",
+  "remote refresh, status summarization, confirmations, and toast feedback",
+]
+next_extraction = "Split settings registration/presentation from repository and pack command controllers."
+
+[[debt]]
+id = "SC-ARCH-011"
+owner = "SugarCubes surface presentation"
+paths = ["frontend/comfyui/ui/surface/CubeSurfacePresenter.ts"]
+fingerprint = "3ceb4ab80987dddd2bbd038c809cbb18ecc01c5a99bb8f5c6249e9ce6fa465d1"
+review_by = 2026-11-30
+responsibilities = [
+  "surface mount, unmount, stabilization, and geometry lifecycle",
+  "renderer and Vue runtime acquisition/release",
+  "preview events, legacy redraw scheduling, and editor launch coordination",
+]
+next_extraction = "Extract renderer/runtime lifecycle and preview observation from surface mount and geometry presentation."
+
+[[debt]]
+id = "SC-ARCH-012"
+owner = "SugarCubes backend HTTP adapter"
+paths = ["sugarcubes/backend/routes.py"]
+fingerprint = "a186e2f303efc9593809db7e31cc93a1833d44ff967db8df52b863c5252a7e09"
+review_by = 2026-11-30
+responsibilities = [
+  "Cube catalog, artifact, metadata, import, and export route adaptation",
+  "tracked repository and identity-policy route adaptation",
+  "flavor and dependency workflow route adaptation and route registration",
+]
+next_extraction = "Split handlers by endpoint family and retain one thin route-registration composition module."
+
+[[debt]]
+id = "SC-ARCH-013"
+owner = "SugarCubes dependency workflows"
+paths = ["sugarcubes/backend/services/cube_dependency_service.py"]
+fingerprint = "b13d1a236447f21c791e24342a05f3ab42c0b93537d0882030732440d69f5433"
+review_by = 2026-11-30
+responsibilities = [
+  "dependency readiness and diagnostic projection",
+  "pack synchronization and approval policy",
+  "node installation, Git version remediation, and subprocess execution",
+]
+next_extraction = "Separate readiness planning, approval selection, and installation/Git execution adapters."
+
+[[debt]]
+id = "SC-ARCH-014"
+owner = "SugarCubes export workflows"
+paths = ["sugarcubes/backend/services/cube_export_service.py"]
+fingerprint = "082c46b309250f26e56d46f9e4985f44edc6a9217a1eb6e5e72e57c65d01c68c"
+review_by = 2026-11-30
+responsibilities = [
+  "native subgraph and required-node contract analysis",
+  "export preview, save planning, and target-path policy",
+  "artifact writes, authored flavor updates, versioning, and Git commit finalization",
+]
+next_extraction = "Extract graph contract analysis and repository commit finalization from Cube export/save orchestration."
+
+[[debt]]
+id = "SC-ARCH-015"
+owner = "SugarCubes library facade"
+paths = ["sugarcubes/backend/services/cube_library_service.py"]
+fingerprint = "11e8698dc0e57c6ad25540e39e96ae1a8c714f2a28868bf01714c4d02bf25d54"
+review_by = 2026-11-30
+responsibilities = [
+  "catalog state, revision, status, and invalidation ownership",
+  "pack lifecycle, artifact lookup, readiness, preview, and icon workflows",
+  "local import/delete and repository/source-path resolution",
+]
+next_extraction = "Turn the facade into narrow delegation by extracting catalog projection and local artifact mutation/source resolution."
+
+[[debt]]
+id = "SC-ARCH-016"
+owner = "SugarCubes library readiness"
+paths = ["sugarcubes/backend/services/cube_library_readiness_service.py"]
+fingerprint = "2b6c534005096043a4e804e8cce7a5034562b8bc8e03134146bcc553c128298b"
+review_by = 2026-11-30
+responsibilities = [
+  "library readiness aggregation and cache lifecycle",
+  "dependency requirement discovery and source signatures",
+  "installed-node inventory and dependency installation-plan projection",
+]
+next_extraction = "Extract dependency requirement inventory/cache and installation-plan projection from readiness aggregation."
+
+[[debt]]
+id = "SC-ARCH-017"
+owner = "SugarCubes dependency version policy"
+paths = ["sugarcubes/backend/services/dependency_versions.py"]
+fingerprint = "bfd6cbbb55a1cf68c10b4f37f5a36c6104ec2931d578d9dc6203b89665efd496"
+review_by = 2026-11-30
+responsibilities = [
+  "requirement extraction and semantic/Git version policy",
+  "installed Python, custom-node, and Git dependency inventory",
+  "Git filesystem/subprocess inspection and remediation projection",
+]
+next_extraction = "Separate pure requirement/version evaluation from installed-environment and Git inspection adapters."
+
+[[debt]]
+id = "SC-ARCH-018"
+owner = "SugarCubes tracked repositories"
+paths = ["sugarcubes/backend/services/tracked_repo_service.py"]
+fingerprint = "6c4aeac4aa413a7a2053feab9ef63e8a9dc1b970ecb74ad43f61019b2c6d8803"
+review_by = 2026-11-30
+responsibilities = [
+  "tracked-repository manifest persistence and normalization",
+  "checkout creation, sync, update, protection, and status policy",
+  "Git staging, commits, ref resolution, and subprocess execution",
+]
+next_extraction = "Extract manifest repository persistence and Git command execution from tracked-repository lifecycle policy."
+
+[[debt]]
+id = "SC-ARCH-019"
+owner = "SugarCubes import workflows"
+paths = ["sugarcubes/importer/loader.py"]
+fingerprint = "0337a4cc491a4bbfe91fb4b1bd18681ad7dc67e1da42ba003bebb48e28c8f808"
+review_by = 2026-11-30
+responsibilities = [
+  "Cube artifact loading and schema parsing",
+  "layout, marker, boundary, nested-subgraph, and connection projection",
+  "prepared Comfy import materialization and runtime node-definition lookup",
+]
+next_extraction = "Separate artifact/schema parsing, prepared import projection, and Comfy runtime definition adaptation."

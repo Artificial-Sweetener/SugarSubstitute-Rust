@@ -1,0 +1,254 @@
+schema = 1
+test_root = "tests"
+
+[[area]]
+name = "governance"
+sources = [
+  "__init__.py",
+  "scripts/**",
+  "tools/**",
+  "stubs/**",
+  "types/**",
+  "sugarcubes/tools/**",
+  "sugarcubes/maintenance.py",
+  "sugarcubes/extension_layout.py",
+  "package.json",
+  "package-lock.json",
+  "pyproject.toml",
+  "jest.config.json",
+  "tsconfig*.json",
+  "ARCHITECTURE_*.toml",
+  "TEST_POLICY.toml",
+  ".github/workflows/**",
+]
+proofs = ["contract", "unit"]
+
+[[area]]
+name = "cube_model"
+sources = ["sugarcubes/cube_model/**"]
+proofs = ["contract", "unit"]
+
+[[area]]
+name = "export"
+sources = [
+  "sugarcubes/exporter/**",
+  "sugarcubes/backend/services/cube_export_service.py",
+  "sugarcubes/backend/services/cube_implementation_defaults_service.py",
+]
+proofs = ["contract", "integration", "unit"]
+
+[[area]]
+name = "import"
+sources = ["sugarcubes/importer/**"]
+proofs = ["integration", "unit"]
+
+[[area]]
+name = "runtime"
+sources = [
+  "sugarcubes/__init__.py",
+  "sugarcubes/host_api.py",
+  "sugarcubes/nodes.py",
+  "sugarcubes/payloads.py",
+  "sugarcubes/runtime/**",
+  "sugarcubes/instrumentation/**",
+]
+proofs = ["unit"]
+
+[[area]]
+name = "backend_api"
+sources = [
+  "sugarcubes/backend/*.py",
+  "sugarcubes/backend/validation/**",
+  "sugarcubes/backend/services/__init__.py",
+]
+proofs = ["integration", "unit"]
+
+[[area]]
+name = "library"
+sources = [
+  "sugarcubes/backend/services/cube_artifact_repository.py",
+  "sugarcubes/backend/services/cube_catalog_state_service.py",
+  "sugarcubes/backend/services/cube_file_io.py",
+  "sugarcubes/backend/services/cube_git_context.py",
+  "sugarcubes/backend/services/cube_history_service.py",
+  "sugarcubes/backend/services/cube_icon_service.py",
+  "sugarcubes/backend/services/cube_identity_redirect_service.py",
+  "sugarcubes/backend/services/cube_library_artifact_service.py",
+  "sugarcubes/backend/services/cube_library_readiness_service.py",
+  "sugarcubes/backend/services/cube_library_service.py",
+  "sugarcubes/backend/services/cube_load_service.py",
+  "sugarcubes/backend/services/cube_metadata.py",
+  "sugarcubes/backend/services/cube_metadata_service.py",
+  "sugarcubes/backend/services/cube_picker_catalog_service.py",
+  "sugarcubes/backend/services/cube_promotion_service.py",
+  "sugarcubes/backend/services/cube_revision_version_projection.py",
+  "sugarcubes/backend/services/cube_summary.py",
+  "sugarcubes/backend/services/cube_version_artifact_cache.py",
+  "sugarcubes/backend/services/identity_policy_service.py",
+  "sugarcubes/backend/services/local_flavor_service.py",
+  "sugarcubes/backend/services/ownership_policy_service.py",
+  "sugarcubes/backend/services/revision_service.py",
+  "sugarcubes/backend/services/tracked_repo_preflight_service.py",
+  "sugarcubes/backend/services/tracked_repo_service.py",
+]
+proofs = ["contract", "integration", "unit"]
+
+[[area]]
+name = "dependencies"
+sources = [
+  "sugarcubes/backend/services/cube_dependency_manifest.py",
+  "sugarcubes/backend/services/cube_dependency_service.py",
+  "sugarcubes/backend/services/dependency_versions.py",
+]
+proofs = ["integration"]
+
+[[area]]
+name = "frontend_core"
+sources = [
+  "frontend/comfyui/*.ts",
+  "frontend/comfyui/ui/*.ts",
+  "frontend/comfyui/ui/core/**",
+  "frontend/comfyui/ui/types/**",
+]
+proofs = ["integration", "unit"]
+
+[[area]]
+name = "graph"
+sources = [
+  "frontend/comfyui/ui/geometry/**",
+  "frontend/comfyui/ui/graph/**",
+  "frontend/comfyui/ui/layout/**",
+]
+proofs = ["contract", "unit"]
+
+[[area]]
+name = "execution"
+sources = ["frontend/comfyui/ui/cube/execution/**"]
+proofs = ["integration", "unit"]
+
+[[area]]
+name = "cube"
+sources = [
+  "frontend/comfyui/ui/affordance/**",
+  "frontend/comfyui/ui/cube/*.ts",
+  "frontend/comfyui/ui/cube/connection/**",
+  "frontend/comfyui/ui/cube/container/**",
+  "frontend/comfyui/ui/cube/geometry/**",
+  "frontend/comfyui/ui/cube/graph/**",
+  "frontend/comfyui/ui/cube/migration/**",
+  "frontend/comfyui/ui/cube/node/**",
+  "frontend/comfyui/ui/cube/placement/**",
+  "frontend/comfyui/ui/cube/version/**",
+]
+proofs = ["contract", "integration", "unit"]
+
+[[area]]
+name = "surface"
+sources = [
+  "frontend/comfyui/ui/overlays/**",
+  "frontend/comfyui/ui/surface/**",
+]
+proofs = ["integration", "unit"]
+
+[[area]]
+name = "browser"
+sources = [
+  "frontend/comfyui/ui/browser/**",
+  "frontend/comfyui/ui/picker/**",
+  "frontend/comfyui/ui/sidebar/**",
+]
+proofs = ["contract", "integration", "unit"]
+isolated_proofs = ["integration"]
+
+[[area]]
+name = "authoring"
+sources = [
+  "frontend/comfyui/ui/create/**",
+  "frontend/comfyui/ui/flavors/**",
+  "frontend/comfyui/ui/import/**",
+  "frontend/comfyui/ui/packs/**",
+  "frontend/comfyui/ui/promotion/**",
+  "frontend/comfyui/ui/save/**",
+]
+proofs = ["contract", "integration", "unit"]
+isolated_proofs = ["integration"]
+
+[[area]]
+name = "settings"
+sources = [
+  "frontend/comfyui/ui/controls/**",
+  "frontend/comfyui/ui/dialogs/**",
+  "frontend/comfyui/ui/settings/**",
+]
+proofs = ["integration", "unit"]
+
+[[boundary]]
+name = "cube_document"
+area = "cube_model"
+
+[[boundary]]
+name = "backend_http"
+area = "backend_api"
+
+[[boundary]]
+name = "library_contract"
+area = "library"
+
+[[boundary]]
+name = "frontend_host"
+area = "frontend_core"
+
+[[boundary]]
+name = "graph_contract"
+area = "graph"
+
+[[boundary]]
+name = "execution_prompt"
+area = "execution"
+
+[[subscription]]
+boundary = "cube_document"
+groups = [
+  "export/contract",
+  "import/integration",
+  "authoring/integration",
+  "execution/integration",
+]
+
+[[subscription]]
+boundary = "backend_http"
+groups = [
+  "browser/integration",
+  "authoring/integration",
+  "settings/integration",
+]
+
+[[subscription]]
+boundary = "library_contract"
+groups = [
+  "backend_api/integration",
+  "browser/integration",
+  "authoring/integration",
+  "dependencies/integration",
+]
+
+[[subscription]]
+boundary = "frontend_host"
+groups = [
+  "browser/integration",
+  "cube/integration",
+  "surface/integration",
+]
+
+[[subscription]]
+boundary = "graph_contract"
+groups = [
+  "authoring/integration",
+  "cube/integration",
+  "execution/integration",
+  "surface/integration",
+]
+
+[[subscription]]
+boundary = "execution_prompt"
+groups = ["surface/integration"]

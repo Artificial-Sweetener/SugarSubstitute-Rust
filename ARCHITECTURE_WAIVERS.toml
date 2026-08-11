@@ -1,0 +1,359 @@
+schema = 1
+
+[[waiver]]
+id = "SC-WAIVER-001"
+kind = "remediation"
+rule = "STRUCT003"
+path = "frontend/comfyui/ui.ts"
+owner = "SugarCubes frontend composition"
+justification = "The extension entry currently mixes composition with import and feedback orchestration; SC-ARCH-001 prevents growth while ownership is extracted."
+review_by = 2026-11-30
+max_lines = 554
+debt = "SC-ARCH-001"
+next_limit = 500
+
+[[waiver]]
+id = "SC-WAIVER-002"
+kind = "structural"
+rule = "STRUCT003"
+path = "frontend/comfyui/ui/browser/BrowserStyles.ts"
+owner = "SugarCubes Cube browser presentation"
+justification = "This module is one generated-at-runtime CSS resource owner; splitting the single style payload would obscure selector and cascade ownership."
+review_by = 2026-11-30
+max_lines = 749
+
+[[waiver]]
+id = "SC-WAIVER-003"
+kind = "remediation"
+rule = "STRUCT003"
+path = "frontend/comfyui/ui/browser/CubeBrowserController.ts"
+owner = "SugarCubes Cube browser"
+justification = "Catalog state, persistence, and mutation workflows remain mixed as recorded by SC-ARCH-002; the exact current cap forbids further growth."
+review_by = 2026-11-30
+max_lines = 1577
+debt = "SC-ARCH-002"
+next_limit = 500
+
+[[waiver]]
+id = "SC-WAIVER-004"
+kind = "remediation"
+rule = "STRUCT003"
+path = "frontend/comfyui/ui/browser/CubeBrowserView.ts"
+owner = "SugarCubes Cube browser presentation"
+justification = "The browser shell, version selector, and metadata editors remain mixed as recorded by SC-ARCH-003; the exact cap forbids growth."
+review_by = 2026-11-30
+max_lines = 1374
+debt = "SC-ARCH-003"
+next_limit = 500
+
+[[waiver]]
+id = "SC-WAIVER-005"
+kind = "structural"
+rule = "STRUCT003"
+path = "frontend/comfyui/ui/browser/CubePreviewRenderer.ts"
+owner = "SugarCubes Cube browser presentation"
+justification = "The module is a cohesive preview renderer whose geometry, pointer bindings, and drawing state change together."
+review_by = 2026-11-30
+max_lines = 564
+
+[[waiver]]
+id = "SC-WAIVER-006"
+kind = "structural"
+rule = "STRUCT003"
+path = "frontend/comfyui/ui/cube/ComfyCubeRuntime.ts"
+owner = "SugarCubes Comfy runtime composition"
+justification = "The module is the typed composition boundary for one Comfy Cube runtime and its host-value validation adapters."
+review_by = 2026-11-30
+max_lines = 614
+
+[[waiver]]
+id = "SC-WAIVER-007"
+kind = "structural"
+rule = "STRUCT003"
+path = "frontend/comfyui/ui/cube/connection/CubePortPresentationController.ts"
+owner = "SugarCubes Cube port presentation"
+justification = "The controller and its private lane-allocation mathematics jointly own one animated port-presentation policy."
+review_by = 2026-11-30
+max_lines = 510
+
+[[waiver]]
+id = "SC-WAIVER-008"
+kind = "remediation"
+rule = "STRUCT003"
+path = "frontend/comfyui/ui/flavors/FlavorService.ts"
+owner = "SugarCubes flavor workflows"
+justification = "Graph application, persistence, and dialog orchestration remain mixed as recorded by SC-ARCH-004; the current cap prevents expansion."
+review_by = 2026-11-30
+max_lines = 919
+debt = "SC-ARCH-004"
+next_limit = 500
+
+[[waiver]]
+id = "SC-WAIVER-009"
+kind = "structural"
+rule = "STRUCT003"
+path = "frontend/comfyui/ui/graph/CubeBounds.ts"
+owner = "SugarCubes graph geometry"
+justification = "The module is the cohesive pure geometry policy for canonical Cube bounds, margins, and containment."
+review_by = 2026-11-30
+max_lines = 560
+
+[[waiver]]
+id = "SC-WAIVER-010"
+kind = "remediation"
+rule = "STRUCT003"
+path = "frontend/comfyui/ui/graph/InstanceManager.ts"
+owner = "SugarCubes graph instances"
+justification = "Refresh lifecycle, reusable-group reconciliation, and presentation projection remain mixed as recorded by SC-ARCH-005."
+review_by = 2026-11-30
+max_lines = 609
+debt = "SC-ARCH-005"
+next_limit = 500
+
+[[waiver]]
+id = "SC-WAIVER-011"
+kind = "structural"
+rule = "STRUCT003"
+path = "frontend/comfyui/ui/layout/CubeLayoutEngine.ts"
+owner = "SugarCubes layout policy"
+justification = "The module contains one pure Cube chain-layout policy and its directly supporting graph algorithms."
+review_by = 2026-11-30
+max_lines = 515
+
+[[waiver]]
+id = "SC-WAIVER-012"
+kind = "remediation"
+rule = "STRUCT003"
+path = "frontend/comfyui/ui/overlays/CubeChromeOverlay.ts"
+owner = "SugarCubes Cube chrome"
+justification = "Hook lifecycle, rendering, and interaction remain mixed as recorded by SC-ARCH-006; the exact cap prevents growth."
+review_by = 2026-11-30
+max_lines = 1422
+debt = "SC-ARCH-006"
+next_limit = 500
+
+[[waiver]]
+id = "SC-WAIVER-013"
+kind = "remediation"
+rule = "STRUCT003"
+path = "frontend/comfyui/ui/overlays/OverlayManager.ts"
+owner = "SugarCubes overlay orchestration"
+justification = "Host hooks, bounds reconciliation, movement, and swap commands remain mixed as recorded by SC-ARCH-007."
+review_by = 2026-11-30
+max_lines = 1219
+debt = "SC-ARCH-007"
+next_limit = 500
+
+[[waiver]]
+id = "SC-WAIVER-014"
+kind = "remediation"
+rule = "STRUCT003"
+path = "frontend/comfyui/ui/overlays/PlacementOverlay.ts"
+owner = "SugarCubes placement workflow"
+justification = "Import commands, pointer control, DOM lifecycle, and rendering remain mixed as recorded by SC-ARCH-008."
+review_by = 2026-11-30
+max_lines = 841
+debt = "SC-ARCH-008"
+next_limit = 500
+
+[[waiver]]
+id = "SC-WAIVER-015"
+kind = "remediation"
+rule = "STRUCT003"
+path = "frontend/comfyui/ui/save/CubeSaveService.ts"
+owner = "SugarCubes save workflow"
+justification = "Save planning, identity policy, persistence, reconciliation, and feedback remain mixed as recorded by SC-ARCH-009."
+review_by = 2026-11-30
+max_lines = 1123
+debt = "SC-ARCH-009"
+next_limit = 500
+
+[[waiver]]
+id = "SC-WAIVER-016"
+kind = "remediation"
+rule = "STRUCT003"
+path = "frontend/comfyui/ui/settings/HostSettingsController.ts"
+owner = "SugarCubes host settings"
+justification = "Settings presentation and repository/pack command workflows remain mixed as recorded by SC-ARCH-010."
+review_by = 2026-11-30
+max_lines = 1224
+debt = "SC-ARCH-010"
+next_limit = 500
+
+[[waiver]]
+id = "SC-WAIVER-017"
+kind = "remediation"
+rule = "STRUCT003"
+path = "frontend/comfyui/ui/surface/CubeSurfacePresenter.ts"
+owner = "SugarCubes surface presentation"
+justification = "Mount/geometry, renderer lifecycle, and preview observation remain mixed as recorded by SC-ARCH-011."
+review_by = 2026-11-30
+max_lines = 555
+debt = "SC-ARCH-011"
+next_limit = 500
+
+[[waiver]]
+id = "SC-WAIVER-018"
+kind = "structural"
+rule = "STRUCT003"
+path = "frontend/comfyui/ui/surface/CubeSurfaceStyles.ts"
+owner = "SugarCubes surface presentation"
+justification = "This module is one generated-at-runtime CSS resource owner for the Cube surface presentation system."
+review_by = 2026-11-30
+max_lines = 705
+
+[[waiver]]
+id = "SC-WAIVER-019"
+kind = "structural"
+rule = "STRUCT003"
+path = "scripts/migrate_subgraph_schema.py"
+owner = "SugarCubes schema migration tooling"
+justification = "The standalone migration command owns one historical subgraph-schema conversion, including its validation and atomic file replacement."
+review_by = 2026-11-30
+max_lines = 622
+
+[[waiver]]
+id = "SC-WAIVER-020"
+kind = "remediation"
+rule = "STRUCT003"
+path = "sugarcubes/backend/routes.py"
+owner = "SugarCubes backend HTTP adapter"
+justification = "Multiple unrelated endpoint families remain in one adapter as recorded by SC-ARCH-012; the exact cap prevents growth."
+review_by = 2026-11-30
+max_lines = 704
+debt = "SC-ARCH-012"
+next_limit = 500
+
+[[waiver]]
+id = "SC-WAIVER-021"
+kind = "remediation"
+rule = "STRUCT003"
+path = "sugarcubes/backend/services/cube_dependency_service.py"
+owner = "SugarCubes dependency workflows"
+justification = "Readiness, approval, synchronization, and installation execution remain mixed as recorded by SC-ARCH-013."
+review_by = 2026-11-30
+max_lines = 822
+debt = "SC-ARCH-013"
+next_limit = 500
+
+[[waiver]]
+id = "SC-WAIVER-022"
+kind = "remediation"
+rule = "STRUCT003"
+path = "sugarcubes/backend/services/cube_export_service.py"
+owner = "SugarCubes export workflows"
+justification = "Graph analysis, save planning, artifact mutation, and Git finalization remain mixed as recorded by SC-ARCH-014."
+review_by = 2026-11-30
+max_lines = 1155
+debt = "SC-ARCH-014"
+next_limit = 500
+
+[[waiver]]
+id = "SC-WAIVER-023"
+kind = "structural"
+rule = "STRUCT003"
+path = "sugarcubes/backend/services/cube_library_artifact_service.py"
+owner = "SugarCubes library artifacts"
+justification = "The service cohesively resolves current and historical Cube artifacts, refs, cache identity, and artifact provenance."
+review_by = 2026-11-30
+max_lines = 730
+
+[[waiver]]
+id = "SC-WAIVER-024"
+kind = "remediation"
+rule = "STRUCT003"
+path = "sugarcubes/backend/services/cube_library_readiness_service.py"
+owner = "SugarCubes library readiness"
+justification = "Readiness aggregation, requirement inventory/cache, and install planning remain mixed as recorded by SC-ARCH-016."
+review_by = 2026-11-30
+max_lines = 709
+debt = "SC-ARCH-016"
+next_limit = 500
+
+[[waiver]]
+id = "SC-WAIVER-025"
+kind = "remediation"
+rule = "STRUCT003"
+path = "sugarcubes/backend/services/cube_library_service.py"
+owner = "SugarCubes library facade"
+justification = "Catalog, pack, artifact, readiness, mutation, and source resolution remain mixed as recorded by SC-ARCH-015."
+review_by = 2026-11-30
+max_lines = 1263
+debt = "SC-ARCH-015"
+next_limit = 500
+
+[[waiver]]
+id = "SC-WAIVER-026"
+kind = "remediation"
+rule = "STRUCT003"
+path = "sugarcubes/backend/services/dependency_versions.py"
+owner = "SugarCubes dependency version policy"
+justification = "Pure version policy and environment/Git inspection remain mixed as recorded by SC-ARCH-017."
+review_by = 2026-11-30
+max_lines = 829
+debt = "SC-ARCH-017"
+next_limit = 500
+
+[[waiver]]
+id = "SC-WAIVER-027"
+kind = "structural"
+rule = "STRUCT003"
+path = "sugarcubes/backend/services/local_flavor_service.py"
+owner = "SugarCubes local flavors"
+justification = "The service cohesively owns the local flavor aggregate, its persistence format, normalization, and collision invariants."
+review_by = 2026-11-30
+max_lines = 531
+
+[[waiver]]
+id = "SC-WAIVER-028"
+kind = "remediation"
+rule = "STRUCT003"
+path = "sugarcubes/backend/services/tracked_repo_service.py"
+owner = "SugarCubes tracked repositories"
+justification = "Manifest persistence, repository lifecycle policy, and Git execution remain mixed as recorded by SC-ARCH-018."
+review_by = 2026-11-30
+max_lines = 991
+debt = "SC-ARCH-018"
+next_limit = 500
+
+[[waiver]]
+id = "SC-WAIVER-029"
+kind = "structural"
+rule = "STRUCT003"
+path = "sugarcubes/exporter/layout_serializer.py"
+owner = "SugarCubes export layout"
+justification = "The module cohesively normalizes and serializes workflow layout, group chrome, execution mode, and geometry values."
+review_by = 2026-11-30
+max_lines = 568
+
+[[waiver]]
+id = "SC-WAIVER-030"
+kind = "structural"
+rule = "STRUCT003"
+path = "sugarcubes/exporter/native_subgraph_adapter.py"
+owner = "SugarCubes native export projection"
+justification = "The module is one projection adapter that converts native Comfy subgraphs into the export graph boundary."
+review_by = 2026-11-30
+max_lines = 513
+
+[[waiver]]
+id = "SC-WAIVER-031"
+kind = "structural"
+rule = "STRUCT003"
+path = "sugarcubes/exporter/serializer.py"
+owner = "SugarCubes Cube serialization"
+justification = "The module cohesively builds validated Cube serialization output, including symbolization and deterministic fingerprints."
+review_by = 2026-11-30
+max_lines = 547
+
+[[waiver]]
+id = "SC-WAIVER-032"
+kind = "remediation"
+rule = "STRUCT003"
+path = "sugarcubes/importer/loader.py"
+owner = "SugarCubes import workflows"
+justification = "Artifact parsing, import projection, and Comfy runtime adaptation remain mixed as recorded by SC-ARCH-019."
+review_by = 2026-11-30
+max_lines = 944
+debt = "SC-ARCH-019"
+next_limit = 500

@@ -28,6 +28,7 @@ import {
 } from '../graph/GroupMetadata.js';
 import { isRecord } from '../types/common.js';
 import type { CubeNodeIdentityUpdates } from '../cube/node/CubeNodeIdentityWriter.js';
+import type { FinalizedDefinition } from '../core/FinalizedDefinition.js';
 import type { UnknownRecord } from '../types/common.js';
 import type { ComfyGraph, GraphId } from '../types/graph.js';
 
@@ -83,13 +84,6 @@ export interface SavedCubeResult extends UnknownRecord {
   cube_id?: unknown;
   version?: unknown;
   definition?: unknown;
-}
-
-export interface FinalizedDefinition {
-  cubeId: string;
-  cubeVersion: string;
-  definitionKey: string;
-  entry: unknown;
 }
 
 export interface SaveReconciliationOptions {
