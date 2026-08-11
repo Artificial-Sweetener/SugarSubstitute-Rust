@@ -24,7 +24,7 @@ from typing import Any, Mapping
 from .composition import BackendServices
 from .responses import BackendError, json_error_from_exception, json_success
 from .route_types import RouteHandler
-from .services.cube_dependency_service import DependencyApprovalPolicy
+from .services.dependency_approval_policy import DependencyApprovalPolicy
 from .services.cube_metadata import normalize_metadata_string
 from .validation import get_bool, parse_optional_json_body
 

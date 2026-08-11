@@ -14,6 +14,12 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+from sugarcubes.backend.services.dependency_approval_policy import (
+    select_install_items,
+    select_version_items,
+    skipped_install_items,
+    skipped_version_items,
+)
 from sugarcubes.backend.services.dependency_requirements import (
     extract_versioned_requirements,
 )
@@ -157,6 +163,61 @@ def test_readiness_uses_git_ancestry_and_blocks_dirty_checkouts(tmp_path: Path) 
     assert plans["dirty-pack"]["repairable"] is False
     assert (("merge-base", "--is-ancestor", "aaaaaaa", "bbbbbbb"), clean) in calls
     assert not any(call[0][0] == "merge-base" and call[1] == dirty for call in calls)
+
+
+def test_approval_policy_keeps_baseline_silent_and_third_party_explicit() -> None:
+    """Preserve baseline and third-party selection for install and version work."""
+
+    install_plan = [
+        {
+            "nodeId": "baseline-pack",
+            "installed": False,
+            "installable": True,
+            "confirmationRequired": False,
+        },
+        {
+            "nodeId": "third-party-pack",
+            "installed": False,
+            "installable": True,
+            "confirmationRequired": True,
+        },
+    ]
+    version_plan = [
+        {
+            "nodeId": "baseline-pack",
+            "status": "installed_version_too_old",
+            "repairable": True,
+            "requirements": [{"defaultBaseRepo": True}],
+        },
+        {
+            "nodeId": "third-party-pack",
+            "status": "installed_version_too_old",
+            "repairable": True,
+            "requirements": [{"defaultBaseRepo": False}],
+        },
+    ]
+
+    selected_installs = select_install_items(
+        install_plan,
+        approval_policy="silent_baseline_only",
+        approved_node_ids=(),
+    )
+    selected_versions = select_version_items(
+        version_plan,
+        approval_policy="silent_baseline_only",
+        approved_node_ids=(),
+    )
+
+    assert [item["nodeId"] for item in selected_installs] == ["baseline-pack"]
+    assert [
+        item["nodeId"]
+        for item in skipped_install_items(install_plan, selected_installs)
+    ] == ["third-party-pack"]
+    assert [item["nodeId"] for item in selected_versions] == ["baseline-pack"]
+    assert [
+        item["nodeId"]
+        for item in skipped_version_items(version_plan, selected_versions)
+    ] == ["third-party-pack"]
 
 
 def _requirement(node_id: str, version: str) -> CubeDependencyRequirement:

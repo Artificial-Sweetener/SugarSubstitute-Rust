@@ -213,18 +213,6 @@ review_by = 2026-11-30
 max_lines = 622
 
 [[waiver]]
-id = "SC-WAIVER-021"
-kind = "remediation"
-rule = "STRUCT003"
-path = "sugarcubes/backend/services/cube_dependency_service.py"
-owner = "SugarCubes dependency workflows"
-justification = "Readiness, approval, synchronization, and installation execution remain mixed as recorded by SC-ARCH-013."
-review_by = 2026-11-30
-max_lines = 822
-debt = "SC-ARCH-013"
-next_limit = 500
-
-[[waiver]]
 id = "SC-WAIVER-022"
 kind = "remediation"
 rule = "STRUCT003"

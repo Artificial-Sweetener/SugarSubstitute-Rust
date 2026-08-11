@@ -26,10 +26,8 @@ import subprocess
 from pathlib import Path
 from typing import Sequence
 
-from sugarcubes.backend.services.cube_dependency_service import (
-    ComfyCliAdapter,
-    CubeDependencyService,
-)
+from sugarcubes.backend.services.cube_dependency_service import CubeDependencyService
+from sugarcubes.backend.services.dependency_cli import ComfyCliAdapter
 
 from tests.library.contract.test_cube_library_backend_contract import (
     _cube_payload_with_cnr,

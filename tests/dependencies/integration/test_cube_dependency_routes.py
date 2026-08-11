@@ -25,10 +25,8 @@ from pathlib import Path
 from typing import Sequence
 
 from sugarcubes.backend.routes import build_route_handlers
-from sugarcubes.backend.services.cube_dependency_service import (
-    ComfyCliAdapter,
-    CubeDependencyService,
-)
+from sugarcubes.backend.services.cube_dependency_service import CubeDependencyService
+from sugarcubes.backend.services.dependency_cli import ComfyCliAdapter
 
 from tests.backend_api.support.backend_fixtures import FakeRequest, decode_json_response
 from tests.library.contract.test_cube_library_backend_contract import (

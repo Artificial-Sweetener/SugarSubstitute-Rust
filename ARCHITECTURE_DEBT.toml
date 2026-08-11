@@ -144,19 +144,6 @@ responsibilities = [
 next_extraction = "Extract renderer/runtime lifecycle and preview observation from surface mount and geometry presentation."
 
 [[debt]]
-id = "SC-ARCH-013"
-owner = "SugarCubes dependency workflows"
-paths = ["sugarcubes/backend/services/cube_dependency_service.py"]
-fingerprint = "b13d1a236447f21c791e24342a05f3ab42c0b93537d0882030732440d69f5433"
-review_by = 2026-11-30
-responsibilities = [
-  "dependency readiness and diagnostic projection",
-  "pack synchronization and approval policy",
-  "node installation, Git version remediation, and subprocess execution",
-]
-next_extraction = "Separate readiness planning, approval selection, and installation/Git execution adapters."
-
-[[debt]]
 id = "SC-ARCH-014"
 owner = "SugarCubes export workflows"
 paths = ["sugarcubes/backend/services/cube_export_service.py"]
