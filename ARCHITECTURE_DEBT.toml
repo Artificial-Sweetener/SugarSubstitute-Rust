@@ -170,19 +170,6 @@ responsibilities = [
 next_extraction = "Turn the facade into narrow delegation by extracting catalog projection and local artifact mutation/source resolution."
 
 [[debt]]
-id = "SC-ARCH-016"
-owner = "SugarCubes library readiness"
-paths = ["sugarcubes/backend/services/cube_library_readiness_service.py"]
-fingerprint = "c51889e76b9786f29263008389071042f98b3655471c294bf8ae0e0f45d6c86d"
-review_by = 2026-11-30
-responsibilities = [
-  "library readiness aggregation and cache lifecycle",
-  "dependency requirement discovery and source signatures",
-  "installed-node inventory and dependency installation-plan projection",
-]
-next_extraction = "Extract dependency requirement inventory/cache and installation-plan projection from readiness aggregation."
-
-[[debt]]
 id = "SC-ARCH-018"
 owner = "SugarCubes tracked repositories"
 paths = ["sugarcubes/backend/services/tracked_repo_service.py"]
