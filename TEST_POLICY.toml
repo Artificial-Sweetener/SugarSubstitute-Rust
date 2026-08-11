@@ -93,7 +93,13 @@ sources = [
   "sugarcubes/backend/services/ownership_policy_service.py",
   "sugarcubes/backend/services/revision_service.py",
   "sugarcubes/backend/services/tracked_repo_preflight_service.py",
+  "sugarcubes/backend/services/tracked_repo_git.py",
+  "sugarcubes/backend/services/tracked_repo_catalog.py",
+  "sugarcubes/backend/services/tracked_repo_batch.py",
+  "sugarcubes/backend/services/tracked_repo_manifest.py",
+  "sugarcubes/backend/services/tracked_repo_models.py",
   "sugarcubes/backend/services/tracked_repo_service.py",
+  "sugarcubes/backend/services/tracked_repo_sync_policy.py",
 ]
 proofs = ["contract", "integration", "unit"]
 

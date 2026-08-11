@@ -46,7 +46,8 @@ from .cube_version_artifact_cache import (
     CubeVersionArtifactCacheKey,
     CubeVersionSelectionCacheKey,
 )
-from .tracked_repo_service import TrackedRepo, TrackedRepoService
+from .tracked_repo_models import TrackedRepo
+from .tracked_repo_service import TrackedRepoService
 
 _logger = logging.getLogger(__name__)
 _ARTIFACT_TRACE_MARKER = "SugarCubes cube library diagnostic"

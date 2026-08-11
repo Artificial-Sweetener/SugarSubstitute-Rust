@@ -22,7 +22,8 @@ from typing import Sequence
 
 from ..responses import BackendError
 from .cube_git_context import CubeGitContext
-from .tracked_repo_service import CubeCommitResult, TrackedRepoService
+from .tracked_repo_models import CubeCommitResult
+from .tracked_repo_service import TrackedRepoService
 
 
 class CubeHistoryService:

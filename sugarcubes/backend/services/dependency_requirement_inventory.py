@@ -31,7 +31,8 @@ from .dependency_requirement_sources import (
 )
 from .dependency_requirements import extract_versioned_requirements
 from .dependency_version_types import CubeDependencyRequirement
-from .tracked_repo_service import TrackedRepo, TrackedRepoService
+from .tracked_repo_models import TrackedRepo
+from .tracked_repo_service import TrackedRepoService
 
 _logger = logging.getLogger(__name__)
 _TRACE_MARKER = "SugarCubes cube library diagnostic"

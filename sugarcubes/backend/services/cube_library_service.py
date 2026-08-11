@@ -66,7 +66,8 @@ from .cube_summary import (
     summarize_cube_file,
 )
 from .ownership_policy_service import OwnershipPolicyService
-from .tracked_repo_service import TrackedRepo, TrackedRepoService
+from .tracked_repo_models import TrackedRepo
+from .tracked_repo_service import TrackedRepoService
 
 _logger = logging.getLogger(__name__)
 CUBE_LIBRARY_TRACE_MARKER = "SugarCubes cube library diagnostic"

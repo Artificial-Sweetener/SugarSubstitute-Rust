@@ -147,7 +147,7 @@ next_extraction = "Extract renderer/runtime lifecycle and preview observation fr
 id = "SC-ARCH-014"
 owner = "SugarCubes export workflows"
 paths = ["sugarcubes/backend/services/cube_export_service.py"]
-fingerprint = "082c46b309250f26e56d46f9e4985f44edc6a9217a1eb6e5e72e57c65d01c68c"
+fingerprint = "27992cf6f9bcc6cfcf7b665ce3400a1288db929983a6f3c81083468ee4772de8"
 review_by = 2026-11-30
 responsibilities = [
   "native subgraph and required-node contract analysis",
@@ -160,7 +160,7 @@ next_extraction = "Extract graph contract analysis and repository commit finaliz
 id = "SC-ARCH-015"
 owner = "SugarCubes library facade"
 paths = ["sugarcubes/backend/services/cube_library_service.py"]
-fingerprint = "11e8698dc0e57c6ad25540e39e96ae1a8c714f2a28868bf01714c4d02bf25d54"
+fingerprint = "571a8bbc05b818cbb15e1317d0e8716ecce17f2bdfa31fe952a37ace5c0148cd"
 review_by = 2026-11-30
 responsibilities = [
   "catalog state, revision, status, and invalidation ownership",
@@ -168,19 +168,6 @@ responsibilities = [
   "local import/delete and repository/source-path resolution",
 ]
 next_extraction = "Turn the facade into narrow delegation by extracting catalog projection and local artifact mutation/source resolution."
-
-[[debt]]
-id = "SC-ARCH-018"
-owner = "SugarCubes tracked repositories"
-paths = ["sugarcubes/backend/services/tracked_repo_service.py"]
-fingerprint = "6c4aeac4aa413a7a2053feab9ef63e8a9dc1b970ecb74ad43f61019b2c6d8803"
-review_by = 2026-11-30
-responsibilities = [
-  "tracked-repository manifest persistence and normalization",
-  "checkout creation, sync, update, protection, and status policy",
-  "Git staging, commits, ref resolution, and subprocess execution",
-]
-next_extraction = "Extract manifest repository persistence and Git command execution from tracked-repository lifecycle policy."
 
 [[debt]]
 id = "SC-ARCH-019"

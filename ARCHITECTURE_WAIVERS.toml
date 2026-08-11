@@ -232,7 +232,7 @@ path = "sugarcubes/backend/services/cube_library_artifact_service.py"
 owner = "SugarCubes library artifacts"
 justification = "The service cohesively resolves current and historical Cube artifacts, refs, cache identity, and artifact provenance."
 review_by = 2026-11-30
-max_lines = 730
+max_lines = 731
 
 [[waiver]]
 id = "SC-WAIVER-025"
@@ -242,7 +242,7 @@ path = "sugarcubes/backend/services/cube_library_service.py"
 owner = "SugarCubes library facade"
 justification = "Catalog, pack, artifact, readiness, mutation, and source resolution remain mixed as recorded by SC-ARCH-015."
 review_by = 2026-11-30
-max_lines = 1263
+max_lines = 1264
 debt = "SC-ARCH-015"
 next_limit = 500
 
@@ -255,18 +255,6 @@ owner = "SugarCubes local flavors"
 justification = "The service cohesively owns the local flavor aggregate, its persistence format, normalization, and collision invariants."
 review_by = 2026-11-30
 max_lines = 531
-
-[[waiver]]
-id = "SC-WAIVER-028"
-kind = "remediation"
-rule = "STRUCT003"
-path = "sugarcubes/backend/services/tracked_repo_service.py"
-owner = "SugarCubes tracked repositories"
-justification = "Manifest persistence, repository lifecycle policy, and Git execution remain mixed as recorded by SC-ARCH-018."
-review_by = 2026-11-30
-max_lines = 991
-debt = "SC-ARCH-018"
-next_limit = 500
 
 [[waiver]]
 id = "SC-WAIVER-029"

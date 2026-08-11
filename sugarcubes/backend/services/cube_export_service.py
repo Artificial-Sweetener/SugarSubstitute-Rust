@@ -53,7 +53,7 @@ from .cube_metadata import (
     normalize_metadata_string,
     normalize_metadata_update,
 )
-from .tracked_repo_service import CubeCommitResult
+from .tracked_repo_models import CubeCommitResult
 from .local_flavor_service import LocalFlavorService
 
 _logger = logging.getLogger(__name__)

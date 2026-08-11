@@ -17,7 +17,8 @@ from typing import Any, Protocol
 
 from ...cube_model import RESERVED_SOURCE_NAMES
 from .cube_file_io import list_cube_files, safe_relative_path
-from .tracked_repo_service import TrackedRepo, TrackedRepoService
+from .tracked_repo_models import TrackedRepo
+from .tracked_repo_service import TrackedRepoService
 
 _SOURCE_SIGNATURE_SCHEMA_VERSION = 1
 

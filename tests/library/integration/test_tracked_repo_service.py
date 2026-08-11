@@ -720,6 +720,50 @@ def test_sync_repo_rejects_checkout_without_cubes(tmp_path: Path) -> None:
     assert "does not contain any .cube files" in repo.last_sync_error
 
 
+def test_sync_all_preserves_legacy_failure_payload_shape(tmp_path: Path) -> None:
+    """Keep batch sync failures compatible with the host-facing response contract."""
+
+    def fake_git(args: Any, *, cwd: Any) -> Any:
+        class Result:
+            stdout = ""
+
+        if args == ["status", "--porcelain"]:
+            Result.stdout = ""
+        elif args == ["rev-parse", "HEAD"]:
+            Result.stdout = "abc123\n"
+        return Result()
+
+    extension_root = tmp_path / "extension"
+    extension_root.mkdir()
+    service = make_tracked_repo_service(extension_root, git_runner=fake_git)
+    checkout = service.checkout_path("Artificial-Sweetener", "Base-Cubes")
+    checkout.mkdir(parents=True)
+    (checkout / "README.md").write_text("not a cube", encoding="utf-8")
+
+    failed = service.sync_all_repos()["repos"][0]
+
+    assert set(failed) == {
+        "owner",
+        "repo",
+        "branch",
+        "enabled",
+        "default_base_repo",
+        "auto_update",
+        "local_checkout_path",
+        "last_sync_status",
+        "last_sync_error",
+        "last_sync_at",
+        "last_checked_at",
+        "last_check_status",
+        "last_check_error",
+        "remote_head_sha",
+        "local_head_sha",
+        "update_available",
+    }
+    assert failed["last_sync_status"] == "error"
+    assert "does not contain any .cube files" in failed["last_sync_error"]
+
+
 def test_add_repo_rejects_reserved_local_owner(tmp_path: Path) -> None:
     extension_root = tmp_path / "extension"
     extension_root.mkdir()
