@@ -144,19 +144,6 @@ responsibilities = [
 next_extraction = "Extract renderer/runtime lifecycle and preview observation from surface mount and geometry presentation."
 
 [[debt]]
-id = "SC-ARCH-012"
-owner = "SugarCubes backend HTTP adapter"
-paths = ["sugarcubes/backend/routes.py"]
-fingerprint = "a186e2f303efc9593809db7e31cc93a1833d44ff967db8df52b863c5252a7e09"
-review_by = 2026-11-30
-responsibilities = [
-  "Cube catalog, artifact, metadata, import, and export route adaptation",
-  "tracked repository and identity-policy route adaptation",
-  "flavor and dependency workflow route adaptation and route registration",
-]
-next_extraction = "Split handlers by endpoint family and retain one thin route-registration composition module."
-
-[[debt]]
 id = "SC-ARCH-013"
 owner = "SugarCubes dependency workflows"
 paths = ["sugarcubes/backend/services/cube_dependency_service.py"]

@@ -213,18 +213,6 @@ review_by = 2026-11-30
 max_lines = 622
 
 [[waiver]]
-id = "SC-WAIVER-020"
-kind = "remediation"
-rule = "STRUCT003"
-path = "sugarcubes/backend/routes.py"
-owner = "SugarCubes backend HTTP adapter"
-justification = "Multiple unrelated endpoint families remain in one adapter as recorded by SC-ARCH-012; the exact cap prevents growth."
-review_by = 2026-11-30
-max_lines = 704
-debt = "SC-ARCH-012"
-next_limit = 500
-
-[[waiver]]
 id = "SC-WAIVER-021"
 kind = "remediation"
 rule = "STRUCT003"
