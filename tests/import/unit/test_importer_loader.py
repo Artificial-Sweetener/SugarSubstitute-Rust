@@ -24,7 +24,7 @@ import json
 import pytest
 
 from sugarcubes.importer import CubeImportError, load_cube, prepare_import
-from sugarcubes.importer import loader as loader_module
+from sugarcubes.importer.runtime_definitions import RuntimeNodeDefinitions
 
 
 def _build_current_payload() -> dict[str, Any]:
@@ -357,12 +357,13 @@ def test_load_cube_rejects_legacy_runtime_payload(tmp_path: Path) -> None:
     }
 
 
-def test_loader_handles_missing_optional_comfy_nodes_runtime(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(loader_module, "_load_comfy_nodes_module", lambda: None)
+def test_loader_handles_missing_optional_comfy_nodes_runtime() -> None:
+    def missing_module(_module_name: str) -> Any:
+        raise ModuleNotFoundError
 
-    assert loader_module._has_definition("NotInstalled", {}) is False
+    definitions = RuntimeNodeDefinitions(module_loader=missing_module)
+
+    assert definitions.has_definition("NotInstalled", {}) is False
 
 
 def test_load_cube_treats_uuid_wrapper_nodes_as_defined_subgraphs(

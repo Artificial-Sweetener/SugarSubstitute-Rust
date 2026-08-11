@@ -168,16 +168,3 @@ responsibilities = [
   "local import/delete and repository/source-path resolution",
 ]
 next_extraction = "Turn the facade into narrow delegation by extracting catalog projection and local artifact mutation/source resolution."
-
-[[debt]]
-id = "SC-ARCH-019"
-owner = "SugarCubes import workflows"
-paths = ["sugarcubes/importer/loader.py"]
-fingerprint = "0337a4cc491a4bbfe91fb4b1bd18681ad7dc67e1da42ba003bebb48e28c8f808"
-review_by = 2026-11-30
-responsibilities = [
-  "Cube artifact loading and schema parsing",
-  "layout, marker, boundary, nested-subgraph, and connection projection",
-  "prepared Comfy import materialization and runtime node-definition lookup",
-]
-next_extraction = "Separate artifact/schema parsing, prepared import projection, and Comfy runtime definition adaptation."

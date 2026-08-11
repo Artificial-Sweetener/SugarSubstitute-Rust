@@ -285,15 +285,3 @@ owner = "SugarCubes Cube serialization"
 justification = "The module cohesively builds validated Cube serialization output, including symbolization and deterministic fingerprints."
 review_by = 2026-11-30
 max_lines = 547
-
-[[waiver]]
-id = "SC-WAIVER-032"
-kind = "remediation"
-rule = "STRUCT003"
-path = "sugarcubes/importer/loader.py"
-owner = "SugarCubes import workflows"
-justification = "Artifact parsing, import projection, and Comfy runtime adaptation remain mixed as recorded by SC-ARCH-019."
-review_by = 2026-11-30
-max_lines = 944
-debt = "SC-ARCH-019"
-next_limit = 500
