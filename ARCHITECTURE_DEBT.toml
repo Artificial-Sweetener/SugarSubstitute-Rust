@@ -186,7 +186,7 @@ next_extraction = "Turn the facade into narrow delegation by extracting catalog 
 id = "SC-ARCH-016"
 owner = "SugarCubes library readiness"
 paths = ["sugarcubes/backend/services/cube_library_readiness_service.py"]
-fingerprint = "2b6c534005096043a4e804e8cce7a5034562b8bc8e03134146bcc553c128298b"
+fingerprint = "c51889e76b9786f29263008389071042f98b3655471c294bf8ae0e0f45d6c86d"
 review_by = 2026-11-30
 responsibilities = [
   "library readiness aggregation and cache lifecycle",
@@ -194,19 +194,6 @@ responsibilities = [
   "installed-node inventory and dependency installation-plan projection",
 ]
 next_extraction = "Extract dependency requirement inventory/cache and installation-plan projection from readiness aggregation."
-
-[[debt]]
-id = "SC-ARCH-017"
-owner = "SugarCubes dependency version policy"
-paths = ["sugarcubes/backend/services/dependency_versions.py"]
-fingerprint = "bfd6cbbb55a1cf68c10b4f37f5a36c6104ec2931d578d9dc6203b89665efd496"
-review_by = 2026-11-30
-responsibilities = [
-  "requirement extraction and semantic/Git version policy",
-  "installed Python, custom-node, and Git dependency inventory",
-  "Git filesystem/subprocess inspection and remediation projection",
-]
-next_extraction = "Separate pure requirement/version evaluation from installed-environment and Git inspection adapters."
 
 [[debt]]
 id = "SC-ARCH-018"

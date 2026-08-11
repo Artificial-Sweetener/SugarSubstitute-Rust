@@ -35,12 +35,10 @@ from .cube_dependency_manifest import (
 )
 from .cube_file_io import list_cube_files, safe_relative_path
 from .cube_metadata import normalize_metadata_string
-from .dependency_versions import (
-    CubeDependencyRequirement,
-    classify_version,
-    dependency_version_readiness,
-    extract_versioned_requirements,
-)
+from .dependency_requirements import extract_versioned_requirements
+from .dependency_version_readiness import dependency_version_readiness
+from .dependency_version_types import CubeDependencyRequirement
+from .dependency_versions import classify_version
 from .tracked_repo_service import TrackedRepo, TrackedRepoService
 
 _logger = logging.getLogger(__name__)
@@ -805,4 +803,3 @@ class CubeLibraryReadinessService:
             for entry in custom_nodes_root.iterdir()
             if entry.is_dir() and entry.name
         }
-

@@ -98,9 +98,14 @@ name = "dependencies"
 sources = [
   "sugarcubes/backend/services/cube_dependency_manifest.py",
   "sugarcubes/backend/services/cube_dependency_service.py",
+  "sugarcubes/backend/services/dependency_git_inspection.py",
+  "sugarcubes/backend/services/dependency_inventory.py",
+  "sugarcubes/backend/services/dependency_requirements.py",
+  "sugarcubes/backend/services/dependency_version_readiness.py",
+  "sugarcubes/backend/services/dependency_version_types.py",
   "sugarcubes/backend/services/dependency_versions.py",
 ]
-proofs = ["integration"]
+proofs = ["integration", "unit"]
 
 [[area]]
 name = "frontend_core"
