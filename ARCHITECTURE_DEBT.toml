@@ -1,19 +1,6 @@
 schema = 1
 
 [[debt]]
-id = "SC-ARCH-007"
-owner = "SugarCubes overlay orchestration"
-paths = ["frontend/comfyui/ui/overlays/OverlayManager.ts"]
-fingerprint = "c36c67d9be24daa540fc5d75d0dbc6cc717b707071dfb1cb3a847442bdbf244b"
-review_by = 2026-11-30
-responsibilities = [
-  "canvas, graph, collapse, and draw hook lifecycle",
-  "group dragging and canonical bounds reconciliation",
-  "node movement queues, swap planning, layout commands, and save coordination",
-]
-next_extraction = "Extract hook lifecycle, movement/bounds reconciliation, and swap command coordination into focused collaborators."
-
-[[debt]]
 id = "SC-ARCH-008"
 owner = "SugarCubes placement workflow"
 paths = ["frontend/comfyui/ui/overlays/PlacementOverlay.ts"]

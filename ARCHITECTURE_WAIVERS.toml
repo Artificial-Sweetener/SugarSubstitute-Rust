@@ -61,18 +61,6 @@ review_by = 2026-11-30
 max_lines = 515
 
 [[waiver]]
-id = "SC-WAIVER-013"
-kind = "remediation"
-rule = "STRUCT003"
-path = "frontend/comfyui/ui/overlays/OverlayManager.ts"
-owner = "SugarCubes overlay orchestration"
-justification = "Host hooks, bounds reconciliation, movement, and swap commands remain mixed as recorded by SC-ARCH-007."
-review_by = 2026-11-30
-max_lines = 1219
-debt = "SC-ARCH-007"
-next_limit = 500
-
-[[waiver]]
 id = "SC-WAIVER-014"
 kind = "remediation"
 rule = "STRUCT003"
