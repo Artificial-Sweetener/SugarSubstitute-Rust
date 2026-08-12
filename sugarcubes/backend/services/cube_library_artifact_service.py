@@ -41,12 +41,12 @@ from .cube_metadata import (
 )
 from .cube_summary import build_cube_identity_fields, derive_cube_display_name
 from .cube_revision_version_projection import project_unique_cube_versions
+from .cube_library_source_resolver import CubeLibrarySourceResolver
 from .cube_version_artifact_cache import (
     CubeVersionArtifactCache,
     CubeVersionArtifactCacheKey,
     CubeVersionSelectionCacheKey,
 )
-from .tracked_repo_models import TrackedRepo
 from .tracked_repo_service import TrackedRepoService
 
 _logger = logging.getLogger(__name__)
@@ -60,32 +60,11 @@ class CubeLibraryArtifactOwner(Protocol):
     extension_root: Path
     load_cube_artifact: Any
     tracked_repo_service: TrackedRepoService
+    sources: CubeLibrarySourceResolver
 
     def resolve_cube_by_id(self, cube_id: str) -> Path: ...
 
     def summarize_cube(self, cube_path: Path) -> dict[str, Any]: ...
-
-    def _source_metadata_for_summary(
-        self,
-        summary: Mapping[str, Any],
-        *,
-        repo_cache: dict[tuple[str, str], TrackedRepo] | None = None,
-    ) -> dict[str, Any]: ...
-
-    def _local_head_sha(self, tracked: TrackedRepo) -> str: ...
-
-    def _is_repo_path_dirty(self, checkout: Path, relative_path: str) -> bool: ...
-
-    def _local_source_relative_path(self, cube_id: str) -> str: ...
-
-    def _local_source_metadata(
-        self,
-        *,
-        namespace: str,
-        source_path: str,
-        repo_root: Path,
-        repo_relative_path: str,
-    ) -> dict[str, Any]: ...
 
 
 def _runtime_version() -> str:
@@ -318,7 +297,7 @@ class CubeLibraryArtifactService:
             "targetModel": normalize_metadata_string(summary.get("target_model")),
             "supportedModels": list(summary.get("supported_models") or []),
             "contentHash": content_hash,
-            "source": self._library._source_metadata_for_summary(summary),
+            "source": self._library.sources.source_metadata_for_summary(summary),
             "cube": dict(payload),
         }
 
@@ -717,7 +696,7 @@ class CubeLibraryArtifactService:
             tracked = self._library.tracked_repo_service.get_repo(
                 context.owner, context.repo
             )
-            return self._library._local_head_sha(tracked)
+            return self._library.sources.local_head_sha(tracked)
         if not (context.repo_root / ".git").exists():
             return "nogit"
         try:
@@ -818,13 +797,13 @@ class CubeLibraryArtifactService:
                 "repo": context.repo,
                 "branch": tracked.branch,
                 "path": context.repo_relative_path,
-                "localHeadSha": self._library._local_head_sha(tracked),
+                "localHeadSha": self._library.sources.local_head_sha(tracked),
                 "remoteHeadSha": tracked.remote_head_sha,
-                "dirty": self._library._is_repo_path_dirty(
+                "dirty": self._library.sources.is_repo_path_dirty(
                     context.repo_root, context.repo_relative_path
                 ),
             }
-        return self._library._local_source_metadata(
+        return self._library.sources.local_source_metadata(
             namespace=context.namespace,
             source_path=context.repo_relative_path,
             repo_root=context.repo_root,

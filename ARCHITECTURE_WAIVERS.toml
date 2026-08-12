@@ -235,18 +235,6 @@ review_by = 2026-11-30
 max_lines = 731
 
 [[waiver]]
-id = "SC-WAIVER-025"
-kind = "remediation"
-rule = "STRUCT003"
-path = "sugarcubes/backend/services/cube_library_service.py"
-owner = "SugarCubes library facade"
-justification = "Catalog, pack, artifact, readiness, mutation, and source resolution remain mixed as recorded by SC-ARCH-015."
-review_by = 2026-11-30
-max_lines = 1264
-debt = "SC-ARCH-015"
-next_limit = 500
-
-[[waiver]]
 id = "SC-WAIVER-027"
 kind = "structural"
 rule = "STRUCT003"

@@ -29,7 +29,7 @@ from pathlib import Path
 import pytest
 
 from sugarcubes.backend.responses import BackendError
-from sugarcubes.backend.services import cube_library_service, cube_summary
+from sugarcubes.backend.services import cube_library_catalog_projection, cube_summary
 from sugarcubes.backend.services.cube_file_io import (
     compute_cube_content_hash_bytes,
 )
@@ -356,7 +356,7 @@ def test_backend_catalog_reuses_hashes_for_unchanged_status_and_catalog(
         "Artificial-Sweetener", "Base-Cubes"
     )
     _write_cube(checkout / "demo.cube", _cube_payload())
-    original_read = cube_library_service.read_cube_payload_with_hash
+    original_read = cube_library_catalog_projection.read_cube_payload_with_hash
     read_paths: list[Path] = []
 
     def count_catalog_read(path: Path) -> Any:
@@ -366,7 +366,7 @@ def test_backend_catalog_reuses_hashes_for_unchanged_status_and_catalog(
         return original_read(path)
 
     monkeypatch.setattr(
-        cube_library_service,
+        cube_library_catalog_projection,
         "read_cube_payload_with_hash",
         count_catalog_read,
     )
@@ -392,7 +392,7 @@ def test_backend_catalog_invalidation_rebuilds_unchanged_stat_rows(
         "Artificial-Sweetener", "Base-Cubes"
     )
     _write_cube(checkout / "demo.cube", _cube_payload())
-    original_read = cube_library_service.read_cube_payload_with_hash
+    original_read = cube_library_catalog_projection.read_cube_payload_with_hash
     read_paths: list[Path] = []
 
     def count_catalog_read(path: Path) -> Any:
@@ -402,7 +402,7 @@ def test_backend_catalog_invalidation_rebuilds_unchanged_stat_rows(
         return original_read(path)
 
     monkeypatch.setattr(
-        cube_library_service,
+        cube_library_catalog_projection,
         "read_cube_payload_with_hash",
         count_catalog_read,
     )

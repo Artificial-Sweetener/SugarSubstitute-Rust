@@ -11,13 +11,14 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Protocol
 
 from ...cube_model import RESERVED_SOURCE_NAMES
 from .cube_file_io import list_cube_files, safe_relative_path
-from .tracked_repo_models import TrackedRepo
+from .cube_library_catalog_projection import CubeLibraryCatalogProjection
+from .cube_library_listing import CubeLibraryListing
+from .cube_library_source_resolver import CubeLibrarySourceResolver
 from .tracked_repo_service import TrackedRepoService
 
 _SOURCE_SIGNATURE_SCHEMA_VERSION = 1
@@ -27,16 +28,9 @@ class DependencyRequirementSourceLibrary(Protocol):
     """Describe library operations needed to fingerprint dependency sources."""
 
     tracked_repo_service: TrackedRepoService
-
-    def _tracked_repo_from_payload(
-        self, repo_entry: Mapping[str, Any]
-    ) -> TrackedRepo: ...
-
-    def local_workspace_root(self) -> Path: ...
-
-    def _revision_pack_facts(
-        self, *, include_disabled: bool
-    ) -> list[dict[str, Any]]: ...
+    catalog_listing: CubeLibraryListing
+    catalog_projection: CubeLibraryCatalogProjection
+    sources: CubeLibrarySourceResolver
 
 
 def dependency_requirement_source_signature(
@@ -49,7 +43,7 @@ def dependency_requirement_source_signature(
     for repo_entry in repo_entries:
         if not repo_entry.get("enabled"):
             continue
-        tracked = library._tracked_repo_from_payload(repo_entry)
+        tracked = library.catalog_listing.tracked_repo_from_payload(repo_entry)
         repo_cube_facts.extend(
             _requirement_file_facts(
                 Path(tracked.local_checkout_path).resolve(),
@@ -61,7 +55,7 @@ def dependency_requirement_source_signature(
         )
 
     local_cube_facts: list[dict[str, Any]] = []
-    local_root = library.local_workspace_root().resolve()
+    local_root = library.sources.local_workspace_root().resolve()
     if local_root.exists():
         for namespace_dir in sorted(
             (path for path in local_root.iterdir() if path.is_dir()),
@@ -80,7 +74,7 @@ def dependency_requirement_source_signature(
             )
     facts = {
         "schemaVersion": _SOURCE_SIGNATURE_SCHEMA_VERSION,
-        "packs": library._revision_pack_facts(include_disabled=False),
+        "packs": library.catalog_projection.revision_pack_facts(include_disabled=False),
         "repoCubes": repo_cube_facts,
         "localCubes": local_cube_facts,
     }

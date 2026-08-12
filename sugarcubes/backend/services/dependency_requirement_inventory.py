@@ -15,12 +15,15 @@ import logging
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from time import perf_counter
-from typing import Any, Optional, Protocol
+from typing import Any, Protocol
 
 from ...instrumentation import log_diagnostic
 from ..responses import BackendError
 from .cube_dependency_manifest import iter_custom_node_requirement_ids
 from .cube_metadata import normalize_metadata_string
+from .cube_library_catalog_projection import CubeLibraryCatalogProjection
+from .cube_library_listing import CubeLibraryListing
+from .cube_library_source_resolver import CubeLibrarySourceResolver
 from .dependency_requirement_cache import (
     DependencyRequirementCache,
     DependencyRequirementSet,
@@ -44,24 +47,9 @@ class DependencyRequirementLibrary(DependencyRequirementSourceLibrary, Protocol)
 
     extension_root: Path
     tracked_repo_service: TrackedRepoService
-
-    def _list_catalog_cube_summaries(
-        self,
-        *,
-        include_disabled: bool,
-        include_internal_payload: bool = False,
-    ) -> list[dict[str, Any]]: ...
-
-    def _summary_payload_with_hash(
-        self, summary: Mapping[str, Any]
-    ) -> tuple[Optional[Mapping[str, Any]], Optional[str], str]: ...
-
-    def _source_metadata_for_summary(
-        self,
-        summary: Mapping[str, Any],
-        *,
-        repo_cache: dict[tuple[str, str], TrackedRepo] | None = None,
-    ) -> dict[str, Any]: ...
+    catalog_listing: CubeLibraryListing
+    catalog_projection: CubeLibraryCatalogProjection
+    sources: CubeLibrarySourceResolver
 
 
 class DependencyRequirementInventory:
@@ -118,7 +106,7 @@ class DependencyRequirementInventory:
         catalog_facts: list[tuple[tuple[str, str, str, str, str], dict[str, Any]]] = []
         repo_cache: dict[tuple[str, str], TrackedRepo] = {}
         phase_started_at = perf_counter()
-        summaries = self._library._list_catalog_cube_summaries(
+        summaries = self._library.catalog_listing.list_catalog_cube_summaries(
             include_disabled=False,
             include_internal_payload=True,
         )
@@ -128,15 +116,15 @@ class DependencyRequirementInventory:
             cube_id = normalize_metadata_string(summary.get("cube_id"))
             try:
                 phase_started_at = perf_counter()
-                payload, error, content_hash = self._library._summary_payload_with_hash(
-                    summary
+                payload, error, content_hash = (
+                    self._library.catalog_projection.summary_payload_with_hash(summary)
                 )
                 add_phase_time("summary_payload_with_hash", phase_started_at)
             except BackendError:
                 skipped_payload_count += 1
                 continue
             phase_started_at = perf_counter()
-            source = self._library._source_metadata_for_summary(
+            source = self._library.sources.source_metadata_for_summary(
                 summary, repo_cache=repo_cache
             )
             add_phase_time("source_metadata_for_summary", phase_started_at)
@@ -214,7 +202,9 @@ class DependencyRequirementInventory:
         """Return the catalog revision from already-read cube facts."""
 
         facts = {
-            "packs": self._library._revision_pack_facts(include_disabled=False),
+            "packs": self._library.catalog_projection.revision_pack_facts(
+                include_disabled=False
+            ),
             "cubes": [
                 fact for _, fact in sorted(catalog_facts, key=lambda item: item[0])
             ],
