@@ -61,18 +61,6 @@ review_by = 2026-11-30
 max_lines = 515
 
 [[waiver]]
-id = "SC-WAIVER-012"
-kind = "remediation"
-rule = "STRUCT003"
-path = "frontend/comfyui/ui/overlays/CubeChromeOverlay.ts"
-owner = "SugarCubes Cube chrome"
-justification = "Hook lifecycle, rendering, and interaction remain mixed as recorded by SC-ARCH-006; the exact cap prevents growth."
-review_by = 2026-11-30
-max_lines = 1422
-debt = "SC-ARCH-006"
-next_limit = 500
-
-[[waiver]]
 id = "SC-WAIVER-013"
 kind = "remediation"
 rule = "STRUCT003"

@@ -1,19 +1,6 @@
 schema = 1
 
 [[debt]]
-id = "SC-ARCH-006"
-owner = "SugarCubes Cube chrome"
-paths = ["frontend/comfyui/ui/overlays/CubeChromeOverlay.ts"]
-fingerprint = "8cd0f7ae5cf82903b094c289da2b7b6310b2179758ae9fa76da54d60c8075d0f"
-review_by = 2026-11-30
-responsibilities = [
-  "group draw-hook installation and lifecycle",
-  "badge, icon, tooltip, color, and layout rendering",
-  "pointer hit testing, hover state, and chrome action dispatch",
-]
-next_extraction = "Separate group hook lifecycle, immutable chrome layout/rendering, and pointer interaction routing."
-
-[[debt]]
 id = "SC-ARCH-007"
 owner = "SugarCubes overlay orchestration"
 paths = ["frontend/comfyui/ui/overlays/OverlayManager.ts"]
