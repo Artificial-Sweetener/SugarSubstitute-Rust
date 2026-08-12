@@ -143,6 +143,7 @@ sources = [
   "frontend/comfyui/*.ts",
   "frontend/comfyui/ui/*.ts",
   "frontend/comfyui/ui/core/**",
+  "frontend/comfyui/ui/debug/**",
   "frontend/comfyui/ui/types/**",
 ]
 proofs = ["integration", "unit"]

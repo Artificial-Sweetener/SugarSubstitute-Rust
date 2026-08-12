@@ -31,25 +31,21 @@ import { ComfyCubeOutputEventBridge, } from './ui/cube/execution/ComfyCubeOutput
 import { ComfyCubeOutputHistoryAdapter, } from './ui/cube/execution/ComfyCubeOutputHistoryAdapter.js';
 import { CubeOutputExecutionStore } from './ui/cube/execution/CubeOutputExecutionStore.js';
 import { NativeSubgraphBoundaryResolver } from './ui/cube/graph/NativeSubgraphBoundaryResolver.js';
-import { getGroupSugarcubes } from './ui/graph/GroupMetadata.js';
-import { coerceVec2, readVector2 } from './ui/graph/VectorUtils.js';
-import { computePayloadBounds, drawGhostRect, getPlacementGroupLabel, resolvePreviewRect, } from './ui/overlays/PlacementHelpers.js';
 import { buildShiftedPlacementPayload } from './ui/import/PlacementPayload.js';
-import { CubeImportCommandService } from './ui/import/CubeImportCommandService.js';
-import { CubeImportOutcomeReporter } from './ui/import/CubeImportOutcomeReporter.js';
-import { CubePreparedImportService } from './ui/import/CubePreparedImportService.js';
-import { ComfyCanvasDropOriginAdapter, } from './ui/import/ComfyCanvasDropOriginAdapter.js';
+import { CubeImportHostCoordinator } from './ui/import/CubeImportHostCoordinator.js';
 import { SugarCubesSidebarHostAdapter, } from './ui/sidebar/SugarCubesSidebarHostAdapter.js';
 import { createPublicApi, getSugarCubesUI } from './ui/index.js';
-import { computeInnerBounds } from './ui/graph/CubeBounds.js';
 import { createHostSettingsController } from './ui/settings/HostSettingsController.js';
-import { CubeBlueprintPersistenceGuard } from './ui/affordance/CubeBlueprintPersistenceGuard.js';
 import { CubeHostAffordanceController } from './ui/affordance/CubeHostAffordanceController.js';
 import { CubeAffordanceHostLifecycle } from './ui/affordance/CubeAffordanceHostLifecycle.js';
 import { notifyComfyGraphCleared } from './ui/affordance/ComfyGraphClearNotifier.js';
 import { createComfyCubePickerIntegration } from './ui/picker/ComfyCubePickerComposition.js';
 import { CubeCatalogInvalidationCoordinator } from './ui/core/CubeCatalogInvalidationCoordinator.js';
 import { CubeGraphInventory } from './ui/cube/node/CubeGraphInventory.js';
+import { CubeGraphConfigurationLifecycle } from './ui/cube/CubeGraphConfigurationLifecycle.js';
+import { CubeExtensionSetupLifecycle } from './ui/cube/CubeExtensionSetupLifecycle.js';
+import { CubeHostFeedback } from './ui/core/CubeHostFeedback.js';
+import { createSugarCubesDebugApi } from './ui/debug/SugarCubesDebugApi.js';
 export { buildShiftedPlacementPayload };
 const EXTENSION_NAME = 'SugarCubes.UI';
 const IMPORT_STORAGE_KEY = 'SugarCubes.Import.LastCube';
@@ -89,6 +85,12 @@ const logger = consoleRef || {
     info() { },
     debug() { },
 };
+const hostFeedback = new CubeHostFeedback({
+    storage,
+    toast: toastService,
+    logger,
+    lastCubeStorageKeys: [IMPORT_STORAGE_KEY],
+});
 const cubePreconfiguration = new CubeWorkflowPreconfiguration();
 const cubePreviewRetention = new CubePreviewRetentionStore();
 const cubeRuntimeLifecycle = new ComfyCubeRuntimeLifecycle(createCubeRuntime);
@@ -124,7 +126,6 @@ const cubeOutputPromptAdapter = new CubeOutputPromptAdapter({
     getCubes: () => cubeRuntimeLifecycle.current()?.nodes.list() ?? [],
     boundaryResolver: nativeBoundaryResolver,
 });
-let blueprintPersistenceGuard = null;
 const cubePromptPipeline = new CubePromptPipeline({
     applyProximity: (payload) => overlayManager.proximity.applyProximityToPrompt(payload),
     adaptCubeOutputs: (payload) => cubeOutputPromptAdapter.apply(payload),
@@ -226,37 +227,11 @@ function readCubeMetadataString(node, key) {
 function requireCubeRuntime() {
     return cubeRuntimeLifecycle.require();
 }
-const LAST_CUBE_STORAGE_KEYS = Object.freeze([IMPORT_STORAGE_KEY]);
 function readErrorMessage(error) {
-    return error instanceof Error ? error.message : String(error);
-}
-function persistLastCubeId(value) {
-    if (value == null) {
-        return;
-    }
-    const trimmed = typeof value === 'string' ? value.trim() : '';
-    if (!trimmed) {
-        return;
-    }
-    try {
-        if (!storage) {
-            return;
-        }
-        const seen = new Set();
-        for (const key of LAST_CUBE_STORAGE_KEYS) {
-            if (!key || seen.has(key)) {
-                continue;
-            }
-            storage.writeValue(key, trimmed);
-            seen.add(key);
-        }
-    }
-    catch (error) {
-        logger.warn('SugarCubes: failed to persist the last imported Cube id.', error);
-    }
+    return hostFeedback.readErrorMessage(error);
 }
 function pushToastMessage(severity, summary, detail) {
-    toastService?.push?.(severity, summary, detail);
+    hostFeedback.pushToast(severity, summary, detail);
 }
 const hostSettingsController = createHostSettingsController({
     adapter,
@@ -276,90 +251,42 @@ const sidebarHost = new SugarCubesSidebarHostAdapter({
     browser: ui.cubeBrowser,
     logger,
 });
-const dropOrigin = new ComfyCanvasDropOriginAdapter({
-    getCanvas: () => adapter.getCanvas(),
+const importHostCoordinator = new CubeImportHostCoordinator({
+    ui,
+    app: appRef,
+    feedback: hostFeedback,
+    getRuntime: requireCubeRuntime,
     logger,
 });
-const computeDropOrigin = () => dropOrigin.compute();
 function reportImportOutcome(defaultAlias, backendWarnings, importResult, payloadValue, options = {}) {
-    importOutcomeReporter.report(defaultAlias, backendWarnings, importResult, payloadValue, options);
+    importHostCoordinator.report(defaultAlias, backendWarnings, importResult, payloadValue, options);
 }
 async function applyPreparedImport(payloadValue, options = {}) {
-    return preparedImportService.apply(payloadValue, options);
+    return importHostCoordinator.apply(payloadValue, options);
 }
-const preparedImportService = new CubePreparedImportService({
-    getGraph: () => appRef?.graph,
-    getLiteGraph: () => adapter.getLiteGraph?.(),
-    getNodeRenderer: () => adapter.getNodeRenderer?.(),
-    getRuntime: requireCubeRuntime,
-    assertRootPlacement: () => requireCubeRuntime().graphScope.assertCurrentRoot('imported'),
-    readErrorMessage,
+const graphConfigurationLifecycle = new CubeGraphConfigurationLifecycle({
+    app: appRef,
+    ui,
+    runtimeLifecycle: cubeRuntimeLifecycle,
+    requireRuntime: requireCubeRuntime,
+    preconfiguration: cubePreconfiguration,
+    affordances: cubeAffordances,
+    overlays: overlayManager,
+    outputStore: cubeOutputExecutionStore,
+    outputHistory: cubeOutputHistoryAdapter,
+    feedback: hostFeedback,
+    logger,
 });
-const importOutcomeReporter = new CubeImportOutcomeReporter({
-    focusImportedCube: (result) => {
-        const canvas = adapter.getCanvas();
-        const bounds = result.bounds;
-        if (!canvas || !bounds)
-            return;
-        const rectangle = [
-            bounds.minX,
-            bounds.minY,
-            bounds.maxX - bounds.minX,
-            bounds.maxY - bounds.minY,
-        ];
-        const redraw = () => canvas.setDirty?.(true, true);
-        if (typeof canvas.ds?.animateToBounds === 'function') {
-            canvas.ds.animateToBounds(rectangle, redraw);
-        }
-        else {
-            canvas.ds?.fitToBounds?.(rectangle);
-            redraw();
-        }
-    },
-    pushToast: pushToastMessage,
-});
-const importCommandService = new CubeImportCommandService({
-    api: cubeApi,
-    applyPreparedImport,
-    computeDropOrigin,
-    reportOutcome: (defaultAlias, backendWarnings, result, payload) => importOutcomeReporter.report(defaultAlias, backendWarnings, result, payload),
-    persistLastCubeId: (cubeId) => persistLastCubeId(cubeId),
-    pushToast: pushToastMessage,
-    readErrorMessage,
-});
-ui.cubeBrowser.configure({
-    actions: {
-        computeDropOrigin,
-        importCubeByName: (cubeId, options) => importCommandService.importCurrent(cubeId, options),
-        importCubeRevision: (cubeId, revisionRef, options) => importCommandService.importRevision(cubeId, revisionRef, options),
-        onCubesUpdated: (cubes) => ui.dirtyManager.updateKnownCubes(cubes),
-        openConfirmDialog: (options) => ui.confirmDialog.open(options),
-        promoteCube: (cube) => ui.promotionService.promote(cube),
-        reconcileCubeIdentity: (identity) => ui.identityReconciler.reconcile(identity),
-        startCubePlacement: (cubeId, options) => overlayManager.placement.start(cubeId, options),
-    },
-    helpers: {
-        coerceVec2,
-        computePayloadBounds: (entries, ctx) => computePayloadBounds(entries, ctx, adapter.getLiteGraph?.()),
-        drawGhostRect,
-        getPlacementGroupLabel: (defaultAlias, group) => getPlacementGroupLabel(defaultAlias, group, getGroupSugarcubes),
-        readVector2,
-        resolvePreviewRect: (entry, pos, size, ctx) => resolvePreviewRect(entry, pos, size, ctx, adapter.getLiteGraph?.()),
-    },
-    placement: {
-        commit: () => overlayManager.placement.commit(),
-        computeOriginFromEvent: (event) => overlayManager.placement.computeOriginFromEvent(event),
-        getState: () => overlayManager.placement.getState(),
-        isPointerOverCanvas: (event) => overlayManager.placement.isPointerOverCanvas(event),
-        setCommitInProgress: (value) => overlayManager.placement.setCommitInProgress(value),
-        setDirty: () => overlayManager.placement.setDirty(),
-        setOrigin: (origin) => overlayManager.placement.setOrigin(origin),
-        start: (cubeId, options) => overlayManager.placement.start(cubeId, {
-            closeBrowser: options.closeBrowser,
-            ...(options.defaultAlias ? { defaultAlias: options.defaultAlias } : {}),
-        }),
-        stop: (reason) => overlayManager.placement.stop(reason),
-    },
+const extensionSetupLifecycle = new CubeExtensionSetupLifecycle({
+    api,
+    app: appRef,
+    ui,
+    sidebar: sidebarHost,
+    settings: hostSettingsController,
+    promptQueue: promptQueueBridge,
+    outputEvents: cubeOutputEventBridge,
+    outputHistory: cubeOutputHistoryAdapter,
+    logger,
 });
 /** Define the ComfyUI extension lifecycle owned by SugarCubes. */
 export const sugarCubesExtension = {
@@ -380,132 +307,17 @@ export const sugarCubesExtension = {
         return cubeAffordances.getNodeMenuItems(node);
     },
     async setup() {
-        try {
-            sidebarHost.register();
-            hostSettingsController.register();
-            await ui.setup();
-            if (typeof Reflect.get(api, 'storeUserData') === 'function') {
-                blueprintPersistenceGuard ??= new CubeBlueprintPersistenceGuard(api);
-                blueprintPersistenceGuard.install();
-            }
-            else {
-                logger.warn('SugarCubes: Comfy Blueprint persistence guard is unavailable.');
-            }
-            promptQueueBridge.install();
-            cubeOutputEventBridge.install();
-            cubeOutputHistoryAdapter.install();
-            await cubeOutputHistoryAdapter.hydrateRecent();
-            await hostSettingsController.refresh({ checkForUpdates: false });
-            const graph = appRef?.canvas?.graph ?? appRef?.graph;
-            overlayManager.proximity.refreshOverlayState({
-                recompute: true,
-                ...(graph ? { graph } : {}),
-            });
-            hostSettingsController.refreshUi();
-            ui.instanceManager.scheduleRefresh({ ...(graph ? { graph } : {}), reason: 'setup' });
-            ui.dirtyManager.requestRefresh({ ...(graph ? { graph } : {}), reason: 'setup' });
-        }
-        catch (error) {
-            logger.error('SugarCubes: setup failed', error);
-            throw error;
-        }
+        await extensionSetupLifecycle.setup();
     },
     beforeConfigureGraph(graphData) {
-        try {
-            cubeRuntimeLifecycle.reset();
-            cubeOutputExecutionStore.clear();
-            cubePreconfiguration.prepare(graphData);
-            cubeAffordances.attach(requireCubeRuntime());
-            overlayManager.proximity.resetOverlayState();
-        }
-        catch (error) {
-            logger.error(`SugarCubes: Cube preconfiguration failed: ${readErrorMessage(error)}`, error);
-            throw error;
-        }
+        graphConfigurationLifecycle.beforeConfigureGraph(graphData);
     },
     afterConfigureGraph(missingNodeTypes, comfyApp) {
-        try {
-            const runtime = requireCubeRuntime();
-            runtime.hostPlacementGuard.completeHydration();
-            runtime.restoreLegacy(cubePreconfiguration.takeLegacyBatch());
-            runtime.detectLegacyBlueprints();
-            const nestedCubes = runtime.graphInventory.snapshot().nestedCubes;
-            if (nestedCubes.length) {
-                pushToastMessage('error', 'Nested SugarCubes need attention', `${String(nestedCubes.length)} SugarCube${nestedCubes.length === 1 ? '' : 's'} ` +
-                    `${nestedCubes.length === 1 ? 'is' : 'are'} inside a Subgraph. ` +
-                    'The workflow was preserved, but execution and Cube saving are blocked until the nested wrapper is removed.');
-            }
-            cubeAffordances.adaptMissingNodes(missingNodeTypes);
-            void cubeOutputHistoryAdapter.hydrateRecent();
-            const graph = appRef?.canvas?.graph ?? comfyApp.graph ?? appRef?.graph;
-            overlayManager.proximity.refreshOverlayState({
-                recompute: true,
-                ...(graph ? { graph } : {}),
-            });
-            ui.instanceManager.scheduleRefresh({ ...(graph ? { graph } : {}), reason: 'configure' });
-            ui.dirtyManager.requestRefresh({ ...(graph ? { graph } : {}), reason: 'configure' });
-        }
-        catch (error) {
-            logger.error(`SugarCubes: Cube postconfiguration failed: ${readErrorMessage(error)}`, error);
-            throw error;
-        }
+        graphConfigurationLifecycle.afterConfigureGraph(missingNodeTypes, comfyApp);
     },
 };
 app.registerExtension(sugarCubesExtension);
-const debugApi = {
-    getDirtyState(instanceId) {
-        return ui.dirtyManager.getDebugState(instanceId);
-    },
-    bounds: {
-        get(instanceId) {
-            if (!instanceId) {
-                return null;
-            }
-            const graph = appRef?.graph || null;
-            const index = ui.containmentService?.buildIndex?.(graph) || null;
-            const entry = index?.instanceById?.get?.(String(instanceId)) || null;
-            if (!entry?.metadata?.bounds) {
-                return null;
-            }
-            return {
-                bounds: entry.metadata.bounds,
-                inner: computeInnerBounds(entry.metadata.bounds),
-            };
-        },
-        reconcile(instanceId) {
-            const graph = appRef?.graph || null;
-            if (!graph || !ui.boundsReconciler) {
-                return { changed: [] };
-            }
-            const result = ui.boundsReconciler.reconcileAll({ graph });
-            const changed = Array.from(result.changed || []);
-            if (instanceId && !changed.includes(String(instanceId))) {
-                return { changed: [] };
-            }
-            return { changed };
-        },
-        resolveCollisions(instanceId) {
-            const graph = appRef?.graph || null;
-            if (!graph || !ui.collisionService || !instanceId) {
-                return { moved: false };
-            }
-            const index = ui.containmentService?.buildIndex?.(graph) || null;
-            return ui.collisionService.resolveCollisions({
-                graph,
-                activeInstanceId: String(instanceId),
-                index,
-            });
-        },
-    },
-    layout: {
-        service: ui.layoutService,
-        appendCube: (options) => ui.layoutService.appendCube(options),
-        insertBetween: (options) => ui.layoutService.insertBetween(options),
-        insertBefore: (options) => ui.layoutService.insertBefore(options),
-        swapOrder: (options) => ui.layoutService.swapOrder(options),
-        replaceCube: (options) => ui.layoutService.replaceCube(options),
-    },
-};
+const debugApi = createSugarCubesDebugApi({ ui, app: appRef });
 if (windowRef) {
     Object.assign(windowRef, {
         SugarCubes: createPublicApi(ui),

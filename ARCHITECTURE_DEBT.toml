@@ -1,19 +1,6 @@
 schema = 1
 
 [[debt]]
-id = "SC-ARCH-001"
-owner = "SugarCubes frontend composition"
-paths = ["frontend/comfyui/ui.ts"]
-fingerprint = "a2b8ed952d4f099733f328a2fd2a2fd5437f22703faec1e1acace8770bacbc06"
-review_by = 2026-11-30
-responsibilities = [
-  "extension and host lifecycle composition",
-  "Cube import command orchestration and outcome feedback",
-  "prompt queue, output, settings, sidebar, and debug integration wiring",
-]
-next_extraction = "Extract import orchestration and host feedback into application owners, leaving ui.ts as declarative extension composition."
-
-[[debt]]
 id = "SC-ARCH-002"
 owner = "SugarCubes Cube browser"
 paths = ["frontend/comfyui/ui/browser/CubeBrowserController.ts"]

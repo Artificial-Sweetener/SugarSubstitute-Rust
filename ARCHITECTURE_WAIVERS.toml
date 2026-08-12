@@ -1,18 +1,6 @@
 schema = 1
 
 [[waiver]]
-id = "SC-WAIVER-001"
-kind = "remediation"
-rule = "STRUCT003"
-path = "frontend/comfyui/ui.ts"
-owner = "SugarCubes frontend composition"
-justification = "The extension entry currently mixes composition with import and feedback orchestration; SC-ARCH-001 prevents growth while ownership is extracted."
-review_by = 2026-11-30
-max_lines = 554
-debt = "SC-ARCH-001"
-next_limit = 500
-
-[[waiver]]
 id = "SC-WAIVER-002"
 kind = "structural"
 rule = "STRUCT003"
