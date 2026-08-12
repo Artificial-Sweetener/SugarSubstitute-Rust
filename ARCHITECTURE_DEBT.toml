@@ -1,19 +1,6 @@
 schema = 1
 
 [[debt]]
-id = "SC-ARCH-005"
-owner = "SugarCubes graph instances"
-paths = ["frontend/comfyui/ui/graph/InstanceManager.ts"]
-fingerprint = "ddd42f309d94a429a541d5899ac130275b1a3203e62d82bfba4bca18df0d865a"
-review_by = 2026-11-30
-responsibilities = [
-  "instance refresh scheduling and lifecycle",
-  "reusable group discovery and metadata reconciliation",
-  "group geometry, title, alias, and schema migration projection",
-]
-next_extraction = "Move reusable-group reconciliation and group presentation projection out of the refresh lifecycle manager."
-
-[[debt]]
 id = "SC-ARCH-006"
 owner = "SugarCubes Cube chrome"
 paths = ["frontend/comfyui/ui/overlays/CubeChromeOverlay.ts"]
