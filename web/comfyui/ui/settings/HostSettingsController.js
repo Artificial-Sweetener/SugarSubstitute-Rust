@@ -17,7 +17,8 @@
  * Own SugarCubes host settings and tracked-pack management.
  */
 import { TrackedPackManagerDialog } from './TrackedPackManagerDialog.js';
-import { isRecord } from '../types/common.js';
+import { HostSettingsRepositoryController } from './HostSettingsRepositoryController.js';
+import { createRepoPanelState, } from './HostSettingsContracts.js';
 /** Create the repository-scoped host settings controller. */
 export function createHostSettingsController(dependencies) {
     const { adapter, appRef, cubeApi, ui, logger } = dependencies;
@@ -33,71 +34,18 @@ export function createHostSettingsController(dependencies) {
         trackedPacks: null,
         manageTrackedPacks: null,
     };
-    const repoPanelState = {
-        loading: false,
-        checking: false,
-        repos: [],
-        error: '',
-        identityPolicy: {
-            claimed_github_owner: '',
-            allow_system_owner_claim: false,
-            has_claimed_github_owner: false,
-            claimed_github_owner_source: 'default',
-            allow_system_owner_claim_source: 'default',
-            env_override_active: false,
-        },
-    };
+    const repoPanelState = createRepoPanelState();
     const trackedPackManagerDialog = new TrackedPackManagerDialog({ adapter });
-    function readPackApiPayload(value) {
-        return value;
-    }
-    function readTrackedRepos(value) {
-        if (!Array.isArray(value))
-            return [];
-        return value.flatMap((entry) => {
-            if (!isRecord(entry) || typeof entry.owner !== 'string' || typeof entry.repo !== 'string') {
-                return [];
-            }
-            return [
-                {
-                    owner: entry.owner,
-                    repo: entry.repo,
-                    ...(typeof entry.repo_ref === 'string' ? { repo_ref: entry.repo_ref } : {}),
-                    enabled: entry.enabled !== false,
-                    ...(typeof entry.auto_update === 'boolean' ? { auto_update: entry.auto_update } : {}),
-                    ...(typeof entry.update_available === 'boolean'
-                        ? { update_available: entry.update_available }
-                        : {}),
-                    ...(typeof entry.is_writable === 'boolean' ? { is_writable: entry.is_writable } : {}),
-                    ...(typeof entry.is_system_pack === 'boolean'
-                        ? { is_system_pack: entry.is_system_pack }
-                        : {}),
-                    ...(typeof entry.default_base_repo === 'boolean'
-                        ? { default_base_repo: entry.default_base_repo }
-                        : {}),
-                    ...(typeof entry.last_sync_status === 'string'
-                        ? { last_sync_status: entry.last_sync_status }
-                        : {}),
-                    ...(typeof entry.last_check_status === 'string'
-                        ? { last_check_status: entry.last_check_status }
-                        : {}),
-                    ...(typeof entry.last_checked_at === 'string'
-                        ? { last_checked_at: entry.last_checked_at }
-                        : {}),
-                    ...(typeof entry.last_sync_at === 'string' ? { last_sync_at: entry.last_sync_at } : {}),
-                    ...(typeof entry.last_check_error === 'string'
-                        ? { last_check_error: entry.last_check_error }
-                        : {}),
-                    ...(typeof entry.last_sync_error === 'string'
-                        ? { last_sync_error: entry.last_sync_error }
-                        : {}),
-                    ...(typeof entry.write_block_reason === 'string'
-                        ? { write_block_reason: entry.write_block_reason }
-                        : {}),
-                },
-            ];
-        });
-    }
+    const repositoryCommands = new HostSettingsRepositoryController({
+        adapter,
+        cubeApi,
+        ui,
+        state: repoPanelState,
+        pushToast: pushToastMessage,
+        readErrorMessage,
+        invalidateDependentCatalogs,
+        refreshUi: refreshSugarCubesSettingsUi,
+    });
     function formatRepoTimestamp(value) {
         if (typeof value !== 'string' || !value.trim()) {
             return 'Never';
@@ -129,67 +77,6 @@ export function createHostSettingsController(dependencies) {
             return { label: 'Up to date', tone: 'neutral' };
         }
         return { label: 'Never checked', tone: 'muted' };
-    }
-    async function requestConfirmation({ title, message, confirmLabel, }) {
-        if (ui.dialogs?.confirm) {
-            return ui.dialogs.confirm({ title, message, confirmLabel });
-        }
-        if (ui.confirmDialog?.open) {
-            return ui.confirmDialog.open({ title, message, confirmLabel });
-        }
-        const confirmRef = adapter.getWindow?.()?.confirm || globalThis.confirm;
-        if (typeof confirmRef !== 'function') {
-            return false;
-        }
-        const lines = Array.isArray(message) ? message : [message];
-        return Boolean(confirmRef(lines.filter(Boolean).join('\n')));
-    }
-    function parseRepoReference(value) {
-        const normalized = typeof value === 'string' ? value.trim() : '';
-        if (!normalized) {
-            return { owner: '', repo: '' };
-        }
-        const [owner = '', repo = ''] = normalized.split('/', 2);
-        return { owner: owner.trim(), repo: repo.trim() };
-    }
-    function validateRepoReference(value) {
-        const { owner, repo } = parseRepoReference(value);
-        if (!owner || !repo) {
-            return 'Cube Pack source must use owner/repo format.';
-        }
-        return '';
-    }
-    function normalizeOwnerIdentity(value) {
-        return typeof value === 'string' ? value.trim().toLowerCase() : '';
-    }
-    function readIdentityPolicyFromPayload(payload) {
-        if (!isRecord(payload)) {
-            return {
-                claimed_github_owner: '',
-                allow_system_owner_claim: false,
-                has_claimed_github_owner: false,
-                claimed_github_owner_source: 'default',
-                allow_system_owner_claim_source: 'default',
-                env_override_active: false,
-            };
-        }
-        const claimedOwner = typeof payload.claimed_github_owner === 'string' ? payload.claimed_github_owner.trim() : '';
-        const allowSystemOwnerClaim = Boolean(payload.allow_system_owner_claim);
-        const claimedOwnerSource = typeof payload.claimed_github_owner_source === 'string' && payload.claimed_github_owner_source
-            ? payload.claimed_github_owner_source
-            : 'default';
-        const allowSystemOwnerClaimSource = typeof payload.allow_system_owner_claim_source === 'string' &&
-            payload.allow_system_owner_claim_source
-            ? payload.allow_system_owner_claim_source
-            : 'default';
-        return {
-            claimed_github_owner: claimedOwner,
-            allow_system_owner_claim: allowSystemOwnerClaim,
-            has_claimed_github_owner: Boolean(claimedOwner),
-            claimed_github_owner_source: claimedOwnerSource,
-            allow_system_owner_claim_source: allowSystemOwnerClaimSource,
-            env_override_active: Boolean(payload.env_override_active),
-        };
     }
     function describeRepoOwnership(repo) {
         if (!repo || typeof repo !== 'object') {
@@ -330,12 +217,12 @@ export function createHostSettingsController(dependencies) {
         const actions = documentRef.createElement('div');
         applySettingsActionGroupStyle(actions);
         const claimOwnerButton = createSettingsActionButton('Claim', () => {
-            handleClaimGithubOwner().catch((error) => {
+            repositoryCommands.claimGithubOwner().catch((error) => {
                 pushToastMessage('error', 'Settings update failed', readErrorMessage(error));
             });
         });
         const clearClaimButton = createSettingsActionButton('Clear', () => {
-            handleClearGithubOwnerClaim().catch((error) => {
+            repositoryCommands.clearGithubOwner().catch((error) => {
                 pushToastMessage('error', 'Settings update failed', readErrorMessage(error));
             });
         });
@@ -467,7 +354,7 @@ export function createHostSettingsController(dependencies) {
         settingsUiState.trackedPacks = { root, summary };
         refreshTrackedPacksSettingRow();
         if (!repoPanelState.loading) {
-            refreshTrackedRepoPanel({ checkForUpdates: false }).catch((error) => {
+            repositoryCommands.refresh({ checkForUpdates: false }).catch((error) => {
                 logger.warn('SugarCubes: failed to refresh tracked pack summary', error);
             });
         }
@@ -477,7 +364,7 @@ export function createHostSettingsController(dependencies) {
         if (!documentRef || trackedPackManagerDialog.isOpen) {
             return;
         }
-        await refreshTrackedRepoPanel({ checkForUpdates: false });
+        await repositoryCommands.refresh({ checkForUpdates: false });
         if (trackedPackManagerDialog.isOpen) {
             return;
         }
@@ -604,7 +491,7 @@ export function createHostSettingsController(dependencies) {
         const actions = documentRef.createElement('div');
         applySettingsActionGroupStyle(actions);
         const addButton = createSettingsActionButton('Add Pack', () => {
-            handleAddTrackedRepo().catch((error) => {
+            repositoryCommands.addTrackedRepo().catch((error) => {
                 const message = readErrorMessage(error);
                 pushToastMessage('error', 'Pack add failed', message);
             });
@@ -614,7 +501,7 @@ export function createHostSettingsController(dependencies) {
         const updateCount = repoPanelState.repos.filter((repo) => repo.enabled && repo.update_available).length;
         if (updateCount > 0) {
             const updateAllButton = createSettingsActionButton(updateCount > 1 ? `Update All (${updateCount})` : 'Update All', () => {
-                handleSyncAllTrackedRepos().catch((error) => {
+                repositoryCommands.syncAllTrackedRepos().catch((error) => {
                     const message = readErrorMessage(error);
                     pushToastMessage('error', 'Pack update failed', message);
                 });
@@ -742,7 +629,7 @@ export function createHostSettingsController(dependencies) {
             autoUpdateToggle.checked = Boolean(repo.auto_update);
             autoUpdateToggle.disabled = repoPanelState.loading || !repo.enabled;
             autoUpdateToggle.addEventListener('change', () => {
-                handleSetPackAutoUpdate(repo, autoUpdateToggle.checked).catch((error) => {
+                repositoryCommands.setAutoUpdate(repo, autoUpdateToggle.checked).catch((error) => {
                     autoUpdateToggle.checked = Boolean(repo.auto_update);
                     const message = readErrorMessage(error);
                     pushToastMessage('error', 'Pack update failed', message);
@@ -756,7 +643,7 @@ export function createHostSettingsController(dependencies) {
             applySettingsActionGroupStyle(actionCluster);
             if (repo.enabled && repo.update_available) {
                 const updateButton = createSettingsActionButton('Update', () => {
-                    handleSyncTrackedRepo(repo).catch((error) => {
+                    repositoryCommands.syncTrackedRepo(repo).catch((error) => {
                         const message = readErrorMessage(error);
                         pushToastMessage('error', 'Pack update failed', message);
                     });
@@ -766,7 +653,7 @@ export function createHostSettingsController(dependencies) {
             }
             if (!repo.default_base_repo) {
                 const toggleButton = createSettingsActionButton(repo.enabled ? 'Disable' : 'Enable', () => {
-                    handleToggleTrackedRepo(repo).catch((error) => {
+                    repositoryCommands.toggleTrackedRepo(repo).catch((error) => {
                         const message = readErrorMessage(error);
                         pushToastMessage('error', 'Pack update failed', message);
                     });
@@ -776,7 +663,7 @@ export function createHostSettingsController(dependencies) {
             }
             if (!repo.default_base_repo) {
                 const removeButton = createSettingsActionButton('Remove', () => {
-                    handleRemoveTrackedRepo(repo).catch((error) => {
+                    repositoryCommands.removeTrackedRepo(repo).catch((error) => {
                         const message = readErrorMessage(error);
                         pushToastMessage('error', 'Pack removal failed', message);
                     });
@@ -799,244 +686,9 @@ export function createHostSettingsController(dependencies) {
             body: createTrackedPackManagerDialogBody(),
         });
     }
-    async function refreshTrackedRepoPanel({ checkForUpdates = true, } = {}) {
-        repoPanelState.loading = true;
-        repoPanelState.checking = false;
-        repoPanelState.error = '';
-        refreshSugarCubesSettingsUi();
-        try {
-            const { response, data: rawData } = await cubeApi.listCubePacks();
-            const data = readPackApiPayload(rawData);
-            if (!response.ok || data.error) {
-                const message = data.error?.message || response.statusText || 'Failed to load cube packs';
-                repoPanelState.error = message;
-                repoPanelState.repos = [];
-                repoPanelState.identityPolicy = readIdentityPolicyFromPayload(null);
-                refreshSugarCubesSettingsUi();
-                return;
-            }
-            repoPanelState.repos = readTrackedRepos(data.repos);
-            repoPanelState.identityPolicy = readIdentityPolicyFromPayload(data.identity_policy);
-            repoPanelState.error = '';
-            if (checkForUpdates && repoPanelState.repos.length) {
-                repoPanelState.checking = true;
-                refreshSugarCubesSettingsUi();
-                const checkResult = await cubeApi.checkAllCubePacks(JSON.stringify({ apply_auto_updates: true }), { headers: { 'Content-Type': 'application/json' } });
-                const checkData = readPackApiPayload(checkResult.data);
-                if (!checkResult.response.ok || checkData.error) {
-                    const message = checkData.error?.message ||
-                        checkResult.response.statusText ||
-                        'Failed to check cube packs';
-                    repoPanelState.error = message;
-                }
-                else {
-                    repoPanelState.repos = checkData.repos
-                        ? readTrackedRepos(checkData.repos)
-                        : repoPanelState.repos;
-                    repoPanelState.identityPolicy = readIdentityPolicyFromPayload(checkData.identity_policy || repoPanelState.identityPolicy);
-                }
-            }
-        }
-        catch (error) {
-            repoPanelState.error = readErrorMessage(error);
-            repoPanelState.repos = [];
-            repoPanelState.identityPolicy = readIdentityPolicyFromPayload(null);
-        }
-        finally {
-            repoPanelState.loading = false;
-            repoPanelState.checking = false;
-            refreshSugarCubesSettingsUi();
-        }
-    }
-    async function updateIdentityPolicy(payload) {
-        const { response, data: rawData } = await cubeApi.updateIdentityPolicy(JSON.stringify(payload), {
-            headers: { 'Content-Type': 'application/json' },
-        });
-        const data = readPackApiPayload(rawData);
-        if (!response.ok || data.error) {
-            throw new Error(data.error?.message || response.statusText || 'Failed to update identity policy');
-        }
-        repoPanelState.identityPolicy = readIdentityPolicyFromPayload(data);
-        await refreshTrackedRepoPanel({ checkForUpdates: false });
-    }
-    async function handleClaimGithubOwner() {
-        const currentOwner = repoPanelState.identityPolicy.claimed_github_owner || '';
-        const nextOwner = await ui.dialogs?.promptText?.({
-            title: 'Claim GitHub Owner',
-            message: [
-                'Claim exactly one GitHub owner to unlock writes for matching tracked repos.',
-                'local/... stays writable either way.',
-            ],
-            label: 'GitHub owner',
-            initialValue: currentOwner,
-            placeholder: 'example-user',
-            confirmLabel: 'Save Claim',
-            normalizeValue: (value) => value.trim(),
-        });
-        const normalizedOwner = typeof nextOwner === 'string' ? nextOwner.trim() : '';
-        if (!normalizedOwner || normalizedOwner === currentOwner) {
-            return;
-        }
-        if (normalizeOwnerIdentity(normalizedOwner) === 'artificial-sweetener' &&
-            !repoPanelState.identityPolicy.allow_system_owner_claim) {
-            throw new Error('Artificial-Sweetener can only be claimed when SUGARCUBES_ALLOW_SYSTEM_OWNER_CLAIM is enabled in .env or the process environment.');
-        }
-        if (currentOwner) {
-            const confirmed = await requestConfirmation({
-                title: 'Change Claimed Owner?',
-                message: [
-                    `Change your claimed GitHub owner from ${currentOwner} to ${normalizedOwner}?`,
-                    'This changes which tracked repos SugarCubes treats as writable.',
-                ],
-                confirmLabel: 'Change',
-            });
-            if (!confirmed) {
-                return;
-            }
-        }
-        await updateIdentityPolicy({ claimed_github_owner: normalizedOwner });
-        pushToastMessage('success', 'Authoring access updated', `Claimed owner is now ${normalizedOwner}.`);
-    }
-    async function handleClearGithubOwnerClaim() {
-        const currentOwner = repoPanelState.identityPolicy.claimed_github_owner || '';
-        if (!currentOwner) {
-            return;
-        }
-        const confirmed = await requestConfirmation({
-            title: 'Clear Claimed Owner?',
-            message: [
-                `Clear your claimed GitHub owner (${currentOwner})?`,
-                'Tracked GitHub repos will return to read-only. local/... remains writable.',
-            ],
-            confirmLabel: 'Clear',
-        });
-        if (!confirmed) {
-            return;
-        }
-        await updateIdentityPolicy({ claimed_github_owner: '' });
-        pushToastMessage('success', 'Authoring access updated', 'Tracked GitHub repos are read-only again.');
-    }
-    async function handleAddTrackedRepo() {
-        const values = await ui.dialogs?.openForm?.({
-            title: 'Add Cube Pack',
-            message: [
-                'Track a shared SugarCube library and keep it available in the browser.',
-                'SugarCubes will verify the repository contains .cube files before tracking it.',
-            ],
-            confirmLabel: 'Add Pack',
-            fields: [
-                {
-                    key: 'repoRef',
-                    label: 'Source repository',
-                    placeholder: 'Artificial-Sweetener/Base-Cubes',
-                    initialValue: 'Artificial-Sweetener/Base-Cubes',
-                    required: true,
-                    normalizeValue: (value) => value.trim(),
-                    validate: validateRepoReference,
-                },
-            ],
-        });
-        if (!values) {
-            return;
-        }
-        const { owner, repo } = parseRepoReference(values.repoRef);
-        const preflightBody = JSON.stringify({
-            owner,
-            repo,
-            enabled: true,
-            auto_update: false,
-        });
-        const { response: preflightResponse, data: rawPreflightData } = await cubeApi.preflightCubePack(preflightBody, { headers: { 'Content-Type': 'application/json' } });
-        const preflightData = readPackApiPayload(rawPreflightData);
-        if (!preflightResponse.ok || preflightData.error) {
-            throw new Error(preflightData.error?.message ||
-                preflightResponse.statusText ||
-                'Failed to verify Cube Pack');
-        }
-        const { response, data: rawData } = await cubeApi.addCubePack(JSON.stringify({
-            owner,
-            repo,
-            enabled: true,
-            auto_update: false,
-        }), { headers: { 'Content-Type': 'application/json' } });
-        const data = readPackApiPayload(rawData);
-        if (!response.ok || data.error) {
-            throw new Error(data.error?.message || response.statusText || 'Failed to add Cube Pack');
-        }
-        const cubeCount = Number(data.preflight?.cube_count ?? preflightData.preflight?.cube_count);
-        const cubeCountText = Number.isFinite(cubeCount)
-            ? ` Found ${cubeCount} cube${cubeCount === 1 ? '' : 's'}.`
-            : '';
-        pushToastMessage('success', 'Cube Pack added', `${owner}/${repo} is now tracked.${cubeCountText}`);
-        await refreshTrackedRepoPanel();
-        invalidateDependentCatalogs();
-    }
-    async function handleSyncTrackedRepo(repo) {
-        const { response, data: rawData } = await cubeApi.updateCubePackNow(JSON.stringify({ owner: repo.owner, repo: repo.repo }), { headers: { 'Content-Type': 'application/json' } });
-        const data = readPackApiPayload(rawData);
-        if (!response.ok || data.error) {
-            throw new Error(data.error?.message || response.statusText || 'Failed to update Cube Pack');
-        }
-        pushToastMessage('success', 'Cube Pack updated', `${repo.owner}/${repo.repo} is up to date.`);
-        await refreshTrackedRepoPanel();
-        invalidateDependentCatalogs();
-    }
-    async function handleSyncAllTrackedRepos() {
-        const { response, data: rawData } = await cubeApi.updateAllCubePacks();
-        const data = readPackApiPayload(rawData);
-        if (!response.ok || data.error) {
-            throw new Error(data.error?.message || response.statusText || 'Failed to update Cube Packs');
-        }
-        pushToastMessage('success', 'Cube Packs updated', 'Available pack updates were applied.');
-        await refreshTrackedRepoPanel();
-        invalidateDependentCatalogs();
-    }
-    async function handleToggleTrackedRepo(repo) {
-        const { response, data: rawData } = await cubeApi.updateCubePack(JSON.stringify({ owner: repo.owner, repo: repo.repo, enabled: !repo.enabled }), { headers: { 'Content-Type': 'application/json' } });
-        const data = readPackApiPayload(rawData);
-        if (!response.ok || data.error) {
-            throw new Error(data.error?.message || response.statusText || 'Failed to update Cube Pack');
-        }
-        pushToastMessage('success', 'Cube Pack updated', `${repo.owner}/${repo.repo} ${repo.enabled ? 'disabled' : 'enabled'}.`);
-        await refreshTrackedRepoPanel();
-        invalidateDependentCatalogs();
-    }
-    async function handleSetPackAutoUpdate(repo, enabled) {
-        const { response, data: rawData } = await cubeApi.updateCubePack(JSON.stringify({ owner: repo.owner, repo: repo.repo, auto_update: Boolean(enabled) }), { headers: { 'Content-Type': 'application/json' } });
-        const data = readPackApiPayload(rawData);
-        if (!response.ok || data.error) {
-            throw new Error(data.error?.message || response.statusText || 'Failed to update Cube Pack');
-        }
-        pushToastMessage('success', 'Auto-update updated', `${repo.owner}/${repo.repo} auto-update ${enabled ? 'enabled' : 'disabled'}.`);
-        await refreshTrackedRepoPanel({ checkForUpdates: false });
-    }
-    async function handleRemoveTrackedRepo(repo) {
-        const confirmed = await requestConfirmation({
-            title: 'Remove Cube Pack?',
-            message: [
-                `Stop tracking ${repo.owner}/${repo.repo}?`,
-                'Local checkout files will remain on disk.',
-            ],
-            confirmLabel: 'Remove',
-        });
-        if (!confirmed) {
-            return;
-        }
-        const { response, data: rawData } = await cubeApi.removeCubePack({
-            owner: repo.owner,
-            repo: repo.repo,
-        });
-        const data = readPackApiPayload(rawData);
-        if (!response.ok || data.error) {
-            throw new Error(data.error?.message || response.statusText || 'Failed to remove Cube Pack');
-        }
-        pushToastMessage('success', 'Cube Pack removed', `${repo.owner}/${repo.repo} removed from tracking.`);
-        await refreshTrackedRepoPanel();
-        invalidateDependentCatalogs();
-    }
     return Object.freeze({
         register: registerSugarCubesSettings,
-        refresh: refreshTrackedRepoPanel,
+        refresh: (options) => repositoryCommands.refresh(options),
         refreshUi: refreshSugarCubesSettingsUi,
     });
 }

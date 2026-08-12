@@ -1,19 +1,6 @@
 schema = 1
 
 [[debt]]
-id = "SC-ARCH-010"
-owner = "SugarCubes host settings"
-paths = ["frontend/comfyui/ui/settings/HostSettingsController.ts"]
-fingerprint = "fe32cda8bb29a203ee86182aa925acebcdc8fc92e5f0e34a5413ab94f98dce2c"
-review_by = 2026-11-30
-responsibilities = [
-  "Comfy settings registration and UI state rendering",
-  "identity, proximity, pack, and repository settings commands",
-  "remote refresh, status summarization, confirmations, and toast feedback",
-]
-next_extraction = "Split settings registration/presentation from repository and pack command controllers."
-
-[[debt]]
 id = "SC-ARCH-011"
 owner = "SugarCubes surface presentation"
 paths = ["frontend/comfyui/ui/surface/CubeSurfacePresenter.ts"]

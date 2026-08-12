@@ -62,15 +62,13 @@ max_lines = 515
 
 [[waiver]]
 id = "SC-WAIVER-016"
-kind = "remediation"
+kind = "structural"
 rule = "STRUCT003"
 path = "frontend/comfyui/ui/settings/HostSettingsController.ts"
-owner = "SugarCubes host settings"
-justification = "Settings presentation and repository/pack command workflows remain mixed as recorded by SC-ARCH-010."
+owner = "SugarCubes host settings presentation"
+justification = "The module contains one Comfy settings presentation surface, including its row and tracked-pack dialog rendering and event binding; repository and identity commands are owned separately."
 review_by = 2026-11-30
-max_lines = 1224
-debt = "SC-ARCH-010"
-next_limit = 500
+max_lines = 776
 
 [[waiver]]
 id = "SC-WAIVER-017"
