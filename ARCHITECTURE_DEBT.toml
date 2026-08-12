@@ -1,19 +1,6 @@
 schema = 1
 
 [[debt]]
-id = "SC-ARCH-009"
-owner = "SugarCubes save workflow"
-paths = ["frontend/comfyui/ui/save/CubeSaveService.ts"]
-fingerprint = "ef4b29a4dafea9939d116f8843bc126ffdb351f4a48be0c6ffe4e9f61fff13a8"
-review_by = 2026-11-30
-responsibilities = [
-  "save source discovery, metadata projection, and plan construction",
-  "Cube identity assignment, stale-save decisions, and forking",
-  "backend save orchestration, reconciliation, catalog invalidation, and feedback",
-]
-next_extraction = "Extract save planning and identity/staleness policy from backend command execution and presentation feedback."
-
-[[debt]]
 id = "SC-ARCH-010"
 owner = "SugarCubes host settings"
 paths = ["frontend/comfyui/ui/settings/HostSettingsController.ts"]

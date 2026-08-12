@@ -61,18 +61,6 @@ review_by = 2026-11-30
 max_lines = 515
 
 [[waiver]]
-id = "SC-WAIVER-015"
-kind = "remediation"
-rule = "STRUCT003"
-path = "frontend/comfyui/ui/save/CubeSaveService.ts"
-owner = "SugarCubes save workflow"
-justification = "Save planning, identity policy, persistence, reconciliation, and feedback remain mixed as recorded by SC-ARCH-009."
-review_by = 2026-11-30
-max_lines = 1123
-debt = "SC-ARCH-009"
-next_limit = 500
-
-[[waiver]]
 id = "SC-WAIVER-016"
 kind = "remediation"
 rule = "STRUCT003"
