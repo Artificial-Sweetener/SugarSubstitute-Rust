@@ -41,18 +41,6 @@ review_by = 2026-11-30
 max_lines = 510
 
 [[waiver]]
-id = "SC-WAIVER-008"
-kind = "remediation"
-rule = "STRUCT003"
-path = "frontend/comfyui/ui/flavors/FlavorService.ts"
-owner = "SugarCubes flavor workflows"
-justification = "Graph application, persistence, and dialog orchestration remain mixed as recorded by SC-ARCH-004; the current cap prevents expansion."
-review_by = 2026-11-30
-max_lines = 919
-debt = "SC-ARCH-004"
-next_limit = 500
-
-[[waiver]]
 id = "SC-WAIVER-009"
 kind = "structural"
 rule = "STRUCT003"
