@@ -35,7 +35,7 @@ from sugarcubes.backend.comfy_node_registry import (
     resolve_active_comfy_node_class_mappings,
 )
 from sugarcubes.backend.responses import BackendError
-from sugarcubes.backend.services.cube_export_service import (
+from sugarcubes.backend.services.cube_export_graph_contract import (
     collect_missing_node_class_types,
     collect_required_node_class_types,
     collect_subgraph_contract_violations,

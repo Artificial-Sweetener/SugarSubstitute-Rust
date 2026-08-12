@@ -158,9 +158,7 @@ def backend_services_factory() -> BackendServicesFactory:
         load_cube_artifact: Any = None,
         prepare_cube_import: Any = None,
         export_cubes: Any = None,
-        write_cube: Any = None,
         write_cube_to_path: Any = None,
-        write_cubes: Any = None,
         write_cubes_to_paths: Any = None,
         suggest_version: Any = None,
         node_class_mappings: Any = None,
@@ -262,9 +260,7 @@ def backend_services_factory() -> BackendServicesFactory:
         exporter = CubeExportService(
             library,
             export_cubes=export_cubes or (lambda *args, **kwargs: []),
-            write_cube=write_cube or (lambda *args, **kwargs: {}),
             write_cube_to_path=write_cube_to_path or (lambda *args, **kwargs: {}),
-            write_cubes=write_cubes or (lambda *args, **kwargs: []),
             write_cubes_to_paths=write_cubes_to_paths or (lambda *args, **kwargs: []),
             suggest_version=suggest_version
             or (

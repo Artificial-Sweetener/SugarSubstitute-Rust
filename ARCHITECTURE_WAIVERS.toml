@@ -213,18 +213,6 @@ review_by = 2026-11-30
 max_lines = 622
 
 [[waiver]]
-id = "SC-WAIVER-022"
-kind = "remediation"
-rule = "STRUCT003"
-path = "sugarcubes/backend/services/cube_export_service.py"
-owner = "SugarCubes export workflows"
-justification = "Graph analysis, save planning, artifact mutation, and Git finalization remain mixed as recorded by SC-ARCH-014."
-review_by = 2026-11-30
-max_lines = 1155
-debt = "SC-ARCH-014"
-next_limit = 500
-
-[[waiver]]
 id = "SC-WAIVER-023"
 kind = "structural"
 rule = "STRUCT003"

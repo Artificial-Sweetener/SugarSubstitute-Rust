@@ -32,8 +32,15 @@ proofs = ["contract", "unit"]
 name = "export"
 sources = [
   "sugarcubes/exporter/**",
+  "sugarcubes/backend/services/cube_authored_flavor_save_service.py",
+  "sugarcubes/backend/services/cube_export_graph_contract.py",
+  "sugarcubes/backend/services/cube_export_persistence.py",
   "sugarcubes/backend/services/cube_export_service.py",
   "sugarcubes/backend/services/cube_implementation_defaults_service.py",
+  "sugarcubes/backend/services/cube_save_commit_finalizer.py",
+  "sugarcubes/backend/services/cube_save_models.py",
+  "sugarcubes/backend/services/cube_save_response.py",
+  "sugarcubes/backend/services/cube_save_target_planner.py",
 ]
 proofs = ["contract", "integration", "unit"]
 

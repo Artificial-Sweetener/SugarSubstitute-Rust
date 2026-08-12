@@ -22,9 +22,7 @@ from pathlib import Path
 
 from ..exporter import (
     export as export_cubes,
-    write_cube,
     write_cube_to_path,
-    write_cubes,
     write_cubes_to_paths,
 )
 from ..exporter.versioning import suggest_version
@@ -132,8 +130,6 @@ def build_backend_services(
     exporter = CubeExportService(
         library,
         export_cubes=export_cubes,
-        write_cube=write_cube,
-        write_cubes=write_cubes,
         write_cube_to_path=write_cube_to_path,
         write_cubes_to_paths=write_cubes_to_paths,
         suggest_version=suggest_version,

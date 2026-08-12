@@ -142,16 +142,3 @@ responsibilities = [
   "preview events, legacy redraw scheduling, and editor launch coordination",
 ]
 next_extraction = "Extract renderer/runtime lifecycle and preview observation from surface mount and geometry presentation."
-
-[[debt]]
-id = "SC-ARCH-014"
-owner = "SugarCubes export workflows"
-paths = ["sugarcubes/backend/services/cube_export_service.py"]
-fingerprint = "27992cf6f9bcc6cfcf7b665ce3400a1288db929983a6f3c81083468ee4772de8"
-review_by = 2026-11-30
-responsibilities = [
-  "native subgraph and required-node contract analysis",
-  "export preview, save planning, and target-path policy",
-  "artifact writes, authored flavor updates, versioning, and Git commit finalization",
-]
-next_extraction = "Extract graph contract analysis and repository commit finalization from Cube export/save orchestration."
