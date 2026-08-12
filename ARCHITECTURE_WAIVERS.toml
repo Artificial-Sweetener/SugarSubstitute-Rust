@@ -11,18 +11,6 @@ review_by = 2026-11-30
 max_lines = 749
 
 [[waiver]]
-id = "SC-WAIVER-003"
-kind = "remediation"
-rule = "STRUCT003"
-path = "frontend/comfyui/ui/browser/CubeBrowserController.ts"
-owner = "SugarCubes Cube browser"
-justification = "Catalog state, persistence, and mutation workflows remain mixed as recorded by SC-ARCH-002; the exact current cap forbids further growth."
-review_by = 2026-11-30
-max_lines = 1577
-debt = "SC-ARCH-002"
-next_limit = 500
-
-[[waiver]]
 id = "SC-WAIVER-004"
 kind = "remediation"
 rule = "STRUCT003"

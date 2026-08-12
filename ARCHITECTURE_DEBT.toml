@@ -1,19 +1,6 @@
 schema = 1
 
 [[debt]]
-id = "SC-ARCH-002"
-owner = "SugarCubes Cube browser"
-paths = ["frontend/comfyui/ui/browser/CubeBrowserController.ts"]
-fingerprint = "ce674ce5667a6e9a3699c3c488c08edca044b3d77796daf6d29a235da3e84c33"
-review_by = 2026-11-30
-responsibilities = [
-  "catalog retrieval, refresh, filtering, and selection state",
-  "favorite, recent, and author-group persistence",
-  "metadata editing, revision loading, deletion, promotion, and preview workflows",
-]
-next_extraction = "Separate catalog state/persistence from Cube mutation commands and revision/preview coordination."
-
-[[debt]]
 id = "SC-ARCH-003"
 owner = "SugarCubes Cube browser presentation"
 paths = ["frontend/comfyui/ui/browser/CubeBrowserView.ts"]
