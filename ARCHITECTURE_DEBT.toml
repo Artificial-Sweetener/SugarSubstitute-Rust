@@ -1,19 +1,6 @@
 schema = 1
 
 [[debt]]
-id = "SC-ARCH-003"
-owner = "SugarCubes Cube browser presentation"
-paths = ["frontend/comfyui/ui/browser/CubeBrowserView.ts"]
-fingerprint = "d5058731c5a6084eb09cdf2b347804052804221ef1a9316e62dd7642409b7a4d"
-review_by = 2026-11-30
-responsibilities = [
-  "browser shell and list DOM construction",
-  "version combobox interaction and selection state",
-  "Cube detail, metadata editor, model editor, and preview presentation",
-]
-next_extraction = "Extract version selection and metadata editor views from the browser shell/list presenter."
-
-[[debt]]
 id = "SC-ARCH-004"
 owner = "SugarCubes flavor workflows"
 paths = ["frontend/comfyui/ui/flavors/FlavorService.ts"]
