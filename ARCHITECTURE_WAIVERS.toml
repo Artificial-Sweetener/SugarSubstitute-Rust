@@ -70,17 +70,6 @@ justification = "The module contains one Comfy settings presentation surface, in
 review_by = 2026-11-30
 max_lines = 776
 
-[[waiver]]
-id = "SC-WAIVER-017"
-kind = "remediation"
-rule = "STRUCT003"
-path = "frontend/comfyui/ui/surface/CubeSurfacePresenter.ts"
-owner = "SugarCubes surface presentation"
-justification = "Mount/geometry, renderer lifecycle, and preview observation remain mixed as recorded by SC-ARCH-011."
-review_by = 2026-11-30
-max_lines = 555
-debt = "SC-ARCH-011"
-next_limit = 500
 
 [[waiver]]
 id = "SC-WAIVER-018"
