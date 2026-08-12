@@ -1,19 +1,6 @@
 schema = 1
 
 [[debt]]
-id = "SC-ARCH-008"
-owner = "SugarCubes placement workflow"
-paths = ["frontend/comfyui/ui/overlays/PlacementOverlay.ts"]
-fingerprint = "b926b157818c703d3360684216be31c15ecd3e6d1450df3c7392936c37b7381c"
-review_by = 2026-11-30
-responsibilities = [
-  "Cube revision loading and placement commit orchestration",
-  "pointer capture, canvas coordinate conversion, and placement state",
-  "DOM overlay lifecycle and canvas preview rendering",
-]
-next_extraction = "Separate the placement application workflow from pointer/geometry control and overlay rendering."
-
-[[debt]]
 id = "SC-ARCH-009"
 owner = "SugarCubes save workflow"
 paths = ["frontend/comfyui/ui/save/CubeSaveService.ts"]
