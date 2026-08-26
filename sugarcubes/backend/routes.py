@@ -25,16 +25,21 @@ from .composition import BackendServices
 from .cube_routes import build_cube_route_handlers
 from .dependency_routes import build_dependency_route_handlers
 from .export_routes import build_export_route_handlers
+from .execution_routes import build_execution_route_handlers
 from .flavor_routes import build_flavor_route_handlers
 from .implementation_save_routes import build_implementation_save_route_handlers
+from .legacy_workflow_routes import build_legacy_workflow_route_handlers
 from .repository_routes import build_repository_route_handlers
 from .route_types import RouteHandler
+from .sugarscript_routes import build_sugarscript_route_handlers
+from .workflow_library_routes import build_workflow_library_route_handlers
 
 
 @dataclass(frozen=True)
 class RouteHandlers:
     """Concrete route callables used for registration and tests."""
 
+    get_status: RouteHandler
     list_cubes: RouteHandler
     list_picker_catalog: RouteHandler
     get_identity_policy: RouteHandler
@@ -72,6 +77,13 @@ class RouteHandlers:
     get_dependency_readiness: RouteHandler
     repair_dependencies: RouteHandler
     sync_and_check_dependencies: RouteHandler
+    classify_workflow: RouteHandler
+    save_workflow_cube_to_stable: RouteHandler
+    fork_workflow_cube: RouteHandler
+    sync_workflow_cube_source: RouteHandler
+    compile_sugarscript: RouteHandler
+    compile_legacy_workflow: RouteHandler
+    queue_execution: RouteHandler
 
 
 def build_route_handlers(services: BackendServices) -> RouteHandlers:
@@ -84,7 +96,12 @@ def build_route_handlers(services: BackendServices) -> RouteHandlers:
     implementation_save = build_implementation_save_route_handlers(services)
     flavors = build_flavor_route_handlers(services)
     dependencies = build_dependency_route_handlers(services)
+    workflow_library = build_workflow_library_route_handlers(services)
+    sugarscript = build_sugarscript_route_handlers(services)
+    legacy_workflow = build_legacy_workflow_route_handlers(services)
+    execution = build_execution_route_handlers(services)
     return RouteHandlers(
+        get_status=catalog.get_status,
         list_cubes=catalog.list_cubes,
         list_picker_catalog=catalog.list_picker_catalog,
         get_identity_policy=repositories.get_identity_policy,
@@ -122,6 +139,13 @@ def build_route_handlers(services: BackendServices) -> RouteHandlers:
         get_dependency_readiness=dependencies.get_dependency_readiness,
         repair_dependencies=dependencies.repair_dependencies,
         sync_and_check_dependencies=dependencies.sync_and_check_dependencies,
+        classify_workflow=workflow_library.classify_workflow,
+        save_workflow_cube_to_stable=workflow_library.save_workflow_cube_to_stable,
+        fork_workflow_cube=workflow_library.fork_workflow_cube,
+        sync_workflow_cube_source=workflow_library.sync_workflow_cube_source,
+        compile_sugarscript=sugarscript.compile_sugarscript,
+        compile_legacy_workflow=legacy_workflow.compile_legacy_workflow,
+        queue_execution=execution.queue_execution,
     )
 
 
@@ -130,6 +154,7 @@ def register_routes(prompt_server: Any, services: BackendServices) -> RouteHandl
 
     handlers = build_route_handlers(services)
     routes = getattr(prompt_server, "instance", prompt_server).routes
+    routes.get("/sugarcubes/status")(handlers.get_status)
     routes.get("/sugarcubes/list")(handlers.list_cubes)
     routes.get("/sugarcubes/picker_catalog")(handlers.list_picker_catalog)
     routes.get("/sugarcubes/identity_policy")(handlers.get_identity_policy)
@@ -171,4 +196,13 @@ def register_routes(prompt_server: Any, services: BackendServices) -> RouteHandl
     routes.post("/sugarcubes/dependencies/sync-and-check")(
         handlers.sync_and_check_dependencies
     )
+    routes.post("/sugarcubes/v2/cubes/classify-workflow")(handlers.classify_workflow)
+    routes.post("/sugarcubes/v2/cubes/stable")(handlers.save_workflow_cube_to_stable)
+    routes.post("/sugarcubes/v2/cubes/forks")(handlers.fork_workflow_cube)
+    routes.post("/sugarcubes/v2/cubes/sync-source")(handlers.sync_workflow_cube_source)
+    routes.post("/sugarcubes/v2/sugarscript/compile")(handlers.compile_sugarscript)
+    routes.post("/sugarcubes/v2/workflows/compile-legacy")(
+        handlers.compile_legacy_workflow
+    )
+    routes.post("/sugarcubes/v2/executions/queue")(handlers.queue_execution)
     return handlers

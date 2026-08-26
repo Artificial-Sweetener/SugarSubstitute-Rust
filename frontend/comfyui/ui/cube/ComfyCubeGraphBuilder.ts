@@ -17,7 +17,7 @@
 
 import {
   applyExecutionMode,
-  applyExtrasToNode,
+  applyNodeProperties,
   applyInputValueToNode,
   resolveInputSlotIndex,
 } from '../import/ImportNodeWriter.js';
@@ -184,7 +184,7 @@ export class ComfyCubeGraphBuilder {
             applyInputValueToNode(node, inputName, value);
           }
         }
-        if (entry.extras) applyExtrasToNode(node, entry.extras);
+        if (entry.extras) applyNodeProperties(node, entry.extras);
         applyAuthoredGeometry(node, entry.layout, origin);
       }
 

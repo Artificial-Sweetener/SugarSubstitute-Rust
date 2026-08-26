@@ -53,6 +53,83 @@ def index_boundary_widget_names(
     return indexed
 
 
+def index_boundary_widget_targets(
+    subgraph: Mapping[str, Any],
+) -> dict[str, tuple[GraphId, str]]:
+    """Map each public boundary name to one exact inner widget identity."""
+
+    links = _index_links(subgraph.get("links"))
+    nodes = _index_nodes(subgraph.get("nodes"))
+    result: dict[str, tuple[GraphId, str]] = {}
+    boundaries = subgraph.get("inputs")
+    if not _is_sequence(boundaries):
+        return result
+    for boundary in boundaries:
+        if not isinstance(boundary, Mapping):
+            continue
+        boundary_name = _text(boundary.get("name"))
+        link_ids = boundary.get("linkIds")
+        targets: set[tuple[GraphId, str]] = set()
+        if not boundary_name or not _is_sequence(link_ids):
+            continue
+        for raw_link_id in link_ids:
+            link_id = _read_graph_id(raw_link_id)
+            link = links.get(link_id) if link_id is not None else None
+            if not link or _read_graph_id(link.get("origin_id")) != SUBGRAPH_INPUT_NODE_ID:
+                continue
+            node_id = _read_graph_id(link.get("target_id"))
+            slot = link.get("target_slot")
+            node = nodes.get(node_id) if node_id is not None else None
+            inputs = node.get("inputs") if node is not None else None
+            if (
+                not isinstance(slot, int)
+                or isinstance(slot, bool)
+                or not _is_sequence(inputs)
+                or slot < 0
+                or slot >= len(inputs)
+            ):
+                continue
+            entry = inputs[slot]
+            name = _widget_name(entry) if isinstance(entry, Mapping) else None
+            if node_id is not None and name:
+                targets.add((node_id, name))
+        if len(targets) == 1:
+            result[boundary_name] = next(iter(targets))
+    return result
+
+
+def _index_links(value: object) -> dict[GraphId, Mapping[str, Any]]:
+    """Index serialized links by their exact graph identity."""
+
+    if not _is_sequence(value):
+        return {}
+    return {
+        link_id: link
+        for link in value
+        if isinstance(link, Mapping)
+        if (link_id := _read_graph_id(link.get("id"))) is not None
+    }
+
+
+def _index_nodes(value: object) -> dict[GraphId, Mapping[str, Any]]:
+    """Index serialized nodes by their exact graph identity."""
+
+    if not _is_sequence(value):
+        return {}
+    return {
+        node_id: node
+        for node in value
+        if isinstance(node, Mapping)
+        if (node_id := _read_graph_id(node.get("id"))) is not None
+    }
+
+
+def _text(value: object) -> str:
+    """Read one nonempty boundary name."""
+
+    return value.strip() if isinstance(value, str) else ""
+
+
 def _boundary_link_targets(value: object) -> dict[GraphId, GraphId]:
     """Map subgraph-input link identities to their exact target nodes."""
 

@@ -120,6 +120,7 @@ export interface ComfyGraph {
   afterChange?(): void;
   getLink?(id: GraphId): ComfyLink | null;
   setDirtyCanvas?(foreground?: boolean, background?: boolean): void;
+  serialize?(): unknown;
   [key: string]: unknown;
 }
 
@@ -140,7 +141,7 @@ export interface ComfyApplication extends UnknownRecord {
 
 export interface ComfyHostApi extends UnknownRecord {
   fetchApi?(path: string, options?: RequestInit): Promise<ApiResponse>;
-  queuePrompt?(position: number, payload: unknown): Promise<unknown>;
+  queuePrompt?(position: number, payload: unknown, options?: unknown): Promise<unknown>;
 }
 
 export interface ApiResponse {

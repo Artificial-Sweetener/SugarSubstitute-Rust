@@ -54,6 +54,11 @@ import { CubePromotionService } from './promotion/CubePromotionService.js';
 import { RendererGeometryCoordinator } from './geometry/RendererGeometryCoordinator.js';
 import type { CubeDefinitionEntry } from './graph/CubeDefinitionStore.js';
 import type { UnknownRecord } from './types/common.js';
+import { CubeWorkflowLibraryState } from './workflow/CubeWorkflowLibraryState.js';
+import { CubeWorkflowLibraryActions } from './workflow/CubeWorkflowLibraryActions.js';
+import { CubeWorkflowLibraryPresentation } from './workflow/CubeWorkflowLibraryPresentation.js';
+import { CubeWorkflowPreconfiguration } from './cube/CubeWorkflowPreconfiguration.js';
+import { CubeWorkflowNodePackMetadata } from './cube/node/CubeWorkflowNodePackMetadata.js';
 
 interface SugarCubesUIOptions extends UnknownRecord {
   adapter?: ComfyAdapter;
@@ -107,6 +112,11 @@ export class SugarCubesUI {
   readonly collisionService: CubeCollisionService;
   readonly boundsReconciler: CubeBoundsReconciler;
   readonly rendererGeometry: RendererGeometryCoordinator;
+  readonly workflowLibraryState: CubeWorkflowLibraryState;
+  readonly workflowLibraryActions: CubeWorkflowLibraryActions;
+  readonly workflowLibraryPresentation: CubeWorkflowLibraryPresentation;
+  readonly workflowPreconfiguration: CubeWorkflowPreconfiguration;
+  readonly workflowNodePackMetadata: CubeWorkflowNodePackMetadata;
   readonly overlayManager: OverlayManager;
   private _setupDone: boolean;
 
@@ -121,6 +131,18 @@ export class SugarCubesUI {
     this.confirmDialog = this.dialogs.confirmDialog || new ConfirmDialog({ adapter: this.adapter });
     this.versionDialog = new VersionDialog({ adapter: this.adapter, storage: this.storage });
     this._setupDone = false;
+    this.workflowNodePackMetadata = new CubeWorkflowNodePackMetadata();
+    this.workflowLibraryState = new CubeWorkflowLibraryState(
+      this.api,
+      this.adapter.getConsole?.() ?? console,
+    );
+    this.workflowLibraryActions = new CubeWorkflowLibraryActions({
+      api: this.api,
+      state: this.workflowLibraryState,
+      host: this.adapter,
+      dialogs: this.dialogs,
+      feedback: this.toast,
+    });
 
     this.cubeBrowser = new CubeBrowserController({
       adapter: this.adapter,
@@ -136,6 +158,10 @@ export class SugarCubesUI {
       logger: this.adapter?.getConsole?.(),
       onUpdate: (definitionKey, entry) => this.handleDefinitionUpdate(definitionKey, entry),
     });
+    this.workflowPreconfiguration = CubeWorkflowPreconfiguration.withEmbeddedDefinitions(
+      this.definitionStore,
+      this.workflowLibraryState,
+    );
 
     this.instanceManager = new InstanceManager({
       adapter: this.adapter,
@@ -179,6 +205,10 @@ export class SugarCubesUI {
       dialogs: this.dialogs,
       toast: this.toast,
     });
+    this.workflowLibraryPresentation = new CubeWorkflowLibraryPresentation(
+      this.workflowLibraryState,
+      this.packService,
+    );
 
     this.identityReconciler = new CubeIdentityReconciler({
       adapter: this.adapter,
@@ -287,6 +317,8 @@ export class SugarCubesUI {
       containmentService: this.containmentService,
       collisionService: this.collisionService,
       boundsReconciler: this.boundsReconciler,
+      workflowLibraryState: this.workflowLibraryState,
+      workflowLibraryActions: this.workflowLibraryActions,
     });
   }
 
@@ -310,6 +342,11 @@ export class SugarCubesUI {
     if (this._setupDone) {
       return;
     }
+    const metadataResult = await this.api.getStatus();
+    if (!metadataResult.response.ok) {
+      throw new Error('SugarCubes workflow node-pack metadata could not be loaded.');
+    }
+    this.workflowNodePackMetadata.updateFromStatus(metadataResult.data);
     await this.cubeBrowser.setup();
     this.instanceManager.setup();
     this.dirtyManager.setup();
@@ -326,6 +363,7 @@ export class SugarCubesUI {
   }
 
   dispose(): void {
+    this.workflowLibraryState.clear();
     this.rendererGeometry.dispose();
     this.overlayManager.dispose();
     this.cubeBrowser.dispose();

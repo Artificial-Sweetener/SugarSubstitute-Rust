@@ -21,14 +21,21 @@ import {
   requireCubeSurface,
   type CubeNode,
 } from '../cube/node/ComfyCubeNodeFactory.js';
-import { resolveCubeIdentityPresentation } from '../cube/CubeIdentityPresentation.js';
+import {
+  resolveCubeIdentityPresentation,
+  type CubeIdentitySource,
+} from '../cube/CubeIdentityPresentation.js';
 import type { CubeNodeCatalog } from '../cube/node/CubeNodeCatalog.js';
 import { buildCubeFaceChromeMetadata } from '../cube/node/CubeNodeAuthoringCandidate.js';
 import { ComfyVueCubeNodeHost } from './ComfyVueCubeNodeHost.js';
 import { ensureCubeSurfaceStyles } from './CubeSurfaceStyles.js';
 import { CubeSurfaceView } from './CubeSurfaceView.js';
 import { parseCubeSurfaceState, serializeCubeSurfaceState } from './CubeSurfaceState.js';
-import { buildCubeCardVisibilitySignature } from './CubeCardVisibilitySignature.js';
+import {
+  buildCubeSurfaceMountAttemptSignature,
+  buildCubeSurfacePresentationSignature,
+  buildCubeSurfaceTopologySignature,
+} from './CubeSurfaceSignatures.js';
 import type { NativeNodeCardRenderer } from './NativeNodeCardRenderer.js';
 import type { CubePreviewCatalog } from './CubePreviewModel.js';
 import { NativeSubgraphChangeObserver } from './NativeSubgraphChangeObserver.js';
@@ -40,7 +47,10 @@ import type { LiteGraphCubeNodeInteractionHistory } from './ComfyLiteGraphCubeNo
 import type { CubeFaceChromeActions } from './CubeFaceChromeActions.js';
 import type { CubePortPresentationController } from '../cube/connection/CubePortPresentationController.js';
 import { CUBE_INPUT_GUTTER_WIDTH } from './CubePortGutterLayout.js';
-import { CUBE_VUE_CONTENT_HORIZONTAL_INSET } from './CubeSurfaceGeometry.js';
+import {
+  replaceCubeSurfaceRecord,
+  resolveCubeVueContentWidth,
+} from './CubeSurfaceRecordHelpers.js';
 import { ComfyRendererPresenceObserver } from './ComfyRendererPresenceObserver.js';
 import { ComfyNativeSlotLayoutCoordinator } from './ComfyNativeSlotLayoutCoordinator.js';
 import type { CanvasGraphChangeSource } from './ComfyCanvasGraphChangeAdapter.js';
@@ -59,11 +69,11 @@ import type {
 import type { CubePreviewActions } from './CubePreviewActions.js';
 import { ComfyVueCubeDropTargetBridge } from './ComfyVueCubeDropTargetBridge.js';
 import type { ComfyNode } from '../types/graph.js';
+import { CubeEditorEntryController } from './CubeEditorEntryController.js';
 
 export interface CubeSurfacePresenterOptions {
   document: Document;
   openEditor(node: CubeNode): void;
-  prepareEditor?(node: CubeNode): void;
   rootGraph: object;
   getCurrentGraph(): object | null;
   nodes: CubeNodeCatalog;
@@ -86,6 +96,10 @@ export interface CubeSurfacePresenterOptions {
   previewEvents?: ComfyNodePreviewEventSource;
   graphChanges?: CanvasGraphChangeSource;
   rendererChanges?: ComfyRendererModeChangeSource;
+  resolveIdentitySource?(metadata: UnknownRecord): CubeIdentitySource | null;
+  presentationChanges?: { subscribe(listener: () => void): () => void };
+  canEdit?(node: CubeNode): Promise<boolean>;
+  onEditDenied?(node: CubeNode): void;
 }
 
 export type { ComfyNodePreviewEventSource } from './CubeSurfacePreviewCoordinator.js';
@@ -102,8 +116,6 @@ interface MountedCubeSurface {
 /** Own custom Cube-node face mounts across renderer and graph navigation changes. */
 export class CubeSurfacePresenter {
   readonly #document: Document;
-  readonly #openEditor: (node: CubeNode) => void;
-  readonly #prepareEditor: (node: CubeNode) => void;
   readonly #rootGraph: object;
   readonly #getCurrentGraph: () => object | null;
   readonly #nodes: CubeNodeCatalog;
@@ -125,6 +137,9 @@ export class CubeSurfacePresenter {
   readonly #unsubscribeNodes: () => void;
   readonly #unsubscribeGraphChanges: () => void;
   readonly #unsubscribeRendererChanges: () => void;
+  readonly #unsubscribePresentationChanges: () => void;
+  readonly #resolveIdentitySource: (metadata: UnknownRecord) => CubeIdentitySource | null;
+  readonly #editorEntry: CubeEditorEntryController;
   readonly #nodePresenceObserver: ComfyRendererPresenceObserver;
   readonly #slotLayoutCoordinator: ComfyNativeSlotLayoutCoordinator;
   readonly #rendererStabilizer: CubeRendererTransitionStabilizer;
@@ -136,8 +151,6 @@ export class CubeSurfacePresenter {
   /** Bind native Cube nodes to their Nodes 2.0 custom-content seam. */
   constructor(options: CubeSurfacePresenterOptions) {
     this.#document = options.document;
-    this.#openEditor = options.openEditor;
-    this.#prepareEditor = options.prepareEditor ?? (() => undefined);
     this.#rootGraph = options.rootGraph;
     this.#getCurrentGraph = options.getCurrentGraph;
     this.#nodes = options.nodes;
@@ -149,7 +162,19 @@ export class CubeSurfacePresenter {
     this.#getRendererMode = options.getRendererMode ?? (() => 'vue');
     this.#getScale = () => Number(options.legacyCanvas?.ds?.scale) || 1;
     this.#chromeActions = options.chromeActions ?? null;
+    this.#resolveIdentitySource = options.resolveIdentitySource ?? (() => null);
     this.#onBoundaryGeometryChange = options.onBoundaryGeometryChange ?? (() => undefined);
+    this.#editorEntry = new CubeEditorEntryController({
+      canEdit: options.canEdit ?? (async () => true),
+      leaveSurface: () => {
+        this.#legacyHost?.setEnabled(false);
+        for (const mountedNode of [...this.#views.keys()]) this.#unmount(mountedNode);
+      },
+      recoverSurface: () => this.#sync(),
+      openEditor: options.openEditor,
+      onDenied: options.onEditDenied ?? (() => undefined),
+      logger: options.logger,
+    });
     const windowRef = options.document.defaultView;
     this.#rendererStabilizer = new CubeRendererTransitionStabilizer({
       requestFrame: (callback) => windowRef?.requestAnimationFrame(callback) ?? null,
@@ -172,7 +197,7 @@ export class CubeSurfacePresenter {
       titleHeight: options.titleHeight ?? 30,
       history: options.history ?? {},
       getScale: () => Number(options.legacyCanvas?.ds?.scale) || 1,
-      prepareEditor: (node) => this.#prepareEditor(node),
+      openEditor: (node) => this.#editorEntry.open(node),
       onGeometryChange: (node) => this.#handleNodeGeometryChange(node),
       requestSlotLayoutSync:
         options.requestSlotLayoutSync ?? (() => this.#slotLayoutCoordinator.request()),
@@ -186,12 +211,13 @@ export class CubeSurfacePresenter {
           nodes: options.nodes,
           history: options.history ?? {},
           titleHeight: options.titleHeight ?? 30,
-          openEditor: (node) => this.#beginEditing(node),
+          openEditor: (node) => this.#editorEntry.open(node),
           logger: options.logger,
           ...(options.previewCatalog ? { previewCatalog: options.previewCatalog } : {}),
           ...(options.previewActions ? { previewActions: options.previewActions } : {}),
           ...(options.chromeActions ? { chromeActions: options.chromeActions } : {}),
           ...(options.portPresentation ? { portPresentation: options.portPresentation } : {}),
+          resolveIdentitySource: this.#resolveIdentitySource,
         })
       : null;
     this.#unsubscribeNodes = options.nodes.subscribe(() => this.#stabilizeSync());
@@ -199,6 +225,9 @@ export class CubeSurfacePresenter {
       options.graphChanges?.subscribe(() => this.#stabilizeSync()) ?? (() => undefined);
     this.#unsubscribeRendererChanges =
       options.rendererChanges?.subscribe(() => this.#stabilizeSync()) ?? (() => undefined);
+    this.#unsubscribePresentationChanges =
+      options.presentationChanges?.subscribe(() => this.#refreshIdentityPresentation()) ??
+      (() => undefined);
     this.#nodePresenceObserver = new ComfyRendererPresenceObserver({
       document: options.document,
       ownsNodeId: (nodeId) => this.#nodes.list().some((node) => String(node.id) === nodeId),
@@ -224,6 +253,7 @@ export class CubeSurfacePresenter {
     this.#previews.dispose();
     this.#unsubscribeGraphChanges();
     this.#unsubscribeRendererChanges();
+    this.#unsubscribePresentationChanges();
     this.#nodePresenceObserver.dispose();
     this.#slotLayoutCoordinator.dispose();
     this.#rendererStabilizer.dispose();
@@ -245,6 +275,13 @@ export class CubeSurfacePresenter {
   /** Reconcile presentation after an explicit host geometry or lifecycle event. */
   refresh(): void {
     this.#stabilizeSync();
+  }
+
+  /** Rebuild Vue identity views and redraw LiteGraph after transient class changes. */
+  #refreshIdentityPresentation(): void {
+    for (const node of [...this.#views.keys()]) this.#unmount(node);
+    this.#stabilizeSync();
+    this.#setDirtyCanvas(true, true);
   }
 
   /** Reconcile now and across Comfy's short renderer hook replacement window. */
@@ -290,7 +327,7 @@ export class CubeSurfacePresenter {
     for (const node of nodes) {
       const surface = this.#views.get(node);
       const root = this.#host.getRoot(node);
-      const failureSignature = buildMountAttemptSignature(node);
+      const failureSignature = buildCubeSurfaceMountAttemptSignature(node);
       if (!surface || !root || surface.root !== root) {
         if (surface) this.#unmount(node);
         if (this.#mountFailureSignatures.get(node) !== failureSignature) {
@@ -298,8 +335,8 @@ export class CubeSurfacePresenter {
         }
         continue;
       }
-      const signature = buildTopologySignature(node);
-      const presentationSignature = buildPresentationSignature(node);
+      const signature = buildCubeSurfaceTopologySignature(node);
+      const presentationSignature = buildCubeSurfacePresentationSignature(node);
       if (
         surface.topologySignature !== signature ||
         surface.presentationSignature !== presentationSignature
@@ -342,6 +379,7 @@ export class CubeSurfacePresenter {
           metadata: requireCubeIdentity(node),
           instanceTitle: node.title?.trim() || node.subgraph.name,
           fallbackDefinitionTitle: node.subgraph.name,
+          fallbackSource: this.#resolveIdentitySource(requireCubeIdentity(node)),
         }),
         metadata: buildCubeFaceChromeMetadata(node),
         chromeActions: this.#chromeActions,
@@ -351,7 +389,7 @@ export class CubeSurfacePresenter {
         ...(this.#previewActions ? { previewActions: this.#previewActions } : {}),
         getScale: this.#getScale,
         onStateChange: (nextState) => {
-          replaceRecord(surfaceState, serializeCubeSurfaceState(nextState));
+          replaceCubeSurfaceRecord(surfaceState, serializeCubeSurfaceState(nextState));
           this.#nodes.changed(node);
           this.#setDirtyCanvas(true, true);
         },
@@ -383,8 +421,8 @@ export class CubeSurfacePresenter {
       }
       this.#views.set(node, {
         root,
-        topologySignature: buildTopologySignature(node),
-        presentationSignature: buildPresentationSignature(node),
+        topologySignature: buildCubeSurfaceTopologySignature(node),
+        presentationSignature: buildCubeSurfacePresentationSignature(node),
         view: pendingView,
         dropTargets: pendingDropTargets,
         layoutWidth: Number.NaN,
@@ -420,7 +458,7 @@ export class CubeSurfacePresenter {
       pendingDropTargets?.dispose();
       pendingView?.dispose();
       this.#host.unmount(node);
-      const failureSignature = buildMountAttemptSignature(node);
+      const failureSignature = buildCubeSurfaceMountAttemptSignature(node);
       if (this.#mountFailureSignatures.get(node) !== failureSignature) {
         this.#mountFailureSignatures.set(node, failureSignature);
         const reason = error instanceof Error ? error.message : String(error);
@@ -444,7 +482,7 @@ export class CubeSurfacePresenter {
       externalInterface.inputSlots.length > 0 ? CUBE_INPUT_GUTTER_WIDTH : 0,
       0,
     );
-    const width = resolveVueContentWidth(node);
+    const width = resolveCubeVueContentWidth(node);
     if (Number.isFinite(surface.layoutWidth) && Math.abs(surface.layoutWidth - width) < 0.5) {
       return;
     }
@@ -509,55 +547,4 @@ export class CubeSurfacePresenter {
     this.#mountFailureSignatures.delete(node);
     this.#host.unmount(node);
   }
-
-  /** Remove every native face mount before Comfy activates the same internal nodes. */
-  #beginEditing(node: CubeNode): void {
-    this.#legacyHost?.setEnabled(false);
-    for (const mountedNode of [...this.#views.keys()]) this.#unmount(mountedNode);
-    try {
-      this.#openEditor(node);
-    } catch (error: unknown) {
-      this.#sync();
-      throw error;
-    }
-  }
-}
-
-/** Describe exact internal node identity without projecting it onto the root graph. */
-function buildTopologySignature(node: CubeNode): string {
-  return JSON.stringify(
-    node.subgraph._nodes.map((innerNode) => [String(innerNode.id ?? ''), innerNode.type ?? '']),
-  );
-}
-
-/** Detect titlebar identity and persistence changes without remounting for unrelated graph state. */
-function buildPresentationSignature(node: CubeNode): string {
-  const identity = requireCubeIdentity(node);
-  return JSON.stringify([
-    node.title ?? '',
-    node.subgraph.name,
-    identity.cube_id ?? '',
-    identity.default_alias ?? '',
-    identity.cube_version ?? '',
-    identity.has_saveable_changes ?? false,
-    identity.icon ?? null,
-    buildCubeCardVisibilitySignature(requireCubeSurface(node)),
-  ]);
-}
-
-/** Retry a failed mount only after its renderer-relevant node contract changes. */
-function buildMountAttemptSignature(node: CubeNode): string {
-  return `${buildTopologySignature(node)}|${buildPresentationSignature(node)}`;
-}
-
-/** Replace persisted surface state while retaining domain ownership of the record. */
-function replaceRecord(target: UnknownRecord, source: object): void {
-  for (const key of Object.keys(target)) Reflect.deleteProperty(target, key);
-  Object.assign(target, source);
-}
-
-/** Exclude only input labels because output slots overlay the preview's right rail. */
-function resolveVueContentWidth(node: CubeNode): number {
-  const inputGutterWidth = node.inputs.length > 0 ? CUBE_INPUT_GUTTER_WIDTH : 0;
-  return Math.max(1, Number(node.size[0]) - CUBE_VUE_CONTENT_HORIZONTAL_INSET - inputGutterWidth);
 }

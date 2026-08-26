@@ -28,6 +28,8 @@ import {
 } from '../../../frontend/comfyui/ui/cube/node/ComfyCubeNodeFactory.js';
 import { CubeNodeCatalog } from '../../../frontend/comfyui/ui/cube/node/CubeNodeCatalog.js';
 
+const noopNodePackMetadata = { apply: () => false };
+
 describe('CubePlacementService', () => {
   test('adds one real Cube node while children remain in its native definition', () => {
     const subgraph = nativeSubgraph('definition', ['inner-a', 'inner-b']);
@@ -47,7 +49,10 @@ describe('CubePlacementService', () => {
     const catalog = new CubeNodeCatalog();
     const graphBuilder = { build } as unknown as ComfyCubeGraphBuilder;
     const service = new CubePlacementService({
-      construction: constructionFor(graphBuilder, new ComfyCubeNodeFactory({ createNode })),
+      construction: constructionFor(
+        graphBuilder,
+        new ComfyCubeNodeFactory({ createNode, nodePackMetadata: noopNodePackMetadata }),
+      ),
       graph: { add },
       catalog,
       history: { beforeChange, afterChange, setDirtyCanvas },
@@ -180,6 +185,7 @@ describe('CubePlacementService', () => {
         graphBuilder,
         new ComfyCubeNodeFactory({
           createNode: () => nativeSubgraphNode(currentSubgraph),
+          nodePackMetadata: noopNodePackMetadata,
         }),
       ),
       graph: { add },
@@ -204,6 +210,94 @@ describe('CubePlacementService', () => {
     expect(second.node.id).not.toBe('exported-template-instance');
     expect(add).toHaveBeenNthCalledWith(1, first.node);
     expect(add).toHaveBeenNthCalledWith(2, second.node);
+  });
+
+  test('commits one connected workflow batch inside one history boundary', () => {
+    const subgraphs = [nativeSubgraph('definition-1'), nativeSubgraph('definition-2')];
+    let index = 0;
+    const graphBuilder = {
+      build: () => ({ subgraph: subgraphs[index++]!, nodesBySymbol: new Map(), warnings: [] }),
+    } as unknown as ComfyCubeGraphBuilder;
+    let activeSubgraph = 0;
+    const construction = constructionFor(
+      graphBuilder,
+      new ComfyCubeNodeFactory({
+        createNode: () => nativeSubgraphNode(subgraphs[activeSubgraph++]!),
+        nodePackMetadata: noopNodePackMetadata,
+      }),
+    );
+    const add = jest.fn();
+    const beforeChange = jest.fn();
+    const afterChange = jest.fn();
+    const setDirtyCanvas = jest.fn();
+    const service = new CubePlacementService({
+      construction,
+      graph: { add, remove: jest.fn() },
+      catalog: new CubeNodeCatalog(),
+      history: { beforeChange, afterChange, setDirtyCanvas },
+    });
+    const finalize = jest.fn();
+
+    const placed = service.placeBatch(
+      [
+        { payload: { cube: { cube_id: 'local/tests/one.cube', default_alias: 'One' } } },
+        { payload: { cube: { cube_id: 'local/tests/two.cube', default_alias: 'Two' } } },
+      ],
+      finalize,
+    );
+
+    expect(placed).toHaveLength(2);
+    expect(add).toHaveBeenCalledTimes(2);
+    expect(finalize).toHaveBeenCalledWith(placed);
+    expect(beforeChange).toHaveBeenCalledTimes(1);
+    expect(afterChange).toHaveBeenCalledTimes(1);
+    expect(setDirtyCanvas).toHaveBeenCalledTimes(1);
+  });
+
+  test('rolls back every node and definition when batch finalization fails', () => {
+    const subgraphs = [nativeSubgraph('definition-1'), nativeSubgraph('definition-2')];
+    let buildIndex = 0;
+    let nodeIndex = 0;
+    const discard = jest.fn();
+    const construction = new CubeConstructionService({
+      graphBuilder: {
+        build: () => ({
+          subgraph: subgraphs[buildIndex++]!,
+          nodesBySymbol: new Map(),
+          warnings: [],
+        }),
+      } as unknown as ComfyCubeGraphBuilder,
+      nodeFactory: new ComfyCubeNodeFactory({
+        createNode: () => nativeSubgraphNode(subgraphs[nodeIndex++]!),
+        nodePackMetadata: noopNodePackMetadata,
+      }),
+      definitions: { discard },
+      resolveInitialSize: () => [920, 600],
+      createInstanceId: () => `batch-${String(nodeIndex + 1)}`,
+    });
+    const remove = jest.fn();
+    const catalog = new CubeNodeCatalog();
+    const service = new CubePlacementService({
+      construction,
+      graph: { add: jest.fn(), remove },
+      catalog,
+      history: {},
+    });
+
+    expect(() =>
+      service.placeBatch(
+        [
+          { payload: { cube: { cube_id: 'local/tests/one.cube', default_alias: 'One' } } },
+          { payload: { cube: { cube_id: 'local/tests/two.cube', default_alias: 'Two' } } },
+        ],
+        () => {
+          throw new Error('connection failed');
+        },
+      ),
+    ).toThrow('connection failed');
+    expect(remove).toHaveBeenCalledTimes(2);
+    expect(discard).toHaveBeenCalledTimes(2);
+    expect(catalog.list()).toEqual([]);
   });
 });
 
@@ -233,6 +327,7 @@ function nativeSubgraph(id: string, nodeIds: string[] = []): NativeCubeSubgraph 
 function nodeFactoryFor(subgraph: NativeCubeSubgraph): ComfyCubeNodeFactory {
   return new ComfyCubeNodeFactory({
     createNode: () => nativeSubgraphNode(subgraph),
+    nodePackMetadata: noopNodePackMetadata,
   });
 }
 

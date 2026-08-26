@@ -70,24 +70,31 @@ export function resolveCubeEntrySource(entry) {
     return sourceFromLegacyAuthor(entry.author);
 }
 /** Create the authoritative chrome source resolver for a cube catalog. */
-export function createCubeSourceResolver(cubeBrowser) {
+export function createCubeSourceResolver(cubeBrowser, libraryState = null) {
     return (metadata) => {
+        const instanceId = typeof metadata.instance_id === 'string' ? metadata.instance_id.trim() : '';
+        const libraryClass = instanceId ? libraryState?.read(instanceId)?.primaryClass : undefined;
         const cubeId = typeof metadata.cube_id === 'string' ? metadata.cube_id.trim() : '';
         if (!cubeId) {
-            return { sourceKind: '', author: '', pack: '', namespace: '' };
+            return withLibraryClass({ sourceKind: '', author: '', pack: '', namespace: '' }, libraryClass);
         }
         const catalogSource = resolveCubeEntrySource(cubeBrowser?.getCubeById?.(cubeId));
         if (catalogSource) {
-            return catalogSource;
+            return withLibraryClass(catalogSource, libraryClass);
         }
         try {
             const parsed = parseCanonicalCubeId(cubeId);
-            return parsed.sourceKind === 'github'
+            const source = parsed.sourceKind === 'github'
                 ? buildGithubSource(parsed.owner, parsed.repo)
                 : buildLocalSource(parsed.namespace);
+            return withLibraryClass(source ?? {}, libraryClass);
         }
         catch {
-            return { sourceKind: '', author: '', pack: '', namespace: '' };
+            return withLibraryClass({ sourceKind: '', author: '', pack: '', namespace: '' }, libraryClass);
         }
     };
+}
+/** Add transient classification only when the asynchronous owner has resolved it. */
+function withLibraryClass(source, libraryClass) {
+    return libraryClass ? { ...source, libraryClass } : source;
 }

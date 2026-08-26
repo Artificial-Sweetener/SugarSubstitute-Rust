@@ -89,6 +89,28 @@ describe('CubeSurfaceView', () => {
     view.dispose();
   });
 
+  test('marks a wild Cube with a top-right Comfy Lucide icon and no status text', () => {
+    const identity = cubeIdentity('Wild Text to Image');
+    identity.isWild = true;
+    const view = new CubeSurfaceView({
+      document,
+      renderer: createRenderer(),
+      identity,
+      nodes: [],
+      state: createDefaultCubeSurfaceState(),
+      onStateChange: jest.fn(),
+    });
+
+    const indicator = view.element.querySelector<HTMLElement>('.sugarcubes-cube-wild-indicator');
+    expect(indicator?.parentElement?.classList).toContain('sugarcubes-cube-face__actions');
+    expect(indicator?.getAttribute('aria-label')).toBe('Wild Cube');
+    expect(indicator?.querySelector('i')?.classList).toContain('icon-[lucide--paw-print]');
+    expect(view.element.querySelector('[data-cube-definition-source]')?.textContent).toBe(
+      'from Base-Cubes by Artificial-Sweetener',
+    );
+    view.dispose();
+  });
+
   test('does not let legacy persisted card order override the native Cube graph order', () => {
     const state = createDefaultCubeSurfaceState();
     state.nodeOrder = ['2', '1'];
@@ -755,6 +777,7 @@ function cubeIdentity(instanceTitle: string): CubeIdentityPresentation {
       suffix: versionText,
     }),
     awaitingFirstSave: false,
+    isWild: false,
     sourceLine: 'from Base-Cubes by Artificial-Sweetener',
     icon: {
       kind: 'asset',

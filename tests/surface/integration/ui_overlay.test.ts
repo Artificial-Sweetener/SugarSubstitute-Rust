@@ -1002,6 +1002,48 @@ describe('ui overlay rendering', () => {
     expect(options.map((entry) => entry.title)).toEqual(['Save cube implementation']);
   });
 
+  test('chrome overlay replaces definition save with explicit read-only workflow actions', async () => {
+    await loadUi();
+    const { CubeChromeOverlay } = await import(
+      '../../../frontend/comfyui/ui/overlays/CubeChromeOverlay.js'
+    );
+    const actions = {
+      onSaveImplementation: jest.fn(),
+      getLibraryClassification: jest.fn(() => ({
+        definitionId: 'definition-2',
+        cubeId: 'cube-2',
+        cubeVersion: '1.0.0',
+        semanticHash: 'a'.repeat(64),
+        instanceIds: ['instance-2'],
+        primaryClass: 'none' as const,
+        access: 'read_only' as const,
+        sourceAvailable: true,
+        permittedOperations: new Set(['keep', 'save_to_stable', 'track_source', 'fork']),
+      })),
+      onKeepWorkflowCube: jest.fn(),
+      onSaveWorkflowCubeToStable: jest.fn(),
+      onSyncWorkflowCubeSource: jest.fn(),
+      onForkWorkflowCube: jest.fn(),
+    };
+    const overlay = new CubeChromeOverlay({ actions });
+    const metadata = { cube_id: 'cube-2', instance_id: 'instance-2', dirty: false };
+
+    const options = overlay.buildMenuOptions({ metadata, isDirty: false, flavors: [] });
+
+    expect(options.map((entry) => entry.title)).toEqual([
+      'Keep workflow copy',
+      'Save to Wild Cube Stable',
+      'Synchronize home source…',
+      'Fork to Local Cubes…',
+    ]);
+    options.forEach((entry) => entry.callback());
+    expect(actions.onSaveImplementation).not.toHaveBeenCalled();
+    expect(actions.onKeepWorkflowCube).toHaveBeenCalledWith(metadata);
+    expect(actions.onSaveWorkflowCubeToStable).toHaveBeenCalledWith(metadata);
+    expect(actions.onSyncWorkflowCubeSource).toHaveBeenCalledWith(metadata);
+    expect(actions.onForkWorkflowCube).toHaveBeenCalledWith(metadata);
+  });
+
   test('chrome overlay opens LiteGraph context menu from menu pill', async () => {
     await loadUi();
     const { CubeChromeOverlay } = await import(
@@ -1696,6 +1738,30 @@ describe('ui overlay rendering', () => {
     overlay.applyProximityToPrompt(result);
 
     expect(overlay.promptMatches).toEqual([]);
+  });
+
+  test('reuses accepted direct-execution proximity without legacy prompt patching', () => {
+    const graph = createTestGraph();
+    const overlay = new ProximityOverlay();
+    const match: ProximityMatch = {
+      outputId: 10,
+      outputSlot: 0,
+      outputPos: [0, 20],
+      inputId: 20,
+      inputSlot: 0,
+      inputName: 'image',
+      inputPos: [80, 20],
+      originId: 'producer',
+      originSlot: 0,
+      promptTargets: [{ nodeId: 'consumer', inputSlot: 0, inputName: 'image' }],
+      distance: 80,
+    };
+    const computeMatches = jest.spyOn(overlay, 'computeMatches');
+    overlay.updateOverlay([match]);
+
+    expect(overlay.promptMatches).toEqual([]);
+    expect(overlay.resolveExecutionMatches(graph)).toEqual([match]);
+    expect(computeMatches).not.toHaveBeenCalled();
   });
 
   test('does not invalidate presentation for an unchanged proximity result', () => {

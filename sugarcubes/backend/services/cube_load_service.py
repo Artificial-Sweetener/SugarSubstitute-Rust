@@ -171,6 +171,7 @@ class CubeLoadService:
         )
         response = {
             "cube": cube_payload,
+            "document": dict(loaded_cube.document),
             "nodes": prepared.nodes,
             "markers": prepared.markers,
             "connections": prepared.connections,

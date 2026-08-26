@@ -23,16 +23,14 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any, Callable, Mapping, Sequence
 
-from ...importer import CubeImportError
 from ...instrumentation import log_diagnostic
 from ..responses import BackendError
-from .cube_icon_service import attach_icon_url, normalize_existing_icon_metadata
 from .cube_identity_redirect_service import CubeIdentityRedirectService
 from .cube_git_context import CubeGitContext, resolve_cube_git_context
 from .cube_library_service import CubeLibraryService
 from .cube_file_io import format_timestamp, read_cube_payload
-from .cube_summary import build_cube_identity_fields
 from .cube_metadata import normalize_metadata_string
+from .cube_revision_loader import CubeRevisionLoader
 from .cube_revision_version_projection import project_unique_cube_versions
 from .tracked_repo_service import TrackedRepoService
 
@@ -57,8 +55,10 @@ class CubeRevisionService:
 
         self.library_service = library_service
         self.tracked_repo_service = tracked_repo_service
-        self.load_cube_artifact = load_cube_artifact
-        self.prepare_cube_import = prepare_cube_import
+        self._loader = CubeRevisionLoader(
+            load_cube_artifact=load_cube_artifact,
+            prepare_cube_import=prepare_cube_import,
+        )
         self.redirect_service = redirect_service
 
     def list_revisions(self, *, cube_id: str) -> dict[str, Any]:
@@ -153,7 +153,7 @@ class CubeRevisionService:
         with TemporaryDirectory(prefix="sugarcubes-revision-") as temp_dir:
             temp_path = Path(temp_dir) / Path(revision_context.repo_relative_path).name
             temp_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-            return self._load_path(
+            return self._loader.load_path(
                 temp_path,
                 revision_context,
                 revision_ref=normalized_revision_ref,
@@ -171,7 +171,7 @@ class CubeRevisionService:
     ) -> dict[str, Any]:
         """Load the current working-tree cube revision."""
 
-        return self._load_path(
+        return self._loader.load_path(
             context.cube_path,
             context,
             revision_ref=_CURRENT_REVISION_REF,
@@ -179,106 +179,6 @@ class CubeRevisionService:
             version_pin=version_pin,
             drop_origin=drop_origin,
         )
-
-    def _load_path(
-        self,
-        cube_path: Path,
-        context: CubeGitContext,
-        *,
-        revision_ref: str,
-        current: bool,
-        version_pin: str,
-        drop_origin: Sequence[float],
-    ) -> dict[str, Any]:
-        """Load one cube file path and shape the importer response."""
-
-        try:
-            loaded_cube = self.load_cube_artifact(cube_path)
-            if version_pin and loaded_cube.version != version_pin:
-                _log_cube_library_diagnostic(
-                    "sugarcubes_revision_version_pin_mismatch",
-                    cube_id=context.cube_id,
-                    revision_ref=revision_ref,
-                    expected_version=version_pin,
-                    actual_version=loaded_cube.version,
-                )
-                raise BackendError(
-                    "Cube version mismatch",
-                    status=409,
-                    details={"expected": version_pin, "actual": loaded_cube.version},
-                )
-            prepared = self.prepare_cube_import(loaded_cube, drop_origin=drop_origin)
-        except CubeImportError:
-            raise
-        except BackendError:
-            raise
-        except Exception as exc:  # pragma: no cover - defensive
-            _logger.exception(
-                "SugarCubes: failed to load revision '%s' for cube '%s'",
-                revision_ref,
-                context.cube_id,
-            )
-            raise BackendError("Load failed", status=500) from exc
-
-        cube_payload = dict(prepared.cube)
-        cube_payload.setdefault("name", context.cube_path.stem)
-        metadata_value = cube_payload.get("metadata")
-        metadata = metadata_value if isinstance(metadata_value, dict) else {}
-        icon = attach_icon_url(
-            normalize_existing_icon_metadata(metadata.get("icon")),
-            normalize_metadata_string(cube_payload.get("cube_id")),
-        )
-        if icon:
-            cube_payload["icon"] = icon
-        cube_payload.update(
-            build_cube_identity_fields(
-                cube_id=normalize_metadata_string(cube_payload.get("cube_id"))
-                or context.cube_id,
-                default_alias=normalize_metadata_string(metadata.get("default_alias"))
-                or normalize_metadata_string(cube_payload.get("name"))
-                or context.cube_path.stem,
-                metadata=metadata,
-            )
-        )
-        _log_cube_library_diagnostic(
-            "sugarcubes_revision_load_return",
-            cube_id=context.cube_id,
-            revision_ref=revision_ref,
-            current=current,
-            loaded_cube_id=normalize_metadata_string(cube_payload.get("cube_id")),
-            loaded_version=normalize_metadata_string(cube_payload.get("version")),
-        )
-        response = {
-            "cube": cube_payload,
-            "nodes": prepared.nodes,
-            "markers": prepared.markers,
-            "connections": prepared.connections,
-            "layout": prepared.layout,
-            "warnings": prepared.warnings,
-            "subgraphs": prepared.subgraphs,
-            "source": {
-                "path": str(context.cube_path),
-                "name": context.cube_path.stem,
-                "type": context.source_kind,
-                "owner": context.owner,
-                "repo": context.repo,
-                "repo_ref": (
-                    f"{context.owner}/{context.repo}"
-                    if context.owner and context.repo
-                    else ""
-                ),
-                "namespace": context.namespace,
-                "relative_path": context.repo_relative_path,
-            },
-            "revision": {
-                "revision_ref": revision_ref,
-                "current": current,
-            },
-        }
-        boundaries = getattr(prepared, "boundaries", None)
-        if boundaries is not None:
-            response["boundaries"] = boundaries
-        return response
 
     def _resolve_git_context(self, cube_id: str) -> CubeGitContext:
         """Resolve the owning git repo and repo-relative cube path."""

@@ -62,6 +62,7 @@ import { ComfyLiteGraphCubeFaceProjectionHost } from './ComfyLiteGraphCubeFacePr
 import type { CubePreviewActions } from './CubePreviewActions.js';
 import { ComfyLiteGraphCubeDropTargetBridge } from './ComfyLiteGraphCubeDropTargetBridge.js';
 import { CubePreviewFrameResizePolicy } from './CubePreviewFrameResizePolicy.js';
+import type { CubeIdentitySource } from '../cube/CubeIdentityPresentation.js';
 
 export interface LiteGraphCubeNodeCanvas
   extends LiteGraphCubeDrawHost,
@@ -90,6 +91,7 @@ export interface ComfyLiteGraphCubeNodeHostOptions {
   chromeActions?: CubeFaceChromeActions;
   portPresentation?: CubePortPresentationController;
   logger?: Pick<Console, 'debug' | 'warn'>;
+  resolveIdentitySource?(metadata: UnknownRecord): CubeIdentitySource | null;
 }
 
 interface CubeDrawNode extends CubeNode {
@@ -176,6 +178,7 @@ export class ComfyLiteGraphCubeNodeHost {
         imageFactory: () => options.document.createElement('img'),
         onImageLoad: () => this.#refresh(),
       }),
+      options.resolveIdentitySource,
     );
     this.#domWidgets = new ComfyLiteGraphCubeDomWidgetHost({
       document: options.document,

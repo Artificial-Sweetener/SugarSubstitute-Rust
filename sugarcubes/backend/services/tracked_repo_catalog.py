@@ -225,9 +225,11 @@ class TrackedRepoCatalog:
         )
         replacement = self._manifest.normalize(replacement)
         self._manifest.write(
-            replacement
-            if entry.owner == current.owner and entry.repo == current.repo
-            else entry
+            (
+                replacement
+                if entry.owner == current.owner and entry.repo == current.repo
+                else entry
+            )
             for entry in self._manifest.load()
         )
         return {"repo": serialize_tracked_repo(replacement)}

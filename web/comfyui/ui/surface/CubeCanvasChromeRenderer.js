@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Render Nodes 1.0 Cube header chrome with Comfy-owned icon primitives. */
-import { resolveCubeIdentityPresentation } from '../cube/CubeIdentityPresentation.js';
+import { resolveCubeIdentityPresentation, } from '../cube/CubeIdentityPresentation.js';
 import { requireCubeIdentity } from '../cube/node/ComfyCubeNodeFactory.js';
 import { drawFallbackInitialsCanvas } from '../core/CubeFallbackIconRenderer.js';
 import { resolveCubeFaceTitlebarActions, } from './CubeFaceChromeActions.js';
@@ -24,18 +24,22 @@ import { CubeModelPillCanvasRenderer } from './CubeModelPillCanvasRenderer.js';
 /** Own Cube header composition without owning cards, previews, or interaction. */
 export class CubeCanvasChromeRenderer {
     #icons;
+    #resolveIdentitySource;
     #modelTitles = new CubeModelPillCanvasRenderer();
     /** Bind Cube-definition icon loading to the header renderer. */
-    constructor(icons) {
+    constructor(icons, resolveIdentitySource = () => null) {
         this.#icons = icons;
+        this.#resolveIdentitySource = resolveIdentitySource;
     }
     /** Draw one Cube header and every currently available action. */
     draw(context, item) {
         const { node, layout } = item;
+        const metadata = requireCubeIdentity(node);
         const identity = resolveCubeIdentityPresentation({
-            metadata: requireCubeIdentity(node),
+            metadata,
             instanceTitle: node.title?.trim() || node.subgraph.name,
             fallbackDefinitionTitle: node.subgraph.name,
+            fallbackSource: this.#resolveIdentitySource(metadata),
         });
         context.fillStyle = item.headerColor;
         context.fillRect(layout.header.x, layout.header.y, layout.header.width, layout.header.height);

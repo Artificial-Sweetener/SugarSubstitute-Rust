@@ -119,6 +119,7 @@ class LoadedCube:
     surface: Dict[str, Any] = field(default_factory=dict)
     flavors: Dict[str, Any] = field(default_factory=dict)
     surface_signature: str = ""
+    document: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

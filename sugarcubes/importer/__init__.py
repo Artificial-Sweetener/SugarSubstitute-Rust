@@ -24,11 +24,14 @@ from .loader import (
     load_cube,
     prepare_import,
 )
+from .document_loader import load_cube_document, load_materialized_cube_document
 
 __all__ = [
     "CubeImportError",
     "LoadedCube",
     "PreparedImport",
     "load_cube",
+    "load_cube_document",
+    "load_materialized_cube_document",
     "prepare_import",
 ]

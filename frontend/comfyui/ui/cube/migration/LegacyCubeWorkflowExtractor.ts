@@ -58,6 +58,7 @@ export interface LegacyCubePlan {
   cubeVersion: string;
   title: string;
   metadata: UnknownRecord;
+  embeddedSubgraphDefinitions: ReadonlyMap<string, UnknownRecord>;
   position: Vec2;
   size: Vec2;
   nodes: UnknownRecord[];
@@ -119,9 +120,16 @@ export class LegacyCubeWorkflowExtractor {
       .map(parseLegacyLink)
       .filter((link): link is LegacyCubeLink => link !== null);
     const warnings: string[] = [];
+    const embeddedSubgraphDefinitions = indexEmbeddedSubgraphDefinitions(workflow);
     const managed = groups
       .map((group, index) =>
-        this.#readManagedGroup(group, nodeById, warnings, `legacy-group-${index + 1}`),
+        this.#readManagedGroup(
+          group,
+          nodeById,
+          embeddedSubgraphDefinitions,
+          warnings,
+          `legacy-group-${index + 1}`,
+        ),
       )
       .filter((group): group is ManagedGroup => group !== null);
     if (managed.length === 0) return emptyBatch();
@@ -185,6 +193,7 @@ export class LegacyCubeWorkflowExtractor {
   #readManagedGroup(
     group: UnknownRecord,
     nodeById: ReadonlyMap<string, UnknownRecord>,
+    embeddedSubgraphDefinitions: ReadonlyMap<string, UnknownRecord>,
     warnings: string[],
     fallbackKey: string,
   ): ManagedGroup | null {
@@ -232,6 +241,7 @@ export class LegacyCubeWorkflowExtractor {
         cubeVersion: readString(definition.cube_version) || readString(metadata.cube_version),
         title,
         metadata: cloneRecord(metadata),
+        embeddedSubgraphDefinitions,
         position: [bounds[0], bounds[1]],
         size: [bounds[2], bounds[3]],
         nodes: ownedNodes,
@@ -383,6 +393,17 @@ export class LegacyCubeWorkflowExtractor {
     }
     return connections;
   }
+}
+
+/** Index co-persisted native subgraph definitions used by nested legacy wrappers. */
+function indexEmbeddedSubgraphDefinitions(workflow: UnknownRecord): Map<string, UnknownRecord> {
+  const envelope = isRecord(workflow.definitions) ? workflow.definitions : {};
+  const index = new Map<string, UnknownRecord>();
+  for (const definition of readRecords(envelope.subgraphs)) {
+    const key = readIdKey(definition.id);
+    if (key) index.set(key, cloneRecord(definition));
+  }
+  return index;
 }
 
 /** Return a detached empty migration result. */

@@ -24,8 +24,8 @@
     "architecture": "python -m tools.check_architecture",
     "architecture:staged": "python -m tools.check_architecture --staged",
     "lint": "eslint \"frontend/**/*.ts\" \"tests/**/*.ts\" \"scripts/**/*.ts\"",
-    "format": "python -m black . --exclude \"node_modules|cubes\" && prettier --write \"frontend/**/*.ts\" \"tests/**/*.ts\" \"scripts/**/*.ts\" \"*.json\"",
-    "format:check": "python -m black --check . --exclude \"node_modules|cubes\" && prettier --check \"frontend/**/*.ts\" \"tests/**/*.ts\" \"scripts/**/*.ts\" \"*.json\"",
+    "format": "python -m black . --exclude \"\\.venv|node_modules|cubes\" && prettier --write \"frontend/**/*.ts\" \"tests/**/*.ts\" \"scripts/**/*.ts\" \"*.json\"",
+    "format:check": "python -m black --check . --exclude \"\\.venv|node_modules|cubes\" && prettier --check \"frontend/**/*.ts\" \"tests/**/*.ts\" \"scripts/**/*.ts\" \"*.json\"",
     "check": "npm run format:check && python -m ruff check . --exclude node_modules,cubes && npm run audit:standards && npm run architecture && npm run typecheck && npm run lint && npm run build:check && npm run test:all",
     "check:commit": "npm run check",
     "release": "semantic-release"

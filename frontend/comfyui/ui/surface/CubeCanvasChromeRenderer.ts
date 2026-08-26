@@ -15,7 +15,10 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Render Nodes 1.0 Cube header chrome with Comfy-owned icon primitives. */
 
-import { resolveCubeIdentityPresentation } from '../cube/CubeIdentityPresentation.js';
+import {
+  resolveCubeIdentityPresentation,
+  type CubeIdentitySource,
+} from '../cube/CubeIdentityPresentation.js';
 import { requireCubeIdentity, type CubeNode } from '../cube/node/ComfyCubeNodeFactory.js';
 import { drawFallbackInitialsCanvas } from '../core/CubeFallbackIconRenderer.js';
 import { CubeIconResolver, type CubeIconModel } from '../core/CubeIconResolver.js';
@@ -27,6 +30,7 @@ import {
 import { drawComfyPrimeIcon, type ComfyPrimeIconName } from './ComfyPrimeIcons.js';
 import { drawCubeUnsavedIndicator } from './CubeUnsavedIndicator.js';
 import { CubeModelPillCanvasRenderer } from './CubeModelPillCanvasRenderer.js';
+import type { UnknownRecord } from '../types/common.js';
 
 /** Describe the native LiteGraph button retained from the real SubgraphNode. */
 export interface NativeLiteGraphTitleButton {
@@ -51,20 +55,27 @@ export interface CubeCanvasChromeRenderItem {
 /** Own Cube header composition without owning cards, previews, or interaction. */
 export class CubeCanvasChromeRenderer {
   readonly #icons: CubeIconResolver;
+  readonly #resolveIdentitySource: (metadata: UnknownRecord) => CubeIdentitySource | null;
   readonly #modelTitles = new CubeModelPillCanvasRenderer();
 
   /** Bind Cube-definition icon loading to the header renderer. */
-  constructor(icons: CubeIconResolver) {
+  constructor(
+    icons: CubeIconResolver,
+    resolveIdentitySource: (metadata: UnknownRecord) => CubeIdentitySource | null = () => null,
+  ) {
     this.#icons = icons;
+    this.#resolveIdentitySource = resolveIdentitySource;
   }
 
   /** Draw one Cube header and every currently available action. */
   draw(context: CanvasRenderingContext2D, item: CubeCanvasChromeRenderItem): void {
     const { node, layout } = item;
+    const metadata = requireCubeIdentity(node);
     const identity = resolveCubeIdentityPresentation({
-      metadata: requireCubeIdentity(node),
+      metadata,
       instanceTitle: node.title?.trim() || node.subgraph.name,
       fallbackDefinitionTitle: node.subgraph.name,
+      fallbackSource: this.#resolveIdentitySource(metadata),
     });
     context.fillStyle = item.headerColor;
     context.fillRect(layout.header.x, layout.header.y, layout.header.width, layout.header.height);

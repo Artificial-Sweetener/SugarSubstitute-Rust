@@ -336,6 +336,72 @@ describe('ComfyCubeGraphBuilder', () => {
     expect(node.size).toEqual([280, 190]);
   });
 
+  test('never lets legacy positional extras shift named Cube values onto added fields', () => {
+    const internalNodes: NativeGraphNode[] = [];
+    const node = makeNode('Sampler');
+    node.widgets = [
+      { name: 'width', value: 1024 },
+      { name: 'height', value: 1024 },
+      { name: 'seed', value: 1 },
+      { name: 'steps', value: 20 },
+      { name: 'cfg', value: 7 },
+      { name: 'sampler_name', value: 'euler' },
+      { name: 'scheduler', value: 'normal' },
+      { name: 'batch_size', value: 1 },
+    ];
+    const subgraph = {
+      id: 'cube-definition',
+      name: 'Cube',
+      _nodes: internalNodes,
+      inputNode: {},
+      outputNode: {},
+      add: (entry: NativeGraphNode) => internalNodes.push(entry),
+      addInput: jest.fn(),
+      addOutput: jest.fn(),
+    } as unknown as NativeCubeSubgraph;
+    const builder = new ComfyCubeGraphBuilder({
+      rootGraph: { createSubgraph: () => subgraph },
+      createNode: () => node,
+      createUuid: () => 'sampler-node',
+    });
+
+    builder.build(
+      {
+        nodes: [
+          {
+            symbol: 'ksampler',
+            class_type: 'Sampler',
+            inputs: {
+              seed: 9508555241579063000,
+              steps: 30,
+              cfg: 5,
+              sampler_name: 'euler_ancestral',
+              scheduler: 'normal',
+              batch_size: 2,
+            },
+            extras: {
+              widgets_values: [9508555241579063000, 30, 5, 'euler_ancestral', 'normal', 2],
+            },
+          },
+        ],
+        markers: [],
+        connections: [],
+      },
+      '047 Pink Witch',
+    );
+
+    expect(Object.fromEntries(node.widgets.map((widget) => [widget.name, widget.value]))).toEqual({
+      width: 1024,
+      height: 1024,
+      seed: 9508555241579063000,
+      steps: 30,
+      cfg: 5,
+      sampler_name: 'euler_ancestral',
+      scheduler: 'normal',
+      batch_size: 2,
+    });
+  });
+
   test('keeps nested native subgraph nodes as real internal nodes', () => {
     const internalNodes: NativeGraphNode[] = [];
     const subgraph = {
@@ -526,5 +592,54 @@ describe('ComfyCubeGraphBuilder', () => {
     );
 
     expect(checkpoint.widgets[0]?.value).toBe('local-default.safetensors');
+  });
+
+  test('applies Cube defaults by name while retaining defaults for added live fields', () => {
+    const internalNodes: NativeGraphNode[] = [];
+    const subgraph = {
+      id: 'cube-definition',
+      name: 'Cube',
+      _nodes: internalNodes,
+      inputNode: {},
+      outputNode: {},
+      add: (node: NativeGraphNode) => internalNodes.push(node),
+      addInput: jest.fn(),
+      addOutput: jest.fn(),
+    } as unknown as NativeCubeSubgraph;
+    const modelLoader = makeNode('SimpleLoadAnima');
+    modelLoader.widgets = [
+      { name: 'diffusion_model', value: 'node-model-default.safetensors' },
+      { name: 'quantization', value: 'Original' },
+      { name: 'diffusion_weight_dtype', value: 'node-dtype-default' },
+    ];
+    const builder = new ComfyCubeGraphBuilder({
+      rootGraph: { createSubgraph: () => subgraph },
+      createNode: () => modelLoader,
+      createUuid: () => 'model-loader-node',
+    });
+
+    builder.build(
+      {
+        nodes: [
+          {
+            symbol: 'models',
+            class_type: 'SimpleLoadAnima',
+            inputs: {
+              diffusion_model: 'cube-model-default.safetensors',
+              diffusion_weight_dtype: 'default',
+            },
+          },
+        ],
+        markers: [],
+        connections: [],
+      },
+      'Forward-compatible Cube',
+    );
+
+    expect(modelLoader.widgets.map((widget) => widget?.value)).toEqual([
+      'cube-model-default.safetensors',
+      'Original',
+      'default',
+    ]);
   });
 });

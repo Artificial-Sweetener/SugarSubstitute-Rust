@@ -33,6 +33,8 @@ def test_check_script_uses_validation_only_formatters() -> None:
     assert "npm run architecture" in scripts["check"]
     assert "npm run format" not in scripts["check"].replace("npm run format:check", "")
     assert "--check" in scripts["format:check"]
+    assert r"\.venv" in scripts["format:check"]
+    assert r"\.venv" in scripts["format"]
     assert "prettier --check" in scripts["format:check"]
     assert "--write" not in scripts["check"]
     assert "prettier --write" in scripts["format"]

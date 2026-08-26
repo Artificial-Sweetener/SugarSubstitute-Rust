@@ -21,13 +21,17 @@ import {
   type CubeNode,
 } from '../../../frontend/comfyui/ui/cube/node/ComfyCubeNodeFactory.js';
 import type { NativeCubeSubgraph } from '../../../frontend/comfyui/ui/cube/ComfyCubeGraphBuilder.js';
+import { CubeWorkflowNodePackMetadata } from '../../../frontend/comfyui/ui/cube/node/CubeWorkflowNodePackMetadata.js';
 
 describe('ComfyCubeNodeFactory', () => {
   test('creates one detached real subgraph node for an insertion owner', () => {
     const subgraph = nativeSubgraph('cube-definition');
     const node = nativeSubgraphNode(subgraph);
     const createNode = jest.fn(() => node);
-    const factory = new ComfyCubeNodeFactory({ createNode });
+    const factory = new ComfyCubeNodeFactory({
+      createNode,
+      nodePackMetadata: nodePackMetadata(),
+    });
 
     const cube = factory.create({
       subgraph,
@@ -48,6 +52,8 @@ describe('ComfyCubeNodeFactory', () => {
       size: [900, 640],
     });
     expect(cube.properties).toMatchObject({
+      cnr_id: 'SugarCubes',
+      ver: '9.8.7',
       sugarcubes_kind: 'cube',
       sugarcubes_cube: { cube_id: 'sdxl/text-to-image.cube' },
       sugarcubes_surface: { schema: 1, revealed: true },
@@ -61,6 +67,7 @@ describe('ComfyCubeNodeFactory', () => {
     node.id = 27;
     const factory = new ComfyCubeNodeFactory({
       createNode: jest.fn(() => null),
+      nodePackMetadata: nodePackMetadata(),
     });
 
     const cube = factory.adopt(node, {
@@ -79,6 +86,7 @@ describe('ComfyCubeNodeFactory', () => {
       cube_id: 'local/Authored.cube',
       instance_id: 'authored-instance',
     });
+    expect(cube.properties).toMatchObject({ cnr_id: 'SugarCubes', ver: '9.8.7' });
   });
 
   test('rejects a generic node instead of disguising it as a Cube', () => {
@@ -89,6 +97,7 @@ describe('ComfyCubeNodeFactory', () => {
     };
     const factory = new ComfyCubeNodeFactory({
       createNode: () => generic,
+      nodePackMetadata: nodePackMetadata(),
     });
 
     expect(() =>
@@ -104,6 +113,15 @@ describe('ComfyCubeNodeFactory', () => {
     ).toThrow('real Comfy subgraph node');
   });
 });
+
+/** Build one authoritative installed-extension identity without using a release literal. */
+function nodePackMetadata(): CubeWorkflowNodePackMetadata {
+  const metadata = new CubeWorkflowNodePackMetadata();
+  metadata.updateFromStatus({
+    workflowNodePack: { cnrId: 'SugarCubes', version: '9.8.7' },
+  });
+  return metadata;
+}
 
 /** Build a minimal registered native subgraph definition. */
 function nativeSubgraph(id: string): NativeCubeSubgraph {

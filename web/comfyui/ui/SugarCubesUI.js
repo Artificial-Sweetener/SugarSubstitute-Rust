@@ -47,6 +47,11 @@ import { CubePackService } from './packs/CubePackService.js';
 import { CubeIdentityReconciler } from './graph/CubeIdentityReconciler.js';
 import { CubePromotionService } from './promotion/CubePromotionService.js';
 import { RendererGeometryCoordinator } from './geometry/RendererGeometryCoordinator.js';
+import { CubeWorkflowLibraryState } from './workflow/CubeWorkflowLibraryState.js';
+import { CubeWorkflowLibraryActions } from './workflow/CubeWorkflowLibraryActions.js';
+import { CubeWorkflowLibraryPresentation } from './workflow/CubeWorkflowLibraryPresentation.js';
+import { CubeWorkflowPreconfiguration } from './cube/CubeWorkflowPreconfiguration.js';
+import { CubeWorkflowNodePackMetadata } from './cube/node/CubeWorkflowNodePackMetadata.js';
 /**
  * Coordinate sugar cubes ui behavior for the SugarCubes UI.
  */
@@ -78,6 +83,11 @@ export class SugarCubesUI {
     collisionService;
     boundsReconciler;
     rendererGeometry;
+    workflowLibraryState;
+    workflowLibraryActions;
+    workflowLibraryPresentation;
+    workflowPreconfiguration;
+    workflowNodePackMetadata;
     overlayManager;
     _setupDone;
     constructor(options = {}) {
@@ -91,6 +101,15 @@ export class SugarCubesUI {
         this.confirmDialog = this.dialogs.confirmDialog || new ConfirmDialog({ adapter: this.adapter });
         this.versionDialog = new VersionDialog({ adapter: this.adapter, storage: this.storage });
         this._setupDone = false;
+        this.workflowNodePackMetadata = new CubeWorkflowNodePackMetadata();
+        this.workflowLibraryState = new CubeWorkflowLibraryState(this.api, this.adapter.getConsole?.() ?? console);
+        this.workflowLibraryActions = new CubeWorkflowLibraryActions({
+            api: this.api,
+            state: this.workflowLibraryState,
+            host: this.adapter,
+            dialogs: this.dialogs,
+            feedback: this.toast,
+        });
         this.cubeBrowser = new CubeBrowserController({
             adapter: this.adapter,
             api: this.api,
@@ -104,6 +123,7 @@ export class SugarCubesUI {
             logger: this.adapter?.getConsole?.(),
             onUpdate: (definitionKey, entry) => this.handleDefinitionUpdate(definitionKey, entry),
         });
+        this.workflowPreconfiguration = CubeWorkflowPreconfiguration.withEmbeddedDefinitions(this.definitionStore, this.workflowLibraryState);
         this.instanceManager = new InstanceManager({
             adapter: this.adapter,
             events: this.events,
@@ -141,6 +161,7 @@ export class SugarCubesUI {
             dialogs: this.dialogs,
             toast: this.toast,
         });
+        this.workflowLibraryPresentation = new CubeWorkflowLibraryPresentation(this.workflowLibraryState, this.packService);
         this.identityReconciler = new CubeIdentityReconciler({
             adapter: this.adapter,
             instanceManager: this.instanceManager,
@@ -237,6 +258,8 @@ export class SugarCubesUI {
             containmentService: this.containmentService,
             collisionService: this.collisionService,
             boundsReconciler: this.boundsReconciler,
+            workflowLibraryState: this.workflowLibraryState,
+            workflowLibraryActions: this.workflowLibraryActions,
         });
     }
     /** Publish definition updates to consumers without assigning them cache ownership. */
@@ -258,6 +281,11 @@ export class SugarCubesUI {
         if (this._setupDone) {
             return;
         }
+        const metadataResult = await this.api.getStatus();
+        if (!metadataResult.response.ok) {
+            throw new Error('SugarCubes workflow node-pack metadata could not be loaded.');
+        }
+        this.workflowNodePackMetadata.updateFromStatus(metadataResult.data);
         await this.cubeBrowser.setup();
         this.instanceManager.setup();
         this.dirtyManager.setup();
@@ -273,6 +301,7 @@ export class SugarCubesUI {
         this._setupDone = true;
     }
     dispose() {
+        this.workflowLibraryState.clear();
         this.rendererGeometry.dispose();
         this.overlayManager.dispose();
         this.cubeBrowser.dispose();

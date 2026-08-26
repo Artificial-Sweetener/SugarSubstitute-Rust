@@ -36,7 +36,7 @@ describe('CubeSubgraphRegistrar', () => {
       discardSubgraph: jest.fn(),
     });
 
-    const warnings = registrar.register({
+    const result = registrar.register({
       nodes: [
         {
           symbol: 'nested',
@@ -59,7 +59,7 @@ describe('CubeSubgraphRegistrar', () => {
       ],
     });
 
-    expect(warnings).toEqual([]);
+    expect(result).toEqual({ warnings: [], createdIds: ['nested-id'] });
     expect(createSubgraph).toHaveBeenCalledTimes(1);
     expect(createSubgraph).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -109,7 +109,7 @@ describe('CubeSubgraphRegistrar', () => {
           },
         ],
       }),
-    ).toEqual([]);
+    ).toEqual({ warnings: [], createdIds: [] });
     expect(createSubgraph).not.toHaveBeenCalled();
     expect(configure).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -141,7 +141,7 @@ describe('CubeSubgraphRegistrar', () => {
       discardSubgraph: jest.fn(),
     });
 
-    const warnings = registrar.register({
+    const result = registrar.register({
       subgraphs: [
         {
           id: 'resize-subgraph',
@@ -167,7 +167,7 @@ describe('CubeSubgraphRegistrar', () => {
       ],
     });
 
-    expect(warnings).toEqual([]);
+    expect(result).toEqual({ warnings: [], createdIds: ['resize-subgraph'] });
     const createdData = createdEntries[0];
     expect(createdData).toBeDefined();
     const nodes = Array.isArray(createdData?.nodes) ? createdData.nodes : [];

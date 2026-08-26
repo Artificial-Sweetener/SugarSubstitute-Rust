@@ -89,6 +89,23 @@ def test_list_route_preserves_library_response_shape(
     assert payload["cubes"][0]["is_writable"] is False
 
 
+def test_status_route_exposes_workflow_node_pack_identity(
+    tmp_path: Path, backend_services_factory: BackendServicesFactory
+) -> None:
+    """Expose the installed package identity without coupling it to Cube versions."""
+
+    services = backend_services_factory(tmp_path)
+
+    response = asyncio.run(build_route_handlers(services).get_status(FakeRequest()))
+    payload = decode_json_response(response)
+
+    assert response.status == 200
+    assert payload["workflowNodePack"] == {
+        "cnrId": "SugarCubes",
+        "version": payload["sugarCubesVersion"],
+    }
+
+
 def test_list_route_returns_route_based_default_alias(
     tmp_path: Path, backend_services_factory: BackendServicesFactory
 ) -> None:
@@ -502,7 +519,16 @@ def test_list_route_marks_matching_claimed_owner_repo_writable(
 def test_load_route_uses_local_source_metadata(
     tmp_path: Path, backend_services_factory: BackendServicesFactory
 ) -> None:
-    loaded_cube = SimpleNamespace(version="1.0.0")
+    loaded_cube = SimpleNamespace(
+        version="1.0.0",
+        document={
+            "cube_id": "local/example-user/private/text_to_image.cube",
+            "version": "1.0.0",
+            "implementation": {},
+            "surface": {},
+            "flavors": {},
+        },
+    )
     prepared = SimpleNamespace(
         cube={
             "cube_id": "local/example-user/private/text_to_image.cube",

@@ -26,6 +26,7 @@ from .cube_identity_redirect_service import CubeIdentityRedirectService
 from .cube_implementation_defaults_service import CubeImplementationDefaultsService
 from .identity_policy_service import IdentityPolicyService
 from .local_flavor_service import LocalFlavorService
+from .native_cube_import_preparer import NativeCubeImportPreparerAdapter
 from .cube_load_service import CubeLoadService
 from .cube_picker_catalog_service import CubePickerCatalogService
 from .cube_metadata_service import CubeMetadataService
@@ -37,6 +38,10 @@ from .tracked_repo_preflight_service import (
     TrackedRepoPreflightService,
 )
 from .tracked_repo_service import TrackedRepoService
+from .sugarscript_catalog_resolver import SugarScriptCatalogResolver
+from .workflow_catalog_artifact_provider import WorkflowCatalogArtifactProvider
+from .workflow_fork_repository import WorkflowForkRepository
+from .workflow_source_sync_port import WorkflowSourceSyncPort
 
 __all__ = [
     "CubeExportService",
@@ -50,6 +55,7 @@ __all__ = [
     "CubeImplementationDefaultsService",
     "IdentityPolicyService",
     "LocalFlavorService",
+    "NativeCubeImportPreparerAdapter",
     "CubeLoadService",
     "CubePickerCatalogService",
     "CubeMetadataService",
@@ -59,4 +65,8 @@ __all__ = [
     "TrackedRepoPreflightResult",
     "TrackedRepoPreflightService",
     "TrackedRepoService",
+    "SugarScriptCatalogResolver",
+    "WorkflowCatalogArtifactProvider",
+    "WorkflowForkRepository",
+    "WorkflowSourceSyncPort",
 ]

@@ -99,6 +99,7 @@ function plan(key: string, title: string): LegacyCubePlan {
     cubeVersion: '1.0.0',
     title,
     metadata: {},
+    embeddedSubgraphDefinitions: new Map(),
     position: [10, 20],
     size: [700, 500],
     nodes: [],

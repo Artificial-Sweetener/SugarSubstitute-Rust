@@ -230,6 +230,31 @@ export class ProximityOverlay {
     return patch.payload;
   }
 
+  /** Resolve fresh accepted edges for SugarCubes-owned direct execution. */
+  resolveExecutionMatches(graph?: ProximityGraph | null): readonly ProximityMatch[] {
+    if (!this.settings.enabled) {
+      this.updateOverlay([]);
+      return [];
+    }
+    if (this.authoritativeMatches.length) return this.authoritativeMatches;
+    const matches = this.computeMatches(
+      graph ?? this.adapter?.getApp?.()?.canvas?.graph ?? this.adapter?.getApp?.()?.graph,
+      this.settings,
+    );
+    this.updateOverlay(matches);
+    return matches;
+  }
+
+  /** Return endpoint-only state for opt-in host diagnostics. */
+  executionDebugState(): UnknownRecord {
+    return {
+      enabled: this.settings.enabled,
+      authoritative: this.authoritativeMatches.map(describeMatch),
+      overlay: this.overlayMatches.map(describeMatch),
+      prompt: this.promptMatches.map(describeMatch),
+    };
+  }
+
   computeMatches(
     graph: ProximityGraph | null | undefined,
     settings: Partial<ProximitySettings>,
@@ -368,4 +393,16 @@ function matchGeometrySignature(matches: readonly ProximityMatch[]): string {
         `${String(match.inputId)}:${String(match.inputSlot)}@${match.inputPos.join(',')}`,
     )
     .join('|');
+}
+
+/** Strip one accepted match to stable non-sensitive endpoint facts. */
+function describeMatch(match: ProximityMatch): UnknownRecord {
+  return {
+    output_id: match.outputId,
+    output_instance_id: match.outputInstanceId,
+    output_binding: match.outputBinding,
+    input_id: match.inputId,
+    input_instance_id: match.inputInstanceId,
+    input_binding: match.inputBinding,
+  };
 }

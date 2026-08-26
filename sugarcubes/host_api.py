@@ -26,6 +26,7 @@ from .runtime import (
 )
 
 HOST_API_VERSION = 1
+HOST_API_VERSIONS = (1, 2)
 HOST_API_MODULE_NAME = "sugarcubes.host_api"
 
 _ACTIVE_BACKEND_SERVICES: BackendServices | None = None
@@ -44,6 +45,13 @@ def active_backend_services() -> BackendServices | None:
     return _ACTIVE_BACKEND_SERVICES
 
 
+def active_execution_service() -> object | None:
+    """Return the additive version-2 Cube execution service when active."""
+
+    services = active_backend_services()
+    return None if services is None else services.execution
+
+
 def _publish_canonical_module_identity() -> None:
     """Publish one stable identity despite ComfyUI's path-derived module names."""
 
@@ -55,6 +63,8 @@ _publish_canonical_module_identity()
 __all__ = [
     "HOST_API_MODULE_NAME",
     "HOST_API_VERSION",
+    "HOST_API_VERSIONS",
+    "active_execution_service",
     "active_backend_services",
     "register_cube_output_observer",
     "set_active_backend_services",

@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Restore extracted legacy Cube records through Comfy's native subgraph loader. */
 import { isRecord } from '../../types/common.js';
+import { rebindSubgraphWidgetValues } from '../../graph/SubgraphWidgetValueRebinder.js';
 /** Own native graph creation for one already-extracted legacy Cube plan. */
 export class LegacyCubeGraphBuilder {
     #host;
@@ -27,6 +28,7 @@ export class LegacyCubeGraphBuilder {
     /** Create one configured native subgraph containing the original real nodes. */
     build(plan) {
         const definition = this.#serializer.serialize(plan, this.#host.createUuid());
+        rebindSubgraphWidgetValues(definition, (type) => (type ? this.#host.createNode(type) : null));
         const subgraph = this.#host.rootGraph.createSubgraph(definition);
         subgraph.configure(definition);
         if (subgraph._nodes.length !== plan.nodes.length) {

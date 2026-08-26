@@ -55,6 +55,7 @@ def test_runtime_identity_uses_canonical_sugarcubes_distribution_name() -> None:
     backend_source = (package_root / "backend" / "__init__.py").read_text(
         encoding="utf-8"
     )
+    identity_source = (package_root / "package_identity.py").read_text(encoding="utf-8")
     dependency_manifest_source = (
         package_root / "backend" / "services" / "cube_dependency_manifest.py"
     ).read_text(encoding="utf-8")
@@ -62,8 +63,9 @@ def test_runtime_identity_uses_canonical_sugarcubes_distribution_name() -> None:
         package_root / "backend" / "services" / "dependency_requirements.py"
     ).read_text(encoding="utf-8")
 
-    assert '_DISTRIBUTION_NAME = "SugarCubes"' in backend_source
-    assert "_FALLBACK_VERSION" not in backend_source
+    assert 'SUGARCUBES_DISTRIBUTION_NAME = "SugarCubes"' in identity_source
+    assert "_FALLBACK_VERSION" not in identity_source
+    assert "runtime_version" in backend_source
     assert 'frozenset({"sugarcubes"})' in dependency_manifest_source
     assert 'frozenset({"sugarcubes"})' in dependency_requirements_source
 

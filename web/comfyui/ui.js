@@ -19,14 +19,13 @@
 import { app } from '/scripts/app.js';
 import { api } from '/scripts/api.js';
 import { createComfyCubeRuntime } from './ui/cube/ComfyCubeRuntime.js';
-import { isDraftCubeNode, requireCubeIdentity, } from './ui/cube/node/ComfyCubeNodeFactory.js';
 import { ComfyCubeRuntimeLifecycle } from './ui/cube/ComfyCubeRuntimeLifecycle.js';
 import { CubePreviewRetentionStore } from './ui/surface/CubePreviewRetentionStore.js';
-import { CubeWorkflowPreconfiguration } from './ui/cube/CubeWorkflowPreconfiguration.js';
 import { CubeAuthoringHostCommands } from './ui/cube/CubeAuthoringHostCommands.js';
 import { ComfyPromptQueueBridge, } from './ui/cube/execution/ComfyPromptQueueBridge.js';
 import { CubePromptPipeline } from './ui/cube/execution/CubePromptPipeline.js';
 import { CubeOutputPromptAdapter } from './ui/cube/execution/CubeOutputPromptAdapter.js';
+import { createCubeDirectExecution } from './ui/cube/execution/CubeDirectExecutionService.js';
 import { ComfyCubeOutputEventBridge, } from './ui/cube/execution/ComfyCubeOutputEventBridge.js';
 import { ComfyCubeOutputHistoryAdapter, } from './ui/cube/execution/ComfyCubeOutputHistoryAdapter.js';
 import { CubeOutputExecutionStore } from './ui/cube/execution/CubeOutputExecutionStore.js';
@@ -70,7 +69,6 @@ const cubeAuthoringCommands = new CubeAuthoringHostCommands({
     createEmptyCube: () => ui.cubeCreation.startCreateEmptyCube(),
 });
 const adapter = ui.adapter;
-const storage = ui.storage;
 const toastService = ui.toast;
 const cubeApi = ui.api;
 const overlayManager = ui.overlayManager;
@@ -86,12 +84,12 @@ const logger = consoleRef || {
     debug() { },
 };
 const hostFeedback = new CubeHostFeedback({
-    storage,
+    storage: ui.storage,
     toast: toastService,
     logger,
     lastCubeStorageKeys: [IMPORT_STORAGE_KEY],
 });
-const cubePreconfiguration = new CubeWorkflowPreconfiguration();
+const cubePreconfiguration = ui.workflowPreconfiguration;
 const cubePreviewRetention = new CubePreviewRetentionStore();
 const cubeRuntimeLifecycle = new ComfyCubeRuntimeLifecycle(createCubeRuntime);
 const cubePicker = createComfyCubePickerIntegration({
@@ -130,6 +128,12 @@ const cubePromptPipeline = new CubePromptPipeline({
     applyProximity: (payload) => overlayManager.proximity.applyProximityToPrompt(payload),
     adaptCubeOutputs: (payload) => cubeOutputPromptAdapter.apply(payload),
 });
+const directExecution = createCubeDirectExecution({
+    api,
+    logger,
+    getGraph: () => appRef?.graph,
+    getProximityMatches: () => overlayManager.proximity.resolveExecutionMatches(appRef?.canvas?.graph ?? appRef?.graph),
+});
 const promptQueueBridge = new ComfyPromptQueueBridge({
     api: api,
     preflight: () => {
@@ -142,6 +146,8 @@ const promptQueueBridge = new ComfyPromptQueueBridge({
         }
     },
     transform: (payload) => cubePromptPipeline.transform(payload),
+    executeDirect: (position, payload, options) => directExecution.queue(position, payload, options),
+    shouldExecuteDirect: (payload) => directExecution.owns(payload),
 });
 /** Validate persisted nesting without requiring renderer or node-factory capabilities. */
 function assertNoNestedCubes(action) {
@@ -169,6 +175,7 @@ const cubeAffordances = new CubeAffordanceHostLifecycle({
     getCanvas: () => appRef?.canvas ?? null,
     controller: cubeAffordanceController,
     logger,
+    libraryActions: ui.workflowLibraryActions,
 });
 /** Construct graph-bound Cube collaborators only after Comfy initializes its graph. */
 function createCubeRuntime() {
@@ -184,13 +191,9 @@ function createCubeRuntime() {
         liteGraph,
         document: documentRef,
         logger,
+        nodePackMetadata: ui.workflowNodePackMetadata,
         editorMetadata: {
-            canEdit: async (node) => {
-                if (isDraftCubeNode(node))
-                    return true;
-                const cubeId = readCubeMetadataString(node, 'cube_id');
-                return cubeId ? ui.packService.canWriteCube(cubeId) : false;
-            },
+            canEdit: (node) => ui.workflowLibraryPresentation.canEdit(node),
             save: async (node, values) => ui.cubeEditorSave.save(node, values),
             modelSuggestions: () => ui.cubeBrowser.getModelSuggestions(),
         },
@@ -199,6 +202,8 @@ function createCubeRuntime() {
         previewRetention: cubePreviewRetention,
         getCubeOutput: (executionId) => cubeOutputExecutionStore.read(executionId),
         subscribePreviewChanges: (listener) => cubeOutputExecutionStore.subscribe(listener),
+        presentationChanges: ui.workflowLibraryState,
+        resolveIdentitySource: (metadata) => ui.workflowLibraryPresentation.resolveSource(metadata),
         onBoundaryGeometryChange: () => overlayManager.proximity.schedulePreview({
             graph: appRef.canvas?.graph ?? appRef.graph,
         }),
@@ -217,11 +222,6 @@ function createCubeRuntime() {
     overlayManager.proximity.setEndpointSource(runtime.proximityEndpoints);
     overlayManager.proximity.setMatchSink(runtime.proximityPresentation);
     return runtime;
-}
-/** Read one graph-owned Cube metadata field without leaking dynamic values upward. */
-function readCubeMetadataString(node, key) {
-    const value = requireCubeIdentity(node)[key];
-    return typeof value === 'string' ? value.trim() : '';
 }
 /** Resolve the first-class Cube runtime only when the active graph requires it. */
 function requireCubeRuntime() {
@@ -320,7 +320,9 @@ app.registerExtension(sugarCubesExtension);
 const debugApi = createSugarCubesDebugApi({ ui, app: appRef });
 if (windowRef) {
     Object.assign(windowRef, {
-        SugarCubes: createPublicApi(ui),
+        SugarCubes: createPublicApi(ui, {
+            importSugarScript: (source) => importHostCoordinator.importSugarScript(source),
+        }),
         SugarCubesDebug: debugApi,
     });
 }

@@ -29,10 +29,10 @@ export class ComfyLiteGraphCubeRenderer {
     #chrome;
     #ports = new CubeCanvasPortRenderer();
     /** Bind Comfy's exact active node and boundary render surfaces. */
-    constructor(host, previewImages, icons) {
+    constructor(host, previewImages, icons, resolveIdentitySource) {
         this.#host = host;
         this.#previewImages = previewImages;
-        this.#chrome = new CubeCanvasChromeRenderer(icons);
+        this.#chrome = new CubeCanvasChromeRenderer(icons, resolveIdentitySource);
     }
     /** Draw one ordered set of graph-space Cube surfaces. */
     draw(context, items) {

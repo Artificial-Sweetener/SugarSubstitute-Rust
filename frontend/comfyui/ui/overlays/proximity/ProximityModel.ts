@@ -63,12 +63,16 @@ export interface ProximityMatchSink {
 export interface ProximityMatch extends UnknownRecord {
   outputId: GraphId | undefined;
   outputCube?: unknown;
+  outputInstanceId?: unknown;
+  outputBinding?: unknown;
   outputSlot: number;
   outputNode?: ComfyNode;
   outputPos: Vec2;
   outputType?: unknown;
   inputId: GraphId | undefined;
   inputCube?: unknown;
+  inputInstanceId?: unknown;
+  inputBinding?: unknown;
   inputSlot: number;
   inputName: string;
   inputNode?: ComfyNode;

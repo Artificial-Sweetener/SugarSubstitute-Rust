@@ -15,7 +15,16 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Install one stable SugarCubes boundary around Comfy's prompt queue. */
 
-type QueuePrompt = (position: number, payload: unknown) => Promise<unknown>;
+export interface ComfyPromptQueueOptions {
+  partialExecutionTargets?: unknown;
+  previewMethod?: unknown;
+}
+
+type QueuePrompt = (
+  position: number,
+  payload: unknown,
+  options?: ComfyPromptQueueOptions,
+) => Promise<unknown>;
 
 export interface ComfyPromptQueueApi {
   queuePrompt?: QueuePrompt;
@@ -25,6 +34,12 @@ export interface ComfyPromptQueueBridgeOptions {
   api: ComfyPromptQueueApi;
   preflight?(): void;
   transform(payload: unknown): Promise<unknown>;
+  executeDirect?(
+    position: number,
+    payload: unknown,
+    options?: ComfyPromptQueueOptions,
+  ): Promise<unknown>;
+  shouldExecuteDirect?(payload: unknown): boolean;
 }
 
 /** Own the sole SugarCubes host queue interaction across workflow lifecycles. */
@@ -32,6 +47,10 @@ export class ComfyPromptQueueBridge {
   readonly #api: ComfyPromptQueueApi;
   readonly #preflight: () => void;
   readonly #transform: (payload: unknown) => Promise<unknown>;
+  readonly #executeDirect:
+    | ((position: number, payload: unknown, options?: ComfyPromptQueueOptions) => Promise<unknown>)
+    | null;
+  readonly #shouldExecuteDirect: (payload: unknown) => boolean;
   #original: QueuePrompt | null = null;
   #installed = false;
 
@@ -40,6 +59,8 @@ export class ComfyPromptQueueBridge {
     this.#api = options.api;
     this.#preflight = options.preflight ?? (() => undefined);
     this.#transform = options.transform;
+    this.#executeDirect = options.executeDirect ?? null;
+    this.#shouldExecuteDirect = options.shouldExecuteDirect ?? (() => true);
   }
 
   /** Install the bridge exactly once. */
@@ -63,11 +84,14 @@ export class ComfyPromptQueueBridge {
   }
 
   /** Retain a stable wrapper identity so disposal cannot remove another hook. */
-  readonly #queueWrapper: QueuePrompt = async (position, payload) => {
+  readonly #queueWrapper: QueuePrompt = async (position, payload, options) => {
     const original = this.#original;
     if (!original) throw new Error('SugarCubes prompt queue bridge is not installed.');
-    this.#preflight();
+    if (this.#executeDirect && this.#shouldExecuteDirect(payload)) {
+      this.#preflight();
+      return await this.#executeDirect(position, payload, options);
+    }
     const transformed = await this.#transform(payload);
-    return await original.call(this.#api, position, transformed);
+    return await original.call(this.#api, position, transformed, options);
   };
 }

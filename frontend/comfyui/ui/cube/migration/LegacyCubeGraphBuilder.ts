@@ -19,6 +19,7 @@ import { isRecord } from '../../types/common.js';
 import type { BuiltCubeGraph, CubeGraphBuilderHost } from '../ComfyCubeGraphBuilder.js';
 import type { LegacyCubeDefinitionSerializer } from './LegacyCubeDefinitionSerializer.js';
 import type { LegacyCubePlan } from './LegacyCubeWorkflowExtractor.js';
+import { rebindSubgraphWidgetValues } from '../../graph/SubgraphWidgetValueRebinder.js';
 
 /** Own native graph creation for one already-extracted legacy Cube plan. */
 export class LegacyCubeGraphBuilder {
@@ -34,6 +35,7 @@ export class LegacyCubeGraphBuilder {
   /** Create one configured native subgraph containing the original real nodes. */
   build(plan: LegacyCubePlan): BuiltCubeGraph {
     const definition = this.#serializer.serialize(plan, this.#host.createUuid());
+    rebindSubgraphWidgetValues(definition, (type) => (type ? this.#host.createNode(type) : null));
     const subgraph = this.#host.rootGraph.createSubgraph(definition);
     subgraph.configure(definition);
     if (subgraph._nodes.length !== plan.nodes.length) {

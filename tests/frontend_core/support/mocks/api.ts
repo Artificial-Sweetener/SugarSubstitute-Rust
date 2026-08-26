@@ -26,13 +26,36 @@ const mockHost = globalThis as typeof globalThis & { __sugarCubesMockApi?: MockA
 /** Create the Comfy API surface consumed by browser integration tests. */
 function createMockApi(): MockApi {
   const events = new EventTarget();
-  return {
-    fetchApi: async () => ({ ok: true, json: async () => ({}) }),
+  let fetchImplementation: MockApi['fetchApi'] = async () => ({
+    ok: true,
+    json: async () => ({}),
+  });
+  const api = {
     queuePrompt: async () => ({}),
     addEventListener: events.addEventListener.bind(events),
     removeEventListener: events.removeEventListener.bind(events),
     dispatchEvent: events.dispatchEvent.bind(events),
-  };
+  } as MockApi;
+  Object.defineProperty(api, 'fetchApi', {
+    configurable: false,
+    enumerable: true,
+    get: () => {
+      const implementation = fetchImplementation;
+      return async (path: string, options?: RequestInit) =>
+        path === '/sugarcubes/status'
+          ? {
+              ok: true,
+              json: async () => ({
+                workflowNodePack: { cnrId: 'SugarCubes', version: '9.8.7' },
+              }),
+            }
+          : implementation(path, options);
+    },
+    set: (implementation: MockApi['fetchApi']) => {
+      fetchImplementation = implementation;
+    },
+  });
+  return api;
 }
 
 export const api: MockApi = mockHost.__sugarCubesMockApi ?? createMockApi();

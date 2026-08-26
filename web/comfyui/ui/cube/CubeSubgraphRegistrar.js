@@ -24,9 +24,10 @@ export class CubeSubgraphRegistrar {
     constructor(host) {
         this.#host = host;
     }
-    /** Synchronize every nested definition and return actionable warnings. */
+    /** Synchronize every nested definition and identify rollback-owned additions. */
     register(payload) {
         const warnings = [];
+        const createdIds = [];
         const hints = buildHintLookup(payload);
         for (const entry of payload.subgraphs ?? []) {
             const id = readString(entry.id);
@@ -42,18 +43,21 @@ export class CubeSubgraphRegistrar {
                     continue;
                 }
                 rebindSubgraphWidgetValues(normalized, (type) => type ? this.#host.createNode(type) : null);
-                const subgraph = this.#host.getSubgraph(id) ?? this.#host.createSubgraph(normalized);
+                const existing = this.#host.getSubgraph(id);
+                const subgraph = existing ?? this.#host.createSubgraph(normalized);
                 if (!subgraph) {
                     warnings.push(`Subgraph '${id}' could not be synchronized; skipping.`);
                     continue;
                 }
+                if (!existing)
+                    createdIds.push(id);
                 subgraph.configure?.(normalized);
             }
             catch (error) {
                 warnings.push(`Failed to register subgraph '${id}': ${readErrorMessage(error)}`);
             }
         }
-        return warnings;
+        return { warnings, createdIds };
     }
     /** Discard isolated definitions that did not reach a committed Cube version. */
     discard(ids) {

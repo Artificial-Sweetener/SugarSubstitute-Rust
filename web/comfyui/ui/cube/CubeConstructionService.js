@@ -16,6 +16,7 @@
 /** Construct detached native Cube nodes from prepared imports. */
 import { isRecord } from '../types/common.js';
 import { writeCubeDefinitionIdentity } from './node/CubeDefinitionIdentityWriter.js';
+import { writeCubeDefinitionDocument } from '../workflow/CubeDefinitionDocumentWriter.js';
 const MINIMUM_CUBE_WIDTH = 240;
 const MINIMUM_CUBE_HEIGHT = 160;
 /** Own graph assembly, instance identity, metadata, and detached node construction. */
@@ -50,12 +51,17 @@ export class CubeConstructionService {
                         hasInputs: built.subgraph.inputs.length > 0,
                     }),
             },
+            ...(isRecord(payload.document) ? { document: payload.document } : {}),
         });
     }
     /** Configure one prebuilt definition and return a detached real Cube node. */
     constructBuilt(request) {
         const metadata = buildInstanceMetadata(request.identity);
         writeCubeDefinitionIdentity(request.built.subgraph, 'cube', metadata);
+        writeCubeDefinitionDocument(request.built.subgraph, request.document, {
+            cubeId: request.identity.cubeId,
+            cubeVersion: request.identity.cubeVersion,
+        });
         try {
             const node = this.#nodeFactory.create({
                 instanceId: requireInstanceId(request.identity.instanceId),

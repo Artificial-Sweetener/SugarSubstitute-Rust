@@ -19,6 +19,8 @@ export class ComfyPromptQueueBridge {
     #api;
     #preflight;
     #transform;
+    #executeDirect;
+    #shouldExecuteDirect;
     #original = null;
     #installed = false;
     /** Bind one stable host API and one application-level prompt pipeline. */
@@ -26,6 +28,8 @@ export class ComfyPromptQueueBridge {
         this.#api = options.api;
         this.#preflight = options.preflight ?? (() => undefined);
         this.#transform = options.transform;
+        this.#executeDirect = options.executeDirect ?? null;
+        this.#shouldExecuteDirect = options.shouldExecuteDirect ?? (() => true);
     }
     /** Install the bridge exactly once. */
     install() {
@@ -49,12 +53,15 @@ export class ComfyPromptQueueBridge {
         this.#installed = false;
     }
     /** Retain a stable wrapper identity so disposal cannot remove another hook. */
-    #queueWrapper = async (position, payload) => {
+    #queueWrapper = async (position, payload, options) => {
         const original = this.#original;
         if (!original)
             throw new Error('SugarCubes prompt queue bridge is not installed.');
-        this.#preflight();
+        if (this.#executeDirect && this.#shouldExecuteDirect(payload)) {
+            this.#preflight();
+            return await this.#executeDirect(position, payload, options);
+        }
         const transformed = await this.#transform(payload);
-        return await original.call(this.#api, position, transformed);
+        return await original.call(this.#api, position, transformed, options);
     };
 }

@@ -57,7 +57,7 @@ export interface ComfyVueCubeNodeHostOptions
   extends Pick<ComfyVueCubeNodeResizeHostOptions, 'history' | 'getScale'> {
   document: Document;
   titleHeight: number;
-  prepareEditor?(node: CubeNode): void;
+  openEditor?(node: CubeNode): void;
   requestSlotLayoutSync(): void;
   onGeometryChange?(node: CubeNode): void;
   portPresentation?: CubePortPresentationController;
@@ -69,7 +69,7 @@ export class ComfyVueCubeNodeHost {
   readonly #titleHeight: number;
   readonly #history: ComfyVueCubeNodeResizeHostOptions['history'];
   readonly #getScale: () => number;
-  readonly #prepareEditor: (node: CubeNode) => void;
+  readonly #openEditor: (node: CubeNode) => void;
   readonly #requestSlotLayoutSync: () => void;
   readonly #onGeometryChange: (node: CubeNode) => void;
   readonly #portPresentation: CubePortPresentationController | null;
@@ -81,7 +81,7 @@ export class ComfyVueCubeNodeHost {
     this.#titleHeight = Math.max(0, options.titleHeight);
     this.#history = options.history;
     this.#getScale = options.getScale;
-    this.#prepareEditor = options.prepareEditor ?? (() => undefined);
+    this.#openEditor = options.openEditor ?? (() => undefined);
     this.#requestSlotLayoutSync = options.requestSlotLayoutSync;
     this.#onGeometryChange = options.onGeometryChange ?? (() => undefined);
     this.#portPresentation = options.portPresentation ?? null;
@@ -136,7 +136,7 @@ export class ComfyVueCubeNodeHost {
       requestSlotLayoutSync: this.#requestSlotLayoutSync,
       ...(this.#portPresentation ? { portPresentation: this.#portPresentation } : {}),
     });
-    const editorFooter = new ComfyVueCubeEditorFooter(nodeRoot, node, this.#prepareEditor);
+    const editorFooter = new ComfyVueCubeEditorFooter(nodeRoot, node, this.#openEditor);
     const observer = new MutationObserver((records) => {
       const mounted = this.#mounts.get(node);
       if (mounted && records.some((record) => requiresNativeHostReconcile(record, mounted))) {

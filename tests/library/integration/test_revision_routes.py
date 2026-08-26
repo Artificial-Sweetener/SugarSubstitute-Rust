@@ -45,6 +45,7 @@ def _make_loaded_cube(path: Any) -> Any:
         definitions={},
         warnings=[],
         layout=None,
+        document=payload,
     )
 
 

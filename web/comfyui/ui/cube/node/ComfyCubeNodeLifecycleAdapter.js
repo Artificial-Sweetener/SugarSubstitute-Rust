@@ -26,6 +26,8 @@ export class ComfyCubeNodeLifecycleAdapter {
     #events;
     #createInstanceId;
     #logger;
+    #nodePackMetadata;
+    #unsubscribeNodePackMetadata;
     #previousConfigure;
     #previousNodeAdded;
     #previousNodeRemoved;
@@ -40,6 +42,7 @@ export class ComfyCubeNodeLifecycleAdapter {
         this.#events = options.events;
         this.#createInstanceId = options.createInstanceId;
         this.#logger = options.logger;
+        this.#nodePackMetadata = options.nodePackMetadata;
         this.#previousConfigure = options.graph.onConfigure ?? null;
         this.#previousNodeAdded = options.graph.onNodeAdded ?? null;
         this.#previousNodeRemoved = options.graph.onNodeRemoved ?? null;
@@ -62,6 +65,7 @@ export class ComfyCubeNodeLifecycleAdapter {
         options.graph.onNodeAdded = this.#nodeAddedHook;
         options.graph.onNodeRemoved = this.#nodeRemovedHook;
         options.events.addEventListener('litegraph:canvas', this.#handleCanvasChange);
+        this.#unsubscribeNodePackMetadata = options.nodePackMetadata.subscribe(() => this.#reconcile());
         this.#reconcile();
     }
     /** Restore callbacks when the graph-bound runtime is replaced. */
@@ -76,6 +80,7 @@ export class ComfyCubeNodeLifecycleAdapter {
             this.#graph.onNodeRemoved = this.#previousNodeRemoved;
         }
         this.#events.removeEventListener('litegraph:canvas', this.#handleCanvasChange);
+        this.#unsubscribeNodePackMetadata();
     }
     /** Reconcile only after Comfy has configured all nodes created by one canvas operation. */
     #handleCanvasChange = (event) => {
@@ -99,6 +104,7 @@ export class ComfyCubeNodeLifecycleAdapter {
         for (const value of values) {
             if (!isCubeNode(value))
                 continue;
+            this.#nodePackMetadata.apply(value);
             if (isDraftCubeNode(value))
                 labelEmptyCubeBoundaryAffordances(value.subgraph);
             let instanceId = readInstanceId(value);

@@ -20,7 +20,7 @@ import { ComfyCubeGraphBuilder } from './ComfyCubeGraphBuilder.js';
 import { CubePlacementService } from './CubePlacementService.js';
 import { CubeConstructionService } from './CubeConstructionService.js';
 import { resolveCubeInitialSurfaceSize } from '../surface/CubeInitialSurfaceSize.js';
-import { CubeSubgraphRegistrar } from './CubeSubgraphRegistrar.js';
+import { CubeSubgraphRegistrar, } from './CubeSubgraphRegistrar.js';
 import { CubeOutputSurfaceSynchronizer } from './CubeOutputSurfaceSynchronizer.js';
 import { LegacyCubeDefinitionSerializer } from './migration/LegacyCubeDefinitionSerializer.js';
 import { LegacyCubeGraphBuilder } from './migration/LegacyCubeGraphBuilder.js';
@@ -57,6 +57,9 @@ import { ComfyCubeVersionReplacementAdapter } from './version/ComfyCubeVersionRe
 import { ComfyCubeVersionSelectionAdapter } from './version/ComfyCubeVersionSelectionAdapter.js';
 import { CubeVersionSwitchService } from './version/CubeVersionSwitchService.js';
 import { CubeVersionDefinitionStager } from './version/CubeVersionDefinitionStager.js';
+import { buildCubeRuntimePresentationBindings } from './CubeRuntimePresentationBindings.js';
+import { buildCubeRuntimeEditorBindings } from './CubeRuntimeEditorBindings.js';
+import { ComfyCubeRootMutationAdapter } from './ComfyCubeRootMutationAdapter.js';
 /** Construct the graph-bound SugarCubes integration around native SubgraphNodes. */
 export function createComfyCubeRuntime(options) {
     const app = requireRecord(options.app, 'Comfy application');
@@ -71,16 +74,13 @@ export function createComfyCubeRuntime(options) {
     const canvas = requireRecord(app.canvas, 'Comfy canvas');
     const createNodeFunction = requireFunction(liteGraph.createNode, 'LiteGraph.createNode');
     const createSubgraphFunction = requireFunction(graph.createSubgraph, 'LGraph.createSubgraph');
-    const addFunction = requireFunction(graph.add, 'LGraph.add');
-    const removeFunction = requireFunction(graph.remove, 'LGraph.remove');
-    const getLinkFunction = requireFunction(graph.getLink, 'LGraph.getLink');
-    const getNodeByIdFunction = requireFunction(graph.getNodeById, 'LGraph.getNodeById');
     const selectedItems = requireSet(canvas.selectedItems, 'LGraphCanvas.selectedItems');
     const processSelectFunction = requireFunction(canvas.processSelect, 'LGraphCanvas.processSelect');
     const updateSelectedItemsFunction = typeof canvas.updateSelectedItems === 'function' ? canvas.updateSelectedItems : null;
     const apiUrlFunction = requireFunction(api.apiURL, 'Comfy API.apiURL');
     const openSubgraphFunction = typeof canvas.openSubgraph === 'function' ? canvas.openSubgraph : null;
     const runtimeGraph = requireRuntimeGraph(graph);
+    const rootMutations = new ComfyCubeRootMutationAdapter(graph);
     const legacyCanvas = requireLiteGraphCubeNodeCanvas(canvas);
     const { graphScope, graphInventory, hostPlacementGuard } = createComfyCubePlacementRuntime({
         rootGraph: graph,
@@ -129,10 +129,14 @@ export function createComfyCubeRuntime(options) {
         catalog: nodes,
         events: legacyCanvas.canvas,
         createInstanceId: createUuid,
+        nodePackMetadata: options.nodePackMetadata,
         logger: options.logger,
     });
     const outputSurfaceSynchronizer = new CubeOutputSurfaceSynchronizer(nodes, legacyCanvas.canvas);
-    const nodeFactory = new ComfyCubeNodeFactory({ createNode });
+    const nodeFactory = new ComfyCubeNodeFactory({
+        createNode,
+        nodePackMetadata: options.nodePackMetadata,
+    });
     const nodeSwap = new CubeNodeSwapCoordinator({
         graph,
         nodes,
@@ -209,8 +213,7 @@ export function createComfyCubeRuntime(options) {
     });
     const presenter = new CubeSurfacePresenter({
         document: options.document,
-        openEditor: (node) => editorNavigation.open(node),
-        prepareEditor: (node) => editorNavigation.prepare(node),
+        ...buildCubeRuntimeEditorBindings(options, (node) => editorNavigation.open(node)),
         rootGraph: graph,
         getCurrentGraph: () => (isRecord(canvas.graph) ? canvas.graph : null),
         nodes,
@@ -255,16 +258,10 @@ export function createComfyCubeRuntime(options) {
         portPresentation,
         graphChanges: canvasGraphChanges,
         rendererChanges,
+        ...buildCubeRuntimePresentationBindings(options),
         ...(previewEvents ? { previewEvents } : {}),
         ...(options.onBoundaryGeometryChange
             ? { onBoundaryGeometryChange: options.onBoundaryGeometryChange }
-            : {}),
-        ...(options.subscribePreviewChanges
-            ? {
-                previewChanges: {
-                    subscribe: options.subscribePreviewChanges,
-                },
-            }
             : {}),
     });
     const graphBuilder = new ComfyCubeGraphBuilder(graphBuilderHost);
@@ -298,21 +295,7 @@ export function createComfyCubeRuntime(options) {
         processSelect: (node) => void processSelectFunction.call(canvas, node),
     });
     const versionReplacement = new ComfyCubeVersionReplacementAdapter({
-        graph: {
-            add(node) {
-                addFunction.call(graph, node);
-            },
-            remove(node) {
-                removeFunction.call(graph, node);
-            },
-            getNodeById(id) {
-                return getNodeByIdFunction.call(graph, id);
-            },
-            getLink(id) {
-                const value = getLinkFunction.call(graph, id);
-                return isRecord(value) ? value : null;
-            },
-        },
+        graph: rootMutations,
         catalog: nodes,
         history,
         selection: versionSelection,
@@ -330,11 +313,7 @@ export function createComfyCubeRuntime(options) {
     });
     const placement = new CubePlacementService({
         construction,
-        graph: {
-            add(node) {
-                addFunction.call(graph, node);
-            },
-        },
+        graph: rootMutations,
         catalog: nodes,
         history,
     });
@@ -363,7 +342,7 @@ export function createComfyCubeRuntime(options) {
         placement,
         graph: {
             getNodeById(id) {
-                const value = getNodeByIdFunction.call(graph, id);
+                const value = rootMutations.getNodeById(id);
                 return isConnectableNode(value) ? value : null;
             },
             ...(history.setDirtyCanvas
@@ -400,6 +379,7 @@ export function createComfyCubeRuntime(options) {
         proximityEndpoints,
         proximityPresentation: portPresentation,
         registerSubgraphs: (payload) => subgraphRegistrar.register(payload),
+        discardSubgraphs: (ids) => subgraphRegistrar.discard(ids),
         restoreLegacy: (batch) => legacyMigration.restore(batch),
         detectLegacyBlueprints: () => blueprintMigration.scan(graph),
         dispose: () => {

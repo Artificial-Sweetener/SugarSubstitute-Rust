@@ -67,6 +67,7 @@ export interface ImportLayout extends UnknownRecord {
   origin?: unknown;
   groups?: ImportLayoutGroup[];
   cube?: UnknownRecord;
+  document?: UnknownRecord;
   geometry?: UnknownRecord;
 }
 
@@ -139,6 +140,7 @@ export function readImportPayload(value: unknown): ImportPayload | null {
     ...(isRecord(value.boundaries) ? { boundaries: value.boundaries } : {}),
     ...(layout ? { layout } : {}),
     ...(isRecord(value.cube) ? { cube: value.cube } : {}),
+    ...(isRecord(value.document) ? { document: value.document } : {}),
   };
 }
 

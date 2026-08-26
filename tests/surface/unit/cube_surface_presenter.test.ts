@@ -101,11 +101,46 @@ describe('CubeSurfacePresenter', () => {
     expect(shell.root.querySelectorAll('[data-sugarcube-edge-resize]')).toHaveLength(4);
 
     shell.footerButton.click();
-    expect(openEditor).not.toHaveBeenCalled();
-    expect(nativeEnterSubgraph).toHaveBeenCalledTimes(1);
+    await flushMount();
+    expect(openEditor).toHaveBeenCalledWith(node);
+    expect(nativeEnterSubgraph).not.toHaveBeenCalled();
     presenter.dispose();
     expect(shell.root.querySelector('[data-sugarcube-edge-resize]')).toBeNull();
     expect(replacementHeader.hidden).toBe(false);
+  });
+
+  test('blocks native editor entry when definition access is read-only', async () => {
+    const pane = createTransformPane();
+    const shell = createNativeNodeShell('9');
+    pane.append(shell.root);
+    const rootGraph = {};
+    const node = cubeNode(9, 'cube-1', [nativeNode('inner', 'KSampler')]);
+    const nodes = new CubeNodeCatalog();
+    nodes.add(node);
+    const openEditor = jest.fn();
+    const nativeEnterSubgraph = jest.fn();
+    const onEditDenied = jest.fn();
+    shell.footerButton.addEventListener('click', nativeEnterSubgraph);
+    const presenter = new CubeSurfacePresenter({
+      document,
+      openEditor,
+      rootGraph,
+      getCurrentGraph: () => rootGraph,
+      nodes,
+      logger: console,
+      renderer: { mount: () => ({ refresh() {}, unmount() {} }), dispose() {} },
+      canEdit: async () => false,
+      onEditDenied,
+    });
+    await flushMount();
+
+    shell.footerButton.click();
+    await flushMount();
+
+    expect(openEditor).not.toHaveBeenCalled();
+    expect(nativeEnterSubgraph).not.toHaveBeenCalled();
+    expect(onEditDenied).toHaveBeenCalledWith(node);
+    presenter.dispose();
   });
 
   test('refreshes the Cube preview rail when Comfy publishes native node media', async () => {

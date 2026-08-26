@@ -16,18 +16,29 @@
 /** Extract only group-era Cubes before Comfy configures a workflow. */
 import { LegacyCubeWorkflowExtractor, } from './migration/LegacyCubeWorkflowExtractor.js';
 import { CubeSerializedDefinitionPresentationAdapter } from './CubeSerializedDefinitionPresentationAdapter.js';
+import { EmbeddedCubeDefinitionPublisher, } from '../workflow/EmbeddedCubeDefinitionPublisher.js';
 /** Own the serialized workflow phase and its one pending legacy migration batch. */
 export class CubeWorkflowPreconfiguration {
     #legacyExtractor;
     #definitionPresentation;
+    #embeddedDefinitions;
+    libraryState;
     #legacyBatch = null;
     /** Bind the focused legacy extraction collaborator. */
-    constructor(legacyExtractor = new LegacyCubeWorkflowExtractor(), definitionPresentation = new CubeSerializedDefinitionPresentationAdapter()) {
+    constructor(legacyExtractor = new LegacyCubeWorkflowExtractor(), definitionPresentation = new CubeSerializedDefinitionPresentationAdapter(), embeddedDefinitions = null, libraryState = null) {
         this.#legacyExtractor = legacyExtractor;
         this.#definitionPresentation = definitionPresentation;
+        this.#embeddedDefinitions = embeddedDefinitions;
+        this.libraryState = libraryState;
+    }
+    /** Compose preconfiguration with workflow-embedded definition authority. */
+    static withEmbeddedDefinitions(store, libraryState = null) {
+        return new CubeWorkflowPreconfiguration(undefined, undefined, new EmbeddedCubeDefinitionPublisher(store), libraryState);
     }
     /** Detach legacy records before graph construction. */
     prepare(workflow) {
+        this.libraryState?.begin(workflow);
+        this.#embeddedDefinitions?.publish(workflow);
         this.#definitionPresentation.prepare(workflow);
         const batch = this.#legacyExtractor.extractInPlace(workflow);
         this.#legacyBatch = batch.plans.length > 0 ? batch : null;

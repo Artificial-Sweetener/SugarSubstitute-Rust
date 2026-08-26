@@ -1783,7 +1783,14 @@ def test_save_many_rejects_target_model_metadata_that_conflicts_with_cube_path(
 def test_load_route_uses_tracked_repo_source_metadata(
     tmp_path: Path, backend_services_factory: BackendServicesFactory
 ) -> None:
-    loaded_cube = SimpleNamespace(version="1.0.0")
+    canonical_document = {
+        "cube_id": CANONICAL_CUBE_ID,
+        "version": "1.0.0",
+        "implementation": {},
+        "surface": {},
+        "flavors": {},
+    }
+    loaded_cube = SimpleNamespace(version="1.0.0", document=canonical_document)
     prepared = SimpleNamespace(
         cube={"cube_id": CANONICAL_CUBE_ID, "version": "1.0.0"},
         nodes=[{"symbol": "node"}],
@@ -1819,6 +1826,7 @@ def test_load_route_uses_tracked_repo_source_metadata(
 
     assert success_response.status == 200
     assert success_payload["cube"]["cube_id"] == CANONICAL_CUBE_ID
+    assert success_payload["document"] == canonical_document
     assert success_payload["source"]["relative_path"] == "demo.cube"
     assert success_payload["source"]["repo_ref"] == "Artificial-Sweetener/Base-Cubes"
 

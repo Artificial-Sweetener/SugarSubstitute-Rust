@@ -97,6 +97,7 @@ export function resolveCubeIdentityPresentation(input) {
         instanceModelTitle,
         definitionModelTitle,
         awaitingFirstSave: isCubeAwaitingFirstSave(metadata),
+        isWild: input.fallbackSource?.libraryClass === 'none',
         sourceLine,
         icon: resolveCubeIconModel(metadata),
     };

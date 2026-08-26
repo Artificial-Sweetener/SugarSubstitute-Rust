@@ -77,6 +77,8 @@ export class OverlayManager {
     containmentService = null,
     collisionService = null,
     boundsReconciler = null,
+    workflowLibraryState = null,
+    workflowLibraryActions = null,
   }: OverlayManagerOptions = {}) {
     this.proximity = new ProximityOverlay({
       adapter,
@@ -133,11 +135,28 @@ export class OverlayManager {
       onSwapRight: (metadata: ChromeMetadata) => this.swapLayout(metadata, 1),
       canSwap: (metadata: ChromeMetadata, direction: 'left' | 'right') =>
         this.canSwapDirection(metadata, direction),
+      ...(workflowLibraryActions
+        ? {
+            getLibraryClassification: (metadata: ChromeMetadata) =>
+              workflowLibraryActions.classification(readInstanceId(metadata)),
+            onKeepWorkflowCube: (metadata: ChromeMetadata) =>
+              workflowLibraryActions.keep(readInstanceId(metadata)),
+            onSaveWorkflowCubeToStable: (metadata: ChromeMetadata) => {
+              void workflowLibraryActions.saveToStable(readInstanceId(metadata));
+            },
+            onSyncWorkflowCubeSource: (metadata: ChromeMetadata) => {
+              void workflowLibraryActions.syncSource(readInstanceId(metadata));
+            },
+            onForkWorkflowCube: (metadata: ChromeMetadata) => {
+              void workflowLibraryActions.forkToLocal(readInstanceId(metadata));
+            },
+          }
+        : {}),
     };
     this.chrome = new CubeChromeOverlay({
       adapter,
       actions: chromeActions,
-      resolveSource: createCubeSourceResolver(cubeBrowser),
+      resolveSource: createCubeSourceResolver(cubeBrowser, workflowLibraryState),
     });
     this.drawHooks = new OverlayDrawHookLifecycle(
       adapter,
@@ -340,6 +359,13 @@ export class OverlayManager {
   scheduleBoundsReconcile(graph: ComfyGraph): void {
     this.nodeMovement.scheduleBoundsReconcile(graph);
   }
+}
+
+/** Require stable instance identity before dispatching a workflow-library action. */
+function readInstanceId(metadata: ChromeMetadata): string {
+  const instanceId = typeof metadata.instance_id === 'string' ? metadata.instance_id.trim() : '';
+  if (!instanceId) throw new Error('Cube instance identity is unavailable.');
+  return instanceId;
 }
 
 function isHistoricalCubeMetadata(metadata: ChromeMetadata): boolean {

@@ -64,25 +64,52 @@ def decode_workflow_widget_snapshot(
         return None
     names = serialized_widget_names(node, included_linked_names=included_linked_names)
     linked_names = _linked_widget_names(node) - included_linked_names
+    if not widget_values and names and set(names).issubset(included_linked_names):
+        return WidgetSnapshot(values={}, source="serialized_inputs")
+    if widget_values and included_linked_names:
+        try:
+            values_with_boundary_defaults = _decode_positional_values(
+                names,
+                widget_values,
+                definition,
+            )
+        except WidgetSnapshotError:
+            local_names = [name for name in names if name not in included_linked_names]
+            try:
+                local_values = _decode_positional_values(
+                    local_names,
+                    widget_values,
+                    definition,
+                )
+            except WidgetSnapshotError:
+                pass
+            else:
+                return WidgetSnapshot(
+                    values=local_values,
+                    source="serialized_inputs_without_boundary_defaults",
+                )
+        else:
+            return WidgetSnapshot(
+                values=values_with_boundary_defaults,
+                source="serialized_inputs",
+            )
     if widget_values and linked_names:
         try:
             named_values = _decode_positional_values(names, widget_values, definition)
         except WidgetSnapshotError:
-            definition_names = widget_input_names(definition)
-            if definition_names:
-                values = _decode_positional_values(
-                    definition_names,
-                    widget_values,
-                    definition,
-                )
-                return WidgetSnapshot(
-                    values={
-                        name: values[name]
-                        for name in names
-                        if name in values
-                    },
-                    source="definition_order_with_link_anchors",
-                )
+            same_snapshot_names = serialized_widget_names(
+                node,
+                included_linked_names=_linked_widget_names(node),
+            )
+            values = _decode_positional_values(
+                same_snapshot_names,
+                widget_values,
+                definition,
+            )
+            return WidgetSnapshot(
+                values={name: values[name] for name in names if name in values},
+                source="serialized_inputs_with_link_anchors",
+            )
         else:
             return WidgetSnapshot(values=named_values, source="serialized_inputs")
     if not names and not widget_values:
@@ -91,6 +118,51 @@ def decode_workflow_widget_snapshot(
         values=_decode_positional_values(names, widget_values, definition),
         source="serialized_inputs",
     )
+
+
+def decode_versioned_widget_snapshot(
+    node: Mapping[str, Any],
+    definition: Mapping[str, Any],
+    *,
+    included_linked_names: AbstractSet[str] = frozenset(),
+    versioned_widget_names: Sequence[str] | None = None,
+) -> WidgetSnapshot | None:
+    """Decode a snapshot using an explicitly co-versioned node definition.
+
+    This fallback is valid only when the caller has resolved the exact Cube
+    version that produced ``node``. Linked widget identities from the saved
+    node are removed because Comfy omits their values from ``widgets_values``.
+    """
+
+    try:
+        return decode_workflow_widget_snapshot(
+            node,
+            definition,
+            included_linked_names=included_linked_names,
+        )
+    except WidgetSnapshotError as original_error:
+        values = node.get("widgets_values")
+        if not _is_sequence(values) or not values:
+            raise
+        linked_names = _linked_widget_names(node) - included_linked_names
+        exact_names = (
+            list(versioned_widget_names)
+            if versioned_widget_names is not None
+            else widget_input_names(definition)
+        )
+        versioned_names = [name for name in exact_names if name not in linked_names]
+        candidates = [versioned_names]
+        if included_linked_names:
+            candidates.append(
+                [name for name in versioned_names if name not in included_linked_names]
+            )
+        for names in candidates:
+            try:
+                decoded = _decode_positional_values(names, values, definition)
+            except WidgetSnapshotError:
+                continue
+            return WidgetSnapshot(decoded, "exact_versioned_definition")
+        raise original_error
 
 
 def serialized_widget_names(
@@ -160,7 +232,6 @@ def canonicalize_subgraph_widget_values(
                 continue
             if snapshot.source in {
                 "live_name_map",
-                "definition_order_with_link_anchors",
             }:
                 _attach_explicit_widget_identities(
                     node,

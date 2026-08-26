@@ -77,6 +77,50 @@ def test_contention_sensitive_integration_proofs_are_process_isolated(
     assert policy.area("browser").isolated_proofs == frozenset({"integration"})
 
 
+def test_cube_execution_program_has_independently_runnable_areas(
+    policy: _TestPolicy,
+) -> None:
+    """Keep each architecture migration lane selectable during focused work."""
+
+    assert {
+        "workflow",
+        "language",
+        "execution",
+        "optimizer",
+        "library",
+        "comfy_contract",
+        "browser",
+    } <= {area.name for area in policy.areas}
+
+
+def test_phase_six_evidence_selects_governance_proofs(policy: _TestPolicy) -> None:
+    """Keep machine-readable acceptance evidence inside test-policy ownership."""
+
+    assert _group_names(
+        policy,
+        "artifacts/recipe-compatibility/fixture.semantic.json",
+        "artifacts/phase6-acceptance/EVIDENCE.md",
+    ) == frozenset({"governance/contract", "governance/unit"})
+
+
+def test_canonical_workflow_changes_select_every_runtime_consumer(
+    policy: _TestPolicy,
+) -> None:
+    """Fan canonical workflow changes out to every execution-facing consumer."""
+
+    groups = _group_names(policy, "sugarcubes/workflow/reader.py")
+
+    assert {
+        "workflow/contract",
+        "workflow/unit",
+        "language/contract",
+        "library/integration",
+        "comfy_contract/contract",
+        "execution/integration",
+        "browser/integration",
+    } <= groups
+
+
 def test_source_change_selects_owner_and_boundary_subscribers(
     policy: _TestPolicy,
 ) -> None:

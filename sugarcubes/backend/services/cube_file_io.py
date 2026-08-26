@@ -97,9 +97,17 @@ def read_cube_payload_with_hash(
         _logger.warning("SugarCubes: failed to decode cube %s", path, exc_info=exc)
         return None, str(exc), ""
     except json.JSONDecodeError:
-        return None, "Cube file is not valid JSON", compute_cube_content_hash_bytes(content)
+        return (
+            None,
+            "Cube file is not valid JSON",
+            compute_cube_content_hash_bytes(content),
+        )
     if not isinstance(payload, Mapping):
-        return None, "Cube root must be a JSON object", compute_cube_content_hash_bytes(content)
+        return (
+            None,
+            "Cube root must be a JSON object",
+            compute_cube_content_hash_bytes(content),
+        )
     return dict(payload), None, compute_cube_content_hash_bytes(content)
 
 

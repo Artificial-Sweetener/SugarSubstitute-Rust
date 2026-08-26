@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Insert constructed Cube nodes with Sugar-owned catalog and history behavior. */
+import { readInstanceId } from './node/CubeNodeCatalog.js';
 /** Own root-graph insertion, catalog registration, and history boundaries. */
 export class CubePlacementService {
     #construction;
@@ -35,12 +36,52 @@ export class CubePlacementService {
     placeBuilt(request) {
         return this.#withHistory(request.recordHistory, () => this.#insert(this.#construction.constructBuilt(request)));
     }
+    /** Atomically construct, insert, configure, and connect one workflow batch. */
+    placeBatch(items, finalize) {
+        const constructed = [];
+        try {
+            for (const item of items) {
+                constructed.push(this.#construction.construct(item.payload, item.options));
+            }
+        }
+        catch (error) {
+            for (const item of constructed.reverse())
+                this.#construction.discard(item);
+            throw error;
+        }
+        const inserted = [];
+        return this.#withHistory(true, () => {
+            try {
+                for (const item of constructed) {
+                    this.#graph.add(item.node);
+                    inserted.push(item);
+                    this.#catalog.add(item.node);
+                }
+                finalize(inserted);
+                this.#history.setDirtyCanvas?.(true, true);
+                return inserted;
+            }
+            catch (error) {
+                this.#rollbackBatch(inserted, constructed);
+                throw error;
+            }
+        });
+    }
     /** Insert one already-constructed node through normal Sugar placement ownership. */
     #insert(constructed) {
         this.#graph.add(constructed.node);
         this.#catalog.add(constructed.node);
         this.#history.setDirtyCanvas?.(true, true);
         return constructed;
+    }
+    /** Remove every inserted node and detached definition after batch failure. */
+    #rollbackBatch(inserted, constructed) {
+        for (const item of [...inserted].reverse()) {
+            this.#catalog.remove(readInstanceId(item.node));
+            this.#graph.remove?.(item.node);
+        }
+        for (const item of [...constructed].reverse())
+            this.#construction.discard(item);
     }
     /** Preserve one balanced host history boundary around a placement mutation. */
     #withHistory(recordHistory, operation) {

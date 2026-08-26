@@ -57,6 +57,36 @@ export class CubeChromeInteraction {
         },
       ];
     }
+    const actions = this.options.getActions();
+    const classification = actions.getLibraryClassification?.(metadata) ?? null;
+    if (classification?.access === 'read_only') {
+      const entries: Array<{ title: string; callback: () => void }> = [];
+      if (classification.permittedOperations.has('keep')) {
+        entries.push({
+          title: 'Keep workflow copy',
+          callback: () => actions.onKeepWorkflowCube?.(metadata),
+        });
+      }
+      if (classification.permittedOperations.has('save_to_stable')) {
+        entries.push({
+          title: 'Save to Wild Cube Stable',
+          callback: () => actions.onSaveWorkflowCubeToStable?.(metadata),
+        });
+      }
+      if (classification.permittedOperations.has('track_source')) {
+        entries.push({
+          title: 'Synchronize home source…',
+          callback: () => actions.onSyncWorkflowCubeSource?.(metadata),
+        });
+      }
+      if (classification.permittedOperations.has('fork')) {
+        entries.push({
+          title: 'Fork to Local Cubes…',
+          callback: () => actions.onForkWorkflowCube?.(metadata),
+        });
+      }
+      return entries;
+    }
     return [
       {
         title: 'Save cube implementation',

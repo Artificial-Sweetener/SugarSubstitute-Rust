@@ -226,7 +226,22 @@ def test_picker_catalog_route_exposes_composed_service(
     """The registered HTTP boundary should return the focused picker projection."""
 
     cube_id = "Artificial-Sweetener/Base-Cubes/demo.cube"
-    loaded_cube = SimpleNamespace(version="1.0.0")
+    canonical_document = {
+        "cube_id": cube_id,
+        "version": "1.0.0",
+        "metadata": {"default_alias": "Demo", "tags": ["portrait"]},
+        "implementation": {
+            "nodes": {},
+            "inputs": {},
+            "outputs": {},
+            "layout": {},
+            "definitions": {},
+            "subgraphs": [],
+        },
+        "surface": {"default_flavor_id": "default", "controls": []},
+        "flavors": {"authored": [{"id": "default", "name": "Default", "values": {}}]},
+    }
+    loaded_cube = SimpleNamespace(version="1.0.0", document=canonical_document)
     prepared = SimpleNamespace(
         cube={
             "cube_id": cube_id,
@@ -263,25 +278,7 @@ def test_picker_catalog_route_exposes_composed_service(
     )
     checkout.mkdir(parents=True, exist_ok=True)
     (checkout / "demo.cube").write_text(
-        json.dumps(
-            {
-                "cube_id": cube_id,
-                "version": "1.0.0",
-                "metadata": {"default_alias": "Demo", "tags": ["portrait"]},
-                "implementation": {
-                    "nodes": {},
-                    "inputs": {},
-                    "outputs": {},
-                    "layout": {},
-                    "definitions": {},
-                    "subgraphs": [],
-                },
-                "surface": {"default_flavor_id": "default", "controls": []},
-                "flavors": {
-                    "authored": [{"id": "default", "name": "Default", "values": {}}]
-                },
-            }
-        ),
+        json.dumps(canonical_document),
         encoding="utf-8",
     )
 

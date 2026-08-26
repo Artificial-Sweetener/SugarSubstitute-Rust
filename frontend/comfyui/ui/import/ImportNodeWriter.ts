@@ -126,27 +126,8 @@ export function applyInputValueToNode(
   return true;
 }
 
-/** Apply serialized widget and property extras to one imported node. */
-export function applyExtrasToNode(node: WritableImportNode, extras: UnknownRecord): void {
-  if (Array.isArray(extras.widgets_values) && Array.isArray(node.widgets)) {
-    for (
-      let index = 0;
-      index < node.widgets.length && index < extras.widgets_values.length;
-      index += 1
-    ) {
-      const widget = node.widgets[index];
-      if (!widget) continue;
-      const value = extras.widgets_values[index];
-      widget.value = value;
-      if (typeof widget.callback === 'function') {
-        try {
-          widget.callback(value);
-        } catch (_error) {
-          // Continue applying the remaining serialized widget values.
-        }
-      }
-    }
-  }
+/** Apply serialized node properties without interpreting positional widget data. */
+export function applyNodeProperties(node: WritableImportNode, extras: UnknownRecord): void {
   if (!isRecord(extras.properties)) return;
   for (const [key, propertyValue] of Object.entries(extras.properties)) {
     if (typeof node.setProperty === 'function') {

@@ -147,10 +147,10 @@ describe('ComfyVueCubeNodeHost', () => {
 
   test('adopts the native Nodes 2.0 footer as the Cube editor entry point', async () => {
     const { root, footerButton, footerLabel } = nativeCubeRoot('cube-node');
-    const prepareEditor = jest.fn();
+    const openEditor = jest.fn();
     const nativeEnterSubgraph = jest.fn();
     footerButton.addEventListener('click', nativeEnterSubgraph);
-    const host = createHost(undefined, prepareEditor);
+    const host = createHost(undefined, openEditor);
     const node = cubeNode('cube-node');
 
     host.mount(node);
@@ -171,8 +171,8 @@ describe('ComfyVueCubeNodeHost', () => {
 
     footerButton.click();
 
-    expect(prepareEditor).toHaveBeenCalledWith(node);
-    expect(nativeEnterSubgraph).toHaveBeenCalledTimes(1);
+    expect(openEditor).toHaveBeenCalledWith(node);
+    expect(nativeEnterSubgraph).not.toHaveBeenCalled();
 
     host.unmount(node);
     expect(footerLabel.textContent).toBe('Enter Subgraph');
@@ -192,7 +192,7 @@ describe('ComfyVueCubeNodeHost', () => {
     replacement.button.addEventListener('click', nativeEnterSubgraph);
     replacement.button.click();
 
-    expect(nativeEnterSubgraph).toHaveBeenCalledTimes(1);
+    expect(nativeEnterSubgraph).not.toHaveBeenCalled();
     host.dispose();
   });
 
@@ -308,14 +308,14 @@ describe('ComfyVueCubeNodeHost', () => {
 /** Create one host with inert graph collaborators. */
 function createHost(
   portPresentation?: CubePortPresentationController,
-  prepareEditor: (node: CubeNode) => void = () => undefined,
+  openEditor: (node: CubeNode) => void = () => undefined,
 ): ComfyVueCubeNodeHost {
   return new ComfyVueCubeNodeHost({
     document,
     titleHeight: 30,
     history: {},
     getScale: () => 1,
-    prepareEditor,
+    openEditor,
     requestSlotLayoutSync: () => undefined,
     ...(portPresentation ? { portPresentation } : {}),
   });

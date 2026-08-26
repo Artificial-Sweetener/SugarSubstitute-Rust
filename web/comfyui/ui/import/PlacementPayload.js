@@ -64,6 +64,7 @@ export function readImportPayload(value) {
         ...(isRecord(value.boundaries) ? { boundaries: value.boundaries } : {}),
         ...(layout ? { layout } : {}),
         ...(isRecord(value.cube) ? { cube: value.cube } : {}),
+        ...(isRecord(value.document) ? { document: value.document } : {}),
     };
 }
 /** Summarize one prepared import for user-facing feedback. */

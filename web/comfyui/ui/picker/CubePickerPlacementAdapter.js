@@ -54,23 +54,29 @@ export class CubePickerPlacementAdapter {
         }
         const geometryPolicy = resolveRendererGeometryPolicy(liteGraph, this.#getNodeRenderer());
         const payload = planPlacementGeometry(insertionPayload, geometryPolicy);
-        const registrationWarnings = runtime.registerSubgraphs(payload);
-        for (const warning of registrationWarnings) {
-            this.#logger.warn('SugarCubes picker registered a nested definition with a warning.', {
-                cubeId: descriptor.cubeId,
-                warning,
+        const registration = runtime.registerSubgraphs(payload);
+        try {
+            for (const warning of registration.warnings) {
+                this.#logger.warn('SugarCubes picker registered a nested definition with a warning.', {
+                    cubeId: descriptor.cubeId,
+                    warning,
+                });
+            }
+            const constructed = runtime.construction.construct(payload, {
+                instanceAlias: descriptor.displayName,
+                ...(position ? { position } : {}),
             });
+            for (const warning of constructed.warnings) {
+                this.#logger.warn('SugarCubes picker constructed a Cube with a warning.', {
+                    cubeId: descriptor.cubeId,
+                    warning,
+                });
+            }
+            return constructed.node;
         }
-        const constructed = runtime.construction.construct(payload, {
-            instanceAlias: descriptor.displayName,
-            ...(position ? { position } : {}),
-        });
-        for (const warning of constructed.warnings) {
-            this.#logger.warn('SugarCubes picker constructed a Cube with a warning.', {
-                cubeId: descriptor.cubeId,
-                warning,
-            });
+        catch (error) {
+            runtime.discardSubgraphs(registration.createdIds);
+            throw error;
         }
-        return constructed.node;
     }
 }

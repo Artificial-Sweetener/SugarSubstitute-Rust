@@ -19,6 +19,7 @@ import { isRecord } from '../../types/common.js';
 import type { UnknownRecord, Vec2 } from '../../types/common.js';
 import type { GraphId } from '../../types/graph.js';
 import type { LegacyCubeLink, LegacyCubePlan } from './LegacyCubeWorkflowExtractor.js';
+import { reconcileLegacySubgraphInstance } from './LegacySubgraphInstanceReconciler.js';
 
 export interface SerializedCubeDefinition extends UnknownRecord {
   id: string;
@@ -43,7 +44,15 @@ export class LegacyCubeDefinitionSerializer {
   /** Build one detached marker-free native subgraph definition. */
   serialize(plan: LegacyCubePlan, definitionId: string): SerializedCubeDefinition {
     const retainedLinkIds = collectRetainedLinkIds(plan);
-    const nodes = plan.nodes.map((node) => serializeNode(node, plan.position, retainedLinkIds));
+    const nodes = plan.nodes.map((node) =>
+      serializeNode(
+        node,
+        plan.position,
+        retainedLinkIds,
+        plan.metadata,
+        plan.embeddedSubgraphDefinitions,
+      ),
+    );
     const groups = plan.groups.map((group) => serializeGroup(group, plan.position));
     const internalLinks = plan.internalLinks.map(serializeLink);
     const inputLinks = plan.inputs.flatMap((input, inputSlot) =>
@@ -129,8 +138,12 @@ function serializeNode(
   source: UnknownRecord,
   origin: Vec2,
   retainedLinkIds: ReadonlySet<GraphId>,
+  cubeMetadata: UnknownRecord,
+  embeddedSubgraphDefinitions: ReadonlyMap<string, UnknownRecord>,
 ): UnknownRecord {
   const node = cloneRecord(source);
+  reconcileLegacySubgraphInstance(node, cubeMetadata, embeddedSubgraphDefinitions);
+  assertSavedWidgetIdentities(node);
   node.pos = shiftPair(node.pos, origin);
   if (Array.isArray(node.inputs)) {
     node.inputs = node.inputs.map((value) => {
@@ -152,6 +165,28 @@ function serializeNode(
     });
   }
   return node;
+}
+
+/** Reject direct positional arrays that lack identities from their own saved snapshot. */
+function assertSavedWidgetIdentities(node: UnknownRecord): void {
+  const properties = isRecord(node.properties) ? node.properties : {};
+  if (readOriginalSubgraphId(properties) || !Array.isArray(node.widgets_values)) return;
+  if (node.widgets_values.length === 0) return;
+  const names = Array.isArray(node.inputs)
+    ? node.inputs.filter(isRecord).filter((input) => isRecord(input.widget))
+    : [];
+  if (names.length === 0) {
+    throw new Error(
+      `Node '${String(properties.sugarcubes_symbol ?? node.title ?? node.type ?? node.id)}' ` +
+        'contains positional widget values without same-snapshot identities.',
+    );
+  }
+}
+
+/** Read the legacy marker that identifies an instance-specific subgraph clone. */
+function readOriginalSubgraphId(properties: UnknownRecord): string {
+  const value = properties.sugarcubes_original_subgraph_id;
+  return typeof value === 'string' ? value.trim() : '';
 }
 
 /** Serialize one internal editor group relative to the native Cube origin. */

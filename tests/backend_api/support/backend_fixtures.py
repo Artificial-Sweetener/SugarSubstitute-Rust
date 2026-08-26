@@ -18,15 +18,33 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
 from sugarcubes.backend.composition import BackendServices
+from sugarcubes.authoring import (
+    LegacyWorkflowAuthoringService,
+    SugarScriptWorkflowAuthoringService,
+)
+from sugarcubes.backend.services import (
+    TrackedRepoPreflightResult,
+    WorkflowCatalogArtifactProvider,
+    WorkflowForkRepository,
+    WorkflowSourceSyncPort,
+)
+from sugarcubes.library import (
+    CubeForkService,
+    CubeLibraryClassService,
+    CubeSourceSyncService,
+    StableCubeRepository,
+)
+from sugarcubes.importer import LoadedCube
+
 from .typing_support import BackendServicesFactory
-from sugarcubes.backend.services import TrackedRepoPreflightResult
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -150,7 +168,11 @@ def backend_services_factory() -> BackendServicesFactory:
         LocalFlavorService,
         OwnershipPolicyService,
         TrackedRepoService,
+        NativeCubeImportPreparerAdapter,
+        SugarScriptCatalogResolver,
     )
+    from sugarcubes.importer import load_materialized_cube_document, prepare_import
+    from sugarcubes.language import SugarScriptLanguageService
 
     def factory(
         tmp_path: Path,
@@ -206,6 +228,24 @@ def backend_services_factory() -> BackendServicesFactory:
             tracked_repo_service=tracked_repos,
             ownership_policy_service=ownership,
             registry_factory=registry_factory,
+        )
+        workflow_catalog = WorkflowCatalogArtifactProvider(library.catalog_listing)
+        workflow_library = CubeLibraryClassService(
+            stable=StableCubeRepository(tracked_repos.data_root() / "wild_cube_stable"),
+            catalog_artifacts=workflow_catalog.list_artifacts,
+        )
+        workflow_forks = CubeForkService(
+            WorkflowForkRepository(
+                artifacts=artifacts,
+                ownership=ownership,
+                library=library,
+            )
+        )
+        workflow_source_sync = CubeSourceSyncService(
+            WorkflowSourceSyncPort(
+                tracked_repos,
+                catalog_artifacts=workflow_catalog.list_artifacts,
+            )
         )
         metadata = CubeMetadataService(
             library,
@@ -296,6 +336,34 @@ def backend_services_factory() -> BackendServicesFactory:
             prepare_cube_import=prepare_cube_import or default_prepared,
             redirect_service=redirects,
         )
+
+        def unavailable_artifact_loader(_path: Path) -> LoadedCube:
+            """Fail clearly if an unrelated test invokes SugarScript resolution."""
+
+            raise RuntimeError("Cube artifact loading is not configured for this test.")
+
+        artifact_loader = cast(
+            Callable[[Path], LoadedCube],
+            load_cube_artifact or unavailable_artifact_loader,
+        )
+        workflow_resolver = SugarScriptCatalogResolver(
+            library=library,
+            redirects=redirects,
+            load_cube=artifact_loader,
+        )
+        workflow_preparer = NativeCubeImportPreparerAdapter(
+            load_document=lambda document: load_materialized_cube_document(document),
+            prepare_import=lambda loaded: prepare_import(loaded),
+        )
+        sugarscript_authoring = SugarScriptWorkflowAuthoringService(
+            language=SugarScriptLanguageService(),
+            resolver=workflow_resolver,
+            preparer=workflow_preparer,
+        )
+        legacy_workflow_authoring = LegacyWorkflowAuthoringService(
+            resolver=workflow_resolver,
+            preparer=workflow_preparer,
+        )
         return BackendServices(
             library=library,
             picker_catalog=picker_catalog,
@@ -310,6 +378,11 @@ def backend_services_factory() -> BackendServicesFactory:
             revisions=revisions,
             local_flavors=local_flavors,
             dependencies=dependencies,
+            workflow_library=workflow_library,
+            workflow_forks=workflow_forks,
+            workflow_source_sync=workflow_source_sync,
+            sugarscript_authoring=sugarscript_authoring,
+            legacy_workflow_authoring=legacy_workflow_authoring,
         )
 
     return factory

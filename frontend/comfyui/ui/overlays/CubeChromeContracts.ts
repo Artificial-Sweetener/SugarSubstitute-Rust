@@ -21,6 +21,8 @@ import type { CubeGroupMetadataRecord } from '../graph/GroupMetadata.js';
 import type { CubeFaceGraphSummary } from '../surface/CubeFaceChromeActions.js';
 import type { ComfyApplication, ComfyCanvas, ComfyGraph } from '../types/graph.js';
 import type { RectBounds, UnknownRecord, Vec2 } from '../types/common.js';
+import type { WorkflowCubeLibraryClass } from '../workflow/CubeWorkflowLibraryState.js';
+import type { WorkflowCubeClassification } from '../workflow/CubeWorkflowLibraryState.js';
 
 export interface ChromeMetadata extends CubeGroupMetadataRecord {
   managed?: boolean;
@@ -39,6 +41,7 @@ export interface BadgeSource {
   author?: string;
   pack?: string;
   namespace?: string;
+  libraryClass?: WorkflowCubeLibraryClass;
 }
 export interface HitRegion {
   key: string;
@@ -62,6 +65,11 @@ export interface ChromeActions extends UnknownRecord {
   onSwapRight?(metadata: ChromeMetadata): void;
   canSwap?(metadata: ChromeMetadata, direction: 'left' | 'right'): boolean;
   onOpenMenu?(metadata: ChromeMetadata, options: unknown[]): void;
+  getLibraryClassification?(metadata: ChromeMetadata): WorkflowCubeClassification | null;
+  onKeepWorkflowCube?(metadata: ChromeMetadata): void;
+  onSaveWorkflowCubeToStable?(metadata: ChromeMetadata): void;
+  onSyncWorkflowCubeSource?(metadata: ChromeMetadata): void;
+  onForkWorkflowCube?(metadata: ChromeMetadata): void;
 }
 export interface ChromeDebugState {
   actions: ChromeActions;

@@ -32,6 +32,7 @@ export class CubeAffordanceHostLifecycle {
                     canvas,
                     controller: options.controller,
                     logger: options.logger,
+                    ...(options.libraryActions ? { libraryActions: options.libraryActions } : {}),
                 }));
     }
     /** Bind one graph runtime after Comfy's canvas is available. */

@@ -34,6 +34,7 @@ test('retains structured definition, instance, and surface metadata', () => {
       surface_state: { schema: 1, revealed: { sampler: true } },
       target_model: 'SDXL',
     },
+    embeddedSubgraphDefinitions: new Map(),
     position: [0, 0],
     size: [720, 480],
     nodes: [],

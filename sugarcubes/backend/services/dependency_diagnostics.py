@@ -136,9 +136,11 @@ def _json_safe_details(details: Mapping[str, Any]) -> dict[str, Any]:
             safe[str(key)] = _json_safe_details(value)
         elif isinstance(value, list):
             safe[str(key)] = [
-                _json_safe_details(item)
-                if isinstance(item, Mapping)
-                else _json_safe_scalar(item)
+                (
+                    _json_safe_details(item)
+                    if isinstance(item, Mapping)
+                    else _json_safe_scalar(item)
+                )
                 for item in value[:20]
             ]
         else:

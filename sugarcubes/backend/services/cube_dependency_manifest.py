@@ -104,7 +104,9 @@ def _iter_python_modules(payload: Mapping[str, Any]) -> Sequence[str]:
     definitions = payload.get("definitions")
     if isinstance(definitions, Mapping):
         for spec in definitions.values():
-            module_name = spec.get("python_module") if isinstance(spec, Mapping) else None
+            module_name = (
+                spec.get("python_module") if isinstance(spec, Mapping) else None
+            )
             if isinstance(module_name, str):
                 modules.append(module_name)
         return tuple(modules)
@@ -117,7 +119,9 @@ def _iter_python_modules(payload: Mapping[str, Any]) -> Sequence[str]:
     )
     if isinstance(implementation_definitions, Mapping):
         for spec in implementation_definitions.values():
-            module_name = spec.get("python_module") if isinstance(spec, Mapping) else None
+            module_name = (
+                spec.get("python_module") if isinstance(spec, Mapping) else None
+            )
             if isinstance(module_name, str):
                 modules.append(module_name)
         return tuple(modules)

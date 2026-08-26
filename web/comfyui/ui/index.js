@@ -38,15 +38,19 @@ export function getSugarCubesUI(options = {}) {
 /**
  * Create public api.
  */
-export function createPublicApi(uiInstance) {
+export function createPublicApi(uiInstance, options = {}) {
     if (!uiInstance) {
         throw new Error('SugarCubes UI instance required for public API.');
     }
+    const importSugarScript = options.importSugarScript;
     return Object.freeze({
         listCubes: uiInstance.listCubes.bind(uiInstance),
         previewCube: uiInstance.previewCube.bind(uiInstance),
         scheduleCubeInstanceRefresh: uiInstance.scheduleCubeInstanceRefresh.bind(uiInstance),
         scheduleCubeDirtyRefresh: uiInstance.scheduleCubeDirtyRefresh.bind(uiInstance),
         openLibrary: uiInstance.openLibrary.bind(uiInstance),
+        ...(importSugarScript
+            ? { importSugarScript: (source) => importSugarScript(source) }
+            : {}),
     });
 }

@@ -21,9 +21,11 @@ const MINIMUM_SIZE = [320, 180];
 /** Own the narrow integration boundary between Cube semantics and native nodes. */
 export class ComfyCubeNodeFactory {
     #createNode;
+    #nodePackMetadata;
     /** Bind native node construction without taking graph insertion ownership. */
     constructor(options) {
         this.#createNode = options.createNode;
+        this.#nodePackMetadata = options.nodePackMetadata;
     }
     /** Create one detached registered subgraph instance as a real native node. */
     create(configuration) {
@@ -57,6 +59,7 @@ export class ComfyCubeNodeFactory {
             sugarcubes_cube: identity,
             sugarcubes_surface: cloneRecord(configuration.surface),
         };
+        this.#nodePackMetadata.apply(node);
     }
 }
 /** Identify a SugarCube by its durable marker and real native subgraph lifecycle. */

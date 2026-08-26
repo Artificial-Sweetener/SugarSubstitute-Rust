@@ -27,6 +27,8 @@ import type { CubeContainmentService } from '../layout/CubeContainmentService.js
 import type { CubeCollisionService } from '../layout/CubeCollisionService.js';
 import type { CubeBoundsReconciler } from '../layout/CubeBoundsReconciler.js';
 import type { CubeFaceGraphSummary } from '../surface/CubeFaceChromeActions.js';
+import type { CubeWorkflowLibraryState } from '../workflow/CubeWorkflowLibraryState.js';
+import type { CubeWorkflowLibraryActions } from '../workflow/CubeWorkflowLibraryActions.js';
 
 type PlacementOptions = NonNullable<ConstructorParameters<typeof PlacementOverlay>[0]>;
 
@@ -91,6 +93,8 @@ export interface OverlayManagerOptions {
   containmentService?: CubeContainmentService | null;
   collisionService?: CubeCollisionService | null;
   boundsReconciler?: CubeBoundsReconciler | null;
+  workflowLibraryState?: CubeWorkflowLibraryState | null;
+  workflowLibraryActions?: CubeWorkflowLibraryActions | null;
 }
 export interface ManagedMetadata extends CubeGroupMetadataRecord {
   managed: true;

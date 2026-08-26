@@ -21,6 +21,14 @@ import { ComfyCanvasDropOriginAdapter, } from './ComfyCanvasDropOriginAdapter.js
 import { CubeImportCommandService } from './CubeImportCommandService.js';
 import { CubeImportOutcomeReporter } from './CubeImportOutcomeReporter.js';
 import { CubePreparedImportService } from './CubePreparedImportService.js';
+import { SugarScriptAuthoringApi } from '../sugarscript/SugarScriptAuthoringApi.js';
+import { SugarScriptFileDropAdapter } from '../sugarscript/SugarScriptFileDropAdapter.js';
+import { SugarScriptImportService } from '../sugarscript/SugarScriptImportService.js';
+import { isSugarScriptFileHost, SugarScriptImageFileHostAdapter, } from '../sugarscript/SugarScriptImageFileHostAdapter.js';
+import { SugarScriptWorkflowArtifactCompanionService } from '../sugarscript/SugarScriptWorkflowArtifactCompanionService.js';
+import { NativeWorkflowMaterializer } from '../workflow/NativeWorkflowMaterializer.js';
+import { LegacyWorkflowAuthoringApi } from '../workflow/LegacyWorkflowAuthoringApi.js';
+import { LegacyWorkflowImportService } from '../workflow/LegacyWorkflowImportService.js';
 /** Own Cube import commands, feedback, and placement adapter wiring. */
 export class CubeImportHostCoordinator {
     #ui;
@@ -31,6 +39,10 @@ export class CubeImportHostCoordinator {
     #preparedImports;
     #commands;
     #dropOrigin;
+    #sugarScriptApi;
+    #legacyWorkflowApi;
+    #sugarScriptFiles;
+    #sugarScriptImages;
     constructor(options) {
         this.#ui = options.ui;
         this.#app = options.app;
@@ -41,6 +53,30 @@ export class CubeImportHostCoordinator {
             getCanvas: () => adapter.getCanvas(),
             logger: options.logger,
         });
+        this.#sugarScriptApi = new SugarScriptAuthoringApi(this.#ui.api);
+        this.#legacyWorkflowApi = new LegacyWorkflowAuthoringApi(this.#ui.api);
+        const document = adapter.getDocument();
+        this.#sugarScriptFiles = document
+            ? new SugarScriptFileDropAdapter({
+                document,
+                importSource: (source) => this.importSugarScript(source),
+                feedback: this.#ui.toast,
+                readErrorMessage: (error) => this.#feedback.readErrorMessage(error),
+            })
+            : null;
+        this.#sugarScriptFiles?.setup();
+        this.#sugarScriptImages = isSugarScriptFileHost(this.#app)
+            ? new SugarScriptImageFileHostAdapter({
+                host: this.#app,
+                importSource: (source) => this.importSugarScript(source),
+                importWorkflow: (workflow) => this.importLegacyWorkflow(workflow),
+                validateWorkflow: (workflow) => this.#legacyWorkflowApi.compile(workflow),
+                retainWorkflowSource: (source) => new SugarScriptWorkflowArtifactCompanionService(this.#sugarScriptApi, () => this.#app?.graph ?? null).retain(source),
+                feedback: this.#ui.toast,
+                readErrorMessage: (error) => this.#feedback.readErrorMessage(error),
+            })
+            : null;
+        this.#sugarScriptImages?.setup();
         this.#preparedImports = new CubePreparedImportService({
             getGraph: () => this.#app?.graph,
             getLiteGraph: () => adapter.getLiteGraph?.(),
@@ -110,6 +146,31 @@ export class CubeImportHostCoordinator {
     /** Return the current graph-space drop origin. */
     computeDropOrigin() {
         return this.#dropOrigin.compute();
+    }
+    /** Compile source and atomically create a self-contained native Cube workflow. */
+    async importSugarScript(source, origin = this.computeDropOrigin()) {
+        const runtime = this.#getRuntime();
+        runtime.graphScope.assertCurrentRoot('SugarScript import');
+        const graph = this.#app?.graph;
+        if (!graph)
+            throw new Error('Comfy root graph is unavailable.');
+        return new SugarScriptImportService(this.#sugarScriptApi, this.#nativeWorkflowMaterializer(runtime, graph)).import(source, origin);
+    }
+    /** Reconcile and atomically import a persisted group-era Cube workflow. */
+    async importLegacyWorkflow(workflow, origin = this.computeDropOrigin()) {
+        const runtime = this.#getRuntime();
+        runtime.graphScope.assertCurrentRoot('persisted Cube workflow import');
+        const graph = this.#app?.graph;
+        if (!graph)
+            throw new Error('Comfy root graph is unavailable.');
+        return new LegacyWorkflowImportService(this.#legacyWorkflowApi, this.#nativeWorkflowMaterializer(runtime, graph)).import(workflow, origin);
+    }
+    /** Build the shared native workflow mutation owner for one root graph. */
+    #nativeWorkflowMaterializer(runtime, graph) {
+        return new NativeWorkflowMaterializer(runtime.placement, graph, {
+            register: (payload) => runtime.registerSubgraphs(payload),
+            discard: (ids) => runtime.discardSubgraphs(ids),
+        });
     }
     /** Focus the canvas on the imported Cube bounds when available. */
     #focusImportedCube(result) {

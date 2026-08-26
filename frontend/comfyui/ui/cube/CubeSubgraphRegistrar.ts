@@ -38,6 +38,11 @@ interface SubgraphHint {
   expectedInputNames: string[];
 }
 
+export interface CubeSubgraphRegistrationResult {
+  warnings: string[];
+  createdIds: string[];
+}
+
 /** Own normalization and host registration of Cube-embedded nested subgraphs. */
 export class CubeSubgraphRegistrar {
   readonly #host: CubeSubgraphRegistrationHost;
@@ -47,9 +52,10 @@ export class CubeSubgraphRegistrar {
     this.#host = host;
   }
 
-  /** Synchronize every nested definition and return actionable warnings. */
-  register(payload: ImportPayload): string[] {
+  /** Synchronize every nested definition and identify rollback-owned additions. */
+  register(payload: ImportPayload): CubeSubgraphRegistrationResult {
     const warnings: string[] = [];
+    const createdIds: string[] = [];
     const hints = buildHintLookup(payload);
     for (const entry of payload.subgraphs ?? []) {
       const id = readString(entry.id);
@@ -67,17 +73,19 @@ export class CubeSubgraphRegistrar {
         rebindSubgraphWidgetValues(normalized, (type) =>
           type ? this.#host.createNode(type) : null,
         );
-        const subgraph = this.#host.getSubgraph(id) ?? this.#host.createSubgraph(normalized);
+        const existing = this.#host.getSubgraph(id);
+        const subgraph = existing ?? this.#host.createSubgraph(normalized);
         if (!subgraph) {
           warnings.push(`Subgraph '${id}' could not be synchronized; skipping.`);
           continue;
         }
+        if (!existing) createdIds.push(id);
         subgraph.configure?.(normalized);
       } catch (error: unknown) {
         warnings.push(`Failed to register subgraph '${id}': ${readErrorMessage(error)}`);
       }
     }
-    return warnings;
+    return { warnings, createdIds };
   }
 
   /** Discard isolated definitions that did not reach a committed Cube version. */

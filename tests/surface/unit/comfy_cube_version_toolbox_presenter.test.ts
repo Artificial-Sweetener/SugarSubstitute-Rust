@@ -44,7 +44,13 @@ test('matches the color control and uses one exclusive shared check menu', () =>
   const model = {
     currentVersion: '2.0.0',
     options: [
-      { label: 'v2.0.0', value: '2.0.0', revisionRef: 'WORKTREE', current: true, raw: null },
+      {
+        label: 'Latest (v2.0.0)',
+        value: '2.0.0',
+        revisionRef: 'WORKTREE',
+        current: true,
+        raw: null,
+      },
       { label: 'v1.0.0', value: '1.0.0', revisionRef: 'abc123', current: false, raw: null },
     ],
     loading: false,
@@ -73,6 +79,7 @@ test('matches the color control and uses one exclusive shared check menu', () =>
   expect(menu?.getAttribute('role')).toBe('menu');
   expect([...rows].filter((row) => row.getAttribute('aria-checked') === 'true')).toHaveLength(1);
   expect([...rows].every((row) => row.getAttribute('role') === 'menuitemradio')).toBe(true);
+  expect(rows[0]?.textContent).toContain('Latest (v2.0.0)');
   expect(document.getElementById('sugarcubes-toolbox-check-menu-styles')?.textContent).toContain(
     ':hover',
   );

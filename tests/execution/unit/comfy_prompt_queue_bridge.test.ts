@@ -19,16 +19,19 @@ import { jest } from '@jest/globals';
 import { ComfyPromptQueueBridge } from '../../../frontend/comfyui/ui/cube/execution/ComfyPromptQueueBridge.js';
 
 test('transforms prompts and restores only its own queue wrapper', async () => {
-  const queuePrompt = jest.fn(async (_position: number, payload: unknown) => payload);
+  const queuePrompt = jest.fn(
+    async (_position: number, payload: unknown, _options?: unknown) => payload,
+  );
   const transform = jest.fn(async () => ({ output: { transformed: {} } }));
   const api = { queuePrompt };
   const bridge = new ComfyPromptQueueBridge({ api, transform });
 
   bridge.install();
-  await api.queuePrompt(2, { output: {} });
+  const options = { partialExecutionTargets: ['sink'] };
+  await api.queuePrompt(2, { output: {} }, options);
 
   expect(transform).toHaveBeenCalledWith({ output: {} });
-  expect(queuePrompt).toHaveBeenCalledWith(2, { output: { transformed: {} } });
+  expect(queuePrompt).toHaveBeenCalledWith(2, { output: { transformed: {} } }, options);
 
   bridge.dispose();
   expect(api.queuePrompt).toBe(queuePrompt);
@@ -44,6 +47,8 @@ test('rejects invalid nesting before transformation or host queue mutation', asy
       throw new Error('Remove the nested SugarCube wrapper.');
     },
     transform,
+    executeDirect: async () => ({}),
+    shouldExecuteDirect: () => true,
   });
   bridge.install();
 
@@ -52,5 +57,33 @@ test('rejects invalid nesting before transformation or host queue mutation', asy
   );
   expect(transform).not.toHaveBeenCalled();
   expect(queuePrompt).not.toHaveBeenCalled();
+  bridge.dispose();
+});
+
+test('queues directly when SugarCubes owns the request and preserves legacy fallback', async () => {
+  const queuePrompt = jest.fn(
+    async (_position: number, payload: unknown, _options?: unknown) => payload,
+  );
+  const transform = jest.fn(async (payload: unknown) => payload);
+  const executeDirect = jest.fn(async () => ({ prompt_id: 'direct' }));
+  const api = { queuePrompt };
+  const bridge = new ComfyPromptQueueBridge({
+    api,
+    transform,
+    executeDirect,
+    shouldExecuteDirect: (payload) => payload !== 'substitute',
+  });
+  bridge.install();
+
+  const options = { previewMethod: 'latent2rgb' };
+  await expect(api.queuePrompt(0, { output: {} }, options)).resolves.toEqual({
+    prompt_id: 'direct',
+  });
+  await api.queuePrompt(0, 'substitute');
+
+  expect(executeDirect).toHaveBeenCalledTimes(1);
+  expect(executeDirect).toHaveBeenCalledWith(0, { output: {} }, options);
+  expect(transform).toHaveBeenCalledWith('substitute');
+  expect(queuePrompt).toHaveBeenCalledWith(0, 'substitute', undefined);
   bridge.dispose();
 });

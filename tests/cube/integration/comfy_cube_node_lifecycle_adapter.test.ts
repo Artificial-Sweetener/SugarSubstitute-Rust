@@ -21,8 +21,45 @@ import type { CubeNode } from '../../../frontend/comfyui/ui/cube/node/ComfyCubeN
 import { ComfyCubeNodeLifecycleAdapter } from '../../../frontend/comfyui/ui/cube/node/ComfyCubeNodeLifecycleAdapter.js';
 import { CubeGraphInventory } from '../../../frontend/comfyui/ui/cube/node/CubeGraphInventory.js';
 import { CubeNodeCatalog } from '../../../frontend/comfyui/ui/cube/node/CubeNodeCatalog.js';
+import { CubeWorkflowNodePackMetadata } from '../../../frontend/comfyui/ui/cube/node/CubeWorkflowNodePackMetadata.js';
 
 describe('ComfyCubeNodeLifecycleAdapter', () => {
+  test('reconciles legacy root Cube dependency metadata without shifting workflow state', () => {
+    const cube = cubeNode('legacy-instance');
+    cube.properties.persisted_value = 2;
+    const nested = cubeNode('nested-instance');
+    const graph = {
+      _nodes: [cube] as unknown[],
+      subgraphs: new Map([['nested-definition', { _nodes: [nested] as unknown[] }]]),
+    };
+    const nodePackMetadata = new CubeWorkflowNodePackMetadata();
+    const adapter = new ComfyCubeNodeLifecycleAdapter({
+      graph,
+      inventory: new CubeGraphInventory(graph),
+      catalog: new CubeNodeCatalog(),
+      events: new EventTarget(),
+      createInstanceId: () => 'unused-instance',
+      nodePackMetadata,
+      logger: { debug: jest.fn(), error: jest.fn() },
+    });
+
+    nodePackMetadata.updateFromStatus({
+      workflowNodePack: { cnrId: 'SugarCubes', version: '9.8.7' },
+    });
+
+    expect(cube.properties).toMatchObject({
+      cnr_id: 'SugarCubes',
+      ver: '9.8.7',
+      persisted_value: 2,
+      sugarcubes_cube: { instance_id: 'legacy-instance' },
+    });
+    expect(cube.id).toBe('legacy-instance');
+    expect(cube.type).toBe('definition-legacy-instance');
+    expect(nested.properties.cnr_id).toBeUndefined();
+    expect(nested.properties.ver).toBeUndefined();
+    adapter.dispose();
+  });
+
   test('does not wake presentation when authoritative graph membership is unchanged', () => {
     const first = cubeNode('first-instance');
     const second = cubeNode('second-instance');
@@ -51,6 +88,7 @@ describe('ComfyCubeNodeLifecycleAdapter', () => {
       catalog,
       events,
       createInstanceId,
+      nodePackMetadata: unconfiguredNodePackMetadata(),
       logger: { debug: jest.fn(), error: jest.fn() },
     });
 
@@ -80,6 +118,7 @@ describe('ComfyCubeNodeLifecycleAdapter', () => {
       catalog,
       events,
       createInstanceId,
+      nodePackMetadata: unconfiguredNodePackMetadata(),
       logger: { debug: jest.fn(), error: jest.fn() },
     });
 
@@ -107,6 +146,7 @@ describe('ComfyCubeNodeLifecycleAdapter', () => {
       catalog,
       events,
       createInstanceId: () => 'nested-instance',
+      nodePackMetadata: unconfiguredNodePackMetadata(),
       logger: { debug: jest.fn(), error: jest.fn() },
     });
 
@@ -131,6 +171,7 @@ describe('ComfyCubeNodeLifecycleAdapter', () => {
       catalog,
       events,
       createInstanceId: () => 'unused-instance',
+      nodePackMetadata: unconfiguredNodePackMetadata(),
       logger: { debug: jest.fn(), error: jest.fn() },
     });
     const installedAdded = graph.onNodeAdded;
@@ -144,6 +185,11 @@ describe('ComfyCubeNodeLifecycleAdapter', () => {
     expect(catalog.list()).toEqual([]);
   });
 });
+
+/** Build metadata state that cannot mutate a graph until backend identity arrives. */
+function unconfiguredNodePackMetadata(): CubeWorkflowNodePackMetadata {
+  return new CubeWorkflowNodePackMetadata();
+}
 
 /** Build the public canvas event Comfy emits after paste configuration. */
 function graphChangeEvent(): CustomEvent<{ subType: string }> {

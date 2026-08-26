@@ -33,10 +33,14 @@ describe('CubePickerPlacementAdapter', () => {
       warnings: ['construction warning'],
       internalNodeCount: 2,
     }));
-    const registerSubgraphs = jest.fn(() => ['registration warning']);
+    const registerSubgraphs = jest.fn(() => ({
+      warnings: ['registration warning'],
+      createdIds: [],
+    }));
     const runtime = {
       construction: { construct },
       registerSubgraphs,
+      discardSubgraphs: jest.fn(),
       graphScope: { assertCurrentRoot: jest.fn() },
     } as unknown as ComfyCubeRuntime;
     const cachedPayload = {

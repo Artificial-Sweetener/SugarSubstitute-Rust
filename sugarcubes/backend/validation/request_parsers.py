@@ -249,9 +249,7 @@ def parse_save_many_cube_entries(value: Any) -> dict[str, dict[str, Any]]:
                 "Cube entry requires at least one instance identifier", status=400
             )
         if instance_ids and not definition_id:
-            raise BackendError(
-                "Cube entry requires definition_id", status=400
-            )
+            raise BackendError("Cube entry requires definition_id", status=400)
         entries[cube_id] = {
             "forked": get_bool(entry, "forked", False),
             "lineage": normalize_lineage_payload(entry.get("lineage")),

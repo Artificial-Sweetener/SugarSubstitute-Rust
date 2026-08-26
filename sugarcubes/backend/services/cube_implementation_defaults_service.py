@@ -104,7 +104,11 @@ class CubeImplementationDefaultsService:
             overwrite_control_ids = frozenset(
                 change.control_id
                 for change in plan.changes
-                if (decision.save_prompt_fields if change.is_multiline else decision.overwrite_defaults)
+                if (
+                    decision.save_prompt_fields
+                    if change.is_multiline
+                    else decision.overwrite_defaults
+                )
             )
             merged = merge_implementation_save_defaults(
                 existing,

@@ -30,7 +30,10 @@ def sanitize_authored_defaults_document(document: CubeDocument) -> CubeDocument:
     """Return a cube document with unshippable authored defaults removed."""
 
     payload = document.to_dict()
-    sanitize_authored_defaults_payload(payload)
+    sanitize_authored_defaults_payload(
+        payload,
+        definitions=document.implementation.definitions,
+    )
     return CubeDocument.from_dict(payload)
 
 

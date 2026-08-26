@@ -77,7 +77,7 @@ export class ComfyLiteGraphCubeNodeHost {
         this.#renderer = new ComfyLiteGraphCubeRenderer(options.canvas, previewImages, new CubeIconResolver({
             imageFactory: () => options.document.createElement('img'),
             onImageLoad: () => this.#refresh(),
-        }));
+        }), options.resolveIdentitySource);
         this.#domWidgets = new ComfyLiteGraphCubeDomWidgetHost({
             document: options.document,
             canvas: options.canvas,

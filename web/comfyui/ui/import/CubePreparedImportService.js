@@ -47,10 +47,16 @@ export class CubePreparedImportService {
             result.message = 'Importer payload is missing Cube identity';
             return result;
         }
+        let runtime = null;
+        let createdSubgraphIds = [];
         try {
             this.#dependencies.assertRootPlacement();
-            const runtime = this.#dependencies.getRuntime();
-            result.warnings.push(...runtime.registerSubgraphs(payload));
+            runtime = this.#dependencies.getRuntime();
+            const registration = runtime.registerSubgraphs(payload);
+            createdSubgraphIds = registration.createdIds;
+            if (registration.warnings.length > 0) {
+                throw new Error(`Cube embedded definitions could not be registered: ${registration.warnings.join(' ')}`);
+            }
             const placed = runtime.placement.place(payload, {
                 ...(options.instanceAlias ? { instanceAlias: options.instanceAlias } : {}),
             });
@@ -71,6 +77,7 @@ export class CubePreparedImportService {
             return result;
         }
         catch (error) {
+            runtime?.discardSubgraphs(createdSubgraphIds);
             const message = this.#dependencies.readErrorMessage(error);
             result.message = message;
             result.warnings.push(`Cube placement failed: ${message}`);

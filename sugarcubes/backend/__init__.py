@@ -17,29 +17,8 @@
 
 from __future__ import annotations
 
-import importlib.metadata
-import tomllib
-from pathlib import Path
+from ..package_identity import runtime_version
 
-_DISTRIBUTION_NAME = "SugarCubes"
-
-
-def _runtime_version() -> str:
-    """Return the installed SugarCubes version from canonical project metadata."""
-
-    pyproject_path = Path(__file__).resolve().parents[2] / "pyproject.toml"
-    if pyproject_path.exists():
-        metadata = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
-        version = metadata.get("project", {}).get("version")
-        if isinstance(version, str) and version.strip():
-            return version
-        raise RuntimeError("SugarCubes pyproject.toml does not define a version.")
-    try:
-        return importlib.metadata.version(_DISTRIBUTION_NAME)
-    except importlib.metadata.PackageNotFoundError:
-        raise RuntimeError("SugarCubes package metadata is unavailable.") from None
-
-
-__version__ = _runtime_version()
+__version__ = runtime_version()
 
 __all__ = ["__version__"]

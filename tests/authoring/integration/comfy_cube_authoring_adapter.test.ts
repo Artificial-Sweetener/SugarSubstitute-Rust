@@ -21,6 +21,8 @@ import type { NativeCubeSubgraph } from '../../../frontend/comfyui/ui/cube/Comfy
 import { ComfyCubeNodeFactory } from '../../../frontend/comfyui/ui/cube/node/ComfyCubeNodeFactory.js';
 import { CubeNodeCatalog } from '../../../frontend/comfyui/ui/cube/node/CubeNodeCatalog.js';
 
+const noopNodePackMetadata = { apply: () => false };
+
 describe('ComfyCubeAuthoringAdapter', () => {
   test('retains and decorates Comfy generated wrapper node with native links intact', () => {
     const selected = { id: 4 };
@@ -86,6 +88,7 @@ describe('ComfyCubeAuthoringAdapter', () => {
     const updateSelectedItems = jest.fn();
     const nodeFactory = new ComfyCubeNodeFactory({
       createNode: jest.fn(() => null),
+      nodePackMetadata: noopNodePackMetadata,
     });
     const catalog = new CubeNodeCatalog();
     const adapter = new ComfyCubeAuthoringAdapter({
@@ -169,6 +172,7 @@ describe('ComfyCubeAuthoringAdapter', () => {
       canvas: { selectedItems: new Set([selected]) },
       nodeFactory: new ComfyCubeNodeFactory({
         createNode: jest.fn(() => null),
+        nodePackMetadata: noopNodePackMetadata,
       }),
       catalog: new CubeNodeCatalog(),
     });
@@ -190,6 +194,7 @@ describe('ComfyCubeAuthoringAdapter', () => {
       canvas: { selectedItems: new Set([selected]) },
       nodeFactory: new ComfyCubeNodeFactory({
         createNode: jest.fn(() => null),
+        nodePackMetadata: noopNodePackMetadata,
       }),
       catalog: new CubeNodeCatalog(),
     });
@@ -212,6 +217,7 @@ describe('ComfyCubeAuthoringAdapter', () => {
       canvas: { graph: nestedGraph, selectedItems: new Set([selected]) },
       nodeFactory: new ComfyCubeNodeFactory({
         createNode: jest.fn(() => null),
+        nodePackMetadata: noopNodePackMetadata,
       }),
       catalog: new CubeNodeCatalog(),
     });
@@ -228,6 +234,7 @@ describe('ComfyCubeAuthoringAdapter', () => {
       canvas: { selectedItems: new Set() },
       nodeFactory: new ComfyCubeNodeFactory({
         createNode: jest.fn(() => null),
+        nodePackMetadata: noopNodePackMetadata,
       }),
       catalog: new CubeNodeCatalog(),
     });
@@ -249,7 +256,10 @@ describe('ComfyCubeAuthoringAdapter', () => {
       subgraphs: new Map(),
       convertToSubgraph: jest.fn(),
       canvas: { selectedItems: new Set() },
-      nodeFactory: new ComfyCubeNodeFactory({ createNode }),
+      nodeFactory: new ComfyCubeNodeFactory({
+        createNode,
+        nodePackMetadata: noopNodePackMetadata,
+      }),
       catalog: new CubeNodeCatalog(),
       createEmptySubgraph,
       graphScope: {
@@ -300,6 +310,7 @@ describe('ComfyCubeAuthoringAdapter', () => {
       createEmptySubgraph: jest.fn(() => subgraph),
       nodeFactory: new ComfyCubeNodeFactory({
         createNode: jest.fn(() => nativeNode),
+        nodePackMetadata: noopNodePackMetadata,
       }),
       catalog: new CubeNodeCatalog(),
     });
@@ -349,6 +360,7 @@ describe('ComfyCubeAuthoringAdapter', () => {
       canvas: { selectedItems: new Set([nativeNode]) },
       nodeFactory: new ComfyCubeNodeFactory({
         createNode: jest.fn(() => null),
+        nodePackMetadata: noopNodePackMetadata,
       }),
       catalog,
     });
@@ -395,6 +407,7 @@ describe('ComfyCubeAuthoringAdapter', () => {
       canvas: { selectedItems: new Set([nativeNode]) },
       nodeFactory: new ComfyCubeNodeFactory({
         createNode: jest.fn(() => null),
+        nodePackMetadata: noopNodePackMetadata,
       }),
       catalog: new CubeNodeCatalog(),
     });

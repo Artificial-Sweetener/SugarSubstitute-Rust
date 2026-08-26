@@ -43,6 +43,10 @@ RUNTIME_ROOTS = ("sugarcubes",)
 ROOT_RUNTIME_FILES = ("__init__.py",)
 OPTIONAL_FALLBACK_CONTEXTS = {
     (
+        "sugarcubes/execution/coordinator.py",
+        ("CubeExecutionCoordinator", "prepare"),
+    ),
+    (
         "sugarcubes/exporter/definition_snapshot.py",
         ("collect_definitions",),
     ),

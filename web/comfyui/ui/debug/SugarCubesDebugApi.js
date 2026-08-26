@@ -21,6 +21,19 @@ export function createSugarCubesDebugApi({ ui, app }) {
         getDirtyState(instanceId) {
             return ui.dirtyManager.getDebugState(instanceId);
         },
+        workflow: {
+            classification(instanceId) {
+                if (typeof instanceId !== 'string')
+                    return null;
+                const result = ui.workflowLibraryState.read(instanceId);
+                return result ? { ...result, permittedOperations: [...result.permittedOperations] } : null;
+            },
+        },
+        execution: {
+            proximity() {
+                return ui.overlayManager.proximity.executionDebugState();
+            },
+        },
         bounds: {
             get(instanceId) {
                 if (!instanceId)

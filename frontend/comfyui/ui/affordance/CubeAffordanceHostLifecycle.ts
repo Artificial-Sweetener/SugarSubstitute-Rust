@@ -21,6 +21,7 @@ import {
   type CubeAffordanceMenuItem,
 } from './CubeAffordanceHostIntegration.js';
 import type { CubeHostAffordanceController } from './CubeHostAffordanceController.js';
+import type { CubeWorkflowLibraryActions } from '../workflow/CubeWorkflowLibraryActions.js';
 
 interface CubeAffordanceIntegration {
   attach(runtime: ComfyCubeRuntime): void;
@@ -45,6 +46,7 @@ export class CubeAffordanceHostLifecycle {
     getCanvas: () => unknown;
     controller: CubeHostAffordanceController;
     logger: Pick<Console, 'error' | 'warn'>;
+    libraryActions?: CubeWorkflowLibraryActions | null;
     createIntegration?: IntegrationFactory;
   }) {
     this.#getDocument = options.getDocument;
@@ -57,6 +59,7 @@ export class CubeAffordanceHostLifecycle {
           canvas,
           controller: options.controller,
           logger: options.logger,
+          ...(options.libraryActions ? { libraryActions: options.libraryActions } : {}),
         }));
   }
 

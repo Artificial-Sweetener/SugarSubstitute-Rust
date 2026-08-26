@@ -66,6 +66,11 @@ export class CubeLibraryApi {
     return this.fetchJson('/sugarcubes/list', options);
   }
 
+  /** Fetch installed SugarCubes package identity and backend availability. */
+  async getStatus(options: RequestInit = {}): Promise<ApiJsonResult> {
+    return this.fetchJson('/sugarcubes/status', options);
+  }
+
   /** Fetch the host-neutral catalog used by Comfy node-picker adapters. */
   async listPickerCatalog(options: RequestInit = {}): Promise<ApiJsonResult> {
     return this.fetchJson('/sugarcubes/picker_catalog', options);
@@ -228,6 +233,54 @@ export class CubeLibraryApi {
 
   async load(payload: BodyInit | null, options: RequestInit = {}): Promise<ApiJsonResult> {
     return this.fetchJson('/sugarcubes/load', { method: 'POST', body: payload, ...options });
+  }
+
+  /** Classify workflow-embedded Cube definitions without changing graph content. */
+  async classifyWorkflow(
+    payload: BodyInit | null,
+    options: RequestInit = {},
+  ): Promise<ApiJsonResult> {
+    return this.fetchJson('/sugarcubes/v2/cubes/classify-workflow', {
+      method: 'POST',
+      body: payload,
+      ...options,
+    });
+  }
+
+  /** Preserve exact embedded content in the read-only Wild Cube Stable. */
+  async saveWorkflowCubeToStable(
+    payload: BodyInit | null,
+    options: RequestInit = {},
+  ): Promise<ApiJsonResult> {
+    return this.fetchJson('/sugarcubes/v2/cubes/stable', {
+      method: 'POST',
+      body: payload,
+      ...options,
+    });
+  }
+
+  /** Derive a writable Cube identity from read-only embedded content. */
+  async forkWorkflowCube(
+    payload: BodyInit | null,
+    options: RequestInit = {},
+  ): Promise<ApiJsonResult> {
+    return this.fetchJson('/sugarcubes/v2/cubes/forks', {
+      method: 'POST',
+      body: payload,
+      ...options,
+    });
+  }
+
+  /** Synchronize an explicitly approved claimed source without replacing workflow content. */
+  async syncWorkflowCubeSource(
+    payload: BodyInit | null,
+    options: RequestInit = {},
+  ): Promise<ApiJsonResult> {
+    return this.fetchJson('/sugarcubes/v2/cubes/sync-source', {
+      method: 'POST',
+      body: payload,
+      ...options,
+    });
   }
 
   async loadRevision(payload: BodyInit | null, options: RequestInit = {}): Promise<ApiJsonResult> {

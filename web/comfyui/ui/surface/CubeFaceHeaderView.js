@@ -30,6 +30,9 @@ export class CubeFaceHeaderView {
         if (options.identity.awaitingFirstSave) {
             this.#actions.element.prepend(createCubeUnsavedIndicator(options.document));
         }
+        if (options.identity.isWild) {
+            this.#actions.element.prepend(createWildCubeIndicator(options.document));
+        }
         this.element.append(createInstanceIdentity(options.document, options.identity), createDefinitionIdentity(options.document, options.identity), this.#actions.element);
     }
     /** Reconcile header actions without rebuilding identity DOM. */
@@ -70,4 +73,18 @@ function createDefinitionIdentity(documentRef, identity) {
     definitionSource.append(source);
     badge.append(name, definitionSource);
     return badge;
+}
+/** Mark an embedded definition without a matching library owner. */
+function createWildCubeIndicator(documentRef) {
+    const indicator = documentRef.createElement('span');
+    indicator.className =
+        'sugarcubes-cube-wild-indicator sugarcubes-cube-unsaved-indicator text-orange-400';
+    indicator.title = 'Wild Cube';
+    indicator.setAttribute('role', 'img');
+    indicator.setAttribute('aria-label', 'Wild Cube');
+    const icon = documentRef.createElement('i');
+    icon.className = 'icon-[lucide--paw-print] size-4';
+    icon.setAttribute('aria-hidden', 'true');
+    indicator.append(icon);
+    return indicator;
 }

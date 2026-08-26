@@ -28,6 +28,7 @@ import {
   resolveDefaultInstanceModelTitle,
   type CubeModelTitlePresentation,
 } from './CubeModelTitlePresentation.js';
+import type { WorkflowCubeLibraryClass } from '../workflow/CubeWorkflowLibraryState.js';
 
 export interface CubeIdentityPresentation {
   instanceTitle: string;
@@ -37,6 +38,7 @@ export interface CubeIdentityPresentation {
   instanceModelTitle: CubeModelTitlePresentation;
   definitionModelTitle: CubeModelTitlePresentation;
   awaitingFirstSave: boolean;
+  isWild: boolean;
   sourceLine: string;
   icon: CubeIconModel;
 }
@@ -46,6 +48,7 @@ export interface CubeIdentitySource {
   author?: string;
   pack?: string;
   namespace?: string;
+  libraryClass?: WorkflowCubeLibraryClass;
 }
 
 export interface CubeIdentityPresentationInput {
@@ -135,6 +138,7 @@ export function resolveCubeIdentityPresentation(
     instanceModelTitle,
     definitionModelTitle,
     awaitingFirstSave: isCubeAwaitingFirstSave(metadata),
+    isWild: input.fallbackSource?.libraryClass === 'none',
     sourceLine,
     icon: resolveCubeIconModel(metadata),
   };

@@ -69,7 +69,6 @@ class TrackedRepoPreflight(Protocol):
         """Inspect one repository and require cube content."""
 
 
-
 @dataclass(frozen=True)
 class HttpJsonResponse:
     """Represent one decoded HTTP JSON response."""

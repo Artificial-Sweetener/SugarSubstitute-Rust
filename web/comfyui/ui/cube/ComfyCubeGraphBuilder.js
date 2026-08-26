@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Build a Cube's real internal Comfy subgraph without root-graph projections. */
-import { applyExecutionMode, applyExtrasToNode, applyInputValueToNode, resolveInputSlotIndex, } from '../import/ImportNodeWriter.js';
+import { applyExecutionMode, applyNodeProperties, applyInputValueToNode, resolveInputSlotIndex, } from '../import/ImportNodeWriter.js';
 import { isRecord } from '../types/common.js';
 import { buildCubePayloadTopology } from './CubePayloadTopology.js';
 import { resolveCubeInputBoundaryType } from './CubeBoundaryTypeResolver.js';
@@ -86,7 +86,7 @@ export class ComfyCubeGraphBuilder {
                     }
                 }
                 if (entry.extras)
-                    applyExtrasToNode(node, entry.extras);
+                    applyNodeProperties(node, entry.extras);
                 applyAuthoredGeometry(node, entry.layout, origin);
             }
             for (const connection of topology.nodeConnections) {

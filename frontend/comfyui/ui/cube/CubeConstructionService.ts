@@ -25,6 +25,7 @@ import type {
 } from './ComfyCubeGraphBuilder.js';
 import type { ComfyCubeNodeFactory, CubeNode } from './node/ComfyCubeNodeFactory.js';
 import { writeCubeDefinitionIdentity } from './node/CubeDefinitionIdentityWriter.js';
+import { writeCubeDefinitionDocument } from '../workflow/CubeDefinitionDocumentWriter.js';
 import type { CubeInitialSizeResolver } from './geometry/CubeInitialSizePolicy.js';
 
 const MINIMUM_CUBE_WIDTH = 240;
@@ -58,6 +59,7 @@ export interface BuiltCubeConstruction {
   title: string;
   identity: CubeIdentity;
   geometry: CubeParentGeometry;
+  document?: UnknownRecord;
 }
 
 export interface ConstructedCube {
@@ -120,6 +122,7 @@ export class CubeConstructionService {
             hasInputs: built.subgraph.inputs.length > 0,
           }),
       },
+      ...(isRecord(payload.document) ? { document: payload.document } : {}),
     });
   }
 
@@ -127,6 +130,10 @@ export class CubeConstructionService {
   constructBuilt(request: BuiltCubeConstruction): ConstructedCube {
     const metadata = buildInstanceMetadata(request.identity);
     writeCubeDefinitionIdentity(request.built.subgraph, 'cube', metadata);
+    writeCubeDefinitionDocument(request.built.subgraph, request.document, {
+      cubeId: request.identity.cubeId,
+      cubeVersion: request.identity.cubeVersion,
+    });
     try {
       const node = this.#nodeFactory.create({
         instanceId: requireInstanceId(request.identity.instanceId),

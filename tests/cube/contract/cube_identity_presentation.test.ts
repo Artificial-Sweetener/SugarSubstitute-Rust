@@ -100,4 +100,19 @@ describe('resolveCubeIdentityPresentation', () => {
     expect(identity.sourceLine).toBe('Unknown source');
     expect(identity.awaitingFirstSave).toBe(false);
   });
+
+  test('projects transient wild classification as an icon state without changing source text', () => {
+    const identity = resolveCubeIdentityPresentation({
+      metadata: {
+        cube_id: 'Artificial-Sweetener/Base-Cubes/Text to Image.cube',
+        default_alias: 'Text to Image',
+      },
+      instanceTitle: 'Text to Image',
+      fallbackDefinitionTitle: 'Text to Image',
+      fallbackSource: { libraryClass: 'none' },
+    });
+
+    expect(identity.sourceLine).toBe('from Base-Cubes by Artificial-Sweetener');
+    expect(identity.isWild).toBe(true);
+  });
 });

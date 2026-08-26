@@ -15,7 +15,8 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Compose focused Cube affordance adapters around one graph-bound runtime. */
 
-import { isCubeNode } from '../cube/node/ComfyCubeNodeFactory.js';
+import { isCubeNode, isDraftCubeNode } from '../cube/node/ComfyCubeNodeFactory.js';
+import { readInstanceId } from '../cube/node/CubeNodeCatalog.js';
 import type { ComfyCubeRuntime } from '../cube/ComfyCubeRuntime.js';
 import { isRecord } from '../types/common.js';
 import { CubeAffordancePolicy } from './CubeAffordancePolicy.js';
@@ -37,6 +38,7 @@ import { ComfyToolboxTooltipPresenter } from './ComfyToolboxTooltipPresenter.js'
 import { ComfyCubeVersionToolboxPresenter } from './ComfyCubeVersionToolboxPresenter.js';
 import { CubeVersionToolboxController } from './CubeVersionToolboxController.js';
 import { ComfyToolboxCheckMenuPresenter } from './ComfyToolboxCheckMenuPresenter.js';
+import type { CubeWorkflowLibraryActions } from '../workflow/CubeWorkflowLibraryActions.js';
 
 interface AffordanceCanvas {
   graph?: object;
@@ -58,6 +60,7 @@ export class CubeAffordanceHostIntegration {
   readonly #canvas: AffordanceCanvas;
   readonly #controller: CubeHostAffordanceController;
   readonly #logger: Pick<Console, 'error' | 'warn'>;
+  readonly #libraryActions: CubeWorkflowLibraryActions | null;
   readonly #policy = new CubeAffordancePolicy();
   #runtime: ComfyCubeRuntime | null = null;
   #nativeMenus: ComfyCubeNativeMenuAdapter | null = null;
@@ -75,11 +78,13 @@ export class CubeAffordanceHostIntegration {
     canvas: unknown;
     controller: CubeHostAffordanceController;
     logger: Pick<Console, 'error' | 'warn'>;
+    libraryActions?: CubeWorkflowLibraryActions | null;
   }) {
     this.#document = options.document;
     this.#canvas = requireAffordanceCanvas(options.canvas);
     this.#controller = options.controller;
     this.#logger = options.logger;
+    this.#libraryActions = options.libraryActions ?? null;
   }
 
   /** Rebind adapters after Comfy replaces the root workflow graph. */
@@ -179,6 +184,17 @@ export class CubeAffordanceHostIntegration {
   /** Supply Cube replacements through Comfy's supported additive node-menu hook. */
   getNodeMenuItems(node: unknown): CubeAffordanceMenuItem[] {
     if (!isCubeNode(node)) return [];
+    if (!isDraftCubeNode(node) && this.#libraryActions) {
+      const instanceId = readInstanceId(node);
+      const classification = this.#libraryActions.classification(instanceId);
+      if (classification?.access === 'read_only') {
+        return buildReadOnlyLibraryMenu(
+          this.#libraryActions,
+          instanceId,
+          classification.permittedOperations,
+        );
+      }
+    }
     return [{ content: 'Save Cube', callback: () => this.#controller.saveCube(node) }];
   }
 
@@ -218,6 +234,37 @@ export class CubeAffordanceHostIntegration {
     this.#nativeMenus = null;
     this.#missingNodes = null;
   }
+}
+
+/** Build explicit read-only actions without exposing definition-save behavior. */
+function buildReadOnlyLibraryMenu(
+  actions: CubeWorkflowLibraryActions,
+  instanceId: string,
+  permitted: ReadonlySet<string>,
+): CubeAffordanceMenuItem[] {
+  const items: CubeAffordanceMenuItem[] = [];
+  if (permitted.has('keep')) {
+    items.push({ content: 'Keep workflow copy', callback: () => actions.keep(instanceId) });
+  }
+  if (permitted.has('save_to_stable')) {
+    items.push({
+      content: 'Save to Wild Cube Stable',
+      callback: () => actions.saveToStable(instanceId),
+    });
+  }
+  if (permitted.has('track_source')) {
+    items.push({
+      content: 'Synchronize home source…',
+      callback: () => actions.syncSource(instanceId),
+    });
+  }
+  if (permitted.has('fork')) {
+    items.push({
+      content: 'Fork to Local Cubes…',
+      callback: () => actions.forkToLocal(instanceId),
+    });
+  }
+  return items;
 }
 
 /** Validate the smallest stable canvas surface shared by both Comfy renderers. */

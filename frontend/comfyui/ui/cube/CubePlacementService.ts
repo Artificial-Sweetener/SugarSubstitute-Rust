@@ -24,6 +24,7 @@ import type {
 } from './CubeConstructionService.js';
 import type { CubeNode } from './node/ComfyCubeNodeFactory.js';
 import type { CubeNodeCatalog } from './node/CubeNodeCatalog.js';
+import { readInstanceId } from './node/CubeNodeCatalog.js';
 
 export type CubePlacementOptions = CubeConstructionOptions;
 export type CubeIdentity = import('./CubeConstructionService.js').CubeIdentity;
@@ -44,6 +45,12 @@ export interface PlacedCube extends ConstructedCube {
 
 export interface CubePlacementGraph {
   add(node: CubeNode): void;
+  remove?(node: CubeNode): void;
+}
+
+export interface CubePlacementBatchItem {
+  payload: ImportPayload;
+  options?: CubePlacementOptions;
 }
 
 export interface CubePlacementServiceOptions {
@@ -82,12 +89,54 @@ export class CubePlacementService {
     );
   }
 
+  /** Atomically construct, insert, configure, and connect one workflow batch. */
+  placeBatch(
+    items: readonly CubePlacementBatchItem[],
+    finalize: (placed: readonly PlacedCube[]) => void,
+  ): readonly PlacedCube[] {
+    const constructed: ConstructedCube[] = [];
+    try {
+      for (const item of items) {
+        constructed.push(this.#construction.construct(item.payload, item.options));
+      }
+    } catch (error: unknown) {
+      for (const item of constructed.reverse()) this.#construction.discard(item);
+      throw error;
+    }
+
+    const inserted: PlacedCube[] = [];
+    return this.#withHistory(true, () => {
+      try {
+        for (const item of constructed) {
+          this.#graph.add(item.node);
+          inserted.push(item);
+          this.#catalog.add(item.node);
+        }
+        finalize(inserted);
+        this.#history.setDirtyCanvas?.(true, true);
+        return inserted;
+      } catch (error: unknown) {
+        this.#rollbackBatch(inserted, constructed);
+        throw error;
+      }
+    });
+  }
+
   /** Insert one already-constructed node through normal Sugar placement ownership. */
   #insert(constructed: ConstructedCube): PlacedCube {
     this.#graph.add(constructed.node);
     this.#catalog.add(constructed.node);
     this.#history.setDirtyCanvas?.(true, true);
     return constructed;
+  }
+
+  /** Remove every inserted node and detached definition after batch failure. */
+  #rollbackBatch(inserted: readonly PlacedCube[], constructed: readonly ConstructedCube[]): void {
+    for (const item of [...inserted].reverse()) {
+      this.#catalog.remove(readInstanceId(item.node));
+      this.#graph.remove?.(item.node);
+    }
+    for (const item of [...constructed].reverse()) this.#construction.discard(item);
   }
 
   /** Preserve one balanced host history boundary around a placement mutation. */

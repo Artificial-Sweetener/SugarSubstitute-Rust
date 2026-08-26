@@ -64,6 +64,17 @@ export class CubeDefinitionStore {
         }
         return removed;
     }
+    /** Release workflow-scoped embedded authority before another workflow loads. */
+    clearEmbedded() {
+        let removed = 0;
+        for (const [definitionKey, entry] of this.entries) {
+            if (entry.authority !== 'embedded')
+                continue;
+            this.entries.delete(definitionKey);
+            removed += 1;
+        }
+        return removed;
+    }
     ensure(request) {
         const resolved = resolveDefinitionRequest(request);
         if (!resolved.cubeId || !resolved.definitionKey) {
@@ -103,12 +114,36 @@ export class CubeDefinitionStore {
         const now = Date.now();
         const entry = {
             status: 'ready',
+            authority: 'finalized',
             hash,
             payload,
             error: null,
             ...resolved,
             updatedAt: now,
             expiresAt: now + this.ttlMs,
+        };
+        this.entries.set(resolved.definitionKey, entry);
+        this.evictCurrentAliases(resolved);
+        this.onUpdate?.(resolved.definitionKey, entry);
+        return entry;
+    }
+    /** Publish one validated workflow-embedded definition as the selected source. */
+    publishEmbedded(request, payload, contentFingerprint) {
+        const resolved = resolveDefinitionRequest(request);
+        const hash = contentFingerprint.trim();
+        if (!resolved.cubeId || !resolved.definitionKey || !hash) {
+            throw new Error('Embedded cube definition is invalid');
+        }
+        const now = Date.now();
+        const entry = {
+            status: 'ready',
+            authority: 'embedded',
+            hash,
+            payload,
+            error: null,
+            ...resolved,
+            updatedAt: now,
+            expiresAt: Number.POSITIVE_INFINITY,
         };
         this.entries.set(resolved.definitionKey, entry);
         this.evictCurrentAliases(resolved);
@@ -130,16 +165,20 @@ export class CubeDefinitionStore {
         if (!resolved.cubeId || !resolved.definitionKey) {
             return;
         }
+        const current = this.entries.get(resolved.definitionKey);
+        if (current?.authority === 'embedded') {
+            return;
+        }
         if (!this.api) {
             this.logger?.warn?.('SugarCubes: definition load unavailable', resolved.cubeId);
             return;
         }
-        const current = this.entries.get(resolved.definitionKey);
         if (current?.status === 'loading') {
             return;
         }
         const loading = {
             status: 'loading',
+            authority: 'catalog',
             hash: null,
             payload: null,
             error: null,
@@ -168,6 +207,7 @@ export class CubeDefinitionStore {
                 const message = readApiError(data) || response.statusText || 'Definition load failed';
                 const entry = {
                     status: 'error',
+                    authority: 'catalog',
                     hash: null,
                     payload: null,
                     error: message,
@@ -184,6 +224,7 @@ export class CubeDefinitionStore {
             const status = hash ? 'ready' : 'error';
             const entry = {
                 status,
+                authority: 'catalog',
                 hash,
                 payload: data,
                 error: hash ? null : 'Definition hash unavailable',
@@ -198,6 +239,7 @@ export class CubeDefinitionStore {
             const message = error instanceof Error ? error.message : String(error);
             const entry = {
                 status: 'error',
+                authority: 'catalog',
                 hash: null,
                 payload: null,
                 error: message,

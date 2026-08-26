@@ -20,7 +20,7 @@ import { CubePreparedImportService } from '../../../frontend/comfyui/ui/import/C
 
 describe('CubePreparedImportService', () => {
   test('registers native definitions and places one real Cube node', () => {
-    const registerSubgraphs = jest.fn(() => ['registered']);
+    const registerSubgraphs = jest.fn(() => ({ warnings: [], createdIds: [] }));
     const place = jest.fn(() => ({
       node: {
         id: 'surface-instance',
@@ -36,6 +36,7 @@ describe('CubePreparedImportService', () => {
       getNodeRenderer: () => 'vue',
       getRuntime: () => ({
         registerSubgraphs,
+        discardSubgraphs: jest.fn(),
         placement: { place },
       }),
       assertRootPlacement: () => undefined,
@@ -58,7 +59,7 @@ describe('CubePreparedImportService', () => {
       success: true,
       summary: 'cube 1, internal nodes 9',
       primaryNodeId: 'surface-instance',
-      warnings: ['registered', 'placed'],
+      warnings: ['placed'],
       bounds: { minX: 40, minY: 60, maxX: 940, maxY: 700 },
       nodesAdded: 0,
       markersAdded: 0,
@@ -99,7 +100,8 @@ describe('CubePreparedImportService', () => {
       getLiteGraph: () => ({ createNode() {} }),
       getNodeRenderer: () => 'litegraph',
       getRuntime: () => ({
-        registerSubgraphs: () => [],
+        registerSubgraphs: () => ({ warnings: [], createdIds: ['nested'] }),
+        discardSubgraphs: jest.fn(),
         placement: {
           place() {
             throw new Error('host rejected placement');
@@ -115,6 +117,36 @@ describe('CubePreparedImportService', () => {
       message: 'host rejected placement',
       warnings: ['Cube placement failed: host rejected placement'],
     });
+  });
+
+  test('fails closed when an embedded definition cannot be rebound safely', () => {
+    const discardSubgraphs = jest.fn();
+    const place = jest.fn(() => {
+      throw new Error('placement must not run');
+    });
+    const service = new CubePreparedImportService({
+      getGraph: () => ({}),
+      getLiteGraph: () => ({ createNode() {} }),
+      getNodeRenderer: () => 'litegraph',
+      getRuntime: () => ({
+        registerSubgraphs: () => ({
+          warnings: ["Failed to register subgraph 'sampler': positional values are ambiguous."],
+          createdIds: ['already-staged'],
+        }),
+        discardSubgraphs,
+        placement: { place },
+      }),
+      assertRootPlacement: () => undefined,
+      readErrorMessage: (error) => (error instanceof Error ? error.message : String(error)),
+    });
+
+    expect(service.apply({ cube: { cube_id: 'example.cube' } })).toMatchObject({
+      success: false,
+      message:
+        "Cube embedded definitions could not be registered: Failed to register subgraph 'sampler': positional values are ambiguous.",
+    });
+    expect(place).not.toHaveBeenCalled();
+    expect(discardSubgraphs).toHaveBeenCalledWith(['already-staged']);
   });
 
   test('rejects a nested import before runtime registration or placement', () => {

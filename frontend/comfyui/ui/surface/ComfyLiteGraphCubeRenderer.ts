@@ -28,6 +28,8 @@ import {
   CubeCanvasChromeRenderer,
   type NativeLiteGraphTitleButton,
 } from './CubeCanvasChromeRenderer.js';
+import type { CubeIdentitySource } from '../cube/CubeIdentityPresentation.js';
+import type { UnknownRecord } from '../types/common.js';
 import { drawComfyPrimeIcon } from './ComfyPrimeIcons.js';
 import { CubeCanvasPortRenderer } from './CubeCanvasPortRenderer.js';
 import {
@@ -76,10 +78,11 @@ export class ComfyLiteGraphCubeRenderer {
     host: LiteGraphCubeDrawHost,
     previewImages: CubeCanvasPreviewImageProvider,
     icons: CubeIconResolver,
+    resolveIdentitySource?: (metadata: UnknownRecord) => CubeIdentitySource | null,
   ) {
     this.#host = host;
     this.#previewImages = previewImages;
-    this.#chrome = new CubeCanvasChromeRenderer(icons);
+    this.#chrome = new CubeCanvasChromeRenderer(icons, resolveIdentitySource);
   }
 
   /** Draw one ordered set of graph-space Cube surfaces. */

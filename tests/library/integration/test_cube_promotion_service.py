@@ -81,7 +81,9 @@ def _prepare_services(
 
     def load_cube_artifact(path: Any) -> Any:
         payload = json.loads(path.read_text(encoding="utf-8"))
-        return SimpleNamespace(version=payload["version"], payload=payload)
+        return SimpleNamespace(
+            version=payload["version"], payload=payload, document=payload
+        )
 
     def prepare_cube_import(loaded: Any, drop_origin: Any = (0.0, 0.0)) -> Any:
         return SimpleNamespace(

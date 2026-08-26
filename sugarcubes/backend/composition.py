@@ -17,17 +17,33 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
+from ..authoring import (
+    LegacyWorkflowAuthoringService,
+    SugarScriptWorkflowAuthoringService,
+)
 from ..exporter import (
     export as export_cubes,
     write_cube_to_path,
     write_cubes_to_paths,
 )
 from ..exporter.versioning import suggest_version
+from ..execution import CubeExecutionCoordinator
+from ..execution import LiveNodeDefaultReconciler
+from ..exporter.definition_snapshot import resolve_definition_via_nodes
+from ..execution.ports import ComfyExecutionPort
 from ..importer import load_cube as load_cube_artifact
+from ..importer import load_materialized_cube_document
 from ..importer import prepare_import as prepare_cube_import
+from ..language import SugarScriptLanguageService
+from ..library import (
+    CubeForkService,
+    CubeLibraryClassService,
+    CubeSourceSyncService,
+    StableCubeRepository,
+)
 from ..payloads import retarget_cube_payload
 from .comfy_node_registry import resolve_active_comfy_node_class_mappings
 from .services import (
@@ -44,8 +60,13 @@ from .services import (
     CubeRevisionService,
     IdentityPolicyService,
     LocalFlavorService,
+    NativeCubeImportPreparerAdapter,
     OwnershipPolicyService,
     TrackedRepoService,
+    SugarScriptCatalogResolver,
+    WorkflowCatalogArtifactProvider,
+    WorkflowForkRepository,
+    WorkflowSourceSyncPort,
 )
 
 
@@ -66,6 +87,14 @@ class BackendServices:
     revisions: CubeRevisionService
     local_flavors: LocalFlavorService
     dependencies: CubeDependencyService
+    workflow_library: CubeLibraryClassService
+    workflow_forks: CubeForkService
+    workflow_source_sync: CubeSourceSyncService
+    sugarscript_authoring: SugarScriptWorkflowAuthoringService
+    legacy_workflow_authoring: LegacyWorkflowAuthoringService
+    execution: CubeExecutionCoordinator = field(
+        default_factory=CubeExecutionCoordinator
+    )
 
 
 def build_backend_services(
@@ -73,6 +102,7 @@ def build_backend_services(
     *,
     workspace_path: Path | None = None,
     custom_nodes_root: Path | None = None,
+    execution_port: ComfyExecutionPort | None = None,
 ) -> BackendServices:
     """Build the repository-standard backend service graph."""
 
@@ -96,6 +126,43 @@ def build_backend_services(
         tracked_repo_service=tracked_repos,
         ownership_policy_service=ownership,
         registry_factory=None,
+    )
+    workflow_catalog = WorkflowCatalogArtifactProvider(library.catalog_listing)
+    workflow_library = CubeLibraryClassService(
+        stable=StableCubeRepository(tracked_repos.data_root() / "wild_cube_stable"),
+        catalog_artifacts=workflow_catalog.list_artifacts,
+    )
+    workflow_forks = CubeForkService(
+        WorkflowForkRepository(
+            artifacts=artifacts,
+            ownership=ownership,
+            library=library,
+        )
+    )
+    workflow_source_sync = CubeSourceSyncService(
+        WorkflowSourceSyncPort(
+            tracked_repos,
+            catalog_artifacts=workflow_catalog.list_artifacts,
+        )
+    )
+    workflow_resolver = SugarScriptCatalogResolver(
+        library=library,
+        redirects=redirects,
+        load_cube=load_cube_artifact,
+    )
+    workflow_preparer = NativeCubeImportPreparerAdapter(
+        load_document=lambda document: load_materialized_cube_document(document),
+        prepare_import=lambda loaded: prepare_cube_import(loaded),
+        resolve_live_definition=resolve_definition_via_nodes,
+    )
+    sugarscript_authoring = SugarScriptWorkflowAuthoringService(
+        language=SugarScriptLanguageService(),
+        resolver=workflow_resolver,
+        preparer=workflow_preparer,
+    )
+    legacy_workflow_authoring = LegacyWorkflowAuthoringService(
+        resolver=workflow_resolver,
+        preparer=workflow_preparer,
     )
     metadata = CubeMetadataService(
         library,
@@ -136,9 +203,11 @@ def build_backend_services(
         node_class_mappings_provider=lambda: resolve_active_comfy_node_class_mappings(
             extension_root
         ),
-        finalized_definition_provider=lambda path, cube_id, _payload: loader.load_cube_path(
-            cube_path=path,
-            cube_id=cube_id,
+        finalized_definition_provider=lambda path, cube_id, _payload: (
+            loader.load_cube_path(
+                cube_path=path,
+                cube_id=cube_id,
+            )
         ),
         local_flavor_service=local_flavors,
     )
@@ -169,4 +238,13 @@ def build_backend_services(
         revisions=revisions,
         local_flavors=local_flavors,
         dependencies=dependencies,
+        workflow_library=workflow_library,
+        workflow_forks=workflow_forks,
+        workflow_source_sync=workflow_source_sync,
+        sugarscript_authoring=sugarscript_authoring,
+        legacy_workflow_authoring=legacy_workflow_authoring,
+        execution=CubeExecutionCoordinator(
+            comfy=execution_port,
+            live_defaults=LiveNodeDefaultReconciler(resolve_definition_via_nodes),
+        ),
     )

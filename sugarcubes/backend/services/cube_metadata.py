@@ -213,8 +213,6 @@ def normalize_default_alias(value: Any) -> str:
     return "/".join(segments)
 
 
-
-
 def normalize_default_alias_title(value: Any) -> str:
     """Normalize an authored cube display title without changing path semantics."""
 
@@ -371,7 +369,9 @@ def _normalize_surface_size(value: object) -> list[float]:
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
         return []
     if len(value) != 2:
-        raise BackendError("metadata.surface_size must contain width and height", status=400)
+        raise BackendError(
+            "metadata.surface_size must contain width and height", status=400
+        )
     result: list[float] = []
     for entry in value:
         if isinstance(entry, bool) or not isinstance(entry, (int, float)):
@@ -431,5 +431,3 @@ def _normalize_surface_state(value: object) -> dict[str, Any]:
         normalized_preview["selected_output"] = selected_output or None
         normalized["preview"] = normalized_preview
     return normalized
-
-

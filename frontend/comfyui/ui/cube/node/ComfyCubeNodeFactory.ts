@@ -19,6 +19,7 @@ import { isRecord } from '../../types/common.js';
 import type { UnknownRecord, Vec2 } from '../../types/common.js';
 import type { NativeCubeSubgraph, NativeGraphNode } from '../ComfyCubeGraphBuilder.js';
 import { initializePromotedWidgetIdentity } from './PromotedWidgetIdentityInitializer.js';
+import type { CubeWorkflowNodePackMetadata } from './CubeWorkflowNodePackMetadata.js';
 
 const DEFAULT_SIZE: Vec2 = [720, 480];
 const MINIMUM_SIZE: Vec2 = [320, 180];
@@ -43,15 +44,18 @@ export interface CubeNodeConfiguration {
 
 export interface ComfyCubeNodeFactoryOptions {
   createNode(type: string): NativeGraphNode | null;
+  nodePackMetadata: Pick<CubeWorkflowNodePackMetadata, 'apply'>;
 }
 
 /** Own the narrow integration boundary between Cube semantics and native nodes. */
 export class ComfyCubeNodeFactory {
   readonly #createNode: (type: string) => NativeGraphNode | null;
+  readonly #nodePackMetadata: Pick<CubeWorkflowNodePackMetadata, 'apply'>;
 
   /** Bind native node construction without taking graph insertion ownership. */
   constructor(options: ComfyCubeNodeFactoryOptions) {
     this.#createNode = options.createNode;
+    this.#nodePackMetadata = options.nodePackMetadata;
   }
 
   /** Create one detached registered subgraph instance as a real native node. */
@@ -88,6 +92,7 @@ export class ComfyCubeNodeFactory {
       sugarcubes_cube: identity,
       sugarcubes_surface: cloneRecord(configuration.surface),
     };
+    this.#nodePackMetadata.apply(node);
   }
 }
 

@@ -31,6 +31,7 @@ from .cube_library_diagnostics import (
 )
 from .cube_library_listing import CubeLibraryListing
 from .cube_library_source_resolver import CubeLibrarySourceResolver
+from ...workflow_node_pack import current_workflow_node_pack
 
 _logger = logging.getLogger(__name__)
 
@@ -177,11 +178,13 @@ class CubeLibraryStateService:
     ) -> dict[str, Any]:
         """Build the stable host-facing library status response."""
 
+        node_pack = current_workflow_node_pack()
         return {
             "schemaVersion": 1,
             "available": available,
             "source": "SugarCubes",
             "sugarCubesVersion": runtime_version(),
+            "workflowNodePack": node_pack.api_payload(),
             "catalogRevision": catalog_revision,
             "packManagementSupported": available,
             "localAuthoringSupported": available,

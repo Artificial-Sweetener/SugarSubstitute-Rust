@@ -28,7 +28,7 @@ describe('cube version option projection', () => {
       ),
     ).toEqual([
       {
-        label: 'v2.0.0',
+        label: 'Latest (v2.0.0)',
         value: '2.0.0',
         revisionRef: 'WORKTREE',
         current: true,
@@ -47,12 +47,27 @@ describe('cube version option projection', () => {
   test('uses the selected cube version only when revision history is empty', () => {
     expect(projectCubeVersionOptions([], 'v1.4.0')).toEqual([
       {
-        label: 'v1.4.0',
+        label: 'Latest (v1.4.0)',
         value: '1.4.0',
         revisionRef: 'WORKTREE',
         current: true,
         raw: null,
       },
+    ]);
+  });
+
+  test('identifies the current artifact as latest instead of guessing from semantic order', () => {
+    const options = projectCubeVersionOptions(
+      [
+        { revision_ref: 'WORKTREE', version: '2.3.0', current: true },
+        { revision_ref: 'historical-ref', version: '3.0.0', current: false },
+      ],
+      '2.3.0',
+    );
+
+    expect(options.map(({ label, value, current }) => ({ label, value, current }))).toEqual([
+      { label: 'Latest (v2.3.0)', value: '2.3.0', current: true },
+      { label: 'v3.0.0', value: '3.0.0', current: false },
     ]);
   });
 });

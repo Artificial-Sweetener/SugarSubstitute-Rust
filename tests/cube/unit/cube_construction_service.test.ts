@@ -26,6 +26,8 @@ import {
   type CubeNode,
 } from '../../../frontend/comfyui/ui/cube/node/ComfyCubeNodeFactory.js';
 
+const noopNodePackMetadata = { apply: () => false };
+
 describe('CubeConstructionService', () => {
   test('returns a configured real Cube without inserting it into any graph', () => {
     const subgraph = nativeSubgraph('definition');
@@ -33,7 +35,10 @@ describe('CubeConstructionService', () => {
     const discard = jest.fn();
     const service = new CubeConstructionService({
       graphBuilder: builderReturning(subgraph),
-      nodeFactory: new ComfyCubeNodeFactory({ createNode: () => node }),
+      nodeFactory: new ComfyCubeNodeFactory({
+        createNode: () => node,
+        nodePackMetadata: noopNodePackMetadata,
+      }),
       definitions: { discard },
       resolveInitialSize: () => [920, 600],
       createInstanceId: () => 'runtime-instance',
@@ -41,6 +46,7 @@ describe('CubeConstructionService', () => {
 
     const constructed = service.construct({
       cube: { cube_id: 'local/demo.cube', version: '1.0.0', default_alias: 'Demo' },
+      document: canonicalDocument('local/demo.cube', '1.0.0'),
       layout: { origin: [30, 40], groups: [] },
     });
 
@@ -51,6 +57,7 @@ describe('CubeConstructionService', () => {
     expect(subgraph.extra).toMatchObject({
       sugarcubes_kind: 'cube',
       sugarcubes_cube: { cube_id: 'local/demo.cube', instance_id: 'runtime-instance' },
+      sugarcubes_document: canonicalDocument('local/demo.cube', '1.0.0'),
     });
     expect(discard).not.toHaveBeenCalled();
   });
@@ -60,7 +67,10 @@ describe('CubeConstructionService', () => {
     const discard = jest.fn();
     const service = new CubeConstructionService({
       graphBuilder: builderReturning(subgraph),
-      nodeFactory: new ComfyCubeNodeFactory({ createNode: () => null }),
+      nodeFactory: new ComfyCubeNodeFactory({
+        createNode: () => null,
+        nodePackMetadata: noopNodePackMetadata,
+      }),
       definitions: { discard },
       resolveInitialSize: () => [920, 600],
       createInstanceId: () => 'runtime-instance',
@@ -91,6 +101,7 @@ describe('CubeConstructionService', () => {
       } as unknown as ComfyCubeGraphBuilder,
       nodeFactory: new ComfyCubeNodeFactory({
         createNode: (type) => nodes.get(type) ?? null,
+        nodePackMetadata: noopNodePackMetadata,
       }),
       definitions: { discard: jest.fn() },
       resolveInitialSize: () => [920, 600],
@@ -113,7 +124,10 @@ describe('CubeConstructionService', () => {
     const node = nativeSubgraphNode(subgraph);
     const service = new CubeConstructionService({
       graphBuilder: builderReturning(subgraph),
-      nodeFactory: new ComfyCubeNodeFactory({ createNode: () => node }),
+      nodeFactory: new ComfyCubeNodeFactory({
+        createNode: () => node,
+        nodePackMetadata: noopNodePackMetadata,
+      }),
       definitions: { discard: jest.fn() },
       resolveInitialSize: () => [920, 600],
       createInstanceId: () => 'unused-instance',
@@ -145,7 +159,10 @@ describe('CubeConstructionService', () => {
     const resolveInitialSize = jest.fn((): [number, number] => [1_040, 600]);
     const service = new CubeConstructionService({
       graphBuilder: builderReturning(subgraph),
-      nodeFactory: new ComfyCubeNodeFactory({ createNode: () => node }),
+      nodeFactory: new ComfyCubeNodeFactory({
+        createNode: () => node,
+        nodePackMetadata: noopNodePackMetadata,
+      }),
       definitions: { discard: jest.fn() },
       resolveInitialSize,
       createInstanceId: () => 'fresh-instance',
@@ -177,7 +194,10 @@ describe('CubeConstructionService', () => {
     const resolveInitialSize = jest.fn((): [number, number] => [920, 600]);
     const service = new CubeConstructionService({
       graphBuilder: builderReturning(subgraph),
-      nodeFactory: new ComfyCubeNodeFactory({ createNode: () => node }),
+      nodeFactory: new ComfyCubeNodeFactory({
+        createNode: () => node,
+        nodePackMetadata: noopNodePackMetadata,
+      }),
       definitions: { discard: jest.fn() },
       resolveInitialSize,
       createInstanceId: () => 'unused-instance',
@@ -202,6 +222,26 @@ describe('CubeConstructionService', () => {
     expect(resolveInitialSize).not.toHaveBeenCalled();
   });
 });
+
+/** Build portable content retained beside its native Comfy projection. */
+function canonicalDocument(cubeId: string, version: string): Record<string, unknown> {
+  return {
+    cube_id: cubeId,
+    version,
+    description: '',
+    metadata: {},
+    implementation: {
+      nodes: {},
+      inputs: {},
+      outputs: {},
+      layout: {},
+      definitions: {},
+      subgraphs: [],
+    },
+    surface: { default_flavor_id: 'default', controls: [] },
+    flavors: { authored: [{ id: 'default', name: 'Default', values: {} }] },
+  };
+}
 
 /** Build one graph-builder double whose definition is already registered. */
 function builderReturning(subgraph: NativeCubeSubgraph): ComfyCubeGraphBuilder {

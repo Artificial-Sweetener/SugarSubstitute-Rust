@@ -33,12 +33,19 @@ _logger = logging.getLogger(__name__)
 class CatalogRouteHandlers:
     """Collect the endpoint-family handlers for composition."""
 
+    get_status: RouteHandler
     list_cubes: RouteHandler
     list_picker_catalog: RouteHandler
 
 
 def build_catalog_route_handlers(services: BackendServices) -> CatalogRouteHandlers:
     """Build thin endpoint-family handlers over backend services."""
+
+    async def get_status(request: Any) -> Any:
+        """Return SugarCubes availability and installed package identity."""
+
+        _ = request
+        return json_success(services.library.library_status(), status=200)
 
     async def list_cubes(request: Any) -> Any:
         _ = request
@@ -65,6 +72,7 @@ def build_catalog_route_handlers(services: BackendServices) -> CatalogRouteHandl
             return json_error("Failed to list SugarCubes picker catalog", status=500)
 
     return CatalogRouteHandlers(
+        get_status=get_status,
         list_cubes=list_cubes,
         list_picker_catalog=list_picker_catalog,
     )

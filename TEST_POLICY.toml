@@ -12,6 +12,7 @@ sources = [
   "sugarcubes/tools/**",
   "sugarcubes/maintenance.py",
   "sugarcubes/extension_layout.py",
+  "sugarcubes/package_identity.py",
   "package.json",
   "package-lock.json",
   "pyproject.toml",
@@ -19,6 +20,8 @@ sources = [
   "tsconfig*.json",
   "ARCHITECTURE_*.toml",
   "TEST_POLICY.toml",
+  "artifacts/phase6-acceptance/**",
+  "artifacts/recipe-compatibility/**",
   ".github/workflows/**",
 ]
 proofs = ["contract", "unit"]
@@ -27,6 +30,30 @@ proofs = ["contract", "unit"]
 name = "cube_model"
 sources = ["sugarcubes/cube_model/**"]
 proofs = ["contract", "unit"]
+
+[[area]]
+name = "workflow"
+sources = [
+  "sugarcubes/workflow/**",
+  "sugarcubes/workflow_node_pack.py",
+  "frontend/comfyui/ui/workflow/**",
+]
+proofs = ["contract", "integration", "unit"]
+
+[[area]]
+name = "language"
+sources = ["sugarcubes/language/**"]
+proofs = ["contract"]
+
+[[area]]
+name = "optimizer"
+sources = ["sugarcubes/optimization/**"]
+proofs = ["contract"]
+
+[[area]]
+name = "comfy_contract"
+sources = ["sugarcubes/comfy/**"]
+proofs = ["contract"]
 
 [[area]]
 name = "export"
@@ -73,6 +100,7 @@ proofs = ["integration", "unit"]
 [[area]]
 name = "library"
 sources = [
+  "sugarcubes/library/**",
   "sugarcubes/backend/services/cube_artifact_repository.py",
   "sugarcubes/backend/services/cube_catalog_state_service.py",
   "sugarcubes/backend/services/cube_file_io.py",
@@ -101,6 +129,7 @@ sources = [
   "sugarcubes/backend/services/cube_picker_catalog_service.py",
   "sugarcubes/backend/services/cube_promotion_service.py",
   "sugarcubes/backend/services/cube_revision_version_projection.py",
+  "sugarcubes/backend/services/cube_revision_loader.py",
   "sugarcubes/backend/services/cube_summary.py",
   "sugarcubes/backend/services/cube_version_artifact_cache.py",
   "sugarcubes/backend/services/identity_policy_service.py",
@@ -115,6 +144,9 @@ sources = [
   "sugarcubes/backend/services/tracked_repo_models.py",
   "sugarcubes/backend/services/tracked_repo_service.py",
   "sugarcubes/backend/services/tracked_repo_sync_policy.py",
+  "sugarcubes/backend/services/workflow_catalog_artifact_provider.py",
+  "sugarcubes/backend/services/workflow_fork_repository.py",
+  "sugarcubes/backend/services/workflow_source_sync_port.py",
 ]
 proofs = ["contract", "integration", "unit"]
 
@@ -159,8 +191,8 @@ proofs = ["contract", "unit"]
 
 [[area]]
 name = "execution"
-sources = ["frontend/comfyui/ui/cube/execution/**"]
-proofs = ["integration", "unit"]
+sources = ["sugarcubes/execution/**", "frontend/comfyui/ui/cube/execution/**"]
+proofs = ["contract", "integration", "unit"]
 
 [[area]]
 name = "cube"
@@ -199,12 +231,16 @@ isolated_proofs = ["integration"]
 [[area]]
 name = "authoring"
 sources = [
+  "sugarcubes/authoring/**",
+  "sugarcubes/backend/services/native_cube_import_preparer.py",
+  "sugarcubes/backend/services/sugarscript_catalog_resolver.py",
   "frontend/comfyui/ui/create/**",
   "frontend/comfyui/ui/flavors/**",
   "frontend/comfyui/ui/import/**",
   "frontend/comfyui/ui/packs/**",
   "frontend/comfyui/ui/promotion/**",
   "frontend/comfyui/ui/save/**",
+  "frontend/comfyui/ui/sugarscript/**",
 ]
 proofs = ["contract", "integration", "unit"]
 isolated_proofs = ["integration"]
@@ -221,6 +257,22 @@ proofs = ["integration", "unit"]
 [[boundary]]
 name = "cube_document"
 area = "cube_model"
+
+[[boundary]]
+name = "canonical_workflow"
+area = "workflow"
+
+[[boundary]]
+name = "sugarscript_language"
+area = "language"
+
+[[boundary]]
+name = "optimization_contract"
+area = "optimizer"
+
+[[boundary]]
+name = "comfy_execution_contract"
+area = "comfy_contract"
 
 [[boundary]]
 name = "backend_http"
@@ -250,6 +302,28 @@ groups = [
   "authoring/integration",
   "execution/integration",
 ]
+
+[[subscription]]
+boundary = "canonical_workflow"
+groups = [
+  "language/contract",
+  "library/integration",
+  "comfy_contract/contract",
+  "execution/integration",
+  "browser/integration",
+]
+
+[[subscription]]
+boundary = "sugarscript_language"
+groups = ["authoring/integration"]
+
+[[subscription]]
+boundary = "optimization_contract"
+groups = ["execution/integration", "comfy_contract/contract"]
+
+[[subscription]]
+boundary = "comfy_execution_contract"
+groups = ["execution/integration", "browser/integration"]
 
 [[subscription]]
 boundary = "backend_http"

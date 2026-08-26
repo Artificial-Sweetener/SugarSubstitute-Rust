@@ -41,7 +41,7 @@ export class OverlayManager {
     graphHooks;
     nodeMovement;
     groupBounds;
-    constructor({ adapter = null, events = null, scheduler = null, storage = null, cubeApi = null, cubeBrowser = null, saveService = null, saveDraft, toast = null, applyPreparedImport, reportImportOutcome, buildShiftedPlacementPayload, requestDirtyRefresh = null, layoutService = null, containmentService = null, collisionService = null, boundsReconciler = null, } = {}) {
+    constructor({ adapter = null, events = null, scheduler = null, storage = null, cubeApi = null, cubeBrowser = null, saveService = null, saveDraft, toast = null, applyPreparedImport, reportImportOutcome, buildShiftedPlacementPayload, requestDirtyRefresh = null, layoutService = null, containmentService = null, collisionService = null, boundsReconciler = null, workflowLibraryState = null, workflowLibraryActions = null, } = {}) {
         this.proximity = new ProximityOverlay({
             adapter,
             events,
@@ -91,11 +91,26 @@ export class OverlayManager {
             onSwapLeft: (metadata) => this.swapLayout(metadata, -1),
             onSwapRight: (metadata) => this.swapLayout(metadata, 1),
             canSwap: (metadata, direction) => this.canSwapDirection(metadata, direction),
+            ...(workflowLibraryActions
+                ? {
+                    getLibraryClassification: (metadata) => workflowLibraryActions.classification(readInstanceId(metadata)),
+                    onKeepWorkflowCube: (metadata) => workflowLibraryActions.keep(readInstanceId(metadata)),
+                    onSaveWorkflowCubeToStable: (metadata) => {
+                        void workflowLibraryActions.saveToStable(readInstanceId(metadata));
+                    },
+                    onSyncWorkflowCubeSource: (metadata) => {
+                        void workflowLibraryActions.syncSource(readInstanceId(metadata));
+                    },
+                    onForkWorkflowCube: (metadata) => {
+                        void workflowLibraryActions.forkToLocal(readInstanceId(metadata));
+                    },
+                }
+                : {}),
         };
         this.chrome = new CubeChromeOverlay({
             adapter,
             actions: chromeActions,
-            resolveSource: createCubeSourceResolver(cubeBrowser),
+            resolveSource: createCubeSourceResolver(cubeBrowser, workflowLibraryState),
         });
         this.drawHooks = new OverlayDrawHookLifecycle(adapter, scheduler, this.proximity, this.placement, this.chrome, this.proximityGraphMutations);
         this.nodeMovement = new OverlayNodeMovementCoordinator(adapter, scheduler, containmentService, collisionService, boundsReconciler, requestDirtyRefresh);
@@ -230,6 +245,13 @@ export class OverlayManager {
     scheduleBoundsReconcile(graph) {
         this.nodeMovement.scheduleBoundsReconcile(graph);
     }
+}
+/** Require stable instance identity before dispatching a workflow-library action. */
+function readInstanceId(metadata) {
+    const instanceId = typeof metadata.instance_id === 'string' ? metadata.instance_id.trim() : '';
+    if (!instanceId)
+        throw new Error('Cube instance identity is unavailable.');
+    return instanceId;
 }
 function isHistoricalCubeMetadata(metadata) {
     const revisionRef = typeof metadata?.cube_revision_ref === 'string' ? metadata.cube_revision_ref.trim() : '';

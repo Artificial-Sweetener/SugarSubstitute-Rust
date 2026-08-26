@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 from .artifact_loader import load_cube
+from .document_loader import load_cube_document, load_materialized_cube_document
 from .models import CubeImportError, LoadedCube, PreparedImport
 from .prepared_projection import prepare_import
 
@@ -26,5 +27,7 @@ __all__ = [
     "LoadedCube",
     "PreparedImport",
     "load_cube",
+    "load_cube_document",
+    "load_materialized_cube_document",
     "prepare_import",
 ]

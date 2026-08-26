@@ -20,7 +20,7 @@ const DRAG_THRESHOLD = 4;
 export class ComfyVueCubeEditorFooter {
     #root;
     #node;
-    #prepareEditor;
+    #openEditor;
     #button = null;
     #label = null;
     #originalLabel = '';
@@ -31,10 +31,10 @@ export class ComfyVueCubeEditorFooter {
     #pointerStart = null;
     #suppressClick = false;
     /** Bind one native node root while preserving Comfy's subgraph navigation command. */
-    constructor(root, node, prepareEditor) {
+    constructor(root, node, openEditor) {
         this.#root = root;
         this.#node = node;
-        this.#prepareEditor = prepareEditor;
+        this.#openEditor = openEditor;
         root.addEventListener('pointerdown', this.#onPointerDown, true);
         root.addEventListener('pointerup', this.#onPointerUp, true);
         root.addEventListener('pointercancel', this.#onPointerCancel, true);
@@ -101,18 +101,16 @@ export class ComfyVueCubeEditorFooter {
         this.#pointerStart = null;
         this.#suppressClick = true;
     };
-    /** Suppress only a post-drag click and otherwise leave Comfy's native command untouched. */
+    /** Route clicks through SugarCubes' permission-checked editor entry. */
     #onClick = (event) => {
         if (!findOwningFooterButtonFromTarget(this.#root, event.target))
             return;
         const suppress = this.#suppressClick;
         this.#suppressClick = false;
-        if (suppress) {
-            event.preventDefault();
-            event.stopImmediatePropagation();
-            return;
-        }
-        this.#prepareEditor(this.#node);
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (!suppress)
+            this.#openEditor(this.#node);
     };
     /** Take ownership of one current native footer button. */
     #bindButton(button) {

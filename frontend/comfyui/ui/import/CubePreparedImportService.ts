@@ -30,7 +30,8 @@ interface PreparedImportLiteGraph extends RendererGeometryHost {
 }
 
 interface PreparedImportRuntime {
-  registerSubgraphs(payload: ImportPayload): string[];
+  registerSubgraphs(payload: ImportPayload): { warnings: string[]; createdIds: string[] };
+  discardSubgraphs(ids: readonly string[]): void;
   placement: {
     place(
       payload: ImportPayload,
@@ -92,10 +93,18 @@ export class CubePreparedImportService {
       return result;
     }
 
+    let runtime: PreparedImportRuntime | null = null;
+    let createdSubgraphIds: string[] = [];
     try {
       this.#dependencies.assertRootPlacement();
-      const runtime = this.#dependencies.getRuntime();
-      result.warnings.push(...runtime.registerSubgraphs(payload));
+      runtime = this.#dependencies.getRuntime();
+      const registration = runtime.registerSubgraphs(payload);
+      createdSubgraphIds = registration.createdIds;
+      if (registration.warnings.length > 0) {
+        throw new Error(
+          `Cube embedded definitions could not be registered: ${registration.warnings.join(' ')}`,
+        );
+      }
       const placed = runtime.placement.place(payload, {
         ...(options.instanceAlias ? { instanceAlias: options.instanceAlias } : {}),
       });
@@ -115,6 +124,7 @@ export class CubePreparedImportService {
       };
       return result;
     } catch (error: unknown) {
+      runtime?.discardSubgraphs(createdSubgraphIds);
       const message = this.#dependencies.readErrorMessage(error);
       result.message = message;
       result.warnings.push(`Cube placement failed: ${message}`);

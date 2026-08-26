@@ -27,11 +27,11 @@ export class CubeVersionDefinitionStager {
     /** Register an isolated clone or remove every staged definition on failure. */
     stage(payload) {
         const staged = remapCubeEmbeddedSubgraphs(payload, this.#createId);
-        const warnings = this.#registrar.register(staged.payload);
-        if (warnings.length === 0)
+        const registration = this.#registrar.register(staged.payload);
+        if (registration.warnings.length === 0)
             return staged;
         this.#registrar.discard(staged.definitionIds);
-        throw new Error(`Cube embedded definitions could not be staged: ${warnings.join(' ')}`);
+        throw new Error(`Cube embedded definitions could not be staged: ${registration.warnings.join(' ')}`);
     }
     /** Remove staged definitions after construction or replacement compensation. */
     discard(staged) {

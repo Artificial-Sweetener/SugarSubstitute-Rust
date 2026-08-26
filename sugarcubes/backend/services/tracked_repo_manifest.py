@@ -117,9 +117,11 @@ class TrackedRepoManifest:
 
         replacement = self.normalize(TrackedRepo(**{**asdict(repo), **changes}))
         self.write(
-            replacement
-            if entry.owner == repo.owner and entry.repo == repo.repo
-            else entry
+            (
+                replacement
+                if entry.owner == repo.owner and entry.repo == repo.repo
+                else entry
+            )
             for entry in self.load()
         )
         return replacement

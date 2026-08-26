@@ -1,7 +1,9 @@
 .generated/
 .coverage
 .env
+.venv/
 .sugarcubes/
+build/
 *.egg-info/
 node_modules/
 __pycache__/

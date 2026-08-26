@@ -19,6 +19,7 @@ import { parseCanonicalCubeId } from '../core/CubeId.js';
 import { isRecord, readString } from '../types/common.js';
 import type { UnknownRecord } from '../types/common.js';
 import type { BadgeSource, ChromeMetadata } from './CubeChromeOverlay.js';
+import type { CubeWorkflowLibraryState } from '../workflow/CubeWorkflowLibraryState.js';
 
 export interface CubeSourceCatalog {
   getCubeById?(cubeId: string): unknown;
@@ -86,23 +87,42 @@ export function resolveCubeEntrySource(entry: unknown): BadgeSource | null {
 /** Create the authoritative chrome source resolver for a cube catalog. */
 export function createCubeSourceResolver(
   cubeBrowser: CubeSourceCatalog | null | undefined,
+  libraryState: Pick<CubeWorkflowLibraryState, 'read'> | null = null,
 ): (metadata: ChromeMetadata) => BadgeSource | null {
   return (metadata) => {
+    const instanceId = typeof metadata.instance_id === 'string' ? metadata.instance_id.trim() : '';
+    const libraryClass = instanceId ? libraryState?.read(instanceId)?.primaryClass : undefined;
     const cubeId = typeof metadata.cube_id === 'string' ? metadata.cube_id.trim() : '';
     if (!cubeId) {
-      return { sourceKind: '', author: '', pack: '', namespace: '' };
+      return withLibraryClass(
+        { sourceKind: '', author: '', pack: '', namespace: '' },
+        libraryClass,
+      );
     }
     const catalogSource = resolveCubeEntrySource(cubeBrowser?.getCubeById?.(cubeId));
     if (catalogSource) {
-      return catalogSource;
+      return withLibraryClass(catalogSource, libraryClass);
     }
     try {
       const parsed = parseCanonicalCubeId(cubeId);
-      return parsed.sourceKind === 'github'
-        ? buildGithubSource(parsed.owner, parsed.repo)
-        : buildLocalSource(parsed.namespace);
+      const source =
+        parsed.sourceKind === 'github'
+          ? buildGithubSource(parsed.owner, parsed.repo)
+          : buildLocalSource(parsed.namespace);
+      return withLibraryClass(source ?? {}, libraryClass);
     } catch {
-      return { sourceKind: '', author: '', pack: '', namespace: '' };
+      return withLibraryClass(
+        { sourceKind: '', author: '', pack: '', namespace: '' },
+        libraryClass,
+      );
     }
   };
+}
+
+/** Add transient classification only when the asynchronous owner has resolved it. */
+function withLibraryClass(
+  source: BadgeSource,
+  libraryClass: BadgeSource['libraryClass'],
+): BadgeSource {
+  return libraryClass ? { ...source, libraryClass } : source;
 }

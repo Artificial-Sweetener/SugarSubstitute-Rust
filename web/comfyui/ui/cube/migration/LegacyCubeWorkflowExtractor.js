@@ -34,8 +34,9 @@ export class LegacyCubeWorkflowExtractor {
             .map(parseLegacyLink)
             .filter((link) => link !== null);
         const warnings = [];
+        const embeddedSubgraphDefinitions = indexEmbeddedSubgraphDefinitions(workflow);
         const managed = groups
-            .map((group, index) => this.#readManagedGroup(group, nodeById, warnings, `legacy-group-${index + 1}`))
+            .map((group, index) => this.#readManagedGroup(group, nodeById, embeddedSubgraphDefinitions, warnings, `legacy-group-${index + 1}`))
             .filter((group) => group !== null);
         if (managed.length === 0)
             return emptyBatch();
@@ -84,7 +85,7 @@ export class LegacyCubeWorkflowExtractor {
         };
     }
     /** Parse one authoritative managed-group record and its owned node identities. */
-    #readManagedGroup(group, nodeById, warnings, fallbackKey) {
+    #readManagedGroup(group, nodeById, embeddedSubgraphDefinitions, warnings, fallbackKey) {
         const metadata = isRecord(group.sugarcubes) ? group.sugarcubes : null;
         if (!metadata || metadata.managed === false)
             return null;
@@ -130,6 +131,7 @@ export class LegacyCubeWorkflowExtractor {
                 cubeVersion: readString(definition.cube_version) || readString(metadata.cube_version),
                 title,
                 metadata: cloneRecord(metadata),
+                embeddedSubgraphDefinitions,
                 position: [bounds[0], bounds[1]],
                 size: [bounds[2], bounds[3]],
                 nodes: ownedNodes,
@@ -262,6 +264,17 @@ export class LegacyCubeWorkflowExtractor {
         }
         return connections;
     }
+}
+/** Index co-persisted native subgraph definitions used by nested legacy wrappers. */
+function indexEmbeddedSubgraphDefinitions(workflow) {
+    const envelope = isRecord(workflow.definitions) ? workflow.definitions : {};
+    const index = new Map();
+    for (const definition of readRecords(envelope.subgraphs)) {
+        const key = readIdKey(definition.id);
+        if (key)
+            index.set(key, cloneRecord(definition));
+    }
+    return index;
 }
 /** Return a detached empty migration result. */
 function emptyBatch() {

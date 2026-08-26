@@ -33,12 +33,13 @@ export function projectCubeVersionOptions(
     const version = normalizeCubeVersion(revision.version);
     const revisionRef = normalizeRevisionRef(revision.revision_ref);
     if (!version || !revisionRef) return [];
+    const current = isCurrentRevisionRef(revisionRef);
     return [
       {
-        label: formatCubeVersionLabel(version),
+        label: formatVersionOptionLabel(version, current),
         value: version,
         revisionRef,
-        current: isCurrentRevisionRef(revisionRef),
+        current,
         raw: revision,
       },
     ];
@@ -48,7 +49,7 @@ export function projectCubeVersionOptions(
   return version
     ? [
         {
-          label: formatCubeVersionLabel(version),
+          label: formatVersionOptionLabel(version, true),
           value: version,
           revisionRef: CURRENT_REVISION_REF,
           current: true,
@@ -56,4 +57,10 @@ export function projectCubeVersionOptions(
         },
       ]
     : [];
+}
+
+/** Distinguish the currently available definition from immutable historical versions. */
+function formatVersionOptionLabel(version: string, current: boolean): string {
+  const versionLabel = formatCubeVersionLabel(version);
+  return current ? `Latest (${versionLabel})` : versionLabel;
 }
