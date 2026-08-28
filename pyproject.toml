@@ -27,7 +27,7 @@ dev = [
     "numpy",
     "Pillow",
     "pytest",
-    "ruff",
+    "ruff==0.15.9",
 ]
 
 [tool.comfy]
