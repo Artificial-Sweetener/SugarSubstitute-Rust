@@ -16,6 +16,9 @@
 /** Adapt cached picker payloads to detached Cube construction. */
 
 import type { ComfyCubeRuntime } from '../cube/ComfyCubeRuntime.js';
+import type { CubePlacementOptions } from '../cube/CubePlacementService.js';
+import type { CubeSubgraphRegistrationResult } from '../cube/CubeSubgraphRegistrar.js';
+import type { ConstructedCube } from '../cube/CubeConstructionService.js';
 import type { CubeNode } from '../cube/node/ComfyCubeNodeFactory.js';
 import { planPlacementGeometry } from '../geometry/PlacementGeometryPlanner.js';
 import {
@@ -23,9 +26,10 @@ import {
   type NodeRenderer,
   type RendererGeometryHost,
 } from '../geometry/RendererGeometryPolicy.js';
-import { prepareGraphInsertionPayload } from '../import/PlacementPayload.js';
+import { prepareGraphInsertionPayload, type ImportPayload } from '../import/PlacementPayload.js';
 import type { UnknownRecord, Vec2 } from '../types/common.js';
 import type { CubePickerCatalogRegistry } from './CubePickerCatalogRegistry.js';
+import type { CubePickerDescriptor } from './CubePickerDescriptor.js';
 
 interface CubePickerPlacementHost extends RendererGeometryHost {
   createNode?: unknown;
@@ -37,6 +41,12 @@ export interface CubePickerPlacementAdapterOptions {
   getLiteGraph(): CubePickerPlacementHost | null | undefined;
   getNodeRenderer(): NodeRenderer | undefined;
   logger: Pick<Console, 'warn'>;
+}
+
+export interface PreparedCubePickerPlacement {
+  descriptor: CubePickerDescriptor;
+  payload: ImportPayload;
+  options: CubePlacementOptions;
 }
 
 /** Own synchronous prepared-cache resolution and detached Cube construction. */
@@ -58,6 +68,21 @@ export class CubePickerPlacementAdapter {
 
   /** Construct one final native Cube node without adding it to a graph. */
   create(type: string, position: Vec2 | null = null): CubeNode {
+    const prepared = this.prepare(type, position);
+    const runtime = this.#getRuntime();
+    const registration = runtime.registerSubgraphs(prepared.payload);
+    try {
+      const constructed = runtime.construction.construct(prepared.payload, prepared.options);
+      this.reportWarnings(prepared.descriptor.cubeId, registration, constructed);
+      return constructed.node;
+    } catch (error: unknown) {
+      runtime.discardSubgraphs(registration.createdIds);
+      throw error;
+    }
+  }
+
+  /** Prepare one isolated renderer-aware payload for native creation or direct insertion. */
+  prepare(type: string, position: Vec2 | null = null): PreparedCubePickerPlacement {
     const descriptor = this.#registry.descriptor(type);
     const cached = this.#registry.preparedPayload(type);
     if (!descriptor || !cached) {
@@ -78,28 +103,33 @@ export class CubePickerPlacementAdapter {
     }
     const geometryPolicy = resolveRendererGeometryPolicy(liteGraph, this.#getNodeRenderer());
     const payload = planPlacementGeometry(insertionPayload, geometryPolicy);
-    const registration = runtime.registerSubgraphs(payload);
-    try {
-      for (const warning of registration.warnings) {
-        this.#logger.warn('SugarCubes picker registered a nested definition with a warning.', {
-          cubeId: descriptor.cubeId,
-          warning,
-        } satisfies UnknownRecord);
-      }
-      const constructed = runtime.construction.construct(payload, {
+    return {
+      descriptor,
+      payload,
+      options: {
         instanceAlias: descriptor.displayName,
         ...(position ? { position } : {}),
-      });
-      for (const warning of constructed.warnings) {
-        this.#logger.warn('SugarCubes picker constructed a Cube with a warning.', {
-          cubeId: descriptor.cubeId,
-          warning,
-        } satisfies UnknownRecord);
-      }
-      return constructed.node;
-    } catch (error: unknown) {
-      runtime.discardSubgraphs(registration.createdIds);
-      throw error;
+      },
+    };
+  }
+
+  /** Report non-fatal registration and construction diagnostics consistently. */
+  reportWarnings(
+    cubeId: string,
+    registration: CubeSubgraphRegistrationResult,
+    constructed: ConstructedCube,
+  ): void {
+    for (const warning of registration.warnings) {
+      this.#logger.warn('SugarCubes picker registered a nested definition with a warning.', {
+        cubeId,
+        warning,
+      } satisfies UnknownRecord);
+    }
+    for (const warning of constructed.warnings) {
+      this.#logger.warn('SugarCubes picker constructed a Cube with a warning.', {
+        cubeId,
+        warning,
+      } satisfies UnknownRecord);
     }
   }
 }

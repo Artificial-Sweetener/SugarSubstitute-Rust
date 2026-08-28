@@ -101,6 +101,7 @@ const cubePicker = createComfyCubePickerIntegration({
     getRuntime: requireCubeRuntime,
     logger,
     reportError: (summary, detail) => pushToastMessage('error', summary, detail),
+    isProximityStrict: () => Boolean(overlayManager.proximity.settings.strict),
 });
 const cubeCatalogInvalidation = new CubeCatalogInvalidationCoordinator({
     refreshPicker: () => cubePicker.refresh(),
@@ -192,6 +193,7 @@ function createCubeRuntime() {
         document: documentRef,
         logger,
         nodePackMetadata: ui.workflowNodePackMetadata,
+        openAddCubeMenu: (metadata, anchor) => cubePicker.openAddMenu(metadata, anchor),
         editorMetadata: {
             canEdit: (node) => ui.workflowLibraryPresentation.canEdit(node),
             save: async (node, values) => ui.cubeEditorSave.save(node, values),
@@ -227,9 +229,7 @@ function createCubeRuntime() {
 function requireCubeRuntime() {
     return cubeRuntimeLifecycle.require();
 }
-function readErrorMessage(error) {
-    return hostFeedback.readErrorMessage(error);
-}
+const readErrorMessage = (error) => hostFeedback.readErrorMessage(error);
 function pushToastMessage(severity, summary, detail) {
     hostFeedback.pushToast(severity, summary, detail);
 }

@@ -65,6 +65,13 @@ export class CubePickerCatalogRegistry {
     definitions() {
         return [...this.#snapshot.entriesByType.values()].map(({ descriptor }) => projectComfyCubeNodeDef(descriptor));
     }
+    /** Return the current immutable descriptor view with each reserved Comfy type. */
+    entries() {
+        return [...this.#snapshot.entriesByType.entries()].map(([type, { descriptor }]) => ({
+            type,
+            descriptor,
+        }));
+    }
     /** Return the descriptor currently advertised for one reserved Comfy type. */
     descriptor(type) {
         return this.#snapshot.entriesByType.get(type)?.descriptor ?? null;

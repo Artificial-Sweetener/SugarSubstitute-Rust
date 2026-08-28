@@ -29,9 +29,13 @@ export function layoutCubeCanvasChrome(header, options) {
         return slot;
     };
     const editAction = takeSlot();
-    const unsavedIndicator = options.showUnsavedIndicator ? takeSlot() : null;
     const chromeActions = {};
-    for (const key of [...options.titlebarActionKeys].reverse()) {
+    if (options.titlebarActionKeys.includes('add-cube'))
+        chromeActions['add-cube'] = takeSlot();
+    const unsavedIndicator = options.showUnsavedIndicator ? takeSlot() : null;
+    for (const key of [...options.titlebarActionKeys]
+        .filter((item) => item !== 'add-cube')
+        .reverse()) {
         chromeActions[key] = takeSlot();
     }
     return { editAction, unsavedIndicator, chromeActions };

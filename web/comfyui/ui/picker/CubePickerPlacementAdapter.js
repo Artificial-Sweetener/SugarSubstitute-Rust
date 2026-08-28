@@ -34,6 +34,21 @@ export class CubePickerPlacementAdapter {
     }
     /** Construct one final native Cube node without adding it to a graph. */
     create(type, position = null) {
+        const prepared = this.prepare(type, position);
+        const runtime = this.#getRuntime();
+        const registration = runtime.registerSubgraphs(prepared.payload);
+        try {
+            const constructed = runtime.construction.construct(prepared.payload, prepared.options);
+            this.reportWarnings(prepared.descriptor.cubeId, registration, constructed);
+            return constructed.node;
+        }
+        catch (error) {
+            runtime.discardSubgraphs(registration.createdIds);
+            throw error;
+        }
+    }
+    /** Prepare one isolated renderer-aware payload for native creation or direct insertion. */
+    prepare(type, position = null) {
         const descriptor = this.#registry.descriptor(type);
         const cached = this.#registry.preparedPayload(type);
         if (!descriptor || !cached) {
@@ -54,29 +69,28 @@ export class CubePickerPlacementAdapter {
         }
         const geometryPolicy = resolveRendererGeometryPolicy(liteGraph, this.#getNodeRenderer());
         const payload = planPlacementGeometry(insertionPayload, geometryPolicy);
-        const registration = runtime.registerSubgraphs(payload);
-        try {
-            for (const warning of registration.warnings) {
-                this.#logger.warn('SugarCubes picker registered a nested definition with a warning.', {
-                    cubeId: descriptor.cubeId,
-                    warning,
-                });
-            }
-            const constructed = runtime.construction.construct(payload, {
+        return {
+            descriptor,
+            payload,
+            options: {
                 instanceAlias: descriptor.displayName,
                 ...(position ? { position } : {}),
+            },
+        };
+    }
+    /** Report non-fatal registration and construction diagnostics consistently. */
+    reportWarnings(cubeId, registration, constructed) {
+        for (const warning of registration.warnings) {
+            this.#logger.warn('SugarCubes picker registered a nested definition with a warning.', {
+                cubeId,
+                warning,
             });
-            for (const warning of constructed.warnings) {
-                this.#logger.warn('SugarCubes picker constructed a Cube with a warning.', {
-                    cubeId: descriptor.cubeId,
-                    warning,
-                });
-            }
-            return constructed.node;
         }
-        catch (error) {
-            runtime.discardSubgraphs(registration.createdIds);
-            throw error;
+        for (const warning of constructed.warnings) {
+            this.#logger.warn('SugarCubes picker constructed a Cube with a warning.', {
+                cubeId,
+                warning,
+            });
         }
     }
 }

@@ -144,6 +144,7 @@ export function createComfyCubeRuntime(options) {
         setDirtyCanvas: (foreground, background) => history.setDirtyCanvas?.(foreground, background),
     });
     const chromeActions = {
+        ...(options.openAddCubeMenu ? { onAddCube: options.openAddCubeMenu } : {}),
         onSwapLeft: (metadata) => nodeSwap.swap(metadata, 'left'),
         onSwapRight: (metadata) => nodeSwap.swap(metadata, 'right'),
         canSwap: (metadata, direction) => nodeSwap.canSwap(metadata, direction),

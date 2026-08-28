@@ -48,6 +48,11 @@ export interface CubePickerCatalogRefresh {
   unavailableCubeIds: readonly string[];
 }
 
+export interface CubePickerCatalogEntry {
+  type: string;
+  descriptor: CubePickerDescriptor;
+}
+
 interface LoadedPickerEntry {
   descriptor: CubePickerDescriptor;
   payload: ImportPayload;
@@ -110,6 +115,14 @@ export class CubePickerCatalogRegistry {
     return [...this.#snapshot.entriesByType.values()].map(({ descriptor }) =>
       projectComfyCubeNodeDef(descriptor),
     );
+  }
+
+  /** Return the current immutable descriptor view with each reserved Comfy type. */
+  entries(): readonly CubePickerCatalogEntry[] {
+    return [...this.#snapshot.entriesByType.entries()].map(([type, { descriptor }]) => ({
+      type,
+      descriptor,
+    }));
   }
 
   /** Return the descriptor currently advertised for one reserved Comfy type. */

@@ -136,6 +136,12 @@ describe('Cube picker catalog registry', () => {
       sugarcubes_pack_name: 'Base-Cubes',
       sugarcubes_target_model: 'Anima',
     });
+    expect(registry.entries()).toEqual([
+      expect.objectContaining({
+        type: `SugarCubes.Cube.${keyA}`,
+        descriptor: expect.objectContaining({ cubeId: cubeA, targetModel: 'Anima' }),
+      }),
+    ]);
   });
 
   test('coalesces concurrent refresh and skips unchanged revisions', async () => {

@@ -23,6 +23,7 @@ import {
   type CubeFaceTitlebarActionKey,
 } from './CubeFaceChromeActions.js';
 import { createComfyPrimeIconElement } from './ComfyPrimeIcons.js';
+import { createCubeAddIconElement } from './CubeAddIcon.js';
 
 /** Own the accessible Cube header controls without owning card policy. */
 export class CubeFaceActionsView {
@@ -42,10 +43,18 @@ export class CubeFaceActionsView {
     this.#metadata = metadata;
     this.#chromeActions = chromeActions ?? null;
     this.#chromeButtons = new Map(
-      (['swap-left', 'swap-right'] as const).map((key) => {
+      (['swap-left', 'swap-right', 'add-cube'] as const).map((key) => {
         const button = createChromeButton(documentRef, key);
         button.addEventListener('click', (event) => {
-          if (dispatchCubeFaceTitlebarAction(key, this.#metadata, this.#chromeActions)) {
+          const rect = button.getBoundingClientRect();
+          if (
+            dispatchCubeFaceTitlebarAction(key, this.#metadata, this.#chromeActions, {
+              left: rect.left,
+              top: rect.top,
+              right: rect.right,
+              bottom: rect.bottom,
+            })
+          ) {
             event.preventDefault();
             event.stopPropagation();
           }
@@ -64,7 +73,11 @@ export class CubeFaceActionsView {
       const button = this.#chromeButtons.get(action.key);
       if (!button) continue;
       button.hidden = false;
-      button.replaceChildren(createComfyPrimeIconElement(button.ownerDocument, action.icon));
+      button.replaceChildren(
+        action.icon === 'cube-plus'
+          ? createCubeAddIconElement(button.ownerDocument)
+          : createComfyPrimeIconElement(button.ownerDocument, action.icon),
+      );
       button.title = action.title;
       button.setAttribute('aria-label', action.ariaLabel);
     }

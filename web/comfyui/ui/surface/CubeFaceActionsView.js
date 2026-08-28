@@ -16,6 +16,7 @@
 /** Compose Cube-owned header actions without owning popup geometry. */
 import { dispatchCubeFaceTitlebarAction, resolveCubeFaceTitlebarActions, } from './CubeFaceChromeActions.js';
 import { createComfyPrimeIconElement } from './ComfyPrimeIcons.js';
+import { createCubeAddIconElement } from './CubeAddIcon.js';
 /** Own the accessible Cube header controls without owning card policy. */
 export class CubeFaceActionsView {
     element;
@@ -28,10 +29,16 @@ export class CubeFaceActionsView {
         this.element.className = 'sugarcubes-cube-face__actions';
         this.#metadata = metadata;
         this.#chromeActions = chromeActions ?? null;
-        this.#chromeButtons = new Map(['swap-left', 'swap-right'].map((key) => {
+        this.#chromeButtons = new Map(['swap-left', 'swap-right', 'add-cube'].map((key) => {
             const button = createChromeButton(documentRef, key);
             button.addEventListener('click', (event) => {
-                if (dispatchCubeFaceTitlebarAction(key, this.#metadata, this.#chromeActions)) {
+                const rect = button.getBoundingClientRect();
+                if (dispatchCubeFaceTitlebarAction(key, this.#metadata, this.#chromeActions, {
+                    left: rect.left,
+                    top: rect.top,
+                    right: rect.right,
+                    bottom: rect.bottom,
+                })) {
                     event.preventDefault();
                     event.stopPropagation();
                 }
@@ -50,7 +57,9 @@ export class CubeFaceActionsView {
             if (!button)
                 continue;
             button.hidden = false;
-            button.replaceChildren(createComfyPrimeIconElement(button.ownerDocument, action.icon));
+            button.replaceChildren(action.icon === 'cube-plus'
+                ? createCubeAddIconElement(button.ownerDocument)
+                : createComfyPrimeIconElement(button.ownerDocument, action.icon));
             button.title = action.title;
             button.setAttribute('aria-label', action.ariaLabel);
         }

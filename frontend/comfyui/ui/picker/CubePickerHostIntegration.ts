@@ -19,11 +19,19 @@ import type { UnknownRecord } from '../types/common.js';
 import type { ComfyCubePickerCreationAdapter } from './ComfyCubePickerCreationAdapter.js';
 import type { ComfyCubePickerDefinitionAdapter } from './ComfyCubePickerDefinitionAdapter.js';
 import type { ComfyCubePickerResultPresenter } from './ComfyCubePickerResultPresenter.js';
+import type { CubeAddMenuController } from './CubeAddMenuController.js';
+import type { ComfyRendererModeChangeSource } from '../core/ComfyRendererMode.js';
+import type {
+  CubeFaceActionAnchor,
+  CubeFaceChromeMetadata,
+} from '../surface/CubeFaceChromeActions.js';
 
 export interface CubePickerHostIntegrationOptions {
   definitions: ComfyCubePickerDefinitionAdapter;
   creation: ComfyCubePickerCreationAdapter;
   results: ComfyCubePickerResultPresenter;
+  addMenu: CubeAddMenuController;
+  rendererChanges: ComfyRendererModeChangeSource;
   logger: Pick<Console, 'error'>;
   reportError(summary: string, detail: string): void;
 }
@@ -33,16 +41,31 @@ export class CubePickerHostIntegration {
   readonly #definitions: ComfyCubePickerDefinitionAdapter;
   readonly #creation: ComfyCubePickerCreationAdapter;
   readonly #results: ComfyCubePickerResultPresenter;
+  readonly #addMenu: CubeAddMenuController;
+  readonly #rendererChanges: ComfyRendererModeChangeSource;
   readonly #logger: Pick<Console, 'error'>;
   readonly #reportError: (summary: string, detail: string) => void;
+  #releaseRendererChanges: (() => void) | null = null;
 
   /** Bind current-version host adapters to one extension-facing coordinator. */
   constructor(options: CubePickerHostIntegrationOptions) {
     this.#definitions = options.definitions;
     this.#creation = options.creation;
     this.#results = options.results;
+    this.#addMenu = options.addMenu;
+    this.#rendererChanges = options.rendererChanges;
     this.#logger = options.logger;
     this.#reportError = options.reportError;
+  }
+
+  /** Open the shared Add Cube menu from either renderer's header action. */
+  openAddMenu(metadata: CubeFaceChromeMetadata, anchor: CubeFaceActionAnchor): void {
+    this.#addMenu.open(metadata, anchor);
+  }
+
+  /** Close transient menu state before a renderer transition. */
+  closeAddMenu(): void {
+    this.#addMenu.close();
   }
 
   /** Contribute cached placement-ready definitions during initial registration. */
@@ -65,6 +88,7 @@ export class CubePickerHostIntegration {
   /** Activate the single shared native creation compatibility seam. */
   activate(): void {
     try {
+      this.#releaseRendererChanges ??= this.#rendererChanges.subscribe(() => this.#addMenu.close());
       this.#results.install();
       this.#creation.install();
     } catch (error: unknown) {

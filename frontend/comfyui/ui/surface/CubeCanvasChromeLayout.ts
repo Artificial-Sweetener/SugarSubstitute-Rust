@@ -55,9 +55,12 @@ export function layoutCubeCanvasChrome(
   };
 
   const editAction = takeSlot();
-  const unsavedIndicator = options.showUnsavedIndicator ? takeSlot() : null;
   const chromeActions: Partial<Record<CubeFaceTitlebarActionKey, CubeCanvasChromeRect>> = {};
-  for (const key of [...options.titlebarActionKeys].reverse()) {
+  if (options.titlebarActionKeys.includes('add-cube')) chromeActions['add-cube'] = takeSlot();
+  const unsavedIndicator = options.showUnsavedIndicator ? takeSlot() : null;
+  for (const key of [...options.titlebarActionKeys]
+    .filter((item) => item !== 'add-cube')
+    .reverse()) {
     chromeActions[key] = takeSlot();
   }
 

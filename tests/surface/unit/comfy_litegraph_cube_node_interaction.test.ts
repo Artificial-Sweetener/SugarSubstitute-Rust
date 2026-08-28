@@ -29,6 +29,48 @@ import { layoutCubeCanvasPreviewSections } from '../../../frontend/comfyui/ui/su
 const EDGES: CubeResizeEdge[] = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'];
 
 describe('ComfyLiteGraphCubeNodeInteraction', () => {
+  test('opens Add Cube from the Nodes 1 canvas action at the pointer anchor', () => {
+    const node = cubeNode();
+    const state = createDefaultCubeSurfaceState();
+    state.preview.visible = false;
+    const layout = computeCubeCanvasLayout(node, state, 30, ['add-cube']);
+    const target = layout.chromeActions['add-cube'];
+    if (!target) throw new Error('Missing Add Cube canvas action.');
+    const canvasElement = document.createElement('canvas');
+    document.body.replaceChildren(canvasElement);
+    Object.defineProperty(canvasElement, 'getBoundingClientRect', {
+      value: () => ({ left: 0, top: 0, width: 1200, height: 900 }),
+    });
+    const onAddCube = jest.fn();
+    const interaction = new ComfyLiteGraphCubeNodeInteraction({
+      canvas: { canvas: canvasElement, convertCanvasToOffset: (point) => point },
+      history: {},
+      widgetInteraction: inertWidgetInteraction(),
+      getItems: () => [{ node, layout }],
+      onEdit: jest.fn(),
+      onCardActivationChange: jest.fn(),
+      chromeActions: { onAddCube },
+    });
+    const x = target.x + target.width / 2;
+    const y = target.y + target.height / 2;
+
+    canvasElement.dispatchEvent(pointer('pointermove', x, y));
+
+    expect(canvasElement.style.cursor).toBe('pointer');
+
+    canvasElement.dispatchEvent(pointer('pointerdown', x, y));
+
+    expect(onAddCube).toHaveBeenCalledWith(
+      expect.objectContaining({ instance_id: 'cube-instance' }),
+      { left: x, top: y, right: x, bottom: y },
+    );
+
+    canvasElement.dispatchEvent(pointer('pointermove', layout.frame.x + 100, layout.frame.y + 100));
+
+    expect(canvasElement.style.cursor).toBe('');
+    interaction.dispose();
+  });
+
   test.each(EDGES)('resizes the real node from the %s handle', (edge) => {
     const node = cubeNode();
     const state = createDefaultCubeSurfaceState();

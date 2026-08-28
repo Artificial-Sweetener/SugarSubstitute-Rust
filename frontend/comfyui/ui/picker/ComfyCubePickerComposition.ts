@@ -27,6 +27,12 @@ import { ComfyCubePickerResultPresenter } from './ComfyCubePickerResultPresenter
 import { CubePickerCatalogRegistry } from './CubePickerCatalogRegistry.js';
 import { CubePickerHostIntegration } from './CubePickerHostIntegration.js';
 import { CubePickerPlacementAdapter } from './CubePickerPlacementAdapter.js';
+import { CubeConnectionTypePolicy } from '../cube/connection/CubeConnectionTypePolicy.js';
+import { CubeAddCandidateCatalog } from './CubeAddCandidateCatalog.js';
+import { CubePickerInsertAfterService } from './CubePickerInsertAfterService.js';
+import { ComfyCubeAddMenuPresenter } from './ComfyCubeAddMenuPresenter.js';
+import { CubeAddMenuController } from './CubeAddMenuController.js';
+import { createComfyRendererModeChangeSource } from '../core/ComfyRendererMode.js';
 
 export interface ComfyCubePickerCompositionOptions {
   api: CubeLibraryApi;
@@ -37,6 +43,7 @@ export interface ComfyCubePickerCompositionOptions {
   getRuntime(): ComfyCubeRuntime;
   logger: Pick<Console, 'debug' | 'error' | 'warn'>;
   reportError(summary: string, detail: string): void;
+  isProximityStrict(): boolean;
 }
 
 /** Build one picker integration while isolating all dynamic Comfy capability checks. */
@@ -74,10 +81,42 @@ export function createComfyCubePickerIntegration(
     document: options.document,
     definitions: () => registry.definitions(),
   });
+  const getConnectionLiteGraph = () => {
+    const host = getLiteGraph();
+    if (!host) return null;
+    const isValidConnection = host.isValidConnection;
+    return typeof isValidConnection === 'function'
+      ? {
+          isValidConnection: (outputType: unknown, inputType: unknown) =>
+            Boolean(isValidConnection.call(host, outputType, inputType)),
+        }
+      : {};
+  };
+  const candidates = new CubeAddCandidateCatalog({
+    compatibility: new CubeConnectionTypePolicy({
+      getLiteGraph: getConnectionLiteGraph,
+      logger: options.logger,
+    }),
+    strict: options.isProximityStrict,
+  });
+  const insertion = new CubePickerInsertAfterService({
+    placement,
+    getRuntime: options.getRuntime,
+  });
+  const addMenu = new CubeAddMenuController({
+    registry,
+    candidates,
+    insertion,
+    presenter: new ComfyCubeAddMenuPresenter(options.document),
+    getRuntime: options.getRuntime,
+    reportError: options.reportError,
+  });
   return new CubePickerHostIntegration({
     definitions,
     creation,
     results,
+    addMenu,
+    rendererChanges: createComfyRendererModeChangeSource(options.app),
     logger: options.logger,
     reportError: options.reportError,
   });

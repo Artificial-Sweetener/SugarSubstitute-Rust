@@ -30,6 +30,12 @@ const SWAP_ACTIONS = Object.freeze([
         ariaLabel: 'Swap Cube right',
     },
 ]);
+const ADD_ACTION = Object.freeze({
+    key: 'add-cube',
+    icon: 'cube-plus',
+    ariaLabel: 'Add Cube after this Cube',
+    title: 'Add Cube',
+});
 /** Return titlebar actions currently available for one Cube instance. */
 export function resolveCubeFaceTitlebarActions(metadata, actions) {
     const result = [];
@@ -47,10 +53,12 @@ export function resolveCubeFaceTitlebarActions(metadata, actions) {
             title: action.ariaLabel,
         });
     }
+    if (actions?.onAddCube)
+        result.push(ADD_ACTION);
     return result;
 }
 /** Invoke one available titlebar action through the authoritative action owner. */
-export function dispatchCubeFaceTitlebarAction(key, metadata, actions) {
+export function dispatchCubeFaceTitlebarAction(key, metadata, actions, anchor) {
     if (key === 'swap-left') {
         if (!actions?.onSwapLeft)
             return false;
@@ -61,6 +69,12 @@ export function dispatchCubeFaceTitlebarAction(key, metadata, actions) {
         if (!actions?.onSwapRight)
             return false;
         actions.onSwapRight(metadata);
+        return true;
+    }
+    if (key === 'add-cube') {
+        if (!actions?.onAddCube || !anchor)
+            return false;
+        actions.onAddCube(metadata, anchor);
         return true;
     }
     return false;

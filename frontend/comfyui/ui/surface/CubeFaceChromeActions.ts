@@ -32,17 +32,27 @@ export interface CubeFaceChromeMetadata extends UnknownRecord {
   instance_id?: string;
 }
 
+export interface CubeFaceActionAnchor {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
 export interface CubeFaceChromeActions {
+  onAddCube?(metadata: CubeFaceChromeMetadata, anchor: CubeFaceActionAnchor): void;
   onSwapLeft?(metadata: CubeFaceChromeMetadata): void;
   onSwapRight?(metadata: CubeFaceChromeMetadata): void;
   canSwap?(metadata: CubeFaceChromeMetadata, direction: CubeSwapDirection): boolean;
 }
 
-export type CubeFaceTitlebarActionKey = 'swap-left' | 'swap-right';
+export type CubeFaceTitlebarActionKey = 'swap-left' | 'swap-right' | 'add-cube';
+
+export type CubeFaceActionIcon = ComfyPrimeIconName | 'cube-plus';
 
 export interface CubeFaceTitlebarAction {
   key: CubeFaceTitlebarActionKey;
-  icon: ComfyPrimeIconName;
+  icon: CubeFaceActionIcon;
   ariaLabel: string;
   title: string;
 }
@@ -70,6 +80,13 @@ const SWAP_ACTIONS: ReadonlyArray<{
   },
 ]);
 
+const ADD_ACTION: CubeFaceTitlebarAction = Object.freeze({
+  key: 'add-cube',
+  icon: 'cube-plus',
+  ariaLabel: 'Add Cube after this Cube',
+  title: 'Add Cube',
+});
+
 /** Return titlebar actions currently available for one Cube instance. */
 export function resolveCubeFaceTitlebarActions(
   metadata: CubeFaceChromeMetadata,
@@ -88,6 +105,7 @@ export function resolveCubeFaceTitlebarActions(
       title: action.ariaLabel,
     });
   }
+  if (actions?.onAddCube) result.push(ADD_ACTION);
   return result;
 }
 
@@ -96,6 +114,7 @@ export function dispatchCubeFaceTitlebarAction(
   key: CubeFaceTitlebarActionKey,
   metadata: CubeFaceChromeMetadata,
   actions: CubeFaceChromeActions | null | undefined,
+  anchor?: CubeFaceActionAnchor,
 ): boolean {
   if (key === 'swap-left') {
     if (!actions?.onSwapLeft) return false;
@@ -105,6 +124,11 @@ export function dispatchCubeFaceTitlebarAction(
   if (key === 'swap-right') {
     if (!actions?.onSwapRight) return false;
     actions.onSwapRight(metadata);
+    return true;
+  }
+  if (key === 'add-cube') {
+    if (!actions?.onAddCube || !anchor) return false;
+    actions.onAddCube(metadata, anchor);
     return true;
   }
   return false;

@@ -43,7 +43,11 @@ describe('CubeCanvasChromeRenderer', () => {
     const node = cubeNode(inner);
     const state = createDefaultCubeSurfaceState();
     state.preview.visible = false;
-    const layout = computeCubeCanvasLayout(node, state, 30, ['swap-left', 'swap-right']);
+    const layout = computeCubeCanvasLayout(node, state, 30, [
+      'swap-left',
+      'swap-right',
+      'add-cube',
+    ]);
     const context = drawingContext();
     const editorButton = {
       name: 'enter_subgraph',
@@ -59,6 +63,7 @@ describe('CubeCanvasChromeRenderer', () => {
       node,
       layout,
       chromeActions: {
+        onAddCube() {},
         onSwapLeft() {},
         onSwapRight() {},
       },
@@ -67,6 +72,12 @@ describe('CubeCanvasChromeRenderer', () => {
       titleTextColor: '#f0f2f5',
     });
 
+    expect(layout.editAction.x).toBeGreaterThan(layout.chromeActions['swap-left']?.x ?? 0);
+    expect(layout.editAction.x).toBeGreaterThan(layout.chromeActions['swap-right']?.x ?? 0);
+    expect(layout.editAction.x).toBeGreaterThan(layout.chromeActions['add-cube']?.x ?? 0);
+    expect(layout.chromeActions['add-cube']?.x ?? 0).toBeGreaterThan(
+      layout.chromeActions['swap-right']?.x ?? 0,
+    );
     expect(editorButton.draw).toHaveBeenCalledWith(context, expect.any(Number), expect.any(Number));
     const texts = (
       context.fillText as jest.MockedFunction<CanvasRenderingContext2D['fillText']>
@@ -78,6 +89,8 @@ describe('CubeCanvasChromeRenderer', () => {
         'Text to Image version 2.0.0',
         comfyPrimeIconGlyph('arrow-left'),
         comfyPrimeIconGlyph('arrow-right'),
+        comfyPrimeIconGlyph('box'),
+        comfyPrimeIconGlyph('plus'),
       ]),
     );
     expect(texts).not.toEqual(
@@ -199,6 +212,7 @@ function drawingContext(): CanvasRenderingContext2D {
     scale: jest.fn(),
     fillRect: jest.fn(),
     beginPath: jest.fn(),
+    arc: jest.fn(),
     fill: jest.fn(),
     fillText: jest.fn(),
     measureText: jest.fn(

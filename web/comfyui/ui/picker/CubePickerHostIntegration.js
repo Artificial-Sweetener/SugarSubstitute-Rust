@@ -19,15 +19,28 @@ export class CubePickerHostIntegration {
     #definitions;
     #creation;
     #results;
+    #addMenu;
+    #rendererChanges;
     #logger;
     #reportError;
+    #releaseRendererChanges = null;
     /** Bind current-version host adapters to one extension-facing coordinator. */
     constructor(options) {
         this.#definitions = options.definitions;
         this.#creation = options.creation;
         this.#results = options.results;
+        this.#addMenu = options.addMenu;
+        this.#rendererChanges = options.rendererChanges;
         this.#logger = options.logger;
         this.#reportError = options.reportError;
+    }
+    /** Open the shared Add Cube menu from either renderer's header action. */
+    openAddMenu(metadata, anchor) {
+        this.#addMenu.open(metadata, anchor);
+    }
+    /** Close transient menu state before a renderer transition. */
+    closeAddMenu() {
+        this.#addMenu.close();
     }
     /** Contribute cached placement-ready definitions during initial registration. */
     async contribute(definitions) {
@@ -48,6 +61,7 @@ export class CubePickerHostIntegration {
     /** Activate the single shared native creation compatibility seam. */
     activate() {
         try {
+            this.#releaseRendererChanges ??= this.#rendererChanges.subscribe(() => this.#addMenu.close());
             this.#results.install();
             this.#creation.install();
         }

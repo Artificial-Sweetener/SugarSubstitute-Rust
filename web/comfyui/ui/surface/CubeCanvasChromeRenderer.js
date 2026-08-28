@@ -21,6 +21,7 @@ import { resolveCubeFaceTitlebarActions, } from './CubeFaceChromeActions.js';
 import { drawComfyPrimeIcon } from './ComfyPrimeIcons.js';
 import { drawCubeUnsavedIndicator } from './CubeUnsavedIndicator.js';
 import { CubeModelPillCanvasRenderer } from './CubeModelPillCanvasRenderer.js';
+import { drawCubeAddIcon } from './CubeAddIcon.js';
 /** Own Cube header composition without owning cards, previews, or interaction. */
 export class CubeCanvasChromeRenderer {
     #icons;
@@ -84,8 +85,15 @@ export class CubeCanvasChromeRenderer {
         }
         for (const action of resolveCubeFaceTitlebarActions(requireCubeIdentity(node), item.chromeActions)) {
             const target = layout.chromeActions[action.key];
-            if (target)
+            if (!target)
+                continue;
+            if (action.icon === 'cube-plus') {
+                context.fillStyle = '#f0f2f5';
+                drawCubeAddIcon(context, target.x + target.width / 2, target.y + target.height / 2, item.headerColor);
+            }
+            else {
                 drawPrimeIconAction(context, target, action.icon);
+            }
         }
     }
     /** Draw one definition asset or its exact initials fallback. */

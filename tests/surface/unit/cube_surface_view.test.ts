@@ -18,6 +18,7 @@
 import { describe, expect, jest, test } from '@jest/globals';
 
 import { CubeSurfaceView } from '../../../frontend/comfyui/ui/surface/CubeSurfaceView.js';
+import { ensureCubeSurfaceStyles } from '../../../frontend/comfyui/ui/surface/CubeSurfaceStyles.js';
 import { createDefaultCubeSurfaceState } from '../../../frontend/comfyui/ui/surface/CubeSurfaceState.js';
 import type {
   NativeNodeCardMountOptions,
@@ -271,15 +272,18 @@ describe('CubeSurfaceView', () => {
     ).toBe('rail');
   });
 
-  test('renders only swap actions in the Nodes 2.0 Cube header', () => {
+  test('renders Add Cube as the rightmost Nodes 2.0 Cube header action', () => {
+    ensureCubeSurfaceStyles(document);
     const onSwapLeft = jest.fn();
     const onSwapRight = jest.fn();
+    const onAddCube = jest.fn();
     const view = new CubeSurfaceView({
       document,
       renderer: createRenderer(),
       identity: cubeIdentity('A long Cube title that still needs room'),
       metadata: { instance_id: 'cube-1' },
       chromeActions: {
+        onAddCube,
         onSwapLeft,
         onSwapRight,
         canSwap: (_metadata, direction) => direction === 'left',
@@ -295,11 +299,20 @@ describe('CubeSurfaceView', () => {
     const swapRight = view.element.querySelector<HTMLButtonElement>(
       '[data-cube-action="swap-right"]',
     );
+    const addCube = view.element.querySelector<HTMLButtonElement>('[data-cube-action="add-cube"]');
     expect(view.element.querySelector('[data-cube-action="edit"]')).toBeNull();
     expect(swapLeft?.querySelector('.pi.pi-arrow-left')).not.toBeNull();
     expect(swapLeft?.textContent).toBe('');
     expect(swapLeft?.hidden).toBe(false);
     expect(swapRight?.hidden).toBe(true);
+    expect(addCube?.hidden).toBe(false);
+    expect(addCube?.querySelector('[data-sugarcubes-add-cube-icon]')).not.toBeNull();
+    expect(window.getComputedStyle(addCube!).cursor).toBe('pointer');
+    expect(
+      [...view.element.querySelectorAll<HTMLElement>('[data-cube-action]')].map(
+        (button) => button.dataset.cubeAction,
+      ),
+    ).toEqual(['swap-left', 'swap-right', 'add-cube']);
     expect(view.element.querySelector('[data-cube-action="cube-menu"]')).toBeNull();
     expect(view.element.querySelector('[data-cube-action="card-menu"]')).toBeNull();
     expect(
@@ -317,6 +330,11 @@ describe('CubeSurfaceView', () => {
     swapLeft?.click();
     expect(onSwapLeft).toHaveBeenCalledWith({ instance_id: 'cube-1' });
     expect(onSwapRight).not.toHaveBeenCalled();
+    addCube?.click();
+    expect(onAddCube).toHaveBeenCalledWith(
+      { instance_id: 'cube-1' },
+      expect.objectContaining({ left: 0, top: 0, right: 0, bottom: 0 }),
+    );
   });
 
   test('always shows the Cube title independently from definition metadata', () => {

@@ -71,7 +71,11 @@ import { LegacyCubeContainerMigrationAdapter } from './migration/LegacyCubeConta
 import { NativeCubeProximityEndpointSource } from './connection/NativeCubeProximityEndpointSource.js';
 import type { ProximityEndpointSource } from '../overlays/proximity/ProximityModel.js';
 import type { NativeSubgraphBoundaryResolver } from './graph/NativeSubgraphBoundaryResolver.js';
-import type { CubeFaceChromeActions } from '../surface/CubeFaceChromeActions.js';
+import type {
+  CubeFaceActionAnchor,
+  CubeFaceChromeActions,
+  CubeFaceChromeMetadata,
+} from '../surface/CubeFaceChromeActions.js';
 import { CubePortPresentationController } from './connection/CubePortPresentationController.js';
 import type { ProximityMatchSink } from '../overlays/proximity/ProximityModel.js';
 import { ComfyCanvasGraphChangeAdapter } from '../surface/ComfyCanvasGraphChangeAdapter.js';
@@ -118,6 +122,7 @@ export interface ComfyCubeRuntimeOptions {
   resolveIdentitySource?(metadata: UnknownRecord): CubeIdentitySource | null;
   presentationChanges?: { subscribe(listener: () => void): () => void };
   nodePackMetadata: CubeWorkflowNodePackMetadata;
+  openAddCubeMenu?(metadata: CubeFaceChromeMetadata, anchor: CubeFaceActionAnchor): void;
 }
 
 export interface ComfyCubeRuntime {
@@ -248,6 +253,7 @@ export function createComfyCubeRuntime(options: ComfyCubeRuntimeOptions): ComfyC
     setDirtyCanvas: (foreground, background) => history.setDirtyCanvas?.(foreground, background),
   });
   const chromeActions: CubeFaceChromeActions = {
+    ...(options.openAddCubeMenu ? { onAddCube: options.openAddCubeMenu } : {}),
     onSwapLeft: (metadata) => nodeSwap.swap(metadata, 'left'),
     onSwapRight: (metadata) => nodeSwap.swap(metadata, 'right'),
     canSwap: (metadata, direction) => nodeSwap.canSwap(metadata, direction),

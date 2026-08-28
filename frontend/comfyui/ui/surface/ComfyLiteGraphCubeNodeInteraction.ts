@@ -40,6 +40,7 @@ import {
   dispatchCubeFaceTitlebarAction,
   resolveCubeFaceTitlebarActions,
   type CubeFaceChromeActions,
+  type CubeFaceTitlebarActionKey,
 } from './CubeFaceChromeActions.js';
 import { requireCubeIdentity } from '../cube/node/ComfyCubeNodeFactory.js';
 import { buildCubeFaceChromeMetadata } from '../cube/node/CubeNodeAuthoringCandidate.js';
@@ -218,20 +219,21 @@ export class ComfyLiteGraphCubeNodeInteraction {
       this.#onEdit(item.node);
       return;
     }
-    for (const action of resolveCubeFaceTitlebarActions(
-      requireCubeIdentity(item.node),
-      this.#chromeActions,
-    )) {
-      const target = item.layout.chromeActions[action.key];
-      if (target && containsCubeCanvasPoint(target, point)) {
-        this.#consume(event);
-        dispatchCubeFaceTitlebarAction(
-          action.key,
-          buildCubeFaceChromeMetadata(item.node),
-          this.#chromeActions,
-        );
-        return;
-      }
+    const titlebarAction = this.#titlebarActionAt(item, point);
+    if (titlebarAction) {
+      this.#consume(event);
+      dispatchCubeFaceTitlebarAction(
+        titlebarAction,
+        buildCubeFaceChromeMetadata(item.node),
+        this.#chromeActions,
+        {
+          left: event.clientX,
+          top: event.clientY,
+          right: event.clientX,
+          bottom: event.clientY,
+        },
+      );
+      return;
     }
     const card = item.layout.cards.find((candidate) =>
       containsCubeCanvasPoint(candidate.rect, point),
@@ -381,7 +383,7 @@ export class ComfyLiteGraphCubeNodeInteraction {
     return point.every(Number.isFinite) ? point : null;
   }
 
-  /** Limit cursor ownership to the Cube resize handle currently under the pointer. */
+  /** Show native cursors for Cube-owned controls without replacing unrelated host cursors. */
   #syncCursor(point: Vec2 | null): void {
     const item = point ? this.#itemAt(point) : null;
     if (point && item?.layout.previewDivider) {
@@ -404,11 +406,36 @@ export class ComfyLiteGraphCubeNodeInteraction {
       this.#appliedCursor = cursor;
       return;
     }
+    if (
+      point &&
+      item &&
+      (containsCubeCanvasPoint(item.layout.editAction, point) ||
+        this.#titlebarActionAt(item, point) !== null)
+    ) {
+      this.#canvas.canvas.style.cursor = 'pointer';
+      this.#appliedCursor = 'pointer';
+      return;
+    }
     if (this.#appliedCursor === null) return;
     if (this.#canvas.canvas.style.cursor === this.#appliedCursor) {
       this.#canvas.canvas.style.cursor = '';
     }
     this.#appliedCursor = null;
+  }
+
+  /** Return the available Cube titlebar action containing one graph point. */
+  #titlebarActionAt(
+    item: LiteGraphCubeNodeInteractionItem,
+    point: Vec2,
+  ): CubeFaceTitlebarActionKey | null {
+    for (const action of resolveCubeFaceTitlebarActions(
+      requireCubeIdentity(item.node),
+      this.#chromeActions,
+    )) {
+      const target = item.layout.chromeActions[action.key];
+      if (target && containsCubeCanvasPoint(target, point)) return action.key;
+    }
+    return null;
   }
 
   /** Record one Cube-owned face interaction through the host history boundary. */

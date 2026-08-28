@@ -26,6 +26,7 @@ export type ComfyPrimeIconName =
   | 'circle-fill'
   | 'download'
   | 'eye'
+  | 'plus'
   | 'save'
   | 'window-maximize';
 
@@ -46,6 +47,7 @@ const ICONS: Readonly<Record<ComfyPrimeIconName, ComfyPrimeIconSpec>> = Object.f
   'circle-fill': { className: 'pi-circle-fill', glyph: '\uE9DD' },
   download: { className: 'pi-download', glyph: '\uE956' },
   eye: { className: 'pi-eye', glyph: '\uE966' },
+  plus: { className: 'pi-plus', glyph: '\uE90D' },
   save: { className: 'pi-save', glyph: '\uE92B' },
   'window-maximize': { className: 'pi-window-maximize', glyph: '\uE93B' },
 });

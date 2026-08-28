@@ -272,7 +272,6 @@ export function ensureCubeSurfaceStyles(documentRef: Document): void {
       padding: 0;
       font: inherit;
       font-size: 1rem;
-      cursor: pointer;
     }
     .sugarcubes-cube-face__actions button[hidden] {
       display: none;
@@ -305,11 +304,11 @@ export function ensureCubeSurfaceStyles(documentRef: Document): void {
       filter: drop-shadow(0 0 1px var(--comfy-menu-bg, #171b20));
     }
     .sugarcubes-cube-face__actions,
-    .sugarcubes-cube-face__actions button,
     .sugarcubes-cube-face__content {
       cursor: default;
       user-select: auto;
     }
+    .sugarcubes-cube-face__actions button { cursor: pointer; }
     .sugarcubes-cube-face__content {
       box-sizing: border-box;
       position: relative;

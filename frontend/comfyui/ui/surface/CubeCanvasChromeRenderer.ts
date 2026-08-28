@@ -31,6 +31,7 @@ import { drawComfyPrimeIcon, type ComfyPrimeIconName } from './ComfyPrimeIcons.j
 import { drawCubeUnsavedIndicator } from './CubeUnsavedIndicator.js';
 import { CubeModelPillCanvasRenderer } from './CubeModelPillCanvasRenderer.js';
 import type { UnknownRecord } from '../types/common.js';
+import { drawCubeAddIcon } from './CubeAddIcon.js';
 
 /** Describe the native LiteGraph button retained from the real SubgraphNode. */
 export interface NativeLiteGraphTitleButton {
@@ -133,7 +134,18 @@ export class CubeCanvasChromeRenderer {
       item.chromeActions,
     )) {
       const target = layout.chromeActions[action.key];
-      if (target) drawPrimeIconAction(context, target, action.icon);
+      if (!target) continue;
+      if (action.icon === 'cube-plus') {
+        context.fillStyle = '#f0f2f5';
+        drawCubeAddIcon(
+          context,
+          target.x + target.width / 2,
+          target.y + target.height / 2,
+          item.headerColor,
+        );
+      } else {
+        drawPrimeIconAction(context, target, action.icon);
+      }
     }
   }
 
