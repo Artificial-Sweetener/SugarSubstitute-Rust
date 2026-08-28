@@ -42,7 +42,7 @@ from .sugarcubes.execution.comfy_execution_port import (
 from .sugarcubes.host_api import set_active_backend_services
 
 WEB_DIRECTORY = "web"
-__version__ = "0.11.0"
+__version__ = "0.12.0"
 _EXTENSION_ROOT = extension_root()
 _LOGGER = logging.getLogger(__name__)
 
