@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -38,9 +39,7 @@ def repository_snapshot(project_root: Path, *, staged: bool) -> Iterator[Path]:
         return
     with TemporaryDirectory(prefix="sugarcubes-architecture-index-") as temp:
         snapshot_root = Path(temp).resolve()
-        prefix = f"{snapshot_root}{Path().anchor or ''}"
-        if not prefix.endswith(("/", "\\")):
-            prefix += "\\"
+        prefix = f"{snapshot_root}{os.sep}"
         completed = subprocess.run(  # noqa: S603
             ["git", "checkout-index", "--all", f"--prefix={prefix}"],
             cwd=root,
