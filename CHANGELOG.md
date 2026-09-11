@@ -1,3 +1,10 @@
+# [0.13.0](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.12.0...v0.13.0) (2026-09-11)
+
+
+### Features
+
+* **workflows:** make canonical cube graphs portable and executable ([66d496f](https://github.com/Artificial-Sweetener/SugarCubes/commit/66d496fe0b0066f0a64d85042ea83eb9ee43ffd2))
+
 # [0.12.0](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.11.0...v0.12.0) (2026-08-28)
 
 
