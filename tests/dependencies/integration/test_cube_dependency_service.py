@@ -327,6 +327,120 @@ def test_repair_checks_out_approved_baseline_git_version(
     assert result["restartRequired"] is True
 
 
+def test_repair_checks_out_exact_first_party_tag_for_clean_git_install(
+    tmp_path: Path,
+    backend_services_factory: BackendServicesFactory,
+) -> None:
+    """Update a clean official checkout without replacing it with an archive."""
+
+    installed_commit = "f561f164543f927e0452e14658a0509e8e4866d6"
+    git_commands: list[tuple[str, ...]] = []
+
+    def fake_git(args: Sequence[str], *, cwd: Path) -> Any:
+        _ = cwd
+        git_commands.append(tuple(args))
+
+        class Result:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        if args == ["rev-parse", "HEAD"]:
+            Result.stdout = installed_commit + "\n"
+        elif args == ["status", "--porcelain"]:
+            Result.stdout = ""
+        elif args == ["config", "--get", "remote.origin.url"]:
+            Result.stdout = "https://github.com/Artificial-Sweetener/SimpleSyrup.git\n"
+        return Result()
+
+    services = backend_services_factory(tmp_path, git_runner=fake_git)
+    checkout = services.tracked_repos.checkout_path(
+        "Artificial-Sweetener", "Base-Cubes"
+    )
+    _write_cube(
+        checkout / "demo.cube",
+        _cube_payload_with_cnr(
+            cnr_id="SimpleSyrup",
+            version="1.7.1",
+            python_module="custom_nodes.SimpleSyrup",
+        ),
+    )
+    custom_nodes_root = tmp_path / "custom_nodes"
+    (custom_nodes_root / "SimpleSyrup" / ".git").mkdir(parents=True)
+    cli_commands: list[list[str]] = []
+    service = CubeDependencyService(
+        library_service=services.library,
+        tracked_repo_service=services.tracked_repos,
+        workspace_path=tmp_path / "ComfyUI",
+        custom_nodes_root=custom_nodes_root,
+        cli_adapter=ComfyCliAdapter(
+            runner=lambda command, cwd, timeout_seconds: _recorded_completed(
+                cli_commands, command
+            )
+        ),
+    )
+
+    result = service.repair(approval_policy="silent_baseline_only")
+
+    assert result["updatedNodes"][0]["operation"] == "git_checkout"
+    assert ("fetch", "--all", "--tags") in git_commands
+    assert ("cat-file", "-e", "v1.7.1^{commit}") in git_commands
+    assert ("checkout", "v1.7.1") in git_commands
+    assert cli_commands == []
+
+
+def test_repair_refuses_dirty_first_party_git_semver_update(
+    tmp_path: Path,
+    backend_services_factory: BackendServicesFactory,
+) -> None:
+    """Never mutate a first-party checkout with local changes."""
+
+    def fake_git(args: Sequence[str], *, cwd: Path) -> Any:
+        _ = cwd
+
+        class Result:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        if args == ["rev-parse", "HEAD"]:
+            Result.stdout = "f561f164543f927e0452e14658a0509e8e4866d6\n"
+        elif args == ["status", "--porcelain"]:
+            Result.stdout = " M local.py\n"
+        elif args == ["config", "--get", "remote.origin.url"]:
+            Result.stdout = "https://github.com/Artificial-Sweetener/SimpleSyrup.git\n"
+        elif args[0] in {"fetch", "checkout"}:
+            raise AssertionError("dirty checkout must not be changed")
+        return Result()
+
+    services = backend_services_factory(tmp_path, git_runner=fake_git)
+    checkout = services.tracked_repos.checkout_path(
+        "Artificial-Sweetener", "Base-Cubes"
+    )
+    _write_cube(
+        checkout / "demo.cube",
+        _cube_payload_with_cnr(
+            cnr_id="SimpleSyrup",
+            version="1.7.1",
+            python_module="custom_nodes.SimpleSyrup",
+        ),
+    )
+    custom_nodes_root = tmp_path / "custom_nodes"
+    (custom_nodes_root / "SimpleSyrup" / ".git").mkdir(parents=True)
+    service = CubeDependencyService(
+        library_service=services.library,
+        tracked_repo_service=services.tracked_repos,
+        workspace_path=tmp_path / "ComfyUI",
+        custom_nodes_root=custom_nodes_root,
+        cli_adapter=ComfyCliAdapter(),
+    )
+
+    result = service.repair(approval_policy="silent_baseline_only")
+
+    assert result["updatedNodes"] == []
+    assert result["failedVersionItems"][0]["reason"] == "dirty_git_checkout"
+
+
 def test_repair_blocks_git_checkout_without_repository_provenance(
     tmp_path: Path,
     backend_services_factory: BackendServicesFactory,
@@ -498,8 +612,8 @@ def test_repair_updates_baseline_semver_node_with_repository_provenance(
     result = service.repair(approval_policy="silent_baseline_only")
 
     assert result["updatedNodes"][0]["nodeId"] == "ComfyUI-Impact-Pack"
-    assert result["updatedNodes"][0]["operation"] == "comfy_cli_install"
-    assert commands[1][-1] == "ComfyUI-Impact-Pack"
+    assert result["updatedNodes"][0]["operation"] == "comfy_registry_install"
+    assert commands[1][-1] == "ComfyUI-Impact-Pack@9.9.0"
 
 
 def test_repair_skips_non_default_version_update_without_approval(

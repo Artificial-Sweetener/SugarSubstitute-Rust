@@ -11,24 +11,21 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping, Sequence
-from pathlib import Path
 from typing import Any
 
-from ..responses import BackendError
 from .cube_metadata import normalize_metadata_string
-from .dependency_cli import ComfyCliAdapter
+from .dependency_acquisition import DependencyAcquirer
 
 _logger = logging.getLogger(__name__)
 
 
 class DependencyNodeInstaller:
-    """Install selected dependency plan items through Comfy CLI."""
+    """Install selected dependency plan items through acquisition policy."""
 
-    def __init__(self, *, workspace_path: Path, cli_adapter: ComfyCliAdapter) -> None:
+    def __init__(self, *, acquirer: DependencyAcquirer) -> None:
         """Initialize the installer with explicit host boundaries."""
 
-        self._workspace_path = workspace_path
-        self._cli_adapter = cli_adapter
+        self._acquirer = acquirer
 
     def install(
         self,
@@ -39,37 +36,13 @@ class DependencyNodeInstaller:
         attempted = [dict(item) for item in selected_items]
         installed: list[dict[str, Any]] = []
         failed: list[dict[str, Any]] = []
-        if attempted:
-            try:
-                self._cli_adapter.assert_available(self._workspace_path)
-            except BackendError as exc:
-                _logger.warning(
-                    "SugarCubes: Comfy CLI is unavailable for dependency repair: %s",
-                    exc.message,
-                )
-                failed.extend(
-                    _failed_install_result(item=item, error=exc) for item in attempted
-                )
-                return [], installed, failed
-
         for item in attempted:
             node_id = normalize_metadata_string(item.get("nodeId"))
             try:
-                install_result = self._cli_adapter.install_node(
-                    workspace_path=self._workspace_path,
-                    node_id=node_id,
-                )
-            except BackendError as exc:
-                _logger.warning(
-                    "SugarCubes: dependency install failed for %s: %s",
-                    node_id,
-                    exc.message,
-                )
-                failed.append(_failed_install_result(item=item, error=exc))
-                continue
-            except OSError as exc:
+                install_payload = self._acquirer.acquire(item)
+            except (OSError, RuntimeError, ValueError) as exc:
                 _logger.exception(
-                    "SugarCubes: failed to launch Comfy CLI for node %s", node_id
+                    "SugarCubes: dependency acquisition failed for node %s", node_id
                 )
                 failed.append(
                     {
@@ -80,30 +53,8 @@ class DependencyNodeInstaller:
                     }
                 )
                 continue
-            install_payload = install_result.to_payload()
-            if install_result.return_code == 0:
+            if install_payload.get("returnCode") == 0:
                 installed.append(install_payload)
             else:
-                failed.append(
-                    {
-                        **install_payload,
-                        "reason": "Comfy CLI failed to install the custom node",
-                    }
-                )
+                failed.append(install_payload)
         return attempted, installed, failed
-
-
-def _failed_install_result(
-    *,
-    item: Mapping[str, Any],
-    error: BackendError,
-) -> dict[str, Any]:
-    """Return one failed install result from a structured backend error."""
-
-    return {
-        "nodeId": normalize_metadata_string(item.get("nodeId")),
-        "reason": error.details.get("reason") or error.message,
-        "stdout": normalize_metadata_string(error.details.get("stdout")),
-        "stderr": normalize_metadata_string(error.details.get("stderr")),
-        "status": error.status,
-    }

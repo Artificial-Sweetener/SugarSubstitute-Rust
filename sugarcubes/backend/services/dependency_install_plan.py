@@ -33,10 +33,16 @@ def build_dependency_install_plan(
     *,
     requirement_records: Sequence[Mapping[str, Any]],
     installed: set[str],
+    version_plan: Sequence[Mapping[str, Any]] = (),
 ) -> list[dict[str, Any]]:
     """Collapse requirement records into one install plan per custom node."""
 
     installed_by_key = {normalize_requirement_key(name): name for name in installed}
+    versions_by_key = {
+        normalize_requirement_key(normalize_metadata_string(item.get("nodeId"))): item
+        for item in version_plan
+        if normalize_metadata_string(item.get("nodeId"))
+    }
     by_node: dict[str, dict[str, Any]] = {}
     for record in requirement_records:
         node_id = normalize_metadata_string(record.get("node_id"))
@@ -49,6 +55,8 @@ def build_dependency_install_plan(
                 "nodeId": node_id,
                 "displayName": normalize_metadata_string(record.get("display_name"))
                 or node_id,
+                "requiredVersion": "",
+                "requiredVersionKind": "missing",
                 "existingFolderName": "",
                 "requiredByPacks": [],
                 "requiredByCubeIds": [],
@@ -70,6 +78,15 @@ def build_dependency_install_plan(
             item["confirmationRequired"] = True
 
     for key, item in by_node.items():
+        version_item = versions_by_key.get(key)
+        if version_item is not None:
+            item["requiredVersion"] = normalize_metadata_string(
+                version_item.get("requiredVersion")
+            )
+            item["requiredVersionKind"] = (
+                normalize_metadata_string(version_item.get("requiredVersionKind"))
+                or "missing"
+            )
         existing_folder = installed_by_key.get(key, "")
         item["existingFolderName"] = existing_folder
         item["installed"] = bool(existing_folder)

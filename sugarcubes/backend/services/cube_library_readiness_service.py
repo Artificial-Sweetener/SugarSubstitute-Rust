@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+from collections.abc import Mapping
 from copy import deepcopy
 from pathlib import Path
 from time import perf_counter
@@ -95,9 +96,22 @@ class CubeLibraryReadinessService:
             for slug in required
             if normalize_requirement_key(slug) not in installed_keys
         )
+        version_readiness = dependency_version_readiness(
+            requirements=requirements.version_requirements,
+            custom_nodes_root=custom_nodes_root,
+            git_runner=self._library.tracked_repo_service.git_runner,
+        )
+        record_phase("dependency_version_readiness")
+        version_plan_value = version_readiness.get("dependencyVersionPlan")
+        version_plan = (
+            [item for item in version_plan_value if isinstance(item, Mapping)]
+            if isinstance(version_plan_value, list)
+            else []
+        )
         install_plan = build_dependency_install_plan(
             requirement_records=requirements.records,
             installed=installed,
+            version_plan=version_plan,
         )
         record_phase("dependency_install_plan")
         installable_missing = [
@@ -105,12 +119,6 @@ class CubeLibraryReadinessService:
             for item in install_plan
             if item["installed"] is False and item["installable"] is True
         ]
-        version_readiness = dependency_version_readiness(
-            requirements=requirements.version_requirements,
-            custom_nodes_root=custom_nodes_root,
-            git_runner=self._library.tracked_repo_service.git_runner,
-        )
-        record_phase("dependency_version_readiness")
         self._log(
             "sugarcubes_library_readiness_timing",
             total_duration_ms=round((perf_counter() - started_at) * 1000, 3),

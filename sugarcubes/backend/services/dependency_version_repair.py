@@ -14,28 +14,27 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from ..responses import BackendError
 from .cube_metadata import normalize_metadata_string
-from .dependency_cli import ComfyCliAdapter
+from .dependency_acquisition import DependencyAcquirer
+from .dependency_first_party_manifest import first_party_extension
 from .dependency_version_types import GitRunner
+from .dependency_versions import classify_version
 
 _logger = logging.getLogger(__name__)
 
 
 class DependencyVersionRepairExecutor:
-    """Apply version repair through Comfy CLI or an installed Git checkout."""
+    """Apply version repair through acquisition policy or a safe Git checkout."""
 
     def __init__(
         self,
         *,
-        workspace_path: Path,
-        cli_adapter: ComfyCliAdapter,
+        acquirer: DependencyAcquirer,
         git_runner: GitRunner,
     ) -> None:
         """Initialize version repair with explicit execution adapters."""
 
-        self._workspace_path = workspace_path
-        self._cli_adapter = cli_adapter
+        self._acquirer = acquirer
         self._git_runner = git_runner
 
     def repair(self, item: Mapping[str, Any]) -> dict[str, Any]:
@@ -43,11 +42,17 @@ class DependencyVersionRepairExecutor:
 
         status = normalize_metadata_string(item.get("status"))
         if status == "installed_commit_not_descendant":
-            return self._checkout_required_git_commit(item)
+            return self._checkout_required_git_ref(item)
+        if _is_trusted_semver_git_repair(item):
+            required_version = normalize_metadata_string(item.get("requiredVersion"))
+            return self._checkout_required_git_ref(
+                item,
+                checkout_ref=f"v{required_version}",
+            )
         return self._reinstall_versioned_node(item)
 
     def _reinstall_versioned_node(self, item: Mapping[str, Any]) -> dict[str, Any]:
-        """Use Comfy CLI to update or reinstall a versioned custom node."""
+        """Reacquire a versioned node through the shared acquisition policy."""
 
         node_id = normalize_metadata_string(item.get("nodeId"))
         evidence = item.get("installedEvidence")
@@ -59,52 +64,15 @@ class DependencyVersionRepairExecutor:
                 operation="comfy_cli_install",
                 reason="repository_provenance_missing",
             )
-        try:
-            self._cli_adapter.assert_available(self._workspace_path)
-            result = self._cli_adapter.install_node(
-                workspace_path=self._workspace_path,
-                node_id=node_id,
-            )
-        except BackendError as exc:
-            _logger.warning(
-                "SugarCubes: Comfy CLI version repair failed for %s: %s",
-                node_id,
-                exc.message,
-            )
-            return {
-                "nodeId": node_id,
-                "operation": "comfy_cli_install",
-                "returnCode": 1,
-                "reason": exc.details.get("reason") or exc.message,
-                "stdout": normalize_metadata_string(exc.details.get("stdout")),
-                "stderr": normalize_metadata_string(exc.details.get("stderr")),
-            }
-        except OSError as exc:
-            _logger.exception(
-                "SugarCubes: failed to launch Comfy CLI for version repair %s",
-                node_id,
-            )
-            return {
-                "nodeId": node_id,
-                "operation": "comfy_cli_install",
-                "returnCode": 1,
-                "reason": str(exc),
-                "stdout": "",
-                "stderr": "",
-            }
-        payload = result.to_payload()
-        return {
-            **payload,
-            "operation": "comfy_cli_install",
-            "reason": (
-                ""
-                if result.return_code == 0
-                else "Comfy CLI failed to update the custom node"
-            ),
-        }
+        return self._acquirer.acquire(item)
 
-    def _checkout_required_git_commit(self, item: Mapping[str, Any]) -> dict[str, Any]:
-        """Fetch and checkout the approved required Git commit when safe."""
+    def _checkout_required_git_ref(
+        self,
+        item: Mapping[str, Any],
+        *,
+        checkout_ref: str | None = None,
+    ) -> dict[str, Any]:
+        """Fetch and checkout an approved Git commit or release tag when safe."""
 
         node_id = normalize_metadata_string(item.get("nodeId"))
         required_version = normalize_metadata_string(item.get("requiredVersion"))
@@ -141,10 +109,11 @@ class DependencyVersionRepairExecutor:
                 operation="git_checkout",
                 reason="required_version_missing",
             )
+        resolved_ref = checkout_ref or required_version
         commands = (
             ["fetch", "--all", "--tags"],
-            ["cat-file", "-e", f"{required_version}^{{commit}}"],
-            ["checkout", required_version],
+            ["cat-file", "-e", f"{resolved_ref}^{{commit}}"],
+            ["checkout", resolved_ref],
         )
         for command in commands:
             try:
@@ -184,6 +153,32 @@ class DependencyVersionRepairExecutor:
             "stdout": "",
             "stderr": "",
         }
+
+
+def _is_trusted_semver_git_repair(item: Mapping[str, Any]) -> bool:
+    """Return whether a clean official checkout may follow its exact release tag."""
+
+    required_version = normalize_metadata_string(item.get("requiredVersion"))
+    if classify_version(required_version) != "semver":
+        return False
+    evidence = item.get("installedEvidence")
+    if not isinstance(evidence, Mapping):
+        return False
+    if normalize_metadata_string(evidence.get("sourceKind")) != "git":
+        return False
+    extension = first_party_extension(normalize_metadata_string(item.get("nodeId")))
+    if extension is None:
+        return False
+    observed_repository = _normalized_repository(
+        normalize_metadata_string(evidence.get("repositoryUrl"))
+    )
+    return observed_repository == _normalized_repository(extension.repository_url)
+
+
+def _normalized_repository(value: str) -> str:
+    """Normalize a repository URL for trusted-source identity comparison."""
+
+    return value.strip().rstrip("/").removesuffix(".git").casefold()
 
 
 def _failed_version_result(

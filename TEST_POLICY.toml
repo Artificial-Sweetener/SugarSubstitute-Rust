@@ -156,15 +156,19 @@ proofs = ["contract", "integration", "unit"]
 [[area]]
 name = "dependencies"
 sources = [
+  "sugarcubes/backend/services/dependency_acquisition.py",
   "sugarcubes/backend/services/cube_dependency_manifest.py",
   "sugarcubes/backend/services/cube_dependency_service.py",
   "sugarcubes/backend/services/dependency_approval_policy.py",
   "sugarcubes/backend/services/dependency_cli.py",
   "sugarcubes/backend/services/dependency_diagnostics.py",
+  "sugarcubes/backend/services/dependency_first_party_manifest.py",
   "sugarcubes/backend/services/dependency_git_inspection.py",
   "sugarcubes/backend/services/dependency_installation.py",
   "sugarcubes/backend/services/dependency_inventory.py",
+  "sugarcubes/backend/services/dependency_python_requirements.py",
   "sugarcubes/backend/services/dependency_requirements.py",
+  "sugarcubes/backend/services/dependency_source_archive.py",
   "sugarcubes/backend/services/dependency_version_readiness.py",
   "sugarcubes/backend/services/dependency_version_types.py",
   "sugarcubes/backend/services/dependency_version_repair.py",

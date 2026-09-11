@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import tomllib
 from collections.abc import Collection, Mapping, Sequence
 from pathlib import Path
 from time import perf_counter
@@ -120,7 +121,8 @@ def _installed_dependency(
 
     git_dir = path / ".git"
     phase_started_at = perf_counter()
-    tracking = _read_tracking_metadata(path / ".tracking")
+    tracking_path = path / ".tracking"
+    tracking = _read_tracking_metadata(tracking_path)
     _add_phase_time(phase_timings, "read_tracking_metadata", phase_started_at)
     phase_started_at = perf_counter()
     git_exists = git_dir.exists()
@@ -156,14 +158,19 @@ def _installed_dependency(
             repository_url=repository_url,
             dirty=dirty,
         )
-    version = _normalize_text(tracking.get("version"))
+    project_version, project_repository = _read_project_identity(
+        path / "pyproject.toml"
+    )
+    version = project_version or _normalize_text(tracking.get("version"))
     return InstalledDependency(
         folder_name=path.name,
         source_path=str(path),
         installed_version=version,
         version_kind=classify_version(version),
-        source_kind="tracking" if tracking else "directory",
-        repository_url=_normalize_text(tracking.get("repository")),
+        source_kind="tracking" if tracking_path.is_file() else "directory",
+        repository_url=(
+            project_repository or _normalize_text(tracking.get("repository"))
+        ),
         dirty=False,
     )
 
@@ -271,6 +278,26 @@ def _read_tracking_metadata(path: Path) -> dict[str, Any]:
     except json.JSONDecodeError:
         return {"raw": text}
     return dict(data) if isinstance(data, Mapping) else {}
+
+
+def _read_project_identity(path: Path) -> tuple[str, str]:
+    """Read Registry project version and repository from installed source."""
+
+    if not path.is_file():
+        return "", ""
+    try:
+        payload = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError):
+        return "", ""
+    project = payload.get("project")
+    if not isinstance(project, Mapping):
+        return "", ""
+    version = _normalize_text(project.get("version"))
+    urls = project.get("urls")
+    repository = (
+        _normalize_text(urls.get("Repository")) if isinstance(urls, Mapping) else ""
+    )
+    return version, repository
 
 
 def _git_stdout(args: Sequence[str], *, cwd: Path, git_runner: GitRunner) -> str:

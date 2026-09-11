@@ -19,6 +19,7 @@ from typing import Any
 from ..responses import BackendError
 from .cube_library_service import CubeLibraryService
 from .cube_metadata import normalize_metadata_string
+from .dependency_acquisition import DependencyAcquirer
 from .dependency_approval_policy import (
     DependencyApprovalPolicy,
     approval_policy_from_payload,
@@ -34,6 +35,8 @@ from .dependency_diagnostics import (
     diagnostics_from_sync_errors,
 )
 from .dependency_installation import DependencyNodeInstaller
+from .dependency_python_requirements import DependencyPythonRequirementsInstaller
+from .dependency_source_archive import TrustedSourceArchiveInstaller
 from .dependency_version_repair import DependencyVersionRepairExecutor
 from .tracked_repo_service import TrackedRepoService
 
@@ -59,6 +62,7 @@ class CubeDependencyService:
         workspace_path: Path,
         custom_nodes_root: Path,
         cli_adapter: ComfyCliAdapter | None = None,
+        acquirer: DependencyAcquirer | None = None,
     ) -> None:
         """Initialize the service from the SugarCubes backend service graph."""
 
@@ -66,14 +70,20 @@ class CubeDependencyService:
         self._tracked_repo_service = tracked_repo_service
         self._workspace_path = workspace_path.resolve()
         self._custom_nodes_root = custom_nodes_root.resolve()
-        self._cli_adapter = cli_adapter or ComfyCliAdapter()
-        self._node_installer = DependencyNodeInstaller(
+        dependency_cli = cli_adapter or ComfyCliAdapter()
+        dependency_acquirer = acquirer or DependencyAcquirer(
             workspace_path=self._workspace_path,
-            cli_adapter=self._cli_adapter,
+            cli_adapter=dependency_cli,
+            source_installer=TrustedSourceArchiveInstaller(
+                custom_nodes_root=self._custom_nodes_root,
+                requirements_installer=DependencyPythonRequirementsInstaller(),
+            ),
+        )
+        self._node_installer = DependencyNodeInstaller(
+            acquirer=dependency_acquirer,
         )
         self._version_repair = DependencyVersionRepairExecutor(
-            workspace_path=self._workspace_path,
-            cli_adapter=self._cli_adapter,
+            acquirer=dependency_acquirer,
             git_runner=tracked_repo_service.git_runner,
         )
         self._maintenance_lock = Lock()

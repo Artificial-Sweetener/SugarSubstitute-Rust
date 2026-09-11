@@ -124,6 +124,40 @@ def test_readiness_projects_semver_statuses_from_tracking_evidence(
     assert plans["missing-pack"]["restartRequiredAfterRepair"] is True
 
 
+def test_readiness_reads_real_comfy_tracking_and_project_metadata(
+    tmp_path: Path,
+) -> None:
+    """Read version identity from pyproject beside Comfy's tracked-file list."""
+
+    custom_nodes_root = tmp_path / "custom_nodes"
+    installed = custom_nodes_root / "SimpleSyrup"
+    installed.mkdir(parents=True)
+    (installed / ".tracking").write_text(
+        "__init__.py\nsimple_syrup/__init__.py",
+        encoding="utf-8",
+    )
+    (installed / "pyproject.toml").write_text(
+        "[project]\n"
+        'name = "SimpleSyrup"\n'
+        'version = "1.7.0"\n'
+        "[project.urls]\n"
+        'Repository = "https://github.com/Artificial-Sweetener/SimpleSyrup"\n',
+        encoding="utf-8",
+    )
+
+    readiness = dependency_version_readiness(
+        requirements=(_requirement("SimpleSyrup", "1.7.1"),),
+        custom_nodes_root=custom_nodes_root,
+        git_runner=None,
+    )
+
+    plan = readiness["dependencyVersionPlan"][0]
+    assert plan["status"] == "installed_version_too_old"
+    assert plan["installedVersion"] == "1.7.0"
+    assert plan["installedEvidence"]["sourceKind"] == "tracking"
+    assert plan["installedEvidence"]["repositoryUrl"].endswith("/SimpleSyrup")
+
+
 def test_readiness_uses_git_ancestry_and_blocks_dirty_checkouts(tmp_path: Path) -> None:
     """Preserve Git ancestry comparison and dirty-checkout safety."""
 

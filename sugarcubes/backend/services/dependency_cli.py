@@ -30,6 +30,7 @@ class ComfyCliResult:
     """Describe one Comfy CLI invocation used for dependency repair."""
 
     node_id: str
+    requested_version: str
     command: tuple[str, ...]
     return_code: int
     stdout: str
@@ -40,6 +41,7 @@ class ComfyCliResult:
 
         return {
             "nodeId": self.node_id,
+            "requestedVersion": self.requested_version,
             "command": list(self.command),
             "returnCode": self.return_code,
             "stdout": self.stdout,
@@ -77,12 +79,24 @@ class ComfyCliAdapter:
                 },
             )
 
-    def install_node(self, *, workspace_path: Path, node_id: str) -> ComfyCliResult:
-        """Install one custom node through Comfy CLI."""
+    def install_node(
+        self,
+        *,
+        workspace_path: Path,
+        node_id: str,
+        version: str = "",
+    ) -> ComfyCliResult:
+        """Install one custom node, requesting an exact version when supplied."""
 
         normalized_node_id = normalize_metadata_string(node_id)
         if not normalized_node_id:
             raise BackendError("Custom node id is required", status=400)
+        normalized_version = normalize_metadata_string(version)
+        node_spec = (
+            f"{normalized_node_id}@{normalized_version}"
+            if normalized_version
+            else normalized_node_id
+        )
         command = (
             str(self._python_executable),
             "-m",
@@ -93,11 +107,12 @@ class ComfyCliAdapter:
             "node",
             "install",
             "--exit-on-fail",
-            normalized_node_id,
+            node_spec,
         )
         result = self._runner(command, workspace_path, _CLI_TIMEOUT_SECONDS)
         return ComfyCliResult(
             node_id=normalized_node_id,
+            requested_version=normalized_version,
             command=command,
             return_code=result.returncode,
             stdout=result.stdout,
