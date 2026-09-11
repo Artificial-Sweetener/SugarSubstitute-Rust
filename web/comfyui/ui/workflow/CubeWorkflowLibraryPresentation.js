@@ -29,14 +29,14 @@ export class CubeWorkflowLibraryPresentation {
         const classification = this.#classification(metadata);
         return classification ? { libraryClass: classification.primaryClass } : null;
     }
-    /** Permit definition editing only for drafts or a verified writable match. */
+    /** Permit definition editing for drafts or a verified writable source. */
     async canEdit(node) {
         if (isDraftCubeNode(node))
             return true;
         const identity = requireCubeIdentity(node);
         const classifiedAccess = this.#classification(identity)?.access;
-        if (classifiedAccess)
-            return classifiedAccess === 'writable';
+        if (classifiedAccess === 'writable')
+            return true;
         const cubeId = readString(identity.cube_id);
         return cubeId ? this.#writableCubes.canWriteCube(cubeId) : false;
     }

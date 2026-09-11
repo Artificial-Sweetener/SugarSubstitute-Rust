@@ -23,6 +23,37 @@ from tests.backend_api.support.typing_support import BackendServicesFactory
 from tests.execution.support.execution_fixtures import cube_workflow, provider_document
 
 
+def test_execution_capabilities_publish_stable_routes_and_schema_versions(
+    tmp_path: Path,
+    backend_services_factory: BackendServicesFactory,
+) -> None:
+    """Let external graph clients negotiate the complete native queue contract."""
+
+    handlers = build_route_handlers(backend_services_factory(tmp_path))
+
+    response = asyncio.run(handlers.get_execution_capabilities(FakeRequest()))
+
+    assert response.status == 200
+    assert decode_json_response(response) == {
+        "available": True,
+        "schema_version": 1,
+        "workflow_schema_version": 1,
+        "report_schema_version": 1,
+        "queue_observer_api_version": 1,
+        "queue_route": "/sugarcubes/v2/executions/queue",
+        "capabilities_route": "/sugarcubes/v2/executions/capabilities",
+        "workflow_analysis_route": "/sugarcubes/v2/workflows/analyze",
+        "workflow_reorder_route": "/sugarcubes/v2/workflows/reorder",
+        "workflow_cube_append_route": "/sugarcubes/v2/workflows/cubes/append",
+        "workflow_cube_create_route": "/sugarcubes/v2/workflows/cubes/create",
+        "workflow_cube_remove_route": "/sugarcubes/v2/workflows/cubes/remove",
+        "execution_owner": "sugarcubes",
+        "atomic_queueing": True,
+        "cube_scoped_optimization": True,
+        "validated_queue_observers": True,
+    }
+
+
 def test_execution_route_queues_once_and_returns_deterministic_report(
     tmp_path: Path,
     backend_services_factory: BackendServicesFactory,
@@ -53,6 +84,7 @@ def test_execution_route_queues_once_and_returns_deterministic_report(
     payload = decode_json_response(response)
     assert payload["accepted"] is True
     assert payload["prompt_id"] == "route-proof"
+    assert payload["execution_prompt"] == {"queued-node": {"class_type": "Test"}}
     assert payload["report"]["execution_owner"] == "sugarcubes"
     assert payload["report"]["phase_order"][-1] == "instrumentation"
     assert [name for name, _ in payload["report"]["phase_timings_ms"]] == payload[
@@ -154,4 +186,10 @@ class _AcceptingPort:
         """Accept one prepared prompt with a stable queue receipt."""
 
         self.prepared.append(prepared)
-        return ComfyQueueReceipt(True, "route-proof", 3.0, node_errors={})
+        return ComfyQueueReceipt(
+            True,
+            "route-proof",
+            3.0,
+            node_errors={},
+            execution_prompt={"queued-node": {"class_type": "Test"}},
+        )

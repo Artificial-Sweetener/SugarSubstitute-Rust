@@ -39,8 +39,7 @@ def remove_nested_execution_nodes(
     descendants = [
         node_id
         for raw_node_id in prompt
-        if (node_id := str(raw_node_id)).startswith(prefix)
-        and node_id not in retained
+        if (node_id := str(raw_node_id)).startswith(prefix) and node_id not in retained
     ]
     for node_id in descendants:
         prompt.pop(node_id, None)

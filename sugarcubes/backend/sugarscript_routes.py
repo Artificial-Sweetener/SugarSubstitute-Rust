@@ -23,6 +23,7 @@ from .composition import BackendServices
 from .responses import BackendError, json_error_from_exception, json_success
 from .route_types import RouteHandler
 from .validation import parse_json_body
+from .workflow_analysis_routes import workflow_analysis_response
 from .workflow_plan_responses import serialize_sugarscript_result
 
 _MAX_SOURCE_BYTES = 1_000_000
@@ -49,8 +50,17 @@ def build_sugarscript_route_handlers(
             if len(source.encode("utf-8")) > _MAX_SOURCE_BYTES:
                 raise BackendError("SugarScript source exceeds 1 MB", status=413)
             result = services.sugarscript_authoring.compile(source)
+            payload = serialize_sugarscript_result(result)
+            workflow = payload.get("workflow")
+            payload["analysis"] = (
+                workflow_analysis_response(services.workflow_analysis.analyze(workflow))
+                if result.is_valid and workflow is not None
+                else None
+            )
+            if isinstance(payload["analysis"], dict):
+                payload["workflow"] = payload["analysis"]["workflow"]
             return json_success(
-                serialize_sugarscript_result(result),
+                payload,
                 status=200 if result.is_valid else 422,
             )
         except BackendError as error:

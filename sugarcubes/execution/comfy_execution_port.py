@@ -10,7 +10,13 @@ from collections.abc import Awaitable, Callable, Sequence
 from copy import deepcopy
 from typing import Protocol
 
+from .comfy_prompt_value_encoding import encode_atomic_list_widget_values
 from .models import ComfyQueueReceipt, PreparedCubeExecution
+from .queue_observers import (
+    QueueObserverPublisher,
+    RequiredQueueObserverFailure,
+    ValidatedQueueEvent,
+)
 
 
 class PromptQueueLike(Protocol):
@@ -71,6 +77,7 @@ class DirectComfyExecutionPort:
         *,
         prompt_server: PromptServerLike,
         execution_module: ComfyExecutionModuleLike,
+        observers: QueueObserverPublisher | None = None,
         uuid_factory: Callable[[], uuid.UUID] = uuid.uuid4,
         time_source: Callable[[], float] = time.time,
     ) -> None:
@@ -78,6 +85,7 @@ class DirectComfyExecutionPort:
 
         self._prompt_server = prompt_server
         self._execution = execution_module
+        self._observers = observers
         self._uuid_factory = uuid_factory
         self._time_source = time_source
 
@@ -85,6 +93,7 @@ class DirectComfyExecutionPort:
         """Apply replacements, validate once, and queue atomically when accepted."""
 
         prompt = deepcopy(prepared.prompt)
+        encode_atomic_list_widget_values(prompt, prepared.node_definitions)
         self._prompt_server.node_replace_manager.apply_replacements(prompt)
         prompt_id = str(self._uuid_factory())
         partial_targets = list(prepared.queue.partial_execution_targets) or None
@@ -101,7 +110,33 @@ class DirectComfyExecutionPort:
                 number=None,
                 error=valid[1],
                 node_errors=node_errors,
+                execution_prompt=deepcopy(prompt),
             )
+        if self._observers is not None:
+            try:
+                self._observers.notify(
+                    ValidatedQueueEvent(
+                        prompt_id=prompt_id,
+                        prompt=deepcopy(prompt),
+                        extra_data=deepcopy(dict(prepared.extra_data)),
+                        report=prepared.report,
+                        client_id=prepared.queue.client_id,
+                    )
+                )
+            except RequiredQueueObserverFailure:
+                return ComfyQueueReceipt(
+                    accepted=False,
+                    prompt_id=prompt_id,
+                    number=None,
+                    error={
+                        "type": "sugarcubes_queue_observer_failed",
+                        "message": (
+                            "A required pre-queue observer rejected the execution."
+                        ),
+                    },
+                    node_errors=node_errors,
+                    execution_prompt=deepcopy(prompt),
+                )
         number = self._resolve_number(prepared)
         extra_data = deepcopy(dict(prepared.extra_data))
         if prepared.queue.client_id is not None:
@@ -119,6 +154,7 @@ class DirectComfyExecutionPort:
             prompt_id=prompt_id,
             number=number,
             node_errors=node_errors,
+            execution_prompt=deepcopy(prompt),
         )
 
     def _resolve_number(self, prepared: PreparedCubeExecution) -> float:

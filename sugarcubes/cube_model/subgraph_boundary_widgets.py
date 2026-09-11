@@ -75,7 +75,10 @@ def index_boundary_widget_targets(
         for raw_link_id in link_ids:
             link_id = _read_graph_id(raw_link_id)
             link = links.get(link_id) if link_id is not None else None
-            if not link or _read_graph_id(link.get("origin_id")) != SUBGRAPH_INPUT_NODE_ID:
+            if (
+                not link
+                or _read_graph_id(link.get("origin_id")) != SUBGRAPH_INPUT_NODE_ID
+            ):
                 continue
             node_id = _read_graph_id(link.get("target_id"))
             slot = link.get("target_slot")
@@ -142,7 +145,11 @@ def _boundary_link_targets(value: object) -> dict[GraphId, GraphId]:
         origin_id = _read_graph_id(link.get("origin_id"))
         link_id = _read_graph_id(link.get("id"))
         target_id = _read_graph_id(link.get("target_id"))
-        if origin_id == SUBGRAPH_INPUT_NODE_ID and link_id is not None and target_id is not None:
+        if (
+            origin_id == SUBGRAPH_INPUT_NODE_ID
+            and link_id is not None
+            and target_id is not None
+        ):
             targets[link_id] = target_id
     return targets
 

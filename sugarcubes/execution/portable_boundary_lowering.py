@@ -18,6 +18,33 @@ from .lowering_values import (
 from .models import BoundaryBinding
 
 
+def document_boundary_ports(
+    document: CubeDocument,
+) -> tuple[tuple[dict[str, str], ...], tuple[dict[str, str], ...]]:
+    """Project exact stable Cube boundaries into native Comfy socket records."""
+
+    bindings = describe_document_bindings("@socket-contract", document)
+    inputs_by_name = {
+        binding.binding: binding.value_type or "*"
+        for binding in bindings
+        if binding.direction == "input"
+    }
+    outputs_by_name = {
+        binding.binding: binding.value_type or "*"
+        for binding in bindings
+        if binding.direction == "output"
+    }
+    inputs = tuple(
+        {"name": name, "type": inputs_by_name.get(name, "*")}
+        for name in document.implementation.inputs
+    )
+    outputs = tuple(
+        {"name": name, "type": outputs_by_name.get(name, "*")}
+        for name in document.implementation.outputs
+    )
+    return inputs, outputs
+
+
 def describe_document_bindings(
     instance_id: str,
     document: CubeDocument,

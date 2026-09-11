@@ -52,6 +52,7 @@ import { CubeWorkflowLibraryActions } from './workflow/CubeWorkflowLibraryAction
 import { CubeWorkflowLibraryPresentation } from './workflow/CubeWorkflowLibraryPresentation.js';
 import { CubeWorkflowPreconfiguration } from './cube/CubeWorkflowPreconfiguration.js';
 import { CubeWorkflowNodePackMetadata } from './cube/node/CubeWorkflowNodePackMetadata.js';
+import { CubeSerializedWidgetRehydrator } from './cube/CubeSerializedWidgetRehydrator.js';
 /**
  * Coordinate sugar cubes ui behavior for the SugarCubes UI.
  */
@@ -123,7 +124,7 @@ export class SugarCubesUI {
             logger: this.adapter?.getConsole?.(),
             onUpdate: (definitionKey, entry) => this.handleDefinitionUpdate(definitionKey, entry),
         });
-        this.workflowPreconfiguration = CubeWorkflowPreconfiguration.withEmbeddedDefinitions(this.definitionStore, this.workflowLibraryState);
+        this.workflowPreconfiguration = CubeWorkflowPreconfiguration.withEmbeddedDefinitions(this.definitionStore, this.workflowLibraryState, new CubeSerializedWidgetRehydrator((type) => this.adapter.getLiteGraph()?.createNode(type) ?? null));
         this.instanceManager = new InstanceManager({
             adapter: this.adapter,
             events: this.events,

@@ -63,6 +63,37 @@ test('materializes valid SugarScript from paired images without loading stale wo
   expect(retainWorkflowSource).not.toHaveBeenCalled();
 });
 
+test('materializes valid SugarScript even when the attached legacy workflow cannot be reconciled', async () => {
+  const original = jest.fn(async () => 'host');
+  const host: SugarScriptFileHost = { handleFile: original };
+  const importSource = jest.fn(async () => 'imported');
+  const importWorkflow = jest.fn(async () => 'reconciled-workflow');
+  const push = jest.fn();
+  const adapter = new SugarScriptImageFileHostAdapter({
+    host,
+    importSource,
+    importWorkflow,
+    validateWorkflow: async () => {
+      throw new Error('exact Cube artifact unavailable');
+    },
+    retainWorkflowSource: async () => undefined,
+    feedback: { push },
+    readErrorMessage: (error) => String(error),
+  });
+  adapter.setup();
+  const paired = pngFile(
+    textChunk('sugar_script', 'use "available.cube" as Available'),
+    textChunk('workflow', JSON.stringify(managedWorkflow())),
+  );
+
+  await expect(host.handleFile(paired)).resolves.toBe('imported');
+
+  expect(importSource).toHaveBeenCalledWith('use "available.cube" as Available');
+  expect(importWorkflow).not.toHaveBeenCalled();
+  expect(original).not.toHaveBeenCalled();
+  expect(push).toHaveBeenCalledWith('success', 'SugarScript workflow imported', 'recipe.png');
+});
+
 test('delegates ordinary files without invoking either SugarScript use case', async () => {
   const original = jest.fn(async () => 'host');
   const host: SugarScriptFileHost = { handleFile: original };
@@ -117,6 +148,84 @@ test('falls back to the attached workflow when SugarScript materialization fails
   expect(importWorkflow).toHaveBeenCalledWith(managedWorkflow());
 });
 
+test('loads a valid group-era workflow when exact Cube validation cannot resolve its source', async () => {
+  const original = jest.fn(async () => 'native-workflow');
+  const host: SugarScriptFileHost = { handleFile: original };
+  const importSource = jest.fn(async () => {
+    throw new Error('personal Cube not found');
+  });
+  const importWorkflow = jest.fn(async () => 'reconciled-workflow');
+  const retainWorkflowSource = jest.fn(async () => undefined);
+  const push = jest.fn();
+  const adapter = new SugarScriptImageFileHostAdapter({
+    host,
+    importSource,
+    importWorkflow,
+    validateWorkflow: async () => {
+      throw new Error('exact Cube version could not be resolved');
+    },
+    retainWorkflowSource,
+    feedback: { push },
+    readErrorMessage: (error) => String(error),
+  });
+  adapter.setup();
+  const paired = pngFile(
+    textChunk('sugar_script', 'use "local/personal/missing.cube"@1.0.0 as Missing'),
+    textChunk('workflow', JSON.stringify(managedWorkflow())),
+  );
+
+  await expect(host.handleFile(paired, 'file_drop', { deferWarnings: true })).resolves.toBe(
+    'native-workflow',
+  );
+
+  expect(importSource).toHaveBeenCalledTimes(1);
+  expect(importWorkflow).not.toHaveBeenCalled();
+  expect(original).toHaveBeenCalledWith(paired, 'file_drop', { deferWarnings: true });
+  expect(retainWorkflowSource).toHaveBeenCalledTimes(1);
+  expect(push).toHaveBeenCalledWith(
+    'warning',
+    'Embedded workflow loaded after reconstruction failed',
+    'Error: exact Cube version could not be resolved',
+  );
+});
+
+test('loads a valid group-era workflow when exact reconciliation fails after source compilation', async () => {
+  const original = jest.fn(async () => 'native-workflow');
+  const host: SugarScriptFileHost = { handleFile: original };
+  const importWorkflow = jest.fn(async () => {
+    throw new Error('exact Cube artifact unavailable');
+  });
+  const retainWorkflowSource = jest.fn(async () => undefined);
+  const push = jest.fn();
+  const adapter = new SugarScriptImageFileHostAdapter({
+    host,
+    importSource: async () => {
+      throw new Error('source compilation failed');
+    },
+    importWorkflow,
+    validateWorkflow: async () => undefined,
+    retainWorkflowSource,
+    feedback: { push },
+    readErrorMessage: (error) => String(error),
+  });
+  adapter.setup();
+  const paired = pngFile(
+    textChunk('sugar_script', 'invalid source'),
+    textChunk('workflow', JSON.stringify(managedWorkflow())),
+  );
+
+  await expect(host.handleFile(paired)).resolves.toBe('native-workflow');
+
+  expect(importWorkflow).toHaveBeenCalledWith(managedWorkflow());
+  expect(original).toHaveBeenCalledWith(paired);
+  expect(retainWorkflowSource).toHaveBeenCalledWith('invalid source');
+  expect(push).toHaveBeenCalledWith(
+    'warning',
+    'Embedded workflow loaded after reconstruction failed',
+    'Error: exact Cube artifact unavailable',
+  );
+});
+
 test('imports a workflow-only image through exact reconciliation instead of Comfy', async () => {
   const original = jest.fn(async () => 'host');
   const host: SugarScriptFileHost = { handleFile: original };
@@ -129,6 +238,122 @@ test('imports a workflow-only image through exact reconciliation instead of Comf
 
   expect(importWorkflow).toHaveBeenCalledWith(managedWorkflow());
   expect(original).not.toHaveBeenCalled();
+});
+
+test('loads a workflow-only group-era image when exact reconciliation fails', async () => {
+  const original = jest.fn(async () => 'native-workflow');
+  const host: SugarScriptFileHost = { handleFile: original };
+  const importWorkflow = jest.fn(async () => {
+    throw new Error('personal Cube not found');
+  });
+  const push = jest.fn();
+  const adapter = new SugarScriptImageFileHostAdapter({
+    host,
+    importSource: async () => undefined,
+    importWorkflow,
+    validateWorkflow: async () => undefined,
+    retainWorkflowSource: async () => undefined,
+    feedback: { push },
+    readErrorMessage: (error) => String(error),
+  });
+  adapter.setup();
+  const workflowImage = pngFile(textChunk('workflow', JSON.stringify(managedWorkflow())));
+
+  await expect(host.handleFile(workflowImage)).resolves.toBe('native-workflow');
+
+  expect(original).toHaveBeenCalledWith(workflowImage);
+  expect(push).toHaveBeenCalledWith(
+    'warning',
+    'Embedded workflow loaded after reconstruction failed',
+    'Error: personal Cube not found',
+  );
+});
+
+test('delegates a workflow-only native wild Cube image directly to Comfy', async () => {
+  const original = jest.fn(async () => 'native-workflow');
+  const host: SugarScriptFileHost = { handleFile: original };
+  const importWorkflow = jest.fn(async () => 'reconciled-workflow');
+  createAdapter(host, async () => undefined, undefined, importWorkflow).setup();
+  const workflowImage = pngFile(textChunk('workflow', JSON.stringify(nativeWildCubeWorkflow())));
+
+  await expect(host.handleFile(workflowImage, 'file_drop')).resolves.toBe('native-workflow');
+
+  expect(original).toHaveBeenCalledWith(workflowImage, 'file_drop');
+  expect(importWorkflow).not.toHaveBeenCalled();
+});
+
+test.each([
+  ['native wild Cube', nativeWildCubeWorkflow()],
+  ['ordinary Comfy', ordinaryWorkflow()],
+])('loads an attached %s workflow when SugarScript compilation fails', async (_label, workflow) => {
+  const original = jest.fn(async () => 'native-workflow');
+  const host: SugarScriptFileHost = { handleFile: original };
+  const importWorkflow = jest.fn(async () => 'reconciled-workflow');
+  const retainWorkflowSource = jest.fn(async () => undefined);
+  const push = jest.fn();
+  const adapter = new SugarScriptImageFileHostAdapter({
+    host,
+    importSource: async () => {
+      throw new Error('source compilation failed');
+    },
+    importWorkflow,
+    validateWorkflow: async () => undefined,
+    retainWorkflowSource,
+    feedback: { push },
+    readErrorMessage: (error) => String(error),
+  });
+  adapter.setup();
+  const paired = pngFile(
+    textChunk('sugar_script', 'invalid source'),
+    textChunk('workflow', JSON.stringify(workflow)),
+  );
+
+  await expect(host.handleFile(paired)).resolves.toBe('native-workflow');
+
+  expect(original).toHaveBeenCalledWith(paired);
+  expect(importWorkflow).not.toHaveBeenCalled();
+  expect(retainWorkflowSource).toHaveBeenCalledWith('invalid source');
+  expect(push).toHaveBeenCalledWith(
+    'warning',
+    'Embedded workflow loaded after reconstruction failed',
+    'Error: source compilation failed',
+  );
+});
+
+test('reports failure only when both reconstruction and native workflow loading fail', async () => {
+  const original = jest.fn(async () => {
+    throw new Error('embedded workflow is invalid');
+  });
+  const host: SugarScriptFileHost = { handleFile: original };
+  const push = jest.fn();
+  const adapter = new SugarScriptImageFileHostAdapter({
+    host,
+    importSource: async () => {
+      throw new Error('source compilation failed');
+    },
+    importWorkflow: async () => {
+      throw new Error('exact Cube artifact unavailable');
+    },
+    validateWorkflow: async () => undefined,
+    retainWorkflowSource: async () => undefined,
+    feedback: { push },
+    readErrorMessage: (error) => String(error),
+  });
+  adapter.setup();
+  const paired = pngFile(
+    textChunk('sugar_script', 'invalid source'),
+    textChunk('workflow', JSON.stringify(managedWorkflow())),
+  );
+
+  await expect(host.handleFile(paired)).resolves.toBeUndefined();
+
+  expect(original).toHaveBeenCalledWith(paired);
+  expect(push).toHaveBeenCalledWith(
+    'error',
+    'Recipe image import failed',
+    'Error: embedded workflow is invalid',
+  );
+  expect(push).not.toHaveBeenCalledWith('warning', expect.anything(), expect.anything());
 });
 
 test('reports source compilation failure without invoking Comfy as a fallback', async () => {
@@ -224,6 +449,40 @@ function managedWorkflow(): Record<string, unknown> {
       },
     ],
   };
+}
+
+function nativeWildCubeWorkflow(): Record<string, unknown> {
+  return {
+    nodes: [
+      {
+        id: 1,
+        type: 'cube-definition',
+        properties: {
+          sugarcubes_kind: 'cube',
+          sugarcubes_cube: { instance_id: 'instance-1' },
+        },
+      },
+    ],
+    definitions: {
+      subgraphs: [
+        {
+          id: 'cube-definition',
+          extra: {
+            sugarcubes_kind: 'cube',
+            sugarcubes_cube: {
+              cube_id: 'local/personal/missing.cube',
+              cube_version: '1.0.0',
+            },
+            sugarcubes_document: { cube_id: 'local/personal/missing.cube', version: '1.0.0' },
+          },
+        },
+      ],
+    },
+  };
+}
+
+function ordinaryWorkflow(): Record<string, unknown> {
+  return { nodes: [{ id: 1, type: 'KSampler' }], links: [] };
 }
 
 function pngFile(...metadataChunks: Uint8Array[]): File {

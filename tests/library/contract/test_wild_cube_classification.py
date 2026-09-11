@@ -85,6 +85,35 @@ def test_reports_exact_and_divergent_matches_without_shadowing_workflow(
     assert workflow.payload is not source
 
 
+def test_writable_source_authorizes_editing_when_embedded_content_has_diverged(
+    tmp_path: Path,
+) -> None:
+    """Keep source ownership independent from exact semantic equality."""
+
+    workflow = read_canonical_workflow(cube_workflow())
+    definition = workflow.definitions[0]
+    service = CubeLibraryClassService(
+        stable=StableCubeRepository(tmp_path / "stable"),
+        catalog_artifacts=lambda: (
+            CatalogCubeArtifact(
+                definition.cube_id,
+                definition.cube_version,
+                "f" * 64,
+                "local",
+                "writable",
+                "local:personal",
+            ),
+        ),
+    )
+
+    classification = service.classify_workflow(workflow).definitions[0]
+
+    assert classification.matches == ()
+    assert [match.state for match in classification.divergent_matches] == ["divergent"]
+    assert classification.access == "writable"
+    assert "edit_definition" in classification.permitted_operations
+
+
 def test_duplicate_instances_share_definition_classification(tmp_path: Path) -> None:
     """Keep one content classification while preserving stable instance identities."""
 

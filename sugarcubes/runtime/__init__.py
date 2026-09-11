@@ -26,6 +26,12 @@ from .cube_output_events import (
     register_cube_output_observer,
     unregister_cube_output_observer,
 )
+from .queue_observers import (
+    QUEUE_OBSERVER_API_VERSION,
+    queue_observer_registry,
+    register_validated_queue_observer,
+    unregister_validated_queue_observer,
+)
 
 __all__ = [
     "CUBE_OUTPUT_OBSERVER_API_VERSION",
@@ -34,7 +40,11 @@ __all__ = [
     "CubeOutputEventBus",
     "CubeOutputObserver",
     "MediaKind",
+    "QUEUE_OBSERVER_API_VERSION",
     "notify_cube_output_observers",
     "register_cube_output_observer",
+    "queue_observer_registry",
+    "register_validated_queue_observer",
     "unregister_cube_output_observer",
+    "unregister_validated_queue_observer",
 ]

@@ -35,6 +35,11 @@ from .native_workflow_projection import (
     NativeWorkflowProjectionError,
     project_native_workflow_plan,
 )
+from .native_workflow_normalization import (
+    ExactCubeDocumentResolver,
+    NativeWorkflowNormalizationError,
+    NativeWorkflowNormalizer,
+)
 
 __all__ = [
     "NativeCubeImport",
@@ -47,6 +52,9 @@ __all__ = [
     "LegacyWorkflowImportError",
     "NativeWorkflowAuthoringResult",
     "NativeWorkflowImportPlan",
+    "ExactCubeDocumentResolver",
+    "NativeWorkflowNormalizationError",
+    "NativeWorkflowNormalizer",
     "NativeWorkflowProjectionError",
     "SugarScriptWorkflowAuthoringService",
     "WorkflowArtifactInterpreter",

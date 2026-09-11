@@ -319,4 +319,3 @@ def _jsonify_definition_value(value: Any) -> Any:
     if isinstance(value, list):
         return [_jsonify_definition_value(item) for item in value]
     return value
-

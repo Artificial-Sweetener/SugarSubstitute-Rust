@@ -354,6 +354,13 @@ def test_compiler_resolves_native_cube_instances_connections_and_values() -> Non
     assert _compiled_inputs(producer_two["sampler"])["steps"] == 20
     assert producer_two["sampler"]["mode"] == 4
     assert _compiled_inputs(producer_one["linked_sampler"])["cfg"] == ["provider", 0]
+    producer_one_document = result.plan.instances[0].document
+    producer_one_values = producer_one_document.authored_flavor_index()[
+        producer_one_document.surface.default_flavor_id
+    ].values
+    assert producer_one_values["sampler.cfg"] == 9
+    assert producer_one_values["sampler.steps"] == 20
+    assert producer_one_values["sampler.seed"] == {"$sugarscript": "random"}
     assert [
         (connection.source_binding, connection.target_binding)
         for connection in result.plan.connections

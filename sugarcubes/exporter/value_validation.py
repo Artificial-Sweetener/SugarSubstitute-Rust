@@ -24,9 +24,11 @@ from ..cube_model.input_persistence import should_store_authored_value
 from ..cube_model.picker_fields import (
     find_input_field_spec,
     is_picker_field_spec,
+    is_unselected_picker_value,
     picker_options,
 )
 from ..cube_model.runtime_references import contains_runtime_reference
+from ..cube_model.subgraph_boundary_widgets import index_boundary_widget_names
 from ..cube_model.widget_values import (
     WidgetSnapshotError,
     decode_workflow_widget_snapshot,
@@ -56,6 +58,10 @@ def validate_named_node_inputs(
             continue
         if contains_runtime_reference(value):
             continue
+        if value is None:
+            continue
+        if is_unselected_picker_value(value, field_spec):
+            continue
         reason = invalid_named_value_reason(value, field_spec)
         if reason is not None:
             _raise_value_error(
@@ -74,6 +80,7 @@ def validate_subgraph_widget_values(
     """Validate subgraph values through names stored in the same snapshot."""
 
     for subgraph in subgraphs:
+        boundary_names_by_node = index_boundary_widget_names(subgraph)
         nodes = subgraph.get("nodes")
         if not _is_sequence(nodes):
             continue
@@ -86,8 +93,18 @@ def validate_subgraph_widget_values(
             definition = definitions.get(class_type)
             if not isinstance(definition, Mapping):
                 continue
+            node_id = node.get("id")
+            boundary_names = (
+                boundary_names_by_node.get(node_id, frozenset())
+                if isinstance(node_id, str | int) and not isinstance(node_id, bool)
+                else frozenset()
+            )
             try:
-                snapshot = decode_workflow_widget_snapshot(node, definition)
+                snapshot = decode_workflow_widget_snapshot(
+                    node,
+                    definition,
+                    included_linked_names=boundary_names,
+                )
             except WidgetSnapshotError as exc:
                 raise PersistedValueError(
                     "Unsafe subgraph widget snapshot: "

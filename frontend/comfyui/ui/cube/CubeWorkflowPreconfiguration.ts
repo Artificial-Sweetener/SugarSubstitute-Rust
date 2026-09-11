@@ -25,6 +25,8 @@ import {
   type EmbeddedDefinitionStore,
 } from '../workflow/EmbeddedCubeDefinitionPublisher.js';
 import { CubeWorkflowLibraryState } from '../workflow/CubeWorkflowLibraryState.js';
+import { CubeSerializedDocumentReconciler } from './CubeSerializedDocumentReconciler.js';
+import { CubeSerializedWidgetRehydrator } from './CubeSerializedWidgetRehydrator.js';
 
 /** Own the serialized workflow phase and its one pending legacy migration batch. */
 export class CubeWorkflowPreconfiguration {
@@ -32,6 +34,8 @@ export class CubeWorkflowPreconfiguration {
   readonly #definitionPresentation: CubeSerializedDefinitionPresentationAdapter;
   readonly #embeddedDefinitions: EmbeddedCubeDefinitionPublisher | null;
   readonly libraryState: CubeWorkflowLibraryState | null;
+  readonly #widgetRehydrator: CubeSerializedWidgetRehydrator | null;
+  readonly #documentReconciler: CubeSerializedDocumentReconciler;
   #legacyBatch: LegacyCubeMigrationBatch | null = null;
 
   /** Bind the focused legacy extraction collaborator. */
@@ -40,29 +44,37 @@ export class CubeWorkflowPreconfiguration {
     definitionPresentation = new CubeSerializedDefinitionPresentationAdapter(),
     embeddedDefinitions: EmbeddedCubeDefinitionPublisher | null = null,
     libraryState: CubeWorkflowLibraryState | null = null,
+    widgetRehydrator: CubeSerializedWidgetRehydrator | null = null,
+    documentReconciler = new CubeSerializedDocumentReconciler(),
   ) {
     this.#legacyExtractor = legacyExtractor;
     this.#definitionPresentation = definitionPresentation;
     this.#embeddedDefinitions = embeddedDefinitions;
     this.libraryState = libraryState;
+    this.#widgetRehydrator = widgetRehydrator;
+    this.#documentReconciler = documentReconciler;
   }
 
   /** Compose preconfiguration with workflow-embedded definition authority. */
   static withEmbeddedDefinitions(
     store: EmbeddedDefinitionStore,
     libraryState: CubeWorkflowLibraryState | null = null,
+    widgetRehydrator: CubeSerializedWidgetRehydrator | null = null,
   ): CubeWorkflowPreconfiguration {
     return new CubeWorkflowPreconfiguration(
       undefined,
       undefined,
       new EmbeddedCubeDefinitionPublisher(store),
       libraryState,
+      widgetRehydrator,
     );
   }
 
   /** Detach legacy records before graph construction. */
   prepare(workflow: unknown): number {
     this.libraryState?.begin(workflow);
+    this.#documentReconciler.prepare(workflow);
+    this.#widgetRehydrator?.prepare(workflow);
     this.#embeddedDefinitions?.publish(workflow);
     this.#definitionPresentation.prepare(workflow);
     const batch = this.#legacyExtractor.extractInPlace(workflow);

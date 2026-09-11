@@ -86,6 +86,10 @@ export class CubeSaveReconciler {
                     cubeRevisionRef: WORKTREE_REVISION,
                     cubeDefinitionKey: definitionKey,
                 });
+                this.cubeNodeSave?.updateDocuments(cubeNodeInstanceIds, definitionCube, {
+                    cubeId,
+                    cubeVersion,
+                });
             }
             this.alignTargetGroupIdentity({
                 graph,

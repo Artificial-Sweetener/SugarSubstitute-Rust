@@ -21,6 +21,8 @@ from collections.abc import Mapping, Sequence
 from enum import Enum
 from typing import Any
 
+from .picker_fields import is_picker_field_spec, picker_options
+
 
 class InputPersistence(str, Enum):
     """Describe where one name-addressed node input value may persist."""
@@ -58,6 +60,31 @@ _LOCAL_RESOURCE_FIELDS = frozenset(
 
 _LOCAL_FILE_METADATA_KEYS = frozenset({"image_folder"})
 _LOCAL_FILE_METADATA_SUFFIXES = ("_path_extensions",)
+_LOCAL_RESOURCE_NAME_SUFFIXES = (
+    "_checkpoint",
+    "_checkpoint_name",
+    "_diffusion_model",
+    "_encoder",
+    "_encoder_name",
+    "_model",
+    "_model_name",
+    "_text_encoder",
+    "_unet",
+    "_unet_name",
+    "_vae",
+    "_vae_name",
+)
+_LOCAL_RESOURCE_EXACT_NAMES = frozenset({"model", "text_encoder", "vae"})
+_LOCAL_RESOURCE_FILE_EXTENSIONS = (
+    ".bin",
+    ".ckpt",
+    ".engine",
+    ".gguf",
+    ".onnx",
+    ".pt",
+    ".pth",
+    ".safetensors",
+)
 
 
 def classify_input_persistence(
@@ -75,6 +102,14 @@ def classify_input_persistence(
     if is_local_file_field_spec(field_spec):
         return InputPersistence.LOCAL_RESOURCE
     if normalized_name in _LOCAL_RESOURCE_INPUT_NAMES:
+        return InputPersistence.LOCAL_RESOURCE
+    if _picker_contains_local_resource_paths(field_spec):
+        return InputPersistence.LOCAL_RESOURCE
+    if (
+        _is_resource_shaped_input_name(normalized_name)
+        and is_picker_field_spec(field_spec)
+        and not picker_options(field_spec)
+    ):
         return InputPersistence.LOCAL_RESOURCE
     if (normalized_class, normalized_name) in _LOCAL_RESOURCE_FIELDS:
         return InputPersistence.LOCAL_RESOURCE
@@ -112,6 +147,25 @@ def is_local_file_field_spec(field_spec: Any) -> bool:
         if normalized_key.endswith(_LOCAL_FILE_METADATA_SUFFIXES):
             return True
     return False
+
+
+def _is_resource_shaped_input_name(input_name: str) -> bool:
+    """Recognize conventional loader resource identities without node coupling."""
+
+    normalized = input_name.strip().lower()
+    return normalized in _LOCAL_RESOURCE_EXACT_NAMES or normalized.endswith(
+        _LOCAL_RESOURCE_NAME_SUFFIXES
+    )
+
+
+def _picker_contains_local_resource_paths(field_spec: Any) -> bool:
+    """Recognize host inventory pickers from their file-shaped options."""
+
+    return any(
+        isinstance(option, str)
+        and option.strip().lower().endswith(_LOCAL_RESOURCE_FILE_EXTENSIONS)
+        for option in picker_options(field_spec)
+    )
 
 
 def _field_metadata(field_spec: Any) -> Mapping[str, Any]:

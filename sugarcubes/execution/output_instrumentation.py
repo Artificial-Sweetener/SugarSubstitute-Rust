@@ -98,6 +98,7 @@ class CubeOutputInstrumenter:
                     CubeOutputIdentity(
                         execution_id=execution_id,
                         instance_id=instance_id,
+                        instance_alias=instance.instance_alias,
                         binding=binding_name,
                         root_node_id=instance.node_id,
                         output_slot=output_slot,

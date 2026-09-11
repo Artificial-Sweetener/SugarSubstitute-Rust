@@ -10,6 +10,7 @@ from typing import cast
 
 from ..cube_model.native_subgraph_defaults import (
     native_boundary_widget_names,
+    native_surface_widget_defaults,
     native_widget_defaults,
 )
 
@@ -41,6 +42,18 @@ def reconcile_saved_node_values(
         )
 
     class_type = _text(target_node.get("class_type"))
+    exact_subgraph = exact_subgraphs.get(class_type)
+    if exact_subgraph is not None:
+        try:
+            return native_surface_widget_defaults(
+                saved_node,
+                _subgraph_boundary_definition(exact_subgraph),
+                _subgraph_boundary_names(exact_subgraph),
+            )
+        except ValueError as error:
+            raise LegacyWorkflowImportError(
+                f"Nested node '{saved_symbol(saved_node)}' values are ambiguous: {error}"
+            ) from error
     definition = definitions.get(class_type)
     if not isinstance(definition, Mapping):
         values = saved_node.get("widgets_values")
@@ -49,6 +62,17 @@ def reconcile_saved_node_values(
                 f"Node '{saved_symbol(saved_node)}' lacks its exact saved schema"
             )
         return {}
+    if versioned_widget_names is not None:
+        try:
+            return native_surface_widget_defaults(
+                saved_node,
+                definition,
+                versioned_widget_names,
+            )
+        except ValueError as error:
+            raise LegacyWorkflowImportError(
+                f"Node '{saved_symbol(saved_node)}' values are ambiguous: {error}"
+            ) from error
     try:
         return native_widget_defaults(
             saved_node,
@@ -85,6 +109,33 @@ def saved_symbol(node: Mapping[str, object]) -> str:
         if isinstance(properties, Mapping)
         else ""
     )
+
+
+def _subgraph_boundary_definition(
+    subgraph: Mapping[str, object],
+) -> dict[str, object]:
+    """Project stable native subgraph boundaries as a widget decoding schema."""
+
+    required = {
+        name: [value_type]
+        for boundary in _records(subgraph.get("inputs"))
+        if (name := _text(boundary.get("name")))
+        if (value_type := _text(boundary.get("type")))
+    }
+    return {
+        "input": {"required": required},
+        "input_order": {"required": list(required)},
+    }
+
+
+def _subgraph_boundary_names(subgraph: Mapping[str, object]) -> list[str]:
+    """Return exact versioned public input identities in declaration order."""
+
+    return [
+        name
+        for boundary in _records(subgraph.get("inputs"))
+        if (name := _text(boundary.get("name")))
+    ]
 
 
 def _reconcile_nested_values(

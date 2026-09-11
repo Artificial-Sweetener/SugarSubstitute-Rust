@@ -22,6 +22,7 @@ from .models import (
     CubeBoundaryConnection,
     CubeBoundaryEndpoint,
     CubeExecutionReport,
+    CubeExecutionNodeIdentity,
     CubeExecutionRequest,
     CubeExecutionResult,
     CubeOptimizationOptions,
@@ -37,6 +38,13 @@ from .models import (
     QueueMetadata,
 )
 from .optimizer import CubePromptOptimizer
+from .queue_observers import (
+    QueueObserver,
+    QueueObserverPublisher,
+    QueueObserverRegistry,
+    RequiredQueueObserverFailure,
+    ValidatedQueueEvent,
+)
 from .topology import build_cube_topology
 
 __all__ = [
@@ -48,6 +56,7 @@ __all__ = [
     "CubeExecutionCoordinator",
     "CubeExecutionError",
     "CubeExecutionReport",
+    "CubeExecutionNodeIdentity",
     "CubeExecutionRequest",
     "CubeExecutionResult",
     "CubeOptimizationOptions",
@@ -71,5 +80,10 @@ __all__ = [
     "PreparedCubeExecution",
     "ProximityConnection",
     "QueueMetadata",
+    "QueueObserver",
+    "QueueObserverPublisher",
+    "QueueObserverRegistry",
+    "RequiredQueueObserverFailure",
+    "ValidatedQueueEvent",
     "build_cube_topology",
 ]

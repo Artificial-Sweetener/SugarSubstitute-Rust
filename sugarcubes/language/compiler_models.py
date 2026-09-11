@@ -18,7 +18,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Mapping, Protocol
 
 from ..cube_model import CubeDocument
 from .source import SourceSpan, SugarScriptDiagnostic
@@ -67,12 +67,24 @@ class CompiledCubeConnection:
 
 
 @dataclass(frozen=True)
+class CompiledFieldAnnotation:
+    """Attach opaque companion data to one stable Cube instance field."""
+
+    instance_id: str
+    node_symbol: str
+    input_name: str
+    namespace: str
+    payload: Mapping[str, object]
+
+
+@dataclass(frozen=True)
 class SugarScriptWorkflowPlan:
     """Hold a deterministic host-neutral plan for constructing a native Cube workflow."""
 
     semantic_hash: str
     instances: tuple[CompiledCubeInstance, ...]
     connections: tuple[CompiledCubeConnection, ...]
+    field_annotations: tuple[CompiledFieldAnnotation, ...] = ()
 
 
 @dataclass(frozen=True)

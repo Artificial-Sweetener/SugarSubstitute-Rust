@@ -24,12 +24,14 @@ from ..cube_model import CubeDocument
 from ..cube_model.merge import materialize_nodes
 from .compiler_models import (
     CompiledCubeConnection,
+    CompiledFieldAnnotation,
     CompiledCubeInstance,
     SugarScriptCompileRequest,
     SugarScriptCompileResult,
     SugarScriptWorkflowPlan,
 )
 from .expression_evaluator import evaluate_expression
+from .instance_control_values import persist_instance_control_values
 from .node_linking import apply_whole_node_link
 from .parser import SugarScriptParser
 from .resolved_instances import (
@@ -60,6 +62,7 @@ from .syntax import (
     SetStatement,
     SugarPath,
     SugarStatement,
+    SugarScriptComment,
     UseStatement,
 )
 
@@ -166,20 +169,31 @@ class SugarScriptCompiler:
 
         if any(item.severity is DiagnosticSeverity.ERROR for item in diagnostics):
             return SugarScriptCompileResult(None, tuple(diagnostics))
-        frozen = tuple(
-            CompiledCubeInstance(
-                state.instance_id,
-                state.alias,
-                state.document.cube_id,
-                state.document.version,
-                state.bypassed,
-                CubeDocument.from_dict(deepcopy(state.payload)),
-                state.source_span,
+        frozen_instances: list[CompiledCubeInstance] = []
+        for state in ordered_instances:
+            persist_instance_control_values(
+                state.payload,
+                authored_flavor_id=state.authored_flavor_id,
             )
-            for state in ordered_instances
-        )
+            frozen_instances.append(
+                CompiledCubeInstance(
+                    state.instance_id,
+                    state.alias,
+                    state.document.cube_id,
+                    state.document.version,
+                    state.bypassed,
+                    CubeDocument.from_dict(deepcopy(state.payload)),
+                    state.source_span,
+                )
+            )
+        frozen = tuple(frozen_instances)
         return SugarScriptCompileResult(
-            SugarScriptWorkflowPlan(semantic_hash, frozen, tuple(connections)),
+            SugarScriptWorkflowPlan(
+                semantic_hash,
+                frozen,
+                tuple(connections),
+                _compile_field_annotations(parsed.document.items, instances),
+            ),
             tuple(diagnostics),
         )
 
@@ -218,6 +232,7 @@ class SugarScriptCompiler:
                 alias,
                 document,
                 payload,
+                flavor_id,
                 statement.bypassed,
                 statement.span,
             )
@@ -247,6 +262,37 @@ def _apply_set(
         if not isinstance(inputs, dict):
             raise ValueError(f"Node '{instance.alias}.{node_key}' has invalid inputs.")
         inputs[input_key] = deepcopy(value)
+
+
+def _compile_field_annotations(
+    items: tuple[SugarStatement | SugarScriptComment, ...],
+    instances: Mapping[str, ResolvedCubeInstance],
+) -> tuple[CompiledFieldAnnotation, ...]:
+    """Bind adjacent opaque metadata comments to resolved stable field identities."""
+
+    annotations: list[CompiledFieldAnnotation] = []
+    for index, item in enumerate(items[:-1]):
+        if not isinstance(item, SetStatement) or len(item.target.parts) != 3:
+            continue
+        comment = items[index + 1]
+        if (
+            not isinstance(comment, SugarScriptComment)
+            or comment.extension_name != "sha256"
+            or not isinstance(comment.extension_payload, str)
+        ):
+            continue
+        for path in expand_path(item.target):
+            instance, node_symbol, input_name = resolve_field(instances, path.parts)
+            annotations.append(
+                CompiledFieldAnnotation(
+                    instance_id=instance.instance_id,
+                    node_symbol=node_symbol,
+                    input_name=input_name,
+                    namespace="substitute.model_asset",
+                    payload={"sha256": comment.extension_payload.upper()},
+                )
+            )
+    return tuple(annotations)
 
 
 def _apply_node_link(
@@ -354,11 +400,11 @@ def _compile_connection(
     return result
 
 
-def _resolve_flavor(document: CubeDocument, requested: str | None) -> str | None:
+def _resolve_flavor(document: CubeDocument, requested: str | None) -> str:
     """Resolve authored flavor ids and names case-insensitively."""
 
     if requested is None:
-        return None
+        return document.surface.default_flavor_id
     matches = [
         flavor.id
         for flavor in document.flavors.authored

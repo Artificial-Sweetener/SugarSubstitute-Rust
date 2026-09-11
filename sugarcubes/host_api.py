@@ -21,8 +21,11 @@ import sys
 
 from .backend.composition import BackendServices
 from .runtime import (
+    QUEUE_OBSERVER_API_VERSION,
     register_cube_output_observer,
+    register_validated_queue_observer,
     unregister_cube_output_observer,
+    unregister_validated_queue_observer,
 )
 
 HOST_API_VERSION = 1
@@ -64,9 +67,12 @@ __all__ = [
     "HOST_API_MODULE_NAME",
     "HOST_API_VERSION",
     "HOST_API_VERSIONS",
+    "QUEUE_OBSERVER_API_VERSION",
     "active_execution_service",
     "active_backend_services",
     "register_cube_output_observer",
+    "register_validated_queue_observer",
     "set_active_backend_services",
     "unregister_cube_output_observer",
+    "unregister_validated_queue_observer",
 ]

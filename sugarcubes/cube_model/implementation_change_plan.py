@@ -274,7 +274,9 @@ def _describe_change(
         return "Defaults", controls.get(control_id, _humanize(control_id))
     if len(parts) >= 3 and parts[:2] == ["implementation", "nodes"]:
         symbol = parts[2]
-        node_label = nodes.get(symbol) or _mapping_label(previous, proposed) or _humanize(symbol)
+        node_label = (
+            nodes.get(symbol) or _mapping_label(previous, proposed) or _humanize(symbol)
+        )
         if len(parts) == 3:
             return "Nodes", node_label
         if len(parts) >= 5 and parts[3] == "inputs":
@@ -331,7 +333,11 @@ def _node_labels(document: CubeDocument) -> dict[str, str]:
     labels: dict[str, str] = {}
     for symbol, node in document.implementation.nodes.items():
         label = node.get("label")
-        labels[symbol] = label.strip() if isinstance(label, str) and label.strip() else _humanize(symbol)
+        labels[symbol] = (
+            label.strip()
+            if isinstance(label, str) and label.strip()
+            else _humanize(symbol)
+        )
     return labels
 
 

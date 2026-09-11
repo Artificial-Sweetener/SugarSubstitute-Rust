@@ -21,17 +21,43 @@ from .composition import BackendServices
 from .responses import BackendError, json_error_from_exception, json_success
 from .route_types import RouteHandler
 from .validation import parse_json_body
+from ..runtime import QUEUE_OBSERVER_API_VERSION
 
 
 @dataclass(frozen=True)
 class ExecutionRouteHandlers:
     """Collect direct SugarCubes execution routes."""
 
+    get_capabilities: RouteHandler
     queue_execution: RouteHandler
 
 
 def build_execution_route_handlers(services: BackendServices) -> ExecutionRouteHandlers:
     """Build one thin dynamic-JSON adapter over the execution coordinator."""
+
+    async def get_capabilities(_request: Any) -> Any:
+        """Publish the versioned native Cube graph execution contract."""
+
+        return json_success(
+            {
+                "available": True,
+                "schema_version": 1,
+                "workflow_schema_version": 1,
+                "report_schema_version": 1,
+                "queue_observer_api_version": QUEUE_OBSERVER_API_VERSION,
+                "queue_route": "/sugarcubes/v2/executions/queue",
+                "capabilities_route": "/sugarcubes/v2/executions/capabilities",
+                "workflow_analysis_route": "/sugarcubes/v2/workflows/analyze",
+                "workflow_reorder_route": "/sugarcubes/v2/workflows/reorder",
+                "workflow_cube_append_route": "/sugarcubes/v2/workflows/cubes/append",
+                "workflow_cube_create_route": "/sugarcubes/v2/workflows/cubes/create",
+                "workflow_cube_remove_route": "/sugarcubes/v2/workflows/cubes/remove",
+                "execution_owner": "sugarcubes",
+                "atomic_queueing": True,
+                "cube_scoped_optimization": True,
+                "validated_queue_observers": True,
+            }
+        )
 
     async def queue_execution(request: Any) -> Any:
         try:
@@ -45,6 +71,7 @@ def build_execution_route_handlers(services: BackendServices) -> ExecutionRouteH
                 "number": receipt.number,
                 "error": receipt.error,
                 "node_errors": receipt.node_errors,
+                "execution_prompt": _json_value(receipt.execution_prompt),
                 "report": _json_value(asdict(result.report)),
             }
             return json_success(payload, status=200 if receipt.accepted else 400)
@@ -59,7 +86,10 @@ def build_execution_route_handlers(services: BackendServices) -> ExecutionRouteH
         except BackendError as error:
             return json_error_from_exception(error)
 
-    return ExecutionRouteHandlers(queue_execution=queue_execution)
+    return ExecutionRouteHandlers(
+        get_capabilities=get_capabilities,
+        queue_execution=queue_execution,
+    )
 
 
 def _parse_request(body: Mapping[str, Any]) -> CubeExecutionRequest:

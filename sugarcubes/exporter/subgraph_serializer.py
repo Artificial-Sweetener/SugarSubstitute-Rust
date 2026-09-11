@@ -253,4 +253,3 @@ def _subgraph_has_executable_body(definition: Mapping[str, Any]) -> bool:
         if isinstance(node_type, str) and node_type.strip():
             return True
     return False
-

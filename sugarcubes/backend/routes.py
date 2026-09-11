@@ -33,6 +33,13 @@ from .repository_routes import build_repository_route_handlers
 from .route_types import RouteHandler
 from .sugarscript_routes import build_sugarscript_route_handlers
 from .workflow_library_routes import build_workflow_library_route_handlers
+from .workflow_analysis_routes import build_workflow_analysis_handler
+from .workflow_mutation_routes import (
+    build_workflow_append_cube_handler,
+    build_workflow_create_cube_handler,
+    build_workflow_remove_cube_handler,
+    build_workflow_reorder_handler,
+)
 
 
 @dataclass(frozen=True)
@@ -83,7 +90,13 @@ class RouteHandlers:
     sync_workflow_cube_source: RouteHandler
     compile_sugarscript: RouteHandler
     compile_legacy_workflow: RouteHandler
+    get_execution_capabilities: RouteHandler
     queue_execution: RouteHandler
+    analyze_workflow: RouteHandler
+    reorder_workflow: RouteHandler
+    append_workflow_cube: RouteHandler
+    create_cube_workflow: RouteHandler
+    remove_workflow_cube: RouteHandler
 
 
 def build_route_handlers(services: BackendServices) -> RouteHandlers:
@@ -100,6 +113,11 @@ def build_route_handlers(services: BackendServices) -> RouteHandlers:
     sugarscript = build_sugarscript_route_handlers(services)
     legacy_workflow = build_legacy_workflow_route_handlers(services)
     execution = build_execution_route_handlers(services)
+    workflow_analysis = build_workflow_analysis_handler(services)
+    workflow_reorder = build_workflow_reorder_handler(services)
+    workflow_append_cube = build_workflow_append_cube_handler(services)
+    workflow_create_cube = build_workflow_create_cube_handler(services)
+    workflow_remove_cube = build_workflow_remove_cube_handler(services)
     return RouteHandlers(
         get_status=catalog.get_status,
         list_cubes=catalog.list_cubes,
@@ -145,7 +163,13 @@ def build_route_handlers(services: BackendServices) -> RouteHandlers:
         sync_workflow_cube_source=workflow_library.sync_workflow_cube_source,
         compile_sugarscript=sugarscript.compile_sugarscript,
         compile_legacy_workflow=legacy_workflow.compile_legacy_workflow,
+        get_execution_capabilities=execution.get_capabilities,
         queue_execution=execution.queue_execution,
+        analyze_workflow=workflow_analysis,
+        reorder_workflow=workflow_reorder,
+        append_workflow_cube=workflow_append_cube,
+        create_cube_workflow=workflow_create_cube,
+        remove_workflow_cube=workflow_remove_cube,
     )
 
 
@@ -204,5 +228,13 @@ def register_routes(prompt_server: Any, services: BackendServices) -> RouteHandl
     routes.post("/sugarcubes/v2/workflows/compile-legacy")(
         handlers.compile_legacy_workflow
     )
+    routes.get("/sugarcubes/v2/executions/capabilities")(
+        handlers.get_execution_capabilities
+    )
     routes.post("/sugarcubes/v2/executions/queue")(handlers.queue_execution)
+    routes.post("/sugarcubes/v2/workflows/analyze")(handlers.analyze_workflow)
+    routes.post("/sugarcubes/v2/workflows/reorder")(handlers.reorder_workflow)
+    routes.post("/sugarcubes/v2/workflows/cubes/append")(handlers.append_workflow_cube)
+    routes.post("/sugarcubes/v2/workflows/cubes/create")(handlers.create_cube_workflow)
+    routes.post("/sugarcubes/v2/workflows/cubes/remove")(handlers.remove_workflow_cube)
     return handlers

@@ -54,6 +54,10 @@ OPTIONAL_FALLBACK_CONTEXTS = {
         "sugarcubes/runtime/cube_output_events.py",
         ("CubeOutputEventBus", "notify"),
     ),
+    (
+        "sugarcubes/execution/queue_observers.py",
+        ("QueueObserverRegistry", "notify"),
+    ),
 }
 
 

@@ -113,9 +113,7 @@ def native_bypass_entry(
     class_type = node.get("type")
     definition = definitions.get(class_type) if isinstance(class_type, str) else None
     definition_outputs = (
-        string_list(definition.get("output"))
-        if isinstance(definition, Mapping)
-        else ()
+        string_list(definition.get("output")) if isinstance(definition, Mapping) else ()
     )
     output_type = (
         definition_outputs[output_index]

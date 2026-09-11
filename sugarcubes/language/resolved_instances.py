@@ -34,6 +34,7 @@ class ResolvedCubeInstance:
     alias: str
     document: CubeDocument
     payload: dict[str, Any]
+    authored_flavor_id: str
     bypassed: bool
     source_span: SourceSpan
 

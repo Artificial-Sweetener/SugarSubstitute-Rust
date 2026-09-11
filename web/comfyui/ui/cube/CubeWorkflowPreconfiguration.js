@@ -17,27 +17,34 @@
 import { LegacyCubeWorkflowExtractor, } from './migration/LegacyCubeWorkflowExtractor.js';
 import { CubeSerializedDefinitionPresentationAdapter } from './CubeSerializedDefinitionPresentationAdapter.js';
 import { EmbeddedCubeDefinitionPublisher, } from '../workflow/EmbeddedCubeDefinitionPublisher.js';
+import { CubeSerializedDocumentReconciler } from './CubeSerializedDocumentReconciler.js';
 /** Own the serialized workflow phase and its one pending legacy migration batch. */
 export class CubeWorkflowPreconfiguration {
     #legacyExtractor;
     #definitionPresentation;
     #embeddedDefinitions;
     libraryState;
+    #widgetRehydrator;
+    #documentReconciler;
     #legacyBatch = null;
     /** Bind the focused legacy extraction collaborator. */
-    constructor(legacyExtractor = new LegacyCubeWorkflowExtractor(), definitionPresentation = new CubeSerializedDefinitionPresentationAdapter(), embeddedDefinitions = null, libraryState = null) {
+    constructor(legacyExtractor = new LegacyCubeWorkflowExtractor(), definitionPresentation = new CubeSerializedDefinitionPresentationAdapter(), embeddedDefinitions = null, libraryState = null, widgetRehydrator = null, documentReconciler = new CubeSerializedDocumentReconciler()) {
         this.#legacyExtractor = legacyExtractor;
         this.#definitionPresentation = definitionPresentation;
         this.#embeddedDefinitions = embeddedDefinitions;
         this.libraryState = libraryState;
+        this.#widgetRehydrator = widgetRehydrator;
+        this.#documentReconciler = documentReconciler;
     }
     /** Compose preconfiguration with workflow-embedded definition authority. */
-    static withEmbeddedDefinitions(store, libraryState = null) {
-        return new CubeWorkflowPreconfiguration(undefined, undefined, new EmbeddedCubeDefinitionPublisher(store), libraryState);
+    static withEmbeddedDefinitions(store, libraryState = null, widgetRehydrator = null) {
+        return new CubeWorkflowPreconfiguration(undefined, undefined, new EmbeddedCubeDefinitionPublisher(store), libraryState, widgetRehydrator);
     }
     /** Detach legacy records before graph construction. */
     prepare(workflow) {
         this.libraryState?.begin(workflow);
+        this.#documentReconciler.prepare(workflow);
+        this.#widgetRehydrator?.prepare(workflow);
         this.#embeddedDefinitions?.publish(workflow);
         this.#definitionPresentation.prepare(workflow);
         const batch = this.#legacyExtractor.extractInPlace(workflow);

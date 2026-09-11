@@ -221,6 +221,164 @@ describe('subgraph widget value rebinding', () => {
     ]);
   });
 
+  test('uses the embedded schema when native input identities are only a partial snapshot', () => {
+    const historicalWidgetNames = [
+      'width',
+      'height',
+      'resize_mode',
+      'sampling',
+      'processor',
+      'divisible_by',
+      'crop_position',
+      'pad_color',
+      'max_batch_size',
+      'sinc_window',
+      'precision',
+    ];
+    const subgraph = {
+      links: [
+        { id: 501, origin_id: 2159, target_id: 2160 },
+        { id: 502, origin_id: 2159, target_id: 2160 },
+        { id: 503, origin_id: -10, target_id: 2160 },
+      ],
+      nodes: [
+        {
+          id: 2160,
+          type: 'SimpleSyrup.ResizeImageToTarget',
+          inputs: [
+            { name: 'width', link: 501, widget: { name: 'width' } },
+            { name: 'height', link: 502, widget: { name: 'height' } },
+            { name: 'sampling', link: 503, widget: { name: 'sampling' } },
+          ],
+          widgets_values: [
+            1024,
+            1024,
+            'Keep AR',
+            'lanczos',
+            'gpu',
+            2,
+            'center',
+            '0, 0, 0',
+            0,
+            3,
+            'fp32',
+          ],
+        },
+      ],
+    };
+
+    rebindSubgraphWidgetValues(
+      subgraph,
+      () => ({
+        widgets: historicalWidgetNames.map((name) => ({ name, value: `default-${name}` })),
+      }),
+      {
+        unavailableNode: 'preserve',
+        historicalWidgetNames: () => historicalWidgetNames,
+        unidentifiedValues: 'discard',
+      },
+    );
+
+    expect(subgraph.nodes[0].widgets_values).toEqual([
+      1024,
+      1024,
+      'Keep AR',
+      'lanczos',
+      'gpu',
+      2,
+      'center',
+      '0, 0, 0',
+      0,
+      3,
+      'fp32',
+    ]);
+  });
+
+  test('recognizes values authored against a newer live layout than the embedded schema', () => {
+    const subgraph = {
+      nodes: [
+        {
+          id: 'models',
+          type: 'SimpleSyrup.SimpleLoadAnima',
+          inputs: [],
+          widgets_values: ['', 'Original', '', '', '', ''],
+        },
+      ],
+    };
+    const historicalNames = [
+      'diffusion_model',
+      'diffusion_weight_dtype',
+      'text_encoder',
+      'text_encoder_device',
+      'vae',
+    ];
+
+    rebindSubgraphWidgetValues(
+      subgraph,
+      () => ({
+        widgets: [
+          {
+            name: 'diffusion_model',
+            value: 'local-model.safetensors',
+            options: { values: ['local-model.safetensors'] },
+          },
+          {
+            name: 'quantization',
+            value: 'Original',
+            options: { values: ['Original', 'FP8 E4M3'] },
+          },
+          {
+            name: 'diffusion_weight_dtype',
+            value: 'default',
+            options: { values: ['default', 'fp16'] },
+          },
+          { name: 'text_encoder', value: 'auto', options: { values: ['auto'] } },
+          {
+            name: 'text_encoder_device',
+            value: 'default',
+            options: { values: ['default', 'cpu'] },
+          },
+          { name: 'vae', value: 'auto', options: { values: ['auto'] } },
+        ],
+      }),
+      {
+        unavailableNode: 'preserve',
+        historicalWidgetNames: () => historicalNames,
+        unidentifiedValues: 'discard',
+      },
+    );
+
+    expect(subgraph.nodes[0].widgets_values).toEqual([
+      'local-model.safetensors',
+      'Original',
+      'default',
+      'auto',
+      'default',
+      'auto',
+    ]);
+  });
+
+  test('uses current defaults for picker choices that are no longer available', () => {
+    const subgraph = {
+      nodes: [
+        {
+          id: 'picker',
+          type: 'ThirdParty.Picker',
+          inputs: [{ name: 'choice', widget: { name: 'choice' } }],
+          widgets_values: ['removed-choice'],
+        },
+      ],
+    };
+
+    rebindSubgraphWidgetValues(subgraph, () => ({
+      widgets: [
+        { name: 'choice', value: 'current-default', options: { values: ['current-default'] } },
+      ],
+    }));
+
+    expect(subgraph.nodes[0].widgets_values).toEqual(['current-default']);
+  });
+
   test('discards stale linked values in favor of the current host default', () => {
     const subgraph = {
       nodes: [
@@ -238,5 +396,22 @@ describe('subgraph widget value rebinding', () => {
     }));
 
     expect(subgraph.nodes[0].widgets_values).toEqual(['current-default']);
+  });
+
+  test('can preserve unavailable node values during non-blocking workflow loading', () => {
+    const subgraph = {
+      nodes: [
+        {
+          id: 7,
+          type: 'MissingCustomNode',
+          inputs: [{ name: 'value', widget: { name: 'value' } }],
+          widgets_values: ['saved-value'],
+        },
+      ],
+    };
+
+    rebindSubgraphWidgetValues(subgraph, () => null, { unavailableNode: 'preserve' });
+
+    expect(subgraph.nodes[0].widgets_values).toEqual(['saved-value']);
   });
 });

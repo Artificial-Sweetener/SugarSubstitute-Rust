@@ -6,7 +6,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..authoring import NativeWorkflowAuthoringResult, NativeWorkflowImportPlan
+from ..authoring import (
+    NativeWorkflowAuthoringResult,
+    NativeWorkflowImportPlan,
+    project_native_workflow_plan,
+)
 from ..language.source import SugarScriptDiagnostic
 
 
@@ -45,6 +49,11 @@ def serialize_sugarscript_result(
         "valid": result.is_valid,
         "plan": (
             serialize_native_workflow_plan(result.plan)
+            if result.plan is not None
+            else None
+        ),
+        "workflow": (
+            project_native_workflow_plan(result.plan)
             if result.plan is not None
             else None
         ),

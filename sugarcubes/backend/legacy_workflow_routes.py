@@ -49,6 +49,4 @@ def build_legacy_workflow_route_handlers(
         except BackendError as error:
             return json_error_from_exception(error)
 
-    return LegacyWorkflowRouteHandlers(
-        compile_legacy_workflow=compile_legacy_workflow
-    )
+    return LegacyWorkflowRouteHandlers(compile_legacy_workflow=compile_legacy_workflow)

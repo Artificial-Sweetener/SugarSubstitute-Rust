@@ -56,6 +56,46 @@ def test_lowering_connects_public_boundaries_and_marks_loose_nodes_explicitly() 
     ]
 
 
+def test_lowering_preserves_manually_selected_cube_boundary_edges() -> None:
+    """Execution must honor explicit graph wiring instead of applying proximity order."""
+
+    source = cube_document(
+        "Source",
+        nodes={
+            "first": {"class_type": "ImagePass", "inputs": {"image": None}},
+            "second": {"class_type": "ImagePass", "inputs": {"image": None}},
+        },
+        inputs={},
+        outputs={"output.first": ["first", 0], "output.second": ["second", 0]},
+    )
+    target = cube_document(
+        "Target",
+        nodes={
+            "first": {"class_type": "ImagePass", "inputs": {"image": None}},
+            "second": {"class_type": "ImagePass", "inputs": {"image": None}},
+        },
+        inputs={
+            "input.first": {"kind": "input", "targets": [["first", "image"]]},
+            "input.second": {"kind": "input", "targets": [["second", "image"]]},
+        },
+        outputs={},
+    )
+    workflow = read_canonical_workflow(
+        cube_workflow(
+            {"source": source, "target": target},
+            links=[
+                [1, 1, 1, 2, 0, "IMAGE"],
+                [2, 1, 0, 2, 1, "IMAGE"],
+            ],
+        )
+    )
+
+    result = NativeCubeWorkflowLowerer().lower(workflow, build_cube_topology(workflow))
+
+    assert _inputs(result.prompt["target:first"])["image"] == ["source:second", 0]
+    assert _inputs(result.prompt["target:second"])["image"] == ["source:first", 0]
+
+
 def test_loose_node_widget_companion_values_fail_closed_without_named_snapshot() -> (
     None
 ):

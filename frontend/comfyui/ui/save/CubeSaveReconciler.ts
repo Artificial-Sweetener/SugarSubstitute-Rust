@@ -63,6 +63,11 @@ interface DirtyStateCoordinator {
 
 interface CubeNodeIdentityPort {
   updateIdentities(instanceIds: readonly string[], updates: CubeNodeIdentityUpdates): number;
+  updateDocuments(
+    instanceIds: readonly string[],
+    document: UnknownRecord,
+    identity: { cubeId: string; cubeVersion: string },
+  ): number;
 }
 
 interface CubeSaveReconcilerDependencies {
@@ -198,6 +203,10 @@ export class CubeSaveReconciler {
           cubeVersion,
           cubeRevisionRef: WORKTREE_REVISION,
           cubeDefinitionKey: definitionKey,
+        });
+        this.cubeNodeSave?.updateDocuments(cubeNodeInstanceIds, definitionCube, {
+          cubeId,
+          cubeVersion,
         });
       }
       this.alignTargetGroupIdentity({

@@ -16,6 +16,7 @@
 /** Adapt graph-owned native Cube nodes to the save application boundary. */
 import { listCubeNodeInstances } from './CubeNodeInstanceCatalog.js';
 import { updateCubeNodeIdentityForIds, } from './CubeNodeIdentityWriter.js';
+import { writeCubeNodeDocumentsForIds } from './CubeNodeDocumentWriter.js';
 /** Isolate live Comfy node lookup and mutation from save orchestration. */
 export class ComfyCubeSaveAdapter {
     #getCatalog;
@@ -30,5 +31,10 @@ export class ComfyCubeSaveAdapter {
     updateIdentities(instanceIds, updates) {
         const catalog = this.#getCatalog();
         return catalog ? updateCubeNodeIdentityForIds(catalog, instanceIds, updates) : 0;
+    }
+    /** Persist one finalized portable document beside each addressed native definition. */
+    updateDocuments(instanceIds, document, identity) {
+        const catalog = this.#getCatalog();
+        return catalog ? writeCubeNodeDocumentsForIds(catalog, instanceIds, document, identity) : 0;
     }
 }

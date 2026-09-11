@@ -83,7 +83,7 @@ def _classify_definition(
     primary_class = exact[0].library_class if exact else "none"
     access: CubeAccess = (
         "writable"
-        if any(match.access == "writable" for match in exact)
+        if any(match.access == "writable" for match in (*exact, *divergent))
         else "read_only"
     )
     source_available = _source_available(definition)

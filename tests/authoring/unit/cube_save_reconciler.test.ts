@@ -119,7 +119,15 @@ describe('CubeSaveReconciler', () => {
     const subgraph = {
       id: 'native-definition',
       name: 'Cube: Native',
-      extra: {},
+      extra: {
+        sugarcubes_document: {
+          cube_id: cubeId,
+          version: '1.0.0',
+          implementation: {},
+          surface: {},
+          flavors: {},
+        },
+      },
     } as unknown as NativeCubeSubgraph;
     const cube: CubeNode = {
       id: 'root-node-81',
@@ -150,6 +158,9 @@ describe('CubeSaveReconciler', () => {
       cube: {
         cube_id: cubeId,
         version: '1.1.0',
+        implementation: {},
+        surface: {},
+        flavors: {},
       },
       nodes: [],
       markers: [],
@@ -178,6 +189,9 @@ describe('CubeSaveReconciler', () => {
     });
     expect((cube.subgraph.extra as Record<string, unknown>).sugarcubes_cube).toEqual(
       cube.properties.sugarcubes_cube,
+    );
+    expect((cube.subgraph.extra as Record<string, unknown>).sugarcubes_document).toEqual(
+      definition.cube,
     );
   });
 });

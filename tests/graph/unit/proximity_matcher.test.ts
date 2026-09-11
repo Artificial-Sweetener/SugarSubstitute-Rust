@@ -108,6 +108,42 @@ describe('ProximityMatcher', () => {
     ).toEqual([[1, 0]]);
   });
 
+  test('consumes repeated typed Cube ports in declared slot order', () => {
+    const outputNode: ComfyNode = {
+      id: 10,
+      pos: [100, 100],
+      size: [400, 320],
+      outputs: [],
+    };
+    const inputNode: ComfyNode = {
+      id: 20,
+      pos: [540, 100],
+      size: [400, 320],
+      inputs: [],
+    };
+    const outputs = ['IMAGE', 'IMAGE', 'IMAGE', 'MASK'].map((type, slot) =>
+      outputEndpoint(outputNode, slot, type, [500, 140 + slot * 40]),
+    );
+    const inputs = ['IMAGE', 'IMAGE', 'MASK', 'MASK'].map((type, slot) =>
+      inputEndpoint(inputNode, slot, type, [540, 140 + slot * 40]),
+    );
+    const matcher = new ProximityMatcher(
+      { discover: () => ({ outputs, inputs }) },
+      () => ({ isValidConnection: (output, input) => output === input }),
+      console,
+    );
+
+    expect(
+      matcher
+        .compute({ _nodes: [outputNode, inputNode] }, { radius: 160, strict: true })
+        .map((match) => [match.outputSlot, match.inputSlot]),
+    ).toEqual([
+      [0, 0],
+      [1, 1],
+      [3, 2],
+    ]);
+  });
+
   test('retains a selected pair inside the release radius and drops it after hysteresis', () => {
     const outputNode: ComfyNode = { id: 10, pos: [100, 100], size: [400, 320] };
     const inputNode: ComfyNode = { id: 20, pos: [540, 100], size: [400, 320] };

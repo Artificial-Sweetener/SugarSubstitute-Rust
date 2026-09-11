@@ -71,6 +71,23 @@ def test_prepare_returns_complete_report_and_never_mutates_saved_workflow() -> N
     assert len(prepared.report.inherited_bindings) == 3
     assert all(owner.instance_id for owner in prepared.node_owners.values())
     assert len(prepared.report.output_identities) == 2
+    assert {
+        identity.instance_alias for identity in prepared.report.output_identities
+    } == {
+        "Provider",
+        "Consumer",
+    }
+    assert {
+        (identity.execution_id, identity.instance_id, identity.instance_alias)
+        for identity in prepared.report.execution_node_identities
+    } == {
+        (
+            node_id,
+            owner.instance_id,
+            "Provider" if owner.instance_id == "cube-a" else "Consumer",
+        )
+        for node_id, owner in prepared.node_owners.items()
+    }
 
 
 def test_prepare_instruments_native_outputs_without_a_portable_document() -> None:

@@ -75,14 +75,14 @@ export class ComfyGraphPreviewImageSource {
     }));
     const imageConstructor = this.#document.defaultView?.HTMLImageElement;
     if (!imageConstructor) return images;
-    const pending: Array<{ graph: object; root: boolean }> = [
-      { graph: this.#rootGraph, root: true },
+    const pending: Array<{ graph: object; executionPath: readonly string[] }> = [
+      { graph: this.#rootGraph, executionPath: [] },
     ];
     const visited = new Set<object>();
     while (pending.length > 0) {
       const next = pending.pop();
       if (!next || visited.has(next.graph)) continue;
-      const { graph, root } = next;
+      const { graph, executionPath } = next;
       visited.add(graph);
       const record = isRecord(graph) ? graph : null;
       const nodes = Array.isArray(record?._nodes)
@@ -93,14 +93,16 @@ export class ComfyGraphPreviewImageSource {
       for (const value of nodes) {
         if (!isRecord(value)) continue;
         const nodeId = readNonEmptyString(value.id);
-        const graphId = readNonEmptyString(record?.id);
-        const locator = !root && graphId && nodeId ? `${graphId}:${nodeId}` : nodeId;
+        const nodePath = nodeId ? [...executionPath, nodeId] : executionPath;
+        const locator = nodePath.length > 0 ? nodePath.join(':') : null;
         if (Array.isArray(value.imgs)) {
           for (const image of value.imgs) {
             if (image instanceof imageConstructor) images.push({ image, locator });
           }
         }
-        if (isRecord(value.subgraph)) pending.push({ graph: value.subgraph, root: false });
+        if (isRecord(value.subgraph)) {
+          pending.push({ graph: value.subgraph, executionPath: nodePath });
+        }
       }
     }
     return images;

@@ -22,6 +22,7 @@ from pathlib import Path
 
 from ..authoring import (
     LegacyWorkflowAuthoringService,
+    NativeWorkflowNormalizer,
     SugarScriptWorkflowAuthoringService,
 )
 from ..exporter import (
@@ -32,6 +33,8 @@ from ..exporter import (
 from ..exporter.versioning import suggest_version
 from ..execution import CubeExecutionCoordinator
 from ..execution import LiveNodeDefaultReconciler
+from ..workflow_analysis import CubeGraphAnalysisService
+from ..workflow_mutation import CubeGraphMutationService
 from ..exporter.definition_snapshot import resolve_definition_via_nodes
 from ..execution.ports import ComfyExecutionPort
 from ..importer import load_cube as load_cube_artifact
@@ -94,6 +97,12 @@ class BackendServices:
     legacy_workflow_authoring: LegacyWorkflowAuthoringService
     execution: CubeExecutionCoordinator = field(
         default_factory=CubeExecutionCoordinator
+    )
+    workflow_analysis: CubeGraphAnalysisService = field(
+        default_factory=CubeGraphAnalysisService
+    )
+    workflow_mutation: CubeGraphMutationService = field(
+        default_factory=lambda: CubeGraphMutationService(CubeGraphAnalysisService())
     )
 
 
@@ -164,6 +173,7 @@ def build_backend_services(
         resolver=workflow_resolver,
         preparer=workflow_preparer,
     )
+    workflow_normalizer = NativeWorkflowNormalizer(workflow_resolver)
     metadata = CubeMetadataService(
         library,
         retarget_cube_payload=retarget_cube_payload,
@@ -224,6 +234,7 @@ def build_backend_services(
         workspace_path=workspace_path or extension_root.parent.parent,
         custom_nodes_root=custom_nodes_root or extension_root.parent,
     )
+    workflow_analysis = CubeGraphAnalysisService(workflow_normalizer)
     return BackendServices(
         library=library,
         picker_catalog=picker_catalog,
@@ -246,5 +257,8 @@ def build_backend_services(
         execution=CubeExecutionCoordinator(
             comfy=execution_port,
             live_defaults=LiveNodeDefaultReconciler(resolve_definition_via_nodes),
+            workflow_normalizer=workflow_normalizer,
         ),
+        workflow_analysis=workflow_analysis,
+        workflow_mutation=CubeGraphMutationService(workflow_analysis),
     )

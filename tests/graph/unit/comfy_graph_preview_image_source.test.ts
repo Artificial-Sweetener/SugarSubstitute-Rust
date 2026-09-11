@@ -67,4 +67,28 @@ describe('ComfyGraphPreviewImageSource', () => {
 
     expect(source.find('blob:transient-preview', '2315')).toBe(image);
   });
+
+  test('uses the flattened Cube instance path for an internal detail preview', () => {
+    const image = document.createElement('img');
+    image.src = '/view?filename=decoded-detail.png&type=temp&subfolder=';
+    Object.defineProperties(image, {
+      naturalWidth: { value: 960 },
+      naturalHeight: { value: 1344 },
+    });
+    const source = new ComfyGraphPreviewImageSource(document, {
+      _nodes: [
+        {
+          id: 'container-definition',
+          subgraph: {
+            id: 'definition',
+            _nodes: [{ id: 'detailer', imgs: [image] }],
+          },
+        },
+      ],
+    });
+
+    expect(
+      source.find('blob:simple-syrup-full-context-detail-preview', 'container-definition:detailer'),
+    ).toBe(image);
+  });
 });

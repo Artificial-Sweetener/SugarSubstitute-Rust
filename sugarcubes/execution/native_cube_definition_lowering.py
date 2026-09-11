@@ -53,15 +53,17 @@ class NativeCubeDefinitionLowerer:
             for entry in instance_inputs
             if entry.name in connected_input_bindings
         }
-        prompt, node_definitions, outputs = (
-            NativeSubgraphDocumentLowerer().lower_definition(
-                instance_id,
-                document,
-                definition,
-                external_inputs,
-                native_subgraphs,
-                native_node_definitions,
-            )
+        (
+            prompt,
+            node_definitions,
+            outputs,
+        ) = NativeSubgraphDocumentLowerer().lower_definition(
+            instance_id,
+            document,
+            definition,
+            external_inputs,
+            native_subgraphs,
+            native_node_definitions,
         )
         return NativeCubeDefinitionLowering(
             prompt=prompt,

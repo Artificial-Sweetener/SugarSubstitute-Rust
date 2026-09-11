@@ -314,9 +314,19 @@ class CubeOutputIdentity:
 
     execution_id: str
     instance_id: str
+    instance_alias: str | None
     binding: str
     root_node_id: str
     output_slot: int
+
+
+@dataclass(frozen=True)
+class CubeExecutionNodeIdentity:
+    """Map one lowered prompt node to its stable Cube instance identity."""
+
+    execution_id: str
+    instance_id: str
+    instance_alias: str
 
 
 @dataclass(frozen=True)
@@ -332,6 +342,7 @@ class CubeExecutionReport:
     inherited_bindings: tuple[InheritedBinding, ...] = ()
     optimization: CubeOptimizationReport | None = None
     output_identities: tuple[CubeOutputIdentity, ...] = ()
+    execution_node_identities: tuple[CubeExecutionNodeIdentity, ...] = ()
     diagnostics: tuple[ExecutionDiagnostic, ...] = ()
     execution_owner: str = "sugarcubes"
 
@@ -347,6 +358,7 @@ class PreparedCubeExecution:
     """Carry one derived queue candidate without retaining mutable source input."""
 
     prompt: ApiPrompt
+    node_definitions: NodeDefinitions
     node_owners: Mapping[str, ExecutionNodeOwner]
     boundary_bindings: tuple[BoundaryBinding, ...]
     queue: CubeQueueOptions
@@ -363,6 +375,7 @@ class ComfyQueueReceipt:
     number: float | None
     error: object | None = None
     node_errors: object | None = None
+    execution_prompt: ApiPrompt | None = None
 
 
 @dataclass(frozen=True)

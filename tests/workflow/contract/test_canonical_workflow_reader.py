@@ -122,8 +122,8 @@ def test_validates_embedded_document_identity_and_retains_canonical_content() ->
     )
 
 
-def test_rejects_embedded_document_identity_divergence() -> None:
-    """Fail closed when portable content claims a different Cube identity."""
+def test_ignores_stale_embedded_document_identity_divergence() -> None:
+    """Let authoritative native state run when its auxiliary document is stale."""
 
     source = cube_workflow()
     definitions = source["definitions"]
@@ -138,10 +138,10 @@ def test_rejects_embedded_document_identity_divergence() -> None:
     assert isinstance(document, dict)
     document["version"] = "9.0.0"
 
-    with pytest.raises(CanonicalWorkflowError) as captured:
-        read_canonical_workflow(source)
+    embedded = read_canonical_workflow(source).definitions[0]
 
-    assert captured.value.code == "workflow.cube_document_identity_mismatch"
+    assert embedded.document is None
+    assert len(embedded.semantic_hash) == 64
 
 
 def test_legacy_embedded_definition_without_document_remains_runnable() -> None:

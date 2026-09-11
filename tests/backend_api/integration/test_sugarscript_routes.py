@@ -72,6 +72,30 @@ def test_compile_route_resolves_catalog_cube_and_returns_native_import_plan(
     nodes = _mapping(implementation["nodes"])
     sampler = _mapping(nodes["sampler"])
     assert _mapping(sampler["inputs"])["steps"] == 24
+    workflow = _mapping(body["workflow"])
+    workflow_nodes = workflow["nodes"]
+    assert isinstance(workflow_nodes, list)
+    assert _mapping(workflow_nodes[0])["type"] == "sugarcubes-plan-definition-1"
+    workflow_definitions = _mapping(workflow["definitions"])["subgraphs"]
+    assert isinstance(workflow_definitions, list)
+    workflow_document = _mapping(
+        _mapping(_mapping(workflow_definitions[0])["extra"])["sugarcubes_document"]
+    )
+    workflow_implementation = _mapping(workflow_document["implementation"])
+    workflow_sampler = _mapping(_mapping(workflow_implementation["nodes"])["sampler"])
+    assert _mapping(workflow_sampler["inputs"])["steps"] == 24
+    authored_flavors = _mapping(workflow_document["flavors"])["authored"]
+    assert isinstance(authored_flavors, list)
+    assert _mapping(_mapping(authored_flavors[0])["values"])["sampler.steps"] == 24
+    assert (
+        _mapping(workflow["extra"])["sugarcubes_authoring_semantic_hash"]
+        == plan["semantic_hash"]
+    )
+    analysis = _mapping(body["analysis"])
+    analyzed_instances = analysis["instances"]
+    assert isinstance(analyzed_instances, list)
+    assert _mapping(analyzed_instances[0])["instance_alias"] == "Native"
+    assert analysis["workflow"] == workflow
 
 
 def test_compile_route_returns_located_diagnostics_and_no_plan(
@@ -90,6 +114,8 @@ def test_compile_route_returns_located_diagnostics_and_no_plan(
     assert response.status == 422
     body = _mapping(decode_json_response(response))
     assert body["plan"] is None
+    assert body["workflow"] is None
+    assert body["analysis"] is None
     diagnostics = body["diagnostics"]
     assert isinstance(diagnostics, list)
     first = _mapping(diagnostics[0])

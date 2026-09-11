@@ -68,6 +68,12 @@ def test_cube_output_is_output_node() -> None:
     assert CubeOutput.OUTPUT_NODE is True
 
 
+def test_cube_output_remains_cacheable_for_identical_inputs() -> None:
+    """Let Comfy reuse CubeOutput when its complete input identity is unchanged."""
+
+    assert "IS_CHANGED" not in vars(CubeOutput)
+
+
 def test_marker_nodes_declare_graph_passthrough_outputs() -> None:
     """Marker nodes publish exact value pass-through provenance metadata."""
 

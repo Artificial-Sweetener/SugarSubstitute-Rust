@@ -208,11 +208,7 @@ def _read_embedded_document(
             "workflow.invalid_cube_document", document_path, str(exc)
         ) from exc
     if document.cube_id != cube_id or document.version != cube_version:
-        raise CanonicalWorkflowError(
-            "workflow.cube_document_identity_mismatch",
-            document_path,
-            "Embedded Cube document identity disagrees with its native definition.",
-        )
+        return None
     return document.to_dict()
 
 

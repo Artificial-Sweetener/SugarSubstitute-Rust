@@ -40,9 +40,10 @@ from .sugarcubes.execution.comfy_execution_port import (
     PromptServerLike,
 )
 from .sugarcubes.host_api import set_active_backend_services
+from .sugarcubes.runtime import queue_observer_registry
 
 WEB_DIRECTORY = "web"
-__version__ = "0.12.0"
+__version__ = "0.13.0"
 _EXTENSION_ROOT = extension_root()
 _LOGGER = logging.getLogger(__name__)
 
@@ -63,6 +64,7 @@ if PromptServer is not None:
             execution_port=DirectComfyExecutionPort(
                 prompt_server=cast(PromptServerLike, prompt_server),
                 execution_module=cast(ComfyExecutionModuleLike, comfy_execution),
+                observers=queue_observer_registry(),
             ),
         )
         set_active_backend_services(_backend_services)

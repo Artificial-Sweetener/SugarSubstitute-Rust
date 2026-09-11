@@ -59,6 +59,7 @@ import { CubeWorkflowLibraryActions } from './workflow/CubeWorkflowLibraryAction
 import { CubeWorkflowLibraryPresentation } from './workflow/CubeWorkflowLibraryPresentation.js';
 import { CubeWorkflowPreconfiguration } from './cube/CubeWorkflowPreconfiguration.js';
 import { CubeWorkflowNodePackMetadata } from './cube/node/CubeWorkflowNodePackMetadata.js';
+import { CubeSerializedWidgetRehydrator } from './cube/CubeSerializedWidgetRehydrator.js';
 
 interface SugarCubesUIOptions extends UnknownRecord {
   adapter?: ComfyAdapter;
@@ -161,6 +162,9 @@ export class SugarCubesUI {
     this.workflowPreconfiguration = CubeWorkflowPreconfiguration.withEmbeddedDefinitions(
       this.definitionStore,
       this.workflowLibraryState,
+      new CubeSerializedWidgetRehydrator(
+        (type) => this.adapter.getLiteGraph()?.createNode(type) ?? null,
+      ),
     );
 
     this.instanceManager = new InstanceManager({

@@ -19,6 +19,7 @@ import { buildCubeOutputExecutionId } from '../cube/execution/CubeOutputExecutio
 import { buildLinkIndex } from '../graph/GraphQuery.js';
 import { isRecord } from '../types/common.js';
 import { CubePreviewRetentionStore } from './CubePreviewRetentionStore.js';
+import { upstreamPreviewLocatorLayers } from './CubeOutputPreviewAncestry.js';
 /** Own Comfy media lookup while leaving preview composition to the surface. */
 export class ComfyCubePreviewCatalog {
     #host;
@@ -44,11 +45,16 @@ export class ComfyCubePreviewCatalog {
             const source = resolveOutputNode(cube, index);
             const locator = source ? (locatorByNode.get(source) ?? '') : '';
             const directItems = source && locator ? this.#readLocatedNodeItems({ node: source, locator }, id) : [];
+            const upstreamItems = source && directItems.length === 0
+                ? this.#readNearestUpstreamPreviewItems(cube, source, locatorByNode, id)
+                : [];
             const items = markerItems.length > 0
                 ? markerItems
                 : directItems.length > 0
                     ? directItems
-                    : this.#readDownstreamOutputItems(cube, index, id);
+                    : upstreamItems.length > 0
+                        ? upstreamItems
+                        : this.#readDownstreamOutputItems(cube, index, id);
             return { id, label: id, items };
         });
         const current = { outputs };
@@ -139,12 +145,25 @@ export class ComfyCubePreviewCatalog {
             ? this.#readNodeItems(localNodeId, label)
             : [];
     }
+    /** Read the nearest live sampler/detailer preview feeding one Cube output. */
+    #readNearestUpstreamPreviewItems(cube, outputNode, locatorByNode, label) {
+        for (const locators of upstreamPreviewLocatorLayers(cube, outputNode, locatorByNode)) {
+            const items = locators.flatMap((locator) => this.#readLivePreviewItems(locator, label));
+            if (items.length > 0)
+                return deduplicateItems(items);
+        }
+        return [];
+    }
     /** Read durable execution media before renderer-owned transient previews. */
     #readNodeItems(locator, label) {
         const output = this.#host.getNodeOutputs()[locator];
         const outputItems = this.#readOutputItems(output, locator, label);
         if (outputItems.length > 0)
             return outputItems;
+        return this.#readLivePreviewItems(locator, label);
+    }
+    /** Convert renderer-owned live preview URLs without treating them as finals. */
+    #readLivePreviewItems(locator, label) {
         const livePreviews = this.#host.getNodePreviewImages()[locator];
         if (!Array.isArray(livePreviews))
             return [];

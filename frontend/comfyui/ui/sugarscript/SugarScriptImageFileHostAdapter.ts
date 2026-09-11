@@ -103,30 +103,35 @@ export class SugarScriptImageFileHostAdapter {
         this.#feedback?.push?.('success', 'Cube workflow imported', file.name);
         return result;
       } catch (error: unknown) {
-        this.#reportFailure(error, 'Cube workflow image import failed');
-        return undefined;
+        return this.#loadEmbeddedWorkflow(file, arguments_, null, error);
       }
     }
     if (metadata.sugarScript === null) return this.#delegate(file, arguments_);
+
+    const managedWorkflow = isManagedCubeWorkflow(metadata.workflow) ? metadata.workflow : null;
+    let workflowValidated = false;
+    let workflowValidationFailure: unknown;
+    if (managedWorkflow) {
+      try {
+        await this.#validateWorkflow(managedWorkflow);
+        workflowValidated = true;
+      } catch (error: unknown) {
+        workflowValidationFailure = error;
+      }
+    }
     try {
-      if (isManagedCubeWorkflow(metadata.workflow)) await this.#validateWorkflow(metadata.workflow);
       const result = await this.#importSource(metadata.sugarScript);
       this.#feedback?.push?.('success', 'SugarScript workflow imported', file.name);
       return result;
     } catch (error: unknown) {
-      if (isManagedCubeWorkflow(metadata.workflow)) {
+      if (managedWorkflow && workflowValidated) {
         let result: unknown;
         try {
-          result = await this.#importWorkflow(metadata.workflow);
+          result = await this.#importWorkflow(managedWorkflow);
         } catch (workflowError: unknown) {
-          this.#reportFailure(workflowError, 'Recipe image import failed');
-          return undefined;
+          return this.#loadEmbeddedWorkflow(file, arguments_, metadata.sugarScript, workflowError);
         }
-        try {
-          await this.#retainWorkflowSource(metadata.sugarScript);
-        } catch {
-          // The attached workflow is still usable and the source failure is reported below.
-        }
+        await this.#retainSourceWithoutBlocking(metadata.sugarScript);
         this.#feedback?.push?.(
           'warning',
           'Workflow imported after SugarScript failed',
@@ -134,8 +139,47 @@ export class SugarScriptImageFileHostAdapter {
         );
         return result;
       }
+      if (metadata.workflow !== null) {
+        return this.#loadEmbeddedWorkflow(
+          file,
+          arguments_,
+          metadata.sugarScript,
+          workflowValidationFailure ?? error,
+        );
+      }
       this.#reportFailure(error);
       return undefined;
+    }
+  }
+
+  /** Load attached workflow bytes when optional Cube reconstruction is unavailable. */
+  async #loadEmbeddedWorkflow(
+    file: File,
+    arguments_: readonly unknown[],
+    source: string | null,
+    reconstructionFailure: unknown,
+  ): Promise<unknown> {
+    try {
+      const result = await this.#delegate(file, arguments_);
+      if (source !== null) await this.#retainSourceWithoutBlocking(source);
+      this.#feedback?.push?.(
+        'warning',
+        'Embedded workflow loaded after reconstruction failed',
+        this.#readErrorMessage(reconstructionFailure),
+      );
+      return result;
+    } catch (error: unknown) {
+      this.#reportFailure(error, 'Recipe image import failed');
+      return undefined;
+    }
+  }
+
+  /** Preserve optional SugarScript without making a usable workflow fail. */
+  async #retainSourceWithoutBlocking(source: string): Promise<void> {
+    try {
+      await this.#retainWorkflowSource(source);
+    } catch {
+      // The workflow remains authoritative when optional source retention fails.
     }
   }
 

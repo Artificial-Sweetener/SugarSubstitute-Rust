@@ -55,8 +55,6 @@ class MigrationSummary:
     results: tuple[MigrationResult, ...]
 
 
-
-
 def main(argv: list[str] | None = None) -> int:
     """Run the CLI entry point for the legacy cube migration tool."""
 

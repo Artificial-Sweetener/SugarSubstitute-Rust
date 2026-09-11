@@ -92,8 +92,6 @@ def build_workflow_index(
     return WorkflowLayoutIndex(nodes=nodes, ds=ds, groups=groups, version=version)
 
 
-
-
 def build_layout_payload(
     cube: CubeData,
     graph: Graph,
@@ -468,9 +466,7 @@ def _resolve_chrome_header(bounds: Any) -> Dict[str, float]:
     header = bounds.get("header") if isinstance(bounds, Mapping) else None
     if not isinstance(header, Mapping):
         header = {}
-    return {
-        "height": coerce_float(header.get("height"), _DEFAULT_CHROME_HEADER_HEIGHT)
-    }
+    return {"height": coerce_float(header.get("height"), _DEFAULT_CHROME_HEADER_HEIGHT)}
 
 
 def _is_finite_number(value: float) -> bool:
@@ -681,4 +677,3 @@ def _round_value(value: float) -> float:
     """Round persisted layout values to a stable precision."""
 
     return round(float(value), 6)
-

@@ -5,20 +5,30 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from copy import deepcopy
 from time import perf_counter_ns
 
-from ..workflow import CanonicalWorkflowError, read_canonical_workflow
+from ..workflow import (
+    CanonicalWorkflow,
+    CanonicalWorkflowError,
+    ComposedValueMaterializer,
+    read_canonical_workflow,
+    WorkflowNormalizer,
+)
+from ..serialized_cube_proximity import SerializedCubeProximityMatcher
 from .errors import CubeQueueError, CubeWorkflowError
 from .inheritance import CubeInheritanceResolver
 from .live_node_defaults import LiveNodeDefaultReconciler
 from .lowering import NativeCubeWorkflowLowerer
 from .models import (
+    CubeExecutionNodeIdentity,
     CubeOptimizationReport,
     CubeExecutionReport,
     CubeExecutionRequest,
     CubeExecutionResult,
     ExecutionDiagnostic,
+    ExecutionNodeOwner,
     PreparedCubeExecution,
 )
 from .optimizer import CubePromptOptimizer, PromptOptimizer
@@ -44,6 +54,8 @@ class CubeExecutionCoordinator:
         output_instrumenter: CubeOutputInstrumenter | None = None,
         comfy: ComfyExecutionPort | None = None,
         clock_ns: NanoClock = perf_counter_ns,
+        proximity_matcher: SerializedCubeProximityMatcher | None = None,
+        workflow_normalizer: WorkflowNormalizer | None = None,
     ) -> None:
         """Bind cohesive domain owners behind one application use case."""
 
@@ -54,6 +66,8 @@ class CubeExecutionCoordinator:
         self._output_instrumenter = output_instrumenter or CubeOutputInstrumenter()
         self._comfy = comfy
         self._clock_ns = clock_ns
+        self._proximity_matcher = proximity_matcher or SerializedCubeProximityMatcher()
+        self._workflow_normalizer = workflow_normalizer
 
     async def queue(self, request: CubeExecutionRequest) -> CubeExecutionResult:
         """Prepare, validate, and queue one canonical Cube workflow through Comfy."""
@@ -72,7 +86,13 @@ class CubeExecutionCoordinator:
 
         measurements = ExecutionPhaseMeasurements.start(self._clock_ns)
         try:
-            workflow = read_canonical_workflow(request.workflow)
+            normalized = (
+                self._workflow_normalizer.normalize(request.workflow)
+                if self._workflow_normalizer is not None
+                else request.workflow
+            )
+            materialized = ComposedValueMaterializer().materialize(normalized)
+            workflow = read_canonical_workflow(materialized)
         except CanonicalWorkflowError as error:
             raise CubeWorkflowError(
                 error.code,
@@ -80,7 +100,11 @@ class CubeExecutionCoordinator:
                 path=error.path,
             ) from error
         measurements.finish("workflow")
-        topology = build_cube_topology(workflow, request.proximity_connections)
+        proximity_connections = (
+            request.proximity_connections
+            or self._proximity_matcher.match(workflow.payload)
+        )
+        topology = build_cube_topology(workflow, proximity_connections)
         measurements.finish("topology")
         lowered = self._lowerer.lower(workflow, topology)
         if self._live_defaults is not None:
@@ -150,6 +174,10 @@ class CubeExecutionCoordinator:
             inherited_bindings=inherited.inherited_bindings,
             optimization=optimization,
             output_identities=instrumented.output_identities,
+            execution_node_identities=_execution_node_identities(
+                instrumented.node_owners,
+                workflow=workflow,
+            ),
             diagnostics=diagnostics,
         )
         _logger.info(
@@ -164,9 +192,35 @@ class CubeExecutionCoordinator:
         )
         return PreparedCubeExecution(
             prompt=instrumented.prompt,
+            node_definitions=inherited.node_definitions,
             node_owners=instrumented.node_owners,
             boundary_bindings=inherited.boundary_bindings,
             queue=queue,
             extra_data=deepcopy(dict(request.extra_data)),
             report=report,
         )
+
+
+def _execution_node_identities(
+    node_owners: Mapping[str, ExecutionNodeOwner],
+    *,
+    workflow: CanonicalWorkflow,
+) -> tuple[CubeExecutionNodeIdentity, ...]:
+    """Describe every Cube-owned lowered node without exposing loose graph ownership."""
+
+    aliases = {
+        instance.instance_id: instance.instance_alias for instance in workflow.instances
+    }
+    identities: list[CubeExecutionNodeIdentity] = []
+    for execution_id in sorted(node_owners):
+        instance_id = node_owners[execution_id].instance_id
+        if instance_id is None:
+            continue
+        identities.append(
+            CubeExecutionNodeIdentity(
+                execution_id=execution_id,
+                instance_id=instance_id,
+                instance_alias=aliases.get(instance_id, instance_id),
+            )
+        )
+    return tuple(identities)

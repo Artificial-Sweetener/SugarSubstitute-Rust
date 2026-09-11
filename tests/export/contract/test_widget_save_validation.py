@@ -27,6 +27,7 @@ from sugarcubes.cube_model.authored_default_policy import (
 from sugarcubes.exporter.value_validation import (
     PersistedValueError,
     validate_named_node_inputs,
+    validate_subgraph_widget_values,
 )
 from sugarcubes.cube_model.widget_values import (
     WidgetSnapshotError,
@@ -205,6 +206,118 @@ def test_subgraph_boundary_widget_inputs_preserve_authored_defaults() -> None:
     assert canonical[0]["nodes"][0]["widgets_values"] == [1080, 30]
 
 
+def test_canonical_subgraph_boundary_values_pass_save_validation() -> None:
+    """Validate canonical values with the same boundary context used to build them."""
+
+    widget_names = [
+        "width",
+        "height",
+        "resize_mode",
+        "sampling",
+        "processor",
+        "divisible_by",
+        "crop_position",
+        "pad_color",
+        "max_batch_size",
+        "sinc_window",
+        "precision",
+    ]
+    widget_values = [
+        1024,
+        1024,
+        "Keep AR",
+        "lanczos",
+        "gpu",
+        2,
+        "center",
+        "0, 0, 0",
+        0,
+        3,
+        "fp32",
+    ]
+    inputs: list[dict[str, Any]] = [
+        {"name": name, "widget": {"name": name}} for name in widget_names
+    ]
+    inputs[0]["link"] = 501
+    inputs[1]["link"] = 502
+    inputs[3]["link"] = 503
+    subgraphs: list[dict[str, Any]] = [
+        {
+            "id": "upscale-by-factor",
+            "links": [
+                {
+                    "id": 501,
+                    "origin_id": 2159,
+                    "origin_slot": 0,
+                    "target_id": 2160,
+                    "target_slot": 0,
+                    "type": "INT",
+                },
+                {
+                    "id": 502,
+                    "origin_id": 2159,
+                    "origin_slot": 1,
+                    "target_id": 2160,
+                    "target_slot": 1,
+                    "type": "INT",
+                },
+                {
+                    "id": 503,
+                    "origin_id": -10,
+                    "origin_slot": 0,
+                    "target_id": 2160,
+                    "target_slot": 3,
+                    "type": "COMBO",
+                },
+            ],
+            "nodes": [
+                {
+                    "id": 2160,
+                    "type": "SimpleSyrup.ResizeImageToTarget",
+                    "inputs": inputs,
+                    "widgets_values": widget_values,
+                    "sugarcubes_widget_values": dict(zip(widget_names, widget_values)),
+                }
+            ],
+        }
+    ]
+    definitions = {
+        "SimpleSyrup.ResizeImageToTarget": {
+            "input": {
+                "required": {
+                    "width": ["INT", {"default": 512}],
+                    "height": ["INT", {"default": 512}],
+                    "resize_mode": [["Keep AR", "Crop"], {"default": "Keep AR"}],
+                    "sampling": [["lanczos", "nearest"], {"default": "lanczos"}],
+                    "processor": [["gpu", "cpu"], {"default": "gpu"}],
+                    "divisible_by": ["INT", {"default": 1}],
+                    "crop_position": [["center", "top"], {"default": "center"}],
+                    "pad_color": ["STRING", {"default": "0, 0, 0"}],
+                    "max_batch_size": ["INT", {"default": 0}],
+                    "sinc_window": ["INT", {"default": 3}],
+                    "precision": [["fp32", "fp16"], {"default": "fp32"}],
+                }
+            },
+            "input_order": {"required": widget_names},
+        }
+    }
+
+    canonical = canonicalize_subgraph_widget_values(subgraphs, definitions)
+
+    assert canonical[0]["nodes"][0]["widgets_values"] == [
+        "Keep AR",
+        "lanczos",
+        "gpu",
+        2,
+        "center",
+        "0, 0, 0",
+        0,
+        3,
+        "fp32",
+    ]
+    validate_subgraph_widget_values(canonical, definitions)
+
+
 def test_linked_widget_inputs_ignore_stale_positional_values() -> None:
     """Connected widgets may retain stale UI values that do not drive execution."""
 
@@ -343,6 +456,85 @@ def test_machine_local_picker_inventory_does_not_gate_cube_saves() -> None:
         inputs={"ckpt_name": ""},
         definition=definition,
     )
+
+
+def test_file_inventory_picker_is_machine_local_without_known_node_names() -> None:
+    """Infer arbitrary host file inventories from picker options, not node allowlists."""
+
+    definition = {
+        "input": {
+            "required": {
+                "asset": [
+                    "COMBO",
+                    {
+                        "options": [
+                            "models\\producer-only.safetensors",
+                            "models\\another.ckpt",
+                        ]
+                    },
+                ]
+            }
+        }
+    }
+
+    validate_named_node_inputs(
+        node_id="arbitrary-node",
+        class_type="ThirdParty.ArbitraryLoader",
+        inputs={"asset": ""},
+        definition=definition,
+    )
+
+
+def test_resource_shaped_picker_names_are_machine_local_without_inventory() -> None:
+    """Keep empty loader inventories portable through conventional resource names."""
+
+    definition = {
+        "input": {
+            "required": {
+                "diffusion_model": ["COMBO", {"options": []}],
+            }
+        }
+    }
+
+    validate_named_node_inputs(
+        node_id="anima-loader",
+        class_type="ThirdParty.Loader",
+        inputs={"diffusion_model": ""},
+        definition=definition,
+    )
+
+
+def test_unselected_stable_picker_does_not_block_or_persist() -> None:
+    """Treat an empty unavailable picker choice as an unset authored value."""
+
+    definition = {
+        "input": {
+            "required": {
+                "precision": ["COMBO", {"options": ["default", "fp16"]}],
+            }
+        }
+    }
+    subgraphs: list[dict[str, Any]] = [
+        {
+            "id": "picker",
+            "nodes": [
+                {
+                    "id": 7,
+                    "type": "ThirdParty.Picker",
+                    "inputs": [{"name": "precision", "widget": {"name": "precision"}}],
+                    "widgets_values": [""],
+                }
+            ],
+        }
+    ]
+
+    canonical = canonicalize_subgraph_widget_values(
+        subgraphs,
+        {"ThirdParty.Picker": definition},
+    )
+
+    assert canonical[0]["nodes"][0]["widgets_values"] == [None]
+    validate_subgraph_widget_values(canonical, {"ThirdParty.Picker": definition})
 
 
 def test_subgraph_persistence_removes_local_and_volatile_values_by_name() -> None:

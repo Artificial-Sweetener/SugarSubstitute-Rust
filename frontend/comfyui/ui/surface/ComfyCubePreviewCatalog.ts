@@ -29,6 +29,7 @@ import type {
   CubePreviewSnapshot,
 } from './CubePreviewModel.js';
 import { CubePreviewRetentionStore } from './CubePreviewRetentionStore.js';
+import { upstreamPreviewLocatorLayers } from './CubeOutputPreviewAncestry.js';
 
 export interface ComfyCubePreviewHost {
   getRootGraph?(): ComfyGraph;
@@ -90,12 +91,18 @@ export class ComfyCubePreviewCatalog implements CubePreviewCatalog {
       const locator = source ? (locatorByNode.get(source) ?? '') : '';
       const directItems =
         source && locator ? this.#readLocatedNodeItems({ node: source, locator }, id) : [];
+      const upstreamItems =
+        source && directItems.length === 0
+          ? this.#readNearestUpstreamPreviewItems(cube, source, locatorByNode, id)
+          : [];
       const items =
         markerItems.length > 0
           ? markerItems
           : directItems.length > 0
             ? directItems
-            : this.#readDownstreamOutputItems(cube, index, id);
+            : upstreamItems.length > 0
+              ? upstreamItems
+              : this.#readDownstreamOutputItems(cube, index, id);
       return { id, label: id, items };
     });
     const current = { outputs };
@@ -189,12 +196,31 @@ export class ComfyCubePreviewCatalog implements CubePreviewCatalog {
       : [];
   }
 
+  /** Read the nearest live sampler/detailer preview feeding one Cube output. */
+  #readNearestUpstreamPreviewItems(
+    cube: CubeNode,
+    outputNode: ComfyNode,
+    locatorByNode: ReadonlyMap<ComfyNode, string>,
+    label: string,
+  ): CubePreviewItem[] {
+    for (const locators of upstreamPreviewLocatorLayers(cube, outputNode, locatorByNode)) {
+      const items = locators.flatMap((locator) => this.#readLivePreviewItems(locator, label));
+      if (items.length > 0) return deduplicateItems(items);
+    }
+    return [];
+  }
+
   /** Read durable execution media before renderer-owned transient previews. */
   #readNodeItems(locator: string, label: string): CubePreviewItem[] {
     const output = this.#host.getNodeOutputs()[locator];
     const outputItems = this.#readOutputItems(output, locator, label);
     if (outputItems.length > 0) return outputItems;
 
+    return this.#readLivePreviewItems(locator, label);
+  }
+
+  /** Convert renderer-owned live preview URLs without treating them as finals. */
+  #readLivePreviewItems(locator: string, label: string): CubePreviewItem[] {
     const livePreviews = this.#host.getNodePreviewImages()[locator];
     if (!Array.isArray(livePreviews)) return [];
     return livePreviews

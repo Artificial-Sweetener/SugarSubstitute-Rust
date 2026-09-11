@@ -98,6 +98,13 @@ def picker_options(field_spec: Any) -> list[Any]:
     return []
 
 
+def is_unselected_picker_value(value: Any, field_spec: Any) -> bool:
+    """Return whether an empty value means no valid picker choice was authored."""
+
+    options = picker_options(field_spec)
+    return is_picker_field_spec(field_spec) and value == "" and "" not in options
+
+
 def resolve_picker_fallback(field_spec: Any) -> PickerFallback | None:
     """Resolve the local default or first option for one picker field spec."""
 

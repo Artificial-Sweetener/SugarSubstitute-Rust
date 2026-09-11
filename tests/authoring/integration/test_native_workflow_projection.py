@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import pytest
 from sugarcubes.package_identity import runtime_version
 
@@ -14,7 +16,10 @@ from sugarcubes.authoring import (
     project_native_workflow_plan,
 )
 from sugarcubes.execution import CubeExecutionCoordinator, CubeExecutionRequest
-from sugarcubes.language.compiler_models import CompiledCubeConnection
+from sugarcubes.language.compiler_models import (
+    CompiledCubeConnection,
+    CompiledFieldAnnotation,
+)
 
 
 def test_projected_plan_lowers_named_values_and_public_links() -> None:
@@ -56,16 +61,84 @@ def test_projection_marks_every_top_level_cube_with_sugarcubes_node_pack() -> No
     )
 
     workflow = project_native_workflow_plan(plan)
-    nodes = workflow["nodes"]
-    assert isinstance(nodes, list)
+    nodes = cast(list[dict[str, object]], workflow["nodes"])
+    properties = [cast(dict[str, object], node["properties"]) for node in nodes]
 
-    assert [
-        (node["properties"]["cnr_id"], node["properties"]["ver"]) for node in nodes
-    ] == [("SugarCubes", runtime_version())] * 2
+    assert [(item["cnr_id"], item["ver"]) for item in properties] == [
+        ("SugarCubes", runtime_version())
+    ] * 2
     assert all(
-        node["properties"]["sugarcubes_cube"]["cube_version"] == "1.0.0"
-        for node in nodes
+        cast(dict[str, object], item["sugarcubes_cube"])["cube_version"] == "1.0.0"
+        for item in properties
     )
+
+
+def test_projection_persists_opaque_field_annotations_without_graph_edges() -> None:
+    """Keep Substitute model identity beside stable fields as graph metadata only."""
+
+    annotation = CompiledFieldAnnotation(
+        instance_id="first",
+        node_symbol="image",
+        input_name="strength",
+        namespace="substitute.model_asset",
+        payload={"sha256": "A" * 64},
+    )
+    plan = NativeWorkflowImportPlan(
+        "a" * 64,
+        (NativeCubeImport("first", "First", False, _payload("First", 1)),),
+        (),
+        (annotation,),
+    )
+
+    workflow = project_native_workflow_plan(plan)
+
+    assert workflow["links"] == []
+    assert cast(dict[str, object], workflow["extra"])["sugarcubes_composition"] == {
+        "schema_version": 1,
+        "field_annotations": [
+            {
+                "annotation_id": "substitute.model_asset:first:image:strength",
+                "namespace": "substitute.model_asset",
+                "endpoint": {
+                    "instance_id": "first",
+                    "node_symbol": "image",
+                    "input_name": "strength",
+                },
+                "payload": {"sha256": "A" * 64},
+            }
+        ],
+    }
+
+
+def test_projection_reconstructs_implicit_series_as_typed_proximity() -> None:
+    """Let SugarCubes recover stack adjacency without persisted explicit links."""
+
+    plan = NativeWorkflowImportPlan(
+        "a" * 64,
+        (
+            NativeCubeImport("source", "Source", False, _payload("Source", 17)),
+            NativeCubeImport("target", "Target", False, _payload("Target", 23)),
+        ),
+        (),
+    )
+
+    workflow = project_native_workflow_plan(plan)
+    prepared = CubeExecutionCoordinator().prepare(
+        CubeExecutionRequest(workflow=workflow)
+    )
+
+    nodes = cast(list[dict[str, object]], workflow["nodes"])
+    assert nodes[0]["outputs"] == [{"name": "output.image", "type": "IMAGE"}]
+    assert nodes[1]["inputs"] == [{"name": "input.image", "type": "IMAGE"}]
+    assert nodes[0]["pos"] == [0.0, 0.0]
+    assert nodes[1]["pos"] == [344.0, 0.0]
+    assert workflow["links"] == []
+    target = prepared.prompt["target:image"]
+    inputs = cast(dict[str, object], target["inputs"])
+    assert inputs["image"] == [
+        "source:image",
+        0,
+    ]
 
 
 def test_projection_rejects_unknown_boundary_without_slot_guessing() -> None:

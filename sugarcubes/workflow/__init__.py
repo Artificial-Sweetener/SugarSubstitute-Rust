@@ -16,6 +16,12 @@
 """Expose canonical workflow contracts owned by SugarCubes."""
 
 from .models import CanonicalWorkflow, CubeInstance, EmbeddedCubeDefinition
+from .normalization import WorkflowNormalizer
+from .composed_values import (
+    COMPOSITION_METADATA_KEY,
+    ComposedValueMaterializer,
+    StableFieldEndpoint,
+)
 from .reader import CanonicalWorkflowError, read_canonical_workflow
 
 __all__ = [
@@ -24,4 +30,8 @@ __all__ = [
     "CubeInstance",
     "EmbeddedCubeDefinition",
     "read_canonical_workflow",
+    "WorkflowNormalizer",
+    "COMPOSITION_METADATA_KEY",
+    "ComposedValueMaterializer",
+    "StableFieldEndpoint",
 ]

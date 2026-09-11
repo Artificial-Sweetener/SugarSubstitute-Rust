@@ -23,7 +23,11 @@ from dataclasses import dataclass
 from typing import Any, TypeGuard
 
 from .input_persistence import should_store_authored_value
-from .picker_fields import find_input_field_spec, widget_input_names
+from .picker_fields import (
+    find_input_field_spec,
+    is_unselected_picker_value,
+    widget_input_names,
+)
 from .subgraph_boundary_widgets import index_boundary_widget_names
 
 WORKFLOW_WIDGET_VALUES_KEY = "sugarcubes_widget_values"
@@ -165,6 +169,51 @@ def decode_versioned_widget_snapshot(
         raise original_error
 
 
+def decode_versioned_surface_snapshot(
+    node: Mapping[str, Any],
+    definition: Mapping[str, Any],
+    control_names: Sequence[str],
+) -> WidgetSnapshot | None:
+    """Decode only exact Cube surface fields and ignore non-semantic host widgets.
+
+    Cube surface identities are co-versioned with the saved node. Some custom
+    nodes serialize additional presentation-only widgets after their executable
+    inputs; those trailing values are deliberately outside the Cube surface
+    contract and cannot affect execution.
+    """
+
+    normalized_names = _unique_names(control_names)
+    explicit_values = node.get(WORKFLOW_WIDGET_VALUES_KEY)
+    if isinstance(explicit_values, Mapping):
+        values = _normalize_explicit_values(explicit_values)
+        return WidgetSnapshot(
+            values={name: values[name] for name in normalized_names if name in values},
+            source="live_surface_name_map",
+        )
+    widget_values = node.get("widgets_values")
+    if not _is_sequence(widget_values):
+        return None
+    try:
+        snapshot = decode_workflow_widget_snapshot(node, definition)
+    except WidgetSnapshotError:
+        snapshot = None
+    if snapshot is not None:
+        return WidgetSnapshot(
+            values={
+                name: snapshot.values[name]
+                for name in normalized_names
+                if name in snapshot.values
+            },
+            source=snapshot.source,
+        )
+    linked_names = _linked_widget_names(node)
+    positional_names = [name for name in normalized_names if name not in linked_names]
+    return WidgetSnapshot(
+        values=_decode_positional_prefix(positional_names, widget_values, definition),
+        source="exact_versioned_surface",
+    )
+
+
 def serialized_widget_names(
     node: Mapping[str, Any],
     *,
@@ -243,19 +292,38 @@ def canonicalize_subgraph_widget_values(
                 included_linked_names=boundary_names,
             )
             node["widgets_values"] = [
-                (
-                    snapshot.values.get(name)
-                    if should_store_authored_value(
-                        class_type,
-                        name,
-                        field_spec=find_input_field_spec(live_definition, name),
-                    )
-                    else None
+                _portable_widget_value(
+                    class_type,
+                    name,
+                    snapshot.values.get(name),
+                    live_definition,
                 )
                 for name in names
             ]
             node.pop(WORKFLOW_WIDGET_VALUES_KEY, None)
     return canonical
+
+
+def _portable_widget_value(
+    class_type: str,
+    input_name: str,
+    value: Any,
+    definition: Mapping[str, Any],
+) -> Any:
+    """Return one authored value or an unset placeholder for local reconciliation."""
+
+    field_spec = find_input_field_spec(definition, input_name)
+    if is_unselected_picker_value(value, field_spec):
+        return None
+    return (
+        value
+        if should_store_authored_value(
+            class_type,
+            input_name,
+            field_spec=field_spec,
+        )
+        else None
+    )
 
 
 def _attach_explicit_widget_identities(
@@ -369,6 +437,45 @@ def _decode_positional_values(
             "Positional widget values cannot be associated with same-snapshot names"
         )
     return decoded
+
+
+def _decode_positional_prefix(
+    names: Sequence[str],
+    values: Sequence[Any],
+    definition: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Decode exact semantic fields while leaving trailing UI-only widgets alone."""
+
+    decoded: dict[str, Any] = {}
+    value_index = 0
+    for name in names:
+        if value_index >= len(values):
+            raise WidgetSnapshotError(
+                f"Workflow snapshot is missing the value for stable field '{name}'"
+            )
+        decoded[name] = values[value_index]
+        value_index += 1
+        field_spec = find_input_field_spec(definition, name)
+        if _has_control_after_generate(field_spec) and value_index < len(values):
+            if values[value_index] in _CONTROL_AFTER_GENERATE_VALUES:
+                value_index += 1
+    return decoded
+
+
+def _unique_names(values: Sequence[str]) -> list[str]:
+    """Normalize exact field identities and reject duplicate stable names."""
+
+    result: list[str] = []
+    for value in values:
+        name = value.strip()
+        if not name:
+            raise WidgetSnapshotError("Cube surface contains an invalid field identity")
+        if name in result:
+            raise WidgetSnapshotError(
+                f"Cube surface contains duplicate field identity '{name}'"
+            )
+        result.append(name)
+    return result
 
 
 def _has_control_after_generate(field_spec: Any) -> bool:

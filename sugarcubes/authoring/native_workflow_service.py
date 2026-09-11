@@ -97,6 +97,7 @@ class SugarScriptWorkflowAuthoringService:
                 compiled.plan.semantic_hash,
                 tuple(imports),
                 compiled.plan.connections,
+                compiled.plan.field_annotations,
             ),
             compiled.diagnostics,
         )

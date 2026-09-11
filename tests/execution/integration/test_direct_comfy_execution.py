@@ -15,7 +15,11 @@ from sugarcubes.execution import (
     QueueMetadata,
 )
 from sugarcubes.execution.comfy_execution_port import DirectComfyExecutionPort
-from tests.execution.support.execution_fixtures import cube_workflow, provider_document
+from tests.execution.support.execution_fixtures import (
+    cube_document,
+    cube_workflow,
+    provider_document,
+)
 
 
 def test_queue_validates_instrumented_prompt_once_and_preserves_metadata() -> None:
@@ -85,6 +89,64 @@ def test_validation_failure_queues_nothing_atomically() -> None:
     assert result.receipt.accepted is False
     assert result.receipt.error == {"type": "invalid"}
     assert server.prompt_queue.items == []
+
+
+def test_queue_wraps_atomic_list_widget_values_before_comfy_validation() -> None:
+    """Prevent multiselect widget values from being mistaken for prompt links."""
+
+    server = _PromptServer()
+    execution = _Execution(valid=(True, None, (), {}))
+    coordinator = CubeExecutionCoordinator(
+        comfy=DirectComfyExecutionPort(
+            prompt_server=server,
+            execution_module=execution,
+            uuid_factory=lambda: uuid.UUID(int=3),
+        )
+    )
+    document = cube_document(
+        "Mask List",
+        nodes={
+            "source": {"class_type": "MaskSource", "inputs": {}},
+            "masks": {
+                "class_type": "MaskBatch",
+                "inputs": {
+                    "image": ["01_left_third_hard.png"],
+                    "mask": ["source", 0],
+                },
+            },
+        },
+        inputs={},
+        outputs={"output.mask": ["masks", 0]},
+        definitions={
+            "MaskSource": {"input": {"required": {}}, "output": ["MASK"]},
+            "MaskBatch": {
+                "input": {
+                    "required": {
+                        "image": ["LIST"],
+                        "mask": ["MASK", {"forceInput": True}],
+                    }
+                },
+                "output": ["MASK"],
+            },
+        },
+    )
+
+    result = asyncio.run(
+        coordinator.queue(
+            CubeExecutionRequest(workflow=cube_workflow({"cube-a": document}))
+        )
+    )
+
+    assert result.receipt.accepted is True
+    validated_prompt = execution.calls[0][1]
+    assert isinstance(validated_prompt, dict)
+    assert validated_prompt["cube-a:masks"]["inputs"]["image"] == {
+        "__value__": ["01_left_third_hard.png"]
+    }
+    assert validated_prompt["cube-a:masks"]["inputs"]["mask"] == [
+        "cube-a:source",
+        0,
+    ]
 
 
 @dataclass

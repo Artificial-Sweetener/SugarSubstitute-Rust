@@ -13,7 +13,11 @@ from .subgraph_boundary_widgets import (
     index_boundary_widget_names,
     index_boundary_widget_targets,
 )
-from .widget_values import WidgetSnapshotError, decode_versioned_widget_snapshot
+from .widget_values import (
+    WidgetSnapshotError,
+    decode_versioned_surface_snapshot,
+    decode_versioned_widget_snapshot,
+)
 
 
 class NativeSubgraphDefaultError(ValueError):
@@ -39,6 +43,31 @@ def native_widget_defaults(
     except WidgetSnapshotError as error:
         raise NativeSubgraphDefaultError(
             f"Native subgraph widget defaults are ambiguous: {error}"
+        ) from error
+    if snapshot is None:
+        return {}
+    return {
+        name: _definition_default(definition, name, value)
+        for name, value in snapshot.values.items()
+    }
+
+
+def native_surface_widget_defaults(
+    node: Mapping[str, object],
+    definition: Mapping[str, object],
+    control_names: Sequence[str],
+) -> dict[str, object]:
+    """Decode exact stable Cube fields without retaining host-only widget state."""
+
+    try:
+        snapshot = decode_versioned_surface_snapshot(
+            node,
+            definition,
+            control_names,
+        )
+    except WidgetSnapshotError as error:
+        raise NativeSubgraphDefaultError(
+            f"Native Cube surface values are ambiguous: {error}"
         ) from error
     if snapshot is None:
         return {}

@@ -7,8 +7,14 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from copy import deepcopy
 
-from .native_workflow_models import NativeWorkflowImportPlan
+from ..cube_model import CubeDocument
+from ..execution.portable_boundary_lowering import document_boundary_ports
 from ..workflow_node_pack import current_workflow_node_pack
+from .native_workflow_models import NativeWorkflowImportPlan
+
+_CUBE_WIDTH = 320.0
+_CUBE_HEIGHT = 200.0
+_CUBE_GAP = 24.0
 
 
 class NativeWorkflowProjectionError(ValueError):
@@ -26,9 +32,10 @@ def project_native_workflow_plan(
     instances: dict[str, tuple[int, list[str], list[str]]] = {}
     for index, instance in enumerate(plan.instances, start=1):
         document = _mapping(instance.payload.get("document"), "instance document")
-        implementation = _mapping(document.get("implementation"), "implementation")
-        input_names = _names(implementation.get("inputs"), "Cube inputs")
-        output_names = _names(implementation.get("outputs"), "Cube outputs")
+        cube_document = CubeDocument.from_dict(document)
+        input_ports, output_ports = document_boundary_ports(cube_document)
+        input_names = [item["name"] for item in input_ports]
+        output_names = [item["name"] for item in output_ports]
         cube_id = _text(document.get("cube_id"), "cube_id")
         version = _text(document.get("version"), "version")
         definition_id = f"sugarcubes-plan-definition-{index}"
@@ -42,8 +49,10 @@ def project_native_workflow_plan(
                 "id": index,
                 "type": definition_id,
                 "mode": 4 if instance.bypassed else 0,
-                "inputs": [{"name": name, "type": "*"} for name in input_names],
-                "outputs": [{"name": name, "type": "*"} for name in output_names],
+                "pos": [(index - 1) * (_CUBE_WIDTH + _CUBE_GAP), 0.0],
+                "size": [_CUBE_WIDTH, _CUBE_HEIGHT],
+                "inputs": deepcopy(list(input_ports)),
+                "outputs": deepcopy(list(output_ports)),
                 "properties": {
                     **node_pack_properties,
                     "sugarcubes_kind": "cube",
@@ -61,8 +70,8 @@ def project_native_workflow_plan(
                 "name": instance.alias,
                 "nodes": [],
                 "links": [],
-                "inputs": [{"name": name, "type": "*"} for name in input_names],
-                "outputs": [{"name": name, "type": "*"} for name in output_names],
+                "inputs": deepcopy(list(input_ports)),
+                "outputs": deepcopy(list(output_ports)),
                 "extra": {
                     "sugarcubes_kind": "cube",
                     "sugarcubes_cube": identity,
@@ -92,19 +101,29 @@ def project_native_workflow_plan(
         "nodes": nodes,
         "links": links,
         "definitions": {"subgraphs": definitions},
-        "extra": {"sugarcubes_authoring_semantic_hash": plan.semantic_hash},
+        "extra": {
+            "sugarcubes_authoring_semantic_hash": plan.semantic_hash,
+            "sugarcubes_composition": {
+                "schema_version": 1,
+                "field_annotations": [
+                    {
+                        "annotation_id": (
+                            f"{annotation.namespace}:{annotation.instance_id}:"
+                            f"{annotation.node_symbol}:{annotation.input_name}"
+                        ),
+                        "namespace": annotation.namespace,
+                        "endpoint": {
+                            "instance_id": annotation.instance_id,
+                            "node_symbol": annotation.node_symbol,
+                            "input_name": annotation.input_name,
+                        },
+                        "payload": deepcopy(dict(annotation.payload)),
+                    }
+                    for annotation in plan.field_annotations
+                ],
+            },
+        },
     }
-
-
-def _names(value: object, label: str) -> list[str]:
-    """Read ordered boundary names from one Cube implementation mapping."""
-
-    if not isinstance(value, Mapping):
-        raise NativeWorkflowProjectionError(f"{label} must be an object")
-    names = [str(name) for name in value]
-    if any(not name.strip() for name in names) or len(set(names)) != len(names):
-        raise NativeWorkflowProjectionError(f"{label} contain invalid names")
-    return names
 
 
 def _unique_slot(names: Sequence[str], name: str, direction: str) -> int:

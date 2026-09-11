@@ -35,6 +35,9 @@ proofs = ["contract", "unit"]
 name = "workflow"
 sources = [
   "sugarcubes/workflow/**",
+  "sugarcubes/serialized_cube_proximity.py",
+  "sugarcubes/workflow_analysis.py",
+  "sugarcubes/workflow_mutation.py",
   "sugarcubes/workflow_node_pack.py",
   "frontend/comfyui/ui/workflow/**",
 ]

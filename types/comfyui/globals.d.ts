@@ -58,7 +58,7 @@ interface LiteGraphHost {
   };
   INPUT: number;
   OUTPUT: number;
-  createNode(type: string): object | null;
+  createNode(type: string): import('../../frontend/comfyui/ui/types/graph.js').ComfyNode | null;
   registerNodeType(type: string, nodeType: object): void;
 }
 

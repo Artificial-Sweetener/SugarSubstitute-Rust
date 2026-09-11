@@ -138,6 +138,27 @@ def test_script_values_override_cube_defaults_and_absent_values_retain_them() ->
     assert _node_inputs(overridden.plan.instances[0].document, "sampler")["cfg"] == 0
 
 
+def test_adjacent_hash_metadata_binds_to_resolved_stable_field_identity() -> None:
+    """Carry model companion data without interpreting or resolving its hash."""
+
+    document = _cube_document("source")
+    sha256 = "A" * 64
+    result = _compile(
+        'use "local/tests/source.cube" as Cube\n'
+        "set Cube.sampler.cfg = 4\n"
+        f"# sha256 {sha256}\n",
+        document,
+    )
+
+    assert result.plan is not None
+    annotation = result.plan.field_annotations[0]
+    assert annotation.instance_id == result.plan.instances[0].instance_id
+    assert annotation.node_symbol == "sampler"
+    assert annotation.input_name == "cfg"
+    assert annotation.namespace == "substitute.model_asset"
+    assert annotation.payload == {"sha256": sha256}
+
+
 def test_whole_node_link_copies_editable_state_without_replacing_graph_inputs() -> None:
     """Preserve Sugar-DSL node-link behavior used by attached recipe images."""
 

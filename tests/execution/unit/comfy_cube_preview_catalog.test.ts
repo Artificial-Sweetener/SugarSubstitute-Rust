@@ -164,6 +164,66 @@ describe('ComfyCubePreviewCatalog', () => {
     expect(catalog.snapshot(cube).outputs[0]?.items[0]?.url).toBe('/view?filename=durable.png');
   });
 
+  test('projects a SimpleSyrup detail sampler preview through its Cube output', () => {
+    const detailer = {
+      id: 'detailer',
+      type: 'SimpleSyrup.DetailSEGSByScaleFactor',
+      outputs: [{ links: ['detail-to-color'] }],
+    };
+    const color = {
+      id: 'color',
+      type: 'SimpleSyrup.VectorScopeCC',
+      inputs: [{ link: 'detail-to-color' }],
+    };
+    const cube = container('definition', [detailer, color], ['output.image'], color);
+    const catalog = new ComfyCubePreviewCatalog({
+      getNodeOutputs: () => ({}),
+      getNodePreviewImages: () => ({
+        'container-definition:detailer': ['blob:simple-syrup-full-context-detail-preview'],
+      }),
+      buildOutputImageUrl: () => null,
+    });
+
+    expect(catalog.snapshot(cube).outputs[0]?.items).toEqual([
+      {
+        key: 'container-definition:detailer:preview:0',
+        url: 'blob:simple-syrup-full-context-detail-preview',
+        label: 'output.image',
+        sourceLocator: 'container-definition:detailer',
+      },
+    ]);
+  });
+
+  test('uses the nearest upstream live preview for one output boundary', () => {
+    const sampler = {
+      id: 'sampler',
+      type: 'KSampler',
+      outputs: [{ links: ['sampler-to-decode'] }],
+    };
+    const decode = {
+      id: 'decode',
+      type: 'VAEDecode',
+      inputs: [{ link: 'sampler-to-decode' }],
+      outputs: [{ links: ['decode-to-color'] }],
+    };
+    const color = {
+      id: 'color',
+      inputs: [{ link: 'decode-to-color' }],
+    };
+    const cube = container('definition', [sampler, decode, color], ['image'], color);
+    const catalog = new ComfyCubePreviewCatalog({
+      getNodeOutputs: () => ({}),
+      getNodePreviewImages: () => ({
+        'container-definition:sampler': ['blob:sampling-preview'],
+      }),
+      buildOutputImageUrl: () => null,
+    });
+
+    expect(catalog.snapshot(cube).outputs[0]?.items[0]?.sourceLocator).toBe(
+      'container-definition:sampler',
+    );
+  });
+
   test('keeps Comfy view URLs stable across host cache-buster refreshes', () => {
     const outputNode = { id: 'save', type: 'PreviewImage' };
     const cube = container('definition', [outputNode], ['image'], outputNode);

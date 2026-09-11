@@ -20,7 +20,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Mapping
 
-from ..language.compiler_models import CompiledCubeConnection
+from ..language.compiler_models import CompiledCubeConnection, CompiledFieldAnnotation
 from ..language.source import SugarScriptDiagnostic
 
 
@@ -41,6 +41,7 @@ class NativeWorkflowImportPlan:
     semantic_hash: str
     instances: tuple[NativeCubeImport, ...]
     connections: tuple[CompiledCubeConnection, ...]
+    field_annotations: tuple[CompiledFieldAnnotation, ...] = ()
 
 
 @dataclass(frozen=True)
