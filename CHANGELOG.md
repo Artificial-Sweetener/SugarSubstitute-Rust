@@ -1,3 +1,10 @@
+# [0.14.0](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.13.0...v0.14.0) (2026-09-11)
+
+
+### Features
+
+* **dependencies:** acquire exact first-party extension releases ([e91238b](https://github.com/Artificial-Sweetener/SugarCubes/commit/e91238bcebd330628a319b5d735629a6c16998d3))
+
 # [0.13.0](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.12.0...v0.13.0) (2026-09-11)
 
 
