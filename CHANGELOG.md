@@ -1,3 +1,11 @@
+## [0.14.2](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.14.1...v0.14.2) (2026-09-19)
+
+
+### Bug Fixes
+
+* **export:** persist nested subgraph defaults ([28c2acc](https://github.com/Artificial-Sweetener/SugarCubes/commit/28c2acc8859c53b1050f9fef54c795216e158312))
+* **surface:** hide consumed cube face widgets ([da03987](https://github.com/Artificial-Sweetener/SugarCubes/commit/da03987a48310c9cb610d43562955390e6088b9b))
+
 ## [0.14.1](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.14.0...v0.14.1) (2026-09-19)
 
 
