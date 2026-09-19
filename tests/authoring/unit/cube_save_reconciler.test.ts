@@ -44,6 +44,13 @@ describe('CubeSaveReconciler', () => {
         version: '1.0.0',
         surface: { controls: [{ name: 'prompt', default: 'persisted' }] },
       },
+      document: {
+        cube_id: 'local/author/Model/Test.cube',
+        version: '1.0.0',
+        implementation: {},
+        surface: { controls: [{ name: 'prompt', default: 'persisted' }] },
+        flavors: {},
+      },
       nodes: [],
       markers: [],
       connections: [],
@@ -158,6 +165,11 @@ describe('CubeSaveReconciler', () => {
       cube: {
         cube_id: cubeId,
         version: '1.1.0',
+        default_alias: 'Native',
+      },
+      document: {
+        cube_id: cubeId,
+        version: '1.1.0',
         implementation: {},
         surface: {},
         flavors: {},
@@ -191,7 +203,40 @@ describe('CubeSaveReconciler', () => {
       cube.properties.sugarcubes_cube,
     );
     expect((cube.subgraph.extra as Record<string, unknown>).sugarcubes_document).toEqual(
-      definition.cube,
+      definition.document,
     );
+  });
+
+  test('rejects a missing canonical document before mutating native identity', async () => {
+    const cubeId = 'local/author/Model/Native.cube';
+    const graph = { _nodes: [markerNode()] };
+    const cubeNodeSave = {
+      updateIdentities: jest.fn(() => 1),
+      updateDocuments: jest.fn(() => 1),
+    };
+    const definitionStore = { publishFinalized: jest.fn() };
+    const reconciler = new CubeSaveReconciler({ definitionStore, cubeNodeSave });
+
+    await expect(
+      reconciler.reconcile({
+        graph,
+        saved: [
+          {
+            cube_id: cubeId,
+            version: '1.1.0',
+            definition: {
+              cube: { cube_id: cubeId, version: '1.1.0' },
+            },
+          },
+        ],
+        markerIdsByCubeId: { [cubeId]: [10] },
+        cubeNodeInstanceIdsByCubeId: { [cubeId]: ['container-81'] },
+      }),
+    ).rejects.toThrow('definition.document');
+
+    expect(graph._nodes[0].properties).toEqual({});
+    expect(cubeNodeSave.updateIdentities).not.toHaveBeenCalled();
+    expect(cubeNodeSave.updateDocuments).not.toHaveBeenCalled();
+    expect(definitionStore.publishFinalized).not.toHaveBeenCalled();
   });
 });

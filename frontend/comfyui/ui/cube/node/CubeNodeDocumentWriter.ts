@@ -15,16 +15,18 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Write finalized portable documents to graph-owned Cube definitions. */
 
-import type { CubeDocumentIdentity } from '../../workflow/CubeDefinitionDocumentWriter.js';
+import type {
+  CubeDefinitionDocument,
+  CubeDocumentIdentity,
+} from '../../workflow/CubeDefinitionDocumentWriter.js';
 import { writeCubeDefinitionDocument } from '../../workflow/CubeDefinitionDocumentWriter.js';
-import type { UnknownRecord } from '../../types/common.js';
 import type { CubeNodeCatalog } from './CubeNodeCatalog.js';
 
 /** Update exactly the native Cube definitions addressed by stable instance id. */
 export function writeCubeNodeDocumentsForIds(
   catalog: CubeNodeCatalog,
   instanceIds: readonly string[],
-  document: UnknownRecord,
+  document: CubeDefinitionDocument,
   identity: CubeDocumentIdentity,
 ): number {
   const targets = new Set(instanceIds.map((value) => value.trim()).filter(Boolean));

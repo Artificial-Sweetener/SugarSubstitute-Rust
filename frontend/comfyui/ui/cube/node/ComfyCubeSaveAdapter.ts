@@ -22,8 +22,10 @@ import {
 } from './CubeNodeIdentityWriter.js';
 import type { CubeNodeCatalog } from './CubeNodeCatalog.js';
 import { writeCubeNodeDocumentsForIds } from './CubeNodeDocumentWriter.js';
-import type { CubeDocumentIdentity } from '../../workflow/CubeDefinitionDocumentWriter.js';
-import type { UnknownRecord } from '../../types/common.js';
+import type {
+  CubeDefinitionDocument,
+  CubeDocumentIdentity,
+} from '../../workflow/CubeDefinitionDocumentWriter.js';
 
 interface ComfyCubeSaveAdapterDependencies {
   getCatalog: () => CubeNodeCatalog | null;
@@ -51,7 +53,7 @@ export class ComfyCubeSaveAdapter {
   /** Persist one finalized portable document beside each addressed native definition. */
   updateDocuments(
     instanceIds: readonly string[],
-    document: UnknownRecord,
+    document: CubeDefinitionDocument,
     identity: CubeDocumentIdentity,
   ): number {
     const catalog = this.#getCatalog();
