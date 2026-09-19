@@ -16,6 +16,7 @@
 /** Detect semantic prompt editors and assign their shared Cube-face layout policy. */
 
 import type { ComfyGraph, ComfyLink, ComfyNode, ComfyWidget, GraphId } from '../types/graph.js';
+import { cubeFaceVisibleWidgets } from './CubeFaceWidgetPolicy.js';
 
 /** Reserve two masonry columns for the one semantic prompt card in a responsive row. */
 export const CUBE_FACE_PROMPT_CARD_COLUMN_SPAN = 2;
@@ -37,9 +38,7 @@ export function cubeFaceCardMasonryPriority(node: ComfyNode): number {
 
 /** Find the one unambiguous editable multiline widget that represents a prompt. */
 export function findCubeFacePromptWidget(node: ComfyNode): ComfyWidget | null {
-  const candidates = visibleWidgets(node).filter(
-    (widget) => isEditableMultilineWidget(widget) && isUnlinkedWidget(node, widget),
-  );
+  const candidates = cubeFaceVisibleWidgets(node).filter(isEditableMultilineWidget);
   if (candidates.length === 0) return null;
   const matching = candidates.filter((widget) => hasPromptEvidence(node, widget));
   return matching.length === 1 ? (matching[0] ?? null) : null;
@@ -65,26 +64,11 @@ function hasPromptToken(node: ComfyNode, widget: ComfyWidget): boolean {
   ).has('prompt');
 }
 
-/** Return only widgets Comfy presents and that retain a directly editable value. */
-function visibleWidgets(node: ComfyNode): ComfyWidget[] {
-  const isVisible = node.isWidgetVisible;
-  if (typeof isVisible !== 'function') return node.widgets ?? [];
-  return (node.widgets ?? []).filter((widget) => isVisible.call(node, widget) !== false);
-}
-
 /** Recognize the two multiline widget forms Comfy exposes at this renderer boundary. */
 function isEditableMultilineWidget(widget: ComfyWidget): boolean {
   if (widget.options?.multiline === true || widget.type === 'customtext') return true;
   const element = widget.element;
   return typeof HTMLTextAreaElement !== 'undefined' && element instanceof HTMLTextAreaElement;
-}
-
-/** Reject widget controls whose value is owned by an incoming graph connection. */
-function isUnlinkedWidget(node: ComfyNode, widget: ComfyWidget): boolean {
-  return !(node.inputs ?? []).some((input) => {
-    if (input.widget?.name !== widget.name) return false;
-    return (input.link !== null && input.link !== undefined) || (input.links?.length ?? 0) > 0;
-  });
 }
 
 /** Normalize prompt-relevant authored labels without coupling to host localization. */

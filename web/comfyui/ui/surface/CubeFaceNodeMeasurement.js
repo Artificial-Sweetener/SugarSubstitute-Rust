@@ -16,6 +16,7 @@
 /** Measure Nodes 1.0 face bodies without mutating graph-owned slot collections. */
 import { isRecord } from '../types/common.js';
 import { cubeFaceNodeHasVisibleWidgets, cubeFaceNodeWidgetStartY, } from './CubeFaceNodePresentationPolicy.js';
+import { cubeFaceVisibleWidgets } from './CubeFaceWidgetPolicy.js';
 import { cubePromptWidgetHeight } from './CubePromptWidgetHeightStore.js';
 const HEADER_ONLY_BODY_HEIGHT = 1;
 const LEGACY_SLOT_HEIGHT = 20;
@@ -30,7 +31,7 @@ export function measureCubeFaceNodeBodyHeight(node) {
     }
     const width = positiveNumber(node.size?.[0]) ?? 200;
     let widgetsHeight = cubeFaceNodeWidgetStartY(node);
-    for (const widget of visibleWidgets(node)) {
+    for (const widget of cubeFaceVisibleWidgets(node)) {
         widgetsHeight += measureWidgetAllocation(widget, node, width);
     }
     const constructorState = Reflect.get(node, 'constructor');
@@ -47,14 +48,6 @@ function hasNativePreviewMedia(node) {
     const animatedImages = Reflect.get(node, 'animatedImages');
     return ((Array.isArray(imgs) && imgs.length > 0) ||
         (Array.isArray(animatedImages) && animatedImages.length > 0));
-}
-/** Return only widgets Comfy currently presents on the real graph node. */
-function visibleWidgets(node) {
-    const widgets = node.widgets ?? [];
-    const isWidgetVisible = node.isWidgetVisible;
-    if (typeof isWidgetVisible !== 'function')
-        return widgets;
-    return widgets.filter((widget) => isWidgetVisible.call(node, widget) !== false);
 }
 /** Measure the complete vertical allocation Comfy's arrange pass assigns one widget. */
 function measureWidgetAllocation(widget, node, width) {

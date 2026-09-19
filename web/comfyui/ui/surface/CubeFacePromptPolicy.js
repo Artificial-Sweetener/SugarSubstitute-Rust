@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Detect semantic prompt editors and assign their shared Cube-face layout policy. */
+import { cubeFaceVisibleWidgets } from './CubeFaceWidgetPolicy.js';
 /** Reserve two masonry columns for the one semantic prompt card in a responsive row. */
 export const CUBE_FACE_PROMPT_CARD_COLUMN_SPAN = 2;
 /** Return the width policy for one card without making renderers infer semantics independently. */
@@ -30,7 +31,7 @@ export function cubeFaceCardMasonryPriority(node) {
 }
 /** Find the one unambiguous editable multiline widget that represents a prompt. */
 export function findCubeFacePromptWidget(node) {
-    const candidates = visibleWidgets(node).filter((widget) => isEditableMultilineWidget(widget) && isUnlinkedWidget(node, widget));
+    const candidates = cubeFaceVisibleWidgets(node).filter(isEditableMultilineWidget);
     if (candidates.length === 0)
         return null;
     const matching = candidates.filter((widget) => hasPromptEvidence(node, widget));
@@ -49,27 +50,12 @@ function promptRoleFor(node, widget) {
 function hasPromptToken(node, widget) {
     return tokens(`${node.title ?? ''} ${node.type ?? ''} ${node.class_type ?? ''} ${widget.name}`).has('prompt');
 }
-/** Return only widgets Comfy presents and that retain a directly editable value. */
-function visibleWidgets(node) {
-    const isVisible = node.isWidgetVisible;
-    if (typeof isVisible !== 'function')
-        return node.widgets ?? [];
-    return (node.widgets ?? []).filter((widget) => isVisible.call(node, widget) !== false);
-}
 /** Recognize the two multiline widget forms Comfy exposes at this renderer boundary. */
 function isEditableMultilineWidget(widget) {
     if (widget.options?.multiline === true || widget.type === 'customtext')
         return true;
     const element = widget.element;
     return typeof HTMLTextAreaElement !== 'undefined' && element instanceof HTMLTextAreaElement;
-}
-/** Reject widget controls whose value is owned by an incoming graph connection. */
-function isUnlinkedWidget(node, widget) {
-    return !(node.inputs ?? []).some((input) => {
-        if (input.widget?.name !== widget.name)
-            return false;
-        return (input.link !== null && input.link !== undefined) || (input.links?.length ?? 0) > 0;
-    });
 }
 /** Normalize prompt-relevant authored labels without coupling to host localization. */
 function tokens(value) {

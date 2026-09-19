@@ -187,6 +187,35 @@ describe('CubeFaceCardPolicy', () => {
     expect(presentation.menuEntries).toEqual([]);
   });
 
+  test('omits a node whose only widget is consumed by an incoming graph connection', () => {
+    const state = createDefaultCubeSurfaceState();
+    const promptEncoder = node('encode', 'CLIPTextEncode', {
+      widgets: [{ name: 'text', type: 'customtext' }],
+      inputs: [{ name: 'text', link: 41, widget: { name: 'text' } }],
+      outputs: [{ type: 'CONDITIONING' }],
+    });
+
+    expect(resolveCubeFaceCardPresentation([promptEncoder], state)).toEqual({
+      cards: [],
+      menuEntries: [],
+    });
+  });
+
+  test('retains a card when an unconsumed sibling widget remains editable', () => {
+    const state = createDefaultCubeSurfaceState();
+    const mixed = node('mixed', 'PromptStyler', {
+      widgets: [
+        { name: 'text', type: 'customtext' },
+        { name: 'strength', value: 0.5 },
+      ],
+      inputs: [{ name: 'text', link: 41, widget: { name: 'text' } }],
+    });
+
+    expect(resolveCubeFaceCardPresentation([mixed], state).cards).toEqual([
+      expect.objectContaining({ id: 'mixed', visible: true }),
+    ]);
+  });
+
   test('keeps an authored-bypass sampler revealable without adding an activation switch', () => {
     const state = createDefaultCubeSurfaceState();
     const sampler = node('sampler', 'KSampler', {

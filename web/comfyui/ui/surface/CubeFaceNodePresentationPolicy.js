@@ -16,6 +16,7 @@
 /** Own transient native-node state used only while presenting Cube-face cards. */
 import { isRecord } from '../types/common.js';
 import { findCubeFacePromptWidget } from './CubeFacePromptPolicy.js';
+import { cubeFaceUnconsumedWidgets, cubeFaceVisibleWidgets } from './CubeFaceWidgetPolicy.js';
 /** Match the compact native bottom margin above ordinary Cube-face widget stacks. */
 export const CUBE_FACE_WIDGET_PADDING = 6;
 const PROMPT_WIDGET_TOP_PADDING = 2;
@@ -30,18 +31,25 @@ function createCubeFaceFlags(flags) {
         collapsed: false,
     };
 }
-/** Create safe Comfy Vue render data without any internal graph boundary slots. */
-export function createCubeFaceNodeData(nodeData) {
+/** Create safe Comfy Vue render data with only controls still owned by the node. */
+export function createCubeFaceNodeData(nodeData, node) {
     return {
         ...nodeData,
         flags: createCubeFaceFlags(nodeData.flags),
         inputs: [],
         outputs: [],
+        widgets: cubeFaceVisibleWidgets(node),
     };
 }
 /** Expose expanded slotless state during one native operation, then restore exact ownership. */
 export function withCubeFaceNodePresentation(node, operation) {
-    const remembered = rememberNodeProperties(node, ['flags', 'widgets_start_y', 'widgets_up']);
+    const remembered = rememberNodeProperties(node, [
+        'flags',
+        'widgets',
+        'widgets_start_y',
+        'widgets_up',
+    ]);
+    node.widgets = cubeFaceUnconsumedWidgets(node);
     const widgetLabels = applyDurableWidgetLabels(node);
     node.flags = createCubeFaceFlags(node.flags);
     Reflect.set(node, 'widgets_up', true);
@@ -98,11 +106,5 @@ function restoreNodeProperties(node, remembered) {
 }
 /** Return whether Comfy will present at least one real widget control. */
 export function cubeFaceNodeHasVisibleWidgets(node) {
-    const widgets = node.widgets ?? [];
-    if (widgets.length === 0)
-        return false;
-    const isWidgetVisible = node.isWidgetVisible;
-    if (typeof isWidgetVisible !== 'function')
-        return true;
-    return widgets.some((widget) => isWidgetVisible.call(node, widget) !== false);
+    return cubeFaceVisibleWidgets(node).length > 0;
 }

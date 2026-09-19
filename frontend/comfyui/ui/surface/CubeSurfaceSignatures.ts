@@ -21,11 +21,16 @@ import {
   type CubeNode,
 } from '../cube/node/ComfyCubeNodeFactory.js';
 import { buildCubeCardVisibilitySignature } from './CubeCardVisibilitySignature.js';
+import { cubeFaceVisibleWidgets } from './CubeFaceWidgetPolicy.js';
 
-/** Describe exact internal node identity without projecting it onto the root graph. */
+/** Describe internal node identity and the widget ownership that shapes its face card. */
 export function buildCubeSurfaceTopologySignature(node: CubeNode): string {
   return JSON.stringify(
-    node.subgraph._nodes.map((innerNode) => [String(innerNode.id ?? ''), innerNode.type ?? '']),
+    node.subgraph._nodes.map((innerNode) => [
+      String(innerNode.id ?? ''),
+      innerNode.type ?? '',
+      cubeFaceVisibleWidgets(innerNode).map((widget) => widget.name),
+    ]),
   );
 }
 

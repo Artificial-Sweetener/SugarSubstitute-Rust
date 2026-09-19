@@ -89,6 +89,30 @@ describe('ComfyLiteGraphCubeDomWidgetHost', () => {
     original.remove();
   });
 
+  test('does not mount a DOM widget whose value is consumed by a graph link', () => {
+    const original = document.createElement('div');
+    const textarea = document.createElement('textarea');
+    original.append(textarea);
+    document.body.append(original);
+    const node = faceNode([
+      {
+        name: 'text',
+        element: textarea,
+        y: 20,
+        computedHeight: 100,
+      },
+    ]);
+    node.inputs = [{ name: 'text', link: 91, widget: { name: 'text' } }];
+    const { host } = createHost();
+
+    host.sync([cubeItemForNode(node)]);
+
+    expect(textarea.parentElement).toBe(original);
+    expect(document.querySelector('[data-sugarcubes-cube-face-dom-widget]')).toBeNull();
+    host.dispose();
+    original.remove();
+  });
+
   test('reclaims the exact multiline element after Comfy remounts it', () => {
     const original = document.createElement('div');
     const textarea = document.createElement('textarea');

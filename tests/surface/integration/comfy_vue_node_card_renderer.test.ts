@@ -22,10 +22,11 @@ import type { ComfyNode } from '../../../frontend/comfyui/ui/types/graph.js';
 
 describe('ComfyVueNodeCardRenderer', () => {
   test('uses Comfy extraction and component rendering without cloning the graph node', () => {
-    const node: ComfyNode = { id: 'inside-1', type: 'KSampler' };
+    const widgets = [{ name: 'steps' }];
+    const node: ComfyNode = { id: 'inside-1', type: 'KSampler', widgets };
     const inputs = [{ name: 'model' }];
     const outputs = [{ name: 'LATENT' }];
-    const nodeData = { id: 'inside-1', inputs, outputs, widgets: [{ name: 'steps' }] };
+    const nodeData = { id: 'inside-1', inputs, outputs, widgets };
     const component = { __name: 'LGraphNode' };
     const appContext = { provides: {} };
     const render = jest.fn();
@@ -56,6 +57,38 @@ describe('ComfyVueNodeCardRenderer', () => {
     );
     expect(nodeData.inputs).toBe(inputs);
     expect(nodeData.outputs).toBe(outputs);
+  });
+
+  test('projects only widgets whose values are not supplied by graph links', () => {
+    const consumed = { name: 'text', value: 'stale prompt' };
+    const editable = { name: 'strength', value: 0.7 };
+    const widgets = [consumed, editable];
+    const node: ComfyNode = {
+      id: 'inside-linked',
+      type: 'PromptStyler',
+      widgets,
+      inputs: [{ name: 'text', link: 71, widget: { name: 'text' } }],
+    };
+    const h = jest.fn(() => ({ type: 'node' }));
+    const renderer = new ComfyVueNodeCardRenderer({
+      component: { __name: 'LGraphNode' },
+      appContext: {},
+      runtime: {
+        render: jest.fn(),
+        h,
+        extractVueNodeData: () => ({ id: 'inside-linked', widgets }),
+      },
+    });
+
+    renderer.mount(document.createElement('div'), node);
+
+    expect(h).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        nodeData: expect.objectContaining({ widgets: [editable] }),
+      }),
+    );
+    expect(node.widgets).toBe(widgets);
   });
 
   test('unmounts through Comfy Vue rendering and re-extracts current node state', () => {

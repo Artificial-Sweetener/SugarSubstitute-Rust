@@ -74,7 +74,7 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
     });
     const renderCard = (): void => {
       if (disposed) return;
-      const nodeData = createCubeFaceNodeData(this.#runtime.extractVueNodeData(node));
+      const nodeData = createCubeFaceNodeData(this.#runtime.extractVueNodeData(node), node);
       const vnodeValue = this.#runtime.h(this.#component, { nodeData });
       if (!isRecord(vnodeValue)) {
         throw new TypeError('Comfy native renderer returned an invalid VNode.');

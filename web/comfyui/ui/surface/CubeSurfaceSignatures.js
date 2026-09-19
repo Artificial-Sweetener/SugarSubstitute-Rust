@@ -16,9 +16,14 @@
 /** Derive stable signatures for Cube surface topology and presentation remounts. */
 import { requireCubeIdentity, requireCubeSurface, } from '../cube/node/ComfyCubeNodeFactory.js';
 import { buildCubeCardVisibilitySignature } from './CubeCardVisibilitySignature.js';
-/** Describe exact internal node identity without projecting it onto the root graph. */
+import { cubeFaceVisibleWidgets } from './CubeFaceWidgetPolicy.js';
+/** Describe internal node identity and the widget ownership that shapes its face card. */
 export function buildCubeSurfaceTopologySignature(node) {
-    return JSON.stringify(node.subgraph._nodes.map((innerNode) => [String(innerNode.id ?? ''), innerNode.type ?? '']));
+    return JSON.stringify(node.subgraph._nodes.map((innerNode) => [
+        String(innerNode.id ?? ''),
+        innerNode.type ?? '',
+        cubeFaceVisibleWidgets(innerNode).map((widget) => widget.name),
+    ]));
 }
 /** Detect titlebar identity and persistence changes without unrelated graph state. */
 export function buildCubeSurfacePresentationSignature(node) {

@@ -22,6 +22,31 @@ import {
 } from '../../../frontend/comfyui/ui/surface/ComfyLiteGraphNodeCardRenderer.js';
 
 describe('ComfyLiteGraphNodeCardRenderer', () => {
+  test('masks consumed widgets only during native face drawing', () => {
+    const consumed = { name: 'text', value: 'stale prompt' };
+    const editable = { name: 'strength', value: 0.7 };
+    const widgets = [consumed, editable];
+    const node = {
+      id: 'inside-linked',
+      type: 'PromptStyler',
+      size: [240, 180],
+      widgets,
+      inputs: [{ name: 'text', link: 81, widget: { name: 'text' } }],
+      drawSlots: jest.fn(),
+      drawCollapsedSlots: jest.fn(),
+      onDrawBackground: jest.fn(),
+      title_buttons: [],
+      strokeStyles: {},
+    };
+    const drawNode = jest.fn(() => {
+      expect(node.widgets).toEqual([editable]);
+    });
+
+    drawNativeLiteGraphCubeCard({ drawNode }, node, {} as CanvasRenderingContext2D);
+
+    expect(node.widgets).toBe(widgets);
+  });
+
   test('preserves native preview media while restoring masked host callbacks', () => {
     const drawSlots = jest.fn();
     const drawCollapsedSlots = jest.fn();

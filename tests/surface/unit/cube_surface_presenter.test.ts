@@ -26,6 +26,7 @@ import type {
   NativeNodeCardMount,
   NativeNodeCardRenderer,
 } from '../../../frontend/comfyui/ui/surface/NativeNodeCardRenderer.js';
+import type { ComfyInput } from '../../../frontend/comfyui/ui/types/graph.js';
 
 describe('CubeSurfacePresenter', () => {
   beforeEach(() => {
@@ -363,6 +364,45 @@ describe('CubeSurfacePresenter', () => {
     await flushMount();
 
     expect(mount).toHaveBeenLastCalledWith(expect.any(HTMLElement), second, {});
+    presenter.dispose();
+  });
+
+  test('reconciles a card when graph links consume or release its only widget', async () => {
+    const pane = createTransformPane();
+    const internal = nativeNode('prompt-target', 'CLIPTextEncode');
+    const consumedInput: ComfyInput = {
+      name: 'value',
+      link: null,
+      widget: { name: 'value' },
+    };
+    Reflect.set(internal, 'inputs', [consumedInput]);
+    const node = cubeNode(9, 'cube-1', [internal]);
+    pane.append(createNativeNodeShell(String(node.id)).root);
+    const nodes = new CubeNodeCatalog();
+    nodes.add(node);
+    const rootGraph = {};
+    const presenter = new CubeSurfacePresenter({
+      document,
+      openEditor: jest.fn(),
+      rootGraph,
+      getCurrentGraph: () => rootGraph,
+      nodes,
+      logger: console,
+      renderer: { mount: () => ({ refresh() {}, unmount() {} }), dispose() {} },
+      requestSlotLayoutSync: () => undefined,
+    });
+    await flushMount();
+    expect(pane.querySelectorAll('[data-cube-node-id="prompt-target"]')).toHaveLength(1);
+
+    consumedInput.link = 41;
+    node.subgraph.onAfterChange?.(node.subgraph);
+    await flushMount();
+    expect(pane.querySelectorAll('[data-cube-node-id="prompt-target"]')).toHaveLength(0);
+
+    consumedInput.link = null;
+    node.subgraph.onAfterChange?.(node.subgraph);
+    await flushMount();
+    expect(pane.querySelectorAll('[data-cube-node-id="prompt-target"]')).toHaveLength(1);
     presenter.dispose();
   });
 
