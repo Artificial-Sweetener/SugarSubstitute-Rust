@@ -296,7 +296,7 @@ def test_exporter_rejects_cyclic_nested_subgraph_definitions() -> None:
         )
 
 
-def test_exporter_collects_real_node_definitions_inside_nested_subgraphs() -> None:
+def test_exporter_collects_inner_and_wrapper_definitions_for_nested_subgraphs() -> None:
     cubes = export_cubes(
         _build_subgraph_wrapper_prompt(),
         workflow=_build_nested_subgraph_workflow(),
@@ -305,8 +305,8 @@ def test_exporter_collects_real_node_definitions_inside_nested_subgraphs() -> No
     definitions = cubes[0].cube["implementation"]["definitions"]
 
     assert "KSampler" in definitions
-    assert CHILD_SUBGRAPH_ID not in definitions
-    assert PARENT_SUBGRAPH_ID not in definitions
+    assert definitions[CHILD_SUBGRAPH_ID]["python_module"] == "comfy.subgraph"
+    assert definitions[PARENT_SUBGRAPH_ID]["python_module"] == "comfy.subgraph"
 
 
 def test_export_import_roundtrip(tmp_path: Path) -> None:

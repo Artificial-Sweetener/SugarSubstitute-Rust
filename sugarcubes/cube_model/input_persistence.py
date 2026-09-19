@@ -41,6 +41,7 @@ _LOCAL_RESOURCE_INPUT_NAMES = frozenset(
         "clip_name2",
         "clip_name3",
         "control_net_name",
+        "device",
         "lora_name",
         "unet_name",
         "vae_name",

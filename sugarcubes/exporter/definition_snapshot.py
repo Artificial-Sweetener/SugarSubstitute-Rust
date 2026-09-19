@@ -96,7 +96,7 @@ def collect_definitions(
             continue
 
         validation_definitions[class_type] = deepcopy(dict(definition))
-        definitions[class_type] = _normalize_definition_map(class_type, definition)
+        definitions[class_type] = normalize_definition_snapshot(class_type, definition)
 
     return definitions, validation_definitions, warnings
 
@@ -248,10 +248,10 @@ def _load_comfy_runtime() -> Tuple[Any, Any]:
     return _COMFY_NODES_MODULE, _COMFY_NODE_INTERNAL_TYPE
 
 
-def _normalize_definition_map(
+def normalize_definition_snapshot(
     class_type: str, definition: Mapping[str, Any]
 ) -> Dict[str, Any]:
-    """Normalize a live node definition into compact JSON-friendly metadata."""
+    """Normalize one node definition into compact JSON-friendly metadata."""
 
     normalized: Dict[str, Any] = {}
     for key, value in definition.items():

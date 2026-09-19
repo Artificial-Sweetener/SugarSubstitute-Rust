@@ -1239,6 +1239,20 @@ def test_save_authored_flavor_strips_machine_local_defaults(
                         symbol="sam",
                         value_type="string",
                     ),
+                    _surface_control(
+                        "loader.device",
+                        input_name="device",
+                        class_type="AnyDeviceAwareNode",
+                        symbol="loader",
+                        value_type="string",
+                    ),
+                    _surface_control(
+                        "wrapper.model",
+                        input_name="model",
+                        class_type="11111111-2222-3333-4444-555555555555",
+                        symbol="wrapper",
+                        value_type="string",
+                    ),
                 ],
                 authored=[
                     {
@@ -1249,6 +1263,8 @@ def test_save_authored_flavor_strips_machine_local_defaults(
                             "ksampler.seed": 12345,
                             "checkpoint.ckpt_name": "old.safetensors",
                             "sam.sam_model": "sam_vit_l",
+                            "loader.device": "cuda:0",
+                            "wrapper.model": "old-local-model.safetensors",
                         },
                     }
                 ],
@@ -1256,6 +1272,13 @@ def test_save_authored_flavor_strips_machine_local_defaults(
         ),
         encoding="utf-8",
     )
+    existing_payload = json.loads(cube_path.read_text(encoding="utf-8"))
+    existing_payload["implementation"]["definitions"] = {
+        "11111111-2222-3333-4444-555555555555": {
+            "input": {"required": {"model": ["LIST"]}}
+        }
+    }
+    cube_path.write_text(json.dumps(existing_payload), encoding="utf-8")
 
     response = asyncio.run(
         build_route_handlers(services).save_authored_flavor(
@@ -1269,6 +1292,8 @@ def test_save_authored_flavor_strips_machine_local_defaults(
                         "ksampler.seed": 99999,
                         "checkpoint.ckpt_name": "new.safetensors",
                         "sam.sam_model": "sam_vit_b",
+                        "loader.device": "cpu",
+                        "wrapper.model": "new-local-model.safetensors",
                     },
                 }
             )

@@ -44,7 +44,17 @@ def sanitize_authored_defaults_payload(
 ) -> None:
     """Remove authored values that should not be stored in portable cube files."""
 
-    live_definitions = definitions or {}
+    live_definitions = definitions
+    if live_definitions is None:
+        implementation = payload.get("implementation")
+        embedded_definitions = (
+            implementation.get("definitions")
+            if isinstance(implementation, Mapping)
+            else None
+        )
+        live_definitions = (
+            embedded_definitions if isinstance(embedded_definitions, Mapping) else {}
+        )
     _strip_unshippable_node_inputs(payload.get("implementation"), live_definitions)
     surface = payload.get("surface")
     flavors = payload.get("flavors")

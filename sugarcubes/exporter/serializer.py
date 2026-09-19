@@ -45,10 +45,6 @@ from ..cube_model.input_persistence import should_store_authored_value
 from ..cube_model.widget_values import canonicalize_subgraph_widget_values
 from ..instrumentation import log_event
 
-from .definition_snapshot import (
-    collect_definitions,
-    collect_subgraph_node_types,
-)
 from .boundary_bindings import build_input_bindings, build_output_bindings
 from .graph import CubeAnalysis, CubeData, Graph, GraphNode
 from .identifiers import sanitize_identifier
@@ -62,6 +58,7 @@ from .layout_serializer import (
 from .node_inputs import backfill_missing_widget_inputs
 from .ordering import natural_node_key
 from .subgraph_serializer import build_subgraph_index, collect_subgraphs
+from .subgraph_wrapper_definitions import collect_cube_definitions
 from .value_validation import (
     invalid_named_value_reason,
     validate_named_node_inputs,
@@ -136,9 +133,8 @@ def _serialize_cube(
     graph = analysis.graph
     symbols = _symbolize_nodes(cube, graph)
     subgraphs, subgraph_warnings = collect_subgraphs(cube, graph, subgraph_defs)
-    subgraph_class_types = collect_subgraph_node_types(subgraphs)
-    definitions, validation_definitions, definition_warnings = collect_definitions(
-        symbols, graph, resolver, extra_class_types=subgraph_class_types
+    definitions, validation_definitions, definition_warnings = collect_cube_definitions(
+        symbols, graph, resolver, subgraphs
     )
     subgraphs = canonicalize_subgraph_widget_values(subgraphs, validation_definitions)
     validate_subgraph_widget_values(subgraphs, validation_definitions)
