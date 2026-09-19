@@ -13,15 +13,13 @@ from uuid import uuid4
 from .cube_model import CubeDocument, CubeSchemaError
 from .execution.portable_boundary_lowering import document_boundary_ports
 from .workflow_analysis import CubeGraphAnalysis, CubeGraphAnalysisService
+from .workflow_cube_replacement import CubeGraphReplacementService
+from .workflow_mutation_errors import CubeGraphMutationError
 from .workflow_node_pack import current_workflow_node_pack
 
 _MINIMUM_SWAP_GAP = 24.0
 _DEFAULT_CUBE_WIDTH = 320.0
 _DEFAULT_CUBE_HEIGHT = 200.0
-
-
-class CubeGraphMutationError(ValueError):
-    """Reject a graph mutation that would cross or reinterpret a graph boundary."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -238,6 +236,21 @@ class CubeGraphMutationService:
         ):
             raise CubeGraphMutationError("Removed Cube remains in graph analysis.")
         return after
+
+    def replace_cube(
+        self,
+        workflow_value: object,
+        *,
+        instance_id: str,
+        document: object,
+    ) -> CubeGraphAnalysis:
+        """Replace one Cube document while preserving its native graph identity."""
+
+        return CubeGraphReplacementService(self._analysis).replace_cube(
+            workflow_value,
+            instance_id=instance_id,
+            document=document,
+        )
 
     def _new_ids(self, workflow: Mapping[str, object]) -> tuple[str, str]:
         """Allocate collision-resistant root-node and definition identifiers."""

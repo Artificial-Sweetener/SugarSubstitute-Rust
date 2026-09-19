@@ -193,6 +193,38 @@ def test_append_and_remove_routes_keep_non_cube_graph_content_opaque(
     assert removed["instances"] == []
 
 
+def test_replace_route_preserves_instance_identity_and_updates_version(
+    tmp_path: Path,
+    backend_services_factory: BackendServicesFactory,
+) -> None:
+    """Expose canonical replacement without detaching the native owner node."""
+
+    workflow = cube_workflow({"cube": image_passthrough_document("Cube")})
+    replacement = image_passthrough_document("Cube")
+    replacement["version"] = "1.1.0"
+    handlers = build_route_handlers(backend_services_factory(tmp_path))
+
+    response = asyncio.run(
+        handlers.replace_workflow_cube(
+            FakeRequest(
+                body={
+                    "schema_version": 1,
+                    "workflow": workflow,
+                    "instance_id": "cube",
+                    "document": replacement,
+                }
+            )
+        )
+    )
+
+    assert response.status == 200
+    payload = decode_json_response(response)
+    instances = cast(list[dict[str, object]], payload["instances"])
+    assert instances[0]["instance_id"] == "cube"
+    assert instances[0]["node_id"] == "1"
+    assert instances[0]["cube_version"] == "1.1.0"
+
+
 def test_create_cube_workflow_route_returns_one_canonical_graph(
     tmp_path: Path,
     backend_services_factory: BackendServicesFactory,

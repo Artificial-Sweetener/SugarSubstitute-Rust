@@ -38,6 +38,7 @@ from .workflow_mutation_routes import (
     build_workflow_append_cube_handler,
     build_workflow_create_cube_handler,
     build_workflow_remove_cube_handler,
+    build_workflow_replace_cube_handler,
     build_workflow_reorder_handler,
 )
 
@@ -97,6 +98,7 @@ class RouteHandlers:
     append_workflow_cube: RouteHandler
     create_cube_workflow: RouteHandler
     remove_workflow_cube: RouteHandler
+    replace_workflow_cube: RouteHandler
 
 
 def build_route_handlers(services: BackendServices) -> RouteHandlers:
@@ -118,6 +120,7 @@ def build_route_handlers(services: BackendServices) -> RouteHandlers:
     workflow_append_cube = build_workflow_append_cube_handler(services)
     workflow_create_cube = build_workflow_create_cube_handler(services)
     workflow_remove_cube = build_workflow_remove_cube_handler(services)
+    workflow_replace_cube = build_workflow_replace_cube_handler(services)
     return RouteHandlers(
         get_status=catalog.get_status,
         list_cubes=catalog.list_cubes,
@@ -170,6 +173,7 @@ def build_route_handlers(services: BackendServices) -> RouteHandlers:
         append_workflow_cube=workflow_append_cube,
         create_cube_workflow=workflow_create_cube,
         remove_workflow_cube=workflow_remove_cube,
+        replace_workflow_cube=workflow_replace_cube,
     )
 
 
@@ -237,4 +241,7 @@ def register_routes(prompt_server: Any, services: BackendServices) -> RouteHandl
     routes.post("/sugarcubes/v2/workflows/cubes/append")(handlers.append_workflow_cube)
     routes.post("/sugarcubes/v2/workflows/cubes/create")(handlers.create_cube_workflow)
     routes.post("/sugarcubes/v2/workflows/cubes/remove")(handlers.remove_workflow_cube)
+    routes.post("/sugarcubes/v2/workflows/cubes/replace")(
+        handlers.replace_workflow_cube
+    )
     return handlers

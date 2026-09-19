@@ -742,10 +742,12 @@ def test_save_many_existing_implementation_save_preserves_authored_flavors(
     assert "ksampler.steps" not in saved_payload["flavors"]["authored"][0]["values"]
     assert "ksampler.seed" not in saved_payload["flavors"]["authored"][0]["values"]
     assert saved_payload["surface"]["controls"] == exported_controls
-    finalized_cube = response_payload["saved"][0]["definition"]["cube"]
+    finalized_definition = response_payload["saved"][0]["definition"]
+    finalized_cube = finalized_definition["cube"]
     assert finalized_cube["surface"] == saved_payload["surface"]
     assert finalized_cube["flavors"] == saved_payload["flavors"]
     assert finalized_cube["implementation"] == saved_payload["implementation"]
+    assert finalized_definition["document"] == saved_payload
 
 
 def test_save_many_existing_implementation_save_reorders_authored_values_to_exported_surface(

@@ -47,6 +47,7 @@ def test_execution_capabilities_publish_stable_routes_and_schema_versions(
         "workflow_cube_append_route": "/sugarcubes/v2/workflows/cubes/append",
         "workflow_cube_create_route": "/sugarcubes/v2/workflows/cubes/create",
         "workflow_cube_remove_route": "/sugarcubes/v2/workflows/cubes/remove",
+        "workflow_cube_replace_route": "/sugarcubes/v2/workflows/cubes/replace",
         "execution_owner": "sugarcubes",
         "atomic_queueing": True,
         "cube_scoped_optimization": True,

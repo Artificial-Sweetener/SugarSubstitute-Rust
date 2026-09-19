@@ -21,6 +21,7 @@ import { updateMarkersForIds } from '../graph/CubeMarkers.js';
 import { getGraphGroups } from '../graph/GraphQuery.js';
 import { flattenCubeGroupMetadata, getGroupSugarcubes, setGroupSugarcubes, writeCubeDefinitionMetadata, } from '../graph/GroupMetadata.js';
 import { isRecord } from '../types/common.js';
+import { parseCubeDefinitionDocument, } from '../workflow/CubeDefinitionDocumentWriter.js';
 const WORKTREE_REVISION = 'WORKTREE';
 /** Coordinate post-save definition, instance, preset, and dirty-state updates. */
 export class CubeSaveReconciler {
@@ -62,14 +63,8 @@ export class CubeSaveReconciler {
     /** Publish each persisted definition and align marker definition identity. */
     publishDefinitions(graph, saved, markerIdsByCubeId, cubeNodeInstanceIdsByCubeId = {}) {
         const results = [];
-        for (const savedEntry of Array.isArray(saved) ? saved : []) {
-            const definition = isRecord(savedEntry.definition) ? savedEntry.definition : null;
-            const definitionCube = isRecord(definition?.cube) ? definition.cube : null;
-            const cubeId = readString(savedEntry.cube_id) || readString(definitionCube?.cube_id);
-            const cubeVersion = readString(definitionCube?.version) || readString(savedEntry.version);
-            if (!cubeId || !definition || !definitionCube) {
-                continue;
-            }
+        const preparedDefinitions = prepareSavedDefinitions(saved);
+        for (const { cubeId, cubeVersion, definition, document } of preparedDefinitions) {
             const definitionKey = buildCubeDefinitionKey(cubeId, cubeVersion);
             const markerIds = markerIdsByCubeId[cubeId] ?? [];
             const cubeNodeInstanceIds = cubeNodeInstanceIdsByCubeId[cubeId] ?? [];
@@ -86,7 +81,7 @@ export class CubeSaveReconciler {
                     cubeRevisionRef: WORKTREE_REVISION,
                     cubeDefinitionKey: definitionKey,
                 });
-                this.cubeNodeSave?.updateDocuments(cubeNodeInstanceIds, definitionCube, {
+                this.cubeNodeSave?.updateDocuments(cubeNodeInstanceIds, document, {
                     cubeId,
                     cubeVersion,
                 });
@@ -127,6 +122,40 @@ export class CubeSaveReconciler {
             });
             setGroupSugarcubes(group, flattenCubeGroupMetadata(definitionMetadata, metadata));
         }
+    }
+}
+/** Validate every finalized backend definition before mutating the live graph. */
+function prepareSavedDefinitions(saved) {
+    const prepared = [];
+    for (const savedEntry of Array.isArray(saved) ? saved : []) {
+        if (!isRecord(savedEntry.definition)) {
+            continue;
+        }
+        const definition = savedEntry.definition;
+        if (!isRecord(definition.cube)) {
+            throw new TypeError('Cube save response definition.cube must be an object.');
+        }
+        const document = parseCubeDefinitionDocument(definition.document);
+        const cubeId = document.cube_id;
+        const cubeVersion = document.version;
+        requireMatchingIdentity(savedEntry.cube_id, cubeId, 'saved cube_id');
+        requireMatchingIdentity(savedEntry.version, cubeVersion, 'saved version');
+        requireMatchingIdentity(definition.cube.cube_id, cubeId, 'definition.cube.cube_id');
+        requireMatchingIdentity(definition.cube.version, cubeVersion, 'definition.cube.version');
+        prepared.push({
+            cubeId,
+            cubeVersion,
+            definition: { ...definition, cube: definition.cube, document },
+            document,
+        });
+    }
+    return prepared;
+}
+/** Reject contradictory response identity before any graph reconciliation. */
+function requireMatchingIdentity(value, canonical, path) {
+    const supplied = readString(value);
+    if (supplied && supplied !== canonical) {
+        throw new TypeError(`Cube save response ${path} disagrees with definition.document.`);
     }
 }
 function normalizeCubeIds(values) {

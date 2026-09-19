@@ -99,6 +99,31 @@ def build_workflow_remove_cube_handler(services: BackendServices) -> RouteHandle
     return remove_cube
 
 
+def build_workflow_replace_cube_handler(services: BackendServices) -> RouteHandler:
+    """Build the atomic recognized-Cube replacement adapter."""
+
+    async def replace_cube(request: Any) -> Any:
+        """Return the graph and projection after replacing one Cube document."""
+
+        try:
+            body = await _mutation_body(request)
+            result = services.workflow_mutation.replace_cube(
+                body["workflow"],
+                instance_id=_required_string(body.get("instance_id"), "instance_id"),
+                document=body.get("document"),
+            )
+            return json_success(workflow_analysis_response(result))
+        except (
+            BackendError,
+            CanonicalWorkflowError,
+            CubeExecutionError,
+            CubeGraphMutationError,
+        ) as error:
+            return _mutation_error(error)
+
+    return replace_cube
+
+
 def build_workflow_create_cube_handler(services: BackendServices) -> RouteHandler:
     """Build the one-request legacy Cube-stack migration adapter."""
 
@@ -202,5 +227,6 @@ __all__ = [
     "build_workflow_append_cube_handler",
     "build_workflow_create_cube_handler",
     "build_workflow_remove_cube_handler",
+    "build_workflow_replace_cube_handler",
     "build_workflow_reorder_handler",
 ]

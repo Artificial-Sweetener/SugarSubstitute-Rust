@@ -28,6 +28,8 @@ def project_finalized_save(finalized: FinalizedCubeSave) -> dict[str, Any]:
     """Project one authoritative persisted save into the HTTP response."""
 
     commit_result = finalized.commit_state.commit_result
+    definition = deepcopy(dict(finalized.definition))
+    definition["document"] = finalized.document.to_dict()
     return {
         **finalized.artifact,
         "cube_id": finalized.target.cube_id,
@@ -38,5 +40,5 @@ def project_finalized_save(finalized: FinalizedCubeSave) -> dict[str, Any]:
         "commit_message": commit_result.commit_message if commit_result else "",
         "commit_error": finalized.commit_state.commit_error,
         "version": normalize_metadata_string(finalized.document.version),
-        "definition": deepcopy(dict(finalized.definition)),
+        "definition": definition,
     }

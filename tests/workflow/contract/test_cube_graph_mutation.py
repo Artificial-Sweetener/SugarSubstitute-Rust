@@ -242,6 +242,63 @@ def test_remove_cube_rejects_non_cube_identity() -> None:
         )
 
 
+def test_replace_cube_updates_document_without_replacing_native_instance() -> None:
+    """Replace Cube content while preserving native identity and graph topology."""
+
+    original_document = image_passthrough_document("Cube")
+    replacement_document = image_passthrough_document("Cube")
+    replacement_document["version"] = "1.1.0"
+    implementation = cast(dict[str, object], replacement_document["implementation"])
+    implementation["nodes"] = {
+        "image": {"class_type": "ImagePass", "inputs": {"image": None}},
+        "detail": {
+            "class_type": "ImagePass",
+            "inputs": {"image": ["image", 0]},
+        },
+    }
+    implementation["outputs"] = {"output.image": ["detail", 0]}
+    workflow = cube_workflow(
+        {"cube": original_document},
+        links=([1, "source", 0, 1, 0, "IMAGE"], [2, 1, 0, "sink", 0, "IMAGE"]),
+        loose_nodes=(
+            {"id": "source", "type": "Source", "properties": {}},
+            {"id": "sink", "type": "Sink", "properties": {}},
+        ),
+        modes={"cube": 4},
+    )
+    nodes = cast(list[dict[str, object]], workflow["nodes"])
+    owner_before = deepcopy(nodes[0])
+    definitions = cast(dict[str, object], workflow["definitions"])
+    subgraphs = cast(list[dict[str, object]], definitions["subgraphs"])
+    definition_id = subgraphs[0]["id"]
+
+    result = CubeGraphMutationService(CubeGraphAnalysisService()).replace_cube(
+        workflow,
+        instance_id="cube",
+        document=replacement_document,
+    )
+
+    assert workflow["nodes"] == nodes
+    assert result.instances[0].instance_id == "cube"
+    assert result.instances[0].node_id == str(owner_before["id"])
+    assert result.instances[0].definition_id == definition_id
+    assert result.instances[0].instance_alias == "Cube"
+    assert result.instances[0].execution_mode == 4
+    assert result.instances[0].cube_version == "1.1.0"
+    assert result.normalized_workflow["links"] == workflow["links"]
+    next_definitions = cast(
+        dict[str, object], result.normalized_workflow["definitions"]
+    )
+    next_subgraphs = cast(list[dict[str, object]], next_definitions["subgraphs"])
+    extra = cast(dict[str, object], next_subgraphs[0]["extra"])
+    persisted_document = cast(dict[str, object], extra["sugarcubes_document"])
+    persisted_implementation = cast(
+        dict[str, object], persisted_document["implementation"]
+    )
+    assert persisted_document["version"] == "1.1.0"
+    assert persisted_implementation["outputs"] == {"output.image": ["detail", 0]}
+
+
 def test_create_cube_workflow_builds_ordered_native_graph_in_one_analysis() -> None:
     """Migrate an ordered legacy stack without per-Cube analysis passes."""
 
