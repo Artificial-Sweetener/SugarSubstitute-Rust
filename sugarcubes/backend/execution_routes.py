@@ -52,6 +52,7 @@ def build_execution_route_handlers(services: BackendServices) -> ExecutionRouteH
                 "workflow_cube_append_route": "/sugarcubes/v2/workflows/cubes/append",
                 "workflow_cube_create_route": "/sugarcubes/v2/workflows/cubes/create",
                 "workflow_cube_remove_route": "/sugarcubes/v2/workflows/cubes/remove",
+                "workflow_cube_replace_route": "/sugarcubes/v2/workflows/cubes/replace",
                 "execution_owner": "sugarcubes",
                 "atomic_queueing": True,
                 "cube_scoped_optimization": True,
