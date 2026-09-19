@@ -1,3 +1,11 @@
+## [0.14.1](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.14.0...v0.14.1) (2026-09-19)
+
+
+### Bug Fixes
+
+* **authoring:** persist canonical Cube documents after save ([15e9ab6](https://github.com/Artificial-Sweetener/SugarCubes/commit/15e9ab64ce9099b09ffb7a1f44b839d8fc7603a0))
+* **workflows:** preserve graph identity during Cube updates ([bd5088d](https://github.com/Artificial-Sweetener/SugarCubes/commit/bd5088d1d9002ca787e4c1f3a04fa3e887167f39))
+
 # [0.14.0](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.13.0...v0.14.0) (2026-09-11)
 
 
