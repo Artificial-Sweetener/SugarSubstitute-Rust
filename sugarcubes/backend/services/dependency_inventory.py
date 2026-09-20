@@ -123,6 +123,9 @@ def _installed_dependency(
     phase_started_at = perf_counter()
     tracking_path = path / ".tracking"
     tracking = _read_tracking_metadata(tracking_path)
+    project_version, project_repository = _read_project_identity(
+        path / "pyproject.toml"
+    )
     _add_phase_time(phase_timings, "read_tracking_metadata", phase_started_at)
     phase_started_at = perf_counter()
     git_exists = git_dir.exists()
@@ -152,15 +155,14 @@ def _installed_dependency(
         return InstalledDependency(
             folder_name=path.name,
             source_path=str(path),
-            installed_version=head,
-            version_kind=classify_version(head),
+            installed_version=project_version or head,
+            version_kind=classify_version(project_version or head),
             source_kind="git",
             repository_url=repository_url,
             dirty=dirty,
+            git_head=head,
+            project_version=project_version,
         )
-    project_version, project_repository = _read_project_identity(
-        path / "pyproject.toml"
-    )
     version = project_version or _normalize_text(tracking.get("version"))
     return InstalledDependency(
         folder_name=path.name,
@@ -172,6 +174,7 @@ def _installed_dependency(
             project_repository or _normalize_text(tracking.get("repository"))
         ),
         dirty=False,
+        project_version=project_version,
     )
 
 
@@ -194,6 +197,7 @@ def _cheap_git_dependency(
         source_kind="git",
         repository_url=_normalize_text(tracking.get("repository")),
         dirty=False,
+        git_head=head,
     )
 
 

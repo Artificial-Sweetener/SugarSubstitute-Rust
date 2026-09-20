@@ -8,7 +8,10 @@ from typing import Mapping
 
 from ..cube_model import CubeDocument, CubeSchemaError
 from ..workflow import CanonicalWorkflow
-from .boundary_lowering import apply_topology_edges
+from .boundary_lowering import (
+    apply_topology_edges,
+    omit_unconnected_boundary_markers,
+)
 from .cube_document_lowering import CubeDocumentLowerer
 from .errors import CubeLoweringError
 from .loose_node_lowering import LooseWorkflowNodeLowerer
@@ -80,6 +83,7 @@ class NativeCubeWorkflowLowerer:
         self._loose_nodes.lower(workflow, prompt, owners, definitions)
         apply_topology_edges(prompt, tuple(bindings), topology)
         self._mixed_edges.lower(workflow, prompt, owners, tuple(bindings), topology)
+        omit_unconnected_boundary_markers(prompt)
         return LoweringResult(
             prompt=prompt,
             node_owners=owners,

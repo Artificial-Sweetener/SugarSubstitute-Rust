@@ -9,7 +9,6 @@
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -17,10 +16,9 @@ from typing import Any
 from .cube_metadata import normalize_metadata_string
 from .dependency_acquisition import DependencyAcquirer
 from .dependency_first_party_manifest import first_party_extension
+from .dependency_python_requirements import DependencyPythonRequirementsInstaller
 from .dependency_version_types import GitRunner
 from .dependency_versions import classify_version
-
-_logger = logging.getLogger(__name__)
 
 
 class DependencyVersionRepairExecutor:
@@ -31,11 +29,13 @@ class DependencyVersionRepairExecutor:
         *,
         acquirer: DependencyAcquirer,
         git_runner: GitRunner,
+        requirements_installer: DependencyPythonRequirementsInstaller,
     ) -> None:
         """Initialize version repair with explicit execution adapters."""
 
         self._acquirer = acquirer
         self._git_runner = git_runner
+        self._requirements_installer = requirements_installer
 
     def repair(self, item: Mapping[str, Any]) -> dict[str, Any]:
         """Repair one approved dependency version plan item."""
@@ -48,8 +48,20 @@ class DependencyVersionRepairExecutor:
             return self._checkout_required_git_ref(
                 item,
                 checkout_ref=f"v{required_version}",
+                install_trusted_requirements=True,
             )
         return self._reinstall_versioned_node(item)
+
+    def selected_source(self, item: Mapping[str, Any]) -> str:
+        """Return the acquisition path selected for one repair plan item."""
+
+        status = normalize_metadata_string(item.get("status"))
+        if (
+            status == "installed_commit_not_descendant"
+            or _is_trusted_semver_git_repair(item)
+        ):
+            return "the trusted installed Git checkout"
+        return "Comfy Registry with trusted first-party fallback"
 
     def _reinstall_versioned_node(self, item: Mapping[str, Any]) -> dict[str, Any]:
         """Reacquire a versioned node through the shared acquisition policy."""
@@ -71,6 +83,7 @@ class DependencyVersionRepairExecutor:
         item: Mapping[str, Any],
         *,
         checkout_ref: str | None = None,
+        install_trusted_requirements: bool = False,
     ) -> dict[str, Any]:
         """Fetch and checkout an approved Git commit or release tag when safe."""
 
@@ -119,11 +132,6 @@ class DependencyVersionRepairExecutor:
             try:
                 result = self._git_runner(command, cwd=source_path)
             except (OSError, RuntimeError, ValueError) as exc:
-                _logger.warning(
-                    "SugarCubes: Git version repair failed for %s",
-                    node_id,
-                    exc_info=True,
-                )
                 return {
                     "nodeId": node_id,
                     "operation": "git_checkout",
@@ -144,6 +152,18 @@ class DependencyVersionRepairExecutor:
                     "stdout": normalize_metadata_string(getattr(result, "stdout", "")),
                     "stderr": normalize_metadata_string(getattr(result, "stderr", "")),
                 }
+        if install_trusted_requirements:
+            requirements_failure = self._install_trusted_requirements(
+                item,
+                source_path=source_path,
+            )
+            if requirements_failure:
+                return self._rollback_after_requirements_failure(
+                    item,
+                    source_path=source_path,
+                    failed_ref=resolved_ref,
+                    reason=requirements_failure,
+                )
         return {
             "nodeId": node_id,
             "operation": "git_checkout",
@@ -152,6 +172,67 @@ class DependencyVersionRepairExecutor:
             "reason": "",
             "stdout": "",
             "stderr": "",
+        }
+
+    def _install_trusted_requirements(
+        self,
+        item: Mapping[str, Any],
+        *,
+        source_path: Path,
+    ) -> str:
+        """Install the manifest-authorized requirements after a trusted checkout."""
+
+        extension = first_party_extension(normalize_metadata_string(item.get("nodeId")))
+        if extension is None or extension.requirements_file is None:
+            return ""
+        requirements_path = source_path / extension.requirements_file
+        if not requirements_path.is_file():
+            return f"{extension.project_name} source is missing its requirements file"
+        try:
+            result = self._requirements_installer.install(requirements_path)
+        except (OSError, RuntimeError, ValueError) as exc:
+            return str(exc)
+        if result.return_code == 0:
+            return ""
+        detail = (result.stderr or result.stdout).strip()[-2000:]
+        return f"Could not install {extension.project_name} requirements: {detail}"
+
+    def _rollback_after_requirements_failure(
+        self,
+        item: Mapping[str, Any],
+        *,
+        source_path: Path,
+        failed_ref: str,
+        reason: str,
+    ) -> dict[str, Any]:
+        """Restore the prior Git commit when post-checkout requirements fail."""
+
+        evidence = item.get("installedEvidence")
+        previous_head = (
+            normalize_metadata_string(evidence.get("gitHead"))
+            if isinstance(evidence, Mapping)
+            else ""
+        )
+        rollback_return_code = 1
+        if previous_head:
+            try:
+                rollback = self._git_runner(
+                    ["checkout", previous_head],
+                    cwd=source_path,
+                )
+                rollback_return_code = int(getattr(rollback, "returncode", 0) or 0)
+            except (OSError, RuntimeError, ValueError):
+                rollback_return_code = 1
+        return {
+            "nodeId": normalize_metadata_string(item.get("nodeId")),
+            "operation": "git_checkout",
+            "command": ["checkout", failed_ref],
+            "returnCode": 1,
+            "reason": reason,
+            "stdout": "",
+            "stderr": "",
+            "rollbackRef": previous_head,
+            "rollbackSucceeded": rollback_return_code == 0,
         }
 
 

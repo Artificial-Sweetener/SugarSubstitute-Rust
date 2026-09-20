@@ -56,6 +56,42 @@ def test_lowering_connects_public_boundaries_and_marks_loose_nodes_explicitly() 
     ]
 
 
+def test_lowering_omits_unconnected_optional_boundary_markers() -> None:
+    """Let Comfy apply optional input defaults when no Cube edge supplies one."""
+
+    document = cube_document(
+        "OptionalMask",
+        nodes={
+            "sampler": {
+                "class_type": "OptionalMaskPass",
+                "inputs": {"image": None, "mask": ["@binding", "input.mask"]},
+            }
+        },
+        inputs={
+            "input.mask": {
+                "kind": "input",
+                "targets": [["sampler", "mask"]],
+            }
+        },
+        outputs={"output.image": ["sampler", 0]},
+        definitions={
+            "OptionalMaskPass": {
+                "input": {
+                    "required": {"image": ["IMAGE"]},
+                    "optional": {"mask": ["MASK"]},
+                },
+                "output": ["IMAGE"],
+            }
+        },
+    )
+    workflow = read_canonical_workflow(cube_workflow({"cube-a": document}))
+
+    result = NativeCubeWorkflowLowerer().lower(workflow, build_cube_topology(workflow))
+
+    assert "mask" not in _inputs(result.prompt["cube-a:sampler"])
+    assert any(binding.binding == "input.mask" for binding in result.boundary_bindings)
+
+
 def test_lowering_preserves_manually_selected_cube_boundary_edges() -> None:
     """Execution must honor explicit graph wiring instead of applying proximity order."""
 

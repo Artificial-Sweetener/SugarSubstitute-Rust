@@ -1265,6 +1265,86 @@ def test_backend_readiness_preserves_versioned_custom_node_requirements(
     assert version_item["requiredByNodes"] == ["Impact Detailer"]
 
 
+def test_backend_readiness_is_false_for_installed_dependency_below_requirement(
+    tmp_path: Path,
+    backend_services_factory: BackendServicesFactory,
+) -> None:
+    """Keep aggregate readiness truthful when a present dependency needs repair."""
+
+    services = backend_services_factory(tmp_path, git_runner=lambda args, cwd: None)
+    checkout = services.tracked_repos.checkout_path(
+        "Artificial-Sweetener", "Base-Cubes"
+    )
+    _write_cube(
+        checkout / "demo.cube",
+        _cube_payload_with_cnr(
+            cnr_id="SimpleSyrup",
+            version="1.9.2",
+            python_module="custom_nodes.SimpleSyrup",
+        ),
+    )
+    custom_nodes_root = tmp_path / "custom_nodes"
+    installed = custom_nodes_root / "SimpleSyrup"
+    installed.mkdir(parents=True)
+    (installed / ".tracking").write_text(
+        json.dumps(
+            {
+                "version": "1.9.1",
+                "repository": "https://github.com/Artificial-Sweetener/SimpleSyrup",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    readiness = services.library.library_readiness(custom_nodes_root)
+
+    assert readiness["missingCustomNodes"] == []
+    assert readiness["dependencyVersionPlan"][0]["status"] == (
+        "installed_version_too_old"
+    )
+    assert readiness["ready"] is False
+    assert readiness["restartRequired"] is True
+
+
+def test_backend_readiness_does_not_block_on_uncomparable_sha_history(
+    tmp_path: Path,
+    backend_services_factory: BackendServicesFactory,
+) -> None:
+    """Keep Registry installs usable when SHA history proves no actionable update."""
+
+    services = backend_services_factory(tmp_path, git_runner=lambda args, cwd: None)
+    checkout = services.tracked_repos.checkout_path(
+        "Artificial-Sweetener", "Base-Cubes"
+    )
+    _write_cube(
+        checkout / "demo.cube",
+        _cube_payload_with_cnr(
+            cnr_id="seedvr2_videoupscaler",
+            version="2a873e2f286224bb00c60fe3fb61b88b65258a6d",
+            python_module="custom_nodes.seedvr2_videoupscaler",
+        ),
+    )
+    custom_nodes_root = tmp_path / "custom_nodes"
+    installed = custom_nodes_root / "seedvr2_videoupscaler"
+    installed.mkdir(parents=True)
+    (installed / "pyproject.toml").write_text(
+        "[project]\n"
+        'name = "seedvr2_videoupscaler"\n'
+        'version = "2.5.22"\n'
+        "[project.urls]\n"
+        'Repository = "https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler"\n',
+        encoding="utf-8",
+    )
+
+    readiness = services.library.library_readiness(custom_nodes_root)
+    version_item = readiness["dependencyVersionPlan"][0]
+
+    assert version_item["status"] == "installed_version_unknown"
+    assert version_item["repairable"] is False
+    assert readiness["ready"] is True
+    assert readiness["restartRequired"] is False
+
+
 def test_backend_readiness_skips_git_runner_for_unrelated_installed_nodes(
     tmp_path: Path,
     backend_services_factory: BackendServicesFactory,

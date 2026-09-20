@@ -26,8 +26,13 @@ import subprocess
 from pathlib import Path
 from typing import Sequence
 
+import pytest
+
 from sugarcubes.backend.services.cube_dependency_service import CubeDependencyService
 from sugarcubes.backend.services.dependency_cli import ComfyCliAdapter
+from sugarcubes.backend.services.dependency_python_requirements import (
+    DependencyPythonRequirementsInstaller,
+)
 
 from tests.library.contract.test_cube_library_backend_contract import (
     _cube_payload_with_cnr,
@@ -260,6 +265,53 @@ def test_repair_preserves_failed_install_output(
     assert "stderr" in json.dumps(result["failedNodes"][0])
 
 
+def test_sync_and_check_does_not_request_restart_after_failed_repair(
+    tmp_path: Path,
+    backend_services_factory: BackendServicesFactory,
+) -> None:
+    """Keep the running host available when approved dependency repair fails."""
+
+    call_count = 0
+
+    def runner(
+        command: Sequence[str], cwd: Path, timeout_seconds: int
+    ) -> subprocess.CompletedProcess[str]:
+        nonlocal call_count
+        _ = cwd, timeout_seconds
+        call_count += 1
+        return _completed(command, 0 if call_count == 1 else 1)
+
+    services = backend_services_factory(tmp_path, git_runner=lambda args, cwd: None)
+    checkout = services.tracked_repos.checkout_path(
+        "Artificial-Sweetener", "Base-Cubes"
+    )
+    _write_cube(checkout / "demo.cube", _cube_payload_with_cnr())
+    service = CubeDependencyService(
+        library_service=services.library,
+        tracked_repo_service=services.tracked_repos,
+        workspace_path=tmp_path / "ComfyUI",
+        custom_nodes_root=tmp_path / "custom_nodes",
+        cli_adapter=ComfyCliAdapter(runner=runner),
+    )
+
+    result = service.sync_and_check(
+        {
+            "dependencyPolicy": {
+                "repair": True,
+                "baselineOnly": True,
+            }
+        }
+    )
+
+    assert result["repairResult"]["failedNodes"][0]["reason"] == (
+        "Comfy Registry exact-version install failed"
+    )
+    assert result["dependencyReadiness"]["ready"] is False
+    assert result["dependencyReadiness"]["restartRequired"] is True
+    assert result["repairResult"]["restartRequired"] is False
+    assert result["restartRequired"] is False
+
+
 def test_repair_checks_out_approved_baseline_git_version(
     tmp_path: Path,
     backend_services_factory: BackendServicesFactory,
@@ -330,10 +382,35 @@ def test_repair_checks_out_approved_baseline_git_version(
 def test_repair_checks_out_exact_first_party_tag_for_clean_git_install(
     tmp_path: Path,
     backend_services_factory: BackendServicesFactory,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Update a clean official checkout without replacing it with an archive."""
 
+    caplog.set_level("INFO")
     installed_commit = "f561f164543f927e0452e14658a0509e8e4866d6"
+    updated_commit = "0d97d7c2424f8a2d3a859fa80bfc64e935116cf1"
+    custom_nodes_root = tmp_path / "custom_nodes"
+    installed_path = custom_nodes_root / "SimpleSyrup"
+    git_dir = installed_path / ".git"
+    git_dir.mkdir(parents=True)
+    head_path = git_dir / "HEAD"
+    head_path.write_text(installed_commit, encoding="utf-8")
+    project_path = installed_path / "pyproject.toml"
+    (installed_path / "requirements.txt").write_text("", encoding="utf-8")
+
+    def write_project_version(version: str) -> None:
+        """Write installed release evidence changed by the simulated checkout."""
+
+        project_path.write_text(
+            "[project]\n"
+            'name = "SimpleSyrup"\n'
+            f'version = "{version}"\n'
+            "[project.urls]\n"
+            'Repository = "https://github.com/Artificial-Sweetener/SimpleSyrup"\n',
+            encoding="utf-8",
+        )
+
+    write_project_version("1.7.0")
     git_commands: list[tuple[str, ...]] = []
 
     def fake_git(args: Sequence[str], *, cwd: Path) -> Any:
@@ -351,6 +428,9 @@ def test_repair_checks_out_exact_first_party_tag_for_clean_git_install(
             Result.stdout = ""
         elif args == ["config", "--get", "remote.origin.url"]:
             Result.stdout = "https://github.com/Artificial-Sweetener/SimpleSyrup.git\n"
+        elif args == ["checkout", "v1.7.1"]:
+            head_path.write_text(updated_commit, encoding="utf-8")
+            write_project_version("1.7.1")
         return Result()
 
     services = backend_services_factory(tmp_path, git_runner=fake_git)
@@ -365,9 +445,26 @@ def test_repair_checks_out_exact_first_party_tag_for_clean_git_install(
             python_module="custom_nodes.SimpleSyrup",
         ),
     )
-    custom_nodes_root = tmp_path / "custom_nodes"
-    (custom_nodes_root / "SimpleSyrup" / ".git").mkdir(parents=True)
+    _write_cube(
+        checkout / "legacy-sha.cube",
+        _cube_payload_with_cnr(
+            cube_id="Artificial-Sweetener/Base-Cubes/legacy-sha.cube",
+            cnr_id="SimpleSyrup",
+            version="37bcd403c5172adc2505b38d1d31c05969a69443",
+            python_module="custom_nodes.SimpleSyrup",
+        ),
+    )
+    _write_cube(
+        checkout / "older-semver.cube",
+        _cube_payload_with_cnr(
+            cube_id="Artificial-Sweetener/Base-Cubes/older-semver.cube",
+            cnr_id="SimpleSyrup",
+            version="1.7.0",
+            python_module="custom_nodes.SimpleSyrup",
+        ),
+    )
     cli_commands: list[list[str]] = []
+    requirement_commands: list[list[str]] = []
     service = CubeDependencyService(
         library_service=services.library,
         tracked_repo_service=services.tracked_repos,
@@ -378,22 +475,144 @@ def test_repair_checks_out_exact_first_party_tag_for_clean_git_install(
                 cli_commands, command
             )
         ),
+        requirements_installer=DependencyPythonRequirementsInstaller(
+            runner=lambda command, cwd, timeout_seconds: _recorded_completed(
+                requirement_commands, command
+            )
+        ),
     )
 
     result = service.repair(approval_policy="silent_baseline_only")
 
     assert result["updatedNodes"][0]["operation"] == "git_checkout"
+    assert result["attemptedVersionPlan"][0]["requiredVersion"] == "1.7.1"
+    assert result["attemptedVersionPlan"][0]["conflicts"] == []
     assert ("fetch", "--all", "--tags") in git_commands
     assert ("cat-file", "-e", "v1.7.1^{commit}") in git_commands
     assert ("checkout", "v1.7.1") in git_commands
     assert cli_commands == []
+    assert requirement_commands[0][-2:] == [
+        "-r",
+        str(installed_path / "requirements.txt"),
+    ]
+    assert result["readinessAfter"]["ready"] is True
+    checkout_count = git_commands.count(("checkout", "v1.7.1"))
+
+    repeated = service.repair(approval_policy="silent_baseline_only")
+
+    assert repeated["updatedNodes"] == []
+    assert repeated["restartRequired"] is False
+    assert repeated["readinessAfter"]["ready"] is True
+    assert git_commands.count(("checkout", "v1.7.1")) == checkout_count
+    progress = [
+        message for message in caplog.messages if "SugarCubes[nodepack_" in message
+    ]
+    assert [message.split("]", 1)[0] for message in progress] == [
+        "SugarCubes[nodepack_version_selected",
+        "SugarCubes[nodepack_source_selected",
+        "SugarCubes[nodepack_update_started",
+        "SugarCubes[nodepack_update_complete",
+        "SugarCubes[nodepack_restart_required",
+    ]
+
+
+def test_failed_trusted_requirements_restore_the_previous_git_revision(
+    tmp_path: Path,
+    backend_services_factory: BackendServicesFactory,
+) -> None:
+    """Roll back source changes when trusted post-checkout requirements fail."""
+
+    installed_commit = "f561f164543f927e0452e14658a0509e8e4866d6"
+    updated_commit = "0d97d7c2424f8a2d3a859fa80bfc64e935116cf1"
+    custom_nodes_root = tmp_path / "custom_nodes"
+    installed_path = custom_nodes_root / "SimpleSyrup"
+    git_dir = installed_path / ".git"
+    git_dir.mkdir(parents=True)
+    head_path = git_dir / "HEAD"
+    project_path = installed_path / "pyproject.toml"
+    (installed_path / "requirements.txt").write_text("", encoding="utf-8")
+
+    def write_installed_state(commit: str, version: str) -> None:
+        """Write the source evidence changed by the simulated checkout."""
+
+        head_path.write_text(commit, encoding="utf-8")
+        project_path.write_text(
+            "[project]\n"
+            'name = "SimpleSyrup"\n'
+            f'version = "{version}"\n'
+            "[project.urls]\n"
+            'Repository = "https://github.com/Artificial-Sweetener/SimpleSyrup"\n',
+            encoding="utf-8",
+        )
+
+    write_installed_state(installed_commit, "1.7.0")
+    git_commands: list[tuple[str, ...]] = []
+
+    def fake_git(args: Sequence[str], *, cwd: Path) -> Any:
+        _ = cwd
+        command = tuple(args)
+        git_commands.append(command)
+
+        class Result:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        if args == ["rev-parse", "HEAD"]:
+            Result.stdout = head_path.read_text(encoding="utf-8") + "\n"
+        elif args == ["status", "--porcelain"]:
+            Result.stdout = ""
+        elif args == ["config", "--get", "remote.origin.url"]:
+            Result.stdout = "https://github.com/Artificial-Sweetener/SimpleSyrup.git\n"
+        elif args == ["checkout", "v1.7.1"]:
+            write_installed_state(updated_commit, "1.7.1")
+        elif args == ["checkout", installed_commit]:
+            write_installed_state(installed_commit, "1.7.0")
+        return Result()
+
+    services = backend_services_factory(tmp_path, git_runner=fake_git)
+    checkout = services.tracked_repos.checkout_path(
+        "Artificial-Sweetener", "Base-Cubes"
+    )
+    _write_cube(
+        checkout / "demo.cube",
+        _cube_payload_with_cnr(
+            cnr_id="SimpleSyrup",
+            version="1.7.1",
+            python_module="custom_nodes.SimpleSyrup",
+        ),
+    )
+    service = CubeDependencyService(
+        library_service=services.library,
+        tracked_repo_service=services.tracked_repos,
+        workspace_path=tmp_path / "ComfyUI",
+        custom_nodes_root=custom_nodes_root,
+        requirements_installer=DependencyPythonRequirementsInstaller(
+            runner=lambda command, cwd, timeout_seconds: _completed(command, 1)
+        ),
+    )
+
+    result = service.repair(approval_policy="silent_baseline_only")
+    failure = result["failedVersionItems"][0]
+
+    assert result["updatedNodes"] == []
+    assert result["restartRequired"] is False
+    assert "Could not install SimpleSyrup requirements" in failure["reason"]
+    assert failure["rollbackRef"] == installed_commit
+    assert failure["rollbackSucceeded"] is True
+    assert ("checkout", "v1.7.1") in git_commands
+    assert ("checkout", installed_commit) in git_commands
+    assert 'version = "1.7.0"' in project_path.read_text(encoding="utf-8")
 
 
 def test_repair_refuses_dirty_first_party_git_semver_update(
     tmp_path: Path,
     backend_services_factory: BackendServicesFactory,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Never mutate a first-party checkout with local changes."""
+
+    caplog.set_level("INFO")
 
     def fake_git(args: Sequence[str], *, cwd: Path) -> Any:
         _ = cwd
@@ -438,7 +657,18 @@ def test_repair_refuses_dirty_first_party_git_semver_update(
     result = service.repair(approval_policy="silent_baseline_only")
 
     assert result["updatedNodes"] == []
-    assert result["failedVersionItems"][0]["reason"] == "dirty_git_checkout"
+    assert result["failedVersionItems"] == []
+    assert result["blockedVersionItems"][0]["status"] == "blocked"
+    assert result["blockedVersionItems"][0]["repairable"] is False
+    assert result["diagnostics"][0]["code"] == (
+        "sugarcubes_dependency_version_repair_blocked"
+    )
+    progress = [
+        message for message in caplog.messages if "SugarCubes[nodepack_" in message
+    ]
+    assert sum("nodepack_update_failed" in message for message in progress) == 1
+    assert not any("nodepack_update_complete" in message for message in progress)
+    assert progress[-1].endswith("ComfyUI will continue starting.")
 
 
 def test_repair_blocks_git_checkout_without_repository_provenance(
@@ -503,11 +733,79 @@ def test_repair_blocks_git_checkout_without_repository_provenance(
     assert result["failedVersionItems"][0]["reason"] == "repository_provenance_missing"
 
 
-def test_repair_reports_git_runner_exception_as_failed_version_item(
+def test_semver_git_repair_requires_the_actual_remote_to_be_trusted(
     tmp_path: Path,
     backend_services_factory: BackendServicesFactory,
 ) -> None:
+    """Do not trust project metadata that disagrees with the installed Git remote."""
+
+    installed_commit = "f561f164543f927e0452e14658a0509e8e4866d6"
+
+    def fake_git(args: Sequence[str], *, cwd: Path) -> Any:
+        _ = cwd
+
+        class Result:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        if args == ["rev-parse", "HEAD"]:
+            Result.stdout = installed_commit + "\n"
+        elif args == ["status", "--porcelain"]:
+            Result.stdout = ""
+        elif args == ["config", "--get", "remote.origin.url"]:
+            Result.stdout = "https://example.invalid/not-simple-syrup.git\n"
+        elif args[0] == "checkout":
+            raise AssertionError("untrusted checkout must not be mutated")
+        return Result()
+
+    services = backend_services_factory(tmp_path, git_runner=fake_git)
+    checkout = services.tracked_repos.checkout_path(
+        "Artificial-Sweetener", "Base-Cubes"
+    )
+    _write_cube(
+        checkout / "demo.cube",
+        _cube_payload_with_cnr(
+            cnr_id="SimpleSyrup",
+            version="1.7.1",
+            python_module="custom_nodes.SimpleSyrup",
+        ),
+    )
+    custom_nodes_root = tmp_path / "custom_nodes"
+    installed = custom_nodes_root / "SimpleSyrup"
+    (installed / ".git").mkdir(parents=True)
+    (installed / "pyproject.toml").write_text(
+        "[project]\n"
+        'name = "SimpleSyrup"\n'
+        'version = "1.7.0"\n'
+        "[project.urls]\n"
+        'Repository = "https://github.com/Artificial-Sweetener/SimpleSyrup"\n',
+        encoding="utf-8",
+    )
+    service = CubeDependencyService(
+        library_service=services.library,
+        tracked_repo_service=services.tracked_repos,
+        workspace_path=tmp_path / "ComfyUI",
+        custom_nodes_root=custom_nodes_root,
+    )
+
+    result = service.repair(approval_policy="silent_baseline_only")
+
+    assert result["updatedNodes"] == []
+    assert result["failedVersionItems"][0]["reason"] == (
+        "installed_source_is_git_checkout"
+    )
+    assert result["restartRequired"] is False
+
+
+def test_repair_reports_git_runner_exception_as_failed_version_item(
+    tmp_path: Path,
+    backend_services_factory: BackendServicesFactory,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     """Git command launch failures should stay inside the repair payload."""
+
+    caplog.set_level("INFO")
 
     required_commit = "37bcd403c5172adc2505b38d1d31c05969a69443"
     installed_commit = "f561f164543f927e0452e14658a0509e8e4866d6"
@@ -570,6 +868,14 @@ def test_repair_reports_git_runner_exception_as_failed_version_item(
         result["diagnostics"][0]["code"]
         == "sugarcubes_dependency_version_repair_failed"
     )
+    failures = [
+        message
+        for message in caplog.messages
+        if "SugarCubes[nodepack_update_failed]" in message
+    ]
+    assert len(failures) == 1
+    assert "git is unavailable" in failures[0]
+    assert failures[0].endswith("ComfyUI will continue starting.")
 
 
 def test_repair_updates_baseline_semver_node_with_repository_provenance(

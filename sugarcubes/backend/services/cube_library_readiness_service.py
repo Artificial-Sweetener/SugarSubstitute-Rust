@@ -108,6 +108,12 @@ class CubeLibraryReadinessService:
             if isinstance(version_plan_value, list)
             else []
         )
+        unready_version_items = [
+            item for item in version_plan if _blocks_dependency_readiness(item)
+        ]
+        repairable_version_items = [
+            item for item in version_plan if item.get("repairable") is True
+        ]
         install_plan = build_dependency_install_plan(
             requirement_records=requirements.records,
             installed=installed,
@@ -131,7 +137,7 @@ class CubeLibraryReadinessService:
         )
         payload = {
             "schemaVersion": 1,
-            "ready": not missing,
+            "ready": not missing and not unready_version_items,
             "requiredCustomNodes": list(required),
             "missingCustomNodes": list(missing),
             "installedCustomNodes": [
@@ -148,7 +154,7 @@ class CubeLibraryReadinessService:
                 if item["installed"] is False and item["installable"] is False
             ],
             "installPlan": install_plan,
-            "restartRequired": bool(missing),
+            "restartRequired": bool(missing or repairable_version_items),
             **version_readiness,
         }
         self._cache = (
@@ -202,6 +208,7 @@ class CubeLibraryReadinessService:
                     "git_head_mtime_ns": _path_mtime_ns(entry / ".git" / "HEAD"),
                     "git_index_mtime_ns": _path_mtime_ns(entry / ".git" / "index"),
                     "tracking_mtime_ns": _path_mtime_ns(entry / ".tracking"),
+                    "pyproject_mtime_ns": _path_mtime_ns(entry / "pyproject.toml"),
                 }
             )
         facts = {
@@ -215,3 +222,10 @@ class CubeLibraryReadinessService:
         """Emit one structured library-readiness diagnostic."""
 
         log_diagnostic(_logger, _TRACE_MARKER, event, fields)
+
+
+def _blocks_dependency_readiness(item: Mapping[str, object]) -> bool:
+    """Return whether one plan item proves required dependency work remains."""
+
+    status = item.get("status")
+    return item.get("repairable") is True or status in {"version_conflict", "blocked"}

@@ -15,6 +15,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from sugarcubes.backend.services.dependency_approval_policy import (
+    blocked_version_items,
     select_install_items,
     select_version_items,
     skipped_install_items,
@@ -23,12 +24,16 @@ from sugarcubes.backend.services.dependency_approval_policy import (
 from sugarcubes.backend.services.dependency_requirements import (
     extract_versioned_requirements,
 )
+from sugarcubes.backend.services.dependency_requirement_fingerprint import (
+    dependency_requirements_fingerprint,
+)
 from sugarcubes.backend.services.dependency_version_readiness import (
     dependency_version_readiness,
 )
 from sugarcubes.backend.services.dependency_version_types import (
     CubeDependencyRequirement,
 )
+from sugarcubes.backend.services.dependency_versions import classify_version
 
 
 def test_extract_versioned_requirements_preserves_nodes_and_deduplicates_fallbacks() -> (
@@ -199,6 +204,151 @@ def test_readiness_uses_git_ancestry_and_blocks_dirty_checkouts(tmp_path: Path) 
     assert not any(call[0][0] == "merge-base" and call[1] == dirty for call in calls)
 
 
+def test_sha_only_requirements_select_newest_required_commit_in_any_order(
+    tmp_path: Path,
+) -> None:
+    """Select the unique descendant required SHA instead of input-order state."""
+
+    custom_nodes_root = tmp_path / "custom_nodes"
+    installed = custom_nodes_root / "SimpleSyrup"
+    git_dir = installed / ".git"
+    git_dir.mkdir(parents=True)
+    (git_dir / "HEAD").write_text("ddddddd", encoding="utf-8")
+    rank = {"aaaaaaa": 1, "bbbbbbb": 2, "ccccccc": 3, "ddddddd": 4}
+
+    def git_runner(args: list[str], *, cwd: Path) -> Any:
+        assert cwd == installed
+        if args == ["status", "--porcelain"]:
+            return SimpleNamespace(returncode=0, stdout="")
+        if args[:2] == ["merge-base", "--is-ancestor"]:
+            ancestor, descendant = args[2:]
+            return SimpleNamespace(
+                returncode=0 if rank[ancestor] <= rank[descendant] else 1,
+                stdout="",
+            )
+        return SimpleNamespace(returncode=0, stdout="")
+
+    requirements = (
+        _requirement("SimpleSyrup", "aaaaaaa"),
+        _requirement("SimpleSyrup", "ccccccc"),
+        _requirement("SimpleSyrup", "bbbbbbb"),
+    )
+
+    forward = dependency_version_readiness(
+        requirements=requirements,
+        custom_nodes_root=custom_nodes_root,
+        git_runner=git_runner,
+    )["dependencyVersionPlan"][0]
+    reverse = dependency_version_readiness(
+        requirements=tuple(reversed(requirements)),
+        custom_nodes_root=custom_nodes_root,
+        git_runner=git_runner,
+    )["dependencyVersionPlan"][0]
+
+    for plan in (forward, reverse):
+        assert plan["requiredVersion"] == "ccccccc"
+        assert plan["requiredVersionKind"] == "git_sha"
+        assert plan["status"] == "satisfied"
+        assert plan["conflicts"] == []
+
+
+def test_semver_requirements_override_historical_requirement_kinds_in_any_order(
+    tmp_path: Path,
+) -> None:
+    """Select the highest semver while retaining every requirement as evidence."""
+
+    custom_nodes_root = tmp_path / "custom_nodes"
+    installed = custom_nodes_root / "SimpleSyrup"
+    installed.mkdir(parents=True)
+    (installed / ".tracking").write_text(
+        json.dumps(
+            {
+                "version": "1.9.1",
+                "repository": "https://github.com/Artificial-Sweetener/SimpleSyrup",
+            }
+        ),
+        encoding="utf-8",
+    )
+    requirements = (
+        _requirement("SimpleSyrup", "1.9.2"),
+        _requirement("SimpleSyrup", "abcdef0"),
+        _requirement("SimpleSyrup", "1.9.1"),
+        _requirement("SimpleSyrup", ""),
+        _requirement("SimpleSyrup", "floating"),
+    )
+
+    forward = dependency_version_readiness(
+        requirements=requirements,
+        custom_nodes_root=custom_nodes_root,
+        git_runner=None,
+    )["dependencyVersionPlan"][0]
+    reverse = dependency_version_readiness(
+        requirements=tuple(reversed(requirements)),
+        custom_nodes_root=custom_nodes_root,
+        git_runner=None,
+    )["dependencyVersionPlan"][0]
+
+    for plan in (forward, reverse):
+        assert plan["requiredVersion"] == "1.9.2"
+        assert plan["requiredVersionKind"] == "semver"
+        assert plan["status"] == "installed_version_too_old"
+        assert plan["repairable"] is True
+        assert plan["conflicts"] == []
+        assert {item["requiredVersion"] for item in plan["requirements"]} == {
+            "1.9.1",
+            "1.9.2",
+            "abcdef0",
+            "",
+            "floating",
+        }
+
+
+def test_semver_repair_preserves_dirty_git_checkout(tmp_path: Path) -> None:
+    """Refuse automatic semver repair when it would overwrite authored Git state."""
+
+    custom_nodes_root = tmp_path / "custom_nodes"
+    installed = custom_nodes_root / "SimpleSyrup"
+    git_dir = installed / ".git"
+    git_dir.mkdir(parents=True)
+    (git_dir / "HEAD").write_text("abcdef0", encoding="utf-8")
+
+    def git_runner(args: list[str], *, cwd: Path) -> Any:
+        assert cwd == installed
+        if args == ["status", "--porcelain"]:
+            return SimpleNamespace(returncode=0, stdout=" M authored.py")
+        return SimpleNamespace(returncode=0, stdout="")
+
+    plan = dependency_version_readiness(
+        requirements=(_requirement("SimpleSyrup", "1.9.2"),),
+        custom_nodes_root=custom_nodes_root,
+        git_runner=git_runner,
+    )["dependencyVersionPlan"][0]
+
+    assert plan["requiredVersion"] == "1.9.2"
+    assert plan["status"] == "blocked"
+    assert plan["repairable"] is False
+    assert plan["restartRequiredAfterRepair"] is False
+
+
+def test_requirement_fingerprint_is_order_independent_and_version_sensitive() -> None:
+    """Expose a stable change token for event-driven dependency reconciliation."""
+
+    requirements = (
+        _requirement("SimpleSyrup", "1.9.2"),
+        _requirement("ComfyUI-Impact-Pack", "8.15.3"),
+    )
+
+    forward = dependency_requirements_fingerprint(requirements)
+    reverse = dependency_requirements_fingerprint(tuple(reversed(requirements)))
+    changed = dependency_requirements_fingerprint(
+        (_requirement("SimpleSyrup", "1.9.3"), requirements[1])
+    )
+
+    assert forward == reverse
+    assert changed != forward
+    assert len(forward) == 64
+
+
 def test_approval_policy_keeps_baseline_silent_and_third_party_explicit() -> None:
     """Preserve baseline and third-party selection for install and version work."""
 
@@ -254,13 +404,47 @@ def test_approval_policy_keeps_baseline_silent_and_third_party_explicit() -> Non
     ] == ["third-party-pack"]
 
 
+def test_blocked_projection_excludes_non_actionable_version_evidence() -> None:
+    """Do not report uncomparable installed evidence as a failed repair."""
+
+    version_plan = [
+        {
+            "nodeId": "dirty-pack",
+            "status": "blocked",
+            "repairable": False,
+        },
+        {
+            "nodeId": "conflicting-pack",
+            "status": "version_conflict",
+            "repairable": False,
+        },
+        {
+            "nodeId": "registry-pack",
+            "status": "installed_version_unknown",
+            "repairable": False,
+        },
+        {
+            "nodeId": "opaque-pack",
+            "status": "not_comparable",
+            "repairable": False,
+        },
+    ]
+
+    blocked = blocked_version_items(version_plan)
+
+    assert [item["nodeId"] for item in blocked] == [
+        "dirty-pack",
+        "conflicting-pack",
+    ]
+
+
 def _requirement(node_id: str, version: str) -> CubeDependencyRequirement:
     """Build one characterized dependency requirement."""
 
     return CubeDependencyRequirement(
         node_id=node_id,
         required_version=version,
-        version_kind="git_sha" if len(version) == 7 and version.isalpha() else "semver",
+        version_kind=classify_version(version),
         cube_id="Example/Cubes/demo.cube",
         pack_ref="Example/Cubes",
         node_name=node_id,

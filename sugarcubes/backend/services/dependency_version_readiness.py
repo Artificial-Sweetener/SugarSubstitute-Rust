@@ -19,6 +19,7 @@ from typing import Any
 from ...instrumentation import log_diagnostic
 from .dependency_git_inspection import DependencyGitAncestryInspector
 from .dependency_inventory import installed_dependency_inventory
+from .dependency_requirement_fingerprint import dependency_requirements_fingerprint
 from .dependency_requirements import (
     comfy_runtime_readiness,
     is_external_custom_node_requirement,
@@ -79,6 +80,9 @@ def dependency_version_readiness(
     record_phase("build_version_plan")
     payload = {
         "versionedRequirementsSupported": True,
+        "dependencyRequirementsFingerprint": dependency_requirements_fingerprint(
+            custom_node_requirements
+        ),
         "dependencyRequirements": [
             requirement.to_payload() for requirement in custom_node_requirements
         ],

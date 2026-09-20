@@ -73,7 +73,11 @@ def _version_plan_item(
         for requirement in node_requirements
         if requirement.version_kind != "missing"
     }
-    required_version = _required_version(node_requirements)
+    required_version = _required_version(
+        node_requirements,
+        installed=installed,
+        git_contains=git_contains,
+    )
     required_kind = classify_version(required_version)
     conflicts = _requirement_conflicts(
         node_requirements=node_requirements,
@@ -100,7 +104,7 @@ def _version_plan_item(
         remediation = ""
     elif required_kind == "semver":
         status = _semver_status(required_version, installed)
-        repairable = status != "satisfied"
+        repairable = status not in {"satisfied", "blocked"}
         installed_version = installed.installed_version
         installed_kind = installed.version_kind
         remediation = _remediation_for_status(status)
@@ -160,6 +164,8 @@ def _requirement_conflicts(
         for requirement in node_requirements
         if requirement.version_kind not in {"missing", "unknown"}
     }
+    if "semver" in kinds:
+        return []
     if len(kinds) > 1:
         return [
             {
@@ -175,17 +181,32 @@ def _requirement_conflicts(
         and installed.source_kind == "git"
         and not installed.dirty
     ):
-        divergent = _divergent_git_requirements(
+        git_versions = _unique_sorted(
+            requirement.required_version
+            for requirement in node_requirements
+            if requirement.version_kind == "git_sha"
+        )
+        strongest = _strongest_git_requirement(
             node_requirements,
             source_path=installed.source_path,
             git_contains=git_contains,
         )
-        if divergent:
-            return [{"reason": "divergent_git_requirements", "versions": divergent}]
+        if len(git_versions) > 1 and strongest is None:
+            return [
+                {
+                    "reason": "divergent_git_requirements",
+                    "versions": git_versions,
+                }
+            ]
     return []
 
 
-def _required_version(requirements: Sequence[CubeDependencyRequirement]) -> str:
+def _required_version(
+    requirements: Sequence[CubeDependencyRequirement],
+    *,
+    installed: InstalledDependency | None,
+    git_contains: GitContains,
+) -> str:
     """Return the strongest required version when it can be chosen locally."""
 
     semver_versions = [
@@ -201,7 +222,19 @@ def _required_version(requirements: Sequence[CubeDependencyRequirement]) -> str:
         if requirement.version_kind == "git_sha"
     ]
     if git_versions:
-        return git_versions[-1]
+        if (
+            installed is not None
+            and installed.source_kind == "git"
+            and not installed.dirty
+        ):
+            strongest = _strongest_git_requirement(
+                requirements,
+                source_path=installed.source_path,
+                git_contains=git_contains,
+            )
+            if strongest is not None:
+                return strongest
+        return _unique_sorted(git_versions)[-1]
     unknown_versions = [
         requirement.required_version
         for requirement in requirements
@@ -216,6 +249,8 @@ def _semver_status(
 ) -> DependencyStatus:
     """Return semver readiness for one installed dependency."""
 
+    if installed.source_kind == "git" and installed.dirty:
+        return "blocked"
     if installed.version_kind == "missing":
         return "installed_version_unknown"
     if installed.version_kind != "semver":
@@ -237,49 +272,44 @@ def _git_status(
         return "installed_version_unknown"
     if installed.dirty:
         return "blocked"
-    if installed.version_kind != "git_sha":
+    installed_commit = installed.git_head or installed.installed_version
+    if classify_version(installed_commit) != "git_sha":
         return "installed_version_unknown"
-    if required_version == installed.installed_version:
+    if required_version == installed_commit:
         return "satisfied"
     if git_contains(
         installed.source_path,
         required_version,
-        installed.installed_version,
+        installed_commit,
     ):
         return "satisfied"
     return "installed_commit_not_descendant"
 
 
-def _divergent_git_requirements(
+def _strongest_git_requirement(
     requirements: Sequence[CubeDependencyRequirement],
     *,
     source_path: str,
     git_contains: GitContains,
-) -> list[str]:
-    """Return Git requirements that cannot be ordered by ancestry."""
+) -> str | None:
+    """Return the unique required commit containing every other required SHA."""
 
     versions = _unique_sorted(
         requirement.required_version
         for requirement in requirements
         if requirement.version_kind == "git_sha"
     )
-    if len(versions) < 2:
-        return []
-    for left in versions:
-        related = False
-        for right in versions:
-            if left == right:
-                continue
-            if git_contains(source_path, left, right) or git_contains(
-                source_path,
-                right,
-                left,
-            ):
-                related = True
-                break
-        if not related:
-            return versions
-    return []
+    if not versions:
+        return None
+    strongest = [
+        candidate
+        for candidate in versions
+        if all(
+            other == candidate or git_contains(source_path, other, candidate)
+            for other in versions
+        )
+    ]
+    return strongest[0] if len(strongest) == 1 else None
 
 
 def _semver_key(value: str) -> tuple[int, int, int, int, str]:

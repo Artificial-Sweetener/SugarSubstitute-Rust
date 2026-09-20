@@ -151,6 +151,17 @@ def skipped_version_items(
     ]
 
 
+def blocked_version_items(version_plan: object) -> list[dict[str, Any]]:
+    """Return unsatisfied version items that automatic repair must preserve."""
+
+    return [
+        item
+        for item in iter_plan_items(version_plan)
+        if item.get("status") in {"blocked", "version_conflict"}
+        and item.get("repairable") is not True
+    ]
+
+
 def iter_plan_items(plan: object) -> list[dict[str, Any]]:
     """Coerce a dependency-plan payload into item dictionaries."""
 

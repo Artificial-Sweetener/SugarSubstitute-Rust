@@ -87,6 +87,21 @@ def diagnostics_from_repair_result(
     for item in iter_plan_items(repair_result.get("skippedVersionItems")):
         if version_item_confirmation_required(item):
             diagnostics.append(_approval_required_diagnostic(item))
+    for item in iter_plan_items(repair_result.get("blockedVersionItems")):
+        node_id = normalize_metadata_string(item.get("nodeId"))
+        diagnostics.append(
+            _diagnostic(
+                code="sugarcubes_dependency_version_repair_blocked",
+                severity="warning",
+                title="SugarCubes dependency repair blocked",
+                message=(
+                    f"{node_id} was left unchanged because automatic repair is unsafe."
+                    if node_id
+                    else "A cube dependency was left unchanged because automatic repair is unsafe."
+                ),
+                details=item,
+            )
+        )
     return diagnostics
 
 
