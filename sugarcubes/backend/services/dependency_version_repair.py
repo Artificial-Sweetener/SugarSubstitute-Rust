@@ -15,7 +15,6 @@ from typing import Any
 
 from .cube_metadata import normalize_metadata_string
 from .dependency_acquisition import DependencyAcquirer
-from .dependency_first_party_manifest import first_party_extension
 from .dependency_python_requirements import DependencyPythonRequirementsInstaller
 from .dependency_version_types import GitRunner
 from .dependency_versions import classify_version
@@ -43,12 +42,11 @@ class DependencyVersionRepairExecutor:
         status = normalize_metadata_string(item.get("status"))
         if status == "installed_commit_not_descendant":
             return self._checkout_required_git_ref(item)
-        if _is_trusted_semver_git_repair(item):
+        if _is_clean_semver_git_repair(item):
             required_version = normalize_metadata_string(item.get("requiredVersion"))
             return self._checkout_required_git_ref(
                 item,
                 checkout_ref=f"v{required_version}",
-                install_trusted_requirements=True,
             )
         return self._reinstall_versioned_node(item)
 
@@ -56,11 +54,10 @@ class DependencyVersionRepairExecutor:
         """Return the acquisition path selected for one repair plan item."""
 
         status = normalize_metadata_string(item.get("status"))
-        if (
-            status == "installed_commit_not_descendant"
-            or _is_trusted_semver_git_repair(item)
+        if status == "installed_commit_not_descendant" or _is_clean_semver_git_repair(
+            item
         ):
-            return "the trusted installed Git checkout"
+            return "the installed clean Git checkout"
         return "Comfy Registry with trusted first-party fallback"
 
     def _reinstall_versioned_node(self, item: Mapping[str, Any]) -> dict[str, Any]:
@@ -83,7 +80,6 @@ class DependencyVersionRepairExecutor:
         item: Mapping[str, Any],
         *,
         checkout_ref: str | None = None,
-        install_trusted_requirements: bool = False,
     ) -> dict[str, Any]:
         """Fetch and checkout an approved Git commit or release tag when safe."""
 
@@ -152,18 +148,17 @@ class DependencyVersionRepairExecutor:
                     "stdout": normalize_metadata_string(getattr(result, "stdout", "")),
                     "stderr": normalize_metadata_string(getattr(result, "stderr", "")),
                 }
-        if install_trusted_requirements:
-            requirements_failure = self._install_trusted_requirements(
+        requirements_failure = self._install_requirements(
+            item,
+            source_path=source_path,
+        )
+        if requirements_failure:
+            return self._rollback_after_requirements_failure(
                 item,
                 source_path=source_path,
+                failed_ref=resolved_ref,
+                reason=requirements_failure,
             )
-            if requirements_failure:
-                return self._rollback_after_requirements_failure(
-                    item,
-                    source_path=source_path,
-                    failed_ref=resolved_ref,
-                    reason=requirements_failure,
-                )
         return {
             "nodeId": node_id,
             "operation": "git_checkout",
@@ -174,20 +169,17 @@ class DependencyVersionRepairExecutor:
             "stderr": "",
         }
 
-    def _install_trusted_requirements(
+    def _install_requirements(
         self,
         item: Mapping[str, Any],
         *,
         source_path: Path,
     ) -> str:
-        """Install the manifest-authorized requirements after a trusted checkout."""
+        """Install conventional Python requirements after an approved checkout."""
 
-        extension = first_party_extension(normalize_metadata_string(item.get("nodeId")))
-        if extension is None or extension.requirements_file is None:
-            return ""
-        requirements_path = source_path / extension.requirements_file
+        requirements_path = source_path / "requirements.txt"
         if not requirements_path.is_file():
-            return f"{extension.project_name} source is missing its requirements file"
+            return ""
         try:
             result = self._requirements_installer.install(requirements_path)
         except (OSError, RuntimeError, ValueError) as exc:
@@ -195,7 +187,8 @@ class DependencyVersionRepairExecutor:
         if result.return_code == 0:
             return ""
         detail = (result.stderr or result.stdout).strip()[-2000:]
-        return f"Could not install {extension.project_name} requirements: {detail}"
+        node_id = normalize_metadata_string(item.get("nodeId")) or source_path.name
+        return f"Could not install {node_id} requirements: {detail}"
 
     def _rollback_after_requirements_failure(
         self,
@@ -236,8 +229,8 @@ class DependencyVersionRepairExecutor:
         }
 
 
-def _is_trusted_semver_git_repair(item: Mapping[str, Any]) -> bool:
-    """Return whether a clean official checkout may follow its exact release tag."""
+def _is_clean_semver_git_repair(item: Mapping[str, Any]) -> bool:
+    """Return whether an installed clean Git checkout may follow its release tag."""
 
     required_version = normalize_metadata_string(item.get("requiredVersion"))
     if classify_version(required_version) != "semver":
@@ -245,21 +238,11 @@ def _is_trusted_semver_git_repair(item: Mapping[str, Any]) -> bool:
     evidence = item.get("installedEvidence")
     if not isinstance(evidence, Mapping):
         return False
-    if normalize_metadata_string(evidence.get("sourceKind")) != "git":
-        return False
-    extension = first_party_extension(normalize_metadata_string(item.get("nodeId")))
-    if extension is None:
-        return False
-    observed_repository = _normalized_repository(
-        normalize_metadata_string(evidence.get("repositoryUrl"))
+    return (
+        normalize_metadata_string(evidence.get("sourceKind")) == "git"
+        and evidence.get("dirty") is not True
+        and bool(normalize_metadata_string(evidence.get("repositoryUrl")))
     )
-    return observed_repository == _normalized_repository(extension.repository_url)
-
-
-def _normalized_repository(value: str) -> str:
-    """Normalize a repository URL for trusted-source identity comparison."""
-
-    return value.strip().rstrip("/").removesuffix(".git").casefold()
 
 
 def _failed_version_result(

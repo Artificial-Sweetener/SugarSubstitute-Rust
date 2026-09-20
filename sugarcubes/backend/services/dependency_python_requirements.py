@@ -5,7 +5,7 @@
 #    it under the terms of the GNU Affero General Public License as published by
 #    the Free Software Foundation, either version 3 of the License, or
 #    (at your option) any later version.
-"""Install trusted extension Python requirements through the host runtime."""
+"""Install extension Python requirements through the host runtime."""
 
 from __future__ import annotations
 
@@ -44,7 +44,7 @@ class DependencyPythonRequirementsInstaller:
         self._runner = runner or _run_subprocess
 
     def install(self, requirements_path: Path) -> PythonRequirementsResult:
-        """Install one trusted, manifest-selected requirements file."""
+        """Install one explicitly selected requirements file."""
 
         command = (
             str(self._python_executable),
