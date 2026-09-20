@@ -175,6 +175,7 @@ sources = [
   "sugarcubes/backend/services/dependency_requirements.py",
   "sugarcubes/backend/services/dependency_source_archive.py",
   "sugarcubes/backend/services/dependency_source_git.py",
+  "sugarcubes/backend/services/dependency_state_fingerprint.py",
   "sugarcubes/backend/services/dependency_version_readiness.py",
   "sugarcubes/backend/services/dependency_version_types.py",
   "sugarcubes/backend/services/dependency_version_repair.py",

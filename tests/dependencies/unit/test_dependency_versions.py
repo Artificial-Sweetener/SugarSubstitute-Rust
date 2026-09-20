@@ -349,6 +349,53 @@ def test_requirement_fingerprint_is_order_independent_and_version_sensitive() ->
     assert len(forward) == 64
 
 
+def test_readiness_fingerprint_changes_only_with_required_dependency_state(
+    tmp_path: Path,
+) -> None:
+    """Expose one stable token when a required installed version changes."""
+
+    custom_nodes_root = tmp_path / "custom_nodes"
+    installed = custom_nodes_root / "SimpleSyrup"
+    unrelated = custom_nodes_root / "unrelated-pack"
+    installed.mkdir(parents=True)
+    unrelated.mkdir()
+    tracking_path = installed / ".tracking"
+    tracking_path.write_text(
+        json.dumps({"version": "1.9.1"}),
+        encoding="utf-8",
+    )
+    requirements = (_requirement("SimpleSyrup", "1.9.2"),)
+
+    outdated = dependency_version_readiness(
+        requirements=requirements,
+        custom_nodes_root=custom_nodes_root,
+        git_runner=None,
+    )
+    (unrelated / ".tracking").write_text(
+        json.dumps({"version": "99.0.0"}),
+        encoding="utf-8",
+    )
+    unrelated_changed = dependency_version_readiness(
+        requirements=requirements,
+        custom_nodes_root=custom_nodes_root,
+        git_runner=None,
+    )
+    tracking_path.write_text(
+        json.dumps({"version": "1.9.2"}),
+        encoding="utf-8",
+    )
+    satisfied = dependency_version_readiness(
+        requirements=requirements,
+        custom_nodes_root=custom_nodes_root,
+        git_runner=None,
+    )
+
+    outdated_fingerprint = outdated["dependencyStateFingerprint"]
+    assert len(outdated_fingerprint) == 64
+    assert unrelated_changed["dependencyStateFingerprint"] == outdated_fingerprint
+    assert satisfied["dependencyStateFingerprint"] != outdated_fingerprint
+
+
 def test_approval_policy_keeps_baseline_silent_and_third_party_explicit() -> None:
     """Preserve baseline and third-party selection for install and version work."""
 
