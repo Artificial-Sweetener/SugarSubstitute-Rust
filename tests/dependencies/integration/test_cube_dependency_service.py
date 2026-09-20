@@ -33,6 +33,9 @@ from sugarcubes.backend.services.dependency_cli import ComfyCliAdapter
 from sugarcubes.backend.services.dependency_python_requirements import (
     DependencyPythonRequirementsInstaller,
 )
+from sugarcubes.backend.services.dependency_registry_source import (
+    RegistrySourceResolver,
+)
 
 from tests.library.contract.test_cube_library_backend_contract import (
     _cube_payload_with_cnr,
@@ -60,6 +63,20 @@ def _recorded_completed(
 
     commands.append(list(command))
     return _completed(command)
+
+
+def _unavailable_source_resolver() -> RegistrySourceResolver:
+    """Return a deterministic Registry outage boundary for failure tests."""
+
+    def unavailable(node_id: str) -> dict[str, object]:
+        """Raise the same recoverable failure as unavailable Registry metadata."""
+
+        raise RuntimeError(f"Registry metadata unavailable for {node_id}")
+
+    return RegistrySourceResolver(
+        loader=unavailable,
+        install_loader=lambda node_id, version: None,
+    )
 
 
 def test_repair_installs_baseline_nodes_without_prompt(
@@ -196,11 +213,11 @@ def test_repair_installs_any_approved_non_default_node(
     assert commands[1][-1] == "comfyui-example@4.2.0"
 
 
-def test_repair_reports_missing_comfy_cli_without_raising(
+def test_repair_reports_cli_and_registry_source_failures_without_raising(
     tmp_path: Path,
     backend_services_factory: BackendServicesFactory,
 ) -> None:
-    """Missing Comfy CLI is reported as failed repair work."""
+    """Unavailable acquisition channels remain observable and non-fatal."""
 
     services = backend_services_factory(tmp_path, git_runner=lambda args, cwd: None)
     checkout = services.tracked_repos.checkout_path(
@@ -215,13 +232,19 @@ def test_repair_reports_missing_comfy_cli_without_raising(
         cli_adapter=ComfyCliAdapter(
             runner=lambda command, cwd, timeout_seconds: _completed(command, 1),
         ),
+        source_resolver=_unavailable_source_resolver(),
     )
 
     result = service.repair(approval_policy="silent_baseline_only")
 
     assert result["installedNodes"] == []
     assert result["failedNodes"][0]["nodeId"] == "comfyui-impact-pack"
-    assert result["failedNodes"][0]["reason"] == "missing_comfy_cli"
+    assert result["failedNodes"][0]["reason"] == (
+        "Registry metadata unavailable for comfyui-impact-pack"
+    )
+    assert result["failedNodes"][0]["registryAttempt"]["reason"] == (
+        "missing_comfy_cli"
+    )
     assert result["diagnostics"][0]["code"] == "sugarcubes_dependency_install_failed"
     assert result["diagnostics"][0]["severity"] == "error"
 
@@ -302,6 +325,7 @@ def test_repair_preserves_failed_install_output(
         workspace_path=tmp_path / "ComfyUI",
         custom_nodes_root=tmp_path / "custom_nodes",
         cli_adapter=ComfyCliAdapter(runner=runner),
+        source_resolver=_unavailable_source_resolver(),
     )
 
     result = service.repair(approval_policy="silent_baseline_only")
@@ -338,6 +362,7 @@ def test_sync_and_check_does_not_request_restart_after_failed_repair(
         workspace_path=tmp_path / "ComfyUI",
         custom_nodes_root=tmp_path / "custom_nodes",
         cli_adapter=ComfyCliAdapter(runner=runner),
+        source_resolver=_unavailable_source_resolver(),
     )
 
     result = service.sync_and_check(
@@ -350,7 +375,7 @@ def test_sync_and_check_does_not_request_restart_after_failed_repair(
     )
 
     assert result["repairResult"]["failedNodes"][0]["reason"] == (
-        "Comfy Registry exact-version install failed"
+        "Registry metadata unavailable for comfyui-impact-pack"
     )
     assert result["dependencyReadiness"]["ready"] is False
     assert result["dependencyReadiness"]["restartRequired"] is True
