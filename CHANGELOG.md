@@ -1,3 +1,10 @@
+## [0.14.4](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.14.3...v0.14.4) (2026-09-20)
+
+
+### Bug Fixes
+
+* **dependencies:** update every cube-required node pack ([e845db2](https://github.com/Artificial-Sweetener/SugarCubes/commit/e845db2902371966f05ae08530570c452d1a8e7b))
+
 ## [0.14.3](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.14.2...v0.14.3) (2026-09-20)
 
 
