@@ -1,3 +1,10 @@
+## [0.14.3](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.14.2...v0.14.3) (2026-09-20)
+
+
+### Bug Fixes
+
+* **runtime:** keep Cube workflows usable across dependency changes ([04d9cea](https://github.com/Artificial-Sweetener/SugarCubes/commit/04d9cea9796e1e56a5169635d2217cd3c1b10dff))
+
 ## [0.14.2](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.14.1...v0.14.2) (2026-09-19)
 
 
