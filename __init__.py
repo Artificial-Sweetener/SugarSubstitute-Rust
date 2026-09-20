@@ -43,7 +43,7 @@ from .sugarcubes.host_api import set_active_backend_services
 from .sugarcubes.runtime import queue_observer_registry
 
 WEB_DIRECTORY = "web"
-__version__ = "0.14.4"
+__version__ = "0.14.5"
 _EXTENSION_ROOT = extension_root()
 _LOGGER = logging.getLogger(__name__)
 
