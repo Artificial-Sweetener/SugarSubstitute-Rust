@@ -1,3 +1,10 @@
+## [0.14.6](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.14.5...v0.14.6) (2026-09-20)
+
+
+### Bug Fixes
+
+* **dependencies:** expose installed state for launch reconciliation ([dffc47b](https://github.com/Artificial-Sweetener/SugarCubes/commit/dffc47b67678ad653655a28011551c166b4538e9))
+
 ## [0.14.5](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.14.4...v0.14.5) (2026-09-20)
 
 
