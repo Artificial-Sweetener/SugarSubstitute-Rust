@@ -61,6 +61,34 @@ def apply_topology_edges(
             wire_boundary_target(prompt, source, target)
 
 
+def omit_unconnected_boundary_markers(
+    prompt: MutableMapping[str, dict[str, object]],
+) -> None:
+    """Omit portable boundary placeholders that received no workflow edge.
+
+    A connected boundary marker is replaced by :func:`apply_topology_edges`.
+    Any marker still present afterward represents an unconnected public input;
+    omitting that input lets Comfy apply the node's optional/default semantics
+    instead of interpreting ``@binding`` as an execution-node identifier.
+    """
+
+    marker_owner = "@binding"
+    for node in prompt.values():
+        inputs = node.get("inputs")
+        if not isinstance(inputs, MutableMapping):
+            continue
+        unconnected = [
+            name
+            for name, value in inputs.items()
+            if isinstance(value, list)
+            and len(value) == 2
+            and value[0] == marker_owner
+            and isinstance(value[1], str)
+        ]
+        for name in unconnected:
+            del inputs[name]
+
+
 def _resolve_source(
     edge: CubeBoundaryConnection,
     *,

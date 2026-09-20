@@ -24,6 +24,7 @@ from .dependency_approval_policy import (
     DependencyApprovalPolicy,
     approval_policy_from_payload,
     approved_node_ids,
+    blocked_version_items,
     select_install_items,
     select_version_items,
     skipped_install_items,
@@ -36,6 +37,14 @@ from .dependency_diagnostics import (
 )
 from .dependency_installation import DependencyNodeInstaller
 from .dependency_python_requirements import DependencyPythonRequirementsInstaller
+from .dependency_repair_logging import (
+    log_restart_required,
+    log_source_selected,
+    log_update_complete,
+    log_update_failed,
+    log_update_started,
+    log_version_selected,
+)
 from .dependency_source_archive import TrustedSourceArchiveInstaller
 from .dependency_version_repair import DependencyVersionRepairExecutor
 from .tracked_repo_service import TrackedRepoService
@@ -63,6 +72,7 @@ class CubeDependencyService:
         custom_nodes_root: Path,
         cli_adapter: ComfyCliAdapter | None = None,
         acquirer: DependencyAcquirer | None = None,
+        requirements_installer: DependencyPythonRequirementsInstaller | None = None,
     ) -> None:
         """Initialize the service from the SugarCubes backend service graph."""
 
@@ -71,12 +81,15 @@ class CubeDependencyService:
         self._workspace_path = workspace_path.resolve()
         self._custom_nodes_root = custom_nodes_root.resolve()
         dependency_cli = cli_adapter or ComfyCliAdapter()
+        dependency_requirements = (
+            requirements_installer or DependencyPythonRequirementsInstaller()
+        )
         dependency_acquirer = acquirer or DependencyAcquirer(
             workspace_path=self._workspace_path,
             cli_adapter=dependency_cli,
             source_installer=TrustedSourceArchiveInstaller(
                 custom_nodes_root=self._custom_nodes_root,
-                requirements_installer=DependencyPythonRequirementsInstaller(),
+                requirements_installer=dependency_requirements,
             ),
         )
         self._node_installer = DependencyNodeInstaller(
@@ -85,6 +98,7 @@ class CubeDependencyService:
         self._version_repair = DependencyVersionRepairExecutor(
             acquirer=dependency_acquirer,
             git_runner=tracked_repo_service.git_runner,
+            requirements_installer=dependency_requirements,
         )
         self._maintenance_lock = Lock()
 
@@ -132,8 +146,9 @@ class CubeDependencyService:
                 },
                 "repairResult": repair_result,
                 "restartRequired": bool(
-                    (repair_result or {}).get("restartRequired")
-                    or readiness.get("restartRequired")
+                    repair_result.get("restartRequired")
+                    if repair_result is not None
+                    else readiness.get("restartRequired")
                 ),
                 "errors": list(readiness.get("errors") or []),
             }
@@ -168,14 +183,25 @@ class CubeDependencyService:
         version_skipped = skipped_version_items(
             after.get("dependencyVersionPlan"), version_items
         )
+        version_blocked = blocked_version_items(after.get("dependencyVersionPlan"))
         version_results: list[dict[str, Any]] = []
         version_failures: list[dict[str, Any]] = []
         for item in version_items:
+            log_version_selected(item)
+            log_source_selected(item, self._version_repair.selected_source(item))
+            log_update_started(item)
             result = self._version_repair.repair(item)
             if result.get("returnCode") == 0:
                 version_results.append(result)
+                log_update_complete(item)
             else:
                 version_failures.append(result)
+                log_update_failed(item, result.get("reason"))
+        for item in version_blocked:
+            log_version_selected(item)
+            log_update_failed(item, item.get("remediation") or item.get("status"))
+        if installed or version_results:
+            log_restart_required()
 
         response_payload: dict[str, Any] = {
             "schemaVersion": 1,
@@ -188,6 +214,7 @@ class CubeDependencyService:
             "attemptedVersionPlan": version_items,
             "updatedNodes": version_results,
             "skippedVersionItems": version_skipped,
+            "blockedVersionItems": version_blocked,
             "failedVersionItems": version_failures,
             "readinessAfter": self.readiness(),
             "restartRequired": bool(installed or version_results),

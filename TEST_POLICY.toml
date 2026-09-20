@@ -169,6 +169,8 @@ sources = [
   "sugarcubes/backend/services/dependency_installation.py",
   "sugarcubes/backend/services/dependency_inventory.py",
   "sugarcubes/backend/services/dependency_python_requirements.py",
+  "sugarcubes/backend/services/dependency_repair_logging.py",
+  "sugarcubes/backend/services/dependency_requirement_fingerprint.py",
   "sugarcubes/backend/services/dependency_requirements.py",
   "sugarcubes/backend/services/dependency_source_archive.py",
   "sugarcubes/backend/services/dependency_version_readiness.py",

@@ -70,6 +70,8 @@ class InstalledDependency:
     source_kind: str
     repository_url: str
     dirty: bool
+    git_head: str = ""
+    project_version: str = ""
 
     def to_payload(self) -> dict[str, Any]:
         """Return this installed evidence as a JSON-safe payload."""
@@ -82,4 +84,6 @@ class InstalledDependency:
             "sourceKind": self.source_kind,
             "repositoryUrl": self.repository_url,
             "dirty": self.dirty,
+            "gitHead": self.git_head,
+            "projectVersion": self.project_version,
         }
