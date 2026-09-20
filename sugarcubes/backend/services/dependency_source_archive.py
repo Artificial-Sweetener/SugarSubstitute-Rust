@@ -5,7 +5,7 @@
 #    it under the terms of the GNU Affero General Public License as published by
 #    the Free Software Foundation, either version 3 of the License, or
 #    (at your option) any later version.
-"""Install verified first-party release archives transactionally."""
+"""Install Registry-authoritative source archives transactionally."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from .dependency_first_party_manifest import FirstPartyExtension
+from .dependency_registry_source import RegistrySource
 from .dependency_python_requirements import DependencyPythonRequirementsInstaller
 from .dependency_versions import classify_version
 
@@ -31,7 +31,7 @@ ArchiveDownloader = Callable[[str, Path], None]
 
 @dataclass(frozen=True, slots=True)
 class SourceArchiveInstallResult:
-    """Describe one verified first-party source installation."""
+    """Describe one verified Registry-source installation."""
 
     node_id: str
     version: str
@@ -42,7 +42,7 @@ class SourceArchiveInstallResult:
 
 
 class TrustedSourceArchiveInstaller:
-    """Install allowlisted release source without replacing unowned content."""
+    """Install Registry-authoritative source without replacing unowned content."""
 
     def __init__(
         self,
@@ -60,37 +60,30 @@ class TrustedSourceArchiveInstaller:
     def install(
         self,
         *,
-        extension: FirstPartyExtension,
+        extension: RegistrySource,
         version: str,
     ) -> SourceArchiveInstallResult:
-        """Install an exact trusted tag while retaining non-owned local data."""
+        """Install verified source while retaining non-owned local data."""
 
-        if classify_version(version) != "semver":
-            raise RuntimeError("Trusted source fallback requires an exact semver.")
         target_path = self._target_path(extension)
         old_tracked_files = _owned_paths(target_path)
         if target_path.exists() and old_tracked_files is None:
             raise RuntimeError(
                 f"Refusing to replace unowned custom-node folder: {target_path}"
             )
-        archive_url = extension.archive_url(version)
-        with tempfile.TemporaryDirectory(prefix="sugarcubes-extension-") as temp:
-            transaction_root = Path(temp)
-            archive_path = transaction_root / "source.zip"
-            extracted_path = transaction_root / "source"
-            backup_path = transaction_root / "previous"
-            self._downloader(archive_url, archive_path)
-            source_path = extract_single_root_archive(
-                archive_path=archive_path,
-                target_path=extracted_path,
+        if extension.package_url:
+            archive_url, source_path, new_tracked_files, transaction = (
+                self._validated_registry_package(extension=extension)
             )
-            validate_source_identity(
-                source_path=source_path,
+        else:
+            archive_url, source_path, transaction = self._validated_source(
                 extension=extension,
                 version=version,
             )
-            self._install_requirements(source_path, extension)
             new_tracked_files = tracked_source_files(source_path)
+        with transaction:
+            backup_path = Path(transaction.name) / "previous"
+            self._install_requirements(source_path, extension)
             _apply_source_transaction(
                 source_path=source_path,
                 target_path=target_path,
@@ -99,36 +92,98 @@ class TrustedSourceArchiveInstaller:
                 backup_path=backup_path,
             )
         return SourceArchiveInstallResult(
-            node_id=extension.registry_id,
-            version=version,
+            node_id=extension.node_id,
+            version=extension.package_version or version,
             repository_url=extension.repository_url,
             archive_url=archive_url,
             target_path=target_path,
             tracked_file_count=len(new_tracked_files),
         )
 
-    def _target_path(self, extension: FirstPartyExtension) -> Path:
-        """Resolve a manifest-owned folder and reject escaped destinations."""
+    def _validated_registry_package(
+        self,
+        *,
+        extension: RegistrySource,
+    ) -> tuple[
+        str,
+        Path,
+        tuple[Path, ...],
+        tempfile.TemporaryDirectory[str],
+    ]:
+        """Download and validate the exact package published by Comfy Registry."""
+
+        transaction = tempfile.TemporaryDirectory(prefix="sugarcubes-registry-")
+        transaction_root = Path(transaction.name)
+        try:
+            archive_path = transaction_root / "node.zip"
+            source_path = transaction_root / "source"
+            self._downloader(extension.package_url, archive_path)
+            tracked_files = extract_registry_package_archive(
+                archive_path=archive_path,
+                target_path=source_path,
+            )
+            validate_source_identity(
+                source_path=source_path,
+                extension=extension,
+                version=extension.package_version,
+            )
+        except (OSError, RuntimeError, ValueError, zipfile.BadZipFile):
+            transaction.cleanup()
+            raise
+        return extension.package_url, source_path, tracked_files, transaction
+
+    def _validated_source(
+        self,
+        *,
+        extension: RegistrySource,
+        version: str,
+    ) -> tuple[str, Path, tempfile.TemporaryDirectory[str]]:
+        """Download candidates until one proves the requested source identity."""
+
+        failures: list[Exception] = []
+        for archive_url in extension.archive_urls(version):
+            transaction = tempfile.TemporaryDirectory(prefix="sugarcubes-extension-")
+            transaction_root = Path(transaction.name)
+            try:
+                archive_path = transaction_root / "source.zip"
+                extracted_path = transaction_root / "source"
+                self._downloader(archive_url, archive_path)
+                source_path = extract_single_root_archive(
+                    archive_path=archive_path,
+                    target_path=extracted_path,
+                )
+                validate_source_identity(
+                    source_path=source_path,
+                    extension=extension,
+                    version=version,
+                )
+            except (OSError, RuntimeError, ValueError, zipfile.BadZipFile) as exc:
+                failures.append(exc)
+                transaction.cleanup()
+                continue
+            return archive_url, source_path, transaction
+        if failures:
+            raise RuntimeError(str(failures[-1])) from failures[-1]
+        raise RuntimeError("Registry source exposes no usable archive.")
+
+    def _target_path(self, extension: RegistrySource) -> Path:
+        """Resolve a Registry-owned folder and reject escaped destinations."""
 
         target_path = (self._custom_nodes_root / extension.target_folder_name).resolve()
         if not _is_relative_to(target_path, self._custom_nodes_root):
-            raise RuntimeError("Trusted extension target escapes custom_nodes.")
+            raise RuntimeError("Registry source target escapes custom_nodes.")
         return target_path
 
     def _install_requirements(
         self,
         source_path: Path,
-        extension: FirstPartyExtension,
+        extension: RegistrySource,
     ) -> None:
-        """Install only the manifest-authorized dependency declaration."""
+        """Install a conventional dependency declaration when the source has one."""
 
-        if extension.requirements_file is None:
-            return
         requirements_path = source_path / extension.requirements_file
         if not requirements_path.is_file():
-            raise RuntimeError(
-                f"{extension.project_name} source is missing its requirements file."
-            )
+            return
         result = self._requirements_installer.install(requirements_path)
         if result.return_code != 0:
             detail = (result.stderr or result.stdout).strip()[-2000:]
@@ -138,7 +193,7 @@ class TrustedSourceArchiveInstaller:
 
 
 def download_archive(archive_url: str, target_path: Path) -> None:
-    """Download a trusted manifest URL with timeout and size bounds."""
+    """Download a validated Registry repository URL with timeout and size bounds."""
 
     request = urllib.request.Request(
         archive_url,
@@ -146,7 +201,7 @@ def download_archive(archive_url: str, target_path: Path) -> None:
     )
     downloaded = 0
     with (
-        urllib.request.urlopen(  # noqa: S310 - the manifest owns the HTTPS URL.
+        urllib.request.urlopen(  # noqa: S310 - validated Registry provenance.
             request,
             timeout=_DOWNLOAD_TIMEOUT_SECONDS,
         ) as response,
@@ -155,7 +210,7 @@ def download_archive(archive_url: str, target_path: Path) -> None:
         while chunk := response.read(1024 * 1024):
             downloaded += len(chunk)
             if downloaded > _MAX_ARCHIVE_BYTES:
-                raise RuntimeError("Trusted extension archive exceeds the size limit.")
+                raise RuntimeError("Registry source archive exceeds the size limit.")
             output.write(chunk)
 
 
@@ -172,15 +227,13 @@ def extract_single_root_archive(*, archive_path: Path, target_path: Path) -> Pat
             if not member_path.parts:
                 continue
             if member_path.is_absolute() or _zip_member_is_symlink(member):
-                raise RuntimeError("Trusted extension archive contains an unsafe path.")
+                raise RuntimeError("Registry source archive contains an unsafe path.")
             destination = (target_path / member_path).resolve()
             if not _is_relative_to(destination, resolved_target):
-                raise RuntimeError("Trusted extension archive contains an unsafe path.")
+                raise RuntimeError("Registry source archive contains an unsafe path.")
             extracted_bytes += member.file_size
             if extracted_bytes > _MAX_EXTRACTED_BYTES:
-                raise RuntimeError(
-                    "Trusted extension archive expands beyond the limit."
-                )
+                raise RuntimeError("Registry source archive expands beyond the limit.")
             roots.add(member_path.parts[0])
             if member.is_dir():
                 destination.mkdir(parents=True, exist_ok=True)
@@ -189,36 +242,71 @@ def extract_single_root_archive(*, archive_path: Path, target_path: Path) -> Pat
             with archive.open(member) as source, destination.open("wb") as output:
                 shutil.copyfileobj(source, output)
     if len(roots) != 1:
-        raise RuntimeError("Trusted extension archive must contain one root folder.")
+        raise RuntimeError("Registry source archive must contain one root folder.")
     return target_path / next(iter(roots))
+
+
+def extract_registry_package_archive(
+    *,
+    archive_path: Path,
+    target_path: Path,
+) -> tuple[Path, ...]:
+    """Extract a bounded flat Registry package and return Comfy tracking paths."""
+
+    target_path.mkdir(parents=True, exist_ok=True)
+    resolved_target = target_path.resolve()
+    extracted_bytes = 0
+    tracked_files: list[Path] = []
+    with zipfile.ZipFile(archive_path) as archive:
+        for member in archive.infolist():
+            member_path = Path(member.filename)
+            if not member_path.parts:
+                continue
+            if member_path.is_absolute() or _zip_member_is_symlink(member):
+                raise RuntimeError("Registry package contains an unsafe path.")
+            destination = (target_path / member_path).resolve()
+            if not _is_relative_to(destination, resolved_target):
+                raise RuntimeError("Registry package contains an unsafe path.")
+            extracted_bytes += member.file_size
+            if extracted_bytes > _MAX_EXTRACTED_BYTES:
+                raise RuntimeError("Registry package expands beyond the size limit.")
+            if member.is_dir():
+                destination.mkdir(parents=True, exist_ok=True)
+                continue
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            with archive.open(member) as source, destination.open("wb") as output:
+                shutil.copyfileobj(source, output)
+            tracked_files.append(member_path)
+    if not tracked_files:
+        raise RuntimeError("Registry package contains no files.")
+    return tuple(tracked_files)
 
 
 def validate_source_identity(
     *,
     source_path: Path,
-    extension: FirstPartyExtension,
+    extension: RegistrySource,
     version: str,
 ) -> None:
     """Prove archive project, version, repository, and sentinels match policy."""
 
-    if not all(
-        (source_path / sentinel).is_file() for sentinel in extension.sentinel_files
-    ):
-        raise RuntimeError(
-            f"{extension.project_name} source is missing required installation files."
-        )
+    if not (source_path / "__init__.py").is_file():
+        raise RuntimeError(f"{extension.project_name} source has no __init__.py.")
     project, repository_url = _project_identity(source_path / "pyproject.toml")
     name = project.get("name")
     observed_version = project.get("version")
     if (
         not isinstance(name, str)
         or name.casefold() != extension.project_name.casefold()
-        or observed_version != version
         or _normalized_repository(repository_url)
         != _normalized_repository(extension.repository_url)
     ):
         raise RuntimeError(
-            f"Source identity does not match {extension.registry_id}@{version}."
+            f"Source identity does not match {extension.node_id}@{version}."
+        )
+    if classify_version(version) == "semver" and observed_version != version:
+        raise RuntimeError(
+            f"Source identity does not match {extension.node_id}@{version}."
         )
 
 
@@ -253,12 +341,10 @@ def _project_identity(
     try:
         payload = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
     except (OSError, tomllib.TOMLDecodeError) as exc:
-        raise RuntimeError(
-            "Trusted extension pyproject metadata is unreadable."
-        ) from exc
+        raise RuntimeError("Registry source pyproject metadata is unreadable.") from exc
     project_value = payload.get("project")
     if not isinstance(project_value, Mapping):
-        raise RuntimeError("Trusted extension pyproject has no project table.")
+        raise RuntimeError("Registry source pyproject has no project table.")
     urls_value = project_value.get("urls")
     repository_url = (
         urls_value.get("Repository") if isinstance(urls_value, Mapping) else ""
@@ -413,6 +499,7 @@ __all__ = [
     "TrustedSourceArchiveInstaller",
     "download_archive",
     "extract_single_root_archive",
+    "extract_registry_package_archive",
     "tracked_source_files",
     "validate_source_identity",
 ]

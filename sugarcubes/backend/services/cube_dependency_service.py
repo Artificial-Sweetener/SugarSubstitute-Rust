@@ -37,6 +37,7 @@ from .dependency_diagnostics import (
 )
 from .dependency_installation import DependencyNodeInstaller
 from .dependency_python_requirements import DependencyPythonRequirementsInstaller
+from .dependency_registry_source import RegistrySourceResolver
 from .dependency_repair_logging import (
     log_restart_required,
     log_source_selected,
@@ -46,6 +47,7 @@ from .dependency_repair_logging import (
     log_version_selected,
 )
 from .dependency_source_archive import TrustedSourceArchiveInstaller
+from .dependency_source_git import RegistrySourceGitInstaller
 from .dependency_version_repair import DependencyVersionRepairExecutor
 from .tracked_repo_service import TrackedRepoService
 
@@ -73,6 +75,7 @@ class CubeDependencyService:
         cli_adapter: ComfyCliAdapter | None = None,
         acquirer: DependencyAcquirer | None = None,
         requirements_installer: DependencyPythonRequirementsInstaller | None = None,
+        source_resolver: RegistrySourceResolver | None = None,
     ) -> None:
         """Initialize the service from the SugarCubes backend service graph."""
 
@@ -87,6 +90,12 @@ class CubeDependencyService:
         dependency_acquirer = acquirer or DependencyAcquirer(
             workspace_path=self._workspace_path,
             cli_adapter=dependency_cli,
+            source_resolver=source_resolver or RegistrySourceResolver(),
+            git_installer=RegistrySourceGitInstaller(
+                custom_nodes_root=self._custom_nodes_root,
+                git_runner=tracked_repo_service.git_runner,
+                requirements_installer=dependency_requirements,
+            ),
             source_installer=TrustedSourceArchiveInstaller(
                 custom_nodes_root=self._custom_nodes_root,
                 requirements_installer=dependency_requirements,

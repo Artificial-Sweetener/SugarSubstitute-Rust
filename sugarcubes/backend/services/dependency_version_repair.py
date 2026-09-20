@@ -58,7 +58,7 @@ class DependencyVersionRepairExecutor:
             item
         ):
             return "the installed clean Git checkout"
-        return "Comfy Registry with trusted first-party fallback"
+        return "Comfy Registry with authoritative repository fallback"
 
     def _reinstall_versioned_node(self, item: Mapping[str, Any]) -> dict[str, Any]:
         """Reacquire a versioned node through the shared acquisition policy."""
