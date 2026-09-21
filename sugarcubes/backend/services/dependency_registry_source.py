@@ -41,7 +41,13 @@ class RegistrySource:
     target_folder_name: str
     package_url: str = ""
     package_version: str = ""
+    package_status: str = ""
     requirements_file: Path = Path("requirements.txt")
+
+    def package_is_flagged(self) -> bool:
+        """Return whether Registry explicitly flagged this exact release."""
+
+        return self.package_status.casefold() == "nodeversionstatusflagged"
 
     def archive_urls(self, required_version: str) -> tuple[str, ...]:
         """Return safe GitHub archives in exact-to-current preference order."""
@@ -52,7 +58,6 @@ class RegistrySource:
             return (
                 f"{repository}/archive/refs/tags/v{required_version}.zip",
                 f"{repository}/archive/refs/tags/{required_version}.zip",
-                f"{repository}/archive/HEAD.zip",
             )
         if version_kind == "git_sha":
             return (f"{repository}/archive/{required_version}.zip",)
@@ -93,6 +98,7 @@ class RegistrySourceResolver:
         install_payload = self._install_loader(normalized_node_id, required_version)
         package_url = ""
         package_version = ""
+        package_status = ""
         if install_payload is not None:
             observed_install_id = normalize_metadata_string(
                 install_payload.get("node_id")
@@ -103,15 +109,17 @@ class RegistrySourceResolver:
                 raise ValueError(
                     "Registry install identity does not match the requested node."
                 )
-            package_url = _validated_registry_package_url(
-                normalize_metadata_string(install_payload.get("downloadUrl"))
-            )
             package_version = normalize_metadata_string(install_payload.get("version"))
+            package_status = normalize_metadata_string(install_payload.get("status"))
             if (
                 classify_version(required_version) == "semver"
                 and package_version != required_version
             ):
                 raise ValueError("Registry install version does not match the request.")
+            if _package_status_is_active(package_status):
+                package_url = _validated_registry_package_url(
+                    normalize_metadata_string(install_payload.get("downloadUrl"))
+                )
         return RegistrySource(
             node_id=observed_id,
             project_name=observed_id,
@@ -119,6 +127,7 @@ class RegistrySourceResolver:
             target_folder_name=observed_id,
             package_url=package_url,
             package_version=package_version,
+            package_status=package_status,
         )
 
 
@@ -223,6 +232,12 @@ def _validated_registry_package_url(value: str) -> str:
     ):
         raise ValueError("Registry package URL is not a canonical Comfy CDN archive.")
     return value
+
+
+def _package_status_is_active(value: str) -> bool:
+    """Return whether Registry marks a package release as active."""
+
+    return value.casefold() == "nodeversionstatusactive"
 
 
 __all__ = [

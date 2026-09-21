@@ -1265,6 +1265,87 @@ def test_backend_readiness_preserves_versioned_custom_node_requirements(
     assert version_item["requiredByNodes"] == ["Impact Detailer"]
 
 
+def test_backend_readiness_implies_prompt_control_for_fresh_simplesyrup_install(
+    tmp_path: Path,
+    backend_services_factory: BackendServicesFactory,
+) -> None:
+    """Expose both packs when a fresh install requires qualifying SimpleSyrup."""
+
+    services = backend_services_factory(tmp_path, git_runner=lambda args, cwd: None)
+    checkout = services.tracked_repos.checkout_path(
+        "Artificial-Sweetener", "Base-Cubes"
+    )
+    _write_cube(
+        checkout / "demo.cube",
+        _cube_payload_with_cnr(
+            cnr_id="SimpleSyrup",
+            version="1.9.2",
+            python_module="custom_nodes.SimpleSyrup",
+        ),
+    )
+
+    readiness = services.library.library_readiness(tmp_path / "custom_nodes")
+
+    assert readiness["missingCustomNodes"] == [
+        "comfyui-prompt-control",
+        "SimpleSyrup",
+    ]
+    plans = {item["nodeId"]: item for item in readiness["dependencyVersionPlan"]}
+    assert plans["SimpleSyrup"]["requiredVersionPolicy"] == "minimum"
+    assert plans["comfyui-prompt-control"]["requiredVersion"] == ("3.0.0-beta.10")
+    assert plans["comfyui-prompt-control"]["requiredVersionPolicy"] == "exact"
+    assert (
+        plans["comfyui-prompt-control"]["requirements"][0]["impliedByNodeId"]
+        == "SimpleSyrup"
+    )
+
+
+def test_backend_readiness_implies_missing_prompt_control_after_cache_reuse(
+    tmp_path: Path,
+    backend_services_factory: BackendServicesFactory,
+) -> None:
+    """Keep implication active when SimpleSyrup is current and facts are cached."""
+
+    first_services = backend_services_factory(
+        tmp_path, git_runner=lambda args, cwd: None
+    )
+    checkout = first_services.tracked_repos.checkout_path(
+        "Artificial-Sweetener", "Base-Cubes"
+    )
+    _write_cube(
+        checkout / "demo.cube",
+        _cube_payload_with_cnr(
+            cnr_id="SimpleSyrup",
+            version="1.9.2",
+            python_module="custom_nodes.SimpleSyrup",
+        ),
+    )
+    custom_nodes_root = tmp_path / "custom_nodes"
+    installed = custom_nodes_root / "SimpleSyrup"
+    installed.mkdir(parents=True)
+    (installed / ".tracking").write_text(
+        json.dumps(
+            {
+                "version": "1.9.2",
+                "repository": ("https://github.com/Artificial-Sweetener/SimpleSyrup"),
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    first_services.library.library_readiness(custom_nodes_root)
+    second_services = backend_services_factory(
+        tmp_path, git_runner=lambda args, cwd: None
+    )
+    readiness = second_services.library.library_readiness(custom_nodes_root)
+
+    assert readiness["missingCustomNodes"] == ["comfyui-prompt-control"]
+    assert readiness["installedCustomNodes"] == ["SimpleSyrup"]
+    plans = {item["nodeId"]: item for item in readiness["dependencyVersionPlan"]}
+    assert plans["SimpleSyrup"]["status"] == "satisfied"
+    assert plans["comfyui-prompt-control"]["status"] == "missing"
+
+
 def test_backend_readiness_is_false_for_installed_dependency_below_requirement(
     tmp_path: Path,
     backend_services_factory: BackendServicesFactory,
@@ -1298,10 +1379,9 @@ def test_backend_readiness_is_false_for_installed_dependency_below_requirement(
 
     readiness = services.library.library_readiness(custom_nodes_root)
 
-    assert readiness["missingCustomNodes"] == []
-    assert readiness["dependencyVersionPlan"][0]["status"] == (
-        "installed_version_too_old"
-    )
+    assert readiness["missingCustomNodes"] == ["comfyui-prompt-control"]
+    plans = {item["nodeId"]: item for item in readiness["dependencyVersionPlan"]}
+    assert plans["SimpleSyrup"]["status"] == ("installed_version_too_old")
     assert readiness["ready"] is False
     assert readiness["restartRequired"] is True
 

@@ -13,12 +13,14 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from .dependency_semver import semver_at_least, semver_key
 from .dependency_version_types import (
     CubeDependencyRequirement,
     DependencyStatus,
     GitContains,
     InstalledDependency,
     VersionKind,
+    VersionRequirementPolicy,
 )
 
 _SEMVER_RE = re.compile(r"^\d+(?:\.\d+){1,3}(?:[-+][0-9A-Za-z.-]+)?$")
@@ -79,23 +81,29 @@ def _version_plan_item(
         git_contains=git_contains,
     )
     required_kind = classify_version(required_version)
+    exact_required = any(
+        requirement.version_policy == "exact" for requirement in node_requirements
+    )
+    required_policy: VersionRequirementPolicy = "exact" if exact_required else "minimum"
     conflicts = _requirement_conflicts(
         node_requirements=node_requirements,
         installed=installed,
         git_contains=git_contains,
     )
-    if installed is None:
-        status: DependencyStatus = "missing"
+    if conflicts:
+        status: DependencyStatus = "version_conflict"
+        repairable = False
+        installed_version = installed.installed_version if installed is not None else ""
+        installed_kind: VersionKind = (
+            installed.version_kind if installed is not None else "missing"
+        )
+        remediation = "Resolve conflicting cube version requirements before repair."
+    elif installed is None:
+        status = "missing"
         repairable = True
         installed_version = ""
-        installed_kind: VersionKind = "missing"
+        installed_kind = "missing"
         remediation = "Install the required custom node."
-    elif conflicts:
-        status = "version_conflict"
-        repairable = False
-        installed_version = installed.installed_version
-        installed_kind = installed.version_kind
-        remediation = "Resolve conflicting cube version requirements before repair."
     elif not kinds:
         status = "satisfied"
         repairable = False
@@ -103,7 +111,11 @@ def _version_plan_item(
         installed_kind = installed.version_kind
         remediation = ""
     elif required_kind == "semver":
-        status = _semver_status(required_version, installed)
+        status = _semver_status(
+            required_version,
+            installed,
+            policy=required_policy,
+        )
         repairable = status not in {"satisfied", "blocked"}
         installed_version = installed.installed_version
         installed_kind = installed.version_kind
@@ -130,6 +142,7 @@ def _version_plan_item(
         "displayName": node_id,
         "requiredVersion": required_version,
         "requiredVersionKind": required_kind,
+        "requiredVersionPolicy": required_policy,
         "installedVersion": installed_version,
         "installedVersionKind": installed_kind,
         "installedEvidence": installed.to_payload() if installed is not None else None,
@@ -164,6 +177,31 @@ def _requirement_conflicts(
         for requirement in node_requirements
         if requirement.version_kind not in {"missing", "unknown"}
     }
+    exact_versions = _unique_sorted(
+        requirement.required_version
+        for requirement in node_requirements
+        if requirement.version_kind == "semver"
+        and requirement.version_policy == "exact"
+    )
+    if len(exact_versions) > 1:
+        return [{"reason": "conflicting_exact_versions", "versions": exact_versions}]
+    if exact_versions:
+        minimum_versions = [
+            requirement.required_version
+            for requirement in node_requirements
+            if requirement.version_kind == "semver"
+            and requirement.version_policy == "minimum"
+        ]
+        if minimum_versions:
+            strongest_minimum = max(minimum_versions, key=semver_key)
+            if semver_key(strongest_minimum) > semver_key(exact_versions[0]):
+                return [
+                    {
+                        "reason": "exact_version_below_minimum",
+                        "versions": [exact_versions[0], strongest_minimum],
+                    }
+                ]
+        return []
     if "semver" in kinds:
         return []
     if len(kinds) > 1:
@@ -215,7 +253,15 @@ def _required_version(
         if requirement.version_kind == "semver"
     ]
     if semver_versions:
-        return max(semver_versions, key=_semver_key)
+        exact_versions = [
+            requirement.required_version
+            for requirement in requirements
+            if requirement.version_kind == "semver"
+            and requirement.version_policy == "exact"
+        ]
+        if exact_versions:
+            return _unique_sorted(exact_versions)[0]
+        return max(semver_versions, key=semver_key)
     git_versions = [
         requirement.required_version
         for requirement in requirements
@@ -246,6 +292,8 @@ def _required_version(
 def _semver_status(
     required_version: str,
     installed: InstalledDependency,
+    *,
+    policy: VersionRequirementPolicy,
 ) -> DependencyStatus:
     """Return semver readiness for one installed dependency."""
 
@@ -255,7 +303,11 @@ def _semver_status(
         return "installed_version_unknown"
     if installed.version_kind != "semver":
         return "not_comparable"
-    if _semver_key(installed.installed_version) >= _semver_key(required_version):
+    if policy == "exact":
+        if installed.installed_version == required_version:
+            return "satisfied"
+        return "installed_version_mismatch"
+    if semver_at_least(installed.installed_version, required_version):
         return "satisfied"
     return "installed_version_too_old"
 
@@ -312,20 +364,13 @@ def _strongest_git_requirement(
     return strongest[0] if len(strongest) == 1 else None
 
 
-def _semver_key(value: str) -> tuple[int, int, int, int, str]:
-    """Return a conservative sortable key for semver-like strings."""
-
-    main, _, suffix = value.partition("-")
-    numeric = [int(part) for part in main.split(".") if part.isdigit()]
-    padded = [*numeric, 0, 0, 0, 0][:4]
-    return (padded[0], padded[1], padded[2], padded[3], suffix)
-
-
 def _remediation_for_status(status: DependencyStatus) -> str:
     """Return a short user-facing remediation for one version status."""
 
     if status == "installed_version_too_old":
         return "Update the installed custom node to the required version or newer."
+    if status == "installed_version_mismatch":
+        return "Install the exact custom-node version required by the cube library."
     if status == "installed_commit_not_descendant":
         return "Update the installed git checkout to a commit containing the required cube commit."
     if status == "installed_version_unknown":

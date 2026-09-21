@@ -32,6 +32,7 @@ from sugarcubes.backend.services.dependency_version_readiness import (
 )
 from sugarcubes.backend.services.dependency_version_types import (
     CubeDependencyRequirement,
+    VersionRequirementPolicy,
 )
 from sugarcubes.backend.services.dependency_versions import classify_version
 
@@ -87,6 +88,9 @@ def test_extract_versioned_requirements_preserves_nodes_and_deduplicates_fallbac
         "classType": "ImpactNode",
         "sourcePath": "demo.cube",
         "defaultBaseRepo": False,
+        "requiredVersionPolicy": "minimum",
+        "requirementOrigin": "direct",
+        "impliedByNodeId": "",
     }
     assert requirements[1].version_kind == "missing"
 
@@ -485,7 +489,79 @@ def test_blocked_projection_excludes_non_actionable_version_evidence() -> None:
     ]
 
 
-def _requirement(node_id: str, version: str) -> CubeDependencyRequirement:
+def test_missing_dependency_with_conflicting_exact_versions_is_not_repairable(
+    tmp_path: Path,
+) -> None:
+    """Refuse to choose an arbitrary release when exact requirements disagree."""
+
+    plan = dependency_version_readiness(
+        requirements=(
+            _requirement("conflicting-pack", "3.0.0-beta.9", version_policy="exact"),
+            _requirement("conflicting-pack", "3.0.0-beta.10", version_policy="exact"),
+        ),
+        custom_nodes_root=tmp_path / "custom_nodes",
+        git_runner=None,
+    )["dependencyVersionPlan"][0]
+
+    assert plan["status"] == "version_conflict"
+    assert plan["repairable"] is False
+    assert plan["installedVersionKind"] == "missing"
+    assert plan["conflicts"] == [
+        {
+            "reason": "conflicting_exact_versions",
+            "versions": ["3.0.0-beta.10", "3.0.0-beta.9"],
+        }
+    ]
+
+
+def test_exact_prerelease_requirement_rejects_newer_or_older_versions(
+    tmp_path: Path,
+) -> None:
+    """Require the implied Prompt Control release exactly, including beta number."""
+
+    custom_nodes_root = tmp_path / "custom_nodes"
+    installed = custom_nodes_root / "comfyui-prompt-control"
+    installed.mkdir(parents=True)
+    tracking_path = installed / ".tracking"
+    requirement = _requirement(
+        "comfyui-prompt-control",
+        "3.0.0-beta.10",
+        version_policy="exact",
+    )
+
+    observed_statuses: list[str] = []
+    for installed_version in (
+        "3.0.0-beta.9",
+        "3.0.0-beta.10",
+        "3.0.0-beta.11",
+        "3.0.0",
+    ):
+        tracking_path.write_text(
+            json.dumps({"version": installed_version}),
+            encoding="utf-8",
+        )
+        plan = dependency_version_readiness(
+            requirements=(requirement,),
+            custom_nodes_root=custom_nodes_root,
+            git_runner=None,
+        )["dependencyVersionPlan"][0]
+        observed_statuses.append(plan["status"])
+        assert plan["requiredVersionPolicy"] == "exact"
+
+    assert observed_statuses == [
+        "installed_version_mismatch",
+        "satisfied",
+        "installed_version_mismatch",
+        "installed_version_mismatch",
+    ]
+
+
+def _requirement(
+    node_id: str,
+    version: str,
+    *,
+    version_policy: VersionRequirementPolicy = "minimum",
+) -> CubeDependencyRequirement:
     """Build one characterized dependency requirement."""
 
     return CubeDependencyRequirement(
@@ -498,4 +574,5 @@ def _requirement(node_id: str, version: str) -> CubeDependencyRequirement:
         class_type="ExampleNode",
         source_path="demo.cube",
         default_base_repo=False,
+        version_policy=version_policy,
     )

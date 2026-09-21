@@ -79,6 +79,22 @@ def _unavailable_source_resolver() -> RegistrySourceResolver:
     )
 
 
+def _write_satisfied_prompt_control(custom_nodes_root: Path) -> None:
+    """Materialize the exact implied dependency for unrelated repair tests."""
+
+    installed = custom_nodes_root / "comfyui-prompt-control"
+    installed.mkdir(parents=True)
+    (installed / ".tracking").write_text(
+        json.dumps(
+            {
+                "version": "3.0.0-beta.10",
+                "repository": "https://github.com/asagi4/comfyui-prompt-control",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
 def test_repair_installs_baseline_nodes_without_prompt(
     tmp_path: Path,
     backend_services_factory: BackendServicesFactory,
@@ -122,6 +138,34 @@ def test_repair_installs_baseline_nodes_without_prompt(
     ]
     assert "--workspace" in commands[1]
     assert "--skip-prompt" in commands[1]
+
+
+def test_repair_never_removes_an_installed_pack_without_a_requirement(
+    tmp_path: Path,
+    backend_services_factory: BackendServicesFactory,
+) -> None:
+    """Keep installed node packs when no enabled cube currently requires them."""
+
+    services = backend_services_factory(tmp_path, git_runner=lambda args, cwd: None)
+    prompt_control = tmp_path / "custom_nodes" / "comfyui-prompt-control"
+    prompt_control.mkdir(parents=True)
+    marker = prompt_control / "user-owned-marker.txt"
+    marker.write_text("keep", encoding="utf-8")
+    service = CubeDependencyService(
+        library_service=services.library,
+        tracked_repo_service=services.tracked_repos,
+        workspace_path=tmp_path / "ComfyUI",
+        custom_nodes_root=tmp_path / "custom_nodes",
+        cli_adapter=ComfyCliAdapter(
+            runner=lambda command, cwd, timeout_seconds: _completed(command)
+        ),
+    )
+
+    result = service.repair(approval_policy="silent_baseline_only")
+
+    assert result["attemptedInstallPlan"] == []
+    assert result["attemptedVersionPlan"] == []
+    assert marker.read_text(encoding="utf-8") == "keep"
 
 
 def test_repair_refuses_non_default_nodes_without_approval(
@@ -461,6 +505,7 @@ def test_repair_checks_out_exact_tag_for_clean_git_install(
     installed_commit = "f561f164543f927e0452e14658a0509e8e4866d6"
     updated_commit = "0d97d7c2424f8a2d3a859fa80bfc64e935116cf1"
     custom_nodes_root = tmp_path / "custom_nodes"
+    _write_satisfied_prompt_control(custom_nodes_root)
     installed_path = custom_nodes_root / "SimpleSyrup"
     git_dir = installed_path / ".git"
     git_dir.mkdir(parents=True)
@@ -816,6 +861,7 @@ def test_repair_refuses_dirty_first_party_git_semver_update(
         ),
     )
     custom_nodes_root = tmp_path / "custom_nodes"
+    _write_satisfied_prompt_control(custom_nodes_root)
     (custom_nodes_root / "SimpleSyrup" / ".git").mkdir(parents=True)
     service = CubeDependencyService(
         library_service=services.library,
@@ -952,6 +998,7 @@ def test_semver_git_repair_uses_the_actual_remote_as_authoritative_source(
         ),
     )
     custom_nodes_root = tmp_path / "custom_nodes"
+    _write_satisfied_prompt_control(custom_nodes_root)
     installed = custom_nodes_root / "SimpleSyrup"
     (installed / ".git").mkdir(parents=True)
     project_path = installed / "pyproject.toml"

@@ -28,6 +28,7 @@ from .dependency_requirement_cache import (
     DependencyRequirementCache,
     DependencyRequirementSet,
 )
+from .dependency_requirement_implications import expand_dependency_requirements
 from .dependency_requirement_sources import (
     DependencyRequirementSourceLibrary,
     dependency_requirement_source_signature,
@@ -92,14 +93,15 @@ class DependencyRequirementInventory:
         cached = self._cache.load(source_signature)
         add_phase_time("cache_read", phase_started_at)
         if cached is not None:
+            expanded_cached = _with_implied_requirements(cached)
             self._log_collection(
                 started_at=started_at,
                 phase_timings=phase_timings,
                 source_signature=source_signature,
-                result=cached,
+                result=expanded_cached,
                 cached=True,
             )
-            return cached
+            return expanded_cached
 
         records: list[dict[str, Any]] = []
         version_records: list[CubeDependencyRequirement] = []
@@ -181,14 +183,14 @@ class DependencyRequirementInventory:
             started_at=started_at,
             phase_timings=phase_timings,
             source_signature=source_signature,
-            result=result,
+            result=_with_implied_requirements(result),
             cached=False,
             summary_count=len(summaries),
             catalog_fact_count=len(catalog_facts),
             skipped_payload_count=skipped_payload_count,
             repo_lookup_count=len(repo_cache),
         )
-        return result
+        return _with_implied_requirements(result)
 
     def source_signature(self) -> str:
         """Return cheap source facts that validate durable requirement reuse."""
@@ -316,3 +318,27 @@ def _dependency_source_path(source: Mapping[str, Any]) -> str:
     namespace = normalize_metadata_string(source.get("namespace"))
     path = normalize_metadata_string(source.get("path"))
     return f"local/{namespace}/{path}".rstrip("/") if namespace else "local"
+
+
+def _with_implied_requirements(
+    direct: DependencyRequirementSet,
+) -> DependencyRequirementSet:
+    """Add current implication policy after cache loading direct cube facts."""
+
+    expanded = expand_dependency_requirements(direct.version_requirements)
+    direct_count = len(direct.version_requirements)
+    implied_records = [
+        {
+            "node_id": requirement.node_id,
+            "display_name": requirement.node_id,
+            "pack_ref": requirement.pack_ref,
+            "cube_id": requirement.cube_id,
+            "default_base_repo": requirement.default_base_repo,
+        }
+        for requirement in expanded[direct_count:]
+    ]
+    return DependencyRequirementSet(
+        records=[*direct.records, *implied_records],
+        version_requirements=expanded,
+        catalog_revision=direct.catalog_revision,
+    )

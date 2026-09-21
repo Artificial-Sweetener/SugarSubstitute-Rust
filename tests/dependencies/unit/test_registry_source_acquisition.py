@@ -70,9 +70,12 @@ def test_registry_resolves_arbitrary_node_source_and_archive_candidates() -> Non
 
     assert extension.node_id == "SimpleSyrup"
     assert extension.target_folder_name == "SimpleSyrup"
-    assert extension.archive_urls("1.7.1")[0].endswith(
+    release_urls = extension.archive_urls("1.7.1")
+    assert release_urls[0].endswith(
         "/Artificial-Sweetener/SimpleSyrup/archive/refs/tags/v1.7.1.zip"
     )
+    assert len(release_urls) == 2
+    assert all("HEAD" not in url for url in release_urls)
     assert extension.archive_urls("")[0].endswith("/SimpleSyrup/archive/HEAD.zip")
     assert extension.archive_urls("a" * 40)[0].endswith(
         f"/SimpleSyrup/archive/{'a' * 40}.zip"
@@ -181,6 +184,58 @@ def test_arbitrary_registry_node_uses_authoritative_source_fallback(
     assert result["operation"] == "registry_source_install"
     assert source_calls[0] == "https://cdn.comfy.org/test/node.zip"
     assert (tmp_path / "custom_nodes" / "SomeThirdPartyNode" / "__init__.py").is_file()
+
+
+def test_flagged_exact_release_uses_validated_github_tag_instead_of_registry(
+    tmp_path: Path,
+) -> None:
+    """Bypass Registry execution and CDN artifacts for a flagged exact release."""
+
+    commands: list[list[str]] = []
+    source_calls: list[str] = []
+
+    def runner(
+        command: Sequence[str], cwd: Path, timeout_seconds: int
+    ) -> subprocess.CompletedProcess[str]:
+        _ = cwd, timeout_seconds
+        commands.append(list(command))
+        return subprocess.CompletedProcess(command, 0, stdout="ok", stderr="")
+
+    archive_path = _release_archive(
+        tmp_path,
+        version="3.0.0-beta.10",
+        project_name="comfyui-prompt-control",
+        repository_url="https://github.com/asagi4/comfyui-prompt-control",
+    )
+    acquirer = _acquirer(
+        tmp_path,
+        runner=runner,
+        archive_path=archive_path,
+        source_calls=source_calls,
+        source_payload={
+            "id": "comfyui-prompt-control",
+            "repository": "https://github.com/asagi4/comfyui-prompt-control",
+        },
+        registry_status="NodeVersionStatusFlagged",
+    )
+
+    result = acquirer.acquire(
+        {
+            "nodeId": "comfyui-prompt-control",
+            "requiredVersion": "3.0.0-beta.10",
+            "requiredVersionKind": "semver",
+            "requiredVersionPolicy": "exact",
+            "installedEvidence": None,
+        }
+    )
+
+    assert result["returnCode"] == 0
+    assert result["acquisitionSource"] == "github_source"
+    assert commands == []
+    assert source_calls == [
+        "https://github.com/asagi4/comfyui-prompt-control/archive/refs/tags/"
+        "v3.0.0-beta.10.zip"
+    ]
 
 
 def test_registry_source_rejects_non_github_or_mismatched_metadata() -> None:
@@ -344,6 +399,7 @@ def _acquirer(
     source_calls: list[str] | None = None,
     source_payload: dict[str, object] | None = None,
     registry_artifact: bool = True,
+    registry_status: str = "NodeVersionStatusActive",
 ) -> DependencyAcquirer:
     """Build the production acquisition path around deterministic boundaries."""
 
@@ -376,6 +432,7 @@ def _acquirer(
                     "node_id": node_id,
                     "version": version,
                     "downloadUrl": "https://cdn.comfy.org/test/node.zip",
+                    "status": registry_status,
                 }
                 if registry_artifact
                 else None
@@ -431,7 +488,7 @@ def _release_archive(
         f'[project.urls]\nRepository = "{repository_url}"\n'
     )
     with zipfile.ZipFile(archive_path, "w") as archive:
-        prefix = "" if flat else "SimpleSyrup-1.7.1/"
+        prefix = "" if flat else f"{project_name}-{version}/"
         archive.writestr(f"{prefix}__init__.py", "release")
         archive.writestr(f"{prefix}simple_syrup/__init__.py", "release")
         archive.writestr(f"{prefix}pyproject.toml", project)
