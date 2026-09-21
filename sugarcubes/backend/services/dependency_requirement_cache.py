@@ -18,11 +18,15 @@ from pathlib import Path
 from typing import Any
 
 from .cube_metadata import normalize_metadata_string
-from .dependency_version_types import CubeDependencyRequirement
+from .dependency_version_types import (
+    CubeDependencyRequirement,
+    RequirementOrigin,
+    VersionRequirementPolicy,
+)
 from .dependency_versions import classify_version
 
 _logger = logging.getLogger(__name__)
-_CACHE_SCHEMA_VERSION = 1
+_CACHE_SCHEMA_VERSION = 2
 _CACHE_FILENAME = "dependency-requirements.json"
 
 
@@ -141,4 +145,19 @@ def _requirement_from_payload(payload: Mapping[str, Any]) -> CubeDependencyRequi
         class_type=normalize_metadata_string(payload.get("classType")),
         source_path=normalize_metadata_string(payload.get("sourcePath")),
         default_base_repo=bool(payload.get("defaultBaseRepo")),
+        version_policy=_version_policy(payload.get("requiredVersionPolicy")),
+        requirement_origin=_requirement_origin(payload.get("requirementOrigin")),
+        implied_by_node_id=normalize_metadata_string(payload.get("impliedByNodeId")),
     )
+
+
+def _version_policy(value: object) -> VersionRequirementPolicy:
+    """Return a supported cached version policy or the direct default."""
+
+    return "exact" if value == "exact" else "minimum"
+
+
+def _requirement_origin(value: object) -> RequirementOrigin:
+    """Return a supported cached requirement origin or the direct default."""
+
+    return "implied" if value == "implied" else "direct"

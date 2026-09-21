@@ -14,11 +14,14 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 VersionKind = Literal["semver", "git_sha", "unknown", "missing"]
+VersionRequirementPolicy = Literal["minimum", "exact"]
+RequirementOrigin = Literal["direct", "implied"]
 DependencyStatus = Literal[
     "satisfied",
     "missing",
     "installed_version_unknown",
     "installed_version_too_old",
+    "installed_version_mismatch",
     "installed_commit_not_descendant",
     "version_conflict",
     "not_comparable",
@@ -42,6 +45,9 @@ class CubeDependencyRequirement:
     class_type: str
     source_path: str
     default_base_repo: bool
+    version_policy: VersionRequirementPolicy = "minimum"
+    requirement_origin: RequirementOrigin = "direct"
+    implied_by_node_id: str = ""
 
     def to_payload(self) -> dict[str, Any]:
         """Return this requirement as a JSON-safe payload."""
@@ -56,6 +62,9 @@ class CubeDependencyRequirement:
             "classType": self.class_type,
             "sourcePath": self.source_path,
             "defaultBaseRepo": self.default_base_repo,
+            "requiredVersionPolicy": self.version_policy,
+            "requirementOrigin": self.requirement_origin,
+            "impliedByNodeId": self.implied_by_node_id,
         }
 
 

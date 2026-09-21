@@ -20,7 +20,7 @@ from typing import Any
 from ..responses import BackendError
 from .cube_metadata import normalize_metadata_string
 from .dependency_cli import ComfyCliAdapter, ComfyCliResult
-from .dependency_registry_source import RegistrySourceResolver
+from .dependency_registry_source import RegistrySource, RegistrySourceResolver
 from .dependency_source_archive import TrustedSourceArchiveInstaller
 from .dependency_source_git import RegistrySourceGitInstaller
 from .dependency_versions import classify_version
@@ -53,41 +53,57 @@ class DependencyAcquirer:
 
         node_id = normalize_metadata_string(item.get("nodeId"))
         required_version = normalize_metadata_string(item.get("requiredVersion"))
+        required_policy = normalize_metadata_string(item.get("requiredVersionPolicy"))
         registry_result: ComfyCliResult | None = None
         registry_failure = ""
-        try:
-            self._cli_adapter.assert_available(self._workspace_path)
-            registry_result = self._cli_adapter.install_node(
-                workspace_path=self._workspace_path,
-                node_id=node_id,
-                version=(
-                    required_version
-                    if classify_version(required_version) == "semver"
-                    else ""
-                ),
-            )
-            if registry_result.return_code == 0:
-                return {
-                    **registry_result.to_payload(),
-                    "operation": "comfy_registry_install",
-                    "acquisitionSource": "registry",
-                    "reason": "",
-                }
-            registry_failure = "Comfy Registry exact-version install failed"
-        except BackendError as exc:
-            registry_failure = (
-                normalize_metadata_string(exc.details.get("reason")) or exc.message
-            )
-        except (OSError, subprocess.SubprocessError) as exc:
-            _logger.warning(
-                "SugarCubes: could not execute Comfy CLI for %s",
-                node_id,
-                exc_info=True,
-            )
-            registry_failure = str(exc).strip() or type(exc).__name__
+        extension: RegistrySource | None = None
+        if (
+            required_policy == "exact"
+            and classify_version(required_version) == "semver"
+        ):
+            try:
+                extension = self._source_resolver.resolve(node_id, required_version)
+            except (OSError, RuntimeError, ValueError, urllib.error.URLError) as exc:
+                registry_failure = str(exc).strip() or type(exc).__name__
+        flagged_release = extension is not None and extension.package_is_flagged()
+        if flagged_release:
+            registry_failure = "Comfy Registry release is flagged"
+        else:
+            try:
+                self._cli_adapter.assert_available(self._workspace_path)
+                registry_result = self._cli_adapter.install_node(
+                    workspace_path=self._workspace_path,
+                    node_id=node_id,
+                    version=(
+                        required_version
+                        if classify_version(required_version) == "semver"
+                        else ""
+                    ),
+                )
+                if registry_result.return_code == 0:
+                    return {
+                        **registry_result.to_payload(),
+                        "operation": "comfy_registry_install",
+                        "acquisitionSource": "registry",
+                        "reason": "",
+                    }
+                registry_failure = "Comfy Registry exact-version install failed"
+            except BackendError as exc:
+                registry_failure = (
+                    normalize_metadata_string(exc.details.get("reason")) or exc.message
+                )
+            except (OSError, subprocess.SubprocessError) as exc:
+                _logger.warning(
+                    "SugarCubes: could not execute Comfy CLI for %s",
+                    node_id,
+                    exc_info=True,
+                )
+                registry_failure = str(exc).strip() or type(exc).__name__
 
         try:
-            extension = self._source_resolver.resolve(node_id, required_version)
+            extension = extension or self._source_resolver.resolve(
+                node_id, required_version
+            )
             unsafe_reason = _unsafe_existing_source_reason(
                 item.get("installedEvidence"),
                 expected_repository=extension.repository_url,
