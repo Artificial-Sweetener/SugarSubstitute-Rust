@@ -1,3 +1,11 @@
+## [0.14.10](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.14.9...v0.14.10) (2026-09-22)
+
+
+### Bug Fixes
+
+* **dependencies:** install required node packs without system Git ([8b38caf](https://github.com/Artificial-Sweetener/SugarCubes/commit/8b38cafb17f52c4bb7d185b026582389caa5a642))
+* **dependencies:** keep internal Git worker portable ([f46d27b](https://github.com/Artificial-Sweetener/SugarCubes/commit/f46d27bc994d5e20e0495ef5005c1687e01828f9))
+
 ## [0.14.9](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.14.8...v0.14.9) (2026-09-22)
 
 
