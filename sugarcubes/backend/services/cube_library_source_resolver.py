@@ -24,7 +24,7 @@ from typing import Any, Mapping
 from ...cube_model import CubeIdentityError, CanonicalCubeId, parse_canonical_cube_id
 from ..responses import BackendError
 from .cube_file_io import format_display_path
-from .cube_library_diagnostics import git_status_path, log_cube_library_diagnostic
+from .cube_library_diagnostics import log_cube_library_diagnostic
 from .cube_metadata import normalize_metadata_string
 from .tracked_repo_models import TrackedRepo
 from .tracked_repo_service import TrackedRepoService
@@ -215,12 +215,9 @@ class CubeLibrarySourceResolver:
         if not (checkout / ".git").exists():
             return ""
         try:
-            result = self.tracked_repo_service.git_runner(
-                ["rev-parse", "HEAD"], cwd=checkout
-            )
+            return self.tracked_repo_service.head_commit_id(repo_root=checkout)
         except (OSError, RuntimeError):
             return ""
-        return normalize_metadata_string(getattr(result, "stdout", ""))
 
     def is_repo_path_dirty(self, checkout: Path, relative_path: str) -> bool:
         """Return whether a repo-relative cube artifact differs from clean HEAD."""
@@ -245,18 +242,11 @@ class CubeLibrarySourceResolver:
             )
             return cached
         try:
-            result = self.tracked_repo_service.git_runner(
-                ["status", "--porcelain"],
-                cwd=checkout,
+            dirty_paths = frozenset(
+                self.tracked_repo_service.changed_paths(repo_root=checkout)
             )
         except (OSError, RuntimeError):
-            dirty_paths: frozenset[str] = frozenset()
-        else:
-            dirty_paths = frozenset(
-                git_status_path(line)
-                for line in str(getattr(result, "stdout", "")).splitlines()
-                if git_status_path(line)
-            )
+            dirty_paths = frozenset()
         self._repo_dirty_paths_cache[checkout] = dirty_paths
         log_cube_library_diagnostic(
             "sugarcubes_repo_dirty_paths_timing",

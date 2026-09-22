@@ -28,7 +28,6 @@ DependencyStatus = Literal[
     "not_repairable",
     "blocked",
 ]
-GitRunner = Callable[..., object]
 GitContains = Callable[[str, str, str], bool]
 
 

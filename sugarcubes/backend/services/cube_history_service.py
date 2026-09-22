@@ -68,12 +68,12 @@ class CubeHistoryService:
         """Return the newest commit containing one artifact path."""
 
         try:
-            result = self.tracked_repo_service.git_runner(
-                ["log", "-1", "--format=%H", "--", context.repo_relative_path],
-                cwd=context.repo_root,
+            history = self.tracked_repo_service.history_for_path(
+                repo_root=context.repo_root,
+                repo_relative_path=context.repo_relative_path,
             )
         except RuntimeError as exc:
             raise BackendError(
                 "Failed to inspect cube promotion history", status=500
             ) from exc
-        return (result.stdout or "").strip()
+        return history[0].commit_id if history else ""

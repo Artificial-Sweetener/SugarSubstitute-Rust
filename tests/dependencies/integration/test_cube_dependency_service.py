@@ -130,10 +130,12 @@ def test_repair_installs_baseline_nodes_without_prompt(
 
     assert result["installedNodes"][0]["nodeId"] == "comfyui-impact-pack"
     assert commands[0][-1] == "import comfy_cli"
-    assert commands[1][-4:] == [
+    assert commands[1][-6:] == [
         "node",
         "install",
         "--exit-on-fail",
+        "--mode",
+        "remote",
         "comfyui-impact-pack",
     ]
     assert "--workspace" in commands[1]
@@ -342,6 +344,37 @@ def test_sync_and_check_keeps_readiness_when_default_pack_sync_fails(
     ]
 
 
+def test_sync_and_check_bootstraps_local_authoring_repository(
+    tmp_path: Path,
+    backend_services_factory: BackendServicesFactory,
+) -> None:
+    """Own local repository initialization inside SugarCubes maintenance."""
+
+    repository_commands: list[tuple[str, ...]] = []
+
+    def record_repository(command: Sequence[str], *, cwd: Path) -> Any:
+        _ = cwd
+        repository_commands.append(tuple(command))
+
+        class Result:
+            stdout = ""
+
+        return Result()
+
+    services = backend_services_factory(tmp_path, git_runner=record_repository)
+    service = CubeDependencyService(
+        library_service=services.library,
+        tracked_repo_service=services.tracked_repos,
+        workspace_path=tmp_path / "ComfyUI",
+        custom_nodes_root=tmp_path / "custom_nodes",
+    )
+
+    service.sync_and_check({"dependencyPolicy": {"repair": False}})
+
+    assert repository_commands[0] == ("init", "-b", "main")
+    assert services.tracked_repos.local_repo_root().is_dir()
+
+
 def test_repair_preserves_failed_install_output(
     tmp_path: Path,
     backend_services_factory: BackendServicesFactory,
@@ -490,7 +523,7 @@ def test_repair_checks_out_approved_baseline_git_version(
     assert result["updatedNodes"][0]["operation"] == "git_checkout"
     assert ("fetch", "--all", "--tags") in git_commands
     assert ("cat-file", "-e", f"{required_commit}^{{commit}}") in git_commands
-    assert ("checkout", required_commit) in git_commands
+    assert ("checkout", "--detach", required_commit) in git_commands
     assert result["restartRequired"] is True
 
 
@@ -544,7 +577,7 @@ def test_repair_checks_out_exact_tag_for_clean_git_install(
             Result.stdout = ""
         elif args == ["config", "--get", "remote.origin.url"]:
             Result.stdout = "https://github.com/Artificial-Sweetener/SimpleSyrup.git\n"
-        elif args == ["checkout", "v1.7.1"]:
+        elif args == ["checkout", "--detach", "v1.7.1"]:
             head_path.write_text(updated_commit, encoding="utf-8")
             write_project_version("1.7.1")
         return Result()
@@ -605,21 +638,21 @@ def test_repair_checks_out_exact_tag_for_clean_git_install(
     assert result["attemptedVersionPlan"][0]["conflicts"] == []
     assert ("fetch", "--all", "--tags") in git_commands
     assert ("cat-file", "-e", "v1.7.1^{commit}") in git_commands
-    assert ("checkout", "v1.7.1") in git_commands
+    assert ("checkout", "--detach", "v1.7.1") in git_commands
     assert cli_commands == []
     assert requirement_commands[0][-2:] == [
         "-r",
         str(installed_path / "requirements.txt"),
     ]
     assert result["readinessAfter"]["ready"] is True
-    checkout_count = git_commands.count(("checkout", "v1.7.1"))
+    checkout_count = git_commands.count(("checkout", "--detach", "v1.7.1"))
 
     repeated = service.repair(approval_policy="silent_baseline_only")
 
     assert repeated["updatedNodes"] == []
     assert repeated["restartRequired"] is False
     assert repeated["readinessAfter"]["ready"] is True
-    assert git_commands.count(("checkout", "v1.7.1")) == checkout_count
+    assert git_commands.count(("checkout", "--detach", "v1.7.1")) == checkout_count
     progress = [
         message for message in caplog.messages if "SugarCubes[nodepack_" in message
     ]
@@ -683,7 +716,7 @@ def test_repair_checks_out_required_tag_for_any_clean_git_install(
             Result.stdout = ""
         elif args == ["config", "--get", "remote.origin.url"]:
             Result.stdout = repository_url + "\n"
-        elif args == ["checkout", "v2.0.0"]:
+        elif args == ["checkout", "--detach", "v2.0.0"]:
             head_path.write_text(updated_commit, encoding="utf-8")
             write_project_version("2.0.0")
         return Result()
@@ -727,7 +760,7 @@ def test_repair_checks_out_required_tag_for_any_clean_git_install(
     assert result["updatedNodes"][0]["operation"] == "git_checkout"
     assert ("fetch", "--all", "--tags") in git_commands
     assert ("cat-file", "-e", "v2.0.0^{commit}") in git_commands
-    assert ("checkout", "v2.0.0") in git_commands
+    assert ("checkout", "--detach", "v2.0.0") in git_commands
     assert requirement_commands[0][-2:] == ["-r", str(requirements_path)]
     assert result["readinessAfter"]["ready"] is True
 
@@ -781,9 +814,9 @@ def test_failed_requirements_restore_the_previous_git_revision(
             Result.stdout = ""
         elif args == ["config", "--get", "remote.origin.url"]:
             Result.stdout = "https://github.com/Artificial-Sweetener/SimpleSyrup.git\n"
-        elif args == ["checkout", "v1.7.1"]:
+        elif args == ["checkout", "--detach", "v1.7.1"]:
             write_installed_state(updated_commit, "1.7.1")
-        elif args == ["checkout", installed_commit]:
+        elif args == ["checkout", "--detach", installed_commit]:
             write_installed_state(installed_commit, "1.7.0")
         return Result()
 
@@ -817,8 +850,8 @@ def test_failed_requirements_restore_the_previous_git_revision(
     assert "Could not install SimpleSyrup requirements" in failure["reason"]
     assert failure["rollbackRef"] == installed_commit
     assert failure["rollbackSucceeded"] is True
-    assert ("checkout", "v1.7.1") in git_commands
-    assert ("checkout", installed_commit) in git_commands
+    assert ("checkout", "--detach", "v1.7.1") in git_commands
+    assert ("checkout", "--detach", installed_commit) in git_commands
     assert 'version = "1.7.0"' in project_path.read_text(encoding="utf-8")
 
 
@@ -1021,7 +1054,7 @@ def test_semver_git_repair_uses_the_actual_remote_as_authoritative_source(
     result = service.repair(approval_policy="silent_baseline_only")
 
     assert result["updatedNodes"][0]["operation"] == "git_checkout"
-    assert checkout_commands == [("checkout", "v1.7.1")]
+    assert checkout_commands == [("checkout", "--detach", "v1.7.1")]
     assert result["failedVersionItems"] == []
     assert result["restartRequired"] is True
     assert result["readinessAfter"]["ready"] is True

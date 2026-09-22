@@ -26,8 +26,9 @@ from .dependency_requirements import (
     is_external_custom_node_requirement,
     normalize_requirement_key,
 )
-from .dependency_version_types import CubeDependencyRequirement, GitRunner
+from .dependency_version_types import CubeDependencyRequirement
 from .dependency_versions import build_dependency_version_plan
+from .repository_service import RepositoryService
 
 _logger = logging.getLogger(__name__)
 _TRACE_MARKER = "SugarCubes cube library diagnostic"
@@ -37,7 +38,7 @@ def dependency_version_readiness(
     *,
     requirements: Sequence[CubeDependencyRequirement],
     custom_nodes_root: Path,
-    git_runner: GitRunner | None,
+    repositories: RepositoryService,
 ) -> dict[str, Any]:
     """Build an additive version-readiness payload from cube requirements."""
 
@@ -65,14 +66,14 @@ def dependency_version_readiness(
     record_phase("group_requirements")
     installed = installed_dependency_inventory(
         custom_nodes_root,
-        git_runner=git_runner,
+        repositories=repositories,
         detailed_keys=frozenset(grouped),
     )
     record_phase("installed_dependency_inventory")
     installed_by_key = {
         normalize_requirement_key(item.folder_name): item for item in installed.values()
     }
-    ancestry = DependencyGitAncestryInspector(git_runner)
+    ancestry = DependencyGitAncestryInspector(repositories)
     plan = build_dependency_version_plan(
         grouped_requirements=grouped,
         installed_by_key=installed_by_key,

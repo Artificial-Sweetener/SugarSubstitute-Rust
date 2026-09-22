@@ -370,9 +370,9 @@ class CubePromotionService:
         except BackendError:
             self.artifacts.restore(source_context, source_payload)
             try:
-                self.history.tracked_repo_service.git_runner(
-                    ["reset", "HEAD", "--", source_context.repo_relative_path],
-                    cwd=source_context.repo_root,
+                self.history.tracked_repo_service.unstage_paths(
+                    repo_root=source_context.repo_root,
+                    repo_relative_paths=(source_context.repo_relative_path,),
                 )
             except RuntimeError:
                 _logger.warning(
@@ -385,9 +385,9 @@ class CubePromotionService:
         """Best-effort unstage one artifact after a rolled-back target write."""
 
         try:
-            self.history.tracked_repo_service.git_runner(
-                ["reset", "HEAD", "--", context.repo_relative_path],
-                cwd=context.repo_root,
+            self.history.tracked_repo_service.unstage_paths(
+                repo_root=context.repo_root,
+                repo_relative_paths=(context.repo_relative_path,),
             )
         except RuntimeError:
             _logger.warning(

@@ -23,12 +23,13 @@ from pathlib import Path
 from typing import Any, Callable, Optional, Sequence
 
 from ..responses import BackendError
+from .pygit2_repository import Pygit2RepositoryService
+from .repository_service import RepositoryCommit, RepositoryService
 from .tracked_repo_batch import TrackedRepoBatch
 from .tracked_repo_catalog import TrackedRepoCatalog
 from .tracked_repo_git import (
     TrackedRepoGit,
     normalize_repo_relative_path,
-    run_git,
 )
 from .tracked_repo_manifest import TrackedRepoManifest
 from .tracked_repo_models import (
@@ -38,7 +39,6 @@ from .tracked_repo_models import (
     serialize_tracked_repo,
 )
 from .tracked_repo_preflight_service import (
-    GitRunner,
     TrackedRepoPreflight,
     TrackedRepoPreflightResult,
     TrackedRepoPreflightService,
@@ -56,28 +56,24 @@ class TrackedRepoService:
         self,
         extension_root: Path,
         *,
-        git_runner: GitRunner | None = None,
+        repositories: RepositoryService | None = None,
         preflight_service: TrackedRepoPreflight | None = None,
         protected_owner_provider: Optional[Callable[[], str]] = None,
     ) -> None:
         """Initialize the tracked repo service."""
 
         self.extension_root = extension_root.resolve()
-        self.git_runner = git_runner or run_git
+        self.repositories = repositories or Pygit2RepositoryService()
         self.protected_owner_provider = protected_owner_provider
         self._manifest = TrackedRepoManifest(self.extension_root)
-        self._git = TrackedRepoGit(
-            runner=self.git_runner,
-            workspace_root=self._manifest.workspace_root,
-        )
+        self._git = TrackedRepoGit(repositories=self.repositories)
         self._sync_policy = TrackedRepoSyncPolicy(
-            git_runner=self.git_runner,
             git=self._git,
             protected_owner_provider=protected_owner_provider,
         )
         self.preflight_service = preflight_service or TrackedRepoPreflightService(
             workspace_root=self.workspace_root(),
-            git_runner=self.git_runner,
+            repositories=self.repositories,
         )
         self._catalog = TrackedRepoCatalog(
             manifest=self._manifest,
@@ -134,6 +130,11 @@ class TrackedRepoService:
             normalize_repo_relative_path(repo_relative_path),
         )
 
+    def changed_paths(self, *, repo_root: Path) -> tuple[str, ...]:
+        """Return normalized paths with staged or worktree changes."""
+
+        return self.repositories.changed_paths(repo_root)
+
     def commit_file(
         self,
         *,
@@ -163,6 +164,39 @@ class TrackedRepoService:
             repo_relative_paths=repo_relative_paths,
             commit_message=commit_message,
         )
+
+    def unstage_paths(
+        self, *, repo_root: Path, repo_relative_paths: Sequence[str]
+    ) -> None:
+        """Restore selected index entries without changing saved files."""
+
+        self._git.unstage_paths(repo_root, repo_relative_paths)
+
+    def history_for_path(
+        self, *, repo_root: Path, repo_relative_path: str
+    ) -> tuple[RepositoryCommit, ...]:
+        """Return newest-first commits that changed one repository path."""
+
+        return self.repositories.history_for_path(
+            repo_root,
+            normalize_repo_relative_path(repo_relative_path),
+        )
+
+    def read_file_at_revision(
+        self, *, repo_root: Path, revision: str, repo_relative_path: str
+    ) -> str:
+        """Return one historical repository file as UTF-8 text."""
+
+        return self.repositories.read_file_at_revision(
+            repo_root,
+            revision,
+            normalize_repo_relative_path(repo_relative_path),
+        )
+
+    def head_commit_id(self, *, repo_root: Path) -> str:
+        """Return the current repository commit identifier."""
+
+        return self.repositories.head_commit_id(repo_root)
 
     def list_repos(self) -> dict[str, Any]:
         """Return the tracked repo listing payload."""
@@ -275,12 +309,9 @@ class TrackedRepoService:
                 self._git.clone_checkout(tracked, checkout)
             else:
                 self._sync_policy.assert_clean_checkout(checkout)
-                self.git_runner(["fetch", "origin", tracked.branch], cwd=checkout)
+                self._git.fetch_branch(tracked, checkout)
                 self._sync_policy.assert_preserves_local_commits(tracked, checkout)
-                self.git_runner(
-                    ["reset", "--hard", f"origin/{tracked.branch}"],
-                    cwd=checkout,
-                )
+                self._git.hard_reset_to_remote(tracked, checkout)
             cube_paths = list_local_cube_candidate_paths(checkout)
             if not cube_paths:
                 self._manifest.replace(

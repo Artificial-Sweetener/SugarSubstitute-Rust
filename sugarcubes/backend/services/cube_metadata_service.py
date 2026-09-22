@@ -367,8 +367,9 @@ class CubeMetadataService:
         """Best-effort unstage paths after restoring a failed rename mutation."""
 
         try:
-            self.history.tracked_repo_service.git_runner(
-                ["reset", "HEAD", "--", *relative_paths], cwd=repo_root
+            self.history.tracked_repo_service.unstage_paths(
+                repo_root=repo_root,
+                repo_relative_paths=relative_paths,
             )
         except RuntimeError:
             _logger.warning(

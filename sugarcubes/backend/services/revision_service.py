@@ -244,14 +244,9 @@ class CubeRevisionService:
         """Return committed git revisions for one cube file."""
 
         try:
-            result = self.tracked_repo_service.git_runner(
-                [
-                    "log",
-                    "--format=%H%x1f%cI%x1f%s",
-                    "--",
-                    context.repo_relative_path,
-                ],
-                cwd=context.repo_root,
+            history = self.tracked_repo_service.history_for_path(
+                repo_root=context.repo_root,
+                repo_relative_path=context.repo_relative_path,
             )
         except RuntimeError as exc:
             message = str(exc)
@@ -264,11 +259,8 @@ class CubeRevisionService:
             raise BackendError("Failed to list cube revisions", status=500) from exc
 
         entries: list[dict[str, Any]] = []
-        for line in (result.stdout or "").splitlines():
-            parts = line.split("\x1f")
-            if len(parts) != 3:
-                continue
-            revision_ref, timestamp, subject = parts
+        for commit in history:
+            revision_ref = commit.commit_id
             version = self._read_revision_version(context, revision_ref)
             entries.append(
                 {
@@ -276,12 +268,12 @@ class CubeRevisionService:
                     "label": revision_ref[:7],
                     "current": False,
                     "committed": True,
-                    "timestamp": timestamp,
+                    "timestamp": commit.committed_at,
                     "version": version,
                     "source_type": context.source_kind,
                     "commit_sha": revision_ref,
                     "short_sha": revision_ref[:7],
-                    "subject": subject,
+                    "subject": commit.message.splitlines()[0],
                 }
             )
         return entries
@@ -350,13 +342,13 @@ class CubeRevisionService:
         """Return the historical file contents for one git revision."""
 
         try:
-            result = self.tracked_repo_service.git_runner(
-                ["show", f"{revision_ref}:{context.repo_relative_path}"],
-                cwd=context.repo_root,
+            return self.tracked_repo_service.read_file_at_revision(
+                repo_root=context.repo_root,
+                revision=revision_ref,
+                repo_relative_path=context.repo_relative_path,
             )
         except RuntimeError as exc:
             raise BackendError("Failed to load cube revision", status=500) from exc
-        return result.stdout or ""
 
 
 def _log_cube_library_diagnostic(event: str, **fields: object) -> None:

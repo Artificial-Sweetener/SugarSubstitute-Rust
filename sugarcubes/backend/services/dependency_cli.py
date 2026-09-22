@@ -107,6 +107,8 @@ class ComfyCliAdapter:
             "node",
             "install",
             "--exit-on-fail",
+            "--mode",
+            "remote",
             node_spec,
         )
         result = self._runner(command, workspace_path, _CLI_TIMEOUT_SECONDS)

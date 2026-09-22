@@ -93,7 +93,7 @@ class CubeDependencyService:
             source_resolver=source_resolver or RegistrySourceResolver(),
             git_installer=RegistrySourceGitInstaller(
                 custom_nodes_root=self._custom_nodes_root,
-                git_runner=tracked_repo_service.git_runner,
+                repositories=tracked_repo_service.repositories,
                 requirements_installer=dependency_requirements,
             ),
             source_installer=TrustedSourceArchiveInstaller(
@@ -106,7 +106,7 @@ class CubeDependencyService:
         )
         self._version_repair = DependencyVersionRepairExecutor(
             acquirer=dependency_acquirer,
-            git_runner=tracked_repo_service.git_runner,
+            repositories=tracked_repo_service.repositories,
             requirements_installer=dependency_requirements,
         )
         self._maintenance_lock = Lock()
@@ -126,6 +126,7 @@ class CubeDependencyService:
                 details={"reason": "maintenance_in_progress"},
             )
         try:
+            self._tracked_repo_service.ensure_local_repo()
             sync_result = self._sync_requested_packs(payload.get("sync"))
             diagnostics = diagnostics_from_sync_errors(sync_result.errors)
             policy_value = payload.get("dependencyPolicy")

@@ -1,0 +1,2 @@
+aiohttp
+pygit2==1.20.1

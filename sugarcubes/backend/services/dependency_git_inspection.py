@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from .dependency_version_types import GitRunner
+from .repository_service import RepositoryOperationError, RepositoryService
 
 _logger = logging.getLogger(__name__)
 
@@ -20,10 +20,10 @@ _logger = logging.getLogger(__name__)
 class DependencyGitAncestryInspector:
     """Inspect and cache Git commit ancestry for installed dependencies."""
 
-    def __init__(self, git_runner: GitRunner | None) -> None:
-        """Initialize the inspector with an optional host Git runner."""
+    def __init__(self, repositories: RepositoryService) -> None:
+        """Initialize the inspector with SugarCubes repository access."""
 
-        self._git_runner = git_runner
+        self._repositories = repositories
         self._cache: dict[tuple[str, str, str], bool] = {}
 
     @property
@@ -37,19 +37,18 @@ class DependencyGitAncestryInspector:
 
         if ancestor == descendant:
             return True
-        if self._git_runner is None:
-            return False
         repo_path = Path(source_path)
         key = (str(repo_path.resolve()), ancestor, descendant)
         cached = self._cache.get(key)
         if cached is not None:
             return cached
         try:
-            result = self._git_runner(
-                ["merge-base", "--is-ancestor", ancestor, descendant],
-                cwd=repo_path,
+            contains = self._repositories.is_ancestor(
+                repo_path,
+                ancestor,
+                descendant,
             )
-        except (OSError, RuntimeError, ValueError) as exc:
+        except (OSError, RepositoryOperationError, ValueError) as exc:
             _logger.debug(
                 "SugarCubes: Git ancestry check failed",
                 extra={
@@ -60,6 +59,5 @@ class DependencyGitAncestryInspector:
                 },
             )
             return False
-        contains = int(getattr(result, "returncode", 0) or 0) == 0
         self._cache[key] = contains
         return contains

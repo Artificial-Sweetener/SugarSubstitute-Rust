@@ -12,15 +12,16 @@ from __future__ import annotations
 import json
 import logging
 import tomllib
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping
 from pathlib import Path
 from time import perf_counter
 from typing import Any
 
 from ...instrumentation import log_diagnostic
 from .dependency_requirements import normalize_requirement_key
-from .dependency_version_types import GitRunner, InstalledDependency
+from .dependency_version_types import InstalledDependency
 from .dependency_versions import classify_version
+from .repository_service import RepositoryOperationError, RepositoryService
 
 _logger = logging.getLogger(__name__)
 _TRACE_MARKER = "SugarCubes cube library diagnostic"
@@ -30,7 +31,7 @@ _SLOW_INVENTORY_ENTRY_MS = 250.0
 def installed_dependency_inventory(
     custom_nodes_root: Path,
     *,
-    git_runner: GitRunner | None,
+    repositories: RepositoryService,
     detailed_keys: Collection[str] | None = None,
 ) -> dict[str, InstalledDependency]:
     """Inspect installed custom-node folders without mutating them."""
@@ -66,7 +67,7 @@ def installed_dependency_inventory(
         )
         dependency = _installed_dependency(
             entry,
-            git_runner=git_runner,
+            repositories=repositories,
             detailed_git=detailed_git,
             phase_timings=phase_timings,
         )
@@ -113,7 +114,7 @@ def installed_dependency_inventory(
 def _installed_dependency(
     path: Path,
     *,
-    git_runner: GitRunner | None,
+    repositories: RepositoryService,
     detailed_git: bool,
     phase_timings: dict[str, float],
 ) -> InstalledDependency:
@@ -130,7 +131,7 @@ def _installed_dependency(
     phase_started_at = perf_counter()
     git_exists = git_dir.exists()
     _add_phase_time(phase_timings, "probe_git_dir", phase_started_at)
-    if git_exists and git_runner is not None:
+    if git_exists:
         if not detailed_git:
             return _cheap_git_dependency(
                 path,
@@ -138,19 +139,13 @@ def _installed_dependency(
                 phase_timings=phase_timings,
             )
         phase_started_at = perf_counter()
-        head = _read_git_head(git_dir) or _git_stdout(
-            ["rev-parse", "HEAD"], cwd=path, git_runner=git_runner
-        )
+        head = _repository_value(repositories.head_commit_id, path)
         _add_phase_time(phase_timings, "read_git_head", phase_started_at)
         phase_started_at = perf_counter()
-        dirty = bool(
-            _git_stdout(["status", "--porcelain"], cwd=path, git_runner=git_runner)
-        )
+        dirty = _repository_dirty(repositories, path)
         _add_phase_time(phase_timings, "read_git_status", phase_started_at)
         phase_started_at = perf_counter()
-        repository_url = _read_git_remote_origin_url(git_dir) or _git_stdout(
-            ["config", "--get", "remote.origin.url"], cwd=path, git_runner=git_runner
-        )
+        repository_url = _repository_value(repositories.remote_url, path)
         _add_phase_time(phase_timings, "read_git_remote", phase_started_at)
         return InstalledDependency(
             folder_name=path.name,
@@ -227,22 +222,6 @@ def _read_git_head(git_dir: Path) -> str:
     return head
 
 
-def _read_git_remote_origin_url(git_dir: Path) -> str:
-    """Read the origin URL directly when the repository uses a plain config."""
-
-    resolved_git_dir = _resolve_git_dir(git_dir)
-    if resolved_git_dir is None:
-        return ""
-    try:
-        import configparser
-
-        parser = configparser.ConfigParser()
-        parser.read(resolved_git_dir / "config", encoding="utf-8")
-        return _normalize_text(parser.get('remote "origin"', "url", fallback=""))
-    except (OSError, configparser.Error):
-        return ""
-
-
 def _resolve_git_dir(git_path: Path) -> Path | None:
     """Return the concrete Git metadata directory for repos and worktrees."""
 
@@ -304,14 +283,29 @@ def _read_project_identity(path: Path) -> tuple[str, str]:
     return version, repository
 
 
-def _git_stdout(args: Sequence[str], *, cwd: Path, git_runner: GitRunner) -> str:
-    """Run a Git inspection command and return stripped stdout."""
+def _repository_value(
+    operation: Callable[[Path], str],
+    repository_path: Path,
+) -> str:
+    """Return one repository string while treating unreadable evidence as absent."""
 
     try:
-        result = git_runner(list(args), cwd=cwd)
-    except (OSError, RuntimeError, ValueError):
+        value = operation(repository_path)
+    except (OSError, RepositoryOperationError, ValueError):
         return ""
-    return _normalize_text(getattr(result, "stdout", ""))
+    return _normalize_text(value)
+
+
+def _repository_dirty(
+    repositories: RepositoryService,
+    repository_path: Path,
+) -> bool:
+    """Return dirty state while treating unreadable evidence as clean."""
+
+    try:
+        return repositories.is_dirty(repository_path)
+    except (OSError, RepositoryOperationError, ValueError):
+        return False
 
 
 def _normalize_text(value: object) -> str:

@@ -36,6 +36,7 @@ from .scanner import (
     source_paths,
 )
 from .snapshot import SnapshotError, repository_snapshot
+from .system_git_policy import scan_system_git_dependencies
 
 POLICY_PATH = "ARCHITECTURE_POLICY.toml"
 DEBT_PATH = "ARCHITECTURE_DEBT.toml"
@@ -75,6 +76,7 @@ def _check_snapshot(root: Path, *, today: date) -> ArchitectureResult:
     paths = source_paths(root, policy)
     structure, metrics = scan_structure(root, policy, paths)
     dependencies = scan_dependencies(root, policy, paths)
+    system_git = scan_system_git_dependencies(root)
     governance = _validate_governance(
         root,
         paths=frozenset(paths),
@@ -84,7 +86,7 @@ def _check_snapshot(root: Path, *, today: date) -> ArchitectureResult:
         today=today,
     )
     waived, waiver_usage = _apply_waivers(
-        diagnostics=structure + dependencies,
+        diagnostics=structure + dependencies + system_git,
         waivers=waivers,
     )
     unused = tuple(
