@@ -1292,7 +1292,7 @@ def test_backend_readiness_implies_prompt_control_for_fresh_simplesyrup_install(
     ]
     plans = {item["nodeId"]: item for item in readiness["dependencyVersionPlan"]}
     assert plans["SimpleSyrup"]["requiredVersionPolicy"] == "minimum"
-    assert plans["comfyui-prompt-control"]["requiredVersion"] == ("3.0.0-beta.10")
+    assert plans["comfyui-prompt-control"]["requiredVersion"] == ("3.0.0-beta.3")
     assert plans["comfyui-prompt-control"]["requiredVersionPolicy"] == "exact"
     assert (
         plans["comfyui-prompt-control"]["requirements"][0]["impliedByNodeId"]

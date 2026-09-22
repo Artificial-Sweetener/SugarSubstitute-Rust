@@ -525,15 +525,15 @@ def test_exact_prerelease_requirement_rejects_newer_or_older_versions(
     tracking_path = installed / ".tracking"
     requirement = _requirement(
         "comfyui-prompt-control",
-        "3.0.0-beta.10",
+        "3.0.0-beta.3",
         version_policy="exact",
     )
 
     observed_statuses: list[str] = []
     for installed_version in (
-        "3.0.0-beta.9",
-        "3.0.0-beta.10",
-        "3.0.0-beta.11",
+        "3.0.0-beta.2",
+        "3.0.0-beta.3",
+        "3.0.0-beta.4",
         "3.0.0",
     ):
         tracking_path.write_text(

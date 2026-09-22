@@ -87,7 +87,7 @@ def _write_satisfied_prompt_control(custom_nodes_root: Path) -> None:
     (installed / ".tracking").write_text(
         json.dumps(
             {
-                "version": "3.0.0-beta.10",
+                "version": "3.0.0-beta.3",
                 "repository": "https://github.com/asagi4/comfyui-prompt-control",
             }
         ),
