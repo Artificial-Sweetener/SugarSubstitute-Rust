@@ -29,7 +29,7 @@ def test_simplesyrup_release_implies_exact_prompt_control_release() -> None:
     assert len(expanded) == 2
     implied = expanded[1]
     assert implied.node_id == "comfyui-prompt-control"
-    assert implied.required_version == "3.0.0-beta.10"
+    assert implied.required_version == "3.0.0-beta.3"
     assert implied.version_policy == "exact"
     assert implied.requirement_origin == "implied"
     assert implied.implied_by_node_id == "SimpleSyrup"
@@ -50,7 +50,7 @@ def test_existing_prompt_control_requirement_is_not_duplicated() -> None:
 
     direct = _requirement(
         "comfyui-prompt-control",
-        "3.0.0-beta.10",
+        "3.0.0-beta.3",
         version_policy="exact",
     )
     requirements = (_requirement("SimpleSyrup", "1.9.2"), direct)

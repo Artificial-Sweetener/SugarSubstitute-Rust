@@ -33,7 +33,7 @@ _IMPLICATIONS = (
         source_node_id="SimpleSyrup",
         source_minimum_version="1.3.0",
         implied_node_id="comfyui-prompt-control",
-        implied_version="3.0.0-beta.10",
+        implied_version="3.0.0-beta.3",
     ),
 )
 
