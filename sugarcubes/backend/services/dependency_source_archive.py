@@ -215,18 +215,21 @@ def download_archive(archive_url: str, target_path: Path) -> None:
 
 
 def extract_single_root_archive(*, archive_path: Path, target_path: Path) -> Path:
-    """Extract a bounded zip with one root and no links or escaping paths."""
+    """Extract a bounded zip, materializing safe in-archive file aliases."""
 
     target_path.mkdir(parents=True, exist_ok=True)
     resolved_target = target_path.resolve()
     extracted_bytes = 0
     roots: set[str] = set()
+    regular_files: set[Path] = set()
+    aliases: list[tuple[Path, str]] = []
+    file_destinations: set[Path] = set()
     with zipfile.ZipFile(archive_path) as archive:
         for member in archive.infolist():
             member_path = Path(member.filename)
             if not member_path.parts:
                 continue
-            if member_path.is_absolute() or _zip_member_is_symlink(member):
+            if member_path.is_absolute():
                 raise RuntimeError("Registry source archive contains an unsafe path.")
             destination = (target_path / member_path).resolve()
             if not _is_relative_to(destination, resolved_target):
@@ -238,9 +241,34 @@ def extract_single_root_archive(*, archive_path: Path, target_path: Path) -> Pat
             if member.is_dir():
                 destination.mkdir(parents=True, exist_ok=True)
                 continue
+            if destination in file_destinations:
+                raise RuntimeError("Registry source archive contains an unsafe path.")
+            file_destinations.add(destination)
+            if _zip_member_is_symlink(member):
+                try:
+                    alias_target = archive.read(member).decode("utf-8")
+                except UnicodeDecodeError as exc:
+                    raise RuntimeError(
+                        "Registry source archive contains an unsafe path."
+                    ) from exc
+                aliases.append((destination, alias_target))
+                continue
             destination.parent.mkdir(parents=True, exist_ok=True)
             with archive.open(member) as source, destination.open("wb") as output:
                 shutil.copyfileobj(source, output)
+            regular_files.add(destination)
+    for destination, alias_target in aliases:
+        alias_path = Path(alias_target)
+        source_path = (destination.parent / alias_path).resolve()
+        if (
+            alias_path.is_absolute()
+            or not _is_relative_to(source_path, resolved_target)
+            or source_path not in regular_files
+            or not source_path.is_file()
+        ):
+            raise RuntimeError("Registry source archive contains an unsafe path.")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source_path, destination)
     if len(roots) != 1:
         raise RuntimeError("Registry source archive must contain one root folder.")
     return target_path / next(iter(roots))

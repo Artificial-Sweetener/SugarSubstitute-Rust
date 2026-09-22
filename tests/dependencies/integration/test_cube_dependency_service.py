@@ -741,6 +741,7 @@ def test_failed_requirements_restore_the_previous_git_revision(
     installed_commit = "f561f164543f927e0452e14658a0509e8e4866d6"
     updated_commit = "0d97d7c2424f8a2d3a859fa80bfc64e935116cf1"
     custom_nodes_root = tmp_path / "custom_nodes"
+    _write_satisfied_prompt_control(custom_nodes_root)
     installed_path = custom_nodes_root / "SimpleSyrup"
     git_dir = installed_path / ".git"
     git_dir.mkdir(parents=True)
