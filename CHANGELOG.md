@@ -1,3 +1,10 @@
+## [0.14.8](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.14.7...v0.14.8) (2026-09-22)
+
+
+### Bug Fixes
+
+* **dependencies:** install safe aliased source archives ([f3fcb3e](https://github.com/Artificial-Sweetener/SugarCubes/commit/f3fcb3e4a3586a192e830e592e964fe73d7fd5b1))
+
 ## [0.14.7](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.14.6...v0.14.7) (2026-09-21)
 
 
