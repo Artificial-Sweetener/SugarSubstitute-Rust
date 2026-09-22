@@ -35,6 +35,7 @@ from sugarcubes.backend.services.dependency_version_types import (
     VersionRequirementPolicy,
 )
 from sugarcubes.backend.services.dependency_versions import classify_version
+from tests.support.command_repository import CommandRepository
 
 
 def test_extract_versioned_requirements_preserves_nodes_and_deduplicates_fallbacks() -> (
@@ -121,7 +122,7 @@ def test_readiness_projects_semver_statuses_from_tracking_evidence(
             _requirement("missing-pack", "3.0.0"),
         ),
         custom_nodes_root=custom_nodes_root,
-        git_runner=None,
+        repositories=CommandRepository(None),
     )
 
     plans = {item["nodeId"]: item for item in readiness["dependencyVersionPlan"]}
@@ -157,7 +158,7 @@ def test_readiness_reads_real_comfy_tracking_and_project_metadata(
     readiness = dependency_version_readiness(
         requirements=(_requirement("SimpleSyrup", "1.7.1"),),
         custom_nodes_root=custom_nodes_root,
-        git_runner=None,
+        repositories=CommandRepository(None),
     )
 
     plan = readiness["dependencyVersionPlan"][0]
@@ -197,7 +198,7 @@ def test_readiness_uses_git_ancestry_and_blocks_dirty_checkouts(tmp_path: Path) 
             _requirement("dirty-pack", "ccccccc"),
         ),
         custom_nodes_root=custom_nodes_root,
-        git_runner=git_runner,
+        repositories=CommandRepository(git_runner),
     )
 
     plans = {item["nodeId"]: item for item in readiness["dependencyVersionPlan"]}
@@ -241,12 +242,12 @@ def test_sha_only_requirements_select_newest_required_commit_in_any_order(
     forward = dependency_version_readiness(
         requirements=requirements,
         custom_nodes_root=custom_nodes_root,
-        git_runner=git_runner,
+        repositories=CommandRepository(git_runner),
     )["dependencyVersionPlan"][0]
     reverse = dependency_version_readiness(
         requirements=tuple(reversed(requirements)),
         custom_nodes_root=custom_nodes_root,
-        git_runner=git_runner,
+        repositories=CommandRepository(git_runner),
     )["dependencyVersionPlan"][0]
 
     for plan in (forward, reverse):
@@ -284,12 +285,12 @@ def test_semver_requirements_override_historical_requirement_kinds_in_any_order(
     forward = dependency_version_readiness(
         requirements=requirements,
         custom_nodes_root=custom_nodes_root,
-        git_runner=None,
+        repositories=CommandRepository(None),
     )["dependencyVersionPlan"][0]
     reverse = dependency_version_readiness(
         requirements=tuple(reversed(requirements)),
         custom_nodes_root=custom_nodes_root,
-        git_runner=None,
+        repositories=CommandRepository(None),
     )["dependencyVersionPlan"][0]
 
     for plan in (forward, reverse):
@@ -325,7 +326,7 @@ def test_semver_repair_preserves_dirty_git_checkout(tmp_path: Path) -> None:
     plan = dependency_version_readiness(
         requirements=(_requirement("SimpleSyrup", "1.9.2"),),
         custom_nodes_root=custom_nodes_root,
-        git_runner=git_runner,
+        repositories=CommandRepository(git_runner),
     )["dependencyVersionPlan"][0]
 
     assert plan["requiredVersion"] == "1.9.2"
@@ -373,7 +374,7 @@ def test_readiness_fingerprint_changes_only_with_required_dependency_state(
     outdated = dependency_version_readiness(
         requirements=requirements,
         custom_nodes_root=custom_nodes_root,
-        git_runner=None,
+        repositories=CommandRepository(None),
     )
     (unrelated / ".tracking").write_text(
         json.dumps({"version": "99.0.0"}),
@@ -382,7 +383,7 @@ def test_readiness_fingerprint_changes_only_with_required_dependency_state(
     unrelated_changed = dependency_version_readiness(
         requirements=requirements,
         custom_nodes_root=custom_nodes_root,
-        git_runner=None,
+        repositories=CommandRepository(None),
     )
     tracking_path.write_text(
         json.dumps({"version": "1.9.2"}),
@@ -391,7 +392,7 @@ def test_readiness_fingerprint_changes_only_with_required_dependency_state(
     satisfied = dependency_version_readiness(
         requirements=requirements,
         custom_nodes_root=custom_nodes_root,
-        git_runner=None,
+        repositories=CommandRepository(None),
     )
 
     outdated_fingerprint = outdated["dependencyStateFingerprint"]
@@ -500,7 +501,7 @@ def test_missing_dependency_with_conflicting_exact_versions_is_not_repairable(
             _requirement("conflicting-pack", "3.0.0-beta.10", version_policy="exact"),
         ),
         custom_nodes_root=tmp_path / "custom_nodes",
-        git_runner=None,
+        repositories=CommandRepository(None),
     )["dependencyVersionPlan"][0]
 
     assert plan["status"] == "version_conflict"
@@ -543,7 +544,7 @@ def test_exact_prerelease_requirement_rejects_newer_or_older_versions(
         plan = dependency_version_readiness(
             requirements=(requirement,),
             custom_nodes_root=custom_nodes_root,
-            git_runner=None,
+            repositories=CommandRepository(None),
         )["dependencyVersionPlan"][0]
         observed_statuses.append(plan["status"])
         assert plan["requiredVersionPolicy"] == "exact"

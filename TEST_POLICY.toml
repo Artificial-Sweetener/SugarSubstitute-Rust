@@ -16,6 +16,7 @@ sources = [
   "package.json",
   "package-lock.json",
   "pyproject.toml",
+  "requirements.txt",
   "jest.config.json",
   "tsconfig*.json",
   "ARCHITECTURE_*.toml",
@@ -99,6 +100,17 @@ sources = [
   "sugarcubes/backend/*.py",
   "sugarcubes/backend/validation/**",
   "sugarcubes/backend/services/__init__.py",
+]
+proofs = ["integration", "unit"]
+
+[[area]]
+name = "version_control"
+sources = [
+  "sugarcubes/backend/services/pygit2_repository.py",
+  "sugarcubes/backend/services/pygit2_tree.py",
+  "sugarcubes/backend/services/repository_network.py",
+  "sugarcubes/backend/services/repository_network_worker.py",
+  "sugarcubes/backend/services/repository_service.py",
 ]
 proofs = ["integration", "unit"]
 

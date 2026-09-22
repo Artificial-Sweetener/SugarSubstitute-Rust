@@ -88,6 +88,7 @@ def test_cube_execution_program_has_independently_runnable_areas(
         "execution",
         "optimizer",
         "library",
+        "version_control",
         "comfy_contract",
         "browser",
     } <= {area.name for area in policy.areas}
@@ -188,6 +189,14 @@ def test_area_support_selects_every_area_proof(policy: _TestPolicy) -> None:
     groups = _group_names(policy, "tests/backend_api/support/backend_fixtures.py")
 
     assert groups == frozenset({"backend_api/integration", "backend_api/unit"})
+
+
+def test_repository_support_selects_every_proof(policy: _TestPolicy) -> None:
+    """Treat cross-area test adapters as dependencies of the complete suite."""
+
+    groups = _group_names(policy, "tests/support/command_repository.py")
+
+    assert groups == frozenset(group.name for group in policy.groups)
 
 
 def test_area_package_selects_every_area_proof(policy: _TestPolicy) -> None:

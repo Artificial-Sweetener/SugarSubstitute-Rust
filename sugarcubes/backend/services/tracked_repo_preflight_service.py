@@ -29,6 +29,7 @@ from urllib.request import Request, urlopen
 
 from ...cube_model.cube_identity import CubeIdentityError, validate_github_repo_ref
 from ..responses import BackendError
+from .repository_service import RepositoryOperationError, RepositoryService
 
 _logger = logging.getLogger(__name__)
 
@@ -38,21 +39,6 @@ _GITHUB_TREE_URL = (
 _HTTP_TIMEOUT_SECONDS = 10
 _RETURNED_PATH_LIMIT = 20
 _IGNORED_TOP_LEVEL_DIRS = frozenset({"old", "backup", "_old", "_history"})
-
-
-class GitResult(Protocol):
-    """Describe git command output consumed by repo preflight."""
-
-    @property
-    def stdout(self) -> str:
-        """Return standard output emitted by the command."""
-
-
-class GitRunner(Protocol):
-    """Run one git command in an explicit working directory."""
-
-    def __call__(self, args: list[str], *, cwd: Path) -> GitResult:
-        """Execute one git argument list."""
 
 
 class TrackedRepoPreflight(Protocol):
@@ -113,7 +99,7 @@ class TrackedRepoPreflightService:
         self,
         *,
         workspace_root: Path,
-        git_runner: GitRunner,
+        repositories: RepositoryService,
         http_json_loader: Optional[
             Callable[[str, Mapping[str, str], int], HttpJsonResponse]
         ] = None,
@@ -122,7 +108,7 @@ class TrackedRepoPreflightService:
         """Initialize the GitHub preflight service."""
 
         self.workspace_root = workspace_root.resolve()
-        self.git_runner = git_runner
+        self._repositories = repositories
         self.http_json_loader = http_json_loader or load_http_json
         self.timeout_seconds = timeout_seconds
 
@@ -296,27 +282,16 @@ class TrackedRepoPreflightService:
                     "Temporary preflight path is invalid", status=500
                 ) from exc
             remote_url = f"https://github.com/{owner}/{repo}.git"
-            self.git_runner(
-                [
-                    "clone",
-                    "--depth=1",
-                    "--filter=blob:none",
-                    "--no-checkout",
-                    "--branch",
-                    branch,
-                    remote_url,
-                    str(checkout_path),
-                ],
-                cwd=temp_root_resolved,
-            )
-            result = self.git_runner(
-                ["ls-tree", "-r", "--name-only", "HEAD"],
-                cwd=checkout_path,
+            self._repositories.clone(
+                remote_url,
+                checkout_path,
+                branch=branch,
+                depth=1,
             )
             paths = [
-                line.strip()
-                for line in (result.stdout or "").splitlines()
-                if is_cube_candidate_path(line.strip())
+                path
+                for path in self._repositories.tree_paths(checkout_path)
+                if is_cube_candidate_path(path)
             ]
             return build_preflight_result(
                 owner=owner,
@@ -328,7 +303,7 @@ class TrackedRepoPreflightService:
             )
         except BackendError:
             raise
-        except (OSError, RuntimeError, ValueError) as exc:
+        except (OSError, RepositoryOperationError, ValueError) as exc:
             _logger.warning(
                 "SugarCubes: temporary repo preflight failed for %s/%s branch %s: %s",
                 owner,

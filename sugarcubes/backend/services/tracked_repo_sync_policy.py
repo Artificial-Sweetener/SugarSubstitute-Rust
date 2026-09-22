@@ -15,7 +15,6 @@ from pathlib import Path
 from ..responses import BackendError
 from .tracked_repo_git import TrackedRepoGit
 from .tracked_repo_models import TrackedRepo
-from .tracked_repo_preflight_service import GitRunner
 
 
 class TrackedRepoSyncPolicy:
@@ -24,21 +23,18 @@ class TrackedRepoSyncPolicy:
     def __init__(
         self,
         *,
-        git_runner: GitRunner,
         git: TrackedRepoGit,
         protected_owner_provider: Callable[[], str] | None,
     ) -> None:
         """Initialize sync safeguards with explicit Git and owner boundaries."""
 
-        self._git_runner = git_runner
         self._git = git
         self._protected_owner_provider = protected_owner_provider
 
     def assert_clean_checkout(self, checkout: Path) -> None:
         """Reject destructive sync when a tracked checkout is dirty."""
 
-        result = self._git_runner(["status", "--porcelain"], cwd=checkout)
-        if result.stdout.strip():
+        if self._git.is_dirty(checkout):
             raise BackendError(
                 "Tracked repo has local changes; commit or discard them before syncing",
                 status=409,
@@ -52,25 +48,21 @@ class TrackedRepoSyncPolicy:
 
         if not self._must_preserve_local_commits(tracked):
             return
-        remote_ref = f"origin/{tracked.branch}"
-        try:
-            self._git_runner(
-                ["merge-base", "--is-ancestor", "HEAD", remote_ref],
-                cwd=checkout,
-            )
+        if self._git.local_head_is_ancestor_of_remote(tracked, checkout):
             return
-        except RuntimeError:
-            raise BackendError(
-                "Cannot sync protected tracked repo because local commits are ahead of the remote; push or merge them before syncing",
-                status=409,
-                details={
-                    "repo": tracked.repo_ref,
-                    "checkout": str(checkout),
-                    "branch": tracked.branch,
-                    "local_head_sha": self._git.local_head_sha(checkout),
-                    "remote_head_sha": self._git.ref_sha(checkout, remote_ref),
-                },
-            )
+        raise BackendError(
+            "Cannot sync protected tracked repo because local commits are ahead of the remote; push or merge them before syncing",
+            status=409,
+            details={
+                "repo": tracked.repo_ref,
+                "checkout": str(checkout),
+                "branch": tracked.branch,
+                "local_head_sha": self._git.local_head_sha(checkout),
+                "remote_head_sha": self._git.ref_sha(
+                    checkout, f"origin/{tracked.branch}"
+                ),
+            },
+        )
 
     def _must_preserve_local_commits(self, tracked: TrackedRepo) -> bool:
         """Return whether sync must preserve local commits for this repo."""

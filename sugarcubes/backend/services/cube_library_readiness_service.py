@@ -99,7 +99,7 @@ class CubeLibraryReadinessService:
         version_readiness = dependency_version_readiness(
             requirements=requirements.version_requirements,
             custom_nodes_root=custom_nodes_root,
-            git_runner=self._library.tracked_repo_service.git_runner,
+            repositories=self._library.tracked_repo_service.repositories,
         )
         record_phase("dependency_version_readiness")
         version_plan_value = version_readiness.get("dependencyVersionPlan")

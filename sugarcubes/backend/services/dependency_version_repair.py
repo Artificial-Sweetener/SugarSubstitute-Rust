@@ -16,8 +16,8 @@ from typing import Any
 from .cube_metadata import normalize_metadata_string
 from .dependency_acquisition import DependencyAcquirer
 from .dependency_python_requirements import DependencyPythonRequirementsInstaller
-from .dependency_version_types import GitRunner
 from .dependency_versions import classify_version
+from .repository_service import RepositoryOperationError, RepositoryService
 
 
 class DependencyVersionRepairExecutor:
@@ -27,13 +27,13 @@ class DependencyVersionRepairExecutor:
         self,
         *,
         acquirer: DependencyAcquirer,
-        git_runner: GitRunner,
+        repositories: RepositoryService,
         requirements_installer: DependencyPythonRequirementsInstaller,
     ) -> None:
         """Initialize version repair with explicit execution adapters."""
 
         self._acquirer = acquirer
-        self._git_runner = git_runner
+        self._repositories = repositories
         self._requirements_installer = requirements_installer
 
     def repair(self, item: Mapping[str, Any]) -> dict[str, Any]:
@@ -119,35 +119,23 @@ class DependencyVersionRepairExecutor:
                 reason="required_version_missing",
             )
         resolved_ref = checkout_ref or required_version
-        commands = (
-            ["fetch", "--all", "--tags"],
-            ["cat-file", "-e", f"{resolved_ref}^{{commit}}"],
-            ["checkout", resolved_ref],
-        )
-        for command in commands:
-            try:
-                result = self._git_runner(command, cwd=source_path)
-            except (OSError, RuntimeError, ValueError) as exc:
-                return {
-                    "nodeId": node_id,
-                    "operation": "git_checkout",
-                    "command": command,
-                    "returnCode": 1,
-                    "reason": str(exc),
-                    "stdout": "",
-                    "stderr": "",
-                }
-            return_code = int(getattr(result, "returncode", 0) or 0)
-            if return_code != 0:
-                return {
-                    "nodeId": node_id,
-                    "operation": "git_checkout",
-                    "command": command,
-                    "returnCode": return_code,
-                    "reason": "git_command_failed",
-                    "stdout": normalize_metadata_string(getattr(result, "stdout", "")),
-                    "stderr": normalize_metadata_string(getattr(result, "stderr", "")),
-                }
+        try:
+            self._repositories.fetch(source_path)
+            if not self._repositories.revision_commit_id(source_path, resolved_ref):
+                raise RepositoryOperationError(
+                    f"Required revision is unavailable: {resolved_ref}"
+                )
+            self._repositories.checkout_revision(source_path, resolved_ref)
+        except (OSError, RepositoryOperationError, ValueError) as exc:
+            return {
+                "nodeId": node_id,
+                "operation": "git_checkout",
+                "command": ["checkout", resolved_ref],
+                "returnCode": 1,
+                "reason": str(exc),
+                "stdout": "",
+                "stderr": "",
+            }
         requirements_failure = self._install_requirements(
             item,
             source_path=source_path,
@@ -162,7 +150,7 @@ class DependencyVersionRepairExecutor:
         return {
             "nodeId": node_id,
             "operation": "git_checkout",
-            "command": list(commands[-1]),
+            "command": ["checkout", resolved_ref],
             "returnCode": 0,
             "reason": "",
             "stdout": "",
@@ -209,12 +197,9 @@ class DependencyVersionRepairExecutor:
         rollback_return_code = 1
         if previous_head:
             try:
-                rollback = self._git_runner(
-                    ["checkout", previous_head],
-                    cwd=source_path,
-                )
-                rollback_return_code = int(getattr(rollback, "returncode", 0) or 0)
-            except (OSError, RuntimeError, ValueError):
+                self._repositories.checkout_revision(source_path, previous_head)
+                rollback_return_code = 0
+            except (OSError, RepositoryOperationError, ValueError):
                 rollback_return_code = 1
         return {
             "nodeId": normalize_metadata_string(item.get("nodeId")),

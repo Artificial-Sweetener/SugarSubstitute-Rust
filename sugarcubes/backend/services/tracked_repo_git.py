@@ -5,29 +5,29 @@
 #    it under the terms of the GNU Affero General Public License as published by
 #    the Free Software Foundation, either version 3 of the License, or
 #    (at your option) any later version.
-"""Adapt Git commands used by tracked-repository workflows."""
+"""Adapt semantic repository operations for tracked-repository workflows."""
 
 from __future__ import annotations
 
-import subprocess
 from collections.abc import Sequence
 from pathlib import Path
 
 from ..responses import BackendError
+from .repository_service import (
+    RepositoryOperationError,
+    RepositoryReferenceNotFoundError,
+    RepositoryService,
+)
 from .tracked_repo_models import CubeCommitResult, TrackedRepo
-from .tracked_repo_preflight_service import GitRunner
-
-_GIT_TIMEOUT_SECONDS = 30
 
 
 class TrackedRepoGit:
-    """Execute tracked-repository Git inspection and mutation commands."""
+    """Apply tracked-repository policy through the repository boundary."""
 
-    def __init__(self, *, runner: GitRunner, workspace_root: Path) -> None:
-        """Initialize Git execution with an explicit runner and workspace."""
+    def __init__(self, *, repositories: RepositoryService) -> None:
+        """Initialize repository access through one semantic boundary."""
 
-        self.runner = runner
-        self._workspace_root = workspace_root
+        self._repositories = repositories
 
     def ensure_repo(self, repo_root: Path, *, branch: str) -> Path:
         """Ensure a local repository exists and is Git-initialized."""
@@ -35,26 +35,23 @@ class TrackedRepoGit:
         if (repo_root / ".git").exists():
             return repo_root
         repo_root.mkdir(parents=True, exist_ok=True)
-        self.runner(["init", "-b", branch], cwd=repo_root)
+        self._repositories.initialize(repo_root, branch=branch)
         return repo_root
 
     def list_staged_paths(self, repo_root: Path) -> list[str]:
         """Return staged paths for one managed repository."""
 
-        result = self.runner(["diff", "--cached", "--name-only"], cwd=repo_root)
-        return [
-            line.strip() for line in (result.stdout or "").splitlines() if line.strip()
-        ]
+        return list(self._repositories.staged_paths(repo_root))
 
     def has_file_changes(self, repo_root: Path, repo_relative_path: str) -> bool:
         """Return whether one repository-relative path has visible changes."""
 
         try:
-            result = self.runner(
-                ["status", "--porcelain", "--", repo_relative_path],
-                cwd=repo_root,
+            return self._repositories.has_path_changes(
+                repo_root,
+                repo_relative_path,
             )
-        except RuntimeError as exc:
+        except RepositoryOperationError as exc:
             raise BackendError(
                 "Failed to inspect saved cube git status",
                 status=500,
@@ -64,7 +61,6 @@ class TrackedRepoGit:
                     "reason": str(exc),
                 },
             ) from exc
-        return bool((result.stdout or "").strip())
 
     def commit_paths(
         self,
@@ -87,7 +83,7 @@ class TrackedRepoGit:
         allowed_paths = set(normalized_paths)
         try:
             self._require_only_allowed_staged(repo_root, allowed_paths)
-            self.runner(["add", "--", *normalized_paths], cwd=repo_root)
+            self._repositories.stage_paths(repo_root, normalized_paths)
             staged_after = self._require_only_allowed_staged(repo_root, allowed_paths)
             if not set(staged_after).intersection(allowed_paths):
                 raise BackendError(
@@ -98,22 +94,15 @@ class TrackedRepoGit:
                         "repo_relative_paths": list(normalized_paths),
                     },
                 )
-            self.runner(
-                [
-                    "-c",
-                    "user.name=SugarCubes",
-                    "-c",
-                    "user.email=sugarcubes@example.invalid",
-                    "commit",
-                    "-m",
-                    commit_message,
-                ],
-                cwd=repo_root,
+            commit_sha = self._repositories.commit_staged(
+                repo_root,
+                message=commit_message,
+                author_name="SugarCubes",
+                author_email="sugarcubes@example.invalid",
             )
-            head = self.runner(["rev-parse", "HEAD"], cwd=repo_root)
         except BackendError:
             raise
-        except RuntimeError as exc:
+        except RepositoryOperationError as exc:
             raise BackendError(
                 "Failed to commit saved cube revision",
                 status=500,
@@ -123,7 +112,6 @@ class TrackedRepoGit:
                     "reason": str(exc),
                 },
             ) from exc
-        commit_sha = (head.stdout or "").strip()
         return CubeCommitResult(
             commit_sha=commit_sha,
             commit_short_sha=commit_sha[:7],
@@ -134,58 +122,62 @@ class TrackedRepoGit:
         """Clone a tracked repo, tolerating an empty remote without branches."""
 
         try:
-            self.runner(
-                [
-                    "clone",
-                    "--branch",
-                    tracked.branch,
-                    tracked.remote_url,
-                    str(checkout),
-                ],
-                cwd=self._workspace_root,
+            self._repositories.clone(
+                tracked.remote_url,
+                checkout,
+                branch=tracked.branch,
             )
-        except RuntimeError as exc:
-            reason = str(exc)
-            missing_branch = "Remote branch" in reason and "not found" in reason
-            empty_remote = "does not appear to have any commits yet" in reason
-            if not missing_branch and not empty_remote:
-                raise
-            self.runner(
-                ["clone", tracked.remote_url, str(checkout)],
-                cwd=self._workspace_root,
-            )
+        except RepositoryReferenceNotFoundError:
+            self._repositories.clone(tracked.remote_url, checkout)
 
     def local_head_sha(self, checkout: Path) -> str:
         """Return the local HEAD SHA for one managed checkout."""
 
-        result = self.runner(["rev-parse", "HEAD"], cwd=checkout)
-        return (result.stdout or "").strip()
+        return self._repositories.head_commit_id(checkout)
 
     def ref_sha(self, checkout: Path, ref: str) -> str:
         """Return a checkout ref SHA, or empty when unavailable."""
 
-        try:
-            result = self.runner(["rev-parse", ref], cwd=checkout)
-        except RuntimeError:
-            return ""
-        return (result.stdout or "").strip()
+        return self._repositories.revision_commit_id(checkout, ref)
 
     def remote_head_sha(self, tracked: TrackedRepo) -> str:
         """Return the remote branch HEAD without updating the checkout."""
 
-        result = self.runner(
-            ["ls-remote", "--heads", tracked.remote_url, tracked.branch],
-            cwd=self._workspace_root,
+        return self._repositories.remote_branch_commit_id(
+            tracked.remote_url,
+            tracked.branch,
         )
-        first_line = next(
-            (
-                line.strip()
-                for line in (result.stdout or "").splitlines()
-                if line.strip()
-            ),
-            "",
+
+    def fetch_branch(self, tracked: TrackedRepo, checkout: Path) -> None:
+        """Fetch one tracked branch and its tags."""
+
+        self._repositories.fetch(checkout, branch=tracked.branch)
+
+    def hard_reset_to_remote(self, tracked: TrackedRepo, checkout: Path) -> None:
+        """Reset one clean checkout to its fetched remote branch."""
+
+        self._repositories.hard_reset(checkout, f"origin/{tracked.branch}")
+
+    def is_dirty(self, checkout: Path) -> bool:
+        """Return whether one checkout contains local changes."""
+
+        return self._repositories.is_dirty(checkout)
+
+    def local_head_is_ancestor_of_remote(
+        self, tracked: TrackedRepo, checkout: Path
+    ) -> bool:
+        """Return whether sync can retain every local commit."""
+
+        return self._repositories.is_ancestor(
+            checkout,
+            "HEAD",
+            f"origin/{tracked.branch}",
         )
-        return first_line.split()[0].strip() if first_line else ""
+
+    def unstage_paths(self, repo_root: Path, relative_paths: Sequence[str]) -> None:
+        """Restore selected index entries without changing saved files."""
+
+        self._repositories.unstage_paths(repo_root, relative_paths)
 
     def _require_only_allowed_staged(
         self, repo_root: Path, allowed_paths: set[str]
@@ -213,22 +205,3 @@ def normalize_repo_relative_path(value: str) -> str:
     if not cleaned:
         raise BackendError("Repo-relative path is required", status=400)
     return cleaned
-
-
-def run_git(args: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
-    """Run one Git subprocess with explicit arguments and a timeout."""
-
-    try:
-        return subprocess.run(
-            ["git", *args],
-            cwd=str(cwd),
-            capture_output=True,
-            text=True,
-            timeout=_GIT_TIMEOUT_SECONDS,
-            check=True,
-        )
-    except subprocess.CalledProcessError as exc:
-        reason = (exc.stderr or "").strip() or (exc.stdout or "").strip() or str(exc)
-        raise RuntimeError(reason) from exc
-    except subprocess.TimeoutExpired as exc:
-        raise RuntimeError("git command timed out") from exc

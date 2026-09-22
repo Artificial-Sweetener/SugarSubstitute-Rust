@@ -325,14 +325,9 @@ class CubeLibraryArtifactService:
         if not (context.repo_root / ".git").exists():
             return []
         try:
-            result = self._library.tracked_repo_service.git_runner(
-                [
-                    "log",
-                    "--format=%H%x1f%cI%x1f%s",
-                    "--",
-                    context.repo_relative_path,
-                ],
-                cwd=context.repo_root,
+            history = self._library.tracked_repo_service.history_for_path(
+                repo_root=context.repo_root,
+                repo_relative_path=context.repo_relative_path,
             )
         except RuntimeError as exc:
             message = str(exc)
@@ -344,11 +339,8 @@ class CubeLibraryArtifactService:
             raise BackendError("Failed to list cube refs", status=500) from exc
 
         refs: list[dict[str, Any]] = []
-        for line in (getattr(result, "stdout", "") or "").splitlines():
-            parts = line.split("\x1f")
-            if len(parts) != 3:
-                continue
-            revision_ref, timestamp, subject = parts
+        for commit in history:
+            revision_ref = commit.commit_id
             payload_text = self._git_show_cube(context, revision_ref)
             payload = self._read_revision_payload(payload_text)
             refs.append(
@@ -362,8 +354,8 @@ class CubeLibraryArtifactService:
                     current=False,
                     committed=True,
                     label=revision_ref[:7],
-                    timestamp=timestamp,
-                    subject=subject,
+                    timestamp=commit.committed_at,
+                    subject=commit.message.splitlines()[0],
                 )
             )
         return refs
@@ -579,14 +571,9 @@ class CubeLibraryArtifactService:
                 details={"cube_id": context.cube_id, "version": version},
             )
         try:
-            result = self._library.tracked_repo_service.git_runner(
-                [
-                    "log",
-                    "--format=%H%x1f%cI%x1f%s",
-                    "--",
-                    context.repo_relative_path,
-                ],
-                cwd=context.repo_root,
+            history = self._library.tracked_repo_service.history_for_path(
+                repo_root=context.repo_root,
+                repo_relative_path=context.repo_relative_path,
             )
         except RuntimeError as exc:
             message = str(exc)
@@ -601,11 +588,8 @@ class CubeLibraryArtifactService:
                 ) from exc
             raise BackendError("Failed to list cube refs", status=500) from exc
 
-        for line in (getattr(result, "stdout", "") or "").splitlines():
-            parts = line.split("\x1f")
-            if len(parts) != 3:
-                continue
-            revision_ref, timestamp, subject = parts
+        for commit in history:
+            revision_ref = commit.commit_id
             payload_text = self._git_show_cube(context, revision_ref)
             payload = self._read_revision_payload(payload_text)
             if normalize_metadata_string(payload.get("version")) != version:
@@ -620,8 +604,8 @@ class CubeLibraryArtifactService:
                 current=False,
                 committed=True,
                 label=revision_ref[:7],
-                timestamp=timestamp,
-                subject=subject,
+                timestamp=commit.committed_at,
+                subject=commit.message.splitlines()[0],
             )
             ref["_payloadText"] = payload_text
             return ref
@@ -700,13 +684,11 @@ class CubeLibraryArtifactService:
         if not (context.repo_root / ".git").exists():
             return "nogit"
         try:
-            result = self._library.tracked_repo_service.git_runner(
-                ["rev-parse", "HEAD"],
-                cwd=context.repo_root,
+            return self._library.tracked_repo_service.head_commit_id(
+                repo_root=context.repo_root
             )
         except (OSError, RuntimeError):
             return "unknown"
-        return normalize_metadata_string(getattr(result, "stdout", ""))
 
     def _assert_loaded_artifact_matches_ref(
         self,
@@ -775,13 +757,13 @@ class CubeLibraryArtifactService:
         """Read one cube artifact from git history."""
 
         try:
-            result = self._library.tracked_repo_service.git_runner(
-                ["show", f"{revision_ref}:{context.repo_relative_path}"],
-                cwd=context.repo_root,
+            return self._library.tracked_repo_service.read_file_at_revision(
+                repo_root=context.repo_root,
+                revision=revision_ref,
+                repo_relative_path=context.repo_relative_path,
             )
         except RuntimeError as exc:
             raise BackendError("Failed to load cube revision", status=500) from exc
-        return getattr(result, "stdout", "") or ""
 
     def _source_metadata_for_context(self, context: CubeGitContext) -> dict[str, Any]:
         """Build source metadata directly from resolved cube ownership context."""

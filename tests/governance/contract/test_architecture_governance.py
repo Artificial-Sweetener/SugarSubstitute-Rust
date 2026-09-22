@@ -24,6 +24,7 @@ from tools.architecture.checker import check_repository
 from tools.architecture.registry import RegistryError, load_waivers
 from tools.architecture.registry import load_policy
 from tools.architecture.scanner import source_fingerprint, source_paths
+from tools.architecture.system_git_policy import scan_system_git_dependencies
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
@@ -231,6 +232,59 @@ forbidden_typescript_paths = ["src/ui"]
     result = check_repository(tmp_path)
 
     assert "DEPENDENCY_CORE" in {item.rule for item in result.diagnostics}
+
+
+def test_system_git_policy_rejects_runtime_processes_and_discovery(
+    tmp_path: Path,
+) -> None:
+    """Prevent runtime code from acquiring or invoking a Git executable."""
+
+    source_root = tmp_path / "sugarcubes"
+    source_root.mkdir()
+    (source_root / "process.py").write_text(
+        "import subprocess\nsubprocess.run(['git.exe', 'status'])\n",
+        encoding="utf-8",
+    )
+    (source_root / "discovery.py").write_text(
+        "import shutil\nvalue = shutil.which('git')\n",
+        encoding="utf-8",
+    )
+
+    diagnostics = scan_system_git_dependencies(tmp_path)
+
+    assert {(item.path, item.rule) for item in diagnostics} == {
+        ("sugarcubes/discovery.py", "GIT001"),
+        ("sugarcubes/process.py", "GIT001"),
+    }
+
+
+def test_system_git_policy_rejects_gitpython_configuration(tmp_path: Path) -> None:
+    """Prevent GitPython from restoring an implicit system-Git dependency."""
+
+    source_root = tmp_path / "sugarcubes"
+    source_root.mkdir()
+    (source_root / "adapter.py").write_text(
+        "import git\nVARIABLE = 'GIT_PYTHON_GIT_EXECUTABLE'\n",
+        encoding="utf-8",
+    )
+
+    diagnostics = scan_system_git_dependencies(tmp_path)
+
+    assert len(diagnostics) == 1
+    assert diagnostics[0].rule == "GIT001"
+
+
+def test_system_git_policy_allows_internal_python_processes(tmp_path: Path) -> None:
+    """Allow bounded subprocess isolation that never invokes system Git."""
+
+    source_root = tmp_path / "sugarcubes"
+    source_root.mkdir()
+    (source_root / "worker.py").write_text(
+        "import subprocess, sys\nsubprocess.run([sys.executable, 'worker.py'])\n",
+        encoding="utf-8",
+    )
+
+    assert scan_system_git_dependencies(tmp_path) == ()
 
 
 def test_staged_validation_reads_only_the_git_index(tmp_path: Path) -> None:

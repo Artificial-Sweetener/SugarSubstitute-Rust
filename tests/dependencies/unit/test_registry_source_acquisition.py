@@ -35,6 +35,7 @@ from sugarcubes.backend.services.dependency_source_archive import (
 from sugarcubes.backend.services.dependency_source_git import (
     RegistrySourceGitInstaller,
 )
+from tests.support.command_repository import CommandRepository
 
 
 class RecordingRequirementsInstaller(DependencyPythonRequirementsInstaller):
@@ -103,6 +104,7 @@ def test_registry_receives_the_exact_required_version_before_fallback(
 
     assert result["returnCode"] == 0
     assert result["acquisitionSource"] == "registry"
+    assert commands[1][-3:-1] == ["--mode", "remote"]
     assert commands[1][-1] == "SimpleSyrup@1.7.1"
     assert not (tmp_path / "custom_nodes" / "SimpleSyrup").exists()
 
@@ -185,6 +187,53 @@ def test_arbitrary_registry_node_uses_authoritative_source_fallback(
     assert result["operation"] == "registry_source_install"
     assert source_calls[0] == "https://cdn.comfy.org/test/node.zip"
     assert (tmp_path / "custom_nodes" / "SomeThirdPartyNode" / "__init__.py").is_file()
+
+
+def test_pending_registry_review_uses_exact_validated_github_release(
+    tmp_path: Path,
+) -> None:
+    """Install the required tag when Registry metadata has not published it yet."""
+
+    commands: list[list[str]] = []
+    source_calls: list[str] = []
+
+    def runner(
+        command: Sequence[str], cwd: Path, timeout_seconds: int
+    ) -> subprocess.CompletedProcess[str]:
+        _ = cwd, timeout_seconds
+        commands.append(list(command))
+        is_availability_check = command[-1] == "import comfy_cli"
+        return subprocess.CompletedProcess(
+            command,
+            0 if is_availability_check else 1,
+            stdout="",
+            stderr="Version is not available in the Registry",
+        )
+
+    archive_path = _release_archive(tmp_path)
+    acquirer = _acquirer(
+        tmp_path,
+        runner=runner,
+        archive_path=archive_path,
+        source_calls=source_calls,
+        registry_artifact=False,
+    )
+
+    result = acquirer.acquire(_install_item())
+
+    assert result["returnCode"] == 0
+    assert result["requestedVersion"] == "1.7.1"
+    assert result["acquisitionSource"] == "github_source"
+    assert commands[1][-3:] == ["--mode", "remote", "SimpleSyrup@1.7.1"]
+    assert source_calls == [
+        "https://github.com/Artificial-Sweetener/SimpleSyrup/archive/refs/tags/"
+        "v1.7.1.zip"
+    ]
+    installed = tmp_path / "custom_nodes" / "SimpleSyrup"
+    assert (installed / "pyproject.toml").is_file()
+    assert "simple_syrup/__init__.py" in (installed / ".tracking").read_text(
+        encoding="utf-8"
+    )
 
 
 def test_flagged_exact_release_uses_validated_github_tag_instead_of_registry(
@@ -288,7 +337,7 @@ def test_missing_sha_requirement_installs_manager_visible_git_checkout(
 
     result = RegistrySourceGitInstaller(
         custom_nodes_root=tmp_path / "custom_nodes",
-        git_runner=git_runner,
+        repositories=CommandRepository(git_runner),
         requirements_installer=RecordingRequirementsInstaller(),
     ).install(
         extension=RegistrySource(
@@ -488,7 +537,7 @@ def _acquirer(
         ),
         git_installer=RegistrySourceGitInstaller(
             custom_nodes_root=tmp_path / "custom_nodes",
-            git_runner=unexpected_git,
+            repositories=CommandRepository(unexpected_git),
             requirements_installer=requirements or RecordingRequirementsInstaller(),
         ),
     )

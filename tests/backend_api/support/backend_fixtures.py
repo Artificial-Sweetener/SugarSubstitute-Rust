@@ -45,6 +45,7 @@ from sugarcubes.library import (
 from sugarcubes.importer import LoadedCube
 
 from .typing_support import BackendServicesFactory
+from tests.support.command_repository import CommandRepository
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -195,7 +196,7 @@ def backend_services_factory() -> BackendServicesFactory:
         (extension_root / "cubes").mkdir(exist_ok=True)
         tracked_repos = TrackedRepoService(
             extension_root,
-            git_runner=git_runner,
+            repositories=CommandRepository(git_runner) if git_runner else None,
             preflight_service=preflight_service or AllowingPreflightService(),
         )
         local_flavors = LocalFlavorService(tracked_repos)

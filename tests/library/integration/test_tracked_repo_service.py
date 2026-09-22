@@ -36,6 +36,7 @@ from sugarcubes.backend.services.tracked_repo_preflight_service import (
     HttpJsonResponse,
     TrackedRepoPreflightService,
 )
+from tests.support.command_repository import CommandRepository
 
 
 @dataclass(frozen=True)
@@ -84,7 +85,7 @@ def make_tracked_repo_service(
 
     return TrackedRepoService(
         extension_root,
-        git_runner=git_runner,
+        repositories=CommandRepository(git_runner),
         preflight_service=preflight_service or AllowingPreflightService(),
         protected_owner_provider=protected_owner_provider,
     )
@@ -108,7 +109,7 @@ def test_preflight_succeeds_and_counts_nested_cube_paths(tmp_path: Path) -> None
     extension_root.mkdir()
     service = TrackedRepoPreflightService(
         workspace_root=extension_root / ".sugarcubes",
-        git_runner=_unused_git_runner,
+        repositories=CommandRepository(_unused_git_runner),
         http_json_loader=lambda url, headers, timeout: make_tree_response(
             ["demo.cube", "nested/alpha.cube", "notes/readme.md"]
         ),
@@ -129,7 +130,7 @@ def test_preflight_ignores_backup_cube_paths(tmp_path: Path) -> None:
     extension_root.mkdir()
     service = TrackedRepoPreflightService(
         workspace_root=extension_root / ".sugarcubes",
-        git_runner=_unused_git_runner,
+        repositories=CommandRepository(_unused_git_runner),
         http_json_loader=lambda url, headers, timeout: make_tree_response(
             [
                 "old/demo.cube",
@@ -154,7 +155,7 @@ def test_preflight_rejects_repo_without_cube_paths(tmp_path: Path) -> None:
     extension_root.mkdir()
     service = TrackedRepoPreflightService(
         workspace_root=extension_root / ".sugarcubes",
-        git_runner=_unused_git_runner,
+        repositories=CommandRepository(_unused_git_runner),
         http_json_loader=lambda url, headers, timeout: make_tree_response(
             ["README.md", "workflow.json"]
         ),
@@ -174,14 +175,14 @@ def test_preflight_maps_github_404_and_rate_limit(tmp_path: Path) -> None:
     extension_root.mkdir()
     missing = TrackedRepoPreflightService(
         workspace_root=extension_root / ".sugarcubes",
-        git_runner=_unused_git_runner,
+        repositories=CommandRepository(_unused_git_runner),
         http_json_loader=lambda url, headers, timeout: HttpJsonResponse(
             status=404, headers={}, payload={}
         ),
     )
     limited = TrackedRepoPreflightService(
         workspace_root=extension_root / ".sugarcubes",
-        git_runner=_unused_git_runner,
+        repositories=CommandRepository(_unused_git_runner),
         http_json_loader=lambda url, headers, timeout: HttpJsonResponse(
             status=403, headers={}, payload={}
         ),
@@ -225,7 +226,7 @@ def test_preflight_uses_temporary_git_fallback_for_truncated_tree(
 
     service = TrackedRepoPreflightService(
         workspace_root=extension_root / ".sugarcubes",
-        git_runner=fake_git,
+        repositories=CommandRepository(fake_git),
         http_json_loader=lambda url, headers, timeout: make_tree_response(
             [], truncated=True
         ),

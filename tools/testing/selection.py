@@ -135,6 +135,11 @@ def _groups_for_path(
     test_prefix = f"{policy.test_root}/"
     if path.startswith(test_prefix):
         parts = PurePosixPath(path).parts
+        if len(parts) >= 3 and parts[1] == "support":
+            return tuple(
+                (group, "changed repository-wide test support")
+                for group in policy.groups
+            )
         if len(parts) >= 4 and _is_test_name(parts[-1]):
             candidate = TestGroup(parts[1], parts[2])
             if candidate not in policy.groups:

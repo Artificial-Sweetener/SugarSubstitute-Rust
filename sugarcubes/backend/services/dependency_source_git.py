@@ -16,8 +16,8 @@ from pathlib import Path
 
 from .dependency_python_requirements import DependencyPythonRequirementsInstaller
 from .dependency_registry_source import RegistrySource
-from .dependency_version_types import GitRunner
 from .dependency_versions import classify_version
+from .repository_service import RepositoryService
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,13 +37,13 @@ class RegistrySourceGitInstaller:
         self,
         *,
         custom_nodes_root: Path,
-        git_runner: GitRunner,
+        repositories: RepositoryService,
         requirements_installer: DependencyPythonRequirementsInstaller,
     ) -> None:
-        """Initialize transaction and external-command boundaries."""
+        """Initialize transaction and repository boundaries."""
 
         self._custom_nodes_root = custom_nodes_root.resolve()
-        self._git_runner = git_runner
+        self._repositories = repositories
         self._requirements_installer = requirements_installer
 
     def install(
@@ -69,13 +69,11 @@ class RegistrySourceGitInstaller:
             dir=self._custom_nodes_root,
         ) as temporary_directory:
             source_path = Path(temporary_directory) / "source"
-            self._run(
-                ["clone", "--no-checkout", extension.repository_url, str(source_path)],
-                cwd=self._custom_nodes_root,
-            )
-            self._run(["fetch", "--all", "--tags"], cwd=source_path)
-            self._run(["cat-file", "-e", f"{git_ref}^{{commit}}"], cwd=source_path)
-            self._run(["checkout", "--detach", git_ref], cwd=source_path)
+            self._repositories.clone(extension.repository_url, source_path)
+            self._repositories.fetch(source_path)
+            if not self._repositories.revision_commit_id(source_path, git_ref):
+                raise RuntimeError(f"Required commit is unavailable: {git_ref}")
+            self._repositories.checkout_revision(source_path, git_ref)
             _validate_checkout_identity(source_path, extension)
             requirements_path = source_path / extension.requirements_file
             if requirements_path.is_file():
@@ -98,18 +96,6 @@ class RegistrySourceGitInstaller:
             target_path=target_path,
             git_ref=git_ref,
         )
-
-    def _run(self, command: list[str], *, cwd: Path) -> None:
-        """Run one Git command and preserve its actionable failure output."""
-
-        result = self._git_runner(command, cwd=cwd)
-        return_code = int(getattr(result, "returncode", 0) or 0)
-        if return_code == 0:
-            return
-        detail = str(
-            getattr(result, "stderr", "") or getattr(result, "stdout", "")
-        ).strip()[-2000:]
-        raise RuntimeError(f"Git command failed ({return_code}): {detail}")
 
 
 def _validate_checkout_identity(source_path: Path, extension: RegistrySource) -> None:

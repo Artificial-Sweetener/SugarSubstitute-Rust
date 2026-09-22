@@ -142,24 +142,23 @@ def _init_git_repo(services: Any, repo_root: Any) -> None:
     """Initialize one isolated git repo for backend save tests."""
 
     repo_root.mkdir(parents=True, exist_ok=True)
-    services.tracked_repos.git_runner(["init", "-b", "main"], cwd=repo_root)
+    services.tracked_repos.repositories.initialize(repo_root, branch="main")
 
 
 def _commit_all(services: Any, repo_root: Any, message: Any = "baseline") -> None:
     """Commit all current fixture files in one isolated git repo."""
 
-    services.tracked_repos.git_runner(["add", "--all"], cwd=repo_root)
-    services.tracked_repos.git_runner(
-        [
-            "-c",
-            "user.name=SugarCubes",
-            "-c",
-            "user.email=sugarcubes@example.invalid",
-            "commit",
-            "-m",
-            message,
-        ],
-        cwd=repo_root,
+    paths = tuple(
+        path.relative_to(repo_root).as_posix()
+        for path in repo_root.rglob("*")
+        if path.is_file() and ".git" not in path.parts
+    )
+    services.tracked_repos.repositories.stage_paths(repo_root, paths)
+    services.tracked_repos.repositories.commit_staged(
+        repo_root,
+        message=message,
+        author_name="SugarCubes",
+        author_email="sugarcubes@example.invalid",
     )
 
 
@@ -1482,10 +1481,10 @@ def test_save_many_commits_same_version_changed_local_cube(
     assert payload["saved"][0]["commit_sha"]
     assert payload["saved"][0]["commit_message"] == "update demo.cube content"
     assert (
-        services.tracked_repos.git_runner(
-            ["status", "--short"], cwd=services.library.local_workspace_root()
-        ).stdout.strip()
-        == ""
+        services.tracked_repos.repositories.is_dirty(
+            services.library.local_workspace_root()
+        )
+        is False
     )
 
 
@@ -1534,12 +1533,7 @@ def test_save_many_does_not_commit_noop_local_cube(
     assert payload["saved"][0]["committed"] is False
     assert payload["saved"][0]["commit_sha"] == ""
     assert payload["saved"][0]["commit_error"] == ""
-    assert (
-        services.tracked_repos.git_runner(
-            ["status", "--short"], cwd=local_root
-        ).stdout.strip()
-        == ""
-    )
+    assert services.tracked_repos.repositories.is_dirty(local_root) is False
 
 
 def test_save_many_commits_same_version_layout_only_github_cube(
@@ -1606,12 +1600,7 @@ def test_save_many_commits_same_version_layout_only_github_cube(
     assert payload["saved"][0]["commit_short_sha"]
     assert payload["saved"][0]["commit_message"] == "update demo.cube layout"
     assert saved_payload["version"] == "1.1.0"
-    assert (
-        services.tracked_repos.git_runner(
-            ["status", "--short"], cwd=checkout
-        ).stdout.strip()
-        == ""
-    )
+    assert services.tracked_repos.repositories.is_dirty(checkout) is False
 
 
 def test_save_many_persists_to_new_authoring_pack_checkout(
@@ -1687,7 +1676,7 @@ def test_save_many_reports_commit_failure_when_repo_has_unrelated_staged_changes
     )
     notes_path = checkout / "notes.txt"
     notes_path.write_text("pending\n", encoding="utf-8")
-    services.tracked_repos.git_runner(["add", "--", "notes.txt"], cwd=checkout)
+    services.tracked_repos.repositories.stage_paths(checkout, ("notes.txt",))
 
     response = asyncio.run(
         build_route_handlers(services).save_many(

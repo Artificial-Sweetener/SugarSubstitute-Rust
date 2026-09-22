@@ -48,7 +48,7 @@ def ensure_metadata_repo(services: Any) -> Any:
         default_base_repo=False,
     )
     if not (checkout / ".git").exists():
-        services.tracked_repos.git_runner(["init", "-b", "main"], cwd=checkout)
+        services.tracked_repos.repositories.initialize(checkout, branch="main")
     return checkout
 
 
