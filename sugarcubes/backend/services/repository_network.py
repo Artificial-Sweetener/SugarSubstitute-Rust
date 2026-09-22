@@ -10,7 +10,6 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -78,7 +77,7 @@ class RepositoryNetworkClient:
         """Execute the internal worker and translate its structured result."""
 
         command = [sys.executable, str(_WORKER_PATH), *arguments]
-        creation_flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+        creation_flags = int(getattr(subprocess, "CREATE_NO_WINDOW", 0))
         try:
             completed = subprocess.run(  # noqa: S603
                 command,
