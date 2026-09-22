@@ -1,3 +1,10 @@
+## [0.14.9](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.14.8...v0.14.9) (2026-09-22)
+
+
+### Bug Fixes
+
+* **dependencies:** match SimpleSyrup Prompt Control release ([658f362](https://github.com/Artificial-Sweetener/SugarCubes/commit/658f3627b6e25bc7e06d1d02887006ca11dade40))
+
 ## [0.14.8](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.14.7...v0.14.8) (2026-09-22)
 
 
