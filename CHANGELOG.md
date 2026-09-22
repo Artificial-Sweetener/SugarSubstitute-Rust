@@ -1,3 +1,24 @@
+## [0.14.9](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.14.8...v0.14.9) (2026-09-22)
+
+
+### Bug Fixes
+
+* **dependencies:** match SimpleSyrup Prompt Control release ([658f362](https://github.com/Artificial-Sweetener/SugarCubes/commit/658f3627b6e25bc7e06d1d02887006ca11dade40))
+
+## [0.14.8](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.14.7...v0.14.8) (2026-09-22)
+
+
+### Bug Fixes
+
+* **dependencies:** install safe aliased source archives ([f3fcb3e](https://github.com/Artificial-Sweetener/SugarCubes/commit/f3fcb3e4a3586a192e830e592e964fe73d7fd5b1))
+
+## [0.14.7](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.14.6...v0.14.7) (2026-09-21)
+
+
+### Bug Fixes
+
+* **dependencies:** install Prompt Control required by SimpleSyrup ([0f04f3e](https://github.com/Artificial-Sweetener/SugarCubes/commit/0f04f3eb52a22be65fe0c7589a507786d2a96221))
+
 ## [0.14.6](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.14.5...v0.14.6) (2026-09-20)
 
 
