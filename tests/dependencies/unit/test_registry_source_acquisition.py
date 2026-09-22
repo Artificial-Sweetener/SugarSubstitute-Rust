@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import shutil
+import stat
 import subprocess
 import zipfile
 from collections.abc import Sequence
@@ -388,6 +389,48 @@ def test_archive_extraction_rejects_path_traversal(tmp_path: Path) -> None:
             target_path=tmp_path / "extracted",
         )
     assert not (tmp_path / "escaped.py").exists()
+
+
+def test_archive_extraction_materializes_safe_relative_file_aliases(
+    tmp_path: Path,
+) -> None:
+    """Install release archives whose docs use safe relative symlinks."""
+
+    archive_path = tmp_path / "aliases.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr("project-1.0.0/docs/source.md", "shared docs")
+        alias = zipfile.ZipInfo("project-1.0.0/docs/alias.md")
+        alias.create_system = 3
+        alias.external_attr = (stat.S_IFLNK | 0o777) << 16
+        archive.writestr(alias, "source.md")
+
+    source_root = extract_single_root_archive(
+        archive_path=archive_path,
+        target_path=tmp_path / "extracted",
+    )
+
+    alias_path = source_root / "docs" / "alias.md"
+    assert alias_path.read_text(encoding="utf-8") == "shared docs"
+    assert alias_path.is_symlink() is False
+
+
+def test_archive_extraction_rejects_escaping_or_chained_aliases(tmp_path: Path) -> None:
+    """Reject aliases that do not resolve to a regular file in the archive."""
+
+    archive_path = tmp_path / "unsafe-aliases.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr("project-1.0.0/docs/source.md", "shared docs")
+        alias = zipfile.ZipInfo("project-1.0.0/docs/alias.md")
+        alias.create_system = 3
+        alias.external_attr = (stat.S_IFLNK | 0o777) << 16
+        archive.writestr(alias, "../../../outside.md")
+
+    with pytest.raises(RuntimeError, match="unsafe path"):
+        extract_single_root_archive(
+            archive_path=archive_path,
+            target_path=tmp_path / "extracted",
+        )
+    assert not (tmp_path / "outside.md").exists()
 
 
 def _acquirer(
