@@ -26,7 +26,7 @@ import {
 } from './CubeWorkflowLibraryState.js';
 
 interface WorkflowLibraryApi {
-  saveWorkflowCubeToStable(payload: BodyInit | null, options?: RequestInit): Promise<ApiJsonResult>;
+  captureWorkflowCube(payload: BodyInit | null, options?: RequestInit): Promise<ApiJsonResult>;
   forkWorkflowCube(payload: BodyInit | null, options?: RequestInit): Promise<ApiJsonResult>;
   syncWorkflowCubeSource(payload: BodyInit | null, options?: RequestInit): Promise<ApiJsonResult>;
 }
@@ -96,20 +96,20 @@ export class CubeWorkflowLibraryActions {
     );
   }
 
-  /** Save exact embedded content to the read-only Wild Cube Stable. */
-  async saveToStable(instanceId: string): Promise<void> {
-    await this.#run('Unable to save Cube to Stable', async () => {
-      const classification = this.#requireClassification(instanceId, 'save_to_stable');
+  /** Capture exact embedded content without changing its workflow definition. */
+  async capture(instanceId: string): Promise<void> {
+    await this.#run('Unable to capture Cube', async () => {
+      const classification = this.#requireClassification(instanceId, 'capture');
       const workflow = await this.#workflowSnapshot();
-      const result = await this.#api.saveWorkflowCubeToStable(
+      const result = await this.#api.captureWorkflowCube(
         requestBody(workflow, classification),
         jsonRequest(),
       );
-      requireSuccess(result, 'Stable save');
+      requireSuccess(result, 'Cube capture');
       this.#state.begin(workflow);
       this.#feedback.push(
         'success',
-        'Cube saved to Stable',
+        'Cube captured',
         `${classification.cubeId} is preserved unchanged and remains read-only.`,
       );
     });

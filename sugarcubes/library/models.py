@@ -20,7 +20,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal, Mapping
 
-CubeLibraryClass = Literal["none", "stable", "local", "synced"]
+CubeLibraryClass = Literal["none", "captured", "local", "synced"]
 CubeAccess = Literal["read_only", "writable"]
 CubeCatalogMatchState = Literal["exact", "divergent"]
 
@@ -32,7 +32,7 @@ class CatalogCubeArtifact:
     cube_id: str
     cube_version: str
     semantic_hash: str
-    library_class: Literal["stable", "local", "synced"]
+    library_class: Literal["captured", "local", "synced"]
     access: CubeAccess
     source_ref: str
 
@@ -42,7 +42,7 @@ class CubeLibraryMatch:
     """Report how one installed artifact compares with embedded workflow truth."""
 
     state: CubeCatalogMatchState
-    library_class: Literal["stable", "local", "synced"]
+    library_class: Literal["captured", "local", "synced"]
     access: CubeAccess
     semantic_hash: str
     source_ref: str
@@ -73,16 +73,16 @@ class CubeLibraryClassReport:
 
 
 @dataclass(frozen=True)
-class StableCubeSaveRequest:
-    """Identify exact embedded content requested for Stable preservation."""
+class CaptureCubeRequest:
+    """Identify exact embedded content requested for capture."""
 
     definition_id: str
     expected_semantic_hash: str
 
 
 @dataclass(frozen=True)
-class StableCubeSaveResult:
-    """Return unchanged identity and refreshed classification after Stable save."""
+class CaptureCubeResult:
+    """Return unchanged identity and refreshed classification after capture."""
 
     cube_id: str
     cube_version: str

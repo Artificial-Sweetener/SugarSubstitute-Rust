@@ -9,6 +9,8 @@ from collections.abc import Mapping
 
 import pytest
 
+from sugarcubes.authoring import NativeWorkflowNormalizer
+from sugarcubes.cube_model import CubeDocument
 from sugarcubes.execution import (
     CubeBoundaryEndpoint,
     CubeExecutionCoordinator,
@@ -29,6 +31,29 @@ from tests.execution.support.execution_fixtures import (
     image_passthrough_document,
     provider_document,
 )
+
+
+class _UnexpectedResolver:
+    """Reject catalog access while proving embedded execution."""
+
+    def resolve(self, cube_id: str, version_pin: str | None) -> CubeDocument:
+        """Fail when normalization attempts an out-of-scope catalog lookup."""
+
+        raise AssertionError((cube_id, version_pin))
+
+
+def test_prepare_executes_embedded_wild_cube_without_catalog_resolution() -> None:
+    """Treat a self-contained workflow as executable authority when offline."""
+
+    workflow = cube_workflow({"cube-a": provider_document()})
+    coordinator = CubeExecutionCoordinator(
+        workflow_normalizer=NativeWorkflowNormalizer(_UnexpectedResolver())
+    )
+
+    prepared = coordinator.prepare(CubeExecutionRequest(workflow=workflow))
+
+    assert prepared.prompt
+    assert {owner.instance_id for owner in prepared.node_owners.values()} == {"cube-a"}
 
 
 def test_prepare_returns_complete_report_and_never_mutates_saved_workflow() -> None:

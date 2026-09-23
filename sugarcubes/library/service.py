@@ -13,7 +13,7 @@
 #
 #    You should have received a copy of the GNU Affero General Public License
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""Coordinate workflow classification and exact Stable preservation."""
+"""Coordinate workflow classification and exact Cube capture."""
 
 from __future__ import annotations
 
@@ -24,10 +24,10 @@ from .classification import classify_workflow
 from .models import (
     CatalogCubeArtifact,
     CubeLibraryClassReport,
-    StableCubeSaveRequest,
-    StableCubeSaveResult,
+    CaptureCubeRequest,
+    CaptureCubeResult,
 )
-from .stable_repository import StableCubeRepository
+from .captured_repository import CapturedCubeRepository
 
 
 class CubeLibraryClassService:
@@ -36,24 +36,24 @@ class CubeLibraryClassService:
     def __init__(
         self,
         *,
-        stable: StableCubeRepository,
+        captured: CapturedCubeRepository,
         catalog_artifacts: Callable[[], Iterable[CatalogCubeArtifact]] = tuple,
     ) -> None:
-        """Bind explicit Stable and installed-catalog ports."""
+        """Bind captured and installed-catalog ports."""
 
-        self._stable = stable
+        self._captured = captured
         self._catalog_artifacts = catalog_artifacts
 
     def classify_workflow(self, workflow: CanonicalWorkflow) -> CubeLibraryClassReport:
         """Classify workflow definitions from current machine state."""
 
-        artifacts = (*self._catalog_artifacts(), *self._stable.list_artifacts())
+        artifacts = (*self._catalog_artifacts(), *self._captured.list_artifacts())
         return classify_workflow(workflow, artifacts)
 
-    def save_to_stable(
-        self, workflow: CanonicalWorkflow, request: StableCubeSaveRequest
-    ) -> StableCubeSaveResult:
-        """Save exact expected content without forking identity or rebinding instances."""
+    def capture(
+        self, workflow: CanonicalWorkflow, request: CaptureCubeRequest
+    ) -> CaptureCubeResult:
+        """Capture exact content without forking identity or rebinding instances."""
 
         definition = workflow.definition_index().get(request.definition_id)
         if definition is None:
@@ -62,14 +62,14 @@ class CubeLibraryClassService:
             )
         if definition.semantic_hash != request.expected_semantic_hash:
             raise ValueError("Embedded Cube definition changed after classification")
-        write = self._stable.save(definition)
+        write = self._captured.capture(definition)
         refreshed = self.classify_workflow(workflow)
         classification = next(
             item
             for item in refreshed.definitions
             if item.definition_id == definition.definition_id
         )
-        return StableCubeSaveResult(
+        return CaptureCubeResult(
             cube_id=definition.cube_id,
             cube_version=definition.cube_version,
             semantic_hash=definition.semantic_hash,

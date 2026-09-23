@@ -15,7 +15,7 @@ import type { CubeWorkflowLibraryActions } from '../../../frontend/comfyui/ui/wo
 
 test('read-only native Cube menu offers library operations instead of definition save', () => {
   const keep = jest.fn();
-  const saveToStable = jest.fn(async () => undefined);
+  const capture = jest.fn(async () => undefined);
   const syncSource = jest.fn(async () => undefined);
   const forkToLocal = jest.fn(async () => undefined);
   const libraryActions = {
@@ -28,10 +28,10 @@ test('read-only native Cube menu offers library operations instead of definition
       primaryClass: 'none',
       access: 'read_only',
       sourceAvailable: true,
-      permittedOperations: new Set(['keep', 'save_to_stable', 'track_source', 'fork']),
+      permittedOperations: new Set(['keep', 'capture', 'track_source', 'fork']),
     }),
     keep,
-    saveToStable,
+    capture,
     syncSource,
     forkToLocal,
   } as unknown as CubeWorkflowLibraryActions;
@@ -52,14 +52,14 @@ test('read-only native Cube menu offers library operations instead of definition
 
   expect(items.map((item) => item.content)).toEqual([
     'Keep workflow copy',
-    'Save to Wild Cube Stable',
+    'Capture Cube',
     'Synchronize home source…',
     'Fork to Local Cubes…',
   ]);
   items.forEach((item) => item.callback());
   expect(saveCube).not.toHaveBeenCalled();
   expect(keep).toHaveBeenCalledWith('cube-1');
-  expect(saveToStable).toHaveBeenCalledWith('cube-1');
+  expect(capture).toHaveBeenCalledWith('cube-1');
   expect(syncSource).toHaveBeenCalledWith('cube-1');
   expect(forkToLocal).toHaveBeenCalledWith('cube-1');
 });

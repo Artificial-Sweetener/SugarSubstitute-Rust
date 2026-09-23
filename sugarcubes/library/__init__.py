@@ -13,7 +13,7 @@
 #
 #    You should have received a copy of the GNU Affero General Public License
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""Expose workflow-aware Cube library classification and Stable storage."""
+"""Expose workflow-aware Cube classification and capture storage."""
 
 from .models import (
     CatalogCubeArtifact,
@@ -25,12 +25,12 @@ from .models import (
     CubeInstanceRebind,
     CubeSourceSyncRequest,
     CubeSourceSyncResult,
-    StableCubeSaveRequest,
-    StableCubeSaveResult,
+    CaptureCubeRequest,
+    CaptureCubeResult,
 )
 from .service import CubeLibraryClassService
 from .fork_service import CubeForkService, ForkDefinitionRepository
-from .stable_repository import StableCubeRepository
+from .captured_repository import CapturedCubeRepository
 from .source_sync_service import CubeSourceSyncPort, CubeSourceSyncService
 
 __all__ = [
@@ -48,7 +48,7 @@ __all__ = [
     "CubeSourceSyncResult",
     "CubeSourceSyncService",
     "ForkDefinitionRepository",
-    "StableCubeRepository",
-    "StableCubeSaveRequest",
-    "StableCubeSaveResult",
+    "CapturedCubeRepository",
+    "CaptureCubeRequest",
+    "CaptureCubeResult",
 ]

@@ -67,7 +67,7 @@ export interface ChromeActions extends UnknownRecord {
   onOpenMenu?(metadata: ChromeMetadata, options: unknown[]): void;
   getLibraryClassification?(metadata: ChromeMetadata): WorkflowCubeClassification | null;
   onKeepWorkflowCube?(metadata: ChromeMetadata): void;
-  onSaveWorkflowCubeToStable?(metadata: ChromeMetadata): void;
+  onCaptureWorkflowCube?(metadata: ChromeMetadata): void;
   onSyncWorkflowCubeSource?(metadata: ChromeMetadata): void;
   onForkWorkflowCube?(metadata: ChromeMetadata): void;
 }

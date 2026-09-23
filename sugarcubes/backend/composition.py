@@ -45,7 +45,7 @@ from ..library import (
     CubeForkService,
     CubeLibraryClassService,
     CubeSourceSyncService,
-    StableCubeRepository,
+    CapturedCubeRepository,
 )
 from ..payloads import retarget_cube_payload
 from .comfy_node_registry import resolve_active_comfy_node_class_mappings
@@ -138,7 +138,10 @@ def build_backend_services(
     )
     workflow_catalog = WorkflowCatalogArtifactProvider(library.catalog_listing)
     workflow_library = CubeLibraryClassService(
-        stable=StableCubeRepository(tracked_repos.data_root() / "wild_cube_stable"),
+        captured=CapturedCubeRepository(
+            tracked_repos.data_root() / "captured_cubes",
+            legacy_root=tracked_repos.data_root() / "wild_cube_stable",
+        ),
         catalog_artifacts=workflow_catalog.list_artifacts,
     )
     workflow_forks = CubeForkService(

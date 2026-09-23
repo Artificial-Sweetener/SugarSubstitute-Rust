@@ -6,7 +6,9 @@ from __future__ import annotations
 
 from typing import cast
 
-from sugarcubes.workflow_analysis import analyze_cube_graph
+from sugarcubes.authoring import NativeWorkflowNormalizer
+from sugarcubes.cube_model import CubeDocument
+from sugarcubes.workflow_analysis import CubeGraphAnalysisService, analyze_cube_graph
 from tests.execution.support.execution_fixtures import cube_document, cube_workflow
 
 
@@ -28,6 +30,29 @@ def test_analysis_derives_ordered_typed_proximity_from_native_cube_geometry() ->
     assert analysis.segments[0].instance_ids == ("source", "target")
     assert analysis.segments[0].reorderable is True
     assert analysis.normalized_workflow["extra"] == {"fixture": True}
+
+
+def test_analysis_accepts_embedded_wild_cubes_without_catalog_resolution() -> None:
+    """Project complete workflow-owned definitions while no pack is tracked."""
+
+    analysis = CubeGraphAnalysisService(
+        NativeWorkflowNormalizer(_UnexpectedResolver())
+    ).analyze(_positioned_cube_pair())
+
+    assert [instance.instance_id for instance in analysis.instances] == [
+        "source",
+        "target",
+    ]
+    assert analysis.segments[0].reorderable is True
+
+
+class _UnexpectedResolver:
+    """Reject catalog access while proving embedded analysis."""
+
+    def resolve(self, cube_id: str, version_pin: str | None) -> CubeDocument:
+        """Fail if analysis asks for a tracked Cube Pack."""
+
+        raise AssertionError((cube_id, version_pin))
 
 
 def test_analysis_matches_same_typed_ports_when_input_declaration_order_differs() -> (

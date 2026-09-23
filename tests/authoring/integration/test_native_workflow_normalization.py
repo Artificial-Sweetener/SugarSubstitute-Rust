@@ -73,8 +73,8 @@ def test_normalizer_attaches_named_values_and_reconciled_document() -> None:
     assert nodes["widget"]["inputs"] == {"value": 7}
 
 
-def test_normalizer_rebases_embedded_cube_on_exact_pinned_definition() -> None:
-    """Use embedded state as values, never as the pinned definition authority."""
+def test_normalizer_uses_embedded_cube_as_exact_definition_authority() -> None:
+    """Keep complete workflow-owned content independent from installed catalogs."""
 
     exact = cube_document(
         "Widget",
@@ -94,7 +94,7 @@ def test_normalizer_rebases_embedded_cube_on_exact_pinned_definition() -> None:
     stale["metadata"] = {"default_alias": "Anima/Widget"}
     workflow = cube_workflow({"instance": stale})
 
-    normalized = NativeWorkflowNormalizer(_Resolver(exact)).normalize(workflow)
+    normalized = NativeWorkflowNormalizer(_UnexpectedResolver()).normalize(workflow)
 
     normalized_definition = cast(
         list[dict[str, object]],
@@ -102,10 +102,7 @@ def test_normalizer_rebases_embedded_cube_on_exact_pinned_definition() -> None:
     )[0]
     normalized_extra = cast(Mapping[str, object], normalized_definition["extra"])
     reconciled = cast(Mapping[str, object], normalized_extra["sugarcubes_document"])
-    assert reconciled["metadata"] == {
-        "default_alias": "Anima/Widget",
-        "target_model": "Anima",
-    }
+    assert reconciled["metadata"] == {"default_alias": "Anima/Widget"}
 
 
 def test_normalizer_rebases_structure_without_discarding_embedded_instance_values() -> (
@@ -150,7 +147,7 @@ def test_normalizer_rebases_structure_without_discarding_embedded_instance_value
     embedded_nodes["widget"]["substitute_relation"] = {"source": "Earlier.widget"}
     workflow = cube_workflow({"instance": embedded})
 
-    normalized = NativeWorkflowNormalizer(_Resolver(exact)).normalize(workflow)
+    normalized = NativeWorkflowNormalizer(_UnexpectedResolver()).normalize(workflow)
 
     normalized_definition = cast(
         list[dict[str, object]],
@@ -225,7 +222,7 @@ def test_normalizer_preserves_non_surface_stable_instance_fields() -> None:
     cast(dict[str, object], embedded_authored[0]["values"])["sampler.steps"] = 28
     workflow = cube_workflow({"instance": embedded})
 
-    normalized = NativeWorkflowNormalizer(_Resolver(exact)).normalize(workflow)
+    normalized = NativeWorkflowNormalizer(_UnexpectedResolver()).normalize(workflow)
 
     normalized_definition = cast(
         list[dict[str, object]],
@@ -309,7 +306,7 @@ def test_normalizer_preserves_nested_wrapper_widget_values_from_embedded_graph()
     )
     cast(dict[str, object], embedded_nodes["sampler"]["inputs"])["batch_size"] = 2
 
-    normalized = NativeWorkflowNormalizer(_Resolver(exact)).normalize(
+    normalized = NativeWorkflowNormalizer(_UnexpectedResolver()).normalize(
         cube_workflow({"instance": embedded})
     )
 
@@ -376,7 +373,7 @@ def test_normalizer_restores_exact_cube_sockets_without_touching_ordinary_nodes(
     }
     cast(list[dict[str, object]], workflow["nodes"]).append(ordinary)
 
-    normalized = NativeWorkflowNormalizer(_Resolver(document)).normalize(workflow)
+    normalized = NativeWorkflowNormalizer(_UnexpectedResolver()).normalize(workflow)
 
     normalized_nodes = cast(list[dict[str, object]], normalized["nodes"])
     assert normalized_nodes[0]["inputs"] == [{"name": "input.image", "type": "IMAGE"}]

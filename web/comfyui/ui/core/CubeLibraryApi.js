@@ -164,9 +164,9 @@ export class CubeLibraryApi {
             ...options,
         });
     }
-    /** Preserve exact embedded content in the read-only Wild Cube Stable. */
-    async saveWorkflowCubeToStable(payload, options = {}) {
-        return this.fetchJson('/sugarcubes/v2/cubes/stable', {
+    /** Preserve exact embedded content as a read-only Captured Cube. */
+    async captureWorkflowCube(payload, options = {}) {
+        return this.fetchJson('/sugarcubes/v2/cubes/captured', {
             method: 'POST',
             body: payload,
             ...options,

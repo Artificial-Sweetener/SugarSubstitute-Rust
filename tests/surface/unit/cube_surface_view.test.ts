@@ -93,6 +93,7 @@ describe('CubeSurfaceView', () => {
   test('marks a wild Cube with a top-right Comfy Lucide icon and no status text', () => {
     const identity = cubeIdentity('Wild Text to Image');
     identity.isWild = true;
+    identity.isCaptured = false;
     const view = new CubeSurfaceView({
       document,
       renderer: createRenderer(),
@@ -106,6 +107,29 @@ describe('CubeSurfaceView', () => {
     expect(indicator?.parentElement?.classList).toContain('sugarcubes-cube-face__actions');
     expect(indicator?.getAttribute('aria-label')).toBe('Wild Cube');
     expect(indicator?.querySelector('i')?.classList).toContain('icon-[lucide--paw-print]');
+    expect(view.element.querySelector('[data-cube-definition-source]')?.textContent).toBe(
+      'from Base-Cubes by Artificial-Sweetener',
+    );
+    view.dispose();
+  });
+
+  test('marks a Captured Cube without changing its source identity', () => {
+    const identity = cubeIdentity('Captured Text to Image');
+    identity.isCaptured = true;
+    const view = new CubeSurfaceView({
+      document,
+      renderer: createRenderer(),
+      identity,
+      nodes: [],
+      state: createDefaultCubeSurfaceState(),
+      onStateChange: jest.fn(),
+    });
+
+    const indicator = view.element.querySelector<HTMLElement>(
+      '.sugarcubes-cube-captured-indicator',
+    );
+    expect(indicator?.getAttribute('aria-label')).toBe('Captured Cube');
+    expect(indicator?.querySelector('i')?.classList).toContain('icon-[lucide--circle-check]');
     expect(view.element.querySelector('[data-cube-definition-source]')?.textContent).toBe(
       'from Base-Cubes by Artificial-Sweetener',
     );
@@ -796,6 +820,7 @@ function cubeIdentity(instanceTitle: string): CubeIdentityPresentation {
     }),
     awaitingFirstSave: false,
     isWild: false,
+    isCaptured: false,
     sourceLine: 'from Base-Cubes by Artificial-Sweetener',
     icon: {
       kind: 'asset',

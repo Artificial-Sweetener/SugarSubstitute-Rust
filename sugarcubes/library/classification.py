@@ -30,7 +30,7 @@ from .models import (
     CubeLibraryMatch,
 )
 
-_CLASS_PRIORITY = {"local": 0, "stable": 1, "synced": 2}
+_CLASS_PRIORITY = {"local": 0, "captured": 1, "synced": 2}
 
 
 def classify_workflow(
@@ -88,8 +88,8 @@ def _classify_definition(
     )
     source_available = _source_available(definition)
     operations = {"keep", "fork"}
-    if not any(match.library_class == "stable" for match in exact):
-        operations.add("save_to_stable")
+    if not any(match.library_class == "captured" for match in exact):
+        operations.add("capture")
     if source_available:
         operations.add("track_source")
     if access == "writable":

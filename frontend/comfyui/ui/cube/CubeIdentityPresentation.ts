@@ -39,6 +39,7 @@ export interface CubeIdentityPresentation {
   definitionModelTitle: CubeModelTitlePresentation;
   awaitingFirstSave: boolean;
   isWild: boolean;
+  isCaptured: boolean;
   sourceLine: string;
   icon: CubeIconModel;
 }
@@ -139,6 +140,7 @@ export function resolveCubeIdentityPresentation(
     definitionModelTitle,
     awaitingFirstSave: isCubeAwaitingFirstSave(metadata),
     isWild: input.fallbackSource?.libraryClass === 'none',
+    isCaptured: input.fallbackSource?.libraryClass === 'captured',
     sourceLine,
     icon: resolveCubeIconModel(metadata),
   };

@@ -86,7 +86,7 @@ class RouteHandlers:
     repair_dependencies: RouteHandler
     sync_and_check_dependencies: RouteHandler
     classify_workflow: RouteHandler
-    save_workflow_cube_to_stable: RouteHandler
+    capture_workflow_cube: RouteHandler
     fork_workflow_cube: RouteHandler
     sync_workflow_cube_source: RouteHandler
     compile_sugarscript: RouteHandler
@@ -161,7 +161,7 @@ def build_route_handlers(services: BackendServices) -> RouteHandlers:
         repair_dependencies=dependencies.repair_dependencies,
         sync_and_check_dependencies=dependencies.sync_and_check_dependencies,
         classify_workflow=workflow_library.classify_workflow,
-        save_workflow_cube_to_stable=workflow_library.save_workflow_cube_to_stable,
+        capture_workflow_cube=workflow_library.capture_workflow_cube,
         fork_workflow_cube=workflow_library.fork_workflow_cube,
         sync_workflow_cube_source=workflow_library.sync_workflow_cube_source,
         compile_sugarscript=sugarscript.compile_sugarscript,
@@ -225,7 +225,7 @@ def register_routes(prompt_server: Any, services: BackendServices) -> RouteHandl
         handlers.sync_and_check_dependencies
     )
     routes.post("/sugarcubes/v2/cubes/classify-workflow")(handlers.classify_workflow)
-    routes.post("/sugarcubes/v2/cubes/stable")(handlers.save_workflow_cube_to_stable)
+    routes.post("/sugarcubes/v2/cubes/captured")(handlers.capture_workflow_cube)
     routes.post("/sugarcubes/v2/cubes/forks")(handlers.fork_workflow_cube)
     routes.post("/sugarcubes/v2/cubes/sync-source")(handlers.sync_workflow_cube_source)
     routes.post("/sugarcubes/v2/sugarscript/compile")(handlers.compile_sugarscript)

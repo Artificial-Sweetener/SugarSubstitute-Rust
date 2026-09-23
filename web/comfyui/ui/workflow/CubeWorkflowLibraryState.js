@@ -91,7 +91,7 @@ function readClassificationResponse(value) {
 function readClassification(value, index) {
     if (!isRecord(value))
         throw new TypeError(`Workflow Cube classification #${String(index)} is invalid.`);
-    const primaryClass = requireEnum(value.primary_class, ['none', 'stable', 'local', 'synced'], 'primary_class');
+    const primaryClass = requireEnum(value.primary_class, ['none', 'captured', 'local', 'synced'], 'primary_class');
     const access = requireEnum(value.access, ['read_only', 'writable'], 'access');
     if (!Array.isArray(value.instance_ids) ||
         value.instance_ids.some((item) => typeof item !== 'string')) {

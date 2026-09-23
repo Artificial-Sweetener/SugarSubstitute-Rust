@@ -13,7 +13,7 @@
 #
 #    You should have received a copy of the GNU Affero General Public License
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""Prove fork policy remains separate from Stable preservation."""
+"""Prove fork policy remains separate from read-only capture."""
 
 from __future__ import annotations
 

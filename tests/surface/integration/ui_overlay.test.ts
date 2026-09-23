@@ -1018,10 +1018,10 @@ describe('ui overlay rendering', () => {
         primaryClass: 'none' as const,
         access: 'read_only' as const,
         sourceAvailable: true,
-        permittedOperations: new Set(['keep', 'save_to_stable', 'track_source', 'fork']),
+        permittedOperations: new Set(['keep', 'capture', 'track_source', 'fork']),
       })),
       onKeepWorkflowCube: jest.fn(),
-      onSaveWorkflowCubeToStable: jest.fn(),
+      onCaptureWorkflowCube: jest.fn(),
       onSyncWorkflowCubeSource: jest.fn(),
       onForkWorkflowCube: jest.fn(),
     };
@@ -1032,14 +1032,14 @@ describe('ui overlay rendering', () => {
 
     expect(options.map((entry) => entry.title)).toEqual([
       'Keep workflow copy',
-      'Save to Wild Cube Stable',
+      'Capture Cube',
       'Synchronize home source…',
       'Fork to Local Cubes…',
     ]);
     options.forEach((entry) => entry.callback());
     expect(actions.onSaveImplementation).not.toHaveBeenCalled();
     expect(actions.onKeepWorkflowCube).toHaveBeenCalledWith(metadata);
-    expect(actions.onSaveWorkflowCubeToStable).toHaveBeenCalledWith(metadata);
+    expect(actions.onCaptureWorkflowCube).toHaveBeenCalledWith(metadata);
     expect(actions.onSyncWorkflowCubeSource).toHaveBeenCalledWith(metadata);
     expect(actions.onForkWorkflowCube).toHaveBeenCalledWith(metadata);
   });

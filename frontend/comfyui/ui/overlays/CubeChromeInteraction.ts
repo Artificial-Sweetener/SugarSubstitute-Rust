@@ -67,10 +67,10 @@ export class CubeChromeInteraction {
           callback: () => actions.onKeepWorkflowCube?.(metadata),
         });
       }
-      if (classification.permittedOperations.has('save_to_stable')) {
+      if (classification.permittedOperations.has('capture')) {
         entries.push({
-          title: 'Save to Wild Cube Stable',
-          callback: () => actions.onSaveWorkflowCubeToStable?.(metadata),
+          title: 'Capture Cube',
+          callback: () => actions.onCaptureWorkflowCube?.(metadata),
         });
       }
       if (classification.permittedOperations.has('track_source')) {

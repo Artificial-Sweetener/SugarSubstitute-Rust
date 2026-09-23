@@ -141,8 +141,8 @@ export class OverlayManager {
               workflowLibraryActions.classification(readInstanceId(metadata)),
             onKeepWorkflowCube: (metadata: ChromeMetadata) =>
               workflowLibraryActions.keep(readInstanceId(metadata)),
-            onSaveWorkflowCubeToStable: (metadata: ChromeMetadata) => {
-              void workflowLibraryActions.saveToStable(readInstanceId(metadata));
+            onCaptureWorkflowCube: (metadata: ChromeMetadata) => {
+              void workflowLibraryActions.capture(readInstanceId(metadata));
             },
             onSyncWorkflowCubeSource: (metadata: ChromeMetadata) => {
               void workflowLibraryActions.syncSource(readInstanceId(metadata));

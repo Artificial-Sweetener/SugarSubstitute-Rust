@@ -88,11 +88,11 @@ def test_classification_compares_installed_documents_by_semantic_meaning(
     assert divergent["divergent_matches"][0]["state"] == "divergent"
 
 
-def test_classify_stable_and_fork_are_distinct_sugarcubes_operations(
+def test_classify_capture_and_fork_are_distinct_sugarcubes_operations(
     tmp_path: Path,
     backend_services_factory: BackendServicesFactory,
 ) -> None:
-    """Expose exact Stable preservation separately from writable derivation."""
+    """Expose exact capture separately from writable derivation."""
 
     services = backend_services_factory(tmp_path)
     handlers = build_route_handlers(services)
@@ -108,8 +108,8 @@ def test_classify_stable_and_fork_are_distinct_sugarcubes_operations(
     assert definition["primary_class"] == "none"
     assert definition["access"] == "read_only"
 
-    stable_response = asyncio.run(
-        handlers.save_workflow_cube_to_stable(
+    captured_response = asyncio.run(
+        handlers.capture_workflow_cube(
             FakeRequest(
                 body={
                     "workflow": workflow,
@@ -119,12 +119,12 @@ def test_classify_stable_and_fork_are_distinct_sugarcubes_operations(
             )
         )
     )
-    stable_payload = decode_json_response(stable_response)
+    captured_payload = decode_json_response(captured_response)
 
-    assert stable_response.status == 200
-    assert stable_payload["classification"]["primary_class"] == "stable"
-    assert "lineage" not in stable_payload
-    assert "rebinds" not in stable_payload
+    assert captured_response.status == 200
+    assert captured_payload["classification"]["primary_class"] == "captured"
+    assert "lineage" not in captured_payload
+    assert "rebinds" not in captured_payload
 
     fork_cube_id = "local/personal/SDXL/Workflow Fork.cube"
     fork_response = asyncio.run(

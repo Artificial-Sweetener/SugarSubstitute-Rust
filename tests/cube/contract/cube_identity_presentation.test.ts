@@ -114,5 +114,22 @@ describe('resolveCubeIdentityPresentation', () => {
 
     expect(identity.sourceLine).toBe('from Base-Cubes by Artificial-Sweetener');
     expect(identity.isWild).toBe(true);
+    expect(identity.isCaptured).toBe(false);
+  });
+
+  test('projects transient captured classification without changing source text', () => {
+    const identity = resolveCubeIdentityPresentation({
+      metadata: {
+        cube_id: 'Artificial-Sweetener/Base-Cubes/Text to Image.cube',
+        default_alias: 'Text to Image',
+      },
+      instanceTitle: 'Text to Image',
+      fallbackDefinitionTitle: 'Text to Image',
+      fallbackSource: { libraryClass: 'captured' },
+    });
+
+    expect(identity.sourceLine).toBe('from Base-Cubes by Artificial-Sweetener');
+    expect(identity.isWild).toBe(false);
+    expect(identity.isCaptured).toBe(true);
   });
 });

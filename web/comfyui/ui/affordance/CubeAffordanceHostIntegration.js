@@ -208,10 +208,10 @@ function buildReadOnlyLibraryMenu(actions, instanceId, permitted) {
     if (permitted.has('keep')) {
         items.push({ content: 'Keep workflow copy', callback: () => actions.keep(instanceId) });
     }
-    if (permitted.has('save_to_stable')) {
+    if (permitted.has('capture')) {
         items.push({
-            content: 'Save to Wild Cube Stable',
-            callback: () => actions.saveToStable(instanceId),
+            content: 'Capture Cube',
+            callback: () => actions.capture(instanceId),
         });
     }
     if (permitted.has('track_source')) {

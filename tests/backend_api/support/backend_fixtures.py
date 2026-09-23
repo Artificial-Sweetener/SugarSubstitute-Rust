@@ -40,7 +40,7 @@ from sugarcubes.library import (
     CubeForkService,
     CubeLibraryClassService,
     CubeSourceSyncService,
-    StableCubeRepository,
+    CapturedCubeRepository,
 )
 from sugarcubes.importer import LoadedCube
 
@@ -232,7 +232,9 @@ def backend_services_factory() -> BackendServicesFactory:
         )
         workflow_catalog = WorkflowCatalogArtifactProvider(library.catalog_listing)
         workflow_library = CubeLibraryClassService(
-            stable=StableCubeRepository(tracked_repos.data_root() / "wild_cube_stable"),
+            captured=CapturedCubeRepository(
+                tracked_repos.data_root() / "captured_cubes"
+            ),
             catalog_artifacts=workflow_catalog.list_artifacts,
         )
         workflow_forks = CubeForkService(

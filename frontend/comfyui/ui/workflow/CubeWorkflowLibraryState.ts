@@ -18,7 +18,7 @@
 import type { ApiJsonResult } from '../core/CubeLibraryApi.js';
 import { isRecord } from '../types/common.js';
 
-export type WorkflowCubeLibraryClass = 'none' | 'stable' | 'local' | 'synced';
+export type WorkflowCubeLibraryClass = 'none' | 'captured' | 'local' | 'synced';
 export type WorkflowCubeAccess = 'read_only' | 'writable';
 
 export interface WorkflowCubeClassification {
@@ -125,7 +125,7 @@ function readClassification(value: unknown, index: number): WorkflowCubeClassifi
     throw new TypeError(`Workflow Cube classification #${String(index)} is invalid.`);
   const primaryClass = requireEnum(
     value.primary_class,
-    ['none', 'stable', 'local', 'synced'] as const,
+    ['none', 'captured', 'local', 'synced'] as const,
     'primary_class',
   );
   const access = requireEnum(value.access, ['read_only', 'writable'] as const, 'access');

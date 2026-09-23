@@ -61,11 +61,11 @@ test('ignores a stale response after a newer workflow begins classification', as
 function classificationResult(instanceId: string) {
   return {
     response: { ok: true, status: 200 },
-    data: classificationResponse(instanceId, 'stable'),
+    data: classificationResponse(instanceId, 'captured'),
   };
 }
 
-function classificationResponse(instanceId: string, primaryClass: 'none' | 'stable') {
+function classificationResponse(instanceId: string, primaryClass: 'none' | 'captured') {
   return {
     schema_version: 1,
     definitions: [

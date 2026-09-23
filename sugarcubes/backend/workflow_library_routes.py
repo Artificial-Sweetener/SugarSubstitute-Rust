@@ -28,8 +28,8 @@ from ..library import (
     CubeLibraryClassReport,
     CubeSourceSyncRequest,
     CubeSourceSyncResult,
-    StableCubeSaveRequest,
-    StableCubeSaveResult,
+    CaptureCubeRequest,
+    CaptureCubeResult,
 )
 from ..workflow import CanonicalWorkflowError, read_canonical_workflow
 from .composition import BackendServices
@@ -45,7 +45,7 @@ class WorkflowLibraryRouteHandlers:
     """Collect versioned workflow library handlers for composition."""
 
     classify_workflow: RouteHandler
-    save_workflow_cube_to_stable: RouteHandler
+    capture_workflow_cube: RouteHandler
     fork_workflow_cube: RouteHandler
     sync_workflow_cube_source: RouteHandler
 
@@ -66,20 +66,20 @@ def build_workflow_library_route_handlers(
         except BackendError as exc:
             return json_error_from_exception(exc)
 
-    async def save_workflow_cube_to_stable(request: Any) -> Any:
+    async def capture_workflow_cube(request: Any) -> Any:
         try:
             body = await parse_json_body(request)
             workflow = read_canonical_workflow(body.get("workflow"))
-            result = services.workflow_library.save_to_stable(
+            result = services.workflow_library.capture(
                 workflow,
-                StableCubeSaveRequest(
+                CaptureCubeRequest(
                     definition_id=_required_string(body, "definition_id"),
                     expected_semantic_hash=_required_string(
                         body, "expected_semantic_hash"
                     ),
                 ),
             )
-            return json_success(_serialize_stable_result(result), status=200)
+            return json_success(_serialize_capture_result(result), status=200)
         except CanonicalWorkflowError as exc:
             return _workflow_error(exc)
         except BackendError as exc:
@@ -87,8 +87,8 @@ def build_workflow_library_route_handlers(
         except ValueError as exc:
             return _value_error(exc)
         except OSError:
-            _logger.exception("SugarCubes: failed to save workflow Cube to Stable")
-            return json_error("Failed to save workflow Cube to Stable", status=500)
+            _logger.exception("SugarCubes: failed to capture workflow Cube")
+            return json_error("Failed to capture workflow Cube", status=500)
 
     async def fork_workflow_cube(request: Any) -> Any:
         try:
@@ -151,7 +151,7 @@ def build_workflow_library_route_handlers(
 
     return WorkflowLibraryRouteHandlers(
         classify_workflow=classify_workflow,
-        save_workflow_cube_to_stable=save_workflow_cube_to_stable,
+        capture_workflow_cube=capture_workflow_cube,
         fork_workflow_cube=fork_workflow_cube,
         sync_workflow_cube_source=sync_workflow_cube_source,
     )
@@ -204,8 +204,8 @@ def _serialize_definition(
     }
 
 
-def _serialize_stable_result(result: StableCubeSaveResult) -> dict[str, Any]:
-    """Serialize Stable persistence without introducing fork fields."""
+def _serialize_capture_result(result: CaptureCubeResult) -> dict[str, Any]:
+    """Serialize capture persistence without introducing fork fields."""
 
     return {
         "schema_version": 1,

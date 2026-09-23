@@ -33,6 +33,9 @@ export class CubeFaceHeaderView {
         if (options.identity.isWild) {
             this.#actions.element.prepend(createWildCubeIndicator(options.document));
         }
+        if (options.identity.isCaptured) {
+            this.#actions.element.prepend(createCapturedCubeIndicator(options.document));
+        }
         this.element.append(createInstanceIdentity(options.document, options.identity), createDefinitionIdentity(options.document, options.identity), this.#actions.element);
     }
     /** Reconcile header actions without rebuilding identity DOM. */
@@ -84,6 +87,20 @@ function createWildCubeIndicator(documentRef) {
     indicator.setAttribute('aria-label', 'Wild Cube');
     const icon = documentRef.createElement('i');
     icon.className = 'icon-[lucide--paw-print] size-4';
+    icon.setAttribute('aria-hidden', 'true');
+    indicator.append(icon);
+    return indicator;
+}
+/** Mark a workflow definition preserved in the local Captured Cubes library. */
+function createCapturedCubeIndicator(documentRef) {
+    const indicator = documentRef.createElement('span');
+    indicator.className =
+        'sugarcubes-cube-captured-indicator sugarcubes-cube-unsaved-indicator text-green-400';
+    indicator.title = 'Captured Cube';
+    indicator.setAttribute('role', 'img');
+    indicator.setAttribute('aria-label', 'Captured Cube');
+    const icon = documentRef.createElement('i');
+    icon.className = 'icon-[lucide--circle-check] size-4';
     icon.setAttribute('aria-hidden', 'true');
     indicator.append(icon);
     return indicator;

@@ -95,8 +95,8 @@ export class OverlayManager {
                 ? {
                     getLibraryClassification: (metadata) => workflowLibraryActions.classification(readInstanceId(metadata)),
                     onKeepWorkflowCube: (metadata) => workflowLibraryActions.keep(readInstanceId(metadata)),
-                    onSaveWorkflowCubeToStable: (metadata) => {
-                        void workflowLibraryActions.saveToStable(readInstanceId(metadata));
+                    onCaptureWorkflowCube: (metadata) => {
+                        void workflowLibraryActions.capture(readInstanceId(metadata));
                     },
                     onSyncWorkflowCubeSource: (metadata) => {
                         void workflowLibraryActions.syncSource(readInstanceId(metadata));

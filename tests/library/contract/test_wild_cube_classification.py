@@ -21,7 +21,7 @@ from copy import deepcopy
 from pathlib import Path
 
 from sugarcubes.library import CatalogCubeArtifact, CubeLibraryClassService
-from sugarcubes.library.stable_repository import StableCubeRepository
+from sugarcubes.library.captured_repository import CapturedCubeRepository
 from sugarcubes.workflow import read_canonical_workflow
 from tests.workflow.support.workflow_fixtures import cube_workflow
 
@@ -32,7 +32,9 @@ def test_offline_definition_is_unsaved_wild_and_remains_read_only(
     """Classify valid embedded content without requiring any installed catalog."""
 
     workflow = read_canonical_workflow(cube_workflow())
-    service = CubeLibraryClassService(stable=StableCubeRepository(tmp_path / "stable"))
+    service = CubeLibraryClassService(
+        captured=CapturedCubeRepository(tmp_path / "captured")
+    )
 
     classification = service.classify_workflow(workflow).definitions[0]
 
@@ -40,7 +42,7 @@ def test_offline_definition_is_unsaved_wild_and_remains_read_only(
     assert classification.access == "read_only"
     assert classification.instance_ids == ("cube-sdxl-text-1",)
     assert classification.matches == ()
-    assert "save_to_stable" in classification.permitted_operations
+    assert "capture" in classification.permitted_operations
     assert "edit_definition" not in classification.permitted_operations
 
 
@@ -71,7 +73,7 @@ def test_reports_exact_and_divergent_matches_without_shadowing_workflow(
         ),
     )
     service = CubeLibraryClassService(
-        stable=StableCubeRepository(tmp_path / "stable"),
+        captured=CapturedCubeRepository(tmp_path / "captured"),
         catalog_artifacts=lambda: candidates,
     )
 
@@ -93,7 +95,7 @@ def test_writable_source_authorizes_editing_when_embedded_content_has_diverged(
     workflow = read_canonical_workflow(cube_workflow())
     definition = workflow.definitions[0]
     service = CubeLibraryClassService(
-        stable=StableCubeRepository(tmp_path / "stable"),
+        captured=CapturedCubeRepository(tmp_path / "captured"),
         catalog_artifacts=lambda: (
             CatalogCubeArtifact(
                 definition.cube_id,
@@ -130,7 +132,9 @@ def test_duplicate_instances_share_definition_classification(tmp_path: Path) -> 
     duplicate["id"] = 8
     nodes.append(duplicate)
     workflow = read_canonical_workflow(source)
-    service = CubeLibraryClassService(stable=StableCubeRepository(tmp_path / "stable"))
+    service = CubeLibraryClassService(
+        captured=CapturedCubeRepository(tmp_path / "captured")
+    )
 
     classification = service.classify_workflow(workflow).definitions[0]
 

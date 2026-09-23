@@ -139,6 +139,30 @@ const endpointCases: EndpointCase[] = [
     { method: 'POST', body: payload, ...requestOptions },
   ],
   [
+    'workflow Cube classification',
+    (api) => api.classifyWorkflow(payload, requestOptions),
+    '/sugarcubes/v2/cubes/classify-workflow',
+    { method: 'POST', body: payload, ...requestOptions },
+  ],
+  [
+    'workflow Cube capture',
+    (api) => api.captureWorkflowCube(payload, requestOptions),
+    '/sugarcubes/v2/cubes/captured',
+    { method: 'POST', body: payload, ...requestOptions },
+  ],
+  [
+    'workflow Cube fork',
+    (api) => api.forkWorkflowCube(payload, requestOptions),
+    '/sugarcubes/v2/cubes/forks',
+    { method: 'POST', body: payload, ...requestOptions },
+  ],
+  [
+    'workflow Cube source synchronization',
+    (api) => api.syncWorkflowCubeSource(payload, requestOptions),
+    '/sugarcubes/v2/cubes/sync-source',
+    { method: 'POST', body: payload, ...requestOptions },
+  ],
+  [
     'rename',
     (api) => api.rename(payload, requestOptions),
     '/sugarcubes/rename',

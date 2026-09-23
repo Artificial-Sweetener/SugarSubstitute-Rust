@@ -1,6 +1,6 @@
 #    SugarCubes - composable workflow units for ComfyUI
 #    Copyright (C) 2026  Artificial Sweetener and contributors
-"""Normalize saved native Cube state through exact versioned documents."""
+"""Normalize native Cube state from workflow-owned exact definitions."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ _EXACT_NODE_KEYS = frozenset({"class_type", "inputs", "label", "original_id"})
 
 
 class ExactCubeDocumentResolver(Protocol):
-    """Resolve one exact catalog document for saved native reconciliation."""
+    """Resolve legacy definitions that do not embed their exact document."""
 
     def resolve(self, cube_id: str, version_pin: str | None) -> CubeDocument:
         """Return the exact requested Cube document or raise a value error."""
@@ -37,10 +37,10 @@ class NativeWorkflowNormalizationError(ValueError):
 
 
 class NativeWorkflowNormalizer:
-    """Attach name-addressed values and portable documents to native Cubes."""
+    """Attach name-addressed values while preserving workflow definition truth."""
 
     def __init__(self, resolver: ExactCubeDocumentResolver) -> None:
-        """Bind exact catalog resolution at the normalization boundary."""
+        """Bind catalog fallback for legacy definitions without embedded content."""
 
         self._resolver = resolver
 
@@ -78,11 +78,10 @@ class NativeWorkflowNormalizer:
         return normalized
 
     def _exact_document(self, definition: object) -> CubeDocument:
-        """Resolve pinned Cubes while retaining embedded authority for drafts."""
+        """Use embedded authority, falling back only for legacy references."""
 
         embedded = getattr(definition, "document")
-        payload = getattr(definition, "payload")
-        if _is_cube_draft(payload) and isinstance(embedded, Mapping):
+        if isinstance(embedded, Mapping):
             return CubeDocument.from_dict(embedded)
         cube_id = str(getattr(definition, "cube_id"))
         cube_version = str(getattr(definition, "cube_version"))
@@ -92,16 +91,6 @@ class NativeWorkflowNormalizer:
             raise NativeWorkflowNormalizationError(
                 f"Cube '{cube_id}' version '{cube_version}' cannot be normalized: {error}"
             ) from error
-
-
-def _is_cube_draft(payload: object) -> bool:
-    """Return whether one native definition is an unpublished Cube draft."""
-
-    if not isinstance(payload, Mapping):
-        return False
-    extra = payload.get("extra")
-    return isinstance(extra, Mapping) and extra.get("sugarcubes_kind") == "cube_draft"
-
 
 def _reconcile_definition(
     native_definition: dict[str, object],

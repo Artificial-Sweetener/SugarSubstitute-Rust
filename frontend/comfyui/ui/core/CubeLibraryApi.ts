@@ -247,12 +247,12 @@ export class CubeLibraryApi {
     });
   }
 
-  /** Preserve exact embedded content in the read-only Wild Cube Stable. */
-  async saveWorkflowCubeToStable(
+  /** Preserve exact embedded content as a read-only Captured Cube. */
+  async captureWorkflowCube(
     payload: BodyInit | null,
     options: RequestInit = {},
   ): Promise<ApiJsonResult> {
-    return this.fetchJson('/sugarcubes/v2/cubes/stable', {
+    return this.fetchJson('/sugarcubes/v2/cubes/captured', {
       method: 'POST',
       body: payload,
       ...options,
