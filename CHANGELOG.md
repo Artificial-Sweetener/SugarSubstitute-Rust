@@ -1,3 +1,10 @@
+# [0.15.0](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.14.10...v0.15.0) (2026-09-23)
+
+
+### Bug Fixes
+
+* **release:** recognize breaking feature subjects ([1299146](https://github.com/Artificial-Sweetener/SugarCubes/commit/1299146ef2f0d5e2a855982d8bba578d91144976))
+
 ## [0.14.10](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.14.9...v0.14.10) (2026-09-22)
 
 
