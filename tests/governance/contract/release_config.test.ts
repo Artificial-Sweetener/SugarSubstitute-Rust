@@ -16,7 +16,7 @@
 import { readFileSync } from 'node:fs';
 
 interface ReleaseConfig {
-  plugins: Array<string | [string, { releaseRules?: unknown[] }]>;
+  plugins: Array<string | [string, { preset?: string; releaseRules?: unknown[] }]>;
 }
 
 const releaseConfig = JSON.parse(
@@ -30,6 +30,9 @@ describe('semantic-release configuration', () => {
     );
 
     expect(commitAnalyzer).toBeDefined();
+    expect(Array.isArray(commitAnalyzer) ? commitAnalyzer[1].preset : undefined).toBe(
+      'conventionalcommits',
+    );
     expect(Array.isArray(commitAnalyzer) ? commitAnalyzer[1].releaseRules : undefined).toEqual(
       expect.arrayContaining([{ breaking: true, release: 'minor' }]),
     );
