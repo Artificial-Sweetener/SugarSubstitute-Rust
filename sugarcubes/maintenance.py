@@ -45,7 +45,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         workspace_path = Path(args.workspace).expanduser().resolve()
         services = build_backend_services(
             extension_root(),
-            workspace_path=workspace_path,
             custom_nodes_root=workspace_path / "custom_nodes",
         )
         if args.action == "preflight":

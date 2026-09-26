@@ -19,6 +19,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+from .dependency_acquisition_diagnostics import dependency_acquisition_phase
 from .dependency_registry_source import RegistrySource
 from .dependency_python_requirements import DependencyPythonRequirementsInstaller
 from .dependency_versions import classify_version
@@ -83,14 +84,24 @@ class TrustedSourceArchiveInstaller:
             new_tracked_files = tracked_source_files(source_path)
         with transaction:
             backup_path = Path(transaction.name) / "previous"
-            self._install_requirements(source_path, extension)
-            _apply_source_transaction(
-                source_path=source_path,
-                target_path=target_path,
-                old_tracked_files=old_tracked_files or (),
-                new_tracked_files=new_tracked_files,
-                backup_path=backup_path,
-            )
+            with dependency_acquisition_phase(
+                node_id=extension.node_id,
+                operation="requirements_install",
+                source="python",
+            ):
+                self._install_requirements(source_path, extension)
+            with dependency_acquisition_phase(
+                node_id=extension.node_id,
+                operation="filesystem_apply",
+                source="archive",
+            ):
+                _apply_source_transaction(
+                    source_path=source_path,
+                    target_path=target_path,
+                    old_tracked_files=old_tracked_files or (),
+                    new_tracked_files=new_tracked_files,
+                    backup_path=backup_path,
+                )
         return SourceArchiveInstallResult(
             node_id=extension.node_id,
             version=extension.package_version or version,
@@ -117,16 +128,31 @@ class TrustedSourceArchiveInstaller:
         try:
             archive_path = transaction_root / "node.zip"
             source_path = transaction_root / "source"
-            self._downloader(extension.package_url, archive_path)
-            tracked_files = extract_registry_package_archive(
-                archive_path=archive_path,
-                target_path=source_path,
-            )
-            validate_source_identity(
-                source_path=source_path,
-                extension=extension,
-                version=extension.package_version,
-            )
+            with dependency_acquisition_phase(
+                node_id=extension.node_id,
+                operation="archive_download",
+                source="registry_artifact",
+            ):
+                self._downloader(extension.package_url, archive_path)
+            with dependency_acquisition_phase(
+                node_id=extension.node_id,
+                operation="archive_extract",
+                source="registry_artifact",
+            ):
+                tracked_files = extract_registry_package_archive(
+                    archive_path=archive_path,
+                    target_path=source_path,
+                )
+            with dependency_acquisition_phase(
+                node_id=extension.node_id,
+                operation="source_validate",
+                source="registry_artifact",
+            ):
+                validate_source_identity(
+                    source_path=source_path,
+                    extension=extension,
+                    version=extension.package_version,
+                )
         except (OSError, RuntimeError, ValueError, zipfile.BadZipFile):
             transaction.cleanup()
             raise
@@ -147,16 +173,31 @@ class TrustedSourceArchiveInstaller:
             try:
                 archive_path = transaction_root / "source.zip"
                 extracted_path = transaction_root / "source"
-                self._downloader(archive_url, archive_path)
-                source_path = extract_single_root_archive(
-                    archive_path=archive_path,
-                    target_path=extracted_path,
-                )
-                validate_source_identity(
-                    source_path=source_path,
-                    extension=extension,
-                    version=version,
-                )
+                with dependency_acquisition_phase(
+                    node_id=extension.node_id,
+                    operation="archive_download",
+                    source="github_source",
+                ):
+                    self._downloader(archive_url, archive_path)
+                with dependency_acquisition_phase(
+                    node_id=extension.node_id,
+                    operation="archive_extract",
+                    source="github_source",
+                ):
+                    source_path = extract_single_root_archive(
+                        archive_path=archive_path,
+                        target_path=extracted_path,
+                    )
+                with dependency_acquisition_phase(
+                    node_id=extension.node_id,
+                    operation="source_validate",
+                    source="github_source",
+                ):
+                    validate_source_identity(
+                        source_path=source_path,
+                        extension=extension,
+                        version=version,
+                    )
             except (OSError, RuntimeError, ValueError, zipfile.BadZipFile) as exc:
                 failures.append(exc)
                 transaction.cleanup()

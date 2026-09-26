@@ -21,6 +21,9 @@ from sugarcubes.backend.services.dependency_approval_policy import (
     skipped_install_items,
     skipped_version_items,
 )
+from sugarcubes.backend.services.dependency_install_plan import (
+    build_dependency_install_plan,
+)
 from sugarcubes.backend.services.dependency_requirements import (
     extract_versioned_requirements,
 )
@@ -36,6 +39,33 @@ from sugarcubes.backend.services.dependency_version_types import (
 )
 from sugarcubes.backend.services.dependency_versions import classify_version
 from tests.support.command_repository import CommandRepository
+
+
+def test_install_plan_preserves_the_consolidated_version_policy() -> None:
+    """Keep exact-version semantics intact through installation planning."""
+
+    plan = build_dependency_install_plan(
+        requirement_records=(
+            {
+                "node_id": "comfyui-prompt-control",
+                "display_name": "Prompt Control",
+                "pack_ref": "Artificial-Sweetener/Base-Cubes",
+                "cube_id": "Artificial-Sweetener/Base-Cubes/demo.cube",
+                "default_base_repo": True,
+            },
+        ),
+        installed=set(),
+        version_plan=(
+            {
+                "nodeId": "comfyui-prompt-control",
+                "requiredVersion": "3.0.0-beta.3",
+                "requiredVersionKind": "semver",
+                "requiredVersionPolicy": "exact",
+            },
+        ),
+    )
+
+    assert plan[0]["requiredVersionPolicy"] == "exact"
 
 
 def test_extract_versioned_requirements_preserves_nodes_and_deduplicates_fallbacks() -> (

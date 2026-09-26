@@ -22,25 +22,51 @@ from typing import Any
 from tests.backend_api.support.typing_support import BackendServicesFactory
 
 import json
+import logging
 import subprocess
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Sequence
 
 import pytest
 
 from sugarcubes.backend.services.cube_dependency_service import CubeDependencyService
-from sugarcubes.backend.services.dependency_cli import ComfyCliAdapter
+from sugarcubes.backend.services.dependency_acquisition import DependencyAcquirer
 from sugarcubes.backend.services.dependency_python_requirements import (
     DependencyPythonRequirementsInstaller,
-)
-from sugarcubes.backend.services.dependency_registry_source import (
-    RegistrySourceResolver,
 )
 
 from tests.library.contract.test_cube_library_backend_contract import (
     _cube_payload_with_cnr,
     _write_cube,
 )
+
+
+class RecordingAcquirer(DependencyAcquirer):
+    """Record approved acquisition requests without external side effects."""
+
+    def __init__(self, *, return_code: int = 0, reason: str = "") -> None:
+        """Initialize deterministic acquisition results."""
+
+        self.items: list[dict[str, Any]] = []
+        self._return_code = return_code
+        self._reason = reason
+
+    def acquire(self, item: Mapping[str, Any]) -> dict[str, Any]:
+        """Record one plan item and return its configured result."""
+
+        recorded = dict(item)
+        self.items.append(recorded)
+        return {
+            "nodeId": recorded.get("nodeId", ""),
+            "requestedVersion": recorded.get("requiredVersion", ""),
+            "operation": "registry_source_install",
+            "acquisitionSource": "registry_artifact",
+            "returnCode": self._return_code,
+            "reason": self._reason,
+            "stdout": "",
+            "stderr": "",
+        }
 
 
 def _completed(
@@ -65,20 +91,6 @@ def _recorded_completed(
     return _completed(command)
 
 
-def _unavailable_source_resolver() -> RegistrySourceResolver:
-    """Return a deterministic Registry outage boundary for failure tests."""
-
-    def unavailable(node_id: str) -> dict[str, object]:
-        """Raise the same recoverable failure as unavailable Registry metadata."""
-
-        raise RuntimeError(f"Registry metadata unavailable for {node_id}")
-
-    return RegistrySourceResolver(
-        loader=unavailable,
-        install_loader=lambda node_id, version: None,
-    )
-
-
 def _write_satisfied_prompt_control(custom_nodes_root: Path) -> None:
     """Materialize the exact implied dependency for unrelated repair tests."""
 
@@ -98,48 +110,33 @@ def _write_satisfied_prompt_control(custom_nodes_root: Path) -> None:
 def test_repair_installs_baseline_nodes_without_prompt(
     tmp_path: Path,
     backend_services_factory: BackendServicesFactory,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Base-Cubes-only dependency repair runs under the silent baseline policy."""
-
-    commands: list[list[str]] = []
-
-    def runner(
-        command: Sequence[str], cwd: Path, timeout_seconds: int
-    ) -> subprocess.CompletedProcess[str]:
-        _ = cwd, timeout_seconds
-        commands.append(list(command))
-        return _completed(command)
 
     services = backend_services_factory(tmp_path, git_runner=lambda args, cwd: None)
     checkout = services.tracked_repos.checkout_path(
         "Artificial-Sweetener", "Base-Cubes"
     )
     _write_cube(checkout / "demo.cube", _cube_payload_with_cnr())
+    acquirer = RecordingAcquirer()
     service = CubeDependencyService(
         library_service=services.library,
         tracked_repo_service=services.tracked_repos,
-        workspace_path=tmp_path / "ComfyUI",
         custom_nodes_root=tmp_path / "custom_nodes",
-        cli_adapter=ComfyCliAdapter(
-            python_executable=tmp_path / "ComfyUI" / "venv" / "Scripts" / "python.exe",
-            runner=runner,
-        ),
+        acquirer=acquirer,
     )
 
-    result = service.repair(approval_policy="silent_baseline_only")
+    with caplog.at_level(logging.DEBUG):
+        result = service.repair(approval_policy="silent_baseline_only")
 
     assert result["installedNodes"][0]["nodeId"] == "comfyui-impact-pack"
-    assert commands[0][-1] == "import comfy_cli"
-    assert commands[1][-6:] == [
-        "node",
-        "install",
-        "--exit-on-fail",
-        "--mode",
-        "remote",
-        "comfyui-impact-pack",
-    ]
-    assert "--workspace" in commands[1]
-    assert "--skip-prompt" in commands[1]
+    assert acquirer.items[0]["nodeId"] == "comfyui-impact-pack"
+    assert any(
+        "event=sugarcubes_dependency_repair_timing" in record.getMessage()
+        and "installed_count=1" in record.getMessage()
+        for record in caplog.records
+    )
 
 
 def test_repair_never_removes_an_installed_pack_without_a_requirement(
@@ -156,11 +153,7 @@ def test_repair_never_removes_an_installed_pack_without_a_requirement(
     service = CubeDependencyService(
         library_service=services.library,
         tracked_repo_service=services.tracked_repos,
-        workspace_path=tmp_path / "ComfyUI",
         custom_nodes_root=tmp_path / "custom_nodes",
-        cli_adapter=ComfyCliAdapter(
-            runner=lambda command, cwd, timeout_seconds: _completed(command)
-        ),
     )
 
     result = service.repair(approval_policy="silent_baseline_only")
@@ -176,7 +169,7 @@ def test_repair_refuses_non_default_nodes_without_approval(
 ) -> None:
     """Non-default cube pack dependencies are skipped until approved."""
 
-    commands: list[list[str]] = []
+    acquirer = RecordingAcquirer()
     services = backend_services_factory(tmp_path, git_runner=lambda args, cwd: None)
     services.tracked_repos.add_repo(
         owner="Example",
@@ -197,20 +190,15 @@ def test_repair_refuses_non_default_nodes_without_approval(
     service = CubeDependencyService(
         library_service=services.library,
         tracked_repo_service=services.tracked_repos,
-        workspace_path=tmp_path / "ComfyUI",
         custom_nodes_root=tmp_path / "custom_nodes",
-        cli_adapter=ComfyCliAdapter(
-            runner=lambda command, cwd, timeout_seconds: _recorded_completed(
-                commands, command
-            ),
-        ),
+        acquirer=acquirer,
     )
 
     result = service.repair(approval_policy="silent_baseline_only")
 
     assert result["installedNodes"] == []
     assert result["skippedNodes"][0]["nodeId"] == "comfyui-example"
-    assert commands == []
+    assert acquirer.items == []
 
 
 def test_repair_installs_any_approved_non_default_node(
@@ -219,7 +207,7 @@ def test_repair_installs_any_approved_non_default_node(
 ) -> None:
     """Install an approved cube requirement without a first-party allowlist."""
 
-    commands: list[list[str]] = []
+    acquirer = RecordingAcquirer()
     services = backend_services_factory(tmp_path, git_runner=lambda args, cwd: None)
     services.tracked_repos.add_repo(
         owner="Example",
@@ -241,13 +229,8 @@ def test_repair_installs_any_approved_non_default_node(
     service = CubeDependencyService(
         library_service=services.library,
         tracked_repo_service=services.tracked_repos,
-        workspace_path=tmp_path / "ComfyUI",
         custom_nodes_root=tmp_path / "custom_nodes",
-        cli_adapter=ComfyCliAdapter(
-            runner=lambda command, cwd, timeout_seconds: _recorded_completed(
-                commands, command
-            ),
-        ),
+        acquirer=acquirer,
     )
 
     result = service.repair(
@@ -256,7 +239,7 @@ def test_repair_installs_any_approved_non_default_node(
     )
 
     assert result["installedNodes"][0]["nodeId"] == "comfyui-example"
-    assert commands[1][-1] == "comfyui-example@4.2.0"
+    assert acquirer.items[0]["requiredVersion"] == "4.2.0"
 
 
 def test_repair_reports_cli_and_registry_source_failures_without_raising(
@@ -273,12 +256,11 @@ def test_repair_reports_cli_and_registry_source_failures_without_raising(
     service = CubeDependencyService(
         library_service=services.library,
         tracked_repo_service=services.tracked_repos,
-        workspace_path=tmp_path / "ComfyUI",
         custom_nodes_root=tmp_path / "custom_nodes",
-        cli_adapter=ComfyCliAdapter(
-            runner=lambda command, cwd, timeout_seconds: _completed(command, 1),
+        acquirer=RecordingAcquirer(
+            return_code=1,
+            reason="Registry metadata unavailable for comfyui-impact-pack",
         ),
-        source_resolver=_unavailable_source_resolver(),
     )
 
     result = service.repair(approval_policy="silent_baseline_only")
@@ -287,9 +269,6 @@ def test_repair_reports_cli_and_registry_source_failures_without_raising(
     assert result["failedNodes"][0]["nodeId"] == "comfyui-impact-pack"
     assert result["failedNodes"][0]["reason"] == (
         "Registry metadata unavailable for comfyui-impact-pack"
-    )
-    assert result["failedNodes"][0]["registryAttempt"]["reason"] == (
-        "missing_comfy_cli"
     )
     assert result["diagnostics"][0]["code"] == "sugarcubes_dependency_install_failed"
     assert result["diagnostics"][0]["severity"] == "error"
@@ -319,11 +298,7 @@ def test_sync_and_check_keeps_readiness_when_default_pack_sync_fails(
     service = CubeDependencyService(
         library_service=services.library,
         tracked_repo_service=services.tracked_repos,
-        workspace_path=tmp_path / "ComfyUI",
         custom_nodes_root=tmp_path / "custom_nodes",
-        cli_adapter=ComfyCliAdapter(
-            runner=lambda command, cwd, timeout_seconds: _completed(command)
-        ),
     )
 
     result = service.sync_and_check(
@@ -365,7 +340,6 @@ def test_sync_and_check_bootstraps_local_authoring_repository(
     service = CubeDependencyService(
         library_service=services.library,
         tracked_repo_service=services.tracked_repos,
-        workspace_path=tmp_path / "ComfyUI",
         custom_nodes_root=tmp_path / "custom_nodes",
     )
 
@@ -379,17 +353,7 @@ def test_repair_preserves_failed_install_output(
     tmp_path: Path,
     backend_services_factory: BackendServicesFactory,
 ) -> None:
-    """Comfy CLI install failures remain visible in the repair result."""
-
-    call_count = 0
-
-    def runner(
-        command: Sequence[str], cwd: Path, timeout_seconds: int
-    ) -> subprocess.CompletedProcess[str]:
-        nonlocal call_count
-        _ = cwd, timeout_seconds
-        call_count += 1
-        return _completed(command, 0 if call_count == 1 else 1)
+    """Dependency acquisition failures remain visible in the repair result."""
 
     services = backend_services_factory(tmp_path, git_runner=lambda args, cwd: None)
     checkout = services.tracked_repos.checkout_path(
@@ -399,10 +363,11 @@ def test_repair_preserves_failed_install_output(
     service = CubeDependencyService(
         library_service=services.library,
         tracked_repo_service=services.tracked_repos,
-        workspace_path=tmp_path / "ComfyUI",
         custom_nodes_root=tmp_path / "custom_nodes",
-        cli_adapter=ComfyCliAdapter(runner=runner),
-        source_resolver=_unavailable_source_resolver(),
+        acquirer=RecordingAcquirer(
+            return_code=1,
+            reason="Registry metadata unavailable for comfyui-impact-pack",
+        ),
     )
 
     result = service.repair(approval_policy="silent_baseline_only")
@@ -418,16 +383,6 @@ def test_sync_and_check_does_not_request_restart_after_failed_repair(
 ) -> None:
     """Keep the running host available when approved dependency repair fails."""
 
-    call_count = 0
-
-    def runner(
-        command: Sequence[str], cwd: Path, timeout_seconds: int
-    ) -> subprocess.CompletedProcess[str]:
-        nonlocal call_count
-        _ = cwd, timeout_seconds
-        call_count += 1
-        return _completed(command, 0 if call_count == 1 else 1)
-
     services = backend_services_factory(tmp_path, git_runner=lambda args, cwd: None)
     checkout = services.tracked_repos.checkout_path(
         "Artificial-Sweetener", "Base-Cubes"
@@ -436,10 +391,11 @@ def test_sync_and_check_does_not_request_restart_after_failed_repair(
     service = CubeDependencyService(
         library_service=services.library,
         tracked_repo_service=services.tracked_repos,
-        workspace_path=tmp_path / "ComfyUI",
         custom_nodes_root=tmp_path / "custom_nodes",
-        cli_adapter=ComfyCliAdapter(runner=runner),
-        source_resolver=_unavailable_source_resolver(),
+        acquirer=RecordingAcquirer(
+            return_code=1,
+            reason="Registry metadata unavailable for comfyui-impact-pack",
+        ),
     )
 
     result = service.sync_and_check(
@@ -510,11 +466,7 @@ def test_repair_checks_out_approved_baseline_git_version(
     service = CubeDependencyService(
         library_service=services.library,
         tracked_repo_service=services.tracked_repos,
-        workspace_path=tmp_path / "ComfyUI",
         custom_nodes_root=custom_nodes_root,
-        cli_adapter=ComfyCliAdapter(
-            runner=lambda command, cwd, timeout_seconds: _completed(command)
-        ),
     )
 
     result = service.repair(approval_policy="silent_baseline_only")
@@ -612,18 +564,11 @@ def test_repair_checks_out_exact_tag_for_clean_git_install(
             python_module="custom_nodes.SimpleSyrup",
         ),
     )
-    cli_commands: list[list[str]] = []
     requirement_commands: list[list[str]] = []
     service = CubeDependencyService(
         library_service=services.library,
         tracked_repo_service=services.tracked_repos,
-        workspace_path=tmp_path / "ComfyUI",
         custom_nodes_root=custom_nodes_root,
-        cli_adapter=ComfyCliAdapter(
-            runner=lambda command, cwd, timeout_seconds: _recorded_completed(
-                cli_commands, command
-            )
-        ),
         requirements_installer=DependencyPythonRequirementsInstaller(
             runner=lambda command, cwd, timeout_seconds: _recorded_completed(
                 requirement_commands, command
@@ -639,7 +584,6 @@ def test_repair_checks_out_exact_tag_for_clean_git_install(
     assert ("fetch", "--all", "--tags") in git_commands
     assert ("cat-file", "-e", "v1.7.1^{commit}") in git_commands
     assert ("checkout", "--detach", "v1.7.1") in git_commands
-    assert cli_commands == []
     assert requirement_commands[0][-2:] == [
         "-r",
         str(installed_path / "requirements.txt"),
@@ -735,18 +679,10 @@ def test_repair_checks_out_required_tag_for_any_clean_git_install(
     )
     requirement_commands: list[list[str]] = []
 
-    def reject_registry(command: Sequence[str], cwd: Path, timeout_seconds: int) -> Any:
-        """Fail if a clean Git installation is sent through Registry repair."""
-
-        _ = command, cwd, timeout_seconds
-        raise AssertionError("a clean Git install must use its own origin")
-
     service = CubeDependencyService(
         library_service=services.library,
         tracked_repo_service=services.tracked_repos,
-        workspace_path=tmp_path / "ComfyUI",
         custom_nodes_root=custom_nodes_root,
-        cli_adapter=ComfyCliAdapter(runner=reject_registry),
         requirements_installer=DependencyPythonRequirementsInstaller(
             runner=lambda command, cwd, timeout_seconds: _recorded_completed(
                 requirement_commands, command
@@ -835,7 +771,6 @@ def test_failed_requirements_restore_the_previous_git_revision(
     service = CubeDependencyService(
         library_service=services.library,
         tracked_repo_service=services.tracked_repos,
-        workspace_path=tmp_path / "ComfyUI",
         custom_nodes_root=custom_nodes_root,
         requirements_installer=DependencyPythonRequirementsInstaller(
             runner=lambda command, cwd, timeout_seconds: _completed(command, 1)
@@ -900,9 +835,7 @@ def test_repair_refuses_dirty_first_party_git_semver_update(
     service = CubeDependencyService(
         library_service=services.library,
         tracked_repo_service=services.tracked_repos,
-        workspace_path=tmp_path / "ComfyUI",
         custom_nodes_root=custom_nodes_root,
-        cli_adapter=ComfyCliAdapter(),
     )
 
     result = service.repair(approval_policy="silent_baseline_only")
@@ -971,11 +904,7 @@ def test_repair_blocks_git_checkout_without_repository_provenance(
     service = CubeDependencyService(
         library_service=services.library,
         tracked_repo_service=services.tracked_repos,
-        workspace_path=tmp_path / "ComfyUI",
         custom_nodes_root=custom_nodes_root,
-        cli_adapter=ComfyCliAdapter(
-            runner=lambda command, cwd, timeout_seconds: _completed(command)
-        ),
     )
 
     result = service.repair(approval_policy="silent_baseline_only")
@@ -1047,7 +976,6 @@ def test_semver_git_repair_uses_the_actual_remote_as_authoritative_source(
     service = CubeDependencyService(
         library_service=services.library,
         tracked_repo_service=services.tracked_repos,
-        workspace_path=tmp_path / "ComfyUI",
         custom_nodes_root=custom_nodes_root,
     )
 
@@ -1114,11 +1042,7 @@ def test_repair_reports_git_runner_exception_as_failed_version_item(
     service = CubeDependencyService(
         library_service=services.library,
         tracked_repo_service=services.tracked_repos,
-        workspace_path=tmp_path / "ComfyUI",
         custom_nodes_root=custom_nodes_root,
-        cli_adapter=ComfyCliAdapter(
-            runner=lambda command, cwd, timeout_seconds: _completed(command)
-        ),
     )
 
     result = service.repair(approval_policy="silent_baseline_only")
@@ -1164,24 +1088,19 @@ def test_repair_updates_baseline_semver_node_with_repository_provenance(
         json.dumps({"version": "1.0.0", "repository": "https://example.invalid/repo"}),
         encoding="utf-8",
     )
-    commands: list[list[str]] = []
+    acquirer = RecordingAcquirer()
     service = CubeDependencyService(
         library_service=services.library,
         tracked_repo_service=services.tracked_repos,
-        workspace_path=tmp_path / "ComfyUI",
         custom_nodes_root=custom_nodes_root,
-        cli_adapter=ComfyCliAdapter(
-            runner=lambda command, cwd, timeout_seconds: _recorded_completed(
-                commands, command
-            ),
-        ),
+        acquirer=acquirer,
     )
 
     result = service.repair(approval_policy="silent_baseline_only")
 
     assert result["updatedNodes"][0]["nodeId"] == "ComfyUI-Impact-Pack"
-    assert result["updatedNodes"][0]["operation"] == "comfy_registry_install"
-    assert commands[1][-1] == "ComfyUI-Impact-Pack@9.9.0"
+    assert result["updatedNodes"][0]["operation"] == "registry_source_install"
+    assert acquirer.items[0]["requiredVersion"] == "9.9.0"
 
 
 def test_repair_skips_non_default_version_update_without_approval(
@@ -1214,21 +1133,16 @@ def test_repair_skips_non_default_version_update_without_approval(
         json.dumps({"version": "1.0.0", "repository": "https://example.invalid/repo"}),
         encoding="utf-8",
     )
-    commands: list[list[str]] = []
+    acquirer = RecordingAcquirer()
     service = CubeDependencyService(
         library_service=services.library,
         tracked_repo_service=services.tracked_repos,
-        workspace_path=tmp_path / "ComfyUI",
         custom_nodes_root=custom_nodes_root,
-        cli_adapter=ComfyCliAdapter(
-            runner=lambda command, cwd, timeout_seconds: _recorded_completed(
-                commands, command
-            ),
-        ),
+        acquirer=acquirer,
     )
 
     result = service.repair(approval_policy="silent_baseline_only")
 
     assert result["updatedNodes"] == []
     assert result["skippedVersionItems"][0]["nodeId"] == "ComfyUI-Impact-Pack"
-    assert commands == []
+    assert acquirer.items == []
