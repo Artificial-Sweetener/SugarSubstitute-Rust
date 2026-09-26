@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import urllib.error
 import urllib.parse
@@ -17,8 +18,10 @@ import urllib.request
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
+from ...instrumentation.logger import log_diagnostic
 from .cube_metadata import normalize_metadata_string
 from .dependency_requirements import normalize_requirement_key
 from .dependency_versions import classify_version
@@ -27,6 +30,8 @@ _REGISTRY_API_ROOT = "https://api.comfy.org"
 _REGISTRY_TIMEOUT_SECONDS = 20
 _MAX_METADATA_BYTES = 1024 * 1024
 _SAFE_NODE_ID = re.compile(r"^[A-Za-z0-9._-]+$")
+_logger = logging.getLogger(__name__)
+_TRACE_MARKER = "SugarCubes dependency acquisition diagnostic"
 RegistryNodeLoader = Callable[[str], Mapping[str, Any]]
 RegistryInstallLoader = Callable[[str, str], Mapping[str, Any] | None]
 
@@ -43,11 +48,6 @@ class RegistrySource:
     package_version: str = ""
     package_status: str = ""
     requirements_file: Path = Path("requirements.txt")
-
-    def package_is_flagged(self) -> bool:
-        """Return whether Registry explicitly flagged this exact release."""
-
-        return self.package_status.casefold() == "nodeversionstatusflagged"
 
     def archive_urls(self, required_version: str) -> tuple[str, ...]:
         """Return safe GitHub archives in exact-to-current preference order."""
@@ -84,7 +84,7 @@ class RegistrySourceResolver:
         normalized_node_id = normalize_metadata_string(node_id)
         if not normalized_node_id or not _SAFE_NODE_ID.fullmatch(normalized_node_id):
             raise ValueError("Registry node id is not safe for installation.")
-        payload = self._loader(normalized_node_id)
+        payload = self._load_node(normalized_node_id)
         observed_id = normalize_metadata_string(payload.get("id"))
         if normalize_requirement_key(observed_id) != normalize_requirement_key(
             normalized_node_id
@@ -95,7 +95,7 @@ class RegistrySourceResolver:
         repository_url = _validated_github_repository(
             normalize_metadata_string(payload.get("repository"))
         )
-        install_payload = self._install_loader(normalized_node_id, required_version)
+        install_payload = self._load_install(normalized_node_id, required_version)
         package_url = ""
         package_version = ""
         package_status = ""
@@ -130,6 +130,46 @@ class RegistrySourceResolver:
             package_status=package_status,
         )
 
+    def _load_node(self, node_id: str) -> Mapping[str, Any]:
+        """Load node metadata and report its complete boundary duration."""
+
+        started_at = perf_counter()
+        outcome = "failure"
+        try:
+            payload = self._loader(node_id)
+            outcome = "success"
+            return payload
+        finally:
+            _log_registry_timing(
+                operation="node_metadata",
+                node_id=node_id,
+                required_version="",
+                outcome=outcome,
+                started_at=started_at,
+            )
+
+    def _load_install(
+        self,
+        node_id: str,
+        required_version: str,
+    ) -> Mapping[str, Any] | None:
+        """Load an install descriptor and report its boundary duration."""
+
+        started_at = perf_counter()
+        outcome = "failure"
+        try:
+            payload = self._install_loader(node_id, required_version)
+            outcome = "found" if payload is not None else "not_found"
+            return payload
+        finally:
+            _log_registry_timing(
+                operation="install_descriptor",
+                node_id=node_id,
+                required_version=required_version,
+                outcome=outcome,
+                started_at=started_at,
+            )
+
 
 def load_registry_node(node_id: str) -> Mapping[str, Any]:
     """Load bounded node metadata from the public Comfy Registry API."""
@@ -153,6 +193,30 @@ def load_registry_node(node_id: str) -> Mapping[str, Any]:
     if not isinstance(payload, Mapping):
         raise RuntimeError("Comfy Registry returned invalid node metadata.")
     return payload
+
+
+def _log_registry_timing(
+    *,
+    operation: str,
+    node_id: str,
+    required_version: str,
+    outcome: str,
+    started_at: float,
+) -> None:
+    """Emit one targeted Registry boundary timing."""
+
+    log_diagnostic(
+        _logger,
+        _TRACE_MARKER,
+        "sugarcubes_dependency_registry_request_timing",
+        {
+            "operation": operation,
+            "node_id": node_id,
+            "required_version": required_version,
+            "outcome": outcome,
+            "duration_ms": round((perf_counter() - started_at) * 1000, 3),
+        },
+    )
 
 
 def load_registry_install(

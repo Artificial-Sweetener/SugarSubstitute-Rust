@@ -283,7 +283,6 @@ def backend_services_factory() -> BackendServicesFactory:
         dependencies = CubeDependencyService(
             library_service=library,
             tracked_repo_service=tracked_repos,
-            workspace_path=tmp_path / "ComfyUI",
             custom_nodes_root=tmp_path / "custom_nodes",
         )
         loader = CubeLoadService(

@@ -14,8 +14,10 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
+from time import perf_counter
 from typing import Any
 
+from ...instrumentation.logger import log_diagnostic
 from ..responses import BackendError
 from .cube_library_service import CubeLibraryService
 from .cube_metadata import normalize_metadata_string
@@ -30,7 +32,6 @@ from .dependency_approval_policy import (
     skipped_install_items,
     skipped_version_items,
 )
-from .dependency_cli import ComfyCliAdapter
 from .dependency_diagnostics import (
     diagnostics_from_repair_result,
     diagnostics_from_sync_errors,
@@ -52,6 +53,7 @@ from .dependency_version_repair import DependencyVersionRepairExecutor
 from .tracked_repo_service import TrackedRepoService
 
 _logger = logging.getLogger(__name__)
+_TRACE_MARKER = "SugarCubes dependency acquisition diagnostic"
 
 
 @dataclass(frozen=True)
@@ -70,9 +72,7 @@ class CubeDependencyService:
         *,
         library_service: CubeLibraryService,
         tracked_repo_service: TrackedRepoService,
-        workspace_path: Path,
         custom_nodes_root: Path,
-        cli_adapter: ComfyCliAdapter | None = None,
         acquirer: DependencyAcquirer | None = None,
         requirements_installer: DependencyPythonRequirementsInstaller | None = None,
         source_resolver: RegistrySourceResolver | None = None,
@@ -81,15 +81,11 @@ class CubeDependencyService:
 
         self._library_service = library_service
         self._tracked_repo_service = tracked_repo_service
-        self._workspace_path = workspace_path.resolve()
         self._custom_nodes_root = custom_nodes_root.resolve()
-        dependency_cli = cli_adapter or ComfyCliAdapter()
         dependency_requirements = (
             requirements_installer or DependencyPythonRequirementsInstaller()
         )
         dependency_acquirer = acquirer or DependencyAcquirer(
-            workspace_path=self._workspace_path,
-            cli_adapter=dependency_cli,
             source_resolver=source_resolver or RegistrySourceResolver(),
             git_installer=RegistrySourceGitInstaller(
                 custom_nodes_root=self._custom_nodes_root,
@@ -174,7 +170,20 @@ class CubeDependencyService:
     ) -> dict[str, Any]:
         """Install approved missing dependencies and return readiness changes."""
 
+        started_at = perf_counter()
+        phase_started_at = started_at
+        phase_timings: dict[str, float] = {}
+
+        def record_phase(name: str) -> None:
+            """Record one repair phase and advance the local timing cursor."""
+
+            nonlocal phase_started_at
+            now = perf_counter()
+            phase_timings[name] = round((now - phase_started_at) * 1000, 3)
+            phase_started_at = now
+
         sync_errors = self._sync_enabled_repos(sync_enabled_repos)
+        record_phase("repo_sync_ms")
         before = self.readiness()
         selected_items = select_install_items(
             before.get("installPlan"),
@@ -182,7 +191,9 @@ class CubeDependencyService:
             approved_node_ids=approved_node_ids,
         )
         skipped = skipped_install_items(before.get("installPlan"), selected_items)
+        record_phase("readiness_and_selection_ms")
         attempted, installed, failed = self._node_installer.install(selected_items)
+        record_phase("missing_dependency_install_ms")
 
         after = self.readiness()
         version_items = select_version_items(
@@ -194,6 +205,7 @@ class CubeDependencyService:
             after.get("dependencyVersionPlan"), version_items
         )
         version_blocked = blocked_version_items(after.get("dependencyVersionPlan"))
+        record_phase("post_install_readiness_ms")
         version_results: list[dict[str, Any]] = []
         version_failures: list[dict[str, Any]] = []
         for item in version_items:
@@ -210,9 +222,12 @@ class CubeDependencyService:
         for item in version_blocked:
             log_version_selected(item)
             log_update_failed(item, item.get("remediation") or item.get("status"))
+        record_phase("version_repair_ms")
         if installed or version_results:
             log_restart_required()
 
+        final_readiness = self.readiness()
+        record_phase("final_readiness_ms")
         response_payload: dict[str, Any] = {
             "schemaVersion": 1,
             "syncErrors": sync_errors,
@@ -226,13 +241,31 @@ class CubeDependencyService:
             "skippedVersionItems": version_skipped,
             "blockedVersionItems": version_blocked,
             "failedVersionItems": version_failures,
-            "readinessAfter": self.readiness(),
+            "readinessAfter": final_readiness,
             "restartRequired": bool(installed or version_results),
         }
         response_payload["diagnostics"] = [
             *diagnostics_from_sync_errors(sync_errors),
             *diagnostics_from_repair_result(response_payload),
         ]
+        log_diagnostic(
+            _logger,
+            _TRACE_MARKER,
+            "sugarcubes_dependency_repair_timing",
+            {
+                "selected_install_count": len(selected_items),
+                "installed_count": len(installed),
+                "failed_install_count": len(failed),
+                "selected_version_count": len(version_items),
+                "updated_count": len(version_results),
+                "failed_version_count": len(version_failures),
+                "total_duration_ms": round(
+                    (perf_counter() - started_at) * 1000,
+                    3,
+                ),
+                **phase_timings,
+            },
+        )
         return response_payload
 
     def _sync_enabled_repos(self, enabled: bool) -> list[dict[str, Any]]:

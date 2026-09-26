@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import logging
 import shutil
 import stat
 import subprocess
@@ -19,7 +20,6 @@ from pathlib import Path
 import pytest
 
 from sugarcubes.backend.services.dependency_acquisition import DependencyAcquirer
-from sugarcubes.backend.services.dependency_cli import ComfyCliAdapter, SubprocessRunner
 from sugarcubes.backend.services.dependency_registry_source import (
     RegistrySource,
     RegistrySourceResolver,
@@ -89,49 +89,97 @@ def test_registry_receives_the_exact_required_version_before_fallback(
 ) -> None:
     """Request the cube's semver instead of Registry latest."""
 
-    commands: list[list[str]] = []
-
-    def runner(
-        command: Sequence[str], cwd: Path, timeout_seconds: int
-    ) -> subprocess.CompletedProcess[str]:
-        _ = cwd, timeout_seconds
-        commands.append(list(command))
-        return subprocess.CompletedProcess(command, 0, stdout="ok", stderr="")
-
-    acquirer = _acquirer(tmp_path, runner=runner)
+    archive_path = _release_archive(tmp_path, flat=True)
+    install_requests: list[tuple[str, str]] = []
+    acquirer = _acquirer(
+        tmp_path,
+        archive_path=archive_path,
+        install_requests=install_requests,
+    )
 
     result = acquirer.acquire(_install_item())
 
     assert result["returnCode"] == 0
-    assert result["acquisitionSource"] == "registry"
-    assert commands[1][-3:-1] == ["--mode", "remote"]
-    assert commands[1][-1] == "SimpleSyrup@1.7.1"
-    assert not (tmp_path / "custom_nodes" / "SimpleSyrup").exists()
+    assert result["acquisitionSource"] == "registry_artifact"
+    assert install_requests == [("SimpleSyrup", "1.7.1")]
 
 
-def test_cli_failure_installs_the_exact_registry_artifact(
+def test_versionless_requirement_installs_registry_selected_release(
     tmp_path: Path,
 ) -> None:
-    """Fall back from Comfy CLI to the exact package published by Registry."""
+    """Install Registry latest directly when a cube declares no version."""
+
+    archive_path = _release_archive(tmp_path, flat=True)
+    install_requests: list[tuple[str, str]] = []
+    acquirer = _acquirer(
+        tmp_path,
+        archive_path=archive_path,
+        install_requests=install_requests,
+        registry_version="1.7.1",
+    )
+
+    result = acquirer.acquire(
+        {
+            **_install_item(),
+            "requiredVersion": "",
+            "requiredVersionKind": "missing",
+            "requiredVersionPolicy": "minimum",
+        }
+    )
+
+    assert result["returnCode"] == 0
+    assert result["requestedVersion"] == ""
+    assert result["installedVersion"] == "1.7.1"
+    assert install_requests == [("SimpleSyrup", "")]
+
+
+def test_active_registry_artifact_bypasses_comfy_cli(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Install a targeted active Registry artifact without catalog subprocesses."""
 
     archive_path = _release_archive(tmp_path, flat=True)
 
-    def runner(
-        command: Sequence[str], cwd: Path, timeout_seconds: int
-    ) -> subprocess.CompletedProcess[str]:
-        _ = cwd, timeout_seconds
-        is_availability_check = command[-1] == "import comfy_cli"
-        return subprocess.CompletedProcess(
-            command,
-            0 if is_availability_check else 1,
-            stdout="",
-            stderr="Registry version unavailable",
-        )
+    acquirer = _acquirer(
+        tmp_path,
+        archive_path=archive_path,
+    )
+
+    with caplog.at_level(logging.DEBUG):
+        result = acquirer.acquire(_install_item())
+
+    assert result["returnCode"] == 0
+    assert result["acquisitionSource"] == "registry_artifact"
+    assert (tmp_path / "custom_nodes" / "SimpleSyrup" / ".tracking").is_file()
+    messages = [record.getMessage() for record in caplog.records]
+    assert any(
+        "event=sugarcubes_dependency_registry_request_timing" in message
+        and "operation=node_metadata" in message
+        for message in messages
+    )
+    assert any(
+        "event=sugarcubes_dependency_acquisition_phase_timing" in message
+        and "operation=archive_download" in message
+        for message in messages
+    )
+    assert any(
+        "event=sugarcubes_dependency_acquisition_timing" in message
+        and "outcome=success" in message
+        for message in messages
+    )
+
+
+def test_targeted_acquisition_installs_the_exact_registry_artifact(
+    tmp_path: Path,
+) -> None:
+    """Install the exact package published by Registry."""
+
+    archive_path = _release_archive(tmp_path, flat=True)
 
     requirements = RecordingRequirementsInstaller()
     acquirer = _acquirer(
         tmp_path,
-        runner=runner,
         archive_path=archive_path,
         requirements=requirements,
     )
@@ -142,7 +190,6 @@ def test_cli_failure_installs_the_exact_registry_artifact(
     assert result["returnCode"] == 0
     assert result["acquisitionSource"] == "registry_artifact"
     assert result["requestedVersion"] == "1.7.1"
-    assert result["registryAttempt"]["returnCode"] == 1
     assert (installed / "simple_syrup" / "__init__.py").is_file()
     assert requirements.paths[0].name == "requirements.txt"
     assert "simple_syrup/__init__.py" in (installed / ".tracking").read_text(
@@ -157,12 +204,6 @@ def test_arbitrary_registry_node_uses_authoritative_source_fallback(
 
     source_calls: list[str] = []
 
-    def runner(
-        command: Sequence[str], cwd: Path, timeout_seconds: int
-    ) -> subprocess.CompletedProcess[str]:
-        _ = cwd, timeout_seconds
-        return subprocess.CompletedProcess(command, 1, stdout="", stderr="failed")
-
     archive_path = _release_archive(
         tmp_path,
         project_name="SomeThirdPartyNode",
@@ -171,7 +212,6 @@ def test_arbitrary_registry_node_uses_authoritative_source_fallback(
     )
     acquirer = _acquirer(
         tmp_path,
-        runner=runner,
         archive_path=archive_path,
         source_calls=source_calls,
         source_payload={
@@ -194,26 +234,11 @@ def test_pending_registry_review_uses_exact_validated_github_release(
 ) -> None:
     """Install the required tag when Registry metadata has not published it yet."""
 
-    commands: list[list[str]] = []
     source_calls: list[str] = []
-
-    def runner(
-        command: Sequence[str], cwd: Path, timeout_seconds: int
-    ) -> subprocess.CompletedProcess[str]:
-        _ = cwd, timeout_seconds
-        commands.append(list(command))
-        is_availability_check = command[-1] == "import comfy_cli"
-        return subprocess.CompletedProcess(
-            command,
-            0 if is_availability_check else 1,
-            stdout="",
-            stderr="Version is not available in the Registry",
-        )
 
     archive_path = _release_archive(tmp_path)
     acquirer = _acquirer(
         tmp_path,
-        runner=runner,
         archive_path=archive_path,
         source_calls=source_calls,
         registry_artifact=False,
@@ -224,7 +249,6 @@ def test_pending_registry_review_uses_exact_validated_github_release(
     assert result["returnCode"] == 0
     assert result["requestedVersion"] == "1.7.1"
     assert result["acquisitionSource"] == "github_source"
-    assert commands[1][-3:] == ["--mode", "remote", "SimpleSyrup@1.7.1"]
     assert source_calls == [
         "https://github.com/Artificial-Sweetener/SimpleSyrup/archive/refs/tags/"
         "v1.7.1.zip"
@@ -241,15 +265,7 @@ def test_flagged_exact_release_uses_validated_github_tag_instead_of_registry(
 ) -> None:
     """Bypass Registry execution and CDN artifacts for a flagged exact release."""
 
-    commands: list[list[str]] = []
     source_calls: list[str] = []
-
-    def runner(
-        command: Sequence[str], cwd: Path, timeout_seconds: int
-    ) -> subprocess.CompletedProcess[str]:
-        _ = cwd, timeout_seconds
-        commands.append(list(command))
-        return subprocess.CompletedProcess(command, 0, stdout="ok", stderr="")
 
     archive_path = _release_archive(
         tmp_path,
@@ -259,7 +275,6 @@ def test_flagged_exact_release_uses_validated_github_tag_instead_of_registry(
     )
     acquirer = _acquirer(
         tmp_path,
-        runner=runner,
         archive_path=archive_path,
         source_calls=source_calls,
         source_payload={
@@ -281,7 +296,6 @@ def test_flagged_exact_release_uses_validated_github_tag_instead_of_registry(
 
     assert result["returnCode"] == 0
     assert result["acquisitionSource"] == "github_source"
-    assert commands == []
     assert source_calls == [
         "https://github.com/asagi4/comfyui-prompt-control/archive/refs/tags/"
         "v3.0.0-beta.10.zip"
@@ -335,22 +349,43 @@ def test_missing_sha_requirement_installs_manager_visible_git_checkout(
             )
         return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
-    result = RegistrySourceGitInstaller(
-        custom_nodes_root=tmp_path / "custom_nodes",
-        repositories=CommandRepository(git_runner),
-        requirements_installer=RecordingRequirementsInstaller(),
-    ).install(
-        extension=RegistrySource(
-            node_id="example-node",
-            project_name="example-node",
-            repository_url="https://github.com/example/example-node",
-            target_folder_name="example-node",
+    acquirer = DependencyAcquirer(
+        source_resolver=RegistrySourceResolver(
+            loader=lambda node_id: {
+                "id": node_id,
+                "repository": "https://github.com/example/example-node",
+            },
+            install_loader=lambda node_id, version: None,
         ),
-        git_ref=required_sha,
+        source_installer=TrustedSourceArchiveInstaller(
+            custom_nodes_root=tmp_path / "custom_nodes",
+            requirements_installer=RecordingRequirementsInstaller(),
+            downloader=lambda url, target: pytest.fail(
+                f"unexpected archive download: {url} -> {target}"
+            ),
+        ),
+        git_installer=RegistrySourceGitInstaller(
+            custom_nodes_root=tmp_path / "custom_nodes",
+            repositories=CommandRepository(git_runner),
+            requirements_installer=RecordingRequirementsInstaller(),
+        ),
+    )
+    result = acquirer.acquire(
+        {
+            "nodeId": "example-node",
+            "requiredVersion": required_sha,
+            "requiredVersionKind": "git_sha",
+            "requiredVersionPolicy": "exact",
+            "installedEvidence": None,
+        }
     )
 
-    assert result.target_path.name == "example-node"
-    assert (result.target_path / ".git" / ".cnr-id").read_text(
+    target_path = Path(result["targetPath"])
+    assert result["returnCode"] == 0
+    assert result["acquisitionSource"] == "github_commit"
+    assert result["installedVersion"] == required_sha
+    assert target_path.name == "example-node"
+    assert (target_path / ".git" / ".cnr-id").read_text(
         encoding="utf-8"
     ) == "example-node"
     assert ["cat-file", "-e", f"{required_sha}^{{commit}}"] in commands
@@ -485,13 +520,14 @@ def test_archive_extraction_rejects_escaping_or_chained_aliases(tmp_path: Path) 
 def _acquirer(
     tmp_path: Path,
     *,
-    runner: SubprocessRunner,
     archive_path: Path | None = None,
     requirements: RecordingRequirementsInstaller | None = None,
     source_calls: list[str] | None = None,
+    install_requests: list[tuple[str, str]] | None = None,
     source_payload: dict[str, object] | None = None,
     registry_artifact: bool = True,
     registry_status: str = "NodeVersionStatusActive",
+    registry_version: str | None = None,
 ) -> DependencyAcquirer:
     """Build the production acquisition path around deterministic boundaries."""
 
@@ -509,8 +545,6 @@ def _acquirer(
         raise AssertionError("Git source fallback must not run")
 
     return DependencyAcquirer(
-        workspace_path=tmp_path / "ComfyUI",
-        cli_adapter=ComfyCliAdapter(runner=runner),
         source_resolver=RegistrySourceResolver(
             loader=lambda node_id: (
                 source_payload
@@ -519,15 +553,13 @@ def _acquirer(
                     "repository": "https://github.com/Artificial-Sweetener/SimpleSyrup",
                 }
             ),
-            install_loader=lambda node_id, version: (
-                {
-                    "node_id": node_id,
-                    "version": version,
-                    "downloadUrl": "https://cdn.comfy.org/test/node.zip",
-                    "status": registry_status,
-                }
-                if registry_artifact
-                else None
+            install_loader=lambda node_id, version: _registry_install_payload(
+                node_id=node_id,
+                version=version,
+                requests=install_requests,
+                registry_artifact=registry_artifact,
+                registry_status=registry_status,
+                registry_version=registry_version,
             ),
         ),
         source_installer=TrustedSourceArchiveInstaller(
@@ -541,6 +573,29 @@ def _acquirer(
             requirements_installer=requirements or RecordingRequirementsInstaller(),
         ),
     )
+
+
+def _registry_install_payload(
+    *,
+    node_id: str,
+    version: str,
+    requests: list[tuple[str, str]] | None,
+    registry_artifact: bool,
+    registry_status: str,
+    registry_version: str | None,
+) -> dict[str, object] | None:
+    """Record one targeted descriptor request and return its fixture payload."""
+
+    if requests is not None:
+        requests.append((node_id, version))
+    if not registry_artifact:
+        return None
+    return {
+        "node_id": node_id,
+        "version": registry_version if registry_version is not None else version,
+        "downloadUrl": "https://cdn.comfy.org/test/node.zip",
+        "status": registry_status,
+    }
 
 
 def _source_installer(

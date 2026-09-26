@@ -109,7 +109,6 @@ class BackendServices:
 def build_backend_services(
     extension_root: Path,
     *,
-    workspace_path: Path | None = None,
     custom_nodes_root: Path | None = None,
     execution_port: ComfyExecutionPort | None = None,
 ) -> BackendServices:
@@ -234,7 +233,6 @@ def build_backend_services(
     dependencies = CubeDependencyService(
         library_service=library,
         tracked_repo_service=tracked_repos,
-        workspace_path=workspace_path or extension_root.parent.parent,
         custom_nodes_root=custom_nodes_root or extension_root.parent,
     )
     workflow_analysis = CubeGraphAnalysisService(workflow_normalizer)

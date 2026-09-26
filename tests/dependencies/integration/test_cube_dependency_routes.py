@@ -20,19 +20,42 @@ from __future__ import annotations
 from tests.backend_api.support.typing_support import BackendServicesFactory
 
 import asyncio
-import subprocess
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Sequence
+from typing import Any
 
 from sugarcubes.backend.routes import build_route_handlers
 from sugarcubes.backend.services.cube_dependency_service import CubeDependencyService
-from sugarcubes.backend.services.dependency_cli import ComfyCliAdapter
+from sugarcubes.backend.services.dependency_acquisition import DependencyAcquirer
 
 from tests.backend_api.support.backend_fixtures import FakeRequest, decode_json_response
 from tests.library.contract.test_cube_library_backend_contract import (
     _cube_payload_with_cnr,
     _write_cube,
 )
+
+
+class RecordingAcquirer(DependencyAcquirer):
+    """Record route-approved acquisition requests without external IO."""
+
+    def __init__(self) -> None:
+        """Initialize an empty request list."""
+
+        self.items: list[dict[str, Any]] = []
+
+    def acquire(self, item: Mapping[str, Any]) -> dict[str, Any]:
+        """Record one request and return a successful acquisition result."""
+
+        recorded = dict(item)
+        self.items.append(recorded)
+        return {
+            "nodeId": recorded.get("nodeId", ""),
+            "operation": "registry_source_install",
+            "returnCode": 0,
+            "reason": "",
+            "stdout": "",
+            "stderr": "",
+        }
 
 
 def test_dependency_readiness_route_has_no_install_side_effect(
@@ -62,15 +85,7 @@ def test_dependency_repair_route_installs_approved_nodes(
 ) -> None:
     """Repair route forwards approved node ids into the dependency service."""
 
-    commands: list[list[str]] = []
-
-    def runner(
-        command: Sequence[str], cwd: Path, timeout_seconds: int
-    ) -> subprocess.CompletedProcess[str]:
-        _ = cwd, timeout_seconds
-        commands.append(list(command))
-        return subprocess.CompletedProcess(list(command), 0, stdout="ok", stderr="")
-
+    acquirer = RecordingAcquirer()
     services = backend_services_factory(tmp_path, git_runner=lambda args, cwd: None)
     services.tracked_repos.add_repo(
         owner="Example",
@@ -94,9 +109,8 @@ def test_dependency_repair_route_installs_approved_nodes(
         CubeDependencyService(
             library_service=services.library,
             tracked_repo_service=services.tracked_repos,
-            workspace_path=tmp_path / "ComfyUI",
             custom_nodes_root=tmp_path / "custom_nodes",
-            cli_adapter=ComfyCliAdapter(runner=runner),
+            acquirer=acquirer,
         ),
     )
 
@@ -108,7 +122,7 @@ def test_dependency_repair_route_installs_approved_nodes(
     payload = decode_json_response(response)
 
     assert payload["attemptedInstallPlan"][0]["nodeId"] == "comfyui-example"
-    assert commands[1][-1] == "comfyui-example"
+    assert acquirer.items[0]["nodeId"] == "comfyui-example"
 
 
 def test_dependency_sync_and_check_route_returns_readiness_plan(

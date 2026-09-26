@@ -855,6 +855,7 @@ def test_backend_readiness_reports_target_missing_custom_nodes_without_install(
             "displayName": "comfyui-impact-pack",
             "requiredVersion": "",
             "requiredVersionKind": "missing",
+            "requiredVersionPolicy": "minimum",
             "existingFolderName": "",
             "requiredByPacks": ["Artificial-Sweetener/Base-Cubes"],
             "requiredByCubeIds": [CANONICAL_CUBE_ID],

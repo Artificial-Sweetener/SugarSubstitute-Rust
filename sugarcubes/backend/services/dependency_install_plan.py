@@ -57,6 +57,7 @@ def build_dependency_install_plan(
                 or node_id,
                 "requiredVersion": "",
                 "requiredVersionKind": "missing",
+                "requiredVersionPolicy": "minimum",
                 "existingFolderName": "",
                 "requiredByPacks": [],
                 "requiredByCubeIds": [],
@@ -86,6 +87,10 @@ def build_dependency_install_plan(
             item["requiredVersionKind"] = (
                 normalize_metadata_string(version_item.get("requiredVersionKind"))
                 or "missing"
+            )
+            item["requiredVersionPolicy"] = (
+                normalize_metadata_string(version_item.get("requiredVersionPolicy"))
+                or "minimum"
             )
         existing_folder = installed_by_key.get(key, "")
         item["existingFolderName"] = existing_folder

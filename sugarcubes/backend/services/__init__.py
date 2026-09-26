@@ -18,7 +18,6 @@
 from .cube_export_service import CubeExportService
 from .cube_artifact_repository import CubeArtifactRepository
 from .cube_dependency_service import CubeDependencyService
-from .dependency_cli import ComfyCliAdapter
 from .cube_catalog_state_service import CubeCatalogStateService
 from .cube_library_service import CubeLibraryService
 from .cube_history_service import CubeHistoryService
@@ -46,7 +45,6 @@ from .workflow_source_sync_port import WorkflowSourceSyncPort
 __all__ = [
     "CubeExportService",
     "CubeArtifactRepository",
-    "ComfyCliAdapter",
     "CubeDependencyService",
     "CubeCatalogStateService",
     "CubeLibraryService",

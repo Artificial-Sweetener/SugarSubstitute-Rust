@@ -14,18 +14,18 @@ import subprocess
 import urllib.error
 import zipfile
 from collections.abc import Mapping
-from pathlib import Path
+from time import perf_counter
 from typing import Any
 
-from ..responses import BackendError
+from ...instrumentation.logger import log_diagnostic
 from .cube_metadata import normalize_metadata_string
-from .dependency_cli import ComfyCliAdapter, ComfyCliResult
-from .dependency_registry_source import RegistrySource, RegistrySourceResolver
+from .dependency_registry_source import RegistrySourceResolver
 from .dependency_source_archive import TrustedSourceArchiveInstaller
 from .dependency_source_git import RegistrySourceGitInstaller
 from .dependency_versions import classify_version
 
 _logger = logging.getLogger(__name__)
+_TRACE_MARKER = "SugarCubes dependency acquisition diagnostic"
 
 
 class DependencyAcquirer:
@@ -34,16 +34,12 @@ class DependencyAcquirer:
     def __init__(
         self,
         *,
-        workspace_path: Path,
-        cli_adapter: ComfyCliAdapter,
         source_installer: TrustedSourceArchiveInstaller,
         source_resolver: RegistrySourceResolver,
         git_installer: RegistrySourceGitInstaller,
     ) -> None:
         """Initialize acquisition through explicit external-system adapters."""
 
-        self._workspace_path = workspace_path
-        self._cli_adapter = cli_adapter
         self._source_installer = source_installer
         self._source_resolver = source_resolver
         self._git_installer = git_installer
@@ -51,59 +47,43 @@ class DependencyAcquirer:
     def acquire(self, item: Mapping[str, Any]) -> dict[str, Any]:
         """Acquire one approved dependency without trusting cube-authored URLs."""
 
+        started_at = perf_counter()
+        payload = self._acquire(item)
         node_id = normalize_metadata_string(item.get("nodeId"))
         required_version = normalize_metadata_string(item.get("requiredVersion"))
-        required_policy = normalize_metadata_string(item.get("requiredVersionPolicy"))
-        registry_result: ComfyCliResult | None = None
-        registry_failure = ""
-        extension: RegistrySource | None = None
-        if (
-            required_policy == "exact"
-            and classify_version(required_version) == "semver"
-        ):
-            try:
-                extension = self._source_resolver.resolve(node_id, required_version)
-            except (OSError, RuntimeError, ValueError, urllib.error.URLError) as exc:
-                registry_failure = str(exc).strip() or type(exc).__name__
-        flagged_release = extension is not None and extension.package_is_flagged()
-        if flagged_release:
-            registry_failure = "Comfy Registry release is flagged"
-        else:
-            try:
-                self._cli_adapter.assert_available(self._workspace_path)
-                registry_result = self._cli_adapter.install_node(
-                    workspace_path=self._workspace_path,
-                    node_id=node_id,
-                    version=(
-                        required_version
-                        if classify_version(required_version) == "semver"
-                        else ""
-                    ),
-                )
-                if registry_result.return_code == 0:
-                    return {
-                        **registry_result.to_payload(),
-                        "operation": "comfy_registry_install",
-                        "acquisitionSource": "registry",
-                        "reason": "",
-                    }
-                registry_failure = "Comfy Registry exact-version install failed"
-            except BackendError as exc:
-                registry_failure = (
-                    normalize_metadata_string(exc.details.get("reason")) or exc.message
-                )
-            except (OSError, subprocess.SubprocessError) as exc:
-                _logger.warning(
-                    "SugarCubes: could not execute Comfy CLI for %s",
-                    node_id,
-                    exc_info=True,
-                )
-                registry_failure = str(exc).strip() or type(exc).__name__
+        log_diagnostic(
+            _logger,
+            _TRACE_MARKER,
+            "sugarcubes_dependency_acquisition_timing",
+            {
+                "node_id": node_id,
+                "required_version": required_version,
+                "required_version_kind": normalize_metadata_string(
+                    item.get("requiredVersionKind")
+                ),
+                "required_version_policy": normalize_metadata_string(
+                    item.get("requiredVersionPolicy")
+                ),
+                "acquisition_source": normalize_metadata_string(
+                    payload.get("acquisitionSource")
+                ),
+                "operation": normalize_metadata_string(payload.get("operation")),
+                "outcome": ("success" if payload.get("returnCode") == 0 else "failure"),
+                "total_duration_ms": round(
+                    (perf_counter() - started_at) * 1000,
+                    3,
+                ),
+            },
+        )
+        return payload
 
+    def _acquire(self, item: Mapping[str, Any]) -> dict[str, Any]:
+        """Execute one validated targeted acquisition."""
+
+        node_id = normalize_metadata_string(item.get("nodeId"))
+        required_version = normalize_metadata_string(item.get("requiredVersion"))
         try:
-            extension = extension or self._source_resolver.resolve(
-                node_id, required_version
-            )
+            extension = self._source_resolver.resolve(node_id, required_version)
             unsafe_reason = _unsafe_existing_source_reason(
                 item.get("installedEvidence"),
                 expected_repository=extension.repository_url,
@@ -115,11 +95,7 @@ class DependencyAcquirer:
                         required_version=required_version,
                         operation="registry_source_install",
                         reason=unsafe_reason,
-                    ),
-                    "registryAttempt": _registry_attempt_payload(
-                        registry_result,
-                        registry_failure,
-                    ),
+                    )
                 }
             if classify_version(required_version) == "git_sha":
                 git_result = self._git_installer.install(
@@ -131,16 +107,13 @@ class DependencyAcquirer:
                     "requestedVersion": required_version,
                     "operation": "registry_source_git_install",
                     "acquisitionSource": "github_commit",
+                    "installedVersion": git_result.git_ref,
                     "repositoryUrl": git_result.repository_url,
                     "targetPath": str(git_result.target_path),
                     "returnCode": 0,
                     "stdout": "",
                     "stderr": "",
                     "reason": "",
-                    "registryAttempt": _registry_attempt_payload(
-                        registry_result,
-                        registry_failure,
-                    ),
                 }
             source_result = self._source_installer.install(
                 extension=extension,
@@ -166,11 +139,7 @@ class DependencyAcquirer:
                     required_version=required_version,
                     operation="registry_source_install",
                     reason=str(exc).strip() or type(exc).__name__,
-                ),
-                "registryAttempt": _registry_attempt_payload(
-                    registry_result,
-                    registry_failure,
-                ),
+                )
             }
         return {
             "nodeId": node_id,
@@ -179,6 +148,7 @@ class DependencyAcquirer:
             "acquisitionSource": (
                 "registry_artifact" if extension.package_url else "github_source"
             ),
+            "installedVersion": source_result.version,
             "archiveUrl": source_result.archive_url,
             "repositoryUrl": source_result.repository_url,
             "targetPath": str(source_result.target_path),
@@ -187,10 +157,6 @@ class DependencyAcquirer:
             "stdout": "",
             "stderr": "",
             "reason": "",
-            "registryAttempt": _registry_attempt_payload(
-                registry_result,
-                registry_failure,
-            ),
         }
 
 
@@ -214,22 +180,6 @@ def _unsafe_existing_source_reason(
     ) != _normalized_repository(expected_repository):
         return "installed_repository_does_not_match_trusted_source"
     return ""
-
-
-def _registry_attempt_payload(
-    result: ComfyCliResult | None,
-    failure: str,
-) -> dict[str, Any]:
-    """Return bounded evidence from the Registry attempt preceding fallback."""
-
-    if result is None:
-        return {"returnCode": 1, "reason": failure}
-    return {
-        **result.to_payload(),
-        "stdout": result.stdout[-4000:],
-        "stderr": result.stderr[-4000:],
-        "reason": failure,
-    }
 
 
 def _failed_result(

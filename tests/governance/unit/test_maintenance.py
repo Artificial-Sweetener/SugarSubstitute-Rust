@@ -89,21 +89,18 @@ class _BuildCapture:
     """Record resolved service-construction paths."""
 
     extension_root: Path | None = None
-    workspace_path: Path | None = None
     custom_nodes_root: Path | None = None
 
     def build(
         self,
         extension_root: Path,
         *,
-        workspace_path: Path,
         custom_nodes_root: Path,
         dependencies: _DependencyCommands,
     ) -> _BackendServices:
         """Record paths and return configured backend services."""
 
         self.extension_root = extension_root
-        self.workspace_path = workspace_path
         self.custom_nodes_root = custom_nodes_root
         return _BackendServices(dependencies=dependencies)
 
@@ -147,14 +144,12 @@ def test_maintenance_preflight_resolves_workspace_and_returns_success(
     def build_services(
         extension_root: Path,
         *,
-        workspace_path: Path,
         custom_nodes_root: Path,
     ) -> _BackendServices:
         """Return the preflight command recorder."""
 
         return capture.build(
             extension_root,
-            workspace_path=workspace_path,
             custom_nodes_root=custom_nodes_root,
             dependencies=dependencies,
         )
@@ -172,7 +167,6 @@ def test_maintenance_preflight_resolves_workspace_and_returns_success(
     assert dependencies.calls == [("preflight", None)]
     assert capture.extension_root == Path(maintenance.__file__).resolve().parents[1]
     assert capture.extension_root == Path(__file__).resolve().parents[3]
-    assert capture.workspace_path == expected_workspace
     assert capture.custom_nodes_root == expected_workspace / "custom_nodes"
 
 

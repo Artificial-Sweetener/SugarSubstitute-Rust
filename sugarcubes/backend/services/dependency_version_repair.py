@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from .cube_metadata import normalize_metadata_string
+from .dependency_acquisition_diagnostics import dependency_acquisition_phase
 from .dependency_acquisition import DependencyAcquirer
 from .dependency_python_requirements import DependencyPythonRequirementsInstaller
 from .dependency_versions import classify_version
@@ -70,7 +71,7 @@ class DependencyVersionRepairExecutor:
         ):
             return _failed_version_result(
                 node_id=node_id,
-                operation="comfy_cli_install",
+                operation="registry_source_install",
                 reason="repository_provenance_missing",
             )
         return self._acquirer.acquire(item)
@@ -120,12 +121,22 @@ class DependencyVersionRepairExecutor:
             )
         resolved_ref = checkout_ref or required_version
         try:
-            self._repositories.fetch(source_path)
-            if not self._repositories.revision_commit_id(source_path, resolved_ref):
-                raise RepositoryOperationError(
-                    f"Required revision is unavailable: {resolved_ref}"
-                )
-            self._repositories.checkout_revision(source_path, resolved_ref)
+            with dependency_acquisition_phase(
+                node_id=node_id,
+                operation="git_fetch",
+                source="installed_git_checkout",
+            ):
+                self._repositories.fetch(source_path)
+            with dependency_acquisition_phase(
+                node_id=node_id,
+                operation="git_checkout_validate",
+                source="installed_git_checkout",
+            ):
+                if not self._repositories.revision_commit_id(source_path, resolved_ref):
+                    raise RepositoryOperationError(
+                        f"Required revision is unavailable: {resolved_ref}"
+                    )
+                self._repositories.checkout_revision(source_path, resolved_ref)
         except (OSError, RepositoryOperationError, ValueError) as exc:
             return {
                 "nodeId": node_id,
@@ -169,7 +180,13 @@ class DependencyVersionRepairExecutor:
         if not requirements_path.is_file():
             return ""
         try:
-            result = self._requirements_installer.install(requirements_path)
+            with dependency_acquisition_phase(
+                node_id=normalize_metadata_string(item.get("nodeId"))
+                or source_path.name,
+                operation="requirements_install",
+                source="python",
+            ):
+                result = self._requirements_installer.install(requirements_path)
         except (OSError, RuntimeError, ValueError) as exc:
             return str(exc)
         if result.return_code == 0:

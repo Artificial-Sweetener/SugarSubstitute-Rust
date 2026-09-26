@@ -14,6 +14,7 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
+from .dependency_acquisition_diagnostics import dependency_acquisition_phase
 from .dependency_python_requirements import DependencyPythonRequirementsInstaller
 from .dependency_registry_source import RegistrySource
 from .dependency_versions import classify_version
@@ -69,15 +70,35 @@ class RegistrySourceGitInstaller:
             dir=self._custom_nodes_root,
         ) as temporary_directory:
             source_path = Path(temporary_directory) / "source"
-            self._repositories.clone(extension.repository_url, source_path)
-            self._repositories.fetch(source_path)
-            if not self._repositories.revision_commit_id(source_path, git_ref):
-                raise RuntimeError(f"Required commit is unavailable: {git_ref}")
-            self._repositories.checkout_revision(source_path, git_ref)
-            _validate_checkout_identity(source_path, extension)
+            with dependency_acquisition_phase(
+                node_id=extension.node_id,
+                operation="git_clone",
+                source="github_commit",
+            ):
+                self._repositories.clone(extension.repository_url, source_path)
+            with dependency_acquisition_phase(
+                node_id=extension.node_id,
+                operation="git_fetch",
+                source="github_commit",
+            ):
+                self._repositories.fetch(source_path)
+            with dependency_acquisition_phase(
+                node_id=extension.node_id,
+                operation="git_checkout_validate",
+                source="github_commit",
+            ):
+                if not self._repositories.revision_commit_id(source_path, git_ref):
+                    raise RuntimeError(f"Required commit is unavailable: {git_ref}")
+                self._repositories.checkout_revision(source_path, git_ref)
+                _validate_checkout_identity(source_path, extension)
             requirements_path = source_path / extension.requirements_file
             if requirements_path.is_file():
-                requirements = self._requirements_installer.install(requirements_path)
+                with dependency_acquisition_phase(
+                    node_id=extension.node_id,
+                    operation="requirements_install",
+                    source="python",
+                ):
+                    requirements = self._requirements_installer.install(requirements_path)
                 if requirements.return_code != 0:
                     detail = (requirements.stderr or requirements.stdout).strip()[
                         -2000:
@@ -89,7 +110,12 @@ class RegistrySourceGitInstaller:
                 extension.node_id,
                 encoding="utf-8",
             )
-            source_path.replace(target_path)
+            with dependency_acquisition_phase(
+                node_id=extension.node_id,
+                operation="filesystem_apply",
+                source="github_commit",
+            ):
+                source_path.replace(target_path)
         return SourceGitInstallResult(
             node_id=extension.node_id,
             repository_url=extension.repository_url,
