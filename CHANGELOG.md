@@ -1,3 +1,10 @@
+## [0.15.1](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.15.0...v0.15.1) (2026-09-26)
+
+
+### Bug Fixes
+
+* **dependencies:** install node packs without repeated catalog reloads ([498dd4a](https://github.com/Artificial-Sweetener/SugarCubes/commit/498dd4a80508c2356ab6b7b862655d25d18391f1))
+
 # [0.15.0](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.14.10...v0.15.0) (2026-09-23)
 
 
