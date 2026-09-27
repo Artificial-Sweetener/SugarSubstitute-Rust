@@ -173,6 +173,58 @@ def test_cube_output_image_value_produces_preview_and_artifacts(
     assert event.artifacts == (artifact,)
 
 
+def test_cube_output_uses_artifact_media_kind_for_video(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Publish video identity when the preview builder returns a video artifact."""
+
+    artifact = CubeOutputArtifact(
+        filename="motion.mp4",
+        subfolder="clips",
+        type="temp",
+        media_kind="video",
+        mime_type="video/mp4",
+        width=320,
+        height=180,
+        duration_seconds=1.25,
+    )
+    monkeypatch.setattr(
+        "sugarcubes.nodes._build_output_preview",
+        lambda value: (
+            {
+                "images": [
+                    {
+                        "filename": artifact.filename,
+                        "subfolder": artifact.subfolder,
+                        "type": artifact.type,
+                    }
+                ],
+                "animated": (True,),
+            },
+            (artifact,),
+        ),
+    )
+    observer = RecordingObserver()
+    register_cube_output_observer(observer)
+    try:
+        result = CubeOutput().forward(object(), "owner/repo/demo.cube", "Demo")
+    finally:
+        unregister_cube_output_observer(observer)
+
+    assert result["ui"] == {
+        "images": [
+            {
+                "filename": artifact.filename,
+                "subfolder": artifact.subfolder,
+                "type": artifact.type,
+            }
+        ],
+        "animated": (True,),
+    }
+    assert observer.events[0].media_kind == "video"
+    assert observer.events[0].artifacts == (artifact,)
+
+
 def test_cube_output_observer_failure_does_not_fail_forward() -> None:
     failing = FailingObserver()
     register_cube_output_observer(failing)
