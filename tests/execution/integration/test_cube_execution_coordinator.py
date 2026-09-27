@@ -115,6 +115,34 @@ def test_prepare_returns_complete_report_and_never_mutates_saved_workflow() -> N
     }
 
 
+def test_disconnected_cubes_can_be_targeted_in_authored_stage_order() -> None:
+    """Resolve one independent Cube stage without executing another Cube output."""
+
+    workflow = cube_workflow(
+        {
+            "z-image": provider_document("Image"),
+            "a-video": provider_document("Video"),
+        }
+    )
+    coordinator = CubeExecutionCoordinator()
+
+    for instance_id in ("z-image", "a-video"):
+        prepared = coordinator.prepare(
+            CubeExecutionRequest(
+                workflow=workflow,
+                queue=QueueMetadata(partial_execution_targets=(instance_id,)),
+            )
+        )
+        expected = tuple(
+            identity.execution_id
+            for identity in prepared.report.output_identities
+            if identity.instance_id == instance_id
+        )
+        assert expected
+        assert prepared.queue.partial_execution_targets == expected
+        assert prepared.report.topology_edges == ()
+
+
 def test_prepare_instruments_native_outputs_without_a_portable_document() -> None:
     """Keep legacy native-only Cubes queueable through their saved host surface."""
 
