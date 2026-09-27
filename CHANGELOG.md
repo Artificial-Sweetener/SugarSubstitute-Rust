@@ -1,3 +1,10 @@
+## [0.15.2](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.15.1...v0.15.2) (2026-09-27)
+
+
+### Bug Fixes
+
+* **outputs:** make video Cube outputs available for playback ([9409dbb](https://github.com/Artificial-Sweetener/SugarCubes/commit/9409dbb8c9ebbfbcb3bcaa3721a765247bbdf150))
+
 ## [0.15.1](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.15.0...v0.15.1) (2026-09-26)
 
 
