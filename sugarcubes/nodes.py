@@ -31,6 +31,7 @@ from .runtime import (
     CubeOutputEvent,
     notify_cube_output_observers,
 )
+from .runtime.video_output_preview import build_video_output_preview
 
 LOGGER = logging.getLogger(__name__)
 
@@ -121,10 +122,10 @@ def _build_output_preview(
 ) -> tuple[dict[str, object], tuple[CubeOutputArtifact, ...]]:
     """Create Comfy preview metadata for previewable cube output values."""
 
-    if not _looks_like_image_batch(value):
-        return {}, ()
     try:
-        return _save_preview_images(value)
+        if _looks_like_image_batch(value):
+            return _save_preview_images(value)
+        return build_video_output_preview(value)
     except (
         AttributeError,
         ImportError,
@@ -339,7 +340,9 @@ class CubeOutput:
             default_alias=cleaned_default_alias,
             instance_alias=cleaned_instance_alias or cleaned_default_alias,
             instance_id=cleaned_instance_id,
-            media_kind="image" if artifacts else _media_kind_for_value(value),
+            media_kind=(
+                artifacts[0].media_kind if artifacts else _media_kind_for_value(value)
+            ),
             value_type=_value_type_name(value),
             artifacts=artifacts,
         )
