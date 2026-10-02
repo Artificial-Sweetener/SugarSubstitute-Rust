@@ -14,11 +14,12 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Adapt real Cube-graph nodes to Comfy's host-owned native card renderer. */
-import { createCubeFaceActivationControl } from './CubeFaceActivationControl.js';
+import { createCubeFaceActivationControl, updateCubeFaceActivationControl, } from './CubeFaceActivationControl.js';
 /** Own native child-card mounts for one Cube surface view. */
 export class NativeNodeCardHost {
     #renderer;
     #mounts = [];
+    #activation = new Map();
     /** Create a host that delegates all node rendering to Comfy. */
     constructor(renderer) {
         this.#renderer = renderer;
@@ -29,29 +30,41 @@ export class NativeNodeCardHost {
         container.replaceChildren();
         const cells = [];
         for (const card of cards) {
-            const { node } = card;
             const cell = container.ownerDocument.createElement('div');
-            cell.className = 'sugarcubes-cube-face__node-card';
-            cell.dataset.cubeNodeId = String(node.id ?? '');
-            cell.dataset.cubeColumnSpan = String(card.columnSpan ?? 1);
-            const graphId = node.graph?.id;
-            if (graphId !== undefined) {
-                cell.dataset.cubeNodeLocator = `${String(graphId)}:${String(node.id ?? '')}`;
-            }
-            const nativeTarget = container.ownerDocument.createElement('div');
-            nativeTarget.className = 'sugarcubes-cube-face__native-card-mount';
-            cell.append(nativeTarget);
             container.appendChild(cell);
-            const headerAccessory = card.showActivationControl
-                ? createCubeFaceActivationControl(cell.ownerDocument, card, onActivationChange)
-                : null;
-            this.#mounts.push(this.#renderer.mount(nativeTarget, node, headerAccessory ? { headerAccessory } : {}));
+            this.mountCard(cell, card, onActivationChange);
             cells.push(cell);
         }
         return cells;
     }
+    /** Mount the shared card chrome into a supplied cell while retaining native renderer options. */
+    mountCard(cell, card, onActivationChange, options = {}) {
+        const { node } = card;
+        cell.classList.add('sugarcubes-cube-face__node-card');
+        cell.dataset.cubeNodeId = String(node.id ?? '');
+        cell.dataset.cubeColumnSpan = String(card.columnSpan ?? 1);
+        if (node.graph?.id !== undefined)
+            cell.dataset.cubeNodeLocator = `${String(node.graph.id)}:${String(node.id ?? '')}`;
+        const target = cell.ownerDocument.createElement('div');
+        target.className = 'sugarcubes-cube-face__native-card-mount';
+        cell.append(target);
+        const headerAccessory = card.showActivationControl
+            ? createCubeFaceActivationControl(cell.ownerDocument, card, onActivationChange)
+            : null;
+        if (headerAccessory)
+            this.#activation.set(node, headerAccessory);
+        this.#mounts.push(this.#renderer.mount(target, node, {
+            ...options,
+            ...(headerAccessory ? { headerAccessory } : {}),
+        }));
+    }
     /** Refresh render data after an internal node changes structure. */
-    refresh() {
+    refresh(cards = []) {
+        for (const card of cards) {
+            const control = this.#activation.get(card.node);
+            if (control)
+                updateCubeFaceActivationControl(control, card);
+        }
         for (const mount of this.#mounts)
             mount.refresh();
     }
@@ -59,5 +72,6 @@ export class NativeNodeCardHost {
     dispose() {
         for (const mount of this.#mounts.splice(0))
             mount.unmount();
+        this.#activation.clear();
     }
 }

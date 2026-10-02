@@ -45,9 +45,22 @@ export function createComfyRendererModeChangeSource(app) {
             if (typeof addEventListener !== 'function' || typeof removeEventListener !== 'function') {
                 return () => undefined;
             }
-            const handleChange = () => listener();
+            let active = true;
+            let queued = false;
+            const handleChange = () => {
+                if (queued)
+                    return;
+                queued = true;
+                // Comfy dispatches before committing settingValues; read after that synchronous commit.
+                queueMicrotask(() => {
+                    queued = false;
+                    if (active)
+                        listener();
+                });
+            };
             addEventListener.call(settings, VUE_NODES_CHANGE_EVENT, handleChange);
             return () => {
+                active = false;
                 removeEventListener.call(settings, VUE_NODES_CHANGE_EVENT, handleChange);
             };
         },

@@ -125,7 +125,7 @@ export class CubeAffordanceHostIntegration {
         }),
         cardVisibility: new ComfyCubeCardVisibilityToolboxPresenter({
           document: this.#document,
-          owner: runtime.cardReveal,
+          owner: runtime.cardState,
           tooltip: new ComfyToolboxTooltipPresenter(this.#document),
           menu: new ComfyToolboxCheckMenuPresenter({
             document: this.#document,

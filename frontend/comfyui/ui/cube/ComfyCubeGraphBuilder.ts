@@ -29,6 +29,7 @@ import type {
   ComfyInput,
   ComfyNode,
   ComfyOutput,
+  GraphId,
   NumericVector,
 } from '../types/graph.js';
 import { buildCubePayloadTopology } from './CubePayloadTopology.js';
@@ -55,6 +56,7 @@ interface NativeBoundaryOutput {
 }
 
 interface NativeBoundaryNode {
+  id?: GraphId;
   bounding?: NumericVector;
   boundingRect?: NumericVector;
   emptySlot?: NativeBoundarySlot & { name: string };

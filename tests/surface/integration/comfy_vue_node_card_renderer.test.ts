@@ -21,6 +21,101 @@ import { ComfyVueNodeCardRenderer } from '../../../frontend/comfyui/ui/surface/C
 import type { ComfyNode } from '../../../frontend/comfyui/ui/types/graph.js';
 
 describe('ComfyVueNodeCardRenderer', () => {
+  test('renders a promoted Cube control with its real owner identity and callback', () => {
+    const target = document.createElement('div');
+    const owner: ComfyNode = { id: 'cube', widgets: [{ name: 'prompt' }] };
+    const internal: ComfyNode = {
+      id: 'internal',
+      widgets: [{ name: 'text' }],
+      inputs: [{ name: 'text', widget: { name: 'text' }, link: 7 }],
+    };
+    const callback = jest.fn();
+    const h = jest.fn();
+    const renderer = new ComfyVueNodeCardRenderer({
+      component: {},
+      appContext: {},
+      runtime: {
+        render() {},
+        h: (_component, props) => {
+          h(props);
+          return {};
+        },
+        extractVueNodeData: (node) => ({
+          id: node.id,
+          widgets: node === owner ? [{ name: 'prompt', widgetId: 'cube:prompt', callback }] : [],
+        }),
+      },
+    });
+    const mount = renderer.mount(target, internal, {
+      widgetSources: [{ node: owner, name: 'prompt', targetName: 'text' }],
+    });
+    expect(h).toHaveBeenCalledWith({
+      nodeData: expect.objectContaining({
+        widgets: [{ name: 'text', widgetId: 'cube:prompt', callback }],
+      }),
+    });
+    mount.unmount();
+  });
+  test('isolates masonry measurements and preserves widgetless native custom content', async () => {
+    const target = document.createElement('div');
+    const root = document.createElement('div');
+    root.className = 'lg-node';
+    root.dataset.nodeId = 'preview';
+    const body = document.createElement('div');
+    body.dataset.testid = 'node-body-preview';
+    const preview = document.createElement('canvas');
+    body.append(preview);
+    const grid = document.createElement('div');
+    grid.dataset.widgetsGridNodeId = 'preview';
+    root.append(body, grid);
+    const renderer = new ComfyVueNodeCardRenderer({
+      component: { __name: 'LGraphNode' },
+      appContext: {},
+      runtime: {
+        render: () => target.append(root),
+        h: () => ({}),
+        extractVueNodeData: () => ({ id: 'preview', widgets: [] }),
+      },
+    });
+    const mount = renderer.mount(
+      target,
+      { id: 'preview', type: 'PreviewImage', size: [360, 280] },
+      { presentationGeometry: true, preserveNativeBody: true },
+    );
+    expect(root.hasAttribute('data-node-id')).toBe(false);
+    expect(grid.hasAttribute('data-widgets-grid-node-id')).toBe(false);
+    expect(root.dataset.presentationNodeId).toBe('preview');
+    expect(body.hidden).toBe(false);
+    expect(preview.hidden).toBe(false);
+    const laterGrid = document.createElement('div');
+    laterGrid.dataset.widgetsGridNodeId = 'preview';
+    root.append(laterGrid);
+    await Promise.resolve();
+    expect(laterGrid.hasAttribute('data-widgets-grid-node-id')).toBe(false);
+    mount.unmount();
+  });
+  test('retains extracted widget identities and host callbacks in projected cards', () => {
+    const rawWidget = { name: 'steps', type: 'number', value: 20 };
+    const callback = jest.fn();
+    const safeWidget = { name: 'steps', type: 'number', widgetId: 'graph:1:steps', callback };
+    const h = jest.fn(() => ({ type: 'node' }));
+    const renderer = new ComfyVueNodeCardRenderer({
+      component: { __name: 'LGraphNode' },
+      appContext: {},
+      runtime: {
+        render: jest.fn(),
+        h,
+        extractVueNodeData: () => ({ id: '1', widgets: [safeWidget] }),
+      },
+    });
+    renderer.mount(document.createElement('div'), { id: 1, widgets: [rawWidget] });
+    expect(h).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        nodeData: expect.objectContaining({ widgets: [safeWidget] }),
+      }),
+    );
+  });
   test('uses Comfy extraction and component rendering without cloning the graph node', () => {
     const widgets = [{ name: 'steps' }];
     const node: ComfyNode = { id: 'inside-1', type: 'KSampler', widgets };

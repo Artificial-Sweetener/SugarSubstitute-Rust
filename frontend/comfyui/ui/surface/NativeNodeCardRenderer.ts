@@ -24,6 +24,16 @@ export interface NativeNodeCardMount {
 
 export interface NativeNodeCardMountOptions {
   headerAccessory?: HTMLElement;
+  presentationGeometry?: boolean;
+  preserveNativeBody?: boolean;
+  widgetSources?: readonly NativeNodeWidgetSource[];
+}
+
+/** Render a boundary-forwarded control with its authoritative owner's native callback. */
+export interface NativeNodeWidgetSource {
+  node: ComfyNode;
+  name: string;
+  targetName: string;
 }
 
 export interface NativeNodeCardRenderer {

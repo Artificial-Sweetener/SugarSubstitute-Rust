@@ -55,24 +55,33 @@ export function createCubeFaceActivationControl(
   switchRoot.append(input, slider);
   control.append(stateLabel, switchRoot);
 
-  const updatePresentation = (enabled: boolean): void => {
-    const actionLabel = `${enabled ? 'Disable' : 'Enable'} ${card.label}`;
-    control.dataset.enabled = String(enabled);
-    stateLabel.textContent = enabled ? 'Enabled' : 'Disabled';
-    input.checked = enabled;
-    input.setAttribute('aria-checked', String(enabled));
-    input.setAttribute('aria-label', actionLabel);
-    control.title = actionLabel;
-    switchRoot.setAttribute('data-p-checked', String(enabled));
-    switchRoot.classList.toggle('p-toggleswitch-checked', enabled);
-  };
-
-  updatePresentation(card.enabled);
+  updateCubeFaceActivationControl(control, card);
   control.addEventListener('pointerdown', (event) => event.stopPropagation());
   control.addEventListener('click', (event) => event.stopPropagation());
   input.addEventListener('change', () => {
-    updatePresentation(input.checked);
+    updateCubeFaceActivationControl(control, { ...card, enabled: input.checked });
     onActivationChange(card.node, input.checked);
   });
   return control;
+}
+
+/** Reconcile shared activation chrome without replacing the user's focused native control. */
+export function updateCubeFaceActivationControl(
+  control: HTMLLabelElement,
+  card: CubeFaceCardDecision,
+): void {
+  const input = control.querySelector<HTMLInputElement>('input');
+  const stateLabel = control.querySelector<HTMLElement>('.sugarcubes-cube-face__activation-label');
+  const switchRoot = control.querySelector<HTMLElement>('.p-toggleswitch');
+  if (!input || !stateLabel || !switchRoot)
+    throw new Error('Cube activation control is incomplete.');
+  const actionLabel = `${card.enabled ? 'Disable' : 'Enable'} ${card.label}`;
+  control.dataset.enabled = String(card.enabled);
+  stateLabel.textContent = card.enabled ? 'Enabled' : 'Disabled';
+  input.checked = card.enabled;
+  input.setAttribute('aria-checked', String(card.enabled));
+  input.setAttribute('aria-label', actionLabel);
+  control.title = actionLabel;
+  switchRoot.setAttribute('data-p-checked', String(card.enabled));
+  switchRoot.classList.toggle('p-toggleswitch-checked', card.enabled);
 }

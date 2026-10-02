@@ -69,12 +69,26 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
     const promptTextareaScope = new CubePromptTextareaScope(target);
     const observer = new MutationObserver(() => {
       if (!disposed) {
-        this.#applyPresentation(target, node, headerAccessoryHost, promptTextareaScope);
+        this.#applyPresentation(target, node, headerAccessoryHost, promptTextareaScope, options);
       }
     });
     const renderCard = (): void => {
       if (disposed) return;
       const nodeData = createCubeFaceNodeData(this.#runtime.extractVueNodeData(node), node);
+      for (const source of options.widgetSources ?? []) {
+        const ownerData = createCubeFaceNodeData(
+          this.#runtime.extractVueNodeData(source.node),
+          source.node,
+        );
+        const widget = Array.isArray(ownerData.widgets)
+          ? ownerData.widgets.find(
+              (value: unknown) => isRecord(value) && value.name === source.name,
+            )
+          : undefined;
+        if (isRecord(widget) && Array.isArray(nodeData.widgets)) {
+          nodeData.widgets.push({ ...widget, name: source.targetName });
+        }
+      }
       const vnodeValue = this.#runtime.h(this.#component, { nodeData });
       if (!isRecord(vnodeValue)) {
         throw new TypeError('Comfy native renderer returned an invalid VNode.');
@@ -83,7 +97,7 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
       this.#runtime.render(vnodeValue, target);
       target.classList.add('sugarcubes-native-node-card');
       target.dataset.cubeFaceNative = 'nodes-2';
-      this.#applyPresentation(target, node, headerAccessoryHost, promptTextareaScope);
+      this.#applyPresentation(target, node, headerAccessoryHost, promptTextareaScope, options);
     };
     const refreshAfterAdvancedInputsToggle = (event: Event): void => {
       const eventTarget = event.target;
@@ -138,9 +152,19 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
     node: ComfyNode,
     headerAccessoryHost: ComfyVueNodeHeaderAccessoryHost | null,
     promptTextareaScope: CubePromptTextareaScope,
+    options: NativeNodeCardMountOptions,
   ): void {
     const nativeRoot = target.querySelector<HTMLElement>('.lg-node');
     if (nativeRoot) {
+      if (options.presentationGeometry) {
+        // Comfy's shared ResizeObserver keys canonical geometry by these attributes.
+        // Presentation cards retain their native callbacks but must never write graph bounds.
+        nativeRoot.dataset.presentationNodeId = String(node.id ?? '');
+        nativeRoot.removeAttribute('data-node-id');
+        for (const grid of nativeRoot.querySelectorAll('[data-widgets-grid-node-id]')) {
+          grid.removeAttribute('data-widgets-grid-node-id');
+        }
+      }
       nativeRoot.dataset.cubeFacePresentation = 'true';
       for (const handle of nativeRoot.querySelectorAll<HTMLElement>(':scope > [role="button"]')) {
         handle.hidden = true;
@@ -166,7 +190,7 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
     const footerRoot = resolveComponentElement(footerVNode);
     const advancedInputs = footerRoot ? reconcileNativeFooter(footerRoot) : null;
     if (advancedInputs) this.#isolateInteractiveRoot(advancedInputs);
-    if (nativeRoot) reconcileNativeBody(nativeRoot, node);
+    if (nativeRoot && !options.preserveNativeBody) reconcileNativeBody(nativeRoot, node);
     promptTextareaScope.reconcile(findCubeFacePromptWidget(node) !== null);
 
     const widgetsVNode = findVueComponent(targetRecord._vnode, 'NodeWidgets');

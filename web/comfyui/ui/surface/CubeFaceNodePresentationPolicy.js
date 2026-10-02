@@ -33,12 +33,16 @@ function createCubeFaceFlags(flags) {
 }
 /** Create safe Comfy Vue render data with only controls still owned by the node. */
 export function createCubeFaceNodeData(nodeData, node) {
+    const visibleNames = new Set(cubeFaceVisibleWidgets(node).map((widget) => widget.name));
+    const widgets = Array.isArray(nodeData.widgets)
+        ? nodeData.widgets.filter((widget) => isRecord(widget) && visibleNames.has(String(widget.name)))
+        : cubeFaceVisibleWidgets(node);
     return {
         ...nodeData,
         flags: createCubeFaceFlags(nodeData.flags),
         inputs: [],
         outputs: [],
-        widgets: cubeFaceVisibleWidgets(node),
+        widgets,
     };
 }
 /** Expose expanded slotless state during one native operation, then restore exact ownership. */

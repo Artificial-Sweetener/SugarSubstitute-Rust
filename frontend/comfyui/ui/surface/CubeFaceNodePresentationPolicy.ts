@@ -52,12 +52,18 @@ function createCubeFaceFlags(flags: unknown): UnknownRecord {
 
 /** Create safe Comfy Vue render data with only controls still owned by the node. */
 export function createCubeFaceNodeData(nodeData: UnknownRecord, node: ComfyNode): UnknownRecord {
+  const visibleNames = new Set(cubeFaceVisibleWidgets(node).map((widget) => widget.name));
+  const widgets = Array.isArray(nodeData.widgets)
+    ? nodeData.widgets.filter(
+        (widget: unknown) => isRecord(widget) && visibleNames.has(String(widget.name)),
+      )
+    : cubeFaceVisibleWidgets(node);
   return {
     ...nodeData,
     flags: createCubeFaceFlags(nodeData.flags),
     inputs: [],
     outputs: [],
-    widgets: cubeFaceVisibleWidgets(node),
+    widgets,
   };
 }
 

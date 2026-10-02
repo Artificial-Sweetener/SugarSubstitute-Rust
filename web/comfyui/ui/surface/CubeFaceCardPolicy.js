@@ -50,7 +50,7 @@ export function resolveCubeFaceCardPresentation(nodes, state, graph) {
     return { cards: orderCubeFaceMasonryCards(cards, nodes, graph), menuEntries };
 }
 /** Match Substitute's upstream-first card order, then pin semantic prompts above masonry. */
-function orderCubeFaceMasonryCards(cards, nodes, graph) {
+export function orderCubeFaceMasonryCards(cards, nodes, graph) {
     const graphOrder = new Map(orderNodesUpstreamFirst(nodes, graph).map((id, index) => [id, index]));
     return cards
         .map((card, index) => ({
@@ -65,13 +65,16 @@ function orderCubeFaceMasonryCards(cards, nodes, graph) {
         .map(({ card }) => card);
 }
 /** Return a stable complete-graph order so hidden intermediaries retain dependency chronology. */
-function orderNodesUpstreamFirst(nodes, graph) {
+export function orderNodesUpstreamFirst(nodes, graph, additionalEdges = []) {
     const nodeIds = nodes.map((node, index) => nodeId(node, index));
     const nodesById = new Map(nodes.map((node, index) => [nodeId(node, index), node]));
     const inDegree = new Map(nodeIds.map((id) => [id, 0]));
     const dependents = new Map(nodeIds.map((id) => [id, new Set()]));
     for (const [targetId, node] of nodesById) {
-        for (const originId of linkedOriginNodeIds(node, graph)) {
+        const extraOrigins = additionalEdges
+            .filter((edge) => String(edge.target) === targetId)
+            .map((edge) => edge.source);
+        for (const originId of [...linkedOriginNodeIds(node, graph), ...extraOrigins]) {
             const sourceId = String(originId);
             if (!nodesById.has(sourceId) || sourceId === targetId)
                 continue;

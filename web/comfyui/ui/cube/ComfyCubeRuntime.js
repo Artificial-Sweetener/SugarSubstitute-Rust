@@ -50,7 +50,7 @@ import { CubeEditorContextResolver } from '../surface/CubeEditorContextResolver.
 import { CubeStructuralOperationGuard } from '../affordance/CubeStructuralOperationGuard.js';
 import { CubeNodeProductIdentityPresenter } from '../affordance/CubeNodeProductIdentityPresenter.js';
 import { CubeBlueprintMigrationDetector } from '../affordance/CubeBlueprintMigrationDetector.js';
-import { CubeCardRevealService } from '../surface/CubeCardRevealService.js';
+import { CubeFaceCardStateService } from '../surface/CubeFaceCardStateService.js';
 import { CubeVersionRepository } from './version/CubeVersionRepository.js';
 import { CubeVersionAvailabilityService } from './version/CubeVersionAvailabilityService.js';
 import { ComfyCubeVersionReplacementAdapter } from './version/ComfyCubeVersionReplacementAdapter.js';
@@ -116,7 +116,7 @@ export function createComfyCubeRuntime(options) {
     };
     const history = createComfyCubeHistoryAdapter({ canvas, graph });
     const nodes = new CubeNodeCatalog();
-    const cardReveal = new CubeCardRevealService({ nodes, history });
+    const cardState = new CubeFaceCardStateService({ nodes, history });
     const contexts = new CubeEditorContextResolver(nodes);
     const portPresentation = new CubePortPresentationController({
         requestFrame: (callback) => options.document.defaultView?.requestAnimationFrame(callback) ?? null,
@@ -369,7 +369,7 @@ export function createComfyCubeRuntime(options) {
         placement,
         authoring,
         nodes,
-        cardReveal,
+        cardState,
         versionAvailability,
         versionSwitch,
         graphScope,
