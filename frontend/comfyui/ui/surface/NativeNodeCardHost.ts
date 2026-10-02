@@ -16,14 +16,22 @@
 /** Adapt real Cube-graph nodes to Comfy's host-owned native card renderer. */
 
 import type { ComfyNode } from '../types/graph.js';
-import { createCubeFaceActivationControl } from './CubeFaceActivationControl.js';
+import {
+  createCubeFaceActivationControl,
+  updateCubeFaceActivationControl,
+} from './CubeFaceActivationControl.js';
 import type { CubeFaceCardDecision } from './CubeFaceCardPolicy.js';
-import type { NativeNodeCardMount, NativeNodeCardRenderer } from './NativeNodeCardRenderer.js';
+import type {
+  NativeNodeCardMount,
+  NativeNodeCardRenderer,
+  NativeNodeCardMountOptions,
+} from './NativeNodeCardRenderer.js';
 
 /** Own native child-card mounts for one Cube surface view. */
 export class NativeNodeCardHost {
   readonly #renderer: NativeNodeCardRenderer;
   readonly #mounts: NativeNodeCardMount[] = [];
+  readonly #activation = new Map<ComfyNode, HTMLLabelElement>();
 
   /** Create a host that delegates all node rendering to Comfy. */
   constructor(renderer: NativeNodeCardRenderer) {
@@ -40,37 +48,54 @@ export class NativeNodeCardHost {
     container.replaceChildren();
     const cells: HTMLElement[] = [];
     for (const card of cards) {
-      const { node } = card;
       const cell = container.ownerDocument.createElement('div');
-      cell.className = 'sugarcubes-cube-face__node-card';
-      cell.dataset.cubeNodeId = String(node.id ?? '');
-      cell.dataset.cubeColumnSpan = String(card.columnSpan ?? 1);
-      const graphId = node.graph?.id;
-      if (graphId !== undefined) {
-        cell.dataset.cubeNodeLocator = `${String(graphId)}:${String(node.id ?? '')}`;
-      }
-      const nativeTarget = container.ownerDocument.createElement('div');
-      nativeTarget.className = 'sugarcubes-cube-face__native-card-mount';
-      cell.append(nativeTarget);
       container.appendChild(cell);
-      const headerAccessory = card.showActivationControl
-        ? createCubeFaceActivationControl(cell.ownerDocument, card, onActivationChange)
-        : null;
-      this.#mounts.push(
-        this.#renderer.mount(nativeTarget, node, headerAccessory ? { headerAccessory } : {}),
-      );
+      this.mountCard(cell, card, onActivationChange);
       cells.push(cell);
     }
     return cells;
   }
 
+  /** Mount the shared card chrome into a supplied cell while retaining native renderer options. */
+  mountCard(
+    cell: HTMLElement,
+    card: CubeFaceCardDecision,
+    onActivationChange: (node: ComfyNode, enabled: boolean) => void,
+    options: NativeNodeCardMountOptions = {},
+  ): void {
+    const { node } = card;
+    cell.classList.add('sugarcubes-cube-face__node-card');
+    cell.dataset.cubeNodeId = String(node.id ?? '');
+    cell.dataset.cubeColumnSpan = String(card.columnSpan ?? 1);
+    if (node.graph?.id !== undefined)
+      cell.dataset.cubeNodeLocator = `${String(node.graph.id)}:${String(node.id ?? '')}`;
+    const target = cell.ownerDocument.createElement('div');
+    target.className = 'sugarcubes-cube-face__native-card-mount';
+    cell.append(target);
+    const headerAccessory = card.showActivationControl
+      ? createCubeFaceActivationControl(cell.ownerDocument, card, onActivationChange)
+      : null;
+    if (headerAccessory) this.#activation.set(node, headerAccessory);
+    this.#mounts.push(
+      this.#renderer.mount(target, node, {
+        ...options,
+        ...(headerAccessory ? { headerAccessory } : {}),
+      }),
+    );
+  }
+
   /** Refresh render data after an internal node changes structure. */
-  refresh(): void {
+  refresh(cards: readonly CubeFaceCardDecision[] = []): void {
+    for (const card of cards) {
+      const control = this.#activation.get(card.node);
+      if (control) updateCubeFaceActivationControl(control, card);
+    }
     for (const mount of this.#mounts) mount.refresh();
   }
 
   /** Unmount this view's cards while retaining Comfy's shared renderer service. */
   dispose(): void {
     for (const mount of this.#mounts.splice(0)) mount.unmount();
+    this.#activation.clear();
   }
 }

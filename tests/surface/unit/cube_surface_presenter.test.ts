@@ -20,7 +20,7 @@ import type { NativeCubeSubgraph } from '../../../frontend/comfyui/ui/cube/Comfy
 import { CubePortPresentationController } from '../../../frontend/comfyui/ui/cube/connection/CubePortPresentationController.js';
 import type { CubeNode } from '../../../frontend/comfyui/ui/cube/node/ComfyCubeNodeFactory.js';
 import { CubeNodeCatalog } from '../../../frontend/comfyui/ui/cube/node/CubeNodeCatalog.js';
-import { CubeCardRevealService } from '../../../frontend/comfyui/ui/surface/CubeCardRevealService.js';
+import { CubeFaceCardStateService } from '../../../frontend/comfyui/ui/surface/CubeFaceCardStateService.js';
 import { CubeSurfacePresenter } from '../../../frontend/comfyui/ui/surface/CubeSurfacePresenter.js';
 import type {
   NativeNodeCardMount,
@@ -329,7 +329,7 @@ describe('CubeSurfacePresenter', () => {
     await flushMount();
     expect(mountedNodeIds).toEqual([]);
 
-    const reveal = new CubeCardRevealService({ nodes, history: {} });
+    const reveal = new CubeFaceCardStateService({ nodes, history: {} });
     reveal.setRevealed(node, 'optional', true);
     await flushMount();
 

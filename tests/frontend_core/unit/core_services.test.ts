@@ -126,18 +126,36 @@ describe('core services', () => {
     element.remove();
   });
 
-  test('renderer mode changes follow Comfy settings events and unsubscribe cleanly', () => {
+  test('renderer mode changes follow committed Comfy settings and unsubscribe cleanly', async () => {
     const settings = new EventTarget();
     const source = createComfyRendererModeChangeSource({ ui: { settings } });
     const listener = jest.fn();
     const unsubscribe = source.subscribe(listener);
 
     settings.dispatchEvent(new CustomEvent('Comfy.VueNodes.Enabled.change'));
+    await Promise.resolve();
     expect(listener).toHaveBeenCalledTimes(1);
 
     unsubscribe();
     settings.dispatchEvent(new CustomEvent('Comfy.VueNodes.Enabled.change'));
+    await Promise.resolve();
     expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  test('renderer listeners read the value committed after host dispatch and cancel queued notifications', async () => {
+    const settings = new EventTarget();
+    let enabled = true;
+    const observed: boolean[] = [];
+    const source = createComfyRendererModeChangeSource({ ui: { settings } });
+    const unsubscribe = source.subscribe(() => observed.push(enabled));
+    settings.dispatchEvent(new CustomEvent('Comfy.VueNodes.Enabled.change'));
+    enabled = false;
+    await Promise.resolve();
+    expect(observed).toEqual([false]);
+    settings.dispatchEvent(new CustomEvent('Comfy.VueNodes.Enabled.change'));
+    unsubscribe();
+    await Promise.resolve();
+    expect(observed).toEqual([false]);
   });
 
   test('CubeLibraryApi wraps fetch responses', async () => {

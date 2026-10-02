@@ -45,6 +45,7 @@ import { CubeGraphConfigurationLifecycle } from './ui/cube/CubeGraphConfiguratio
 import { CubeExtensionSetupLifecycle } from './ui/cube/CubeExtensionSetupLifecycle.js';
 import { CubeHostFeedback } from './ui/core/CubeHostFeedback.js';
 import { createSugarCubesDebugApi } from './ui/debug/SugarCubesDebugApi.js';
+import { WorkflowMasonryHostLifecycle } from './ui/surface/masonry/WorkflowMasonryHostLifecycle.js';
 export { buildShiftedPlacementPayload };
 const EXTENSION_NAME = 'SugarCubes.UI';
 const IMPORT_STORAGE_KEY = 'SugarCubes.Import.LastCube';
@@ -288,9 +289,33 @@ const extensionSetupLifecycle = new CubeExtensionSetupLifecycle({
     outputHistory: cubeOutputHistoryAdapter,
     logger,
 });
+const workflowMasonry = new WorkflowMasonryHostLifecycle({
+    app: appRef,
+    document: documentRef ?? document,
+    getCubes: () => cubeRuntimeLifecycle.current()?.nodes.list() ?? [],
+    getCardState: () => cubeRuntimeLifecycle.current()?.cardState ?? null,
+    getConnections: (graph) => overlayManager.proximity
+        .resolveExecutionMatches(graph)
+        .flatMap((match) => match.outputId === undefined || match.inputId === undefined
+        ? []
+        : [{ source: match.outputId, target: match.inputId }]),
+    alert: (title, message) => ui.dialogs.alert({ title, message }),
+    reportError: (error) => {
+        logger.error('SugarCubes workflow masonry failed', { error });
+        pushToastMessage('error', 'Masonry unavailable', readErrorMessage(error));
+    },
+    logger,
+});
 /** Define the ComfyUI extension lifecycle owned by SugarCubes. */
 export const sugarCubesExtension = {
     name: EXTENSION_NAME,
+    commands: [
+        {
+            id: 'SugarCubes.ToggleMasonry',
+            label: 'Toggle workflow masonry',
+            function: () => workflowMasonry.toggle(),
+        },
+    ],
     addCustomNodeDefs(definitions) {
         return cubePicker.contribute(definitions);
     },
@@ -308,12 +333,15 @@ export const sugarCubesExtension = {
     },
     async setup() {
         await extensionSetupLifecycle.setup();
+        workflowMasonry.setup();
     },
     beforeConfigureGraph(graphData) {
+        workflowMasonry.beforeConfigureGraph();
         graphConfigurationLifecycle.beforeConfigureGraph(graphData);
     },
     afterConfigureGraph(missingNodeTypes, comfyApp) {
         graphConfigurationLifecycle.afterConfigureGraph(missingNodeTypes, comfyApp);
+        workflowMasonry.afterConfigureGraph();
     },
 };
 app.registerExtension(sugarCubesExtension);

@@ -29,7 +29,7 @@ function createRuntime(dispose: () => void): ComfyCubeRuntime {
     placement: {} as ComfyCubeRuntime['placement'],
     authoring: {} as ComfyCubeRuntime['authoring'],
     nodes,
-    cardReveal: {} as ComfyCubeRuntime['cardReveal'],
+    cardState: {} as ComfyCubeRuntime['cardState'],
     versionAvailability: {} as ComfyCubeRuntime['versionAvailability'],
     versionSwitch: {} as ComfyCubeRuntime['versionSwitch'],
     graphScope: {} as ComfyCubeRuntime['graphScope'],

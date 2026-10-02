@@ -21,8 +21,62 @@ import {
   type CubeNode,
 } from '../../../frontend/comfyui/ui/cube/node/ComfyCubeNodeFactory.js';
 import { CubeNodeCatalog } from '../../../frontend/comfyui/ui/cube/node/CubeNodeCatalog.js';
-import { CubeCardRevealService } from '../../../frontend/comfyui/ui/surface/CubeCardRevealService.js';
+import { CubeFaceCardStateService } from '../../../frontend/comfyui/ui/surface/CubeFaceCardStateService.js';
 import { parseCubeSurfaceState } from '../../../frontend/comfyui/ui/surface/CubeSurfaceState.js';
+import { readCubeFaceCardState } from '../../../frontend/comfyui/ui/surface/CubeFaceCardStateService.js';
+import type { ComfyGraph } from '../../../frontend/comfyui/ui/types/graph.js';
+
+test.each(['cube', 'workflow'])(
+  'retains independent reveal and activation choices on a %s',
+  (kind) => {
+    const cube = cubeNode();
+    const nodes = new CubeNodeCatalog();
+    nodes.add(cube);
+    const graph: ComfyGraph = { _nodes: cube.subgraph._nodes };
+    const target = kind === 'cube' ? cube : graph;
+    const node = cube.subgraph._nodes[0]!;
+    const service = new CubeFaceCardStateService({ nodes, history: {} });
+    const listener = jest.fn();
+    const unsubscribe = service.subscribe(listener);
+    service.setRevealed(target, 'patch', true);
+    expect(node.mode).toBe(4);
+    service.setEnabled(target, 'patch', true);
+    expect(node.mode).toBe(0);
+    service.setRevealed(target, 'patch', false);
+    expect(node.mode).toBe(4);
+    service.setRevealed(target, 'patch', true);
+    expect(node.mode).toBe(0);
+    service.setEnabled(target, 'patch', false);
+    expect(service.list(target)[0]?.revealed).toBe(true);
+    expect(readCubeFaceCardState(target).cards.patch).toMatchObject({
+      authoredBypass: true,
+      revealed: true,
+      enabledOverride: false,
+    });
+
+    if (kind === 'workflow') {
+      expect(
+        parseCubeSurfaceState(
+          graph.extra && typeof graph.extra === 'object'
+            ? Reflect.get(graph.extra, 'sugarcubes_surface')
+            : undefined,
+        ).cards.patch,
+      ).toEqual(readCubeFaceCardState(target).cards.patch);
+      const savedExtra: unknown = JSON.parse(JSON.stringify(graph.extra));
+      expect(
+        parseCubeSurfaceState(
+          typeof savedExtra === 'object' && savedExtra !== null
+            ? Reflect.get(savedExtra, 'sugarcubes_surface')
+            : undefined,
+        ).cards.patch,
+      ).toEqual(readCubeFaceCardState(target).cards.patch);
+    }
+    expect(listener).toHaveBeenCalledTimes(5);
+    unsubscribe();
+    service.setEnabled(target, 'patch', true);
+    expect(listener).toHaveBeenCalledTimes(5);
+  },
+);
 
 test('persists visibility through graph history and invalidates both renderers', () => {
   const node = cubeNode();
@@ -35,7 +89,7 @@ test('persists visibility through graph history and invalidates both renderers',
     afterChange: jest.fn(),
     setDirtyCanvas: jest.fn(),
   };
-  const service = new CubeCardRevealService({ nodes, history });
+  const service = new CubeFaceCardStateService({ nodes, history });
 
   expect(service.list(node)).toEqual([{ id: 'patch', label: 'Model patch', revealed: false }]);
 
@@ -59,7 +113,7 @@ test('ignores stale menu entries without creating empty history changes', () => 
   const nodes = new CubeNodeCatalog();
   nodes.add(node);
   const history = { beforeChange: jest.fn(), afterChange: jest.fn() };
-  const service = new CubeCardRevealService({ nodes, history });
+  const service = new CubeFaceCardStateService({ nodes, history });
 
   service.setRevealed(node, 'removed-node', true);
 

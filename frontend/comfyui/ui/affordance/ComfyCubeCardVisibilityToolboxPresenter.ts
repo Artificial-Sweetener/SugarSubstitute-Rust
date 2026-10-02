@@ -15,8 +15,10 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Present Cube optional-card visibility through the shared toolbox check menu. */
 
-import type { CubeNode } from '../cube/node/ComfyCubeNodeFactory.js';
-import type { CubeCardRevealService } from '../surface/CubeCardRevealService.js';
+import type {
+  CubeFaceCardStateService,
+  CubeFaceCardTarget,
+} from '../surface/CubeFaceCardStateService.js';
 import type {
   ComfyToolboxCheckMenuPresenter,
   ToolboxCheckMenuModel,
@@ -28,16 +30,16 @@ const BUTTON_ATTRIBUTE = 'data-sugarcubes-card-visibility-button';
 /** Own the eye action and map optional-card state into the shared multiple-selection menu. */
 export class ComfyCubeCardVisibilityToolboxPresenter {
   readonly #document: Document;
-  readonly #owner: Pick<CubeCardRevealService, 'list' | 'setRevealed'>;
+  readonly #owner: Pick<CubeFaceCardStateService, 'list' | 'setRevealed'>;
   readonly #tooltip: ComfyToolboxTooltipPresenter;
   readonly #menu: ComfyToolboxCheckMenuPresenter;
   #button: HTMLButtonElement | null = null;
-  #node: CubeNode | null = null;
+  #node: CubeFaceCardTarget | null = null;
 
   /** Bind the focused host presentation to renderer-neutral reveal state. */
   constructor(options: {
     document: Document;
-    owner: Pick<CubeCardRevealService, 'list' | 'setRevealed'>;
+    owner: Pick<CubeFaceCardStateService, 'list' | 'setRevealed'>;
     tooltip: ComfyToolboxTooltipPresenter;
     menu: ComfyToolboxCheckMenuPresenter;
   }) {
@@ -48,7 +50,7 @@ export class ComfyCubeCardVisibilityToolboxPresenter {
   }
 
   /** Place one eye action after its anchor when the Cube has optional cards. */
-  present(anchor: HTMLElement, node: CubeNode): void {
+  present(anchor: HTMLElement, node: CubeFaceCardTarget): void {
     if (this.#owner.list(node).length === 0) {
       this.clear();
       return;
@@ -108,7 +110,7 @@ export class ComfyCubeCardVisibilityToolboxPresenter {
   };
 
   /** Project live optional-card state into a multiple-selection checked menu. */
-  #menuModel(node: CubeNode): ToolboxCheckMenuModel {
+  #menuModel(node: CubeFaceCardTarget): ToolboxCheckMenuModel {
     return {
       ariaLabel: 'Manage optional nodes',
       selectionMode: 'multiple',

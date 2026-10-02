@@ -86,7 +86,7 @@ export function resolveCubeFaceCardPresentation(
 }
 
 /** Match Substitute's upstream-first card order, then pin semantic prompts above masonry. */
-function orderCubeFaceMasonryCards(
+export function orderCubeFaceMasonryCards(
   cards: readonly CubeFaceCardDecision[],
   nodes: readonly ComfyNode[],
   graph: ComfyGraph | undefined,
@@ -109,9 +109,10 @@ function orderCubeFaceMasonryCards(
 }
 
 /** Return a stable complete-graph order so hidden intermediaries retain dependency chronology. */
-function orderNodesUpstreamFirst(
+export function orderNodesUpstreamFirst(
   nodes: readonly ComfyNode[],
   graph: ComfyGraph | undefined,
+  additionalEdges: readonly { source: GraphId; target: GraphId }[] = [],
 ): string[] {
   const nodeIds = nodes.map((node, index) => nodeId(node, index));
   const nodesById = new Map(nodes.map((node, index) => [nodeId(node, index), node]));
@@ -119,7 +120,10 @@ function orderNodesUpstreamFirst(
   const dependents = new Map(nodeIds.map((id) => [id, new Set<string>()]));
 
   for (const [targetId, node] of nodesById) {
-    for (const originId of linkedOriginNodeIds(node, graph)) {
+    const extraOrigins = additionalEdges
+      .filter((edge) => String(edge.target) === targetId)
+      .map((edge) => edge.source);
+    for (const originId of [...linkedOriginNodeIds(node, graph), ...extraOrigins]) {
       const sourceId = String(originId);
       if (!nodesById.has(sourceId) || sourceId === targetId) continue;
       const downstream = dependents.get(sourceId);
