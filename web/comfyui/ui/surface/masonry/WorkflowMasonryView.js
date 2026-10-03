@@ -2,6 +2,8 @@ import { NativeCardGeometryObserver } from '../NativeCardGeometryObserver.js';
 import { ensureCubeSurfaceStyles } from '../CubeSurfaceStyles.js';
 import { computeWorkflowMasonry } from './WorkflowMasonryLayout.js';
 import { WorkflowMasonrySectionView } from './WorkflowMasonrySectionView.js';
+import { SurfaceMotion } from '../motion/SurfaceMotion.js';
+import { DISCLOSURE_LAYOUT_EVENT, measureDisclosureCardHeight, } from '../motion/DisclosureLayout.js';
 /** Retain shared Cube presentation while measuring only masonry geometry. */
 export class WorkflowMasonryView {
     element;
@@ -9,6 +11,7 @@ export class WorkflowMasonryView {
     #options;
     #views = new Map();
     #geometry;
+    #motion = new SurfaceMotion();
     #sections;
     #generation = 0;
     #disposed = false;
@@ -21,8 +24,11 @@ export class WorkflowMasonryView {
         this.element = options.document.createElement('section');
         this.element.className = 'sugarcubes-workflow-masonry';
         this.element.setAttribute('aria-label', 'Workflow masonry');
+        // Comfy's ancestor capture handler checks this before forwarding wheel input to the graph.
+        this.element.setAttribute('data-capture-wheel', 'true');
         this.element.tabIndex = 0;
         this.element.addEventListener('wheel', (event) => event.stopPropagation(), { passive: true });
+        this.element.addEventListener(DISCLOSURE_LAYOUT_EVENT, this.#onDisclosureLayout);
         this.#content = options.document.createElement('div');
         this.#content.className = 'sugarcubes-workflow-masonry__content';
         this.element.append(this.#content);
@@ -45,6 +51,7 @@ export class WorkflowMasonryView {
         const ids = new Set(sections.map((section) => section.id));
         for (const [id, view] of this.#views) {
             if (!ids.has(id)) {
+                this.#motion.forget(view.header);
                 view.dispose();
                 this.#views.delete(id);
             }
@@ -57,6 +64,7 @@ export class WorkflowMasonryView {
                     content: this.#content,
                     cardState: this.#options.cardState,
                     openCube: this.#options.openCube,
+                    motion: this.#motion,
                 });
                 this.#views.set(section.id, view);
             }
@@ -98,8 +106,8 @@ export class WorkflowMasonryView {
             return;
         const options = {
             availableWidth: Math.max(1, this.#content.clientWidth),
-            minimumColumnWidth: 320,
-            gap: 12,
+            minimumColumnWidth: Number.parseFloat(getComputedStyle(this.element).getPropertyValue('--sugarcubes-masonry-column-width')) || 320,
+            gap: Number.parseFloat(getComputedStyle(this.element).getPropertyValue('--sugarcubes-masonry-gap')) || 12,
         };
         const measure = () => computeWorkflowMasonry(this.#sections.map((section) => ({
             id: section.id,
@@ -108,7 +116,7 @@ export class WorkflowMasonryView {
                 .map((card) => ({
                 id: card.id,
                 columnSpan: card.columnSpan,
-                height: this.#views.get(section.id)?.cells.get(card.id)?.offsetHeight ?? 36,
+                height: this.#measureCard(section.id, card.id),
             })),
         })), options);
         const cells = new Map([...this.#views.values()].flatMap((view) => [...view.cells]));
@@ -120,22 +128,40 @@ export class WorkflowMasonryView {
         const result = measure();
         for (const section of result.sections) {
             const header = this.#views.get(section.id)?.header;
-            if (header)
-                header.style.transform = `translateY(${String(section.y)}px)`;
+            if (header) {
+                header.dataset.masonryY = String(section.y);
+                this.#motion.place(header, {
+                    x: 0,
+                    y: section.y,
+                    width: options.availableWidth,
+                    height: 36,
+                });
+            }
         }
         for (const card of result.placements) {
             const cell = cells.get(card.id);
             if (cell)
-                cell.style.transform = `translate(${String(card.x)}px, ${String(card.y)}px)`;
+                this.#motion.place(cell, card);
         }
-        this.#content.style.height = `${String(Math.max(result.height, 120))}px`;
+        this.#motion.settle();
+        this.#motion.resizeHeight(this.#content, Math.max(result.height, 120));
     }
+    /** Use settled disclosure geometry so neighbors share one smooth destination transition. */
+    #measureCard(sectionId, cardId) {
+        const cell = this.#views.get(sectionId)?.cells.get(cardId);
+        return cell ? measureDisclosureCardHeight(cell) : 36;
+    }
+    /** Reflow at disclosure start and release, retaining native resize observation for other changes. */
+    #onDisclosureLayout = () => {
+        if (!this.#mounting)
+            this.layout();
+    };
     /** Navigate by stable section identity for shared Cube stack navigation. */
     scrollToSection(id) {
         const header = this.#views.get(id)?.header;
         if (header)
             this.element.scrollTo({
-                top: header.offsetTop + Number(header.style.transform.match(/[-\d.]+/)?.[0] ?? 0),
+                top: header.offsetTop + Number(header.dataset.masonryY ?? 0),
                 behavior: 'smooth',
             });
     }
@@ -144,8 +170,10 @@ export class WorkflowMasonryView {
         if (this.#disposed)
             return;
         this.#disposed = true;
+        this.element.removeEventListener(DISCLOSURE_LAYOUT_EVENT, this.#onDisclosureLayout);
         this.#generation += 1;
         this.#geometry.dispose();
+        this.#motion.dispose();
         for (const view of this.#views.values())
             view.dispose();
         this.#views.clear();

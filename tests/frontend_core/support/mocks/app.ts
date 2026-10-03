@@ -92,6 +92,7 @@ const createMockApp = (): MockApp => ({
     setDirty: () => undefined,
   },
   extensionManager: { registerSidebarTab: () => undefined },
+  ui: { settings: { addSetting: () => undefined } },
   clean: () => undefined,
   registerExtension(ext: MockExtension) {
     this._extensions.push(ext);
@@ -112,6 +113,7 @@ const createMockApp = (): MockApp => ({
       setDirty: () => undefined,
     };
     this.extensionManager = { registerSidebarTab: () => undefined };
+    this.ui = { settings: { addSetting: () => undefined } };
     this.clean = () => undefined;
   },
 });

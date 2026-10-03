@@ -75,13 +75,15 @@ describe('ensureCubeSurfaceStyles', () => {
 
     const css = document.getElementById('sugarcubes-cube-surface-styles')?.textContent ?? '';
     const cubeBodyRule = css.match(/\[data-sugarcube-cube-body\]\s*\{([^}]*)\}/s)?.[1] ?? '';
+    const appearance =
+      document.getElementById('sugarcubes-node-card-appearance')?.textContent ?? '';
     const cardHeaderRule =
-      css.match(
-        /\.sugarcubes-native-node-card\s+\[data-testid="node-inner-wrapper"\]\s*\{([^}]*)\}/s,
+      appearance.match(
+        /\.lg-node:not\(\[data-sc-fluent-node\]\)\s+\[data-testid="node-inner-wrapper"\]\s*\{([^}]*)\}/s,
       )?.[1] ?? '';
     const cardBodyRule =
-      css.match(
-        /\.sugarcubes-native-node-card\s+\[data-testid\^="node-body-"\]\s*\{([^}]*)\}/s,
+      appearance.match(
+        /\.lg-node:not\(\[data-sc-fluent-node\]\)\s+\[data-testid\^="node-body-"\]\s*\{([^}]*)\}/s,
       )?.[1] ?? '';
 
     expect(cubeBodyRule).toMatch(

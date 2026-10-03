@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own the reversible workflow presentation state machine and renderer fallback. */
-import type { CubeNode } from '../../cube/node/ComfyCubeNodeFactory.js';
+import { requireCubeIdentity, type CubeNode } from '../../cube/node/ComfyCubeNodeFactory.js';
 import type { WorkflowMasonrySection } from './WorkflowMasonryProjection.js';
 import type { NativeNodeCardRenderer } from '../NativeNodeCardRenderer.js';
 import type { CubeFaceCardStateService } from '../CubeFaceCardStateService.js';
@@ -191,6 +191,7 @@ function topologySignature(sections: readonly WorkflowMasonrySection[]): string 
     sections.map((section) => [
       section.id,
       section.label,
+      section.cube ? requireCubeIdentity(section.cube) : null,
       section.cards.map((card) => [
         card.id,
         card.node.type,

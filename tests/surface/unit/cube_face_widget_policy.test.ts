@@ -22,13 +22,34 @@ import {
   withCubeFaceNodePresentation,
 } from '../../../frontend/comfyui/ui/surface/CubeFaceNodePresentationPolicy.js';
 import {
+  cubeFaceRevealableWidgets,
   cubeFaceUnconsumedWidgets,
   cubeFaceVisibleWidgets,
   isCubeFaceWidgetConsumed,
 } from '../../../frontend/comfyui/ui/surface/CubeFaceWidgetPolicy.js';
-import type { ComfyNode } from '../../../frontend/comfyui/ui/types/graph.js';
+import type { ComfyNode, ComfyWidget } from '../../../frontend/comfyui/ui/types/graph.js';
 
 describe('CubeFaceWidgetPolicy', () => {
+  test('retains collapsed card eligibility while respecting hidden widgets and restoring flags on failure', () => {
+    const visible = { name: 'steps' };
+    const hidden = { name: 'secret', hidden: true };
+    const flags = { collapsed: true, pinned: true };
+    const node: ComfyNode = {
+      flags,
+      widgets: [visible, hidden],
+      isWidgetVisible(widget: { hidden?: boolean }): boolean {
+        return !this.flags?.collapsed && !widget.hidden;
+      },
+    };
+    expect(cubeFaceVisibleWidgets(node)).toEqual([visible]);
+    expect(node.flags).toBe(flags);
+    expect(flags.collapsed).toBe(true);
+    node.isWidgetVisible = (): never => {
+      throw new Error('Custom visibility failed');
+    };
+    expect(() => cubeFaceVisibleWidgets(node)).toThrow('Custom visibility failed');
+    expect(node.flags).toBe(flags);
+  });
   test('excludes widgets supplied through singular or plural input links', () => {
     const prompt = { name: 'text', value: 'stale prompt' };
     const style = { name: 'style', value: 'cinematic' };
@@ -97,4 +118,30 @@ describe('CubeFaceWidgetPolicy', () => {
 
     expect(node.widgets).toBe(widgets);
   });
+});
+
+test('disclosure eligibility includes advanced controls but excludes hidden and consumed content', () => {
+  const basic = { name: 'steps' };
+  const advanced = { name: 'tile_size', advanced: true };
+  const hidden = { name: 'secret', hidden: true };
+  const flags = { collapsed: true };
+  const node: ComfyNode = {
+    flags,
+    widgets: [basic, advanced, hidden],
+    inputs: [{ widget: { name: 'steps' }, link: 7 }],
+    isWidgetVisible(widget: ComfyWidget): boolean {
+      return (
+        !this.flags?.collapsed && !widget.hidden && (!widget.advanced || this.showAdvanced === true)
+      );
+    },
+  };
+  expect(cubeFaceRevealableWidgets(node)).toEqual([advanced]);
+  expect(Object.hasOwn(node, 'showAdvanced')).toBe(false);
+  expect(node.flags).toBe(flags);
+  node.isWidgetVisible = (): never => {
+    throw new Error('Visibility failed');
+  };
+  expect(() => cubeFaceRevealableWidgets(node)).toThrow('Visibility failed');
+  expect(Object.hasOwn(node, 'showAdvanced')).toBe(false);
+  expect(node.flags).toBe(flags);
 });

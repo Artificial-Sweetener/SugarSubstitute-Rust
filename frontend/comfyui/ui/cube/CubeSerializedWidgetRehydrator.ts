@@ -18,6 +18,8 @@
 import { rebindSubgraphWidgetValues } from '../graph/SubgraphWidgetValueRebinder.js';
 import { isRecord } from '../types/common.js';
 import type { ComfyNode } from '../types/graph.js';
+import type { ComfyGraph } from '../types/graph.js';
+import { CubeNestedWidgetRestoration } from './CubeNestedWidgetRestoration.js';
 
 const CUBE_KINDS = new Set(['cube', 'cube_draft']);
 const WIDGET_INPUT_TYPES = new Set([
@@ -36,6 +38,7 @@ type LiveNodeFactory = (type: string) => ComfyNode | null;
 /** Own preconfiguration-time Cube widget migration into the current node schema. */
 export class CubeSerializedWidgetRehydrator {
   readonly #createNode: LiveNodeFactory;
+  readonly #nested = new CubeNestedWidgetRestoration();
 
   /** Bind the current Comfy node factory used to discover live widget layouts. */
   constructor(createNode: LiveNodeFactory) {
@@ -44,6 +47,7 @@ export class CubeSerializedWidgetRehydrator {
 
   /** Rebind every Cube-owned serialized subgraph before native configuration. */
   prepare(workflow: unknown): number {
+    this.#nested.reset();
     if (!isRecord(workflow) || !isRecord(workflow.definitions)) return 0;
     const definitions = workflow.definitions.subgraphs;
     if (!Array.isArray(definitions)) return 0;
@@ -69,12 +73,18 @@ export class CubeSerializedWidgetRehydrator {
       if (!id || visited.has(id)) continue;
       visited.add(id);
 
-      rebindSubgraphWidgetValues(definition, (type) => (type ? this.#createNode(type) : null), {
-        unavailableNode: 'preserve',
-        historicalWidgetNames: (node) =>
-          historicalWidgetNames.get(readString(node.type ?? node.class_type)) ?? null,
-        unidentifiedValues: 'discard',
-      });
+      // Native nested widgets require definitions that Comfy has not registered in this phase.
+      rebindSubgraphWidgetValues(
+        definition,
+        (type) => (type && !byId.has(type) ? this.#createNode(type) : null),
+        {
+          unavailableNode: 'preserve',
+          historicalWidgetNames: (node) =>
+            historicalWidgetNames.get(readString(node.type ?? node.class_type)) ?? null,
+          unidentifiedValues: 'discard',
+        },
+      );
+      this.#nested.capture(definition, new Set(byId.keys()), this.#createNode);
       rehydrated += 1;
       for (const node of Array.isArray(definition.nodes) ? definition.nodes : []) {
         if (!isRecord(node)) continue;
@@ -85,6 +95,11 @@ export class CubeSerializedWidgetRehydrator {
       }
     }
     return rehydrated;
+  }
+
+  /** Complete promoted-widget hydration after native instance identities have been assigned. */
+  restore(graph: ComfyGraph | null | undefined): void {
+    this.#nested.restore(graph);
   }
 }
 

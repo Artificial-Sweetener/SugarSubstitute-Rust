@@ -57,4 +57,8 @@ export class CubeWorkflowPreconfiguration {
         this.#legacyBatch = null;
         return batch;
     }
+    /** Finish host-backed widget hydration after native configuration. */
+    restoreWidgets(graph) {
+        this.#widgetRehydrator?.restore(graph);
+    }
 }

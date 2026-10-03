@@ -64,6 +64,7 @@ import { CubeExtensionSetupLifecycle } from './ui/cube/CubeExtensionSetupLifecyc
 import { CubeHostFeedback, type ToastSeverity } from './ui/core/CubeHostFeedback.js';
 import { createSugarCubesDebugApi } from './ui/debug/SugarCubesDebugApi.js';
 import { WorkflowMasonryHostLifecycle } from './ui/surface/masonry/WorkflowMasonryHostLifecycle.js';
+import { FluentAppearanceHost } from './ui/surface/appearance/FluentAppearanceHost.js';
 
 export { buildShiftedPlacementPayload };
 
@@ -372,6 +373,16 @@ const workflowMasonry = new WorkflowMasonryHostLifecycle({
   logger,
 });
 
+/** Compose shared appearance without adding styling behavior to host registration. */
+const fluentAppearance = new FluentAppearanceHost({
+  app: appRef,
+  document: documentRef ?? document,
+  reportError: (error) => {
+    logger.error('SugarCubes Fluent appearance failed', { error });
+    pushToastMessage('error', 'Fluent theme unavailable', readErrorMessage(error));
+  },
+});
+
 /** Define the ComfyUI extension lifecycle owned by SugarCubes. */
 export const sugarCubesExtension: SugarCubesExtension = {
   name: EXTENSION_NAME,
@@ -400,6 +411,7 @@ export const sugarCubesExtension: SugarCubesExtension = {
   async setup() {
     await extensionSetupLifecycle.setup();
     workflowMasonry.setup();
+    fluentAppearance.setup();
   },
   beforeConfigureGraph(graphData?: unknown) {
     workflowMasonry.beforeConfigureGraph();

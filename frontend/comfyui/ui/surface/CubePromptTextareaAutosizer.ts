@@ -124,7 +124,8 @@ export class CubePromptTextareaAutosizer {
   /** Apply the complete content height and report only material changes. */
   #fit(binding: PromptTextareaBinding): void {
     const { textarea } = binding;
-    textarea.style.setProperty('height', 'auto', 'important');
+    // Collapse intrinsic rows before measuring so content and the current theme's minimum own height.
+    textarea.style.setProperty('height', '0px', 'important');
     textarea.style.setProperty('overflow-y', 'hidden', 'important');
     const height = Math.max(textarea.scrollHeight, textarea.clientHeight, textarea.offsetHeight, 1);
     textarea.style.setProperty('height', `${String(height)}px`, 'important');

@@ -18,26 +18,11 @@
 import { isRecord } from '../types/common.js';
 import type { UnknownRecord } from '../types/common.js';
 
-export interface ComfyNativeNodeMount {
-  component: UnknownRecord;
-  appContext: UnknownRecord;
-}
-
 /** Resolve Comfy's mounted Vue application context independently of graph contents. */
 export function findComfyVueAppContext(root: HTMLElement): UnknownRecord | null {
   const rootRecord: UnknownRecord = isRecord(root) ? root : {};
   const app = isRecord(rootRecord.__vue_app__) ? rootRecord.__vue_app__ : null;
   return isRecord(app?._context) ? app._context : null;
-}
-
-/** Locate the actual active LGraphNode component and Comfy application context. */
-export function findComfyNativeNodeMount(root: HTMLElement): ComfyNativeNodeMount | null {
-  const rootRecord: UnknownRecord = isRecord(root) ? root : {};
-  const appContext = findComfyVueAppContext(root);
-  if (!appContext) return null;
-  const componentVNode = findVueComponent(rootRecord._vnode, 'LGraphNode');
-  const component = isRecord(componentVNode?.type) ? componentVNode.type : null;
-  return component ? { component, appContext } : null;
 }
 
 /** Visit each mounted VNode once and return the requested component VNode. */

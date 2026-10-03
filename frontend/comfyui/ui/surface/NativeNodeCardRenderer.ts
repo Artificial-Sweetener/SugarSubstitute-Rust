@@ -17,6 +17,9 @@
 
 import type { ComfyNode } from '../types/graph.js';
 
+/** Release presentation adapters while the native card's callbacks are still mounted. */
+export const NATIVE_NODE_CARD_DISPOSE_EVENT = 'sugarcubes-native-node-card-dispose';
+
 export interface NativeNodeCardMount {
   refresh(): void;
   unmount(): void;

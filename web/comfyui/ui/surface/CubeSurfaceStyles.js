@@ -14,9 +14,11 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Install structural Cube-face styles without reproducing Comfy node styling. */
+import { ensureNodeCardAppearanceStyles } from './appearance/NodeCardAppearanceStyles.js';
 const STYLE_ID = 'sugarcubes-cube-surface-styles';
 /** Install the one structural stylesheet used by every Cube surface. */
 export function ensureCubeSurfaceStyles(documentRef) {
+    ensureNodeCardAppearanceStyles(documentRef);
     if (documentRef.getElementById(STYLE_ID))
         return;
     const style = documentRef.createElement('style');
@@ -398,12 +400,6 @@ export function ensureCubeSurfaceStyles(documentRef) {
     .sugarcubes-native-node-card [data-testid^="node-inner-wrapper"] {
       min-width: 0 !important;
       max-width: 100%;
-    }
-    .sugarcubes-native-node-card [data-testid="node-inner-wrapper"] {
-      background-color: var(--sugarcubes-cube-card-header) !important;
-    }
-    .sugarcubes-native-node-card [data-testid^="node-body-"] {
-      background-color: var(--sugarcubes-cube-card-body) !important;
     }
     .sugarcubes-native-node-card
       [data-cube-face-body="header-only"]

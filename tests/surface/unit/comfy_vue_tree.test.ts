@@ -18,12 +18,12 @@
 import { describe, expect, test } from '@jest/globals';
 
 import {
-  findComfyNativeNodeMount,
+  findVueComponent,
   findComfyVueAppContext,
 } from '../../../frontend/comfyui/ui/surface/ComfyVueTree.js';
 
-describe('findComfyNativeNodeMount', () => {
-  test('returns the actual LGraphNode component and existing app context', () => {
+describe('Comfy Vue tree boundaries', () => {
+  test('discovers native VNodes for annotations independently of the application context', () => {
     const component = { __name: 'LGraphNode', setup: () => undefined };
     const appContext = { provides: { pinia: 'real-store' } };
     const root = document.createElement('div') as HTMLDivElement & {
@@ -48,7 +48,8 @@ describe('findComfyNativeNodeMount', () => {
       },
     };
 
-    expect(findComfyNativeNodeMount(root)).toEqual({ component, appContext });
+    expect(findVueComponent(root._vnode, 'LGraphNode')?.type).toBe(component);
+    expect(findComfyVueAppContext(root)).toBe(appContext);
   });
 
   test('returns null until Nodes 2.0 has mounted a native node component', () => {
@@ -59,7 +60,7 @@ describe('findComfyNativeNodeMount', () => {
     root.__vue_app__ = { _context: {} };
     root._vnode = { type: { __name: 'GraphView' } };
 
-    expect(findComfyNativeNodeMount(root)).toBeNull();
+    expect(findVueComponent(root._vnode, 'LGraphNode')).toBeNull();
     expect(findComfyVueAppContext(root)).toEqual({});
   });
 });

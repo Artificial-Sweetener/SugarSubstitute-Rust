@@ -19,7 +19,7 @@ import { isRecord } from '../types/common.js';
 import type { UnknownRecord } from '../types/common.js';
 import type { ComfyNode } from '../types/graph.js';
 import type { ComfyVueNodeRenderRuntime } from './ComfyRuntimeModuleLoader.js';
-import { findVueComponent } from './ComfyVueTree.js';
+import { findVueComponent, findVueComponents } from './ComfyVueTree.js';
 import {
   createCubeFaceNodeData,
   cubeFaceNodeHasVisibleWidgets,
@@ -27,6 +27,9 @@ import {
 import { findCubeFacePromptWidget } from './CubeFacePromptPolicy.js';
 import { CubePromptTextareaScope } from './CubePromptTextareaScope.js';
 import { ComfyVueNodeHeaderAccessoryHost } from './ComfyVueNodeHeaderAccessoryHost.js';
+import { NativeProjectedNodeCollapse } from './NativeProjectedNodeCollapse.js';
+import { NativeProjectedNodeScrollBoundary } from './NativeProjectedNodeScrollBoundary.js';
+import { NATIVE_NODE_CARD_DISPOSE_EVENT } from './NativeNodeCardRenderer.js';
 import type {
   NativeNodeCardMount,
   NativeNodeCardMountOptions,
@@ -67,9 +70,18 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
       ? new ComfyVueNodeHeaderAccessoryHost(options.headerAccessory)
       : null;
     const promptTextareaScope = new CubePromptTextareaScope(target);
+    const scrollBoundary = new NativeProjectedNodeScrollBoundary();
     const observer = new MutationObserver(() => {
       if (!disposed) {
-        this.#applyPresentation(target, node, headerAccessoryHost, promptTextareaScope, options);
+        this.#applyPresentation(
+          target,
+          node,
+          headerAccessoryHost,
+          promptTextareaScope,
+          collapseHost,
+          scrollBoundary,
+          options,
+        );
       }
     });
     const renderCard = (): void => {
@@ -97,8 +109,17 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
       this.#runtime.render(vnodeValue, target);
       target.classList.add('sugarcubes-native-node-card');
       target.dataset.cubeFaceNative = 'nodes-2';
-      this.#applyPresentation(target, node, headerAccessoryHost, promptTextareaScope, options);
+      this.#applyPresentation(
+        target,
+        node,
+        headerAccessoryHost,
+        promptTextareaScope,
+        collapseHost,
+        scrollBoundary,
+        options,
+      );
     };
+    const collapseHost = new NativeProjectedNodeCollapse(target, node, renderCard);
     const refreshAfterAdvancedInputsToggle = (event: Event): void => {
       const eventTarget = event.target;
       if (!(eventTarget instanceof Element)) return;
@@ -131,7 +152,10 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
         }
         observer.disconnect();
         target.removeEventListener('click', refreshAfterAdvancedInputsToggle, true);
+        target.querySelector('.lg-node')?.dispatchEvent(new Event(NATIVE_NODE_CARD_DISPOSE_EVENT));
         promptTextareaScope.dispose();
+        collapseHost.dispose();
+        scrollBoundary.dispose();
         headerAccessoryHost?.dispose();
         this.#runtime.render(null, target);
         this.#mounts.delete(mount);
@@ -152,6 +176,8 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
     node: ComfyNode,
     headerAccessoryHost: ComfyVueNodeHeaderAccessoryHost | null,
     promptTextareaScope: CubePromptTextareaScope,
+    collapseHost: NativeProjectedNodeCollapse,
+    scrollBoundary: NativeProjectedNodeScrollBoundary,
     options: NativeNodeCardMountOptions,
   ): void {
     const nativeRoot = target.querySelector<HTMLElement>('.lg-node');
@@ -169,10 +195,7 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
       for (const handle of nativeRoot.querySelectorAll<HTMLElement>(':scope > [role="button"]')) {
         handle.hidden = true;
       }
-      const collapseButton = nativeRoot.querySelector<HTMLElement>(
-        '[data-testid="node-collapse-button"]',
-      );
-      if (collapseButton) hideComponentRoot(collapseButton);
+      collapseHost.reconcile(nativeRoot);
       if (node.isSubgraphNode?.()) {
         hideNativeSubgraphIcon(nativeRoot);
         hideNativeSubgraphFooter(nativeRoot);
@@ -181,6 +204,7 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
     }
 
     const targetRecord: UnknownRecord = isRecord(target) ? target : {};
+    annotateNativeBypassBadge(targetRecord._vnode, nativeRoot);
     for (const componentName of ['NodeSlots', 'NodeBadges']) {
       const vnode = findVueComponent(targetRecord._vnode, componentName);
       const element = resolveComponentElement(vnode);
@@ -196,6 +220,10 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
     const widgetsVNode = findVueComponent(targetRecord._vnode, 'NodeWidgets');
     const widgetsRoot = resolveComponentElement(widgetsVNode);
     if (widgetsRoot) this.#isolateInteractiveRoot(widgetsRoot);
+    scrollBoundary.reconcile(
+      nativeRoot,
+      [advancedInputs, widgetsRoot].filter((element): element is HTMLElement => element !== null),
+    );
   }
 
   /** Keep embedded controls from initiating the projected native node's drag behavior. */
@@ -204,9 +232,21 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
     const stopAtControl = (event: Event): void => event.stopPropagation();
     root.addEventListener('pointerdown', stopAtControl);
     root.addEventListener('mousedown', stopAtControl);
-    root.addEventListener('wheel', stopAtControl);
     root.addEventListener('contextmenu', stopAtControl);
     this.#interactiveRoots.add(root);
+  }
+}
+
+/** Identify the native header's bypass badge while leaving custom and pricing badges intact. */
+function annotateNativeBypassBadge(vnode: unknown, nativeRoot: HTMLElement | null): void {
+  const header = findVueComponent(vnode, 'NodeHeader');
+  for (const badge of findVueComponents(header, 'NodeBadge')) {
+    const component = isRecord(badge.component) ? badge.component : {};
+    const props = isRecord(component.props) ? component.props : {};
+    const element = resolveComponentElement(badge);
+    if (!element || element.closest('.lg-node') !== nativeRoot) continue;
+    if (props.cssIcon === 'icon-[lucide--redo-dot]') element.dataset.masonryBypassBadge = '';
+    else delete element.dataset.masonryBypassBadge;
   }
 }
 

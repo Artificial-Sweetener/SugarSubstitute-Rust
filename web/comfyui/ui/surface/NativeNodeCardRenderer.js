@@ -14,4 +14,5 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Define the SugarCubes-owned boundary to Comfy's native node renderers. */
-export {};
+/** Release presentation adapters while the native card's callbacks are still mounted. */
+export const NATIVE_NODE_CARD_DISPOSE_EVENT = 'sugarcubes-native-node-card-dispose';

@@ -15,11 +15,14 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Mount Comfy's real Nodes 2.0 component as a Cube-face sub-card. */
 import { isRecord } from '../types/common.js';
-import { findVueComponent } from './ComfyVueTree.js';
+import { findVueComponent, findVueComponents } from './ComfyVueTree.js';
 import { createCubeFaceNodeData, cubeFaceNodeHasVisibleWidgets, } from './CubeFaceNodePresentationPolicy.js';
 import { findCubeFacePromptWidget } from './CubeFacePromptPolicy.js';
 import { CubePromptTextareaScope } from './CubePromptTextareaScope.js';
 import { ComfyVueNodeHeaderAccessoryHost } from './ComfyVueNodeHeaderAccessoryHost.js';
+import { NativeProjectedNodeCollapse } from './NativeProjectedNodeCollapse.js';
+import { NativeProjectedNodeScrollBoundary } from './NativeProjectedNodeScrollBoundary.js';
+import { NATIVE_NODE_CARD_DISPOSE_EVENT } from './NativeNodeCardRenderer.js';
 /** Own native Vue mounts while leaving component rendering and widget UI to Comfy. */
 export class ComfyVueNodeCardRenderer {
     #component;
@@ -42,9 +45,10 @@ export class ComfyVueNodeCardRenderer {
             ? new ComfyVueNodeHeaderAccessoryHost(options.headerAccessory)
             : null;
         const promptTextareaScope = new CubePromptTextareaScope(target);
+        const scrollBoundary = new NativeProjectedNodeScrollBoundary();
         const observer = new MutationObserver(() => {
             if (!disposed) {
-                this.#applyPresentation(target, node, headerAccessoryHost, promptTextareaScope, options);
+                this.#applyPresentation(target, node, headerAccessoryHost, promptTextareaScope, collapseHost, scrollBoundary, options);
             }
         });
         const renderCard = () => {
@@ -68,8 +72,9 @@ export class ComfyVueNodeCardRenderer {
             this.#runtime.render(vnodeValue, target);
             target.classList.add('sugarcubes-native-node-card');
             target.dataset.cubeFaceNative = 'nodes-2';
-            this.#applyPresentation(target, node, headerAccessoryHost, promptTextareaScope, options);
+            this.#applyPresentation(target, node, headerAccessoryHost, promptTextareaScope, collapseHost, scrollBoundary, options);
         };
+        const collapseHost = new NativeProjectedNodeCollapse(target, node, renderCard);
         const refreshAfterAdvancedInputsToggle = (event) => {
             const eventTarget = event.target;
             if (!(eventTarget instanceof Element))
@@ -104,7 +109,10 @@ export class ComfyVueNodeCardRenderer {
                 }
                 observer.disconnect();
                 target.removeEventListener('click', refreshAfterAdvancedInputsToggle, true);
+                target.querySelector('.lg-node')?.dispatchEvent(new Event(NATIVE_NODE_CARD_DISPOSE_EVENT));
                 promptTextareaScope.dispose();
+                collapseHost.dispose();
+                scrollBoundary.dispose();
                 headerAccessoryHost?.dispose();
                 this.#runtime.render(null, target);
                 this.#mounts.delete(mount);
@@ -119,7 +127,7 @@ export class ComfyVueNodeCardRenderer {
             mount.unmount();
     }
     /** Apply the narrow Cube-face mode to Comfy-owned component roots. */
-    #applyPresentation(target, node, headerAccessoryHost, promptTextareaScope, options) {
+    #applyPresentation(target, node, headerAccessoryHost, promptTextareaScope, collapseHost, scrollBoundary, options) {
         const nativeRoot = target.querySelector('.lg-node');
         if (nativeRoot) {
             if (options.presentationGeometry) {
@@ -135,9 +143,7 @@ export class ComfyVueNodeCardRenderer {
             for (const handle of nativeRoot.querySelectorAll(':scope > [role="button"]')) {
                 handle.hidden = true;
             }
-            const collapseButton = nativeRoot.querySelector('[data-testid="node-collapse-button"]');
-            if (collapseButton)
-                hideComponentRoot(collapseButton);
+            collapseHost.reconcile(nativeRoot);
             if (node.isSubgraphNode?.()) {
                 hideNativeSubgraphIcon(nativeRoot);
                 hideNativeSubgraphFooter(nativeRoot);
@@ -145,6 +151,7 @@ export class ComfyVueNodeCardRenderer {
             headerAccessoryHost?.reconcile(nativeRoot, node);
         }
         const targetRecord = isRecord(target) ? target : {};
+        annotateNativeBypassBadge(targetRecord._vnode, nativeRoot);
         for (const componentName of ['NodeSlots', 'NodeBadges']) {
             const vnode = findVueComponent(targetRecord._vnode, componentName);
             const element = resolveComponentElement(vnode);
@@ -163,6 +170,7 @@ export class ComfyVueNodeCardRenderer {
         const widgetsRoot = resolveComponentElement(widgetsVNode);
         if (widgetsRoot)
             this.#isolateInteractiveRoot(widgetsRoot);
+        scrollBoundary.reconcile(nativeRoot, [advancedInputs, widgetsRoot].filter((element) => element !== null));
     }
     /** Keep embedded controls from initiating the projected native node's drag behavior. */
     #isolateInteractiveRoot(root) {
@@ -171,9 +179,23 @@ export class ComfyVueNodeCardRenderer {
         const stopAtControl = (event) => event.stopPropagation();
         root.addEventListener('pointerdown', stopAtControl);
         root.addEventListener('mousedown', stopAtControl);
-        root.addEventListener('wheel', stopAtControl);
         root.addEventListener('contextmenu', stopAtControl);
         this.#interactiveRoots.add(root);
+    }
+}
+/** Identify the native header's bypass badge while leaving custom and pricing badges intact. */
+function annotateNativeBypassBadge(vnode, nativeRoot) {
+    const header = findVueComponent(vnode, 'NodeHeader');
+    for (const badge of findVueComponents(header, 'NodeBadge')) {
+        const component = isRecord(badge.component) ? badge.component : {};
+        const props = isRecord(component.props) ? component.props : {};
+        const element = resolveComponentElement(badge);
+        if (!element || element.closest('.lg-node') !== nativeRoot)
+            continue;
+        if (props.cssIcon === 'icon-[lucide--redo-dot]')
+            element.dataset.masonryBypassBadge = '';
+        else
+            delete element.dataset.masonryBypassBadge;
     }
 }
 /** Preserve and return only the native footer control for advanced inputs. */

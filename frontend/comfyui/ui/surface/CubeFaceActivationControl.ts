@@ -17,6 +17,7 @@
 
 import type { ComfyNode } from '../types/graph.js';
 import type { CubeFaceCardDecision } from './CubeFaceCardPolicy.js';
+import { ensureCubeFaceActivationStyles } from './CubeFaceActivationStyles.js';
 
 /** Build one labeled PrimeVue-style switch without taking ownership of activation state. */
 export function createCubeFaceActivationControl(
@@ -24,6 +25,7 @@ export function createCubeFaceActivationControl(
   card: CubeFaceCardDecision,
   onActivationChange: (node: ComfyNode, enabled: boolean) => void,
 ): HTMLLabelElement {
+  ensureCubeFaceActivationStyles(documentRef);
   const control = documentRef.createElement('label');
   control.className = 'sugarcubes-cube-face__activation';
   control.dataset.cubeCardActivation = card.id;

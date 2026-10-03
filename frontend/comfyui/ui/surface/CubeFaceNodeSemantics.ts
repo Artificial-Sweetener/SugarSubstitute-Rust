@@ -42,11 +42,16 @@ export function isHardHiddenCubeFaceNode(node: ComfyNode): boolean {
 /** Return whether Substitute suppresses the generic activation switch for a worker. */
 export function cubeFaceNodeAllowsActivationControl(node: ComfyNode): boolean {
   if (isHardHiddenCubeFaceNode(node)) return false;
-  if (nodeClass(node) === 'KSampler') return false;
+  return !isCubeFaceSamplerWorker(node);
+}
+
+/** Identify sampler workers consistently for activation and title presentation. */
+export function isCubeFaceSamplerWorker(node: ComfyNode): boolean {
+  if (nodeClass(node) === 'KSampler') return true;
   const widgetNames = new Set(
     (node.widgets ?? []).map((widget) => widget.name?.trim().toLowerCase() ?? ''),
   );
-  return !(widgetNames.has('steps') && widgetNames.has('denoise'));
+  return widgetNames.has('steps') && widgetNames.has('denoise');
 }
 
 /** Infer resource/config types that pass through one ordinary graph node. */

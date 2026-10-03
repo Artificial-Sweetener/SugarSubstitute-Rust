@@ -16,7 +16,7 @@
 /** Own lazy Comfy renderer/runtime acquisition and release. */
 import { loadComfyNativeNodeComponent, loadComfyVueRuntime, } from './ComfyRuntimeModuleLoader.js';
 import { ComfyVueNodeCardRenderer } from './ComfyVueNodeCardRenderer.js';
-import { findComfyNativeNodeMount, findComfyVueAppContext } from './ComfyVueTree.js';
+import { findComfyVueAppContext } from './ComfyVueTree.js';
 /** Retain renderer state only for the active Comfy Vue application. */
 export class CubeSurfaceRendererLifecycle {
     options;
@@ -65,11 +65,8 @@ export class CubeSurfaceRendererLifecycle {
         const appContext = findComfyVueAppContext(vueRoot);
         if (!appContext)
             throw new Error('Comfy Vue application context is not mounted.');
-        const mountedComponent = findComfyNativeNodeMount(vueRoot)?.component;
         const [component, runtime] = await Promise.all([
-            mountedComponent
-                ? Promise.resolve(mountedComponent)
-                : loadComfyNativeNodeComponent(this.options.document),
+            loadComfyNativeNodeComponent(this.options.document),
             this.getRuntime(),
         ]);
         return new ComfyVueNodeCardRenderer({ component, appContext, runtime });

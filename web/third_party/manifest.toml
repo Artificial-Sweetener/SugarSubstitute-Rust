@@ -1,0 +1,61 @@
+[[component]]
+name = "Microsoft Fluent UI System Icons"
+license = "MIT"
+license_file = "third_party/licenses/fluentui-system-icons.LICENSE.txt"
+source = "https://github.com/microsoft/fluentui-system-icons"
+revision = "a6931cf6ad3541975b132762c8cad67b2f54fd7a"
+modifications = "None; SVG files copied verbatim."
+
+[[component.asset]]
+source_path = "assets/App Generic/SVG/ic_fluent_app_generic_20_regular.svg"
+vendored_file = "frontend/static/icons/node/app-generic.svg"
+runtime_file = "web/icons/node/app-generic.svg"
+sha256 = "b37ef4e4acb7d92f479ab06cb76077f09e0a0cfccd02679ae55e774741fd92ad"
+
+[[component.asset]]
+source_path = "assets/Edit/SVG/ic_fluent_edit_20_regular.svg"
+vendored_file = "frontend/static/icons/node/edit.svg"
+runtime_file = "web/icons/node/edit.svg"
+sha256 = "4ae9e650d5b7c45cb481466b4817215bde363b84edd2a7ad34ac905da2bf0fc3"
+
+[[component.asset]]
+source_path = "assets/Eraser/SVG/ic_fluent_eraser_20_regular.svg"
+vendored_file = "frontend/static/icons/node/eraser.svg"
+runtime_file = "web/icons/node/eraser.svg"
+sha256 = "82dffc4b2394fd53138ba32d249c41bdcad459d662c32a444357ab40541cb592"
+
+[[component.asset]]
+source_path = "assets/Folder/SVG/ic_fluent_folder_20_regular.svg"
+vendored_file = "frontend/static/icons/node/folder.svg"
+runtime_file = "web/icons/node/folder.svg"
+sha256 = "1c2980b77954a81cfd8b669a758063df74193c6fcb8e002effb684909fd74755"
+
+[[component.asset]]
+source_path = "assets/Brain Circuit/SVG/ic_fluent_brain_circuit_20_regular.svg"
+vendored_file = "frontend/static/icons/node/brain-circuit.svg"
+runtime_file = "web/icons/node/brain-circuit.svg"
+sha256 = "001b1ef1ba11f7913bf8cfb79a26f1aa084c01de08d32b9c35d700c934538f18"
+
+[[component.asset]]
+source_path = "assets/Color/SVG/ic_fluent_color_20_regular.svg"
+vendored_file = "frontend/static/icons/node/color.svg"
+runtime_file = "web/icons/node/color.svg"
+sha256 = "01aebdb4cf92c2d2cb6e7f6612e0a98949574d3a2beb0d8f4190d6c03fec13b7"
+
+[[component.asset]]
+source_path = "assets/Image/SVG/ic_fluent_image_20_regular.svg"
+vendored_file = "frontend/static/icons/node/image.svg"
+runtime_file = "web/icons/node/image.svg"
+sha256 = "a29ba9e4ab5e24d3d4869fb52893154a48ba8f1de3636da0a17bb9e56f3a648b"
+
+[[component.asset]]
+source_path = "assets/Board/SVG/ic_fluent_board_20_regular.svg"
+vendored_file = "frontend/static/icons/view/board.svg"
+runtime_file = "web/icons/view/board.svg"
+sha256 = "de5d2b4836512c173e96b839dad65cc5eb7a01e2f2022223cedb8210c5c84771"
+
+[[component.asset]]
+source_path = "assets/Flowchart/SVG/ic_fluent_flowchart_20_regular.svg"
+vendored_file = "frontend/static/icons/view/flowchart.svg"
+runtime_file = "web/icons/view/flowchart.svg"
+sha256 = "9a4f35ecfa1942229dfb9775913bf695cc8a2af2b8ec6789a7bec7513d001ffe"
