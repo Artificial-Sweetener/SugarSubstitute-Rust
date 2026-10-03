@@ -59,3 +59,35 @@ source_path = "assets/Flowchart/SVG/ic_fluent_flowchart_20_regular.svg"
 vendored_file = "frontend/static/icons/view/flowchart.svg"
 runtime_file = "web/icons/view/flowchart.svg"
 sha256 = "9a4f35ecfa1942229dfb9775913bf695cc8a2af2b8ec6789a7bec7513d001ffe"
+
+[[component.asset]]
+source_path = "assets/Add/SVG/ic_fluent_add_20_regular.svg"
+vendored_file = "frontend/static/icons/seed/add.svg"
+runtime_file = "web/icons/seed/add.svg"
+sha256 = "681eeefb05a98a2cd10afa2e3a8ebc3e5490266f3dbaced884ab2fa3a4ffcde5"
+
+[[component.asset]]
+source_path = "assets/Subtract/SVG/ic_fluent_subtract_20_regular.svg"
+vendored_file = "frontend/static/icons/seed/subtract.svg"
+runtime_file = "web/icons/seed/subtract.svg"
+sha256 = "cb2825b8c04cf792c55bd9c0cd37a0a15d5bc9e708127195acb2d2bdae76b190"
+
+[[component]]
+name = "Microsoft Fluent UI Emoji"
+license = "MIT"
+license_file = "third_party/licenses/fluentui-emoji.LICENSE.txt"
+source = "https://github.com/microsoft/fluentui-emoji"
+revision = "62ecdc0d7ca5c6df32148c169556bc8d3782fca4"
+modifications = "None; SVG files copied verbatim."
+
+[[component.asset]]
+source_path = "assets/Game die/High Contrast/game_die_high_contrast.svg"
+vendored_file = "frontend/static/icons/seed/game-die.svg"
+runtime_file = "web/icons/seed/game-die.svg"
+sha256 = "c3dc9dd557318492b9888501da0a111a5db68dbe5f9ef4a7fce220661a1bd855"
+
+[[component.asset]]
+source_path = "assets/Locked/High Contrast/locked_high_contrast.svg"
+vendored_file = "frontend/static/icons/seed/locked.svg"
+runtime_file = "web/icons/seed/locked.svg"
+sha256 = "cc6f0a3d58ff3b86737ee78a158b29431f6c34a1bf720435f7aa4cd519f29401"

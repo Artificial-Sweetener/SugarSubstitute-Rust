@@ -18,6 +18,34 @@ import { describe, expect, test } from '@jest/globals';
 import { rebindSubgraphWidgetValues } from '../../../frontend/comfyui/ui/graph/SubgraphWidgetValueRebinder.js';
 
 describe('subgraph widget value rebinding', () => {
+  test.each(['fixed', 'increment', 'decrement', 'randomize'])(
+    'preserves the saved native seed companion mode %s without shifting settings',
+    (mode) => {
+      const control = {
+        name: 'control_after_generate',
+        type: 'combo',
+        value: 'randomize',
+        options: { serialize: false, values: ['fixed', 'increment', 'decrement', 'randomize'] },
+      };
+      const subgraph = {
+        nodes: [
+          {
+            id: 7,
+            type: 'KSampler',
+            inputs: ['seed', 'steps'].map((name) => ({ name, widget: { name } })),
+            widgets_values: [123456789, mode, 28],
+          },
+        ],
+      };
+      const factory = () => ({
+        widgets: [{ name: 'seed', value: 0 }, control, { name: 'steps', value: 20 }],
+      });
+      rebindSubgraphWidgetValues(subgraph, factory);
+      expect(subgraph.nodes[0]?.widgets_values).toEqual([123456789, mode, 28]);
+      rebindSubgraphWidgetValues(subgraph, factory);
+      expect(subgraph.nodes[0]?.widgets_values).toEqual([123456789, mode, 28]);
+    },
+  );
   test('preserves current saved values when stale input identities collide with a seed companion', () => {
     const subgraph = {
       nodes: [

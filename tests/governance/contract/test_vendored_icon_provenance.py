@@ -34,15 +34,22 @@ def test_every_vendored_icon_has_exact_provenance_and_deployment_bytes() -> None
     recorded: set[str] = set()
     for component in components:
         assert isinstance(component, dict)
-        assert (
-            component["source"] == "https://github.com/microsoft/fluentui-system-icons"
-        )
+        source = component["source"]
+        assert source in {
+            "https://github.com/microsoft/fluentui-system-icons",
+            "https://github.com/microsoft/fluentui-emoji",
+        }
         assert component["license"] == "MIT"
         assert re.fullmatch(r"[0-9a-f]{40}", component["revision"])
         assert component["modifications"] == "None; SVG files copied verbatim."
         license_path = Path(component["license_file"])
         license_bytes = (ROOT / license_path).read_bytes()
-        assert b"Copyright (c) 2020 Microsoft Corporation" in license_bytes
+        expected_copyright = (
+            b"Copyright (c) 2020 Microsoft Corporation"
+            if source.endswith("/fluentui-system-icons")
+            else b"Copyright (c) Microsoft Corporation"
+        )
+        assert expected_copyright in license_bytes
         assert b"permission notice shall be included" in license_bytes
         assert (ROOT / "web" / license_path).read_bytes() == license_bytes
         assets: object = component["asset"]
@@ -53,7 +60,13 @@ def test_every_vendored_icon_has_exact_provenance_and_deployment_bytes() -> None
             authored_path = asset["vendored_file"]
             runtime_path = asset["runtime_file"]
             assert isinstance(source_path, str) and source_path.startswith("assets/")
-            assert source_path.endswith("_20_regular.svg")
+            if source.endswith("/fluentui-system-icons"):
+                assert source_path.endswith("_20_regular.svg")
+            else:
+                assert source_path in {
+                    "assets/Game die/High Contrast/game_die_high_contrast.svg",
+                    "assets/Locked/High Contrast/locked_high_contrast.svg",
+                }
             assert isinstance(authored_path, str)
             assert authored_path.startswith("frontend/static/icons/")
             assert authored_path not in recorded
@@ -82,9 +95,11 @@ def test_browser_distribution_preserves_manifest_notice_and_upstream_notice() ->
         "third_party/manifest.toml",
         "third_party/NOTICE.md",
         "third_party/licenses/fluentui-system-icons.NOTICE.txt",
+        "third_party/licenses/fluentui-emoji.LICENSE.txt",
     ):
         assert (ROOT / "web" / relative).read_bytes() == (ROOT / relative).read_bytes()
     notice = (ROOT / "third_party/NOTICE.md").read_text("utf-8")
     assert "Microsoft Fluent UI System Icons" in notice
+    assert "Microsoft Fluent UI Emoji" in notice
     assert "MIT" in notice
     assert "Copyright (c) 2020 Microsoft Corporation" in notice

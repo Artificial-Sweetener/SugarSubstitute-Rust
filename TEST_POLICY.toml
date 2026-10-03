@@ -249,6 +249,8 @@ sources = [
   "web/icons/node/**",
   "frontend/static/icons/view/**",
   "web/icons/view/**",
+  "frontend/static/icons/seed/**",
+  "web/icons/seed/**",
   "frontend/comfyui/ui/overlays/**",
   "frontend/comfyui/ui/surface/**",
 ]

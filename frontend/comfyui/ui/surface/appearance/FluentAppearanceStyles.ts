@@ -17,6 +17,7 @@
 import { fluentTokenDeclarations } from './FluentThemeRuntime.js';
 import { fluentInteractionCss } from './FluentInteractionStyles.js';
 import { fluentNumericCss } from './FluentNumericStyles.js';
+import { fluentSeedCss } from './FluentSeedStyles.js';
 
 /** Render the shared appearance without overriding explicit custom inline styling. */
 export function fluentAppearanceCss(dark: boolean): string {
@@ -218,5 +219,6 @@ export function fluentAppearanceCss(dark: boolean): string {
       border-radius:4px; outline:none; z-index:1;
     }
     ${fluentNumericCss()}
+    ${fluentSeedCss()}
   `;
 }

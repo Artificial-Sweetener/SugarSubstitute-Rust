@@ -25,12 +25,15 @@ import {
 import type { NativeFieldDescriptor } from './NativeFieldPresentation.js';
 import { readNativeNumericField } from './ComfyNativeNumericField.js';
 import type { NativeNumericField } from './ComfyNativeNumericField.js';
+import { ComfyNativeSeedControlAdapter } from './ComfyNativeSeedControl.js';
+import type { NativeSeedField } from './NativeSeedControls.js';
 
 export interface FluentCardBoundary {
   root: HTMLElement;
   body: HTMLElement | null;
   fields: readonly NativeFieldDescriptor[];
   numericFields: readonly NativeNumericField[];
+  seedFields: readonly NativeSeedField[];
   labelElements: readonly HTMLElement[];
   header: HTMLElement | null;
   collapsed: boolean;
@@ -43,9 +46,16 @@ export class NativeFluentCardAdapter {
   readonly #cards = new Map<HTMLElement, Set<HTMLElement>>();
   readonly #vnodes = new WeakMap<HTMLElement, UnknownRecord>();
   readonly #graphNodes = new Map<HTMLElement, UnknownRecord>();
+  readonly #seeds: ComfyNativeSeedControlAdapter;
+
+  /** Resolve native execution controls through the supplied Comfy application boundary. */
+  constructor(app: unknown = null) {
+    this.#seeds = new ComfyNativeSeedControlAdapter(app);
+  }
 
   /** Index graph component roots once for a coalesced host update. */
   beginBatch(documentRef: Document): void {
+    this.#seeds.beginBatch();
     const mount = documentRef.getElementById('vue-app');
     const record: UnknownRecord = isRecord(mount) ? mount : {};
     for (const vnode of findVueComponents(record._vnode, 'LGraphNode')) {
@@ -57,6 +67,7 @@ export class NativeFluentCardAdapter {
   /** Release the graph index so detached application trees are not retained. */
   endBatch(): void {
     this.#graphNodes.clear();
+    this.#seeds.endBatch();
   }
 
   /** Mark one live card and its positively identified native field rows. */
@@ -74,6 +85,7 @@ export class NativeFluentCardAdapter {
     if (vnode) this.#vnodes.set(root, vnode);
     const descriptors: NativeFieldDescriptor[] = [];
     const numericFields: NativeNumericField[] = [];
+    const seedFields: NativeSeedField[] = [];
     const labelElements: HTMLElement[] = [];
     for (const widgets of findVueComponents(vnode, 'NodeWidgets')) {
       const container = resolveVNodeElement(widgets);
@@ -90,6 +102,8 @@ export class NativeFluentCardAdapter {
           annotated,
           numericFields,
           labelElements,
+          seedFields,
+          this.#seeds,
         );
         const advanced = candidates.some(({ vnode: candidate }) => {
           const component = isRecord(candidate.component) ? candidate.component : {};
@@ -164,6 +178,7 @@ export class NativeFluentCardAdapter {
       body: root.querySelector<HTMLElement>('[data-testid^="node-body-"]'),
       fields: descriptors,
       numericFields,
+      seedFields,
       labelElements,
     };
   }
@@ -232,6 +247,8 @@ function resolveFieldDescriptor(
   annotated: Set<HTMLElement>,
   numericFields: NativeNumericField[],
   labelElements: HTMLElement[],
+  seedFields: NativeSeedField[],
+  seeds: ComfyNativeSeedControlAdapter,
 ): NativeFieldDescriptor | null {
   const contains = (vnode: UnknownRecord): boolean => {
     const element = resolveVNodeElement(vnode);
@@ -284,7 +301,11 @@ function resolveFieldDescriptor(
     }
     if (name.startsWith('WidgetInputNumber')) {
       const numeric = readNativeNumericField(row, vnode);
-      if (numeric) numericFields.push(numeric);
+      if (numeric) {
+        numericFields.push(numeric);
+        const control = seeds.read(widget, numeric.precision);
+        if (control) seedFields.push({ numeric, control });
+      }
     }
     return descriptor;
   }
