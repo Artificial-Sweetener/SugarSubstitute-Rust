@@ -246,6 +246,8 @@ test('centers recognized numeric editors and uses the desktop slider cursor only
   const slider = root.querySelector<SliderFixture>('numeric-slider-fixture');
   if (!slider) throw new Error('Slider fixture missing');
   expect(getComputedStyle(field.input).textAlign).toBe('center');
+  expect(getComputedStyle(field.input).paddingLeft).toBe('8px');
+  expect(getComputedStyle(field.input).paddingRight).toBe('8px');
   expect(getComputedStyle(slider).cursor).toBe('default');
   expect(getComputedStyle(custom).textAlign).toBe('right');
   controls.clear();

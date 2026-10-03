@@ -61,12 +61,15 @@ test.each([
 /** Mount literal text without parsing dynamic labels as markup. */
 function fixture(source: string) {
   const root = document.createElement('div');
+  const masonry = document.createElement('section');
+  masonry.className = 'sugarcubes-workflow-masonry';
   const label = document.createElement('span');
   label.className = 'truncate';
   const text = document.createTextNode(source);
   label.append(text);
   root.append(label);
-  document.body.append(root);
+  masonry.append(root);
+  document.body.append(masonry);
   const presentation = new NativeLabelPresentation();
   return { root, label, text, presentation };
 }
@@ -91,6 +94,34 @@ test('does not overwrite host changes pending reconciliation when disabled', () 
   text.data = 'authored replacement';
   presentation.clear();
   expect(text.data).toBe('authored replacement');
+});
+
+test('limits aliases and casing to masonry and restores the same label on every mode change', () => {
+  const { root, label, text, presentation } = fixture('sampler_name');
+  const masonry = root.parentElement;
+  if (!masonry) throw new Error('Masonry surface missing');
+  document.body.append(root);
+  presentation.reconcile(root, [label]);
+  expect(text.data).toBe('sampler_name');
+  masonry.append(root);
+  presentation.reconcile(root, [label]);
+  expect(text.data).toBe('Sampler');
+  document.body.append(root);
+  presentation.reconcile(root, [label]);
+  expect(text.data).toBe('sampler_name');
+  text.data = 'strength_model';
+  presentation.reconcile(root, [label]);
+  expect(text.data).toBe('strength_model');
+  masonry.append(root);
+  presentation.reconcile(root, [label]);
+  expect(text.data).toBe('Strength Model');
+  text.data = 'native_UPDATE';
+  document.body.append(root);
+  presentation.reconcile(root, [label]);
+  expect(text.data).toBe('native_UPDATE');
+  expect(label.firstChild).toBe(text);
+  presentation.clear();
+  expect(text.data).toBe('native_UPDATE');
 });
 
 test('releases replaced and detached labels without touching a native title editor', () => {

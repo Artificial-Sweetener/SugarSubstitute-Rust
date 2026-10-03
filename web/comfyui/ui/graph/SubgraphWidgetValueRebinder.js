@@ -16,6 +16,7 @@
 /** Rebind persisted subgraph widget values to current fields by stable name. */
 import { cloneWidgetValue, isSerializedWidget, readCurrentWidgetValue, } from './WidgetValueSerialization.js';
 import { indexSubgraphBoundaryWidgetNames } from './SubgraphBoundaryWidgetIdentities.js';
+import { isComfySeedModeControl, isSeedMode } from './ComfySeedMode.js';
 /** Rebuild subgraph widget arrays against the complete current widget layout. */
 export function rebindSubgraphWidgetValues(subgraph, createNode, options = { unavailableNode: 'error' }) {
     if (!Array.isArray(subgraph.nodes)) {
@@ -83,6 +84,9 @@ function decodeNamedWidgetValues(node, liveWidgets, names, persisted, unidentifi
             !isSerializedWidget(companion) &&
             companionValuesRemaining > 0 &&
             valueIndex < persisted.length) {
+            const mode = persisted[valueIndex];
+            if (isComfySeedModeControl(companion) && isSeedMode(mode))
+                values.set(companion.name, mode);
             valueIndex += 1;
             companionValuesRemaining -= 1;
         }
@@ -177,7 +181,8 @@ function rebuildWidgetValues(liveWidgets, persistedByName) {
             return null;
         }
         const persisted = persistedByName.get(widget.name);
-        return isSerializedWidget(widget) && isValidPersistedWidgetValue(widget, persisted)
+        return (isSerializedWidget(widget) || isComfySeedModeControl(widget)) &&
+            isValidPersistedWidgetValue(widget, persisted)
             ? cloneWidgetValue(persisted)
             : readCurrentWidgetValue(widget);
     });

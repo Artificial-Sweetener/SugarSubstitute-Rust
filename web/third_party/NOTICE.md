@@ -18,3 +18,13 @@ preserved in `licenses/fluentui-system-icons.NOTICE.txt`.
 Masonry uses App Generic, Edit, Eraser, Folder, Brain Circuit, Color, and Image.
 The view switch uses Board for masonry and Flowchart for graph.
 CSS masks adapt their color to the current theme without modifying the SVGs.
+
+## Microsoft Fluent UI Emoji
+
+Copyright (c) Microsoft Corporation.
+
+Seed controls use the unmodified Game die and Locked High Contrast SVGs from
+[Microsoft Fluent UI Emoji](https://github.com/microsoft/fluentui-emoji), under
+the MIT License. Their revision, source paths, and hashes are recorded in the
+manifest. The complete license is in `licenses/fluentui-emoji.LICENSE.txt`.
+CSS masks adapt their color to the current theme without modifying the SVGs.

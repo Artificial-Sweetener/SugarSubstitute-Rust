@@ -110,7 +110,9 @@ function nativeLabelVNode(
   return { type: { __name: name }, component: { props, subTree: { el: element, children } } };
 }
 
-test('follows native label edits and remounts, restoring source labels across renderer changes', async () => {
+test('formats masonry labels and restores source text across presentation and renderer changes', async () => {
+  const masonry = document.createElement('section');
+  masonry.className = 'sugarcubes-workflow-masonry';
   const mount = document.createElement('div');
   mount.className = 'sugarcubes-native-node-card';
   const root = document.createElement('div');
@@ -134,7 +136,8 @@ test('follows native label edits and remounts, restoring source labels across re
   fields.append(layout);
   root.append(header, fields);
   mount.append(root);
-  document.body.append(mount);
+  masonry.append(mount);
+  document.body.append(masonry);
   const nodeData = { title: 'mahiro CFG', widgets: {} };
   Object.assign(mount, {
     _vnode: nativeLabelVNode(
@@ -193,18 +196,32 @@ test('follows native label edits and remounts, restoring source labels across re
   await Promise.resolve();
   frames.splice(0).forEach((frame) => frame(0));
   expect(label.textContent).toBe('CFG Scale');
+  document.body.append(mount);
+  await Promise.resolve();
+  frames.splice(0).forEach((frame) => frame(0));
+  expect(text.textContent).toBe('the_lord_of_the_rings');
+  expect(label.textContent).toBe('cfg_scale');
+  replacement.data = 'strength_model';
+  await Promise.resolve();
+  frames.splice(0).forEach((frame) => frame(0));
+  expect(label.textContent).toBe('strength_model');
+  masonry.append(mount);
+  await Promise.resolve();
+  frames.splice(0).forEach((frame) => frame(0));
+  expect(text.textContent).toBe('The Lord of the Rings');
+  expect(label.textContent).toBe('Strength Model');
   vue = false;
   events.dispatchEvent(new Event('Comfy.VueNodes.Enabled.change'));
   await Promise.resolve();
   expect(text.textContent).toBe('the_lord_of_the_rings');
-  expect(label.textContent).toBe('cfg_scale');
+  expect(label.textContent).toBe('strength_model');
   vue = true;
   events.dispatchEvent(new Event('Comfy.VueNodes.Enabled.change'));
   await Promise.resolve();
   frames.splice(0).forEach((frame) => frame(0));
-  expect(label.textContent).toBe('CFG Scale');
+  expect(label.textContent).toBe('Strength Model');
   host.setEnabled(false);
-  expect(label.textContent).toBe('cfg_scale');
+  expect(label.textContent).toBe('strength_model');
   expect(errors).not.toHaveBeenCalled();
   host.dispose();
 });

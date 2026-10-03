@@ -29,6 +29,7 @@ import { NativeToggleRows } from './NativeToggleRows.js';
 import { NativeAdvancedDisclosure } from './NativeAdvancedDisclosure.js';
 import { NativeNumericControls } from './NativeNumericControls.js';
 import { NativeLabelPresentation } from './NativeLabelPresentation.js';
+import { NativeSeedControls } from './NativeSeedControls.js';
 
 /** Persist the user's appearance preference independently of workflow documents. */
 export const FLUENT_APPEARANCE_SETTING = 'SugarCubes.Appearance.Fluent';
@@ -43,12 +44,13 @@ export interface FluentAppearanceHostOptions {
 /** Keep appearance separate from graph, Cube policy, and masonry layout state. */
 export class FluentAppearanceHost {
   readonly #options: FluentAppearanceHostOptions;
-  readonly #adapter = new NativeFluentCardAdapter();
+  readonly #adapter: NativeFluentCardAdapter;
   readonly #titlebars = new NativeCardTitlebar();
   readonly #labels = new NativeLabelPresentation();
   readonly #toggleRows = new NativeToggleRows();
   readonly #advanced = new NativeAdvancedDisclosure();
   readonly #numeric = new NativeNumericControls(createFluentNumericSlider);
+  readonly #seeds = new NativeSeedControls();
   readonly #comboSearch: NativeInlineComboSearch;
   readonly #style: HTMLStyleElement;
   readonly #presence: MutationObserver;
@@ -69,6 +71,7 @@ export class FluentAppearanceHost {
   /** Prepare observers without altering styles until the user opts in. */
   constructor(options: FluentAppearanceHostOptions) {
     this.#options = options;
+    this.#adapter = new NativeFluentCardAdapter(options.app);
     this.#comboSearch = new NativeInlineComboSearch(options.document);
     this.#style = options.document.createElement('style');
     this.#style.id = 'sugarcubes-fluent-appearance';
@@ -188,6 +191,7 @@ export class FluentAppearanceHost {
     this.#toggleRows.clear();
     this.#advanced.clear();
     this.#numeric.clear();
+    this.#seeds.clear();
     this.#comboSearch.clear();
     for (const surface of this.#surfaces) {
       applyOwnedFluentTheme(surface, null);
@@ -240,12 +244,7 @@ export class FluentAppearanceHost {
         for (const popup of this.#popups) if (!popup.isConnected) this.#popups.delete(popup);
         this.#comboSearch.reconcile();
         this.#annotatePopup();
-        if (
-          [...this.#dirty].some(
-            (element) =>
-              element.matches('.lg-node') && !element.closest('.sugarcubes-native-node-card'),
-          )
-        )
+        if ([...this.#dirty].some((element) => element.matches('.lg-node')))
           this.#adapter.beginBatch(this.#options.document);
         for (const element of this.#dirty) {
           if (!element.isConnected) continue;
@@ -256,6 +255,7 @@ export class FluentAppearanceHost {
             this.#toggleRows.reconcile(element);
             this.#advanced.reconcile(card);
             this.#numeric.reconcile(element, card.numericFields);
+            this.#seeds.reconcile(element, card.seedFields);
           } else {
             element.setAttribute('data-sc-fluent-surface', '');
             if (!this.#surfaces.has(element)) applyOwnedFluentTheme(element, this.#dark ?? true);

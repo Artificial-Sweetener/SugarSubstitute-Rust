@@ -80,6 +80,7 @@ function fixture() {
     canCollapse: true,
     fields: [],
     numericFields: [],
+    seedFields: [],
     labelElements: [],
     advanced: { fields, button, expanded },
   };
