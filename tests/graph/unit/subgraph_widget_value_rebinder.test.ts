@@ -18,6 +18,38 @@ import { describe, expect, test } from '@jest/globals';
 import { rebindSubgraphWidgetValues } from '../../../frontend/comfyui/ui/graph/SubgraphWidgetValueRebinder.js';
 
 describe('subgraph widget value rebinding', () => {
+  test('preserves current saved values when stale input identities collide with a seed companion', () => {
+    const subgraph = {
+      nodes: [
+        {
+          id: 7,
+          type: 'Sampler',
+          inputs: ['seed', 'steps', 'cfg', 'removed'].map((name) => ({ name, widget: { name } })),
+          widgets_values: [0, 'randomize', 12, 6.5],
+        },
+      ],
+    };
+    const factory = () => ({
+      widgets: [
+        { name: 'seed', value: 0 },
+        {
+          name: 'control_after_generate',
+          value: 'randomize',
+          options: { serialize: false, values: ['fixed', 'randomize'] },
+        },
+        { name: 'steps', value: 20 },
+        { name: 'cfg', value: 7 },
+      ],
+    });
+    const options = {
+      unavailableNode: 'error' as const,
+      historicalWidgetNames: () => ['seed', 'steps', 'cfg', 'removed'],
+    };
+    rebindSubgraphWidgetValues(subgraph, factory, options);
+    expect(subgraph.nodes[0]?.widgets_values).toEqual([0, 'randomize', 12, 6.5]);
+    rebindSubgraphWidgetValues(subgraph, factory, options);
+    expect(subgraph.nodes[0]?.widgets_values).toEqual([0, 'randomize', 12, 6.5]);
+  });
   test('rebinds reordered widgets and leaves added widgets at current defaults', () => {
     const subgraph = {
       nodes: [

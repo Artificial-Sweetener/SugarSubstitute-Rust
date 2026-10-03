@@ -17,6 +17,11 @@
 import { cubeFaceVisibleWidgets } from './CubeFaceWidgetPolicy.js';
 /** Reserve two masonry columns for the one semantic prompt card in a responsive row. */
 export const CUBE_FACE_PROMPT_CARD_COLUMN_SPAN = 2;
+/** Share prompt-role inference with presentation without duplicating authored/topology rules. */
+export function cubeFacePromptRole(node) {
+    const widget = findCubeFacePromptWidget(node);
+    return widget ? promptRoleFor(node, widget) : null;
+}
 /** Return the width policy for one card without making renderers infer semantics independently. */
 export function cubeFaceCardColumnSpan(node) {
     return findCubeFacePromptWidget(node) ? CUBE_FACE_PROMPT_CARD_COLUMN_SPAN : 1;

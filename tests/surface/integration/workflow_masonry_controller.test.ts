@@ -30,6 +30,66 @@ afterEach(() => {
 });
 
 describe('workflow masonry controller', () => {
+  test('keeps ancestor capture forwarding out of masonry scrolling and restores graph zoom on exit', async () => {
+    const setup = fixture();
+    let graphScale = 1;
+    const canvas = document.createElement('canvas');
+    document.body.append(canvas);
+    canvas.addEventListener('wheel', (event) => {
+      graphScale *= event.deltaY > 0 ? 0.9 : 1.1;
+    });
+    setup.container.addEventListener(
+      'wheel',
+      (event) => {
+        const target = event.target;
+        // Comfy forwards during ancestor capture unless the target opts into native scrolling.
+        if (target instanceof Element && target.closest('[data-capture-wheel="true"]')) return;
+        event.preventDefault();
+        event.stopPropagation();
+        canvas.dispatchEvent(new WheelEvent('wheel', { deltaY: event.deltaY }));
+      },
+      { capture: true },
+    );
+    await setup.controller.toggle();
+    const surface = document.querySelector('.sugarcubes-workflow-masonry');
+    const input = surface?.querySelector('input');
+    if (!surface || !input) throw new Error('Masonry native controls missing');
+    for (const target of [surface, input]) {
+      for (const modifiers of [{}, { ctrlKey: true }, { metaKey: true }]) {
+        for (const deltaY of [120, -120]) {
+          const event = new WheelEvent('wheel', {
+            bubbles: true,
+            cancelable: true,
+            deltaY,
+            ...modifiers,
+          });
+          target.dispatchEvent(event);
+          expect(event.defaultPrevented).toBe(false);
+          expect(graphScale).toBe(1);
+        }
+      }
+    }
+    await setup.controller.toggle();
+    canvas.dispatchEvent(new WheelEvent('wheel', { deltaY: 120 }));
+    expect(graphScale).toBe(0.9);
+  });
+  test('retains native controls and focus when another card joins the section', async () => {
+    const setup = fixture();
+    await setup.controller.toggle();
+    const input = document.querySelector('input');
+    if (!input) throw new Error('Native input missing');
+    input.focus();
+    const section = setup.sections[0];
+    const first = section?.cards[0];
+    if (!section || !first) throw new Error('Card missing');
+    section.cards.push({ ...first, id: 'root:2', node: { ...setup.node, id: 2 } });
+    await setup.controller.graphChanged();
+    expect(document.querySelector('input')).toBe(input);
+    expect(document.activeElement).toBe(input);
+    expect(setup.mount).toHaveBeenCalledTimes(2);
+    expect(setup.unmount).not.toHaveBeenCalled();
+    setup.controller.leaveImmediately();
+  });
   test('reuses the optional-node menu and activation switch while keeping the live section and scroll surface', async () => {
     const setup = fixture();
     setup.node.mode = 4;

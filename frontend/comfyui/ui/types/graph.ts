@@ -65,6 +65,8 @@ export interface ComfyNode {
   outputs?: ComfyOutput[];
   properties?: UnknownRecord;
   flags?: UnknownRecord;
+  collapsible?: boolean;
+  collapse?(force?: boolean): void;
   widgets_values?: unknown[];
   graph?: ComfyGraph | null;
   isSubgraphNode?(): boolean;
@@ -118,6 +120,7 @@ export interface ComfyGraph {
   remove?(item: ComfyNode | ComfyGroup): void;
   convertToSubgraph?(items: Set<unknown>): unknown;
   afterChange?(): void;
+  beforeChange?(): void;
   getLink?(id: GraphId): ComfyLink | null;
   setDirtyCanvas?(foreground?: boolean, background?: boolean): void;
   serialize?(): unknown;

@@ -107,16 +107,17 @@ function serializedWidgetNameCandidates(node, liveWidgets, persisted, includedLi
         .filter(isSerializedWidget)
         .every((widget) => sameSnapshotNames.includes(widget.name));
     const ordered = currentIdentitiesAreComplete
-        ? [currentNames, historicalLocalNames, historicalNames, ...evidencedLiveNames]
+        ? [...evidencedLiveNames, currentNames, historicalLocalNames, historicalNames]
         : [historicalLocalNames, historicalNames, ...evidencedLiveNames, currentNames];
     return ordered.filter((names, index) => ordered.findIndex((candidate) => arraysEqual(candidate, names)) === index);
 }
 /** Detect values authored against a newer live layout than the embedded definition. */
 function hasCurrentLayoutEvidence(liveWidgets, historicalNames, persisted) {
     const serializedWidgets = liveWidgets.filter(isSerializedWidget);
-    if (historicalNames.length === 0 || serializedWidgets.length !== persisted.length)
+    const currentWidgets = liveWidgets.length === persisted.length ? liveWidgets : serializedWidgets;
+    if (historicalNames.length === 0 || currentWidgets.length !== persisted.length)
         return false;
-    return serializedWidgets.some((widget, index) => {
+    return currentWidgets.some((widget, index) => {
         if (historicalNames.includes(widget.name))
             return false;
         const value = persisted[index];

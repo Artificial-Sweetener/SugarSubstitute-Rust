@@ -21,6 +21,61 @@ import { ComfyVueNodeCardRenderer } from '../../../frontend/comfyui/ui/surface/C
 import type { ComfyNode } from '../../../frontend/comfyui/ui/types/graph.js';
 
 describe('ComfyVueNodeCardRenderer', () => {
+  test('blocks native wheel forwarding in masonry while preserving custom wheel handlers and scrolling', () => {
+    const surface = document.createElement('section');
+    surface.className = 'sugarcubes-workflow-masonry';
+    const target = document.createElement('div');
+    surface.append(target);
+    const root = document.createElement('div');
+    root.className = 'lg-node';
+    const wrapper = document.createElement('div');
+    wrapper.dataset.testid = 'node-inner-wrapper';
+    const header = document.createElement('div');
+    const customWidget = document.createElement('canvas');
+    wrapper.append(header, customWidget);
+    const footer = document.createElement('div');
+    root.append(wrapper, footer);
+    const forwardedWheel = jest.fn();
+    const customWheel = jest.fn();
+    root.addEventListener('wheel', forwardedWheel);
+    customWidget.addEventListener('wheel', customWheel);
+    const renderer = new ComfyVueNodeCardRenderer({
+      component: { __name: 'LGraphNode' },
+      appContext: {},
+      runtime: {
+        render: (vnode) => {
+          if (vnode !== null) target.append(root);
+        },
+        h: () => ({}),
+        extractVueNodeData: () => ({ id: 'scroll-proof' }),
+      },
+    });
+    const mount = renderer.mount(target, { id: 'scroll-proof' }, { preserveNativeBody: true });
+    for (const element of [root, wrapper, header, footer, customWidget]) {
+      for (const modifiers of [{}, { ctrlKey: true }, { metaKey: true }]) {
+        const wheel = new WheelEvent('wheel', {
+          bubbles: true,
+          cancelable: true,
+          deltaY: 120,
+          ...modifiers,
+        });
+        element.dispatchEvent(wheel);
+        expect(wheel.defaultPrevented).toBe(false);
+      }
+    }
+    expect(customWheel).toHaveBeenCalledTimes(3);
+    expect(forwardedWheel).not.toHaveBeenCalled();
+    surface.className = '';
+    header.dispatchEvent(new WheelEvent('wheel', { bubbles: true }));
+    expect(forwardedWheel).toHaveBeenCalledTimes(1);
+    surface.className = 'sugarcubes-workflow-masonry';
+    mount.refresh();
+    header.dispatchEvent(new WheelEvent('wheel', { bubbles: true }));
+    expect(forwardedWheel).toHaveBeenCalledTimes(1);
+    mount.unmount();
+    header.dispatchEvent(new WheelEvent('wheel', { bubbles: true }));
+    expect(forwardedWheel).toHaveBeenCalledTimes(2);
+  });
   test('renders a promoted Cube control with its real owner identity and callback', () => {
     const target = document.createElement('div');
     const owner: ComfyNode = { id: 'cube', widgets: [{ name: 'prompt' }] };
@@ -386,6 +441,9 @@ describe('ComfyVueNodeCardRenderer', () => {
     innerWrapper.dataset.testid = 'node-inner-wrapper';
     const header = document.createElement('div');
     header.dataset.testid = 'node-header-widgetless';
+    const collapse = document.createElement('button');
+    collapse.dataset.testid = 'node-collapse-button';
+    header.append(collapse);
     const body = document.createElement('div');
     body.dataset.testid = 'node-body-widgetless';
     const badges = document.createElement('div');
@@ -414,7 +472,20 @@ describe('ComfyVueNodeCardRenderer', () => {
       },
     });
 
-    renderer.mount(target, { id: 'widgetless', type: 'Mahiro', widgets: [] });
+    const node: ComfyNode = {
+      id: 'widgetless',
+      type: 'MahiroCFG',
+      widgets: [],
+      flags: { collapsed: true },
+      collapse: jest.fn(),
+    };
+    renderer.mount(target, node);
+    expect(collapse.hidden).toBe(true);
+    expect(collapse.style.display).toBe('none');
+    expect(collapse.disabled).toBe(true);
+    collapse.click();
+    expect(node.collapse).not.toHaveBeenCalled();
+    expect(node.flags?.collapsed).toBe(true);
 
     expect(badges.hidden).toBe(true);
     expect(body.hidden).toBe(true);
@@ -422,7 +493,7 @@ describe('ComfyVueNodeCardRenderer', () => {
     expect(nativeRoot.dataset.cubeFaceBody).toBe('header-only');
   });
 
-  test('hides the native Nodes 2 collapse control from a Cube card header', () => {
+  test('routes the native collapse control to the exact projected node and retains its state', () => {
     const nativeRoot = document.createElement('div');
     nativeRoot.className = 'lg-node';
     const collapseButton = document.createElement('button');
@@ -441,11 +512,29 @@ describe('ComfyVueNodeCardRenderer', () => {
       },
     });
 
-    renderer.mount(target, { id: 'inside-collapse-control', type: 'KSampler' });
-
-    expect(collapseButton.hidden).toBe(true);
-    expect(collapseButton.style.getPropertyValue('display')).toBe('none');
-    expect(collapseButton.style.getPropertyPriority('display')).toBe('important');
+    const flags = { collapsed: false, pinned: true };
+    const node: ComfyNode = {
+      id: 'inside-collapse-control',
+      type: 'KSampler',
+      widgets: [{ name: 'steps' }],
+      flags,
+      collapse: jest.fn(() => {
+        flags.collapsed = !flags.collapsed;
+      }),
+    };
+    const mount = renderer.mount(target, node);
+    const hostAction = jest.fn();
+    collapseButton.addEventListener('click', hostAction);
+    expect(collapseButton.hidden).toBe(false);
+    expect(collapseButton.disabled).toBe(false);
+    collapseButton.click();
+    expect(node.collapse).toHaveBeenCalledTimes(1);
+    expect(hostAction).not.toHaveBeenCalled();
+    expect(node.flags).toBe(flags);
+    expect(flags).toEqual({ collapsed: true, pinned: true });
+    mount.unmount();
+    collapseButton.click();
+    expect(node.collapse).toHaveBeenCalledTimes(1);
   });
 
   test('adopts a header accessory into the exact native title row and reconciles replacement', async () => {
@@ -523,7 +612,7 @@ describe('ComfyVueNodeCardRenderer', () => {
     expect(nativeControl.hidden).toBe(false);
   });
 
-  test('renders collapsed graph nodes expanded without changing their editor state', () => {
+  test('preserves native graph collapse in Nodes 2 projected cards without mutating extraction', () => {
     const graphFlags = { collapsed: true, pinned: true };
     const extractedFlags = { collapsed: true, pinned: true };
     const node: ComfyNode = {
@@ -553,7 +642,7 @@ describe('ComfyVueNodeCardRenderer', () => {
       expect.anything(),
       expect.objectContaining({
         nodeData: expect.objectContaining({
-          flags: { collapsed: false, pinned: true },
+          flags: { collapsed: true, pinned: true },
           inputs: [],
           outputs: [],
         }),

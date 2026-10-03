@@ -172,7 +172,7 @@ function serializedWidgetNameCandidates(
     .filter(isSerializedWidget)
     .every((widget) => sameSnapshotNames.includes(widget.name));
   const ordered = currentIdentitiesAreComplete
-    ? [currentNames, historicalLocalNames, historicalNames, ...evidencedLiveNames]
+    ? [...evidencedLiveNames, currentNames, historicalLocalNames, historicalNames]
     : [historicalLocalNames, historicalNames, ...evidencedLiveNames, currentNames];
   return ordered.filter(
     (names, index) => ordered.findIndex((candidate) => arraysEqual(candidate, names)) === index,
@@ -186,8 +186,9 @@ function hasCurrentLayoutEvidence(
   persisted: readonly unknown[],
 ): boolean {
   const serializedWidgets = liveWidgets.filter(isSerializedWidget);
-  if (historicalNames.length === 0 || serializedWidgets.length !== persisted.length) return false;
-  return serializedWidgets.some((widget, index) => {
+  const currentWidgets = liveWidgets.length === persisted.length ? liveWidgets : serializedWidgets;
+  if (historicalNames.length === 0 || currentWidgets.length !== persisted.length) return false;
+  return currentWidgets.some((widget, index) => {
     if (historicalNames.includes(widget.name)) return false;
     const value = persisted[index];
     const pickerValues = widget.options?.values;

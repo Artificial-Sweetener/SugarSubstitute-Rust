@@ -21,7 +21,7 @@ import {
   type ComfyVueRuntime,
 } from './ComfyRuntimeModuleLoader.js';
 import { ComfyVueNodeCardRenderer } from './ComfyVueNodeCardRenderer.js';
-import { findComfyNativeNodeMount, findComfyVueAppContext } from './ComfyVueTree.js';
+import { findComfyVueAppContext } from './ComfyVueTree.js';
 import type { NativeNodeCardRenderer } from './NativeNodeCardRenderer.js';
 
 interface CubeSurfaceRendererLifecycleOptions {
@@ -83,11 +83,8 @@ export class CubeSurfaceRendererLifecycle {
     if (!vueRoot) throw new Error('Comfy Vue application root is not mounted.');
     const appContext = findComfyVueAppContext(vueRoot);
     if (!appContext) throw new Error('Comfy Vue application context is not mounted.');
-    const mountedComponent = findComfyNativeNodeMount(vueRoot)?.component;
     const [component, runtime] = await Promise.all([
-      mountedComponent
-        ? Promise.resolve(mountedComponent)
-        : loadComfyNativeNodeComponent(this.options.document),
+      loadComfyNativeNodeComponent(this.options.document),
       this.getRuntime(),
     ]);
     return new ComfyVueNodeCardRenderer({ component, appContext, runtime });

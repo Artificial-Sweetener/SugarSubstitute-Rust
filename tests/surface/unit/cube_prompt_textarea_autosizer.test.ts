@@ -20,6 +20,18 @@ import { describe, expect, jest, test } from '@jest/globals';
 import { CubePromptTextareaAutosizer } from '../../../frontend/comfyui/ui/surface/CubePromptTextareaAutosizer.js';
 
 describe('CubePromptTextareaAutosizer', () => {
+  test('shrinks to content and themed minimum instead of intrinsic textarea rows', () => {
+    const textarea = document.createElement('textarea');
+    textarea.rows = 2;
+    Object.defineProperty(textarea, 'scrollHeight', {
+      get: () => (textarea.style.height === '0px' ? 33 : 65),
+    });
+    const autosizer = new CubePromptTextareaAutosizer(document);
+    autosizer.bind(textarea);
+    expect(textarea.style.height).toBe('33px');
+    expect(textarea.rows).toBe(2);
+    autosizer.dispose();
+  });
   test('owns content height and restores exact inline styles on release', () => {
     const textarea = document.createElement('textarea');
     textarea.style.setProperty('height', '30px', 'important');

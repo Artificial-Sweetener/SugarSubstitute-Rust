@@ -14,11 +14,42 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own effective widget visibility for projected Cube-face node cards. */
-/** Return widgets whose values remain owned by the node and visible through Comfy. */
+/** Resolve widget eligibility independently from the card's collapsed presentation. */
 export function cubeFaceVisibleWidgets(node) {
     const isWidgetVisible = node.isWidgetVisible;
-    return (node.widgets ?? []).filter((widget) => !isCubeFaceWidgetConsumed(node, widget) &&
-        (typeof isWidgetVisible !== 'function' || isWidgetVisible.call(node, widget) !== false));
+    const flags = node.flags;
+    const ownedFlags = Object.prototype.hasOwnProperty.call(node, 'flags');
+    // Comfy folds whole-card collapse into widget visibility. Query the expanded
+    // capability synchronously, retaining native hidden/advanced/custom rules.
+    if (flags?.collapsed === true)
+        node.flags = { ...flags, collapsed: false };
+    try {
+        return (node.widgets ?? []).filter((widget) => !isCubeFaceWidgetConsumed(node, widget) &&
+            (typeof isWidgetVisible !== 'function' || isWidgetVisible.call(node, widget) !== false));
+    }
+    finally {
+        if (flags?.collapsed === true) {
+            if (ownedFlags)
+                node.flags = flags;
+            else
+                delete node.flags;
+        }
+    }
+}
+/** Query content available through disclosure while preserving native hidden and connection rules. */
+export function cubeFaceRevealableWidgets(node) {
+    const owned = Object.prototype.hasOwnProperty.call(node, 'showAdvanced');
+    const previous = node.showAdvanced;
+    node.showAdvanced = true;
+    try {
+        return cubeFaceVisibleWidgets(node);
+    }
+    finally {
+        if (owned)
+            node.showAdvanced = previous;
+        else
+            delete node.showAdvanced;
+    }
 }
 /** Return widgets whose values remain owned by the node regardless of host visibility. */
 export function cubeFaceUnconsumedWidgets(node) {

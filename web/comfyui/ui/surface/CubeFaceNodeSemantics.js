@@ -38,10 +38,14 @@ export function isHardHiddenCubeFaceNode(node) {
 export function cubeFaceNodeAllowsActivationControl(node) {
     if (isHardHiddenCubeFaceNode(node))
         return false;
+    return !isCubeFaceSamplerWorker(node);
+}
+/** Identify sampler workers consistently for activation and title presentation. */
+export function isCubeFaceSamplerWorker(node) {
     if (nodeClass(node) === 'KSampler')
-        return false;
+        return true;
     const widgetNames = new Set((node.widgets ?? []).map((widget) => widget.name?.trim().toLowerCase() ?? ''));
-    return !(widgetNames.has('steps') && widgetNames.has('denoise'));
+    return widgetNames.has('steps') && widgetNames.has('denoise');
 }
 /** Infer resource/config types that pass through one ordinary graph node. */
 export function inferCubeFaceTransformSignals(node) {

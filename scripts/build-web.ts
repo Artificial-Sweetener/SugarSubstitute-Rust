@@ -26,6 +26,7 @@ import {
   statSync,
 } from 'node:fs';
 import path from 'node:path';
+import { build } from 'esbuild';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '..');
 const generatedRoot = path.join(repositoryRoot, '.generated', 'web');
@@ -77,10 +78,17 @@ function compileTypeScript(): Promise<void> {
 
 /** Stage authored static frontend assets beside compiled JavaScript. */
 function stageStaticAssets(): void {
-  const modelsSource = path.join(staticRoot, 'models.txt');
-  const modelsOutput = path.join(generatedRoot, 'models.txt');
-  mkdirSync(path.dirname(modelsOutput), { recursive: true });
-  copyFileSync(modelsSource, modelsOutput);
+  for (const source of walkFiles(staticRoot)) {
+    const output = path.join(generatedRoot, path.relative(staticRoot, source));
+    mkdirSync(path.dirname(output), { recursive: true });
+    copyFileSync(source, output);
+  }
+  const noticesRoot = path.join(repositoryRoot, 'third_party');
+  for (const source of walkFiles(noticesRoot)) {
+    const output = path.join(generatedRoot, 'third_party', path.relative(noticesRoot, source));
+    mkdirSync(path.dirname(output), { recursive: true });
+    copyFileSync(source, output);
+  }
 }
 
 /** Render a stable repository-independent artifact path. */
@@ -138,6 +146,17 @@ async function main(): Promise<void> {
   const checkOnly = process.argv.includes('--check');
   rmSync(generatedRoot, { force: true, recursive: true });
   await compileTypeScript();
+  await build({
+    entryPoints: [
+      path.join(repositoryRoot, 'frontend/comfyui/ui/surface/appearance/FluentThemeRuntime.ts'),
+    ],
+    outfile: path.join(generatedRoot, 'comfyui/ui/surface/appearance/FluentThemeRuntime.js'),
+    bundle: true,
+    format: 'esm',
+    platform: 'browser',
+    target: 'es2022',
+    legalComments: 'inline',
+  });
   stageStaticAssets();
   synchronizeArtifacts(checkOnly);
   console.log(checkOnly ? 'Web artifacts are current.' : 'Web artifacts updated.');

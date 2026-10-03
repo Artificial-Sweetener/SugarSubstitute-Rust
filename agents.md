@@ -93,6 +93,15 @@ Engineering priority is maintainability, clear architecture, behavior safety dur
 - Required context should live in code, type hints, tests, and docstrings.
 - Keep documentation concise and directly useful.
 
+## Third-Party Vendoring Policy
+
+- When vendoring third-party source, assets, icons, models, datasets, or generated derivatives, update `third_party/manifest.toml` in the same change.
+- Store third-party license text under `third_party/licenses/` and reference it from the manifest.
+- Add or update `third_party/NOTICE.md` when introducing a third-party component.
+- Record the source repository, pinned revision, source paths, license, modifications, and vendored runtime file paths. Record SHA-256 hashes for vendored assets.
+- Keep runtime assets in the package/resource location owned by their consumer; centralize licensing and provenance under `third_party/`.
+- Preserve third-party copyright and license notices. Ship notices and applicable license texts with the browser deployment assets.
+
 ## Typing Policy
 
 - The entire first-party Python codebase is fully typed and passes strict mypy checking, including runtime packages, tests, scripts, and tools.

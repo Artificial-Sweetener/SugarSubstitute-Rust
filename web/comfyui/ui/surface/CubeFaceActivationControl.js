@@ -14,8 +14,10 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Present Cube-owned activation through Comfy's Nodes 2.0 switch vocabulary. */
+import { ensureCubeFaceActivationStyles } from './CubeFaceActivationStyles.js';
 /** Build one labeled PrimeVue-style switch without taking ownership of activation state. */
 export function createCubeFaceActivationControl(documentRef, card, onActivationChange) {
+    ensureCubeFaceActivationStyles(documentRef);
     const control = documentRef.createElement('label');
     control.className = 'sugarcubes-cube-face__activation';
     control.dataset.cubeCardActivation = card.id;

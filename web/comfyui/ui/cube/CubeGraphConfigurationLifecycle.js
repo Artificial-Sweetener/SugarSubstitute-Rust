@@ -52,6 +52,7 @@ export class CubeGraphConfigurationLifecycle {
             options.affordances.adaptMissingNodes(missingNodeTypes);
             void options.outputHistory.hydrateRecent();
             const graph = options.app?.canvas?.graph ?? comfyApp.graph ?? options.app?.graph;
+            options.preconfiguration.restoreWidgets(graph);
             options.overlays.proximity.refreshOverlayState({
                 recompute: true,
                 ...(graph ? { graph } : {}),

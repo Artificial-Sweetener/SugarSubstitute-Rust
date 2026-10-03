@@ -27,6 +27,7 @@ import {
 import { CubeWorkflowLibraryState } from '../workflow/CubeWorkflowLibraryState.js';
 import { CubeSerializedDocumentReconciler } from './CubeSerializedDocumentReconciler.js';
 import { CubeSerializedWidgetRehydrator } from './CubeSerializedWidgetRehydrator.js';
+import type { ComfyGraph } from '../types/graph.js';
 
 /** Own the serialized workflow phase and its one pending legacy migration batch. */
 export class CubeWorkflowPreconfiguration {
@@ -87,5 +88,10 @@ export class CubeWorkflowPreconfiguration {
     const batch = this.#legacyBatch;
     this.#legacyBatch = null;
     return batch;
+  }
+
+  /** Finish host-backed widget hydration after native configuration. */
+  restoreWidgets(graph: ComfyGraph | null | undefined): void {
+    this.#widgetRehydrator?.restore(graph);
   }
 }

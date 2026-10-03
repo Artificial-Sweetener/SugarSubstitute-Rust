@@ -39,7 +39,10 @@ export function createCubeFaceNodeData(nodeData, node) {
         : cubeFaceVisibleWidgets(node);
     return {
         ...nodeData,
-        flags: createCubeFaceFlags(nodeData.flags),
+        flags: {
+            ...(isRecord(nodeData.flags) ? nodeData.flags : {}),
+            collapsed: node.flags?.collapsed === true,
+        },
         inputs: [],
         outputs: [],
         widgets,

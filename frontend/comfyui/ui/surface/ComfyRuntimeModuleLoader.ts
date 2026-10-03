@@ -164,8 +164,8 @@ export async function loadComfySettingsAutoCompleteComponent(
  * Expose the installed component while keeping every renderer dependency native.
  *
  * Comfy currently keeps LGraphNode private inside its GraphView chunk. SugarCubes
- * adds one export to that installed module and resolves its relative dependencies
- * against the original asset URL. No node markup, widgets, or styling are copied.
+ * exports that component from a projection-only module, resolves its dependencies,
+ * and leaves canonical layout-reference disposal with the graph's native mount.
  */
 export function buildNativeNodeComponentModule(source: string, graphViewUrl: string): string {
   const componentMatch = source.match(NATIVE_NODE_COMPONENT_PATTERN);
@@ -175,8 +175,37 @@ export function buildNativeNodeComponentModule(source: string, graphViewUrl: str
       'Comfy GraphView no longer contains the native LGraphNode component boundary.',
     );
   }
-  const resolvedSource = resolveInstalledModuleReferences(source, graphViewUrl);
+  const resolvedSource = resolveInstalledModuleReferences(
+    retainCanonicalLayoutReference(source),
+    graphViewUrl,
+  );
   return `${resolvedSource}\nexport{${componentIdentifier} as ${NATIVE_NODE_COMPONENT_EXPORT}};\n`;
+}
+
+/** Keep projected teardown from invalidating the graph's shared reactive geometry cache. */
+function retainCanonicalLayoutReference(source: string): string {
+  const declaration = source.match(
+    /function\s+useNodeLayout\([^)]*\)\s*\{[\s\S]*?(?=\bfunction\s|$)/,
+  )?.[0];
+  if (!declaration?.includes('.cleanupNodeRef(')) return source;
+  const identifier = '[A-Za-z_$][\\w$]*';
+  const cleanup = new RegExp(
+    `(${identifier})\\(\\(\\)\\s*=>\\s*\\{\\s*(${identifier})\\.cleanupNodeRef\\((${identifier})\\)\\s*;?\\s*\\}\\)\\s*;`,
+    'g',
+  );
+  const matches = [...declaration.matchAll(cleanup)];
+  const match = matches[0];
+  if (
+    matches.length !== 1 ||
+    !match ||
+    !declaration.includes(`${match[2]}.getNodeLayoutRef(${match[3]})`)
+  ) {
+    throw new NativeRendererCompatibilityError(
+      'Comfy native layout teardown changed; refusing to invalidate live graph geometry.',
+    );
+  }
+  // Only the cloned projection module changes; Comfy's graph mount retains its cleanup hook.
+  return source.replace(declaration, declaration.replace(match[0], ''));
 }
 
 /** Expose Comfy's retained private node-data function from its installed chunk. */

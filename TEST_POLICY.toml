@@ -7,6 +7,8 @@ sources = [
   "__init__.py",
   "scripts/**",
   "tools/**",
+  "third_party/**",
+  "web/third_party/**",
   "stubs/**",
   "types/**",
   "sugarcubes/tools/**",
@@ -243,6 +245,10 @@ proofs = ["contract", "integration", "unit"]
 [[area]]
 name = "surface"
 sources = [
+  "frontend/static/icons/node/**",
+  "web/icons/node/**",
+  "frontend/static/icons/view/**",
+  "web/icons/view/**",
   "frontend/comfyui/ui/overlays/**",
   "frontend/comfyui/ui/surface/**",
 ]
