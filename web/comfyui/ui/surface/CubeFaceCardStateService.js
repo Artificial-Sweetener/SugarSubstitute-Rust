@@ -17,7 +17,7 @@
 import { isCubeNode, requireCubeSurface, } from '../cube/node/ComfyCubeNodeFactory.js';
 import { isRecord } from '../types/common.js';
 import { resolveCubeFaceCardPresentation, } from './CubeFaceCardPolicy.js';
-import { setCubeFaceCardRevealed, setCubeFaceNodeEnabled } from './CubeFaceCardStateController.js';
+import { setCubeFaceCardRevealed, setCubeFaceNodeEnabled, setCubeFaceNodeExecutionMode, } from './CubeFaceCardStateController.js';
 import { parseCubeSurfaceState, serializeCubeSurfaceState, } from './CubeSurfaceState.js';
 import { replaceCubeSurfaceRecord } from './CubeSurfaceRecordHelpers.js';
 /** Read the same presentation schema from a Cube or loose-node workflow without mutating it. */
@@ -60,6 +60,10 @@ export class CubeFaceCardStateService {
     /** Persist activation without changing whether the card is optional or revealed. */
     setEnabled(target, nodeId, enabled) {
         this.#change(target, nodeId, (state, node) => setCubeFaceNodeEnabled(state, node, enabled));
+    }
+    /** Persist a linked execution mode through the same activation and reveal transition owner. */
+    setExecutionMode(target, nodeId, mode) {
+        this.#change(target, nodeId, (state, node) => setCubeFaceNodeExecutionMode(state, node, mode));
     }
     /** Apply one shared policy transition and notify the presentation after persistence. */
     #change(target, nodeId, change) {

@@ -1,4 +1,4 @@
-import { CardDisclosureMotion } from './motion/CardDisclosureMotion.js';
+import { isNativeWidgetPresented } from './NativeWidgetPresentation.js';
 import { cubeFaceRevealableWidgets } from './CubeFaceWidgetPolicy.js';
 import { settleNativeDisclosure } from './NativeDisclosureSettlement.js';
 /** Adapt a native collapse button while leaving flags, history, and graph geometry with Comfy. */
@@ -8,15 +8,15 @@ export class NativeProjectedNodeCollapse {
     #refresh;
     #motion;
     /** Bind one projected card and its native renderer refresh. */
-    constructor(target, node, refresh) {
+    constructor(target, node, refresh, motion) {
         this.#target = target;
         this.#node = node;
         this.#refresh = refresh;
-        this.#motion = new CardDisclosureMotion(target);
+        this.#motion = motion;
         target.addEventListener('click', this.#collapse, true);
     }
     /** Reflect the native node's collapse capability in the existing control. */
-    reconcile(root, hasContent = cubeFaceRevealableWidgets(this.#node).length > 0) {
+    reconcile(root, hasContent = cubeFaceRevealableWidgets(this.#node).some(isNativeWidgetPresented)) {
         const button = root.querySelector('[data-testid="node-collapse-button"]');
         if (button) {
             button.hidden = !hasContent;
@@ -33,7 +33,6 @@ export class NativeProjectedNodeCollapse {
     /** Release the host-facing listener before the Vue mount is unmounted. */
     dispose() {
         this.#target.removeEventListener('click', this.#collapse, true);
-        this.#motion.dispose();
     }
     /** Invoke the authoritative node transition without consulting ambiguous numeric IDs. */
     #collapse = (event) => {

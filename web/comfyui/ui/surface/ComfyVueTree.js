@@ -15,6 +15,20 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Traverse Comfy's mounted Vue tree through a guarded adapter boundary. */
 import { isRecord } from '../types/common.js';
+/** Resolve a native node through its own component ancestry instead of walking the application tree. */
+export function findMountedNodeVNode(root) {
+    let candidate = Reflect.get(root, '__vueParentComponent');
+    const visited = new Set();
+    while (isRecord(candidate) && !visited.has(candidate)) {
+        visited.add(candidate);
+        const vnode = isRecord(candidate.vnode) ? candidate.vnode : null;
+        const type = isRecord(vnode?.type) ? vnode.type : null;
+        if (type?.__name === 'LGraphNode' || type?.name === 'LGraphNode')
+            return vnode;
+        candidate = candidate.parent;
+    }
+    return null;
+}
 /** Resolve Comfy's mounted Vue application context independently of graph contents. */
 export function findComfyVueAppContext(root) {
     const rootRecord = isRecord(root) ? root : {};

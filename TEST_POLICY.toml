@@ -2,6 +2,11 @@ schema = 1
 test_root = "tests"
 
 [[area]]
+name = "relations"
+sources = ["frontend/comfyui/ui/relations/**", "web/comfyui/ui/relations/**"]
+proofs = ["unit", "integration"]
+
+[[area]]
 name = "editor_actions"
 sources = ["frontend/comfyui/ui/editor_actions/**", "web/comfyui/ui/editor_actions/**"]
 proofs = ["unit", "contract", "integration"]
@@ -366,7 +371,7 @@ groups = ["editor_actions/integration", "editor_actions/unit"]
 
 [[subscription]]
 boundary = "native_card_presentation"
-groups = ["frontend_core/integration", "model_library/integration", "editor_actions/integration"]
+groups = ["frontend_core/integration", "model_library/integration", "editor_actions/integration", "relations/integration"]
 
 [[subscription]]
 boundary = "cube_document"
@@ -435,4 +440,4 @@ groups = [
 
 [[subscription]]
 boundary = "execution_prompt"
-groups = ["surface/integration"]
+groups = ["surface/integration", "relations/integration"]

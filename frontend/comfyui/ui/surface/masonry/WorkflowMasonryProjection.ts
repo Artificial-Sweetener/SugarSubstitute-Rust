@@ -14,10 +14,11 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Project graph membership and reading order without changing workflow state. */
-import type { ComfyGraph, ComfyNode, GraphId } from '../../types/graph.js';
+import type { ComfyGraph, ComfyNode } from '../../types/graph.js';
 import type { CubeNode } from '../../cube/node/ComfyCubeNodeFactory.js';
 import { requireCubeIdentity } from '../../cube/node/ComfyCubeNodeFactory.js';
-import { orderNodesUpstreamFirst } from '../CubeFaceCardPolicy.js';
+import { orderWorkflowNodes } from '../WorkflowNodeOrder.js';
+import type { WorkflowNodeConnection } from '../WorkflowNodeOrder.js';
 import { readCubeFaceCardState, type CubeFaceCardTarget } from '../CubeFaceCardStateService.js';
 import { projectNodeCards, type ProjectedNodeCard } from '../NodeCardProjection.js';
 
@@ -33,10 +34,7 @@ export interface WorkflowMasonrySection {
   cards: WorkflowMasonryCard[];
 }
 
-export interface WorkflowMasonryConnection {
-  source: GraphId;
-  target: GraphId;
-}
+export type WorkflowMasonryConnection = WorkflowNodeConnection;
 
 /** Keep real Cubes and consecutive loose nodes in distinct runs of the shared grid. */
 export function projectWorkflowMasonry(
@@ -44,17 +42,12 @@ export function projectWorkflowMasonry(
   cubes: readonly CubeNode[],
   connections: readonly WorkflowMasonryConnection[] = [],
 ): WorkflowMasonrySection[] {
-  const nodes = [...(graph._nodes ?? graph.nodes ?? [])].sort(
-    (a, b) => (a.pos?.[0] ?? 0) - (b.pos?.[0] ?? 0) || (a.pos?.[1] ?? 0) - (b.pos?.[1] ?? 0),
-  );
-  const byId = new Map(nodes.map((node) => [String(node.id), node]));
   const cubeSet = new Set<ComfyNode>(cubes);
   const sections: WorkflowMasonrySection[] = [];
   const looseMembers = new Map<string, ComfyNode[]>();
   let loose: WorkflowMasonrySection | null = null;
-  for (const id of orderNodesUpstreamFirst(nodes, graph, connections)) {
-    const node = byId.get(id);
-    if (!node) continue;
+  for (const node of orderWorkflowNodes(graph, connections)) {
+    const id = String(node.id);
     const cube = cubeSet.has(node) ? cubes.find((candidate) => candidate === node) : undefined;
     if (cube) {
       loose = null;

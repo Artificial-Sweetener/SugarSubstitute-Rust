@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Adapt Comfy breadcrumb and inspector chrome at the root of a Cube editor. */
+import { HostSurfaceObserver } from '../core/HostSurfaceObserver.js';
 
 import { requireCubeIdentity } from '../cube/node/ComfyCubeNodeFactory.js';
 import type { CubeHostAffordanceController } from './CubeHostAffordanceController.js';
@@ -37,7 +38,7 @@ export class ComfyCubeEditorChromeAdapter {
   readonly #contexts: CubeEditorContextResolver;
   readonly #policy: CubeAffordancePolicy;
   readonly #controller: CubeHostAffordanceController;
-  readonly #observer: MutationObserver;
+  #observer: HostSurfaceObserver | null = null;
   readonly #handleClick: (event: MouseEvent) => void;
   readonly #handleDoubleClick: (event: MouseEvent) => void;
   readonly #handleKeydown: (event: KeyboardEvent) => void;
@@ -60,7 +61,6 @@ export class ComfyCubeEditorChromeAdapter {
     this.#contexts = options.contexts;
     this.#policy = options.policy;
     this.#controller = options.controller;
-    this.#observer = new MutationObserver(() => this.#schedule());
     this.#handleClick = (event) => this.#onClick(event);
     this.#handleDoubleClick = (event) => this.#onDoubleClick(event);
     this.#handleKeydown = (event) => this.#onKeydown(event);
@@ -68,7 +68,12 @@ export class ComfyCubeEditorChromeAdapter {
 
   /** Observe host remounts and intercept only actions at the active Cube root. */
   install(): void {
-    this.#observer.observe(this.#document.body, { childList: true, subtree: true });
+    this.#observer = new HostSurfaceObserver(
+      this.#document.body,
+      '[data-testid^="subgraph-breadcrumb"],[data-testid="subgraph-editor-toggle"],.p-tooltip',
+      () => this.#schedule(),
+      { content: true },
+    );
     this.#document.addEventListener('click', this.#handleClick, true);
     this.#document.addEventListener('dblclick', this.#handleDoubleClick, true);
     this.#document.addEventListener('keydown', this.#handleKeydown, true);
@@ -77,7 +82,7 @@ export class ComfyCubeEditorChromeAdapter {
 
   /** Release DOM observers and event capture. */
   dispose(): void {
-    this.#observer.disconnect();
+    this.#observer?.disconnect();
     this.#document.removeEventListener('click', this.#handleClick, true);
     this.#document.removeEventListener('dblclick', this.#handleDoubleClick, true);
     this.#document.removeEventListener('keydown', this.#handleKeydown, true);

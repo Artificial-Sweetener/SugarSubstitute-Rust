@@ -20,6 +20,19 @@ import { jest } from '@jest/globals';
 import { NativeSubgraphChangeObserver } from '../../../frontend/comfyui/ui/surface/NativeSubgraphChangeObserver.js';
 
 describe('NativeSubgraphChangeObserver', () => {
+  test('releases pending notifications with the observed graph lifetime', async () => {
+    const subgraph = {
+      onAfterChange: null as ((graph: unknown) => void) | null,
+      add: jest.fn(),
+      remove: jest.fn(),
+    };
+    const change = jest.fn();
+    const observer = new NativeSubgraphChangeObserver(subgraph, change);
+    subgraph.onAfterChange?.(subgraph);
+    observer.dispose();
+    await Promise.resolve();
+    expect(change).not.toHaveBeenCalled();
+  });
   test('chains native mutation methods and restores Comfy graph behavior', async () => {
     const previousAfterChange = jest.fn();
     const add = jest.fn<(node: string) => string>(() => 'added');

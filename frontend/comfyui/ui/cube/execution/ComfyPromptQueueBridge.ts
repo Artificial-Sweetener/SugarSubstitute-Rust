@@ -33,6 +33,7 @@ export interface ComfyPromptQueueApi {
 export interface ComfyPromptQueueBridgeOptions {
   api: ComfyPromptQueueApi;
   preflight?(): void;
+  prepare?(payload: unknown): unknown;
   transform(payload: unknown): Promise<unknown>;
   executeDirect?(
     position: number,
@@ -47,6 +48,7 @@ export class ComfyPromptQueueBridge {
   readonly #api: ComfyPromptQueueApi;
   readonly #preflight: () => void;
   readonly #transform: (payload: unknown) => Promise<unknown>;
+  readonly #prepare: (payload: unknown) => unknown;
   readonly #executeDirect:
     | ((position: number, payload: unknown, options?: ComfyPromptQueueOptions) => Promise<unknown>)
     | null;
@@ -59,6 +61,7 @@ export class ComfyPromptQueueBridge {
     this.#api = options.api;
     this.#preflight = options.preflight ?? (() => undefined);
     this.#transform = options.transform;
+    this.#prepare = options.prepare ?? ((payload) => payload);
     this.#executeDirect = options.executeDirect ?? null;
     this.#shouldExecuteDirect = options.shouldExecuteDirect ?? (() => true);
   }
@@ -87,8 +90,10 @@ export class ComfyPromptQueueBridge {
   readonly #queueWrapper: QueuePrompt = async (position, payload, options) => {
     const original = this.#original;
     if (!original) throw new Error('SugarCubes prompt queue bridge is not installed.');
-    if (this.#executeDirect && this.#shouldExecuteDirect(payload)) {
-      this.#preflight();
+    const direct = Boolean(this.#executeDirect && this.#shouldExecuteDirect(payload));
+    if (direct) this.#preflight();
+    payload = this.#prepare(payload);
+    if (direct && this.#executeDirect) {
       return await this.#executeDirect(position, payload, options);
     }
     const transformed = await this.#transform(payload);

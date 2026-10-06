@@ -26,7 +26,11 @@ import {
   resolveCubeFaceCardPresentation,
   type CubeFaceCardMenuEntry,
 } from './CubeFaceCardPolicy.js';
-import { setCubeFaceCardRevealed, setCubeFaceNodeEnabled } from './CubeFaceCardStateController.js';
+import {
+  setCubeFaceCardRevealed,
+  setCubeFaceNodeEnabled,
+  setCubeFaceNodeExecutionMode,
+} from './CubeFaceCardStateController.js';
 import {
   parseCubeSurfaceState,
   serializeCubeSurfaceState,
@@ -90,6 +94,11 @@ export class CubeFaceCardStateService {
   /** Persist activation without changing whether the card is optional or revealed. */
   setEnabled(target: CubeFaceCardTarget, nodeId: string, enabled: boolean): void {
     this.#change(target, nodeId, (state, node) => setCubeFaceNodeEnabled(state, node, enabled));
+  }
+
+  /** Persist a linked execution mode through the same activation and reveal transition owner. */
+  setExecutionMode(target: CubeFaceCardTarget, nodeId: string, mode: number): void {
+    this.#change(target, nodeId, (state, node) => setCubeFaceNodeExecutionMode(state, node, mode));
   }
 
   /** Apply one shared policy transition and notify the presentation after persistence. */

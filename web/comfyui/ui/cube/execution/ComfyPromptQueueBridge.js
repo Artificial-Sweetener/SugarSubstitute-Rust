@@ -19,6 +19,7 @@ export class ComfyPromptQueueBridge {
     #api;
     #preflight;
     #transform;
+    #prepare;
     #executeDirect;
     #shouldExecuteDirect;
     #original = null;
@@ -28,6 +29,7 @@ export class ComfyPromptQueueBridge {
         this.#api = options.api;
         this.#preflight = options.preflight ?? (() => undefined);
         this.#transform = options.transform;
+        this.#prepare = options.prepare ?? ((payload) => payload);
         this.#executeDirect = options.executeDirect ?? null;
         this.#shouldExecuteDirect = options.shouldExecuteDirect ?? (() => true);
     }
@@ -57,8 +59,11 @@ export class ComfyPromptQueueBridge {
         const original = this.#original;
         if (!original)
             throw new Error('SugarCubes prompt queue bridge is not installed.');
-        if (this.#executeDirect && this.#shouldExecuteDirect(payload)) {
+        const direct = Boolean(this.#executeDirect && this.#shouldExecuteDirect(payload));
+        if (direct)
             this.#preflight();
+        payload = this.#prepare(payload);
+        if (direct && this.#executeDirect) {
             return await this.#executeDirect(position, payload, options);
         }
         const transformed = await this.#transform(payload);

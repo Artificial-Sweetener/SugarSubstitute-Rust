@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own the reversible appearance setting and native presentation lifetime. */
 import { isRecord } from '../../types/common.js';
+import { HostSurfaceObserver } from '../../core/HostSurfaceObserver.js';
 import { createComfyRendererModeChangeSource, resolveComfyRendererMode, } from '../../core/ComfyRendererMode.js';
 import { NativeFluentCardAdapter } from './NativeFluentCardAdapter.js';
 import { fluentAppearanceCss } from './FluentAppearanceStyles.js';
@@ -30,7 +31,7 @@ import { readComfyDarkTheme } from './ComfyColorScheme.js';
 import { FluentOverlayScrollbarHost } from './FluentOverlayScrollbarHost.js';
 /** Persist the user's appearance preference independently of workflow documents. */
 export const FLUENT_APPEARANCE_SETTING = 'SugarCubes.Appearance.Fluent';
-const surfaceSelector = '.sugarcubes-workflow-masonry, .sugarcubes-masonry-toggle';
+const surfaceSelector = '.sugarcubes-workflow-masonry, .sugarcubes-masonry-toggle, .sc-overrides-toolbar, .sugarcubes-native-widget';
 /** Keep appearance separate from graph, Cube policy, and masonry layout state. */
 export class FluentAppearanceHost {
     #options;
@@ -44,7 +45,7 @@ export class FluentAppearanceHost {
     #comboSearch;
     #scrollbars;
     #style;
-    #presence;
+    #presence = null;
     #palette;
     #surfaces = new Set();
     #popups = new Set();
@@ -66,32 +67,6 @@ export class FluentAppearanceHost {
         this.#comboSearch = new NativeInlineComboSearch(options.document);
         this.#style = options.document.createElement('style');
         this.#style.id = 'sugarcubes-fluent-appearance';
-        this.#presence = new MutationObserver((records) => {
-            if (!this.#active)
-                return;
-            let changed = false;
-            for (const record of records) {
-                if (record.target instanceof HTMLElement &&
-                    record.target.closest('.sc-fluent-scrollbar-layer'))
-                    continue;
-                const nodes = [...record.addedNodes, ...record.removedNodes];
-                if (nodes.length &&
-                    nodes.every((node) => node instanceof HTMLElement &&
-                        (node.matches('.sc-fluent-scrollbar-layer') ||
-                            node.hasAttribute('data-sc-scrollbar-policy'))))
-                    continue;
-                changed = true;
-                if (record.target instanceof HTMLElement)
-                    this.#queue(record.target);
-                else if (record.target instanceof Text && record.target.parentElement)
-                    this.#queue(record.target.parentElement);
-                for (const node of record.addedNodes)
-                    if (node instanceof HTMLElement)
-                        this.#queue(node);
-            }
-            if (changed)
-                this.#schedule();
-        });
         this.#palette = new MutationObserver(() => this.#refreshPalette());
     }
     /** Register host persistence and renderer/theme subscriptions through their existing owners. */
@@ -121,10 +96,17 @@ export class FluentAppearanceHost {
             settings.addEventListener.call(settings, 'Comfy.ColorPalette.change', refresh);
             this.#unsubscribePalette = () => removePaletteListener.call(settings, 'Comfy.ColorPalette.change', refresh);
         }
-        this.#presence.observe(this.#options.document.body, {
-            childList: true,
+        this.#presence = new HostSurfaceObserver(this.#options.document.body, `.lg-node, ${surfaceSelector}, [role="listbox"]`, (changes) => {
+            if (!this.#active)
+                return;
+            for (const { element } of changes)
+                if (element.getAttribute('role') !== 'listbox')
+                    this.#dirty.add(element);
+            this.#schedule();
+        }, {
+            content: true,
             characterData: true,
-            subtree: true,
+            exclude: '.sc-fluent-scrollbar-layer,[data-sc-scrollbar-policy]',
         });
         for (const element of [
             this.#options.document.documentElement,
@@ -153,7 +135,7 @@ export class FluentAppearanceHost {
             return;
         this.#disposed = true;
         this.#deactivate();
-        this.#presence.disconnect();
+        this.#presence?.disconnect();
         this.#palette.disconnect();
         this.#unsubscribe?.();
         this.#unsubscribePalette?.();
@@ -222,7 +204,7 @@ export class FluentAppearanceHost {
     }
     /** Discover changed subtrees and their nearest card rather than scanning all cards per keystroke. */
     #queue(element) {
-        const root = element.closest('.lg-node');
+        const root = element.closest('.lg-node, .sugarcubes-native-widget');
         if (root)
             this.#dirty.add(root);
         if (element.matches('.lg-node') || element.matches(surfaceSelector))
@@ -248,14 +230,18 @@ export class FluentAppearanceHost {
                 this.#comboSearch.reconcile();
                 this.#annotatePopup();
                 if ([...this.#dirty].some((element) => element.matches('.lg-node')))
-                    this.#adapter.beginBatch(this.#options.document);
+                    this.#adapter.beginBatch(this.#options.document, [...this.#dirty].filter((element) => element.matches('.lg-node')));
                 for (const element of this.#dirty) {
                     if (!element.isConnected)
                         continue;
-                    if (element.matches('.lg-node')) {
-                        const card = this.#adapter.annotate(element);
+                    if (element.matches('.lg-node, .sugarcubes-native-widget')) {
+                        const standalone = element.matches('.sugarcubes-native-widget');
+                        const card = standalone
+                            ? this.#adapter.annotateWidget(element)
+                            : this.#adapter.annotate(element);
                         this.#labels.reconcile(element, card.labelElements);
-                        this.#titlebars.reconcile(element, card.header, card.collapsed, card.canCollapse);
+                        if (!standalone)
+                            this.#titlebars.reconcile(element, card.header, card.collapsed, card.canCollapse);
                         this.#toggleRows.reconcile(element);
                         this.#advanced.reconcile(card);
                         this.#numeric.reconcile(element, card.numericFields);

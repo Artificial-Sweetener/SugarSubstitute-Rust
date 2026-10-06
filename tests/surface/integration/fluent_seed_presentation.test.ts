@@ -142,9 +142,11 @@ test.each(['native', 'cube', 'masonry'])(
     expect(getComputedStyle(input).textAlign).toBe('left');
     if (view !== 'native') {
       expect(getComputedStyle(layout).display).toBe('flex');
-      expect(getComputedStyle(container).flexShrink).toBe('0');
-      expect(getComputedStyle(spinner).width).toBe('calc(20ch + 64px)');
-    } else expect(getComputedStyle(spinner).width).toBe('100%');
+      expect(getComputedStyle(container).flexShrink).toBe('1');
+      expect(getComputedStyle(container).minWidth).toBe('60px');
+    }
+    expect(getComputedStyle(spinner).width).toBe('192px');
+    expect(getComputedStyle(spinner).minWidth).toBe('60px');
     expect(getComputedStyle(increment).display).toBe('none');
     expect(getComputedStyle(nativeMode).display).toBe('none');
     toggle.click();

@@ -19,7 +19,12 @@ import { isRecord } from '../types/common.js';
 import type { UnknownRecord } from '../types/common.js';
 import type { ComfyNode } from '../types/graph.js';
 import { findCubeFacePromptWidget } from './CubeFacePromptPolicy.js';
-import { cubeFaceUnconsumedWidgets, cubeFaceVisibleWidgets } from './CubeFaceWidgetPolicy.js';
+import {
+  cubeFaceUnconsumedWidgets,
+  cubeFacePresentedWidgets,
+  cubeFaceVisibleWidgets,
+} from './CubeFaceWidgetPolicy.js';
+import { isNativeWidgetPresented } from './NativeWidgetPresentation.js';
 import { projectNativeWidgetOrigins } from './NativeWidgetOrigins.js';
 import { nativeAdvancedInputControl } from './NativeAdvancedInputControl.js';
 
@@ -27,6 +32,7 @@ interface RememberedNodeProperty {
   key: 'flags' | 'widgets' | 'widgets_start_y' | 'widgets_up';
   owned: boolean;
   value: unknown;
+  widgetItems?: unknown[];
 }
 
 interface RememberedWidgetLabel {
@@ -57,23 +63,24 @@ export function createCubeFaceNodeData(
   nodeData: UnknownRecord,
   node: ComfyNode,
   refresh: () => void = () => undefined,
+  allowCollapse = true,
 ): UnknownRecord {
-  const visibleNames = new Set(cubeFaceVisibleWidgets(node).map((widget) => widget.name));
+  const visibleNames = new Set(cubeFacePresentedWidgets(node).map((widget) => widget.name));
   const widgets = Array.isArray(nodeData.widgets)
     ? nodeData.widgets.filter(
         (widget: unknown) => isRecord(widget) && visibleNames.has(String(widget.name)),
       )
-    : cubeFaceVisibleWidgets(node);
+    : cubeFacePresentedWidgets(node);
   return {
     ...nodeData,
     flags: {
       ...(isRecord(nodeData.flags) ? nodeData.flags : {}),
-      collapsed: node.flags?.collapsed === true,
+      collapsed: allowCollapse && node.flags?.collapsed === true,
     },
     inputs: [],
     outputs: [],
     widgets: projectNativeWidgetOrigins(node, widgets),
-    sugarcubesEditorWidgets: cubeFaceUnconsumedWidgets(node),
+    sugarcubesEditorWidgets: cubeFaceUnconsumedWidgets(node).filter(isNativeWidgetPresented),
     sugarcubesAdvancedInputs: nativeAdvancedInputControl(node, refresh),
   };
 }
@@ -89,7 +96,7 @@ export function withCubeFaceNodePresentation<Result>(
     'widgets_start_y',
     'widgets_up',
   ]);
-  node.widgets = cubeFaceUnconsumedWidgets(node);
+  node.widgets = cubeFaceUnconsumedWidgets(node).filter(isNativeWidgetPresented);
   const widgetLabels = applyDurableWidgetLabels(node);
   node.flags = createCubeFaceFlags(node.flags);
   Reflect.set(node, 'widgets_up', true);
@@ -136,6 +143,7 @@ function rememberNodeProperties(
     key,
     owned: Object.prototype.hasOwnProperty.call(node, key),
     value: node[key],
+    ...(key === 'widgets' && Array.isArray(node.widgets) ? { widgetItems: [...node.widgets] } : {}),
   }));
 }
 
@@ -145,6 +153,9 @@ function restoreNodeProperties(
   remembered: readonly RememberedNodeProperty[],
 ): void {
   for (const property of remembered) {
+    // Comfy's widgets setter splices the original array instead of replacing it.
+    if (property.widgetItems && Array.isArray(property.value))
+      property.value.splice(0, property.value.length, ...property.widgetItems);
     Reflect.set(node, property.key, property.value);
     if (!property.owned) Reflect.deleteProperty(node, property.key);
   }
@@ -153,4 +164,9 @@ function restoreNodeProperties(
 /** Return whether Comfy will present at least one real widget control. */
 export function cubeFaceNodeHasVisibleWidgets(node: ComfyNode): boolean {
   return cubeFaceVisibleWidgets(node).length > 0;
+}
+
+/** Resolve whether a native card body has locally presented controls after shared fields move out. */
+export function cubeFaceNodeHasPresentedWidgets(node: ComfyNode): boolean {
+  return cubeFacePresentedWidgets(node).length > 0;
 }

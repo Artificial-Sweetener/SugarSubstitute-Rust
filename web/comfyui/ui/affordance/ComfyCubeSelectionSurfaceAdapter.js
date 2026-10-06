@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Reconcile focused Cube adapters when Comfy remounts selection surfaces. */
+import { HostSurfaceObserver } from '../core/HostSurfaceObserver.js';
 /** Own selection resolution and mutation-observer lifecycle without rendering feature UI. */
 export class ComfyCubeSelectionSurfaceAdapter {
     #document;
@@ -21,7 +22,7 @@ export class ComfyCubeSelectionSurfaceAdapter {
     #contexts;
     #toolbox;
     #menus;
-    #observer;
+    #observer = null;
     #scheduled = false;
     /** Bind selection semantics to focused host-surface adapters. */
     constructor(options) {
@@ -30,16 +31,15 @@ export class ComfyCubeSelectionSurfaceAdapter {
         this.#contexts = options.contexts;
         this.#toolbox = options.toolbox;
         this.#menus = options.menus;
-        this.#observer = new MutationObserver(() => this.#schedule());
     }
     /** Observe Vue mounts and renderer switches, then reconcile immediately. */
     install() {
-        this.#observer.observe(this.#document.body, { childList: true, subtree: true });
+        this.#observer = new HostSurfaceObserver(this.#document.body, '[data-testid="selection-toolbox"],.p-contextmenu', () => this.#schedule(), { content: true });
         this.refresh();
     }
     /** Restore presentation mutations when Comfy replaces the Cube runtime. */
     dispose() {
-        this.#observer.disconnect();
+        this.#observer?.disconnect();
         this.#toolbox.dispose();
         this.#menus.clear();
     }

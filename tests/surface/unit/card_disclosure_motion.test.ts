@@ -128,3 +128,84 @@ test('retains the latest user choice when a view unmount interrupts closing', ()
   expect(apply).toHaveBeenCalledWith(true);
   expect(effects[0]?.cancel).toHaveBeenCalledTimes(1);
 });
+
+test('animates a native content resize to its settled destination and restores inline geometry', async () => {
+  const { target, root, effects, motion } = fixture();
+  let settle = (): void => undefined;
+  const settled = new Promise<void>((resolve) => {
+    settle = resolve;
+  });
+  motion.resize(
+    () => {
+      root.style.height = '80px';
+    },
+    { settle: () => settled },
+  );
+  expect(target.style.height).toBe('200px');
+  expect(target.style.overflow).toBe('clip');
+  expect(effects).toHaveLength(0);
+  root.style.height = '60px';
+  settle();
+  await Promise.resolve();
+  expect(effects[0]?.frames).toEqual([{ height: '200px' }, { height: '60px' }]);
+  expect(target.dataset.scDisclosureHeight).toBe('60');
+  effects[0]?.finish();
+  await Promise.resolve();
+  expect(target.style.height).toBe('200px');
+  expect(target.style.overflow).toBe('visible');
+  expect(target.hasAttribute('data-sc-disclosing')).toBe(false);
+  motion.dispose();
+});
+
+test('reverses content resizing and ignores stale settlement and animation completion', async () => {
+  const { target, root, effects, motion } = fixture();
+  let settle = (): void => undefined;
+  const settled = new Promise<void>((resolve) => {
+    settle = resolve;
+  });
+  motion.resize(
+    () => {
+      root.style.height = '60px';
+    },
+    { settle: () => settled },
+  );
+  motion.resize(() => {
+    root.style.height = '240px';
+  });
+  expect(effects[0]?.frames).toEqual([{ height: '200px' }, { height: '240px' }]);
+  settle();
+  await Promise.resolve();
+  expect(effects).toHaveLength(1);
+  motion.dispose();
+  effects[0]?.finish();
+  await Promise.resolve();
+  expect(target.style.height).toBe('200px');
+  expect(target.hasAttribute('data-sc-disclosure-height')).toBe(false);
+});
+
+test('does not animate unchanged geometry or reduced-motion content updates', () => {
+  const { target, root, effects, motion } = fixture();
+  motion.resize(() => undefined);
+  expect(effects).toHaveLength(0);
+  expect(target.hasAttribute('data-sc-disclosing')).toBe(false);
+  root.removeAttribute('data-sc-fluent-node');
+  const apply = jest.fn();
+  motion.resize(apply);
+  expect(apply).toHaveBeenCalledTimes(1);
+  expect(effects).toHaveLength(0);
+  motion.dispose();
+});
+
+test('releases temporary geometry when native rendering fails during a content update', () => {
+  const { target, motion } = fixture();
+  const error = new Error('Native renderer failed');
+  expect(() =>
+    motion.resize(() => {
+      throw error;
+    }),
+  ).toThrow(error);
+  expect(target.style.height).toBe('200px');
+  expect(target.style.overflow).toBe('visible');
+  expect(target.hasAttribute('data-sc-disclosing')).toBe(false);
+  motion.dispose();
+});

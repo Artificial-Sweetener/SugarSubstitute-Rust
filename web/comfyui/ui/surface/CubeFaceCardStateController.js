@@ -46,6 +46,22 @@ export function setCubeFaceNodeEnabled(state, node, enabled) {
     };
     node.mode = enabled && decision.visible ? activeMode : BYPASS_MODE;
 }
+/** Copy a linked node's execution choice while preserving this face's independent reveal state. */
+export function setCubeFaceNodeExecutionMode(state, node, mode) {
+    if (!Number.isInteger(mode) || mode < 0)
+        throw new RangeError('Invalid native node execution mode.');
+    const nodeId = String(node.id ?? '');
+    const current = state.cards[nodeId];
+    const decision = resolveCubeFaceRevealDecision(node, current);
+    const activeMode = mode === BYPASS_MODE ? resolveActiveMode(node, current?.activeMode) : mode;
+    state.cards[nodeId] = {
+        authoredBypass: decision.authoredBypass,
+        revealed: decision.revealed,
+        enabledOverride: mode !== BYPASS_MODE,
+        activeMode,
+    };
+    node.mode = mode !== BYPASS_MODE && decision.visible ? activeMode : BYPASS_MODE;
+}
 /** Retain the last executable mode while a reveal or activation policy bypasses the node. */
 function resolveActiveMode(node, persistedMode) {
     const currentMode = finiteNodeMode(node.mode);

@@ -35,3 +35,22 @@ test('does not rewrite unchanged owned style properties after observing itself',
   expect(setProperty).toHaveBeenCalledTimes(2);
   positioner.dispose();
 });
+
+test('does not rediscover chrome when a widget or popup changes', async () => {
+  document.body.replaceChildren();
+  const root = document.createElement('aside');
+  document.body.append(root);
+  const positioner = new CubeEditorHudPositioner(document, root);
+  await Promise.resolve();
+  await Promise.resolve();
+  const sync = jest.spyOn(positioner, 'sync');
+  const popup = document.createElement('div');
+  popup.setAttribute('role', 'listbox');
+  document.body.append(popup);
+  popup.style.height = '100px';
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(sync).not.toHaveBeenCalled();
+  positioner.dispose();
+  jest.restoreAllMocks();
+});

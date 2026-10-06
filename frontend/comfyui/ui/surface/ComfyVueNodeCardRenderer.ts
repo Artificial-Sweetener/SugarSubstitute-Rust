@@ -15,6 +15,8 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Mount Comfy's real Nodes 2.0 component as a Cube-face sub-card. */
 
+import { scopeNativeVueMountContext } from './NativeVueMountContext.js';
+import { isNativeWidgetPresented } from './NativeWidgetPresentation.js';
 import { isRecord } from '../types/common.js';
 import type { UnknownRecord } from '../types/common.js';
 import type { ComfyNode } from '../types/graph.js';
@@ -22,12 +24,15 @@ import type { ComfyVueNodeRenderRuntime } from './ComfyRuntimeModuleLoader.js';
 import { findVueComponent, findVueComponents } from './ComfyVueTree.js';
 import {
   createCubeFaceNodeData,
+  cubeFaceNodeHasPresentedWidgets,
   cubeFaceNodeHasVisibleWidgets,
 } from './CubeFaceNodePresentationPolicy.js';
 import { findCubeFacePromptWidget } from './CubeFacePromptPolicy.js';
 import { CubePromptTextareaScope } from './CubePromptTextareaScope.js';
 import { ComfyVueNodeHeaderAccessoryHost } from './ComfyVueNodeHeaderAccessoryHost.js';
 import { NativeProjectedNodeCollapse } from './NativeProjectedNodeCollapse.js';
+import { CardDisclosureMotion } from './motion/CardDisclosureMotion.js';
+import { NativeCardContentDisclosure } from './NativeCardContentDisclosure.js';
 import { NativeProjectedAdvancedInputs } from './NativeProjectedAdvancedInputs.js';
 import { NativeProjectedNodeScrollBoundary } from './NativeProjectedNodeScrollBoundary.js';
 import { NATIVE_NODE_CARD_DISPOSE_EVENT } from './NativeNodeCardRenderer.js';
@@ -66,11 +71,14 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
     options: NativeNodeCardMountOptions = {},
   ): NativeNodeCardMount {
     let disposed = false;
+    const scopedContext = scopeNativeVueMountContext(this.#appContext);
     const headerAccessoryHost = options.headerAccessory
       ? new ComfyVueNodeHeaderAccessoryHost(options.headerAccessory)
       : null;
     const promptTextareaScope = new CubePromptTextareaScope(target);
     const scrollBoundary = new NativeProjectedNodeScrollBoundary();
+    const disclosureMotion = new CardDisclosureMotion(target);
+    const contentDisclosure = new NativeCardContentDisclosure(target, disclosureMotion);
     const observer = new MutationObserver(() => {
       if (!disposed) {
         this.#applyPresentation(
@@ -91,6 +99,7 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
         this.#runtime.extractVueNodeData(node),
         node,
         renderCard,
+        options.allowCollapse,
       );
       for (const source of options.widgetSources ?? []) {
         const ownerData = createCubeFaceNodeData(
@@ -106,33 +115,57 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
           nodeData.widgets.push({ ...widget, name: source.targetName });
         }
       }
-      // Comfy snapshots advanced footer state at setup instead of watching native node changes.
-      const vnodeValue = this.#runtime.h(this.#component, {
-        nodeData,
-        key: node.showAdvanced === true,
-      });
-      if (!isRecord(vnodeValue)) {
-        throw new TypeError('Comfy native renderer returned an invalid VNode.');
-      }
-      vnodeValue.appContext = this.#appContext;
-      this.#runtime.render(vnodeValue, target);
-      target.classList.add('sugarcubes-native-node-card');
-      target.dataset.cubeFaceNative = 'nodes-2';
-      this.#applyPresentation(
-        target,
-        node,
-        headerAccessoryHost,
-        promptTextareaScope,
-        collapseHost,
-        advancedInputsHost,
-        scrollBoundary,
-        options,
+      // Promoted editor controls can be absent from Comfy's extracted Vue widget list.
+      const widgets = [nodeData.widgets, nodeData.sugarcubesEditorWidgets].flatMap(
+        (value: unknown) => (Array.isArray(value) ? value : []),
+      );
+      contentDisclosure.reconcile(
+        [
+          ...new Set(
+            widgets.flatMap((widget: unknown) =>
+              isRecord(widget) && typeof widget.name === 'string' ? [widget.name] : [],
+            ),
+          ),
+        ].sort(),
+        () => {
+          // Comfy snapshots advanced footer state at setup instead of watching native node changes.
+          const vnodeValue = this.#runtime.h(this.#component, {
+            nodeData,
+            key: node.showAdvanced === true,
+          });
+          if (!isRecord(vnodeValue)) {
+            throw new TypeError('Comfy native renderer returned an invalid VNode.');
+          }
+          vnodeValue.appContext = scopedContext;
+          this.#runtime.render(vnodeValue, target);
+          target.classList.add('sugarcubes-native-node-card');
+          target.dataset.cubeFaceNative = 'nodes-2';
+          this.#applyPresentation(
+            target,
+            node,
+            headerAccessoryHost,
+            promptTextareaScope,
+            collapseHost,
+            advancedInputsHost,
+            scrollBoundary,
+            options,
+          );
+        },
       );
     };
-    const collapseHost = new NativeProjectedNodeCollapse(target, node, renderCard);
+    const collapseHost = new NativeProjectedNodeCollapse(
+      target,
+      node,
+      renderCard,
+      disclosureMotion,
+    );
     const advancedInputsHost = new NativeProjectedAdvancedInputs(target, node, renderCard);
     renderCard();
-    const releaseNativeRefresh = subscribeNativeNodeCardRefresh(target.ownerDocument, renderCard);
+    const releaseNativeRefresh = subscribeNativeNodeCardRefresh(
+      target.ownerDocument,
+      [node, ...(options.widgetSources ?? []).map((source) => source.node)],
+      renderCard,
+    );
     observer.observe(target, { childList: true, subtree: true });
 
     const mount: NativeNodeCardMount = {
@@ -145,6 +178,7 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
         target.querySelector('.lg-node')?.dispatchEvent(new Event(NATIVE_NODE_CARD_DISPOSE_EVENT));
         promptTextareaScope.dispose();
         collapseHost.dispose();
+        disclosureMotion.dispose();
         advancedInputsHost.dispose();
         scrollBoundary.dispose();
         headerAccessoryHost?.dispose();
@@ -173,6 +207,13 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
     options: NativeNodeCardMountOptions,
   ): void {
     const nativeRoot = target.querySelector<HTMLElement>('.lg-node');
+    const forwardedPresented =
+      options.widgetSources?.some((source) =>
+        source.node.widgets?.some(
+          (widget) => widget.name === source.name && isNativeWidgetPresented(widget),
+        ),
+      ) ?? false;
+    const hasPresented = cubeFaceNodeHasPresentedWidgets(node) || forwardedPresented;
     if (nativeRoot) {
       if (options.presentationGeometry) {
         // Comfy's shared ResizeObserver keys canonical geometry by these attributes.
@@ -189,7 +230,7 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
       }
       collapseHost.reconcile(
         nativeRoot,
-        (options.widgetSources?.length ?? 0) > 0 ? true : undefined,
+        options.allowCollapse === false ? false : forwardedPresented ? true : undefined,
       );
       if (node.isSubgraphNode?.()) {
         hideNativeSubgraphIcon(nativeRoot);
@@ -211,7 +252,14 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
       advancedInputsHost.reconcile(footerRoot);
       if (!footerRoot.hidden) this.#isolateInteractiveRoot(footerRoot);
     }
-    if (nativeRoot && !options.preserveNativeBody) reconcileNativeBody(nativeRoot, node);
+    if (
+      nativeRoot &&
+      (!options.preserveNativeBody ||
+        cubeFaceNodeHasVisibleWidgets(node) ||
+        (options.widgetSources?.length ?? 0) > 0 ||
+        nativeRoot.dataset.cubeFaceBody)
+    )
+      reconcileNativeBody(nativeRoot, hasPresented);
     promptTextareaScope.reconcile(findCubeFacePromptWidget(node) !== null);
 
     const widgetsVNode = findVueComponent(targetRecord._vnode, 'NodeWidgets');
@@ -250,10 +298,10 @@ function annotateNativeBypassBadge(vnode: unknown, nativeRoot: HTMLElement | nul
 }
 
 /** Remove the native body when Cube-face policy leaves only the title row. */
-function reconcileNativeBody(nativeRoot: HTMLElement, node: ComfyNode): void {
+function reconcileNativeBody(nativeRoot: HTMLElement, hasPresented: boolean): void {
   const body = nativeRoot.querySelector<HTMLElement>('[data-testid^="node-body-"]');
   if (!body) return;
-  const headerOnly = !cubeFaceNodeHasVisibleWidgets(node);
+  const headerOnly = !hasPresented;
   const wasHeaderOnly = nativeRoot.dataset.cubeFaceBody === 'header-only';
   if (headerOnly) {
     nativeRoot.dataset.cubeFaceBody = 'header-only';

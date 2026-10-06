@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own reversible model-picker mounts independently of theme and layout preferences. */
 import { isRecord } from '../types/common.js';
+import { HostSurfaceObserver } from '../core/HostSurfaceObserver.js';
 import { createComfyRendererModeChangeSource, resolveComfyRendererMode, } from '../core/ComfyRendererMode.js';
 import { ModelPickerAppearance } from './ModelPickerAppearance.js';
 import { readComfyModelFields } from './ComfyModelFieldAdapter.js';
@@ -35,7 +36,7 @@ export class ModelPickerHost {
     #discovery;
     #page;
     #appearance;
-    #observer;
+    #observer = null;
     #popups = new Set();
     #mounts = new Map();
     #dirty = new Set();
@@ -69,30 +70,6 @@ export class ModelPickerHost {
             })
             : null;
         this.#appearance = new ModelPickerAppearance(options.document, options.app);
-        this.#observer = new MutationObserver((records) => {
-            if (!this.#active)
-                return;
-            for (const record of records) {
-                if (record.target instanceof HTMLElement &&
-                    !record.target.closest('.sc-model-mount, .sc-model-popup, [data-sc-floating-surface]'))
-                    this.#queue(record.target);
-                for (const added of record.addedNodes)
-                    if (added instanceof HTMLElement) {
-                        if (added.matches('.sc-model-popup')) {
-                            this.#popups.add(added);
-                            this.#appearance.track(added);
-                        }
-                        if (!added.closest('.sc-model-mount, .sc-model-popup, [data-sc-floating-surface]'))
-                            this.#queue(added);
-                    }
-                for (const popup of this.#popups)
-                    if (!popup.isConnected) {
-                        this.#appearance.release(popup);
-                        this.#popups.delete(popup);
-                    }
-            }
-            this.#schedule();
-        });
     }
     /** Register the independent Nodes 2.0 preference and owned lifecycle subscriptions. */
     setup() {
@@ -113,11 +90,29 @@ export class ModelPickerHost {
             tooltip: 'Browse models with searchable image-backed fields in Nodes 2.0.',
             onChange: (value) => this.setEnabled(value === true),
         });
-        this.#observer.observe(this.#options.document.body, {
-            childList: true,
-            subtree: true,
-            attributes: true,
-            attributeFilter: ['aria-expanded'],
+        this.#observer = new HostSurfaceObserver(this.#options.document.body, '.lg-node,.sc-model-popup', (changes) => {
+            if (!this.#active)
+                return;
+            for (const { element, kind } of changes) {
+                if (element.matches('.sc-model-popup')) {
+                    if (kind === 'removed') {
+                        this.#appearance.release(element);
+                        this.#popups.delete(element);
+                    }
+                    else {
+                        this.#popups.add(element);
+                        this.#appearance.track(element);
+                    }
+                }
+                else if (!element.closest('.sc-model-mount,[data-sc-floating-surface]'))
+                    this.#dirty.add(element);
+            }
+            if (this.#dirty.size)
+                this.#schedule();
+        }, {
+            content: true,
+            attributes: ['aria-expanded'],
+            exclude: '.sc-model-mount,[data-sc-floating-surface]',
         });
         this.#options.document.addEventListener('focusout', this.#nativeFocusOut);
         this.#unsubscribe = createComfyRendererModeChangeSource(this.#options.app).subscribe(() => this.#reconcile());
@@ -143,7 +138,7 @@ export class ModelPickerHost {
         this.#disposed = true;
         this.#page?.dispose();
         this.#deactivate();
-        this.#observer.disconnect();
+        this.#observer?.disconnect();
         this.#appearance.dispose();
         this.#unsubscribe?.();
         this.#options.document.removeEventListener('focusout', this.#nativeFocusOut);

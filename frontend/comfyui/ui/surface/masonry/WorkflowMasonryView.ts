@@ -166,12 +166,16 @@ export class WorkflowMasonryView {
         options,
       );
     const cells = new Map([...this.#views.values()].flatMap((view) => [...view.cells]));
-    for (const card of measure().placements) {
+    const initial = measure();
+    let widthChanged = false;
+    for (const card of initial.placements) {
       const cell = cells.get(card.id);
-      if (cell && cell.style.width !== `${String(card.width)}px`)
+      if (cell && cell.style.width !== `${String(card.width)}px`) {
         cell.style.width = `${String(card.width)}px`;
+        widthChanged = true;
+      }
     }
-    const result = measure();
+    const result = widthChanged ? measure() : initial;
     for (const section of result.sections) {
       const header = this.#views.get(section.id)?.header;
       if (header) {

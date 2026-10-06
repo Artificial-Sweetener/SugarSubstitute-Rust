@@ -121,6 +121,31 @@ test('ignores stale menu entries without creating empty history changes', () => 
   expect(history.afterChange).not.toHaveBeenCalled();
 });
 
+test('copies linked execution choices through persisted card state while preserving follower reveal', () => {
+  const cube = cubeNode();
+  const nodes = new CubeNodeCatalog();
+  nodes.add(cube);
+  const service = new CubeFaceCardStateService({ nodes, history: {} });
+  service.setExecutionMode(cube, 'patch', 2);
+  expect(cube.subgraph._nodes[0]?.mode).toBe(4);
+  expect(readCubeFaceCardState(cube).cards.patch).toMatchObject({
+    revealed: false,
+    enabledOverride: true,
+    activeMode: 2,
+  });
+  service.setRevealed(cube, 'patch', true);
+  expect(cube.subgraph._nodes[0]?.mode).toBe(2);
+  service.setExecutionMode(cube, 'patch', 4);
+  expect(readCubeFaceCardState(cube).cards.patch).toMatchObject({
+    revealed: true,
+    enabledOverride: false,
+    activeMode: 2,
+  });
+  service.setExecutionMode(cube, 'patch', 0);
+  expect(cube.subgraph._nodes[0]?.mode).toBe(0);
+  expect(readCubeFaceCardState(cube).cards.patch?.revealed).toBe(true);
+});
+
 /** Build one persisted Cube with a bypass-authored optional card. */
 function cubeNode(): CubeNode {
   return {

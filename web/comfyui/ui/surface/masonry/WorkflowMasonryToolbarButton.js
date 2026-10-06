@@ -14,11 +14,13 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own the icon-only view affordance and its position in Comfy's action bar. */
+import { HostSurfaceObserver } from '../../core/HostSurfaceObserver.js';
+/** Retain the native toolbar affordance across identified action-bar mounts. */
 export class WorkflowMasonryToolbarButton {
     #document;
     #button;
     #icon;
-    #presence;
+    #presence = null;
     #toggle;
     #disposed = false;
     /** Create one accessible button and reuse it across native toolbar replacements. */
@@ -34,14 +36,13 @@ export class WorkflowMasonryToolbarButton {
         this.#icon.setAttribute('aria-hidden', 'true');
         this.#button.append(this.#icon);
         this.#button.addEventListener('click', toggle);
-        this.#presence = new MutationObserver(() => this.#attach());
         this.update(false, false);
     }
     /** Observe native toolbar mounts after Comfy setup. */
     setup() {
         if (this.#disposed)
             return;
-        this.#presence.observe(this.#document.body, { childList: true, subtree: true });
+        this.#presence = new HostSurfaceObserver(this.#document.body, '.actionbar-container', () => this.#attach(), { content: true });
         this.#attach();
     }
     /** Show the destination view while exposing current state to assistive technology. */
@@ -60,7 +61,7 @@ export class WorkflowMasonryToolbarButton {
     /** Release the toolbar observer and click handler with the owning host. */
     dispose() {
         this.#disposed = true;
-        this.#presence.disconnect();
+        this.#presence?.disconnect();
         this.#button.removeEventListener('click', this.#toggle);
         this.#button.remove();
     }

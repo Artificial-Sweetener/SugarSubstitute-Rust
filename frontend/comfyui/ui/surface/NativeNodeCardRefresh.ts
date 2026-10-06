@@ -14,18 +14,38 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Carry Comfy's completed native-choice refresh to still-mounted projected cards. */
-const eventName = 'sugarcubes-native-node-cards-refresh';
+import type { ComfyNode } from '../types/graph.js';
+import { isRecord } from '../types/common.js';
+
+const eventName = 'sugarcubes-native-node-card-change';
+
+export type NativeNodeCardChange =
+  | { readonly kind: 'nodes'; readonly nodes: readonly ComfyNode[] }
+  | { readonly kind: 'reset'; readonly reason: 'native-choices' };
 
 /** Refresh copied Vue field data without replacing a card's node or interaction identity. */
-export function refreshNativeNodeCards(document: Document): void {
-  document.dispatchEvent(new Event(eventName));
+export function refreshNativeNodeCards(document: Document, change: NativeNodeCardChange): void {
+  document.dispatchEvent(new CustomEvent<NativeNodeCardChange>(eventName, { detail: change }));
 }
 
 /** Scope native-data invalidation to the projected card's exact mount lifetime. */
 export function subscribeNativeNodeCardRefresh(
   document: Document,
+  nodes: readonly ComfyNode[],
   refresh: () => void,
 ): () => void {
-  document.addEventListener(eventName, refresh);
-  return () => document.removeEventListener(eventName, refresh);
+  const listener = (event: Event): void => {
+    if (!(event instanceof CustomEvent)) return;
+    const change: unknown = event.detail;
+    if (!isRecord(change)) return;
+    if (change.kind === 'reset' && change.reason === 'native-choices') refresh();
+    else if (
+      change.kind === 'nodes' &&
+      Array.isArray(change.nodes) &&
+      change.nodes.some((node: unknown) => nodes.some((owner) => owner === node))
+    )
+      refresh();
+  };
+  document.addEventListener(eventName, listener);
+  return () => document.removeEventListener(eventName, listener);
 }

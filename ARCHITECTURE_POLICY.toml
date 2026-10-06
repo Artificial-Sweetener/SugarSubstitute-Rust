@@ -1,5 +1,29 @@
 schema = 1
 
+[invalidation]
+document_observer_owners = [
+  "frontend/comfyui/ui/core/HostSurfaceObserver.ts",
+  "frontend/comfyui/ui/surface/ComfyRendererPresenceObserver.ts",
+  "frontend/comfyui/ui/surface/appearance/FluentOverlayScrollbarHost.ts",
+]
+mutation_observer_owners = [
+  "frontend/comfyui/ui/core/HostSurfaceObserver.ts",
+  "frontend/comfyui/ui/dialogs/ModalAppearance.ts",
+  "frontend/comfyui/ui/picker/ComfyCubePickerResultPresenter.ts",
+  "frontend/comfyui/ui/relations/infrastructure/NativeLinkChoiceLabels.ts",
+  "frontend/comfyui/ui/relations/presentation/GlobalOverrideToolbar.ts",
+  "frontend/comfyui/ui/surface/ComfyRendererPresenceObserver.ts",
+  "frontend/comfyui/ui/surface/ComfyVueCubeColorScope.ts",
+  "frontend/comfyui/ui/surface/ComfyVueCubeNodeHost.ts",
+  "frontend/comfyui/ui/surface/ComfyVueNodeCardRenderer.ts",
+  "frontend/comfyui/ui/surface/NativeChoiceRestrictions.ts",
+  "frontend/comfyui/ui/surface/NodeCardIconHost.ts",
+  "frontend/comfyui/ui/surface/appearance/FluentAppearanceHost.ts",
+  "frontend/comfyui/ui/surface/appearance/FluentOverlayScrollbarHost.ts",
+  "frontend/comfyui/ui/surface/appearance/NativeToggleRows.ts",
+  "frontend/comfyui/ui/model_library/ModelPickerAppearance.ts",
+]
+
 [structure]
 source_roots = [
   "__init__.py",
@@ -22,6 +46,27 @@ excluded_prefixes = [
 ]
 soft_lines = 350
 hard_lines = 500
+
+[[dependency]]
+name = "TYPESCRIPT_RELATION_DOMAIN"
+paths = ["frontend/comfyui/ui/relations/domain/*.ts"]
+forbidden_typescript_paths = [
+  "frontend/comfyui/ui/relations/application",
+  "frontend/comfyui/ui/relations/infrastructure",
+  "frontend/comfyui/ui/relations/presentation",
+  "frontend/comfyui/ui/surface",
+  "frontend/comfyui/ui/cube",
+]
+
+[[dependency]]
+name = "TYPESCRIPT_RELATION_APPLICATION"
+paths = ["frontend/comfyui/ui/relations/application/*.ts"]
+forbidden_typescript_paths = [
+  "frontend/comfyui/ui/relations/infrastructure",
+  "frontend/comfyui/ui/relations/presentation",
+  "frontend/comfyui/ui/surface",
+  "frontend/comfyui/ui/cube",
+]
 
 [[dependency]]
 name = "TYPESCRIPT_EDITOR_ACTION_DOMAIN"

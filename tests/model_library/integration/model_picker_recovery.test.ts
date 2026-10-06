@@ -86,6 +86,26 @@ function fixture(paired = false) {
   return { native, app, host, load, values, events, warn, feedback, stop };
 }
 
+test('unrelated popup search and closure preserve the mounted model picker without card discovery', async () => {
+  const proof = fixture();
+  proof.load.mockResolvedValue(proof.native.snapshot);
+  proof.host.setup();
+  await jest.advanceTimersByTimeAsync(40);
+  const mount = proof.native.card.querySelector('.sc-model-mount');
+  const discovery = jest.spyOn(proof.native.card, 'querySelectorAll');
+  const popup = document.createElement('div');
+  popup.setAttribute('role', 'listbox');
+  const search = document.createElement('input');
+  popup.append(search);
+  document.body.append(popup);
+  await jest.advanceTimersByTimeAsync(20);
+  search.dispatchEvent(new Event('input', { bubbles: true }));
+  popup.remove();
+  await jest.advanceTimersByTimeAsync(20);
+  expect(discovery).not.toHaveBeenCalled();
+  expect(proof.native.card.querySelector('.sc-model-mount')).toBe(mount);
+});
+
 test('contributes one Cube scope menu for paired checkpoint and VAE fields', async () => {
   const proof = fixture(true);
   const subgraph = {

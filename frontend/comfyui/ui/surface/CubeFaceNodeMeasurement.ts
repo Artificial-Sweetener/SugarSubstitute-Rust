@@ -18,10 +18,10 @@
 import { isRecord } from '../types/common.js';
 import type { ComfyNode, ComfyWidget } from '../types/graph.js';
 import {
-  cubeFaceNodeHasVisibleWidgets,
+  cubeFaceNodeHasPresentedWidgets,
   cubeFaceNodeWidgetStartY,
 } from './CubeFaceNodePresentationPolicy.js';
-import { cubeFaceVisibleWidgets } from './CubeFaceWidgetPolicy.js';
+import { cubeFacePresentedWidgets } from './CubeFaceWidgetPolicy.js';
 import { cubePromptWidgetHeight } from './CubePromptWidgetHeightStore.js';
 
 const HEADER_ONLY_BODY_HEIGHT = 1;
@@ -38,13 +38,13 @@ interface MeasurableWidget extends ComfyWidget {
 /** Measure the native expanded widget body while excluding graph boundary rows. */
 export function measureCubeFaceNodeBodyHeight(node: ComfyNode): number {
   const nativePreviewHeight = hasNativePreviewMedia(node) ? positiveNumber(node.size?.[1]) : null;
-  if (!cubeFaceNodeHasVisibleWidgets(node)) {
+  if (!cubeFaceNodeHasPresentedWidgets(node)) {
     return nativePreviewHeight ?? HEADER_ONLY_BODY_HEIGHT;
   }
 
   const width = positiveNumber(node.size?.[0]) ?? 200;
   let widgetsHeight = cubeFaceNodeWidgetStartY(node);
-  for (const widget of cubeFaceVisibleWidgets(node)) {
+  for (const widget of cubeFacePresentedWidgets(node)) {
     widgetsHeight += measureWidgetAllocation(widget, node, width);
   }
 

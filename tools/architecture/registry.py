@@ -123,6 +123,7 @@ def load_policy(path: Path) -> ArchitecturePolicy:
         root,
         context=str(path),
         required=frozenset({"schema", "structure", "dependency"}),
+        optional=frozenset({"invalidation"}),
     )
     schema = _integer(root["schema"], "policy.schema")
     if schema != 1:
@@ -190,10 +191,38 @@ def load_policy(path: Path) -> ArchitecturePolicy:
     names = tuple(rule.name for rule in dependencies)
     if len(names) != len(set(names)):
         raise RegistryError("dependency rule names must be unique")
+    observer_owners: tuple[str, ...] = ()
+    document_owners: tuple[str, ...] = ()
+    if "invalidation" in root:
+        table = _mapping(root["invalidation"], "invalidation")
+        _keys(
+            table,
+            context="invalidation",
+            required=frozenset({"mutation_observer_owners"}),
+            optional=frozenset({"document_observer_owners"}),
+        )
+        observer_owners = _strings(
+            table["mutation_observer_owners"], "invalidation.mutation_observer_owners"
+        )
+        if len(set(observer_owners)) != len(observer_owners):
+            raise RegistryError("mutation observer owners must be unique")
+        if "document_observer_owners" in table:
+            document_owners = _strings(
+                table["document_observer_owners"],
+                "invalidation.document_observer_owners",
+            )
+            if len(set(document_owners)) != len(document_owners) or not set(
+                document_owners
+            ).issubset(observer_owners):
+                raise RegistryError(
+                    "document observer owners must be unique approved mutation observer owners"
+                )
     return ArchitecturePolicy(
         schema=schema,
         structure=structure,
         dependencies=tuple(dependencies),
+        mutation_observer_owners=observer_owners,
+        document_observer_owners=document_owners,
     )
 
 

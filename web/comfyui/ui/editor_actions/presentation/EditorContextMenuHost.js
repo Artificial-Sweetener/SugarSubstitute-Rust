@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own editor menu entry-point lifetimes while delegating values, policies and persistence. */
 import { ContextMenu } from '../../menus/ContextMenu.js';
+import { HostSurfaceObserver } from '../../core/HostSurfaceObserver.js';
 import { inferDimensionPairs } from '../domain/DimensionPolicy.js';
 import { readNativeEditorCard, projectedEditorCardMount, } from '../infrastructure/NativeEditorCardAdapter.js';
 import { SaveNodePresetDialog } from './SaveNodePresetDialog.js';
@@ -27,7 +28,7 @@ export class EditorContextMenuHost {
     #menu;
     #dialog;
     #cards = new Map();
-    #presence;
+    #presence = null;
     #dirty = new Set();
     #queued = false;
     #active = false;
@@ -37,26 +38,17 @@ export class EditorContextMenuHost {
         this.#options = options;
         this.#menu = new ContextMenu(options.document);
         this.#dialog = new SaveNodePresetDialog(options.document);
-        this.#presence = new MutationObserver((records) => {
-            for (const record of records) {
-                if (record.target instanceof Element &&
-                    record.target.closest('[data-sc-floating-surface], .sugarcubes-modal-overlay'))
-                    continue;
-                for (const node of record.addedNodes)
-                    if (node instanceof HTMLElement)
-                        this.#queue(node);
-                if (record.target instanceof HTMLElement && record.target.closest('.lg-node'))
-                    this.#queue(record.target);
-            }
-            this.#schedule();
-        });
     }
     /** Observe native card mounts and intercept dimension menus before embedded event isolation. */
     setup() {
         if (this.#active)
             return;
         this.#active = true;
-        this.#presence.observe(this.#options.document.body, { subtree: true, childList: true });
+        this.#presence = new HostSurfaceObserver(this.#options.document.body, '.lg-node', (changes) => {
+            for (const { element } of changes)
+                this.#dirty.add(element);
+            this.#schedule();
+        }, { content: true, exclude: '[data-sc-floating-surface],.sugarcubes-modal-overlay' });
         this.#options.document.addEventListener('contextmenu', this.#context, true);
         this.refresh();
     }
@@ -72,7 +64,7 @@ export class EditorContextMenuHost {
     /** Remove every owned listener, menu and modal on shutdown. */
     dispose() {
         this.#active = false;
-        this.#presence.disconnect();
+        this.#presence?.disconnect();
         this.#options.document.removeEventListener('contextmenu', this.#context, true);
         this.#menu.close();
         this.#dialog.close();

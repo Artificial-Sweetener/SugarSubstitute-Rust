@@ -23,9 +23,10 @@ import {
 import type { CubeSurfaceState } from './CubeSurfaceState.js';
 import type { NativeNodeWidgetSource } from './NativeNodeCardRenderer.js';
 import { resolveCubeCardWidgetSources } from './CubeCardWidgetSources.js';
-import { cubeFaceCardColumnSpan } from './CubeFacePromptPolicy.js';
+import { cubeFaceCardColumnSpan, findCubeFacePromptWidget } from './CubeFacePromptPolicy.js';
 
 export interface ProjectedNodeCard extends CubeFaceCardDecision {
+  prompt?: boolean;
   widgetSources?: readonly NativeNodeWidgetSource[];
 }
 
@@ -46,15 +47,15 @@ export function projectNodeCards(
     (card) => {
       const widgetSources = sources.get(card.node) ?? [];
       const exposed = new Set(widgetSources.map((source) => source.targetName));
+      const presentedNode = {
+        ...card.node,
+        inputs: (card.node.inputs ?? []).filter((input) => !exposed.has(input.widget?.name ?? '')),
+      };
       return {
         ...card,
         widgetSources,
-        columnSpan: cubeFaceCardColumnSpan({
-          ...card.node,
-          inputs: (card.node.inputs ?? []).filter(
-            (input) => !exposed.has(input.widget?.name ?? ''),
-          ),
-        }),
+        prompt: findCubeFacePromptWidget(presentedNode) !== null,
+        columnSpan: cubeFaceCardColumnSpan(presentedNode),
       };
     },
   );
