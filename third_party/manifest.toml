@@ -72,6 +72,43 @@ vendored_file = "frontend/static/icons/seed/subtract.svg"
 runtime_file = "web/icons/seed/subtract.svg"
 sha256 = "cb2825b8c04cf792c55bd9c0cd37a0a15d5bc9e708127195acb2d2bdae76b190"
 
+[[component.asset]]
+source_path = "assets/Arrow Circle Up Sparkle/SVG/ic_fluent_arrow_circle_up_sparkle_20_regular.svg"
+vendored_file = "frontend/static/icons/model/update.svg"
+runtime_file = "web/icons/model/update.svg"
+sha256 = "97f129c2939d54e04b46e573fbe7f290b36900b7fffdf45c547a57723c6b848a"
+
+
+[[component.asset]]
+source_path = "assets/Globe/SVG/ic_fluent_globe_20_regular.svg"
+vendored_file = "frontend/static/icons/model/globe.svg"
+runtime_file = "web/icons/model/globe.svg"
+sha256 = "cc981a685e7dfe6eb0b7a9234ed7b9d5f40a4df7a5b2476448dd0842451ea52c"
+
+[[component.asset]]
+source_path = "assets/Arrow Download/SVG/ic_fluent_arrow_download_20_regular.svg"
+vendored_file = "frontend/static/icons/model/download.svg"
+runtime_file = "web/icons/model/download.svg"
+sha256 = "003fde5a3b8a229c5a51dbe04bfb30f98b52e1d769d13c44e542b22123d5c1e1"
+
+[[component.asset]]
+source_path = "assets/Key/SVG/ic_fluent_key_20_regular.svg"
+vendored_file = "frontend/static/icons/model/key.svg"
+runtime_file = "web/icons/model/key.svg"
+sha256 = "7977d3963b316b2ad7cf397dc81de65ffeb8d7adc46fd210eb0b5114943f8deb"
+
+[[component.asset]]
+source_path = "assets/Eye/SVG/ic_fluent_eye_20_regular.svg"
+vendored_file = "frontend/static/icons/model/eye.svg"
+runtime_file = "web/icons/model/eye.svg"
+sha256 = "0dc2a3cd24b2bd3f85a85e349bad9b2851d15aac29ba3c0926312c3d2aee0b43"
+
+[[component.asset]]
+source_path = "assets/Eye Off/SVG/ic_fluent_eye_off_20_regular.svg"
+vendored_file = "frontend/static/icons/model/eye-off.svg"
+runtime_file = "web/icons/model/eye-off.svg"
+sha256 = "819b18033ecedc1f9dec830ba811925ce5276938c7d754a4989cdd631f06d87d"
+
 [[component]]
 name = "Microsoft Fluent UI Emoji"
 license = "MIT"
@@ -91,3 +128,400 @@ source_path = "assets/Locked/High Contrast/locked_high_contrast.svg"
 vendored_file = "frontend/static/icons/seed/locked.svg"
 runtime_file = "web/icons/seed/locked.svg"
 sha256 = "cc6f0a3d58ff3b86737ee78a158b29431f6c34a1bf720435f7aa4cd519f29401"
+
+[[component]]
+name = "SugarSubstitute model catalog and suggestions"
+license = "GPL-3.0-or-later"
+license_file = "third_party/licenses/sugarsubstitute.LICENSE.txt"
+source = "https://github.com/Artificial-Sweetener/SugarSubstitute"
+revision = "6adbbd75a1277b2e3cf02d7204b08733bd90b947"
+modifications = "Catalog, curated recommendations, suggestion semantics and secure credential flows adapted into strict typed SugarCubes owners and shared asynchronous adapters. Windows DPAPI persistence uses bounded decoding and atomic publication in Comfy's private system-user directory."
+
+[[component.implementation]]
+source_path = "substitute/application/model_metadata/model_catalog_provider.py"
+source_sha256 = "0bc71743631813d0b97297cf6018973a1b987b2639605452b10701c0d4ed16e9"
+adapted_paths = ["sugarcubes/model_library/domain/provider_metadata.py", "sugarcubes/model_library/application/provider_registry.py", "sugarcubes/model_library/application/enrichment_service.py", "sugarcubes/model_library/infrastructure/provider_link_codec.py", "sugarcubes/model_library/infrastructure/provider_metadata_codec.py", "sugarcubes/model_library/infrastructure/provider_metadata_store.py", "sugarcubes/model_library/infrastructure/provider_metadata_migration.py", "sugarcubes/model_library/infrastructure/catalog_row_projection.py"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/widgets/model_picker/model_picker_geometry.py"
+source_sha256 = "6a2d62b1cb8821d0725e0e5fb7bbf2bdee3a1daf793d70185ff340b7f2567915"
+adapted_paths = ["frontend/comfyui/ui/model_library/ModelPickerPlacement.ts", "frontend/comfyui/ui/model_library/vue/ModelPickerField.ts"]
+
+[[component.implementation]]
+source_path = "substitute/domain/civitai/preferences.py"
+source_sha256 = "13cda572f96f057015339956b2afe7886909e08f4cde8abb302f0f159597b253"
+adapted_paths = ["sugarcubes/model_library/domain/provider_preferences.py", "sugarcubes/model_library/application/provider_preferences.py", "sugarcubes/model_library/infrastructure/provider_preference_codec.py", "sugarcubes/model_library/infrastructure/provider_preference_store.py", "frontend/comfyui/ui/model_library/ModelProviderPreferences.ts", "frontend/comfyui/ui/model_library/ModelProviderSettings.ts"]
+
+[[component.implementation]]
+source_path = "substitute/application/recipes/model_load_resolution.py"
+source_sha256 = "3a71df5fc4878f81f57d3d761598cf5e2d4f6c10b63f74b19211fec1c48f7604"
+adapted_paths = ["sugarcubes/model_library/application/requested_artifacts.py", "sugarcubes/model_library/infrastructure/civitai_client.py"]
+
+[[component.implementation]]
+source_path = "substitute/application/recipes/model_download_resolution.py"
+source_sha256 = "848afe2e6a79e393e778f0fffa76680c7b5267b52efa7a901421a8b335d0cff4"
+adapted_paths = ["sugarcubes/model_library/application/provider_preferences.py", "sugarcubes/model_library/infrastructure/desktop_acquisitions.py"]
+
+[[component.implementation]]
+source_path = "sugarsubstitute_shared/model_acquisition/service.py"
+source_sha256 = "24585dff1d44e2d3f8eaed184c5855d4120f03e54ce56df2e3f82e1772128ce1"
+adapted_paths = ["sugarcubes/model_library/infrastructure/artifact_destinations.py", "sugarcubes/model_library/infrastructure/artifact_files.py", "sugarcubes/model_library/infrastructure/artifact_downloads.py"]
+
+[[component.implementation]]
+source_path = "substitute/infrastructure/model_suggestions/openmodeldb_catalog.py"
+source_sha256 = "63fbd25924c7eb651cb5d65c949ffc79dab2a3e1b640ee0e2cce59d9e30e8bc7"
+adapted_paths = ["sugarcubes/model_library/domain/openmodeldb_catalog.py", "sugarcubes/model_library/infrastructure/openmodeldb_codec.py", "sugarcubes/model_library/infrastructure/openmodeldb_client.py", "sugarcubes/model_library/infrastructure/provider_catalog_cache.py"]
+
+[[component.implementation]]
+source_path = "substitute/infrastructure/model_suggestions/openmodeldb_provider.py"
+source_sha256 = "5599153cb273ee49b170e692f58e365b56c7bd516a74b6bbcc48a69cc43c9010"
+adapted_paths = ["sugarcubes/model_library/application/openmodeldb_suggestions.py", "sugarcubes/model_library/domain/artifact_transport.py"]
+
+[[component.implementation]]
+source_path = "substitute/application/model_suggestions/upscaler_catalog.py"
+source_sha256 = "5d62d70d8e8292eaa3fd1ccc0baaf2fb6e62b8dba25d57d9915f91e9e31c3c92"
+adapted_paths = ["sugarcubes/model_library/application/openmodeldb_suggestions.py"]
+
+[[component.implementation]]
+source_path = "substitute/domain/model_suggestions/models.py"
+source_sha256 = "a451b35361ed2892beae79b8043113db6bf235c810ca940711935b32d594498b"
+adapted_paths = ["sugarcubes/model_library/domain/model_suggestions.py"]
+
+[[component.implementation]]
+source_path = "sugarsubstitute_shared/model_discovery/civitai_client.py"
+source_sha256 = "51b693498a7d78161cf241bf923121052915aef4e59bd8758d97b605fe1a1b63"
+adapted_paths = ["sugarcubes/model_library/domain/artifact_eligibility.py", "sugarcubes/model_library/infrastructure/civitai_release_codec.py", "sugarcubes/model_library/infrastructure/civitai_artifact_codec.py"]
+
+[[component.implementation]]
+source_path = "sugarsubstitute_shared/model_updates/civitai_gateway.py"
+source_sha256 = "7d8a43522c369c52a551f69459109abdb42b694f084a3c11b21b8a11685167aa"
+adapted_paths = ["sugarcubes/model_library/domain/artifact_eligibility.py", "sugarcubes/model_library/domain/release_family.py"]
+
+[[component.implementation]]
+source_path = "substitute/infrastructure/model_suggestions/civitai_provider.py"
+source_sha256 = "6bb3d62fcf9fc20b1986666ee8c0166583c49226e5a3ae3873635a7256a91897"
+adapted_paths = ["sugarcubes/model_library/domain/artifact_eligibility.py", "sugarcubes/model_library/application/civitai_suggestions.py", "sugarcubes/model_library/infrastructure/civitai_upscaler_discovery.py"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/widgets/model_picker/model_picker_completion.py"
+source_sha256 = "cd2fdd568f4174e6e023533dc20983f7a661d2c85930a96759e7e8f69be5a1dd"
+adapted_paths = ["frontend/comfyui/ui/model_library/ModelPickerCompletion.ts"]
+
+  [[component.implementation]]
+  source_path = "substitute/application/model_suggestions/service.py"
+  source_sha256 = "a860a4888d9db09aeedaadbe2613a64de098664e63a873e6a457dbaa49a19740"
+  adapted_paths = ["sugarcubes/model_library/application/model_suggestion_engine.py", "sugarcubes/model_library/application/model_suggestion_service.py"]
+
+[[component.implementation]]
+source_path = "substitute/domain/model_recommendations/catalog.py"
+source_sha256 = "270f901cb9d337ecef95eb422f24f308455378fff148a90a753ebcfe0ad6d10a"
+adapted_paths = ["sugarcubes/model_library/domain/model_families.py"]
+
+[[component.implementation]]
+source_path = "substitute/infrastructure/model_recommendations/civitai_gateway.py"
+source_sha256 = "c41b042759f0142db97c0316593542b4cbb4e62c2132c8abce862896cf23f91e"
+adapted_paths = ["sugarcubes/model_library/infrastructure/civitai_family_discovery.py", "sugarcubes/model_library/infrastructure/civitai_discovery_codec.py"]
+
+[[component.implementation]]
+source_path = "substitute/infrastructure/model_recommendations/civitai_payload_parser.py"
+source_sha256 = "963d2a93aedd78c4c0a4a6b40f44f7921b3d46713cf3dfee6b1a19613db55f3f"
+adapted_paths = ["sugarcubes/model_library/infrastructure/civitai_discovery_codec.py", "sugarcubes/model_library/infrastructure/civitai_image_codec.py", "sugarcubes/model_library/infrastructure/civitai_artifact_codec.py"]
+
+[[component.implementation]]
+source_path = "substitute/domain/model_metadata/thumbnail_policy.py"
+source_sha256 = "fe89b2a8590230d09df8e350139402123f2da450e722a040170d93fce8b63e8f"
+adapted_paths = ["sugarcubes/model_library/domain/thumbnail_safety.py", "sugarcubes/model_library/infrastructure/civitai_image_codec.py"]
+
+[[component.implementation]]
+source_path = "substitute/infrastructure/persistence/model_metadata_repository.py"
+source_sha256 = "2acbc78868642d7cba70ffc1b6bf203d6a09967e8ae7c5c6746d81571517ae48"
+adapted_paths = ["sugarcubes/model_library/application/enrichment_freshness.py", "sugarcubes/model_library/infrastructure/thumbnail_preparer.py", "sugarcubes/model_library/infrastructure/provider_previews.py"]
+
+[[component.implementation]]
+source_path = "substitute/infrastructure/persistence/sqlite_model_metadata_store.py"
+source_sha256 = "ae2c68f59b02b69580e28ee1a15718e9325d30facdadf1616d8938dc1c9ddc79"
+adapted_paths = ["sugarcubes/model_library/domain/enrichment_freshness.py", "sugarcubes/model_library/application/enrichment_freshness.py", "sugarcubes/model_library/infrastructure/enrichment_cache.py"]
+
+[[component.implementation]]
+source_path = "substitute/infrastructure/persistence/sqlite_model_thumbnail_asset_store.py"
+source_sha256 = "8f8e0f79e415c1bbcb4345617d1ee195cf33466e5df44768718f3e72c2ead1bb"
+adapted_paths = ["sugarcubes/model_library/domain/thumbnail_sources.py", "sugarcubes/model_library/infrastructure/thumbnail_sources.py", "sugarcubes/model_library/infrastructure/thumbnail_assets.py", "sugarcubes/model_library/infrastructure/thumbnail_preparer.py", "sugarcubes/model_library/infrastructure/provider_previews.py", "sugarcubes/model_library/infrastructure/detector_assets.py", "sugarcubes/model_library/infrastructure/stored_thumbnail_ownership.py"]
+
+[[component.implementation]]
+source_path = "substitute/application/civitai/cache_service.py"
+source_sha256 = "f9a77e7e08022e6a0cabcdb0fb8460f0f70c4ddcb137cb0be9bd89ab2dbdca1c"
+adapted_paths = ["sugarcubes/model_library/domain/provider_cache.py", "sugarcubes/model_library/application/provider_cache_service.py", "sugarcubes/model_library/infrastructure/provider_cache_store.py", "sugarcubes/model_library/infrastructure/provider_cache_jobs.py", "sugarcubes/model_library/infrastructure/enrichment_ownership_codec.py", "sugarcubes/model_library/infrastructure/enrichment_attempts.py", "sugarcubes/model_library/infrastructure/enrichment_worker.py", "sugarcubes/model_library/cache_api.py", "frontend/comfyui/ui/model_library/ModelProviderCacheClient.ts"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/settings/civitai_page.py"
+source_sha256 = "10c451e01ae71025d484b88053e4929214650b65b8b00b0e3b7ec12ed6a1e8af"
+adapted_paths = ["frontend/comfyui/ui/model_library/ModelProviderSettings.ts", "frontend/comfyui/ui/model_library/ModelProviderCacheSettings.ts"]
+
+[[component.implementation]]
+source_path = "substitute/application/model_metadata/metadata_enrichment.py"
+source_sha256 = "5d222762e9a3d420f28d06bf101ba8db9562fee6a22c8fc123e7a18849cc2076"
+adapted_paths = ["sugarcubes/model_library/application/enrichment_service.py", "sugarcubes/model_library/application/automatic_enrichment.py", "sugarcubes/model_library/application/blocking_model_work.py", "sugarcubes/model_library/application/metadata_activity.py", "sugarcubes/model_library/application/coordinated_previews.py", "sugarcubes/model_library/infrastructure/catalog_store.py"]
+
+[[component.implementation]]
+source_path = "substitute/domain/civitai/preferences.py"
+source_sha256 = "13cda572f96f057015339956b2afe7886909e08f4cde8abb302f0f159597b253"
+adapted_paths = ["sugarcubes/model_library/domain/thumbnail_safety.py"]
+
+[[component.implementation]]
+source_path = "substitute/application/civitai/credential_service.py"
+source_sha256 = "c24de147d1ddc43f74eb9a3ca756f7e9f0f8941ee4afe2e74f2d103b3a16f345"
+adapted_paths = ["sugarcubes/model_library/application/credential_service.py", "sugarcubes/model_library/infrastructure/civitai_credential_validator.py"]
+
+[[component.implementation]]
+source_path = "substitute/application/ports/civitai_credential_store.py"
+source_sha256 = "6cd399b093ee52e47fe50654ba0d8390e6567fbb74a6fdbbc6bde500421f9cb0"
+adapted_paths = ["sugarcubes/model_library/application/credential_service.py"]
+
+[[component.implementation]]
+source_path = "substitute/infrastructure/security/windows_civitai_credential_store.py"
+source_sha256 = "1ff4c156d0f8a1e5b75d5eea6715b906535d836d0f43840acd13c9418e34eb53"
+adapted_paths = ["sugarcubes/model_library/infrastructure/civitai_credential_store.py", "sugarcubes/model_library/infrastructure/windows_data_protection.py"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/editor/panel/model_choice_snapshot_values.py"
+source_sha256 = "3a248e2d1aa1fc5942f7167a5b8973efbbab9a1a358cc634a51c05391d7203ba"
+adapted_paths = ["sugarcubes/model_library/domain/model_families.py"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/shell/empty_model_picker_discovery_controller.py"
+source_sha256 = "4bbf16db7e319f4e2e42f3a44a40a32ddfc641c864f7dfce301200798caa3340"
+adapted_paths = ["sugarcubes/model_library/discovery_api.py", "sugarcubes/model_library/infrastructure/discovery_requests.py", "sugarcubes/model_library/infrastructure/discovery_payloads.py", "sugarcubes/model_library/infrastructure/discovery_plans.py"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/model_discovery/discovery_modal.py"
+source_sha256 = "adb793aa643328e1c182b19840f27a6c7243e50e8accb32137691aa446c6db5d"
+adapted_paths = ["frontend/comfyui/ui/model_library/ModelDiscoveryDialog.ts", "frontend/comfyui/ui/model_library/ModelDiscoveryStyles.ts", "frontend/comfyui/ui/model_library/ModelEmptyPickerDiscovery.ts"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/model_discovery/discovery_card.py"
+source_sha256 = "ab54cf16efa8bbe2925178a2912f5242eb3dac22fb97cf4e6833a4d0125a1901"
+adapted_paths = ["frontend/comfyui/ui/model_library/vue/ModelDiscoveryGallery.ts", "frontend/comfyui/ui/model_library/ModelDiscoveryView.ts", "frontend/comfyui/ui/model_library/vue/ModelProviderIcon.ts", "frontend/comfyui/ui/model_library/vue/ModelContextMenuView.ts"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/model_discovery/credential_prompt.py"
+source_sha256 = "ea2d0703dd148bea762c05e92be3cb96c4f4875f3168e0cc84e7cfb11d869cde"
+adapted_paths = ["frontend/comfyui/ui/model_library/vue/CivitaiCredentialLayer.ts", "frontend/comfyui/ui/model_library/CivitaiCredentialClient.ts"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/model_discovery/discovery_copy.py"
+source_sha256 = "9191d741c976ac2329fe02a1277eeb1e4184e0db794c4fe3c0265212d2adba84"
+adapted_paths = ["frontend/comfyui/ui/model_library/ModelDiscoveryDialog.ts", "frontend/comfyui/ui/model_library/vue/ModelDiscoveryGallery.ts"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/onboarding/onboarding_recommendation_portrait.py"
+source_sha256 = "5c27ec1f8ff4c53f1a6cb729be4cbc401d57901dae0fef8680f2a29a38896a77"
+adapted_paths = ["frontend/comfyui/ui/model_library/vue/ModelDiscoveryPortrait.ts", "frontend/comfyui/ui/model_library/vue/ModelVersionFamily.ts", "frontend/comfyui/ui/model_library/vue/ModelRecommendationPreview.ts", "frontend/comfyui/ui/model_library/ModelRecommendationPreviewStyles.ts", "frontend/comfyui/ui/model_library/ModelDiscoveryStyles.ts", "frontend/comfyui/ui/model_library/ModelPickerStyles.ts"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/widgets/busy_ring.py"
+source_sha256 = "9faaebb6f6a340ccd8de632aeff6466bf44937c3341ab73a62b639d8d5f1c6cb"
+adapted_paths = ["frontend/comfyui/ui/model_library/vue/ModelBusyRing.ts", "frontend/comfyui/ui/model_library/ModelBusyRingStyles.ts", "frontend/comfyui/ui/model_library/vue/ModelDiscoveryGallery.ts", "frontend/comfyui/ui/model_library/vue/ModelVersionFamily.ts", "frontend/comfyui/ui/model_library/vue/ModelRecommendationPreview.ts"]
+
+[[component]]
+name = "SugarSubstitute detector illustrations"
+license = "GPL-3.0-or-later"
+license_file = "third_party/licenses/sugarsubstitute.LICENSE.txt"
+source = "https://github.com/Artificial-Sweetener/SugarSubstitute"
+revision = "9e27255cd65e5d8d99543a693127083996e14924"
+modifications = "PNG assets copied verbatim; matching policy adapted into typed SugarCubes owners."
+
+[[component.asset]]
+source_path = "substitute/infrastructure/model_thumbnails/resources/ultralytics/anime-face-detection.png"
+vendored_file = "sugarcubes/model_library/infrastructure/resources/detectors/anime-face-detection.png"
+runtime_file = "sugarcubes/model_library/infrastructure/resources/detectors/anime-face-detection.png"
+sha256 = "89ef7086aa26f7be145c48005f99ddd434291706f920c1ffaad36e226edbfd15"
+
+[[component.asset]]
+source_path = "substitute/infrastructure/model_thumbnails/resources/ultralytics/anime-face-segmentation.png"
+vendored_file = "sugarcubes/model_library/infrastructure/resources/detectors/anime-face-segmentation.png"
+runtime_file = "sugarcubes/model_library/infrastructure/resources/detectors/anime-face-segmentation.png"
+sha256 = "3b7a52aed0454da82ce721fb6407289a3496b925d7a69ab454ce3c98a417f399"
+
+[[component.asset]]
+source_path = "substitute/infrastructure/model_thumbnails/resources/ultralytics/breast-detection.png"
+vendored_file = "sugarcubes/model_library/infrastructure/resources/detectors/breast-detection.png"
+runtime_file = "sugarcubes/model_library/infrastructure/resources/detectors/breast-detection.png"
+sha256 = "6a3eb56f64e487067e7497b8654cf0536b3b5a30b52e79e799abc6fd7a77eb59"
+
+[[component.asset]]
+source_path = "substitute/infrastructure/model_thumbnails/resources/ultralytics/breast-segmentation.png"
+vendored_file = "sugarcubes/model_library/infrastructure/resources/detectors/breast-segmentation.png"
+runtime_file = "sugarcubes/model_library/infrastructure/resources/detectors/breast-segmentation.png"
+sha256 = "5fea21dd2a65d87ca3e2b80e2cf32e9bac0fc3fc49dd9a5579c9e26a9e2522fe"
+
+[[component.asset]]
+source_path = "substitute/infrastructure/model_thumbnails/resources/ultralytics/eyes-detection.png"
+vendored_file = "sugarcubes/model_library/infrastructure/resources/detectors/eyes-detection.png"
+runtime_file = "sugarcubes/model_library/infrastructure/resources/detectors/eyes-detection.png"
+sha256 = "bfd1f02a7174a6e56d65546f3cb2f871d66e4255a1aa6b1092a8a1336f029d95"
+
+[[component.asset]]
+source_path = "substitute/infrastructure/model_thumbnails/resources/ultralytics/eyes-segmentation.png"
+vendored_file = "sugarcubes/model_library/infrastructure/resources/detectors/eyes-segmentation.png"
+runtime_file = "sugarcubes/model_library/infrastructure/resources/detectors/eyes-segmentation.png"
+sha256 = "388a220c1150fa607da27cceea530941aebaaee7353ccb18b3b2a48ef07a8aa5"
+
+[[component.asset]]
+source_path = "substitute/infrastructure/model_thumbnails/resources/ultralytics/face-detection.png"
+vendored_file = "sugarcubes/model_library/infrastructure/resources/detectors/face-detection.png"
+runtime_file = "sugarcubes/model_library/infrastructure/resources/detectors/face-detection.png"
+sha256 = "27bff6968f1db75bb636d64bd55ca0e7fcb6682640be7e19089f74229f64e18a"
+
+[[component.asset]]
+source_path = "substitute/infrastructure/model_thumbnails/resources/ultralytics/face-segmentation.png"
+vendored_file = "sugarcubes/model_library/infrastructure/resources/detectors/face-segmentation.png"
+runtime_file = "sugarcubes/model_library/infrastructure/resources/detectors/face-segmentation.png"
+sha256 = "9e8575fb5ddee8dac4d829a3b98130a8ca215fa61359907ac0efcf23ea8a424e"
+
+[[component.asset]]
+source_path = "substitute/infrastructure/model_thumbnails/resources/ultralytics/female-face-detection.png"
+vendored_file = "sugarcubes/model_library/infrastructure/resources/detectors/female-face-detection.png"
+runtime_file = "sugarcubes/model_library/infrastructure/resources/detectors/female-face-detection.png"
+sha256 = "2100bccf40630804b964ff8c8843b7be94957ab088fb43e961c3d520a13b138b"
+
+[[component.asset]]
+source_path = "substitute/infrastructure/model_thumbnails/resources/ultralytics/female-face-segmentation.png"
+vendored_file = "sugarcubes/model_library/infrastructure/resources/detectors/female-face-segmentation.png"
+runtime_file = "sugarcubes/model_library/infrastructure/resources/detectors/female-face-segmentation.png"
+sha256 = "c97b64358e5c429073715bb5e93659feb692fcd190cee84b3939e93c88640d7d"
+
+[[component.asset]]
+source_path = "substitute/infrastructure/model_thumbnails/resources/ultralytics/hair-detection.png"
+vendored_file = "sugarcubes/model_library/infrastructure/resources/detectors/hair-detection.png"
+runtime_file = "sugarcubes/model_library/infrastructure/resources/detectors/hair-detection.png"
+sha256 = "beb55ec54edbb6e8ab010bd91c24e43771b7178be19d45d584361510f723d698"
+
+[[component.asset]]
+source_path = "substitute/infrastructure/model_thumbnails/resources/ultralytics/hair-segmentation.png"
+vendored_file = "sugarcubes/model_library/infrastructure/resources/detectors/hair-segmentation.png"
+runtime_file = "sugarcubes/model_library/infrastructure/resources/detectors/hair-segmentation.png"
+sha256 = "172b308490a4a62c03f77b095e73d27c94e1441c0290eddd73b83d7020d1ea63"
+
+[[component.asset]]
+source_path = "substitute/infrastructure/model_thumbnails/resources/ultralytics/hand-detection.png"
+vendored_file = "sugarcubes/model_library/infrastructure/resources/detectors/hand-detection.png"
+runtime_file = "sugarcubes/model_library/infrastructure/resources/detectors/hand-detection.png"
+sha256 = "07c817176d6397d08ce12d965641a95daed63c41977b2f3d898a72c7f431f8a2"
+
+[[component.asset]]
+source_path = "substitute/infrastructure/model_thumbnails/resources/ultralytics/hand-segmentation.png"
+vendored_file = "sugarcubes/model_library/infrastructure/resources/detectors/hand-segmentation.png"
+runtime_file = "sugarcubes/model_library/infrastructure/resources/detectors/hand-segmentation.png"
+sha256 = "d27835f936a7d604e892805bc0c71bb9ae1853c2c88c733faeea0cbbe929d7a4"
+
+[[component.asset]]
+source_path = "substitute/infrastructure/model_thumbnails/resources/ultralytics/male-face-detection.png"
+vendored_file = "sugarcubes/model_library/infrastructure/resources/detectors/male-face-detection.png"
+runtime_file = "sugarcubes/model_library/infrastructure/resources/detectors/male-face-detection.png"
+sha256 = "6d44fddf8ed69e416fcb83bd99aaf282bf8f0f51944ad484051e4a7c08f987e2"
+
+[[component.asset]]
+source_path = "substitute/infrastructure/model_thumbnails/resources/ultralytics/male-face-segmentation.png"
+vendored_file = "sugarcubes/model_library/infrastructure/resources/detectors/male-face-segmentation.png"
+runtime_file = "sugarcubes/model_library/infrastructure/resources/detectors/male-face-segmentation.png"
+sha256 = "fc80f3b577439b387c0fdce87d7d5858fa5dcb1413afad7dc875206fc4123aa7"
+
+[[component.asset]]
+source_path = "substitute/infrastructure/model_thumbnails/resources/ultralytics/person-segmentation.png"
+vendored_file = "sugarcubes/model_library/infrastructure/resources/detectors/person-segmentation.png"
+runtime_file = "sugarcubes/model_library/infrastructure/resources/detectors/person-segmentation.png"
+sha256 = "8c15d32f42db927f42fa664528ea9aa867be6c1ef7dfdba33f9e012271e077cc"
+
+[[component]]
+name = "CivitAI Badge"
+license = "Apache-2.0"
+license_file = "third_party/licenses/civitai.LICENSE.txt"
+source = "https://github.com/civitai/civitai"
+revision = "e695de5aae91508df8a4465a86200d5cfa9c05f5"
+modifications = "Official brand SVG generated by SugarSubstitute; copied without modifications."
+derivation_source = "https://github.com/Artificial-Sweetener/SugarSubstitute"
+derivation_revision = "6adbbd75a1277b2e3cf02d7204b08733bd90b947"
+derivation_path = "substitute/presentation/resources/icons/CivitaiBadge.svg"
+source_paths = ["packages/civitai-brand/src/paths.ts", "packages/civitai-brand/src/gradients.ts", "packages/civitai-brand/src/svg.ts"]
+
+[[component.asset]]
+source_path = "packages/civitai-brand/src/svg.ts"
+vendored_file = "frontend/static/model-providers/civitai.svg"
+runtime_file = "web/model-providers/civitai.svg"
+sha256 = "b96eba49967d02ef5f6e59e7742cc8dcc6e22c8563e157a9c2686fa460ab3174"
+
+[[component]]
+name = "OpenModelDB Favicon"
+license = "GPL-3.0-only"
+license_file = "third_party/licenses/openmodeldb.LICENSE.txt"
+source = "https://github.com/OpenModelDB/open-model-database"
+revision = "782aac088bd83dd3fc438a42eb0c3868dc559110"
+modifications = "None; official favicon copied verbatim."
+
+[[component.asset]]
+source_path = "public/favicon.ico"
+vendored_file = "frontend/static/model-providers/openmodeldb.ico"
+runtime_file = "web/model-providers/openmodeldb.ico"
+sha256 = "efe53844c597e16e2019aa2166ece248af277273e1c7444a56da4d60b363370a"
+
+[[component]]
+name = "Microsoft Fluent Web Components menu runtime"
+license = "MIT"
+license_file = "third_party/licenses/fluentui.LICENSE.txt"
+source = "https://github.com/microsoft/fluentui"
+revision = "44cf3fb9906b4f98243589e0b078e4df9ca6227b"
+version = "3.1.3"
+modifications = "Official MenuList and MenuItem components bundled with esbuild; upstream source is unchanged. FAST dependency and license are pinned in package-lock.json and third_party/NOTICE.md."
+source_paths = ["packages/web-components/src/menu-list", "packages/web-components/src/menu-item"]
+runtime_files = ["web/comfyui/ui/menus/FluentMenuRuntime.js"]
+runtime_sha256 = "70870c572fab3eba0c740b0300b5c408b6ed3bdc0f11a008aac06cc2ef7b096d"
+
+[[component]]
+name = "SugarSubstitute media wall presentation"
+license = "GPL-3.0-or-later"
+license_file = "third_party/licenses/sugarsubstitute.LICENSE.txt"
+source = "https://github.com/Artificial-Sweetener/SugarSubstitute"
+revision = "84b6c882d1323447cf82350495dadaeb41d948d5"
+modifications = "Title phase timing, constant-speed travel and glyph fading adapted to a typed Vue presentation owner with browser measurements, reduced-motion preference and bounded animation lifetime. Frame insets and caption padding follow the reference layout."
+runtime_files = ["web/comfyui/ui/model_library/ModelTitleMarquee.js", "web/comfyui/ui/model_library/ModelGalleryLayout.js", "web/comfyui/ui/model_library/ModelPickerNavigation.js", "web/comfyui/ui/model_library/ModelPickerStyles.js", "web/comfyui/ui/model_library/vue/ModelGalleryTitle.js", "web/comfyui/ui/model_library/vue/ModelPickerWall.js"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/widgets/media_wall/media_wall_marquee.py"
+source_sha256 = "4ec897a54348f8a23aa4355f0fc53e8a73ccd275bfdc432a34642f3aa5f62b0f"
+adapted_paths = ["frontend/comfyui/ui/model_library/ModelTitleMarquee.ts", "frontend/comfyui/ui/model_library/vue/ModelGalleryTitle.ts"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/widgets/fluent_popup_frame.py"
+source_sha256 = "59628fc7fbeebb5ed52b67c5344e3349996e01198474faa39a7e87f7e698ce93"
+adapted_paths = ["frontend/comfyui/ui/model_library/ModelPickerStyles.ts"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/widgets/media_wall/media_wall_painter.py"
+source_sha256 = "42833b1634853a9380348f3970d32bd744a665d76d6b4bb2f909ba9d3d9b897c"
+adapted_paths = ["frontend/comfyui/ui/model_library/ModelPickerStyles.ts", "frontend/comfyui/ui/model_library/vue/ModelGalleryTitle.ts"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/widgets/model_picker/model_picker_models.py"
+source_sha256 = "097358dc0cb20e036b44e787d64be94a755b7024679e27bc7e5bb1b0ad26d020"
+adapted_paths = ["frontend/comfyui/ui/model_library/ModelGalleryLayout.ts"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/widgets/media_wall/media_wall_view.py"
+source_sha256 = "d478a72b5dab0fb707455eec88fa28cc45cf0ea71958b4798b5c6036645251cf"
+adapted_paths = ["frontend/comfyui/ui/model_library/ModelPickerNavigation.ts", "frontend/comfyui/ui/model_library/vue/ModelPickerWall.ts"]
+
+
+[[component]]
+name = 'CivitAI model relationships'
+license = 'Apache-2.0'
+license_file = 'third_party/licenses/civitai.LICENSE.txt'
+source = 'https://github.com/civitai/civitai'
+revision = '6cfb0e4ab589ecaaa572909eb6ca5d7d2af08ea8'
+modifications = 'Literal ecosystem, base model, resource type and cross ecosystem records extracted as JSON without executing upstream code. Hosted generation availability excluded; compatibility retains declared resource types and explicit directional partial rules.'
+source_paths = ['packages/civitai-shared/src/basemodel.constants.ts']
+
+[[component.asset]]
+source_path = 'packages/civitai-shared/src/basemodel.constants.ts'
+vendored_file = 'sugarcubes/model_library/infrastructure/resources/model-relationships.json'
+runtime_file = 'sugarcubes/model_library/infrastructure/resources/model-relationships.json'
+sha256 = 'd8a772647055720e3c83d4524ab63b38c31d37aae988cce0204fc8d234950c3f'

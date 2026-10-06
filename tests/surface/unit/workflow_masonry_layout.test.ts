@@ -17,11 +17,12 @@
 import { describe, expect, test } from '@jest/globals';
 import { computeWorkflowMasonry } from '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryLayout.js';
 import { projectWorkflowMasonry } from '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryProjection.js';
-import { resolveMasonryWidgetSources } from '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryWidgetSources.js';
+import { resolveCubeCardWidgetSources } from '../../../frontend/comfyui/ui/surface/CubeCardWidgetSources.js';
 import type { CubeNode } from '../../../frontend/comfyui/ui/cube/node/ComfyCubeNodeFactory.js';
 import type { NativeGraphNode } from '../../../frontend/comfyui/ui/cube/ComfyCubeGraphBuilder.js';
 import type { ComfyGraph } from '../../../frontend/comfyui/ui/types/graph.js';
 import { resolveCubeFaceCardPresentation } from '../../../frontend/comfyui/ui/surface/CubeFaceCardPolicy.js';
+import { projectNodeCards } from '../../../frontend/comfyui/ui/surface/NodeCardProjection.js';
 import {
   readCubeFaceCardState,
   CubeFaceCardStateService,
@@ -56,6 +57,7 @@ describe('workflow masonry sections', () => {
     expect(projection()).toEqual(
       decisions().map((card) => ({
         ...card,
+        widgetSources: [],
         id: `cube:cube:${card.id}`,
         columnSpan: card.columnSpan ?? 1,
       })),
@@ -89,14 +91,35 @@ describe('workflow masonry sections', () => {
     cube.inputs = [{ name: 'prompt', widget: { name: 'prompt' }, link: null }];
     cube.subgraph.inputNode.id = -10;
     cube.subgraph.getLink = () => ({ origin_id: -10, origin_slot: 0 });
-    expect(resolveMasonryWidgetSources(cube, member)).toEqual([
+    expect(resolveCubeCardWidgetSources(cube, member)).toEqual([
       { node: cube, name: 'prompt', targetName: 'text' },
     ]);
+    member.title = 'Positive Prompt';
+    member.widgets = [{ name: 'text', value: 'original', type: 'customtext' }];
+    const before = JSON.stringify(member);
+    const faceCards = projectNodeCards(
+      cube.subgraph._nodes,
+      readCubeFaceCardState(cube),
+      cube.subgraph,
+      cube,
+    );
+    const workflowCards = projectWorkflowMasonry({ _nodes: [cube] }, [cube])[0]?.cards;
+    expect(faceCards).toEqual([
+      expect.objectContaining({
+        node: member,
+        columnSpan: 2,
+        widgetSources: [{ node: cube, name: 'prompt', targetName: 'text' }],
+      }),
+    ]);
+    expect(
+      workflowCards?.map(({ id, ...card }) => ({ ...card, id: id.replace('cube:cube:', '') })),
+    ).toEqual(faceCards);
+    expect(JSON.stringify(member)).toBe(before);
     cube.inputs[0]!.link = 8;
-    expect(resolveMasonryWidgetSources(cube, member)).toEqual([]);
+    expect(resolveCubeCardWidgetSources(cube, member)).toEqual([]);
     cube.inputs[0]!.link = null;
     cube.subgraph.getLink = () => ({ origin_id: 'other-node', origin_slot: 0 });
-    expect(resolveMasonryWidgetSources(cube, member)).toEqual([]);
+    expect(resolveCubeCardWidgetSources(cube, member)).toEqual([]);
   });
   test('restarts below the tallest column and retains one shared width and span policy', () => {
     const result = computeWorkflowMasonry(

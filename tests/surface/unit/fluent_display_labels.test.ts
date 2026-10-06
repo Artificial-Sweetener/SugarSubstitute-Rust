@@ -62,7 +62,7 @@ test.each([
 function fixture(source: string) {
   const root = document.createElement('div');
   const masonry = document.createElement('section');
-  masonry.className = 'sugarcubes-workflow-masonry';
+  masonry.className = 'sugarcubes-cube-face__node-card';
   const label = document.createElement('span');
   label.className = 'truncate';
   const text = document.createTextNode(source);
@@ -96,7 +96,7 @@ test('does not overwrite host changes pending reconciliation when disabled', () 
   expect(text.data).toBe('authored replacement');
 });
 
-test('limits aliases and casing to masonry and restores the same label on every mode change', () => {
+test('limits aliases and casing to projected cards and restores the same label on every mode change', () => {
   const { root, label, text, presentation } = fixture('sampler_name');
   const masonry = root.parentElement;
   if (!masonry) throw new Error('Masonry surface missing');

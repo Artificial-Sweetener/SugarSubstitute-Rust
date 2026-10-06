@@ -33,6 +33,25 @@ import {
 } from '../../../frontend/comfyui/ui/cube/CubeModelTitlePresentation.js';
 
 describe('CubeSurfaceView', () => {
+  test('uses the same geometry-safe native card options as workflow masonry', () => {
+    const renderer = createRenderer();
+    const node = createNode(1);
+    const view = new CubeSurfaceView({
+      document,
+      renderer,
+      identity: cubeIdentity('Shared projection'),
+      nodes: [node],
+      state: createDefaultCubeSurfaceState(),
+      onStateChange: jest.fn(),
+    });
+    expect(renderer.mount).toHaveBeenCalledWith(expect.any(HTMLElement), node, {
+      presentationGeometry: true,
+      preserveNativeBody: true,
+      widgetSources: [],
+    });
+    view.dispose();
+  });
+
   test('builds one Cube composition with native-card masonry and a preview rail', () => {
     const renderer = createRenderer();
     const state = createDefaultCubeSurfaceState();

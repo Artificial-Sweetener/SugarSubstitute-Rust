@@ -41,7 +41,7 @@ import { createComfyCubePlacementRuntime, } from './placement/ComfyCubePlacement
 import { LegacyCubeContainerMigrationAdapter } from './migration/LegacyCubeContainerMigrationAdapter.js';
 import { NativeCubeProximityEndpointSource } from './connection/NativeCubeProximityEndpointSource.js';
 import { CubePortPresentationController } from './connection/CubePortPresentationController.js';
-import { ComfyCanvasGraphChangeAdapter } from '../surface/ComfyCanvasGraphChangeAdapter.js';
+import { ComfyCanvasGraphChangeAdapter, } from '../surface/ComfyCanvasGraphChangeAdapter.js';
 import { createComfyRendererModeChangeSource, resolveComfyRendererMode, } from '../core/ComfyRendererMode.js';
 import { NativeCubeGeometryCoordinator } from './geometry/NativeCubeGeometryCoordinator.js';
 import { CubeEditorWorkspaceChromeAdapter } from '../surface/CubeEditorWorkspaceChromeAdapter.js';
@@ -370,6 +370,7 @@ export function createComfyCubeRuntime(options) {
         authoring,
         nodes,
         cardState,
+        graphChanges: canvasGraphChanges,
         versionAvailability,
         versionSwitch,
         graphScope,

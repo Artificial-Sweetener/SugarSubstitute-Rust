@@ -13,12 +13,12 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Own masonry-only display text without changing native Vue models or custom controls. */
+/** Own projected-card display text without changing native Vue models or custom controls. */
 import { formatFluentDisplayLabel } from './FluentDisplayLabels.js';
 /** Follow native text replacement and restore only text still owned by the theme. */
 export class NativeLabelPresentation {
     #cards = new Map();
-    /** Format masonry labels and restore native text when a card returns to the graph. */
+    /** Format projected-card labels and restore native text when a card returns to the graph. */
     reconcile(root, elements) {
         for (const [card, labels] of this.#cards) {
             if (!card.isConnected) {
@@ -26,7 +26,7 @@ export class NativeLabelPresentation {
                 this.#cards.delete(card);
             }
         }
-        if (!root.closest('.sugarcubes-workflow-masonry')) {
+        if (!root.closest('.sugarcubes-cube-face__node-card')) {
             const labels = this.#cards.get(root);
             if (labels)
                 this.#restore(labels);

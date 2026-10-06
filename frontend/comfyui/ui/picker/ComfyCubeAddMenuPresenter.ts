@@ -20,6 +20,8 @@ import { resolveCubeModelTitle } from '../cube/CubeModelTitlePresentation.js';
 import { createCubeModelTitleElement } from '../surface/CubeModelPillDomRenderer.js';
 import type { CubeFaceActionAnchor } from '../surface/CubeFaceChromeActions.js';
 import type { CubeAddCandidate, CubeAddCandidateGroups } from './CubeAddCandidateCatalog.js';
+import { FloatingSurface } from '../menus/FloatingSurface.js';
+import { createFluentMenuItem, createFluentMenuList } from '../menus/FluentMenuRuntime.js';
 
 const MENU_ATTRIBUTE = 'data-sugarcubes-add-cube-menu';
 const RESULT_ATTRIBUTE = 'data-sugarcubes-add-cube-result';
@@ -36,9 +38,9 @@ export interface CubeAddMenuModel {
 export class ComfyCubeAddMenuPresenter {
   readonly #document: Document;
   #menu: HTMLElement | null = null;
-  #anchor: CubeFaceActionAnchor | null = null;
   #model: CubeAddMenuModel | null = null;
   #showOtherModels = false;
+  #surface: FloatingSurface | null = null;
 
   /** Bind the menu to one Comfy document. */
   constructor(documentRef: Document) {
@@ -52,7 +54,6 @@ export class ComfyCubeAddMenuPresenter {
       this.close();
       return;
     }
-    this.#anchor = anchor;
     this.#model = model;
     this.#showOtherModels = false;
     const menu = this.#document.createElement('section');
@@ -64,18 +65,15 @@ export class ComfyCubeAddMenuPresenter {
     search.placeholder = 'Search Cubes';
     search.setAttribute('aria-label', 'Search Cubes');
     search.addEventListener('input', () => this.#renderResults(search.value));
-    const results = this.#document.createElement('div');
+    const results = createFluentMenuList(this.#document);
     results.className = 'sugarcubes-add-cube-menu__results';
     results.setAttribute('role', 'menu');
     menu.append(search, results);
-    this.#document.body.append(menu);
     this.#menu = menu;
+    this.#surface = new FloatingSurface(menu);
+    this.#surface.open({ anchor: { kind: 'below', bounds: anchor }, dismiss: this.close });
     this.#renderResults('');
-    this.#position();
-    this.#document.addEventListener('pointerdown', this.#handleOutsidePointer, true);
     this.#document.addEventListener('keydown', this.#handleKeyDown, true);
-    this.#document.defaultView?.addEventListener('resize', this.close);
-    this.#document.defaultView?.addEventListener('scroll', this.#handleScroll, true);
     search.focus();
   }
 
@@ -86,15 +84,12 @@ export class ComfyCubeAddMenuPresenter {
 
   /** Close the menu and release every transient listener. */
   readonly close = (): void => {
-    this.#menu?.remove();
+    this.#surface?.close();
+    this.#surface = null;
     this.#menu = null;
-    this.#anchor = null;
     this.#model = null;
     this.#showOtherModels = false;
-    this.#document.removeEventListener('pointerdown', this.#handleOutsidePointer, true);
     this.#document.removeEventListener('keydown', this.#handleKeyDown, true);
-    this.#document.defaultView?.removeEventListener('resize', this.close);
-    this.#document.defaultView?.removeEventListener('scroll', this.#handleScroll, true);
   };
 
   /** Release every owned menu resource. */
@@ -119,16 +114,17 @@ export class ComfyCubeAddMenuPresenter {
       rows.push(this.#createOtherModelsRow(model.groups.otherModels.length));
     }
     results.replaceChildren(...rows);
-    this.#position();
+    this.#surface?.reposition();
   }
 
   /** Build one literal-safe candidate row. */
-  #createCandidateRow(candidate: CubeAddCandidate): HTMLButtonElement {
-    const row = this.#document.createElement('button');
-    row.type = 'button';
+  #createCandidateRow(candidate: CubeAddCandidate): HTMLElement {
+    const row = createFluentMenuItem(this.#document);
     row.setAttribute(RESULT_ATTRIBUTE, candidate.type);
     row.setAttribute('role', 'menuitem');
-    row.append(createCubeAddIconElement(this.#document));
+    const icon = createCubeAddIconElement(this.#document);
+    icon.slot = 'start';
+    row.append(icon);
     const presentation = resolveCubeModelTitle({
       targetModel: candidate.targetModel,
       title: candidate.displayName,
@@ -149,9 +145,8 @@ export class ComfyCubeAddMenuPresenter {
   }
 
   /** Build the bottom-level navigation into boundary-compatible other models. */
-  #createOtherModelsRow(count: number): HTMLButtonElement {
-    const row = this.#document.createElement('button');
-    row.type = 'button';
+  #createOtherModelsRow(count: number): HTMLElement {
+    const row = createFluentMenuItem(this.#document);
     row.setAttribute(OTHER_ATTRIBUTE, '');
     row.setAttribute('role', 'menuitem');
     const icon = this.#document.createElement('i');
@@ -177,42 +172,6 @@ export class ComfyCubeAddMenuPresenter {
     return empty;
   }
 
-  /** Keep the menu inside the viewport while preferring the action's lower edge. */
-  #position(): void {
-    if (!this.#menu || !this.#anchor) return;
-    const windowRef = this.#document.defaultView;
-    const viewportWidth = windowRef?.innerWidth ?? this.#document.documentElement.clientWidth;
-    const viewportHeight = windowRef?.innerHeight ?? this.#document.documentElement.clientHeight;
-    const left = Math.max(
-      4,
-      Math.min(
-        this.#anchor.right - this.#menu.offsetWidth,
-        viewportWidth - this.#menu.offsetWidth - 4,
-      ),
-    );
-    const below = this.#anchor.bottom + 4;
-    const top =
-      below + this.#menu.offsetHeight <= viewportHeight - 4
-        ? below
-        : Math.max(4, this.#anchor.top - this.#menu.offsetHeight - 4);
-    this.#menu.style.left = `${String(left)}px`;
-    this.#menu.style.top = `${String(top)}px`;
-  }
-
-  /** Close when a different host surface receives the pointer. */
-  readonly #handleOutsidePointer = (event: PointerEvent): void => {
-    const target = event.target;
-    if (!(target instanceof Node) || this.#menu?.contains(target)) return;
-    this.close();
-  };
-
-  /** Preserve menu-owned scrolling while closing after external viewport movement. */
-  readonly #handleScroll = (event: Event): void => {
-    const target = event.target;
-    if (target instanceof Node && this.#menu?.contains(target)) return;
-    this.close();
-  };
-
   /** Close the menu through the standard accessible escape path. */
   readonly #handleKeyDown = (event: KeyboardEvent): void => {
     if (event.key !== 'Escape') return;
@@ -226,24 +185,18 @@ export class ComfyCubeAddMenuPresenter {
     const style = this.#document.createElement('style');
     style.id = STYLE_ID;
     style.textContent = `
-      [${MENU_ATTRIBUTE}] { box-sizing: border-box; position: fixed; z-index: 100000;
+      [${MENU_ATTRIBUTE}] {
         display: flex; flex-direction: column; width: min(24rem, calc(100vw - 0.5rem));
         max-height: min(32rem, calc(100vh - 0.5rem)); padding: 0.5rem; gap: 0.375rem;
-        border: 1px solid color-mix(in srgb, currentColor 24%, transparent); border-radius: 0.5rem;
-        color: var(--input-text, #f0f2f5); background: var(--comfy-menu-bg, #171b20);
-        box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 45%); }
+        border: 1px solid var(--colorNeutralStroke2); border-radius: var(--borderRadiusMedium);
+        color: var(--colorNeutralForeground1); background: var(--colorNeutralBackground1);
+        box-shadow: var(--shadow16); font:var(--fontWeightRegular) var(--fontSizeBase300)/var(--lineHeightBase300) var(--fontFamilyBase); }
       [${MENU_ATTRIBUTE}] input { box-sizing: border-box; width: 100%; flex: 0 0 auto;
-        padding: 0.55rem 0.65rem; border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-        border-radius: 0.375rem; color: inherit; background: var(--p-inputtext-background, #111418); }
-      .sugarcubes-add-cube-menu__results { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
-      [${RESULT_ATTRIBUTE}], [${OTHER_ATTRIBUTE}] { appearance: none; display: grid; width: 100%;
-        grid-template-columns: 1.25rem minmax(0, 1fr); align-items: center; gap: 0.625rem;
-        padding: 0.55rem; border: 0; border-radius: 0.375rem; color: inherit;
-        background: transparent; cursor: pointer; text-align: left; content-visibility: auto;
-        contain-intrinsic-size: auto 2.75rem; }
-      [${RESULT_ATTRIBUTE}]:hover, [${RESULT_ATTRIBUTE}]:focus-visible,
-      [${OTHER_ATTRIBUTE}]:hover, [${OTHER_ATTRIBUTE}]:focus-visible {
-        outline: none; background: color-mix(in srgb, currentColor 10%, transparent); }
+        padding: 0.55rem 0.65rem; border: 1px solid var(--colorNeutralStroke1); border-bottom:2px solid var(--colorNeutralStrokeAccessible);
+        border-radius: var(--borderRadiusMedium); color: inherit; background: var(--colorNeutralBackground1); font:inherit; }
+      [${MENU_ATTRIBUTE}] input:focus { outline:0; border-bottom-color:var(--colorBrandStroke1); }
+      .sugarcubes-add-cube-menu__results { min-height: 0; max-inline-size:none; box-shadow:none; border:0; padding:0; overflow-y:auto; overscroll-behavior:contain; }
+      [${RESULT_ATTRIBUTE}] { content-visibility:auto; contain-intrinsic-size:auto 2.75rem; }
       .sugarcubes-add-cube-menu__result-title { min-width: 0; font-weight: 600; }
       .sugarcubes-add-cube-menu__empty { margin: 0; padding: 0.75rem; opacity: 0.7; }
     `;

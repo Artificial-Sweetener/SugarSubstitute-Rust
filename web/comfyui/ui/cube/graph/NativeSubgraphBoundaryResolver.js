@@ -33,15 +33,28 @@ export class NativeSubgraphBoundaryResolver {
     resolveInputTargets(node, slot) {
         if (node.id == null)
             return [];
-        return this.#resolveInputTargets(node, slot, [node.id], new Set());
+        return this.#resolveInputTargets(node, slot, [node.id], new Set()).map(({ nodeId, inputSlot, inputName }) => ({ nodeId, inputSlot, inputName }));
+    }
+    /** Preserve leaf field contracts when a native subgraph renames its promoted widget. */
+    resolveWidgetOrigins(node, name) {
+        if (!isTraversableSubgraphNode(node)) {
+            return [{ classType: typeof node.type === 'string' ? node.type : '', inputName: name }];
+        }
+        const slot = node.inputs?.findIndex((input) => input.widget?.name === name || input.name === name) ?? -1;
+        if (slot < 0 || node.id == null)
+            return [];
+        const origins = this.#resolveInputTargets(node, slot, [node.id], new Set()).map(({ node: leaf, inputSlot, inputName }) => ({
+            classType: typeof leaf.type === 'string' ? leaf.type : '',
+            inputName: leaf.inputs?.[inputSlot]?.widget?.name ?? inputName,
+        }));
+        return origins.filter((origin, index) => origins.findIndex((other) => other.classType === origin.classType && other.inputName === origin.inputName) === index);
     }
     /** Recurse through output boundaries while retaining the exact instance path. */
     #resolveOutput(node, slot, executionPath, visited) {
         if (!isTraversableSubgraphNode(node)) {
             return { nodeId: joinExecutionPath(executionPath), slot };
         }
-        const visitKey = `${executionPath.map(String).join(':')}[O]${String(slot)}`;
-        if (visited.has(visitKey)) {
+        if (visited.has(node)) {
             this.#logger.warn('SugarCubes skipped a circular native subgraph output boundary.', {
                 nodeId: node.id,
                 slot,
@@ -49,7 +62,7 @@ export class NativeSubgraphBoundaryResolver {
             return null;
         }
         const nextVisited = new Set(visited);
-        nextVisited.add(visitKey);
+        nextVisited.add(node);
         const resolved = resolveSubgraphOutput(node, slot);
         const outputNode = resolved?.outputNode;
         const outputSlot = readLinkSlot(resolved?.link?.origin_slot, outputNode?.outputs, resolved?.output);
@@ -68,11 +81,11 @@ export class NativeSubgraphBoundaryResolver {
                     nodeId: joinExecutionPath(executionPath),
                     inputSlot: slot,
                     inputName: readSlotName(input, slot),
+                    node,
                 },
             ];
         }
-        const visitKey = `${executionPath.map(String).join(':')}[I]${String(slot)}`;
-        if (visited.has(visitKey)) {
+        if (visited.has(node)) {
             this.#logger.warn('SugarCubes skipped a circular native subgraph input boundary.', {
                 nodeId: node.id,
                 slot,
@@ -80,7 +93,7 @@ export class NativeSubgraphBoundaryResolver {
             return [];
         }
         const nextVisited = new Set(visited);
-        nextVisited.add(visitKey);
+        nextVisited.add(node);
         const targets = [];
         for (const resolved of resolveSubgraphInputs(node, slot)) {
             const inputNode = resolved.inputNode;

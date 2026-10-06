@@ -18,7 +18,7 @@ import { isRecord } from '../../types/common.js';
 import { createComfyRendererModeChangeSource, resolveComfyRendererMode, } from '../../core/ComfyRendererMode.js';
 import { NativeFluentCardAdapter } from './NativeFluentCardAdapter.js';
 import { fluentAppearanceCss } from './FluentAppearanceStyles.js';
-import { applyOwnedFluentTheme, createFluentNumericSlider } from './FluentThemeRuntime.js';
+import { applyOwnedFluentTheme, createFluentNumericSlider, createFluentBooleanCheckbox, } from './FluentThemeRuntime.js';
 import { NativeInlineComboSearch } from './NativeInlineComboSearch.js';
 import { NativeCardTitlebar } from './NativeCardTitlebar.js';
 import { NativeToggleRows } from './NativeToggleRows.js';
@@ -26,6 +26,8 @@ import { NativeAdvancedDisclosure } from './NativeAdvancedDisclosure.js';
 import { NativeNumericControls } from './NativeNumericControls.js';
 import { NativeLabelPresentation } from './NativeLabelPresentation.js';
 import { NativeSeedControls } from './NativeSeedControls.js';
+import { readComfyDarkTheme } from './ComfyColorScheme.js';
+import { FluentOverlayScrollbarHost } from './FluentOverlayScrollbarHost.js';
 /** Persist the user's appearance preference independently of workflow documents. */
 export const FLUENT_APPEARANCE_SETTING = 'SugarCubes.Appearance.Fluent';
 const surfaceSelector = '.sugarcubes-workflow-masonry, .sugarcubes-masonry-toggle';
@@ -35,11 +37,12 @@ export class FluentAppearanceHost {
     #adapter;
     #titlebars = new NativeCardTitlebar();
     #labels = new NativeLabelPresentation();
-    #toggleRows = new NativeToggleRows();
+    #toggleRows = new NativeToggleRows(createFluentBooleanCheckbox);
     #advanced = new NativeAdvancedDisclosure();
     #numeric = new NativeNumericControls(createFluentNumericSlider);
     #seeds = new NativeSeedControls();
     #comboSearch;
+    #scrollbars;
     #style;
     #presence;
     #palette;
@@ -58,6 +61,7 @@ export class FluentAppearanceHost {
     /** Prepare observers without altering styles until the user opts in. */
     constructor(options) {
         this.#options = options;
+        this.#scrollbars = new FluentOverlayScrollbarHost(options.document, options.reportError);
         this.#adapter = new NativeFluentCardAdapter(options.app);
         this.#comboSearch = new NativeInlineComboSearch(options.document);
         this.#style = options.document.createElement('style');
@@ -65,7 +69,18 @@ export class FluentAppearanceHost {
         this.#presence = new MutationObserver((records) => {
             if (!this.#active)
                 return;
+            let changed = false;
             for (const record of records) {
+                if (record.target instanceof HTMLElement &&
+                    record.target.closest('.sc-fluent-scrollbar-layer'))
+                    continue;
+                const nodes = [...record.addedNodes, ...record.removedNodes];
+                if (nodes.length &&
+                    nodes.every((node) => node instanceof HTMLElement &&
+                        (node.matches('.sc-fluent-scrollbar-layer') ||
+                            node.hasAttribute('data-sc-scrollbar-policy'))))
+                    continue;
+                changed = true;
                 if (record.target instanceof HTMLElement)
                     this.#queue(record.target);
                 else if (record.target instanceof Text && record.target.parentElement)
@@ -74,7 +89,8 @@ export class FluentAppearanceHost {
                     if (node instanceof HTMLElement)
                         this.#queue(node);
             }
-            this.#schedule();
+            if (changed)
+                this.#schedule();
         });
         this.#palette = new MutationObserver(() => this.#refreshPalette());
     }
@@ -159,6 +175,7 @@ export class FluentAppearanceHost {
         if (!this.#style.isConnected)
             this.#options.document.head.append(this.#style);
         this.#refreshPalette();
+        this.#scrollbars.enable();
         this.#queue(this.#options.document.body);
         this.#schedule();
     }
@@ -166,6 +183,7 @@ export class FluentAppearanceHost {
     #deactivate() {
         this.#active = false;
         this.#style.remove();
+        this.#scrollbars.clear();
         this.#adapter.clear();
         this.#labels.clear();
         this.#titlebars.clear();
@@ -194,9 +212,7 @@ export class FluentAppearanceHost {
     #refreshPalette() {
         if (!this.#active)
             return;
-        const scheme = this.#options.document.defaultView?.getComputedStyle(this.#options.document.documentElement).colorScheme;
-        const dark = scheme === 'dark' ||
-            (scheme !== 'light' && !this.#options.document.querySelector('.light-theme'));
+        const dark = readComfyDarkTheme(this.#options.document);
         if (dark === this.#dark)
             return;
         this.#dark = dark;

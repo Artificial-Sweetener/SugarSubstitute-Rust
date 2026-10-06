@@ -21,6 +21,39 @@ import {
   planNativeFields,
 } from '../../../frontend/comfyui/ui/surface/appearance/NativeFieldPresentation.js';
 
+test('sizes recognized model pickers through their owned mount and restores ordinary field geometry', () => {
+  const style = document.createElement('style');
+  style.textContent = fluentAppearanceCss(true);
+  document.head.append(style);
+  const surface = document.createElement('div');
+  surface.className = 'sugarcubes-cube-face__node-card';
+  const row = document.createElement('div');
+  row.dataset.scFluentRow = '';
+  const layout = document.createElement('div');
+  layout.dataset.scFluentLayout = '';
+  const label = document.createElement('label');
+  label.textContent = 'diffusion_model';
+  const mount = document.createElement('div');
+  mount.className = 'sc-model-mount';
+  const control = document.createElement('div');
+  control.append(mount);
+  layout.append(label, control);
+  row.append(layout);
+  surface.append(row);
+  document.body.append(surface);
+  try {
+    expect(getComputedStyle(control).flexBasis).toBe('360px');
+    mount.className = '';
+    expect(getComputedStyle(control).flexBasis).toBe('156px');
+    mount.className = 'sc-model-mount';
+    surface.className = '';
+    expect(getComputedStyle(control).flexBasis).toBe('');
+  } finally {
+    surface.remove();
+    style.remove();
+  }
+});
+
 describe('native Fluent field presentation', () => {
   test('groups adjacent dimensions and sampling controls without reordering source fields', () => {
     const fields = ['width', 'height', 'seed', 'steps', 'cfg', 'sampler_name', 'scheduler'].map(
@@ -49,15 +82,18 @@ describe('native Fluent field presentation', () => {
       [3, 2],
     ]);
     expect(classifyNativeField({ name: 'seed', component: 'FancySeedEditor' })).toBeNull();
-    expect(classifyNativeField({ name: 'ckpt_name', component: 'WidgetSelect' })).toBe('model');
+    expect(classifyNativeField({ name: 'ckpt_name', component: 'WidgetSelect' })).toBe('scalar');
+    expect(classifyNativeField({ name: 'diffusion_model', component: 'WidgetSelect' })).toBe(
+      'scalar',
+    );
     expect(classifyNativeField({ name: 'text', component: 'WidgetTextarea' })).toBe('multiline');
   });
 });
 
-test('field-row structure is scoped to masonry while shared theme tokens remain available to graph cards', () => {
+test('field-row structure is shared by projected cards while native graph cards retain host layout', () => {
   const css = fluentAppearanceCss(true);
-  expect(css).toContain('.sugarcubes-workflow-masonry [data-sc-fluent-fields]');
-  expect(css).toContain('.sugarcubes-workflow-masonry [data-sc-fluent-row]');
+  expect(css).toContain('.sugarcubes-cube-face__node-card [data-sc-fluent-fields]');
+  expect(css).toContain('.sugarcubes-cube-face__node-card [data-sc-fluent-row]');
   expect(css).not.toMatch(/\n\s*\[data-sc-fluent-fields\]/);
   expect(css).toContain('--component-node-background:var(--sc-card-fill)');
 });

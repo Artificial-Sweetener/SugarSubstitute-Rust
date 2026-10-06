@@ -69,7 +69,7 @@ function fixture(
   }
   root.append(header);
   const surface = document.createElement('div');
-  if (masonry) surface.className = 'sugarcubes-workflow-masonry';
+  if (masonry) surface.className = 'sugarcubes-cube-face__node-card';
   surface.append(root);
   document.body.append(surface);
   return { root, header, collapse, enabled };
@@ -175,11 +175,11 @@ test('graph headers leave collapse to the chevron and preserve native selection 
   expect(pointer).toHaveBeenCalledTimes(1);
   collapse.click();
   expect(action).toHaveBeenCalledTimes(1);
-  root.parentElement?.classList.add('sugarcubes-workflow-masonry');
+  root.parentElement?.classList.add('sugarcubes-cube-face__node-card');
   adapter.reconcile(root, header, false);
   header.click();
   expect(action).toHaveBeenCalledTimes(2);
-  root.parentElement?.classList.remove('sugarcubes-workflow-masonry');
+  root.parentElement?.classList.remove('sugarcubes-cube-face__node-card');
   adapter.reconcile(root, header, false);
   header.click();
   expect(action).toHaveBeenCalledTimes(2);

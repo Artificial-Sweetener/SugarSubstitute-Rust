@@ -39,8 +39,8 @@ DOCSTRING_TARGETS = (
     "sugarcubes/nodes.py",
 )
 
-RUNTIME_ROOTS = ("sugarcubes",)
-ROOT_RUNTIME_FILES = ("__init__.py",)
+RUNTIME_ROOTS = ("sugarcubes", "sugarcubes_model_roots")
+ROOT_RUNTIME_FILES = ("__init__.py", "prestartup_script.py", "load_model_roots.py")
 OPTIONAL_FALLBACK_CONTEXTS = {
     (
         "sugarcubes/execution/coordinator.py",
@@ -57,6 +57,10 @@ OPTIONAL_FALLBACK_CONTEXTS = {
     (
         "sugarcubes/execution/queue_observers.py",
         ("QueueObserverRegistry", "notify"),
+    ),
+    (
+        "sugarcubes/model_library/infrastructure/comfy_model_usage.py",
+        ("ComfyModelUsageObserver", "_observe_accepted"),
     ),
 }
 

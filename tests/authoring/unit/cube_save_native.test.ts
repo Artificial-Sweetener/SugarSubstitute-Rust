@@ -51,6 +51,7 @@ test('saves one semantic Cube through its native definition and real node', asyn
         cube_version: '1.0.0',
         cube_revision_ref: 'WORKTREE',
         description: 'Native save description',
+        model_requirements: { schemaVersion: 1, architecture: 'SDXL', family: 'Illustrious' },
       },
       sugarcubes_surface: {
         schema: 1,
@@ -132,6 +133,7 @@ test('saves one semantic Cube through its native definition and real node', asyn
       instance_node_ids: ['root-node-1'],
       description: 'Native save description',
       metadata: expect.objectContaining({
+        model_requirements: { schemaVersion: 1, architecture: 'SDXL', family: 'Illustrious' },
         surface_size: [840, 520],
         surface_state: {
           schema: 1,

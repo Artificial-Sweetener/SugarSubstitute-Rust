@@ -23,6 +23,7 @@ import {
   resolveComfyRendererMode,
 } from '../../core/ComfyRendererMode.js';
 import { CubeSurfaceRendererLifecycle } from '../CubeSurfaceRendererLifecycle.js';
+import type { CanvasGraphChangeSource } from '../ComfyCanvasGraphChangeAdapter.js';
 import {
   NativeSubgraphChangeObserver,
   type ObservableNativeSubgraph,
@@ -40,8 +41,9 @@ export interface WorkflowMasonryHostLifecycleOptions {
   document: Document;
   getCubes(): readonly CubeNode[];
   getCardState(): CubeFaceCardStateService | null;
+  getGraphChanges(): CanvasGraphChangeSource | null;
   getConnections(graph: ComfyGraph): readonly WorkflowMasonryConnection[];
-  alert(title: string, message: string): Promise<unknown>;
+  notifyRendererFallback(): void;
   reportError(error: unknown): void;
   logger: Pick<Console, 'warn'>;
 }
@@ -55,10 +57,11 @@ export class WorkflowMasonryHostLifecycle {
   readonly #graphs = new Map<ObservableNativeSubgraph, NativeSubgraphChangeObserver>();
   #unsubscribeRenderer: (() => void) | null = null;
   #unsubscribeCards: (() => void) | null = null;
+  #unsubscribeNavigation: (() => void) | null = null;
   #restoreAfterConfigure = false;
   #disposed = false;
 
-  /** Bind native renderer capabilities and the existing SugarCubes dialog service. */
+  /** Bind native renderer capabilities and non-blocking fallback feedback. */
   constructor(options: WorkflowMasonryHostLifecycleOptions) {
     this.#options = options;
     this.#renderers = new CubeSurfaceRendererLifecycle({
@@ -84,7 +87,7 @@ export class WorkflowMasonryHostLifecycle {
         return state;
       },
       openCube: (cube) => this.#openCube(cube),
-      alert: options.alert,
+      notifyRendererFallback: options.notifyRendererFallback,
       reportError: options.reportError,
       onStateChange: () => this.#refreshButton(),
     });
@@ -158,10 +161,18 @@ export class WorkflowMasonryHostLifecycle {
   #observeGraphs(): void {
     this.#unsubscribeCards ??=
       this.#options.getCardState()?.subscribe(this.#onCardsChanged) ?? null;
+    this.#unsubscribeNavigation ??=
+      this.#options.getGraphChanges()?.subscribe(this.#onGraphReplaced) ?? null;
     const graph = this.#options.app?.canvas?.graph ?? this.#options.app?.graph;
-    const graphs: unknown[] = [graph, ...this.#options.getCubes().map((cube) => cube.subgraph)];
+    const candidates: unknown[] = [graph, ...this.#options.getCubes().map((cube) => cube.subgraph)];
+    const graphs = new Set(candidates.filter(isObservableGraph));
+    for (const [observed, observer] of this.#graphs) {
+      if (graphs.has(observed)) continue;
+      observer.dispose();
+      this.#graphs.delete(observed);
+    }
     for (const candidate of graphs) {
-      if (!isObservableGraph(candidate) || this.#graphs.has(candidate)) continue;
+      if (this.#graphs.has(candidate)) continue;
       this.#graphs.set(
         candidate,
         new NativeSubgraphChangeObserver(candidate, () => {
@@ -176,6 +187,8 @@ export class WorkflowMasonryHostLifecycle {
 
   /** Restore every host callback before changing renderer or graph ownership. */
   #releaseGraphObservers(): void {
+    this.#unsubscribeNavigation?.();
+    this.#unsubscribeNavigation = null;
     this.#unsubscribeCards?.();
     this.#unsubscribeCards = null;
     for (const observer of this.#graphs.values()) observer.dispose();
@@ -187,6 +200,14 @@ export class WorkflowMasonryHostLifecycle {
     if (this.#disposed) return;
     void this.#controller
       .graphChanged()
+      .catch((error: unknown) => this.#options.reportError(error));
+  };
+
+  /** Follow the shared native navigation boundary rather than retaining a previous graph's cards. */
+  readonly #onGraphReplaced = (): void => {
+    if (this.#disposed) return;
+    void this.#controller
+      .graphReplaced()
       .catch((error: unknown) => this.#options.reportError(error));
   };
 

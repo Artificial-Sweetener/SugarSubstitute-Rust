@@ -783,7 +783,7 @@ describe('ui overlay rendering', () => {
 
     const badge = overlay.getDebugState().badgeRegions[0]!;
     const canvasInstance = chromeCanvas({
-      canvas: { getBoundingClientRect: () => ({ left: 0, top: 0 }) },
+      canvas: { ownerDocument: document, getBoundingClientRect: () => ({ left: 0, top: 0 }) },
       convertCanvasToOffset: (point: Vec2) => point,
       ds: { scale: 1, offset: [0, 0] },
     });
@@ -1044,7 +1044,7 @@ describe('ui overlay rendering', () => {
     expect(actions.onForkWorkflowCube).toHaveBeenCalledWith(metadata);
   });
 
-  test('chrome overlay opens LiteGraph context menu from menu pill', async () => {
+  test('chrome overlay opens the shared floating menu from its menu pill', async () => {
     await loadUi();
     const { CubeChromeOverlay } = await import(
       '../../../frontend/comfyui/ui/overlays/CubeChromeOverlay.js'
@@ -1087,7 +1087,7 @@ describe('ui overlay rendering', () => {
     expect(menuRegion).toBeTruthy();
 
     const canvasInstance = chromeCanvas({
-      canvas: { getBoundingClientRect: () => ({ left: 0, top: 0 }) },
+      canvas: { ownerDocument: document, getBoundingClientRect: () => ({ left: 0, top: 0 }) },
       convertCanvasToOffset: (point: Vec2) => point,
       ds: { scale: 1, offset: [0, 0] },
     });
@@ -1097,10 +1097,15 @@ describe('ui overlay rendering', () => {
     const handled = overlay.handleMouseDown(event, canvasInstance);
 
     expect(handled).toBe(true);
-    expect(globalThis.LiteGraph.ContextMenu).toHaveBeenCalledWith(expect.any(Array), { event });
+    expect(globalThis.LiteGraph.ContextMenu).not.toHaveBeenCalled();
+    const menu = document.querySelector('[role=menu][aria-label="Cube actions"]');
+    expect(menu?.parentElement).toBe(document.body);
+    expect(menu?.textContent).toContain('Save cube implementation');
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(menu?.isConnected).toBe(false);
   });
 
-  test('chrome overlay menu no-ops when LiteGraph context menu missing', async () => {
+  test('chrome overlay shared menu works without the host menu constructor', async () => {
     await loadUi();
     const { CubeChromeOverlay } = await import(
       '../../../frontend/comfyui/ui/overlays/CubeChromeOverlay.js'
@@ -1142,7 +1147,7 @@ describe('ui overlay rendering', () => {
     expect(menuRegion).toBeTruthy();
 
     const canvasInstance = chromeCanvas({
-      canvas: { getBoundingClientRect: () => ({ left: 0, top: 0 }) },
+      canvas: { ownerDocument: document, getBoundingClientRect: () => ({ left: 0, top: 0 }) },
       convertCanvasToOffset: (point: Vec2) => point,
       ds: { scale: 1, offset: [0, 0] },
     });
@@ -1152,6 +1157,8 @@ describe('ui overlay rendering', () => {
     const handled = overlay.handleMouseDown(event, canvasInstance);
 
     expect(handled).toBe(true);
+    expect(document.querySelector('[role=menu][aria-label="Cube actions"]')).not.toBeNull();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
   });
 
   test('overlay manager exposes no separate cube-default action', async () => {
@@ -1323,7 +1330,7 @@ describe('ui overlay rendering', () => {
     overlay.renderHeader(canvasContext(ctx), [0, 0, 420, 60], metadata);
 
     const canvasInstance = chromeCanvas({
-      canvas: { getBoundingClientRect: () => ({ left: 0, top: 0 }) },
+      canvas: { ownerDocument: document, getBoundingClientRect: () => ({ left: 0, top: 0 }) },
       convertCanvasToOffset: (point: Vec2) => point,
       ds: { scale: 1, offset: [0, 0] },
     });

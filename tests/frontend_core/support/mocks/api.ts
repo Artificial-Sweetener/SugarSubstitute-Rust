@@ -42,14 +42,16 @@ function createMockApi(): MockApi {
     get: () => {
       const implementation = fetchImplementation;
       return async (path: string, options?: RequestInit) =>
-        path === '/sugarcubes/status'
-          ? {
-              ok: true,
-              json: async () => ({
-                workflowNodePack: { cnrId: 'SugarCubes', version: '9.8.7' },
-              }),
-            }
-          : implementation(path, options);
+        path === '/userdata/SugarCubes%2Fpresets.json'
+          ? { ok: false, status: 404, json: async () => null }
+          : path === '/sugarcubes/status'
+            ? {
+                ok: true,
+                json: async () => ({
+                  workflowNodePack: { cnrId: 'SugarCubes', version: '9.8.7' },
+                }),
+              }
+            : implementation(path, options);
     },
     set: (implementation: MockApi['fetchApi']) => {
       fetchImplementation = implementation;

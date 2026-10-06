@@ -305,6 +305,7 @@ export class CubeSurfacePresenter {
                 chromeActions: this.#chromeActions,
                 nodes: node.subgraph._nodes,
                 graph: node.subgraph,
+                cube: node,
                 state,
                 ...(this.#previewActions ? { previewActions: this.#previewActions } : {}),
                 getScale: this.#getScale,

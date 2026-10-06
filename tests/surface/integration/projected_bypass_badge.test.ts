@@ -16,7 +16,7 @@
 /** Prove masonry suppresses only native bypass labels while preserving activation state. */
 import { afterEach, expect, test } from '@jest/globals';
 import { ComfyVueNodeCardRenderer } from '../../../frontend/comfyui/ui/surface/ComfyVueNodeCardRenderer.js';
-import { ensureWorkflowMasonryStyles } from '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryStyles.js';
+import { ensureCubeSurfaceStyles } from '../../../frontend/comfyui/ui/surface/CubeSurfaceStyles.js';
 import type { UnknownRecord } from '../../../frontend/comfyui/ui/types/common.js';
 
 afterEach(() => {
@@ -34,13 +34,14 @@ function component(
   return { type: { __name: name }, component: { props, subTree: { el, children } } };
 }
 
-test.each([false, true])(
-  'hides the bypass label only in masonry=%s and reconciles a reused muted badge',
-  (masonry) => {
-    ensureWorkflowMasonryStyles(document);
+test.each(['native', 'cube', 'masonry'])(
+  'hides bypass labels in projected cards on %s and reconciles a reused muted badge',
+  (view) => {
+    ensureCubeSurfaceStyles(document);
     const surface = document.createElement('section');
-    if (masonry) surface.className = 'sugarcubes-workflow-masonry';
+    if (view === 'masonry') surface.className = 'sugarcubes-workflow-masonry';
     const target = document.createElement('div');
+    if (view !== 'native') target.className = 'sugarcubes-cube-face__node-card';
     surface.append(target);
     document.body.append(surface);
     const root = document.createElement('div');
@@ -82,7 +83,7 @@ test.each([false, true])(
       },
     });
     const mount = renderer.mount(target, node, { preserveNativeBody: true });
-    expect(getComputedStyle(bypass).display).toBe(masonry ? 'none' : 'block');
+    expect(getComputedStyle(bypass).display).toBe(view !== 'native' ? 'none' : 'block');
     expect(getComputedStyle(price).display).toBe('block');
     expect(getComputedStyle(custom).display).toBe('block');
     expect(node.mode).toBe(4);

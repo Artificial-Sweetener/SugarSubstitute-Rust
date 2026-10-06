@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Compose one Cube face around host-rendered native node cards. */
-import { resolveCubeFaceCardPresentation, } from './CubeFaceCardPolicy.js';
+import { projectNodeCards } from './NodeCardProjection.js';
 import { setCubeFaceNodeEnabled } from './CubeFaceCardStateController.js';
 import { NativeNodeCardHost } from './NativeNodeCardHost.js';
 import { CubePreviewRailView } from './CubePreviewRailView.js';
@@ -30,6 +30,7 @@ export class CubeSurfaceView {
     #state;
     #nodes;
     #graph;
+    #cube;
     #onStateChange;
     #onMinimumHeightChange;
     #cardHost;
@@ -50,6 +51,7 @@ export class CubeSurfaceView {
         this.#state = options.state;
         this.#nodes = [...options.nodes];
         this.#graph = options.graph;
+        this.#cube = options.cube;
         this.#onStateChange = options.onStateChange;
         this.#onMinimumHeightChange = options.onMinimumHeightChange ?? null;
         this.#cardHost = new NativeNodeCardHost(options.renderer);
@@ -157,8 +159,7 @@ export class CubeSurfaceView {
     }
     /** Reconcile exact native card mounts from the shared presentation policy. */
     #renderCards() {
-        const presentation = resolveCubeFaceCardPresentation(this.#nodes, this.#state, this.#graph);
-        this.#visibleCards = presentation.cards.filter((card) => card.visible);
+        this.#visibleCards = projectNodeCards(this.#nodes, this.#state, this.#graph, this.#cube).filter((card) => card.visible);
         this.#cells = this.#cardHost.mount(this.#masonry, this.#visibleCards, (node, enabled) => {
             setCubeFaceNodeEnabled(this.#state, node, enabled);
             this.#commitCardChange();

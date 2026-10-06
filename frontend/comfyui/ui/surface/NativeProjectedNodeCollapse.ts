@@ -36,10 +36,13 @@ export class NativeProjectedNodeCollapse {
   }
 
   /** Reflect the native node's collapse capability in the existing control. */
-  reconcile(root: HTMLElement): void {
+  reconcile(
+    root: HTMLElement,
+    hasContent = cubeFaceRevealableWidgets(this.#node).length > 0,
+  ): void {
     const button = root.querySelector<HTMLButtonElement>('[data-testid="node-collapse-button"]');
     if (button) {
-      button.hidden = cubeFaceRevealableWidgets(this.#node).length === 0;
+      button.hidden = !hasContent;
       if (button.hidden) button.style.setProperty('display', 'none', 'important');
       else button.style.removeProperty('display');
       button.disabled =

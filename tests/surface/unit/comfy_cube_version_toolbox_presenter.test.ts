@@ -80,9 +80,8 @@ test('matches the color control and uses one exclusive shared check menu', () =>
   expect([...rows].filter((row) => row.getAttribute('aria-checked') === 'true')).toHaveLength(1);
   expect([...rows].every((row) => row.getAttribute('role') === 'menuitemradio')).toBe(true);
   expect(rows[0]?.textContent).toContain('Latest (v2.0.0)');
-  expect(document.getElementById('sugarcubes-toolbox-check-menu-styles')?.textContent).toContain(
-    ':hover',
-  );
+  expect(menu?.parentElement).toBe(document.body);
+  expect(menu?.style.position).toBe('fixed');
   menu?.querySelector<HTMLButtonElement>('[data-sugarcubes-version-option="2.0.0"]')?.click();
   expect(select).not.toHaveBeenCalled();
   expect(document.querySelector('[data-sugarcubes-version-menu]')).toBeNull();

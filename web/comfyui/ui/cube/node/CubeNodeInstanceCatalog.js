@@ -17,6 +17,19 @@
 import { isRecord } from '../../types/common.js';
 import { requireCubeIdentity, requireCubeSurface } from './ComfyCubeNodeFactory.js';
 import { readInstanceId } from './CubeNodeCatalog.js';
+import { decodeModelRequirement } from '../ModelRequirement.js';
+/** Read the explicit family through the same instance-first identity owner used by persistence. */
+export function readCubeTargetModel(node) {
+    return readString(readNodeMetadata(node).target_model);
+}
+/** Retain canonical-document requirements until an instance receives an explicit assignment. */
+export function readCubeModelRequirement(node) {
+    const document = isRecord(node.subgraph.extra?.sugarcubes_document)
+        ? node.subgraph.extra.sugarcubes_document
+        : {};
+    const metadata = isRecord(document.metadata) ? document.metadata : {};
+    return decodeModelRequirement(readNodeMetadata(node).model_requirements ?? metadata.model_requirements);
+}
 /** Return every persistable Cube node from the live native catalog. */
 export function listCubeNodeInstances(nodes) {
     const instances = [];
@@ -40,6 +53,7 @@ export function listCubeNodeInstances(nodes) {
             description: readOptionalString(metadata, 'description'),
             surfaceSize: [Number(node.size[0]), Number(node.size[1])],
             surfaceState: cloneRecord(requireCubeSurface(node)),
+            modelRequirements: readCubeModelRequirement(node),
         });
     }
     return instances;

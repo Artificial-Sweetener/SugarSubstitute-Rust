@@ -150,12 +150,18 @@ export class NativeFluentCardAdapter {
     const footer = findVueComponents(vnode, 'NodeFooter')[0];
     const footerComponent = isRecord(footer?.component) ? footer.component : {};
     const footerProps = isRecord(footerComponent.props) ? footerComponent.props : {};
-    const button = root.querySelector<HTMLButtonElement>('[data-testid="advanced-inputs-button"]');
-    const fields = root.querySelector<HTMLElement>('[data-sc-fluent-fields]');
+    const button =
+      [...root.querySelectorAll<HTMLButtonElement>('[data-testid="advanced-inputs-button"]')].find(
+        (element) => element.closest('.lg-node') === root,
+      ) ?? null;
+    const fields =
+      [...root.querySelectorAll<HTMLElement>('[data-sc-fluent-fields]')].find(
+        (element) => element.closest('.lg-node') === root,
+      ) ?? null;
     const visibleFields = Array.from(fields?.children ?? []).some(
       (child) => child instanceof HTMLElement && !child.hidden && child.style.display !== 'none',
     );
-    if (visibleFields && !root.closest('.sugarcubes-workflow-masonry')) {
+    if (visibleFields && !root.closest('.sugarcubes-cube-face__node-card')) {
       for (const slots of findVueComponents(vnode, 'NodeSlots')) {
         const container = resolveVNodeElement(slots);
         if (container?.closest('.lg-node') === root && container.querySelector('.lg-slot'))

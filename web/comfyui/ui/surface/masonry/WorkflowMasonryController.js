@@ -50,6 +50,20 @@ export class WorkflowMasonryController {
                 this.#releaseView();
             return;
         }
+        await this.#show(generation);
+    }
+    /** Release obsolete graph bindings immediately while retaining the chosen presentation. */
+    async graphReplaced() {
+        if (!this.#desired)
+            return;
+        const generation = ++this.#generation;
+        this.#transition.cancel();
+        this.#releaseView();
+        this.#options.onStateChange();
+        await this.#show(generation);
+    }
+    /** Mount the current graph only while this presentation request still owns the lifecycle. */
+    async #show(generation) {
         try {
             if (!this.#view) {
                 const renderer = await this.#options.getRenderer();
@@ -103,9 +117,12 @@ export class WorkflowMasonryController {
         const unsupported = !this.#options.isNodes2();
         if (unsupported && (this.#desired || this.#view)) {
             this.leaveImmediately();
-            void this.#options
-                .alert('Masonry requires Nodes 2.0', 'SugarCubes masonry does not support Nodes 1.0. Your workflow is now displayed in graph mode.')
-                .catch((error) => this.#options.reportError(error));
+            try {
+                this.#options.notifyRendererFallback();
+            }
+            catch (error) {
+                this.#options.reportError(error);
+            }
         }
         this.#options.onStateChange();
     }
@@ -117,8 +134,9 @@ export class WorkflowMasonryController {
     async graphChanged() {
         if (!this.#desired || !this.#view || !this.#renderer)
             return;
+        const generation = this.#generation;
         await this.#mounting;
-        if (!this.#desired || !this.#view)
+        if (generation !== this.#generation || !this.#desired || !this.#view)
             return;
         const sections = this.#options.getSections();
         const topology = topologySignature(sections);
@@ -130,6 +148,8 @@ export class WorkflowMasonryController {
             await this.#mounting;
         }
         catch (error) {
+            if (generation !== this.#generation)
+                return;
             this.leaveImmediately();
             this.#options.reportError(error);
         }

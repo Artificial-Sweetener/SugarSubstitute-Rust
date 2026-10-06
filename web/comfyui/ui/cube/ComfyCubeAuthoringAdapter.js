@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Convert a native Comfy selection into a real Cube subgraph node. */
 import { isRecord } from '../types/common.js';
-import { isDraftCubeNode, } from './node/ComfyCubeNodeFactory.js';
+import { isDraftCubeNode, requireCubeIdentity, } from './node/ComfyCubeNodeFactory.js';
 import { writeCubeDefinitionIdentity } from './node/CubeDefinitionIdentityWriter.js';
 import { resolveCubeDefinitionDescription } from './node/CubeDefinitionIdentityWriter.js';
 import { ComfyCubeGraphScope } from './placement/ComfyCubeGraphScope.js';
@@ -117,7 +117,12 @@ export class ComfyCubeAuthoringAdapter {
         if (!node || !isDraftCubeNode(node)) {
             throw new Error('The selected Cube draft is no longer available.');
         }
-        const metadata = buildCubeMetadata(identity);
+        const metadata = {
+            ...buildCubeMetadata(identity),
+            ...(requireCubeIdentity(node).model_requirements
+                ? { model_requirements: requireCubeIdentity(node).model_requirements }
+                : {}),
+        };
         node.subgraph.name = `Cube: ${identity.defaultAlias}`;
         writeCubeDefinitionIdentity(node.subgraph, 'cube', metadata);
         this.#nodeFactory.adopt(node, {
@@ -141,7 +146,12 @@ export class ComfyCubeAuthoringAdapter {
             instanceId,
             defaultAlias: node.title?.trim() || 'Untitled Cube',
         };
-        const metadata = buildDraftMetadata(identity);
+        const metadata = {
+            ...buildDraftMetadata(identity),
+            ...(requireCubeIdentity(node).model_requirements
+                ? { model_requirements: requireCubeIdentity(node).model_requirements }
+                : {}),
+        };
         markSubgraphAsDraft(node.subgraph, metadata);
         this.#nodeFactory.adopt(node, {
             instanceId,

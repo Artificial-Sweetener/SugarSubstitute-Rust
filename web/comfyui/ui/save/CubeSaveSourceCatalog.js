@@ -17,6 +17,7 @@
 import { defaultSupportedModelsForTarget, deriveRouteFromCubeId, deriveTargetModelFromCubeId, normalizeSupportedModels, normalizeTargetModel, } from '../core/ModelTargets.js';
 import { buildCubeDefinitionKey, isCurrentRevisionRef, normalizeCubeVersion, normalizeRevisionRef, } from '../core/CubeDefinitionKey.js';
 import { InstanceBuilder } from '../graph/InstanceBuilder.js';
+import { encodeModelRequirement } from '../cube/ModelRequirement.js';
 import { getGraphGroups } from '../graph/GraphQuery.js';
 import { getGroupSugarcubes } from '../graph/GroupMetadata.js';
 /** Own save-source discovery and metadata projection. */
@@ -63,6 +64,7 @@ export class CubeSaveSourceCatalog {
                 cubeNodeId: instance.nodeId,
                 surfaceSize: instance.surfaceSize,
                 surfaceState: instance.surfaceState,
+                modelRequirements: instance.modelRequirements ?? null,
             });
         }
         for (const group of getGraphGroups(graph)) {
@@ -177,6 +179,11 @@ export class CubeSaveSourceCatalog {
             ...(defaultAlias ? { default_alias: defaultAlias } : {}),
             target_model: targetModel,
             supported_models: normalizeSupportedModels(supportedSource, { targetModel }),
+            ...(sourceMetadata?.selectedSourceEntry?.modelRequirements
+                ? {
+                    model_requirements: encodeModelRequirement(sourceMetadata.selectedSourceEntry.modelRequirements),
+                }
+                : {}),
             ...(sourceMetadata?.selectedSourceEntry?.surfaceSize
                 ? { surface_size: [...sourceMetadata.selectedSourceEntry.surfaceSize] }
                 : {}),

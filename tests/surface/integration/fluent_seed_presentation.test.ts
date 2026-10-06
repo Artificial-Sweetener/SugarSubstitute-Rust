@@ -34,13 +34,14 @@ function vnode(
   return { type: { __name: name }, component: { props, subTree: { el, children } } };
 }
 
-test.each([false, true])(
-  'presents seed controls in masonry=%s and restores native UI across theme/renderer changes',
-  async (masonry) => {
+test.each(['native', 'cube', 'masonry'])(
+  'presents seed controls in %s and restores native UI across theme/renderer changes',
+  async (view) => {
     const surface = document.createElement('section');
-    if (masonry) surface.className = 'sugarcubes-workflow-masonry';
+    if (view === 'masonry') surface.className = 'sugarcubes-workflow-masonry';
     const mount = document.createElement('div');
     mount.className = 'sugarcubes-native-node-card';
+    if (view !== 'native') surface.classList.add('sugarcubes-cube-face__node-card');
     const root = document.createElement('article');
     root.className = 'lg-node';
     const fields = document.createElement('div');
@@ -139,7 +140,7 @@ test.each([false, true])(
     expect(getComputedStyle(input).paddingLeft).toBe('8px');
     expect(getComputedStyle(input).paddingRight).toBe('8px');
     expect(getComputedStyle(input).textAlign).toBe('left');
-    if (masonry) {
+    if (view !== 'native') {
       expect(getComputedStyle(layout).display).toBe('flex');
       expect(getComputedStyle(container).flexShrink).toBe('0');
       expect(getComputedStyle(spinner).width).toBe('calc(20ch + 64px)');
@@ -149,7 +150,7 @@ test.each([false, true])(
     toggle.click();
     expect(control.value).toBe('fixed');
     arrow.click();
-    root.querySelector<HTMLButtonElement>('[data-sc-seed-option="decrement"]')?.click();
+    document.querySelector<HTMLButtonElement>('[data-sc-seed-option="decrement"]')?.click();
     expect(control.value).toBe('decrement');
     expect(modeCallback).toHaveBeenCalledWith('decrement');
     expect(widget.value).toBe(709312264123456);

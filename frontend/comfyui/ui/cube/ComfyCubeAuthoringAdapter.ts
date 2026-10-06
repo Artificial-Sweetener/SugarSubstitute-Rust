@@ -21,6 +21,7 @@ import type { ComfyGraph, GraphId, NumericVector } from '../types/graph.js';
 import type { NativeCubeSubgraph } from './ComfyCubeGraphBuilder.js';
 import {
   isDraftCubeNode,
+  requireCubeIdentity,
   type ComfyCubeNodeFactory,
   type CubeNode,
 } from './node/ComfyCubeNodeFactory.js';
@@ -205,7 +206,12 @@ export class ComfyCubeAuthoringAdapter {
     if (!node || !isDraftCubeNode(node)) {
       throw new Error('The selected Cube draft is no longer available.');
     }
-    const metadata = buildCubeMetadata(identity);
+    const metadata = {
+      ...buildCubeMetadata(identity),
+      ...(requireCubeIdentity(node).model_requirements
+        ? { model_requirements: requireCubeIdentity(node).model_requirements }
+        : {}),
+    };
     node.subgraph.name = `Cube: ${identity.defaultAlias}`;
     writeCubeDefinitionIdentity(node.subgraph, 'cube', metadata);
     this.#nodeFactory.adopt(node, {
@@ -229,7 +235,12 @@ export class ComfyCubeAuthoringAdapter {
       instanceId,
       defaultAlias: node.title?.trim() || 'Untitled Cube',
     };
-    const metadata = buildDraftMetadata(identity);
+    const metadata = {
+      ...buildDraftMetadata(identity),
+      ...(requireCubeIdentity(node).model_requirements
+        ? { model_requirements: requireCubeIdentity(node).model_requirements }
+        : {}),
+    };
     markSubgraphAsDraft(node.subgraph, metadata);
     this.#nodeFactory.adopt(node, {
       instanceId,

@@ -31,6 +31,7 @@ from ...cube_model import (
     validate_cube_route_identity,
 )
 from ..responses import BackendError
+from ...cube_model.model_requirements import normalize_model_requirement
 from .cube_icon_service import CubeIconError, normalize_icon_metadata
 
 _TITLE_SMALL_WORDS = {
@@ -268,6 +269,13 @@ def normalize_metadata_update(
 
     normalized: dict[str, Any] = {}
     remove_keys: set[str] = set()
+    if "model_requirements" in payload:
+        try:
+            normalized["model_requirements"] = normalize_model_requirement(
+                payload["model_requirements"]
+            )
+        except ValueError as exc:
+            raise BackendError(str(exc), status=400) from exc
     for key in ("author_url",):
         if key not in payload:
             continue

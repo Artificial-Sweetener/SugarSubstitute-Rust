@@ -14,7 +14,10 @@ classifiers = [
 ]
 dependencies = [
     "aiohttp",
+    "av>=16.0.0",
+    "certifi>=2025.1.31",
     "pygit2==1.20.1",
+    "Pillow>=11.3,<13",
 ]
 
 [project.urls]
@@ -41,6 +44,11 @@ includes = []
 include = [
     "sugarcubes*",
 ]
+
+[tool.setuptools.package-data]
+sugarcubes = ["py.typed"]
+"sugarcubes.model_library.infrastructure" = ["resources/detectors/*.png"]
+sugarcubes_model_roots = ["py.typed"]
 
 [tool.black]
 target-version = ["py312"]

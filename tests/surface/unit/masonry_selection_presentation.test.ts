@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Prove masonry suppresses native selection color while retaining graph and control feedback. */
 import { afterEach, expect, test } from '@jest/globals';
+import { ensureCubeSurfaceStyles } from '../../../frontend/comfyui/ui/surface/CubeSurfaceStyles.js';
 import { ensureWorkflowMasonryStyles } from '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryStyles.js';
 
 afterEach(() => {
@@ -29,10 +30,11 @@ function fixture(masonry: boolean) {
     '.outline-node-component-outline { outline-color:blue; } .border-node-component-outline { border:3px solid blue; } .border-node-stroke-executing { border:3px solid green; } input { outline-color:blue; }';
   document.head.append(native);
   ensureWorkflowMasonryStyles(document);
+  ensureCubeSurfaceStyles(document);
   const surface = document.createElement('div');
   if (masonry) surface.className = 'sugarcubes-workflow-masonry';
   const card = document.createElement('article');
-  if (masonry) card.className = 'sugarcubes-workflow-masonry__card';
+  if (masonry) card.className = 'sugarcubes-workflow-masonry__card sugarcubes-cube-face__node-card';
   const root = document.createElement('div');
   root.className = 'lg-node outline-node-component-outline';
   const selection = document.createElement('div');

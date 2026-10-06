@@ -21,6 +21,11 @@ import {
   updateCubeFaceActivationControl,
 } from './CubeFaceActivationControl.js';
 import type { CubeFaceCardDecision } from './CubeFaceCardPolicy.js';
+import type { ProjectedNodeCard } from './NodeCardProjection.js';
+import { cubeFaceNodeHasVisibleWidgets } from './CubeFaceNodePresentationPolicy.js';
+import { NativeWidgetElementLease } from './NativeWidgetElementLease.js';
+import { NativeForwardedWidgetLease } from './NativeForwardedWidgetLease.js';
+import { NodeCardIconHost } from './NodeCardIconHost.js';
 import type {
   NativeNodeCardMount,
   NativeNodeCardRenderer,
@@ -32,6 +37,7 @@ export class NativeNodeCardHost {
   readonly #renderer: NativeNodeCardRenderer;
   readonly #mounts: NativeNodeCardMount[] = [];
   readonly #activation = new Map<ComfyNode, HTMLLabelElement>();
+  readonly #leases: Array<() => void> = [];
 
   /** Create a host that delegates all node rendering to Comfy. */
   constructor(renderer: NativeNodeCardRenderer) {
@@ -41,7 +47,7 @@ export class NativeNodeCardHost {
   /** Mount the exact internal graph nodes into dedicated masonry cells. */
   mount(
     container: HTMLElement,
-    cards: readonly CubeFaceCardDecision[],
+    cards: readonly ProjectedNodeCard[],
     onActivationChange: (node: ComfyNode, enabled: boolean) => void,
   ): HTMLElement[] {
     this.dispose();
@@ -59,7 +65,7 @@ export class NativeNodeCardHost {
   /** Mount the shared card chrome into a supplied cell while retaining native renderer options. */
   mountCard(
     cell: HTMLElement,
-    card: CubeFaceCardDecision,
+    card: ProjectedNodeCard,
     onActivationChange: (node: ComfyNode, enabled: boolean) => void,
     options: NativeNodeCardMountOptions = {},
   ): void {
@@ -76,8 +82,23 @@ export class NativeNodeCardHost {
       ? createCubeFaceActivationControl(cell.ownerDocument, card, onActivationChange)
       : null;
     if (headerAccessory) this.#activation.set(node, headerAccessory);
+    const widgetSources = card.widgetSources ?? [];
+    const widgets = new NativeWidgetElementLease([
+      node,
+      ...widgetSources.map((source) => source.node),
+    ]);
+    const forwarded = new NativeForwardedWidgetLease(cell, node, widgetSources);
+    const icon = new NodeCardIconHost(cell, node);
+    this.#leases.push(() => {
+      icon.dispose();
+      forwarded.dispose();
+      widgets.restore();
+    });
     this.#mounts.push(
       this.#renderer.mount(target, node, {
+        presentationGeometry: true,
+        preserveNativeBody: cubeFaceNodeHasVisibleWidgets(node) || widgetSources.length > 0,
+        widgetSources,
         ...options,
         ...(headerAccessory ? { headerAccessory } : {}),
       }),
@@ -96,6 +117,7 @@ export class NativeNodeCardHost {
   /** Unmount this view's cards while retaining Comfy's shared renderer service. */
   dispose(): void {
     for (const mount of this.#mounts.splice(0)) mount.unmount();
+    for (const release of this.#leases.splice(0)) release();
     this.#activation.clear();
   }
 }

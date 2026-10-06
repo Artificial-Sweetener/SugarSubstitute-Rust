@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Adapt Comfy's native image actions to Cube output media. */
+import { ContextMenu } from '../menus/ContextMenu.js';
 /** Reuse Comfy's image-action semantics on output media outside native node cards. */
 export class ComfyCubePreviewActions {
     #document;
@@ -102,12 +103,16 @@ export function createComfyCubePreviewActions(host) {
             ]);
         },
         showContextMenu: (options, event) => {
-            const ContextMenu = host.liteGraph.ContextMenu;
-            if (typeof ContextMenu !== 'function') {
-                host.logger.warn('SugarCubes could not open Comfy image actions: ContextMenu is missing.');
-                return;
-            }
-            Reflect.construct(ContextMenu, [options, { event }]);
+            new ContextMenu(host.document).open({
+                label: 'Image actions',
+                anchor: { kind: 'pointer', x: event.clientX, y: event.clientY },
+                entries: options.map((option) => ({
+                    label: option.content,
+                    select: () => {
+                        void option.callback();
+                    },
+                })),
+            });
         },
         reportError: (message, error) => host.logger.error(message, error),
     });

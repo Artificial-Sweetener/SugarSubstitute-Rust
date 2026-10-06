@@ -31,7 +31,7 @@ export class ComfyVueNodeHeaderAccessoryHost {
   reconcile(nativeRoot: HTMLElement, node: ComfyNode): boolean {
     const header = findNativeNodeHeader(nativeRoot, node);
     if (!header) return false;
-    const row = findNativeNodeHeaderRow(header);
+    const row = nativeNodeHeaderAccessoryRow(header);
     if (!row) return false;
     if (this.#header && this.#header !== header) {
       delete this.#header.dataset.sugarcubeCardHeaderAccessory;
@@ -62,7 +62,7 @@ function findNativeNodeHeader(nativeRoot: HTMLElement, node: ComfyNode): HTMLEle
 }
 
 /** Resolve Comfy's stable title-and-badges flex row inside the native header. */
-function findNativeNodeHeaderRow(header: HTMLElement): HTMLElement | null {
+function nativeNodeHeaderAccessoryRow(header: HTMLElement): HTMLElement | null {
   const title = header.querySelector<HTMLElement>('[data-testid="node-title"]');
   const semanticRow = title?.parentElement?.parentElement;
   if (semanticRow instanceof HTMLElement && semanticRow.parentElement === header) {

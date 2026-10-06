@@ -18,11 +18,26 @@ import { setTheme } from '@fluentui/web-components/theme/set-theme.js';
 import { webDarkTheme, webLightTheme } from '@fluentui/tokens';
 import { Slider } from '@fluentui/web-components/slider/class.js';
 import { definition as SliderDefinition } from '@fluentui/web-components/slider/definition.js';
+import { Button } from '@fluentui/web-components/button/class.js';
+import { definition as ButtonDefinition } from '@fluentui/web-components/button/definition.js';
+import { Checkbox } from '@fluentui/web-components/checkbox/class.js';
+import { definition as CheckboxDefinition } from '@fluentui/web-components/checkbox/definition.js';
 import type { FluentNumericSlider } from './NativeNumericControls.js';
+import type { FluentBooleanCheckbox } from './NativeToggleRows.js';
 import { adaptFluentSliderGeometry } from './FluentSliderGeometry.js';
 
 // FAST completes component registration asynchronously, before consumers can create controls.
 if (!customElements.get('fluent-slider')) await Slider.define(SliderDefinition);
+if (!customElements.get('fluent-button')) await Button.define(ButtonDefinition);
+if (!customElements.get('fluent-checkbox')) await Checkbox.define(CheckboxDefinition);
+
+/** Instantiate Microsoft's checkbox while Comfy retains the boolean value owner. */
+export function createFluentBooleanCheckbox(documentRef: Document): FluentBooleanCheckbox {
+  const checkbox = documentRef.createElement('fluent-checkbox');
+  if (!(checkbox instanceof Checkbox))
+    throw new TypeError('The registered Fluent checkbox has an incompatible implementation.');
+  return checkbox;
+}
 
 /** Instantiate Microsoft's official slider without replacing Comfy's numeric value owner. */
 export function createFluentNumericSlider(documentRef: Document): FluentNumericSlider {

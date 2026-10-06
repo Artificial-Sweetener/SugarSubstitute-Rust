@@ -16,10 +16,8 @@
 /** Compose one Cube face around host-rendered native node cards. */
 
 import type { ComfyGraph, ComfyNode } from '../types/graph.js';
-import {
-  resolveCubeFaceCardPresentation,
-  type CubeFaceCardDecision,
-} from './CubeFaceCardPolicy.js';
+import { projectNodeCards, type ProjectedNodeCard } from './NodeCardProjection.js';
+import type { CubeNode } from '../cube/node/ComfyCubeNodeFactory.js';
 import { setCubeFaceNodeEnabled } from './CubeFaceCardStateController.js';
 import { NativeNodeCardHost } from './NativeNodeCardHost.js';
 import type { NativeNodeCardRenderer } from './NativeNodeCardRenderer.js';
@@ -43,6 +41,7 @@ export interface CubeSurfaceViewOptions {
   chromeActions?: CubeFaceChromeActions | null;
   nodes: readonly ComfyNode[];
   graph?: ComfyGraph;
+  cube?: CubeNode;
   state: CubeSurfaceState;
   previewActions?: CubePreviewActions;
   getScale?(): number;
@@ -57,6 +56,7 @@ export class CubeSurfaceView {
   readonly #state: CubeSurfaceState;
   readonly #nodes: ComfyNode[];
   readonly #graph: ComfyGraph | undefined;
+  readonly #cube: CubeNode | undefined;
   readonly #onStateChange: (state: CubeSurfaceState) => void;
   readonly #onMinimumHeightChange: ((minimumHeight: number) => void) | null;
   readonly #cardHost: NativeNodeCardHost;
@@ -70,7 +70,7 @@ export class CubeSurfaceView {
   readonly #previewDividerController: CubePreviewDividerController | null;
   readonly #previewFrameResize = new CubePreviewFrameResizePolicy();
   #cells: HTMLElement[] = [];
-  #visibleCards: CubeFaceCardDecision[] = [];
+  #visibleCards: ProjectedNodeCard[] = [];
   #lastLayoutWidth = 1;
 
   /** Build a Cube view without assuming ownership of Comfy's renderer service. */
@@ -78,6 +78,7 @@ export class CubeSurfaceView {
     this.#state = options.state;
     this.#nodes = [...options.nodes];
     this.#graph = options.graph;
+    this.#cube = options.cube;
     this.#onStateChange = options.onStateChange;
     this.#onMinimumHeightChange = options.onMinimumHeightChange ?? null;
     this.#cardHost = new NativeNodeCardHost(options.renderer);
@@ -210,8 +211,9 @@ export class CubeSurfaceView {
 
   /** Reconcile exact native card mounts from the shared presentation policy. */
   #renderCards(): void {
-    const presentation = resolveCubeFaceCardPresentation(this.#nodes, this.#state, this.#graph);
-    this.#visibleCards = presentation.cards.filter((card) => card.visible);
+    this.#visibleCards = projectNodeCards(this.#nodes, this.#state, this.#graph, this.#cube).filter(
+      (card) => card.visible,
+    );
     this.#cells = this.#cardHost.mount(this.#masonry, this.#visibleCards, (node, enabled) => {
       setCubeFaceNodeEnabled(this.#state, node, enabled);
       this.#commitCardChange();

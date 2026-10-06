@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Resolve standard row geometry without claiming custom component presentation. */
-export type NativeFieldKind = 'scalar' | 'multiline' | 'model';
+export type NativeFieldKind = 'scalar' | 'multiline';
 
 const standardComponents: Readonly<Record<string, NativeFieldKind>> = {
   WidgetInputNumber: 'scalar',
@@ -25,14 +25,6 @@ const standardComponents: Readonly<Record<string, NativeFieldKind>> = {
   WidgetInputText: 'scalar',
   WidgetTextarea: 'multiline',
 };
-const modelFields = new Set([
-  'ckpt_name',
-  'vae_name',
-  'lora_name',
-  'unet_name',
-  'clip_name',
-  'model_name',
-]);
 /** Enumerate the core components whose field layout this adapter understands. */
 export const NATIVE_FIELD_COMPONENTS = Object.keys(standardComponents);
 
@@ -51,8 +43,7 @@ export interface NativeFieldPlacement {
 
 /** Accept known native components rather than guessing from arbitrary input markup. */
 export function classifyNativeField(field: NativeFieldDescriptor): NativeFieldKind | null {
-  const kind = standardComponents[field.component];
-  return kind === 'scalar' && modelFields.has(field.name) ? 'model' : (kind ?? null);
+  return standardComponents[field.component] ?? null;
 }
 
 /** Group adjacent native fields while preserving authored order and custom boundaries. */

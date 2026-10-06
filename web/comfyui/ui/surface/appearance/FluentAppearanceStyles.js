@@ -18,9 +18,11 @@ import { fluentTokenDeclarations } from './FluentThemeRuntime.js';
 import { fluentInteractionCss } from './FluentInteractionStyles.js';
 import { fluentNumericCss } from './FluentNumericStyles.js';
 import { fluentSeedCss } from './FluentSeedStyles.js';
+import { fluentScrollbarCss } from './FluentScrollbarStyles.js';
 /** Render the shared appearance without overriding explicit custom inline styling. */
 export function fluentAppearanceCss(dark) {
     return `
+    ${fluentScrollbarCss(dark)}
     ${fluentInteractionCss()}
     :where([data-sc-fluent-node], [data-sc-fluent-surface], [data-sc-fluent-popup]) {
       ${fluentTokenDeclarations(dark)}
@@ -87,10 +89,10 @@ export function fluentAppearanceCss(dark) {
     }
     [data-sc-fluent-node] [data-testid^="node-header-"] > :first-child { width:100%; }
     [data-sc-fluent-node] [data-testid="node-title"] { font-size:14px; }
-    .sugarcubes-workflow-masonry [data-sc-fluent-node] [data-testid="node-title"] { padding-left:30px; }
+    .sugarcubes-cube-face__node-card [data-sc-fluent-node] [data-testid="node-title"] { padding-left:30px; }
     [data-sc-fluent-node] { filter:none; font-family:var(--fontFamilyBase); }
     [data-sc-fluent-node] [data-testid="node-title"] .editable-text { font-weight:400; padding-left:0; padding-right:0; }
-    .sugarcubes-workflow-masonry [data-sc-fluent-node] [data-testid^="node-body-"]:has(> [data-sc-fluent-fields]) {
+    .sugarcubes-cube-face__node-card [data-sc-fluent-node] [data-testid^="node-body-"]:has(> [data-sc-fluent-fields]) {
       padding:0; gap:0;
     }
     [data-sc-fluent-node] [data-testid^="node-body-"]:not(:has(> :not([hidden]))) { padding:0; }
@@ -110,7 +112,7 @@ export function fluentAppearanceCss(dark) {
     [data-sc-fluent-node]:has([data-sc-fluent-row]) [data-testid^="node-header-"]:not([data-sc-titlebar-collapsed="true"]) {
       border-bottom:1px solid var(--sc-row-stroke);
     }
-    .sugarcubes-workflow-masonry [data-sc-fluent-node]:has([data-sc-fluent-row]) [data-testid^="node-header-"]:not([data-sc-titlebar-collapsed="true"]) { border-bottom:0; }
+    .sugarcubes-cube-face__node-card [data-sc-fluent-node]:has([data-sc-fluent-row]) [data-testid^="node-header-"]:not([data-sc-titlebar-collapsed="true"]) { border-bottom:0; }
     [data-sc-fluent-node] [data-sc-fluent-fields] { gap:0; }
     [data-sc-fluent-node] [data-testid^="node-body-"]:has(> [data-sc-fluent-ports]:not([hidden])) {
       padding-top:0; gap:0;
@@ -120,74 +122,82 @@ export function fluentAppearanceCss(dark) {
     }
     [data-sc-fluent-node] [data-sc-fluent-row] { padding:8px 30px 8px 10px; }
     [data-sc-fluent-node] [data-sc-fluent-row][data-sc-fluent-kind="multiline"],
-    .sugarcubes-workflow-masonry [data-sc-fluent-row][data-sc-fluent-span="1"][data-sc-fluent-column="1"] { padding-right:10px; }
+    .sugarcubes-cube-face__node-card [data-sc-fluent-row][data-sc-fluent-span="1"][data-sc-fluent-column="1"] { padding-right:10px; }
     [data-sc-fluent-node] [data-sc-fluent-row]:not([hidden]):not([style*="display: none"]) ~ [data-sc-fluent-row]:not([hidden]):not([style*="display: none"]) {
       border-top:1px solid var(--sc-row-stroke);
     }
-    .sugarcubes-workflow-masonry [data-sc-fluent-fields] {
+    .sugarcubes-cube-face__node-card [data-sc-fluent-fields] {
       display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr);
       gap:0; padding:0;
     }
-    .sugarcubes-workflow-masonry [data-sc-fluent-fields] > :not([data-sc-fluent-row]) { grid-column:1 / -1; }
-    .sugarcubes-workflow-masonry [data-sc-fluent-row] {
+    .sugarcubes-cube-face__node-card [data-sc-fluent-fields] > :not([data-sc-fluent-row]) { grid-column:1 / -1; }
+    .sugarcubes-cube-face__node-card [data-sc-fluent-row] {
       display:grid; grid-template-columns:20px minmax(0,1fr);
       grid-row:var(--sc-field-row); grid-column:var(--sc-field-column) / span var(--sc-field-span);
       min-width:0; border-top:1px solid var(--sc-row-stroke);
       font-family:var(--fontFamilyBase); font-size:12px; gap:0;
     }
-    .sugarcubes-workflow-masonry [data-sc-fluent-row][data-sc-fluent-column="2"] { position:relative; }
-    .sugarcubes-workflow-masonry [data-sc-fluent-row][data-sc-fluent-column="2"]::before {
+    .sugarcubes-cube-face__node-card [data-sc-fluent-row][data-sc-fluent-column="2"] { position:relative; }
+    .sugarcubes-cube-face__node-card [data-sc-fluent-row][data-sc-fluent-column="2"]::before {
       content:''; position:absolute; left:0; top:50%; transform:translateY(-50%);
       width:1px; height:33px; background:var(--sc-row-stroke); pointer-events:none;
     }
-    .sugarcubes-workflow-masonry [data-sc-fluent-row] > [data-sc-fluent-control], .sugarcubes-workflow-masonry [data-sc-fluent-layout] {
+    .sugarcubes-cube-face__node-card [data-sc-fluent-row] > [data-sc-fluent-control], .sugarcubes-cube-face__node-card [data-sc-fluent-layout] {
       min-width:0; width:100%; height:auto; min-height:33px;
       grid-column:2;
     }
-    .sugarcubes-workflow-masonry [data-sc-fluent-layout] {
+    .sugarcubes-cube-face__node-card [data-sc-fluent-layout] {
       display:flex; flex-direction:row; align-items:center; justify-content:space-between; gap:6px;
     }
-    .sugarcubes-workflow-masonry [data-sc-fluent-layout] > :first-child { min-width:0; flex:1; }
-    .sugarcubes-workflow-masonry [data-sc-fluent-layout] > :last-child { min-width:0; flex:0 1 156px; max-width:65%; }
-    .sugarcubes-workflow-masonry [data-sc-fluent-row][data-sc-fluent-widget^="WidgetInputNumber"] [data-sc-fluent-layout] > :last-child {
+    .sugarcubes-cube-face__node-card [data-sc-fluent-layout] > :first-child { min-width:0; flex:1; }
+    .sugarcubes-cube-face__node-card [data-sc-fluent-layout] > :last-child { min-width:0; flex:0 1 156px; max-width:65%; }
+    .sugarcubes-cube-face__node-card [data-sc-fluent-row][data-sc-fluent-widget^="WidgetInputNumber"] [data-sc-fluent-layout] > :last-child {
       flex-basis:100px;
     }
-    .sugarcubes-workflow-masonry [data-sc-fluent-row][data-sc-fluent-widget="WidgetToggleSwitch"] [data-sc-fluent-layout] > :last-child {
+    .sugarcubes-cube-face__node-card [data-sc-fluent-row][data-sc-fluent-widget="WidgetToggleSwitch"] [data-sc-fluent-layout] > :last-child {
       flex:0 0 auto;
     }
-    .sugarcubes-workflow-masonry [data-sc-fluent-row][data-sc-fluent-kind="model"] [data-sc-fluent-layout] > :last-child {
+    .sugarcubes-cube-face__node-card [data-sc-fluent-row] [data-sc-fluent-layout] > :last-child:has(.sc-model-mount) {
       flex-basis:360px; max-width:min(65%,360px);
     }
-    .sugarcubes-workflow-masonry [data-sc-fluent-row][data-sc-fluent-widget^="WidgetInputNumber"] [data-sc-fluent-layout] > :last-child > :first-child > :first-child {
+    .sugarcubes-cube-face__node-card [data-sc-fluent-row][data-sc-fluent-widget^="WidgetInputNumber"] [data-sc-fluent-layout] > :last-child > :first-child > :first-child {
       height:33px; border:1px solid var(--sc-control-stroke);
       border-bottom-color:var(--sc-control-bottom-stroke); border-radius:4px;
       background:var(--sc-control-fill);
     }
-    [data-sc-fluent-combo-frame] {
+    [data-sc-fluent-combo-frame],
+    :where([data-sc-fluent-node], [data-sc-fluent-surface]) .sc-model-field:not(:has(.sc-model-banner, .sc-model-transfer-thumbnail)) {
       box-sizing:border-box; height:33px; min-height:33px;
       border:1px solid var(--sc-control-stroke); border-bottom-color:var(--sc-control-bottom-stroke);
       border-radius:4px; background:var(--sc-control-fill);
     }
+    [data-sc-fluent-combo-frame]:hover,
+    :where([data-sc-fluent-node], [data-sc-fluent-surface]) .sc-model-field:not(:has(.sc-model-banner, .sc-model-transfer-thumbnail)):hover {
+      background:var(--colorNeutralBackground1Hover);
+    }
+    :where([data-sc-fluent-node], [data-sc-fluent-surface]) .sc-model-field:not(:has(.sc-model-banner, .sc-model-transfer-thumbnail)) .sc-model-field-arrow {
+      color:var(--colorNeutralForeground3);
+    }
     [data-sc-fluent-combo-frame] > [data-testid="widget-select-default-trigger"] { height:100%; }
-    .sugarcubes-workflow-masonry [data-sc-fluent-row] [data-sc-fluent-control] input,
-    .sugarcubes-workflow-masonry [data-sc-fluent-row] [data-sc-fluent-control] textarea,
-    .sugarcubes-workflow-masonry [data-sc-fluent-row] [data-sc-fluent-control] button {
+    .sugarcubes-cube-face__node-card [data-sc-fluent-row] [data-sc-fluent-control] input,
+    .sugarcubes-cube-face__node-card [data-sc-fluent-row] [data-sc-fluent-control] textarea,
+    .sugarcubes-cube-face__node-card [data-sc-fluent-row] [data-sc-fluent-control] button {
       font-family:var(--fontFamilyBase); font-size:12px;
     }
-    .sugarcubes-workflow-masonry [data-sc-fluent-row][data-sc-fluent-kind="multiline"] {
+    .sugarcubes-cube-face__node-card [data-sc-fluent-row][data-sc-fluent-kind="multiline"] {
       display:block;
     }
-    .sugarcubes-workflow-masonry [data-sc-fluent-row][data-sc-fluent-kind="multiline"] > :first-child { display:none; }
-    .sugarcubes-workflow-masonry [data-sc-fluent-row][data-sc-fluent-kind="multiline"] [data-sc-fluent-control] textarea {
+    .sugarcubes-cube-face__node-card [data-sc-fluent-row][data-sc-fluent-kind="multiline"] > :first-child { display:none; }
+    .sugarcubes-cube-face__node-card [data-sc-fluent-row][data-sc-fluent-kind="multiline"] [data-sc-fluent-control] textarea {
       border:1px solid var(--sc-control-stroke); border-bottom-color:var(--sc-control-bottom-stroke);
       border-radius:4px; background:var(--sc-control-fill);
       min-height:33px; padding:6px 8px; line-height:19px;
     }
-    .sugarcubes-workflow-masonry [data-sc-fluent-row][data-sc-fluent-kind="multiline"] [data-sc-fluent-control] > :first-child {
+    .sugarcubes-cube-face__node-card [data-sc-fluent-row][data-sc-fluent-kind="multiline"] [data-sc-fluent-control] > :first-child {
       display:none;
     }
     [data-sc-fluent-surface] { font-family:var(--fontFamilyBase); }
-    [data-sc-fluent-surface] .sugarcubes-workflow-masonry__card {
+    .sugarcubes-cube-face__node-card:has([data-sc-fluent-node]) {
       border-radius:4px; border:0; background:transparent;
     }
     [data-sc-fluent-surface] .sugarcubes-workflow-masonry__section {

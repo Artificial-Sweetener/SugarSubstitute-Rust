@@ -16,6 +16,7 @@
 /** Define the collaboration contracts for the Cube save workflow. */
 
 import type { CubeNodeInstance } from '../cube/node/CubeNodeInstanceCatalog.js';
+import type { ModelRequirement } from '../cube/ModelRequirement.js';
 import type { CubeNodeIdentityUpdates } from '../cube/node/CubeNodeIdentityWriter.js';
 import type { ApiJsonResult } from '../core/CubeLibraryApi.js';
 import type { CubeInstance } from '../graph/InstanceBuilder.js';
@@ -48,6 +49,7 @@ export interface CubeBrowserEntry extends UnknownRecord {
 }
 
 export interface SaveSourceEntry {
+  modelRequirements?: ModelRequirement | null;
   cubeId: string;
   defaultAlias: string;
   sourceVersion: string;

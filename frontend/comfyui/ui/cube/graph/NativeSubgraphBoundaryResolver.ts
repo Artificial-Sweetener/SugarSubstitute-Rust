@@ -37,6 +37,16 @@ export interface NativePromptInputTarget {
   inputName: string;
 }
 
+/** Identify the native field contract behind a promoted widget. */
+export interface NativeWidgetOrigin {
+  classType: string;
+  inputName: string;
+}
+
+interface ResolvedNativeInput extends NativePromptInputTarget {
+  node: ComfyNode;
+}
+
 interface ResolvedSubgraphConnection {
   link?: ComfyLink;
   inputNode?: ComfyNode;
@@ -79,7 +89,31 @@ export class NativeSubgraphBoundaryResolver {
   /** Resolve one surface input to every leaf prompt target behind its boundary. */
   resolveInputTargets(node: ComfyNode, slot: number): NativePromptInputTarget[] {
     if (node.id == null) return [];
-    return this.#resolveInputTargets(node, slot, [node.id], new Set());
+    return this.#resolveInputTargets(node, slot, [node.id], new Set()).map(
+      ({ nodeId, inputSlot, inputName }) => ({ nodeId, inputSlot, inputName }),
+    );
+  }
+
+  /** Preserve leaf field contracts when a native subgraph renames its promoted widget. */
+  resolveWidgetOrigins(node: ComfyNode, name: string): NativeWidgetOrigin[] {
+    if (!isTraversableSubgraphNode(node)) {
+      return [{ classType: typeof node.type === 'string' ? node.type : '', inputName: name }];
+    }
+    const slot =
+      node.inputs?.findIndex((input) => input.widget?.name === name || input.name === name) ?? -1;
+    if (slot < 0 || node.id == null) return [];
+    const origins = this.#resolveInputTargets(node, slot, [node.id], new Set()).map(
+      ({ node: leaf, inputSlot, inputName }) => ({
+        classType: typeof leaf.type === 'string' ? leaf.type : '',
+        inputName: leaf.inputs?.[inputSlot]?.widget?.name ?? inputName,
+      }),
+    );
+    return origins.filter(
+      (origin, index) =>
+        origins.findIndex(
+          (other) => other.classType === origin.classType && other.inputName === origin.inputName,
+        ) === index,
+    );
   }
 
   /** Recurse through output boundaries while retaining the exact instance path. */
@@ -87,13 +121,12 @@ export class NativeSubgraphBoundaryResolver {
     node: ComfyNode,
     slot: number,
     executionPath: GraphId[],
-    visited: Set<string>,
+    visited: Set<ComfyNode>,
   ): NativePromptOutput | null {
     if (!isTraversableSubgraphNode(node)) {
       return { nodeId: joinExecutionPath(executionPath), slot };
     }
-    const visitKey = `${executionPath.map(String).join(':')}[O]${String(slot)}`;
-    if (visited.has(visitKey)) {
+    if (visited.has(node)) {
       this.#logger.warn('SugarCubes skipped a circular native subgraph output boundary.', {
         nodeId: node.id,
         slot,
@@ -101,7 +134,7 @@ export class NativeSubgraphBoundaryResolver {
       return null;
     }
     const nextVisited = new Set(visited);
-    nextVisited.add(visitKey);
+    nextVisited.add(node);
     const resolved = resolveSubgraphOutput(node, slot);
     const outputNode = resolved?.outputNode;
     const outputSlot = readLinkSlot(
@@ -123,8 +156,8 @@ export class NativeSubgraphBoundaryResolver {
     node: ComfyNode,
     slot: number,
     executionPath: GraphId[],
-    visited: Set<string>,
-  ): NativePromptInputTarget[] {
+    visited: Set<ComfyNode>,
+  ): ResolvedNativeInput[] {
     if (!isTraversableSubgraphNode(node)) {
       const input = node.inputs?.[slot];
       if (!input) return [];
@@ -133,11 +166,11 @@ export class NativeSubgraphBoundaryResolver {
           nodeId: joinExecutionPath(executionPath),
           inputSlot: slot,
           inputName: readSlotName(input, slot),
+          node,
         },
       ];
     }
-    const visitKey = `${executionPath.map(String).join(':')}[I]${String(slot)}`;
-    if (visited.has(visitKey)) {
+    if (visited.has(node)) {
       this.#logger.warn('SugarCubes skipped a circular native subgraph input boundary.', {
         nodeId: node.id,
         slot,
@@ -145,8 +178,8 @@ export class NativeSubgraphBoundaryResolver {
       return [];
     }
     const nextVisited = new Set(visited);
-    nextVisited.add(visitKey);
-    const targets: NativePromptInputTarget[] = [];
+    nextVisited.add(node);
+    const targets: ResolvedNativeInput[] = [];
     for (const resolved of resolveSubgraphInputs(node, slot)) {
       const inputNode = resolved.inputNode;
       const inputSlot = readLinkSlot(resolved.link?.target_slot, inputNode?.inputs, resolved.input);
@@ -273,9 +306,7 @@ function joinExecutionPath(path: readonly GraphId[]): GraphId {
 }
 
 /** Remove duplicate leaf targets created by fanout through nested boundaries. */
-function dedupeInputTargets(
-  targets: readonly NativePromptInputTarget[],
-): NativePromptInputTarget[] {
+function dedupeInputTargets(targets: readonly ResolvedNativeInput[]): ResolvedNativeInput[] {
   const seen = new Set<string>();
   return targets.filter((target) => {
     const key = `${String(target.nodeId)}:${String(target.inputSlot)}:${target.inputName}`;

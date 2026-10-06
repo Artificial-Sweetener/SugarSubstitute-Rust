@@ -16,7 +16,20 @@
 /**
  * Own the SugarCubes core UI service layer in `frontend/comfyui/ui/core/ComfyAdapter.js`.
  */
+import { isRecord } from '../types/common.js';
 import { resolveComfyRendererMode } from './ComfyRendererMode.js';
+/** Validate a dynamic host service and retain the original store as its method receiver. */
+function readHostToast(value) {
+    if (!isRecord(value) || typeof value.add !== 'function')
+        return null;
+    const add = value.add;
+    return {
+        /** Forward a typed notification through the validated public host boundary. */
+        add(message) {
+            add.call(value, message);
+        },
+    };
+}
 /**
  * Coordinate comfy adapter behavior for the SugarCubes UI.
  */
@@ -81,8 +94,11 @@ export class ComfyAdapter {
     getGraph() {
         return this.getApp()?.graph ?? null;
     }
+    /** Read the public workspace notification service, retaining older host API support. */
     getToast() {
-        return this.windowRef?.comfyAPI?.vueApp?.config?.globalProperties?.$toast || null;
+        const manager = this.getApp()?.extensionManager;
+        const toast = isRecord(manager) ? readHostToast(manager.toast) : null;
+        return (toast ?? readHostToast(this.windowRef?.comfyAPI?.vueApp?.config?.globalProperties?.$toast));
     }
     getApp() {
         return this.app || this.windowRef?.app || null;
