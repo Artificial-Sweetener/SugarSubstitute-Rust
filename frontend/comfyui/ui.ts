@@ -25,22 +25,9 @@ import { createComfyCubeRuntime, type ComfyCubeRuntime } from './ui/cube/ComfyCu
 import { ComfyCubeRuntimeLifecycle } from './ui/cube/ComfyCubeRuntimeLifecycle.js';
 import { CubePreviewRetentionStore } from './ui/surface/CubePreviewRetentionStore.js';
 import { CubeAuthoringHostCommands } from './ui/cube/CubeAuthoringHostCommands.js';
-import {
-  ComfyPromptQueueBridge,
-  type ComfyPromptQueueApi,
-} from './ui/cube/execution/ComfyPromptQueueBridge.js';
-import { CubePromptPipeline } from './ui/cube/execution/CubePromptPipeline.js';
-import { CubeOutputPromptAdapter } from './ui/cube/execution/CubeOutputPromptAdapter.js';
-import { createCubeDirectExecution } from './ui/cube/execution/CubeDirectExecutionService.js';
-import {
-  ComfyCubeOutputEventBridge,
-  type ComfyExecutionEventApi,
-} from './ui/cube/execution/ComfyCubeOutputEventBridge.js';
-import {
-  ComfyCubeOutputHistoryAdapter,
-  type ComfyCubeOutputHistoryApi,
-} from './ui/cube/execution/ComfyCubeOutputHistoryAdapter.js';
-import { CubeOutputExecutionStore } from './ui/cube/execution/CubeOutputExecutionStore.js';
+import { createCubeHostExecution } from './ui/cube/execution/CubeHostExecutionComposition.js';
+import { RelationHostLifecycle } from './ui/relations/RelationHostLifecycle.js';
+import { proximityWorkflowConnections } from './ui/overlays/proximity/ProximityWorkflowConnections.js';
 import { NativeSubgraphBoundaryResolver } from './ui/cube/graph/NativeSubgraphBoundaryResolver.js';
 import { buildShiftedPlacementPayload } from './ui/import/PlacementPayload.js';
 import type { ImportOptions, ImportResult } from './ui/import/CubeImportTypes.js';
@@ -172,34 +159,32 @@ const cubeCatalogInvalidation = new CubeCatalogInvalidationCoordinator({
 });
 invalidateCubeCatalogs = () => cubeCatalogInvalidation.invalidate();
 const nativeBoundaryResolver = new NativeSubgraphBoundaryResolver(logger);
-const cubeOutputExecutionStore = new CubeOutputExecutionStore();
-const cubeOutputEventBridge = new ComfyCubeOutputEventBridge({
-  api: api as unknown as ComfyExecutionEventApi,
-  store: cubeOutputExecutionStore,
+const workflowRelations = new RelationHostLifecycle({
+  getCardState: () => cubeRuntimeLifecycle.current()?.cardState ?? null,
+  getConnections: (graph) => proximityWorkflowConnections(overlayManager.proximity, graph),
+  app: appRef,
+  document: documentRef ?? document,
   logger,
+  reportError: (error) => {
+    logger.error('SugarCubes workflow relations failed', { error });
+    pushToastMessage('error', 'Shared field unavailable', readErrorMessage(error));
+  },
 });
-const cubeOutputHistoryAdapter = new ComfyCubeOutputHistoryAdapter({
-  api: api as unknown as ComfyCubeOutputHistoryApi,
-  store: cubeOutputExecutionStore,
-  logger,
-});
-const cubeOutputPromptAdapter = new CubeOutputPromptAdapter({
-  getCubes: () => cubeRuntimeLifecycle.current()?.nodes.list() ?? [],
-  boundaryResolver: nativeBoundaryResolver,
-});
-const cubePromptPipeline = new CubePromptPipeline({
-  applyProximity: (payload) => overlayManager.proximity.applyProximityToPrompt(payload),
-  adaptCubeOutputs: (payload) => cubeOutputPromptAdapter.apply(payload),
-});
-const directExecution = createCubeDirectExecution({
+const {
+  outputStore: cubeOutputExecutionStore,
+  outputEvents: cubeOutputEventBridge,
+  outputHistory: cubeOutputHistoryAdapter,
+  queue: promptQueueBridge,
+} = createCubeHostExecution({
   api,
   logger,
+  boundaryResolver: nativeBoundaryResolver,
   getGraph: () => appRef?.graph,
+  getCubes: () => cubeRuntimeLifecycle.current()?.nodes.list() ?? [],
   getProximityMatches: () =>
     overlayManager.proximity.resolveExecutionMatches(appRef?.canvas?.graph ?? appRef?.graph),
-});
-const promptQueueBridge = new ComfyPromptQueueBridge({
-  api: api as unknown as ComfyPromptQueueApi,
+  applyProximity: (payload) => overlayManager.proximity.applyProximityToPrompt(payload),
+  prepareRelations: (payload) => workflowRelations.prepare(payload),
   preflight: () => {
     try {
       assertNoNestedCubes('run this workflow');
@@ -208,9 +193,6 @@ const promptQueueBridge = new ComfyPromptQueueBridge({
       throw error;
     }
   },
-  transform: (payload) => cubePromptPipeline.transform(payload),
-  executeDirect: (position, payload, options) => directExecution.queue(position, payload, options),
-  shouldExecuteDirect: (payload) => directExecution.owns(payload),
 });
 
 /** Validate persisted nesting without requiring renderer or node-factory capabilities. */
@@ -378,14 +360,7 @@ const workflowMasonry = new WorkflowMasonryHostLifecycle({
   getCubes: () => cubeRuntimeLifecycle.current()?.nodes.list() ?? [],
   getCardState: () => cubeRuntimeLifecycle.current()?.cardState ?? null,
   getGraphChanges: () => cubeRuntimeLifecycle.current()?.graphChanges ?? null,
-  getConnections: (graph) =>
-    overlayManager.proximity
-      .resolveExecutionMatches(graph)
-      .flatMap((match) =>
-        match.outputId === undefined || match.inputId === undefined
-          ? []
-          : [{ source: match.outputId, target: match.inputId }],
-      ),
+  getConnections: (graph) => proximityWorkflowConnections(overlayManager.proximity, graph),
   notifyRendererFallback: () =>
     pushToastMessage('info', 'Switched to graph view', 'Masonry requires Nodes 2.0.'),
   reportError: (error) => {
@@ -508,7 +483,7 @@ export const sugarCubesExtension: SugarCubesExtension = {
     cubePicker.activate();
   },
   refreshComboInNodes() {
-    refreshNativeNodeCards(documentRef ?? document);
+    refreshNativeNodeCards(documentRef ?? document, { kind: 'reset', reason: 'native-choices' });
   },
   getCanvasMenuItems(canvas) {
     return cubeAuthoringCommands.getCanvasMenuItems(canvas);
@@ -518,6 +493,7 @@ export const sugarCubesExtension: SugarCubesExtension = {
   },
   async setup() {
     await extensionSetupLifecycle.setup();
+    workflowRelations.setup();
     workflowMasonry.setup();
     fluentAppearance.setup();
     modelPickers.setup();
@@ -529,12 +505,14 @@ export const sugarCubesExtension: SugarCubesExtension = {
     modelUpdateLifecycle.start();
   },
   beforeConfigureGraph(graphData?: unknown) {
+    workflowRelations.beforeConfigureGraph();
     workflowMasonry.beforeConfigureGraph();
     graphConfigurationLifecycle.beforeConfigureGraph(graphData);
   },
   afterConfigureGraph(missingNodeTypes: unknown[], comfyApp) {
     graphConfigurationLifecycle.afterConfigureGraph(missingNodeTypes, comfyApp);
     workflowMasonry.afterConfigureGraph();
+    workflowRelations.afterConfigureGraph();
   },
 };
 

@@ -34,6 +34,8 @@ export class FluentOverlayScrollbarHost {
   readonly #roots = new Set<Node>();
   readonly #shadowStyles = new Map<ShadowRoot, HTMLStyleElement>();
   readonly #pending = new Set<HTMLElement>();
+  readonly #changedElements = new Set<HTMLElement>();
+  readonly #dirtyOwners = new Set<HTMLElement>();
   readonly #observedSizes = new Set<HTMLElement>();
   readonly #mutations: MutationObserver;
   readonly #resize: ResizeObserver | null;
@@ -48,16 +50,34 @@ export class FluentOverlayScrollbarHost {
     this.#layer = document.createElement('div');
     this.#layer.className = 'sc-fluent-scrollbar-layer';
     this.#mutations = new MutationObserver((records) => {
+      let removed = false;
       for (const record of records) {
-        if (record.target instanceof HTMLElement && !this.#owned(record.target))
-          this.#pending.add(record.target);
+        if (
+          record.target instanceof HTMLElement &&
+          !this.#owned(record.target) &&
+          (record.type !== 'childList' || record.target !== this.#document.body)
+        )
+          this.#changedElements.add(record.target);
         for (const node of record.addedNodes)
           if (node instanceof HTMLElement && !this.#owned(node)) this.#pending.add(node);
+        for (const node of record.removedNodes)
+          if (
+            node instanceof HTMLElement &&
+            !this.#owned(node) &&
+            !node.matches('.sc-fluent-scrollbar,.sc-fluent-scrollbar-layer')
+          )
+            removed = true;
       }
-      if (this.#pending.size) this.#schedule();
+      if (removed || this.#pending.size || this.#changedElements.size) this.#schedule();
     });
     this.#resize =
-      typeof ResizeObserver === 'function' ? new ResizeObserver(() => this.#schedule()) : null;
+      typeof ResizeObserver === 'function'
+        ? new ResizeObserver((entries) => {
+            for (const entry of entries)
+              if (entry.target instanceof HTMLElement) this.#invalidateGeometry(entry.target);
+            this.#schedule();
+          })
+        : null;
   }
 
   /** Start the policy once, including existing host dialogs and open shadow surfaces. */
@@ -67,9 +87,9 @@ export class FluentOverlayScrollbarHost {
     this.#document.body.append(this.#layer);
     this.#observe(this.#document.body);
     this.#pending.add(this.#document.body);
-    this.#document.addEventListener('scroll', this.#schedule, true);
-    this.#document.addEventListener('input', this.#schedule, true);
-    this.#document.defaultView?.addEventListener('resize', this.#schedule);
+    this.#document.addEventListener('scroll', this.#onContentChange, true);
+    this.#document.addEventListener('input', this.#onContentChange, true);
+    this.#document.defaultView?.addEventListener('resize', this.#onViewportResize);
     this.#document.defaultView?.addEventListener('pointerdown', this.#captureThumb, true);
     this.#schedule();
   }
@@ -82,20 +102,22 @@ export class FluentOverlayScrollbarHost {
     this.#mutations.disconnect();
     this.#resize?.disconnect();
     this.#observedSizes.clear();
-    this.#document.removeEventListener('scroll', this.#schedule, true);
-    this.#document.removeEventListener('input', this.#schedule, true);
-    this.#document.defaultView?.removeEventListener('resize', this.#schedule);
+    this.#document.removeEventListener('scroll', this.#onContentChange, true);
+    this.#document.removeEventListener('input', this.#onContentChange, true);
+    this.#document.defaultView?.removeEventListener('resize', this.#onViewportResize);
     this.#document.defaultView?.removeEventListener('pointerdown', this.#captureThumb, true);
     for (const [element, owner] of this.#owners) this.#remove(element, owner);
     this.#owners.clear();
     this.#views.clear();
     for (const [root, style] of this.#shadowStyles) {
       style.remove();
-      root.removeEventListener('scroll', this.#schedule, true);
+      root.removeEventListener('scroll', this.#onContentChange, true);
     }
     this.#shadowStyles.clear();
     this.#roots.clear();
     this.#pending.clear();
+    this.#changedElements.clear();
+    this.#dirtyOwners.clear();
     this.#layer.remove();
   }
 
@@ -135,9 +157,14 @@ export class FluentOverlayScrollbarHost {
     if (scrollable && !this.#owners.has(element)) {
       const assignedId = element.id ? null : `sc-fluent-scroll-owner-${++this.#nextId}`;
       if (assignedId) element.id = assignedId;
-      const vertical = new FluentScrollbarView(element, 'vertical', element.id, this.#schedule);
-      const horizontal = new FluentScrollbarView(element, 'horizontal', element.id, this.#schedule);
+      const update = (): void => {
+        this.#invalidateGeometry(element);
+        this.#schedule();
+      };
+      const vertical = new FluentScrollbarView(element, 'vertical', element.id, update);
+      const horizontal = new FluentScrollbarView(element, 'horizontal', element.id, update);
       this.#owners.set(element, { vertical, horizontal, assignedId });
+      this.#dirtyOwners.add(element);
       this.#views.set(vertical.element, vertical);
       this.#views.set(horizontal.element, horizontal);
       this.#layer.append(vertical.element, horizontal.element);
@@ -153,7 +180,7 @@ export class FluentOverlayScrollbarHost {
       styleElement.textContent = fluentNativeScrollbarCss();
       root.append(styleElement);
       this.#shadowStyles.set(root, styleElement);
-      root.addEventListener('scroll', this.#schedule, true);
+      root.addEventListener('scroll', this.#onContentChange, true);
       this.#observe(root);
     }
     if (root)
@@ -200,7 +227,7 @@ export class FluentOverlayScrollbarHost {
     for (const [root, style] of this.#shadowStyles) {
       if (root.host.isConnected) continue;
       style.remove();
-      root.removeEventListener('scroll', this.#schedule, true);
+      root.removeEventListener('scroll', this.#onContentChange, true);
       this.#shadowStyles.delete(root);
       this.#roots.delete(root);
       rootsChanged = true;
@@ -213,6 +240,26 @@ export class FluentOverlayScrollbarHost {
     }
   }
 
+  /** Refresh the affected scroll container and tracks whose viewport position it moves. */
+  #invalidateGeometry(element: HTMLElement): void {
+    for (const owner of this.#owners.keys())
+      if (owner === element || owner.contains(element) || element.contains(owner))
+        this.#dirtyOwners.add(owner);
+  }
+
+  /** Keep input and scrolling local to the event's native container. */
+  readonly #onContentChange = (event: Event): void => {
+    const target = event.composedPath().find((node) => node instanceof HTMLElement);
+    if (target instanceof HTMLElement) this.#invalidateGeometry(target);
+    this.#schedule();
+  };
+
+  /** Reposition every viewport track only when the viewport itself changes. */
+  readonly #onViewportResize = (): void => {
+    for (const owner of this.#owners.keys()) this.#dirtyOwners.add(owner);
+    this.#schedule();
+  };
+
   /** Batch geometry reads and fail visibly through the existing diagnostic owner. */
   readonly #schedule = (): void => {
     if (!this.#active || this.#frame !== null) return;
@@ -224,6 +271,12 @@ export class FluentOverlayScrollbarHost {
         const pending = [...this.#pending];
         this.#pending.clear();
         for (const element of pending) if (element.isConnected) this.#discover(element);
+        for (const element of this.#changedElements)
+          if (element.isConnected) {
+            this.#consider(element);
+            this.#invalidateGeometry(element);
+          }
+        this.#changedElements.clear();
         const root = this.#document.scrollingElement;
         if (root instanceof HTMLElement) this.#consider(root);
         for (const [element, owner] of this.#owners) {
@@ -232,10 +285,12 @@ export class FluentOverlayScrollbarHost {
             this.#owners.delete(element);
             continue;
           }
+          if (!this.#dirtyOwners.has(element)) continue;
           const track = scrollbarTrack(element);
           owner.vertical.update(track);
           owner.horizontal.update(track);
         }
+        this.#dirtyOwners.clear();
       } catch (error: unknown) {
         this.#reportError(error);
         this.clear();

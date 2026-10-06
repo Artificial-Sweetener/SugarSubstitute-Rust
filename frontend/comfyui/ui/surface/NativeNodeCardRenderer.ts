@@ -26,6 +26,7 @@ export interface NativeNodeCardMount {
 }
 
 export interface NativeNodeCardMountOptions {
+  allowCollapse?: boolean;
   headerAccessory?: HTMLElement;
   presentationGeometry?: boolean;
   preserveNativeBody?: boolean;

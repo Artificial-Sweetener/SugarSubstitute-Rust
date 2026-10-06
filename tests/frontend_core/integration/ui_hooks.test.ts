@@ -179,7 +179,7 @@ describe('ui hooks and scheduling', () => {
     const refresh = extension?.refreshComboInNodes;
     if (typeof refresh !== 'function') throw new Error('Missing native-choice refresh hook.');
     const listener = jest.fn();
-    const release = subscribeNativeNodeCardRefresh(document, listener);
+    const release = subscribeNativeNodeCardRefresh(document, [], listener);
     try {
       refresh.call(extension);
       expect(listener).toHaveBeenCalledTimes(1);

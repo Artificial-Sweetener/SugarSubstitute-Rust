@@ -71,6 +71,8 @@ class ArchitecturePolicy:
     schema: int
     structure: StructurePolicy
     dependencies: tuple[DependencyRule, ...]
+    mutation_observer_owners: tuple[str, ...] = ()
+    document_observer_owners: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

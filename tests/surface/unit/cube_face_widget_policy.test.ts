@@ -208,3 +208,26 @@ test('disclosure eligibility includes advanced controls but excludes hidden and 
   expect(Object.hasOwn(node, 'showAdvanced')).toBe(false);
   expect(node.flags).toBe(flags);
 });
+
+test('restores native widgets when Comfy assigns through an in-place array setter', () => {
+  const consumed: ComfyWidget = { name: 'seed' },
+    editable: ComfyWidget = { name: 'steps' };
+  const widgets = [consumed, editable];
+  const node: ComfyNode = { inputs: [{ name: 'seed', widget: { name: 'seed' }, link: 1 }] };
+  Object.defineProperty(node, 'widgets', {
+    configurable: true,
+    enumerable: true,
+    get: () => widgets,
+    set: (value: ComfyWidget[]) => widgets.splice(0, widgets.length, ...value),
+  });
+  expect(() =>
+    withCubeFaceNodePresentation(node, () => {
+      expect(node.widgets).toEqual([editable]);
+      throw new Error('Native draw failed');
+    }),
+  ).toThrow('Native draw failed');
+  expect(node.widgets).toBe(widgets);
+  expect(node.widgets).toEqual([consumed, editable]);
+  withCubeFaceNodePresentation(node, () => expect(node.widgets).toEqual([editable]));
+  expect(node.widgets).toEqual([consumed, editable]);
+});

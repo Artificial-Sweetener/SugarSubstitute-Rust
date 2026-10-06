@@ -21,11 +21,56 @@ import {
 } from '../../../frontend/comfyui/ui/surface/appearance/FluentAppearanceHost.js';
 import { isRecord } from '../../../frontend/comfyui/ui/types/common.js';
 import type { UnknownRecord } from '../../../frontend/comfyui/ui/types/common.js';
+import { NativeFluentCardAdapter } from '../../../frontend/comfyui/ui/surface/appearance/NativeFluentCardAdapter.js';
 
 afterEach(() => {
   document.body.replaceChildren();
   document.head.replaceChildren();
   jest.restoreAllMocks();
+});
+
+test('popup mounts, search and closure never annotate an unrelated card', async () => {
+  const card = document.createElement('div');
+  card.className = 'lg-node';
+  document.body.append(card);
+  const app = {
+    ui: {
+      settings: {
+        addSetting: () => undefined,
+        getSettingValue: (key: string) => key === 'Comfy.VueNodes.Enabled',
+      },
+    },
+  };
+  const frames: FrameRequestCallback[] = [];
+  jest.spyOn(window, 'requestAnimationFrame').mockImplementation((frame) => {
+    frames.push(frame);
+    return frames.length;
+  });
+  const host = new FluentAppearanceHost({ document, app, reportError: jest.fn() });
+  host.setup();
+  host.setEnabled(true);
+  for (let index = 0; index < 3; index++) {
+    await Promise.resolve();
+    frames.splice(0).forEach((frame) => frame(0));
+  }
+  const annotate = jest.spyOn(NativeFluentCardAdapter.prototype, 'annotate');
+  const popup = document.createElement('div');
+  popup.setAttribute('role', 'listbox');
+  const search = document.createElement('input');
+  popup.append(search);
+  document.body.append(popup);
+  for (let index = 0; index < 3; index++) {
+    await Promise.resolve();
+    frames.splice(0).forEach((frame) => frame(0));
+  }
+  search.dispatchEvent(new Event('input', { bubbles: true }));
+  popup.remove();
+  for (let index = 0; index < 3; index++) {
+    await Promise.resolve();
+    frames.splice(0).forEach((frame) => frame(0));
+  }
+  expect(annotate).not.toHaveBeenCalled();
+  host.dispose();
 });
 
 test('keeps controls and explicit custom styling intact while restoring the current host palette', async () => {

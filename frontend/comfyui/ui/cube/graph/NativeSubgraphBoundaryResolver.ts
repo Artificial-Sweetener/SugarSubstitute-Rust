@@ -43,7 +43,8 @@ export interface NativeWidgetOrigin {
   inputName: string;
 }
 
-interface ResolvedNativeInput extends NativePromptInputTarget {
+/** Retain the exact host owner for contract validation at an explicitly exposed boundary. */
+export interface ResolvedNativeInput extends NativePromptInputTarget {
   node: ComfyNode;
 }
 
@@ -99,10 +100,7 @@ export class NativeSubgraphBoundaryResolver {
     if (!isTraversableSubgraphNode(node)) {
       return [{ classType: typeof node.type === 'string' ? node.type : '', inputName: name }];
     }
-    const slot =
-      node.inputs?.findIndex((input) => input.widget?.name === name || input.name === name) ?? -1;
-    if (slot < 0 || node.id == null) return [];
-    const origins = this.#resolveInputTargets(node, slot, [node.id], new Set()).map(
+    const origins = this.resolveWidgetTargets(node, name).map(
       ({ node: leaf, inputSlot, inputName }) => ({
         classType: typeof leaf.type === 'string' ? leaf.type : '',
         inputName: leaf.inputs?.[inputSlot]?.widget?.name ?? inputName,
@@ -114,6 +112,14 @@ export class NativeSubgraphBoundaryResolver {
           (other) => other.classType === origin.classType && other.inputName === origin.inputName,
         ) === index,
     );
+  }
+
+  /** Return exact leaf owners only for a widget explicitly exposed through the native facade. */
+  resolveWidgetTargets(node: ComfyNode, name: string): ResolvedNativeInput[] {
+    const slot =
+      node.inputs?.findIndex((input) => input.widget?.name === name || input.name === name) ?? -1;
+    if (slot < 0 || node.id == null) return [];
+    return this.#resolveInputTargets(node, slot, [node.id], new Set());
   }
 
   /** Recurse through output boundaries while retaining the exact instance path. */

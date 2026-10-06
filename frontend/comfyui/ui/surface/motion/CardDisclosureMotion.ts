@@ -31,6 +31,7 @@ export class CardDisclosureMotion {
   #overflow: string | null = null;
   #height: { value: string; priority: string } | null = null;
   #apply: ((collapsed: boolean) => void) | null = null;
+  #revision = 0;
 
   /** Bind the projected mount whose intrinsic height drives its existing masonry layout. */
   constructor(target: HTMLElement) {
@@ -43,6 +44,7 @@ export class CardDisclosureMotion {
     apply: (collapsed: boolean) => void,
     geometry?: DisclosureGeometry,
   ): void {
+    this.#revision++;
     const desired = !(this.#desired ?? collapsed);
     const from = height(this.#target);
     this.#animation?.cancel();
@@ -52,28 +54,13 @@ export class CardDisclosureMotion {
     const root =
       this.#target.querySelector<HTMLElement>('.lg-node') ??
       this.#target.closest<HTMLElement>('.lg-node');
-    const reduced = this.#target.ownerDocument.defaultView?.matchMedia?.(
-      '(prefers-reduced-motion: reduce)',
-    ).matches;
-    if (
-      !root?.hasAttribute('data-sc-fluent-node') ||
-      reduced ||
-      typeof this.#target.animate !== 'function'
-    ) {
+    if (!root || !this.#canAnimate(root)) {
       apply(desired);
       this.#release();
       return;
     }
     if (geometry?.settle && !desired) {
-      if (this.#height === null)
-        this.#height = {
-          value: this.#target.style.getPropertyValue('height'),
-          priority: this.#target.style.getPropertyPriority('height'),
-        };
-      this.#target.style.height = `${String(from)}px`;
-      if (this.#overflow === null) this.#overflow = this.#target.style.overflow;
-      this.#target.style.overflow = 'clip';
-      this.#target.dataset.scDisclosing = '';
+      this.#hold(from);
       this.#target.dataset.scDisclosureTarget = 'expanded';
     }
     if (!desired) apply(false);
@@ -83,6 +70,71 @@ export class CardDisclosureMotion {
           this.#animate(root, desired, from, apply, geometry);
       });
     } else this.#animate(root, desired, from, apply, geometry);
+  }
+
+  /** Animate native widget membership changes without inventing a collapsed node state. */
+  resize(apply: () => void, geometry?: DisclosureGeometry): void {
+    if (this.#desired !== null) {
+      apply();
+      return;
+    }
+    const revision = ++this.#revision;
+    const from = height(this.#target);
+    this.#animation?.cancel();
+    this.#animation = null;
+    const root = this.#target.querySelector<HTMLElement>('.lg-node');
+    if (!root || !this.#canAnimate(root)) {
+      try {
+        apply();
+      } finally {
+        this.#release();
+      }
+      return;
+    }
+    this.#hold(from);
+    try {
+      apply();
+    } catch (error: unknown) {
+      this.#release();
+      throw error;
+    }
+    const animate = (): void => {
+      if (this.#revision !== revision) return;
+      const to =
+        geometry?.expandedHeight?.() ??
+        height(this.#target.querySelector<HTMLElement>('.lg-node') ?? root);
+      if (Math.abs(to - from) < 0.5) {
+        this.#release();
+        return;
+      }
+      this.#target.dataset.scDisclosureTarget = to < from ? 'collapsed' : 'expanded';
+      this.#run(from, to, () => this.#release());
+    };
+    if (geometry?.settle) void geometry.settle().then(animate);
+    else animate();
+  }
+
+  /** Apply the same appearance and accessibility motion policy to every disclosure trigger. */
+  #canAnimate(root: HTMLElement): boolean {
+    return (
+      root.hasAttribute('data-sc-fluent-node') &&
+      !this.#target.ownerDocument.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)')
+        .matches &&
+      typeof this.#target.animate === 'function'
+    );
+  }
+
+  /** Retain the current extent while native mounting and autosizing establish the destination. */
+  #hold(from: number): void {
+    if (this.#height === null)
+      this.#height = {
+        value: this.#target.style.getPropertyValue('height'),
+        priority: this.#target.style.getPropertyPriority('height'),
+      };
+    this.#target.style.height = `${String(from)}px`;
+    if (this.#overflow === null) this.#overflow = this.#target.style.overflow;
+    this.#target.style.overflow = 'clip';
+    this.#target.dataset.scDisclosing = '';
   }
 
   /** Animate either whole-card or field-container disclosure through the same motion policy. */
@@ -110,6 +162,20 @@ export class CardDisclosureMotion {
     this.#target.style.overflow = 'clip';
     this.#target.dataset.scDisclosing = '';
     this.#target.dataset.scDisclosureTarget = desired ? 'collapsed' : 'expanded';
+    this.#run(from, to, () => {
+      if (desired) apply(true);
+      const finish = (): void => this.#release();
+      if (desired && geometry?.settle) {
+        const revision = this.#revision;
+        void geometry.settle().then(() => {
+          if (this.#revision === revision) finish();
+        });
+      } else finish();
+    });
+  }
+
+  /** Publish and animate one final extent through the shared motion and masonry policy. */
+  #run(from: number, to: number, finish: () => void): void {
     const animation = this.#target.animate(
       [{ height: `${String(from)}px` }, { height: `${String(to)}px` }],
       {
@@ -123,15 +189,7 @@ export class CardDisclosureMotion {
     void animation.finished.then(
       () => {
         if (this.#animation !== animation) return;
-        if (desired) apply(true);
-        const finish = (): void => {
-          if (this.#animation !== animation) return;
-          animation.cancel();
-          this.#animation = null;
-          this.#release();
-        };
-        if (desired && geometry?.settle) void geometry.settle().then(finish);
-        else finish();
+        finish();
       },
       () => {
         // Reversal and disposal deliberately cancel the previous native animation.
@@ -141,6 +199,7 @@ export class CardDisclosureMotion {
 
   /** Retain the latest requested native state when changing views interrupts presentation. */
   dispose(): void {
+    this.#revision++;
     if (this.#desired !== null) this.#apply?.(this.#desired);
     this.#animation?.cancel();
     this.#animation = null;
@@ -149,6 +208,8 @@ export class CardDisclosureMotion {
 
   /** Restore only the transient style owned by this disclosure lifetime. */
   #release(): void {
+    this.#animation?.cancel();
+    this.#animation = null;
     if (this.#height !== null) {
       this.#target.style.setProperty('height', this.#height.value, this.#height.priority);
       this.#height = null;

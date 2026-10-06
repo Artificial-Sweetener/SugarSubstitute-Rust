@@ -139,6 +139,13 @@ Engineering priority is maintainability, clear architecture, behavior safety dur
 
 ## DOM Safety Rules
 
+- Host mutations must be filtered into identified surface changes at the adapter boundary. Added portals never promote their parent (especially `body` or `documentElement`) into a discovery root.
+- Graph candidate discovery belongs to graph topology, exposure, domain, workflow-load and undo lifecycles. Popup mounts, search input and presentation mutations must not trigger graph discovery.
+- Value and presentation refresh requests must identify affected nodes or mounted surfaces. A complete reset requires a named host lifecycle reason.
+- Use `HostSurfaceObserver` for native surface mount observation. Raw `MutationObserver` construction is restricted to the exact owners in `ARCHITECTURE_POLICY.toml`, enforced by a type-aware compiler audit in worktree and staged architecture checks.
+- Native updates must be idempotent and preserve control, focus and popup identity. Geometry observation must coalesce work and use settled disclosure destinations rather than chasing animation frames.
+- Regression tests must prove unrelated popup activity causes zero inventory rebuilds and unrelated card refreshes, while legitimate topology changes and scoped value changes still propagate.
+
 - Never render dynamic values with `innerHTML`, `outerHTML`, or `insertAdjacentHTML`.
 - Build DOM with `document.createElement`, `textContent`, `replaceChildren`, and explicit attribute assignment.
 - Treat all dynamic values as untrusted for DOM rendering, including cube metadata, workflow content, server payloads, query-state values, and imported data.

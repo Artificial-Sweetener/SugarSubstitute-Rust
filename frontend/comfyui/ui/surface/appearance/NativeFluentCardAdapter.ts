@@ -16,7 +16,7 @@
 /** Identify native Vue presentation boundaries without touching custom widget internals. */
 import { isRecord } from '../../types/common.js';
 import type { UnknownRecord } from '../../types/common.js';
-import { findVueComponents } from '../ComfyVueTree.js';
+import { findVueComponents, findMountedNodeVNode } from '../ComfyVueTree.js';
 import {
   classifyNativeField,
   planNativeFields,
@@ -27,6 +27,7 @@ import { readNativeNumericField } from './ComfyNativeNumericField.js';
 import type { NativeNumericField } from './ComfyNativeNumericField.js';
 import { ComfyNativeSeedControlAdapter } from './ComfyNativeSeedControl.js';
 import type { NativeSeedField } from './NativeSeedControls.js';
+import { readNativeWidgetMount } from '../NativeWidgetMountBoundary.js';
 
 export interface FluentCardBoundary {
   root: HTMLElement;
@@ -54,13 +55,20 @@ export class NativeFluentCardAdapter {
   }
 
   /** Index graph component roots once for a coalesced host update. */
-  beginBatch(documentRef: Document): void {
+  beginBatch(documentRef: Document, roots: readonly HTMLElement[]): void {
     this.#seeds.beginBatch();
+    const unresolved = roots.filter((root) => {
+      if (this.#vnodes.has(root)) return false;
+      const vnode = findMountedNodeVNode(root);
+      if (vnode) this.#vnodes.set(root, vnode);
+      return !vnode;
+    });
+    if (!unresolved.length) return;
     const mount = documentRef.getElementById('vue-app');
     const record: UnknownRecord = isRecord(mount) ? mount : {};
     for (const vnode of findVueComponents(record._vnode, 'LGraphNode')) {
       const element = resolveVNodeElement(vnode);
-      if (element) this.#graphNodes.set(element, vnode);
+      if (element && unresolved.includes(element)) this.#graphNodes.set(element, vnode);
     }
   }
 
@@ -68,6 +76,46 @@ export class NativeFluentCardAdapter {
   endBatch(): void {
     this.#graphNodes.clear();
     this.#seeds.endBatch();
+  }
+
+  /** Annotate toolbar widgets through the same component and numeric boundaries as node fields. */
+  annotateWidget(root: HTMLElement): FluentCardBoundary {
+    const previous = this.#cards.get(root);
+    if (previous) clearAnnotations(previous);
+    const annotated = new Set<HTMLElement>();
+    this.#cards.set(root, annotated);
+    mark(root, 'node', annotated);
+    const boundary = readNativeWidgetMount(root);
+    const numericFields: NativeNumericField[] = [];
+    const seedFields: NativeSeedField[] = [];
+    const labelElements: HTMLElement[] = [];
+    const descriptor = resolveFieldDescriptor(
+      root,
+      indexFieldComponents(boundary?.vnode ?? {}),
+      annotated,
+      numericFields,
+      labelElements,
+      seedFields,
+      this.#seeds,
+    );
+    if (descriptor) {
+      if (!root.hasAttribute('data-sc-choice-inline')) mark(root, 'row', annotated);
+      root.dataset.scFluentWidget = descriptor.component;
+    }
+    if (boundary?.seed && numericFields[0])
+      seedFields.push({ numeric: numericFields[0], control: boundary.seed });
+    return {
+      root,
+      body: null,
+      fields: descriptor ? [descriptor] : [],
+      numericFields,
+      seedFields,
+      labelElements,
+      header: null,
+      collapsed: false,
+      canCollapse: false,
+      advanced: null,
+    };
   }
 
   /** Mark one live card and its positively identified native field rows. */

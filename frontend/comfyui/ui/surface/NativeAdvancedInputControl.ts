@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Expose the exact projected node's advanced disclosure without borrowing a footer or graph ID. */
 import type { ComfyNode } from '../types/graph.js';
+import { isNativeWidgetPresented } from './NativeWidgetPresentation.js';
 import { cubeFaceUnconsumedWidgets } from './CubeFaceWidgetPolicy.js';
 
 export interface NativeAdvancedInputControl {
@@ -29,7 +30,9 @@ export function nativeAdvancedInputControl(
 ): NativeAdvancedInputControl | null {
   if (
     !cubeFaceUnconsumedWidgets(node).some(
-      (widget) => widget.options?.advanced === true || widget.advanced === true,
+      (widget) =>
+        isNativeWidgetPresented(widget) &&
+        (widget.options?.advanced === true || widget.advanced === true),
     )
   )
     return null;

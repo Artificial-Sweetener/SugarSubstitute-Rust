@@ -14,11 +14,14 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own the icon-only view affordance and its position in Comfy's action bar. */
+import { HostSurfaceObserver } from '../../core/HostSurfaceObserver.js';
+
+/** Retain the native toolbar affordance across identified action-bar mounts. */
 export class WorkflowMasonryToolbarButton {
   readonly #document: Document;
   readonly #button: HTMLButtonElement;
   readonly #icon: HTMLSpanElement;
-  readonly #presence: MutationObserver;
+  #presence: HostSurfaceObserver | null = null;
   readonly #toggle: () => void;
   #disposed = false;
 
@@ -35,14 +38,18 @@ export class WorkflowMasonryToolbarButton {
     this.#icon.setAttribute('aria-hidden', 'true');
     this.#button.append(this.#icon);
     this.#button.addEventListener('click', toggle);
-    this.#presence = new MutationObserver(() => this.#attach());
     this.update(false, false);
   }
 
   /** Observe native toolbar mounts after Comfy setup. */
   setup(): void {
     if (this.#disposed) return;
-    this.#presence.observe(this.#document.body, { childList: true, subtree: true });
+    this.#presence = new HostSurfaceObserver(
+      this.#document.body,
+      '.actionbar-container',
+      () => this.#attach(),
+      { content: true },
+    );
     this.#attach();
   }
 
@@ -63,7 +70,7 @@ export class WorkflowMasonryToolbarButton {
   /** Release the toolbar observer and click handler with the owning host. */
   dispose(): void {
     this.#disposed = true;
-    this.#presence.disconnect();
+    this.#presence?.disconnect();
     this.#button.removeEventListener('click', this.#toggle);
     this.#button.remove();
   }

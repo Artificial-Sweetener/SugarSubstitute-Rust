@@ -19,6 +19,7 @@ export class NativeCardGeometryObserver {
     #window;
     #onGeometryChange;
     #observer;
+    #sizes = new WeakMap();
     #animationFrame = null;
     /** Bind native ResizeObserver updates to one coalesced layout callback. */
     constructor(documentRef, onGeometryChange) {
@@ -29,7 +30,21 @@ export class NativeCardGeometryObserver {
         this.#onGeometryChange = onGeometryChange;
         this.#observer =
             typeof windowRef.ResizeObserver === 'function'
-                ? new windowRef.ResizeObserver(() => this.#schedule())
+                ? new windowRef.ResizeObserver((entries) => {
+                    let changed = entries.length === 0;
+                    for (const entry of entries) {
+                        const previous = this.#sizes.get(entry.target);
+                        const { width, height } = entry.contentRect;
+                        const disclosing = entry.target.querySelector('[data-sc-disclosure-height]') !== null;
+                        if (!previous ||
+                            Math.abs(previous.width - width) > 0.5 ||
+                            (!disclosing && Math.abs(previous.height - height) > 0.5))
+                            changed = true;
+                        this.#sizes.set(entry.target, { width, height });
+                    }
+                    if (changed)
+                        this.#schedule();
+                })
                 : null;
     }
     /** Replace the exact native card cells whose dimensions drive masonry. */

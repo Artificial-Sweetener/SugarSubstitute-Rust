@@ -14,6 +14,11 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own effective widget visibility for projected Cube-face node cards. */
+import { isNativeWidgetPresented } from './NativeWidgetPresentation.js';
+/** Resolve rendered fields while retaining their underlying editing capabilities for discovery. */
+export function cubeFacePresentedWidgets(node) {
+    return cubeFaceVisibleWidgets(node).filter(isNativeWidgetPresented);
+}
 /** Resolve widget eligibility independently from the card's collapsed presentation. */
 export function cubeFaceVisibleWidgets(node) {
     const isWidgetVisible = node.isWidgetVisible;

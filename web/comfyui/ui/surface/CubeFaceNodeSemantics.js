@@ -54,6 +54,10 @@ export function inferCubeFaceTransformSignals(node) {
         HOST_OWNED_ACTIVATION_CLASSES.has(nodeClass(node))) {
         return new Set();
     }
+    return cubeFaceResourcePassThrough(node);
+}
+/** Classify resource transforms independently from activation presentation and resource providers. */
+export function cubeFaceResourcePassThrough(node) {
     const inputs = new Set((node.inputs ?? [])
         .map((slot) => resourceSignal(slotType(slot)))
         .filter((signal) => signal !== null));

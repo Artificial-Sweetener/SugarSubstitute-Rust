@@ -265,6 +265,7 @@ describe('workflow masonry controller', () => {
     expect(wheelAtHost).not.toHaveBeenCalled();
     expect(wheel.defaultPrevented).toBe(false);
     expect(setup.mount).toHaveBeenCalledWith(expect.any(HTMLElement), setup.node, {
+      allowCollapse: true,
       presentationGeometry: true,
       preserveNativeBody: true,
       widgetSources: [],

@@ -16,6 +16,12 @@
 /** Own effective widget visibility for projected Cube-face node cards. */
 
 import type { ComfyInput, ComfyNode, ComfyWidget } from '../types/graph.js';
+import { isNativeWidgetPresented } from './NativeWidgetPresentation.js';
+
+/** Resolve rendered fields while retaining their underlying editing capabilities for discovery. */
+export function cubeFacePresentedWidgets(node: ComfyNode): ComfyWidget[] {
+  return cubeFaceVisibleWidgets(node).filter(isNativeWidgetPresented);
+}
 
 /** Resolve widget eligibility independently from the card's collapsed presentation. */
 export function cubeFaceVisibleWidgets(node: ComfyNode): ComfyWidget[] {

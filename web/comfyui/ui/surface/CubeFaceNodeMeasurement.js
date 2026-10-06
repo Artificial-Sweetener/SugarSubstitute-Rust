@@ -15,8 +15,8 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Measure Nodes 1.0 face bodies without mutating graph-owned slot collections. */
 import { isRecord } from '../types/common.js';
-import { cubeFaceNodeHasVisibleWidgets, cubeFaceNodeWidgetStartY, } from './CubeFaceNodePresentationPolicy.js';
-import { cubeFaceVisibleWidgets } from './CubeFaceWidgetPolicy.js';
+import { cubeFaceNodeHasPresentedWidgets, cubeFaceNodeWidgetStartY, } from './CubeFaceNodePresentationPolicy.js';
+import { cubeFacePresentedWidgets } from './CubeFaceWidgetPolicy.js';
 import { cubePromptWidgetHeight } from './CubePromptWidgetHeightStore.js';
 const HEADER_ONLY_BODY_HEIGHT = 1;
 const LEGACY_SLOT_HEIGHT = 20;
@@ -26,12 +26,12 @@ const LEGACY_NODE_MARGIN = 6;
 /** Measure the native expanded widget body while excluding graph boundary rows. */
 export function measureCubeFaceNodeBodyHeight(node) {
     const nativePreviewHeight = hasNativePreviewMedia(node) ? positiveNumber(node.size?.[1]) : null;
-    if (!cubeFaceNodeHasVisibleWidgets(node)) {
+    if (!cubeFaceNodeHasPresentedWidgets(node)) {
         return nativePreviewHeight ?? HEADER_ONLY_BODY_HEIGHT;
     }
     const width = positiveNumber(node.size?.[0]) ?? 200;
     let widgetsHeight = cubeFaceNodeWidgetStartY(node);
-    for (const widget of cubeFaceVisibleWidgets(node)) {
+    for (const widget of cubeFacePresentedWidgets(node)) {
         widgetsHeight += measureWidgetAllocation(widget, node, width);
     }
     const constructorState = Reflect.get(node, 'constructor');

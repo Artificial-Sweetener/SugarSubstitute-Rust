@@ -14,13 +14,14 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Replace generated Subgraph tooltip text on marked Cube instances. */
+import { HostSurfaceObserver } from '../core/HostSurfaceObserver.js';
 import { requireCubeIdentity } from '../cube/node/ComfyCubeNodeFactory.js';
 import { resolveCubeDefinitionDescription } from '../cube/node/CubeDefinitionIdentityWriter.js';
 /** Adapt renderer-mounted tooltips while native definitions retain structural identity. */
 export class CubeNodeTooltipAdapter {
     #document;
     #nodes;
-    #observer;
+    #observer = null;
     #originalText = new Map();
     #unsubscribe;
     #scheduled = false;
@@ -28,17 +29,16 @@ export class CubeNodeTooltipAdapter {
     constructor(options) {
         this.#document = options.document;
         this.#nodes = options.nodes;
-        this.#observer = new MutationObserver(() => this.#schedule());
         this.#unsubscribe = options.nodes.subscribe(() => this.#schedule());
     }
     /** Observe lazy PrimeVue tooltip mounts and reconcile current Cube headers. */
     install() {
-        this.#observer.observe(this.#document.body, { childList: true, subtree: true });
+        this.#observer = new HostSurfaceObserver(this.#document.body, '[data-testid^="node-header-"],.p-tooltip', () => this.#schedule(), { content: true });
         this.refresh();
     }
     /** Restore host tooltip text when the graph-bound runtime is replaced. */
     dispose() {
-        this.#observer.disconnect();
+        this.#observer?.disconnect();
         this.#unsubscribe();
         for (const [element, text] of this.#originalText)
             element.textContent = text;

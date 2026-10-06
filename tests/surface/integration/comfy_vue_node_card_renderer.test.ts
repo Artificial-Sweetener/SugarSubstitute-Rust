@@ -21,8 +21,88 @@ import { ComfyVueNodeCardRenderer } from '../../../frontend/comfyui/ui/surface/C
 import type { ComfyNode } from '../../../frontend/comfyui/ui/types/graph.js';
 import { refreshNativeNodeCards } from '../../../frontend/comfyui/ui/surface/NativeNodeCardRefresh.js';
 import { isRecord } from '../../../frontend/comfyui/ui/types/common.js';
+import { NativeWidgetPresentation } from '../../../frontend/comfyui/ui/surface/NativeWidgetPresentation.js';
 
 describe('ComfyVueNodeCardRenderer', () => {
+  test.each([true, false])(
+    'animates widget visibility with extracted native fields=%s, including unlink and override release',
+    async (extracted) => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+      const target = document.createElement('div');
+      const root = document.createElement('div');
+      root.className = 'lg-node';
+      root.dataset.scFluentNode = '';
+      root.style.height = '200px';
+      document.body.append(target);
+      Object.defineProperty(target, 'offsetHeight', {
+        get: () => Number.parseFloat(root.style.height),
+      });
+      const effects: { frames: Keyframe[]; finish(): void }[] = [];
+      Object.defineProperty(target, 'animate', {
+        value: (frames: Keyframe[]) => {
+          let finish = (): void => undefined;
+          const finished = new Promise<void>((resolve) => {
+            finish = resolve;
+          });
+          effects.push({ frames, finish });
+          return { finished, cancel: jest.fn() };
+        },
+      });
+      const widget = { name: 'text', type: 'customtext', value: 'Native prompt' };
+      const presentation = new NativeWidgetPresentation();
+      const renderer = new ComfyVueNodeCardRenderer({
+        component: { __name: 'LGraphNode' },
+        appContext: {},
+        runtime: {
+          h: (_component, props) => ({ props }),
+          extractVueNodeData: () => ({ widgets: extracted ? [{ name: 'text' }] : [] }),
+          render: (vnode) => {
+            if (!isRecord(vnode)) return;
+            const props = isRecord(vnode.props) ? vnode.props : {};
+            const data = isRecord(props.nodeData) ? props.nodeData : {};
+            root.style.height =
+              (Array.isArray(data.widgets) && data.widgets.length) ||
+              (Array.isArray(data.sugarcubesEditorWidgets) && data.sugarcubesEditorWidgets.length)
+                ? '200px'
+                : '49px';
+            target.append(root);
+          },
+        },
+      });
+      const mount = renderer.mount(
+        target,
+        { title: 'Positive prompt', widgets: [widget] },
+        { allowCollapse: false },
+      );
+      try {
+        expect(effects).toHaveLength(0);
+        presentation.reconcile(new Set([widget]));
+        refreshNativeNodeCards(document, { kind: 'reset', reason: 'native-choices' });
+        mount.refresh();
+        await jest.runAllTimersAsync();
+        expect(effects[0]?.frames).toEqual([{ height: '200px' }, { height: '49px' }]);
+        effects[0]?.finish();
+        await Promise.resolve();
+        expect(target.style.height).toBe('');
+        presentation.reconcile(new Set());
+        refreshNativeNodeCards(document, { kind: 'reset', reason: 'native-choices' });
+        await jest.runAllTimersAsync();
+        expect(effects[1]?.frames).toEqual([{ height: '49px' }, { height: '200px' }]);
+        widget.value = 'Edited value';
+        mount.refresh();
+        await jest.runAllTimersAsync();
+        expect(effects).toHaveLength(2);
+        effects[1]?.finish();
+        await Promise.resolve();
+        expect(target.hasAttribute('data-sc-disclosure-height')).toBe(false);
+      } finally {
+        mount.unmount();
+        presentation.dispose();
+        target.remove();
+        jest.useRealTimers();
+      }
+    },
+  );
   test('refreshes published native choices on surviving card mounts and releases the subscription on unmount', () => {
     const target = document.createElement('div');
     const root = document.createElement('div');
@@ -51,7 +131,7 @@ describe('ComfyVueNodeCardRenderer', () => {
     );
     const origin = target.querySelector('.lg-node');
     choices = ['verified-fixture.safetensors'];
-    refreshNativeNodeCards(document);
+    refreshNativeNodeCards(document, { kind: 'reset', reason: 'native-choices' });
     expect(h).toHaveBeenCalledTimes(2);
     expect(h.mock.lastCall?.[1]).toEqual(
       expect.objectContaining({
@@ -62,7 +142,7 @@ describe('ComfyVueNodeCardRenderer', () => {
     );
     expect(target.querySelector('.lg-node')).toBe(origin);
     mount.unmount();
-    refreshNativeNodeCards(document);
+    refreshNativeNodeCards(document, { kind: 'reset', reason: 'native-choices' });
     expect(h).toHaveBeenCalledTimes(2);
     target.remove();
   });
@@ -282,7 +362,13 @@ describe('ComfyVueNodeCardRenderer', () => {
       }),
     });
     expect(render).toHaveBeenCalledWith(
-      expect.objectContaining({ appContext, type: component }),
+      expect.objectContaining({
+        appContext: expect.objectContaining({
+          provides: appContext.provides,
+          config: expect.objectContaining({ idPrefix: expect.stringMatching(/^sc-native-/) }),
+        }),
+        type: component,
+      }),
       target,
     );
     expect(nodeData.inputs).toBe(inputs);
@@ -588,6 +674,53 @@ describe('ComfyVueNodeCardRenderer', () => {
     mount.unmount();
     collapseButton.click();
     expect(node.collapse).toHaveBeenCalledTimes(1);
+  });
+
+  test('keeps masonry prompts expanded without a collapse control or graph-state mutation', () => {
+    const root = document.createElement('div');
+    root.className = 'lg-node';
+    const button = document.createElement('button');
+    button.dataset.testid = 'node-collapse-button';
+    const textarea = document.createElement('textarea');
+    root.append(button, textarea);
+    const target = document.createElement('div');
+    const flags = { collapsed: true, pinned: true };
+    const node: ComfyNode = {
+      title: 'Positive prompt',
+      widgets: [{ name: 'text', type: 'customtext', value: 'Editable prompt' }],
+      flags,
+      collapse: jest.fn(),
+    };
+    const h = jest.fn(() => ({ type: 'node' }));
+    const renderer = new ComfyVueNodeCardRenderer({
+      component: { __name: 'LGraphNode' },
+      appContext: {},
+      runtime: {
+        render: (vnode) => {
+          if (vnode !== null) target.append(root);
+        },
+        h,
+        extractVueNodeData: () => ({ flags, widgets: [{ name: 'text' }] }),
+      },
+    });
+    const mount = renderer.mount(target, node, { allowCollapse: false });
+    expect(h).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        nodeData: expect.objectContaining({ flags: { collapsed: false, pinned: true } }),
+      }),
+    );
+    expect(button.hidden).toBe(true);
+    expect(button.disabled).toBe(true);
+    expect(button.style.display).toBe('none');
+    expect(textarea.disabled).toBe(false);
+    button.click();
+    mount.refresh();
+    expect(node.collapse).not.toHaveBeenCalled();
+    expect(node.flags).toBe(flags);
+    expect(flags).toEqual({ collapsed: true, pinned: true });
+    expect(button.hidden).toBe(true);
+    mount.unmount();
   });
 
   test('adopts a header accessory into the exact native title row and reconciles replacement', async () => {

@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Keep the Cube editor HUD clear of Comfy's native viewport chrome as it changes. */
+import { HostSurfaceObserver } from '../core/HostSurfaceObserver.js';
 const LEFT_CHROME_SELECTOR = [
     '.side-tool-bar-container',
     '.side-bar-panel',
@@ -39,13 +40,7 @@ export class CubeEditorHudPositioner {
         this.#resizeObserver = ResizeObserverConstructor
             ? new ResizeObserverConstructor(() => this.#schedule())
             : null;
-        this.#mutationObserver = new MutationObserver(() => this.#schedule());
-        this.#mutationObserver.observe(documentRef.documentElement, {
-            attributes: true,
-            attributeFilter: ['class', 'style'],
-            childList: true,
-            subtree: true,
-        });
+        this.#mutationObserver = new HostSurfaceObserver(documentRef.documentElement, `${LEFT_CHROME_SELECTOR},${TOP_CHROME_SELECTOR}`, () => this.#schedule(), { attributes: ['class', 'style'] });
         documentRef.defaultView?.addEventListener('resize', this.#onWindowResize);
         this.#observeChrome();
         this.sync();

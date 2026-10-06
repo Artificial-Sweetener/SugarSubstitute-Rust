@@ -63,6 +63,11 @@ export function inferCubeFaceTransformSignals(node: ComfyNode): ReadonlySet<stri
   ) {
     return new Set();
   }
+  return cubeFaceResourcePassThrough(node);
+}
+
+/** Classify resource transforms independently from activation presentation and resource providers. */
+export function cubeFaceResourcePassThrough(node: ComfyNode): ReadonlySet<string> {
   const inputs = new Set(
     (node.inputs ?? [])
       .map((slot) => resourceSignal(slotType(slot)))

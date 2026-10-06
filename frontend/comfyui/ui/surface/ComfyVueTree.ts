@@ -18,6 +18,20 @@
 import { isRecord } from '../types/common.js';
 import type { UnknownRecord } from '../types/common.js';
 
+/** Resolve a native node through its own component ancestry instead of walking the application tree. */
+export function findMountedNodeVNode(root: HTMLElement): UnknownRecord | null {
+  let candidate: unknown = Reflect.get(root, '__vueParentComponent');
+  const visited = new Set<object>();
+  while (isRecord(candidate) && !visited.has(candidate)) {
+    visited.add(candidate);
+    const vnode = isRecord(candidate.vnode) ? candidate.vnode : null;
+    const type = isRecord(vnode?.type) ? vnode.type : null;
+    if (type?.__name === 'LGraphNode' || type?.name === 'LGraphNode') return vnode;
+    candidate = candidate.parent;
+  }
+  return null;
+}
+
 /** Resolve Comfy's mounted Vue application context independently of graph contents. */
 export function findComfyVueAppContext(root: HTMLElement): UnknownRecord | null {
   const rootRecord: UnknownRecord = isRecord(root) ? root : {};

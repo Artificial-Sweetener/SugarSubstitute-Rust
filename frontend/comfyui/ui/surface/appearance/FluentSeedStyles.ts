@@ -18,9 +18,8 @@
 /** Style only recognized native seed fields in both graph and masonry. */
 export function fluentSeedCss(): string {
   return `
-    [data-sc-number-spinner][data-sc-seed-box] { width:100%; max-width:100%; min-width:60px; padding-right:46px; overflow:visible; font-variant-numeric:tabular-nums; }
-    .sugarcubes-cube-face__node-card [data-sc-number-spinner][data-sc-seed-box] { width:calc(20ch + 64px); }
-    .sugarcubes-cube-face__node-card [data-sc-fluent-row][data-sc-fluent-widget^="WidgetInputNumber"] [data-sc-fluent-layout] > :last-child:has([data-sc-seed-box]) { flex:0 0 calc(20ch + 64px); width:calc(20ch + 64px); max-width:100%; }
+    [data-sc-number-spinner][data-sc-seed-box] { width:192px; max-width:100%; min-width:60px; padding-right:46px; overflow:visible; font-variant-numeric:tabular-nums; }
+    .sugarcubes-cube-face__node-card [data-sc-fluent-row][data-sc-fluent-widget^="WidgetInputNumber"] [data-sc-fluent-layout] > :last-child:has([data-sc-seed-box]) { flex:0 1 192px; width:192px; min-width:60px; max-width:100%; }
     [data-sc-seed-box] [data-sc-number-increment], [data-sc-seed-box] [data-sc-number-decrement],
     [data-sc-seed-box] [data-testid="value-control"] { display:none; }
     [data-sc-seed-box] [data-sc-number-input] { text-align:left; font:inherit; }

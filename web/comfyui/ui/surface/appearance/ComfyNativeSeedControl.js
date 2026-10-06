@@ -69,46 +69,48 @@ export class ComfyNativeSeedControlAdapter {
         const node = typeof locator === 'string' ? this.#nodes.get(locator) : undefined;
         if (!node)
             return null;
-        const owner = resolveOwner(node, widget.name, new Set());
-        if (!owner)
-            return null;
-        const linked = owner.widget.linkedWidgets;
-        const candidates = Array.isArray(linked) ? linked : [];
-        let control = candidates.find(isComfySeedModeControl);
-        if (!control && (seedNames.has(widget.name) || spec.control_after_generate === true)) {
-            const widgets = owner.node.widgets;
-            if (Array.isArray(widgets)) {
-                const index = widgets.indexOf(owner.widget);
-                const next = widgets[index + 1];
-                if (isRecord(next) &&
-                    next.name === 'control_after_generate' &&
-                    isComfySeedModeControl(next))
-                    control = next;
-            }
-        }
-        if (!isComfySeedModeControl(control))
-            return null;
-        const options = isRecord(control.options) ? control.options : {};
-        const modes = Array.isArray(options.values) ? options.values.filter(isSeedMode) : [];
-        const nativeControl = control;
-        return {
-            modes,
-            readMode: () => (isSeedMode(nativeControl.value) ? nativeControl.value : 'fixed'),
-            writeMode: (mode) => {
-                if (!modes.includes(mode) || nativeControl.value === mode)
-                    return;
-                const previous = nativeControl.value;
-                nativeControl.value = mode;
-                if (typeof nativeControl.callback === 'function')
-                    nativeControl.callback.call(nativeControl, mode);
-                if (typeof owner.node.onWidgetChanged === 'function')
-                    owner.node.onWidgetChanged.call(owner.node, nativeControl.name, mode, previous, nativeControl);
-                const graph = isRecord(owner.node.graph) ? owner.node.graph : {};
-                if (typeof graph.afterChange === 'function')
-                    graph.afterChange.call(graph);
-            },
-        };
+        return readNativeSeedControl(node, widget.name, spec.control_after_generate === true);
     }
+}
+/** Share native promoted seed ownership with execution controls and relation coordination. */
+export function readNativeSeedControl(node, name, allowFallback = false) {
+    const owner = resolveOwner(node, name, new Set());
+    if (!owner)
+        return null;
+    const linked = owner.widget.linkedWidgets;
+    const candidates = Array.isArray(linked) ? linked : [];
+    let control = candidates.find(isComfySeedModeControl);
+    if (!control && (seedNames.has(name) || allowFallback)) {
+        const widgets = owner.node.widgets;
+        if (Array.isArray(widgets)) {
+            const index = widgets.indexOf(owner.widget);
+            const next = widgets[index + 1];
+            if (isRecord(next) && next.name === 'control_after_generate' && isComfySeedModeControl(next))
+                control = next;
+        }
+    }
+    if (!isComfySeedModeControl(control))
+        return null;
+    const options = isRecord(control.options) ? control.options : {};
+    const modes = Array.isArray(options.values) ? options.values.filter(isSeedMode) : [];
+    const nativeControl = control;
+    return {
+        modes,
+        readMode: () => (isSeedMode(nativeControl.value) ? nativeControl.value : 'fixed'),
+        writeMode: (mode) => {
+            if (!modes.includes(mode) || nativeControl.value === mode)
+                return;
+            const previous = nativeControl.value;
+            nativeControl.value = mode;
+            if (typeof nativeControl.callback === 'function')
+                nativeControl.callback.call(nativeControl, mode);
+            if (typeof owner.node.onWidgetChanged === 'function')
+                owner.node.onWidgetChanged.call(owner.node, nativeControl.name, mode, previous, nativeControl);
+            const graph = isRecord(owner.node.graph) ? owner.node.graph : {};
+            if (typeof graph.afterChange === 'function')
+                graph.afterChange.call(graph);
+        },
+    };
 }
 /** Follow exposed subgraph inputs to the original widget and its linked execution control. */
 function resolveOwner(node, name, seen) {

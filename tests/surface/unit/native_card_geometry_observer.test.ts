@@ -64,6 +64,48 @@ describe('NativeCardGeometryObserver', () => {
     pending?.(0);
     expect(onGeometryChange).toHaveBeenCalledTimes(1);
 
+    callbacks.clear();
+    const resize = (width: number, height: number): void => {
+      const entry: ResizeObserverEntry = {
+        target: first,
+        contentRect: {
+          x: 0,
+          y: 0,
+          left: 0,
+          top: 0,
+          right: width,
+          bottom: height,
+          width,
+          height,
+          toJSON: () => ({}),
+        },
+        borderBoxSize: [],
+        contentBoxSize: [],
+        devicePixelContentBoxSize: [],
+      };
+      notify([entry], observer as unknown as ResizeObserver);
+    };
+    resize(300, 100);
+    callbacks.forEach((callback) => callback(0));
+    callbacks.clear();
+    const disclosure = document.createElement('div');
+    disclosure.dataset.scDisclosureHeight = '200';
+    first.append(disclosure);
+    resize(300, 130);
+    resize(300, 160);
+    expect(callbacks.size).toBe(0);
+    resize(320, 180);
+    expect(callbacks.size).toBe(1);
+    callbacks.forEach((callback) => callback(0));
+    callbacks.clear();
+    disclosure.remove();
+    resize(320, 200);
+    expect(callbacks.size).toBe(1);
+    callbacks.forEach((callback) => callback(0));
+    callbacks.clear();
+    resize(320, 200);
+    expect(callbacks.size).toBe(0);
+
     observer.dispose();
     expect(disconnect).toHaveBeenCalled();
     window.ResizeObserver = originalResizeObserver;

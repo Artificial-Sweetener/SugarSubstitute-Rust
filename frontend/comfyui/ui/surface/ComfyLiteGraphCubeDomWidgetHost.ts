@@ -20,6 +20,7 @@ import type { CubeCanvasCard, CubeCanvasLayout } from './CubeCanvasLayout.js';
 import { findCubeFacePromptWidget } from './CubeFacePromptPolicy.js';
 import { cubeFaceNodeWidgetStartY } from './CubeFaceNodePresentationPolicy.js';
 import { cubeFaceUnconsumedWidgets } from './CubeFaceWidgetPolicy.js';
+import { isNativeWidgetPresented } from './NativeWidgetPresentation.js';
 import { CubePromptDomWidgetSizingHost } from './CubePromptDomWidgetSizingHost.js';
 
 export interface LiteGraphCubeDomWidgetCanvas {
@@ -122,7 +123,7 @@ export class ComfyLiteGraphCubeDomWidgetHost {
 
   /** Collect valid DOM widgets after Comfy has laid out the native face card. */
   #collectCardWidgets(card: CubeCanvasCard, desired: Map<HTMLElement, WidgetGeometry>): void {
-    for (const widget of cubeFaceUnconsumedWidgets(card.node)) {
+    for (const widget of cubeFaceUnconsumedWidgets(card.node).filter(isNativeWidgetPresented)) {
       const nativeWidget = this.#asNativeDomWidget(widget);
       if (!nativeWidget || !this.#isVisible(card.node, nativeWidget)) continue;
       const geometry = this.#geometry(card, nativeWidget);

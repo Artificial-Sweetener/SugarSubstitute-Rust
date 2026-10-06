@@ -28,6 +28,7 @@ interface MountedMasonryCard {
   host: NativeNodeCardHost;
   node: ComfyNode;
   activation: boolean;
+  prompt: boolean;
   mounted: boolean;
   retiring: boolean;
 }
@@ -76,7 +77,11 @@ export class WorkflowMasonrySectionView {
             this.#cards.delete(id);
           });
         }
-      } else if (next?.node !== record.node || next.showActivationControl !== record.activation) {
+      } else if (
+        next?.node !== record.node ||
+        next.showActivationControl !== record.activation ||
+        (next.prompt === true) !== record.prompt
+      ) {
         this.#options.motion.forget(record.cell);
         releaseCard(record);
         this.#cards.delete(id);
@@ -99,6 +104,7 @@ export class WorkflowMasonrySectionView {
           host: new NativeNodeCardHost(renderer),
           node: card.node,
           activation: card.showActivationControl,
+          prompt: card.prompt === true,
           mounted: false,
           retiring: false,
         };
@@ -117,8 +123,12 @@ export class WorkflowMasonrySectionView {
         const mount = record;
         pending.push(() => {
           if (this.#cards.get(card.id) !== mount || mount.mounted) return;
-          mount.host.mountCard(mount.cell, card, (node, enabled) =>
-            this.#options.cardState.setEnabled(section.target, String(node.id ?? ''), enabled),
+          mount.host.mountCard(
+            mount.cell,
+            card,
+            (node, enabled) =>
+              this.#options.cardState.setEnabled(section.target, String(node.id ?? ''), enabled),
+            { allowCollapse: card.prompt !== true },
           );
           mount.mounted = true;
         });

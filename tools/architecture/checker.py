@@ -37,6 +37,7 @@ from .scanner import (
 )
 from .snapshot import SnapshotError, repository_snapshot
 from .system_git_policy import scan_system_git_dependencies
+from .invalidation_policy import scan_invalidation
 
 POLICY_PATH = "ARCHITECTURE_POLICY.toml"
 DEBT_PATH = "ARCHITECTURE_DEBT.toml"
@@ -53,7 +54,9 @@ def check_repository(
 
     try:
         with repository_snapshot(project_root, staged=staged) as root:
-            return _check_snapshot(root, today=today or date.today())
+            return _check_snapshot(
+                root, tooling_root=project_root, today=today or date.today()
+            )
     except (RegistryError, SnapshotError) as error:
         return ArchitectureResult(
             diagnostics=(
@@ -67,7 +70,9 @@ def check_repository(
         )
 
 
-def _check_snapshot(root: Path, *, today: date) -> ArchitectureResult:
+def _check_snapshot(
+    root: Path, *, tooling_root: Path, today: date
+) -> ArchitectureResult:
     """Validate architecture files and governed sources in one materialized tree."""
 
     policy = load_policy(root / POLICY_PATH)
@@ -77,6 +82,13 @@ def _check_snapshot(root: Path, *, today: date) -> ArchitectureResult:
     structure, metrics = scan_structure(root, policy, paths)
     dependencies = scan_dependencies(root, policy, paths)
     system_git = scan_system_git_dependencies(root)
+    invalidation = scan_invalidation(
+        root,
+        tooling_root,
+        paths,
+        policy.mutation_observer_owners,
+        policy.document_observer_owners,
+    )
     governance = _validate_governance(
         root,
         paths=frozenset(paths),
@@ -86,7 +98,7 @@ def _check_snapshot(root: Path, *, today: date) -> ArchitectureResult:
         today=today,
     )
     waived, waiver_usage = _apply_waivers(
-        diagnostics=structure + dependencies + system_git,
+        diagnostics=structure + dependencies + system_git + invalidation,
         waivers=waivers,
     )
     unused = tuple(

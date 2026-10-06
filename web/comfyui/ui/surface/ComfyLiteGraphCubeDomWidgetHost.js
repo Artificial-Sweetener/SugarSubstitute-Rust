@@ -17,6 +17,7 @@
 import { findCubeFacePromptWidget } from './CubeFacePromptPolicy.js';
 import { cubeFaceNodeWidgetStartY } from './CubeFaceNodePresentationPolicy.js';
 import { cubeFaceUnconsumedWidgets } from './CubeFaceWidgetPolicy.js';
+import { isNativeWidgetPresented } from './NativeWidgetPresentation.js';
 import { CubePromptDomWidgetSizingHost } from './CubePromptDomWidgetSizingHost.js';
 const DEFAULT_WIDGET_MARGIN = 10;
 const DEFAULT_WIDGET_HEIGHT = 50;
@@ -65,7 +66,7 @@ export class ComfyLiteGraphCubeDomWidgetHost {
     }
     /** Collect valid DOM widgets after Comfy has laid out the native face card. */
     #collectCardWidgets(card, desired) {
-        for (const widget of cubeFaceUnconsumedWidgets(card.node)) {
+        for (const widget of cubeFaceUnconsumedWidgets(card.node).filter(isNativeWidgetPresented)) {
             const nativeWidget = this.#asNativeDomWidget(widget);
             if (!nativeWidget || !this.#isVisible(card.node, nativeWidget))
                 continue;

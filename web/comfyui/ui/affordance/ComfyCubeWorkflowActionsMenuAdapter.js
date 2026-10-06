@@ -14,13 +14,14 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Adapt Comfy's portalled Workflow actions menu at the root of a Cube editor. */
+import { HostSurfaceObserver } from '../core/HostSurfaceObserver.js';
 /** Own Cube language on the top-level Workflow actions menu. */
 export class ComfyCubeWorkflowActionsMenuAdapter {
     #document;
     #canvas;
     #contexts;
     #policy;
-    #observer;
+    #observer = null;
     #textStates = new Map();
     #scheduled = false;
     /** Bind the stable semantic menu surface and shared Cube policy. */
@@ -29,16 +30,15 @@ export class ComfyCubeWorkflowActionsMenuAdapter {
         this.#canvas = options.canvas;
         this.#contexts = options.contexts;
         this.#policy = options.policy;
-        this.#observer = new MutationObserver(() => this.#schedule());
     }
     /** Observe portalled menu mounts and apply Cube language when appropriate. */
     install() {
-        this.#observer.observe(this.#document.body, { childList: true, subtree: true });
+        this.#observer = new HostSurfaceObserver(this.#document.body, '[role="menu"][data-reka-menu-content]', () => this.#schedule(), { content: true });
         this.refresh();
     }
     /** Release the observer and restore any still-mounted host labels. */
     dispose() {
-        this.#observer.disconnect();
+        this.#observer?.disconnect();
         this.#restoreText();
     }
     /** Reconcile the currently open Workflow actions menu. */

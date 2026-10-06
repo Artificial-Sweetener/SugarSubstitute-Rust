@@ -1,6 +1,6 @@
 import { resolveCubeFaceCardPresentation, } from './CubeFaceCardPolicy.js';
 import { resolveCubeCardWidgetSources } from './CubeCardWidgetSources.js';
-import { cubeFaceCardColumnSpan } from './CubeFacePromptPolicy.js';
+import { cubeFaceCardColumnSpan, findCubeFacePromptWidget } from './CubeFacePromptPolicy.js';
 /** Keep exposed controls, prompt spans and reading order identical across both surfaces. */
 export function projectNodeCards(nodes, state, graph, cube) {
     const sources = new Map(nodes.map((node) => [node, cube ? resolveCubeCardWidgetSources(cube, node) : []]));
@@ -8,13 +8,15 @@ export function projectNodeCards(nodes, state, graph, cube) {
     return resolveCubeFaceCardPresentation(nodes, state, graph, additionalControlNodes).cards.map((card) => {
         const widgetSources = sources.get(card.node) ?? [];
         const exposed = new Set(widgetSources.map((source) => source.targetName));
+        const presentedNode = {
+            ...card.node,
+            inputs: (card.node.inputs ?? []).filter((input) => !exposed.has(input.widget?.name ?? '')),
+        };
         return {
             ...card,
             widgetSources,
-            columnSpan: cubeFaceCardColumnSpan({
-                ...card.node,
-                inputs: (card.node.inputs ?? []).filter((input) => !exposed.has(input.widget?.name ?? '')),
-            }),
+            prompt: findCubeFacePromptWidget(presentedNode) !== null,
+            columnSpan: cubeFaceCardColumnSpan(presentedNode),
         };
     });
 }

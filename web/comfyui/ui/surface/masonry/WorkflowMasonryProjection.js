@@ -1,19 +1,15 @@
 import { requireCubeIdentity } from '../../cube/node/ComfyCubeNodeFactory.js';
-import { orderNodesUpstreamFirst } from '../CubeFaceCardPolicy.js';
+import { orderWorkflowNodes } from '../WorkflowNodeOrder.js';
 import { readCubeFaceCardState } from '../CubeFaceCardStateService.js';
 import { projectNodeCards } from '../NodeCardProjection.js';
 /** Keep real Cubes and consecutive loose nodes in distinct runs of the shared grid. */
 export function projectWorkflowMasonry(graph, cubes, connections = []) {
-    const nodes = [...(graph._nodes ?? graph.nodes ?? [])].sort((a, b) => (a.pos?.[0] ?? 0) - (b.pos?.[0] ?? 0) || (a.pos?.[1] ?? 0) - (b.pos?.[1] ?? 0));
-    const byId = new Map(nodes.map((node) => [String(node.id), node]));
     const cubeSet = new Set(cubes);
     const sections = [];
     const looseMembers = new Map();
     let loose = null;
-    for (const id of orderNodesUpstreamFirst(nodes, graph, connections)) {
-        const node = byId.get(id);
-        if (!node)
-            continue;
+    for (const node of orderWorkflowNodes(graph, connections)) {
+        const id = String(node.id);
         const cube = cubeSet.has(node) ? cubes.find((candidate) => candidate === node) : undefined;
         if (cube) {
             loose = null;

@@ -24,14 +24,54 @@ import { SurfaceMotion } from '../../../frontend/comfyui/ui/surface/motion/Surfa
 import { CubeFaceCardStateService } from '../../../frontend/comfyui/ui/surface/CubeFaceCardStateService.js';
 import { CubeNodeCatalog } from '../../../frontend/comfyui/ui/cube/node/CubeNodeCatalog.js';
 import type { ComfyNode } from '../../../frontend/comfyui/ui/types/graph.js';
+import type {
+  NativeNodeCardMountOptions,
+  NativeNodeCardRenderer,
+} from '../../../frontend/comfyui/ui/surface/NativeNodeCardRenderer.js';
+import { projectWorkflowMasonry } from '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryProjection.js';
 import type { WorkflowMasonrySection } from '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryProjection.js';
 import { NativeProjectedNodeCollapse } from '../../../frontend/comfyui/ui/surface/NativeProjectedNodeCollapse.js';
+import { CardDisclosureMotion } from '../../../frontend/comfyui/ui/surface/motion/CardDisclosureMotion.js';
 import { DISCLOSURE_LAYOUT_EVENT } from '../../../frontend/comfyui/ui/surface/motion/DisclosureLayout.js';
 
 afterEach(() => {
   document.body.replaceChildren();
   jest.restoreAllMocks();
   jest.useRealTimers();
+});
+
+test('masonry suppresses disclosure only for semantic prompt cards', async () => {
+  const nodes: ComfyNode[] = [
+    {
+      id: 'positive',
+      title: 'Positive prompt',
+      type: 'StringConstant',
+      widgets: [{ name: 'text', type: 'customtext', value: 'prompt' }],
+    },
+    { id: 'sampler', type: 'KSampler', widgets: [{ name: 'steps', value: 20 }] },
+  ];
+  const mounts = new Map<ComfyNode, NativeNodeCardMountOptions>();
+  const view = new WorkflowMasonryView({
+    document,
+    sections: projectWorkflowMasonry({ _nodes: nodes }, []),
+    cardState: new CubeFaceCardStateService({ nodes: new CubeNodeCatalog(), history: {} }),
+    openCube() {},
+  });
+  document.body.append(view.element);
+  const renderer: NativeNodeCardRenderer = {
+    mount(_target, node, options = {}) {
+      mounts.set(node, options);
+      return { refresh() {}, unmount() {} };
+    },
+    dispose() {},
+  };
+  await view.mountCards(renderer);
+  expect(mounts.get(nodes[0]!)).toMatchObject({ allowCollapse: false });
+  expect(mounts.get(nodes[1]!)).toMatchObject({ allowCollapse: true });
+  nodes[0]!.title = 'Notes';
+  await view.refresh(projectWorkflowMasonry({ _nodes: nodes }, []), renderer);
+  expect(mounts.get(nodes[0]!)).toMatchObject({ allowCollapse: true });
+  view.dispose();
 });
 
 /** Model a native prompt whose Fluent textarea sizing follows reactive expansion. */
@@ -75,17 +115,23 @@ function promptDisclosureFixture() {
       return { finished, cancel: jest.fn() };
     },
   });
-  const collapse = new NativeProjectedNodeCollapse(target, node, () => {
-    root.style.height = flags.collapsed ? '50px' : '130px';
-    window.requestAnimationFrame(() => {
-      root.style.height = flags.collapsed ? '50px' : '100px';
-    });
-  });
-  return { target, root, button, flags, effects, collapse };
+  const motion = new CardDisclosureMotion(target);
+  const collapse = new NativeProjectedNodeCollapse(
+    target,
+    node,
+    () => {
+      root.style.height = flags.collapsed ? '50px' : '130px';
+      window.requestAnimationFrame(() => {
+        root.style.height = flags.collapsed ? '50px' : '100px';
+      });
+    },
+    motion,
+  );
+  return { target, root, button, flags, effects, collapse, motion };
 }
 
 test('expanding a native prompt publishes its settled height without an oversized neighbor destination', async () => {
-  const { target, root, button, effects, collapse } = promptDisclosureFixture();
+  const { target, root, button, effects, collapse, motion } = promptDisclosureFixture();
   const destinations: (string | undefined)[] = [];
   target.addEventListener(DISCLOSURE_LAYOUT_EVENT, () =>
     destinations.push(target.dataset.scDisclosureHeight),
@@ -103,6 +149,7 @@ test('expanding a native prompt publishes its settled height without an oversize
   expect(target.style.height).toBe('50px');
   expect(destinations).toEqual(['100', undefined]);
   collapse.dispose();
+  motion.dispose();
 });
 
 test('reversing or disposing a pending expansion prevents a stale oversized animation', async () => {
@@ -116,9 +163,11 @@ test('reversing or disposing a pending expansion prevents a stale oversized anim
   await jest.runAllTimersAsync();
   expect(first.flags.collapsed).toBe(true);
   first.collapse.dispose();
+  first.motion.dispose();
   const second = promptDisclosureFixture();
   second.button.click();
   second.collapse.dispose();
+  second.motion.dispose();
   await jest.runAllTimersAsync();
   expect(second.effects).toHaveLength(0);
   expect(second.flags.collapsed).toBe(false);

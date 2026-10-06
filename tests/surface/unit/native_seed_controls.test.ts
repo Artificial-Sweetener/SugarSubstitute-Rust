@@ -144,7 +144,8 @@ test('follows disabled input and removes accessories, subscriptions and markers 
   expect(f.field.numeric.spinner.hasAttribute('data-sc-seed-box')).toBe(false);
   expect(f.field.numeric.input.value).toBe('123456789');
   expect(fluentSeedCss()).toContain('padding-right:46px');
-  expect(fluentSeedCss()).toContain('width:calc(20ch + 64px)');
+  expect(fluentSeedCss()).toContain('flex:0 1 192px');
+  expect(fluentSeedCss()).toContain('min-width:60px');
   expect(fluentSeedCss()).toContain('font-variant-numeric:tabular-nums');
   f.controls.clear();
 });

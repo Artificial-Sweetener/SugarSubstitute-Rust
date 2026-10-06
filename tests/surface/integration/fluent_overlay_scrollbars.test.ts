@@ -55,6 +55,36 @@ async function flush(frames: FrameRequestCallback[]): Promise<void> {
   await Promise.resolve();
 }
 
+test('portal mounts and local input do not rediscover or measure an unrelated scroll owner', async () => {
+  const area = scrollArea(),
+    other = scrollArea();
+  const input = document.createElement('input');
+  area.append(input);
+  document.body.append(area, other);
+  const frames: FrameRequestCallback[] = [];
+  jest.spyOn(window, 'requestAnimationFrame').mockImplementation((frame) => {
+    frames.push(frame);
+    return frames.length;
+  });
+  const host = new FluentOverlayScrollbarHost(document, jest.fn());
+  host.enable();
+  await flush(frames);
+  await flush(frames);
+  const bounds = jest.mocked(other.getBoundingClientRect);
+  bounds.mockClear();
+  const styles = jest.spyOn(window, 'getComputedStyle');
+  const popup = document.createElement('div');
+  popup.setAttribute('role', 'listbox');
+  document.body.append(popup);
+  await flush(frames);
+  await flush(frames);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  await flush(frames);
+  expect(bounds).not.toHaveBeenCalled();
+  expect(styles.mock.calls.some(([element]) => element === other)).toBe(false);
+  host.clear();
+});
+
 test('handles both axes through native state and restores untouched content on disable', async () => {
   const area = scrollArea();
   const content = document.createElement('input');

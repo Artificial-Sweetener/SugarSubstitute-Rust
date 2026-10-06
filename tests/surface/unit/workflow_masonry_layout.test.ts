@@ -58,6 +58,7 @@ describe('workflow masonry sections', () => {
       decisions().map((card) => ({
         ...card,
         widgetSources: [],
+        prompt: false,
         id: `cube:cube:${card.id}`,
         columnSpan: card.columnSpan ?? 1,
       })),
@@ -108,6 +109,7 @@ describe('workflow masonry sections', () => {
       expect.objectContaining({
         node: member,
         columnSpan: 2,
+        prompt: true,
         widgetSources: [{ node: cube, name: 'prompt', targetName: 'text' }],
       }),
     ]);
