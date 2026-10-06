@@ -18,21 +18,14 @@ import type { CubeNode } from '../../cube/node/ComfyCubeNodeFactory.js';
 import type { CubeFaceCardStateService } from '../CubeFaceCardStateService.js';
 import { NativeNodeCardHost } from '../NativeNodeCardHost.js';
 import type { NativeNodeCardRenderer } from '../NativeNodeCardRenderer.js';
-import { NativeWidgetElementLease } from './NativeWidgetElementLease.js';
-import { NativeForwardedWidgetLease } from './NativeForwardedWidgetLease.js';
-import { resolveMasonryWidgetSources } from './WorkflowMasonryWidgetSources.js';
 import type { WorkflowMasonrySection } from './WorkflowMasonryProjection.js';
 import type { ComfyNode } from '../../types/graph.js';
 import type { SurfaceMotion } from '../motion/SurfaceMotion.js';
 import { WorkflowMasonrySectionHeaderView } from './WorkflowMasonrySectionHeaderView.js';
-import { MasonryNodeIconHost } from './MasonryNodeIconHost.js';
 
 interface MountedMasonryCard {
   cell: HTMLElement;
   host: NativeNodeCardHost;
-  icon: MasonryNodeIconHost;
-  widgets: NativeWidgetElementLease;
-  forwarded: NativeForwardedWidgetLease | null;
   node: ComfyNode;
   activation: boolean;
   mounted: boolean;
@@ -53,7 +46,6 @@ export class WorkflowMasonrySectionView {
   readonly #options: WorkflowMasonrySectionViewOptions;
   readonly #headerView: WorkflowMasonrySectionHeaderView;
   readonly #cards = new Map<string, MountedMasonryCard>();
-  #cubeWidgets: NativeWidgetElementLease | null = null;
 
   /** Build stable section chrome using the existing optional-node toolbox presenter. */
   constructor(section: WorkflowMasonrySection, options: WorkflowMasonrySectionViewOptions) {
@@ -70,8 +62,6 @@ export class WorkflowMasonrySectionView {
   /** Reconcile shared policy decisions without replacing the live menu or untouched controls. */
   prepare(section: WorkflowMasonrySection, renderer: NativeNodeCardRenderer): Array<() => void> {
     this.#headerView.render(section);
-    if (!this.#cubeWidgets && section.cube)
-      this.#cubeWidgets = new NativeWidgetElementLease([section.cube]);
     const visible = section.cards.filter((card) => card.visible);
     const ids = new Set(visible.map((card) => card.id));
     for (const [id, record] of this.#cards) {
@@ -101,14 +91,12 @@ export class WorkflowMasonrySectionView {
         cell.className = 'sugarcubes-workflow-masonry__card';
         cell.style.position = 'absolute';
         cell.dataset.masonryCard = card.id;
+        cell.dataset.masonrySection = section.id;
         this.#options.content.append(cell);
         this.cells.set(card.id, cell);
         record = {
           cell,
           host: new NativeNodeCardHost(renderer),
-          icon: new MasonryNodeIconHost(cell, card.node),
-          widgets: new NativeWidgetElementLease([card.node]),
-          forwarded: null,
           node: card.node,
           activation: card.showActivationControl,
           mounted: false,
@@ -125,21 +113,12 @@ export class WorkflowMasonrySectionView {
       if (record.mounted) {
         record.cell.dataset.cubeColumnSpan = String(card.columnSpan);
         record.host.refresh([card]);
-        record.icon.refresh();
       } else {
         const mount = record;
         pending.push(() => {
           if (this.#cards.get(card.id) !== mount || mount.mounted) return;
-          const widgetSources = section.cube
-            ? resolveMasonryWidgetSources(section.cube, card.node)
-            : [];
-          mount.forwarded = new NativeForwardedWidgetLease(mount.cell, card.node, widgetSources);
-          mount.host.mountCard(
-            mount.cell,
-            card,
-            (node, enabled) =>
-              this.#options.cardState.setEnabled(section.target, String(node.id ?? ''), enabled),
-            { presentationGeometry: true, preserveNativeBody: true, widgetSources },
+          mount.host.mountCard(mount.cell, card, (node, enabled) =>
+            this.#options.cardState.setEnabled(section.target, String(node.id ?? ''), enabled),
           );
           mount.mounted = true;
         });
@@ -156,17 +135,12 @@ export class WorkflowMasonrySectionView {
     }
     this.#cards.clear();
     this.cells.clear();
-    this.#cubeWidgets?.restore();
-    this.#cubeWidgets = null;
     this.#headerView.dispose();
   }
 }
 
 /** Release one card without disturbing surviving native control instances. */
 function releaseCard(record: MountedMasonryCard): void {
-  record.icon.dispose();
-  record.forwarded?.dispose();
   record.host.dispose();
-  record.widgets.restore();
   record.cell.remove();
 }

@@ -18,10 +18,23 @@
  */
 
 import type { ComfyApplication, ComfyCanvas, ComfyGraph, ComfyHostApi } from '../types/graph.js';
+import { isRecord } from '../types/common.js';
 import { resolveComfyRendererMode } from './ComfyRendererMode.js';
 
 export interface HostToast {
   add(message: { severity: string; summary: string; detail: string; life: number }): void;
+}
+
+/** Validate a dynamic host service and retain the original store as its method receiver. */
+function readHostToast(value: unknown): HostToast | null {
+  if (!isRecord(value) || typeof value.add !== 'function') return null;
+  const add = value.add;
+  return {
+    /** Forward a typed notification through the validated public host boundary. */
+    add(message): void {
+      add.call(value, message);
+    },
+  };
 }
 
 export type BrowserSetTimeout = (
@@ -128,8 +141,13 @@ export class ComfyAdapter {
     return this.getApp()?.graph ?? null;
   }
 
+  /** Read the public workspace notification service, retaining older host API support. */
   getToast(): HostToast | null {
-    return this.windowRef?.comfyAPI?.vueApp?.config?.globalProperties?.$toast || null;
+    const manager = this.getApp()?.extensionManager;
+    const toast = isRecord(manager) ? readHostToast(manager.toast) : null;
+    return (
+      toast ?? readHostToast(this.windowRef?.comfyAPI?.vueApp?.config?.globalProperties?.$toast)
+    );
   }
 
   getApp(): ComfyApplication | null {

@@ -20,6 +20,8 @@ import type { UnknownRecord } from '../types/common.js';
 import type { ComfyNode } from '../types/graph.js';
 import { findCubeFacePromptWidget } from './CubeFacePromptPolicy.js';
 import { cubeFaceUnconsumedWidgets, cubeFaceVisibleWidgets } from './CubeFaceWidgetPolicy.js';
+import { projectNativeWidgetOrigins } from './NativeWidgetOrigins.js';
+import { nativeAdvancedInputControl } from './NativeAdvancedInputControl.js';
 
 interface RememberedNodeProperty {
   key: 'flags' | 'widgets' | 'widgets_start_y' | 'widgets_up';
@@ -51,7 +53,11 @@ function createCubeFaceFlags(flags: unknown): UnknownRecord {
 }
 
 /** Create safe Comfy Vue render data with only controls still owned by the node. */
-export function createCubeFaceNodeData(nodeData: UnknownRecord, node: ComfyNode): UnknownRecord {
+export function createCubeFaceNodeData(
+  nodeData: UnknownRecord,
+  node: ComfyNode,
+  refresh: () => void = () => undefined,
+): UnknownRecord {
   const visibleNames = new Set(cubeFaceVisibleWidgets(node).map((widget) => widget.name));
   const widgets = Array.isArray(nodeData.widgets)
     ? nodeData.widgets.filter(
@@ -66,7 +72,9 @@ export function createCubeFaceNodeData(nodeData: UnknownRecord, node: ComfyNode)
     },
     inputs: [],
     outputs: [],
-    widgets,
+    widgets: projectNativeWidgetOrigins(node, widgets),
+    sugarcubesEditorWidgets: cubeFaceUnconsumedWidgets(node),
+    sugarcubesAdvancedInputs: nativeAdvancedInputControl(node, refresh),
   };
 }
 

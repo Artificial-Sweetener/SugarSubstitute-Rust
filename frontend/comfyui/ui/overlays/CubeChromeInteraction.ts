@@ -26,6 +26,7 @@ import type {
   HitRegion,
 } from './CubeChromeContracts.js';
 import type { Vec2 } from '../types/common.js';
+import { ContextMenu } from '../menus/ContextMenu.js';
 
 interface InteractionOptions {
   getActions: () => ChromeActions;
@@ -40,6 +41,7 @@ export class CubeChromeInteraction {
   private hoveredInstance: string | null = null;
   private hoveredBadgeInstance: string | null = null;
   private hoveredBadgeKey: string | null = null;
+  private menu: ContextMenu | null = null;
   constructor(private readonly options: InteractionOptions) {}
 
   buildMenuOptions({
@@ -95,6 +97,8 @@ export class CubeChromeInteraction {
     ];
   }
   clear(): void {
+    this.menu?.close();
+    this.menu = null;
     this.hoveredKey = null;
     this.hoveredInstance = null;
     this.hoveredBadgeInstance = null;
@@ -124,16 +128,20 @@ export class CubeChromeInteraction {
           'swap-left': () => this.options.getActions().onSwapLeft?.(region.metadata),
           'swap-right': () => this.options.getActions().onSwapRight?.(region.metadata),
           menu: () => {
-            const liteGraph = typeof globalThis !== 'undefined' ? globalThis.LiteGraph : null;
-            if (!liteGraph?.ContextMenu) {
-              return;
-            }
+            const documentRef = canvasInstance.canvas?.ownerDocument;
+            if (!documentRef) return;
             const options = this.buildMenuOptions({
               metadata: region.metadata,
               isDirty: Boolean(region.metadata?.dirty),
               flavors: region.flavorOptions || [],
             });
-            new liteGraph.ContextMenu(options, { event });
+            this.menu?.close();
+            this.menu = new ContextMenu(documentRef);
+            this.menu.open({
+              label: 'Cube actions',
+              anchor: { kind: 'pointer', x: event.clientX, y: event.clientY },
+              entries: options.map((option) => ({ label: option.title, select: option.callback })),
+            });
           },
         };
         const handler = handlers[region.key];

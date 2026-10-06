@@ -28,8 +28,10 @@ import { findCubeFacePromptWidget } from './CubeFacePromptPolicy.js';
 import { CubePromptTextareaScope } from './CubePromptTextareaScope.js';
 import { ComfyVueNodeHeaderAccessoryHost } from './ComfyVueNodeHeaderAccessoryHost.js';
 import { NativeProjectedNodeCollapse } from './NativeProjectedNodeCollapse.js';
+import { NativeProjectedAdvancedInputs } from './NativeProjectedAdvancedInputs.js';
 import { NativeProjectedNodeScrollBoundary } from './NativeProjectedNodeScrollBoundary.js';
 import { NATIVE_NODE_CARD_DISPOSE_EVENT } from './NativeNodeCardRenderer.js';
+import { subscribeNativeNodeCardRefresh } from './NativeNodeCardRefresh.js';
 import type {
   NativeNodeCardMount,
   NativeNodeCardMountOptions,
@@ -64,8 +66,6 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
     options: NativeNodeCardMountOptions = {},
   ): NativeNodeCardMount {
     let disposed = false;
-    let advancedInputsRefreshTimer: number | null = null;
-    const windowRef = target.ownerDocument.defaultView;
     const headerAccessoryHost = options.headerAccessory
       ? new ComfyVueNodeHeaderAccessoryHost(options.headerAccessory)
       : null;
@@ -79,6 +79,7 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
           headerAccessoryHost,
           promptTextareaScope,
           collapseHost,
+          advancedInputsHost,
           scrollBoundary,
           options,
         );
@@ -86,7 +87,11 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
     });
     const renderCard = (): void => {
       if (disposed) return;
-      const nodeData = createCubeFaceNodeData(this.#runtime.extractVueNodeData(node), node);
+      const nodeData = createCubeFaceNodeData(
+        this.#runtime.extractVueNodeData(node),
+        node,
+        renderCard,
+      );
       for (const source of options.widgetSources ?? []) {
         const ownerData = createCubeFaceNodeData(
           this.#runtime.extractVueNodeData(source.node),
@@ -101,7 +106,11 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
           nodeData.widgets.push({ ...widget, name: source.targetName });
         }
       }
-      const vnodeValue = this.#runtime.h(this.#component, { nodeData });
+      // Comfy snapshots advanced footer state at setup instead of watching native node changes.
+      const vnodeValue = this.#runtime.h(this.#component, {
+        nodeData,
+        key: node.showAdvanced === true,
+      });
       if (!isRecord(vnodeValue)) {
         throw new TypeError('Comfy native renderer returned an invalid VNode.');
       }
@@ -115,30 +124,15 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
         headerAccessoryHost,
         promptTextareaScope,
         collapseHost,
+        advancedInputsHost,
         scrollBoundary,
         options,
       );
     };
     const collapseHost = new NativeProjectedNodeCollapse(target, node, renderCard);
-    const refreshAfterAdvancedInputsToggle = (event: Event): void => {
-      const eventTarget = event.target;
-      if (!(eventTarget instanceof Element)) return;
-      const toggle = eventTarget.closest('[data-testid="advanced-inputs-button"]');
-      if (!toggle || !target.contains(toggle)) return;
-      if (!windowRef) {
-        queueMicrotask(() => queueMicrotask(renderCard));
-        return;
-      }
-      if (advancedInputsRefreshTimer !== null) {
-        windowRef.clearTimeout(advancedInputsRefreshTimer);
-      }
-      advancedInputsRefreshTimer = windowRef.setTimeout(() => {
-        advancedInputsRefreshTimer = null;
-        renderCard();
-      }, 0);
-    };
+    const advancedInputsHost = new NativeProjectedAdvancedInputs(target, node, renderCard);
     renderCard();
-    target.addEventListener('click', refreshAfterAdvancedInputsToggle, true);
+    const releaseNativeRefresh = subscribeNativeNodeCardRefresh(target.ownerDocument, renderCard);
     observer.observe(target, { childList: true, subtree: true });
 
     const mount: NativeNodeCardMount = {
@@ -146,15 +140,12 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
       unmount: () => {
         if (disposed) return;
         disposed = true;
-        if (advancedInputsRefreshTimer !== null) {
-          windowRef?.clearTimeout(advancedInputsRefreshTimer);
-          advancedInputsRefreshTimer = null;
-        }
         observer.disconnect();
-        target.removeEventListener('click', refreshAfterAdvancedInputsToggle, true);
+        releaseNativeRefresh();
         target.querySelector('.lg-node')?.dispatchEvent(new Event(NATIVE_NODE_CARD_DISPOSE_EVENT));
         promptTextareaScope.dispose();
         collapseHost.dispose();
+        advancedInputsHost.dispose();
         scrollBoundary.dispose();
         headerAccessoryHost?.dispose();
         this.#runtime.render(null, target);
@@ -177,6 +168,7 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
     headerAccessoryHost: ComfyVueNodeHeaderAccessoryHost | null,
     promptTextareaScope: CubePromptTextareaScope,
     collapseHost: NativeProjectedNodeCollapse,
+    advancedInputsHost: NativeProjectedAdvancedInputs,
     scrollBoundary: NativeProjectedNodeScrollBoundary,
     options: NativeNodeCardMountOptions,
   ): void {
@@ -195,7 +187,10 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
       for (const handle of nativeRoot.querySelectorAll<HTMLElement>(':scope > [role="button"]')) {
         handle.hidden = true;
       }
-      collapseHost.reconcile(nativeRoot);
+      collapseHost.reconcile(
+        nativeRoot,
+        (options.widgetSources?.length ?? 0) > 0 ? true : undefined,
+      );
       if (node.isSubgraphNode?.()) {
         hideNativeSubgraphIcon(nativeRoot);
         hideNativeSubgraphFooter(nativeRoot);
@@ -212,8 +207,10 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
     }
     const footerVNode = findVueComponent(targetRecord._vnode, 'NodeFooter');
     const footerRoot = resolveComponentElement(footerVNode);
-    const advancedInputs = footerRoot ? reconcileNativeFooter(footerRoot) : null;
-    if (advancedInputs) this.#isolateInteractiveRoot(advancedInputs);
+    if (footerRoot) {
+      advancedInputsHost.reconcile(footerRoot);
+      if (!footerRoot.hidden) this.#isolateInteractiveRoot(footerRoot);
+    }
     if (nativeRoot && !options.preserveNativeBody) reconcileNativeBody(nativeRoot, node);
     promptTextareaScope.reconcile(findCubeFacePromptWidget(node) !== null);
 
@@ -222,7 +219,9 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
     if (widgetsRoot) this.#isolateInteractiveRoot(widgetsRoot);
     scrollBoundary.reconcile(
       nativeRoot,
-      [advancedInputs, widgetsRoot].filter((element): element is HTMLElement => element !== null),
+      [widgetsRoot, footerRoot?.hidden ? null : footerRoot].filter(
+        (element): element is HTMLElement => element instanceof HTMLElement,
+      ),
     );
   }
 
@@ -248,19 +247,6 @@ function annotateNativeBypassBadge(vnode: unknown, nativeRoot: HTMLElement | nul
     if (props.cssIcon === 'icon-[lucide--redo-dot]') element.dataset.masonryBypassBadge = '';
     else delete element.dataset.masonryBypassBadge;
   }
-}
-
-/** Preserve and return only the native footer control for advanced inputs. */
-function reconcileNativeFooter(footerRoot: HTMLElement): HTMLElement | null {
-  const advancedInputs = footerRoot.querySelector<HTMLElement>(
-    '[data-testid="advanced-inputs-button"]',
-  );
-  if (!advancedInputs) {
-    hideComponentRoot(footerRoot);
-    return null;
-  }
-  showComponentRoot(footerRoot);
-  return advancedInputs;
 }
 
 /** Remove the native body when Cube-face policy leaves only the title row. */
@@ -302,12 +288,6 @@ function hideNativeSubgraphIcon(nativeRoot: HTMLElement): void {
 function hideComponentRoot(element: HTMLElement): void {
   element.hidden = true;
   element.style.setProperty('display', 'none', 'important');
-}
-
-/** Restore a Comfy-owned root previously hidden by Cube-face reconciliation. */
-function showComponentRoot(element: HTMLElement): void {
-  element.hidden = false;
-  element.style.removeProperty('display');
 }
 
 /** Resolve the rendered root element for one mounted component VNode. */

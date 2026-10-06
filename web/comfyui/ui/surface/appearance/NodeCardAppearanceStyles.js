@@ -20,6 +20,25 @@ export function ensureNodeCardAppearanceStyles(documentRef) {
     const style = documentRef.createElement('style');
     style.id = 'sugarcubes-node-card-appearance';
     style.textContent = `
+    .sugarcubes-cube-face__node-card { box-sizing:border-box; border:1px solid var(--interface-stroke,#454545); border-radius:12px; background:var(--sugarcubes-masonry-card-surface,var(--comfy-input-bg,#222)); }
+    .sugarcubes-cube-face__node-card .lg-node { cursor:default; }
+    .sugarcubes-cube-face__node-card [data-masonry-bypass-badge] { display:none !important; }
+    .sugarcubes-cube-face__node-card [data-masonry-title-icon] {
+      position:relative; padding-left:30px;
+    }
+    .sugarcubes-workflow-masonry__node-icon {
+      position:absolute; left:0; top:50%; transform:translateY(-50%);
+      width:24px; height:24px; pointer-events:none;
+    }
+    .sugarcubes-workflow-masonry__node-icon::before {
+      content:''; display:block; width:20px; height:20px; margin:2px;
+      background:currentColor; mask:var(--sc-node-icon) center / contain no-repeat;
+    }
+    .sugarcubes-cube-face__node-card .lg-node.outline-node-component-outline { outline-color:transparent; }
+    .sugarcubes-cube-face__node-card .lg-node > [data-testid="node-state-outline-overlay"].border-node-component-outline {
+      border-color:transparent;
+    }
+
     .sugarcubes-native-node-card .lg-node:not([data-sc-fluent-node]) [data-testid="node-inner-wrapper"] {
       background-color:var(--sugarcubes-cube-card-header) !important;
     }

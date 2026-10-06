@@ -16,6 +16,7 @@
 /**
  * Own Cube chrome hit testing, hover state, and action dispatch.
  */
+import { ContextMenu } from '../menus/ContextMenu.js';
 /** Route pointer input through published Cube chrome regions. */
 export class CubeChromeInteraction {
     options;
@@ -23,6 +24,7 @@ export class CubeChromeInteraction {
     hoveredInstance = null;
     hoveredBadgeInstance = null;
     hoveredBadgeKey = null;
+    menu = null;
     constructor(options) {
         this.options = options;
     }
@@ -73,6 +75,8 @@ export class CubeChromeInteraction {
         ];
     }
     clear() {
+        this.menu?.close();
+        this.menu = null;
         this.hoveredKey = null;
         this.hoveredInstance = null;
         this.hoveredBadgeInstance = null;
@@ -101,16 +105,21 @@ export class CubeChromeInteraction {
                     'swap-left': () => this.options.getActions().onSwapLeft?.(region.metadata),
                     'swap-right': () => this.options.getActions().onSwapRight?.(region.metadata),
                     menu: () => {
-                        const liteGraph = typeof globalThis !== 'undefined' ? globalThis.LiteGraph : null;
-                        if (!liteGraph?.ContextMenu) {
+                        const documentRef = canvasInstance.canvas?.ownerDocument;
+                        if (!documentRef)
                             return;
-                        }
                         const options = this.buildMenuOptions({
                             metadata: region.metadata,
                             isDirty: Boolean(region.metadata?.dirty),
                             flavors: region.flavorOptions || [],
                         });
-                        new liteGraph.ContextMenu(options, { event });
+                        this.menu?.close();
+                        this.menu = new ContextMenu(documentRef);
+                        this.menu.open({
+                            label: 'Cube actions',
+                            anchor: { kind: 'pointer', x: event.clientX, y: event.clientY },
+                            entries: options.map((option) => ({ label: option.title, select: option.callback })),
+                        });
                     },
                 };
                 const handler = handlers[region.key];

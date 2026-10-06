@@ -43,13 +43,25 @@ def main() -> int:
     environment["MYPYPATH"] = str(project_root / "stubs")
 
     project_status = _run_mypy(
-        ["sugarcubes", "tests", "scripts", "tools", "--no-pretty"],
+        [
+            "sugarcubes",
+            "sugarcubes_model_roots",
+            "prestartup_script.py",
+            "load_model_roots.py",
+            "tests",
+            "scripts",
+            "tools",
+            "--no-pretty",
+        ],
         cwd=project_root,
         environment=environment,
     )
     if project_status != 0:
         return project_status
 
+    environment["MYPYPATH"] = os.pathsep.join(
+        (str(project_root / "stubs"), str(project_root))
+    )
     return _run_mypy(
         [
             "-m",

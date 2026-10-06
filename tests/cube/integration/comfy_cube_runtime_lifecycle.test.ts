@@ -30,6 +30,7 @@ function createRuntime(dispose: () => void): ComfyCubeRuntime {
     authoring: {} as ComfyCubeRuntime['authoring'],
     nodes,
     cardState: {} as ComfyCubeRuntime['cardState'],
+    graphChanges: { subscribe: () => () => undefined },
     versionAvailability: {} as ComfyCubeRuntime['versionAvailability'],
     versionSwitch: {} as ComfyCubeRuntime['versionSwitch'],
     graphScope: {} as ComfyCubeRuntime['graphScope'],

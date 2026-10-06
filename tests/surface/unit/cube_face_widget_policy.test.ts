@@ -28,6 +28,69 @@ import {
   isCubeFaceWidgetConsumed,
 } from '../../../frontend/comfyui/ui/surface/CubeFaceWidgetPolicy.js';
 import type { ComfyNode, ComfyWidget } from '../../../frontend/comfyui/ui/types/graph.js';
+import { readNativeWidgetOrigins } from '../../../frontend/comfyui/ui/surface/NativeWidgetOrigins.js';
+import { isRecord } from '../../../frontend/comfyui/ui/types/common.js';
+
+test('retains advanced disclosure as an explicit native capability while collapsed', () => {
+  let refreshes = 0;
+  const node: ComfyNode = {
+    flags: { collapsed: true },
+    showAdvanced: true,
+    widgets: [{ name: 'tile_size', type: 'number', value: 512, options: { advanced: true } }],
+  };
+  const data = createCubeFaceNodeData({ widgets: [] }, node, () => {
+    refreshes++;
+  });
+  const control = data.sugarcubesAdvancedInputs;
+  if (
+    !isRecord(control) ||
+    typeof control.shown !== 'function' ||
+    typeof control.setShown !== 'function'
+  )
+    throw new Error('Missing advanced capability');
+  expect(control.shown()).toBe(true);
+  control.setShown(false);
+  expect(node.showAdvanced).toBe(false);
+  expect(node.flags?.collapsed).toBe(true);
+  expect(refreshes).toBe(1);
+  control.setShown(false);
+  expect(refreshes).toBe(1);
+});
+
+test('preserves promoted field origins only in transient render data, including renamed copies', () => {
+  const callback = jest.fn();
+  const widget = { name: 'Detector', value: 'bbox/face_yolov8n.pt', callback };
+  const leaf: ComfyNode = {
+    id: 'loader',
+    type: 'SimpleSyrup.LoadUltralyticsModel',
+    inputs: [{ name: 'model_name', widget: { name: 'model_name' } }],
+  };
+  const node: ComfyNode = {
+    id: 'boundary',
+    type: 'native-subgraph-uuid',
+    widgets: [widget],
+    inputs: [{ name: 'Detector', widget: { name: 'Detector' } }],
+    subgraph: {},
+    isSubgraphNode: () => true,
+    resolveSubgraphInputLinks: () => [{ inputNode: leaf, link: { target_slot: 0 } }],
+  };
+  const data = createCubeFaceNodeData({ widgets: [widget] }, node);
+  expect(data.widgets).toEqual([
+    {
+      ...widget,
+      sugarcubesNativeWidgetOrigins: [
+        { classType: 'SimpleSyrup.LoadUltralyticsModel', inputName: 'model_name' },
+      ],
+    },
+  ]);
+  expect(widget).not.toHaveProperty('sugarcubesNativeWidgetOrigins');
+  expect(node.widgets?.[0]).toBe(widget);
+  const projected = Array.isArray(data.widgets) ? data.widgets[0] : undefined;
+  expect(projected).not.toBe(widget);
+  expect(readNativeWidgetOrigins({ ...projected, name: 'Renamed detector' })).toEqual([
+    { classType: 'SimpleSyrup.LoadUltralyticsModel', inputName: 'model_name' },
+  ]);
+});
 
 describe('CubeFaceWidgetPolicy', () => {
   test('retains collapsed card eligibility while respecting hidden widgets and restoring flags on failure', () => {

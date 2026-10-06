@@ -78,11 +78,11 @@ var emptyArray = Object.freeze([]);
 function createTypeRegistry() {
   const typeToDefinition = /* @__PURE__ */ new Map();
   return Object.freeze({
-    register(definition2) {
-      if (typeToDefinition.has(definition2.type)) {
+    register(definition4) {
+      if (typeToDefinition.has(definition4.type)) {
         return false;
       }
-      typeToDefinition.set(definition2.type, definition2);
+      typeToDefinition.set(definition4.type, definition4);
       return true;
     },
     getByType(key) {
@@ -659,7 +659,7 @@ var defaultPolicy = Object.freeze({
   createHTML(value) {
     return fastTrustedType.createHTML(value);
   },
-  protect(tagName2, aspect, aspectName, sink) {
+  protect(tagName4, aspect, aspectName, sink) {
     return sink;
   }
 });
@@ -858,8 +858,8 @@ function attr(configOrTarget, prop) {
 
 // node_modules/@microsoft/fast-element/dist/esm/styles/element-styles.js
 var DefaultStyleStrategy;
-function reduceStyles(styles2) {
-  return styles2.reduce((reduced, current) => {
+function reduceStyles(styles4) {
+  return styles4.reduce((reduced, current) => {
     if (current instanceof ElementStyles) {
       reduced.push(...reduceStyles(current.styles));
     } else {
@@ -885,8 +885,8 @@ var ElementStyles = class _ElementStyles {
    * Creates an instance of ElementStyles.
    * @param styles - The styles that will be associated with elements.
    */
-  constructor(styles2) {
-    this.styles = styles2;
+  constructor(styles4) {
+    this.styles = styles4;
     this.targets = /* @__PURE__ */ new WeakSet();
     this._strategy = null;
   }
@@ -924,16 +924,16 @@ var ElementStyles = class _ElementStyles {
    * @param styles - The style options to normalize.
    * @returns A singular ElementStyles instance or undefined.
    */
-  static normalize(styles2) {
-    return styles2 === void 0 ? void 0 : Array.isArray(styles2) ? new _ElementStyles(styles2) : styles2 instanceof _ElementStyles ? styles2 : new _ElementStyles([styles2]);
+  static normalize(styles4) {
+    return styles4 === void 0 ? void 0 : Array.isArray(styles4) ? new _ElementStyles(styles4) : styles4 instanceof _ElementStyles ? styles4 : new _ElementStyles([styles4]);
   }
 };
 ElementStyles.supportsAdoptedStyleSheets = Array.isArray(document.adoptedStyleSheets) && "replace" in CSSStyleSheet.prototype;
 function createAdoptedSheetsStrategy() {
   const cache = /* @__PURE__ */ new Map();
   return class FallbackAdoptedSheetsStrategy {
-    constructor(styles2) {
-      this.sheets = styles2.map((x) => {
+    constructor(styles4) {
+      this.sheets = styles4.map((x) => {
         if (x instanceof CSSStyleSheet) {
           return x;
         }
@@ -959,8 +959,8 @@ function createAdoptedSheetsStrategy() {
 var fallbackStyleId = 0;
 function createStyleElementStrategy() {
   return class FallbackStyleElementStrategy {
-    constructor(styles2) {
-      this.styles = styles2;
+    constructor(styles4) {
+      this.styles = styles4;
       this.styleClass = `fast-${++fallbackStyleId}`;
     }
     addStylesTo(target) {
@@ -974,9 +974,9 @@ function createStyleElementStrategy() {
     }
     removeStylesFrom(target) {
       const t = target === document ? document.body : target;
-      const styles2 = t.querySelectorAll(`.${this.styleClass}`);
-      for (let i = 0, ii = styles2.length; i < ii; ++i) {
-        t.removeChild(styles2[i]);
+      const styles4 = t.querySelectorAll(`.${this.styleClass}`);
+      for (let i = 0, ii = styles4.length; i < ii; ++i) {
+        t.removeChild(styles4[i]);
       }
     }
   };
@@ -989,15 +989,15 @@ var typeRegistry = createTypeRegistry();
 var definitionInstances = /* @__PURE__ */ new WeakMap();
 var instanceRefs = /* @__PURE__ */ new WeakMap();
 var fastElementRegistry = Object.freeze({
-  register(definition2) {
-    if (!typeRegistry.register(definition2)) {
+  register(definition4) {
+    if (!typeRegistry.register(definition4)) {
       return false;
     }
-    const registeredTypes = getRegisteredTypes(definition2.registry);
-    if (!Object.prototype.hasOwnProperty.call(registeredTypes, definition2.name)) {
-      Observable.defineProperty(registeredTypes, definition2.name);
+    const registeredTypes = getRegisteredTypes(definition4.registry);
+    if (!Object.prototype.hasOwnProperty.call(registeredTypes, definition4.name)) {
+      Observable.defineProperty(registeredTypes, definition4.name);
     }
-    registeredTypes[definition2.name] = definition2.type;
+    registeredTypes[definition4.name] = definition4.type;
     return true;
   },
   getByType: typeRegistry.getByType,
@@ -1023,46 +1023,46 @@ function whenRegistered(name, registry3 = customElements) {
   if (!Object.prototype.hasOwnProperty.call(registeredTypes, name)) {
     Observable.defineProperty(registeredTypes, name);
   }
-  const definition2 = getDefinitionForType(registeredTypes[name]);
-  if (definition2 !== void 0) {
-    return Promise.resolve(definition2);
+  const definition4 = getDefinitionForType(registeredTypes[name]);
+  if (definition4 !== void 0) {
+    return Promise.resolve(definition4);
   }
   return new Promise((resolve) => {
     const notifier = Observable.getNotifier(registeredTypes);
     const subscriber = {
       handleChange: () => {
-        const definition3 = getDefinitionForType(registeredTypes[name]);
-        if (definition3 === void 0) {
+        const definition5 = getDefinitionForType(registeredTypes[name]);
+        if (definition5 === void 0) {
           return;
         }
         notifier.unsubscribe(subscriber, name);
-        resolve(definition3);
+        resolve(definition5);
       }
     };
     notifier.subscribe(subscriber, name);
   });
 }
-function trackFASTElementInstance(definition2, instance) {
+function trackFASTElementInstance(definition4, instance) {
   if (instanceRefs.has(instance)) {
     return false;
   }
-  let instances = definitionInstances.get(definition2);
+  let instances = definitionInstances.get(definition4);
   const isFirstInstance = instances === void 0;
   if (instances === void 0) {
     instances = /* @__PURE__ */ new Set();
-    definitionInstances.set(definition2, instances);
+    definitionInstances.set(definition4, instances);
   }
   const ref2 = new WeakRef(instance);
   instances.add(ref2);
   instanceRefs.set(instance, ref2);
   return isFirstInstance;
 }
-function trackedFASTElementInstances(definition2, callback) {
-  const instances = definitionInstances.get(definition2);
+function trackedFASTElementInstances(definition4, callback) {
+  const instances = definitionInstances.get(definition4);
   if (instances === void 0) {
     return;
   }
-  definitionInstances.delete(definition2);
+  definitionInstances.delete(definition4);
   for (const ref2 of instances) {
     const instance = ref2.deref();
     if (instance !== void 0) {
@@ -1086,23 +1086,23 @@ function isFASTElementTemplateResolver(value) {
 function isPromiseLike(value) {
   return typeof (value === null || value === void 0 ? void 0 : value.then) === "function";
 }
-function finalizeResolvedTemplate(definition2, template2) {
-  pendingTemplateResolutions.delete(definition2);
-  if (definition2.template === void 0 && template2 !== void 0) {
-    definition2.template = template2;
+function finalizeResolvedTemplate(definition4, template4) {
+  pendingTemplateResolutions.delete(definition4);
+  if (definition4.template === void 0 && template4 !== void 0) {
+    definition4.template = template4;
   }
-  if (definition2.template !== void 0) {
-    templateResolutionErrors.delete(definition2);
-    templateResolvers.delete(definition2);
-    return definition2.template;
+  if (definition4.template !== void 0) {
+    templateResolutionErrors.delete(definition4);
+    templateResolvers.delete(definition4);
+    return definition4.template;
   }
   return void 0;
 }
-function applyFASTElementExtensions(definition2, registry3 = definition2.registry, extensions) {
+function applyFASTElementExtensions(definition4, registry3 = definition4.registry, extensions) {
   if (!(extensions === null || extensions === void 0 ? void 0 : extensions.length)) {
     return;
   }
-  const typedDefinition = definition2;
+  const typedDefinition = definition4;
   let registries = extensionRegistries.get(typedDefinition);
   if (registries === null || registries === void 0 ? void 0 : registries.has(registry3)) {
     return;
@@ -1113,47 +1113,47 @@ function applyFASTElementExtensions(definition2, registry3 = definition2.registr
   }
   registries.add(registry3);
   for (const extension of extensions) {
-    extension(definition2);
+    extension(definition4);
   }
 }
-function getLateAttributeLookup(definition2) {
+function getLateAttributeLookup(definition4) {
   var _a2;
-  return (_a2 = lateAttributeLookups.get(definition2)) !== null && _a2 !== void 0 ? _a2 : null;
+  return (_a2 = lateAttributeLookups.get(definition4)) !== null && _a2 !== void 0 ? _a2 : null;
 }
-function resolveFASTElementTemplate(definition2) {
-  if (definition2.template !== void 0) {
-    templateResolutionErrors.delete(definition2);
-    return definition2.template;
+function resolveFASTElementTemplate(definition4) {
+  if (definition4.template !== void 0) {
+    templateResolutionErrors.delete(definition4);
+    return definition4.template;
   }
-  const pendingResolution = pendingTemplateResolutions.get(definition2);
+  const pendingResolution = pendingTemplateResolutions.get(definition4);
   if (pendingResolution) {
     return pendingResolution;
   }
-  const templateResolver = templateResolvers.get(definition2);
+  const templateResolver = templateResolvers.get(definition4);
   if (!templateResolver) {
     return void 0;
   }
-  templateResolutionErrors.delete(definition2);
-  let template2;
+  templateResolutionErrors.delete(definition4);
+  let template4;
   try {
-    template2 = templateResolver(definition2);
+    template4 = templateResolver(definition4);
   } catch (error) {
-    templateResolutionErrors.set(definition2, error);
+    templateResolutionErrors.set(definition4, error);
     throw error;
   }
-  if (isPromiseLike(template2)) {
-    const resolution = Promise.resolve(template2).then((resolvedTemplate) => finalizeResolvedTemplate(definition2, resolvedTemplate)).catch((error) => {
-      pendingTemplateResolutions.delete(definition2);
-      templateResolutionErrors.set(definition2, error);
+  if (isPromiseLike(template4)) {
+    const resolution = Promise.resolve(template4).then((resolvedTemplate) => finalizeResolvedTemplate(definition4, resolvedTemplate)).catch((error) => {
+      pendingTemplateResolutions.delete(definition4);
+      templateResolutionErrors.set(definition4, error);
       throw error;
     });
-    pendingTemplateResolutions.set(definition2, resolution);
+    pendingTemplateResolutions.set(definition4, resolution);
     return resolution;
   }
-  return finalizeResolvedTemplate(definition2, template2);
+  return finalizeResolvedTemplate(definition4, template4);
 }
-function setFASTElementTemplateError(definition2, error) {
-  const typedDefinition = definition2;
+function setFASTElementTemplateError(definition4, error) {
+  const typedDefinition = definition4;
   if (error === void 0) {
     templateResolutionErrors.delete(typedDefinition);
     return;
@@ -1219,8 +1219,8 @@ var FASTElementDefinition = class _FASTElementDefinition {
     if (!registry3.get(this.name)) {
       applyFASTElementExtensions(this, registry3, extensions);
       if (this.template === void 0 && templateResolvers.has(this)) {
-        void Promise.resolve().then(() => resolveFASTElementTemplate(this)).then((template2) => {
-          if (template2 !== void 0 && !registry3.get(this.name)) {
+        void Promise.resolve().then(() => resolveFASTElementTemplate(this)).then((template4) => {
+          if (template4 !== void 0 && !registry3.get(this.name)) {
             this.platformDefined = true;
             registry3.define(this.name, type, this.elementOptions);
           }
@@ -1242,9 +1242,9 @@ var FASTElementDefinition = class _FASTElementDefinition {
    * that describes the element to define.
    */
   static compose(type, nameOrDef) {
-    const definition2 = fastElementBaseTypes.has(type) || fastElementRegistry.getByType(type) ? new _FASTElementDefinition(class extends type {
+    const definition4 = fastElementBaseTypes.has(type) || fastElementRegistry.getByType(type) ? new _FASTElementDefinition(class extends type {
     }, nameOrDef) : new _FASTElementDefinition(type, nameOrDef);
-    return Promise.resolve(definition2);
+    return Promise.resolve(definition4);
   }
   /**
    * Registers a FASTElement base type.
@@ -1320,11 +1320,11 @@ var ElementController = class _ElementController {
   get template() {
     var _a2;
     if (this._template === null) {
-      const definition2 = this.definition;
+      const definition4 = this.definition;
       if (this.source.resolveTemplate) {
         this._template = this.source.resolveTemplate();
-      } else if (definition2.template) {
-        this._template = (_a2 = definition2.template) !== null && _a2 !== void 0 ? _a2 : null;
+      } else if (definition4.template) {
+        this._template = (_a2 = definition4.template) !== null && _a2 !== void 0 ? _a2 : null;
       }
     }
     return this._template;
@@ -1365,11 +1365,11 @@ var ElementController = class _ElementController {
   get mainStyles() {
     var _a2;
     if (this._mainStyles === null) {
-      const definition2 = this.definition;
+      const definition4 = this.definition;
       if (this.source.resolveStyles) {
         this._mainStyles = this.source.resolveStyles();
-      } else if (definition2.styles) {
-        this._mainStyles = (_a2 = definition2.styles) !== null && _a2 !== void 0 ? _a2 : null;
+      } else if (definition4.styles) {
+        this._mainStyles = (_a2 = definition4.styles) !== null && _a2 !== void 0 ? _a2 : null;
       }
     }
     return this._mainStyles;
@@ -1393,7 +1393,7 @@ var ElementController = class _ElementController {
    * controller in how to handle rendering and other platform integrations.
    * @internal
    */
-  constructor(element, definition2) {
+  constructor(element, definition4) {
     this.boundObservables = null;
     this.needsInitialization = true;
     this.hasExistingShadowRoot = false;
@@ -1413,8 +1413,8 @@ var ElementController = class _ElementController {
     this.view = null;
     this._notifier = new PropertyChangeNotifier(element);
     this.source = element;
-    this.definition = definition2;
-    this.shadowOptions = definition2.shadowOptions;
+    this.definition = definition4;
+    this.shadowOptions = definition4.shadowOptions;
     const prototype = Reflect.getPrototypeOf(element);
     const accessors = prototype === null ? [] : Observable.getAccessors(prototype);
     if (accessors.length > 0) {
@@ -1516,34 +1516,34 @@ var ElementController = class _ElementController {
    * Adds styles to this element. Providing an HTMLStyleElement will attach the element instance to the shadowRoot.
    * @param styles - The styles to add.
    */
-  addStyles(styles2) {
+  addStyles(styles4) {
     var _a2;
-    if (!styles2) {
+    if (!styles4) {
       return;
     }
     const source = this.source;
-    if (styles2 instanceof HTMLElement) {
+    if (styles4 instanceof HTMLElement) {
       const target = (_a2 = getShadowRoot(source)) !== null && _a2 !== void 0 ? _a2 : this.source;
-      target.append(styles2);
-    } else if (!styles2.isAttachedTo(source)) {
-      styles2.addStylesTo(source);
+      target.append(styles4);
+    } else if (!styles4.isAttachedTo(source)) {
+      styles4.addStylesTo(source);
     }
   }
   /**
    * Removes styles from this element. Providing an HTMLStyleElement will detach the element instance from the shadowRoot.
    * @param styles - the styles to remove.
    */
-  removeStyles(styles2) {
+  removeStyles(styles4) {
     var _a2;
-    if (!styles2) {
+    if (!styles4) {
       return;
     }
     const source = this.source;
-    if (styles2 instanceof HTMLElement) {
+    if (styles4 instanceof HTMLElement) {
       const target = (_a2 = getShadowRoot(source)) !== null && _a2 !== void 0 ? _a2 : source;
-      target.removeChild(styles2);
-    } else if (styles2.isAttachedTo(source)) {
-      styles2.removeStylesFrom(source);
+      target.removeChild(styles4);
+    } else if (styles4.isAttachedTo(source)) {
+      styles4.removeStylesFrom(source);
     }
   }
   /**
@@ -1745,7 +1745,7 @@ var ElementController = class _ElementController {
    * @remarks
    * If `null` is provided, any existing view will be removed.
    */
-  renderTemplate(template2) {
+  renderTemplate(template4) {
     var _a2;
     const element = this.source;
     const host = (_a2 = getShadowRoot(element)) !== null && _a2 !== void 0 ? _a2 : element;
@@ -1759,14 +1759,14 @@ var ElementController = class _ElementController {
         }
       }
     }
-    if (template2) {
+    if (template4) {
       const hasPrerenderedContent = this.hasExistingShadowRoot && this.needsInitialization;
       let didHydrate = false;
       if (hasPrerenderedContent && _ElementController.hydrationHook) {
-        didHydrate = _ElementController.hydrationHook(this, template2, element, host);
+        didHydrate = _ElementController.hydrationHook(this, template4, element, host);
       }
       if (!didHydrate) {
-        this.renderClientSide(template2, element, host);
+        this.renderClientSide(template4, element, host);
       }
       this._resolvePrerendered(hasPrerenderedContent);
       this._resolveHydrated(didHydrate);
@@ -1779,14 +1779,14 @@ var ElementController = class _ElementController {
    * Standard client-side render: clears any stale content, clones the
    * compiled fragment, binds, and appends to the host.
    */
-  renderClientSide(template2, element, host) {
+  renderClientSide(template4, element, host) {
     if (this.hasExistingShadowRoot) {
       for (let child = host.firstChild; child !== null; child = host.firstChild) {
         host.removeChild(child);
       }
       this.hasExistingShadowRoot = false;
     }
-    this.view = template2.render(element, host, element);
+    this.view = template4.render(element, host, element);
     this.view.sourceLifetime = SourceLifetime.coupled;
   }
   /**
@@ -1803,16 +1803,16 @@ var ElementController = class _ElementController {
     if (controller !== void 0 && !override) {
       return controller;
     }
-    const definition2 = FASTElementDefinition.getForInstance(element);
-    if (definition2 === void 0) {
+    const definition4 = FASTElementDefinition.getForInstance(element);
+    if (definition4 === void 0) {
       throw FAST.error(Message.missingElementDefinition);
     }
-    if (definition2.template === void 0 && trackFASTElementInstance(definition2, element)) {
-      const notifier = Observable.getNotifier(definition2);
+    if (definition4.template === void 0 && trackFASTElementInstance(definition4, element)) {
+      const notifier = Observable.getNotifier(definition4);
       const subscriber = {
         handleChange: () => {
           notifier.unsubscribe(subscriber, "template");
-          trackedFASTElementInstances(definition2, (tracked) => {
+          trackedFASTElementInstances(definition4, (tracked) => {
             const trackedElement = tracked;
             _ElementController.forCustomElement(trackedElement, true);
             if (trackedElement.isConnected) {
@@ -1823,7 +1823,7 @@ var ElementController = class _ElementController {
       };
       notifier.subscribe(subscriber, "template");
     }
-    return element.$fastController = new elementControllerStrategy(element, definition2);
+    return element.$fastController = new elementControllerStrategy(element, definition4);
   }
   /**
    * Sets the strategy that ElementController.forCustomElement uses to construct
@@ -1853,9 +1853,9 @@ function normalizeStyleTarget(target) {
   }
 }
 var AdoptedStyleSheetsStrategy = class _AdoptedStyleSheetsStrategy {
-  constructor(styles2) {
+  constructor(styles4) {
     const styleSheetCache = _AdoptedStyleSheetsStrategy.styleSheetCache;
-    this.sheets = styles2.map((x) => {
+    this.sheets = styles4.map((x) => {
       if (x instanceof CSSStyleSheet) {
         return x;
       }
@@ -1882,26 +1882,26 @@ function usableStyleTarget(target) {
   return target === document ? document.body : target;
 }
 var StyleElementStrategy = class {
-  constructor(styles2) {
-    this.styles = styles2;
+  constructor(styles4) {
+    this.styles = styles4;
     this.styleClass = nextStyleId();
   }
   addStylesTo(target) {
     target = usableStyleTarget(normalizeStyleTarget(target));
-    const styles2 = this.styles;
+    const styles4 = this.styles;
     const styleClass = this.styleClass;
-    for (let i = 0; i < styles2.length; i++) {
+    for (let i = 0; i < styles4.length; i++) {
       const element = document.createElement("style");
-      element.innerHTML = styles2[i];
+      element.innerHTML = styles4[i];
       element.className = styleClass;
       target.append(element);
     }
   }
   removeStylesFrom(target) {
     target = usableStyleTarget(normalizeStyleTarget(target));
-    const styles2 = target.querySelectorAll(`.${this.styleClass}`);
-    for (let i = 0, ii = styles2.length; i < ii; ++i) {
-      target.removeChild(styles2[i]);
+    const styles4 = target.querySelectorAll(`.${this.styleClass}`);
+    for (let i = 0, ii = styles4.length; i < ii; ++i) {
+      target.removeChild(styles4[i]);
     }
   }
 };
@@ -1967,9 +1967,9 @@ function define(type, nameOrDef, extensions) {
   const composePromise = isFunction(type) ? FASTElementDefinition.compose(type, nameOrDef) : FASTElementDefinition.compose(this, type);
   return composePromise.then((def) => {
     applyFASTElementExtensions(def, def.registry, extensions);
-    const template2 = resolveFASTElementTemplate(def);
-    if (isPromiseLike2(template2)) {
-      return template2.then(() => def.define().type);
+    const template4 = resolveFASTElementTemplate(def);
+    if (isPromiseLike2(template4)) {
+      return template4.then(() => def.define().type);
     }
     return def.define().type;
   });
@@ -2018,7 +2018,7 @@ var CSSDirective = Object.freeze({
 
 // node_modules/@microsoft/fast-element/dist/esm/styles/css.js
 function collectStyles(strings, values) {
-  const styles2 = [];
+  const styles4 = [];
   let cssString = "";
   for (let i = 0, ii = strings.length - 1; i < ii; ++i) {
     cssString += strings[i];
@@ -2028,26 +2028,26 @@ function collectStyles(strings, values) {
     }
     if (value instanceof ElementStyles || value instanceof CSSStyleSheet) {
       if (cssString.trim() !== "") {
-        styles2.push(cssString);
+        styles4.push(cssString);
         cssString = "";
       }
-      styles2.push(value);
+      styles4.push(value);
     } else {
       cssString += value;
     }
   }
   cssString += strings[strings.length - 1];
   if (cssString.trim() !== "") {
-    styles2.push(cssString);
+    styles4.push(cssString);
   }
-  return styles2;
+  return styles4;
 }
 var css = ((strings, ...values) => {
   return new ElementStyles(collectStyles(strings, values));
 });
 var CSSPartial = class {
-  constructor(styles2) {
-    this.value = styles2.length === 0 ? "" : styles2.length === 1 ? styles2[0] : new ElementStyles(styles2);
+  constructor(styles4) {
+    this.value = styles4.length === 0 ? "" : styles4.length === 1 ? styles4[0] : new ElementStyles(styles4);
   }
   createCSS() {
     return this.value;
@@ -2214,6 +2214,75 @@ var StatelessAttachedAttributeDirective = class {
   }
 };
 makeSerializationNoop(StatelessAttachedAttributeDirective);
+
+// node_modules/@microsoft/fast-element/dist/esm/templating/node-observation.js
+var NodeObservationDirective = class extends StatelessAttachedAttributeDirective {
+  /**
+   * The unique id of the factory.
+   */
+  get id() {
+    return this._id;
+  }
+  set id(value) {
+    this._id = value;
+    this._controllerProperty = `${value}-c`;
+  }
+  /**
+   * Bind this behavior to the source.
+   * @param source - The source to bind to.
+   * @param context - The execution context that the binding is operating within.
+   * @param targets - The targets that behaviors in a view can attach to.
+   */
+  bind(controller) {
+    const target = controller.targets[this.targetNodeId];
+    target[this._controllerProperty] = controller;
+    this.updateTarget(controller.source, this.computeNodes(target));
+    this.observe(target);
+    controller.onUnbind(this);
+  }
+  /**
+   * Unbinds this behavior from the source.
+   * @param source - The source to unbind from.
+   * @param context - The execution context that the binding is operating within.
+   * @param targets - The targets that behaviors in a view can attach to.
+   */
+  unbind(controller) {
+    const target = controller.targets[this.targetNodeId];
+    this.updateTarget(controller.source, emptyArray);
+    this.disconnect(target);
+    target[this._controllerProperty] = null;
+  }
+  /**
+   * Gets the data source for the target.
+   * @param target - The target to get the source for.
+   * @returns The source.
+   */
+  getSource(target) {
+    return target[this._controllerProperty].source;
+  }
+  /**
+   * Updates the source property with the computed nodes.
+   * @param source - The source object to assign the nodes property to.
+   * @param value - The nodes to assign to the source object property.
+   */
+  updateTarget(source, value) {
+    source[this.options.property] = value;
+  }
+  /**
+   * Computes the set of nodes that should be assigned to the source property.
+   * @param target - The target to compute the nodes for.
+   * @returns The computed nodes.
+   * @remarks
+   * Applies filters if provided.
+   */
+  computeNodes(target) {
+    let nodes = this.getNodes(target);
+    if ("filter" in this.options) {
+      nodes = nodes.filter(this.options.filter);
+    }
+    return nodes;
+  }
+};
 
 // node_modules/@microsoft/fast-element/dist/esm/components/hydration.js
 var legacyBindingStartMarker = /fe-b\$\$start\$\$(\d+)\$\$(.+)\$\$fe-b/;
@@ -3274,7 +3343,7 @@ var CompilationContext = class {
     this.descriptors = {};
     this.factories = [];
   }
-  addFactory(factory, parentId, nodeId, targetIndex, tagName2) {
+  addFactory(factory, parentId, nodeId, targetIndex, tagName4) {
     var _a2, _b;
     if (!this.nodeIds.has(nodeId)) {
       this.nodeIds.add(nodeId);
@@ -3282,7 +3351,7 @@ var CompilationContext = class {
     }
     factory.id = (_a2 = factory.id) !== null && _a2 !== void 0 ? _a2 : nextId();
     factory.targetNodeId = nodeId;
-    factory.targetTagName = tagName2;
+    factory.targetTagName = tagName4;
     factory.policy = (_b = factory.policy) !== null && _b !== void 0 ? _b : this.policy;
     this.factories.push(factory);
   }
@@ -3441,26 +3510,26 @@ var Compiler = {
    * @public
    */
   compile(html2, factories, policy = DOM.policy) {
-    let template2;
+    let template4;
     if (isString(html2)) {
-      template2 = document.createElement(templateTag);
-      template2.innerHTML = policy.createHTML(html2);
-      const fec = template2.content.firstElementChild;
+      template4 = document.createElement(templateTag);
+      template4.innerHTML = policy.createHTML(html2);
+      const fec = template4.content.firstElementChild;
       if (fec !== null && fec.tagName === templateTag) {
-        template2 = fec;
+        template4 = fec;
       }
     } else {
-      template2 = html2;
+      template4 = html2;
     }
-    if (!template2.content.firstChild && !template2.content.lastChild) {
-      template2.content.appendChild(document.createComment(""));
+    if (!template4.content.firstChild && !template4.content.lastChild) {
+      template4.content.appendChild(document.createComment(""));
     }
-    const fragment = document.adoptNode(template2.content);
+    const fragment = document.adoptNode(template4.content);
     const context = new CompilationContext(fragment, factories, policy);
     compileAttributes(
       context,
       "",
-      template2,
+      template4,
       /* host */
       "h",
       0,
@@ -3574,8 +3643,8 @@ var InlineTemplateDirective = class {
 };
 InlineTemplateDirective.empty = new InlineTemplateDirective("");
 HTMLDirective.define(InlineTemplateDirective);
-function createHTML2(value, prevString, add, definition2 = HTMLDirective.getForInstance(value)) {
-  if (definition2.aspected) {
+function createHTML2(value, prevString, add, definition4 = HTMLDirective.getForInstance(value)) {
+  if (definition4.aspected) {
     const match = lastAttributeNameRegex.exec(prevString);
     if (match !== null) {
       HTMLDirective.assignAspect(value, match[2]);
@@ -3692,17 +3761,17 @@ var ViewTemplate = class _ViewTemplate {
     for (let i = 0, ii = strings.length - 1; i < ii; ++i) {
       const currentString = strings[i];
       let currentValue = values[i];
-      let definition2;
+      let definition4;
       html2 += currentString;
       if (isFunction(currentValue)) {
         currentValue = new HTMLBindingDirective(oneWay(currentValue));
       } else if (currentValue instanceof Binding) {
         currentValue = new HTMLBindingDirective(currentValue);
-      } else if (!(definition2 = HTMLDirective.getForInstance(currentValue))) {
+      } else if (!(definition4 = HTMLDirective.getForInstance(currentValue))) {
         const staticValue = currentValue;
         currentValue = new HTMLBindingDirective(oneTime(() => staticValue));
       }
-      html2 += createHTML2(currentValue, currentString, add, definition2);
+      html2 += createHTML2(currentValue, currentString, add, definition4);
     }
     return new _ViewTemplate(html2 + strings[strings.length - 1], factories, policy);
   }
@@ -3717,6 +3786,44 @@ var html = ((strings, ...values) => {
 html.partial = (html2) => {
   return new InlineTemplateDirective(html2);
 };
+
+// node_modules/@microsoft/fast-element/dist/esm/templating/slotted.js
+var slotEvent = "slotchange";
+var SlottedDirective = class extends NodeObservationDirective {
+  /**
+   * Begins observation of the nodes.
+   * @param target - The target to observe.
+   */
+  observe(target) {
+    target.addEventListener(slotEvent, this);
+  }
+  /**
+   * Disconnects observation of the nodes.
+   * @param target - The target to unobserve.
+   */
+  disconnect(target) {
+    target.removeEventListener(slotEvent, this);
+  }
+  /**
+   * Retrieves the raw nodes that should be assigned to the source property.
+   * @param target - The target to get the node to.
+   */
+  getNodes(target) {
+    return target.assignedNodes(this.options);
+  }
+  /** @internal */
+  handleEvent(event) {
+    const target = event.currentTarget;
+    this.updateTarget(this.getSource(target), this.computeNodes(target));
+  }
+};
+HTMLDirective.define(SlottedDirective);
+function slotted(propertyOrOptions) {
+  if (isString(propertyOrOptions)) {
+    propertyOrOptions = { property: propertyOrOptions };
+  }
+  return new SlottedDirective(propertyOrOptions);
+}
 
 // node_modules/@fluentui/web-components/dist/esm/utils/unique-id.js
 var uniqueIdCounter = 0;
@@ -5928,6 +6035,20 @@ var statesMap = /* @__PURE__ */ new Map();
 function stateSelector(state) {
   return statesMap.get(state) ?? statesMap.set(state, CustomStatesSetSupported ? `:state(${state})` : `[state--${state}]`).get(state);
 }
+function toggleState(elementInternals, state, force) {
+  if (!state || !elementInternals) {
+    return;
+  }
+  if (!CustomStatesSetSupported) {
+    elementInternals.shadowRoot.host.toggleAttribute(`state--${state}`, force);
+    return;
+  }
+  if (force ?? !elementInternals.states.has(state)) {
+    elementInternals.states.add(state);
+    return;
+  }
+  elementInternals.states.delete(state);
+}
 
 // node_modules/@fluentui/web-components/dist/esm/styles/states/index.js
 var activeState = stateSelector("active");
@@ -5961,19 +6082,71 @@ var validState = stateSelector("valid");
 var valueMissingState = stateSelector("value-missing");
 
 // node_modules/@fluentui/web-components/dist/esm/theme/design-tokens.js
+var colorNeutralForeground1 = "var(--colorNeutralForeground1)";
+var colorNeutralForeground1Hover = "var(--colorNeutralForeground1Hover)";
+var colorNeutralForeground1Pressed = "var(--colorNeutralForeground1Pressed)";
+var colorNeutralForeground2 = "var(--colorNeutralForeground2)";
+var colorNeutralForeground2Hover = "var(--colorNeutralForeground2Hover)";
+var colorNeutralForeground2Pressed = "var(--colorNeutralForeground2Pressed)";
+var colorNeutralForeground2BrandHover = "var(--colorNeutralForeground2BrandHover)";
+var colorNeutralForeground2BrandPressed = "var(--colorNeutralForeground2BrandPressed)";
 var colorNeutralForegroundDisabled = "var(--colorNeutralForegroundDisabled)";
+var colorNeutralForegroundOnBrand = "var(--colorNeutralForegroundOnBrand)";
+var colorNeutralForegroundInverted = "var(--colorNeutralForegroundInverted)";
 var colorNeutralBackground1 = "var(--colorNeutralBackground1)";
+var colorNeutralBackground1Hover = "var(--colorNeutralBackground1Hover)";
+var colorNeutralBackground1Pressed = "var(--colorNeutralBackground1Pressed)";
+var colorSubtleBackground = "var(--colorSubtleBackground)";
+var colorSubtleBackgroundHover = "var(--colorSubtleBackgroundHover)";
+var colorSubtleBackgroundPressed = "var(--colorSubtleBackgroundPressed)";
+var colorTransparentBackground = "var(--colorTransparentBackground)";
+var colorTransparentBackgroundHover = "var(--colorTransparentBackgroundHover)";
+var colorTransparentBackgroundPressed = "var(--colorTransparentBackgroundPressed)";
 var colorNeutralBackgroundDisabled = "var(--colorNeutralBackgroundDisabled)";
+var colorBrandBackground = "var(--colorBrandBackground)";
+var colorBrandBackgroundHover = "var(--colorBrandBackgroundHover)";
+var colorBrandBackgroundPressed = "var(--colorBrandBackgroundPressed)";
 var colorCompoundBrandBackground = "var(--colorCompoundBrandBackground)";
 var colorCompoundBrandBackgroundHover = "var(--colorCompoundBrandBackgroundHover)";
 var colorCompoundBrandBackgroundPressed = "var(--colorCompoundBrandBackgroundPressed)";
 var colorNeutralStrokeAccessible = "var(--colorNeutralStrokeAccessible)";
+var colorNeutralStrokeAccessibleHover = "var(--colorNeutralStrokeAccessibleHover)";
+var colorNeutralStrokeAccessiblePressed = "var(--colorNeutralStrokeAccessiblePressed)";
 var colorNeutralStroke1 = "var(--colorNeutralStroke1)";
+var colorNeutralStroke1Hover = "var(--colorNeutralStroke1Hover)";
+var colorNeutralStroke1Pressed = "var(--colorNeutralStroke1Pressed)";
+var colorCompoundBrandStroke = "var(--colorCompoundBrandStroke)";
+var colorCompoundBrandStrokeHover = "var(--colorCompoundBrandStrokeHover)";
+var colorCompoundBrandStrokePressed = "var(--colorCompoundBrandStrokePressed)";
+var colorNeutralStrokeDisabled = "var(--colorNeutralStrokeDisabled)";
+var colorTransparentStroke = "var(--colorTransparentStroke)";
 var colorStrokeFocus1 = "var(--colorStrokeFocus1)";
 var colorStrokeFocus2 = "var(--colorStrokeFocus2)";
+var borderRadiusNone = "var(--borderRadiusNone)";
 var borderRadiusSmall = "var(--borderRadiusSmall)";
 var borderRadiusMedium = "var(--borderRadiusMedium)";
+var borderRadiusLarge = "var(--borderRadiusLarge)";
 var borderRadiusCircular = "var(--borderRadiusCircular)";
+var fontFamilyBase = "var(--fontFamilyBase)";
+var fontSizeBase200 = "var(--fontSizeBase200)";
+var fontSizeBase300 = "var(--fontSizeBase300)";
+var fontSizeBase400 = "var(--fontSizeBase400)";
+var fontWeightRegular = "var(--fontWeightRegular)";
+var fontWeightSemibold = "var(--fontWeightSemibold)";
+var lineHeightBase200 = "var(--lineHeightBase200)";
+var lineHeightBase300 = "var(--lineHeightBase300)";
+var lineHeightBase400 = "var(--lineHeightBase400)";
+var shadow2 = "var(--shadow2)";
+var shadow4 = "var(--shadow4)";
+var strokeWidthThin = "var(--strokeWidthThin)";
+var strokeWidthThick = "var(--strokeWidthThick)";
+var spacingHorizontalXS = "var(--spacingHorizontalXS)";
+var spacingHorizontalSNudge = "var(--spacingHorizontalSNudge)";
+var spacingHorizontalS = "var(--spacingHorizontalS)";
+var spacingHorizontalM = "var(--spacingHorizontalM)";
+var spacingHorizontalL = "var(--spacingHorizontalL)";
+var durationFaster = "var(--durationFaster)";
+var curveEasyEase = "var(--curveEasyEase)";
 
 // node_modules/@fluentui/web-components/dist/esm/slider/slider.styles.js
 var styles = css`
@@ -6213,6 +6386,1231 @@ var definition = {
   template
 };
 
+// node_modules/@fluentui/web-components/dist/esm/patterns/start-end.js
+var StartEnd = class {
+};
+function endSlotTemplate(options) {
+  return html` <slot name="end" ${ref("end")}>${staticallyCompose(options.end)}</slot> `.inline();
+}
+function startSlotTemplate(options) {
+  return html` <slot name="start" ${ref("start")}>${staticallyCompose(options.start)}</slot> `.inline();
+}
+
+// node_modules/@fluentui/web-components/dist/esm/utils/apply-mixins.js
+function applyMixins(derivedCtor, ...baseCtors) {
+  const derivedAttributes = AttributeConfiguration.locate(derivedCtor);
+  baseCtors.forEach((baseCtor) => {
+    Object.getOwnPropertyNames(baseCtor.prototype).forEach((name) => {
+      if (name !== "constructor") {
+        Object.defineProperty(
+          derivedCtor.prototype,
+          name,
+          /* eslint-disable-next-line @typescript-eslint/no-non-null-assertion */
+          Object.getOwnPropertyDescriptor(baseCtor.prototype, name)
+        );
+      }
+    });
+    const baseAttributes = AttributeConfiguration.locate(baseCtor);
+    baseAttributes.forEach((x) => derivedAttributes.push(x));
+  });
+}
+
+// node_modules/@fluentui/web-components/dist/esm/button/button.options.js
+var ButtonType = {
+  submit: "submit",
+  reset: "reset",
+  button: "button"
+};
+var tagName2 = `${FluentDesignSystem.prefix}-button`;
+
+// node_modules/@fluentui/web-components/dist/esm/button/button.base.js
+var BaseButton = class extends FASTElement {
+  /**
+   * Handles changes to the disabled attribute. If the button is disabled, it
+   * should not be focusable.
+   *
+   * @param previous - the previous disabled value
+   * @param next - the new disabled value
+   * @internal
+   */
+  disabledChanged() {
+    this.setTabIndex();
+  }
+  /**
+   * Sets the element's internal disabled state when the element is focusable while disabled.
+   *
+   * @param previous - the previous disabledFocusable value
+   * @param next - the current disabledFocusable value
+   * @internal
+   */
+  disabledFocusableChanged(previous, next2) {
+    if (this.elementInternals) {
+      this.elementInternals.ariaDisabled = `${!!next2}`;
+    }
+  }
+  /**
+   * The associated form element.
+   *
+   * @public
+   */
+  get form() {
+    return this.elementInternals.form;
+  }
+  static {
+    this.formAssociated = true;
+  }
+  /**
+   * A reference to all associated label elements.
+   *
+   * @public
+   */
+  get labels() {
+    return Object.freeze(Array.from(this.elementInternals.labels));
+  }
+  /**
+   * Removes the form submission fallback control when the type changes.
+   *
+   * @param previous - the previous type value
+   * @param next - the new type value
+   * @internal
+   */
+  typeChanged(previous, next2) {
+    if (next2 !== ButtonType.submit) {
+      this.formSubmissionFallbackControl?.remove();
+      this.shadowRoot?.querySelector('slot[name="internal"]')?.remove();
+    }
+  }
+  /**
+   * Handles the button click event.
+   *
+   * @param e - The event object
+   * @internal
+   */
+  clickHandler(e) {
+    if (e && this.disabledFocusable) {
+      e.stopImmediatePropagation();
+      return;
+    }
+    this.press();
+    return true;
+  }
+  connectedCallback() {
+    super.connectedCallback();
+    this.elementInternals.ariaDisabled = `${!!this.disabledFocusable}`;
+    this.setTabIndex();
+    maybeSetAutoFocus(this);
+  }
+  constructor() {
+    super();
+    this.disabledFocusable = false;
+    this.elementInternals = this.attachInternals();
+    this.elementInternals.role = "button";
+  }
+  /**
+   * This fallback creates a new slot, then creates a submit button to mirror the custom element's
+   * properties. The submit button is then appended to the slot and the form is submitted.
+   *
+   * @internal
+   * @privateRemarks
+   * This is a workaround until {@link https://github.com/WICG/webcomponents/issues/814 | WICG/webcomponents/issues/814} is resolved.
+   */
+  createAndInsertFormSubmissionFallbackControl() {
+    const internalSlot = this.formSubmissionFallbackControlSlot ?? document.createElement("slot");
+    internalSlot.setAttribute("name", "internal");
+    this.shadowRoot?.appendChild(internalSlot);
+    this.formSubmissionFallbackControlSlot = internalSlot;
+    const fallbackControl = this.formSubmissionFallbackControl ?? document.createElement("button");
+    fallbackControl.style.display = "none";
+    fallbackControl.setAttribute("type", "submit");
+    fallbackControl.setAttribute("slot", "internal");
+    if (this.formNoValidate) {
+      fallbackControl.toggleAttribute("formnovalidate", true);
+    }
+    if (this.elementInternals.form?.id) {
+      fallbackControl.setAttribute("form", this.elementInternals.form.id);
+    }
+    if (this.name) {
+      fallbackControl.setAttribute("name", this.name);
+    }
+    if (this.value) {
+      fallbackControl.setAttribute("value", this.value);
+    }
+    if (this.formAction) {
+      fallbackControl.setAttribute("formaction", this.formAction ?? "");
+    }
+    if (this.formEnctype) {
+      fallbackControl.setAttribute("formenctype", this.formEnctype ?? "");
+    }
+    if (this.formMethod) {
+      fallbackControl.setAttribute("formmethod", this.formMethod ?? "");
+    }
+    if (this.formTarget) {
+      fallbackControl.setAttribute("formtarget", this.formTarget ?? "");
+    }
+    this.append(fallbackControl);
+    this.formSubmissionFallbackControl = fallbackControl;
+  }
+  /**
+   * Invoked when a connected component's form or fieldset has its disabled state changed.
+   *
+   * @param disabled - the disabled value of the form / fieldset
+   *
+   * @internal
+   */
+  formDisabledCallback(disabled) {
+    this.disabled = disabled;
+  }
+  /**
+   * Handles keypress events for the button.
+   *
+   * @param e - the keyboard event
+   * @returns - the return value of the click handler
+   * @public
+   */
+  keypressHandler(e) {
+    if (e && this.disabledFocusable) {
+      e.stopImmediatePropagation();
+      return;
+    }
+    if (e.key === "Enter" || e.key === " ") {
+      this.click();
+      return;
+    }
+    return true;
+  }
+  /**
+   * Presses the button.
+   *
+   * @public
+   */
+  press() {
+    switch (this.type) {
+      case ButtonType.reset: {
+        this.resetForm();
+        break;
+      }
+      case ButtonType.submit: {
+        this.submitForm();
+        break;
+      }
+    }
+  }
+  /**
+   * Resets the associated form.
+   *
+   * @public
+   */
+  resetForm() {
+    this.elementInternals.form?.reset();
+  }
+  /**
+   * Sets the `tabindex` attribute based on the disabled state of the button.
+   *
+   * @internal
+   */
+  setTabIndex() {
+    if (this.disabled) {
+      this.removeAttribute("tabindex");
+      return;
+    }
+    this.tabIndex = Number(this.getAttribute("tabindex") ?? 0) < 0 ? -1 : 0;
+  }
+  /**
+   * Submits the associated form.
+   *
+   * @internal
+   */
+  submitForm() {
+    if (!this.elementInternals.form || this.disabled || this.type !== ButtonType.submit) {
+      return;
+    }
+    if (!this.name && !this.formAction && !this.formEnctype && !this.formAttribute && !this.formMethod && !this.formNoValidate && !this.formTarget) {
+      this.elementInternals.form.requestSubmit();
+      return;
+    }
+    try {
+      this.elementInternals.setFormValue(this.value ?? "");
+      this.elementInternals.form.requestSubmit(this);
+    } catch (e) {
+      this.createAndInsertFormSubmissionFallbackControl();
+      this.elementInternals.setFormValue(null);
+      this.elementInternals.form.requestSubmit(this.formSubmissionFallbackControl);
+    }
+  }
+};
+__decorate([
+  observable
+], BaseButton.prototype, "defaultSlottedContent", void 0);
+__decorate([
+  attr({ mode: "boolean" })
+], BaseButton.prototype, "disabled", void 0);
+__decorate([
+  attr({ attribute: "disabled-focusable", mode: "boolean" })
+], BaseButton.prototype, "disabledFocusable", void 0);
+__decorate([
+  attr({ attribute: "formaction" })
+], BaseButton.prototype, "formAction", void 0);
+__decorate([
+  attr({ attribute: "form" })
+], BaseButton.prototype, "formAttribute", void 0);
+__decorate([
+  attr({ attribute: "formenctype" })
+], BaseButton.prototype, "formEnctype", void 0);
+__decorate([
+  attr({ attribute: "formmethod" })
+], BaseButton.prototype, "formMethod", void 0);
+__decorate([
+  attr({ attribute: "formnovalidate", mode: "boolean" })
+], BaseButton.prototype, "formNoValidate", void 0);
+__decorate([
+  attr({ attribute: "formtarget" })
+], BaseButton.prototype, "formTarget", void 0);
+__decorate([
+  attr
+], BaseButton.prototype, "name", void 0);
+__decorate([
+  attr
+], BaseButton.prototype, "type", void 0);
+__decorate([
+  attr
+], BaseButton.prototype, "value", void 0);
+
+// node_modules/@fluentui/web-components/dist/esm/button/button.js
+var Button = class extends BaseButton {
+  constructor() {
+    super(...arguments);
+    this.iconOnly = false;
+  }
+};
+__decorate([
+  attr
+], Button.prototype, "appearance", void 0);
+__decorate([
+  attr
+], Button.prototype, "shape", void 0);
+__decorate([
+  attr
+], Button.prototype, "size", void 0);
+__decorate([
+  attr({ attribute: "icon-only", mode: "boolean" })
+], Button.prototype, "iconOnly", void 0);
+applyMixins(Button, StartEnd);
+
+// node_modules/@fluentui/web-components/dist/esm/button/button.styles.js
+var baseButtonStyles = css`
+  ${display("inline-flex")}
+
+  :host {
+    --icon-spacing: ${spacingHorizontalSNudge};
+    position: relative;
+    contain: layout style;
+    vertical-align: middle;
+    align-items: center;
+    box-sizing: border-box;
+    justify-content: center;
+    text-align: center;
+    text-decoration-line: none;
+    margin: 0;
+    min-height: 32px;
+    outline-style: none;
+    background-color: ${colorNeutralBackground1};
+    color: ${colorNeutralForeground1};
+    border: ${strokeWidthThin} solid ${colorNeutralStroke1};
+    padding: 0 ${spacingHorizontalM};
+    min-width: 96px;
+    border-radius: ${borderRadiusMedium};
+    font-size: ${fontSizeBase300};
+    font-family: ${fontFamilyBase};
+    font-weight: ${fontWeightSemibold};
+    line-height: ${lineHeightBase300};
+    transition-duration: ${durationFaster};
+    transition-property: background, border, color;
+    transition-timing-function: ${curveEasyEase};
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .content {
+    display: inherit;
+  }
+
+  :host(:hover) {
+    background-color: ${colorNeutralBackground1Hover};
+    color: ${colorNeutralForeground1Hover};
+    border-color: ${colorNeutralStroke1Hover};
+  }
+
+  :host(:hover:active) {
+    background-color: ${colorNeutralBackground1Pressed};
+    border-color: ${colorNeutralStroke1Pressed};
+    color: ${colorNeutralForeground1Pressed};
+    outline-style: none;
+  }
+
+  :host(:focus-visible) {
+    border-color: ${colorTransparentStroke};
+    outline: ${strokeWidthThick} solid ${colorTransparentStroke};
+    box-shadow: ${shadow4}, 0 0 0 2px ${colorStrokeFocus2};
+  }
+
+  @media screen and (prefers-reduced-motion: reduce) {
+    :host {
+      transition-duration: 0.01ms;
+    }
+  }
+
+  ::slotted(svg) {
+    font-size: 20px;
+    height: 20px;
+    width: 20px;
+    fill: currentColor;
+  }
+
+  ::slotted([slot='start']) {
+    margin-inline-end: var(--icon-spacing);
+  }
+
+  ::slotted([slot='end']),
+  [slot='end'] {
+    flex-shrink: 0;
+    margin-inline-start: var(--icon-spacing);
+  }
+
+  :host([icon-only]) {
+    min-width: 32px;
+    max-width: 32px;
+  }
+
+  :host([size='small']) {
+    --icon-spacing: ${spacingHorizontalXS};
+    min-height: 24px;
+    min-width: 64px;
+    padding: 0 ${spacingHorizontalS};
+    border-radius: ${borderRadiusSmall};
+    font-size: ${fontSizeBase200};
+    line-height: ${lineHeightBase200};
+    font-weight: ${fontWeightRegular};
+  }
+
+  :host([size='small'][icon-only]) {
+    min-width: 24px;
+    max-width: 24px;
+  }
+
+  :host([size='large']) {
+    min-height: 40px;
+    border-radius: ${borderRadiusLarge};
+    padding: 0 ${spacingHorizontalL};
+    font-size: ${fontSizeBase400};
+    line-height: ${lineHeightBase400};
+  }
+
+  :host([size='large'][icon-only]) {
+    min-width: 40px;
+    max-width: 40px;
+  }
+
+  :host([size='large']) ::slotted(svg) {
+    font-size: 24px;
+    height: 24px;
+    width: 24px;
+  }
+
+  :host(:is([shape='circular'], [shape='circular']:focus-visible)) {
+    border-radius: ${borderRadiusCircular};
+  }
+
+  :host(:is([shape='square'], [shape='square']:focus-visible)) {
+    border-radius: ${borderRadiusNone};
+  }
+
+  :host([appearance='primary']) {
+    background-color: ${colorBrandBackground};
+    color: ${colorNeutralForegroundOnBrand};
+    border-color: transparent;
+  }
+
+  :host([appearance='primary']:hover) {
+    background-color: ${colorBrandBackgroundHover};
+  }
+
+  :host([appearance='primary']:is(:hover, :hover:active):not(:focus-visible)) {
+    border-color: transparent;
+  }
+
+  :host([appearance='primary']:is(:hover, :hover:active)) {
+    color: ${colorNeutralForegroundOnBrand};
+  }
+
+  :host([appearance='primary']:hover:active) {
+    background-color: ${colorBrandBackgroundPressed};
+  }
+
+  :host([appearance='primary']:focus-visible) {
+    border-color: ${colorNeutralForegroundOnBrand};
+    box-shadow: ${shadow2}, 0 0 0 2px ${colorStrokeFocus2};
+  }
+
+  :host([appearance='outline']) {
+    background-color: ${colorTransparentBackground};
+  }
+
+  :host([appearance='outline']:hover) {
+    background-color: ${colorTransparentBackgroundHover};
+  }
+
+  :host([appearance='outline']:hover:active) {
+    background-color: ${colorTransparentBackgroundPressed};
+  }
+
+  :host([appearance='subtle']) {
+    background-color: ${colorSubtleBackground};
+    color: ${colorNeutralForeground2};
+    border-color: transparent;
+  }
+
+  :host([appearance='subtle']:hover) {
+    background-color: ${colorSubtleBackgroundHover};
+    color: ${colorNeutralForeground2Hover};
+    border-color: transparent;
+  }
+
+  :host([appearance='subtle']:hover:active) {
+    background-color: ${colorSubtleBackgroundPressed};
+    color: ${colorNeutralForeground2Pressed};
+    border-color: transparent;
+  }
+
+  :host([appearance='subtle']:hover) ::slotted(svg) {
+    fill: ${colorNeutralForeground2BrandHover};
+  }
+
+  :host([appearance='subtle']:hover:active) ::slotted(svg) {
+    fill: ${colorNeutralForeground2BrandPressed};
+  }
+
+  :host([appearance='transparent']) {
+    background-color: ${colorTransparentBackground};
+    color: ${colorNeutralForeground2};
+  }
+
+  :host([appearance='transparent']:hover) {
+    background-color: ${colorTransparentBackgroundHover};
+    color: ${colorNeutralForeground2BrandHover};
+  }
+
+  :host([appearance='transparent']:hover:active) {
+    background-color: ${colorTransparentBackgroundPressed};
+    color: ${colorNeutralForeground2BrandPressed};
+  }
+
+  :host(:is([appearance='transparent'], [appearance='transparent']:is(:hover, :active))) {
+    border-color: transparent;
+  }
+`;
+var styles2 = css`
+  ${baseButtonStyles}
+
+  :host(:is(:disabled, [disabled], [disabled-focusable], [appearance]:disabled, [appearance][disabled], [appearance][disabled-focusable])),
+  :host(:is(:disabled, [disabled], [disabled-focusable], [appearance]:disabled, [appearance][disabled], [appearance][disabled-focusable]):hover),
+  :host(:is(:disabled, [disabled], [disabled-focusable], [appearance]:disabled, [appearance][disabled], [appearance][disabled-focusable]):hover:active) {
+    background-color: ${colorNeutralBackgroundDisabled};
+    border-color: ${colorNeutralStrokeDisabled};
+    color: ${colorNeutralForegroundDisabled};
+    cursor: not-allowed;
+  }
+
+  :host([appearance='primary']:is(:disabled, [disabled], [disabled-focusable])),
+  :host([appearance='primary']:is(:disabled, [disabled], [disabled-focusable]):is(:hover, :hover:active)) {
+    border-color: transparent;
+  }
+
+  :host([appearance='outline']:is(:disabled, [disabled], [disabled-focusable])),
+  :host([appearance='outline']:is(:disabled, [disabled], [disabled-focusable]):is(:hover, :hover:active)) {
+    background-color: ${colorTransparentBackground};
+  }
+
+  :host([appearance='subtle']:is(:disabled, [disabled], [disabled-focusable])),
+  :host([appearance='subtle']:is(:disabled, [disabled], [disabled-focusable]):is(:hover, :hover:active)) {
+    background-color: ${colorTransparentBackground};
+    border-color: transparent;
+  }
+
+  :host([appearance='transparent']:is(:disabled, [disabled], [disabled-focusable])),
+  :host([appearance='transparent']:is(:disabled, [disabled], [disabled-focusable]):is(:hover, :hover:active)) {
+    border-color: transparent;
+    background-color: ${colorTransparentBackground};
+  }
+
+  @media (forced-colors: active) {
+    :host {
+      background-color: ButtonFace;
+      color: ButtonText;
+    }
+
+    :host(:is(:hover, :focus-visible)) {
+      border-color: Highlight !important;
+    }
+
+    :host([appearance='primary']:not(:is(:hover, :focus-visible))) {
+      background-color: Highlight;
+      color: HighlightText;
+      forced-color-adjust: none;
+    }
+
+    :host(
+        :is(
+            :disabled,
+            [disabled],
+            [disabled-focusable],
+            [appearance]:disabled,
+            [appearance][disabled],
+            [appearance][disabled-focusable]
+          )
+      ) {
+      background-color: ButtonFace;
+      color: GrayText;
+      border-color: ButtonText;
+    }
+  }
+`;
+
+// node_modules/@fluentui/web-components/dist/esm/button/button.template.js
+function buttonTemplate(options = {}) {
+  return html`
+    <template
+      @click="${(x, c) => x.clickHandler(c.event)}"
+      @keypress="${(x, c) => x.keypressHandler(c.event)}"
+    >
+      ${startSlotTemplate(options)}
+      <span class="content" part="content">
+        <slot ${slotted("defaultSlottedContent")}></slot>
+      </span>
+      ${endSlotTemplate(options)}
+    </template>
+  `;
+}
+var template2 = buttonTemplate();
+
+// node_modules/@fluentui/web-components/dist/esm/button/button.definition.js
+var definition2 = {
+  name: tagName2,
+  registry: FluentDesignSystem.registry,
+  styles: styles2,
+  template: template2
+};
+
+// node_modules/@fluentui/web-components/dist/esm/checkbox/checkbox.base.js
+var BaseCheckbox = class extends FASTElement {
+  constructor() {
+    super(...arguments);
+    this.initialValue = "on";
+    this._keydownPressed = false;
+    this.dirtyChecked = false;
+    this.elementInternals = this.attachInternals();
+    this._validationFallbackMessage = "";
+    this._value = this.initialValue;
+  }
+  /**
+   * The element's current checked state.
+   *
+   * @public
+   */
+  get checked() {
+    Observable.track(this, "checked");
+    return !!this._checked;
+  }
+  set checked(next2) {
+    this._checked = next2;
+    this.setFormValue(next2 ? this.value : null);
+    this.setValidity();
+    this.setAriaChecked();
+    toggleState(this.elementInternals, "checked", next2);
+    Observable.notify(this, "checked");
+  }
+  /**
+   * Toggles the disabled state when the user changes the `disabled` property.
+   *
+   * @internal
+   */
+  disabledChanged(prev, next2) {
+    if (this.disabled) {
+      this.removeAttribute("tabindex");
+    } else {
+      this.tabIndex = Number(this.getAttribute("tabindex") ?? 0) < 0 ? -1 : 0;
+    }
+    this.elementInternals.ariaDisabled = this.disabled ? "true" : "false";
+    toggleState(this.elementInternals, "disabled", this.disabled);
+  }
+  /**
+   * Sets the disabled state when the `disabled` attribute changes.
+   *
+   * @param prev - the previous value
+   * @param next - the current value
+   * @internal
+   */
+  disabledAttributeChanged(prev, next2) {
+    this.disabled = !!next2;
+  }
+  /**
+   * Updates the checked state when the `checked` attribute is changed, unless the checked state has been changed by the user.
+   *
+   * @param prev - The previous initial checked state
+   * @param next - The current initial checked state
+   * @internal
+   */
+  initialCheckedChanged(prev, next2) {
+    if (!this.dirtyChecked) {
+      this.checked = !!next2;
+    }
+  }
+  /**
+   * Sets the value of the input when the `value` attribute changes.
+   *
+   * @param prev - The previous initial value
+   * @param next - The current initial value
+   * @internal
+   */
+  initialValueChanged(prev, next2) {
+    this._value = next2;
+  }
+  /**
+   * Sets the validity of the control when the required state changes.
+   *
+   * @param prev - The previous required state
+   * @param next - The current required state
+   * @internal
+   */
+  requiredChanged(prev, next2) {
+    if (this.elementInternals) {
+      this.setValidity();
+      this.elementInternals.ariaRequired = this.required ? "true" : "false";
+    }
+  }
+  /**
+   * The associated `<form>` element.
+   *
+   * @public
+   * @remarks
+   * Reflects the {@link https://developer.mozilla.org/docs/Web/API/ElementInternals/form | `ElementInternals.form`} property.
+   */
+  get form() {
+    return this.elementInternals.form;
+  }
+  static {
+    this.formAssociated = true;
+  }
+  /**
+   * A reference to all associated `<label>` elements.
+   *
+   * @public
+   */
+  get labels() {
+    return Object.freeze(Array.from(this.elementInternals.labels));
+  }
+  /**
+   * The validation message. Uses the browser's default validation message for native checkboxes if not otherwise
+   * specified (e.g., via `setCustomValidity`).
+   *
+   * @public
+   * @remarks
+   * Reflects the {@link https://developer.mozilla.org/docs/Web/API/ElementInternals/validationMessage | `ElementInternals.validationMessage`} property.
+   */
+  get validationMessage() {
+    if (this.elementInternals?.validationMessage) {
+      return this.elementInternals.validationMessage;
+    }
+    if (!this._validationFallbackMessage) {
+      const validationMessageFallbackControl = document.createElement("input");
+      validationMessageFallbackControl.type = "checkbox";
+      validationMessageFallbackControl.required = true;
+      validationMessageFallbackControl.checked = false;
+      this._validationFallbackMessage = validationMessageFallbackControl.validationMessage;
+    }
+    return this._validationFallbackMessage;
+  }
+  /**
+   * The element's validity state.
+   *
+   * @public
+   * @remarks
+   * Reflects the {@link https://developer.mozilla.org/docs/Web/API/ElementInternals/validity | `ElementInternals.validity`} property.
+   */
+  get validity() {
+    return this.elementInternals.validity;
+  }
+  /**
+   * The current value of the input.
+   *
+   * @public
+   */
+  get value() {
+    Observable.track(this, "value");
+    return this._value;
+  }
+  set value(value) {
+    this._value = value;
+    if (this.elementInternals) {
+      this.setFormValue(value);
+      this.setValidity();
+    }
+    Observable.notify(this, "value");
+  }
+  /**
+   * Determines if the control can be submitted for constraint validation.
+   *
+   * @public
+   * @remarks
+   * Reflects the {@link https://developer.mozilla.org/docs/Web/API/ElementInternals/willValidate | `ElementInternals.willValidate`} property.
+   */
+  get willValidate() {
+    return this.elementInternals.willValidate;
+  }
+  /**
+   * Checks the validity of the element and returns the result.
+   *
+   * @public
+   * @remarks
+   * Reflects the {@link https://developer.mozilla.org/docs/Web/API/ElementInternals/checkValidity | `HTMLInputElement.checkValidity()`} method.
+   */
+  checkValidity() {
+    return this.elementInternals.checkValidity();
+  }
+  /**
+   * Toggles the checked state when the user clicks the element.
+   *
+   * @param e - the event object
+   * @internal
+   */
+  clickHandler(e) {
+    if (this.disabled) {
+      return;
+    }
+    this.dirtyChecked = true;
+    const previousChecked = this.checked;
+    this.toggleChecked();
+    if (previousChecked !== this.checked) {
+      this.$emit("change");
+      this.$emit("input");
+    }
+    return true;
+  }
+  connectedCallback() {
+    super.connectedCallback();
+    this.disabled = !!this.disabledAttribute;
+    this.setAriaChecked();
+    this.setValidity();
+    maybeSetAutoFocus(this);
+  }
+  /**
+   * Updates the form value when a user changes the `checked` state.
+   *
+   * @param e - the event object
+   * @internal
+   */
+  inputHandler(e) {
+    this.setFormValue(this.value);
+    this.setValidity();
+    return true;
+  }
+  /**
+   * Prevents scrolling when the user presses the space key, and sets a flag to indicate that the space key was pressed
+   * down while the checkbox was focused.
+   *
+   * @param e - the event object
+   * @internal
+   */
+  keydownHandler(e) {
+    if (e.key !== " ") {
+      return true;
+    }
+    this._keydownPressed = true;
+  }
+  /**
+   * Toggles the checked state when the user releases the space key.
+   *
+   * @param e - the event object
+   * @internal
+   */
+  keyupHandler(e) {
+    if (!this._keydownPressed || e.key !== " ") {
+      return true;
+    }
+    this._keydownPressed = false;
+    this.click();
+  }
+  /**
+   * Resets the form value to its initial value when the form is reset.
+   *
+   * @internal
+   */
+  formResetCallback() {
+    this.checked = this.initialChecked ?? false;
+    this.dirtyChecked = false;
+    this.setValidity();
+  }
+  /**
+   * Reports the validity of the element.
+   *
+   * @public
+   * @remarks
+   * Reflects the {@link https://developer.mozilla.org/docs/Web/API/ElementInternals/reportValidity | `HTMLInputElement.reportValidity()`} method.
+   */
+  reportValidity() {
+    return this.elementInternals.reportValidity();
+  }
+  /**
+   * Sets the ARIA checked state.
+   *
+   * @param value - The checked state
+   * @internal
+   */
+  setAriaChecked(value = this.checked) {
+    if (this.elementInternals) {
+      this.elementInternals.ariaChecked = value ? "true" : "false";
+    }
+  }
+  /**
+   * Reflects the {@link https://developer.mozilla.org/docs/Web/API/ElementInternals/setFormValue | `ElementInternals.setFormValue()`} method.
+   *
+   * @internal
+   */
+  setFormValue(value, state) {
+    this.elementInternals?.setFormValue(value, value ?? state);
+  }
+  /**
+   * Sets a custom validity message.
+   *
+   * @param message - The message to set
+   * @public
+   */
+  setCustomValidity(message) {
+    this.elementInternals.setValidity({ customError: true }, message);
+    this.setValidity();
+  }
+  /**
+   * Sets the validity of the control.
+   *
+   * @param flags - Validity flags to set.
+   * @param message - Optional message to supply. If not provided, the control's `validationMessage` will be used.
+   * @param anchor - Optional anchor to use for the validation message.
+   *
+   * @internal
+   */
+  setValidity(flags, message, anchor2) {
+    if (this.elementInternals) {
+      if (this.disabled || !this.required) {
+        this.elementInternals.setValidity({});
+        return;
+      }
+      this.elementInternals.setValidity({ valueMissing: !!this.required && !this.checked, ...flags }, message ?? this.validationMessage, anchor2);
+    }
+  }
+  /**
+   * Toggles the checked state of the control.
+   *
+   * @param force - Forces the element to be checked or unchecked
+   * @public
+   */
+  toggleChecked(force = !this.checked) {
+    this.checked = force;
+  }
+};
+__decorate([
+  observable
+], BaseCheckbox.prototype, "disabled", void 0);
+__decorate([
+  attr({ attribute: "disabled", mode: "boolean" })
+], BaseCheckbox.prototype, "disabledAttribute", void 0);
+__decorate([
+  attr({ attribute: "form" })
+], BaseCheckbox.prototype, "formAttribute", void 0);
+__decorate([
+  attr({ attribute: "checked", mode: "boolean" })
+], BaseCheckbox.prototype, "initialChecked", void 0);
+__decorate([
+  attr({ attribute: "value", mode: "fromView" })
+], BaseCheckbox.prototype, "initialValue", void 0);
+__decorate([
+  attr
+], BaseCheckbox.prototype, "name", void 0);
+__decorate([
+  attr({ mode: "boolean" })
+], BaseCheckbox.prototype, "required", void 0);
+
+// node_modules/@fluentui/web-components/dist/esm/checkbox/checkbox.js
+var Checkbox = class extends BaseCheckbox {
+  /**
+   * Updates the indeterminate state when the `indeterminate` property changes.
+   *
+   * @param prev - the indeterminate state
+   * @param next - the current indeterminate state
+   * @internal
+   */
+  indeterminateChanged(prev, next2) {
+    this.setAriaChecked();
+    toggleState(this.elementInternals, "indeterminate", next2);
+  }
+  constructor() {
+    super();
+    this.elementInternals.role = "checkbox";
+  }
+  /**
+   * Sets the ARIA checked state. If the `indeterminate` flag is true, the value will be 'mixed'.
+   *
+   * @internal
+   * @override
+   */
+  setAriaChecked(value = this.checked) {
+    if (this.indeterminate) {
+      this.elementInternals.ariaChecked = "mixed";
+      return;
+    }
+    super.setAriaChecked(value);
+  }
+  /**
+   * Toggles the checked state of the control.
+   *
+   * @param force - Forces the element to be checked or unchecked
+   * @public
+   */
+  toggleChecked(force = !this.checked) {
+    this.indeterminate = false;
+    super.toggleChecked(force);
+  }
+};
+__decorate([
+  observable
+], Checkbox.prototype, "indeterminate", void 0);
+__decorate([
+  attr
+], Checkbox.prototype, "shape", void 0);
+__decorate([
+  attr
+], Checkbox.prototype, "size", void 0);
+
+// node_modules/@fluentui/web-components/dist/esm/checkbox/checkbox.options.js
+var tagName3 = `${FluentDesignSystem.prefix}-checkbox`;
+
+// node_modules/@fluentui/web-components/dist/esm/checkbox/checkbox.styles.js
+var styles3 = css`
+  ${display("inline-flex")}
+
+  :host {
+    --size: 16px;
+    background-color: ${colorNeutralBackground1};
+    border-radius: ${borderRadiusSmall};
+    border: ${strokeWidthThin} solid ${colorNeutralStrokeAccessible};
+    box-sizing: border-box;
+    cursor: pointer;
+    position: relative;
+    width: var(--size);
+  }
+
+  :host,
+  .indeterminate-indicator,
+  .checked-indicator {
+    aspect-ratio: 1;
+  }
+
+  :host(:hover) {
+    border-color: ${colorNeutralStrokeAccessibleHover};
+  }
+
+  :host(:active) {
+    border-color: ${colorNeutralStrokeAccessiblePressed};
+  }
+
+  :host(${checkedState}:hover) {
+    background-color: ${colorCompoundBrandBackgroundHover};
+    border-color: ${colorCompoundBrandStrokeHover};
+  }
+
+  :host(${checkedState}:active) {
+    background-color: ${colorCompoundBrandBackgroundPressed};
+    border-color: ${colorCompoundBrandStrokePressed};
+  }
+
+  :host(:focus-visible) {
+    outline: none;
+  }
+
+  :host(:not([slot='input']))::after {
+    content: '';
+    position: absolute;
+    inset: -8px;
+    box-sizing: border-box;
+    outline: none;
+    border: ${strokeWidthThick} solid ${colorTransparentStroke};
+    border-radius: ${borderRadiusMedium};
+  }
+
+  :host(:not([slot='input']):focus-visible)::after {
+    border-color: ${colorStrokeFocus2};
+  }
+
+  .indeterminate-indicator,
+  .checked-indicator {
+    color: ${colorNeutralForegroundInverted};
+    inset: 0;
+    margin: auto;
+    position: absolute;
+  }
+
+  ::slotted([slot='checked-indicator']),
+  .checked-indicator {
+    fill: currentColor;
+    display: inline-flex;
+    flex: 1 0 auto;
+    width: 12px;
+  }
+
+  :host(:not(${checkedState})) *:is(::slotted([slot='checked-indicator']), .checked-indicator) {
+    display: none;
+  }
+
+  :host(${checkedState}),
+  :host(${indeterminateState}) {
+    border-color: ${colorCompoundBrandStroke};
+  }
+
+  :host(${checkedState}),
+  :host(${indeterminateState}) .indeterminate-indicator {
+    background-color: ${colorCompoundBrandBackground};
+  }
+
+  :host(${indeterminateState}) .indeterminate-indicator {
+    border-radius: ${borderRadiusSmall};
+    position: absolute;
+    width: calc(var(--size) / 2);
+    inset: 0;
+  }
+
+  :host([size='large']) {
+    --size: 20px;
+  }
+
+  :host([size='large']) ::slotted([slot='checked-indicator']),
+  :host([size='large']) .checked-indicator {
+    width: 16px;
+  }
+
+  :host([shape='circular']),
+  :host([shape='circular']) .indeterminate-indicator {
+    border-radius: ${borderRadiusCircular};
+  }
+
+  :host(${nativeDisabledState}),
+  :host(${nativeDisabledState}${checkedState}) {
+    background-color: ${colorNeutralBackgroundDisabled};
+    border-color: ${colorNeutralStrokeDisabled};
+  }
+
+  :host(${nativeDisabledState}) {
+    cursor: unset;
+  }
+
+  :host(${nativeDisabledState}${indeterminateState}) .indeterminate-indicator {
+    background-color: ${colorNeutralStrokeDisabled};
+  }
+
+  :host(${nativeDisabledState}${checkedState}) .checked-indicator {
+    color: ${colorNeutralStrokeDisabled};
+  }
+
+  @media (forced-colors: active) {
+    :host {
+      border-color: FieldText;
+    }
+
+    :host(:not([slot='input']:focus-visible))::after {
+      border-color: Canvas;
+    }
+
+    :host(:not(${nativeDisabledState}):hover),
+    :host(${checkedState}:not(${nativeDisabledState}):hover),
+    :host(:not([slot='input']):focus-visible)::after {
+      border-color: Highlight;
+    }
+
+    .indeterminate-indicator,
+    .checked-indicator {
+      color: HighlightText;
+    }
+
+    :host(${checkedState}),
+    :host(${indeterminateState}) .indeterminate-indicator {
+      background-color: FieldText;
+    }
+
+    :host(${checkedState}:not(${nativeDisabledState}):hover),
+    :host(${indeterminateState}:not(${nativeDisabledState}):hover) .indeterminate-indicator {
+      background-color: Highlight;
+    }
+
+    :host(${nativeDisabledState}) {
+      border-color: GrayText;
+    }
+
+    :host(${nativeDisabledState}${indeterminateState}) .indeterminate-indicator {
+      background-color: GrayText;
+    }
+
+    :host(${nativeDisabledState}),
+    :host(${nativeDisabledState}${checkedState}) .checked-indicator {
+      color: GrayText;
+    }
+  }
+`;
+
+// node_modules/@fluentui/web-components/dist/esm/checkbox/checkbox.template.js
+var checkedIndicator = html.partial(
+  /* html */
+  `
+    <svg
+        fill="currentColor"
+        aria-hidden="true"
+        class="checked-indicator"
+        width="1em"
+        height="1em"
+        viewBox="0 0 12 12"
+        xmlns="http://www.w3.org/2000/svg">
+            <path d="M9.76 3.2c.3.29.32.76.04 1.06l-4.25 4.5a.75.75 0 0 1-1.08.02L2.22 6.53a.75.75 0 0 1 1.06-1.06l1.7 1.7L8.7 3.24a.75.75 0 0 1 1.06-.04Z" fill="currentColor"></path>
+    </svg>
+`
+);
+var indeterminateIndicator = html.partial(
+  /* html */
+  `
+    <span class="indeterminate-indicator"></span>
+`
+);
+function checkboxTemplate(options = {}) {
+  return html`
+    <template
+      @click="${(x, c) => x.clickHandler(c.event)}"
+      @input="${(x, c) => x.inputHandler(c.event)}"
+      @keydown="${(x, c) => x.keydownHandler(c.event)}"
+      @keyup="${(x, c) => x.keyupHandler(c.event)}"
+    >
+      <slot name="checked-indicator">${staticallyCompose(options.checkedIndicator)}</slot>
+      <slot name="indeterminate-indicator">${staticallyCompose(options.indeterminateIndicator)}</slot>
+    </template>
+  `;
+}
+var template3 = checkboxTemplate({
+  checkedIndicator,
+  indeterminateIndicator
+});
+
+// node_modules/@fluentui/web-components/dist/esm/checkbox/checkbox.definition.js
+var definition3 = {
+  name: tagName3,
+  registry: FluentDesignSystem.registry,
+  styles: styles3,
+  template: template3
+};
+
 // frontend/comfyui/ui/surface/appearance/FluentSliderGeometry.ts
 function adaptFluentSliderGeometry(slider) {
   const calculate = slider.calculateNewValue.bind(slider);
@@ -6228,6 +7626,14 @@ function adaptFluentSliderGeometry(slider) {
 
 // frontend/comfyui/ui/surface/appearance/FluentThemeRuntime.ts
 if (!customElements.get("fluent-slider")) await Slider.define(definition);
+if (!customElements.get("fluent-button")) await Button.define(definition2);
+if (!customElements.get("fluent-checkbox")) await Checkbox.define(definition3);
+function createFluentBooleanCheckbox(documentRef) {
+  const checkbox = documentRef.createElement("fluent-checkbox");
+  if (!(checkbox instanceof Checkbox))
+    throw new TypeError("The registered Fluent checkbox has an incompatible implementation.");
+  return checkbox;
+}
 function createFluentNumericSlider(documentRef) {
   const slider = documentRef.createElement("fluent-slider");
   if (!(slider instanceof Slider))
@@ -6240,10 +7646,10 @@ var fluentMotion = {
   exitDuration: Number.parseFloat(webDarkTheme.durationFast),
   easing: webDarkTheme.curveDecelerateMid
 };
-var fontFamilyBase = '"Segoe UI Variable", "Segoe UI", sans-serif';
+var fontFamilyBase2 = '"Segoe UI Variable", "Segoe UI", sans-serif';
 var themes = {
-  dark: { ...webDarkTheme, fontFamilyBase },
-  light: { ...webLightTheme, fontFamilyBase }
+  dark: { ...webDarkTheme, fontFamilyBase: fontFamilyBase2 },
+  light: { ...webLightTheme, fontFamilyBase: fontFamilyBase2 }
 };
 function fluentTokenDeclarations(dark) {
   return Object.entries(dark ? themes.dark : themes.light).map(([name, value]) => `--${name}:${value};`).join("");
@@ -6253,6 +7659,7 @@ function applyOwnedFluentTheme(element, dark) {
 }
 export {
   applyOwnedFluentTheme,
+  createFluentBooleanCheckbox,
   createFluentNumericSlider,
   fluentMotion,
   fluentTokenDeclarations

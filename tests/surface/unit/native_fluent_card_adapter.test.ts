@@ -24,7 +24,7 @@ test.each([false, true])(
   'owns only this graph card’s native port section in masonry=%s',
   (masonry) => {
     const surface = document.createElement('div');
-    if (masonry) surface.className = 'sugarcubes-workflow-masonry';
+    if (masonry) surface.className = 'sugarcubes-cube-face__node-card';
     const mount = document.createElement('div');
     mount.className = 'sugarcubes-native-node-card';
     const root = document.createElement('div');
@@ -204,3 +204,29 @@ test.each(['WidgetSelect', 'WidgetDOM'])(
     expect(trigger.children).toHaveLength(0);
   },
 );
+
+test('does not claim an embedded Cube card advanced toggle from its enclosing native node', () => {
+  const mount = document.createElement('div');
+  mount.className = 'sugarcubes-native-node-card';
+  const root = document.createElement('div');
+  root.className = 'lg-node';
+  const ownFields = document.createElement('div');
+  const embedded = document.createElement('div');
+  embedded.className = 'lg-node';
+  const fields = document.createElement('div');
+  fields.dataset.scFluentFields = '';
+  const button = document.createElement('button');
+  button.dataset.testid = 'advanced-inputs-button';
+  embedded.append(fields, button);
+  root.append(ownFields, embedded);
+  mount.append(root);
+  document.body.append(mount);
+  Object.assign(mount, {
+    _vnode: vnode('LGraphNode', root, [vnode('NodeWidgets', ownFields, [])]),
+  });
+  const adapter = new NativeFluentCardAdapter();
+  expect(adapter.annotate(root).advanced).toBeNull();
+  expect(button.isConnected).toBe(true);
+  expect(fields.dataset.scFluentFields).toBe('');
+  adapter.clear();
+});

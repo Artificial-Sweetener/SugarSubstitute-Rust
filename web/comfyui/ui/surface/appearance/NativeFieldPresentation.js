@@ -7,20 +7,11 @@ const standardComponents = {
     WidgetInputText: 'scalar',
     WidgetTextarea: 'multiline',
 };
-const modelFields = new Set([
-    'ckpt_name',
-    'vae_name',
-    'lora_name',
-    'unet_name',
-    'clip_name',
-    'model_name',
-]);
 /** Enumerate the core components whose field layout this adapter understands. */
 export const NATIVE_FIELD_COMPONENTS = Object.keys(standardComponents);
 /** Accept known native components rather than guessing from arbitrary input markup. */
 export function classifyNativeField(field) {
-    const kind = standardComponents[field.component];
-    return kind === 'scalar' && modelFields.has(field.name) ? 'model' : (kind ?? null);
+    return standardComponents[field.component] ?? null;
 }
 /** Group adjacent native fields while preserving authored order and custom boundaries. */
 export function planNativeFields(fields) {

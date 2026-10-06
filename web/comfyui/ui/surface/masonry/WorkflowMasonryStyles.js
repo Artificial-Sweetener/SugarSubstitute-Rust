@@ -36,7 +36,7 @@ export function ensureWorkflowMasonryStyles(documentRef) {
     .sugarcubes-workflow-masonry {
       position:absolute; inset:0; z-index:1100; box-sizing:border-box; pointer-events:auto;
       overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain;
-      padding:52px 20px 96px; scrollbar-gutter:stable;
+      padding:52px 20px 96px;
       background:var(--sugarcubes-masonry-surface,var(--comfy-menu-bg,#202020));
       color:var(--fg-color,#ddd); outline:none;
     }
@@ -71,25 +71,6 @@ export function ensureWorkflowMasonryStyles(documentRef) {
     .sugarcubes-workflow-masonry__content > .sugarcubes-workflow-masonry__card {
       position:absolute; left:0; top:0; box-sizing:border-box;
       contain:layout style;
-      border:1px solid var(--interface-stroke,#454545); border-radius:12px;
-      background:var(--sugarcubes-masonry-card-surface,var(--comfy-input-bg,#222));
-    }
-    .sugarcubes-workflow-masonry__card .lg-node { cursor:default; }
-    .sugarcubes-workflow-masonry [data-masonry-bypass-badge] { display:none !important; }
-    .sugarcubes-workflow-masonry__card [data-masonry-title-icon] {
-      position:relative; padding-left:30px;
-    }
-    .sugarcubes-workflow-masonry__node-icon {
-      position:absolute; left:0; top:50%; transform:translateY(-50%);
-      width:24px; height:24px; pointer-events:none;
-    }
-    .sugarcubes-workflow-masonry__node-icon::before {
-      content:''; display:block; width:20px; height:20px; margin:2px;
-      background:currentColor; mask:var(--sc-node-icon) center / contain no-repeat;
-    }
-    .sugarcubes-workflow-masonry__card .lg-node.outline-node-component-outline { outline-color:transparent; }
-    .sugarcubes-workflow-masonry__card .lg-node > [data-testid="node-state-outline-overlay"].border-node-component-outline {
-      border-color:transparent;
     }
     .sugarcubes-workflow-masonry [data-sc-surface-moving],
     .sugarcubes-workflow-masonry [data-sc-surface-moving] * { pointer-events:none !important; }

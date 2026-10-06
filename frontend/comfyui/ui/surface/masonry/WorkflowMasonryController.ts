@@ -29,7 +29,7 @@ export interface WorkflowMasonryControllerOptions {
   getRenderer(): Promise<NativeNodeCardRenderer>;
   getCardState(): CubeFaceCardStateService;
   openCube(node: CubeNode): void;
-  alert(title: string, message: string): Promise<unknown>;
+  notifyRendererFallback(): void;
   reportError(error: unknown): void;
   onStateChange(): void;
 }
@@ -68,6 +68,21 @@ export class WorkflowMasonryController {
       if (generation === this.#generation) this.#releaseView();
       return;
     }
+    await this.#show(generation);
+  }
+
+  /** Release obsolete graph bindings immediately while retaining the chosen presentation. */
+  async graphReplaced(): Promise<void> {
+    if (!this.#desired) return;
+    const generation = ++this.#generation;
+    this.#transition.cancel();
+    this.#releaseView();
+    this.#options.onStateChange();
+    await this.#show(generation);
+  }
+
+  /** Mount the current graph only while this presentation request still owns the lifecycle. */
+  async #show(generation: number): Promise<void> {
     try {
       if (!this.#view) {
         const renderer = await this.#options.getRenderer();
@@ -117,12 +132,11 @@ export class WorkflowMasonryController {
     const unsupported = !this.#options.isNodes2();
     if (unsupported && (this.#desired || this.#view)) {
       this.leaveImmediately();
-      void this.#options
-        .alert(
-          'Masonry requires Nodes 2.0',
-          'SugarCubes masonry does not support Nodes 1.0. Your workflow is now displayed in graph mode.',
-        )
-        .catch((error: unknown) => this.#options.reportError(error));
+      try {
+        this.#options.notifyRendererFallback();
+      } catch (error: unknown) {
+        this.#options.reportError(error);
+      }
     }
     this.#options.onStateChange();
   }
@@ -135,8 +149,9 @@ export class WorkflowMasonryController {
   /** Reconcile card presentation without replaying transitions or closing the optional-node menu. */
   async graphChanged(): Promise<void> {
     if (!this.#desired || !this.#view || !this.#renderer) return;
+    const generation = this.#generation;
     await this.#mounting;
-    if (!this.#desired || !this.#view) return;
+    if (generation !== this.#generation || !this.#desired || !this.#view) return;
     const sections = this.#options.getSections();
     const topology = topologySignature(sections);
     if (this.#topology === topology) return;
@@ -145,6 +160,7 @@ export class WorkflowMasonryController {
       this.#mounting = this.#view.refresh(sections, this.#renderer);
       await this.#mounting;
     } catch (error: unknown) {
+      if (generation !== this.#generation) return;
       this.leaveImmediately();
       this.#options.reportError(error);
     }

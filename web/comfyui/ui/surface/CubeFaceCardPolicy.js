@@ -19,7 +19,7 @@ import { cubeFaceNodeAllowsActivationControl, inferCubeFaceTransformSignals, isH
 import { resolveCubeFaceRevealDecision } from './CubeFaceRevealPolicy.js';
 import { cubeFaceCardColumnSpan, cubeFaceCardMasonryPriority } from './CubeFacePromptPolicy.js';
 /** Resolve the exact cards and menu entries consumed by either Comfy renderer. */
-export function resolveCubeFaceCardPresentation(nodes, state, graph) {
+export function resolveCubeFaceCardPresentation(nodes, state, graph, additionalControlNodes = new Set()) {
     const cards = [];
     const menuEntries = [];
     nodes.forEach((node, index) => {
@@ -30,7 +30,10 @@ export function resolveCubeFaceCardPresentation(nodes, state, graph) {
         const reveal = resolveCubeFaceRevealDecision(node, persisted);
         const showActivationControl = cubeFaceNodeAllowsActivationControl(node) &&
             (reveal.revealable || inferCubeFaceTransformSignals(node).size > 0);
-        const eligible = cubeFaceNodeHasVisibleWidgets(node) || showActivationControl || reveal.revealable;
+        const eligible = cubeFaceNodeHasVisibleWidgets(node) ||
+            additionalControlNodes.has(node) ||
+            showActivationControl ||
+            reveal.revealable;
         if (!eligible)
             return;
         const label = node.title?.trim() || node.type?.trim() || `Node ${String(index + 1)}`;

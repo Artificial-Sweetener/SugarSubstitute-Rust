@@ -15,11 +15,16 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Adapt real Cube-graph nodes to Comfy's host-owned native card renderer. */
 import { createCubeFaceActivationControl, updateCubeFaceActivationControl, } from './CubeFaceActivationControl.js';
+import { cubeFaceNodeHasVisibleWidgets } from './CubeFaceNodePresentationPolicy.js';
+import { NativeWidgetElementLease } from './NativeWidgetElementLease.js';
+import { NativeForwardedWidgetLease } from './NativeForwardedWidgetLease.js';
+import { NodeCardIconHost } from './NodeCardIconHost.js';
 /** Own native child-card mounts for one Cube surface view. */
 export class NativeNodeCardHost {
     #renderer;
     #mounts = [];
     #activation = new Map();
+    #leases = [];
     /** Create a host that delegates all node rendering to Comfy. */
     constructor(renderer) {
         this.#renderer = renderer;
@@ -53,7 +58,22 @@ export class NativeNodeCardHost {
             : null;
         if (headerAccessory)
             this.#activation.set(node, headerAccessory);
+        const widgetSources = card.widgetSources ?? [];
+        const widgets = new NativeWidgetElementLease([
+            node,
+            ...widgetSources.map((source) => source.node),
+        ]);
+        const forwarded = new NativeForwardedWidgetLease(cell, node, widgetSources);
+        const icon = new NodeCardIconHost(cell, node);
+        this.#leases.push(() => {
+            icon.dispose();
+            forwarded.dispose();
+            widgets.restore();
+        });
         this.#mounts.push(this.#renderer.mount(target, node, {
+            presentationGeometry: true,
+            preserveNativeBody: cubeFaceNodeHasVisibleWidgets(node) || widgetSources.length > 0,
+            widgetSources,
             ...options,
             ...(headerAccessory ? { headerAccessory } : {}),
         }));
@@ -72,6 +92,8 @@ export class NativeNodeCardHost {
     dispose() {
         for (const mount of this.#mounts.splice(0))
             mount.unmount();
+        for (const release of this.#leases.splice(0))
+            release();
         this.#activation.clear();
     }
 }

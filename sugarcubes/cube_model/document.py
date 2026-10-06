@@ -27,6 +27,7 @@ from ..instrumentation import log_diagnostic
 from .cube_identity import CubeIdentityError, parse_canonical_cube_id
 from .flavors import AuthoredFlavor, AuthoredFlavorSet
 from .implementation import CubeImplementation
+from .model_requirements import normalize_model_requirement
 from .surface import CubeSurface, SurfaceControl, compute_surface_signature
 
 _logger = logging.getLogger(__name__)
@@ -94,6 +95,13 @@ class CubeDocument:
         version = _read_required_string(payload, "version")
         description = _read_optional_string(payload.get("description"))
         metadata = _read_mapping(payload.get("metadata"))
+        if "model_requirements" in metadata:
+            try:
+                metadata["model_requirements"] = normalize_model_requirement(
+                    metadata["model_requirements"]
+                )
+            except ValueError as exc:
+                raise CubeSchemaError(str(exc)) from exc
         implementation_payload = _read_required_mapping(payload, "implementation")
         surface_payload = _read_required_mapping(payload, "surface")
         flavors_payload = _read_required_mapping(payload, "flavors")

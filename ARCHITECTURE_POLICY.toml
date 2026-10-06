@@ -3,6 +3,9 @@ schema = 1
 [structure]
 source_roots = [
   "__init__.py",
+  "prestartup_script.py",
+  "load_model_roots.py",
+  "sugarcubes_model_roots",
   "sugarcubes",
   "frontend",
   "scripts",
@@ -21,6 +24,41 @@ soft_lines = 350
 hard_lines = 500
 
 [[dependency]]
+name = "TYPESCRIPT_EDITOR_ACTION_DOMAIN"
+paths = ["frontend/comfyui/ui/editor_actions/domain/*.ts"]
+forbidden_typescript_paths = [
+  "frontend/comfyui/ui/editor_actions/application",
+  "frontend/comfyui/ui/editor_actions/infrastructure",
+  "frontend/comfyui/ui/editor_actions/presentation",
+  "frontend/comfyui/ui/menus",
+  "frontend/comfyui/ui/dialogs",
+  "frontend/comfyui/ui/surface",
+  "frontend/comfyui/ui/model_library",
+]
+
+[[dependency]]
+name = "TYPESCRIPT_EDITOR_ACTION_APPLICATION"
+paths = ["frontend/comfyui/ui/editor_actions/application/*.ts"]
+forbidden_typescript_paths = [
+  "frontend/comfyui/ui/editor_actions/infrastructure",
+  "frontend/comfyui/ui/editor_actions/presentation",
+  "frontend/comfyui/ui/menus",
+  "frontend/comfyui/ui/dialogs",
+  "frontend/comfyui/ui/surface",
+  "frontend/comfyui/ui/model_library",
+]
+
+[[dependency]]
+name = "PYTHON_MODEL_ROOT_DOMAIN"
+paths = ["sugarcubes_model_roots/domain.py", "sugarcubes_model_roots/service.py"]
+forbidden_python_imports = [
+  "sugarcubes_model_roots.store",
+  "sugarcubes_model_roots.startup",
+  "aiohttp",
+  "pathlib",
+]
+
+[[dependency]]
 name = "PYTHON_DOMAIN"
 paths = ["sugarcubes/cube_model/**/*.py", "sugarcubes/cube_model/*.py"]
 forbidden_python_imports = [
@@ -28,6 +66,29 @@ forbidden_python_imports = [
   "sugarcubes.exporter",
   "sugarcubes.importer",
   "sugarcubes.runtime",
+]
+
+[[dependency]]
+name = "PYTHON_MODEL_LIBRARY_DOMAIN"
+paths = ["sugarcubes/model_library/domain/*.py"]
+forbidden_python_imports = [
+  "sugarcubes.model_library.application",
+  "sugarcubes.model_library.infrastructure",
+  "sugarcubes.backend",
+  "aiohttp",
+  "pathlib",
+  "sqlite3",
+]
+
+[[dependency]]
+name = "PYTHON_MODEL_LIBRARY_APPLICATION"
+paths = ["sugarcubes/model_library/application/*.py"]
+forbidden_python_imports = [
+  "sugarcubes.model_library.infrastructure",
+  "sugarcubes.backend",
+  "aiohttp",
+  "pathlib",
+  "sqlite3",
 ]
 
 [[dependency]]

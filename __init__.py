@@ -41,6 +41,7 @@ from .sugarcubes.execution.comfy_execution_port import (
 )
 from .sugarcubes.host_api import set_active_backend_services
 from .sugarcubes.runtime import queue_observer_registry
+from .sugarcubes.model_library.integration import install_model_library
 
 WEB_DIRECTORY = "web"
 __version__ = "0.15.0"
@@ -81,6 +82,11 @@ if PromptServer is not None:
             "ERROR: SugarCubes: backend route registration failed; cube library APIs "
             "may be unavailable."
         )
+
+    try:
+        _model_library_runtime = install_model_library(PromptServer)
+    except (ImportError, OSError, RuntimeError, TypeError, ValueError):
+        _LOGGER.exception("SugarCubes: model library APIs are unavailable.")
 
 
 __all__ = [

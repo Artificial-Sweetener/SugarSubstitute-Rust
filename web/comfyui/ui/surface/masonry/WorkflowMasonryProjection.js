@@ -1,8 +1,7 @@
 import { requireCubeIdentity } from '../../cube/node/ComfyCubeNodeFactory.js';
-import { resolveCubeFaceCardPresentation, orderNodesUpstreamFirst, } from '../CubeFaceCardPolicy.js';
+import { orderNodesUpstreamFirst } from '../CubeFaceCardPolicy.js';
 import { readCubeFaceCardState } from '../CubeFaceCardStateService.js';
-import { cubeFaceCardColumnSpan } from '../CubeFacePromptPolicy.js';
-import { resolveMasonryWidgetSources } from './WorkflowMasonryWidgetSources.js';
+import { projectNodeCards } from '../NodeCardProjection.js';
 /** Keep real Cubes and consecutive loose nodes in distinct runs of the shared grid. */
 export function projectWorkflowMasonry(graph, cubes, connections = []) {
     const nodes = [...(graph._nodes ?? graph.nodes ?? [])].sort((a, b) => (a.pos?.[0] ?? 0) - (b.pos?.[0] ?? 0) || (a.pos?.[1] ?? 0) - (b.pos?.[1] ?? 0));
@@ -24,15 +23,8 @@ export function projectWorkflowMasonry(graph, cubes, connections = []) {
                 label: cube.title?.trim() || 'SugarCube',
                 cube,
                 target: cube,
-                cards: orderedCards(cube.subgraph._nodes, cube.subgraph, `cube:${String(cube.id)}`, cube),
+                cards: orderedCards(cube.subgraph._nodes, cube.subgraph, `cube:${String(cube.id)}`, cube, cube),
             });
-            for (const card of sections[sections.length - 1]?.cards ?? []) {
-                const exposed = new Set(resolveMasonryWidgetSources(cube, card.node).map((source) => source.targetName));
-                card.columnSpan = cubeFaceCardColumnSpan({
-                    ...card.node,
-                    inputs: (card.node.inputs ?? []).filter((input) => !exposed.has(input.widget?.name ?? '')),
-                });
-            }
             continue;
         }
         if (!loose) {
@@ -49,8 +41,8 @@ export function projectWorkflowMasonry(graph, cubes, connections = []) {
     return sections;
 }
 /** Project the exact Cube-face decisions with namespaced placement identities. */
-function orderedCards(nodes, graph, prefix, target) {
-    return resolveCubeFaceCardPresentation(nodes, readCubeFaceCardState(target), graph).cards.map((card) => ({
+function orderedCards(nodes, graph, prefix, target, cube) {
+    return projectNodeCards(nodes, readCubeFaceCardState(target), graph, cube).map((card) => ({
         ...card,
         id: `${prefix}:${card.id}`,
         columnSpan: card.columnSpan ?? 1,

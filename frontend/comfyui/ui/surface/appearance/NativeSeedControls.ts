@@ -17,6 +17,7 @@
 import type { NativeNumericField } from './ComfyNativeNumericField.js';
 import type { NativeSeedControl } from './ComfyNativeSeedControl.js';
 import type { SeedMode } from '../../graph/ComfySeedMode.js';
+import { ContextMenu } from '../../menus/ContextMenu.js';
 
 export interface NativeSeedField {
   numeric: NativeNumericField;
@@ -113,17 +114,13 @@ export class NativeSeedControls {
     chevron.setAttribute('aria-hidden', 'true');
     chevron.className = 'icon-[lucide--chevron-down]';
     menuButton.append(chevron);
-    const menu = documentRef.createElement('div');
-    menu.dataset.scSeedOptions = '';
-    menu.setAttribute('role', 'menu');
-    menu.hidden = true;
-    menu.setAttribute('popover', 'manual');
-    split.append(primary, menuButton, menu);
+    const menu = new ContextMenu(documentRef);
+    split.append(primary, menuButton);
     spinner.dataset.scSeedBox = '';
-    let selectedModes = '';
+    let renderedMode = '';
+    let renderedModes = '';
     const close = (): void => {
-      if (typeof menu.hidePopover === 'function') menu.hidePopover();
-      menu.hidden = true;
+      menu.close();
       menuButton.setAttribute('aria-expanded', 'false');
     };
     const choose = (mode: SeedMode): void => {
@@ -137,45 +134,33 @@ export class NativeSeedControls {
       choose(binding.field.control.readMode() === 'randomize' ? 'fixed' : 'randomize');
     const expand = (): void => {
       if (binding.field.numeric.disabled()) return;
-      if (!menu.hidden) {
+      if (menu.isOpen()) {
         close();
         return;
       }
-      menu.hidden = false;
       menuButton.setAttribute('aria-expanded', 'true');
-      if (typeof menu.showPopover === 'function') {
-        const bounds = spinner.getBoundingClientRect();
-        menu.style.position = 'fixed';
-        menu.style.margin = '0';
-        menu.style.right = 'auto';
-        menu.style.bottom = 'auto';
-        menu.style.left = `${Math.max(4, bounds.right - 158)}px`;
-        menu.style.top = `${Math.min(bounds.bottom + 4, (documentRef.defaultView?.innerHeight ?? bounds.bottom + 164) - 164)}px`;
-        menu.showPopover();
-        const popup = menu.getBoundingClientRect();
-        if (popup.bottom > (documentRef.defaultView?.innerHeight ?? popup.bottom))
-          menu.style.top = `${Math.max(4, bounds.top - popup.height - 4)}px`;
-      }
-      menu.querySelector<HTMLButtonElement>('[aria-checked="true"]')?.focus();
-    };
-    const outside = (event: Event): void => {
-      if (event.target instanceof Node && !split.contains(event.target)) close();
-    };
-    const key = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') {
-        close();
-        menuButton.focus();
-        event.stopPropagation();
-      }
-      if (!menu.hidden && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
-        const buttons = [...menu.querySelectorAll<HTMLButtonElement>('button')];
-        const index = buttons.findIndex((button) => button === documentRef.activeElement);
-        buttons[
-          (index + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length
-        ]?.focus();
-        event.preventDefault();
-        event.stopPropagation();
-      }
+      const control = binding.field.control;
+      menu.open({
+        label: `${binding.field.numeric.label} options`,
+        anchor: { kind: 'below', bounds: spinner.getBoundingClientRect() },
+        trigger: menuButton,
+        focusChecked: true,
+        attributes: { 'data-sc-seed-options': '' },
+        closed: () => menuButton.setAttribute('aria-expanded', 'false'),
+        entries: control.modes.map((mode) => ({
+          label: modeLabels[mode],
+          checked: control.readMode() === mode,
+          attributes: { 'data-sc-seed-option': mode },
+          icon: (document) => {
+            const icon = document.createElement('span');
+            icon.dataset.scSeedIcon = '';
+            icon.style.cssText = `background:currentColor;mask:${seedIconImage(mode)} center/contain no-repeat;`;
+            icon.style.setProperty('--sc-seed-icon', seedIconImage(mode));
+            return icon;
+          },
+          select: () => choose(mode),
+        })),
+      });
     };
     const binding: SeedBinding = {
       field,
@@ -194,50 +179,24 @@ export class NativeSeedControls {
         const image = seedIconImage(mode);
         if (icon.style.getPropertyValue('--sc-seed-icon') !== image)
           icon.style.setProperty('--sc-seed-icon', image);
-        const nextModes = control.modes.join(',');
-        if (selectedModes !== nextModes) {
-          selectedModes = nextModes;
-          menu.replaceChildren(
-            ...control.modes.map((value) => {
-              const item = documentRef.createElement('button');
-              item.type = 'button';
-              item.setAttribute('role', 'menuitemradio');
-              item.dataset.scSeedOption = value;
-              const itemIcon = documentRef.createElement('span');
-              itemIcon.dataset.scSeedIcon = '';
-              itemIcon.setAttribute('aria-hidden', 'true');
-              itemIcon.style.setProperty('--sc-seed-icon', seedIconImage(value));
-              const label = documentRef.createElement('span');
-              label.textContent = modeLabels[value];
-              item.append(itemIcon, label);
-              item.addEventListener('click', () => choose(value));
-              return item;
-            }),
-          );
-        }
-        for (const item of menu.querySelectorAll<HTMLButtonElement>('button')) {
-          item.setAttribute('aria-checked', String(item.dataset.scSeedOption === mode));
-          item.disabled = disabled;
-        }
+        if (menu.isOpen() && (mode !== renderedMode || control.modes.join(',') !== renderedModes))
+          close();
+        renderedMode = mode;
+        renderedModes = control.modes.join(',');
         if (disabled) close();
       },
       release: () => {
+        close();
         unsubscribe();
         split.remove();
         delete spinner.dataset.scSeedBox;
-        documentRef.removeEventListener('pointerdown', outside, true);
-        documentRef.removeEventListener('scroll', close, true);
         primary.removeEventListener('click', toggle);
         menuButton.removeEventListener('click', expand);
-        split.removeEventListener('keydown', key);
       },
     };
     let unsubscribe = (): void => undefined;
     primary.addEventListener('click', toggle);
     menuButton.addEventListener('click', expand);
-    split.addEventListener('keydown', key);
-    documentRef.addEventListener('pointerdown', outside, true);
-    documentRef.addEventListener('scroll', close, true);
     spinner.append(split);
     try {
       binding.synchronize();

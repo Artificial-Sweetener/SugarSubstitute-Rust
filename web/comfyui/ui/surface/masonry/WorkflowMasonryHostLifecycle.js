@@ -15,9 +15,10 @@ export class WorkflowMasonryHostLifecycle {
     #graphs = new Map();
     #unsubscribeRenderer = null;
     #unsubscribeCards = null;
+    #unsubscribeNavigation = null;
     #restoreAfterConfigure = false;
     #disposed = false;
-    /** Bind native renderer capabilities and the existing SugarCubes dialog service. */
+    /** Bind native renderer capabilities and non-blocking fallback feedback. */
     constructor(options) {
         this.#options = options;
         this.#renderers = new CubeSurfaceRendererLifecycle({
@@ -43,7 +44,7 @@ export class WorkflowMasonryHostLifecycle {
                 return state;
             },
             openCube: (cube) => this.#openCube(cube),
-            alert: options.alert,
+            notifyRendererFallback: options.notifyRendererFallback,
             reportError: options.reportError,
             onStateChange: () => this.#refreshButton(),
         });
@@ -112,10 +113,19 @@ export class WorkflowMasonryHostLifecycle {
     #observeGraphs() {
         this.#unsubscribeCards ??=
             this.#options.getCardState()?.subscribe(this.#onCardsChanged) ?? null;
+        this.#unsubscribeNavigation ??=
+            this.#options.getGraphChanges()?.subscribe(this.#onGraphReplaced) ?? null;
         const graph = this.#options.app?.canvas?.graph ?? this.#options.app?.graph;
-        const graphs = [graph, ...this.#options.getCubes().map((cube) => cube.subgraph)];
+        const candidates = [graph, ...this.#options.getCubes().map((cube) => cube.subgraph)];
+        const graphs = new Set(candidates.filter(isObservableGraph));
+        for (const [observed, observer] of this.#graphs) {
+            if (graphs.has(observed))
+                continue;
+            observer.dispose();
+            this.#graphs.delete(observed);
+        }
         for (const candidate of graphs) {
-            if (!isObservableGraph(candidate) || this.#graphs.has(candidate))
+            if (this.#graphs.has(candidate))
                 continue;
             this.#graphs.set(candidate, new NativeSubgraphChangeObserver(candidate, () => {
                 if (this.#disposed)
@@ -128,6 +138,8 @@ export class WorkflowMasonryHostLifecycle {
     }
     /** Restore every host callback before changing renderer or graph ownership. */
     #releaseGraphObservers() {
+        this.#unsubscribeNavigation?.();
+        this.#unsubscribeNavigation = null;
         this.#unsubscribeCards?.();
         this.#unsubscribeCards = null;
         for (const observer of this.#graphs.values())
@@ -140,6 +152,14 @@ export class WorkflowMasonryHostLifecycle {
             return;
         void this.#controller
             .graphChanged()
+            .catch((error) => this.#options.reportError(error));
+    };
+    /** Follow the shared native navigation boundary rather than retaining a previous graph's cards. */
+    #onGraphReplaced = () => {
+        if (this.#disposed)
+            return;
+        void this.#controller
+            .graphReplaced()
             .catch((error) => this.#options.reportError(error));
     };
     /** Enter the native Cube editor through Comfy's validated host API. */

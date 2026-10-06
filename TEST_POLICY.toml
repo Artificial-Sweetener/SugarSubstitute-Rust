@@ -2,6 +2,11 @@ schema = 1
 test_root = "tests"
 
 [[area]]
+name = "editor_actions"
+sources = ["frontend/comfyui/ui/editor_actions/**", "web/comfyui/ui/editor_actions/**"]
+proofs = ["unit", "contract", "integration"]
+
+[[area]]
 name = "governance"
 sources = [
   "__init__.py",
@@ -33,6 +38,11 @@ proofs = ["contract", "unit"]
 name = "cube_model"
 sources = ["sugarcubes/cube_model/**"]
 proofs = ["contract", "unit"]
+
+[[area]]
+name = "model_library"
+sources = ["prestartup_script.py", "load_model_roots.py", "sugarcubes_model_roots/**", "sugarcubes/model_library/**", "frontend/comfyui/ui/model_library/**", "web/comfyui/ui/model_library/**"]
+proofs = ["contract", "integration", "unit"]
 
 [[area]]
 name = "workflow"
@@ -88,6 +98,7 @@ proofs = ["integration", "unit"]
 name = "runtime"
 sources = [
   "sugarcubes/__init__.py",
+  "sugarcubes/py.typed",
   "sugarcubes/host_api.py",
   "sugarcubes/nodes.py",
   "sugarcubes/payloads.py",
@@ -207,6 +218,7 @@ sources = [
   "frontend/comfyui/*.ts",
   "frontend/comfyui/ui/*.ts",
   "frontend/comfyui/ui/core/**",
+  "frontend/comfyui/ui/menus/**",
   "frontend/comfyui/ui/debug/**",
   "frontend/comfyui/ui/types/**",
 ]
@@ -325,12 +337,36 @@ name = "frontend_host"
 area = "frontend_core"
 
 [[boundary]]
+name = "floating_menu_contract"
+area = "frontend_core"
+
+[[subscription]]
+boundary = "floating_menu_contract"
+groups = ["model_library/integration", "surface/integration", "surface/unit", "browser/unit", "cube/integration", "editor_actions/integration", "editor_actions/unit"]
+
+[[boundary]]
 name = "graph_contract"
 area = "graph"
 
 [[boundary]]
 name = "execution_prompt"
 area = "execution"
+
+[[boundary]]
+name = "native_card_presentation"
+area = "surface"
+
+[[boundary]]
+name = "model_library_editor_contract"
+area = "model_library"
+
+[[subscription]]
+boundary = "model_library_editor_contract"
+groups = ["editor_actions/integration", "editor_actions/unit"]
+
+[[subscription]]
+boundary = "native_card_presentation"
+groups = ["frontend_core/integration", "model_library/integration", "editor_actions/integration"]
 
 [[subscription]]
 boundary = "cube_document"

@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Prove Substitute's title-icon semantics without changing graph state or unknown headers. */
 import { expect, test } from '@jest/globals';
-import { resolveMasonryNodeIcon } from '../../../frontend/comfyui/ui/surface/masonry/MasonryNodeIconPolicy.js';
+import { resolveNodeCardIcon } from '../../../frontend/comfyui/ui/surface/NodeCardIconPolicy.js';
 import type { ComfyNode } from '../../../frontend/comfyui/ui/types/graph.js';
 
 test.each([
@@ -30,7 +30,7 @@ test.each([
   ['VAELoader', 'model'],
   ['CheckpointLoaderSimple', 'model'],
 ])('matches Substitute class %s with %s', (type, expected) => {
-  expect(resolveMasonryNodeIcon({ type })).toBe(expected);
+  expect(resolveNodeCardIcon({ type })).toBe(expected);
 });
 
 test('shares semantic prompt roles, including conditioning flow and ambiguous-role fallback', () => {
@@ -44,21 +44,17 @@ test('shares semantic prompt roles, including conditioning flow and ambiguous-ro
     _nodes: [prompt, { id: 2, inputs: [{ name: 'negative' }] }],
     links: { '10': { id: 10, origin_id: 1, target_id: 2, target_slot: 0 } },
   };
-  expect(resolveMasonryNodeIcon(prompt)).toBe('eraser');
-  expect(resolveMasonryNodeIcon({ title: 'Positive prompt', widgets: prompt.widgets })).toBe(
+  expect(resolveNodeCardIcon(prompt)).toBe('eraser');
+  expect(resolveNodeCardIcon({ title: 'Positive prompt', widgets: prompt.widgets })).toBe('edit');
+  expect(resolveNodeCardIcon({ title: 'Negative prompt', widgets: prompt.widgets })).toBe('eraser');
+  expect(resolveNodeCardIcon({ title: 'Positive negative prompt', widgets: prompt.widgets })).toBe(
     'edit',
   );
-  expect(resolveMasonryNodeIcon({ title: 'Negative prompt', widgets: prompt.widgets })).toBe(
-    'eraser',
-  );
-  expect(
-    resolveMasonryNodeIcon({ title: 'Positive negative prompt', widgets: prompt.widgets }),
-  ).toBe('edit');
 });
 
 test('infers sampler workers before model pickers and keeps model links and numeric strengths distinct', () => {
   expect(
-    resolveMasonryNodeIcon({
+    resolveNodeCardIcon({
       type: 'CustomSampler',
       widgets: [
         { name: 'steps', type: 'number' },
@@ -68,19 +64,19 @@ test('infers sampler workers before model pickers and keeps model links and nume
     }),
   ).toBe('application');
   expect(
-    resolveMasonryNodeIcon({
+    resolveNodeCardIcon({
       type: 'CustomLoader',
       widgets: [{ name: 'lora_name', type: 'combo' }],
     }),
   ).toBe('model');
   expect(
-    resolveMasonryNodeIcon({
+    resolveNodeCardIcon({
       type: 'UpscaleModelLoader',
       widgets: [{ name: 'model_name', type: 'combo' }],
     }),
   ).toBe('model');
   expect(
-    resolveMasonryNodeIcon({
+    resolveNodeCardIcon({
       type: 'Custom',
       inputs: [{ name: 'clip', type: 'CLIP' }],
       widgets: [{ name: 'lora_strength', type: 'number' }],
@@ -89,8 +85,6 @@ test('infers sampler workers before model pickers and keeps model links and nume
 });
 
 test('does not invent an icon for an unknown custom card or treat titles as URLs', () => {
-  expect(
-    resolveMasonryNodeIcon({ type: 'Custom', title: '<img src=x onerror=alert(1)>' }),
-  ).toBeNull();
-  expect(resolveMasonryNodeIcon({ type: 'Custom', title: 'Model Loader' })).toBeNull();
+  expect(resolveNodeCardIcon({ type: 'Custom', title: '<img src=x onerror=alert(1)>' })).toBeNull();
+  expect(resolveNodeCardIcon({ type: 'Custom', title: 'Model Loader' })).toBeNull();
 });

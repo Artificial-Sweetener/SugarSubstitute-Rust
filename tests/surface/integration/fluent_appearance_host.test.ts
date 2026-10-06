@@ -63,6 +63,7 @@ test('keeps controls and explicit custom styling intact while restoring the curr
   expect(root.hasAttribute('data-sc-fluent-node')).toBe(false);
   custom.focus();
   host.setEnabled(true);
+  expect(document.querySelector('.sc-fluent-scrollbar-layer')).not.toBeNull();
   frames.splice(0).forEach((frame) => frame(0));
   expect(document.activeElement).toBe(custom);
   expect(custom.style.backgroundColor).toBe('rgb(12, 34, 56)');
@@ -84,6 +85,7 @@ test('keeps controls and explicit custom styling intact while restoring the curr
   values.set('Comfy.VueNodes.Enabled', false);
   events.dispatchEvent(new Event('Comfy.VueNodes.Enabled.change'));
   await Promise.resolve();
+  expect(document.querySelector('.sc-fluent-scrollbar-layer')).toBeNull();
   expect(root.hasAttribute('data-sc-fluent-node')).toBe(false);
   values.set('Comfy.VueNodes.Enabled', true);
   events.dispatchEvent(new Event('Comfy.VueNodes.Enabled.change'));
@@ -91,6 +93,7 @@ test('keeps controls and explicit custom styling intact while restoring the curr
   frames.splice(0).forEach((frame) => frame(0));
   expect(root.hasAttribute('data-sc-fluent-node')).toBe(true);
   host.setEnabled(false);
+  expect(document.querySelector('.sc-fluent-scrollbar-layer')).toBeNull();
   expect(root.style.getPropertyValue('--node-component-surface')).toBe('#fedcba');
   expect(custom.value).toBe('<img src=x>');
   expect(root.querySelector('img')).toBeNull();
@@ -110,9 +113,9 @@ function nativeLabelVNode(
   return { type: { __name: name }, component: { props, subTree: { el: element, children } } };
 }
 
-test('formats masonry labels and restores source text across presentation and renderer changes', async () => {
+test('formats projected card labels and restores source text across presentation and renderer changes', async () => {
   const masonry = document.createElement('section');
-  masonry.className = 'sugarcubes-workflow-masonry';
+  masonry.className = 'sugarcubes-cube-face__node-card';
   const mount = document.createElement('div');
   mount.className = 'sugarcubes-native-node-card';
   const root = document.createElement('div');
@@ -182,6 +185,8 @@ test('formats masonry labels and restores source text across presentation and re
   expect(text.textContent).toBe('Mahiro CFG');
   expect(label.textContent).toBe('Sampler');
   expect(nodeData.title).toBe('mahiro CFG');
+  await Promise.resolve();
+  frames.splice(0).forEach((frame) => frame(0));
   await Promise.resolve();
   frames.splice(0).forEach((frame) => frame(0));
   await Promise.resolve();

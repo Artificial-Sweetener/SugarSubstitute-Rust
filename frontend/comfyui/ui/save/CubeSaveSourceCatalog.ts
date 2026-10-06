@@ -29,6 +29,7 @@ import {
   normalizeRevisionRef,
 } from '../core/CubeDefinitionKey.js';
 import { InstanceBuilder } from '../graph/InstanceBuilder.js';
+import { encodeModelRequirement } from '../cube/ModelRequirement.js';
 import { getGraphGroups } from '../graph/GraphQuery.js';
 import { getGroupSugarcubes } from '../graph/GroupMetadata.js';
 import type { CubeInstance } from '../graph/InstanceBuilder.js';
@@ -99,6 +100,7 @@ export class CubeSaveSourceCatalog {
         cubeNodeId: instance.nodeId,
         surfaceSize: instance.surfaceSize,
         surfaceState: instance.surfaceState,
+        modelRequirements: instance.modelRequirements ?? null,
       });
     }
 
@@ -223,6 +225,13 @@ export class CubeSaveSourceCatalog {
       ...(defaultAlias ? { default_alias: defaultAlias } : {}),
       target_model: targetModel,
       supported_models: normalizeSupportedModels(supportedSource, { targetModel }),
+      ...(sourceMetadata?.selectedSourceEntry?.modelRequirements
+        ? {
+            model_requirements: encodeModelRequirement(
+              sourceMetadata.selectedSourceEntry.modelRequirements,
+            ),
+          }
+        : {}),
       ...(sourceMetadata?.selectedSourceEntry?.surfaceSize
         ? { surface_size: [...sourceMetadata.selectedSourceEntry.surfaceSize] as Vec2 }
         : {}),

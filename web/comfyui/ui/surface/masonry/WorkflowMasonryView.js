@@ -57,6 +57,7 @@ export class WorkflowMasonryView {
             }
         }
         const pending = [];
+        let projectionOrder = 0;
         for (const section of sections) {
             let view = this.#views.get(section.id);
             if (!view) {
@@ -69,6 +70,11 @@ export class WorkflowMasonryView {
                 this.#views.set(section.id, view);
             }
             pending.push(...view.prepare(section, renderer));
+            for (const card of section.cards) {
+                const cell = view.cells.get(card.id);
+                if (cell)
+                    cell.dataset.scProjectionOrder = String(projectionOrder++);
+            }
         }
         this.#content.querySelector('.sugarcubes-workflow-masonry__empty')?.remove();
         if (sections.length === 0) {

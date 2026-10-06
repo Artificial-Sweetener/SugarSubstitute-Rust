@@ -18,6 +18,7 @@
 import type { CubePreviewActions } from './CubePreviewActions.js';
 import type { CubePreviewItem } from './CubePreviewModel.js';
 import type { UnknownRecord } from '../types/common.js';
+import { ContextMenu } from '../menus/ContextMenu.js';
 
 export interface ComfyPreviewMenuOption {
   content: string;
@@ -139,12 +140,16 @@ export function createComfyCubePreviewActions(
       ]);
     },
     showContextMenu: (options, event) => {
-      const ContextMenu = host.liteGraph.ContextMenu;
-      if (typeof ContextMenu !== 'function') {
-        host.logger.warn('SugarCubes could not open Comfy image actions: ContextMenu is missing.');
-        return;
-      }
-      Reflect.construct(ContextMenu, [options, { event }]);
+      new ContextMenu(host.document).open({
+        label: 'Image actions',
+        anchor: { kind: 'pointer', x: event.clientX, y: event.clientY },
+        entries: options.map((option) => ({
+          label: option.content,
+          select: () => {
+            void option.callback();
+          },
+        })),
+      });
     },
     reportError: (message, error) => host.logger.error(message, error),
   });

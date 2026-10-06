@@ -17,6 +17,15 @@
 /** Keep interaction styling scoped to positively identified native presentation boundaries. */
 export function fluentInteractionCss() {
     return `
+    [data-sc-boolean-native] { display:none !important; }
+    [data-sc-boolean-checkbox] { flex:none; }
+    [data-sc-boolean-control] {
+      display:inline-flex; flex-direction:row; align-items:center; gap:8px;
+      cursor:pointer; color:var(--colorNeutralForeground1); white-space:nowrap;
+    }
+    [data-sc-boolean-control]:has([data-sc-boolean-checkbox][disabled]) {
+      cursor:default; color:var(--colorNeutralForegroundDisabled);
+    }
     [data-sc-fluent-node] [data-testid="node-collapse-button"][hidden] { display:none !important; }
     [data-sc-toggle-row], [data-sc-fluent-node] [data-testid="advanced-inputs-button"] {
       cursor:pointer; transition:background-color var(--durationFast) var(--curveEasyEase);
@@ -30,7 +39,6 @@ export function fluentInteractionCss() {
       background:var(--colorNeutralBackground1Pressed);
     }
     [data-sc-toggle-row]:focus-visible { outline:2px solid var(--colorBrandStroke1); outline-offset:-2px; }
-    [data-sc-toggle-state] { color:var(--colorNeutralForeground2); font-size:12px; white-space:nowrap; }
     [data-sc-titlebar-action] {
       position:relative; cursor:pointer;
       transition:background-color var(--durationFast) var(--curveEasyEase);
@@ -76,7 +84,8 @@ export function fluentInteractionCss() {
     [data-sc-fluent-edit-frame] textarea:focus {
       background:var(--colorNeutralBackground1); outline:none;
     }
-    [data-sc-fluent-row][data-sc-fluent-widget^="WidgetInputNumber"] [data-sc-fluent-layout] > :last-child > :first-child {
+    [data-sc-fluent-row][data-sc-fluent-widget^="WidgetInputNumber"] [data-sc-fluent-layout] > :last-child > :first-child,
+    [data-sc-fluent-row][data-sc-fluent-widget="WidgetSelect"] [data-sc-fluent-layout] > :last-child > :first-child {
       --tw-ring-shadow:0 0 transparent; --tw-ring-color:transparent;
     }
     @media (prefers-reduced-motion:reduce) {

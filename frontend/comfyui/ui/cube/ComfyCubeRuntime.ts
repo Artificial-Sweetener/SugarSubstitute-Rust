@@ -78,7 +78,10 @@ import type {
 } from '../surface/CubeFaceChromeActions.js';
 import { CubePortPresentationController } from './connection/CubePortPresentationController.js';
 import type { ProximityMatchSink } from '../overlays/proximity/ProximityModel.js';
-import { ComfyCanvasGraphChangeAdapter } from '../surface/ComfyCanvasGraphChangeAdapter.js';
+import {
+  ComfyCanvasGraphChangeAdapter,
+  type CanvasGraphChangeSource,
+} from '../surface/ComfyCanvasGraphChangeAdapter.js';
 import {
   createComfyRendererModeChangeSource,
   resolveComfyRendererMode,
@@ -131,6 +134,7 @@ export interface ComfyCubeRuntime {
   authoring: ComfyCubeAuthoringAdapter;
   nodes: CubeNodeCatalog;
   cardState: CubeFaceCardStateService;
+  graphChanges: CanvasGraphChangeSource;
   versionAvailability: CubeVersionAvailabilityService;
   versionSwitch: CubeVersionSwitchService;
   graphScope: ComfyCubePlacementRuntime['graphScope'];
@@ -489,6 +493,7 @@ export function createComfyCubeRuntime(options: ComfyCubeRuntimeOptions): ComfyC
     authoring,
     nodes,
     cardState,
+    graphChanges: canvasGraphChanges,
     versionAvailability,
     versionSwitch,
     graphScope,

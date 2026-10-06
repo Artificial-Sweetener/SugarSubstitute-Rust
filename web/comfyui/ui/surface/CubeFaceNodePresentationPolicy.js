@@ -17,6 +17,8 @@
 import { isRecord } from '../types/common.js';
 import { findCubeFacePromptWidget } from './CubeFacePromptPolicy.js';
 import { cubeFaceUnconsumedWidgets, cubeFaceVisibleWidgets } from './CubeFaceWidgetPolicy.js';
+import { projectNativeWidgetOrigins } from './NativeWidgetOrigins.js';
+import { nativeAdvancedInputControl } from './NativeAdvancedInputControl.js';
 /** Match the compact native bottom margin above ordinary Cube-face widget stacks. */
 export const CUBE_FACE_WIDGET_PADDING = 6;
 const PROMPT_WIDGET_TOP_PADDING = 2;
@@ -32,7 +34,7 @@ function createCubeFaceFlags(flags) {
     };
 }
 /** Create safe Comfy Vue render data with only controls still owned by the node. */
-export function createCubeFaceNodeData(nodeData, node) {
+export function createCubeFaceNodeData(nodeData, node, refresh = () => undefined) {
     const visibleNames = new Set(cubeFaceVisibleWidgets(node).map((widget) => widget.name));
     const widgets = Array.isArray(nodeData.widgets)
         ? nodeData.widgets.filter((widget) => isRecord(widget) && visibleNames.has(String(widget.name)))
@@ -45,7 +47,9 @@ export function createCubeFaceNodeData(nodeData, node) {
         },
         inputs: [],
         outputs: [],
-        widgets,
+        widgets: projectNativeWidgetOrigins(node, widgets),
+        sugarcubesEditorWidgets: cubeFaceUnconsumedWidgets(node),
+        sugarcubesAdvancedInputs: nativeAdvancedInputControl(node, refresh),
     };
 }
 /** Expose expanded slotless state during one native operation, then restore exact ownership. */

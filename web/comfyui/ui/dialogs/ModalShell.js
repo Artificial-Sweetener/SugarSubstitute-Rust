@@ -18,10 +18,12 @@
  */
 import { $el } from '/scripts/ui.js';
 import { injectDialogStyles } from './DialogStyles.js';
+import { ModalAppearance } from './ModalAppearance.js';
 /**
  * Coordinate shared modal shell behavior for SugarCubes dialogs.
  */
 export class ModalShell {
+    appearance = new ModalAppearance();
     documentRef;
     windowRef;
     variantClassName;
@@ -105,6 +107,7 @@ export class ModalShell {
             actions,
         };
     }
+    /** Open an owned, themed dialog while preserving the caller's form and result contract. */
     open({ title = '', description = [], body = [], footerMeta = [], confirmLabel = 'Confirm', cancelLabel = 'Cancel', confirmClassName = '', cancelResult = null, allowEscapeClose = true, allowOverlayClose = true, showCancel = true, onConfirm = null, initialFocus = null, } = {}) {
         this.ensureElements();
         const { overlay, dialog, content, titleEl, confirmButton, cancelButton } = this.elements;
@@ -124,6 +127,7 @@ export class ModalShell {
         const activeElement = this.documentRef?.activeElement;
         this.previousActiveElement = activeElement instanceof HTMLElement ? activeElement : null;
         overlay.classList.add('is-visible');
+        this.appearance.open(overlay);
         overlay.style.display = 'flex';
         titleEl.textContent = title || '';
         this.setDescription(description);
@@ -165,6 +169,7 @@ export class ModalShell {
             this.resolver = resolve;
         });
     }
+    /** Release visible dialog resources and restore focus before resolving the caller. */
     close(result) {
         if (!this.elements.overlay) {
             return;
@@ -174,6 +179,7 @@ export class ModalShell {
             this.keydownHandler = null;
         }
         this.elements.overlay.classList.remove('is-visible');
+        this.appearance.close();
         this.elements.overlay.style.display = 'none';
         this.options = {};
         this.focusTarget = null;

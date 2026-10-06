@@ -16,7 +16,7 @@
 /** Verify reversible native presentation, edits, cancellation, and renderer fallback. */
 import { afterEach, describe, expect, jest, test } from '@jest/globals';
 import { WorkflowMasonryController } from '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryController.js';
-import { NativeForwardedWidgetLease } from '../../../frontend/comfyui/ui/surface/masonry/NativeForwardedWidgetLease.js';
+import { NativeForwardedWidgetLease } from '../../../frontend/comfyui/ui/surface/NativeForwardedWidgetLease.js';
 import type { NativeNodeCardRenderer } from '../../../frontend/comfyui/ui/surface/NativeNodeCardRenderer.js';
 import { CubeFaceCardStateService } from '../../../frontend/comfyui/ui/surface/CubeFaceCardStateService.js';
 import { projectWorkflowMasonry } from '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryProjection.js';
@@ -88,6 +88,13 @@ describe('workflow masonry controller', () => {
     expect(document.activeElement).toBe(input);
     expect(setup.mount).toHaveBeenCalledTimes(2);
     expect(setup.unmount).not.toHaveBeenCalled();
+    const cells = [...document.querySelectorAll<HTMLElement>('[data-masonry-card]')];
+    expect(cells.map((cell) => cell.dataset.scProjectionOrder)).toEqual(['0', '1']);
+    section.cards.reverse();
+    await setup.controller.graphChanged();
+    expect(cells.map((cell) => cell.dataset.scProjectionOrder)).toEqual(['1', '0']);
+    expect(document.querySelector('input')).toBe(input);
+    expect(setup.mount).toHaveBeenCalledTimes(2);
     setup.controller.leaveImmediately();
   });
   test('reuses the optional-node menu and activation switch while keeping the live section and scroll surface', async () => {
@@ -293,7 +300,7 @@ describe('workflow masonry controller', () => {
     expect(setup.controller.active).toBe(false);
   });
 
-  test('uses the SugarCubes modal once for active Nodes 1 fallback and preserves edits', async () => {
+  test('notifies once without blocking active Nodes 1 fallback and preserves edits', async () => {
     const setup = fixture();
     const nativeAlert = jest.spyOn(window, 'alert').mockImplementation(() => undefined);
     await setup.controller.toggle();
@@ -301,11 +308,9 @@ describe('workflow masonry controller', () => {
     setup.controller.rendererChanged();
     setup.controller.rendererChanged();
     await setup.controller.toggle();
-    expect(setup.alert).toHaveBeenCalledTimes(1);
-    expect(setup.alert).toHaveBeenCalledWith(
-      'Masonry requires Nodes 2.0',
-      'SugarCubes masonry does not support Nodes 1.0. Your workflow is now displayed in graph mode.',
-    );
+    expect(setup.notifyRendererFallback).toHaveBeenCalledTimes(1);
+    expect(setup.notifyRendererFallback).toHaveBeenCalledWith();
+    expect(document.querySelector('.sugarcubes-modal-overlay')).toBeNull();
     expect(nativeAlert).not.toHaveBeenCalled();
     expect(setup.controller.active).toBe(false);
     expect(setup.unmount).toHaveBeenCalledTimes(1);
@@ -314,6 +319,22 @@ describe('workflow masonry controller', () => {
     await setup.controller.toggle();
     expect(setup.controller.active).toBe(true);
     setup.controller.leaveImmediately();
+  });
+
+  test('keeps graph fallback complete when its notification adapter fails', async () => {
+    const setup = fixture();
+    const failure = new Error('Toast transport unavailable.');
+    setup.notifyRendererFallback.mockImplementation(() => {
+      throw failure;
+    });
+    await setup.controller.toggle();
+    setup.setNodes2(false);
+    expect(() => setup.controller.rendererChanged()).not.toThrow();
+    expect(setup.controller.active).toBe(false);
+    expect(setup.unmount).toHaveBeenCalledTimes(1);
+    expect(setup.reportError).toHaveBeenCalledWith(failure);
+    expect(document.querySelector('.sugarcubes-workflow-masonry')).toBeNull();
+    expect(document.querySelector('.sugarcubes-modal-overlay')).toBeNull();
   });
 
   test('recovers graph presentation and reports native mount failure', async () => {
@@ -372,9 +393,7 @@ function fixture() {
   });
   const renderer: NativeNodeCardRenderer = { mount, dispose() {} };
   const getRenderer = jest.fn<() => Promise<NativeNodeCardRenderer>>().mockResolvedValue(renderer);
-  const alert = jest
-    .fn<(title: string, message: string) => Promise<unknown>>()
-    .mockResolvedValue(true);
+  const notifyRendererFallback = jest.fn<() => void>();
   const reportError = jest.fn();
   let nodes2 = true;
   const sections: WorkflowMasonrySection[] = [
@@ -405,7 +424,7 @@ function fixture() {
     getSections,
     getRenderer,
     getCardState: () => cardState,
-    alert,
+    notifyRendererFallback,
     reportError,
     openCube() {},
     onStateChange() {},
@@ -422,7 +441,7 @@ function fixture() {
     unmount,
     getRenderer,
     getCardState: () => cardState,
-    alert,
+    notifyRendererFallback,
     reportError,
     setNodes2: (value: boolean) => {
       nodes2 = value;

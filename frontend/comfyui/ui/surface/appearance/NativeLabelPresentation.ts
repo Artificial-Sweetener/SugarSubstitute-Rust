@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Own masonry-only display text without changing native Vue models or custom controls. */
+/** Own projected-card display text without changing native Vue models or custom controls. */
 import { formatFluentDisplayLabel } from './FluentDisplayLabels.js';
 
 interface PresentedLabel {
@@ -25,7 +25,7 @@ interface PresentedLabel {
 export class NativeLabelPresentation {
   readonly #cards = new Map<HTMLElement, Map<Text, PresentedLabel>>();
 
-  /** Format masonry labels and restore native text when a card returns to the graph. */
+  /** Format projected-card labels and restore native text when a card returns to the graph. */
   reconcile(root: HTMLElement, elements: readonly HTMLElement[]): void {
     for (const [card, labels] of this.#cards) {
       if (!card.isConnected) {
@@ -33,7 +33,7 @@ export class NativeLabelPresentation {
         this.#cards.delete(card);
       }
     }
-    if (!root.closest('.sugarcubes-workflow-masonry')) {
+    if (!root.closest('.sugarcubes-cube-face__node-card')) {
       const labels = this.#cards.get(root);
       if (labels) this.#restore(labels);
       this.#cards.delete(root);

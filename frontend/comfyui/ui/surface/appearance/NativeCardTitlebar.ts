@@ -55,8 +55,8 @@ export class NativeCardTitlebar {
     );
     const canActivate = binding.activation !== null && !binding.activation.disabled;
     const canCollapse = hasContent && binding.collapse !== null && !binding.collapse.disabled;
-    const masonry = root.closest('.sugarcubes-workflow-masonry') !== null;
-    const action = canActivate ? 'activation' : canCollapse && masonry ? 'collapse' : null;
+    const projected = root.closest('.sugarcubes-cube-face__node-card') !== null;
+    const action = canActivate ? 'activation' : canCollapse && projected ? 'collapse' : null;
     if (canActivate || canCollapse) header.dataset.scTitlebarControls = '';
     else delete header.dataset.scTitlebarControls;
     const title = header.querySelector('[data-testid="node-title"]')?.textContent?.trim() ?? 'node';

@@ -52,6 +52,7 @@ export function resolveCubeFaceCardPresentation(
   nodes: readonly ComfyNode[],
   state: CubeSurfaceState,
   graph?: ComfyGraph,
+  additionalControlNodes: ReadonlySet<ComfyNode> = new Set(),
 ): CubeFaceCardPresentation {
   const cards: CubeFaceCardDecision[] = [];
   const menuEntries: CubeFaceCardMenuEntry[] = [];
@@ -65,7 +66,10 @@ export function resolveCubeFaceCardPresentation(
       cubeFaceNodeAllowsActivationControl(node) &&
       (reveal.revealable || inferCubeFaceTransformSignals(node).size > 0);
     const eligible =
-      cubeFaceNodeHasVisibleWidgets(node) || showActivationControl || reveal.revealable;
+      cubeFaceNodeHasVisibleWidgets(node) ||
+      additionalControlNodes.has(node) ||
+      showActivationControl ||
+      reveal.revealable;
     if (!eligible) return;
     const label = node.title?.trim() || node.type?.trim() || `Node ${String(index + 1)}`;
     if (reveal.revealable) {

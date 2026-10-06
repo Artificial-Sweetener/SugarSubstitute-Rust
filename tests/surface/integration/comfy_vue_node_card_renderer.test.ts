@@ -19,8 +19,53 @@ import { describe, expect, jest, test } from '@jest/globals';
 
 import { ComfyVueNodeCardRenderer } from '../../../frontend/comfyui/ui/surface/ComfyVueNodeCardRenderer.js';
 import type { ComfyNode } from '../../../frontend/comfyui/ui/types/graph.js';
+import { refreshNativeNodeCards } from '../../../frontend/comfyui/ui/surface/NativeNodeCardRefresh.js';
+import { isRecord } from '../../../frontend/comfyui/ui/types/common.js';
 
 describe('ComfyVueNodeCardRenderer', () => {
+  test('refreshes published native choices on surviving card mounts and releases the subscription on unmount', () => {
+    const target = document.createElement('div');
+    const root = document.createElement('div');
+    root.className = 'lg-node';
+    document.body.append(target);
+    let choices: string[] = [];
+    const h = jest.fn((_component: unknown, props: unknown) => ({ props }));
+    const renderer = new ComfyVueNodeCardRenderer({
+      component: { __name: 'LGraphNode' },
+      appContext: {},
+      runtime: {
+        h,
+        render: (vnode) => {
+          if (vnode !== null) target.append(root);
+        },
+        extractVueNodeData: () => ({
+          id: 'empty-native-field',
+          widgets: [{ name: 'ckpt_name', type: 'combo', options: { values: [...choices] } }],
+        }),
+      },
+    });
+    const mount = renderer.mount(
+      target,
+      { id: 'empty-native-field', widgets: [{ name: 'ckpt_name', type: 'combo', value: '' }] },
+      { preserveNativeBody: true },
+    );
+    const origin = target.querySelector('.lg-node');
+    choices = ['verified-fixture.safetensors'];
+    refreshNativeNodeCards(document);
+    expect(h).toHaveBeenCalledTimes(2);
+    expect(h.mock.lastCall?.[1]).toEqual(
+      expect.objectContaining({
+        nodeData: expect.objectContaining({
+          widgets: [expect.objectContaining({ options: { values: choices } })],
+        }),
+      }),
+    );
+    expect(target.querySelector('.lg-node')).toBe(origin);
+    mount.unmount();
+    refreshNativeNodeCards(document);
+    expect(h).toHaveBeenCalledTimes(2);
+    target.remove();
+  });
   test('blocks native wheel forwarding in masonry while preserving custom wheel handlers and scrolling', () => {
     const surface = document.createElement('section');
     surface.className = 'sugarcubes-workflow-masonry';
@@ -76,41 +121,75 @@ describe('ComfyVueNodeCardRenderer', () => {
     header.dispatchEvent(new WheelEvent('wheel', { bubbles: true }));
     expect(forwardedWheel).toHaveBeenCalledTimes(2);
   });
-  test('renders a promoted Cube control with its real owner identity and callback', () => {
-    const target = document.createElement('div');
-    const owner: ComfyNode = { id: 'cube', widgets: [{ name: 'prompt' }] };
-    const internal: ComfyNode = {
-      id: 'internal',
-      widgets: [{ name: 'text' }],
-      inputs: [{ name: 'text', widget: { name: 'text' }, link: 7 }],
-    };
-    const callback = jest.fn();
-    const h = jest.fn();
-    const renderer = new ComfyVueNodeCardRenderer({
-      component: {},
-      appContext: {},
-      runtime: {
-        render() {},
-        h: (_component, props) => {
-          h(props);
-          return {};
+  test.each([false, true])(
+    'renders a promoted Cube control with its real owner identity and callback (subgraph=%s)',
+    (subgraph) => {
+      const target = document.createElement('div');
+      const owner: ComfyNode = { id: 'cube', widgets: [{ name: 'prompt' }] };
+      if (subgraph)
+        Object.assign(owner, {
+          type: 'boundary-uuid',
+          subgraph: {},
+          isSubgraphNode: () => true,
+          inputs: [{ name: 'prompt', widget: { name: 'prompt' } }],
+          resolveSubgraphInputLinks: () => [
+            {
+              inputNode: {
+                id: 'loader',
+                type: 'SimpleSyrup.LoadUltralyticsModel',
+                inputs: [{ name: 'model_name', widget: { name: 'model_name' } }],
+              },
+              link: { target_slot: 0 },
+            },
+          ],
+        });
+      const internal: ComfyNode = {
+        id: 'internal',
+        widgets: [{ name: 'text' }],
+        inputs: [{ name: 'text', widget: { name: 'text' }, link: 7 }],
+      };
+      const callback = jest.fn();
+      const h = jest.fn();
+      const renderer = new ComfyVueNodeCardRenderer({
+        component: {},
+        appContext: {},
+        runtime: {
+          render() {},
+          h: (_component, props) => {
+            h(props);
+            return {};
+          },
+          extractVueNodeData: (node) => ({
+            id: node.id,
+            widgets: node === owner ? [{ name: 'prompt', widgetId: 'cube:prompt', callback }] : [],
+          }),
         },
-        extractVueNodeData: (node) => ({
-          id: node.id,
-          widgets: node === owner ? [{ name: 'prompt', widgetId: 'cube:prompt', callback }] : [],
+      });
+      const mount = renderer.mount(target, internal, {
+        widgetSources: [{ node: owner, name: 'prompt', targetName: 'text' }],
+      });
+      expect(h).toHaveBeenCalledWith({
+        key: false,
+        nodeData: expect.objectContaining({
+          widgets: [
+            {
+              name: 'text',
+              widgetId: 'cube:prompt',
+              callback,
+              ...(subgraph
+                ? {
+                    sugarcubesNativeWidgetOrigins: [
+                      { classType: 'SimpleSyrup.LoadUltralyticsModel', inputName: 'model_name' },
+                    ],
+                  }
+                : {}),
+            },
+          ],
         }),
-      },
-    });
-    const mount = renderer.mount(target, internal, {
-      widgetSources: [{ node: owner, name: 'prompt', targetName: 'text' }],
-    });
-    expect(h).toHaveBeenCalledWith({
-      nodeData: expect.objectContaining({
-        widgets: [{ name: 'text', widgetId: 'cube:prompt', callback }],
-      }),
-    });
-    mount.unmount();
-  });
+      });
+      mount.unmount();
+    },
+  );
   test('isolates masonry measurements and preserves widgetless native custom content', async () => {
     const target = document.createElement('div');
     const root = document.createElement('div');
@@ -193,6 +272,7 @@ describe('ComfyVueNodeCardRenderer', () => {
 
     expect(extractVueNodeData).toHaveBeenCalledWith(node);
     expect(h).toHaveBeenCalledWith(component, {
+      key: false,
       nodeData: expect.objectContaining({
         id: 'inside-1',
         inputs: [],
@@ -335,103 +415,76 @@ describe('ComfyVueNodeCardRenderer', () => {
     expect(nativeRoot.style.getPropertyValue('--min-node-width')).toBe('');
   });
 
-  test('preserves Comfy native advanced-input controls and refreshes after interaction', async () => {
+  test('retains the native advanced footer while expanded and shares disclosure with the context menu', () => {
     const node: ComfyNode = {
       id: 'advanced-node',
       type: 'KSampler',
       showAdvanced: false,
+      widgets: [{ name: 'tile_size', type: 'number', value: 512, options: { advanced: true } }],
     };
     const nativeRoot = document.createElement('div');
     nativeRoot.className = 'lg-node';
     const footer = document.createElement('div');
     const advancedInputs = document.createElement('button');
     advancedInputs.dataset.testid = 'advanced-inputs-button';
-    advancedInputs.textContent = 'Show advanced inputs';
-    const toggleAdvanced = jest.fn();
-    let draggingNativeNode = false;
-    let suppressNextClick = false;
-    nativeRoot.addEventListener('pointerdown', () => {
-      draggingNativeNode = true;
-    });
-    nativeRoot.addEventListener('pointerup', () => {
-      draggingNativeNode = false;
-    });
-    advancedInputs.addEventListener('pointerup', () => {
-      suppressNextClick = draggingNativeNode;
-    });
-    advancedInputs.addEventListener('click', (event) => {
-      event.stopPropagation();
-      if (suppressNextClick) {
-        suppressNextClick = false;
-        return;
-      }
-      const nextShowAdvanced = !node.showAdvanced;
-      toggleAdvanced();
-      queueMicrotask(() => {
-        node.showAdvanced = nextShowAdvanced;
-        advancedInputs.textContent = nextShowAdvanced
-          ? 'Hide advanced inputs'
-          : 'Show advanced inputs';
-      });
-    });
     footer.append(advancedInputs);
     nativeRoot.append(footer);
     const target = document.createElement('div') as HTMLDivElement & { _vnode?: unknown };
+    let projected: unknown;
+    const nativeKeys: unknown[] = [];
     const extractVueNodeData = jest.fn(() => ({
       id: 'advanced-node',
       showAdvanced: node.showAdvanced,
     }));
-    const h = jest.fn((_component: unknown, props: unknown) => ({ type: 'node', props }));
     const renderer = new ComfyVueNodeCardRenderer({
       component: { __name: 'LGraphNode' },
       appContext: {},
       runtime: {
+        h: (_component, props) => {
+          nativeKeys.push(props.key);
+          projected = props.nodeData;
+          return { type: 'node' };
+        },
+        extractVueNodeData,
         render: (vnode) => {
           if (vnode === null) return;
           target.append(nativeRoot);
           target._vnode = {
-            component: {
-              subTree: {
-                children: [componentVNode('NodeFooter', footer)],
-              },
-            },
+            component: { subTree: { children: [componentVNode('NodeFooter', footer)] } },
           };
         },
-        h,
-        extractVueNodeData,
       },
     });
-
     const mount = renderer.mount(target, node);
-    clickNativeControl(advancedInputs);
-    await flushNativeControlUpdate();
-
+    if (!isRecord(projected) || !isRecord(projected.sugarcubesAdvancedInputs))
+      throw new Error('Missing advanced capability');
+    const control = projected.sugarcubesAdvancedInputs;
+    if (typeof control.setShown !== 'function') throw new Error('Missing setter');
     expect(footer.hidden).toBe(false);
-    expect(footer.style.getPropertyValue('display')).toBe('');
-    expect(advancedInputs.hidden).toBe(false);
-    expect(toggleAdvanced).toHaveBeenCalledTimes(1);
-    expect(extractVueNodeData).toHaveBeenCalledTimes(2);
-    expect(h).toHaveBeenLastCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        nodeData: expect.objectContaining({ showAdvanced: true }),
-      }),
-    );
-
-    clickNativeControl(advancedInputs);
-    await flushNativeControlUpdate();
-    expect(extractVueNodeData).toHaveBeenCalledTimes(3);
-    expect(h).toHaveBeenLastCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        nodeData: expect.objectContaining({ showAdvanced: false }),
-      }),
-    );
-
+    const nativeToggle = jest.fn();
+    advancedInputs.addEventListener('click', nativeToggle);
+    advancedInputs.click();
+    expect(node.showAdvanced).toBe(true);
+    expect(nativeToggle).not.toHaveBeenCalled();
+    expect(footer.hidden).toBe(false);
+    advancedInputs.click();
+    expect(node.showAdvanced).toBe(false);
+    expect(nativeKeys).toEqual([false, true, false]);
+    node.flags = { collapsed: true };
+    mount.refresh();
+    control.setShown(true);
+    expect(node.showAdvanced).toBe(true);
+    expect(node.flags.collapsed).toBe(true);
+    expect(footer.hidden).toBe(true);
+    node.flags.collapsed = false;
+    mount.refresh();
+    expect(footer.hidden).toBe(false);
+    expect(extractVueNodeData).toHaveBeenCalledTimes(6);
     mount.unmount();
-    clickNativeControl(advancedInputs);
-    await flushNativeControlUpdate();
-    expect(extractVueNodeData).toHaveBeenCalledTimes(3);
+    control.setShown(false);
+    expect(extractVueNodeData).toHaveBeenCalledTimes(6);
+    advancedInputs.click();
+    expect(nativeToggle).toHaveBeenCalledTimes(1);
   });
 
   test('collapses a badge-only card to its native title row', () => {
@@ -740,19 +793,6 @@ function componentVNode(name: string, element: HTMLElement): unknown {
       },
     },
   };
-}
-
-/** Dispatch the complete pointer sequence produced by a real control click. */
-function clickNativeControl(control: HTMLElement): void {
-  control.dispatchEvent(new Event('pointerdown', { bubbles: true }));
-  control.dispatchEvent(new Event('pointerup', { bubbles: true }));
-  control.click();
-}
-
-/** Flush Comfy's reactive state update and SugarCubes' deferred card refresh. */
-async function flushNativeControlUpdate(): Promise<void> {
-  await Promise.resolve();
-  await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
 }
 
 /** Build the semantic title hierarchy shared by supported Comfy NodeHeader releases. */

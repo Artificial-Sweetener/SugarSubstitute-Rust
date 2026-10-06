@@ -26,6 +26,7 @@ import type {
 } from '../../../frontend/comfyui/ui/layout/CubeContainmentService.js';
 import type { CubeCollisionService } from '../../../frontend/comfyui/ui/layout/CubeCollisionService.js';
 import type * as UiIndexModule from '../../../frontend/comfyui/ui/index.js';
+import { subscribeNativeNodeCardRefresh } from '../../../frontend/comfyui/ui/surface/NativeNodeCardRefresh.js';
 
 type EnforceForNodes = CubeContainmentService['enforceForNodes'];
 type BuildContainmentIndex = CubeContainmentService['buildIndex'];
@@ -172,6 +173,20 @@ beforeEach(() => {
 });
 
 describe('ui hooks and scheduling', () => {
+  test('publishes Comfy native-choice refresh to projected-card owners', async () => {
+    await loadUi();
+    const extension = app._extensions[0];
+    const refresh = extension?.refreshComboInNodes;
+    if (typeof refresh !== 'function') throw new Error('Missing native-choice refresh hook.');
+    const listener = jest.fn();
+    const release = subscribeNativeNodeCardRefresh(document, listener);
+    try {
+      refresh.call(extension);
+      expect(listener).toHaveBeenCalledTimes(1);
+    } finally {
+      release();
+    }
+  });
   test('picker hooks contribute, order, and preserve ordinary node creation', async () => {
     const key = 'a'.repeat(64);
     const cubeId = 'local/demo.cube';

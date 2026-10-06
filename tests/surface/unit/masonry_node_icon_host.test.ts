@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Safeguard masonry-only icon adoption across native Vue header replacement. */
 import { afterEach, expect, test } from '@jest/globals';
-import { MasonryNodeIconHost } from '../../../frontend/comfyui/ui/surface/masonry/MasonryNodeIconHost.js';
+import { NodeCardIconHost } from '../../../frontend/comfyui/ui/surface/NodeCardIconHost.js';
 
 afterEach(() => document.body.replaceChildren());
 
@@ -39,7 +39,7 @@ test('adopts one decorative icon into a replaceable header, refreshes semantics,
   cell.append(first.header);
   document.body.append(cell);
   const node = { id: 1, type: 'KSampler' };
-  const host = new MasonryNodeIconHost(cell, node);
+  const host = new NodeCardIconHost(cell, node);
   expect(first.title.querySelector('[data-masonry-node-icon]')?.getAttribute('aria-hidden')).toBe(
     'true',
   );
@@ -72,7 +72,7 @@ test('does not adopt into a graph header or a nested descendant card', () => {
   const graph = document.createElement('article');
   const native = nativeHeader();
   graph.append(native.header);
-  const host = new MasonryNodeIconHost(graph, { id: 1, type: 'KSampler' });
+  const host = new NodeCardIconHost(graph, { id: 1, type: 'KSampler' });
   expect(graph.querySelector('[data-masonry-node-icon]')).toBeNull();
   host.dispose();
   graph.dataset.masonryCard = 'outer';
@@ -80,7 +80,7 @@ test('does not adopt into a graph header or a nested descendant card', () => {
   nested.dataset.masonryCard = 'inner';
   nested.append(native.header);
   graph.append(nested);
-  const outer = new MasonryNodeIconHost(graph, { id: 1, type: 'KSampler' });
+  const outer = new NodeCardIconHost(graph, { id: 1, type: 'KSampler' });
   expect(nested.querySelector('[data-masonry-node-icon]')).toBeNull();
   outer.dispose();
 });

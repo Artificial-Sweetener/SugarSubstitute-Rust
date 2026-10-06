@@ -98,22 +98,23 @@ test('dropdown offers the host modes, tracks selection and supports keyboard/dis
   const f = fixture();
   f.arrow.click();
   expect(f.arrow.getAttribute('aria-expanded')).toBe('true');
-  expect(f.root.querySelectorAll('[role="menuitemradio"]')).toHaveLength(4);
+  expect(document.querySelectorAll('[role="menuitemradio"]')).toHaveLength(4);
   for (const [mode, filename] of Object.entries({
     fixed: 'locked',
     increment: 'add',
     decrement: 'subtract',
     randomize: 'game-die',
   })) {
-    const icon = f.root.querySelector(`[data-sc-seed-option="${mode}"] [data-sc-seed-icon]`);
+    const icon = document.querySelector(`[data-sc-seed-option="${mode}"] [data-sc-seed-icon]`);
     expect(icon?.getAttribute('aria-hidden')).toBe('true');
     expect(icon?.getAttribute('style')).toContain(`${filename}.svg`);
   }
-  const increment = f.root.querySelector<HTMLButtonElement>('[data-sc-seed-option="increment"]');
+  let increment = document.querySelector<HTMLButtonElement>('[data-sc-seed-option="increment"]');
   increment?.click();
   expect(f.field.control.readMode()).toBe('increment');
   expect(f.arrow.getAttribute('aria-expanded')).toBe('false');
   f.arrow.click();
+  increment = document.querySelector<HTMLButtonElement>('[data-sc-seed-option="increment"]');
   expect(document.activeElement).toBe(increment);
   increment?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
   expect(document.activeElement?.getAttribute('data-sc-seed-option')).toBe('decrement');

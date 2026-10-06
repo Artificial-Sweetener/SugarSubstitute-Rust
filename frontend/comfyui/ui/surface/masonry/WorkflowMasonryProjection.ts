@@ -17,16 +17,11 @@
 import type { ComfyGraph, ComfyNode, GraphId } from '../../types/graph.js';
 import type { CubeNode } from '../../cube/node/ComfyCubeNodeFactory.js';
 import { requireCubeIdentity } from '../../cube/node/ComfyCubeNodeFactory.js';
-import {
-  resolveCubeFaceCardPresentation,
-  orderNodesUpstreamFirst,
-  type CubeFaceCardDecision,
-} from '../CubeFaceCardPolicy.js';
+import { orderNodesUpstreamFirst } from '../CubeFaceCardPolicy.js';
 import { readCubeFaceCardState, type CubeFaceCardTarget } from '../CubeFaceCardStateService.js';
-import { cubeFaceCardColumnSpan } from '../CubeFacePromptPolicy.js';
-import { resolveMasonryWidgetSources } from './WorkflowMasonryWidgetSources.js';
+import { projectNodeCards, type ProjectedNodeCard } from '../NodeCardProjection.js';
 
-export interface WorkflowMasonryCard extends CubeFaceCardDecision {
+export interface WorkflowMasonryCard extends ProjectedNodeCard {
   columnSpan: number;
 }
 
@@ -69,19 +64,14 @@ export function projectWorkflowMasonry(
         label: cube.title?.trim() || 'SugarCube',
         cube,
         target: cube,
-        cards: orderedCards(cube.subgraph._nodes, cube.subgraph, `cube:${String(cube.id)}`, cube),
+        cards: orderedCards(
+          cube.subgraph._nodes,
+          cube.subgraph,
+          `cube:${String(cube.id)}`,
+          cube,
+          cube,
+        ),
       });
-      for (const card of sections[sections.length - 1]?.cards ?? []) {
-        const exposed = new Set(
-          resolveMasonryWidgetSources(cube, card.node).map((source) => source.targetName),
-        );
-        card.columnSpan = cubeFaceCardColumnSpan({
-          ...card.node,
-          inputs: (card.node.inputs ?? []).filter(
-            (input) => !exposed.has(input.widget?.name ?? ''),
-          ),
-        });
-      }
       continue;
     }
     if (!loose) {
@@ -104,12 +94,11 @@ function orderedCards(
   graph: ComfyGraph,
   prefix: string,
   target: CubeFaceCardTarget,
+  cube?: CubeNode,
 ): WorkflowMasonryCard[] {
-  return resolveCubeFaceCardPresentation(nodes, readCubeFaceCardState(target), graph).cards.map(
-    (card) => ({
-      ...card,
-      id: `${prefix}:${card.id}`,
-      columnSpan: card.columnSpan ?? 1,
-    }),
-  );
+  return projectNodeCards(nodes, readCubeFaceCardState(target), graph, cube).map((card) => ({
+    ...card,
+    id: `${prefix}:${card.id}`,
+    columnSpan: card.columnSpan ?? 1,
+  }));
 }

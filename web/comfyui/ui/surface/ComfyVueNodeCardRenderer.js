@@ -21,8 +21,10 @@ import { findCubeFacePromptWidget } from './CubeFacePromptPolicy.js';
 import { CubePromptTextareaScope } from './CubePromptTextareaScope.js';
 import { ComfyVueNodeHeaderAccessoryHost } from './ComfyVueNodeHeaderAccessoryHost.js';
 import { NativeProjectedNodeCollapse } from './NativeProjectedNodeCollapse.js';
+import { NativeProjectedAdvancedInputs } from './NativeProjectedAdvancedInputs.js';
 import { NativeProjectedNodeScrollBoundary } from './NativeProjectedNodeScrollBoundary.js';
 import { NATIVE_NODE_CARD_DISPOSE_EVENT } from './NativeNodeCardRenderer.js';
+import { subscribeNativeNodeCardRefresh } from './NativeNodeCardRefresh.js';
 /** Own native Vue mounts while leaving component rendering and widget UI to Comfy. */
 export class ComfyVueNodeCardRenderer {
     #component;
@@ -39,8 +41,6 @@ export class ComfyVueNodeCardRenderer {
     /** Mount one exact internal graph node through Comfy's active native renderer. */
     mount(target, node, options = {}) {
         let disposed = false;
-        let advancedInputsRefreshTimer = null;
-        const windowRef = target.ownerDocument.defaultView;
         const headerAccessoryHost = options.headerAccessory
             ? new ComfyVueNodeHeaderAccessoryHost(options.headerAccessory)
             : null;
@@ -48,13 +48,13 @@ export class ComfyVueNodeCardRenderer {
         const scrollBoundary = new NativeProjectedNodeScrollBoundary();
         const observer = new MutationObserver(() => {
             if (!disposed) {
-                this.#applyPresentation(target, node, headerAccessoryHost, promptTextareaScope, collapseHost, scrollBoundary, options);
+                this.#applyPresentation(target, node, headerAccessoryHost, promptTextareaScope, collapseHost, advancedInputsHost, scrollBoundary, options);
             }
         });
         const renderCard = () => {
             if (disposed)
                 return;
-            const nodeData = createCubeFaceNodeData(this.#runtime.extractVueNodeData(node), node);
+            const nodeData = createCubeFaceNodeData(this.#runtime.extractVueNodeData(node), node, renderCard);
             for (const source of options.widgetSources ?? []) {
                 const ownerData = createCubeFaceNodeData(this.#runtime.extractVueNodeData(source.node), source.node);
                 const widget = Array.isArray(ownerData.widgets)
@@ -64,7 +64,11 @@ export class ComfyVueNodeCardRenderer {
                     nodeData.widgets.push({ ...widget, name: source.targetName });
                 }
             }
-            const vnodeValue = this.#runtime.h(this.#component, { nodeData });
+            // Comfy snapshots advanced footer state at setup instead of watching native node changes.
+            const vnodeValue = this.#runtime.h(this.#component, {
+                nodeData,
+                key: node.showAdvanced === true,
+            });
             if (!isRecord(vnodeValue)) {
                 throw new TypeError('Comfy native renderer returned an invalid VNode.');
             }
@@ -72,30 +76,12 @@ export class ComfyVueNodeCardRenderer {
             this.#runtime.render(vnodeValue, target);
             target.classList.add('sugarcubes-native-node-card');
             target.dataset.cubeFaceNative = 'nodes-2';
-            this.#applyPresentation(target, node, headerAccessoryHost, promptTextareaScope, collapseHost, scrollBoundary, options);
+            this.#applyPresentation(target, node, headerAccessoryHost, promptTextareaScope, collapseHost, advancedInputsHost, scrollBoundary, options);
         };
         const collapseHost = new NativeProjectedNodeCollapse(target, node, renderCard);
-        const refreshAfterAdvancedInputsToggle = (event) => {
-            const eventTarget = event.target;
-            if (!(eventTarget instanceof Element))
-                return;
-            const toggle = eventTarget.closest('[data-testid="advanced-inputs-button"]');
-            if (!toggle || !target.contains(toggle))
-                return;
-            if (!windowRef) {
-                queueMicrotask(() => queueMicrotask(renderCard));
-                return;
-            }
-            if (advancedInputsRefreshTimer !== null) {
-                windowRef.clearTimeout(advancedInputsRefreshTimer);
-            }
-            advancedInputsRefreshTimer = windowRef.setTimeout(() => {
-                advancedInputsRefreshTimer = null;
-                renderCard();
-            }, 0);
-        };
+        const advancedInputsHost = new NativeProjectedAdvancedInputs(target, node, renderCard);
         renderCard();
-        target.addEventListener('click', refreshAfterAdvancedInputsToggle, true);
+        const releaseNativeRefresh = subscribeNativeNodeCardRefresh(target.ownerDocument, renderCard);
         observer.observe(target, { childList: true, subtree: true });
         const mount = {
             refresh: renderCard,
@@ -103,15 +89,12 @@ export class ComfyVueNodeCardRenderer {
                 if (disposed)
                     return;
                 disposed = true;
-                if (advancedInputsRefreshTimer !== null) {
-                    windowRef?.clearTimeout(advancedInputsRefreshTimer);
-                    advancedInputsRefreshTimer = null;
-                }
                 observer.disconnect();
-                target.removeEventListener('click', refreshAfterAdvancedInputsToggle, true);
+                releaseNativeRefresh();
                 target.querySelector('.lg-node')?.dispatchEvent(new Event(NATIVE_NODE_CARD_DISPOSE_EVENT));
                 promptTextareaScope.dispose();
                 collapseHost.dispose();
+                advancedInputsHost.dispose();
                 scrollBoundary.dispose();
                 headerAccessoryHost?.dispose();
                 this.#runtime.render(null, target);
@@ -127,7 +110,7 @@ export class ComfyVueNodeCardRenderer {
             mount.unmount();
     }
     /** Apply the narrow Cube-face mode to Comfy-owned component roots. */
-    #applyPresentation(target, node, headerAccessoryHost, promptTextareaScope, collapseHost, scrollBoundary, options) {
+    #applyPresentation(target, node, headerAccessoryHost, promptTextareaScope, collapseHost, advancedInputsHost, scrollBoundary, options) {
         const nativeRoot = target.querySelector('.lg-node');
         if (nativeRoot) {
             if (options.presentationGeometry) {
@@ -143,7 +126,7 @@ export class ComfyVueNodeCardRenderer {
             for (const handle of nativeRoot.querySelectorAll(':scope > [role="button"]')) {
                 handle.hidden = true;
             }
-            collapseHost.reconcile(nativeRoot);
+            collapseHost.reconcile(nativeRoot, (options.widgetSources?.length ?? 0) > 0 ? true : undefined);
             if (node.isSubgraphNode?.()) {
                 hideNativeSubgraphIcon(nativeRoot);
                 hideNativeSubgraphFooter(nativeRoot);
@@ -160,9 +143,11 @@ export class ComfyVueNodeCardRenderer {
         }
         const footerVNode = findVueComponent(targetRecord._vnode, 'NodeFooter');
         const footerRoot = resolveComponentElement(footerVNode);
-        const advancedInputs = footerRoot ? reconcileNativeFooter(footerRoot) : null;
-        if (advancedInputs)
-            this.#isolateInteractiveRoot(advancedInputs);
+        if (footerRoot) {
+            advancedInputsHost.reconcile(footerRoot);
+            if (!footerRoot.hidden)
+                this.#isolateInteractiveRoot(footerRoot);
+        }
         if (nativeRoot && !options.preserveNativeBody)
             reconcileNativeBody(nativeRoot, node);
         promptTextareaScope.reconcile(findCubeFacePromptWidget(node) !== null);
@@ -170,7 +155,7 @@ export class ComfyVueNodeCardRenderer {
         const widgetsRoot = resolveComponentElement(widgetsVNode);
         if (widgetsRoot)
             this.#isolateInteractiveRoot(widgetsRoot);
-        scrollBoundary.reconcile(nativeRoot, [advancedInputs, widgetsRoot].filter((element) => element !== null));
+        scrollBoundary.reconcile(nativeRoot, [widgetsRoot, footerRoot?.hidden ? null : footerRoot].filter((element) => element instanceof HTMLElement));
     }
     /** Keep embedded controls from initiating the projected native node's drag behavior. */
     #isolateInteractiveRoot(root) {
@@ -197,16 +182,6 @@ function annotateNativeBypassBadge(vnode, nativeRoot) {
         else
             delete element.dataset.masonryBypassBadge;
     }
-}
-/** Preserve and return only the native footer control for advanced inputs. */
-function reconcileNativeFooter(footerRoot) {
-    const advancedInputs = footerRoot.querySelector('[data-testid="advanced-inputs-button"]');
-    if (!advancedInputs) {
-        hideComponentRoot(footerRoot);
-        return null;
-    }
-    showComponentRoot(footerRoot);
-    return advancedInputs;
 }
 /** Remove the native body when Cube-face policy leaves only the title row. */
 function reconcileNativeBody(nativeRoot, node) {
@@ -245,11 +220,6 @@ function hideNativeSubgraphIcon(nativeRoot) {
 function hideComponentRoot(element) {
     element.hidden = true;
     element.style.setProperty('display', 'none', 'important');
-}
-/** Restore a Comfy-owned root previously hidden by Cube-face reconciliation. */
-function showComponentRoot(element) {
-    element.hidden = false;
-    element.style.removeProperty('display');
 }
 /** Resolve the rendered root element for one mounted component VNode. */
 function resolveComponentElement(vnode) {

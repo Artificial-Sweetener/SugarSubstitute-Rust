@@ -18,6 +18,7 @@
  */
 import { app } from '/scripts/app.js';
 import { api } from '/scripts/api.js';
+import { createEditorActionsRuntime } from './ui/editor_actions/EditorActionsComposition.js';
 import { createComfyCubeRuntime } from './ui/cube/ComfyCubeRuntime.js';
 import { ComfyCubeRuntimeLifecycle } from './ui/cube/ComfyCubeRuntimeLifecycle.js';
 import { CubePreviewRetentionStore } from './ui/surface/CubePreviewRetentionStore.js';
@@ -47,6 +48,24 @@ import { CubeHostFeedback } from './ui/core/CubeHostFeedback.js';
 import { createSugarCubesDebugApi } from './ui/debug/SugarCubesDebugApi.js';
 import { WorkflowMasonryHostLifecycle } from './ui/surface/masonry/WorkflowMasonryHostLifecycle.js';
 import { FluentAppearanceHost } from './ui/surface/appearance/FluentAppearanceHost.js';
+import { ModelPickerHost } from './ui/model_library/ModelPickerHost.js';
+import { ComfyOutputThumbnailSource } from './ui/model_library/ComfyOutputThumbnailSource.js';
+import { modelBackgroundReporter } from './ui/model_library/ModelBackgroundDiagnostics.js';
+import { ModelUpdateClient } from './ui/model_library/ModelUpdateClient.js';
+import { ModelUpdateLifecycle } from './ui/model_library/ModelUpdateLifecycle.js';
+import { ModelUpdateSettings } from './ui/model_library/ModelUpdateSettings.js';
+import { ModelProviderSettings } from './ui/model_library/ModelProviderSettings.js';
+import { ModelProviderCacheSettings } from './ui/model_library/ModelProviderCacheSettings.js';
+import { ModelProviderCacheClient } from './ui/model_library/ModelProviderCacheClient.js';
+import { ModelProviderPreferenceClient } from './ui/model_library/ModelProviderPreferences.js';
+import { ModelCatalogClient } from './ui/model_library/ModelCatalogClient.js';
+import { ModelDetectorClient } from './ui/model_library/ModelDetectorClient.js';
+import { refreshComfyModelChoices } from './ui/model_library/ComfyModelChoices.js';
+import { refreshNativeNodeCards } from './ui/surface/NativeNodeCardRefresh.js';
+import { ModelDiscoveryClient } from './ui/model_library/ModelDiscoveryClient.js';
+import { CivitaiCredentialClient } from './ui/model_library/CivitaiCredentialClient.js';
+import { ModelRootClient } from './ui/model_library/ModelRootClient.js';
+import { ModelLibrarySettings } from './ui/model_library/ModelLibrarySettings.js';
 export { buildShiftedPlacementPayload };
 const EXTENSION_NAME = 'SugarCubes.UI';
 const IMPORT_STORAGE_KEY = 'SugarCubes.Import.LastCube';
@@ -295,12 +314,13 @@ const workflowMasonry = new WorkflowMasonryHostLifecycle({
     document: documentRef ?? document,
     getCubes: () => cubeRuntimeLifecycle.current()?.nodes.list() ?? [],
     getCardState: () => cubeRuntimeLifecycle.current()?.cardState ?? null,
+    getGraphChanges: () => cubeRuntimeLifecycle.current()?.graphChanges ?? null,
     getConnections: (graph) => overlayManager.proximity
         .resolveExecutionMatches(graph)
         .flatMap((match) => match.outputId === undefined || match.inputId === undefined
         ? []
         : [{ source: match.outputId, target: match.inputId }]),
-    alert: (title, message) => ui.dialogs.alert({ title, message }),
+    notifyRendererFallback: () => pushToastMessage('info', 'Switched to graph view', 'Masonry requires Nodes 2.0.'),
     reportError: (error) => {
         logger.error('SugarCubes workflow masonry failed', { error });
         pushToastMessage('error', 'Masonry unavailable', readErrorMessage(error));
@@ -314,6 +334,56 @@ const fluentAppearance = new FluentAppearanceHost({
     reportError: (error) => {
         logger.error('SugarCubes Fluent appearance failed', { error });
         pushToastMessage('error', 'Fluent theme unavailable', readErrorMessage(error));
+    },
+});
+/** Compose shared model presentation while preserving the native widget owner. */
+const modelCatalog = new ModelCatalogClient((path, options) => api.fetchApi(path, options), () => refreshComfyModelChoices(appRef));
+const modelUpdates = new ModelUpdateClient((path, options) => api.fetchApi(path, options));
+const modelDetectors = new ModelDetectorClient((path, options) => api.fetchApi(path, options));
+/** Route update failures through the established SugarCubes feedback owner. */
+const reportModelUpdateError = (error) => {
+    logger.error('SugarCubes model update failed', { error });
+    pushToastMessage('error', 'Model updates unavailable', readErrorMessage(error));
+};
+const modelUpdateLifecycle = new ModelUpdateLifecycle(window, modelUpdates, modelBackgroundReporter(logger, 'model update lifecycle'));
+const modelUpdateSettings = new ModelUpdateSettings(documentRef ?? document, modelUpdates, reportModelUpdateError);
+const modelProviderSettings = new ModelProviderSettings(documentRef ?? document, new ModelProviderPreferenceClient((path, options) => api.fetchApi(path, options)), (error) => {
+    logger.error('SugarCubes model provider settings failed', { error });
+    pushToastMessage('error', 'Model provider settings', readErrorMessage(error));
+});
+const modelProviderCacheSettings = new ModelProviderCacheSettings(documentRef ?? document, new ModelProviderCacheClient((path, options) => api.fetchApi(path, options)), (error) => {
+    logger.error('SugarCubes model cache settings failed', { error });
+    pushToastMessage('error', 'Model cache', readErrorMessage(error));
+});
+const modelPickers = new ModelPickerHost({
+    app: appRef,
+    document: documentRef ?? document,
+    catalog: modelCatalog,
+    feedback: (severity, message) => pushToastMessage(severity, 'Model library', message),
+    updates: modelUpdates,
+    detectors: modelDetectors,
+    outputs: new ComfyOutputThumbnailSource(appRef, documentRef ?? document, (executionId) => cubeOutputExecutionStore.read(executionId)),
+    reportError: modelBackgroundReporter(logger, 'model picker'),
+    discovery: {
+        discovery: new ModelDiscoveryClient((path, options) => api.fetchApi(path, options), async () => {
+            await refreshComfyModelChoices(appRef);
+            await modelCatalog.load(true);
+        }),
+        credentials: new CivitaiCredentialClient((path, options) => api.fetchApi(path, options)),
+        cubes: () => cubeRuntimeLifecycle.current()?.nodes.list() ?? [],
+    },
+});
+const editorActions = createEditorActionsRuntime(adapter, modelCatalog, logger, hostFeedback, modelPickers);
+/** Compose shared model-root settings without duplicating persistence or dialog policy. */
+const modelLibrarySettings = new ModelLibrarySettings({
+    app: appRef,
+    document: documentRef ?? document,
+    catalog: modelCatalog,
+    roots: new ModelRootClient((path, options) => api.fetchApi(path, options)),
+    dialogs: ui.dialogs,
+    reportError: (error) => {
+        logger.error('SugarCubes model library settings failed', { error });
+        pushToastMessage('error', 'Model library unavailable', readErrorMessage(error));
     },
 });
 /** Define the ComfyUI extension lifecycle owned by SugarCubes. */
@@ -335,6 +405,9 @@ export const sugarCubesExtension = {
     registerCustomNodes() {
         cubePicker.activate();
     },
+    refreshComboInNodes() {
+        refreshNativeNodeCards(documentRef ?? document);
+    },
     getCanvasMenuItems(canvas) {
         return cubeAuthoringCommands.getCanvasMenuItems(canvas);
     },
@@ -345,6 +418,13 @@ export const sugarCubesExtension = {
         await extensionSetupLifecycle.setup();
         workflowMasonry.setup();
         fluentAppearance.setup();
+        modelPickers.setup();
+        await editorActions.setup();
+        modelLibrarySettings.setup();
+        modelUpdateSettings.setup(appRef);
+        modelProviderSettings.setup(appRef);
+        modelProviderCacheSettings.setup(appRef);
+        modelUpdateLifecycle.start();
     },
     beforeConfigureGraph(graphData) {
         workflowMasonry.beforeConfigureGraph();

@@ -26,7 +26,7 @@ afterEach(() => {
 function fixture(masonry: boolean, fields: boolean, dark = true) {
   const nativeStyle = document.createElement('style');
   nativeStyle.textContent =
-    '.native-body { padding:4px 0 12px; gap:4px; } .native-combo { height:24px; border:0; } .native-field-row,.native-header { border:0; padding:0; } .editable-text { padding:0 8px; } .native-collapse-slot { display:flex; padding:0 2px; }';
+    '.native-body { padding:4px 0 12px; gap:4px; } .native-combo { height:24px; border:0; } .native-field-row,.native-header { border:0; padding:0; } .editable-text { padding:0 8px; } .native-collapse-slot { display:flex; padding:0 2px; } .host-widget-ring { --tw-ring-shadow:0 0 0 1px blue; --tw-ring-color:blue; }';
   const themeStyle = document.createElement('style');
   // Resolve border tokens at the JSDOM boundary, which cannot compute variable-based shorthands.
   themeStyle.textContent = fluentAppearanceCss(dark)
@@ -35,7 +35,7 @@ function fixture(masonry: boolean, fields: boolean, dark = true) {
     .replaceAll('var(--sc-row-stroke)', dark ? 'rgba(0, 0, 0, 0.1)' : 'rgba(0, 0, 0, 0.06)');
   document.head.append(nativeStyle, themeStyle);
   const surface = document.createElement('div');
-  if (masonry) surface.className = 'sugarcubes-workflow-masonry';
+  if (masonry) surface.className = 'sugarcubes-workflow-masonry sugarcubes-cube-face__node-card';
   const card = document.createElement('div');
   card.dataset.scFluentNode = '';
   const body = document.createElement('div');
@@ -140,6 +140,46 @@ test('segments native graph ports from visible fields with a single reversible r
   expect(getComputedStyle(ports).borderBottomWidth).toBe('');
   expect(getComputedStyle(body).gap).toBe('4px');
 });
+
+test.each([false, true])(
+  'keeps advanced and focused combo rings out of themed native fields in masonry=%s',
+  (masonry) => {
+    const { body, themeStyle } = fixture(masonry, true);
+    const wrappers: HTMLElement[] = [];
+    for (const widget of ['WidgetSelect', 'WidgetDOM']) {
+      const row = document.createElement('div');
+      row.dataset.scFluentRow = '';
+      row.dataset.scFluentWidget = widget;
+      row.dataset.scFluentAdvancedRow = '';
+      const layout = document.createElement('div');
+      layout.dataset.scFluentLayout = '';
+      const label = document.createElement('span');
+      label.textContent = 'Model';
+      const control = document.createElement('div');
+      const wrapper = document.createElement('div');
+      wrapper.className = 'host-widget-ring';
+      const input = document.createElement('input');
+      wrapper.append(input);
+      control.append(wrapper);
+      layout.append(label, control);
+      row.append(layout);
+      body.append(row);
+      wrappers.push(wrapper);
+      input.focus();
+      expect(getComputedStyle(wrapper).getPropertyValue('--tw-ring-shadow')).toBe(
+        widget === 'WidgetSelect' ? '0 0 transparent' : '0 0 0 1px blue',
+      );
+      expect(getComputedStyle(wrapper).getPropertyValue('--tw-ring-color')).toBe(
+        widget === 'WidgetSelect' ? 'transparent' : 'blue',
+      );
+    }
+    themeStyle.remove();
+    for (const wrapper of wrappers) {
+      expect(getComputedStyle(wrapper).getPropertyValue('--tw-ring-shadow')).toBe('0 0 0 1px blue');
+      expect(wrapper.className).toBe('host-widget-ring');
+    }
+  },
+);
 
 test.each([false, true])(
   'matches combo and spinner frames in masonry=%s and restores native sizing',
@@ -324,11 +364,11 @@ test('shares card stroke tint in both palettes and reserves short vertical divid
   expect(css).toContain('--sc-row-stroke:var(--sc-card-stroke)');
   // Match the graph rule's capability predicates so masonry's single row seam wins the browser cascade.
   expect(css).toContain(
-    '.sugarcubes-workflow-masonry [data-sc-fluent-node]:has([data-sc-fluent-row]) [data-testid^="node-header-"]:not([data-sc-titlebar-collapsed="true"]) { border-bottom:0; }',
+    '.sugarcubes-cube-face__node-card [data-sc-fluent-node]:has([data-sc-fluent-row]) [data-testid^="node-header-"]:not([data-sc-titlebar-collapsed="true"]) { border-bottom:0; }',
   );
   // JSDOM omits pseudo-element geometry; browser verification covers the painted paired-field divider.
   expect(css).toContain(
-    '.sugarcubes-workflow-masonry [data-sc-fluent-row][data-sc-fluent-column="2"]::before',
+    '.sugarcubes-cube-face__node-card [data-sc-fluent-row][data-sc-fluent-column="2"]::before',
   );
   expect(css).toContain(
     'width:1px; height:33px; background:var(--sc-row-stroke); pointer-events:none;',

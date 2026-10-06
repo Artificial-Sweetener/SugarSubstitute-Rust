@@ -19,8 +19,8 @@
 export function fluentSeedCss(): string {
   return `
     [data-sc-number-spinner][data-sc-seed-box] { width:100%; max-width:100%; min-width:60px; padding-right:46px; overflow:visible; font-variant-numeric:tabular-nums; }
-    .sugarcubes-workflow-masonry [data-sc-number-spinner][data-sc-seed-box] { width:calc(20ch + 64px); }
-    .sugarcubes-workflow-masonry [data-sc-fluent-row][data-sc-fluent-widget^="WidgetInputNumber"] [data-sc-fluent-layout] > :last-child:has([data-sc-seed-box]) { flex:0 0 calc(20ch + 64px); width:calc(20ch + 64px); max-width:100%; }
+    .sugarcubes-cube-face__node-card [data-sc-number-spinner][data-sc-seed-box] { width:calc(20ch + 64px); }
+    .sugarcubes-cube-face__node-card [data-sc-fluent-row][data-sc-fluent-widget^="WidgetInputNumber"] [data-sc-fluent-layout] > :last-child:has([data-sc-seed-box]) { flex:0 0 calc(20ch + 64px); width:calc(20ch + 64px); max-width:100%; }
     [data-sc-seed-box] [data-sc-number-increment], [data-sc-seed-box] [data-sc-number-decrement],
     [data-sc-seed-box] [data-testid="value-control"] { display:none; }
     [data-sc-seed-box] [data-sc-number-input] { text-align:left; font:inherit; }
@@ -34,9 +34,5 @@ export function fluentSeedCss(): string {
     [data-sc-seed-split] button:active { background:var(--colorNeutralBackground1Pressed); }
     [data-sc-seed-split] button:focus-visible { outline:2px solid var(--colorBrandStroke1); outline-offset:-2px; }
     [data-sc-seed-split] button:disabled { opacity:.4; }
-    [data-sc-seed-options] { box-sizing:border-box; position:absolute; right:0; top:calc(100% + 4px); z-index:100; width:158px; min-width:158px; padding:4px; border-radius:6px; border:1px solid var(--colorNeutralStroke2); background:var(--colorNeutralBackground1); box-shadow:var(--shadow16); }
-    [data-sc-seed-options][hidden] { display:none; }
-    [data-sc-seed-options] > button { display:flex; align-items:center; gap:10px; width:100%; padding:7px 10px; border:0; border-radius:4px; text-align:left; background:transparent; color:var(--colorNeutralForeground1); font:inherit; }
-    [data-sc-seed-options] > button[aria-checked="true"] { box-shadow:inset 3px 0 var(--colorBrandStroke1); }
   `;
 }
