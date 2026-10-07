@@ -45,6 +45,7 @@ export interface WorkflowMasonryViewOptions {
   cardState: CubeFaceCardStateService;
   openCube(node: CubeNode): void;
   getSources?(): ReadonlyMap<string, HTMLElement>;
+  onCardsChanged?(): void;
 }
 
 /** Retain shared Cube presentation while measuring only masonry geometry. */
@@ -63,6 +64,7 @@ export class WorkflowMasonryView {
   #mounting = true;
   #transitioning = false;
   #pendingLayout = false;
+  #searchCards: ReadonlySet<string> | null = null;
 
   /** Prepare a continuous surface whose sections share existing Cube presentation owners. */
   constructor(options: WorkflowMasonryViewOptions) {
@@ -140,6 +142,7 @@ export class WorkflowMasonryView {
           getSource: (id) => this.#options.getSources?.().get(id) ?? null,
           onRemounted: () => {
             if (!this.#mounting) this.#requestLayout();
+            this.#options.onCardsChanged?.();
           },
         });
         this.#views.set(section.id, view);
@@ -205,10 +208,10 @@ export class WorkflowMasonryView {
     const options = this.#layoutOptions();
     const measure = (): ReturnType<typeof computeWorkflowMasonry> =>
       computeWorkflowMasonry(
-        this.#sections.map((section) => ({
+        this.#layoutSections().map((section) => ({
           id: section.id,
           cards: section.cards
-            .filter((card) => card.visible)
+            .filter((card) => card.visible && this.#searchVisible(card.id))
             .map((card) => ({
               id: card.id,
               columnSpan: card.columnSpan,
@@ -238,6 +241,52 @@ export class WorkflowMasonryView {
       if (cell) this.#motion.place(cell, card);
     }
     this.#motion.resizeHeight(this.#content, Math.max(result.height, 120));
+  }
+
+  /** Expose the lifecycle-owned projection without rediscovering graph candidates from presentation events. */
+  get sections(): readonly WorkflowMasonrySection[] {
+    return this.#sections;
+  }
+
+  /** Return identified mounted cells for scoped native-field adapters. */
+  cards(): ReadonlyMap<string, HTMLElement> {
+    return new Map([...this.#views.values()].flatMap((view) => [...view.cells]));
+  }
+
+  /** Pack finder-visible cards without changing persistent node visibility or native mount identity. */
+  setSearchCards(cards: ReadonlySet<string> | null, remeasure = false): void {
+    const same =
+      cards === this.#searchCards ||
+      (cards !== null &&
+        this.#searchCards !== null &&
+        cards.size === this.#searchCards.size &&
+        [...cards].every((id) => this.#searchCards?.has(id)));
+    if (same && !remeasure) return;
+    this.#searchCards = cards;
+    for (const view of this.#views.values()) {
+      let visible = false;
+      for (const [id, cell] of view.cells) {
+        const shown = this.#searchVisible(id);
+        cell.toggleAttribute('data-sc-search-card-hidden', !shown);
+        visible ||= shown;
+      }
+      view.header.toggleAttribute('data-sc-search-card-hidden', cards !== null && !visible);
+    }
+    this.#requestLayout();
+  }
+
+  /** Keep empty filtered sections out of packing while retaining their actual mounted headers. */
+  #layoutSections(): readonly WorkflowMasonrySection[] {
+    return this.#searchCards === null
+      ? this.#sections
+      : this.#sections.filter((section) =>
+          section.cards.some((card) => card.visible && this.#searchVisible(card.id)),
+        );
+  }
+
+  /** Resolve the transient finder mask independently of policy visibility. */
+  #searchVisible(id: string): boolean {
+    return this.#searchCards === null || this.#searchCards.has(id);
   }
 
   /** Read container constraints once before any card width writes. */

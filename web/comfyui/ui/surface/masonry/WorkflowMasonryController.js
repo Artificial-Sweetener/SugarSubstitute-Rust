@@ -54,6 +54,7 @@ export class WorkflowMasonryController {
         this.#links?.hold(!this.#desired);
         this.#options.onStateChange();
         if (!this.#desired) {
+            this.#options.onSurfaceLeaving?.();
             this.#setGraphHidden(false);
             try {
                 if (!this.#view?.element.hasAttribute('data-sc-masonry-transition'))
@@ -120,6 +121,10 @@ export class WorkflowMasonryController {
                         this.leaveImmediately();
                         this.#options.openCube(cube);
                     },
+                    onCardsChanged: () => {
+                        if (this.#view && this.#desired)
+                            this.#options.onSurfaceReady?.(this.#view);
+                    },
                 });
                 this.#container = container;
                 this.#reveal ??= new WorkflowMasonryGraphReveal();
@@ -138,6 +143,8 @@ export class WorkflowMasonryController {
             }
             if (generation !== this.#generation || !this.#desired)
                 return;
+            if (this.#view)
+                this.#options.onSurfaceReady?.(this.#view);
             await this.#animate(true);
             if (generation === this.#generation && this.#desired)
                 this.#setGraphHidden(true);
@@ -188,12 +195,16 @@ export class WorkflowMasonryController {
         if (this.#container)
             this.#reveal?.reconcile(this.#container, sections);
         const topology = topologySignature(sections);
-        if (this.#topology === topology)
+        if (this.#topology === topology) {
+            this.#options.onSurfaceValuesChanged?.();
             return;
+        }
         this.#topology = topology;
         try {
             this.#mounting = this.#view.refresh(sections, this.#renderer);
             await this.#mounting;
+            if (generation === this.#generation && this.#desired && this.#view)
+                this.#options.onSurfaceReady?.(this.#view);
         }
         catch (error) {
             if (generation !== this.#generation)
@@ -250,6 +261,7 @@ export class WorkflowMasonryController {
     }
     /** Return borrowed controls before recapturing settled native noodle endpoints. */
     #disposePresentation() {
+        this.#options.onSurfaceLeaving?.();
         this.#view?.dispose();
         this.#view = null;
         this.#mounting = null;

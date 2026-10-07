@@ -20,9 +20,24 @@ import { describe, expect, jest, test } from '@jest/globals';
 import {
   CubePromptTextareaAutosizer,
   settleCubePromptTextareaGeometry,
+  PROMPT_VALUE_CHANGE_EVENT,
 } from '../../../frontend/comfyui/ui/surface/CubePromptTextareaAutosizer.js';
 
 describe('CubePromptTextareaAutosizer', () => {
+  test('notifies scoped value consumers once per actual programmatic change and releases observation', () => {
+    const textarea = document.createElement('textarea');
+    const changed = jest.fn();
+    textarea.addEventListener(PROMPT_VALUE_CHANGE_EVENT, changed);
+    const autosizer = new CubePromptTextareaAutosizer(document);
+    autosizer.bind(textarea);
+    textarea.value = 'updated';
+    textarea.value = 'updated';
+    expect(changed).toHaveBeenCalledTimes(1);
+    autosizer.dispose();
+    textarea.value = 'released';
+    expect(changed).toHaveBeenCalledTimes(1);
+    expect(Object.hasOwn(textarea, 'value')).toBe(false);
+  });
   test('shrinks to content and themed minimum instead of intrinsic textarea rows', () => {
     const textarea = document.createElement('textarea');
     textarea.rows = 2;

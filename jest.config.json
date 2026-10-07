@@ -1,6 +1,9 @@
 {
   "testEnvironment": "jsdom",
-  "setupFiles": ["<rootDir>/tests/frontend_core/support/browser_css.ts"],
+  "setupFiles": [
+    "<rootDir>/tests/frontend_core/support/browser_css.ts",
+    "<rootDir>/tests/frontend_core/support/browser_forms.ts"
+  ],
   "testMatch": ["**/tests/**/*.test.ts", "**/tests/**/*.spec.ts"],
   "extensionsToTreatAsEsm": [".ts"],
   "moduleFileExtensions": ["ts", "js", "json"],

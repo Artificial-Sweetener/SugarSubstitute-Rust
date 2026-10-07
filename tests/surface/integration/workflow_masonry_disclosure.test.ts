@@ -40,6 +40,38 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
+test('search masks pack visible cards and hide empty headers without changing native mounts or policy', async () => {
+  const nodes: ComfyNode[] = [
+    { id: 1, type: 'KSampler', widgets: [{ name: 'steps', value: 20 }] },
+    { id: 2, type: 'KSampler', widgets: [{ name: 'steps', value: 30 }] },
+  ];
+  const sections = projectWorkflowMasonry({ _nodes: nodes }, []);
+  const mount = jest.fn<NativeNodeCardRenderer['mount']>(() => ({ refresh() {}, unmount() {} }));
+  const view = new WorkflowMasonryView({
+    document,
+    sections,
+    cardState: new CubeFaceCardStateService({ nodes: new CubeNodeCatalog(), history: {} }),
+    openCube() {},
+  });
+  document.body.append(view.element);
+  await view.mountCards({ mount, dispose() {} });
+  const [first, second] = [...view.cards()];
+  if (!first || !second) throw new Error('Native card fixture missing');
+  view.setSearchCards(new Set([second[0]]));
+  expect(first[1].hasAttribute('data-sc-search-card-hidden')).toBe(true);
+  expect(second[1].hasAttribute('data-sc-search-card-hidden')).toBe(false);
+  view.setSearchCards(new Set());
+  expect(
+    view.element.querySelector('header[data-masonry-section][data-sc-search-card-hidden]'),
+  ).not.toBeNull();
+  view.setSearchCards(null);
+  expect(view.cards().get(first[0])).toBe(first[1]);
+  expect(first[1].hasAttribute('data-sc-search-card-hidden')).toBe(false);
+  expect(sections.flatMap((section) => section.cards).every((card) => card.visible)).toBe(true);
+  expect(mount).toHaveBeenCalledTimes(2);
+  view.dispose();
+});
+
 test('masonry suppresses disclosure only for semantic prompt cards', async () => {
   const nodes: ComfyNode[] = [
     {

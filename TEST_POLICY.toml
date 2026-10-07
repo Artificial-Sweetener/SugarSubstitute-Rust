@@ -3,8 +3,8 @@ test_root = "tests"
 
 [[area]]
 name = "masonry_search"
-sources = ["frontend/comfyui/ui/search/**", "web/comfyui/ui/search/**"]
-proofs = ["unit"]
+sources = ["frontend/comfyui/ui/search/**", "web/comfyui/ui/search/**", "frontend/static/icons/search/**", "web/icons/search/**"]
+proofs = ["unit", "integration"]
 
 [[area]]
 name = "relations"
@@ -376,7 +376,7 @@ groups = ["editor_actions/integration", "editor_actions/unit"]
 
 [[subscription]]
 boundary = "native_card_presentation"
-groups = ["frontend_core/integration", "model_library/integration", "editor_actions/integration", "relations/integration"]
+groups = ["frontend_core/integration", "model_library/integration", "editor_actions/integration", "relations/integration", "masonry_search/integration"]
 
 [[subscription]]
 boundary = "cube_document"

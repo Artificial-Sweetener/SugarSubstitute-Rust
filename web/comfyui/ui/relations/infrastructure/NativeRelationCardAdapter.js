@@ -1,5 +1,5 @@
 import { isRecord } from '../../types/common.js';
-import { findVueComponents, findMountedNodeVNode } from '../../surface/ComfyVueTree.js';
+import { nativeNodeFieldRows } from '../../surface/NativeNodeFieldRows.js';
 import { CUBE_FACE_PROJECTION_SYMBOL } from '../../surface/ComfyLiteGraphCubeFaceProjectionHost.js';
 import { cubeFacePresentedWidgets } from '../../surface/CubeFaceWidgetPolicy.js';
 /** Resolve already-mounted views of one eligible face node in either native renderer. */
@@ -44,57 +44,7 @@ export function nativeRelationCards(document, node, cubeId) {
         const card = root.matches('.lg-node') ? root : root.querySelector('.lg-node');
         const canvas = root.querySelector('canvas[data-cube-face-native="nodes-1"]');
         const header = card?.querySelector('.lg-node-header') ?? null;
-        const rows = new Map();
-        const vnodeRoot = root.querySelector('.sugarcubes-cube-face__native-card-mount') ?? card;
-        const localVNode = vnodeRoot ? Reflect.get(vnodeRoot, '_vnode') : null;
-        const appRoot = document.getElementById('vue-app');
-        const appVNode = appRoot ? Reflect.get(appRoot, '_vnode') : null;
-        const vnode = localVNode ??
-            (card ? findMountedNodeVNode(card) : null) ??
-            (card
-                ? findVueComponents(appVNode, 'LGraphNode').find((candidate) => {
-                    const component = isRecord(candidate.component) ? candidate.component : {};
-                    const subtree = isRecord(component.subTree) ? component.subTree : {};
-                    return subtree.el === card;
-                })
-                : undefined);
-        if (vnode)
-            for (const container of findVueComponents(vnode, 'NodeWidgets')) {
-                const component = isRecord(container.component) ? container.component : {}, tree = isRecord(component.subTree) ? component.subTree : {};
-                if (!(tree.el instanceof HTMLElement))
-                    continue;
-                for (const child of findVueComponents(container, [
-                    'WidgetSelect',
-                    'WidgetInputNumber',
-                    'WidgetInputNumberSlider',
-                    'WidgetInputText',
-                    'WidgetTextarea',
-                    'WidgetToggle',
-                ])) {
-                    const instance = isRecord(child.component) ? child.component : {}, props = isRecord(instance.props) ? instance.props : {}, widget = isRecord(props.widget) ? props.widget : {}, subtree = isRecord(instance.subTree) ? instance.subTree : {};
-                    if (!(subtree.el instanceof HTMLElement) || typeof widget.name !== 'string')
-                        continue;
-                    let row = subtree.el;
-                    while (row.parentElement && row.parentElement !== tree.el)
-                        row = row.parentElement;
-                    if (row.parentElement === tree.el)
-                        rows.set(widget.name, row);
-                }
-            }
-        if (card)
-            for (const row of card.querySelectorAll('[data-sc-fluent-row]')) {
-                if (row.closest('.lg-node') !== card)
-                    continue;
-                const label = row
-                    .querySelector('[data-testid="widget-layout-field-label"]')
-                    ?.textContent?.trim();
-                const control = row.querySelector('[role="combobox"][aria-label], [aria-label]');
-                const name = control?.getAttribute('aria-label');
-                if (name)
-                    rows.set(name, row);
-                else if (label)
-                    rows.set(label, row);
-            }
+        const rows = nativeNodeFieldRows(root);
         const aspect = canvas?.style.aspectRatio.split('/').map((value) => Number.parseFloat(value));
         const width = aspect?.[0] ?? (canvas ? root.clientWidth : 0);
         const height = aspect?.[1] ?? (canvas ? root.clientHeight : 0);

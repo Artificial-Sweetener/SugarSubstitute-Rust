@@ -7,11 +7,13 @@ import { ensureWorkflowMasonryStyles } from './WorkflowMasonryStyles.js';
 import { WorkflowMasonryToolbarButton } from './WorkflowMasonryToolbarButton.js';
 import { captureMasonryLinkPaths } from './ComfyMasonryLinkAdapter.js';
 import { WorkflowMasonryLinkMotion } from './WorkflowMasonryLinkMotion.js';
+import { MasonrySearchHost } from '../../search/infrastructure/MasonrySearchHost.js';
 /** Compose focused owners and keep host registration free of layout behavior. */
 export class WorkflowMasonryHostLifecycle {
     #options;
     #controller;
     #toolbar;
+    #search;
     #graphs = new Map();
     #unsubscribeRenderer = null;
     #unsubscribeCards = null;
@@ -21,6 +23,12 @@ export class WorkflowMasonryHostLifecycle {
     /** Bind native renderer capabilities and non-blocking fallback feedback. */
     constructor(options) {
         this.#options = options;
+        this.#search = new MasonrySearchHost({
+            document: options.document,
+            app: options.app,
+            getGraph: () => options.app?.canvas?.graph ?? options.app?.graph ?? null,
+            reportError: options.reportError,
+        });
         this.#controller = new WorkflowMasonryController({
             document: options.document,
             getContainer: () => options.document.querySelector('.graph-canvas-panel') ??
@@ -56,6 +64,9 @@ export class WorkflowMasonryHostLifecycle {
             notifyRendererFallback: options.notifyRendererFallback,
             reportError: options.reportError,
             onStateChange: () => this.#refreshButton(),
+            onSurfaceReady: (view) => this.#search.ready(view),
+            onSurfaceLeaving: () => this.#search.release(),
+            onSurfaceValuesChanged: () => this.#search.valuesChanged(),
         });
         this.#toolbar = new WorkflowMasonryToolbarButton(options.document, () => this.toggle());
     }
@@ -68,6 +79,7 @@ export class WorkflowMasonryHostLifecycle {
             this.#controller.rendererChanged();
         });
         this.#toolbar.setup();
+        this.#search.setup();
         this.#refreshButton();
         this.#options.document.defaultView?.addEventListener('pagehide', this.#onPageHide);
     }
@@ -95,6 +107,7 @@ export class WorkflowMasonryHostLifecycle {
         this.#disposed = true;
         this.#controller.leaveImmediately();
         this.#toolbar.dispose();
+        this.#search.dispose();
         this.#unsubscribeRenderer?.();
         this.#unsubscribeRenderer = null;
         this.#releaseGraphObservers();
