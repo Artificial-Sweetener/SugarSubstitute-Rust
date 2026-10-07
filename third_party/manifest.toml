@@ -1,4 +1,28 @@
 [[component]]
+name = "SugarSubstitute editor finder"
+license = "GPL-3.0-or-later"
+license_file = "third_party/licenses/sugarsubstitute.LICENSE.txt"
+source = "https://github.com/Artificial-Sweetener/SugarSubstitute"
+revision = "84b6c882d1323447cf82350495dadaeb41d948d5"
+modifications = "Finder contexts, literal matching, quoted node scope and navigation intent adapted to typed browser-independent TypeScript owners with UTF-16 source selection ranges."
+runtime_files = ["web/comfyui/ui/search/domain/SearchQuery.js", "web/comfyui/ui/search/domain/SearchMatching.js", "web/comfyui/ui/search/application/SearchSession.js"]
+
+[[component.implementation]]
+source_path = "substitute/application/editor_search/service.py"
+source_sha256 = "ddc9ff14dc230221ce0acdda3e0863d8624959a73e40dc68ab065645c0355412"
+adapted_paths = ["frontend/comfyui/ui/search/domain/SearchQuery.ts", "frontend/comfyui/ui/search/domain/SearchMatching.ts"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/widgets/search_box.py"
+source_sha256 = "1b19c91ce41bbccd4bc331ce62b6d5c2458bd8c3c7c15afe1266cda18b4550e1"
+adapted_paths = ["frontend/comfyui/ui/search/domain/SearchQuery.ts"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/editor/panel/search_controller.py"
+source_sha256 = "776b7d6b605e5b616f50433489a3387875e77960ad9d7bc9555439efbadc674a"
+adapted_paths = ["frontend/comfyui/ui/search/application/SearchSession.ts"]
+
+[[component]]
 name = "Microsoft Fluent UI System Icons"
 license = "MIT"
 license_file = "third_party/licenses/fluentui-system-icons.LICENSE.txt"

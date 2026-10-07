@@ -144,3 +144,8 @@ manifest. The complete license is in `licenses/fluentui-emoji.LICENSE.txt`.
 CSS masks adapt their color to the current theme without modifying the SVGs.
 
 CivitAI model relationships: ecosystem identities, base model records, and directional generation cross-ecosystem rules derived from civitai/civitai revision 6cfb0e4ab589ecaaa572909eb6ca5d7d2af08ea8, packages/civitai-shared/src/basemodel.constants.ts. Apache-2.0; see licenses/civitai.LICENSE.txt. Literal records are distributed as JSON; SugarCubes evaluates compatibility independently of CivitAI's hosted service availability.
+
+Masonry finder semantics are adapted from SugarSubstitute's editor search at
+revision `84b6c882d1323447cf82350495dadaeb41d948d5`, under GPL-3.0-or-later.
+Source fingerprints and adapted TypeScript paths are recorded in the manifest;
+the complete license is in `licenses/sugarsubstitute.LICENSE.txt`.
