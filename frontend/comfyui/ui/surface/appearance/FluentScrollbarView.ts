@@ -17,7 +17,7 @@
 import { scrollbarDragPosition, scrollbarGeometry } from './FluentScrollbarGeometry.js';
 import { scrollWheelDistance } from '../ScrollWheelDistance.js';
 import type { ScrollbarGeometry } from './FluentScrollbarGeometry.js';
-import { scrollbarEdgeVisible } from './FluentScrollbarLayout.js';
+import type { ScrollbarCoordinateSpace } from './FluentScrollbarLayers.js';
 import type { ScrollbarTrack } from './FluentScrollbarLayout.js';
 
 export type ScrollbarAxis = 'vertical' | 'horizontal';
@@ -29,7 +29,7 @@ interface DragState {
   geometry: ScrollbarGeometry;
 }
 
-/** Keep input handling on the portalled thumb, outside graph drag and zoom handlers. */
+/** Keep input handling on the owned thumb, outside graph drag and zoom handlers. */
 export class FluentScrollbarView {
   readonly element: HTMLDivElement;
   readonly #owner: HTMLElement;
@@ -65,8 +65,8 @@ export class FluentScrollbarView {
     this.element.addEventListener('wheel', this.#wheel, { passive: false });
   }
 
-  /** Follow range, position, clipping, and occlusion without resizing the content. */
-  update(track: ScrollbarTrack | null): void {
+  /** Follow native range and viewport clipping inside the owning surface. */
+  update(track: ScrollbarTrack | null, space: ScrollbarCoordinateSpace): void {
     const vertical = this.#axis === 'vertical';
     const style = this.#owner.ownerDocument.defaultView?.getComputedStyle(this.#owner);
     const overflow = (vertical ? style?.overflowY : style?.overflowX) || style?.overflow;
@@ -96,13 +96,12 @@ export class FluentScrollbarView {
         : track.left + track.width - 12
       : track.left + 1 + offset;
     const top = vertical ? track.top + 1 + offset : track.top + track.height - 12;
-    const visible = scrollbarEdgeVisible(
-      this.#owner,
-      vertical ? left + 6 : left + geometry.length / 2,
-      vertical ? top + geometry.length / 2 : top + 6,
-    );
-    this.element.hidden = !visible && !this.#drag;
-    const css = `left:${left}px;top:${top}px;width:${vertical ? 12 : geometry.length}px;height:${vertical ? geometry.length : 12}px`;
+    this.element.hidden = false;
+    const localLeft = (left - space.left) / space.scaleX;
+    const localTop = (top - space.top) / space.scaleY;
+    const width = (vertical ? 12 : geometry.length) / space.scaleX;
+    const height = (vertical ? geometry.length : 12) / space.scaleY;
+    const css = `left:${localLeft}px;top:${localTop}px;width:${width}px;height:${height}px;--sc-scrollbar-scale-x:${space.scaleX};--sc-scrollbar-scale-y:${space.scaleY}`;
     if (this.element.getAttribute('style') !== css) this.element.setAttribute('style', css);
     this.element.setAttribute('aria-valuemax', String(Math.round(geometry.maximum)));
     this.element.setAttribute('aria-valuenow', String(Math.round(position)));
@@ -114,7 +113,7 @@ export class FluentScrollbarView {
     this.element.remove();
   }
 
-  /** Suppress a portalled track while its owner is between stable presentation coordinates. */
+  /** Suppress a track while its owner is between stable presentation coordinates. */
   hide(): void {
     this.element.hidden = true;
   }

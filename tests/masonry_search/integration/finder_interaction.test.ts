@@ -115,6 +115,66 @@ test('restores mouse reachability inside Comfy’s noninteractive overlay contai
   expect(getComputedStyle(finder).pointerEvents).toBe('auto');
 });
 
+test('context trigger toggles its menu without changing query, matches or native control identity', () => {
+  const f = fixture();
+  f.search('512');
+  const state = f.presenter.state;
+  const reads = f.read.mock.calls.length;
+  const trigger = f.container.querySelector<HTMLElement>('[aria-label="Search context"]');
+  if (!trigger) throw new Error('Context trigger missing');
+  f.click('Search context');
+  expect(trigger.getAttribute('aria-expanded')).toBe('true');
+  expect(document.querySelector('[role="menu"][aria-label="Search context"]')).not.toBeNull();
+  trigger.dispatchEvent(new Event('pointerdown', { bubbles: true, composed: true }));
+  f.click('Search context');
+  expect(trigger.getAttribute('aria-expanded')).toBe('false');
+  expect(document.querySelector('[role="menu"][aria-label="Search context"]')).toBeNull();
+  expect(f.presenter.state).toEqual(state);
+  expect(f.read).toHaveBeenCalledTimes(reads);
+  expect(f.container.querySelector('.sc-masonry-finder__input')).toBe(f.input);
+  expect(document.activeElement).toBe(trigger);
+  f.click('Search context');
+  expect(trigger.getAttribute('aria-expanded')).toBe('true');
+  f.click('Close search (Esc)');
+  expect(trigger.getAttribute('aria-expanded')).toBe('false');
+  expect(document.querySelector('[role="menu"][aria-label="Search context"]')).toBeNull();
+});
+
+test('context selector provides a Fluent stroke divider without intercepting search input', () => {
+  const f = fixture();
+  const trigger = f.container.querySelector<HTMLElement>('.sc-masonry-finder__mode');
+  if (!trigger) throw new Error('Context trigger missing');
+  expect(getComputedStyle(trigger).borderRightWidth).toBe('1px');
+  expect(getComputedStyle(trigger).borderRightStyle).toBe('solid');
+  expect(document.getElementById('sc-masonry-finder-styles')?.textContent).toContain(
+    'border-right-color:var(--colorNeutralStroke2)',
+  );
+  f.search('512');
+  expect(f.presenter.state.active?.field).toBe('width');
+  f.click('Next match (Enter)');
+  expect(f.presenter.state.active?.field).toBe('height');
+});
+
+test('finder icon actions use official subtle rounded buttons over textured acrylic', () => {
+  const f = fixture();
+  const buttons = f.container.querySelectorAll('fluent-button:not(.sc-masonry-finder__mode)');
+  expect(buttons).toHaveLength(5);
+  for (const button of buttons) {
+    expect(button.getAttribute('role')).toBe('button');
+    expect(button.getAttribute('appearance')).toBe('subtle');
+    expect(button.getAttribute('shape')).toBe('rounded');
+    expect(button.hasAttribute('icon-only')).toBe(true);
+    expect(getComputedStyle(button).width).toBe('28px');
+    expect(getComputedStyle(button).height).toBe('28px');
+  }
+  const styles = document.getElementById('sc-masonry-finder-styles')?.textContent;
+  expect(styles).toContain('backdrop-filter:blur(30px) saturate(125%)');
+  expect(styles).toContain('acrylic-grain.svg');
+  expect(styles).toContain('var(--colorNeutralBackground2) 78%');
+  expect(styles).toContain('gap:0; background:transparent');
+  expect(styles).toContain('prefers-reduced-transparency:reduce');
+});
+
 test('context choices return focus to the real Fluent input and Field masks surrender space', () => {
   const f = fixture();
   f.click('Search context');

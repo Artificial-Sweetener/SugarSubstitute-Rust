@@ -9,7 +9,7 @@ import { NativeRelationViews } from './infrastructure/NativeRelationViews.js';
 import { NativeSharedSeedModes } from './infrastructure/NativeSharedSeedModes.js';
 import { NativeRelationWidgetRenderer } from './infrastructure/NativeRelationWidgetRenderer.js';
 import { NativeRelationVisibility } from './infrastructure/NativeRelationVisibility.js';
-import { attachNativeOverrideToolbar } from './infrastructure/NativeOverrideToolbarHost.js';
+import { NativeOverrideToolbarHost } from './infrastructure/NativeOverrideToolbarHost.js';
 import { GlobalOverrideToolbar } from './presentation/GlobalOverrideToolbar.js';
 import { CubeRelationPresenter } from './presentation/CubeRelationPresenter.js';
 import { ensureRelationStyles } from './presentation/RelationStyles.js';
@@ -26,6 +26,7 @@ export class RelationHostLifecycle {
     #seedModes = new NativeSharedSeedModes();
     #graphs = new Map();
     #presence = null;
+    #chromePresence = null;
     #pending = false;
     #valuesPending = false;
     #active = false;
@@ -39,7 +40,7 @@ export class RelationHostLifecycle {
         this.#execution = new NativeRelationExecution(this.relations, this.#port.inventorySource, options.logger, () => options.app?.graph?.serialize?.());
         const widgets = new NativeRelationWidgetRenderer(options.document, options.reportError);
         this.#views = new NativeRelationViews(options.document);
-        this.#toolbar = new GlobalOverrideToolbar(options.document, this.relations, options.reportError, widgets, (element) => attachNativeOverrideToolbar(options.document, element));
+        this.#toolbar = new GlobalOverrideToolbar(options.document, this.relations, options.reportError, widgets, new NativeOverrideToolbarHost(options.document));
         this.#cards = new CubeRelationPresenter(options.document, this.relations, () => {
             const nodes = new Map([...this.#port.inventorySource.owners.values()].map((owner) => [owner.nodeId, owner]));
             return [...nodes].flatMap(([nodeId, owner]) => nodeId
@@ -57,11 +58,13 @@ export class RelationHostLifecycle {
             return;
         this.#active = true;
         ensureRelationStyles(this.options.document);
-        this.#presence = new HostSurfaceObserver(this.options.document.body, '.sugarcubes-cube-face__node-card,.lg-node[data-node-id],[data-sugarcubes-cube-face-projection],.actionbar-container', (changes) => {
+        const changed = (changes) => {
             this.#views.invalidate(changes.map((change) => change.element));
             if (!this.#rendering)
                 this.#present();
-        }, { content: true, exclude: '.sc-field-relation,.sc-overrides-toolbar' });
+        };
+        this.#presence = new HostSurfaceObserver(this.options.document.body, '.sugarcubes-cube-face__node-card,.lg-node[data-node-id],[data-sugarcubes-cube-face-projection]', changed, { content: true, exclude: '.sc-field-relation,.sc-overrides-toolbar' });
+        this.#chromePresence = new HostSurfaceObserver(this.options.document.body, '.actionbar-container', changed);
         this.options.document.addEventListener('input', this.#nativeEdit, true);
         this.options.document.addEventListener('change', this.#nativeEdit, true);
         this.#unsubscribeChoices = subscribeNativeNodeCardRefresh(this.options.document, [], () => this.#schedule());
@@ -89,6 +92,7 @@ export class RelationHostLifecycle {
     dispose() {
         this.#active = false;
         this.#presence?.disconnect();
+        this.#chromePresence?.disconnect();
         this.#unsubscribeChoices?.();
         this.#unsubscribeChoices = null;
         this.beforeConfigureGraph();
@@ -176,6 +180,7 @@ export class RelationHostLifecycle {
         }
         finally {
             this.#presence?.discardPending();
+            this.#chromePresence?.discardPending();
             this.#rendering = false;
         }
     }

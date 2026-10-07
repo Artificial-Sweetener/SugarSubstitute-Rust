@@ -22,11 +22,11 @@ export function fluentNativeScrollbarCss() {
     .p-scrollpanel-bar { display:none!important; }
   `;
 }
-/** Render trackless handles without allocating any space in their scroll owners. */
-export function fluentScrollbarCss(dark) {
-    return `${fluentNativeScrollbarCss()}
+/** Render local trackless handles with inherited palette tokens and native surface stacking. */
+export function fluentScrollbarPresentationCss() {
+    return `
     .sc-fluent-scrollbar-layer {
-      position:fixed; inset:0; z-index:2147483646; pointer-events:none;
+      position:absolute; inset:0; z-index:1; overflow:clip; pointer-events:none;
     }
     .sc-fluent-scrollbar {
       position:absolute; box-sizing:border-box; pointer-events:auto; touch-action:none;
@@ -35,15 +35,19 @@ export function fluentScrollbarCss(dark) {
     .sc-fluent-scrollbar[hidden] { display:none!important; }
     .sc-fluent-scrollbar::before {
       content:''; position:absolute; border-radius:999px;
-      background:${dark ? 'rgba(255,255,255,.55)' : 'rgba(0,0,0,.45)'};
+      background:var(--sc-fluent-scrollbar-thumb,rgba(255,255,255,.55));
       transition:width 150ms cubic-bezier(.2,0,0,1),height 150ms cubic-bezier(.2,0,0,1),background-color 150ms;
     }
-    .sc-fluent-scrollbar[aria-orientation="vertical"]::before { width:3px; height:100%; right:1px; }
-    .sc-fluent-scrollbar[aria-orientation="horizontal"]::before { height:3px; width:100%; bottom:1px; }
-    .sc-fluent-scrollbar[aria-orientation="vertical"]:is(:hover,:focus-visible,[data-dragging])::before { width:6px; }
-    .sc-fluent-scrollbar[aria-orientation="horizontal"]:is(:hover,:focus-visible,[data-dragging])::before { height:6px; }
+    .sc-fluent-scrollbar[aria-orientation="vertical"]::before { width:calc(3px / var(--sc-scrollbar-scale-x,1)); height:100%; right:calc(1px / var(--sc-scrollbar-scale-x,1)); }
+    .sc-fluent-scrollbar[aria-orientation="horizontal"]::before { height:calc(3px / var(--sc-scrollbar-scale-y,1)); width:100%; bottom:calc(1px / var(--sc-scrollbar-scale-y,1)); }
+    .sc-fluent-scrollbar[aria-orientation="vertical"]:is(:hover,:focus-visible,[data-dragging])::before { width:calc(6px / var(--sc-scrollbar-scale-x,1)); }
+    .sc-fluent-scrollbar[aria-orientation="horizontal"]:is(:hover,:focus-visible,[data-dragging])::before { height:calc(6px / var(--sc-scrollbar-scale-y,1)); }
     .sc-fluent-scrollbar:focus-visible::before { outline:1px solid Highlight; outline-offset:1px; }
     @media (prefers-reduced-motion:reduce) { .sc-fluent-scrollbar::before { transition:none; } }
     @media (forced-colors:active) { .sc-fluent-scrollbar::before { background:ButtonText; } }
   `;
+}
+/** Apply the current palette without overriding the native owner's stacking context. */
+export function fluentScrollbarCss(dark) {
+    return `${fluentNativeScrollbarCss()} :root { --sc-fluent-scrollbar-thumb:${dark ? 'rgba(255,255,255,.55)' : 'rgba(0,0,0,.45)'}; } ${fluentScrollbarPresentationCss()}`;
 }

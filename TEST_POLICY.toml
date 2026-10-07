@@ -3,7 +3,7 @@ test_root = "tests"
 
 [[area]]
 name = "masonry_search"
-sources = ["frontend/comfyui/ui/search/**", "web/comfyui/ui/search/**", "frontend/static/icons/search/**", "web/icons/search/**"]
+sources = ["frontend/comfyui/ui/search/**", "web/comfyui/ui/search/**", "frontend/static/icons/search/**", "web/icons/search/**", "frontend/static/textures/acrylic-grain.svg", "web/textures/acrylic-grain.svg"]
 proofs = ["unit", "integration"]
 
 [[area]]
@@ -357,6 +357,14 @@ groups = ["model_library/integration", "surface/integration", "surface/unit", "b
 [[boundary]]
 name = "graph_contract"
 area = "graph"
+
+[[boundary]]
+name = "modal_presentation"
+area = "settings"
+
+[[subscription]]
+boundary = "modal_presentation"
+groups = ["model_library/integration", "editor_actions/integration", "authoring/unit", "authoring/integration", "masonry_search/integration"]
 
 [[boundary]]
 name = "execution_prompt"

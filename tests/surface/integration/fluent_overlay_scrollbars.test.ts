@@ -110,6 +110,35 @@ test('portal mounts and local input do not rediscover or measure an unrelated sc
   host.clear();
 });
 
+test('keeps tracks inside positioned owners and reparents them when the owning surface changes', async () => {
+  const area = scrollArea();
+  const surface = document.createElement('div');
+  surface.style.position = 'fixed';
+  surface.style.zIndex = '12000';
+  surface.append(area);
+  document.body.append(surface);
+  const frames: FrameRequestCallback[] = [];
+  jest.spyOn(window, 'requestAnimationFrame').mockImplementation((frame) => {
+    frames.push(frame);
+    return frames.length;
+  });
+  const host = new FluentOverlayScrollbarHost(document, jest.fn());
+  host.enable();
+  await flush(frames);
+  const thumb = document.querySelector<HTMLElement>('[aria-orientation="vertical"]');
+  expect(thumb?.closest('.sc-fluent-scrollbar-layer')?.parentElement).toBe(surface);
+  const replacement = document.createElement('div');
+  replacement.style.position = 'relative';
+  document.body.append(replacement);
+  replacement.append(area);
+  await flush(frames);
+  expect(thumb?.closest('.sc-fluent-scrollbar-layer')?.parentElement).toBe(replacement);
+  expect(surface.querySelector('.sc-fluent-scrollbar-layer')).toBeNull();
+  expect(document.querySelector('[aria-orientation="vertical"]')).toBe(thumb);
+  host.clear();
+  expect(replacement.querySelector('.sc-fluent-scrollbar-layer')).toBeNull();
+});
+
 test('defers moving-region geometry until settlement while unrelated native scrolling remains responsive', async () => {
   const area = scrollArea(),
     other = scrollArea();
@@ -215,10 +244,10 @@ test('discovers asynchronous shadow content and removes only policy-owned shadow
   expect(shadow.querySelector('[data-sc-scrollbar-policy]')?.textContent).toContain(
     'scrollbar-width:none',
   );
-  expect(document.querySelector('[aria-controls="existing-scroll-owner"]')).not.toBeNull();
+  expect(shadow.querySelector('[aria-controls="existing-scroll-owner"]')).not.toBeNull();
   custom.remove();
   await flush(frames);
-  expect(document.querySelector('[aria-controls="existing-scroll-owner"]')).toBeNull();
+  expect(shadow.querySelector('[aria-controls="existing-scroll-owner"]')).toBeNull();
   host.clear();
   expect(shadow.querySelector('[data-sc-scrollbar-policy]')).toBeNull();
   expect(style.textContent).toBe(':host {color: pink}');
@@ -226,52 +255,58 @@ test('discovers asynchronous shadow content and removes only policy-owned shadow
   expect(errors).not.toHaveBeenCalled();
 });
 
-test('captures thumb dragging without bubbling into graph interaction', async () => {
-  const frames: FrameRequestCallback[] = [];
-  jest.spyOn(window, 'requestAnimationFrame').mockImplementation((frame) => {
-    frames.push(frame);
-    return frames.length;
-  });
-  const area = scrollArea();
-  document.body.append(area);
-  const host = new FluentOverlayScrollbarHost(document, jest.fn());
-  host.enable();
-  await flush(frames);
-  const thumb = document.querySelector<HTMLElement>(
-    '.sc-fluent-scrollbar[aria-orientation="vertical"]',
-  );
-  if (!thumb) throw new Error('Missing vertical thumb');
-  Object.assign(thumb, {
-    setPointerCapture: jest.fn(),
-    hasPointerCapture: () => true,
-    releasePointerCapture: jest.fn(),
-  });
-  const graphDrag = jest.fn();
-  document.addEventListener('pointerdown', graphDrag, true);
-  thumb.dispatchEvent(
-    Object.assign(new Event('pointerdown', { bubbles: true, cancelable: true }), {
-      button: 0,
-      pointerId: 1,
-      clientY: 30,
-      clientX: 310,
-    }),
-  );
-  thumb.dispatchEvent(
-    Object.assign(new Event('pointermove', { bubbles: true, cancelable: true }), {
-      pointerId: 1,
-      clientY: 109.2,
-      clientX: 310,
-    }),
-  );
-  await flush(frames);
-  expect(area.scrollTop).toBeCloseTo(400);
-  expect(graphDrag).not.toHaveBeenCalled();
-  thumb.dispatchEvent(new Event('pointerup'));
-  expect(thumb.hasAttribute('data-dragging')).toBe(false);
-  document.body.dispatchEvent(
-    Object.assign(new Event('pointerdown', { bubbles: true }), { button: 0 }),
-  );
-  expect(graphDrag).toHaveBeenCalledTimes(1);
-  document.removeEventListener('pointerdown', graphDrag, true);
-  host.clear();
-});
+test.each([false, true])(
+  'captures thumb dragging without graph or popup handlers in shadow mode %s',
+  async (shadowMode) => {
+    const frames: FrameRequestCallback[] = [];
+    jest.spyOn(window, 'requestAnimationFrame').mockImplementation((frame) => {
+      frames.push(frame);
+      return frames.length;
+    });
+    const area = scrollArea();
+    const surface = document.createElement('div');
+    const root = shadowMode ? surface.attachShadow({ mode: 'open' }) : surface;
+    root.append(area);
+    document.body.append(surface);
+    const host = new FluentOverlayScrollbarHost(document, jest.fn());
+    host.enable();
+    await flush(frames);
+    const thumb = (shadowMode ? root : document).querySelector<HTMLElement>(
+      '.sc-fluent-scrollbar[aria-orientation="vertical"]',
+    );
+    if (!thumb) throw new Error('Missing vertical thumb');
+    Object.assign(thumb, {
+      setPointerCapture: jest.fn(),
+      hasPointerCapture: () => true,
+      releasePointerCapture: jest.fn(),
+    });
+    const graphDrag = jest.fn();
+    document.addEventListener('pointerdown', graphDrag, true);
+    thumb.dispatchEvent(
+      Object.assign(new Event('pointerdown', { bubbles: true, cancelable: true, composed: true }), {
+        button: 0,
+        pointerId: 1,
+        clientY: 30,
+        clientX: 310,
+      }),
+    );
+    thumb.dispatchEvent(
+      Object.assign(new Event('pointermove', { bubbles: true, cancelable: true }), {
+        pointerId: 1,
+        clientY: 109.2,
+        clientX: 310,
+      }),
+    );
+    await flush(frames);
+    expect(area.scrollTop).toBeCloseTo(400);
+    expect(graphDrag).not.toHaveBeenCalled();
+    thumb.dispatchEvent(new Event('pointerup'));
+    expect(thumb.hasAttribute('data-dragging')).toBe(false);
+    document.body.dispatchEvent(
+      Object.assign(new Event('pointerdown', { bubbles: true }), { button: 0 }),
+    );
+    expect(graphDrag).toHaveBeenCalledTimes(1);
+    document.removeEventListener('pointerdown', graphDrag, true);
+    host.clear();
+  },
+);

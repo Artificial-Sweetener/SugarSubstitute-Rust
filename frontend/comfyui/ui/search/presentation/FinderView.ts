@@ -63,9 +63,10 @@ export class FinderView {
     this.#menu = new ContextMenu(documentRef);
     this.#mode = documentRef.createElement('fluent-button');
     this.#mode.className = 'sc-masonry-finder__mode';
+    this.#mode.setAttribute('role', 'button');
     this.#mode.setAttribute('slot', 'start');
     this.#mode.setAttribute('aria-label', 'Search context');
-    this.#mode.setAttribute('appearance', 'transparent');
+    this.#mode.setAttribute('appearance', 'subtle');
     this.#mode.setAttribute('aria-haspopup', 'menu');
     this.#mode.setAttribute('aria-expanded', 'false');
     this.#modeLabel = documentRef.createElement('span');
@@ -73,7 +74,7 @@ export class FinderView {
     chevron.className = 'sc-masonry-finder__chevron';
     chevron.setAttribute('aria-hidden', 'true');
     this.#mode.append(this.#modeLabel, chevron);
-    this.#mode.addEventListener('click', this.#openContext);
+    this.#mode.addEventListener('click', this.#toggleContext);
     this.#clear = this.#button('Clear search', 'dismiss', () => {
       this.#input.value = '';
       this.#change();
@@ -141,8 +142,12 @@ export class FinderView {
     if (this.#syncing) return;
     this.#actions.input(this.#context, this.#input.value);
   };
-  /** Choose a search context through the shared Fluent menu with normal keyboard and focus behavior. */
-  readonly #openContext = (): void => {
+  /** Toggle the shared context menu while retaining its normal keyboard and focus behavior. */
+  readonly #toggleContext = (): void => {
+    if (this.#menu.isOpen()) {
+      this.#menu.close();
+      return;
+    }
     const modes: readonly SearchMode[] = ['text', 'field', 'node'];
     this.#mode.setAttribute('aria-expanded', 'true');
     this.#menu.open({
@@ -181,7 +186,11 @@ export class FinderView {
   #button(label: string, icon: string, action: () => void): HTMLElement {
     const documentRef = this.element.ownerDocument;
     const button = documentRef.createElement('fluent-button');
-    button.setAttribute('appearance', 'transparent');
+    button.setAttribute('role', 'button');
+    button.setAttribute('appearance', 'subtle');
+    button.setAttribute('shape', 'rounded');
+    button.setAttribute('size', 'small');
+    button.setAttribute('icon-only', '');
     button.setAttribute('aria-label', label);
     button.title = label;
     const image = documentRef.createElement('span');

@@ -50,7 +50,6 @@ export class ModelDetectorDialog {
       body,
       cancelLabel: 'Cancel',
       cancelResult: null,
-      allowOverlayClose: false,
     });
     if (this.#shell.elements.confirmButton) this.#shell.elements.confirmButton.hidden = true;
     const overlay = this.#shell.elements.overlay;

@@ -21,7 +21,7 @@ import { emptyRelationState } from '../../../frontend/comfyui/ui/relations/domai
 import { readNativeWidgetMount } from '../../../frontend/comfyui/ui/surface/NativeWidgetMountBoundary.js';
 import { GlobalOverrideToolbar } from '../../../frontend/comfyui/ui/relations/presentation/GlobalOverrideToolbar.js';
 import { WorkflowRelations } from '../../../frontend/comfyui/ui/relations/application/WorkflowRelations.js';
-import { attachNativeOverrideToolbar } from '../../../frontend/comfyui/ui/relations/infrastructure/NativeOverrideToolbarHost.js';
+import { NativeOverrideToolbarHost } from '../../../frontend/comfyui/ui/relations/infrastructure/NativeOverrideToolbarHost.js';
 import { ContextMenu } from '../../../frontend/comfyui/ui/menus/ContextMenu.js';
 import { ensureRelationStyles } from '../../../frontend/comfyui/ui/relations/presentation/RelationStyles.js';
 
@@ -169,7 +169,7 @@ test('reserves workflow space below Run and creates every field through the widg
     relations,
     jest.fn(),
     { mount, mountChoice: mount },
-    (element) => attachNativeOverrideToolbar(document, element),
+    new NativeOverrideToolbarHost(document),
   );
   toolbar.reconcile();
   expect(mount).not.toHaveBeenCalled();
@@ -181,11 +181,17 @@ test('reserves workflow space below Run and creates every field through the widg
   expect(toolbar.element.nextElementSibling).toBe(graph);
   expect(actionbar.parentElement).toBe(runRow);
   expect(toolbar.element.querySelector('.sc-overrides-title')).toBeNull();
-  expect(toolbar.element.firstElementChild?.getAttribute('aria-label')).toBe('Set Global Override');
+  expect(toolbar.element.firstElementChild?.getAttribute('aria-label')).toBe(
+    'Move global overrides',
+  );
   expect(toolbar.element.querySelector('.icon-\\[lucide--plus\\]')).toBeNull();
   expect(mount).toHaveBeenCalledTimes(1);
   ensureRelationStyles(document);
-  const menuButton = toolbar.element.querySelector('button')!;
+  const grip = toolbar.element.querySelector<HTMLButtonElement>('.sc-overrides-grip')!;
+  expect(grip.firstElementChild?.className).toBe('drag-handle h-max w-3 cursor-grab');
+  expect(getComputedStyle(grip).width).toBe('12px');
+  expect(getComputedStyle(grip).padding).toBe('0px');
+  const menuButton = toolbar.element.querySelector<HTMLButtonElement>('.sc-overrides-menu')!;
   const nativeControl = toolbar.element.querySelector('.sc-override-control');
   expect(toolbar.element.dataset.presentation).toBe('comfy');
   expect(getComputedStyle(menuButton).flexDirection).toBe('row');
@@ -198,7 +204,7 @@ test('reserves workflow space below Run and creates every field through the widg
   expect(getComputedStyle(menuButton.firstElementChild!).width).toBe('14px');
   toolbar.setPresentation('comfy');
   expect(getComputedStyle(menuButton).flexDirection).toBe('row');
-  expect(toolbar.element.querySelector('button')).toBe(menuButton);
+  expect(toolbar.element.querySelector('.sc-overrides-menu')).toBe(menuButton);
   expect(toolbar.element.querySelector('.sc-override-control')).toBe(nativeControl);
   expect(mount).toHaveBeenCalledTimes(1);
   await Promise.resolve();
@@ -208,7 +214,7 @@ test('reserves workflow space below Run and creates every field through the widg
   expect(toolbar.element.querySelector('b')).toBeNull();
   expect(toolbar.element.querySelector('input')).toBeNull();
   const open = jest.spyOn(ContextMenu.prototype, 'open').mockImplementation(() => undefined);
-  toolbar.element.querySelector('button')?.click();
+  menuButton.click();
   expect(open.mock.calls[0]?.[0].entries.map((entry) => entry.label)).toEqual(['Seed']);
   expect(open.mock.calls[0]?.[0].entries[0]?.checked).toBe(true);
   open.mockRestore();

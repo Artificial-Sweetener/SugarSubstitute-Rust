@@ -14,9 +14,14 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own global discovery and the reversible lifetime of Fluent overlay scrollbars. */
-import { fluentNativeScrollbarCss } from './FluentScrollbarStyles.js';
+import {
+  fluentNativeScrollbarCss,
+  fluentScrollbarPresentationCss,
+} from './FluentScrollbarStyles.js';
 import { scrollbarTrack } from './FluentScrollbarLayout.js';
 import { FluentScrollbarView } from './FluentScrollbarView.js';
+import { FluentScrollbarLayers, scrollbarCoordinateSpace } from './FluentScrollbarLayers.js';
+import type { ScrollbarCoordinateSpace } from './FluentScrollbarLayers.js';
 import { SURFACE_GEOMETRY_MOTION_EVENT } from '../motion/SurfaceGeometryMotion.js';
 
 interface ScrollOwner {
@@ -29,7 +34,7 @@ interface ScrollOwner {
 export class FluentOverlayScrollbarHost {
   readonly #document: Document;
   readonly #reportError: (error: unknown) => void;
-  readonly #layer: HTMLDivElement;
+  readonly #layers: FluentScrollbarLayers;
   readonly #owners = new Map<HTMLElement, ScrollOwner>();
   readonly #views = new Map<HTMLElement, FluentScrollbarView>();
   readonly #roots = new Set<Node>();
@@ -45,12 +50,11 @@ export class FluentOverlayScrollbarHost {
   #frame: number | null = null;
   #nextId = 0;
 
-  /** Prepare a single portalled layer and coalesced observers. */
+  /** Prepare native surface layers and coalesced observers. */
   constructor(document: Document, reportError: (error: unknown) => void) {
     this.#document = document;
     this.#reportError = reportError;
-    this.#layer = document.createElement('div');
-    this.#layer.className = 'sc-fluent-scrollbar-layer';
+    this.#layers = new FluentScrollbarLayers(document);
     this.#mutations = new MutationObserver((records) => {
       let removed = false;
       for (const record of records) {
@@ -86,7 +90,6 @@ export class FluentOverlayScrollbarHost {
   enable(): void {
     if (this.#active) return;
     this.#active = true;
-    this.#document.body.append(this.#layer);
     this.#observe(this.#document.body);
     this.#pending.add(this.#document.body);
     this.#document.addEventListener('scroll', this.#onContentChange, true);
@@ -123,12 +126,15 @@ export class FluentOverlayScrollbarHost {
     this.#pending.clear();
     this.#changedElements.clear();
     this.#dirtyOwners.clear();
-    this.#layer.remove();
+    this.#layers.clear();
   }
 
-  /** Exclude our own portal and policy styles from rediscovery. */
+  /** Exclude owned layers and policy styles from rediscovery. */
   #owned(element: HTMLElement): boolean {
-    return this.#layer.contains(element) || element.hasAttribute('data-sc-scrollbar-policy');
+    return (
+      !!element.closest('.sc-fluent-scrollbar-layer') ||
+      element.hasAttribute('data-sc-scrollbar-policy')
+    );
   }
 
   /** Subscribe once per light or open shadow tree. */
@@ -190,7 +196,7 @@ export class FluentOverlayScrollbarHost {
       this.#dirtyOwners.add(element);
       this.#views.set(vertical.element, vertical);
       this.#views.set(horizontal.element, horizontal);
-      this.#layer.append(vertical.element, horizontal.element);
+      this.#layers.mount(element, vertical.element, horizontal.element);
       this.#observeSize(element);
     }
     if (scrollable)
@@ -200,7 +206,7 @@ export class FluentOverlayScrollbarHost {
     if (root && !this.#shadowStyles.has(root)) {
       const styleElement = this.#document.createElement('style');
       styleElement.setAttribute('data-sc-scrollbar-policy', '');
-      styleElement.textContent = fluentNativeScrollbarCss();
+      styleElement.textContent = fluentNativeScrollbarCss() + fluentScrollbarPresentationCss();
       root.append(styleElement);
       this.#shadowStyles.set(root, styleElement);
       root.addEventListener('scroll', this.#onContentChange, true);
@@ -215,6 +221,7 @@ export class FluentOverlayScrollbarHost {
     this.#views.delete(owner.horizontal.element);
     owner.vertical.dispose();
     owner.horizontal.dispose();
+    this.#layers.release(element);
     this.#resize?.unobserve(element);
     this.#observedSizes.delete(element);
     for (const child of element.children)
@@ -224,8 +231,10 @@ export class FluentOverlayScrollbarHost {
 
   /** Route owned thumb presses before document-level popup dismissal and graph handlers. */
   readonly #captureThumb = (event: PointerEvent): void => {
-    if (!(event.target instanceof HTMLElement)) return;
-    const view = this.#views.get(event.target);
+    const thumb = event
+      .composedPath()
+      .find((node) => node instanceof HTMLElement && this.#views.has(node));
+    const view = thumb instanceof HTMLElement ? this.#views.get(thumb) : undefined;
     if (!view || event.button !== 0) return;
     view.beginDrag(event);
     event.stopImmediatePropagation();
@@ -276,7 +285,7 @@ export class FluentOverlayScrollbarHost {
     );
   }
 
-  /** Hide displaced portal tracks and flush their geometry once the presentation owner settles. */
+  /** Hide changing tracks and flush their geometry once the presentation owner settles. */
   readonly #onGeometryMotion = (event: Event): void => {
     if (!(event.target instanceof HTMLElement)) return;
     const region = event.target;
@@ -321,6 +330,7 @@ export class FluentOverlayScrollbarHost {
           if (element.isConnected) {
             this.#invalidateGeometry(element);
           }
+        const spaces = new Map<HTMLElement, ScrollbarCoordinateSpace>();
         for (const [element, owner] of this.#owners) {
           if (!element.isConnected) {
             this.#remove(element, owner);
@@ -328,9 +338,19 @@ export class FluentOverlayScrollbarHost {
             continue;
           }
           if (!this.#dirtyOwners.has(element) || this.#moving(element)) continue;
+          const layer = this.#layers.mount(
+            element,
+            owner.vertical.element,
+            owner.horizontal.element,
+          );
+          let space = spaces.get(layer);
+          if (!space) {
+            space = scrollbarCoordinateSpace(layer);
+            spaces.set(layer, space);
+          }
           const track = scrollbarTrack(element);
-          owner.vertical.update(track);
-          owner.horizontal.update(track);
+          owner.vertical.update(track, space);
+          owner.horizontal.update(track, space);
           this.#dirtyOwners.delete(element);
         }
       } catch (error: unknown) {

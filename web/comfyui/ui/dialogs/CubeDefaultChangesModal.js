@@ -49,7 +49,6 @@ export class CubeDefaultChangesModal {
             confirmLabel: 'Save implementation',
             cancelLabel: 'Cancel',
             cancelResult: null,
-            allowOverlayClose: false,
             onConfirm: () => this.#shell.close(toDecisions(decisions)),
             initialFocus: () => this.#shell.elements.confirmButton,
         });

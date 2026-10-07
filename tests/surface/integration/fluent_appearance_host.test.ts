@@ -127,6 +127,8 @@ test('initial styling synchronizes native sockets while popup activity leaves ca
 test('keeps controls and explicit custom styling intact while restoring the current host palette', async () => {
   const root = document.createElement('div');
   root.className = 'lg-node';
+  root.style.position = 'relative';
+  root.style.overflow = 'auto';
   const custom = document.createElement('input');
   custom.style.backgroundColor = 'rgb(12, 34, 56)';
   custom.value = '<img src=x>';
@@ -159,8 +161,9 @@ test('keeps controls and explicit custom styling intact while restoring the curr
   expect(root.hasAttribute('data-sc-fluent-node')).toBe(false);
   custom.focus();
   host.setEnabled(true);
-  expect(document.querySelector('.sc-fluent-scrollbar-layer')).not.toBeNull();
+  expect(document.querySelector('.sc-fluent-scrollbar-layer')).toBeNull();
   frames.splice(0).forEach((frame) => frame(0));
+  expect(root.querySelector('.sc-fluent-scrollbar-layer')).not.toBeNull();
   expect(document.activeElement).toBe(custom);
   expect(custom.style.backgroundColor).toBe('rgb(12, 34, 56)');
   expect(root.hasAttribute('data-sc-fluent-node')).toBe(true);

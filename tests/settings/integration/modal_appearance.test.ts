@@ -60,10 +60,14 @@ test('themes existing and purpose-built forms through the shared shell and retai
     '<b>Name</b>',
   );
   expect(document.querySelector('.sugarcubes-input-dialog b')).toBeNull();
-  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-  await expect(inputResult).resolves.toBeNull();
-  await expect(formResult).resolves.toBeNull();
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }));
   await expect(presetResult).resolves.toBeNull();
+  expect(overlays[0]?.classList.contains('is-visible')).toBe(true);
+  expect(overlays[1]?.classList.contains('is-visible')).toBe(true);
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }));
+  await expect(formResult).resolves.toBeNull();
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }));
+  await expect(inputResult).resolves.toBeNull();
   expect(overlays.every((overlay) => !overlay.hasAttribute('data-sc-modal-appearance'))).toBe(true);
 });
 

@@ -1,24 +1,31 @@
 import { ContextMenu } from '../../menus/ContextMenu.js';
+import { OverrideToolbarDisclosure } from './OverrideToolbarDisclosure.js';
+import { OverrideToolbarDrag } from './OverrideToolbarDrag.js';
+import { OverrideToolbarPlacement } from './OverrideToolbarPlacement.js';
+import { OverrideToolbarFieldLayout } from './OverrideToolbarFieldLayout.js';
 /** Keep toolbar controls stable while reconciling automatically discovered participant groups. */
 export class GlobalOverrideToolbar {
     document;
     relations;
     reportError;
     widgets;
-    attach;
     element;
     #controls = new Map();
     #menu;
     #menuButton;
     #labels;
+    #fields;
+    #fieldLayout;
+    #disclosure;
+    #drag;
+    #placement;
     #signature = '';
     /** Bind toolbar edits directly to the authoritative application owner. */
-    constructor(document, relations, reportError, widgets, attach, presentation = 'comfy') {
+    constructor(document, relations, reportError, widgets, host, presentation = 'comfy') {
         this.document = document;
         this.relations = relations;
         this.reportError = reportError;
         this.widgets = widgets;
-        this.attach = attach;
         this.element = document.createElement('div');
         this.element.className = 'sc-overrides-toolbar';
         this.element.setAttribute('role', 'toolbar');
@@ -58,7 +65,38 @@ export class GlobalOverrideToolbar {
                 })),
             });
         });
-        this.element.append(this.#menuButton);
+        const grip = document.createElement('button');
+        grip.type = 'button';
+        grip.className = 'sc-overrides-grip';
+        grip.setAttribute('aria-label', 'Move global overrides');
+        grip.title =
+            'Drag onto the Run dock target; Enter toggles docking; arrow keys move, Home resets';
+        const gripIcon = document.createElement('span');
+        gripIcon.className = 'drag-handle h-max w-3 cursor-grab';
+        gripIcon.setAttribute('aria-hidden', 'true');
+        grip.append(gripIcon);
+        this.#fields = document.createElement('div');
+        this.#fields.className = 'sc-overrides-fields';
+        this.#fieldLayout = new OverrideToolbarFieldLayout(this.#fields);
+        this.#fields.id = 'sc-overrides-fields';
+        const disclosure = document.createElement('button');
+        disclosure.type = 'button';
+        disclosure.className = 'sc-overrides-disclosure';
+        disclosure.setAttribute('aria-controls', this.#fields.id);
+        disclosure.addEventListener('click', () => {
+            this.#menu.close();
+            queueMicrotask(this.#measureLabels);
+        });
+        this.element.append(grip, this.#menuButton, this.#fields, disclosure);
+        this.#placement = new OverrideToolbarPlacement(this.element, grip, host, (docked) => this.#disclosure.setExpansionDirection(docked ? 'left' : 'right'), () => this.#fieldLayout.reconcile());
+        this.#drag = new OverrideToolbarDrag(this.element, grip, this.#placement, () => {
+            this.#menu.close();
+            this.#disclosure.finish();
+        });
+        this.#disclosure = new OverrideToolbarDisclosure(this.element, this.#fields, disclosure, (width, height) => {
+            this.#fieldLayout.reconcile();
+            this.#placement.resize(width, height);
+        }, reportError);
         this.#labels = new MutationObserver(this.#measureLabels);
         this.#labels.observe(this.element, { childList: true, subtree: true, characterData: true });
     }
@@ -68,8 +106,9 @@ export class GlobalOverrideToolbar {
     }
     /** Reattach after native shell replacement and update only changed controls. */
     reconcile() {
-        if (!this.attach(this.element))
+        if (!this.#placement.attached())
             return;
+        this.#disclosure.refresh();
         const groups = this.relations.snapshot().groups;
         this.element.hidden = groups.length === 0;
         const signature = JSON.stringify(groups);
@@ -89,19 +128,22 @@ export class GlobalOverrideToolbar {
             }
             control.update(group);
         }
-        let preceding = this.#menuButton;
+        let preceding = null;
         for (const group of groups.filter((item) => item.enabled)) {
             const root = this.#controls.get(group.key)?.root;
             if (!root)
                 continue;
-            if (root.previousElementSibling !== preceding)
-                this.element.insertBefore(root, preceding.nextSibling);
+            if (root.parentElement !== this.#fields || root.previousElementSibling !== preceding)
+                this.#fields.insertBefore(root, preceding ? preceding.nextSibling : this.#fields.firstChild);
             preceding = root;
         }
     }
     /** Release menus and owned toolbar DOM without modifying workflow state. */
     dispose() {
         this.#labels.disconnect();
+        this.#drag.dispose();
+        this.#placement.dispose();
+        this.#disclosure.dispose();
         for (const control of this.#controls.values())
             control.dispose();
         this.#controls.clear();
@@ -112,9 +154,11 @@ export class GlobalOverrideToolbar {
     #measureLabels = () => {
         for (const control of this.#controls.values()) {
             const label = control.root.querySelector('[data-testid="widget-layout-field-label"]');
-            if (label)
-                control.root.style.setProperty('--sc-override-label-width', `${label.getBoundingClientRect().width}px`);
+            const width = label?.getBoundingClientRect().width ?? 0;
+            if (width > 0)
+                control.root.style.setProperty('--sc-override-label-width', `${width}px`);
         }
+        this.#disclosure.refresh();
     };
     /** Mount the same native widget component used on node cards against the shared value owner. */
     #createControl(group) {

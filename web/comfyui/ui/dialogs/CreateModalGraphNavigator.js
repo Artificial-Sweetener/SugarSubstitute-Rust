@@ -36,6 +36,9 @@ export class CreateModalGraphNavigator {
     listeners;
     windowListeners;
     windowListenersAttached;
+    panOrigin = null;
+    suppressPanClick = false;
+    /** Bind viewport-only gestures while leaving ordinary backdrop clicks to the modal. */
     constructor({ adapter = null } = {}) {
         this.adapter = adapter;
         this.overlay = null;
@@ -52,7 +55,7 @@ export class CreateModalGraphNavigator {
             ['pointerup', (event) => this.handlePointerEnd(event)],
             ['pointercancel', (event) => this.handlePointerEnd(event)],
             ['wheel', (event) => this.handleWheel(event)],
-            ['click', (event) => this.blockBackdropEvent(event)],
+            ['click', (event) => this.handleBackdropClick(event)],
             ['dblclick', (event) => this.blockBackdropEvent(event)],
             ['contextmenu', (event) => this.blockBackdropEvent(event)],
         ];
@@ -80,6 +83,7 @@ export class CreateModalGraphNavigator {
             overlay.addEventListener(type, listener, true);
         }
     }
+    /** Release capture and pending gesture suppression when the authoring dialog closes. */
     detach() {
         this.detachWindowListeners();
         if (this.overlay) {
@@ -92,6 +96,8 @@ export class CreateModalGraphNavigator {
             this.dialog.style.cursor = this.originalDialogCursor;
         }
         this.isPanning = false;
+        this.panOrigin = null;
+        this.suppressPanClick = false;
         this.pointerId = null;
         this.overlay = null;
         this.dialog = null;
@@ -105,6 +111,14 @@ export class CreateModalGraphNavigator {
         event.preventDefault();
         event.stopPropagation();
         return true;
+    }
+    /** Let a backdrop click dismiss the form while consuming the click synthesized after a pan. */
+    handleBackdropClick(event) {
+        if (!this.suppressPanClick)
+            return;
+        this.suppressPanClick = false;
+        event.preventDefault();
+        event.stopPropagation();
     }
     isNavigationEvent(event) {
         if (this.isCapturedPanEvent(event)) {
@@ -129,6 +143,7 @@ export class CreateModalGraphNavigator {
         const pointerId = event?.pointerId ?? null;
         return pointerId == null || this.pointerId == null || pointerId === this.pointerId;
     }
+    /** Capture a backdrop gesture without changing graph selection or node positions. */
     handlePointerDown(event) {
         if (!this.blockBackdropEvent(event)) {
             return;
@@ -142,6 +157,8 @@ export class CreateModalGraphNavigator {
         this.pointerId = event.pointerId ?? null;
         this.lastClientX = Number(event.clientX) || 0;
         this.lastClientY = Number(event.clientY) || 0;
+        this.panOrigin = [this.lastClientX, this.lastClientY];
+        this.suppressPanClick = false;
         this.attachWindowListeners();
         this.setBackdropCursor('grabbing');
         if (this.pointerId != null && typeof this.overlay?.setPointerCapture === 'function') {
@@ -153,18 +170,24 @@ export class CreateModalGraphNavigator {
             }
         }
     }
+    /** Pan the viewport and distinguish deliberate movement from a dismissal click. */
     handlePointerMove(event) {
         if (!this.blockBackdropEvent(event) || !this.isPanning) {
             return;
         }
         const clientX = Number(event.clientX) || 0;
         const clientY = Number(event.clientY) || 0;
+        if (this.panOrigin &&
+            Math.hypot(clientX - this.panOrigin[0], clientY - this.panOrigin[1]) > 4) {
+            this.suppressPanClick = true;
+        }
         const dx = clientX - this.lastClientX;
         const dy = clientY - this.lastClientY;
         this.lastClientX = clientX;
         this.lastClientY = clientY;
         this.panBy(dx, dy);
     }
+    /** Release pan capture while retaining suppression of its synthesized click. */
     handlePointerEnd(event) {
         if (!this.blockBackdropEvent(event)) {
             return;
@@ -181,6 +204,9 @@ export class CreateModalGraphNavigator {
             }
         }
         this.isPanning = false;
+        this.panOrigin = null;
+        if (event.type === 'pointercancel')
+            this.suppressPanClick = false;
         this.pointerId = null;
         this.setBackdropCursor('grab');
         this.detachWindowListeners();

@@ -1,31 +1,32 @@
 import {
   ModelPickerField
-} from "./chunk-66QM3N57.js";
-import "./chunk-UHSVLRK7.js";
-import "./chunk-VK2YTUDH.js";
-import "./chunk-MMOUDFHF.js";
-import "./chunk-OUW7MOZ3.js";
-import "./chunk-TX757RKW.js";
-import "./chunk-X3VJ7M63.js";
-import "./chunk-3AFG44E5.js";
-import "./chunk-SXT6EATL.js";
-import "./chunk-WQY75U7Z.js";
-import "./chunk-YR7F7J6A.js";
-import "./chunk-JHL2BQUZ.js";
-import "./chunk-JN3PQMAZ.js";
+} from "./chunk-ITPTXXE4.js";
+import "./chunk-2EJWBG22.js";
+import "./chunk-OKMKTXD6.js";
+import "./chunk-RR5YCA3U.js";
+import "./chunk-RUTW3MPT.js";
+import "./chunk-CEVAK54V.js";
+import "./chunk-EYWLUWSB.js";
+import "./chunk-BGLA25ZI.js";
+import "./chunk-FQAGC7FG.js";
+import "./chunk-MM7W35BE.js";
+import "./chunk-ZMF3A2RB.js";
+import "./chunk-KJVBBJVU.js";
+import "./chunk-4DBFGV2O.js";
 import "./chunk-HBDMWEN5.js";
-import "./chunk-NU224JSW.js";
-import "./chunk-TYXNDHG2.js";
-import "./chunk-MRDNZD2T.js";
-import "./chunk-YSDVLBQQ.js";
-import "./chunk-3UMXK5CY.js";
-import "./chunk-LTR7DIIA.js";
-import "./chunk-5HRVOV4C.js";
+import "./chunk-HRRVXU3H.js";
+import "./chunk-RPKXVHLS.js";
+import "./chunk-6S3EI6RJ.js";
+import "./chunk-KJ2VRCYH.js";
+import "./chunk-LODHLXUH.js";
+import "./chunk-SYMYA4CE.js";
+import "./chunk-WIKCJTWX.js";
+import "./chunk-NC5FFMF2.js";
 import {
   createApp,
   h,
   shallowRef
-} from "./chunk-57LGDI7T.js";
+} from "./chunk-3W5PGMRW.js";
 
 // frontend/comfyui/ui/model_library/vue/ModelPickerVueRuntime.ts
 var mountIdentity = 0;

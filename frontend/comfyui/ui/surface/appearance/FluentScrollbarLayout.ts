@@ -75,30 +75,3 @@ export function scrollbarTrack(element: HTMLElement): ScrollbarTrack | null {
     rtl: windowRef.getComputedStyle(element).direction === 'rtl',
   };
 }
-
-/** Hide a background owner's handles when a popup or scrim covers its visible edge. */
-export function scrollbarEdgeVisible(element: HTMLElement, x: number, y: number): boolean {
-  const document = element.ownerDocument;
-  if (!document.elementsFromPoint) return true;
-  const hit = document
-    .elementsFromPoint(x, y)
-    .find((candidate) => !candidate.closest('.sc-fluent-scrollbar-layer'));
-  if (!hit) return false;
-  let top: Element = hit;
-  while (top.shadowRoot?.elementsFromPoint) {
-    const inner: Element | undefined = top.shadowRoot
-      .elementsFromPoint(x, y)
-      .find((candidate) => candidate !== top);
-    if (!inner) break;
-    top = inner;
-  }
-  if (element === document.scrollingElement) return top === document.body || top === element;
-  const edge =
-    element.getAttribute('data-sc-scrollbar-edge') === 'parent' ? scrollParent(element) : null;
-  return (
-    top === element ||
-    element.contains(top) ||
-    top.getRootNode() === element.shadowRoot ||
-    top === edge
-  );
-}

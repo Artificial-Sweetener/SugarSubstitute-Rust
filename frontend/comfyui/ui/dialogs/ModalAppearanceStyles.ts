@@ -22,7 +22,9 @@ ${scope} :is(.sugarcubes-modal,.sugarcubes-modal__panel) {
   border-radius:8px; background:var(--colorNeutralBackground2); color:var(--colorNeutralForeground1);
   box-shadow:var(--shadow64); font-family:var(--fontFamilyBase); font-size:14px; line-height:1.4; overflow-wrap:anywhere;
 }
+${scope} :is(.p-dialog-header,.sugarcubes-modal__panel-header) { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
 ${scope} .p-dialog-header { padding:24px 24px 16px; border:0; border-radius:8px 8px 0 0; background:transparent; color:inherit; }
+${scope} .p-dialog-title { min-width:0; flex:1; }
 ${scope} :is(.p-dialog-title,.sugarcubes-modal__panel-title) { font-size:20px; line-height:28px; font-weight:600; }
 ${scope} .p-dialog-content { box-sizing:border-box; min-width:0; padding:0 24px 24px; background:transparent; color:inherit; }
 ${scope} .p-dialog-footer { padding:16px 24px 24px; background:transparent; border:0; border-radius:0 0 8px 8px; }
@@ -62,6 +64,10 @@ ${scope} :is(.sugarcubes-modal__footer-actions .p-button:not(.p-button-secondary
 ${scope} :is(.sugarcubes-modal__footer-actions .p-button:not(.p-button-secondary),.p-button-primary):not(:disabled):hover { background:var(--colorBrandBackgroundHover); }
 ${scope} :is(.sugarcubes-modal__footer-actions .p-button:not(.p-button-secondary),.p-button-primary):not(:disabled):active { background:var(--colorBrandBackgroundPressed); }
 ${scope} .p-button:disabled { color:var(--colorNeutralForegroundDisabled); background:var(--colorNeutralBackgroundDisabled); border-color:var(--colorNeutralStrokeDisabled); cursor:default; opacity:1; }
+${scope} .sugarcubes-modal__close { position:relative; flex:none; width:32px; height:32px; padding:0; border-color:transparent; background:transparent; }
+${scope} .sugarcubes-modal__close::before,${scope} .sugarcubes-modal__close::after { content:''; position:absolute; width:14px; height:1px; background:currentColor; transform:rotate(45deg); }
+${scope} .sugarcubes-modal__close::after { transform:rotate(-45deg); }
+${scope} .sugarcubes-modal__close:hover:not(:disabled) { border-color:var(--colorNeutralStroke1Hover); background:var(--colorNeutralBackground1Hover); }
 ${scope} :is(.sugarcubes-modal__error,.sugarcubes-modal__field-error) { color:var(--colorPaletteRedForeground1); }
 ${scope} :is(.sugarcubes-modal__field-help,.sugarcubes-modal__description) { color:var(--colorNeutralForeground2); }
 ${scope} :is(.sugarcubes-selection-dialog__option,.sugarcubes-default-review__choice,.sugarcubes-create-cube__preview) { background:var(--colorNeutralBackground3); border-color:var(--colorNeutralStroke1); }

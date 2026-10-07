@@ -26,7 +26,6 @@ import {
 export interface WorkflowMasonryTransitionCard {
   id: string;
   cell: HTMLElement;
-  element: HTMLElement;
 }
 
 export interface WorkflowMasonryTransitionSurface {
@@ -97,8 +96,8 @@ export class WorkflowMasonryTransition {
         if (!source?.visible && !rectanglesIntersect(destination, view.graph.viewport)) continue;
         if (!source) {
           requests.push({
-            element: card.element,
-            frames: opacityFrames(card.element, entering ? 0 : 1, entering ? 1 : 0),
+            element: card.cell,
+            frames: opacityFrames(card.cell, entering ? 0 : 1, entering ? 1 : 0),
           });
           continue;
         }
@@ -111,15 +110,18 @@ export class WorkflowMasonryTransition {
           });
         }
         const rectangle = source.rectangle;
-        const graphTransform = `translate(${String(rectangle.x - destination.x)}px, ${String(rectangle.y - destination.y)}px) scale(${String(source.scale)})`;
-        const masonryTransform = 'translate(0px, 0px) scale(1)';
-        const current = this.#effects.has(card.element)
-          ? windowRef?.getComputedStyle(card.element)
+        const placement = card.cell.style.transform;
+        const masonryTransform = placement || 'translate(0px, 0px) scale(1)';
+        const graphTransform = `${placement ? `${placement} ` : ''}translate(${String(rectangle.x - destination.x)}px, ${String(rectangle.y - destination.y)}px) scale(${String(source.scale)})`;
+        const current = this.#effects.has(card.cell)
+          ? windowRef?.getComputedStyle(card.cell)
           : undefined;
         const graphWidth = `${String(source.layoutWidth)}px`;
         const masonryWidth = `${String(destination.width)}px`;
+        const graphHeight = `${String(rectangle.height / source.scale)}px`;
+        const masonryHeight = `${String(destination.height)}px`;
         requests.push({
-          element: card.element,
+          element: card.cell,
           ...(graphAssembly ? {} : { source: source.element }),
           frames: [
             {
@@ -131,11 +133,15 @@ export class WorkflowMasonryTransition {
                     : masonryTransform,
               opacity: graphAssembly ? current?.opacity || (entering ? 0 : 1) : 1,
               width: current?.width || (entering ? graphWidth : masonryWidth),
+              ...(graphAssembly
+                ? { height: current?.height || (entering ? graphHeight : masonryHeight) }
+                : {}),
             },
             {
               transform: entering ? masonryTransform : graphTransform,
               opacity: graphAssembly ? (entering ? 1 : 0) : 1,
               width: entering ? masonryWidth : graphWidth,
+              ...(graphAssembly ? { height: entering ? masonryHeight : graphHeight } : {}),
             },
           ],
         });

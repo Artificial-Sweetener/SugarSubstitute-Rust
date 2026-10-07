@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Prove the animated slider thumb stays decorative and keeps fixed geometry around its inner dot. */
+/** Prove the decorative slider thumb paints its ring and animated dot on one centered surface. */
 import { afterEach, expect, test } from '@jest/globals';
 import {
   createFluentSliderThumb,
@@ -26,30 +26,31 @@ test('uses Fluent’s thumb slot without introducing another input or focus targ
   const thumb = createFluentSliderThumb(document);
   expect(thumb.slot).toBe('thumb');
   expect(thumb.getAttribute('aria-hidden')).toBe('true');
-  expect(thumb.querySelectorAll('[data-sc-slider-thumb-center]')).toHaveLength(1);
+  expect(thumb.childElementCount).toBe(0);
   expect(thumb.querySelector('input, button, [tabindex], [role]')).toBeNull();
   expect(thumb.hasAttribute('tabindex')).toBe(false);
 });
 
-test('sizes only the inner dot for enabled hover and press, with reduced motion and high contrast support', () => {
+test('centers dot painting in the fixed ring for hover and press, reduced motion and high contrast', () => {
   const style = document.createElement('style');
   style.textContent = fluentSliderThumbCss();
   const thumb = createFluentSliderThumb(document);
   document.body.append(style, thumb);
-  const center = thumb.querySelector('[data-sc-slider-thumb-center]');
-  if (!center) throw new Error('Missing thumb center.');
-  expect(getComputedStyle(thumb).display).toBe('grid');
-  expect(getComputedStyle(center).width).toBe('10px');
-  expect(getComputedStyle(center).height).toBe('10px');
-  expect(getComputedStyle(center).pointerEvents).toBe('none');
-  expect(getComputedStyle(center).transform).toBe('scale(1)');
+  const appearance = getComputedStyle(thumb);
+  expect(appearance.display).toBe('block');
+  expect(appearance.boxSizing).toBe('border-box');
+  expect(appearance.backgroundPosition).toBe('center');
+  expect(appearance.backgroundSize).toBe('10px 10px');
+  expect(appearance.backgroundRepeat).toBe('no-repeat');
+  expect(appearance.transform).toBe('');
   const rules = Array.from(style.sheet?.cssRules ?? [])
     .map((rule) => rule.cssText)
     .join('\n');
   expect(rules).toContain(':not([disabled]) [data-sc-slider-thumb]:hover');
-  expect(rules).toContain('transform: scale(1.2)');
+  expect(rules).toContain('background-size: 12px 12px');
   expect(rules).toContain(':not([disabled]):active');
-  expect(rules).toContain('transform: scale(.8)');
+  expect(rules).toContain('background-size: 8px 8px');
+  expect(rules).toContain('radial-gradient(circle closest-side');
   expect(rules).toContain('prefers-reduced-motion:reduce');
   expect(rules).toContain('forced-colors:active');
 });

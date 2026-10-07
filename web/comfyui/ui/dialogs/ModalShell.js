@@ -19,6 +19,7 @@
 import { $el } from '/scripts/ui.js';
 import { injectDialogStyles } from './DialogStyles.js';
 import { ModalAppearance } from './ModalAppearance.js';
+import { ModalDismissal } from './ModalDismissal.js';
 /**
  * Coordinate shared modal shell behavior for SugarCubes dialogs.
  */
@@ -34,6 +35,8 @@ export class ModalShell {
     options;
     focusTarget;
     previousActiveElement;
+    dismissal;
+    /** Bind presentation lifetimes and one cancellation policy to the host document. */
     constructor({ adapter, variantClassName = '', dialogClassName = '' } = {}) {
         this.documentRef = adapter?.getDocument?.() || null;
         this.windowRef = adapter?.getWindow?.() || null;
@@ -45,7 +48,9 @@ export class ModalShell {
         this.options = {};
         this.focusTarget = null;
         this.previousActiveElement = null;
+        this.dismissal = new ModalDismissal(this.documentRef, () => this.elements.dialog, () => this.options, () => this.close(this.options.cancelResult));
     }
+    /** Create persistent controls with explicit host-independent accessibility attributes. */
     ensureElements() {
         if (this.elements.overlay) {
             return;
@@ -60,14 +65,20 @@ export class ModalShell {
             dialogClassNames.push(this.dialogClassName);
         }
         const dialog = $el('div', { className: dialogClassNames.join(' ') });
+        dialog.setAttribute('role', 'dialog');
+        dialog.setAttribute('aria-modal', 'true');
         const titleEl = $el('span.p-dialog-title');
-        const header = $el('div.p-dialog-header', [titleEl]);
+        const closeButton = $el('button.p-button.p-component.sugarcubes-modal__close', {
+            type: 'button',
+            title: 'Close',
+        });
+        closeButton.setAttribute('aria-label', 'Close dialog');
+        const header = $el('div.p-dialog-header', [titleEl, closeButton]);
         const descriptionEl = $el('div.sugarcubes-modal__description');
         const content = $el('div.p-dialog-content');
-        const errorEl = $el('div.sugarcubes-modal__error', {
-            role: 'alert',
-            'aria-live': 'polite',
-        });
+        const errorEl = $el('div.sugarcubes-modal__error');
+        errorEl.setAttribute('role', 'alert');
+        errorEl.setAttribute('aria-live', 'polite');
         const footerMeta = $el('div.sugarcubes-modal__footer-meta');
         const cancelButton = $el('button.p-button.p-component.p-button-text.p-button-secondary', {
             type: 'button',
@@ -83,13 +94,10 @@ export class ModalShell {
         dialog.append(header, content, footer);
         overlay.appendChild(dialog);
         this.documentRef?.body?.appendChild(overlay);
-        overlay.addEventListener('click', (event) => {
-            if (event.target !== overlay || this.options.allowOverlayClose === false) {
-                return;
-            }
-            this.close(this.options.cancelResult);
-        });
-        cancelButton.addEventListener('click', () => this.close(this.options.cancelResult));
+        overlay.addEventListener('pointerdown', (event) => this.dismissal.press(event), true);
+        overlay.addEventListener('click', (event) => this.dismissal.outside(event));
+        closeButton.addEventListener('click', () => this.dismissal.dismiss());
+        cancelButton.addEventListener('click', () => this.dismissal.dismiss());
         confirmButton.addEventListener('click', () => {
             this.options.onConfirm?.();
         });
@@ -97,6 +105,7 @@ export class ModalShell {
             overlay,
             dialog,
             titleEl,
+            closeButton,
             content,
             descriptionEl,
             errorEl,
@@ -126,10 +135,12 @@ export class ModalShell {
         this.focusTarget = typeof initialFocus === 'function' ? initialFocus : null;
         const activeElement = this.documentRef?.activeElement;
         this.previousActiveElement = activeElement instanceof HTMLElement ? activeElement : null;
+        this.documentRef?.body?.appendChild(overlay);
         overlay.classList.add('is-visible');
         this.appearance.open(overlay);
         overlay.style.display = 'flex';
         titleEl.textContent = title || '';
+        dialog.setAttribute('aria-label', title || 'SugarCubes');
         this.setDescription(description);
         this.setBody(body);
         this.setFooterMeta(footerMeta);
@@ -141,9 +152,10 @@ export class ModalShell {
         cancelButton.style.display = showCancel ? '' : 'none';
         this.setBusy(false);
         const onKeydown = (event) => {
-            if (event.key === 'Escape' && this.options.allowEscapeClose !== false) {
-                event.preventDefault();
-                this.close(this.options.cancelResult);
+            if (event.defaultPrevented || !this.dismissal.isFrontmost())
+                return;
+            if (event.key === 'Escape') {
+                this.dismissal.escape(event);
                 return;
             }
             if (event.key === 'Enter' && !event.defaultPrevented) {
@@ -182,6 +194,7 @@ export class ModalShell {
         this.appearance.close();
         this.elements.overlay.style.display = 'none';
         this.options = {};
+        this.dismissal.reset();
         this.focusTarget = null;
         const focusTarget = this.previousActiveElement;
         this.previousActiveElement = null;
@@ -235,8 +248,12 @@ export class ModalShell {
         this.elements.errorEl.textContent = text;
         this.elements.errorEl.style.display = text ? '' : 'none';
     }
+    /** Keep all cancellation routes and acceptance controls aligned during a transaction. */
     setBusy(busy) {
         const isBusy = Boolean(busy);
+        this.dismissal.setBusy(isBusy);
+        if (this.elements.closeButton)
+            this.elements.closeButton.disabled = isBusy;
         if (this.elements.confirmButton) {
             const allowConfirm = this.elements.confirmButton.dataset.allowConfirm !== 'false';
             this.elements.confirmButton.disabled = isBusy || !allowConfirm;
@@ -249,12 +266,13 @@ export class ModalShell {
             this.elements.dialog.classList.toggle('is-busy', isBusy);
         }
     }
+    /** Retain acceptance eligibility without re-enabling a busy transaction. */
     setConfirmEnabled(enabled) {
         if (!this.elements.confirmButton) {
             return;
         }
         this.elements.confirmButton.dataset.allowConfirm = enabled ? 'true' : 'false';
-        this.elements.confirmButton.disabled = !enabled;
+        this.elements.confirmButton.disabled = this.dismissal.busy || !enabled;
     }
     focusInitialTarget() {
         const explicit = this.focusTarget?.();

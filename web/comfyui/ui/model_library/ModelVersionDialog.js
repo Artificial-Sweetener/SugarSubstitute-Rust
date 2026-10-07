@@ -155,14 +155,10 @@ export class ModelVersionDialog {
             footerMeta: footer,
             confirmLabel: 'Use version',
             cancelLabel: 'Close',
-            allowOverlayClose: false,
             onConfirm: () => {
                 void download();
             },
         });
-        this.#shell.elements.dialog?.setAttribute('role', 'dialog');
-        this.#shell.elements.dialog?.setAttribute('aria-label', this.#title(versions));
-        this.#shell.elements.dialog?.setAttribute('aria-modal', 'true');
         this.#shell.setConfirmEnabled(false);
         const controller = new AbortController();
         this.#controller = controller;

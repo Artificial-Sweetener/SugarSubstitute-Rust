@@ -75,11 +75,9 @@ describe('Cube authoring modal', () => {
     expect(
       preview.compareDocumentPosition(descriptionField) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+    preview.click();
+    expect(overlay.classList.contains('is-visible')).toBe(true);
     overlay.click();
-    expect(document.body.textContent).toContain('Save SugarCube');
-    document
-      .querySelector<HTMLButtonElement>('.sugarcubes-create-cube-dialog .p-dialog-footer button')!
-      .click();
     await expect(promise).resolves.toBeNull();
     expect(overlay.style.cursor).toBe('');
   });
