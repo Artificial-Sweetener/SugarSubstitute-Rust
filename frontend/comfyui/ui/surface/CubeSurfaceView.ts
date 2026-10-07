@@ -32,6 +32,7 @@ import type { CubeIdentityPresentation } from '../cube/CubeIdentityPresentation.
 import type { CubeFaceChromeActions, CubeFaceChromeMetadata } from './CubeFaceChromeActions.js';
 import { CubePreviewFrameResizePolicy } from './CubePreviewFrameResizePolicy.js';
 import { CubeFaceHeaderView } from './CubeFaceHeaderView.js';
+import { NativeCardPresentationOwner } from './NativeCardPresentationOwner.js';
 
 export interface CubeSurfaceViewOptions {
   document: Document;
@@ -69,6 +70,9 @@ export class CubeSurfaceView {
   readonly #geometryObserver: NativeCardGeometryObserver;
   readonly #previewDividerController: CubePreviewDividerController | null;
   readonly #previewFrameResize = new CubePreviewFrameResizePolicy();
+  readonly #presentation = new NativeCardPresentationOwner(() =>
+    this.layout(this.#lastLayoutWidth),
+  );
   #cells: HTMLElement[] = [];
   #visibleCards: ProjectedNodeCard[] = [];
   #lastLayoutWidth = 1;
@@ -163,6 +167,7 @@ export class CubeSurfaceView {
   layout(width: number): void {
     const safeWidth = Number.isFinite(width) ? Math.max(1, width) : 1;
     this.#lastLayoutWidth = safeWidth;
+    if (this.#presentation.borrowed) return;
     let result = this.#applyLayout(safeWidth);
     const resizedPreviewWidth = this.#previewFrameResize.resolve({
       frameWidth: safeWidth,
@@ -206,11 +211,13 @@ export class CubeSurfaceView {
     this.#previewDividerController?.dispose();
     this.#previewView.dispose();
     this.#geometryObserver.dispose();
+    this.#presentation.dispose();
     this.#cardHost.dispose();
   }
 
   /** Reconcile exact native card mounts from the shared presentation policy. */
   #renderCards(): void {
+    this.#presentation.reset([]);
     this.#visibleCards = projectNodeCards(this.#nodes, this.#state, this.#graph, this.#cube).filter(
       (card) => card.visible,
     );
@@ -219,6 +226,7 @@ export class CubeSurfaceView {
       this.#commitCardChange();
     });
     this.#geometryObserver.observe(this.#cells);
+    this.#presentation.reset(this.#cells);
     this.#headerView.renderActions();
   }
 

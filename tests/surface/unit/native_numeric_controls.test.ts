@@ -46,7 +46,10 @@ class SliderFixture extends HTMLElement implements FluentNumericSlider {
 customElements.define('numeric-slider-fixture', SliderFixture);
 
 test('completes official Fluent component registration before creating numeric controls', () => {
-  expect(customElements.get('fluent-slider')).toBe(Slider);
+  const registered = customElements.get('fluent-slider');
+  expect(registered).toBeDefined();
+  expect(registered?.prototype).toBeInstanceOf(Slider);
+  expect(typeof Reflect.get(registered?.prototype ?? {}, 'connectedMoveCallback')).toBe('function');
 });
 
 test('keeps primary numeric gestures with the controls and restores graph gestures on release', () => {

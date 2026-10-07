@@ -25,11 +25,30 @@ import { definition as CheckboxDefinition } from '@fluentui/web-components/check
 import type { FluentNumericSlider } from './NativeNumericControls.js';
 import type { FluentBooleanCheckbox } from './NativeToggleRows.js';
 import { adaptFluentSliderGeometry } from './FluentSliderGeometry.js';
+import { createFluentSliderThumb } from './FluentSliderThumb.js';
+
+/** Retain the official slider's bindings and stylesheet during connected presentation moves. */
+class PresentationSlider extends Slider {
+  /** Preserve mounted state while native layout observes the new parent width. */
+  connectedMoveCallback(): void {}
+}
+
+/** Retain the official button's native state during connected presentation moves. */
+class PresentationButton extends Button {
+  /** Keep mounted bindings intact when its enclosing card changes presentation. */
+  connectedMoveCallback(): void {}
+}
+
+/** Retain the official checkbox's form and value bindings during connected presentation moves. */
+class PresentationCheckbox extends Checkbox {
+  /** Keep mounted bindings intact when its enclosing card changes presentation. */
+  connectedMoveCallback(): void {}
+}
 
 // FAST completes component registration asynchronously, before consumers can create controls.
-if (!customElements.get('fluent-slider')) await Slider.define(SliderDefinition);
-if (!customElements.get('fluent-button')) await Button.define(ButtonDefinition);
-if (!customElements.get('fluent-checkbox')) await Checkbox.define(CheckboxDefinition);
+if (!customElements.get('fluent-slider')) await PresentationSlider.define(SliderDefinition);
+if (!customElements.get('fluent-button')) await PresentationButton.define(ButtonDefinition);
+if (!customElements.get('fluent-checkbox')) await PresentationCheckbox.define(CheckboxDefinition);
 
 /** Instantiate Microsoft's checkbox while Comfy retains the boolean value owner. */
 export function createFluentBooleanCheckbox(documentRef: Document): FluentBooleanCheckbox {
@@ -45,6 +64,7 @@ export function createFluentNumericSlider(documentRef: Document): FluentNumericS
   if (!(slider instanceof Slider))
     throw new TypeError('The registered Fluent slider has an incompatible implementation.');
   adaptFluentSliderGeometry(slider);
+  slider.append(createFluentSliderThumb(documentRef));
   return slider;
 }
 

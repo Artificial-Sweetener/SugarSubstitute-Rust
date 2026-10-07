@@ -442,7 +442,7 @@ describe('ComfyVueNodeCardRenderer', () => {
     expect(render).toHaveBeenCalledWith(null, expect.any(HTMLElement));
   });
 
-  test('applies Cube-face mode to native component roots without replacing widgets', () => {
+  test('applies Cube-face mode idempotently without replacing widgets', async () => {
     const componentRoots = {
       slots: document.createElement('div'),
       widgets: document.createElement('div'),
@@ -485,7 +485,7 @@ describe('ComfyVueNodeCardRenderer', () => {
       },
     });
 
-    renderer.mount(target, { id: 'inside-1', type: 'KSampler' });
+    const mount = renderer.mount(target, { id: 'inside-1', type: 'KSampler' });
 
     expect(componentRoots.slots.hidden).toBe(true);
     expect(componentRoots.content.hidden).toBe(false);
@@ -499,6 +499,15 @@ describe('ComfyVueNodeCardRenderer', () => {
     expect(nativeRoot.dataset.cubeFacePresentation).toBe('true');
     expect(nativeRoot.style.getPropertyValue('transform')).toBe('translate(40px, 20px)');
     expect(nativeRoot.style.getPropertyValue('--min-node-width')).toBe('');
+    const mutations: MutationRecord[] = [];
+    const observer = new MutationObserver((records) => mutations.push(...records));
+    for (const root of [nativeRoot, ...Object.values(componentRoots)])
+      observer.observe(root, { attributes: true, subtree: true });
+    target.append(document.createElement('span'));
+    await Promise.resolve();
+    expect([...mutations, ...observer.takeRecords()]).toHaveLength(0);
+    observer.disconnect();
+    mount.unmount();
   });
 
   test('retains the native advanced footer while expanded and shares disclosure with the context menu', () => {
@@ -944,3 +953,17 @@ function nativeCardHeader(nodeId: string): {
   header.append(row);
   return { header, row };
 }
+
+test('delegates settled socket synchronization to the native geometry owner without remounting', () => {
+  const requestSlotLayoutSync = jest.fn();
+  const render = jest.fn();
+  const renderer = new ComfyVueNodeCardRenderer({
+    component: {},
+    appContext: {},
+    runtime: { render, h: () => ({}), extractVueNodeData: () => ({}), requestSlotLayoutSync },
+  });
+  renderer.requestSlotLayoutSync();
+  expect(requestSlotLayoutSync).toHaveBeenCalledTimes(1);
+  expect(render).not.toHaveBeenCalled();
+  renderer.dispose();
+});

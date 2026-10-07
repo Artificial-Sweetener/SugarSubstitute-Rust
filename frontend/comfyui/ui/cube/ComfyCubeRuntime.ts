@@ -46,6 +46,7 @@ import {
 import type { LegacyCubeMigrationResult } from './migration/LegacyCubeMigrationCoordinator.js';
 import type { LegacyCubeMigrationBatch } from './migration/LegacyCubeWorkflowExtractor.js';
 import { CubeSurfacePresenter } from '../surface/CubeSurfacePresenter.js';
+import type { NativeNodeCardRenderer } from '../surface/NativeNodeCardRenderer.js';
 import { ComfyCubePreviewCatalog } from '../surface/ComfyCubePreviewCatalog.js';
 import type { CubePreviewLink } from '../surface/ComfyCubePreviewCatalog.js';
 import type { CubePreviewRetentionStore } from '../surface/CubePreviewRetentionStore.js';
@@ -144,6 +145,7 @@ export interface ComfyCubeRuntime {
   metadataHud: CubeEditorMetadataHud | null;
   proximityEndpoints: ProximityEndpointSource;
   proximityPresentation: ProximityMatchSink;
+  getNativeRenderer(): Promise<NativeNodeCardRenderer>;
   registerSubgraphs(payload: ImportPayload): CubeSubgraphRegistrationResult;
   discardSubgraphs(ids: readonly string[]): void;
   restoreLegacy(batch: LegacyCubeMigrationBatch | null): LegacyCubeMigrationResult;
@@ -503,6 +505,7 @@ export function createComfyCubeRuntime(options: ComfyCubeRuntimeOptions): ComfyC
     metadataHud,
     proximityEndpoints,
     proximityPresentation: portPresentation,
+    getNativeRenderer: () => presenter.getNativeRenderer(),
     registerSubgraphs: (payload) => subgraphRegistrar.register(payload),
     discardSubgraphs: (ids) => subgraphRegistrar.discard(ids),
     restoreLegacy: (batch) => legacyMigration.restore(batch),

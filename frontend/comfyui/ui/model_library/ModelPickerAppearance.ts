@@ -31,6 +31,7 @@ export class ModelPickerAppearance {
   readonly #observer: MutationObserver;
   readonly #surfaces = new Set<HTMLElement>();
   #active = false;
+  #dark = true;
 
   /** Bind appearance to the same persisted preference as native Fluent cards. */
   constructor(documentRef: Document, app: unknown) {
@@ -105,7 +106,8 @@ export class ModelPickerAppearance {
   /** Refresh live surfaces in place so search, focus and keyboard selection survive theme changes. */
   readonly #refresh = (): void => {
     if (!this.#active) return;
-    this.#style.textContent = `${modelPickerCss}\n[data-sc-model-appearance="fluent"]{${fluentTokenDeclarations(readComfyDarkTheme(this.#document))}}\n[data-sc-model-native]{display:none!important}.sc-model-mount{width:100%;min-width:0}`;
+    this.#dark = readComfyDarkTheme(this.#document);
+    this.#style.textContent = `${modelPickerCss}\n[data-sc-model-appearance="fluent"]{${fluentTokenDeclarations(this.#dark)}}\n[data-sc-model-native]{display:none!important}.sc-model-mount{width:100%;min-width:0}`;
     for (const surface of this.#surfaces) this.#apply(surface);
   };
 
@@ -113,6 +115,6 @@ export class ModelPickerAppearance {
   #apply(surface: HTMLElement): void {
     const fluent = this.#fluent();
     surface.dataset.scModelAppearance = fluent ? 'fluent' : 'native';
-    applyOwnedFluentTheme(surface, fluent ? readComfyDarkTheme(this.#document) : null);
+    applyOwnedFluentTheme(surface, fluent ? this.#dark : null);
   }
 }

@@ -68,9 +68,11 @@ export const modelPickerCss =
 .sc-model-popup-above .sc-model-routes { order:1; padding-top:4px; padding-bottom:0; }
 .sc-model-routes button { box-sizing:border-box; min-height:0; height:24px; margin:0; padding:0 4px; min-width:0; flex:none; white-space:nowrap; border:0; border-radius:3px; color:inherit; background:transparent; font:inherit; line-height:19px; cursor:pointer; }
 .sc-model-routes button:hover { background:var(--colorNeutralBackground1Hover,#ffffff12); }
-.sc-model-routes .sc-model-filter-toggle { display:inline-flex; align-items:center; gap:4px; margin-left:auto; padding:2px 6px; }
+.sc-model-routes .sc-model-filter-toggle { display:grid; grid-template-columns:16px auto; align-items:center; column-gap:4px; margin-left:auto; padding:2px 6px; }
+.sc-model-filter-toggle::after { content:attr(data-width-label); grid-area:1/2; visibility:hidden; pointer-events:none; }
+.sc-model-filter-label { grid-area:1/2; text-align:center; }
 .sc-model-filter-toggle[aria-pressed="true"] { background:var(--colorNeutralBackground1Hover,#ffffff12); }
-.sc-model-filter-icon { display:block; width:16px; height:16px; flex:none; background:currentColor; mask:url("${showAllIcon}") center/contain no-repeat; }
+.sc-model-filter-icon { display:block; grid-area:1/1; width:16px; height:16px; flex:none; background:currentColor; mask:url("${showAllIcon}") center/contain no-repeat; }
 .sc-model-filter-toggle[aria-pressed="true"] .sc-model-filter-icon { mask:url("${showOnlyIcon}") center/contain no-repeat; }
 .sc-model-route-separator { flex:none; color:var(--colorNeutralForeground3,#aaa); }
 .sc-model-child-folder { color:var(--colorNeutralForeground2,#c5c5c5)!important; }

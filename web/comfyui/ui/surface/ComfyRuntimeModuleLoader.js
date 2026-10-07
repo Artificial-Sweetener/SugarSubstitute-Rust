@@ -26,6 +26,19 @@ const RELATIVE_ASSET_URL_PATTERN = /new URL\((["'`])([^"'`]+)\1,\s*import\.meta\
 const FETCH_TIMEOUT_MS = 5_000;
 const NATIVE_NODE_COMPONENT_EXPORT = 'sugarcubesNativeNodeComponent';
 const NODE_DATA_FUNCTION_EXPORT = 'sugarcubesExtractVueNodeData';
+/** Resolve native socket synchronization without loading a second node component or Vue renderer. */
+export async function loadComfyNativeSlotLayoutSync(documentRef, fetchText = fetchRuntimeText, importModule = importRuntimeModule) {
+    const discovery = await discoverModules(documentRef, fetchText, [
+        { key: 'slotLayout', matches: exposesSlotLayoutCapability },
+    ]);
+    const module = await importModule(requireModule(discovery.modules, 'slotLayout').url);
+    const synchronize = findNamedFunction(module, SLOT_LAYOUT_CAPABILITY);
+    if (!synchronize)
+        throw new NativeRendererCompatibilityError('Comfy native socket synchronization is unavailable.');
+    return () => {
+        synchronize();
+    };
+}
 /** Report an installed Comfy runtime that no longer matches the guarded contract. */
 export class NativeRendererCompatibilityError extends Error {
     /** Create a compatibility failure with actionable boundary context. */

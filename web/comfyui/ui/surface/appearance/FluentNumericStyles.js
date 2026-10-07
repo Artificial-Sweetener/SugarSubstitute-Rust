@@ -14,9 +14,11 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Arrange native number spinners and Substitute's slider pairs through Fluent styling. */
+import { fluentSliderThumbCss } from './FluentSliderThumb.js';
 /** Keep number geometry scoped to positively identified native components in both views. */
 export function fluentNumericCss() {
     return `
+    ${fluentSliderThumbCss()}
     [data-sc-number-spinner] {
       position:relative; display:flex; box-sizing:border-box; padding-right:20px;
       height:33px; border:1px solid var(--sc-control-stroke); border-bottom-color:var(--sc-control-bottom-stroke);

@@ -27,6 +27,7 @@ export class ModelPickerAppearance {
     #observer;
     #surfaces = new Set();
     #active = false;
+    #dark = true;
     /** Bind appearance to the same persisted preference as native Fluent cards. */
     constructor(documentRef, app) {
         this.#document = documentRef;
@@ -84,7 +85,8 @@ export class ModelPickerAppearance {
     #refresh = () => {
         if (!this.#active)
             return;
-        this.#style.textContent = `${modelPickerCss}\n[data-sc-model-appearance="fluent"]{${fluentTokenDeclarations(readComfyDarkTheme(this.#document))}}\n[data-sc-model-native]{display:none!important}.sc-model-mount{width:100%;min-width:0}`;
+        this.#dark = readComfyDarkTheme(this.#document);
+        this.#style.textContent = `${modelPickerCss}\n[data-sc-model-appearance="fluent"]{${fluentTokenDeclarations(this.#dark)}}\n[data-sc-model-native]{display:none!important}.sc-model-mount{width:100%;min-width:0}`;
         for (const surface of this.#surfaces)
             this.#apply(surface);
     };
@@ -92,6 +94,6 @@ export class ModelPickerAppearance {
     #apply(surface) {
         const fluent = this.#fluent();
         surface.dataset.scModelAppearance = fluent ? 'fluent' : 'native';
-        applyOwnedFluentTheme(surface, fluent ? readComfyDarkTheme(this.#document) : null);
+        applyOwnedFluentTheme(surface, fluent ? this.#dark : null);
     }
 }

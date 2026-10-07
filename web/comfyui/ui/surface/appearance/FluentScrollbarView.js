@@ -90,6 +90,10 @@ export class FluentScrollbarView {
         this.#pointerEnd();
         this.element.remove();
     }
+    /** Suppress a portalled track while its owner is between stable presentation coordinates. */
+    hide() {
+        this.element.hidden = true;
+    }
     /** Read native RTL coordinates as a positive distance from the leading edge. */
     #position() {
         return this.#axis === 'vertical' ? this.#owner.scrollTop : Math.abs(this.#owner.scrollLeft);

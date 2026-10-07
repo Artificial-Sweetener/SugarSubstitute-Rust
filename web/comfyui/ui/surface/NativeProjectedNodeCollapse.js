@@ -19,15 +19,20 @@ export class NativeProjectedNodeCollapse {
     reconcile(root, hasContent = cubeFaceRevealableWidgets(this.#node).some(isNativeWidgetPresented)) {
         const button = root.querySelector('[data-testid="node-collapse-button"]');
         if (button) {
-            button.hidden = !hasContent;
-            if (button.hidden)
-                button.style.setProperty('display', 'none', 'important');
+            if (button.hidden === hasContent)
+                button.hidden = !hasContent;
+            if (button.hidden) {
+                if (button.style.display !== 'none' ||
+                    button.style.getPropertyPriority('display') !== 'important')
+                    button.style.setProperty('display', 'none', 'important');
+            }
             else
                 button.style.removeProperty('display');
-            button.disabled =
-                button.hidden ||
-                    typeof this.#node.collapse !== 'function' ||
-                    this.#node.collapsible === false;
+            const disabled = button.hidden ||
+                typeof this.#node.collapse !== 'function' ||
+                this.#node.collapsible === false;
+            if (button.disabled !== disabled)
+                button.disabled = disabled;
         }
     }
     /** Release the host-facing listener before the Vue mount is unmounted. */

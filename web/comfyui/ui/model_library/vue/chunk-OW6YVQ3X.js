@@ -10,7 +10,7 @@ import {
 import {
   ModelPickerPopupContent,
   filterModelChoices
-} from "./chunk-T3VJOPF6.js";
+} from "./chunk-X3VJ7M63.js";
 import {
   modelProviderPage,
   useModelContext
@@ -8036,9 +8036,24 @@ var definition3 = {
 };
 
 // frontend/comfyui/ui/surface/appearance/FluentThemeRuntime.ts
-if (!customElements.get("fluent-slider")) await Slider.define(definition);
-if (!customElements.get("fluent-button")) await Button.define(definition2);
-if (!customElements.get("fluent-checkbox")) await Checkbox.define(definition3);
+var PresentationSlider = class extends Slider {
+  /** Preserve mounted state while native layout observes the new parent width. */
+  connectedMoveCallback() {
+  }
+};
+var PresentationButton = class extends Button {
+  /** Keep mounted bindings intact when its enclosing card changes presentation. */
+  connectedMoveCallback() {
+  }
+};
+var PresentationCheckbox = class extends Checkbox {
+  /** Keep mounted bindings intact when its enclosing card changes presentation. */
+  connectedMoveCallback() {
+  }
+};
+if (!customElements.get("fluent-slider")) await PresentationSlider.define(definition);
+if (!customElements.get("fluent-button")) await PresentationButton.define(definition2);
+if (!customElements.get("fluent-checkbox")) await PresentationCheckbox.define(definition3);
 var fluentMotion = {
   duration: Number.parseFloat(webDarkTheme.durationNormal),
   exitDuration: Number.parseFloat(webDarkTheme.durationFast),

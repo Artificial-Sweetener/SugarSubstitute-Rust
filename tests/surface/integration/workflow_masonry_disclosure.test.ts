@@ -219,6 +219,9 @@ test('packs the settled height once and never sends neighbors through intermedia
     },
     dispose() {},
   });
+  view.setTransitioning(true);
+  view.element.removeAttribute('data-sc-masonry-preparing');
+  view.setTransitioning(false);
   const first = content.querySelector<HTMLElement>('[data-masonry-card="1"]');
   const next = content.querySelector<HTMLElement>('[data-masonry-card="3"]');
   if (!first || !next) throw new Error('Masonry fixture cards missing');

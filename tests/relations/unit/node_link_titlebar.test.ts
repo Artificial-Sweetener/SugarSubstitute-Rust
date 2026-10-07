@@ -74,7 +74,7 @@ test('omits the first compatible selector and reconciles title controls on reord
       surface: {
         root,
         header,
-        rows: new Map(),
+        rows: new Map([['variation_strength', document.createElement('div')]]),
         canvas: null,
         canvasFields: new Map(),
         canvasTitle: false,
@@ -93,6 +93,13 @@ test('omits the first compatible selector and reconciles title controls on reord
     },
   });
   presenter.reconcile();
+  const hiddenRow = views[1]!.surface.rows.get('variation_strength')!;
+  const annotations = new MutationObserver(() => undefined);
+  annotations.observe(hiddenRow, { attributes: true });
+  presenter.reconcile();
+  expect(hiddenRow.dataset.scRelationHidden).toBe('true');
+  expect(annotations.takeRecords()).toHaveLength(0);
+  annotations.disconnect();
   expect(views[0]!.surface.root.querySelector('.sc-node-link')).toBeNull();
   const follower = views[1]!.surface.root.querySelector<HTMLElement>('.sc-node-link')!;
   expect(follower.nextElementSibling).toBe(
@@ -115,6 +122,8 @@ test('omits the first compatible selector and reconciles title controls on reord
   expect(document.querySelector('.sc-node-link')).toBeNull();
   expect(follower.isConnected).toBe(false);
   relations.linkNode('b', null);
+  presenter.reconcile();
+  expect(hiddenRow.hasAttribute('data-sc-relation-hidden')).toBe(false);
   relations.linkNode('a', null);
   presenter.reconcile();
   const later = views[0]!.surface.root.querySelector<HTMLElement>('.sc-node-link')!;

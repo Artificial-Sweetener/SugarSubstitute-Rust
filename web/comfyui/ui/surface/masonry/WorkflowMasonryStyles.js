@@ -37,8 +37,17 @@ export function ensureWorkflowMasonryStyles(documentRef) {
       position:absolute; inset:0; z-index:1100; box-sizing:border-box; pointer-events:auto;
       overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain;
       padding:52px 20px 96px;
-      background:var(--sugarcubes-masonry-surface,var(--comfy-menu-bg,#202020));
+      background:transparent;
       color:var(--fg-color,#ddd); outline:none;
+    }
+    .sugarcubes-workflow-masonry__backdrop {
+      position:absolute; inset:0; z-index:1100; pointer-events:none;
+      background:var(--sugarcubes-masonry-surface,var(--comfy-menu-bg,#202020));
+    }
+    .sugarcubes-workflow-masonry[data-sc-masonry-preparing] { opacity:0 !important; }
+    [data-sc-masonry-source] { visibility:hidden !important; }
+    .sugarcubes-workflow-masonry__card .sugarcubes-cube-face__native-card-mount {
+      transform-origin:0 0;
     }
     .sugarcubes-workflow-masonry__content { position:relative; width:100%; }
     .sugarcubes-workflow-masonry__section {

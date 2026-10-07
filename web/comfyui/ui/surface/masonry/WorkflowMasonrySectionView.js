@@ -1,4 +1,4 @@
-import { NativeNodeCardHost } from '../NativeNodeCardHost.js';
+import { WorkflowMasonryCardMount } from './WorkflowMasonryCardMount.js';
 import { WorkflowMasonrySectionHeaderView } from './WorkflowMasonrySectionHeaderView.js';
 /** Retain the shared optional-node menu while reconciling native card membership. */
 export class WorkflowMasonrySectionView {
@@ -19,7 +19,7 @@ export class WorkflowMasonrySectionView {
         options.content.append(this.header);
     }
     /** Reconcile shared policy decisions without replacing the live menu or untouched controls. */
-    prepare(section, renderer) {
+    prepare(section, renderer, sources) {
         this.#headerView.render(section);
         const visible = section.cards.filter((card) => card.visible);
         const ids = new Set(visible.map((card) => card.id));
@@ -58,7 +58,15 @@ export class WorkflowMasonrySectionView {
                 this.cells.set(card.id, cell);
                 record = {
                     cell,
-                    host: new NativeNodeCardHost(renderer),
+                    mount: new WorkflowMasonryCardMount({
+                        cell,
+                        card,
+                        renderer,
+                        source: section.cube ? (sources.get(card.id) ?? null) : null,
+                        getSource: () => (section.cube ? this.#options.getSource(card.id) : null),
+                        onActivationChange: (node, enabled) => this.#options.cardState.setEnabled(section.target, String(node.id ?? ''), enabled),
+                        onRemounted: this.#options.onRemounted,
+                    }),
                     node: card.node,
                     activation: card.showActivationControl,
                     prompt: card.prompt === true,
@@ -75,15 +83,18 @@ export class WorkflowMasonrySectionView {
             }
             if (record.mounted) {
                 record.cell.dataset.cubeColumnSpan = String(card.columnSpan);
-                record.host.refresh([card]);
+                record.mount.refresh(card);
             }
             else {
                 const mount = record;
-                pending.push(() => {
-                    if (this.#cards.get(card.id) !== mount || mount.mounted)
-                        return;
-                    mount.host.mountCard(mount.cell, card, (node, enabled) => this.#options.cardState.setEnabled(section.target, String(node.id ?? ''), enabled), { allowCollapse: card.prompt !== true });
-                    mount.mounted = true;
+                pending.push({
+                    requiresNativeMount: mount.mount.requiresNativeMount,
+                    mount: () => {
+                        if (this.#cards.get(card.id) !== mount || mount.mounted)
+                            return;
+                        mount.mount.mount();
+                        mount.mounted = true;
+                    },
                 });
             }
         }
@@ -102,6 +113,6 @@ export class WorkflowMasonrySectionView {
 }
 /** Release one card without disturbing surviving native control instances. */
 function releaseCard(record) {
-    record.host.dispose();
+    record.mount.dispose();
     record.cell.remove();
 }

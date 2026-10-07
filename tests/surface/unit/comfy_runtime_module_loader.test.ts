@@ -27,9 +27,43 @@ import {
   loadComfySettingsSelectComponent,
   loadComfyVueRenderRuntime,
   loadComfyVueRuntime,
+  loadComfyNativeSlotLayoutSync,
 } from '../../../frontend/comfyui/ui/surface/ComfyRuntimeModuleLoader.js';
 
 describe('Comfy runtime module discovery', () => {
+  test('loads only the native slot capability and fails when its exported function is unavailable', async () => {
+    document.head.replaceChildren();
+    const entry = document.createElement('script');
+    entry.type = 'module';
+    entry.src = 'http://127.0.0.1:8188/assets/index-current.js';
+    document.head.append(entry);
+    const slotUrl = 'http://127.0.0.1:8188/assets/settingStore-current.js';
+    const sources = new Map([
+      [entry.src, 'import "./settingStore-current.js"; import("./GraphView-current.js");'],
+      [slotUrl, 'export{requestSlotLayoutSyncForAllNodes};'],
+      ['http://127.0.0.1:8188/assets/GraphView-current.js', 'export const graph = true;'],
+    ]);
+    const synchronize = jest.fn();
+    const importModule = jest.fn(
+      async (_url: string): Promise<Record<string, unknown>> => ({
+        nativeSync: function requestSlotLayoutSyncForAllNodes(): void {
+          synchronize();
+        },
+      }),
+    );
+    const sync = await loadComfyNativeSlotLayoutSync(
+      document,
+      moduleFetcher(sources),
+      importModule,
+    );
+    sync();
+    expect(synchronize).toHaveBeenCalledTimes(1);
+    expect(importModule.mock.calls).toEqual([[slotUrl]]);
+    importModule.mockResolvedValue({});
+    await expect(
+      loadComfyNativeSlotLayoutSync(document, moduleFetcher(sources), importModule),
+    ).rejects.toBeInstanceOf(NativeRendererCompatibilityError);
+  });
   test('resolves the legacy direct-entry Nodes 2 runtime layout', async () => {
     document.head.replaceChildren();
     const entry = document.createElement('script');

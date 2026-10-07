@@ -84,34 +84,35 @@ export function nativeRelationCards(
     const vnode =
       localVNode ??
       (card ? findMountedNodeVNode(card) : null) ??
-      findVueComponents(appVNode, 'LGraphNode').find((candidate) => {
-        const component = isRecord(candidate.component) ? candidate.component : {};
-        const subtree = isRecord(component.subTree) ? component.subTree : {};
-        return subtree.el === card;
-      });
+      (card
+        ? findVueComponents(appVNode, 'LGraphNode').find((candidate) => {
+            const component = isRecord(candidate.component) ? candidate.component : {};
+            const subtree = isRecord(component.subTree) ? component.subTree : {};
+            return subtree.el === card;
+          })
+        : undefined);
     if (vnode)
       for (const container of findVueComponents(vnode, 'NodeWidgets')) {
         const component = isRecord(container.component) ? container.component : {},
           tree = isRecord(component.subTree) ? component.subTree : {};
         if (!(tree.el instanceof HTMLElement)) continue;
-        for (const name of [
+        for (const child of findVueComponents(container, [
           'WidgetSelect',
           'WidgetInputNumber',
           'WidgetInputNumberSlider',
           'WidgetInputText',
           'WidgetTextarea',
           'WidgetToggle',
-        ])
-          for (const child of findVueComponents(container, name)) {
-            const instance = isRecord(child.component) ? child.component : {},
-              props = isRecord(instance.props) ? instance.props : {},
-              widget = isRecord(props.widget) ? props.widget : {},
-              subtree = isRecord(instance.subTree) ? instance.subTree : {};
-            if (!(subtree.el instanceof HTMLElement) || typeof widget.name !== 'string') continue;
-            let row = subtree.el;
-            while (row.parentElement && row.parentElement !== tree.el) row = row.parentElement;
-            if (row.parentElement === tree.el) rows.set(widget.name, row);
-          }
+        ])) {
+          const instance = isRecord(child.component) ? child.component : {},
+            props = isRecord(instance.props) ? instance.props : {},
+            widget = isRecord(props.widget) ? props.widget : {},
+            subtree = isRecord(instance.subTree) ? instance.subTree : {};
+          if (!(subtree.el instanceof HTMLElement) || typeof widget.name !== 'string') continue;
+          let row = subtree.el;
+          while (row.parentElement && row.parentElement !== tree.el) row = row.parentElement;
+          if (row.parentElement === tree.el) rows.set(widget.name, row);
+        }
       }
     if (card)
       for (const row of card.querySelectorAll<HTMLElement>('[data-sc-fluent-row]')) {
@@ -127,8 +128,8 @@ export function nativeRelationCards(
         else if (label) rows.set(label, row);
       }
     const aspect = canvas?.style.aspectRatio.split('/').map((value) => Number.parseFloat(value));
-    const width = aspect?.[0] ?? root.clientWidth;
-    const height = aspect?.[1] ?? root.clientHeight;
+    const width = aspect?.[0] ?? (canvas ? root.clientWidth : 0);
+    const height = aspect?.[1] ?? (canvas ? root.clientHeight : 0);
     const ratio = canvas && width > 0 ? canvas.getBoundingClientRect().width / width : 1;
     const canvasTop = canvas
       ? canvas.getBoundingClientRect().top - root.getBoundingClientRect().top

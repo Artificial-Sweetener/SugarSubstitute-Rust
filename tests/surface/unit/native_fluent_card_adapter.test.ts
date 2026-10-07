@@ -20,6 +20,18 @@ import type { UnknownRecord } from '../../../frontend/comfyui/ui/types/common.js
 
 afterEach(() => document.body.replaceChildren());
 
+test('releases detached native annotations on an empty retirement batch', () => {
+  const root = document.createElement('div');
+  root.className = 'lg-node';
+  document.body.append(root);
+  const adapter = new NativeFluentCardAdapter();
+  adapter.annotate(root);
+  expect(root.hasAttribute('data-sc-fluent-node')).toBe(true);
+  root.remove();
+  adapter.endBatch();
+  expect(root.hasAttribute('data-sc-fluent-node')).toBe(false);
+});
+
 test.each([false, true])(
   'owns only this graph card’s native port section in masonry=%s',
   (masonry) => {
@@ -71,6 +83,40 @@ test.each([false, true])(
     expect(port.parentElement).toBe(slots);
   },
 );
+
+test('retains identical annotations and removes only properties whose field ownership changed', () => {
+  const mount = document.createElement('div');
+  mount.className = 'sugarcubes-native-node-card';
+  const root = document.createElement('div');
+  root.className = 'lg-node';
+  const fields = document.createElement('div');
+  const row = document.createElement('div');
+  const control = document.createElement('div');
+  control.append(document.createElement('input'));
+  row.append(control);
+  fields.append(row);
+  root.append(fields);
+  mount.append(root);
+  document.body.append(mount);
+  const widgets = vnode('NodeWidgets', fields, [
+    vnode('WidgetInputText', control, [], { widget: { name: 'text' } }),
+  ]);
+  Object.assign(mount, { _vnode: vnode('LGraphNode', root, [widgets]) });
+  const adapter = new NativeFluentCardAdapter();
+  adapter.annotate(root);
+  const observer = new MutationObserver(() => undefined);
+  observer.observe(root, { attributes: true, subtree: true });
+  adapter.annotate(root);
+  expect(observer.takeRecords()).toHaveLength(0);
+  Object.assign(widgets, { component: { subTree: { el: fields, children: [] } } });
+  adapter.annotate(root);
+  expect(row.hasAttribute('data-sc-fluent-row')).toBe(false);
+  expect(row.style.getPropertyValue('--sc-field-column')).toBe('');
+  expect(control.hasAttribute('data-sc-fluent-control')).toBe(false);
+  expect(root.hasAttribute('data-sc-fluent-node')).toBe(true);
+  observer.disconnect();
+  adapter.clear();
+});
 
 /** Model only the mounted Vue properties consumed at the host boundary. */
 function vnode(

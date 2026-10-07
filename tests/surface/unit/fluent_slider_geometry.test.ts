@@ -56,6 +56,7 @@ function trackRect(width: number): DOMRect {
 test.each([0.5, 1, 2, 2.42, 3])('keeps slider values proportional at zoom %s', (zoom) => {
   const slider = createFluentNumericSlider(document);
   if (!(slider instanceof Slider)) throw new Error('Official Fluent slider missing');
+  expect(slider.querySelector('[slot="thumb"][data-sc-slider-thumb]')).not.toBeNull();
   slider.min = '0';
   slider.max = '100';
   slider.step = '1';
@@ -78,4 +79,19 @@ test('uses Fluent calculation safely before a measurable track is laid out', () 
   slider.step = '1';
   slider.track = document.createElement('div');
   expect(slider.calculateNewValue(0.5)).toBe(50);
+});
+
+test('preserves official Fluent control state across connected presentation moves', () => {
+  for (const tag of ['fluent-slider', 'fluent-button', 'fluent-checkbox']) {
+    const constructor = customElements.get(tag);
+    expect(constructor).toBeDefined();
+    if (!constructor) throw new Error('Fluent component registration missing');
+    expect(typeof Reflect.get(constructor.prototype, 'connectedMoveCallback')).toBe('function');
+  }
+  const slider = createFluentNumericSlider(document);
+  slider.value = '27';
+  const callback: unknown = Reflect.get(slider, 'connectedMoveCallback');
+  if (typeof callback !== 'function') throw new Error('Connected move callback missing');
+  callback.call(slider);
+  expect(slider.value).toBe('27');
 });

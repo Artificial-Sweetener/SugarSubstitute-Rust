@@ -17,6 +17,7 @@
 import { fluentNativeScrollbarCss } from './FluentScrollbarStyles.js';
 import { scrollbarTrack } from './FluentScrollbarLayout.js';
 import { FluentScrollbarView } from './FluentScrollbarView.js';
+import { SURFACE_GEOMETRY_MOTION_EVENT } from '../motion/SurfaceGeometryMotion.js';
 /** Observe native overflow while leaving the host's layout and scrolling intact. */
 export class FluentOverlayScrollbarHost {
     #document;
@@ -30,6 +31,7 @@ export class FluentOverlayScrollbarHost {
     #changedElements = new Set();
     #dirtyOwners = new Set();
     #observedSizes = new Set();
+    #movingRegions = new Set();
     #mutations;
     #resize;
     #active = false;
@@ -80,6 +82,7 @@ export class FluentOverlayScrollbarHost {
         this.#pending.add(this.#document.body);
         this.#document.addEventListener('scroll', this.#onContentChange, true);
         this.#document.addEventListener('input', this.#onContentChange, true);
+        this.#document.addEventListener(SURFACE_GEOMETRY_MOTION_EVENT, this.#onGeometryMotion);
         this.#document.defaultView?.addEventListener('resize', this.#onViewportResize);
         this.#document.defaultView?.addEventListener('pointerdown', this.#captureThumb, true);
         this.#schedule();
@@ -95,6 +98,8 @@ export class FluentOverlayScrollbarHost {
         this.#observedSizes.clear();
         this.#document.removeEventListener('scroll', this.#onContentChange, true);
         this.#document.removeEventListener('input', this.#onContentChange, true);
+        this.#document.removeEventListener(SURFACE_GEOMETRY_MOTION_EVENT, this.#onGeometryMotion);
+        this.#movingRegions.clear();
         this.#document.defaultView?.removeEventListener('resize', this.#onViewportResize);
         this.#document.defaultView?.removeEventListener('pointerdown', this.#captureThumb, true);
         for (const [element, owner] of this.#owners)
@@ -128,22 +133,42 @@ export class FluentOverlayScrollbarHost {
             attributeFilter: ['class', 'style', 'hidden'],
         });
     }
-    /** Discover changed subtrees rather than walking the entire document on every scroll. */
-    #discover(element) {
-        if (this.#owned(element))
-            return;
-        this.#consider(element);
-        for (const child of element.querySelectorAll('*')) {
-            if (child instanceof HTMLElement && !this.#owned(child))
-                this.#consider(child);
+    /** Batch overflow reads across unique changed subtrees before inserting tracks or shadow styles. */
+    #discover(roots, changed) {
+        const elements = new Set(changed.filter((element) => element.isConnected));
+        const pending = [...roots];
+        const scanned = new Set();
+        while (pending.length) {
+            const root = pending.pop();
+            if (!root?.isConnected || this.#owned(root) || scanned.has(root))
+                continue;
+            scanned.add(root);
+            const subtree = [root, ...root.querySelectorAll('*')];
+            for (const element of subtree)
+                elements.add(element);
+            for (const element of subtree)
+                if (element.shadowRoot)
+                    pending.push(...element.shadowRoot.querySelectorAll('*'));
         }
+        const scrolling = this.#document.scrollingElement;
+        if (scrolling instanceof HTMLElement)
+            elements.add(scrolling);
+        const candidates = [...elements]
+            .filter((element) => !this.#owned(element))
+            .map((element) => {
+            const style = this.#document.defaultView?.getComputedStyle(element);
+            return {
+                element,
+                scrollable: element === scrolling ||
+                    element.tagName === 'TEXTAREA' ||
+                    /auto|scroll/.test(`${style?.overflow} ${style?.overflowX} ${style?.overflowY}`),
+            };
+        });
+        for (const { element, scrollable } of candidates)
+            this.#consider(element, scrollable);
     }
     /** Register potential overflow even before asynchronously loaded content fills it. */
-    #consider(element) {
-        const style = this.#document.defaultView?.getComputedStyle(element);
-        const scrollable = element === this.#document.scrollingElement ||
-            element.tagName === 'TEXTAREA' ||
-            /auto|scroll/.test(`${style?.overflow} ${style?.overflowX} ${style?.overflowY}`);
+    #consider(element, scrollable) {
         if (scrollable && !this.#owners.has(element)) {
             const assignedId = element.id ? null : `sc-fluent-scroll-owner-${++this.#nextId}`;
             if (assignedId)
@@ -175,13 +200,10 @@ export class FluentOverlayScrollbarHost {
             root.addEventListener('scroll', this.#onContentChange, true);
             this.#observe(root);
         }
-        if (root)
-            for (const child of root.children)
-                if (child instanceof HTMLElement)
-                    this.#discover(child);
     }
     /** Tear down a detached owner without restoring IDs subsequently changed by the host. */
     #remove(element, owner) {
+        this.#dirtyOwners.delete(element);
         this.#views.delete(owner.vertical.element);
         this.#views.delete(owner.horizontal.element);
         owner.vertical.dispose();
@@ -243,6 +265,27 @@ export class FluentOverlayScrollbarHost {
             if (owner === element || owner.contains(element) || element.contains(owner))
                 this.#dirtyOwners.add(owner);
     }
+    /** Defer only observers intersecting an identified moving surface, retaining unrelated controls. */
+    #moving(element) {
+        return [...this.#movingRegions].some((region) => region.contains(element) || element.contains(region));
+    }
+    /** Hide displaced portal tracks and flush their geometry once the presentation owner settles. */
+    #onGeometryMotion = (event) => {
+        if (!(event.target instanceof HTMLElement))
+            return;
+        const region = event.target;
+        if (region.hasAttribute('data-sc-geometry-moving'))
+            this.#movingRegions.add(region);
+        else
+            this.#movingRegions.delete(region);
+        this.#invalidateGeometry(region);
+        for (const [element, owner] of this.#owners)
+            if (this.#moving(element)) {
+                owner.vertical.hide();
+                owner.horizontal.hide();
+            }
+        this.#schedule();
+    };
     /** Keep input and scrolling local to the event's native container. */
     #onContentChange = (event) => {
         const target = event.composedPath().find((node) => node instanceof HTMLElement);
@@ -266,33 +309,30 @@ export class FluentOverlayScrollbarHost {
                 return;
             try {
                 this.#prune();
-                const pending = [...this.#pending];
-                this.#pending.clear();
+                const pending = [...this.#pending].filter((element) => !this.#moving(element));
                 for (const element of pending)
-                    if (element.isConnected)
-                        this.#discover(element);
-                for (const element of this.#changedElements)
+                    this.#pending.delete(element);
+                const changed = [...this.#changedElements].filter((element) => !this.#moving(element));
+                for (const element of changed)
+                    this.#changedElements.delete(element);
+                this.#discover(pending, changed);
+                for (const element of changed)
                     if (element.isConnected) {
-                        this.#consider(element);
                         this.#invalidateGeometry(element);
                     }
-                this.#changedElements.clear();
-                const root = this.#document.scrollingElement;
-                if (root instanceof HTMLElement)
-                    this.#consider(root);
                 for (const [element, owner] of this.#owners) {
                     if (!element.isConnected) {
                         this.#remove(element, owner);
                         this.#owners.delete(element);
                         continue;
                     }
-                    if (!this.#dirtyOwners.has(element))
+                    if (!this.#dirtyOwners.has(element) || this.#moving(element))
                         continue;
                     const track = scrollbarTrack(element);
                     owner.vertical.update(track);
                     owner.horizontal.update(track);
+                    this.#dirtyOwners.delete(element);
                 }
-                this.#dirtyOwners.clear();
             }
             catch (error) {
                 this.#reportError(error);

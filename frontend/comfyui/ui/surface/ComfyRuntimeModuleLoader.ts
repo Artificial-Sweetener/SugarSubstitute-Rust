@@ -62,6 +62,7 @@ export interface ComfyVueRenderRuntime {
 
 export interface ComfyVueNodeRenderRuntime extends ComfyVueRenderRuntime {
   extractVueNodeData(node: ComfyNode): UnknownRecord;
+  requestSlotLayoutSync?(): void;
 }
 
 export interface ComfyVueRuntime extends ComfyVueNodeRenderRuntime {
@@ -70,6 +71,26 @@ export interface ComfyVueRuntime extends ComfyVueNodeRenderRuntime {
 
 export type RuntimeModuleImporter = (url: string) => Promise<UnknownRecord>;
 export type RuntimeTextFetcher = ComfyRuntimeTextFetcher;
+
+/** Resolve native socket synchronization without loading a second node component or Vue renderer. */
+export async function loadComfyNativeSlotLayoutSync(
+  documentRef: Document,
+  fetchText: RuntimeTextFetcher = fetchRuntimeText,
+  importModule: RuntimeModuleImporter = importRuntimeModule,
+): Promise<() => void> {
+  const discovery = await discoverModules(documentRef, fetchText, [
+    { key: 'slotLayout', matches: exposesSlotLayoutCapability },
+  ]);
+  const module = await importModule(requireModule(discovery.modules, 'slotLayout').url);
+  const synchronize = findNamedFunction(module, SLOT_LAYOUT_CAPABILITY);
+  if (!synchronize)
+    throw new NativeRendererCompatibilityError(
+      'Comfy native socket synchronization is unavailable.',
+    );
+  return () => {
+    synchronize();
+  };
+}
 
 /** Report an installed Comfy runtime that no longer matches the guarded contract. */
 export class NativeRendererCompatibilityError extends Error {

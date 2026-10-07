@@ -17,7 +17,10 @@
 
 import { describe, expect, jest, test } from '@jest/globals';
 
-import { CubePromptTextareaAutosizer } from '../../../frontend/comfyui/ui/surface/CubePromptTextareaAutosizer.js';
+import {
+  CubePromptTextareaAutosizer,
+  settleCubePromptTextareaGeometry,
+} from '../../../frontend/comfyui/ui/surface/CubePromptTextareaAutosizer.js';
 
 describe('CubePromptTextareaAutosizer', () => {
   test('shrinks to content and themed minimum instead of intrinsic textarea rows', () => {
@@ -91,4 +94,89 @@ describe('CubePromptTextareaAutosizer', () => {
     expect(textarea.style.height).toBe('220px');
     autosizer.dispose();
   });
+});
+
+test('batches presentation sizing across separately owned prompts before publishing heights', () => {
+  const root = document.createElement('section');
+  const prompts = [document.createElement('textarea'), document.createElement('textarea')];
+  root.append(...prompts);
+  const owners = prompts.map(() => new CubePromptTextareaAutosizer(document));
+  let measuring = false;
+  const reads: number[] = [];
+  prompts.forEach((prompt, index) => {
+    Object.defineProperty(prompt, 'scrollHeight', {
+      get: () => {
+        if (measuring) {
+          expect(prompts.every((member) => member.style.height === '0px')).toBe(true);
+          reads.push(index);
+        }
+        return 40 + index * 20;
+      },
+    });
+    owners[index]?.bind(prompt);
+  });
+  measuring = true;
+  settleCubePromptTextareaGeometry([root]);
+  expect(reads).toEqual([0, 1]);
+  expect(prompts.map((prompt) => prompt.style.height)).toEqual(['40px', '60px']);
+  owners.forEach((owner) => owner.dispose());
+});
+
+test('ignores resize delivery for explicitly settled prompt geometry and refits actual width changes', () => {
+  const descriptor = Object.getOwnPropertyDescriptor(window, 'ResizeObserver');
+  let deliver: ResizeObserverCallback | null = null;
+  let observation: ResizeObserver | null = null;
+  class Observer implements ResizeObserver {
+    constructor(callback: ResizeObserverCallback) {
+      deliver = callback;
+      observation = this;
+    }
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  }
+  Object.defineProperty(window, 'ResizeObserver', { configurable: true, value: Observer });
+  const textarea = document.createElement('textarea');
+  let width = 200;
+  let reads = 0;
+  Object.defineProperty(textarea, 'offsetWidth', { get: () => width });
+  Object.defineProperty(textarea, 'scrollHeight', {
+    get: () => {
+      reads += 1;
+      return 33;
+    },
+  });
+  const root = document.createElement('section');
+  root.append(textarea);
+  const autosizer = new CubePromptTextareaAutosizer(document);
+  try {
+    autosizer.bind(textarea);
+    settleCubePromptTextareaGeometry([root]);
+    reads = 0;
+    const send = (inlineSize: number): void => {
+      const callback: ResizeObserverCallback | null = deliver;
+      if (!callback || !observation) throw new Error('Prompt resize observation missing');
+      callback(
+        [
+          {
+            target: textarea,
+            contentRect: textarea.getBoundingClientRect(),
+            borderBoxSize: [{ inlineSize, blockSize: 33 }],
+            contentBoxSize: [],
+            devicePixelContentBoxSize: [],
+          },
+        ],
+        observation,
+      );
+    };
+    send(200);
+    expect(reads).toBe(0);
+    width = 300;
+    send(300);
+    expect(reads).toBe(1);
+  } finally {
+    autosizer.dispose();
+    if (descriptor) Object.defineProperty(window, 'ResizeObserver', descriptor);
+    else Reflect.deleteProperty(window, 'ResizeObserver');
+  }
 });

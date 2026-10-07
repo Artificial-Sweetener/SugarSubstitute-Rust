@@ -16,11 +16,18 @@
 /** Verify reversible native presentation, edits, cancellation, and renderer fallback. */
 import { afterEach, describe, expect, jest, test } from '@jest/globals';
 import { WorkflowMasonryController } from '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryController.js';
+import type { WorkflowMasonryControllerOptions } from '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryController.js';
+import { WorkflowMasonryLinkMotion } from '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryLinkMotion.js';
+import { WorkflowMasonryTransition } from '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryTransition.js';
+import { NATIVE_PRESENTATION_READY_EVENT } from '../../../frontend/comfyui/ui/surface/NativePresentationReady.js';
+import { NativeCardPresentationOwner } from '../../../frontend/comfyui/ui/surface/NativeCardPresentationOwner.js';
+import { WorkflowMasonryView } from '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryView.js';
 import { NativeForwardedWidgetLease } from '../../../frontend/comfyui/ui/surface/NativeForwardedWidgetLease.js';
 import type { NativeNodeCardRenderer } from '../../../frontend/comfyui/ui/surface/NativeNodeCardRenderer.js';
 import { CubeFaceCardStateService } from '../../../frontend/comfyui/ui/surface/CubeFaceCardStateService.js';
 import { projectWorkflowMasonry } from '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryProjection.js';
 import { CubeNodeCatalog } from '../../../frontend/comfyui/ui/cube/node/CubeNodeCatalog.js';
+import type { CubeNode } from '../../../frontend/comfyui/ui/cube/node/ComfyCubeNodeFactory.js';
 import type { ComfyNode } from '../../../frontend/comfyui/ui/types/graph.js';
 import type { WorkflowMasonrySection } from '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryProjection.js';
 
@@ -30,6 +37,131 @@ afterEach(() => {
 });
 
 describe('workflow masonry controller', () => {
+  test('packs preparation once after host styling rather than reflowing every mount delivery', async () => {
+    const setup = fixture();
+    const callbacks: FrameRequestCallback[] = [];
+    jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      callbacks.push(callback);
+      return callbacks.length;
+    });
+    const layout = jest.spyOn(WorkflowMasonryView.prototype, 'layout');
+    const pending = setup.controller.toggle();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(layout).not.toHaveBeenCalled();
+    for (let index = 0; index < callbacks.length; index += 1) {
+      callbacks[index]?.(index * 16);
+      await Promise.resolve();
+    }
+    await pending;
+    expect(layout).toHaveBeenCalledTimes(1);
+    setup.controller.leaveImmediately();
+  });
+  test('reuses identified Cube controls and returns them instead of mounting a duplicate view', async () => {
+    jest.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+    const setup = fixture();
+    const cube: CubeNode = {
+      id: 99,
+      pos: [0, 0],
+      size: [400, 300],
+      inputs: [],
+      outputs: [],
+      connect: () => undefined,
+      isSubgraphNode: () => true,
+      serialize: () => ({}),
+      properties: { sugarcubes_cube: { instance_id: 'borrowed-cube' } },
+      subgraph: {
+        id: 'borrowed-definition',
+        name: 'Borrowed cube',
+        _nodes: [],
+        inputs: [],
+        outputs: [],
+        inputNode: {},
+        outputNode: {},
+        add: () => undefined,
+        remove: () => undefined,
+        addInput: () => ({ connect: () => undefined }),
+        addOutput: () => ({ connect: () => undefined }),
+        configure: () => undefined,
+      },
+    };
+    const root = document.createElement('div');
+    root.className = 'lg-node';
+    root.dataset.nodeId = '99';
+    const face = document.createElement('div');
+    face.className = 'sugarcubes-cube-face';
+    const cell = document.createElement('div');
+    cell.className = 'sugarcubes-cube-face__node-card';
+    cell.dataset.cubeNodeId = String(setup.node.id);
+    cell.style.cssText = 'position:absolute;left:25px;top:40px;width:300px;height:120px';
+    const wrapper = document.createElement('div');
+    wrapper.className = 'sugarcubes-cube-face__native-card-mount';
+    const input = document.createElement('input');
+    input.value = 'Original widget';
+    wrapper.append(input);
+    cell.append(wrapper);
+    face.append(cell);
+    root.append(face);
+    setup.container.append(root);
+    const owner = new NativeCardPresentationOwner(jest.fn());
+    owner.reset([cell]);
+    const measureSources = jest.spyOn(owner, 'measureSources');
+    const originalMeasure = measureSources.getMockImplementation();
+    if (!originalMeasure) throw new Error('Source measurement fixture missing');
+    measureSources.mockImplementation(() => {
+      expect(document.querySelector('.sugarcubes-workflow-masonry')).toBeNull();
+      originalMeasure.call(owner);
+    });
+    const section = setup.sections[0]!;
+    section.cube = cube;
+    section.cards[0]!.id = 'cube:99:1';
+    for (let visit = 0; visit < 3; visit += 1) {
+      await setup.controller.toggle();
+      expect(document.querySelector('.sugarcubes-workflow-masonry input')).toBe(input);
+      expect(setup.mount).not.toHaveBeenCalled();
+      expect(face.querySelector('input')).toBeNull();
+      expect(owner.borrowed).toBe(true);
+      await setup.controller.toggle();
+      expect(face.querySelector('input')).toBe(input);
+      expect(cell.style.width).toBe('300px');
+      expect(cell.style.left).toBe('25px');
+      expect(owner.borrowed).toBe(false);
+      expect(document.querySelector('[data-sc-card-origin]')).toBeNull();
+      expect(setup.unmount).not.toHaveBeenCalled();
+    }
+    expect(measureSources).toHaveBeenCalledTimes(3);
+    owner.dispose();
+  });
+
+  test('suppresses graph interaction at layer boundaries and restores preexisting inert state', async () => {
+    const setup = fixture();
+    const root = document.createElement('div');
+    root.id = 'graph-canvas-container';
+    setup.container.replaceWith(root);
+    root.append(setup.container);
+    const layers = ['ph-no-capture', 'isolate'].map((className) => {
+      const element = document.createElement('div');
+      element.className = className;
+      element.inert = false;
+      root.append(element);
+      return element;
+    });
+    layers[1]!.inert = true;
+    const mount = setup.mount.getMockImplementation();
+    if (!mount) throw new Error('Native mount fixture missing');
+    setup.mount.mockImplementation((...args) => {
+      expect(layers.map((element) => element.inert)).toEqual([true, true]);
+      return mount(...args);
+    });
+    await setup.controller.toggle();
+    expect(layers.map((element) => element.inert)).toEqual([true, true]);
+    await setup.controller.toggle();
+    expect(layers.map((element) => element.inert)).toEqual([false, true]);
+    await setup.controller.toggle();
+    setup.controller.leaveImmediately();
+    expect(layers.map((element) => element.inert)).toEqual([false, true]);
+    expect(root.dataset.sugarcubesMasonry).toBeUndefined();
+  });
   test('keeps ancestor capture forwarding out of masonry scrolling and restores graph zoom on exit', async () => {
     const setup = fixture();
     let graphScale = 1;
@@ -143,6 +275,28 @@ describe('workflow masonry controller', () => {
     expect(document.querySelector('[data-sugarcubes-card-visibility-menu]')).toBeNull();
   });
 
+  test('assigns final column widths before mounting and releases every card between visits', async () => {
+    const setup = fixture();
+    const mount = setup.mount.getMockImplementation();
+    const widths: string[] = [];
+    setup.mount.mockImplementation((...args) => {
+      const cell = args[0].closest<HTMLElement>('[data-masonry-card]');
+      widths.push(cell?.style.width ?? '');
+      const result = mount?.(...args);
+      if (!result) throw new Error('Native mount missing');
+      return result;
+    });
+    for (let visit = 0; visit < 3; visit += 1) {
+      await setup.controller.toggle();
+      expect(document.querySelectorAll('.sugarcubes-workflow-masonry')).toHaveLength(1);
+      await setup.controller.toggle();
+      expect(document.querySelector('.sugarcubes-workflow-masonry')).toBeNull();
+      expect(setup.unmount).toHaveBeenCalledTimes(visit + 1);
+    }
+    expect(widths).toHaveLength(3);
+    expect(widths.every((width) => Number.parseFloat(width) > 0)).toBe(true);
+  });
+
   test('yields native mount batches and cancels the remaining work on immediate exit', async () => {
     const setup = fixture();
     const frames: FrameRequestCallback[] = [];
@@ -164,9 +318,11 @@ describe('workflow masonry controller', () => {
     const pending = setup.controller.toggle();
     await Promise.resolve();
     expect(setup.mount).toHaveBeenCalledTimes(6);
-    expect(document.querySelector<HTMLElement>('.sugarcubes-workflow-masonry')?.style.opacity).toBe(
-      '0',
-    );
+    expect(
+      document
+        .querySelector('.sugarcubes-workflow-masonry')
+        ?.hasAttribute('data-sc-masonry-preparing'),
+    ).toBe(true);
     expect(setup.container.dataset.sugarcubesMasonry).toBeUndefined();
     setup.controller.leaveImmediately();
     for (const frame of frames) frame(0);
@@ -175,7 +331,7 @@ describe('workflow masonry controller', () => {
     expect(setup.unmount).toHaveBeenCalledTimes(6);
     expect(setup.controller.active).toBe(false);
   });
-  test('keeps graph visible during the surface fade and safely reverses a pending exit', async () => {
+  test('keeps graph visible during assembly and safely reverses a pending exit', async () => {
     const setup = fixture();
     const effects: Array<{ finish(): void; cancel: ReturnType<typeof jest.fn> }> = [];
     const mount = setup.mount.getMockImplementation();
@@ -183,7 +339,9 @@ describe('workflow masonry controller', () => {
       const result = mount?.(...args);
       const surface = args[0].closest<HTMLElement>('.sugarcubes-workflow-masonry');
       if (!result || !surface) throw new Error('Native mount surface missing');
-      Object.defineProperty(surface, 'animate', {
+      const backdrop = surface.previousElementSibling;
+      if (!backdrop) throw new Error('Masonry backdrop missing');
+      Object.defineProperty(backdrop, 'animate', {
         value: () => {
           const completion: { resolve?: () => void; reject?: (error: Error) => void } = {};
           const finished = new Promise<void>((resolve, reject) => {
@@ -202,15 +360,25 @@ describe('workflow masonry controller', () => {
       return result;
     });
     const entry = setup.controller.toggle();
-    await Promise.resolve();
-    await Promise.resolve();
+    for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
     expect(effects).toHaveLength(1);
     expect(setup.container.dataset.sugarcubesMasonry).toBeUndefined();
+    const movingSurface = document.querySelector<HTMLElement>('.sugarcubes-workflow-masonry');
+    if (!movingSurface) throw new Error('Masonry surface missing');
+    const wheel = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: 120 });
+    movingSurface.dispatchEvent(wheel);
+    expect(wheel.defaultPrevented).toBe(true);
     effects[0]?.finish();
     await entry;
     expect(setup.container.dataset.sugarcubesMasonry).toBe('true');
+    movingSurface.scrollTop = 123;
+    const scrollTo = jest.fn();
+    movingSurface.scrollTo = scrollTo;
     const exit = setup.controller.toggle();
     expect(setup.container.dataset.sugarcubesMasonry).toBeUndefined();
+    for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
+    expect(effects).toHaveLength(2);
+    expect(scrollTo).toHaveBeenCalledWith({ top: 123, behavior: 'instant' });
     const surface = document.querySelector<HTMLElement>('.sugarcubes-workflow-masonry');
     if (!surface) throw new Error('Masonry surface missing');
     surface.style.opacity = '0.6';
@@ -266,6 +434,7 @@ describe('workflow masonry controller', () => {
     expect(wheel.defaultPrevented).toBe(false);
     expect(setup.mount).toHaveBeenCalledWith(expect.any(HTMLElement), setup.node, {
       allowCollapse: true,
+      allowRename: false,
       presentationGeometry: true,
       preserveNativeBody: true,
       widgetSources: [],
@@ -370,7 +539,11 @@ describe('workflow masonry controller', () => {
 });
 
 /** Bind a controllable host boundary to the real presentation state machine and view. */
-function fixture() {
+function fixture(createLinkMotion?: WorkflowMasonryControllerOptions['createLinkMotion']) {
+  jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+    queueMicrotask(() => callback(0));
+    return 0;
+  });
   const container = document.createElement('div');
   document.body.append(container);
   const node: ComfyNode = {
@@ -424,6 +597,7 @@ function fixture() {
     isNodes2: () => nodes2,
     getSections,
     getRenderer,
+    ...(createLinkMotion ? { createLinkMotion } : {}),
     getCardState: () => cardState,
     notifyRendererFallback,
     reportError,
@@ -449,3 +623,138 @@ function fixture() {
     },
   };
 }
+
+test('assigns final themed masonry widths before the native renderer mounts controls', async () => {
+  const setup = fixture();
+  const view = new WorkflowMasonryView({
+    document,
+    sections: setup.sections,
+    cardState: new CubeFaceCardStateService({ nodes: new CubeNodeCatalog(), history: {} }),
+    openCube() {},
+  });
+  document.body.append(view.element);
+  const content = view.element.firstElementChild;
+  if (!content) throw new Error('Masonry content missing');
+  Object.defineProperty(content, 'clientWidth', { value: 1100 });
+  const prepare = (): void => {
+    view.element.style.setProperty('--sugarcubes-masonry-column-width', '400');
+    view.element.style.setProperty('--sugarcubes-masonry-gap', '8');
+  };
+  view.element.addEventListener(NATIVE_PRESENTATION_READY_EVENT, prepare);
+  const widths: string[] = [];
+  await view.mountCards({
+    mount(target) {
+      widths.push(target.parentElement?.style.width ?? '');
+      return { refresh() {}, unmount() {} };
+    },
+    dispose() {},
+  });
+  expect(widths).toEqual(['546px']);
+  view.dispose();
+});
+
+test('keeps noodles hidden through node travel and recaptures only after native cards return', async () => {
+  const events: string[] = [];
+  const create = jest.fn((container: HTMLElement) => {
+    events.push('capture');
+    return new WorkflowMasonryLinkMotion(container, {
+      strokes: [],
+      restore: () => events.push('restore'),
+    });
+  });
+  const setup = fixture(create);
+  setup.renderer.requestSlotLayoutSync = jest.fn(() => events.push('sync-sockets'));
+  jest.spyOn(WorkflowMasonryLinkMotion.prototype, 'run').mockImplementation(async (entering) => {
+    events.push(entering ? 'unplug' : 'replug');
+    if (!entering) expect(setup.unmount).toHaveBeenCalledTimes(1);
+  });
+  let finish = (): void => undefined;
+  jest
+    .spyOn(WorkflowMasonryTransition.prototype, 'run')
+    .mockImplementation(async (_view, entering) => {
+      events.push(entering ? 'cards-enter' : 'cards-exit');
+      if (!entering)
+        await new Promise<void>((resolve) => {
+          finish = resolve;
+        });
+    });
+  await setup.controller.toggle();
+  expect(events).toEqual(['sync-sockets', 'capture', 'unplug', 'cards-enter']);
+  const hold = jest.spyOn(WorkflowMasonryLinkMotion.prototype, 'hold');
+  const exit = setup.controller.toggle();
+  for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
+  expect(hold).toHaveBeenCalledWith(true);
+  expect(events).toEqual(['sync-sockets', 'capture', 'unplug', 'cards-enter', 'cards-exit']);
+  expect(setup.unmount).not.toHaveBeenCalled();
+  finish();
+  await exit;
+  expect(events).toEqual([
+    'sync-sockets',
+    'capture',
+    'unplug',
+    'cards-enter',
+    'cards-exit',
+    'sync-sockets',
+    'restore',
+    'capture',
+    'replug',
+    'restore',
+  ]);
+  expect(document.querySelector('svg')).toBeNull();
+});
+
+test('preserves a new masonry request when an old replug completes after reversal', async () => {
+  const create = jest.fn(
+    (container: HTMLElement) =>
+      new WorkflowMasonryLinkMotion(container, { strokes: [], restore: jest.fn() }),
+  );
+  const setup = fixture(create);
+  let finish = (): void => undefined;
+  let replugStarted = false;
+  jest.spyOn(WorkflowMasonryLinkMotion.prototype, 'run').mockImplementation(async (entering) => {
+    if (entering) return;
+    replugStarted = true;
+    await new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+  });
+  await setup.controller.toggle();
+  const exit = setup.controller.toggle();
+  for (let turn = 0; turn < 30 && !replugStarted; turn += 1) await Promise.resolve();
+  expect(replugStarted).toBe(true);
+  expect(document.querySelector('.sugarcubes-workflow-masonry')).toBeNull();
+  const entry = setup.controller.toggle();
+  finish();
+  await exit;
+  await entry;
+  expect(setup.controller.active).toBe(true);
+  expect(document.querySelector('.sugarcubes-workflow-masonry')).not.toBeNull();
+  expect(document.querySelector('svg')).not.toBeNull();
+  setup.controller.leaveImmediately();
+  expect(document.querySelector('svg')).toBeNull();
+});
+
+test('drops existing vector effects immediately when reduced motion is enabled during masonry', async () => {
+  const media = Object.getOwnPropertyDescriptor(window, 'matchMedia');
+  const create = jest.fn(
+    (container: HTMLElement) =>
+      new WorkflowMasonryLinkMotion(container, { strokes: [], restore: jest.fn() }),
+  );
+  const setup = fixture(create);
+  try {
+    await setup.controller.toggle();
+    expect(document.querySelector('svg')).not.toBeNull();
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: () => ({ matches: true }),
+    });
+    await setup.controller.toggle();
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(document.querySelector('svg')).toBeNull();
+    expect(document.querySelector('.sugarcubes-workflow-masonry')).toBeNull();
+  } finally {
+    setup.controller.leaveImmediately();
+    if (media) Object.defineProperty(window, 'matchMedia', media);
+    else Reflect.deleteProperty(window, 'matchMedia');
+  }
+});

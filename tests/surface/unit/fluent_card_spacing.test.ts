@@ -26,7 +26,7 @@ afterEach(() => {
 function fixture(masonry: boolean, fields: boolean, dark = true) {
   const nativeStyle = document.createElement('style');
   nativeStyle.textContent =
-    '.native-body { padding:4px 0 12px; gap:4px; } .native-combo { height:24px; border:0; } .native-field-row,.native-header { border:0; padding:0; } .editable-text { padding:0 8px; } .native-collapse-slot { display:flex; padding:0 2px; } .host-widget-ring { --tw-ring-shadow:0 0 0 1px blue; --tw-ring-color:blue; }';
+    '.native-body { padding:4px 0 12px; gap:4px; } .native-combo { height:24px; border:0; } .native-field-row,.native-header { border:0; padding:0; } .native-field-row { padding-right:12px; } .editable-text { padding:0 8px; } .native-collapse-slot { display:flex; padding:0 2px; } .host-widget-ring { --tw-ring-shadow:0 0 0 1px blue; --tw-ring-color:blue; }';
   const themeStyle = document.createElement('style');
   // Resolve border tokens at the JSDOM boundary, which cannot compute variable-based shorthands.
   themeStyle.textContent = fluentAppearanceCss(dark)
@@ -118,6 +118,8 @@ test('segments native graph ports from visible fields with a single reversible r
   expect(getComputedStyle(ports).borderBottomColor).toBe('rgba(0, 0, 0, 0.1)');
   expect(getComputedStyle(ports).paddingTop).toBe('8px');
   expect(getComputedStyle(ports).paddingBottom).toBe('8px');
+  expect(getComputedStyle(ports).paddingLeft).toBe('0px');
+  expect(getComputedStyle(ports).paddingRight).toBe('0px');
   expect(getComputedStyle(body).paddingTop).toBe('0px');
   expect(getComputedStyle(body).gap).toBe('0');
   expect(getComputedStyle(body).paddingBottom).toBe('12px');
@@ -257,20 +259,20 @@ test.each([false, true])('draws one header seam and row dividers in masonry=%s',
 });
 
 test.each([false, true])(
-  'reserves Substitute trailing space once per scalar row in masonry=%s',
+  'reserves Substitute horizontal insets only on projected cards in masonry=%s',
   (masonry) => {
     const { first, second, third, themeStyle } = segmentedFixture(masonry);
-    expect(getComputedStyle(first).paddingRight).toBe(masonry ? '10px' : '30px');
-    expect(getComputedStyle(second).paddingRight).toBe('30px');
-    expect(getComputedStyle(third).paddingRight).toBe('30px');
-    expect(getComputedStyle(third).paddingLeft).toBe('10px');
+    expect(getComputedStyle(first).paddingRight).toBe(masonry ? '10px' : '12px');
+    expect(getComputedStyle(second).paddingRight).toBe(masonry ? '30px' : '12px');
+    expect(getComputedStyle(third).paddingRight).toBe(masonry ? '30px' : '12px');
+    expect(getComputedStyle(third).paddingLeft).toBe(masonry ? '10px' : '0px');
     third.dataset.scFluentKind = 'multiline';
-    expect(getComputedStyle(third).paddingRight).toBe('10px');
+    expect(getComputedStyle(third).paddingRight).toBe(masonry ? '10px' : '12px');
     const custom = document.createElement('div');
     second.after(custom);
     expect(getComputedStyle(custom).paddingRight).toBe('');
     themeStyle.remove();
-    expect(getComputedStyle(second).paddingRight).toBe('0px');
+    expect(getComputedStyle(second).paddingRight).toBe('12px');
   },
 );
 

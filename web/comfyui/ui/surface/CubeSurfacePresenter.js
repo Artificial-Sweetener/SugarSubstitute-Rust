@@ -167,7 +167,11 @@ export class CubeSurfacePresenter {
         ensureCubeSurfaceStyles(options.document);
         this.#stabilizeSync();
     }
-    /** Dispose all native card mounts and host observers. */
+    /** Share the active native renderer without transferring its application lifecycle ownership. */
+    getNativeRenderer() {
+        return this.#renderers.getRenderer();
+    }
+    /** Release Cube presentation and its owned native renderer. */
     dispose() {
         this.#unsubscribeNodes();
         this.#previews.dispose();

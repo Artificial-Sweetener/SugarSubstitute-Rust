@@ -68,6 +68,7 @@ var ModelPickerPopupContent = defineComponent({
       {
         type: "button",
         class: "sc-model-filter-toggle",
+        "data-width-label": `Show only ${props.compatibilityLabel}`,
         "aria-label": props.unfiltered ? `Show only ${props.compatibilityLabel}` : "Show all",
         "aria-pressed": props.unfiltered,
         title: props.unfiltered ? `Show only ${props.compatibilityLabel}` : "Show all models",
@@ -75,7 +76,11 @@ var ModelPickerPopupContent = defineComponent({
       },
       [
         h("span", { class: "sc-model-filter-icon", "aria-hidden": true }),
-        props.unfiltered ? `Show only ${props.compatibilityLabel}` : "Show all"
+        h(
+          "span",
+          { class: "sc-model-filter-label" },
+          props.unfiltered ? `Show only ${props.compatibilityLabel}` : "Show all"
+        )
       ]
     ) : null;
     return () => {

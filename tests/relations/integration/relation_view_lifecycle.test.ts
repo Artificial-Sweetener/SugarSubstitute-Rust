@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Verify graph and masonry views of the same face retain independent mount lifetimes. */
-import { afterEach, expect, test } from '@jest/globals';
+import { afterEach, expect, jest, test } from '@jest/globals';
 import { NativeRelationViews } from '../../../frontend/comfyui/ui/relations/infrastructure/NativeRelationViews.js';
 import type { ComfyNode } from '../../../frontend/comfyui/ui/types/graph.js';
 
@@ -44,4 +44,43 @@ test('discovers a second mounted view while the first remains connected and rele
   registry.invalidate([graph]);
   expect(registry.read(node, 'cube').map((view) => view.root)).toEqual([masonry]);
   registry.clear();
+});
+
+test('discovers DOM-backed relation rows without reading canvas geometry', () => {
+  const node: ComfyNode = { id: 1, graph: { id: 'cube-graph' } };
+  const root = document.createElement('div');
+  root.className = 'sugarcubes-cube-face__node-card';
+  root.dataset.cubeNodeLocator = 'cube-graph:1';
+  document.body.append(root);
+  const width = jest.spyOn(root, 'clientWidth', 'get');
+  const height = jest.spyOn(root, 'clientHeight', 'get');
+  const surfaces = new NativeRelationViews(document).read(node, 'cube');
+  expect(surfaces[0]?.canvasTitle).toBe(false);
+  expect(width).not.toHaveBeenCalled();
+  expect(height).not.toHaveBeenCalled();
+  width.mockRestore();
+  height.mockRestore();
+});
+
+test('does not walk the application tree for a projection cell awaiting its native mount', () => {
+  const app = document.createElement('div');
+  app.id = 'vue-app';
+  let applicationReads = 0;
+  Reflect.set(app, '_vnode', {
+    get type() {
+      applicationReads += 1;
+      return { __name: 'App' };
+    },
+  });
+  const cell = document.createElement('article');
+  cell.className = 'sugarcubes-cube-face__node-card';
+  cell.dataset.cubeNodeLocator = 'cube-graph:1';
+  document.body.append(app, cell);
+  const surfaces = new NativeRelationViews(document).read(
+    { id: 1, graph: { id: 'cube-graph' } },
+    'cube',
+  );
+  expect(surfaces[0]?.root).toBe(cell);
+  expect(surfaces[0]?.rows.size).toBe(0);
+  expect(applicationReads).toBe(0);
 });

@@ -114,6 +114,11 @@ export class FluentScrollbarView {
     this.element.remove();
   }
 
+  /** Suppress a portalled track while its owner is between stable presentation coordinates. */
+  hide(): void {
+    this.element.hidden = true;
+  }
+
   /** Read native RTL coordinates as a positive distance from the leading edge. */
   #position(): number {
     return this.#axis === 'vertical' ? this.#owner.scrollTop : Math.abs(this.#owner.scrollLeft);

@@ -35,6 +35,7 @@ import { CardDisclosureMotion } from './motion/CardDisclosureMotion.js';
 import { NativeCardContentDisclosure } from './NativeCardContentDisclosure.js';
 import { NativeProjectedAdvancedInputs } from './NativeProjectedAdvancedInputs.js';
 import { NativeProjectedNodeScrollBoundary } from './NativeProjectedNodeScrollBoundary.js';
+import { NativeProjectedNodeTitleBoundary } from './NativeProjectedNodeTitleBoundary.js';
 import { NATIVE_NODE_CARD_DISPOSE_EVENT } from './NativeNodeCardRenderer.js';
 import { subscribeNativeNodeCardRefresh } from './NativeNodeCardRefresh.js';
 import type {
@@ -64,6 +65,11 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
     this.#runtime = options.runtime;
   }
 
+  /** Resynchronize native socket caches after presentation styles or borrowed controls settle. */
+  requestSlotLayoutSync(): void {
+    this.#runtime.requestSlotLayoutSync?.();
+  }
+
   /** Mount one exact internal graph node through Comfy's active native renderer. */
   mount(
     target: HTMLElement,
@@ -77,6 +83,10 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
       : null;
     const promptTextareaScope = new CubePromptTextareaScope(target);
     const scrollBoundary = new NativeProjectedNodeScrollBoundary();
+    const titleBoundary = new NativeProjectedNodeTitleBoundary(
+      target,
+      options.allowRename !== false,
+    );
     const disclosureMotion = new CardDisclosureMotion(target);
     const contentDisclosure = new NativeCardContentDisclosure(target, disclosureMotion);
     const observer = new MutationObserver(() => {
@@ -138,8 +148,10 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
           }
           vnodeValue.appContext = scopedContext;
           this.#runtime.render(vnodeValue, target);
-          target.classList.add('sugarcubes-native-node-card');
-          target.dataset.cubeFaceNative = 'nodes-2';
+          if (!target.classList.contains('sugarcubes-native-node-card'))
+            target.classList.add('sugarcubes-native-node-card');
+          if (target.dataset.cubeFaceNative !== 'nodes-2')
+            target.dataset.cubeFaceNative = 'nodes-2';
           this.#applyPresentation(
             target,
             node,
@@ -181,6 +193,7 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
         disclosureMotion.dispose();
         advancedInputsHost.dispose();
         scrollBoundary.dispose();
+        titleBoundary.dispose();
         headerAccessoryHost?.dispose();
         this.#runtime.render(null, target);
         this.#mounts.delete(mount);
@@ -218,15 +231,18 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
       if (options.presentationGeometry) {
         // Comfy's shared ResizeObserver keys canonical geometry by these attributes.
         // Presentation cards retain their native callbacks but must never write graph bounds.
-        nativeRoot.dataset.presentationNodeId = String(node.id ?? '');
+        const identity = String(node.id ?? '');
+        if (nativeRoot.dataset.presentationNodeId !== identity)
+          nativeRoot.dataset.presentationNodeId = identity;
         nativeRoot.removeAttribute('data-node-id');
         for (const grid of nativeRoot.querySelectorAll('[data-widgets-grid-node-id]')) {
           grid.removeAttribute('data-widgets-grid-node-id');
         }
       }
-      nativeRoot.dataset.cubeFacePresentation = 'true';
+      if (nativeRoot.dataset.cubeFacePresentation !== 'true')
+        nativeRoot.dataset.cubeFacePresentation = 'true';
       for (const handle of nativeRoot.querySelectorAll<HTMLElement>(':scope > [role="button"]')) {
-        handle.hidden = true;
+        if (!handle.hidden) handle.hidden = true;
       }
       collapseHost.reconcile(
         nativeRoot,
@@ -292,8 +308,10 @@ function annotateNativeBypassBadge(vnode: unknown, nativeRoot: HTMLElement | nul
     const props = isRecord(component.props) ? component.props : {};
     const element = resolveComponentElement(badge);
     if (!element || element.closest('.lg-node') !== nativeRoot) continue;
-    if (props.cssIcon === 'icon-[lucide--redo-dot]') element.dataset.masonryBypassBadge = '';
-    else delete element.dataset.masonryBypassBadge;
+    if (props.cssIcon === 'icon-[lucide--redo-dot]') {
+      if (!element.hasAttribute('data-masonry-bypass-badge'))
+        element.dataset.masonryBypassBadge = '';
+    } else delete element.dataset.masonryBypassBadge;
   }
 }
 
@@ -304,7 +322,7 @@ function reconcileNativeBody(nativeRoot: HTMLElement, hasPresented: boolean): vo
   const headerOnly = !hasPresented;
   const wasHeaderOnly = nativeRoot.dataset.cubeFaceBody === 'header-only';
   if (headerOnly) {
-    nativeRoot.dataset.cubeFaceBody = 'header-only';
+    if (!wasHeaderOnly) nativeRoot.dataset.cubeFaceBody = 'header-only';
     hideComponentRoot(body);
     return;
   }
@@ -334,8 +352,12 @@ function hideNativeSubgraphIcon(nativeRoot: HTMLElement): void {
 
 /** Hide one Comfy-owned presentation root without replacing its renderer. */
 function hideComponentRoot(element: HTMLElement): void {
-  element.hidden = true;
-  element.style.setProperty('display', 'none', 'important');
+  if (!element.hidden) element.hidden = true;
+  if (
+    element.style.display !== 'none' ||
+    element.style.getPropertyPriority('display') !== 'important'
+  )
+    element.style.setProperty('display', 'none', 'important');
 }
 
 /** Resolve the rendered root element for one mounted component VNode. */

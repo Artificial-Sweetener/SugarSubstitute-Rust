@@ -16,6 +16,7 @@
 /** Prove overlay scrolling, dynamic discovery, and reversible ownership without layout wrappers. */
 import { afterEach, expect, jest, test } from '@jest/globals';
 import { FluentOverlayScrollbarHost } from '../../../frontend/comfyui/ui/surface/appearance/FluentOverlayScrollbarHost.js';
+import { setSurfaceGeometryMoving } from '../../../frontend/comfyui/ui/surface/motion/SurfaceGeometryMotion.js';
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -55,6 +56,30 @@ async function flush(frames: FrameRequestCallback[]): Promise<void> {
   await Promise.resolve();
 }
 
+test('reads new overflow candidates before mounting any tracks', async () => {
+  const first = scrollArea(),
+    second = scrollArea();
+  document.body.append(first, second);
+  const frames: FrameRequestCallback[] = [];
+  jest.spyOn(window, 'requestAnimationFrame').mockImplementation((frame) => {
+    frames.push(frame);
+    return frames.length;
+  });
+  const styles = window.getComputedStyle.bind(window);
+  let tracksWhenSecondRead: number | null = null;
+  jest.spyOn(window, 'getComputedStyle').mockImplementation((element, pseudo) => {
+    if (element === second && tracksWhenSecondRead === null)
+      tracksWhenSecondRead = document.querySelectorAll('.sc-fluent-scrollbar').length;
+    return styles(element, pseudo);
+  });
+  const host = new FluentOverlayScrollbarHost(document, jest.fn());
+  host.enable();
+  await flush(frames);
+  expect(tracksWhenSecondRead).toBe(0);
+  expect(document.querySelectorAll('.sc-fluent-scrollbar')).toHaveLength(4);
+  host.clear();
+});
+
 test('portal mounts and local input do not rediscover or measure an unrelated scroll owner', async () => {
   const area = scrollArea(),
     other = scrollArea();
@@ -82,6 +107,39 @@ test('portal mounts and local input do not rediscover or measure an unrelated sc
   await flush(frames);
   expect(bounds).not.toHaveBeenCalled();
   expect(styles.mock.calls.some(([element]) => element === other)).toBe(false);
+  host.clear();
+});
+
+test('defers moving-region geometry until settlement while unrelated native scrolling remains responsive', async () => {
+  const area = scrollArea(),
+    other = scrollArea();
+  document.body.append(area, other);
+  const frames: FrameRequestCallback[] = [];
+  jest.spyOn(window, 'requestAnimationFrame').mockImplementation((frame) => {
+    frames.push(frame);
+    return frames.length;
+  });
+  const host = new FluentOverlayScrollbarHost(document, jest.fn());
+  host.enable();
+  await flush(frames);
+  await flush(frames);
+  const bounds = jest.mocked(area.getBoundingClientRect);
+  bounds.mockClear();
+  const unrelated = jest.mocked(other.getBoundingClientRect);
+  unrelated.mockClear();
+  setSurfaceGeometryMoving(area, true);
+  for (let index = 0; index < 3; index++) {
+    area.style.width = `${300 + index}px`;
+    area.dispatchEvent(new Event('scroll', { bubbles: true }));
+    await flush(frames);
+  }
+  expect(bounds).not.toHaveBeenCalled();
+  other.dispatchEvent(new Event('scroll', { bubbles: true }));
+  await flush(frames);
+  expect(unrelated).toHaveBeenCalled();
+  setSurfaceGeometryMoving(area, false);
+  await flush(frames);
+  expect(bounds).toHaveBeenCalledTimes(1);
   host.clear();
 });
 

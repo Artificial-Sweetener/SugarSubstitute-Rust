@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Mount shared values and link selectors through Comfy's exact widget component family. */
 import { isRecord } from '../../types/common.js';
+import { NativeLinkLabelLayout } from './NativeLinkLabelLayout.js';
 import { NativeLinkChoiceLabels } from './NativeLinkChoiceLabels.js';
 import { scopeNativeVueMountContext } from '../../surface/NativeVueMountContext.js';
 import { findComfyVueAppContext } from '../../surface/ComfyVueTree.js';
@@ -26,11 +27,13 @@ import { choiceRestrictions } from '../domain/FieldCompatibility.js';
 export class NativeRelationWidgetRenderer {
     document;
     reportError;
+    #labelLayout;
     #runtime = null;
     /** Bind the host; resolve its native capabilities when the first surface mounts. */
     constructor(document, reportError) {
         this.document = document;
         this.reportError = reportError;
+        this.#labelLayout = new NativeLinkLabelLayout(document, reportError);
     }
     /** Mount one native field backed by an automatically discovered shared value. */
     mount(root, initial, change, changeMode) {
@@ -116,7 +119,7 @@ export class NativeRelationWidgetRenderer {
         let disabled = false;
         let signature = '';
         root.dataset.scChoiceInline = '';
-        const labels = new NativeLinkChoiceLabels(root);
+        const labels = new NativeLinkChoiceLabels(root, this.#labelLayout);
         const mount = this.#mount(root, () => ({
             component: 'WidgetSelect',
             value,

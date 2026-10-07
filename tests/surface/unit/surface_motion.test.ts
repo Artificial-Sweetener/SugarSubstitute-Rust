@@ -87,6 +87,21 @@ test('lets disclosure own continuous height and neighboring movement without sca
   motion.dispose();
 });
 
+test('finishes placement effects without losing destinations needed by the next layout', () => {
+  const { element, effects, motion } = fixture();
+  motion.place(element, { x: 0, y: 0, width: 400, height: 100 });
+  motion.settle();
+  motion.place(element, { x: 400, y: 120, width: 400, height: 100 });
+  motion.finishAnimations();
+  expect(effects[0]?.cancel).toHaveBeenCalledTimes(1);
+  expect(element.style.transform).toBe('translate(400px, 120px)');
+  motion.place(element, { x: 400, y: 120, width: 400, height: 100 });
+  expect(effects).toHaveLength(1);
+  motion.place(element, { x: 0, y: 0, width: 400, height: 100 });
+  expect(effects[1]?.frames[0]?.transform).toBe('translate(400px, 120px)');
+  motion.dispose();
+});
+
 test('animates scroll extent once and reverses from its current displayed height', () => {
   const { element, effects, motion } = fixture();
   motion.resizeHeight(element, 800);
@@ -100,6 +115,15 @@ test('animates scroll extent once and reverses from its current displayed height
   motion.resizeHeight(element, 900);
   expect(effects[0]?.cancel).toHaveBeenCalledTimes(1);
   expect(effects[1]?.frames).toEqual([{ height: '720px' }, { height: '900px' }]);
+  motion.dispose();
+});
+
+test('commits initial scroll extent without forcing a computed-layout read', () => {
+  const { element, motion } = fixture();
+  const computedStyle = jest.spyOn(window, 'getComputedStyle');
+  motion.resizeHeight(element, 800);
+  expect(computedStyle).not.toHaveBeenCalled();
+  expect(element.style.height).toBe('800px');
   motion.dispose();
 });
 

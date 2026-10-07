@@ -380,6 +380,7 @@ export function createComfyCubeRuntime(options) {
         metadataHud,
         proximityEndpoints,
         proximityPresentation: portPresentation,
+        getNativeRenderer: () => presenter.getNativeRenderer(),
         registerSubgraphs: (payload) => subgraphRegistrar.register(payload),
         discardSubgraphs: (ids) => subgraphRegistrar.discard(ids),
         restoreLegacy: (batch) => legacyMigration.restore(batch),

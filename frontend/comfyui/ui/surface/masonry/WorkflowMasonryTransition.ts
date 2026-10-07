@@ -13,38 +13,206 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Fade the workflow surface independently of card geometry, layout, and theme. */
-export class WorkflowMasonryTransition {
-  #animation: Animation | null = null;
-  #surface: HTMLElement | null = null;
+/** Coordinate reversible native-card layout assembly and graph chrome fades. */
+import { fluentMotion } from '../appearance/FluentThemeRuntime.js';
+import { NativeGraphCardAssembly } from './NativeGraphCardAssembly.js';
+import { setSurfaceGeometryMoving } from '../motion/SurfaceGeometryMotion.js';
+import type { WorkflowMasonryGraphReveal } from './WorkflowMasonryGraphReveal.js';
+import {
+  rectanglesIntersect,
+  type WorkflowMasonryGraphSnapshot,
+} from './WorkflowMasonryGraphGeometry.js';
 
-  /** Reverse from displayed opacity and retain the destination after the effect ends. */
-  async run(surface: HTMLElement, entering: boolean, reducedMotion: boolean): Promise<void> {
-    const from =
-      this.#animation && this.#surface === surface && !reducedMotion
-        ? (surface.ownerDocument.defaultView?.getComputedStyle(surface).opacity ??
-          surface.style.opacity)
-        : surface.style.opacity || '1';
-    this.cancel();
-    const to = entering ? '1' : '0';
-    surface.style.opacity = to;
-    if (reducedMotion || from === to || typeof surface.animate !== 'function') return;
-    const animation = surface.animate([{ opacity: from }, { opacity: to }], {
-      duration: 180,
-      easing: 'ease-in-out',
-      fill: 'both',
-    });
-    this.#animation = animation;
-    this.#surface = surface;
-    await Promise.allSettled([animation.finished]);
-    if (this.#animation !== animation) return;
-    this.cancel();
+export interface WorkflowMasonryTransitionCard {
+  id: string;
+  cell: HTMLElement;
+  element: HTMLElement;
+}
+
+export interface WorkflowMasonryTransitionSurface {
+  surface: HTMLElement;
+  backdrop: HTMLElement;
+  cards: readonly WorkflowMasonryTransitionCard[];
+  graph: WorkflowMasonryGraphSnapshot;
+  reveal?: WorkflowMasonryGraphReveal;
+}
+
+interface MotionRequest {
+  element: HTMLElement;
+  frames: Keyframe[];
+  source?: HTMLElement;
+}
+
+/** Own all temporary effects and source suppression without retaining either presentation. */
+export class WorkflowMasonryTransition {
+  readonly #effects = new Map<HTMLElement, Animation>();
+  readonly #marked = new Set<HTMLElement>();
+  readonly #sources = new Set<HTMLElement>();
+  readonly #graphAssemblies = new Map<HTMLElement, NativeGraphCardAssembly>();
+  #surface: HTMLElement | null = null;
+  #surfaceInert = false;
+  #generation = 0;
+
+  /** Measure endpoints before writes and interpolate native width independently of graph zoom. */
+  async run(
+    view: WorkflowMasonryTransitionSurface,
+    entering: boolean,
+    reducedMotion: boolean,
+  ): Promise<void> {
+    const windowRef = view.surface.ownerDocument.defaultView;
+    const requests: MotionRequest[] = [];
+    const opacityFrames = (element: HTMLElement, from: number, to: number): Keyframe[] => [
+      {
+        opacity: this.#effects.has(element)
+          ? (windowRef?.getComputedStyle(element).opacity ?? String(from))
+          : from,
+      },
+      { opacity: to },
+    ];
+    const reveal = view.reveal?.frames(entering) ?? [];
+    if (!reducedMotion) {
+      requests.push(...reveal);
+      requests.push({
+        element: view.backdrop,
+        frames: opacityFrames(view.backdrop, entering ? 0 : 1, entering ? 1 : 0),
+      });
+      for (const layer of view.graph.layers)
+        requests.push({
+          element: layer,
+          frames: opacityFrames(layer, entering ? 1 : 0, entering ? 0 : 1),
+        });
+      for (const header of view.surface.querySelectorAll<HTMLElement>(
+        '.sugarcubes-workflow-masonry__section',
+      ))
+        requests.push({
+          element: header,
+          frames: opacityFrames(header, entering ? 0 : 1, entering ? 1 : 0),
+        });
+      for (const card of view.cards) {
+        const destination = card.cell.getBoundingClientRect();
+        if (destination.width <= 0 || destination.height <= 0) continue;
+        const measured = view.graph.cards.get(card.id);
+        let graphAssembly = measured ? this.#graphAssemblies.get(measured.element) : undefined;
+        const source = graphAssembly?.source ?? measured;
+        if (!source?.visible && !rectanglesIntersect(destination, view.graph.viewport)) continue;
+        if (!source) {
+          requests.push({
+            element: card.element,
+            frames: opacityFrames(card.element, entering ? 0 : 1, entering ? 1 : 0),
+          });
+          continue;
+        }
+        if (source.element.matches('.lg-node') && typeof source.element.animate === 'function') {
+          graphAssembly ??= new NativeGraphCardAssembly(source);
+          this.#graphAssemblies.set(source.element, graphAssembly);
+          requests.push({
+            element: source.element,
+            frames: graphAssembly.frames(destination, entering, this.#effects.has(source.element)),
+          });
+        }
+        const rectangle = source.rectangle;
+        const graphTransform = `translate(${String(rectangle.x - destination.x)}px, ${String(rectangle.y - destination.y)}px) scale(${String(source.scale)})`;
+        const masonryTransform = 'translate(0px, 0px) scale(1)';
+        const current = this.#effects.has(card.element)
+          ? windowRef?.getComputedStyle(card.element)
+          : undefined;
+        const graphWidth = `${String(source.layoutWidth)}px`;
+        const masonryWidth = `${String(destination.width)}px`;
+        requests.push({
+          element: card.element,
+          ...(graphAssembly ? {} : { source: source.element }),
+          frames: [
+            {
+              transform:
+                current?.transform && current.transform !== 'none'
+                  ? current.transform
+                  : entering
+                    ? graphTransform
+                    : masonryTransform,
+              opacity: graphAssembly ? current?.opacity || (entering ? 0 : 1) : 1,
+              width: current?.width || (entering ? graphWidth : masonryWidth),
+            },
+            {
+              transform: entering ? masonryTransform : graphTransform,
+              opacity: graphAssembly ? (entering ? 1 : 0) : 1,
+              width: entering ? masonryWidth : graphWidth,
+            },
+          ],
+        });
+      }
+    }
+    this.#cancelEffects();
+    const generation = this.#generation;
+    if (view.surface.style.opacity !== '1') view.surface.style.opacity = '1';
+    delete view.surface.dataset.scMasonryPreparing;
+    const backdropOpacity = entering ? '1' : '0';
+    if (view.backdrop.style.opacity !== backdropOpacity)
+      view.backdrop.style.opacity = backdropOpacity;
+    if (requests.length === 0) {
+      this.cancel();
+      return;
+    }
+    this.#surface = view.surface;
+    this.#surfaceInert = view.surface.inert;
+    view.surface.inert = true;
+    view.surface.dataset.scMasonryTransition = entering ? 'enter' : 'exit';
+    const completions: Array<Promise<PromiseSettledResult<Animation>[]>> = [];
+    try {
+      setSurfaceGeometryMoving(view.surface, true);
+      for (const assembly of this.#graphAssemblies.values()) assembly.attach();
+      for (const request of requests) {
+        if (typeof request.element.animate !== 'function') continue;
+        request.element.dataset.scMasonryMoving = '';
+        if (this.#graphAssemblies.has(request.element))
+          setSurfaceGeometryMoving(request.element, true);
+        this.#marked.add(request.element);
+        if (request.source) {
+          request.source.dataset.scMasonrySource = '';
+          this.#sources.add(request.source);
+        }
+      }
+      for (const request of requests) {
+        if (typeof request.element.animate !== 'function') continue;
+        const effect = request.element.animate(request.frames, {
+          duration: fluentMotion.duration,
+          easing: fluentMotion.easing,
+          fill: 'both',
+        });
+        this.#effects.set(request.element, effect);
+        completions.push(Promise.allSettled([effect.finished]));
+      }
+      await Promise.all(completions);
+    } finally {
+      if (generation === this.#generation) this.cancel();
+    }
   }
 
-  /** Release the active effect before reversal, renderer teardown, or graph replacement. */
+  /** Restore source visibility and release all compositor effects on every teardown path. */
   cancel(): void {
-    this.#animation?.cancel();
-    this.#animation = null;
+    this.#cancelEffects();
+    for (const assembly of this.#graphAssemblies.values()) assembly.dispose();
+    this.#graphAssemblies.clear();
+  }
+
+  /** Stop old effects during reversal while retaining their exact original graph endpoints. */
+  #cancelEffects(): void {
+    this.#generation += 1;
+    for (const effect of this.#effects.values()) {
+      effect.cancel();
+    }
+    this.#effects.clear();
+    for (const element of this.#marked) {
+      delete element.dataset.scMasonryMoving;
+      if (this.#graphAssemblies.has(element)) setSurfaceGeometryMoving(element, false);
+    }
+    this.#marked.clear();
+    for (const source of this.#sources) delete source.dataset.scMasonrySource;
+    this.#sources.clear();
+    if (this.#surface) {
+      setSurfaceGeometryMoving(this.#surface, false);
+      delete this.#surface.dataset.scMasonryTransition;
+      this.#surface.inert = this.#surfaceInert;
+    }
     this.#surface = null;
   }
 }

@@ -23,6 +23,7 @@ import { layoutCubeSurfaceDom } from './CubeSurfaceDomLayout.js';
 import { NativeCardGeometryObserver } from './NativeCardGeometryObserver.js';
 import { CubePreviewFrameResizePolicy } from './CubePreviewFrameResizePolicy.js';
 import { CubeFaceHeaderView } from './CubeFaceHeaderView.js';
+import { NativeCardPresentationOwner } from './NativeCardPresentationOwner.js';
 /** Own DOM composition, actions, and responsive geometry for one Cube face. */
 export class CubeSurfaceView {
     element;
@@ -43,6 +44,7 @@ export class CubeSurfaceView {
     #geometryObserver;
     #previewDividerController;
     #previewFrameResize = new CubePreviewFrameResizePolicy();
+    #presentation = new NativeCardPresentationOwner(() => this.layout(this.#lastLayoutWidth));
     #cells = [];
     #visibleCards = [];
     #lastLayoutWidth = 1;
@@ -118,6 +120,8 @@ export class CubeSurfaceView {
     layout(width) {
         const safeWidth = Number.isFinite(width) ? Math.max(1, width) : 1;
         this.#lastLayoutWidth = safeWidth;
+        if (this.#presentation.borrowed)
+            return;
         let result = this.#applyLayout(safeWidth);
         const resizedPreviewWidth = this.#previewFrameResize.resolve({
             frameWidth: safeWidth,
@@ -155,16 +159,19 @@ export class CubeSurfaceView {
         this.#previewDividerController?.dispose();
         this.#previewView.dispose();
         this.#geometryObserver.dispose();
+        this.#presentation.dispose();
         this.#cardHost.dispose();
     }
     /** Reconcile exact native card mounts from the shared presentation policy. */
     #renderCards() {
+        this.#presentation.reset([]);
         this.#visibleCards = projectNodeCards(this.#nodes, this.#state, this.#graph, this.#cube).filter((card) => card.visible);
         this.#cells = this.#cardHost.mount(this.#masonry, this.#visibleCards, (node, enabled) => {
             setCubeFaceNodeEnabled(this.#state, node, enabled);
             this.#commitCardChange();
         });
         this.#geometryObserver.observe(this.#cells);
+        this.#presentation.reset(this.#cells);
         this.#headerView.renderActions();
     }
     /** Persist one card change, then remount against the resulting policy. */

@@ -77,7 +77,8 @@ export class ComfyVueCubeColorScope {
     /** Return whether one native mutation can replace or recolor the theme owner. */
     #affectsNativeTheme(record) {
         if (record.type === 'childList')
-            return true;
+            return (record.target === this.#root &&
+                [...record.addedNodes, ...record.removedNodes].some((node) => node instanceof HTMLElement && node.matches('[data-testid="node-inner-wrapper"]')));
         return (record.target instanceof HTMLElement &&
             record.target.parentElement === this.#root &&
             record.target.matches('[data-testid="node-inner-wrapper"]'));
