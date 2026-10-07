@@ -15,6 +15,8 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own complete browser lifecycle and measurement for Cube prompt textareas. */
 const PRESENTATION_RESIZE_EVENT = 'sugarcubes:prompt-presentation-resize';
+/** Identify changed hydrated prompt text without asking presentation consumers to observe value properties. */
+export const PROMPT_VALUE_CHANGE_EVENT = 'sugarcubes:prompt-value-change';
 
 export type CubePromptTextareaHeightListener = (height: number) => void;
 
@@ -140,8 +142,11 @@ export class CubePromptTextareaAutosizer {
       enumerable: valueAccessors.enumerable,
       get: valueAccessors.get,
       set: (value: string) => {
+        const previous = valueAccessors.get();
         valueAccessors.set(value);
         this.#fit(binding);
+        if (valueAccessors.get() !== previous)
+          textarea.dispatchEvent(new Event(PROMPT_VALUE_CHANGE_EVENT, { bubbles: true }));
       },
     });
   }

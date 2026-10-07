@@ -22,6 +22,9 @@ import { Button } from '@fluentui/web-components/button/class.js';
 import { definition as ButtonDefinition } from '@fluentui/web-components/button/definition.js';
 import { Checkbox } from '@fluentui/web-components/checkbox/class.js';
 import { definition as CheckboxDefinition } from '@fluentui/web-components/checkbox/definition.js';
+import { TextInput } from '@fluentui/web-components/text-input/class.js';
+import { definition as TextInputDefinition } from '@fluentui/web-components/text-input/definition.js';
+import type { FluentFinderInput } from './FluentFinderControls.js';
 import type { FluentNumericSlider } from './NativeNumericControls.js';
 import type { FluentBooleanCheckbox } from './NativeToggleRows.js';
 import { adaptFluentSliderGeometry } from './FluentSliderGeometry.js';
@@ -49,6 +52,15 @@ class PresentationCheckbox extends Checkbox {
 if (!customElements.get('fluent-slider')) await PresentationSlider.define(SliderDefinition);
 if (!customElements.get('fluent-button')) await PresentationButton.define(ButtonDefinition);
 if (!customElements.get('fluent-checkbox')) await PresentationCheckbox.define(CheckboxDefinition);
+if (!customElements.get('fluent-text-input')) await TextInput.define(TextInputDefinition);
+
+/** Instantiate Microsoft's native text input through the narrow finder control boundary. */
+export function createFluentFinderInput(documentRef: Document): FluentFinderInput {
+  const input = documentRef.createElement('fluent-text-input');
+  if (!(input instanceof TextInput))
+    throw new TypeError('The registered Fluent input is incompatible.');
+  return input;
+}
 
 /** Instantiate Microsoft's checkbox while Comfy retains the boolean value owner. */
 export function createFluentBooleanCheckbox(documentRef: Document): FluentBooleanCheckbox {

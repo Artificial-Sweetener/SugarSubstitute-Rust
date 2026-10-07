@@ -162,7 +162,7 @@ export class NativeFluentCardAdapter {
           containerFields.push({ name: '', component: '' });
           continue;
         }
-        containerFields.push(descriptor);
+        if (!child.hasAttribute('data-sc-search-field-hidden')) containerFields.push(descriptor);
         rows.set(descriptor.name, child);
       }
       descriptors.push(...containerFields);

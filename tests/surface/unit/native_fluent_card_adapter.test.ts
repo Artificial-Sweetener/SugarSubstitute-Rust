@@ -168,6 +168,16 @@ test('groups core fields and releases their annotations when replaced by a custo
   expect(fields.children[1]?.getAttribute('style')).toContain('--sc-field-column: 2');
   expect(fields.children[1]?.getAttribute('data-sc-fluent-column')).toBe('2');
   expect(controls[2]?.hasAttribute('data-sc-fluent-control')).toBe(false);
+  const hidden = fields.children[1];
+  if (!(hidden instanceof HTMLElement)) throw new Error('Second native field missing');
+  const nativeInput = controls[0]?.querySelector('input');
+  hidden.setAttribute('data-sc-search-field-hidden', '');
+  adapter.annotate(root);
+  expect(fields.children[0]?.getAttribute('data-sc-fluent-span')).toBe('2');
+  expect(controls[0]?.querySelector('input')).toBe(nativeInput);
+  hidden.removeAttribute('data-sc-search-field-hidden');
+  adapter.annotate(root);
+  expect(fields.children[0]?.getAttribute('data-sc-fluent-span')).toBe('1');
   const first = nodes[0];
   if (!first) throw new Error('Fixture component missing');
   first.type = { __name: 'WidgetDOM' };
