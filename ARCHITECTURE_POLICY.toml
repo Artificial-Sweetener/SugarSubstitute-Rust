@@ -48,6 +48,27 @@ soft_lines = 350
 hard_lines = 500
 
 [[dependency]]
+name = "TYPESCRIPT_SEARCH_DOMAIN"
+paths = ["frontend/comfyui/ui/search/domain/*.ts"]
+forbidden_typescript_paths = [
+  "frontend/comfyui/ui/search/application",
+  "frontend/comfyui/ui/search/infrastructure",
+  "frontend/comfyui/ui/search/presentation",
+  "frontend/comfyui/ui/surface",
+  "frontend/comfyui/ui/cube",
+]
+
+[[dependency]]
+name = "TYPESCRIPT_SEARCH_APPLICATION"
+paths = ["frontend/comfyui/ui/search/application/*.ts"]
+forbidden_typescript_paths = [
+  "frontend/comfyui/ui/search/infrastructure",
+  "frontend/comfyui/ui/search/presentation",
+  "frontend/comfyui/ui/surface",
+  "frontend/comfyui/ui/cube",
+]
+
+[[dependency]]
 name = "TYPESCRIPT_RELATION_DOMAIN"
 paths = ["frontend/comfyui/ui/relations/domain/*.ts"]
 forbidden_typescript_paths = [

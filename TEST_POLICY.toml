@@ -2,6 +2,11 @@ schema = 1
 test_root = "tests"
 
 [[area]]
+name = "masonry_search"
+sources = ["frontend/comfyui/ui/search/**", "web/comfyui/ui/search/**"]
+proofs = ["unit"]
+
+[[area]]
 name = "relations"
 sources = ["frontend/comfyui/ui/relations/**", "web/comfyui/ui/relations/**"]
 proofs = ["unit", "integration"]
