@@ -22,7 +22,7 @@ import {
   createComfyRendererModeChangeSource,
   resolveComfyRendererMode,
 } from '../../core/ComfyRendererMode.js';
-import { CubeSurfaceRendererLifecycle } from '../CubeSurfaceRendererLifecycle.js';
+import type { NativeNodeCardRenderer } from '../NativeNodeCardRenderer.js';
 import type { CanvasGraphChangeSource } from '../ComfyCanvasGraphChangeAdapter.js';
 import {
   NativeSubgraphChangeObserver,
@@ -35,6 +35,8 @@ import {
 } from './WorkflowMasonryProjection.js';
 import { ensureWorkflowMasonryStyles } from './WorkflowMasonryStyles.js';
 import { WorkflowMasonryToolbarButton } from './WorkflowMasonryToolbarButton.js';
+import { captureMasonryLinkPaths } from './ComfyMasonryLinkAdapter.js';
+import { WorkflowMasonryLinkMotion } from './WorkflowMasonryLinkMotion.js';
 
 export interface WorkflowMasonryHostLifecycleOptions {
   app: ComfyApplication | null;
@@ -43,16 +45,15 @@ export interface WorkflowMasonryHostLifecycleOptions {
   getCardState(): CubeFaceCardStateService | null;
   getGraphChanges(): CanvasGraphChangeSource | null;
   getConnections(graph: ComfyGraph): readonly WorkflowMasonryConnection[];
+  getRenderer(): Promise<NativeNodeCardRenderer>;
   notifyRendererFallback(): void;
   reportError(error: unknown): void;
-  logger: Pick<Console, 'warn'>;
 }
 
 /** Compose focused owners and keep host registration free of layout behavior. */
 export class WorkflowMasonryHostLifecycle {
   readonly #options: WorkflowMasonryHostLifecycleOptions;
   readonly #controller: WorkflowMasonryController;
-  readonly #renderers: CubeSurfaceRendererLifecycle;
   readonly #toolbar: WorkflowMasonryToolbarButton;
   readonly #graphs = new Map<ObservableNativeSubgraph, NativeSubgraphChangeObserver>();
   #unsubscribeRenderer: (() => void) | null = null;
@@ -64,10 +65,6 @@ export class WorkflowMasonryHostLifecycle {
   /** Bind native renderer capabilities and non-blocking fallback feedback. */
   constructor(options: WorkflowMasonryHostLifecycleOptions) {
     this.#options = options;
-    this.#renderers = new CubeSurfaceRendererLifecycle({
-      document: options.document,
-      logger: options.logger,
-    });
     this.#controller = new WorkflowMasonryController({
       document: options.document,
       getContainer: () =>
@@ -80,7 +77,18 @@ export class WorkflowMasonryHostLifecycle {
           ? projectWorkflowMasonry(graph, options.getCubes(), options.getConnections(graph))
           : [];
       },
-      getRenderer: () => this.#renderers.getRenderer(),
+      getRenderer: options.getRenderer,
+      createLinkMotion: (container) => {
+        const layer = container.closest<HTMLElement>('#graph-canvas-container') ?? container;
+        const snapshot = captureMasonryLinkPaths(options.app?.canvas, layer);
+        if (!snapshot) return null;
+        try {
+          return new WorkflowMasonryLinkMotion(layer, snapshot);
+        } catch (error: unknown) {
+          snapshot.restore();
+          throw error;
+        }
+      },
       getCardState: () => {
         const state = options.getCardState();
         if (!state) throw new Error('Cube card presentation is unavailable.');
@@ -101,7 +109,6 @@ export class WorkflowMasonryHostLifecycle {
     this.#unsubscribeRenderer = createComfyRendererModeChangeSource(this.#options.app).subscribe(
       () => {
         this.#controller.rendererChanged();
-        if (!this.#isNodes2()) this.#renderers.release();
       },
     );
     this.#toolbar.setup();
@@ -137,7 +144,6 @@ export class WorkflowMasonryHostLifecycle {
     this.#unsubscribeRenderer?.();
     this.#unsubscribeRenderer = null;
     this.#releaseGraphObservers();
-    this.#renderers.dispose();
     this.#options.document.defaultView?.removeEventListener('pagehide', this.#onPageHide);
   }
 

@@ -41,23 +41,45 @@ export function findComfyVueAppContext(root: HTMLElement): UnknownRecord | null 
 
 /** Visit each mounted VNode once and return the requested component VNode. */
 export function findVueComponent(value: unknown, name: string): UnknownRecord | null {
-  return findVueComponents(value, name)[0] ?? null;
+  const desired = new Set([name]);
+  for (const candidate of mountedVueNodes(value))
+    if (hasVueComponentName(candidate, desired)) return candidate;
+  return null;
 }
 
 /** Visit each mounted VNode once and return every requested component VNode. */
-export function findVueComponents(value: unknown, name: string): UnknownRecord[] {
+export function findVueComponents(
+  value: unknown,
+  names: string | readonly string[],
+): UnknownRecord[] {
+  const desired = new Set(typeof names === 'string' ? [names] : names);
+  const matches: UnknownRecord[] = [];
+  for (const candidate of mountedVueNodes(value))
+    if (hasVueComponentName(candidate, desired)) matches.push(candidate);
+  return matches;
+}
+
+/** Read the component's published name without invoking its render code. */
+function hasVueComponentName(candidate: UnknownRecord, desired: ReadonlySet<string>): boolean {
+  const value: unknown = candidate.type;
+  if (!isRecord(value)) return false;
+  return (
+    (typeof value.__name === 'string' && desired.has(value.__name)) ||
+    (typeof value.name === 'string' && desired.has(value.name))
+  );
+}
+
+/** Share one cycle-safe traversal between early lookup and batched type discovery. */
+function* mountedVueNodes(value: unknown): Generator<UnknownRecord> {
   const pending: unknown[] = [value];
   const visited = new Set<object>();
-  const matches: UnknownRecord[] = [];
   while (pending.length > 0) {
     const candidate = pending.pop();
     if (!isRecord(candidate) || visited.has(candidate)) continue;
     visited.add(candidate);
-    const type = isRecord(candidate.type) ? candidate.type : null;
-    if (type && (type.__name === name || type.name === name)) matches.push(candidate);
+    yield candidate;
     enqueueVueChildren(candidate, pending);
   }
-  return matches;
 }
 
 /** Add known Vue tree edges without invoking slots or component code. */

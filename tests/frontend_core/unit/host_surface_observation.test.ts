@@ -55,3 +55,41 @@ test('reports identified mounts and local content, excludes owned descendants, a
   await Promise.resolve();
   expect(changed).not.toHaveBeenCalled();
 });
+
+test('flushes queued host mounts once and discards only subsequent owned mutations', async () => {
+  const changed = jest.fn();
+  const observer = new HostSurfaceObserver(document.body, '.card', changed, { content: true });
+  const card = document.createElement('div');
+  card.className = 'card';
+  document.body.append(card);
+  observer.flushPending();
+  expect(changed).toHaveBeenLastCalledWith([{ element: card, kind: 'mounted' }]);
+  changed.mockClear();
+  card.append(document.createElement('input'));
+  observer.discardPending();
+  await Promise.resolve();
+  expect(changed).not.toHaveBeenCalled();
+  card.append(document.createElement('button'));
+  await Promise.resolve();
+  expect(changed).toHaveBeenLastCalledWith([{ element: card, kind: 'content' }]);
+  observer.disconnect();
+});
+
+test('identifies relocation separately from native content changes in the same delivery', () => {
+  const changed = jest.fn();
+  const source = document.createElement('section');
+  const destination = document.createElement('section');
+  const card = document.createElement('div');
+  card.className = 'card';
+  source.append(card);
+  document.body.append(source, destination);
+  const observer = new HostSurfaceObserver(document.body, '.card', changed, { content: true });
+  destination.append(card);
+  observer.flushPending();
+  expect(changed).toHaveBeenLastCalledWith([{ element: card, kind: 'mounted', relocated: true }]);
+  card.append(document.createElement('input'));
+  source.append(card);
+  observer.flushPending();
+  expect(changed).toHaveBeenLastCalledWith([{ element: card, kind: 'content', relocated: true }]);
+  observer.disconnect();
+});

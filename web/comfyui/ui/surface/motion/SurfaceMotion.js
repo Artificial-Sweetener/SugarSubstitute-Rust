@@ -26,6 +26,11 @@ export class SurfaceMotion {
     settle() {
         this.#ready = true;
     }
+    /** Commit owned placement destinations before another presentation animates their contents. */
+    finishAnimations() {
+        for (const element of this.#animations.keys())
+            this.cancel(element);
+    }
     /** Commit layout immediately and animate its visual delta on the compositor. */
     place(element, rectangle, animate = true) {
         const previous = this.#placements.get(element);
@@ -62,7 +67,9 @@ export class SurfaceMotion {
         const previous = this.#heights.get(element);
         if (previous !== undefined && Math.abs(previous - height) < 0.5)
             return;
-        const from = Number.parseFloat(element.ownerDocument.defaultView?.getComputedStyle(element).height || '0');
+        const from = this.#ready && previous !== undefined
+            ? Number.parseFloat(element.ownerDocument.defaultView?.getComputedStyle(element).height || '0')
+            : height;
         this.cancel(element);
         this.#heights.set(element, height);
         element.style.height = `${String(height)}px`;

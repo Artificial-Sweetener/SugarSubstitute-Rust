@@ -22,6 +22,11 @@ import {
 import { isRecord } from '../../../frontend/comfyui/ui/types/common.js';
 import type { UnknownRecord } from '../../../frontend/comfyui/ui/types/common.js';
 import { NativeFluentCardAdapter } from '../../../frontend/comfyui/ui/surface/appearance/NativeFluentCardAdapter.js';
+import {
+  NativeCardPresentationOwner,
+  prepareNativeCardPresentation,
+} from '../../../frontend/comfyui/ui/surface/NativeCardPresentationOwner.js';
+import { prepareNativePresentation } from '../../../frontend/comfyui/ui/surface/NativePresentationReady.js';
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -29,9 +34,43 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
-test('popup mounts, search and closure never annotate an unrelated card', async () => {
+test('finishes requested native presentation before its first animation frame without replacing controls', () => {
+  jest.spyOn(window, 'requestAnimationFrame').mockImplementation(() => 1);
+  jest.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined);
+  const app = {
+    ui: {
+      settings: {
+        addSetting: () => undefined,
+        getSettingValue: (key: string) => key === 'Comfy.VueNodes.Enabled',
+      },
+    },
+  };
+  const host = new FluentAppearanceHost({ document, app, reportError: jest.fn() });
+  host.setup();
+  host.setEnabled(true);
+  const surface = document.createElement('section');
+  surface.className = 'sugarcubes-workflow-masonry';
   const card = document.createElement('div');
   card.className = 'lg-node';
+  const input = document.createElement('input');
+  card.append(input);
+  surface.append(card);
+  document.body.append(surface);
+  expect(card.hasAttribute('data-sc-fluent-node')).toBe(false);
+  prepareNativePresentation(surface);
+  expect(card.hasAttribute('data-sc-fluent-node')).toBe(true);
+  expect(surface.hasAttribute('data-sc-fluent-surface')).toBe(true);
+  expect(surface.hasAttribute('data-fluent-theme')).toBe(false);
+  expect(card.querySelector('input')).toBe(input);
+  host.dispose();
+  prepareNativePresentation(surface);
+  expect(card.hasAttribute('data-sc-fluent-node')).toBe(false);
+});
+
+test('initial styling synchronizes native sockets while popup activity leaves cards and geometry untouched', async () => {
+  const card = document.createElement('div');
+  card.className = 'lg-node';
+  card.dataset.nodeId = '4';
   document.body.append(card);
   const app = {
     ui: {
@@ -46,7 +85,13 @@ test('popup mounts, search and closure never annotate an unrelated card', async 
     frames.push(frame);
     return frames.length;
   });
-  const host = new FluentAppearanceHost({ document, app, reportError: jest.fn() });
+  const synchronize = jest.fn<() => void>();
+  const host = new FluentAppearanceHost({
+    document,
+    app,
+    reportError: jest.fn(),
+    getSlotLayoutSync: async () => synchronize,
+  });
   host.setup();
   host.setEnabled(true);
   for (let index = 0; index < 3; index++) {
@@ -54,6 +99,7 @@ test('popup mounts, search and closure never annotate an unrelated card', async 
     frames.splice(0).forEach((frame) => frame(0));
   }
   const annotate = jest.spyOn(NativeFluentCardAdapter.prototype, 'annotate');
+  expect(synchronize).toHaveBeenCalledTimes(1);
   const popup = document.createElement('div');
   popup.setAttribute('role', 'listbox');
   const search = document.createElement('input');
@@ -70,6 +116,11 @@ test('popup mounts, search and closure never annotate an unrelated card', async 
     frames.splice(0).forEach((frame) => frame(0));
   }
   expect(annotate).not.toHaveBeenCalled();
+  expect(synchronize).toHaveBeenCalledTimes(1);
+  host.setEnabled(false);
+  frames.splice(0).forEach((frame) => frame(0));
+  await Promise.resolve();
+  expect(synchronize).toHaveBeenCalledTimes(2);
   host.dispose();
 });
 
@@ -273,5 +324,89 @@ test('formats projected card labels and restores source text across presentation
   host.setEnabled(false);
   expect(label.textContent).toBe('strength_model');
   expect(errors).not.toHaveBeenCalled();
+  host.dispose();
+});
+
+test('retains styled borrowed controls while still reconciling actual native content changes', async () => {
+  const frames: FrameRequestCallback[] = [];
+  jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+    frames.push(callback);
+    return frames.length;
+  });
+  const app = {
+    ui: {
+      settings: {
+        addSetting() {},
+        getSettingValue: (key: string) => key === 'Comfy.VueNodes.Enabled',
+      },
+    },
+  };
+  const host = new FluentAppearanceHost({ document, app, reportError: jest.fn() });
+  host.setup();
+  host.setEnabled(true);
+  const source = document.createElement('section');
+  source.className = 'sugarcubes-workflow-masonry';
+  const cell = document.createElement('div');
+  cell.className = 'sugarcubes-cube-face__node-card';
+  const root = document.createElement('div');
+  root.className = 'lg-node';
+  root.append(document.createElement('input'));
+  cell.append(root);
+  source.append(cell);
+  document.body.append(source);
+  prepareNativePresentation(source);
+  const annotate = jest.spyOn(NativeFluentCardAdapter.prototype, 'annotate');
+  const owner = new NativeCardPresentationOwner(() => undefined);
+  owner.reset([cell]);
+  const transfer = prepareNativeCardPresentation(cell, () => undefined)!;
+  const destination = document.createElement('section');
+  destination.className = 'sugarcubes-workflow-masonry';
+  document.body.append(destination);
+  transfer.move(destination);
+  prepareNativePresentation(destination);
+  await Promise.resolve();
+  frames.splice(0).forEach((frame) => frame(0));
+  expect(annotate).not.toHaveBeenCalled();
+  root.append(document.createElement('textarea'));
+  await Promise.resolve();
+  frames.splice(0).forEach((frame) => frame(0));
+  expect(annotate).toHaveBeenCalledWith(root);
+  transfer.restore();
+  owner.dispose();
+  host.dispose();
+});
+
+test('owns one stable graph token scope across native card and masonry presentation', () => {
+  jest.spyOn(window, 'requestAnimationFrame').mockImplementation(() => 1);
+  const graph = document.createElement('div');
+  graph.id = 'graph-canvas-container';
+  const card = document.createElement('div');
+  card.className = 'lg-node';
+  const masonry = document.createElement('section');
+  masonry.className = 'sugarcubes-workflow-masonry';
+  graph.append(card, masonry);
+  document.body.append(graph);
+  const app = {
+    ui: {
+      settings: {
+        addSetting() {},
+        getSettingValue: (key: string) => key === 'Comfy.VueNodes.Enabled',
+      },
+    },
+  };
+  const host = new FluentAppearanceHost({ document, app, reportError: jest.fn() });
+  host.setup();
+  host.setEnabled(true);
+  prepareNativePresentation(masonry);
+  expect([...document.querySelectorAll('[data-sc-fluent-theme-root]')]).toEqual([graph]);
+  expect(document.getElementById('sugarcubes-fluent-appearance')?.textContent).toContain(
+    '[data-sc-fluent-theme-root]',
+  );
+  expect(card.hasAttribute('data-sc-fluent-node')).toBe(true);
+  masonry.append(card);
+  prepareNativePresentation(masonry);
+  expect([...document.querySelectorAll('[data-sc-fluent-theme-root]')]).toEqual([graph]);
+  host.setEnabled(false);
+  expect(document.querySelector('[data-sc-fluent-theme-root]')).toBeNull();
   host.dispose();
 });

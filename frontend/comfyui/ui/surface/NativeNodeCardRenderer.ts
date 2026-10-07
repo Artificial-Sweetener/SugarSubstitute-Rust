@@ -27,6 +27,7 @@ export interface NativeNodeCardMount {
 
 export interface NativeNodeCardMountOptions {
   allowCollapse?: boolean;
+  allowRename?: boolean;
   headerAccessory?: HTMLElement;
   presentationGeometry?: boolean;
   preserveNativeBody?: boolean;
@@ -41,6 +42,7 @@ export interface NativeNodeWidgetSource {
 }
 
 export interface NativeNodeCardRenderer {
+  requestSlotLayoutSync?(): void;
   mount(
     target: HTMLElement,
     node: ComfyNode,

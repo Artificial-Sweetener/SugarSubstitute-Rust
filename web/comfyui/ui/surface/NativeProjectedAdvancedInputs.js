@@ -16,10 +16,12 @@ export class NativeProjectedAdvancedInputs {
         const shown = this.#control !== null &&
             this.#node.flags?.collapsed !== true &&
             footer.querySelector('[data-testid="advanced-inputs-button"]') !== null;
-        footer.hidden = !shown;
+        if (footer.hidden === shown)
+            footer.hidden = !shown;
         if (shown)
             footer.style.removeProperty('display');
-        else
+        else if (footer.style.display !== 'none' ||
+            footer.style.getPropertyPriority('display') !== 'important')
             footer.style.setProperty('display', 'none', 'important');
     }
     /** Return footer interaction to Comfy when its projected card is unmounted. */

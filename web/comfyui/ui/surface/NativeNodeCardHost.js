@@ -37,12 +37,12 @@ export class NativeNodeCardHost {
         for (const card of cards) {
             const cell = container.ownerDocument.createElement('div');
             container.appendChild(cell);
-            this.mountCard(cell, card, onActivationChange);
+            this.mountCard(cell, card, onActivationChange, card.prompt === true ? { allowCollapse: false } : {});
             cells.push(cell);
         }
         return cells;
     }
-    /** Mount the shared card chrome into a supplied cell while retaining native renderer options. */
+    /** Mount shared presentation cards with native controls and read-only node titles. */
     mountCard(cell, card, onActivationChange, options = {}) {
         const { node } = card;
         cell.classList.add('sugarcubes-cube-face__node-card');
@@ -75,6 +75,7 @@ export class NativeNodeCardHost {
             preserveNativeBody: cubeFaceNodeHasVisibleWidgets(node) || widgetSources.length > 0,
             widgetSources,
             ...options,
+            allowRename: false,
             ...(headerAccessory ? { headerAccessory } : {}),
         }));
     }

@@ -1,16 +1,16 @@
 import { isRecord } from '../../types/common.js';
 import { createComfyRendererModeChangeSource, resolveComfyRendererMode, } from '../../core/ComfyRendererMode.js';
-import { CubeSurfaceRendererLifecycle } from '../CubeSurfaceRendererLifecycle.js';
 import { NativeSubgraphChangeObserver, } from '../NativeSubgraphChangeObserver.js';
 import { WorkflowMasonryController } from './WorkflowMasonryController.js';
 import { projectWorkflowMasonry, } from './WorkflowMasonryProjection.js';
 import { ensureWorkflowMasonryStyles } from './WorkflowMasonryStyles.js';
 import { WorkflowMasonryToolbarButton } from './WorkflowMasonryToolbarButton.js';
+import { captureMasonryLinkPaths } from './ComfyMasonryLinkAdapter.js';
+import { WorkflowMasonryLinkMotion } from './WorkflowMasonryLinkMotion.js';
 /** Compose focused owners and keep host registration free of layout behavior. */
 export class WorkflowMasonryHostLifecycle {
     #options;
     #controller;
-    #renderers;
     #toolbar;
     #graphs = new Map();
     #unsubscribeRenderer = null;
@@ -21,10 +21,6 @@ export class WorkflowMasonryHostLifecycle {
     /** Bind native renderer capabilities and non-blocking fallback feedback. */
     constructor(options) {
         this.#options = options;
-        this.#renderers = new CubeSurfaceRendererLifecycle({
-            document: options.document,
-            logger: options.logger,
-        });
         this.#controller = new WorkflowMasonryController({
             document: options.document,
             getContainer: () => options.document.querySelector('.graph-canvas-panel') ??
@@ -36,7 +32,20 @@ export class WorkflowMasonryHostLifecycle {
                     ? projectWorkflowMasonry(graph, options.getCubes(), options.getConnections(graph))
                     : [];
             },
-            getRenderer: () => this.#renderers.getRenderer(),
+            getRenderer: options.getRenderer,
+            createLinkMotion: (container) => {
+                const layer = container.closest('#graph-canvas-container') ?? container;
+                const snapshot = captureMasonryLinkPaths(options.app?.canvas, layer);
+                if (!snapshot)
+                    return null;
+                try {
+                    return new WorkflowMasonryLinkMotion(layer, snapshot);
+                }
+                catch (error) {
+                    snapshot.restore();
+                    throw error;
+                }
+            },
             getCardState: () => {
                 const state = options.getCardState();
                 if (!state)
@@ -57,8 +66,6 @@ export class WorkflowMasonryHostLifecycle {
         ensureWorkflowMasonryStyles(this.#options.document);
         this.#unsubscribeRenderer = createComfyRendererModeChangeSource(this.#options.app).subscribe(() => {
             this.#controller.rendererChanged();
-            if (!this.#isNodes2())
-                this.#renderers.release();
         });
         this.#toolbar.setup();
         this.#refreshButton();
@@ -91,7 +98,6 @@ export class WorkflowMasonryHostLifecycle {
         this.#unsubscribeRenderer?.();
         this.#unsubscribeRenderer = null;
         this.#releaseGraphObservers();
-        this.#renderers.dispose();
         this.#options.document.defaultView?.removeEventListener('pagehide', this.#onPageHide);
     }
     /** Tear down before the browser releases the Comfy Vue application. */

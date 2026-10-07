@@ -40,6 +40,10 @@ function createRuntime(dispose: () => void): ComfyCubeRuntime {
     metadataHud: null,
     proximityEndpoints: { discover: () => ({ outputs: [], inputs: [] }) },
     proximityPresentation: { updateMatches: () => undefined },
+    getNativeRenderer: async () => ({
+      mount: () => ({ refresh() {}, unmount() {} }),
+      dispose() {},
+    }),
     registerSubgraphs: () => ({ warnings: [], createdIds: [] }),
     discardSubgraphs: () => undefined,
     restoreLegacy: () => ({ migrated: 0, connected: 0, warnings: [] }),

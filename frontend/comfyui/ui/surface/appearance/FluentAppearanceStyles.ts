@@ -25,8 +25,10 @@ export function fluentAppearanceCss(dark: boolean): string {
   return `
     ${fluentScrollbarCss(dark)}
     ${fluentInteractionCss()}
-    :where([data-sc-fluent-node], [data-sc-fluent-surface], [data-sc-fluent-popup]) {
+    [data-sc-fluent-theme-root] {
       ${fluentTokenDeclarations(dark)}
+    }
+    :where([data-sc-fluent-node], [data-sc-fluent-surface], [data-sc-fluent-popup]) {
       --sc-card-fill:${dark ? '#2b2b2b' : '#fbfbfb'};
       --sc-node-card-radius:4px;
       --sc-control-fill:${dark ? '#373737' : '#ffffff'};
@@ -121,8 +123,9 @@ export function fluentAppearanceCss(dark: boolean): string {
     [data-sc-fluent-node] [data-sc-fluent-ports]:not([hidden]) {
       padding:8px 0; border-bottom:1px solid var(--sc-row-stroke);
     }
-    [data-sc-fluent-node] [data-sc-fluent-row] { padding:8px 30px 8px 10px; }
-    [data-sc-fluent-node] [data-sc-fluent-row][data-sc-fluent-kind="multiline"],
+    [data-sc-fluent-node] [data-sc-fluent-row] { padding-top:8px; padding-bottom:8px; }
+    .sugarcubes-cube-face__node-card [data-sc-fluent-node] [data-sc-fluent-row] { padding-left:10px; padding-right:30px; }
+    .sugarcubes-cube-face__node-card [data-sc-fluent-row][data-sc-fluent-kind="multiline"],
     .sugarcubes-cube-face__node-card [data-sc-fluent-row][data-sc-fluent-span="1"][data-sc-fluent-column="1"] { padding-right:10px; }
     [data-sc-fluent-node] [data-sc-fluent-row]:not([hidden]):not([style*="display: none"]) ~ [data-sc-fluent-row]:not([hidden]):not([style*="display: none"]) {
       border-top:1px solid var(--sc-row-stroke);

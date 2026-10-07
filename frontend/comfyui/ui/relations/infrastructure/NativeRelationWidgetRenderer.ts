@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Mount shared values and link selectors through Comfy's exact widget component family. */
 import { isRecord } from '../../types/common.js';
+import { NativeLinkLabelLayout } from './NativeLinkLabelLayout.js';
 import { NativeLinkChoiceLabels } from './NativeLinkChoiceLabels.js';
 import type { UnknownRecord } from '../../types/common.js';
 import { scopeNativeVueMountContext } from '../../surface/NativeVueMountContext.js';
@@ -46,13 +47,16 @@ interface NativeWidgetRequest {
 
 /** Delegate component rendering and menu interaction to Comfy while relations own only value policy. */
 export class NativeRelationWidgetRenderer implements RelationWidgetRenderer {
+  readonly #labelLayout: NativeLinkLabelLayout;
   #runtime: ReturnType<typeof loadComfyNativeWidgetRuntime> | null = null;
 
   /** Bind the host; resolve its native capabilities when the first surface mounts. */
   constructor(
     private readonly document: Document,
     private readonly reportError: (error: unknown) => void,
-  ) {}
+  ) {
+    this.#labelLayout = new NativeLinkLabelLayout(document, reportError);
+  }
 
   /** Mount one native field backed by an automatically discovered shared value. */
   mount(
@@ -157,7 +161,7 @@ export class NativeRelationWidgetRenderer implements RelationWidgetRenderer {
     let disabled = false;
     let signature = '';
     root.dataset.scChoiceInline = '';
-    const labels = new NativeLinkChoiceLabels(root);
+    const labels = new NativeLinkChoiceLabels(root, this.#labelLayout);
     const mount = this.#mount(
       root,
       () => ({

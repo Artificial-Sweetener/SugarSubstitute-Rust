@@ -17,10 +17,15 @@
 import { requireCubeIdentity } from '../../cube/node/ComfyCubeNodeFactory.js';
 import { WorkflowMasonryView } from './WorkflowMasonryView.js';
 import { WorkflowMasonryTransition } from './WorkflowMasonryTransition.js';
+import { WorkflowMasonryGraphReveal } from './WorkflowMasonryGraphReveal.js';
+import { SurfacePresentationBoundary } from '../motion/SurfacePresentationBoundary.js';
+import { measureWorkflowMasonryGraph, workflowMasonryGraphLayers, workflowMasonryGraphCards, } from './WorkflowMasonryGraphGeometry.js';
 /** Keep layout choice transient and restore graph presentation on every failure path. */
 export class WorkflowMasonryController {
     #options;
     #transition = new WorkflowMasonryTransition();
+    #settled;
+    #reveal = null;
     #view = null;
     #container = null;
     #desired = false;
@@ -28,9 +33,12 @@ export class WorkflowMasonryController {
     #mounting = null;
     #topology = '';
     #renderer = null;
+    #links = null;
+    #graphInert = new Map();
     /** Bind host capabilities without importing host globals or owning graph mutations. */
     constructor(options) {
         this.#options = options;
+        this.#settled = new SurfacePresentationBoundary(options.document);
     }
     /** Expose the requested presentation mode for button and future stack navigation. */
     get active() {
@@ -42,20 +50,48 @@ export class WorkflowMasonryController {
             return;
         this.#desired = !this.#desired;
         const generation = ++this.#generation;
+        this.#settled.cancel();
+        this.#links?.hold(!this.#desired);
         this.#options.onStateChange();
         if (!this.#desired) {
             this.#setGraphHidden(false);
-            await this.#animate(false);
-            if (generation === this.#generation)
-                this.#releaseView();
+            try {
+                if (!this.#view?.element.hasAttribute('data-sc-masonry-transition'))
+                    await this.#view?.settlePresentation();
+                if (generation !== this.#generation)
+                    return;
+                await this.#animate(false);
+                if (generation !== this.#generation)
+                    return;
+                const renderer = this.#renderer;
+                this.#disposePresentation();
+                renderer?.requestSlotLayoutSync?.();
+                if (this.#links) {
+                    await this.#settled.settled();
+                    if (generation !== this.#generation || !this.#container)
+                        return;
+                    this.#links.dispose();
+                    this.#links = null;
+                    this.#links = this.#options.createLinkMotion?.(this.#container) ?? null;
+                    this.#links?.hold(true);
+                    await this.#links?.run(false, this.#reducedMotion());
+                }
+            }
+            finally {
+                if (generation === this.#generation)
+                    this.#releaseView();
+            }
             return;
         }
         await this.#show(generation);
     }
     /** Release obsolete graph bindings immediately while retaining the chosen presentation. */
     async graphReplaced() {
-        if (!this.#desired)
+        if (!this.#desired) {
+            if (this.#view || this.#links)
+                this.leaveImmediately();
             return;
+        }
         const generation = ++this.#generation;
         this.#transition.cancel();
         this.#releaseView();
@@ -79,18 +115,27 @@ export class WorkflowMasonryController {
                     document: this.#options.document,
                     sections,
                     cardState: this.#options.getCardState(),
+                    getSources: () => workflowMasonryGraphCards(container, this.#options.getSections()),
                     openCube: (cube) => {
                         this.leaveImmediately();
                         this.#options.openCube(cube);
                     },
                 });
                 this.#container = container;
-                this.#view.element.style.opacity = '0';
-                container.append(this.#view.element);
-                this.#view.layout();
-                this.#mounting = this.#view.mountCards(renderer);
+                this.#reveal ??= new WorkflowMasonryGraphReveal();
+                this.#reveal.reconcile(container, sections);
+                const sources = this.#view.prepareSources();
+                container.append(this.#view.backdrop, this.#view.element);
+                this.#setGraphInert(true);
+                this.#mounting = this.#view.mountCards(renderer, sources);
             }
             await this.#mounting;
+            if (generation !== this.#generation || !this.#desired)
+                return;
+            if (this.#view?.element.hasAttribute('data-sc-masonry-preparing')) {
+                this.#renderer?.requestSlotLayoutSync?.();
+                await this.#view.settlePresentation();
+            }
             if (generation !== this.#generation || !this.#desired)
                 return;
             await this.#animate(true);
@@ -109,6 +154,7 @@ export class WorkflowMasonryController {
         this.#desired = false;
         this.#generation += 1;
         this.#transition.cancel();
+        this.#settled.cancel();
         this.#releaseView();
         this.#options.onStateChange();
     }
@@ -139,6 +185,8 @@ export class WorkflowMasonryController {
         if (generation !== this.#generation || !this.#desired || !this.#view)
             return;
         const sections = this.#options.getSections();
+        if (this.#container)
+            this.#reveal?.reconcile(this.#container, sections);
         const topology = topologySignature(sections);
         if (this.#topology === topology)
             return;
@@ -154,25 +202,67 @@ export class WorkflowMasonryController {
             this.#options.reportError(error);
         }
     }
-    /** Fade the complete surface without reading or animating node geometry. */
+    /** Assemble native cards from actual graph bounds without changing saved node positions. */
     async #animate(entering) {
         const view = this.#view;
-        if (!view)
+        const container = this.#container;
+        if (!view || !container)
             return;
-        const windowRef = this.#options.document.defaultView;
-        await this.#transition.run(view.element, entering, windowRef?.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
+        this.#setGraphInert(true);
+        view.setTransitioning(true);
+        const reducedMotion = this.#reducedMotion();
+        if (reducedMotion && this.#links) {
+            const links = this.#links;
+            this.#links = null;
+            links.dispose();
+        }
+        if (!reducedMotion && !this.#links)
+            this.#links = this.#options.createLinkMotion?.(container) ?? null;
+        const noodles = entering ? this.#links?.run(true, reducedMotion) : undefined;
+        await Promise.all([
+            noodles,
+            this.#transition.run({
+                surface: view.element,
+                backdrop: view.backdrop,
+                cards: view.transitionCards(),
+                graph: measureWorkflowMasonryGraph(container, this.#options.getSections()),
+                ...(this.#reveal ? { reveal: this.#reveal } : {}),
+            }, entering, reducedMotion),
+        ]);
+        if (entering && !view.element.hasAttribute('data-sc-masonry-transition'))
+            view.setTransitioning(false);
     }
     /** Remove presentation resources while preserving canonical graph and edit state. */
     #releaseView() {
         this.#setGraphHidden(false);
+        this.#settled.cancel();
+        const links = this.#links;
+        this.#links = null;
+        try {
+            links?.dispose();
+        }
+        finally {
+            this.#reveal?.dispose();
+            this.#reveal = null;
+            this.#disposePresentation();
+            this.#container = null;
+        }
+    }
+    /** Return borrowed controls before recapturing settled native noodle endpoints. */
+    #disposePresentation() {
         this.#view?.dispose();
         this.#view = null;
         this.#mounting = null;
         this.#renderer = null;
-        this.#container = null;
+    }
+    /** Respect the document's current motion preference on each transition phase. */
+    #reducedMotion() {
+        return (this.#options.document.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)')
+            .matches ?? false);
     }
     /** Keep graph visible behind the fade and suppress it only after masonry is opaque. */
     #setGraphHidden(hidden) {
+        this.#setGraphInert(hidden);
         const container = this.#container;
         if (!container)
             return;
@@ -184,6 +274,25 @@ export class WorkflowMasonryController {
                 element.dataset.sugarcubesMasonry = 'true';
             else
                 delete element.dataset.sugarcubesMasonry;
+        }
+    }
+    /** Keep graph controls dormant while presentation owns the pointer, retaining host inert state. */
+    #setGraphInert(hidden) {
+        if (!hidden) {
+            for (const [element, inert] of this.#graphInert)
+                element.inert = inert;
+            this.#graphInert.clear();
+        }
+        const container = this.#container;
+        if (!container)
+            return;
+        if (hidden) {
+            for (const layer of workflowMasonryGraphLayers(container)) {
+                if (!this.#graphInert.has(layer))
+                    this.#graphInert.set(layer, layer.inert);
+                if (!layer.inert)
+                    layer.inert = true;
+            }
         }
     }
 }

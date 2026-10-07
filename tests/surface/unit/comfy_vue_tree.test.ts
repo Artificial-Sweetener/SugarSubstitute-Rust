@@ -20,9 +20,25 @@ import { describe, expect, test } from '@jest/globals';
 import {
   findVueComponent,
   findComfyVueAppContext,
+  findVueComponents,
 } from '../../../frontend/comfyui/ui/surface/ComfyVueTree.js';
 
 describe('Comfy Vue tree boundaries', () => {
+  test('stops singular discovery at the first match and batches component types in one walk', () => {
+    let visits = 0;
+    const tail = {
+      get type() {
+        visits += 1;
+        return { __name: 'WidgetTextarea' };
+      },
+    };
+    const first = { type: { __name: 'WidgetSelect' } };
+    const tree = { children: [tail, first] };
+    expect(findVueComponent(tree, 'WidgetSelect')).toBe(first);
+    expect(visits).toBe(0);
+    expect(findVueComponents(tree, ['WidgetSelect', 'WidgetTextarea'])).toEqual([first, tail]);
+    expect(visits).toBe(1);
+  });
   test('discovers native VNodes for annotations independently of the application context', () => {
     const component = { __name: 'LGraphNode', setup: () => undefined };
     const appContext = { provides: { pinia: 'real-store' } };

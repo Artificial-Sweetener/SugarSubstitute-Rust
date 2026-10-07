@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own complete browser lifecycle and measurement for Cube prompt textareas. */
+const PRESENTATION_RESIZE_EVENT = 'sugarcubes:prompt-presentation-resize';
 /** Autosize bound prompt textareas after hydration, input, and width changes. */
 export class CubePromptTextareaAutosizer {
     #bindings = new Map();
@@ -40,6 +41,17 @@ export class CubePromptTextareaAutosizer {
             textarea,
             onHeightChange,
             onInput: () => this.#fit(binding),
+            onPresentationResize: (event) => {
+                const phase = event instanceof CustomEvent ? event.detail : null;
+                if (phase === 'prepare')
+                    this.#prepare(binding);
+                else if (phase === 'measure')
+                    this.#measure(binding);
+                else if (phase === 'apply')
+                    this.#apply(binding);
+            },
+            measuredHeight: 1,
+            measuredWidth: null,
             originalStyle: capturePromptTextareaStyle(textarea.style),
             originalValueProperty: Object.getOwnPropertyDescriptor(textarea, 'value'),
             valueAccessors: resolvePromptTextareaValueAccessors(textarea),
@@ -48,6 +60,7 @@ export class CubePromptTextareaAutosizer {
         this.#observeProgrammaticValueChanges(binding);
         this.#bindings.set(textarea, binding);
         textarea.addEventListener('input', binding.onInput);
+        textarea.addEventListener(PRESENTATION_RESIZE_EVENT, binding.onPresentationResize);
         this.#resizeObserver?.observe(textarea);
         this.#fit(binding);
     }
@@ -58,6 +71,7 @@ export class CubePromptTextareaAutosizer {
             return;
         this.#bindings.delete(textarea);
         textarea.removeEventListener('input', binding.onInput);
+        textarea.removeEventListener(PRESENTATION_RESIZE_EVENT, binding.onPresentationResize);
         this.#resizeObserver?.unobserve(textarea);
         restorePromptTextareaValueProperty(textarea, binding.originalValueProperty);
         restorePromptTextareaStyle(textarea.style, binding.originalStyle);
@@ -70,11 +84,23 @@ export class CubePromptTextareaAutosizer {
     }
     /** Measure after Comfy changes a bound textarea's rendered width. */
     #handleResize(entries) {
-        for (const entry of entries) {
+        const bindings = entries.flatMap((entry) => {
             const binding = this.#bindings.get(entry.target);
-            if (binding)
-                this.#fit(binding);
-        }
+            if (!binding)
+                return [];
+            const box = entry.borderBoxSize?.[0];
+            if (box &&
+                Math.round(box.inlineSize) === binding.measuredWidth &&
+                Math.abs(box.blockSize - (binding.lastHeight ?? -1)) < 0.5)
+                return [];
+            return [binding];
+        });
+        for (const binding of bindings)
+            this.#prepare(binding);
+        for (const binding of bindings)
+            this.#measure(binding);
+        for (const binding of bindings)
+            this.#apply(binding);
     }
     /** Observe Comfy and Vue assigning hydrated values without browser input events. */
     #observeProgrammaticValueChanges(binding) {
@@ -91,17 +117,40 @@ export class CubePromptTextareaAutosizer {
     }
     /** Apply the complete content height and report only material changes. */
     #fit(binding) {
-        const { textarea } = binding;
+        this.#prepare(binding);
+        this.#measure(binding);
+        this.#apply(binding);
+    }
+    /** Collapse all intrinsic rows before the batch reads content geometry. */
+    #prepare({ textarea }) {
         // Collapse intrinsic rows before measuring so content and the current theme's minimum own height.
         textarea.style.setProperty('height', '0px', 'important');
         textarea.style.setProperty('overflow-y', 'hidden', 'important');
-        const height = Math.max(textarea.scrollHeight, textarea.clientHeight, textarea.offsetHeight, 1);
+    }
+    /** Read final content geometry without applying intervening height changes. */
+    #measure(binding) {
+        const { textarea } = binding;
+        binding.measuredWidth = textarea.offsetWidth;
+        binding.measuredHeight = Math.max(textarea.scrollHeight, textarea.clientHeight, textarea.offsetHeight, 1);
+    }
+    /** Publish measured heights only after every batch member has been read. */
+    #apply(binding) {
+        const { textarea, measuredHeight: height } = binding;
         textarea.style.setProperty('height', `${String(height)}px`, 'important');
         if (binding.lastHeight !== null && Math.abs(binding.lastHeight - height) < 0.5)
             return;
         binding.lastHeight = height;
         binding.onHeightChange(height);
     }
+}
+/** Settle owned prompt sizing after a synchronous presentation-width change. */
+export function settleCubePromptTextareaGeometry(roots) {
+    const textareas = [
+        ...new Set([...roots].flatMap((root) => [...root.querySelectorAll('textarea')])),
+    ];
+    for (const phase of ['prepare', 'measure', 'apply'])
+        for (const textarea of textareas)
+            textarea.dispatchEvent(new CustomEvent(PRESENTATION_RESIZE_EVENT, { detail: phase }));
 }
 /** Capture the exact inline properties owned while a prompt is bound. */
 function capturePromptTextareaStyle(style) {

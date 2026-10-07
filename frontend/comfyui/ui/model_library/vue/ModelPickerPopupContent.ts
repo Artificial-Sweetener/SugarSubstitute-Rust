@@ -58,7 +58,7 @@ export const ModelPickerPopupContent = defineComponent({
         },
         label,
       );
-    /** Render the filter action within the available navigation row. */
+    /** Reserve the longer filter label so toggling keeps the icon and button edges stationary. */
     const filter = () =>
       props.compatibilityLabel
         ? h(
@@ -66,6 +66,7 @@ export const ModelPickerPopupContent = defineComponent({
             {
               type: 'button',
               class: 'sc-model-filter-toggle',
+              'data-width-label': `Show only ${props.compatibilityLabel}`,
               'aria-label': props.unfiltered ? `Show only ${props.compatibilityLabel}` : 'Show all',
               'aria-pressed': props.unfiltered,
               title: props.unfiltered ? `Show only ${props.compatibilityLabel}` : 'Show all models',
@@ -73,7 +74,11 @@ export const ModelPickerPopupContent = defineComponent({
             },
             [
               h('span', { class: 'sc-model-filter-icon', 'aria-hidden': true }),
-              props.unfiltered ? `Show only ${props.compatibilityLabel}` : 'Show all',
+              h(
+                'span',
+                { class: 'sc-model-filter-label' },
+                props.unfiltered ? `Show only ${props.compatibilityLabel}` : 'Show all',
+              ),
             ],
           )
         : null;

@@ -37,6 +37,32 @@ describe('CubeSurfacePresenter', () => {
     jest.restoreAllMocks();
   });
 
+  test('shares one lazily acquired native renderer with other presentations', async () => {
+    const renderer: NativeNodeCardRenderer = {
+      mount: jest.fn<NativeNodeCardRenderer['mount']>(),
+      dispose: jest.fn(),
+    };
+    const createRenderer = jest.fn(async () => renderer);
+    const rootGraph = {};
+    const presenter = new CubeSurfacePresenter({
+      document,
+      openEditor: jest.fn(),
+      rootGraph,
+      getCurrentGraph: () => rootGraph,
+      nodes: new CubeNodeCatalog(),
+      logger: console,
+      createRenderer,
+      requestSlotLayoutSync: () => undefined,
+    });
+    const first = presenter.getNativeRenderer();
+    expect(presenter.getNativeRenderer()).toBe(first);
+    expect(await first).toBe(renderer);
+    expect(createRenderer).toHaveBeenCalledTimes(1);
+    presenter.dispose();
+    await Promise.resolve();
+    expect(renderer.dispose).toHaveBeenCalledTimes(1);
+  });
+
   test('mounts the custom face inside the real node while preserving shell edges and controls', async () => {
     const pane = createTransformPane();
     const shell = createNativeNodeShell('9');
@@ -89,6 +115,7 @@ describe('CubeSurfacePresenter', () => {
     expect(faceHost?.querySelector('[data-cube-port-direction]')).toBeNull();
     expect(mount).toHaveBeenCalledWith(expect.any(HTMLElement), internalNode, {
       presentationGeometry: true,
+      allowRename: false,
       preserveNativeBody: true,
       widgetSources: [],
     });
@@ -369,6 +396,7 @@ describe('CubeSurfacePresenter', () => {
 
     expect(mount).toHaveBeenLastCalledWith(expect.any(HTMLElement), second, {
       presentationGeometry: true,
+      allowRename: false,
       preserveNativeBody: true,
       widgetSources: [],
     });

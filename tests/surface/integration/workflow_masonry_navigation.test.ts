@@ -16,7 +16,6 @@
 /** Prove masonry follows native graph navigation and releases obsolete bindings. */
 import { afterEach, expect, jest, test } from '@jest/globals';
 import { ComfyCanvasGraphChangeAdapter } from '../../../frontend/comfyui/ui/surface/ComfyCanvasGraphChangeAdapter.js';
-import { CubeSurfaceRendererLifecycle } from '../../../frontend/comfyui/ui/surface/CubeSurfaceRendererLifecycle.js';
 import { CubeFaceCardStateService } from '../../../frontend/comfyui/ui/surface/CubeFaceCardStateService.js';
 import { CubeNodeCatalog } from '../../../frontend/comfyui/ui/cube/node/CubeNodeCatalog.js';
 import { WorkflowMasonryHostLifecycle } from '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryHostLifecycle.js';
@@ -26,6 +25,22 @@ import type { ComfyGraph, ComfyNode } from '../../../frontend/comfyui/ui/types/g
 afterEach(() => {
   document.body.replaceChildren();
   jest.restoreAllMocks();
+});
+
+test('borrows the application renderer and releases only masonry mounts', async () => {
+  const setup = fixture();
+  setup.host.toggle();
+  await settle();
+  expect(setup.getRenderer).toHaveBeenCalledTimes(1);
+  setup.host.toggle();
+  await settle();
+  setup.host.toggle();
+  await settle();
+  expect(setup.getRenderer).toHaveBeenCalledTimes(2);
+  setup.host.dispose();
+  expect(setup.unmount).toHaveBeenCalledTimes(2);
+  expect(setup.renderer.dispose).not.toHaveBeenCalled();
+  setup.changes.dispose();
 });
 
 test('replaces native bindings on root/cube navigation even when node ids and labels match', async () => {
@@ -150,6 +165,10 @@ test('restores graph presentation if the new native graph cannot mount', async (
 
 /** Mount real masonry with only the external native renderer replaced. */
 function fixture(rootCount = 1) {
+  jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+    queueMicrotask(() => callback(0));
+    return 1;
+  });
   const root = graph('root model', rootCount);
   const nested = graph('cube model');
   const rootAdd = root.add;
@@ -176,10 +195,11 @@ function fixture(rootCount = 1) {
     target.append(input);
     return { refresh() {}, unmount: () => unmount(node) };
   });
-  jest.spyOn(CubeSurfaceRendererLifecycle.prototype, 'getRenderer').mockResolvedValue({
+  const renderer: NativeNodeCardRenderer = {
     mount,
-    dispose() {},
-  });
+    dispose: jest.fn(),
+  };
+  const getRenderer = jest.fn(async () => renderer);
   const cardState = new CubeFaceCardStateService({ nodes: new CubeNodeCatalog(), history: {} });
   const reportError = jest.fn();
   const notifyRendererFallback = jest.fn<() => void>();
@@ -200,9 +220,9 @@ function fixture(rootCount = 1) {
     getCardState: () => cardState,
     getGraphChanges: () => changes,
     getConnections: () => [],
+    getRenderer,
     notifyRendererFallback,
     reportError,
-    logger: { warn: jest.fn() },
   });
   host.setup();
   return {
@@ -225,6 +245,8 @@ function fixture(rootCount = 1) {
     nestedAdd,
     container,
     mount,
+    renderer,
+    getRenderer,
     unmount,
     notifyRendererFallback,
     reportError,

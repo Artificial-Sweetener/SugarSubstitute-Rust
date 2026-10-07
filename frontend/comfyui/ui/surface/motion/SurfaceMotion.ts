@@ -36,6 +36,11 @@ export class SurfaceMotion {
     this.#ready = true;
   }
 
+  /** Commit owned placement destinations before another presentation animates their contents. */
+  finishAnimations(): void {
+    for (const element of this.#animations.keys()) this.cancel(element);
+  }
+
   /** Commit layout immediately and animate its visual delta on the compositor. */
   place(element: HTMLElement, rectangle: SurfaceRectangle, animate = true): void {
     const previous = this.#placements.get(element);
@@ -78,9 +83,12 @@ export class SurfaceMotion {
   resizeHeight(element: HTMLElement, height: number): void {
     const previous = this.#heights.get(element);
     if (previous !== undefined && Math.abs(previous - height) < 0.5) return;
-    const from = Number.parseFloat(
-      element.ownerDocument.defaultView?.getComputedStyle(element).height || '0',
-    );
+    const from =
+      this.#ready && previous !== undefined
+        ? Number.parseFloat(
+            element.ownerDocument.defaultView?.getComputedStyle(element).height || '0',
+          )
+        : height;
     this.cancel(element);
     this.#heights.set(element, height);
     element.style.height = `${String(height)}px`;

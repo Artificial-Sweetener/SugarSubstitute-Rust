@@ -361,13 +361,17 @@ const workflowMasonry = new WorkflowMasonryHostLifecycle({
   getCardState: () => cubeRuntimeLifecycle.current()?.cardState ?? null,
   getGraphChanges: () => cubeRuntimeLifecycle.current()?.graphChanges ?? null,
   getConnections: (graph) => proximityWorkflowConnections(overlayManager.proximity, graph),
+  getRenderer: () => {
+    const runtime = cubeRuntimeLifecycle.current();
+    if (!runtime) throw new Error('SugarCubes native renderer is unavailable.');
+    return runtime.getNativeRenderer();
+  },
   notifyRendererFallback: () =>
     pushToastMessage('info', 'Switched to graph view', 'Masonry requires Nodes 2.0.'),
   reportError: (error) => {
     logger.error('SugarCubes workflow masonry failed', { error });
     pushToastMessage('error', 'Masonry unavailable', readErrorMessage(error));
   },
-  logger,
 });
 
 /** Compose shared appearance without adding styling behavior to host registration. */

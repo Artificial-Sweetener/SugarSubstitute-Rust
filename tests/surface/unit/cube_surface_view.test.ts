@@ -18,6 +18,7 @@
 import { describe, expect, jest, test } from '@jest/globals';
 
 import { CubeSurfaceView } from '../../../frontend/comfyui/ui/surface/CubeSurfaceView.js';
+import { prepareNativeCardPresentation } from '../../../frontend/comfyui/ui/surface/NativeCardPresentationOwner.js';
 import { ensureCubeSurfaceStyles } from '../../../frontend/comfyui/ui/surface/CubeSurfaceStyles.js';
 import { createDefaultCubeSurfaceState } from '../../../frontend/comfyui/ui/surface/CubeSurfaceState.js';
 import type {
@@ -33,6 +34,40 @@ import {
 } from '../../../frontend/comfyui/ui/cube/CubeModelTitlePresentation.js';
 
 describe('CubeSurfaceView', () => {
+  test('suspends source geometry during a card loan and resumes once at its latest width', () => {
+    const renderer = createRenderer();
+    const minimumHeight = jest.fn();
+    const state = createDefaultCubeSurfaceState();
+    state.preview.visible = false;
+    state.minimumColumnWidth = 1000;
+    const view = new CubeSurfaceView({
+      document,
+      renderer,
+      identity: cubeIdentity('Borrowed'),
+      nodes: [createNode(1)],
+      state,
+      onStateChange: jest.fn(),
+      onMinimumHeightChange: minimumHeight,
+    });
+    document.body.append(view.element);
+    view.layout(600);
+    const cell = view.element.querySelector<HTMLElement>('[data-cube-node-id]')!;
+    const target = document.createElement('article');
+    document.body.append(target);
+    const transfer = prepareNativeCardPresentation(cell, jest.fn())!;
+    transfer.move(target);
+    minimumHeight.mockClear();
+    view.layout(900);
+    expect(cell.style.width).toBe('100%');
+    expect(minimumHeight).not.toHaveBeenCalled();
+    transfer.restore();
+    expect(cell.parentElement?.dataset.cubeMasonry).toBe('');
+    expect(cell.style.width).toBe('900px');
+    expect(renderer.mount).toHaveBeenCalledTimes(1);
+    view.dispose();
+    view.element.remove();
+    target.remove();
+  });
   test('uses the same geometry-safe native card options as workflow masonry', () => {
     const renderer = createRenderer();
     const node = createNode(1);
@@ -46,9 +81,31 @@ describe('CubeSurfaceView', () => {
     });
     expect(renderer.mount).toHaveBeenCalledWith(expect.any(HTMLElement), node, {
       presentationGeometry: true,
+      allowRename: false,
       preserveNativeBody: true,
       widgetSources: [],
     });
+    view.dispose();
+  });
+
+  test('keeps prompt controls expanded when their native Cube card is reused in workflow masonry', () => {
+    const renderer = createRenderer();
+    const node = createNode(1);
+    node.title = 'Positive Prompt';
+    node.widgets = [{ name: 'text', type: 'customtext', value: '' }];
+    const view = new CubeSurfaceView({
+      document,
+      renderer,
+      identity: cubeIdentity('Prompt'),
+      nodes: [node],
+      state: createDefaultCubeSurfaceState(),
+      onStateChange: jest.fn(),
+    });
+    expect(renderer.mount).toHaveBeenCalledWith(
+      expect.any(HTMLElement),
+      node,
+      expect.objectContaining({ allowCollapse: false, allowRename: false }),
+    );
     view.dispose();
   });
 

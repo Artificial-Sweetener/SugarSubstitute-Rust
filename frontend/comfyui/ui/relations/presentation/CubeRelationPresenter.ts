@@ -33,13 +33,12 @@ export interface RelationCardView {
 interface MountedChoice {
   readonly choice: RelationChoiceMount;
   readonly root: HTMLElement;
-  readonly hidden: HTMLElement[];
 }
 
 /** Reconcile chrome independently from native card construction and compatibility policy. */
 export class CubeRelationPresenter {
   readonly #choices = new Map<HTMLElement, Map<string, MountedChoice>>();
-  readonly #hidden = new Set<HTMLElement>();
+  #hidden = new Set<HTMLElement>();
 
   /** Receive identified native view boundaries through an explicit adapter. */
   constructor(
@@ -52,8 +51,7 @@ export class CubeRelationPresenter {
 
   /** Add selectors only where a compatible peer exists or an existing link needs display. */
   reconcile(): void {
-    for (const element of this.#hidden) element.removeAttribute('data-sc-relation-hidden');
-    this.#hidden.clear();
+    const hidden = new Set<HTMLElement>();
     const snapshot = this.relations.snapshot(),
       views = this.getViews(),
       live = new Set(views.map((view) => view.surface.root));
@@ -69,13 +67,18 @@ export class CubeRelationPresenter {
       this.#choices.set(view.surface.root, mounted);
       const retain = new Set<string>();
       if (node) this.#node(node, view.surface, mounted, retain);
-      for (const field of fields) this.#field(field, view.surface, mounted, retain);
+      for (const field of fields) this.#field(field, view.surface, mounted, retain, hidden);
       for (const [key, choice] of mounted)
         if (!retain.has(key)) {
           this.#release(choice);
           mounted.delete(key);
         }
     }
+    for (const element of this.#hidden)
+      if (!hidden.has(element)) element.removeAttribute('data-sc-relation-hidden');
+    for (const element of hidden)
+      if (!this.#hidden.has(element)) element.dataset.scRelationHidden = 'true';
+    this.#hidden = hidden;
   }
 
   /** Restore native presentation and release all owned link controls. */
@@ -139,6 +142,7 @@ export class CubeRelationPresenter {
     surface: RelationCardSurface,
     mounted: Map<string, MountedChoice>,
     retain: Set<string>,
+    hidden: Set<HTMLElement>,
   ): void {
     const snapshot = this.relations.snapshot(),
       effective = snapshot.resolved.find((item) => item.field.id === field.id),
@@ -146,11 +150,11 @@ export class CubeRelationPresenter {
       canvasField = surface.canvasFields.get(field.name);
     if (!row && !canvasField) return;
     if (effective?.override) {
-      if (row) this.#hide(row);
+      if (row) hidden.add(row);
       return;
     }
     if (effective?.source && snapshot.state.nodeLinks[field.nodeId]) {
-      if (row) this.#hide(row);
+      if (row) hidden.add(row);
       return;
     }
     const peers = field.cubeId
@@ -180,8 +184,7 @@ export class CubeRelationPresenter {
     if (control instanceof HTMLElement) {
       if (choice.root.parentElement !== control.parentElement)
         control.parentElement?.append(choice.root);
-      this.#hide(control);
-      if (!choice.hidden.includes(control)) choice.hidden.push(control);
+      hidden.add(control);
     } else if (canvasField) {
       surface.root.style.position = surface.canvas ? 'relative' : surface.root.style.position;
       choice.root.classList.add('sc-relation-canvas-field');
@@ -227,22 +230,15 @@ export class CubeRelationPresenter {
           this.reportError(error);
         }
       });
-      existing = { root, choice, hidden: [] };
+      existing = { root, choice };
       mounted.set(key, existing);
     }
     return existing;
   }
 
-  /** Hide shared rows while preserving native controls and callbacks for release. */
-  #hide(element: HTMLElement): void {
-    element.dataset.scRelationHidden = 'true';
-    this.#hidden.add(element);
-  }
-
-  /** Restore only annotations owned by this presentation. */
+  /** Release the link control while the visibility diff restores its native row. */
   #release(mounted: MountedChoice): void {
     mounted.choice.dispose();
     mounted.root.remove();
-    for (const hidden of mounted.hidden) hidden.removeAttribute('data-sc-relation-hidden');
   }
 }

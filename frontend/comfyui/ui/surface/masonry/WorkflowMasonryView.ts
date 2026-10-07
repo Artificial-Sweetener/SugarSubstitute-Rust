@@ -19,10 +19,21 @@ import type { CubeFaceCardStateService } from '../CubeFaceCardStateService.js';
 import type { NativeNodeCardRenderer } from '../NativeNodeCardRenderer.js';
 import { NativeCardGeometryObserver } from '../NativeCardGeometryObserver.js';
 import { ensureCubeSurfaceStyles } from '../CubeSurfaceStyles.js';
+import type { CubeMasonryOptions } from '../CubeMasonryLayout.js';
 import { computeWorkflowMasonry } from './WorkflowMasonryLayout.js';
 import type { WorkflowMasonrySection } from './WorkflowMasonryProjection.js';
-import { WorkflowMasonrySectionView } from './WorkflowMasonrySectionView.js';
+import {
+  WorkflowMasonrySectionView,
+  type WorkflowMasonryPendingMount,
+} from './WorkflowMasonrySectionView.js';
 import { SurfaceMotion } from '../motion/SurfaceMotion.js';
+import { SurfacePresentationBoundary } from '../motion/SurfacePresentationBoundary.js';
+import { prepareNativePresentation } from '../NativePresentationReady.js';
+import {
+  measureNativeCardPresentationSources,
+  restoreNativeCardPresentations,
+} from '../NativeCardPresentationOwner.js';
+import type { WorkflowMasonryTransitionCard } from './WorkflowMasonryTransition.js';
 import {
   DISCLOSURE_LAYOUT_EVENT,
   measureDisclosureCardHeight,
@@ -33,51 +44,75 @@ export interface WorkflowMasonryViewOptions {
   sections: readonly WorkflowMasonrySection[];
   cardState: CubeFaceCardStateService;
   openCube(node: CubeNode): void;
+  getSources?(): ReadonlyMap<string, HTMLElement>;
 }
 
 /** Retain shared Cube presentation while measuring only masonry geometry. */
 export class WorkflowMasonryView {
   readonly element: HTMLElement;
+  readonly backdrop: HTMLElement;
   readonly #content: HTMLElement;
   readonly #options: WorkflowMasonryViewOptions;
   readonly #views = new Map<string, WorkflowMasonrySectionView>();
   readonly #geometry: NativeCardGeometryObserver;
   readonly #motion = new SurfaceMotion();
+  readonly #presentation: SurfacePresentationBoundary;
   #sections: readonly WorkflowMasonrySection[];
   #generation = 0;
   #disposed = false;
   #mounting = true;
+  #transitioning = false;
+  #pendingLayout = false;
 
   /** Prepare a continuous surface whose sections share existing Cube presentation owners. */
   constructor(options: WorkflowMasonryViewOptions) {
     ensureCubeSurfaceStyles(options.document);
     this.#options = options;
+    this.#presentation = new SurfacePresentationBoundary(options.document);
     this.#sections = options.sections;
+    this.backdrop = options.document.createElement('div');
+    this.backdrop.className = 'sugarcubes-workflow-masonry__backdrop';
+    this.backdrop.style.opacity = '0';
+    this.backdrop.setAttribute('aria-hidden', 'true');
     this.element = options.document.createElement('section');
     this.element.className = 'sugarcubes-workflow-masonry';
+    this.element.style.opacity = '1';
+    this.element.dataset.scMasonryPreparing = '';
     this.element.setAttribute('aria-label', 'Workflow masonry');
     // Comfy's ancestor capture handler checks this before forwarding wheel input to the graph.
     this.element.setAttribute('data-capture-wheel', 'true');
     this.element.tabIndex = 0;
-    this.element.addEventListener('wheel', (event) => event.stopPropagation(), { passive: true });
+    this.element.addEventListener('wheel', this.#onWheel, { passive: false });
     this.element.addEventListener(DISCLOSURE_LAYOUT_EVENT, this.#onDisclosureLayout);
     this.#content = options.document.createElement('div');
     this.#content.className = 'sugarcubes-workflow-masonry__content';
     this.element.append(this.#content);
     this.#geometry = new NativeCardGeometryObserver(options.document, () => {
-      if (!this.#mounting) this.layout();
+      if (!this.#mounting) this.#requestLayout();
     });
   }
 
+  /** Read original source geometry before attaching the new surface or changing graph interaction. */
+  prepareSources(): ReadonlyMap<string, HTMLElement> {
+    const sources = this.#options.getSources?.() ?? new Map<string, HTMLElement>();
+    measureNativeCardPresentationSources(sources.values());
+    return sources;
+  }
+
   /** Mount native controls through the same path used for subsequent presentation changes. */
-  mountCards(renderer: NativeNodeCardRenderer): Promise<void> {
-    return this.refresh(this.#sections, renderer);
+  mountCards(
+    renderer: NativeNodeCardRenderer,
+    sources: ReadonlyMap<string, HTMLElement> = this.prepareSources(),
+  ): Promise<void> {
+    prepareNativePresentation(this.element);
+    return this.refresh(this.#sections, renderer, sources);
   }
 
   /** Retain section headers and open menus while reconciling card decisions in small batches. */
   async refresh(
     sections: readonly WorkflowMasonrySection[],
     renderer: NativeNodeCardRenderer,
+    sources: ReadonlyMap<string, HTMLElement> = this.#options.getSources?.() ?? new Map(),
   ): Promise<void> {
     if (this.#disposed) return;
     const generation = ++this.#generation;
@@ -91,7 +126,8 @@ export class WorkflowMasonryView {
         this.#views.delete(id);
       }
     }
-    const pending: Array<() => void> = [];
+    const options = this.#layoutOptions();
+    const pending: WorkflowMasonryPendingMount[] = [];
     let projectionOrder = 0;
     for (const section of sections) {
       let view = this.#views.get(section.id);
@@ -101,10 +137,14 @@ export class WorkflowMasonryView {
           cardState: this.#options.cardState,
           openCube: this.#options.openCube,
           motion: this.#motion,
+          getSource: (id) => this.#options.getSources?.().get(id) ?? null,
+          onRemounted: () => {
+            if (!this.#mounting) this.#requestLayout();
+          },
         });
         this.#views.set(section.id, view);
       }
-      pending.push(...view.prepare(section, renderer));
+      pending.push(...view.prepare(section, renderer, sources));
       for (const card of section.cards) {
         const cell = view.cells.get(card.id);
         if (cell) cell.dataset.scProjectionOrder = String(projectionOrder++);
@@ -117,10 +157,28 @@ export class WorkflowMasonryView {
       empty.textContent = 'Add nodes to your workflow to see them here.';
       this.#content.append(empty);
     }
+    this.#assignWidths(
+      computeWorkflowMasonry(
+        sections.map((section) => ({
+          id: section.id,
+          cards: section.cards
+            .filter((card) => card.visible)
+            .map((card) => ({
+              id: card.id,
+              columnSpan: card.columnSpan,
+              height: 36,
+            })),
+        })),
+        options,
+      ),
+    );
+    let nativeMounts = 0;
     for (let index = 0; index < pending.length; index += 1) {
       if (this.#disposed || generation !== this.#generation) return;
-      pending[index]?.();
-      if ((index + 1) % 6 === 0 && index + 1 < pending.length) {
+      const item = pending[index];
+      item?.mount();
+      if (item?.requiresNativeMount) nativeMounts += 1;
+      if (item?.requiresNativeMount && nativeMounts % 6 === 0 && index + 1 < pending.length) {
         await new Promise<void>((resolve) => {
           const windowRef = this.element.ownerDocument.defaultView;
           if (windowRef?.requestAnimationFrame) windowRef.requestAnimationFrame(() => resolve());
@@ -134,23 +192,17 @@ export class WorkflowMasonryView {
       this.element,
       ...[...this.#views.values()].flatMap((view) => [...view.cells.values()]),
     ]);
-    this.layout();
+    this.#requestLayout();
   }
 
   /** Pack visible cards into section runs using one shared column width. */
   layout(): void {
     if (this.#disposed) return;
-    const options = {
-      availableWidth: Math.max(1, this.#content.clientWidth),
-      minimumColumnWidth:
-        Number.parseFloat(
-          getComputedStyle(this.element).getPropertyValue('--sugarcubes-masonry-column-width'),
-        ) || 320,
-      gap:
-        Number.parseFloat(
-          getComputedStyle(this.element).getPropertyValue('--sugarcubes-masonry-gap'),
-        ) || 12,
-    };
+    if (this.#transitioning) {
+      this.#pendingLayout = true;
+      return;
+    }
+    const options = this.#layoutOptions();
     const measure = (): ReturnType<typeof computeWorkflowMasonry> =>
       computeWorkflowMasonry(
         this.#sections.map((section) => ({
@@ -167,14 +219,7 @@ export class WorkflowMasonryView {
       );
     const cells = new Map([...this.#views.values()].flatMap((view) => [...view.cells]));
     const initial = measure();
-    let widthChanged = false;
-    for (const card of initial.placements) {
-      const cell = cells.get(card.id);
-      if (cell && cell.style.width !== `${String(card.width)}px`) {
-        cell.style.width = `${String(card.width)}px`;
-        widthChanged = true;
-      }
-    }
+    const widthChanged = this.#assignWidths(initial);
     const result = widthChanged ? measure() : initial;
     for (const section of result.sections) {
       const header = this.#views.get(section.id)?.header;
@@ -192,8 +237,37 @@ export class WorkflowMasonryView {
       const cell = cells.get(card.id);
       if (cell) this.#motion.place(cell, card);
     }
-    this.#motion.settle();
     this.#motion.resizeHeight(this.#content, Math.max(result.height, 120));
+  }
+
+  /** Read container constraints once before any card width writes. */
+  #layoutOptions(): CubeMasonryOptions {
+    return {
+      availableWidth: Math.max(1, this.#content.clientWidth),
+      minimumColumnWidth:
+        Number.parseFloat(
+          getComputedStyle(this.element).getPropertyValue('--sugarcubes-masonry-column-width'),
+        ) || 320,
+      gap:
+        Number.parseFloat(
+          getComputedStyle(this.element).getPropertyValue('--sugarcubes-masonry-gap'),
+        ) || 12,
+    };
+  }
+
+  /** Establish native control widths before mount so text and sliders measure their final columns. */
+  #assignWidths(layout: ReturnType<typeof computeWorkflowMasonry>): boolean {
+    const cells = new Map([...this.#views.values()].flatMap((view) => [...view.cells]));
+    let changed = false;
+    for (const card of layout.placements) {
+      const cell = cells.get(card.id);
+      const width = `${String(card.width)}px`;
+      if (cell && cell.style.width !== width) {
+        cell.style.width = width;
+        changed = true;
+      }
+    }
+    return changed;
   }
 
   /** Use settled disclosure geometry so neighbors share one smooth destination transition. */
@@ -204,7 +278,19 @@ export class WorkflowMasonryView {
 
   /** Reflow at disclosure start and release, retaining native resize observation for other changes. */
   readonly #onDisclosureLayout = (): void => {
-    if (!this.#mounting) this.layout();
+    if (!this.#mounting) this.#requestLayout();
+  };
+
+  /** Coalesce initial native styling into the single endpoint layout that starts assembly. */
+  #requestLayout(): void {
+    if (this.element.hasAttribute('data-sc-masonry-preparing')) this.#pendingLayout = true;
+    else this.layout();
+  }
+
+  /** Freeze scroll coordinates during card travel and keep wheel input inside the native surface. */
+  readonly #onWheel = (event: WheelEvent): void => {
+    if (this.#transitioning) event.preventDefault();
+    event.stopPropagation();
   };
 
   /** Navigate by stable section identity for shared Cube stack navigation. */
@@ -217,16 +303,59 @@ export class WorkflowMasonryView {
       });
   }
 
+  /** Expose native mount wrappers while leaving layout transforms owned by SurfaceMotion. */
+  transitionCards(): WorkflowMasonryTransitionCard[] {
+    return [...this.#views.values()].flatMap((view) =>
+      [...view.cells].flatMap(([id, cell]) => {
+        const element = cell.querySelector<HTMLElement>('.sugarcubes-cube-face__native-card-mount');
+        return element ? [{ id, cell, element }] : [];
+      }),
+    );
+  }
+
+  /** Wait for native mount or restored graph styles before measuring animation endpoints. */
+  settlePresentation(): Promise<void> {
+    if (this.element.hasAttribute('data-sc-masonry-preparing')) {
+      prepareNativePresentation(this.element);
+      return this.#presentation.settled(1);
+    }
+    return this.#presentation.settled();
+  }
+
+  /** Hold settled endpoints during assembly and reconcile any queued resize afterward. */
+  setTransitioning(transitioning: boolean): void {
+    if (transitioning && !this.#transitioning) {
+      this.element.scrollTo?.({ top: this.element.scrollTop, behavior: 'instant' });
+      if (this.#pendingLayout || this.element.hasAttribute('data-sc-masonry-preparing')) {
+        this.#pendingLayout = false;
+        this.layout();
+      }
+      this.#motion.finishAnimations();
+    }
+    this.#transitioning = transitioning;
+    if (!transitioning) this.#motion.settle();
+    if (!transitioning && this.#pendingLayout) {
+      this.#pendingLayout = false;
+      this.layout();
+    }
+  }
+
   /** Release observers and native mounts before restoring singleton custom widgets. */
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
     this.element.removeEventListener(DISCLOSURE_LAYOUT_EVENT, this.#onDisclosureLayout);
+    this.element.removeEventListener('wheel', this.#onWheel);
     this.#generation += 1;
     this.#geometry.dispose();
+    this.#presentation.cancel();
     this.#motion.dispose();
+    restoreNativeCardPresentations(
+      this.element.querySelectorAll<HTMLElement>('.sugarcubes-cube-face__node-card'),
+    );
     for (const view of this.#views.values()) view.dispose();
     this.#views.clear();
     this.element.remove();
+    this.backdrop.remove();
   }
 }

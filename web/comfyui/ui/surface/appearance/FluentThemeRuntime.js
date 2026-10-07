@@ -7624,10 +7624,37 @@ function adaptFluentSliderGeometry(slider) {
   };
 }
 
+// frontend/comfyui/ui/surface/appearance/FluentSliderThumb.ts
+function createFluentSliderThumb(documentRef) {
+  const thumb = documentRef.createElement("span");
+  thumb.slot = "thumb";
+  thumb.dataset.scSliderThumb = "";
+  thumb.setAttribute("aria-hidden", "true");
+  const center = documentRef.createElement("span");
+  center.dataset.scSliderThumbCenter = "";
+  thumb.append(center);
+  return thumb;
+}
+
 // frontend/comfyui/ui/surface/appearance/FluentThemeRuntime.ts
-if (!customElements.get("fluent-slider")) await Slider.define(definition);
-if (!customElements.get("fluent-button")) await Button.define(definition2);
-if (!customElements.get("fluent-checkbox")) await Checkbox.define(definition3);
+var PresentationSlider = class extends Slider {
+  /** Preserve mounted state while native layout observes the new parent width. */
+  connectedMoveCallback() {
+  }
+};
+var PresentationButton = class extends Button {
+  /** Keep mounted bindings intact when its enclosing card changes presentation. */
+  connectedMoveCallback() {
+  }
+};
+var PresentationCheckbox = class extends Checkbox {
+  /** Keep mounted bindings intact when its enclosing card changes presentation. */
+  connectedMoveCallback() {
+  }
+};
+if (!customElements.get("fluent-slider")) await PresentationSlider.define(definition);
+if (!customElements.get("fluent-button")) await PresentationButton.define(definition2);
+if (!customElements.get("fluent-checkbox")) await PresentationCheckbox.define(definition3);
 function createFluentBooleanCheckbox(documentRef) {
   const checkbox = documentRef.createElement("fluent-checkbox");
   if (!(checkbox instanceof Checkbox))
@@ -7639,6 +7666,7 @@ function createFluentNumericSlider(documentRef) {
   if (!(slider instanceof Slider))
     throw new TypeError("The registered Fluent slider has an incompatible implementation.");
   adaptFluentSliderGeometry(slider);
+  slider.append(createFluentSliderThumb(documentRef));
   return slider;
 }
 var fluentMotion = {

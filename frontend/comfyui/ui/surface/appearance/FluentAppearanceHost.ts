@@ -21,13 +21,10 @@ import {
   createComfyRendererModeChangeSource,
   resolveComfyRendererMode,
 } from '../../core/ComfyRendererMode.js';
+import { NativeFluentThemeScopes } from './NativeFluentThemeScopes.js';
 import { NativeFluentCardAdapter } from './NativeFluentCardAdapter.js';
 import { fluentAppearanceCss } from './FluentAppearanceStyles.js';
-import {
-  applyOwnedFluentTheme,
-  createFluentNumericSlider,
-  createFluentBooleanCheckbox,
-} from './FluentThemeRuntime.js';
+import { createFluentNumericSlider, createFluentBooleanCheckbox } from './FluentThemeRuntime.js';
 import { NativeInlineComboSearch } from './NativeInlineComboSearch.js';
 import { NativeCardTitlebar } from './NativeCardTitlebar.js';
 import { NativeToggleRows } from './NativeToggleRows.js';
@@ -37,6 +34,9 @@ import { NativeLabelPresentation } from './NativeLabelPresentation.js';
 import { NativeSeedControls } from './NativeSeedControls.js';
 import { readComfyDarkTheme } from './ComfyColorScheme.js';
 import { FluentOverlayScrollbarHost } from './FluentOverlayScrollbarHost.js';
+import { isBorrowedNativeCardPresentation } from '../NativeCardPresentationOwner.js';
+import { NATIVE_PRESENTATION_READY_EVENT } from '../NativePresentationReady.js';
+import { NativeFluentGraphGeometry } from './NativeFluentGraphGeometry.js';
 
 /** Persist the user's appearance preference independently of workflow documents. */
 export const FLUENT_APPEARANCE_SETTING = 'SugarCubes.Appearance.Fluent';
@@ -46,6 +46,7 @@ const surfaceSelector =
 export interface FluentAppearanceHostOptions {
   document: Document;
   app: unknown;
+  getSlotLayoutSync?(): Promise<() => void>;
   reportError(error: unknown): void;
 }
 
@@ -53,6 +54,8 @@ export interface FluentAppearanceHostOptions {
 export class FluentAppearanceHost {
   readonly #options: FluentAppearanceHostOptions;
   readonly #adapter: NativeFluentCardAdapter;
+  readonly #graphGeometry: NativeFluentGraphGeometry;
+  readonly #themes = new NativeFluentThemeScopes();
   readonly #titlebars = new NativeCardTitlebar();
   readonly #labels = new NativeLabelPresentation();
   readonly #toggleRows = new NativeToggleRows(createFluentBooleanCheckbox);
@@ -82,6 +85,11 @@ export class FluentAppearanceHost {
     this.#options = options;
     this.#scrollbars = new FluentOverlayScrollbarHost(options.document, options.reportError);
     this.#adapter = new NativeFluentCardAdapter(options.app);
+    this.#graphGeometry = new NativeFluentGraphGeometry({
+      document: options.document,
+      ...(options.getSlotLayoutSync ? { getSynchronizer: options.getSlotLayoutSync } : {}),
+      reportError: options.reportError,
+    });
     this.#comboSearch = new NativeInlineComboSearch(options.document);
     this.#style = options.document.createElement('style');
     this.#style.id = 'sugarcubes-fluent-appearance';
@@ -126,8 +134,12 @@ export class FluentAppearanceHost {
       `.lg-node, ${surfaceSelector}, [role="listbox"]`,
       (changes) => {
         if (!this.#active) return;
-        for (const { element } of changes)
-          if (element.getAttribute('role') !== 'listbox') this.#dirty.add(element);
+        for (const { element, kind, relocated } of changes)
+          if (
+            element.getAttribute('role') !== 'listbox' &&
+            !(relocated && kind === 'mounted' && this.#retainedCard(element))
+          )
+            this.#dirty.add(element);
         this.#schedule();
       },
       {
@@ -146,6 +158,10 @@ export class FluentAppearanceHost {
     }
     this.#options.document.addEventListener('pointerdown', this.#rememberPopupOrigin, true);
     this.#options.document.addEventListener('keydown', this.#rememberPopupOrigin, true);
+    this.#options.document.addEventListener(
+      NATIVE_PRESENTATION_READY_EVENT,
+      this.#onPresentationReady,
+    );
     this.#options.document.defaultView?.addEventListener('pagehide', this.#onPageHide);
     const value: unknown =
       typeof settings.getSettingValue === 'function'
@@ -171,6 +187,10 @@ export class FluentAppearanceHost {
     this.#unsubscribePalette?.();
     this.#options.document.removeEventListener('pointerdown', this.#rememberPopupOrigin, true);
     this.#options.document.removeEventListener('keydown', this.#rememberPopupOrigin, true);
+    this.#options.document.removeEventListener(
+      NATIVE_PRESENTATION_READY_EVENT,
+      this.#onPresentationReady,
+    );
     this.#options.document.defaultView?.removeEventListener('pagehide', this.#onPageHide);
   }
 
@@ -194,19 +214,25 @@ export class FluentAppearanceHost {
 
   /** Expose the underlying host theme, which remains live throughout the session. */
   #deactivate(): void {
+    const synchronizeRestored =
+      this.#active &&
+      !this.#disposed &&
+      resolveComfyRendererMode(this.#options.app, null, this.#options.document) === 'vue';
     this.#active = false;
     this.#style.remove();
     this.#scrollbars.clear();
     this.#adapter.clear();
+    this.#themes.clear();
     this.#labels.clear();
     this.#titlebars.clear();
     this.#toggleRows.clear();
     this.#advanced.clear();
     this.#numeric.clear();
     this.#seeds.clear();
+    if (synchronizeRestored) this.#graphGeometry.stylesRemoved();
+    else this.#graphGeometry.clear();
     this.#comboSearch.clear();
     for (const surface of this.#surfaces) {
-      applyOwnedFluentTheme(surface, null);
       surface.removeAttribute('data-sc-fluent-surface');
       surface.removeAttribute('data-sc-fluent-popup');
     }
@@ -227,7 +253,6 @@ export class FluentAppearanceHost {
     if (dark === this.#dark) return;
     this.#dark = dark;
     this.#style.textContent = fluentAppearanceCss(dark);
-    for (const surface of this.#surfaces) applyOwnedFluentTheme(surface, dark);
   }
 
   /** Discover changed subtrees and their nearest card rather than scanning all cards per keystroke. */
@@ -236,7 +261,12 @@ export class FluentAppearanceHost {
     if (root) this.#dirty.add(root);
     if (element.matches('.lg-node') || element.matches(surfaceSelector)) this.#dirty.add(element);
     for (const node of element.querySelectorAll<HTMLElement>(`.lg-node, ${surfaceSelector}`))
-      this.#dirty.add(node);
+      if (!this.#retainedCard(node)) this.#dirty.add(node);
+  }
+
+  /** Retain already styled controls only while their exact source renderer owns the loan. */
+  #retainedCard(element: HTMLElement): boolean {
+    return element.hasAttribute('data-sc-fluent-node') && isBorrowedNativeCardPresentation(element);
   }
 
   /** Coalesce native discovery and report unsupported host failures through SugarCubes feedback. */
@@ -244,44 +274,7 @@ export class FluentAppearanceHost {
     if (this.#frame !== null || !this.#active) return;
     const run = (): void => {
       this.#frame = null;
-      if (!this.#active) return;
-      try {
-        for (const surface of this.#surfaces)
-          if (!surface.isConnected) this.#surfaces.delete(surface);
-        for (const popup of this.#popups) if (!popup.isConnected) this.#popups.delete(popup);
-        this.#comboSearch.reconcile();
-        this.#annotatePopup();
-        if ([...this.#dirty].some((element) => element.matches('.lg-node')))
-          this.#adapter.beginBatch(
-            this.#options.document,
-            [...this.#dirty].filter((element) => element.matches('.lg-node')),
-          );
-        for (const element of this.#dirty) {
-          if (!element.isConnected) continue;
-          if (element.matches('.lg-node, .sugarcubes-native-widget')) {
-            const standalone = element.matches('.sugarcubes-native-widget');
-            const card = standalone
-              ? this.#adapter.annotateWidget(element)
-              : this.#adapter.annotate(element);
-            this.#labels.reconcile(element, card.labelElements);
-            if (!standalone)
-              this.#titlebars.reconcile(element, card.header, card.collapsed, card.canCollapse);
-            this.#toggleRows.reconcile(element);
-            this.#advanced.reconcile(card);
-            this.#numeric.reconcile(element, card.numericFields);
-            this.#seeds.reconcile(element, card.seedFields);
-          } else {
-            element.setAttribute('data-sc-fluent-surface', '');
-            if (!this.#surfaces.has(element)) applyOwnedFluentTheme(element, this.#dark ?? true);
-            this.#surfaces.add(element);
-          }
-        }
-        this.#dirty.clear();
-        this.#adapter.endBatch();
-      } catch (error: unknown) {
-        this.#options.reportError(error);
-        this.#deactivate();
-      }
+      this.#flush();
     };
     const windowRef = this.#options.document.defaultView;
     if (windowRef?.requestAnimationFrame) this.#frame = windowRef.requestAnimationFrame(run);
@@ -290,6 +283,64 @@ export class FluentAppearanceHost {
       queueMicrotask(run);
     }
   }
+
+  /** Finish identified presentation work before a caller measures native geometry. */
+  #flush(): void {
+    if (!this.#active) return;
+    try {
+      for (const surface of this.#surfaces)
+        if (!surface.isConnected) this.#surfaces.delete(surface);
+      for (const popup of this.#popups) if (!popup.isConnected) this.#popups.delete(popup);
+      this.#themes.prune();
+      this.#comboSearch.reconcile();
+      this.#annotatePopup();
+      if ([...this.#dirty].some((element) => element.matches('.lg-node')))
+        this.#adapter.beginBatch(
+          this.#options.document,
+          [...this.#dirty].filter((element) => element.matches('.lg-node')),
+        );
+      for (const element of this.#dirty) {
+        if (!element.isConnected) continue;
+        this.#themes.retain(element);
+        if (element.matches('.lg-node, .sugarcubes-native-widget')) {
+          const standalone = element.matches('.sugarcubes-native-widget');
+          const card = standalone
+            ? this.#adapter.annotateWidget(element)
+            : this.#adapter.annotate(element);
+          this.#labels.reconcile(element, card.labelElements);
+          if (!standalone)
+            this.#titlebars.reconcile(element, card.header, card.collapsed, card.canCollapse);
+          this.#toggleRows.reconcile(element);
+          this.#advanced.reconcile(card);
+          this.#numeric.reconcile(element, card.numericFields);
+          this.#seeds.reconcile(element, card.seedFields);
+          if (!standalone) this.#graphGeometry.request(element);
+        } else {
+          if (!element.hasAttribute('data-sc-fluent-surface'))
+            element.setAttribute('data-sc-fluent-surface', '');
+          this.#surfaces.add(element);
+        }
+      }
+      this.#dirty.clear();
+      this.#adapter.endBatch();
+      this.#presence?.discardPending();
+    } catch (error: unknown) {
+      this.#options.reportError(error);
+      this.#deactivate();
+    }
+  }
+
+  /** Settle a named mounted surface through the same authoritative appearance reconciliation. */
+  readonly #onPresentationReady = (event: Event): void => {
+    const target = event.target;
+    if (!this.#active || !(target instanceof HTMLElement) || !target.matches(surfaceSelector))
+      return;
+    this.#presence?.flushPending();
+    this.#queue(target);
+    if (this.#frame !== null) this.#options.document.defaultView?.cancelAnimationFrame(this.#frame);
+    this.#frame = null;
+    this.#flush();
+  };
 
   /** Associate portalled menus with their native source field rather than all host popups. */
   readonly #rememberPopupOrigin = (event: Event): void => {
@@ -309,6 +360,7 @@ export class FluentAppearanceHost {
       const popup = id ? this.#options.document.getElementById(id) : null;
       if (!popup || popup.getAttribute('role') !== 'listbox') continue;
       popup.setAttribute('data-sc-fluent-popup', '');
+      this.#themes.retain(popup);
       this.#popups.add(popup);
       if (trigger instanceof HTMLElement) this.#comboSearch.present(trigger, popup);
     }

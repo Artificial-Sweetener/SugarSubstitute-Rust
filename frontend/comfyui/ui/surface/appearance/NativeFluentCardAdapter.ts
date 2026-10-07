@@ -28,6 +28,10 @@ import type { NativeNumericField } from './ComfyNativeNumericField.js';
 import { ComfyNativeSeedControlAdapter } from './ComfyNativeSeedControl.js';
 import type { NativeSeedField } from './NativeSeedControls.js';
 import { readNativeWidgetMount } from '../NativeWidgetMountBoundary.js';
+import {
+  NativeFluentAnnotations,
+  type NativeFluentAnnotationPlan,
+} from './NativeFluentAnnotations.js';
 
 export interface FluentCardBoundary {
   root: HTMLElement;
@@ -44,7 +48,7 @@ export interface FluentCardBoundary {
 
 /** Own removable annotations on recognized Comfy component roots only. */
 export class NativeFluentCardAdapter {
-  readonly #cards = new Map<HTMLElement, Set<HTMLElement>>();
+  readonly #annotations = new NativeFluentAnnotations();
   readonly #vnodes = new WeakMap<HTMLElement, UnknownRecord>();
   readonly #graphNodes = new Map<HTMLElement, UnknownRecord>();
   readonly #seeds: ComfyNativeSeedControlAdapter;
@@ -74,16 +78,14 @@ export class NativeFluentCardAdapter {
 
   /** Release the graph index so detached application trees are not retained. */
   endBatch(): void {
+    this.#annotations.prune();
     this.#graphNodes.clear();
     this.#seeds.endBatch();
   }
 
   /** Annotate toolbar widgets through the same component and numeric boundaries as node fields. */
   annotateWidget(root: HTMLElement): FluentCardBoundary {
-    const previous = this.#cards.get(root);
-    if (previous) clearAnnotations(previous);
-    const annotated = new Set<HTMLElement>();
-    this.#cards.set(root, annotated);
+    const annotated = this.#annotations.begin(root);
     mark(root, 'node', annotated);
     const boundary = readNativeWidgetMount(root);
     const numericFields: NativeNumericField[] = [];
@@ -100,10 +102,11 @@ export class NativeFluentCardAdapter {
     );
     if (descriptor) {
       if (!root.hasAttribute('data-sc-choice-inline')) mark(root, 'row', annotated);
-      root.dataset.scFluentWidget = descriptor.component;
+      annotated.attribute(root, 'data-sc-fluent-widget', descriptor.component);
     }
     if (boundary?.seed && numericFields[0])
       seedFields.push({ numeric: numericFields[0], control: boundary.seed });
+    annotated.commit();
     return {
       root,
       body: null,
@@ -120,14 +123,7 @@ export class NativeFluentCardAdapter {
 
   /** Mark one live card and its positively identified native field rows. */
   annotate(root: HTMLElement): FluentCardBoundary {
-    for (const [card, elements] of this.#cards) {
-      if (card === root || !card.isConnected) {
-        clearAnnotations(elements);
-        this.#cards.delete(card);
-      }
-    }
-    const annotated = new Set<HTMLElement>();
-    this.#cards.set(root, annotated);
+    const annotated = this.#annotations.begin(root);
     mark(root, 'node', annotated);
     const vnode = this.#vnodes.get(root) ?? this.#graphNodes.get(root) ?? resolveNodeVNode(root);
     if (vnode) this.#vnodes.set(root, vnode);
@@ -174,14 +170,17 @@ export class NativeFluentCardAdapter {
         const row = rows.get(placement.name);
         if (!row) continue;
         mark(row, 'row', annotated);
-        row.dataset.scFluentKind = placement.kind;
-        row.dataset.scFluentSpan = String(placement.span);
-        row.dataset.scFluentColumn = String(placement.column);
-        row.dataset.scFluentWidget =
-          containerFields.find((field) => field.name === placement.name)?.component ?? '';
-        row.style.setProperty('--sc-field-row', String(placement.row));
-        row.style.setProperty('--sc-field-column', String(placement.column));
-        row.style.setProperty('--sc-field-span', String(placement.span));
+        annotated.attribute(row, 'data-sc-fluent-kind', placement.kind);
+        annotated.attribute(row, 'data-sc-fluent-span', String(placement.span));
+        annotated.attribute(row, 'data-sc-fluent-column', String(placement.column));
+        annotated.attribute(
+          row,
+          'data-sc-fluent-widget',
+          containerFields.find((field) => field.name === placement.name)?.component ?? '',
+        );
+        annotated.style(row, '--sc-field-row', String(placement.row));
+        annotated.style(row, '--sc-field-column', String(placement.column));
+        annotated.style(row, '--sc-field-span', String(placement.span));
       }
     }
     const headerVNode = findVueComponents(vnode, 'NodeHeader')[0];
@@ -216,6 +215,7 @@ export class NativeFluentCardAdapter {
           mark(container, 'ports', annotated);
       }
     }
+    annotated.commit();
     return {
       root,
       header,
@@ -239,8 +239,7 @@ export class NativeFluentCardAdapter {
 
   /** Remove only owned annotations, preserving host and custom inline style changes. */
   clear(): void {
-    for (const elements of this.#cards.values()) clearAnnotations(elements);
-    this.#cards.clear();
+    this.#annotations.clear();
     this.endBatch();
   }
 }
@@ -253,33 +252,8 @@ function hasNativeWidgets(widgets: unknown): boolean {
 }
 
 /** Track annotations so turning the theme off restores host ownership exactly. */
-function mark(element: HTMLElement, name: string, annotated: Set<HTMLElement>): void {
-  element.setAttribute(`data-sc-fluent-${name}`, '');
-  annotated.add(element);
-}
-
-/** Release stale presentation ownership after native structure or visibility changes. */
-function clearAnnotations(elements: ReadonlySet<HTMLElement>): void {
-  for (const element of elements) {
-    for (const name of [
-      'node',
-      'fields',
-      'ports',
-      'row',
-      'kind',
-      'span',
-      'column',
-      'widget',
-      'layout',
-      'control',
-      'edit-frame',
-      'combo-frame',
-      'advanced-row',
-    ])
-      element.removeAttribute(`data-sc-fluent-${name}`);
-    for (const name of ['row', 'column', 'span'])
-      element.style.removeProperty(`--sc-field-${name}`);
-  }
+function mark(element: HTMLElement, name: string, annotated: NativeFluentAnnotationPlan): void {
+  annotated.attribute(element, `data-sc-fluent-${name}`);
 }
 
 /** Resolve the actual node instance without crossing into a nested Cube card. */
@@ -298,7 +272,7 @@ function resolveNodeVNode(root: HTMLElement): UnknownRecord | null {
 function resolveFieldDescriptor(
   row: HTMLElement,
   candidates: readonly FieldComponent[],
-  annotated: Set<HTMLElement>,
+  annotated: NativeFluentAnnotationPlan,
   numericFields: NativeNumericField[],
   labelElements: HTMLElement[],
   seedFields: NativeSeedField[],
@@ -326,8 +300,7 @@ function resolveFieldDescriptor(
     const layoutVNode = findVueComponents(vnode, 'WidgetLayoutField')[0];
     const layout = layoutVNode ? resolveVNodeElement(layoutVNode) : null;
     if (control) {
-      control.setAttribute('data-sc-fluent-control', '');
-      annotated.add(control);
+      mark(control, 'control', annotated);
       const input = control.querySelector<HTMLInputElement | HTMLTextAreaElement>(
         'input:not([type="checkbox"]), textarea',
       );
@@ -348,8 +321,7 @@ function resolveFieldDescriptor(
         mark(frame, 'combo-frame', annotated);
     }
     if (layout) {
-      layout.setAttribute('data-sc-fluent-layout', '');
-      annotated.add(layout);
+      mark(layout, 'layout', annotated);
       const label = layout.querySelector<HTMLElement>('[data-testid="widget-layout-field-label"]');
       if (label) labelElements.push(label);
     }
