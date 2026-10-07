@@ -157,3 +157,34 @@ test('Ctrl+F ownership, popup isolation and workflow-scoped restoration release 
   window.dispatchEvent(graphShortcut);
   expect(graphShortcut.defaultPrevented).toBe(false);
 });
+
+test('visible modals own Ctrl+F while retained hidden dialogs do not block the finder', () => {
+  const f = fixture();
+  const host = new MasonrySearchHost({
+    document,
+    app: null,
+    getGraph: () => f.graph,
+    reportError: jest.fn(),
+  });
+  const modal = document.createElement('div');
+  modal.setAttribute('role', 'dialog');
+  modal.setAttribute('aria-modal', 'true');
+  let visible = true;
+  modal.checkVisibility = jest.fn(() => visible);
+  document.body.append(modal);
+  host.setup();
+  host.ready(f.view);
+  try {
+    const blocked = new KeyboardEvent('keydown', { key: 'f', ctrlKey: true, cancelable: true });
+    window.dispatchEvent(blocked);
+    expect(blocked.defaultPrevented).toBe(false);
+    expect(f.container.querySelector('.sc-masonry-finder')).toBeNull();
+    visible = false;
+    const allowed = new KeyboardEvent('keydown', { key: 'f', ctrlKey: true, cancelable: true });
+    window.dispatchEvent(allowed);
+    expect(allowed.defaultPrevented).toBe(true);
+    expect(f.container.querySelector<HTMLElement>('.sc-masonry-finder')?.hidden).toBe(false);
+  } finally {
+    host.dispose();
+  }
+});

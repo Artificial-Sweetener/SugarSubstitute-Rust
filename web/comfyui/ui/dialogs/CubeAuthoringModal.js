@@ -155,7 +155,6 @@ export class CubeAuthoringModal {
             cancelLabel: 'Cancel',
             confirmClassName: 'p-button-primary',
             cancelResult: null,
-            allowOverlayClose: false,
             onConfirm: () => {
                 const name = normalizeDefaultAliasTitle(nameInput.value);
                 const targetModel = this.tryNormalizeTargetModel(readTargetModel());

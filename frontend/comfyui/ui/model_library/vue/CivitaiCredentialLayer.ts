@@ -15,7 +15,8 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Render Substitute's contained explicit-key prompt without browser-native dialogs. */
 
-import { defineComponent, h, nextTick, onMounted, ref } from 'vue';
+import { defineComponent, h, nextTick, onMounted, ref, watchEffect } from 'vue';
+import { ModalDismissal } from '../../dialogs/ModalDismissal.js';
 import type { PropType } from 'vue';
 import type { ModelDiscoveryViewActions } from '../ModelDiscoveryView.js';
 const globeIcon = new URL('../../../../icons/model/globe.svg', import.meta.url).href;
@@ -33,6 +34,13 @@ export const CivitaiCredentialLayer = defineComponent({
     const visible = ref(false);
     const input = ref<HTMLInputElement | null>(null);
     const panel = ref<HTMLElement | null>(null);
+    const dismissal = new ModalDismissal(
+      document,
+      () => panel.value ?? undefined,
+      () => ({}),
+      () => props.actions.cancelCredential(),
+    );
+    watchEffect(() => dismissal.setBusy(props.busy));
     onMounted(() => {
       void nextTick(() => input.value?.focus());
     });
@@ -40,8 +48,7 @@ export const CivitaiCredentialLayer = defineComponent({
     const keyboard = (event: KeyboardEvent): void => {
       event.stopPropagation();
       if (event.key === 'Escape') {
-        event.preventDefault();
-        if (!props.busy) props.actions.cancelCredential();
+        dismissal.escape(event);
       }
       if (event.key !== 'Tab') return;
       const controls = [
@@ -60,115 +67,134 @@ export const CivitaiCredentialLayer = defineComponent({
       }
     };
     return () =>
-      h('div', { class: 'sc-model-credential-layer', onKeydown: keyboard }, [
-        h(
-          'form',
-          {
-            ref: panel,
-            class: 'sc-model-credential-panel sugarcubes-modal__panel',
-            role: 'dialog',
-            'aria-modal': 'true',
-            'aria-label': 'CivitAI API key',
-            onSubmit: (event: Event) => {
-              event.preventDefault();
-              if (!props.busy && key.value.trim()) {
-                const candidate = key.value;
-                key.value = '';
-                props.actions.saveCredential(candidate);
-              }
-            },
-          },
-          [
-            h(
-              'h2',
-              { class: 'sugarcubes-modal__panel-title' },
-              'This model needs a CivitAI API key',
-            ),
-            h(
-              'p',
-              'Sign in to CivitAI or create an account.\nThen create an API key in Account Settings and paste it here.',
-            ),
-            h(
-              'a',
-              {
-                class: 'p-button p-button-secondary',
-                href: 'https://civitai.com/user/account',
-                target: '_blank',
-                rel: 'noopener noreferrer',
+      h(
+        'div',
+        {
+          class: 'sc-model-credential-layer',
+          onKeydown: keyboard,
+          onPointerdownCapture: (event: PointerEvent) => dismissal.press(event),
+          onClick: (event: MouseEvent) => dismissal.outside(event),
+        },
+        [
+          h(
+            'form',
+            {
+              ref: panel,
+              class: 'sc-model-credential-panel sugarcubes-modal__panel',
+              role: 'dialog',
+              'aria-modal': 'true',
+              'aria-label': 'CivitAI API key',
+              onSubmit: (event: Event) => {
+                event.preventDefault();
+                if (!props.busy && key.value.trim()) {
+                  const candidate = key.value;
+                  key.value = '';
+                  props.actions.saveCredential(candidate);
+                }
               },
-              [
-                h('span', {
-                  class: 'sc-model-action-icon',
-                  'aria-hidden': 'true',
-                  style: { '--sc-model-action-icon': `url("${globeIcon}")` },
+            },
+            [
+              h('div', { class: 'sugarcubes-modal__panel-header' }, [
+                h(
+                  'h2',
+                  { class: 'sugarcubes-modal__panel-title' },
+                  'This model needs a CivitAI API key',
+                ),
+                h('button', {
+                  type: 'button',
+                  class: 'p-button p-component sugarcubes-modal__close',
+                  'aria-label': 'Close dialog',
+                  title: 'Close',
+                  disabled: props.busy,
+                  onClick: () => dismissal.dismiss(),
                 }),
-                'Open CivitAI account settings',
-              ],
-            ),
-            h('div', { class: 'sc-model-credential-input sugarcubes-modal__input-group' }, [
-              h('input', {
-                ref: input,
-                type: visible.value ? 'text' : 'password',
-                placeholder: 'Paste CivitAI API key',
-                'aria-label': 'Paste CivitAI API key',
-                autocomplete: 'off',
-                spellcheck: false,
-                disabled: props.busy,
-                value: key.value,
-                onInput: (event: Event) => {
-                  if (event.target instanceof HTMLInputElement) key.value = event.target.value;
-                },
-              }),
+              ]),
               h(
-                'button',
+                'p',
+                'Sign in to CivitAI or create an account.\nThen create an API key in Account Settings and paste it here.',
+              ),
+              h(
+                'a',
                 {
-                  type: 'button',
-                  'aria-label': visible.value ? 'Hide API key' : 'Show API key',
+                  class: 'p-button p-button-secondary',
+                  href: 'https://civitai.com/user/account',
+                  target: '_blank',
+                  rel: 'noopener noreferrer',
+                },
+                [
+                  h('span', {
+                    class: 'sc-model-action-icon',
+                    'aria-hidden': 'true',
+                    style: { '--sc-model-action-icon': `url("${globeIcon}")` },
+                  }),
+                  'Open CivitAI account settings',
+                ],
+              ),
+              h('div', { class: 'sc-model-credential-input sugarcubes-modal__input-group' }, [
+                h('input', {
+                  ref: input,
+                  type: visible.value ? 'text' : 'password',
+                  placeholder: 'Paste CivitAI API key',
+                  'aria-label': 'Paste CivitAI API key',
+                  autocomplete: 'off',
+                  spellcheck: false,
                   disabled: props.busy,
-                  onClick: () => {
-                    visible.value = !visible.value;
-                    input.value?.focus();
+                  value: key.value,
+                  onInput: (event: Event) => {
+                    if (event.target instanceof HTMLInputElement) key.value = event.target.value;
                   },
-                },
-                [h('span', { class: 'sc-model-credential-eye', 'aria-hidden': 'true' })],
-              ),
-            ]),
-            props.error
-              ? h('p', { role: 'alert', class: 'sc-model-credential-error' }, props.error)
-              : null,
-            h('div', { class: 'sc-model-credential-actions' }, [
-              h(
-                'button',
-                {
-                  type: 'button',
-                  class: 'p-button p-button-secondary',
-                  disabled: props.busy,
-                  onClick: props.actions.cancelCredential,
-                },
-                'Cancel',
-              ),
-              h(
-                'button',
-                {
-                  type: 'button',
-                  class: 'p-button p-button-secondary',
-                  disabled: props.busy,
-                  onClick: props.actions.publicOnly,
-                },
-                "Show models that don't require a key",
-              ),
-              h(
-                'button',
-                {
-                  type: 'submit',
-                  class: 'p-button p-button-primary',
-                  disabled: props.busy || !key.value.trim(),
-                },
-                'Save and continue',
-              ),
-            ]),
-          ],
-        ),
-      ]);
+                }),
+                h(
+                  'button',
+                  {
+                    type: 'button',
+                    'aria-label': visible.value ? 'Hide API key' : 'Show API key',
+                    disabled: props.busy,
+                    onClick: () => {
+                      visible.value = !visible.value;
+                      input.value?.focus();
+                    },
+                  },
+                  [h('span', { class: 'sc-model-credential-eye', 'aria-hidden': 'true' })],
+                ),
+              ]),
+              props.error
+                ? h('p', { role: 'alert', class: 'sc-model-credential-error' }, props.error)
+                : null,
+              h('div', { class: 'sc-model-credential-actions' }, [
+                h(
+                  'button',
+                  {
+                    type: 'button',
+                    class: 'p-button p-button-secondary',
+                    disabled: props.busy,
+                    onClick: props.actions.cancelCredential,
+                  },
+                  'Cancel',
+                ),
+                h(
+                  'button',
+                  {
+                    type: 'button',
+                    class: 'p-button p-button-secondary',
+                    disabled: props.busy,
+                    onClick: props.actions.publicOnly,
+                  },
+                  "Show models that don't require a key",
+                ),
+                h(
+                  'button',
+                  {
+                    type: 'submit',
+                    class: 'p-button p-button-primary',
+                    disabled: props.busy || !key.value.trim(),
+                  },
+                  'Save and continue',
+                ),
+              ]),
+            ],
+          ),
+        ],
+      );
   },
 });

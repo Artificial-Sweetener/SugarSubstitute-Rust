@@ -28,11 +28,12 @@ function fixture(sourceX = 40, destinationX = 320) {
   const surface = document.createElement('section');
   const backdrop = document.createElement('div');
   const cell = document.createElement('article');
-  const element = document.createElement('div');
+  const element = cell;
+  const content = document.createElement('div');
   const source = document.createElement('article');
   source.style.width = '200px';
   const layer = document.createElement('div');
-  cell.append(element);
+  cell.append(content);
   surface.append(cell);
   layer.append(source);
   document.body.append(layer, backdrop, surface);
@@ -85,12 +86,13 @@ function fixture(sourceX = 40, destinationX = 320) {
     surface,
     backdrop,
     element,
+    content,
     source,
     layer,
     cell,
     effects,
     transition: new WorkflowMasonryTransition(),
-    options: { surface, backdrop, cards: [{ id: 'root:1', cell, element }], graph },
+    options: { surface, backdrop, cards: [{ id: 'root:1', cell }], graph },
   };
 }
 
@@ -117,6 +119,29 @@ test('assembles actual cards from graph bounds and returns them to those bounds'
   await exit;
   expect(setup.backdrop.style.opacity).toBe('0');
   expect(setup.cell.style.transform).toBe('');
+});
+
+test('moves the complete painted card from its settled placement without leaving a stationary shell', async () => {
+  const setup = fixture();
+  setup.cell.style.cssText =
+    'transform:translate(24px, 44px);background:rgb(32,32,32);border:1px solid gray';
+  const entry = setup.transition.run(setup.options, true, false);
+  try {
+    expect(setup.cell.hasAttribute('data-sc-masonry-moving')).toBe(true);
+    expect(setup.content.hasAttribute('data-sc-masonry-moving')).toBe(false);
+    expect(setup.effects.at(-1)?.frames).toEqual([
+      {
+        transform: 'translate(24px, 44px) translate(-280px, 120px) scale(0.8)',
+        width: '200px',
+        opacity: 1,
+      },
+      { transform: 'translate(24px, 44px)', width: '320px', opacity: 1 },
+    ]);
+  } finally {
+    setup.transition.cancel();
+    await entry;
+  }
+  expect(setup.cell.style.transform).toBe('translate(24px, 44px)');
 });
 
 /** Model the browser geometry boundary without relying on JSDOM's absent DOMRect constructor. */
@@ -218,6 +243,27 @@ test('blends the real loose graph card during travel and restores its geometry i
   expect(setup.source.style.transformOrigin).toBe('');
 });
 
+test('interpolates loose graph and masonry heights together across native minimum-height constraints', async () => {
+  const setup = fixture();
+  setup.source.className = 'lg-node';
+  setup.source.style.minHeight = '125px';
+  const entry = setup.transition.run(setup.options, true, false);
+  try {
+    const graph = setup.effects.find((effect) => effect.element === setup.source);
+    const masonry = setup.effects.find((effect) => effect.element === setup.cell);
+    expect(graph?.frames.map((frame) => frame.height)).toEqual(['125px', '200px']);
+    expect(masonry?.frames.map((frame) => frame.height)).toEqual(['125px', '200px']);
+    expect(
+      graph?.frames.every((frame) => frame.minHeight === '0px' && frame.overflow === 'clip'),
+    ).toBe(true);
+  } finally {
+    setup.transition.cancel();
+    await entry;
+  }
+  expect(setup.source.style.minHeight).toBe('125px');
+  expect(setup.source.style.height).toBe('');
+});
+
 test('reverses a loose card from its displayed width without replacing its original graph endpoint', async () => {
   const setup = fixture();
   setup.source.className = 'lg-node';
@@ -226,6 +272,7 @@ test('reverses a loose card from its displayed width without replacing its origi
   setup.source.style.setProperty('transform-origin', '50% 50%', 'important');
   const entry = setup.transition.run(setup.options, true, false);
   setup.source.style.width = '260px';
+  setup.source.style.height = '150px';
   setup.source.style.transform = 'matrix(1.1, 0, 0, 1.1, 100, 80)';
   setup.options.graph.cards.set('root:1', {
     element: setup.source,
@@ -240,8 +287,17 @@ test('reverses a loose card from its displayed width without replacing its origi
   expect(graphEffect.frames[0]).toEqual({
     transform: 'matrix(1.1, 0, 0, 1.1, 100, 80)',
     width: '260px',
+    height: '150px',
+    minHeight: '0px',
+    overflow: 'clip',
   });
-  expect(graphEffect.frames[1]).toEqual({ transform: 'translate(20px, 40px)', width: '200px' });
+  expect(graphEffect.frames[1]).toEqual({
+    transform: 'translate(20px, 40px)',
+    width: '200px',
+    height: '125px',
+    minHeight: '0px',
+    overflow: 'clip',
+  });
   expect(setup.source.dataset.nodeId).toBeUndefined();
   setup.transition.cancel();
   await exit;

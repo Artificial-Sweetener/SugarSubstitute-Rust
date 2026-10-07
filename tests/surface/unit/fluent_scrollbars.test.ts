@@ -29,7 +29,10 @@ test.each([true, false])(
     expect(css).toContain('scrollbar-gutter:auto!important');
     expect(css).toContain('::-webkit-scrollbar');
     expect(css).toContain('.sc-fluent-scrollbar-layer');
-    expect(css).toContain('position:fixed');
+    expect(css).toContain('position:absolute');
+    expect(css).toContain('z-index:1');
+    expect(css).toContain('overflow:clip');
+    expect(css).not.toContain('2147483646');
   },
 );
 

@@ -20,8 +20,31 @@ export function ensureRelationStyles(document) {
     const style = document.createElement('style');
     style.id = 'sc-relation-styles';
     style.textContent = `
-  .sc-overrides-toolbar { display:flex; flex:none; align-items:center; gap:4px; margin:0 4px 4px; padding:4px 8px; border:1px solid var(--interface-stroke); border-radius:var(--radius-lg); background:var(--comfy-menu-bg); color:var(--fg-color); font:inherit; font-size:var(--text-xs); pointer-events:auto; min-width:0; overflow-x:auto; }
+  .sc-overrides-toolbar { position:fixed; z-index:1200; display:flex; flex:none; align-self:flex-start; align-items:center; gap:0; min-height:43px; width:max-content; max-width:calc(100% - 8px); box-sizing:border-box; margin:0; padding:4px; border:1px solid var(--interface-stroke); border-radius:var(--radius-lg); background:var(--comfy-menu-bg); color:var(--fg-color); font:inherit; font-size:var(--text-xs); pointer-events:auto; min-width:0; transition:left 200ms cubic-bezier(.1,.9,.2,1),top 200ms cubic-bezier(.1,.9,.2,1); }
   .sc-overrides-toolbar[hidden] { display:none; }
+  .sc-overrides-dock-slot { display:flex; flex:none; align-items:center; min-width:0; }
+  .sc-overrides-toolbar[data-placement="docked"] { position:static; align-self:center; min-height:32px; margin:0; padding:0; border:0; background:transparent; transition:none; }
+  .sc-overrides-toolbar[data-placement="docked"] > .sc-overrides-disclosure { order:-1; margin-right:4px; }
+  .sc-overrides-toolbar[data-placement="docked"][data-collapsed="true"] > .sc-overrides-menu { margin-right:0; }
+  .sc-overrides-dock-target { display:flex; flex:none; align-self:stretch; align-items:center; justify-content:center; box-sizing:border-box; margin:6px 0; border:2px dashed var(--primary-background); border-radius:var(--radius-md); color:var(--fg-color); opacity:.8; pointer-events:none; }
+  .sc-overrides-dock-target[data-sc-override-drop-target] { border-width:3px; opacity:1; box-shadow:0 0 20px color-mix(in srgb,var(--primary-background) 50%,transparent); }
+  .sc-overrides-grip, .sc-overrides-menu { margin-right:4px; }
+  .sc-overrides-fields { display:flex; align-items:center; gap:4px; flex:0 1 auto; min-width:0; margin-right:4px; overflow-x:auto; }
+  .sc-overrides-fields[hidden] { display:none; }
+  .sc-overrides-toolbar[data-sc-override-moving] { overflow:clip; }
+  .sc-overrides-fields[data-sc-override-overflow] > .sc-override-control { flex-shrink:0; }
+  .sc-overrides-toolbar[data-sc-override-moving] .sc-overrides-fields { overflow:clip; }
+  .sc-overrides-toolbar[data-collapsed="true"] .sc-overrides-menu > :last-child { display:none; }
+  .sc-overrides-toolbar[data-collapsed="true"] .sc-overrides-fields { margin-right:0; }
+  .sc-overrides-toolbar[data-sc-override-dragging] { transition:none; pointer-events:none; user-select:none; z-index:1400; }
+  .sc-overrides-toolbar[data-sc-override-dragging] .sc-overrides-grip { cursor:grabbing; }
+  .sc-overrides-grip, .sc-overrides-disclosure { flex:none; display:flex; align-items:center; justify-content:center; width:24px; height:32px; padding:4px; border:0; border-radius:var(--radius-md); color:var(--fg-color); background:transparent; cursor:pointer; }
+  .sc-overrides-grip { width:12px; padding:0; margin-right:8px; border-radius:0; font:inherit; font-family:var(--sc-native-grip-font-family,var(--font-inter)); cursor:grab; touch-action:none; }
+  .sc-overrides-toolbar[data-collapsed="true"] > .sc-overrides-grip { display:none; }
+  .sc-overrides-disclosure > span { width:16px; height:16px; }
+  .sc-overrides-disclosure:hover { background:var(--comfy-input-bg); }
+  .sc-overrides-grip:focus-visible, .sc-overrides-disclosure:focus-visible { outline:2px solid var(--component-node-widget-background-highlighted); outline-offset:-2px; }
+  @media (prefers-reduced-motion:reduce) { .sc-overrides-toolbar { transition:none; } }
   .sc-override-control { --sc-override-width:180px; flex:0 1 auto; min-width:calc(var(--sc-override-label-width,0px) + 64px); }
   .sc-override-control[data-semantic="seed"] { --sc-override-width:192px; }
   .sc-override-control[data-semantic="steps"], .sc-override-control[data-semantic="cfg"] { --sc-override-width:80px; }

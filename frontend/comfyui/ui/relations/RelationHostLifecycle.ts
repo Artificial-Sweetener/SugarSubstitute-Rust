@@ -17,6 +17,7 @@
 import type { ComfyApplication, ComfyGraph } from '../types/graph.js';
 import { isRecord } from '../types/common.js';
 import { HostSurfaceObserver } from '../core/HostSurfaceObserver.js';
+import type { HostSurfaceChange } from '../core/HostSurfaceObserver.js';
 import { NativeSubgraphChangeObserver } from '../surface/NativeSubgraphChangeObserver.js';
 import { subscribeNativeNodeCardRefresh } from '../surface/NativeNodeCardRefresh.js';
 import { WorkflowRelations } from './application/WorkflowRelations.js';
@@ -26,7 +27,7 @@ import { NativeRelationViews } from './infrastructure/NativeRelationViews.js';
 import { NativeSharedSeedModes } from './infrastructure/NativeSharedSeedModes.js';
 import { NativeRelationWidgetRenderer } from './infrastructure/NativeRelationWidgetRenderer.js';
 import { NativeRelationVisibility } from './infrastructure/NativeRelationVisibility.js';
-import { attachNativeOverrideToolbar } from './infrastructure/NativeOverrideToolbarHost.js';
+import { NativeOverrideToolbarHost } from './infrastructure/NativeOverrideToolbarHost.js';
 import { GlobalOverrideToolbar } from './presentation/GlobalOverrideToolbar.js';
 import { CubeRelationPresenter } from './presentation/CubeRelationPresenter.js';
 import { ensureRelationStyles } from './presentation/RelationStyles.js';
@@ -54,6 +55,7 @@ export class RelationHostLifecycle {
   readonly #seedModes = new NativeSharedSeedModes();
   readonly #graphs = new Map<ComfyGraph, NativeSubgraphChangeObserver>();
   #presence: HostSurfaceObserver | null = null;
+  #chromePresence: HostSurfaceObserver | null = null;
   #pending = false;
   #valuesPending = false;
   #active = false;
@@ -83,7 +85,7 @@ export class RelationHostLifecycle {
       this.relations,
       options.reportError,
       widgets,
-      (element) => attachNativeOverrideToolbar(options.document, element),
+      new NativeOverrideToolbarHost(options.document),
     );
     this.#cards = new CubeRelationPresenter(
       options.document,
@@ -112,14 +114,20 @@ export class RelationHostLifecycle {
     if (this.#active) return;
     this.#active = true;
     ensureRelationStyles(this.options.document);
+    const changed = (changes: readonly HostSurfaceChange[]): void => {
+      this.#views.invalidate(changes.map((change) => change.element));
+      if (!this.#rendering) this.#present();
+    };
     this.#presence = new HostSurfaceObserver(
       this.options.document.body,
-      '.sugarcubes-cube-face__node-card,.lg-node[data-node-id],[data-sugarcubes-cube-face-projection],.actionbar-container',
-      (changes) => {
-        this.#views.invalidate(changes.map((change) => change.element));
-        if (!this.#rendering) this.#present();
-      },
+      '.sugarcubes-cube-face__node-card,.lg-node[data-node-id],[data-sugarcubes-cube-face-projection]',
+      changed,
       { content: true, exclude: '.sc-field-relation,.sc-overrides-toolbar' },
+    );
+    this.#chromePresence = new HostSurfaceObserver(
+      this.options.document.body,
+      '.actionbar-container',
+      changed,
     );
     this.options.document.addEventListener('input', this.#nativeEdit, true);
     this.options.document.addEventListener('change', this.#nativeEdit, true);
@@ -153,6 +161,7 @@ export class RelationHostLifecycle {
   dispose(): void {
     this.#active = false;
     this.#presence?.disconnect();
+    this.#chromePresence?.disconnect();
     this.#unsubscribeChoices?.();
     this.#unsubscribeChoices = null;
     this.beforeConfigureGraph();
@@ -242,6 +251,7 @@ export class RelationHostLifecycle {
       this.#cards.reconcile();
     } finally {
       this.#presence?.discardPending();
+      this.#chromePresence?.discardPending();
       this.#rendering = false;
     }
   }

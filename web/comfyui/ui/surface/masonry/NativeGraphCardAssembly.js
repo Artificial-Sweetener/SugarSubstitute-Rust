@@ -23,7 +23,7 @@ export class NativeGraphCardAssembly {
             return value === null ? [] : [{ element: target, name, value }];
         }));
     }
-    /** Interpolate native layout width and camera scale while preserving the host's node translation. */
+    /** Blend native bounds and camera scale without letting host minimum heights pin the card shell. */
     frames(destination, entering, interrupted) {
         const { element, rectangle, scale, layoutWidth } = this.source;
         const computed = interrupted
@@ -32,14 +32,22 @@ export class NativeGraphCardAssembly {
         const graphTransform = this.#transform === 'none' ? 'translate(0px, 0px) scale(1)' : this.#transform;
         const base = this.#transform === 'none' ? '' : `${this.#transform} `;
         const masonryTransform = `${base}translate(${String((destination.x - rectangle.x) / scale)}px, ${String((destination.y - rectangle.y) / scale)}px) scale(${String(1 / scale)})`;
+        const graphHeight = `${String(rectangle.height / scale)}px`;
+        const masonryHeight = `${String(destination.height)}px`;
         return [
             {
                 transform: computed?.transform || (entering ? graphTransform : masonryTransform),
                 width: computed?.width || `${String(entering ? layoutWidth : destination.width)}px`,
+                height: computed?.height || (entering ? graphHeight : masonryHeight),
+                minHeight: '0px',
+                overflow: 'clip',
             },
             {
                 transform: entering ? masonryTransform : graphTransform,
                 width: `${String(entering ? destination.width : layoutWidth)}px`,
+                height: entering ? masonryHeight : graphHeight,
+                minHeight: '0px',
+                overflow: 'clip',
             },
         ];
     }

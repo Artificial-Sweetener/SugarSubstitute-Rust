@@ -64,7 +64,6 @@ export class CivitaiKeyDialog {
             body,
             confirmLabel: 'Save key',
             cancelLabel: 'Cancel',
-            allowOverlayClose: false,
             onConfirm: () => {
                 if (busy || !input.value.trim())
                     return;
@@ -98,35 +97,22 @@ export class CivitaiKeyDialog {
                 });
             },
         });
-        this.#shell.elements.dialog?.setAttribute('role', 'dialog');
-        this.#shell.elements.dialog?.setAttribute('aria-modal', 'true');
-        this.#shell.elements.dialog?.setAttribute('aria-label', 'Add CivitAI API key');
-        /** Contain keyboard interaction in the top modal so Escape leaves the underlying selection intact. */
+        /** Trap Tab within secure entry while the shared shell owns cancellation and acceptance keys. */
         const keyboard = (event) => {
+            if (event.key !== 'Tab')
+                return;
             event.stopPropagation();
-            if (event.key === 'Escape') {
+            const controls = [
+                ...(this.#shell.elements.dialog?.querySelectorAll('a[href],input:not(:disabled),button:not(:disabled)') ?? []),
+            ];
+            const first = controls[0], last = controls.at(-1);
+            if (event.shiftKey && this.#document.activeElement === first) {
                 event.preventDefault();
-                if (!busy)
-                    this.#shell.close(false);
+                last?.focus();
             }
-            else if (event.key === 'Enter' && !(event.target instanceof HTMLButtonElement)) {
+            else if (!event.shiftKey && this.#document.activeElement === last) {
                 event.preventDefault();
-                if (!busy)
-                    this.#shell.elements.confirmButton?.click();
-            }
-            else if (event.key === 'Tab') {
-                const controls = [
-                    ...(this.#shell.elements.dialog?.querySelectorAll('a[href],input:not(:disabled),button:not(:disabled)') ?? []),
-                ];
-                const first = controls[0], last = controls.at(-1);
-                if (event.shiftKey && this.#document.activeElement === first) {
-                    event.preventDefault();
-                    last?.focus();
-                }
-                else if (!event.shiftKey && this.#document.activeElement === last) {
-                    event.preventDefault();
-                    first?.focus();
-                }
+                first?.focus();
             }
         };
         this.#shell.elements.dialog?.addEventListener('keydown', keyboard);

@@ -173,7 +173,9 @@ export class MasonrySearchHost {
       !event.ctrlKey ||
       event.altKey ||
       event.key.toLowerCase() !== 'f' ||
-      this.#options.document.querySelector('[role="dialog"][aria-modal="true"]')
+      [...this.#options.document.querySelectorAll('[role="dialog"][aria-modal="true"]')].some(
+        (dialog) => dialog.checkVisibility({ visibilityProperty: true }),
+      )
     )
       return;
     event.preventDefault();

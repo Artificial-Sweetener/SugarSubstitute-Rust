@@ -95,7 +95,10 @@ export class ModelDiscoveryDialog {
       select: (identity) => this.#update({ selected: identity }),
       provider: (identity, providerId) =>
         this.#update({ providers: { ...this.#state.providers, [identity]: providerId } }),
-      cancelCredential: () => this.#update({ credential: false, credentialError: '' }),
+      cancelCredential: () => {
+        this.#update({ credential: false, credentialError: '' });
+        this.#shell.elements.confirmButton?.focus();
+      },
       publicOnly: () => {
         void this.#load(true);
       },
@@ -130,18 +133,11 @@ export class ModelDiscoveryDialog {
       footerMeta: footer,
       cancelLabel: 'Not now',
       confirmLabel: 'Download and use',
-      allowOverlayClose: false,
       onConfirm: () => {
         void this.#download();
       },
     });
     const dialog = this.#shell.elements.dialog;
-    dialog?.setAttribute('role', 'dialog');
-    dialog?.setAttribute('aria-modal', 'true');
-    dialog?.setAttribute(
-      'aria-label',
-      this.#kind === 'upscale_models' ? 'Download an upscaler model?' : 'Download an image model?',
-    );
     dialog?.append(style);
     this.#publish();
     void this.#load(false);
@@ -320,6 +316,7 @@ export class ModelDiscoveryDialog {
   /** Derive footer availability from the exact selection without auto-selecting suggestions. */
   #publish(): void {
     this.#view?.update(this.#state);
+    this.#shell.setBusy(this.#state.downloading || this.#state.credentialBusy);
     const { confirmButton, cancelButton, footerMeta, footer, titleEl } = this.#shell.elements;
     const selected = this.#state.plan?.suggestions.find(
       (item) => item.identity === this.#state.selected,

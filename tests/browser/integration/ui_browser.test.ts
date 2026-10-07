@@ -183,7 +183,10 @@ async function submitFormModal(fieldValues: Record<string, unknown> = {}) {
     input.value = String(value);
     input.dispatchEvent(new Event('input', { bubbles: true }));
   }
-  const confirmButton = requiredElement(document, '.sugarcubes-form-dialog button:last-child');
+  const confirmButton = requiredElement(
+    document,
+    '.sugarcubes-form-dialog .p-dialog-footer button:last-child',
+  );
   expect(confirmButton).not.toBeNull();
   confirmButton.click();
   await flushPromises();

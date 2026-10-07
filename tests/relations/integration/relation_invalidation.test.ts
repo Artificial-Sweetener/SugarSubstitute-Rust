@@ -17,6 +17,7 @@
 import { afterEach, expect, jest, test } from '@jest/globals';
 import { RelationHostLifecycle } from '../../../frontend/comfyui/ui/relations/RelationHostLifecycle.js';
 import { NativeRelationInventory } from '../../../frontend/comfyui/ui/relations/infrastructure/NativeRelationInventory.js';
+import { CubeRelationPresenter } from '../../../frontend/comfyui/ui/relations/presentation/CubeRelationPresenter.js';
 import { refreshNativeNodeCards } from '../../../frontend/comfyui/ui/surface/NativeNodeCardRefresh.js';
 import type { ComfyGraph } from '../../../frontend/comfyui/ui/types/graph.js';
 import type { ObservableNativeSubgraph } from '../../../frontend/comfyui/ui/surface/NativeSubgraphChangeObserver.js';
@@ -30,6 +31,40 @@ afterEach(() => {
 async function settle(): Promise<void> {
   for (let index = 0; index < 6; index++) await Promise.resolve();
 }
+
+test('dock placeholders and native Run content do not refresh cards or rebuild field inventory', async () => {
+  const inventory = jest.spyOn(NativeRelationInventory.prototype, 'read');
+  const cards = jest.spyOn(CubeRelationPresenter.prototype, 'reconcile');
+  const host = new RelationHostLifecycle({
+    app: { graph: { _nodes: [], extra: {} } },
+    document,
+    logger: console,
+    reportError: jest.fn(),
+    getCardState: () => null,
+  });
+  host.setup();
+  await settle();
+  const bar = document.createElement('div');
+  bar.className = 'actionbar-container';
+  document.body.append(bar);
+  await settle();
+  expect(cards).toHaveBeenCalled();
+  inventory.mockClear();
+  cards.mockClear();
+  const target = document.createElement('div');
+  target.className = 'sc-overrides-dock-target';
+  bar.append(target);
+  await settle();
+  target.textContent = 'Dock to Run';
+  target.toggleAttribute('data-sc-override-drop-target', true);
+  await settle();
+  target.remove();
+  bar.append(document.createElement('button'));
+  await settle();
+  expect(inventory).not.toHaveBeenCalled();
+  expect(cards).not.toHaveBeenCalled();
+  host.dispose();
+});
 
 test('ignores popup mounts, search input, and unrelated DOM replacement', async () => {
   const inventory = jest.spyOn(NativeRelationInventory.prototype, 'read');

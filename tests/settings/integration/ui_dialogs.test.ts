@@ -81,7 +81,9 @@ describe('dialogs', () => {
     });
 
     const input = requiredElement('.sugarcubes-input-dialog input');
-    const confirmButton = requiredElement('.sugarcubes-input-dialog button:last-child');
+    const confirmButton = requiredElement(
+      '.sugarcubes-input-dialog .p-dialog-footer button:last-child',
+    );
     expect(input).not.toBeNull();
     input.value = 'invalid';
     input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -126,7 +128,9 @@ describe('dialogs', () => {
     });
 
     const inputs = document.querySelectorAll<HTMLInputElement>('.sugarcubes-form-dialog input');
-    const confirmButton = requiredElement('.sugarcubes-form-dialog button:last-child');
+    const confirmButton = requiredElement(
+      '.sugarcubes-form-dialog .p-dialog-footer button:last-child',
+    );
     inputs[0].value = '';
     inputs[0].dispatchEvent(new Event('input', { bubbles: true }));
     confirmButton.click();
@@ -156,7 +160,9 @@ describe('dialogs', () => {
       ],
     });
 
-    const confirmButton = requiredElement('.sugarcubes-selection-dialog button:last-child');
+    const confirmButton = requiredElement(
+      '.sugarcubes-selection-dialog .p-dialog-footer button:last-child',
+    );
     expect(confirmButton.disabled).toBe(true);
 
     const radio = requiredElement('.sugarcubes-selection-dialog input[value="cinematic"]');
@@ -192,8 +198,12 @@ describe('dialogs', () => {
     });
 
     const dialog = requiredElement('.sugarcubes-confirm-dialog');
-    const cancelButton = dialog.querySelector<HTMLButtonElement>('button:first-child');
-    const confirmButton = dialog.querySelector<HTMLButtonElement>('button:last-child');
+    const cancelButton = dialog.querySelector<HTMLButtonElement>(
+      '.p-dialog-footer button:first-child',
+    );
+    const confirmButton = dialog.querySelector<HTMLButtonElement>(
+      '.p-dialog-footer button:last-child',
+    );
     if (!cancelButton || !confirmButton) throw new Error('Missing alert actions');
     expect(dialog.textContent).toContain('Create failed');
     expect(dialog.textContent).toContain('Unable to serialize the current graph.');
@@ -279,7 +289,7 @@ describe('dialogs', () => {
 
     overwriteDefaults.click();
     savePromptFields.click();
-    requiredElement('.sugarcubes-default-review-dialog button:last-child').click();
+    requiredElement('.sugarcubes-default-review-dialog .p-dialog-footer button:last-child').click();
 
     await expect(promise).resolves.toEqual({
       'local/me/prompt.cube': {
@@ -351,7 +361,7 @@ describe('dialogs', () => {
     expect(dialog.querySelector('img')).toBeNull();
     expect(dialog.querySelectorAll('input[type="checkbox"]')).toHaveLength(2);
 
-    requiredElement('.sugarcubes-default-review-dialog button:last-child').click();
+    requiredElement('.sugarcubes-default-review-dialog .p-dialog-footer button:last-child').click();
     await expect(promise).resolves.toEqual({
       'local/me/prompt.cube': {
         overwriteDefaults: false,
@@ -376,7 +386,9 @@ describe('dialogs', () => {
 
     const promise = dialog.open(suggestions);
     const checkbox = requiredElement('.sugarcubes-version-dialog__dismiss input');
-    const confirmButton = requiredElement('.sugarcubes-version-dialog button:last-child');
+    const confirmButton = requiredElement(
+      '.sugarcubes-version-dialog .p-dialog-footer button:last-child',
+    );
     expect(checkbox).not.toBeNull();
     expect(confirmButton).not.toBeNull();
     checkbox.checked = true;

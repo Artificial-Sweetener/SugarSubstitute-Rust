@@ -284,11 +284,10 @@ export class WorkflowMasonryView {
                 behavior: 'smooth',
             });
     }
-    /** Expose native mount wrappers while leaving layout transforms owned by SurfaceMotion. */
+    /** Expose complete painted cells after SurfaceMotion commits their settled placements. */
     transitionCards() {
         return [...this.#views.values()].flatMap((view) => [...view.cells].flatMap(([id, cell]) => {
-            const element = cell.querySelector('.sugarcubes-cube-face__native-card-mount');
-            return element ? [{ id, cell, element }] : [];
+            return cell.querySelector('.sugarcubes-cube-face__native-card-mount') ? [{ id, cell }] : [];
         }));
     }
     /** Wait for native mount or restored graph styles before measuring animation endpoints. */

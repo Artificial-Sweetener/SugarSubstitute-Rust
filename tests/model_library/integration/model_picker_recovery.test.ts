@@ -86,6 +86,28 @@ function fixture(paired = false) {
   return { native, app, host, load, values, events, warn, feedback, stop };
 }
 
+/** Advance retry deadlines and paint one browser frame without replaying idle popup geometry frames. */
+function recoveryClock(): (milliseconds: number) => Promise<void> {
+  const frames = new Map<number, FrameRequestCallback>();
+  let nextFrame = 0;
+  jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+    const id = ++nextFrame;
+    frames.set(id, callback);
+    return id;
+  });
+  jest.spyOn(window, 'cancelAnimationFrame').mockImplementation((id) => {
+    frames.delete(id);
+  });
+  return async (milliseconds: number): Promise<void> => {
+    await jest.advanceTimersByTimeAsync(milliseconds);
+    for (const [id, callback] of [...frames]) {
+      if (!frames.delete(id)) continue;
+      callback(performance.now());
+    }
+    await jest.advanceTimersByTimeAsync(0);
+  };
+}
+
 test('unrelated popup search and closure preserve the mounted model picker without card discovery', async () => {
   const proof = fixture();
   proof.load.mockResolvedValue(proof.native.snapshot);
@@ -199,24 +221,25 @@ test('leaves native choices editable after initial failure and retries without a
 });
 
 test('keeps a mounted picker and its open choices during failed background refreshes', async () => {
+  const advance = recoveryClock();
   const proof = fixture();
   proof.load
     .mockResolvedValueOnce({ ...proof.native.snapshot, scanning: true })
     .mockRejectedValueOnce(new TypeError('Failed to fetch'))
     .mockResolvedValue(proof.native.snapshot);
   proof.host.setup();
-  await jest.advanceTimersByTimeAsync(20);
+  await advance(20);
   const input = proof.native.card.querySelector('input');
   if (!input) throw new Error('Expected a mounted picker');
   input.click();
-  await jest.advanceTimersByTimeAsync(0);
+  await advance(0);
   expect(document.querySelectorAll('.sc-model-tile')).toHaveLength(2);
-  await jest.advanceTimersByTimeAsync(500);
+  await advance(500);
   expect(proof.native.card.querySelector('input')).toBe(input);
   expect(document.querySelectorAll('.sc-model-tile')).toHaveLength(2);
   expect(proof.feedback).not.toHaveBeenCalled();
   expect(document.querySelector('[role="dialog"],.sugarcubes-modal')).toBeNull();
-  await jest.advanceTimersByTimeAsync(1_020);
+  await advance(1_020);
   expect(proof.load).toHaveBeenCalledTimes(3);
   expect(proof.native.card.querySelector('input')).toBe(input);
   expect(proof.native.props.modelValue).toBe('Flux\\alpha.safetensors');

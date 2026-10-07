@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Present Substitute's animated inner dot through the official Fluent slider thumb slot. */
+/** Paint a concentric animated dot through the official Fluent slider thumb slot. */
 
 /** Supply a decorative thumb while Fluent retains focus, pointer gestures, and value ownership. */
 export function createFluentSliderThumb(documentRef: Document): HTMLElement {
@@ -21,32 +21,26 @@ export function createFluentSliderThumb(documentRef: Document): HTMLElement {
   thumb.slot = 'thumb';
   thumb.dataset.scSliderThumb = '';
   thumb.setAttribute('aria-hidden', 'true');
-  const center = documentRef.createElement('span');
-  center.dataset.scSliderThumbCenter = '';
-  thumb.append(center);
   return thumb;
 }
 
-/** Animate only the inner dot so hover and press never move the track or pointer hit target. */
+/** Paint ring and dot on one surface so graph zoom cannot snap their centers independently. */
 export function fluentSliderThumbCss(): string {
   return `
     [data-sc-slider-thumb] {
-      display:grid; place-items:center; box-sizing:border-box;
+      display:block; box-sizing:border-box;
       width:var(--thumb-size); height:var(--thumb-size); border-radius:50%;
-      border:1px solid var(--colorNeutralStroke1); background:var(--colorNeutralBackground1);
+      border:1px solid var(--colorNeutralStroke1); background-color:var(--colorNeutralBackground1);
+      background-image:radial-gradient(circle closest-side,var(--rail-color) calc(100% - .5px),transparent 100%);
+      background-position:center; background-repeat:no-repeat; background-size:10px 10px;
+      transition:background-size var(--durationFaster,100ms) var(--curveEasyEase);
     }
-    [data-sc-slider-thumb-center] {
-      display:block; width:10px; height:10px; border-radius:50%; pointer-events:none;
-      background:var(--rail-color); transform:scale(1);
-      transition:transform var(--durationFaster,100ms) var(--curveEasyEase);
-    }
-    [data-sc-number-slider]:not([disabled]) [data-sc-slider-thumb]:hover [data-sc-slider-thumb-center] { transform:scale(1.2); }
-    [data-sc-number-slider]:not([disabled]):active [data-sc-slider-thumb] [data-sc-slider-thumb-center] { transform:scale(.8); }
-    @media (prefers-reduced-motion:reduce) { [data-sc-slider-thumb-center] { transition:none; } }
+    [data-sc-number-slider]:not([disabled]) [data-sc-slider-thumb]:hover { background-size:12px 12px; }
+    [data-sc-number-slider]:not([disabled]):active [data-sc-slider-thumb] { background-size:8px 8px; }
+    @media (prefers-reduced-motion:reduce) { [data-sc-slider-thumb] { transition:none; } }
     @media (forced-colors:active) {
-      [data-sc-slider-thumb] { background:Canvas; border-color:ButtonText; forced-color-adjust:none; }
-      [data-sc-slider-thumb-center] { background:Highlight; }
-      [data-sc-number-slider][disabled] [data-sc-slider-thumb-center] { background:GrayText; }
+      [data-sc-slider-thumb] { background-color:Canvas; border-color:ButtonText; --rail-color:Highlight; forced-color-adjust:none; }
+      [data-sc-number-slider][disabled] [data-sc-slider-thumb] { --rail-color:GrayText; }
     }
   `;
 }

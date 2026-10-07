@@ -8314,9 +8314,6 @@ function createFluentSliderThumb(documentRef) {
   thumb.slot = "thumb";
   thumb.dataset.scSliderThumb = "";
   thumb.setAttribute("aria-hidden", "true");
-  const center = documentRef.createElement("span");
-  center.dataset.scSliderThumbCenter = "";
-  thumb.append(center);
   return thumb;
 }
 

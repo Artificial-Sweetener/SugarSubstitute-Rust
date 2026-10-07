@@ -1,8 +1,8 @@
 import {
   ModelKeyRequiredBadge,
   modelKeyRequiredBadgeCss
-} from "./chunk-YSDVLBQQ.js";
-import "./chunk-57LGDI7T.js";
+} from "./chunk-KJ2VRCYH.js";
+import "./chunk-3W5PGMRW.js";
 export {
   ModelKeyRequiredBadge,
   modelKeyRequiredBadgeCss
