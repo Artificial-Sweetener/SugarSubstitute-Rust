@@ -198,6 +198,42 @@ test('docking reserves the existing Run strip and keeps native controls, values,
   }
 });
 
+test('keeps the top-strip dock independent of the movable native Run panel', () => {
+  const f = fixture();
+  try {
+    const legacy = document.createElement('div');
+    legacy.dataset.testid = 'legacy-topbar-container';
+    const native = document.createElement('div');
+    native.className = 'actionbar';
+    const row = document.createElement('div');
+    const nativeGrip = document.createElement('span');
+    nativeGrip.className = 'drag-handle';
+    const overrideGrip = document.createElement('span');
+    overrideGrip.className = 'drag-handle';
+    f.grip.append(overrideGrip);
+    row.append(nativeGrip, f.run);
+    native.append(row);
+    f.bar.append(legacy, native);
+    f.placement.toggleDock();
+    expect(f.root.parentElement?.parentElement).toBe(f.bar);
+    expect(getComputedStyle(legacy).display).toBe('none');
+    expect([...row.children]).toEqual([nativeGrip, f.run]);
+    native.style.position = 'absolute';
+    native.style.top = '200px';
+    f.placement.attached();
+    expect(f.root.parentElement?.parentElement).toBe(f.bar);
+    expect(native.contains(f.root)).toBe(false);
+    expect(legacy.parentElement).toBe(f.bar);
+    f.placement.toggleDock();
+    f.host.dragging(true);
+    expect(f.bar.firstElementChild?.className).toBe('sc-overrides-dock-target');
+    f.dispose();
+    expect([...row.children]).toEqual([nativeGrip, f.run]);
+  } finally {
+    f.dispose();
+  }
+});
+
 test('completed drops dock, cancellation does not, and dragging out retains the same input', () => {
   const f = fixture();
   try {

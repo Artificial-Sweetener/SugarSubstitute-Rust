@@ -165,14 +165,20 @@ export class CubePromptTextareaAutosizer {
     textarea.style.setProperty('overflow-y', 'hidden', 'important');
   }
 
-  /** Read final content geometry without applying intervening height changes. */
+  /** Fit the full padding box inside native borders without intervening height writes. */
   #measure(binding: PromptTextareaBinding): void {
     const { textarea } = binding;
     binding.measuredWidth = textarea.offsetWidth;
+    const clientHeight = textarea.clientHeight;
+    const offsetHeight = textarea.offsetHeight;
+    const borderHeight =
+      textarea.ownerDocument.defaultView?.getComputedStyle(textarea).boxSizing === 'border-box'
+        ? Math.max(0, offsetHeight - clientHeight)
+        : 0;
     binding.measuredHeight = Math.max(
-      textarea.scrollHeight,
-      textarea.clientHeight,
-      textarea.offsetHeight,
+      textarea.scrollHeight + borderHeight,
+      clientHeight + borderHeight,
+      offsetHeight,
       1,
     );
   }

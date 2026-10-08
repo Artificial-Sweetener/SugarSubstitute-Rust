@@ -39,9 +39,9 @@ export function fluentScrollbarPresentationCss() {
       transition:width 150ms cubic-bezier(.2,0,0,1),height 150ms cubic-bezier(.2,0,0,1),background-color 150ms;
     }
     .sc-fluent-scrollbar[aria-orientation="vertical"]::before { width:calc(3px / var(--sc-scrollbar-scale-x,1)); height:100%; right:calc(1px / var(--sc-scrollbar-scale-x,1)); }
-    .sc-fluent-scrollbar[aria-orientation="horizontal"]::before { height:calc(3px / var(--sc-scrollbar-scale-y,1)); width:100%; bottom:calc(1px / var(--sc-scrollbar-scale-y,1)); }
+    .sc-fluent-scrollbar[aria-orientation="horizontal"]::before { height:calc(2px / var(--sc-scrollbar-scale-y,1)); width:100%; bottom:0; }
     .sc-fluent-scrollbar[aria-orientation="vertical"]:is(:hover,:focus-visible,[data-dragging])::before { width:calc(6px / var(--sc-scrollbar-scale-x,1)); }
-    .sc-fluent-scrollbar[aria-orientation="horizontal"]:is(:hover,:focus-visible,[data-dragging])::before { height:calc(6px / var(--sc-scrollbar-scale-y,1)); }
+    .sc-fluent-scrollbar[aria-orientation="horizontal"]:is(:hover,:focus-visible,[data-dragging])::before { height:calc(4px / var(--sc-scrollbar-scale-y,1)); }
     .sc-fluent-scrollbar:focus-visible::before { outline:1px solid Highlight; outline-offset:1px; }
     @media (prefers-reduced-motion:reduce) { .sc-fluent-scrollbar::before { transition:none; } }
     @media (forced-colors:active) { .sc-fluent-scrollbar::before { background:ButtonText; } }

@@ -38,6 +38,9 @@ test('shares a positioned native surface until its final scroll owner is release
     secondThumb = document.createElement('div');
   const layer = layers.mount(first, firstThumb, document.createElement('div'));
   expect(layers.mount(second, secondThumb, document.createElement('div'))).toBe(layer);
+  const firstAttributes = jest.spyOn(first, 'getAttribute');
+  layers.mount(second, secondThumb, document.createElement('div'));
+  expect(firstAttributes).not.toHaveBeenCalled();
   expect(layer.parentElement).toBe(surface);
   expect(surface.style.position).toBe('relative');
   layers.release(first);
@@ -87,6 +90,27 @@ test('keeps shadow thumbs in the shadow tree and supplies a body fallback for st
   expect(shadow.querySelector('.sc-fluent-scrollbar-layer')).toBeNull();
 });
 
+test.each(['flex', 'inline-flex', 'grid', 'inline-grid'])(
+  'keeps overlays above controls inside a static %s item with its own stacking context',
+  (display) => {
+    const bar = document.createElement('div');
+    bar.style.cssText = `position:relative;display:${display}`;
+    const toolbar = document.createElement('div');
+    toolbar.style.zIndex = '1200';
+    const owner = document.createElement('div');
+    toolbar.append(owner);
+    bar.append(toolbar);
+    document.body.append(bar);
+    const before = toolbar.getAttribute('style');
+    const layers = new FluentScrollbarLayers(document);
+    const layer = layers.mount(owner, document.createElement('div'), document.createElement('div'));
+    expect(layer.parentElement).toBe(toolbar);
+    expect(toolbar.getAttribute('style')).toBe(before);
+    layers.clear();
+    expect(toolbar.children).toHaveLength(1);
+  },
+);
+
 test('maps viewport geometry through a zoomed and scrolled native layer while preserving screen thumb size', () => {
   const layer = document.createElement('div');
   Object.defineProperties(layer, { offsetWidth: { value: 400 }, offsetHeight: { value: 600 } });
@@ -112,7 +136,10 @@ test('maps viewport geometry through a zoomed and scrolled native layer while pr
     scrollHeight: { value: 1000 },
   });
   const view = new FluentScrollbarView(owner, 'vertical', 'owner', jest.fn());
-  view.update({ left: 110, top: 20, width: 150, height: 100, rtl: false }, space);
+  view.update(
+    { left: 110, top: 20, width: 150, height: 100, horizontalBottom: 120, rtl: false },
+    space,
+  );
   expect(view.element.style.left).toBe('296px');
   expect(view.element.style.top).toBe('142px');
   expect(view.element.style.width).toBe('24px');

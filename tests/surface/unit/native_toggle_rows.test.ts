@@ -16,8 +16,21 @@
 /** Prove native toggle delegation, keyboard access, custom control boundaries, and release. */
 import { afterEach, expect, jest, test } from '@jest/globals';
 import { NativeToggleRows } from '../../../frontend/comfyui/ui/surface/appearance/NativeToggleRows.js';
+import { fluentInteractionCss } from '../../../frontend/comfyui/ui/surface/appearance/FluentInteractionStyles.js';
 
 afterEach(() => document.body.replaceChildren());
+
+test('keeps row hover fill separate from retained focus and keyboard focus outlines', () => {
+  const css = fluentInteractionCss();
+  expect(css).not.toMatch(/\[data-sc-toggle-row\]:focus-within/);
+  const hoverSelectors = css.match(
+    /([^{}]+)\{\s*background:var\(--colorNeutralBackground1Hover\);/,
+  )?.[1];
+  expect(hoverSelectors).toContain('[data-sc-toggle-row]:hover');
+  expect(hoverSelectors).not.toMatch(/\[data-sc-toggle-row\]:(?:focus|has)/);
+  expect(css).toMatch(/\[data-sc-toggle-row\]:active/);
+  expect(css).toMatch(/\[data-sc-toggle-row\]:focus-visible\s*\{\s*outline:/);
+});
 
 /** Model only the external checkbox event boundary; native ownership remains real. */
 function createCheckbox(documentRef: Document): HTMLInputElement {

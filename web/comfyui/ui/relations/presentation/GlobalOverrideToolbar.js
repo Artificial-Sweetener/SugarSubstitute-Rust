@@ -77,6 +77,7 @@ export class GlobalOverrideToolbar {
         grip.append(gripIcon);
         this.#fields = document.createElement('div');
         this.#fields.className = 'sc-overrides-fields';
+        this.#fields.dataset.scScrollbarHorizontalOutset = '3';
         this.#fieldLayout = new OverrideToolbarFieldLayout(this.#fields);
         this.#fields.id = 'sc-overrides-fields';
         const disclosure = document.createElement('button');

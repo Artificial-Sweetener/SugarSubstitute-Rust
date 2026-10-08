@@ -17,6 +17,7 @@
 import { afterAll, beforeAll, expect, jest, test } from '@jest/globals';
 import { createFluentNumericSlider } from '../../../frontend/comfyui/ui/surface/appearance/FluentThemeRuntime.js';
 import { Slider } from '@fluentui/web-components/slider/class.js';
+import { fluentNumericCss } from '../../../frontend/comfyui/ui/surface/appearance/FluentNumericStyles.js';
 
 const internalsDescriptor = Object.getOwnPropertyDescriptor(
   HTMLElement.prototype,
@@ -64,11 +65,19 @@ test.each([0.5, 1, 2, 2.42, 3])('keeps slider values proportional at zoom %s', (
   Object.defineProperty(track, 'clientWidth', { value: 100 });
   jest.spyOn(track, 'getBoundingClientRect').mockReturnValue(trackRect(100 * zoom));
   slider.track = track;
+  expect(slider.calculateNewValue(0)).toBe(0);
   expect(slider.calculateNewValue(25 * zoom)).toBe(25);
   expect(slider.calculateNewValue(50 * zoom)).toBe(50);
   expect(slider.calculateNewValue(75 * zoom)).toBe(75);
+  expect(slider.calculateNewValue(100 * zoom)).toBe(100);
   jest.spyOn(track, 'getBoundingClientRect').mockReturnValue(trackRect(100));
   expect(slider.calculateNewValue(50)).toBe(50);
+});
+
+test('paints only the rounded native track between the endpoint thumb centers', () => {
+  const css = fluentNumericCss();
+  expect(css).toMatch(/\[data-sc-number-slider\]::after\s*\{\s*content:none;/);
+  expect(css).toMatch(/::part\(track-container\)\s*\{\s*border-radius:var\(--border-radius\);/);
 });
 
 test('uses Fluent calculation safely before a measurable track is laid out', () => {

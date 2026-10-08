@@ -72,7 +72,6 @@ export class FluentScrollbarView {
     const overflow = (vertical ? style?.overflowY : style?.overflowX) || style?.overflow;
     if (
       this.#owner !== this.#owner.ownerDocument.scrollingElement &&
-      this.#owner.tagName !== 'TEXTAREA' &&
       !/auto|scroll/.test(overflow ?? '')
     ) {
       this.element.hidden = true;
@@ -95,7 +94,7 @@ export class FluentScrollbarView {
         ? track.left
         : track.left + track.width - 12
       : track.left + 1 + offset;
-    const top = vertical ? track.top + 1 + offset : track.top + track.height - 12;
+    const top = vertical ? track.top + 1 + offset : track.horizontalBottom - 12;
     this.element.hidden = false;
     const localLeft = (left - space.left) / space.scaleX;
     const localTop = (top - space.top) / space.scaleY;

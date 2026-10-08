@@ -17,18 +17,67 @@
 import type { ComfyNode } from '../types/graph.js';
 import { nativeAdvancedInputControl } from './NativeAdvancedInputControl.js';
 import type { NativeAdvancedInputControl } from './NativeAdvancedInputControl.js';
+import type { CardDisclosureMotion } from './motion/CardDisclosureMotion.js';
+import { prepareNativePresentation } from './NativePresentationReady.js';
+
+/** Publish the exact-node state owner and stable mount to its optional disclosure presentation. */
+export interface NativeProjectedAdvancedInputMount {
+  target: HTMLElement;
+  control: NativeAdvancedInputControl;
+  motion: CardDisclosureMotion;
+  present(toggle: () => void, dispose: () => void): () => void;
+}
+
+interface AdvancedPresentation {
+  toggle(): void;
+  dispose(): void;
+}
+
+const mounts = new WeakMap<HTMLElement, NativeProjectedAdvancedInputMount>();
+
+/** Resolve a positively registered projection without consulting graph IDs or the application tree. */
+export function readProjectedAdvancedInputMount(
+  root: HTMLElement,
+): NativeProjectedAdvancedInputMount | null {
+  const target = root.closest<HTMLElement>('.sugarcubes-native-node-card');
+  return target ? (mounts.get(target) ?? null) : null;
+}
 
 /** Preserve native footer rendering while sharing advanced state with context actions. */
 export class NativeProjectedAdvancedInputs {
   readonly #target: HTMLElement;
   readonly #node: ComfyNode;
   readonly #control: NativeAdvancedInputControl | null;
+  #presentation: AdvancedPresentation | null = null;
 
   /** Bind one node rather than routing projected IDs through the active graph. */
-  constructor(target: HTMLElement, node: ComfyNode, refresh: () => void) {
+  constructor(
+    target: HTMLElement,
+    node: ComfyNode,
+    refresh: () => void,
+    motion: CardDisclosureMotion,
+  ) {
     this.#target = target;
     this.#node = node;
-    this.#control = nativeAdvancedInputControl(node, refresh);
+    this.#control = nativeAdvancedInputControl(node, () => {
+      refresh();
+      const root = target.querySelector<HTMLElement>('.lg-node');
+      if (root) prepareNativePresentation(root);
+    });
+    if (this.#control)
+      mounts.set(target, {
+        target,
+        control: this.#control,
+        motion,
+        present: (toggle, dispose) => {
+          this.#presentation?.dispose();
+          const presentation = { toggle, dispose };
+          this.#presentation = presentation;
+          return () => {
+            if (this.#presentation === presentation) this.#presentation = null;
+          };
+        },
+      });
     target.addEventListener('click', this.#toggle, true);
   }
 
@@ -49,6 +98,9 @@ export class NativeProjectedAdvancedInputs {
 
   /** Return footer interaction to Comfy when its projected card is unmounted. */
   dispose(): void {
+    mounts.delete(this.#target);
+    this.#presentation?.dispose();
+    this.#presentation = null;
     this.#target.removeEventListener('click', this.#toggle, true);
   }
 
@@ -60,6 +112,7 @@ export class NativeProjectedAdvancedInputs {
     );
     if (!button || !this.#target.contains(button) || button.disabled) return;
     event.stopImmediatePropagation();
-    this.#control.setShown(!this.#control.shown());
+    if (this.#presentation) this.#presentation.toggle();
+    else this.#control.setShown(!this.#control.shown());
   };
 }

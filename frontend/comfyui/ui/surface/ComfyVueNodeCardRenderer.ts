@@ -171,7 +171,12 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
       renderCard,
       disclosureMotion,
     );
-    const advancedInputsHost = new NativeProjectedAdvancedInputs(target, node, renderCard);
+    const advancedInputsHost = new NativeProjectedAdvancedInputs(
+      target,
+      node,
+      renderCard,
+      disclosureMotion,
+    );
     renderCard();
     const releaseNativeRefresh = subscribeNativeNodeCardRefresh(
       target.ownerDocument,
