@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Keep scroll tracks in their native containing surface and translate viewport geometry locally. */
-import { scrollParent } from './FluentScrollbarLayout.js';
+import { scrollParent, scrollbarHorizontalOutset } from './FluentScrollbarLayout.js';
 
 export interface ScrollbarCoordinateSpace {
   left: number;
@@ -26,7 +26,8 @@ export interface ScrollbarCoordinateSpace {
 type LayerSurface = HTMLElement | ShadowRoot;
 interface Layer {
   element: HTMLElement;
-  owners: Set<HTMLElement>;
+  owners: Map<HTMLElement, number>;
+  horizontalOutset: number;
 }
 
 /** Share layout-neutral layers within a surface without modifying host styles or reserving gutters. */
@@ -46,10 +47,15 @@ export class FluentScrollbarLayers {
       const element = this.document.createElement('div');
       element.className = 'sc-fluent-scrollbar-layer';
       surface.append(element);
-      layer = { element, owners: new Set() };
+      layer = { element, owners: new Map(), horizontalOutset: 0 };
       this.#layers.set(surface, layer);
     }
-    layer.owners.add(owner);
+    const outset = scrollbarHorizontalOutset(owner);
+    if (layer.owners.get(owner) !== outset) {
+      layer.owners.set(owner, outset);
+      this.#measureOutset(layer);
+    }
+    this.#outset(layer);
     this.#owners.set(owner, surface);
     if (vertical.parentElement !== layer.element) layer.element.append(vertical, horizontal);
     return layer.element;
@@ -65,6 +71,9 @@ export class FluentScrollbarLayers {
     if (layer && layer.owners.size === 0) {
       layer.element.remove();
       this.#layers.delete(surface);
+    } else if (layer) {
+      this.#measureOutset(layer);
+      this.#outset(layer);
     }
   }
 
@@ -75,16 +84,39 @@ export class FluentScrollbarLayers {
     this.#owners.clear();
   }
 
-  /** Find the closest native positioning or paint boundary without adding host wrappers. */
+  /** Extend paint into an opted-in surface's existing breathing room without reserving layout space. */
+  #outset(layer: Layer): void {
+    const pixels = layer.horizontalOutset;
+    if (!pixels) {
+      layer.element.style.removeProperty('bottom');
+      return;
+    }
+    const bottom = `${-pixels / scrollbarCoordinateSpace(layer.element).scaleY}px`;
+    if (layer.element.style.bottom !== bottom) layer.element.style.bottom = bottom;
+  }
+
+  /** Recompute the shared allowance only when owner membership or configuration changes. */
+  #measureOutset(layer: Layer): void {
+    let maximum = 0;
+    for (const outset of layer.owners.values()) maximum = Math.max(maximum, outset);
+    layer.horizontalOutset = maximum;
+  }
+
+  /** Keep handles inside the closest native positioning, paint, or stacking boundary. */
   #surface(owner: HTMLElement): LayerSurface {
     const window = this.document.defaultView;
     for (let element: HTMLElement | null = owner; element; element = scrollParent(element)) {
       const style = window?.getComputedStyle(element);
+      const parentDisplay =
+        style?.zIndex && style.zIndex !== 'auto' && element.parentElement
+          ? window?.getComputedStyle(element.parentElement).display
+          : '';
       if (
         element !== this.document.documentElement &&
         element !== this.document.body &&
         style &&
         ((style.position && style.position !== 'static') ||
+          /^(inline-)?(flex|grid)$/.test(parentDisplay ?? '') ||
           style.isolation === 'isolate' ||
           (style.transform && style.transform !== 'none') ||
           (style.filter && style.filter !== 'none') ||

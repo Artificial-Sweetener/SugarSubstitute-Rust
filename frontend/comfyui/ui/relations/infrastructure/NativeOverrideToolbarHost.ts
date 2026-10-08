@@ -18,11 +18,13 @@ import type {
   OverrideToolbarHost,
   OverrideToolbarFloatingSurface,
 } from '../presentation/OverrideToolbarPlacement.js';
+import { NativeRunStripContentVisibility } from './NativeRunStripContentVisibility.js';
 
 interface ToolbarSurfaces {
   panel: HTMLElement;
   runRow: HTMLElement;
   actionbar: HTMLElement;
+  grip: HTMLElement | null;
   line: HTMLElement;
 }
 
@@ -32,6 +34,7 @@ export class NativeOverrideToolbarHost implements OverrideToolbarHost {
   #slot: HTMLElement | null = null;
   #target: HTMLElement | null = null;
   #dragging = false;
+  readonly #emptyContent = new NativeRunStripContentVisibility();
 
   /** Resolve only identified native chrome, independently of graph candidate discovery. */
   constructor(private readonly document: Document) {}
@@ -41,13 +44,15 @@ export class NativeOverrideToolbarHost implements OverrideToolbarHost {
     this.#surfaces = this.#read();
     const surfaces = this.#surfaces;
     if (!surfaces) {
+      this.#emptyContent.mount(null);
       element.remove();
       this.#removeSlot();
       this.#removeTarget();
       return false;
     }
+    this.#emptyContent.mount(docked ? surfaces.actionbar : null);
     if (docked && !this.canDock()) return false;
-    const nativeGrip = surfaces.actionbar.querySelector('.actionbar .drag-handle');
+    const nativeGrip = surfaces.grip;
     const fontFamily = nativeGrip
       ? this.document.defaultView?.getComputedStyle(nativeGrip).fontFamily
       : undefined;
@@ -128,6 +133,7 @@ export class NativeOverrideToolbarHost implements OverrideToolbarHost {
 
   /** Remove owned chrome and release references when the toolbar is disposed. */
   dispose(): void {
+    this.#emptyContent.dispose();
     this.dragging(false);
     this.#removeSlot();
     this.#surfaces = null;
@@ -151,7 +157,11 @@ export class NativeOverrideToolbarHost implements OverrideToolbarHost {
       }
       ancestor = ancestor.parentElement;
     }
-    return { panel, runRow, actionbar, line };
+    const grip =
+      [...actionbar.querySelectorAll<HTMLElement>('.actionbar .drag-handle')].find(
+        (element) => !element.closest('.sc-overrides-toolbar'),
+      ) ?? null;
+    return { panel, runRow, actionbar, grip, line };
   }
 
   /** Keep native controls at their existing width while only override fields surrender space. */

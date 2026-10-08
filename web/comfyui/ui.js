@@ -44,6 +44,7 @@ import { CubeHostFeedback } from './ui/core/CubeHostFeedback.js';
 import { createSugarCubesDebugApi } from './ui/debug/SugarCubesDebugApi.js';
 import { WorkflowMasonryHostLifecycle } from './ui/surface/masonry/WorkflowMasonryHostLifecycle.js';
 import { FluentAppearanceHost } from './ui/surface/appearance/FluentAppearanceHost.js';
+import { ScrollSurfaceWheelHost } from './ui/surface/ScrollSurfaceWheelHost.js';
 import { ModelPickerHost } from './ui/model_library/ModelPickerHost.js';
 import { ComfyOutputThumbnailSource } from './ui/model_library/ComfyOutputThumbnailSource.js';
 import { modelBackgroundReporter } from './ui/model_library/ModelBackgroundDiagnostics.js';
@@ -314,6 +315,8 @@ const workflowMasonry = new WorkflowMasonryHostLifecycle({
         pushToastMessage('error', 'Masonry unavailable', readErrorMessage(error));
     },
 });
+/** Compose theme-independent native scroll input once for the host document. */
+const scrollSurfaceInput = new ScrollSurfaceWheelHost(documentRef ?? document);
 /** Compose shared appearance without adding styling behavior to host registration. */
 const fluentAppearance = new FluentAppearanceHost({
     app: appRef,
@@ -405,6 +408,7 @@ export const sugarCubesExtension = {
         await extensionSetupLifecycle.setup();
         workflowRelations.setup();
         workflowMasonry.setup();
+        scrollSurfaceInput.setup();
         fluentAppearance.setup();
         modelPickers.setup();
         await editorActions.setup();

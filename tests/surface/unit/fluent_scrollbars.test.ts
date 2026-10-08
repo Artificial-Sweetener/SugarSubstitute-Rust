@@ -17,6 +17,10 @@
 import { expect, test } from '@jest/globals';
 import { fluentAppearanceCss } from '../../../frontend/comfyui/ui/surface/appearance/FluentAppearanceStyles.js';
 import {
+  fluentScrollbarCss,
+  fluentScrollbarPresentationCss,
+} from '../../../frontend/comfyui/ui/surface/appearance/FluentScrollbarStyles.js';
+import {
   scrollbarGeometry,
   scrollbarDragPosition,
 } from '../../../frontend/comfyui/ui/surface/appearance/FluentScrollbarGeometry.js';
@@ -27,6 +31,11 @@ test.each([true, false])(
     const css = fluentAppearanceCss(dark);
     expect(css).toContain('scrollbar-width:none!important');
     expect(css).toContain('scrollbar-gutter:auto!important');
+    expect(css).not.toContain('scrollbar-width:auto!important');
+    expect(css).not.toContain('scrollbar-width:thin!important');
+    expect(css).not.toContain('data-sc-horizontal-scrollbar');
+    expect(fluentScrollbarCss(dark)).not.toContain('padding-bottom');
+    expect(fluentScrollbarCss(dark)).not.toContain('padding-block-end');
     expect(css).toContain('::-webkit-scrollbar');
     expect(css).toContain('.sc-fluent-scrollbar-layer');
     expect(css).toContain('position:absolute');
@@ -51,4 +60,12 @@ test('bounds the thumb and maps native scroll range to pointer travel', () => {
   expect(scrollbarGeometry(100, 100, 100, 0)).toBeNull();
   expect(scrollbarGeometry(0, 100, 200, 0)).toBeNull();
   expect(scrollbarGeometry(100, 100, Infinity, 0)).toBeNull();
+});
+
+test('keeps horizontal paint thin and flush with the bottom while preserving vertical paint', () => {
+  const css = fluentScrollbarPresentationCss();
+  expect(css).toContain('height:calc(2px / var(--sc-scrollbar-scale-y,1))');
+  expect(css).toContain('bottom:0;');
+  expect(css).toContain('height:calc(4px / var(--sc-scrollbar-scale-y,1))');
+  expect(css).toContain('width:calc(3px / var(--sc-scrollbar-scale-x,1))');
 });

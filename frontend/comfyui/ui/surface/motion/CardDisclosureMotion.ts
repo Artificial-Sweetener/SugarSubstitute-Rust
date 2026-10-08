@@ -31,6 +31,7 @@ export class CardDisclosureMotion {
   #overflow: string | null = null;
   #height: { value: string; priority: string } | null = null;
   #apply: ((collapsed: boolean) => void) | null = null;
+  #owner: object | null = null;
   #revision = 0;
 
   /** Bind the projected mount whose intrinsic height drives its existing masonry layout. */
@@ -43,18 +44,26 @@ export class CardDisclosureMotion {
     collapsed: boolean,
     apply: (collapsed: boolean) => void,
     geometry?: DisclosureGeometry,
+    owner: object = this.#target,
   ): void {
     this.#revision++;
-    const desired = !(this.#desired ?? collapsed);
+    const sameOwner = this.#owner === owner;
+    const desired = !(sameOwner ? (this.#desired ?? collapsed) : collapsed);
     const from = height(this.#target);
+    const previousRoot =
+      this.#target.querySelector<HTMLElement>('.lg-node') ??
+      this.#target.closest<HTMLElement>('.lg-node');
+    const canAnimate = previousRoot !== null && this.#canAnimate(previousRoot);
+    if (!sameOwner && this.#desired !== null) this.#apply?.(this.#desired);
     this.#animation?.cancel();
     this.#animation = null;
     this.#desired = desired;
     this.#apply = apply;
+    this.#owner = owner;
     const root =
       this.#target.querySelector<HTMLElement>('.lg-node') ??
       this.#target.closest<HTMLElement>('.lg-node');
-    if (!root || !this.#canAnimate(root)) {
+    if (!root || !canAnimate) {
       apply(desired);
       this.#release();
       return;
@@ -218,6 +227,7 @@ export class CardDisclosureMotion {
     this.#overflow = null;
     this.#desired = null;
     this.#apply = null;
+    this.#owner = null;
     delete this.#target.dataset.scDisclosing;
     delete this.#target.dataset.scDisclosureTarget;
     publishDisclosureHeight(this.#target, null);

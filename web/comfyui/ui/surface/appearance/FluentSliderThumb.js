@@ -20,24 +20,39 @@ export function createFluentSliderThumb(documentRef) {
     thumb.slot = 'thumb';
     thumb.dataset.scSliderThumb = '';
     thumb.setAttribute('aria-hidden', 'true');
+    const svgNamespace = 'http://www.w3.org/2000/svg';
+    const surface = documentRef.createElementNS(svgNamespace, 'svg');
+    surface.setAttribute('viewBox', '0 0 20 20');
+    surface.setAttribute('focusable', 'false');
+    const ring = documentRef.createElementNS(svgNamespace, 'circle');
+    ring.dataset.scSliderRing = '';
+    ring.setAttribute('cx', '10');
+    ring.setAttribute('cy', '10');
+    ring.setAttribute('r', '9.5');
+    const dot = documentRef.createElementNS(svgNamespace, 'circle');
+    dot.dataset.scSliderDot = '';
+    dot.setAttribute('cx', '10');
+    dot.setAttribute('cy', '10');
+    dot.setAttribute('r', '5');
+    surface.append(ring, dot);
+    thumb.append(surface);
     return thumb;
 }
-/** Paint ring and dot on one surface so graph zoom cannot snap their centers independently. */
+/** Keep both circles in one vector coordinate system under fractional graph zoom. */
 export function fluentSliderThumbCss() {
     return `
     [data-sc-slider-thumb] {
       display:block; box-sizing:border-box;
-      width:var(--thumb-size); height:var(--thumb-size); border-radius:50%;
-      border:1px solid var(--colorNeutralStroke1); background-color:var(--colorNeutralBackground1);
-      background-image:radial-gradient(circle closest-side,var(--rail-color) calc(100% - .5px),transparent 100%);
-      background-position:center; background-repeat:no-repeat; background-size:10px 10px;
-      transition:background-size var(--durationFaster,100ms) var(--curveEasyEase);
+      width:var(--thumb-size); height:var(--thumb-size);
     }
-    [data-sc-number-slider]:not([disabled]) [data-sc-slider-thumb]:hover { background-size:12px 12px; }
-    [data-sc-number-slider]:not([disabled]):active [data-sc-slider-thumb] { background-size:8px 8px; }
-    @media (prefers-reduced-motion:reduce) { [data-sc-slider-thumb] { transition:none; } }
+    [data-sc-slider-thumb] > svg { display:block; width:100%; height:100%; }
+    [data-sc-slider-ring] { fill:var(--colorNeutralBackground1); stroke:var(--colorNeutralStroke1); stroke-width:1px; }
+    [data-sc-slider-dot] { fill:var(--rail-color); r:5px; transition:r var(--durationFaster,100ms) var(--curveEasyEase); }
+    [data-sc-number-slider]:not([disabled]) [data-sc-slider-thumb]:hover [data-sc-slider-dot] { r:6px; }
+    [data-sc-number-slider]:not([disabled]):active [data-sc-slider-thumb] [data-sc-slider-dot] { r:4px; }
+    @media (prefers-reduced-motion:reduce) { [data-sc-slider-dot] { transition:none; } }
     @media (forced-colors:active) {
-      [data-sc-slider-thumb] { background-color:Canvas; border-color:ButtonText; --rail-color:Highlight; forced-color-adjust:none; }
+      [data-sc-slider-thumb] { --colorNeutralBackground1:Canvas; --colorNeutralStroke1:ButtonText; --rail-color:Highlight; forced-color-adjust:none; }
       [data-sc-number-slider][disabled] [data-sc-slider-thumb] { --rail-color:GrayText; }
     }
   `;

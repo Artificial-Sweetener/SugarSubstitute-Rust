@@ -100,7 +100,7 @@ export class ComfyVueNodeCardRenderer {
             });
         };
         const collapseHost = new NativeProjectedNodeCollapse(target, node, renderCard, disclosureMotion);
-        const advancedInputsHost = new NativeProjectedAdvancedInputs(target, node, renderCard);
+        const advancedInputsHost = new NativeProjectedAdvancedInputs(target, node, renderCard, disclosureMotion);
         renderCard();
         const releaseNativeRefresh = subscribeNativeNodeCardRefresh(target.ownerDocument, [node, ...(options.widgetSources ?? []).map((source) => source.node)], renderCard);
         observer.observe(target, { childList: true, subtree: true });

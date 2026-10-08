@@ -67,6 +67,41 @@ test('finishes requested native presentation before its first animation frame wi
   expect(card.hasAttribute('data-sc-fluent-node')).toBe(false);
 });
 
+test('prepares a replacement native card synchronously without refreshing unrelated cards', () => {
+  jest.spyOn(window, 'requestAnimationFrame').mockImplementation(() => 1);
+  jest.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined);
+  const host = new FluentAppearanceHost({
+    document,
+    app: {
+      ui: {
+        settings: {
+          addSetting: () => undefined,
+          getSettingValue: (key: string) => key === 'Comfy.VueNodes.Enabled',
+        },
+      },
+    },
+    reportError: jest.fn(),
+  });
+  host.setup();
+  host.setEnabled(true);
+  const surface = document.createElement('section');
+  surface.className = 'sugarcubes-workflow-masonry';
+  const unrelated = document.createElement('div');
+  unrelated.className = 'lg-node';
+  surface.append(unrelated);
+  document.body.append(surface);
+  prepareNativePresentation(surface);
+  const replacement = document.createElement('div');
+  replacement.className = 'lg-node';
+  surface.append(replacement);
+  const annotate = jest.spyOn(NativeFluentCardAdapter.prototype, 'annotate');
+  prepareNativePresentation(replacement);
+  expect(replacement.hasAttribute('data-sc-fluent-node')).toBe(true);
+  expect(annotate).toHaveBeenCalledTimes(1);
+  expect(annotate).toHaveBeenCalledWith(replacement);
+  host.dispose();
+});
+
 test('initial styling synchronizes native sockets while popup activity leaves cards and geometry untouched', async () => {
   const card = document.createElement('div');
   card.className = 'lg-node';

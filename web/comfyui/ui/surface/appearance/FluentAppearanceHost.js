@@ -305,7 +305,9 @@ export class FluentAppearanceHost {
     /** Settle a named mounted surface through the same authoritative appearance reconciliation. */
     #onPresentationReady = (event) => {
         const target = event.target;
-        if (!this.#active || !(target instanceof HTMLElement) || !target.matches(surfaceSelector))
+        if (!this.#active ||
+            !(target instanceof HTMLElement) ||
+            !target.matches(`.lg-node, ${surfaceSelector}`))
             return;
         this.#presence?.flushPending();
         this.#queue(target);

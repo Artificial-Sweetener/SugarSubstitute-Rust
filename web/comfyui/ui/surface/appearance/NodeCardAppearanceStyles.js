@@ -22,6 +22,9 @@ export function ensureNodeCardAppearanceStyles(documentRef) {
     style.textContent = `
     .sugarcubes-cube-face__node-card { box-sizing:border-box; border:1px solid var(--interface-stroke,#454545); border-radius:12px; background:var(--sugarcubes-masonry-card-surface,var(--comfy-input-bg,#222)); }
     .sugarcubes-cube-face__node-card .lg-node { cursor:default; }
+    .sugarcubes-cube-face__node-card .lg-node:not([data-sc-fluent-node]) [data-testid="advanced-inputs-button"] {
+      --node-component-header-surface:var(--sugarcubes-cube-card-header, var(--sugarcubes-masonry-card-surface, var(--comfy-input-bg, #222)));
+    }
     .sugarcubes-cube-face__node-card [data-masonry-bypass-badge] { display:none !important; }
     .sugarcubes-cube-face__node-card [data-masonry-title-icon] {
       position:relative; padding-left:30px;

@@ -8314,6 +8314,22 @@ function createFluentSliderThumb(documentRef) {
   thumb.slot = "thumb";
   thumb.dataset.scSliderThumb = "";
   thumb.setAttribute("aria-hidden", "true");
+  const svgNamespace = "http://www.w3.org/2000/svg";
+  const surface = documentRef.createElementNS(svgNamespace, "svg");
+  surface.setAttribute("viewBox", "0 0 20 20");
+  surface.setAttribute("focusable", "false");
+  const ring = documentRef.createElementNS(svgNamespace, "circle");
+  ring.dataset.scSliderRing = "";
+  ring.setAttribute("cx", "10");
+  ring.setAttribute("cy", "10");
+  ring.setAttribute("r", "9.5");
+  const dot = documentRef.createElementNS(svgNamespace, "circle");
+  dot.dataset.scSliderDot = "";
+  dot.setAttribute("cx", "10");
+  dot.setAttribute("cy", "10");
+  dot.setAttribute("r", "5");
+  surface.append(ring, dot);
+  thumb.append(surface);
   return thumb;
 }
 

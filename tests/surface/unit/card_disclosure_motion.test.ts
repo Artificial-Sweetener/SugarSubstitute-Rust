@@ -129,6 +129,20 @@ test('retains the latest user choice when a view unmount interrupts closing', ()
   expect(effects[0]?.cancel).toHaveBeenCalledTimes(1);
 });
 
+test('commits the previous state owner before another disclosure takes over the same mount', () => {
+  const { motion, effects } = fixture();
+  const advanced = jest.fn(),
+    node = jest.fn();
+  motion.toggle(false, advanced, { closedHeight: () => 100 }, advanced);
+  motion.toggle(false, node, { closedHeight: () => 50 }, node);
+  expect(advanced).toHaveBeenCalledWith(true);
+  expect(node).not.toHaveBeenCalled();
+  expect(effects[0]?.cancel).toHaveBeenCalled();
+  expect(effects[1]?.frames).toEqual([{ height: '200px' }, { height: '50px' }]);
+  motion.dispose();
+  expect(node).toHaveBeenCalledWith(true);
+});
+
 test('animates a native content resize to its settled destination and restores inline geometry', async () => {
   const { target, root, effects, motion } = fixture();
   let settle = (): void => undefined;

@@ -22,6 +22,7 @@ export function ensureRelationStyles(document: Document): void {
   .sc-overrides-toolbar { position:fixed; z-index:1200; display:flex; flex:none; align-self:flex-start; align-items:center; gap:0; min-height:43px; width:max-content; max-width:calc(100% - 8px); box-sizing:border-box; margin:0; padding:4px; border:1px solid var(--interface-stroke); border-radius:var(--radius-lg); background:var(--comfy-menu-bg); color:var(--fg-color); font:inherit; font-size:var(--text-xs); pointer-events:auto; min-width:0; transition:left 200ms cubic-bezier(.1,.9,.2,1),top 200ms cubic-bezier(.1,.9,.2,1); }
   .sc-overrides-toolbar[hidden] { display:none; }
   .sc-overrides-dock-slot { display:flex; flex:none; align-items:center; min-width:0; }
+  .actionbar-container > [data-sc-empty-run-content] { display:none!important; }
   .sc-overrides-toolbar[data-placement="docked"] { position:static; align-self:center; min-height:32px; margin:0; padding:0; border:0; background:transparent; transition:none; }
   .sc-overrides-toolbar[data-placement="docked"] > .sc-overrides-disclosure { order:-1; margin-right:4px; }
   .sc-overrides-toolbar[data-placement="docked"][data-collapsed="true"] > .sc-overrides-menu { margin-right:0; }

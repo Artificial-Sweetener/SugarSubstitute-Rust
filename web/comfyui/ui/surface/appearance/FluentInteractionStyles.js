@@ -17,6 +17,20 @@
 /** Keep interaction styling scoped to positively identified native presentation boundaries. */
 export function fluentInteractionCss() {
     return `
+    [data-sc-projected-advanced-motion][data-sc-disclosing] > .lg-node[data-sc-fluent-node] {
+      height:100% !important; min-height:0 !important;
+    }
+    [data-sc-projected-advanced-motion][data-sc-disclosing] [data-testid="node-inner-wrapper"],
+    [data-sc-projected-advanced-motion][data-sc-disclosing] [data-testid^="node-body-"] {
+      min-height:0;
+    }
+    [data-sc-projected-advanced-motion][data-sc-disclosing] [data-sc-fluent-fields] {
+      min-height:0; flex:1; overflow:clip;
+    }
+    [data-sc-projected-advanced-motion][data-sc-disclosing] [data-testid^="node-header-"],
+    [data-sc-projected-advanced-motion][data-sc-disclosing] > .lg-node > :has(> [data-testid="advanced-inputs-button"]) {
+      flex-shrink:0;
+    }
     [data-sc-boolean-native] { display:none !important; }
     [data-sc-boolean-checkbox] { flex:none; }
     [data-sc-boolean-control] {
@@ -30,7 +44,7 @@ export function fluentInteractionCss() {
     [data-sc-toggle-row], [data-sc-fluent-node] [data-testid="advanced-inputs-button"] {
       cursor:pointer; transition:background-color var(--durationFast) var(--curveEasyEase);
     }
-    [data-sc-toggle-row]:hover, [data-sc-toggle-row]:focus-within,
+    [data-sc-toggle-row]:hover,
     [data-sc-fluent-node] [data-testid="advanced-inputs-button"]:hover,
     [data-sc-fluent-node] [data-testid="advanced-inputs-button"]:focus-visible {
       background:var(--colorNeutralBackground1Hover);

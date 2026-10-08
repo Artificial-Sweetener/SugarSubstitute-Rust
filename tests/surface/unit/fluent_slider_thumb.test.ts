@@ -26,12 +26,26 @@ test('uses Fluent’s thumb slot without introducing another input or focus targ
   const thumb = createFluentSliderThumb(document);
   expect(thumb.slot).toBe('thumb');
   expect(thumb.getAttribute('aria-hidden')).toBe('true');
-  expect(thumb.childElementCount).toBe(0);
+  expect(thumb.childElementCount).toBe(1);
   expect(thumb.querySelector('input, button, [tabindex], [role]')).toBeNull();
   expect(thumb.hasAttribute('tabindex')).toBe(false);
 });
 
-test('centers dot painting in the fixed ring for hover and press, reduced motion and high contrast', () => {
+test('paints ring and dot around the same vector center', () => {
+  const thumb = createFluentSliderThumb(document);
+  expect(thumb.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 20 20');
+  const circles = Array.from(thumb.querySelectorAll('circle'));
+  expect(circles).toHaveLength(2);
+  for (const circle of circles) {
+    expect(circle.namespaceURI).toBe('http://www.w3.org/2000/svg');
+    expect(circle.getAttribute('cx')).toBe('10');
+    expect(circle.getAttribute('cy')).toBe('10');
+  }
+  expect(circles[0]?.getAttribute('r')).toBe('9.5');
+  expect(circles[1]?.getAttribute('r')).toBe('5');
+});
+
+test('changes only dot radius for hover and press, reduced motion and high contrast', () => {
   const style = document.createElement('style');
   style.textContent = fluentSliderThumbCss();
   const thumb = createFluentSliderThumb(document);
@@ -39,18 +53,16 @@ test('centers dot painting in the fixed ring for hover and press, reduced motion
   const appearance = getComputedStyle(thumb);
   expect(appearance.display).toBe('block');
   expect(appearance.boxSizing).toBe('border-box');
-  expect(appearance.backgroundPosition).toBe('center');
-  expect(appearance.backgroundSize).toBe('10px 10px');
-  expect(appearance.backgroundRepeat).toBe('no-repeat');
   expect(appearance.transform).toBe('');
   const rules = Array.from(style.sheet?.cssRules ?? [])
     .map((rule) => rule.cssText)
     .join('\n');
   expect(rules).toContain(':not([disabled]) [data-sc-slider-thumb]:hover');
-  expect(rules).toContain('background-size: 12px 12px');
-  expect(rules).toContain(':not([disabled]):active');
-  expect(rules).toContain('background-size: 8px 8px');
-  expect(rules).toContain('radial-gradient(circle closest-side');
+  expect(rules).toContain('r: 6px');
+  expect(rules).toContain(':not([disabled]):active [data-sc-slider-thumb] [data-sc-slider-dot]');
+  expect(rules).toContain('r: 4px');
+  expect(rules).not.toMatch(/(?:cx|cy|translate|background-position):/);
+  expect(rules).not.toContain('radial-gradient');
   expect(rules).toContain('prefers-reduced-motion:reduce');
   expect(rules).toContain('forced-colors:active');
 });

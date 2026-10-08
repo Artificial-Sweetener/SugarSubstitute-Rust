@@ -13,130 +13,27 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Adapt native advanced-field disclosure to the shared Fluent accordion motion. */
-import { CardDisclosureMotion } from '../motion/CardDisclosureMotion.js';
+/** Compose Fluent advanced disclosure for native graph and stable projected mounts. */
 import type { FluentCardBoundary } from './NativeFluentCardAdapter.js';
-import { NATIVE_NODE_CARD_DISPOSE_EVENT } from '../NativeNodeCardRenderer.js';
-import { settleNativeDisclosure } from '../NativeDisclosureSettlement.js';
+import { NativeGraphAdvancedDisclosure } from './NativeGraphAdvancedDisclosure.js';
+import { NativeProjectedAdvancedDisclosure } from './NativeProjectedAdvancedDisclosure.js';
+import { readProjectedAdvancedInputMount } from '../NativeProjectedAdvancedInputs.js';
 
-interface AdvancedBinding {
-  fields: HTMLElement;
-  button: HTMLButtonElement;
-  expanded: boolean;
-  motion: CardDisclosureMotion;
-  release(): void;
-}
-
-/** Preserve native advanced state and callbacks while owning only disclosure presentation. */
+/** Route presentation to the mounted state owner rather than competing click handlers. */
 export class NativeAdvancedDisclosure {
-  readonly #bindings = new Map<HTMLElement, AdvancedBinding>();
+  readonly #graph = new NativeGraphAdvancedDisclosure();
+  readonly #projected = new NativeProjectedAdvancedDisclosure();
 
-  /** Follow native component replacement and the current advanced state. */
+  /** Reconcile each recognized card through its renderer's disclosure lifetime. */
   reconcile(card: FluentCardBoundary): void {
-    for (const [root, binding] of this.#bindings) {
-      if (!root.isConnected || (root === card.root && binding.fields !== card.advanced?.fields)) {
-        binding.release();
-        this.#bindings.delete(root);
-      }
-    }
-    if (!card.advanced) return;
-    const existing = this.#bindings.get(card.root);
-    if (existing) {
-      existing.button = card.advanced.button;
-      existing.expanded = card.advanced.expanded;
-      return;
-    }
-    const { fields, button, expanded } = card.advanced;
-    let forwarding = false;
-    let dispatching = false;
-    const dispose = (): void => {
-      binding.release();
-      this.#bindings.delete(card.root);
-    };
-    const binding: AdvancedBinding = {
-      fields,
-      button,
-      expanded,
-      motion: new CardDisclosureMotion(fields),
-      release: () => {
-        card.root.removeEventListener('click', click, true);
-        card.root.removeEventListener(NATIVE_NODE_CARD_DISPOSE_EVENT, dispose);
-        binding.motion.dispose();
-      },
-    };
-    const click = (event: Event): void => {
-      if (
-        forwarding ||
-        !(event.target instanceof Element) ||
-        !binding.button.contains(event.target)
-      )
-        return;
-      event.stopImmediatePropagation();
-      dispatching = true;
-      try {
-        binding.motion.toggle(
-          !binding.expanded,
-          (collapsed) => {
-            if (binding.expanded === !collapsed) return;
-            // Native HTMLElement.click suppresses reentrant clicks on the same button.
-            const invoke = (): void => {
-              if (binding.expanded === !collapsed) return;
-              forwarding = true;
-              try {
-                binding.button.click();
-              } finally {
-                forwarding = false;
-              }
-              binding.expanded = !collapsed;
-            };
-            if (dispatching) queueMicrotask(invoke);
-            else invoke();
-          },
-          {
-            closedHeight: () => measureNativeFields(fields, true),
-            expandedHeight: () => measureNativeFields(fields, false),
-            settle: () => settleNativeDisclosure(fields),
-          },
-        );
-      } finally {
-        dispatching = false;
-      }
-    };
-    card.root.addEventListener('click', click, true);
-    card.root.addEventListener(NATIVE_NODE_CARD_DISPOSE_EVENT, dispose);
-    this.#bindings.set(card.root, binding);
+    const projection = readProjectedAdvancedInputMount(card.root);
+    if (projection) this.#projected.reconcile(projection, card);
+    else this.#graph.reconcile(card);
   }
 
-  /** Commit pending native choices and release transient motion when appearance ends. */
+  /** Release both presentations while retaining the latest native advanced state. */
   clear(): void {
-    for (const binding of this.#bindings.values()) binding.release();
-    this.#bindings.clear();
-  }
-}
-
-/** Measure the native basic fields without changing widget values or advanced flags. */
-function measureNativeFields(fields: HTMLElement, closed: boolean): number {
-  const rows = closed
-    ? [...fields.querySelectorAll<HTMLElement>(':scope > [data-sc-fluent-advanced-row]')]
-    : [];
-  const styles = rows.map((row) => ({
-    value: row.style.getPropertyValue('display'),
-    priority: row.style.getPropertyPriority('display'),
-  }));
-  const height = fields.style.getPropertyValue('height');
-  const priority = fields.style.getPropertyPriority('height');
-  try {
-    fields.style.removeProperty('height');
-    for (const row of rows) row.style.display = 'none';
-    const intrinsic = Number.parseFloat(
-      fields.ownerDocument.defaultView?.getComputedStyle(fields).height ?? '',
-    );
-    return Number.isFinite(intrinsic) ? intrinsic : fields.offsetHeight;
-  } finally {
-    fields.style.setProperty('height', height, priority);
-    rows.forEach((row, index) => {
-      const style = styles[index];
-      row.style.setProperty('display', style?.value ?? '', style?.priority ?? '');
-    });
+    this.#graph.clear();
+    this.#projected.clear();
   }
 }

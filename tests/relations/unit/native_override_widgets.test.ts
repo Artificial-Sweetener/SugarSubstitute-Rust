@@ -181,6 +181,11 @@ test('reserves workflow space below Run and creates every field through the widg
   expect(toolbar.element.nextElementSibling).toBe(graph);
   expect(actionbar.parentElement).toBe(runRow);
   expect(toolbar.element.querySelector('.sc-overrides-title')).toBeNull();
+  expect(
+    toolbar.element
+      .querySelector('.sc-overrides-fields')
+      ?.getAttribute('data-sc-scrollbar-horizontal-outset'),
+  ).toBe('3');
   expect(toolbar.element.firstElementChild?.getAttribute('aria-label')).toBe(
     'Move global overrides',
   );

@@ -40,6 +40,8 @@ export function fluentNumericCss() {
     [data-sc-number-pair] { display:flex; align-items:center; justify-content:flex-end; min-width:0; gap:6px; }
     [data-sc-number-pair] > :first-child { width:80px; min-width:64px; flex:0 1 80px; }
     [data-sc-number-slider] { width:120px; min-width:40px; max-width:120px; flex:1 1 120px; cursor:default; }
+    [data-sc-number-slider]::after { content:none; }
+    [data-sc-number-slider]::part(track-container) { border-radius:var(--border-radius); }
     [data-sc-number-slider]::part(track-container)::after { background-image:none; }
     .sugarcubes-cube-face__node-card [data-sc-fluent-row][data-sc-fluent-widget^="WidgetInputNumber"] [data-sc-fluent-layout] > [data-sc-number-pair] {
       flex:0 0 206px; max-width:206px;
