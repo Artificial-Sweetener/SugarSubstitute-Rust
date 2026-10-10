@@ -29,6 +29,30 @@ import {
 const noopNodePackMetadata = { apply: () => false };
 
 describe('CubeConstructionService', () => {
+  test('projects the actual native minimum frame without allocating a definition or identity', () => {
+    const subgraph = nativeSubgraph('preview-definition');
+    const node = nativeSubgraphNode(subgraph);
+    const builder = builderReturning(subgraph);
+    const createInstanceId = jest.fn(() => 'unused');
+    const service = new CubeConstructionService({
+      graphBuilder: builder,
+      nodeFactory: new ComfyCubeNodeFactory({
+        createNode: () => node,
+        nodePackMetadata: noopNodePackMetadata,
+      }),
+      definitions: { discard: jest.fn() },
+      resolveInitialSize: () => [1, 1],
+      createInstanceId,
+    });
+    const payload = { cube: { cube_id: 'demo', default_alias: 'Demo' } };
+    const options = { instanceId: 'captured-instance' };
+    const projected = service.previewSize(payload, false, options);
+    expect(projected).toEqual([320, 180]);
+    expect(builder.build).not.toHaveBeenCalled();
+    expect(createInstanceId).not.toHaveBeenCalled();
+    service.construct(payload, options);
+    expect([...node.size]).toEqual(projected);
+  });
   test('returns a configured real Cube without inserting it into any graph', () => {
     const subgraph = nativeSubgraph('definition');
     const node = nativeSubgraphNode(subgraph);

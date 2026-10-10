@@ -88,7 +88,7 @@ export class FlavorCommands {
         setGroupSugarcubes(group, next);
         this.options.lifecycle.refreshGroup(graph, group, next);
         this.options.dirtyManager?.requestRefresh?.({ graph, reason: 'authored-flavor-save' });
-        void this.options.cubeBrowser?.refresh?.({ force: true }).catch(() => { });
+        await this.options.invalidateCatalogs?.();
         if (isDefault)
             this.options.toast?.push?.('success', 'Cube defaults saved', 'Current values saved as cube defaults.');
         return true;

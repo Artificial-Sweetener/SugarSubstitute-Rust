@@ -16,7 +16,30 @@
 /** Style shared SugarCubes dialog chrome and native form controls with Fluent tokens. */
 const STYLE_ID = 'sugarcubes-modal-appearance';
 const scope = '[data-sc-modal-appearance="fluent"]';
+const comfy = '[data-sc-modal-appearance="comfy"]';
 const styles = `
+${comfy} .sugarcubes-modal {
+  box-sizing:border-box; padding:0; border:1px solid var(--interface-stroke,#444);
+  border-radius:12px; background:var(--comfy-menu-bg,#202020); color:var(--fg-color,#eee);
+  font:14px/1.4 var(--font-family,"Inter",sans-serif); box-shadow:0 16px 48px #0004;
+}
+${comfy} .p-dialog-header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; padding:24px 24px 16px; }
+${comfy} .p-dialog-title { min-width:0; flex:1; }
+${comfy} .p-dialog-footer { padding:16px 24px 24px; }
+${comfy} .p-button {
+  display:inline-flex; align-items:center; justify-content:center; min-height:32px; padding:5px 12px; margin:0;
+  border:1px solid var(--interface-stroke,#444); border-radius:6px;
+  color:var(--fg-color,#eee); background:var(--secondary-background,#303030); font:inherit; cursor:pointer;
+}
+${comfy} .p-button:hover { background:var(--secondary-background-hover,#393939); }
+${comfy} .p-button:focus-visible { outline:2px solid var(--p-primary-color,#60cdff); outline-offset:2px; }
+${comfy} .sugarcubes-modal__footer-actions .p-button:not(.p-button-secondary):not(:disabled) {
+  background:var(--p-primary-color,#0078d4); border-color:transparent; color:var(--p-primary-contrast-color,#fff);
+}
+${comfy} .p-button:disabled { opacity:.45; cursor:default; }
+${comfy} .sugarcubes-modal__close { flex:none; position:relative; width:32px; height:32px; padding:0; border-color:transparent; background:transparent; }
+${comfy} .sugarcubes-modal__close::before,${comfy} .sugarcubes-modal__close::after { content:''; position:absolute; width:14px; height:1px; background:currentColor; transform:rotate(45deg); }
+${comfy} .sugarcubes-modal__close::after { transform:rotate(-45deg); }
 ${scope} :is(.sugarcubes-modal,.sugarcubes-modal__panel) {
   box-sizing:border-box; min-width:0; padding:0; border:1px solid var(--colorNeutralStroke1);
   border-radius:8px; background:var(--colorNeutralBackground2); color:var(--colorNeutralForeground1);

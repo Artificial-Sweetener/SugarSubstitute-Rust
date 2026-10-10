@@ -50,6 +50,7 @@ function node(id: string, cubeId: string): NodeContract {
     cubeLabel: cubeId,
     label: id,
     classType: 'Patch',
+    configurationIdentity: 'patch',
     linkable: true,
     fields: [field(id, cubeId)],
   };
@@ -129,4 +130,15 @@ test('rejects clone groups whose pairwise overlap has no value common to the who
   expect(canLinkNode(nodes[2]!, nodes[0]!, nodes, state)).toBe(false);
   initializeNodeLinks(nodes, state);
   expect(state.nodeLinks.c).toBeUndefined();
+});
+
+test('rejects differing authored identities and ambiguous endpoints within one Cube', () => {
+  const a = node('a', 'first'),
+    b = node('b', 'second'),
+    duplicate = node('duplicate', 'second');
+  expect(compatibleNodes(a, { ...b, configurationIdentity: 'different connections' })).toBe(false);
+  expect(canLinkNode(a, b, [a, b, duplicate], emptyRelationState())).toBe(false);
+  const state = emptyRelationState();
+  initializeNodeLinks([a, b], state);
+  expect(state.nodeLinks).toEqual({ a: null, b: 'a' });
 });

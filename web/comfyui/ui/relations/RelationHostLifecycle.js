@@ -10,6 +10,7 @@ import { NativeSharedSeedModes } from './infrastructure/NativeSharedSeedModes.js
 import { NativeRelationWidgetRenderer } from './infrastructure/NativeRelationWidgetRenderer.js';
 import { NativeRelationVisibility } from './infrastructure/NativeRelationVisibility.js';
 import { NativeOverrideToolbarHost } from './infrastructure/NativeOverrideToolbarHost.js';
+import { createNativeOverrideToolbarState } from './infrastructure/NativeOverrideToolbarState.js';
 import { GlobalOverrideToolbar } from './presentation/GlobalOverrideToolbar.js';
 import { CubeRelationPresenter } from './presentation/CubeRelationPresenter.js';
 import { ensureRelationStyles } from './presentation/RelationStyles.js';
@@ -40,7 +41,7 @@ export class RelationHostLifecycle {
         this.#execution = new NativeRelationExecution(this.relations, this.#port.inventorySource, options.logger, () => options.app?.graph?.serialize?.());
         const widgets = new NativeRelationWidgetRenderer(options.document, options.reportError);
         this.#views = new NativeRelationViews(options.document);
-        this.#toolbar = new GlobalOverrideToolbar(options.document, this.relations, options.reportError, widgets, new NativeOverrideToolbarHost(options.document));
+        this.#toolbar = new GlobalOverrideToolbar(options.document, this.relations, options.reportError, widgets, new NativeOverrideToolbarHost(options.document), createNativeOverrideToolbarState(options.document, options.logger));
         this.#cards = new CubeRelationPresenter(options.document, this.relations, () => {
             const nodes = new Map([...this.#port.inventorySource.owners.values()].map((owner) => [owner.nodeId, owner]));
             return [...nodes].flatMap(([nodeId, owner]) => nodeId
@@ -83,6 +84,10 @@ export class RelationHostLifecycle {
     /** Discover loaded instances without relying on whether their native cards have mounted. */
     afterConfigureGraph() {
         this.#schedule();
+    }
+    /** Reconcile reordered membership inside the graph mutation owner's native history transaction. */
+    reconcileCubeOrder() {
+        this.#port.joinTransaction(() => this.relations.reconcile());
     }
     /** Prepare either queue path through the same workflow relation owner. */
     prepare(payload) {

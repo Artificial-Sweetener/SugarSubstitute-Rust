@@ -16,6 +16,7 @@
 /** Measure and draw compact Cube model pills in Nodes 1.0 Canvas headers. */
 
 import type { CubeModelTitlePresentation } from '../cube/CubeModelTitlePresentation.js';
+import { cubeCapBaseline } from './CubeTextOpticalMetrics.js';
 
 export interface CubeModelPillCanvasOptions {
   x: number;
@@ -25,7 +26,8 @@ export interface CubeModelPillCanvasOptions {
   fontFamily: string;
   fontSize: number;
   textColor: string;
-  punchoutColor: string;
+  pillBackground: string;
+  pillForeground: string;
   align: 'left' | 'center';
 }
 
@@ -47,14 +49,15 @@ export class CubeModelPillCanvasRenderer {
     const visibleText = [presentation.nameText, presentation.suffixText].filter(Boolean).join(' ');
     context.save();
     context.textAlign = 'left';
-    context.textBaseline = 'middle';
+    context.textBaseline = 'alphabetic';
     context.font = options.font;
+    const titleBaseline = cubeCapBaseline(options.y, context.measureText('H'), options.fontSize);
     const textWidth = context.measureText(visibleText).width;
     if (!presentation.usesModelPill) {
       const renderedWidth = Math.min(maxWidth, textWidth);
       const startX = resolveStartX(options.x, renderedWidth, options.align);
       context.fillStyle = options.textColor;
-      context.fillText(visibleText, startX, options.y, maxWidth);
+      context.fillText(visibleText, startX, titleBaseline, maxWidth);
       context.restore();
       return { pillHeight: 0, renderedWidth, startX };
     }
@@ -64,6 +67,7 @@ export class CubeModelPillCanvasRenderer {
     const horizontalPadding = options.fontSize * 0.3;
     const gap = options.fontSize * 0.3;
     context.font = `700 ${String(pillFontSize)}px ${options.fontFamily}`;
+    const pillBaseline = cubeCapBaseline(options.y, context.measureText('H'), pillFontSize);
     const naturalPillWidth =
       context.measureText(presentation.modelText).width + horizontalPadding * 2;
     const pillWidth = Math.min(naturalPillWidth, maxWidth * 0.45);
@@ -75,18 +79,18 @@ export class CubeModelPillCanvasRenderer {
 
     context.beginPath();
     context.roundRect(startX, pillY, pillWidth, pillHeight, pillHeight / 2);
-    context.fillStyle = options.textColor;
+    context.fillStyle = options.pillBackground;
     context.fill();
-    context.fillStyle = options.punchoutColor;
+    context.fillStyle = options.pillForeground;
     context.fillText(
       presentation.modelText,
       startX + horizontalPadding,
-      options.y,
+      pillBaseline,
       Math.max(1, pillWidth - horizontalPadding * 2),
     );
     context.font = options.font;
     context.fillStyle = options.textColor;
-    context.fillText(visibleText, startX + pillWidth + gap, options.y, availableTextWidth);
+    context.fillText(visibleText, startX + pillWidth + gap, titleBaseline, availableTextWidth);
     context.restore();
     return { pillHeight, renderedWidth, startX };
   }

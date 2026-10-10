@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
- * Own claimed-owner and writable-pack selection for authoring workflows.
+ * Own claimed identity and writable pack creation for authoring workflows.
  */
 import { parseCanonicalCubeId } from '../core/CubeId.js';
 import { isRecord } from '../types/common.js';
@@ -22,7 +22,6 @@ function readApiError(data) {
     const error = isRecord(data.error) ? data.error : {};
     return typeof error.message === 'string' ? error.message : '';
 }
-const CREATE_PACK_VALUE = '__create_pack__';
 /** Coordinate claimed identity and authoring pack setup through SugarCubes dialogs. */
 export class CubePackService {
     api;
@@ -49,42 +48,6 @@ export class CubePackService {
         const catalog = await this.loadCatalog();
         const owner = await this.ensureClaimedOwner(catalog.identityPolicy);
         return owner ? this.createAuthoringPack(owner) : null;
-    }
-    /** Return a selected writable pack, creating or claiming prerequisites when requested. */
-    async chooseWritablePack() {
-        let catalog = await this.loadCatalog();
-        const owner = await this.ensureClaimedOwner(catalog.identityPolicy);
-        if (!owner) {
-            return null;
-        }
-        if (owner !== catalog.identityPolicy?.claimed_github_owner) {
-            catalog = await this.loadCatalog();
-        }
-        const matchingPacks = catalog.packs.filter((pack) => pack.owner.toLowerCase() === owner.toLowerCase());
-        const selected = await this.dialogs?.selectItem?.({
-            title: 'Choose Cube Pack',
-            message: ['Select the managed pack that will own this SugarCube.'],
-            confirmLabel: 'Continue',
-            items: [
-                ...matchingPacks.map((pack) => ({
-                    value: pack.repoRef,
-                    label: pack.repo,
-                    description: pack.owner,
-                })),
-                {
-                    value: CREATE_PACK_VALUE,
-                    label: 'Create a new pack',
-                    description: `Create a writable pack owned by ${owner}.`,
-                },
-            ],
-        });
-        if (!selected) {
-            return null;
-        }
-        if (selected === CREATE_PACK_VALUE) {
-            return this.createAuthoringPack(owner);
-        }
-        return matchingPacks.find((pack) => pack.repoRef === selected) || null;
     }
     /** Determine whether the active installation can save one persisted Cube in place. */
     async canWriteCube(cubeId) {
@@ -124,9 +87,7 @@ export class CubePackService {
         }
         const values = await this.dialogs?.openForm?.({
             title: 'Claim Your Pack Owner',
-            message: [
-                'Enter the GitHub owner used for packs you manage. Your personal cube stays local until promotion completes.',
-            ],
+            message: ['Enter the GitHub owner used for packs you manage.'],
             confirmLabel: 'Claim Owner',
             fields: [
                 {

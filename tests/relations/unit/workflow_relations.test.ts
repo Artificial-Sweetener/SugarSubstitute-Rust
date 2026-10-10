@@ -85,6 +85,21 @@ test('value edits reuse bindings and refresh only the affected relation members'
   expect(inventory).not.toHaveBeenCalled();
 });
 
+test('publishes changed link ownership without refreshing unchanged native values', () => {
+  const fixture = workflow();
+  fixture.values.set('b', 'euler');
+  fixture.relations.reconcile();
+  fixture.relations.setOverrideEnabled('sampler_name', false);
+  const refresh = jest.spyOn(fixture.port, 'refresh');
+  const present = jest.fn();
+  fixture.relations.subscribe(present);
+  fixture.relations.linkField('b', 'a');
+  expect(fixture.relations.snapshot().state.fieldLinks.b).toBe('a');
+  expect(fixture.values.get('b')).toBe('euler');
+  expect(present).toHaveBeenCalled();
+  expect(refresh).not.toHaveBeenCalled();
+});
+
 test('applies automatic globals and edits one shared value through native transaction boundaries', () => {
   const fixture = workflow();
   fixture.relations.reconcile();

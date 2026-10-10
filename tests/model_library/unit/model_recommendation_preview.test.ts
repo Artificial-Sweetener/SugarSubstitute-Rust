@@ -155,6 +155,7 @@ test.each([
       expect(presentation.getPropertyValue('inset')).toBe('0 16px 34px');
       expect(presentation.fontSize).toBe('12px');
       expect(presentation.zIndex).toBe('2');
+      expect(getComputedStyle(fixture.root).backgroundColor).toBe('rgb(32, 32, 36)');
     } finally {
       style.remove();
       fixture.dispose();

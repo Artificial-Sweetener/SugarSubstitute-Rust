@@ -109,7 +109,8 @@ test('holds a replug during reversal and releases animation ownership on disposa
     [];
   for (const element of container.querySelectorAll('path'))
     Object.defineProperty(element, 'animate', {
-      value: (frames: Keyframe[]) => {
+      value: (frames: Keyframe[], options: KeyframeAnimationOptions) => {
+        expect(options.duration).toBe(100);
         let finish = (): void => undefined;
         let reject = (_error: Error): void => undefined;
         const finished = new Promise<void>((resolve, failure) => {

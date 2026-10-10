@@ -46,7 +46,7 @@ export function resolveComfyLiteGraphCubeSurfaceTheme(
   };
 }
 
-/** Resolve the live LiteGraph title-text token used as the model-pill fill. */
+/** Resolve the live LiteGraph title-text token for Cube names and versions. */
 export function resolveComfyLiteGraphTitleTextColor(
   source: LiteGraphNodeColorSource | null | undefined = globalThis.LiteGraph,
 ): string {

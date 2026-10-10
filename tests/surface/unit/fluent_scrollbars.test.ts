@@ -40,7 +40,7 @@ test.each([true, false])(
     expect(css).toContain('.sc-fluent-scrollbar-layer');
     expect(css).toContain('position:absolute');
     expect(css).toContain('z-index:1');
-    expect(css).toContain('overflow:clip');
+    expect(fluentScrollbarPresentationCss()).toContain('overflow:visible');
     expect(css).not.toContain('2147483646');
   },
 );

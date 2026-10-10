@@ -15,7 +15,7 @@
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #    SugarCubes - composable workflow units for ComfyUI
 #    Copyright (C) 2026  Artificial Sweetener and contributors
-"""Mutate reorderable Cube graph segments through SugarCubes-owned geometry."""
+"""Coordinate atomic native Cube mutations through focused graph owners."""
 
 from __future__ import annotations
 
@@ -29,10 +29,15 @@ from .cube_model import CubeDocument, CubeSchemaError
 from .execution.portable_boundary_lowering import document_boundary_ports
 from .workflow_analysis import CubeGraphAnalysis, CubeGraphAnalysisService
 from .workflow_cube_replacement import CubeGraphReplacementService
+from .workflow_cube_placement import (
+    MINIMUM_CUBE_GAP,
+    cube_position_order,
+    read_cube_pair,
+    reorder_cube_positions,
+)
 from .workflow_mutation_errors import CubeGraphMutationError
 from .workflow_node_pack import current_workflow_node_pack
 
-_MINIMUM_SWAP_GAP = 24.0
 _DEFAULT_CUBE_WIDTH = 320.0
 _DEFAULT_CUBE_HEIGHT = 200.0
 
@@ -48,7 +53,7 @@ class CubeGraphDraft:
 
 
 class CubeGraphMutationService:
-    """Own atomic Cube-segment mutations over complete native workflows."""
+    """Own atomic native Cube placement mutations over complete workflows."""
 
     def __init__(
         self,
@@ -68,6 +73,7 @@ class CubeGraphMutationService:
         alias: str,
         bypassed: bool,
         document: object,
+        size: tuple[float, float] | None = None,
     ) -> CubeGraphAnalysis:
         """Append one exact Cube while preserving all unrelated graph content."""
 
@@ -95,6 +101,7 @@ class CubeGraphMutationService:
             alias=normalized_alias,
             bypassed=bypassed,
             cube=cube,
+            size=size,
         )
         after = self._analysis.analyze(mutated)
         if not any(
@@ -150,6 +157,7 @@ class CubeGraphMutationService:
         alias: str,
         bypassed: bool,
         cube: CubeDocument,
+        size: tuple[float, float] | None = None,
     ) -> None:
         """Append one validated Cube without triggering an intermediate analysis."""
 
@@ -163,13 +171,19 @@ class CubeGraphMutationService:
             "default_alias": alias,
         }
         left, top = _next_cube_position(nodes)
+        frame_size = size or (_DEFAULT_CUBE_WIDTH, _DEFAULT_CUBE_HEIGHT)
+        if any(
+            isinstance(value, bool) or not isfinite(value) or value < 1 or value > 16384
+            for value in frame_size
+        ):
+            raise CubeGraphMutationError("A new Cube frame size is invalid.")
         nodes.append(
             {
                 "id": node_id,
                 "type": definition_id,
                 "mode": 4 if bypassed else 0,
                 "pos": [left, top],
-                "size": [_DEFAULT_CUBE_WIDTH, _DEFAULT_CUBE_HEIGHT],
+                "size": list(frame_size),
                 "inputs": deepcopy(list(inputs)),
                 "outputs": deepcopy(list(outputs)),
                 "properties": {
@@ -289,71 +303,24 @@ class CubeGraphMutationService:
         segment_instance_ids: Sequence[str],
         ordered_instance_ids: Sequence[str],
     ) -> CubeGraphAnalysis:
-        """Reorder one proximity-only segment using native Cube swap geometry."""
+        """Arrange every Cube by native position while preserving execution wiring."""
 
         before = self._analysis.analyze(workflow_value)
-        segment_identity = tuple(segment_instance_ids)
-        requested = tuple(ordered_instance_ids)
-        segment = next(
-            (
-                candidate
-                for candidate in before.segments
-                if candidate.instance_ids == segment_identity
-            ),
-            None,
-        )
-        if segment is None:
-            raise CubeGraphMutationError("Cube graph segment is unavailable.")
-        if not segment.reorderable:
-            raise CubeGraphMutationError(
-                "Cube graph segment is fixed by explicit wiring or an ordinary graph boundary."
-            )
-        if len(requested) != len(set(requested)) or set(requested) != set(
-            segment.instance_ids
-        ):
-            raise CubeGraphMutationError(
-                "Cube reorder must be an exact segment permutation."
-            )
         mutated = deepcopy(dict(before.normalized_workflow))
-        nodes = _mutable_nodes(mutated)
         node_ids = {
             instance.instance_id: instance.node_id for instance in before.instances
         }
-        current = list(segment.instance_ids)
-        for requested_index, instance_id in enumerate(requested):
-            current_index = current.index(instance_id)
-            while current_index > requested_index:
-                left_id = current[current_index - 1]
-                right_id = current[current_index]
-                _swap_nodes(nodes[node_ids[left_id]], nodes[node_ids[right_id]])
-                current[current_index - 1], current[current_index] = (
-                    current[current_index],
-                    current[current_index - 1],
-                )
-                current_index -= 1
+        reorder_cube_positions(
+            mutated, node_ids, segment_instance_ids, ordered_instance_ids
+        )
         after = self._analysis.analyze(mutated)
-        if not any(candidate.instance_ids == requested for candidate in after.segments):
+        if cube_position_order(after.normalized_workflow, node_ids) != tuple(
+            ordered_instance_ids
+        ):
             raise CubeGraphMutationError(
-                "Reordered Cube geometry did not produce the requested topology."
+                "Reordered Cube geometry did not fulfill the requested order."
             )
         return after
-
-
-def _mutable_nodes(workflow: dict[str, object]) -> dict[str, dict[str, object]]:
-    """Index mutable root nodes by normalized Comfy identifier."""
-
-    values = workflow.get("nodes")
-    if not isinstance(values, list):
-        raise CubeGraphMutationError("Workflow nodes are unavailable.")
-    result: dict[str, dict[str, object]] = {}
-    for value in values:
-        if not isinstance(value, dict):
-            continue
-        node_id = value.get("id")
-        if isinstance(node_id, bool) or not isinstance(node_id, str | int):
-            continue
-        result[str(node_id)] = value
-    return result
 
 
 def _mutable_node_values(workflow: dict[str, object]) -> list[dict[str, object]]:
@@ -404,7 +371,7 @@ def _next_cube_position(nodes: Sequence[Mapping[str, object]]) -> tuple[float, f
     if not geometries:
         return 0.0, 0.0
     left, top, width = max(geometries, key=lambda value: value[0] + value[2])
-    return left + width + _MINIMUM_SWAP_GAP, top
+    return left + width + MINIMUM_CUBE_GAP, top
 
 
 def _is_cube_node(node: Mapping[str, object]) -> bool:
@@ -423,8 +390,8 @@ def _optional_geometry(
     """Read valid Cube placement without rejecting unrelated malformed geometry."""
 
     try:
-        left, top = _pair(node.get("pos"), "position")
-        width, _height = _pair(node.get("size"), "size")
+        left, top = read_cube_pair(node.get("pos"), "position")
+        width, _height = read_cube_pair(node.get("size"), "size")
     except CubeGraphMutationError:
         return None
     return left, top, max(0.0, width)
@@ -493,39 +460,6 @@ def _empty_native_workflow() -> dict[str, object]:
         "definitions": {"subgraphs": []},
         "extra": {},
     }
-
-
-def _swap_nodes(left: dict[str, object], right: dict[str, object]) -> None:
-    """Apply the same collision-safe adjacent placement used by the frontend."""
-
-    left_x, left_y = _pair(left.get("pos"), "position")
-    right_x, right_y = _pair(right.get("pos"), "position")
-    left_width, _left_height = _pair(left.get("size"), "size")
-    right_width, _right_height = _pair(right.get("size"), "size")
-    authored_gap = right_x - (left_x + max(0.0, left_width))
-    gap = max(_MINIMUM_SWAP_GAP, authored_gap, 0.0)
-    left["pos"] = [left_x + max(0.0, right_width) + gap, right_y]
-    right["pos"] = [left_x, left_y]
-
-
-def _pair(value: object, label: str) -> tuple[float, float]:
-    """Read one finite serialized geometry pair without coercing arbitrary values."""
-
-    if not isinstance(value, Sequence) or isinstance(value, (str, bytes, bytearray)):
-        raise CubeGraphMutationError(f"Cube {label} is unavailable.")
-    if len(value) < 2:
-        raise CubeGraphMutationError(f"Cube {label} is incomplete.")
-    first, second = value[0], value[1]
-    if (
-        isinstance(first, bool)
-        or not isinstance(first, int | float)
-        or isinstance(second, bool)
-        or not isinstance(second, int | float)
-        or not isfinite(float(first))
-        or not isfinite(float(second))
-    ):
-        raise CubeGraphMutationError(f"Cube {label} must contain finite numbers.")
-    return float(first), float(second)
 
 
 __all__ = ["CubeGraphDraft", "CubeGraphMutationError", "CubeGraphMutationService"]

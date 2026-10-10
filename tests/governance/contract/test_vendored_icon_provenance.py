@@ -40,6 +40,7 @@ def test_every_vendored_icon_has_exact_provenance_and_deployment_bytes() -> None
             "https://github.com/civitai/civitai",
             "https://github.com/OpenModelDB/open-model-database",
             "https://github.com/microsoft/fluentui",
+            "https://github.com/microsoft/polyfills",
         }:
             continue
         assert source in {

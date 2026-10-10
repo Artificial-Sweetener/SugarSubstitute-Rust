@@ -62,7 +62,7 @@ describe('masonry section identity', () => {
     view.render(section);
     expect(view.element.querySelector('h2')?.textContent).toContain('<img src=x> My Cube');
     expect(view.element.querySelectorAll('img')).toHaveLength(1);
-    expect(view.element.querySelector('[data-sugarcubes-model-pill]')).toBeNull();
+    expect(view.element.querySelector('[data-sugarcubes-model-pill]')?.textContent).toBe('SDXL');
     expect(action?.getAttribute('aria-label')).toBe('Open <img src=x> My Cube');
     view.dispose();
   });

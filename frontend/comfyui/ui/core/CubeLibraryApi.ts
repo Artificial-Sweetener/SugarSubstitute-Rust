@@ -215,22 +215,6 @@ export class CubeLibraryApi {
     return this.fetchJson(url);
   }
 
-  async delete(reference?: string | UnknownRecord | null): Promise<ApiJsonResult> {
-    if (typeof reference === 'string') {
-      const url = `/sugarcubes?cube_id=${encodeURIComponent(reference)}`;
-      return this.fetchJson(url, { method: 'DELETE' });
-    }
-    const params = new URLSearchParams();
-    if (reference && typeof reference === 'object') {
-      if (reference.cube_id) {
-        params.set('cube_id', String(reference.cube_id));
-      }
-    }
-    const query = params.toString();
-    const url = query ? `/sugarcubes?${query}` : '/sugarcubes';
-    return this.fetchJson(url, { method: 'DELETE' });
-  }
-
   async load(payload: BodyInit | null, options: RequestInit = {}): Promise<ApiJsonResult> {
     return this.fetchJson('/sugarcubes/load', { method: 'POST', body: payload, ...options });
   }
@@ -285,25 +269,6 @@ export class CubeLibraryApi {
 
   async loadRevision(payload: BodyInit | null, options: RequestInit = {}): Promise<ApiJsonResult> {
     return this.fetchJson('/sugarcubes/load_revision', {
-      method: 'POST',
-      body: payload,
-      ...options,
-    });
-  }
-
-  async rename(payload: BodyInit | null, options: RequestInit = {}): Promise<ApiJsonResult> {
-    return this.fetchJson('/sugarcubes/rename', { method: 'POST', body: payload, ...options });
-  }
-
-  async promote(payload: BodyInit | null, options: RequestInit = {}): Promise<ApiJsonResult> {
-    return this.fetchJson('/sugarcubes/promote', { method: 'POST', body: payload, ...options });
-  }
-
-  async updateMetadata(
-    payload: BodyInit | null,
-    options: RequestInit = {},
-  ): Promise<ApiJsonResult> {
-    return this.fetchJson('/sugarcubes/update_metadata', {
       method: 'POST',
       body: payload,
       ...options,

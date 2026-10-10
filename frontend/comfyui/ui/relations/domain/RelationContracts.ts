@@ -40,6 +40,7 @@ export interface NodeContract {
   readonly cubeLabel: string;
   readonly label: string;
   readonly classType: string;
+  readonly configurationIdentity: string;
   readonly promptRole?: 'positive' | 'negative' | null;
   readonly fields: readonly FieldContract[];
   readonly linkable: boolean;

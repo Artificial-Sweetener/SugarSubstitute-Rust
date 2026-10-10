@@ -18,6 +18,10 @@ import { fluentMotion } from '../appearance/FluentThemeRuntime.js';
 import { publishDisclosureHeight } from './DisclosureLayout.js';
 
 export interface DisclosureGeometry {
+  /** Reuse geometry read before a batch of native cards begins writing layout. */
+  fromHeight?: number;
+  /** Let content follow the animated extent only for a disclosure that moves its footer. */
+  contentLayout?: 'fill';
   closedHeight?(): number;
   expandedHeight?(): number;
   settle?(): Promise<void>;
@@ -39,6 +43,11 @@ export class CardDisclosureMotion {
     this.#target = target;
   }
 
+  /** Read the visible CSS extent before the scoped native refresh batch changes any card. */
+  captureHeight(): number {
+    return height(this.#target);
+  }
+
   /** Reverse from the current visible height and commit collapse only after content closes. */
   toggle(
     collapsed: boolean,
@@ -49,7 +58,7 @@ export class CardDisclosureMotion {
     this.#revision++;
     const sameOwner = this.#owner === owner;
     const desired = !(sameOwner ? (this.#desired ?? collapsed) : collapsed);
-    const from = height(this.#target);
+    const from = geometry?.fromHeight ?? height(this.#target);
     const previousRoot =
       this.#target.querySelector<HTMLElement>('.lg-node') ??
       this.#target.closest<HTMLElement>('.lg-node');
@@ -68,6 +77,7 @@ export class CardDisclosureMotion {
       this.#release();
       return;
     }
+    this.#target.dataset.scDisclosureLayout = geometry?.contentLayout ?? 'intrinsic';
     if (geometry?.settle && !desired) {
       this.#hold(from);
       this.#target.dataset.scDisclosureTarget = 'expanded';
@@ -88,11 +98,11 @@ export class CardDisclosureMotion {
       return;
     }
     const revision = ++this.#revision;
-    const from = height(this.#target);
+    const from = geometry?.fromHeight ?? height(this.#target);
     this.#animation?.cancel();
     this.#animation = null;
     const root = this.#target.querySelector<HTMLElement>('.lg-node');
-    if (!root || !this.#canAnimate(root)) {
+    if (!root || !this.#canAnimate(root, true)) {
       try {
         apply();
       } finally {
@@ -100,6 +110,7 @@ export class CardDisclosureMotion {
       }
       return;
     }
+    this.#target.dataset.scDisclosureLayout = geometry?.contentLayout ?? 'intrinsic';
     this.#hold(from);
     try {
       apply();
@@ -124,9 +135,9 @@ export class CardDisclosureMotion {
   }
 
   /** Apply the same appearance and accessibility motion policy to every disclosure trigger. */
-  #canAnimate(root: HTMLElement): boolean {
+  #canAnimate(root: HTMLElement, contentChange = false): boolean {
     return (
-      root.hasAttribute('data-sc-fluent-node') &&
+      (contentChange || root.hasAttribute('data-sc-fluent-node')) &&
       !this.#target.ownerDocument.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)')
         .matches &&
       typeof this.#target.animate === 'function'
@@ -230,6 +241,7 @@ export class CardDisclosureMotion {
     this.#owner = null;
     delete this.#target.dataset.scDisclosing;
     delete this.#target.dataset.scDisclosureTarget;
+    delete this.#target.dataset.scDisclosureLayout;
     publishDisclosureHeight(this.#target, null);
   }
 }

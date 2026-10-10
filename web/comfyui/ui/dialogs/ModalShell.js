@@ -24,7 +24,7 @@ import { ModalDismissal } from './ModalDismissal.js';
  * Coordinate shared modal shell behavior for SugarCubes dialogs.
  */
 export class ModalShell {
-    appearance = new ModalAppearance();
+    appearance;
     documentRef;
     windowRef;
     variantClassName;
@@ -37,7 +37,8 @@ export class ModalShell {
     previousActiveElement;
     dismissal;
     /** Bind presentation lifetimes and one cancellation policy to the host document. */
-    constructor({ adapter, variantClassName = '', dialogClassName = '' } = {}) {
+    constructor({ adapter, appearanceSource, variantClassName = '', dialogClassName = '', } = {}) {
+        this.appearance = new ModalAppearance(appearanceSource);
         this.documentRef = adapter?.getDocument?.() || null;
         this.windowRef = adapter?.getWindow?.() || null;
         this.variantClassName = variantClassName || '';

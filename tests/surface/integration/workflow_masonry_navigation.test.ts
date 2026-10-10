@@ -19,12 +19,96 @@ import { ComfyCanvasGraphChangeAdapter } from '../../../frontend/comfyui/ui/surf
 import { CubeFaceCardStateService } from '../../../frontend/comfyui/ui/surface/CubeFaceCardStateService.js';
 import { CubeNodeCatalog } from '../../../frontend/comfyui/ui/cube/node/CubeNodeCatalog.js';
 import { WorkflowMasonryHostLifecycle } from '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryHostLifecycle.js';
+import { WorkflowMasonryTransition } from '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryTransition.js';
 import type { NativeNodeCardRenderer } from '../../../frontend/comfyui/ui/surface/NativeNodeCardRenderer.js';
 import type { ComfyGraph, ComfyNode } from '../../../frontend/comfyui/ui/types/graph.js';
 
 afterEach(() => {
   document.body.replaceChildren();
   jest.restoreAllMocks();
+});
+
+test('closes an open Properties panel before masonry mounts and blocks every native setting write', async () => {
+  const setup = fixture();
+  const mount = setup.mount.getMockImplementation();
+  if (!mount) throw new Error('Native renderer fixture missing.');
+  setup.mount.mockImplementation((...args) => {
+    expect(setup.propertiesOpen()).toBe(false);
+    return mount(...args);
+  });
+  for (let visit = 0; visit < 3; visit += 1) {
+    await setup.setPropertiesOpen(true);
+    setup.host.toggle();
+    expect(setup.propertiesOpen()).toBe(false);
+    await settle();
+    await setup.setPropertiesOpen(true);
+    expect(setup.propertiesOpen()).toBe(false);
+    setup.setMode('app');
+    expect(setup.propertiesOpen()).toBe(true);
+    await setup.setPropertiesOpen(true);
+    expect(setup.propertiesOpen()).toBe(true);
+    setup.setMode('graph');
+    expect(setup.propertiesOpen()).toBe(false);
+    await settle();
+    setup.host.toggle();
+    await settle();
+    expect(setup.propertiesOpen()).toBe(true);
+  }
+  setup.host.toggle();
+  await settle();
+  setup.setNodes2(false);
+  await settle();
+  expect(setup.propertiesOpen()).toBe(true);
+  setup.host.dispose();
+  expect(setup.panelDefinition.migrateDeprecatedValue).toBeUndefined();
+  setup.changes.dispose();
+});
+
+test.each([false, true])(
+  'restores saved Properties state %s only after exit travel',
+  async (open) => {
+    const setup = fixture();
+    await setup.setPropertiesOpen(open);
+    let completeExit: (() => void) | undefined;
+    jest
+      .spyOn(WorkflowMasonryTransition.prototype, 'run')
+      .mockImplementation(async (_view, entering) => {
+        if (!entering)
+          await new Promise<void>((resolve) => {
+            completeExit = resolve;
+          });
+      });
+    setup.host.toggle();
+    await settle();
+    setup.host.toggle();
+    await settle();
+    expect(completeExit).toBeDefined();
+    expect(document.querySelector('.sugarcubes-workflow-masonry')).not.toBeNull();
+    await setup.setPropertiesOpen(true);
+    expect(setup.propertiesOpen()).toBe(false);
+    completeExit?.();
+    await settle();
+    expect(document.querySelector('.sugarcubes-workflow-masonry')).toBeNull();
+    expect(setup.propertiesOpen()).toBe(open);
+    await setup.setPropertiesOpen(true);
+    expect(setup.propertiesOpen()).toBe(true);
+    setup.host.dispose();
+    setup.changes.dispose();
+  },
+);
+
+test('keeps graph view when the native Properties close operation cannot commit', async () => {
+  const setup = fixture();
+  await setup.setPropertiesOpen(true);
+  setup.rejectPropertiesClose();
+  setup.host.toggle();
+  await settle();
+  expect(setup.propertiesOpen()).toBe(true);
+  expect(document.querySelector('.sugarcubes-workflow-masonry')).toBeNull();
+  expect(setup.mount).not.toHaveBeenCalled();
+  expect(setup.reportError).toHaveBeenCalled();
+  setup.host.dispose();
+  setup.changes.dispose();
 });
 
 test('borrows the application renderer and releases only masonry mounts', async () => {
@@ -163,6 +247,114 @@ test('restores graph presentation if the new native graph cannot mount', async (
   setup.changes.dispose();
 });
 
+test('remembers graph and masonry across repeated app mode round trips', async () => {
+  const setup = fixture();
+  for (const mode of ['app', 'builder:arrange']) {
+    setup.setMode(mode);
+    setup.host.toggle();
+    await settle();
+    expect(setup.mount).not.toHaveBeenCalled();
+    setup.setMode('graph');
+    await settle();
+    expect(setup.mount).not.toHaveBeenCalled();
+  }
+  setup.host.toggle();
+  await settle();
+  for (const mode of ['app', 'builder:arrange', 'app']) {
+    setup.setMode(mode);
+    expect(document.querySelector('.sugarcubes-workflow-masonry')).toBeNull();
+    expect(setup.root.add).toBe(setup.rootAdd);
+    expect(setup.container.dataset.sugarcubesMasonry).toBeUndefined();
+    setup.setMode('graph');
+    await settle();
+    expect(document.querySelector('input')?.value).toBe('root model');
+    expect(setup.container.dataset.sugarcubesMasonry).toBe('true');
+  }
+  setup.host.toggle();
+  await settle();
+  setup.setMode('app');
+  setup.setMode('graph');
+  await settle();
+  expect(document.querySelector('.sugarcubes-workflow-masonry')).toBeNull();
+  setup.host.dispose();
+  expect(setup.modeListeners.size).toBe(0);
+  setup.changes.dispose();
+});
+
+test('keeps app suspension through configuration and restores only the latest graph', async () => {
+  const setup = fixture();
+  setup.host.toggle();
+  await settle();
+  setup.setMode('app');
+  setup.host.beforeConfigureGraph();
+  setup.canvas.setGraph(setup.nested);
+  setup.host.afterConfigureGraph();
+  await settle();
+  expect(document.querySelector('input')).toBeNull();
+  setup.setMode('graph');
+  setup.setMode('app');
+  await settle();
+  expect(document.querySelector('input')).toBeNull();
+  setup.setMode('builder:inputs');
+  await settle();
+  expect(document.querySelector('input')?.value).toBe('cube model');
+  setup.setMode('builder:outputs');
+  await settle();
+  expect(setup.getRenderer).toHaveBeenCalledTimes(2);
+  setup.host.dispose();
+  setup.setMode('graph');
+  await settle();
+  expect(document.querySelector('input')).toBeNull();
+  setup.changes.dispose();
+});
+
+test('falls back to graph when Nodes 1 is selected during app mode', async () => {
+  const setup = fixture();
+  setup.host.toggle();
+  await settle();
+  setup.setMode('app');
+  setup.setNodes2(false);
+  await settle();
+  setup.setMode('graph');
+  await settle();
+  expect(document.querySelector('.sugarcubes-workflow-masonry')).toBeNull();
+  expect(setup.notifyRendererFallback).toHaveBeenCalledTimes(1);
+  setup.setNodes2(true);
+  await settle();
+  expect(document.querySelector('.sugarcubes-workflow-masonry')).toBeNull();
+  setup.host.dispose();
+  setup.changes.dispose();
+});
+
+test('cancels a partially mounted surface when app mode interrupts entry', async () => {
+  const setup = fixture(20);
+  const frames: FrameRequestCallback[] = [];
+  jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+    frames.push(callback);
+    return frames.length;
+  });
+  setup.host.toggle();
+  await settle();
+  expect(setup.mount).toHaveBeenCalledTimes(6);
+  setup.setMode('app');
+  expect(setup.unmount).toHaveBeenCalledTimes(6);
+  while (frames.length) {
+    frames.shift()?.(0);
+    await settle();
+  }
+  expect(setup.mount).toHaveBeenCalledTimes(6);
+  expect(document.querySelector('input')).toBeNull();
+  setup.setMode('graph');
+  while (frames.length) {
+    frames.shift()?.(0);
+    await settle();
+  }
+  expect(document.querySelectorAll('input')).toHaveLength(20);
+  expect(setup.reportError).not.toHaveBeenCalled();
+  setup.host.dispose();
+  setup.changes.dispose();
+});
+
 /** Mount real masonry with only the external native renderer replaced. */
 function fixture(rootCount = 1) {
   jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
@@ -203,13 +395,49 @@ function fixture(rootCount = 1) {
   const cardState = new CubeFaceCardStateService({ nodes: new CubeNodeCatalog(), history: {} });
   const reportError = jest.fn();
   const notifyRendererFallback = jest.fn<() => void>();
+  const modeListeners = new Set<() => void>();
+  const workflow = {
+    activeWorkflow: { activeMode: 'graph', initialMode: 'graph' },
+    $subscribe(listener: () => void) {
+      modeListeners.add(listener);
+      return () => modeListeners.delete(listener);
+    },
+  };
+  let propertiesOpen = false;
+  let rejectPropertiesClose = false;
+  const panelDefinition: { migrateDeprecatedValue?: (value: unknown) => unknown } = {};
+  const setting = {
+    settings: { 'Comfy.RightSidePanel.IsOpen': panelDefinition },
+    get: () => propertiesOpen,
+    async set(_id: string, value: unknown) {
+      if (rejectPropertiesClose && value === false) throw new Error('Native close failed.');
+      const normalized = panelDefinition.migrateDeprecatedValue?.(value) ?? value;
+      if (typeof normalized !== 'boolean') throw new Error('Invalid panel setting.');
+      propertiesOpen = normalized;
+    },
+  };
   const host = new WorkflowMasonryHostLifecycle({
+    stack: {
+      appearance: {
+        appearance: { fluent: false, dark: true },
+        subscribeAppearance: () => () => undefined,
+      },
+      getReorder: () => null,
+      resolveSource: () => null,
+      openCart() {},
+      remove() {},
+      contextMenu() {},
+      closeTransient() {},
+    },
     app: {
+      extensionManager: { workflow, setting },
       graph: root,
       canvas,
       ui: {
         settings: {
-          getSettingValue: () => nodes2,
+          getSettingValue: (id: string) => (id === 'Comfy.VueNodes.Enabled' ? nodes2 : undefined),
+          addSetting() {},
+          setSettingValue() {},
           addEventListener: settingsEvents.addEventListener.bind(settingsEvents),
           removeEventListener: settingsEvents.removeEventListener.bind(settingsEvents),
         },
@@ -227,6 +455,17 @@ function fixture(rootCount = 1) {
   host.setup();
   return {
     host,
+    panelDefinition,
+    propertiesOpen: () => propertiesOpen,
+    setPropertiesOpen: (value: boolean) => setting.set('Comfy.RightSidePanel.IsOpen', value),
+    rejectPropertiesClose: () => {
+      rejectPropertiesClose = true;
+    },
+    modeListeners,
+    setMode(mode: string) {
+      workflow.activeWorkflow.activeMode = mode;
+      for (const listener of modeListeners) listener();
+    },
     get changes() {
       return changes;
     },

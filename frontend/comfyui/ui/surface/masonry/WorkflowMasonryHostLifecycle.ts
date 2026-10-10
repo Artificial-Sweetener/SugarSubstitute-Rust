@@ -16,6 +16,7 @@
 /** Adapt Comfy renderer, graph, command, and DOM lifecycles to workflow masonry. */
 import type { ComfyApplication, ComfyGraph } from '../../types/graph.js';
 import { isRecord } from '../../types/common.js';
+import { createComfyAppModeSource } from '../../core/ComfyAppMode.js';
 import type { CubeNode } from '../../cube/node/ComfyCubeNodeFactory.js';
 import type { CubeFaceCardStateService } from '../CubeFaceCardStateService.js';
 import {
@@ -35,11 +36,17 @@ import {
 } from './WorkflowMasonryProjection.js';
 import { ensureWorkflowMasonryStyles } from './WorkflowMasonryStyles.js';
 import { WorkflowMasonryToolbarButton } from './WorkflowMasonryToolbarButton.js';
+import { WorkflowMasonryPropertiesPanel } from './WorkflowMasonryPropertiesPanel.js';
 import { captureMasonryLinkPaths } from './ComfyMasonryLinkAdapter.js';
 import { WorkflowMasonryLinkMotion } from './WorkflowMasonryLinkMotion.js';
 import { MasonrySearchHost } from '../../search/infrastructure/MasonrySearchHost.js';
+import { CubeStackHost, type CubeStackHostOptions } from '../stack/CubeStackHost.js';
 
 export interface WorkflowMasonryHostLifecycleOptions {
+  stack: Omit<
+    CubeStackHostOptions,
+    'document' | 'app' | 'refreshSurface' | 'revealSearchResults' | 'reportError'
+  >;
   app: ComfyApplication | null;
   document: Document;
   getCubes(): readonly CubeNode[];
@@ -56,12 +63,15 @@ export class WorkflowMasonryHostLifecycle {
   readonly #options: WorkflowMasonryHostLifecycleOptions;
   readonly #controller: WorkflowMasonryController;
   readonly #toolbar: WorkflowMasonryToolbarButton;
+  readonly #properties: WorkflowMasonryPropertiesPanel;
   readonly #search: MasonrySearchHost;
+  readonly #stack: CubeStackHost;
   readonly #graphs = new Map<ObservableNativeSubgraph, NativeSubgraphChangeObserver>();
   #unsubscribeRenderer: (() => void) | null = null;
   #unsubscribeCards: (() => void) | null = null;
   #unsubscribeNavigation: (() => void) | null = null;
-  #restoreAfterConfigure = false;
+  #unsubscribeAppMode: (() => void) | null = null;
+  #appMode = false;
   #disposed = false;
 
   /** Bind native renderer capabilities and non-blocking fallback feedback. */
@@ -73,6 +83,14 @@ export class WorkflowMasonryHostLifecycle {
       getGraph: () => options.app?.canvas?.graph ?? options.app?.graph ?? null,
       reportError: options.reportError,
     });
+    this.#stack = new CubeStackHost({
+      ...options.stack,
+      document: options.document,
+      app: options.app,
+      refreshSurface: () => this.#controller.graphChanged(),
+      revealSearchResults: () => this.#search.revealAll(),
+      reportError: options.reportError,
+    });
     this.#controller = new WorkflowMasonryController({
       document: options.document,
       getContainer: () =>
@@ -82,7 +100,12 @@ export class WorkflowMasonryHostLifecycle {
       getSections: () => {
         const graph = options.app?.canvas?.graph ?? options.app?.graph;
         return graph
-          ? projectWorkflowMasonry(graph, options.getCubes(), options.getConnections(graph))
+          ? projectWorkflowMasonry(
+              graph,
+              options.getCubes(),
+              options.getConnections(graph),
+              options.stack.getReorder()?.analysis ?? null,
+            )
           : [];
       },
       getRenderer: options.getRenderer,
@@ -106,45 +129,73 @@ export class WorkflowMasonryHostLifecycle {
       notifyRendererFallback: options.notifyRendererFallback,
       reportError: options.reportError,
       onStateChange: () => this.#refreshButton(),
-      onSurfaceReady: (view) => this.#search.ready(view),
-      onSurfaceLeaving: () => this.#search.release(),
-      onSurfaceValuesChanged: () => this.#search.valuesChanged(),
+      onSurfaceReady: (view) => {
+        this.#search.ready(view);
+        this.#stack.ready(view, true);
+      },
+      onSurfaceTransition: (entering) => this.#stack.transition(entering),
+      onSurfaceLeaving: () => {
+        this.#properties.update(this.#controller.active);
+        this.#stack.release();
+        this.#search.release();
+      },
+      onSurfaceValuesChanged: () => {
+        this.#search.valuesChanged();
+        this.#stack.valuesChanged();
+      },
     });
     this.#toolbar = new WorkflowMasonryToolbarButton(options.document, () => this.toggle());
+    this.#properties = new WorkflowMasonryPropertiesPanel(
+      options.document,
+      options.app,
+      options.reportError,
+    );
   }
 
   /** Register the persistent affordance and renderer transition subscription after host setup. */
   setup(): void {
     if (this.#unsubscribeRenderer || this.#disposed) return;
     ensureWorkflowMasonryStyles(this.#options.document);
+    const appMode = createComfyAppModeSource(this.#options.app);
+    this.#onAppModeChanged(appMode.active);
+    this.#unsubscribeAppMode = appMode.subscribe(this.#onAppModeChanged);
     this.#unsubscribeRenderer = createComfyRendererModeChangeSource(this.#options.app).subscribe(
       () => {
         this.#controller.rendererChanged();
       },
     );
     this.#toolbar.setup();
+    this.#properties.setup();
     this.#search.setup();
+    this.#stack.setup();
     this.#refreshButton();
     this.#options.document.defaultView?.addEventListener('pagehide', this.#onPageHide);
   }
 
   /** Serve both the button and the registered Comfy command through the same use case. */
   toggle(): void {
+    if (this.#disposed) return;
     void this.#controller.toggle().catch((error: unknown) => this.#options.reportError(error));
+  }
+
+  /** Refresh an accepted canonical stack mutation through the existing projected layout owner. */
+  refresh(): Promise<void> {
+    return this.#controller.graphChanged();
   }
 
   /** Release native mounts before Comfy replaces a workflow's graph objects. */
   beforeConfigureGraph(): void {
-    this.#restoreAfterConfigure = this.#controller.active;
-    this.#controller.leaveImmediately();
+    void this.#controller
+      .setSuspended('configure', true)
+      .catch((error: unknown) => this.#options.reportError(error));
     this.#releaseGraphObservers();
   }
 
   /** Restore the selected presentation against the newly configured workflow. */
   afterConfigureGraph(): void {
-    this.#refreshButton();
-    if (this.#restoreAfterConfigure && this.#isNodes2()) this.toggle();
-    this.#restoreAfterConfigure = false;
+    void this.#controller
+      .setSuspended('configure', false)
+      .catch((error: unknown) => this.#options.reportError(error));
   }
 
   /** Release all owned DOM, observers, subscriptions, renderer mounts, and animations. */
@@ -153,15 +204,29 @@ export class WorkflowMasonryHostLifecycle {
     this.#disposed = true;
     this.#controller.leaveImmediately();
     this.#toolbar.dispose();
+    this.#properties.dispose();
     this.#search.dispose();
+    this.#stack.dispose();
     this.#unsubscribeRenderer?.();
     this.#unsubscribeRenderer = null;
+    this.#unsubscribeAppMode?.();
+    this.#unsubscribeAppMode = null;
     this.#releaseGraphObservers();
     this.#options.document.defaultView?.removeEventListener('pagehide', this.#onPageHide);
   }
 
   /** Tear down before the browser releases the Comfy Vue application. */
   readonly #onPageHide = (): void => this.dispose();
+
+  /** Suspend borrowed native controls before Comfy hides the graph, preserving the view choice. */
+  readonly #onAppModeChanged = (active: boolean): void => {
+    if (this.#disposed) return;
+    this.#appMode = active;
+    void this.#controller
+      .setSuspended('app', active)
+      .catch((error: unknown) => this.#options.reportError(error));
+    this.#refreshButton();
+  };
 
   /** Read the authoritative Comfy setting rather than inferring from stale graph DOM. */
   #isNodes2(): boolean {
@@ -171,7 +236,11 @@ export class WorkflowMasonryHostLifecycle {
   /** Reflect transient presentation and subscribe only while masonry needs graph updates. */
   #refreshButton(): void {
     const active = this.#controller.active;
-    this.#toolbar.update(active, this.#isNodes2());
+    this.#toolbar.update(active, this.#isNodes2() && !this.#appMode);
+    if (!this.#properties.update(this.#controller.presenting)) {
+      this.#controller.leaveImmediately();
+      return;
+    }
     if (active) this.#observeGraphs();
     else this.#releaseGraphObservers();
   }

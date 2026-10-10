@@ -39,10 +39,7 @@ import { CubeOutputSurfaceSynchronizer } from './CubeOutputSurfaceSynchronizer.j
 import type { ImportPayload } from '../import/PlacementPayload.js';
 import { LegacyCubeDefinitionSerializer } from './migration/LegacyCubeDefinitionSerializer.js';
 import { LegacyCubeGraphBuilder } from './migration/LegacyCubeGraphBuilder.js';
-import {
-  LegacyCubeMigrationCoordinator,
-  type ConnectableNode,
-} from './migration/LegacyCubeMigrationCoordinator.js';
+import { LegacyCubeMigrationCoordinator } from './migration/LegacyCubeMigrationCoordinator.js';
 import type { LegacyCubeMigrationResult } from './migration/LegacyCubeMigrationCoordinator.js';
 import type { LegacyCubeMigrationBatch } from './migration/LegacyCubeWorkflowExtractor.js';
 import { CubeSurfacePresenter } from '../surface/CubeSurfacePresenter.js';
@@ -61,13 +58,22 @@ import { ComfyCanvasSelectionStateAdapter } from '../surface/ComfyCanvasSelectio
 import { createComfyCubeHistoryAdapter } from './ComfyCubeHistoryAdapter.js';
 import { ComfyCubeNodeFactory } from './node/ComfyCubeNodeFactory.js';
 import { CubeNodeCatalog } from './node/CubeNodeCatalog.js';
-import { CubeNodeSwapCoordinator } from './node/CubeNodeSwapCoordinator.js';
+import { createComfyCubeReorder } from '../workflow/infrastructure/ComfyCubeReorderComposition.js';
+import type { CubeGraphGateway } from '../workflow/domain/CubeGraphModels.js';
+import type { CubeGraphReorderService } from '../workflow/application/CubeGraphReorderService.js';
+import { discardNativeCubeDefinition } from './graph/NativeCubeDefinitionRegistry.js';
 import { ComfyCubeNodeLifecycleAdapter } from './node/ComfyCubeNodeLifecycleAdapter.js';
 import {
   createComfyCubePlacementRuntime,
   type ComfyCubePlacementRuntime,
 } from './placement/ComfyCubePlacementRuntime.js';
-import type { LiteGraphCubeNodeCanvas } from '../surface/ComfyLiteGraphCubeNodeHost.js';
+import {
+  isNativeGraphNode,
+  isNativeCubeSubgraph,
+  requireRuntimeGraph,
+  requireLiteGraphCubeNodeCanvas,
+  isConnectableNode,
+} from './ComfyCubeRuntimeGraphBoundary.js';
 import { LegacyCubeContainerMigrationAdapter } from './migration/LegacyCubeContainerMigrationAdapter.js';
 import { NativeCubeProximityEndpointSource } from './connection/NativeCubeProximityEndpointSource.js';
 import type { ProximityEndpointSource } from '../overlays/proximity/ProximityModel.js';
@@ -101,17 +107,22 @@ import { CubeVersionAvailabilityService } from './version/CubeVersionAvailabilit
 import { ComfyCubeVersionReplacementAdapter } from './version/ComfyCubeVersionReplacementAdapter.js';
 import { ComfyCubeVersionSelectionAdapter } from './version/ComfyCubeVersionSelectionAdapter.js';
 import { CubeVersionSwitchService } from './version/CubeVersionSwitchService.js';
-import { CubeVersionDefinitionStager } from './version/CubeVersionDefinitionStager.js';
+import { CubeEmbeddedDefinitionStager } from './graph/CubeEmbeddedDefinitionStager.js';
 import type { CubeIdentitySource } from './CubeIdentityPresentation.js';
 import { buildCubeRuntimePresentationBindings } from './CubeRuntimePresentationBindings.js';
 import { buildCubeRuntimeEditorBindings } from './CubeRuntimeEditorBindings.js';
 import { ComfyCubeRootMutationAdapter } from './ComfyCubeRootMutationAdapter.js';
+import { CubeInstanceActions } from './stack/CubeInstanceActions.js';
+import { ComfyCubeStackCommitHost } from './stack/ComfyCubeStackCommitHost.js';
+import type { CubeGraphSnapshotSource } from '../workflow/domain/CubeGraphStackModels.js';
 import type { CubeWorkflowNodePackMetadata } from './node/CubeWorkflowNodePackMetadata.js';
 
 export interface ComfyCubeRuntimeOptions {
   app: unknown;
   api: unknown;
   cubeApi: CubeVersionApi;
+  graphGateway: CubeGraphGateway;
+  reconcileCubeOrder(): void;
   liteGraph: unknown;
   document: Document;
   logger: Pick<Console, 'debug' | 'error' | 'warn'>;
@@ -134,6 +145,10 @@ export interface ComfyCubeRuntime {
   placement: CubePlacementService;
   authoring: ComfyCubeAuthoringAdapter;
   nodes: CubeNodeCatalog;
+  reorder: CubeGraphReorderService;
+  graphSnapshots: CubeGraphSnapshotSource;
+  instanceActions: CubeInstanceActions;
+  stackCommit: Pick<ComfyCubeStackCommitHost, 'commit'>;
   cardState: CubeFaceCardStateService;
   graphChanges: CanvasGraphChangeSource;
   versionAvailability: CubeVersionAvailabilityService;
@@ -151,19 +166,6 @@ export interface ComfyCubeRuntime {
   restoreLegacy(batch: LegacyCubeMigrationBatch | null): LegacyCubeMigrationResult;
   detectLegacyBlueprints(): number;
   dispose(): void;
-}
-
-interface CubeRuntimeGraph {
-  subgraphs: Map<string, NativeCubeSubgraph>;
-  _nodes?: unknown[];
-  onConfigure?: ((data: UnknownRecord) => void) | null;
-  onSerialize?: ((data: UnknownRecord) => void) | null;
-  onNodeAdded?: ((node: unknown) => void) | null;
-  onNodeRemoved?: ((node: unknown) => void) | null;
-  add(node: NativeGraphNode): void;
-  remove(node: NativeGraphNode): void;
-  getLink(id: string | number): import('../types/graph.js').ComfyLink | null;
-  getNodeById(id: string | number): unknown;
 }
 
 /** Construct the graph-bound SugarCubes integration around native SubgraphNodes. */
@@ -203,12 +205,8 @@ export function createComfyCubeRuntime(options: ComfyCubeRuntimeOptions): ComfyC
     const value = createNodeFunction.call(liteGraph, type);
     return isNativeGraphNode(value) ? value : null;
   };
-  const discardSubgraph = (subgraph: NativeCubeSubgraph): void => {
-    runtimeGraph.subgraphs.delete(subgraph.id);
-    if (typeof liteGraph.unregisterNodeType === 'function') {
-      liteGraph.unregisterNodeType.call(liteGraph, subgraph.id);
-    }
-  };
+  const discardSubgraph = (subgraph: NativeCubeSubgraph): void =>
+    discardNativeCubeDefinition(runtimeGraph, liteGraph, subgraph.id);
   const graphBuilderHost: CubeGraphBuilderHost = {
     rootGraph: {
       createSubgraph(data) {
@@ -244,6 +242,7 @@ export function createComfyCubeRuntime(options: ComfyCubeRuntimeOptions): ComfyC
     catalog: nodes,
     events: legacyCanvas.canvas,
     createInstanceId: createUuid,
+    discardDefinition: (id) => discardNativeCubeDefinition(runtimeGraph, liteGraph, id),
     nodePackMetadata: options.nodePackMetadata,
     logger: options.logger,
   });
@@ -252,17 +251,34 @@ export function createComfyCubeRuntime(options: ComfyCubeRuntimeOptions): ComfyC
     createNode,
     nodePackMetadata: options.nodePackMetadata,
   });
-  const nodeSwap = new CubeNodeSwapCoordinator({
+  const canvasGraphChanges = new ComfyCanvasGraphChangeAdapter(canvas);
+  const reorder = createComfyCubeReorder({
     graph,
     nodes,
     history,
-    setDirtyCanvas: (foreground, background) => history.setDirtyCanvas?.(foreground, background),
+    gateway: options.graphGateway,
+    reconcileOrder: options.reconcileCubeOrder,
+    graphChanges: canvasGraphChanges,
+    isCurrentRoot: () => graphScope.isCurrentRoot(),
+    reportError: (error) => {
+      options.logger.error('SugarCubes Cube reorder failed.', { error });
+      options.feedback?.push?.(
+        'error',
+        'Cube reorder unavailable',
+        error instanceof Error ? error.message : String(error),
+      );
+    },
   });
   const chromeActions: CubeFaceChromeActions = {
+    subscribeAvailability: (listener) => reorder.service.subscribe(listener),
     ...(options.openAddCubeMenu ? { onAddCube: options.openAddCubeMenu } : {}),
-    onSwapLeft: (metadata) => nodeSwap.swap(metadata, 'left'),
-    onSwapRight: (metadata) => nodeSwap.swap(metadata, 'right'),
-    canSwap: (metadata, direction) => nodeSwap.canSwap(metadata, direction),
+    onSwapLeft: (metadata) => {
+      void reorder.swap.swap(metadata, 'left');
+    },
+    onSwapRight: (metadata) => {
+      void reorder.swap.swap(metadata, 'right');
+    },
+    canSwap: (metadata, direction) => reorder.swap.canSwap(metadata, direction),
   };
   const legacyContainerMigration = new LegacyCubeContainerMigrationAdapter({
     graph: runtimeGraph,
@@ -284,7 +300,6 @@ export function createComfyCubeRuntime(options: ComfyCubeRuntimeOptions): ComfyC
     updateSelectedItemsFunction ? () => updateSelectedItemsFunction.call(canvas) : null,
     options.logger,
   );
-  const canvasGraphChanges = new ComfyCanvasGraphChangeAdapter(canvas);
   const rendererChanges = createComfyRendererModeChangeSource(app);
   const metadataHud = options.editorMetadata
     ? new CubeEditorMetadataHud(options.document, options.editorMetadata, {
@@ -427,7 +442,18 @@ export function createComfyCubeRuntime(options: ComfyCubeRuntimeOptions): ComfyC
     repository: versionRepository,
     construction,
     replacement: versionReplacement,
-    definitions: new CubeVersionDefinitionStager({
+    definitions: new CubeEmbeddedDefinitionStager({
+      registrar: subgraphRegistrar,
+      createId: createUuid,
+    }),
+  });
+  const stackCommit = new ComfyCubeStackCommitHost({
+    snapshots: reorder.snapshots,
+    graph: rootMutations,
+    nodes,
+    history,
+    construction,
+    definitions: new CubeEmbeddedDefinitionStager({
       registrar: subgraphRegistrar,
       createId: createUuid,
     }),
@@ -495,6 +521,17 @@ export function createComfyCubeRuntime(options: ComfyCubeRuntimeOptions): ComfyC
     authoring,
     nodes,
     cardState,
+    reorder: reorder.service,
+    graphSnapshots: reorder.snapshots,
+    stackCommit,
+    instanceActions: new CubeInstanceActions({
+      nodes,
+      graph: rootMutations,
+      history,
+      createId: createUuid,
+      scope: graphScope,
+      isReordering: () => reorder.service.pending,
+    }),
     graphChanges: canvasGraphChanges,
     versionAvailability,
     versionSwitch,
@@ -511,6 +548,7 @@ export function createComfyCubeRuntime(options: ComfyCubeRuntimeOptions): ComfyC
     restoreLegacy: (batch) => legacyMigration.restore(batch),
     detectLegacyBlueprints: () => blueprintMigration.scan(graph),
     dispose: () => {
+      reorder.dispose();
       outputSurfaceSynchronizer.dispose();
       editorNavigation.dispose();
       metadataHud?.dispose();
@@ -537,74 +575,6 @@ function createUuid(): string {
 /** Read the graph currently displayed by Comfy's canvas, falling back to the workflow root. */
 function readActiveGraph(canvas: UnknownRecord, fallback: ComfyGraph): ComfyGraph {
   return isRecord(canvas.graph) ? (canvas.graph as ComfyGraph) : fallback;
-}
-
-/** Validate the node surface required by native Cube graph construction. */
-function isNativeGraphNode(value: unknown): value is NativeGraphNode {
-  if (!isRecord(value)) return false;
-  value.properties = isRecord(value.properties) ? value.properties : {};
-  return (
-    isNumericVector(value.pos) &&
-    isNumericVector(value.size) &&
-    Array.isArray(value.inputs) &&
-    Array.isArray(value.outputs) &&
-    typeof value.connect === 'function'
-  );
-}
-
-/** Validate the Comfy subgraph API used by Cube assembly and serialization. */
-function isNativeCubeSubgraph(value: unknown): value is NativeCubeSubgraph {
-  return (
-    isRecord(value) &&
-    typeof value.id === 'string' &&
-    typeof value.name === 'string' &&
-    Array.isArray(value._nodes) &&
-    Array.isArray(value.inputs) &&
-    Array.isArray(value.outputs) &&
-    isRecord(value.inputNode) &&
-    isRecord(value.outputNode) &&
-    typeof value.add === 'function' &&
-    typeof value.remove === 'function' &&
-    typeof value.addInput === 'function' &&
-    typeof value.addOutput === 'function' &&
-    typeof value.configure === 'function'
-  );
-}
-
-/** Require Comfy's native definition map and lifecycle hook surface. */
-function requireRuntimeGraph(graph: UnknownRecord): CubeRuntimeGraph {
-  if (!(graph.subgraphs instanceof Map)) {
-    throw new TypeError('LGraph.subgraphs is unavailable.');
-  }
-  return graph as unknown as CubeRuntimeGraph;
-}
-
-/** Require the exact host capabilities used by the Nodes 1.0 Cube node face. */
-function requireLiteGraphCubeNodeCanvas(canvas: UnknownRecord): LiteGraphCubeNodeCanvas {
-  if (
-    !(canvas.canvas instanceof HTMLCanvasElement) ||
-    typeof canvas.drawNode !== 'function' ||
-    typeof canvas.processWidgetClick !== 'function' ||
-    !isNumericVector(canvas.graph_mouse)
-  ) {
-    throw new TypeError('Comfy Nodes 1.0 Cube-node integration is unavailable.');
-  }
-  return canvas as unknown as LiteGraphCubeNodeCanvas;
-}
-
-/** Validate a native node capable of owning one restored graph connection. */
-function isConnectableNode(value: unknown): value is ConnectableNode {
-  return (
-    isRecord(value) &&
-    Array.isArray(value.inputs) &&
-    Array.isArray(value.outputs) &&
-    typeof value.connect === 'function'
-  );
-}
-
-/** Accept LiteGraph's array and typed-array geometry vectors. */
-function isNumericVector(value: unknown): value is number[] | Float32Array | Float64Array {
-  return Array.isArray(value) || value instanceof Float32Array || value instanceof Float64Array;
 }
 
 /** Read one finite graph-space point from Comfy's mutable coordinate vector. */

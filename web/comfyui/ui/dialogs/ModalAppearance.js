@@ -22,6 +22,13 @@ export class ModalAppearance {
     #observer = null;
     #overlay = null;
     #dark = null;
+    #fluent = null;
+    #release = null;
+    #source;
+    /** Use an accepted product appearance source when the surface supports both styles. */
+    constructor(source) {
+        this.#source = source;
+    }
     /** Activate shared styling and observe only host palette attributes. */
     open(overlay) {
         this.close();
@@ -30,6 +37,10 @@ export class ModalAppearance {
         this.#overlay = overlay;
         overlay.dataset.scModalAppearance = 'fluent';
         this.#refresh();
+        if (this.#source) {
+            this.#release = this.#source.subscribeAppearance(() => this.#refresh());
+            return;
+        }
         const Observer = document.defaultView?.MutationObserver;
         if (!Observer)
             return;
@@ -45,23 +56,32 @@ export class ModalAppearance {
     }
     /** Release observation and scoped tokens when the dialog closes. */
     close() {
+        this.#release?.();
+        this.#release = null;
         this.#observer?.disconnect();
         this.#observer = null;
         if (this.#overlay) {
             applyOwnedFluentTheme(this.#overlay, null);
             delete this.#overlay.dataset.scModalAppearance;
+            delete this.#overlay.dataset.scModalColorScheme;
         }
         this.#overlay = null;
         this.#dark = null;
+        this.#fluent = null;
     }
     /** Apply official tokens only when the host changes palette. */
     #refresh() {
         if (!this.#overlay)
             return;
-        const dark = readComfyDarkTheme(this.#overlay.ownerDocument);
-        if (dark === this.#dark)
+        const accepted = this.#source?.appearance;
+        const dark = accepted?.dark ?? readComfyDarkTheme(this.#overlay.ownerDocument);
+        const fluent = accepted?.fluent ?? true;
+        if (dark === this.#dark && fluent === this.#fluent)
             return;
         this.#dark = dark;
-        applyOwnedFluentTheme(this.#overlay, dark);
+        this.#fluent = fluent;
+        this.#overlay.dataset.scModalAppearance = fluent ? 'fluent' : 'comfy';
+        this.#overlay.dataset.scModalColorScheme = dark ? 'dark' : 'light';
+        applyOwnedFluentTheme(this.#overlay, fluent ? dark : null);
     }
 }

@@ -1,13 +1,16 @@
 import { isRecord } from '../../types/common.js';
 import { nativeNodeFieldRows } from '../../surface/NativeNodeFieldRows.js';
+import { readNativeNodeCard } from '../../surface/NativeNodeCardBoundary.js';
 import { CUBE_FACE_PROJECTION_SYMBOL } from '../../surface/ComfyLiteGraphCubeFaceProjectionHost.js';
 import { cubeFacePresentedWidgets } from '../../surface/CubeFaceWidgetPolicy.js';
 /** Resolve already-mounted views of one eligible face node in either native renderer. */
 export function nativeRelationCards(document, node, cubeId) {
-    const locator = `${String(node.graph?.id)}:${String(node.id)}`;
     const cells = [
         ...document.querySelectorAll('.sugarcubes-cube-face__node-card'),
-    ].filter((cell) => cell.dataset.cubeNodeLocator === locator);
+    ].filter((cell) => {
+        const boundary = readNativeNodeCard(cell);
+        return boundary?.node === node && boundary.cubeId === cubeId;
+    });
     const roots = cubeId !== null
         ? cells
         : [
@@ -56,6 +59,7 @@ export function nativeRelationCards(document, node, cubeId) {
             ? canvasFields(node, width, (y) => canvasTop + (30 + y) * ratio, ratio)
             : new Map();
         return {
+            nativeWidgetVisibility: readNativeNodeCard(root) !== null,
             root,
             header,
             rows,

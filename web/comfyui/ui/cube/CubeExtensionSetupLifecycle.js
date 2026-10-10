@@ -26,7 +26,6 @@ export class CubeExtensionSetupLifecycle {
     async setup() {
         const options = this.options;
         try {
-            options.sidebar.register();
             options.settings.register();
             await options.ui.setup();
             if (typeof Reflect.get(options.api, 'storeUserData') === 'function') {

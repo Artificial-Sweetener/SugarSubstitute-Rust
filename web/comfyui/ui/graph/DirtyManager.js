@@ -30,7 +30,7 @@ import { isRecord } from '../types/common.js';
 export class DirtyManager {
     events;
     scheduler;
-    cubeBrowser;
+    libraryCatalog;
     savedIds;
     unsubscribe;
     lastGraph;
@@ -39,10 +39,10 @@ export class DirtyManager {
     tracker;
     definitionStore;
     refreshScheduler;
-    constructor({ adapter, events = null, scheduler, cubeBrowser = null, definitionStore, }) {
+    constructor({ adapter, events = null, scheduler, libraryCatalog = null, definitionStore, }) {
         this.events = events;
         this.scheduler = scheduler;
-        this.cubeBrowser = cubeBrowser;
+        this.libraryCatalog = libraryCatalog;
         this.savedIds = new Set();
         this.unsubscribe = null;
         this.lastGraph = null;
@@ -64,7 +64,6 @@ export class DirtyManager {
             return;
         }
         this.unsubscribe = this.tracker.onChange((dirtyIds) => {
-            this.cubeBrowser?.setDirtyCubeIds?.(dirtyIds);
             this.events?.emit?.('cube:dirty:changed', { dirtyIds });
         });
         this.events?.on?.('cube:instances:updated', (payload) => {
@@ -100,8 +99,8 @@ export class DirtyManager {
     }
     buildKnownCubeIdSet() {
         const known = new Set();
-        const entries = Array.isArray(this.cubeBrowser?.getCubes?.())
-            ? this.cubeBrowser.getCubes()
+        const entries = Array.isArray(this.libraryCatalog?.getCubes?.())
+            ? this.libraryCatalog.getCubes()
             : [];
         for (const entry of entries) {
             const cubeId = typeof entry?.cube_id === 'string' ? entry.cube_id.trim() : '';
@@ -166,7 +165,6 @@ export class DirtyManager {
         const groups = getGraphGroups(graph);
         if (!groups.length) {
             this.tracker.refresh({ graph, knownCubeIds: null });
-            this.cubeBrowser?.setDirtyCubeIds?.(new Set());
             return { dirtyCubeIds: new Set() };
         }
         const hasSugarcubes = groups.some((group) => {
@@ -175,7 +173,6 @@ export class DirtyManager {
         });
         if (!hasSugarcubes) {
             this.tracker.refresh({ graph, knownCubeIds: null });
-            this.cubeBrowser?.setDirtyCubeIds?.(new Set());
             return { dirtyCubeIds: new Set() };
         }
         for (const group of groups) {
@@ -194,7 +191,6 @@ export class DirtyManager {
             graph,
             knownCubeIds: knownCubeIds.size ? knownCubeIds : null,
         });
-        this.cubeBrowser?.setDirtyCubeIds?.(result?.dirtyCubeIds || new Set());
         return result;
     }
     markClean({ graph, cubeIds } = {}) {

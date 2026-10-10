@@ -20,6 +20,32 @@ import { fluentInteractionCss } from '../../../frontend/comfyui/ui/surface/appea
 
 afterEach(() => document.body.replaceChildren());
 
+test('named boolean choices never claim checkbox row gestures or focus', () => {
+  const root = document.createElement('div');
+  const row = document.createElement('div');
+  row.dataset.scFluentRow = '';
+  row.dataset.scFluentWidget = 'WidgetToggleSwitch';
+  const group = document.createElement('div');
+  group.setAttribute('role', 'group');
+  const buttons = ['separate', 'combined'].map((label) => {
+    const button = document.createElement('button');
+    button.textContent = label;
+    button.setAttribute('aria-pressed', String(label === 'combined'));
+    return button;
+  });
+  group.append(...buttons);
+  row.append(group);
+  root.append(row);
+  document.body.append(root);
+  const adapter = new NativeToggleRows(createCheckbox);
+  adapter.reconcile(root);
+  expect(row.hasAttribute('data-sc-toggle-row')).toBe(false);
+  expect(row.hasAttribute('tabindex')).toBe(false);
+  expect(row.querySelector('[data-sc-boolean-control]')).toBeNull();
+  expect(Array.from(group.children)).toEqual(buttons);
+  adapter.clear();
+});
+
 test('keeps row hover fill separate from retained focus and keyboard focus outlines', () => {
   const css = fluentInteractionCss();
   expect(css).not.toMatch(/\[data-sc-toggle-row\]:focus-within/);

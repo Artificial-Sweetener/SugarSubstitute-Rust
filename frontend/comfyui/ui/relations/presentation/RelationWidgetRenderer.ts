@@ -49,5 +49,6 @@ export interface RelationWidgetRenderer {
     root: HTMLElement,
     label: string,
     change: (value: string) => void,
+    nativeInputName?: string,
   ): RelationChoiceMount;
 }

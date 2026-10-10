@@ -27,8 +27,8 @@ from .execution import (
     ConnectionOrigin,
     CubeBoundaryConnection,
     ProximityConnection,
-    build_cube_topology,
 )
+from .execution.topology import CubeTopologyBuilder
 from .workflow import ComposedValueMaterializer, CubeInstance, read_canonical_workflow
 from .workflow import WorkflowNormalizer
 from .serialized_cube_proximity import SerializedCubeProximityMatcher
@@ -75,7 +75,7 @@ class CubeGraphAnalysisService:
         workflow = read_canonical_workflow(materialized)
         proximity_matcher = SerializedCubeProximityMatcher()
         proximity = proximity_matcher.match(workflow.payload)
-        topology = build_cube_topology(workflow, proximity)
+        topology = CubeTopologyBuilder().project(workflow, proximity)
         return CubeGraphAnalysis(
             workflow_semantic_hash=workflow.semantic_hash,
             instances=workflow.instances,
@@ -142,7 +142,7 @@ def _segments(
         component_explicit_pairs = {
             pair for pair in explicit_pairs if pair[0] in members and pair[1] in members
         }
-        if not component_explicit_pairs:
+        if not component_explicit_pairs or len(ordered) != len(members):
             ordered = tuple(
                 sorted(members, key=lambda item: _instance_layout_key(instances[item]))
             )

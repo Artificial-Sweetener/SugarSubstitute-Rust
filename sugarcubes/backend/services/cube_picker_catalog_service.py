@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import logging
 import hashlib
+import json
+from copy import deepcopy
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any, TypedDict
 
@@ -44,6 +46,7 @@ class CubePickerDescriptor(TypedDict):
     key: str
     cubeId: str
     version: str
+    contentHash: str
     displayName: str
     description: str
     searchTerms: list[str]
@@ -79,6 +82,7 @@ class CubePickerCatalogService:
 
         self._list_catalog = list_catalog
         self._load_cube = load_cube
+        self._descriptors: dict[str, tuple[str, CubePickerDescriptor]] = {}
 
     def list_picker_catalog(self) -> dict[str, Any]:
         """Return valid picker descriptors while isolating invalid artifacts."""
@@ -87,6 +91,7 @@ class CubePickerCatalogService:
         revision = normalize_metadata_string(catalog.get("catalogRevision"))
         descriptors: list[CubePickerDescriptor] = []
         errors: list[CubePickerCatalogError] = []
+        next_descriptors: dict[str, tuple[str, CubePickerDescriptor]] = {}
         for entry in _mapping_sequence(catalog.get("cubes")):
             cube_id = normalize_metadata_string(entry.get("cubeId"))
             if not cube_id:
@@ -95,7 +100,16 @@ class CubePickerCatalogService:
                 )
                 continue
             try:
-                descriptors.append(self._project_descriptor(entry, cube_id))
+                fingerprint = json.dumps(
+                    dict(entry), sort_keys=True, separators=(",", ":")
+                )
+                cached = self._descriptors.get(cube_id)
+                if entry.get("contentHash") and cached and cached[0] == fingerprint:
+                    descriptor = cached[1]
+                else:
+                    descriptor = self._project_descriptor(entry, cube_id)
+                next_descriptors[cube_id] = (fingerprint, descriptor)
+                descriptors.append(deepcopy(descriptor))
             except (BackendError, CubeImportError, TypeError, ValueError) as error:
                 message = _error_message(error)
                 _logger.warning(
@@ -111,6 +125,7 @@ class CubePickerCatalogService:
                 errors.append(
                     {"cubeId": cube_id, "message": "Cube picker projection failed"}
                 )
+        self._descriptors = next_descriptors
         return {
             "schemaVersion": 1,
             "catalogRevision": revision,
@@ -126,6 +141,11 @@ class CubePickerCatalogService:
         """Build one descriptor from catalog metadata and canonical boundaries."""
 
         prepared = self._load_cube(cube_id)
+        content_hash = normalize_metadata_string(entry.get("contentHash"))
+        if content_hash and prepared.get("contentHash") != content_hash:
+            raise ValueError(
+                "Cube changed while projecting picker metadata; refresh and try again"
+            )
         cube_value = prepared.get("cube")
         cube = cube_value if isinstance(cube_value, Mapping) else {}
         metadata_value = cube.get("metadata")
@@ -159,6 +179,7 @@ class CubePickerCatalogService:
         return {
             "key": hashlib.sha256(cube_id.encode("utf-8")).hexdigest(),
             "cubeId": cube_id,
+            "contentHash": content_hash,
             "version": normalize_metadata_string(cube.get("version"))
             or normalize_metadata_string(entry.get("version")),
             "displayName": display_name,

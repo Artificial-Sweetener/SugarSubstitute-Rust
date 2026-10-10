@@ -21,6 +21,9 @@ import {
   type CubeMasonryPlacement,
 } from '../CubeMasonryLayout.js';
 
+/** Align sections and navigation below the panel edge; native toolbars occupy separate flow. */
+export const WORKFLOW_MASONRY_TOP_INSET = 12;
+
 export interface WorkflowMasonryLayoutSection {
   id: string;
   cards: readonly CubeMasonryCard[];

@@ -190,6 +190,66 @@ describe('Cube picker catalog registry', () => {
     expect(registry.revision).toBe('revision-2');
   });
 
+  test('forced refresh reuses unchanged artifacts and reloads same-version content changes only', async () => {
+    const cubeA = 'local/demo/a.cube';
+    const cubeB = 'local/demo/b.cube';
+    const a = { ...descriptor(keyA, cubeA), contentHash: `sha256:${keyA}` };
+    const b = { ...descriptor(keyB, cubeB), contentHash: `sha256:${keyB}` };
+    const { registry, load } = setup(
+      [
+        response(catalog('one', [a, b])),
+        response(catalog('one', [a, b])),
+        response(catalog('two', [{ ...a, contentHash: `sha256:${'c'.repeat(64)}` }, b])),
+      ],
+      {
+        [cubeA]: response({ ...payload(cubeA), contentHash: a.contentHash }),
+        [cubeB]: response({ ...payload(cubeB), contentHash: b.contentHash }),
+      },
+    );
+    await registry.refresh();
+    load.mockClear();
+    expect((await registry.refresh({ force: true })).changed).toBe(false);
+    expect(load).not.toHaveBeenCalled();
+    load.mockResolvedValueOnce(
+      response({ ...payload(cubeA), contentHash: `sha256:${'c'.repeat(64)}` }),
+    );
+    await registry.refresh({ force: true });
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String(load.mock.calls[0]?.[0]))).toMatchObject({ cube_id: cubeA });
+  });
+
+  test('retains another invalidation arriving during the queued refresh', async () => {
+    const cubeA = 'local/demo/a.cube';
+    let releaseFirst!: (value: ApiJsonResult) => void;
+    let releaseSecond!: (value: ApiJsonResult) => void;
+    const first = new Promise<ApiJsonResult>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const second = new Promise<ApiJsonResult>((resolve) => {
+      releaseSecond = resolve;
+    });
+    const listPickerCatalog = jest
+      .fn<() => Promise<ApiJsonResult>>()
+      .mockReturnValueOnce(first)
+      .mockReturnValueOnce(second)
+      .mockResolvedValueOnce(response(catalog('three', [descriptor(keyA, cubeA)])));
+    const registry = new CubePickerCatalogRegistry({
+      api: { listPickerCatalog, load: async () => response(payload(cubeA)) },
+      logger: { debug: jest.fn(), error: jest.fn(), warn: jest.fn() },
+    });
+    const initial = registry.refresh();
+    const queued = registry.refresh({ force: true });
+    releaseFirst(response(catalog('one', [descriptor(keyA, cubeA)])));
+    await initial;
+    expect(listPickerCatalog).toHaveBeenCalledTimes(2);
+    const latest = registry.refresh({ force: true });
+    releaseSecond(response(catalog('two', [descriptor(keyA, cubeA)])));
+    await queued;
+    await latest;
+    expect(listPickerCatalog).toHaveBeenCalledTimes(3);
+    expect(registry.revision).toBe('three');
+  });
+
   test('reconciles removals and returns isolated placement payload copies', async () => {
     const cubeA = 'local/demo/a.cube';
     const type = `SugarCubes.Cube.${keyA}`;
@@ -208,11 +268,38 @@ describe('Cube picker catalog registry', () => {
     expect(first).toEqual(second);
     if (first?.cube) first.cube.cube_id = 'mutated';
     expect(registry.preparedPayload(type)?.cube?.cube_id).toBe(cubeA);
+    const captured = registry.capturedPayload(type);
+    expect(registry.capturedPayload(type)).toBe(captured);
+    expect(Object.isFrozen(captured?.cube)).toBe(true);
+    expect(Object.isFrozen(registry.descriptor(type))).toBe(true);
 
     const removed = await registry.refresh();
     expect(removed.changed).toBe(true);
     expect(removed.definitions).toEqual([]);
     expect(registry.preparedPayload(type)).toBeNull();
+  });
+
+  test('retains an accepted generation when a changed artifact fails and retries the same revision', async () => {
+    const cubeA = 'local/demo/a.cube';
+    const a = { ...descriptor(keyA, cubeA), contentHash: 'original' };
+    const changed = { ...a, contentHash: 'changed' };
+    const { registry, load } = setup(
+      [
+        response(catalog('one', [a])),
+        response(catalog('two', [changed])),
+        response(catalog('two', [changed])),
+      ],
+      { [cubeA]: response({ ...payload(cubeA), contentHash: 'original' }) },
+    );
+    await registry.refresh();
+    const captured = registry.capturedPayload(`SugarCubes.Cube.${keyA}`);
+    await expect(registry.refresh()).rejects.toThrow('could not validate');
+    expect(registry.revision).toBe('one');
+    expect(registry.capturedPayload(`SugarCubes.Cube.${keyA}`)).toBe(captured);
+    load.mockResolvedValueOnce(response({ ...payload(cubeA), contentHash: 'changed' }));
+    await registry.refresh();
+    expect(registry.revision).toBe('two');
+    expect(captured?.contentHash).toBe('original');
   });
 
   test('preserves the last known-good snapshot when catalog refresh fails', async () => {

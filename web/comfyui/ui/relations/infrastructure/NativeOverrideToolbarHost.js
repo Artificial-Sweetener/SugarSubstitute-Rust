@@ -1,4 +1,5 @@
 import { NativeRunStripContentVisibility } from './NativeRunStripContentVisibility.js';
+import { NativeOverrideToolbarLayout } from './NativeOverrideToolbarLayout.js';
 /** Reserve an owned dock slot and measure the width left after native Run and workflow controls. */
 export class NativeOverrideToolbarHost {
     document;
@@ -7,6 +8,7 @@ export class NativeOverrideToolbarHost {
     #target = null;
     #dragging = false;
     #emptyContent = new NativeRunStripContentVisibility();
+    #layout = new NativeOverrideToolbarLayout();
     /** Resolve only identified native chrome, independently of graph candidate discovery. */
     constructor(document) {
         this.document = document;
@@ -15,6 +17,7 @@ export class NativeOverrideToolbarHost {
     attach(element, docked) {
         this.#surfaces = this.#read();
         const surfaces = this.#surfaces;
+        this.#layout.mount(surfaces?.actionbar ?? null);
         if (!surfaces) {
             this.#emptyContent.mount(null);
             element.remove();
@@ -100,8 +103,13 @@ export class NativeOverrideToolbarHost {
     preview(active) {
         this.#target?.toggleAttribute('data-sc-override-drop-target', active);
     }
+    /** Notify placement when native Run docking changes the space available in the top strip. */
+    subscribeLayout(changed) {
+        return this.#layout.subscribe(changed);
+    }
     /** Remove owned chrome and release references when the toolbar is disposed. */
     dispose() {
+        this.#layout.dispose();
         this.#emptyContent.dispose();
         this.dragging(false);
         this.#removeSlot();

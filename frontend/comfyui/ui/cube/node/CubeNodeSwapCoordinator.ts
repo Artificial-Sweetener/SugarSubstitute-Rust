@@ -13,126 +13,51 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Swap first-class Cube nodes without depending on legacy group chrome state. */
-
+/** Adapt native face arrows to the canonical Cube reorder application service. */
 import type {
   CubeFaceChromeMetadata,
   CubeSwapDirection,
 } from '../../surface/CubeFaceChromeActions.js';
-import type { ComfyGraph } from '../../types/graph.js';
-import type { CubeNode } from './ComfyCubeNodeFactory.js';
-import type { CubeNodeCatalog } from './CubeNodeCatalog.js';
-import type { LiteGraphCubeNodeInteractionHistory } from '../../surface/ComfyLiteGraphCubeNodeInteraction.js';
-import { resolveCubeNodeSwapPlacements } from './CubeNodeSwapGeometry.js';
-
-const MINIMUM_SWAP_GAP = 24;
+import type { CubeGraphReorderService } from '../../workflow/application/CubeGraphReorderService.js';
 
 interface CubeNodeSwapCoordinatorOptions {
-  graph: ComfyGraph;
-  nodes: CubeNodeCatalog;
-  history: LiteGraphCubeNodeInteractionHistory;
-  setDirtyCanvas?(foreground?: boolean, background?: boolean): void;
+  reorder: Pick<CubeGraphReorderService, 'canMove' | 'move'>;
+  reportError(error: unknown): void;
 }
 
-interface SwapPlan {
-  current: CubeNode;
-  neighbor: CubeNode;
-}
-
-/** Own node-based Cube swap eligibility and state transitions. */
+/** Translate face interaction without reproducing graph permissions or geometry. */
 export class CubeNodeSwapCoordinator {
-  readonly #graph: ComfyGraph;
-  readonly #nodes: CubeNodeCatalog;
-  readonly #history: LiteGraphCubeNodeInteractionHistory;
-  readonly #setDirtyCanvas: (foreground?: boolean, background?: boolean) => void;
+  readonly #options: CubeNodeSwapCoordinatorOptions;
 
-  /** Bind graph-owned Cube nodes and the native history seam. */
+  /** Share exactly the same application owner used by stack dragging and keyboard movement. */
   constructor(options: CubeNodeSwapCoordinatorOptions) {
-    this.#graph = options.graph;
-    this.#nodes = options.nodes;
-    this.#history = options.history;
-    this.#setDirtyCanvas = options.setDirtyCanvas ?? (() => undefined);
+    this.#options = options;
   }
 
-  /** Return whether a neighboring first-class Cube node can be swapped in that direction. */
+  /** Reflect native order availability for this stable instance. */
   canSwap(metadata: CubeFaceChromeMetadata, direction: CubeSwapDirection): boolean {
-    return this.#resolvePlan(metadata, direction) !== null;
+    const instanceId = readInstanceId(metadata);
+    return instanceId !== null && this.#options.reorder.canMove(instanceId, delta(direction));
   }
 
-  /** Swap this Cube node with its nearest eligible first-class Cube neighbor. */
-  swap(metadata: CubeFaceChromeMetadata, direction: CubeSwapDirection): void {
-    const plan = this.#resolvePlan(metadata, direction);
-    if (!plan) return;
-    const formerLeft = direction === 'left' ? plan.neighbor : plan.current;
-    const formerRight = direction === 'left' ? plan.current : plan.neighbor;
-    const placements = resolveCubeNodeSwapPlacements(
-      readSwapBounds(formerLeft),
-      readSwapBounds(formerRight),
-      MINIMUM_SWAP_GAP,
-    );
-    this.#history.beforeChange?.();
-    writePosition(formerLeft, placements.formerLeft);
-    writePosition(formerRight, placements.formerRight);
-    this.#graph.afterChange?.();
-    this.#graph.setDirtyCanvas?.(true, true);
-    this.#setDirtyCanvas(true, true);
-    this.#nodes.changed(plan.current);
-    this.#nodes.changed(plan.neighbor);
-    this.#history.afterChange?.();
-  }
-
-  /** Resolve the nearest eligible Cube node using current node positions. */
-  #resolvePlan(metadata: CubeFaceChromeMetadata, direction: CubeSwapDirection): SwapPlan | null {
-    const instanceId = typeof metadata.instance_id === 'string' ? metadata.instance_id.trim() : '';
-    if (!instanceId) return null;
-    const current = this.#nodes.get(instanceId);
-    if (!current) return null;
-    const ordered = [...this.#nodes.list()].sort(compareCubeNodePosition);
-    const index = ordered.indexOf(current);
-    if (index < 0) return null;
-    const neighbor = ordered[index + (direction === 'left' ? -1 : 1)] ?? null;
-    return neighbor && hasReorderableInput(current) && hasReorderableInput(neighbor)
-      ? { current, neighbor }
-      : null;
+  /** Report rejected or stale actions through the existing SugarCubes feedback owner. */
+  async swap(metadata: CubeFaceChromeMetadata, direction: CubeSwapDirection): Promise<void> {
+    const instanceId = readInstanceId(metadata);
+    if (!instanceId || !this.canSwap(metadata, direction)) return;
+    try {
+      await this.#options.reorder.move(instanceId, delta(direction));
+    } catch (error: unknown) {
+      this.#options.reportError(error);
+    }
   }
 }
 
-/** Keep source Cubes fixed at the start of a series. */
-function hasReorderableInput(node: CubeNode): boolean {
-  return node.inputs.length > 0;
+/** Narrow native chrome identity without inventing an instance from an obsolete group marker. */
+function readInstanceId(metadata: CubeFaceChromeMetadata): string | null {
+  return typeof metadata.instance_id === 'string' ? metadata.instance_id.trim() || null : null;
 }
 
-/** Sort left-to-right with a vertical tie-breaker for stable row-independent swaps. */
-function compareCubeNodePosition(left: CubeNode, right: CubeNode): number {
-  const leftPosition = readPosition(left);
-  const rightPosition = readPosition(right);
-  return leftPosition[0] - rightPosition[0] || leftPosition[1] - rightPosition[1];
-}
-
-/** Read a native Cube node position as finite graph-space coordinates. */
-function readPosition(node: CubeNode): [number, number] {
-  return [finite(node.pos[0]), finite(node.pos[1])];
-}
-
-/** Read the live node width at the moment a swap is executed. */
-function readSwapBounds(node: CubeNode): { position: [number, number]; width: number } {
-  return {
-    position: readPosition(node),
-    width: Math.max(0, finite(node.size[0])),
-  };
-}
-
-/** Write a native Cube node position through its native API when present. */
-function writePosition(node: CubeNode, position: readonly [number, number]): void {
-  if (typeof node.setPos === 'function') {
-    node.setPos(position[0], position[1]);
-  }
-  node.pos[0] = position[0];
-  node.pos[1] = position[1];
-}
-
-/** Prevent invalid persisted graph coordinates from entering swap math. */
-function finite(value: unknown): number {
-  const numberValue = Number(value);
-  return Number.isFinite(numberValue) ? numberValue : 0;
+/** Translate native horizontal arrows into canonical adjacent movement. */
+function delta(direction: CubeSwapDirection): -1 | 1 {
+  return direction === 'left' ? -1 : 1;
 }

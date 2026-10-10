@@ -70,7 +70,7 @@ beforeEach(() => {
 });
 
 describe('ui setup and hooks', () => {
-  test('setup registers sidebar tab when extension manager is available', async () => {
+  test('setup leaves host sidebar registration untouched', async () => {
     const registerCalls: MockSidebarTab[] = [];
     app.extensionManager.registerSidebarTab = (payload) => registerCalls.push(payload);
 
@@ -78,8 +78,7 @@ describe('ui setup and hooks', () => {
     const extension = app._extensions[0];
     await extension.setup!();
 
-    expect(registerCalls).toHaveLength(1);
-    expect(registerCalls[0].title).toBe('SugarCubes');
+    expect(registerCalls).toHaveLength(0);
     expect(typeof module).toBe('object');
   });
 

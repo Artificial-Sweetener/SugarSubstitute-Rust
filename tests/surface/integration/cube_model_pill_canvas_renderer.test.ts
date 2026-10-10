@@ -37,12 +37,19 @@ test('draws a centered pill shorter than its adjacent title text', () => {
       fontFamily: 'sans-serif',
       fontSize: 12,
       textColor: '#eee',
-      punchoutColor: '#222',
+      pillBackground: '#0078d4',
+      pillForeground: '#202020',
       align: 'center',
     },
   );
 
   expect(geometry.pillHeight).toBeLessThan(12);
+  expect(context.fill).toHaveBeenCalledWith();
+  expect((context.fill as jest.Mock).mock.results[0]?.value).toBe('#0078d4');
+  expect((context.fillText as jest.Mock).mock.results.map((result) => result.value)).toEqual([
+    '#202020',
+    '#eee',
+  ]);
   expect(geometry.startX).toBeLessThan(200);
   expect(context.roundRect).toHaveBeenCalledWith(
     expect.any(Number),
@@ -54,18 +61,18 @@ test('draws a centered pill shorter than its adjacent title text', () => {
   expect(context.fillText).toHaveBeenCalledWith(
     'Anima',
     expect.any(Number),
-    20,
+    expect.closeTo(23.276),
     expect.any(Number),
   );
   expect(context.fillText).toHaveBeenCalledWith(
     'Prompt by Region version 3.2.0',
     expect.any(Number),
-    20,
+    expect.closeTo(24.2),
     expect.any(Number),
   );
 });
 
-test('draws a plain nonmatching title without pill geometry', () => {
+test('draws the declared model alongside an arbitrary renamed title', () => {
   const context = drawingContext();
   const geometry = new CubeModelPillCanvasRenderer().draw(
     context,
@@ -78,25 +85,49 @@ test('draws a plain nonmatching title without pill geometry', () => {
       fontFamily: 'sans-serif',
       fontSize: 16,
       textColor: '#eee',
-      punchoutColor: '#222',
+      pillBackground: '#0078d4',
+      pillForeground: '#fff',
       align: 'left',
     },
   );
 
-  expect(geometry.pillHeight).toBe(0);
-  expect(context.roundRect).not.toHaveBeenCalled();
-  expect(context.fillText).toHaveBeenCalledWith('Custom alias', 10, 20, 200);
+  expect(geometry.pillHeight).toBeGreaterThan(0);
+  expect(context.roundRect).toHaveBeenCalled();
+  expect(context.fillText).toHaveBeenCalledWith(
+    'Anima',
+    expect.any(Number),
+    expect.closeTo(24.368),
+    expect.any(Number),
+  );
+  expect(context.fillText).toHaveBeenCalledWith(
+    'Custom alias',
+    expect.any(Number),
+    expect.closeTo(25.6),
+    expect.any(Number),
+  );
 });
 
 /** Provide the finite Canvas surface required by the model-title renderer. */
 function drawingContext(): CanvasRenderingContext2D {
-  return {
+  const context = {
+    fillStyle: '',
+    font: '',
     save: jest.fn(),
     restore: jest.fn(),
     beginPath: jest.fn(),
     roundRect: jest.fn(),
-    fill: jest.fn(),
-    fillText: jest.fn(),
-    measureText: jest.fn((text: string) => ({ width: text.length * 6 }) as TextMetrics),
+    fill: jest.fn((): CanvasRenderingContext2D['fillStyle'] => context.fillStyle),
+    fillText: jest.fn((): CanvasRenderingContext2D['fillStyle'] => context.fillStyle),
+    measureText: jest.fn((text: string) => {
+      const size = Number.parseFloat(context.font.match(/([\d.]+)px/)?.[1] ?? '12');
+      return {
+        width: text.length * 6,
+        actualBoundingBoxAscent: size * 0.7,
+        actualBoundingBoxDescent: 0,
+        fontBoundingBoxAscent: size * 0.8,
+        fontBoundingBoxDescent: size * 0.2,
+      } as TextMetrics;
+    }),
   } as unknown as CanvasRenderingContext2D;
+  return context;
 }

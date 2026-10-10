@@ -24,8 +24,11 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
+
 from sugarcubes.backend.routes import build_route_handlers
 from sugarcubes.backend.responses import BackendError
+from sugarcubes.backend.services import cube_load_service
 from sugarcubes.backend.services.cube_picker_catalog_service import (
     CubePickerCatalogService,
 )
@@ -111,6 +114,7 @@ def test_picker_catalog_projects_canonical_boundaries_and_search_metadata() -> N
             "cubeId": "Artificial-Sweetener/Base-Cubes/SDXL/Demo.cube",
             "version": "1.2.3",
             "displayName": "SDXL/Demo",
+            "contentHash": "",
             "description": "A demo Cube",
             "searchTerms": [
                 "Artificial-Sweetener/Base-Cubes/SDXL/Demo.cube",
@@ -294,3 +298,84 @@ def test_picker_catalog_route_exposes_composed_service(
     assert payload["entries"][0]["inputs"] == [
         {"id": "seed", "name": "seed", "label": "Seed", "type": "INT"}
     ]
+
+
+def test_picker_catalog_reuses_content_hashes_and_isolates_descriptor_mutation() -> (
+    None
+):
+    """Prepare only changed artifacts even when versions and catalog-wide facts stay similar."""
+
+    entries: list[dict[str, Any]] = [
+        {"cubeId": "a", "contentHash": "sha256:a"},
+        {"cubeId": "b", "contentHash": "sha256:b"},
+    ]
+    loaded: list[str] = []
+
+    def load_cube(cube_id: str) -> dict[str, Any]:
+        """Return the current artifact without changing its public version."""
+
+        loaded.append(cube_id)
+        entry = next(entry for entry in entries if entry["cubeId"] == cube_id)
+        return {
+            "cube": {"cube_id": cube_id, "version": "1"},
+            "contentHash": entry["contentHash"],
+            "boundaries": {"inputs": [], "outputs": []},
+        }
+
+    service = CubePickerCatalogService(
+        list_catalog=lambda: {"catalogRevision": "revision", "cubes": entries},
+        load_cube=load_cube,
+    )
+    first = service.list_picker_catalog()
+    first["entries"][0]["displayName"] = "Mutated response"
+    assert service.list_picker_catalog()["entries"][0]["displayName"] == "a"
+    assert loaded == ["a", "b"]
+    entries[0]["contentHash"] = "sha256:changed"
+    assert service.list_picker_catalog()["entries"][0]["version"] == "1"
+    assert loaded == ["a", "b", "a"]
+    entries.pop()
+    assert len(service.list_picker_catalog()["entries"]) == 1
+    entries.append({"cubeId": "b", "contentHash": "sha256:b"})
+    service.list_picker_catalog()
+    assert loaded == ["a", "b", "a", "b"]
+
+
+def test_picker_catalog_retries_a_changed_artifact_instead_of_caching_a_mismatch() -> (
+    None
+):
+    """An edit during projection must remain unavailable until one coherent load succeeds."""
+
+    prepared: dict[str, Any] = {
+        "cube": {"cube_id": "cube", "version": "1"},
+        "contentHash": "changed",
+        "boundaries": {"inputs": [], "outputs": []},
+    }
+    service = CubePickerCatalogService(
+        list_catalog=lambda: {
+            "catalogRevision": "revision",
+            "cubes": [{"cubeId": "cube", "contentHash": "expected"}],
+        },
+        load_cube=lambda _: prepared,
+    )
+    assert service.list_picker_catalog()["entries"] == []
+    prepared["contentHash"] = "expected"
+    assert len(service.list_picker_catalog()["entries"]) == 1
+
+
+def test_picker_load_rejects_an_edit_during_artifact_read(
+    tmp_path: Path,
+    backend_services_factory: BackendServicesFactory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reject raced bytes before preparing or advertising a mismatched artifact hash."""
+
+    hashes = iter(["before", "after"])
+    monkeypatch.setattr(
+        cube_load_service, "compute_cube_content_hash", lambda _: next(hashes)
+    )
+    services = backend_services_factory(
+        tmp_path,
+        load_cube_artifact=lambda _: SimpleNamespace(version="1", document={}),
+    )
+    with pytest.raises(BackendError, match="changed while loading"):
+        services.loader.load_cube_path(cube_path=tmp_path / "cube.cube", cube_id="cube")

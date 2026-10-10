@@ -1,20 +1,23 @@
 /** Retain every host option, including sentinels and files without provider metadata. */
-export function modelPickerChoices(items, kind, options) {
+export function modelPickerChoices(items, kind, options, optionLabel) {
     const available = new Map(items.filter((item) => item.kind === kind).map((item) => [item.value, item]));
-    return options.map((value) => available.get(value) ?? literalModelChoice(kind, value));
+    return options.map((value) => available.get(value) ?? literalModelChoice(kind, value, optionLabel?.(value)));
 }
-/** Construct an honest filename-only entry until prepared metadata becomes available. */
-function literalModelChoice(kind, value) {
+/** Present labeled host references at the root without interpreting opaque identifiers as paths. */
+function literalModelChoice(kind, value, label) {
     const path = value.replaceAll('\\', '/');
     const filename = path.split('/').at(-1) ?? path;
+    const labeled = Boolean(label && label !== value);
     return {
         id: `literal:${kind}:${value}`,
         kind,
         value,
         rootId: '',
-        relativePath: path,
-        folder: path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '',
-        title: filename.replace(/\.(?:safetensors|ckpt|pt|pth|bin|gguf)$/i, ''),
+        relativePath: labeled ? '' : path,
+        folder: !labeled && path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '',
+        title: label && label !== value
+            ? label
+            : filename.replace(/\.(?:safetensors|ckpt|pt|pth|bin|gguf)$/i, ''),
         version: '',
         baseModel: '',
         provider: '',

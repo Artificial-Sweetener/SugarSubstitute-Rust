@@ -38,6 +38,7 @@ export interface CubePickerDescriptor {
   key: string;
   cubeId: string;
   version: string;
+  contentHash: string;
   displayName: string;
   description: string;
   searchTerms: string[];
@@ -112,6 +113,7 @@ export function readCubePickerDescriptor(value: unknown): CubePickerDescriptor |
     key,
     cubeId,
     version: readOptionalString(value.version),
+    contentHash: readOptionalString(value.contentHash),
     displayName,
     description: readOptionalString(value.description),
     searchTerms,

@@ -24,6 +24,7 @@ from typing import Any, Callable, Sequence
 from ...importer import CubeImportError
 from ...instrumentation import log_diagnostic
 from ..responses import BackendError
+from .cube_file_io import compute_cube_content_hash
 from .cube_icon_service import attach_icon_url, normalize_existing_icon_metadata
 from .cube_identity_redirect_service import CubeIdentityRedirectService
 from .cube_library_service import CubeLibraryService
@@ -99,7 +100,12 @@ class CubeLoadService:
             version_pin=version_pin,
         )
         try:
+            content_hash = compute_cube_content_hash(cube_path)
             loaded_cube = self.load_cube_artifact(cube_path)
+            if compute_cube_content_hash(cube_path) != content_hash:
+                raise BackendError(
+                    "Cube changed while loading; refresh and try again", status=409
+                )
             if version_pin and loaded_cube.version != version_pin:
                 _log_cube_library_diagnostic(
                     "sugarcubes_frontend_load_cube_version_pin_mismatch",
@@ -170,6 +176,7 @@ class CubeLoadService:
             relative_path=source_info.get("relative_path", ""),
         )
         response = {
+            "contentHash": content_hash,
             "cube": cube_payload,
             "document": dict(loaded_cube.document),
             "nodes": prepared.nodes,

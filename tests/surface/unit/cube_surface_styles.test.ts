@@ -18,15 +18,39 @@
 import { ensureCubeSurfaceStyles } from '../../../frontend/comfyui/ui/surface/CubeSurfaceStyles.js';
 
 describe('ensureCubeSurfaceStyles', () => {
-  test('removes SugarCubes sidebar chrome from the active Cube editor viewport', () => {
+  test('uses palette foreground for borrowed controls while retaining model caption ownership', () => {
     ensureCubeSurfaceStyles(document);
-
-    const css = document.getElementById('sugarcubes-cube-surface-styles')?.textContent ?? '';
+    const style = document.getElementById('sugarcubes-owned-control-appearance');
+    if (!(style instanceof HTMLStyleElement)) throw new Error('Missing card appearance');
+    const rule = [...(style.sheet?.cssRules ?? [])].find(
+      (entry) =>
+        entry instanceof CSSStyleRule && entry.selectorText.includes(':not(.sc-model-field input)'),
+    );
+    if (!(rule instanceof CSSStyleRule)) throw new Error('Missing control foreground rule');
+    const card = document.createElement('article');
+    card.className = 'sugarcubes-native-node-card';
+    const input = document.createElement('input');
+    const combo = document.createElement('button');
+    combo.setAttribute('role', 'combobox');
+    const model = document.createElement('div');
+    model.className = 'sc-model-field';
+    const caption = document.createElement('input');
+    model.append(caption);
+    card.append(input, combo, model);
+    document.body.append(card);
+    expect(input.matches(rule.selectorText)).toBe(true);
+    expect(combo.matches(rule.selectorText)).toBe(true);
+    expect(caption.matches(rule.selectorText)).toBe(false);
+    expect(rule.style.color).toBe('var(--colorNeutralForeground1,var(--fg-color,#eee))');
+    card.remove();
+  });
+  test('uses the accepted palette foreground on owned Cube shells, headers, and output rails', () => {
+    ensureCubeSurfaceStyles(document);
+    const css = document.getElementById('sugarcubes-node-card-appearance')?.textContent ?? '';
     expect(css).toMatch(
-      /body\.sugarcubes-cube-editor-workspace[\s\S]*?\.p-splitter:has\(\.sugarcubes-sidebar-panel\)[\s\S]*?> \.side-bar-panel,[\s\S]*?> \.p-splitter-gutter\s*\{[^}]*display:\s*none\s*!important;/s,
+      /\.sugarcubes-cube-face,\s*\.sugarcubes-cube-face__header,\s*\[data-sugarcube-cube-body\]\s*\{[^}]*color:var\(--colorNeutralForeground1,var\(--fg-color,#eee\)\);/,
     );
   });
-
   test('suppresses native ports and subgraph footers while preserving advanced inputs', () => {
     ensureCubeSurfaceStyles(document);
 

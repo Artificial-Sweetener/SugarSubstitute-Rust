@@ -26,11 +26,11 @@ import type {
 import { commonFieldDomain } from '../domain/FieldCompatibility.js';
 import { advanceSharedSeeds } from '../domain/SharedSeedAdvancement.js';
 import { resolveLinkedNodeModes } from '../domain/LinkedNodeState.js';
+import { reconcileRelationMembership } from '../domain/RelationMembership.js';
 import {
   canLinkField,
   canLinkNode,
   discoverOverrides,
-  initializeNodeLinks,
   linkedFieldMembers,
   resolveRelations,
   validateSharedEdit,
@@ -76,8 +76,7 @@ export class WorkflowRelations {
         })),
       };
       const previousSnapshot = this.#snapshot;
-      this.#repairMembership(inventory, state);
-      initializeNodeLinks(inventory.nodes, state);
+      reconcileRelationMembership(fields, inventory.nodes, state);
       const groups = discoverOverrides(fields, state);
       for (const group of groups)
         state.overrides[group.key] = {
@@ -122,13 +121,7 @@ export class WorkflowRelations {
         const previous = previousSnapshot?.resolved.find(
           (field) => field.field.id === item.field.id,
         );
-        if (
-          item.value !== item.field.value ||
-          (previous &&
-            (previous.value !== item.value ||
-              previous.source !== item.source ||
-              previous.override !== item.override))
-        )
+        if (item.value !== item.field.value || (previous && previous.value !== item.value))
           changedNodes.add(item.field.nodeId);
       }
       for (const node of inventory.nodes)
@@ -261,36 +254,6 @@ export class WorkflowRelations {
       this.port.save(state);
       this.reconcile(false);
     });
-  }
-
-  /** Promote surviving masters using their effective value instead of dormant local configuration. */
-  #repairMembership(inventory: RelationInventory, state: RelationState): void {
-    const nodeIds = new Set(inventory.nodes.map((node) => node.id)),
-      fieldIds = new Set(inventory.fields.map((field) => field.contract.id));
-    for (const [links, ids] of [
-      [state.nodeLinks, nodeIds],
-      [state.fieldLinks, fieldIds],
-    ] as const) {
-      const missingSources = new Set(
-        Object.values(links).filter((id): id is string => id !== null && !ids.has(id)),
-      );
-      for (const missing of missingSources) {
-        const survivors = Object.keys(links).filter((id) => ids.has(id) && links[id] === missing);
-        const replacement = survivors[0];
-        if (replacement) {
-          links[replacement] = null;
-          for (const bound of inventory.fields)
-            if (bound.contract.id === replacement || bound.contract.nodeId === replacement)
-              state.locals[bound.contract.id] = bound.read();
-          const promoted = inventory.nodes.find((node) => node.id === replacement);
-          if (promoted) state.localNodeModes[replacement] = promoted.mode ?? 0;
-        }
-        for (const id of survivors.slice(1)) links[id] = replacement ?? null;
-      }
-      for (const id of Object.keys(links)) if (!ids.has(id)) Reflect.deleteProperty(links, id);
-    }
-    for (const id of Object.keys(state.locals))
-      if (!fieldIds.has(id)) Reflect.deleteProperty(state.locals, id);
   }
 
   /** Project only validated editable fields; native connections are never mutated. */

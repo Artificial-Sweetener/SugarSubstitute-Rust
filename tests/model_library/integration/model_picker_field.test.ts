@@ -21,6 +21,7 @@ import { modelPickerChoices } from '../../../frontend/comfyui/ui/model_library/M
 import type { ModelPickerBinding } from '../../../frontend/comfyui/ui/model_library/ModelPickerBinding.js';
 import { modelPickerCss } from '../../../frontend/comfyui/ui/model_library/ModelPickerStyles.js';
 import { fluentAppearanceCss } from '../../../frontend/comfyui/ui/surface/appearance/FluentAppearanceStyles.js';
+import { ensureRelationStyles } from '../../../frontend/comfyui/ui/relations/presentation/RelationStyles.js';
 
 import { ModelFixtureResizeObserver } from '../support/resize_observer.js';
 
@@ -68,7 +69,49 @@ beforeAll(() => {
 });
 afterEach(() => {
   document.body.replaceChildren();
+  document.getElementById('sc-relation-styles')?.remove();
 });
+
+test.each([true, false])(
+  'inline model replacement fills its native value slot in Fluent=%s',
+  (fluent) => {
+    const field = fixture();
+    field.container.className = 'sc-model-mount';
+    const card = document.createElement('div');
+    card.className = 'sugarcubes-cube-face__node-card';
+    const row = document.createElement('div');
+    row.dataset.scFluentRow = '';
+    const outerLayout = document.createElement('div');
+    outerLayout.dataset.scFluentLayout = '';
+    const outerLabel = document.createElement('label');
+    const slot = document.createElement('div');
+    const relation = document.createElement('div');
+    relation.className = 'sugarcubes-native-widget';
+    relation.dataset.scChoiceInline = '';
+    const layout = document.createElement('div');
+    if (fluent) layout.dataset.scFluentLayout = '';
+    const label = document.createElement('label');
+    label.dataset.testid = 'widget-layout-field-label';
+    const value = document.createElement('div');
+    value.append(field.container);
+    layout.append(label, value);
+    relation.append(layout);
+    slot.append(relation);
+    outerLayout.append(outerLabel, slot);
+    row.append(outerLayout);
+    card.append(row);
+    document.body.append(card);
+    const style = document.createElement('style');
+    ensureRelationStyles(document);
+    style.textContent = modelPickerCss + (fluent ? fluentAppearanceCss(true) : '');
+    card.append(style);
+    expect(getComputedStyle(layout).width).toBe('100%');
+    expect(getComputedStyle(value).width).toBe('100%');
+    expect(getComputedStyle(value).maxWidth).toBe('none');
+    if (fluent) expect(getComputedStyle(slot).maxWidth).toBe('min(65%,360px)');
+    field.picker.dispose();
+  },
+);
 
 test.each([true, false])(
   'shares regular Fluent combo styling in dark=%s through thumbnail changes',

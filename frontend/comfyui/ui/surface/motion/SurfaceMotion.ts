@@ -23,6 +23,12 @@ export interface SurfaceRectangle {
   height: number;
 }
 
+/** Bind one retained native mount to its settled layout destination. */
+export interface SurfacePlacement {
+  element: HTMLElement;
+  rectangle: SurfaceRectangle;
+}
+
 /** Animate stable surface items with one lifecycle for entry, placement, resize, and retirement. */
 export class SurfaceMotion {
   readonly #placements = new Map<HTMLElement, SurfaceRectangle>();
@@ -41,14 +47,29 @@ export class SurfaceMotion {
     for (const element of this.#animations.keys()) this.cancel(element);
   }
 
-  /** Commit layout immediately and animate its visual delta on the compositor. */
-  place(element: HTMLElement, rectangle: SurfaceRectangle, animate = true): void {
-    const previous = this.#placements.get(element);
-    if (previous && sameRectangle(previous, rectangle)) return;
+  /** Read interrupted positions together before committing compositor placement destinations. */
+  place(placements: readonly SurfacePlacement[], animate = true): void {
+    const prepared = placements.flatMap(({ element, rectangle }) => {
+      const previous = this.#placements.get(element);
+      if (previous && sameRectangle(previous, rectangle)) return [];
+      const interrupted = this.#animations.has(element)
+        ? element.ownerDocument.defaultView?.getComputedStyle(element).transform
+        : undefined;
+      return [{ element, rectangle, previous, interrupted }];
+    });
+    for (const { element, rectangle, previous, interrupted } of prepared)
+      this.#place(element, rectangle, previous, interrupted, animate);
+  }
+
+  /** Apply a prepared destination without another layout read between neighbor writes. */
+  #place(
+    element: HTMLElement,
+    rectangle: SurfaceRectangle,
+    previous: SurfaceRectangle | undefined,
+    interrupted: string | undefined,
+    animate: boolean,
+  ): void {
     const target = `translate(${String(rectangle.x)}px, ${String(rectangle.y)}px)`;
-    const interrupted = this.#animations.has(element)
-      ? element.ownerDocument.defaultView?.getComputedStyle(element).transform
-      : undefined;
     this.cancel(element);
     this.#placements.set(element, rectangle);
     element.style.transform = target;

@@ -19,8 +19,66 @@ import { readComfyModelFields } from '../../../frontend/comfyui/ui/model_library
 import type { ModelCatalogSnapshot } from '../../../frontend/comfyui/ui/model_library/ModelCatalog.js';
 import { recognizeModelField } from '../../../frontend/comfyui/ui/model_library/ModelFieldRecognition.js';
 import { modelPickerChoices } from '../../../frontend/comfyui/ui/model_library/ModelPickerChoices.js';
+import { registerNativeWidgetMount } from '../../../frontend/comfyui/ui/surface/NativeWidgetMountBoundary.js';
 
 afterEach(() => document.body.replaceChildren());
+
+test('enhances registered relation choices through their own callback without duplicating native fields', () => {
+  const native = nativeModelFieldFixture();
+  const mount = document.createElement('div');
+  mount.className = 'sugarcubes-native-widget';
+  const frame = document.createElement('div');
+  frame.setAttribute('data-capture-wheel', 'true');
+  const trigger = document.createElement('button');
+  trigger.dataset.testid = 'widget-select-default-trigger';
+  frame.append(trigger);
+  mount.append(frame);
+  native.card.append(mount);
+  const reference = 'link:["cube/peer","model_name"]';
+  const values = ['Flux\\alpha.safetensors', reference, 'blocked.safetensors'];
+  const props = {
+    widget: {
+      name: 'ckpt_name',
+      label: 'ckpt_name link or value',
+      options: {
+        values,
+        allowedValues: ['Flux\\alpha.safetensors', reference],
+        getOptionLabel: (value: string) => (value === reference ? '🔗 Other Cube' : value),
+      },
+    },
+    modelValue: 'Flux\\alpha.safetensors',
+  };
+  const writes: string[] = [];
+  registerNativeWidgetMount(mount, {
+    seed: null,
+    vnode: {
+      type: { __name: 'WidgetSelectDefault' },
+      component: {
+        props,
+        emit: (_event: string, value: string) => {
+          writes.push(value);
+          props.modelValue = value;
+        },
+        proxy: { $watch: () => () => undefined },
+        subTree: { el: frame },
+      },
+    },
+  });
+  const fields = readComfyModelFields(native.card, native.snapshot);
+  expect(fields).toHaveLength(2);
+  const binding = fields.find((field) => field.anchor === frame);
+  expect(binding?.inputName).toBe('ckpt_name');
+  expect(binding?.kind).toBe('checkpoints');
+  binding?.writeValue(reference);
+  binding?.writeValue('injected.safetensors');
+  binding?.writeValue('blocked.safetensors');
+  expect(writes).toEqual([reference]);
+  expect(native.emit).not.toHaveBeenCalled();
+  expect(modelPickerChoices([], 'checkpoints', values, binding?.optionLabel)[1]?.title).toBe(
+    '🔗 Other Cube',
+  );
+  expect(modelPickerChoices([], 'checkpoints', values, binding?.optionLabel)[1]?.folder).toBe('');
+});
 
 test('uses promoted leaf contracts while retaining the native name and legal callback path', () => {
   const native = nativeModelFieldFixture();

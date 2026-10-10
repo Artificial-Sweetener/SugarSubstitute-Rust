@@ -148,8 +148,8 @@ def test_cube_output_image_value_produces_preview_and_artifacts(
         height=6,
     )
     monkeypatch.setattr(
-        "sugarcubes.nodes._build_output_preview",
-        lambda value: (
+        "sugarcubes.nodes.build_cube_output_preview",
+        lambda value, *, save_outputs: (
             {
                 "images": [
                     {"filename": artifact.filename, "subfolder": "", "type": "temp"}

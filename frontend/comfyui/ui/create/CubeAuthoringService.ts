@@ -27,9 +27,8 @@ import { suggestCubeAuthoringIdentity } from './CubeAuthoringIdentity.js';
 import type { CubeSaveDestination } from './CubeAuthoringIdentity.js';
 import type { WritableCubePack } from '../packs/CubePackService.js';
 
-interface AuthoringBrowser {
+interface AuthoringCatalog {
   getCubes?(): UnknownRecord[];
-  getModelSuggestions?(): readonly string[];
 }
 
 interface AuthoringPackService {
@@ -42,7 +41,8 @@ interface AuthoringToast {
 }
 
 export interface CubeAuthoringServiceOptions {
-  browser?: AuthoringBrowser | null;
+  catalog?: AuthoringCatalog | null;
+  modelSuggestions?: { getModelSuggestions(): readonly string[] } | null;
   dialogs: CubeAuthoringDialog;
   packService: AuthoringPackService;
   toast?: AuthoringToast | null;
@@ -63,13 +63,15 @@ const CREATE_PACK_DESTINATION: CubeAuthoringDestinationOption = {
 
 /** Coordinate the one canonical Cube authoring modal for first and subsequent saves. */
 export class CubeAuthoringService {
-  readonly #browser: AuthoringBrowser | null;
+  readonly #catalog: AuthoringCatalog | null;
+  readonly #modelSuggestions: CubeAuthoringServiceOptions['modelSuggestions'];
   readonly #dialogs: CubeAuthoringDialog;
   readonly #packService: AuthoringPackService;
   readonly #toast: AuthoringToast | null;
 
   constructor(options: CubeAuthoringServiceOptions) {
-    this.#browser = options.browser ?? null;
+    this.#catalog = options.catalog ?? null;
+    this.#modelSuggestions = options.modelSuggestions;
     this.#dialogs = options.dialogs;
     this.#packService = options.packService;
     this.#toast = options.toast ?? null;
@@ -81,7 +83,7 @@ export class CubeAuthoringService {
     return this.#dialogs.openCubeAuthoring({
       candidate,
       destinations,
-      modelSuggestions: this.#browser?.getModelSuggestions?.() ?? [],
+      modelSuggestions: this.#modelSuggestions?.getModelSuggestions() ?? [],
       deriveIdentity: (name, targetModel, destination) =>
         suggestCubeAuthoringIdentity(name, targetModel, destination, this.#existingCubeIds()),
       onCreateDestination: async () => {
@@ -100,7 +102,7 @@ export class CubeAuthoringService {
       candidate: { ...candidate, destination },
       destinationLocked: true,
       destinations: [destinationOption(destination)],
-      modelSuggestions: this.#browser?.getModelSuggestions?.() ?? [],
+      modelSuggestions: this.#modelSuggestions?.getModelSuggestions() ?? [],
       deriveIdentity: (name, targetModel) => {
         const normalizedName = normalizeDefaultAliasTitle(name);
         if (!normalizedName) throw new Error('Name is required.');
@@ -130,7 +132,7 @@ export class CubeAuthoringService {
 
   /** Return canonical ids already reserved by the active library. */
   #existingCubeIds(): string[] {
-    return (this.#browser?.getCubes?.() ?? [])
+    return (this.#catalog?.getCubes?.() ?? [])
       .map((entry) => (typeof entry.cube_id === 'string' ? entry.cube_id : ''))
       .filter(Boolean);
   }

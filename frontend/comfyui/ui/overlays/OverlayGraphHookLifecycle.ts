@@ -21,7 +21,6 @@ import { isRecord } from '../types/common.js';
 import { writeCanonicalBounds } from '../graph/CubeBounds.js';
 import type { UnknownRecord } from '../types/common.js';
 import type { ComfyCanvas, ComfyGraph, ComfyNode } from '../types/graph.js';
-import type { PlacementOverlay } from './PlacementOverlay.js';
 import type { ProximityOverlay } from './ProximityOverlay.js';
 import type { CubeChromeOverlay } from './CubeChromeOverlay.js';
 import type { CubeContainmentService } from '../layout/CubeContainmentService.js';
@@ -90,7 +89,6 @@ interface HookOptions {
   scheduler: HookScheduler | null;
   target: GraphHookTarget;
   proximity: ProximityOverlay;
-  placement: PlacementOverlay;
   chrome: CubeChromeOverlay;
   proximityPointerMoves: ProximityPointerMoveTracker;
   proximityGraphMutations: ProximityGraphMutationTracker;
@@ -108,7 +106,6 @@ export class OverlayGraphHookLifecycle {
   private readonly scheduler: HookScheduler | null;
   private readonly target: GraphHookTarget;
   private readonly proximity: ProximityOverlay;
-  private readonly placement: PlacementOverlay;
   private readonly chrome: CubeChromeOverlay;
   private readonly proximityPointerMoves: ProximityPointerMoveTracker;
   private readonly proximityGraphMutations: ProximityGraphMutationTracker;
@@ -123,7 +120,6 @@ export class OverlayGraphHookLifecycle {
     this.scheduler = options.scheduler;
     this.target = options.target;
     this.proximity = options.proximity;
-    this.placement = options.placement;
     this.chrome = options.chrome;
     this.proximityPointerMoves = options.proximityPointerMoves;
     this.proximityGraphMutations = options.proximityGraphMutations;
@@ -150,7 +146,6 @@ export class OverlayGraphHookLifecycle {
     const originalClean = appRef.clean as HostCallback;
     appRef.clean = function sugarcubesPatchedClean(this: UnknownRecord, ...args: unknown[]) {
       manager.proximity?.resetOverlayState?.();
-      manager.placement?.stop?.();
       return originalClean.call(this, ...args);
     };
     this.cleanHooked = true;
@@ -310,13 +305,6 @@ export class OverlayGraphHookLifecycle {
         if (lifecycle.chrome?.handleMouseDown?.(event, this)) {
           manager.clearGroupDragState();
           return true;
-        }
-        if (lifecycle.placement.getState().active) {
-          const handled = lifecycle.placement.handlePlacementMouseDown(event, this, null);
-          if (handled) {
-            manager.clearGroupDragState();
-            return true;
-          }
         }
         const result = originalProcessMouseDown.call(this, event, ...args);
         manager.captureGroupDragState(this);

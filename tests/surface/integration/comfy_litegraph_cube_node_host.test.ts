@@ -112,7 +112,7 @@ describe('ComfyLiteGraphCubeNodeHost', () => {
     expect(drawNode).toHaveBeenCalledWith(inner, expect.any(Object));
     expect(context.fillText).toHaveBeenCalledWith('TI', 0, 0);
     expect(context.fillText).toHaveBeenCalledWith(
-      'SDXL/Text to Image version 2.0.0',
+      'SDXL/Text to Image v2.0.0',
       expect.any(Number),
       expect.any(Number),
       expect.any(Number),

@@ -14,7 +14,10 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Style relation chrome with Comfy tokens and explicit embedded Substitute presentation. */
+import { ensureOwnedControlAppearanceStyles } from '../../surface/appearance/OwnedControlAppearanceStyles.js';
+/** Install relation geometry while shared native control foregrounds retain one owner. */
 export function ensureRelationStyles(document) {
+    ensureOwnedControlAppearanceStyles(document);
     if (document.getElementById('sc-relation-styles'))
         return;
     const style = document.createElement('style');
@@ -61,11 +64,12 @@ export function ensureRelationStyles(document) {
   .sc-field-relation.sc-node-link.sc-relation-canvas-header { max-width:50%; }
   [data-sc-relation-hidden="true"] { display:none !important; }
   .sc-field-relation { display:flex; align-items:center; min-width:0; flex:1; color:var(--fg-color); font:inherit; }
+  .sc-field-relation[hidden] { display:none !important; }
   [data-sc-choice-inline] [data-testid="widget-layout-field-label"] { display:none; }
-  [data-sc-choice-inline] :has(> [data-testid="widget-layout-field-label"]) { display:block; }
+  [data-sc-choice-inline] :has(> [data-testid="widget-layout-field-label"]) { display:block; width:100%; min-width:0; }
+  [data-sc-choice-inline] :has(> [data-testid="widget-layout-field-label"]) > :last-child { width:100%; max-width:none; min-width:0; flex:1; }
   .sugarcubes-native-widget[data-sc-choice-inline] > [data-sc-fluent-control] { width:100%; min-width:0; grid-column:auto; }
   .sugarcubes-native-widget[data-sc-choice-inline] [data-sc-fluent-layout] { display:block; width:100%; min-height:0; grid-column:auto; }
-  .sugarcubes-native-widget[data-sc-choice-inline] [data-sc-fluent-layout] > :last-child { width:100%; max-width:none; min-width:0; flex:1; }
   .sc-overrides-menu { flex:none; display:flex; flex-direction:row; align-items:center; justify-content:center; gap:4px; height:32px; width:40px; padding:6px; border:0; border-radius:var(--radius-md); color:var(--fg-color); background:transparent; cursor:pointer; }
   .sc-overrides-menu:hover, .sc-overrides-menu[aria-expanded="true"] { background:var(--comfy-input-bg); }
   .sc-overrides-menu:focus-visible { outline:2px solid var(--component-node-widget-background-highlighted); outline-offset:-2px; }

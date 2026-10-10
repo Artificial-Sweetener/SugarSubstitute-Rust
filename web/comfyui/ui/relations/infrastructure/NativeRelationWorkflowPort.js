@@ -25,6 +25,7 @@ export class NativeRelationWorkflowPort {
     getConnections;
     inventorySource;
     #transactionDepth = 0;
+    #pendingRefresh = null;
     /** Resolve the root workflow lazily so navigation and loading do not change relation scope. */
     constructor(getGraph, document, logger, getCardState, getConnections = () => []) {
         this.getGraph = getGraph;
@@ -57,6 +58,16 @@ export class NativeRelationWorkflowPort {
         extra[RELATION_METADATA_KEY] = parseRelationState(state);
         graph.extra = extra;
     }
+    /** Join an existing native history transaction without opening a second undo entry. */
+    joinTransaction(operation) {
+        this.#transactionDepth++;
+        try {
+            operation();
+        }
+        finally {
+            this.#transactionDepth--;
+        }
+    }
     /** Bracket one user intent and its dependent writes as a single native history transaction. */
     transaction(operation) {
         const graph = this.getGraph(), outer = this.#transactionDepth === 0;
@@ -76,15 +87,38 @@ export class NativeRelationWorkflowPort {
             }
         }
     }
-    /** Invalidate projected native widgets after effective values change. */
+    /** Render effective values and visibility together once their synchronous transaction settles. */
     refresh(nodeIds) {
         if (!nodeIds.length)
             return;
-        this.getGraph()?.setDirtyCanvas?.(true, true);
+        const graph = this.getGraph();
+        if (!graph)
+            return;
         const affected = new Set(nodeIds);
         const nodes = [
             ...new Set([...this.inventorySource.owners.values()].flatMap((owner) => affected.has(owner.nodeId) ? [owner.face, owner.node] : [])),
         ];
-        refreshNativeNodeCards(this.document, { kind: 'nodes', nodes });
+        if (!nodes.length)
+            return;
+        if (this.#pendingRefresh?.graph === graph) {
+            for (const node of nodes)
+                this.#pendingRefresh.nodes.add(node);
+            return;
+        }
+        const pending = { graph, nodes: new Set(nodes) };
+        this.#pendingRefresh = pending;
+        queueMicrotask(() => {
+            if (this.#pendingRefresh !== pending)
+                return;
+            this.#pendingRefresh = null;
+            if (this.getGraph() !== graph)
+                return;
+            const current = new Set([...this.inventorySource.owners.values()].flatMap((owner) => [owner.face, owner.node]));
+            const mounted = [...pending.nodes].filter((node) => current.has(node));
+            if (!mounted.length)
+                return;
+            graph.setDirtyCanvas?.(true, true);
+            refreshNativeNodeCards(this.document, { kind: 'nodes', nodes: mounted });
+        });
     }
 }

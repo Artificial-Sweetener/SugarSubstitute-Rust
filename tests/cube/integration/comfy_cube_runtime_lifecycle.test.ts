@@ -18,8 +18,10 @@
 import { jest } from '@jest/globals';
 import { ComfyCubeRuntimeLifecycle } from '../../../frontend/comfyui/ui/cube/ComfyCubeRuntimeLifecycle.js';
 import type { ComfyCubeRuntime } from '../../../frontend/comfyui/ui/cube/ComfyCubeRuntime.js';
+import { CubeInstanceActions } from '../../../frontend/comfyui/ui/cube/stack/CubeInstanceActions.js';
 import { CubeNodeCatalog } from '../../../frontend/comfyui/ui/cube/node/CubeNodeCatalog.js';
 import { CubeEditorContextResolver } from '../../../frontend/comfyui/ui/surface/CubeEditorContextResolver.js';
+import { CubeGraphReorderService } from '../../../frontend/comfyui/ui/workflow/application/CubeGraphReorderService.js';
 
 /** Build the smallest graph-bound runtime needed by the lifecycle owner. */
 function createRuntime(dispose: () => void): ComfyCubeRuntime {
@@ -29,6 +31,42 @@ function createRuntime(dispose: () => void): ComfyCubeRuntime {
     placement: {} as ComfyCubeRuntime['placement'],
     authoring: {} as ComfyCubeRuntime['authoring'],
     nodes,
+    graphSnapshots: {
+      available: false,
+      snapshot: () => ({ revision: '', serializedWorkflow: '{}' }),
+    },
+    stackCommit: { commit: () => undefined },
+    instanceActions: new CubeInstanceActions({
+      nodes,
+      graph: { add() {}, remove() {}, getNodeById: () => null, getLink: () => null },
+      history: { beforeChange() {}, afterChange() {}, setDirtyCanvas() {} },
+      createId: () => 'unused',
+      scope: {
+        assertCurrentRoot() {
+          throw new Error('Inactive lifecycle fixture');
+        },
+      },
+      isReordering: () => false,
+    }),
+    reorder: new CubeGraphReorderService({
+      host: {
+        available: false,
+        revision: '',
+        snapshot: () => ({ revision: '', serializedWorkflow: '{}' }),
+        isCurrent: () => false,
+        isPlacementCurrent: () => false,
+        isOrderCurrent: () => false,
+        commit: () => false,
+      },
+      gateway: {
+        analyze: async () => {
+          throw new Error('Inactive lifecycle fixture');
+        },
+        reorder: async () => {
+          throw new Error('Inactive lifecycle fixture');
+        },
+      },
+    }),
     cardState: {} as ComfyCubeRuntime['cardState'],
     graphChanges: { subscribe: () => () => undefined },
     versionAvailability: {} as ComfyCubeRuntime['versionAvailability'],

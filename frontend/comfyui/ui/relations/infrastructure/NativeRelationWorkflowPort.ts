@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Adapt native workflow transactions and metadata to typed relation use cases. */
 import { isRecord } from '../../types/common.js';
-import type { ComfyGraph } from '../../types/graph.js';
+import type { ComfyGraph, ComfyNode } from '../../types/graph.js';
 import { refreshNativeNodeCards } from '../../surface/NativeNodeCardRefresh.js';
 import type { WorkflowNodeConnection } from '../../surface/WorkflowNodeOrder.js';
 import type { CubeFaceCardStateService } from '../../surface/CubeFaceCardStateService.js';
@@ -28,6 +28,7 @@ import { parseRelationState, RELATION_METADATA_KEY } from './RelationWorkflowMet
 export class NativeRelationWorkflowPort implements RelationWorkflowPort {
   readonly inventorySource: NativeRelationInventory;
   #transactionDepth = 0;
+  #pendingRefresh: { graph: ComfyGraph; nodes: Set<ComfyNode> } | null = null;
 
   /** Resolve the root workflow lazily so navigation and loading do not change relation scope. */
   constructor(
@@ -69,6 +70,16 @@ export class NativeRelationWorkflowPort implements RelationWorkflowPort {
     graph.extra = extra;
   }
 
+  /** Join an existing native history transaction without opening a second undo entry. */
+  joinTransaction(operation: () => void): void {
+    this.#transactionDepth++;
+    try {
+      operation();
+    } finally {
+      this.#transactionDepth--;
+    }
+  }
+
   /** Bracket one user intent and its dependent writes as a single native history transaction. */
   transaction(operation: () => void): void {
     const graph = this.getGraph(),
@@ -86,10 +97,11 @@ export class NativeRelationWorkflowPort implements RelationWorkflowPort {
     }
   }
 
-  /** Invalidate projected native widgets after effective values change. */
+  /** Render effective values and visibility together once their synchronous transaction settles. */
   refresh(nodeIds: readonly string[]): void {
     if (!nodeIds.length) return;
-    this.getGraph()?.setDirtyCanvas?.(true, true);
+    const graph = this.getGraph();
+    if (!graph) return;
     const affected = new Set(nodeIds);
     const nodes = [
       ...new Set(
@@ -98,6 +110,24 @@ export class NativeRelationWorkflowPort implements RelationWorkflowPort {
         ),
       ),
     ];
-    refreshNativeNodeCards(this.document, { kind: 'nodes', nodes });
+    if (!nodes.length) return;
+    if (this.#pendingRefresh?.graph === graph) {
+      for (const node of nodes) this.#pendingRefresh.nodes.add(node);
+      return;
+    }
+    const pending = { graph, nodes: new Set(nodes) };
+    this.#pendingRefresh = pending;
+    queueMicrotask(() => {
+      if (this.#pendingRefresh !== pending) return;
+      this.#pendingRefresh = null;
+      if (this.getGraph() !== graph) return;
+      const current = new Set(
+        [...this.inventorySource.owners.values()].flatMap((owner) => [owner.face, owner.node]),
+      );
+      const mounted = [...pending.nodes].filter((node) => current.has(node));
+      if (!mounted.length) return;
+      graph.setDirtyCanvas?.(true, true);
+      refreshNativeNodeCards(this.document, { kind: 'nodes', nodes: mounted });
+    });
   }
 }

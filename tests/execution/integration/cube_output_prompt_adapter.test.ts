@@ -54,10 +54,26 @@ describe('CubeOutputPromptAdapter', () => {
         default_alias: 'SDXL/Text to Image',
         instance_alias: 'My SDXL Cube',
         instance_id: 'stable-instance',
+        save_outputs: true,
       },
       class_type: 'SugarCubes.CubeOutput',
       _meta: { title: 'output.image' },
     });
+  });
+
+  test('projects workflow-local saving into its sink and skips native muted or bypassed cubes', () => {
+    const producer = leaf('decode');
+    const cube = cubeNode('cube-instance', [producer], ['output.image'], producer);
+    cube.properties.sugarcubes_save_outputs = false;
+    const adapter = outputAdapter([cube]);
+    expect(
+      requirePrompt(adapter.apply({ output: {} })).output[buildCubeOutputExecutionId(cube.id, 0)],
+    ).toMatchObject({ inputs: { save_outputs: false } });
+    for (const mode of [2, 4]) {
+      cube.mode = mode;
+      const original = { output: {} };
+      expect(adapter.apply(original)).toBe(original);
+    }
   });
 
   test('keeps a sink for an externally connected output and resolves nested execution paths', () => {

@@ -226,16 +226,18 @@ function floatingPlacement(root: HTMLElement, grip: HTMLElement): OverrideToolba
     root,
     grip,
     {
-      attach: () => true,
+      attach: (_root, docked) => !docked,
       canDock: () => false,
       dockBounds: () => null,
       floatingBounds: () => ({ bounds: bounds(0, 40, 800, 560), origin: { x: 4, y: 80 } }),
       dragging: jest.fn(),
       preview: jest.fn(),
+      subscribeLayout: () => () => undefined,
       dispose: jest.fn(),
     },
     jest.fn(),
     jest.fn(),
+    { read: () => ({ docked: false, floating: null }), write: jest.fn() },
   );
 }
 

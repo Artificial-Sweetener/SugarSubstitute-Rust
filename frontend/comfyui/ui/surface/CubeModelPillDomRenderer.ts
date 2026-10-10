@@ -16,6 +16,11 @@
 /** Render compact, theme-aware Cube model titles with safe DOM construction. */
 
 import type { CubeModelTitlePresentation } from '../cube/CubeModelTitlePresentation.js';
+import { alignCubeTitleOptically } from './CubeTitleOpticalDomAlignment.js';
+import {
+  CUBE_MODEL_PILL_BACKGROUND,
+  CUBE_MODEL_PILL_FOREGROUND,
+} from './CubeModelPillAppearance.js';
 
 const STYLE_ID = 'sugarcubes-model-pill-styles';
 
@@ -44,6 +49,7 @@ export function createCubeModelTitleElement(
   if (presentation.suffixText) {
     root.append(createTextPart(documentRef, 'suffix', presentation.suffixText));
   }
+  alignCubeTitleOptically(root);
   return root;
 }
 
@@ -60,7 +66,7 @@ export function presentCubeModelTitle(
   return true;
 }
 
-/** Create the inverse model label inside its inherited text-color fill. */
+/** Create the literal model label inside its accent capsule. */
 function createModelPill(documentRef: Document, modelText: string): HTMLSpanElement {
   const pill = documentRef.createElement('span');
   pill.className = 'sugarcubes-model-title__pill';
@@ -110,7 +116,7 @@ function ensureCubeModelPillStyles(documentRef: Document): void {
       max-width: 45%;
       padding: 0.08em 0.38em;
       border-radius: 999px;
-      background: currentColor;
+      background: ${CUBE_MODEL_PILL_BACKGROUND};
       font-size: 0.78em;
       font-weight: 700;
       line-height: 1;
@@ -118,12 +124,12 @@ function ensureCubeModelPillStyles(documentRef: Document): void {
     }
     .sugarcubes-model-title__pill-label {
       overflow: hidden;
-      color: var(
-        --sugarcubes-model-pill-punchout,
-        var(--comfy-menu-bg, var(--p-content-background, #171b20))
-      );
+      color: ${CUBE_MODEL_PILL_FOREGROUND};
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+    .sugarcubes-model-title :is(.sugarcubes-model-title__pill-label,.sugarcubes-model-title__name,.sugarcubes-model-title__suffix) {
+      transform:translateY(var(--sc-cap-line-offset,0px));
     }
     .sugarcubes-model-title__name,
     .sugarcubes-model-title__suffix {

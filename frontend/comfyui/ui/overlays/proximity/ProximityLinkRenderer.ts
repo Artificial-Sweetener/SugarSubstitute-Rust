@@ -140,7 +140,7 @@ export class ProximityLinkRenderer {
     );
   }
 
-  /** Render one guide with Comfy's selected native link mode and a dashed stroke. */
+  /** Render one unbordered guide with Comfy's selected native route and a dashed stroke. */
   #drawNativeLink(options: {
     context: CanvasRenderingContext2D;
     canvas: ProximityRenderCanvas;
@@ -180,7 +180,7 @@ export class ProximityLinkRenderer {
         [options.start[0], options.start[1]],
         [options.end[0], options.end[1]],
         fakeLink,
-        false,
+        true, // Native skip_border prevents dark blocks around each proximity dash.
         false,
         null,
         resolveSlotDirection(options.outputSlot, true, liteGraph),

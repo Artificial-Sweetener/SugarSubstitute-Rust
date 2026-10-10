@@ -20,8 +20,34 @@ import { InputModal } from '../../../frontend/comfyui/ui/dialogs/InputModal.js';
 import { FormModal } from '../../../frontend/comfyui/ui/dialogs/FormModal.js';
 import { SaveNodePresetDialog } from '../../../frontend/comfyui/ui/editor_actions/presentation/SaveNodePresetDialog.js';
 import { GLOBAL_ASSOCIATION } from '../../../frontend/comfyui/ui/editor_actions/domain/UserPreset.js';
+import { FluentAppearanceState } from '../../../frontend/comfyui/ui/surface/appearance/FluentAppearanceState.js';
 
 const adapter = { getDocument: () => document, getWindow: () => window };
+
+test('follows an accepted dual-style appearance source without replacing controls or retaining subscriptions after close', async () => {
+  const source = new FluentAppearanceState();
+  source.update(true, true);
+  const shell = new ModalShell({ adapter, appearanceSource: source });
+  const input = document.createElement('input');
+  input.value = 'retained';
+  const result = shell.open({ title: 'Cube cart', body: input });
+  input.focus();
+  const overlay = shell.elements.overlay!;
+  expect(overlay.dataset.scModalAppearance).toBe('fluent');
+  source.update(false, true);
+  expect(overlay.dataset.scModalAppearance).toBe('comfy');
+  expect(overlay.style.getPropertyValue('--colorNeutralBackground1')).toBe('');
+  expect(document.activeElement).toBe(input);
+  expect(input.value).toBe('retained');
+  source.update(true, false);
+  expect(overlay.dataset.scModalColorScheme).toBe('light');
+  expect(overlay.dataset.scModalAppearance).toBe('fluent');
+  expect(overlay.style.getPropertyValue('--colorNeutralBackground1')).toBeTruthy();
+  shell.close(null);
+  await result;
+  source.update(true, true);
+  expect(overlay.style.getPropertyValue('--colorNeutralBackground1')).toBe('');
+});
 
 afterEach(() => {
   document.body.replaceChildren();

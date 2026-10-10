@@ -40,6 +40,8 @@ export interface CubeFaceActionAnchor {
 }
 
 export interface CubeFaceChromeActions {
+  /** Refresh mounted action availability without signaling graph or Cube metadata changes. */
+  subscribeAvailability?(listener: () => void): () => void;
   onAddCube?(metadata: CubeFaceChromeMetadata, anchor: CubeFaceActionAnchor): void;
   onSwapLeft?(metadata: CubeFaceChromeMetadata): void;
   onSwapRight?(metadata: CubeFaceChromeMetadata): void;

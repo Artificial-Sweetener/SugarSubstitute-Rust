@@ -40,6 +40,7 @@ import type { ModelContextContribution } from './ModelContextProjection.js';
 import { comfyModelCompatibilityContext } from './ComfyModelCompatibilityContext.js';
 import { mountedModelContextContributions } from './ModelMountedContextContributions.js';
 import { resolveCubeInstalledModel } from './CubeInstalledModelResolution.js';
+import { registerNativeFieldEnhancement } from '../surface/NativeFieldPresentation.js';
 
 /** Persist model-picker presentation separately from Fluent styling. */
 export const MODEL_PICKER_SETTING = 'SugarCubes.Models.EnhancedPicker';
@@ -69,6 +70,7 @@ interface FieldMount {
   readonly options: readonly string[];
   readonly picker: MountedModelPicker;
   readonly releaseDiscovery: () => void;
+  readonly releasePresentation: () => void;
   readonly scanning: boolean;
   readonly compatibilityKey: string;
 }
@@ -314,12 +316,14 @@ export class ModelPickerHost {
               resolveCubeInstalledModel(this.#options.app, binding, this.#snapshot);
               const container = this.#options.document.createElement('div');
               container.className = 'sc-model-mount';
+              const releasePresentation = registerNativeFieldEnhancement(binding.anchor, container);
               this.#appearance.track(container);
               binding.anchor.after(container);
               const choices = modelPickerChoices(
                 this.#snapshot.items,
                 binding.kind,
                 binding.options,
+                binding.optionLabel,
               );
               const picker = mountModelPicker(
                 container,
@@ -346,7 +350,6 @@ export class ModelPickerHost {
                   ...choices.filter((item) => item.value !== selected),
                 ])
                 .catch(this.#options.reportError);
-              binding.anchor.setAttribute('data-sc-model-native', '');
               this.#mounts.set(binding.anchor, {
                 binding,
                 inputName: binding.inputName ?? binding.label,
@@ -357,6 +360,7 @@ export class ModelPickerHost {
                 options: binding.options,
                 picker,
                 releaseDiscovery,
+                releasePresentation,
                 scanning: this.#snapshot.scanning,
                 compatibilityKey,
               });
@@ -380,7 +384,9 @@ export class ModelPickerHost {
   /** Apply one shared resolution to still-live mounts without publishing stale asynchronous choices. */
   #publishChoices(mount: FieldMount, snapshot: ModelCatalogSnapshot): void {
     if (mount.kind !== 'ultralytics') {
-      mount.picker.update(modelPickerChoices(snapshot.items, mount.kind, mount.options));
+      mount.picker.update(
+        modelPickerChoices(snapshot.items, mount.kind, mount.options, mount.binding.optionLabel),
+      );
       return;
     }
     void this.#options.detectors
@@ -411,7 +417,7 @@ export class ModelPickerHost {
     mount.picker.dispose();
     this.#appearance.release(mount.container);
     mount.container.remove();
-    anchor.removeAttribute('data-sc-model-native');
+    mount.releasePresentation();
     this.#mounts.delete(anchor);
   }
 

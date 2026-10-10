@@ -20,6 +20,7 @@ export class CubePickerHostIntegration {
     #creation;
     #results;
     #addMenu;
+    #cart;
     #rendererChanges;
     #logger;
     #reportError;
@@ -30,6 +31,7 @@ export class CubePickerHostIntegration {
         this.#creation = options.creation;
         this.#results = options.results;
         this.#addMenu = options.addMenu;
+        this.#cart = options.cart;
         this.#rendererChanges = options.rendererChanges;
         this.#logger = options.logger;
         this.#reportError = options.reportError;
@@ -41,6 +43,14 @@ export class CubePickerHostIntegration {
     /** Close transient menu state before a renderer transition. */
     closeAddMenu() {
         this.#addMenu.close();
+        this.#cart.close();
+    }
+    /** Open the complete stack cart from masonry or a registered Comfy command. */
+    openCart(removeInstanceId = null) {
+        void this.#cart.open(removeInstanceId).catch((error) => {
+            this.#logger.error('SugarCubes Cube cart opening failed.', { error });
+            this.#reportError('Cube cart unavailable', readErrorMessage(error));
+        });
     }
     /** Contribute cached placement-ready definitions during initial registration. */
     async contribute(definitions) {
@@ -61,7 +71,7 @@ export class CubePickerHostIntegration {
     /** Activate the single shared native creation compatibility seam. */
     activate() {
         try {
-            this.#releaseRendererChanges ??= this.#rendererChanges.subscribe(() => this.#addMenu.close());
+            this.#releaseRendererChanges ??= this.#rendererChanges.subscribe(() => this.closeAddMenu());
             this.#results.install();
             this.#creation.install();
         }

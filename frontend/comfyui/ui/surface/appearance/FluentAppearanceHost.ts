@@ -24,10 +24,15 @@ import {
 import { NativeFluentThemeScopes } from './NativeFluentThemeScopes.js';
 import { NativeFluentCardAdapter } from './NativeFluentCardAdapter.js';
 import { fluentAppearanceCss } from './FluentAppearanceStyles.js';
-import { createFluentNumericSlider, createFluentBooleanCheckbox } from './FluentThemeRuntime.js';
+import {
+  createFluentNumericSlider,
+  createFluentBooleanCheckbox,
+  createFluentBooleanSegments,
+} from './FluentThemeRuntime.js';
 import { NativeInlineComboSearch } from './NativeInlineComboSearch.js';
 import { NativeCardTitlebar } from './NativeCardTitlebar.js';
 import { NativeToggleRows } from './NativeToggleRows.js';
+import { NativeBooleanSegments } from './NativeBooleanSegments.js';
 import { NativeAdvancedDisclosure } from './NativeAdvancedDisclosure.js';
 import { NativeNumericControls } from './NativeNumericControls.js';
 import { NativeLabelPresentation } from './NativeLabelPresentation.js';
@@ -37,6 +42,11 @@ import { FluentOverlayScrollbarHost } from './FluentOverlayScrollbarHost.js';
 import { isBorrowedNativeCardPresentation } from '../NativeCardPresentationOwner.js';
 import { NATIVE_PRESENTATION_READY_EVENT } from '../NativePresentationReady.js';
 import { NativeFluentGraphGeometry } from './NativeFluentGraphGeometry.js';
+import { FluentAppearanceState } from './FluentAppearanceState.js';
+import { AccentThemeHost } from './AccentThemeHost.js';
+import { CubeIconAppearanceHost } from './CubeIconAppearanceHost.js';
+import { ensureOwnedControlAppearanceStyles } from './OwnedControlAppearanceStyles.js';
+import { refreshCubeTitleOpticalAlignment } from '../CubeTitleOpticalDomAlignment.js';
 
 /** Persist the user's appearance preference independently of workflow documents. */
 export const FLUENT_APPEARANCE_SETTING = 'SugarCubes.Appearance.Fluent';
@@ -52,6 +62,7 @@ export interface FluentAppearanceHostOptions {
 
 /** Keep appearance separate from graph, Cube policy, and masonry layout state. */
 export class FluentAppearanceHost {
+  readonly state = new FluentAppearanceState();
   readonly #options: FluentAppearanceHostOptions;
   readonly #adapter: NativeFluentCardAdapter;
   readonly #graphGeometry: NativeFluentGraphGeometry;
@@ -59,12 +70,15 @@ export class FluentAppearanceHost {
   readonly #titlebars = new NativeCardTitlebar();
   readonly #labels = new NativeLabelPresentation();
   readonly #toggleRows = new NativeToggleRows(createFluentBooleanCheckbox);
+  readonly #booleanSegments = new NativeBooleanSegments(createFluentBooleanSegments);
   readonly #advanced = new NativeAdvancedDisclosure();
   readonly #numeric = new NativeNumericControls(createFluentNumericSlider);
   readonly #seeds = new NativeSeedControls();
   readonly #comboSearch: NativeInlineComboSearch;
   readonly #scrollbars: FluentOverlayScrollbarHost;
   readonly #style: HTMLStyleElement;
+  readonly #accent: AccentThemeHost;
+  readonly #iconAppearance: CubeIconAppearanceHost;
   #presence: HostSurfaceObserver | null = null;
   readonly #palette: MutationObserver;
   readonly #surfaces = new Set<HTMLElement>();
@@ -83,6 +97,8 @@ export class FluentAppearanceHost {
   /** Prepare observers without altering styles until the user opts in. */
   constructor(options: FluentAppearanceHostOptions) {
     this.#options = options;
+    this.#accent = new AccentThemeHost(options.document, options.app, options.reportError);
+    this.#iconAppearance = new CubeIconAppearanceHost(options.document, this.state);
     this.#scrollbars = new FluentOverlayScrollbarHost(options.document, options.reportError);
     this.#adapter = new NativeFluentCardAdapter(options.app);
     this.#graphGeometry = new NativeFluentGraphGeometry({
@@ -100,6 +116,8 @@ export class FluentAppearanceHost {
   setup(): void {
     if (this.#setup || this.#disposed) return;
     this.#setup = true;
+    ensureOwnedControlAppearanceStyles(this.#options.document);
+    this.#accent.setup();
     const settings = readSettings(this.#options.app);
     if (typeof settings.addSetting !== 'function') {
       this.#options.reportError(
@@ -180,7 +198,10 @@ export class FluentAppearanceHost {
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
+    this.#accent.dispose();
+    this.#iconAppearance.dispose();
     this.#deactivate();
+    this.state.dispose();
     this.#presence?.disconnect();
     this.#palette.disconnect();
     this.#unsubscribe?.();
@@ -202,6 +223,7 @@ export class FluentAppearanceHost {
       resolveComfyRendererMode(this.#options.app, null, this.#options.document) === 'vue';
     if (!active) {
       this.#deactivate();
+      refreshCubeTitleOpticalAlignment(this.#options.document);
       return;
     }
     this.#active = true;
@@ -210,6 +232,7 @@ export class FluentAppearanceHost {
     this.#scrollbars.enable();
     this.#queue(this.#options.document.body);
     this.#schedule();
+    refreshCubeTitleOpticalAlignment(this.#options.document);
   }
 
   /** Expose the underlying host theme, which remains live throughout the session. */
@@ -219,6 +242,7 @@ export class FluentAppearanceHost {
       !this.#disposed &&
       resolveComfyRendererMode(this.#options.app, null, this.#options.document) === 'vue';
     this.#active = false;
+    this.state.update(false, readComfyDarkTheme(this.#options.document));
     this.#style.remove();
     this.#scrollbars.clear();
     this.#adapter.clear();
@@ -226,6 +250,7 @@ export class FluentAppearanceHost {
     this.#labels.clear();
     this.#titlebars.clear();
     this.#toggleRows.clear();
+    this.#booleanSegments.clear();
     this.#advanced.clear();
     this.#numeric.clear();
     this.#seeds.clear();
@@ -248,8 +273,9 @@ export class FluentAppearanceHost {
 
   /** Follow Comfy's theme selector without replacing its palette owner. */
   #refreshPalette(): void {
-    if (!this.#active) return;
     const dark = readComfyDarkTheme(this.#options.document);
+    this.state.update(this.#active, dark);
+    if (!this.#active) return;
     if (dark === this.#dark) return;
     this.#dark = dark;
     this.#style.textContent = fluentAppearanceCss(dark);
@@ -307,10 +333,14 @@ export class FluentAppearanceHost {
           const card = standalone
             ? this.#adapter.annotateWidget(element)
             : this.#adapter.annotate(element);
+          if (!standalone)
+            for (const widget of element.querySelectorAll<HTMLElement>('.sugarcubes-native-widget'))
+              this.#dirty.add(widget);
           this.#labels.reconcile(element, card.labelElements);
           if (!standalone)
             this.#titlebars.reconcile(element, card.header, card.collapsed, card.canCollapse);
           this.#toggleRows.reconcile(element);
+          this.#booleanSegments.reconcile(element);
           this.#advanced.reconcile(card);
           this.#numeric.reconcile(element, card.numericFields);
           this.#seeds.reconcile(element, card.seedFields);
@@ -339,6 +369,11 @@ export class FluentAppearanceHost {
       !target.matches(`.lg-node, ${surfaceSelector}`)
     )
       return;
+    if (target.matches('.sugarcubes-native-widget')) {
+      this.#dirty.add(target);
+      this.#schedule();
+      return;
+    }
     this.#presence?.flushPending();
     this.#queue(target);
     if (this.#frame !== null) this.#options.document.defaultView?.cancelAnimationFrame(this.#frame);

@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { describe, expect, jest, test } from '@jest/globals';
-import { transferCubeVersionState } from '../../../frontend/comfyui/ui/cube/version/CubeVersionStateTransfer.js';
+import { transferCubeInstanceState } from '../../../frontend/comfyui/ui/cube/node/CubeInstanceStateTransfer.js';
 import type { CubeNode } from '../../../frontend/comfyui/ui/cube/node/ComfyCubeNodeFactory.js';
 import type { NativeGraphNode } from '../../../frontend/comfyui/ui/cube/ComfyCubeGraphBuilder.js';
 
@@ -62,7 +62,7 @@ describe('Cube version state transfer', () => {
     });
     const target = cube([targetNode], {});
 
-    transferCubeVersionState(source, target);
+    transferCubeInstanceState(source, target);
 
     expect(targetNode.widgets?.map((widget) => widget.value)).toEqual([768, 'target']);
     expect(target.properties.sugarcubes_surface).toMatchObject({

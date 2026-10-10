@@ -20,7 +20,6 @@ import { CubeBlueprintPersistenceGuard } from '../affordance/CubeBlueprintPersis
 import type { ComfyCubeOutputEventBridge } from './execution/ComfyCubeOutputEventBridge.js';
 import type { ComfyCubeOutputHistoryAdapter } from './execution/ComfyCubeOutputHistoryAdapter.js';
 import type { ComfyPromptQueueBridge } from './execution/ComfyPromptQueueBridge.js';
-import type { SugarCubesSidebarHostAdapter } from '../sidebar/SugarCubesSidebarHostAdapter.js';
 import type { HostSettingsController } from '../settings/HostSettingsController.js';
 import type { ComfyApplication } from '../types/graph.js';
 
@@ -33,7 +32,6 @@ interface CubeExtensionSetupLifecycleOptions {
   api: object;
   app: ComfyApplication | null;
   ui: SugarCubesUI;
-  sidebar: SugarCubesSidebarHostAdapter;
   settings: HostSettingsController;
   promptQueue: ComfyPromptQueueBridge;
   outputEvents: ComfyCubeOutputEventBridge;
@@ -51,7 +49,6 @@ export class CubeExtensionSetupLifecycle {
   async setup(): Promise<void> {
     const options = this.options;
     try {
-      options.sidebar.register();
       options.settings.register();
       await options.ui.setup();
       if (typeof Reflect.get(options.api, 'storeUserData') === 'function') {

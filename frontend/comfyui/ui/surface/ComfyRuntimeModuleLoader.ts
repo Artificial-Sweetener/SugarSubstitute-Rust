@@ -15,6 +15,11 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Resolve the installed Comfy runtime modules used by native Nodes 2.0. */
 
+import {
+  ComfyRuntimeAssetUnavailableError,
+  fetchComfyRuntimeText,
+  isComfyModuleTransportFailure,
+} from './ComfyRuntimeAssetRequest.js';
 import type { ComfyNode } from '../types/graph.js';
 import type { UnknownRecord } from '../types/common.js';
 import { isRecord } from '../types/common.js';
@@ -32,7 +37,6 @@ const NODE_DATA_CAPABILITY = 'extractVueNodeData';
 const SLOT_LAYOUT_CAPABILITY = 'requestSlotLayoutSyncForAllNodes';
 const RELATIVE_MODULE_SPECIFIER_PATTERN = /((?:from|import)\s*(?:\(\s*)?)(["'])\.\/([^"'`]+)\2/g;
 const RELATIVE_ASSET_URL_PATTERN = /new URL\((["'`])([^"'`]+)\1,\s*import\.meta\.url\)/g;
-const FETCH_TIMEOUT_MS = 5_000;
 const NATIVE_NODE_COMPONENT_EXPORT = 'sugarcubesNativeNodeComponent';
 const NODE_DATA_FUNCTION_EXPORT = 'sugarcubesExtractVueNodeData';
 
@@ -75,7 +79,7 @@ export type RuntimeTextFetcher = ComfyRuntimeTextFetcher;
 /** Resolve native socket synchronization without loading a second node component or Vue renderer. */
 export async function loadComfyNativeSlotLayoutSync(
   documentRef: Document,
-  fetchText: RuntimeTextFetcher = fetchRuntimeText,
+  fetchText: RuntimeTextFetcher = fetchComfyRuntimeText,
   importModule: RuntimeModuleImporter = importRuntimeModule,
 ): Promise<() => void> {
   const discovery = await discoverModules(documentRef, fetchText, [
@@ -104,7 +108,7 @@ export class NativeRendererCompatibilityError extends Error {
 /** Discover Nodes 2 assets by their semantic capabilities across Comfy's module graph. */
 export async function discoverComfyNodes2RuntimeAssets(
   documentRef: Document,
-  fetchText: RuntimeTextFetcher = fetchRuntimeText,
+  fetchText: RuntimeTextFetcher = fetchComfyRuntimeText,
 ): Promise<ComfyNodes2RuntimeAssets> {
   const discovery = await discoverModules(documentRef, fetchText, [
     { key: 'vue', matches: (module) => VUE_RUNTIME_URL_PATTERN.test(module.url) },
@@ -124,7 +128,7 @@ export async function discoverComfyNodes2RuntimeAssets(
 /** Discover Settings renderer assets independently of Nodes 2 internals. */
 export async function discoverComfySettingsRuntimeAssets(
   documentRef: Document,
-  fetchText: RuntimeTextFetcher = fetchRuntimeText,
+  fetchText: RuntimeTextFetcher = fetchComfyRuntimeText,
 ): Promise<ComfySettingsRuntimeAssets> {
   const discovery = await discoverModules(documentRef, fetchText, [
     { key: 'vue', matches: (module) => VUE_RUNTIME_URL_PATTERN.test(module.url) },
@@ -140,7 +144,7 @@ export async function discoverComfySettingsRuntimeAssets(
 /** Load Comfy's exact LGraphNode component without requiring a root-graph node. */
 export async function loadComfyNativeNodeComponent(
   documentRef: Document,
-  fetchText: RuntimeTextFetcher = fetchRuntimeText,
+  fetchText: RuntimeTextFetcher = fetchComfyRuntimeText,
   importModule: RuntimeModuleImporter = importRuntimeModule,
 ): Promise<UnknownRecord> {
   const discovery = await discoverModules(documentRef, fetchText, [
@@ -166,7 +170,7 @@ export async function loadComfyNativeNodeComponent(
 /** Load the PrimeVue Select used by Comfy's Settings panel. */
 export async function loadComfySettingsSelectComponent(
   documentRef: Document,
-  fetchText: RuntimeTextFetcher = fetchRuntimeText,
+  fetchText: RuntimeTextFetcher = fetchComfyRuntimeText,
   importModule: RuntimeModuleImporter = importRuntimeModule,
 ): Promise<UnknownRecord> {
   return await loadComfyPrimeVueComponent(documentRef, 'Select', fetchText, importModule);
@@ -175,7 +179,7 @@ export async function loadComfySettingsSelectComponent(
 /** Load the PrimeVue AutoComplete used by Comfy's Settings component family. */
 export async function loadComfySettingsAutoCompleteComponent(
   documentRef: Document,
-  fetchText: RuntimeTextFetcher = fetchRuntimeText,
+  fetchText: RuntimeTextFetcher = fetchComfyRuntimeText,
   importModule: RuntimeModuleImporter = importRuntimeModule,
 ): Promise<UnknownRecord> {
   return await loadComfyPrimeVueComponent(documentRef, 'AutoComplete', fetchText, importModule);
@@ -278,7 +282,7 @@ async function loadComfyPrimeVueComponent(
 /** Load only Vue's render primitives for non-node Comfy component mounts. */
 export async function loadComfyVueRenderRuntime(
   documentRef: Document,
-  fetchText: RuntimeTextFetcher = fetchRuntimeText,
+  fetchText: RuntimeTextFetcher = fetchComfyRuntimeText,
   importModule: RuntimeModuleImporter = importRuntimeModule,
 ): Promise<ComfyVueRenderRuntime> {
   const assets = await discoverComfyVueRuntimeAsset(documentRef, fetchText);
@@ -301,7 +305,7 @@ export async function loadComfyVueRenderRuntime(
 /** Load and capability-check the actual renderer functions from installed Comfy. */
 export async function loadComfyVueRuntime(
   documentRef: Document,
-  fetchText: RuntimeTextFetcher = fetchRuntimeText,
+  fetchText: RuntimeTextFetcher = fetchComfyRuntimeText,
   importModule: RuntimeModuleImporter = importRuntimeModule,
 ): Promise<ComfyVueRuntime> {
   const assets = await discoverComfyNodes2RuntimeAssets(documentRef, fetchText);
@@ -408,7 +412,11 @@ async function discoverModules(
     }
     return discovery;
   } catch (error: unknown) {
-    if (error instanceof NativeRendererCompatibilityError) throw error;
+    if (
+      error instanceof NativeRendererCompatibilityError ||
+      error instanceof ComfyRuntimeAssetUnavailableError
+    )
+      throw error;
     throw new NativeRendererCompatibilityError(
       error instanceof Error ? error.message : 'Comfy frontend module discovery failed.',
     );
@@ -442,26 +450,16 @@ function exposesNativeNodeComponent(module: ComfyFrontendModule): boolean {
   return NATIVE_NODE_COMPONENT_PATTERN.test(module.source);
 }
 
-/** Fetch a same-origin runtime module with an explicit timeout. */
-async function fetchRuntimeText(url: string): Promise<string> {
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-  try {
-    const response = await fetch(url, { signal: controller.signal });
-    if (!response.ok) {
-      throw new NativeRendererCompatibilityError(
-        `Comfy runtime asset request failed with status ${response.status}.`,
-      );
-    }
-    return await response.text();
-  } finally {
-    window.clearTimeout(timeout);
-  }
-}
-
 /** Import a same-origin installed Comfy module by its discovered URL. */
 async function importRuntimeModule(url: string): Promise<UnknownRecord> {
-  const loaded: unknown = await import(url);
+  let loaded: unknown;
+  try {
+    loaded = await import(url);
+  } catch (error: unknown) {
+    if (isComfyModuleTransportFailure(error))
+      throw new ComfyRuntimeAssetUnavailableError(url, error);
+    throw error;
+  }
   if (!isRecord(loaded)) {
     throw new NativeRendererCompatibilityError('Comfy runtime module was not an object.');
   }

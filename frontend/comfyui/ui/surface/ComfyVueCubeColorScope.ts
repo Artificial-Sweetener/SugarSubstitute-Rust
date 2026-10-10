@@ -56,7 +56,7 @@ export class ComfyVueCubeColorScope {
     });
   }
 
-  /** Re-read the authoritative native wrapper into Cube-scoped CSS tokens. */
+  /** Project explicit native colors while leaving default colors live in the CSS cascade. */
   refresh(): void {
     const wrapper = this.#root.querySelector<HTMLElement>(NATIVE_INNER_WRAPPER_SELECTOR);
     if (!wrapper) {
@@ -65,12 +65,8 @@ export class ComfyVueCubeColorScope {
       this.#writeToken(CUBE_BACKDROP_TOKEN, '');
       return;
     }
-    const computed = getComputedStyle(wrapper);
-    const header =
-      wrapper.style.getPropertyValue('background-color').trim() || computed.backgroundColor.trim();
-    const body =
-      wrapper.style.getPropertyValue(NATIVE_BODY_TOKEN).trim() ||
-      computed.getPropertyValue(NATIVE_BODY_TOKEN).trim();
+    const header = wrapper.style.getPropertyValue('background-color').trim();
+    const body = wrapper.style.getPropertyValue(NATIVE_BODY_TOKEN).trim();
     this.#writeToken(CUBE_CARD_HEADER_TOKEN, header);
     this.#writeToken(CUBE_CARD_BODY_TOKEN, body);
     this.#writeToken(CUBE_BACKDROP_TOKEN, body ? deriveCubeBackdropColor(body) : '');

@@ -113,7 +113,7 @@ test('saves one semantic Cube through its native definition and real node', asyn
     dirtyManager: {
       getImplementationDirtyCubeIds: () => new Set([cubeId]),
     },
-    cubeBrowser: {
+    libraryCatalog: {
       getCubes: () => [{ cube_id: cubeId, name: 'Detailer', is_writable: true }],
     },
     cubeNodeSave: new ComfyCubeSaveAdapter({ getCatalog: () => nodes }),

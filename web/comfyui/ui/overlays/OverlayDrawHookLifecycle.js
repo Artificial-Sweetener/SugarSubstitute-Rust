@@ -21,16 +21,14 @@ export class OverlayDrawHookLifecycle {
     adapter;
     scheduler;
     proximity;
-    placement;
     chrome;
     proximityGraphMutations;
     overlayDrawHooked = false;
     overlayWatchdog = { timerId: null, attempts: 0 };
-    constructor(adapter, scheduler, proximity, placement, chrome, proximityGraphMutations) {
+    constructor(adapter, scheduler, proximity, chrome, proximityGraphMutations) {
         this.adapter = adapter;
         this.scheduler = scheduler;
         this.proximity = proximity;
-        this.placement = placement;
         this.chrome = chrome;
         this.proximityGraphMutations = proximityGraphMutations;
     }
@@ -76,7 +74,6 @@ export class OverlayDrawHookLifecycle {
                 canvasProto.drawForeground = function drawForeground(ctx, ...args) {
                     const result = originalDrawForeground.call(this, ctx, ...args);
                     try {
-                        manager.placement.render(ctx, this);
                         manager.chrome.render(ctx, this);
                     }
                     catch (error) {
@@ -100,7 +97,6 @@ export class OverlayDrawHookLifecycle {
                         ?.getConsole?.()
                         ?.error?.('SugarCubes: onDrawForeground wrapper failed', error);
                 }
-                manager.placement.render(ctx, this);
                 manager.chrome.render(ctx, this);
             };
             wrappedForeground.__sugarcubes_overlay_hooked = true;
@@ -124,7 +120,6 @@ export class OverlayDrawHookLifecycle {
                 manager.proximityGraphMutations.attach(this.graph);
                 manager.proximity.ensurePreview(this.graph);
                 manager.proximity.render(ctx, this);
-                manager.placement.render(ctx, this);
             }
             catch (error) {
                 manager.adapter?.getConsole?.()?.error?.('SugarCubes: background overlays failed', error);

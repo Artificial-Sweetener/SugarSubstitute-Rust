@@ -22,6 +22,7 @@ export class NativeCardGeometryObserver {
   readonly #observer: ResizeObserver | null;
   readonly #sizes = new WeakMap<Element, { width: number; height: number }>();
   #animationFrame: number | null = null;
+  #disposed = false;
 
   /** Bind native ResizeObserver updates to one coalesced layout callback. */
   constructor(documentRef: Document, onGeometryChange: () => void) {
@@ -45,20 +46,22 @@ export class NativeCardGeometryObserver {
                 changed = true;
               this.#sizes.set(entry.target, { width, height });
             }
-            if (changed) this.#schedule();
+            if (changed) this.request();
           })
         : null;
   }
 
   /** Replace the exact native card cells whose dimensions drive masonry. */
   observe(cells: readonly HTMLElement[]): void {
+    if (this.#disposed) return;
     this.#observer?.disconnect();
     for (const cell of cells) this.#observer?.observe(cell);
-    this.#schedule();
+    this.request();
   }
 
   /** Disconnect browser resources owned by this Cube surface. */
   dispose(): void {
+    this.#disposed = true;
     this.#observer?.disconnect();
     if (this.#animationFrame !== null) {
       this.#window.cancelAnimationFrame(this.#animationFrame);
@@ -67,8 +70,8 @@ export class NativeCardGeometryObserver {
   }
 
   /** Schedule one post-render measurement regardless of callback burst size. */
-  #schedule(): void {
-    if (this.#animationFrame !== null) return;
+  request(): void {
+    if (this.#disposed || this.#animationFrame !== null) return;
     this.#animationFrame = this.#window.requestAnimationFrame(() => {
       this.#animationFrame = null;
       this.#onGeometryChange();

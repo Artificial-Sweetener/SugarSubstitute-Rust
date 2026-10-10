@@ -1,3 +1,4 @@
+import { requireCubeIdentity } from '../cube/node/ComfyCubeNodeFactory.js';
 import { resolveCubeFaceCardPresentation, } from './CubeFaceCardPolicy.js';
 import { resolveCubeCardWidgetSources } from './CubeCardWidgetSources.js';
 import { cubeFaceCardColumnSpan, findCubeFacePromptWidget } from './CubeFacePromptPolicy.js';
@@ -14,6 +15,7 @@ export function projectNodeCards(nodes, state, graph, cube) {
         };
         return {
             ...card,
+            ...(cube ? { cubeId: String(requireCubeIdentity(cube).instance_id ?? cube.id) } : {}),
             widgetSources,
             prompt: findCubeFacePromptWidget(presentedNode) !== null,
             columnSpan: cubeFaceCardColumnSpan(presentedNode),

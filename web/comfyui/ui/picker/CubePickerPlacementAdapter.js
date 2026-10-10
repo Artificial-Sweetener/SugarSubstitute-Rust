@@ -54,13 +54,18 @@ export class CubePickerPlacementAdapter {
         if (!descriptor || !cached) {
             throw new Error(`SugarCube picker type '${type}' is no longer available.`);
         }
+        return this.prepareCaptured(descriptor, cached, position);
+    }
+    /** Reuse placement policy for an exact opening artifact independently of later registry refreshes. */
+    prepareCaptured(descriptor, cached, position = null) {
         const runtime = this.#getRuntime();
         runtime.graphScope.assertCurrentRoot('placed');
         const liteGraph = this.#getLiteGraph();
         if (!liteGraph || typeof liteGraph.createNode !== 'function') {
             throw new Error('LiteGraph is unavailable for SugarCube placement.');
         }
-        const insertionPayload = prepareGraphInsertionPayload(cached, {
+        const isolated = JSON.parse(JSON.stringify(cached));
+        const insertionPayload = prepareGraphInsertionPayload(isolated, {
             ...(position ? { targetOrigin: position } : {}),
             remapInstanceIds: true,
         });

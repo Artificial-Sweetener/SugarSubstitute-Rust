@@ -13,150 +13,74 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Verify first-class Cube node swapping does not use legacy group markers. */
-
-import { jest } from '@jest/globals';
-import { CubeNodeCatalog } from '../../../frontend/comfyui/ui/cube/node/CubeNodeCatalog.js';
+/** Prove native face arrows share canonical permissions and report rejected actions. */
+import { expect, jest, test } from '@jest/globals';
 import { CubeNodeSwapCoordinator } from '../../../frontend/comfyui/ui/cube/node/CubeNodeSwapCoordinator.js';
-import type { CubeNode } from '../../../frontend/comfyui/ui/cube/node/ComfyCubeNodeFactory.js';
-import type { ComfyGraph } from '../../../frontend/comfyui/ui/types/graph.js';
 
-describe('CubeNodeSwapCoordinator', () => {
-  test('swaps real Cube node bounds through history and dirty graph state', () => {
-    const first = cubeNode('first', [20, 40], { size: [220, 160] });
-    const second = cubeNode('second', [300, 80], { size: [360, 240] });
-    const graph: ComfyGraph = {
-      _nodes: [first, second],
-      afterChange: jest.fn(),
-      setDirtyCanvas: jest.fn(),
-    };
-    const catalog = new CubeNodeCatalog();
-    catalog.add(first);
-    catalog.add(second);
-    const changed: string[] = [];
-    catalog.subscribe(() => changed.push('changed'));
-    const beforeChange = jest.fn();
-    const afterChange = jest.fn();
-    const setDirtyCanvas = jest.fn();
-    const coordinator = new CubeNodeSwapCoordinator({
-      graph,
-      nodes: catalog,
-      history: { beforeChange, afterChange },
-      setDirtyCanvas,
-    });
-
-    expect(coordinator.canSwap({ instance_id: 'first' }, 'right')).toBe(true);
-    coordinator.swap({ instance_id: 'first' }, 'right');
-
-    expect([...first.pos]).toEqual([440, 80]);
-    expect([...second.pos]).toEqual([20, 40]);
-    expect(beforeChange).toHaveBeenCalledTimes(1);
-    expect(afterChange).toHaveBeenCalledTimes(1);
-    expect(graph.afterChange).toHaveBeenCalledTimes(1);
-    expect(graph.setDirtyCanvas).toHaveBeenCalledWith(true, true);
-    expect(setDirtyCanvas).toHaveBeenCalledWith(true, true);
-    expect(changed).toHaveLength(2);
-  });
-
-  test('uses Cube widths read at click time so resized neighbors remain separated', () => {
-    const first = cubeNode('first', [20, 40], { size: [220, 160] });
-    const second = cubeNode('second', [300, 40], { size: [220, 160] });
-    const catalog = new CubeNodeCatalog();
-    catalog.add(first);
-    catalog.add(second);
-    const coordinator = new CubeNodeSwapCoordinator({
-      graph: {},
-      nodes: catalog,
-      history: {},
-    });
-
-    expect(coordinator.canSwap({ instance_id: 'first' }, 'right')).toBe(true);
-    first.size[0] = 480;
-    second.size[0] = 340;
-    coordinator.swap({ instance_id: 'first' }, 'right');
-
-    expect([...first.pos]).toEqual([384, 40]);
-    expect([...second.pos]).toEqual([20, 40]);
-    expect(second.pos[0] + second.size[0]).toBeLessThanOrEqual(first.pos[0]);
-  });
-
-  test('keeps outputless Cubes eligible when they still expose an input', () => {
-    const first = cubeNode('first', [20, 40], { outputs: [] });
-    const second = cubeNode('second', [300, 40]);
-    const catalog = new CubeNodeCatalog();
-    catalog.add(first);
-    catalog.add(second);
-    const coordinator = new CubeNodeSwapCoordinator({
-      graph: {},
-      nodes: catalog,
-      history: {},
-    });
-
-    expect(coordinator.canSwap({ instance_id: 'first' }, 'right')).toBe(true);
-  });
-
-  test('does not offer arrows on inputless Cubes or allow another Cube to move them', () => {
-    const source = cubeNode('source', [20, 40], { inputs: [] });
-    const middle = cubeNode('middle', [300, 40]);
-    const catalog = new CubeNodeCatalog();
-    catalog.add(source);
-    catalog.add(middle);
-    const coordinator = new CubeNodeSwapCoordinator({
-      graph: {},
-      nodes: catalog,
-      history: {},
-    });
-
-    expect(coordinator.canSwap({ instance_id: 'source' }, 'right')).toBe(false);
-    expect(coordinator.canSwap({ instance_id: 'middle' }, 'left')).toBe(false);
-
-    coordinator.swap({ instance_id: 'source' }, 'right');
-    coordinator.swap({ instance_id: 'middle' }, 'left');
-
-    expect([...source.pos]).toEqual([20, 40]);
-    expect([...middle.pos]).toEqual([300, 40]);
-  });
+test('translates both directions through one shared application owner', async () => {
+  const canMove = jest.fn(() => true);
+  const move = jest.fn(async () => undefined);
+  const reportError = jest.fn();
+  const coordinator = new CubeNodeSwapCoordinator({ reorder: { canMove, move }, reportError });
+  expect(coordinator.canSwap({ instance_id: 'first' }, 'right')).toBe(true);
+  await coordinator.swap({ instance_id: 'first' }, 'right');
+  await coordinator.swap({ instance_id: 'second' }, 'left');
+  expect(move.mock.calls).toEqual([
+    ['first', 1],
+    ['second', -1],
+  ]);
+  expect(reportError).not.toHaveBeenCalled();
 });
 
-/** Build a first-class Cube node with graph-owned boundary slots. */
-function cubeNode(
-  instanceId: string,
-  position: [number, number],
-  options: { inputs?: unknown[]; outputs?: unknown[]; size?: [number, number] } = {},
-): CubeNode {
-  return {
-    id: instanceId,
-    type: `cube-${instanceId}`,
-    title: instanceId,
-    pos: [...position],
-    size: [...(options.size ?? [220, 160])],
-    properties: {
-      sugarcubes_kind: 'cube',
-      sugarcubes_cube: { instance_id: instanceId },
-      sugarcubes_surface: {},
-    },
-    inputs: (options.inputs ?? [{ name: 'input.value' }]) as CubeNode['inputs'],
-    outputs: (options.outputs ?? [{ name: 'output.image' }]) as CubeNode['outputs'],
-    subgraph: {
-      id: `definition-${instanceId}`,
-      name: instanceId,
-      _nodes: [],
-      inputs: [],
-      outputs: [],
-      inputNode: {},
-      outputNode: {},
-      add() {},
-      remove() {},
-      addInput() {
-        throw new Error('not used');
-      },
-      addOutput() {
-        throw new Error('not used');
-      },
-      configure() {},
-    },
-    isSubgraphNode: () => true,
-    connect() {},
-    serialize: () => ({}),
-  };
-}
+test('keeps a canonically fixed segment disabled even when a Cube has an input', async () => {
+  const canMove = jest.fn(() => false);
+  const move = jest.fn(async () => undefined);
+  const coordinator = new CubeNodeSwapCoordinator({
+    reorder: { canMove, move },
+    reportError: jest.fn(),
+  });
+  const metadata = { instance_id: 'first', graphSummary: { inputCount: 1 } };
+  expect(coordinator.canSwap(metadata, 'right')).toBe(false);
+  await coordinator.swap(metadata, 'right');
+  expect(move).not.toHaveBeenCalled();
+});
+
+test('permits a source Cube when the canonical graph owner allows its segment', async () => {
+  const move = jest.fn(async () => undefined);
+  const coordinator = new CubeNodeSwapCoordinator({
+    reorder: { canMove: () => true, move },
+    reportError: jest.fn(),
+  });
+  expect(
+    coordinator.canSwap({ instance_id: 'source', graphSummary: { inputCount: 0 } }, 'right'),
+  ).toBe(true);
+  await coordinator.swap({ instance_id: 'source' }, 'right');
+  expect(move).toHaveBeenCalledWith('source', 1);
+});
+
+test('does not turn obsolete group markers or missing identifiers into actions', async () => {
+  const canMove = jest.fn(() => true);
+  const move = jest.fn(async () => undefined);
+  const coordinator = new CubeNodeSwapCoordinator({
+    reorder: { canMove, move },
+    reportError: jest.fn(),
+  });
+  expect(coordinator.canSwap({ group_id: 'old' }, 'right')).toBe(false);
+  await coordinator.swap({ instance_id: '  ' }, 'right');
+  expect(canMove).not.toHaveBeenCalled();
+  expect(move).not.toHaveBeenCalled();
+});
+
+test('reports backend or stale-workflow failures through SugarCubes feedback', async () => {
+  const failure = new Error('Workflow changed');
+  const reportError = jest.fn();
+  const move = jest.fn(async () => {
+    throw failure;
+  });
+  const coordinator = new CubeNodeSwapCoordinator({
+    reorder: { canMove: () => true, move },
+    reportError,
+  });
+  await coordinator.swap({ instance_id: 'first' }, 'right');
+  expect(reportError).toHaveBeenCalledWith(failure);
+});

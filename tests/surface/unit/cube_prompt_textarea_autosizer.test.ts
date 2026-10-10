@@ -24,6 +24,22 @@ import {
 } from '../../../frontend/comfyui/ui/surface/CubePromptTextareaAutosizer.js';
 
 describe('CubePromptTextareaAutosizer', () => {
+  test('preserves settled geometry when native rendering rebinds and assigns an unchanged value', () => {
+    const textarea = document.createElement('textarea');
+    const measure = jest.fn(() => 40);
+    Object.defineProperty(textarea, 'scrollHeight', { get: measure });
+    const autosizer = new CubePromptTextareaAutosizer(document);
+    autosizer.bind(textarea);
+    measure.mockClear();
+    autosizer.bind(textarea);
+    const unchanged = textarea.value;
+    textarea.value = unchanged;
+    expect(measure).not.toHaveBeenCalled();
+    expect(textarea.style.height).toBe('40px');
+    textarea.value = 'changed content';
+    expect(measure).toHaveBeenCalledTimes(1);
+    autosizer.dispose();
+  });
   test('includes the border box so fully fitted content has no phantom scroll range', () => {
     const textarea = document.createElement('textarea');
     textarea.style.boxSizing = 'border-box';

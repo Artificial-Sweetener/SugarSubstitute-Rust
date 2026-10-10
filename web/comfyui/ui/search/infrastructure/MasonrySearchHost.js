@@ -99,6 +99,10 @@ export class MasonrySearchHost {
             }
         });
     }
+    /** Reveal the full projection before navigation from the stack, retaining the user's query. */
+    revealAll() {
+        this.#presenter?.close(false);
+    }
     /** Save query and location before releasing every mounted control, highlight and observer. */
     release() {
         if (this.#frame !== null)

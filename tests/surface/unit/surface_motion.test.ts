@@ -43,28 +43,58 @@ function fixture() {
 
 test('preserves committed geometry and coalesces unchanged placement while interrupting changes', () => {
   const { element, effects, motion } = fixture();
-  motion.place(element, { x: 0, y: 0, width: 400, height: 100 });
+  motion.place([{ element, rectangle: { x: 0, y: 0, width: 400, height: 100 } }]);
   expect(effects).toHaveLength(0);
   motion.settle();
-  motion.place(element, { x: 400, y: 120, width: 400, height: 200 });
+  motion.place([{ element, rectangle: { x: 400, y: 120, width: 400, height: 200 } }]);
   expect(element.style.transform).toBe('translate(400px, 120px)');
   expect(effects[0]?.frames[0]?.transform).toBe('translate(0px, 0px)');
   expect(element.hasAttribute('data-sc-surface-moving')).toBe(true);
-  motion.place(element, { x: 400, y: 120, width: 400, height: 200 });
+  motion.place([{ element, rectangle: { x: 400, y: 120, width: 400, height: 200 } }]);
   expect(effects).toHaveLength(1);
-  motion.place(element, { x: 0, y: 250, width: 400, height: 200 });
+  motion.place([{ element, rectangle: { x: 0, y: 250, width: 400, height: 200 } }]);
   expect(effects[0]?.cancel).toHaveBeenCalledTimes(1);
   motion.dispose();
   expect(effects[1]?.cancel).toHaveBeenCalledTimes(1);
   expect(element.hasAttribute('data-sc-surface-moving')).toBe(false);
 });
 
+test('reads all interrupted positions before committing any neighbor destination', () => {
+  const first = fixture();
+  const second = fixture();
+  const motion = first.motion;
+  const rectangles = (offset: number) => [
+    { element: first.element, rectangle: { x: 0, y: offset, width: 400, height: 100 } },
+    { element: second.element, rectangle: { x: 0, y: offset + 120, width: 400, height: 100 } },
+  ];
+  motion.place(rectangles(0));
+  motion.settle();
+  motion.place(rectangles(100));
+  const readStyle = window.getComputedStyle.bind(window);
+  const reads: string[][] = [];
+  jest.spyOn(window, 'getComputedStyle').mockImplementation((element) => {
+    reads.push([first.element.style.transform, second.element.style.transform]);
+    return readStyle(element);
+  });
+  motion.place(rectangles(200));
+  expect(reads).toEqual([
+    ['translate(0px, 100px)', 'translate(0px, 220px)'],
+    ['translate(0px, 100px)', 'translate(0px, 220px)'],
+  ]);
+  expect(first.effects[0]?.cancel).toHaveBeenCalledTimes(1);
+  expect(second.effects[0]?.cancel).toHaveBeenCalledTimes(1);
+  expect(first.element.style.transform).toBe('translate(0px, 200px)');
+  expect(second.element.style.transform).toBe('translate(0px, 320px)');
+  motion.dispose();
+  second.motion.dispose();
+});
+
 test('restores existing pointer interaction after moving neighbors can no longer cover the edited card', async () => {
   const { element, effects, motion } = fixture();
   element.style.setProperty('pointer-events', 'auto', 'important');
-  motion.place(element, { x: 0, y: 0, width: 400, height: 100 });
+  motion.place([{ element, rectangle: { x: 0, y: 0, width: 400, height: 100 } }]);
   motion.settle();
-  motion.place(element, { x: 400, y: 120, width: 400, height: 100 });
+  motion.place([{ element, rectangle: { x: 400, y: 120, width: 400, height: 100 } }]);
   expect(element.hasAttribute('data-sc-surface-moving')).toBe(true);
   effects[0]?.finish();
   await Promise.resolve();
@@ -77,11 +107,11 @@ test('restores existing pointer interaction after moving neighbors can no longer
 
 test('lets disclosure own continuous height and neighboring movement without scaling content', () => {
   const { element, effects, motion } = fixture();
-  motion.place(element, { x: 0, y: 0, width: 400, height: 200 });
+  motion.place([{ element, rectangle: { x: 0, y: 0, width: 400, height: 200 } }]);
   motion.settle();
-  motion.place(element, { x: 0, y: 0, width: 400, height: 100 });
+  motion.place([{ element, rectangle: { x: 0, y: 0, width: 400, height: 100 } }]);
   expect(effects).toHaveLength(0);
-  motion.place(element, { x: 0, y: 20, width: 400, height: 100 }, false);
+  motion.place([{ element, rectangle: { x: 0, y: 20, width: 400, height: 100 } }], false);
   expect(effects).toHaveLength(0);
   expect(element.style.transform).toBe('translate(0px, 20px)');
   motion.dispose();
@@ -89,15 +119,15 @@ test('lets disclosure own continuous height and neighboring movement without sca
 
 test('finishes placement effects without losing destinations needed by the next layout', () => {
   const { element, effects, motion } = fixture();
-  motion.place(element, { x: 0, y: 0, width: 400, height: 100 });
+  motion.place([{ element, rectangle: { x: 0, y: 0, width: 400, height: 100 } }]);
   motion.settle();
-  motion.place(element, { x: 400, y: 120, width: 400, height: 100 });
+  motion.place([{ element, rectangle: { x: 400, y: 120, width: 400, height: 100 } }]);
   motion.finishAnimations();
   expect(effects[0]?.cancel).toHaveBeenCalledTimes(1);
   expect(element.style.transform).toBe('translate(400px, 120px)');
-  motion.place(element, { x: 400, y: 120, width: 400, height: 100 });
+  motion.place([{ element, rectangle: { x: 400, y: 120, width: 400, height: 100 } }]);
   expect(effects).toHaveLength(1);
-  motion.place(element, { x: 0, y: 0, width: 400, height: 100 });
+  motion.place([{ element, rectangle: { x: 0, y: 0, width: 400, height: 100 } }]);
   expect(effects[1]?.frames[0]?.transform).toBe('translate(400px, 120px)');
   motion.dispose();
 });
@@ -156,7 +186,7 @@ test('uses immediate destination and cleanup when the browser requests reduced m
   });
   try {
     motion.settle();
-    motion.place(element, { x: 10, y: 20, width: 400, height: 100 });
+    motion.place([{ element, rectangle: { x: 10, y: 20, width: 400, height: 100 } }]);
     const release = jest.fn();
     motion.retire(element, release);
     expect(element.style.transform).toBe('translate(10px, 20px)');

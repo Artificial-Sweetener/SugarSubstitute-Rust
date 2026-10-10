@@ -21,6 +21,7 @@ import { $el } from '/scripts/ui.js';
 import { injectDialogStyles } from './DialogStyles.js';
 import { ModalAppearance } from './ModalAppearance.js';
 import { ModalDismissal } from './ModalDismissal.js';
+import type { FluentAppearanceSource } from '../surface/appearance/FluentAppearanceState.js';
 
 export interface ModalAdapter {
   getDocument?(): Document | null;
@@ -68,6 +69,7 @@ interface ActiveModalOptions {
 }
 
 interface ModalShellOptions {
+  appearanceSource?: FluentAppearanceSource;
   adapter?: ModalAdapter | null;
   variantClassName?: string;
   dialogClassName?: string;
@@ -79,7 +81,7 @@ type FocusableElement = HTMLElement & { select?: () => void };
  * Coordinate shared modal shell behavior for SugarCubes dialogs.
  */
 export class ModalShell {
-  private readonly appearance = new ModalAppearance();
+  private readonly appearance: ModalAppearance;
   private readonly documentRef: Document | null;
   private readonly windowRef: Window | null;
   private readonly variantClassName: string;
@@ -93,7 +95,13 @@ export class ModalShell {
   private readonly dismissal: ModalDismissal;
 
   /** Bind presentation lifetimes and one cancellation policy to the host document. */
-  constructor({ adapter, variantClassName = '', dialogClassName = '' }: ModalShellOptions = {}) {
+  constructor({
+    adapter,
+    appearanceSource,
+    variantClassName = '',
+    dialogClassName = '',
+  }: ModalShellOptions = {}) {
+    this.appearance = new ModalAppearance(appearanceSource);
     this.documentRef = adapter?.getDocument?.() || null;
     this.windowRef = adapter?.getWindow?.() || null;
     this.variantClassName = variantClassName || '';

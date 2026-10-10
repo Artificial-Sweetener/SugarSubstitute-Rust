@@ -149,8 +149,8 @@ def test_reorders_asymmetric_cube_series_with_dangling_reverse_boundary() -> Non
     ]
 
 
-def test_explicitly_wired_cube_segment_is_not_automatically_reordered() -> None:
-    """Preserve manual Cube wiring as an authoritative fixed graph segment."""
+def test_explicitly_wired_cubes_reorder_without_rewriting_links() -> None:
+    """Arrange native positions independently of execution dependencies."""
 
     workflow = cube_workflow(
         {
@@ -165,12 +165,17 @@ def test_explicitly_wired_cube_segment_is_not_automatically_reordered() -> None:
         node["size"] = [100, 200]
     service = CubeGraphMutationService(CubeGraphAnalysisService())
 
-    with pytest.raises(CubeGraphMutationError, match="explicit wiring"):
-        service.reorder(
-            workflow,
-            segment_instance_ids=("first", "second"),
-            ordered_instance_ids=("second", "first"),
-        )
+    original = deepcopy(workflow)
+    result = service.reorder(
+        workflow,
+        segment_instance_ids=("first", "second"),
+        ordered_instance_ids=("second", "first"),
+    )
+    changed = cast(list[dict[str, object]], result.normalized_workflow["nodes"])
+    assert changed[1]["pos"] == [0.0, 40.0]
+    assert changed[0]["pos"] == [124.0, 40.0]
+    assert result.normalized_workflow["links"] == original["links"]
+    assert workflow == original
 
 
 def test_append_cube_preserves_ordinary_graph_and_uses_exact_cube_ports() -> None:

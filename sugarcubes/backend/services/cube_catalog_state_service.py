@@ -108,10 +108,18 @@ class CubeCatalogStateService:
         *,
         affected_cube_ids: Sequence[str] = (),
     ) -> None:
-        """Mark cached catalog state stale after a known mutation."""
+        """Invalidate affected rows while preserving unrelated artifact hashes."""
 
         self._snapshots.clear()
-        self._entry_cache.clear()
+        if affected_cube_ids:
+            affected = set(affected_cube_ids)
+            self._entry_cache = {
+                key: cached
+                for key, cached in self._entry_cache.items()
+                if cached.entry.get("cubeId") not in affected
+            }
+        else:
+            self._entry_cache.clear()
         self._dirty_reason = reason or "explicit"
         _logger.debug(
             "SugarCubes catalog state invalidated",

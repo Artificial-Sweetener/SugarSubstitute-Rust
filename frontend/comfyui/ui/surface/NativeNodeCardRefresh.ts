@@ -18,6 +18,7 @@ import type { ComfyNode } from '../types/graph.js';
 import { isRecord } from '../types/common.js';
 
 const eventName = 'sugarcubes-native-node-card-change';
+const prepareEventName = 'sugarcubes-native-node-card-prepare';
 
 export type NativeNodeCardChange =
   | { readonly kind: 'nodes'; readonly nodes: readonly ComfyNode[] }
@@ -25,6 +26,9 @@ export type NativeNodeCardChange =
 
 /** Refresh copied Vue field data without replacing a card's node or interaction identity. */
 export function refreshNativeNodeCards(document: Document, change: NativeNodeCardChange): void {
+  document.dispatchEvent(
+    new CustomEvent<NativeNodeCardChange>(prepareEventName, { detail: change }),
+  );
   document.dispatchEvent(new CustomEvent<NativeNodeCardChange>(eventName, { detail: change }));
 }
 
@@ -33,19 +37,31 @@ export function subscribeNativeNodeCardRefresh(
   document: Document,
   nodes: readonly ComfyNode[],
   refresh: () => void,
+  prepare?: () => void,
 ): () => void {
   const listener = (event: Event): void => {
-    if (!(event instanceof CustomEvent)) return;
-    const change: unknown = event.detail;
-    if (!isRecord(change)) return;
-    if (change.kind === 'reset' && change.reason === 'native-choices') refresh();
-    else if (
-      change.kind === 'nodes' &&
-      Array.isArray(change.nodes) &&
-      change.nodes.some((node: unknown) => nodes.some((owner) => owner === node))
-    )
-      refresh();
+    if (matches(event, nodes)) refresh();
   };
+  const preparing = (event: Event): void => {
+    if (matches(event, nodes)) prepare?.();
+  };
+  if (prepare) document.addEventListener(prepareEventName, preparing);
   document.addEventListener(eventName, listener);
-  return () => document.removeEventListener(eventName, listener);
+  return () => {
+    if (prepare) document.removeEventListener(prepareEventName, preparing);
+    document.removeEventListener(eventName, listener);
+  };
+}
+
+/** Identify the same exact native owners for geometry preparation and data rendering. */
+function matches(event: Event, nodes: readonly ComfyNode[]): boolean {
+  if (!(event instanceof CustomEvent)) return false;
+  const change: unknown = event.detail;
+  if (!isRecord(change)) return false;
+  return (
+    (change.kind === 'reset' && change.reason === 'native-choices') ||
+    (change.kind === 'nodes' &&
+      Array.isArray(change.nodes) &&
+      change.nodes.some((node: unknown) => nodes.some((owner) => owner === node)))
+  );
 }

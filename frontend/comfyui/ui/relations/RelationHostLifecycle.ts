@@ -28,6 +28,7 @@ import { NativeSharedSeedModes } from './infrastructure/NativeSharedSeedModes.js
 import { NativeRelationWidgetRenderer } from './infrastructure/NativeRelationWidgetRenderer.js';
 import { NativeRelationVisibility } from './infrastructure/NativeRelationVisibility.js';
 import { NativeOverrideToolbarHost } from './infrastructure/NativeOverrideToolbarHost.js';
+import { createNativeOverrideToolbarState } from './infrastructure/NativeOverrideToolbarState.js';
 import { GlobalOverrideToolbar } from './presentation/GlobalOverrideToolbar.js';
 import { CubeRelationPresenter } from './presentation/CubeRelationPresenter.js';
 import { ensureRelationStyles } from './presentation/RelationStyles.js';
@@ -86,6 +87,7 @@ export class RelationHostLifecycle {
       options.reportError,
       widgets,
       new NativeOverrideToolbarHost(options.document),
+      createNativeOverrideToolbarState(options.document, options.logger),
     );
     this.#cards = new CubeRelationPresenter(
       options.document,
@@ -150,6 +152,11 @@ export class RelationHostLifecycle {
   /** Discover loaded instances without relying on whether their native cards have mounted. */
   afterConfigureGraph(): void {
     this.#schedule();
+  }
+
+  /** Reconcile reordered membership inside the graph mutation owner's native history transaction. */
+  reconcileCubeOrder(): void {
+    this.#port.joinTransaction(() => this.relations.reconcile());
   }
 
   /** Prepare either queue path through the same workflow relation owner. */

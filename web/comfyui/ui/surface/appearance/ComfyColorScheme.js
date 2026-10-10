@@ -14,7 +14,22 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Read the host's active palette without introducing a competing theme preference. */
+import { parseCssColor } from '../CssColor.js';
+/** Prefer the palette's actual surface when a custom palette retains stale host theme metadata. */
 export function readComfyDarkTheme(document) {
-    const scheme = document.defaultView?.getComputedStyle(document.documentElement).colorScheme;
+    const style = document.defaultView?.getComputedStyle(document.documentElement);
+    const background = parseCssColor(style?.getPropertyValue('--comfy-menu-bg') ?? '');
+    if (background?.alpha === 1) {
+        const luminance = linearChannel(background.red) * 0.2126 +
+            linearChannel(background.green) * 0.7152 +
+            linearChannel(background.blue) * 0.0722;
+        return luminance < 0.179;
+    }
+    const scheme = style?.colorScheme;
     return scheme === 'dark' || (scheme !== 'light' && !document.querySelector('.light-theme'));
+}
+/** Convert one sRGB channel before comparing dark and light text contrast. */
+function linearChannel(channel) {
+    const value = channel / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
 }

@@ -26,6 +26,7 @@ import {
   releaseNativeWidgetMount,
 } from '../../surface/NativeWidgetMountBoundary.js';
 import { NativeChoiceRestrictions } from '../../surface/NativeChoiceRestrictions.js';
+import { prepareNativePresentation } from '../../surface/NativePresentationReady.js';
 import type { NativeChoiceRestriction } from '../../surface/NativeChoiceRestrictions.js';
 import type { NativeSeedControl } from '../../surface/appearance/ComfyNativeSeedControl.js';
 import { choiceRestrictions } from '../domain/FieldCompatibility.js';
@@ -155,6 +156,7 @@ export class NativeRelationWidgetRenderer implements RelationWidgetRenderer {
     root: HTMLElement,
     label: string,
     change: (value: string) => void,
+    nativeInputName?: string,
   ): RelationChoiceMount {
     let value = '';
     let choices: readonly RelationWidgetChoice[] = [];
@@ -169,13 +171,16 @@ export class NativeRelationWidgetRenderer implements RelationWidgetRenderer {
         value,
         seed: null,
         widget: {
-          name: label,
+          name: nativeInputName ?? label,
           label,
           type: 'combo',
           value,
           options: {
             disabled,
             values: choices.map((choice) => choice.value),
+            allowedValues: choices
+              .filter((choice) => !choice.blockers.length)
+              .map((choice) => choice.value),
             getOptionLabel: (value: string) =>
               choices.find((choice) => choice.value === value)?.label ?? value,
           },
@@ -218,6 +223,7 @@ export class NativeRelationWidgetRenderer implements RelationWidgetRenderer {
     let disposed = false;
     let render: (() => void) | null = null;
     let unmount: (() => void) | null = null;
+    let presentationQueued = false;
     const constraints = new NativeChoiceRestrictions(root);
     this.#runtime ??= loadComfyNativeWidgetRuntime(this.document);
     void this.#runtime
@@ -243,6 +249,13 @@ export class NativeRelationWidgetRenderer implements RelationWidgetRenderer {
           runtime.render(vnode, root);
           registerNativeWidgetMount(root, { vnode, seed });
           constraints.update(choices);
+          if (!presentationQueued) {
+            presentationQueued = true;
+            queueMicrotask(() => {
+              presentationQueued = false;
+              if (!disposed) prepareNativePresentation(root);
+            });
+          }
         };
         unmount = () => runtime.render(null, root);
         render();

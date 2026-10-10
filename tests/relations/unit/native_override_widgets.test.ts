@@ -46,6 +46,24 @@ const { NativeRelationWidgetRenderer } = await import(
   '../../../frontend/comfyui/ui/relations/infrastructure/NativeRelationWidgetRenderer.js'
 );
 
+test('shares palette foregrounds with legacy relation selectors and override inputs', () => {
+  ensureRelationStyles(document);
+  const style = document.getElementById('sugarcubes-owned-control-appearance');
+  if (!(style instanceof HTMLStyleElement)) throw new Error('Missing borrowed control palette');
+  const rule = [...(style.sheet?.cssRules ?? [])].find((entry) => entry instanceof CSSStyleRule);
+  if (!(rule instanceof CSSStyleRule)) throw new Error('Missing foreground rule');
+  for (const className of ['sugarcubes-native-widget', 'sc-field-relation']) {
+    const root = document.createElement('div');
+    root.className = className;
+    const combo = document.createElement('button');
+    combo.setAttribute('role', 'combobox');
+    root.append(combo);
+    document.body.append(root);
+    expect(combo.matches(rule.selectorText)).toBe(true);
+  }
+  expect(rule.style.color).toBe('var(--colorNeutralForeground1,var(--fg-color,#eee))');
+});
+
 afterEach(() => {
   document.body.replaceChildren();
   document.getElementById('sc-relation-styles')?.remove();
@@ -87,10 +105,15 @@ test('uses native component identity, Vue context, and the same seed control bou
   const mode = jest.fn();
   const error = jest.fn();
   const renderer = new NativeRelationWidgetRenderer(document, error);
+  const ready = jest.fn(() => {
+    expect(readNativeWidgetMount(root)).not.toBeNull();
+  });
+  root.addEventListener('sugarcubes:native-presentation-ready', ready);
   const mount = renderer.mount(root, group(), change, mode);
   await Promise.resolve();
   await Promise.resolve();
   const boundary = readNativeWidgetMount(root);
+  expect(ready).toHaveBeenCalledTimes(1);
   expect(error).not.toHaveBeenCalled();
   expect(boundary?.vnode.type).toBe(numberComponent);
   expect(boundary?.vnode.appContext).toMatchObject({
@@ -105,6 +128,8 @@ test('uses native component identity, Vue context, and the same seed control bou
   boundary?.seed?.writeMode('randomize');
   expect(mode).toHaveBeenCalledWith('randomize');
   mount.update({ ...group(), value: 77, seedMode: 'randomize' });
+  await Promise.resolve();
+  expect(ready).toHaveBeenCalledTimes(2);
   expect(readNativeWidgetMount(root)?.seed?.readMode()).toBe('randomize');
   mount.dispose();
   expect(readNativeWidgetMount(root)).toBeNull();
@@ -170,6 +195,7 @@ test('reserves workflow space below Run and creates every field through the widg
     jest.fn(),
     { mount, mountChoice: mount },
     new NativeOverrideToolbarHost(document),
+    { read: () => ({ docked: false, floating: null }), write: jest.fn() },
   );
   toolbar.reconcile();
   expect(mount).not.toHaveBeenCalled();

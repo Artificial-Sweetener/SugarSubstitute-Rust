@@ -16,6 +16,33 @@
 /** Prove native state overlays share the theme's card shape without clipping custom content. */
 import { afterEach, expect, test } from '@jest/globals';
 import { fluentAppearanceCss } from '../../../frontend/comfyui/ui/surface/appearance/FluentAppearanceStyles.js';
+import { ensureOwnedControlAppearanceStyles } from '../../../frontend/comfyui/ui/surface/appearance/OwnedControlAppearanceStyles.js';
+
+test('owns Fluent control foregrounds while image-backed picker inputs keep their separate contrast owner', () => {
+  ensureOwnedControlAppearanceStyles(document);
+  const style = document.getElementById('sugarcubes-owned-control-appearance');
+  if (!(style instanceof HTMLStyleElement)) throw new Error('Missing control appearance');
+  const root = document.createElement('section');
+  root.setAttribute('data-sc-fluent-node', '');
+  const input = document.createElement('input');
+  const combo = document.createElement('button');
+  combo.setAttribute('role', 'combobox');
+  const imageField = document.createElement('div');
+  imageField.className = 'sc-model-field';
+  const imageInput = document.createElement('input');
+  imageField.append(imageInput);
+  root.append(input, combo, imageField);
+  document.body.append(root);
+  const rule = Array.from(style.sheet?.cssRules ?? []).find(
+    (entry) =>
+      entry instanceof CSSStyleRule && entry.selectorText.includes(':not(.sc-model-field input)'),
+  );
+  if (!(rule instanceof CSSStyleRule)) throw new Error('Missing owned foreground rule');
+  expect(rule.style.color).toBe('var(--colorNeutralForeground1,var(--fg-color,#eee))');
+  expect(input.matches(rule.selectorText)).toBe(true);
+  expect(combo.matches(rule.selectorText)).toBe(true);
+  expect(imageInput.matches(rule.selectorText)).toBe(false);
+});
 
 afterEach(() => {
   document.head.replaceChildren();

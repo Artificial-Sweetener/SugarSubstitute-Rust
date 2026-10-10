@@ -16,6 +16,9 @@
 /** Share reference loading and unavailable presentation without changing portrait geometry. */
 import { modelBusyRingCss } from './ModelBusyRingStyles.js';
 
+/** Retain contrast for white image captions while a thumbnail is absent or loading. */
+export const MODEL_PREVIEW_BACKDROP = '#202024';
+
 /** Position status above captions using the reference portrait's reserved geometry. */
 export const modelRecommendationPreviewCss =
   modelBusyRingCss +

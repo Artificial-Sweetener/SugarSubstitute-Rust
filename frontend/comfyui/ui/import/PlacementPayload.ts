@@ -19,7 +19,16 @@
 
 import { readVector2 } from '../graph/VectorUtils.js';
 import { isRecord } from '../types/common.js';
-import type { PreviewLayout } from '../overlays/PlacementHelpers.js';
+/** Describe serialized node layout retained by workflow insertion. */
+export interface PreviewLayout extends UnknownRecord {
+  title?: string;
+  pos?: unknown;
+  size?: unknown;
+  flags?: unknown;
+  style?: unknown;
+  extra?: unknown;
+  presentation?: unknown;
+}
 import type { UnknownRecord, Vec2 } from '../types/common.js';
 import type { GraphId } from '../types/graph.js';
 import { shiftAuthoredLayoutBaseline } from '../geometry/AuthoredLayoutBaseline.js';

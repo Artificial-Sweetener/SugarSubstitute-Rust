@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Replace one live Cube node while preserving compatible external graph connections. */
 import { readInstanceId } from '../node/CubeNodeCatalog.js';
+import { readNativeCubeConnection } from '../graph/NativeCubeConnections.js';
 /** Own the single history boundary, rollback, catalog, selection, and reconnection mutation. */
 export class ComfyCubeVersionReplacementAdapter {
     #graph;
@@ -87,11 +88,11 @@ function captureConnections(graph, request) {
             : undefined;
         if (targetSlot == null)
             throw incompatibleBoundary('input', input.name, boundaryId);
-        const link = requireLink(graph, input.link);
-        const outside = requireConnectableNode(graph.getNodeById(readOriginId(link)));
+        const connection = readNativeCubeConnection(graph, input.link);
+        const outside = connection.source;
         inputs.push({
             outside,
-            outsideSlot: requireSlot(link.origin_slot, 'origin'),
+            outsideSlot: connection.sourceSlot,
             sourceSlot,
             targetSlot,
         });
@@ -105,11 +106,11 @@ function captureConnections(graph, request) {
                 : undefined;
             if (targetSlot == null)
                 throw incompatibleBoundary('output', output.name, boundaryId);
-            const link = requireLink(graph, linkId);
-            const outside = requireConnectableNode(graph.getNodeById(readTargetId(link)));
+            const connection = readNativeCubeConnection(graph, linkId);
+            const outside = connection.target;
             outputs.push({
                 outside,
-                outsideSlot: requireSlot(link.target_slot, 'target'),
+                outsideSlot: connection.targetSlot,
                 sourceSlot,
                 targetSlot,
             });
@@ -134,41 +135,6 @@ function reconnectSource(source, connections) {
     for (const connection of connections.outputs) {
         source.connect(connection.sourceSlot, connection.outside, connection.outsideSlot);
     }
-}
-/** Require one still-live graph link. */
-function requireLink(graph, id) {
-    const link = graph.getLink(id);
-    if (!link)
-        throw new Error(`Cube connection '${String(id)}' is unavailable.`);
-    return link;
-}
-/** Require a node that can accept a restored LiteGraph connection. */
-function requireConnectableNode(value) {
-    if (!value || typeof value !== 'object' || typeof Reflect.get(value, 'connect') !== 'function') {
-        throw new Error('Cube connection endpoint is unavailable.');
-    }
-    return value;
-}
-/** Read the origin node ID across LiteGraph link representations. */
-function readOriginId(link) {
-    const id = link.origin_id ?? link.origin;
-    if (id == null)
-        throw new Error('Cube input connection has no origin node.');
-    return id;
-}
-/** Read the target node ID across LiteGraph link representations. */
-function readTargetId(link) {
-    const id = link.target_id ?? link.target;
-    if (id == null)
-        throw new Error('Cube output connection has no target node.');
-    return id;
-}
-/** Require one finite non-negative LiteGraph slot. */
-function requireSlot(value, role) {
-    if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
-        throw new Error(`Cube connection has an invalid ${role} slot.`);
-    }
-    return value;
 }
 /** Explain a fail-closed version switch without dropping a user's connection. */
 function incompatibleBoundary(kind, name, id) {

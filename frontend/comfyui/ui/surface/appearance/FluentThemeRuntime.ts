@@ -15,11 +15,21 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Bundle Microsoft's theme implementation at the third-party browser boundary. */
 import { setTheme } from '@fluentui/web-components/theme/set-theme.js';
-import { webDarkTheme, webLightTheme } from '@fluentui/tokens';
+import { webDarkTheme, webLightTheme, createDarkTheme, createLightTheme } from '@fluentui/tokens';
+import {
+  accentForeground,
+  accentIndicatorColor,
+  createAccentBrandPalette,
+  mixAccentColor,
+} from './AccentPalette.js';
 import { Slider } from '@fluentui/web-components/slider/class.js';
 import { definition as SliderDefinition } from '@fluentui/web-components/slider/definition.js';
 import { Button } from '@fluentui/web-components/button/class.js';
 import { definition as ButtonDefinition } from '@fluentui/web-components/button/definition.js';
+import { Tab } from '@fluentui/web-components/tab/class.js';
+import { definition as TabDefinition } from '@fluentui/web-components/tab/definition.js';
+import { Tablist } from '@fluentui/web-components/tablist/class.js';
+import { definition as TablistDefinition } from '@fluentui/web-components/tablist/definition.js';
 import { Checkbox } from '@fluentui/web-components/checkbox/class.js';
 import { definition as CheckboxDefinition } from '@fluentui/web-components/checkbox/definition.js';
 import { TextInput } from '@fluentui/web-components/text-input/class.js';
@@ -27,6 +37,7 @@ import { definition as TextInputDefinition } from '@fluentui/web-components/text
 import type { FluentFinderInput } from './FluentFinderControls.js';
 import type { FluentNumericSlider } from './NativeNumericControls.js';
 import type { FluentBooleanCheckbox } from './NativeToggleRows.js';
+import type { FluentBooleanSegmentsControls } from './NativeBooleanSegments.js';
 import { adaptFluentSliderGeometry } from './FluentSliderGeometry.js';
 import { createFluentSliderThumb } from './FluentSliderThumb.js';
 
@@ -42,6 +53,26 @@ class PresentationButton extends Button {
   connectedMoveCallback(): void {}
 }
 
+/** Retain the official tab's selection and focus during presentation moves. */
+class PresentationTab extends Tab {
+  /** Keep mounted bindings intact when the enclosing field changes presentation. */
+  connectedMoveCallback(): void {}
+}
+
+/** Retain Microsoft's focus group through connected graph and masonry moves. */
+class PresentationTablist extends Tablist {
+  /** Preserve keyboard bindings while the same native field changes parent. */
+  connectedMoveCallback(): void {}
+
+  /** Leave teardown to the binding because Comfy parks native fields between presentation mounts. */
+  override disconnectedCallback(): void {}
+
+  /** Release Microsoft's bindings and focus group once the owning field adapter retires. */
+  releasePresentation(): void {
+    super.disconnectedCallback();
+  }
+}
+
 /** Retain the official checkbox's form and value bindings during connected presentation moves. */
 class PresentationCheckbox extends Checkbox {
   /** Keep mounted bindings intact when its enclosing card changes presentation. */
@@ -51,6 +82,8 @@ class PresentationCheckbox extends Checkbox {
 // FAST completes component registration asynchronously, before consumers can create controls.
 if (!customElements.get('fluent-slider')) await PresentationSlider.define(SliderDefinition);
 if (!customElements.get('fluent-button')) await PresentationButton.define(ButtonDefinition);
+if (!customElements.get('fluent-tab')) await PresentationTab.define(TabDefinition);
+if (!customElements.get('fluent-tablist')) await PresentationTablist.define(TablistDefinition);
 if (!customElements.get('fluent-checkbox')) await PresentationCheckbox.define(CheckboxDefinition);
 if (!customElements.get('fluent-text-input')) await TextInput.define(TextInputDefinition);
 
@@ -70,6 +103,23 @@ export function createFluentBooleanCheckbox(documentRef: Document): FluentBoolea
   return checkbox;
 }
 
+let nextBooleanSegmentId = 0;
+
+/** Instantiate Microsoft's mutually exclusive tabs with their shared sliding accent indicator. */
+export function createFluentBooleanSegments(documentRef: Document): FluentBooleanSegmentsControls {
+  const GroupConstructor = documentRef.defaultView?.customElements.get('fluent-tablist');
+  if (!GroupConstructor) throw new TypeError('The Fluent tablist is not registered.');
+  // Microsoft's focus-group constructor initializes host attributes before connection.
+  const group = new GroupConstructor();
+  const off = documentRef.createElement('fluent-tab');
+  const on = documentRef.createElement('fluent-tab');
+  if (!(group instanceof PresentationTablist) || !(off instanceof Tab) || !(on instanceof Tab))
+    throw new TypeError('The registered Fluent tab controls have incompatible implementations.');
+  off.id = `sc-boolean-${++nextBooleanSegmentId}`;
+  on.id = `sc-boolean-${++nextBooleanSegmentId}`;
+  return { group, segments: [off, on], release: () => group.releasePresentation() };
+}
+
 /** Instantiate Microsoft's official slider without replacing Comfy's numeric value owner. */
 export function createFluentNumericSlider(documentRef: Document): FluentNumericSlider {
   const slider = documentRef.createElement('fluent-slider');
@@ -82,6 +132,7 @@ export function createFluentNumericSlider(documentRef: Document): FluentNumericS
 
 /** Share Microsoft's motion timings across presentation lifecycles and themes. */
 export const fluentMotion = {
+  fasterDuration: Number.parseFloat(webDarkTheme.durationFaster),
   duration: Number.parseFloat(webDarkTheme.durationNormal),
   exitDuration: Number.parseFloat(webDarkTheme.durationFast),
   easing: webDarkTheme.curveDecelerateMid,
@@ -103,4 +154,34 @@ export function fluentTokenDeclarations(dark: boolean): string {
 /** Theme only a SugarCubes-owned container through Microsoft's official API. */
 export function applyOwnedFluentTheme(element: HTMLElement, dark: boolean | null): void {
   setTheme(dark === null ? null : dark ? themes.dark : themes.light, element);
+}
+
+/** Derive all brand roles through Microsoft's factories while retaining one visible accent. */
+export function fluentAccentColorTokens(
+  color: string,
+  dark: boolean,
+): Readonly<Record<string, string>> {
+  const theme = (dark ? createDarkTheme : createLightTheme)(createAccentBrandPalette(color));
+  const indicator = accentIndicatorColor(color, dark);
+  const tokens: Record<string, string> = Object.fromEntries(
+    Object.entries(theme).flatMap(([name, value]) =>
+      /Brand|colorStrokeFocus2/.test(name) && typeof value === 'string' ? [[name, value]] : [],
+    ),
+  );
+  for (const name of ['colorBrandBackground']) tokens[name] = color;
+  for (const name of [
+    'colorBrandForeground1',
+    'colorCompoundBrandForeground1',
+    'colorCompoundBrandBackground',
+    'colorBrandStroke1',
+    'colorCompoundBrandStroke',
+    'colorStrokeFocus2',
+  ])
+    tokens[name] = indicator;
+  tokens.colorBrandBackgroundHover = mixAccentColor(color, '#000000', 0.08);
+  tokens.colorBrandBackgroundPressed = mixAccentColor(color, '#000000', 0.16);
+  tokens.colorCompoundBrandBackgroundHover = mixAccentColor(indicator, '#000000', 0.08);
+  tokens.colorCompoundBrandBackgroundPressed = mixAccentColor(indicator, '#000000', 0.16);
+  tokens.colorNeutralForegroundOnBrand = accentForeground(color);
+  return tokens;
 }

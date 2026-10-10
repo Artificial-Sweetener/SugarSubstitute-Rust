@@ -40,9 +40,10 @@ export function drawCubeUnsavedIndicator(
   context: CanvasRenderingContext2D,
   centerX: number,
   centerY: number,
+  foreground: string,
 ): void {
   context.save();
-  context.fillStyle = '#d7dbe2';
+  context.fillStyle = foreground;
   drawComfyPrimeIcon(context, 'save', centerX, centerY, 15);
   context.fillStyle = '#f0b35c';
   drawComfyPrimeIcon(context, 'ban', centerX, centerY, 19);

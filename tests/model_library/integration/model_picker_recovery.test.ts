@@ -16,12 +16,19 @@
 /** Prove background outages preserve editing and recover within the supported renderer lifetime. */
 import { afterEach, beforeEach, expect, jest, test } from '@jest/globals';
 import { ModelPickerHost } from '../../../frontend/comfyui/ui/model_library/ModelPickerHost.js';
+import type { ModelPickerHostOptions } from '../../../frontend/comfyui/ui/model_library/ModelPickerHost.js';
 import { ModelCatalogClient } from '../../../frontend/comfyui/ui/model_library/ModelCatalogClient.js';
 import { ModelUpdateClient } from '../../../frontend/comfyui/ui/model_library/ModelUpdateClient.js';
 import { ModelDetectorClient } from '../../../frontend/comfyui/ui/model_library/ModelDetectorClient.js';
 import { modelBackgroundReporter } from '../../../frontend/comfyui/ui/model_library/ModelBackgroundDiagnostics.js';
 import { nativeModelFieldFixture } from '../support/native_model_field.js';
 import { ModelFixtureResizeObserver } from '../support/resize_observer.js';
+import { WorkflowRelations } from '../../../frontend/comfyui/ui/relations/application/WorkflowRelations.js';
+import { CubeRelationPresenter } from '../../../frontend/comfyui/ui/relations/presentation/CubeRelationPresenter.js';
+import { emptyRelationState } from '../../../frontend/comfyui/ui/relations/domain/RelationContracts.js';
+import type { FieldContract } from '../../../frontend/comfyui/ui/relations/domain/RelationContracts.js';
+import { registerNativeWidgetMount } from '../../../frontend/comfyui/ui/surface/NativeWidgetMountBoundary.js';
+import type { RelationWidgetChoice } from '../../../frontend/comfyui/ui/relations/presentation/RelationWidgetRenderer.js';
 
 const hosts: ModelPickerHost[] = [];
 
@@ -66,7 +73,7 @@ function fixture(paired = false) {
   jest.spyOn(catalog, 'prioritize').mockResolvedValue(undefined);
   const warn = jest.fn();
   const feedback = jest.fn();
-  const host = new ModelPickerHost({
+  const options: ModelPickerHostOptions = {
     app,
     document,
     catalog,
@@ -81,9 +88,10 @@ function fixture(paired = false) {
       },
     },
     reportError: modelBackgroundReporter({ warn }, 'model picker'),
-  });
+  };
+  const host = new ModelPickerHost(options);
   hosts.push(host);
-  return { native, app, host, load, values, events, warn, feedback, stop };
+  return { native, app, host, options, load, values, events, warn, feedback, stop };
 }
 
 /** Advance retry deadlines and paint one browser frame without replaying idle popup geometry frames. */
@@ -108,6 +116,151 @@ function recoveryClock(): (milliseconds: number) => Promise<void> {
   };
 }
 
+test.each([true, false])(
+  'model enhancement follows relation replacement visibility regardless of mount order (%s)',
+  async (modelFirst) => {
+    const clock = recoveryClock();
+    const proof = fixture();
+    const fields: FieldContract[] = ['checkpoint', 'peer'].map((id) => ({
+      id,
+      nodeId: id,
+      cubeId: id,
+      label: id,
+      name: 'ckpt_name',
+      semantic: 'ckpt_name',
+      value: 'Flux\\alpha.safetensors',
+      domain: { kind: 'choice', values: ['Flux\\alpha.safetensors', 'None'] },
+    }));
+    let state = emptyRelationState();
+    const relations = new WorkflowRelations({
+      inventory: () => ({
+        nodes: fields.map((field) => ({
+          id: field.nodeId,
+          cubeId: field.nodeId,
+          cubeLabel: field.label,
+          label: field.label,
+          classType: 'CheckpointLoaderSimple',
+          configurationIdentity: 'loader',
+          fields: [field],
+          linkable: false,
+        })),
+        fields: fields.map((contract) => ({ contract, read: () => contract.value, write() {} })),
+      }),
+      load: () => state,
+      save: (next) => {
+        state = next;
+      },
+      transaction: (operation) => operation(),
+      refresh() {},
+    });
+    relations.reconcile();
+    const presenter = new CubeRelationPresenter(
+      document,
+      relations,
+      () => [
+        {
+          nodeId: 'checkpoint',
+          surface: {
+            root: proof.native.card,
+            header: null,
+            rows: new Map([['ckpt_name', proof.native.card]]),
+            canvas: null,
+            canvasFields: new Map(),
+            canvasTitle: false,
+          },
+        },
+      ],
+      jest.fn(),
+      {
+        mount: () => {
+          throw new Error('Expected a link choice');
+        },
+        mountChoice: (root, label, change, nativeInputName) => {
+          root.classList.add('sugarcubes-native-widget');
+          const frame = document.createElement('div');
+          frame.setAttribute('data-capture-wheel', 'true');
+          const button = document.createElement('button');
+          button.dataset.testid = 'widget-select-default-trigger';
+          frame.append(button);
+          root.append(frame);
+          let choices: readonly RelationWidgetChoice[] = [];
+          const props = {
+            widget: {
+              name: nativeInputName ?? label,
+              label,
+              options: {
+                values: [] as string[],
+                getOptionLabel: (value: string) =>
+                  choices.find((choice) => choice.value === value)?.label ?? value,
+              },
+            },
+            modelValue: '',
+          };
+          registerNativeWidgetMount(root, {
+            seed: null,
+            vnode: {
+              type: { __name: 'WidgetSelectDefault' },
+              component: {
+                props,
+                emit: (_event: string, value: string) => change(value),
+                proxy: { $watch: () => () => undefined },
+                subTree: { el: frame },
+              },
+            },
+          });
+          return {
+            update: (value, next) => {
+              choices = next;
+              props.modelValue = value;
+              props.widget.options.values = next.map((choice) => choice.value);
+            },
+            dispose: () => root.replaceChildren(),
+          };
+        },
+      },
+    );
+    if (!modelFirst) presenter.reconcile();
+    proof.load.mockResolvedValue(proof.native.snapshot);
+    proof.host.setup();
+    await clock(40);
+    presenter.reconcile();
+    await clock(40);
+    const mount = proof.native.card.querySelector<HTMLElement>('.sc-model-mount');
+    expect(mount).not.toBeNull();
+    expect(mount?.hidden).toBe(true);
+    expect(proof.native.card.querySelectorAll('.sc-field-relation')).toHaveLength(1);
+    expect(proof.native.card.querySelectorAll('.sc-model-mount:not([hidden])')).toHaveLength(1);
+    expect(proof.native.card.querySelector('.sc-field-relation .sc-model-field')).not.toBeNull();
+    for (let index = 0; index < 3; index += 1) {
+      presenter.reconcile();
+      proof.host.setEnabled(true);
+      await clock(40);
+      expect(proof.native.card.querySelector('.sc-model-mount')).toBe(mount);
+      expect(mount?.hidden).toBe(true);
+      expect(proof.native.card.querySelectorAll('.sc-model-mount:not([hidden])')).toHaveLength(1);
+    }
+    proof.values.set('Comfy.VueNodes.Enabled', false);
+    proof.events.dispatchEvent(new Event('Comfy.VueNodes.Enabled.change'));
+    await clock(40);
+    expect(proof.native.card.querySelector('.sc-model-mount')).toBeNull();
+    proof.native.card.remove();
+    proof.values.set('Comfy.VueNodes.Enabled', true);
+    proof.events.dispatchEvent(new Event('Comfy.VueNodes.Enabled.change'));
+    document.getElementById('vue-app')?.append(proof.native.card);
+    await clock(40);
+    expect(proof.load).toHaveBeenCalledTimes(2);
+    const restored = proof.native.card.querySelector<HTMLElement>('.sc-model-mount');
+    expect(proof.warn).not.toHaveBeenCalled();
+    expect(restored).not.toBeNull();
+    expect(restored).not.toBe(mount);
+    expect(restored?.hidden).toBe(true);
+    expect(proof.native.card.querySelectorAll('.sc-model-mount:not([hidden])')).toHaveLength(1);
+    presenter.dispose();
+    expect(restored?.hidden).toBe(false);
+    expect(proof.native.emit).not.toHaveBeenCalled();
+  },
+);
+
 test('unrelated popup search and closure preserve the mounted model picker without card discovery', async () => {
   const proof = fixture();
   proof.load.mockResolvedValue(proof.native.snapshot);
@@ -126,6 +279,27 @@ test('unrelated popup search and closure preserve the mounted model picker witho
   await jest.advanceTimersByTimeAsync(20);
   expect(discovery).not.toHaveBeenCalled();
   expect(proof.native.card.querySelector('.sc-model-mount')).toBe(mount);
+});
+
+test('rejects a competing host before it attaches an orphaned model picker', async () => {
+  const proof = fixture();
+  proof.load.mockResolvedValue(proof.native.snapshot);
+  proof.host.setup();
+  await jest.advanceTimersByTimeAsync(40);
+  const mount = proof.native.card.querySelector('.sc-model-mount');
+  const competing = new ModelPickerHost(proof.options);
+  hosts.push(competing);
+  competing.setup();
+  await jest.advanceTimersByTimeAsync(40);
+  expect(proof.native.card.querySelectorAll('.sc-model-mount')).toHaveLength(1);
+  expect(proof.native.card.querySelector('.sc-model-mount')).toBe(mount);
+  expect(proof.warn).toHaveBeenCalledWith('SugarCubes model background request failed', {
+    operation: 'model picker',
+    error: expect.objectContaining({ message: 'Native field already owns an enhancement.' }),
+  });
+  competing.dispose();
+  expect(proof.native.frame.hasAttribute('data-sc-model-native')).toBe(true);
+  expect(proof.native.emit).not.toHaveBeenCalled();
 });
 
 test('contributes one Cube scope menu for paired checkpoint and VAE fields', async () => {

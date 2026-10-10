@@ -45,12 +45,11 @@ export class CubePickerCatalogRegistry {
                 return this.#refreshing;
             if (this.#queuedForcedRefresh)
                 return this.#queuedForcedRefresh;
-            const queued = this.#refreshing
-                .then(() => this.refresh({ force: true }), () => this.refresh({ force: true }))
-                .finally(() => {
-                if (this.#queuedForcedRefresh === queued)
-                    this.#queuedForcedRefresh = null;
-            });
+            const resume = () => {
+                this.#queuedForcedRefresh = null;
+                return this.refresh({ force: true });
+            };
+            const queued = this.#refreshing.then(resume, resume);
             this.#queuedForcedRefresh = queued;
             return queued;
         }
@@ -83,14 +82,19 @@ export class CubePickerCatalogRegistry {
             return null;
         return readImportPayload(cloneJsonRecord(payload));
     }
-    /** Load every candidate before replacing the last known-good snapshot. */
+    /** Retain a frozen validated artifact for a cart's exact catalog generation. */
+    capturedPayload(type) {
+        return this.#snapshot.entriesByType.get(type)?.payload ?? null;
+    }
+    /** Reuse unchanged artifacts and publish validated changes as one snapshot. */
     async #refresh(force) {
-        const catalogResult = await this.#api.listPickerCatalog({ cache: 'no-store' });
+        const catalogResult = await withPickerRequestTimeout((signal) => this.#api.listPickerCatalog({ cache: 'no-store', signal }));
         requireSuccessfulResponse(catalogResult, 'Cube picker catalog request failed');
         const catalog = readCubePickerCatalog(catalogResult.data);
         if (!catalog)
             throw new Error('Cube picker catalog response is incompatible.');
-        if (!force && catalog.catalogRevision === this.#snapshot.revision) {
+        if (catalog.catalogRevision === this.#snapshot.revision &&
+            catalog.entries.length === this.#snapshot.entriesByType.size) {
             return this.#result(false, []);
         }
         for (const error of catalog.errors) {
@@ -99,14 +103,27 @@ export class CubePickerCatalogRegistry {
                 reason: error.message,
             });
         }
+        const knownCubeIds = new Set([...this.#snapshot.entriesByType.values()].map(({ descriptor }) => descriptor.cubeId));
+        if (catalog.errors.some((error) => knownCubeIds.has(error.cubeId))) {
+            throw new Error('Cube picker refresh could not validate an existing Cube. The previous catalog is retained.');
+        }
         const outcomes = await Promise.all(catalog.entries.map(async (descriptor) => {
             try {
+                const previous = this.#snapshot.entriesByType.get(projectComfyCubeNodeDef(descriptor).name);
+                if (descriptor.contentHash &&
+                    previous?.descriptor.contentHash === descriptor.contentHash &&
+                    previous.descriptor.cubeId === descriptor.cubeId &&
+                    JSON.stringify(previous.descriptor.source) === JSON.stringify(descriptor.source)) {
+                    freezeJsonValue(descriptor);
+                    return { descriptor, payload: previous.payload };
+                }
                 return await this.#loadEntry(descriptor);
             }
             catch (error) {
                 this.#logger.error('SugarCubes picker payload is unavailable.', {
                     cubeId: descriptor.cubeId,
                     reason: readErrorMessage(error),
+                    error,
                 });
                 return descriptor.cubeId;
             }
@@ -121,17 +138,25 @@ export class CubePickerCatalogRegistry {
             const definition = projectComfyCubeNodeDef(outcome.descriptor);
             entriesByType.set(definition.name, outcome);
         }
+        if (unavailableCubeIds.length && this.#snapshot.revision) {
+            throw new Error(`Cube picker refresh could not validate: ${unavailableCubeIds.join(', ')}.`);
+        }
         this.#snapshot = { revision: catalog.catalogRevision, entriesByType };
         this.#logger.debug('SugarCubes picker catalog reconciled.', {
             revision: catalog.catalogRevision,
             advertisedCount: entriesByType.size,
             unavailableCount: unavailableCubeIds.length,
+            forced: force,
         });
         return this.#result(true, unavailableCubeIds);
     }
     /** Fetch and validate one placement payload before its definition becomes visible. */
     async #loadEntry(descriptor) {
-        const result = await this.#api.load(JSON.stringify({ cube_id: descriptor.cubeId, origin: { x: 0, y: 0 } }), { headers: { 'Content-Type': 'application/json' } });
+        const result = await withPickerRequestTimeout((signal) => this.#api.load(JSON.stringify({
+            cube_id: descriptor.cubeId,
+            version_pin: descriptor.version,
+            origin: { x: 0, y: 0 },
+        }), { headers: { 'Content-Type': 'application/json' }, signal }));
         requireSuccessfulResponse(result, `Cube '${descriptor.cubeId}' could not be loaded`);
         const payload = readImportPayload(result.data);
         if (!payload || !isRecord(payload.cube)) {
@@ -145,6 +170,11 @@ export class CubePickerCatalogRegistry {
         if (descriptor.version && payloadVersion !== descriptor.version) {
             throw new Error(`Cube '${descriptor.cubeId}' returned version '${payloadVersion}' instead of '${descriptor.version}'.`);
         }
+        if (descriptor.contentHash && payload.contentHash !== descriptor.contentHash) {
+            throw new Error(`Cube '${descriptor.cubeId}' changed while its picker payload was loading.`);
+        }
+        freezeJsonValue(descriptor);
+        freezeJsonValue(payload);
         return { descriptor, payload };
     }
     /** Describe the current snapshot without exposing mutable registry state. */
@@ -155,6 +185,25 @@ export class CubePickerCatalogRegistry {
             definitions: this.definitions(),
             unavailableCubeIds: [...unavailableCubeIds],
         };
+    }
+}
+/** Freeze JSON artifact trees once so consumers can retain revisions without copying the library. */
+function freezeJsonValue(value) {
+    if (!Array.isArray(value) && !isRecord(value))
+        return;
+    for (const child of Object.values(value))
+        freezeJsonValue(child);
+    Object.freeze(value);
+}
+/** Bound external catalog requests and release each deadline after settlement. */
+async function withPickerRequestTimeout(request) {
+    const controller = new AbortController();
+    const deadline = setTimeout(() => controller.abort(), 15_000);
+    try {
+        return await request(controller.signal);
+    }
+    finally {
+        clearTimeout(deadline);
     }
 }
 /** Reject unsuccessful HTTP responses and backend error envelopes. */

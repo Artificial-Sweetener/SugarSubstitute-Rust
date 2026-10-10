@@ -25,6 +25,8 @@ import { choiceRestrictions } from '../domain/FieldCompatibility.js';
 import type { RelationWidgetRenderer, RelationChoiceMount } from './RelationWidgetRenderer.js';
 import type { RelationCardSurface } from './RelationCardSurface.js';
 import type { FieldContract, NodeContract } from '../domain/RelationContracts.js';
+import { prepareNativePresentation } from '../../surface/NativePresentationReady.js';
+import { setNativeFieldSuppressed } from '../../surface/NativeFieldPresentation.js';
 
 export interface RelationCardView {
   readonly nodeId: string;
@@ -75,9 +77,9 @@ export class CubeRelationPresenter {
         }
     }
     for (const element of this.#hidden)
-      if (!hidden.has(element)) element.removeAttribute('data-sc-relation-hidden');
+      if (!hidden.has(element)) setNativeFieldSuppressed(element, false);
     for (const element of hidden)
-      if (!this.#hidden.has(element)) element.dataset.scRelationHidden = 'true';
+      if (!this.#hidden.has(element)) setNativeFieldSuppressed(element, true);
     this.#hidden = hidden;
   }
 
@@ -86,7 +88,7 @@ export class CubeRelationPresenter {
     for (const choices of this.#choices.values())
       for (const mounted of choices.values()) this.#release(mounted);
     this.#choices.clear();
-    for (const element of this.#hidden) element.removeAttribute('data-sc-relation-hidden');
+    for (const element of this.#hidden) setNativeFieldSuppressed(element, false);
     this.#hidden.clear();
   }
 
@@ -99,16 +101,24 @@ export class CubeRelationPresenter {
   ): void {
     const snapshot = this.relations.snapshot(),
       peers = snapshot.nodes.filter((peer) => compatibleNodes(node, peer));
-    const first = snapshot.nodes.find((peer) => peer.id === node.id || compatibleNodes(node, peer));
-    const targets = peers.filter((peer) => canLinkNode(node, peer, snapshot.nodes, snapshot.state));
+    const earlier = peers.filter(
+      (peer) => snapshot.nodes.indexOf(peer) < snapshot.nodes.indexOf(node),
+    );
+    const targets = earlier.filter((peer) =>
+      canLinkNode(node, peer, snapshot.nodes, snapshot.state),
+    );
     const source = snapshot.state.nodeLinks[node.id];
-    if (first?.id === node.id || !targets.length) return;
+    if (!earlier.length && !source && !mounted.has('node')) return;
     const target = surface.header?.firstElementChild;
     if (!(target instanceof HTMLElement) && !surface.canvasTitle) return;
     const choice = this.#choice('node', mounted, `Link ${node.label}`, (value) =>
       this.relations.linkNode(node.id, value || null),
     );
     choice.root.classList.add('sc-node-link');
+    const first = snapshot.nodes.find(
+      (candidate) => candidate.id === node.id || peers.includes(candidate),
+    );
+    choice.root.hidden = first?.id === node.id;
     const options = [
       { value: '', label: 'Independent', blockers: [] },
       ...targets.map((peer) => ({
@@ -126,12 +136,17 @@ export class CubeRelationPresenter {
       if (
         choice.root.parentElement !== target ||
         (activation && choice.root.nextElementSibling !== activation)
-      )
+      ) {
         target.insertBefore(choice.root, activation);
+        prepareNativePresentation(choice.root);
+      }
     } else {
       choice.root.classList.add('sc-relation-canvas-header');
       if (surface.canvas) surface.root.style.position = 'relative';
-      if (choice.root.parentElement !== surface.root) surface.root.append(choice.root);
+      if (choice.root.parentElement !== surface.root) {
+        surface.root.append(choice.root);
+        prepareNativePresentation(choice.root);
+      }
     }
     retain.add('node');
   }
@@ -150,11 +165,11 @@ export class CubeRelationPresenter {
       canvasField = surface.canvasFields.get(field.name);
     if (!row && !canvasField) return;
     if (effective?.override) {
-      if (row) hidden.add(row);
+      if (row && !surface.nativeWidgetVisibility) hidden.add(row);
       return;
     }
     if (effective?.source && snapshot.state.nodeLinks[field.nodeId]) {
-      if (row) hidden.add(row);
+      if (row && !surface.nativeWidgetVisibility) hidden.add(row);
       return;
     }
     const peers = field.cubeId
@@ -166,14 +181,20 @@ export class CubeRelationPresenter {
     if (field.domain.kind !== 'choice' || (!peers.length && members.length < 2)) return;
     const key = field.id,
       source = snapshot.state.fieldLinks[field.id];
-    const choice = this.#choice(key, mounted, `${field.name} link or value`, (value) => {
-      if (value.startsWith('link:')) this.relations.linkField(field.id, value.slice(5));
-      else {
-        if (this.relations.snapshot().state.fieldLinks[field.id])
-          this.relations.linkField(field.id, null);
-        this.relations.setFieldValue(field.id, value);
-      }
-    });
+    const choice = this.#choice(
+      key,
+      mounted,
+      `${field.name} link or value`,
+      (value) => {
+        if (value.startsWith('link:')) this.relations.linkField(field.id, value.slice(5));
+        else {
+          if (this.relations.snapshot().state.fieldLinks[field.id])
+            this.relations.linkField(field.id, null);
+          this.relations.setFieldValue(field.id, value);
+        }
+      },
+      field.name,
+    );
     const control = row
       ? (row.querySelector<HTMLElement>('[data-sc-fluent-combo-frame]') ??
         row
@@ -182,8 +203,10 @@ export class CubeRelationPresenter {
         row.lastElementChild)
       : null;
     if (control instanceof HTMLElement) {
-      if (choice.root.parentElement !== control.parentElement)
+      if (choice.root.parentElement !== control.parentElement) {
         control.parentElement?.append(choice.root);
+        prepareNativePresentation(choice.root);
+      }
       hidden.add(control);
     } else if (canvasField) {
       surface.root.style.position = surface.canvas ? 'relative' : surface.root.style.position;
@@ -194,7 +217,10 @@ export class CubeRelationPresenter {
         width: `${canvasField.width}px`,
         height: `${canvasField.height}px`,
       });
-      if (choice.root.parentElement !== surface.root) surface.root.append(choice.root);
+      if (choice.root.parentElement !== surface.root) {
+        surface.root.append(choice.root);
+        prepareNativePresentation(choice.root);
+      }
     } else return;
     const restrictions = choiceRestrictions(members.length > 1 ? members : [field]);
     choice.choice.update(
@@ -218,18 +244,24 @@ export class CubeRelationPresenter {
     mounted: Map<string, MountedChoice>,
     label: string,
     operation: (value: string) => void,
+    nativeInputName?: string,
   ): MountedChoice {
     let existing = mounted.get(key);
     if (!existing) {
       const root = this.document.createElement('div');
       root.className = 'sc-field-relation';
-      const choice = this.widgets.mountChoice(root, label, (value) => {
-        try {
-          operation(value);
-        } catch (error: unknown) {
-          this.reportError(error);
-        }
-      });
+      const choice = this.widgets.mountChoice(
+        root,
+        label,
+        (value) => {
+          try {
+            operation(value);
+          } catch (error: unknown) {
+            this.reportError(error);
+          }
+        },
+        nativeInputName,
+      );
       existing = { root, choice };
       mounted.set(key, existing);
     }

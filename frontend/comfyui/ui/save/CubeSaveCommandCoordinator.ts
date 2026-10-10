@@ -29,7 +29,7 @@ import {
 import { isRecord } from '../types/common.js';
 import {
   STALE_SAVE_MODE_LATEST,
-  type CubeBrowserEntry,
+  type SaveLibraryEntry,
   type CubeSaveDependencies,
   type CubeSaveOutcome,
   type SavePlanEntry,
@@ -78,10 +78,10 @@ export class CubeSaveCommandCoordinator {
       const assignedIds = assigned.map((entry) => entry.cubeId);
       const targetCubeIds = this.resolveCubeIds(cubeIds);
       const replacementIds = Array.from(replacements.values());
-      const cubeEntries = Array.isArray(this.dependencies.cubeBrowser?.getCubes?.())
-        ? this.dependencies.cubeBrowser.getCubes()
+      const cubeEntries = Array.isArray(this.dependencies.libraryCatalog?.getCubes?.())
+        ? this.dependencies.libraryCatalog.getCubes()
         : [];
-      const cubeIndex = this.options.sources.indexBrowserEntries(cubeEntries);
+      const cubeIndex = this.options.sources.indexLibraryEntries(cubeEntries);
       const sourceMetadataIndex = this.options.sources.buildIndex(graph);
       const usedNames = new Set(
         cubeEntries
@@ -210,7 +210,7 @@ export class CubeSaveCommandCoordinator {
     assignedIds: string[],
     replacementIds: string[],
     replacements: ReadonlyMap<string, string>,
-    cubeIndex: ReadonlyMap<string, CubeBrowserEntry>,
+    cubeIndex: ReadonlyMap<string, SaveLibraryEntry>,
     sourceMetadataIndex: ReturnType<CubeSaveSourceCatalog['buildIndex']>,
     usedNames: Set<string>,
   ): SavePlanEntry[] {

@@ -27,7 +27,7 @@ export class CubeSaveService {
             adapter: dependencies.adapter,
             instanceManager: dependencies.instanceManager ?? null,
             dirtyManager: dependencies.dirtyManager ?? null,
-            cubeBrowser: dependencies.cubeBrowser ?? null,
+            libraryCatalog: dependencies.libraryCatalog ?? null,
         });
         const sources = new CubeSaveSourceCatalog({
             adapter: dependencies.adapter,

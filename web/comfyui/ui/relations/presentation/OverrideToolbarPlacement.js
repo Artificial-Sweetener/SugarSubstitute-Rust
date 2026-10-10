@@ -5,7 +5,10 @@ export class OverrideToolbarPlacement {
     host;
     changed;
     settled;
+    store;
     #docked = false;
+    #requestedDocked;
+    #unsubscribeLayout;
     #parent = null;
     #observer = null;
     #frame = null;
@@ -14,22 +17,27 @@ export class OverrideToolbarPlacement {
     #size = { width: 0, height: 0 };
     #gesture = null;
     #pointerPlaced = false;
+    #retryDock = false;
     /** Bind the host boundary and publish placement changes to disclosure presentation. */
-    constructor(root, grip, host, changed, settled) {
+    constructor(root, grip, host, changed, settled, store) {
         this.root = root;
         this.grip = grip;
         this.host = host;
         this.changed = changed;
         this.settled = settled;
+        this.store = store;
+        const saved = store.read();
+        this.#requestedDocked = saved.docked;
+        this.#desired = saved.floating;
+        this.#unsubscribeLayout = host.subscribeLayout(this.#hostResized);
         root.dataset.placement = 'floating';
     }
     /** Reattach after native shell replacement, preserving the requested resting placement. */
     attached() {
+        this.#setDocked(this.#requestedDocked);
         if (!this.host.attach(this.root, this.#docked)) {
             if (!this.#docked)
                 return false;
-            this.#desired = null;
-            this.#pointerPlaced = false;
             this.#setDocked(false);
             if (!this.host.attach(this.root, false))
                 return false;
@@ -68,6 +76,7 @@ export class OverrideToolbarPlacement {
             return;
         gesture.moved = true;
         this.#pointerPlaced = true;
+        this.#requestedDocked = false;
         if (this.#docked) {
             this.#setDocked(false);
             this.attached();
@@ -90,36 +99,44 @@ export class OverrideToolbarPlacement {
         const docked = accepted && gesture && gesture.moved && this.#nearDock(x, y);
         this.host.dragging(false);
         if (docked) {
+            this.#requestedDocked = true;
             this.#setDocked(true);
             this.attached();
         }
+        if (accepted && gesture?.moved)
+            this.#save();
     }
     /** Offer keyboard docking without requiring a pointer gesture. */
     toggleDock() {
         if (!this.#docked && !this.host.canDock())
             return;
+        this.#requestedDocked = !this.#docked;
         this.#setDocked(!this.#docked);
         this.attached();
+        this.#save();
     }
     /** Move an undocked toolbar through the same bounded coordinate owner. */
     shift(x, y) {
+        this.#requestedDocked = false;
         if (this.#docked) {
             this.#setDocked(false);
             this.attached();
         }
         this.#desired = { x: this.#applied.x + x, y: this.#applied.y + y };
         this.#place();
+        this.#save();
     }
-    /** Restore the original floating position without changing disclosure or widget values. */
+    /** Restore the default top dock without changing disclosure or widget values. */
     reset() {
-        this.#setDocked(false);
-        this.attached();
+        this.#requestedDocked = true;
         this.#desired = null;
         this.#pointerPlaced = false;
-        this.#place();
+        this.attached();
+        this.#save();
     }
     /** Release host chrome, geometry observation, and queued work at toolbar teardown. */
     dispose() {
+        this.#unsubscribeLayout();
         this.#observer?.disconnect();
         if (this.#frame !== null)
             this.root.ownerDocument.defaultView?.cancelAnimationFrame(this.#frame);
@@ -139,6 +156,13 @@ export class OverrideToolbarPlacement {
         this.#applied = { x: 0, y: 0 };
         this.changed(docked);
     }
+    /** Persist the chosen placement only after a completed pointer or keyboard action. */
+    #save() {
+        this.store.write({
+            docked: this.#requestedDocked,
+            floating: this.#desired ? { ...this.#desired } : null,
+        });
+    }
     /** Accept only the placeholder surface, leaving Run controls outside the drop zone. */
     #nearDock(x, y) {
         const dock = this.host.dockBounds();
@@ -153,6 +177,7 @@ export class OverrideToolbarPlacement {
     #hostResized = () => {
         if (!this.#gesture)
             this.#pointerPlaced = false;
+        this.#retryDock = true;
         this.#schedule();
     };
     /** Coalesce host resizing and leave animated geometry to its settled destination. */
@@ -164,7 +189,10 @@ export class OverrideToolbarPlacement {
             return;
         this.#frame = window.requestAnimationFrame(() => {
             this.#frame = null;
-            if (!this.host.attach(this.root, this.#docked)) {
+            const retryDock = this.#retryDock;
+            this.#retryDock = false;
+            if (!this.host.attach(this.root, this.#docked) ||
+                (retryDock && this.#requestedDocked && !this.#docked)) {
                 this.attached();
                 return;
             }

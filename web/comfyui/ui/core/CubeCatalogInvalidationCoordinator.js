@@ -17,28 +17,28 @@
 /** Fan pack changes out to independent discovery consumers with isolated failures. */
 export class CubeCatalogInvalidationCoordinator {
     #refreshPicker;
-    #refreshBrowser;
+    #refreshLibrary;
     #logger;
     /** Bind the independent catalog refresh operations. */
     constructor(options) {
         this.#refreshPicker = options.refreshPicker;
-        this.#refreshBrowser = options.refreshBrowser;
+        this.#refreshLibrary = options.refreshLibrary;
         this.#logger = options.logger;
     }
     /** Refresh every dependent catalog without letting one failure suppress another. */
     async invalidate() {
-        const [picker, browser] = await Promise.allSettled([
+        const [picker, library] = await Promise.allSettled([
             this.#refreshPicker(),
-            this.#refreshBrowser(),
+            this.#refreshLibrary(),
         ]);
         if (picker.status === 'rejected') {
             this.#logger.warn('SugarCubes: failed to refresh the native picker catalog.', {
                 error: picker.reason,
             });
         }
-        if (browser.status === 'rejected') {
-            this.#logger.warn('SugarCubes: failed to refresh the Cube browser catalog.', {
-                error: browser.reason,
+        if (library.status === 'rejected') {
+            this.#logger.warn('SugarCubes: failed to refresh the library metadata catalog.', {
+                error: library.reason,
             });
         }
     }

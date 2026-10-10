@@ -92,7 +92,7 @@ test('leaves ordinary and ambiguous native results untouched', () => {
   expect(document.querySelector('[data-sugarcubes-picker-model-title]')).toBeNull();
 });
 
-test('renders markup-like picker titles literally and leaves nonmatching model routes plain', () => {
+test('renders literal titles with declared models and preserves nonmatching route text', () => {
   const literal = resultItem('<Anima>/<script>alert(1)</script>', 'SugarCubes / <Anima>');
   const nonmatching = resultItem('Flux/Detailer', 'SugarCubes / SDXL', 'Other description');
   document.body.replaceChildren(resultList(literal, nonmatching));
@@ -118,7 +118,7 @@ test('renders markup-like picker titles literally and leaves nonmatching model r
 
   expect(literal.querySelector('[data-sugarcubes-model-pill]')?.textContent).toBe('<Anima>');
   expect(literal.querySelector('script')).toBeNull();
-  expect(nonmatching.querySelector('[data-sugarcubes-picker-model-title]')).toBeNull();
+  expect(nonmatching.querySelector('[data-sugarcubes-model-pill]')?.textContent).toBe('SDXL');
   expect(nonmatching.textContent).toContain('Flux/Detailer');
 });
 

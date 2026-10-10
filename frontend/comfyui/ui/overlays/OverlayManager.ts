@@ -19,7 +19,6 @@
 
 import { ProximityOverlay } from './ProximityOverlay.js';
 import type { ProximityMatch } from './ProximityOverlay.js';
-import { PlacementOverlay } from './PlacementOverlay.js';
 import { CubeChromeOverlay } from './CubeChromeOverlay.js';
 import type { RectBounds, Vec2 } from '../types/common.js';
 import type { ComfyGraph, ComfyNode } from '../types/graph.js';
@@ -51,7 +50,6 @@ export class OverlayManager {
   readonly proximity: ProximityOverlay;
   private readonly proximityPointerMoves: ProximityPointerMoveTracker;
   private readonly proximityGraphMutations: ProximityGraphMutationTracker;
-  readonly placement: PlacementOverlay;
   private readonly swapCoordinator: OverlaySwapCoordinator;
   private readonly chrome: CubeChromeOverlay;
   private readonly drawHooks: OverlayDrawHookLifecycle;
@@ -64,14 +62,10 @@ export class OverlayManager {
     events = null,
     scheduler = null,
     storage = null,
-    cubeApi = null,
-    cubeBrowser = null,
+    libraryCatalog = null,
     saveService = null,
     saveDraft,
     toast = null,
-    applyPreparedImport,
-    reportImportOutcome,
-    buildShiftedPlacementPayload,
     requestDirtyRefresh = null,
     layoutService = null,
     containmentService = null,
@@ -88,17 +82,6 @@ export class OverlayManager {
     });
     this.proximityPointerMoves = new ProximityPointerMoveTracker(this.proximity, scheduler);
     this.proximityGraphMutations = new ProximityGraphMutationTracker(this.proximity, scheduler);
-    this.placement = new PlacementOverlay({
-      adapter,
-      events,
-      scheduler,
-      cubeApi,
-      cubeBrowser,
-      toast,
-      ...(applyPreparedImport ? { applyPreparedImport } : {}),
-      ...(reportImportOutcome ? { reportImportOutcome } : {}),
-      ...(buildShiftedPlacementPayload ? { buildShiftedPlacementPayload } : {}),
-    });
     this.swapCoordinator = new OverlaySwapCoordinator(adapter, layoutService, this.proximity);
     const saveImplementation = saveService?.saveImplementation?.bind(saveService);
     const chromeActions = {
@@ -156,13 +139,12 @@ export class OverlayManager {
     this.chrome = new CubeChromeOverlay({
       adapter,
       actions: chromeActions,
-      resolveSource: createCubeSourceResolver(cubeBrowser, workflowLibraryState),
+      resolveSource: createCubeSourceResolver(libraryCatalog, workflowLibraryState),
     });
     this.drawHooks = new OverlayDrawHookLifecycle(
       adapter,
       scheduler,
       this.proximity,
-      this.placement,
       this.chrome,
       this.proximityGraphMutations,
     );
@@ -186,7 +168,6 @@ export class OverlayManager {
       scheduler,
       target: this,
       proximity: this.proximity,
-      placement: this.placement,
       chrome: this.chrome,
       proximityPointerMoves: this.proximityPointerMoves,
       proximityGraphMutations: this.proximityGraphMutations,

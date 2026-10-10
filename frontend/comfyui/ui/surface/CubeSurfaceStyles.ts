@@ -578,14 +578,6 @@ export function ensureCubeSurfaceStyles(documentRef: Document): void {
       visibility: visible !important;
       border-radius: 0;
     }
-    body.sugarcubes-cube-editor-workspace
-      .p-splitter:has(.sugarcubes-sidebar-panel)
-      > .side-bar-panel,
-    body.sugarcubes-cube-editor-workspace
-      .p-splitter:has(.sugarcubes-sidebar-panel)
-      > .p-splitter-gutter {
-      display: none !important;
-    }
     .sugarcubes-cube-editor-metadata {
       box-sizing: border-box;
       position: fixed;

@@ -18,6 +18,7 @@
 import { describe, expect, jest, test } from '@jest/globals';
 
 import { CubeSurfaceView } from '../../../frontend/comfyui/ui/surface/CubeSurfaceView.js';
+import { CubeFaceActionsView } from '../../../frontend/comfyui/ui/surface/CubeFaceActionsView.js';
 import { prepareNativeCardPresentation } from '../../../frontend/comfyui/ui/surface/NativeCardPresentationOwner.js';
 import { ensureCubeSurfaceStyles } from '../../../frontend/comfyui/ui/surface/CubeSurfaceStyles.js';
 import { createDefaultCubeSurfaceState } from '../../../frontend/comfyui/ui/surface/CubeSurfaceState.js';
@@ -28,12 +29,40 @@ import type {
 import type { ComfyNode } from '../../../frontend/comfyui/ui/types/graph.js';
 import type { CubeIdentityPresentation } from '../../../frontend/comfyui/ui/cube/CubeIdentityPresentation.js';
 import type { CubePreviewActions } from '../../../frontend/comfyui/ui/surface/CubePreviewActions.js';
-import {
-  resolveCubeModelTitle,
-  resolveDefaultInstanceModelTitle,
-} from '../../../frontend/comfyui/ui/cube/CubeModelTitlePresentation.js';
+import { resolveCubeModelTitle } from '../../../frontend/comfyui/ui/cube/CubeModelTitlePresentation.js';
 
 describe('CubeSurfaceView', () => {
+  test('refreshes header permissions directly while retaining controls and releasing its subscription', () => {
+    const listeners = new Set<() => void>();
+    let allowed = true;
+    const view = new CubeFaceActionsView(
+      document,
+      { instance_id: 'cube' },
+      {
+        onSwapLeft() {},
+        canSwap: () => allowed,
+        subscribeAvailability(listener) {
+          listeners.add(listener);
+          return () => {
+            listeners.delete(listener);
+          };
+        },
+      },
+    );
+    view.render();
+    const button = view.element.querySelector<HTMLButtonElement>('[data-cube-action="swap-left"]')!;
+    const icon = button.firstElementChild;
+    expect(button.hidden).toBe(false);
+    allowed = false;
+    for (const listener of listeners) listener();
+    expect(button.hidden).toBe(true);
+    allowed = true;
+    for (const listener of listeners) listener();
+    expect(button.hidden).toBe(false);
+    expect(button.firstElementChild).toBe(icon);
+    view.dispose();
+    expect(listeners.size).toBe(0);
+  });
   test('suspends source geometry during a card loan and resumes once at its latest width', () => {
     const renderer = createRenderer();
     const minimumHeight = jest.fn();
@@ -419,7 +448,7 @@ describe('CubeSurfaceView', () => {
       view.element
         .querySelector<HTMLElement>('[data-cube-definition-name] .sugarcubes-model-title')
         ?.getAttribute('aria-label'),
-    ).toBe('SDXL/Text to Image version 2.0.0');
+    ).toBe('SDXL/Text to Image v2.0.0');
     expect(
       view.element.querySelector<HTMLElement>('[data-cube-definition-source]')?.textContent,
     ).toBe('from Base-Cubes by Artificial-Sweetener');
@@ -466,13 +495,13 @@ describe('CubeSurfaceView', () => {
         ?.textContent,
     ).toBe('SDXL');
     expect(
-      repeated.element
-        .querySelector<HTMLElement>('.sugarcubes-cube-face__title .sugarcubes-model-title')
-        ?.style.getPropertyValue('--sugarcubes-model-pill-punchout'),
-    ).toBe('');
+      aliased.element.querySelector('.sugarcubes-cube-face__title [data-sugarcubes-model-pill]')
+        ?.textContent,
+    ).toBe('SDXL');
     expect(
-      aliased.element.querySelector('.sugarcubes-cube-face__title [data-sugarcubes-model-pill]'),
-    ).toBeNull();
+      aliased.element.querySelector('.sugarcubes-cube-face__title .sugarcubes-model-title__name')
+        ?.textContent,
+    ).toBe('My portrait pipeline');
     expect(
       aliased.element.querySelector('[data-cube-definition-name] [data-sugarcubes-model-pill]')
         ?.textContent,
@@ -484,7 +513,7 @@ describe('CubeSurfaceView', () => {
       aliased.element
         .querySelector('[data-cube-definition-name] .sugarcubes-model-title')
         ?.getAttribute('aria-label'),
-    ).toBe('SDXL/Text to Image version 2.0.0');
+    ).toBe('SDXL/Text to Image v2.0.0');
     repeated.dispose();
     aliased.dispose();
   });
@@ -878,16 +907,16 @@ function createRenderer(): NativeNodeCardRenderer {
 /** Build the fully resolved header model supplied by the Cube presenter. */
 function cubeIdentity(instanceTitle: string): CubeIdentityPresentation {
   const definitionTitle = 'SDXL/Text to Image';
-  const versionText = 'version 2.0.0';
+  const versionText = 'v2.0.0';
   return {
     instanceTitle,
     definitionTitle,
+    targetModel: 'SDXL',
     versionText,
     definitionLine: `${definitionTitle} ${versionText}`,
-    instanceModelTitle: resolveDefaultInstanceModelTitle({
+    instanceModelTitle: resolveCubeModelTitle({
       targetModel: 'SDXL',
-      instanceTitle,
-      defaultAlias: definitionTitle,
+      title: instanceTitle,
     }),
     definitionModelTitle: resolveCubeModelTitle({
       targetModel: 'SDXL',

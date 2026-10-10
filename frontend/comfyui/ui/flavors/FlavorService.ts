@@ -53,7 +53,7 @@ export class FlavorService {
     toast,
     api,
     dirtyManager,
-    cubeBrowser,
+    invalidateCatalogs,
   }: FlavorServiceOptions = {}) {
     this.events = events || null;
     this.toast = toast || null;
@@ -74,7 +74,7 @@ export class FlavorService {
       toast: toast || null,
       api: api || null,
       dirtyManager: dirtyManager || null,
-      cubeBrowser: cubeBrowser || null,
+      invalidateCatalogs: invalidateCatalogs || null,
       storage: this.storage,
       graph: this.graph,
       lifecycle: this.lifecycle,

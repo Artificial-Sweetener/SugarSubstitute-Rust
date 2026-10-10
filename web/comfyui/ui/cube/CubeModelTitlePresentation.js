@@ -13,44 +13,24 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Segment authoritative Cube model routes for renderer-neutral title presentation. */
-/** Split only a declared target-model route prefix from one visible title. */
-export function resolveCubeModelTitle({ targetModel, title, suffix = '', allowModelPill = true, }) {
+/** Present declared model identity independently of editable Cube titles. */
+/** Preserve arbitrary names while removing only their declared model route prefix. */
+export function resolveCubeModelTitle({ targetModel, title, suffix = '', }) {
     const modelText = readText(targetModel);
     const titleText = readText(title);
     const suffixText = readText(suffix);
-    const accessibleText = [titleText, suffixText].filter(Boolean).join(' ');
     const routePrefix = `${modelText}/`;
-    const hasMatchingPrefix = allowModelPill &&
-        Boolean(modelText) &&
+    const hasMatchingPrefix = Boolean(modelText) &&
         titleText.length > routePrefix.length &&
         titleText.slice(0, routePrefix.length).toLocaleLowerCase() === routePrefix.toLocaleLowerCase();
-    if (!hasMatchingPrefix) {
-        return {
-            accessibleText,
-            modelText: '',
-            nameText: titleText,
-            suffixText,
-            usesModelPill: false,
-        };
-    }
+    const accessibleTitle = hasMatchingPrefix || !modelText ? titleText : [modelText, titleText].filter(Boolean).join(' ');
     return {
-        accessibleText,
+        accessibleText: [accessibleTitle, suffixText].filter(Boolean).join(' '),
         modelText,
-        nameText: titleText.slice(routePrefix.length).trim(),
+        nameText: hasMatchingPrefix ? titleText.slice(routePrefix.length).trim() : titleText,
         suffixText,
-        usesModelPill: true,
+        usesModelPill: Boolean(modelText),
     };
-}
-/** Use a model pill in the instance lane only while it shows the default alias. */
-export function resolveDefaultInstanceModelTitle({ targetModel, instanceTitle, defaultAlias, }) {
-    const resolvedInstanceTitle = readText(instanceTitle);
-    const resolvedDefaultAlias = readText(defaultAlias);
-    return resolveCubeModelTitle({
-        targetModel,
-        title: resolvedInstanceTitle,
-        allowModelPill: Boolean(resolvedInstanceTitle) && resolvedInstanceTitle === resolvedDefaultAlias,
-    });
 }
 /** Accept only explicit non-empty title text from typed or dynamic callers. */
 function readText(value) {

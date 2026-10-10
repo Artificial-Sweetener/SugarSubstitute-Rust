@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Load Comfy's exact exported widget components independently of the active graph renderer. */
+import { fetchComfyRuntimeText } from './ComfyRuntimeAssetRequest.js';
 import {
   discoverComfyFrontendModules,
   discoverReferencedModuleUrls,
@@ -46,11 +47,7 @@ export async function loadComfyNativeWidgetRuntime(
           matches: (module) => names.every((name) => module.source.includes(`./${name}-`)),
         },
       ],
-      async (url) => {
-        const response = await fetch(url, { signal: AbortSignal.timeout(5_000) });
-        if (!response.ok) throw new Error(`Comfy widget discovery failed (${response.status}).`);
-        return response.text();
-      },
+      fetchComfyRuntimeText,
     ),
   ]);
   const components = new Map<string, UnknownRecord>();

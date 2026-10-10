@@ -54,6 +54,8 @@ export class NativeToggleRows {
         existing.refresh();
         continue;
       }
+      if (!nativeSwitch(row)) continue;
+      const tabindex = row.getAttribute('tabindex');
       const caption = row.ownerDocument.createElement('span');
       caption.dataset.scBooleanCaption = '';
       caption.textContent = 'Enable';
@@ -70,8 +72,13 @@ export class NativeToggleRows {
           nativeRoot?.removeAttribute('data-sc-boolean-native');
           nativeRoot = null;
           control.remove();
+          row.removeAttribute('data-sc-toggle-row');
+          if (tabindex === null) row.removeAttribute('tabindex');
+          else row.setAttribute('tabindex', tabindex);
           return;
         }
+        row.tabIndex = 0;
+        row.dataset.scToggleRow = '';
         if (nativeRoot !== switchRoot) {
           nativeRoot?.removeAttribute('data-sc-boolean-native');
           nativeRoot = switchRoot;
@@ -121,9 +128,6 @@ export class NativeToggleRows {
         event.stopPropagation();
         activate();
       };
-      const tabindex = row.getAttribute('tabindex');
-      row.tabIndex = 0;
-      row.dataset.scToggleRow = '';
       row.addEventListener('click', click);
       row.addEventListener('keydown', key);
       row.addEventListener('change', nativeChange, true);

@@ -24,6 +24,7 @@ import type {
   NativeCubeSubgraph,
 } from './ComfyCubeGraphBuilder.js';
 import type { ComfyCubeNodeFactory, CubeNode } from './node/ComfyCubeNodeFactory.js';
+import { resolveNativeCubeFrameSize } from './node/ComfyCubeNodeFactory.js';
 import { writeCubeDefinitionIdentity } from './node/CubeDefinitionIdentityWriter.js';
 import { writeCubeDefinitionDocument } from '../workflow/CubeDefinitionDocumentWriter.js';
 import type { CubeInitialSizeResolver } from './geometry/CubeInitialSizePolicy.js';
@@ -115,15 +116,36 @@ export class CubeConstructionService {
       identity,
       geometry: {
         position: readPayloadPosition(payload, options.position),
-        size:
-          options.size ??
-          this.#resolveInitialSize({
-            surface: readSurfaceState(identity.metadata),
-            hasInputs: built.subgraph.inputs.length > 0,
-          }),
+        size: this.#initialSize(identity, built.subgraph.inputs.length > 0, options),
       },
       ...(isRecord(payload.document) ? { document: payload.document } : {}),
     });
+  }
+
+  /** Project the same fresh frame before graph construction so canonical cart geometry stays accurate. */
+  previewSize(
+    payload: ImportPayload,
+    hasInputs: boolean,
+    options: CubeConstructionOptions & { instanceId: string },
+  ): Vec2 {
+    const identity = readPayloadIdentity(
+      payload,
+      options.instanceId,
+      options.instanceAlias,
+      options.surface,
+      options.revisionRef,
+    );
+    return resolveNativeCubeFrameSize(
+      normalizedSize(this.#initialSize(identity, hasInputs, options)),
+    );
+  }
+
+  /** Share fresh frame policy between immutable planning and actual native construction. */
+  #initialSize(identity: CubeIdentity, hasInputs: boolean, options: CubeConstructionOptions): Vec2 {
+    return (
+      options.size ??
+      this.#resolveInitialSize({ surface: readSurfaceState(identity.metadata), hasInputs })
+    );
   }
 
   /** Configure one prebuilt definition and return a detached real Cube node. */

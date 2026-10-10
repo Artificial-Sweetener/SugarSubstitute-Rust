@@ -25,6 +25,7 @@ import { CubePickerHostIntegration } from '../../../frontend/comfyui/ui/picker/C
 test('subscribes once and closes the Add Cube menu whenever node style changes', () => {
   const renderer = { changed: null as (() => void) | null };
   const close = jest.fn();
+  const cartClose = jest.fn();
   const install = jest.fn();
   const creationInstall = jest.fn();
   const integration = new CubePickerHostIntegration({
@@ -32,6 +33,7 @@ test('subscribes once and closes the Add Cube menu whenever node style changes',
     creation: { install: creationInstall } as unknown as ComfyCubePickerCreationAdapter,
     results: { install, schedule: jest.fn() } as unknown as ComfyCubePickerResultPresenter,
     addMenu: { close, open: jest.fn() } as unknown as CubeAddMenuController,
+    cart: { close: cartClose, open: async () => undefined },
     rendererChanges: {
       subscribe(listener) {
         renderer.changed = listener;
@@ -49,4 +51,5 @@ test('subscribes once and closes the Add Cube menu whenever node style changes',
   expect(install).toHaveBeenCalledTimes(2);
   expect(creationInstall).toHaveBeenCalledTimes(2);
   expect(close).toHaveBeenCalledTimes(1);
+  expect(cartClose).toHaveBeenCalledTimes(1);
 });

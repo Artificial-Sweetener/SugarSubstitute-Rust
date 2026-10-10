@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Resolve browser and canonical cube identities into chrome badge sources. */
+/** Resolve library metadata and canonical Cube identities into chrome badge sources. */
 import { parseCanonicalCubeId } from '../core/CubeId.js';
 import { isRecord, readString } from '../types/common.js';
 function buildGithubSource(author, pack) {
@@ -70,7 +70,7 @@ export function resolveCubeEntrySource(entry) {
     return sourceFromLegacyAuthor(entry.author);
 }
 /** Create the authoritative chrome source resolver for a cube catalog. */
-export function createCubeSourceResolver(cubeBrowser, libraryState = null) {
+export function createCubeSourceResolver(libraryCatalog, libraryState = null) {
     return (metadata) => {
         const instanceId = typeof metadata.instance_id === 'string' ? metadata.instance_id.trim() : '';
         const libraryClass = instanceId ? libraryState?.read(instanceId)?.primaryClass : undefined;
@@ -78,7 +78,7 @@ export function createCubeSourceResolver(cubeBrowser, libraryState = null) {
         if (!cubeId) {
             return withLibraryClass({ sourceKind: '', author: '', pack: '', namespace: '' }, libraryClass);
         }
-        const catalogSource = resolveCubeEntrySource(cubeBrowser?.getCubeById?.(cubeId));
+        const catalogSource = resolveCubeEntrySource(libraryCatalog?.getCubeById?.(cubeId));
         if (catalogSource) {
             return withLibraryClass(catalogSource, libraryClass);
         }

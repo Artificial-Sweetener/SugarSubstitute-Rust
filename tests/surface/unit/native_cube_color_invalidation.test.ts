@@ -47,7 +47,26 @@ test('ignores relocated cards and popups while updating changed or replaced nati
   replacement.style.backgroundColor = 'rgb(10, 20, 30)';
   wrapper.replaceWith(replacement);
   await Promise.resolve();
-  expect(computed).toHaveBeenCalledTimes(1);
+  expect(computed).not.toHaveBeenCalled();
   expect(root.style.getPropertyValue('--sugarcubes-cube-card-header')).toBe('rgb(10, 20, 30)');
+  scope.dispose();
+});
+
+test('keeps default Cube colors inherited through palette changes instead of freezing computed values', () => {
+  const root = document.createElement('div');
+  const wrapper = document.createElement('div');
+  wrapper.dataset.testid = 'node-inner-wrapper';
+  root.append(wrapper);
+  document.body.append(root);
+  const inherited = document.createElement('div').style;
+  inherited.backgroundColor = 'rgb(43, 43, 43)';
+  inherited.setProperty('--component-node-background', '#2b2b2b');
+  const computed = jest.spyOn(window, 'getComputedStyle').mockReturnValue(inherited);
+  const scope = new ComfyVueCubeColorScope(root);
+  scope.mount();
+  expect(root.style.getPropertyValue('--sugarcubes-cube-card-header')).toBe('');
+  expect(root.style.getPropertyValue('--sugarcubes-cube-card-body')).toBe('');
+  expect(root.style.getPropertyValue('--sugarcubes-cube-backdrop')).toBe('');
+  expect(computed).not.toHaveBeenCalled();
   scope.dispose();
 });

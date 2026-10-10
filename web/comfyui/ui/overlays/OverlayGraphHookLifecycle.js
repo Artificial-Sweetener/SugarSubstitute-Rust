@@ -26,7 +26,6 @@ export class OverlayGraphHookLifecycle {
     scheduler;
     target;
     proximity;
-    placement;
     chrome;
     proximityPointerMoves;
     proximityGraphMutations;
@@ -40,7 +39,6 @@ export class OverlayGraphHookLifecycle {
         this.scheduler = options.scheduler;
         this.target = options.target;
         this.proximity = options.proximity;
-        this.placement = options.placement;
         this.chrome = options.chrome;
         this.proximityPointerMoves = options.proximityPointerMoves;
         this.proximityGraphMutations = options.proximityGraphMutations;
@@ -66,7 +64,6 @@ export class OverlayGraphHookLifecycle {
         const originalClean = appRef.clean;
         appRef.clean = function sugarcubesPatchedClean(...args) {
             manager.proximity?.resetOverlayState?.();
-            manager.placement?.stop?.();
             return originalClean.call(this, ...args);
         };
         this.cleanHooked = true;
@@ -205,13 +202,6 @@ export class OverlayGraphHookLifecycle {
                 if (lifecycle.chrome?.handleMouseDown?.(event, this)) {
                     manager.clearGroupDragState();
                     return true;
-                }
-                if (lifecycle.placement.getState().active) {
-                    const handled = lifecycle.placement.handlePlacementMouseDown(event, this, null);
-                    if (handled) {
-                        manager.clearGroupDragState();
-                        return true;
-                    }
                 }
                 const result = originalProcessMouseDown.call(this, event, ...args);
                 manager.captureGroupDragState(this);

@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Verify dotted guides consume the same live geometry as rendered Cube sockets. */
+/** Verify proximity guides use live sockets and request an unbordered native stroke. */
 
 import { jest } from '@jest/globals';
 
@@ -24,7 +24,7 @@ import {
 import type { ProximityMatch } from '../../../frontend/comfyui/ui/overlays/proximity/ProximityModel.js';
 import type { ComfyGraph, ComfyNode } from '../../../frontend/comfyui/ui/types/graph.js';
 
-test('renders from authoritative animated port positions', () => {
+test('renders an unbordered guide from authoritative animated port positions', () => {
   const graph = {} as ComfyGraph;
   const outputNode: ComfyNode = {
     id: 'output',
@@ -71,13 +71,44 @@ test('renders from authoritative animated port positions', () => {
     [400, 150],
     [450, 150],
     expect.anything(),
-    false,
+    true,
     false,
     null,
     4,
     3,
     { disabled: false },
   );
+});
+
+test('restores native marker and canvas state when the host link painter fails', () => {
+  const context = {
+    save: jest.fn(),
+    restore: jest.fn(),
+    setLineDash: jest.fn(),
+    lineDashOffset: 0,
+    strokeStyle: '',
+  } as unknown as CanvasRenderingContext2D;
+  const error = new Error('Native link painter failed');
+  const warn = jest.fn();
+  const canvas: ProximityRenderCanvas = {
+    linkMarkerShape: 7,
+    render_connections_border: true,
+    renderLink: () => {
+      throw error;
+    },
+  };
+  const renderer = new ProximityLinkRenderer({
+    getLiteGraph: () => null,
+    logger: { debug: jest.fn(), warn },
+  });
+
+  renderer.render([match({ pos: [0, 0] }, { pos: [50, 0] })], context, canvas);
+
+  expect(context.save).toHaveBeenCalledTimes(1);
+  expect(context.restore).toHaveBeenCalledTimes(1);
+  expect(canvas.linkMarkerShape).toBe(7);
+  expect(canvas.render_connections_border).toBe(true);
+  expect(warn).toHaveBeenCalledWith('SugarCubes: proximity renderLink failed', error);
 });
 
 /** Build one complete match for the renderer boundary. */

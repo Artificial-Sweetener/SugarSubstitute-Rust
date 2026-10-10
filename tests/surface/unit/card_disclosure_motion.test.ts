@@ -130,17 +130,20 @@ test('retains the latest user choice when a view unmount interrupts closing', ()
 });
 
 test('commits the previous state owner before another disclosure takes over the same mount', () => {
-  const { motion, effects } = fixture();
+  const { target, motion, effects } = fixture();
   const advanced = jest.fn(),
     node = jest.fn();
-  motion.toggle(false, advanced, { closedHeight: () => 100 }, advanced);
+  motion.toggle(false, advanced, { closedHeight: () => 100, contentLayout: 'fill' }, advanced);
+  expect(target.dataset.scDisclosureLayout).toBe('fill');
   motion.toggle(false, node, { closedHeight: () => 50 }, node);
+  expect(target.dataset.scDisclosureLayout).toBe('intrinsic');
   expect(advanced).toHaveBeenCalledWith(true);
   expect(node).not.toHaveBeenCalled();
   expect(effects[0]?.cancel).toHaveBeenCalled();
   expect(effects[1]?.frames).toEqual([{ height: '200px' }, { height: '50px' }]);
   motion.dispose();
   expect(node).toHaveBeenCalledWith(true);
+  expect(target.hasAttribute('data-sc-disclosure-layout')).toBe(false);
 });
 
 test('animates a native content resize to its settled destination and restores inline geometry', async () => {
@@ -171,6 +174,17 @@ test('animates a native content resize to its settled destination and restores i
   motion.dispose();
 });
 
+test('animates reordered prompt membership in the normal Comfy appearance', () => {
+  const { target, root, effects, motion } = fixture();
+  root.removeAttribute('data-sc-fluent-node');
+  motion.resize(() => {
+    root.style.height = '80px';
+  });
+  expect(effects[0]?.frames).toEqual([{ height: '200px' }, { height: '80px' }]);
+  expect(target.dataset.scDisclosureHeight).toBe('80');
+  motion.dispose();
+});
+
 test('reverses content resizing and ignores stale settlement and animation completion', async () => {
   const { target, root, effects, motion } = fixture();
   let settle = (): void => undefined;
@@ -181,11 +195,13 @@ test('reverses content resizing and ignores stale settlement and animation compl
     () => {
       root.style.height = '60px';
     },
-    { settle: () => settled },
+    { settle: () => settled, contentLayout: 'fill' },
   );
+  expect(target.dataset.scDisclosureLayout).toBe('fill');
   motion.resize(() => {
     root.style.height = '240px';
   });
+  expect(target.dataset.scDisclosureLayout).toBe('intrinsic');
   expect(effects[0]?.frames).toEqual([{ height: '200px' }, { height: '240px' }]);
   settle();
   await Promise.resolve();
@@ -195,6 +211,21 @@ test('reverses content resizing and ignores stale settlement and animation compl
   await Promise.resolve();
   expect(target.style.height).toBe('200px');
   expect(target.hasAttribute('data-sc-disclosure-height')).toBe(false);
+  expect(target.hasAttribute('data-sc-disclosure-layout')).toBe(false);
+});
+
+test('uses the prepared source extent without reading a changed layout again', () => {
+  const { target, root, effects, motion } = fixture();
+  const fromHeight = motion.captureHeight();
+  target.style.height = '160px';
+  motion.resize(
+    () => {
+      root.style.height = '80px';
+    },
+    { fromHeight },
+  );
+  expect(effects[0]?.frames).toEqual([{ height: '200px' }, { height: '80px' }]);
+  motion.dispose();
 });
 
 test('does not animate unchanged geometry or reduced-motion content updates', () => {
@@ -202,11 +233,24 @@ test('does not animate unchanged geometry or reduced-motion content updates', ()
   motion.resize(() => undefined);
   expect(effects).toHaveLength(0);
   expect(target.hasAttribute('data-sc-disclosing')).toBe(false);
-  root.removeAttribute('data-sc-fluent-node');
   const apply = jest.fn();
-  motion.resize(apply);
-  expect(apply).toHaveBeenCalledTimes(1);
-  expect(effects).toHaveLength(0);
+  const original = Object.getOwnPropertyDescriptor(window, 'matchMedia');
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    value: () => ({ matches: true }),
+  });
+  try {
+    motion.resize(() => {
+      apply();
+      root.style.height = '80px';
+    });
+    expect(apply).toHaveBeenCalledTimes(1);
+    expect(effects).toHaveLength(0);
+    expect(target.hasAttribute('data-sc-disclosing')).toBe(false);
+  } finally {
+    if (original) Object.defineProperty(window, 'matchMedia', original);
+    else Reflect.deleteProperty(window, 'matchMedia');
+  }
   motion.dispose();
 });
 

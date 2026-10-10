@@ -22,6 +22,7 @@ import { OverrideToolbarDisclosure } from './OverrideToolbarDisclosure.js';
 import { OverrideToolbarDrag } from './OverrideToolbarDrag.js';
 import { OverrideToolbarPlacement } from './OverrideToolbarPlacement.js';
 import type { OverrideToolbarHost } from './OverrideToolbarPlacement.js';
+import type { OverrideToolbarPlacementStore } from './OverrideToolbarPlacementState.js';
 import { OverrideToolbarFieldLayout } from './OverrideToolbarFieldLayout.js';
 
 /** Select host chrome without changing native widgets or workflow relation state. */
@@ -51,6 +52,7 @@ export class GlobalOverrideToolbar {
     private readonly reportError: (error: unknown) => void,
     private readonly widgets: RelationWidgetRenderer,
     host: OverrideToolbarHost,
+    placementStore: OverrideToolbarPlacementStore,
     presentation: OverrideToolbarPresentation = 'comfy',
   ) {
     this.element = document.createElement('div');
@@ -122,6 +124,7 @@ export class GlobalOverrideToolbar {
       host,
       (docked) => this.#disclosure.setExpansionDirection(docked ? 'left' : 'right'),
       () => this.#fieldLayout.reconcile(),
+      placementStore,
     );
     this.#drag = new OverrideToolbarDrag(this.element, grip, this.#placement, () => {
       this.#menu.close();

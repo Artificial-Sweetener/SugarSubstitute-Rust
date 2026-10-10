@@ -17,8 +17,55 @@
 import { afterEach, expect, test } from '@jest/globals';
 import { NativeFluentCardAdapter } from '../../../frontend/comfyui/ui/surface/appearance/NativeFluentCardAdapter.js';
 import type { UnknownRecord } from '../../../frontend/comfyui/ui/types/common.js';
+import {
+  registerNativeWidgetMount,
+  releaseNativeWidgetMount,
+} from '../../../frontend/comfyui/ui/surface/NativeWidgetMountBoundary.js';
 
 afterEach(() => document.body.replaceChildren());
+
+test('retains live native widget presentation through disconnection until its mount is released', () => {
+  const adapter = new NativeFluentCardAdapter();
+  const root = document.createElement('div');
+  root.className = 'sugarcubes-native-widget';
+  const trigger = document.createElement('button');
+  root.append(trigger);
+  document.body.append(root);
+  registerNativeWidgetMount(root, { vnode: {}, seed: null });
+  adapter.annotateWidget(root);
+  root.remove();
+  adapter.endBatch();
+  expect(root.hasAttribute('data-sc-fluent-node')).toBe(true);
+  document.body.append(root);
+  expect(root.querySelector('button')).toBe(trigger);
+  expect(root.hasAttribute('data-sc-fluent-node')).toBe(true);
+  releaseNativeWidgetMount(root);
+  root.remove();
+  adapter.endBatch();
+  expect(root.hasAttribute('data-sc-fluent-node')).toBe(false);
+  adapter.clear();
+});
+
+test('retains a relation control temporarily detached while another native field is reconciled', () => {
+  const adapter = new NativeFluentCardAdapter();
+  const first = document.createElement('div');
+  const second = document.createElement('div');
+  first.className = second.className = 'sugarcubes-native-widget';
+  const trigger = document.createElement('button');
+  first.append(trigger);
+  document.body.append(first, second);
+  adapter.annotateWidget(first);
+  first.remove();
+  adapter.annotateWidget(second);
+  document.body.append(first);
+  adapter.endBatch();
+  expect(first.hasAttribute('data-sc-fluent-node')).toBe(true);
+  expect(first.querySelector('button')).toBe(trigger);
+  second.remove();
+  adapter.endBatch();
+  expect(second.hasAttribute('data-sc-fluent-node')).toBe(false);
+  adapter.clear();
+});
 
 test('releases detached native annotations on an empty retirement batch', () => {
   const root = document.createElement('div');

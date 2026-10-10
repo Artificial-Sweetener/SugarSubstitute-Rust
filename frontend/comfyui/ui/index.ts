@@ -27,6 +27,7 @@ interface SugarCubesUIFactoryOptions extends UnknownRecord {
 }
 
 interface SugarCubesPublicApiOptions {
+  openLibrary(): void;
   importSugarScript?(source: string): Promise<unknown>;
 }
 
@@ -52,10 +53,7 @@ export function getSugarCubesUI(options: SugarCubesUIFactoryOptions = {}): Sugar
 /**
  * Create public api.
  */
-export function createPublicApi(
-  uiInstance: SugarCubesUI,
-  options: SugarCubesPublicApiOptions = {},
-) {
+export function createPublicApi(uiInstance: SugarCubesUI, options: SugarCubesPublicApiOptions) {
   if (!uiInstance) {
     throw new Error('SugarCubes UI instance required for public API.');
   }
@@ -65,7 +63,7 @@ export function createPublicApi(
     previewCube: uiInstance.previewCube.bind(uiInstance),
     scheduleCubeInstanceRefresh: uiInstance.scheduleCubeInstanceRefresh.bind(uiInstance),
     scheduleCubeDirtyRefresh: uiInstance.scheduleCubeDirtyRefresh.bind(uiInstance),
-    openLibrary: uiInstance.openLibrary.bind(uiInstance),
+    openLibrary: () => options.openLibrary(),
     ...(importSugarScript
       ? { importSugarScript: (source: string) => importSugarScript(source) }
       : {}),

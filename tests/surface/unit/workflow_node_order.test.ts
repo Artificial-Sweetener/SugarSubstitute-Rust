@@ -33,6 +33,36 @@ test('uses position for independent nodes and honors native and accepted implici
   expect(orderWorkflowNodes(graph, [{ source: 'left', target: 'right' }])).toEqual([left, right]);
 });
 
+test('keeps Cube order spatial without moving loose-node dependency slots', () => {
+  const first = nativeCube('first', 200);
+  const second = nativeCube('second', 100);
+  second.inputs = [{ link: 1 }];
+  const loose = { id: 'loose', pos: [300, 0] };
+  const graph: ComfyGraph = {
+    _nodes: [first, second, loose],
+    links: [{ id: 1, origin_id: 'first', target_id: 'second' }],
+  };
+  expect(orderWorkflowNodes(graph)).toEqual([second, loose, first]);
+  first.pos = [0, 0];
+  expect(orderWorkflowNodes(graph)).toEqual([first, loose, second]);
+});
+
+/** Supply a recognized native Cube wrapper without editable implementation fields. */
+function nativeCube(id: string, x: number) {
+  return {
+    id,
+    pos: [x, 0],
+    size: [720, 480],
+    inputs: [] as Array<{ link: number }>,
+    outputs: [],
+    properties: { sugarcubes_kind: 'cube', sugarcubes_cube: { instance_id: id } },
+    subgraph: { id: `definition-${id}`, name: 'Cube', _nodes: [], inputs: [], outputs: [] },
+    isSubgraphNode: () => true,
+    connect() {},
+    serialize: () => ({}),
+  };
+}
+
 test('projects accepted proximity edges once and excludes unresolved endpoints while retaining zero ids', () => {
   const graph: ComfyGraph = { _nodes: [] };
   const match: ProximityMatch = {

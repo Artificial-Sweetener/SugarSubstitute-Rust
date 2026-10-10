@@ -163,24 +163,6 @@ const endpointCases: EndpointCase[] = [
     { method: 'POST', body: payload, ...requestOptions },
   ],
   [
-    'rename',
-    (api) => api.rename(payload, requestOptions),
-    '/sugarcubes/rename',
-    { method: 'POST', body: payload, ...requestOptions },
-  ],
-  [
-    'promote',
-    (api) => api.promote(payload, requestOptions),
-    '/sugarcubes/promote',
-    { method: 'POST', body: payload, ...requestOptions },
-  ],
-  [
-    'metadata update',
-    (api) => api.updateMetadata(payload, requestOptions),
-    '/sugarcubes/update_metadata',
-    { method: 'POST', body: payload, ...requestOptions },
-  ],
-  [
     'bulk save',
     (api) => api.saveMany(payload, requestOptions),
     '/sugarcubes/save_many',
@@ -267,26 +249,6 @@ describe('cube library API contract', () => {
         options: { method: 'DELETE' },
       },
       { url: '/sugarcubes/repos', options: { method: 'DELETE' } },
-    ]);
-  });
-
-  test('cube deletion supports string, object, and empty references', async () => {
-    const { api, requests } = createApi();
-
-    await api.delete('local/example user/demo.cube');
-    await api.delete({ cube_id: 'local/example-user/second.cube' });
-    await api.delete(null);
-
-    expect(requests).toEqual([
-      {
-        url: '/sugarcubes?cube_id=local%2Fexample%20user%2Fdemo.cube',
-        options: { method: 'DELETE' },
-      },
-      {
-        url: '/sugarcubes?cube_id=local%2Fexample-user%2Fsecond.cube',
-        options: { method: 'DELETE' },
-      },
-      { url: '/sugarcubes', options: { method: 'DELETE' } },
     ]);
   });
 

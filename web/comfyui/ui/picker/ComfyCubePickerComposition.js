@@ -27,6 +27,9 @@ import { CubePickerInsertAfterService } from './CubePickerInsertAfterService.js'
 import { ComfyCubeAddMenuPresenter } from './ComfyCubeAddMenuPresenter.js';
 import { CubeAddMenuController } from './CubeAddMenuController.js';
 import { createComfyRendererModeChangeSource } from '../core/ComfyRendererMode.js';
+import { CubeGraphApi } from '../workflow/infrastructure/CubeGraphApi.js';
+import { CubeStackCartFactory } from './infrastructure/CubeStackCartFactory.js';
+import { CubeStackCartHost } from './CubeStackCartHost.js';
 /** Build one picker integration while isolating all dynamic Comfy capability checks. */
 export function createComfyCubePickerIntegration(options) {
     const app = readDefinitionHost(options.app);
@@ -90,11 +93,30 @@ export function createComfyCubePickerIntegration(options) {
         getRuntime: options.getRuntime,
         reportError: options.reportError,
     });
+    const cart = new CubeStackCartHost({
+        document: options.document,
+        appearance: options.appearance,
+        onApplied: options.onStackApplied,
+        reportError: (error) => {
+            options.logger.error('SugarCubes Cube cart failed.', { error });
+            options.reportError('Cube cart unavailable', error instanceof Error ? error.message : String(error));
+        },
+        factory: new CubeStackCartFactory({
+            registry,
+            placement,
+            getRuntime: options.getRuntime,
+            gateway: new CubeGraphApi(options.api),
+            ensureCatalog: () => definitions.ensureReady(),
+            refreshCatalog: () => definitions.reconcile().then(() => undefined),
+            createId: () => options.document.defaultView?.crypto.randomUUID() ?? globalThis.crypto.randomUUID(),
+        }),
+    });
     return new CubePickerHostIntegration({
         definitions,
         creation,
         results,
         addMenu,
+        cart,
         rendererChanges: createComfyRendererModeChangeSource(options.app),
         logger: options.logger,
         reportError: options.reportError,
@@ -109,9 +131,9 @@ function readDefinitionHost(value) {
     if (typeof registerNodeDef === 'function') {
         host.registerNodeDef = (type, definition) => registerNodeDef.call(value, type, definition);
     }
-    const reloadNodeDefs = value.reloadNodeDefs;
-    if (typeof reloadNodeDefs === 'function') {
-        host.reloadNodeDefs = () => reloadNodeDefs.call(value);
+    const updateVueAppNodeDefs = value.updateVueAppNodeDefs;
+    if (typeof updateVueAppNodeDefs === 'function') {
+        host.publishNodeDefs = (definitions) => updateVueAppNodeDefs.call(value, definitions);
     }
     return host;
 }

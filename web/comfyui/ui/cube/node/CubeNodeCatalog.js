@@ -19,6 +19,8 @@ import { isCubeNode, requireCubeIdentity } from './ComfyCubeNodeFactory.js';
 export class CubeNodeCatalog {
     #nodes = new Map();
     #listeners = new Set();
+    #batchDepth = 0;
+    #changedInBatch = false;
     /** Index one graph-owned Cube node. */
     add(node) {
         const instanceId = readInstanceId(node);
@@ -77,8 +79,26 @@ export class CubeNodeCatalog {
         this.#listeners.add(listener);
         return () => this.#listeners.delete(listener);
     }
+    /** Publish one coherent final inventory after a synchronous native mutation or its compensation. */
+    batch(operation) {
+        this.#batchDepth += 1;
+        try {
+            return operation();
+        }
+        finally {
+            this.#batchDepth -= 1;
+            if (this.#batchDepth === 0 && this.#changedInBatch) {
+                this.#changedInBatch = false;
+                this.#notify();
+            }
+        }
+    }
     /** Notify subscribers after one coherent catalog change. */
     #notify() {
+        if (this.#batchDepth > 0) {
+            this.#changedInBatch = true;
+            return;
+        }
         for (const listener of this.#listeners)
             listener();
     }
