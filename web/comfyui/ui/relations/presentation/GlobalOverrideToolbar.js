@@ -21,7 +21,7 @@ export class GlobalOverrideToolbar {
     #placement;
     #signature = '';
     /** Bind toolbar edits directly to the authoritative application owner. */
-    constructor(document, relations, reportError, widgets, host, presentation = 'comfy') {
+    constructor(document, relations, reportError, widgets, host, placementStore, presentation = 'comfy') {
         this.document = document;
         this.relations = relations;
         this.reportError = reportError;
@@ -89,7 +89,7 @@ export class GlobalOverrideToolbar {
             queueMicrotask(this.#measureLabels);
         });
         this.element.append(grip, this.#menuButton, this.#fields, disclosure);
-        this.#placement = new OverrideToolbarPlacement(this.element, grip, host, (docked) => this.#disclosure.setExpansionDirection(docked ? 'left' : 'right'), () => this.#fieldLayout.reconcile());
+        this.#placement = new OverrideToolbarPlacement(this.element, grip, host, (docked) => this.#disclosure.setExpansionDirection(docked ? 'left' : 'right'), () => this.#fieldLayout.reconcile(), placementStore);
         this.#drag = new OverrideToolbarDrag(this.element, grip, this.#placement, () => {
             this.#menu.close();
             this.#disclosure.finish();

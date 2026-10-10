@@ -26,7 +26,7 @@ from sugarcubes.model_library.api import register_model_library_routes
 from sugarcubes.model_library.download_api import register_model_download_routes
 from sugarcubes.model_library.metadata_api import register_model_metadata_routes
 from sugarcubes.model_library.infrastructure.runtime import ModelLibraryRuntime
-from sugarcubes.model_library.domain.models import ModelMetadata
+from sugarcubes.model_library.domain.provider_models import ProviderModelVersion
 from sugarcubes.model_library.domain.provider_metadata import ProviderMetadataRecord
 from tests.model_library.support.model_roots import FixtureFileRoots
 from tests.model_library.support.enrichment import ObservedProvider, ObservedPreviews
@@ -40,9 +40,24 @@ def test_model_traits_http_classification_and_relative_preferences(
 
     async def exercise() -> None:
         """Observe the actual metadata owners through isolated aiohttp handlers."""
+        version = ProviderModelVersion(
+            provider="civitai",
+            model_id="1",
+            version_id="2",
+            title="Model",
+            version="v1",
+            base_model="Illustrious",
+            page_url="https://civitai.com/models/1",
+            description="",
+            trained_words=(),
+            preview_url=None,
+            model_type="LORA",
+            provider_nsfw=False,
+            provider_nsfw_level=1,
+        )
         runtime = ModelLibraryRuntime(
             FixtureFileRoots(tmp_path),
-            enrichment_provider=ObservedProvider(),
+            enrichment_provider=ObservedProvider(version),
             enrichment_previews=ObservedPreviews(),
         )
         runtime.catalog.refresh()
@@ -51,18 +66,7 @@ def test_model_traits_http_classification_and_relative_preferences(
         runtime.repository.save_fingerprint(entry.evidence, digest)
         runtime.repository.save_provider_metadata(
             digest,
-            (
-                ProviderMetadataRecord(
-                    ModelMetadata(
-                        "Model",
-                        base_model="Illustrious",
-                        provider="civitai",
-                        model_type="LORA",
-                        provider_nsfw=False,
-                        provider_nsfw_level=1,
-                    )
-                ),
-            ),
+            (ProviderMetadataRecord(version.metadata(())),),
         )
         routes = web.RouteTableDef()
         register_model_library_routes(routes, runtime)

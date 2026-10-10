@@ -50,7 +50,7 @@ function buildManager({ cubes = [] }: { cubes?: UnknownRecord[] } = {}) {
     emit: jest.fn((_event: string, _payload: unknown) => undefined),
   };
   const scheduler = { raf: (callback: FrameRequestCallback) => (callback(0), 1) };
-  const cubeBrowser = { getCubes: () => cubes, setDirtyCubeIds: jest.fn() };
+  const libraryCatalog = { getCubes: () => cubes };
   const ensureSpy = jest.fn((_request: UnknownRecord): CubeDefinitionEntry | null => null);
   const definitionStore = {
     ensure: ensureSpy,
@@ -60,11 +60,11 @@ function buildManager({ cubes = [] }: { cubes?: UnknownRecord[] } = {}) {
     adapter,
     events,
     scheduler,
-    cubeBrowser,
+    libraryCatalog,
     definitionStore,
   });
 
-  return { manager, ensureSpy, cubeBrowser };
+  return { manager, ensureSpy, libraryCatalog };
 }
 
 function expectCurrentDefinitionRequest(

@@ -17,6 +17,7 @@
 import type { ComfyNode } from '../../types/graph.js';
 import { isRecord } from '../../types/common.js';
 import { nativeNodeFieldRows } from '../../surface/NativeNodeFieldRows.js';
+import { readNativeNodeCard } from '../../surface/NativeNodeCardBoundary.js';
 import { CUBE_FACE_PROJECTION_SYMBOL } from '../../surface/ComfyLiteGraphCubeFaceProjectionHost.js';
 import { cubeFacePresentedWidgets } from '../../surface/CubeFaceWidgetPolicy.js';
 import type {
@@ -30,10 +31,12 @@ export function nativeRelationCards(
   node: ComfyNode,
   cubeId: string | null,
 ): RelationCardSurface[] {
-  const locator = `${String(node.graph?.id)}:${String(node.id)}`;
   const cells = [
     ...document.querySelectorAll<HTMLElement>('.sugarcubes-cube-face__node-card'),
-  ].filter((cell) => cell.dataset.cubeNodeLocator === locator);
+  ].filter((cell) => {
+    const boundary = readNativeNodeCard(cell);
+    return boundary?.node === node && boundary.cubeId === cubeId;
+  });
   const roots =
     cubeId !== null
       ? cells
@@ -87,6 +90,7 @@ export function nativeRelationCards(
       ? canvasFields(node, width, (y) => canvasTop + (30 + y) * ratio, ratio)
       : new Map<string, RelationCanvasField>();
     return {
+      nativeWidgetVisibility: readNativeNodeCard(root) !== null,
       root,
       header,
       rows,

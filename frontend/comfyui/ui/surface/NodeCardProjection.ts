@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Project one authoritative set of native cards for Cube faces and workflow masonry. */
 import type { ComfyGraph, ComfyNode } from '../types/graph.js';
-import type { CubeNode } from '../cube/node/ComfyCubeNodeFactory.js';
+import { requireCubeIdentity, type CubeNode } from '../cube/node/ComfyCubeNodeFactory.js';
 import {
   resolveCubeFaceCardPresentation,
   type CubeFaceCardDecision,
@@ -26,6 +26,7 @@ import { resolveCubeCardWidgetSources } from './CubeCardWidgetSources.js';
 import { cubeFaceCardColumnSpan, findCubeFacePromptWidget } from './CubeFacePromptPolicy.js';
 
 export interface ProjectedNodeCard extends CubeFaceCardDecision {
+  cubeId?: string;
   prompt?: boolean;
   widgetSources?: readonly NativeNodeWidgetSource[];
 }
@@ -53,6 +54,7 @@ export function projectNodeCards(
       };
       return {
         ...card,
+        ...(cube ? { cubeId: String(requireCubeIdentity(cube).instance_id ?? cube.id) } : {}),
         widgetSources,
         prompt: findCubeFacePromptWidget(presentedNode) !== null,
         columnSpan: cubeFaceCardColumnSpan(presentedNode),

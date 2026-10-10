@@ -16,8 +16,13 @@
 /** Prove shared token boundaries release without retaining retired native surfaces. */
 import { afterEach, expect, test } from '@jest/globals';
 import { NativeFluentThemeScopes } from '../../../frontend/comfyui/ui/surface/appearance/NativeFluentThemeScopes.js';
+import { fluentAppearanceCss } from '../../../frontend/comfyui/ui/surface/appearance/FluentAppearanceStyles.js';
+import { ensureWorkflowMasonryStyles } from '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryStyles.js';
 
-afterEach(() => document.body.replaceChildren());
+afterEach(() => {
+  document.body.replaceChildren();
+  document.head.replaceChildren();
+});
 
 test('shares graph tokens and keeps independent toolbar and popup scopes isolated', () => {
   const scopes = new NativeFluentThemeScopes();
@@ -46,4 +51,36 @@ test('shares graph tokens and keeps independent toolbar and popup scopes isolate
   scopes.clear();
   expect(graph.hasAttribute('data-sc-fluent-theme-root')).toBe(false);
   expect(toolbar.getAttribute('data-sc-fluent-theme-root')).toBe('host-owned');
+});
+
+test.each([
+  [true, '#202020'],
+  [false, '#f3f3f3'],
+])('shares the masonry workspace color with sibling chrome for dark=%s', (dark, color) => {
+  const theme = document.createElement('style');
+  theme.textContent = fluentAppearanceCss(dark);
+  document.head.append(theme);
+  const themeRules = Array.from(theme.sheet!.cssRules).filter(
+    (rule): rule is CSSStyleRule => rule instanceof CSSStyleRule,
+  );
+  const root = themeRules.find((rule) => rule.selectorText === '[data-sc-fluent-theme-root]');
+  expect(root?.style.getPropertyValue('--sugarcubes-masonry-surface')).toBe(color);
+  expect(
+    themeRules.filter((rule) => rule.style.getPropertyValue('--sugarcubes-masonry-surface')),
+  ).toHaveLength(1);
+  ensureWorkflowMasonryStyles(document);
+  const layout = document.getElementById('sugarcubes-workflow-masonry-styles') as HTMLStyleElement;
+  const layoutRules = Array.from(layout.sheet!.cssRules).filter(
+    (rule): rule is CSSStyleRule => rule instanceof CSSStyleRule,
+  );
+  const chrome = layoutRules.find(
+    (rule) => rule.selectorText === '#graph-canvas-container[data-sugarcubes-masonry="true"]',
+  );
+  const backdrop = layoutRules.find(
+    (rule) => rule.selectorText === '.sugarcubes-workflow-masonry__backdrop',
+  );
+  expect(chrome?.style.getPropertyValue('background')).toBe(
+    backdrop?.style.getPropertyValue('background'),
+  );
+  expect(chrome?.style.getPropertyValue('background')).toContain('--sugarcubes-masonry-surface');
 });

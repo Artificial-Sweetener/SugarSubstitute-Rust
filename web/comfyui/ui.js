@@ -20,8 +20,10 @@ import { app } from '/scripts/app.js';
 import { api } from '/scripts/api.js';
 import { createEditorActionsRuntime } from './ui/editor_actions/EditorActionsComposition.js';
 import { createComfyCubeRuntime } from './ui/cube/ComfyCubeRuntime.js';
+import { CubeGraphApi } from './ui/workflow/infrastructure/CubeGraphApi.js';
 import { ComfyCubeRuntimeLifecycle } from './ui/cube/ComfyCubeRuntimeLifecycle.js';
 import { CubePreviewRetentionStore } from './ui/surface/CubePreviewRetentionStore.js';
+import { projectCubeProximityPreviewLinks } from './ui/surface/CubeProximityPreviewLinks.js';
 import { CubeAuthoringHostCommands } from './ui/cube/CubeAuthoringHostCommands.js';
 import { createCubeHostExecution } from './ui/cube/execution/CubeHostExecutionComposition.js';
 import { RelationHostLifecycle } from './ui/relations/RelationHostLifecycle.js';
@@ -29,7 +31,6 @@ import { proximityWorkflowConnections } from './ui/overlays/proximity/ProximityW
 import { NativeSubgraphBoundaryResolver } from './ui/cube/graph/NativeSubgraphBoundaryResolver.js';
 import { buildShiftedPlacementPayload } from './ui/import/PlacementPayload.js';
 import { CubeImportHostCoordinator } from './ui/import/CubeImportHostCoordinator.js';
-import { SugarCubesSidebarHostAdapter, } from './ui/sidebar/SugarCubesSidebarHostAdapter.js';
 import { createPublicApi, getSugarCubesUI } from './ui/index.js';
 import { createHostSettingsController } from './ui/settings/HostSettingsController.js';
 import { CubeHostAffordanceController } from './ui/affordance/CubeHostAffordanceController.js';
@@ -43,6 +44,7 @@ import { CubeExtensionSetupLifecycle } from './ui/cube/CubeExtensionSetupLifecyc
 import { CubeHostFeedback } from './ui/core/CubeHostFeedback.js';
 import { createSugarCubesDebugApi } from './ui/debug/SugarCubesDebugApi.js';
 import { WorkflowMasonryHostLifecycle } from './ui/surface/masonry/WorkflowMasonryHostLifecycle.js';
+import { createCubeStackCommands } from './ui/surface/stack/CubeStackCommands.js';
 import { FluentAppearanceHost } from './ui/surface/appearance/FluentAppearanceHost.js';
 import { ScrollSurfaceWheelHost } from './ui/surface/ScrollSurfaceWheelHost.js';
 import { ModelPickerHost } from './ui/model_library/ModelPickerHost.js';
@@ -65,15 +67,11 @@ import { ModelRootClient } from './ui/model_library/ModelRootClient.js';
 import { ModelLibrarySettings } from './ui/model_library/ModelLibrarySettings.js';
 export { buildShiftedPlacementPayload };
 const EXTENSION_NAME = 'SugarCubes.UI';
-const IMPORT_STORAGE_KEY = 'SugarCubes.Import.LastCube';
 let invalidateCubeCatalogs = async () => undefined;
 /** Provide the authoritative UI service graph for this host extension instance. */
 export const sugarCubesUI = getSugarCubesUI({
     forceNew: true,
     adapterOptions: { app, api },
-    applyPreparedImport,
-    reportImportOutcome,
-    buildShiftedPlacementPayload,
     getCubeAuthoring: () => requireCubeRuntime().authoring,
     getCubeNodeCatalog: () => cubeRuntimeLifecycle.current()?.nodes ?? null,
     validateCubePersistence: () => assertNoNestedCubes('save SugarCubes'),
@@ -102,15 +100,23 @@ const logger = consoleRef || {
     debug() { },
 };
 const hostFeedback = new CubeHostFeedback({
-    storage: ui.storage,
     toast: toastService,
-    logger,
-    lastCubeStorageKeys: [IMPORT_STORAGE_KEY],
 });
 const cubePreconfiguration = ui.workflowPreconfiguration;
 const cubePreviewRetention = new CubePreviewRetentionStore();
 const cubeRuntimeLifecycle = new ComfyCubeRuntimeLifecycle(createCubeRuntime);
+/** Compose shared appearance without adding styling behavior to host registration. */
+const fluentAppearance = new FluentAppearanceHost({
+    app: appRef,
+    document: documentRef ?? document,
+    reportError: (error) => {
+        logger.error('SugarCubes Fluent appearance failed', { error });
+        pushToastMessage('error', 'Fluent theme unavailable', readErrorMessage(error));
+    },
+});
 const cubePicker = createComfyCubePickerIntegration({
+    appearance: fluentAppearance.state,
+    onStackApplied: () => workflowMasonry.refresh(),
     api: cubeApi,
     app,
     document: documentRef ?? document,
@@ -123,7 +129,7 @@ const cubePicker = createComfyCubePickerIntegration({
 });
 const cubeCatalogInvalidation = new CubeCatalogInvalidationCoordinator({
     refreshPicker: () => cubePicker.refresh(),
-    refreshBrowser: () => ui.cubeBrowser.refresh({ force: true }),
+    refreshLibrary: () => ui.libraryCatalog.refresh({ force: true }),
     logger,
 });
 invalidateCubeCatalogs = () => cubeCatalogInvalidation.invalidate();
@@ -192,11 +198,12 @@ function createCubeRuntime() {
     if (!appRef || !liteGraph || !documentRef) {
         throw new Error('SugarCubes native Cube runtime dependencies are unavailable.');
     }
-    let runtime = null;
-    runtime = createComfyCubeRuntime({
+    const runtime = createComfyCubeRuntime({
         app: appRef,
         api,
         cubeApi,
+        graphGateway: new CubeGraphApi(cubeApi),
+        reconcileCubeOrder: () => workflowRelations.reconcileCubeOrder(),
         liteGraph,
         document: documentRef,
         logger,
@@ -205,7 +212,7 @@ function createCubeRuntime() {
         editorMetadata: {
             canEdit: (node) => ui.workflowLibraryPresentation.canEdit(node),
             save: async (node, values) => ui.cubeEditorSave.save(node, values),
-            modelSuggestions: () => ui.cubeBrowser.getModelSuggestions(),
+            modelSuggestions: () => ui.modelSuggestions.getModelSuggestions(),
         },
         feedback: toastService,
         boundaryResolver: nativeBoundaryResolver,
@@ -217,17 +224,7 @@ function createCubeRuntime() {
         onBoundaryGeometryChange: () => overlayManager.proximity.schedulePreview({
             graph: appRef.canvas?.graph ?? appRef.graph,
         }),
-        getPreviewLinks: () => overlayManager.proximity.settings.enabled
-            ? overlayManager.proximity.promptMatches.flatMap((match) => match.outputId === undefined || match.inputId === undefined
-                ? []
-                : [
-                    {
-                        originId: match.outputId,
-                        originSlot: match.outputSlot,
-                        targetId: match.inputId,
-                    },
-                ])
-            : [],
+        getPreviewLinks: () => projectCubeProximityPreviewLinks(overlayManager.proximity.settings.enabled, overlayManager.proximity.promptMatches),
     });
     overlayManager.proximity.setEndpointSource(runtime.proximityEndpoints);
     overlayManager.proximity.setMatchSink(runtime.proximityPresentation);
@@ -238,9 +235,7 @@ function requireCubeRuntime() {
     return cubeRuntimeLifecycle.require();
 }
 const readErrorMessage = (error) => hostFeedback.readErrorMessage(error);
-function pushToastMessage(severity, summary, detail) {
-    hostFeedback.pushToast(severity, summary, detail);
-}
+const pushToastMessage = hostFeedback.pushToast.bind(hostFeedback);
 const hostSettingsController = createHostSettingsController({
     adapter,
     appRef,
@@ -253,12 +248,6 @@ const hostSettingsController = createHostSettingsController({
         void cubeCatalogInvalidation.invalidate();
     },
 });
-const sidebarHost = new SugarCubesSidebarHostAdapter({
-    document: documentRef ?? document,
-    getManager: () => appRef?.extensionManager,
-    browser: ui.cubeBrowser,
-    logger,
-});
 const importHostCoordinator = new CubeImportHostCoordinator({
     ui,
     app: appRef,
@@ -266,12 +255,6 @@ const importHostCoordinator = new CubeImportHostCoordinator({
     getRuntime: requireCubeRuntime,
     logger,
 });
-function reportImportOutcome(defaultAlias, backendWarnings, importResult, payloadValue, options = {}) {
-    importHostCoordinator.report(defaultAlias, backendWarnings, importResult, payloadValue, options);
-}
-async function applyPreparedImport(payloadValue, options = {}) {
-    return importHostCoordinator.apply(payloadValue, options);
-}
 const graphConfigurationLifecycle = new CubeGraphConfigurationLifecycle({
     app: appRef,
     ui,
@@ -289,7 +272,6 @@ const extensionSetupLifecycle = new CubeExtensionSetupLifecycle({
     api,
     app: appRef,
     ui,
-    sidebar: sidebarHost,
     settings: hostSettingsController,
     promptQueue: promptQueueBridge,
     outputEvents: cubeOutputEventBridge,
@@ -297,6 +279,19 @@ const extensionSetupLifecycle = new CubeExtensionSetupLifecycle({
     logger,
 });
 const workflowMasonry = new WorkflowMasonryHostLifecycle({
+    stack: createCubeStackCommands({
+        document: documentRef ?? document,
+        appearance: fluentAppearance.state,
+        picker: cubePicker,
+        library: ui.workflowLibraryActions,
+        dialogs: ui.dialogs,
+        getRuntime: () => cubeRuntimeLifecycle.current(),
+        resolveSource: (metadata) => ui.workflowLibraryPresentation.resolveSource(metadata),
+        reportError: (error) => {
+            logger.error('SugarCubes stack action failed.', { error });
+            pushToastMessage('error', 'Cube stack unavailable', readErrorMessage(error));
+        },
+    }),
     app: appRef,
     document: documentRef ?? document,
     getCubes: () => cubeRuntimeLifecycle.current()?.nodes.list() ?? [],
@@ -317,15 +312,6 @@ const workflowMasonry = new WorkflowMasonryHostLifecycle({
 });
 /** Compose theme-independent native scroll input once for the host document. */
 const scrollSurfaceInput = new ScrollSurfaceWheelHost(documentRef ?? document);
-/** Compose shared appearance without adding styling behavior to host registration. */
-const fluentAppearance = new FluentAppearanceHost({
-    app: appRef,
-    document: documentRef ?? document,
-    reportError: (error) => {
-        logger.error('SugarCubes Fluent appearance failed', { error });
-        pushToastMessage('error', 'Fluent theme unavailable', readErrorMessage(error));
-    },
-});
 /** Compose shared model presentation while preserving the native widget owner. */
 const modelCatalog = new ModelCatalogClient((path, options) => api.fetchApi(path, options), () => refreshComfyModelChoices(appRef));
 const modelUpdates = new ModelUpdateClient((path, options) => api.fetchApi(path, options));
@@ -381,6 +367,11 @@ export const sugarCubesExtension = {
     name: EXTENSION_NAME,
     commands: [
         {
+            id: 'SugarCubes.CubeStackCart',
+            label: 'Add cubes / edit Cube stack',
+            function: () => cubePicker.openCart(),
+        },
+        {
             id: 'SugarCubes.ToggleMasonry',
             label: 'Toggle workflow masonry',
             function: () => workflowMasonry.toggle(),
@@ -421,6 +412,7 @@ export const sugarCubesExtension = {
     beforeConfigureGraph(graphData) {
         workflowRelations.beforeConfigureGraph();
         workflowMasonry.beforeConfigureGraph();
+        cubePicker.closeAddMenu();
         graphConfigurationLifecycle.beforeConfigureGraph(graphData);
     },
     afterConfigureGraph(missingNodeTypes, comfyApp) {
@@ -434,6 +426,7 @@ const debugApi = createSugarCubesDebugApi({ ui, app: appRef });
 if (windowRef) {
     Object.assign(windowRef, {
         SugarCubes: createPublicApi(ui, {
+            openLibrary: () => cubePicker.openCart(),
             importSugarScript: (source) => importHostCoordinator.importSugarScript(source),
         }),
         SugarCubesDebug: debugApi,

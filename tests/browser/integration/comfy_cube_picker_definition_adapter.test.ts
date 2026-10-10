@@ -91,17 +91,19 @@ describe('ComfyCubePickerDefinitionAdapter', () => {
       unavailableCubeIds: [],
     }));
     const registerNodeDef = jest.fn(async () => undefined);
-    const reloadNodeDefs = jest.fn(async () => undefined);
+    const publishNodeDefs = jest.fn(
+      async (_definitions: Record<string, UnknownRecord>) => undefined,
+    );
     const unregisterNodeType = jest.fn();
     const adapter = new ComfyCubePickerDefinitionAdapter({
       registry: {
         refresh,
         definitions: () => current,
       } as unknown as CubePickerCatalogRegistry,
-      app: { registerNodeDef, reloadNodeDefs },
+      app: { registerNodeDef, publishNodeDefs },
       liteGraph: { unregisterNodeType },
     });
-    await adapter.contribute({});
+    await adapter.contribute({ Ordinary: { name: 'Ordinary', input: { required: {} } } });
     current = [definition(typeB, 'Cube B')];
 
     await adapter.reconcile();
@@ -112,7 +114,14 @@ describe('ComfyCubePickerDefinitionAdapter', () => {
       typeB,
       expect.objectContaining({ name: typeB, display_name: 'Cube B' }),
     );
-    expect(reloadNodeDefs).toHaveBeenCalledTimes(1);
+    expect(publishNodeDefs).toHaveBeenCalledTimes(1);
+    expect(publishNodeDefs.mock.calls[0]?.[0].Ordinary?.name).toBe('Ordinary');
+    expect(publishNodeDefs.mock.calls[0]?.[0][typeA]).toBeUndefined();
+    registerNodeDef.mockClear();
+    publishNodeDefs.mockClear();
+    await adapter.reconcile();
+    expect(registerNodeDef).not.toHaveBeenCalled();
+    expect(publishNodeDefs).not.toHaveBeenCalled();
   });
 
   test('fails closed when dynamic host registration is unavailable', async () => {
@@ -132,6 +141,39 @@ describe('ComfyCubePickerDefinitionAdapter', () => {
     });
 
     await expect(adapter.reconcile()).rejects.toThrow('registration is unavailable');
+  });
+
+  test('warm readiness and unchanged definitions require no registration or host publication', async () => {
+    let current = [definition(typeA, 'Cube A'), definition(typeB, 'Cube B')];
+    const refresh = jest.fn(async () => ({
+      changed: true,
+      revision: 'ready',
+      definitions: current,
+      unavailableCubeIds: [],
+    }));
+    const registerNodeDef = jest.fn(async () => undefined);
+    const publishNodeDefs = jest.fn(async () => undefined);
+    const adapter = new ComfyCubePickerDefinitionAdapter({
+      registry: {
+        revision: 'ready',
+        refresh,
+        definitions: () => current,
+      } as unknown as CubePickerCatalogRegistry,
+      app: { registerNodeDef, publishNodeDefs },
+      liteGraph: {},
+    });
+    await adapter.contribute({});
+    refresh.mockClear();
+    await adapter.ensureReady();
+    expect(refresh).not.toHaveBeenCalled();
+    await adapter.reconcile();
+    expect(registerNodeDef).not.toHaveBeenCalled();
+    expect(publishNodeDefs).not.toHaveBeenCalled();
+    current = [definition(typeA, 'Updated Cube A'), definition(typeB, 'Cube B')];
+    await adapter.reconcile();
+    expect(registerNodeDef).toHaveBeenCalledTimes(1);
+    expect(registerNodeDef).toHaveBeenCalledWith(typeA, expect.anything());
+    expect(publishNodeDefs).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -26,9 +26,8 @@ test('renders literal model and name text with a complete accessible title', () 
     targetModel: '<Anima>',
     title: '<Anima>/<script>alert(1)</script>',
   });
-  const element = createCubeModelTitleElement(document, presentation, {
-    punchoutColor: 'var(--test-header)',
-  });
+  const element = createCubeModelTitleElement(document, presentation, { punchoutColor: '#202020' });
+  expect(element.style.getPropertyValue('--sugarcubes-model-pill-punchout')).toBe('#202020');
 
   expect(element.getAttribute('aria-label')).toBe('<Anima>/<script>alert(1)</script>');
   expect(element.querySelector('[data-sugarcubes-model-pill]')?.textContent).toBe('<Anima>');
@@ -36,9 +35,6 @@ test('renders literal model and name text with a complete accessible title', () 
     '<script>alert(1)</script>',
   );
   expect(element.querySelector('script')).toBeNull();
-  expect(element.style.getPropertyValue('--sugarcubes-model-pill-punchout')).toBe(
-    'var(--test-header)',
-  );
 });
 
 test('keeps compact pill geometry in the shared theme-token stylesheet', () => {
@@ -50,8 +46,14 @@ test('keeps compact pill geometry in the shared theme-token stylesheet', () => {
 
   expect(styles).toContain('font-size: 0.78em');
   expect(styles).toContain('padding: 0.08em 0.38em');
-  expect(styles).toContain('--p-content-background');
-  expect(styles).toContain('background: currentColor');
+  expect(styles).toContain('background: var(--sc-accent-color');
+  expect(styles).toContain('--colorBrandForeground1');
+  expect(styles).toContain('color: var(--sc-accent-foreground');
+  expect(styles).toContain('--p-primary-color');
+  expect(styles).toContain('--sugarcubes-model-pill-punchout');
+  expect(styles).toContain('--comfy-menu-bg');
+  expect(styles).not.toContain('--colorNeutralForegroundOnBrand');
+  expect(styles).not.toContain('background: currentColor');
 });
 
 test('does not rewrite an unchanged owned title', () => {
@@ -65,4 +67,18 @@ test('does not rewrite an unchanged owned title', () => {
   const child = host.firstElementChild;
   expect(presentCubeModelTitle(host, presentation)).toBe(false);
   expect(host.firstElementChild).toBe(child);
+});
+
+test.each([
+  ['Anima/Contextual Upscale 2', 'Contextual Upscale 2'],
+  ['Final polish', 'Final polish'],
+  ['<img src=x>', '<img src=x>'],
+])('renders renamed title %s literally with its declared model', (title, name) => {
+  const element = createCubeModelTitleElement(
+    document,
+    resolveCubeModelTitle({ targetModel: 'Anima', title }),
+  );
+  expect(element.querySelector('[data-sugarcubes-model-pill]')?.textContent).toBe('Anima');
+  expect(element.querySelector('.sugarcubes-model-title__name')?.textContent).toBe(name);
+  expect(element.querySelector('img')).toBeNull();
 });

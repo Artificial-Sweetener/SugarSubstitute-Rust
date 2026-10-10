@@ -1,4 +1,5 @@
 import { nativeRelationCards } from './NativeRelationCardAdapter.js';
+import { readNativeNodeCard } from '../../surface/NativeNodeCardBoundary.js';
 /** Cache native component discovery until that exact surface's contents or lifetime changes. */
 export class NativeRelationViews {
     document;
@@ -9,25 +10,37 @@ export class NativeRelationViews {
     }
     /** Resolve one face's retained views without inspecting unrelated Vue components. */
     read(node, cubeId) {
-        const cached = this.#views.get(node);
-        if (cached?.surfaces.length &&
-            cached.surfaces.every((surface) => surface.root.isConnected && !surface.canvasTitle))
-            return cached.surfaces;
+        let instances = this.#views.get(node);
+        const cached = instances?.get(cubeId);
+        if (cached?.length &&
+            cached.every((surface) => {
+                const boundary = readNativeNodeCard(surface.root);
+                return (surface.root.isConnected &&
+                    !surface.canvasTitle &&
+                    (cubeId === null || (boundary?.node === node && boundary.cubeId === cubeId)));
+            }))
+            return cached;
         const surfaces = nativeRelationCards(this.document, node, cubeId);
-        this.#views.set(node, { cubeId, surfaces });
+        if (!instances)
+            this.#views.set(node, (instances = new Map()));
+        instances.set(cubeId, surfaces);
         return surfaces;
     }
     /** Invalidate only cached views touched by identified native surface changes. */
     invalidate(elements) {
-        for (const [node, { cubeId, surfaces }] of this.#views) {
-            const locator = `${String(node.graph?.id)}:${String(node.id)}`;
-            if (!surfaces.length ||
-                elements.some((element) => element.dataset.cubeNodeLocator === locator ||
-                    element.closest('.sugarcubes-cube-face__node-card')?.dataset
-                        .cubeNodeLocator === locator ||
-                    (cubeId === null && element.dataset.nodeId === String(node.id))) ||
-                surfaces.some((surface) => !surface.root.isConnected ||
-                    elements.some((element) => element.contains(surface.root) || surface.root.contains(element))))
+        for (const [node, instances] of this.#views) {
+            for (const [cubeId, surfaces] of instances) {
+                if (!surfaces.length ||
+                    elements.some((element) => {
+                        const boundary = readNativeNodeCard(element);
+                        return ((boundary?.node === node && boundary.cubeId === cubeId) ||
+                            (cubeId === null && element.dataset.nodeId === String(node.id)));
+                    }) ||
+                    surfaces.some((surface) => !surface.root.isConnected ||
+                        elements.some((element) => element.contains(surface.root) || surface.root.contains(element))))
+                    instances.delete(cubeId);
+            }
+            if (!instances.size)
                 this.#views.delete(node);
         }
     }

@@ -42,9 +42,8 @@ interface DirtyEventBus {
   on?(event: string, handler: (payload: UnknownRecord) => void): (() => void) | void;
 }
 
-interface DirtyBrowser {
+interface DirtyLibraryCatalog {
   getCubes?(): UnknownRecord[];
-  setDirtyCubeIds?(ids: Set<string>): void;
 }
 
 interface DirtyDefinitionStore {
@@ -56,7 +55,7 @@ interface DirtyManagerOptions {
   adapter: DirtyManagerAdapter;
   events?: DirtyEventBus | null;
   scheduler?: RefreshScheduler | null;
-  cubeBrowser?: DirtyBrowser | null;
+  libraryCatalog?: DirtyLibraryCatalog | null;
   definitionStore: DirtyDefinitionStore;
 }
 
@@ -71,7 +70,7 @@ interface DirtyMarkOptions {
 export class DirtyManager {
   private readonly events: DirtyEventBus | null;
   private readonly scheduler: RefreshScheduler | null | undefined;
-  private readonly cubeBrowser: DirtyBrowser | null;
+  private readonly libraryCatalog: DirtyLibraryCatalog | null;
   private readonly savedIds: Set<string>;
   private unsubscribe: (() => boolean | void) | null;
   private lastGraph: ComfyGraph | null;
@@ -85,12 +84,12 @@ export class DirtyManager {
     adapter,
     events = null,
     scheduler,
-    cubeBrowser = null,
+    libraryCatalog = null,
     definitionStore,
   }: DirtyManagerOptions) {
     this.events = events;
     this.scheduler = scheduler;
-    this.cubeBrowser = cubeBrowser;
+    this.libraryCatalog = libraryCatalog;
     this.savedIds = new Set<string>();
     this.unsubscribe = null;
     this.lastGraph = null;
@@ -113,7 +112,6 @@ export class DirtyManager {
       return;
     }
     this.unsubscribe = this.tracker.onChange((dirtyIds) => {
-      this.cubeBrowser?.setDirtyCubeIds?.(dirtyIds);
       this.events?.emit?.('cube:dirty:changed', { dirtyIds });
     });
     this.events?.on?.('cube:instances:updated', (payload) => {
@@ -155,8 +153,8 @@ export class DirtyManager {
 
   buildKnownCubeIdSet(): Set<string> {
     const known = new Set<string>();
-    const entries = Array.isArray(this.cubeBrowser?.getCubes?.())
-      ? this.cubeBrowser.getCubes()
+    const entries = Array.isArray(this.libraryCatalog?.getCubes?.())
+      ? this.libraryCatalog.getCubes()
       : [];
     for (const entry of entries) {
       const cubeId = typeof entry?.cube_id === 'string' ? entry.cube_id.trim() : '';
@@ -227,7 +225,6 @@ export class DirtyManager {
     const groups = getGraphGroups(graph);
     if (!groups.length) {
       this.tracker.refresh({ graph, knownCubeIds: null });
-      this.cubeBrowser?.setDirtyCubeIds?.(new Set());
       return { dirtyCubeIds: new Set() };
     }
     const hasSugarcubes = groups.some((group) => {
@@ -236,7 +233,6 @@ export class DirtyManager {
     });
     if (!hasSugarcubes) {
       this.tracker.refresh({ graph, knownCubeIds: null });
-      this.cubeBrowser?.setDirtyCubeIds?.(new Set());
       return { dirtyCubeIds: new Set() };
     }
     for (const group of groups) {
@@ -255,7 +251,6 @@ export class DirtyManager {
       graph,
       knownCubeIds: knownCubeIds.size ? knownCubeIds : null,
     });
-    this.cubeBrowser?.setDirtyCubeIds?.(result?.dirtyCubeIds || new Set());
     return result;
   }
 

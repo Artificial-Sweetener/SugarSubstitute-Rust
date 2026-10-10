@@ -89,9 +89,7 @@ export interface FlavorApi {
 export interface FlavorDirtyManager {
   requestRefresh?(options: { graph: ComfyGraph; reason: string }): void;
 }
-export interface FlavorBrowser {
-  refresh?(options: { force: boolean }): Promise<unknown>;
-}
+
 export interface FlavorStorageAdapter {
   readValue?(key: string): string | null;
   writeValue?(key: string, value: unknown): void;
@@ -105,7 +103,7 @@ export interface FlavorServiceOptions {
   toast?: FlavorToast | null;
   api?: FlavorApi | null;
   dirtyManager?: FlavorDirtyManager | null;
-  cubeBrowser?: FlavorBrowser | null;
+  invalidateCatalogs?: (() => Promise<void>) | null;
 }
 export interface HydrateOptions {
   cubeId?: string;

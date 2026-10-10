@@ -78,11 +78,11 @@ var emptyArray = Object.freeze([]);
 function createTypeRegistry() {
   const typeToDefinition = /* @__PURE__ */ new Map();
   return Object.freeze({
-    register(definition5) {
-      if (typeToDefinition.has(definition5.type)) {
+    register(definition7) {
+      if (typeToDefinition.has(definition7.type)) {
         return false;
       }
-      typeToDefinition.set(definition5.type, definition5);
+      typeToDefinition.set(definition7.type, definition7);
       return true;
     },
     getByType(key) {
@@ -659,7 +659,7 @@ var defaultPolicy = Object.freeze({
   createHTML(value) {
     return fastTrustedType.createHTML(value);
   },
-  protect(tagName5, aspect, aspectName, sink) {
+  protect(tagName7, aspect, aspectName, sink) {
     return sink;
   }
 });
@@ -872,8 +872,8 @@ function attr(configOrTarget, prop) {
 
 // node_modules/@microsoft/fast-element/dist/esm/styles/element-styles.js
 var DefaultStyleStrategy;
-function reduceStyles(styles5) {
-  return styles5.reduce((reduced, current) => {
+function reduceStyles(styles7) {
+  return styles7.reduce((reduced, current) => {
     if (current instanceof ElementStyles) {
       reduced.push(...reduceStyles(current.styles));
     } else {
@@ -899,8 +899,8 @@ var ElementStyles = class _ElementStyles {
    * Creates an instance of ElementStyles.
    * @param styles - The styles that will be associated with elements.
    */
-  constructor(styles5) {
-    this.styles = styles5;
+  constructor(styles7) {
+    this.styles = styles7;
     this.targets = /* @__PURE__ */ new WeakSet();
     this._strategy = null;
   }
@@ -938,16 +938,16 @@ var ElementStyles = class _ElementStyles {
    * @param styles - The style options to normalize.
    * @returns A singular ElementStyles instance or undefined.
    */
-  static normalize(styles5) {
-    return styles5 === void 0 ? void 0 : Array.isArray(styles5) ? new _ElementStyles(styles5) : styles5 instanceof _ElementStyles ? styles5 : new _ElementStyles([styles5]);
+  static normalize(styles7) {
+    return styles7 === void 0 ? void 0 : Array.isArray(styles7) ? new _ElementStyles(styles7) : styles7 instanceof _ElementStyles ? styles7 : new _ElementStyles([styles7]);
   }
 };
 ElementStyles.supportsAdoptedStyleSheets = Array.isArray(document.adoptedStyleSheets) && "replace" in CSSStyleSheet.prototype;
 function createAdoptedSheetsStrategy() {
   const cache = /* @__PURE__ */ new Map();
   return class FallbackAdoptedSheetsStrategy {
-    constructor(styles5) {
-      this.sheets = styles5.map((x) => {
+    constructor(styles7) {
+      this.sheets = styles7.map((x) => {
         if (x instanceof CSSStyleSheet) {
           return x;
         }
@@ -973,8 +973,8 @@ function createAdoptedSheetsStrategy() {
 var fallbackStyleId = 0;
 function createStyleElementStrategy() {
   return class FallbackStyleElementStrategy {
-    constructor(styles5) {
-      this.styles = styles5;
+    constructor(styles7) {
+      this.styles = styles7;
       this.styleClass = `fast-${++fallbackStyleId}`;
     }
     addStylesTo(target) {
@@ -988,9 +988,9 @@ function createStyleElementStrategy() {
     }
     removeStylesFrom(target) {
       const t = target === document ? document.body : target;
-      const styles5 = t.querySelectorAll(`.${this.styleClass}`);
-      for (let i = 0, ii = styles5.length; i < ii; ++i) {
-        t.removeChild(styles5[i]);
+      const styles7 = t.querySelectorAll(`.${this.styleClass}`);
+      for (let i = 0, ii = styles7.length; i < ii; ++i) {
+        t.removeChild(styles7[i]);
       }
     }
   };
@@ -1003,15 +1003,15 @@ var typeRegistry = createTypeRegistry();
 var definitionInstances = /* @__PURE__ */ new WeakMap();
 var instanceRefs = /* @__PURE__ */ new WeakMap();
 var fastElementRegistry = Object.freeze({
-  register(definition5) {
-    if (!typeRegistry.register(definition5)) {
+  register(definition7) {
+    if (!typeRegistry.register(definition7)) {
       return false;
     }
-    const registeredTypes = getRegisteredTypes(definition5.registry);
-    if (!Object.prototype.hasOwnProperty.call(registeredTypes, definition5.name)) {
-      Observable.defineProperty(registeredTypes, definition5.name);
+    const registeredTypes = getRegisteredTypes(definition7.registry);
+    if (!Object.prototype.hasOwnProperty.call(registeredTypes, definition7.name)) {
+      Observable.defineProperty(registeredTypes, definition7.name);
     }
-    registeredTypes[definition5.name] = definition5.type;
+    registeredTypes[definition7.name] = definition7.type;
     return true;
   },
   getByType: typeRegistry.getByType,
@@ -1037,46 +1037,46 @@ function whenRegistered(name, registry3 = customElements) {
   if (!Object.prototype.hasOwnProperty.call(registeredTypes, name)) {
     Observable.defineProperty(registeredTypes, name);
   }
-  const definition5 = getDefinitionForType(registeredTypes[name]);
-  if (definition5 !== void 0) {
-    return Promise.resolve(definition5);
+  const definition7 = getDefinitionForType(registeredTypes[name]);
+  if (definition7 !== void 0) {
+    return Promise.resolve(definition7);
   }
   return new Promise((resolve) => {
     const notifier = Observable.getNotifier(registeredTypes);
     const subscriber = {
       handleChange: () => {
-        const definition6 = getDefinitionForType(registeredTypes[name]);
-        if (definition6 === void 0) {
+        const definition8 = getDefinitionForType(registeredTypes[name]);
+        if (definition8 === void 0) {
           return;
         }
         notifier.unsubscribe(subscriber, name);
-        resolve(definition6);
+        resolve(definition8);
       }
     };
     notifier.subscribe(subscriber, name);
   });
 }
-function trackFASTElementInstance(definition5, instance) {
+function trackFASTElementInstance(definition7, instance) {
   if (instanceRefs.has(instance)) {
     return false;
   }
-  let instances = definitionInstances.get(definition5);
+  let instances = definitionInstances.get(definition7);
   const isFirstInstance = instances === void 0;
   if (instances === void 0) {
     instances = /* @__PURE__ */ new Set();
-    definitionInstances.set(definition5, instances);
+    definitionInstances.set(definition7, instances);
   }
   const ref2 = new WeakRef(instance);
   instances.add(ref2);
   instanceRefs.set(instance, ref2);
   return isFirstInstance;
 }
-function trackedFASTElementInstances(definition5, callback) {
-  const instances = definitionInstances.get(definition5);
+function trackedFASTElementInstances(definition7, callback) {
+  const instances = definitionInstances.get(definition7);
   if (instances === void 0) {
     return;
   }
-  definitionInstances.delete(definition5);
+  definitionInstances.delete(definition7);
   for (const ref2 of instances) {
     const instance = ref2.deref();
     if (instance !== void 0) {
@@ -1100,23 +1100,23 @@ function isFASTElementTemplateResolver(value) {
 function isPromiseLike(value) {
   return typeof (value === null || value === void 0 ? void 0 : value.then) === "function";
 }
-function finalizeResolvedTemplate(definition5, template5) {
-  pendingTemplateResolutions.delete(definition5);
-  if (definition5.template === void 0 && template5 !== void 0) {
-    definition5.template = template5;
+function finalizeResolvedTemplate(definition7, template7) {
+  pendingTemplateResolutions.delete(definition7);
+  if (definition7.template === void 0 && template7 !== void 0) {
+    definition7.template = template7;
   }
-  if (definition5.template !== void 0) {
-    templateResolutionErrors.delete(definition5);
-    templateResolvers.delete(definition5);
-    return definition5.template;
+  if (definition7.template !== void 0) {
+    templateResolutionErrors.delete(definition7);
+    templateResolvers.delete(definition7);
+    return definition7.template;
   }
   return void 0;
 }
-function applyFASTElementExtensions(definition5, registry3 = definition5.registry, extensions) {
+function applyFASTElementExtensions(definition7, registry3 = definition7.registry, extensions) {
   if (!(extensions === null || extensions === void 0 ? void 0 : extensions.length)) {
     return;
   }
-  const typedDefinition = definition5;
+  const typedDefinition = definition7;
   let registries = extensionRegistries.get(typedDefinition);
   if (registries === null || registries === void 0 ? void 0 : registries.has(registry3)) {
     return;
@@ -1127,47 +1127,47 @@ function applyFASTElementExtensions(definition5, registry3 = definition5.registr
   }
   registries.add(registry3);
   for (const extension of extensions) {
-    extension(definition5);
+    extension(definition7);
   }
 }
-function getLateAttributeLookup(definition5) {
+function getLateAttributeLookup(definition7) {
   var _a2;
-  return (_a2 = lateAttributeLookups.get(definition5)) !== null && _a2 !== void 0 ? _a2 : null;
+  return (_a2 = lateAttributeLookups.get(definition7)) !== null && _a2 !== void 0 ? _a2 : null;
 }
-function resolveFASTElementTemplate(definition5) {
-  if (definition5.template !== void 0) {
-    templateResolutionErrors.delete(definition5);
-    return definition5.template;
+function resolveFASTElementTemplate(definition7) {
+  if (definition7.template !== void 0) {
+    templateResolutionErrors.delete(definition7);
+    return definition7.template;
   }
-  const pendingResolution = pendingTemplateResolutions.get(definition5);
+  const pendingResolution = pendingTemplateResolutions.get(definition7);
   if (pendingResolution) {
     return pendingResolution;
   }
-  const templateResolver = templateResolvers.get(definition5);
+  const templateResolver = templateResolvers.get(definition7);
   if (!templateResolver) {
     return void 0;
   }
-  templateResolutionErrors.delete(definition5);
-  let template5;
+  templateResolutionErrors.delete(definition7);
+  let template7;
   try {
-    template5 = templateResolver(definition5);
+    template7 = templateResolver(definition7);
   } catch (error) {
-    templateResolutionErrors.set(definition5, error);
+    templateResolutionErrors.set(definition7, error);
     throw error;
   }
-  if (isPromiseLike(template5)) {
-    const resolution = Promise.resolve(template5).then((resolvedTemplate) => finalizeResolvedTemplate(definition5, resolvedTemplate)).catch((error) => {
-      pendingTemplateResolutions.delete(definition5);
-      templateResolutionErrors.set(definition5, error);
+  if (isPromiseLike(template7)) {
+    const resolution = Promise.resolve(template7).then((resolvedTemplate) => finalizeResolvedTemplate(definition7, resolvedTemplate)).catch((error) => {
+      pendingTemplateResolutions.delete(definition7);
+      templateResolutionErrors.set(definition7, error);
       throw error;
     });
-    pendingTemplateResolutions.set(definition5, resolution);
+    pendingTemplateResolutions.set(definition7, resolution);
     return resolution;
   }
-  return finalizeResolvedTemplate(definition5, template5);
+  return finalizeResolvedTemplate(definition7, template7);
 }
-function setFASTElementTemplateError(definition5, error) {
-  const typedDefinition = definition5;
+function setFASTElementTemplateError(definition7, error) {
+  const typedDefinition = definition7;
   if (error === void 0) {
     templateResolutionErrors.delete(typedDefinition);
     return;
@@ -1233,8 +1233,8 @@ var FASTElementDefinition = class _FASTElementDefinition {
     if (!registry3.get(this.name)) {
       applyFASTElementExtensions(this, registry3, extensions);
       if (this.template === void 0 && templateResolvers.has(this)) {
-        void Promise.resolve().then(() => resolveFASTElementTemplate(this)).then((template5) => {
-          if (template5 !== void 0 && !registry3.get(this.name)) {
+        void Promise.resolve().then(() => resolveFASTElementTemplate(this)).then((template7) => {
+          if (template7 !== void 0 && !registry3.get(this.name)) {
             this.platformDefined = true;
             registry3.define(this.name, type, this.elementOptions);
           }
@@ -1256,9 +1256,9 @@ var FASTElementDefinition = class _FASTElementDefinition {
    * that describes the element to define.
    */
   static compose(type, nameOrDef) {
-    const definition5 = fastElementBaseTypes.has(type) || fastElementRegistry.getByType(type) ? new _FASTElementDefinition(class extends type {
+    const definition7 = fastElementBaseTypes.has(type) || fastElementRegistry.getByType(type) ? new _FASTElementDefinition(class extends type {
     }, nameOrDef) : new _FASTElementDefinition(type, nameOrDef);
-    return Promise.resolve(definition5);
+    return Promise.resolve(definition7);
   }
   /**
    * Registers a FASTElement base type.
@@ -1334,11 +1334,11 @@ var ElementController = class _ElementController {
   get template() {
     var _a2;
     if (this._template === null) {
-      const definition5 = this.definition;
+      const definition7 = this.definition;
       if (this.source.resolveTemplate) {
         this._template = this.source.resolveTemplate();
-      } else if (definition5.template) {
-        this._template = (_a2 = definition5.template) !== null && _a2 !== void 0 ? _a2 : null;
+      } else if (definition7.template) {
+        this._template = (_a2 = definition7.template) !== null && _a2 !== void 0 ? _a2 : null;
       }
     }
     return this._template;
@@ -1379,11 +1379,11 @@ var ElementController = class _ElementController {
   get mainStyles() {
     var _a2;
     if (this._mainStyles === null) {
-      const definition5 = this.definition;
+      const definition7 = this.definition;
       if (this.source.resolveStyles) {
         this._mainStyles = this.source.resolveStyles();
-      } else if (definition5.styles) {
-        this._mainStyles = (_a2 = definition5.styles) !== null && _a2 !== void 0 ? _a2 : null;
+      } else if (definition7.styles) {
+        this._mainStyles = (_a2 = definition7.styles) !== null && _a2 !== void 0 ? _a2 : null;
       }
     }
     return this._mainStyles;
@@ -1407,7 +1407,7 @@ var ElementController = class _ElementController {
    * controller in how to handle rendering and other platform integrations.
    * @internal
    */
-  constructor(element, definition5) {
+  constructor(element, definition7) {
     this.boundObservables = null;
     this.needsInitialization = true;
     this.hasExistingShadowRoot = false;
@@ -1427,8 +1427,8 @@ var ElementController = class _ElementController {
     this.view = null;
     this._notifier = new PropertyChangeNotifier(element);
     this.source = element;
-    this.definition = definition5;
-    this.shadowOptions = definition5.shadowOptions;
+    this.definition = definition7;
+    this.shadowOptions = definition7.shadowOptions;
     const prototype = Reflect.getPrototypeOf(element);
     const accessors = prototype === null ? [] : Observable.getAccessors(prototype);
     if (accessors.length > 0) {
@@ -1530,34 +1530,34 @@ var ElementController = class _ElementController {
    * Adds styles to this element. Providing an HTMLStyleElement will attach the element instance to the shadowRoot.
    * @param styles - The styles to add.
    */
-  addStyles(styles5) {
+  addStyles(styles7) {
     var _a2;
-    if (!styles5) {
+    if (!styles7) {
       return;
     }
     const source = this.source;
-    if (styles5 instanceof HTMLElement) {
+    if (styles7 instanceof HTMLElement) {
       const target = (_a2 = getShadowRoot(source)) !== null && _a2 !== void 0 ? _a2 : this.source;
-      target.append(styles5);
-    } else if (!styles5.isAttachedTo(source)) {
-      styles5.addStylesTo(source);
+      target.append(styles7);
+    } else if (!styles7.isAttachedTo(source)) {
+      styles7.addStylesTo(source);
     }
   }
   /**
    * Removes styles from this element. Providing an HTMLStyleElement will detach the element instance from the shadowRoot.
    * @param styles - the styles to remove.
    */
-  removeStyles(styles5) {
+  removeStyles(styles7) {
     var _a2;
-    if (!styles5) {
+    if (!styles7) {
       return;
     }
     const source = this.source;
-    if (styles5 instanceof HTMLElement) {
+    if (styles7 instanceof HTMLElement) {
       const target = (_a2 = getShadowRoot(source)) !== null && _a2 !== void 0 ? _a2 : source;
-      target.removeChild(styles5);
-    } else if (styles5.isAttachedTo(source)) {
-      styles5.removeStylesFrom(source);
+      target.removeChild(styles7);
+    } else if (styles7.isAttachedTo(source)) {
+      styles7.removeStylesFrom(source);
     }
   }
   /**
@@ -1759,7 +1759,7 @@ var ElementController = class _ElementController {
    * @remarks
    * If `null` is provided, any existing view will be removed.
    */
-  renderTemplate(template5) {
+  renderTemplate(template7) {
     var _a2;
     const element = this.source;
     const host = (_a2 = getShadowRoot(element)) !== null && _a2 !== void 0 ? _a2 : element;
@@ -1773,14 +1773,14 @@ var ElementController = class _ElementController {
         }
       }
     }
-    if (template5) {
+    if (template7) {
       const hasPrerenderedContent = this.hasExistingShadowRoot && this.needsInitialization;
       let didHydrate = false;
       if (hasPrerenderedContent && _ElementController.hydrationHook) {
-        didHydrate = _ElementController.hydrationHook(this, template5, element, host);
+        didHydrate = _ElementController.hydrationHook(this, template7, element, host);
       }
       if (!didHydrate) {
-        this.renderClientSide(template5, element, host);
+        this.renderClientSide(template7, element, host);
       }
       this._resolvePrerendered(hasPrerenderedContent);
       this._resolveHydrated(didHydrate);
@@ -1793,14 +1793,14 @@ var ElementController = class _ElementController {
    * Standard client-side render: clears any stale content, clones the
    * compiled fragment, binds, and appends to the host.
    */
-  renderClientSide(template5, element, host) {
+  renderClientSide(template7, element, host) {
     if (this.hasExistingShadowRoot) {
       for (let child = host.firstChild; child !== null; child = host.firstChild) {
         host.removeChild(child);
       }
       this.hasExistingShadowRoot = false;
     }
-    this.view = template5.render(element, host, element);
+    this.view = template7.render(element, host, element);
     this.view.sourceLifetime = SourceLifetime.coupled;
   }
   /**
@@ -1817,16 +1817,16 @@ var ElementController = class _ElementController {
     if (controller !== void 0 && !override) {
       return controller;
     }
-    const definition5 = FASTElementDefinition.getForInstance(element);
-    if (definition5 === void 0) {
+    const definition7 = FASTElementDefinition.getForInstance(element);
+    if (definition7 === void 0) {
       throw FAST.error(Message.missingElementDefinition);
     }
-    if (definition5.template === void 0 && trackFASTElementInstance(definition5, element)) {
-      const notifier = Observable.getNotifier(definition5);
+    if (definition7.template === void 0 && trackFASTElementInstance(definition7, element)) {
+      const notifier = Observable.getNotifier(definition7);
       const subscriber = {
         handleChange: () => {
           notifier.unsubscribe(subscriber, "template");
-          trackedFASTElementInstances(definition5, (tracked) => {
+          trackedFASTElementInstances(definition7, (tracked) => {
             const trackedElement = tracked;
             _ElementController.forCustomElement(trackedElement, true);
             if (trackedElement.isConnected) {
@@ -1837,7 +1837,7 @@ var ElementController = class _ElementController {
       };
       notifier.subscribe(subscriber, "template");
     }
-    return element.$fastController = new elementControllerStrategy(element, definition5);
+    return element.$fastController = new elementControllerStrategy(element, definition7);
   }
   /**
    * Sets the strategy that ElementController.forCustomElement uses to construct
@@ -1867,9 +1867,9 @@ function normalizeStyleTarget(target) {
   }
 }
 var AdoptedStyleSheetsStrategy = class _AdoptedStyleSheetsStrategy {
-  constructor(styles5) {
+  constructor(styles7) {
     const styleSheetCache = _AdoptedStyleSheetsStrategy.styleSheetCache;
-    this.sheets = styles5.map((x) => {
+    this.sheets = styles7.map((x) => {
       if (x instanceof CSSStyleSheet) {
         return x;
       }
@@ -1896,26 +1896,26 @@ function usableStyleTarget(target) {
   return target === document ? document.body : target;
 }
 var StyleElementStrategy = class {
-  constructor(styles5) {
-    this.styles = styles5;
+  constructor(styles7) {
+    this.styles = styles7;
     this.styleClass = nextStyleId();
   }
   addStylesTo(target) {
     target = usableStyleTarget(normalizeStyleTarget(target));
-    const styles5 = this.styles;
+    const styles7 = this.styles;
     const styleClass = this.styleClass;
-    for (let i = 0; i < styles5.length; i++) {
+    for (let i = 0; i < styles7.length; i++) {
       const element = document.createElement("style");
-      element.innerHTML = styles5[i];
+      element.innerHTML = styles7[i];
       element.className = styleClass;
       target.append(element);
     }
   }
   removeStylesFrom(target) {
     target = usableStyleTarget(normalizeStyleTarget(target));
-    const styles5 = target.querySelectorAll(`.${this.styleClass}`);
-    for (let i = 0, ii = styles5.length; i < ii; ++i) {
-      target.removeChild(styles5[i]);
+    const styles7 = target.querySelectorAll(`.${this.styleClass}`);
+    for (let i = 0, ii = styles7.length; i < ii; ++i) {
+      target.removeChild(styles7[i]);
     }
   }
 };
@@ -1981,9 +1981,9 @@ function define(type, nameOrDef, extensions) {
   const composePromise = isFunction(type) ? FASTElementDefinition.compose(type, nameOrDef) : FASTElementDefinition.compose(this, type);
   return composePromise.then((def) => {
     applyFASTElementExtensions(def, def.registry, extensions);
-    const template5 = resolveFASTElementTemplate(def);
-    if (isPromiseLike2(template5)) {
-      return template5.then(() => def.define().type);
+    const template7 = resolveFASTElementTemplate(def);
+    if (isPromiseLike2(template7)) {
+      return template7.then(() => def.define().type);
     }
     return def.define().type;
   });
@@ -2032,7 +2032,7 @@ var CSSDirective = Object.freeze({
 
 // node_modules/@microsoft/fast-element/dist/esm/styles/css.js
 function collectStyles(strings, values) {
-  const styles5 = [];
+  const styles7 = [];
   let cssString = "";
   for (let i = 0, ii = strings.length - 1; i < ii; ++i) {
     cssString += strings[i];
@@ -2042,26 +2042,26 @@ function collectStyles(strings, values) {
     }
     if (value instanceof ElementStyles || value instanceof CSSStyleSheet) {
       if (cssString.trim() !== "") {
-        styles5.push(cssString);
+        styles7.push(cssString);
         cssString = "";
       }
-      styles5.push(value);
+      styles7.push(value);
     } else {
       cssString += value;
     }
   }
   cssString += strings[strings.length - 1];
   if (cssString.trim() !== "") {
-    styles5.push(cssString);
+    styles7.push(cssString);
   }
-  return styles5;
+  return styles7;
 }
 var css = ((strings, ...values) => {
   return new ElementStyles(collectStyles(strings, values));
 });
 var CSSPartial = class {
-  constructor(styles5) {
-    this.value = styles5.length === 0 ? "" : styles5.length === 1 ? styles5[0] : new ElementStyles(styles5);
+  constructor(styles7) {
+    this.value = styles7.length === 0 ? "" : styles7.length === 1 ? styles7[0] : new ElementStyles(styles7);
   }
   createCSS() {
     return this.value;
@@ -3169,9 +3169,9 @@ function updateContent(target, aspect, value, controller) {
 function updateTokenList(target, aspect, value) {
   var _a2;
   const lookup = `${this.id}-t`;
-  const state = (_a2 = target[lookup]) !== null && _a2 !== void 0 ? _a2 : target[lookup] = { v: 0, cv: /* @__PURE__ */ Object.create(null) };
-  const classVersions = state.cv;
-  let version = state.v;
+  const state2 = (_a2 = target[lookup]) !== null && _a2 !== void 0 ? _a2 : target[lookup] = { v: 0, cv: /* @__PURE__ */ Object.create(null) };
+  const classVersions = state2.cv;
+  let version = state2.v;
   const tokenList = target[aspect];
   if (value !== null && value !== void 0 && value.length) {
     const names = value.split(/\s+/);
@@ -3184,7 +3184,7 @@ function updateTokenList(target, aspect, value) {
       tokenList.add(currentName);
     }
   }
-  state.v = version + 1;
+  state2.v = version + 1;
   if (version === 0) {
     return;
   }
@@ -3357,7 +3357,7 @@ var CompilationContext = class {
     this.descriptors = {};
     this.factories = [];
   }
-  addFactory(factory, parentId, nodeId, targetIndex, tagName5) {
+  addFactory(factory, parentId, nodeId, targetIndex, tagName7) {
     var _a2, _b;
     if (!this.nodeIds.has(nodeId)) {
       this.nodeIds.add(nodeId);
@@ -3365,7 +3365,7 @@ var CompilationContext = class {
     }
     factory.id = (_a2 = factory.id) !== null && _a2 !== void 0 ? _a2 : nextId();
     factory.targetNodeId = nodeId;
-    factory.targetTagName = tagName5;
+    factory.targetTagName = tagName7;
     factory.policy = (_b = factory.policy) !== null && _b !== void 0 ? _b : this.policy;
     this.factories.push(factory);
   }
@@ -3524,26 +3524,26 @@ var Compiler = {
    * @public
    */
   compile(html2, factories, policy = DOM.policy) {
-    let template5;
+    let template7;
     if (isString(html2)) {
-      template5 = document.createElement(templateTag);
-      template5.innerHTML = policy.createHTML(html2);
-      const fec = template5.content.firstElementChild;
+      template7 = document.createElement(templateTag);
+      template7.innerHTML = policy.createHTML(html2);
+      const fec = template7.content.firstElementChild;
       if (fec !== null && fec.tagName === templateTag) {
-        template5 = fec;
+        template7 = fec;
       }
     } else {
-      template5 = html2;
+      template7 = html2;
     }
-    if (!template5.content.firstChild && !template5.content.lastChild) {
-      template5.content.appendChild(document.createComment(""));
+    if (!template7.content.firstChild && !template7.content.lastChild) {
+      template7.content.appendChild(document.createComment(""));
     }
-    const fragment = document.adoptNode(template5.content);
+    const fragment = document.adoptNode(template7.content);
     const context = new CompilationContext(fragment, factories, policy);
     compileAttributes(
       context,
       "",
-      template5,
+      template7,
       /* host */
       "h",
       0,
@@ -3657,8 +3657,8 @@ var InlineTemplateDirective = class {
 };
 InlineTemplateDirective.empty = new InlineTemplateDirective("");
 HTMLDirective.define(InlineTemplateDirective);
-function createHTML2(value, prevString, add, definition5 = HTMLDirective.getForInstance(value)) {
-  if (definition5.aspected) {
+function createHTML2(value, prevString, add, definition7 = HTMLDirective.getForInstance(value)) {
+  if (definition7.aspected) {
     const match = lastAttributeNameRegex.exec(prevString);
     if (match !== null) {
       HTMLDirective.assignAspect(value, match[2]);
@@ -3775,17 +3775,17 @@ var ViewTemplate = class _ViewTemplate {
     for (let i = 0, ii = strings.length - 1; i < ii; ++i) {
       const currentString = strings[i];
       let currentValue = values[i];
-      let definition5;
+      let definition7;
       html2 += currentString;
       if (isFunction(currentValue)) {
         currentValue = new HTMLBindingDirective(oneWay(currentValue));
       } else if (currentValue instanceof Binding) {
         currentValue = new HTMLBindingDirective(currentValue);
-      } else if (!(definition5 = HTMLDirective.getForInstance(currentValue))) {
+      } else if (!(definition7 = HTMLDirective.getForInstance(currentValue))) {
         const staticValue = currentValue;
         currentValue = new HTMLBindingDirective(oneTime(() => staticValue));
       }
-      html2 += createHTML2(currentValue, currentString, add, definition5);
+      html2 += createHTML2(currentValue, currentString, add, definition7);
     }
     return new _ViewTemplate(html2 + strings[strings.length - 1], factories, policy);
   }
@@ -5401,6 +5401,79 @@ var createDarkTheme = (brand) => {
 // node_modules/@fluentui/tokens/lib/themes/web/darkTheme.js
 var webDarkTheme = createDarkTheme(brandWeb);
 
+// frontend/comfyui/ui/surface/appearance/AccentPalette.ts
+function normalizeAccentColor(value) {
+  if (typeof value !== "string") return null;
+  const color = value.trim().toLowerCase();
+  if (/^#[\da-f]{6}$/.test(color)) return color;
+  if (/^#[\da-f]{3}$/.test(color))
+    return `#${Array.from(color.slice(1), (character) => character + character).join("")}`;
+  return null;
+}
+function createAccentBrandPalette(color) {
+  return {
+    10: mixAccentColor(color, "#000000", 0.94),
+    20: mixAccentColor(color, "#000000", 0.86),
+    30: mixAccentColor(color, "#000000", 0.75),
+    40: mixAccentColor(color, "#000000", 0.62),
+    50: mixAccentColor(color, "#000000", 0.48),
+    60: mixAccentColor(color, "#000000", 0.32),
+    70: mixAccentColor(color, "#000000", 0.16),
+    80: color,
+    90: mixAccentColor(color, "#ffffff", 0.1),
+    100: mixAccentColor(color, "#ffffff", 0.2),
+    110: mixAccentColor(color, "#ffffff", 0.32),
+    120: mixAccentColor(color, "#ffffff", 0.44),
+    130: mixAccentColor(color, "#ffffff", 0.56),
+    140: mixAccentColor(color, "#ffffff", 0.68),
+    150: mixAccentColor(color, "#ffffff", 0.8),
+    160: mixAccentColor(color, "#ffffff", 0.92)
+  };
+}
+function accentForeground(color) {
+  const luminance = relativeLuminance(color);
+  return (luminance + 0.05) / 0.05 >= 1.05 / (luminance + 0.05) ? "#000000" : "#ffffff";
+}
+function accentIndicatorColor(color, dark) {
+  const surface = relativeLuminance(dark ? "#2b2b2b" : "#ffffff");
+  for (let step = 0; step <= 20; step += 1) {
+    const candidate = mixAccentColor(color, dark ? "#ffffff" : "#000000", step / 20);
+    const luminance = relativeLuminance(candidate);
+    if ((Math.max(surface, luminance) + 0.05) / (Math.min(surface, luminance) + 0.05) >= 4.5)
+      return candidate;
+  }
+  return dark ? "#ffffff" : "#000000";
+}
+function mixAccentColor(color, destination, weight) {
+  const [red2, green2, blue2] = readChannels(color);
+  const [targetRed, targetGreen, targetBlue] = readChannels(destination);
+  const pairs = [
+    [red2, targetRed],
+    [green2, targetGreen],
+    [blue2, targetBlue]
+  ];
+  return `#${pairs.map(
+    ([channel, target]) => Math.round(channel * (1 - weight) + target * weight).toString(16).padStart(2, "0")
+  ).join("")}`;
+}
+function linearChannel(channel) {
+  const normalized = channel / 255;
+  return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+}
+function relativeLuminance(color) {
+  const [red2, green2, blue2] = readChannels(color);
+  return linearChannel(red2) * 0.2126 + linearChannel(green2) * 0.7152 + linearChannel(blue2) * 0.0722;
+}
+function readChannels(color) {
+  const normalized = normalizeAccentColor(color);
+  if (!normalized) throw new TypeError("Accent colors must be opaque hexadecimal colors.");
+  return [
+    Number.parseInt(normalized.slice(1, 3), 16),
+    Number.parseInt(normalized.slice(3, 5), 16),
+    Number.parseInt(normalized.slice(5, 7), 16)
+  ];
+}
+
 // node_modules/tslib/tslib.es6.mjs
 function __decorate(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
@@ -5659,8 +5732,8 @@ var Slider = class extends FASTElement {
    *
    * @internal
    */
-  setFormValue(value, state) {
-    this.elementInternals.setFormValue(value, value ?? state);
+  setFormValue(value, state2) {
+    this.elementInternals.setFormValue(value, value ?? state2);
   }
   directionChanged() {
     this.setSliderPosition();
@@ -6046,22 +6119,40 @@ var CustomStatesSetSupported = CSS.supports("selector(:state(g))");
 
 // node_modules/@fluentui/web-components/dist/esm/utils/element-internals.js
 var statesMap = /* @__PURE__ */ new Map();
-function stateSelector(state) {
-  return statesMap.get(state) ?? statesMap.set(state, CustomStatesSetSupported ? `:state(${state})` : `[state--${state}]`).get(state);
+function stateSelector(state2) {
+  return statesMap.get(state2) ?? statesMap.set(state2, CustomStatesSetSupported ? `:state(${state2})` : `[state--${state2}]`).get(state2);
 }
-function toggleState(elementInternals, state, force) {
-  if (!state || !elementInternals) {
+function toggleState(elementInternals, state2, force) {
+  if (!state2 || !elementInternals) {
     return;
   }
   if (!CustomStatesSetSupported) {
-    elementInternals.shadowRoot.host.toggleAttribute(`state--${state}`, force);
+    elementInternals.shadowRoot.host.toggleAttribute(`state--${state2}`, force);
     return;
   }
-  if (force ?? !elementInternals.states.has(state)) {
-    elementInternals.states.add(state);
+  if (force ?? !elementInternals.states.has(state2)) {
+    elementInternals.states.add(state2);
     return;
   }
-  elementInternals.states.delete(state);
+  elementInternals.states.delete(state2);
+}
+var matchingStateMap = /* @__PURE__ */ new WeakMap();
+function hasMatchingState(States, state2) {
+  if (!States || !state2) {
+    return false;
+  }
+  if (matchingStateMap.has(States)) {
+    return matchingStateMap.get(States).has(state2);
+  }
+  const stateSet = new Set(Object.values(States));
+  matchingStateMap.set(States, stateSet);
+  return stateSet.has(state2);
+}
+function swapStates(elementInternals, prev = "", next2 = "", States, prefix = "") {
+  toggleState(elementInternals, `${prefix}${prev}`, false);
+  if (!States || hasMatchingState(States, next2)) {
+    toggleState(elementInternals, `${prefix}${next2}`, true);
+  }
 }
 
 // node_modules/@fluentui/web-components/dist/esm/styles/states/index.js
@@ -6107,6 +6198,7 @@ var colorNeutralForeground2BrandPressed = "var(--colorNeutralForeground2BrandPre
 var colorNeutralForeground3 = "var(--colorNeutralForeground3)";
 var colorNeutralForeground4 = "var(--colorNeutralForeground4)";
 var colorNeutralForegroundDisabled = "var(--colorNeutralForegroundDisabled)";
+var colorCompoundBrandForeground1Hover = "var(--colorCompoundBrandForeground1Hover)";
 var colorNeutralForegroundOnBrand = "var(--colorNeutralForegroundOnBrand)";
 var colorNeutralForegroundInverted = "var(--colorNeutralForegroundInverted)";
 var colorNeutralBackground1 = "var(--colorNeutralBackground1)";
@@ -6162,6 +6254,7 @@ var shadow2 = "var(--shadow2)";
 var shadow4 = "var(--shadow4)";
 var strokeWidthThin = "var(--strokeWidthThin)";
 var strokeWidthThick = "var(--strokeWidthThick)";
+var strokeWidthThicker = "var(--strokeWidthThicker)";
 var spacingHorizontalXXS = "var(--spacingHorizontalXXS)";
 var spacingHorizontalXS = "var(--spacingHorizontalXS)";
 var spacingHorizontalSNudge = "var(--spacingHorizontalSNudge)";
@@ -6169,11 +6262,18 @@ var spacingHorizontalS = "var(--spacingHorizontalS)";
 var spacingHorizontalMNudge = "var(--spacingHorizontalMNudge)";
 var spacingHorizontalM = "var(--spacingHorizontalM)";
 var spacingHorizontalL = "var(--spacingHorizontalL)";
+var spacingVerticalXXS = "var(--spacingVerticalXXS)";
 var spacingVerticalXS = "var(--spacingVerticalXS)";
+var spacingVerticalSNudge = "var(--spacingVerticalSNudge)";
+var spacingVerticalS = "var(--spacingVerticalS)";
+var spacingVerticalMNudge = "var(--spacingVerticalMNudge)";
+var spacingVerticalL = "var(--spacingVerticalL)";
 var durationUltraFast = "var(--durationUltraFast)";
 var durationFaster = "var(--durationFaster)";
 var durationNormal = "var(--durationNormal)";
+var durationSlow = "var(--durationSlow)";
 var curveAccelerateMid = "var(--curveAccelerateMid)";
+var curveDecelerateMax = "var(--curveDecelerateMax)";
 var curveDecelerateMid = "var(--curveDecelerateMid)";
 var curveEasyEase = "var(--curveEasyEase)";
 
@@ -7029,6 +7129,1093 @@ var definition2 = {
   template: template2
 };
 
+// node_modules/@fluentui/web-components/dist/esm/tab/tab.js
+var Tab = class extends FASTElement {
+  disabledChanged(prev, next2) {
+    this.setDisabledSideEffect(next2);
+  }
+  constructor() {
+    super();
+    this.elementInternals = this.attachInternals();
+    this.elementInternals.role = "tab";
+  }
+  connectedCallback() {
+    super.connectedCallback();
+    this.slot ||= "tab";
+    this.setDisabledSideEffect(this.disabled);
+    if (this.styles) {
+      this.$fastController.removeStyles(this.styles);
+    }
+    this.styles = css`
+      :host {
+        --textContent: '${this.textContent}';
+      }
+    `;
+    this.$fastController.addStyles(this.styles);
+    maybeSetAutoFocus(this);
+  }
+  setDisabledSideEffect(disabled) {
+    if (disabled) {
+      this.setAttribute("aria-disabled", "true");
+    } else {
+      this.removeAttribute("aria-disabled");
+    }
+    this.tabIndex = disabled && this.getAttribute("aria-selected") !== "true" ? -1 : 0;
+  }
+};
+__decorate([
+  attr({ mode: "boolean" })
+], Tab.prototype, "disabled", void 0);
+applyMixins(Tab, StartEnd);
+
+// node_modules/@fluentui/web-components/dist/esm/tab/tab.options.js
+function isTab(element, tagName7 = "-tab") {
+  if (element?.nodeType !== Node.ELEMENT_NODE) {
+    return false;
+  }
+  return element.tagName.toLowerCase().endsWith(tagName7);
+}
+var tagName3 = `${FluentDesignSystem.prefix}-tab`;
+
+// node_modules/@fluentui/web-components/dist/esm/tab/tab.styles.js
+var styles3 = css`
+  ${display("inline-flex")}
+
+  :host {
+    position: relative;
+    flex-direction: row;
+    align-items: center;
+    cursor: pointer;
+    box-sizing: border-box;
+    justify-content: center;
+    line-height: ${lineHeightBase300};
+    font-family: ${fontFamilyBase};
+    font-size: ${fontSizeBase300};
+    color: ${colorNeutralForeground2};
+    fill: currentcolor;
+    grid-row: 1;
+    padding: ${spacingHorizontalM} ${spacingHorizontalMNudge};
+    border-radius: ${borderRadiusMedium};
+    gap: 4px;
+  }
+
+  :host .tab-content {
+    display: inline-flex;
+    flex-direction: column;
+    padding: 0 2px;
+    grid-column: 3;
+  }
+
+  :host([aria-selected='true']) {
+    color: ${colorNeutralForeground1};
+    font-weight: ${fontWeightSemibold};
+  }
+
+  /* adds hidden textContent to prevent shifting ui on bold / unbolding of text */
+  :host .tab-content::after {
+    content: var(--textContent);
+    visibility: hidden;
+    height: 0;
+    line-height: ${lineHeightBase300};
+    font-weight: ${fontWeightSemibold};
+  }
+
+  :host([aria-selected='true'])::after {
+    background-color: ${colorCompoundBrandStroke};
+    border-radius: ${borderRadiusCircular};
+    content: '';
+    inset: 0;
+    position: absolute;
+    z-index: 2;
+  }
+
+  :host([aria-selected='false']:hover)::after {
+    background-color: ${colorNeutralStroke1Hover};
+    border-radius: ${borderRadiusCircular};
+    content: '';
+    inset: 0;
+    position: absolute;
+    z-index: 1;
+  }
+
+  /*
+   * TODO: Remove '(text-size-adjust: auto)' after this bug is fixed:
+   * https://bugs.webkit.org/show_bug.cgi?id=298646
+   * Also remove the same trick from tablist.styles.ts.
+   * Using '@supports (text-size-adjust: auto)' here to exclude Safari 26 from
+   * using CSS Anchor Positioning here because it crashes.
+   */
+  @supports (anchor-name: --a) and (text-size-adjust: auto) {
+    :host([aria-selected='true'])::after {
+      background-color: transparent;
+    }
+
+    :host([aria-selected='true']:hover)::after {
+      background-color: ${colorNeutralStroke1Hover};
+    }
+  }
+
+  :host([aria-selected='true'][disabled])::after {
+    background-color: ${colorNeutralForegroundDisabled};
+  }
+
+  ::slotted([slot='start']) {
+    grid-column: 2;
+  }
+
+  ::slotted([slot='end']) {
+    grid-column: -1;
+  }
+
+  ::slotted([slot='start']),
+  ::slotted([slot='end']) {
+    display: flex;
+  }
+  :host([disabled]) {
+    cursor: not-allowed;
+    fill: ${colorNeutralForegroundDisabled};
+    color: ${colorNeutralForegroundDisabled};
+    pointer-events: none;
+  }
+
+  :host([disabled]:hover)::after {
+    background-color: unset;
+  }
+
+  :host(:focus) {
+    outline: none;
+  }
+
+  :host(:focus-visible) {
+    border-radius: ${borderRadiusSmall};
+    box-shadow: 0 0 0 3px ${colorStrokeFocus2};
+    outline: 1px solid ${colorStrokeFocus1};
+  }
+
+  @media (forced-colors: active) {
+    :host([aria-selected='true'])::after {
+      background-color: Highlight;
+    }
+  }
+`;
+
+// node_modules/@fluentui/web-components/dist/esm/tab/tab.template.js
+function tabTemplate(options = {}) {
+  return html`
+    <template slot="tab" role="tab">
+      ${startSlotTemplate(options)}
+      <span class="tab-content"><slot></slot></span>
+      ${endSlotTemplate(options)}
+    </template>
+  `;
+}
+var template3 = tabTemplate({});
+
+// node_modules/@fluentui/web-components/dist/esm/tab/tab.definition.js
+var definition3 = {
+  name: tagName3,
+  registry: FluentDesignSystem.registry,
+  styles: styles3,
+  template: template3
+};
+
+// node_modules/@microsoft/focusgroup-polyfill/build/constants.mjs
+var DatasetName = {
+  INFERRED_ROLE: "data-fg-ir",
+  ITEM: "data-fg-item",
+  AUTHOR_TABINDEX: "data-fg-ati",
+  SEGMENT: "data-fg-seg",
+  SEGMENT_START: "data-fg-segs"
+};
+var BehaviorToken = {
+  TOOLBAR: "toolbar",
+  TABLIST: "tablist",
+  RADIOGROUP: "radiogroup",
+  LISTBOX: "listbox",
+  MENU: "menu",
+  MENUBAR: "menubar",
+  NONE: "none"
+};
+var BEHAVIOR_TOKENS = [
+  BehaviorToken.TOOLBAR,
+  BehaviorToken.TABLIST,
+  BehaviorToken.RADIOGROUP,
+  BehaviorToken.LISTBOX,
+  BehaviorToken.MENU,
+  BehaviorToken.MENUBAR,
+  BehaviorToken.NONE
+];
+
+// node_modules/@microsoft/focusgroup-polyfill/build/shadow-utils/index-shadowless.mjs
+function nodeContains(node, otherNode) {
+  return node.contains(otherNode);
+}
+
+// node_modules/@microsoft/focusgroup-polyfill/build/utils-shadowless.mjs
+function supportsFocusGroup() {
+  return "focusgroup" in (globalThis?.HTMLElement?.prototype ?? {}) || "focusGroup" in (globalThis?.HTMLElement?.prototype ?? {});
+}
+function getNavigationDirection(event, owner, axis) {
+  const FORWARD = "forward";
+  const BACKWARD = "backward";
+  const BLOCK = "block";
+  const INLINE = "inline";
+  if (isKeyConflictElement(event.composedPath()[0])) return event.key === "Tab" ? event.shiftKey ? BACKWARD : FORWARD : null;
+  if (event.shiftKey || event.ctrlKey || event.metaKey) return null;
+  const { writingMode, direction } = window.getComputedStyle(owner);
+  const isVertical = !writingMode.startsWith("horizontal-");
+  const isRtl = direction === "rtl";
+  const horizontal = isVertical ? BLOCK : INLINE;
+  const vertical = isVertical ? INLINE : BLOCK;
+  const isHorizontalReversed = isVertical ? writingMode.endsWith("-rl") !== isRtl : isRtl;
+  const isVerticalReversed = isVertical && isRtl;
+  const action = {
+    ArrowUp: {
+      axis: vertical,
+      dir: isVerticalReversed ? FORWARD : BACKWARD
+    },
+    ArrowDown: {
+      axis: vertical,
+      dir: isVerticalReversed ? BACKWARD : FORWARD
+    },
+    ArrowLeft: {
+      axis: horizontal,
+      dir: isHorizontalReversed ? FORWARD : BACKWARD
+    },
+    ArrowRight: {
+      axis: horizontal,
+      dir: isHorizontalReversed ? BACKWARD : FORWARD
+    },
+    Home: { dir: "start" },
+    End: { dir: "end" }
+  }[event.key];
+  if (!action || axis && action.axis && action.axis !== axis) return null;
+  return action.dir;
+}
+function isKeyConflictElement(el) {
+  return el?.nodeType === Node.ELEMENT_NODE && ([
+    "INPUT",
+    "TEXTAREA",
+    "SELECT"
+  ].includes(el.nodeName) && !["checkbox", "radio"].includes(el.getAttribute("type")) || el.isContentEditable || ["AUDIO", "VIDEO"].includes(el.nodeName) && el.hasAttribute("controls") || ["IFRAME", "OBJECT"].includes(el.nodeName));
+}
+
+// node_modules/@microsoft/focusgroup-polyfill/build/global-state.mjs
+globalThis.__FOCUSGROUP_POLYFILL__ ??= {
+  o: /* @__PURE__ */ new Set(),
+  b: false
+};
+var state = globalThis.__FOCUSGROUP_POLYFILL__;
+
+// node_modules/@microsoft/focusgroup-polyfill/build/observer-registry.mjs
+var observers = state.o;
+function flushAllObservers() {
+  for (const observer of observers) observer.takeRecords();
+}
+
+// node_modules/@microsoft/focusgroup-polyfill/build/focusgroup-shadowless.mjs
+var FocusGroup = class {
+  /**
+  * The focus group owner element.
+  * @type {HTMLElement!}
+  */
+  #owner;
+  /**
+  * The items collection — exposes the focus group's items and answers
+  * queries about them. Reconciliation is triggered externally via
+  * `FocusGroup#update()`.
+  * @type {FocusGroupItemCollection}
+  */
+  #items;
+  /**
+  * The focus group behavior.
+  * @type {BehaviorToken | null}
+  */
+  #behavior = null;
+  /**
+  * The focus group navigation axis limitation.
+  * @type {("inline" | "block" | undefined)}
+  */
+  #axis = void 0;
+  /**
+  * Whether the focus group wraps. Defaults to `false`.
+  * @type {boolean}
+  */
+  #wrap = false;
+  /**
+  * Whether the focus group remembers the previously focused element.
+  * Defaults to `true`.
+  * @type {boolean}
+  */
+  #memory = true;
+  /**
+  * The focus group start element (initial tab stop after decoration).
+  * @type {HTMLElement}
+  */
+  #start;
+  /**
+  * The current item — the most recently focused item within the group.
+  * Serves as the keyboard-navigation cursor while focus is inside, and (in
+  * memory mode) as the tab stop to restore on re-entry. Updated by
+  * `#handleFocusin`, plus directly by `#handleKeydown` for shadow-internal
+  * navigation (where focus events don't cross the shadow boundary).
+  * Cleared in nomemory mode on focusout and when validation fails after
+  * re-decoration.
+  * @type {HTMLElement|null}
+  */
+  #current = null;
+  /**
+  * Whether the owner currently has `tabindex=0` set as a Tab-entry proxy so
+  * sequential focus navigation can reach a tab stop inside a shadow root.
+  * @type {boolean}
+  */
+  #ownerIsProxy = false;
+  /**
+  * The owner's original `tabindex` attribute value (or `null` if it had no
+  * `tabindex`), saved before the polyfill sets `tabindex=0` for proxy duty.
+  * @type {string|null}
+  */
+  #ownerTabindexBeforeProxy = null;
+  /**
+  * The abort controller for when `disconnect()` is called.
+  * @type {AbortController}
+  */
+  #abort = new AbortController();
+  /**
+  * Optional owner-decoration hook injected via `options.decorateOwner`.
+  * Called with `(owner, behavior)` on decoration and `(owner, null)` on
+  * undecoration. When absent, no owner decoration happens.
+  * @type {((element: HTMLElement, behavior: BehaviorToken|null) => void) | undefined}
+  */
+  #decorateOwner;
+  /**
+  * Optional item-decoration hook injected via `options.decorateItem`.
+  * Called with `(item, behavior)` on decoration and `(item, null)` on
+  * undecoration. When absent, no item decoration happens.
+  * @type {((element: HTMLElement, behavior: BehaviorToken|null) => void) | undefined}
+  */
+  #decorateItem;
+  /**
+  * @param {HTMLElement!} owner - The focus group owner element.
+  * @param {FocusGroupItemCollection} items - The items collection providing
+  *     item discovery and queries.
+  * @param {FocusGroupOptions} [options]
+  */
+  constructor(owner, items, options = {}) {
+    if (supportsFocusGroup() || !owner) return;
+    this.#owner = owner;
+    this.#items = items;
+    this.#decorateOwner = options.decorateOwner;
+    this.#decorateItem = options.decorateItem;
+    this.#updateDefinition(options.definition);
+    this.#decorateOwner?.(this.#owner, this.#behavior);
+    this.#decorateItems();
+    const opts = { signal: this.#abort.signal };
+    this.#owner.addEventListener("keydown", this.#handleKeydown.bind(this), opts);
+    this.#owner.addEventListener("focusin", this.#handleFocusin.bind(this), opts);
+    this.#owner.addEventListener("focusout", this.#handleFocusout.bind(this), opts);
+  }
+  /**
+  * Tears down the focus group: disables the owner proxy, removes all event
+  * listeners (via the abort signal), then disconnects the items collection
+  * if it supports it.
+  *
+  * Ordering matters: owner-proxy teardown can trigger `flushAllObservers()`,
+  * which expects the items' observer to still be in the global registry.
+  * The items' own `disconnect()` is therefore called last.
+  *
+  * NOTE: This method does not undecorate the elements. Call it only after
+  * the focusgroup owner has been removed from the DOM.
+  */
+  disconnect() {
+    this.#disableFocusabilityProxy();
+    this.#abort.abort();
+    this.#items?.disconnect?.();
+    this.#owner = null;
+  }
+  /**
+  * Reconciles decoration state in response to relevant changes. Call this
+  * whenever the focus group should refresh — e.g. items were added or
+  * removed, the owner's `focusgroup` attribute changed, or an author set
+  * `tabindex` on a decorated item.
+  *
+  * The polyfill's default `TreeWalkerItemCollection` calls this from a
+  * `MutationObserver`. App-supplied collections (or app code that knows
+  * when its model changed) can call it directly.
+  *
+  * @param {FocusGroupUpdateInfo} [info]
+  */
+  update(info = {}) {
+    if (!this.#owner) return;
+    if (info.definition !== void 0) {
+      this.#updateDefinition(info.definition);
+      this.#decorateOwner?.(this.#owner, this.#behavior);
+    }
+    if (info.authorTabindexChanges) for (const el of info.authorTabindexChanges) el.setAttribute(DatasetName.AUTHOR_TABINDEX, el.getAttribute("tabindex") ?? "none");
+    this.#undecorateItems();
+    this.#decorateItems();
+  }
+  /** @param {FocusGroupDefinition} [def] */
+  #updateDefinition(def) {
+    this.#behavior = def?.behavior ?? null;
+    this.#wrap = def?.wrap ?? false;
+    this.#axis = def?.axis;
+    this.#memory = def?.memory ?? true;
+    if (!this.#memory) this.#current = null;
+  }
+  #decorateItems() {
+    if (!this.#behavior || this.#behavior === BehaviorToken.NONE) {
+      this.#undecorateItems();
+      return;
+    }
+    this.#items.decorate?.();
+    for (const { element, segmentBoundary } of this.#items.items()) {
+      this.#decorateItem?.(element, this.#behavior);
+      element.setAttribute(DatasetName.AUTHOR_TABINDEX, element.getAttribute("tabindex") ?? "none");
+      element.tabIndex = segmentBoundary ? 0 : -1;
+    }
+    if (!this.#current?.isConnected || !(this.#items.isItem?.(this.#current) ?? this.#items.contains(this.#current))) this.#current = null;
+    const startItem = this.#current ?? this.#items.start ?? this.#items.first?.() ?? null;
+    if (startItem) {
+      startItem.tabIndex = 0;
+      this.#start = startItem;
+      this.#disableFocusabilityProxy();
+      this.#enableFocusabilityProxy(startItem);
+    }
+    this.#items.flush?.();
+  }
+  #undecorateItems() {
+    this.#disableFocusabilityProxy();
+    let undecorated = false;
+    for (const { element } of this.#items.items()) {
+      undecorated = true;
+      this.#decorateItem?.(element, null);
+      const authorTabIndex = element.getAttribute(DatasetName.AUTHOR_TABINDEX);
+      if (authorTabIndex) {
+        if (authorTabIndex === "none") element.removeAttribute("tabindex");
+        else element.setAttribute("tabindex", authorTabIndex);
+        element.removeAttribute(DatasetName.AUTHOR_TABINDEX);
+      }
+    }
+    this.#items.undecorate?.();
+    if (undecorated) this.#items.flush?.();
+  }
+  /** @param {KeyboardEvent} evt */
+  #handleKeydown(evt) {
+    const current = evt.composedPath()[0];
+    if (evt.defaultPrevented || current === this.#owner) return;
+    if (!this.#items.contains(current)) return;
+    let target;
+    switch (getNavigationDirection(evt, current, this.#axis)) {
+      case "start":
+        target = this.#items.first();
+        break;
+      case "end":
+        target = this.#items.last();
+        break;
+      case "forward":
+        target = this.#items.next(current);
+        if (!target && this.#wrap) target = this.#items.first();
+        break;
+      case "backward":
+        target = this.#items.previous(current);
+        if (!target && this.#wrap) target = this.#items.last();
+        break;
+    }
+    if (target && target !== current) {
+      this.#advanceFocus(current, target, true);
+      this.#current = target;
+      evt.preventDefault();
+    }
+  }
+  /** @param {FocusEvent} evt */
+  #handleFocusin(evt) {
+    const target = evt.composedPath()[0];
+    if (target === this.#owner && this.#ownerIsProxy && (!evt.relatedTarget || !nodeContains(this.#owner, evt.relatedTarget))) {
+      const tabStop = this.#current || this.#start;
+      this.#disableFocusabilityProxy();
+      if (tabStop) tabStop.focus();
+      evt.stopPropagation();
+      return;
+    }
+    if (!this.#items.contains(target)) return;
+    if (this.#ownerIsProxy) this.#disableFocusabilityProxy();
+    const prev = this.#current;
+    this.#current = target;
+    if (prev === target) return;
+    if (target.tabIndex < 0) {
+      const transferFrom = prev ?? this.#start;
+      if (transferFrom) this.#advanceFocus(transferFrom, target);
+    }
+  }
+  /** @param {FocusEvent} evt */
+  #handleFocusout(evt) {
+    if (!evt.relatedTarget || !nodeContains(this.#owner, evt.relatedTarget)) {
+      const tabStop = this.#memory ? this.#current || this.#start : this.#start;
+      if (tabStop) this.#enableFocusabilityProxy(tabStop);
+    }
+    if (evt.relatedTarget && nodeContains(this.#owner, evt.relatedTarget) || this.#memory || !this.#start) return;
+    const prev = this.#current;
+    this.#current = null;
+    const nextStart = this.#items.start ?? this.#items.first?.() ?? null;
+    if (prev !== this.#start || nextStart !== this.#start) {
+      for (const { element, segmentBoundary } of this.#items.items()) element.tabIndex = segmentBoundary ? 0 : -1;
+      if (nextStart) {
+        nextStart.tabIndex = 0;
+        this.#start = nextStart;
+      }
+      this.#items.flush?.();
+    }
+  }
+  /**
+  * If the tab stop is inside a shadow DOM, sets `tabindex=0` on the
+  * focusgroup owner so the browser's Tab navigation can land on it, at
+  * which point `#handleFocusin` will redirect focus to the real tab stop.
+  * @param {HTMLElement} tabStop - The actual focusable tab stop element.
+  */
+  #enableFocusabilityProxy(tabStop) {
+    const rootNode = (tabStop.assignedSlot ?? tabStop).getRootNode();
+    const hasFocusableHost = rootNode instanceof ShadowRoot && rootNode.host.hasAttribute(DatasetName.AUTHOR_TABINDEX);
+    if (this.#ownerIsProxy || !hasFocusableHost) return;
+    this.#ownerTabindexBeforeProxy = this.#owner.getAttribute("tabindex");
+    this.#owner.tabIndex = 0;
+    this.#ownerIsProxy = true;
+    flushAllObservers();
+  }
+  /** Undoes `#enableFocusabilityProxy`. */
+  #disableFocusabilityProxy() {
+    if (!this.#ownerIsProxy) return;
+    if (this.#ownerTabindexBeforeProxy !== null) this.#owner.setAttribute("tabindex", this.#ownerTabindexBeforeProxy);
+    else this.#owner.removeAttribute("tabindex");
+    this.#ownerIsProxy = false;
+    this.#ownerTabindexBeforeProxy = null;
+    this.#items.flush?.();
+    flushAllObservers();
+  }
+  /**
+  * Advances the focusgroup's active tab stop from one item to another. Sets
+  * the target's `tabindex` to `0` and optionally calls `focus()` on it. The
+  * previous item's `tabindex` is set to `-1` unless it belongs to a different
+  * segment (in which case it remains `0` as a segment tab stop). Also disables
+  * the owner proxy.
+  *
+  * @param {HTMLElement} prev - The currently focused item.
+  * @param {HTMLElement} next - The item to receive focus.
+  * @param {boolean} [shouldCallFocus=false] - Whether to programmatically
+  *     call `focus()` on the target element.
+  */
+  #advanceFocus(prev, next2, shouldCallFocus = false) {
+    next2.tabIndex = 0;
+    if (shouldCallFocus) next2.focus();
+    prev.tabIndex = this.#items.sameSegment?.(prev, next2) ?? true ? -1 : 0;
+    this.#disableFocusabilityProxy();
+    flushAllObservers();
+  }
+};
+
+// node_modules/@fluentui/web-components/dist/esm/utils/focusgroup.js
+var ArrayItemCollection = class {
+  constructor(getItems, getStart) {
+    this.getItems = getItems;
+    this.getStart = getStart;
+  }
+  get start() {
+    return this.getStart?.() ?? null;
+  }
+  first() {
+    return this.getItems()[0] ?? null;
+  }
+  last() {
+    const items = this.getItems();
+    return items[items.length - 1] ?? null;
+  }
+  next(current) {
+    const items = this.getItems();
+    const i = items.indexOf(current);
+    return i === -1 ? null : items[i + 1] ?? null;
+  }
+  previous(current) {
+    const items = this.getItems();
+    const i = items.indexOf(current);
+    return i <= 0 ? null : items[i - 1] ?? null;
+  }
+  *items() {
+    for (const element of this.getItems()) {
+      yield { element };
+    }
+  }
+  contains(element) {
+    return this.getItems().includes(element);
+  }
+};
+
+// node_modules/@fluentui/web-components/dist/esm/utils/request-idle-callback.js
+function requestIdleCallback(callback, options) {
+  if ("requestIdleCallback" in globalThis) {
+    return globalThis.requestIdleCallback(callback, options);
+  }
+  const start = Date.now();
+  return setTimeout(() => {
+    callback({
+      didTimeout: options?.timeout ? Date.now() - start >= options.timeout : false,
+      timeRemaining: () => 0
+    });
+  }, options?.timeout ?? 1);
+}
+function waitForConnectedDescendants(target, callback, options) {
+  const shallow = options?.shallow ?? false;
+  const timeout = options?.timeout ?? 50;
+  const useIdleCallback = options?.idleCallback ?? false;
+  const selector = `${shallow ? ":scope > " : ""}:not(:defined)`;
+  const scheduleCheck = (deadline) => {
+    if (target.querySelector(selector) === null || deadline && deadline.timeRemaining() <= 0) {
+      if (useIdleCallback) {
+        requestIdleCallback(callback, { timeout });
+      } else {
+        callback();
+      }
+      return;
+    }
+    requestIdleCallback(scheduleCheck, { timeout });
+  };
+  scheduleCheck();
+}
+
+// node_modules/@fluentui/web-components/dist/esm/tablist/tablist.options.js
+var TablistAppearance = {
+  subtle: "subtle",
+  transparent: "transparent"
+};
+var TablistOrientation = Orientation;
+var tagName4 = `${FluentDesignSystem.prefix}-tablist`;
+
+// node_modules/@fluentui/web-components/dist/esm/tablist/tablist.base.js
+var BaseTablist = class extends FASTElement {
+  /** @internal */
+  disabledChanged(prev, next2) {
+    if (this.elementInternals) {
+      toggleState(this.elementInternals, "disabled", next2);
+    }
+    this.setTabs({ forceDisabled: true });
+  }
+  orientationChanged(prev, next2) {
+    if (this.elementInternals) {
+      this.elementInternals.ariaOrientation = next2 ?? TablistOrientation.horizontal;
+      swapStates(this.elementInternals, prev, next2, TablistOrientation);
+    }
+    this.setTabs();
+  }
+  /** @internal */
+  activeidChanged(oldValue, newValue) {
+    if (this.tabs?.length > 0) {
+      this.changeTab(oldValue, newValue);
+    }
+  }
+  /** @internal */
+  slottedTabsChanged(prev, next2) {
+    this.tabs = next2?.filter((tab) => isTab(tab)) ?? [];
+  }
+  /** @internal */
+  tabsChanged(prev, next2) {
+    if (this.tabs?.length > 0) {
+      this.setTabs({ connectToPanel: true });
+    }
+  }
+  /**
+   * Function that is invoked whenever the selected tab or the tab collection changes.
+   */
+  setTabs({ connectToPanel = false, forceDisabled = false } = {}) {
+    if (!this.tabs) {
+      return;
+    }
+    const rootNode = this.getRootNode();
+    let firstEnabledTabId = "";
+    for (const tab of this.tabs) {
+      if (tab.slot !== "tab") {
+        continue;
+      }
+      tab.id ||= uniqueId("tab-");
+      if (forceDisabled) {
+        tab.disabled = this.disabled;
+      } else {
+        tab.disabled = tab.disabled || this.disabled;
+      }
+      if (!firstEnabledTabId && !tab.disabled) {
+        firstEnabledTabId = tab.id;
+      }
+      const isSelected = this.activeid === tab.id;
+      tab.toggleAttribute("focusgroupstart", isSelected);
+      tab.setAttribute("aria-selected", isSelected.toString());
+      if (connectToPanel) {
+        const ariaControls = tab.getAttribute("aria-controls") ?? "";
+        const panel = rootNode.getElementById(ariaControls);
+        if (ariaControls && panel) {
+          panel.role ??= "tabpanel";
+          panel.hidden = this.activeid !== tab.id;
+          this.tabPanelMap.set(tab, panel);
+        }
+      }
+    }
+    if (!this.disabled) {
+      if (this.activeid) {
+        this.changeTab(void 0, this.activeid);
+      } else if (firstEnabledTabId) {
+        this.activeid = firstEnabledTabId;
+      }
+    }
+  }
+  /** @internal */
+  handleFocusIn(event) {
+    this.activeid = event.target.id;
+  }
+  /** @internal */
+  handleClick(event) {
+    if (event.isTrusted) {
+      return;
+    }
+    this.activeid = event.target.id;
+  }
+  changeTab(oldId, newId) {
+    const rootNode = this.getRootNode();
+    const prevTab = oldId ? rootNode.getElementById(oldId) : null;
+    const nextTab = rootNode.getElementById(newId);
+    if (!isTab(nextTab) || nextTab.disabled || !this.contains(nextTab)) {
+      return;
+    }
+    if (prevTab) {
+      prevTab.setAttribute("aria-selected", "false");
+      const prevPanel = this.tabPanelMap.get(prevTab);
+      if (prevPanel) {
+        prevPanel.hidden = true;
+      }
+    }
+    nextTab.setAttribute("aria-selected", "true");
+    const nextPanel = this.tabPanelMap.get(nextTab);
+    if (nextPanel) {
+      nextPanel.hidden = false;
+    }
+    this.activetab = nextTab;
+    this.change();
+  }
+  constructor() {
+    super();
+    this.elementInternals = this.attachInternals();
+    this.disabled = false;
+    this.orientation = TablistOrientation.horizontal;
+    this.tabs = [];
+    this.tabPanelMap = /* @__PURE__ */ new WeakMap();
+    this.change = () => {
+      this.$emit("change", this.activetab);
+    };
+    this.elementInternals.role = "tablist";
+    this.elementInternals.ariaOrientation = this.orientation ?? TablistOrientation.horizontal;
+  }
+  /**
+   * @internal
+   */
+  connectedCallback() {
+    super.connectedCallback();
+    waitForConnectedDescendants(this, () => {
+      this.setTabs();
+    }, { shallow: true });
+  }
+};
+__decorate([
+  attr({ mode: "boolean" })
+], BaseTablist.prototype, "disabled", void 0);
+__decorate([
+  attr
+], BaseTablist.prototype, "orientation", void 0);
+__decorate([
+  attr
+], BaseTablist.prototype, "activeid", void 0);
+__decorate([
+  observable
+], BaseTablist.prototype, "slottedTabs", void 0);
+__decorate([
+  observable
+], BaseTablist.prototype, "tabs", void 0);
+
+// node_modules/@fluentui/web-components/dist/esm/tablist/tablist.js
+var Tablist = class extends BaseTablist {
+  constructor() {
+    super(...arguments);
+    this.appearance = TablistAppearance.transparent;
+  }
+  disconnectedCallback() {
+    this.fg?.disconnect();
+    super.disconnectedCallback();
+  }
+  tabsChanged(prev, next2) {
+    super.tabsChanged(prev, next2);
+    this.fgItems ??= new ArrayItemCollection(() => this.tabs?.filter((t) => (t.getAttribute("aria-selected") === "true" || !t.disabled) && !t.hidden) ?? [], () => this.activetab ?? null);
+    if (!this.fg) {
+      this.fg = new FocusGroup(this, this.fgItems, {
+        definition: {
+          behavior: "tablist",
+          axis: void 0,
+          memory: false,
+          wrap: true
+        }
+      });
+    } else {
+      this.fg.update();
+    }
+  }
+};
+__decorate([
+  attr
+], Tablist.prototype, "appearance", void 0);
+__decorate([
+  attr
+], Tablist.prototype, "size", void 0);
+
+// node_modules/@fluentui/web-components/dist/esm/tablist/tablist.styles.js
+var styles4 = css`
+  ${display("flex")}
+
+  :host {
+    --tabPaddingInline: ${spacingHorizontalMNudge};
+    --tabPaddingBlock: ${spacingHorizontalM};
+    --tabIndicatorInsetInline: var(--tabPaddingInline);
+    --tabIndicatorInsetBlock: 0;
+    box-sizing: border-box;
+    color: ${colorNeutralForeground2};
+    flex-direction: row;
+    position: relative;
+  }
+
+  :host([size='small']) {
+    --tabPaddingBlock: ${spacingVerticalSNudge};
+    --tabPaddingInline: ${spacingHorizontalSNudge};
+  }
+
+  :host([size='large']) {
+    --tabPaddingBlock: ${spacingVerticalL};
+    --tabPaddingInline: ${spacingHorizontalMNudge};
+  }
+
+  :host([orientation='vertical']) {
+    --tabPaddingBlock: ${spacingVerticalS};
+    --tabIndicatorInsetBlock: ${spacingVerticalS};
+    --_col-start-width: 0px;
+    display: grid;
+    grid-template-columns: ${spacingHorizontalMNudge} var(--_col-start-width) 1fr auto ${spacingHorizontalMNudge};
+  }
+
+  :host(:has([slot='start'])) {
+    --_col-start-width: 24px;
+  }
+
+  @scope {
+    :scope:has([slot='start']) {
+      --_col-start-width: 24px;
+    }
+  }
+
+  :host([orientation='vertical'][size='small']) {
+    --tabPaddingBlock: ${spacingVerticalXXS};
+    --tabIndicatorInsetBlock: ${spacingVerticalSNudge};
+  }
+
+  :host([orientation='vertical'][size='large']) {
+    --tabPaddingBlock: ${spacingVerticalS};
+    --tabIndicatorInsetBlock: ${spacingVerticalMNudge};
+  }
+
+  ::slotted([slot='tab']) {
+    padding-inline: var(--tabPaddingInline);
+    padding-block: var(--tabPaddingBlock);
+  }
+
+  :host([orientation='vertical']) ::slotted([role='tab']) {
+    justify-content: flex-start;
+    display: grid;
+    gap: 0;
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
+    grid-row: unset;
+    padding-inline: 0;
+  }
+
+  :host ::slotted([slot='tab'])::after {
+    height: ${strokeWidthThicker};
+    margin-block-start: auto;
+  }
+
+  :host([orientation='vertical']) ::slotted([slot='tab'])::after {
+    width: ${strokeWidthThicker};
+    height: unset;
+    margin-block-start: unset;
+  }
+
+  /* ::before adds a secondary indicator placeholder that appears right after click on the active tab */
+  :host ::slotted([slot='tab'])::before {
+    height: ${strokeWidthThicker};
+    border-radius: ${borderRadiusCircular};
+    content: '';
+    inset-inline: var(--tabIndicatorInsetInline);
+    inset-block: var(--tabIndicatorInsetBlock);
+    position: absolute;
+    margin-top: auto;
+  }
+
+  :host ::slotted([slot='tab'])::before {
+    inset-inline: var(--tabIndicatorInsetInline);
+    inset-block: var(--tabIndicatorInsetBlock);
+  }
+
+  :host ::slotted([slot='tab'][aria-selected='true'])::before {
+    background-color: ${colorNeutralForegroundDisabled};
+  }
+
+  :host ::slotted([slot='tab'][aria-selected='false']:hover)::after {
+    height: ${strokeWidthThicker};
+    margin-block-start: auto;
+    transform-origin: left;
+  }
+
+  :host([orientation='vertical']) ::slotted([slot='tab'])::before,
+  :host([orientation='vertical']) ::slotted([slot='tab'][aria-selected='false']:hover)::after {
+    height: unset;
+    width: ${strokeWidthThicker};
+    margin-inline-end: auto;
+    transform-origin: top;
+  }
+
+  :host([size='small']) ::slotted([slot='tab']) {
+    font-size: ${fontSizeBase300};
+    line-height: ${lineHeightBase300};
+  }
+
+  :host([size='large']) ::slotted([slot='tab']) {
+    font-size: ${fontSizeBase400};
+    line-height: ${lineHeightBase400};
+  }
+
+  /* horizontal spacing for indicator */
+  :host ::slotted([slot='tab'])::after,
+  :host ::slotted([slot='tab'])::before,
+  :host ::slotted([slot='tab']:hover)::after {
+    inset-inline: var(--tabIndicatorInsetInline);
+  }
+
+  :host([orientation='vertical']) ::slotted([slot='tab'])::after,
+  :host([orientation='vertical']) ::slotted([slot='tab'])::before,
+  :host([orientation='vertical']) ::slotted([slot='tab']:hover)::after {
+    inset-inline: 0;
+    inset-block: var(--tabIndicatorInsetBlock);
+  }
+
+  /* disabled styles */
+  :host([disabled]) {
+    cursor: not-allowed;
+    color: ${colorNeutralForegroundDisabled};
+  }
+
+  :host([disabled]) ::slotted([slot='tab']) {
+    pointer-events: none;
+    cursor: not-allowed;
+    color: ${colorNeutralForegroundDisabled};
+  }
+
+  :host([disabled]) ::slotted([slot='tab']:after) {
+    background-color: ${colorNeutralForegroundDisabled};
+  }
+
+  :host([disabled]) ::slotted([slot='tab'][aria-selected='true'])::after {
+    background-color: ${colorNeutralForegroundDisabled};
+  }
+
+  :host([disabled]) ::slotted([slot='tab']:hover):before {
+    content: unset;
+  }
+
+  :host([appearance='subtle']) ::slotted([slot='tab']:hover) {
+    background-color: ${colorSubtleBackgroundHover};
+    color: ${colorNeutralForeground1Hover};
+    fill: ${colorCompoundBrandForeground1Hover};
+  }
+
+  :host([appearance='subtle']) ::slotted([slot='tab']:active) {
+    background-color: ${colorSubtleBackgroundPressed};
+    fill: ${colorSubtleBackgroundPressed};
+    color: ${colorNeutralForeground1};
+  }
+
+  /*
+   * TODO: Remove '(text-size-adjust: auto)' after this bug is fixed:
+   * https://bugs.webkit.org/show_bug.cgi?id=298646
+   * Also remove the same trick from tab.styles.ts.
+   * Using '@supports (text-size-adjust: auto)' here to exclude Safari 26.0 from
+   * using CSS Anchor Positioning here because it crashes.
+   */
+  @supports (anchor-name: --a) and (text-size-adjust: auto) {
+    ::slotted([slot='tab'][aria-selected='true']) {
+      anchor-name: --tab;
+    }
+
+    :host::after {
+      background-color: ${colorCompoundBrandStroke};
+      content: '';
+      inline-size: 100%;
+      inset-block: auto anchor(end);
+      inset-inline: anchor(center) auto;
+      position: fixed;
+      position-anchor: --tab;
+      transform: translateX(-50%);
+      transition-property: inset-inline, width;
+      transition-duration: ${durationSlow};
+      transition-timing-function: ${curveDecelerateMax};
+      z-index: 3;
+
+      /* These styles should be in sync with tab.styles.ts’s :host::after */
+      border-radius: ${borderRadiusCircular};
+      width: calc(anchor-size() - var(--tabIndicatorInsetInline) * 2);
+      height: ${strokeWidthThicker};
+    }
+
+    :host(:dir(rtl))::after {
+      transform: translateX(50%);
+    }
+
+    :host([orientation='vertical'])::after {
+      inset-block: anchor(center) auto;
+      inset-inline: anchor(start) auto;
+      transform: translateY(-50%);
+      transition-property: inset-block, height;
+
+      /* These styles should be in sync with #vertical-tab-highlight above */
+      width: ${strokeWidthThicker};
+      height: calc(anchor-size() - var(--tabIndicatorInsetBlock) * 2);
+    }
+
+    :host([disabled])::after {
+      background-color: ${colorNeutralForegroundDisabled};
+    }
+  }
+`;
+
+// node_modules/@fluentui/web-components/dist/esm/tablist/tablist.template.js
+var template4 = html`
+  <template
+    role="tablist"
+    focusgroup="tablist inline block"
+    @click="${(x, c) => x.handleClick(c.event)}"
+    @focusin="${(x, c) => x.handleFocusIn(c.event)}"
+  >
+    <slot name="tab" ${slotted("slottedTabs")}></slot>
+  </template>
+`;
+
+// node_modules/@fluentui/web-components/dist/esm/tablist/tablist.definition.js
+var definition4 = {
+  name: tagName4,
+  registry: FluentDesignSystem.registry,
+  styles: styles4,
+  template: template4
+};
+
 // node_modules/@fluentui/web-components/dist/esm/checkbox/checkbox.base.js
 var BaseCheckbox = class extends FASTElement {
   constructor() {
@@ -7304,8 +8491,8 @@ var BaseCheckbox = class extends FASTElement {
    *
    * @internal
    */
-  setFormValue(value, state) {
-    this.elementInternals?.setFormValue(value, value ?? state);
+  setFormValue(value, state2) {
+    this.elementInternals?.setFormValue(value, value ?? state2);
   }
   /**
    * Sets a custom validity message.
@@ -7419,10 +8606,10 @@ __decorate([
 ], Checkbox.prototype, "size", void 0);
 
 // node_modules/@fluentui/web-components/dist/esm/checkbox/checkbox.options.js
-var tagName3 = `${FluentDesignSystem.prefix}-checkbox`;
+var tagName5 = `${FluentDesignSystem.prefix}-checkbox`;
 
 // node_modules/@fluentui/web-components/dist/esm/checkbox/checkbox.styles.js
-var styles3 = css`
+var styles5 = css`
   ${display("inline-flex")}
 
   :host {
@@ -7627,17 +8814,17 @@ function checkboxTemplate(options = {}) {
     </template>
   `;
 }
-var template3 = checkboxTemplate({
+var template5 = checkboxTemplate({
   checkedIndicator,
   indeterminateIndicator
 });
 
 // node_modules/@fluentui/web-components/dist/esm/checkbox/checkbox.definition.js
-var definition3 = {
-  name: tagName3,
+var definition5 = {
+  name: tagName5,
   registry: FluentDesignSystem.registry,
-  styles: styles3,
-  template: template3
+  styles: styles5,
+  template: template5
 };
 
 // node_modules/@fluentui/web-components/dist/esm/text-input/text-input.options.js
@@ -7662,7 +8849,7 @@ var ImplicitSubmissionBlockingTypes = [
   "url",
   "week"
 ];
-var tagName4 = `${FluentDesignSystem.prefix}-text-input`;
+var tagName6 = `${FluentDesignSystem.prefix}-text-input`;
 
 // node_modules/@fluentui/web-components/dist/esm/text-input/text-input.base.js
 var BaseTextInput = class extends FASTElement {
@@ -7940,8 +9127,8 @@ var BaseTextInput = class extends FASTElement {
    *
    * @internal
    */
-  setFormValue(value, state) {
-    this.elementInternals?.setFormValue(value, value ?? state);
+  setFormValue(value, state2) {
+    this.elementInternals?.setFormValue(value, value ?? state2);
   }
   /**
    * Sets the validity of the control.
@@ -8043,7 +9230,7 @@ __decorate([
 applyMixins(TextInput, StartEnd);
 
 // node_modules/@fluentui/web-components/dist/esm/text-input/text-input.styles.js
-var styles4 = css`
+var styles6 = css`
   ${display("block")}
 
   :host {
@@ -8282,17 +9469,17 @@ function textInputTemplate(options = {}) {
     </template>
   `;
 }
-var template4 = textInputTemplate();
+var template6 = textInputTemplate();
 
 // node_modules/@fluentui/web-components/dist/esm/text-input/text-input.definition.js
-var definition4 = {
-  name: tagName4,
+var definition6 = {
+  name: tagName6,
   registry: FluentDesignSystem.registry,
   shadowOptions: {
     delegatesFocus: true
   },
-  styles: styles4,
-  template: template4
+  styles: styles6,
+  template: template6
 };
 
 // frontend/comfyui/ui/surface/appearance/FluentSliderGeometry.ts
@@ -8344,6 +9531,23 @@ var PresentationButton = class extends Button {
   connectedMoveCallback() {
   }
 };
+var PresentationTab = class extends Tab {
+  /** Keep mounted bindings intact when the enclosing field changes presentation. */
+  connectedMoveCallback() {
+  }
+};
+var PresentationTablist = class extends Tablist {
+  /** Preserve keyboard bindings while the same native field changes parent. */
+  connectedMoveCallback() {
+  }
+  /** Leave teardown to the binding because Comfy parks native fields between presentation mounts. */
+  disconnectedCallback() {
+  }
+  /** Release Microsoft's bindings and focus group once the owning field adapter retires. */
+  releasePresentation() {
+    super.disconnectedCallback();
+  }
+};
 var PresentationCheckbox = class extends Checkbox {
   /** Keep mounted bindings intact when its enclosing card changes presentation. */
   connectedMoveCallback() {
@@ -8351,8 +9555,10 @@ var PresentationCheckbox = class extends Checkbox {
 };
 if (!customElements.get("fluent-slider")) await PresentationSlider.define(definition);
 if (!customElements.get("fluent-button")) await PresentationButton.define(definition2);
-if (!customElements.get("fluent-checkbox")) await PresentationCheckbox.define(definition3);
-if (!customElements.get("fluent-text-input")) await TextInput.define(definition4);
+if (!customElements.get("fluent-tab")) await PresentationTab.define(definition3);
+if (!customElements.get("fluent-tablist")) await PresentationTablist.define(definition4);
+if (!customElements.get("fluent-checkbox")) await PresentationCheckbox.define(definition5);
+if (!customElements.get("fluent-text-input")) await TextInput.define(definition6);
 function createFluentFinderInput(documentRef) {
   const input = documentRef.createElement("fluent-text-input");
   if (!(input instanceof TextInput))
@@ -8365,6 +9571,19 @@ function createFluentBooleanCheckbox(documentRef) {
     throw new TypeError("The registered Fluent checkbox has an incompatible implementation.");
   return checkbox;
 }
+var nextBooleanSegmentId = 0;
+function createFluentBooleanSegments(documentRef) {
+  const GroupConstructor = documentRef.defaultView?.customElements.get("fluent-tablist");
+  if (!GroupConstructor) throw new TypeError("The Fluent tablist is not registered.");
+  const group = new GroupConstructor();
+  const off = documentRef.createElement("fluent-tab");
+  const on = documentRef.createElement("fluent-tab");
+  if (!(group instanceof PresentationTablist) || !(off instanceof Tab) || !(on instanceof Tab))
+    throw new TypeError("The registered Fluent tab controls have incompatible implementations.");
+  off.id = `sc-boolean-${++nextBooleanSegmentId}`;
+  on.id = `sc-boolean-${++nextBooleanSegmentId}`;
+  return { group, segments: [off, on], release: () => group.releasePresentation() };
+}
 function createFluentNumericSlider(documentRef) {
   const slider = documentRef.createElement("fluent-slider");
   if (!(slider instanceof Slider))
@@ -8374,6 +9593,7 @@ function createFluentNumericSlider(documentRef) {
   return slider;
 }
 var fluentMotion = {
+  fasterDuration: Number.parseFloat(webDarkTheme.durationFaster),
   duration: Number.parseFloat(webDarkTheme.durationNormal),
   exitDuration: Number.parseFloat(webDarkTheme.durationFast),
   easing: webDarkTheme.curveDecelerateMid
@@ -8389,11 +9609,38 @@ function fluentTokenDeclarations(dark) {
 function applyOwnedFluentTheme(element, dark) {
   setTheme(dark === null ? null : dark ? themes.dark : themes.light, element);
 }
+function fluentAccentColorTokens(color, dark) {
+  const theme = (dark ? createDarkTheme : createLightTheme)(createAccentBrandPalette(color));
+  const indicator = accentIndicatorColor(color, dark);
+  const tokens = Object.fromEntries(
+    Object.entries(theme).flatMap(
+      ([name, value]) => /Brand|colorStrokeFocus2/.test(name) && typeof value === "string" ? [[name, value]] : []
+    )
+  );
+  for (const name of ["colorBrandBackground"]) tokens[name] = color;
+  for (const name of [
+    "colorBrandForeground1",
+    "colorCompoundBrandForeground1",
+    "colorCompoundBrandBackground",
+    "colorBrandStroke1",
+    "colorCompoundBrandStroke",
+    "colorStrokeFocus2"
+  ])
+    tokens[name] = indicator;
+  tokens.colorBrandBackgroundHover = mixAccentColor(color, "#000000", 0.08);
+  tokens.colorBrandBackgroundPressed = mixAccentColor(color, "#000000", 0.16);
+  tokens.colorCompoundBrandBackgroundHover = mixAccentColor(indicator, "#000000", 0.08);
+  tokens.colorCompoundBrandBackgroundPressed = mixAccentColor(indicator, "#000000", 0.16);
+  tokens.colorNeutralForegroundOnBrand = accentForeground(color);
+  return tokens;
+}
 export {
   applyOwnedFluentTheme,
   createFluentBooleanCheckbox,
+  createFluentBooleanSegments,
   createFluentFinderInput,
   createFluentNumericSlider,
+  fluentAccentColorTokens,
   fluentMotion,
   fluentTokenDeclarations
 };

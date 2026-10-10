@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Match Substitute's portrait discovery surface and contained Windows-style credential layer. */
-import { modelRecommendationPreviewCss } from './ModelRecommendationPreviewStyles.js';
+import { modelRecommendationPreviewCss, MODEL_PREVIEW_BACKDROP, } from './ModelRecommendationPreviewStyles.js';
 import { modelKeyRequiredBadgeCss } from './vue/ModelKeyRequiredBadge.js';
 const eyeIcon = new URL('../../../icons/model/eye.svg', import.meta.url).href;
 /** Share reference geometry across owned discovery and credential surfaces. */
@@ -28,7 +28,7 @@ export const modelDiscoveryCss = modelRecommendationPreviewCss +
 .sc-model-discovery-purpose { flex:none; margin:0; padding:0; font-size:12px; }
 .sc-model-discovery-grid { display:grid; flex:1; min-height:0; overflow:auto; margin-top:12px; grid-template-columns:repeat(4,204px); grid-template-rows:repeat(2,220px); align-content:space-evenly; justify-content:space-evenly; gap:10px; }
 .sc-model-discovery-card { position:relative; width:204px; height:220px; }
-.sc-model-discovery-portrait { position:absolute; inset:10px; display:block; width:184px; height:200px; padding:0; border:0; border-radius:14px; overflow:hidden; background:#ffffff0c; color:#fff; cursor:pointer; text-align:left; }
+.sc-model-discovery-portrait { position:absolute; inset:10px; display:block; width:184px; height:200px; padding:0; border:0; border-radius:14px; overflow:hidden; background:${MODEL_PREVIEW_BACKDROP}; color:#fff; cursor:pointer; text-align:left; }
 .sc-model-discovery-portrait::before { content:''; position:absolute; inset:0; z-index:1; background:linear-gradient(to bottom,rgba(6,9,14,0) 42%,rgba(6,9,14,.133) 74.48%,rgba(6,9,14,.518) 87.24%,rgba(6,9,14,.91)); pointer-events:none; }
 .sc-model-discovery-portrait:hover::before { background:linear-gradient(to bottom,rgba(6,9,14,0) 42%,rgba(6,9,14,.227) 74.48%,rgba(6,9,14,.651) 87.24%,rgba(6,9,14,.91)); }
 .sc-model-discovery-portrait:focus-visible { outline:2px solid var(--colorBrandStroke1,#4ca6f9); outline-offset:2px; }

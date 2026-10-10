@@ -20,6 +20,7 @@ import type { ComfyCubePickerCreationAdapter } from './ComfyCubePickerCreationAd
 import type { ComfyCubePickerDefinitionAdapter } from './ComfyCubePickerDefinitionAdapter.js';
 import type { ComfyCubePickerResultPresenter } from './ComfyCubePickerResultPresenter.js';
 import type { CubeAddMenuController } from './CubeAddMenuController.js';
+import type { CubeStackCartHost } from './CubeStackCartHost.js';
 import type { ComfyRendererModeChangeSource } from '../core/ComfyRendererMode.js';
 import type {
   CubeFaceActionAnchor,
@@ -31,6 +32,7 @@ export interface CubePickerHostIntegrationOptions {
   creation: ComfyCubePickerCreationAdapter;
   results: ComfyCubePickerResultPresenter;
   addMenu: CubeAddMenuController;
+  cart: Pick<CubeStackCartHost, 'open' | 'close'>;
   rendererChanges: ComfyRendererModeChangeSource;
   logger: Pick<Console, 'error'>;
   reportError(summary: string, detail: string): void;
@@ -42,6 +44,7 @@ export class CubePickerHostIntegration {
   readonly #creation: ComfyCubePickerCreationAdapter;
   readonly #results: ComfyCubePickerResultPresenter;
   readonly #addMenu: CubeAddMenuController;
+  readonly #cart: Pick<CubeStackCartHost, 'open' | 'close'>;
   readonly #rendererChanges: ComfyRendererModeChangeSource;
   readonly #logger: Pick<Console, 'error'>;
   readonly #reportError: (summary: string, detail: string) => void;
@@ -53,6 +56,7 @@ export class CubePickerHostIntegration {
     this.#creation = options.creation;
     this.#results = options.results;
     this.#addMenu = options.addMenu;
+    this.#cart = options.cart;
     this.#rendererChanges = options.rendererChanges;
     this.#logger = options.logger;
     this.#reportError = options.reportError;
@@ -66,6 +70,15 @@ export class CubePickerHostIntegration {
   /** Close transient menu state before a renderer transition. */
   closeAddMenu(): void {
     this.#addMenu.close();
+    this.#cart.close();
+  }
+
+  /** Open the complete stack cart from masonry or a registered Comfy command. */
+  openCart(removeInstanceId: string | null = null): void {
+    void this.#cart.open(removeInstanceId).catch((error: unknown) => {
+      this.#logger.error('SugarCubes Cube cart opening failed.', { error });
+      this.#reportError('Cube cart unavailable', readErrorMessage(error));
+    });
   }
 
   /** Contribute cached placement-ready definitions during initial registration. */
@@ -88,7 +101,7 @@ export class CubePickerHostIntegration {
   /** Activate the single shared native creation compatibility seam. */
   activate(): void {
     try {
-      this.#releaseRendererChanges ??= this.#rendererChanges.subscribe(() => this.#addMenu.close());
+      this.#releaseRendererChanges ??= this.#rendererChanges.subscribe(() => this.closeAddMenu());
       this.#results.install();
       this.#creation.install();
     } catch (error: unknown) {

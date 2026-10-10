@@ -13,6 +13,9 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/** Own masonry layout rules and workspace stacking independently of renderer appearance. */
+import { MASONRY_SURFACE_Z_INDEX } from '../../core/OverlayStacking.js';
+import { WORKFLOW_MASONRY_TOP_INSET } from './WorkflowMasonryLayout.js';
 /** Install layout structure independently of native node theme tokens. */
 export function ensureWorkflowMasonryStyles(documentRef) {
     if (documentRef.getElementById('sugarcubes-workflow-masonry-styles'))
@@ -34,14 +37,17 @@ export function ensureWorkflowMasonryStyles(documentRef) {
       mask:var(--sc-view-icon) center / contain no-repeat;
     }
     .sugarcubes-workflow-masonry {
-      position:absolute; inset:0; z-index:1100; box-sizing:border-box; pointer-events:auto;
+      position:absolute; inset:0; z-index:${MASONRY_SURFACE_Z_INDEX}; box-sizing:border-box; pointer-events:auto;
       overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain;
-      padding:52px 20px 96px;
+      padding:${WORKFLOW_MASONRY_TOP_INSET}px var(--sc-masonry-inline-padding,20px) 96px calc(var(--sc-masonry-inline-padding,20px) + var(--sc-masonry-stack-width,0px));
       background:transparent;
       color:var(--fg-color,#ddd); outline:none;
     }
     .sugarcubes-workflow-masonry__backdrop {
-      position:absolute; inset:0; z-index:1100; pointer-events:none;
+      position:absolute; inset:0; z-index:${MASONRY_SURFACE_Z_INDEX}; pointer-events:none;
+      background:var(--sugarcubes-masonry-surface,var(--comfy-menu-bg,#202020));
+    }
+    #graph-canvas-container[data-sugarcubes-masonry="true"] {
       background:var(--sugarcubes-masonry-surface,var(--comfy-menu-bg,#202020));
     }
     .sugarcubes-workflow-masonry[data-sc-masonry-preparing] { opacity:0 !important; }
@@ -85,6 +91,11 @@ export function ensureWorkflowMasonryStyles(documentRef) {
     .sugarcubes-workflow-masonry [data-sc-surface-moving] * { pointer-events:none !important; }
     .sugarcubes-workflow-masonry__card .lg-node-content { content-visibility:visible; }
     .sugarcubes-workflow-masonry__card:has([data-reka-popper-content-wrapper]) { z-index:10; }
+    #graph-canvas-container:has(.sugarcubes-workflow-masonry) > :has(> [data-testid="selection-toolbox"]),
+    #graph-canvas-container:has(.sugarcubes-workflow-masonry) [data-testid="selection-toolbox"],
+    #graph-canvas-container:has(.sugarcubes-workflow-masonry) [data-testid="selection-toolbox"] * {
+      visibility:hidden !important; pointer-events:none !important;
+    }
     #graph-canvas-container[data-sugarcubes-masonry="true"] > #graph-canvas,
     #graph-canvas-container[data-sugarcubes-masonry="true"] > .ph-no-capture,
     #graph-canvas-container[data-sugarcubes-masonry="true"] > .ph-no-capture *,

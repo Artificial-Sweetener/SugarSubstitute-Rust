@@ -141,6 +141,43 @@ function synchronizeArtifacts(checkOnly: boolean): void {
   }
 }
 
+/** Bundle each isolated Vue surface with shared chunks and explicit host-facing externals. */
+async function bundleVueSurface(
+  relativeRoots: string | readonly string[],
+  external: string[],
+): Promise<void> {
+  const sourceRoot = path.join(repositoryRoot, 'frontend/comfyui/ui');
+  const roots = typeof relativeRoots === 'string' ? [relativeRoots] : relativeRoots;
+  const entries = roots
+    .flatMap((root) => walkFiles(path.join(sourceRoot, root)))
+    .filter((filePath) => filePath.endsWith('.ts'));
+  if (entries.length > 0) {
+    await build({
+      entryPoints: entries,
+      outbase:
+        typeof relativeRoots === 'string' ? path.join(sourceRoot, relativeRoots) : sourceRoot,
+      outdir: path.join(
+        generatedRoot,
+        'comfyui/ui',
+        typeof relativeRoots === 'string' ? relativeRoots : '',
+      ),
+      bundle: true,
+      splitting: true,
+      external,
+      format: 'esm',
+      platform: 'browser',
+      target: 'es2022',
+      legalComments: 'inline',
+      define: {
+        __VUE_OPTIONS_API__: 'false',
+        __VUE_PROD_DEVTOOLS__: 'false',
+        __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: 'false',
+        'process.env.NODE_ENV': '"production"',
+      },
+    });
+  }
+}
+
 /** Build the complete browser deployment tree or verify its committed state. */
 async function main(): Promise<void> {
   const checkOnly = process.argv.includes('--check');
@@ -157,7 +194,6 @@ async function main(): Promise<void> {
     target: 'es2022',
     legalComments: 'inline',
   });
-  const modelVueRoot = path.join(repositoryRoot, 'frontend/comfyui/ui/model_library/vue');
   await build({
     entryPoints: [path.join(repositoryRoot, 'frontend/comfyui/ui/menus/FluentMenuRuntime.ts')],
     outfile: path.join(generatedRoot, 'comfyui/ui/menus/FluentMenuRuntime.js'),
@@ -167,31 +203,13 @@ async function main(): Promise<void> {
     target: 'es2022',
     legalComments: 'inline',
   });
-  const modelVueEntries = walkFiles(modelVueRoot).filter((filePath) => filePath.endsWith('.ts'));
-  if (modelVueEntries.length > 0) {
-    await build({
-      entryPoints: modelVueEntries,
-      outdir: path.join(generatedRoot, 'comfyui/ui/model_library/vue'),
-      bundle: true,
-      splitting: true,
-      external: [
-        '/scripts/*',
-        '../ModelVersionDialog.js',
-        '../ModelDetectorDialog.js',
-        '../../menus/ContextMenu.js',
-      ],
-      format: 'esm',
-      platform: 'browser',
-      target: 'es2022',
-      legalComments: 'inline',
-      define: {
-        __VUE_OPTIONS_API__: 'false',
-        __VUE_PROD_DEVTOOLS__: 'false',
-        __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: 'false',
-        'process.env.NODE_ENV': '"production"',
-      },
-    });
-  }
+  await bundleVueSurface('model_library/vue', [
+    '/scripts/*',
+    '../ModelVersionDialog.js',
+    '../ModelDetectorDialog.js',
+    '../../menus/ContextMenu.js',
+  ]);
+  await bundleVueSurface(['surface/stack/vue', 'picker/vue'], ['/scripts/*']);
   stageStaticAssets();
   synchronizeArtifacts(checkOnly);
   console.log(checkOnly ? 'Web artifacts are current.' : 'Web artifacts updated.');

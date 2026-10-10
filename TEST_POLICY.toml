@@ -62,7 +62,9 @@ sources = [
   "sugarcubes/workflow_analysis.py",
   "sugarcubes/workflow_cube_replacement.py",
   "sugarcubes/workflow_mutation.py",
+  "sugarcubes/workflow_cube_placement.py",
   "sugarcubes/workflow_mutation_errors.py",
+  "sugarcubes/workflow_stack_mutation.py",
   "sugarcubes/workflow_node_pack.py",
   "frontend/comfyui/ui/workflow/**",
 ]
@@ -231,6 +233,7 @@ sources = [
   "frontend/comfyui/ui/menus/**",
   "frontend/comfyui/ui/debug/**",
   "frontend/comfyui/ui/types/**",
+  "frontend/comfyui/ui/sidebar/**",
 ]
 proofs = ["integration", "unit"]
 
@@ -260,6 +263,7 @@ sources = [
   "frontend/comfyui/ui/cube/migration/**",
   "frontend/comfyui/ui/cube/node/**",
   "frontend/comfyui/ui/cube/placement/**",
+  "frontend/comfyui/ui/cube/stack/**",
   "frontend/comfyui/ui/cube/version/**",
 ]
 proofs = ["contract", "integration", "unit"]
@@ -283,7 +287,6 @@ name = "browser"
 sources = [
   "frontend/comfyui/ui/browser/**",
   "frontend/comfyui/ui/picker/**",
-  "frontend/comfyui/ui/sidebar/**",
 ]
 proofs = ["contract", "integration", "unit"]
 isolated_proofs = ["integration"]
@@ -398,6 +401,10 @@ groups = [
 [[subscription]]
 boundary = "canonical_workflow"
 groups = [
+  "cube/unit",
+  "cube/integration",
+  "surface/unit",
+  "surface/integration",
   "language/contract",
   "library/integration",
   "comfy_contract/contract",

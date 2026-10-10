@@ -39,8 +39,8 @@ license_file = "third_party/licenses/fluentui.LICENSE.txt"
 source = "https://github.com/microsoft/fluentui"
 revision = "44cf3fb9906b4f98243589e0b078e4df9ca6227b"
 version = "3.1.3"
-modifications = "Official text input, button, checkbox, slider and theme components bundled with esbuild. SugarCubes owns typed creation boundaries and connected presentation moves; upstream source is unchanged. FAST and tokens dependencies are pinned in package-lock.json and credited in NOTICE.md."
-source_paths = ["packages/web-components/src/text-input", "packages/web-components/src/button", "packages/web-components/src/checkbox", "packages/web-components/src/slider", "packages/web-components/src/theme"]
+modifications = "Official text input, button, tab, tablist, checkbox, slider and theme components bundled with esbuild. SugarCubes owns typed creation boundaries and connected presentation moves; upstream source is unchanged. FAST, focusgroup and tokens dependencies are pinned in package-lock.json and credited in NOTICE.md."
+source_paths = ["packages/web-components/src/text-input", "packages/web-components/src/button", "packages/web-components/src/tab", "packages/web-components/src/tablist", "packages/web-components/src/checkbox", "packages/web-components/src/slider", "packages/web-components/src/theme"]
 runtime_files = ["web/comfyui/ui/surface/appearance/FluentThemeRuntime.js"]
 
 [[component]]
@@ -594,3 +594,67 @@ source_path = 'packages/civitai-shared/src/basemodel.constants.ts'
 vendored_file = 'sugarcubes/model_library/infrastructure/resources/model-relationships.json'
 runtime_file = 'sugarcubes/model_library/infrastructure/resources/model-relationships.json'
 sha256 = 'd8a772647055720e3c83d4524ab63b38c31d37aae988cce0204fc8d234950c3f'
+
+[[component]]
+name = "SugarSubstitute cube stack and cart"
+license = "GPL-3.0-or-later"
+license_file = "third_party/licenses/sugarsubstitute.LICENSE.txt"
+source = "https://github.com/Artificial-Sweetener/SugarSubstitute"
+revision = "84b6c882d1323447cf82350495dadaeb41d948d5"
+modifications = "Stack geometry, selection, bypass and issue states adapted to stable Vue rows with canonical drag constraints, keyboard movement and reduced-motion transitions. Temporary cart drafts use immutable workflow instance and exact catalog references. Repeated artifacts retain distinct draft identities; Reset preserves the opening instance order. Refresh accepts a new catalog generation without replacing staged definitions or row identities. Neutral icon tone profiling and contrast variants preserve colored details and alpha."
+runtime_files = ["sugarcubes/workflow_stack_mutation.py", "web/comfyui/ui/picker/domain/CubeStackDraft.js", "web/comfyui/ui/surface/stack/CubeStackStyles.js", "web/comfyui/ui/surface/stack/vue/CubeStackRail.js", "web/comfyui/ui/surface/stack/vue/CubeStackRow.js", "web/comfyui/ui/picker/CubeStackCartStyles.js", "web/comfyui/ui/picker/CubeStackCartHost.js", "web/comfyui/ui/picker/vue/CubeStackCart.js", "web/comfyui/ui/picker/infrastructure/CubeStackCartFactory.js", "web/comfyui/ui/picker/infrastructure/CubeStackCartCatalog.js", "web/comfyui/ui/picker/CubeStackCartRow.js", "web/comfyui/ui/core/CubeIconToneProfile.js", "web/comfyui/ui/core/CubeIconAssetContrast.js"]
+
+[[component.implementation]]
+source_path = "substitute/application/cubes/cube_stack_draft_models.py"
+source_sha256 = "f4db04e0c68d670917e0f77f221f1dffa824f6fcd75ff488eab41bbfd503d35e"
+adapted_paths = ["frontend/comfyui/ui/picker/domain/CubeStackDraft.ts"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/workflows/cube_stack_view.py"
+source_sha256 = "1abfbf3bf87b625bfc7e183f483512e83526836cfa39c1e6a27629fdd95196f8"
+adapted_paths = ["frontend/comfyui/ui/surface/stack/vue/CubeStackRail.ts"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/workflows/cube_item.py"
+source_sha256 = "58156a61cf6c67411b61c2abdddad584fcc2591a9842216cd8dda4bd67e53f06"
+adapted_paths = ["frontend/comfyui/ui/surface/stack/vue/CubeStackRow.ts", "frontend/comfyui/ui/surface/stack/CubeStackStyles.ts"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/cubes/cube_stack_metrics.py"
+source_sha256 = "3bd894e9cbe0e9236e0672a9fd56a8953b5f69f7084021aaccdc6c7e0919d0ef"
+adapted_paths = ["frontend/comfyui/ui/surface/stack/CubeStackStyles.ts"]
+
+[[component.implementation]]
+source_path = "substitute/domain/workflow/policies.py"
+source_sha256 = "3a52e5dfce0f887f10a37adabf1f81915abf1751e0e702c9d6402f708b8a6787"
+adapted_paths = ["sugarcubes/workflow_stack_mutation.py"]
+
+[[component.implementation]]
+source_path = "substitute/application/cubes/graph_backed_cube_stack_service.py"
+source_sha256 = "494778a94241390973af559a327d00e443bb886a5cdd984ddb2cca34c878ee73"
+adapted_paths = ["sugarcubes/workflow_stack_mutation.py"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/cube_picker/cube_stack_cart_modal.py"
+source_sha256 = "a0e3c71438625104679bfc4d94e19f81a732df4c15433478758071f23792e7bf"
+adapted_paths = ["frontend/comfyui/ui/picker/vue/CubeStackCart.ts", "frontend/comfyui/ui/picker/CubeStackCartStyles.ts", "frontend/comfyui/ui/picker/CubeStackCartHost.ts"]
+
+[[component.implementation]]
+source_path = "substitute/application/cubes/cube_picker_models.py"
+source_sha256 = "96b3ce69411b06bdb34b66e8f2487404e8afef86b94167427d6457716f20fcfd"
+adapted_paths = ["frontend/comfyui/ui/picker/infrastructure/CubeStackCartCatalog.ts", "frontend/comfyui/ui/picker/CubeStackCartRow.ts", "frontend/comfyui/ui/picker/vue/CubeStackCart.ts"]
+[[component.implementation]]
+source_path = "substitute/presentation/resources/cube_icon_factory.py"
+source_sha256 = "d7da28a39321e6ba2ead634cdf525fdfc22081d2c3c217bd0da473b0a307b060"
+adapted_paths = ["frontend/comfyui/ui/core/CubeIconToneProfile.ts", "frontend/comfyui/ui/core/CubeIconAssetContrast.ts"]
+
+[[component]]
+name = "Microsoft focusgroup polyfill"
+license = "MIT"
+license_file = "third_party/licenses/focusgroup-polyfill.LICENSE.txt"
+source = "https://github.com/microsoft/polyfills"
+revision = "88cb793b6b8594084e642936d226f2a2e0886982"
+version = "1.6.0"
+modifications = "None; Microsoft's shadowless focusgroup implementation is bundled as the official Fluent Tablist keyboard navigation dependency."
+source_paths = ["packages/focusgroup/src"]
+runtime_files = ["web/comfyui/ui/surface/appearance/FluentThemeRuntime.js"]

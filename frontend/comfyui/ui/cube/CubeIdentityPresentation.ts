@@ -25,7 +25,6 @@ import {
 import { isRecord, type UnknownRecord } from '../types/common.js';
 import {
   resolveCubeModelTitle,
-  resolveDefaultInstanceModelTitle,
   type CubeModelTitlePresentation,
 } from './CubeModelTitlePresentation.js';
 import type { WorkflowCubeLibraryClass } from '../workflow/CubeWorkflowLibraryState.js';
@@ -33,6 +32,7 @@ import type { WorkflowCubeLibraryClass } from '../workflow/CubeWorkflowLibrarySt
 export interface CubeIdentityPresentation {
   instanceTitle: string;
   definitionTitle: string;
+  targetModel: string;
   versionText: string;
   definitionLine: string;
   instanceModelTitle: CubeModelTitlePresentation;
@@ -59,11 +59,11 @@ export interface CubeIdentityPresentationInput {
   fallbackSource?: CubeIdentitySource | null;
 }
 
-/** Format one persisted Cube version with the former group-chrome wording. */
+/** Format a Cube version using the shared compact display prefix. */
 export function formatCubeVersionText(metadata: UnknownRecord): string {
   const version = typeof metadata.cube_version === 'string' ? metadata.cube_version.trim() : '';
   if (!version) return '';
-  return `version ${version.replace(/^[vV](?=\d)/, '')}`;
+  return /^v/i.test(version) ? version : `v${version}`;
 }
 
 /** Format the former group-chrome source line from canonical Cube identity. */
@@ -117,10 +117,9 @@ export function resolveCubeIdentityPresentation(
     });
   const versionText = formatCubeVersionText(metadata);
   const targetModel = typeof metadata.target_model === 'string' ? metadata.target_model.trim() : '';
-  const instanceModelTitle = resolveDefaultInstanceModelTitle({
+  const instanceModelTitle = resolveCubeModelTitle({
     targetModel,
-    instanceTitle,
-    defaultAlias: definitionTitle,
+    title: instanceTitle,
   });
   const definitionModelTitle = resolveCubeModelTitle({
     targetModel,
@@ -134,6 +133,7 @@ export function resolveCubeIdentityPresentation(
   return {
     instanceTitle,
     definitionTitle,
+    targetModel,
     versionText,
     definitionLine: definitionModelTitle.accessibleText,
     instanceModelTitle,

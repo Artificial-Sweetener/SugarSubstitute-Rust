@@ -26,7 +26,6 @@ import {
   responseErrorMessage,
   savedFlavorId,
   type FlavorApi,
-  type FlavorBrowser,
   type FlavorDialogs,
   type FlavorDirtyManager,
   type FlavorMetadata,
@@ -43,7 +42,7 @@ interface CommandOptions {
   toast: FlavorToast | null;
   api: FlavorApi | null;
   dirtyManager: FlavorDirtyManager | null;
-  cubeBrowser: FlavorBrowser | null;
+  invalidateCatalogs: (() => Promise<void>) | null;
   storage: FlavorStorage;
   graph: FlavorGraphProjection;
   lifecycle: FlavorDefinitionLifecycle;
@@ -132,7 +131,7 @@ export class FlavorCommands {
     setGroupSugarcubes(group, next);
     this.options.lifecycle.refreshGroup(graph, group, next);
     this.options.dirtyManager?.requestRefresh?.({ graph, reason: 'authored-flavor-save' });
-    void this.options.cubeBrowser?.refresh?.({ force: true }).catch(() => {});
+    await this.options.invalidateCatalogs?.();
     if (isDefault)
       this.options.toast?.push?.(
         'success',

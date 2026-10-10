@@ -1,0 +1,208 @@
+import { applyOwnedFluentTheme } from '../appearance/FluentThemeRuntime.js';
+import { CubeStackPreferences } from './CubeStackPreferences.js';
+import { projectCubeStackRows } from './CubeStackProjection.js';
+import { ensureCubeStackStyles } from './CubeStackStyles.js';
+import { mountCubeStackView } from './vue/CubeStackVueRuntime.js';
+import { CubeStackScrollSelection } from './CubeStackScrollSelection.js';
+import { CubeStackDrawerMotion } from './CubeStackDrawerMotion.js';
+/** Retain one presentation application for a mounted surface and release it before native teardown. */
+export class CubeStackHost {
+    #options;
+    #preferences;
+    #actions;
+    #subscriptions = [];
+    #view = null;
+    #element = null;
+    #mounted = null;
+    #motion = null;
+    #surfaceVisible = true;
+    #reorder = null;
+    #unsubscribeReorder = null;
+    #selectedId = null;
+    #scrollSelection = null;
+    #started = false;
+    #disposed = false;
+    /** Compose typed intent handlers while preference and graph services keep their own authority. */
+    constructor(options) {
+        this.#options = options;
+        this.#preferences = new CubeStackPreferences(options.app);
+        this.#actions = {
+            navigate: (id) => this.#navigate(id),
+            previewOrder: (order) => this.#view?.previewCubeOrder(order?.map((id) => `cube:${id}`) ?? null),
+            reorder: (id, order) => this.#mutate((service) => service.reorder(id, order)),
+            move: (id, delta) => this.#mutate((service) => service.move(id, delta)),
+            openCart: options.openCart,
+            setCompact: (compact) => void this.#preferences.setCompact(compact).catch(options.reportError),
+            hide: () => void this.#preferences.setVisible(false).catch(options.reportError),
+            remove: options.remove,
+            contextMenu: options.contextMenu,
+            reportError: options.reportError,
+        };
+    }
+    /** Restore persisted preferences and subscribe only to the authoritative presentation owners. */
+    setup() {
+        if (this.#started || this.#disposed)
+            return;
+        this.#preferences.setup();
+        this.#started = true;
+        ensureCubeStackStyles(this.#options.document);
+        this.#subscriptions.push(this.#preferences.subscribe(() => this.#reconcile()), this.#options.appearance.subscribeAppearance(() => this.#reconcile()));
+    }
+    /** Attach to already projected sections without triggering graph candidate discovery. */
+    ready(view, preparing = false) {
+        if (this.#disposed)
+            return;
+        if (this.#view !== view) {
+            this.release();
+            this.#view = view;
+            this.#surfaceVisible = !preparing;
+            this.#scrollSelection = new CubeStackScrollSelection(view.element, (id) => {
+                this.#selectedId = id;
+                this.#mounted?.update(this.#state());
+            });
+        }
+        this.#reconcile();
+    }
+    /** Start the rail on the owning masonry transition and retain it through reverse travel. */
+    async transition(entering) {
+        this.#surfaceVisible = entering;
+        await this.#present(entering && this.#preferences.snapshot.visible);
+    }
+    /** Refresh literal row presentation after an identified card or canonical permission change. */
+    valuesChanged() {
+        this.#reconcile();
+    }
+    /** Release preview, reserved width, Vue controls and graph subscriptions with the current surface. */
+    release() {
+        this.#options.closeTransient();
+        this.#unmount();
+        this.#unsubscribeReorder?.();
+        this.#unsubscribeReorder = null;
+        this.#reorder = null;
+        this.#view = null;
+        this.#selectedId = null;
+        this.#scrollSelection?.dispose();
+        this.#scrollSelection = null;
+    }
+    /** Restore every retained subscription before extension or document teardown. */
+    dispose() {
+        if (this.#disposed)
+            return;
+        this.release();
+        this.#disposed = true;
+        for (const unsubscribe of this.#subscriptions.splice(0))
+            unsubscribe();
+        this.#preferences.dispose();
+    }
+    /** Match one rail lifetime to the current mounted surface and accepted visibility preference. */
+    #reconcile() {
+        const view = this.#view;
+        if (!this.#started || this.#disposed || !view)
+            return;
+        const reorder = this.#options.getReorder();
+        if (this.#reorder !== reorder) {
+            this.#unsubscribeReorder?.();
+            this.#reorder = reorder;
+            this.#unsubscribeReorder = reorder?.subscribe(() => this.#reconcile()) ?? null;
+        }
+        if (!this.#preferences.snapshot.visible) {
+            this.#view?.previewCubeOrder(null);
+            this.#view?.setStackWidth(0);
+            if (!this.#motion?.canAnimate)
+                this.#unmount();
+            else {
+                const element = this.#element;
+                void this.#present(false)
+                    .then((completed) => {
+                    if (completed && this.#element === element && !this.#preferences.snapshot.visible)
+                        this.#unmount();
+                })
+                    .catch(this.#options.reportError);
+            }
+            return;
+        }
+        const container = view.element.parentElement;
+        if (!container)
+            return;
+        const state = this.#state();
+        view.setCubeOrder(state.rows.map((row) => `cube:${row.id}`));
+        if (!this.#element) {
+            this.#element = this.#options.document.createElement('aside');
+            this.#element.className = 'sc-cube-stack-host';
+            container.append(this.#element);
+        }
+        const appearance = this.#options.appearance.appearance;
+        this.#element.dataset.appearance = state.appearance;
+        this.#element.dataset.colorScheme = appearance.dark ? 'dark' : 'light';
+        applyOwnedFluentTheme(this.#element, appearance.fluent ? appearance.dark : null);
+        if (this.#mounted)
+            this.#mounted.update(state);
+        else {
+            this.#mounted = mountCubeStackView(this.#element, state, this.#actions);
+            this.#motion = new CubeStackDrawerMotion(this.#element);
+            this.#mounted.setInteractive(false);
+        }
+        view.setStackWidth(state.compact ? 82 : 248);
+        if (this.#surfaceVisible)
+            void this.#present(true).catch(this.#options.reportError);
+        this.#scrollSelection?.refresh(state.rows.map((row) => row.id));
+    }
+    /** Derive all row facts from the current projection and exact canonical analysis snapshot. */
+    #state() {
+        return {
+            rows: projectCubeStackRows(this.#view?.sections ?? [], this.#reorder?.analysis ?? null, this.#selectedId, this.#options.resolveSource, this.#reorder?.available === true),
+            compact: this.#preferences.snapshot.compact,
+            pending: this.#reorder?.pending === true,
+            appearance: this.#options.appearance.appearance.fluent ? 'fluent' : 'comfy',
+        };
+    }
+    /** Restore filtered sections through the search owner before scrolling to stable identity. */
+    #navigate(instanceId) {
+        if (!this.#state().rows.some((row) => row.id === instanceId))
+            return;
+        this.#options.revealSearchResults();
+        this.#scrollSelection?.navigate(instanceId);
+        this.#view?.scrollToSection(`cube:${instanceId}`);
+        this.#reconcile();
+    }
+    /** Settle the accepted graph projection before Vue clears its temporary drag permutation. */
+    async #mutate(work) {
+        const reorder = this.#reorder;
+        if (!reorder)
+            throw new Error('Cube graph reorder is unavailable.');
+        await work(reorder);
+        await reorder.refresh();
+        await this.#options.refreshSurface();
+        this.#reconcile();
+    }
+    /** Suspend captured drag intent while motion owns geometry and re-enable only the latest entry. */
+    async #present(visible) {
+        const motion = this.#motion;
+        const mounted = this.#mounted;
+        if (!motion || !mounted)
+            return false;
+        if (visible && motion.settledVisible) {
+            mounted.setInteractive(true);
+            return true;
+        }
+        if (!motion.canAnimate)
+            mounted.setInteractive(visible);
+        else
+            mounted.setInteractive(false);
+        const completed = await motion.setVisible(visible);
+        if (completed && motion === this.#motion && visible)
+            mounted.setInteractive(true);
+        return completed;
+    }
+    /** Remove owned presentation while retaining preferences for the next eligible masonry surface. */
+    #unmount() {
+        this.#motion?.dispose();
+        this.#motion = null;
+        this.#view?.previewCubeOrder(null);
+        this.#view?.setStackWidth(0);
+        this.#mounted?.dispose();
+        this.#mounted = null;
+        this.#element?.remove();
+        this.#element = null;
+    }
+}

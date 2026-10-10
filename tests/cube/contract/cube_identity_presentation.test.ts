@@ -13,9 +13,12 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Verify Cube identity chrome retains the former group-chrome semantics. */
+/** Verify shared Cube identity preserves model metadata and compact version presentation. */
 
-import { resolveCubeIdentityPresentation } from '../../../frontend/comfyui/ui/cube/CubeIdentityPresentation.js';
+import {
+  formatCubeVersionText,
+  resolveCubeIdentityPresentation,
+} from '../../../frontend/comfyui/ui/cube/CubeIdentityPresentation.js';
 
 describe('resolveCubeIdentityPresentation', () => {
   test('separates the instance title from the centered definition and normalized version', () => {
@@ -33,15 +36,20 @@ describe('resolveCubeIdentityPresentation', () => {
 
     expect(identity.instanceTitle).toBe('Hero image');
     expect(identity.definitionTitle).toBe('SDXL/Text to Image');
-    expect(identity.versionText).toBe('version 2.3.1');
-    expect(identity.definitionLine).toBe('SDXL/Text to Image version 2.3.1');
+    expect(identity.targetModel).toBe('SDXL');
+    expect(identity.versionText).toBe('v2.3.1');
+    expect(identity.definitionLine).toBe('SDXL/Text to Image v2.3.1');
     expect(identity.definitionModelTitle).toMatchObject({
       modelText: 'SDXL',
       nameText: 'Text to Image',
-      suffixText: 'version 2.3.1',
+      suffixText: 'v2.3.1',
       usesModelPill: true,
     });
-    expect(identity.instanceModelTitle.usesModelPill).toBe(false);
+    expect(identity.instanceModelTitle).toMatchObject({
+      modelText: 'SDXL',
+      nameText: 'Hero image',
+      usesModelPill: true,
+    });
     expect(identity.awaitingFirstSave).toBe(false);
     expect(identity.sourceLine).toBe('from Base-Cubes by Artificial-Sweetener');
     expect(identity.icon.kind).toBe('initials');
@@ -60,8 +68,8 @@ describe('resolveCubeIdentityPresentation', () => {
       fallbackDefinitionTitle: 'Fallback',
     });
 
-    expect(identity.definitionLine).toBe('Detailer');
-    expect(identity.definitionModelTitle.usesModelPill).toBe(false);
+    expect(identity.definitionLine).toBe('SDXL Detailer');
+    expect(identity.definitionModelTitle.usesModelPill).toBe(true);
     expect(identity.awaitingFirstSave).toBe(false);
     expect(identity.sourceLine).toBe('Personal Cube');
   });
@@ -133,3 +141,49 @@ describe('resolveCubeIdentityPresentation', () => {
     expect(identity.isCaptured).toBe(true);
   });
 });
+
+test.each([
+  ['3.1.0', 'v3.1.0'],
+  [' v3.1.0 ', 'v3.1.0'],
+  ['V3.1.0', 'V3.1.0'],
+  ['', ''],
+  [null, ''],
+  [42, ''],
+])('formats version %p as %p without changing persisted metadata', (value, expected) => {
+  const metadata = { cube_version: value };
+  expect(formatCubeVersionText(metadata)).toBe(expected);
+  expect(metadata.cube_version).toBe(value);
+});
+
+test('retains a declared model after instance rename and rejects non-text model metadata', () => {
+  for (const target of ['  SDXL  ', null, { name: 'SDXL' }]) {
+    const identity = resolveCubeIdentityPresentation({
+      metadata: { target_model: target },
+      instanceTitle: 'Renamed cube',
+      fallbackDefinitionTitle: 'SDXL/Detailer',
+    });
+    expect(identity.targetModel).toBe(typeof target === 'string' ? 'SDXL' : '');
+    expect(identity.instanceModelTitle.usesModelPill).toBe(typeof target === 'string');
+    expect(identity.instanceModelTitle.nameText).toBe('Renamed cube');
+  }
+});
+
+test.each(['Anima/Contextual Upscale 2', 'Final polish', '<img src=x>'])(
+  'keeps stored identity intact for %s',
+  (instanceTitle) => {
+    const metadata = Object.freeze({
+      target_model: 'Anima',
+      default_alias: 'Anima/Contextual Upscale',
+      cube_version: '1.1.0',
+    });
+    const identity = resolveCubeIdentityPresentation({
+      metadata,
+      instanceTitle,
+      fallbackDefinitionTitle: 'Fallback',
+    });
+    expect(identity.instanceTitle).toBe(instanceTitle);
+    expect(identity.instanceModelTitle.modelText).toBe('Anima');
+    expect(identity.definitionTitle).toBe(metadata.default_alias);
+    expect(identity.versionText).toBe('v1.1.0');
+  },
+);

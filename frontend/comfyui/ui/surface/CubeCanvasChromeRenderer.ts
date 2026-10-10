@@ -32,6 +32,9 @@ import { drawCubeUnsavedIndicator } from './CubeUnsavedIndicator.js';
 import { CubeModelPillCanvasRenderer } from './CubeModelPillCanvasRenderer.js';
 import type { UnknownRecord } from '../types/common.js';
 import { drawCubeAddIcon } from './CubeAddIcon.js';
+import { resolveCubeIconContrastImage } from '../core/CubeIconAssetContrast.js';
+import { parseCssColor } from './CssColor.js';
+import { classifyCubeIconTone } from '../core/CubeIconToneProfile.js';
 
 /** Describe the native LiteGraph button retained from the real SubgraphNode. */
 export interface NativeLiteGraphTitleButton {
@@ -51,6 +54,7 @@ export interface CubeCanvasChromeRenderItem {
   editorButton: NativeLiteGraphTitleButton | null;
   headerColor: string;
   titleTextColor: string;
+  modelPillColors: { background: string; foreground: string };
 }
 
 /** Own Cube header composition without owning cards, previews, or interaction. */
@@ -83,7 +87,7 @@ export class CubeCanvasChromeRenderer {
     const iconSize = 24;
     const iconX = layout.header.x + 12;
     const iconY = layout.header.y + (layout.header.height - iconSize) / 2;
-    this.#drawDefinitionIcon(context, identity.icon, iconX, iconY, iconSize);
+    this.#drawDefinitionIcon(context, identity.icon, iconX, iconY, iconSize, item.titleTextColor);
     this.#modelTitles.draw(context, identity.instanceModelTitle, {
       x: iconX + iconSize + 7,
       y: layout.header.y + layout.header.height / 2,
@@ -92,7 +96,8 @@ export class CubeCanvasChromeRenderer {
       fontFamily: 'sans-serif',
       fontSize: 16,
       textColor: item.titleTextColor,
-      punchoutColor: item.headerColor,
+      pillBackground: item.modelPillColors.background,
+      pillForeground: item.modelPillColors.foreground,
       align: 'left',
     });
     context.save();
@@ -108,11 +113,12 @@ export class CubeCanvasChromeRenderer {
       fontFamily: 'sans-serif',
       fontSize: 12,
       textColor: item.titleTextColor,
-      punchoutColor: item.headerColor,
+      pillBackground: item.modelPillColors.background,
+      pillForeground: item.modelPillColors.foreground,
       align: 'center',
     });
     context.font = '10px sans-serif';
-    context.fillStyle = '#aeb4bd';
+    context.fillStyle = item.titleTextColor;
     context.fillText(
       identity.sourceLine,
       definitionCenterX,
@@ -121,12 +127,13 @@ export class CubeCanvasChromeRenderer {
     );
     context.restore();
 
-    drawNativeEditorButton(context, layout.editAction, item.editorButton);
+    drawNativeEditorButton(context, layout.editAction, item.editorButton, item.titleTextColor);
     if (layout.unsavedIndicator) {
       drawCubeUnsavedIndicator(
         context,
         layout.unsavedIndicator.x + layout.unsavedIndicator.width / 2,
         layout.unsavedIndicator.y + layout.unsavedIndicator.height / 2,
+        item.titleTextColor,
       );
     }
     for (const action of resolveCubeFaceTitlebarActions(
@@ -136,7 +143,7 @@ export class CubeCanvasChromeRenderer {
       const target = layout.chromeActions[action.key];
       if (!target) continue;
       if (action.icon === 'cube-plus') {
-        context.fillStyle = '#f0f2f5';
+        context.fillStyle = item.titleTextColor;
         drawCubeAddIcon(
           context,
           target.x + target.width / 2,
@@ -144,7 +151,7 @@ export class CubeCanvasChromeRenderer {
           item.headerColor,
         );
       } else {
-        drawPrimeIconAction(context, target, action.icon);
+        drawPrimeIconAction(context, target, action.icon, item.titleTextColor);
       }
     }
   }
@@ -156,9 +163,28 @@ export class CubeCanvasChromeRenderer {
     x: number,
     y: number,
     size: number,
+    color: string,
   ): void {
     const entry = this.#icons.getImage(model);
     if (model.kind === 'asset' && entry.status === 'ready' && entry.image) {
+      const variant = resolveCubeIconContrastImage(entry.image);
+      const foreground = parseCssColor(color);
+      const foregroundTone = foreground
+        ? classifyCubeIconTone(
+            new Uint8ClampedArray([
+              foreground.red,
+              foreground.green,
+              foreground.blue,
+              foreground.alpha * 255,
+            ]),
+          )
+        : 'original';
+      const neededTone =
+        foregroundTone === 'dark' ? 'bright' : foregroundTone === 'bright' ? 'dark' : null;
+      if (variant?.canvas && variant.tone === neededTone) {
+        context.drawImage(variant.canvas, x, y, size, size);
+        return;
+      }
       const width = Math.max(1, entry.image.naturalWidth);
       const height = Math.max(1, entry.image.naturalHeight);
       const scale = Math.min(size / width, size / height);
@@ -173,7 +199,7 @@ export class CubeCanvasChromeRenderer {
       );
       return;
     }
-    drawFallbackInitialsCanvas(context, model, x, y, size);
+    drawFallbackInitialsCanvas(context, model, x, y, size, { color });
   }
 }
 
@@ -182,9 +208,10 @@ function drawNativeEditorButton(
   context: CanvasRenderingContext2D,
   target: CubeCanvasRect,
   button: NativeLiteGraphTitleButton | null,
+  color: string,
 ): void {
   if (!button?.visible) {
-    context.fillStyle = '#f0f2f5';
+    context.fillStyle = color;
     drawComfyPrimeIcon(
       context,
       'window-maximize',
@@ -197,7 +224,7 @@ function drawNativeEditorButton(
   const x = target.x + (target.width - width) / 2 - button.xOffset;
   const y = target.y + (target.height - button.height) / 2 - button.yOffset;
   context.save();
-  context.fillStyle = '#f0f2f5';
+  context.fillStyle = color;
   button.draw(context, x, y);
   context.restore();
 }
@@ -207,7 +234,8 @@ function drawPrimeIconAction(
   context: CanvasRenderingContext2D,
   target: CubeCanvasRect,
   icon: ComfyPrimeIconName,
+  color: string,
 ): void {
-  context.fillStyle = '#f0f2f5';
+  context.fillStyle = color;
   drawComfyPrimeIcon(context, icon, target.x + target.width / 2, target.y + target.height / 2);
 }

@@ -20,6 +20,7 @@ import { settleNativeDisclosure } from './NativeDisclosureSettlement.js';
 /** Separate native content invalidation from value updates and initial hydration. */
 export class NativeCardContentDisclosure {
   #membership: string | null = null;
+  #preparedHeight: number | null = null;
 
   /** Share the exact mount's motion lifetime with native collapse gestures. */
   constructor(
@@ -27,12 +28,23 @@ export class NativeCardContentDisclosure {
     private readonly motion: CardDisclosureMotion,
   ) {}
 
+  /** Capture source geometry in the shared read phase before any native card renders. */
+  prepare(): void {
+    this.#preparedHeight = this.motion.captureHeight();
+  }
+
   /** Render native updates immediately, animating only a changed set of presented widgets. */
   reconcile(widgets: readonly string[], render: () => void): void {
     const membership = JSON.stringify(widgets);
     const changed = this.#membership !== null && this.#membership !== membership;
+    const fromHeight = this.#preparedHeight;
+    this.#preparedHeight = null;
     this.#membership = membership;
-    if (changed) this.motion.resize(render, { settle: () => settleNativeDisclosure(this.target) });
+    if (changed)
+      this.motion.resize(render, {
+        ...(fromHeight !== null ? { fromHeight } : {}),
+        settle: () => settleNativeDisclosure(this.target),
+      });
     else render();
   }
 }

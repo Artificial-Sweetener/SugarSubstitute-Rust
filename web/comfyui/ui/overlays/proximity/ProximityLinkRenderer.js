@@ -83,7 +83,7 @@ export class ProximityLinkRenderer {
         this.#logger.debug(`SugarCubes painted ${String(renderedCount)} of ${String(matches.length)} proximity matches` +
             `${graphMismatchCount ? `; ${String(graphMismatchCount)} had a graph mismatch` : ''}.`);
     }
-    /** Render one guide with Comfy's selected native link mode and a dashed stroke. */
+    /** Render one unbordered guide with Comfy's selected native route and a dashed stroke. */
     #drawNativeLink(options) {
         const renderLink = typeof options.canvas.renderLink === 'function'
             ? options.canvas.renderLink.bind(options.canvas)
@@ -109,7 +109,8 @@ export class ProximityLinkRenderer {
             options.context.strokeStyle = options.color;
             options.context.setLineDash(dashPattern);
             options.context.lineDashOffset = dashOffset;
-            renderLink(options.context, [options.start[0], options.start[1]], [options.end[0], options.end[1]], fakeLink, false, false, null, resolveSlotDirection(options.outputSlot, true, liteGraph), resolveSlotDirection(options.inputSlot, false, liteGraph), { disabled: false });
+            renderLink(options.context, [options.start[0], options.start[1]], [options.end[0], options.end[1]], fakeLink, true, // Native skip_border prevents dark blocks around each proximity dash.
+            false, null, resolveSlotDirection(options.outputSlot, true, liteGraph), resolveSlotDirection(options.inputSlot, false, liteGraph), { disabled: false });
             return true;
         }
         catch (error) {

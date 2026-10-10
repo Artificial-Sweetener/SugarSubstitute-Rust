@@ -18,18 +18,16 @@
 import type { CubePlacementHistory } from '../CubePlacementService.js';
 import type { CubeNode } from '../node/ComfyCubeNodeFactory.js';
 import { readInstanceId, type CubeNodeCatalog } from '../node/CubeNodeCatalog.js';
-import type { ComfyLink, GraphId } from '../../types/graph.js';
+import type {
+  NativeCubeConnection,
+  NativeConnectionGraph,
+} from '../graph/NativeCubeConnections.js';
+import { readNativeCubeConnection } from '../graph/NativeCubeConnections.js';
 import type { CubeVersionBoundaryMap } from './CubeVersionBoundaryMap.js';
 
-interface ConnectableCubeNode extends CubeNode {
-  connect(outputSlot: number, targetNode: ConnectableCubeNode, inputSlot: number): unknown;
-}
-
-export interface CubeReplacementGraph {
+export interface CubeReplacementGraph extends NativeConnectionGraph {
   add(node: CubeNode): void;
   remove(node: CubeNode): void;
-  getNodeById(id: GraphId): unknown;
-  getLink(id: GraphId): ComfyLink | null;
 }
 
 export interface CubeReplacementSelection {
@@ -111,14 +109,14 @@ export class ComfyCubeVersionReplacementAdapter {
 }
 
 interface InputConnection {
-  outside: ConnectableCubeNode;
+  outside: NativeCubeConnection['source'];
   outsideSlot: number;
   sourceSlot: number;
   targetSlot: number;
 }
 
 interface OutputConnection {
-  outside: ConnectableCubeNode;
+  outside: NativeCubeConnection['source'];
   outsideSlot: number;
   sourceSlot: number;
   targetSlot: number;
@@ -142,11 +140,11 @@ function captureConnections(
       ? request.targetBoundaries.inputSlotById.get(boundaryId)
       : undefined;
     if (targetSlot == null) throw incompatibleBoundary('input', input.name, boundaryId);
-    const link = requireLink(graph, input.link);
-    const outside = requireConnectableNode(graph.getNodeById(readOriginId(link)));
+    const connection = readNativeCubeConnection(graph, input.link);
+    const outside = connection.source;
     inputs.push({
       outside,
-      outsideSlot: requireSlot(link.origin_slot, 'origin'),
+      outsideSlot: connection.sourceSlot,
       sourceSlot,
       targetSlot,
     });
@@ -159,11 +157,11 @@ function captureConnections(
         ? request.targetBoundaries.outputSlotById.get(boundaryId)
         : undefined;
       if (targetSlot == null) throw incompatibleBoundary('output', output.name, boundaryId);
-      const link = requireLink(graph, linkId);
-      const outside = requireConnectableNode(graph.getNodeById(readTargetId(link)));
+      const connection = readNativeCubeConnection(graph, linkId);
+      const outside = connection.target;
       outputs.push({
         outside,
-        outsideSlot: requireSlot(link.target_slot, 'target'),
+        outsideSlot: connection.targetSlot,
         sourceSlot,
         targetSlot,
       });
@@ -175,11 +173,7 @@ function captureConnections(
 /** Reconnect compatible boundaries to the replacement node. */
 function reconnectTarget(target: CubeNode, connections: CapturedConnections): void {
   for (const connection of connections.inputs) {
-    connection.outside.connect(
-      connection.outsideSlot,
-      target as ConnectableCubeNode,
-      connection.targetSlot,
-    );
+    connection.outside.connect(connection.outsideSlot, target, connection.targetSlot);
   }
   for (const connection of connections.outputs) {
     target.connect(connection.targetSlot, connection.outside, connection.outsideSlot);
@@ -189,52 +183,11 @@ function reconnectTarget(target: CubeNode, connections: CapturedConnections): vo
 /** Restore original slot indices when a replacement mutation rolls back. */
 function reconnectSource(source: CubeNode, connections: CapturedConnections): void {
   for (const connection of connections.inputs) {
-    connection.outside.connect(
-      connection.outsideSlot,
-      source as ConnectableCubeNode,
-      connection.sourceSlot,
-    );
+    connection.outside.connect(connection.outsideSlot, source, connection.sourceSlot);
   }
   for (const connection of connections.outputs) {
     source.connect(connection.sourceSlot, connection.outside, connection.outsideSlot);
   }
-}
-
-/** Require one still-live graph link. */
-function requireLink(graph: CubeReplacementGraph, id: GraphId): ComfyLink {
-  const link = graph.getLink(id);
-  if (!link) throw new Error(`Cube connection '${String(id)}' is unavailable.`);
-  return link;
-}
-
-/** Require a node that can accept a restored LiteGraph connection. */
-function requireConnectableNode(value: unknown): ConnectableCubeNode {
-  if (!value || typeof value !== 'object' || typeof Reflect.get(value, 'connect') !== 'function') {
-    throw new Error('Cube connection endpoint is unavailable.');
-  }
-  return value as ConnectableCubeNode;
-}
-
-/** Read the origin node ID across LiteGraph link representations. */
-function readOriginId(link: ComfyLink): GraphId {
-  const id = link.origin_id ?? link.origin;
-  if (id == null) throw new Error('Cube input connection has no origin node.');
-  return id;
-}
-
-/** Read the target node ID across LiteGraph link representations. */
-function readTargetId(link: ComfyLink): GraphId {
-  const id = link.target_id ?? link.target;
-  if (id == null) throw new Error('Cube output connection has no target node.');
-  return id;
-}
-
-/** Require one finite non-negative LiteGraph slot. */
-function requireSlot(value: unknown, role: string): number {
-  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
-    throw new Error(`Cube connection has an invalid ${role} slot.`);
-  }
-  return value;
 }
 
 /** Explain a fail-closed version switch without dropping a user's connection. */

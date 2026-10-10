@@ -37,16 +37,7 @@ export interface CubeSaveOutcome {
   message?: string;
 }
 
-export interface CubeBrowserEntry extends UnknownRecord {
-  cube_id?: string;
-  name?: string;
-  version?: string;
-  author?: string;
-  author_url?: string;
-  target_model?: string;
-  supported_models?: string[];
-  is_writable?: boolean;
-}
+export type SaveLibraryEntry = Partial<import('../core/CubeLibraryCatalog.js').CubeLibraryEntry>;
 
 export interface SaveSourceEntry {
   modelRequirements?: ModelRequirement | null;
@@ -135,8 +126,8 @@ export interface SaveDirtyCoordinator {
   getDirtyCubeIds?(): Iterable<string>;
 }
 
-export interface SaveBrowser {
-  getCubes?(): CubeBrowserEntry[];
+export interface SaveLibraryCatalog {
+  getCubes?(): SaveLibraryEntry[];
   refresh?(options: { force: boolean }): Promise<unknown>;
 }
 
@@ -181,7 +172,7 @@ export interface CubeSaveDependencies {
   toast?: SaveToast | null;
   instanceManager?: SaveRefreshCoordinator | null;
   dirtyManager?: SaveDirtyCoordinator | null;
-  cubeBrowser?: SaveBrowser | null;
+  libraryCatalog?: SaveLibraryCatalog | null;
   versionDialog?: SaveVersionDialog | null;
   dialogs?: SaveDialogs | null;
   saveReconciler?: SaveReconciler | null;

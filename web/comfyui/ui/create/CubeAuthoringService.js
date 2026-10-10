@@ -29,12 +29,14 @@ const CREATE_PACK_DESTINATION = {
 };
 /** Coordinate the one canonical Cube authoring modal for first and subsequent saves. */
 export class CubeAuthoringService {
-    #browser;
+    #catalog;
+    #modelSuggestions;
     #dialogs;
     #packService;
     #toast;
     constructor(options) {
-        this.#browser = options.browser ?? null;
+        this.#catalog = options.catalog ?? null;
+        this.#modelSuggestions = options.modelSuggestions;
         this.#dialogs = options.dialogs;
         this.#packService = options.packService;
         this.#toast = options.toast ?? null;
@@ -45,7 +47,7 @@ export class CubeAuthoringService {
         return this.#dialogs.openCubeAuthoring({
             candidate,
             destinations,
-            modelSuggestions: this.#browser?.getModelSuggestions?.() ?? [],
+            modelSuggestions: this.#modelSuggestions?.getModelSuggestions() ?? [],
             deriveIdentity: (name, targetModel, destination) => suggestCubeAuthoringIdentity(name, targetModel, destination, this.#existingCubeIds()),
             onCreateDestination: async () => {
                 const pack = await this.#packService.createAuthoringPackForClaimedOwner();
@@ -63,7 +65,7 @@ export class CubeAuthoringService {
             candidate: { ...candidate, destination },
             destinationLocked: true,
             destinations: [destinationOption(destination)],
-            modelSuggestions: this.#browser?.getModelSuggestions?.() ?? [],
+            modelSuggestions: this.#modelSuggestions?.getModelSuggestions() ?? [],
             deriveIdentity: (name, targetModel) => {
                 const normalizedName = normalizeDefaultAliasTitle(name);
                 if (!normalizedName)
@@ -89,7 +91,7 @@ export class CubeAuthoringService {
     }
     /** Return canonical ids already reserved by the active library. */
     #existingCubeIds() {
-        return (this.#browser?.getCubes?.() ?? [])
+        return (this.#catalog?.getCubes?.() ?? [])
             .map((entry) => (typeof entry.cube_id === 'string' ? entry.cube_id : ''))
             .filter(Boolean);
     }

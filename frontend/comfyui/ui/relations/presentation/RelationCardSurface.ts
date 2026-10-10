@@ -22,6 +22,8 @@ export interface RelationCanvasField {
 }
 
 export interface RelationCardSurface {
+  /** Let projected renderers animate widget visibility instead of collapsing their live DOM twice. */
+  nativeWidgetVisibility?: boolean;
   root: HTMLElement;
   header: HTMLElement | null;
   rows: ReadonlyMap<string, HTMLElement>;

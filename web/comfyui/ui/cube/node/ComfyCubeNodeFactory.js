@@ -49,7 +49,7 @@ export class ComfyCubeNodeFactory {
         identity.instance_id = instanceId;
         node.title = configuration.title.trim() || configuration.subgraph.name;
         writePair(node.pos, finitePair(configuration.position, [0, 0]));
-        const size = constrainedSize(configuration.size);
+        const size = resolveNativeCubeFrameSize(configuration.size);
         node.setSize?.([...size]);
         writePair(node.size, size);
         const kind = configuration.kind === 'draft' ? 'cube_draft' : 'cube';
@@ -164,7 +164,7 @@ function finitePair(value, fallback) {
     return [Number.isFinite(x) ? x : fallback[0], Number.isFinite(y) ? y : fallback[1]];
 }
 /** Enforce the minimum finite Cube card size. */
-function constrainedSize(value) {
+export function resolveNativeCubeFrameSize(value) {
     const [width, height] = finitePair(value, DEFAULT_SIZE);
     return [Math.max(MINIMUM_SIZE[0], width), Math.max(MINIMUM_SIZE[1], height)];
 }

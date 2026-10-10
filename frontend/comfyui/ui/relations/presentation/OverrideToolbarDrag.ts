@@ -87,7 +87,7 @@ export class OverrideToolbarDrag {
       this.handle.releasePointerCapture(pointer);
   }
 
-  /** Offer keyboard docking, bounded arrow movement, and restoration to the initial floating position. */
+  /** Offer keyboard docking, bounded arrow movement, and restoration to the default dock. */
   readonly #key = (event: KeyboardEvent): void => {
     const steps: Record<string, readonly [number, number]> = {
       ArrowLeft: [-1, 0],

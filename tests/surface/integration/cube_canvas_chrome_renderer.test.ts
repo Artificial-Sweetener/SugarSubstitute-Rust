@@ -70,6 +70,7 @@ describe('CubeCanvasChromeRenderer', () => {
       editorButton,
       headerColor: '#333',
       titleTextColor: '#f0f2f5',
+      modelPillColors: { background: '#0078d4', foreground: '#fff' },
     });
 
     expect(layout.editAction.x).toBeGreaterThan(layout.chromeActions['swap-left']?.x ?? 0);
@@ -86,7 +87,7 @@ describe('CubeCanvasChromeRenderer', () => {
       expect.arrayContaining([
         'from Base-Cubes by Artificial-Sweetener',
         'SDXL',
-        'Text to Image version 2.0.0',
+        'Text to Image v2.0.0',
         comfyPrimeIconGlyph('arrow-left'),
         comfyPrimeIconGlyph('arrow-right'),
         comfyPrimeIconGlyph('box'),
@@ -138,6 +139,7 @@ describe('CubeCanvasChromeRenderer', () => {
       editorButton: null,
       headerColor: '#333',
       titleTextColor: '#f0f2f5',
+      modelPillColors: { background: '#0078d4', foreground: '#fff' },
     });
 
     const texts = (

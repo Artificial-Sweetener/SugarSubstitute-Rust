@@ -27,6 +27,7 @@ export function fluentAppearanceCss(dark: boolean): string {
     ${fluentInteractionCss()}
     [data-sc-fluent-theme-root] {
       ${fluentTokenDeclarations(dark)}
+      --sugarcubes-masonry-surface:${dark ? '#202020' : '#f3f3f3'};
     }
     :where([data-sc-fluent-node], [data-sc-fluent-surface], [data-sc-fluent-popup]) {
       --sc-card-fill:${dark ? '#2b2b2b' : '#fbfbfb'};
@@ -64,10 +65,13 @@ export function fluentAppearanceCss(dark: boolean): string {
       --p-toggleswitch-checked-hover-background:var(--colorCompoundBrandBackgroundHover);
       --sugarcubes-cube-card-header:var(--sc-card-fill);
       --sugarcubes-cube-card-body:var(--sc-card-fill);
-      --sugarcubes-masonry-surface:${dark ? '#202020' : '#f3f3f3'};
+      --sugarcubes-cube-backdrop:var(--sugarcubes-masonry-surface);
       --sugarcubes-masonry-card-surface:var(--sc-card-fill);
       --sugarcubes-masonry-column-width:400;
       --sugarcubes-masonry-gap:8;
+    }
+    [data-sc-fluent-node], [data-sc-fluent-surface], [data-sc-fluent-popup] {
+      color:var(--colorNeutralForeground1);
     }
     [data-sc-fluent-node] > [data-testid="node-inner-wrapper"],
     [data-sc-fluent-node] > [data-testid="node-state-outline-overlay"] {
@@ -154,14 +158,14 @@ export function fluentAppearanceCss(dark: boolean): string {
       display:flex; flex-direction:row; align-items:center; justify-content:space-between; gap:6px;
     }
     .sugarcubes-cube-face__node-card [data-sc-fluent-layout] > :first-child { min-width:0; flex:1; }
-    .sugarcubes-cube-face__node-card [data-sc-fluent-layout] > :last-child { min-width:0; flex:0 1 156px; max-width:65%; }
+    .sugarcubes-cube-face__node-card [data-sc-fluent-layout]:not([data-sc-choice-inline] *) > :last-child { min-width:0; flex:0 1 156px; max-width:65%; }
     .sugarcubes-cube-face__node-card [data-sc-fluent-row][data-sc-fluent-widget^="WidgetInputNumber"] [data-sc-fluent-layout] > :last-child {
       flex-basis:100px;
     }
     .sugarcubes-cube-face__node-card [data-sc-fluent-row][data-sc-fluent-widget="WidgetToggleSwitch"] [data-sc-fluent-layout] > :last-child {
       flex:0 0 auto;
     }
-    .sugarcubes-cube-face__node-card [data-sc-fluent-row] [data-sc-fluent-layout] > :last-child:has(.sc-model-mount) {
+    .sugarcubes-cube-face__node-card [data-sc-fluent-row] [data-sc-fluent-layout]:not([data-sc-choice-inline] *) > :last-child:has(.sc-model-mount) {
       flex-basis:360px; max-width:min(65%,360px);
     }
     .sugarcubes-cube-face__node-card [data-sc-fluent-row][data-sc-fluent-widget^="WidgetInputNumber"] [data-sc-fluent-layout] > :last-child > :first-child > :first-child {
@@ -208,7 +212,7 @@ export function fluentAppearanceCss(dark: boolean): string {
       border:0; color:var(--colorNeutralForeground1);
     }
     [data-sc-fluent-surface] .sugarcubes-workflow-masonry__section h2 { font-size:20px; font-weight:400; }
-    [data-sc-fluent-surface].sugarcubes-workflow-masonry { padding-inline:6px; }
+    [data-sc-fluent-surface].sugarcubes-workflow-masonry { --sc-masonry-inline-padding:6px; }
     [data-sc-fluent-node] .sugarcubes-cube-face__activation { background:transparent; }
     [data-sc-fluent-popup] {
       background:var(--sc-card-fill); color:var(--colorNeutralForeground1);

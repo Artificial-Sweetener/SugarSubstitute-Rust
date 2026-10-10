@@ -18,13 +18,13 @@ import { resolveCubeIconModel } from '../core/CubeIconResolver.js';
 import { parseCanonicalCubeId } from '../core/CubeId.js';
 import { resolveCubeDisplayName, resolveInstanceDisplayName, } from '../graph/GroupMetadata.js';
 import { isRecord } from '../types/common.js';
-import { resolveCubeModelTitle, resolveDefaultInstanceModelTitle, } from './CubeModelTitlePresentation.js';
-/** Format one persisted Cube version with the former group-chrome wording. */
+import { resolveCubeModelTitle, } from './CubeModelTitlePresentation.js';
+/** Format a Cube version using the shared compact display prefix. */
 export function formatCubeVersionText(metadata) {
     const version = typeof metadata.cube_version === 'string' ? metadata.cube_version.trim() : '';
     if (!version)
         return '';
-    return `version ${version.replace(/^[vV](?=\d)/, '')}`;
+    return /^v/i.test(version) ? version : `v${version}`;
 }
 /** Format the former group-chrome source line from canonical Cube identity. */
 export function formatCubeSourceText(metadata, fallbackSource = null) {
@@ -75,10 +75,9 @@ export function resolveCubeIdentityPresentation(input) {
         });
     const versionText = formatCubeVersionText(metadata);
     const targetModel = typeof metadata.target_model === 'string' ? metadata.target_model.trim() : '';
-    const instanceModelTitle = resolveDefaultInstanceModelTitle({
+    const instanceModelTitle = resolveCubeModelTitle({
         targetModel,
-        instanceTitle,
-        defaultAlias: definitionTitle,
+        title: instanceTitle,
     });
     const definitionModelTitle = resolveCubeModelTitle({
         targetModel,
@@ -92,6 +91,7 @@ export function resolveCubeIdentityPresentation(input) {
     return {
         instanceTitle,
         definitionTitle,
+        targetModel,
         versionText,
         definitionLine: definitionModelTitle.accessibleText,
         instanceModelTitle,

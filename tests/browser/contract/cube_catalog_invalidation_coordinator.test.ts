@@ -19,30 +19,30 @@ import { describe, expect, jest, test } from '@jest/globals';
 import { CubeCatalogInvalidationCoordinator } from '../../../frontend/comfyui/ui/core/CubeCatalogInvalidationCoordinator.js';
 
 describe('CubeCatalogInvalidationCoordinator', () => {
-  test('refreshes the native picker and legacy browser together', async () => {
+  test('refreshes the native picker and library metadata together', async () => {
     const refreshPicker = jest.fn(async () => undefined);
-    const refreshBrowser = jest.fn(async () => undefined);
+    const refreshLibrary = jest.fn(async () => undefined);
     const logger = { warn: jest.fn() };
     const coordinator = new CubeCatalogInvalidationCoordinator({
       refreshPicker,
-      refreshBrowser,
+      refreshLibrary,
       logger,
     });
 
     await coordinator.invalidate();
 
     expect(refreshPicker).toHaveBeenCalledTimes(1);
-    expect(refreshBrowser).toHaveBeenCalledTimes(1);
+    expect(refreshLibrary).toHaveBeenCalledTimes(1);
     expect(logger.warn).not.toHaveBeenCalled();
   });
 
   test('reports each failure without suppressing the other refresh', async () => {
     const pickerError = new Error('picker failed');
-    const browserError = new Error('browser failed');
+    const libraryError = new Error('library failed');
     const logger = { warn: jest.fn() };
     const coordinator = new CubeCatalogInvalidationCoordinator({
       refreshPicker: async () => Promise.reject(pickerError),
-      refreshBrowser: async () => Promise.reject(browserError),
+      refreshLibrary: async () => Promise.reject(libraryError),
       logger,
     });
 
@@ -55,8 +55,8 @@ describe('CubeCatalogInvalidationCoordinator', () => {
     );
     expect(logger.warn).toHaveBeenNthCalledWith(
       2,
-      'SugarCubes: failed to refresh the Cube browser catalog.',
-      { error: browserError },
+      'SugarCubes: failed to refresh the library metadata catalog.',
+      { error: libraryError },
     );
   });
 });

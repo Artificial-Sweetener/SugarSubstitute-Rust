@@ -17,6 +17,7 @@
 import { afterEach, expect, jest, test } from '@jest/globals';
 import { NativeOverrideToolbarHost } from '../../../frontend/comfyui/ui/relations/infrastructure/NativeOverrideToolbarHost.js';
 import { OverrideToolbarPlacement } from '../../../frontend/comfyui/ui/relations/presentation/OverrideToolbarPlacement.js';
+import type { OverrideToolbarPlacementState } from '../../../frontend/comfyui/ui/relations/presentation/OverrideToolbarPlacementState.js';
 import { OverrideToolbarDrag } from '../../../frontend/comfyui/ui/relations/presentation/OverrideToolbarDrag.js';
 import { OverrideToolbarDisclosure } from '../../../frontend/comfyui/ui/relations/presentation/OverrideToolbarDisclosure.js';
 import { ensureRelationStyles } from '../../../frontend/comfyui/ui/relations/presentation/RelationStyles.js';
@@ -43,7 +44,7 @@ function bounds(x: number, y: number, width: number, height: number): DOMRect {
 }
 
 /** Model Comfy's header, fixed native controls, and one width-constrained override toolbar. */
-function fixture() {
+function fixture(saved: OverrideToolbarPlacementState = { docked: false, floating: null }) {
   ensureRelationStyles(document);
   let width = 1000;
   const canvas = document.createElement('div');
@@ -112,7 +113,11 @@ function fixture() {
   const changed = jest.fn((docked: boolean) =>
     disclosure.setExpansionDirection(docked ? 'left' : 'right'),
   );
-  const placement = new OverrideToolbarPlacement(root, grip, host, changed, () => undefined);
+  const write = jest.fn<(state: OverrideToolbarPlacementState) => void>();
+  const placement = new OverrideToolbarPlacement(root, grip, host, changed, () => undefined, {
+    read: () => saved,
+    write,
+  });
   const disclosure = new OverrideToolbarDisclosure(
     root,
     fields,
@@ -138,6 +143,7 @@ function fixture() {
     disclosure,
     drag,
     changed,
+    write,
     resize: (next: number) => {
       width = next;
       placement.attached();
@@ -161,6 +167,116 @@ function pointer(grip: HTMLElement, type: string, x: number, y: number): void {
   });
   grip.dispatchEvent(event);
 }
+
+test('starts in the preferred dock and retains that preference through temporary width fallback', () => {
+  const f = fixture({ docked: true, floating: null });
+  try {
+    expect(f.root.dataset.placement).toBe('docked');
+    expect(f.root.parentElement?.parentElement).toBe(f.bar);
+    expect(f.write).not.toHaveBeenCalled();
+    f.resize(550);
+    expect(f.root.dataset.placement).toBe('floating');
+    f.resize(1000);
+    expect(f.root.dataset.placement).toBe('docked');
+    expect(f.write).not.toHaveBeenCalled();
+  } finally {
+    f.dispose();
+  }
+});
+
+test('retries the preferred dock after pane resize even when floating legacy placeholders consume space', async () => {
+  const originalObserver = window.ResizeObserver;
+  let resized: ResizeObserverCallback | null = null;
+  let observer: ResizeObserver | null = null;
+  /** Deliver settled pane resizing through the native browser geometry boundary. */
+  class PaneObserver implements ResizeObserver {
+    /** Capture the pane notification without observing disclosure frames. */
+    constructor(callback: ResizeObserverCallback) {
+      resized = callback;
+      observer = this;
+    }
+    /** Accept the pane selected by the placement adapter. */
+    observe(): void {}
+    /** Release native geometry ownership at toolbar disposal. */
+    disconnect(): void {}
+    /** Implement the browser observer surface. */
+    unobserve(): void {}
+  }
+  Object.defineProperty(window, 'ResizeObserver', { configurable: true, value: PaneObserver });
+  const f = fixture({ docked: true, floating: null });
+  try {
+    const empty = document.createElement('div');
+    empty.dataset.testid = 'legacy-topbar-container';
+    f.bar.append(empty);
+    f.bar.getBoundingClientRect = () => {
+      const legacyWidth = empty.hasAttribute('data-sc-empty-run-content') ? 0 : 100;
+      const slot = f.bar.contains(f.root) ? f.root.getBoundingClientRect().width + 8 : 0;
+      return bounds(0, 0, 350 + legacyWidth + slot, 48);
+    };
+    f.resize(550);
+    expect(f.root.dataset.placement).toBe('floating');
+    f.line.getBoundingClientRect = () => bounds(0, 0, 650, 48);
+    f.panel.getBoundingClientRect = () => bounds(0, 0, 650, 600);
+    if (!resized || !observer) throw new Error('Pane resize observation was not mounted');
+    const callback: ResizeObserverCallback = resized;
+    callback([], observer);
+    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    expect(f.root.dataset.placement).toBe('docked');
+    expect(f.root.style.maxWidth).toBe('176px');
+    expect(f.write).not.toHaveBeenCalled();
+  } finally {
+    f.dispose();
+    Object.defineProperty(window, 'ResizeObserver', {
+      configurable: true,
+      value: originalObserver,
+    });
+  }
+});
+
+test('remembers completed floating movement and docking when the toolbar is recreated', () => {
+  const f = fixture();
+  let saved: OverrideToolbarPlacementState | undefined;
+  try {
+    f.placement.shift(140, 100);
+    expect(f.write).toHaveBeenLastCalledWith({ docked: false, floating: { x: 144, y: 152 } });
+    saved = f.write.mock.calls.at(-1)?.[0];
+  } finally {
+    f.dispose();
+    f.panel.parentElement?.remove();
+  }
+  if (!saved) throw new Error('Floating placement was not saved');
+  const restored = fixture(saved);
+  try {
+    expect(restored.root.style.left).toBe('144px');
+    expect(restored.root.style.top).toBe('152px');
+    restored.placement.toggleDock();
+    saved = restored.write.mock.calls.at(-1)?.[0];
+  } finally {
+    restored.dispose();
+    restored.panel.parentElement?.remove();
+  }
+  if (!saved) throw new Error('Docked placement was not saved');
+  const docked = fixture(saved);
+  try {
+    expect(docked.root.dataset.placement).toBe('docked');
+    expect(docked.write).not.toHaveBeenCalled();
+    docked.placement.reset();
+    expect(docked.write).toHaveBeenLastCalledWith({ docked: true, floating: null });
+  } finally {
+    docked.dispose();
+  }
+});
+
+test('clamps restored offscreen coordinates without overwriting the saved position', () => {
+  const f = fixture({ docked: false, floating: { x: 9000, y: -400 } });
+  try {
+    expect(f.root.style.left).toBe('496px');
+    expect(f.root.style.top).toBe('0px');
+    expect(f.write).not.toHaveBeenCalled();
+  } finally {
+    f.dispose();
+  }
+});
 
 test('docking reserves the existing Run strip and keeps native controls, values, and focus intact', () => {
   const f = fixture();
@@ -234,6 +350,78 @@ test('keeps the top-strip dock independent of the movable native Run panel', () 
   }
 });
 
+test('reclaims native Run space when its panel undocks without resizing the workflow pane', async () => {
+  const f = fixture();
+  const originalObserver = window.ResizeObserver;
+  const callbacks: ResizeObserverCallback[] = [];
+  const observed: Element[] = [];
+  let layoutObserver: ResizeObserver | null = null;
+  /** Observe only native Run sizing, leaving override disclosure geometry to its own owner. */
+  class LayoutObserver implements ResizeObserver {
+    /** Capture the native browser callback at the external geometry boundary. */
+    constructor(callback: ResizeObserverCallback) {
+      callbacks.push(callback);
+      layoutObserver = this;
+    }
+    /** Record the surface whose independent size drives the dock budget. */
+    observe(target: Element): void {
+      observed.push(target);
+    }
+    /** Release the fake browser observation at host teardown. */
+    disconnect(): void {}
+    /** Match the native observer contract for an individual surface. */
+    unobserve(): void {}
+  }
+  Object.defineProperty(window, 'ResizeObserver', { configurable: true, value: LayoutObserver });
+  try {
+    const native = document.createElement('div');
+    native.className = 'actionbar';
+    native.append(f.run);
+    const flow = document.createElement('div');
+    flow.append(native);
+    f.bar.append(flow);
+    let floating = false;
+    let targetWidth = 0;
+    f.bar.getBoundingClientRect = () => {
+      const nativeWidth = floating ? 90 + targetWidth : 350;
+      const slot = f.bar.contains(f.root) ? f.root.getBoundingClientRect().width + 8 : 0;
+      return bounds(1000 - nativeWidth - slot, 0, nativeWidth + slot, 48);
+    };
+    f.placement.toggleDock();
+    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    expect(observed).toEqual([native, flow]);
+    expect(callbacks).toHaveLength(1);
+    expect(f.root.style.maxWidth).toBe('526px');
+    floating = true;
+    native.style.position = 'fixed';
+    native.classList.add('fixed');
+    await Promise.resolve();
+    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    expect(f.root.style.maxWidth).toBe('786px');
+    if (!layoutObserver) throw new Error('Native Run geometry observer was not mounted');
+    targetWidth = 200;
+    callbacks[0]?.([], layoutObserver);
+    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    expect(f.root.style.maxWidth).toBe('586px');
+    targetWidth = 0;
+    callbacks[0]?.([], layoutObserver);
+    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    expect(f.root.style.maxWidth).toBe('786px');
+    floating = false;
+    native.style.position = 'static';
+    native.classList.remove('fixed');
+    await Promise.resolve();
+    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    expect(f.root.style.maxWidth).toBe('526px');
+  } finally {
+    f.dispose();
+    Object.defineProperty(window, 'ResizeObserver', {
+      configurable: true,
+      value: originalObserver,
+    });
+  }
+});
+
 test('completed drops dock, cancellation does not, and dragging out retains the same input', () => {
   const f = fixture();
   try {
@@ -253,6 +441,7 @@ test('completed drops dock, cancellation does not, and dragging out retains the 
     f.placement.attached();
     expect(target.style.width).toBe('200px');
     pointer(f.grip, 'pointercancel', 500, 24);
+    expect(f.write).not.toHaveBeenCalled();
     expect(f.root.dataset.placement).toBe('floating');
     expect(f.bar.querySelector('.sc-overrides-dock-target')).toBeNull();
     const before = f.grip.getBoundingClientRect();
@@ -264,11 +453,13 @@ test('completed drops dock, cancellation does not, and dragging out retains the 
     pointer(f.grip, 'pointermove', 500, 24);
     pointer(f.grip, 'pointerup', 500, 24);
     expect(f.root.dataset.placement).toBe('docked');
+    expect(f.write).toHaveBeenLastCalledWith(expect.objectContaining({ docked: true }));
     const docked = f.grip.getBoundingClientRect();
     pointer(f.grip, 'pointerdown', docked.left + 10, docked.top + 10);
     pointer(f.grip, 'pointermove', 500, 250);
     pointer(f.grip, 'pointerup', 500, 250);
     expect(f.root.dataset.placement).toBe('floating');
+    expect(f.write).toHaveBeenLastCalledWith(expect.objectContaining({ docked: false }));
     expect(f.root.querySelector('input')).toBe(f.input);
     expect(f.root.style.top).not.toBe('0px');
     expect(f.root.style.transform).toBe('');

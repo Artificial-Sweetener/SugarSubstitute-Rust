@@ -18,6 +18,7 @@ import { isRecord } from '../types/common.js';
 import { findVueComponents } from '../surface/ComfyVueTree.js';
 import { readNativeWidgetOrigins } from '../surface/NativeWidgetOrigins.js';
 import { recognizeModelField } from './ModelFieldRecognition.js';
+import { readNativeWidgetMount } from '../surface/NativeWidgetMountBoundary.js';
 /** Return only native fields mounted within the requested graph or projected node card. */
 export function readComfyModelFields(root, snapshot) {
     const mount = root.closest('.sugarcubes-native-node-card') ?? root.ownerDocument.getElementById('vue-app');
@@ -30,7 +31,16 @@ export function readComfyModelFields(root, snapshot) {
     const nodeData = isRecord(nodeProps.nodeData) ? nodeProps.nodeData : {};
     const classType = typeof nodeData.type === 'string' ? nodeData.type : '';
     const fields = [];
-    for (const vnode of findVueComponents(nodeVNode, 'WidgetSelectDefault')) {
+    const selects = new Set(findVueComponents(nodeVNode, 'WidgetSelectDefault'));
+    for (const widgetRoot of root.querySelectorAll('.sugarcubes-native-widget')) {
+        if (widgetRoot.closest('.lg-node') !== root)
+            continue;
+        const mounted = readNativeWidgetMount(widgetRoot);
+        if (mounted)
+            for (const vnode of findVueComponents(mounted.vnode, 'WidgetSelectDefault'))
+                selects.add(vnode);
+    }
+    for (const vnode of selects) {
         const binding = readField(vnode, root, classType, snapshot, nodeData.widgets);
         if (binding)
             fields.push(binding);
@@ -53,9 +63,15 @@ function readField(vnode, root, classType, snapshot, projectedWidgets) {
         return null;
     const readValues = () => {
         const current = isRecord(widget.options) ? widget.options : {};
-        return Array.isArray(current.values) &&
+        const values = Array.isArray(current.values) &&
             !current.values.some((value) => typeof value !== 'string')
             ? current.values.filter((value) => typeof value === 'string')
+            : [];
+        if (!Object.prototype.hasOwnProperty.call(current, 'allowedValues'))
+            return values;
+        const allowed = current.allowedValues;
+        return Array.isArray(allowed) && allowed.every((value) => typeof value === 'string')
+            ? values.filter((value) => allowed.includes(value))
             : [];
     };
     const values = readValues();
@@ -81,6 +97,11 @@ function readField(vnode, root, classType, snapshot, projectedWidgets) {
         inputName: widget.name,
         ...(typeof widget.nodeLocatorId === 'string' ? { nodeLocator: widget.nodeLocatorId } : {}),
         label: typeof widget.label === 'string' ? widget.label : widget.name,
+        optionLabel: (value) => {
+            const current = isRecord(widget.options) ? widget.options : {};
+            const label = typeof current.getOptionLabel === 'function' ? current.getOptionLabel(value) : value;
+            return typeof label === 'string' ? label : value;
+        },
         enhancementReady: () => trigger?.getAttribute('aria-expanded') !== 'true' &&
             !anchor.contains(anchor.ownerDocument.activeElement),
         readValue: () => (typeof props.modelValue === 'string' ? props.modelValue : ''),

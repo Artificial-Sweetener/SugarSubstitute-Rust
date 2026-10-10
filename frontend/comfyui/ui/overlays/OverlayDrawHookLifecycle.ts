@@ -17,7 +17,6 @@
  * Own installation and watchdog lifecycle for canvas overlay draw hooks.
  */
 
-import type { PlacementOverlay } from './PlacementOverlay.js';
 import type { ProximityOverlay } from './ProximityOverlay.js';
 import type { CubeChromeOverlay } from './CubeChromeOverlay.js';
 import type { ProximityGraphMutationTracker } from './proximity/ProximityGraphMutationTracker.js';
@@ -59,7 +58,6 @@ export class OverlayDrawHookLifecycle {
     private readonly adapter: DrawHookAdapter | null,
     private readonly scheduler: DrawHookScheduler | null,
     readonly proximity: ProximityOverlay,
-    readonly placement: PlacementOverlay,
     readonly chrome: CubeChromeOverlay,
     readonly proximityGraphMutations: ProximityGraphMutationTracker,
   ) {}
@@ -115,7 +113,6 @@ export class OverlayDrawHookLifecycle {
         ) {
           const result = originalDrawForeground.call(this, ctx, ...args);
           try {
-            manager.placement.render(ctx, this);
             manager.chrome.render(ctx, this);
           } catch (error) {
             manager.adapter
@@ -141,7 +138,6 @@ export class OverlayDrawHookLifecycle {
             ?.getConsole?.()
             ?.error?.('SugarCubes: onDrawForeground wrapper failed', error);
         }
-        manager.placement.render(ctx, this);
         manager.chrome.render(ctx, this);
       };
       wrappedForeground.__sugarcubes_overlay_hooked = true;
@@ -168,7 +164,6 @@ export class OverlayDrawHookLifecycle {
         manager.proximityGraphMutations.attach(this.graph);
         manager.proximity.ensurePreview(this.graph);
         manager.proximity.render(ctx, this);
-        manager.placement.render(ctx, this);
       } catch (error) {
         manager.adapter?.getConsole?.()?.error?.('SugarCubes: background overlays failed', error);
       }

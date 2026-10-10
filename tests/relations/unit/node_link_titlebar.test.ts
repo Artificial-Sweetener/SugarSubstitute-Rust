@@ -17,12 +17,17 @@
 import { afterEach, expect, jest, test } from '@jest/globals';
 import { WorkflowRelations } from '../../../frontend/comfyui/ui/relations/application/WorkflowRelations.js';
 import { CubeRelationPresenter } from '../../../frontend/comfyui/ui/relations/presentation/CubeRelationPresenter.js';
+import { ensureRelationStyles } from '../../../frontend/comfyui/ui/relations/presentation/RelationStyles.js';
 import { emptyRelationState } from '../../../frontend/comfyui/ui/relations/domain/RelationContracts.js';
 import type { FieldContract } from '../../../frontend/comfyui/ui/relations/domain/RelationContracts.js';
 
-afterEach(() => document.body.replaceChildren());
+afterEach(() => {
+  document.body.replaceChildren();
+  document.getElementById('sc-relation-styles')?.remove();
+});
 
-test('omits the first compatible selector and reconciles title controls on reorder without reversing links', () => {
+test('retains native selectors while matching Substitute first-endpoint visibility through reorder and unlink', () => {
+  ensureRelationStyles(document);
   const fields: FieldContract[] = ['a', 'b'].map((id) => ({
     id,
     nodeId: id,
@@ -39,6 +44,7 @@ test('omits the first compatible selector and reconciles title controls on reord
     cubeLabel: field.label,
     label: `${field.label} · Seed Variation`,
     classType: 'SeedVariation',
+    configurationIdentity: 'variation',
     fields: [field],
     linkable: true,
   }));
@@ -118,9 +124,24 @@ test('omits the first compatible selector and reconciles title controls on reord
   nodes = [...nodes].reverse();
   relations.reconcile();
   presenter.reconcile();
-  expect(relations.snapshot().state.nodeLinks.b).toBe('a');
-  expect(document.querySelector('.sc-node-link')).toBeNull();
-  expect(follower.isConnected).toBe(false);
+  expect(relations.snapshot().state.nodeLinks.b).toBeNull();
+  expect(relations.snapshot().state.nodeLinks.a).toBe('b');
+  expect(views[1]!.surface.root.querySelector('.sc-node-link')).toBe(follower);
+  expect(follower.isConnected).toBe(true);
+  expect(follower.hidden).toBe(true);
+  expect(window.getComputedStyle(follower).display).toBe('none');
+  expect(hiddenRow.hasAttribute('data-sc-relation-hidden')).toBe(false);
+  for (const order of [originalOrder, [...originalOrder].reverse(), originalOrder]) {
+    nodes = order;
+    relations.reconcile();
+    presenter.reconcile();
+    expect(views[1]!.surface.root.querySelector('.sc-node-link')).toBe(follower);
+    expect(mounts.get(follower)?.mock.lastCall?.[0]).toBe(order[0]?.id === 'b' ? '' : 'a');
+    expect(follower.hidden).toBe(order[0]?.id === 'b');
+  }
+  nodes = [...originalOrder].reverse();
+  relations.reconcile();
+  presenter.reconcile();
   relations.linkNode('b', null);
   presenter.reconcile();
   expect(hiddenRow.hasAttribute('data-sc-relation-hidden')).toBe(false);
@@ -131,17 +152,104 @@ test('omits the first compatible selector and reconciles title controls on reord
     { value: '', label: 'Independent', blockers: [] },
     { value: 'b', label: '🔗 pack/b', blockers: [] },
   ]);
-  expect(views[1]!.surface.root.querySelector('.sc-node-link')).toBeNull();
+  expect(views[1]!.surface.root.querySelector('.sc-node-link')).not.toBeNull();
   nodes = originalOrder;
   relations.reconcile();
   presenter.reconcile();
-  expect(later.isConnected).toBe(false);
-  expect(views[0]!.surface.root.querySelector('.sc-node-link')).toBeNull();
+  expect(later.isConnected).toBe(true);
+  expect(views[0]!.surface.root.querySelector('.sc-node-link')).toBe(later);
+  expect(later.hidden).toBe(true);
   expect(views[1]!.surface.root.querySelector('.sc-node-link')).not.toBeNull();
   relations.linkNode('b', 'a');
   presenter.reconcile();
-  expect(views[0]!.surface.root.querySelector('.sc-node-link')).toBeNull();
+  expect(views[0]!.surface.root.querySelector<HTMLElement>('.sc-node-link')?.hidden).toBe(true);
   presenter.dispose();
   expect(document.querySelector('.sc-node-link')).toBeNull();
   expect(document.querySelectorAll('.sugarcubes-cube-face__activation')).toHaveLength(2);
+});
+
+test('lists only earlier compatible Cubes in their current workflow order', () => {
+  let order = ['a', 'c', 'b', 'd'];
+  const fields: FieldContract[] = order.map((id) => ({
+    id,
+    nodeId: id,
+    cubeId: id,
+    label: id,
+    name: 'value',
+    semantic: 'text',
+    value: id,
+    domain: { kind: 'string' },
+  }));
+  let state = emptyRelationState();
+  state.nodeLinks = Object.fromEntries(order.map((id) => [id, null]));
+  const relations = new WorkflowRelations({
+    inventory: () => ({
+      nodes: order.map((id) => ({
+        id,
+        cubeId: id,
+        cubeLabel: id,
+        label: id,
+        classType: 'StringConstant',
+        configurationIdentity: 'positive',
+        promptRole: 'positive' as const,
+        fields: fields.filter((field) => field.id === id),
+        linkable: true,
+      })),
+      fields: fields.map((contract) => ({
+        contract,
+        read: () => contract.value,
+        write: () => undefined,
+      })),
+    }),
+    load: () => state,
+    save: (next) => {
+      state = next;
+    },
+    transaction: (operation) => operation(),
+    refresh: () => undefined,
+  });
+  const views = fields.map((field) => {
+    const root = document.createElement('article');
+    const header = document.createElement('header');
+    header.append(document.createElement('div'));
+    root.append(header);
+    document.body.append(root);
+    return {
+      nodeId: field.id,
+      surface: {
+        root,
+        header,
+        rows: new Map<string, HTMLElement>(),
+        canvas: null,
+        canvasFields: new Map(),
+        canvasTitle: false,
+      },
+    };
+  });
+  const updates = new Map<string, ReturnType<typeof jest.fn>>();
+  const presenter = new CubeRelationPresenter(document, relations, () => views, jest.fn(), {
+    mount: () => {
+      throw new Error('Use native title choices');
+    },
+    mountChoice: (_root, label) => {
+      const update = jest.fn();
+      updates.set(label, update);
+      return { update, dispose: jest.fn() };
+    },
+  });
+  for (const next of [order, ['b', 'd', 'a', 'c'], ['d', 'c', 'a', 'b']]) {
+    order = next;
+    relations.reconcile();
+    presenter.reconcile();
+    for (const [index, id] of order.entries()) {
+      if (index === 0) continue;
+      expect(updates.get(`Link ${id}`)?.mock.lastCall?.[1]).toEqual([
+        { value: '', label: 'Independent', blockers: [] },
+        ...order
+          .slice(0, index)
+          .map((peer) => ({ value: peer, label: `🔗 ${peer}`, blockers: [] })),
+      ]);
+    }
+  }
+  presenter.dispose();
 });

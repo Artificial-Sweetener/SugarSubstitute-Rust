@@ -28,5 +28,6 @@ export interface ModelPickerBinding extends ModelSelectionReceiver {
   readonly anchor: HTMLElement;
   readonly inputName?: string;
   readonly nodeLocator?: string;
+  optionLabel?(value: string): string;
   subscribe(listener: () => void): () => void;
 }

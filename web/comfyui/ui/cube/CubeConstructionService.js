@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Construct detached native Cube nodes from prepared imports. */
 import { isRecord } from '../types/common.js';
+import { resolveNativeCubeFrameSize } from './node/ComfyCubeNodeFactory.js';
 import { writeCubeDefinitionIdentity } from './node/CubeDefinitionIdentityWriter.js';
 import { writeCubeDefinitionDocument } from '../workflow/CubeDefinitionDocumentWriter.js';
 const MINIMUM_CUBE_WIDTH = 240;
@@ -45,14 +46,20 @@ export class CubeConstructionService {
             identity,
             geometry: {
                 position: readPayloadPosition(payload, options.position),
-                size: options.size ??
-                    this.#resolveInitialSize({
-                        surface: readSurfaceState(identity.metadata),
-                        hasInputs: built.subgraph.inputs.length > 0,
-                    }),
+                size: this.#initialSize(identity, built.subgraph.inputs.length > 0, options),
             },
             ...(isRecord(payload.document) ? { document: payload.document } : {}),
         });
+    }
+    /** Project the same fresh frame before graph construction so canonical cart geometry stays accurate. */
+    previewSize(payload, hasInputs, options) {
+        const identity = readPayloadIdentity(payload, options.instanceId, options.instanceAlias, options.surface, options.revisionRef);
+        return resolveNativeCubeFrameSize(normalizedSize(this.#initialSize(identity, hasInputs, options)));
+    }
+    /** Share fresh frame policy between immutable planning and actual native construction. */
+    #initialSize(identity, hasInputs, options) {
+        return (options.size ??
+            this.#resolveInitialSize({ surface: readSurfaceState(identity.metadata), hasInputs }));
     }
     /** Configure one prebuilt definition and return a detached real Cube node. */
     constructBuilt(request) {

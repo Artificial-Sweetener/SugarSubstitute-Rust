@@ -17,7 +17,6 @@
  * Own the SugarCubes overlay rendering layer in `frontend/comfyui/ui/overlays/OverlayManager.js`.
  */
 import { ProximityOverlay } from './ProximityOverlay.js';
-import { PlacementOverlay } from './PlacementOverlay.js';
 import { CubeChromeOverlay } from './CubeChromeOverlay.js';
 import { createCubeSourceResolver } from './CubeSourceResolver.js';
 import { ProximityPointerMoveTracker } from './proximity/ProximityPointerMoveTracker.js';
@@ -34,14 +33,13 @@ export class OverlayManager {
     proximity;
     proximityPointerMoves;
     proximityGraphMutations;
-    placement;
     swapCoordinator;
     chrome;
     drawHooks;
     graphHooks;
     nodeMovement;
     groupBounds;
-    constructor({ adapter = null, events = null, scheduler = null, storage = null, cubeApi = null, cubeBrowser = null, saveService = null, saveDraft, toast = null, applyPreparedImport, reportImportOutcome, buildShiftedPlacementPayload, requestDirtyRefresh = null, layoutService = null, containmentService = null, collisionService = null, boundsReconciler = null, workflowLibraryState = null, workflowLibraryActions = null, } = {}) {
+    constructor({ adapter = null, events = null, scheduler = null, storage = null, libraryCatalog = null, saveService = null, saveDraft, toast = null, requestDirtyRefresh = null, layoutService = null, containmentService = null, collisionService = null, boundsReconciler = null, workflowLibraryState = null, workflowLibraryActions = null, } = {}) {
         this.proximity = new ProximityOverlay({
             adapter,
             events,
@@ -50,17 +48,6 @@ export class OverlayManager {
         });
         this.proximityPointerMoves = new ProximityPointerMoveTracker(this.proximity, scheduler);
         this.proximityGraphMutations = new ProximityGraphMutationTracker(this.proximity, scheduler);
-        this.placement = new PlacementOverlay({
-            adapter,
-            events,
-            scheduler,
-            cubeApi,
-            cubeBrowser,
-            toast,
-            ...(applyPreparedImport ? { applyPreparedImport } : {}),
-            ...(reportImportOutcome ? { reportImportOutcome } : {}),
-            ...(buildShiftedPlacementPayload ? { buildShiftedPlacementPayload } : {}),
-        });
         this.swapCoordinator = new OverlaySwapCoordinator(adapter, layoutService, this.proximity);
         const saveImplementation = saveService?.saveImplementation?.bind(saveService);
         const chromeActions = {
@@ -110,9 +97,9 @@ export class OverlayManager {
         this.chrome = new CubeChromeOverlay({
             adapter,
             actions: chromeActions,
-            resolveSource: createCubeSourceResolver(cubeBrowser, workflowLibraryState),
+            resolveSource: createCubeSourceResolver(libraryCatalog, workflowLibraryState),
         });
-        this.drawHooks = new OverlayDrawHookLifecycle(adapter, scheduler, this.proximity, this.placement, this.chrome, this.proximityGraphMutations);
+        this.drawHooks = new OverlayDrawHookLifecycle(adapter, scheduler, this.proximity, this.chrome, this.proximityGraphMutations);
         this.nodeMovement = new OverlayNodeMovementCoordinator(adapter, scheduler, containmentService, collisionService, boundsReconciler, requestDirtyRefresh);
         this.groupBounds = new OverlayGroupBoundsController({
             adapter,
@@ -126,7 +113,6 @@ export class OverlayManager {
             scheduler,
             target: this,
             proximity: this.proximity,
-            placement: this.placement,
             chrome: this.chrome,
             proximityPointerMoves: this.proximityPointerMoves,
             proximityGraphMutations: this.proximityGraphMutations,

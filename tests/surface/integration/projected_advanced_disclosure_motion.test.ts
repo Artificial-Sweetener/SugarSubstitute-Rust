@@ -142,6 +142,7 @@ test('animates on the stable mount across opening remounts and removes advanced 
   expect(setup.node.showAdvanced).toBe(true);
   expect(setup.target.firstElementChild).not.toBe(initialRoot);
   expect(setup.target.style.height).toBe('100px');
+  expect(setup.target.dataset.scDisclosureLayout).toBe('fill');
   await jest.runAllTimersAsync();
   expect(setup.effects[0]?.frames).toEqual([{ height: '100px' }, { height: '180px' }]);
   expect(setup.effects[0]?.options).toMatchObject({
@@ -150,6 +151,7 @@ test('animates on the stable mount across opening remounts and removes advanced 
   });
   setup.effects[0]?.finish();
   await Promise.resolve();
+  expect(setup.target.hasAttribute('data-sc-disclosure-layout')).toBe(false);
   setup.click();
   expect(setup.node.showAdvanced).toBe(true);
   expect(setup.target.querySelector('[data-sc-fluent-advanced-row]')).not.toBeNull();
@@ -160,6 +162,7 @@ test('animates on the stable mount across opening remounts and removes advanced 
   expect(setup.target.querySelector('[data-sc-fluent-advanced-row]')).toBeNull();
   expect(setup.target.style.height).toBe('');
   expect(setup.target.hasAttribute('data-sc-disclosing')).toBe(false);
+  expect(setup.target.hasAttribute('data-sc-disclosure-layout')).toBe(false);
   expect(setup.beforeChange).toHaveBeenCalledTimes(2);
   expect(setup.afterChange).toHaveBeenCalledTimes(2);
   expect(setup.nativeToggle).not.toHaveBeenCalled();

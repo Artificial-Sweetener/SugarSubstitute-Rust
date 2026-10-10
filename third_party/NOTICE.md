@@ -133,6 +133,12 @@ The Fluent runtime also bundles Microsoft's `@microsoft/fast-element` 3.0.4,
 under the MIT License. Its pinned version is recorded in `package-lock.json`;
 the upstream FAST license is preserved in `licenses/fast-element.LICENSE.txt`.
 
+The Tablist runtime also bundles Microsoft's `@microsoft/focusgroup-polyfill`
+1.6.0 from [Microsoft Polyfills](https://github.com/microsoft/polyfills), under
+the MIT License. It provides the official control's keyboard navigation. The
+pinned revision is recorded in the manifest, and the complete license is in
+`licenses/focusgroup-polyfill.LICENSE.txt`.
+
 ## Microsoft Fluent UI Emoji
 
 Copyright (c) Microsoft Corporation.
@@ -148,4 +154,9 @@ CivitAI model relationships: ecosystem identities, base model records, and direc
 Masonry finder semantics and compact presentation are adapted from SugarSubstitute's editor search at
 revision `84b6c882d1323447cf82350495dadaeb41d948d5`, under GPL-3.0-or-later.
 Source fingerprints and adapted TypeScript paths are recorded in the manifest;
+the complete license is in `licenses/sugarsubstitute.LICENSE.txt`.
+
+Cube stack geometry, presentation states, cart draft semantics, neutral icon contrast, segment planning and alias allocation are adapted from SugarSubstitute at revision
+`84b6c882d1323447cf82350495dadaeb41d948d5`, under GPL-3.0-or-later.
+The provenance manifest records source fingerprints and adapted TypeScript and Python paths;
 the complete license is in `licenses/sugarsubstitute.LICENSE.txt`.

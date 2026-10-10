@@ -15,12 +15,44 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Prove copied widget refresh is scoped to exact node identity and an explicit host reset. */
 import { expect, jest, test } from '@jest/globals';
+import type { ComfyNode } from '../../../frontend/comfyui/ui/types/graph.js';
 import {
   refreshNativeNodeCards,
   subscribeNativeNodeCardRefresh,
 } from '../../../frontend/comfyui/ui/surface/NativeNodeCardRefresh.js';
-import type { ComfyNode } from '../../../frontend/comfyui/ui/types/graph.js';
 
+test('captures every affected card before any scoped native render and releases both phases', () => {
+  const first: ComfyNode = { id: 1 };
+  const second: ComfyNode = { id: 2 };
+  const unrelated: ComfyNode = { id: 3 };
+  const events: string[] = [];
+  const release = subscribeNativeNodeCardRefresh(
+    document,
+    [first],
+    () => events.push('render first'),
+    () => events.push('measure first'),
+  );
+  const releaseSecond = subscribeNativeNodeCardRefresh(
+    document,
+    [second],
+    () => events.push('render second'),
+    () => events.push('measure second'),
+  );
+  const releaseUnrelated = subscribeNativeNodeCardRefresh(
+    document,
+    [unrelated],
+    () => events.push('unrelated'),
+    () => events.push('measure unrelated'),
+  );
+  refreshNativeNodeCards(document, { kind: 'nodes', nodes: [first, second] });
+  expect(events).toEqual(['measure first', 'measure second', 'render first', 'render second']);
+  release();
+  releaseSecond();
+  releaseUnrelated();
+  events.length = 0;
+  refreshNativeNodeCards(document, { kind: 'reset', reason: 'native-choices' });
+  expect(events).toEqual([]);
+});
 test('refreshes owning mounts only, preserves forwarded ownership and rejects malformed events', () => {
   const a: ComfyNode = { id: 1 },
     b: ComfyNode = { id: 2 },

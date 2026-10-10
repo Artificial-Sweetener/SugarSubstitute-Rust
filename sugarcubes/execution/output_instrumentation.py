@@ -105,6 +105,7 @@ class CubeOutputInstrumenter:
                         "default_alias": embedded.default_alias,
                         "instance_alias": instance.instance_alias,
                         "instance_id": instance.instance_id,
+                        "save_outputs": _save_outputs(instance.payload),
                     },
                     "_meta": {"title": binding_name},
                 }
@@ -153,3 +154,13 @@ def _native_output_names(instance: Mapping[str, object]) -> tuple[str, ...]:
             return ()
         names.append(name.strip())
     return tuple(names)
+
+
+def _save_outputs(payload: Mapping[str, object]) -> bool:
+    """Read workflow-local persistence while enabling outputs for ordinary Cube instances."""
+
+    properties = payload.get("properties")
+    return (
+        not isinstance(properties, Mapping)
+        or properties.get("sugarcubes_save_outputs") is not False
+    )

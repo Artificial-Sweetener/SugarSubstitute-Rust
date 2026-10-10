@@ -15,10 +15,12 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Prove projected native mounts always acquire their own lifecycle-safe component boundary. */
 import { afterEach, expect, jest, test } from '@jest/globals';
+import type { NativeNodeCardRenderer } from '../../../frontend/comfyui/ui/surface/NativeNodeCardRenderer.js';
 import type { ComfyVueRuntime } from '../../../frontend/comfyui/ui/surface/ComfyRuntimeModuleLoader.js';
 
 const projectedComponent = { __name: 'LGraphNode' };
 const loadComponent = jest.fn(async () => projectedComponent);
+const loadRuntime = jest.fn<() => Promise<ComfyVueRuntime>>();
 const runtime: ComfyVueRuntime = {
   h: () => ({}),
   render: () => undefined,
@@ -29,16 +31,20 @@ jest.unstable_mockModule(
   '../../../frontend/comfyui/ui/surface/ComfyRuntimeModuleLoader.js',
   () => ({
     loadComfyNativeNodeComponent: loadComponent,
-    loadComfyVueRuntime: async () => runtime,
+    loadComfyVueRuntime: loadRuntime,
   }),
 );
+loadRuntime.mockResolvedValue(runtime);
 const { CubeSurfaceRendererLifecycle } = await import(
   '../../../frontend/comfyui/ui/surface/CubeSurfaceRendererLifecycle.js'
 );
 
 afterEach(() => {
   document.body.replaceChildren();
-  loadComponent.mockClear();
+  loadComponent.mockReset();
+  loadComponent.mockResolvedValue(projectedComponent);
+  loadRuntime.mockReset();
+  loadRuntime.mockResolvedValue(runtime);
 });
 
 test('acquires the projection component even when a live graph node is already mounted', async () => {
@@ -55,5 +61,39 @@ test('acquires the projection component even when a live graph node is already m
   lifecycle.release();
   expect(await lifecycle.getRenderer()).not.toBe(renderer);
   expect(loadComponent).toHaveBeenCalledTimes(2);
+  lifecycle.dispose();
+});
+
+/** Reject one request without retaining that failure as the renderer's permanent state. */
+test('coalesces renderer acquisition and retries after a failed request', async () => {
+  const renderer: NativeNodeCardRenderer = {
+    mount: () => ({ refresh: () => undefined, unmount: () => undefined }),
+    dispose: jest.fn(),
+  };
+  const failure = new TypeError('Failed to fetch');
+  const createRenderer = jest
+    .fn<() => Promise<typeof renderer>>()
+    .mockRejectedValueOnce(failure)
+    .mockResolvedValue(renderer);
+  const lifecycle = new CubeSurfaceRendererLifecycle({ document, logger: console, createRenderer });
+  const first = lifecycle.getRenderer();
+  expect(lifecycle.getRenderer()).toBe(first);
+  await expect(first).rejects.toBe(failure);
+  expect(await lifecycle.getRenderer()).toBe(renderer);
+  expect(createRenderer).toHaveBeenCalledTimes(2);
+  lifecycle.dispose();
+});
+
+/** Permit the Vue dependency to recover independently of component acquisition. */
+test('retries a failed Vue runtime and retains its successful identity', async () => {
+  const failure = new TypeError('Failed to fetch');
+  loadRuntime.mockRejectedValueOnce(failure);
+  const lifecycle = new CubeSurfaceRendererLifecycle({ document, logger: console });
+  const first = lifecycle.getRuntime();
+  expect(lifecycle.getRuntime()).toBe(first);
+  await expect(first).rejects.toBe(failure);
+  expect(await lifecycle.getRuntime()).toBe(runtime);
+  expect(await lifecycle.getRuntime()).toBe(runtime);
+  expect(loadRuntime).toHaveBeenCalledTimes(2);
   lifecycle.dispose();
 });

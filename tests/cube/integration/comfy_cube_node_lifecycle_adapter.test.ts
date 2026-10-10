@@ -24,6 +24,60 @@ import { CubeNodeCatalog } from '../../../frontend/comfyui/ui/cube/node/CubeNode
 import { CubeWorkflowNodePackMetadata } from '../../../frontend/comfyui/ui/cube/node/CubeWorkflowNodePackMetadata.js';
 
 describe('ComfyCubeNodeLifecycleAdapter', () => {
+  test('isolates a copied Cube definition before relation discovery can share mutable widget owners', () => {
+    const original = cubeNode('first');
+    const copied = cubeNode('second');
+    copied.subgraph = original.subgraph;
+    copied.type = original.type;
+    original.subgraph.asSerialisable = () => ({
+      id: original.subgraph.id,
+      name: 'Cube',
+      nodes: [],
+    });
+    original.subgraph.inputNode = {};
+    original.subgraph.outputNode = {};
+    original.subgraph.add = () => undefined;
+    original.subgraph.remove = () => undefined;
+    original.subgraph.addInput = () => ({ connect() {} });
+    original.subgraph.addOutput = () => ({ connect() {} });
+    original.subgraph.configure = () => undefined;
+    let nextId = 0;
+    const definitions = new Map([[original.subgraph.id, original.subgraph]]);
+    const graph = withTopology({
+      _nodes: [original, copied] as unknown[],
+      subgraphs: definitions,
+      createSubgraph: (data: { id: string }) => {
+        const definition = cubeNode(`isolated-${++nextId}`).subgraph;
+        definition.id = data.id;
+        definition.inputNode = {};
+        definition.outputNode = {};
+        definition.add = () => undefined;
+        definition.remove = () => undefined;
+        definition.addInput = () => ({ connect() {} });
+        definition.addOutput = () => ({ connect() {} });
+        definition.configure = () => undefined;
+        definitions.set(data.id, definition);
+        return definition;
+      },
+    });
+    const catalog = new CubeNodeCatalog();
+    const adapter = new ComfyCubeNodeLifecycleAdapter({
+      discardDefinition: jest.fn(),
+      graph,
+      inventory: new CubeGraphInventory(graph),
+      catalog,
+      events: new EventTarget(),
+      createInstanceId: () => 'unused',
+      nodePackMetadata: unconfiguredNodePackMetadata(),
+      logger: { debug: jest.fn(), error: jest.fn() },
+    });
+    expect(copied.subgraph).not.toBe(original.subgraph);
+    expect(copied.type).toBe(copied.subgraph.id);
+    expect(copied.properties.sugarcubes_cube).toMatchObject({ instance_id: 'second' });
+    expect(catalog.list()).toEqual([original, copied]);
+    adapter.dispose();
+  });
+
   test('reconciles legacy root Cube dependency metadata without shifting workflow state', () => {
     const cube = cubeNode('legacy-instance');
     cube.properties.persisted_value = 2;
@@ -34,7 +88,8 @@ describe('ComfyCubeNodeLifecycleAdapter', () => {
     };
     const nodePackMetadata = new CubeWorkflowNodePackMetadata();
     const adapter = new ComfyCubeNodeLifecycleAdapter({
-      graph,
+      discardDefinition: jest.fn(),
+      graph: withTopology(graph),
       inventory: new CubeGraphInventory(graph),
       catalog: new CubeNodeCatalog(),
       events: new EventTarget(),
@@ -83,7 +138,8 @@ describe('ComfyCubeNodeLifecycleAdapter', () => {
     const catalog = new CubeNodeCatalog();
     const createInstanceId = jest.fn(() => 'pasted-instance');
     const adapter = new ComfyCubeNodeLifecycleAdapter({
-      graph,
+      discardDefinition: jest.fn(),
+      graph: withTopology(graph),
       inventory: new CubeGraphInventory(graph),
       catalog,
       events,
@@ -113,7 +169,8 @@ describe('ComfyCubeNodeLifecycleAdapter', () => {
     const catalog = new CubeNodeCatalog();
     const createInstanceId = jest.fn(() => 'unused-instance');
     const adapter = new ComfyCubeNodeLifecycleAdapter({
-      graph,
+      discardDefinition: jest.fn(),
+      graph: withTopology(graph),
       inventory: new CubeGraphInventory(graph),
       catalog,
       events,
@@ -131,6 +188,98 @@ describe('ComfyCubeNodeLifecycleAdapter', () => {
     adapter.dispose();
   });
 
+  test('keeps the active renderer reachable across runtime replacement and repeated undo/redo', () => {
+    const rendered = new Set<unknown>();
+    const graph = {
+      _nodes: [] as unknown[],
+      onNodeAdded: (node: unknown): void => {
+        rendered.add(node);
+      },
+      onNodeRemoved: (node: unknown): void => {
+        rendered.delete(node);
+      },
+    };
+    const nativeAdded = graph.onNodeAdded;
+    const nativeRemoved = graph.onNodeRemoved;
+    const events = new EventTarget();
+    for (let restore = 0; restore < 6; restore += 1) {
+      const catalog = new CubeNodeCatalog();
+      const adapter = new ComfyCubeNodeLifecycleAdapter({
+        discardDefinition: jest.fn(),
+        graph: withTopology(graph),
+        inventory: new CubeGraphInventory(graph),
+        catalog,
+        events,
+        createInstanceId: () => 'unused-instance',
+        nodePackMetadata: unconfiguredNodePackMetadata(),
+        logger: { debug: jest.fn(), error: jest.fn() },
+      });
+      expect(graph.onNodeAdded).toBe(nativeAdded);
+      expect(graph.onNodeRemoved).toBe(nativeRemoved);
+      for (const node of graph._nodes) graph.onNodeRemoved(node);
+      const restored = cubeNode('restored-instance');
+      graph._nodes = [restored];
+      graph.onNodeAdded(restored);
+      events.dispatchEvent(graphChangeEvent());
+      expect(rendered).toEqual(new Set([restored]));
+      expect(catalog.list()).toEqual([restored]);
+      adapter.dispose();
+    }
+  });
+
+  test('reconciles programmatic addition and removal after native topology completes', async () => {
+    const original = cubeNode('original-instance');
+    const graph = withTopology({ _nodes: [original] as unknown[] });
+    const catalog = new CubeNodeCatalog();
+    const adapter = new ComfyCubeNodeLifecycleAdapter({
+      discardDefinition: jest.fn(),
+      graph,
+      inventory: new CubeGraphInventory(graph),
+      catalog,
+      events: new EventTarget(),
+      createInstanceId: () => 'unused-instance',
+      nodePackMetadata: unconfiguredNodePackMetadata(),
+      logger: { debug: jest.fn(), error: jest.fn() },
+    });
+    const added = cubeNode('added-instance');
+    graph.add(added);
+    await Promise.resolve();
+    expect(catalog.list()).toEqual([original, added]);
+    graph.remove(original);
+    await Promise.resolve();
+    expect(catalog.list()).toEqual([added]);
+    graph.add(cubeNode('disposed-instance'));
+    adapter.dispose();
+    await Promise.resolve();
+    expect(catalog.list()).toEqual([added]);
+  });
+
+  test('reconciles configured replacements and ignores obsolete hooks retained by the host', () => {
+    const configured = jest.fn();
+    const graph = withTopology({ _nodes: [] as unknown[], onConfigure: configured });
+    const catalog = new CubeNodeCatalog();
+    const adapter = new ComfyCubeNodeLifecycleAdapter({
+      discardDefinition: jest.fn(),
+      graph,
+      inventory: new CubeGraphInventory(graph),
+      catalog,
+      events: new EventTarget(),
+      createInstanceId: () => 'unused-instance',
+      nodePackMetadata: unconfiguredNodePackMetadata(),
+      logger: { debug: jest.fn(), error: jest.fn() },
+    });
+    const oldHook = graph.onConfigure;
+    const restored = cubeNode('restored-instance');
+    graph._nodes = [restored];
+    graph.onConfigure({});
+    expect(catalog.list()).toEqual([restored]);
+    adapter.dispose();
+    graph._nodes = [];
+    oldHook({});
+    expect(catalog.list()).toEqual([restored]);
+    expect(configured).toHaveBeenCalledTimes(2);
+  });
+
   test('excludes invalid nested Cubes from identity normalization and the root catalog', () => {
     const rootCube = cubeNode('shared-instance');
     const nestedCube = cubeNode('shared-instance');
@@ -141,7 +290,8 @@ describe('ComfyCubeNodeLifecycleAdapter', () => {
     const events = new EventTarget();
     const catalog = new CubeNodeCatalog();
     const adapter = new ComfyCubeNodeLifecycleAdapter({
-      graph,
+      discardDefinition: jest.fn(),
+      graph: withTopology(graph),
       inventory: new CubeGraphInventory(graph),
       catalog,
       events,
@@ -157,7 +307,7 @@ describe('ComfyCubeNodeLifecycleAdapter', () => {
     adapter.dispose();
   });
 
-  test('restores graph hooks and stops event reconciliation on disposal', () => {
+  test('leaves renderer callbacks untouched and stops event reconciliation on disposal', () => {
     const previousAdded = jest.fn();
     const graph = {
       _nodes: [] as unknown[],
@@ -166,7 +316,8 @@ describe('ComfyCubeNodeLifecycleAdapter', () => {
     const events = new EventTarget();
     const catalog = new CubeNodeCatalog();
     const adapter = new ComfyCubeNodeLifecycleAdapter({
-      graph,
+      discardDefinition: jest.fn(),
+      graph: withTopology(graph),
       inventory: new CubeGraphInventory(graph),
       catalog,
       events,
@@ -180,7 +331,7 @@ describe('ComfyCubeNodeLifecycleAdapter', () => {
     graph._nodes.push(cubeNode('after-dispose'));
     events.dispatchEvent(graphChangeEvent());
 
-    expect(installedAdded).not.toBe(previousAdded);
+    expect(installedAdded).toBe(previousAdded);
     expect(graph.onNodeAdded).toBe(previousAdded);
     expect(catalog.list()).toEqual([]);
   });
@@ -225,4 +376,18 @@ function cubeNode(instanceId: string): CubeNode {
     connect() {},
     serialize: () => ({}),
   };
+}
+
+/** Supply authoritative topology methods without implementing host renderer callbacks. */
+function withTopology<T extends { _nodes: unknown[] }>(
+  graph: T,
+): T & { add(node: unknown): void; remove(node: unknown): void } {
+  return Object.assign(graph, {
+    add(node: unknown): void {
+      graph._nodes.push(node);
+    },
+    remove(node: unknown): void {
+      graph._nodes = graph._nodes.filter((value) => value !== node);
+    },
+  });
 }

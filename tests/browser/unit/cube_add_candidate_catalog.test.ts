@@ -154,6 +154,7 @@ function entry(
       key: type.padEnd(64, 'a').slice(0, 64),
       cubeId: `local/${type}.cube`,
       version: '1.0.0',
+      contentHash: '',
       displayName,
       description: `${displayName} description`,
       searchTerms: [displayName, targetModel],

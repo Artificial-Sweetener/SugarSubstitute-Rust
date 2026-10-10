@@ -35,7 +35,7 @@ import { getGroupSugarcubes } from '../graph/GroupMetadata.js';
 import type { CubeInstance } from '../graph/InstanceBuilder.js';
 import type { CubeGroupMetadataRecord } from '../graph/GroupMetadata.js';
 import type {
-  CubeBrowserEntry,
+  SaveLibraryEntry,
   CubeNodeSavePort,
   SaveAdapter,
   SaveEntryMetadata,
@@ -200,7 +200,7 @@ export class CubeSaveSourceCatalog {
   /** Build backend metadata from the authoritative source and catalog views. */
   buildMetadata(
     cubeId: string,
-    browserEntry: CubeBrowserEntry | null,
+    catalogEntry: SaveLibraryEntry | null,
     sourceMetadata: SaveSourceSelection | null = null,
   ): SaveEntryMetadata | null {
     let defaultAlias = sourceMetadata?.defaultAlias?.trim() || '';
@@ -212,12 +212,12 @@ export class CubeSaveSourceCatalog {
       }
     }
     const targetModel =
-      normalizeTargetModel(browserEntry?.target_model) ||
+      normalizeTargetModel(catalogEntry?.target_model) ||
       normalizeTargetModel(sourceMetadata?.targetModel) ||
       this.deriveTargetModel(cubeId);
     if (!defaultAlias && !targetModel) return null;
-    const supportedSource = Array.isArray(browserEntry?.supported_models)
-      ? browserEntry.supported_models
+    const supportedSource = Array.isArray(catalogEntry?.supported_models)
+      ? catalogEntry.supported_models
       : Array.isArray(sourceMetadata?.supportedModels)
         ? sourceMetadata.supportedModels
         : defaultSupportedModelsForTarget(targetModel);
@@ -241,9 +241,9 @@ export class CubeSaveSourceCatalog {
     };
   }
 
-  /** Index browser entries by canonical Cube id. */
-  indexBrowserEntries(entries: readonly CubeBrowserEntry[]): Map<string, CubeBrowserEntry> {
-    const map = new Map<string, CubeBrowserEntry>();
+  /** Index library entries by canonical Cube id. */
+  indexLibraryEntries(entries: readonly SaveLibraryEntry[]): Map<string, SaveLibraryEntry> {
+    const map = new Map<string, SaveLibraryEntry>();
     for (const entry of Array.isArray(entries) ? entries : []) {
       const cubeId = typeof entry.cube_id === 'string' ? entry.cube_id.trim() : '';
       if (cubeId) map.set(cubeId, entry);

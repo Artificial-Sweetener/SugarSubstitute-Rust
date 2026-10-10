@@ -14,12 +14,18 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own the default Cube-face visual treatment independently of layout geometry. */
+import { ensureOwnedControlAppearanceStyles } from './OwnedControlAppearanceStyles.js';
+/** Install default card roles while shared native control foregrounds retain one owner. */
 export function ensureNodeCardAppearanceStyles(documentRef) {
+    ensureOwnedControlAppearanceStyles(documentRef);
     if (documentRef.getElementById('sugarcubes-node-card-appearance'))
         return;
     const style = documentRef.createElement('style');
     style.id = 'sugarcubes-node-card-appearance';
     style.textContent = `
+    .sugarcubes-cube-face, .sugarcubes-cube-face__header, [data-sugarcube-cube-body] {
+      color:var(--colorNeutralForeground1,var(--fg-color,#eee));
+    }
     .sugarcubes-cube-face__node-card { box-sizing:border-box; border:1px solid var(--interface-stroke,#454545); border-radius:12px; background:var(--sugarcubes-masonry-card-surface,var(--comfy-input-bg,#222)); }
     .sugarcubes-cube-face__node-card .lg-node { cursor:default; }
     .sugarcubes-cube-face__node-card .lg-node:not([data-sc-fluent-node]) [data-testid="advanced-inputs-button"] {

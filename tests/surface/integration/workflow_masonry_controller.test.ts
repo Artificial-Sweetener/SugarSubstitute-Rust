@@ -22,6 +22,7 @@ import { WorkflowMasonryTransition } from '../../../frontend/comfyui/ui/surface/
 import { NATIVE_PRESENTATION_READY_EVENT } from '../../../frontend/comfyui/ui/surface/NativePresentationReady.js';
 import { NativeCardPresentationOwner } from '../../../frontend/comfyui/ui/surface/NativeCardPresentationOwner.js';
 import { WorkflowMasonryView } from '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryView.js';
+import { MasonryStackInsetMotion } from '../../../frontend/comfyui/ui/surface/masonry/MasonryStackInsetMotion.js';
 import { NativeForwardedWidgetLease } from '../../../frontend/comfyui/ui/surface/NativeForwardedWidgetLease.js';
 import type { NativeNodeCardRenderer } from '../../../frontend/comfyui/ui/surface/NativeNodeCardRenderer.js';
 import { CubeFaceCardStateService } from '../../../frontend/comfyui/ui/surface/CubeFaceCardStateService.js';
@@ -34,6 +35,37 @@ import type { WorkflowMasonrySection } from '../../../frontend/comfyui/ui/surfac
 afterEach(() => {
   document.body.replaceChildren();
   jest.restoreAllMocks();
+});
+
+/** Retain requested masonry and recover automatically when native assets become reachable. */
+test('recovers a transient native asset failure without an unavailable toast or second toggle', async () => {
+  const setup = fixture();
+  const { ComfyRuntimeAssetUnavailableError } = await import(
+    '../../../frontend/comfyui/ui/surface/ComfyRuntimeAssetRequest.js'
+  );
+  jest.useFakeTimers();
+  jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+  try {
+    setup.getRenderer.mockRejectedValueOnce(
+      new ComfyRuntimeAssetUnavailableError(
+        '/assets/GraphView.js',
+        new TypeError('Failed to fetch'),
+      ),
+    );
+    const pending = setup.controller.toggle();
+    await jest.advanceTimersByTimeAsync(0);
+    expect(setup.controller.active).toBe(true);
+    expect(setup.reportError).not.toHaveBeenCalled();
+    await jest.advanceTimersByTimeAsync(700);
+    await pending;
+    expect(document.querySelector('.sugarcubes-workflow-masonry input')).not.toBeNull();
+    expect(setup.reportError).not.toHaveBeenCalled();
+    expect(setup.getRenderer).toHaveBeenCalledTimes(2);
+    setup.controller.leaveImmediately();
+  } finally {
+    setup.controller.leaveImmediately();
+    jest.useRealTimers();
+  }
 });
 
 describe('workflow masonry controller', () => {
@@ -317,6 +349,7 @@ describe('workflow masonry controller', () => {
     }));
     const pending = setup.controller.toggle();
     await Promise.resolve();
+    await Promise.resolve();
     expect(setup.mount).toHaveBeenCalledTimes(6);
     expect(
       document
@@ -332,7 +365,11 @@ describe('workflow masonry controller', () => {
     expect(setup.controller.active).toBe(false);
   });
   test('keeps graph visible during assembly and safely reverses a pending exit', async () => {
-    const setup = fixture();
+    const leaving = jest.fn();
+    const setup = fixture(undefined, {
+      onSurfaceReady: (view) => view.setStackWidth(248),
+      onSurfaceLeaving: leaving,
+    });
     const effects: Array<{ finish(): void; cancel: ReturnType<typeof jest.fn> }> = [];
     const mount = setup.mount.getMockImplementation();
     setup.mount.mockImplementation((...args) => {
@@ -378,6 +415,7 @@ describe('workflow masonry controller', () => {
     expect(setup.container.dataset.sugarcubesMasonry).toBeUndefined();
     for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
     expect(effects).toHaveLength(2);
+    expect(leaving).not.toHaveBeenCalled();
     expect(scrollTo).toHaveBeenCalledWith({ top: 123, behavior: 'instant' });
     const surface = document.querySelector<HTMLElement>('.sugarcubes-workflow-masonry');
     if (!surface) throw new Error('Masonry surface missing');
@@ -389,8 +427,11 @@ describe('workflow masonry controller', () => {
     expect(effects).toHaveLength(3);
     effects[2]?.finish();
     await reversal;
+    expect(leaving).not.toHaveBeenCalled();
+    expect(surface.style.getPropertyValue('--sc-masonry-stack-width')).toBe('248px');
     expect(setup.container.dataset.sugarcubesMasonry).toBe('true');
     setup.controller.leaveImmediately();
+    expect(leaving).toHaveBeenCalledTimes(1);
     expect(setup.unmount).toHaveBeenCalledTimes(1);
     expect(setup.container.dataset.sugarcubesMasonry).toBeUndefined();
   });
@@ -539,7 +580,13 @@ describe('workflow masonry controller', () => {
 });
 
 /** Bind a controllable host boundary to the real presentation state machine and view. */
-function fixture(createLinkMotion?: WorkflowMasonryControllerOptions['createLinkMotion']) {
+function fixture(
+  createLinkMotion?: WorkflowMasonryControllerOptions['createLinkMotion'],
+  surfaceLifecycle: Pick<
+    WorkflowMasonryControllerOptions,
+    'onSurfaceReady' | 'onSurfaceLeaving' | 'onSurfaceTransition'
+  > = {},
+) {
   jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
     queueMicrotask(() => callback(0));
     return 0;
@@ -603,6 +650,7 @@ function fixture(createLinkMotion?: WorkflowMasonryControllerOptions['createLink
     reportError,
     openCube() {},
     onStateChange() {},
+    ...surfaceLifecycle,
   });
   return {
     controller,
@@ -623,6 +671,119 @@ function fixture(createLinkMotion?: WorkflowMasonryControllerOptions['createLink
     },
   };
 }
+
+test('coordinates drawer travel with masonry and retains its surface until both finish', async () => {
+  let finish: (() => void) | undefined;
+  const travel = jest.fn(
+    (_entering: boolean) =>
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const leaving = jest.fn();
+  const setup = fixture(undefined, { onSurfaceTransition: travel, onSurfaceLeaving: leaving });
+  const entry = setup.controller.toggle();
+  for (let tick = 0; tick < 20 && !finish; tick += 1) await Promise.resolve();
+  expect(travel).toHaveBeenLastCalledWith(true);
+  expect(leaving).not.toHaveBeenCalled();
+  finish!();
+  await entry;
+  finish = undefined;
+  const exit = setup.controller.toggle();
+  for (let tick = 0; tick < 20 && !finish; tick += 1) await Promise.resolve();
+  expect(travel).toHaveBeenLastCalledWith(false);
+  expect(document.querySelector('.sugarcubes-workflow-masonry')).not.toBeNull();
+  expect(leaving).not.toHaveBeenCalled();
+  finish!();
+  await exit;
+  expect(leaving).toHaveBeenCalledTimes(1);
+  expect(document.querySelector('.sugarcubes-workflow-masonry')).toBeNull();
+});
+
+test.each([82, 248])(
+  'retains %ipx rail reservation through exit travel and releases it once at teardown',
+  async (width) => {
+    let view: WorkflowMasonryView | null = null;
+    const leaving = jest.fn(() => view?.setStackWidth(0));
+    const setup = fixture(undefined, {
+      onSurfaceReady: (surface) => {
+        view = surface;
+        surface.setStackWidth(width);
+      },
+      onSurfaceLeaving: leaving,
+    });
+    let finishExit = (): void => undefined;
+    let exitWidth = '';
+    jest
+      .spyOn(WorkflowMasonryTransition.prototype, 'run')
+      .mockImplementation(async (surface, entering) => {
+        if (entering) return;
+        exitWidth = surface.surface.style.getPropertyValue('--sc-masonry-stack-width');
+        await new Promise<void>((resolve) => {
+          finishExit = resolve;
+        });
+      });
+    await setup.controller.toggle();
+    const exit = setup.controller.toggle();
+    for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
+    try {
+      expect(exitWidth).toBe(`${String(width)}px`);
+      expect(leaving).not.toHaveBeenCalled();
+      expect(setup.unmount).not.toHaveBeenCalled();
+    } finally {
+      finishExit();
+      await exit;
+    }
+    expect(leaving).toHaveBeenCalledTimes(1);
+    expect(setup.unmount).toHaveBeenCalledTimes(1);
+  },
+);
+
+test('waits for interrupted stack inset motion before starting exit endpoint measurement', async () => {
+  const setup = fixture();
+  await setup.controller.toggle();
+  let finishInset = (): void => undefined;
+  jest.spyOn(MasonryStackInsetMotion.prototype, 'settled').mockImplementation(
+    () =>
+      new Promise<void>((resolve) => {
+        finishInset = resolve;
+      }),
+  );
+  const travel = jest.spyOn(WorkflowMasonryTransition.prototype, 'run').mockResolvedValue();
+  const exit = setup.controller.toggle();
+  for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
+  try {
+    expect(travel).not.toHaveBeenCalled();
+    expect(setup.unmount).not.toHaveBeenCalled();
+  } finally {
+    finishInset();
+    await exit;
+  }
+  expect(travel).toHaveBeenCalledTimes(1);
+  expect(setup.unmount).toHaveBeenCalledTimes(1);
+});
+
+test('retires an exit waiting for inset motion without scheduling more native presentation frames', async () => {
+  const setup = fixture();
+  await setup.controller.toggle();
+  let finishInset = (): void => undefined;
+  jest.spyOn(MasonryStackInsetMotion.prototype, 'settled').mockImplementation(
+    () =>
+      new Promise<void>((resolve) => {
+        finishInset = resolve;
+      }),
+  );
+  const travel = jest.spyOn(WorkflowMasonryTransition.prototype, 'run').mockResolvedValue();
+  const frames = jest.spyOn(window, 'requestAnimationFrame');
+  const exit = setup.controller.toggle();
+  setup.controller.leaveImmediately();
+  const retiredFrames = frames.mock.calls.length;
+  finishInset();
+  await exit;
+  expect(travel).not.toHaveBeenCalled();
+  expect(frames).toHaveBeenCalledTimes(retiredFrames);
+  expect(setup.unmount).toHaveBeenCalledTimes(1);
+});
 
 test('assigns final themed masonry widths before the native renderer mounts controls', async () => {
   const setup = fixture();

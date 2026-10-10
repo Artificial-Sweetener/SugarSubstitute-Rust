@@ -29,7 +29,7 @@ export class FlavorService {
     lifecycle;
     commands;
     unsubscribers = [];
-    constructor({ adapter, dialogs, events, storage, toast, api, dirtyManager, cubeBrowser, } = {}) {
+    constructor({ adapter, dialogs, events, storage, toast, api, dirtyManager, invalidateCatalogs, } = {}) {
         this.events = events || null;
         this.toast = toast || null;
         this.storage = new FlavorStorage({
@@ -49,7 +49,7 @@ export class FlavorService {
             toast: toast || null,
             api: api || null,
             dirtyManager: dirtyManager || null,
-            cubeBrowser: cubeBrowser || null,
+            invalidateCatalogs: invalidateCatalogs || null,
             storage: this.storage,
             graph: this.graph,
             lifecycle: this.lifecycle,

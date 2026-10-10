@@ -14,23 +14,24 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Reconcile exact native appearance annotations without tearing down unchanged styles. */
+import { readNativeWidgetMount } from '../NativeWidgetMountBoundary.js';
+
 type ElementAnnotations = Map<HTMLElement, Map<string, string>>;
 
 /** Own removable appearance properties independently of native component discovery. */
 export class NativeFluentAnnotations {
   readonly #roots = new Map<HTMLElement, ElementAnnotations>();
 
-  /** Begin one scoped reconciliation while releasing detached native controls. */
+  /** Begin scoped reconciliation without retiring other controls during native reparenting. */
   begin(root: HTMLElement): NativeFluentAnnotationPlan {
-    this.prune();
     const previous = this.#roots.get(root) ?? new Map();
     return new NativeFluentAnnotationPlan(previous, (next) => this.#roots.set(root, next));
   }
 
-  /** Release retired presentation roots even when the batch contains no surviving native cards. */
+  /** Release retired roots while a live native widget mount retains its presentation through moves. */
   prune(): void {
     for (const [element, annotations] of this.#roots)
-      if (!element.isConnected) {
+      if (!element.isConnected && readNativeWidgetMount(element) === null) {
         clearRemoved(annotations, new Map());
         this.#roots.delete(element);
       }

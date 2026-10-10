@@ -10,6 +10,7 @@ import { resolveCubeFaceRevealDecision } from '../../surface/CubeFaceRevealPolic
 import { readNativeSeedControl } from '../../surface/appearance/ComfyNativeSeedControl.js';
 import { intersectFieldDomains, semanticFieldName } from '../domain/FieldCompatibility.js';
 import { isFieldValue, nativeFieldDomain } from './NativeFieldContract.js';
+import { NativeRelationIdentity } from './NativeRelationIdentity.js';
 /** Retain native owners alongside a validated renderer-independent candidate inventory. */
 export class NativeRelationInventory {
     getCardState;
@@ -24,6 +25,7 @@ export class NativeRelationInventory {
     read(graph, connections = []) {
         this.owners.clear();
         const fields = [], nodes = [];
+        const configurationIdentities = new NativeRelationIdentity();
         const editableNodes = [];
         for (const root of graph ? orderWorkflowNodes(graph, connections) : []) {
             if (isCubeNode(root)) {
@@ -54,6 +56,7 @@ export class NativeRelationInventory {
                     const promptWidget = findCubeFacePromptWidget(face);
                     const promptRole = cubeFacePromptRole(face);
                     const activation = resolveCubeFaceRevealDecision(face, cardState);
+                    const configurationIdentity = configurationIdentities.read(face, symbol, candidates.map((field) => field.contract.name));
                     const activeMode = typeof face.mode === 'number' && face.mode !== 4 ? face.mode : 0;
                     nodes.push({
                         id: nodeId,
@@ -61,9 +64,11 @@ export class NativeRelationInventory {
                         cubeLabel: root.title ?? 'Cube',
                         label,
                         classType: face.class_type ?? face.type ?? '',
+                        configurationIdentity: configurationIdentity ?? nodeId,
                         fields: candidates.map((candidate) => candidate.contract),
                         linkable: (isResourcePatch(face) || promptWidget !== null) &&
                             !isResourceProvider(face) &&
+                            configurationIdentity !== null &&
                             face.isSubgraphNode?.() !== true,
                         ...(promptWidget ? { promptRole } : {}),
                         mode: activation.enabledChoice ? (cardState?.activeMode ?? activeMode) : 4,

@@ -53,11 +53,11 @@ export class CubeSaveForkCoordinator {
             if (!markerIds.length && !cubeNodeInstanceIds.length) {
                 throw new Error(`Unable to fork '${entry.defaultAlias || entry.cubeId}' (instances missing).`);
             }
-            const browserEntry = cubeIndex.get(entry.cubeId) || {};
-            const forkedName = this.buildForkedName(entry.defaultAlias || browserEntry.name || 'SugarCube', usedNames);
+            const catalogEntry = cubeIndex.get(entry.cubeId) || {};
+            const forkedName = this.buildForkedName(entry.defaultAlias || catalogEntry.name || 'SugarCube', usedNames);
             usedNames.add(forkedName);
             const reservedIds = [...cubeIndex.keys(), ...savePlan.map((candidate) => candidate.cubeId)];
-            const forkedId = suggestPersonalCubeIdentity(forkedName, this.options.identities.resolveTargetModel(entry.targetModel, browserEntry.target_model, entry.cubeId), reservedIds).cubeId;
+            const forkedId = suggestPersonalCubeIdentity(forkedName, this.options.identities.resolveTargetModel(entry.targetModel, catalogEntry.target_model, entry.cubeId), reservedIds).cubeId;
             const updatedMarkers = updateMarkersForIds(graph, markerIds, {
                 cubeId: forkedId,
                 defaultAlias: forkedName,
@@ -80,8 +80,8 @@ export class CubeSaveForkCoordinator {
             entry.forked = true;
             entry.reconciliationMarkerIds = markerIds;
             entry.reconciliationCubeNodeInstanceIds = cubeNodeInstanceIds;
-            entry.lineage = this.buildHistoricalLineage(browserEntry, entry);
-            entry.metadata = this.options.sources.buildMetadata(forkedId, browserEntry);
+            entry.lineage = this.buildHistoricalLineage(catalogEntry, entry);
+            entry.metadata = this.options.sources.buildMetadata(forkedId, catalogEntry);
             entry.staleRevision = false;
             entry.sourceEntries = [];
             entry.sourceRevisionRef = '';
@@ -135,8 +135,8 @@ export class CubeSaveForkCoordinator {
             cube_definition_key: buildCubeDefinitionKey(cubeId, nextVersion),
         });
     }
-    buildHistoricalLineage(browserEntry, entry) {
-        const source = browserEntry ?? {};
+    buildHistoricalLineage(catalogEntry, entry) {
+        const source = catalogEntry ?? {};
         return {
             id: entry.previousCubeId || source.cube_id || '',
             name: entry.defaultAlias || source.name || '',

@@ -30,12 +30,16 @@ export class CardDisclosureMotion {
     constructor(target) {
         this.#target = target;
     }
+    /** Read the visible CSS extent before the scoped native refresh batch changes any card. */
+    captureHeight() {
+        return height(this.#target);
+    }
     /** Reverse from the current visible height and commit collapse only after content closes. */
     toggle(collapsed, apply, geometry, owner = this.#target) {
         this.#revision++;
         const sameOwner = this.#owner === owner;
         const desired = !(sameOwner ? (this.#desired ?? collapsed) : collapsed);
-        const from = height(this.#target);
+        const from = geometry?.fromHeight ?? height(this.#target);
         const previousRoot = this.#target.querySelector('.lg-node') ??
             this.#target.closest('.lg-node');
         const canAnimate = previousRoot !== null && this.#canAnimate(previousRoot);
@@ -53,6 +57,7 @@ export class CardDisclosureMotion {
             this.#release();
             return;
         }
+        this.#target.dataset.scDisclosureLayout = geometry?.contentLayout ?? 'intrinsic';
         if (geometry?.settle && !desired) {
             this.#hold(from);
             this.#target.dataset.scDisclosureTarget = 'expanded';
@@ -75,11 +80,11 @@ export class CardDisclosureMotion {
             return;
         }
         const revision = ++this.#revision;
-        const from = height(this.#target);
+        const from = geometry?.fromHeight ?? height(this.#target);
         this.#animation?.cancel();
         this.#animation = null;
         const root = this.#target.querySelector('.lg-node');
-        if (!root || !this.#canAnimate(root)) {
+        if (!root || !this.#canAnimate(root, true)) {
             try {
                 apply();
             }
@@ -88,6 +93,7 @@ export class CardDisclosureMotion {
             }
             return;
         }
+        this.#target.dataset.scDisclosureLayout = geometry?.contentLayout ?? 'intrinsic';
         this.#hold(from);
         try {
             apply();
@@ -114,8 +120,8 @@ export class CardDisclosureMotion {
             animate();
     }
     /** Apply the same appearance and accessibility motion policy to every disclosure trigger. */
-    #canAnimate(root) {
-        return (root.hasAttribute('data-sc-fluent-node') &&
+    #canAnimate(root, contentChange = false) {
+        return ((contentChange || root.hasAttribute('data-sc-fluent-node')) &&
             !this.#target.ownerDocument.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)')
                 .matches &&
             typeof this.#target.animate === 'function');
@@ -210,6 +216,7 @@ export class CardDisclosureMotion {
         this.#owner = null;
         delete this.#target.dataset.scDisclosing;
         delete this.#target.dataset.scDisclosureTarget;
+        delete this.#target.dataset.scDisclosureLayout;
         publishDisclosureHeight(this.#target, null);
     }
 }

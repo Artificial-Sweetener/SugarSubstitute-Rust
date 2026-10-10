@@ -20,3 +20,6 @@ def get_save_image_path(
     image_width: int,
     image_height: int,
 ) -> tuple[str, str, int, str, str]: ...
+def get_output_directory() -> str:
+    """Return Comfy's configured persistent output root."""
+    ...

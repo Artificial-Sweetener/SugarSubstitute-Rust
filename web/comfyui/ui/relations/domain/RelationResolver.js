@@ -67,6 +67,7 @@ export function compatibleNodes(left, right) {
         right.linkable &&
         left.cubeId !== right.cubeId &&
         left.classType === right.classType &&
+        left.configurationIdentity === right.configurationIdentity &&
         left.promptRole === right.promptRole &&
         left.fields.length > 0 &&
         left.fields.length === right.fields.length &&
@@ -75,9 +76,16 @@ export function compatibleNodes(left, right) {
             return peer !== undefined && commonFieldDomain([field, peer]) !== null;
         }));
 }
-/** Validate the complete clone group and its field links before selecting a node master. */
+/** Select a compatible master strictly before its follower in the workflow order. */
 export function canLinkNode(target, source, nodes, state) {
-    if (!compatibleNodes(target, source))
+    return (nodes.indexOf(source) < nodes.indexOf(target) &&
+        canShareNodeConfiguration(target, source, nodes, state));
+}
+/** Validate a stored sharing group independently of the order being reconciled. */
+export function canShareNodeConfiguration(target, source, nodes, state) {
+    if (!compatibleNodes(target, source) ||
+        !uniqueEndpoint(target, nodes) ||
+        !uniqueEndpoint(source, nodes))
         return false;
     const visited = new Set([target.id]);
     let anchor = source.id;
@@ -91,14 +99,26 @@ export function canLinkNode(target, source, nodes, state) {
     const fields = nodes.flatMap((node) => node.fields);
     return target.fields.every((field) => commonFieldDomain(linkedFieldMembers(field.id, fields, nodes, next)) !== null);
 }
+/** Reject indistinguishable endpoints inside one Cube rather than selecting an arbitrary node. */
+function uniqueEndpoint(node, nodes) {
+    return (nodes.filter((peer) => peer.linkable &&
+        peer.cubeId === node.cubeId &&
+        peer.classType === node.classType &&
+        peer.configurationIdentity === node.configurationIdentity &&
+        peer.promptRole === node.promptRole &&
+        peer.fields.length === node.fields.length &&
+        peer.fields.every((field) => node.fields.some((candidate) => candidate.name === field.name))).length === 1);
+}
 /** Retain explicit independence and select the earliest compatible Cube as the initial master. */
 export function initializeNodeLinks(nodes, state) {
     for (const [index, node] of nodes.entries()) {
         if (Object.hasOwn(state.nodeLinks, node.id))
             continue;
         const master = nodes.slice(0, index).find((peer) => canLinkNode(node, peer, nodes, state));
-        if (master)
+        if (master) {
             state.nodeLinks[node.id] = master.id;
+            state.nodeLinks[master.id] ??= null;
+        }
     }
 }
 /** Expand whole-node relationships into eligible field edges while retaining graph connections. */

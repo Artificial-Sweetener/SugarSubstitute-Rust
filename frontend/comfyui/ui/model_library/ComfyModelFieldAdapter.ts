@@ -21,6 +21,7 @@ import { readNativeWidgetOrigins } from '../surface/NativeWidgetOrigins.js';
 import { recognizeModelField } from './ModelFieldRecognition.js';
 import type { ModelCatalogSnapshot } from './ModelCatalog.js';
 import type { ModelPickerBinding } from './ModelPickerBinding.js';
+import { readNativeWidgetMount } from '../surface/NativeWidgetMountBoundary.js';
 
 /** Keep native popup and focus ownership until Comfy releases its active field. */
 export interface ComfyModelFieldBinding extends ModelPickerBinding {
@@ -44,7 +45,15 @@ export function readComfyModelFields(
   const nodeData = isRecord(nodeProps.nodeData) ? nodeProps.nodeData : {};
   const classType = typeof nodeData.type === 'string' ? nodeData.type : '';
   const fields: ComfyModelFieldBinding[] = [];
-  for (const vnode of findVueComponents(nodeVNode, 'WidgetSelectDefault')) {
+  const selects = new Set(findVueComponents(nodeVNode, 'WidgetSelectDefault'));
+  for (const widgetRoot of root.querySelectorAll<HTMLElement>('.sugarcubes-native-widget')) {
+    if (widgetRoot.closest('.lg-node') !== root) continue;
+    const mounted = readNativeWidgetMount(widgetRoot);
+    if (mounted)
+      for (const vnode of findVueComponents(mounted.vnode, 'WidgetSelectDefault'))
+        selects.add(vnode);
+  }
+  for (const vnode of selects) {
     const binding = readField(vnode, root, classType, snapshot, nodeData.widgets);
     if (binding) fields.push(binding);
   }
@@ -77,9 +86,15 @@ function readField(
     return null;
   const readValues = (): string[] => {
     const current = isRecord(widget.options) ? widget.options : {};
-    return Array.isArray(current.values) &&
+    const values =
+      Array.isArray(current.values) &&
       !current.values.some((value: unknown) => typeof value !== 'string')
-      ? current.values.filter((value: unknown): value is string => typeof value === 'string')
+        ? current.values.filter((value: unknown): value is string => typeof value === 'string')
+        : [];
+    if (!Object.prototype.hasOwnProperty.call(current, 'allowedValues')) return values;
+    const allowed: unknown = current.allowedValues;
+    return Array.isArray(allowed) && allowed.every((value: unknown) => typeof value === 'string')
+      ? values.filter((value) => allowed.includes(value))
       : [];
   };
   const values = readValues();
@@ -113,6 +128,12 @@ function readField(
     inputName: widget.name,
     ...(typeof widget.nodeLocatorId === 'string' ? { nodeLocator: widget.nodeLocatorId } : {}),
     label: typeof widget.label === 'string' ? widget.label : widget.name,
+    optionLabel: (value) => {
+      const current = isRecord(widget.options) ? widget.options : {};
+      const label: unknown =
+        typeof current.getOptionLabel === 'function' ? current.getOptionLabel(value) : value;
+      return typeof label === 'string' ? label : value;
+    },
     enhancementReady: () =>
       trigger?.getAttribute('aria-expanded') !== 'true' &&
       !anchor.contains(anchor.ownerDocument.activeElement),

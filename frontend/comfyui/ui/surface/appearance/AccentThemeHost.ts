@@ -1,0 +1,165 @@
+//    SugarCubes - composable workflow units for ComfyUI
+//    Copyright (C) 2026  Artificial Sweetener and contributors
+//
+//    This program is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU Affero General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU Affero General Public License for more details.
+//
+//    You should have received a copy of the GNU Affero General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/** Own accent persistence, external CSS overrides, and palette-only invalidation. */
+import { isRecord, type UnknownRecord } from '../../types/common.js';
+import { readComfyDarkTheme } from './ComfyColorScheme.js';
+import { DEFAULT_ACCENT_COLOR, normalizeAccentColor } from './AccentPalette.js';
+import { createAccentColorSetting } from './AccentColorSetting.js';
+import { accentThemeCss } from './AccentThemeStyles.js';
+
+/** Persist the user's accent independently of every workflow document. */
+export const ACCENT_COLOR_SETTING = 'SugarCubes.Appearance.AccentColor';
+
+/** Project one accepted accent into mounted and future surfaces without rebuilding graph inventories. */
+export class AccentThemeHost {
+  readonly #document: Document;
+  readonly #app: unknown;
+  readonly #report: (error: unknown) => void;
+  readonly #style: HTMLStyleElement;
+  readonly #observer: MutationObserver;
+  #configured = DEFAULT_ACCENT_COLOR;
+  #signature = '';
+  #queued = false;
+  #disposed = false;
+  #setup = false;
+
+  /** Bind the host-facing settings and CSS boundary without claiming external variables. */
+  constructor(documentRef: Document, app: unknown, reportError: (error: unknown) => void) {
+    this.#document = documentRef;
+    this.#app = app;
+    this.#report = reportError;
+    this.#style = documentRef.createElement('style');
+    this.#style.id = 'sugarcubes-accent-theme';
+    this.#observer = new MutationObserver((records) => {
+      if (
+        records.every(
+          (record) => record.target === this.#style || this.#style.contains(record.target),
+        )
+      )
+        return;
+      this.#schedule();
+    });
+  }
+
+  /** Register the color picker and observe only host palette inputs and stylesheet lifecycles. */
+  setup(): void {
+    if (this.#setup || this.#disposed) return;
+    this.#setup = true;
+    const settings = this.#settings();
+    if (typeof settings.getSettingValue === 'function')
+      this.#configured =
+        normalizeAccentColor(settings.getSettingValue.call(settings, ACCENT_COLOR_SETTING)) ??
+        DEFAULT_ACCENT_COLOR;
+    if (typeof settings.addSetting === 'function')
+      settings.addSetting.call(settings, {
+        id: ACCENT_COLOR_SETTING,
+        name: 'Accent color',
+        category: ['SugarCubes', 'Appearance', 'AccentColor'],
+        defaultValue: DEFAULT_ACCENT_COLOR,
+        tooltip:
+          'Choose the shared SugarCubes accent. Hosts can override it with --sugarcubes-accent on the document root.',
+        type: () =>
+          createAccentColorSetting(this.#document, this.#configured, (color) => {
+            if (typeof settings.setSettingValue !== 'function') {
+              this.#report(new Error('Comfy accent setting persistence is unavailable.'));
+              return;
+            }
+            try {
+              void Promise.resolve(
+                settings.setSettingValue.call(settings, ACCENT_COLOR_SETTING, color),
+              ).catch(this.#report);
+            } catch (error) {
+              this.#report(error);
+            }
+          }),
+        onChange: (value: unknown) => {
+          const color = normalizeAccentColor(value);
+          if (!color) {
+            this.#report(
+              new TypeError('SugarCubes accent must be a hexadecimal color such as #b58cff.'),
+            );
+            return;
+          }
+          this.#configured = color;
+          this.refresh();
+        },
+      });
+    this.#document.head.append(this.#style);
+    this.#document.head.addEventListener('load', this.#onStylesheetLoad, true);
+    for (const root of [this.#document.documentElement, this.#document.body])
+      this.#observer.observe(root, { attributes: true, attributeFilter: ['class', 'style'] });
+    this.#observer.observe(this.#document.head, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: ['href', 'media', 'disabled'],
+    });
+    this.refresh();
+  }
+
+  /** Resolve external CSS before the saved preference and publish only an actual palette change. */
+  refresh(): void {
+    if (this.#disposed || !this.#setup) return;
+    const style = this.#document.defaultView?.getComputedStyle(this.#document.documentElement);
+    const color =
+      normalizeAccentColor(style?.getPropertyValue('--sugarcubes-accent')) ?? this.#configured;
+    const dark = readComfyDarkTheme(this.#document);
+    const signature = `${color}:${dark}`;
+    if (signature === this.#signature) return;
+    this.#signature = signature;
+    this.#style.textContent = accentThemeCss(color, dark);
+    const app = isRecord(this.#app) ? this.#app : {};
+    const canvas = isRecord(app.canvas) ? app.canvas : {};
+    if (typeof canvas.setDirty === 'function') canvas.setDirty.call(canvas, true, true);
+  }
+
+  /** Release presentation overrides while preserving saved preferences and external host styles. */
+  dispose(): void {
+    if (this.#disposed) return;
+    this.#disposed = true;
+    this.#observer.disconnect();
+    this.#document.head.removeEventListener('load', this.#onStylesheetLoad, true);
+    this.#style.remove();
+  }
+
+  /** Coalesce styles and palette events without observing native controls or graph topology. */
+  #schedule(): void {
+    if (this.#queued || this.#disposed) return;
+    this.#queued = true;
+    queueMicrotask(() => {
+      this.#queued = false;
+      try {
+        this.refresh();
+      } catch (error) {
+        this.#report(error);
+      }
+    });
+  }
+
+  /** Resolve a newly loaded external stylesheet after its rules join the cascade. */
+  readonly #onStylesheetLoad = (event: Event): void => {
+    if (event.target instanceof HTMLLinkElement && event.target.rel === 'stylesheet')
+      this.#schedule();
+  };
+
+  /** Narrow dynamic Comfy settings before accepting host operations. */
+  #settings(): UnknownRecord {
+    const app = isRecord(this.#app) ? this.#app : {};
+    const ui = isRecord(app.ui) ? app.ui : {};
+    return isRecord(ui.settings) ? ui.settings : {};
+  }
+}

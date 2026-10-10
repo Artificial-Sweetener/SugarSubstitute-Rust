@@ -30,15 +30,29 @@ export class CubeSurfaceRendererLifecycle {
             options.createRenderer ??
                 (providedRenderer ? async () => providedRenderer : () => this.load());
     }
-    /** Lazily resolve the native Nodes 2 renderer. */
+    /** Coalesce native renderer requests while allowing rejected acquisitions to retry. */
     getRenderer() {
-        this.renderer ??= this.createRenderer();
-        return this.renderer;
+        if (this.renderer)
+            return this.renderer;
+        const pending = this.createRenderer().catch((error) => {
+            if (this.renderer === pending)
+                this.renderer = null;
+            throw error;
+        });
+        this.renderer = pending;
+        return pending;
     }
-    /** Lazily resolve the Vue runtime used by native slot layout. */
+    /** Retain successful Vue identity while allowing failed native dependency loads to recover. */
     getRuntime() {
-        this.runtime ??= loadComfyVueRuntime(this.options.document);
-        return this.runtime;
+        if (this.runtime)
+            return this.runtime;
+        const pending = loadComfyVueRuntime(this.options.document).catch((error) => {
+            if (this.runtime === pending)
+                this.runtime = null;
+            throw error;
+        });
+        this.runtime = pending;
+        return pending;
     }
     /** Release renderer state tied to a replaced Comfy Vue application. */
     release() {

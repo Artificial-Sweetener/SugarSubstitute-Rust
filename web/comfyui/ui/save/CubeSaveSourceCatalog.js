@@ -155,7 +155,7 @@ export class CubeSaveSourceCatalog {
         };
     }
     /** Build backend metadata from the authoritative source and catalog views. */
-    buildMetadata(cubeId, browserEntry, sourceMetadata = null) {
+    buildMetadata(cubeId, catalogEntry, sourceMetadata = null) {
         let defaultAlias = sourceMetadata?.defaultAlias?.trim() || '';
         if (!defaultAlias) {
             try {
@@ -165,13 +165,13 @@ export class CubeSaveSourceCatalog {
                 defaultAlias = '';
             }
         }
-        const targetModel = normalizeTargetModel(browserEntry?.target_model) ||
+        const targetModel = normalizeTargetModel(catalogEntry?.target_model) ||
             normalizeTargetModel(sourceMetadata?.targetModel) ||
             this.deriveTargetModel(cubeId);
         if (!defaultAlias && !targetModel)
             return null;
-        const supportedSource = Array.isArray(browserEntry?.supported_models)
-            ? browserEntry.supported_models
+        const supportedSource = Array.isArray(catalogEntry?.supported_models)
+            ? catalogEntry.supported_models
             : Array.isArray(sourceMetadata?.supportedModels)
                 ? sourceMetadata.supportedModels
                 : defaultSupportedModelsForTarget(targetModel);
@@ -192,8 +192,8 @@ export class CubeSaveSourceCatalog {
                 : {}),
         };
     }
-    /** Index browser entries by canonical Cube id. */
-    indexBrowserEntries(entries) {
+    /** Index library entries by canonical Cube id. */
+    indexLibraryEntries(entries) {
         const map = new Map();
         for (const entry of Array.isArray(entries) ? entries : []) {
             const cubeId = typeof entry.cube_id === 'string' ? entry.cube_id.trim() : '';

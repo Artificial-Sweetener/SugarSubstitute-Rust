@@ -26,7 +26,7 @@ import {
 } from '../core/CubeDefinitionKey.js';
 import {
   STALE_SAVE_MODE_LATEST,
-  type CubeBrowserEntry,
+  type SaveLibraryEntry,
   type CubeNodeSavePort,
   type SaveDialogs,
   type SavePlanEntry,
@@ -69,7 +69,7 @@ export class CubeSaveForkCoordinator {
   async forkStaleEntries(
     graph: ComfyGraph,
     savePlan: SavePlanEntry[],
-    cubeIndex: ReadonlyMap<string, CubeBrowserEntry>,
+    cubeIndex: ReadonlyMap<string, SaveLibraryEntry>,
     usedNames: Set<string>,
   ): Promise<void> {
     for (const entry of savePlan) {
@@ -90,9 +90,9 @@ export class CubeSaveForkCoordinator {
           `Unable to fork '${entry.defaultAlias || entry.cubeId}' (instances missing).`,
         );
       }
-      const browserEntry = cubeIndex.get(entry.cubeId) || {};
+      const catalogEntry = cubeIndex.get(entry.cubeId) || {};
       const forkedName = this.buildForkedName(
-        entry.defaultAlias || browserEntry.name || 'SugarCube',
+        entry.defaultAlias || catalogEntry.name || 'SugarCube',
         usedNames,
       );
       usedNames.add(forkedName);
@@ -101,7 +101,7 @@ export class CubeSaveForkCoordinator {
         forkedName,
         this.options.identities.resolveTargetModel(
           entry.targetModel,
-          browserEntry.target_model,
+          catalogEntry.target_model,
           entry.cubeId,
         ),
         reservedIds,
@@ -129,8 +129,8 @@ export class CubeSaveForkCoordinator {
       entry.forked = true;
       entry.reconciliationMarkerIds = markerIds;
       entry.reconciliationCubeNodeInstanceIds = cubeNodeInstanceIds;
-      entry.lineage = this.buildHistoricalLineage(browserEntry, entry);
-      entry.metadata = this.options.sources.buildMetadata(forkedId, browserEntry);
+      entry.lineage = this.buildHistoricalLineage(catalogEntry, entry);
+      entry.metadata = this.options.sources.buildMetadata(forkedId, catalogEntry);
       entry.staleRevision = false;
       entry.sourceEntries = [];
       entry.sourceRevisionRef = '';
@@ -157,7 +157,7 @@ export class CubeSaveForkCoordinator {
   }
 
   /** Record lineage for a read-only catalog fork. */
-  buildLineage(entry: CubeBrowserEntry | null | undefined): UnknownRecord | null {
+  buildLineage(entry: SaveLibraryEntry | null | undefined): UnknownRecord | null {
     if (!entry) return null;
     return {
       id: entry.cube_id || '',
@@ -189,10 +189,10 @@ export class CubeSaveForkCoordinator {
   }
 
   private buildHistoricalLineage(
-    browserEntry: CubeBrowserEntry | undefined,
+    catalogEntry: SaveLibraryEntry | undefined,
     entry: SavePlanEntry,
   ): UnknownRecord {
-    const source = browserEntry ?? {};
+    const source = catalogEntry ?? {};
     return {
       id: entry.previousCubeId || source.cube_id || '',
       name: entry.defaultAlias || source.name || '',

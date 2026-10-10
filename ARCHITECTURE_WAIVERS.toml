@@ -1,34 +1,14 @@
 schema = 1
 
 [[waiver]]
-id = "SC-WAIVER-002"
-kind = "structural"
-rule = "STRUCT003"
-path = "frontend/comfyui/ui/browser/BrowserStyles.ts"
-owner = "SugarCubes Cube browser presentation"
-justification = "This module is one generated-at-runtime CSS resource owner; splitting the single style payload would obscure selector and cascade ownership."
-review_by = 2026-11-30
-max_lines = 749
-
-[[waiver]]
-id = "SC-WAIVER-005"
-kind = "structural"
-rule = "STRUCT003"
-path = "frontend/comfyui/ui/browser/CubePreviewRenderer.ts"
-owner = "SugarCubes Cube browser presentation"
-justification = "The module is a cohesive preview renderer whose geometry, pointer bindings, and drawing state change together."
-review_by = 2026-11-30
-max_lines = 564
-
-[[waiver]]
 id = "SC-WAIVER-006"
 kind = "structural"
 rule = "STRUCT003"
 path = "frontend/comfyui/ui/cube/ComfyCubeRuntime.ts"
 owner = "SugarCubes Comfy runtime composition"
-justification = "The module is the typed composition boundary for one Comfy Cube runtime and its host-value validation adapters. Its native-renderer capability delegates to the sole Cube surface owner, shared by graph and masonry."
+justification = "The module composes one Comfy Cube runtime through focused host-value, graph-reorder and surface owners. Its native-renderer capability delegates to the sole Cube surface owner, shared by graph and masonry."
 review_by = 2026-11-30
-max_lines = 617
+max_lines = 600
 
 [[waiver]]
 id = "SC-WAIVER-007"

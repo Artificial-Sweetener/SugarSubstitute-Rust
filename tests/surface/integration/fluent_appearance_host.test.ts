@@ -414,6 +414,54 @@ test('retains styled borrowed controls while still reconciling actual native con
   host.dispose();
 });
 
+test('styles newly mounted relation controls during their native card reconciliation', async () => {
+  const frames: FrameRequestCallback[] = [];
+  jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+    frames.push(callback);
+    return frames.length;
+  });
+  const app = {
+    ui: {
+      settings: {
+        addSetting() {},
+        getSettingValue: (key: string) => key === 'Comfy.VueNodes.Enabled',
+      },
+    },
+  };
+  const errors = jest.fn();
+  const host = new FluentAppearanceHost({ document, app, reportError: errors });
+  host.setup();
+  host.setEnabled(true);
+  const surface = document.createElement('section');
+  surface.className = 'sugarcubes-workflow-masonry';
+  const card = document.createElement('div');
+  card.className = 'lg-node';
+  surface.append(card);
+  document.body.append(surface);
+  const widget = document.createElement('div');
+  widget.className = 'sugarcubes-native-widget';
+  const trigger = document.createElement('button');
+  widget.append(trigger);
+  const original = NativeFluentCardAdapter.prototype.annotate;
+  const annotate = jest.spyOn(NativeFluentCardAdapter.prototype, 'annotate');
+  annotate.mockImplementation(function (this: NativeFluentCardAdapter, root: HTMLElement) {
+    const result = original.call(this, root);
+    if (root === card && !widget.isConnected) card.append(widget);
+    return result;
+  });
+  prepareNativePresentation(surface);
+  expect(widget.hasAttribute('data-sc-fluent-node')).toBe(true);
+  expect(widget.querySelector('button')).toBe(trigger);
+  annotate.mockClear();
+  prepareNativePresentation(widget);
+  expect(annotate).not.toHaveBeenCalled();
+  frames.splice(0).forEach((frame) => frame(0));
+  expect(annotate).not.toHaveBeenCalled();
+  await Promise.resolve();
+  expect(errors).not.toHaveBeenCalled();
+  host.dispose();
+});
+
 test('owns one stable graph token scope across native card and masonry presentation', () => {
   jest.spyOn(window, 'requestAnimationFrame').mockImplementation(() => 1);
   const graph = document.createElement('div');

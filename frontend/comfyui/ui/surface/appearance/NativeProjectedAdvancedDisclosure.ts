@@ -39,13 +39,13 @@ export class NativeProjectedAdvancedDisclosure {
     }
     if (this.#bindings.has(mount.target)) return;
     const motion = mount.motion;
-    mount.target.dataset.scProjectedAdvancedMotion = '';
     const unsubscribe = mount.present(
       () =>
         motion.toggle(
           !mount.control.shown(),
           (collapsed) => mount.control.setShown(!collapsed),
           {
+            contentLayout: 'fill',
             closedHeight: () => measureProjectedAdvancedHeight(mount.target, true),
             expandedHeight: () => measureProjectedAdvancedHeight(mount.target, false),
             settle: () => settleNativeDisclosure(mount.target),
@@ -71,7 +71,6 @@ export class NativeProjectedAdvancedDisclosure {
     try {
       binding.unsubscribe();
       binding.motion.dispose();
-      delete target.dataset.scProjectedAdvancedMotion;
     } finally {
       this.#releasing.delete(target);
     }

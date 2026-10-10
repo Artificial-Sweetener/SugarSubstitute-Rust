@@ -50,7 +50,7 @@ export class CubeOutputPromptAdapter {
     if (!isRecord(payloadValue) || !isRecord(payloadValue.output)) return payloadValue;
     const additions = new Map<string, UnknownRecord>();
     for (const cube of this.#getCubes()) {
-      if (cube.id == null) continue;
+      if (cube.id == null || cube.mode === 2 || cube.mode === 4) continue;
       const identity = readExecutionIdentity(cube);
       for (let slot = 0; slot < cube.subgraph.outputs.length; slot += 1) {
         const source = this.#boundaryResolver.resolveOutput(cube, slot);
@@ -71,6 +71,7 @@ export class CubeOutputPromptAdapter {
             default_alias: identity.defaultAlias,
             instance_alias: identity.instanceAlias,
             instance_id: identity.instanceId,
+            save_outputs: cube.properties.sugarcubes_save_outputs !== false,
           },
           class_type: 'SugarCubes.CubeOutput',
           _meta: { title: readOutputName(output?.name, slot) },

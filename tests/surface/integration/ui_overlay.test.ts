@@ -498,7 +498,7 @@ describe('ui overlay rendering', () => {
     overlay.renderHeader(canvasContext(ctx), [0, 0, 700, 60], metadata, group);
 
     expect(ctx.fillText).toHaveBeenCalledWith(
-      'Canonical version 1.2.3',
+      'Canonical v1.2.3',
       expect.any(Number),
       expect.any(Number),
     );
@@ -512,7 +512,7 @@ describe('ui overlay rendering', () => {
       expect.any(Number),
       expect.any(Number),
     );
-    const nameCall = ctx.fillText.mock.calls.find(([text]) => text === 'Canonical version 1.2.3');
+    const nameCall = ctx.fillText.mock.calls.find(([text]) => text === 'Canonical v1.2.3');
     const sourceCall = ctx.fillText.mock.calls.find(
       ([text]) => text === 'from Base-Cubes by Artificial-Sweetener',
     );
@@ -561,7 +561,7 @@ describe('ui overlay rendering', () => {
     overlay.renderHeader(canvasContext(ctx), [0, 0, 360, 60], metadata);
 
     expect(ctx.fillText).toHaveBeenCalledWith(
-      'Canonical version 1.2.3',
+      'Canonical v1.2.3',
       expect.any(Number),
       expect.any(Number),
     );
@@ -610,7 +610,7 @@ describe('ui overlay rendering', () => {
     overlay.renderHeader(canvasContext(ctx), [0, 0, 700, 60], metadata, group);
 
     expect(ctx.fillText).toHaveBeenCalledWith(
-      'SDXL/Text to Image version 2.0.0',
+      'SDXL/Text to Image v2.0.0',
       expect.any(Number),
       expect.any(Number),
     );

@@ -24,6 +24,7 @@ import {
 } from './CubeFallbackIconRenderer.js';
 import type { FallbackIconModel, FallbackIconStyle } from './CubeFallbackIconRenderer.js';
 import { isRecord } from '../types/common.js';
+import { prepareCubeIconContrast } from './CubeIconAssetContrast.js';
 
 interface AssetIconDescriptor {
   kind: 'asset';
@@ -283,6 +284,7 @@ export function createResolvedCubeIconElement(
     image.loading = 'lazy';
     image.src = model.url;
     root.appendChild(image);
+    prepareCubeIconContrast(root);
     return root;
   }
   if (model.kind === 'initials' && model.initials) {

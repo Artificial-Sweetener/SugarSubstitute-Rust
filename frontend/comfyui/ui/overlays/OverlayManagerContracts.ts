@@ -18,9 +18,8 @@
  */
 
 import type { ProximityMatch, ProximityOverlay } from './ProximityOverlay.js';
-import type { PlacementOverlay } from './PlacementOverlay.js';
 import type { Bounds, RectBounds, UnknownRecord, Vec2 } from '../types/common.js';
-import type { ComfyCanvas, ComfyGraph, ComfyGroup } from '../types/graph.js';
+import type { ComfyApplication, ComfyCanvas, ComfyGraph, ComfyGroup } from '../types/graph.js';
 import type { CubeGroupMetadataRecord } from '../graph/GroupMetadata.js';
 import type { LayoutEntry } from '../layout/CubeLayoutEngine.js';
 import type { CubeContainmentService } from '../layout/CubeContainmentService.js';
@@ -30,10 +29,8 @@ import type { CubeFaceGraphSummary } from '../surface/CubeFaceChromeActions.js';
 import type { CubeWorkflowLibraryState } from '../workflow/CubeWorkflowLibraryState.js';
 import type { CubeWorkflowLibraryActions } from '../workflow/CubeWorkflowLibraryActions.js';
 
-type PlacementOptions = NonNullable<ConstructorParameters<typeof PlacementOverlay>[0]>;
-
 export interface OverlayAdapter {
-  getApp?(): ReturnType<NonNullable<NonNullable<PlacementOptions['adapter']>['getApp']>>;
+  getApp?(): ComfyApplication | null;
   getWindow?(): Window | null;
   getConsole?(): Console | null;
   getLiteGraph?(): LiteGraphHost | null;
@@ -80,14 +77,10 @@ export interface OverlayManagerOptions {
   events?: OverlayEvents | null;
   scheduler?: OverlayScheduler | null;
   storage?: NonNullable<ConstructorParameters<typeof ProximityOverlay>[0]>['storage'];
-  cubeApi?: PlacementOptions['cubeApi'];
-  cubeBrowser?: (PlacementOptions['cubeBrowser'] & CubeCatalog) | null;
+  libraryCatalog?: CubeCatalog | null;
   saveService?: SaveService | null;
   saveDraft?: DraftSaveService['saveDraft'];
-  toast?: (PlacementOptions['toast'] & ToastService) | null;
-  applyPreparedImport?: PlacementOptions['applyPreparedImport'];
-  reportImportOutcome?: PlacementOptions['reportImportOutcome'];
-  buildShiftedPlacementPayload?: PlacementOptions['buildShiftedPlacementPayload'];
+  toast?: ToastService | null;
   requestDirtyRefresh?: DirtyRefreshRequest | null;
   layoutService?: LayoutCoordinator | null;
   containmentService?: CubeContainmentService | null;

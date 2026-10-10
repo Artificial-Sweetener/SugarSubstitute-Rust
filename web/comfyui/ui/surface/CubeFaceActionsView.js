@@ -23,6 +23,7 @@ export class CubeFaceActionsView {
     #chromeButtons;
     #metadata;
     #chromeActions;
+    #releaseAvailability;
     /** Build stable actions that remain mounted while menu entries change. */
     constructor(documentRef, metadata, chromeActions) {
         this.element = documentRef.createElement('div');
@@ -46,23 +47,33 @@ export class CubeFaceActionsView {
             return [key, button];
         }));
         this.element.append(...this.#chromeButtons.values());
+        this.#releaseAvailability =
+            chromeActions?.subscribeAvailability?.(() => this.render()) ?? (() => undefined);
     }
     /** Reconcile the renderer-owned Cube header actions. */
     render() {
         const visibleActions = resolveCubeFaceTitlebarActions(this.#metadata, this.#chromeActions);
-        for (const button of this.#chromeButtons.values())
-            button.hidden = true;
+        const available = new Set(visibleActions.map((action) => action.key));
+        for (const [key, button] of this.#chromeButtons) {
+            const hidden = !available.has(key);
+            if (button.hidden !== hidden)
+                button.hidden = hidden;
+        }
         for (const action of visibleActions) {
             const button = this.#chromeButtons.get(action.key);
             if (!button)
                 continue;
-            button.hidden = false;
-            button.replaceChildren(action.icon === 'cube-plus'
-                ? createCubeAddIconElement(button.ownerDocument)
-                : createComfyPrimeIconElement(button.ownerDocument, action.icon));
+            if (!button.firstElementChild)
+                button.append(action.icon === 'cube-plus'
+                    ? createCubeAddIconElement(button.ownerDocument)
+                    : createComfyPrimeIconElement(button.ownerDocument, action.icon));
             button.title = action.title;
             button.setAttribute('aria-label', action.ariaLabel);
         }
+    }
+    /** Release the permission listener with its header's mount lifetime. */
+    dispose() {
+        this.#releaseAvailability();
     }
 }
 /** Build one persistent button whose behavior delegates to the shared action owner. */

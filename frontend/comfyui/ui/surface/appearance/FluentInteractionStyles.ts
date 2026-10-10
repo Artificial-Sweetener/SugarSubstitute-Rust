@@ -18,21 +18,34 @@
 /** Keep interaction styling scoped to positively identified native presentation boundaries. */
 export function fluentInteractionCss(): string {
   return `
-    [data-sc-projected-advanced-motion][data-sc-disclosing] > .lg-node[data-sc-fluent-node] {
+    [data-sc-disclosure-layout="fill"][data-sc-disclosing] > .lg-node[data-sc-fluent-node] {
       height:100% !important; min-height:0 !important;
     }
-    [data-sc-projected-advanced-motion][data-sc-disclosing] [data-testid="node-inner-wrapper"],
-    [data-sc-projected-advanced-motion][data-sc-disclosing] [data-testid^="node-body-"] {
+    [data-sc-disclosure-layout="fill"][data-sc-disclosing] [data-testid="node-inner-wrapper"],
+    [data-sc-disclosure-layout="fill"][data-sc-disclosing] [data-testid^="node-body-"] {
       min-height:0;
     }
-    [data-sc-projected-advanced-motion][data-sc-disclosing] [data-sc-fluent-fields] {
+    [data-sc-disclosure-layout="fill"][data-sc-disclosing] [data-sc-fluent-fields] {
       min-height:0; flex:1; overflow:clip;
     }
-    [data-sc-projected-advanced-motion][data-sc-disclosing] [data-testid^="node-header-"],
-    [data-sc-projected-advanced-motion][data-sc-disclosing] > .lg-node > :has(> [data-testid="advanced-inputs-button"]) {
+    [data-sc-disclosure-layout="fill"][data-sc-disclosing] [data-testid^="node-header-"],
+    [data-sc-disclosure-layout="fill"][data-sc-disclosing] > .lg-node > :has(> [data-testid="advanced-inputs-button"]) {
       flex-shrink:0;
     }
     [data-sc-boolean-native] { display:none !important; }
+    [data-sc-boolean-segments] {
+      display:flex; min-width:0; align-items:stretch; anchor-scope:--tab;
+      border:1px solid var(--colorNeutralStroke2); border-radius:var(--borderRadiusMedium);
+      background:var(--colorNeutralBackground3);
+    }
+    [data-sc-boolean-segments]::after {
+      transition-duration:var(--durationNormal);
+      transition-timing-function:var(--curveEasyEase);
+    }
+    [data-sc-boolean-segment] {
+      flex:1 1 auto; min-width:0; overflow:hidden; white-space:nowrap;
+    }
+
     [data-sc-boolean-checkbox] { flex:none; }
     [data-sc-boolean-control] {
       display:inline-flex; flex-direction:row; align-items:center; gap:8px;
@@ -100,10 +113,12 @@ export function fluentInteractionCss(): string {
       background:var(--colorNeutralBackground1); outline:none;
     }
     [data-sc-fluent-row][data-sc-fluent-widget^="WidgetInputNumber"] [data-sc-fluent-layout] > :last-child > :first-child,
-    [data-sc-fluent-row][data-sc-fluent-widget="WidgetSelect"] [data-sc-fluent-layout] > :last-child > :first-child {
+    [data-sc-fluent-row][data-sc-fluent-widget="WidgetSelect"] [data-sc-fluent-layout] > :last-child > :first-child,
+    [data-sc-fluent-layout] > :last-child > :first-child:has(> [data-sc-boolean-segments]) {
       --tw-ring-shadow:0 0 transparent; --tw-ring-color:transparent;
     }
     @media (prefers-reduced-motion:reduce) {
+      [data-sc-boolean-segments]::after,
       [data-sc-toggle-row], [data-sc-fluent-node] [data-testid="advanced-inputs-button"],
       [data-sc-titlebar-action], [data-sc-titlebar-action] [data-testid="node-collapse-button"] i,
       [data-sc-fluent-edit-frame]::after, [data-sc-fluent-edit-frame] input, [data-sc-fluent-edit-frame] textarea {

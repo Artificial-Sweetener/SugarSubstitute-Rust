@@ -134,6 +134,7 @@ function descriptor(): CubePickerDescriptor {
     key: 'a'.repeat(64),
     cubeId: 'local/demo.cube',
     version: '1.0.0',
+    contentHash: '',
     displayName: 'Demo Cube',
     description: '',
     searchTerms: [],

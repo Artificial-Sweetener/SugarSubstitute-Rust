@@ -36,7 +36,9 @@ export interface MockExtension extends UnknownRecord {
 
 export interface MockSettingDefinition extends UnknownRecord {
   id: string;
-  type(): HTMLElement;
+  type: 'boolean' | (() => HTMLElement);
+  defaultValue?: unknown;
+  onChange?(value: unknown): void;
 }
 
 export interface MockSidebarTab extends UnknownRecord {
@@ -70,10 +72,26 @@ interface MockApp extends UnknownRecord {
   ui?: {
     settings: {
       addSetting(payload: MockSettingDefinition): unknown;
+      getSettingValue(id: string, fallback: unknown): unknown;
+      setSettingValue(id: string, value: unknown): Promise<void>;
     };
   };
   registerExtension(extension: MockExtension): void;
   reset(): void;
+}
+
+/** Persist accepted preferences and deliver the same callbacks as the real Comfy settings owner. */
+function createMockSettings(): NonNullable<MockApp['ui']>['settings'] {
+  const definitions = new Map<string, MockSettingDefinition>();
+  const values = new Map<string, unknown>();
+  return {
+    addSetting: (definition) => definitions.set(definition.id, definition),
+    getSettingValue: (id, fallback) => (values.has(id) ? values.get(id) : fallback),
+    async setSettingValue(id, value) {
+      values.set(id, value);
+      definitions.get(id)?.onChange?.(value);
+    },
+  };
 }
 
 const createMockApp = (): MockApp => ({
@@ -92,7 +110,7 @@ const createMockApp = (): MockApp => ({
     setDirty: () => undefined,
   },
   extensionManager: { registerSidebarTab: () => undefined },
-  ui: { settings: { addSetting: () => undefined } },
+  ui: { settings: createMockSettings() },
   clean: () => undefined,
   registerExtension(ext: MockExtension) {
     this._extensions.push(ext);
@@ -113,7 +131,7 @@ const createMockApp = (): MockApp => ({
       setDirty: () => undefined,
     };
     this.extensionManager = { registerSidebarTab: () => undefined };
-    this.ui = { settings: { addSetting: () => undefined } };
+    this.ui = { settings: createMockSettings() };
     this.clean = () => undefined;
   },
 });

@@ -128,7 +128,7 @@ export class WorkflowMasonryLinkMotion {
                     if (typeof request.element.animate !== 'function')
                         continue;
                     const effect = request.element.animate(request.frames, {
-                        duration: fluentMotion.exitDuration,
+                        duration: fluentMotion.fasterDuration,
                         easing: fluentMotion.easing,
                         fill: 'both',
                     });

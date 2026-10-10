@@ -19,6 +19,7 @@ import { cubeFaceNodeHasVisibleWidgets } from './CubeFaceNodePresentationPolicy.
 import { NativeWidgetElementLease } from './NativeWidgetElementLease.js';
 import { NativeForwardedWidgetLease } from './NativeForwardedWidgetLease.js';
 import { NodeCardIconHost } from './NodeCardIconHost.js';
+import { registerNativeNodeCard } from './NativeNodeCardBoundary.js';
 /** Own native child-card mounts for one Cube surface view. */
 export class NativeNodeCardHost {
     #renderer;
@@ -46,6 +47,7 @@ export class NativeNodeCardHost {
     mountCard(cell, card, onActivationChange, options = {}) {
         const { node } = card;
         cell.classList.add('sugarcubes-cube-face__node-card');
+        this.#leases.push(registerNativeNodeCard(cell, node, card.cubeId ?? null));
         cell.dataset.cubeNodeId = String(node.id ?? '');
         cell.dataset.cubeColumnSpan = String(card.columnSpan ?? 1);
         if (node.graph?.id !== undefined)

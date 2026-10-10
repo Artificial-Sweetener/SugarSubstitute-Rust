@@ -40,7 +40,22 @@ class CubeTopologyBuilder:
         workflow: CanonicalWorkflow,
         proximity_connections: Sequence[ProximityConnection] = (),
     ) -> CubeTopology:
-        """Build deterministic topology without inferring through loose nodes."""
+        """Validate projected dependencies before an execution consumer uses them."""
+
+        topology = self.project(workflow, proximity_connections)
+        _reject_cycles(topology.instances, topology.edges)
+        return topology
+
+    def project(
+        self,
+        workflow: CanonicalWorkflow,
+        proximity_connections: Sequence[ProximityConnection] = (),
+    ) -> CubeTopology:
+        """Describe editable graph facts without imposing execution readiness.
+
+        Cyclic regions remain represented by edges and components, but do not
+        appear in dependency order. Execution consumers must use build().
+        """
 
         if len(proximity_connections) > MAX_PROXIMITY_CONNECTIONS:
             raise CubeTopologyError(
@@ -97,7 +112,6 @@ class CubeTopologyBuilder:
         ordered_edges = tuple(
             sorted(edges.values(), key=lambda item: item.semantic_key)
         )
-        _reject_cycles(instances, ordered_edges)
         return CubeTopology(
             instances=instances,
             edges=ordered_edges,

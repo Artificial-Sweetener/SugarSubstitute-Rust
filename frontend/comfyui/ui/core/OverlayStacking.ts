@@ -13,10 +13,15 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Own stacking levels shared by SugarCubes dialogs and their detached controls. */
+/** Own stacking levels shared by SugarCubes workspace surfaces, dialogs and detached controls. */
 
 /** Place modal backdrops above the surrounding Comfy interface. */
 export const DIALOG_OVERLAY_Z_INDEX = 2_000;
 
 /** Keep detached Settings control overlays interactive above modal backdrops. */
 export const COMFY_SETTINGS_OVERLAY_BASE_Z_INDEX = 2_100;
+
+/** Keep masonry presentation above the native graph with its rail immediately above the backdrop. */
+export const MASONRY_SURFACE_Z_INDEX = 1_100;
+/** Keep the rail interactive while finder and dialog overlays remain above it. */
+export const MASONRY_STACK_Z_INDEX = MASONRY_SURFACE_Z_INDEX + 1;

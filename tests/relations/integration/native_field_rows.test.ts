@@ -16,6 +16,7 @@
 /** Characterize canonical row identity before sharing the native adapter with the finder. */
 import { afterEach, expect, test } from '@jest/globals';
 import { nativeRelationCards } from '../../../frontend/comfyui/ui/relations/infrastructure/NativeRelationCardAdapter.js';
+import { registerNativeNodeCard } from '../../../frontend/comfyui/ui/surface/NativeNodeCardBoundary.js';
 import type { UnknownRecord } from '../../../frontend/comfyui/ui/types/common.js';
 
 /** Model only the mounted Vue boundary published by Comfy. */
@@ -37,7 +38,8 @@ afterEach(() => document.body.replaceChildren());
 test('resolves canonical widget keys from a local mount independently of visible labels and popups', () => {
   const cell = document.createElement('article');
   cell.className = 'sugarcubes-cube-face__node-card';
-  cell.dataset.cubeNodeLocator = 'face:1';
+  const node = { id: 1, graph: { id: 'face' } };
+  registerNativeNodeCard(cell, node, 'cube');
   const mount = document.createElement('div');
   mount.className = 'sugarcubes-cube-face__native-card-mount';
   const card = document.createElement('div');
@@ -58,15 +60,11 @@ test('resolves canonical widget keys from a local mount independently of visible
       vnode('NodeWidgets', fields, [vnode('WidgetTextarea', control, [], 'positive_prompt')]),
     ]),
   );
-  const surface = nativeRelationCards(document, { id: 1, graph: { id: 'face' } }, 'cube')[0];
+  const surface = nativeRelationCards(document, node, 'cube')[0];
   expect(surface?.rows.get('positive_prompt')).toBe(row);
   expect(surface?.rows.size).toBe(1);
   const popup = document.createElement('div');
   popup.setAttribute('role', 'listbox');
   document.body.append(popup);
-  expect(
-    nativeRelationCards(document, { id: 1, graph: { id: 'face' } }, 'cube')[0]?.rows.get(
-      'positive_prompt',
-    ),
-  ).toBe(row);
+  expect(nativeRelationCards(document, node, 'cube')[0]?.rows.get('positive_prompt')).toBe(row);
 });

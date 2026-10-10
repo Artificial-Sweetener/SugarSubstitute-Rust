@@ -15,6 +15,10 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Keep root Cube identity and presentation aligned with Comfy's workflow graph. */
 
+import {
+  NativeSubgraphChangeObserver,
+  type ObservableNativeSubgraph,
+} from '../../surface/NativeSubgraphChangeObserver.js';
 import { isRecord } from '../../types/common.js';
 import type { UnknownRecord } from '../../types/common.js';
 import { labelEmptyCubeBoundaryAffordances } from '../geometry/NativeCubeBoundaryLayout.js';
@@ -27,12 +31,11 @@ import {
 import { CubeNodeCatalog, readInstanceId } from './CubeNodeCatalog.js';
 import type { CubeGraphInventory } from './CubeGraphInventory.js';
 import type { CubeWorkflowNodePackMetadata } from './CubeWorkflowNodePackMetadata.js';
+import { NativeCubeDefinitionOwnership } from '../graph/NativeCubeDefinitionOwnership.js';
 
-export interface CubeNodeLifecycleGraph {
+export interface CubeNodeLifecycleGraph extends ObservableNativeSubgraph {
   _nodes?: unknown[];
   onConfigure?: ((data: UnknownRecord) => void) | null;
-  onNodeAdded?: ((node: unknown) => void) | null;
-  onNodeRemoved?: ((node: unknown) => void) | null;
 }
 
 export interface ComfyCubeNodeLifecycleAdapterOptions {
@@ -41,6 +44,7 @@ export interface ComfyCubeNodeLifecycleAdapterOptions {
   catalog: CubeNodeCatalog;
   events: EventTarget;
   createInstanceId(): string;
+  discardDefinition(id: string): void;
   nodePackMetadata: CubeWorkflowNodePackMetadata;
   logger: Pick<Console, 'debug' | 'error'>;
 }
@@ -56,13 +60,12 @@ export class ComfyCubeNodeLifecycleAdapter {
   readonly #nodePackMetadata: CubeWorkflowNodePackMetadata;
   readonly #unsubscribeNodePackMetadata: () => void;
   readonly #previousConfigure: ((data: UnknownRecord) => void) | null;
-  readonly #previousNodeAdded: ((node: unknown) => void) | null;
-  readonly #previousNodeRemoved: ((node: unknown) => void) | null;
   readonly #configureHook: (data: UnknownRecord) => void;
-  readonly #nodeAddedHook: (node: unknown) => void;
-  readonly #nodeRemovedHook: (node: unknown) => void;
+  readonly #topology: NativeSubgraphChangeObserver;
+  readonly #definitions: NativeCubeDefinitionOwnership;
+  #disposed = false;
 
-  /** Install graph and completed-canvas-change synchronization around prior callbacks. */
+  /** Observe completed topology changes without capturing native renderer callbacks. */
   constructor(options: ComfyCubeNodeLifecycleAdapterOptions) {
     this.#graph = options.graph;
     this.#catalog = options.catalog;
@@ -71,26 +74,22 @@ export class ComfyCubeNodeLifecycleAdapter {
     this.#createInstanceId = options.createInstanceId;
     this.#logger = options.logger;
     this.#nodePackMetadata = options.nodePackMetadata;
+    this.#definitions = new NativeCubeDefinitionOwnership(
+      options.graph,
+      options.createInstanceId,
+      options.discardDefinition,
+    );
     this.#previousConfigure = options.graph.onConfigure ?? null;
-    this.#previousNodeAdded = options.graph.onNodeAdded ?? null;
-    this.#previousNodeRemoved = options.graph.onNodeRemoved ?? null;
     this.#configureHook = (data) => {
       this.#previousConfigure?.call(this.#graph, data);
       this.#reconcile();
     };
-    this.#nodeAddedHook = (node) => {
-      this.#previousNodeAdded?.call(this.#graph, node);
-      if (isCubeNode(node)) this.#reconcile();
-    };
-    this.#nodeRemovedHook = (node) => {
-      this.#previousNodeRemoved?.call(this.#graph, node);
-      if (isCubeNode(node) && this.#catalog.get(readInstanceId(node)) === node) {
-        this.#catalog.remove(readInstanceId(node));
-      }
-    };
     options.graph.onConfigure = this.#configureHook;
-    options.graph.onNodeAdded = this.#nodeAddedHook;
-    options.graph.onNodeRemoved = this.#nodeRemovedHook;
+    this.#topology = new NativeSubgraphChangeObserver(
+      options.graph,
+      () => this.#reconcile(),
+      (kind) => kind === 'add' || kind === 'remove',
+    );
     options.events.addEventListener('litegraph:canvas', this.#handleCanvasChange);
     this.#unsubscribeNodePackMetadata = options.nodePackMetadata.subscribe(() => this.#reconcile());
     this.#reconcile();
@@ -98,14 +97,11 @@ export class ComfyCubeNodeLifecycleAdapter {
 
   /** Restore callbacks when the graph-bound runtime is replaced. */
   dispose(): void {
+    if (this.#disposed) return;
+    this.#disposed = true;
+    this.#topology.dispose();
     if (this.#graph.onConfigure === this.#configureHook) {
       this.#graph.onConfigure = this.#previousConfigure;
-    }
-    if (this.#graph.onNodeAdded === this.#nodeAddedHook) {
-      this.#graph.onNodeAdded = this.#previousNodeAdded;
-    }
-    if (this.#graph.onNodeRemoved === this.#nodeRemovedHook) {
-      this.#graph.onNodeRemoved = this.#previousNodeRemoved;
     }
     this.#events.removeEventListener('litegraph:canvas', this.#handleCanvasChange);
     this.#unsubscribeNodePackMetadata();
@@ -128,6 +124,7 @@ export class ComfyCubeNodeLifecycleAdapter {
 
   /** Assign fresh per-instance identities to copied Cubes before rebuilding the index. */
   #reconcile(): void {
+    if (this.#disposed) return;
     const seen = new Map<string, CubeNode>();
     const values = this.#inventory.snapshot().rootCubes;
     for (const value of values) {
@@ -141,6 +138,7 @@ export class ComfyCubeNodeLifecycleAdapter {
       }
       seen.set(instanceId, value);
     }
+    this.#definitions.reconcile([...seen.values()]);
     this.#catalog.replace(values);
   }
 

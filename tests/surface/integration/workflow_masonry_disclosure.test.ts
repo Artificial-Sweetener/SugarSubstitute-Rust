@@ -33,11 +33,48 @@ import type { WorkflowMasonrySection } from '../../../frontend/comfyui/ui/surfac
 import { NativeProjectedNodeCollapse } from '../../../frontend/comfyui/ui/surface/NativeProjectedNodeCollapse.js';
 import { CardDisclosureMotion } from '../../../frontend/comfyui/ui/surface/motion/CardDisclosureMotion.js';
 import { DISCLOSURE_LAYOUT_EVENT } from '../../../frontend/comfyui/ui/surface/motion/DisclosureLayout.js';
+import { fluentInteractionCss } from '../../../frontend/comfyui/ui/surface/appearance/FluentInteractionStyles.js';
+import { NativeProjectedAdvancedInputs } from '../../../frontend/comfyui/ui/surface/NativeProjectedAdvancedInputs.js';
+import { NativeAdvancedDisclosure } from '../../../frontend/comfyui/ui/surface/appearance/NativeAdvancedDisclosure.js';
 
 afterEach(() => {
   document.body.replaceChildren();
   jest.restoreAllMocks();
   jest.useRealTimers();
+});
+
+test('packs simultaneous disclosure destinations once per frame without rebuilding cards', async () => {
+  const frames: FrameRequestCallback[] = [];
+  jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+    frames.push(callback);
+    return frames.length;
+  });
+  const view = new WorkflowMasonryView({
+    document,
+    sections: projectWorkflowMasonry(
+      { _nodes: [{ id: 1, type: 'KSampler', widgets: [{ name: 'steps', value: 20 }] }] },
+      [],
+    ),
+    cardState: new CubeFaceCardStateService({ nodes: new CubeNodeCatalog(), history: {} }),
+    openCube() {},
+  });
+  document.body.append(view.element);
+  const mount = jest.fn<NativeNodeCardRenderer['mount']>(() => ({ refresh() {}, unmount() {} }));
+  await view.mountCards({ mount, dispose() {} });
+  view.element.removeAttribute('data-sc-masonry-preparing');
+  for (const callback of frames.splice(0)) callback(0);
+  const layout = jest.spyOn(view, 'layout');
+  const cell = [...view.cards().values()][0]!;
+  const first = document.createElement('div');
+  const second = document.createElement('div');
+  cell.append(first, second);
+  publishDisclosureHeight(first, 80);
+  publishDisclosureHeight(second, 100);
+  expect(layout).not.toHaveBeenCalled();
+  for (const callback of frames.splice(0)) callback(16);
+  expect(layout).toHaveBeenCalledTimes(1);
+  expect(mount).toHaveBeenCalledTimes(1);
+  view.dispose();
 });
 
 test('search masks pack visible cards and hide empty headers without changing native mounts or policy', async () => {
@@ -159,7 +196,7 @@ function promptDisclosureFixture() {
     },
     motion,
   );
-  return { target, root, button, flags, effects, collapse, motion };
+  return { target, root, button, flags, effects, collapse, motion, node };
 }
 
 test('expanding a native prompt publishes its settled height without an oversized neighbor destination', async () => {
@@ -180,6 +217,49 @@ test('expanding a native prompt publishes its settled height without an oversize
   await Promise.resolve();
   expect(target.style.height).toBe('50px');
   expect(destinations).toEqual(['100', undefined]);
+  collapse.dispose();
+  motion.dispose();
+});
+
+test('a registered advanced footer never constrains whole-card expansion to its collapsed height', async () => {
+  const { target, root, button, effects, collapse, motion, node } = promptDisclosureFixture();
+  target.classList.add('sugarcubes-native-node-card');
+  node.widgets = [{ name: 'tile_size', type: 'number', options: { advanced: true } }];
+  const fields = document.createElement('div');
+  const advancedButton = document.createElement('button');
+  advancedButton.dataset.testid = 'advanced-inputs-button';
+  root.append(fields, advancedButton);
+  const input = new NativeProjectedAdvancedInputs(target, node, () => undefined, motion);
+  const presentation = new NativeAdvancedDisclosure();
+  presentation.reconcile({
+    root,
+    body: null,
+    header: null,
+    fields: [],
+    numericFields: [],
+    seedFields: [],
+    labelElements: [],
+    collapsed: true,
+    canCollapse: true,
+    advanced: { fields, button: advancedButton, expanded: false },
+  });
+  const styles = document.createElement('style');
+  styles.textContent = fluentInteractionCss();
+  document.body.append(styles);
+  button.click();
+  const fillRule = [...(styles.sheet?.cssRules ?? [])].find(
+    (rule): rule is CSSStyleRule =>
+      rule instanceof CSSStyleRule && rule.style.getPropertyValue('height') === '100%',
+  );
+  if (!fillRule) throw new Error('Advanced disclosure fill rule missing');
+  expect(root.matches(fillRule.selectorText)).toBe(false);
+  await jest.runAllTimersAsync();
+  expect(effects[0]?.frames).toEqual([{ height: '50px' }, { height: '100px' }]);
+  effects[0]?.finish();
+  await Promise.resolve();
+  expect(target.hasAttribute('data-sc-disclosing')).toBe(false);
+  input.dispose();
+  presentation.clear();
   collapse.dispose();
   motion.dispose();
 });
@@ -207,6 +287,11 @@ test('reversing or disposing a pending expansion prevents a stale oversized anim
 });
 
 test('packs the settled height once and never sends neighbors through intermediate columns', async () => {
+  const frames: FrameRequestCallback[] = [];
+  jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+    frames.push(callback);
+    return frames.length;
+  });
   const nodes: ComfyNode[] = [1, 2, 3].map((id) => ({ id, type: 'Example', widgets: [] }));
   const sections: WorkflowMasonrySection[] = [
     {
@@ -262,6 +347,7 @@ test('packs the settled height once and never sends neighbors through intermedia
   fields.style.height = '100px';
   first.append(fields);
   publishDisclosureHeight(fields, 300);
+  for (const callback of frames.splice(0)) callback(16);
   expect(next.style.transform).toBe('translate(418px, 356px)');
   const destination = next.style.transform;
   place.mockClear();
@@ -273,7 +359,9 @@ test('packs the settled height once and never sends neighbors through intermedia
     expect(next.style.transform).toBe(destination);
   }
   expect(
-    place.mock.calls.filter(([cell]) => cell === next).every((call) => call[2] !== false),
+    place.mock.calls
+      .filter(([placements]) => placements.some(({ element }) => element === next))
+      .every(([, animate]) => animate !== false),
   ).toBe(true);
   publishDisclosureHeight(fields, null);
   expect(next.style.transform).toBe(destination);

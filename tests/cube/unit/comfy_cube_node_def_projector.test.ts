@@ -29,6 +29,7 @@ function descriptor(overrides: Partial<CubePickerDescriptor> = {}): CubePickerDe
     key: KEY,
     cubeId: 'owner/repo/demo.cube',
     version: '1.0.0',
+    contentHash: '',
     displayName: 'Demo',
     description: 'Demo Cube',
     searchTerms: ['owner/repo/demo.cube', 'portrait'],

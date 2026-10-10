@@ -44,6 +44,7 @@ export class CubeFaceHeaderView {
     }
     /** Release header-owned presentation state. */
     dispose() {
+        this.#actions.dispose();
         this.element.remove();
     }
 }

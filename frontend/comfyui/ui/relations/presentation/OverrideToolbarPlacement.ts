@@ -14,10 +14,14 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own floating coordinates and docking while retaining one mounted toolbar. */
+import type {
+  OverrideToolbarPlacementStore,
+  OverrideToolbarPosition as Position,
+} from './OverrideToolbarPlacementState.js';
 /** Describe viewport bounds and the default floating origin supplied by native chrome. */
 export interface OverrideToolbarFloatingSurface {
   bounds: Pick<DOMRect, 'left' | 'right' | 'top' | 'bottom' | 'width' | 'height'>;
-  origin: { x: number; y: number };
+  origin: Position;
 }
 
 /** Adapt native placement surfaces without exposing host discovery to pointer gestures. */
@@ -28,11 +32,8 @@ export interface OverrideToolbarHost {
   canDock(): boolean;
   dragging(active: boolean): void;
   preview(active: boolean): void;
+  subscribeLayout(changed: () => void): () => void;
   dispose(): void;
-}
-interface Position {
-  x: number;
-  y: number;
 }
 interface Gesture {
   start: Position;
@@ -43,6 +44,8 @@ interface Gesture {
 /** Reconcile host placement and settled sizes without observing disclosure animation frames. */
 export class OverrideToolbarPlacement {
   #docked = false;
+  #requestedDocked: boolean;
+  readonly #unsubscribeLayout: () => void;
   #parent: HTMLElement | null = null;
   #observer: ResizeObserver | null = null;
   #frame: number | null = null;
@@ -51,6 +54,7 @@ export class OverrideToolbarPlacement {
   #size = { width: 0, height: 0 };
   #gesture: Gesture | null = null;
   #pointerPlaced = false;
+  #retryDock = false;
 
   /** Bind the host boundary and publish placement changes to disclosure presentation. */
   constructor(
@@ -59,16 +63,20 @@ export class OverrideToolbarPlacement {
     private readonly host: OverrideToolbarHost,
     private readonly changed: (docked: boolean) => void,
     private readonly settled: () => void,
+    private readonly store: OverrideToolbarPlacementStore,
   ) {
+    const saved = store.read();
+    this.#requestedDocked = saved.docked;
+    this.#desired = saved.floating;
+    this.#unsubscribeLayout = host.subscribeLayout(this.#hostResized);
     root.dataset.placement = 'floating';
   }
 
   /** Reattach after native shell replacement, preserving the requested resting placement. */
   attached(): boolean {
+    this.#setDocked(this.#requestedDocked);
     if (!this.host.attach(this.root, this.#docked)) {
       if (!this.#docked) return false;
-      this.#desired = null;
-      this.#pointerPlaced = false;
       this.#setDocked(false);
       if (!this.host.attach(this.root, false)) return false;
     }
@@ -109,6 +117,7 @@ export class OverrideToolbarPlacement {
       return;
     gesture.moved = true;
     this.#pointerPlaced = true;
+    this.#requestedDocked = false;
     if (this.#docked) {
       this.#setDocked(false);
       this.attached();
@@ -133,39 +142,46 @@ export class OverrideToolbarPlacement {
     const docked = accepted && gesture && gesture.moved && this.#nearDock(x, y);
     this.host.dragging(false);
     if (docked) {
+      this.#requestedDocked = true;
       this.#setDocked(true);
       this.attached();
     }
+    if (accepted && gesture?.moved) this.#save();
   }
 
   /** Offer keyboard docking without requiring a pointer gesture. */
   toggleDock(): void {
     if (!this.#docked && !this.host.canDock()) return;
+    this.#requestedDocked = !this.#docked;
     this.#setDocked(!this.#docked);
     this.attached();
+    this.#save();
   }
 
   /** Move an undocked toolbar through the same bounded coordinate owner. */
   shift(x: number, y: number): void {
+    this.#requestedDocked = false;
     if (this.#docked) {
       this.#setDocked(false);
       this.attached();
     }
     this.#desired = { x: this.#applied.x + x, y: this.#applied.y + y };
     this.#place();
+    this.#save();
   }
 
-  /** Restore the original floating position without changing disclosure or widget values. */
+  /** Restore the default top dock without changing disclosure or widget values. */
   reset(): void {
-    this.#setDocked(false);
-    this.attached();
+    this.#requestedDocked = true;
     this.#desired = null;
     this.#pointerPlaced = false;
-    this.#place();
+    this.attached();
+    this.#save();
   }
 
   /** Release host chrome, geometry observation, and queued work at toolbar teardown. */
   dispose(): void {
+    this.#unsubscribeLayout();
     this.#observer?.disconnect();
     if (this.#frame !== null)
       this.root.ownerDocument.defaultView?.cancelAnimationFrame(this.#frame);
@@ -186,6 +202,14 @@ export class OverrideToolbarPlacement {
     this.changed(docked);
   }
 
+  /** Persist the chosen placement only after a completed pointer or keyboard action. */
+  #save(): void {
+    this.store.write({
+      docked: this.#requestedDocked,
+      floating: this.#desired ? { ...this.#desired } : null,
+    });
+  }
+
   /** Accept only the placeholder surface, leaving Run controls outside the drop zone. */
   #nearDock(x: number, y: number): boolean {
     const dock = this.host.dockBounds();
@@ -202,6 +226,7 @@ export class OverrideToolbarPlacement {
   /** Keep the resting toolbar inside a resized pane while allowing active pointer movement. */
   readonly #hostResized = (): void => {
     if (!this.#gesture) this.#pointerPlaced = false;
+    this.#retryDock = true;
     this.#schedule();
   };
 
@@ -212,7 +237,12 @@ export class OverrideToolbarPlacement {
     if (!window?.requestAnimationFrame) return;
     this.#frame = window.requestAnimationFrame(() => {
       this.#frame = null;
-      if (!this.host.attach(this.root, this.#docked)) {
+      const retryDock = this.#retryDock;
+      this.#retryDock = false;
+      if (
+        !this.host.attach(this.root, this.#docked) ||
+        (retryDock && this.#requestedDocked && !this.#docked)
+      ) {
         this.attached();
         return;
       }

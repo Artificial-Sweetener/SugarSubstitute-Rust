@@ -16,11 +16,33 @@
 /** Verify palette reads precede writes and remain shared across mounted model fields. */
 import { afterEach, expect, jest, test } from '@jest/globals';
 import { ModelPickerAppearance } from '../../../frontend/comfyui/ui/model_library/ModelPickerAppearance.js';
+import { modelPickerCss } from '../../../frontend/comfyui/ui/model_library/ModelPickerStyles.js';
 
 afterEach(() => {
   jest.restoreAllMocks();
   document.body.replaceChildren();
   document.documentElement.removeAttribute('style');
+});
+
+test('keeps thumbnail-wash captions white while ordinary native fields inherit the host foreground', () => {
+  expect(modelPickerCss).toMatch(
+    /\[data-sc-model-appearance="fluent"\] \.sc-model-field:has\(\.sc-model-banner\)[^{]*\{[^}]*color:\s*#fff;/,
+  );
+  expect(modelPickerCss).toMatch(/\.sc-model-transfer-caption\s*\{[^}]*color:\s*#fff;/);
+  expect(modelPickerCss).toMatch(
+    /\[data-sc-model-appearance="native"\] \.sc-model-field\s*\{[^}]*color:var\(--component-node-foreground\)/,
+  );
+});
+
+test('keeps transfer text readable on a stable backdrop even without a thumbnail', () => {
+  const style = document.createElement('style');
+  style.textContent = modelPickerCss;
+  document.head.append(style);
+  const presentation = document.createElement('div');
+  presentation.className = 'sc-model-transfer-presentation';
+  document.body.append(presentation);
+  expect(getComputedStyle(presentation).backgroundColor).toBe('rgb(32, 32, 36)');
+  style.remove();
 });
 
 test('shares the active palette across new fields and refreshes it after a host theme change', async () => {

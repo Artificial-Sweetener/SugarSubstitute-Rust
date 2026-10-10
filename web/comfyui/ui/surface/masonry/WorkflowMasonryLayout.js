@@ -15,6 +15,8 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Pack section runs into one continuous masonry coordinate system. */
 import { computeCubeMasonry, } from '../CubeMasonryLayout.js';
+/** Align sections and navigation below the panel edge; native toolbars occupy separate flow. */
+export const WORKFLOW_MASONRY_TOP_INSET = 12;
 /** Reset occupied column heights at each section while preserving shared column widths. */
 export function computeWorkflowMasonry(sections, options) {
     const result = { height: 0, sections: [], placements: [] };

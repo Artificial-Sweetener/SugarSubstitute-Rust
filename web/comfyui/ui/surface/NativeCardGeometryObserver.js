@@ -21,6 +21,7 @@ export class NativeCardGeometryObserver {
     #observer;
     #sizes = new WeakMap();
     #animationFrame = null;
+    #disposed = false;
     /** Bind native ResizeObserver updates to one coalesced layout callback. */
     constructor(documentRef, onGeometryChange) {
         const windowRef = documentRef.defaultView;
@@ -43,19 +44,22 @@ export class NativeCardGeometryObserver {
                         this.#sizes.set(entry.target, { width, height });
                     }
                     if (changed)
-                        this.#schedule();
+                        this.request();
                 })
                 : null;
     }
     /** Replace the exact native card cells whose dimensions drive masonry. */
     observe(cells) {
+        if (this.#disposed)
+            return;
         this.#observer?.disconnect();
         for (const cell of cells)
             this.#observer?.observe(cell);
-        this.#schedule();
+        this.request();
     }
     /** Disconnect browser resources owned by this Cube surface. */
     dispose() {
+        this.#disposed = true;
         this.#observer?.disconnect();
         if (this.#animationFrame !== null) {
             this.#window.cancelAnimationFrame(this.#animationFrame);
@@ -63,8 +67,8 @@ export class NativeCardGeometryObserver {
         }
     }
     /** Schedule one post-render measurement regardless of callback burst size. */
-    #schedule() {
-        if (this.#animationFrame !== null)
+    request() {
+        if (this.#disposed || this.#animationFrame !== null)
             return;
         this.#animationFrame = this.#window.requestAnimationFrame(() => {
             this.#animationFrame = null;

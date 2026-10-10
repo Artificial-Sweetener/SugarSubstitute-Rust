@@ -23,7 +23,8 @@ import { ToastService } from './core/ToastService.js';
 import { StorageService } from './core/StorageService.js';
 import { CubeLibraryApi } from './core/CubeLibraryApi.js';
 import { OverlayManager } from './overlays/OverlayManager.js';
-import { CubeBrowserController } from './browser/CubeBrowserController.js';
+import { CubeLibraryCatalog } from './core/CubeLibraryCatalog.js';
+import { CubeModelSuggestions } from './core/CubeModelSuggestions.js';
 import { ConfirmDialog } from './dialogs/ConfirmDialog.js';
 import { ModalService } from './dialogs/ModalService.js';
 import { VersionDialog } from './dialogs/VersionDialog.js';
@@ -44,8 +45,6 @@ import { CubeCreationService } from './create/CubeCreationService.js';
 import { CubeAuthoringService } from './create/CubeAuthoringService.js';
 import { ComfyCubeSaveAdapter } from './cube/node/ComfyCubeSaveAdapter.js';
 import { CubePackService } from './packs/CubePackService.js';
-import { CubeIdentityReconciler } from './graph/CubeIdentityReconciler.js';
-import { CubePromotionService } from './promotion/CubePromotionService.js';
 import { RendererGeometryCoordinator } from './geometry/RendererGeometryCoordinator.js';
 import { CubeWorkflowLibraryState } from './workflow/CubeWorkflowLibraryState.js';
 import { CubeWorkflowLibraryActions } from './workflow/CubeWorkflowLibraryActions.js';
@@ -66,15 +65,14 @@ export class SugarCubesUI {
     toast;
     confirmDialog;
     versionDialog;
-    cubeBrowser;
+    libraryCatalog;
+    modelSuggestions;
     definitionStore;
     instanceManager;
     dirtyManager;
     flavorService;
     saveReconciler;
     packService;
-    identityReconciler;
-    promotionService;
     cubeSave;
     cubeAuthoring;
     cubeCreation;
@@ -111,14 +109,12 @@ export class SugarCubesUI {
             dialogs: this.dialogs,
             feedback: this.toast,
         });
-        this.cubeBrowser = new CubeBrowserController({
-            adapter: this.adapter,
+        this.libraryCatalog = new CubeLibraryCatalog({
             api: this.api,
-            events: this.events,
-            storage: this.storage,
-            toast: this.toast,
-            scheduler: this.scheduler,
+            logger: this.adapter.getConsole() ?? console,
+            onUpdated: (entries) => this.dirtyManager.updateKnownCubes(entries),
         });
+        this.modelSuggestions = new CubeModelSuggestions(this.adapter.getFetch(), this.adapter.getConsole() ?? console);
         this.definitionStore = new CubeDefinitionStore({
             api: this.api,
             logger: this.adapter?.getConsole?.(),
@@ -135,9 +131,13 @@ export class SugarCubesUI {
             adapter: this.adapter,
             events: this.events,
             scheduler: this.scheduler,
-            cubeBrowser: this.cubeBrowser,
+            libraryCatalog: this.libraryCatalog,
             definitionStore: this.definitionStore,
         });
+        const invalidateCatalogs = options.invalidateCubeCatalogs ??
+            (async () => {
+                await this.libraryCatalog.refresh({ force: true });
+            });
         this.flavorService = new FlavorService({
             adapter: this.adapter,
             dialogs: this.dialogs,
@@ -146,7 +146,7 @@ export class SugarCubesUI {
             toast: this.toast,
             api: this.api,
             dirtyManager: this.dirtyManager,
-            cubeBrowser: this.cubeBrowser,
+            invalidateCatalogs,
         });
         const getCubeNodeCatalog = options.getCubeNodeCatalog ?? (() => null);
         const cubeNodeSave = new ComfyCubeSaveAdapter({ getCatalog: getCubeNodeCatalog });
@@ -163,37 +163,20 @@ export class SugarCubesUI {
             toast: this.toast,
         });
         this.workflowLibraryPresentation = new CubeWorkflowLibraryPresentation(this.workflowLibraryState, this.packService);
-        this.identityReconciler = new CubeIdentityReconciler({
-            adapter: this.adapter,
-            instanceManager: this.instanceManager,
-            dirtyManager: this.dirtyManager,
-            definitionStore: this.definitionStore,
-        });
-        this.promotionService = new CubePromotionService({
-            api: this.api,
-            dialogs: this.dialogs,
-            toast: this.toast,
-            packService: this.packService,
-            identityReconciler: this.identityReconciler,
-            cubeBrowser: this.cubeBrowser,
-        });
         const cubeSaveWorkflow = new CubeSaveService({
             adapter: this.adapter,
             api: this.api,
             toast: this.toast,
             instanceManager: this.instanceManager,
             dirtyManager: this.dirtyManager,
-            cubeBrowser: this.cubeBrowser,
+            libraryCatalog: this.libraryCatalog,
             versionDialog: this.versionDialog,
             dialogs: this.dialogs,
             saveReconciler: this.saveReconciler,
             cubeNodeSave,
             defaultReview: new CubeDefaultReviewService({ api: this.api, dialogs: this.dialogs }),
             catalogInvalidator: {
-                invalidate: options.invalidateCubeCatalogs ??
-                    (async () => {
-                        await this.cubeBrowser.refresh({ force: true });
-                    }),
+                invalidate: invalidateCatalogs,
             },
         });
         this.cubeSave = new CubeSavePreflightService({
@@ -202,7 +185,8 @@ export class SugarCubesUI {
             feedback: this.toast,
         });
         this.cubeAuthoring = new CubeAuthoringService({
-            browser: this.cubeBrowser,
+            catalog: this.libraryCatalog,
+            modelSuggestions: this.modelSuggestions,
             dialogs: this.dialogs,
             packService: this.packService,
             toast: this.toast,
@@ -244,16 +228,10 @@ export class SugarCubesUI {
             events: this.events,
             scheduler: this.scheduler,
             storage: this.storage,
-            cubeApi: this.api,
-            cubeBrowser: this.cubeBrowser,
+            libraryCatalog: this.libraryCatalog,
             saveService: this.cubeSave,
             saveDraft: (instanceId, graphSummary) => this.cubeCreation.saveDraft(instanceId, graphSummary ?? {}),
             toast: this.toast,
-            ...(options.applyPreparedImport ? { applyPreparedImport: options.applyPreparedImport } : {}),
-            ...(options.reportImportOutcome ? { reportImportOutcome: options.reportImportOutcome } : {}),
-            ...(options.buildShiftedPlacementPayload
-                ? { buildShiftedPlacementPayload: options.buildShiftedPlacementPayload }
-                : {}),
             requestDirtyRefresh: (opts) => this.dirtyManager.requestRefresh(opts),
             layoutService: this.layoutService,
             containmentService: this.containmentService,
@@ -287,7 +265,7 @@ export class SugarCubesUI {
             throw new Error('SugarCubes workflow node-pack metadata could not be loaded.');
         }
         this.workflowNodePackMetadata.updateFromStatus(metadataResult.data);
-        await this.cubeBrowser.setup();
+        await Promise.all([this.modelSuggestions.setup(), this.libraryCatalog.refresh()]);
         this.instanceManager.setup();
         this.dirtyManager.setup();
         await this.flavorService.setup();
@@ -305,7 +283,7 @@ export class SugarCubesUI {
         this.workflowLibraryState.clear();
         this.rendererGeometry.dispose();
         this.overlayManager.dispose();
-        this.cubeBrowser.dispose();
+        this.libraryCatalog.dispose();
         this.dirtyManager.dispose();
         this.flavorService.dispose();
     }
@@ -316,9 +294,6 @@ export class SugarCubesUI {
     async previewCube(cubeId) {
         const { data } = await this.api.preview(cubeId);
         return data;
-    }
-    openLibrary(options = {}) {
-        return this.cubeBrowser.open(options);
     }
     scheduleCubeInstanceRefresh(options = {}) {
         this.instanceManager.scheduleRefresh(options);

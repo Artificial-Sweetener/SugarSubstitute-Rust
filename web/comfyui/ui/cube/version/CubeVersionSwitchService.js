@@ -18,7 +18,7 @@ import { normalizeCubeVersion } from '../../core/CubeDefinitionKey.js';
 import { requireCubeIdentity } from '../node/ComfyCubeNodeFactory.js';
 import { readInstanceId } from '../node/CubeNodeCatalog.js';
 import { buildCubeVersionBoundaryMap } from './CubeVersionBoundaryMap.js';
-import { transferCubeVersionState } from './CubeVersionStateTransfer.js';
+import { transferCubeInstanceState } from '../node/CubeInstanceStateTransfer.js';
 /** Replace one persisted Cube instance with a selected available semantic version. */
 export class CubeVersionSwitchService {
     #availability;
@@ -69,7 +69,7 @@ export class CubeVersionSwitchService {
                 size: [Number(node.size[0]) || 0, Number(node.size[1]) || 0],
             });
             requireCompleteConstruction(constructed);
-            transferCubeVersionState(node, constructed.node);
+            transferCubeInstanceState(node, constructed.node);
             this.#replacement.replace({
                 source: node,
                 target: constructed.node,

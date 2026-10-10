@@ -21,18 +21,18 @@ export { CUBE_OUTPUT_LEADER_LABEL_INSET, resolveCubeOutputLeader, } from './Cube
 const INPUT_LABEL_INSET = 16;
 /** Draw presentation-only boundary context without impersonating graph noodles. */
 export class CubeCanvasPortRenderer {
-    /** Draw elided input types and orthogonal output association leaders. */
-    draw(context, layout) {
-        this.#drawInputs(context, layout);
-        this.#drawOutputLeaders(context, layout);
+    /** Draw boundary context with the enclosing Cube's accepted foreground. */
+    draw(context, layout, foreground) {
+        this.#drawInputs(context, layout, foreground);
+        this.#drawOutputLeaders(context, layout, foreground);
     }
     /** Draw input type labels entirely inside the dedicated left gutter. */
-    #drawInputs(context, layout) {
+    #drawInputs(context, layout, foreground) {
         const maximumWidth = Math.max(1, layout.inputGutter.width - INPUT_LABEL_INSET - 8);
         context.save();
         context.font = '12px sans-serif';
         context.textBaseline = 'middle';
-        context.fillStyle = '#c8ced8';
+        context.fillStyle = foreground;
         for (const port of layout.inputs) {
             const label = elideCubePortLabel(port.type, maximumWidth, (value) => context.measureText(value).width);
             context.fillText(label, layout.frame.x + INPUT_LABEL_INSET, port.y, maximumWidth);
@@ -40,11 +40,12 @@ export class CubeCanvasPortRenderer {
         context.restore();
     }
     /** Connect each fixed preview title to its independently moving output socket. */
-    #drawOutputLeaders(context, layout) {
+    #drawOutputLeaders(context, layout, foreground) {
         if (!layout.preview)
             return;
         context.save();
-        context.strokeStyle = 'rgba(200, 206, 216, 0.62)';
+        context.strokeStyle = foreground;
+        context.globalAlpha *= 0.62;
         context.lineWidth = 1.25;
         context.lineJoin = 'round';
         context.font = '14px sans-serif';

@@ -57,6 +57,7 @@ describe('workflow masonry sections', () => {
     expect(projection()).toEqual(
       decisions().map((card) => ({
         ...card,
+        cubeId: 'cube',
         widgetSources: [],
         prompt: false,
         id: `cube:cube:${card.id}`,
@@ -184,7 +185,7 @@ describe('workflow masonry sections', () => {
     expect(JSON.stringify(graph)).toBe(snapshot);
   });
 
-  test('respects effective proximity edges and applies shared card eligibility', () => {
+  test('keeps Cube position order despite proximity edges and applies shared card eligibility', () => {
     const source = cubeNode('source', [node('custom', 0)], 1000);
     const target = cubeNode('target', [node('widgetless', 0)], 0);
     const sections = projectWorkflowMasonry(
@@ -192,7 +193,7 @@ describe('workflow masonry sections', () => {
       [source, target],
       [{ source: 'source', target: 'target' }],
     );
-    expect(sections.map((section) => section.id)).toEqual(['cube:source', 'cube:target']);
+    expect(sections.map((section) => section.id)).toEqual(['cube:target', 'cube:source']);
     expect(sections.flatMap((section) => section.cards)).toHaveLength(2);
   });
 

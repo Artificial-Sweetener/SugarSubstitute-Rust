@@ -69,7 +69,6 @@ export class CubePromptTextareaAutosizer {
     const existing = this.#bindings.get(textarea);
     if (existing) {
       existing.onHeightChange = onHeightChange;
-      this.#fit(existing);
       return;
     }
     const binding: PromptTextareaBinding = {
@@ -144,9 +143,9 @@ export class CubePromptTextareaAutosizer {
       set: (value: string) => {
         const previous = valueAccessors.get();
         valueAccessors.set(value);
+        if (valueAccessors.get() === previous) return;
         this.#fit(binding);
-        if (valueAccessors.get() !== previous)
-          textarea.dispatchEvent(new Event(PROMPT_VALUE_CHANGE_EVENT, { bubbles: true }));
+        textarea.dispatchEvent(new Event(PROMPT_VALUE_CHANGE_EVENT, { bubbles: true }));
       },
     });
   }

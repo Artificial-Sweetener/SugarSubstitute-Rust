@@ -18,6 +18,7 @@
  */
 import { FALLBACK_ICON_STYLE, createFallbackIconModel, drawFallbackInitialsElementCanvas, } from './CubeFallbackIconRenderer.js';
 import { isRecord } from '../types/common.js';
+import { prepareCubeIconContrast } from './CubeIconAssetContrast.js';
 const SUPPORTED_MEDIA_TYPES = new Set(['image/png', 'image/svg+xml']);
 export { FALLBACK_ICON_STYLE };
 function readText(value) {
@@ -191,6 +192,7 @@ export function createResolvedCubeIconElement(documentRef, model, className = 's
         image.loading = 'lazy';
         image.src = model.url;
         root.appendChild(image);
+        prepareCubeIconContrast(root);
         return root;
     }
     if (model.kind === 'initials' && model.initials) {

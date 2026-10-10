@@ -48,10 +48,10 @@ export class CubeSaveCommandCoordinator {
             const assignedIds = assigned.map((entry) => entry.cubeId);
             const targetCubeIds = this.resolveCubeIds(cubeIds);
             const replacementIds = Array.from(replacements.values());
-            const cubeEntries = Array.isArray(this.dependencies.cubeBrowser?.getCubes?.())
-                ? this.dependencies.cubeBrowser.getCubes()
+            const cubeEntries = Array.isArray(this.dependencies.libraryCatalog?.getCubes?.())
+                ? this.dependencies.libraryCatalog.getCubes()
                 : [];
-            const cubeIndex = this.options.sources.indexBrowserEntries(cubeEntries);
+            const cubeIndex = this.options.sources.indexLibraryEntries(cubeEntries);
             const sourceMetadataIndex = this.options.sources.buildIndex(graph);
             const usedNames = new Set(cubeEntries
                 .map((entry) => (typeof entry.name === 'string' ? entry.name : ''))

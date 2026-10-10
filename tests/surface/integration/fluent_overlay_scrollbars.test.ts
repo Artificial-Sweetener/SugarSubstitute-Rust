@@ -17,6 +17,7 @@
 import { afterEach, expect, jest, test } from '@jest/globals';
 import { FluentOverlayScrollbarHost } from '../../../frontend/comfyui/ui/surface/appearance/FluentOverlayScrollbarHost.js';
 import { setSurfaceGeometryMoving } from '../../../frontend/comfyui/ui/surface/motion/SurfaceGeometryMotion.js';
+import { fluentScrollbarPresentationCss } from '../../../frontend/comfyui/ui/surface/appearance/FluentScrollbarStyles.js';
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -55,6 +56,52 @@ async function flush(frames: FrameRequestCallback[]): Promise<void> {
   frames.splice(0).forEach((frame) => frame(0));
   await Promise.resolve();
 }
+
+test('keeps the same viewport thumb visible when its positioned scroll owner moves the layer beyond the viewport', async () => {
+  const area = scrollArea();
+  area.style.position = 'relative';
+  document.body.append(area);
+  const style = document.createElement('style');
+  style.textContent = fluentScrollbarPresentationCss();
+  document.head.append(style);
+  const frames: FrameRequestCallback[] = [];
+  jest.spyOn(window, 'requestAnimationFrame').mockImplementation((frame) => {
+    frames.push(frame);
+    return frames.length;
+  });
+  const host = new FluentOverlayScrollbarHost(document, jest.fn());
+  try {
+    host.enable();
+    await flush(frames);
+    const layer = area.querySelector<HTMLElement>('.sc-fluent-scrollbar-layer')!;
+    const thumb = layer.querySelector<HTMLElement>('[aria-orientation="vertical"]')!;
+    jest.spyOn(layer, 'getBoundingClientRect').mockImplementation(() => ({
+      x: 20,
+      y: 20 - area.scrollTop,
+      left: 20,
+      top: 20 - area.scrollTop,
+      right: 320,
+      bottom: 220 - area.scrollTop,
+      width: 300,
+      height: 200,
+      toJSON: () => ({}),
+    }));
+    for (const position of [400, 600, 800, 0]) {
+      area.scrollTop = position;
+      area.dispatchEvent(new Event('scroll', { bubbles: true }));
+      await flush(frames);
+      expect(layer.querySelector('[aria-orientation="vertical"]')).toBe(thumb);
+      expect(thumb.hidden).toBe(false);
+      const top = layer.getBoundingClientRect().top + Number.parseFloat(thumb.style.top);
+      expect(top).toBeGreaterThanOrEqual(20);
+      expect(top + Number.parseFloat(thumb.style.height)).toBeLessThanOrEqual(220);
+      expect(getComputedStyle(layer).overflow).toBe('visible');
+    }
+  } finally {
+    host.clear();
+    style.remove();
+  }
+});
 
 test('reads new overflow candidates before mounting any tracks', async () => {
   const first = scrollArea(),

@@ -258,7 +258,7 @@ describe('ui hooks and scheduling', () => {
     expect(createNode).toHaveBeenCalledWith('Ordinary');
   });
 
-  test('registerSidebarTab is called only once', async () => {
+  test('repeated setup never registers the removed sidebar', async () => {
     const calls: MockSidebarTab[] = [];
     app.extensionManager.registerSidebarTab = (payload) => calls.push(payload);
 
@@ -267,7 +267,7 @@ describe('ui hooks and scheduling', () => {
     await extension.setup!();
     await extension.setup!();
 
-    expect(calls).toHaveLength(1);
+    expect(calls).toHaveLength(0);
   });
 
   test('ensureGraphHooks wraps onAfterChange only once', async () => {

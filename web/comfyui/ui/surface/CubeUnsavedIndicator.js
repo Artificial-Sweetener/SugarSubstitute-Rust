@@ -32,9 +32,9 @@ export function createCubeUnsavedIndicator(documentRef) {
     return indicator;
 }
 /** Draw the same crossed-out save mark on LiteGraph's canvas titlebar. */
-export function drawCubeUnsavedIndicator(context, centerX, centerY) {
+export function drawCubeUnsavedIndicator(context, centerX, centerY, foreground) {
     context.save();
-    context.fillStyle = '#d7dbe2';
+    context.fillStyle = foreground;
     drawComfyPrimeIcon(context, 'save', centerX, centerY, 15);
     context.fillStyle = '#f0b35c';
     drawComfyPrimeIcon(context, 'ban', centerX, centerY, 19);

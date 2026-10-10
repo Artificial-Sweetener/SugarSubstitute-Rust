@@ -49,10 +49,8 @@ describe('CubeAuthoringService', () => {
       },
     );
     const service = new CubeAuthoringService({
-      browser: {
-        getCubes: () => [],
-        getModelSuggestions: () => ['SDXL', 'Flux .1 D'],
-      },
+      catalog: { getCubes: () => [] },
+      modelSuggestions: { getModelSuggestions: () => ['SDXL', 'Flux .1 D'] },
       dialogs: { openCubeAuthoring },
       packService: {
         listAuthoringPacks: jest.fn(async () => [

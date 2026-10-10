@@ -36,7 +36,7 @@ export class CubeSaveIdentityAssigner {
         const assigned = [];
         const replacements = new Map();
         const assignedIds = new Set();
-        const reservedCubeIds = new Set((this.options.cubeBrowser?.getCubes?.() || [])
+        const reservedCubeIds = new Set((this.options.libraryCatalog?.getCubes?.() || [])
             .map((cube) => (typeof cube.cube_id === 'string' ? cube.cube_id.trim() : ''))
             .filter(Boolean));
         for (const instance of instances) {

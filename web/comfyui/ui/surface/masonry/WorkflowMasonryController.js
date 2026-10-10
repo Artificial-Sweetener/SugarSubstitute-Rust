@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own the reversible workflow presentation state machine and renderer fallback. */
+import { NativeRendererAcquisition } from '../NativeRendererAcquisition.js';
 import { requireCubeIdentity } from '../../cube/node/ComfyCubeNodeFactory.js';
 import { WorkflowMasonryView } from './WorkflowMasonryView.js';
 import { WorkflowMasonryTransition } from './WorkflowMasonryTransition.js';
@@ -25,10 +26,12 @@ export class WorkflowMasonryController {
     #options;
     #transition = new WorkflowMasonryTransition();
     #settled;
+    #acquisition;
     #reveal = null;
     #view = null;
     #container = null;
     #desired = false;
+    #suspensions = new Set();
     #generation = 0;
     #mounting = null;
     #topology = '';
@@ -38,23 +41,47 @@ export class WorkflowMasonryController {
     /** Bind host capabilities without importing host globals or owning graph mutations. */
     constructor(options) {
         this.#options = options;
+        this.#acquisition = new NativeRendererAcquisition(options.document);
         this.#settled = new SurfacePresentationBoundary(options.document);
     }
     /** Expose the requested presentation mode for button and future stack navigation. */
     get active() {
-        return this.#desired;
+        return this.#desired && this.#suspensions.size === 0;
+    }
+    /** Retain graph-only control exclusion until the departing masonry surface is released. */
+    get presenting() {
+        return this.active || this.#view !== null;
+    }
+    /** Release native mounts during host transitions without changing the user's view choice. */
+    async setSuspended(reason, suspended) {
+        if (this.#suspensions.has(reason) === suspended)
+            return;
+        if (suspended)
+            this.#suspensions.add(reason);
+        else
+            this.#suspensions.delete(reason);
+        const generation = ++this.#generation;
+        this.#transition.cancel();
+        this.#releaseView();
+        this.#options.onStateChange();
+        if (!this.active || !this.#options.isNodes2())
+            return;
+        // Comfy commits its mode before Vue reveals the graph container and native controls.
+        await this.#settled.settled(1);
+        if (generation === this.#generation && this.active)
+            await this.#show(generation);
     }
     /** Reverse the presentation with one authoritative state transition. */
     async toggle() {
-        if (!this.#options.isNodes2())
+        if (!this.#options.isNodes2() || this.#suspensions.size)
             return;
         this.#desired = !this.#desired;
         const generation = ++this.#generation;
+        this.#acquisition.cancel();
         this.#settled.cancel();
         this.#links?.hold(!this.#desired);
         this.#options.onStateChange();
         if (!this.#desired) {
-            this.#options.onSurfaceLeaving?.();
             this.#setGraphHidden(false);
             try {
                 if (!this.#view?.element.hasAttribute('data-sc-masonry-transition'))
@@ -88,6 +115,8 @@ export class WorkflowMasonryController {
     }
     /** Release obsolete graph bindings immediately while retaining the chosen presentation. */
     async graphReplaced() {
+        if (this.#suspensions.size)
+            return;
         if (!this.#desired) {
             if (this.#view || this.#links)
                 this.leaveImmediately();
@@ -103,8 +132,10 @@ export class WorkflowMasonryController {
     async #show(generation) {
         try {
             if (!this.#view) {
-                const renderer = await this.#options.getRenderer();
-                if (generation !== this.#generation || !this.#desired || !this.#options.isNodes2())
+                const renderer = await this.#acquisition.acquire(() => this.#options.getRenderer());
+                if (!renderer)
+                    return;
+                if (generation !== this.#generation || !this.active || !this.#options.isNodes2())
                     return;
                 const container = this.#options.getContainer();
                 if (!container)
@@ -232,6 +263,7 @@ export class WorkflowMasonryController {
         const noodles = entering ? this.#links?.run(true, reducedMotion) : undefined;
         await Promise.all([
             noodles,
+            this.#options.onSurfaceTransition?.(entering),
             this.#transition.run({
                 surface: view.element,
                 backdrop: view.backdrop,
@@ -245,6 +277,7 @@ export class WorkflowMasonryController {
     }
     /** Remove presentation resources while preserving canonical graph and edit state. */
     #releaseView() {
+        this.#acquisition.cancel();
         this.#setGraphHidden(false);
         this.#settled.cancel();
         const links = this.#links;
@@ -261,7 +294,9 @@ export class WorkflowMasonryController {
     }
     /** Return borrowed controls before recapturing settled native noodle endpoints. */
     #disposePresentation() {
-        this.#options.onSurfaceLeaving?.();
+        // Rail reservation is part of the animation's coordinate space until card travel completes.
+        if (this.#view)
+            this.#options.onSurfaceLeaving?.();
         this.#view?.dispose();
         this.#view = null;
         this.#mounting = null;

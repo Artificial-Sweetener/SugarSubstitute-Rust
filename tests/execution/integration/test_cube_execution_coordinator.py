@@ -302,3 +302,33 @@ class _FailingOptimizer(CubePromptOptimizer):
 
         _ = prompt, node_owners, node_definitions, topology, options, protected_node_ids
         raise RuntimeError("injected optimizer failure")
+
+
+@pytest.mark.parametrize("save_outputs", [True, False])
+def test_prepare_routes_workflow_local_output_saving_without_changing_definition(
+    save_outputs: bool,
+) -> None:
+    """Carry instance policy into prompt-only sinks while retaining embedded Cube content."""
+    workflow = cube_workflow({"cube-a": provider_document()})
+    nodes = workflow["nodes"]
+    assert isinstance(nodes, list)
+    node = nodes[0]
+    assert isinstance(node, dict)
+    properties = node["properties"]
+    assert isinstance(properties, dict)
+    properties["sugarcubes_save_outputs"] = save_outputs
+    original = deepcopy(workflow)
+    prepared = CubeExecutionCoordinator().prepare(
+        CubeExecutionRequest(workflow=workflow)
+    )
+    sinks = [
+        value
+        for value in prepared.prompt.values()
+        if value["class_type"] == "SugarCubes.CubeOutput"
+    ]
+    assert sinks
+    for sink in sinks:
+        inputs = sink["inputs"]
+        assert isinstance(inputs, Mapping)
+        assert inputs["save_outputs"] is save_outputs
+    assert workflow == original

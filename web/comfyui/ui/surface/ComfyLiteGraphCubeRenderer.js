@@ -19,6 +19,7 @@ import { drawNativeLiteGraphCubeCard } from './ComfyLiteGraphNodeCardRenderer.js
 import { CubeCanvasChromeRenderer, } from './CubeCanvasChromeRenderer.js';
 import { drawComfyPrimeIcon } from './ComfyPrimeIcons.js';
 import { CubeCanvasPortRenderer } from './CubeCanvasPortRenderer.js';
+import { resolveCubeModelPillColors } from './CubeModelPillAppearance.js';
 import { deriveCubeBackdropColor, resolveCubeNodeColorTheme, } from './CubeNodeColorTheme.js';
 import { resolveComfyLiteGraphCubeSurfaceTheme, resolveComfyLiteGraphTitleTextColor, } from './ComfyLiteGraphNodeColorTheme.js';
 import { CUBE_PREVIEW_TITLE_LINE_HEIGHT, layoutCubeCanvasPreviewSections, } from './CubePreviewSections.js';
@@ -54,12 +55,13 @@ export class ComfyLiteGraphCubeRenderer {
             ...item,
             headerColor: surfaceTheme.header,
             titleTextColor: resolveComfyLiteGraphTitleTextColor(),
+            modelPillColors: resolveCubeModelPillColors(context.canvas),
         });
         for (const card of layout.cards)
             this.#drawNativeCard(context, card, cardTheme);
         if (layout.preview)
             this.#drawPreview(context, layout.preview, item);
-        this.#ports.draw(context, layout);
+        this.#ports.draw(context, layout, resolveComfyLiteGraphTitleTextColor());
         context.restore();
     }
     /** Invoke Comfy's exact Nodes 1.0 draw against the real internal node. */
@@ -83,17 +85,21 @@ export class ComfyLiteGraphCubeRenderer {
     }
     /** Draw every output in equal horizontal sections using the dedicated cache. */
     #drawPreview(context, preview, item) {
-        context.strokeStyle = 'rgba(220, 225, 235, 0.22)';
+        const textColor = resolveComfyLiteGraphTitleTextColor();
+        context.save();
+        context.strokeStyle = textColor;
+        context.globalAlpha *= 0.22;
         context.lineWidth = 1;
         context.beginPath();
         context.moveTo(preview.x, preview.y);
         context.lineTo(preview.x, preview.y + preview.height);
         context.stroke();
+        context.restore();
         const outputSections = layoutCubeCanvasPreviewSections(preview, item.preview);
         if (outputSections.length === 0) {
             context.font = '12px sans-serif';
             context.textBaseline = 'top';
-            context.fillStyle = '#aeb5c0';
+            context.fillStyle = textColor;
             context.fillText('No preview available', preview.x + 6, preview.y + 6);
             return;
         }
@@ -101,12 +107,12 @@ export class ComfyLiteGraphCubeRenderer {
             const section = output.rect;
             context.font = '14px sans-serif';
             context.textBaseline = 'middle';
-            context.fillStyle = '#f0f2f5';
+            context.fillStyle = textColor;
             context.fillText(output.canonicalName, section.x, section.y + CUBE_PREVIEW_TITLE_LINE_HEIGHT / 2, Math.max(1, section.width));
             context.textBaseline = 'top';
             if (output.items.length === 0) {
                 context.font = '12px sans-serif';
-                context.fillStyle = '#aeb5c0';
+                context.fillStyle = textColor;
                 context.fillText('No preview available', section.x, section.y + CUBE_PREVIEW_TITLE_LINE_HEIGHT);
                 continue;
             }
@@ -115,7 +121,7 @@ export class ComfyLiteGraphCubeRenderer {
                 const image = this.#previewImages.get(media.url, media.sourceLocator);
                 if (!image) {
                     context.font = '12px sans-serif';
-                    context.fillStyle = '#aeb5c0';
+                    context.fillStyle = textColor;
                     context.fillText('Loading output…', previewItem.rect.x, previewItem.rect.y);
                     continue;
                 }

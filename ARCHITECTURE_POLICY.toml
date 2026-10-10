@@ -7,6 +7,7 @@ document_observer_owners = [
   "frontend/comfyui/ui/surface/appearance/FluentOverlayScrollbarHost.ts",
 ]
 mutation_observer_owners = [
+  "frontend/comfyui/ui/surface/appearance/AccentThemeHost.ts",
   "frontend/comfyui/ui/core/HostSurfaceObserver.ts",
   "frontend/comfyui/ui/dialogs/ModalAppearance.ts",
   "frontend/comfyui/ui/picker/ComfyCubePickerResultPresenter.ts",
@@ -21,6 +22,7 @@ mutation_observer_owners = [
   "frontend/comfyui/ui/surface/appearance/FluentAppearanceHost.ts",
   "frontend/comfyui/ui/surface/appearance/FluentOverlayScrollbarHost.ts",
   "frontend/comfyui/ui/surface/appearance/NativeToggleRows.ts",
+  "frontend/comfyui/ui/surface/appearance/NativeBooleanSegments.ts",
   "frontend/comfyui/ui/model_library/ModelPickerAppearance.ts",
 ]
 
@@ -46,6 +48,39 @@ excluded_prefixes = [
 ]
 soft_lines = 350
 hard_lines = 500
+
+[[dependency]]
+name = "TYPESCRIPT_WORKFLOW_DOMAIN"
+paths = ["frontend/comfyui/ui/workflow/domain/*.ts"]
+forbidden_typescript_paths = [
+  "frontend/comfyui/ui/workflow/application",
+  "frontend/comfyui/ui/workflow/infrastructure",
+  "frontend/comfyui/ui/surface",
+  "frontend/comfyui/ui/cube",
+  "frontend/comfyui/ui/picker",
+]
+
+[[dependency]]
+name = "TYPESCRIPT_WORKFLOW_APPLICATION"
+paths = ["frontend/comfyui/ui/workflow/application/*.ts"]
+forbidden_typescript_paths = [
+  "frontend/comfyui/ui/workflow/infrastructure",
+  "frontend/comfyui/ui/surface",
+  "frontend/comfyui/ui/cube",
+  "frontend/comfyui/ui/picker",
+]
+
+[[dependency]]
+name = "TYPESCRIPT_PICKER_DOMAIN"
+paths = ["frontend/comfyui/ui/picker/domain/*.ts"]
+forbidden_typescript_paths = [
+  "frontend/comfyui/ui/picker/*.ts",
+  "frontend/comfyui/ui/picker/application",
+  "frontend/comfyui/ui/picker/infrastructure",
+  "frontend/comfyui/ui/picker/vue",
+  "frontend/comfyui/ui/surface",
+  "frontend/comfyui/ui/cube",
+]
 
 [[dependency]]
 name = "TYPESCRIPT_SEARCH_DOMAIN"
@@ -176,6 +211,19 @@ forbidden_typescript_paths = [
   "frontend/comfyui/ui/save",
   "frontend/comfyui/ui/settings",
   "frontend/comfyui/ui/surface",
+]
+
+[[dependency]]
+name = "TYPESCRIPT_PICKER_APPLICATION"
+paths = ["frontend/comfyui/ui/picker/application/*.ts"]
+forbidden_typescript_paths = [
+  "frontend/comfyui/ui/picker/infrastructure",
+  "frontend/comfyui/ui/picker/vue",
+  "frontend/comfyui/ui/surface",
+  "frontend/comfyui/ui/cube",
+  "frontend/comfyui/ui/dialogs",
+  "frontend/comfyui/ui/core",
+  "frontend/comfyui/ui/import",
 ]
 
 [[dependency]]

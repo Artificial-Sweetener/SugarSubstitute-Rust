@@ -1,8 +1,10 @@
 import { NativeCardGeometryObserver } from '../NativeCardGeometryObserver.js';
 import { ensureCubeSurfaceStyles } from '../CubeSurfaceStyles.js';
 import { computeWorkflowMasonry } from './WorkflowMasonryLayout.js';
+import { previewMasonrySections } from './WorkflowMasonryPreview.js';
 import { WorkflowMasonrySectionView, } from './WorkflowMasonrySectionView.js';
 import { SurfaceMotion } from '../motion/SurfaceMotion.js';
+import { MasonryStackInsetMotion } from './MasonryStackInsetMotion.js';
 import { SurfacePresentationBoundary } from '../motion/SurfacePresentationBoundary.js';
 import { prepareNativePresentation } from '../NativePresentationReady.js';
 import { measureNativeCardPresentationSources, restoreNativeCardPresentations, } from '../NativeCardPresentationOwner.js';
@@ -16,6 +18,7 @@ export class WorkflowMasonryView {
     #views = new Map();
     #geometry;
     #motion = new SurfaceMotion();
+    #stackInset = new MasonryStackInsetMotion();
     #presentation;
     #sections;
     #generation = 0;
@@ -24,6 +27,7 @@ export class WorkflowMasonryView {
     #transitioning = false;
     #pendingLayout = false;
     #searchCards = null;
+    #previewCubeOrder = null;
     /** Prepare a continuous surface whose sections share existing Cube presentation owners. */
     constructor(options) {
         ensureCubeSurfaceStyles(options.document);
@@ -70,6 +74,7 @@ export class WorkflowMasonryView {
         const generation = ++this.#generation;
         this.#mounting = true;
         this.#sections = sections;
+        this.#previewCubeOrder = null;
         const ids = new Set(sections.map((section) => section.id));
         for (const [id, view] of this.#views) {
             if (!ids.has(id)) {
@@ -172,28 +177,58 @@ export class WorkflowMasonryView {
         const initial = measure();
         const widthChanged = this.#assignWidths(initial);
         const result = widthChanged ? measure() : initial;
+        const placements = [];
         for (const section of result.sections) {
             const header = this.#views.get(section.id)?.header;
             if (header) {
                 header.dataset.masonryY = String(section.y);
-                this.#motion.place(header, {
-                    x: 0,
-                    y: section.y,
-                    width: options.availableWidth,
-                    height: 36,
+                header.dataset.masonryHeight = String(section.height);
+                placements.push({
+                    element: header,
+                    rectangle: {
+                        x: 0,
+                        y: section.y,
+                        width: options.availableWidth,
+                        height: 36,
+                    },
                 });
             }
         }
         for (const card of result.placements) {
             const cell = cells.get(card.id);
             if (cell)
-                this.#motion.place(cell, card);
+                placements.push({ element: cell, rectangle: card });
         }
+        this.#motion.place(placements);
         this.#motion.resizeHeight(this.#content, Math.max(result.height, 120));
+        this.element.dispatchEvent(new CustomEvent('sc-masonry-layout'));
     }
     /** Expose the lifecycle-owned projection without rediscovering graph candidates from presentation events. */
     get sections() {
         return this.#sections;
+    }
+    /** Reserve rail space through ordinary layout so native controls animate rather than remount. */
+    setStackWidth(width) {
+        if (!Number.isFinite(width) || width < 0)
+            throw new TypeError('Cube stack width must be finite and nonnegative.');
+        this.#stackInset.set(this.element, this.#content, width, () => this.#requestLayout());
+    }
+    /** Preview an exact section permutation through existing compositor motion without editing workflow state. */
+    previewCubeOrder(sectionIds) {
+        previewMasonrySections(this.#sections, sectionIds);
+        this.#previewCubeOrder = sectionIds === null ? null : [...sectionIds];
+        this.#requestLayout();
+    }
+    /** Accept canonical reading order while retaining every mounted section and native control. */
+    setCubeOrder(sectionIds) {
+        const current = this.#sections
+            .filter((section) => section.cube !== null)
+            .map((section) => section.id);
+        if (current.every((id, index) => id === sectionIds[index]) &&
+            current.length === sectionIds.length)
+            return;
+        this.#sections = [...previewMasonrySections(this.#sections, sectionIds)];
+        this.#requestLayout();
     }
     /** Return identified mounted cells for scoped native-field adapters. */
     cards() {
@@ -222,9 +257,10 @@ export class WorkflowMasonryView {
     }
     /** Keep empty filtered sections out of packing while retaining their actual mounted headers. */
     #layoutSections() {
+        const sections = previewMasonrySections(this.#sections, this.#previewCubeOrder);
         return this.#searchCards === null
-            ? this.#sections
-            : this.#sections.filter((section) => section.cards.some((card) => card.visible && this.#searchVisible(card.id)));
+            ? sections
+            : sections.filter((section) => section.cards.some((card) => card.visible && this.#searchVisible(card.id)));
     }
     /** Resolve the transient finder mask independently of policy visibility. */
     #searchVisible(id) {
@@ -257,10 +293,10 @@ export class WorkflowMasonryView {
         const cell = this.#views.get(sectionId)?.cells.get(cardId);
         return cell ? measureDisclosureCardHeight(cell) : 36;
     }
-    /** Reflow at disclosure start and release, retaining native resize observation for other changes. */
+    /** Pack simultaneous disclosure destinations together in the existing geometry frame. */
     #onDisclosureLayout = () => {
         if (!this.#mounting)
-            this.#requestLayout();
+            this.#geometry.request();
     };
     /** Coalesce initial native styling into the single endpoint layout that starts assembly. */
     #requestLayout() {
@@ -281,7 +317,9 @@ export class WorkflowMasonryView {
         if (header)
             this.element.scrollTo({
                 top: header.offsetTop + Number(header.dataset.masonryY ?? 0),
-                behavior: 'smooth',
+                behavior: this.#options.document.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+                    ? 'instant'
+                    : 'smooth',
             });
     }
     /** Expose complete painted cells after SurfaceMotion commits their settled placements. */
@@ -296,7 +334,10 @@ export class WorkflowMasonryView {
             prepareNativePresentation(this.element);
             return this.#presentation.settled(1);
         }
-        return this.#presentation.settled();
+        return this.#stackInset.settled().then(() => {
+            if (!this.#disposed)
+                return this.#presentation.settled();
+        });
     }
     /** Hold settled endpoints during assembly and reconcile any queued resize afterward. */
     setTransitioning(transitioning) {
@@ -327,6 +368,7 @@ export class WorkflowMasonryView {
         this.#geometry.dispose();
         this.#presentation.cancel();
         this.#motion.dispose();
+        this.#stackInset.dispose();
         restoreNativeCardPresentations(this.element.querySelectorAll('.sugarcubes-cube-face__node-card'));
         for (const view of this.#views.values())
             view.dispose();

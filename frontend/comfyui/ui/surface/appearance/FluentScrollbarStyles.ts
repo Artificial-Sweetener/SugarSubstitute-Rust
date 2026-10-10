@@ -23,11 +23,11 @@ export function fluentNativeScrollbarCss(): string {
   `;
 }
 
-/** Render local trackless handles with inherited palette tokens and native surface stacking. */
+/** Let viewport-clipped handles paint beyond a layer that moves with native scroll content. */
 export function fluentScrollbarPresentationCss(): string {
   return `
     .sc-fluent-scrollbar-layer {
-      position:absolute; inset:0; z-index:1; overflow:clip; pointer-events:none;
+      position:absolute; inset:0; z-index:1; overflow:visible; pointer-events:none;
     }
     .sc-fluent-scrollbar {
       position:absolute; box-sizing:border-box; pointer-events:auto; touch-action:none;

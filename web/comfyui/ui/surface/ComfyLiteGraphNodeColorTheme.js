@@ -29,7 +29,7 @@ export function resolveComfyLiteGraphCubeSurfaceTheme(node, source = globalThis.
             LITEGRAPH_NATIVE_DEFAULT_THEME.body,
     };
 }
-/** Resolve the live LiteGraph title-text token used as the model-pill fill. */
+/** Resolve the live LiteGraph title-text token for Cube names and versions. */
 export function resolveComfyLiteGraphTitleTextColor(source = globalThis.LiteGraph) {
     return (readColor(source?.NODE_SELECTED_TITLE_COLOR) ?? readColor(source?.NODE_TITLE_COLOR) ?? '#f0f2f5');
 }

@@ -75,6 +75,7 @@ export function readCubePickerDescriptor(value) {
         key,
         cubeId,
         version: readOptionalString(value.version),
+        contentHash: readOptionalString(value.contentHash),
         displayName,
         description: readOptionalString(value.description),
         searchTerms,

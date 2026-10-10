@@ -28,7 +28,7 @@ import { suggestPersonalCubeIdentity } from '../create/PersonalCubeIdentity.js';
 import type {
   AssignedCubeId,
   SaveAdapter,
-  SaveBrowser,
+  SaveLibraryCatalog,
   SaveDirtyCoordinator,
   SaveRefreshCoordinator,
 } from './CubeSaveContracts.js';
@@ -38,7 +38,7 @@ interface CubeSaveIdentityAssignerOptions {
   adapter: SaveAdapter;
   instanceManager: SaveRefreshCoordinator | null;
   dirtyManager: SaveDirtyCoordinator | null;
-  cubeBrowser: SaveBrowser | null;
+  libraryCatalog: SaveLibraryCatalog | null;
 }
 
 /** Own canonical identity assignment for unsaved Cube instances. */
@@ -59,7 +59,7 @@ export class CubeSaveIdentityAssigner {
     const replacements = new Map<string, string>();
     const assignedIds = new Set<string>();
     const reservedCubeIds = new Set(
-      (this.options.cubeBrowser?.getCubes?.() || [])
+      (this.options.libraryCatalog?.getCubes?.() || [])
         .map((cube) => (typeof cube.cube_id === 'string' ? cube.cube_id.trim() : ''))
         .filter(Boolean),
     );

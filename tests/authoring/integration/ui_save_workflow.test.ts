@@ -428,7 +428,7 @@ describe('save workflow payload', () => {
       }),
     ];
     ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
-    ui.cubeBrowser.getCubes = () => [];
+    ui.libraryCatalog.getCubes = () => [];
     const pickerRequestsBeforeSave = pickerCatalogRequests;
     const browserRequestsBeforeSave = browserCatalogRequests;
 
@@ -460,7 +460,7 @@ describe('save workflow payload', () => {
 
     const ui = getLoadedUi();
     ui.dirtyManager.getDirtyCubeIds = () => new Set([targetCubeId]);
-    ui.cubeBrowser.getCubes = () => [
+    ui.libraryCatalog.getCubes = () => [
       {
         cube_id: targetCubeId,
         target_model: 'SDXL',
@@ -560,7 +560,7 @@ describe('save workflow payload', () => {
 
     const ui = getLoadedUi();
     ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
-    ui.cubeBrowser.getCubes = () => [];
+    ui.libraryCatalog.getCubes = () => [];
 
     await ui.cubeSave.save();
     await flushPromises();
@@ -641,7 +641,7 @@ describe('save workflow payload', () => {
 
     const ui = getLoadedUi();
     ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
-    ui.cubeBrowser.getCubes = () => [];
+    ui.libraryCatalog.getCubes = () => [];
 
     await ui.cubeSave.save();
     await flushPromises();
@@ -727,7 +727,7 @@ describe('save workflow payload', () => {
 
     const ui = getLoadedUi();
     ui.dirtyManager.getDirtyCubeIds = () => new Set();
-    ui.cubeBrowser.getCubes = () => [];
+    ui.libraryCatalog.getCubes = () => [];
     await ui.cubeSave.save();
 
     const cubeIdWidget = inputMarker.widgets.find((widget) => widget.name === 'cube_id');
@@ -784,7 +784,7 @@ describe('save workflow payload', () => {
 
     const ui = getLoadedUi();
     ui.dirtyManager.getDirtyCubeIds = () => new Set();
-    ui.cubeBrowser.getCubes = () => [];
+    ui.libraryCatalog.getCubes = () => [];
     await ui.cubeSave.save();
 
     const assignedCubeId =
@@ -804,7 +804,7 @@ describe('save workflow payload', () => {
 
     const ui = getLoadedUi();
     ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
-    ui.cubeBrowser.getCubes = () => [];
+    ui.libraryCatalog.getCubes = () => [];
 
     await ui.cubeSave.save();
     await flushPromises();
@@ -841,7 +841,7 @@ describe('save workflow payload', () => {
 
     const ui = getLoadedUi();
     ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
-    ui.cubeBrowser.getCubes = () => [];
+    ui.libraryCatalog.getCubes = () => [];
     const reconcileSpy = jest
       .spyOn(ui.saveReconciler, 'reconcile')
       .mockResolvedValue({ cubeIds: [], entries: [] });
@@ -891,7 +891,7 @@ describe('save workflow payload', () => {
 
     const ui = getLoadedUi();
     ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
-    ui.cubeBrowser.getCubes = () => [];
+    ui.libraryCatalog.getCubes = () => [];
 
     await ui.cubeSave.save();
     await flushPromises();
@@ -994,7 +994,7 @@ describe('save workflow payload', () => {
     app.graph._groups = [savedGroup, untouchedGroup];
 
     ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
-    ui.cubeBrowser.getCubes = () => [
+    ui.libraryCatalog.getCubes = () => [
       { cube_id: CANONICAL_DEMO_ID, name: 'Demo', version: '1.1.0', is_writable: true },
     ];
     ui.instanceManager.scheduleRefresh = jest.fn();
@@ -1084,7 +1084,7 @@ describe('save workflow payload', () => {
     app.graph._groups = [group];
 
     ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
-    ui.cubeBrowser.getCubes = () => [
+    ui.libraryCatalog.getCubes = () => [
       { cube_id: CANONICAL_DEMO_ID, name: 'Demo', version: '1.1.0', is_writable: true },
     ];
     ui.instanceManager.scheduleRefresh = jest.fn();
@@ -1153,7 +1153,7 @@ describe('save workflow payload', () => {
     };
     app.graph._nodes = [inputMarker, outputMarker];
     ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
-    ui.cubeBrowser.getCubes = () => [
+    ui.libraryCatalog.getCubes = () => [
       {
         cube_id: CANONICAL_DEMO_ID,
         name: 'Demo',
@@ -1203,7 +1203,7 @@ describe('save workflow payload', () => {
 
     const ui = getLoadedUi();
     ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
-    ui.cubeBrowser.getCubes = () => [
+    ui.libraryCatalog.getCubes = () => [
       { cube_id: CANONICAL_DEMO_ID, name: 'Demo', version: '1.2.1', is_writable: true },
     ];
     ui.dialogs.chooseHistoricalVersionSaveAction = jest.fn(async () => 'latest');
@@ -1274,7 +1274,7 @@ describe('save workflow payload', () => {
     app.graph._groups = [group];
 
     ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
-    ui.cubeBrowser.getCubes = () => [
+    ui.libraryCatalog.getCubes = () => [
       { cube_id: CANONICAL_DEMO_ID, name: 'Demo', version: '1.2.1', is_writable: true },
     ];
     ui.dialogs.chooseHistoricalVersionSaveAction = jest.fn(async () => 'latest');
@@ -1360,7 +1360,7 @@ describe('save workflow payload', () => {
     app.graph._groups = [group];
 
     ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
-    ui.cubeBrowser.getCubes = () => [
+    ui.libraryCatalog.getCubes = () => [
       { cube_id: CANONICAL_DEMO_ID, name: 'Demo', version: '1.2.1', is_writable: true },
     ];
     ui.dialogs.chooseHistoricalVersionSaveAction = jest.fn(async () => null);
@@ -1436,7 +1436,7 @@ describe('save workflow payload', () => {
     app.graph._groups = [group];
 
     ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
-    ui.cubeBrowser.getCubes = () => [
+    ui.libraryCatalog.getCubes = () => [
       { cube_id: CANONICAL_DEMO_ID, name: 'Demo', version: '1.2.1', is_writable: true },
     ];
     ui.dialogs.chooseHistoricalVersionSaveAction = jest.fn(async () => 'latest');
@@ -1526,7 +1526,7 @@ describe('save workflow payload', () => {
     app.graph._groups = [staleGroup, currentGroup];
 
     ui.dirtyManager.getDirtyCubeIds = () => new Set([CANONICAL_DEMO_ID]);
-    ui.cubeBrowser.getCubes = () => [
+    ui.libraryCatalog.getCubes = () => [
       {
         cube_id: CANONICAL_DEMO_ID,
         name: 'Demo',

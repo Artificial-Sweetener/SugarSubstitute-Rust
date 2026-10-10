@@ -56,7 +56,9 @@ export class ComfyAdapter {
                 this.windowRef?.document ||
                 (typeof document !== 'undefined' ? document : null);
         this.consoleRef = options.console || (typeof console !== 'undefined' ? console : null);
-        this.fetchRef = options.fetch || (typeof fetch !== 'undefined' ? fetch : null);
+        this.fetchRef =
+            options.fetch ||
+                (typeof fetch !== 'undefined' ? fetch.bind(this.windowRef ?? globalThis) : null);
         this.storageRef =
             options.storage ||
                 this.windowRef?.localStorage ||
@@ -122,6 +124,7 @@ export class ComfyAdapter {
     getConsole() {
         return this.consoleRef;
     }
+    /** Return the transport with its required native Window receiver already bound. */
     getFetch() {
         return this.fetchRef;
     }

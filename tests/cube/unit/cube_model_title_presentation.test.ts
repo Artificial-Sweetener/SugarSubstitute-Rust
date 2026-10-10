@@ -13,12 +13,9 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Verify authoritative target-model segmentation and default-alias policy. */
+/** Verify declared model identity survives arbitrary instance title changes. */
 
-import {
-  resolveCubeModelTitle,
-  resolveDefaultInstanceModelTitle,
-} from '../../../frontend/comfyui/ui/cube/CubeModelTitlePresentation.js';
+import { resolveCubeModelTitle } from '../../../frontend/comfyui/ui/cube/CubeModelTitlePresentation.js';
 
 test('segments only the declared model route and composes its version suffix', () => {
   expect(
@@ -36,11 +33,12 @@ test('segments only the declared model route and composes its version suffix', (
   });
 });
 
-test('does not infer a model from a nonmatching or missing declaration', () => {
+test('uses declared model identity and preserves nonmatching route text', () => {
   expect(resolveCubeModelTitle({ targetModel: 'SDXL', title: 'Flux/Detailer' })).toMatchObject({
-    modelText: '',
+    modelText: 'SDXL',
     nameText: 'Flux/Detailer',
-    usesModelPill: false,
+    accessibleText: 'SDXL Flux/Detailer',
+    usesModelPill: true,
   });
   expect(resolveCubeModelTitle({ targetModel: '', title: 'Anima/Detailer' })).toMatchObject({
     modelText: '',
@@ -49,19 +47,31 @@ test('does not infer a model from a nonmatching or missing declaration', () => {
   });
 });
 
-test('uses the model pill only for an instance still showing its default alias', () => {
+test('retains the model pill for default and arbitrary instance names', () => {
   expect(
-    resolveDefaultInstanceModelTitle({
+    resolveCubeModelTitle({
       targetModel: 'Anima',
-      instanceTitle: 'Anima/Prompt by Region',
-      defaultAlias: 'Anima/Prompt by Region',
+      title: 'Anima/Prompt by Region',
     }).usesModelPill,
   ).toBe(true);
   expect(
-    resolveDefaultInstanceModelTitle({
+    resolveCubeModelTitle({
       targetModel: 'Anima',
-      instanceTitle: 'Background generator',
-      defaultAlias: 'Anima/Prompt by Region',
+      title: 'Background generator',
     }),
-  ).toMatchObject({ nameText: 'Background generator', usesModelPill: false });
+  ).toMatchObject({ modelText: 'Anima', nameText: 'Background generator', usesModelPill: true });
+});
+
+test.each([
+  ['Anima/Contextual Upscale 2', 'Contextual Upscale 2'],
+  ['Final polish', 'Final polish'],
+  ['Flux/Final polish 42', 'Flux/Final polish 42'],
+  ['<img src=x>', '<img src=x>'],
+])('keeps declared model identity for renamed instance %s', (instanceTitle, nameText) => {
+  expect(
+    resolveCubeModelTitle({
+      targetModel: 'Anima',
+      title: instanceTitle,
+    }),
+  ).toMatchObject({ modelText: 'Anima', nameText, usesModelPill: true });
 });

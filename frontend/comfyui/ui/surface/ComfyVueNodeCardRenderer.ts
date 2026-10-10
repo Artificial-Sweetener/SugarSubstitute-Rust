@@ -182,6 +182,7 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
       target.ownerDocument,
       [node, ...(options.widgetSources ?? []).map((source) => source.node)],
       renderCard,
+      () => contentDisclosure.prepare(),
     );
     observer.observe(target, { childList: true, subtree: true });
 
