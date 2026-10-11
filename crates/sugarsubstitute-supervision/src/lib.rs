@@ -13,6 +13,8 @@ mod errors;
 #[cfg(windows)]
 mod environment;
 #[cfg(windows)]
+pub mod lifecycle_protocol;
+#[cfg(windows)]
 #[allow(unsafe_code)]
 mod native_process;
 #[cfg(windows)]

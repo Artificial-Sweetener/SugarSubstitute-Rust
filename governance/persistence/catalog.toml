@@ -65,3 +65,15 @@ current_version = 1
 accepted_versions = [1]
 compatibility = "reject"
 migrations = []
+
+[[formats]]
+id = "windows-lifecycle-control"
+owner = "sugarsubstitute-supervision"
+sources = ["crates/sugarsubstitute-supervision/src/lifecycle_protocol.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/binary.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/decode.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/encode.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/errors.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/frame.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/payload.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/reply.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/target.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/utf16.rs"]
+source_sha256 = "sha256:1b2980bc2b74153af01b3074789ccd0be5fe65e4e564d6806d2983d13578b6a5"
+classification = "protocol"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []
