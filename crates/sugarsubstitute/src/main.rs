@@ -1,126 +1,36 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 
-//! Compose SugarSubstitute's native splash proof independently of future startup services.
+//! Compose the native splash proof and isolated Windows process-exit fixtures.
 
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 mod capture;
 mod demo;
+mod invocation;
 mod preparation;
 mod preparation_task;
 mod render_transfer;
 mod timing_receipt;
 
-use std::{
-    error::Error,
-    path::PathBuf,
-    process::ExitCode,
-    time::{Duration, Instant},
-};
+use std::{error::Error, process::ExitCode, time::Instant};
 use sugarsubstitute_contracts::localization::messages;
 use sugarsubstitute_desktop::{DesktopOptions, run};
-use sugarsubstitute_splash::{Appearance, Theme};
+use sugarsubstitute_splash::Theme;
 
-/// Hold explicit demonstration and qualification invocation inputs.
-struct Options {
-    appearance: Appearance,
-    locale: String,
-    reduced_motion: bool,
-    duration: Option<Duration>,
-    receipt: Option<PathBuf>,
-    frame_audit: Option<PathBuf>,
-    timing_audit: bool,
-    scenarios: Option<PathBuf>,
-    output: Option<PathBuf>,
-}
-
-impl Options {
-    /// Parse only implemented controls, rejecting incomplete or unknown options.
-    fn parse() -> Result<Self, Box<dyn Error>> {
-        Self::parse_arguments(std::env::args_os().skip(1))
-    }
-
-    /// Validate explicit qualification inputs before constructing any native or execution owner.
-    fn parse_arguments(
-        arguments: impl IntoIterator<Item = std::ffi::OsString>,
-    ) -> Result<Self, Box<dyn Error>> {
-        let mut options = Self {
-            appearance: Appearance::demo(),
-            locale: "en".into(),
-            reduced_motion: false,
-            duration: None,
-            receipt: None,
-            frame_audit: None,
-            timing_audit: false,
-            scenarios: None,
-            output: None,
-        };
-        let mut arguments = arguments.into_iter();
-        while let Some(argument) = arguments.next() {
-            match argument.to_str().ok_or("Option name is not valid Unicode")? {
-                "--collapsed" => options.appearance.expanded = false,
-                "--light" => options.appearance.theme = Theme::Light,
-                "--reduced-motion" => options.reduced_motion = true,
-                "--timing-audit" => options.timing_audit = true,
-                "--locale" => {
-                    options.locale = arguments
-                        .next()
-                        .ok_or("--locale requires a value")?
-                        .into_string()
-                        .map_err(|_| "Locale is not valid Unicode")?
-                }
-                "--duration-ms" => {
-                    let value = arguments.next().ok_or("--duration-ms requires a value")?;
-                    let milliseconds =
-                        value.to_str().ok_or("Duration is not valid Unicode")?.parse()?;
-                    options.duration = Some(Duration::from_millis(milliseconds));
-                }
-                "--receipt" => {
-                    options.receipt =
-                        Some(arguments.next().ok_or("--receipt requires a path")?.into())
-                }
-                "--frame-audit" => {
-                    options.frame_audit =
-                        Some(arguments.next().ok_or("--frame-audit requires a path")?.into())
-                }
-                "--scenarios" => {
-                    options.scenarios =
-                        Some(arguments.next().ok_or("--scenarios requires a path")?.into())
-                }
-                "--output" => {
-                    options.output =
-                        Some(arguments.next().ok_or("--output requires a path")?.into())
-                }
-                _ => return Err("Unknown SugarSubstitute proof option".into()),
-            }
-        }
-        if options.scenarios.is_some() != options.output.is_some() {
-            return Err("--scenarios and --output must be supplied together".into());
-        }
-        if options.frame_audit.is_some()
-            && (options.receipt.is_none() || options.scenarios.is_some())
-        {
-            return Err("--frame-audit requires --receipt in native qualification mode".into());
-        }
-        if options.timing_audit && (options.receipt.is_none() || options.scenarios.is_some()) {
-            return Err("--timing-audit requires --receipt in native qualification mode".into());
-        }
-        Ok(options)
-    }
-}
-
-/// Run the interactive native proof or deterministic off-screen qualification.
+/// Dispatch an isolated exit fixture or run native/off-screen splash qualification.
 fn execute() -> Result<(), Box<dyn Error>> {
     let started = Instant::now();
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
-        )
-        .with_writer(std::io::stderr)
-        .try_init()
-        .map_err(|error| error as Box<dyn Error>)?;
-    let options = Options::parse()?;
+    let options = match invocation::Invocation::parse() {
+        Ok(invocation::Invocation::Demo(options)) => options,
+        #[cfg(target_os = "windows")]
+        Ok(invocation::Invocation::NativeExitFixture(code)) => std::process::exit(code),
+        Err(error) => {
+            initialize_diagnostics()?;
+            return Err(error);
+        }
+    };
+    initialize_diagnostics()?;
     if let (Some(scenarios), Some(output)) = (&options.scenarios, &options.output) {
         capture::export(scenarios, output)?;
         return Ok(());
@@ -206,6 +116,17 @@ fn execute() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// Initialize diagnostics for presentation and rejected arguments before returning errors.
+fn initialize_diagnostics() -> Result<(), Box<dyn Error>> {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
+        )
+        .with_writer(std::io::stderr)
+        .try_init()
+        .map_err(|error| error as Box<dyn Error>)
+}
+
 /// Preserve errors in structured diagnostics and return a failing process status.
 fn main() -> ExitCode {
     match execute() {
@@ -214,37 +135,5 @@ fn main() -> ExitCode {
             tracing::error!(operation="splash_proof",cause=%error,"SugarSubstitute could not show the native proof");
             ExitCode::FAILURE
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Timing evidence requires a native receipt destination and cannot silently disappear offline.
-    #[test]
-    fn timing_qualification_rejects_missing_receipt_and_offline_export()
-    -> Result<(), Box<dyn Error>> {
-        let arguments =
-            |values: &[&str]| values.iter().map(std::ffi::OsString::from).collect::<Vec<_>>();
-        assert!(Options::parse_arguments(arguments(&["--timing-audit"])).is_err());
-        assert!(
-            Options::parse_arguments(arguments(&[
-                "--timing-audit",
-                "--receipt",
-                "receipt.json",
-                "--scenarios",
-                "inputs.json",
-                "--output",
-                "frames",
-            ]))
-            .is_err()
-        );
-        let options =
-            Options::parse_arguments(arguments(&["--timing-audit", "--receipt", "receipt.json"]))?;
-        assert!(options.timing_audit);
-        assert_eq!(options.receipt, Some(PathBuf::from("receipt.json")));
-        assert!(options.frame_audit.is_none());
-        Ok(())
     }
 }
