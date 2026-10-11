@@ -144,11 +144,25 @@ pub fn run(
                             if content.pointer(PointerAction::Press, pointer) {
                                 invalidate(&window, &mut redraw_pending);
                             }
-                            if target == HitTarget::Caption
-                                && let Err(error) = window.drag_window()
-                            {
-                                failure = Some(DesktopError::new("drag_window", error));
-                                *control = ControlFlow::Exit;
+                            if target == HitTarget::Caption {
+                                #[cfg(target_os = "windows")]
+                                let drag = crate::windows_drag::begin(&window);
+                                #[cfg(not(target_os = "windows"))]
+                                let drag = window
+                                    .drag_window()
+                                    .map_err(|error| DesktopError::new("drag_window", error));
+                                match drag {
+                                    Ok(()) => {
+                                        pressed = None;
+                                        if content.pointer(PointerAction::Leave, pointer) {
+                                            invalidate(&window, &mut redraw_pending);
+                                        }
+                                    }
+                                    Err(error) => {
+                                        failure = Some(error);
+                                        *control = ControlFlow::Exit;
+                                    }
+                                }
                             }
                         } else {
                             if content.pointer(PointerAction::Release, pointer) {

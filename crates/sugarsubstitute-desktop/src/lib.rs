@@ -22,6 +22,9 @@ mod windows_callbacks;
 mod windows_controls;
 #[cfg(target_os = "windows")]
 #[allow(unsafe_code)]
+mod windows_drag;
+#[cfg(target_os = "windows")]
+#[allow(unsafe_code)]
 mod windows_subclass;
 
 pub use contract::{

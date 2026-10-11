@@ -1,6 +1,21 @@
 schema_version = 1
 
 [[components]]
+id = "qt-raster-numerical-adaptations"
+source_url = "https://github.com/qt/qtbase/tree/v6.11.0/src/gui/painting"
+license = "GPL-3.0-only AND FTL"
+license_file = "third_party/licenses/qt-raster.GPL-3.0-and-FTL.txt"
+files = [
+  "crates/sugarsubstitute-splash/src/border_raster.rs",
+  "crates/sugarsubstitute-splash/src/character.rs",
+  "crates/sugarsubstitute-splash/src/character_sampling.rs",
+  "crates/sugarsubstitute-splash/src/character_transform.rs",
+  "crates/sugarsubstitute-splash/src/chrome.rs",
+  "crates/sugarsubstitute-splash/src/progress.rs",
+  "crates/sugarsubstitute-splash/src/shapes.rs",
+]
+
+[[components]]
 id = "fluent-console-icon"
 source_url = "https://github.com/microsoft/fluentui-system-icons"
 license = "MIT"

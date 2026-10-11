@@ -96,6 +96,7 @@ impl SplashDemo {
             if (466.0..512.0).contains(&pointer.x) {
                 return DemoTarget::Toggle;
             }
+            return DemoTarget::Caption;
         }
         if self.appearance.expanded
             && (24.0..534.0).contains(&pointer.x)
@@ -258,6 +259,25 @@ mod tests {
         assert_eq!(demo.animation.frame(Duration::from_millis(100)), before);
         demo.pointer(PointerAction::Press, Pointer { x: 200.0, y: 200.0 });
         assert_ne!(demo.animation.frame(Duration::from_millis(100)), before);
+        Ok(())
+    }
+
+    /// Keep the caption draggable where its transparent paint overlaps the mascot.
+    #[test]
+    fn caption_input_precedes_the_character_beneath_it() -> Result<(), Box<dyn Error>> {
+        for expanded in [false, true] {
+            let mut appearance = Appearance::demo();
+            appearance.expanded = expanded;
+            let mut demo = SplashDemo::new("en", appearance, false)?;
+            let caption = Pointer { x: 250.0, y: 16.0 };
+            let before = demo.animation.frame(Duration::from_millis(100));
+            assert_eq!(demo.hit_test(caption), HitTarget::Caption);
+            assert!(!demo.pointer(PointerAction::Press, caption));
+            assert_eq!(demo.animation.frame(Duration::from_millis(100)), before);
+            assert_eq!(demo.classify(Pointer { x: 480.0, y: 16.0 }), DemoTarget::Toggle);
+            assert_eq!(demo.hit_test(Pointer { x: 535.0, y: 16.0 }), HitTarget::Close);
+            assert_eq!(demo.hit_test(Pointer { x: 250.0, y: 200.0 }), HitTarget::Client);
+        }
         Ok(())
     }
 

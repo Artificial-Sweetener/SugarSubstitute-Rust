@@ -5,7 +5,11 @@
 
 use super::CharacterError;
 use crate::projection::{Bounds, Point};
-use tiny_skia::{FillRule, Mask, PathBuilder, Pixmap, Transform};
+use tiny_skia::{PathBuilder, Pixmap};
+
+#[path = "character_transform.rs"]
+mod transform;
+pub(super) use transform::DeviceTransform;
 
 const FIXED: f64 = 65_536.0;
 
@@ -104,17 +108,9 @@ pub(super) fn paint(
     source: &Pixmap,
     quad: [Point; 4],
     bounds: Bounds,
+    mapping: DeviceTransform,
 ) -> Result<(), CharacterError> {
-    let extent = f64::from(source.width());
-    let sx = (quad[1].x - quad[0].x) / extent;
-    let sy = (quad[3].y - quad[0].y) / extent;
-    let ky = (quad[1].y - quad[0].y) / extent;
-    let inverse_x = 1.0 / sx;
-    let inverse_y = 1.0 / sy;
-    let inverse_shear = -ky / (sx * sy);
-    let step_x = (inverse_x * FIXED) as i64;
-    let step_y = (inverse_shear * FIXED) as i64;
-    let sheared = step_y != 0;
+    let inverse = mapping.inverse();
     let width = target.width() as usize;
     let height = target.height() as usize;
     let x0 = quad[0].x.floor().max(bounds.x.round()).clamp(0.0, width as f64) as usize;
@@ -138,66 +134,99 @@ pub(super) fn paint(
         return Ok(());
     }
     let mut outline = PathBuilder::new();
-    outline.move_to(quad[0].x as f32, quad[0].y as f32);
-    for point in &quad[1..] {
+    let snapped = quad.map(|point| Point {
+        x: (point.x * 64.0).round() / 64.0,
+        y: (point.y * 64.0).round() / 64.0,
+    });
+    outline.move_to(snapped[0].x as f32, snapped[0].y as f32);
+    for point in &snapped[1..] {
         outline.line_to(point.x as f32, point.y as f32);
     }
     outline.close();
     let path = outline.finish().ok_or(CharacterError::InvalidBounds)?;
-    let mut coverage =
-        Mask::new(target.width(), target.height()).ok_or(CharacterError::RasterAllocation)?;
-    coverage.fill_path(&path, FillRule::Winding, true, Transform::identity());
-    let source_width = source.width() as usize;
-    let source_height = source.height() as usize;
+    let coverage = crate::shapes::coverage(&path, target.width(), target.height())
+        .map_err(|source| CharacterError::Coverage { source: Box::new(source) })?;
     let pixels = target.data_mut();
+    let mut span_count = 0;
     for y in y0..y1 {
         let row_coverage = &coverage.data()[y * width..(y + 1) * width];
-        let Some(first) =
-            row_coverage[x0..x1].iter().position(|alpha| *alpha != 0).map(|offset| x0 + offset)
-        else {
-            continue;
-        };
-        let last = row_coverage[x0..x1]
-            .iter()
-            .rposition(|alpha| *alpha != 0)
-            .map_or(first, |offset| x0 + offset + 1);
-        let center_x = first as f64 + 0.5 - quad[0].x;
-        let center_y = y as f64 + 0.5 - quad[0].y;
-        let mut fx = (((center_x * inverse_x - 1.0 / FIXED) * FIXED) as i64).saturating_sub(32_768);
-        let mut fy = (((center_y * inverse_y + center_x * inverse_shear - 1.0 / FIXED) * FIXED)
-            as i64)
-            .saturating_sub(32_768);
-        let mut precise_until = first;
-        while precise_until < last {
-            let sample_x =
-                fx.saturating_add(step_x.saturating_mul((precise_until - first) as i64)) >> 16;
-            let sample_y =
-                fy.saturating_add(step_y.saturating_mul((precise_until - first) as i64)) >> 16;
-            if sample_x >= 0
-                && sample_x + 1 < source_width as i64
-                && sample_y >= 0
-                && sample_y + 1 < source_height as i64
-            {
-                break;
+        let mut fetch_start = None;
+        let mut first = x0;
+        while first < x1 {
+            let alpha = row_coverage[first];
+            let mut last = first + 1;
+            while last < x1 && row_coverage[last] == alpha {
+                last += 1;
             }
-            precise_until += 1;
+            if alpha != 0 {
+                let start = *fetch_start.get_or_insert(first);
+                span_count += 1;
+                if span_count == 256 {
+                    paint_span(pixels, source, inverse, width, y, start..last, row_coverage);
+                    fetch_start = None;
+                    span_count = 0;
+                }
+            } else if let Some(start) = fetch_start.take() {
+                paint_span(pixels, source, inverse, width, y, start..first, row_coverage);
+            }
+            first = last;
         }
-        let start_fx = fx.saturating_add(step_x.saturating_mul((precise_until - first) as i64));
-        let start_fy = fy.saturating_add(step_y.saturating_mul((precise_until - first) as i64));
-        let x_count = bounded_count(start_fx, step_x, source_width);
-        let y_count = bounded_count(start_fy, step_y, source_height);
-        let bounded_end = last.min(precise_until.saturating_add(x_count.min(y_count)));
-        let coarse_end = precise_until + (bounded_end - precise_until) / 8 * 8;
-        for (x, coverage) in row_coverage.iter().enumerate().take(last).skip(first) {
-            let coarse = sheared && x >= precise_until && x < coarse_end;
-            let sample = sample(source, fx, fy, coarse);
-            let offset = (y * width + x) * 4;
-            over(&mut pixels[offset..offset + 4], sample, *coverage);
-            fx = fx.saturating_add(step_x);
-            fy = fy.saturating_add(step_y);
+        if let Some(start) = fetch_start {
+            paint_span(pixels, source, inverse, width, y, start..x1, row_coverage);
         }
     }
     Ok(())
+}
+
+/// Sample adjacent coverage spans together until the native 256-span callback buffer flushes.
+fn paint_span(
+    pixels: &mut [u8],
+    source: &Pixmap,
+    inverse: DeviceTransform,
+    width: usize,
+    y: usize,
+    range: std::ops::Range<usize>,
+    coverage: &[u8],
+) {
+    let source_width = source.width() as usize;
+    let source_height = source.height() as usize;
+    let step_x = (inverse.x_axis.x * FIXED) as i64;
+    let step_y = (inverse.x_axis.y * FIXED) as i64;
+    let sheared = step_y != 0;
+    let first = range.start;
+    let last = range.end;
+    let source_center = inverse.map(first as f64 + 0.5, y as f64 + 0.5);
+    let mut fx = ((source_center.x * FIXED) as i64).saturating_sub(32_768);
+    let mut fy = ((source_center.y * FIXED) as i64).saturating_sub(32_768);
+    let mut precise_until = first;
+    while precise_until < last {
+        let sample_x =
+            fx.saturating_add(step_x.saturating_mul((precise_until - first) as i64)) >> 16;
+        let sample_y =
+            fy.saturating_add(step_y.saturating_mul((precise_until - first) as i64)) >> 16;
+        if sample_x >= 0
+            && sample_x + 1 < source_width as i64
+            && sample_y >= 0
+            && sample_y + 1 < source_height as i64
+        {
+            break;
+        }
+        precise_until += 1;
+    }
+    let start_fx = fx.saturating_add(step_x.saturating_mul((precise_until - first) as i64));
+    let start_fy = fy.saturating_add(step_y.saturating_mul((precise_until - first) as i64));
+    let x_count = bounded_count(start_fx, step_x, source_width);
+    let y_count = bounded_count(start_fy, step_y, source_height);
+    let bounded_end = last.min(precise_until.saturating_add(x_count.min(y_count)));
+    let coarse_end = precise_until + (bounded_end - precise_until) / 8 * 8;
+    for (x, coverage) in coverage.iter().enumerate().take(last).skip(first) {
+        let coarse = sheared && x >= precise_until && x < coarse_end;
+        let sample = sample(source, fx, fy, coarse);
+        let offset = (y * width + x) * 4;
+        over(&mut pixels[offset..offset + 4], sample, *coverage);
+        fx = fx.saturating_add(step_x);
+        fy = fy.saturating_add(step_y);
+    }
 }
 
 /// Bound complete interpolated steps without including a partial final source interval.
@@ -266,110 +295,5 @@ fn multiply(value: u8, alpha: u8) -> u8 {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{bounded_count, circle_above, multiply, over, paint, paper_edge, sample};
-    use crate::projection::{Bounds, Point};
-    use std::error::Error;
-    use tiny_skia::Pixmap;
-
-    /// Preserve alpha validity and the source raster's downward interpolation at fractions.
-    #[test]
-    fn precise_sampling_retains_premultiplied_channels() -> Result<(), Box<dyn Error>> {
-        let mut source = Pixmap::new(2, 2).ok_or("Cannot allocate sample raster")?;
-        source.data_mut().copy_from_slice(&[
-            101, 24, 18, 255, 102, 34, 27, 255, 102, 84, 81, 255, 114, 153, 148, 255,
-        ]);
-        assert_eq!(sample(&source, 16_383, 49_151, false), [103, 81, 77, 255]);
-        assert_eq!(sample(&source, -32_768, -32_768, false), [101, 24, 18, 255]);
-        assert_eq!(sample(&source, i64::MAX, i64::MAX, false), [114, 153, 148, 255]);
-        Ok(())
-    }
-
-    /// Bound alpha multiplication and compose through actual pixel coverage.
-    #[test]
-    fn premultiplied_over_preserves_source_and_destination_limits() {
-        assert_eq!(multiply(255, 255), 255);
-        assert_eq!(multiply(255, 0), 0);
-        assert_eq!(multiply(191, 253), 189);
-        assert_eq!(multiply(226, 233), 206);
-        let mut destination = [30, 40, 50, 255];
-        over(&mut destination, [10, 20, 30, 128], 0);
-        assert_eq!(destination, [30, 40, 50, 255]);
-        over(&mut destination, [10, 20, 30, 128], 255);
-        assert_eq!(destination, [25, 40, 55, 255]);
-    }
-
-    /// Preserve fixed-coordinate end bounds, including stationary and reversed sampling.
-    #[test]
-    fn complete_interpolation_steps_have_explicit_end_bounds() {
-        assert_eq!(bounded_count(32_768, 65_536, 3), 1);
-        assert_eq!(bounded_count(65_536, -65_536, 3), 1);
-        assert_eq!(bounded_count(0, 0, 3), usize::MAX);
-    }
-
-    /// Retain symmetric quarter-pixel coverage and the original widget's physical clip.
-    #[test]
-    fn paper_edge_covers_fractional_columns_and_clips_widget_rows() -> Result<(), Box<dyn Error>> {
-        let mut target = Pixmap::new(12, 12).ok_or("Cannot allocate edge raster")?;
-        paper_edge(
-            &mut target,
-            Point { x: 5.0, y: 1.0 },
-            Point { x: 5.0, y: 10.0 },
-            2.5,
-            89,
-            Bounds { x: 0.0, y: 3.5, width: 12.0, height: 8.0 },
-        );
-        for x in [3, 6] {
-            let offset = (6 * 12 + x) * 4;
-            assert_eq!(&target.data()[offset..offset + 4], &[5, 2, 2, 22]);
-        }
-        assert_eq!(&target.data()[3 * 12 * 4..4 * 12 * 4], &[0; 48]);
-        assert!((circle_above(-1.0, 1.0, 1.0, 0.0) - std::f64::consts::PI / 2.0).abs() < 1e-12);
-        assert_eq!(circle_above(-1.0, 1.0, 1.0, 1.0), 0.0);
-        Ok(())
-    }
-
-    /// Clip opaque airborne source pixels to the same widget rectangle as the paper edge.
-    #[test]
-    fn transformed_card_cannot_paint_outside_its_widget() -> Result<(), Box<dyn Error>> {
-        let mut source = Pixmap::new(4, 4).ok_or("Cannot allocate source raster")?;
-        source.fill(tiny_skia::Color::WHITE);
-        let quad = [
-            Point { x: 3.0, y: 1.0 },
-            Point { x: 7.0, y: 0.0 },
-            Point { x: 7.0, y: 8.0 },
-            Point { x: 3.0, y: 9.0 },
-        ];
-        let mut target = Pixmap::new(12, 12).ok_or("Cannot allocate target raster")?;
-        paint(&mut target, &source, quad, Bounds { x: 2.0, y: 3.0, width: 6.0, height: 4.0 })?;
-        assert!(target.pixel(5, 4).is_some_and(|pixel| pixel.alpha() == 255));
-        for y in 0..12 {
-            for x in 0..12 {
-                if !(2..8).contains(&x) || !(3..7).contains(&y) {
-                    assert_eq!(target.pixel(x, y).map(|pixel| pixel.alpha()), Some(0));
-                }
-            }
-        }
-        paint(&mut target, &source, quad, Bounds { x: 20.0, y: 20.0, width: 1.0, height: 1.0 })?;
-        Ok(())
-    }
-
-    /// Match the observed Qt widget clip at quarter- and three-quarter-pixel DPI origins.
-    #[test]
-    fn fractional_widget_origins_snap_once_to_device_pixels() -> Result<(), Box<dyn Error>> {
-        for (origin, first_row) in [(8.75, 9), (12.25, 12)] {
-            let mut target = Pixmap::new(20, 20).ok_or("Cannot allocate edge raster")?;
-            paper_edge(
-                &mut target,
-                Point { x: 10.0, y: 1.0 },
-                Point { x: 10.0, y: 18.0 },
-                2.0,
-                89,
-                Bounds { x: 0.0, y: origin, width: 20.0, height: 20.0 },
-            );
-            assert_eq!(target.pixel(10, first_row - 1).map(|pixel| pixel.alpha()), Some(0));
-            assert_eq!(target.pixel(10, first_row).map(|pixel| pixel.alpha()), Some(89));
-        }
-        Ok(())
-    }
-}
+#[path = "character_sampling_tests.rs"]
+mod tests;

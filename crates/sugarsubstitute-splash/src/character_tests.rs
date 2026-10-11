@@ -15,6 +15,31 @@ fn target() -> Result<Pixmap, Box<dyn Error>> {
     Pixmap::new(386, 386).ok_or_else(|| "Cannot allocate test raster".into())
 }
 
+/// Keep native reference color ties stable through airborne and landing shears.
+#[test]
+fn transformed_sampling_retains_native_fixed_point_ties() -> Result<(), Box<dyn Error>> {
+    let mut library = CharacterLibrary::new(POSE_ASSETS)?;
+    for (scale, origin, phase, pose, pixel, expected) in [
+        (1.75, (83.0, 7.0), 0.25, 0, (344, 353), [207, 97, 99, 255]),
+        (2.0, (85.0, 86.0), 0.94, 1, (366, 513), [5, 0, 0, 36]),
+    ] {
+        let mut target = Pixmap::new(1116, 1116).ok_or("Cannot allocate sampling target")?;
+        library.render(
+            &mut target,
+            Bounds {
+                x: origin.0 * scale,
+                y: origin.1 * scale,
+                width: 387.0 * scale,
+                height: 386.0 * scale,
+            },
+            AnimationFrame { pose, progress: phase, direction: 1 },
+        )?;
+        let actual = target.pixel(pixel.0, pixel.1).ok_or("Missing native sampling pixel")?;
+        assert_eq!([actual.red(), actual.green(), actual.blue(), actual.alpha()], expected);
+    }
+    Ok(())
+}
+
 /// Keep the untransformed premultiplied pixels identical to the original PNG.
 #[test]
 fn bootstrap_preserves_identity_pixels_and_decodes_one_pose() -> Result<(), Box<dyn Error>> {

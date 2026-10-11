@@ -20,6 +20,10 @@ struct Scenario {
     flip: f64,
     fill: f32,
     sweep: f32,
+    #[serde(default = "activity_enabled")]
+    activity: bool,
+    #[serde(default)]
+    raw: bool,
     #[serde(default)]
     pose: usize,
     #[serde(default = "forward_direction")]
@@ -40,6 +44,11 @@ fn forward_direction() -> i8 {
 /// Match original scenarios to the canonical reference text.
 fn canonical_locale() -> String {
     "en".into()
+}
+
+/// Keep existing animated parity scenarios active unless static capture is requested.
+fn activity_enabled() -> bool {
+    true
 }
 
 /// Reject mistyped reference controls rather than silently painting a different state.
@@ -100,7 +109,11 @@ pub(crate) fn export(scenarios: &Path, output: &Path) -> Result<(), Box<dyn Erro
         };
         let feedback = ProgressFrame {
             completed: scenario.fill,
-            activity: if scenario.fill == 1.0 { None } else { Some(scenario.sweep) },
+            activity: if scenario.fill == 1.0 || !scenario.activity {
+                None
+            } else {
+                Some(scenario.sweep)
+            },
         };
         let size = (558.0 * scenario.scale).round();
         if !size.is_finite() || !(1.0..=4096.0).contains(&size) {
@@ -115,6 +128,9 @@ pub(crate) fn export(scenarios: &Path, output: &Path) -> Result<(), Box<dyn Erro
             feedback,
         )?;
         frame.save_png(output.join(format!("{}.png", scenario.name)))?;
+        if scenario.raw {
+            fs::write(output.join(format!("{}.raw", scenario.name)), frame.data())?;
+        }
     }
     Ok(())
 }
@@ -132,12 +148,18 @@ mod tests {
         assert_eq!(scenario.locale, "en");
         assert_eq!(scenario.direction, 1);
         assert!(scenario.hovered.is_none());
+        assert!(scenario.activity);
+        assert!(!scenario.raw);
         let mut explicit: serde_json::Value = serde_json::from_str(source)?;
         explicit["locale"] = "ja".into();
         explicit["hovered"] = "console".into();
         explicit["pressed"] = "close".into();
+        explicit["activity"] = false.into();
+        explicit["raw"] = true.into();
         let scenario: Scenario = serde_json::from_value(explicit.clone())?;
         assert_eq!(scenario.locale, "ja");
+        assert!(!scenario.activity);
+        assert!(scenario.raw);
         assert_eq!(control(scenario.hovered.as_deref())?, Some(Control::ConsoleToggle));
         assert_eq!(control(scenario.pressed.as_deref())?, Some(Control::Close));
         assert!(control(Some("unknown")).is_err());

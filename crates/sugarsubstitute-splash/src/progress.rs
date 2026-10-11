@@ -3,12 +3,14 @@
 
 //! Paint source-compatible completion and activity without estimating startup work.
 
-use tiny_skia::{
-    Color, FillRule, GradientStop, LinearGradient, Mask, Paint, PathBuilder, Pixmap, Rect,
-    SpreadMode, Transform,
-};
+use tiny_skia::{Mask, Paint, PathBuilder, Pixmap, Rect, Transform};
 
-use crate::{Appearance, Theme, shapes::rounded};
+use crate::{
+    Appearance, Theme,
+    shapes::{
+        AllocationError, byte_product, coverage, intersect, paint as paint_silhouette, rounded,
+    },
+};
 
 /// Validate externally supplied completion and activity presentation fractions.
 #[derive(Clone, Copy, Debug)]
@@ -29,64 +31,106 @@ impl ProgressFrame {
 }
 
 /// Paint the bar in its fixed logical position and source console-facing silhouette.
-pub(crate) fn paint(target: &mut Pixmap, appearance: Appearance, frame: ProgressFrame, scale: f32) {
+///
+/// Return the underlying cause when a required physical coverage buffer cannot be allocated.
+pub(crate) fn paint(
+    target: &mut Pixmap,
+    appearance: Appearance,
+    frame: ProgressFrame,
+    scale: f32,
+) -> Result<(), AllocationError> {
     let expanded = appearance.expanded;
     let (x, y, width, height) =
         (24.0, if expanded { 356.0 } else { 530.0 }, 510.0, if expanded { 6.0 } else { 4.0 });
-    let transform = Transform::from_scale(scale, scale);
     let completed_width = width * frame.completed;
     let filled = if expanded { completed_width } else { completed_width.floor() };
-    let mut paint = Paint { anti_alias: true, ..Paint::default() };
-    let track_alpha =
-        if expanded { if appearance.theme == Theme::Dark { 18 } else { 12 } } else { 155 };
-    paint.set_color_rgba8(
-        if appearance.theme == Theme::Dark { 255 } else { 0 },
-        if appearance.theme == Theme::Dark { 255 } else { 0 },
-        if appearance.theme == Theme::Dark { 255 } else { 0 },
-        track_alpha,
-    );
+    let foreground = if appearance.theme == Theme::Dark { 255 } else { 0 };
+    let outer = console_mask(target, expanded, x, y, width, scale)?;
     if expanded {
-        if let Some(path) = rounded(x, y, width, 12.0, 6.0)
-            && let Some(rect) = Rect::from_xywh(x, y, width, height)
-            && let Some(mut mask) = Mask::new(target.width(), target.height())
-        {
-            mask.fill_path(&PathBuilder::from_rect(rect), FillRule::Winding, true, transform);
-            target.fill_path(&path, &paint, FillRule::Winding, transform, Some(&mask));
+        let alpha = if appearance.theme == Theme::Dark { 18 } else { 12 };
+        if let Some(path) = clip_path(true, x, y, width, height, scale) {
+            paint_silhouette(
+                target,
+                &path,
+                [foreground, foreground, foreground, alpha],
+                Some(&outer),
+            )?;
         }
     } else {
-        standalone_track(target, if appearance.theme == Theme::Dark { 255 } else { 0 }, scale);
+        standalone_track(target, foreground, scale);
     }
-    paint.set_color_rgba8(
-        if appearance.theme == Theme::Dark { 255 } else { 233 },
-        if appearance.theme == Theme::Dark { 68 } else { 30 },
-        if appearance.theme == Theme::Dark { 132 } else { 99 },
-        255,
-    );
-    let completion_path = clip_path(expanded, x, y, filled, height);
-    let completed_mask = console_mask(target, expanded, x, y, width, scale);
-    if let Some(path) = &completion_path {
-        target.fill_path(path, &paint, FillRule::Winding, transform, completed_mask.as_ref());
+    let color =
+        if appearance.theme == Theme::Dark { [255, 68, 132, 255] } else { [233, 30, 99, 255] };
+    if let Some(path) = clip_path(expanded, x, y, filled, height, scale) {
+        paint_silhouette(target, &path, color, Some(&outer))?;
     }
     if let Some(phase) = frame.activity {
         let activity_width = if filled > 0.0 { filled } else { width };
-        let band = (activity_width * 0.35).max(12.0);
-        let center = -band + phase * (activity_width + 2.0 * band);
-        if let Some(shader) = LinearGradient::new(
-            tiny_skia::Point::from_xy(x + center - band, y),
-            tiny_skia::Point::from_xy(x + center + band, y),
-            vec![
-                GradientStop::new(0.0, Color::from_rgba8(255, 255, 255, 0)),
-                GradientStop::new(0.5, Color::from_rgba8(255, 255, 255, 65)),
-                GradientStop::new(1.0, Color::from_rgba8(255, 255, 255, 0)),
-            ],
-            SpreadMode::Pad,
-            Transform::identity(),
-        ) && let Some(path) = clip_path(expanded, x, y, activity_width, height)
-        {
-            paint.shader = shader;
-            target.fill_path(&path, &paint, FillRule::Winding, transform, completed_mask.as_ref());
+        activity_sweep(
+            target,
+            Some(&outer),
+            (x, y, activity_width, height),
+            phase,
+            scale,
+            expanded,
+        )?;
+    }
+    Ok(())
+}
+
+/// Match the reference sweep's 1024 samples, 256 interpolation weights and byte composition.
+fn activity_sweep(
+    target: &mut Pixmap,
+    console: Option<&Mask>,
+    geometry: (f32, f32, f32, f32),
+    phase: f32,
+    scale: f32,
+    expanded: bool,
+) -> Result<(), AllocationError> {
+    let (x, y, width, height) = geometry;
+    let Some(path) = clip_path(expanded, x, y, width, height, scale) else { return Ok(()) };
+    let mut clip = coverage(&path, target.width(), target.height())?;
+    if let Some(console) = console {
+        for (coverage, silhouette) in clip.data_mut().iter_mut().zip(console.data()) {
+            let product = u16::from(*coverage) * u16::from(*silhouette);
+            *coverage = ((product + (product >> 8) + 128) >> 8) as u8;
         }
     }
+    let band = (f64::from(width) * 0.35).max(12.0);
+    let center = f64::from(x) - band + f64::from(phase) * (f64::from(width) + 2.0 * band);
+    let left = (x * scale).floor().max(0.0) as u32;
+    let origin = (((f64::from(left) + 0.5) / f64::from(scale) - center + band) / (2.0 * band)
+        * 1023.0
+        * 256.0) as i64;
+    let increment = (1023.0 * 256.0 / (2.0 * band * f64::from(scale))) as i64;
+    let top = (y * scale).floor().max(0.0) as u32;
+    let bottom = ((y + height) * scale).ceil().min(target.height() as f32) as u32;
+    for column in left..((x + width) * scale).ceil().min(target.width() as f32) as u32 {
+        let position = origin + i64::from(column - left) * increment;
+        let table_index = ((position + 128) >> 8).clamp(0, 1023) as f64;
+        let table_position = (table_index + 0.5) / 1024.0;
+        let weight = (512.0 * table_position.min(1.0 - table_position)).round() as u32;
+        let alpha16 = 65 * 257 * weight / 256;
+        let alpha = ((alpha16 + 128) / 257) as u8;
+        for row in top..bottom {
+            let index = (row * target.width() + column) as usize;
+            // The source clips the sweep, then paints the widget rectangle as a second
+            // antialiased shape. Fractional outer rows receive both coverage factors.
+            let horizontal = ((column as f32 + 1.0).min((x + 510.0) * scale)
+                - (column as f32).max(x * scale))
+            .clamp(0.0, 1.0);
+            let vertical = ((row as f32 + 1.0).min((y + height) * scale)
+                - (row as f32).max(y * scale))
+            .clamp(0.0, 1.0);
+            let fill_coverage = (horizontal * vertical * 255.0).floor() as u8;
+            let coverage = byte_product(alpha, byte_product(clip.data()[index], fill_coverage));
+            let pixels = target.data_mut();
+            for channel in &mut pixels[index * 4..index * 4 + 4] {
+                *channel = coverage + byte_product(*channel, 255 - coverage);
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Integrate the reference's horizontal one-logical-pixel stroke without raster pen snapping.
@@ -112,15 +156,26 @@ fn standalone_track(target: &mut Pixmap, foreground: u8, scale: f32) {
 }
 
 /// Use a flat cut at incomplete console fill and rounded ends for standalone fill.
-fn clip_path(expanded: bool, x: f32, y: f32, width: f32, height: f32) -> Option<tiny_skia::Path> {
+fn clip_path(
+    expanded: bool,
+    x: f32,
+    y: f32,
+    width: f32,
+    height: f32,
+    scale: f32,
+) -> Option<tiny_skia::Path> {
     if expanded {
-        Rect::from_xywh(x, y, width, height).map(PathBuilder::from_rect)
+        if width <= 0.0 {
+            return None;
+        }
+        let path = rounded(x, y, 510.0, 12.0, 6.0, scale)?;
+        intersect(&path, (x + width) * scale, (y + height) * scale)
     } else {
-        rounded(x, y, width, height, 2.0)
+        rounded(x, y, width, height, 2.0, scale)
     }
 }
 
-/// Restrict the top console strip to its rounded outer silhouette.
+/// Retain the bar child widget's device clip and the console's rounded outer silhouette.
 fn console_mask(
     target: &Pixmap,
     expanded: bool,
@@ -128,19 +183,33 @@ fn console_mask(
     y: f32,
     width: f32,
     scale: f32,
-) -> Option<Mask> {
-    if !expanded {
-        return None;
-    }
-    let mut mask = Mask::new(target.width(), target.height())?;
-    let path = rounded(x, y, width, 12.0, 6.0)?;
-    mask.fill_path(&path, FillRule::Winding, true, Transform::from_scale(scale, scale));
-    Some(mask)
+) -> Result<Mask, AllocationError> {
+    let height = if expanded { 6.0 } else { 4.0 };
+    let path = {
+        let left = (x * scale).round();
+        let top = (y * scale).round();
+        PathBuilder::from_rect(
+            Rect::from_xywh(
+                left,
+                top,
+                ((x + width) * scale).round() - left,
+                ((y + height) * scale).round() - top,
+            )
+            .ok_or(AllocationError::InvalidDimensions)?,
+        )
+    };
+    let mut mask = coverage(&path, target.width(), target.height())?;
+    let top = (y * scale).round().clamp(0.0, target.height() as f32) as usize;
+    let bottom = ((y + height) * scale).round().clamp(0.0, target.height() as f32) as usize;
+    let stride = target.width() as usize;
+    mask.data_mut()[..top * stride].fill(0);
+    mask.data_mut()[bottom * stride..].fill(0);
+    Ok(mask)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{ProgressFrame, paint};
+    use super::{ProgressFrame, clip_path, paint};
     use crate::Appearance;
     use tiny_skia::Pixmap;
 
@@ -150,6 +219,27 @@ mod tests {
         assert!(ProgressFrame { completed: 0.4, activity: Some(0.5) }.is_valid());
         assert!(!ProgressFrame { completed: f32::NAN, activity: None }.is_valid());
         assert!(!ProgressFrame { completed: 0.0, activity: Some(2.0) }.is_valid());
+    }
+
+    /// Retain the actual native intersected silhouette's fractional bottom-corner area.
+    #[test]
+    fn expanded_clip_intersects_before_coverage() -> Result<(), Box<dyn std::error::Error>> {
+        for (scale, x, y, expected) in
+            [(1.25, 667, 452, 61), (1.75, 934, 633, 61), (2.0, 1066, 718, 156)]
+        {
+            let path =
+                clip_path(true, 24.0, 356.0, 510.0, 6.0, scale).ok_or("Missing expanded clip")?;
+            let mask = crate::shapes::coverage(&path, 1116, 1116)?;
+            assert!(
+                mask.data()[y * 1116 + x].abs_diff(expected) <= 1,
+                "actual {} expected {expected}",
+                mask.data()[y * 1116 + x]
+            );
+            if scale == 2.0 {
+                assert_eq!(mask.data()[y * 1116 + x], expected);
+            }
+        }
+        Ok(())
     }
 
     /// Keep activity inside the producer's completed region without altering completion.
@@ -163,13 +253,13 @@ mod tests {
             Appearance::demo(),
             ProgressFrame { completed: 0.4, activity: None },
             1.0,
-        );
+        )?;
         paint(
             &mut active,
             Appearance::demo(),
             ProgressFrame { completed: 0.4, activity: Some(0.5) },
             1.0,
-        );
+        )?;
         assert_eq!(still.pixel(300, 358), active.pixel(300, 358));
         assert_ne!(still.pixel(100, 358), active.pixel(100, 358));
         assert_eq!(still.pixel(100, 358).map(|pixel| pixel.alpha()), Some(255));
@@ -190,9 +280,63 @@ mod tests {
         ] {
             let mut target = Pixmap::new(1116, 1116).ok_or("Cannot allocate progress raster")?;
             let appearance = Appearance { expanded: false, ..Appearance::demo() };
-            paint(&mut target, appearance, ProgressFrame { completed: 0.0, activity: None }, scale);
+            paint(
+                &mut target,
+                appearance,
+                ProgressFrame { completed: 0.0, activity: None },
+                scale,
+            )?;
             for (row, alpha) in rows {
                 assert_eq!(target.pixel(200, row).map(|pixel| pixel.alpha()), Some(alpha));
+            }
+        }
+        Ok(())
+    }
+
+    /// Preserve the source gradient's quantization at both shoulders and its crest.
+    #[test]
+    fn activity_gradient_retains_reference_channel_values() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let mut target = Pixmap::new(558, 558).ok_or("Cannot allocate progress raster")?;
+        paint(
+            &mut target,
+            Appearance::demo(),
+            ProgressFrame { completed: 0.4, activity: Some(0.5) },
+            1.0,
+        )?;
+        for (column, green, blue) in
+            [(70, 78, 139), (110, 105, 157), (125, 115, 163), (130, 113, 161), (190, 72, 135)]
+        {
+            let pixel = target.pixel(column, 359).ok_or("Missing gradient pixel")?;
+            assert_eq!(
+                (pixel.red(), pixel.green(), pixel.blue(), pixel.alpha()),
+                (255, green, blue, 255)
+            );
+        }
+        Ok(())
+    }
+    /// Retain small corner coverage observed in the production painter at fractional DPI.
+    #[test]
+    fn completion_corners_retain_reference_area_coverage() -> Result<(), Box<dyn std::error::Error>>
+    {
+        for (scale, row, first, alphas) in [
+            (1.0, 530, 24, [76, 232, 255]),
+            (1.25, 662, 30, [0, 0, 0]),
+            (1.5, 795, 36, [7, 139, 242]),
+            (1.75, 927, 42, [0, 0, 0]),
+        ] {
+            let mut target = Pixmap::new(1116, 1116).ok_or("Cannot allocate corner raster")?;
+            paint(
+                &mut target,
+                Appearance { expanded: false, ..Appearance::demo() },
+                ProgressFrame { completed: 0.4, activity: None },
+                scale,
+            )?;
+            for (offset, alpha) in alphas.into_iter().enumerate() {
+                assert_eq!(
+                    target.pixel(first + offset as u32, row).map(|pixel| pixel.alpha()),
+                    Some(alpha)
+                );
             }
         }
         Ok(())

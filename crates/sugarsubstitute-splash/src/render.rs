@@ -24,6 +24,8 @@ pub enum RenderError {
     InvalidFrame,
     /// CPU raster allocation failed.
     Allocation,
+    /// Bounded paint coverage allocation failed, retaining its allocator cause.
+    RasterAllocation(std::io::Error),
     /// Packaged character validation or rendering failed.
     Character(CharacterError),
     /// Platform font discovery or loading failed.
@@ -40,6 +42,9 @@ impl fmt::Display for RenderError {
                 formatter.write_str("Invalid splash frame dimensions, scale or progress")
             }
             Self::Allocation => formatter.write_str("Cannot allocate splash CPU frame"),
+            Self::RasterAllocation(error) => {
+                write!(formatter, "Cannot prepare splash coverage: {error}")
+            }
             Self::Character(error) => error.fmt(formatter),
             Self::Font(error) => write!(formatter, "Cannot prepare splash status fonts: {error}"),
             Self::Icon(error) => error.fmt(formatter),
@@ -53,9 +58,17 @@ impl Error for RenderError {
         match self {
             Self::Character(error) => Some(error),
             Self::Font(error) => Some(error),
+            Self::RasterAllocation(error) => Some(error),
             Self::Icon(error) => Some(error),
             _ => None,
         }
+    }
+}
+
+impl From<crate::shapes::AllocationError> for RenderError {
+    /// Retain paint-owner allocation causes across the public render boundary.
+    fn from(error: crate::shapes::AllocationError) -> Self {
+        Self::RasterAllocation(std::io::Error::other(error))
     }
 }
 
@@ -162,7 +175,8 @@ impl SplashRenderer {
         bounds.height *= scale;
         self.characters.render(&mut target, bounds, character).map_err(RenderError::Character)?;
         if appearance.expanded {
-            chrome::console(&mut target, appearance.theme, scale as f32);
+            chrome::console(&mut target, appearance.theme, scale as f32)
+                .map_err(RenderError::from)?;
         } else if status {
             if self.text.is_none() {
                 self.text = Some(StatusText::new(&self.locale).map_err(RenderError::Font)?);
@@ -177,7 +191,8 @@ impl SplashRenderer {
                 .map_err(RenderError::Font)?;
             }
         }
-        progress::paint(&mut target, appearance, feedback, scale as f32);
+        progress::paint(&mut target, appearance, feedback, scale as f32)
+            .map_err(RenderError::from)?;
         chrome::controls(&mut target, appearance, scale as f32);
         let foreground = if appearance.theme == Theme::Dark { [255; 3] } else { [0; 3] };
         self.icons
@@ -201,6 +216,26 @@ impl SplashRenderer {
 mod tests {
     use super::SplashRenderer;
     use crate::{AnimationFrame, Appearance, ProgressFrame};
+
+    /// Preserve a real rejected coverage reservation through the public render error.
+    #[test]
+    fn coverage_allocator_cause_survives_the_render_boundary()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let path = crate::shapes::rounded(0.0, 0.0, 1.0, 4.0, 2.0, 1.0)
+            .ok_or("Cannot construct coverage failure fixture")?;
+        let failure = crate::shapes::coverage(&path, u32::MAX, u32::MAX)
+            .err()
+            .ok_or("Oversized coverage allocation unexpectedly succeeded")?;
+        let error = super::RenderError::from(failure);
+        let mut cause: Option<&(dyn std::error::Error + 'static)> = Some(&error);
+        while let Some(current) = cause {
+            if current.downcast_ref::<std::collections::TryReserveError>().is_some() {
+                return Ok(());
+            }
+            cause = current.source();
+        }
+        Err("Render boundary discarded the coverage allocator cause".into())
+    }
 
     /// Submit a collapsed mascot without font work, then enrich that same retained owner.
     #[test]

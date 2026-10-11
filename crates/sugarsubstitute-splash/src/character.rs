@@ -83,6 +83,11 @@ pub enum CharacterError {
     InvalidBounds,
     /// Allocating the bounded card coverage raster failed.
     RasterAllocation,
+    /// Preserve the cause of failed transformed-card coverage allocation.
+    Coverage {
+        /// Original bounded coverage owner failure.
+        source: Box<dyn Error + Send + Sync>,
+    },
 }
 
 impl Display for CharacterError {
@@ -114,15 +119,18 @@ impl Display for CharacterError {
             Self::RasterAllocation => {
                 formatter.write_str("Cannot allocate splash card coverage raster")
             }
+            Self::Coverage { source } => {
+                write!(formatter, "Cannot allocate splash card coverage: {source}")
+            }
         }
     }
 }
 
 impl Error for CharacterError {
-    /// Keep the original decoder cause available to structured runtime diagnostics.
+    /// Retain decoder and coverage-allocation causes for structured runtime diagnostics.
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            Self::Decode { source, .. } => Some(source.as_ref()),
+            Self::Decode { source, .. } | Self::Coverage { source } => Some(source.as_ref()),
             _ => None,
         }
     }
@@ -170,7 +178,7 @@ impl CharacterLibrary {
     /// the target's edges, including airborne card corners.
     ///
     /// # Errors
-    /// Return a geometry, pose-index, PNG-decoding, or packaged-image-size error.
+    /// Return a geometry, pose-index, PNG-decoding, packaged-image-size, or allocation error.
     pub fn render(
         &mut self,
         target: &mut Pixmap,
@@ -186,14 +194,22 @@ impl CharacterLibrary {
         }
         let source = self.decode(frame.pose)?;
         let card_size = bounds.width.min(bounds.height);
-        let card = Bounds {
-            x: bounds.x + (bounds.width - card_size) / 2.0,
-            y: bounds.y + (bounds.height - card_size) / 2.0,
-            width: card_size,
-            height: card_size,
-        };
-        let quad = projected_quad(card, frame.progress, frame.direction);
         let extent = f64::from(POSE_SIZE);
+        let device_scale = card_size / extent;
+        let logical_quad = projected_quad(
+            Bounds {
+                x: (bounds.width - card_size) / (2.0 * device_scale),
+                y: (bounds.height - card_size) / (2.0 * device_scale),
+                width: extent,
+                height: extent,
+            },
+            frame.progress,
+            frame.direction,
+        );
+        let quad = logical_quad.map(|point| Point {
+            x: bounds.x + point.x * device_scale,
+            y: bounds.y + point.y * device_scale,
+        });
         let transform = card_transform(quad, extent);
         if transform.sx == 1.0 && transform.sy == 1.0 && transform.kx == 0.0 && transform.ky == 0.0
         {
@@ -206,7 +222,13 @@ impl CharacterLibrary {
                 None,
             );
         } else {
-            sampling::paint(target, source, quad, bounds)?;
+            let mapping = sampling::DeviceTransform::from_quad(
+                logical_quad,
+                extent,
+                Point { x: bounds.x / device_scale, y: bounds.y / device_scale },
+                device_scale,
+            );
+            sampling::paint(target, source, quad, bounds, mapping)?;
         }
         paint_paper_edge(target, quad, frame.progress, card_size / extent, bounds);
         Ok(())
