@@ -1,0 +1,17 @@
+[package]
+name = "sugarsubstitute-splash"
+description = "CPU splash presentation and character animation"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+tiny-skia.workspace = true
+png.workspace = true
+cosmic-text.workspace = true
+
+[lints]
+workspace = true

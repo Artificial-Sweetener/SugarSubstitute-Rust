@@ -1,0 +1,3 @@
+schema_version = 1
+# Register persistent caches separately from authoritative application data.
+caches = []

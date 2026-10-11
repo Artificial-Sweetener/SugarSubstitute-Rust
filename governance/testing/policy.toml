@@ -1,0 +1,26 @@
+schema_version = 1
+platforms = ["windows", "macos", "linux"]
+
+[[owners]]
+package = "sugarsubstitute"
+root = "crates/sugarsubstitute"
+concern = "Product identity, demo input and controlled rendering composition"
+minimum_tests = 1
+
+[[owners]]
+package = "sugarsubstitute-xtask"
+root = "tools/xtask"
+concern = "Governance rejection behavior and verification orchestration"
+minimum_tests = 1
+
+[[owners]]
+package = "sugarsubstitute-splash"
+root = "crates/sugarsubstitute-splash"
+concern = "Character animation, appearance and presentation behavior"
+minimum_tests = 1
+
+[[owners]]
+package = "sugarsubstitute-desktop"
+root = "crates/sugarsubstitute-desktop"
+concern = "Frame validation, input boundaries and native window qualification"
+minimum_tests = 1

@@ -1,0 +1,83 @@
+schema_version = 1
+
+[[components]]
+id = "fluent-console-icon"
+source_url = "https://github.com/microsoft/fluentui-system-icons"
+license = "MIT"
+license_file = "third_party/licenses/fluentui-system-icons.MIT.txt"
+files = [
+  "crates/sugarsubstitute-splash/assets/caption/console-100.png",
+  "crates/sugarsubstitute-splash/assets/caption/console-125.png",
+  "crates/sugarsubstitute-splash/assets/caption/console-150.png",
+  "crates/sugarsubstitute-splash/assets/caption/console-175.png",
+  "crates/sugarsubstitute-splash/assets/caption/console-200.png",
+  "crates/sugarsubstitute-splash/assets/caption/console-250.png",
+  "crates/sugarsubstitute-splash/assets/caption/console-300.png",
+  "crates/sugarsubstitute-splash/assets/caption/console-350.png",
+  "crates/sugarsubstitute-splash/assets/caption/console-400.png",
+]
+
+[[components]]
+id = "frameless-close-icon"
+source_url = "https://github.com/zhiyiYo/PyQt-Frameless-Window"
+license = "MIT"
+license_file = "third_party/licenses/frameless-window.LICENSE.txt"
+files = [
+  "crates/sugarsubstitute-splash/assets/caption/close-100.png",
+  "crates/sugarsubstitute-splash/assets/caption/close-125.png",
+  "crates/sugarsubstitute-splash/assets/caption/close-150.png",
+  "crates/sugarsubstitute-splash/assets/caption/close-175.png",
+  "crates/sugarsubstitute-splash/assets/caption/close-200.png",
+  "crates/sugarsubstitute-splash/assets/caption/close-250.png",
+  "crates/sugarsubstitute-splash/assets/caption/close-300.png",
+  "crates/sugarsubstitute-splash/assets/caption/close-350.png",
+  "crates/sugarsubstitute-splash/assets/caption/close-400.png",
+]
+
+[[components]]
+id = "legacy-splash-characters"
+source_url = "https://github.com/Artificial-Sweetener/SugarSubstitute/tree/main/substitute/presentation/resources/splash_poses"
+license = "GPL-3.0-or-later"
+license_file = "third_party/licenses/splash-characters.GPL-3.0.txt"
+files = [
+  "crates/sugarsubstitute-splash/assets/poses/1.png",
+  "crates/sugarsubstitute-splash/assets/poses/2.png",
+  "crates/sugarsubstitute-splash/assets/poses/3.png",
+  "crates/sugarsubstitute-splash/assets/poses/4.png",
+  "crates/sugarsubstitute-splash/assets/poses/5.png",
+  "crates/sugarsubstitute-splash/assets/poses/6.png",
+  "crates/sugarsubstitute-splash/assets/poses/7.png",
+  "crates/sugarsubstitute-splash/assets/poses/8.png",
+  "crates/sugarsubstitute-splash/assets/poses/9.png",
+  "crates/sugarsubstitute-splash/assets/poses/10.png",
+  "crates/sugarsubstitute-splash/assets/poses/11.png",
+  "crates/sugarsubstitute-splash/assets/poses/12.png",
+  "crates/sugarsubstitute-splash/assets/poses/13.png",
+  "crates/sugarsubstitute-splash/assets/poses/14.png",
+  "crates/sugarsubstitute-splash/assets/poses/15.png",
+  "crates/sugarsubstitute-splash/assets/poses/16.png",
+  "crates/sugarsubstitute-splash/assets/poses/17.png",
+  "crates/sugarsubstitute-splash/assets/poses/18.png",
+  "crates/sugarsubstitute-splash/assets/poses/19.png",
+  "crates/sugarsubstitute-splash/assets/poses/20.png",
+  "crates/sugarsubstitute-splash/assets/poses/21.png",
+  "crates/sugarsubstitute-splash/assets/poses/22.png",
+  "crates/sugarsubstitute-splash/assets/poses/23.png",
+  "crates/sugarsubstitute-splash/assets/poses/24.png",
+  "crates/sugarsubstitute-splash/assets/poses/25.png",
+  "crates/sugarsubstitute-splash/assets/poses/26.png",
+  "crates/sugarsubstitute-splash/assets/poses/27.png",
+  "crates/sugarsubstitute-splash/assets/poses/28.png",
+  "crates/sugarsubstitute-splash/assets/poses/cass.png",
+  "crates/sugarsubstitute-splash/assets/poses/comfy.png",
+  "crates/sugarsubstitute-splash/assets/poses/comfy2.png",
+  "crates/sugarsubstitute-splash/assets/poses/cubby.png",
+  "crates/sugarsubstitute-splash/assets/poses/diffusion.png",
+  "crates/sugarsubstitute-splash/assets/poses/liz.png",
+  "crates/sugarsubstitute-splash/assets/poses/lvgf.png",
+  "crates/sugarsubstitute-splash/assets/poses/married.png",
+  "crates/sugarsubstitute-splash/assets/poses/pixelandlibrary.png",
+  "crates/sugarsubstitute-splash/assets/poses/ren.png",
+  "crates/sugarsubstitute-splash/assets/poses/syl.png",
+  "crates/sugarsubstitute-splash/assets/poses/witchy.png",
+]

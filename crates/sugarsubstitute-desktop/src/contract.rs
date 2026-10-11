@@ -1,0 +1,195 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Artificial Sweetener and contributors
+//! Define presentation-only values that do not own application startup policy.
+
+use std::{error::Error, fmt, time::Duration};
+
+/// Configure the native surface in logical pixels.
+pub struct DesktopOptions {
+    /// Localized native window identity.
+    pub title: String,
+    /// Initial client width in logical pixels.
+    pub logical_width: u32,
+    /// Initial client height in logical pixels.
+    pub logical_height: u32,
+    /// Select dark native material and portable fallback color.
+    pub dark: bool,
+    /// Automatically close qualification runs after this duration.
+    pub duration: Option<Duration>,
+}
+
+/// Report measured presentation work without making launch-speed assumptions.
+#[derive(Debug)]
+pub struct DesktopReceipt {
+    /// Time from entering the native adapter to the first completed frame submission.
+    pub first_frame: Duration,
+    /// Successfully submitted frames during this native window lifetime.
+    pub frames_presented: u64,
+    /// Native material selected by the platform adapter, independent of content pixels.
+    pub material: NativeMaterial,
+    /// Combined CPU render, validation and native submission work for successful frames.
+    pub total_frame_work: Duration,
+    /// Combined intervals between consecutive successful frame submissions.
+    pub total_frame_intervals: Duration,
+    /// Longest measured submission interval; zero when fewer than two frames were presented.
+    pub longest_frame_interval: Duration,
+}
+
+/// Describe the actual native background selected by the platform adapter.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NativeMaterial {
+    /// Windows DWM accepted the main-window Mica backdrop.
+    Mica,
+    /// CPU pixels are composited over an explicit native theme color.
+    ThemedFallback,
+}
+
+/// Carry an owned CPU-rasterized image in premultiplied RGBA byte order.
+pub struct Frame {
+    /// Width in device pixels.
+    pub width: u32,
+    /// Height in device pixels.
+    pub height: u32,
+    /// Exactly width times height times four bytes, top row first.
+    pub premultiplied_rgba: Vec<u8>,
+}
+
+impl Frame {
+    /// Reject malformed external buffers before native presentation reads them.
+    pub fn validate(&self) -> Result<(), DesktopError> {
+        let required = usize::try_from(self.width)
+            .ok()
+            .and_then(|width| {
+                usize::try_from(self.height).ok().and_then(|height| width.checked_mul(height))
+            })
+            .and_then(|pixels| pixels.checked_mul(4));
+        if self.width == 0 || self.height == 0 || required != Some(self.premultiplied_rgba.len()) {
+            return Err(DesktopError::message(
+                "validate_frame",
+                "invalid frame dimensions or byte length",
+            ));
+        }
+        if self
+            .premultiplied_rgba
+            .chunks_exact(4)
+            .any(|pixel| pixel[..3].iter().any(|channel| *channel > pixel[3]))
+        {
+            return Err(DesktopError::message(
+                "validate_frame",
+                "frame channels exceed premultiplied alpha",
+            ));
+        }
+        Ok(())
+    }
+}
+
+/// Express pointer coordinates in logical client pixels.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Pointer {
+    /// Horizontal position.
+    pub x: f64,
+    /// Vertical position.
+    pub y: f64,
+}
+
+/// Identify a presentation interaction without exposing native window handles.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HitTarget {
+    /// Drag the native window using the operating system's move loop.
+    Caption,
+    /// Close this native surface.
+    Close,
+    /// Let the content own its client interaction without native window actions.
+    Client,
+}
+
+/// Forward pointer state to the presentation owner.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PointerAction {
+    /// Pointer position changed.
+    Move,
+    /// Pointer left the client surface.
+    Leave,
+    /// Primary button was pressed.
+    Press,
+    /// Primary button was released.
+    Release,
+}
+
+/// Forward an explicit native keyboard intent.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum KeyAction {
+    /// Forward Tab without assigning application-specific behavior.
+    Tab,
+}
+
+/// Supply frames and accept UI input on the native event-loop thread.
+pub trait WindowContent {
+    /// Rasterize the requested device size; elapsed time starts at native adapter entry.
+    fn render(
+        &mut self,
+        width: u32,
+        height: u32,
+        scale: f64,
+        elapsed: Duration,
+    ) -> Result<Frame, Box<dyn Error>>;
+    /// Classify logical pointer positions for native close and drag behavior.
+    fn hit_test(&self, pointer: Pointer) -> HitTarget;
+    /// Receive pointer activity without moving ownership of view state into the host.
+    fn pointer(&mut self, action: PointerAction, pointer: Pointer);
+    /// Receive keyboard intent without owning process or application policy.
+    fn key(&mut self, action: KeyAction);
+}
+
+/// Preserve the failed native operation and its underlying cause.
+#[derive(Debug)]
+pub struct DesktopError {
+    operation: &'static str,
+    cause: Box<dyn Error>,
+}
+
+impl DesktopError {
+    /// Attach an external failure to its adapter operation.
+    pub(crate) fn new(operation: &'static str, cause: impl Error + 'static) -> Self {
+        Self { operation, cause: Box::new(cause) }
+    }
+    /// Attach already boxed content errors without losing their cause.
+    pub(crate) fn boxed(operation: &'static str, cause: Box<dyn Error>) -> Self {
+        Self { operation, cause }
+    }
+    /// Describe a violated native contract or platform error code.
+    pub(crate) fn message(operation: &'static str, message: impl Into<String>) -> Self {
+        Self::new(operation, std::io::Error::other(message.into()))
+    }
+}
+
+impl fmt::Display for DesktopError {
+    /// Include operation identity in an actionable diagnostic.
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "{}: {}", self.operation, self.cause)
+    }
+}
+
+impl Error for DesktopError {
+    /// Preserve the original external error for diagnostics.
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        Some(self.cause.as_ref())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Frame;
+
+    /// Accept a transparent raster while rejecting mismatched dimensions and straight alpha.
+    #[test]
+    fn frame_contract_bounds_native_reads() {
+        let mut frame = Frame { width: 1, height: 1, premultiplied_rgba: vec![0, 0, 0, 0] };
+        assert!(frame.validate().is_ok());
+        frame.width = 2;
+        assert!(frame.validate().is_err());
+        frame.width = 1;
+        frame.premultiplied_rgba = vec![255, 0, 0, 128];
+        assert!(frame.validate().is_err());
+    }
+}

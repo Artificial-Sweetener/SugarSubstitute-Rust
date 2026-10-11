@@ -1,0 +1,32 @@
+schema_version = 1
+soft_lines = 350
+hard_lines = 500
+source_roots = ["crates", "tools"]
+
+# Layers run from pure contracts to composition. A lower layer cannot depend
+# on a higher layer; repository tooling is not a runtime dependency.
+layers = ["domain", "application", "adapter", "host", "tooling"]
+
+[[owners]]
+package = "sugarsubstitute"
+root = "crates/sugarsubstitute"
+layer = "host"
+concern = "Desktop host composition and application identity"
+
+[[owners]]
+package = "sugarsubstitute-xtask"
+root = "tools/xtask"
+layer = "tooling"
+concern = "Repository governance and verification"
+
+[[owners]]
+package = "sugarsubstitute-splash"
+root = "crates/sugarsubstitute-splash"
+layer = "adapter"
+concern = "CPU splash appearance, animation and portable presentation state"
+
+[[owners]]
+package = "sugarsubstitute-desktop"
+root = "crates/sugarsubstitute-desktop"
+layer = "adapter"
+concern = "Native window, event loop and CPU surface lifetime"

@@ -1,0 +1,3 @@
+schema_version = 1
+# Register implemented persisted formats and cross-version host protocols here.
+formats = []

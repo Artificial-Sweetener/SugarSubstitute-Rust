@@ -1,0 +1,15 @@
+repos:
+  - repo: local
+    hooks:
+      - id: whitespace-integrity
+        name: Check staged whitespace integrity
+        entry: git diff --cached --check
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: sugarsubstitute-verification
+        name: Verify SugarSubstitute governance and Rust workspace
+        entry: cargo xtask verify
+        language: system
+        pass_filenames: false
+        exclude: '\.md$'
