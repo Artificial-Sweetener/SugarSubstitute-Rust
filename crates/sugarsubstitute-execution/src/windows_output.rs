@@ -15,6 +15,10 @@ use sugarsubstitute_contracts::{
 #[allow(unsafe_code)]
 #[path = "windows_output/native.rs"]
 mod native;
+#[cfg(test)]
+#[allow(unsafe_code)]
+#[path = "windows_output/native_abi_tests.rs"]
+mod native_abi_tests;
 /// Borrow the exact allowlist through CreateProcess and actual attribute deletion.
 pub struct WindowsOutputInheritance<'a> {
     /// Read-only NUL input, inherited only by this owned launch.
