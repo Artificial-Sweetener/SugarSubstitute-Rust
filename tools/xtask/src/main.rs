@@ -22,7 +22,10 @@ mod testing;
 mod vendor;
 mod workspace;
 
-use std::{path::Path, process::ExitCode};
+use std::{
+    path::{Path, PathBuf},
+    process::ExitCode,
+};
 
 use error::{Failure, Result};
 
@@ -51,6 +54,10 @@ fn run() -> Result<()> {
         .parent()
         .and_then(Path::parent)
         .ok_or_else(|| Failure::Policy("xtask must live under tools/xtask".into()))?;
+    let invocation = std::env::current_dir()
+        .map_err(|error| Failure::external("read verification working directory", error))?;
+    let root = invocation_root(root, &invocation)?;
+    let root = root.as_path();
     governance::check(root)?;
     if task == "governance" {
         return Ok(());
@@ -81,6 +88,22 @@ fn run() -> Result<()> {
     Ok(())
 }
 
+/// Reject a cached verification executable from another checkout before running any gate.
+fn invocation_root(compiled: &Path, invoked: &Path) -> Result<PathBuf> {
+    let compiled = compiled
+        .canonicalize()
+        .map_err(|error| Failure::external("resolve compiled verification checkout", error))?;
+    let invoked = invoked
+        .canonicalize()
+        .map_err(|error| Failure::external("resolve invoked verification checkout", error))?;
+    if compiled != invoked {
+        return Err(Failure::Policy(
+            "run verification from the repository root with a target directory owned by this checkout; rebuild sugarsubstitute-xtask if its cached executable belongs to another checkout".into(),
+        ));
+    }
+    Ok(invoked)
+}
+
 /// Require one supported task so accidental filters cannot bypass verification.
 fn select_task(arguments: &[String]) -> Result<&str> {
     match arguments {
@@ -97,6 +120,23 @@ fn select_task(arguments: &[String]) -> Result<&str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A shared Cargo artifact must never silently verify a different checkout.
+    #[test]
+    fn verification_rejects_other_checkout_and_accepts_resolved_root() -> Result<()> {
+        let compiled = crate::fixtures::Repository::new()?;
+        let invoked = crate::fixtures::Repository::new()?;
+        assert!(invocation_root(compiled.root(), invoked.root()).is_err());
+        assert!(invocation_root(compiled.root(), &compiled.root().join("missing")).is_err());
+        assert_eq!(
+            invocation_root(compiled.root(), &compiled.root().join("."))?,
+            compiled
+                .root()
+                .canonicalize()
+                .map_err(|error| Failure::external("resolve fixture", error))?,
+        );
+        Ok(())
+    }
 
     /// Reject task typos and extra arguments that might narrow the required gate.
     #[test]
