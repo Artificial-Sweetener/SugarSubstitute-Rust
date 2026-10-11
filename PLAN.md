@@ -213,6 +213,8 @@ Thirty new deterministic boundary tests pass, bringing `python -m unittest disco
 
 ### 2.4 M0.4 — Prove behavior and enforce scheduling ownership
 
+**Retained-copy boundary receipt (2026-10-11):** Prepared frames now grant a distinct non-cloneable storage claim from their original admitted reservation before a presenter allocates a copy. Claims share the existing atomic allocation limit and retain their reservation after source-frame replacement and final source-clone drop; releasing one copy makes only its own capacity reusable. Two new regression tests and independent source review verify this ownership boundary. The first fixture incorrectly requested a one-pixel validation step for a four-pixel frame; correcting the fixture to request four pixels preserved the validation contract. Exact-current `cargo xtask verify` passed all 213 Rust tests and the full Windows gate. Applying these claims to actual DIB/Cairo allocation and teardown is part of the pending native presentation integration; opaque native/backend allocations require separate measurement.
+
 **Implementation:** Scheduler registration, owner-export AST checks and rejection fixtures are implemented and independently reviewed. **Verification:** All 37 tooling tests, 43 execution tests and governance pass on Windows; receiving native qualification pending.
 
 - [x] Register the implemented scheduler and extend the existing execution gate; prove runtime behavior and rejection cases.

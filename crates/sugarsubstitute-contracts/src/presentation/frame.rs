@@ -135,6 +135,19 @@ impl PreparedFrame {
     pub fn reserved_bytes(&self) -> u64 {
         self.storage.claim.reserved_bytes()
     }
+
+    /// Claim distinct presenter storage from this frame's original admitted reservation.
+    ///
+    /// Claim before allocating a native copy and retain the non-cloneable guard
+    /// until that allocation is released. The guard may outlive every source-frame
+    /// clone, preserving admission accounting across resize and native teardown.
+    /// This checks aggregate capacity without allocating or exposing scheduling ports.
+    ///
+    /// # Errors
+    /// Rejects storage exceeding unclaimed bytes in the already-admitted reservation.
+    pub fn claim_storage(&self, bytes: u64) -> Result<MemoryClaim, MemoryClaimError> {
+        self.storage.claim.claim_sibling(bytes)
+    }
 }
 
 impl fmt::Debug for PreparedFrame {

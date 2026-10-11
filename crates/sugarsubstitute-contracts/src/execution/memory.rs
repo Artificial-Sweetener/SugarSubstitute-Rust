@@ -86,6 +86,11 @@ pub struct MemoryClaim {
 }
 
 impl MemoryClaim {
+    /// Claim distinct retained storage from this allocation's original admitted reservation.
+    pub(crate) fn claim_sibling(&self, bytes: u64) -> Result<Self, MemoryClaimError> {
+        self.lease.claim(bytes)
+    }
+
     /// Return this allocation's claimed capacity in bytes.
     pub const fn bytes(&self) -> u64 {
         self.bytes

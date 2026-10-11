@@ -33,6 +33,62 @@ fn lease(bytes: u64, releases: &Arc<Releases>) -> MemoryLease {
     MemoryLease::new(bytes, Box::new(Release(releases.clone())))
 }
 
+/// Keep a distinct copied allocation live after every source-frame clone is released.
+#[test]
+fn presenter_storage_retains_original_admission_after_source_replacement()
+-> Result<(), Box<dyn Error>> {
+    struct CopyStorage {
+        pixels: Vec<u8>,
+        _claim: MemoryClaim,
+    }
+    let releases = Arc::new(Releases::default());
+    let shape = FrameShape::new(2, 2, 1.0)?;
+    let mut validator = FrameValidator::new(shape, identity()?, vec![0; 16], lease(32, &releases))?;
+    assert!(validator.validate_next(NonZeroUsize::new(4).ok_or("Nonzero validation budget")?)?);
+    let frame = validator.finish()?;
+    let claim = frame.claim_storage(16)?;
+    let native = CopyStorage { pixels: frame.pixels().to_vec(), _claim: claim };
+    let retained = frame.clone();
+    assert_eq!(
+        retained.claim_storage(1).err(),
+        Some(MemoryClaimError { requested_bytes: 1, available_bytes: 0 })
+    );
+    drop(frame);
+    drop(retained);
+    assert_eq!(releases.calls.load(Ordering::SeqCst), 0);
+    assert_eq!(native.pixels.len(), 16);
+    drop(native);
+    assert_eq!(releases.calls.load(Ordering::SeqCst), 1);
+    assert_eq!(releases.bytes.load(Ordering::SeqCst), 32);
+    Ok(())
+}
+
+/// Presenter copies and source clones share one atomic allocation limit.
+#[test]
+fn presenter_storage_cannot_duplicate_claims_and_reuses_only_released_capacity()
+-> Result<(), Box<dyn Error>> {
+    let releases = Arc::new(Releases::default());
+    let shape = FrameShape::new(1, 1, 1.0)?;
+    let mut validator = FrameValidator::new(shape, identity()?, vec![0; 4], lease(12, &releases))?;
+    assert!(validator.validate_next(NonZeroUsize::MIN)?);
+    let frame = validator.finish()?;
+    let copy = frame.clone();
+    let first = frame.claim_storage(4)?;
+    let second = copy.claim_storage(4)?;
+    assert_eq!(frame.claim_storage(1).err().map(|error| error.available_bytes), Some(0));
+    drop(first);
+    let replacement = copy.claim_storage(4)?;
+    assert_eq!(replacement.bytes(), 4);
+    assert_eq!(copy.claim_storage(1).err().map(|error| error.available_bytes), Some(0));
+    drop(second);
+    drop(replacement);
+    drop(copy);
+    assert_eq!(releases.calls.load(Ordering::SeqCst), 0);
+    drop(frame);
+    assert_eq!(releases.calls.load(Ordering::SeqCst), 1);
+    Ok(())
+}
+
 #[test]
 fn shape_bounds_cover_dimensions_scales_and_exact_tight_storage() -> Result<(), FrameError> {
     for (width, height) in [(0, 1), (1, 0), (4097, 1), (1, 4097), (u32::MAX, u32::MAX)] {
