@@ -18,6 +18,8 @@ use kernel::{Boundary, Lease};
 mod failures;
 #[path = "identity_failure_tests.rs"]
 mod identity_failures;
+#[path = "late_input_tests.rs"]
+mod late_input;
 fn run() -> TestResult<RunKey> {
     Ok(RunKey {
         owner: CoordinatorKey {

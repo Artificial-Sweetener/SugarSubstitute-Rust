@@ -160,7 +160,7 @@ impl Active {
         }
     }
     fn retirement(&mut self, core: &Core, now: Moment, clock_available: bool) {
-        let (pinned, abandoned, authentication, mut capability) = {
+        let (pinned, peer, abandoned, authentication, mut capability) = {
             let mut state = lock(&core.state);
             let mut s = lock(&self.work.shared.state);
             s.stopped = true;
@@ -181,8 +181,26 @@ impl Active {
                     }
                 }
             }
-            (s.pin || s.input_pin, abandoned, s.authenticate.take(), s.capability.take())
+            (
+                s.pin || s.input_pin,
+                s.peer.take(),
+                abandoned,
+                s.authenticate.take(),
+                s.capability.take(),
+            )
         };
+        // Publication releases input_pin under this same lock. Take the peer
+        // with the pin snapshot so retirement cannot skip a late transfer.
+        if let Some(peer) = peer {
+            if let Some(lease) = &mut self.lease {
+                lease.adopt(peer);
+                self.enrolled = true;
+            } else {
+                lock(&self.work.shared.state).peer = Some(peer);
+                self.error(core, failure("pipe_missing_lease"));
+                return;
+            }
+        }
         // Guard destruction may take the session lock and release a real memory claim.
         drop(abandoned);
         drop(authentication);
