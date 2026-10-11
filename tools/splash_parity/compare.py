@@ -6,24 +6,57 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import math
 from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageChops, ImageDraw
 
+try:
+    from .acceptance import decide, measure, owner_bounds
+except ImportError:
+    from acceptance import decide, measure, owner_bounds
 
-def compare(reference: Path, candidate: Path, output: Path) -> None:
+
+def compare(reference: Path, candidate: Path, output: Path) -> bool:
     """Measure every scenario and every visual owner without hiding raster differences."""
     scenarios = json.loads((reference / "scenarios.json").read_text(encoding="utf-8"))
+    if not isinstance(scenarios, list) or not 1 <= len(scenarios) <= 1024:
+        raise ValueError("Parity requires 1 through 1024 reference scenarios")
+    names = [scenario["name"] for scenario in scenarios]
+    if any(
+        not isinstance(name, str)
+        or not name
+        or name in (".", "..")
+        or any(
+            not (character.isascii() and (character.isalnum() or character in "-_."))
+            for character in name
+        )
+        for name in names
+    ) or len(names) != len(set(names)):
+        raise ValueError("Parity scenario names must be unique safe filenames")
     output.mkdir(parents=True, exist_ok=True)
     receipts = []
     for scenario in scenarios:
         name = scenario["name"]
-        original = Image.open(reference / f"{name}.png").convert("RGBA")
-        replacement = Image.open(candidate / f"{name}.png").convert("RGBA")
+        original_path = reference / f"{name}.png"
+        replacement_path = candidate / f"{name}.png"
+        with Image.open(original_path) as image:
+            original = image.convert("RGBA")
+        with Image.open(replacement_path) as image:
+            replacement = image.convert("RGBA")
         if original.size != replacement.size:
             raise ValueError(f"Render dimensions disagree for {name}")
+        if scenario["theme"] not in ("dark", "light") or type(scenario["expanded"]) is not bool:
+            raise ValueError(f"Invalid appearance for {name}")
+        scale = scenario["scale"]
+        if type(scale) not in (int, float) or not np.isfinite(scale) or not 0 < scale <= 4096 / 558:
+            raise ValueError(f"Invalid scale for {name}")
+        expected_size = math.floor(558 * scale + 0.5)
+        if original.size != (expected_size, expected_size):
+            raise ValueError(f"Render dimensions do not match scenario scale for {name}")
         original_bytes = np.asarray(original, dtype=np.int32)
         replacement_bytes = np.asarray(replacement, dtype=np.int32)
         for pixels in (original_bytes, replacement_bytes):
@@ -41,36 +74,15 @@ def compare(reference: Path, candidate: Path, output: Path) -> None:
         delta = np.abs(
             np.asarray(left, dtype=np.int16) - np.asarray(right, dtype=np.int16)
         )
-        owners = {
-            "frame": (0, 0, 558, 558),
-            "character": (83, 7, 470, 355)
-            if scenario["expanded"]
-            else (85, 86, 472, 472),
-            "controls": (466, 0, 558, 32),
-            "progress": (24, 356, 534, 362)
-            if scenario["expanded"]
-            else (24, 530, 534, 534),
-        }
-        if scenario["expanded"]:
-            owners["console"] = (24, 362, 534, 534)
-        else:
-            owners["status"] = (24, 486, 534, 530)
+        owners = owner_bounds(scenario["expanded"])
         metrics = {}
+        decisions = {}
         for owner, bounds in owners.items():
-            x0, y0, x1, y1 = (round(value * scenario["scale"]) for value in bounds)
+            x0, y0, x1, y1 = (math.floor(value * scenario["scale"] + 0.5) for value in bounds)
             region = delta[y0:y1, x0:x1]
             alpha_region = alpha_delta[y0:y1, x0:x1]
-            metrics[owner] = {
-                "mean_channel_error": float(region.mean()),
-                "maximum_channel_error": int(region.max()),
-                "different_pixels": int(np.any(region != 0, axis=2).sum()),
-                "pixels": int(region.shape[0] * region.shape[1]),
-                "mean_premultiplied_error": float(alpha_region.mean()),
-                "maximum_premultiplied_error": int(alpha_region.max()),
-                "different_premultiplied_pixels": int(
-                    np.any(alpha_region != 0, axis=2).sum()
-                ),
-            }
+            metrics[owner] = measure(region, alpha_region)
+            decisions[owner] = decide(owner, metrics[owner])
         pair = Image.new("RGB", (left.width * 2 + 16, left.height + 28), background[:3])
         pair.paste(left, (0, 28))
         pair.paste(right, (left.width + 16, 28))
@@ -82,7 +94,21 @@ def compare(reference: Path, candidate: Path, output: Path) -> None:
         ImageChops.difference(left, right).point(
             lambda value: min(255, value * 8)
         ).save(output / f"{name}-difference.png")
-        receipts.append({"name": name, "owners": metrics})
+        Image.fromarray(np.minimum(255, alpha_delta.max(axis=2) * 8).astype(np.uint8)).save(
+            output / f"{name}-premultiplied-difference.png"
+        )
+        overlay = Image.blend(left, right, 0.5)
+        labels = ImageDraw.Draw(overlay)
+        for owner, bounds in owners.items():
+            if owner != "frame":
+                scaled = [math.floor(value * scale + 0.5) for value in bounds]
+                labels.rectangle(scaled, outline="cyan" if decisions[owner]["accepted"] else "red")
+                labels.text((scaled[0] + 2, scaled[1] + 2), owner, fill=foreground)
+        overlay.save(output / f"{name}-overlay.png")
+        receipts.append({"name": name, "owners": metrics, "decisions": decisions,
+                         "reference_sha256": hashlib.sha256(original_path.read_bytes()).hexdigest(),
+                         "candidate_sha256": hashlib.sha256(replacement_path.read_bytes()).hexdigest(),
+                         "accepted": all(decision["accepted"] for decision in decisions.values())})
     (output / "comparison.json").write_text(
         json.dumps(receipts, indent=2) + "\n", encoding="utf-8"
     )
@@ -91,18 +117,25 @@ def compare(reference: Path, candidate: Path, output: Path) -> None:
         key=lambda receipt: receipt["owners"]["frame"]["mean_channel_error"],
         reverse=True,
     )
-    print(json.dumps({"scenarios": len(receipts), "worst": ranked[:3]}, indent=2))
+    accepted = all(receipt["accepted"] for receipt in receipts)
+    summary = {"accepted": accepted, "scenarios": len(receipts),
+               "failed_scenarios": sum(not receipt["accepted"] for receipt in receipts),
+               "failed_owners": sorted({owner for receipt in receipts for owner, decision in receipt["decisions"].items() if not decision["accepted"]}),
+               "worst": ranked[:3]}
+    (output / "acceptance.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps(summary, indent=2))
+    return accepted
 
 
-def main() -> None:
+def main() -> int:
     """Require explicit artifact roots so captures cannot enter source control accidentally."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--reference", type=Path, required=True)
     parser.add_argument("--candidate", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     arguments = parser.parse_args()
-    compare(arguments.reference, arguments.candidate, arguments.output)
+    return 0 if compare(arguments.reference, arguments.candidate, arguments.output) else 1
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

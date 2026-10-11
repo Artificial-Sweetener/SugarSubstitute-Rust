@@ -124,6 +124,7 @@ impl PaperFlip {
 
     /// Return the frame for an elapsed time without mutating timing or selection.
     pub fn frame(&self, elapsed: Duration) -> AnimationFrame {
+        let elapsed = elapsed.max(self.last_tick);
         let progress = if self.phase == FlipPhase::Flip && !self.reduced_motion {
             (elapsed.saturating_sub(self.phase_started).as_secs_f64() / 0.390).clamp(0.0, 1.0)
         } else {
@@ -328,5 +329,39 @@ mod tests {
         assert_eq!(animation.phase(), FlipPhase::Flip);
         animation.tick(Duration::from_secs(101));
         assert_eq!(animation.phase(), FlipPhase::Hold);
+    }
+
+    /// Keep the drawn card monotonic when an older queued render timestamp arrives.
+    #[test]
+    fn regressing_frame_timestamp_does_not_reverse_an_observed_flip() {
+        let mut animation = PaperFlip::new(3);
+        assert!(animation.trigger_flip(Duration::from_millis(100)));
+        animation.tick(Duration::from_millis(300));
+        let observed = animation.frame(Duration::from_millis(300));
+        assert!(observed.progress > 0.5);
+        assert_ne!(observed.pose, 0);
+        assert_eq!(animation.frame(Duration::from_millis(200)), observed);
+    }
+
+    /// Disabling motion mid-turn restores the committed pose without consuming its queue.
+    #[test]
+    fn reduced_motion_interrupts_a_flip_and_restarts_a_full_hold() {
+        let mut animation = PaperFlip::new(7);
+        assert!(animation.trigger_flip(Duration::from_millis(100)));
+        animation.tick(Duration::from_millis(300));
+        let queued = animation.frame(Duration::from_millis(300)).pose;
+        assert_ne!(queued, 0);
+        animation.set_reduced_motion(true);
+        animation.tick(Duration::from_secs(20));
+        assert_eq!(animation.frame(Duration::from_secs(20)).pose, 0);
+        assert_eq!(animation.frame(Duration::from_secs(20)).progress, 0.0);
+        animation.set_reduced_motion(false);
+        let deadline = Duration::from_secs(20) + animation.hold_duration();
+        animation.tick(deadline - Duration::from_millis(1));
+        assert_eq!(animation.phase(), FlipPhase::Hold);
+        animation.tick(deadline);
+        assert_eq!(animation.phase(), FlipPhase::Flip);
+        animation.tick(deadline + Duration::from_millis(390));
+        assert_eq!(animation.frame(deadline + Duration::from_millis(390)).pose, queued);
     }
 }

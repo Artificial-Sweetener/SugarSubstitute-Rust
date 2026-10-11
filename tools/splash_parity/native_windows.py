@@ -7,6 +7,8 @@ from __future__ import annotations
 import argparse
 import ctypes
 import json
+import math
+import os
 import subprocess
 import sys
 import time
@@ -17,6 +19,10 @@ from typing import Any
 
 from PIL import Image
 
+try:
+    from .native_decisions import accessible_controls, startup_decision
+except ImportError:
+    from native_decisions import accessible_controls, startup_decision
 
 class BitmapHeader(ctypes.Structure):
     """Match the native top-down 32-bit BITMAPINFOHEADER ABI."""
@@ -65,6 +71,149 @@ class Client:
     def scale(self) -> float:
         """Convert logical presentation coordinates to native device pixels."""
         return self.dpi / 96
+
+
+class MouseInput(ctypes.Structure):
+    """Match MOUSEINPUT, including pointer-width extra information."""
+
+    _fields_ = [("x", wintypes.LONG), ("y", wintypes.LONG), ("data", wintypes.DWORD),
+                ("flags", wintypes.DWORD), ("time", wintypes.DWORD), ("extra", ctypes.c_size_t)]
+
+
+class InputPayload(ctypes.Union):
+    """Retain the largest INPUT union member used by injected mouse events."""
+
+    _fields_ = [("mouse", MouseInput)]
+
+
+class MouseEvent(ctypes.Structure):
+    """Match INPUT for SendInput; mouse is the largest native union member."""
+
+    _fields_ = [("kind", wintypes.DWORD), ("payload", InputPayload)]
+
+
+class NativePointer:
+    """Own one bounded mouse gesture and conditionally restore the user's untouched cursor."""
+
+    def __init__(self, native: NativeWindows, hwnd: int, pid: int) -> None:
+        """Borrow only the verified caption window and declare mouse ABI contracts."""
+        self.native, self.hwnd, self.pid = native, hwnd, pid
+        self.original: tuple[int, int] | None = None
+        self.last: tuple[int, int] | None = None
+        self.pressed = False
+        for function, arguments, result in (
+            (native.user.SendInput, [wintypes.UINT, ctypes.POINTER(MouseEvent), ctypes.c_int], wintypes.UINT),
+            (native.user.GetSystemMetrics, [ctypes.c_int], ctypes.c_int),
+            (native.user.GetAsyncKeyState, [ctypes.c_int], ctypes.c_short),
+            (native.user.WindowFromPoint, [wintypes.POINT], wintypes.HWND),
+            (native.user.GetAncestor, [wintypes.HWND, wintypes.UINT], wintypes.HWND),
+            (native.user.GetForegroundWindow, [], wintypes.HWND),
+        ):
+            function.argtypes, function.restype = arguments, result
+
+    def cursor(self) -> tuple[int, int]:
+        """Read the actual screen cursor without moving it."""
+        point = wintypes.POINT()
+        if not self.native.user.GetCursorPos(ctypes.byref(point)):
+            raise ctypes.WinError(ctypes.get_last_error())
+        return point.x, point.y
+
+    def __enter__(self) -> NativePointer:
+        """Reject existing human button state and save the cursor before injecting anything."""
+        self.native.client(self.hwnd, self.pid)
+        if any(self.native.user.GetAsyncKeyState(key) & 0x8000 for key in (1, 2, 4, 5, 6)):
+            raise RuntimeError("A mouse button is already held; owned pointer qualification rejected")
+        self.original = self.cursor()
+        self.last = self.original
+        return self
+
+    def unchanged_cursor(self) -> None:
+        """Stop on human cursor movement rather than reclaiming the pointer."""
+        current = self.cursor()
+        if self.last is None or max(abs(a - b) for a, b in zip(current, self.last)) > 1:
+            raise RuntimeError("The cursor moved outside the owned gesture; human position is preserved")
+
+    def send(self, point: tuple[int, int], flags: int) -> None:
+        """Inject one event over signed virtual-desktop coordinates without acceleration."""
+        left, top, width, height = (self.native.user.GetSystemMetrics(index) for index in (76, 77, 78, 79))
+        if width <= 1 or height <= 1 or not (left <= point[0] < left + width and top <= point[1] < top + height):
+            raise RuntimeError("Owned pointer target is outside the real virtual desktop")
+        x = math.floor((point[0] - left) * 65535 / (width - 1) + .5)
+        y = math.floor((point[1] - top) * 65535 / (height - 1) + .5)
+        event = MouseEvent(0, InputPayload(MouseInput(x, y, 0, flags | 0xC001 | 0x2000, 0, 0)))
+        if self.native.user.SendInput(1, ctypes.byref(event), ctypes.sizeof(event)) != 1:
+            raise RuntimeError("SendInput did not insert the owned mouse event")
+
+    def owned_hit(self, point: tuple[int, int]) -> None:
+        """Reject foreign foreground or hit-test windows before pressing caption controls."""
+        self.native.client(self.hwnd, self.pid)
+        hit = self.native.user.WindowFromPoint(wintypes.POINT(*point))
+        if not hit or self.native.user.GetAncestor(hit, 2) != self.hwnd:
+            raise RuntimeError("The physical pointer target is not the owned window")
+        if self.native.user.GetAncestor(self.native.user.GetForegroundWindow(), 2) != self.hwnd:
+            raise RuntimeError("The owned pointer window is not foreground")
+
+    def move_screen(self, point: tuple[int, int]) -> None:
+        """Move via SendInput, wait for actual cursor placement, then verify the owned hit."""
+        self.unchanged_cursor()
+        self.owned_hit(point)
+        self.send(point, 0)
+        deadline = time.perf_counter() + .5
+        while max(abs(a - b) for a, b in zip(self.cursor(), point)) > 1:
+            if time.perf_counter() >= deadline:
+                raise RuntimeError("The owned injected pointer did not reach its screen target")
+            time.sleep(.005)
+        self.last = self.cursor()
+        self.owned_hit(self.last)
+
+    def move(self, logical: tuple[float, float]) -> None:
+        """Convert current logical client coordinates to actual screen coordinates."""
+        client = self.native.client(self.hwnd, self.pid)
+        point = wintypes.POINT(round(logical[0] * client.scale), round(logical[1] * client.scale))
+        if not (0 <= point.x < client.width and 0 <= point.y < client.height):
+            raise RuntimeError("Owned pointer logical target is outside the client")
+        if not self.native.user.ClientToScreen(self.hwnd, ctypes.byref(point)):
+            raise ctypes.WinError(ctypes.get_last_error())
+        self.move_screen((point.x, point.y))
+
+    def press(self) -> None:
+        """Insert an actual left-button down at a currently verified owned client point."""
+        self.unchanged_cursor()
+        self.owned_hit(self.cursor())
+        if self.pressed or self.native.user.GetAsyncKeyState(1) & 0x8000:
+            raise RuntimeError("A left button is already held before the owned press")
+        self.pressed = True
+        self.send(self.cursor(), 2)
+
+    def release(self) -> None:
+        """Release the harness button at its verified current owned point."""
+        self.unchanged_cursor()
+        self.owned_hit(self.cursor())
+        if not self.pressed:
+            raise RuntimeError("No owned mouse press exists to release")
+        self.send(self.cursor(), 4)
+        self.pressed = False
+
+    def __exit__(self, kind: object, error: BaseException | None, traceback: object) -> bool:
+        """Release injected button state even after ownership loss; never overwrite human movement."""
+        failures: list[Exception] = []
+        if self.pressed:
+            try:
+                self.send(self.cursor(), 4)
+                self.pressed = False
+            except Exception as cleanup:
+                failures.append(cleanup)
+        try:
+            self.unchanged_cursor()
+            if self.original is not None:
+                self.send(self.original, 0)
+        except Exception as cleanup:
+            failures.append(cleanup)
+        if failures:
+            if isinstance(error, Exception):
+                failures.insert(0, error)
+            raise ExceptionGroup("Owned pointer gesture and cleanup failures", failures)
+        return False
 
 
 class NativeWindows:
@@ -437,6 +586,73 @@ def rgb_pixel(image: Image.Image, point: tuple[int, int]) -> tuple[int, int, int
     return pixel[0], pixel[1], pixel[2]
 
 
+def accessibility_snapshot(native: NativeWindows, hwnd: int, pid: int, *, action: str = "Inspect",
+                           name: str = "") -> list[dict[str, object]]:
+    """Recheck native ownership before a bounded public UI Automation query or action."""
+    native.client(hwnd, pid)
+    command = [str(Path(os.environ["SystemRoot"]) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"),
+               "-NoProfile", "-File", str(Path(__file__).with_name("accessibility_windows.ps1")),
+               "-WindowHandle", str(hwnd), "-ProcessId", str(pid), "-Action", action]
+    if name:
+        command.extend(["-ControlName", name])
+    snapshot = subprocess.run(command, check=False, capture_output=True, timeout=5)
+    if snapshot.returncode != 0:
+        raise RuntimeError(
+            f"Owned UI Automation {action} failed with status {snapshot.returncode}: "
+            + snapshot.stderr.decode("utf-8-sig", errors="replace")[:4096]
+        )
+    return json.loads(snapshot.stdout.decode("utf-8-sig"))
+
+
+def observe_disclosure(native: NativeWindows, hwnd: int, process: subprocess.Popen[bytes],
+                       baseline: tuple[int, int, int], scale: float, deadline: float) -> Image.Image:
+    """Require a real visible console change after an accessible or keyboard action."""
+    while time.perf_counter() < deadline and process.poll() is None:
+        image = native.capture(hwnd, process.pid)
+        after = rgb_pixel(image, (round(30 * scale), round(400 * scale)))
+        if max(abs(left - right) for left, right in zip(baseline, after)) > 5:
+            return image
+        time.sleep(0.005)
+    raise RuntimeError("Accessible caption action did not change the displayed disclosure state")
+
+
+def observe_compositor(native: NativeWindows, hwnd: int, process: subprocess.Popen[bytes],
+                       deadline: float) -> tuple[Image.Image, float]:
+    """Wait for owned, unoccluded character paint, returning the external observation time."""
+    while time.perf_counter() < deadline and process.poll() is None:
+        native.client(hwnd, process.pid)
+        image = native.capture(hwnd, process.pid, compositor=True)
+        observed = time.perf_counter()
+        client = native.client(hwnd, process.pid)
+        if native.occluded(hwnd, process.pid):
+            raise RuntimeError("The owned client became occluded during compositor observation")
+        if not isinstance(image, Image.Image) or image.size != (client.width, client.height):
+            raise RuntimeError("Compositor observation did not return the complete owned client frame")
+        if observed < deadline and process.poll() is None and has_mascot(image, client.scale):
+            return image, observed
+        time.sleep(0.005)
+    raise RuntimeError("The owned compositor did not expose character paint within the deadline")
+
+
+def observe_caption(native: NativeWindows, hwnd: int, process: subprocess.Popen[bytes],
+                    baseline: bytes, bounds: tuple[int, int, int, int], *, restored: bool) -> None:
+    """Observe pressed feedback and neutral restoration without requiring animated content."""
+    deadline = time.perf_counter() + 1
+    while time.perf_counter() < deadline and process.poll() is None:
+        current = native.capture(hwnd, process.pid).crop(bounds).tobytes()
+        scale = (bounds[2] - bounds[0]) / 46
+        point = (round(6 * scale), round(8 * scale))
+        offset = (point[1] * (bounds[2] - bounds[0]) + point[0]) * 3
+        pressed = tuple(current[offset:offset + 3])
+        pressed_feedback = max(abs(left - right) for left, right in zip(pressed, (241, 112, 122))) <= 2
+        observed = current == baseline if restored else pressed_feedback
+        if observed:
+            return
+        time.sleep(0.005)
+    raise RuntimeError("The native close caption did not restore neutral paint" if restored
+                       else "The native close caption did not display pressed paint")
+
+
 def qualify(arguments: argparse.Namespace) -> None:
     """Run one bounded native proof, save distinct receipts, and preserve process failure output."""
     native = NativeWindows()
@@ -449,14 +665,14 @@ def qualify(arguments: argparse.Namespace) -> None:
         )
     cursor_work = native.cursor_work_area()
     started = time.perf_counter()
+    command = [str(arguments.executable), "--duration-ms", str(arguments.duration_ms),
+               "--receipt", str(submission), "--locale", arguments.locale]
+    if arguments.light:
+        command.append("--light")
+    if arguments.reduced_motion:
+        command.append("--reduced-motion")
     process = subprocess.Popen(
-        [
-            str(arguments.executable),
-            "--duration-ms",
-            str(arguments.duration_ms),
-            "--receipt",
-            str(submission),
-        ],
+        command,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
@@ -475,6 +691,8 @@ def qualify(arguments: argparse.Namespace) -> None:
                 )
             time.sleep(0.01)
         first_observed = (time.perf_counter() - started) * 1000
+        first_visible = None
+        first_interactive = None
         image.save(output / "native-client.png")
         mica = {
             "pid": process.pid,
@@ -484,21 +702,22 @@ def qualify(arguments: argparse.Namespace) -> None:
             "dpi": client.dpi,
             "first_owned_capture_with_character_ms": first_observed,
             "observation_method": "PrintWindow capture; this is not compositor first-paint timing",
+            "launch_command": command,
             "placement": native.placement(hwnd, process.pid, cursor_work),
         }
         write_json(output / "mica.json", mica)
         if arguments.compositor:
-            occluded = native.occluded(hwnd, process.pid)
-            result: dict[str, object] = {"occluded": occluded, "captured": False}
-            if not occluded:
-                visible = native.capture(hwnd, process.pid, compositor=True)
-                if has_mascot(visible, client.scale):
-                    visible.save(output / "native-compositor.png")
-                    result["captured"] = True
-                else:
-                    result["reason"] = (
-                        "Compositor did not expose character paint; capture rejected"
-                    )
+            result: dict[str, object] = {"captured": False}
+            try:
+                visible, observed = observe_compositor(native, hwnd, process, deadline)
+            except Exception as error:
+                result.update(error_type=type(error).__name__, reason=str(error))
+                write_json(output / "compositor.json", result)
+                raise
+            first_visible = (observed - started) * 1000
+            visible.save(output / "native-compositor.png")
+            result.update(occluded=False, captured=True,
+                          first_owned_compositor_capture_with_character_ms=first_visible)
             write_json(output / "compositor.json", result)
         if arguments.input:
             before = rgb_pixel(
@@ -514,6 +733,7 @@ def qualify(arguments: argparse.Namespace) -> None:
                     collapsed, (round(30 * client.scale), round(400 * client.scale))
                 )
                 if max(abs(left - right) for left, right in zip(before, after)) > 5:
+                    first_interactive = (time.perf_counter() - started) * 1000
                     collapsed.save(output / "native-collapsed.png")
                     changed = True
                     break
@@ -525,35 +745,50 @@ def qualify(arguments: argparse.Namespace) -> None:
                 raise RuntimeError(
                     "Native Tab input did not collapse the console within the deadline"
                 )
-            point = (round(16 * client.scale) << 16) | round(535 * client.scale)
-            bar_bounds = (
-                round(24 * client.scale),
-                round(530 * client.scale),
-                round(534 * client.scale),
-                round(534 * client.scale),
+            if arguments.startup:
+                startup = startup_decision(first_visible, first_interactive)
+                write_json(output / "startup.json", startup)
+                if not startup["accepted"]:
+                    raise RuntimeError("External visible/interactive startup exceeds S0 targets")
+            if arguments.accessibility:
+                records = accessibility_snapshot(native, hwnd, process.pid, action="Focus", name=arguments.console_name)
+                write_json(output / "accessibility.json", records)
+                accessible_controls(records, process.pid, (arguments.console_name, arguments.close_name))
+                button = next(record for record in records if record["name"] == arguments.console_name)
+                if button["has_keyboard_focus"] is not True:
+                    raise RuntimeError("Native accessible disclosure did not receive keyboard focus")
+                native.post(button["window_handle"], process.pid, 0x0100, 32, 0x00390001)
+                native.post(button["window_handle"], process.pid, 0x0101, 32, 0xC0390001)
+                expanded = observe_disclosure(native, hwnd, process, after, client.scale, time.perf_counter() + 1)
+                expanded.save(output / "native-accessible-space-expanded.png")
+                expanded_pixel = rgb_pixel(expanded, (round(30 * client.scale), round(400 * client.scale)))
+                expanded_controls = accessibility_snapshot(native, hwnd, process.pid, action="Invoke", name=arguments.expanded_console_name)
+                accessible_controls(expanded_controls, process.pid, (arguments.expanded_console_name, arguments.close_name))
+                observe_disclosure(native, hwnd, process, expanded_pixel, client.scale, time.perf_counter() + 1)
+                write_json(output / "accessible-actions.json", {"focus_observed": True, "space_expanded_console": True,
+                                                               "invoke_collapsed_console": True})
+            caption_bounds = (
+                round(512 * client.scale),
+                0,
+                round(558 * client.scale),
+                round(32 * client.scale),
             )
-            before_cancel = native.capture(hwnd, process.pid).crop(bar_bounds).tobytes()
-            native.post(hwnd, process.pid, 0x0200, 0, point)
-            native.post(hwnd, process.pid, 0x0201, 1, point)
-            native.post(hwnd, process.pid, 0x02A3, 0, 0)
-            native.post(hwnd, process.pid, 0x0202, 0, point)
-            cancel_deadline = min(deadline, time.perf_counter() + 0.5)
-            cancelled_close_kept_window_open = False
-            while time.perf_counter() < cancel_deadline and process.poll() is None:
-                changed_bar = (
-                    native.capture(hwnd, process.pid).crop(bar_bounds).tobytes()
-                )
-                if changed_bar != before_cancel:
-                    cancelled_close_kept_window_open = True
-                    break
-                time.sleep(0.005)
-            if not cancelled_close_kept_window_open:
-                raise RuntimeError(
-                    "Interrupted native close gesture did not preserve the running surface"
-                )
-            native.post(hwnd, process.pid, 0x0200, 0, point)
-            native.post(hwnd, process.pid, 0x0201, 1, point)
-            native.post(hwnd, process.pid, 0x0202, 0, point)
+            with NativePointer(native, hwnd, process.pid) as pointer:
+                pointer.move((489, 60))
+                before_cancel = native.capture(hwnd, process.pid).crop(caption_bounds).tobytes()
+                pointer.move((535, 16))
+                pointer.press()
+                observe_caption(native, hwnd, process, before_cancel, caption_bounds, restored=False)
+                pointer.move((489, 60))
+                pointer.release()
+                observe_caption(native, hwnd, process, before_cancel, caption_bounds, restored=True)
+                cancelled_close_kept_window_open = True
+                if arguments.accessibility:
+                    accessibility_snapshot(native, hwnd, process.pid, action="Invoke", name=arguments.close_name)
+                else:
+                    pointer.move((535, 16))
+                    pointer.press()
+                    pointer.release()
         stdout, stderr = process.communicate(timeout=arguments.duration_ms / 1000 + 5)
         elapsed = (time.perf_counter() - started) * 1000
         write_json(
@@ -570,17 +805,20 @@ def qualify(arguments: argparse.Namespace) -> None:
             raise RuntimeError(f"Native proof exited with status {process.returncode}")
         submission_data = json.loads(submission.read_text(encoding="utf-8"))
         if arguments.input:
+            closed_before_deadline = submission_data["elapsed_ms"] < arguments.duration_ms
             write_json(
                 output / "input.json",
                 {
                     "keyboard_toggle_changed_console": True,
                     "cancelled_close_kept_window_open": cancelled_close_kept_window_open,
-                    "native_close_exited_before_demo_deadline": submission_data[
-                        "elapsed_ms"
-                    ]
-                    < arguments.duration_ms,
+                    "close_pressed_feedback_observed": True,
+                    "close_cancel_neutral_feedback_observed": True,
+                    "native_close_exited_before_demo_deadline": closed_before_deadline,
+                    "accessible_close_invoked": arguments.accessibility,
                 },
             )
+            if not closed_before_deadline:
+                raise RuntimeError("Native close action did not exit before the demonstration deadline")
         print(
             json.dumps(
                 {
@@ -591,6 +829,10 @@ def qualify(arguments: argparse.Namespace) -> None:
                 indent=2,
             )
         )
+    except Exception as error:
+        write_json(output / "failure.json", {"pid": process.pid, "error": str(error),
+                                             "error_type": type(error).__name__})
+        raise
     finally:
         if process.poll() is None:
             process.terminate()
@@ -603,8 +845,16 @@ def main() -> int:
     parser.add_argument("--executable", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--duration-ms", type=int, default=3000)
+    parser.add_argument("--locale", default="en", choices=("en", "zh-Hans", "ja", "ko", "es"))
+    parser.add_argument("--light", action="store_true")
+    parser.add_argument("--reduced-motion", action="store_true")
     parser.add_argument("--input", action="store_true")
     parser.add_argument("--compositor", action="store_true")
+    parser.add_argument("--startup", action="store_true", help="Enforce external 500 ms visible/750 ms interactive targets")
+    parser.add_argument("--accessibility", action="store_true", help="Inspect actual owned UI Automation caption buttons")
+    parser.add_argument("--console-name", default="Show Comfy output", help="Expected collapsed accessible caption name in the active locale")
+    parser.add_argument("--expanded-console-name", default="Hide Comfy output", help="Expected expanded accessible caption name in the active locale")
+    parser.add_argument("--close-name", default="Cancel loading", help="Expected accessible close name in the active locale")
     arguments = parser.parse_args()
     if sys.platform != "win32":
         parser.error("This native qualification adapter requires Windows")
@@ -612,6 +862,12 @@ def main() -> int:
         parser.error(
             "--duration-ms must allow at least 1000 ms for bounded native qualification"
         )
+    if arguments.startup and not (arguments.compositor and arguments.input):
+        parser.error("--startup requires --compositor and --input external observations")
+    if arguments.accessibility and not arguments.input:
+        parser.error("--accessibility requires --input to observe collapsed controls")
+    if arguments.accessibility and arguments.duration_ms < 15000:
+        parser.error("--accessibility requires --duration-ms >= 15000 for bounded external actions")
     qualify(arguments)
     return 0
 

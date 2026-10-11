@@ -5,7 +5,7 @@
 
 use tiny_skia::{
     Color, FillRule, GradientStop, LinearGradient, Mask, Paint, PathBuilder, Pixmap, Rect,
-    SpreadMode, Stroke, Transform,
+    SpreadMode, Transform,
 };
 
 use crate::{Appearance, Theme, shapes::rounded};
@@ -34,7 +34,8 @@ pub(crate) fn paint(target: &mut Pixmap, appearance: Appearance, frame: Progress
     let (x, y, width, height) =
         (24.0, if expanded { 356.0 } else { 530.0 }, 510.0, if expanded { 6.0 } else { 4.0 });
     let transform = Transform::from_scale(scale, scale);
-    let filled = (width * frame.completed * 10_000.0).round() / 10_000.0;
+    let completed_width = width * frame.completed;
+    let filled = if expanded { completed_width } else { completed_width.floor() };
     let mut paint = Paint { anti_alias: true, ..Paint::default() };
     let track_alpha =
         if expanded { if appearance.theme == Theme::Dark { 18 } else { 12 } } else { 155 };
@@ -53,18 +54,7 @@ pub(crate) fn paint(target: &mut Pixmap, appearance: Appearance, frame: Progress
             target.fill_path(&path, &paint, FillRule::Winding, transform, Some(&mask));
         }
     } else {
-        let mut path = PathBuilder::new();
-        path.move_to(x, y + 2.0);
-        path.line_to(x + width, y + 2.0);
-        if let Some(path) = path.finish() {
-            target.stroke_path(
-                &path,
-                &paint,
-                &Stroke { width: 1.0, ..Stroke::default() },
-                transform,
-                None,
-            );
-        }
+        standalone_track(target, if appearance.theme == Theme::Dark { 255 } else { 0 }, scale);
     }
     paint.set_color_rgba8(
         if appearance.theme == Theme::Dark { 255 } else { 233 },
@@ -95,6 +85,28 @@ pub(crate) fn paint(target: &mut Pixmap, appearance: Appearance, frame: Progress
         {
             paint.shader = shader;
             target.fill_path(&path, &paint, FillRule::Winding, transform, completed_mask.as_ref());
+        }
+    }
+}
+
+/// Integrate the reference's horizontal one-logical-pixel stroke without raster pen snapping.
+fn standalone_track(target: &mut Pixmap, foreground: u8, scale: f32) {
+    let left = (24.0 * scale).round();
+    let right = (534.0 * scale).round();
+    let center = 532.0 * scale;
+    let top = center - scale / 2.0;
+    let bottom = center + scale / 2.0;
+    let mut paint = Paint { anti_alias: false, ..Paint::default() };
+    for row in top.floor().max(0.0) as u32..bottom.ceil().min(target.height() as f32) as u32 {
+        let coverage = ((row as f32 + 1.0).min(bottom) - (row as f32).max(top)).clamp(0.0, 1.0);
+        // Qt's half-covered integer-center pen splits odd alpha between its two rows.
+        let rounding = u16::from(coverage == 0.5 && row as f32 >= center);
+        let coverage = (coverage * 255.0).floor() as u16 + rounding;
+        let product = 155 * coverage;
+        let alpha = ((product + (product >> 8) + 128) >> 8) as u8;
+        paint.set_color_rgba8(foreground, foreground, foreground, alpha);
+        if let Some(rect) = Rect::from_xywh(left, row as f32, right - left, 1.0) {
+            target.fill_rect(rect, &paint, Transform::identity(), None);
         }
     }
 }
@@ -162,6 +174,27 @@ mod tests {
         assert_ne!(still.pixel(100, 358), active.pixel(100, 358));
         assert_eq!(still.pixel(100, 358).map(|pixel| pixel.alpha()), Some(255));
         assert_eq!(active.pixel(300, 358).map(|pixel| pixel.alpha()), Some(18));
+        Ok(())
+    }
+
+    /// Preserve the observed Qt pen's symmetric fractional coverage and split odd alpha.
+    #[test]
+    fn standalone_track_retains_reference_fractional_row_coverage()
+    -> Result<(), Box<dyn std::error::Error>> {
+        for (scale, rows) in [
+            (1.0, [(531, 77), (532, 78)]),
+            (1.25, [(664, 97), (665, 97)]),
+            (1.5, [(797, 116), (798, 116)]),
+            (1.75, [(930, 136), (931, 136)]),
+            (2.0, [(1063, 155), (1064, 155)]),
+        ] {
+            let mut target = Pixmap::new(1116, 1116).ok_or("Cannot allocate progress raster")?;
+            let appearance = Appearance { expanded: false, ..Appearance::demo() };
+            paint(&mut target, appearance, ProgressFrame { completed: 0.0, activity: None }, scale);
+            for (row, alpha) in rows {
+                assert_eq!(target.pixel(200, row).map(|pixel| pixel.alpha()), Some(alpha));
+            }
+        }
         Ok(())
     }
 }

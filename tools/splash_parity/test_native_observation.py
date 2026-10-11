@@ -1,0 +1,238 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Artificial Sweetener and contributors
+
+"""Prove native qualification observes compositor paint and causal caption feedback."""
+
+import argparse
+import json
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import Mock, patch
+
+from PIL import Image
+
+from tools.splash_parity.native_windows import MouseEvent, NativePointer, observe_caption, observe_compositor, qualify
+
+
+class NativePointerTests(unittest.TestCase):
+    """Reject foreign input and preserve human movement while releasing only injected button state."""
+
+    def pointer(self) -> NativePointer:
+        """Provide explicit external mouse and ownership boundaries."""
+        pointer = object.__new__(NativePointer)
+        pointer.native = Mock()
+        pointer.hwnd, pointer.pid = 1, 42
+        pointer.original, pointer.last, pointer.pressed = (10, 20), (30, 40), False
+        pointer.cursor = Mock(return_value=(30, 40))
+        pointer.native.user.GetAsyncKeyState.return_value = 0
+        pointer.native.user.WindowFromPoint.return_value = 1
+        pointer.native.user.GetAncestor.return_value = 1
+        pointer.native.user.GetForegroundWindow.return_value = 1
+        pointer.send = Mock()
+        return pointer
+
+    def test_existing_human_press_rejects_before_injection(self) -> None:
+        """Qualification does not take over an existing mouse gesture."""
+        pointer = self.pointer()
+        pointer.native.user.GetAsyncKeyState.return_value = 0x8000
+        with self.assertRaisesRegex(RuntimeError, "already held"):
+            pointer.__enter__()
+        pointer.send.assert_not_called()
+
+    def test_foreign_hit_or_foreground_rejects_before_press(self) -> None:
+        """No actual input may be sent to another application's pixels."""
+        for ancestors in ([2], [1, 2]):
+            with self.subTest(ancestors=ancestors):
+                pointer = self.pointer()
+                pointer.native.user.GetAncestor.side_effect = ancestors
+                with self.assertRaises(RuntimeError):
+                    pointer.press()
+                pointer.send.assert_not_called()
+
+    def test_cleanup_releases_injected_button_and_restores_untouched_cursor(self) -> None:
+        """Normal or failed gestures leave no held injected button behind."""
+        pointer = self.pointer()
+        pointer.pressed = True
+        self.assertFalse(pointer.__exit__(RuntimeError, RuntimeError("original"), None))
+        self.assertEqual(pointer.send.call_args_list[0].args, ((30, 40), 4))
+        self.assertEqual(pointer.send.call_args_list[1].args, ((10, 20), 0))
+        self.assertFalse(pointer.pressed)
+
+    def test_human_movement_is_preserved_after_button_cleanup(self) -> None:
+        """An intervening user cursor move is never overwritten by restoration."""
+        pointer = self.pointer()
+        pointer.pressed = True
+        pointer.cursor.return_value = (100, 200)
+        original = RuntimeError("lost window ownership")
+        with self.assertRaises(ExceptionGroup) as caught:
+            pointer.__exit__(RuntimeError, original, None)
+        pointer.send.assert_called_once_with((100, 200), 4)
+        self.assertIs(caught.exception.exceptions[0], original)
+        self.assertIn("human position is preserved", str(caught.exception.exceptions[1]))
+
+    def test_virtual_desktop_coordinates_and_failed_insertion(self) -> None:
+        """Signed monitors map to the full virtual desktop and failed SendInput rejects."""
+        pointer = self.pointer()
+        pointer.send = NativePointer.send.__get__(pointer)
+        pointer.native.user.GetSystemMetrics.side_effect = lambda index: {76: -1920, 77: 0, 78: 3840, 79: 1080}[index]
+        events = []
+
+        def insert(count, event, size):
+            import ctypes
+            packet = ctypes.cast(event, ctypes.POINTER(MouseEvent)).contents
+            events.append((packet.payload.mouse.x, packet.payload.mouse.y, packet.payload.mouse.flags, size))
+            return 1
+
+        pointer.native.user.SendInput.side_effect = insert
+        pointer.send((-1920, 0), 2)
+        self.assertEqual(events[0][:3], (0, 0, 0xE003))
+        with self.assertRaisesRegex(RuntimeError, "outside"):
+            pointer.send((-1921, 0), 0)
+        pointer.native.user.SendInput.side_effect = None
+        pointer.native.user.SendInput.return_value = 0
+        with self.assertRaisesRegex(RuntimeError, "did not insert"):
+            pointer.send((0, 0), 2)
+
+
+class CompositorObservationTests(unittest.TestCase):
+    """Keep paint recognition real while faking external frames, process ownership and time."""
+
+    def setUp(self) -> None:
+        """Provide distinct empty and saturated frames from an owned compositor."""
+        self.blank = Image.new("RGB", (558, 558))
+        self.painted = self.blank.copy()
+        for offset in range(441):
+            self.painted.putpixel((100 + offset % 21, 30 + offset // 21),
+                                  (200 + offset % 32, 10 + offset % 47, 20 + offset % 64))
+        self.native = Mock()
+        self.client = Mock(width=558, height=558, scale=1, dpi=96)
+        self.native.client.return_value = self.client
+        self.native.occluded.return_value = False
+        self.process = Mock(pid=42)
+        self.process.poll.return_value = None
+
+    def test_blank_then_painted_compositor_qualifies_at_second_observation(self) -> None:
+        """An asynchronous show/fade frame must be followed by real compositor paint."""
+        self.native.capture.side_effect = [self.blank, self.painted]
+        with patch("tools.splash_parity.native_windows.time.perf_counter", side_effect=[0, .1, .2, .3]), \
+                patch("tools.splash_parity.native_windows.time.sleep"):
+            image, observed = observe_compositor(self.native, 1, self.process, 1)
+        self.assertIs(image, self.painted)
+        self.assertEqual(observed, .3)
+        self.assertEqual(self.native.capture.call_count, 2)
+        self.assertEqual(self.native.client.call_count, 4)
+        for call in self.native.capture.call_args_list:
+            self.assertEqual(call.kwargs, {"compositor": True})
+
+    def test_never_painted_compositor_rejects_at_deadline(self) -> None:
+        """A valid PrintWindow frame cannot replace missing desktop compositor paint."""
+        self.native.capture.return_value = self.blank
+        with patch("tools.splash_parity.native_windows.time.perf_counter", side_effect=[0, .1, 2]), \
+                patch("tools.splash_parity.native_windows.time.sleep"):
+            with self.assertRaisesRegex(RuntimeError, "within the deadline"):
+                observe_compositor(self.native, 1, self.process, 1)
+        self.assertEqual(self.native.capture.call_count, 1)
+
+    def test_paint_returned_after_deadline_cannot_qualify(self) -> None:
+        """A late external capture remains a failed startup observation."""
+        self.native.capture.return_value = self.painted
+        with patch("tools.splash_parity.native_windows.time.perf_counter", side_effect=[0, 2, 3]), \
+                patch("tools.splash_parity.native_windows.time.sleep"):
+            with self.assertRaisesRegex(RuntimeError, "within the deadline"):
+                observe_compositor(self.native, 1, self.process, 1)
+
+    def test_occlusion_and_lost_ownership_are_terminal(self) -> None:
+        """Never retry away a foreign window or an obstructed compositor capture."""
+        self.native.capture.return_value = self.painted
+        self.native.occluded.return_value = True
+        with self.assertRaisesRegex(RuntimeError, "occluded"):
+            observe_compositor(self.native, 1, self.process, float("inf"))
+        self.native.occluded.return_value = False
+        self.native.client.side_effect = [self.client, RuntimeError("Window ownership changed")]
+        with self.assertRaisesRegex(RuntimeError, "ownership changed"):
+            observe_compositor(self.native, 1, self.process, float("inf"))
+
+    def test_missing_or_incomplete_capture_is_terminal(self) -> None:
+        """No missing frame may be mistaken for a temporary blank desktop frame."""
+        for frame in (None, Image.new("RGB", (1, 1))):
+            with self.subTest(frame=frame):
+                self.native.capture.return_value = frame
+                with self.assertRaisesRegex(RuntimeError, "complete owned client frame"):
+                    observe_compositor(self.native, 1, self.process, float("inf"))
+
+    def test_exited_process_cannot_qualify(self) -> None:
+        """Do not capture a window after the owned fixture exits."""
+        self.process.poll.return_value = 0
+        with self.assertRaisesRegex(RuntimeError, "within the deadline"):
+            observe_compositor(self.native, 1, self.process, float("inf"))
+        self.native.capture.assert_not_called()
+
+    def test_compositor_failure_preserves_specific_and_outer_receipts(self) -> None:
+        """An observation failure leaves reviewable cause receipts without a pass marker."""
+        self.native.capture.return_value = self.painted
+        self.native.find_window.return_value = 1
+        self.native.attributes.return_value = {}
+        self.native.placement.return_value = {}
+        self.process.communicate.return_value = (b"", b"")
+        with tempfile.TemporaryDirectory(prefix="compositor-failure-") as directory:
+            output = Path(directory)
+            arguments = argparse.Namespace(output=output, executable=output / "fixture.exe",
+                                           duration_ms=5000, locale="en", light=True,
+                                           reduced_motion=True, compositor=True)
+            with patch("tools.splash_parity.native_windows.NativeWindows", return_value=self.native), \
+                    patch("tools.splash_parity.native_windows.subprocess.Popen", return_value=self.process), \
+                    patch("tools.splash_parity.native_windows.observe_compositor",
+                          side_effect=RuntimeError("Compositor deadline fixture")):
+                with self.assertRaisesRegex(RuntimeError, "deadline fixture"):
+                    qualify(arguments)
+            receipt = json.loads((output / "compositor.json").read_text(encoding="utf-8"))
+            failure = json.loads((output / "failure.json").read_text(encoding="utf-8"))
+            self.assertFalse(receipt["captured"])
+            self.assertEqual(receipt["reason"], failure["error"])
+            self.assertEqual(receipt["error_type"], "RuntimeError")
+            self.assertFalse((output / "native-compositor.png").exists())
+
+
+class CaptionObservationTests(unittest.TestCase):
+    """Fake only external screenshots and clock, preserving the actual observation decisions."""
+
+    def image(self, color: tuple[int, int, int]) -> Image.Image:
+        """Produce a native RGB close-caption observation."""
+        return Image.new("RGB", (46, 32), color)
+
+    def test_hover_is_not_pressed_feedback(self) -> None:
+        """The queued hover frame must not satisfy a press acceptance check."""
+        native = Mock()
+        native.capture.side_effect = [self.image((232, 17, 35)), self.image((241, 112, 122))]
+        process = Mock(pid=42)
+        process.poll.return_value = None
+        with patch("tools.splash_parity.native_windows.time.sleep"):
+            observe_caption(native, 1, process, self.image((0, 0, 0)).tobytes(), (0, 0, 46, 32), restored=False)
+        self.assertEqual(native.capture.call_count, 2)
+
+    def test_hover_only_fails_at_observation_deadline(self) -> None:
+        """A stuck hover state cannot qualify close gesture handling."""
+        native = Mock()
+        native.capture.return_value = self.image((232, 17, 35))
+        process = Mock(pid=42)
+        process.poll.return_value = None
+        with patch("tools.splash_parity.native_windows.time.perf_counter", side_effect=[0, 0, 2]), \
+                patch("tools.splash_parity.native_windows.time.sleep"):
+            with self.assertRaisesRegex(RuntimeError, "pressed"):
+                observe_caption(native, 1, process, self.image((0, 0, 0)).tobytes(), (0, 0, 46, 32), restored=False)
+
+    def test_neutral_restoration_requires_caption_equality(self) -> None:
+        """Restoration remains independent of progress, pose and reduced motion."""
+        neutral = self.image((0, 0, 0))
+        native = Mock()
+        native.capture.side_effect = [self.image((241, 112, 122)), neutral]
+        process = Mock(pid=42)
+        process.poll.return_value = None
+        with patch("tools.splash_parity.native_windows.time.sleep"):
+            observe_caption(native, 1, process, neutral.tobytes(), (0, 0, 46, 32), restored=True)
+        self.assertEqual(native.capture.call_count, 2)
+
+
+if __name__ == "__main__":
+    unittest.main()

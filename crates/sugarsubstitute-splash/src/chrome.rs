@@ -50,7 +50,6 @@ pub(crate) fn console(target: &mut Pixmap, theme: Theme, scale: f32) {
 
 /// Paint disclosure and close backgrounds inside their original logical hit rectangles.
 pub(crate) fn controls(target: &mut Pixmap, appearance: Appearance, scale: f32) {
-    let transform = Transform::from_scale(scale, scale);
     let foreground = if appearance.theme == Theme::Dark { 255 } else { 0 };
     let mut paint = Paint { anti_alias: true, ..Paint::default() };
     for (control, x) in [(Control::ConsoleToggle, 466.0), (Control::Close, 512.0)] {
@@ -74,8 +73,29 @@ pub(crate) fn controls(target: &mut Pixmap, appearance: Appearance, scale: f32) 
             };
             paint.set_color_rgba8(foreground, foreground, foreground, opacity);
         }
-        if let Some(rect) = Rect::from_xywh(x, 0.0, 46.0, 32.0) {
-            target.fill_rect(rect, &paint, transform, None);
+        // Qt clips child widgets at their rounded device origin, retaining the fractional
+        // painted far edge. A global rectangle otherwise leaks a half-alpha pixel leftward.
+        let left = (x * scale).round();
+        if let Some(rect) = Rect::from_xywh(left, 0.0, (x + 46.0) * scale - left, 32.0 * scale) {
+            target.fill_rect(rect, &paint, Transform::identity(), None);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::controls;
+    use crate::Appearance;
+    use tiny_skia::Pixmap;
+
+    /// Keep checked caption fill inside its observed fractional-DPI child widget clip.
+    #[test]
+    fn fractional_caption_origin_does_not_leak_leftward() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let mut target = Pixmap::new(977, 56).ok_or("Cannot allocate caption raster")?;
+        controls(&mut target, Appearance::demo(), 1.75);
+        assert_eq!(target.pixel(815, 12).map(|pixel| pixel.alpha()), Some(0));
+        assert_eq!(target.pixel(816, 12).map(|pixel| pixel.alpha()), Some(28));
+        Ok(())
     }
 }

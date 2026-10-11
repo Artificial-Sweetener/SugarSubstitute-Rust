@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Compose one native event loop, borrowed surface presenter, and replaceable content.
 
+use crate::cadence::{advance_deadline, presentation_wait};
 #[cfg(target_os = "linux")]
 use crate::linux::Presenter;
 #[cfg(target_os = "macos")]
@@ -19,14 +20,28 @@ use std::{
 use tao::{
     dpi::{LogicalSize, PhysicalPosition},
     event::{ElementState, Event, MouseButton, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
+    event_loop::{ControlFlow, EventLoopBuilder},
     keyboard::Key,
     platform::run_return::EventLoopExtRunReturn,
     window::{Theme, WindowBuilder},
 };
 
-/// Match the reference animation cadence without adding raster time to each period.
-const FRAME_INTERVAL: Duration = Duration::from_millis(16);
+/// Forward native peer activation without lending callbacks the content owner.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum NativeAction {
+    /// Activate a surface-local control.
+    #[cfg(target_os = "windows")]
+    Activate(u16),
+    /// Close the surface through the same native terminal path as pointer/Escape.
+    #[cfg(target_os = "windows")]
+    Close,
+    /// Preserve the demonstration's existing disclosure shortcut.
+    #[cfg(target_os = "windows")]
+    Disclosure,
+    /// Repaint a changed native focus cue over a fresh CPU frame.
+    #[cfg(target_os = "windows")]
+    FocusChanged,
+}
 
 /// Run a native surface on the calling main thread until closed or its qualification deadline.
 ///
@@ -49,7 +64,7 @@ pub fn run(
         })?),
         None => None,
     };
-    let mut event_loop = EventLoop::new();
+    let mut event_loop = EventLoopBuilder::<NativeAction>::with_user_event().build();
     let window = Rc::new(
         WindowBuilder::new()
             .with_title(options.title)
@@ -73,6 +88,12 @@ pub fn run(
         }
     }
     let mut presenter = Presenter::new(Rc::clone(&window), options.dark)?;
+    #[cfg(target_os = "windows")]
+    let mut controls = crate::windows_controls::Controls::new(
+        Rc::clone(&window),
+        event_loop.create_proxy(),
+        content.accessible_controls(),
+    )?;
     let mut first_frame = None;
     let mut frames_presented = 0;
     let mut total_frame_work = Duration::ZERO;
@@ -85,9 +106,10 @@ pub fn run(
     let mut next_frame = started;
     window.set_visible(true);
     window.set_focus();
-    window.request_redraw();
+    let mut redraw_pending = false;
+    invalidate(&window, &mut redraw_pending);
     event_loop.run_return(|event, _, control| {
-        *control = ControlFlow::WaitUntil(next_frame);
+        *control = ControlFlow::Wait;
         if options.duration.is_some_and(|duration| started.elapsed() >= duration) {
             *control = ControlFlow::Exit;
             return;
@@ -99,24 +121,29 @@ pub fn run(
                     WindowEvent::CursorMoved { position, .. } => {
                         let scale = window.scale_factor();
                         pointer = Pointer { x: position.x / scale, y: position.y / scale };
-                        content.pointer(PointerAction::Move, pointer);
-                        window.request_redraw();
+                        if content.pointer(PointerAction::Move, pointer) {
+                            invalidate(&window, &mut redraw_pending);
+                        }
                     }
                     WindowEvent::CursorLeft { .. } => {
                         pressed = None;
-                        content.pointer(PointerAction::Leave, pointer);
-                        window.request_redraw();
+                        if content.pointer(PointerAction::Leave, pointer) {
+                            invalidate(&window, &mut redraw_pending);
+                        }
                     }
                     WindowEvent::Focused(false) => {
                         pressed = None;
-                        content.pointer(PointerAction::Leave, pointer);
-                        window.request_redraw();
+                        if content.pointer(PointerAction::Leave, pointer) {
+                            invalidate(&window, &mut redraw_pending);
+                        }
                     }
                     WindowEvent::MouseInput { state, button: MouseButton::Left, .. } => {
                         let target = content.hit_test(pointer);
                         if state == ElementState::Pressed {
                             pressed = Some(target);
-                            content.pointer(PointerAction::Press, pointer);
+                            if content.pointer(PointerAction::Press, pointer) {
+                                invalidate(&window, &mut redraw_pending);
+                            }
                             if target == HitTarget::Caption
                                 && let Err(error) = window.drag_window()
                             {
@@ -124,13 +151,14 @@ pub fn run(
                                 *control = ControlFlow::Exit;
                             }
                         } else {
-                            content.pointer(PointerAction::Release, pointer);
+                            if content.pointer(PointerAction::Release, pointer) {
+                                invalidate(&window, &mut redraw_pending);
+                            }
                             if pressed == Some(HitTarget::Close) && target == HitTarget::Close {
                                 *control = ControlFlow::Exit;
                             }
                             pressed = None;
                         }
-                        window.request_redraw();
                     }
                     WindowEvent::KeyboardInput { event, .. }
                         if event.state == ElementState::Pressed && !event.repeat =>
@@ -138,30 +166,58 @@ pub fn run(
                         match event.logical_key {
                             Key::Escape => *control = ControlFlow::Exit,
                             Key::Tab => {
-                                content.key(KeyAction::Tab);
-                                window.request_redraw();
+                                if content.key(KeyAction::Tab) {
+                                    invalidate(&window, &mut redraw_pending);
+                                }
                             }
                             _ => {}
                         }
                     }
                     WindowEvent::Resized(_)
                     | WindowEvent::ScaleFactorChanged { .. }
-                    | WindowEvent::Focused(true) => window.request_redraw(),
+                    | WindowEvent::Focused(true) => invalidate(&window, &mut redraw_pending),
                     _ => {}
                 }
             }
-            Event::RedrawRequested(window_id)
-                if window_id == window.id() && window.is_visible() && !window.is_minimized() =>
-            {
+            Event::UserEvent(action) => match action {
+                #[cfg(target_os = "windows")]
+                NativeAction::Activate(id) => {
+                    if content.activate(id) {
+                        invalidate(&window, &mut redraw_pending);
+                    }
+                }
+                #[cfg(target_os = "windows")]
+                NativeAction::Close => *control = ControlFlow::Exit,
+                #[cfg(target_os = "windows")]
+                NativeAction::Disclosure => {
+                    if content.key(KeyAction::Tab) {
+                        invalidate(&window, &mut redraw_pending);
+                    }
+                }
+                #[cfg(target_os = "windows")]
+                NativeAction::FocusChanged => invalidate(&window, &mut redraw_pending),
+            },
+            Event::RedrawRequested(window_id) if window_id == window.id() => {
+                redraw_pending = false;
                 let size = window.inner_size();
-                if size.width > 0 && size.height > 0 {
+                if window.is_visible()
+                    && !window.is_minimized()
+                    && size.width > 0
+                    && size.height > 0
+                {
                     let frame_started = Instant::now();
                     let result = content
                         .render(size.width, size.height, window.scale_factor(), started.elapsed())
                         .map_err(|error| DesktopError::boxed("render_frame", error))
                         .and_then(|frame| {
                             frame.validate()?;
-                            presenter.present(&frame)
+                            presenter.present(&frame)?;
+                            #[cfg(target_os = "windows")]
+                            {
+                                controls.update(content.accessible_controls())?;
+                                controls.draw_focus()?;
+                            }
+                            Ok(())
                         });
                     match result {
                         Ok(()) => {
@@ -194,10 +250,11 @@ pub fn run(
             }
             Event::MainEventsCleared
                 if Instant::now() >= next_frame
+                    && content.animating()
                     && window.is_visible()
                     && !window.is_minimized() =>
             {
-                window.request_redraw()
+                invalidate(&window, &mut redraw_pending)
             }
             _ => {}
         }
@@ -205,12 +262,18 @@ pub fn run(
             *control = presentation_wait(
                 window.is_visible(),
                 window.is_minimized(),
-                next_frame,
+                content.animating().then_some(next_frame),
                 shutdown_deadline,
             );
         }
     });
     let material = presenter.material();
+    #[cfg(target_os = "windows")]
+    if let Err(error) = controls.shutdown() {
+        failure.get_or_insert(error);
+    }
+    #[cfg(target_os = "windows")]
+    drop(controls);
     drop(presenter);
     drop(window);
     if let Some(error) = failure {
@@ -229,75 +292,10 @@ pub fn run(
     })
 }
 
-/// Suspend hidden native surfaces without losing the qualification shutdown deadline.
-fn presentation_wait(
-    visible: bool,
-    minimized: bool,
-    next_frame: Instant,
-    shutdown: Option<Instant>,
-) -> ControlFlow {
-    if visible && !minimized {
-        ControlFlow::WaitUntil(next_frame)
-    } else if let Some(deadline) = shutdown {
-        ControlFlow::WaitUntil(deadline)
-    } else {
-        ControlFlow::Wait
-    }
-}
-
-/// Skip missed periods while preserving cadence; an early interaction keeps the next deadline.
-fn advance_deadline(deadline: Instant, now: Instant) -> Instant {
-    if now < deadline {
-        return deadline;
-    }
-    let periods = now.duration_since(deadline).as_nanos() / FRAME_INTERVAL.as_nanos() + 1;
-    u32::try_from(periods)
-        .ok()
-        .and_then(|periods| FRAME_INTERVAL.checked_mul(periods))
-        .and_then(|delay| deadline.checked_add(delay))
-        .unwrap_or_else(|| now + FRAME_INTERVAL)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{FRAME_INTERVAL, advance_deadline, presentation_wait};
-    use std::time::{Duration, Instant};
-    use tao::event_loop::ControlFlow;
-
-    /// Keep raster work from accumulating drift and skip missed frames instead of busy catching up.
-    #[test]
-    fn cadence_skips_late_frames_and_keeps_early_input_deadline() {
-        let origin = Instant::now();
-        let scheduled = origin + FRAME_INTERVAL;
-        assert_eq!(advance_deadline(scheduled, origin + Duration::from_millis(4)), scheduled);
-        assert_eq!(
-            advance_deadline(scheduled, origin + Duration::from_millis(27)),
-            origin + Duration::from_millis(32)
-        );
-        assert_eq!(
-            advance_deadline(scheduled, origin + Duration::from_millis(48)),
-            origin + Duration::from_millis(64)
-        );
-    }
-
-    /// Stop background animation work while preserving a bounded native run's eventual exit.
-    #[test]
-    fn hidden_surfaces_wait_for_native_events_or_shutdown() {
-        let now = Instant::now();
-        let next = now + FRAME_INTERVAL;
-        let shutdown = now + Duration::from_secs(3);
-        assert_eq!(
-            presentation_wait(false, false, next, Some(shutdown)),
-            ControlFlow::WaitUntil(shutdown)
-        );
-        assert_eq!(
-            presentation_wait(true, true, next, Some(shutdown)),
-            ControlFlow::WaitUntil(shutdown)
-        );
-        assert_eq!(presentation_wait(false, false, next, None), ControlFlow::Wait);
-        assert_eq!(
-            presentation_wait(true, false, next, Some(shutdown)),
-            ControlFlow::WaitUntil(next)
-        );
+/// Coalesce meaningful input invalidations until the native redraw is consumed.
+fn invalidate(window: &tao::window::Window, pending: &mut bool) {
+    if !*pending {
+        *pending = true;
+        window.request_redraw();
     }
 }

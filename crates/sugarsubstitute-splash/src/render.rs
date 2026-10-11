@@ -67,6 +67,17 @@ pub struct SplashRenderer {
     locale: String,
 }
 
+/// Keep a validated frame's composition parameters together through both startup stages.
+struct RenderFrame {
+    width: u32,
+    height: u32,
+    scale: f64,
+    appearance: Appearance,
+    character: AnimationFrame,
+    feedback: ProgressFrame,
+    status: bool,
+}
+
 impl SplashRenderer {
     /// Validate the compiled asset inventory without decoding all characters or scanning fonts.
     pub fn new(locale: &str) -> Result<Self, RenderError> {
@@ -91,6 +102,48 @@ impl SplashRenderer {
         character: AnimationFrame,
         feedback: ProgressFrame,
     ) -> Result<Pixmap, RenderError> {
+        self.render_frame(RenderFrame {
+            width,
+            height,
+            scale,
+            appearance,
+            character,
+            feedback,
+            status: true,
+        })
+    }
+
+    /// Paint the first packaged pose and controls before discovering status fonts.
+    ///
+    /// Use this for the initial submission, then call `render` to enrich the same view.
+    /// The collapsed status remains transparent until enrichment. No font discovery or
+    /// other pose decoding occurs here; native material, control and progress paint match
+    /// a normal frame with the same inputs.
+    ///
+    /// # Errors
+    /// Reject invalid/oversized input, allocation failures and invalid packaged images.
+    pub fn render_bootstrap(
+        &mut self,
+        width: u32,
+        height: u32,
+        scale: f64,
+        appearance: Appearance,
+        feedback: ProgressFrame,
+    ) -> Result<Pixmap, RenderError> {
+        self.render_frame(RenderFrame {
+            width,
+            height,
+            scale,
+            appearance,
+            character: AnimationFrame::bootstrap(),
+            feedback,
+            status: false,
+        })
+    }
+
+    /// Validate and compose one frame while retaining this view's prepared resources.
+    fn render_frame(&mut self, frame: RenderFrame) -> Result<Pixmap, RenderError> {
+        let RenderFrame { width, height, scale, appearance, character, feedback, status } = frame;
         if width == 0
             || height == 0
             || width > 4096
@@ -110,7 +163,7 @@ impl SplashRenderer {
         self.characters.render(&mut target, bounds, character).map_err(RenderError::Character)?;
         if appearance.expanded {
             chrome::console(&mut target, appearance.theme, scale as f32);
-        } else {
+        } else if status {
             if self.text.is_none() {
                 self.text = Some(StatusText::new(&self.locale).map_err(RenderError::Font)?);
             }
@@ -120,7 +173,8 @@ impl SplashRenderer {
                     messages(&self.locale).loading,
                     appearance.theme,
                     scale as f32,
-                );
+                )
+                .map_err(RenderError::Font)?;
             }
         }
         progress::paint(&mut target, appearance, feedback, scale as f32);
@@ -147,6 +201,38 @@ impl SplashRenderer {
 mod tests {
     use super::SplashRenderer;
     use crate::{AnimationFrame, Appearance, ProgressFrame};
+
+    /// Submit a collapsed mascot without font work, then enrich that same retained owner.
+    #[test]
+    fn bootstrap_defers_status_fonts_and_other_pose_decoding()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut renderer = SplashRenderer::new("en")?;
+        let appearance = Appearance { expanded: false, ..Appearance::demo() };
+        let feedback = ProgressFrame { completed: 0.4, activity: None };
+        let bootstrap = renderer.render_bootstrap(558, 558, 1.0, appearance, feedback)?;
+        assert!(renderer.text.is_none());
+        assert_eq!(renderer.characters.decoded_count(), 1);
+        assert!(
+            (486..530)
+                .all(|y| (24..534).all(|x| bootstrap.pixel(x, y).is_some_and(|p| p.alpha() == 0)))
+        );
+        let enriched =
+            renderer.render(558, 558, 1.0, appearance, AnimationFrame::bootstrap(), feedback)?;
+        assert!(renderer.text.is_some());
+        assert_eq!(renderer.characters.decoded_count(), 1);
+        assert!(
+            (486..530)
+                .any(|y| (24..534).any(|x| enriched.pixel(x, y).is_some_and(|p| p.alpha() > 0)))
+        );
+        for y in 0..558 {
+            for x in 0..558 {
+                if !(24..534).contains(&x) || !(486..530).contains(&y) {
+                    assert_eq!(bootstrap.pixel(x, y), enriched.pixel(x, y));
+                }
+            }
+        }
+        Ok(())
+    }
 
     /// Keep material pixels transparent and blank output confined to its owned rectangle.
     #[test]

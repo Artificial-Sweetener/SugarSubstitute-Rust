@@ -6,17 +6,23 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import math
 import os
 import sys
 from pathlib import Path
 
 
-def render_reference(legacy_root: Path, output: Path) -> None:
+def render_reference(legacy_root: Path, output: Path, locale: str = "en", locale_sample: bool = False) -> None:
     """Capture actual widgets rather than a reconstructed reference drawing."""
+    if sys.platform == "win32":
+        os.environ["QT_QPA_PLATFORM"] = "windows"
+    os.environ["PYTHONDONTWRITEBYTECODE"] = "1"
     sys.path.insert(0, str(legacy_root))
-    from PySide6.QtCore import QPoint
-    from PySide6.QtGui import QColor, QFontDatabase, QImage, QPainter
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtGui import QColor, QFontDatabase, QImage, QPainter, QTextLayout
+    from PySide6 import __version__ as pyside_version
     from PySide6.QtWidgets import QApplication, QWidget
     from qfluentwidgets import (  # type: ignore[import-untyped]
         Theme,
@@ -30,15 +36,30 @@ def render_reference(legacy_root: Path, output: Path) -> None:
         SplashFlipPhase,
     )
     from sugarsubstitute_shared.launch_splash.progress import SplashProgress
+    from qframelesswindow.titlebar.title_bar_buttons import TitleBarButtonState
+    from substitute.app.bootstrap.splash_localization import build_splash_localization_runtime
+    from sugarsubstitute_shared.presentation.localization import app_text, render_application_text
 
     application = QApplication.instance() or QApplication([])
-    # Qt's Windows offscreen backend does not discover the native Windows fonts.
-    # Load the same installed family explicitly, keeping fonts out of the payload.
-    if sys.platform == "win32":
-        font_path = Path(os.environ["WINDIR"]) / "Fonts" / "segoeui.ttf"
-        if QFontDatabase.addApplicationFont(str(font_path)) < 0:
-            raise RuntimeError("The native Segoe UI reference font could not be loaded")
+    localization = build_splash_localization_runtime(application, locale_override=locale)
+    locale = localization.initial_snapshot.effective_language_identifier
     output.mkdir(parents=True, exist_ok=True)
+    write_environment = {
+        "interpreter": sys.executable,
+        "pyside_version": pyside_version,
+        "qt_platform": application.platformName(),
+        "font_families": QFontDatabase.families(),
+        "screen_mapping": "Suppressed with WA_DontShowOnScreen; production show/resize lifecycle retained",
+        "source_sha256": {
+            name: hashlib.sha256((legacy_root / name).read_bytes()).hexdigest()
+            for name in (
+                "substitute/presentation/shell/splash_window.py",
+                "substitute/presentation/shell/splash_progress_panel.py",
+                "substitute/presentation/splash_animation/paper_flip_widget.py",
+            )
+        },
+    }
+    (output / "environment.json").write_text(json.dumps(write_environment, indent=2) + "\n", encoding="utf-8")
     scenarios = []
     for theme in ("dark", "light"):
         setTheme(Theme.DARK if theme == "dark" else Theme.LIGHT)
@@ -54,12 +75,14 @@ def render_reference(legacy_root: Path, output: Path) -> None:
         panel = splash.findChild(SplashProgressPanel)
         toggle = splash.findChild(ComfyOutputToggleButton)
         assert panel is not None and toggle is not None
+        # Keep the production show/resize lifecycle while Qt suppresses screen mapping.
+        splash.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
         splash.show()
         application.processEvents()
-        for expanded in (False, True):
+        for expanded in ((False,) if locale_sample else (False, True)):
             panel.set_details_visible(expanded)
             application.processEvents()
-            for scale in (1.0, 1.5, 2.0):
+            for scale in (1.0, 1.25, 1.5, 1.75, 2.0):
                 cases = [
                     (0, 1, flip, fill, sweep)
                     for flip, fill, sweep in (
@@ -79,11 +102,27 @@ def render_reference(legacy_root: Path, output: Path) -> None:
                 cases.extend((0, -1, flip, 0.4, 0.5) for flip in (0.25, 0.75))
                 if theme == "dark" and expanded and scale == 1.0:
                     cases.extend((pose, 1, 0.0, 0.4, 0.5) for pose in range(1, 40))
-                for pose, direction, flip, fill, sweep in cases:
+                if locale_sample:
+                    cases = [(0, 1, 0.0, 0.4, 0.5)]
+                control_cases = [(case, None, None) for case in cases]
+                control_cases.extend(
+                    ((0, 1, 0.0, 0.4, 0.5), control, control if pressed else None)
+                    for control in (() if locale_sample else ("console", "close"))
+                    for pressed in (False, True)
+                )
+                for (pose, direction, flip, fill, sweep), hovered, pressed in control_cases:
+                    for control, button in (("console", toggle), ("close", splash.titleBar.closeBtn)):
+                        button.setAttribute(Qt.WidgetAttribute.WA_UnderMouse, False)
+                        button.setState(
+                            TitleBarButtonState.PRESSED if pressed == control
+                            else TitleBarButtonState.HOVER if hovered == control
+                            else TitleBarButtonState.NORMAL
+                        )
                     visual._current_pose = visual._poses[pose]
                     panel.reset_progress()
                     panel.set_progress(
-                        SplashProgress(round(fill * 100), 100), status="Loading..."
+                        SplashProgress(round(fill * 100), 100),
+                        status=render_application_text(app_text("Loading..."))
                     )
                     if fill < 1:
                         panel.progress.set_activity_enabled(True)
@@ -100,7 +139,7 @@ def render_reference(legacy_root: Path, output: Path) -> None:
                     )
                     visual._phase_started_at = -flip * 0.390
                     visual._direction = direction
-                    width, height = round(558 * scale), round(558 * scale)
+                    width = height = math.floor(558 * scale + 0.5)
                     image = QImage(
                         width, height, QImage.Format.Format_ARGB32_Premultiplied
                     )
@@ -112,6 +151,12 @@ def render_reference(legacy_root: Path, output: Path) -> None:
                     name = f"{theme}-{'expanded' if expanded else 'collapsed'}-{scale:g}-{flip:g}-{fill:g}-{sweep:g}"
                     if pose != 0 or direction != 1:
                         name += f"-pose-{pose}-direction-{direction}"
+                    if hovered:
+                        name += f"-hover-{hovered}"
+                    if pressed:
+                        name += f"-press-{pressed}"
+                    if locale != "en":
+                        name += f"-locale-{locale}"
                     assert image.save(str(output / f"{name}.png"))
                     scenarios.append(
                         {
@@ -124,6 +169,9 @@ def render_reference(legacy_root: Path, output: Path) -> None:
                             "sweep": sweep,
                             "pose": pose,
                             "direction": direction,
+                            "hovered": hovered,
+                            "pressed": pressed,
+                            "locale": locale,
                         }
                     )
                     panel.progress._sweep.stop()
@@ -133,6 +181,18 @@ def render_reference(legacy_root: Path, output: Path) -> None:
                 point = widget.mapTo(window, QPoint())
                 return [point.x(), point.y(), widget.width(), widget.height()]
 
+            layout = QTextLayout(panel.status.text(), panel.status.font())
+            layout.beginLayout()
+            line = layout.createLine()
+            line.setLineWidth(panel.status.width())
+            layout.endLayout()
+            glyph_runs = [
+                {"font_family": run.rawFont().familyName(),
+                 "font_style": run.rawFont().styleName(),
+                 "glyph_indices": list(run.glyphIndexes()),
+                 "positions": [[point.x(), point.y()] for point in run.positions()]}
+                for run in layout.glyphRuns()
+            ]
             (
                 output
                 / f"geometry-{theme}-{'expanded' if expanded else 'collapsed'}.json"
@@ -147,10 +207,17 @@ def render_reference(legacy_root: Path, output: Path) -> None:
                         "toggle": geometry(toggle),
                         "close": geometry(splash.titleBar.closeBtn),
                         "font": panel.status.font().toString(),
+                        "font_families": panel.status.font().families(),
                         "ascent": panel.status.fontMetrics().ascent(),
                         "descent": panel.status.fontMetrics().descent(),
                         "bar_color": panel.progress.barColor().name(),
                         "log_empty": splash.log_view.toPlainText() == "",
+                        "locale": locale,
+                        "qt_platform": application.platformName(),
+                        "status_text": panel.status.text(),
+                        "toggle_accessible_name": toggle.accessibleName(),
+                        "close_tooltip": splash.titleBar.closeBtn.toolTip(),
+                        "status_glyph_runs": glyph_runs,
                     },
                     indent=2,
                 )
@@ -164,6 +231,7 @@ def render_reference(legacy_root: Path, output: Path) -> None:
         json.dumps(scenarios, indent=2) + "\n", encoding="utf-8"
     )
     print(json.dumps({"renders": len(scenarios), "output": str(output)}))
+    localization.manager.close()
 
 
 def main() -> None:
@@ -171,9 +239,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--legacy-root", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--locale", default="en", choices=("en", "zh-Hans", "ja", "ko", "es"))
+    parser.add_argument("--locale-sample", action="store_true", help="Capture collapsed owned text at five scales in both themes")
     arguments = parser.parse_args()
     render_reference(
-        arguments.legacy_root.resolve(strict=True), arguments.output.resolve()
+        arguments.legacy_root.resolve(strict=True), arguments.output.resolve(),
+        arguments.locale, arguments.locale_sample
     )
 
 

@@ -34,11 +34,14 @@ pub(super) fn paper_edge(
     }
     let width = target.width() as usize;
     let height = target.height() as usize;
-    let x0 = (top.x - radius).floor().max(bounds.x.ceil()).clamp(0.0, width as f64) as usize;
-    let x1 = (top.x + radius).ceil().min(bounds.x + bounds.width).clamp(0.0, width as f64) as usize;
-    let y0 = (top.y - radius).floor().max(bounds.y.ceil()).clamp(0.0, height as f64) as usize;
-    let y1 =
-        (bottom.y + radius).ceil().min(bounds.y + bounds.height).clamp(0.0, height as f64) as usize;
+    let x0 = (top.x - radius).floor().max(bounds.x.round()).clamp(0.0, width as f64) as usize;
+    let x1 = (top.x + radius).ceil().min((bounds.x + bounds.width).round()).clamp(0.0, width as f64)
+        as usize;
+    let y0 = (top.y - radius).floor().max(bounds.y.round()).clamp(0.0, height as f64) as usize;
+    let y1 = (bottom.y + radius)
+        .ceil()
+        .min((bounds.y + bounds.height).round())
+        .clamp(0.0, height as f64) as usize;
     let source = [multiply(54, alpha), multiply(16, alpha), multiply(16, alpha), alpha];
     let pixels = target.data_mut();
     for y in y0..y1 {
@@ -100,6 +103,7 @@ pub(super) fn paint(
     target: &mut Pixmap,
     source: &Pixmap,
     quad: [Point; 4],
+    bounds: Bounds,
 ) -> Result<(), CharacterError> {
     let extent = f64::from(source.width());
     let sx = (quad[1].x - quad[0].x) / extent;
@@ -113,20 +117,26 @@ pub(super) fn paint(
     let sheared = step_y != 0;
     let width = target.width() as usize;
     let height = target.height() as usize;
-    let x0 = quad[0].x.floor().clamp(0.0, width as f64) as usize;
-    let x1 = quad[1].x.ceil().clamp(0.0, width as f64) as usize;
+    let x0 = quad[0].x.floor().max(bounds.x.round()).clamp(0.0, width as f64) as usize;
+    let x1 =
+        quad[1].x.ceil().min((bounds.x + bounds.width).round()).clamp(0.0, width as f64) as usize;
     let y0 = quad
         .iter()
         .map(|point| point.y)
         .fold(f64::INFINITY, f64::min)
         .floor()
+        .max(bounds.y.round())
         .clamp(0.0, height as f64) as usize;
     let y1 = quad
         .iter()
         .map(|point| point.y)
         .fold(f64::NEG_INFINITY, f64::max)
         .ceil()
+        .min((bounds.y + bounds.height).round())
         .clamp(0.0, height as f64) as usize;
+    if x0 >= x1 || y0 >= y1 {
+        return Ok(());
+    }
     let mut outline = PathBuilder::new();
     outline.move_to(quad[0].x as f32, quad[0].y as f32);
     for point in &quad[1..] {
@@ -257,7 +267,7 @@ fn multiply(value: u8, alpha: u8) -> u8 {
 
 #[cfg(test)]
 mod tests {
-    use super::{bounded_count, circle_above, multiply, over, paper_edge, sample};
+    use super::{bounded_count, circle_above, multiply, over, paint, paper_edge, sample};
     use crate::projection::{Bounds, Point};
     use std::error::Error;
     use tiny_skia::Pixmap;
@@ -316,6 +326,50 @@ mod tests {
         assert_eq!(&target.data()[3 * 12 * 4..4 * 12 * 4], &[0; 48]);
         assert!((circle_above(-1.0, 1.0, 1.0, 0.0) - std::f64::consts::PI / 2.0).abs() < 1e-12);
         assert_eq!(circle_above(-1.0, 1.0, 1.0, 1.0), 0.0);
+        Ok(())
+    }
+
+    /// Clip opaque airborne source pixels to the same widget rectangle as the paper edge.
+    #[test]
+    fn transformed_card_cannot_paint_outside_its_widget() -> Result<(), Box<dyn Error>> {
+        let mut source = Pixmap::new(4, 4).ok_or("Cannot allocate source raster")?;
+        source.fill(tiny_skia::Color::WHITE);
+        let quad = [
+            Point { x: 3.0, y: 1.0 },
+            Point { x: 7.0, y: 0.0 },
+            Point { x: 7.0, y: 8.0 },
+            Point { x: 3.0, y: 9.0 },
+        ];
+        let mut target = Pixmap::new(12, 12).ok_or("Cannot allocate target raster")?;
+        paint(&mut target, &source, quad, Bounds { x: 2.0, y: 3.0, width: 6.0, height: 4.0 })?;
+        assert!(target.pixel(5, 4).is_some_and(|pixel| pixel.alpha() == 255));
+        for y in 0..12 {
+            for x in 0..12 {
+                if !(2..8).contains(&x) || !(3..7).contains(&y) {
+                    assert_eq!(target.pixel(x, y).map(|pixel| pixel.alpha()), Some(0));
+                }
+            }
+        }
+        paint(&mut target, &source, quad, Bounds { x: 20.0, y: 20.0, width: 1.0, height: 1.0 })?;
+        Ok(())
+    }
+
+    /// Match the observed Qt widget clip at quarter- and three-quarter-pixel DPI origins.
+    #[test]
+    fn fractional_widget_origins_snap_once_to_device_pixels() -> Result<(), Box<dyn Error>> {
+        for (origin, first_row) in [(8.75, 9), (12.25, 12)] {
+            let mut target = Pixmap::new(20, 20).ok_or("Cannot allocate edge raster")?;
+            paper_edge(
+                &mut target,
+                Point { x: 10.0, y: 1.0 },
+                Point { x: 10.0, y: 18.0 },
+                2.0,
+                89,
+                Bounds { x: 0.0, y: origin, width: 20.0, height: 20.0 },
+            );
+            assert_eq!(target.pixel(10, first_row - 1).map(|pixel| pixel.alpha()), Some(0));
+            assert_eq!(target.pixel(10, first_row).map(|pixel| pixel.alpha()), Some(89));
+        }
         Ok(())
     }
 }

@@ -11,7 +11,13 @@ publish.workspace = true
 [dependencies]
 tiny-skia.workspace = true
 png.workspace = true
+
+[target.'cfg(not(target_os = "windows"))'.dependencies]
 cosmic-text.workspace = true
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows.workspace = true
+windows-core.workspace = true
 
 [lints]
 workspace = true

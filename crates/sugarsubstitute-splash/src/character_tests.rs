@@ -69,6 +69,42 @@ fn all_packaged_poses_decode_lazily_at_source_size() -> Result<(), Box<dyn Error
     Ok(())
 }
 
+/// Preserve valid alpha and widget clipping for every pose across both flip directions.
+#[test]
+fn all_poses_remain_bounded_through_sheared_edge_and_landing_frames() -> Result<(), Box<dyn Error>>
+{
+    let mut library = CharacterLibrary::new(POSE_ASSETS)?;
+    let mut target = Pixmap::new(209, 209).ok_or("Cannot allocate test raster")?;
+    let bounds = Bounds { x: 8.0, y: 8.0, width: 193.0, height: 193.0 };
+    for pose in 0..40 {
+        for direction in [-1, 1] {
+            for progress in [0.25, 0.5, 0.875] {
+                target.fill(tiny_skia::Color::TRANSPARENT);
+                library.render(
+                    &mut target,
+                    bounds,
+                    AnimationFrame { pose, progress, direction },
+                )?;
+                assert!(target.pixels().iter().any(|pixel| pixel.alpha() > 0));
+                assert!(target.pixels().iter().all(|pixel| {
+                    pixel.red() <= pixel.alpha()
+                        && pixel.green() <= pixel.alpha()
+                        && pixel.blue() <= pixel.alpha()
+                }));
+                for y in 0..209 {
+                    for x in 0..209 {
+                        if !(8..201).contains(&x) || !(8..201).contains(&y) {
+                            assert_eq!(target.pixel(x, y).map(|pixel| pixel.alpha()), Some(0));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert_eq!(library.decoded_count(), 40);
+    Ok(())
+}
+
 /// Reject invalid geometry and pose indices before changing a target or decoding assets.
 #[test]
 fn malformed_frames_do_not_mutate_raster() -> Result<(), Box<dyn Error>> {

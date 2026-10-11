@@ -166,7 +166,8 @@ impl CharacterLibrary {
     /// Bounds and target pixels share a coordinate system; the caller applies display scale
     /// before calling. The source rectangle spans zero through the PNG extent, exactly as
     /// QPainter's `drawPixmap` overload, without a half-pixel translation. Source-over paint
-    /// preserves the caller's backdrop and clipping at the target's edges.
+    /// preserves the caller's backdrop. Paint is clipped to the mascot widget bounds and
+    /// the target's edges, including airborne card corners.
     ///
     /// # Errors
     /// Return a geometry, pose-index, PNG-decoding, or packaged-image-size error.
@@ -205,7 +206,7 @@ impl CharacterLibrary {
                 None,
             );
         } else {
-            sampling::paint(target, source, quad)?;
+            sampling::paint(target, source, quad, bounds)?;
         }
         paint_paper_edge(target, quad, frame.progress, card_size / extent, bounds);
         Ok(())

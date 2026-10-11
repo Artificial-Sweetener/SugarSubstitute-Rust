@@ -5,7 +5,9 @@
 
 use serde::Deserialize;
 use std::{error::Error, fs, path::Path};
-use sugarsubstitute_splash::{AnimationFrame, Appearance, ProgressFrame, SplashRenderer, Theme};
+use sugarsubstitute_splash::{
+    AnimationFrame, Appearance, Control, LOCALES, ProgressFrame, SplashRenderer, Theme,
+};
 
 /// Read a parity scenario emitted by the production PySide reference harness.
 #[derive(Deserialize)]
@@ -22,11 +24,32 @@ struct Scenario {
     pose: usize,
     #[serde(default = "forward_direction")]
     direction: i8,
+    #[serde(default = "canonical_locale")]
+    locale: String,
+    #[serde(default)]
+    hovered: Option<String>,
+    #[serde(default)]
+    pressed: Option<String>,
 }
 
 /// Preserve the original forward direction for reference harnesses predating direction cases.
 fn forward_direction() -> i8 {
     1
+}
+
+/// Match original scenarios to the canonical reference text.
+fn canonical_locale() -> String {
+    "en".into()
+}
+
+/// Reject mistyped reference controls rather than silently painting a different state.
+fn control(value: Option<&str>) -> Result<Option<Control>, Box<dyn Error>> {
+    match value {
+        None => Ok(None),
+        Some("console") => Ok(Some(Control::ConsoleToggle)),
+        Some("close") => Ok(Some(Control::Close)),
+        Some(_) => Err("Parity scenario control is invalid".into()),
+    }
 }
 
 /// Render explicit fixture scenarios without a window or native compositor.
@@ -36,7 +59,8 @@ pub(crate) fn export(scenarios: &Path, output: &Path) -> Result<(), Box<dyn Erro
         return Err("Parity input requires 1 through 1024 scenarios".into());
     }
     fs::create_dir_all(output)?;
-    let mut renderer = SplashRenderer::new("en")?;
+    let mut locale = canonical_locale();
+    let mut renderer = SplashRenderer::new(&locale)?;
     for scenario in definitions {
         if scenario.name.is_empty()
             || !scenario
@@ -56,8 +80,19 @@ pub(crate) fn export(scenarios: &Path, output: &Path) -> Result<(), Box<dyn Erro
         if !scenario.flip.is_finite() || !(0.0..=1.0).contains(&scenario.flip) {
             return Err("Parity scenario flip is invalid".into());
         }
-        let appearance =
-            Appearance { theme, expanded: scenario.expanded, hovered: None, pressed: None };
+        if !LOCALES.iter().any(|messages| messages.id == scenario.locale) {
+            return Err("Parity scenario locale is invalid".into());
+        }
+        if locale != scenario.locale {
+            locale = scenario.locale;
+            renderer = SplashRenderer::new(&locale)?;
+        }
+        let appearance = Appearance {
+            theme,
+            expanded: scenario.expanded,
+            hovered: control(scenario.hovered.as_deref())?,
+            pressed: control(scenario.pressed.as_deref())?,
+        };
         let character = AnimationFrame {
             pose: if scenario.flip >= 0.5 { 1 } else { scenario.pose },
             progress: scenario.flip,
@@ -82,4 +117,32 @@ pub(crate) fn export(scenarios: &Path, output: &Path) -> Result<(), Box<dyn Erro
         frame.save_png(output.join(format!("{}.png", scenario.name)))?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Preserve existing qualification inputs while admitting explicit localized controls.
+    #[test]
+    fn reference_scenarios_preserve_defaults_and_reject_unknown_fields()
+    -> Result<(), Box<dyn Error>> {
+        let source = r#"{"name":"pose","theme":"dark","expanded":false,"scale":1.0,"flip":0.0,"fill":0.4,"sweep":0.5}"#;
+        let scenario: Scenario = serde_json::from_str(source)?;
+        assert_eq!(scenario.locale, "en");
+        assert_eq!(scenario.direction, 1);
+        assert!(scenario.hovered.is_none());
+        let mut explicit: serde_json::Value = serde_json::from_str(source)?;
+        explicit["locale"] = "ja".into();
+        explicit["hovered"] = "console".into();
+        explicit["pressed"] = "close".into();
+        let scenario: Scenario = serde_json::from_value(explicit.clone())?;
+        assert_eq!(scenario.locale, "ja");
+        assert_eq!(control(scenario.hovered.as_deref())?, Some(Control::ConsoleToggle));
+        assert_eq!(control(scenario.pressed.as_deref())?, Some(Control::Close));
+        assert!(control(Some("unknown")).is_err());
+        explicit["unreviewed"] = true.into();
+        assert!(serde_json::from_value::<Scenario>(explicit).is_err());
+        Ok(())
+    }
 }

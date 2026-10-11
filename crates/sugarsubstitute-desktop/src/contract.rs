@@ -123,6 +123,35 @@ pub enum KeyAction {
     Tab,
 }
 
+/// Identify one native accessible pushbutton owned by the presentation content.
+///
+/// IDs are nonzero, unique within the surface, and stable for its lifetime. Labels
+/// are localized by the content owner; bounds are logical client pixels.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct AccessibleControl {
+    /// Stable surface-local native control identifier.
+    pub id: u16,
+    /// Localized current action exposed to assistive technology.
+    pub label: &'static str,
+    /// Logical position and size of the painted control.
+    pub bounds: ControlBounds,
+    /// Route activation to the surface's native close operation.
+    pub close: bool,
+}
+
+/// Bound an accessible control to its painted logical client rectangle.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ControlBounds {
+    /// Left coordinate in logical client pixels.
+    pub x: f64,
+    /// Top coordinate in logical client pixels.
+    pub y: f64,
+    /// Positive width in logical pixels.
+    pub width: f64,
+    /// Positive height in logical pixels.
+    pub height: f64,
+}
+
 /// Supply frames and accept UI input on the native event-loop thread.
 pub trait WindowContent {
     /// Rasterize the requested device size; elapsed time starts at native adapter entry.
@@ -135,10 +164,19 @@ pub trait WindowContent {
     ) -> Result<Frame, Box<dyn Error>>;
     /// Classify logical pointer positions for native close and drag behavior.
     fn hit_test(&self, pointer: Pointer) -> HitTarget;
-    /// Receive pointer activity without moving ownership of view state into the host.
-    fn pointer(&mut self, action: PointerAction, pointer: Pointer);
-    /// Receive keyboard intent without owning process or application policy.
-    fn key(&mut self, action: KeyAction);
+    /// Receive pointer activity; return true only when visible state changed.
+    fn pointer(&mut self, action: PointerAction, pointer: Pointer) -> bool;
+    /// Receive keyboard intent; return true only when visible state changed.
+    fn key(&mut self, action: KeyAction) -> bool;
+    /// Report whether the current presentation needs a continuous animation cadence.
+    /// Static content waits for native expose, input, or application events.
+    fn animating(&self) -> bool;
+    /// Borrow the complete accessible pushbutton snapshot for this surface.
+    /// Identities and geometry match the painted controls; the adapter owns native peers.
+    fn accessible_controls(&self) -> &[AccessibleControl];
+    /// Activate a content-owned control by its registered identity; return visible dirty state.
+    /// Native-close controls are consumed by the adapter and never forwarded here.
+    fn activate(&mut self, id: u16) -> bool;
 }
 
 /// Preserve the failed native operation and its underlying cause.
