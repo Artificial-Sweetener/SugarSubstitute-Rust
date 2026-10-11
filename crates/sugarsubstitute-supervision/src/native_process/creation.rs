@@ -44,9 +44,11 @@ impl WindowsPort {
             )
         }
         .map_err(|cause| RegistryError::new("job_containment_limits", cause))?;
+        let attribute_count = if family.fixture_events.is_some() { 2 } else { 1 };
         let mut bytes = 0;
         // SAFETY: sizing query has no list; the documented insufficient-buffer result supplies its required size.
-        let sized = unsafe { InitializeProcThreadAttributeList(None, 1, None, &mut bytes) };
+        let sized =
+            unsafe { InitializeProcThreadAttributeList(None, attribute_count, None, &mut bytes) };
         if let Err(cause) = sized
             && cause.code().0 as u32 != 0x8007007a
         {
@@ -57,7 +59,7 @@ impl WindowsPort {
         }
         let list = LPPROC_THREAD_ATTRIBUTE_LIST(family.attributes.as_mut_ptr().cast());
         // SAFETY: preclaimed aligned storage covers queried bytes and remains durable until list deletion.
-        unsafe { InitializeProcThreadAttributeList(Some(list), 1, None, &mut bytes) }
+        unsafe { InitializeProcThreadAttributeList(Some(list), attribute_count, None, &mut bytes) }
             .map_err(|cause| RegistryError::new("initialize_attributes", cause))?;
         family.attributes_initialized = true;
         // SAFETY: stable boxed family owns the one Job handle value through DeleteProcThreadAttributeList.
@@ -73,19 +75,36 @@ impl WindowsPort {
             )
         }
         .map_err(|cause| RegistryError::new("job_at_creation_attribute", cause))?;
+        if family.fixture_events.is_some() {
+            // SAFETY: the durable boxed family and session pin keep exactly four
+            // inheritable event duplicates live through actual attribute deletion.
+            unsafe {
+                UpdateProcThreadAttribute(
+                    list,
+                    0,
+                    PROC_THREAD_ATTRIBUTE_HANDLE_LIST as usize,
+                    Some(family.fixture_handles.as_ptr().cast()),
+                    size_of_val(&family.fixture_handles),
+                    None,
+                    None,
+                )
+            }
+            .map_err(|cause| RegistryError::new("fixture_handle_allowlist", cause))?;
+        }
         let mut startup = STARTUPINFOEXW::default();
         startup.StartupInfo.cb = size_of::<STARTUPINFOEXW>() as u32;
         startup.lpAttributeList = list;
         let mut process = PROCESS_INFORMATION::default();
         // SAFETY: validated explicit mutable argv, application/cwd/environment live through the call.
-        // Empty child allowlist means bInheritHandles=false, no HANDLE_LIST and no ambient stdio.
+        // Ordinary launches inherit no handles. The fixture inherits only its exact
+        // four-event HANDLE_LIST; the owned Job and process handles remain private.
         let created = unsafe {
             CreateProcessW(
                 PCWSTR(input.command.application_name.as_ptr()),
                 Some(PWSTR(input.command.command_line.as_mut_ptr())),
                 None,
                 None,
-                false,
+                family.fixture_events.is_some(),
                 EXTENDED_STARTUPINFO_PRESENT | CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT,
                 Some(input.environment.as_utf16().as_ptr().cast()),
                 PCWSTR(input.command.working_directory.as_ptr()),
@@ -177,5 +196,9 @@ impl WindowsPort {
             };
             family.attributes_initialized = false;
         }
+        // Deletion has returned, or initialization never committed. Only now can
+        // the execution worker retire the duplicated event handles.
+        drop(family.fixture_events.take());
+        family.fixture_handles = [0; 4];
     }
 }

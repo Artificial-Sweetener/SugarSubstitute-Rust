@@ -52,3 +52,16 @@ current_version = 1
 accepted_versions = [1]
 compatibility = "reject"
 migrations = []
+
+# The held64 native fixture retains actual cancellation and eventual exit evidence.
+[[formats]]
+id = "native-held-process-report"
+owner = "sugarsubstitute"
+sources = ["crates/sugarsubstitute/src/held_fixture/receipt.rs"]
+source_sha256 = "sha256:9b24adea4426ed7dc2e18df70e909817c8c2192081f4b9da3d85b5e4cbe3ea7f"
+classification = "authored_document"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []

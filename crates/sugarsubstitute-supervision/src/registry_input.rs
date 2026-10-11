@@ -3,6 +3,7 @@
 //! Move bounded native inputs once and account actual retained capacities before admission.
 use crate::{LaunchEnvironment, RegistryInputError, WindowsLaunchBuffers, WindowsLaunchCommand};
 use std::fmt;
+use sugarsubstitute_execution::windows_fixture::FixtureChildEvents;
 
 // Fixed family state, 256 retained members, aligned attribute storage and query scratch.
 // This is an admission peak, not an estimate of unobservable kernel allocations.
@@ -12,6 +13,7 @@ pub(crate) const FAMILY_STORAGE_BYTES: u64 = 131_072;
 pub struct WindowsLaunchInput {
     pub(crate) command: WindowsLaunchBuffers,
     pub(crate) environment: LaunchEnvironment,
+    pub(crate) fixture_events: Option<FixtureChildEvents>,
     required: u64,
 }
 impl WindowsLaunchInput {
@@ -40,7 +42,27 @@ impl WindowsLaunchInput {
         required = required
             .checked_add(environment.allocated_bytes().map_err(RegistryInputError::Environment)?)
             .ok_or(RegistryInputError::Capacity)?;
-        Ok(Self { command, environment, required })
+        Ok(Self { command, environment, fixture_events: None, required })
+    }
+    /// Move an execution-owned four-event launch pin into this explicit fixture input.
+    ///
+    /// The contained launch adapter retains the pin through native attribute-list
+    /// deletion, including partial creation or resume failures. Event storage remains
+    /// charged to its original session; this input accounts its own buffers and family.
+    /// Ordinary input has an empty inheritance allowlist. The trusted caller supplies
+    /// the dedicated child role and its exact handle tokens as command arguments.
+    ///
+    /// # Errors
+    /// Returns the same buffer-capacity/allocation errors as [`Self::new`]. A rejected
+    /// input releases its pin without a native close; the execution owner retires it.
+    pub fn with_fixture_events(
+        command: WindowsLaunchCommand,
+        environment: LaunchEnvironment,
+        events: FixtureChildEvents,
+    ) -> Result<Self, RegistryInputError> {
+        let mut input = Self::new(command, environment)?;
+        input.fixture_events = Some(events);
+        Ok(input)
     }
     /// Return the required real creation-job peak reservation, in bytes.
     /// The worker retains/claims that admitted JobContext lease before native effects.

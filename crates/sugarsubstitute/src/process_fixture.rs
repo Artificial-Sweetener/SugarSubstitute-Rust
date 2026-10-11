@@ -6,7 +6,7 @@
 //! are admitted; the native pump creates no application window or presentation.
 mod activity;
 mod lifetime;
-mod progress;
+pub(crate) mod progress;
 mod receipt;
 #[cfg(test)]
 mod tests;

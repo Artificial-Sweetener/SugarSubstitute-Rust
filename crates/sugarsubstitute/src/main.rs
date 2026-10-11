@@ -7,6 +7,10 @@
 
 mod capture;
 mod demo;
+#[cfg(target_os = "windows")]
+mod held_child;
+#[cfg(target_os = "windows")]
+mod held_fixture;
 mod invocation;
 mod preparation;
 mod preparation_task;
@@ -28,9 +32,25 @@ fn execute() -> Result<(), Box<dyn Error>> {
         #[cfg(target_os = "windows")]
         Ok(invocation::Invocation::NativeExitFixture(code)) => std::process::exit(code),
         #[cfg(target_os = "windows")]
+        Ok(invocation::Invocation::NativeHeldChild(options)) => {
+            initialize_diagnostics()?;
+            let code = held_child::run(options)?;
+            std::process::exit(code);
+        }
+        #[cfg(target_os = "windows")]
         Ok(invocation::Invocation::NativeRegistryFixture(path)) => {
             initialize_diagnostics()?;
             let receipt = process_fixture::run()?;
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::write(path, serde_json::to_vec_pretty(&receipt)?)?;
+            return Ok(());
+        }
+        #[cfg(target_os = "windows")]
+        Ok(invocation::Invocation::NativeHeldRegistryFixture(path)) => {
+            initialize_diagnostics()?;
+            let receipt = held_fixture::run()?;
             if let Some(parent) = path.parent() {
                 std::fs::create_dir_all(parent)?;
             }

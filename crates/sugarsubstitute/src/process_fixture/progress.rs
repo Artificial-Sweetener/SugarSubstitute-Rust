@@ -5,17 +5,17 @@ use super::*;
 use sugarsubstitute_contracts::lifecycle::{ProcessKey, ShutdownBudget};
 use sugarsubstitute_supervision::RegistryObservation;
 
-pub(super) struct CaseProgress {
-    pub(super) expected: u32,
-    pub(super) process: Option<ProcessKey>,
-    pub(super) started: bool,
-    pub(super) exited: Option<u32>,
-    pub(super) stop: Option<(ShutdownId, ShutdownBudget)>,
-    pub(super) settled: bool,
-    pub(super) retired: bool,
+pub(crate) struct CaseProgress {
+    pub(crate) expected: u32,
+    pub(crate) process: Option<ProcessKey>,
+    pub(crate) started: bool,
+    pub(crate) exited: Option<u32>,
+    pub(crate) stop: Option<(ShutdownId, ShutdownBudget)>,
+    pub(crate) settled: bool,
+    pub(crate) retired: bool,
 }
 impl CaseProgress {
-    pub(super) const fn new(expected: u32) -> Self {
+    pub(crate) const fn new(expected: u32) -> Self {
         Self {
             expected,
             process: None,
@@ -26,14 +26,14 @@ impl CaseProgress {
             retired: false,
         }
     }
-    pub(super) fn bind(&mut self, key: ProcessKey) -> Result<()> {
+    pub(crate) fn bind(&mut self, key: ProcessKey) -> Result<()> {
         if self.process.is_some() {
             return Err("Fixture case already has a retained family".into());
         }
         self.process = Some(key);
         Ok(())
     }
-    pub(super) fn observe(&mut self, observation: RegistryObservation) -> Result<()> {
+    pub(crate) fn observe(&mut self, observation: RegistryObservation) -> Result<()> {
         let key = match &observation {
             RegistryObservation::ContainedStarted { process }
             | RegistryObservation::RootExited { process, .. }
@@ -77,13 +77,13 @@ impl CaseProgress {
         }
         Ok(())
     }
-    pub(super) fn complete(&self) -> bool {
+    pub(crate) fn complete(&self) -> bool {
         self.started && self.exited == Some(self.expected) && self.settled && self.retired
     }
 }
 
-pub(super) struct StopPlan {
-    pub(super) budget: ShutdownBudget,
+pub(crate) struct StopPlan {
+    pub(crate) budget: ShutdownBudget,
     graceful: Instant,
     total: Instant,
     grace_observed: bool,
@@ -91,12 +91,12 @@ pub(super) struct StopPlan {
 }
 /// A consumed boundary requests finite cleanup; expiry never denotes settlement.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) struct BoundaryDue {
-    pub(super) cleanup: bool,
-    pub(super) expired: bool,
+pub(crate) struct BoundaryDue {
+    pub(crate) cleanup: bool,
+    pub(crate) expired: bool,
 }
 impl StopPlan {
-    pub(super) fn new(now: Moment, native_now: Instant) -> Result<Self> {
+    pub(crate) fn new(now: Moment, native_now: Instant) -> Result<Self> {
         Ok(Self {
             budget: ShutdownBudget::new(now)?,
             graceful: native_now
@@ -109,14 +109,14 @@ impl StopPlan {
             total_observed: false,
         })
     }
-    pub(super) fn due(&mut self, now: Moment, settled: bool) -> BoundaryDue {
+    pub(crate) fn due(&mut self, now: Moment, settled: bool) -> BoundaryDue {
         let grace = !self.grace_observed && now >= self.budget.graceful_until;
         let total = !self.total_observed && now >= self.budget.settle_until;
         self.grace_observed |= grace;
         self.total_observed |= total;
         BoundaryDue { cleanup: grace || total, expired: total && !settled }
     }
-    pub(super) fn next_deadline(&self) -> Option<Instant> {
+    pub(crate) fn next_deadline(&self) -> Option<Instant> {
         if !self.grace_observed {
             Some(self.graceful)
         } else if !self.total_observed {

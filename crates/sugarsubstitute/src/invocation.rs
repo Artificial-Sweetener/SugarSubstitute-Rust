@@ -15,6 +15,12 @@ pub(crate) enum Invocation {
     /// Windows headless same-executable registry qualification receipt destination.
     #[cfg(target_os = "windows")]
     NativeRegistryFixture(PathBuf),
+    /// Windows child with four explicit inherited fixture events and one original deadline.
+    #[cfg(target_os = "windows")]
+    NativeHeldChild(crate::held_child::ChildOptions),
+    /// Windows held64 cancellation campaign receipt destination.
+    #[cfg(target_os = "windows")]
+    NativeHeldRegistryFixture(PathBuf),
 }
 impl Invocation {
     /// Parse process arguments without starting native or execution resources.
@@ -30,7 +36,19 @@ impl Invocation {
         #[cfg(target_os = "windows")]
         let mut arguments = arguments.peekable();
         #[cfg(target_os = "windows")]
-        if arguments.peek().is_some_and(|argument| argument == "--internal-native-registry-fixture")
+        if arguments.peek().is_some_and(|argument| argument == "--internal-native-held-child") {
+            arguments.next();
+            return Ok(Self::NativeHeldChild(crate::held_child::ChildOptions::parse(arguments)?));
+        }
+        #[cfg(target_os = "windows")]
+        let held = arguments
+            .peek()
+            .is_some_and(|argument| argument == "--internal-native-held-registry-fixture");
+        #[cfg(target_os = "windows")]
+        if held
+            || arguments
+                .peek()
+                .is_some_and(|argument| argument == "--internal-native-registry-fixture")
         {
             arguments.next();
             if arguments.next().as_deref() != Some(std::ffi::OsStr::new("--receipt")) {
@@ -41,7 +59,11 @@ impl Invocation {
             if !path.is_absolute() || arguments.next().is_some() {
                 return Err("Native registry fixture requires one absolute receipt path".into());
             }
-            return Ok(Self::NativeRegistryFixture(path));
+            return Ok(if held {
+                Self::NativeHeldRegistryFixture(path)
+            } else {
+                Self::NativeRegistryFixture(path)
+            });
         }
         #[cfg(target_os = "windows")]
         if arguments.peek().is_some_and(|argument| argument == "--internal-native-exit-fixture") {
@@ -185,6 +207,14 @@ mod tests {
             #[cfg(target_os = "windows")]
             Invocation::NativeRegistryFixture(_) => {
                 return Err("Presentation options selected a registry fixture".into());
+            }
+            #[cfg(target_os = "windows")]
+            Invocation::NativeHeldChild(_) => {
+                return Err("Presentation options selected a held child fixture".into());
+            }
+            #[cfg(target_os = "windows")]
+            Invocation::NativeHeldRegistryFixture(_) => {
+                return Err("Presentation options selected a held registry fixture".into());
             }
         };
         assert_eq!(options.appearance.theme, Theme::Light);

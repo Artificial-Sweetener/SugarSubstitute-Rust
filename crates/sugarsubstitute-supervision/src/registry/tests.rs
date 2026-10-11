@@ -212,6 +212,7 @@ fn input() -> Result<WindowsLaunchInput, Box<dyn Error>> {
 }
 mod admission;
 mod bounds;
+mod cleanup_failure;
 mod completions;
 mod force;
 mod lifecycle;

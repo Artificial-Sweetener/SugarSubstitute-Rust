@@ -190,6 +190,7 @@ fn create_owned(
         return Err(RegistryError::invalid("creation_canceled_before_effect"));
     }
     let family = state.family.as_mut().ok_or_else(|| RegistryError::invalid("creation_owner"))?;
+    family.adopt_fixture_events(input)?;
     let root = shared.port.create(family, input)?;
     state.creation = Some(CreationFacts { root, resumed: false });
     let duplicate = shared.port.duplicate(family, 0)?;

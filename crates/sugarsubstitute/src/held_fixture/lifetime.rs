@@ -1,0 +1,79 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Artificial Sweetener and contributors
+//! Keep the native pump alive through actual family, event and execution settlement.
+use super::*;
+
+impl HeadlessLifetime for Fixture {
+    fn start(&mut self, wake: Arc<dyn CompletionWake>) -> Result<()> {
+        if self.owner.is_some() || self.closing {
+            return Err("Held campaign cannot start twice".into());
+        }
+        self.wake = Some(wake.clone());
+        let external = Arc::new(ExternalWake::new(wake));
+        self.external_wake = Some(external.clone());
+        self.owner = Some(ExecutionOwner::new(self.clock.clone(), external)?);
+        let client = self.owner.as_ref().ok_or("Campaign owner missing")?.client();
+        self.client = Some(client.clone());
+        self.creation_scope =
+            Some(client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?);
+        self.event_scope = Some(
+            client.create_native_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?,
+        );
+        self.notify()
+    }
+    fn activity(&mut self, max: NonZeroUsize) -> Result<HeadlessStep> {
+        self.advance(max)
+    }
+    fn next_deadline(&self) -> Option<Instant> {
+        let original = (!self.deadline_observed).then_some(self.deadline);
+        self.cleanup
+            .iter()
+            .filter_map(|cleanup| cleanup.stop.as_ref().and_then(StopPlan::next_deadline))
+            .chain(original)
+            .min()
+    }
+    fn request_shutdown(&mut self) -> Result<()> {
+        self.closing = true;
+        self.registry.close_launch_admission();
+        self.scan.request();
+        self.notify()
+    }
+    fn poll_shutdown(&mut self) -> Result<bool> {
+        if !self.closing
+            || !self.registry.is_empty()
+            || self.cases.iter().any(|case| case.session.is_some())
+        {
+            return Ok(false);
+        }
+        let Some(owner) = &mut self.owner else { return Ok(true) };
+        if !self.execution_stopping {
+            self.execution_stopping = true;
+            owner.request_shutdown(self.execution_deadline);
+        }
+        let progress = owner.poll_shutdown()?;
+        if progress.deadline_expired && !self.deadline_observed {
+            self.deadline_observed = true;
+            return Err("Held campaign execution exceeded its original admitted deadline".into());
+        }
+        if progress.settled {
+            self.workers = Some(progress.workers);
+        }
+        Ok(progress.settled)
+    }
+    fn finish_shutdown(&mut self) -> Result<()> {
+        if !self.poll_shutdown()? {
+            return Err("Held campaign cannot finish unresolved work".into());
+        }
+        if let Some(owner) = &mut self.owner {
+            owner.finish_shutdown()?;
+        }
+        self.creation_scope = None;
+        self.event_scope = None;
+        self.client = None;
+        self.owner = None;
+        self.wake = None;
+        self.external_wake = None;
+        self.finished = true;
+        Ok(())
+    }
+}
