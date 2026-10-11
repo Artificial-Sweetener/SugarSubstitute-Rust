@@ -6,6 +6,12 @@ use sugarsubstitute_contracts::execution::{AdmissionError, PanicCause};
 
 /// Reject bounded launch storage before execution admission or native effects.
 pub enum RegistryInputError {
+    /// Output binding/owner/resource generation does not match the owned launch.
+    OutputBinding,
+    /// Stdio and output control do not belong to the exact source session.
+    OutputProvenance,
+    /// Another output artifact or mutually exclusive fixture events are present.
+    OutputConflict,
     /// Bootstrap and enrollment do not belong to the exact same admitted session.
     LifecycleProvenance,
     /// Checked capacity accounting overflowed or exceeded supported storage.
@@ -23,7 +29,11 @@ impl fmt::Display for RegistryInputError {
 impl Error for RegistryInputError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            Self::Capacity | Self::LifecycleProvenance => None,
+            Self::Capacity
+            | Self::LifecycleProvenance
+            | Self::OutputBinding
+            | Self::OutputProvenance
+            | Self::OutputConflict => None,
             Self::Allocation(cause) => Some(cause),
             Self::Environment(cause) => Some(cause),
         }

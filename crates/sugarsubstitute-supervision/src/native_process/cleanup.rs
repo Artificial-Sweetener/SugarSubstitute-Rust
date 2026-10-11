@@ -58,7 +58,7 @@ impl WindowsPort {
         Ok(())
     }
     fn close_native(&self, family: &mut Family) -> Result<(), RegistryError> {
-        self.delete_attributes(family);
+        self.delete_attributes(family)?;
         let mut failure = None;
         let mut keep = |next: Result<(), RegistryError>| {
             if let Err(cause) = next {

@@ -126,6 +126,9 @@ fn creation(record: &mut Record, completion: JobCompletion<(), RegistryError>) {
     }
     retained_failure(record, failure, completion.outcome, "creation_terminal");
     if record.error.is_some() {
+        if let Some(family) = &lock(&record.shared.native).family {
+            family.request_output_close();
+        }
         record.shared.admission.store(CLOSED, Ordering::Release);
     }
 }

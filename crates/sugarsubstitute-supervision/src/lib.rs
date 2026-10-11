@@ -56,7 +56,7 @@ pub use registry::WindowsProcessRegistry;
 #[cfg(windows)]
 pub use registry_error::{RegistryAdmissionError, RegistryError, RegistryInputError};
 #[cfg(windows)]
-pub use registry_input::WindowsLaunchInput;
+pub use registry_input::{RejectedOutputLaunch, WindowsLaunchInput};
 #[cfg(windows)]
 pub use registry_types::{
     FamilyBinding, LaunchTicket, RegistryObservation, RegistrySnapshot, RootObservationOutcome,

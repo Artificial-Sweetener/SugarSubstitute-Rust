@@ -27,6 +27,13 @@ impl WindowsProcessRegistry {
         if binding.owner() != self.owner {
             return Err(RegistryAdmissionError::ForeignOwner);
         }
+        if input
+            .output
+            .as_ref()
+            .is_some_and(|output| !output.validates(binding) || input.fixture_events.is_some())
+        {
+            return Err(RegistryAdmissionError::InvalidSpecification);
+        }
         if let Some(launch) = &input.lifecycle
             && (binding != FamilyBinding::Desktop(launch.run)
                 || input.fixture_events.is_some()
@@ -186,12 +193,17 @@ fn create(
         context.memory().claim(bytes).map_err(|cause| RegistryError::new("input_memory", cause))?;
     let mut charged = ChargedInput { input, _claim: claim };
     let family = Family::new(context.memory())?;
+    let mut unwind = CreationOutputGuard { shared: shared.clone(), armed: true };
     let mut state = lock(&shared.native);
     state.family = Some(family);
     let result = create_owned(&shared, &mut state, &mut charged.input, &context, ticket);
     if let Err(cause) = &result {
         state.failure = Some(cause.clone());
+        if let Some(family) = &state.family {
+            family.request_output_close();
+        }
     }
+    unwind.armed = false;
     result
 }
 fn create_owned(
@@ -207,6 +219,8 @@ fn create_owned(
     let family = state.family.as_mut().ok_or_else(|| RegistryError::invalid("creation_owner"))?;
     family.adopt_fixture_events(input)?;
     family.adopt_lifecycle(input)?;
+    family.adopt_output(input, ticket.binding)?;
+    family.prepare_inheritance()?;
     let root = shared.port.create(family, input)?;
     state.creation = Some(CreationFacts { root, resumed: false });
     let duplicate = shared.port.duplicate(family, 0)?;
@@ -217,6 +231,7 @@ fn create_owned(
     if let FamilyBinding::Desktop(run) = ticket.binding {
         shared.port.enroll_desktop(family, run, ticket.process)?;
     }
+    family.validate_output_for_resume()?;
     if stopped(context)
         || shared
             .admission
@@ -242,4 +257,17 @@ pub(super) fn bind(permit: ProcessWatchPermit, input: WatchInput) -> Option<Watc
 fn stopped(context: &JobContext) -> bool {
     context.cancellation_requested()
         || context.deadline().is_some_and(|deadline| context.now() >= deadline)
+}
+struct CreationOutputGuard {
+    shared: Arc<Shared>,
+    armed: bool,
+}
+impl Drop for CreationOutputGuard {
+    fn drop(&mut self) {
+        if self.armed
+            && let Some(family) = &lock(&self.shared.native).family
+        {
+            family.request_output_close();
+        }
+    }
 }

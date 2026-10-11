@@ -44,7 +44,7 @@ impl WindowsPort {
             )
         }
         .map_err(|cause| RegistryError::new("job_containment_limits", cause))?;
-        let inherited = family.fixture_events.is_some() || family.lifecycle_bootstrap.is_some();
+        let inherited = family.inherited_count != 0;
         let attribute_count = if inherited { 2 } else { 1 };
         let mut bytes = 0;
         // SAFETY: sizing query has no list; the documented insufficient-buffer result supplies its required size.
@@ -76,45 +76,31 @@ impl WindowsPort {
             )
         }
         .map_err(|cause| RegistryError::new("job_at_creation_attribute", cause))?;
-        if family.fixture_events.is_some() {
-            // SAFETY: the durable boxed family and session pin keep exactly four
-            // inheritable event duplicates live through actual attribute deletion.
+        if inherited {
+            // SAFETY: exactly the verified initialized prefix of one stable family
+            // array is pinned through actual attribute deletion. No ambient handles.
             unsafe {
                 UpdateProcThreadAttribute(
                     list,
                     0,
                     PROC_THREAD_ATTRIBUTE_HANDLE_LIST as usize,
-                    Some(family.fixture_handles.as_ptr().cast()),
-                    size_of_val(&family.fixture_handles),
+                    Some(family.inherited_handles.as_ptr().cast()),
+                    family.inherited_count * size_of::<usize>(),
                     None,
                     None,
                 )
             }
-            .map_err(|cause| RegistryError::new("fixture_handle_allowlist", cause))?;
-        }
-        if family.lifecycle_bootstrap.is_some() {
-            // SAFETY: exactly one read-only section is pinned by this stable family
-            // until actual attribute deletion. No other handle is inherited.
-            unsafe {
-                UpdateProcThreadAttribute(
-                    list,
-                    0,
-                    PROC_THREAD_ATTRIBUTE_HANDLE_LIST as usize,
-                    Some(family.lifecycle_handles.as_ptr().cast()),
-                    size_of_val(&family.lifecycle_handles),
-                    None,
-                    None,
-                )
-            }
-            .map_err(|cause| RegistryError::new("lifecycle_handle_allowlist", cause))?;
+            .map_err(|cause| RegistryError::new("owned_handle_allowlist", cause))?;
         }
         let mut startup = STARTUPINFOEXW::default();
         startup.StartupInfo.cb = size_of::<STARTUPINFOEXW>() as u32;
         startup.lpAttributeList = list;
+        family.configure_stdio(&mut startup.StartupInfo);
         let mut process = PROCESS_INFORMATION::default();
         // SAFETY: validated explicit mutable argv, application/cwd/environment live through the call.
-        // Ordinary launches inherit no handles. A typed input retains either four
-        // fixture events or one read-only bootstrap section in its exact HANDLE_LIST.
+        // Ordinary launches inherit no handles; explicit output alone sets stdio.
+        // One checked HANDLE_LIST covers exactly fixture4, bootstrap1, stdio3,
+        // or bootstrap+stdio4. Pins remain live through actual attribute deletion.
         let created = unsafe {
             CreateProcessW(
                 PCWSTR(input.command.application_name.as_ptr()),
@@ -166,7 +152,7 @@ impl WindowsPort {
             return Err(RegistryError::invalid("primary_suspend_count"));
         }
         close_slot(&mut family.thread, "close_primary_thread")?;
-        self.delete_attributes(family);
+        self.delete_attributes(family)?;
         Ok(())
     }
     pub(super) fn duplicate_native(
@@ -203,7 +189,7 @@ impl WindowsPort {
         family.watch_duplicate = None;
         Ok(WatchInput::Native(owned))
     }
-    pub(super) fn delete_attributes(&self, family: &mut Family) {
+    pub(super) fn delete_attributes(&self, family: &mut Family) -> Result<(), RegistryError> {
         if family.attributes_initialized {
             // SAFETY: initialized list and all value storage remain retained; deletion cannot fail.
             unsafe {
@@ -215,9 +201,6 @@ impl WindowsPort {
         }
         // Deletion has returned, or initialization never committed. Only now can
         // the execution worker retire the pinned duplicated inheritance handles.
-        drop(family.fixture_events.take());
-        family.fixture_handles = [0; 4];
-        drop(family.lifecycle_bootstrap.take());
-        family.lifecycle_handles = [0];
+        family.release_inheritance()
     }
 }

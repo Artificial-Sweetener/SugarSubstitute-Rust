@@ -22,7 +22,6 @@ impl Family {
             if raw == 0 || raw >= usize::MAX - 15 {
                 return Err(RegistryError::invalid("lifecycle_inheritance_handle"));
             }
-            self.lifecycle_handles = [raw];
             self.lifecycle_run = Some(launch.run);
             self.lifecycle_enrollment = launch.enrollment;
             self.lifecycle_bootstrap = Some(launch.bootstrap);

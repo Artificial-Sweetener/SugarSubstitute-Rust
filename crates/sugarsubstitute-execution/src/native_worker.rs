@@ -110,6 +110,7 @@ enum Active {
     Child(crate::fixture_session::child_worker::Active),
     Pipe(crate::lifecycle_pipe::worker::Active),
     Forward(crate::fixture_forwarding::worker::Active),
+    Output(crate::output::worker::Active),
 }
 impl Active {
     fn new(queued: QueuedJob, core: &Arc<Core>, now: Moment) -> Option<Self> {
@@ -130,6 +131,9 @@ impl Active {
             NativeWork::FixtureForward(work) => Self::Forward(
                 crate::fixture_forwarding::worker::Active::new(work, queued.context, core, now),
             ),
+            NativeWork::Output(work) => {
+                Self::Output(crate::output::worker::Active::new(work, queued.context, core, now))
+            }
         })
     }
     fn fail_owner(&mut self, cause: &PanicCause) {
@@ -139,6 +143,7 @@ impl Active {
             Self::Child(active) => active.fail_owner(cause),
             Self::Pipe(active) => active.fail_owner(cause),
             Self::Forward(active) => active.fail_owner(cause),
+            Self::Output(active) => active.fail_owner(cause),
         }
     }
     fn progress(&mut self, core: &Core, now: Moment, clock_available: bool) {
@@ -148,6 +153,7 @@ impl Active {
             Self::Child(active) => active.progress(core, now, clock_available),
             Self::Pipe(active) => active.progress(core, now, clock_available),
             Self::Forward(active) => active.progress(core, now, clock_available),
+            Self::Output(active) => active.progress(core, now, clock_available),
         }
     }
     fn completed(&self) -> bool {
@@ -157,6 +163,7 @@ impl Active {
             Self::Child(active) => active.completed(),
             Self::Pipe(active) => active.completed(),
             Self::Forward(active) => active.completed(),
+            Self::Output(active) => active.completed(),
         }
     }
 }

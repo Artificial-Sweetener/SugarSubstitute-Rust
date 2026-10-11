@@ -6,13 +6,14 @@
 //! may run on the last owner's thread: closing the KILL_ON_CLOSE Job is authorized
 //! containment and does not manufacture settlement. A failed close intentionally
 //! retains only its bounded native storage and lease; it is not retryable state.
-use crate::{RegistryError, WindowsLaunchInput};
+use crate::registry_input::output::{OutputCancellation, OutputPin};
+use crate::{FamilyBinding, RegistryError, WindowsLaunchInput};
 use std::{
     os::windows::io::{AsRawHandle, OwnedHandle},
     sync::Arc,
 };
 use sugarsubstitute_contracts::execution::{MemoryClaim, MemoryLease};
-use sugarsubstitute_contracts::lifecycle::{ProcessKey, RunKey};
+use sugarsubstitute_contracts::lifecycle::{ProcessKey, ResourceKey, RunKey};
 use sugarsubstitute_execution::windows_fixture::FixtureChildEvents;
 use sugarsubstitute_execution::windows_lifecycle_pipe::{
     LifecycleDesktopEnrollment, LifecyclePipeBootstrap,
@@ -41,12 +42,16 @@ pub(crate) struct Family {
     pub(crate) query: Vec<usize>,
     pub(crate) attributes_initialized: bool,
     pub(crate) job_list: [usize; 1],
-    pub(crate) fixture_handles: [usize; 4],
     pub(crate) fixture_events: Option<FixtureChildEvents>,
     pub(crate) lifecycle_bootstrap: Option<LifecyclePipeBootstrap>,
     pub(crate) lifecycle_enrollment: Option<LifecycleDesktopEnrollment>,
     pub(crate) lifecycle_run: Option<RunKey>,
-    pub(crate) lifecycle_handles: [usize; 1],
+    pub(crate) output_pin: Option<OutputPin>,
+    pub(crate) output_cancel: Option<OutputCancellation>,
+    pub(crate) output_resource: Option<ResourceKey>,
+    pub(crate) inherited_handles: [usize; 4],
+    pub(crate) inherited_count: usize,
+    pub(crate) stdio_handles: [usize; 3],
     pub(crate) sealed: bool,
     pub(crate) incomplete: bool,
     pub(crate) forced: bool,
@@ -85,12 +90,16 @@ impl Family {
             query,
             attributes_initialized: false,
             job_list: [0],
-            fixture_handles: [0; 4],
             fixture_events: None,
             lifecycle_bootstrap: None,
             lifecycle_enrollment: None,
             lifecycle_run: None,
-            lifecycle_handles: [0],
+            output_pin: None,
+            output_cancel: None,
+            output_resource: None,
+            inherited_handles: [0; 4],
+            inherited_count: 0,
+            stdio_handles: [0; 3],
             sealed: false,
             incomplete: false,
             forced: false,
@@ -98,30 +107,6 @@ impl Family {
             closure_committed: false,
             _memory: claim,
         }))
-    }
-    /// Adopt the execution-owned pin before any attribute list can borrow its handles.
-    pub(crate) fn adopt_fixture_events(
-        &mut self,
-        input: &mut WindowsLaunchInput,
-    ) -> Result<(), RegistryError> {
-        if self.attributes_initialized || self.fixture_events.is_some() {
-            return Err(RegistryError::invalid("fixture_inheritance_owner"));
-        }
-        if let Some(events) = input.fixture_events.take() {
-            let handles = {
-                let view = events.borrow_inheritance();
-                [view.ready, view.release, view.challenge, view.response]
-                    .map(|handle| handle.as_raw_handle() as usize)
-            };
-            for (index, handle) in handles.iter().enumerate() {
-                if *handle == 0 || *handle >= usize::MAX - 15 || handles[..index].contains(handle) {
-                    return Err(RegistryError::invalid("fixture_inheritance_handles"));
-                }
-            }
-            self.fixture_handles = handles;
-            self.fixture_events = Some(events);
-        }
-        Ok(())
     }
     pub(crate) fn member(&self, index: usize) -> Result<&Member, RegistryError> {
         self.members
@@ -203,5 +188,6 @@ pub(crate) fn close_slot(
 }
 mod cleanup;
 mod creation;
+mod inheritance;
 mod lifecycle;
 mod membership;

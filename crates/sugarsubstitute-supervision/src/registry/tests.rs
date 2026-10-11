@@ -220,6 +220,7 @@ mod enrollment;
 mod force;
 mod lifecycle;
 mod observation_retirement;
+mod output;
 mod panics;
 mod retirement;
 

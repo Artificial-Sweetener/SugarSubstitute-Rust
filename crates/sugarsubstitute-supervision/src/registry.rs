@@ -52,13 +52,16 @@ struct NativeState {
 impl Drop for NativeState {
     fn drop(&mut self) {
         drop(self.watch.take());
-        if let Some(mut family) = self.family.take()
-            && let Err(cause) = self.port.close(&mut family)
-        {
-            tracing::error!(operation = "registry_owner_loss_close", cause = %cause, "Failed native retirement retains bounded storage and lease without retry authority");
-            // Only a specific failed kernel close retains this fixed native state
-            // and its real charge. This does not report family settlement.
-            std::mem::forget(family);
+        if let Some(mut family) = self.family.take() {
+            if family.has_native_ownership() {
+                family.request_output_close();
+            }
+            if let Err(cause) = self.port.close(&mut family) {
+                tracing::error!(operation = "registry_owner_loss_close", cause = %cause, "Failed native retirement retains bounded storage and lease without retry authority");
+                // Only a specific failed kernel close retains this fixed native state
+                // and its real charge. This does not report family settlement.
+                std::mem::forget(family);
+            }
         }
     }
 }

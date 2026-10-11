@@ -18,6 +18,8 @@ mod memory;
 mod native;
 #[cfg(any(windows, test))]
 mod native_deadlines;
+#[cfg(any(windows, test))]
+mod output;
 mod runtime;
 mod scope;
 mod task;
@@ -32,6 +34,8 @@ pub mod windows;
 pub mod windows_fixture;
 #[cfg(windows)]
 pub mod windows_lifecycle_pipe;
+#[cfg(windows)]
+pub mod windows_output;
 
 pub use clock::MonotonicClock;
 pub use runtime::{

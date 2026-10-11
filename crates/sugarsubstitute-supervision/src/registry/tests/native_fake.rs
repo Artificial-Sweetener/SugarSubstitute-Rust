@@ -19,6 +19,7 @@ pub(super) struct Fake {
     pub(super) hold_enrollment: AtomicBool,
     pub(super) enrollment_entered: AtomicBool,
     pub(super) creation_order: Mutex<[u8; 4]>,
+    pub(super) inherited: Mutex<([usize; 4], usize, [usize; 3], bool)>,
     pub(super) fail_terminate: AtomicBool,
     pub(super) advance_clock: Mutex<Option<Arc<TestClock>>>,
     pub(super) root_alive: AtomicBool,
@@ -91,6 +92,19 @@ impl NativePort for Fake {
             Some(native_process::Member { handle: Some(12), identity: ROOT, exited: false });
         family.root = Some(ROOT);
         family.count = 1;
+        let mut startup = windows::Win32::System::Threading::STARTUPINFOW::default();
+        family.configure_stdio(&mut startup);
+        *lock(&self.inherited) = (
+            family.inherited_handles,
+            family.inherited_count,
+            [
+                startup.hStdInput.0 as usize,
+                startup.hStdOutput.0 as usize,
+                startup.hStdError.0 as usize,
+            ],
+            startup.dwFlags.contains(windows::Win32::System::Threading::STARTF_USESTDHANDLES),
+        );
+        family.attributes_initialized = true;
         if self.panic_create.load(Ordering::Acquire) {
             std::panic::resume_unwind(Box::new("private native creation owner payload"));
         }
@@ -119,6 +133,8 @@ impl NativePort for Fake {
             ));
         }
         family.thread = None;
+        family.attributes_initialized = false;
+        family.release_inheritance()?;
         Ok(())
     }
     fn duplicate(&self, _: &mut Family, _: usize) -> Result<WatchInput, RegistryError> {
@@ -201,6 +217,8 @@ impl NativePort for Fake {
         Ok(())
     }
     fn close(&self, family: &mut Family) -> Result<(), RegistryError> {
+        family.attributes_initialized = false;
+        family.release_inheritance()?;
         if self.fail_close_after_job.load(Ordering::Acquire) && family.job.take().is_some() {
             return Err(RegistryError::new(
                 "close_primary_thread",
