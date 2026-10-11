@@ -4,12 +4,12 @@
 //! Retain asynchronous and finite-blocking joins and observe every stop.
 
 use crate::{
-    admission::Core,
+    admission::{Core, State},
     scope::lock,
     task::{self, Work},
 };
 use std::{future::Future, sync::Arc};
-use sugarsubstitute_contracts::execution::Moment;
+use sugarsubstitute_contracts::execution::{JobClass, JobPhase, Moment};
 use tokio::task::JoinHandle;
 
 struct Running {
@@ -71,25 +71,20 @@ pub(super) async fn supervise(core: Arc<Core>) {
             });
         }
         let now = core.clock.now();
-        let (stopping, deadline) = {
+        let (stopping, deadline, expired_native) = {
             let state = lock(&core.state);
-            (
-                state.stopping,
-                state
-                    .jobs
-                    .values()
-                    .filter(|record| {
-                        record.phase == sugarsubstitute_contracts::execution::JobPhase::Queued
-                            || (record.spec.class
-                                == sugarsubstitute_contracts::execution::JobClass::NativeObservation
-                                && record.phase
-                                    == sugarsubstitute_contracts::execution::JobPhase::Running)
-                    })
-                    .filter_map(|record| record.deadline)
-                    .filter(|deadline| *deadline > now)
-                    .min(),
-            )
+            let (deadline, expired_native) = deadlines(&state, now);
+            (state.stopping, deadline, expired_native)
         };
+        // A notification may win select and discard an already-ready deadline
+        // future. Independently wake parked native ownership at the fresh scan;
+        // notifying this supervisor again would repeatedly poll expired work.
+        #[cfg(any(windows, test))]
+        if expired_native && let Some(thread) = core.native_thread.get() {
+            thread.unpark();
+        }
+        #[cfg(not(any(windows, test)))]
+        let _ = expired_native;
         if stopping && core.settled() && running.is_empty() {
             break;
         }
@@ -120,3 +115,26 @@ pub(super) async fn supervise(core: Arc<Core>) {
         }
     }
 }
+
+fn deadlines(state: &State, now: Moment) -> (Option<Moment>, bool) {
+    let mut future = None;
+    let mut expired_native = false;
+    for record in state.jobs.values() {
+        let native = record.spec.class == JobClass::NativeObservation;
+        if record.phase != JobPhase::Queued && !(native && record.phase == JobPhase::Running) {
+            continue;
+        }
+        if let Some(deadline) = record.deadline {
+            if deadline > now {
+                future = Some(future.map_or(deadline, |earlier: Moment| earlier.min(deadline)));
+            } else if native {
+                expired_native = true;
+            }
+        }
+    }
+    (future, expired_native)
+}
+
+#[cfg(test)]
+#[path = "runtime_supervision_tests.rs"]
+mod tests;
