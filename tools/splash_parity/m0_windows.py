@@ -338,7 +338,7 @@ def run(args):
                 region = Region(round(30 * client.scale), round(400 * client.scale), 2, 2)
                 with DisclosureLabel(hwnd, process.pid, creation, ui_thread, clock) as disclosure, \
                         RegionCapture(hwnd, process.pid, region, creation_ticks=creation) as capture:
-                    with NativePointer(native, hwnd, process.pid) as pointer:
+                    with NativePointer(native, hwnd, process.pid, clock=clock) as pointer:
                         pointer.move((489, 16))
                         state["input_samples"] = []
                         state["input"] = input_samples(pointer, capture, clock, 32, state["input_samples"], disclosure)

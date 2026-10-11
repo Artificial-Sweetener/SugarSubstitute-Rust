@@ -76,6 +76,7 @@ class NativePointerTests(unittest.TestCase):
         pointer.native = Mock()
         pointer.hwnd, pointer.pid = 1, 42
         pointer.original, pointer.last, pointer.pressed = (10, 20), (30, 40), False
+        pointer.click_clock = None
         pointer.cursor = Mock(return_value=(30, 40))
         pointer.native.user.GetAsyncKeyState.return_value = 0
         pointer.native.user.WindowFromPoint.return_value = 1
@@ -83,6 +84,185 @@ class NativePointerTests(unittest.TestCase):
         pointer.native.user.GetForegroundWindow.return_value = 1
         pointer.send = Mock()
         return pointer
+
+    def clock(self, *, failure_call=None, invalid=None):
+        """Advance deterministic raw ticks and fail the selected actual clock boundary."""
+        clock = Mock(frequency=1000000, ticks=1000, calls=0)
+        def read():
+            clock.calls += 1
+            if clock.calls == failure_call:
+                if invalid is not None:
+                    return invalid
+                raise OSError("phase clock cause")
+            clock.ticks += 100
+            return clock.ticks
+        clock.read.side_effect = read
+        return clock
+
+    def test_optin_click_clock_records_exact_seven_phases_without_changing_native_calls(self) -> None:
+        """The fixed phase inventory brackets the existing calls, retaining actual raw ticks."""
+        pointer = self.pointer()
+        clock = self.clock()
+        pointer.click_clock = clock
+        def insert(*_):
+            clock.ticks += 42000
+            return 2
+        pointer.native.user.SendInput.side_effect = insert
+        result = pointer.click()
+        timing = result["phase_timings"]
+        self.assertEqual(timing["qpc_frequency"], 1000000)
+        self.assertEqual([phase["kind"] for phase in timing["phases"]],
+                         ["before_cursor_check", "before_owned_hit", "before_human_buttons", "send_input",
+                          "after_cursor_check", "after_owned_hit", "after_human_buttons"])
+        self.assertEqual(clock.read.call_count, 14)
+        self.assertTrue(all(phase["operation_completed"] for phase in timing["phases"]))
+        self.assertEqual([phase["end_ticks"] - phase["begin_ticks"] for phase in timing["phases"]],
+                         [100, 100, 100, 42100, 100, 100, 100])
+        for previous, current in zip(timing["phases"], timing["phases"][1:]):
+            self.assertLessEqual(previous["end_ticks"], current["begin_ticks"])
+        self.assertEqual(pointer.cursor.call_count, 4)
+        self.assertEqual(pointer.native.client.call_count, 2)
+        self.assertEqual(pointer.native.user.WindowFromPoint.call_count, 2)
+        self.assertEqual(pointer.native.user.GetForegroundWindow.call_count, 2)
+        self.assertEqual([call.args[0] for call in pointer.native.user.GetAsyncKeyState.call_args_list], [1, 2, 4, 5, 6] * 2)
+        pointer.native.user.SendInput.assert_called_once()
+
+    def test_disabled_clock_never_reads_qpc_and_keeps_prior_click_receipt(self) -> None:
+        pointer = self.pointer()
+        pointer.native.user.SendInput.return_value = 2
+        with patch.object(NativePointer, "_click_phase", wraps=pointer._click_phase) as phases:
+            receipt = pointer.click()
+        self.assertEqual(phases.call_count, 7)
+        self.assertNotIn("phase_timings", receipt)
+        self.assertEqual(set(receipt), {"mode", "requested_events", "event_flags", "inserted_events", "prechecked", "postchecked"})
+        native = Mock()
+        clock = self.clock()
+        real_pointer = NativePointer(native, 1, 42, clock=clock)
+        real_pointer.cursor()
+        clock.read.assert_not_called()
+
+    def test_failing_start_clocks_before_insertion_do_not_create_owned_down(self) -> None:
+        for call in (1, 3, 5, 7):
+            with self.subTest(call=call):
+                pointer = self.pointer()
+                pointer.click_clock = self.clock(failure_call=call)
+                with self.assertRaisesRegex(OSError, "phase clock cause") as raised:
+                    pointer.click()
+                pointer.native.user.SendInput.assert_not_called()
+                self.assertFalse(pointer.pressed)
+                phase = pointer.last_click["phase_timings"]["phases"][-1]
+                self.assertIsNone(phase["begin_ticks"])
+                self.assertIsNone(phase["end_ticks"])
+                self.assertFalse(phase["operation_completed"])
+                self.assertIn("phase clock cause", phase["clock_failure"]["message"])
+                pointer.__exit__(OSError, raised.exception, None)
+                self.assertFalse(any(call.args[1] == 4 for call in pointer.send.call_args_list))
+
+    def test_end_clock_failure_accounts_native_insertions_before_cleanup(self) -> None:
+        for inserted in (0, 1, 2, None, True, RuntimeError("native insertion cause")):
+            with self.subTest(inserted=inserted):
+                pointer = self.pointer()
+                pointer.click_clock = self.clock(failure_call=8)
+                if isinstance(inserted, Exception):
+                    pointer.native.user.SendInput.side_effect = inserted
+                else:
+                    pointer.native.user.SendInput.return_value = inserted
+                with self.assertRaises(BaseException) as caught:
+                    pointer.click()
+                needs_up = type(inserted) is not int or inserted not in (0, 2)
+                self.assertEqual(pointer.pressed, needs_up)
+                self.assertIsNone(pointer.original)
+                phase = pointer.last_click["phase_timings"]["phases"][-1]
+                self.assertIsNotNone(phase["begin_ticks"])
+                self.assertIsNone(phase["end_ticks"])
+                self.assertEqual(phase["operation_completed"], inserted == 2 and type(inserted) is int)
+                self.assertIn("phase clock cause", phase["clock_failure"]["message"])
+                if type(inserted) is int and inserted == 2:
+                    self.assertIsInstance(caught.exception, OSError)
+                    self.assertEqual(pointer.last_click["inserted_events"], 2)
+                else:
+                    self.assertIsInstance(caught.exception, BaseExceptionGroup)
+                    self.assertIsInstance(caught.exception.exceptions[1], OSError)
+                    self.assertIn("operation_failure", phase)
+                pointer.__exit__(type(caught.exception), caught.exception, None)
+                self.assertEqual(any(call.args[1] == 4 for call in pointer.send.call_args_list), needs_up)
+                self.assertFalse(any(call.args[1] == 0 for call in pointer.send.call_args_list))
+
+    def test_postphase_clock_failure_keeps_actual_complete_insertion_and_disables_restoration(self) -> None:
+        for call in range(9, 15):
+            pointer = self.pointer()
+            pointer.native.user.SendInput.return_value = 2
+            pointer.click_clock = self.clock(failure_call=call)
+            with self.assertRaises(OSError) as raised:
+                pointer.click()
+            self.assertFalse(pointer.pressed)
+            self.assertIsNone(pointer.original)
+            self.assertEqual(pointer.last_click["inserted_events"], 2)
+            self.assertFalse(pointer.last_click["postchecked"])
+            pointer.__exit__(OSError, raised.exception, None)
+            pointer.send.assert_not_called()
+
+    def test_native_failure_and_clock_failure_preserve_original_typed_causes(self) -> None:
+        pointer = self.pointer()
+        native_cause = OSError("cursor boundary cause")
+        pointer.cursor.side_effect = native_cause
+        pointer.click_clock = self.clock(failure_call=2)
+        with self.assertRaises(BaseExceptionGroup) as caught:
+            pointer.click()
+        self.assertIs(caught.exception.exceptions[0], native_cause)
+        self.assertIn("phase clock cause", str(caught.exception.exceptions[1]))
+        phase = pointer.last_click["phase_timings"]["phases"][0]
+        self.assertIn("cursor boundary cause", phase["operation_failure"]["message"])
+        pointer.native.user.SendInput.assert_not_called()
+
+    def test_full_click_timer_includes_timed_prechecks_postchecks_and_phase_clock_cost(self) -> None:
+        pointer, clock = self.pointer(), self.clock()
+        pointer.click_clock = clock
+        def cursor():
+            clock.ticks += 20000
+            return (30, 40)
+        pointer.cursor.side_effect = cursor
+        pointer.native.user.SendInput.return_value = 2
+        begin = clock.read()
+        receipt = pointer.click()
+        end = clock.read()
+        phases = receipt["phase_timings"]["phases"]
+        self.assertEqual(pointer.cursor.call_count, 4)
+        self.assertEqual(end - begin, 81500)
+        self.assertEqual([item["end_ticks"] - item["begin_ticks"] for item in phases],
+                         [20100, 20100, 100, 100, 20100, 20100, 100])
+        self.assertGreater(end - begin, sum(item["end_ticks"] - item["begin_ticks"] for item in phases))
+
+    def test_partial_insertion_clock_and_cleanup_failure_all_remain_observable(self) -> None:
+        pointer = self.pointer()
+        pointer.click_clock = self.clock(failure_call=8)
+        pointer.native.user.SendInput.return_value = 1
+        with self.assertRaises(BaseExceptionGroup) as primary:
+            pointer.click()
+        pointer.send.side_effect = OSError("owned-up cleanup cause")
+        with self.assertRaises(ExceptionGroup) as grouped:
+            pointer.__exit__(type(primary.exception), primary.exception, None)
+        self.assertIs(grouped.exception.exceptions[0], primary.exception)
+        self.assertIn("owned-up cleanup cause", str(grouped.exception.exceptions[1]))
+        self.assertTrue(pointer.pressed)
+        self.assertIsNone(pointer.original)
+
+    def test_invalid_noninteger_reversed_clock_and_frequency_cannot_qualify(self) -> None:
+        for invalid in (True, 1.0, -1, 1 << 63):
+            pointer = self.pointer()
+            pointer.click_clock = self.clock(failure_call=1, invalid=invalid)
+            self.assertRaises(RuntimeError, pointer.click)
+            pointer.native.user.SendInput.assert_not_called()
+        pointer = self.pointer()
+        pointer.click_clock = Mock(frequency=1000000, read=Mock(side_effect=[200, 100]))
+        self.assertRaisesRegex(RuntimeError, "bracket reversed", pointer.click)
+        pointer.native.user.SendInput.assert_not_called()
+        pointer = self.pointer()
+        pointer.click_clock = Mock(frequency=1000000, read=Mock(side_effect=[100, 200, 199]))
+        self.assertRaisesRegex(RuntimeError, "phase order reversed", pointer.click)
+        pointer.native.user.SendInput.assert_not_called()
+        for frequency in (True, 0, -1, 1.0, 1 << 63):
+            self.assertRaises(ValueError, NativePointer, Mock(), 1, 42, clock=Mock(frequency=frequency))
 
     def test_button_only_click_batches_exact_native_array_and_records_insertions(self) -> None:
         """One native array inserts only down/up; coordinates and all movement flags stay zero."""

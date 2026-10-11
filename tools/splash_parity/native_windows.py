@@ -95,13 +95,16 @@ class MouseEvent(ctypes.Structure):
 class NativePointer:
     """Own one bounded mouse gesture and conditionally restore the user's untouched cursor."""
 
-    def __init__(self, native: NativeWindows, hwnd: int, pid: int) -> None:
+    def __init__(self, native: NativeWindows, hwnd: int, pid: int, *, clock=None) -> None:
         """Borrow only the verified caption window and declare mouse ABI contracts."""
         self.native, self.hwnd, self.pid = native, hwnd, pid
         self.original: tuple[int, int] | None = None
         self.last: tuple[int, int] | None = None
         self.pressed = False
         self.last_click: dict[str, object] | None = None
+        self.click_clock = clock
+        if clock is not None and (type(clock.frequency) is not int or not 0 < clock.frequency <= 0x7fffffffffffffff):
+            raise ValueError("Click timing requires a positive signed-native QPC frequency")
         for function, arguments, result in (
             (native.user.SendInput, [wintypes.UINT, ctypes.POINTER(MouseEvent), ctypes.c_int], wintypes.UINT),
             (native.user.GetSystemMetrics, [ctypes.c_int], ctypes.c_int),
@@ -175,6 +178,48 @@ class NativePointer:
             raise ctypes.WinError(ctypes.get_last_error())
         self.move_screen((point.x, point.y))
 
+    def _click_phase(self, receipt, kind, operation):
+        """Observe one fixed phase without losing native effects when a clock read fails."""
+        clock = getattr(self, "click_clock", None)
+        if clock is None:
+            return operation()
+        phase = {"kind": kind, "begin_ticks": None, "end_ticks": None, "operation_completed": False}
+        timing = receipt["phase_timings"]
+        previous = timing["phases"][-1] if timing["phases"] else None
+        timing["phases"].append(phase)
+        def tick():
+            value = clock.read()
+            if (type(value) is not int or not 0 <= value <= 0x7fffffffffffffff
+                    or type(clock.frequency) is not int or clock.frequency != timing["qpc_frequency"]):
+                raise RuntimeError("Click QPC clock returned invalid ticks or changed frequency")
+            return value
+        try:
+            phase["begin_ticks"] = tick()
+            if previous is not None and previous["end_ticks"] is not None and phase["begin_ticks"] < previous["end_ticks"]:
+                raise RuntimeError("Click QPC phase order reversed")
+        except BaseException as error:
+            phase["clock_failure"] = {"type": type(error).__name__, "message": str(error)}
+            raise
+        primary = None
+        try:
+            result = operation()
+            phase["operation_completed"] = True
+        except BaseException as error:
+            primary = error
+            phase["operation_failure"] = {"type": type(error).__name__, "message": str(error)}
+        try:
+            phase["end_ticks"] = tick()
+            if phase["end_ticks"] < phase["begin_ticks"]:
+                raise RuntimeError("Click QPC phase bracket reversed")
+        except BaseException as error:
+            phase["clock_failure"] = {"type": type(error).__name__, "message": str(error)}
+            if primary is not None:
+                raise BaseExceptionGroup("Click native operation and phase clock failed", [primary, error])
+            raise
+        if primary is not None:
+            raise primary
+        return result
+
     def click(self) -> dict[str, object]:
         """Insert one owned button-only down/up array, retaining uncertain held state for cleanup.
 
@@ -186,32 +231,43 @@ class NativePointer:
                                      "event_flags": [2, 4], "inserted_events": None,
                                      "prechecked": False, "postchecked": False}
         self.last_click = receipt
-        self.unchanged_cursor()
-        self.owned_hit(self.cursor())
-        if self.pressed:
-            raise RuntimeError("An owned mouse press already exists before the click")
-        if any(self.native.user.GetAsyncKeyState(key) & 0x8000 for key in (1, 2, 4, 5, 6)):
-            self.original = None
-            raise RuntimeError("A mouse button is already held before the owned click; human state is preserved")
+        clock = getattr(self, "click_clock", None)
+        if clock is not None:
+            receipt["phase_timings"] = {"source": "windows_qpc", "qpc_frequency": clock.frequency, "phases": []}
+        self._click_phase(receipt, "before_cursor_check", self.unchanged_cursor)
+        self._click_phase(receipt, "before_owned_hit", lambda: self.owned_hit(self.cursor()))
+        def before_buttons():
+            if self.pressed:
+                raise RuntimeError("An owned mouse press already exists before the click")
+            if any(self.native.user.GetAsyncKeyState(key) & 0x8000 for key in (1, 2, 4, 5, 6)):
+                self.original = None
+                raise RuntimeError("A mouse button is already held before the owned click; human state is preserved")
+        self._click_phase(receipt, "before_human_buttons", before_buttons)
         receipt["prechecked"] = True
         events = (MouseEvent * 2)(*(MouseEvent(0, InputPayload(MouseInput(0, 0, 0, flags, 0, 0)))
                                    for flags in (2, 4)))
         # Until every postcheck succeeds, uncertain delivery cannot authorize cursor restoration.
         # Unknown/partial insertion conservatively retains an injected-down cleanup obligation.
         original = self.original
-        self.original = None
-        self.pressed = True
-        inserted = self.native.user.SendInput(2, events, ctypes.sizeof(MouseEvent))
-        receipt["inserted_events"] = inserted
-        if type(inserted) is int and inserted in (0, 2):
-            self.pressed = False
-        if type(inserted) is not int or inserted != 2:
-            raise RuntimeError(f"SendInput inserted {inserted} of two owned button events")
-        self.unchanged_cursor()
-        self.owned_hit(self.cursor())
-        if any(self.native.user.GetAsyncKeyState(key) & 0x8000 for key in (1, 2, 4, 5, 6)):
+        def insert():
             self.original = None
-            raise RuntimeError("A mouse button is held after the owned click; human state is preserved")
+            self.pressed = True
+            inserted = self.native.user.SendInput(2, events, ctypes.sizeof(MouseEvent))
+            receipt["inserted_events"] = inserted
+            # Account insertion before the failable end-clock read. Exact0/2 has
+            # no injected down to release; partial/unknown delivery retains one.
+            if type(inserted) is int and inserted in (0, 2):
+                self.pressed = False
+            if type(inserted) is not int or inserted != 2:
+                raise RuntimeError(f"SendInput inserted {inserted} of two owned button events")
+        self._click_phase(receipt, "send_input", insert)
+        self._click_phase(receipt, "after_cursor_check", self.unchanged_cursor)
+        self._click_phase(receipt, "after_owned_hit", lambda: self.owned_hit(self.cursor()))
+        def after_buttons():
+            if any(self.native.user.GetAsyncKeyState(key) & 0x8000 for key in (1, 2, 4, 5, 6)):
+                self.original = None
+                raise RuntimeError("A mouse button is held after the owned click; human state is preserved")
+        self._click_phase(receipt, "after_human_buttons", after_buttons)
         receipt["postchecked"] = True
         self.original = original
         return receipt
