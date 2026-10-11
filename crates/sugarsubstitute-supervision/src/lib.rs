@@ -9,5 +9,11 @@ mod arguments;
 mod command;
 mod errors;
 
+#[cfg(windows)]
+mod environment;
+
 pub use command::{MAX_WINDOWS_ARGUMENTS, WindowsLaunchBuffers, WindowsLaunchCommand};
 pub use errors::LaunchCommandError;
+
+#[cfg(windows)]
+pub use environment::{EnvironmentOverride, LaunchEnvironment, LaunchEnvironmentError};

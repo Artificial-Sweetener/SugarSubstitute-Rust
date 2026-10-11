@@ -40,8 +40,8 @@ minimum_tests = 1
 [[owners]]
 package = "sugarsubstitute-supervision"
 root = "crates/sugarsubstitute-supervision"
-concern = "Exact bounded Windows process launch input preparation"
-minimum_tests = 13
+concern = "Exact bounded Windows commands and explicit child environments"
+minimum_tests = 27
 
 [[owners]]
 package = "sugarsubstitute-splash"
