@@ -66,6 +66,11 @@ fn primary_watch_owner_panic_is_typed_fatal_and_outer_diagnostics_stay_redacted(
         .ok_or("Missing panic error")?;
     assert!(error.contains_owner_panic());
     assert_eq!(error.stage(), "process_observation");
+    assert!(
+        error
+            .owner_panic_cause()
+            .is_some_and(|cause| cause.as_str().contains("supervised watch payload"))
+    );
     assert!(!format!("{error:?} {error}").contains("secret"));
     assert!(
         error
@@ -119,6 +124,11 @@ fn assert_cleanup_panic(secondary_count: usize) -> TestResult {
     assert_eq!(error.stage(), "first_native_failure");
     assert!(error.contains_owner_panic());
     assert!(error.clone().contains_owner_panic());
+    assert_eq!(
+        error.owner_panic_cause().map(sugarsubstitute_contracts::execution::PanicCause::as_str),
+        Some("private supervised cleanup payload")
+    );
+    assert_eq!(error.clone().owner_panic_cause(), error.owner_panic_cause());
     assert!(!format!("{error:?} {error}").contains("payload"));
     if secondary_count == 0 {
         assert_eq!(error.cleanup_causes().len(), 1);

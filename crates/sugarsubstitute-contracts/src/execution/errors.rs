@@ -60,6 +60,8 @@ pub enum AdmissionError {
         /// Available retained-byte budget.
         available_bytes: u64,
     },
+    /// This typed operation requires an explicit original job deadline.
+    DeadlineRequired,
     /// The effective deadline has already elapsed.
     DeadlineExpired {
         /// Effective ancestor/job deadline.
@@ -142,6 +144,9 @@ impl fmt::Display for AdmissionError {
             }
             Self::CompletionSaturated => {
                 formatter.write_str("Execution completion capacity is saturated")
+            }
+            Self::DeadlineRequired => {
+                formatter.write_str("Execution operation requires an original job deadline")
             }
             Self::MemorySaturated { requested_bytes, available_bytes } => write!(
                 formatter,

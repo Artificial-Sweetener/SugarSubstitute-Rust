@@ -220,7 +220,9 @@ pub(super) fn observe_watch(
                 record.next = None;
             }
         }
-        JobOutcome::Failure(cause) => record.fail(RegistryError::new("process_observation", cause)),
+        JobOutcome::Failure(cause) => {
+            record.fail(RegistryError::native_observation("process_observation", cause))
+        }
         JobOutcome::Panicked(cause) => {
             record.fail(RegistryError::owner_panic("process_observation", cause))
         }

@@ -6,6 +6,8 @@ mod admission;
 mod blocking;
 mod clock;
 mod cpu;
+#[cfg(any(windows, test))]
+mod fixture_session;
 mod mailbox;
 mod memory;
 #[cfg(any(windows, test))]
@@ -16,6 +18,8 @@ mod task;
 
 #[cfg(windows)]
 pub mod windows;
+#[cfg(windows)]
+pub mod windows_fixture;
 
 pub use clock::MonotonicClock;
 pub use runtime::{

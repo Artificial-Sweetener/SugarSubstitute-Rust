@@ -20,20 +20,31 @@ struct Callback {
     signal: Arc<Signal>,
     timed_out: AtomicBool,
 }
-pub(super) struct Wait {
+pub(crate) struct Wait {
     handle: Option<usize>,
     callback: Box<Callback>,
     uncertain_registration: bool,
+    register_stage: &'static str,
+    retire_stage: &'static str,
 }
 impl Wait {
-    pub(super) fn new(signal: Arc<Signal>) -> Self {
+    pub(crate) fn new(signal: Arc<Signal>) -> Self {
+        Self::for_operation(signal, "register_process_wait", "unregister_process_wait")
+    }
+    pub(crate) fn for_operation(
+        signal: Arc<Signal>,
+        register_stage: &'static str,
+        retire_stage: &'static str,
+    ) -> Self {
         Self {
             handle: None,
             callback: Box::new(Callback { signal, timed_out: AtomicBool::new(false) }),
             uncertain_registration: false,
+            register_stage,
+            retire_stage,
         }
     }
-    pub(super) fn register(&mut self, process: HANDLE) -> Result<(), NativeObservationError> {
+    pub(crate) fn register(&mut self, process: HANDLE) -> Result<(), NativeObservationError> {
         let mut handle = HANDLE::default();
         let context = self.callback.as_ref() as *const Callback;
         // SAFETY: callback Box has a stable address before registration, including
@@ -52,23 +63,23 @@ impl Wait {
         if !handle.is_invalid() {
             self.handle = Some(handle.0 as usize);
         }
-        result.map_err(|cause| NativeObservationError::new("register_process_wait", cause))?;
+        result.map_err(|cause| NativeObservationError::new(self.register_stage, cause))?;
         if self.handle.is_none() {
             self.uncertain_registration = true;
             return Err(NativeObservationError::new(
-                "register_process_wait",
+                self.register_stage,
                 std::io::Error::other("Successful registration returned no wait identity"),
             ));
         }
         Ok(())
     }
-    pub(super) fn timed_out(&self) -> bool {
+    pub(crate) fn timed_out(&self) -> bool {
         self.callback.timed_out.load(Ordering::Acquire)
     }
-    pub(super) fn retire(&mut self) -> Result<(), NativeObservationError> {
+    pub(crate) fn retire(&mut self) -> Result<(), NativeObservationError> {
         if self.uncertain_registration {
             return Err(NativeObservationError::new(
-                "unregister_process_wait",
+                self.retire_stage,
                 std::io::Error::other(
                     "Successful native registration has no retirement identity; callback lifetime remains unresolved",
                 ),
@@ -79,7 +90,7 @@ impl Wait {
             // thread. The sentinel makes return wait for actual callback completion.
             // On failure identity and callback storage stay retained for retry.
             unsafe { UnregisterWaitEx(HANDLE(handle as *mut _), Some(INVALID_HANDLE_VALUE)) }
-                .map_err(|cause| NativeObservationError::new("unregister_process_wait", cause))?;
+                .map_err(|cause| NativeObservationError::new(self.retire_stage, cause))?;
             self.handle = None;
         }
         Ok(())

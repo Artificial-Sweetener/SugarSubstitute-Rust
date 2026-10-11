@@ -3,7 +3,7 @@
 
 //! Own one bounded process-registration retirement thread through its actual join.
 
-use super::{NativeWork, ProcessLease, Signal};
+use super::{NativeWork, ProcessLease, ProcessWork, Signal};
 use crate::{
     admission::Core,
     scope::lock,
@@ -18,8 +18,8 @@ use sugarsubstitute_contracts::execution::{
     ExecutionError, JobContext, JobOutcome, Moment, PanicCause,
 };
 
-struct Active {
-    work: NativeWork,
+struct ProcessActive {
+    work: ProcessWork,
     context: JobContext,
     started: Moment,
     signal: Arc<Signal>,
@@ -28,28 +28,23 @@ struct Active {
     initialized: bool,
     completed: bool,
 }
-impl Active {
-    fn new(queued: QueuedJob, core: &Arc<Core>, now: Moment) -> Option<Self> {
-        let Work::Native(work) = queued.work else {
-            return None;
-        };
+impl ProcessActive {
+    fn new(work: ProcessWork, context: JobContext, core: &Arc<Core>, now: Moment) -> Self {
         let lease = work.binding.take();
-        Some(Self {
+        Self {
             work,
-            context: queued.context,
+            context,
             started: now,
             signal: Signal::new(core),
             lease,
             outcome: None,
             initialized: false,
             completed: false,
-        })
+        }
     }
     fn fail_owner(&mut self, cause: &PanicCause) {
         self.initialized = true;
-        if !matches!(self.outcome, Some(JobOutcome::Failure(_))) {
-            self.outcome = Some(JobOutcome::Panicked(cause.clone()));
-        }
+        crate::native::record_owner_panic(&mut self.outcome, cause);
     }
     fn progress(&mut self, core: &Core, now: Moment, clock_available: bool) {
         if !self.initialized {
@@ -89,10 +84,7 @@ impl Active {
         if let Some(lease) = &mut self.lease
             && let Err(error) = lease.retire()
         {
-            match &mut self.outcome {
-                Some(JobOutcome::Failure(primary)) => primary.retain_cleanup(error.clone()),
-                outcome => *outcome = Some(JobOutcome::Failure(error.clone())),
-            }
+            crate::native::retain_retirement(&mut self.outcome, error.clone());
             core.mailbox.record_failure(ExecutionError::new(
                 self.context.spec().operation,
                 Box::new(error),
@@ -108,6 +100,49 @@ impl Active {
         self.completed = true;
         if let Some(outcome) = self.outcome.take() {
             self.work.job.finish_at(&self.context, Some(self.started), ended, outcome);
+        }
+    }
+}
+
+enum Active {
+    Process(ProcessActive),
+    Fixture(crate::fixture_session::worker::Active),
+    Child(crate::fixture_session::child_worker::Active),
+}
+impl Active {
+    fn new(queued: QueuedJob, core: &Arc<Core>, now: Moment) -> Option<Self> {
+        let Work::Native(work) = queued.work else { return None };
+        Some(match work {
+            NativeWork::Process(work) => {
+                Self::Process(ProcessActive::new(work, queued.context, core, now))
+            }
+            NativeWork::FixtureParent(work) => Self::Fixture(
+                crate::fixture_session::worker::Active::new(work, queued.context, core, now),
+            ),
+            NativeWork::FixtureChild(work) => Self::Child(
+                crate::fixture_session::child_worker::Active::new(work, queued.context, core, now),
+            ),
+        })
+    }
+    fn fail_owner(&mut self, cause: &PanicCause) {
+        match self {
+            Self::Process(active) => active.fail_owner(cause),
+            Self::Fixture(active) => active.fail_owner(cause),
+            Self::Child(active) => active.fail_owner(cause),
+        }
+    }
+    fn progress(&mut self, core: &Core, now: Moment, clock_available: bool) {
+        match self {
+            Self::Process(active) => active.progress(core, now, clock_available),
+            Self::Fixture(active) => active.progress(core, now, clock_available),
+            Self::Child(active) => active.progress(core, now, clock_available),
+        }
+    }
+    fn completed(&self) -> bool {
+        match self {
+            Self::Process(active) => active.completed,
+            Self::Fixture(active) => active.completed(),
+            Self::Child(active) => active.completed(),
         }
     }
 }
@@ -207,8 +242,10 @@ fn worker(core: Arc<Core>) {
             })) {
                 owner_panicked(&core, &mut fatal, payload);
             }
-            if active[index].completed {
-                active.swap_remove(index);
+            if active[index].completed() {
+                // Stable removal preserves initial enrollment order of retained
+                // later entries when an earlier operation finishes in this pass.
+                active.remove(index);
             } else {
                 index += 1;
             }

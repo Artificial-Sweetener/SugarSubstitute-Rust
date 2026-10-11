@@ -14,7 +14,7 @@ impl Core {
         let mut state = lock(&self.state);
         let index = state.queue.iter().position(|queued| {
             if let Work::Native(work) = &queued.work {
-                work.binding.ready()
+                work.ready()
                     && (stop_reason_at(&queued.context, now).is_some()
                         || Self::has_capacity(&state, JobClass::NativeObservation))
             } else {

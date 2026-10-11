@@ -8,9 +8,9 @@ use crate::{
     scope::lock,
     task::{ErasedJob, Job, JobHandle, QueuedJob, Work},
 };
+#[cfg(test)]
+use std::error::Error;
 use std::{
-    error::Error,
-    fmt,
     num::NonZeroU64,
     sync::{
         Arc, Mutex, Weak,
@@ -50,50 +50,10 @@ pub struct ProcessExit {
     pub exit_code: u32,
 }
 
-/// Preserve the first native stage failure and its original owned cause.
-///
-/// Up to eight subsequent cleanup failures remain owned; further actual failures
-/// are counted explicitly. `source` always identifies the original cause.
-#[derive(Clone, Debug)]
-pub struct NativeObservationError {
-    stage: &'static str,
-    cause: Arc<dyn Error + Send + Sync>,
-    cleanup: Vec<Arc<NativeObservationError>>,
-    omitted_cleanup: u64,
-}
-impl NativeObservationError {
-    pub(crate) fn new(stage: &'static str, cause: impl Error + Send + Sync + 'static) -> Self {
-        Self { stage, cause: Arc::new(cause), cleanup: Vec::new(), omitted_cleanup: 0 }
-    }
-    /// Identify the native operation whose original cause is retained by `source`.
-    pub const fn stage(&self) -> &'static str {
-        self.stage
-    }
-    pub(crate) fn retain_cleanup(&mut self, cleanup: Self) {
-        if self.cleanup.len() < 8 {
-            self.cleanup.push(Arc::new(cleanup));
-        } else {
-            self.omitted_cleanup = self.omitted_cleanup.saturating_add(1);
-        }
-    }
-}
-impl fmt::Display for NativeObservationError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Native observation {} failed: {}", self.stage, self.cause)?;
-        for cleanup in &self.cleanup {
-            write!(f, "; cleanup: {cleanup}")?;
-        }
-        if self.omitted_cleanup != 0 {
-            write!(f, "; {} further cleanup failures omitted", self.omitted_cleanup)?;
-        }
-        Ok(())
-    }
-}
-impl Error for NativeObservationError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        Some(self.cause.as_ref())
-    }
-}
+#[path = "native_error.rs"]
+mod error;
+pub use error::NativeObservationError;
+pub(crate) use error::{record_owner_panic, retain_retirement};
 
 pub(crate) trait ProcessLease: Send {
     fn start(
@@ -191,10 +151,24 @@ impl Drop for ProcessWatchPermit {
         }
     }
 }
-pub(crate) struct NativeWork {
+pub(crate) struct ProcessWork {
     pub(crate) binding: Arc<Binding>,
     pub(crate) job: Arc<Job<ProcessExit, NativeObservationError>>,
     pub(crate) correlation: NativeCorrelation,
+}
+pub(crate) enum NativeWork {
+    Process(ProcessWork),
+    FixtureParent(crate::fixture_session::FixtureWork),
+    FixtureChild(crate::fixture_session::child::ChildWork),
+}
+impl NativeWork {
+    pub(crate) fn ready(&self) -> bool {
+        match self {
+            Self::Process(work) => work.binding.ready(),
+            Self::FixtureParent(_) => true,
+            Self::FixtureChild(work) => work.binding.ready(),
+        }
+    }
 }
 
 pub(crate) fn reserve(
@@ -209,11 +183,11 @@ pub(crate) fn reserve(
         let queued = QueuedJob {
             context,
             job: job.clone(),
-            work: Work::Native(NativeWork {
+            work: Work::Native(NativeWork::Process(ProcessWork {
                 binding: binding.clone(),
                 job: job.clone(),
                 correlation,
-            }),
+            })),
         };
         let permit = ProcessWatchPermit { job, binding, core: core.clone(), transferred: false };
         (queued, permit)
@@ -223,6 +197,11 @@ pub(crate) fn reserve(
 #[path = "native_worker.rs"]
 mod worker;
 pub(crate) use worker::NativeWorker;
+
+#[cfg(windows)]
+#[allow(unsafe_code)]
+#[path = "windows_wait.rs"]
+pub(crate) mod wait;
 
 #[cfg(test)]
 #[path = "native_tests.rs"]

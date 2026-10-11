@@ -10,6 +10,74 @@ struct NativePanicClock {
     clock: Arc<ManualClock>,
     armed: Arc<AtomicBool>,
 }
+
+#[test]
+fn panic_then_retirement_failure_retains_fatal_cause_until_late_close() -> TestResult {
+    let rig = Rig::new()?;
+    let scope = native_scope(&rig)?;
+    let boundary = Boundary::new(true, false);
+    boundary.panic_start.store(true, Ordering::Release);
+    boundary.retire_failures.store(usize::MAX, Ordering::Release);
+    let mut job = permit(&rig, &scope, 1)?.bind_input(Box::new(Input(boundary.clone())));
+    boundary.retiring.wait()?;
+    let observed = rig.wake.count();
+    boundary.release.open();
+    rig.wake.wait_after(observed)?;
+    assert!(job.try_take_completion().is_none());
+    assert_eq!(boundary.closes.load(Ordering::Acquire), 0);
+    assert_eq!(scope.snapshot().reserved_bytes, 4096);
+    boundary.retire_failures.store(0, Ordering::Release);
+    rig.client.core.changed();
+    let (completion, _) = super::lifecycle::terminal_with_failures(&rig, &mut job)?;
+    let JobOutcome::Failure(error) = completion.outcome else {
+        return Err("Combined fatal/native cause was lost".into());
+    };
+    assert_eq!(error.stage(), "unregister_process_wait");
+    assert!(error.contains_owner_panic());
+    assert_eq!(error.owner_panic_cause().map(PanicCause::as_str), Some("native start panic"));
+    assert!(!format!("{error:?} {error}").contains("native start panic"));
+    assert_eq!(boundary.closes.load(Ordering::Acquire), 1);
+    Ok(())
+}
+
+#[test]
+fn original_native_failure_then_retirement_panic_preserves_first_cause_and_fatal_fact() -> TestResult
+{
+    let rig = Rig::new()?;
+    let scope = native_scope(&rig)?;
+    let boundary = Boundary::new(false, true);
+    boundary.panic_retire.store(true, Ordering::Release);
+    let mut job = permit(&rig, &scope, 1)?.bind_input(Box::new(Input(boundary.clone())));
+    let (completion, _) = super::lifecycle::terminal_with_failures(&rig, &mut job)?;
+    let JobOutcome::Failure(error) = completion.outcome else {
+        return Err("Original native failure was replaced".into());
+    };
+    assert_eq!(error.stage(), "register_process_wait");
+    assert!(error.contains_owner_panic());
+    assert_eq!(error.owner_panic_cause().map(PanicCause::as_str), Some("native retirement panic"));
+    assert_eq!(boundary.closes.load(Ordering::Acquire), 1);
+    Ok(())
+}
+
+#[test]
+fn fatal_fact_and_original_bounded_payload_survive_full_cleanup_inventory_and_clone() {
+    let mut error = NativeObservationError::new("register", std::io::Error::from_raw_os_error(5));
+    for _ in 0..8 {
+        error.retain_cleanup(NativeObservationError::new(
+            "close",
+            std::io::Error::from_raw_os_error(6),
+        ));
+    }
+    let mut fatal = NativeObservationError::new("unregister", std::io::Error::from_raw_os_error(6));
+    fatal.retain_panic(&PanicCause::new("secret-panic".repeat(200)));
+    error.retain_cleanup(fatal);
+    let cloned = error.clone();
+    assert_eq!(cloned.cleanup.len(), 8);
+    assert_eq!(cloned.omitted_cleanup, 1);
+    assert!(cloned.contains_owner_panic());
+    assert_eq!(cloned.owner_panic_cause().map(|cause| cause.as_str().len()), Some(1024));
+    assert!(!format!("{cloned:?} {cloned}").contains("secret-panic"));
+}
 impl Clock for NativePanicClock {
     fn now(&self) -> Moment {
         if std::thread::current().name() == Some("sugarsubstitute-native-retirement")
@@ -81,6 +149,7 @@ fn unregister_failure_retains_registration_credit_and_first_cause_until_retry_se
         return Err("Native unregister failure was not retained".into());
     };
     assert_eq!(cause.stage(), "unregister_process_wait");
+    assert!(!cause.contains_owner_panic());
     assert_eq!(
         cause
             .source()

@@ -16,8 +16,7 @@ use std::{
     sync::Arc,
 };
 
-#[path = "windows_wait.rs"]
-mod wait;
+use crate::native::wait;
 
 // Integer handle identities permit moving unique ownership between threads.
 // No borrowed HANDLE or callback pointer escapes this adapter.
