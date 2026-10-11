@@ -181,6 +181,7 @@ impl Harness {
             sugarsubstitute_contracts::execution::JobOutcome::Success(exit),
             Some(identity),
             root,
+            record.root_spec.1,
         );
         Ok(())
     }
@@ -214,6 +215,7 @@ mod bounds;
 mod completions;
 mod force;
 mod lifecycle;
+mod observation_retirement;
 mod panics;
 mod retirement;
 

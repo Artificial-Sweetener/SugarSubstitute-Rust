@@ -3,7 +3,7 @@
 //! Expose exact registry facts independently of native handles and scheduler jobs.
 use crate::RegistryError;
 use sugarsubstitute_contracts::{
-    execution::Moment,
+    execution::{JobId, Moment},
     lifecycle::{CoordinatorKey, ProcessKey, ResourceKey, RunKey, ShutdownBudget, ShutdownId},
 };
 
@@ -79,6 +79,15 @@ impl RegistrySnapshot {
         !self.settled && self.shutdown.is_some_and(|(_, budget)| now >= budget.settle_until)
     }
 }
+/// Classify an actual root-watch terminal without inferring process exit.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RootObservationOutcome {
+    /// The exact watch's typed cancellation returned after its native retirement.
+    Cancelled,
+    /// The exact watch's typed timeout returned after its native retirement.
+    TimedOut,
+}
+
 /// Transfer one actual fact, distinct from a requested stop/cancel/kill operation.
 #[derive(Debug)]
 pub enum RegistryObservation {
@@ -93,6 +102,15 @@ pub enum RegistryObservation {
         process: ProcessKey,
         /// Actual u32 status, including valid status259.
         code: u32,
+    },
+    /// The root watch retired without observing exit; family ownership remains live.
+    RootObservationRetired {
+        /// Exact retained family identity.
+        process: ProcessKey,
+        /// Exact execution job whose typed terminal was transferred.
+        job: JobId,
+        /// Actual cancellation or timeout, never process or family settlement.
+        outcome: RootObservationOutcome,
     },
     /// Every retained member exited, membership is empty and owned work/handles closed.
     FamilySettled {

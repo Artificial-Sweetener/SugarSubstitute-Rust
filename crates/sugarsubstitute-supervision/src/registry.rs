@@ -7,7 +7,7 @@
 //! record before executor shutdown. Drop is owned containment, never clean proof.
 use crate::{
     FamilyBinding, LaunchTicket, RegistryAdmissionError, RegistryError, RegistryObservation,
-    RegistrySnapshot, WindowsLaunchInput,
+    RegistrySnapshot, RootObservationOutcome, WindowsLaunchInput,
     native_process::{self, Family, Identity, NativePort, WatchInput},
 };
 use std::sync::{
@@ -84,6 +84,7 @@ struct Record {
     root_notice: bool,
     root: Option<Identity>,
     root_exit: Option<ProcessExit>,
+    root_retirement: Option<(JobId, RootObservationOutcome)>,
     member_watch: Option<WatchJob>,
     member_spec: Option<(sugarsubstitute_contracts::execution::ScopeId, JobId)>,
     member_notice: bool,
@@ -97,7 +98,7 @@ struct Record {
     started: bool,
     settled: bool,
     error: Option<RegistryError>,
-    unread: [bool; 4],
+    unread: [bool; 5],
 }
 impl Record {
     fn fail(&mut self, error: RegistryError) {
@@ -217,6 +218,16 @@ impl WindowsProcessRegistry {
                 }));
             }
         }
+        if record.unread[4] {
+            record.unread[4] = false;
+            if let Some((job, outcome)) = record.root_retirement {
+                return Ok(Some(RegistryObservation::RootObservationRetired {
+                    process: key,
+                    job,
+                    outcome,
+                }));
+            }
+        }
         if record.unread[3] {
             record.unread[3] = false;
             if let Some(error) = &record.error {
@@ -274,6 +285,7 @@ impl Drop for WindowsProcessRegistry {
 }
 mod cleanup;
 mod completion;
+mod observation_retirement;
 mod submission;
 #[cfg(test)]
 mod tests;

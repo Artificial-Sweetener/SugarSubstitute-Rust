@@ -17,8 +17,8 @@ impl Fixture {
         let Some(key) = self.cases[self.current].process else {
             return Ok(if self.closing { HeadlessStep::Shutdown } else { HeadlessStep::Active });
         };
-        // Each record has four unread fact classes; no dynamic event list is retained.
-        for _ in 0..4 {
+        // Each record has five unread fact classes; no dynamic event list is retained.
+        for _ in 0..5 {
             let Some(observation) = self.registry.take_observation(key)? else { break };
             self.cases[self.current].observe(observation)?;
         }

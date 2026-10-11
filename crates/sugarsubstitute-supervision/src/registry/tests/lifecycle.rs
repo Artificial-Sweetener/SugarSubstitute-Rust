@@ -36,11 +36,12 @@ fn root_exit_zero_or259_is_not_family_settlement_and_live_leaf_remains_owned() -
                 assert_eq!(code, 259);
                 1
             }
-            RegistryObservation::Failed { .. } => 2,
-            RegistryObservation::FamilySettled { .. } => 3,
+            RegistryObservation::RootObservationRetired { .. } => 2,
+            RegistryObservation::Failed { .. } => 3,
+            RegistryObservation::FamilySettled { .. } => 4,
         });
     }
-    assert_eq!(kinds, [0, 1, 2, 3]);
+    assert_eq!(kinds, [0, 1, 2, 3, 4]);
     h.registry.retire_settled(key)?;
     assert!(h.registry.is_empty());
     assert!(matches!(h.registry.snapshot(key), Err(RegistryAdmissionError::Stale)));

@@ -37,6 +37,7 @@ impl CaseProgress {
         let key = match &observation {
             RegistryObservation::ContainedStarted { process }
             | RegistryObservation::RootExited { process, .. }
+            | RegistryObservation::RootObservationRetired { process, .. }
             | RegistryObservation::FamilySettled { process, .. }
             | RegistryObservation::Failed { process, .. } => *process,
         };
@@ -50,6 +51,9 @@ impl CaseProgress {
                 if code != self.expected {
                     return Err("Fixture observed an unexpected actual exit code".into());
                 }
+            }
+            RegistryObservation::RootObservationRetired { .. } => {
+                return Err("Immediate-exit fixture requires an actual exit observation".into());
             }
             RegistryObservation::FamilySettled { shutdown: observed, .. } => {
                 if observed != self.stop.map(|stop| stop.0) || observed.is_none() {

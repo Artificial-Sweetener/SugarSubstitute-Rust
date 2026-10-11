@@ -67,6 +67,25 @@ fn unexpected_actual_code_is_retained_without_claiming_success() -> Result<()> {
 }
 
 #[test]
+fn observation_retirement_cannot_replace_immediate_fixture_exit_evidence() -> Result<()> {
+    let fixture = Fixture::new()?;
+    let process = key(&fixture, 1)?;
+    let mut case = CaseProgress::new(0);
+    case.bind(process)?;
+    assert!(
+        case.observe(RegistryObservation::RootObservationRetired {
+            process,
+            job: JobId::new(1)?,
+            outcome: sugarsubstitute_supervision::RootObservationOutcome::Cancelled,
+        })
+        .is_err()
+    );
+    assert_eq!(case.exited, None);
+    assert!(!case.complete());
+    Ok(())
+}
+
+#[test]
 fn grace_and_total_are_consumed_once_without_resetting_original_budget() -> Result<()> {
     let origin = Instant::now();
     let mut plan = StopPlan::new(Moment::from_nanos(17), origin)?;

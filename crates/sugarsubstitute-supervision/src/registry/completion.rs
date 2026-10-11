@@ -67,7 +67,13 @@ impl WindowsProcessRegistry {
                 {
                     drop(record.root_watch.take());
                     record.root_notice = false;
-                    observe_watch(record, completion.outcome, record.root, true);
+                    observe_watch(
+                        record,
+                        completion.outcome,
+                        record.root,
+                        true,
+                        completion.spec.id,
+                    );
                 }
                 if record.member_notice
                     && let Some(completion) =
@@ -78,7 +84,7 @@ impl WindowsProcessRegistry {
                     record.member_notice = false;
                     self.cleanup_watches -= 1;
                     let watched = record.watched.take();
-                    observe_watch(record, completion.outcome, watched, false);
+                    observe_watch(record, completion.outcome, watched, false, completion.spec.id);
                 }
             }
             if !record.settled
@@ -181,7 +187,19 @@ pub(super) fn observe_watch(
     outcome: JobOutcome<ProcessExit, NativeObservationError>,
     expected: Option<Identity>,
     root: bool,
+    job: JobId,
 ) {
+    if root && expected.is_some() && !record.rejected_launch {
+        let retirement = match &outcome {
+            JobOutcome::Cancelled => Some(RootObservationOutcome::Cancelled),
+            JobOutcome::TimedOut => Some(RootObservationOutcome::TimedOut),
+            _ => None,
+        };
+        if let Some(retirement) = retirement {
+            record.root_retirement = Some((job, retirement));
+            record.unread[4] = true;
+        }
+    }
     match outcome {
         JobOutcome::Success(exit) => {
             let identity = Identity { pid: exit.process_id, birth: exit.creation_time_100ns };

@@ -101,6 +101,7 @@ impl WindowsProcessRegistry {
             root_notice: false,
             root: None,
             root_exit: None,
+            root_retirement: None,
             member_watch: None,
             member_spec: None,
             member_notice: false,
@@ -114,7 +115,7 @@ impl WindowsProcessRegistry {
             started: false,
             settled: false,
             error: None,
-            unread: [false; 4],
+            unread: [false; 5],
         };
         self.next_process = next;
         let job = execution.submit_blocking(creation_scope, creation, move |context| {

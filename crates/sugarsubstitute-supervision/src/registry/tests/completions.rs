@@ -4,7 +4,7 @@
 use super::*;
 use sugarsubstitute_contracts::execution::JobOutcome;
 
-fn observed_job(
+pub(super) fn observed_job(
     h: &mut Harness,
     key: ProcessKey,
     identity: Identity,
