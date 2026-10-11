@@ -60,6 +60,8 @@ pub(super) async fn supervise(core: Arc<Core>) {
                     factory(queued.context.clone(), started)
                 }
                 Work::Cpu(_) => continue,
+                #[cfg(any(windows, test))]
+                Work::Native(_) => continue,
             };
             running.push(Running {
                 handle: tokio::spawn(future),
@@ -74,9 +76,16 @@ pub(super) async fn supervise(core: Arc<Core>) {
             (
                 state.stopping,
                 state
-                    .queue
-                    .iter()
-                    .filter_map(|queued| queued.context.deadline())
+                    .jobs
+                    .values()
+                    .filter(|record| {
+                        record.phase == sugarsubstitute_contracts::execution::JobPhase::Queued
+                            || (record.spec.class
+                                == sugarsubstitute_contracts::execution::JobClass::NativeObservation
+                                && record.phase
+                                    == sugarsubstitute_contracts::execution::JobPhase::Running)
+                    })
+                    .filter_map(|record| record.deadline)
                     .filter(|deadline| *deadline > now)
                     .min(),
             )

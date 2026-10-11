@@ -34,9 +34,9 @@ impl Mailbox {
     pub(crate) fn new(wake: Arc<dyn CompletionWake>) -> Self {
         Self {
             pending: Mutex::new(Pending {
-                notices: VecDeque::with_capacity(48),
+                notices: VecDeque::with_capacity(560),
                 wake_pending: false,
-                failures: Vec::with_capacity(48),
+                failures: Vec::with_capacity(560),
                 omitted_failures: 0,
             }),
             wake,
@@ -78,7 +78,7 @@ impl Mailbox {
 
     pub(crate) fn record_failure(&self, error: ExecutionError) {
         let mut pending = lock(&self.pending);
-        if pending.failures.len() < 48 {
+        if pending.failures.len() < 560 {
             pending.failures.push(error);
         } else {
             pending.omitted_failures = pending.omitted_failures.saturating_add(1);

@@ -79,6 +79,15 @@ pub enum AdmissionError {
     },
     /// The executor's fixed live/retained scope capacity has been reached.
     ScopeCapacity,
+    /// Native observations require a scope admitted by the native scope boundary.
+    NativeScopeRequired,
+    /// A native observer's fixed state is not covered by the reservation.
+    NativeReservationTooSmall {
+        /// Submitted total peak reservation, in bytes.
+        requested_bytes: u64,
+        /// Minimum native observer state reservation, in bytes.
+        minimum_bytes: u64,
+    },
     /// A job identity has already been used by this executor.
     DuplicateJobId {
         /// Reused application job identity.
@@ -151,6 +160,13 @@ impl fmt::Display for AdmissionError {
                 write!(formatter, "Scope identity must advance {}", latest.get())
             }
             Self::ScopeCapacity => formatter.write_str("Execution scope capacity is saturated"),
+            Self::NativeScopeRequired => {
+                formatter.write_str("Native observation requires an admitted native scope")
+            }
+            Self::NativeReservationTooSmall { requested_bytes, minimum_bytes } => write!(
+                formatter,
+                "Native observation reserves {requested_bytes} bytes but requires at least {minimum_bytes}"
+            ),
             Self::DuplicateJobId { job_id } => {
                 write!(formatter, "Job identity {} was already used", job_id.get())
             }

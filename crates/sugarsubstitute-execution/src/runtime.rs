@@ -37,7 +37,11 @@ pub use policy::{ExecutionLimits, ShutdownProgress, WorkerStatus};
 /// Request/poll shutdown while UI remains live. `finish_shutdown` requires actual
 /// settlement and must run after native teardown. Dropping without this transaction
 /// cancels and joins synchronously, and can block until finite work returns.
+/// Consume or drop native process-watch permits before this final teardown;
+/// an unconsumed permit remains unresolved because it can still bind a handle.
 pub struct ExecutionOwner {
+    #[cfg(any(windows, test))]
+    native: Option<crate::native::NativeWorker>,
     core: Arc<Core>,
     runtime: Option<Runtime>,
     supervisor: Option<JoinHandle<()>>,
@@ -49,7 +53,7 @@ pub struct ExecutionOwner {
 /// Clone an application submission endpoint without exposing scheduler handles.
 #[derive(Clone)]
 pub struct ExecutionClient {
-    core: Arc<Core>,
+    pub(crate) core: Arc<Core>,
 }
 
 pub(crate) fn error(cause: impl std::error::Error + Send + Sync + 'static) -> ExecutionError {
@@ -91,8 +95,22 @@ impl ExecutionOwner {
             .build()
             .map_err(error)?;
         let cpu = CpuPool::start(core.clone(), cpu_workers)?;
+        #[cfg(any(windows, test))]
+        let native = match crate::native::NativeWorker::start(core.clone()) {
+            Ok(native) => native,
+            Err(primary) => {
+                core.shutdown();
+                let mut failures = vec![primary];
+                if let Err(error) = cpu.finish() {
+                    failures.push(error);
+                }
+                return Err(aggregate_errors(failures));
+            }
+        };
         let supervisor = runtime.spawn(supervise(core.clone()));
         Ok(Self {
+            #[cfg(any(windows, test))]
+            native: Some(native),
             core,
             runtime: Some(runtime),
             supervisor: Some(supervisor),
@@ -150,9 +168,22 @@ impl ExecutionOwner {
         let workers = WorkerStatus {
             async_finished: self.supervisor.as_ref().is_none_or(JoinHandle::is_finished),
             cpu_finished: self.cpu.as_ref().is_none_or(CpuPool::is_finished),
+            native_finished: {
+                #[cfg(any(windows, test))]
+                {
+                    self.native.as_ref().is_none_or(crate::native::NativeWorker::is_finished)
+                }
+                #[cfg(not(any(windows, test)))]
+                {
+                    true
+                }
+            },
         };
-        let settled =
-            state.stopping && state.settled() && workers.async_finished && workers.cpu_finished;
+        let settled = state.stopping
+            && state.settled()
+            && workers.async_finished
+            && workers.cpu_finished
+            && workers.native_finished;
         Ok(ShutdownProgress {
             settled,
             deadline_expired: !settled
@@ -176,7 +207,13 @@ impl ExecutionOwner {
     }
 
     fn join_workers(&mut self) -> Result<(), ExecutionError> {
-        let mut failures = Vec::with_capacity(2);
+        let mut failures = Vec::with_capacity(3);
+        #[cfg(any(windows, test))]
+        if let Some(native) = self.native.take()
+            && let Err(cause) = native.finish()
+        {
+            failures.push(cause);
+        }
         if let Some(handle) = self.supervisor.take()
             && let Some(runtime) = &self.runtime
             && let Err(cause) = runtime.block_on(handle)
@@ -203,94 +240,6 @@ impl Drop for ExecutionOwner {
     }
 }
 
-impl sugarsubstitute_contracts::execution::ExecutionPort for ExecutionClient {
-    fn create_scope(
-        &self,
-        spec: ScopeSpec,
-        parent: Option<&Scope>,
-    ) -> Result<Scope, AdmissionError> {
-        self.core.create_scope(spec, parent)
-    }
-    fn submit_async<T, E, F, M>(
-        &self,
-        scope: &Scope,
-        spec: JobSpec,
-        factory: M,
-    ) -> Result<OwnedJob<T, E>, AdmissionError>
-    where
-        T: Send + 'static,
-        E: Send + 'static,
-        F: Future<Output = Result<T, E>> + Send + 'static,
-        M: FnOnce(sugarsubstitute_contracts::execution::JobContext) -> F + Send + 'static,
-    {
-        self.submit(scope, spec, RequestKind::Async, |job| {
-            Work::Async(Box::new(move |context, started| {
-                Box::pin(task::run_async(job, context, started, factory))
-            }))
-        })
-    }
-    fn submit_blocking<T, E, M>(
-        &self,
-        scope: &Scope,
-        spec: JobSpec,
-        factory: M,
-    ) -> Result<OwnedJob<T, E>, AdmissionError>
-    where
-        T: Send + 'static,
-        E: Send + 'static,
-        M: FnOnce(sugarsubstitute_contracts::execution::JobContext) -> Result<T, E>
-            + Send
-            + 'static,
-    {
-        self.submit(scope, spec, RequestKind::Blocking, |job| {
-            Work::Blocking(Box::new(move |context, started| {
-                Box::pin(crate::blocking::run(job, context, started, factory))
-            }))
-        })
-    }
-    fn submit_cpu<T, E, C, M>(
-        &self,
-        scope: &Scope,
-        spec: JobSpec,
-        factory: M,
-    ) -> Result<OwnedJob<T, E>, AdmissionError>
-    where
-        T: Send + 'static,
-        E: Send + 'static,
-        C: CpuTask<T, E>,
-        M: FnOnce(sugarsubstitute_contracts::execution::JobContext) -> C + Send + 'static,
-    {
-        self.submit(scope, spec, RequestKind::Cpu, |job| {
-            Work::Cpu(Box::new(move |context, started| {
-                crate::cpu::work(job, context, started, factory)
-            }))
-        })
-    }
-    fn drain_completions(&self, maximum: NonZeroUsize) -> Result<CompletionBatch, ExecutionError> {
-        self.core.mailbox.drain(maximum)
-    }
-}
-
-impl ExecutionClient {
-    #[cfg(test)]
-    pub(crate) fn core_for_test(&self) -> Arc<Core> {
-        self.core.clone()
-    }
-    fn submit<T: Send + 'static, E: Send + 'static>(
-        &self,
-        scope: &Scope,
-        spec: JobSpec,
-        kind: RequestKind,
-        work: impl FnOnce(Arc<Job<T, E>>) -> Work,
-    ) -> Result<OwnedJob<T, E>, AdmissionError> {
-        self.core.admit(scope, spec, kind, |context, cancel, admitted| {
-            let job = Job::new(scope.id(), spec, admitted, cancel, Arc::downgrade(&self.core));
-            let queued = QueuedJob { context, job: job.clone(), work: work(job.clone()) };
-            (queued, OwnedJob::new(scope.id(), spec, Box::new(JobHandle(job))))
-        })
-    }
-}
-
 #[path = "runtime_supervision.rs"]
 mod supervision;
 use supervision::supervise;
@@ -298,3 +247,6 @@ use supervision::supervise;
 #[cfg(test)]
 #[path = "runtime_tests.rs"]
 mod tests;
+
+#[path = "runtime_submit.rs"]
+mod submission;

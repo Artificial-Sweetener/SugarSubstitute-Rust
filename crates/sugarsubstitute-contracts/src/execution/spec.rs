@@ -39,6 +39,8 @@ pub enum JobClass {
     CpuInteractive,
     /// Background image decoding capacity.
     CpuDecode,
+    /// Private native observations admitted independently of asynchronous I/O.
+    NativeObservation,
 }
 
 /// Select the latest application-owned revision of one presentation surface.
@@ -102,7 +104,9 @@ impl JobSpec {
                 JobClass::IoLifecycle
             ) | (
                 Operation::NativeLifecycle,
-                JobClass::IoLifecycle | JobClass::InfrastructureLifecycle
+                JobClass::IoLifecycle
+                    | JobClass::InfrastructureLifecycle
+                    | JobClass::NativeObservation
             ) | (Operation::FramePrepare, JobClass::CpuInteractive)
                 | (Operation::ImageDecode, JobClass::CpuDecode)
                 | (
@@ -128,7 +132,11 @@ mod tests {
             (Operation::Readiness, vec![JobClass::IoLifecycle]),
             (
                 Operation::NativeLifecycle,
-                vec![JobClass::IoLifecycle, JobClass::InfrastructureLifecycle],
+                vec![
+                    JobClass::IoLifecycle,
+                    JobClass::InfrastructureLifecycle,
+                    JobClass::NativeObservation,
+                ],
             ),
             (Operation::FramePrepare, vec![JobClass::CpuInteractive]),
             (Operation::ImageDecode, vec![JobClass::CpuDecode]),
@@ -148,6 +156,7 @@ mod tests {
             JobClass::InfrastructureLifecycle,
             JobClass::CpuInteractive,
             JobClass::CpuDecode,
+            JobClass::NativeObservation,
         ];
         for (operation, expected) in allowed {
             for class in classes {
@@ -181,6 +190,7 @@ mod tests {
             JobClass::InfrastructureLifecycle,
             JobClass::CpuInteractive,
             JobClass::CpuDecode,
+            JobClass::NativeObservation,
         ] {
             let mut spec = JobSpec {
                 id: JobId::new(1)?,

@@ -11,6 +11,16 @@ use sugarsubstitute_contracts::execution::JobId;
 /// cannot consume lifecycle reserves. Peak bytes include caller-retained results.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ExecutionLimits {
+    /// Native observations actually registered concurrently, separate from I/O capacity.
+    pub native_running: usize,
+    /// Unbound or bound native reservations awaiting registration.
+    pub native_queued: usize,
+    /// Native held credits covering reservations, registrations, retirement and untransferred results.
+    pub native_terminal: usize,
+    /// Native live/retained scopes, independent of the ordinary scope allowance.
+    pub native_scopes: usize,
+    /// One private native registration/retirement worker on Windows.
+    pub native_workers: usize,
     /// Private asynchronous runtime worker count.
     pub async_workers: usize,
     /// Maximum finite blocking workers.
@@ -21,15 +31,17 @@ pub struct ExecutionLimits {
     pub io_running: usize,
     /// Maximum ordinary I/O work.
     pub io_ordinary: usize,
-    /// Total ready factories awaiting execution (32); deferred cleanup uses terminal credits.
+    /// Ordinary/lifecycle ready factories (32), independent of native reservations.
+    /// Deferred cleanup uses the corresponding class's held terminal credits.
     pub queued: usize,
     /// Maximum ordinary ready factories (28).
     pub queued_ordinary: usize,
-    /// Total held credits (48), covering ready/running work, retained results and deferred cleanup.
+    /// Ordinary/lifecycle held credits (48), independent of native held credits.
+    /// Covers ready/running work, retained results and deferred cleanup.
     pub terminal: usize,
     /// Maximum ordinary held terminal credits.
     pub terminal_ordinary: usize,
-    /// Maximum live or retained scope records.
+    /// Maximum ordinary live or retained scope records, separate from native scopes.
     pub scopes: usize,
     /// Maximum peak bytes charged across jobs and retained results.
     pub memory_bytes: u64,
@@ -38,6 +50,11 @@ pub struct ExecutionLimits {
 impl ExecutionLimits {
     pub(super) fn fixed(cpu_workers: usize) -> Self {
         Self {
+            native_running: if cfg!(any(windows, test)) { 384 } else { 0 },
+            native_queued: if cfg!(any(windows, test)) { 384 } else { 0 },
+            native_terminal: if cfg!(any(windows, test)) { 512 } else { 0 },
+            native_scopes: if cfg!(any(windows, test)) { 132 } else { 0 },
+            native_workers: usize::from(cfg!(any(windows, test))),
             async_workers: 2,
             blocking_workers: 2,
             cpu_workers,
@@ -56,6 +73,8 @@ impl ExecutionLimits {
 /// Observe actual termination of the adapter's retained worker facilities.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct WorkerStatus {
+    /// The native registration/retirement worker has actually returned after quiescence.
+    pub native_finished: bool,
     /// Every asynchronous supervisor/job join has actually completed.
     pub async_finished: bool,
     /// Every retained CPU thread has actually returned.
@@ -66,12 +85,13 @@ pub struct WorkerStatus {
 #[derive(Debug)]
 pub struct ShutdownProgress {
     /// Every admitted job is transferred or disposed and cancellation callbacks have returned.
-    /// Every retained supervisor/job join and CPU worker has actually stopped.
+    /// Every retained supervisor/job join, CPU worker and native worker has stopped.
     /// Runtime facilities are destroyed by `finish_shutdown` after this observation.
     pub settled: bool,
     /// Effective shutdown deadline has elapsed while work remains owned.
     pub deadline_expired: bool,
-    /// Jobs retaining work, untransferred results, deferred disposal or pending notifications.
+    /// Jobs retaining work, unbound native permits, untransferred results,
+    /// actual native retirement, deferred disposal or pending notifications.
     /// Pending scope notifications can keep shutdown unsettled even when this vector is empty.
     pub unresolved_job_ids: Vec<JobId>,
     /// Jobs awaiting a ready factory or deferred factory/result cleanup.

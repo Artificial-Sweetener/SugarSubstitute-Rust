@@ -10,8 +10,8 @@ const MEMORY_LIMIT: u64 = 256 * 1024 * 1024;
 /// Retain bounded rejection interests, not callers, jobs or an additional queue.
 #[derive(Default)]
 pub(super) struct CapacityWait {
-    queue: [bool; 2],
-    completion: [bool; 2],
+    queue: [bool; 3],
+    completion: [bool; 3],
     memory: Option<u64>,
 }
 
@@ -23,19 +23,32 @@ impl Core {
         replaces_ready: bool,
     ) -> Result<(), AdmissionError> {
         let ordinary = ordinary(spec.class);
-        let index = usize::from(ordinary);
+        let native = spec.class == JobClass::NativeObservation;
+        let index = if native { 2 } else { usize::from(ordinary) };
+        let ready = state
+            .queue
+            .iter()
+            .filter(|queued| (queued.context.spec().class == JobClass::NativeObservation) == native)
+            .count();
+        let held = state
+            .jobs
+            .values()
+            .filter(|record| (record.spec.class == JobClass::NativeObservation) == native)
+            .count();
         let queued_ordinary = state
             .queue
             .iter()
             .filter(|queued| super::ordinary(queued.context.spec().class))
             .count();
-        if !replaces_ready && (state.queue.len() >= 32 || (ordinary && queued_ordinary >= 28)) {
+        if !replaces_ready
+            && (ready >= if native { 384 } else { 32 } || (ordinary && queued_ordinary >= 28))
+        {
             state.capacity_wait.queue[index] = true;
             return Err(AdmissionError::QueueSaturated { class: spec.class });
         }
         let held_ordinary =
             state.jobs.values().filter(|record| super::ordinary(record.spec.class)).count();
-        if state.jobs.len() >= 48 || (ordinary && held_ordinary >= 44) {
+        if held >= if native { 512 } else { 48 } || (ordinary && held_ordinary >= 44) {
             state.capacity_wait.completion[index] = true;
             return Err(AdmissionError::CompletionSaturated);
         }
@@ -66,7 +79,7 @@ impl Core {
             return false;
         }
         let wait = &state.capacity_wait;
-        if wait.queue == [false; 2] && wait.completion == [false; 2] && wait.memory.is_none() {
+        if wait.queue == [false; 3] && wait.completion == [false; 3] && wait.memory.is_none() {
             return false;
         }
         let queued_ordinary =
@@ -75,12 +88,30 @@ impl Core {
             state.jobs.values().filter(|record| ordinary(record.spec.class)).count();
         let wait = &mut state.capacity_wait;
         let mut ready = false;
-        for index in 0..2 {
-            if wait.queue[index] && state.queue.len() < 32 && (index == 0 || queued_ordinary < 28) {
+        for index in 0..3 {
+            let native = index == 2;
+            let ready_count = state
+                .queue
+                .iter()
+                .filter(|queued| {
+                    (queued.context.spec().class == JobClass::NativeObservation) == native
+                })
+                .count();
+            let held_count = state
+                .jobs
+                .values()
+                .filter(|record| (record.spec.class == JobClass::NativeObservation) == native)
+                .count();
+            if wait.queue[index]
+                && ready_count < if native { 384 } else { 32 }
+                && (index != 1 || queued_ordinary < 28)
+            {
                 wait.queue[index] = false;
                 ready = true;
             }
-            if wait.completion[index] && state.jobs.len() < 48 && (index == 0 || held_ordinary < 44)
+            if wait.completion[index]
+                && held_count < if native { 512 } else { 48 }
+                && (index != 1 || held_ordinary < 44)
             {
                 wait.completion[index] = false;
                 ready = true;

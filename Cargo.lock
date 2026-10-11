@@ -1861,6 +1861,7 @@ dependencies = [
  "sugarsubstitute-contracts",
  "tokio",
  "tracing",
+ "windows",
 ]
 
 [[package]]

@@ -28,7 +28,7 @@ impl Core {
     pub(crate) fn flush_notifications(&self) {
         let cancellations = {
             let mut state = lock(&self.state);
-            let mut cancellations = Vec::with_capacity(112);
+            let mut cancellations = Vec::with_capacity(756);
             for scope in state.scopes.values() {
                 if scope.cancel.take_notification() {
                     cancellations.push(scope.cancel.clone());

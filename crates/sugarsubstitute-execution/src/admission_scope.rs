@@ -32,6 +32,15 @@ impl Core {
         spec: ScopeSpec,
         parent: Option<&Scope>,
     ) -> Result<Scope, AdmissionError> {
+        self.create_scope_kind(spec, parent, false)
+    }
+
+    pub(crate) fn create_scope_kind(
+        self: &Arc<Self>,
+        spec: ScopeSpec,
+        parent: Option<&Scope>,
+        native: bool,
+    ) -> Result<Scope, AdmissionError> {
         let now = self.clock.now();
         let parent_owner = parent.map(Scope::owner_id);
         let mut state = lock(&self.state);
@@ -44,7 +53,9 @@ impl Core {
         if let Some(latest) = state.latest_scope.filter(|latest| spec.id <= *latest) {
             return Err(AdmissionError::ScopeIdentityOrder { latest });
         }
-        if state.scopes.len() >= 64 {
+        if state.scopes.values().filter(|scope| scope.native == native).count()
+            >= if native { 132 } else { 64 }
+        {
             return Err(AdmissionError::ScopeCapacity);
         }
         let (parent_id, parent_cancel, deadline) = match parent {
@@ -68,6 +79,7 @@ impl Core {
         state.scopes.insert(
             spec.id,
             ScopeState {
+                native,
                 spec,
                 parent: parent_id,
                 deadline,

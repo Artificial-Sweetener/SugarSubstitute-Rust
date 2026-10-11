@@ -8,9 +8,14 @@ mod clock;
 mod cpu;
 mod mailbox;
 mod memory;
+#[cfg(any(windows, test))]
+mod native;
 mod runtime;
 mod scope;
 mod task;
+
+#[cfg(windows)]
+pub mod windows;
 
 pub use clock::MonotonicClock;
 pub use runtime::{

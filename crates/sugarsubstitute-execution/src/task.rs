@@ -21,6 +21,8 @@ pub(crate) type TaskFuture = std::pin::Pin<Box<dyn std::future::Future<Output = 
 pub(crate) type TaskFactory = Box<dyn FnOnce(JobContext, Moment) -> TaskFuture + Send>;
 
 pub(crate) enum Work {
+    #[cfg(any(windows, test))]
+    Native(crate::native::NativeWork),
     Async(TaskFactory),
     Blocking(TaskFactory),
     Cpu(Box<dyn FnOnce(JobContext, Moment) -> Box<dyn crate::cpu::CpuWork> + Send>),
@@ -125,6 +127,17 @@ impl<T: Send + 'static, E: Send + 'static> Job<T, E> {
         outcome: JobOutcome<T, E>,
     ) {
         let ended = context.now();
+        self.finish_at(context, started, ended, outcome);
+    }
+
+    /// Publish only after actual stop, using a previously observed owner clock sample.
+    pub(crate) fn finish_at(
+        &self,
+        context: &JobContext,
+        started: Option<Moment>,
+        ended: Moment,
+        outcome: JobOutcome<T, E>,
+    ) {
         let start = started.unwrap_or(ended);
         let duration = |later: Moment, earlier: Moment| -> Duration {
             match later.checked_duration_since(earlier) {

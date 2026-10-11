@@ -99,6 +99,7 @@ mod notification;
 use notification::SupervisedWait;
 
 pub(crate) struct ScopeState {
+    pub(crate) native: bool,
     pub(crate) spec: ScopeSpec,
     pub(crate) parent: Option<ScopeId>,
     pub(crate) deadline: Option<Moment>,
