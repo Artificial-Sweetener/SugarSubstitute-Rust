@@ -79,6 +79,10 @@ pub trait CompletionWake: Send + Sync {
 /// Accepted scope and job identities independently increase within an executor
 /// lifetime in actual admission order. Rejected admission does not advance either
 /// high-water mark; retired identities remain unavailable without unbounded ID sets.
+/// Rejected admission consumes and drops its uninvoked factory on the caller.
+/// Captures must therefore be cheap to drop or retain recoverable ownership outside
+/// the factory. Accepted factory and untransferred-result retirement belongs to
+/// execution workers and retains capacity until disposal actually returns.
 pub trait ExecutionPort: Send + Sync {
     /// Create an application scope, inheriting parent cancellation and deadlines.
     ///

@@ -32,6 +32,12 @@ layer = "host"
 concern = "Desktop host composition and application identity"
 
 [[owners]]
+package = "sugarsubstitute-execution"
+root = "crates/sugarsubstitute-execution"
+layer = "adapter"
+concern = "Application execution and task lifetime"
+
+[[owners]]
 package = "sugarsubstitute-xtask"
 root = "tools/xtask"
 layer = "tooling"

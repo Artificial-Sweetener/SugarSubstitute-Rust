@@ -1,6 +1,3 @@
 schema_version = 1
 
-# No execution adapter is implemented yet. Scheduling primitives are forbidden
-# throughout authored Rust until one dedicated adapter package is registered here.
-# Register its exact Cargo package as owner when its implementation and tests land.
-# Native event-loop pumping and process creation are separate owned concerns.
+owner = "sugarsubstitute-execution"

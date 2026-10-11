@@ -26,6 +26,12 @@ concern = "Product identity, demo input and controlled rendering composition"
 minimum_tests = 1
 
 [[owners]]
+package = "sugarsubstitute-execution"
+root = "crates/sugarsubstitute-execution"
+concern = "Admission, CPU scheduling, cancellation, retained ownership and observed worker teardown"
+minimum_tests = 43
+
+[[owners]]
 package = "sugarsubstitute-xtask"
 root = "tools/xtask"
 concern = "Governance rejection behavior and verification orchestration"

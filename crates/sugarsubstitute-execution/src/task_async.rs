@@ -1,0 +1,121 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Artificial Sweetener and contributors
+
+//! Isolate future polling and actual future/outcome/panic-payload destruction.
+
+use super::*;
+use std::{
+    any::Any,
+    future::Future,
+    pin::Pin,
+    task::{Context, Poll},
+};
+
+pub(crate) fn panic_cause(payload: Box<dyn Any + Send>) -> PanicCause {
+    let text = if let Some(text) = payload.downcast_ref::<String>() {
+        text.as_str()
+    } else if let Some(text) = payload.downcast_ref::<&str>() {
+        *text
+    } else {
+        "Non-text panic payload"
+    };
+    let mut end = text.len().min(1024);
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    let first = text[..end].to_owned();
+    let mut next = Some(payload);
+    let mut destructor_failed = false;
+    while let Some(payload) = next.take() {
+        match catch_unwind(AssertUnwindSafe(|| drop(payload))) {
+            Ok(()) => {}
+            Err(payload) => {
+                destructor_failed = true;
+                next = Some(payload);
+            }
+        }
+    }
+    let detail = if destructor_failed {
+        format!("{first}; panic payload destruction also panicked")
+    } else {
+        first
+    };
+    PanicCause::new(detail)
+}
+
+struct Supervised<F> {
+    future: Pin<Box<F>>,
+}
+impl<F: Future> Future for Supervised<F> {
+    type Output = Result<F::Output, PanicCause>;
+    fn poll(self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.get_mut();
+        match catch_unwind(AssertUnwindSafe(|| this.future.as_mut().poll(context))) {
+            Ok(Poll::Ready(value)) => Poll::Ready(Ok(value)),
+            Ok(Poll::Pending) => Poll::Pending,
+            Err(payload) => Poll::Ready(Err(panic_cause(payload))),
+        }
+    }
+}
+
+pub(crate) async fn run_async<T, E, F, M>(
+    job: Arc<Job<T, E>>,
+    context: JobContext,
+    _dispatched: Moment,
+    factory: M,
+) where
+    T: Send + 'static,
+    E: Send + 'static,
+    F: Future<Output = Result<T, E>> + Send + 'static,
+    M: FnOnce(JobContext) -> F + Send + 'static,
+{
+    let started = context.now();
+    if let Some(reason) = stop_reason(&context) {
+        let outcome = match catch_unwind(AssertUnwindSafe(|| drop(factory))) {
+            Ok(()) => stopped_outcome(reason),
+            Err(payload) => JobOutcome::Panicked(panic_cause(payload)),
+        };
+        job.finish(&context, Some(started), outcome);
+        return;
+    }
+    let constructed = catch_unwind(AssertUnwindSafe(|| factory(context.clone())));
+    let outcome = match constructed {
+        Err(payload) => JobOutcome::Panicked(panic_cause(payload)),
+        Ok(future) => {
+            let mut future = Supervised { future: Box::pin(future) };
+            let deadline = context.deadline();
+            let deadline_wait = async {
+                match deadline {
+                    Some(deadline) => context.sleep_until(deadline).await,
+                    None => std::future::pending().await,
+                }
+            };
+            let outcome = tokio::select! {
+                biased;
+                () = deadline_wait => JobOutcome::TimedOut,
+                () = context.cancelled() => JobOutcome::Cancelled,
+                result = &mut future => match result { Ok(Ok(value)) => JobOutcome::Success(value), Ok(Err(error)) => JobOutcome::Failure(error), Err(cause) => JobOutcome::Panicked(cause) },
+            };
+            match catch_unwind(AssertUnwindSafe(|| drop(future))) {
+                Ok(()) => outcome,
+                Err(payload) => {
+                    let cause = panic_cause(payload);
+                    let discarded = catch_unwind(AssertUnwindSafe(|| drop(outcome)));
+                    let cause = match discarded {
+                        Ok(()) => cause,
+                        Err(payload) => {
+                            let secondary = panic_cause(payload);
+                            PanicCause::new(format!(
+                                "{}; discarded outcome: {}",
+                                cause.as_str(),
+                                secondary.as_str()
+                            ))
+                        }
+                    };
+                    JobOutcome::Panicked(cause)
+                }
+            }
+        }
+    };
+    job.finish(&context, Some(started), outcome);
+}

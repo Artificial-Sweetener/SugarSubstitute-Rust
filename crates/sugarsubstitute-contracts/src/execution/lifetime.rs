@@ -14,7 +14,7 @@ pub struct ScopeSnapshot {
     pub closed: bool,
     /// Cancellation has been requested for this scope.
     pub cancellation_requested: bool,
-    /// Admitted jobs still waiting for execution.
+    /// Admitted jobs awaiting execution or worker-owned factory retirement.
     pub queued: usize,
     /// Jobs whose actual execution has not yet stopped.
     pub running: usize,
@@ -107,6 +107,8 @@ pub struct JobStatus {
 /// Methods are nonblocking, infallible and must not panic. A completion is returned
 /// at most once, after actual termination. Its transfer acknowledges delivery
 /// credit; its memory guard independently retains the admitted byte charge.
+/// Cancellation and abandonment after transfer are no-ops for this job handle;
+/// a retained context still observes cancellation of its authoritative scope.
 pub trait JobControl<T, E>: Send + Sync {
     /// Request cancellation while retaining observation of actual termination.
     fn cancel(&self);
@@ -140,6 +142,7 @@ impl<T, E> OwnedJob<T, E> {
         self.spec
     }
     /// Request cancellation; this is not proof of blocking/native termination.
+    /// A job whose terminal completion has already transferred is unaffected.
     pub fn cancel(&self) {
         self.control.cancel();
     }

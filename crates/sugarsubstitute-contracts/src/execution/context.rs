@@ -10,6 +10,9 @@ use std::{future::Future, pin::Pin, sync::Arc};
 pub type WaitFuture = Pin<Box<dyn Future<Output = ()> + Send + 'static>>;
 
 /// Supply the execution owner's injected monotonic clock and bounded timer waits.
+///
+/// Port calls are nonblocking and must not panic. The execution owner samples
+/// supplied clocks outside its internal admission and lifetime locks.
 pub trait Clock: Send + Sync {
     /// Return nanoseconds in this clock's monotonic epoch.
     fn now(&self) -> Moment;

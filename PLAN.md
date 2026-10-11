@@ -16,7 +16,7 @@ These components already exist. Continue from them; their outstanding acceptance
 | --- | --- | --- | --- |
 | B1 | Rust workspace, pinned Rust 1.93.1/edition 2024, locked dependencies and executable composition | Cargo.toml, Cargo.lock, rust-toolchain.toml, crates/sugarsubstitute | Production launch composition is K1. The current executable runs the splash demonstration. |
 | B2 | Architecture, testing, persistence, cache and vendoring policies/checkers; repository verification commands and three-platform CI configuration | governance/, tools/xtask/, .github/workflows/verify.yml | Extend registrations/checks with each implemented owner. Configured CI is not native platform acceptance. |
-| B3 | Execution ownership restrictions and checker fixtures | governance/execution/policy.toml, tools/xtask/src/execution*.rs | The execution adapter is not implemented. M0 supplies the runtime and behavioral qualification. |
+| B3 | Execution ownership restrictions and checker fixtures | governance/execution/policy.toml, tools/xtask/src/execution*.rs | M0 has registered the tested execution adapter; native application integration and qualification remain pending. |
 | B4 | CPU splash renderer, paper-flip animation, progress/activity drawing, blank console presentation and collapsed/expanded interaction | crates/sugarsubstitute-splash/, crates/sugarsubstitute/src/demo.rs | S0 verifies full reference parity, control behavior and responsiveness. L2 supplies the live transcript. |
 | B5 | Forty packaged character poses, eighteen caption glyph PNGs and asset provenance | crates/sugarsubstitute-splash/assets/, third_party/ | Preserve assets and licensing; S0 checks all poses, scales and phases. |
 | B6 | Five-locale product registry and localized demonstration controls | crates/sugarsubstitute-contracts/src/localization.rs | M0 owns shared localization; L2 completes production messages. |
@@ -53,7 +53,7 @@ Implementation and verification have separate statuses. Implementation is Not st
 | Order | Work ID | Implementation | Verification | Next work and prerequisite |
 | --- | --- | --- | --- | --- |
 | 1 | S0 | Complete on the Windows development setup: controls, raster parity, clipping and bounded source audit | Windows 11 at 96 DPI accepted: 429 frames, five startup runs, native controls/drag/load/idle matrix pass; other platforms and mixed DPI pending | Proceed to M0; retain separately pending native platform/DPI qualification. |
-| 2 | M0 | In progress: canonical contracts/localization, typed job lifetimes and bounded readiness admission implemented; central execution and export governance under review | Contracts 19 and application 5 focused tests pass; runtime lifecycle and native performance pending | Integrate verified execution, startup configuration and governed prepared-frame delivery. |
+| 2 | M0 | In progress: registered execution adapter, configuration/readiness contracts, immutable frames and publication admission implemented | Windows workspace verification passes 211 tests, including 43 execution tests; native integration/performance pending | Integrate governed raster preparation, nonblocking native delivery and startup composition. |
 | 3 | M1 | Not started | Pending | Implement supervision, scoped identities/leases, authenticated lifecycle and containment after M0. |
 | 4 | L1–L5 | Not started: reusable presentation/proof components are B4–B8 | Pending | Build main host, production splash, Comfy adapter, qualification and native crash capture in parallel after M0/M1 ports are accepted. |
 | 5 | K1 | Not started | Pending | Integrate and hand off the first actual Comfy/SugarCubes host after L1–L5 components are ready. |
@@ -161,9 +161,9 @@ Use dirty-state/hover-change invalidation and coalesced redraw requests. Pointer
 
 ### 2.1 M0.1 — Introduce the actual layered owners
 
-**Implementation:** Partial: contracts and application readiness owners implemented and registered; execution adapter under implementation. **Verification:** Focused contracts/application checks pass on Windows; integration pending.
+**Implementation:** Complete for first implemented concerns: contracts, application, execution and Comfy configuration owners are registered. **Verification:** Windows workspace verification passes; native application integration pending.
 
-- [ ] Implement the real application/contracts/execution/Comfy owners as their first behavior lands; register each implemented crate.
+- [x] Implement the real application/contracts/execution/Comfy owners as their first behavior lands; register each implemented crate.
 
 Keep sugarsubstitute as executable/composition owner. Introduce sugarsubstitute-contracts for runtime-independent typed boundaries and sugarsubstitute-application for application state/use cases when their first real behavior lands. Introduce sugarsubstitute-execution as the dedicated execution adapter and sugarsubstitute-comfy for process/readiness transport. Register each real crate with architecture/testing policy and nonzero behavioral tests in the same change. No empty placeholder crates, identity-only proofs, raw native handles in domain state or tooling dependencies in runtime crates.
 
@@ -171,9 +171,9 @@ The host injects typed execution ports into application services and owns the ex
 
 ### 2.2 M0.2 — Fix a bounded runtime policy
 
-**Implementation:** In progress in the execution worktree; public contracts frozen. **Verification:** Owner compilation passes; admission/lifetime/worker behavior tests and integrated qualification pending.
+**Implementation:** Complete for bounded execution admission, supervised job lifetimes and owned worker shutdown. **Verification:** 43 execution tests and the full Windows workspace gate pass; receiving native performance and process/network integration remain pending.
 
-- [ ] Implement bounded runtime/worker admission, job lifetimes, cancellation and completion delivery.
+- [x] Implement bounded runtime/worker admission, job lifetimes, cancellation and completion delivery.
 
 Use one private Tokio 1.53.2 runtime per process that performs background work for async process/network/timer work, its capped blocking facility for finite infrastructure operations, and a separate fixed execution-owned CPU worker facility for render/decode preparation. Published metadata reports MSRV 1.71; pin required reviewed features and verify the complete lockfile on Rust 1.93.1. Do not import Tokio into consumers. Every executable mode uses the same governed execution adapter; a separate supervisor process does not authorize consumer-created runtimes or threads. Aggregate supervisor/desktop/helper costs are included in Q1 measurements. Native event-loop callbacks are not background jobs; GLib/AppKit/Win32 scheduler entry points must not become alternative executors.
 
@@ -188,6 +188,10 @@ Tokio's blocking facility does not provide the required application queue/resour
 Define scope ID, job ID, operation kind, connection/navigation/import generation, deadline, capacity/memory reservation, cancellation state and typed terminal result. Model success, failure, panic, cancellation, timeout and overload distinctly. Panics are observed failures and do not escape into the event loop. Dropping a future/token invalidates publication but does not prove blocking work ceased. Scopes cancel children, drain joins, release reservations and record unresolved shutdown failures.
 
 A bounded completion mailbox wakes Tao once per pending batch. Control/failure/cancellation notifications have reserved capacity; replaceable status/frame snapshots coalesce. Output acknowledgements and terminal outcomes cannot be silently dropped. Apply a bounded per-event-loop drain budget, re-wake remaining work, validate generations before publication and avoid broad locks held across awaits or native callbacks.
+
+**Execution owner integration receipt (2026-10-11):** `sugarsubstitute-execution` is the registered sole scheduling owner. Its private Tokio runtime uses two async and at most two blocking workers; its CPU pool uses two workers, or one on a single-logical-CPU machine. Admission bounds twelve concurrent I/O jobs with four lifecycle reserves, two infrastructure jobs with one lifecycle reserve, thirty-two ready factories with four lifecycle reserves, forty-eight retained terminal/cleanup credits with four lifecycle reserves, sixty-four live/retained scopes, and 256 MiB of admitted retained storage. Ready-factory capacity and deferred disposal capacity are distinct. Replaced factories, abandoned results and cancellation callbacks retain their credits and byte reservations until worker-owned cleanup actually returns. The owner supervises panic payloads, custom cancellation wakers and their destructors, and observes joins before runtime destruction. Supplied clock/control/callback code runs outside admission locks. Transferred frame/cache guards may outlive stopped workers while retaining accountable byte charges.
+
+Independent source review accepted all twenty-seven worker-owned files against `D:\\SugarSubstitute-Rust\\artifacts\\m0\\execution-retirement-20261011-01.json`, SHA-256 `5e894485c9ff93e13f2fc24cec8ee37ae1bb81cada7fd226b0831297d6642c10`. Canonical `cargo check --offline -p sugarsubstitute-execution` deliberately added Tokio 1.53.2, tokio-macros 2.7.2 and the workspace package edge; existing external lockfile versions were preserved. `cargo xtask verify` passed governance, formatting, strict all-target/all-feature Clippy, 211 Rust tests (43 execution), and warning-free Rustdoc with pinned Rust 1.93.1 Windows MSVC. These tests cover production-boundary admission, reserves, aggregate memory, actual cancellation, timeout/panic, replacement, disposal, bounded delivery and worker teardown. The native demonstration still uses its synchronous raster path until the governed presentation integration lands. This receipt does not establish macOS/Linux execution or native M0 latency.
 
 ### 2.3 M0.3 — Prepare production rendering and observability
 
@@ -205,9 +209,9 @@ Initial responsiveness targets: p95 host UI callback/drain work below 4 ms and p
 
 ### 2.4 M0.4 — Prove behavior and enforce scheduling ownership
 
-**Implementation:** Partial: owner-export AST checks and rejection fixtures are implemented and independently reviewed; scheduler registration and runtime tests pending. **Verification:** All 37 tooling tests and governance pass on Windows; runtime and native qualification pending.
+**Implementation:** Scheduler registration, owner-export AST checks and rejection fixtures are implemented and independently reviewed. **Verification:** All 37 tooling tests, 43 execution tests and governance pass on Windows; receiving native qualification pending.
 
-- [ ] Register the implemented scheduler and extend the existing execution gate; prove runtime behavior and rejection cases.
+- [x] Register the implemented scheduler and extend the existing execution gate; prove runtime behavior and rejection cases.
 
 Extend governance/execution/policy.toml with exactly one implemented scheduler package. Keep raw runtime/private worker dependencies inside it. Reject scheduler access elsewhere, including tests/platform conditionals, renamed dependencies/imports, re-exports, aliases, macro fragments and native FFI worker entry points. Extend rejection fixtures for actual new APIs; audit raw identifiers and false-positive handling rather than weakening the gate. Static checking cannot establish lifecycle safety, so pair it with behavior tests.
 
