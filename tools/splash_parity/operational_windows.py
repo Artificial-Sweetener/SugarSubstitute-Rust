@@ -100,6 +100,75 @@ def terminal_frame_audit(receipt: Path, source_path: Path, expected: bytes, widt
             "complete_source_immutable": True, "comparison": "Exact complete premultiplied RGBA bytes; every presented transition audited"}
 
 
+def terminal_move_audit(receipt: Path, source_path: Path, width: int, height: int) -> dict[str, object]:
+    """Require complete in-loop native submissions with multiple whole-source transitions after owned teardown."""
+    if receipt.stat().st_size > 65536:
+        raise ValueError("Native terminal receipt exceeded its bounded metadata size")
+    metadata = json.loads(receipt.read_text(encoding="utf-8"))
+    frame = metadata.get("frame_audit")
+    frame_keys = {"width", "height", "presented_frames", "content_changes", "byte_count", "source_path"}
+    if not isinstance(frame, dict) or set(frame) != frame_keys:
+        raise ValueError("Native terminal full-frame audit schema is missing or unrecognized")
+    if any(type(frame[key]) is not int for key in frame_keys - {"source_path"}):
+        raise ValueError("Native frame audit requires integer geometry and transition counts")
+    if (frame["width"], frame["height"], frame["byte_count"]) != (width, height, width * height * 4):
+        raise ValueError("Native frame audit geometry differs from the admitted whole frame")
+    if (type(metadata.get("frames_presented")) is not int or frame["presented_frames"] < 1
+            or frame["presented_frames"] != metadata["frames_presented"]):
+        raise ValueError("Native frame audit did not cover every successfully presented frame")
+    if not 0 <= frame["content_changes"] < frame["presented_frames"]:
+        raise ValueError("Native whole-source transition count exceeds its successful presentation inventory")
+    if not isinstance(frame["source_path"], str) or Path(frame["source_path"]).resolve(strict=True) != source_path.resolve(strict=True):
+        raise ValueError("Native frame audit source is not the owned requested artifact")
+    if source_path.stat().st_size != width * height * 4:
+        raise ValueError("Native first-source byte count differs from the admitted whole frame")
+    raw = source_path.read_bytes()
+    source_pixels(raw, width, height)
+    audit = metadata.get("native_move_audit")
+    if not isinstance(audit, dict) or set(audit) != {"schema_version", "move_frames_observed", "move_samples_omitted", "presentations"}:
+        raise ValueError("Native moving-source audit schema is missing or unrecognized")
+    if (type(audit["schema_version"]) is not int or audit["schema_version"] != 1
+            or any(type(audit[key]) is not int or audit[key] < 0 for key in ("move_frames_observed", "move_samples_omitted"))):
+        raise ValueError("Native moving-source audit version or counts are invalid")
+    samples = audit["presentations"]
+    if not isinstance(samples, list) or not 3 <= len(samples) <= 512:
+        raise ValueError("Native moving-source audit requires three through 512 complete moving samples")
+    if audit["move_samples_omitted"] != 0 or audit["move_frames_observed"] != len(samples):
+        raise ValueError("Native moving-source audit omitted or miscounted in-loop presentations")
+    for sample in samples:
+        if not isinstance(sample, dict) or set(sample) != {"sequence", "elapsed_ms", "source_revision"}:
+            raise ValueError("Native moving presentation schema is unrecognized")
+        if (type(sample["sequence"]) is not int or not 1 <= sample["sequence"] <= frame["presented_frames"]
+                or type(sample["source_revision"]) is not int
+                or not 0 <= sample["source_revision"] <= min(frame["content_changes"], sample["sequence"] - 1)
+                or type(sample["elapsed_ms"]) not in (int, float)
+                or not math.isfinite(sample["elapsed_ms"]) or sample["elapsed_ms"] < 0):
+            raise ValueError("Native moving presentation identity, revision or finite timestamp is invalid")
+    pairs = list(zip(samples, samples[1:]))
+    if any(a["sequence"] >= b["sequence"] or a["elapsed_ms"] >= b["elapsed_ms"]
+           or a["source_revision"] > b["source_revision"] for a, b in pairs):
+        raise ValueError("Native moving presentations are not ordered by sequence, time and source revision")
+    if any(b["sequence"] != a["sequence"] + 1 for a, b in pairs):
+        raise ValueError("Native moving presentations are not consecutive lifetime submissions; intervening sources are unobserved")
+    transitions = sum(a["source_revision"] != b["source_revision"] for a, b in pairs)
+    if transitions < 2:
+        raise ValueError("Native source did not change between at least two consecutive moving presentation pairs")
+    longest = metadata.get("longest_frame_interval_ms")
+    if type(longest) not in (int, float) or not math.isfinite(longest) or longest < 0:
+        raise ValueError("Native lifetime longest frame interval is missing or nonfinite")
+    return {**audit, "whole_source_transitions_between_move_samples": transitions,
+            "in_loop_submission_intervals": distribution([b["elapsed_ms"] - a["elapsed_ms"] for a, b in pairs]),
+            "in_loop_sample_span_ms": samples[-1]["elapsed_ms"] - samples[0]["elapsed_ms"],
+            "in_loop_first_submission_elapsed_ms": samples[0]["elapsed_ms"],
+            "in_loop_last_submission_elapsed_ms": samples[-1]["elapsed_ms"],
+            "lifetime_longest_frame_interval_ms": longest, "frame_audit": frame,
+            "first_source_sha256": hashlib.sha256(raw).hexdigest(),
+            "terminal_receipt_sha256": hashlib.sha256(receipt.read_bytes()).hexdigest(),
+            "animated_source_activity_qualified": True,
+            "observation": "Native owner observed the owned OS move loop before and after each successful audited presentation",
+            "timing_scope": "Intervals between retained in-loop native submissions; compositor frame age and full entry/exit gaps are unmeasured"}
+
+
 def distribution(samples: list[float]) -> dict[str, float | int]:
     """Summarize measured milliseconds by nearest-rank percentiles without invented budgets."""
     if not samples or any(not math.isfinite(value) or value < 0 for value in samples):
@@ -405,6 +474,53 @@ class ObservationWindows:
             raise RuntimeError("Cannot observe the owned GUI thread move state")
         return bool(info.flags & 2) and info.move == hwnd
 
+    def calibrate_drag(self, hwnd: int, pid: int, pointer, origin: tuple[int, int],
+                       cursor: tuple[int, int], direction: tuple[int, int], deadline: float,
+                       state: dict[str, object]) -> tuple[tuple[int, int], tuple[int, int]]:
+        """Establish a causal cursor/window pair after queued horizontal entry input has been consumed."""
+        state.update(before_origin=origin, before_cursor_screen=cursor, direction=direction, steps=[],
+                     phase_bound_ms=750, measured_distribution_member=False)
+        for index in (1, 2):
+            started = time.perf_counter()
+            phase_deadline = min(deadline, started + .75)
+            target = (cursor[0] + direction[0] * 8, cursor[1] + direction[1] * 8)
+            expected = (origin[0] + direction[0] * 8, origin[1] + direction[1] * 8) if index == 2 else None
+            step = {"index": index, "cursor_screen_target": target, "expected_window_origin": expected,
+                    "input_dispatched": False, "accepted": False, "observations": []}
+            state["steps"].append(step)
+            step["owned_move_loop_before"] = self.in_move_loop(hwnd, pid)
+            if not step["owned_move_loop_before"]:
+                raise RuntimeError("Owned OS move loop ended before drag calibration")
+            if time.perf_counter() >= phase_deadline:
+                raise RuntimeError("Drag calibration exceeded its phase or original ten-second deadline")
+            pointer.move_screen(target)
+            step["input_dispatched"] = True
+            step["message_response_ms"] = self.response(hwnd, pid)
+            while True:
+                actual_cursor = pointer.cursor()
+                current = self.origin(hwnd, pid)
+                observed = time.perf_counter()
+                step["observations"].append({"cursor_screen": actual_cursor, "window_origin": current,
+                                               "after_dispatch_ms": (observed - started) * 1000})
+                if max(abs(a - b) for a, b in zip(actual_cursor, target)) > 1:
+                    raise RuntimeError("Actual cursor departed its owned drag calibration target")
+                if observed >= phase_deadline:
+                    raise RuntimeError("Drag calibration exceeded its phase or original ten-second deadline")
+                arrived = (current[1] - origin[1]) * direction[1] > 2 if index == 1 else max(abs(a - b) for a, b in zip(current, expected)) <= 2
+                if arrived:
+                    break
+                time.sleep(.005)
+            step["owned_move_loop_after"] = self.in_move_loop(hwnd, pid)
+            if not step["owned_move_loop_after"]:
+                raise RuntimeError("Owned OS move loop ended during drag calibration")
+            if time.perf_counter() >= phase_deadline:
+                raise RuntimeError("Drag calibration exceeded its phase or original ten-second deadline")
+            step.update(accepted=True, observed_window_origin=current, observed_cursor_screen=actual_cursor,
+                        elapsed_ms=(observed - started) * 1000)
+            origin, cursor = current, actual_cursor
+        state.update(qualified_anchor_origin=origin, qualified_anchor_cursor_screen=cursor)
+        return origin, cursor
+
     def mouse_drag(self, hwnd: int, pid: int, output: Path, samples: int, *, animated: bool = False,
                    expected_source: bytes | None = None) -> dict[str, object]:
         """Observe physical caption dragging with static equality or a two-second animated activity trace."""
@@ -429,10 +545,12 @@ class ObservationWindows:
         monitor.size = ctypes.sizeof(monitor)
         if not self.native.user.GetMonitorInfoW(monitor_handle, ctypes.byref(monitor)):
             raise ctypes.WinError(ctypes.get_last_error())
-        distance_x, distance_y = samples * 4, samples * 2
-        direction_x = 1 if before[0] + client.width + distance_x < monitor.work.right else -1
+        distance_x, distance_y = samples * 4 + 16, samples * 2 + 16
+        direction_x = 1 if before[0] + client.width + 64 + distance_x < monitor.work.right else -1
         direction_y = 1 if before[1] + client.height + distance_y < monitor.work.bottom else -1
-        if before[0] - distance_x < monitor.work.left and direction_x < 0 or before[1] - distance_y < monitor.work.top and direction_y < 0:
+        if (before[0] + client.width + 64 > monitor.work.right
+                or before[0] - distance_x < monitor.work.left and direction_x < 0
+                or before[1] - distance_y < monitor.work.top and direction_y < 0):
             raise RuntimeError("Owned work area has insufficient safe space for the bounded drag path")
         steps: list[dict[str, object]] = []
         states: dict[str, object] = {"before_origin": before, "move_loop_observations": []}
@@ -453,6 +571,10 @@ class ObservationWindows:
                 anchor_origin, anchor_cursor = self.origin(hwnd, pid), pointer.cursor()
                 states["move_loop_entry"] = {"window_origin": anchor_origin, "cursor_screen": anchor_cursor,
                                              "after_press_ms": (time.perf_counter() - press_started) * 1000}
+                calibration: dict[str, object] = {}
+                states["calibration"] = calibration
+                anchor_origin, anchor_cursor = self.calibrate_drag(hwnd, pid, pointer, anchor_origin, anchor_cursor,
+                                                                  (direction_x, direction_y), deadline, calibration)
                 schedule_started = time.perf_counter()
                 for index in range(1, samples + 1):
                     if animated:
@@ -464,6 +586,9 @@ class ObservationWindows:
                     latest = {"index": index, "cursor_screen_target": target, "expected_window_origin": expected,
                               "input_dispatched": False, "sample_accepted": False}
                     states["latest_movement"] = latest
+                    latest["owned_move_loop_before_measurement"] = self.in_move_loop(hwnd, pid)
+                    if not latest["owned_move_loop_before_measurement"]:
+                        raise RuntimeError("Owned OS move loop ended before a physical movement measurement")
                     started = time.perf_counter()
                     pointer.move_screen(target)
                     latest["input_dispatched"] = True
@@ -492,6 +617,9 @@ class ObservationWindows:
                         latest["whole_frame_composite"] = composite
                         frame.save(output / "drag-static-mismatch.png")
                         raise RuntimeError("Full captured frame violates its retained premultiplied source-over bounds")
+                    latest["owned_move_loop_after_measurement"] = self.in_move_loop(hwnd, pid)
+                    if not latest["owned_move_loop_after_measurement"]:
+                        raise RuntimeError("Owned OS move loop ended during a physical movement measurement")
                     steps.append({"index": index, "cursor_screen": target, "window_origin": current,
                                   "message_response_ms": response_ms, "move_observed_ms": move_ms,
                                   "capture_ms": capture_ms, "frame_sha256": hashlib.sha256(frozen_pixels).hexdigest(),
@@ -499,7 +627,8 @@ class ObservationWindows:
                                   "progress_sha256": hashlib.sha256(frame.crop((round(24 * client.scale), round(356 * client.scale),
                                                                                round(534 * client.scale), round(362 * client.scale))).tobytes()).hexdigest(),
                                   "captured_rgb_equal_to_initial": frozen_pixels == baseline if not animated else None,
-                                  "whole_frame_composite": composite})
+                                  "whole_frame_composite": composite,
+                                  "owned_move_loop_before_measurement": True, "owned_move_loop_after_measurement": True})
                     latest["sample_accepted"] = True
                     if time.perf_counter() >= deadline:
                         raise RuntimeError("Physical drag exceeded its ten-second observation boundary")
@@ -510,11 +639,10 @@ class ObservationWindows:
                         raise RuntimeError("Owned OS move loop did not end after physical release")
                     time.sleep(.005)
             progress_changes = sum(a["progress_sha256"] != b["progress_sha256"] for a, b in zip(steps, steps[1:]))
-            if animated and progress_changes == 0:
-                raise RuntimeError("Animated progress pixels never changed during the two-second physical drag")
             return {"mode": "SendInput native mouse caption drag", "physical_mouse_drag_qualified": True,
                     "before_origin": before, "after_origin": self.origin(hwnd, pid), "samples": steps,
                     "entry_gesture": states["entry_gesture"],
+                    "calibration": states["calibration"],
                     "move_loop_entry": states["move_loop_entry"],
                     "static_source_immutability": "Requires terminal native full-source audit before acceptance" if not animated else None,
                     "initial_whole_frame_composite": initial_composite,
@@ -523,9 +651,10 @@ class ObservationWindows:
                     "message_response": distribution([step["message_response_ms"] for step in steps]),
                     "move_observation": distribution([step["move_observed_ms"] for step in steps]),
                     "capture_observation": distribution([step["capture_ms"] for step in steps]),
-                    "animated_progress_changes_observed": progress_changes if animated else None,
-                    "animated_frame_cadence_qualified": False,
-                    "frame_age_limit": "External sampled pixels identify activity; no producer submission timestamp is exposed"}
+                    "captured_progress_rgb_changes_observed": progress_changes if animated else None,
+                    "animated_source_activity_qualified": False,
+                    "animated_source_activity": "Requires terminal in-loop native whole-source transitions" if animated else None,
+                    "frame_age_limit": "Captured RGB includes variable native material; compositor frame age is unmeasured"}
         except BaseException as error:
             states["failure_causes"] = error_causes(error)
             raise
@@ -729,7 +858,7 @@ def main() -> int:
         command.append("--reduced-motion")
     audited_static_drag = args.mode == "mouse-drag" and not args.animated
     audit_source = args.output / "audit-first.raw"
-    if audited_static_drag:
+    if args.mode == "mouse-drag":
         command.extend(("--frame-audit", str(audit_source)))
     process = subprocess.Popen(command,
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=0x08000000)
@@ -786,6 +915,10 @@ def main() -> int:
             result["frame_audit"] = terminal_frame_audit(args.output / "submission.json", audit_source, expected,
                                                          source_client.width, source_client.height)
             result["static_immutable_pixels"] = True
+        if args.mode == "mouse-drag" and args.animated:
+            result["native_move_audit"] = terminal_move_audit(args.output / "submission.json", audit_source,
+                                                            source_client.width, source_client.height)
+            result["animated_source_activity_qualified"] = True
         result["process_output"] = output.receipt()
         write_json(args.output / "observation.json", result)
         return 1 if args.mode == "cpu" and not result["below_one_percent"] else 0

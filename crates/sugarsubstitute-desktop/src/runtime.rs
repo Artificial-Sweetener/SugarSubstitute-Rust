@@ -228,10 +228,16 @@ pub fn run(
                     && size.height > 0
                 {
                     let frame_started = Instant::now();
-                    let result = content
-                        .render(size.width, size.height, window.scale_factor(), started.elapsed())
-                        .map_err(|error| DesktopError::boxed("render_frame", error))
-                        .and_then(|frame| {
+                    let result =
+                        observe_move(&window, frame_audit.is_some()).and_then(|move_before| {
+                            let frame = content
+                                .render(
+                                    size.width,
+                                    size.height,
+                                    window.scale_factor(),
+                                    started.elapsed(),
+                                )
+                                .map_err(|error| DesktopError::boxed("render_frame", error))?;
                             frame.validate()?;
                             presenter.present(&frame)?;
                             #[cfg(target_os = "windows")]
@@ -239,12 +245,15 @@ pub fn run(
                                 controls.update(content.accessible_controls())?;
                                 controls.draw_focus()?;
                             }
-                            Ok(frame)
+                            let move_after = observe_move(&window, frame_audit.is_some())?;
+                            let move_elapsed =
+                                (move_before && move_after).then(|| started.elapsed());
+                            Ok((frame, move_elapsed))
                         });
-                    let result = match &mut frame_audit {
-                        Some(audit) => audit.record(result),
-                        None => result.map(|_| ()),
-                    };
+                    let result = result.and_then(|(frame, move_elapsed)| match &mut frame_audit {
+                        Some(audit) => audit.record(Ok(frame), move_elapsed),
+                        None => Ok(()),
+                    });
                     match result {
                         Ok(()) => {
                             let submitted = Instant::now();
@@ -317,6 +326,17 @@ pub fn run(
         longest_frame_interval,
         frame_audit: frame_audit.and_then(FrameAudit::finish),
     })
+}
+
+/// Query opt-in native move evidence around submission; portable surfaces have no Windows evidence.
+fn observe_move(window: &tao::window::Window, auditing: bool) -> Result<bool, DesktopError> {
+    #[cfg(target_os = "windows")]
+    if auditing {
+        return crate::windows_move_state::is_moving(window);
+    }
+    #[cfg(not(target_os = "windows"))]
+    let _ = (window, auditing);
+    Ok(false)
 }
 
 /// Coalesce meaningful input invalidations until the native redraw is consumed.

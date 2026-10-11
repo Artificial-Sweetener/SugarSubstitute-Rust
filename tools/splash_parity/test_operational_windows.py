@@ -17,7 +17,7 @@ from unittest.mock import MagicMock, Mock, patch
 
 from PIL import Image
 
-from tools.splash_parity.operational_windows import ExposureFailure, MonitorInfo, ObservationWindows, OperationalOutput, OwnedContention, affinity, distribution, main, static_source, terminal_frame_audit
+from tools.splash_parity.operational_windows import ExposureFailure, MonitorInfo, ObservationWindows, OperationalOutput, OwnedContention, affinity, distribution, main, static_source, terminal_frame_audit, terminal_move_audit
 from tools.splash_parity.contention_worker import run as run_load_fixture
 
 
@@ -35,9 +35,9 @@ class DragObservationTests(unittest.TestCase):
         self.observer.native.capture.return_value = Image.new("RGB", (558, 558))
         self.source = bytes([0, 0, 0, 255]) * 558 * 558
         self.observer.native.user.GetSystemMetrics.return_value = 0
-        self.observer.origin = Mock(side_effect=[(100, 100)] * 4 + [(100 + index * 4, 100 + index * 2) for index in range(1, 9)] + [(132, 116)])
+        self.observer.origin = Mock(side_effect=[(100, 100)] * 4 + [(108, 108), (116, 116)]
+                                    + [(116 + index * 4, 116 + index * 2) for index in range(1, 9)] + [(148, 132)])
         self.observer.response = Mock(return_value=.1)
-        self.observer.in_move_loop = Mock(side_effect=[False, True, False])
 
         def monitor(handle, pointer):
             info = ctypes.cast(pointer, ctypes.POINTER(MonitorInfo)).contents
@@ -49,6 +49,8 @@ class DragObservationTests(unittest.TestCase):
         self.pointer.__enter__.return_value = self.pointer
         self.pointer.cursor.side_effect = lambda: (self.pointer.move_screen.call_args.args[0]
                                                   if self.pointer.move_screen.call_count else (350, 116))
+        self.observer.in_move_loop = Mock(side_effect=lambda hwnd, pid: self.pointer.move_screen.call_count >= 1
+                                         and self.pointer.release.call_count == 0)
 
     def run_drag(self):
         """Use deterministic external time and a fake physical-input boundary."""
@@ -65,12 +67,14 @@ class DragObservationTests(unittest.TestCase):
         self.assertIn("terminal native full-source audit", result["static_source_immutability"])
         self.assertTrue(result["initial_whole_frame_composite"]["accepted"])
         self.assertEqual(result["message_response"]["count"], 8)
-        self.assertEqual(self.pointer.move_screen.call_count, 9)
+        self.assertEqual(self.pointer.move_screen.call_count, 11)
+        self.assertEqual(result["calibration"]["qualified_anchor_origin"], (116, 116))
+        self.assertFalse(result["calibration"]["measured_distribution_member"])
         self.assertTrue(result["entry_gesture"]["steps"][0]["input_dispatched"])
         self.pointer.press.assert_called_once()
         self.pointer.release.assert_called_once()
         self.assertEqual(len(json.loads((self.output / "drag-samples.json").read_text())), 8)
-        self.assertFalse(result["animated_frame_cadence_qualified"])
+        self.assertFalse(result["animated_source_activity_qualified"])
 
     def test_no_move_loop_is_not_physical_drag_acceptance(self) -> None:
         """A delivered button event without an OS move loop fails closed."""
@@ -88,22 +92,25 @@ class DragObservationTests(unittest.TestCase):
 
     def test_route_anchors_after_actual_owned_move_loop_entry(self) -> None:
         """Queued SC_MOVE establishes its real anchor before any physical route movement."""
-        self.observer.origin.side_effect = [(100, 100), (100, 100), (105, 105), (107, 107)] + [(107 + index * 4, 107 + index * 2) for index in range(1, 9)] + [(139, 123)]
+        self.observer.origin.side_effect = [(100, 100), (100, 100), (105, 105), (107, 107), (115, 115), (123, 123)] + [(123 + index * 4, 123 + index * 2) for index in range(1, 9)] + [(155, 139)]
 
         def observe_move_state(hwnd, pid):
-            return self.pointer.move_screen.call_count == 1 and self.pointer.release.call_count == 0
+            return self.pointer.move_screen.call_count >= 1 and self.pointer.release.call_count == 0
 
         self.observer.in_move_loop.side_effect = observe_move_state
         result = self.run_drag()
         self.assertEqual(result["move_loop_entry"]["window_origin"], (107, 107))
         self.assertEqual(self.pointer.move_screen.call_args_list[0].args, ((354, 116),))
-        self.assertEqual(self.pointer.move_screen.call_args_list[1].args, ((358, 118),))
+        self.assertEqual(self.pointer.move_screen.call_args_list[1].args, ((362, 124),))
+        self.assertEqual(self.pointer.move_screen.call_args_list[2].args, ((370, 132),))
+        self.assertEqual(self.pointer.move_screen.call_args_list[3].args, ((374, 134),))
         self.assertEqual(result["move_observation"]["count"], 8)
 
     def test_initial_physical_motion_causally_precedes_entry_and_route(self) -> None:
         events = []
         self.pointer.press.side_effect = lambda: events.append("press")
-        self.pointer.move_screen.side_effect = lambda point: events.append("initial-motion" if self.pointer.move_screen.call_count == 1 else "route-motion")
+        self.pointer.move_screen.side_effect = lambda point: events.append("initial-motion" if self.pointer.move_screen.call_count == 1
+                                                                          else "calibration-motion" if self.pointer.move_screen.call_count <= 3 else "route-motion")
         self.pointer.release.side_effect = lambda: events.append("release")
 
         def actual_entry(hwnd, pid):
@@ -113,13 +120,13 @@ class DragObservationTests(unittest.TestCase):
             if events == ["press"]:
                 events.append("pending-entry")
                 return False
-            self.assertEqual(events, ["press", "pending-entry", "initial-motion"])
-            events.append("observed-entry")
+            if events == ["press", "pending-entry", "initial-motion"]:
+                events.append("observed-entry")
             return True
 
         self.observer.in_move_loop.side_effect = actual_entry
         self.run_drag()
-        self.assertEqual(events, ["press", "pending-entry", "initial-motion", "observed-entry"] + ["route-motion"] * 8 + ["release", "observed-exit"])
+        self.assertEqual(events, ["press", "pending-entry", "initial-motion", "observed-entry"] + ["calibration-motion"] * 2 + ["route-motion"] * 8 + ["release", "observed-exit"])
 
     def test_foreign_initial_motion_rejects_before_entry_and_route(self) -> None:
         self.pointer.move_screen.side_effect = RuntimeError("foreign early movement target")
@@ -143,17 +150,62 @@ class DragObservationTests(unittest.TestCase):
         self.assertNotIn("move_loop_entry", state)
         self.pointer.move_screen.assert_not_called()
 
+    def test_move_loop_loss_before_measurement_rejects_without_route_motion(self) -> None:
+        self.observer.calibrate_drag = Mock(return_value=((116, 116), (370, 132)))
+        self.observer.in_move_loop.side_effect = [False, True, False]
+        with self.assertRaisesRegex(RuntimeError, "before a physical"):
+            self.run_drag()
+        self.assertEqual(self.pointer.move_screen.call_count, 1)
+        state = json.loads((self.output / "drag-state.json").read_text())
+        self.assertFalse(state["latest_movement"]["owned_move_loop_before_measurement"])
+        self.assertEqual(json.loads((self.output / "drag-samples.json").read_text()), [])
+
+    def test_move_loop_loss_during_measurement_rejects_captured_frame(self) -> None:
+        self.observer.calibrate_drag = Mock(return_value=((116, 116), (370, 132)))
+        self.observer.origin.side_effect = [(100, 100)] * 4 + [(120, 118)]
+        self.observer.in_move_loop.side_effect = [False, True, True, False]
+        with self.assertRaisesRegex(RuntimeError, "during a physical"):
+            self.run_drag()
+        state = json.loads((self.output / "drag-state.json").read_text())
+        self.assertTrue(state["latest_movement"]["owned_move_loop_before_measurement"])
+        self.assertFalse(state["latest_movement"]["owned_move_loop_after_measurement"])
+        self.assertFalse(state["latest_movement"]["sample_accepted"])
+        self.pointer.__exit__.assert_called_once()
+
+    def test_work_area_admission_includes_the_maximum_horizontal_entry_motion(self) -> None:
+        def small_work_area(handle, pointer):
+            info = ctypes.cast(pointer, ctypes.POINTER(MonitorInfo)).contents
+            info.work.left, info.work.top, info.work.right, info.work.bottom = 0, 0, 700, 1080
+            return True
+
+        self.observer.native.user.GetMonitorInfoW.side_effect = small_work_area
+        with self.assertRaisesRegex(RuntimeError, "insufficient safe space"):
+            self.run_drag()
+        self.pointer.__enter__.assert_not_called()
+
+    def test_work_area_admission_includes_both_diagonal_calibration_movements(self) -> None:
+        def small_work_area(handle, pointer):
+            info = ctypes.cast(pointer, ctypes.POINTER(MonitorInfo)).contents
+            info.work.left, info.work.top, info.work.right, info.work.bottom = 0, 0, 706, 1080
+            return True
+
+        self.observer.origin.side_effect = None
+        self.observer.origin.return_value = (40, 100)
+        self.observer.native.user.GetMonitorInfoW.side_effect = small_work_area
+        with self.assertRaisesRegex(RuntimeError, "insufficient safe space"):
+            self.run_drag()
+        self.pointer.__enter__.assert_not_called()
+
     def test_no_window_movement_is_rejected_and_samples_retained(self) -> None:
         """Cursor movement alone cannot satisfy a caption drag proof."""
         self.observer.origin.side_effect = None
         self.observer.origin.return_value = (100, 100)
-        with self.assertRaisesRegex(RuntimeError, "expected origin"):
+        with self.assertRaisesRegex(RuntimeError, "calibration exceeded"):
             self.run_drag()
         self.assertEqual(json.loads((self.output / "drag-samples.json").read_text()), [])
         state = json.loads((self.output / "drag-state.json").read_text())
-        self.assertEqual(state["latest_movement"]["observed_window_origin"], [100, 100])
-        self.assertEqual(state["latest_movement"]["expected_window_origin"], [104, 102])
-        self.assertFalse(state["latest_movement"]["sample_accepted"])
+        self.assertEqual(state["calibration"]["steps"][0]["observations"][-1]["window_origin"], [100, 100])
+        self.assertFalse(state["calibration"]["steps"][0]["accepted"])
         self.pointer.__exit__.assert_called_once()
 
     def test_mutated_static_frame_is_rejected_with_failure_image(self) -> None:
@@ -414,6 +466,269 @@ class StaticFrameAuditTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "changed before"):
                 static_source(executable, self.root, Mock(), hashlib.sha256(b"fixture").hexdigest())
         spawn.assert_not_called()
+
+
+class DragCalibrationTests(unittest.TestCase):
+    """Require fresh diagonal native motion before adopting a measured cursor/window anchor."""
+
+    def setUp(self) -> None:
+        self.observer = object.__new__(ObservationWindows)
+        self.observer.in_move_loop = Mock(return_value=True)
+        self.observer.origin = Mock(side_effect=[(104, 100), (112, 108), (120, 116)])
+        self.observer.response = Mock(return_value=.1)
+        self.pointer = Mock()
+        self.pointer.cursor.side_effect = lambda: self.pointer.move_screen.call_args.args[0]
+        self.state = {}
+
+    def calibrate(self, deadline=10):
+        with patch("tools.splash_parity.operational_windows.time.perf_counter", side_effect=itertools.count(0, .01)), \
+                patch("tools.splash_parity.operational_windows.time.sleep"):
+            return self.observer.calibrate_drag(1, 42, self.pointer, (100, 100), (350, 116), (1, 1), deadline, self.state)
+
+    def test_old_horizontal_input_cannot_seed_calibration_and_actual_diagonal_pair_qualifies(self) -> None:
+        origin, cursor = self.calibrate()
+        self.assertEqual(origin, (120, 116))
+        self.assertEqual(cursor, (366, 132))
+        self.assertEqual(self.state["steps"][0]["observations"][0]["window_origin"], (104, 100))
+        self.assertEqual(self.state["steps"][0]["observed_window_origin"], (112, 108))
+        self.assertEqual(self.state["steps"][1]["expected_window_origin"], (120, 116))
+        self.assertTrue(all(step["accepted"] for step in self.state["steps"]))
+        self.assertEqual(self.observer.in_move_loop.call_count, 4)
+
+    def test_first_seed_late_vertical_response_is_rejected(self) -> None:
+        self.observer.origin.side_effect = None
+        self.observer.origin.return_value = (104, 100)
+        with self.assertRaisesRegex(RuntimeError, "calibration exceeded"):
+            self.calibrate()
+        self.assertFalse(self.state["steps"][0]["accepted"])
+        self.assertEqual(self.pointer.move_screen.call_count, 1)
+
+    def test_second_point_mismatch_cannot_increase_position_tolerance(self) -> None:
+        self.observer.origin.side_effect = itertools.chain([(112, 108)], itertools.repeat((124, 116)))
+        with self.assertRaisesRegex(RuntimeError, "calibration exceeded"):
+            self.calibrate()
+        self.assertTrue(self.state["steps"][0]["accepted"])
+        self.assertFalse(self.state["steps"][1]["accepted"])
+
+    def test_loop_loss_during_calibration_rejects_paired_position(self) -> None:
+        self.observer.in_move_loop.side_effect = [True, False]
+        self.observer.origin.side_effect = [(112, 108)]
+        with self.assertRaisesRegex(RuntimeError, "ended during"):
+            self.calibrate()
+        self.assertFalse(self.state["steps"][0]["accepted"])
+
+    def test_foreign_motion_target_cannot_be_adopted(self) -> None:
+        self.pointer.move_screen.side_effect = RuntimeError("foreign target")
+        with self.assertRaisesRegex(RuntimeError, "foreign"):
+            self.calibrate()
+        self.assertFalse(self.state["steps"][0]["input_dispatched"])
+
+    def test_actual_cursor_mismatch_rejects_despite_fresh_window_y(self) -> None:
+        self.pointer.cursor.side_effect = None
+        self.pointer.cursor.return_value = (350, 116)
+        with self.assertRaisesRegex(RuntimeError, "cursor departed"):
+            self.calibrate()
+
+    def test_original_ten_second_deadline_is_not_extended_by_calibration(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "original ten-second"):
+            self.calibrate(deadline=.025)
+        self.assertFalse(self.state["steps"][0]["accepted"])
+
+    def test_negative_direction_uses_the_same_admitted_route_and_seed_rule(self) -> None:
+        self.observer.origin.side_effect = [(96, 100), (88, 92), (80, 84)]
+        with patch("tools.splash_parity.operational_windows.time.perf_counter", side_effect=itertools.count(0, .01)), \
+                patch("tools.splash_parity.operational_windows.time.sleep"):
+            result = self.observer.calibrate_drag(1, 42, self.pointer, (100, 100), (350, 116), (-1, -1), 10, self.state)
+        self.assertEqual(result, ((80, 84), (334, 100)))
+
+
+class MovingSourceAuditTests(unittest.TestCase):
+    """Distinguish native source transitions inside a real move loop from variable captured material."""
+
+    def setUp(self) -> None:
+        temporary = tempfile.TemporaryDirectory(prefix="moving-source-audit-")
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.source = self.root / "first.raw"
+        self.source.write_bytes(bytes([70, 20, 30, 128]))
+        self.receipt = self.root / "submission.json"
+        self.frame = {"width": 1, "height": 1, "presented_frames": 10, "content_changes": 5,
+                      "byte_count": 4, "source_path": str(self.source)}
+        self.audit = {"schema_version": 1, "move_frames_observed": 3, "move_samples_omitted": 0,
+                      "presentations": [{"sequence": 3, "elapsed_ms": 100., "source_revision": 1},
+                                        {"sequence": 4, "elapsed_ms": 116., "source_revision": 2},
+                                        {"sequence": 5, "elapsed_ms": 148., "source_revision": 3}]}
+        self.metadata = {"frames_presented": 10, "frame_audit": self.frame, "native_move_audit": self.audit,
+                         "longest_frame_interval_ms": 850.}
+
+    def validate(self):
+        self.receipt.write_text(json.dumps(self.metadata), encoding="utf-8")
+        return terminal_move_audit(self.receipt, self.source, 1, 1)
+
+    def test_actual_in_loop_source_changes_report_distinct_submission_and_lifetime_intervals(self) -> None:
+        result = self.validate()
+        self.assertTrue(result["animated_source_activity_qualified"])
+        self.assertEqual(result["whole_source_transitions_between_move_samples"], 2)
+        self.assertEqual(result["in_loop_submission_intervals"]["p50_ms"], 16.)
+        self.assertEqual(result["in_loop_submission_intervals"]["p95_ms"], 32.)
+        self.assertEqual(result["in_loop_submission_intervals"]["p99_ms"], 32.)
+        self.assertEqual(result["in_loop_sample_span_ms"], 48.)
+        self.assertEqual(result["in_loop_first_submission_elapsed_ms"], 100.)
+        self.assertEqual(result["in_loop_last_submission_elapsed_ms"], 148.)
+        self.assertEqual(result["lifetime_longest_frame_interval_ms"], 850.)
+        self.assertIn("frame age", result["timing_scope"])
+
+    def test_global_source_changes_only_outside_loop_do_not_qualify(self) -> None:
+        for sample in self.audit["presentations"]:
+            sample["source_revision"] = 1
+        with self.assertRaisesRegex(ValueError, "at least two consecutive"):
+            self.validate()
+
+    def test_multiple_changes_in_only_one_sample_pair_do_not_qualify(self) -> None:
+        self.audit["presentations"][1]["source_revision"] = 3
+        with self.assertRaisesRegex(ValueError, "at least two consecutive"):
+            self.validate()
+
+    def test_source_changes_in_intervening_outside_loop_presentations_cannot_qualify(self) -> None:
+        self.audit["presentations"][1]["sequence"] = 6
+        self.audit["presentations"][2]["sequence"] = 9
+        with self.assertRaisesRegex(ValueError, "not consecutive lifetime"):
+            self.validate()
+
+    def test_missing_unknown_and_unsupported_move_schema_reject(self) -> None:
+        for change in (lambda: self.metadata.pop("native_move_audit"),
+                       lambda: self.audit.update(unreviewed=True),
+                       lambda: self.audit.update(schema_version=2),
+                       lambda: self.audit.update(schema_version=True)):
+            with self.subTest(change=change):
+                original = json.loads(json.dumps(self.metadata))
+                change()
+                with self.assertRaisesRegex(ValueError, "schema|version"):
+                    self.validate()
+                self.metadata = original
+                self.audit = self.metadata["native_move_audit"]
+                self.frame = self.metadata["frame_audit"]
+
+    def test_omitted_miscounted_and_too_few_samples_reject(self) -> None:
+        for field, value in (("move_samples_omitted", 1), ("move_frames_observed", 4),
+                             ("move_frames_observed", True), ("move_samples_omitted", -1)):
+            with self.subTest(field=field, value=value):
+                prior = self.audit[field]
+                self.audit[field] = value
+                with self.assertRaises(ValueError):
+                    self.validate()
+                self.audit[field] = prior
+        self.audit["presentations"] = self.audit["presentations"][:2]
+        self.audit["move_frames_observed"] = 2
+        with self.assertRaisesRegex(ValueError, "three through 512"):
+            self.validate()
+
+    def test_more_than512_samples_reject_instead_of_silently_truncating(self) -> None:
+        self.audit["presentations"] = self.audit["presentations"] * 171
+        self.audit["move_frames_observed"] = 513
+        with self.assertRaisesRegex(ValueError, "three through 512"):
+            self.validate()
+
+    def test_sample_unknown_fields_nonfinite_and_invalid_integer_identities_reject(self) -> None:
+        for field, value in (("elapsed_ms", float("nan")), ("elapsed_ms", float("inf")),
+                             ("elapsed_ms", True), ("elapsed_ms", -1), ("sequence", 0),
+                             ("sequence", 11), ("sequence", True), ("source_revision", -1),
+                             ("source_revision", 6), ("source_revision", True), ("foreign_hwnd", 77)):
+            with self.subTest(field=field, value=value):
+                sample = self.audit["presentations"][0]
+                previous = dict(sample)
+                sample[field] = value
+                with self.assertRaises(ValueError):
+                    self.validate()
+                self.audit["presentations"][0] = previous
+
+    def test_reversed_or_equal_sequence_time_and_reversed_revision_reject(self) -> None:
+        for field, value in (("sequence", 3), ("elapsed_ms", 100.), ("elapsed_ms", 99.), ("source_revision", 0)):
+            with self.subTest(field=field):
+                sample = self.audit["presentations"][1]
+                prior = sample[field]
+                sample[field] = value
+                with self.assertRaisesRegex(ValueError, "not ordered"):
+                    self.validate()
+                sample[field] = prior
+
+    def test_whole_frame_presentation_disagreement_and_invalid_transition_count_reject(self) -> None:
+        self.metadata["frames_presented"] = 9
+        with self.assertRaisesRegex(ValueError, "every successfully presented"):
+            self.validate()
+        self.metadata["frames_presented"] = 10
+        self.frame["content_changes"] = 10
+        with self.assertRaisesRegex(ValueError, "transition count"):
+            self.validate()
+
+    def test_unowned_truncated_or_invalid_premultiplied_first_source_reject(self) -> None:
+        foreign = self.root / "foreign.raw"
+        foreign.write_bytes(bytes(4))
+        self.frame["source_path"] = str(foreign)
+        with self.assertRaisesRegex(ValueError, "owned requested"):
+            self.validate()
+        self.frame["source_path"] = str(self.source)
+        self.source.write_bytes(bytes(3))
+        with self.assertRaisesRegex(ValueError, "byte count"):
+            self.validate()
+        self.source.write_bytes(bytes([129, 20, 30, 128]))
+        with self.assertRaises(ValueError):
+            self.validate()
+
+    def test_animated_main_requires_terminal_audit_and_retains_full_first_source_path(self) -> None:
+        executable = self.root / "fixture.exe"
+        executable.write_bytes(b"exact-native-build")
+        process = Mock(pid=42, returncode=0)
+        process.poll.return_value = 0
+        process.communicate.return_value = (b"", b"")
+        native, observer = Mock(), Mock()
+        native.client.return_value = Mock(width=558, height=558, scale=1)
+        native.exposure_state.return_value = {"foreground_owned": True, "occluding_windows": []}
+        observer.mouse_drag.return_value = {"animated_source_activity_qualified": False}
+        output = self.root / "animated"
+        arguments = ["operational", "--executable", str(executable), "--output", str(output),
+                     "--mode", "mouse-drag", "--animated"]
+        with patch("sys.argv", arguments), \
+                patch("tools.splash_parity.operational_windows.NativeWindows", return_value=native), \
+                patch("tools.splash_parity.operational_windows.ObservationWindows", return_value=observer), \
+                patch("tools.splash_parity.operational_windows.subprocess.Popen", return_value=process) as spawn, \
+                patch("tools.splash_parity.operational_windows.has_mascot", return_value=True), \
+                patch("tools.splash_parity.operational_windows.observe_exposure", return_value=1.), \
+                patch("tools.splash_parity.operational_windows.terminal_move_audit", return_value={"animated_source_activity_qualified": True}) as validator:
+            self.assertEqual(main(), 0)
+        command = spawn.call_args.args[0]
+        self.assertEqual(command[command.index("--frame-audit") + 1], str(output / "audit-first.raw"))
+        self.assertNotIn("--reduced-motion", command)
+        validator.assert_called_once_with(output / "submission.json", output / "audit-first.raw", 558, 558)
+        result = json.loads((output / "observation.json").read_text())
+        self.assertTrue(result["animated_source_activity_qualified"])
+
+    def test_failed_terminal_audit_prevents_any_successful_animated_receipt(self) -> None:
+        executable = self.root / "fixture.exe"
+        executable.write_bytes(b"exact-native-build")
+        process = Mock(pid=42, returncode=0)
+        process.poll.return_value = 0
+        process.communicate.return_value = (b"", b"native-proof-diagnostic")
+        native, observer = Mock(), Mock()
+        native.client.return_value = Mock(width=558, height=558, scale=1)
+        native.exposure_state.return_value = {"foreground_owned": True, "occluding_windows": []}
+        observer.mouse_drag.return_value = {"animated_source_activity_qualified": False}
+        output = self.root / "animated-rejected"
+        arguments = ["operational", "--executable", str(executable), "--output", str(output),
+                     "--mode", "mouse-drag", "--animated"]
+        with patch("sys.argv", arguments), \
+                patch("tools.splash_parity.operational_windows.NativeWindows", return_value=native), \
+                patch("tools.splash_parity.operational_windows.ObservationWindows", return_value=observer), \
+                patch("tools.splash_parity.operational_windows.subprocess.Popen", return_value=process), \
+                patch("tools.splash_parity.operational_windows.has_mascot", return_value=True), \
+                patch("tools.splash_parity.operational_windows.observe_exposure", return_value=1.), \
+                patch("tools.splash_parity.operational_windows.terminal_move_audit", side_effect=ValueError("outside-only source changes")):
+            with self.assertRaisesRegex(ValueError, "outside-only"):
+                main()
+        self.assertFalse((output / "observation.json").exists())
+        failure = json.loads((output / "failure.json").read_text())
+        self.assertFalse(failure["qualification_accepted"])
+        self.assertIn("outside-only", failure["causes"][0]["error"])
 
 
 class ContentionOwnershipTests(unittest.TestCase):

@@ -122,22 +122,40 @@ fn execute() -> Result<(), Box<dyn Error>> {
         content,
     )?;
     tracing::info!(operation="splash_demo", first_frame_ms=(before_native+receipt.first_frame).as_secs_f64()*1000.0, frames=receipt.frames_presented, material=?receipt.material, "Native splash proof finished");
-    let frame_audit = match (options.frame_audit, receipt.frame_audit) {
+    let (frame_audit, native_move_audit) = match (options.frame_audit, receipt.frame_audit) {
         (Some(path), Some(audit)) => {
             if let Some(parent) = path.parent() {
                 std::fs::create_dir_all(parent)?;
             }
             std::fs::write(&path, &audit.first_frame.premultiplied_rgba)?;
-            serde_json::json!({
+            let frame_audit = serde_json::json!({
                 "width": audit.first_frame.width,
                 "height": audit.first_frame.height,
                 "presented_frames": audit.presented_frames,
                 "content_changes": audit.content_changes,
                 "byte_count": audit.first_frame.premultiplied_rgba.len(),
                 "source_path": path,
-            })
+            });
+            let presentations: Vec<_> = audit
+                .move_presentations
+                .iter()
+                .map(|sample| {
+                    serde_json::json!({
+                        "sequence": sample.sequence,
+                        "elapsed_ms": sample.elapsed.as_secs_f64() * 1000.0,
+                        "source_revision": sample.source_revision,
+                    })
+                })
+                .collect();
+            let native_move_audit = serde_json::json!({
+                "schema_version": 1,
+                "move_frames_observed": audit.move_frames_observed,
+                "move_samples_omitted": audit.move_samples_omitted,
+                "presentations": presentations,
+            });
+            (frame_audit, native_move_audit)
         }
-        (None, None) => serde_json::Value::Null,
+        (None, None) => (serde_json::Value::Null, serde_json::Value::Null),
         _ => return Err("Native frame audit did not match the requested qualification".into()),
     };
     if let Some(path) = options.receipt {
@@ -153,6 +171,7 @@ fn execute() -> Result<(), Box<dyn Error>> {
             "mean_frame_interval_ms":receipt.total_frame_intervals.as_secs_f64()*1000.0 / receipt.frames_presented.saturating_sub(1).max(1) as f64,
             "longest_frame_interval_ms":receipt.longest_frame_interval.as_secs_f64()*1000.0,
             "frame_audit": frame_audit,
+            "native_move_audit": native_move_audit,
             "elapsed_ms":started.elapsed().as_secs_f64()*1000.0
         });
         std::fs::write(path, serde_json::to_vec_pretty(&data)?)?;

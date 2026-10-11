@@ -35,6 +35,8 @@ pub struct DesktopReceipt {
     /// Combined intervals between consecutive successful frame submissions.
     pub total_frame_intervals: Duration,
     /// Longest measured submission interval; zero when fewer than two frames were presented.
+    /// Covers the complete surface lifetime, including intervals outside movement
+    /// and gaps at move-loop entry/exit; move samples identify in-loop submissions separately.
     pub longest_frame_interval: Duration,
     /// Optional full-source audit collected after successful native presentations.
     /// Pixel ownership transfers to the caller after native window teardown.
@@ -53,6 +55,25 @@ pub struct FrameAuditReceipt {
     pub presented_frames: u64,
     /// Transitions from the preceding presented source, including change then restoration.
     pub content_changes: u64,
+    /// At most 512 successful source submissions bracketed by owned native move-loop observations.
+    /// These observations establish submission within the loop, not compositor frame age
+    /// or coverage of the gaps at move-loop entry and exit.
+    pub move_presentations: Vec<MovePresentation>,
+    /// All successful submissions bracketed by owned native move-loop observations.
+    pub move_frames_observed: u64,
+    /// Qualifying submissions omitted after the 512-sample bound; nonzero means incomplete evidence.
+    pub move_samples_omitted: u64,
+}
+
+/// Identify one successful source submission during an observed owned native move loop.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MovePresentation {
+    /// One-based successful submission sequence over the complete native surface lifetime.
+    pub sequence: u64,
+    /// Time from entering the native adapter to the post-submission move-state observation.
+    pub elapsed: Duration,
+    /// Complete-source transitions since the first submission, including transitions outside movement.
+    pub source_revision: u64,
 }
 
 /// Describe the actual native background selected by the platform adapter.

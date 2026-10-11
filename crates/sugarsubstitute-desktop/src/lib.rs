@@ -26,10 +26,14 @@ mod windows_controls;
 mod windows_drag;
 #[cfg(target_os = "windows")]
 #[allow(unsafe_code)]
+mod windows_move_state;
+#[cfg(target_os = "windows")]
+#[allow(unsafe_code)]
 mod windows_subclass;
 
 pub use contract::{
     AccessibleControl, ControlBounds, DesktopError, DesktopOptions, DesktopReceipt, Frame,
-    FrameAuditReceipt, HitTarget, KeyAction, NativeMaterial, Pointer, PointerAction, WindowContent,
+    FrameAuditReceipt, HitTarget, KeyAction, MovePresentation, NativeMaterial, Pointer,
+    PointerAction, WindowContent,
 };
 pub use runtime::run;
