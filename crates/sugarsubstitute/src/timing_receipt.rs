@@ -3,7 +3,9 @@
 //! Preserve raw native qualification counters without reducing or hiding observations.
 
 use serde_json::{Value, json};
-use sugarsubstitute_desktop::{NativeCallbackKind, NativeTimingReceipt, NativeTimingSource};
+use sugarsubstitute_desktop::{
+    NativeCallbackKind, NativeStartupStage, NativeTimingReceipt, NativeTimingSource,
+};
 
 /// Serialize native timing evidence after teardown, keeping omissions and frame identity explicit.
 pub(crate) fn encode(receipt: NativeTimingReceipt) -> Value {
@@ -41,8 +43,14 @@ pub(crate) fn encode(receipt: NativeTimingReceipt) -> Value {
             })
         })
         .collect();
+    let startup_milestones: Vec<_> = receipt
+        .startup_milestones
+        .iter()
+        .flatten()
+        .map(|sample| json!({"stage": startup_stage(sample.stage), "ticks": sample.ticks}))
+        .collect();
     json!({
-        "schema_version": 1,
+        "schema_version": 2,
         "source": match receipt.source { NativeTimingSource::WindowsQpc => "windows_qpc" },
         "begin_ticks": receipt.begin_ticks,
         "end_ticks": receipt.end_ticks,
@@ -54,7 +62,21 @@ pub(crate) fn encode(receipt: NativeTimingReceipt) -> Value {
         "submission_samples_omitted": receipt.submission_samples_omitted,
         "callbacks": callbacks,
         "submissions": submissions,
+        "startup_milestones": startup_milestones,
     })
+}
+
+/// Keep the seven startup boundaries stable without serializing enum debug spelling.
+fn startup_stage(stage: NativeStartupStage) -> &'static str {
+    match stage {
+        NativeStartupStage::EventLoopReady => "event_loop_ready",
+        NativeStartupStage::WindowCreated => "window_created",
+        NativeStartupStage::PresenterReady => "presenter_ready",
+        NativeStartupStage::ControlsReady => "controls_ready",
+        NativeStartupStage::ExecutionReady => "execution_ready",
+        NativeStartupStage::ShowFocusReturned => "show_focus_returned",
+        NativeStartupStage::FirstPreparationRequest => "first_preparation_request",
+    }
 }
 
 /// Keep event categories stable for qualification analysis instead of relying on debug spelling.
@@ -80,7 +102,7 @@ mod tests {
         presentation::FrameIdentity,
     };
     use sugarsubstitute_desktop::{
-        NativeCallbackTiming, NativeSubmissionTiming, NativeTickInterval,
+        NativeCallbackTiming, NativeStartupTiming, NativeSubmissionTiming, NativeTickInterval,
     };
 
     /// Keep raw integers, overlapping drag evidence, omissions and actual producer identity.
@@ -97,6 +119,16 @@ mod tests {
             callback_samples_omitted: 1,
             submissions_observed: 3,
             submission_samples_omitted: 2,
+            startup_milestones: [
+                NativeStartupStage::EventLoopReady,
+                NativeStartupStage::WindowCreated,
+                NativeStartupStage::PresenterReady,
+                NativeStartupStage::ControlsReady,
+                NativeStartupStage::ExecutionReady,
+                NativeStartupStage::ShowFocusReturned,
+                NativeStartupStage::FirstPreparationRequest,
+            ]
+            .map(|stage| Some(NativeStartupTiming { stage, ticks: 9_007_199_254_740_994 })),
             callbacks: vec![NativeCallbackTiming {
                 sequence: 1,
                 kind: NativeCallbackKind::WindowsParent,
@@ -110,8 +142,8 @@ mod tests {
             }],
             submissions: vec![NativeSubmissionTiming {
                 sequence: 1,
-                begin_ticks: 9_007_199_254_740_996,
-                end_ticks: 9_007_199_254_740_999,
+                begin_ticks: 9_007_199_254_741_002,
+                end_ticks: 9_007_199_254_741_003,
                 retained: true,
                 identity: FrameIdentity {
                     surface: SurfaceId::new(7)?,
@@ -132,6 +164,49 @@ mod tests {
         assert_eq!(roundtrip["submissions"][0]["retained"], true);
         assert_eq!(roundtrip["submissions"][0]["identity"]["sequence"], 13);
         assert_eq!(roundtrip["source"], "windows_qpc");
+        assert_eq!(roundtrip["schema_version"], 2);
+        assert_eq!(
+            roundtrip["startup_milestones"].as_array().ok_or("Milestones missing")?.len(),
+            7
+        );
+        assert_eq!(roundtrip["startup_milestones"][0]["stage"], "event_loop_ready");
+        assert_eq!(roundtrip["startup_milestones"][6]["stage"], "first_preparation_request");
+        assert_eq!(
+            roundtrip["startup_milestones"][6]["ticks"].as_i64(),
+            Some(9_007_199_254_740_994)
+        );
         Ok(())
+    }
+
+    /// Keep failed/partial native setup evidence as an ordered prefix without fabricated stages.
+    #[test]
+    fn partial_startup_receipt_serializes_only_actual_observed_stages() {
+        let mut milestones = [None; 7];
+        milestones[0] = Some(NativeStartupTiming {
+            stage: NativeStartupStage::EventLoopReady,
+            ticks: 9_007_199_254_740_993,
+        });
+        let encoded = encode(NativeTimingReceipt {
+            source: NativeTimingSource::WindowsQpc,
+            begin_ticks: 9_007_199_254_740_992,
+            end_ticks: 9_007_199_254_740_994,
+            frequency: 10_000_000,
+            ui_thread_id: 7,
+            callbacks: Vec::new(),
+            submissions: Vec::new(),
+            startup_milestones: milestones,
+            callbacks_observed: 0,
+            callback_samples_omitted: 0,
+            submissions_observed: 0,
+            submission_samples_omitted: 0,
+        });
+        assert_eq!(encoded["schema_version"], 2);
+        assert_eq!(
+            encoded["startup_milestones"],
+            json!([
+                {"stage":"event_loop_ready", "ticks":9_007_199_254_740_993_i64}
+            ])
+        );
+        assert_eq!(encoded["submissions"], json!([]));
     }
 }

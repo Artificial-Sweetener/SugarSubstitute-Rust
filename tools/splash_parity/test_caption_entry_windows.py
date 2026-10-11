@@ -12,6 +12,31 @@ from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
 from tools.splash_parity.caption_entry_windows import caption_entry, drain_counts, observe
+from tools.splash_parity.caption_entry_windows import main
+from tools.splash_parity.startup_windows import launch
+
+
+class CaptionLaunchContractTests(unittest.TestCase):
+    def test_actual_caption_cli_supplies_the_shared_launch_contract_in_both_modes(self):
+        with tempfile.TemporaryDirectory(prefix="caption-launch-") as temporary:
+            root = Path(temporary)
+            executable = root / "fixture.exe"
+            executable.write_bytes(b"fixture")
+            for mode in ("rust", "reference"):
+                commands = []
+
+                def inspect_launch(arguments, output, native):
+                    commands.append(launch(arguments, output)[0])
+
+                argv = ["caption_entry_windows", "--mode", mode, "--executable", str(executable),
+                        "--interpreter", str(executable), "--legacy-root", str(root),
+                        "--temporary", str(root), "--output", str(root / mode)]
+                with self.subTest(mode=mode), patch("sys.argv", argv), \
+                        patch("tools.splash_parity.caption_entry_windows.NativeWindows"), \
+                        patch("tools.splash_parity.caption_entry_windows.observe", side_effect=inspect_launch):
+                    self.assertEqual(main(), 0)
+                self.assertEqual(len(commands), 1)
+                self.assertNotIn("--timing-audit", commands[0])
 
 
 class CaptionEntryTests(unittest.TestCase):

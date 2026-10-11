@@ -58,6 +58,14 @@ impl TimingObserver {
     pub(crate) fn mark(&self) -> Result<Stamp, DesktopError> {
         self.with(TimingAudit::mark)
     }
+    /// Commit one ordered startup stage with no collector borrow across its native boundary.
+    pub(crate) fn startup(&self, stage: NativeStartupStage) -> Result<(), DesktopError> {
+        self.with(|audit| audit.startup(stage))
+    }
+    /// Observe the first actual content request only; later calls perform no counter read.
+    pub(crate) fn first_preparation(&self) -> Result<(), DesktopError> {
+        self.with(TimingAudit::first_preparation)
+    }
     /// Append a checked callback completion to preallocated storage.
     pub(crate) fn callback(
         &self,

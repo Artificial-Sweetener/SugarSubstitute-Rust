@@ -110,13 +110,100 @@ fn frame(shape: FrameShape, released: &Arc<AtomicUsize>) -> Result<PreparedFrame
     Ok(validator.finish()?)
 }
 
+struct StartupClock(std::rc::Rc<std::cell::Cell<bool>>);
+impl crate::timing::TimingClock for StartupClock {
+    fn frequency(&self) -> i64 {
+        1_000
+    }
+    fn thread(&self) -> u32 {
+        7
+    }
+    fn read(&mut self) -> Result<crate::timing::Stamp, DesktopError> {
+        if self.0.get() {
+            return Err(DesktopError::new(
+                "first_request_counter",
+                std::io::Error::other("unavailable"),
+            ));
+        }
+        Ok(crate::timing::Stamp { ticks: 10, thread: 7, source: crate::timing::QPC_SOURCE })
+    }
+}
+fn startup_observer(
+    failure: std::rc::Rc<std::cell::Cell<bool>>,
+) -> Result<crate::timing::TimingObserver, DesktopError> {
+    use crate::timing::{NativeStartupStage as Stage, TimingAudit, TimingObserver};
+    let observer = TimingObserver::new(TimingAudit::new(Box::new(StartupClock(failure)))?);
+    for stage in [
+        Stage::EventLoopReady,
+        Stage::WindowCreated,
+        Stage::PresenterReady,
+        Stage::ControlsReady,
+        Stage::ExecutionReady,
+        Stage::ShowFocusReturned,
+    ] {
+        observer.startup(stage)?;
+    }
+    Ok(observer)
+}
+
+#[test]
+fn startup_request_observation_follows_actual_visible_shape_admission_and_never_resamples()
+-> Result<(), Box<dyn Error>> {
+    let failure = std::rc::Rc::new(std::cell::Cell::new(false));
+    let observer = startup_observer(failure.clone())?;
+    let mut surface = SurfaceState::new(Some(observer.clone()));
+    let mut content = Content::default();
+    failure.set(true);
+    surface.prepare(&mut content, Some(shape()?), Duration::ZERO, true);
+    surface.visibility(&mut content, true);
+    surface.prepare(&mut content, None, Duration::ZERO, true);
+    assert!(!surface.closing);
+    assert!(!content.calls.contains(&"prepare"));
+    failure.set(false);
+    // Geometry-triggered poll uses the same actual request boundary as ordinary cadence.
+    assert!(!surface.poll(&mut content, Some(shape()?), budget()?, Duration::ZERO));
+    assert!(content.calls.contains(&"prepare"));
+    failure.set(true);
+    surface.dirty();
+    surface.prepare(&mut content, Some(shape()?), Duration::ZERO, false);
+    assert!(!surface.closing);
+    assert_eq!(content.calls.iter().filter(|call| **call == "prepare").count(), 2);
+    surface.close(&mut content);
+    surface.prepare(&mut content, Some(shape()?), Duration::ZERO, true);
+    assert_eq!(content.calls.iter().filter(|call| **call == "prepare").count(), 2);
+    failure.set(false);
+    let receipt = observer.finish()?;
+    assert_eq!(receipt.startup_milestones[6].ok_or("Actual request not recorded")?.ticks, 10);
+    Ok(())
+}
+
+#[test]
+fn first_request_counter_failure_enters_closing_without_admission_and_preserves_first_cause()
+-> Result<(), Box<dyn Error>> {
+    let failure = std::rc::Rc::new(std::cell::Cell::new(false));
+    let observer = startup_observer(failure.clone())?;
+    let mut surface = SurfaceState::new(Some(observer));
+    let mut content = Content::default();
+    surface.visibility(&mut content, true);
+    failure.set(true);
+    surface.prepare(&mut content, Some(shape()?), Duration::ZERO, true);
+    assert!(surface.closing);
+    assert!(!content.calls.contains(&"prepare"));
+    assert!(content.calls.contains(&"cancel"));
+    surface.fail(&mut content, DesktopError::message("later", "later failure"));
+    let cause = surface.failure.as_ref().ok_or("Clock error lost")?;
+    assert!(cause.to_string().contains("first_request_counter"));
+    assert_eq!(cause.source().ok_or("Source lost")?.to_string(), "unavailable");
+    Ok(())
+}
+
 #[test]
 fn input_and_animation_admit_preparation_without_replacing_or_exposing_retained_storage()
 -> Result<(), Box<dyn Error>> {
     let shape = shape()?;
     let released = Arc::new(AtomicUsize::new(0));
     let mut content = Content::default();
-    let mut surface = SurfaceState::new();
+    let mut surface = SurfaceState::new(None);
     surface.visibility(&mut content, true);
     content.frames.push_back(frame(shape, &released)?);
     assert!(surface.poll(&mut content, Some(shape), budget()?, Duration::ZERO));
@@ -142,7 +229,7 @@ fn hidden_surface_invalidates_before_new_work_and_still_disposes_terminal_frames
     let shape = shape()?;
     let released = Arc::new(AtomicUsize::new(0));
     let mut content = Content::default();
-    let mut surface = SurfaceState::new();
+    let mut surface = SurfaceState::new(None);
     surface.visibility(&mut content, true);
     surface.visibility(&mut content, false);
     surface.dirty();
@@ -164,7 +251,7 @@ fn mismatched_completions_are_acknowledged_and_native_expose_requires_actual_sha
     let different = FrameShape::new(1, 2, 1.0)?;
     let released = Arc::new(AtomicUsize::new(0));
     let mut content = Content::default();
-    let mut surface = SurfaceState::new();
+    let mut surface = SurfaceState::new(None);
     surface.visibility(&mut content, true);
     content.frames.push_back(frame(shape, &released)?);
     assert!(surface.poll(&mut content, Some(shape), budget()?, Duration::ZERO));
@@ -189,7 +276,7 @@ fn changed_visible_geometry_is_requested_before_completion_publication()
     let resized = FrameShape::new(3, 2, 1.5)?;
     let released = Arc::new(AtomicUsize::new(0));
     let mut content = Content::default();
-    let mut surface = SurfaceState::new();
+    let mut surface = SurfaceState::new(None);
     surface.visibility(&mut content, true);
     content.frames.push_back(frame(initial, &released)?);
     assert!(surface.poll(&mut content, Some(initial), budget()?, Duration::ZERO));
@@ -218,7 +305,7 @@ fn closing_is_idempotent_and_waits_for_actual_settlement_after_errors() -> Resul
         Err(std::io::Error::other("later poll cause").into()),
         Ok(true),
     ]);
-    let mut surface = SurfaceState::new();
+    let mut surface = SurfaceState::new(None);
     surface.visibility(&mut content, true);
     surface.close(&mut content);
     surface.close(&mut content);
@@ -247,7 +334,7 @@ fn closing_is_idempotent_and_waits_for_actual_settlement_after_errors() -> Resul
 fn request_error_retains_its_original_cause_while_shutdown_failures_do_not_replace_it()
 -> Result<(), Box<dyn Error>> {
     let mut content = Content { request_error: true, shutdown_error: true, ..Content::default() };
-    let mut surface = SurfaceState::new();
+    let mut surface = SurfaceState::new(None);
     surface.visibility(&mut content, true);
     surface.prepare(&mut content, Some(shape()?), Duration::ZERO, false);
     assert!(surface.closing);

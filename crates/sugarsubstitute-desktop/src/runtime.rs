@@ -21,6 +21,7 @@ use crate::cadence::{advance_deadline, closing_wait, presentation_wait};
 use crate::linux::Presenter;
 #[cfg(target_os = "macos")]
 use crate::macos::Presenter;
+use crate::timing::{NativeStartupStage as StartupStage, observe_startup};
 #[cfg(target_os = "windows")]
 use crate::windows::Presenter;
 use crate::{DesktopError, DesktopOptions, DesktopReceipt, Pointer, WindowContent};
@@ -79,6 +80,7 @@ pub fn run(
         None => None,
     };
     let mut event_loop = EventLoopBuilder::<NativeAction>::with_user_event().build();
+    observe_startup(timings.as_ref(), StartupStage::EventLoopReady)?;
     let window = Rc::new(
         WindowBuilder::new()
             .with_title(options.title)
@@ -101,7 +103,9 @@ pub fn run(
             window.set_outer_position(PhysicalPosition::new(x, y));
         }
     }
+    observe_startup(timings.as_ref(), StartupStage::WindowCreated)?;
     let mut presenter = Presenter::new(Rc::clone(&window), options.dark)?;
+    observe_startup(timings.as_ref(), StartupStage::PresenterReady)?;
     #[cfg(target_os = "windows")]
     let mut controls = crate::windows_controls::Controls::new(
         Rc::clone(&window),
@@ -109,15 +113,18 @@ pub fn run(
         content.accessible_controls(),
         timings.clone(),
     )?;
+    observe_startup(timings.as_ref(), StartupStage::ControlsReady)?;
     let drain_budget = NonZeroUsize::new(32).ok_or_else(|| {
         DesktopError::message("start_content", "completion drain budget must be positive")
     })?;
     let wake_lifetime = wake::WakeLifetime::new();
     let completion_wake =
         Arc::new(wake::ProxyWake::new(event_loop.create_proxy(), wake_lifetime.clone()));
-    let mut surface = state::SurfaceState::new();
+    let mut surface = state::SurfaceState::new(timings.clone());
     if let Err(error) = content.start(completion_wake) {
         surface.fail(&mut content, DesktopError::boxed("start_content", error));
+    } else if let Err(cause) = observe_startup(timings.as_ref(), StartupStage::ExecutionReady) {
+        surface.fail(&mut content, cause);
     }
     let mut presentations = presentation::Presentations::new(started, options.audit_frames);
     let mut pointer = Pointer::default();
@@ -129,6 +136,9 @@ pub fn run(
     if !surface.closing {
         window.set_visible(true);
         window.set_focus();
+        if let Err(cause) = observe_startup(timings.as_ref(), StartupStage::ShowFocusReturned) {
+            surface.fail(&mut content, cause);
+        }
     }
     event_loop.run_return(|event, _, control| {
         let began = match timings.as_ref().map(crate::timing::TimingObserver::mark).transpose() {

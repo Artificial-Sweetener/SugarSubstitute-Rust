@@ -23,8 +23,8 @@ mod windows_animation_period;
 #[allow(unsafe_code)]
 mod windows_timing;
 pub use timing::{
-    NativeCallbackKind, NativeCallbackTiming, NativeSubmissionTiming, NativeTickInterval,
-    NativeTimingReceipt, NativeTimingSource,
+    NativeCallbackKind, NativeCallbackTiming, NativeStartupStage, NativeStartupTiming,
+    NativeSubmissionTiming, NativeTickInterval, NativeTimingReceipt, NativeTimingSource,
 };
 #[cfg(target_os = "windows")]
 #[allow(unsafe_code)]

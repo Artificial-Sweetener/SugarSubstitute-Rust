@@ -214,6 +214,8 @@ def reference_base(interpreter: Path, environment: dict[str, str]) -> Path:
 
 def launch(arguments: argparse.Namespace, output: Path) -> tuple[list[str], Path, dict[str, str]]:
     """Use actual production entrypoints, preserving interpreter and font/cache state."""
+    if arguments.timing_audit and arguments.mode != "rust":
+        raise ValueError("Native timing diagnostics require the owned Rust proof")
     environment = os.environ.copy()
     temporary = arguments.temporary.resolve(strict=True)
     environment.update(TEMP=str(temporary), TMP=str(temporary), PYTHONDONTWRITEBYTECODE="1")
@@ -232,7 +234,25 @@ def launch(arguments: argparse.Namespace, output: Path) -> tuple[list[str], Path
                "--receipt", str(output / "submission.json"), "--locale", arguments.locale]
     if arguments.light:
         command.append("--light")
+    if arguments.timing_audit:
+        command.append("--timing-audit")
     return command, executable.parent, environment
+
+
+def retain_diagnostics(arguments: argparse.Namespace, output: Path,
+                       stdout: bytes, stderr: bytes) -> dict[str, object]:
+    """Retain bounded Rust proof diagnostics after observed termination; reference output stays private."""
+    if arguments.mode != "rust" or not arguments.timing_audit:
+        raise ValueError("Diagnostic output is restricted to the opted-in owned Rust proof")
+    streams = {}
+    for name, raw in (("stdout", stdout), ("stderr", stderr)):
+        tail = raw[-65536:]
+        path = output / f"{name}-tail.log"
+        path.write_bytes(tail)
+        streams[name] = dict(bytes_observed=len(raw), retained_tail_bytes=len(tail),
+                             tail_truncated=len(raw) > len(tail), tail_path=str(path),
+                             tail_sha256=hashlib.sha256(tail).hexdigest())
+    return streams
 
 
 def observe(arguments: argparse.Namespace, output: Path, ordinal: int,
@@ -273,7 +293,10 @@ def observe(arguments: argparse.Namespace, output: Path, ordinal: int,
     except Exception as error:
         receipt["foreground_launch_setup"] = fixture.receipt
         receipt.update(error_type=type(error).__name__, error=str(error), failure_phase="before measured product launch")
-        write_json(output / "failure.json", receipt)
+        try:
+            write_json(output / "failure.json", receipt)
+        except Exception as storage:
+            raise ExceptionGroup("Startup preparation and failure-receipt storage failed", [error, storage])
         raise
     process: subprocess.Popen[bytes] | None = None
     owner: ReferenceOwner | None = None
@@ -326,6 +349,8 @@ def observe(arguments: argparse.Namespace, output: Path, ordinal: int,
         stdout, stderr = process.communicate(timeout=5)
         # The production reference's ready message contains session authentication material.
         receipt.update(exit_code=process.returncode, stdout_bytes=len(stdout), stderr_bytes=len(stderr))
+        if arguments.timing_audit:
+            receipt["diagnostic_output"] = retain_diagnostics(arguments, output, stdout, stderr)
         if process.returncode != 0:
             raise RuntimeError(f"Owned startup fixture exited with status {process.returncode}")
         write_json(output / "startup.json", receipt)
@@ -335,7 +360,6 @@ def observe(arguments: argparse.Namespace, output: Path, ordinal: int,
         if isinstance(error, ExposureFailure):
             receipt["exposure_state"] = error.state
         receipt.update(error_type=type(error).__name__, error=str(error))
-        write_json(output / "failure.json", receipt)
         raise
     finally:
         cleanup_errors = []
@@ -351,12 +375,24 @@ def observe(arguments: argparse.Namespace, output: Path, ordinal: int,
         except Exception as error:
             cleanup_errors.append(error)
         try:
+            if arguments.timing_audit and process is not None and "diagnostic_output" not in receipt:
+                stdout, stderr = process.communicate(timeout=5)
+                receipt["diagnostic_output"] = retain_diagnostics(arguments, output, stdout, stderr)
+        except Exception as error:
+            cleanup_errors.append(error)
+        try:
             fixture.__exit__(None, None, None)
         except Exception as error:
             cleanup_errors.append(error)
+        if primary_error is not None or cleanup_errors:
+            receipt["qualification_accepted"] = False
+            if cleanup_errors:
+                receipt["cleanup_errors"] = [{"error_type": type(error).__name__, "error": str(error)} for error in cleanup_errors]
+            try:
+                write_json(output / "failure.json", receipt)
+            except Exception as storage:
+                cleanup_errors.append(storage)
         if cleanup_errors:
-            receipt["cleanup_errors"] = [{"error_type": type(error).__name__, "error": str(error)} for error in cleanup_errors]
-            write_json(output / "failure.json", receipt)
             raise ExceptionGroup("Startup fixture and owned cleanup failures",
                                  ([primary_error] if primary_error is not None else []) + cleanup_errors)
 
@@ -375,6 +411,7 @@ def main() -> int:
     parser.add_argument("--runs", type=int, default=5)
     parser.add_argument("--duration-ms", type=int, default=5000)
     parser.add_argument("--enforce-targets", action="store_true")
+    parser.add_argument("--timing-audit", action="store_true", help="Collect bounded native Rust startup diagnostics")
     args = parser.parse_args()
     if not 1 <= args.runs <= 30 or not 1000 <= args.duration_ms <= 30000:
         parser.error("Use 1 through 30 sequential runs with a 1000 through 30000 ms lifetime")
@@ -382,6 +419,8 @@ def main() -> int:
         parser.error("Rust qualification requires --executable")
     if args.mode == "reference" and (args.interpreter is None or args.legacy_root is None):
         parser.error("Reference qualification requires --interpreter and --legacy-root")
+    if args.timing_audit and args.mode != "rust":
+        parser.error("--timing-audit requires --mode rust")
     args.output.mkdir(parents=True, exist_ok=False)
     native = NativeWindows()
     receipts = [observe(args, args.output / f"run-{ordinal:02}", ordinal, native) for ordinal in range(args.runs)]

@@ -188,6 +188,7 @@ def main() -> int:
     parser.add_argument("--locale", default="en", choices=("en", "zh-Hans", "ja", "ko", "es"))
     parser.add_argument("--light", action="store_true")
     parser.add_argument("--duration-ms", type=int, default=10000)
+    parser.set_defaults(timing_audit=False)
     args = parser.parse_args()
     if not 5000 <= args.duration_ms <= 30000:
         parser.error("Caption entry requires an owned 5000 through 30000 ms maximum lifetime")

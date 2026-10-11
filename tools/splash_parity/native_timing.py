@@ -15,6 +15,8 @@ KINDS = frozenset(("windows_parent", "windows_child", "window_event", "completio
 RECEIPT_KEYS = frozenset(("schema_version", "source", "begin_ticks", "end_ticks", "frequency",
                         "ui_thread_id", "callbacks_observed", "callback_samples_omitted",
                         "submissions_observed", "submission_samples_omitted", "callbacks", "submissions"))
+STARTUP_STAGES = ("event_loop_ready", "window_created", "presenter_ready", "controls_ready",
+                  "execution_ready", "show_focus_returned", "first_preparation_request")
 
 
 def integer(value, name, minimum=0, maximum=(1 << 64) - 1):
@@ -43,14 +45,19 @@ def validate(receipt):
     Omissions remain valid observable metadata, but analyse never accepts an
     incomplete buffer. Callback sequence is completion order; starts may nest.
     """
-    keys(receipt, RECEIPT_KEYS, "native timings")
-    if integer(receipt["schema_version"], "schema version", 1, 1) != 1 or receipt["source"] != "windows_qpc":
+    if not isinstance(receipt, dict):
+        raise ValueError("Native timings require an object")
+    version = integer(receipt.get("schema_version"), "schema version", 1, 2)
+    keys(receipt, RECEIPT_KEYS | ({"startup_milestones"} if version == 2 else set()), "native timings")
+    if receipt["source"] != "windows_qpc":
         raise ValueError("Unsupported native clock schema")
     integer(receipt["frequency"], "QPC frequency", 1, (1 << 63) - 1)
     integer(receipt["ui_thread_id"], "UI thread identity", 1, (1 << 32) - 1)
     lifetime = interval(receipt, (0, (1 << 63) - 1), "native lifetime")
     if lifetime[0] == lifetime[1]:
         raise ValueError("Native timing lifetime must be positive")
+    if version == 2:
+        validate_startup(receipt, lifetime)
     for buffer, count, omitted in (("callbacks", "callbacks_observed", "callback_samples_omitted"),
                                    ("submissions", "submissions_observed", "submission_samples_omitted")):
         samples = receipt[buffer]
@@ -107,6 +114,27 @@ def validate(receipt):
     return receipt
 
 
+def validate_startup(receipt, lifetime):
+    """Require exact ordered native startup checkpoints before any successful submission."""
+    milestones = receipt["startup_milestones"]
+    if not isinstance(milestones, list) or len(milestones) > len(STARTUP_STAGES):
+        raise ValueError("Startup milestones exceed the seven-stage inventory")
+    previous = lifetime[0]
+    for index, milestone in enumerate(milestones):
+        keys(milestone, ("stage", "ticks"), "startup milestone")
+        if milestone["stage"] != STARTUP_STAGES[index]:
+            raise ValueError("Startup stages must form the exact ordered prefix")
+        previous = integer(milestone["ticks"], "startup milestone ticks", previous, lifetime[1])
+    submissions = receipt["submissions"]
+    if isinstance(submissions, list) and submissions:
+        if len(milestones) != len(STARTUP_STAGES):
+            raise ValueError("Successful native submission requires every startup milestone")
+        first = submissions[0]
+        if (not isinstance(first, dict) or type(first.get("begin_ticks")) is not int
+                or previous > first["begin_ticks"]):
+            raise ValueError("First native preparation must precede its successful submission")
+
+
 def distribution(values):
     """Use nearest-rank percentiles; preserve sample count and maxima without smoothing."""
     if not values:
@@ -141,7 +169,10 @@ def analyse(receipt):
                                               for left, right in zip(samples, samples[1:])])
     fresh_intervals, lifetime_intervals = intervals(fresh), intervals(all_submissions)
     producer_passed = fresh_intervals["count"] > 0 and fresh_intervals["p95_ms"] < 25
-    return {"schema_version": 1, "source": receipt["source"], "frequency": receipt["frequency"],
+    return {"schema_version": 2, "source": receipt["source"], "frequency": receipt["frequency"],
+            "native_receipt_schema_version": receipt["schema_version"],
+            "startup_milestones": [{**mark, "elapsed_ms": (mark["ticks"] - receipt["begin_ticks"]) * factor}
+                                   for mark in receipt.get("startup_milestones", [])],
             "ui_thread_id": receipt["ui_thread_id"], "complete_evidence": complete,
             "callbacks_by_kind": groups, "fresh_producer_submission_intervals": fresh_intervals,
             "all_lifetime_submission_intervals": lifetime_intervals,

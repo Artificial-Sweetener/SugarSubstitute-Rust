@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, Mock, patch
 
 from PIL import Image
 
-from tools.splash_parity.startup_windows import ReferenceOwner, launch, observe, reference_base
+from tools.splash_parity.startup_windows import ReferenceOwner, launch, observe, reference_base, retain_diagnostics
 
 
 class ReferenceOwnershipTests(unittest.TestCase):
@@ -132,7 +132,33 @@ class StartupLaunchTests(unittest.TestCase):
         """Select explicit trusted entrypoints and an isolated output location."""
         return argparse.Namespace(mode=mode, temporary=self.root, legacy_root=self.root,
                                   interpreter=self.executable, executable=self.executable,
-                                  duration_ms=5000, locale="ja", light=True)
+                                  duration_ms=5000, locale="ja", light=True, timing_audit=False)
+
+    def test_timing_diagnostics_preserve_launch_options_and_reject_reference(self) -> None:
+        arguments = self.arguments("rust")
+        arguments.timing_audit = True
+        command, cwd, _ = launch(arguments, self.root)
+        self.assertEqual(command.count("--timing-audit"), 1)
+        self.assertIn("--collapsed", command)
+        self.assertEqual(cwd, self.root)
+        arguments.mode = "reference"
+        self.assertRaises(ValueError, launch, arguments, self.root)
+
+    def test_diagnostic_output_has_bounded_exact_tails_and_never_saves_reference(self) -> None:
+        arguments = self.arguments("rust")
+        arguments.timing_audit = True
+        raw = b"prefix" + b"x" * 65536
+        result = retain_diagnostics(arguments, self.root, b"", raw)
+        self.assertEqual((self.root / "stderr-tail.log").read_bytes(), raw[-65536:])
+        self.assertEqual(result["stderr"]["bytes_observed"], len(raw))
+        self.assertEqual(result["stderr"]["retained_tail_bytes"], 65536)
+        self.assertTrue(result["stderr"]["tail_truncated"])
+        self.assertFalse(result["stdout"]["tail_truncated"])
+        for mode, enabled in (("reference", True), ("rust", False)):
+            arguments.mode, arguments.timing_audit = mode, enabled
+            forbidden = self.root / "must-remain-absent"
+            self.assertRaises(ValueError, retain_diagnostics, arguments, forbidden, b"private", b"private")
+            self.assertFalse(forbidden.exists())
 
     def test_production_reference_uses_existing_interpreter_without_legacy_writes(self) -> None:
         """The actual startup module remains authoritative and inherited offscreen mode is removed."""
@@ -212,6 +238,68 @@ class StartupLaunchTests(unittest.TestCase):
             with self.assertRaisesRegex(OSError, "launch rejected"):
                 observe(self.arguments("rust"), self.root / "popen-failed", 0, Mock())
         fixture.__exit__.assert_called_once()
+
+    def test_failed_diagnostic_launch_retains_bounded_owned_rust_output(self) -> None:
+        arguments = self.arguments("rust")
+        arguments.timing_audit = True
+        native = Mock()
+        native.find_window.side_effect = RuntimeError("window missing")
+        process = Mock(pid=42, returncode=1)
+        process.poll.return_value = 1
+        process.communicate.return_value = (b"", b"native phase failure")
+        fixture = MagicMock(receipt={})
+        output = self.root / "diagnostic-failed"
+        with patch("tools.splash_parity.startup_windows.ForegroundLauncher", return_value=fixture), \
+                patch("tools.splash_parity.startup_windows.subprocess.Popen", return_value=process):
+            with self.assertRaisesRegex(RuntimeError, "window missing"):
+                observe(arguments, output, 0, native)
+        receipt = json.loads((output / "failure.json").read_text())
+        self.assertEqual(receipt["error"], "window missing")
+        self.assertEqual(receipt["diagnostic_output"]["stderr"]["bytes_observed"], 20)
+        self.assertEqual((output / "stderr-tail.log").read_bytes(), b"native phase failure")
+        fixture.__exit__.assert_called_once()
+
+    def test_diagnostic_cleanup_error_retains_the_original_observation_cause(self) -> None:
+        arguments = self.arguments("rust")
+        arguments.timing_audit = True
+        native = Mock()
+        native.find_window.side_effect = RuntimeError("window missing")
+        process = Mock(pid=42, returncode=1)
+        process.poll.return_value = 1
+        process.communicate.return_value = (b"", b"")
+        with patch("tools.splash_parity.startup_windows.ForegroundLauncher", return_value=MagicMock(receipt={})), \
+                patch("tools.splash_parity.startup_windows.subprocess.Popen", return_value=process), \
+                patch("tools.splash_parity.startup_windows.retain_diagnostics", side_effect=OSError("tail failure")):
+            with self.assertRaises(ExceptionGroup) as caught:
+                observe(arguments, self.root / "diagnostic-cleanup-failed", 0, native)
+        self.assertEqual([str(cause) for cause in caught.exception.exceptions], ["window missing", "tail failure"])
+
+    def test_failure_receipt_storage_never_masks_observation_or_cleanup_causes(self) -> None:
+        native = Mock()
+        native.find_window.side_effect = RuntimeError("window missing")
+        process = Mock(pid=42, returncode=1)
+        process.poll.return_value = 1
+        fixture = MagicMock(receipt={})
+        fixture.__exit__.side_effect = OSError("fixture cleanup failed")
+        with patch("tools.splash_parity.startup_windows.ForegroundLauncher", return_value=fixture), \
+                patch("tools.splash_parity.startup_windows.subprocess.Popen", return_value=process), \
+                patch("tools.splash_parity.startup_windows.write_json", side_effect=OSError("receipt storage failed")):
+            with self.assertRaises(ExceptionGroup) as caught:
+                observe(self.arguments("rust"), self.root / "storage-failed", 0, native)
+        self.assertEqual([str(cause) for cause in caught.exception.exceptions],
+                         ["window missing", "fixture cleanup failed", "receipt storage failed"])
+
+    def test_prelaunch_failure_receipt_storage_preserves_activation_cause(self) -> None:
+        fixture = MagicMock(receipt={})
+        fixture.__enter__.side_effect = RuntimeError("activation rejected")
+        with patch("tools.splash_parity.startup_windows.ForegroundLauncher", return_value=fixture), \
+                patch("tools.splash_parity.startup_windows.write_json", side_effect=OSError("receipt storage failed")), \
+                patch("tools.splash_parity.startup_windows.subprocess.Popen") as process:
+            with self.assertRaises(ExceptionGroup) as caught:
+                observe(self.arguments("rust"), self.root / "prelaunch-storage-failed", 0, Mock())
+        self.assertEqual([str(cause) for cause in caught.exception.exceptions],
+                         ["activation rejected", "receipt storage failed"])
+        process.assert_not_called()
 
 
 if __name__ == "__main__":

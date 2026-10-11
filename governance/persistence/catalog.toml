@@ -13,6 +13,20 @@ accepted_versions = [1]
 compatibility = "reject"
 migrations = []
 
+# The native writer emits schema two reports after teardown. Qualification tools
+# analyse retained schema one reports directly; original reports are never rewritten.
+[[formats]]
+id = "native-timing-report"
+owner = "sugarsubstitute"
+sources = ["crates/sugarsubstitute/src/timing_receipt.rs"]
+source_sha256 = "sha256:a624dc4003084d503391ddaf1c8e1d8b3ecb0a119af9a10203c44f24c92e0489"
+classification = "authored_document"
+preservation = "must_preserve"
+current_version = 2
+accepted_versions = [2]
+compatibility = "reject"
+migrations = []
+
 [[formats]]
 id = "startup-configuration"
 owner = "sugarsubstitute-comfy"

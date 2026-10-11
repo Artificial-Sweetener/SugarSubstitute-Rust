@@ -8,9 +8,9 @@ import unittest
 from pathlib import Path
 
 try:
-    from .native_timing import MAX_FILE_BYTES, MAX_SAMPLES, analyse, read_terminal, validate
+    from .native_timing import MAX_FILE_BYTES, MAX_SAMPLES, STARTUP_STAGES, analyse, read_terminal, validate
 except ImportError:
-    from native_timing import MAX_FILE_BYTES, MAX_SAMPLES, analyse, read_terminal, validate
+    from native_timing import MAX_FILE_BYTES, MAX_SAMPLES, STARTUP_STAGES, analyse, read_terminal, validate
 
 
 def fixture():
@@ -24,6 +24,74 @@ def fixture():
             "submissions": [dict(sequence=i, begin_ticks=1000 + i * 16000, end_ticks=1100 + i * 16000,
                                  retained=False, identity=dict(surface=1, state_generation=1, sequence=i))
                             for i in range(1, 4)]}
+
+
+def startup_fixture():
+    value = fixture()
+    value.update(schema_version=2, startup_milestones=[dict(stage=stage, ticks=120 + index * 10)
+                                                    for index, stage in enumerate(STARTUP_STAGES)])
+    return value
+
+
+class StartupTimingTests(unittest.TestCase):
+    def test_current_and_preserved_receipts_keep_exact_observed_startup_ticks(self):
+        result = analyse(startup_fixture())
+        self.assertEqual(result["native_receipt_schema_version"], 2)
+        self.assertEqual(result["startup_milestones"][-1]["ticks"], 180)
+        self.assertEqual(result["startup_milestones"][-1]["elapsed_ms"], .08)
+        self.assertEqual(analyse(fixture())["startup_milestones"], [])
+
+    def test_partial_prefix_is_diagnostic_only_without_successful_submissions(self):
+        value = startup_fixture()
+        value.update(submissions=[], submissions_observed=0)
+        value["startup_milestones"] = value["startup_milestones"][:3]
+        self.assertIs(validate(value), value)
+        self.assertFalse(analyse(value)["accepted"])
+        value["submissions"] = fixture()["submissions"]
+        value["submissions_observed"] = 3
+        self.assertRaises(ValueError, validate, value)
+
+    def test_startup_schema_inventory_and_stage_order_reject_corruption(self):
+        mutations = [lambda value: value.pop("startup_milestones"),
+                     lambda value: value.__setitem__("startup_milestones", {}),
+                     lambda value: value["startup_milestones"].append(dict(stage="future", ticks=190)),
+                     lambda value: value["startup_milestones"][1].__setitem__("stage", "event_loop_ready"),
+                     lambda value: value["startup_milestones"][0].__setitem__("stage", []),
+                     lambda value: value["startup_milestones"][0].__setitem__("future", 1),
+                     lambda value: value.__setitem__("schema_version", 3)]
+        for mutate in mutations:
+            value = startup_fixture()
+            mutate(value)
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                validate(value)
+        legacy = fixture()
+        legacy["startup_milestones"] = []
+        self.assertRaises(ValueError, validate, legacy)
+
+    def test_startup_clock_types_lifetime_and_submission_order_are_strict(self):
+        for index, ticks in ((0, True), (0, 120.0), (0, 99), (1, 119), (0, 1 << 63),
+                             (6, 100001), (6, 17001)):
+            value = startup_fixture()
+            value["startup_milestones"][index]["ticks"] = ticks
+            with self.subTest(index=index, ticks=ticks), self.assertRaises(ValueError):
+                validate(value)
+
+    def test_startup_ticks_above_float_precision_are_preserved(self):
+        value = startup_fixture()
+        offset = 1 << 53
+        value["begin_ticks"] += offset
+        value["end_ticks"] += offset
+        for mark in value["startup_milestones"]:
+            mark["ticks"] += offset
+        for sample in value["callbacks"] + value["submissions"]:
+            sample["begin_ticks"] += offset
+            sample["end_ticks"] += offset
+            if sample.get("delegated_drag"):
+                sample["delegated_drag"]["begin_ticks"] += offset
+                sample["delegated_drag"]["end_ticks"] += offset
+        result = analyse(value)
+        self.assertEqual(result["startup_milestones"][-1]["ticks"], offset + 180)
+        self.assertEqual(result["startup_milestones"][-1]["elapsed_ms"], .08)
 
 
 class NativeTimingTests(unittest.TestCase):

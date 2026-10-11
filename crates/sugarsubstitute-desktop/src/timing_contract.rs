@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Define raw, bounded native callback and successful-submission evidence.
 
+use super::NativeStartupTiming;
 use sugarsubstitute_contracts::presentation::FrameIdentity;
 
 /// Identify the native counter that owns every tick in one receipt.
@@ -102,6 +103,9 @@ pub struct NativeTimingReceipt {
     pub callbacks: Vec<NativeCallbackTiming>,
     /// At most 16,384 successful native/control submissions, including retained exposures.
     pub submissions: Vec<NativeSubmissionTiming>,
+    /// Seven fixed, ordered setup/request slots; failure may leave an observed prefix.
+    /// Ticks share the receipt's validated source, frequency and UI thread identity.
+    pub startup_milestones: [Option<NativeStartupTiming>; 7],
     /// All callback observations, including samples beyond the storage bound.
     pub callbacks_observed: u64,
     /// Callback observations omitted after the fixed buffer filled.

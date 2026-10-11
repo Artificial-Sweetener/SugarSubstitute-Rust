@@ -9,6 +9,11 @@ use sugarsubstitute_contracts::presentation::FrameIdentity;
 mod contract;
 pub use contract::*;
 
+#[path = "timing_startup.rs"]
+mod startup;
+pub(crate) use startup::observe_startup;
+pub use startup::{NativeStartupStage, NativeStartupTiming};
+
 pub(crate) const SAMPLE_LIMIT: usize = 16_384;
 pub(crate) const QPC_SOURCE: u64 = 1;
 
@@ -77,6 +82,7 @@ impl TimingAudit {
                 ui_thread_id: thread,
                 callbacks,
                 submissions,
+                startup_milestones: [None; 7],
                 callbacks_observed: 0,
                 callback_samples_omitted: 0,
                 submissions_observed: 0,
@@ -183,6 +189,9 @@ impl TimingAudit {
         begin: Stamp,
         identity: FrameIdentity,
     ) -> Result<(), DesktopError> {
+        if self.receipt.startup_milestones[6].is_none_or(|sample| sample.ticks > begin.ticks) {
+            return Err(error("successful submission precedes the first preparation request"));
+        }
         let end = self.mark()?;
         let interval = self.interval(begin, end)?;
         let sequence = self

@@ -15,11 +15,12 @@ pub(super) struct SurfaceState {
     pub(super) retained: Option<PreparedFrame>,
     dirty: bool,
     requested_shape: Option<FrameShape>,
+    timings: Option<crate::timing::TimingObserver>,
 }
 
 impl SurfaceState {
     /// Start hidden with a pending first preparation once native visibility is established.
-    pub(super) fn new() -> Self {
+    pub(super) fn new(timings: Option<crate::timing::TimingObserver>) -> Self {
         Self {
             closing: false,
             settled: false,
@@ -28,6 +29,7 @@ impl SurfaceState {
             retained: None,
             dirty: true,
             requested_shape: None,
+            timings,
         }
     }
 
@@ -96,6 +98,12 @@ impl SurfaceState {
             self.dirty = true;
         }
         if !self.dirty && !animation_due {
+            return;
+        }
+        if let Some(observer) = &self.timings
+            && let Err(cause) = observer.first_preparation()
+        {
+            self.fail(content, cause);
             return;
         }
         match content.request_frame(shape, elapsed) {

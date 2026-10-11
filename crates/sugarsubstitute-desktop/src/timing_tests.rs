@@ -39,7 +39,19 @@ fn counter(frequency: i64, thread: u32) -> (Counter, Rc<Cell<Stamp>>, Rc<Cell<bo
     (Counter { stamp: stamp.clone(), frequency, thread, failure: failure.clone() }, stamp, failure)
 }
 fn audit() -> Result<TimingAudit, DesktopError> {
-    TimingAudit::new(Box::new(counter(1_000, 7).0))
+    let mut audit = TimingAudit::new(Box::new(counter(1_000, 7).0))?;
+    for stage in [
+        NativeStartupStage::EventLoopReady,
+        NativeStartupStage::WindowCreated,
+        NativeStartupStage::PresenterReady,
+        NativeStartupStage::ControlsReady,
+        NativeStartupStage::ExecutionReady,
+        NativeStartupStage::ShowFocusReturned,
+        NativeStartupStage::FirstPreparationRequest,
+    ] {
+        audit.startup(stage)?;
+    }
+    Ok(audit)
 }
 fn identity(state: u64, sequence: u64) -> Result<FrameIdentity, Box<dyn Error>> {
     Ok(FrameIdentity {
