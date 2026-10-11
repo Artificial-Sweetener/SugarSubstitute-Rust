@@ -164,6 +164,7 @@ pub(crate) enum NativeWork {
     FixtureParent(crate::fixture_session::FixtureWork),
     FixtureChild(crate::fixture_session::child::ChildWork),
     LifecyclePipe(crate::lifecycle_pipe::PipeWork),
+    FixtureForward(crate::fixture_forwarding::ForwardWork),
 }
 impl NativeWork {
     pub(crate) fn ready(&self) -> bool {
@@ -172,6 +173,7 @@ impl NativeWork {
             Self::FixtureParent(_) => true,
             Self::FixtureChild(work) => work.binding.ready(),
             Self::LifecyclePipe(_) => true,
+            Self::FixtureForward(work) => work.ready(),
         }
     }
     pub(crate) fn initial_deadlines(&self) -> Option<crate::native_deadlines::Deadlines> {

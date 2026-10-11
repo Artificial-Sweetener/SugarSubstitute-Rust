@@ -125,3 +125,15 @@ current_version = 1
 accepted_versions = [1]
 compatibility = "reject"
 migrations = []
+
+[[formats]]
+id = "native-descendant-family-report"
+owner = "sugarsubstitute"
+sources = ["crates/sugarsubstitute/src/descendant_fixture/mod.rs"]
+source_sha256 = "sha256:83ae88ddcc2c71643f7f393a8b0a82934661ace597ddafab94bb094ae231f79f"
+classification = "authored_document"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []

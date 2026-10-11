@@ -7,6 +7,8 @@ mod blocking;
 mod clock;
 mod cpu;
 #[cfg(any(windows, test))]
+mod fixture_forwarding;
+#[cfg(any(windows, test))]
 mod fixture_session;
 #[cfg(any(windows, test))]
 mod lifecycle_pipe;
@@ -19,6 +21,10 @@ mod native_deadlines;
 mod runtime;
 mod scope;
 mod task;
+
+#[cfg(windows)]
+#[allow(unsafe_code)]
+mod windows_fixture_forwarding;
 
 #[cfg(windows)]
 pub mod windows;

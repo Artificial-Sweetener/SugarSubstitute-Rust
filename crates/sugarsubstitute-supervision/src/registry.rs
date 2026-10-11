@@ -14,6 +14,7 @@ use std::sync::{
     Arc, Mutex, MutexGuard,
     atomic::{AtomicU8, Ordering},
 };
+pub(crate) use submission::validate_blocking;
 use sugarsubstitute_contracts::{
     execution::{CompletionBatch, ExecutionPort, JobContext, JobId, JobSpec, OwnedJob, Scope},
     lifecycle::{CoordinatorKey, ProcessId, ProcessKey, ShutdownBudget, ShutdownId},
@@ -45,6 +46,7 @@ struct NativeState {
     creation: Option<CreationFacts>,
     cleanup: Option<CleanupFacts>,
     failure: Option<RegistryError>,
+    forced: bool,
     port: Arc<dyn NativePort>,
 }
 impl Drop for NativeState {
@@ -84,6 +86,8 @@ struct Record {
     root_notice: bool,
     root: Option<Identity>,
     root_exit: Option<ProcessExit>,
+    last_member_exit: Option<ProcessExit>,
+    forced: bool,
     root_retirement: Option<(JobId, RootObservationOutcome)>,
     member_watch: Option<WatchJob>,
     member_spec: Option<(sugarsubstitute_contracts::execution::ScopeId, JobId)>,
@@ -116,6 +120,8 @@ impl Record {
             started: self.started,
             launch_closed: self.shared.admission.load(Ordering::Acquire) == CLOSED,
             root_exit: self.root_exit.map(|exit| exit.exit_code),
+            last_member_exit: self.last_member_exit,
+            forced: self.forced,
             retained_members: self.retained,
             cleanup_pending: self.cleanup.is_some() || self.member_watch.is_some(),
             member_watch_required: self.next.is_some() && self.member_watch.is_none(),

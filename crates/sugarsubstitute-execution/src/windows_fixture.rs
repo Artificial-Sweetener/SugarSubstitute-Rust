@@ -3,6 +3,10 @@
 //! Own four-event fixture protocols through central admission and native retirement.
 //! Protocol observations prove event progress only; process and family exits remain
 //! separate owners. Cancellation never signals Release or terminates a process.
+pub use crate::fixture_forwarding::{
+    FixtureForwardingControl, FixtureForwardingEvents, FixtureForwardingPermit,
+    FixtureForwardingReport, FixtureForwardingSession,
+};
 pub use crate::fixture_session::child::{
     FixtureChildAdmissionError, FixtureChildPermit, FixtureChildReport, FixtureDeadline,
     InheritedFixtureEvents,
@@ -32,6 +36,19 @@ impl FixtureDeadline {
 }
 
 impl ExecutionClient {
+    /// Reserve forwarding before taking inherited input, with one unchanged QPC deadline.
+    /// Reject conflicting local deadlines; cancellation retains a late-bound input until closure.
+    pub fn reserve_fixture_forwarding(
+        &self,
+        scope: &Scope,
+        spec: JobSpec,
+        correlation: crate::native::NativeCorrelation,
+        deadline: FixtureDeadline,
+    ) -> Result<FixtureForwardingPermit, FixtureChildAdmissionError> {
+        crate::fixture_forwarding::reserve(&self.core, scope, spec, correlation, deadline, || {
+            child_port::sample().map_err(FixtureChildAdmissionError::Clock)
+        })
+    }
     /// Admit one parent session before any native event creation or registration.
     /// Requires a native scope, NativeLifecycle/NativeObservation, a fixed deadline,
     /// and at least MIN_FIXTURE_SESSION_BYTES. All ordinary limits remain unchanged.

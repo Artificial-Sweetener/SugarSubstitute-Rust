@@ -112,7 +112,10 @@ fn demonstration_options_keep_their_invocation_role() -> Result<(), Box<dyn Erro
             return Err("Presentation options selected a held registry fixture".into());
         }
         #[cfg(target_os = "windows")]
-        Invocation::NativeClaimFixture(_) | Invocation::NativeClaimChild(_) => {
+        Invocation::NativeClaimFixture(_)
+        | Invocation::NativeClaimChild(_)
+        | Invocation::NativeForwardingRoot(_)
+        | Invocation::NativeDescendantFixture(_) => {
             return Err("Presentation options selected a claim fixture".into());
         }
     };
@@ -123,6 +126,53 @@ fn demonstration_options_keep_their_invocation_role() -> Result<(), Box<dyn Erro
     assert_eq!(options.duration, Some(Duration::from_millis(750)));
     assert!(options.timing_audit);
     assert_eq!(options.receipt, Some(PathBuf::from("receipt.json")));
+    Ok(())
+}
+
+/// Both fixed descendant roles reject malformed or mixed arguments before effects.
+#[cfg(target_os = "windows")]
+#[test]
+fn native_descendant_fixture_dispatch_preserves_fixed_roles() -> Result<(), Box<dyn Error>> {
+    let parsed = Invocation::parse_arguments(
+        ["--internal-native-descendant-fixture", "--receipt", "D:\\evidence\\descendant.json"]
+            .map(OsString::from),
+    )?;
+    assert!(matches!(parsed,Invocation::NativeDescendantFixture(path)
+        if path==std::path::Path::new("D:\\evidence\\descendant.json")));
+    let parsed = Invocation::parse_arguments(
+        [
+            "--internal-native-forwarding-root",
+            "--ready",
+            "11",
+            "--release",
+            "12",
+            "--challenge",
+            "13",
+            "--response",
+            "14",
+            "--deadline-qpc",
+            "1000",
+            "--qpc-frequency",
+            "1000",
+            "--correlation",
+            "1",
+            "--exit-code",
+            "0",
+        ]
+        .map(OsString::from),
+    )?;
+    assert!(matches!(parsed,Invocation::NativeForwardingRoot(options)
+        if options.deadline.ticks()==1000 && options.correlation.get()==1 && options.exit_code==0));
+    for args in [
+        vec!["--internal-native-descendant-fixture"],
+        vec!["--internal-native-descendant-fixture", "--receipt", "relative.json"],
+        vec!["--internal-native-descendant-fixture", "--receipt", "D:\\receipt.json", "--light"],
+        vec!["--internal-native-forwarding-root"],
+        vec!["--internal-native-forwarding-root", "--internal-native-claim-child"],
+        vec!["--light", "--internal-native-descendant-fixture", "--receipt", "D:\\receipt.json"],
+    ] {
+        assert!(Invocation::parse_arguments(args.into_iter().map(OsString::from)).is_err());
+    }
     Ok(())
 }
 

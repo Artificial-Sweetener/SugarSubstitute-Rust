@@ -83,6 +83,7 @@ impl WindowsProcessRegistry {
                 creation: None,
                 cleanup: None,
                 failure: None,
+                forced: false,
                 port: self.port.clone(),
             }),
             port: self.port.clone(),
@@ -101,6 +102,8 @@ impl WindowsProcessRegistry {
             root_notice: false,
             root: None,
             root_exit: None,
+            last_member_exit: None,
+            forced: false,
             root_retirement: None,
             member_watch: None,
             member_spec: None,
@@ -138,7 +141,7 @@ impl WindowsProcessRegistry {
         Ok(ticket)
     }
 }
-pub(super) fn validate_blocking(spec: JobSpec) -> Result<(), RegistryAdmissionError> {
+pub(crate) fn validate_blocking(spec: JobSpec) -> Result<(), RegistryAdmissionError> {
     if spec.operation != Operation::NativeLifecycle
         || spec.class != JobClass::InfrastructureLifecycle
         || spec.replacement.is_some()

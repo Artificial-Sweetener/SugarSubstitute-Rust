@@ -10,6 +10,10 @@ mod capture;
 mod claim_fixture;
 mod demo;
 #[cfg(target_os = "windows")]
+mod descendant_fixture;
+#[cfg(target_os = "windows")]
+mod forwarding_root;
+#[cfg(target_os = "windows")]
 mod held_child;
 #[cfg(target_os = "windows")]
 mod held_fixture;
@@ -33,6 +37,18 @@ fn execute() -> Result<(), Box<dyn Error>> {
         Ok(invocation::Invocation::Demo(options)) => options,
         #[cfg(target_os = "windows")]
         Ok(invocation::Invocation::NativeExitFixture(code)) => std::process::exit(code),
+        #[cfg(target_os = "windows")]
+        Ok(invocation::Invocation::NativeForwardingRoot(options)) => {
+            initialize_diagnostics()?;
+            std::process::exit(forwarding_root::run(options)?);
+        }
+        #[cfg(target_os = "windows")]
+        Ok(invocation::Invocation::NativeDescendantFixture(path)) => {
+            initialize_diagnostics()?;
+            let receipt = descendant_fixture::run()?;
+            std::fs::write(path, serde_json::to_vec_pretty(&receipt)?)?;
+            return Ok(());
+        }
         #[cfg(target_os = "windows")]
         Ok(invocation::Invocation::NativeClaimFixture(options)) => {
             initialize_diagnostics()?;

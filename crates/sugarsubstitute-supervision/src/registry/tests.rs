@@ -215,6 +215,7 @@ mod bounds;
 mod claim_identity;
 mod cleanup_failure;
 mod completions;
+mod descendant_facts;
 mod force;
 mod lifecycle;
 mod observation_retirement;

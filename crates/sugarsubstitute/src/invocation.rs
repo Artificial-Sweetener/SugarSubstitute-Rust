@@ -21,6 +21,12 @@ pub(crate) enum Invocation {
     /// Windows held64 cancellation campaign receipt destination.
     #[cfg(target_os = "windows")]
     NativeHeldRegistryFixture(PathBuf),
+    /// Windows forwarding root; fixed child inherits the retained outer Job.
+    #[cfg(target_os = "windows")]
+    NativeForwardingRoot(crate::held_child::ChildOptions),
+    /// Windows root-exit/surviving-descendant campaign receipt destination.
+    #[cfg(target_os = "windows")]
+    NativeDescendantFixture(PathBuf),
     /// Actual cross-process claim qualification with an isolated D-drive workspace.
     #[cfg(target_os = "windows")]
     NativeClaimFixture(crate::claim_fixture::CampaignOptions),
@@ -41,6 +47,30 @@ impl Invocation {
         let arguments = arguments.into_iter();
         #[cfg(target_os = "windows")]
         let mut arguments = arguments.peekable();
+        #[cfg(target_os = "windows")]
+        if arguments.peek().is_some_and(|argument| argument == "--internal-native-forwarding-root")
+        {
+            arguments.next();
+            return Ok(Self::NativeForwardingRoot(crate::held_child::ChildOptions::parse(
+                arguments,
+            )?));
+        }
+        #[cfg(target_os = "windows")]
+        if arguments
+            .peek()
+            .is_some_and(|argument| argument == "--internal-native-descendant-fixture")
+        {
+            arguments.next();
+            if arguments.next().as_deref() != Some(std::ffi::OsStr::new("--receipt")) {
+                return Err("Descendant fixture requires --receipt".into());
+            }
+            let path =
+                PathBuf::from(arguments.next().ok_or("Descendant fixture receipt path missing")?);
+            if !path.is_absolute() || arguments.next().is_some() {
+                return Err("Descendant fixture requires one absolute receipt path".into());
+            }
+            return Ok(Self::NativeDescendantFixture(path));
+        }
         #[cfg(target_os = "windows")]
         if arguments.peek().is_some_and(|argument| argument == "--internal-native-claim-fixture") {
             arguments.next();

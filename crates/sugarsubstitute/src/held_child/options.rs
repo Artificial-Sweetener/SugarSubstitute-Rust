@@ -15,10 +15,10 @@ use sugarsubstitute_execution::{
 /// Retain validated role-order input until one successful admitted bind.
 /// No native operation or handle closure occurs during parsing or unbound Drop.
 pub(crate) struct ChildOptions {
-    pub(super) events: Option<InheritedFixtureEvents>,
-    pub(super) deadline: FixtureDeadline,
-    pub(super) correlation: NativeCorrelation,
-    pub(super) exit_code: i32,
+    pub(crate) events: Option<InheritedFixtureEvents>,
+    pub(crate) deadline: FixtureDeadline,
+    pub(crate) correlation: NativeCorrelation,
+    pub(crate) exit_code: i32,
 }
 impl ChildOptions {
     /// Require exactly eight ordered flag/value pairs and canonical ASCII numbers.

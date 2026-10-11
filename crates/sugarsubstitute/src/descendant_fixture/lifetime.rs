@@ -1,0 +1,74 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Artificial Sweetener and contributors
+//! Keep the headless pump alive through family ownership, event closure and real joins.
+use super::*;
+impl HeadlessLifetime for Fixture {
+    fn start(&mut self, wake: Arc<dyn CompletionWake>) -> Result<()> {
+        if self.owner.is_some() || self.closing {
+            return Err("Descendant campaign cannot start twice or after closure".into());
+        }
+        self.owner = Some(ExecutionOwner::new(self.clock.clone(), wake)?);
+        let client = self.owner.as_ref().ok_or("Descendant owner")?.client();
+        self.creation_scope =
+            Some(client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?);
+        self.event_scope = Some(
+            client.create_native_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?,
+        );
+        self.client = Some(client);
+        self.enroll_events()
+    }
+    fn activity(&mut self, max: NonZeroUsize) -> Result<HeadlessStep> {
+        self.advance(max)
+    }
+    fn next_deadline(&self) -> Option<Instant> {
+        self.stop
+            .as_ref()
+            .and_then(StopPlan::next_deadline)
+            .into_iter()
+            .chain((!self.deadline_observed).then_some(self.original))
+            .min()
+    }
+    fn request_shutdown(&mut self) -> Result<()> {
+        self.closing = true;
+        self.registry.close_launch_admission();
+        self.begin_stop()?;
+        self.cleanup_needed = true;
+        if let Some(session) = &self.session {
+            session.control.cancel();
+        }
+        Ok(())
+    }
+    fn poll_shutdown(&mut self) -> Result<bool> {
+        if !self.closing || !self.registry.is_empty() || self.session.is_some() {
+            return Ok(false);
+        }
+        let Some(owner) = &mut self.owner else { return Ok(true) };
+        if !self.stopping {
+            self.stopping = true;
+            owner.request_shutdown(self.deadline);
+        }
+        let progress = owner.poll_shutdown()?;
+        if progress.deadline_expired && !self.deadline_observed {
+            self.deadline_observed = true;
+            return Err("Descendant execution exceeded original deadline".into());
+        }
+        if progress.settled {
+            self.workers = Some(progress.workers);
+        }
+        Ok(progress.settled)
+    }
+    fn finish_shutdown(&mut self) -> Result<()> {
+        if !self.poll_shutdown()? {
+            return Err("Descendant campaign still owns unresolved lifetime".into());
+        }
+        if let Some(owner) = &mut self.owner {
+            owner.finish_shutdown()?;
+        }
+        self.creation_scope = None;
+        self.event_scope = None;
+        self.client = None;
+        self.owner = None;
+        self.finished = true;
+        Ok(())
+    }
+}

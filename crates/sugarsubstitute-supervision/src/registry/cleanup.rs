@@ -143,6 +143,7 @@ fn cleanup_owned(
     if let Err(cause) = &result {
         state.failure = Some(cause.clone());
     }
+    state.forced |= state.family.as_ref().is_some_and(|family| family.forced);
     result
 }
 #[allow(clippy::too_many_arguments)]
@@ -206,6 +207,7 @@ fn cleanup_step(
     }
     let closed = inventory.empty && family.all_exited() && !family.incomplete;
     let root = family.root;
+    state.forced |= family.forced;
     let next = family.next_member(root_watch_active);
     if closed {
         // Empty membership and every retained actual exit are now immutable:

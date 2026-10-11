@@ -130,10 +130,11 @@ fn creation(record: &mut Record, completion: JobCompletion<(), RegistryError>) {
     }
 }
 fn cleanup(record: &mut Record, completion: JobCompletion<(), RegistryError>) {
-    let (facts, failure, watch) = {
+    let (facts, failure, watch, forced) = {
         let mut state = lock(&record.shared.native);
-        (state.cleanup.take(), state.failure.take(), state.watch.take())
+        (state.cleanup.take(), state.failure.take(), state.watch.take(), state.forced)
     };
+    record.forced |= forced;
     if let Some(watch) = watch {
         record.member_watch = Some(watch);
     }
@@ -215,6 +216,9 @@ pub(super) fn observe_watch(
             }
             if !root {
                 record.pending_exit = Some(identity);
+                if record.root != Some(identity) {
+                    record.last_member_exit = Some(exit);
+                }
             }
             if record.next.is_some_and(|(_, next)| next == identity) {
                 record.next = None;

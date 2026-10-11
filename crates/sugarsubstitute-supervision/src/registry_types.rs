@@ -60,6 +60,13 @@ pub struct RegistrySnapshot {
     pub launch_closed: bool,
     /// Actual root exit code, never interpreted as complete family settlement.
     pub root_exit: Option<u32>,
+    /// Most recent actual non-root secondary exit, validated against this family's
+    /// exact watch/correlation/PID/creation time. One bounded slot is overwritten
+    /// only by a later validated member completion; it remains until record retirement.
+    pub last_member_exit: Option<sugarsubstitute_execution::windows::ProcessExit>,
+    /// TerminateJobObject actually succeeded, distinct from a stop or force request.
+    /// This monotonic fact is retained through native closure until record retirement.
+    pub forced: bool,
     /// Most recent complete retained member inventory, including exited members.
     pub retained_members: usize,
     /// An admitted finite cleanup job or secondary process watch remains owned.
