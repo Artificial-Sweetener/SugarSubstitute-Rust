@@ -13,6 +13,20 @@ accepted_versions = [1]
 compatibility = "reject"
 migrations = []
 
+# The internal native fixture emits schema-one qualification receipts after teardown.
+# They are retained diagnostic evidence; readers reject unsupported schemas.
+[[formats]]
+id = "native-process-family-report"
+owner = "sugarsubstitute"
+sources = ["crates/sugarsubstitute/src/process_fixture/receipt.rs"]
+source_sha256 = "sha256:c959e4c08fe0363ec2540687397907931e10b483bbeb0e866eab537c262864a0"
+classification = "authored_document"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []
+
 # The native writer emits schema two reports after teardown. Qualification tools
 # analyse retained schema one reports directly; original reports are never rewritten.
 [[formats]]

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 
-//! Compose the native splash proof and isolated Windows process-exit fixtures.
+//! Compose the native splash proof and isolated Windows process-lifetime fixtures.
 
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
@@ -10,6 +10,8 @@ mod demo;
 mod invocation;
 mod preparation;
 mod preparation_task;
+#[cfg(target_os = "windows")]
+mod process_fixture;
 mod render_transfer;
 mod timing_receipt;
 
@@ -18,13 +20,23 @@ use sugarsubstitute_contracts::localization::messages;
 use sugarsubstitute_desktop::{DesktopOptions, run};
 use sugarsubstitute_splash::Theme;
 
-/// Dispatch an isolated exit fixture or run native/off-screen splash qualification.
+/// Dispatch isolated process fixtures or run native/off-screen splash qualification.
 fn execute() -> Result<(), Box<dyn Error>> {
     let started = Instant::now();
     let options = match invocation::Invocation::parse() {
         Ok(invocation::Invocation::Demo(options)) => options,
         #[cfg(target_os = "windows")]
         Ok(invocation::Invocation::NativeExitFixture(code)) => std::process::exit(code),
+        #[cfg(target_os = "windows")]
+        Ok(invocation::Invocation::NativeRegistryFixture(path)) => {
+            initialize_diagnostics()?;
+            let receipt = process_fixture::run()?;
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::write(path, serde_json::to_vec_pretty(&receipt)?)?;
+            return Ok(());
+        }
         Err(error) => {
             initialize_diagnostics()?;
             return Err(error);

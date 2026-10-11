@@ -12,6 +12,9 @@ pub(crate) enum Invocation {
     /// Windows qualification-only process exit; no splash or child process is created.
     #[cfg(target_os = "windows")]
     NativeExitFixture(i32),
+    /// Windows headless same-executable registry qualification receipt destination.
+    #[cfg(target_os = "windows")]
+    NativeRegistryFixture(PathBuf),
 }
 impl Invocation {
     /// Parse process arguments without starting native or execution resources.
@@ -26,6 +29,20 @@ impl Invocation {
         let arguments = arguments.into_iter();
         #[cfg(target_os = "windows")]
         let mut arguments = arguments.peekable();
+        #[cfg(target_os = "windows")]
+        if arguments.peek().is_some_and(|argument| argument == "--internal-native-registry-fixture")
+        {
+            arguments.next();
+            if arguments.next().as_deref() != Some(std::ffi::OsStr::new("--receipt")) {
+                return Err("Native registry fixture requires --receipt".into());
+            }
+            let path =
+                PathBuf::from(arguments.next().ok_or("Native registry fixture requires a path")?);
+            if !path.is_absolute() || arguments.next().is_some() {
+                return Err("Native registry fixture requires one absolute receipt path".into());
+            }
+            return Ok(Self::NativeRegistryFixture(path));
+        }
         #[cfg(target_os = "windows")]
         if arguments.peek().is_some_and(|argument| argument == "--internal-native-exit-fixture") {
             arguments.next();
@@ -165,6 +182,10 @@ mod tests {
             Invocation::NativeExitFixture(_) => {
                 return Err("Presentation options selected an exit fixture".into());
             }
+            #[cfg(target_os = "windows")]
+            Invocation::NativeRegistryFixture(_) => {
+                return Err("Presentation options selected a registry fixture".into());
+            }
         };
         assert_eq!(options.appearance.theme, Theme::Light);
         assert!(!options.appearance.expanded);
@@ -214,6 +235,49 @@ mod tests {
             ])
             .is_err()
         );
+    }
+
+    /// Registry qualification has a single explicit role and an absolute output path.
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn native_registry_fixture_accepts_only_its_exact_role() -> Result<(), Box<dyn Error>> {
+        let result = Invocation::parse_arguments(
+            ["--internal-native-registry-fixture", "--receipt", "D:\\evidence\\receipt.json"]
+                .map(OsString::from),
+        )?;
+        assert!(
+            matches!(result, Invocation::NativeRegistryFixture(path) if path == std::path::Path::new("D:\\evidence\\receipt.json"))
+        );
+        Ok(())
+    }
+
+    /// Relative destinations, mixed roles and non-Unicode flags fail before effects.
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn native_registry_fixture_rejects_ambiguous_or_missing_arguments() {
+        use std::os::windows::ffi::OsStringExt;
+        for arguments in [
+            vec!["--internal-native-registry-fixture"],
+            vec!["--internal-native-registry-fixture", "--receipt"],
+            vec!["--internal-native-registry-fixture", "--receipt", "relative.json"],
+            vec!["--internal-native-registry-fixture", "--receipt", "D:relative.json"],
+            vec!["--internal-native-registry-fixture", "--receipt", "D:\\receipt.json", "--light"],
+            vec!["--light", "--internal-native-registry-fixture", "--receipt", "D:\\receipt.json"],
+            vec!["--internal-native-registry-fixture", "--internal-native-exit-fixture", "0"],
+        ] {
+            assert!(
+                Invocation::parse_arguments(arguments.into_iter().map(OsString::from)).is_err()
+            );
+        }
+        assert!(
+            Invocation::parse_arguments([
+                OsString::from("--internal-native-registry-fixture"),
+                OsString::from_wide(&[0xd800]),
+                OsString::from("D:\\receipt.json"),
+            ])
+            .is_err()
+        );
+        assert!(Invocation::parse_arguments([OsString::from_wide(&[0xd800])]).is_err());
     }
 
     /// Timing evidence requires a native receipt destination and cannot silently disappear offline.

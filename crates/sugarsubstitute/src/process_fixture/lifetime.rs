@@ -1,0 +1,69 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Artificial Sweetener and contributors
+//! Retain families through actual retirement, then observe the execution owner's shutdown.
+use super::*;
+use sugarsubstitute_contracts::execution::CompletionWake;
+use sugarsubstitute_desktop::{HeadlessLifetime, HeadlessStep};
+
+impl HeadlessLifetime for Fixture {
+    fn start(&mut self, wake: Arc<dyn CompletionWake>) -> Result<()> {
+        if self.owner.is_some() || self.closing {
+            return Err("Registry fixture cannot start twice or after closure".into());
+        }
+        self.owner = Some(ExecutionOwner::new(self.clock.clone(), wake)?);
+        let client = self.owner.as_ref().ok_or("Fixture execution owner missing")?.client();
+        self.client = Some(client.clone());
+        self.scope =
+            Some(client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?);
+        self.launch_next()
+    }
+    fn activity(&mut self, max: NonZeroUsize) -> Result<HeadlessStep> {
+        self.advance(max)
+    }
+    fn next_deadline(&self) -> Option<Instant> {
+        let original = (!self.deadline_observed).then_some(self.deadline);
+        match (original, self.stop.as_ref().and_then(StopPlan::next_deadline)) {
+            (Some(original), Some(stop)) => Some(original.min(stop)),
+            (original, stop) => original.or(stop),
+        }
+    }
+    fn request_shutdown(&mut self) -> Result<()> {
+        self.closing = true;
+        self.registry.close_launch_admission();
+        self.ensure_stop()
+    }
+    fn poll_shutdown(&mut self) -> Result<bool> {
+        if !self.closing || !self.registry.is_empty() {
+            return Ok(false);
+        }
+        let Some(owner) = &mut self.owner else { return Ok(true) };
+        if !self.execution_stopping {
+            self.execution_stopping = true;
+            owner.request_shutdown(self.execution_deadline);
+        }
+        let progress = owner.poll_shutdown()?;
+        if progress.deadline_expired && !self.deadline_observed {
+            self.deadline_observed = true;
+            return Err(
+                "Registry fixture execution has not settled before its original deadline".into()
+            );
+        }
+        if progress.settled {
+            self.workers = Some(progress.workers);
+        }
+        Ok(progress.settled)
+    }
+    fn finish_shutdown(&mut self) -> Result<()> {
+        if !self.registry.is_empty() || !self.poll_shutdown()? {
+            return Err("Registry fixture cannot finish with retained native families/work".into());
+        }
+        if let Some(owner) = &mut self.owner {
+            owner.finish_shutdown()?;
+        }
+        self.scope = None;
+        self.client = None;
+        self.owner = None;
+        self.finished = true;
+        Ok(())
+    }
+}

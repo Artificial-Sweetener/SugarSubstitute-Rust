@@ -1812,6 +1812,7 @@ dependencies = [
  "sugarsubstitute-desktop",
  "sugarsubstitute-execution",
  "sugarsubstitute-splash",
+ "sugarsubstitute-supervision",
  "tracing",
  "tracing-subscriber",
 ]
