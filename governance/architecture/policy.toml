@@ -17,7 +17,7 @@ concern = "Runtime-independent application contracts and product localization"
 package = "sugarsubstitute-application"
 root = "crates/sugarsubstitute-application"
 layer = "application"
-concern = "Application readiness and navigation lifecycle"
+concern = "Application readiness, navigation and frame publication lifecycle"
 
 [[owners]]
 package = "sugarsubstitute"

@@ -22,7 +22,7 @@ pub use identity::{
     ExecutionId, Generation, IdentityError, JobId, Moment, ScopeId, SurfaceId, TimeError,
 };
 pub use lifetime::{JobControl, JobPhase, JobStatus, OwnedJob, Scope, ScopeControl, ScopeSnapshot};
-pub use memory::{MemoryLease, MemoryRelease};
+pub use memory::{MemoryClaim, MemoryClaimError, MemoryLease, MemoryRelease};
 pub use outcome::{JobCompletion, JobOutcome, PanicCause, TerminalKind};
 pub use ports::{
     CompletionBatch, CompletionNotification, CompletionWake, CpuStep, CpuTask, ExecutionPort,

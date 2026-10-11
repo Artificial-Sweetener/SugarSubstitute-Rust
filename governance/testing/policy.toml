@@ -4,14 +4,14 @@ platforms = ["windows", "macos", "linux"]
 [[owners]]
 package = "sugarsubstitute-contracts"
 root = "crates/sugarsubstitute-contracts"
-concern = "Owned application contracts, localization and adapter lifetime boundaries"
-minimum_tests = 1
+concern = "Owned contracts, localization, memory claims and immutable frame boundaries"
+minimum_tests = 29
 
 [[owners]]
 package = "sugarsubstitute-application"
 root = "crates/sugarsubstitute-application"
-concern = "Current-navigation readiness, terminal admission and cancellation"
-minimum_tests = 5
+concern = "Current-navigation readiness and current-state frame publication"
+minimum_tests = 11
 
 [[owners]]
 package = "sugarsubstitute"

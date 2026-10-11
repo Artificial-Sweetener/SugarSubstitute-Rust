@@ -191,7 +191,7 @@ A bounded completion mailbox wakes Tao once per pending batch. Control/failure/c
 
 ### 2.3 M0.3 — Prepare production rendering and observability
 
-**Implementation:** Not started. **Verification:** Pending.
+**Implementation:** Partial: immutable prepared frames, incremental validation, aggregate allocation claims and application publication admission are implemented. Governed raster delivery and native instrumentation remain pending. **Verification:** Windows contracts 29 and application 11 tests pass; native M0 performance is not established.
 
 - [ ] Integrate governed render preparation, retained frames, bounded diagnostics and latency/resource instrumentation.
 
@@ -200,6 +200,8 @@ Move expensive font discovery, decoding, layout/raster preparation and image val
 Instrument queue wait, runtime execution, UI delivery, raster preparation, frame submission, dropped/coalesced updates, allocated/reserved bytes, cancellation lag and scope shutdown. Use structured logging keyed by application/connection/run/document/job IDs. Keep bounded log storage and redact tokens, credentials and unnecessary paths. Do not route unlimited tracing output into the splash or use runtime printing.
 
 Initial responsiveness targets: p95 host UI callback/drain work below 4 ms and p99 below 8 ms, p95 input-to-feedback below 50 ms, and p95 submitted splash intervals below 25 ms in the controlled 60 Hz scenario. Also measure displayed frames separately. Static native canvas must have no periodic redraw loop; hidden/minimized surfaces must stop preparation. Targets are not hardcoded test sleeps or evidence of existing performance. Retain the measured setup locally and report host/browser/Comfy CPU and memory separately.
+
+**Prepared-frame boundary receipt (2026-10-11):** The contracts owner validates dimensions, tight RGBA stride, finite scale, actual vector capacity and premultiplication in steps of at most 65536 pixels. Validation failure remains sticky; incomplete or failed validation cannot publish. Each distinct frame allocation obtains a non-cloneable byte claim from the already-admitted shared lease. Atomic claims prevent separate vectors from reusing the same bytes; prepared-frame clones share one allocation and claim, and final storage release precedes claim reuse. The application publication owner accepts only the current surface/state/shape, visible state and a sequence newer than its last accepted sample, allowing already-running animation samples to publish while newer samples are requested. Resize/visibility revisions advance before mutation; no-op and generation-exhaustion paths preserve state. Qualification reviewed both the original boundary and aggregate-charge correction. Delivery identities and exact hashes are in `m0/presentation-contracts-20261011-01.json` under permitted artifact storage. Primary-checkout `cargo xtask verify` passed governance, formatting, strict Clippy, all 155 Rust tests and warning-free Rustdoc on Rust 1.93.1 Windows MSVC. This verifies the reusable boundary; the demonstration still prepares frames synchronously until the governed raster/native integration lands. Other platforms and native M0 latency/resource qualification remain pending.
 
 ### 2.4 M0.4 — Prove behavior and enforce scheduling ownership
 

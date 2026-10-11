@@ -3,7 +3,14 @@
 
 //! Retain exactly one admitted byte reservation through result ownership.
 
-use std::{fmt, sync::Arc};
+use std::{
+    error::Error,
+    fmt,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
+};
 
 /// Return one byte charge to the execution adapter after its last guard drops.
 ///
@@ -29,12 +36,35 @@ impl MemoryLease {
     /// The supplied release port owns returning that charge. Creating a lease does
     /// not itself reserve memory; only the adapter may construct admitted guards.
     pub fn new(bytes: u64, release: Box<dyn MemoryRelease>) -> Self {
-        Self(Arc::new(ReservationState { bytes, release }))
+        Self(Arc::new(ReservationState { bytes, claimed: AtomicU64::new(0), release }))
     }
 
     /// Return the single shared retained-byte charge.
     pub fn bytes(&self) -> u64 {
         self.0.bytes
+    }
+
+    /// Claim part of the shared charge for one independently owned allocation.
+    ///
+    /// Claims across every cloned lease atomically share this reservation's byte
+    /// limit. A zero-byte claim consumes no capacity but retains the reservation.
+    /// Keep the returned guard with its allocation and drop the allocation first.
+    /// Dropping a claim makes its capacity reusable; it does not release admission
+    /// while any lease or claim still retains the reservation.
+    ///
+    /// # Errors
+    /// Rejects a claim exceeding the remaining charge, including sum overflow.
+    pub fn claim(&self, bytes: u64) -> Result<MemoryClaim, MemoryClaimError> {
+        self.0
+            .claimed
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |claimed| {
+                claimed.checked_add(bytes).filter(|total| *total <= self.0.bytes)
+            })
+            .map_err(|claimed| MemoryClaimError {
+                requested_bytes: bytes,
+                available_bytes: self.0.bytes - claimed,
+            })?;
+        Ok(MemoryClaim { lease: self.clone(), bytes })
     }
 }
 
@@ -44,9 +74,71 @@ impl fmt::Debug for MemoryLease {
     }
 }
 
+/// Own one allocation's share of an admitted reservation without duplicating it.
+///
+/// This guard is not cloneable. Shared allocation owners share this same guard,
+/// while independently allocated storage must obtain another claim. Allocation
+/// storage must drop before its claim so reusable capacity never covers live bytes.
+#[must_use = "Keep the byte claim with its independently owned allocation"]
+pub struct MemoryClaim {
+    lease: MemoryLease,
+    bytes: u64,
+}
+
+impl MemoryClaim {
+    /// Return this allocation's claimed capacity in bytes.
+    pub const fn bytes(&self) -> u64 {
+        self.bytes
+    }
+
+    /// Return the single shared admission reservation in bytes.
+    pub fn reserved_bytes(&self) -> u64 {
+        self.lease.bytes()
+    }
+}
+
+impl fmt::Debug for MemoryClaim {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("MemoryClaim")
+            .field("bytes", &self.bytes)
+            .field("reserved_bytes", &self.reserved_bytes())
+            .finish_non_exhaustive()
+    }
+}
+
+impl Drop for MemoryClaim {
+    fn drop(&mut self) {
+        // Only successful claims construct guards; each noncloneable guard returns
+        // exactly its own contribution, so subtraction cannot underflow.
+        self.lease.0.claimed.fetch_sub(self.bytes, Ordering::AcqRel);
+    }
+}
+
+/// Reject an allocation that cannot fit within the shared admitted byte charge.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct MemoryClaimError {
+    /// Capacity requested for the independently owned allocation, in bytes.
+    pub requested_bytes: u64,
+    /// Unclaimed capacity at the failed atomic admission check, in bytes.
+    pub available_bytes: u64,
+}
+
+impl fmt::Display for MemoryClaimError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "Allocation requires {} admitted bytes, {} remain unclaimed",
+            self.requested_bytes, self.available_bytes
+        )
+    }
+}
+impl Error for MemoryClaimError {}
+
 /// Couple a byte charge to exactly one final adapter release.
 struct ReservationState {
     bytes: u64,
+    claimed: AtomicU64,
     release: Box<dyn MemoryRelease>,
 }
 
@@ -57,28 +149,5 @@ impl Drop for ReservationState {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::sync::atomic::{AtomicU64, Ordering};
-
-    struct ReleaseCounter(Arc<AtomicU64>);
-    impl MemoryRelease for ReleaseCounter {
-        fn release(&self, bytes: u64) {
-            self.0.fetch_add(bytes, Ordering::SeqCst);
-        }
-    }
-
-    #[test]
-    fn cloned_result_guards_release_one_charge_only_after_last_drop() {
-        let released = Arc::new(AtomicU64::new(0));
-        let lease = MemoryLease::new(64, Box::new(ReleaseCounter(released.clone())));
-        let retained_result = lease.clone();
-        let second_result = retained_result.clone();
-        assert_eq!(second_result.bytes(), 64);
-        drop(lease);
-        drop(retained_result);
-        assert_eq!(released.load(Ordering::SeqCst), 0);
-        drop(second_result);
-        assert_eq!(released.load(Ordering::SeqCst), 64);
-    }
-}
+#[path = "memory_tests.rs"]
+mod tests;
