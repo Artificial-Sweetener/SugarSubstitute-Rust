@@ -10,8 +10,8 @@ minimum_tests = 38
 [[owners]]
 package = "sugarsubstitute-application"
 root = "crates/sugarsubstitute-application"
-concern = "Current-navigation readiness and current-state frame publication"
-minimum_tests = 11
+concern = "Acknowledged startup, cancellation, settled retry, readiness and frame publication"
+minimum_tests = 19
 
 [[owners]]
 package = "sugarsubstitute-comfy"
