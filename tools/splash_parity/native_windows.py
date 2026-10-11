@@ -101,6 +101,7 @@ class NativePointer:
         self.original: tuple[int, int] | None = None
         self.last: tuple[int, int] | None = None
         self.pressed = False
+        self.last_click: dict[str, object] | None = None
         for function, arguments, result in (
             (native.user.SendInput, [wintypes.UINT, ctypes.POINTER(MouseEvent), ctypes.c_int], wintypes.UINT),
             (native.user.GetSystemMetrics, [ctypes.c_int], ctypes.c_int),
@@ -174,6 +175,47 @@ class NativePointer:
             raise ctypes.WinError(ctypes.get_last_error())
         self.move_screen((point.x, point.y))
 
+    def click(self) -> dict[str, object]:
+        """Insert one owned button-only down/up array, retaining uncertain held state for cleanup.
+
+        SendInput inserts the array serially. Button events use no movement flags
+        or coordinates; pre/post cursor, ownership and human-state checks remain
+        part of the caller's timed observation. Partial insertion never qualifies.
+        """
+        receipt: dict[str, object] = {"mode": "button-only SendInput array", "requested_events": 2,
+                                     "event_flags": [2, 4], "inserted_events": None,
+                                     "prechecked": False, "postchecked": False}
+        self.last_click = receipt
+        self.unchanged_cursor()
+        self.owned_hit(self.cursor())
+        if self.pressed:
+            raise RuntimeError("An owned mouse press already exists before the click")
+        if any(self.native.user.GetAsyncKeyState(key) & 0x8000 for key in (1, 2, 4, 5, 6)):
+            self.original = None
+            raise RuntimeError("A mouse button is already held before the owned click; human state is preserved")
+        receipt["prechecked"] = True
+        events = (MouseEvent * 2)(*(MouseEvent(0, InputPayload(MouseInput(0, 0, 0, flags, 0, 0)))
+                                   for flags in (2, 4)))
+        # Until every postcheck succeeds, uncertain delivery cannot authorize cursor restoration.
+        # Unknown/partial insertion conservatively retains an injected-down cleanup obligation.
+        original = self.original
+        self.original = None
+        self.pressed = True
+        inserted = self.native.user.SendInput(2, events, ctypes.sizeof(MouseEvent))
+        receipt["inserted_events"] = inserted
+        if type(inserted) is int and inserted in (0, 2):
+            self.pressed = False
+        if type(inserted) is not int or inserted != 2:
+            raise RuntimeError(f"SendInput inserted {inserted} of two owned button events")
+        self.unchanged_cursor()
+        self.owned_hit(self.cursor())
+        if any(self.native.user.GetAsyncKeyState(key) & 0x8000 for key in (1, 2, 4, 5, 6)):
+            self.original = None
+            raise RuntimeError("A mouse button is held after the owned click; human state is preserved")
+        receipt["postchecked"] = True
+        self.original = original
+        return receipt
+
     def press(self) -> None:
         """Insert an actual left-button down at a currently verified owned client point."""
         self.unchanged_cursor()
@@ -204,6 +246,10 @@ class NativePointer:
         try:
             self.unchanged_cursor()
             if self.original is not None:
+                if getattr(self, "last_click", None) is not None and any(
+                        self.native.user.GetAsyncKeyState(key) & 0x8000 for key in (1, 2, 4, 5, 6)):
+                    self.original = None
+                    raise RuntimeError("A mouse button is held during click cleanup; human state is preserved")
                 self.send(self.original, 0)
         except Exception as cleanup:
             failures.append(cleanup)

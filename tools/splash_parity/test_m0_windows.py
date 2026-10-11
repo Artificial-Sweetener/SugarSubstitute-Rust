@@ -53,6 +53,11 @@ class Pointer:
     def release(self):
         self.events.append("release")
         self.capture.expanded = not self.capture.expanded
+    def click(self):
+        self.events.append("click")
+        self.capture.pressed = True
+        self.capture.expanded = not self.capture.expanded
+        return dict(inserted_events=2, event_flags=[2, 4], prechecked=True, postchecked=True)
     def move_screen(self, point):
         self.point = point
     def cursor(self):
@@ -147,11 +152,53 @@ class M0WindowsTests(unittest.TestCase):
         result = owner.input_samples(pointer, capture, clock, 32, records)
         self.assertTrue(result["p95_below_50ms"])
         self.assertEqual(result["input_to_visible"]["count"], 32)
-        self.assertEqual(pointer.events, ["press", "release"] * 32)
+        self.assertEqual(pointer.events, ["click"] * 32)
+        self.assertTrue(all(item["input_injection"]["inserted_events"] == 2 for item in records))
         for item in records:
             final = item["observations"][-1]
             self.assertEqual(item["input_to_visible_ms"], (final["end_ticks"] - item["input_begin_ticks"]) / 1000)
             self.assertGreater(item["input_to_visible_ms"], item["observer_sample_ms"])
+
+    def test_button_pre_post_checks_stay_inside_timed_visible_interval(self):
+        clock = Clock()
+        capture = Capture(clock)
+        pointer = Pointer(capture)
+        click = pointer.click
+        def checked_click():
+            clock.ticks += 100000
+            return click()
+        pointer.click = checked_click
+        records = []
+        result = owner.input_samples(pointer, capture, clock, 32, records)
+        self.assertFalse(result["p95_below_50ms"])
+        self.assertTrue(all(item["input_to_visible_ms"] > 100 for item in records))
+        self.assertTrue(all(item["input_dispatch_end_ticks"] - item["input_begin_ticks"] > 100000 for item in records))
+
+    def test_missing_insertion_provenance_and_click_failure_never_reach_roi_acceptance(self):
+        for receipt in (dict(inserted_events=0, event_flags=[2, 4], prechecked=True, postchecked=True),
+                        dict(inserted_events=2.0, event_flags=[2, 4], prechecked=True, postchecked=True),
+                        dict(inserted_events=2, event_flags=[0xE003, 0xE005], prechecked=True, postchecked=True),
+                        dict(inserted_events=2, event_flags=[2, 4], prechecked=True, postchecked=False)):
+            clock = Clock()
+            capture = Capture(clock)
+            pointer = Pointer(capture)
+            pointer.click = lambda receipt=receipt: receipt
+            records = []
+            self.assertRaises(RuntimeError, owner.input_samples, pointer, capture, clock, 32, records)
+            self.assertFalse(records[0]["accepted"])
+            self.assertEqual(records[0]["observations"], [])
+        clock = Clock()
+        capture = Capture(clock)
+        pointer = Pointer(capture)
+        def failed_click():
+            pointer.last_click = dict(inserted_events=1, event_flags=[2, 4], prechecked=True, postchecked=False)
+            raise RuntimeError("partial batch insertion")
+        pointer.click = failed_click
+        records = []
+        with self.assertRaisesRegex(RuntimeError, "partial batch insertion"):
+            owner.input_samples(pointer, capture, clock, 32, records)
+        self.assertEqual(records[0]["input_injection"]["inserted_events"], 1)
+        self.assertFalse(records[0]["accepted"])
 
     def test_observer_cost_not_subtracted_to_pass_budget(self):
         clock = Clock()

@@ -84,6 +84,128 @@ class NativePointerTests(unittest.TestCase):
         pointer.send = Mock()
         return pointer
 
+    def test_button_only_click_batches_exact_native_array_and_records_insertions(self) -> None:
+        """One native array inserts only down/up; coordinates and all movement flags stay zero."""
+        import ctypes
+        pointer = self.pointer()
+        events = []
+        def insert(count, array, size):
+            packets = ctypes.cast(array, ctypes.POINTER(MouseEvent))
+            events.append((count, size, [(packets[i].kind, packets[i].payload.mouse.x,
+                            packets[i].payload.mouse.y, packets[i].payload.mouse.flags,
+                            packets[i].payload.mouse.data, packets[i].payload.mouse.time,
+                            packets[i].payload.mouse.extra) for i in range(count)]))
+            return 2
+        pointer.native.user.SendInput.side_effect = insert
+        result = pointer.click()
+        self.assertEqual(events, [(2, ctypes.sizeof(MouseEvent), [(0, 0, 0, 2, 0, 0, 0), (0, 0, 0, 4, 0, 0, 0)])])
+        self.assertEqual(result["inserted_events"], 2)
+        self.assertEqual(result["event_flags"], [2, 4])
+        self.assertTrue(result["prechecked"] and result["postchecked"])
+        self.assertEqual([call.args[0] for call in pointer.native.user.GetAsyncKeyState.call_args_list], [1, 2, 4, 5, 6] * 2)
+        self.assertFalse(pointer.pressed)
+        pointer.send.assert_not_called()
+
+    def test_click_foreign_ownership_existing_press_and_all_human_buttons_reject(self) -> None:
+        """Every admission boundary rejects before native insertion and preserves human state."""
+        for key in (1, 2, 4, 5, 6):
+            pointer = self.pointer()
+            pointer.native.user.GetAsyncKeyState.side_effect = lambda observed, key=key: 0x8000 if observed == key else 0
+            with self.assertRaisesRegex(RuntimeError, "already held"):
+                pointer.click()
+            pointer.native.user.SendInput.assert_not_called()
+            pointer.__exit__(None, None, None)
+            pointer.send.assert_not_called()
+        pointer = self.pointer()
+        pointer.native.user.GetAncestor.return_value = 2
+        self.assertRaises(RuntimeError, pointer.click)
+        pointer.native.user.SendInput.assert_not_called()
+        pointer = self.pointer()
+        pointer.pressed = True
+        self.assertRaisesRegex(RuntimeError, "owned mouse press", pointer.click)
+        pointer.native.user.SendInput.assert_not_called()
+
+    def test_click_zero_partial_unknown_and_exception_keep_correct_cleanup_obligation(self) -> None:
+        """Partial or uncertain delivery releases a possible owned down, never qualifies a click."""
+        for inserted in (0, 1, 3, True, False, 0.0, 2.0, None, "2", RuntimeError("native insertion cause")):
+            pointer = self.pointer()
+            if isinstance(inserted, Exception):
+                pointer.native.user.SendInput.side_effect = inserted
+            else:
+                pointer.native.user.SendInput.return_value = inserted
+            with self.assertRaises(RuntimeError) as caught:
+                pointer.click()
+            self.assertEqual(pointer.pressed, type(inserted) is not int or inserted != 0)
+            if not isinstance(inserted, Exception):
+                self.assertEqual(pointer.last_click["inserted_events"], inserted)
+            pointer.__exit__(RuntimeError, caught.exception, None)
+            self.assertFalse(pointer.pressed)
+            expected_release = type(inserted) is not int or inserted != 0
+            self.assertEqual(any(call.args[1] == 4 for call in pointer.send.call_args_list), expected_release)
+
+    def test_click_post_human_button_or_cursor_change_preserves_human_pointer(self) -> None:
+        """Successful insertion cannot authorize restoration over an intervening human gesture."""
+        for offset in range(5):
+            pointer = self.pointer()
+            pointer.native.user.SendInput.return_value = 2
+            pointer.native.user.GetAsyncKeyState.side_effect = [0] * (5 + offset) + [0x8000]
+            with self.assertRaisesRegex(RuntimeError, "human state is preserved") as caught:
+                pointer.click()
+            pointer.__exit__(RuntimeError, caught.exception, None)
+            pointer.send.assert_not_called()
+        pointer = self.pointer()
+        pointer.native.user.SendInput.return_value = 2
+        pointer.cursor.side_effect = [(30, 40), (30, 40), (100, 200), (100, 200)]
+        with self.assertRaisesRegex(RuntimeError, "human position is preserved") as caught:
+            pointer.click()
+        with self.assertRaises(ExceptionGroup):
+            pointer.__exit__(RuntimeError, caught.exception, None)
+        pointer.send.assert_not_called()
+
+    def test_human_button_after_successful_click_blocks_later_cursor_restoration(self) -> None:
+        """A human gesture during feedback observation remains protected at context teardown."""
+        pointer = self.pointer()
+        pointer.native.user.SendInput.return_value = 2
+        pointer.click()
+        pointer.native.user.GetAsyncKeyState.side_effect = lambda key: 0x8000 if key == 2 else 0
+        with self.assertRaises(ExceptionGroup) as caught:
+            pointer.__exit__(None, None, None)
+        self.assertIn("human state is preserved", str(caught.exception.exceptions[0]))
+        pointer.send.assert_not_called()
+
+    def test_click_failed_insertion_cannot_restore_cursor_over_new_human_button(self) -> None:
+        """Zero/partial/uncertain insertion never restores the cursor after an unobserved human gesture."""
+        for inserted in (0, 1, None, RuntimeError("insertion boundary failure")):
+            pointer = self.pointer()
+            def insert(*_, inserted=inserted):
+                pointer.native.user.GetAsyncKeyState.side_effect = lambda key: 0x8000 if key == 2 else 0
+                if isinstance(inserted, Exception):
+                    raise inserted
+                return inserted
+            pointer.native.user.SendInput.side_effect = insert
+            with self.assertRaises(RuntimeError) as caught:
+                pointer.click()
+            pointer.__exit__(RuntimeError, caught.exception, None)
+            self.assertFalse(any(call.args[1] == 0 for call in pointer.send.call_args_list))
+            self.assertEqual(any(call.args[1] == 4 for call in pointer.send.call_args_list), inserted != 0)
+
+    def test_click_post_foreign_ownership_and_cleanup_secondary_cause_reject(self) -> None:
+        """A post-insertion ownership loss and failed release retain original observable failures."""
+        pointer = self.pointer()
+        pointer.native.user.SendInput.return_value = 2
+        pointer.native.user.GetAncestor.side_effect = [1, 1, 2]
+        self.assertRaises(RuntimeError, pointer.click)
+        self.assertFalse(pointer.pressed)
+        pointer = self.pointer()
+        pointer.native.user.SendInput.return_value = 1
+        with self.assertRaises(RuntimeError) as caught:
+            pointer.click()
+        pointer.send.side_effect = RuntimeError("cleanup release cause")
+        with self.assertRaises(ExceptionGroup) as grouped:
+            pointer.__exit__(RuntimeError, caught.exception, None)
+        self.assertIs(grouped.exception.exceptions[0], caught.exception)
+        self.assertIn("cleanup release cause", str(grouped.exception.exceptions[1]))
+
     def test_existing_human_press_rejects_before_injection(self) -> None:
         """Qualification does not take over an existing mouse gesture."""
         pointer = self.pointer()

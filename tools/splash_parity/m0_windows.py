@@ -96,8 +96,17 @@ def input_samples(pointer, capture, clock, samples, observations):
         record = {"index": index, "input_begin_ticks": start, "baseline": sample_record(baseline),
                   "observations": [], "accepted": False}
         observations.append(record)
-        pointer.press()
-        pointer.release()
+        try:
+            record["input_injection"] = pointer.click()
+        finally:
+            if getattr(pointer, "last_click", None) is not None:
+                record["input_injection"] = dict(pointer.last_click)
+        injection = record["input_injection"]
+        if (not isinstance(injection, dict) or type(injection.get("inserted_events")) is not int
+                or injection["inserted_events"] != 2 or injection.get("event_flags") != [2, 4]
+                or any(type(flag) is not int for flag in injection["event_flags"])
+                or injection.get("prechecked") is not True or injection.get("postchecked") is not True):
+            raise RuntimeError("Owned input click lacks exact two button insertions and completed safety checks")
         record["input_dispatch_end_ticks"] = clock.read()
         for _ in range(256):
             observed = capture.sample()
