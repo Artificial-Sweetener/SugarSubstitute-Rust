@@ -1,3 +1,10 @@
+## [0.15.3](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.15.2...v0.15.3) (2026-10-11)
+
+
+### Bug Fixes
+
+* **execution:** prepare source noise capture before cube queue validation ([f5ceede](https://github.com/Artificial-Sweetener/SugarCubes/commit/f5ceede20cadbbe4c1c01606c28206956932d687))
+
 ## [0.15.2](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.15.1...v0.15.2) (2026-09-27)
 
 

@@ -44,7 +44,7 @@ from .sugarcubes.runtime import queue_observer_registry
 from .sugarcubes.runtime.prompt_preparation import ComfyNodePromptPreparer
 
 WEB_DIRECTORY = "web"
-__version__ = "0.15.2"
+__version__ = "0.15.3"
 _EXTENSION_ROOT = extension_root()
 _LOGGER = logging.getLogger(__name__)
 
