@@ -12,6 +12,7 @@ from typing import Protocol
 
 from .comfy_prompt_value_encoding import encode_atomic_list_widget_values
 from .models import ComfyQueueReceipt, PreparedCubeExecution
+from .prompt_preparation import PromptPreparer
 from .queue_observers import (
     QueueObserverPublisher,
     RequiredQueueObserverFailure,
@@ -78,6 +79,7 @@ class DirectComfyExecutionPort:
         prompt_server: PromptServerLike,
         execution_module: ComfyExecutionModuleLike,
         observers: QueueObserverPublisher | None = None,
+        preparer: PromptPreparer | None = None,
         uuid_factory: Callable[[], uuid.UUID] = uuid.uuid4,
         time_source: Callable[[], float] = time.time,
     ) -> None:
@@ -86,6 +88,7 @@ class DirectComfyExecutionPort:
         self._prompt_server = prompt_server
         self._execution = execution_module
         self._observers = observers
+        self._preparer = preparer
         self._uuid_factory = uuid_factory
         self._time_source = time_source
 
@@ -95,6 +98,8 @@ class DirectComfyExecutionPort:
         prompt = deepcopy(prepared.prompt)
         encode_atomic_list_widget_values(prompt, prepared.node_definitions)
         self._prompt_server.node_replace_manager.apply_replacements(prompt)
+        if self._preparer is not None:
+            self._preparer.prepare(prompt)
         prompt_id = str(self._uuid_factory())
         partial_targets = list(prepared.queue.partial_execution_targets) or None
         valid = await self._execution.validate_prompt(

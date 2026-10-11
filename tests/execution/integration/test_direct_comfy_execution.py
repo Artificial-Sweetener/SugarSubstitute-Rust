@@ -8,6 +8,8 @@ import asyncio
 import uuid
 from dataclasses import dataclass, field
 
+import pytest
+
 from sugarcubes.execution import (
     CubeExecutionCoordinator,
     CubeExecutionRequest,
@@ -15,6 +17,7 @@ from sugarcubes.execution import (
     QueueMetadata,
 )
 from sugarcubes.execution.comfy_execution_port import DirectComfyExecutionPort
+from sugarcubes.execution.models import ApiPrompt
 from tests.execution.support.execution_fixtures import (
     cube_document,
     cube_workflow,
@@ -147,6 +150,49 @@ def test_queue_wraps_atomic_list_widget_values_before_comfy_validation() -> None
         "cube-a:source",
         0,
     ]
+
+
+@pytest.mark.parametrize("reject", [False, True])
+def test_preparation_runs_before_validation_and_failure_never_queues(
+    reject: bool,
+) -> None:
+    """Install sibling graph dependencies before the one authoritative validation."""
+    server = _PromptServer()
+    execution = _Execution(valid=(True, None, (), {}))
+
+    class Preparer:
+        """Represent an explicit source-noise capture dependency preparation."""
+
+        def prepare(self, prompt: ApiPrompt) -> None:
+            """Inject a dependency or reject atomically before validation."""
+            assert execution.calls == []
+            prompt["capture"] = {"class_type": "Capture", "inputs": {}}
+            if reject:
+                raise ValueError("capture cannot be installed")
+
+    coordinator = CubeExecutionCoordinator(
+        comfy=DirectComfyExecutionPort(
+            prompt_server=server,
+            execution_module=execution,
+            preparer=Preparer(),
+        )
+    )
+    request = CubeExecutionRequest(
+        workflow=cube_workflow({"cube-a": provider_document()})
+    )
+    if reject:
+        with pytest.raises(ValueError, match="capture cannot be installed"):
+            asyncio.run(coordinator.queue(request))
+        assert execution.calls == []
+        assert server.prompt_queue.items == []
+        assert server.number == 0
+    else:
+        result = asyncio.run(coordinator.queue(request))
+        assert result.receipt.accepted
+        assert result.receipt.execution_prompt is not None
+        assert "capture" in result.receipt.execution_prompt
+        assert len(execution.calls) == 1
+        assert len(server.prompt_queue.items) == 1
 
 
 @dataclass
