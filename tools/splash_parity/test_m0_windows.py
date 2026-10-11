@@ -12,10 +12,10 @@ from unittest.mock import patch
 
 try:
     from . import m0_windows as owner
-    from .region_capture import RegionSample, Geometry, Region
+    from .region_records import RegionSample, RegionPending, Geometry, Region, GdiMetadata, DxgiOutput, DxgiMetadata, Interval
 except ImportError:
     import m0_windows as owner
-    from region_capture import RegionSample, Geometry, Region
+    from region_records import RegionSample, RegionPending, Geometry, Region, GdiMetadata, DxgiOutput, DxgiMetadata, Interval
 
 
 class Clock:
@@ -32,7 +32,7 @@ class Capture:
         self.clock, self.cost, self.expanded, self.pressed = clock, cost, False, False
         self.foreign, self.late, self.stuck, self.wrong_frequency = False, False, False, False
         self.calls = 0
-    def sample(self):
+    def sample(self, *, deadline_ticks, minimum_present_ticks=0):
         self.calls += 1
         if self.foreign and self.pressed:
             raise RuntimeError("Foreign ROI ownership")
@@ -42,8 +42,8 @@ class Capture:
         color = 180 if self.expanded and not self.stuck else 30
         raw = bytes([color, color, color, 0]) * 4
         return RegionSample(raw, 11, 55, 99, Geometry(558, 558, 96, 100, 100), Region(30, 400, 2, 2),
-                            self.clock.frequency + int(self.wrong_frequency), begin, begin, None, None,
-                            begin, end, end, end)
+                            self.clock.frequency + int(self.wrong_frequency), begin, begin, begin, end, end,
+                            GdiMetadata(None, None, begin, end, end), "gdi")
 
 
 class Disclosure:
@@ -60,6 +60,22 @@ class Disclosure:
             self.pending -= 1
             label = owner.LABELS[1 - int(self.capture.expanded)]
         return dict(label=label, begin_ticks=begin, end_ticks=end, qpc_frequency=self.clock.frequency)
+
+
+def dxgi_observation(sample, pending=False, source=None):
+    """External copy-boundary fixture; shared native guards have separate real-owner tests."""
+    roi = (sample.geometry.screen_x + sample.region.x, sample.geometry.screen_y + sample.region.y,
+           sample.geometry.screen_x + sample.region.x + 2, sample.geometry.screen_y + sample.region.y + 2)
+    output = DxgiOutput(7, 0, sample.qpc_frequency, 1, 21, 4, 0, (-1920, 0, 1920, 1080), roi,
+                        1, 0, 8, 0, 87, 3840, 1080, 2, 2, "DISPLAY1", "Fixture adapter", "SDR external boundary fixture")
+    stage = Interval(sample.begin_ticks, sample.begin_ticks)
+    metadata = DxgiMetadata(output, "fence_pending" if pending else "ready", Interval(sample.begin_ticks, sample.storage_end_ticks),
+                            1, sample.begin_ticks if source is None else source, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                            stage, stage, stage, Interval(0, 0) if pending else stage, Interval(0, 0) if pending else stage)
+    fields = {name: getattr(sample, name) for name in ("hwnd", "pid", "creation_ticks", "geometry", "region", "qpc_frequency",
+                                                     "begin_ticks", "ownership_before_end_ticks", "storage_begin_ticks", "storage_end_ticks", "end_ticks")}
+    fields.update(metadata=metadata, backend="dxgi_v1")
+    return RegionPending(**fields) if pending else RegionSample(bgra=sample.bgra, **fields)
 
 
 class Pointer:
@@ -327,8 +343,9 @@ class M0WindowsTests(unittest.TestCase):
         disclosure.read = observed
         self.assertRaises(owner.DisclosureError, owner.input_samples, Pointer(capture), capture,
                           clock, 32, records, disclosure)
-        self.assertEqual(len(records), 1)
+        self.assertEqual(len(records), 2)
         self.assertTrue(records[0]["accepted"])
+        self.assertFalse(records[1]["accepted"])
         clock, records = Clock(), []
         capture = Capture(clock)
         disclosure = Disclosure(capture)
@@ -397,6 +414,80 @@ class M0WindowsTests(unittest.TestCase):
     def test_wrong_sample_inventory_is_rejected(self):
         self.assertRaises(ValueError, owner.input_samples, None, None, None, 31, [], None)
         self.assertRaises(ValueError, owner.drag_path, None, None, 11, 55, None, None, None, 0, 31, None, [])
+
+    def test_dxgi_pending_retains_original_floor_deadline_inventory_and_full_cost(self):
+        clock, records, options = Clock(), [], []
+        capture = Capture(clock)
+        original = capture.sample
+        pending_after_click = [0]
+        def sample(**kwargs):
+            options.append(dict(kwargs))
+            observed = original(**kwargs)
+            if not capture.pressed:
+                pending = capture.calls == 1
+            else:
+                pending_after_click[0] += 1
+                pending = pending_after_click[0] % 3 != 0
+            return dxgi_observation(observed, pending=pending)
+        capture.sample = sample
+        result = owner.input_samples(Pointer(capture), capture, clock, 32, records, Disclosure(capture))
+        self.assertTrue(result["p95_below_50ms"])
+        self.assertEqual(records[0]["baseline_observations"][0]["kind"], "pending")
+        for item in records:
+            post = item["observations"]
+            self.assertTrue(any(attempt["kind"] == "pending" for attempt in post))
+            start = item["input_begin_ticks"]
+            self.assertEqual(item["input_to_visible_ms"], (post[-1]["end_ticks"] - start) / 1000)
+        post_options = [item for item in options if item["minimum_present_ticks"]]
+        for item in post_options:
+            self.assertEqual(item["deadline_ticks"], item["minimum_present_ticks"] + clock.frequency)
+
+    def test_never_ready_baseline_uses256_total_attempts_without_a_click_or_new_deadline(self):
+        clock, records, bounds = Clock(), [], []
+        capture = Capture(clock)
+        original = capture.sample
+        def sample(**kwargs):
+            bounds.append(kwargs["deadline_ticks"])
+            return dxgi_observation(original(**kwargs), pending=True)
+        capture.sample = sample
+        pointer = Pointer(capture)
+        self.assertRaises(RuntimeError, owner.input_samples, pointer, capture, clock, 32, records, Disclosure(capture))
+        self.assertEqual(len(bounds), 256)
+        self.assertEqual(len(set(bounds)), 1)
+        self.assertEqual(pointer.events, [])
+        self.assertEqual(len(records[0]["baseline_observations"]), 256)
+        self.assertFalse(records[0]["accepted"])
+
+    def test_zero_future_and_preinput_source_cannot_qualify_even_matching_final_pixels(self):
+        for mode in ("zero", "stale", "future"):
+            clock, records = Clock(), []
+            capture = Capture(clock)
+            original = capture.sample
+            def sample(**kwargs):
+                observed = original(**kwargs)
+                floor = kwargs["minimum_present_ticks"]
+                source = observed.begin_ticks
+                if floor:
+                    source = 0 if mode == "zero" else floor - 1 if mode == "stale" else observed.end_ticks + 1
+                return dxgi_observation(observed, source=source)
+            capture.sample = sample
+            self.assertRaises(RuntimeError, owner.input_samples, Pointer(capture), capture, clock, 32, records, Disclosure(capture))
+            self.assertFalse(records[0]["accepted"])
+
+    def test_helper_pair_invalid_hash_and_loader_failure_are_before_product_launch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Path(directory) / "helper.dll"
+            fixture.write_bytes(b"test fixture")
+            for helper, digest in ((None, "0" * 64), (fixture, None), (fixture, "0" * 64), (Path("relative.dll"), "0" * 64)):
+                args = SimpleNamespace(capture_helper=helper, capture_helper_sha256=digest)
+                with patch.object(owner.subprocess, "Popen") as launch:
+                    self.assertRaises(ValueError, owner.run, args)
+                launch.assert_not_called()
+            digest = owner.hashlib.sha256(fixture.read_bytes()).hexdigest()
+            args = SimpleNamespace(capture_helper=fixture, capture_helper_sha256=digest)
+            with patch.object(owner, "DxgiLibrary", side_effect=AttributeError("Missing ABI export")), patch.object(owner.subprocess, "Popen") as launch:
+                self.assertRaises(AttributeError, owner.run, args)
+            launch.assert_not_called()
 
     def failed_run(self, directory, *, collect_failure=False, foreign=False, bad_identity=False):
         executable = Path(directory) / "fixture.exe"

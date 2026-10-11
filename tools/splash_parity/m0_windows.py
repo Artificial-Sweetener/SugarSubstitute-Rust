@@ -23,7 +23,10 @@ try:
     from .native_timing import analyse, distribution, integer, read_terminal, validate
     from .native_windows import MonitorInfo, NativePointer, NativeWindows, observe_exposure, write_json
     from .operational_windows import ObservationWindows, OperationalOutput, OwnedContention, affinity, error_causes
-    from .region_capture import Region, RegionCapture
+    from .region_capture import RegionCapture
+    from .region_records import Region, RegionSample, RegionPending, validate_record
+    from .dxgi_abi import enroll_helper, DxgiLibrary
+    from .dxgi_storage import DxgiCopyStorage
     from .move_entry_windows import observe_move_entry
     from .startup_windows import ReferenceProcesses
     from .disclosure_label_windows import DisclosureLabel, DisclosureError, LABELS
@@ -31,7 +34,10 @@ except ImportError:
     from native_timing import analyse, distribution, integer, read_terminal, validate
     from native_windows import MonitorInfo, NativePointer, NativeWindows, observe_exposure, write_json
     from operational_windows import ObservationWindows, OperationalOutput, OwnedContention, affinity, error_causes
-    from region_capture import Region, RegionCapture
+    from region_capture import RegionCapture
+    from region_records import Region, RegionSample, RegionPending, validate_record
+    from dxgi_abi import enroll_helper, DxgiLibrary
+    from dxgi_storage import DxgiCopyStorage
     from move_entry_windows import observe_move_entry
     from startup_windows import ReferenceProcesses
     from disclosure_label_windows import DisclosureLabel, DisclosureError, LABELS
@@ -57,7 +63,8 @@ class Qpc:
 
 def sample_record(sample):
     record = asdict(sample)
-    record["bgra"] = sample.bgra.hex()
+    if type(sample) is RegionSample:
+        record["bgra"] = sample.bgra.hex()
     return record
 
 
@@ -71,6 +78,19 @@ def pixels_changed(left, right):
     """Require each of the four ROI pixels to show a meaningful color transition."""
     return len(left) == len(right) == 16 and all(max(abs(a - b) for a, b in zip(left[i:i + 3], right[i:i + 3])) > 5
                                                for i in range(0, 16, 4))
+
+
+def capture_attempt(capture, clock, deadline, minimum, inventory):
+    """Retain each actual ready/pending/failure attempt under one unchanged bound."""
+    try:
+        observed = capture.sample(deadline_ticks=deadline, minimum_present_ticks=minimum)
+    except BaseException:
+        if isinstance(getattr(capture, "last_attempt", None), dict):
+            inventory.append(dict(capture.last_attempt))
+        raise
+    inventory.append(sample_record(observed))
+    validate_record(observed, frequency=clock.frequency, deadline=deadline, minimum_present=minimum)
+    return observed
 
 
 def wait_disclosure(disclosure, expected, clock, start, record):
@@ -111,15 +131,16 @@ def input_samples(pointer, capture, clock, samples, observations, disclosure):
         raise ValueError("M0 input qualification requires exactly32 physical clicks")
     states, previous, previous_label = [], None, None
     for index in range(samples):
-        first = capture.sample()
-        if first.qpc_frequency != clock.frequency:
-            raise RuntimeError("ROI and input clocks differ")
-        baseline_deadline = first.end_ticks + clock.frequency
+        record = {"index": index, "baseline_observations": [], "label_observations": [],
+                  "observations": [], "accepted": False}
+        observations.append(record)
+        baseline_deadline = clock.read() + clock.frequency
+        first = None
         for _ in range(256):
-            baseline = capture.sample()
-            if baseline.end_ticks >= baseline_deadline:
-                raise RuntimeError("Owned input baseline did not settle within one second")
-            if pixels_close(first.bgra, baseline.bgra):
+            baseline = capture_attempt(capture, clock, baseline_deadline, 0, record["baseline_observations"])
+            if type(baseline) is RegionPending:
+                continue
+            if first is not None and pixels_close(first.bgra, baseline.bgra):
                 break
             first = baseline
         else:
@@ -131,10 +152,8 @@ def input_samples(pointer, capture, clock, samples, observations, disclosure):
             raise DisclosureError("observe_disclosure", "Published name changed without a measured click")
         expected_label = LABELS[1 - LABELS.index(label_baseline["label"])]
         start = clock.read()
-        record = {"index": index, "input_begin_ticks": start, "baseline": sample_record(baseline),
-                  "baseline_label": label_baseline, "expected_label": expected_label,
-                  "label_observations": [], "observations": [], "accepted": False}
-        observations.append(record)
+        record.update(input_begin_ticks=start, baseline=sample_record(baseline), baseline_label=label_baseline,
+                      expected_label=expected_label)
         try:
             record["input_injection"] = pointer.click()
         finally:
@@ -149,12 +168,11 @@ def input_samples(pointer, capture, clock, samples, observations, disclosure):
         record["input_dispatch_end_ticks"] = clock.read()
         wait_disclosure(disclosure, expected_label, clock, start, record)
         for _ in range(256):
-            observed = capture.sample()
+            observed = capture_attempt(capture, clock, start + clock.frequency, start, record["observations"])
             if observed.qpc_frequency != clock.frequency or observed.begin_ticks < start:
                 raise RuntimeError("Input observation clock or ordering changed")
-            record["observations"].append(sample_record(observed))
-            if observed.end_ticks >= start + clock.frequency:
-                raise RuntimeError("Physical caption input lacked visible response within one second")
+            if type(observed) is RegionPending:
+                continue
             if pixels_changed(baseline.bgra, observed.bgra):
                 if index >= 2 and not pixels_close(states[index % 2], observed.bgra):
                     raise RuntimeError("Visible disclosure did not return to its previously observed alternate state")
@@ -290,6 +308,8 @@ def performance_command(executable, receipt):
 
 
 def run(args):
+    helper = enroll_helper(getattr(args, "capture_helper", None), getattr(args, "capture_helper_sha256", None))
+    library = DxgiLibrary(helper) if helper is not None else None
     executable = args.executable.resolve(strict=True)
     if os.name == "nt" and args.output.resolve().drive.lower() != "d:":
         raise ValueError("Native qualification artifacts and temporary paths must use D:")
@@ -305,12 +325,14 @@ def run(args):
     command = performance_command(executable, terminal)
     source_files = ("m0_windows.py", "native_timing.py", "native_windows.py", "region_capture.py",
                     "operational_windows.py", "move_entry_windows.py", "startup_windows.py", "contention_worker.py",
-                    "disclosure_label_windows.py")
+                    "disclosure_label_windows.py", "region_records.py", "gdi_storage.py", "dxgi_abi.py", "dxgi_storage.py")
     harness = {name: hashlib.sha256(Path(__file__).with_name(name).read_bytes()).hexdigest() for name in source_files}
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=environment, creationflags=0x08000000)
     output = OperationalOutput(process, args.output)
-    primary, hwnd, cleanup = None, None, []
+    primary, hwnd, cleanup, capture_owner = None, None, [], None
     state = {"schema_version": 1, "harness_sha256": harness, "command": command, "executable_sha256": digest, "pid": process.pid,
+             "capture_backend": "dxgi_v1" if library is not None else "gdi",
+             "capture_helper": dict(path=str(helper.path), sha256=helper.sha256) if helper else None,
              "timing_source_audit_enabled": False, "qualification_accepted": False,
              "preparation_cadence": "Controlled by exact host configuration; this fixture does not synthesize producer cadence",
              "source_and_compositor_frame_age": "Not measured by performance fixture"}
@@ -336,8 +358,9 @@ def run(args):
                 state["drag"] = physical_drag(observer, hwnd, process.pid, clock, state["drag_state"])
                 client = native.client(hwnd, process.pid)
                 region = Region(round(30 * client.scale), round(400 * client.scale), 2, 2)
-                with DisclosureLabel(hwnd, process.pid, creation, ui_thread, clock) as disclosure, \
-                        RegionCapture(hwnd, process.pid, region, creation_ticks=creation) as capture:
+                capture_owner = RegionCapture(hwnd, process.pid, region, creation_ticks=creation,
+                                              storage=DxgiCopyStorage(library) if library is not None else None)
+                with DisclosureLabel(hwnd, process.pid, creation, ui_thread, clock) as disclosure, capture_owner as capture:
                     with NativePointer(native, hwnd, process.pid, clock=clock) as pointer:
                         pointer.move((489, 16))
                         state["input_samples"] = []
@@ -351,6 +374,8 @@ def run(args):
             raise RuntimeError(f"Owned native timing fixture exit {process.returncode}")
         if hashlib.sha256(executable.read_bytes()).hexdigest() != digest:
             raise RuntimeError("Native executable changed during qualification")
+        if helper is not None:
+            helper.verify()
         raw = read_terminal(terminal)
         if raw["ui_thread_id"] != ui_thread:
             raise RuntimeError("Terminal native timing UI thread differs from the actual owned window")
@@ -365,6 +390,9 @@ def run(args):
         primary = error
         raise
     finally:
+        if capture_owner is not None and isinstance(capture_owner.last_attempt, dict):
+            state["capture_failure_evidence"] = dict(capture_owner.last_attempt)
+            state["capture_failure_evidence"]["cleanup_evidence"] = getattr(capture_owner._storage, "last_cleanup", None)
         if not output.complete:
             try:
                 if hwnd is not None and process.poll() is None and native.owns(hwnd, process.pid):
@@ -393,6 +421,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--executable", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--capture-helper", type=Path)
+    parser.add_argument("--capture-helper-sha256")
     parser.add_argument("--workers", type=int, default=0)
     parser.add_argument("--affinity-cpus")
     args = parser.parse_args()

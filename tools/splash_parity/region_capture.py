@@ -1,135 +1,79 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Artificial Sweetener and contributors
-"""Observe bounded screen pixels from an owned exposed Windows client.
+"""Observe owned physical display pixels with one shared security and DPI lifetime.
 
-The returned timing brackets include observation work. They are not native
-publication times and must not be adjusted by subtracting average capture cost.
-The adapter writes no files, changes no windows and performs no input injection.
+Whole observation brackets include every ownership, native and immutable-copy
+cost. Driver calls can be ininterruptible despite finite native wait settings.
 """
-
 from __future__ import annotations
-
 import ctypes
 import os
-from dataclasses import dataclass
+from dataclasses import asdict
 from typing import Any
+try:
+    from .region_records import Region, Geometry, RegionSample, RegionPending, integer, validate_record
+    from .gdi_storage import GdiCopyStorage
+except ImportError:
+    from region_records import Region, Geometry, RegionSample, RegionPending, integer, validate_record
+    from gdi_storage import GdiCopyStorage
 
 _PER_MONITOR_AWARE_V2 = -4
-
-
-def _integer(value: int, minimum: int, maximum: int, name: str) -> None:
-    if type(value) is not int or not minimum <= value <= maximum:
-        raise ValueError(f"{name} must be an integer in [{minimum}, {maximum}]")
-
-
-@dataclass(frozen=True)
-class Region:
-    """Describe a 2..16-pixel rectangle in physical client coordinates."""
-
-    x: int
-    y: int
-    width: int
-    height: int
-
-    def __post_init__(self) -> None:
-        _integer(self.x, 0, 0x7fffffff, "region x")
-        _integer(self.y, 0, 0x7fffffff, "region y")
-        _integer(self.width, 2, 16, "region width")
-        _integer(self.height, 2, 16, "region height")
-
-
-@dataclass(frozen=True)
-class Geometry:
-    """Retain device client dimensions, DPI and physical screen origin."""
-
-    width: int
-    height: int
-    dpi: int
-    screen_x: int
-    screen_y: int
-
-
-@dataclass(frozen=True)
-class RegionSample:
-    """Retain one immutable top-down BGRA8 observation; alpha is unspecified.
-
-    Tick fields use the recorded QPC frequency. Ownership checks are outside the
-    copy bracket but inside the complete sample bracket. `end_ticks` is the
-    conservative observed end; no timestamp claims the exact display transition.
-    """
-
-    bgra: bytes
-    hwnd: int
-    pid: int
-    creation_ticks: int
-    geometry: Geometry
-    region: Region
-    qpc_frequency: int
-    begin_ticks: int
-    ownership_before_end_ticks: int
-    flush_begin_ticks: int | None
-    flush_end_ticks: int | None
-    copy_begin_ticks: int
-    copy_end_ticks: int
-    read_end_ticks: int
-    end_ticks: int
+# Complete recovery ownership includes storage, process and DPI obligations.
+# In particular, a failed unbound __enter__ must not lose its recovery owner.
+_CAPTURE_OWNERS = {}
 
 
 class RegionCapture:
-    """Own one retained process identity and reusable, thread-affine capture DIB.
+    """Own guards and a single explicit copy backend, with no backend fallback.
 
-    `creation_ticks` must come from the caller's verified process creation receipt.
-    An owned thread-local Per Monitor v2 DPI context makes coordinates physical;
-    the caller's previous context is restored after native resource cleanup.
-    The injectable boundary implements the private native methods below; portable
-    boundary tests do not constitute actual Windows display qualification.
+    Creation identity is supplied by the verified process owner. PMv2 remains
+    active until all storage/process handles have actually been released. Failed
+    close remains owned and can be explicitly retried on the creating thread.
     """
-
-    def __init__(self, hwnd: int, pid: int, region: Region, *, creation_ticks: int,
-                 flush: bool = False, boundary: Any | None = None) -> None:
-        _integer(hwnd, 1, (1 << (ctypes.sizeof(ctypes.c_void_p) * 8)) - 1, "HWND")
-        _integer(pid, 1, 0xffffffff, "PID")
-        _integer(creation_ticks, 1, 0xffffffffffffffff, "process creation ticks")
+    def __init__(self, hwnd, pid, region, *, creation_ticks, flush=False, boundary=None, storage=None):
+        integer(hwnd, 1, (1 << (ctypes.sizeof(ctypes.c_void_p) * 8)) - 1, "HWND")
+        integer(pid, 1, 0xffffffff, "PID")
+        integer(creation_ticks, 1, 0xffffffffffffffff, "process creation ticks")
         if not isinstance(region, Region) or type(flush) is not bool:
             raise ValueError("Capture requires a validated Region and boolean flush option")
-        self.hwnd, self.pid, self.region = hwnd, pid, region
-        self.creation_ticks, self.flush = creation_ticks, flush
+        if storage is not None and flush:
+            raise ValueError("Flush is configured by the explicit GDI storage owner")
+        self.hwnd, self.pid, self.region, self.creation_ticks = hwnd, pid, region, creation_ticks
         self._native = boundary if boundary is not None else _Win32Boundary()
-        self._process = self._screen = self._dc = self._bitmap = self._previous = None
-        self._pixels = None
-        self._geometry: Geometry | None = None
+        self._storage = storage if storage is not None else GdiCopyStorage(flush=flush)
+        self._process = self._geometry = self._thread = self._previous_dpi = None
         self._frequency = 0
         self._started = self._ready = False
-        self._thread = None
-        self._previous_dpi = None
+        self.last_attempt = None
 
-    def __enter__(self) -> RegionCapture:
+    def __enter__(self):
         if self._started:
             raise RuntimeError("A region capture lifetime cannot be entered again")
+        if len(_CAPTURE_OWNERS) >= 8:
+            raise RuntimeError("Unsettled captures exhausted the bounded recovery inventory")
         self._started = True
+        _CAPTURE_OWNERS[id(self)] = self
         try:
             self._thread = self._native.thread_id()
-            previous = self._native.set_dpi_context(_PER_MONITOR_AWARE_V2)
-            if not previous:
+            self._previous_dpi = self._native.set_dpi_context(_PER_MONITOR_AWARE_V2)
+            if not self._previous_dpi:
                 raise RuntimeError("Native thread DPI context could not be established")
-            self._previous_dpi = previous
             self._verify_dpi()
             self._frequency = self._native.frequency()
-            _integer(self._frequency, 1, 0x7fffffffffffffff, "QPC frequency")
+            integer(self._frequency, 1, 0x7fffffffffffffff, "QPC frequency")
             self._process = self._native.open_process(self.pid)
             self._geometry = self._verify()
-            self._screen = self._native.screen_dc()
-            self._dc = self._native.memory_dc(self._screen)
-            self._bitmap, self._pixels = self._native.dib(self._screen, self.region.width, self.region.height)
-            if not self._bitmap or not self._pixels:
-                raise RuntimeError("CreateDIBSection did not return owned bitmap storage")
-            self._previous = self._native.select(self._dc, self._bitmap)
+            self._storage.open(self._geometry, self.region, self._frequency, self._thread, self._native.ticks)
             self._ready = True
             return self
         except BaseException as primary:
+            self.last_attempt = {"schema_version": 2, "backend": self._storage.backend, "operation": "enrollment",
+                                 "accepted": False, "failure": str(primary),
+                                 "backend_evidence": getattr(self._storage, "last_creation", None)}
             try:
                 self.close()
             except BaseException as cleanup:
+                self.last_attempt["cleanup_evidence"] = getattr(self._storage, "last_cleanup", None)
                 raise BaseExceptionGroup("Region capture construction and cleanup failed", [primary, cleanup])
             raise
 
@@ -175,80 +119,90 @@ class RegionCapture:
                     raise RuntimeError("A capture pixel does not hit the owned root or native child")
         return geometry
 
-    def sample(self) -> RegionSample:
-        """Read current screen pixels once, with checked ownership on both sides."""
+    def sample(self, *, deadline_ticks=None, minimum_present_ticks=0):
+        """Perform one ready/pending attempt under original absolute QPC bounds.
+
+        Standalone GDI callers retain their public unbounded sample behavior;
+        explicit DXGI attempts require the caller's original positive deadline.
+        Finite native waits cannot bound an ininterruptible driver call.
+        """
         if not self._ready:
             raise RuntimeError("Region capture is not inside its owned resource lifetime")
+        integer(minimum_present_ticks, 0, 0x7fffffffffffffff, "source floor")
+        if deadline_ticks is None:
+            if self._storage.backend != "gdi":
+                raise ValueError("DXGI capture requires an explicit original absolute deadline")
+            deadline = 0x7fffffffffffffff
+        else:
+            deadline = integer(deadline_ticks, 1, 0x7fffffffffffffff, "capture deadline")
         native = self._native
+        self.last_attempt = {"schema_version": 2, "backend": self._storage.backend, "accepted": False}
         begin = native.ticks()
+        self.last_attempt["begin_ticks"] = begin
         geometry = self._verify()
         ownership_end = native.ticks()
-        flush_begin = flush_end = None
-        if self.flush:
-            flush_begin = native.ticks()
-            native.dwm_flush()
-            flush_end = native.ticks()
-        copy_begin = native.ticks()
-        native.copy(self._dc, self._screen, geometry.screen_x + self.region.x,
-                    geometry.screen_y + self.region.y, self.region.width, self.region.height)
-        # CreateDIBSection requires completed GDI drawing before direct pointer reads.
-        native.gdi_flush()
-        copy_end = native.ticks()
-        pixels = native.read(self._pixels, self.region.width * self.region.height * 4)
-        read_end = native.ticks()
-        self._verify()
-        end = native.ticks()
-        brackets = [begin, ownership_end]
-        if flush_begin is not None:
-            brackets.extend([flush_begin, flush_end])
-        brackets.extend([copy_begin, copy_end, read_end, end])
-        if any(type(tick) is not int or tick < 0 for tick in brackets) or any(a > b for a, b in zip(brackets, brackets[1:])):
-            raise RuntimeError("Capture timing brackets are invalid or reversed")
-        if type(pixels) is not bytes or len(pixels) != self.region.width * self.region.height * 4:
-            raise RuntimeError("Native DIB read did not return the exact bounded region bytes")
-        return RegionSample(pixels, self.hwnd, self.pid, self.creation_ticks, geometry, self.region,
-                            self._frequency, begin, ownership_end, flush_begin, flush_end,
-                            copy_begin, copy_end, read_end, end)
+        storage_begin = native.ticks()
+        if storage_begin >= deadline:
+            raise RuntimeError("Owned capture exceeded original absolute deadline before copy")
+        primary = result = None
+        try:
+            result = self._storage.attempt(minimum_present_ticks, deadline)
+            self.last_attempt["backend_evidence"] = asdict(result.metadata)
+            if type(result.bgra) is bytes:
+                self.last_attempt["byte_count"] = len(result.bgra)
+                self.last_attempt["bgra"] = result.bgra[:1024].hex()
+        except BaseException as error:
+            primary = error
+            self.last_attempt["backend_evidence"] = getattr(self._storage, "last_attempt", None)
+            self.last_attempt["failure"] = str(primary)
+        failures = [primary] if primary is not None else []
+        storage_end = end = None
+        for name, operation in (("storage_end_ticks", native.ticks), ("final_ownership", self._verify), ("end_ticks", native.ticks)):
+            try:
+                value = operation()
+                if name == "storage_end_ticks":
+                    storage_end = value
+                elif name == "end_ticks":
+                    end = value
+                self.last_attempt[name] = asdict(value) if isinstance(value, Geometry) else value
+            except BaseException as failure:
+                failures.append(failure)
+        if failures:
+            if len(failures) == 1:
+                raise failures[0]
+            raise BaseExceptionGroup("Capture copy, clocks and final ownership failed", failures)
+        fields = dict(hwnd=self.hwnd, pid=self.pid, creation_ticks=self.creation_ticks, geometry=geometry,
+                      region=self.region, qpc_frequency=self._frequency, begin_ticks=begin,
+                      ownership_before_end_ticks=ownership_end, storage_begin_ticks=storage_begin,
+                      storage_end_ticks=storage_end, end_ticks=end, metadata=result.metadata, backend=result.backend)
+        observed = RegionPending(**fields) if result.bgra is None else RegionSample(bgra=result.bgra, **fields)
+        self.last_attempt = asdict(observed)
+        if result.bgra is not None:
+            self.last_attempt["bgra"] = result.bgra.hex()
+        self.last_attempt["accepted"] = False
+        validate_record(observed, frequency=self._frequency, deadline=deadline, minimum_present=minimum_present_ticks)
+        self.last_attempt = observed
+        return observed
 
-    def close(self) -> None:
-        """Release resources, then restore DPI; retain failures for same-thread retry.
-
-        Live handles keep the physical DPI guard active after a cleanup failure.
-        A failed context restoration remains owned even after handles are closed.
-        """
+    def close(self):
+        """Release storage/process, then restore DPI; never discard pending resources."""
         self._ready = False
         if self._thread is not None and self._native.thread_id() != self._thread:
             raise RuntimeError("Region capture cleanup crossed its owning native thread")
-        failures: list[Exception] = []
-
-        def release(attribute: str, operation: Any) -> None:
-            value = getattr(self, attribute)
-            if value is not None:
-                try:
-                    operation(value)
-                    setattr(self, attribute, None)
-                except Exception as error:
-                    failures.append(error)
-
-        if self._previous is not None and self._dc is not None:
+        failures = []
+        try:
+            self._storage.close()
+        except ExceptionGroup as error:
+            failures.extend(error.exceptions)
+        except Exception as error:
+            failures.append(error)
+        if self._process is not None:
             try:
-                self._native.select(self._dc, self._previous)
-                self._previous = None
+                self._native.close_process(self._process)
+                self._process = None
             except Exception as error:
                 failures.append(error)
-        bitmap_attempted = self._previous is None
-        if bitmap_attempted:
-            release("_bitmap", self._native.delete_bitmap)
-        release("_dc", self._native.delete_dc)
-        if self._dc is None:
-            self._previous = None
-            if not bitmap_attempted:
-                release("_bitmap", self._native.delete_bitmap)
-        release("_screen", self._native.release_screen)
-        release("_process", self._native.close_process)
-        if self._bitmap is None:
-            self._pixels = None
-        if self._previous_dpi is not None and all(value is None for value in (self._bitmap, self._dc, self._screen, self._process)):
+        if self._previous_dpi is not None and not self._storage.active and self._process is None:
             try:
                 self._native.set_dpi_context(self._previous_dpi)
                 if not self._native.dpi_equal(self._native.dpi_context(), self._previous_dpi):
@@ -256,10 +210,12 @@ class RegionCapture:
                 self._previous_dpi = None
             except Exception as error:
                 failures.append(error)
+        if not self._storage.active and self._process is None and self._previous_dpi is None:
+            _CAPTURE_OWNERS.pop(id(self), None)
         if failures:
             raise ExceptionGroup("Region capture resource cleanup failed", failures)
 
-    def __exit__(self, kind: object, error: BaseException | None, traceback: object) -> bool:
+    def __exit__(self, kind, error, traceback):
         try:
             self.close()
         except BaseException as cleanup:
@@ -281,17 +237,6 @@ class _FileTime(ctypes.Structure):
     _fields_ = [("low", ctypes.c_uint32), ("high", ctypes.c_uint32)]
 
 
-class _BitmapHeader(ctypes.Structure):
-    _fields_ = [("size", ctypes.c_uint32), ("width", ctypes.c_int32), ("height", ctypes.c_int32),
-                ("planes", ctypes.c_uint16), ("bits", ctypes.c_uint16), ("compression", ctypes.c_uint32),
-                ("image_size", ctypes.c_uint32), ("x", ctypes.c_int32), ("y", ctypes.c_int32),
-                ("used", ctypes.c_uint32), ("important", ctypes.c_uint32)]
-
-
-class _BitmapInfo(ctypes.Structure):
-    _fields_ = [("header", _BitmapHeader), ("colors", ctypes.c_uint32 * 3)]
-
-
 class _Win32Boundary:
     """Keep pointer-width FFI, resource calls and bounded z-order inventory private."""
 
@@ -299,9 +244,7 @@ class _Win32Boundary:
         if os.name != "nt":
             raise OSError("Actual region capture requires Windows")
         self._user = ctypes.WinDLL("user32", use_last_error=True)
-        self._gdi = ctypes.WinDLL("gdi32", use_last_error=True)
         self._kernel = ctypes.WinDLL("kernel32", use_last_error=True)
-        self._dwm = ctypes.WinDLL("dwmapi", use_last_error=True)
         handle, uint, boolean = ctypes.c_void_p, ctypes.c_uint32, ctypes.c_int32
         pointer = ctypes.POINTER
         declarations = [
@@ -326,16 +269,6 @@ class _Win32Boundary:
             (self._user, "WindowFromPoint", [_Point], handle),
             (self._user, "GetWindow", [handle, uint], handle),
             (self._user, "GetWindowRect", [handle, pointer(_Rect)], boolean),
-            (self._user, "GetDC", [handle], handle),
-            (self._user, "ReleaseDC", [handle, handle], ctypes.c_int32),
-            (self._gdi, "CreateCompatibleDC", [handle], handle),
-            (self._gdi, "CreateDIBSection", [handle, pointer(_BitmapInfo), uint, pointer(handle), handle, uint], handle),
-            (self._gdi, "SelectObject", [handle, handle], handle),
-            (self._gdi, "DeleteObject", [handle], boolean),
-            (self._gdi, "DeleteDC", [handle], boolean),
-            (self._gdi, "BitBlt", [handle] + [ctypes.c_int32] * 4 + [handle] + [ctypes.c_int32] * 2 + [uint], boolean),
-            (self._gdi, "GdiFlush", [], boolean),
-            (self._dwm, "DwmFlush", [], ctypes.c_int32),
         ]
         for library, name, arguments, result in declarations:
             function = getattr(library, name)
@@ -430,49 +363,6 @@ class _Win32Boundary:
 
     def hit(self, x: int, y: int) -> int:
         return self._user.WindowFromPoint(_Point(x, y))
-
-    def screen_dc(self) -> int:
-        return self._checked(self._user.GetDC(None), "GetDC")
-
-    def memory_dc(self, screen: int) -> int:
-        return self._checked(self._gdi.CreateCompatibleDC(screen), "CreateCompatibleDC")
-
-    def dib(self, screen: int, width: int, height: int) -> tuple[int, int | None]:
-        info = _BitmapInfo(_BitmapHeader(40, width, -height, 1, 32, 0, width * height * 4, 0, 0, 0, 0))
-        pixels = ctypes.c_void_p()
-        bitmap = self._checked(self._gdi.CreateDIBSection(screen, ctypes.byref(info), 0, ctypes.byref(pixels), None, 0), "CreateDIBSection")
-        # Transfer the bitmap even on an invalid pointer so its owner can retain
-        # failed cleanup handles and attempt explicit teardown later.
-        return bitmap, pixels.value
-
-    def select(self, dc: int, bitmap: int) -> int:
-        value = self._checked(self._gdi.SelectObject(dc, bitmap), "SelectObject")
-        if value == ctypes.c_void_p(-1).value:
-            raise OSError(ctypes.get_last_error(), "SelectObject returned HGDI_ERROR")
-        return value
-
-    def copy(self, dc: int, screen: int, x: int, y: int, width: int, height: int) -> None:
-        self._checked(self._gdi.BitBlt(dc, 0, 0, width, height, screen, x, y, 0x00cc0020 | 0x40000000), "BitBlt")
-
-    def gdi_flush(self) -> None:
-        self._checked(self._gdi.GdiFlush(), "GdiFlush")
-
-    def dwm_flush(self) -> None:
-        result = self._dwm.DwmFlush()
-        if result != 0:
-            raise RuntimeError(f"DwmFlush failed with HRESULT {result:#x}")
-
-    def read(self, pointer: int, size: int) -> bytes:
-        return ctypes.string_at(pointer, size)
-
-    def delete_bitmap(self, bitmap: int) -> None:
-        self._checked(self._gdi.DeleteObject(bitmap), "DeleteObject")
-
-    def delete_dc(self, dc: int) -> None:
-        self._checked(self._gdi.DeleteDC(dc), "DeleteDC")
-
-    def release_screen(self, dc: int) -> None:
-        self._checked(self._user.ReleaseDC(None, dc), "ReleaseDC")
 
     def close_process(self, handle: int) -> None:
         self._checked(self._kernel.CloseHandle(handle), "CloseHandle")

@@ -5,7 +5,9 @@
 import unittest
 from collections import Counter
 
-from tools.splash_parity.region_capture import Geometry, Region, RegionCapture, _BitmapHeader, _BitmapInfo, _Win32Boundary
+from tools.splash_parity.region_capture import RegionCapture, _Win32Boundary
+from tools.splash_parity.region_records import Geometry, Region
+from tools.splash_parity.gdi_storage import GdiCopyStorage, _BitmapHeader, _BitmapInfo, _GdiBoundary
 
 
 class Boundary:
@@ -168,8 +170,10 @@ class RegionCaptureTests(unittest.TestCase):
     """Reject uncertain source pixels/timings and prove bounded reusable ownership."""
 
     def capture(self, boundary=None, region=None, **options):
+        boundary = boundary or Boundary()
+        flush = options.pop("flush", False)
         return RegionCapture(1, 42, region or Region(10, 12, 2, 2), creation_ticks=123,
-                             boundary=boundary or Boundary(), **options)
+                             boundary=boundary, storage=GdiCopyStorage(flush=flush, boundary=boundary), **options)
 
     def test_region_and_supplied_identity_reject_invalid_bounds_without_native_calls(self):
         for values in [(0, 0, 1, 2), (0, 0, 2, 17), (-1, 0, 2, 2), (True, 0, 2, 2), (0, 0, 2.0, 2)]:
@@ -190,12 +194,12 @@ class RegionCaptureTests(unittest.TestCase):
             self.assertEqual(first.bgra, bytes(range(16)))
             self.assertEqual(first.geometry, Geometry(558, 558, 96, -600, 200))
             self.assertEqual((first.hwnd, first.pid, first.creation_ticks, first.qpc_frequency), (1, 42, 123, 1_000_000))
-            self.assertIsNone(first.flush_begin_ticks)
-            self.assertIsNone(first.flush_end_ticks)
-            order = [first.begin_ticks, first.ownership_before_end_ticks, first.copy_begin_ticks,
-                     first.copy_end_ticks, first.read_end_ticks, first.end_ticks, second.begin_ticks]
+            self.assertIsNone(first.metadata.flush_begin_ticks)
+            self.assertIsNone(first.metadata.flush_end_ticks)
+            order = [first.begin_ticks, first.ownership_before_end_ticks, first.metadata.copy_begin_ticks,
+                     first.metadata.copy_end_ticks, first.metadata.read_end_ticks, first.end_ticks, second.begin_ticks]
             self.assertEqual(order, sorted(order))
-            self.assertGreater(first.end_ticks - first.read_end_ticks, first.copy_end_ticks - first.copy_begin_ticks)
+            self.assertGreater(first.end_ticks - first.metadata.read_end_ticks, first.metadata.copy_end_ticks - first.metadata.copy_begin_ticks)
         counts = Counter(name for name, _ in boundary.calls)
         for operation in ("open_process", "screen_dc", "memory_dc", "dib", "restore", "delete_bitmap", "delete_dc", "release_screen", "close_process"):
             self.assertEqual(counts[operation], 1, operation)
@@ -216,9 +220,9 @@ class RegionCaptureTests(unittest.TestCase):
     def test_optional_flush_keeps_its_actual_cost_bracket(self):
         with self.capture(flush=True) as capture:
             sample = capture.sample()
-        self.assertLess(sample.ownership_before_end_ticks, sample.flush_begin_ticks)
-        self.assertLess(sample.flush_begin_ticks, sample.flush_end_ticks)
-        self.assertLess(sample.flush_end_ticks, sample.copy_begin_ticks)
+        self.assertLess(sample.ownership_before_end_ticks, sample.metadata.flush_begin_ticks)
+        self.assertLess(sample.metadata.flush_begin_ticks, sample.metadata.flush_end_ticks)
+        self.assertLess(sample.metadata.flush_end_ticks, sample.metadata.copy_begin_ticks)
 
     def test_all_region_pixels_are_witnessed_and_owned_native_child_is_allowed(self):
         boundary = Boundary()
@@ -290,7 +294,7 @@ class RegionCaptureTests(unittest.TestCase):
     def test_native_dib_descriptor_is_top_down_32bit_and_pointer_read_is_exact(self):
         import ctypes
         from unittest.mock import Mock
-        native = object.__new__(_Win32Boundary)
+        native = object.__new__(_GdiBoundary)
         native._gdi = Mock()
         backing = (ctypes.c_ubyte * 16)(*range(16))
         descriptors = []
@@ -346,7 +350,7 @@ class RegionCaptureTests(unittest.TestCase):
                     capture.sample()
         boundary = Boundary()
         with self.capture(boundary) as capture:
-            value = iter([100, 101, 102, 103, 104, 99])
+            value = iter([100, 101, 102, 103, 104, 105, 106, 99])
             boundary.tick_override = lambda: next(value)
             with self.assertRaisesRegex(RuntimeError, "timing"):
                 capture.sample()
@@ -372,7 +376,7 @@ class RegionCaptureTests(unittest.TestCase):
             capture.__enter__()
         self.assertIs(caught.exception.exceptions[0], primary)
         self.assertIs(caught.exception.exceptions[1].exceptions[0], cleanup)
-        self.assertIsNotNone(capture._dc)
+        self.assertIsNotNone(capture._storage._dc)
         boundary.failures.clear()
         capture.close()
 
@@ -385,10 +389,10 @@ class RegionCaptureTests(unittest.TestCase):
         with self.assertRaises(ExceptionGroup) as caught:
             capture.__enter__()
         self.assertIn("bitmap storage", str(caught.exception.exceptions[0]))
-        self.assertEqual(capture._bitmap, 40)
+        self.assertEqual(capture._storage._bitmap, 40)
         boundary.failures.clear()
         capture.close()
-        self.assertIsNone(capture._bitmap)
+        self.assertIsNone(capture._storage._bitmap)
 
     def test_bitmap_delete_failure_remains_owned_without_automatic_retry(self):
         boundary = Boundary()
@@ -397,11 +401,11 @@ class RegionCaptureTests(unittest.TestCase):
         with self.assertRaises(ExceptionGroup):
             capture.close()
         self.assertEqual(Counter(name for name, _ in boundary.calls)["delete_bitmap"], 1)
-        self.assertIsNotNone(capture._bitmap)
-        self.assertIsNone(capture._dc)
+        self.assertIsNotNone(capture._storage._bitmap)
+        self.assertIsNone(capture._storage._dc)
         boundary.failures.clear()
         capture.close()
-        self.assertIsNone(capture._bitmap)
+        self.assertIsNone(capture._storage._bitmap)
 
     def test_cleanup_preserves_primary_and_all_cleanup_causes_and_allows_explicit_retry(self):
         boundary = Boundary()
@@ -414,12 +418,12 @@ class RegionCaptureTests(unittest.TestCase):
         self.assertIs(caught.exception.exceptions[0], primary)
         cleanup = caught.exception.exceptions[1]
         self.assertEqual([str(error) for error in cleanup.exceptions], ["restore", "delete_dc", "release_screen", "close_process"])
-        self.assertIsNotNone(capture._bitmap)
+        self.assertIsNotNone(capture._storage._bitmap)
         boundary.failures.clear()
         capture.close()
-        self.assertIsNone(capture._bitmap)
-        self.assertIsNone(capture._dc)
-        self.assertIsNone(capture._screen)
+        self.assertIsNone(capture._storage._bitmap)
+        self.assertIsNone(capture._storage._dc)
+        self.assertIsNone(capture._storage._screen)
         self.assertIsNone(capture._process)
 
     def test_failed_restore_deletes_dc_before_bitmap_without_retrying_the_restore(self):
@@ -537,6 +541,81 @@ class RegionCaptureTests(unittest.TestCase):
         native._user.AreDpiAwarenessContextsEqual.return_value = 1
         self.assertTrue(native.dpi_equal(0x12340004, -4))
         native._user.AreDpiAwarenessContextsEqual.assert_called_once_with(0x12340004, -4)
+
+    def test_unbound_failed_enter_and_exit_retain_complete_recovery_owner(self):
+        import gc
+        from tools.splash_parity.region_capture import _CAPTURE_OWNERS
+        before = set(_CAPTURE_OWNERS)
+        boundary = Boundary()
+        boundary.failures.update(dib=OSError("create DIB"), delete_dc=OSError("close DC"), close_process=OSError("close process"))
+        with self.assertRaises(ExceptionGroup):
+            with self.capture(boundary):
+                self.fail("Failed entry became usable")
+        gc.collect()
+        added = set(_CAPTURE_OWNERS) - before
+        self.assertEqual(len(added), 1)
+        recovery = _CAPTURE_OWNERS[added.pop()]
+        self.assertEqual(recovery._process, 10)
+        self.assertEqual(recovery._previous_dpi, -1)
+        self.assertEqual(recovery._storage._dc, 30)
+        boundary.failures.clear()
+        recovery.close()
+        self.assertEqual(set(_CAPTURE_OWNERS), before)
+        boundary = Boundary()
+        boundary.failures["delete_bitmap"] = OSError("exit bitmap cleanup")
+        with self.assertRaises(ExceptionGroup):
+            with self.capture(boundary):
+                pass
+        gc.collect()
+        added = set(_CAPTURE_OWNERS) - before
+        self.assertEqual(len(added), 1)
+        recovery = _CAPTURE_OWNERS[added.pop()]
+        boundary.failures.clear()
+        recovery.close()
+        self.assertEqual(set(_CAPTURE_OWNERS), before)
+
+    def test_native_effects_survive_next_clock_failure_and_final_guard_still_runs(self):
+        boundary = Boundary()
+        with self.capture(boundary) as capture:
+            calls = [0]
+            def ticks():
+                calls[0] += 1
+                if calls[0] == 5:
+                    raise OSError("copy end QPC")
+                return boundary.clock
+            boundary.tick_override = ticks
+            self.assertRaisesRegex(OSError, "copy end QPC", capture.sample)
+            evidence = capture.last_attempt["backend_evidence"]
+            self.assertTrue(evidence["copy_completed"])
+            self.assertTrue(evidence["gdi_flush_completed"])
+            self.assertIn("final_ownership", capture.last_attempt)
+        boundary = Boundary()
+        with self.capture(boundary) as capture:
+            calls = [0]
+            def ticks():
+                calls[0] += 1
+                if calls[0] == 7:
+                    raise OSError("storage end QPC")
+                return boundary.clock
+            boundary.tick_override = ticks
+            boundary.after_read = lambda: setattr(boundary, "foreground_value", 9)
+            with self.assertRaises(BaseExceptionGroup) as caught:
+                capture.sample()
+            self.assertEqual(str(caught.exception.exceptions[0]), "storage end QPC")
+            self.assertIn("foreground", str(caught.exception.exceptions[1]))
+            self.assertEqual(capture.last_attempt["bgra"], bytes(range(16)).hex())
+
+    def test_consumed_owner_removes_after_subsequent_dpi_restore_error_recovery(self):
+        from tools.splash_parity.region_capture import _CAPTURE_OWNERS
+        boundary = Boundary()
+        capture = self.capture(boundary).__enter__()
+        boundary.failures["dpi_restore"] = OSError("restore")
+        self.assertRaises(ExceptionGroup, capture.close)
+        self.assertIn(id(capture), _CAPTURE_OWNERS)
+        self.assertFalse(capture._storage.active)
+        boundary.failures.clear()
+        capture.close()
+        self.assertNotIn(id(capture), _CAPTURE_OWNERS)
 
 
 if __name__ == "__main__":
