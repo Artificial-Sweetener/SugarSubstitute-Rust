@@ -5,13 +5,19 @@ platforms = ["windows", "macos", "linux"]
 package = "sugarsubstitute-contracts"
 root = "crates/sugarsubstitute-contracts"
 concern = "Owned contracts, localization, memory claims and immutable frame boundaries"
-minimum_tests = 29
+minimum_tests = 36
 
 [[owners]]
 package = "sugarsubstitute-application"
 root = "crates/sugarsubstitute-application"
 concern = "Current-navigation readiness and current-state frame publication"
 minimum_tests = 11
+
+[[owners]]
+package = "sugarsubstitute-comfy"
+root = "crates/sugarsubstitute-comfy"
+concern = "Bounded startup schema and explicit launch or loopback attachment admission"
+minimum_tests = 6
 
 [[owners]]
 package = "sugarsubstitute"

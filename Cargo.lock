@@ -1823,6 +1823,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "sugarsubstitute-comfy"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "sugarsubstitute-contracts",
+ "toml",
+]
+
+[[package]]
 name = "sugarsubstitute-contracts"
 version = "0.1.0"
 dependencies = [

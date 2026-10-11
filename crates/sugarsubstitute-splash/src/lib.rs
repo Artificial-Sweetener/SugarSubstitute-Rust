@@ -18,8 +18,11 @@ mod text;
 pub use animation::{AnimationFrame, FlipPhase, POSE_COUNT, PaperFlip};
 pub use caption_icons::IconError;
 pub use character::{CharacterError, CharacterLibrary, PoseAsset};
-pub use layout::{Appearance, Control, LOGICAL_SIZE, Theme};
+pub use layout::{Appearance, Control, LOGICAL_SIZE};
 pub use progress::ProgressFrame;
 pub use projection::{Bounds, Point, projected_quad};
 pub use render::{RenderError, SplashRenderer};
-pub use sugarsubstitute_contracts::localization::{LOCALES, Messages, messages};
+pub use sugarsubstitute_contracts::{
+    configuration::Theme,
+    localization::{LOCALES, Messages, messages},
+};

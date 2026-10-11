@@ -12,3 +12,15 @@ current_version = 1
 accepted_versions = [1]
 compatibility = "reject"
 migrations = []
+
+[[formats]]
+id = "startup-configuration"
+owner = "sugarsubstitute-comfy"
+sources = ["crates/sugarsubstitute-comfy/src/configuration.rs"]
+source_sha256 = "sha256:e8e6b32be9c11f0430725f3dffb97925e6b10e83dd7c596bef033df58816b0c7"
+classification = "authoritative_state"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []

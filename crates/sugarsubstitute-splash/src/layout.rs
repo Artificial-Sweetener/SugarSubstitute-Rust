@@ -3,19 +3,10 @@
 
 //! Own source-compatible logical geometry independently of the native window.
 
-use crate::Bounds;
+use crate::{Bounds, Theme};
 
 /// Preserve the PySide splash's fixed logical width and height.
 pub const LOGICAL_SIZE: u32 = 558;
-
-/// Select the appearance shared by graphics, text and native material.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Theme {
-    /// Dark Fluent palette.
-    Dark,
-    /// Light Fluent palette.
-    Light,
-}
 
 /// Identify a splash-owned control without depending on a native event type.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

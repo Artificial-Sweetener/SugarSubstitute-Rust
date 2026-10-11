@@ -20,6 +20,12 @@ layer = "application"
 concern = "Application readiness, navigation and frame publication lifecycle"
 
 [[owners]]
+package = "sugarsubstitute-comfy"
+root = "crates/sugarsubstitute-comfy"
+layer = "adapter"
+concern = "ComfyUI startup configuration and connection boundaries"
+
+[[owners]]
 package = "sugarsubstitute"
 root = "crates/sugarsubstitute"
 layer = "host"

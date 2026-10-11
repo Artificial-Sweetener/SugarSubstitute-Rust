@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Define owned application contracts independently of desktop and execution adapters.
 
+pub mod configuration;
 pub mod execution;
 pub mod localization;
 pub mod presentation;
