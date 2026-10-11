@@ -16,8 +16,8 @@ minimum_tests = 65
 [[owners]]
 package = "sugarsubstitute-comfy"
 root = "crates/sugarsubstitute-comfy"
-concern = "Bounded startup schema and explicit launch or loopback attachment admission"
-minimum_tests = 6
+concern = "Bounded startup schema, effective managed argv and observed ComfyUI response contracts"
+minimum_tests = 26
 
 [[owners]]
 package = "sugarsubstitute"
