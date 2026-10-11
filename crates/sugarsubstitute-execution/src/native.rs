@@ -83,6 +83,9 @@ impl Signal {
     pub(crate) fn completed(&self) -> bool {
         self.completed.load(Ordering::Acquire)
     }
+    pub(crate) fn reset(&self) {
+        self.completed.store(false, Ordering::Release);
+    }
 }
 
 enum BindingState {
@@ -160,6 +163,7 @@ pub(crate) enum NativeWork {
     Process(ProcessWork),
     FixtureParent(crate::fixture_session::FixtureWork),
     FixtureChild(crate::fixture_session::child::ChildWork),
+    LifecyclePipe(crate::lifecycle_pipe::PipeWork),
 }
 impl NativeWork {
     pub(crate) fn ready(&self) -> bool {
@@ -167,6 +171,13 @@ impl NativeWork {
             Self::Process(work) => work.binding.ready(),
             Self::FixtureParent(_) => true,
             Self::FixtureChild(work) => work.binding.ready(),
+            Self::LifecyclePipe(_) => true,
+        }
+    }
+    pub(crate) fn initial_deadlines(&self) -> Option<crate::native_deadlines::Deadlines> {
+        match self {
+            Self::LifecyclePipe(work) => Some(crate::lifecycle_pipe::initial_deadlines(work)),
+            _ => None,
         }
     }
 }

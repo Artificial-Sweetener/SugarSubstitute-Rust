@@ -113,3 +113,15 @@ current_version = 1
 accepted_versions = [1]
 compatibility = "reject"
 migrations = []
+
+[[formats]]
+id = "native-lifecycle-bootstrap"
+owner = "sugarsubstitute-execution"
+sources = ["crates/sugarsubstitute-execution/src/windows_lifecycle_pipe/bootstrap.rs"]
+source_sha256 = "sha256:cb32f556feea29a1de45822c4969752d4a17d50215b642576c5baea6c4dc5186"
+classification = "protocol"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []

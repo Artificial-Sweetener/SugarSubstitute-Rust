@@ -52,6 +52,11 @@ fn declared_public_scheduler_capabilities_are_rejected() -> Result<()> {
         "pub fn raw() -> impl Iterator<Item = tokio::runtime::Handle> { loop {} }",
         "pub fn raw() -> Box<dyn Iterator<Item = std::sync::mpsc::Sender<()>>> { loop {} }",
         "pub type Completion<T> = <T as tokio::task::Join>::Output;",
+        "pub use windows::Win32::System::Pipes::ConnectNamedPipe as connect;",
+        "pub use windows::Win32::System::IO::CancelIoEx as cancel;",
+        "pub use windows::Win32::System::IO::GetOverlappedResult as settle;",
+        "pub use windows::Win32::System::IO::GetOverlappedResultEx as settle;",
+        "unsafe extern \"system\" { #[link_name = \"CancelIoEx\"] pub fn cancel(); }",
         "pub use windows::Win32::System::Threading::CreateThreadpoolWork as launch;",
         "pub use windows::Win32::System::Threading::RegisterWaitForSingleObject as register;",
         "pub use windows::Win32::System::Threading::SetThreadpoolWaitEx as arm;",
@@ -120,6 +125,7 @@ fn public_type_macros_fail_with_actionable_errors() -> Result<()> {
 #[test]
 fn exported_macro_scheduler_paths_and_fragments_are_rejected() -> Result<()> {
     for source in [
+        "#[macro_export] macro_rules! io { () => { unsafe { ConnectNamedPipe(); CancelIoEx(); GetOverlappedResult(); } }; }",
         "#[macro_export] macro_rules! work { () => { tokio::spawn(async {}); }; }",
         "use tokio as jobs; #[macro_export] macro_rules! work { () => { jobs::spawn(async {}); }; }",
         "#[macro_export] macro_rules! work { ($r:ident,$m:ident,$f:ident) => { $r::$m::$f(||{}); }; }",

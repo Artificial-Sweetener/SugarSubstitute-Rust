@@ -215,3 +215,34 @@ fn execution_policy_rejects_future_schemas_and_undeclared_exemptions() -> Result
     }
     Ok(())
 }
+
+/// Keep overlapped issue/cancel/settlement under one execution lifetime owner.
+#[test]
+fn overlapped_pipe_lifetimes_cannot_escape_execution_ownership() -> Result<()> {
+    let fixture = Repository::new()?;
+    let policy = Policy { schema_version: 1, owner: None };
+    for name in ["ConnectNamedPipe", "CancelIoEx", "GetOverlappedResult", "GetOverlappedResultEx"] {
+        for source in [
+            format!("fn io() {{ unsafe {{ windows::Win32::System::IO::{name}(); }} }}"),
+            format!(
+                "use windows::Win32::System::IO::{name} as settle; fn io() {{ unsafe {{ settle(); }} }}"
+            ),
+            format!("unsafe extern \"system\" {{ #[link_name = \"{name}\"] fn settle(); }}"),
+            format!("macro_rules! io {{ () => {{ unsafe {{ {name}(); }} }}; }}"),
+        ] {
+            assert!(!findings(&source)?.is_empty(), "accepted {source}");
+            write(fixture.root(), "crates/host/src/io.rs", &source)?;
+            let error = check(fixture.root(), &policy, &fixture.architecture, &fixture.workspace)
+                .err()
+                .map(|error| error.to_string())
+                .unwrap_or_default();
+            assert!(error.contains("outside the execution owner"), "unexpected result: {error}");
+        }
+    }
+    assert!(findings("fn files() { ReadFile(); WriteFile(); }")?.is_empty());
+    assert!(
+        findings("const NOTE: &str = \"ConnectNamedPipe CancelIoEx GetOverlappedResult\";")?
+            .is_empty()
+    );
+    Ok(())
+}

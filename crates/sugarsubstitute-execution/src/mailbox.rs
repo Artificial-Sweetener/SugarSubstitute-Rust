@@ -28,6 +28,9 @@ mod tests;
 pub(crate) struct Mailbox {
     pending: Mutex<Pending>,
     wake: Arc<dyn CompletionWake>,
+    pub(crate) notify: Arc<tokio::sync::Notify>,
+    suppressed_thread: Mutex<Option<std::thread::ThreadId>>,
+    deferred_wake: std::sync::atomic::AtomicBool,
 }
 
 impl Mailbox {
@@ -40,6 +43,9 @@ impl Mailbox {
                 omitted_failures: 0,
             }),
             wake,
+            notify: Arc::new(tokio::sync::Notify::new()),
+            suppressed_thread: Mutex::new(None),
+            deferred_wake: std::sync::atomic::AtomicBool::new(false),
         }
     }
 
@@ -60,6 +66,12 @@ impl Mailbox {
     }
 
     pub(crate) fn deliver_wake(&self) {
+        if lock(&self.suppressed_thread).is_some_and(|thread| thread == std::thread::current().id())
+        {
+            self.deferred_wake.store(true, std::sync::atomic::Ordering::Release);
+            self.notify.notify_one();
+            return;
+        }
         let result = match catch_unwind(AssertUnwindSafe(|| self.wake.wake())) {
             Ok(result) => result,
             Err(payload) => Err(ExecutionError::new(
@@ -73,6 +85,15 @@ impl Mailbox {
             tracing::error!(operation = ?error.operation(), "Completion wake failed");
             lock(&self.pending).wake_pending = false;
             self.record_failure(error);
+        }
+    }
+    #[cfg(any(windows, test))]
+    pub(crate) fn suppress_current_thread(&self) {
+        *lock(&self.suppressed_thread) = Some(std::thread::current().id());
+    }
+    pub(crate) fn flush_deferred_wake(&self) {
+        if self.deferred_wake.swap(false, std::sync::atomic::Ordering::AcqRel) {
+            self.deliver_wake();
         }
     }
 

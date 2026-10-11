@@ -25,6 +25,7 @@ pub(super) async fn supervise(core: Arc<Core>) {
         let notified = core.notify.notified();
         tokio::pin!(notified);
         notified.as_mut().enable();
+        core.mailbox.flush_deferred_wake();
         core.flush_notifications();
         let mut index = 0;
         while index < running.len() {
@@ -72,8 +73,28 @@ pub(super) async fn supervise(core: Arc<Core>) {
         }
         let now = core.clock.now();
         let (stopping, deadline, expired_native) = {
-            let state = lock(&core.state);
-            let (deadline, expired_native) = deadlines(&state, now);
+            let mut state = lock(&core.state);
+            let timers_enabled = !state.stopping;
+            let (mut deadline, mut expired_native) = deadlines(&state, now);
+            #[cfg(any(windows, test))]
+            for record in state.jobs.values_mut() {
+                if !timers_enabled {
+                    continue;
+                }
+                if !matches!(record.phase, JobPhase::Queued | JobPhase::Running) {
+                    continue;
+                }
+                if let Some(slots) = &mut record.native_deadlines {
+                    let (command_deadline, command_expired) = slots.scan(now);
+                    expired_native |= command_expired;
+                    if let Some(command_deadline) = command_deadline {
+                        deadline = Some(
+                            deadline
+                                .map_or(command_deadline, |earlier| earlier.min(command_deadline)),
+                        );
+                    }
+                }
+            }
             (state.stopping, deadline, expired_native)
         };
         // A notification may win select and discard an already-ready deadline
@@ -117,11 +138,22 @@ pub(super) async fn supervise(core: Arc<Core>) {
 }
 
 fn deadlines(state: &State, now: Moment) -> (Option<Moment>, bool) {
+    // Shutdown already wakes/cancels every owner. Expiry cannot schedule retries
+    // of retained native teardown, including unrelated unbound native permits.
+    if state.stopping {
+        return (None, false);
+    }
     let mut future = None;
     let mut expired_native = false;
     for record in state.jobs.values() {
         let native = record.spec.class == JobClass::NativeObservation;
         if record.phase != JobPhase::Queued && !(native && record.phase == JobPhase::Running) {
+            continue;
+        }
+        // A pipe that has selected stop still owns native retirement. Its
+        // inherited deadline has already been consumed and cannot retry close.
+        #[cfg(any(windows, test))]
+        if record.native_deadlines.as_ref().is_some_and(|slots| slots.stopped()) {
             continue;
         }
         if let Some(deadline) = record.deadline {
@@ -138,3 +170,7 @@ fn deadlines(state: &State, now: Moment) -> (Option<Moment>, bool) {
 #[cfg(test)]
 #[path = "runtime_supervision_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "runtime_supervision_pipe_tests.rs"]
+mod pipe_tests;

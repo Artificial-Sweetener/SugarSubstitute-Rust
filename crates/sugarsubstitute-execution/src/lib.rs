@@ -8,10 +8,14 @@ mod clock;
 mod cpu;
 #[cfg(any(windows, test))]
 mod fixture_session;
+#[cfg(any(windows, test))]
+mod lifecycle_pipe;
 mod mailbox;
 mod memory;
 #[cfg(any(windows, test))]
 mod native;
+#[cfg(any(windows, test))]
+mod native_deadlines;
 mod runtime;
 mod scope;
 mod task;
@@ -20,6 +24,8 @@ mod task;
 pub mod windows;
 #[cfg(windows)]
 pub mod windows_fixture;
+#[cfg(windows)]
+pub mod windows_lifecycle_pipe;
 
 pub use clock::MonotonicClock;
 pub use runtime::{

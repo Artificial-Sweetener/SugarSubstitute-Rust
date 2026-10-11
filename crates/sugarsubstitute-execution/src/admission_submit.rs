@@ -119,6 +119,11 @@ impl Core {
         state.jobs.insert(
             spec.id,
             Record {
+                #[cfg(any(windows, test))]
+                native_deadlines: match &queued.work {
+                    crate::task::Work::Native(work) => work.initial_deadlines(),
+                    _ => None,
+                },
                 deadline,
                 scope_id: scope.id(),
                 spec,

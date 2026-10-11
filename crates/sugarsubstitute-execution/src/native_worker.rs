@@ -108,6 +108,7 @@ enum Active {
     Process(ProcessActive),
     Fixture(crate::fixture_session::worker::Active),
     Child(crate::fixture_session::child_worker::Active),
+    Pipe(crate::lifecycle_pipe::worker::Active),
 }
 impl Active {
     fn new(queued: QueuedJob, core: &Arc<Core>, now: Moment) -> Option<Self> {
@@ -122,6 +123,9 @@ impl Active {
             NativeWork::FixtureChild(work) => Self::Child(
                 crate::fixture_session::child_worker::Active::new(work, queued.context, core, now),
             ),
+            NativeWork::LifecyclePipe(work) => Self::Pipe(
+                crate::lifecycle_pipe::worker::Active::new(work, queued.context, core, now),
+            ),
         })
     }
     fn fail_owner(&mut self, cause: &PanicCause) {
@@ -129,6 +133,7 @@ impl Active {
             Self::Process(active) => active.fail_owner(cause),
             Self::Fixture(active) => active.fail_owner(cause),
             Self::Child(active) => active.fail_owner(cause),
+            Self::Pipe(active) => active.fail_owner(cause),
         }
     }
     fn progress(&mut self, core: &Core, now: Moment, clock_available: bool) {
@@ -136,6 +141,7 @@ impl Active {
             Self::Process(active) => active.progress(core, now, clock_available),
             Self::Fixture(active) => active.progress(core, now, clock_available),
             Self::Child(active) => active.progress(core, now, clock_available),
+            Self::Pipe(active) => active.progress(core, now, clock_available),
         }
     }
     fn completed(&self) -> bool {
@@ -143,6 +149,7 @@ impl Active {
             Self::Process(active) => active.completed,
             Self::Fixture(active) => active.completed(),
             Self::Child(active) => active.completed(),
+            Self::Pipe(active) => active.completed(),
         }
     }
 }
@@ -216,7 +223,9 @@ fn worker(core: Arc<Core>) {
     let mut fatal = None;
     let mut now = Moment::from_nanos(0);
     loop {
-        if fatal.is_none() {
+        if fatal.is_none()
+            && !core.native_identity_unrestored.load(std::sync::atomic::Ordering::Acquire)
+        {
             match catch_unwind(AssertUnwindSafe(|| core.clock.now())) {
                 Ok(observed) => now = observed,
                 Err(payload) => owner_panicked(&core, &mut fatal, payload),
@@ -238,7 +247,14 @@ fn worker(core: Arc<Core>) {
                 active[index].fail_owner(cause);
             }
             if let Err(payload) = catch_unwind(AssertUnwindSafe(|| {
-                active[index].progress(&core, now, fatal.is_none())
+                active[index].progress(
+                    &core,
+                    now,
+                    fatal.is_none()
+                        && !core
+                            .native_identity_unrestored
+                            .load(std::sync::atomic::Ordering::Acquire),
+                )
             })) {
                 owner_panicked(&core, &mut fatal, payload);
             }

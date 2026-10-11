@@ -29,13 +29,13 @@ minimum_tests = 78
 package = "sugarsubstitute-execution"
 root = "crates/sugarsubstitute-execution"
 concern = "Admission, CPU scheduling, cancellation, retained ownership and observed worker teardown"
-minimum_tests = 119
+minimum_tests = 157
 
 [[owners]]
 package = "sugarsubstitute-xtask"
 root = "tools/xtask"
 concern = "Governance rejection behavior and verification orchestration"
-minimum_tests = 1
+minimum_tests = 39
 
 [[owners]]
 package = "sugarsubstitute-supervision"

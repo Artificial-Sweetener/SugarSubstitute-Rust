@@ -30,6 +30,8 @@ pub(crate) enum RequestKind {
 }
 
 pub(crate) struct Record {
+    #[cfg(any(windows, test))]
+    pub(crate) native_deadlines: Option<crate::native_deadlines::Deadlines>,
     pub(crate) deadline: Option<Moment>,
     pub(crate) scope_id: ScopeId,
     pub(crate) spec: JobSpec,
@@ -89,11 +91,13 @@ impl State {
 pub(crate) struct Core {
     #[cfg(any(windows, test))]
     pub(crate) native_thread: std::sync::OnceLock<std::thread::Thread>,
+    #[cfg(any(windows, test))]
+    pub(crate) native_identity_unrestored: std::sync::atomic::AtomicBool,
     pub(crate) id: ExecutionId,
     pub(crate) state: Mutex<State>,
     pub(crate) clock: Arc<dyn Clock>,
     pub(crate) mailbox: Mailbox,
-    pub(crate) notify: Notify,
+    pub(crate) notify: Arc<Notify>,
     pub(crate) cpu_changed: Condvar,
 }
 
@@ -110,9 +114,13 @@ impl Core {
         clock: Arc<dyn Clock>,
         wake: Arc<dyn CompletionWake>,
     ) -> Arc<Self> {
+        let mailbox = Mailbox::new(wake);
+        let notify = mailbox.notify.clone();
         Arc::new(Self {
             #[cfg(any(windows, test))]
             native_thread: std::sync::OnceLock::new(),
+            #[cfg(any(windows, test))]
+            native_identity_unrestored: std::sync::atomic::AtomicBool::new(false),
             id,
             state: Mutex::new(State {
                 scopes: HashMap::new(),
@@ -128,8 +136,8 @@ impl Core {
                 latest_scope: None,
             }),
             clock,
-            mailbox: Mailbox::new(wake),
-            notify: Notify::new(),
+            mailbox,
+            notify,
             cpu_changed: Condvar::new(),
         })
     }
