@@ -11,12 +11,11 @@ mod input;
 mod presentation;
 #[path = "runtime_state.rs"]
 mod state;
-#[path = "runtime_wake.rs"]
-mod wake;
 
 #[cfg(target_os = "windows")]
 use crate::KeyAction;
 use crate::cadence::{advance_deadline, closing_wait, presentation_wait};
+use crate::completion_wake as wake;
 #[cfg(target_os = "linux")]
 use crate::linux::Presenter;
 #[cfg(target_os = "macos")]
@@ -118,8 +117,11 @@ pub fn run(
         DesktopError::message("start_content", "completion drain budget must be positive")
     })?;
     let wake_lifetime = wake::WakeLifetime::new();
-    let completion_wake =
-        Arc::new(wake::ProxyWake::new(event_loop.create_proxy(), wake_lifetime.clone()));
+    let completion_wake = Arc::new(wake::ProxyWake::new(
+        event_loop.create_proxy(),
+        wake_lifetime.clone(),
+        NativeAction::Completions,
+    ));
     let mut surface = state::SurfaceState::new(timings.clone());
     if let Err(error) = content.start(completion_wake) {
         surface.fail(&mut content, DesktopError::boxed("start_content", error));

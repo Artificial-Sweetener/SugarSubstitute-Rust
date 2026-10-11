@@ -3,10 +3,15 @@
 //! Own native window lifetime and CPU frame presentation independently of UI content.
 
 mod cadence;
+mod completion_wake;
 mod contract;
 #[cfg(target_os = "windows")]
 mod control_geometry;
 mod frame_audit;
+#[cfg(target_os = "windows")]
+mod headless;
+#[cfg(target_os = "windows")]
+pub use headless::{HeadlessLifetime, HeadlessStep, run_headless};
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "macos")]

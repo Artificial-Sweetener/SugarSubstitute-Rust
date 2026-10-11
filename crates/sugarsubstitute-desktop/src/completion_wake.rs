@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Borrow a native proxy for completion wakeups only while its event loop is alive.
 
-use super::NativeAction;
+use std::fmt::Debug;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -11,23 +11,24 @@ use sugarsubstitute_contracts::execution::{CompletionWake, ExecutionError, Opera
 use tao::event_loop::EventLoopProxy;
 
 /// Disconnect before native teardown, after the owner proves all worker callbacks settled.
-pub(super) struct ProxyWake {
-    proxy: EventLoopProxy<NativeAction>,
+pub(crate) struct ProxyWake<T: 'static> {
+    proxy: EventLoopProxy<T>,
     lifetime: WakeLifetime,
+    completion: T,
 }
 
 /// Share only whether the native completion mailbox remains connected.
 #[derive(Clone)]
-pub(super) struct WakeLifetime(Arc<AtomicBool>);
+pub(crate) struct WakeLifetime(Arc<AtomicBool>);
 
 impl WakeLifetime {
     /// Create a connected wake lifetime before preparation can emit early completions.
-    pub(super) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self(Arc::new(AtomicBool::new(true)))
     }
 
     /// Reject subsequent wakes before controls/window/event-loop resources are dropped.
-    pub(super) fn disconnect(&self) {
+    pub(crate) fn disconnect(&self) {
         self.0.store(false, Ordering::Release);
     }
 
@@ -47,18 +48,18 @@ impl WakeLifetime {
     }
 }
 
-impl ProxyWake {
+impl<T: 'static> ProxyWake<T> {
     /// Retain Tao's thread-safe proxy without lending a native window to workers.
-    pub(super) fn new(proxy: EventLoopProxy<NativeAction>, lifetime: WakeLifetime) -> Self {
-        Self { proxy, lifetime }
+    pub(crate) fn new(proxy: EventLoopProxy<T>, lifetime: WakeLifetime, completion: T) -> Self {
+        Self { proxy, lifetime, completion }
     }
 }
 
-impl CompletionWake for ProxyWake {
+impl<T: Clone + Debug + Send + Sync + 'static> CompletionWake for ProxyWake<T> {
     fn wake(&self) -> Result<(), ExecutionError> {
         self.lifetime.check()?;
         self.proxy
-            .send_event(NativeAction::Completions)
+            .send_event(self.completion.clone())
             .map_err(|cause| ExecutionError::new(Operation::NativeLifecycle, Box::new(cause)))
     }
 }
