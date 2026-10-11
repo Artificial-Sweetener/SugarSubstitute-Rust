@@ -6,3 +6,4 @@ pub mod presentation;
 pub mod readiness;
 pub mod startup;
 pub mod supervision;
+pub mod transcript;

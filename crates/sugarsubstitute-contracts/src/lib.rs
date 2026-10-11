@@ -8,3 +8,4 @@ pub mod lifecycle;
 pub mod localization;
 pub mod presentation;
 pub mod startup;
+pub mod transcript;
