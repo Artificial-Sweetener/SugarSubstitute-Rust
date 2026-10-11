@@ -5,8 +5,9 @@
 
 use serde::Deserialize;
 use std::{error::Error, fs, path::Path};
+use sugarsubstitute_contracts::localization::LOCALES;
 use sugarsubstitute_splash::{
-    AnimationFrame, Appearance, Control, LOCALES, ProgressFrame, SplashRenderer, Theme,
+    AnimationFrame, Appearance, Control, ProgressFrame, SplashRenderer, Theme,
 };
 
 /// Read a parity scenario emitted by the production PySide reference harness.

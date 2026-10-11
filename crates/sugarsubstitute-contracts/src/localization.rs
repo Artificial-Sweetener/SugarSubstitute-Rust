@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 
-//! Own complete localized copy for the implemented native proof controls.
+//! Own SugarSubstitute's product copy and its sole supported-locale inventory.
 
 /// Bind one supported locale to every user-facing splash message.
 pub struct Messages {

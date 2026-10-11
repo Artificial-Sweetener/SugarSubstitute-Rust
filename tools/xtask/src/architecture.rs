@@ -143,6 +143,7 @@ mod tests {
         assert!(check(fixture.root(), &fixture.architecture, &fixture.workspace).is_err());
         let mut fixture = crate::fixtures::Repository::new()?;
         fixture.workspace.packages[0].dependencies.push(crate::workspace::Dependency {
+            rename: None,
             name: "external".into(),
             kind: None,
             path: Some("machine-local".into()),

@@ -9,6 +9,7 @@ authors.workspace = true
 publish.workspace = true
 
 [dependencies]
+sugarsubstitute-contracts = { path = "../sugarsubstitute-contracts" }
 sugarsubstitute-splash = { path = "../sugarsubstitute-splash" }
 sugarsubstitute-desktop = { path = "../sugarsubstitute-desktop" }
 tracing.workspace = true

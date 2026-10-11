@@ -14,8 +14,9 @@ use std::{
     process::ExitCode,
     time::{Duration, Instant},
 };
+use sugarsubstitute_contracts::localization::messages;
 use sugarsubstitute_desktop::{DesktopOptions, run};
-use sugarsubstitute_splash::{Appearance, Theme, messages};
+use sugarsubstitute_splash::{Appearance, Theme};
 
 /// Hold explicit demonstration and qualification invocation inputs.
 struct Options {

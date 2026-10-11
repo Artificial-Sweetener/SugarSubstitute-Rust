@@ -8,6 +8,15 @@ mod catalog;
 mod command;
 mod error;
 mod execution;
+mod execution_exports;
+mod execution_exports_declarations;
+mod execution_exports_macros;
+mod execution_exports_modules;
+mod execution_exports_names;
+#[cfg(test)]
+mod execution_exports_resolution_tests;
+#[cfg(test)]
+mod execution_exports_tests;
 mod execution_source;
 #[cfg(test)]
 mod execution_tests;

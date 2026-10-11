@@ -4,6 +4,7 @@
 //! Compose the replaceable CPU splash view from immutable presentation inputs.
 
 use std::{error::Error, fmt};
+use sugarsubstitute_contracts::localization::messages;
 use tiny_skia::Pixmap;
 
 use crate::{
@@ -11,9 +12,7 @@ use crate::{
     ProgressFrame, Theme,
     assets::POSE_ASSETS,
     caption_icons::{CaptionIcon, CaptionIcons},
-    chrome,
-    locale::messages,
-    progress,
+    chrome, progress,
     text::StatusText,
 };
 

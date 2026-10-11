@@ -190,7 +190,7 @@ fn macro_identifiers(tokens: TokenStream, identifiers: &mut BTreeSet<String>) {
 }
 
 /// Reject raw thread/queue ownership and native scheduling entry points outside the adapter.
-fn restricted_path(path: &[String]) -> bool {
+pub(crate) fn restricted_path(path: &[String]) -> bool {
     let Some(first) = path.first().map(String::as_str) else { return false };
     if restricted_crate(first) {
         return true;

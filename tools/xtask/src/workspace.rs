@@ -29,6 +29,7 @@ pub(crate) struct Package {
 #[derive(Deserialize)]
 pub(crate) struct Dependency {
     pub(crate) name: String,
+    pub(crate) rename: Option<String>,
     pub(crate) kind: Option<String>,
     pub(crate) path: Option<String>,
 }

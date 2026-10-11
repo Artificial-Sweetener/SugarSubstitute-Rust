@@ -1807,10 +1807,27 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+ "sugarsubstitute-contracts",
  "sugarsubstitute-desktop",
  "sugarsubstitute-splash",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "sugarsubstitute-application"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "sugarsubstitute-contracts",
+]
+
+[[package]]
+name = "sugarsubstitute-contracts"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1831,6 +1848,7 @@ version = "0.1.0"
 dependencies = [
  "cosmic-text",
  "png",
+ "sugarsubstitute-contracts",
  "tiny-skia",
  "windows",
  "windows-core",

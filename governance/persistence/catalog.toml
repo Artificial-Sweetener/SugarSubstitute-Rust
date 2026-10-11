@@ -1,3 +1,14 @@
 schema_version = 1
-# Register implemented persisted formats and cross-version host protocols here.
-formats = []
+# Readiness schema one rejects unsupported versions before application admission.
+
+[[formats]]
+id = "frontend-readiness"
+owner = "sugarsubstitute-contracts"
+sources = ["crates/sugarsubstitute-contracts/src/startup/mod.rs", "crates/sugarsubstitute-contracts/src/startup/readiness.rs", "crates/sugarsubstitute-contracts/src/execution/identity.rs"]
+source_sha256 = "sha256:a0a987062f399eb90c96a105adb1e50c878c89340b1d2af4b2137e504b05d720"
+classification = "protocol"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []

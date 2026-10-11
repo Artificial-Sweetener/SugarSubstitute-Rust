@@ -2,6 +2,18 @@ schema_version = 1
 platforms = ["windows", "macos", "linux"]
 
 [[owners]]
+package = "sugarsubstitute-contracts"
+root = "crates/sugarsubstitute-contracts"
+concern = "Owned application contracts, localization and adapter lifetime boundaries"
+minimum_tests = 1
+
+[[owners]]
+package = "sugarsubstitute-application"
+root = "crates/sugarsubstitute-application"
+concern = "Current-navigation readiness, terminal admission and cancellation"
+minimum_tests = 5
+
+[[owners]]
 package = "sugarsubstitute"
 root = "crates/sugarsubstitute"
 concern = "Product identity, demo input and controlled rendering composition"

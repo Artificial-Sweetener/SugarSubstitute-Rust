@@ -31,7 +31,7 @@ pub(crate) struct SplashDemo {
     pressed_target: Option<DemoTarget>,
     reduced_motion: bool,
     controls: [AccessibleControl; 2],
-    messages: &'static sugarsubstitute_splash::Messages,
+    messages: &'static sugarsubstitute_contracts::localization::Messages,
 }
 
 impl SplashDemo {
@@ -43,7 +43,7 @@ impl SplashDemo {
     ) -> Result<Self, Box<dyn Error>> {
         let mut animation = PaperFlip::new(0x0053_5547_4152);
         animation.set_reduced_motion(reduced_motion);
-        let messages = sugarsubstitute_splash::messages(locale);
+        let messages = sugarsubstitute_contracts::localization::messages(locale);
         Ok(Self {
             renderer: SplashRenderer::new(locale)?,
             animation,
@@ -343,7 +343,7 @@ mod tests {
     #[test]
     fn accessible_disclosure_reflects_pointer_keyboard_and_native_activation()
     -> Result<(), Box<dyn Error>> {
-        for locale in sugarsubstitute_splash::LOCALES {
+        for locale in sugarsubstitute_contracts::localization::LOCALES {
             let mut demo = SplashDemo::new(locale.id, Appearance::demo(), true)?;
             assert_eq!(demo.accessible_controls()[0].label, locale.hide_output);
             assert_eq!(demo.accessible_controls()[1].label, locale.cancel);

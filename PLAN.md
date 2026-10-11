@@ -19,7 +19,7 @@ These components already exist. Continue from them; their outstanding acceptance
 | B3 | Execution ownership restrictions and checker fixtures | governance/execution/policy.toml, tools/xtask/src/execution*.rs | The execution adapter is not implemented. M0 supplies the runtime and behavioral qualification. |
 | B4 | CPU splash renderer, paper-flip animation, progress/activity drawing, blank console presentation and collapsed/expanded interaction | crates/sugarsubstitute-splash/, crates/sugarsubstitute/src/demo.rs | S0 verifies full reference parity, control behavior and responsiveness. L2 supplies the live transcript. |
 | B5 | Forty packaged character poses, eighteen caption glyph PNGs and asset provenance | crates/sugarsubstitute-splash/assets/, third_party/ | Preserve assets and licensing; S0 checks all poses, scales and phases. |
-| B6 | Five-locale splash registry and localized demonstration controls | crates/sugarsubstitute-splash/src/locale.rs | M0 establishes shared application localization ownership; L2 completes production messages. |
+| B6 | Five-locale product registry and localized demonstration controls | crates/sugarsubstitute-contracts/src/localization.rs | M0 owns shared localization; L2 completes production messages. |
 | B7 | Replaceable content/frame contract, Tao event loop, native drag/close and platform presenters: Windows DIB/Mica, macOS softbuffer and Linux GTK/Cairo | crates/sugarsubstitute-desktop/ | S0 qualifies the demonstration. L1 adds the resizable main window, Wry and production native-window behavior. |
 | B8 | Deterministic Rust render export, Python reference renders, comparison metrics and Windows native observation tools | crates/sugarsubstitute/src/capture.rs, tools/splash_parity/ | S0 adds enforceable parity decisions and completes native/timing receipts; L4 extends lifecycle fixtures. |
 
@@ -53,7 +53,7 @@ Implementation and verification have separate statuses. Implementation is Not st
 | Order | Work ID | Implementation | Verification | Next work and prerequisite |
 | --- | --- | --- | --- | --- |
 | 1 | S0 | Complete on the Windows development setup: controls, raster parity, clipping and bounded source audit | Windows 11 at 96 DPI accepted: 429 frames, five startup runs, native controls/drag/load/idle matrix pass; other platforms and mixed DPI pending | Proceed to M0; retain separately pending native platform/DPI qualification. |
-| 2 | M0 | Not started: scheduling enforcement already exists in B3 | Pending | Implement central execution and minimal startup/config/localization contracts after the development platform's S0 boundary is accepted. |
+| 2 | M0 | In progress: canonical contracts/localization, typed job lifetimes and bounded readiness admission implemented; central execution and export governance under review | Contracts 19 and application 5 focused tests pass; runtime lifecycle and native performance pending | Integrate verified execution, startup configuration and governed prepared-frame delivery. |
 | 3 | M1 | Not started | Pending | Implement supervision, scoped identities/leases, authenticated lifecycle and containment after M0. |
 | 4 | L1–L5 | Not started: reusable presentation/proof components are B4–B8 | Pending | Build main host, production splash, Comfy adapter, qualification and native crash capture in parallel after M0/M1 ports are accepted. |
 | 5 | K1 | Not started | Pending | Integrate and hand off the first actual Comfy/SugarCubes host after L1–L5 components are ready. |
@@ -161,7 +161,7 @@ Use dirty-state/hover-change invalidation and coalesced redraw requests. Pointer
 
 ### 2.1 M0.1 — Introduce the actual layered owners
 
-**Implementation:** Not started. **Verification:** Pending.
+**Implementation:** Partial: contracts and application readiness owners implemented and registered; execution adapter under implementation. **Verification:** Focused contracts/application checks pass on Windows; integration pending.
 
 - [ ] Implement the real application/contracts/execution/Comfy owners as their first behavior lands; register each implemented crate.
 
@@ -171,7 +171,7 @@ The host injects typed execution ports into application services and owns the ex
 
 ### 2.2 M0.2 — Fix a bounded runtime policy
 
-**Implementation:** Not started. **Verification:** Pending.
+**Implementation:** In progress in the execution worktree; public contracts frozen. **Verification:** Owner compilation passes; admission/lifetime/worker behavior tests and integrated qualification pending.
 
 - [ ] Implement bounded runtime/worker admission, job lifetimes, cancellation and completion delivery.
 
@@ -203,7 +203,7 @@ Initial responsiveness targets: p95 host UI callback/drain work below 4 ms and p
 
 ### 2.4 M0.4 — Prove behavior and enforce scheduling ownership
 
-**Implementation:** Partial; source restrictions/checker fixtures exist, scheduler registration and runtime tests pending. **Verification:** Pending.
+**Implementation:** Partial: owner-export AST checks and rejection fixtures are implemented and independently reviewed; scheduler registration and runtime tests pending. **Verification:** All 37 tooling tests and governance pass on Windows; runtime and native qualification pending.
 
 - [ ] Register the implemented scheduler and extend the existing execution gate; prove runtime behavior and rejection cases.
 
@@ -213,7 +213,7 @@ Required tests cover admission saturation/byte reservations, fairness between cl
 
 ### 2.5 M0.5 — Freeze only first-checkpoint contracts
 
-**Implementation:** Not started. **Verification:** Pending.
+**Implementation:** Partial: shared localization and schema-one bounded readiness parsing/current-navigation terminal admission implemented. Configuration and process/readiness adapter ports remain pending. **Verification:** Seven protocol tests and five application admission tests pass on Windows; actual frontend probing remains L1/L3 integration.
 
 - [ ] Implement and freeze minimal startup/readiness/configuration/localization ports for the first host.
 
@@ -780,3 +780,23 @@ The first current static and animated drag receipts reject an origin mismatch: q
 Controlled runs use two owned integer-load workers and explicit two-logical-CPU affinity, with observed worker utilization and terminal/reap receipts. They do not claim full CPU saturation. The 32 disclosure input receipts measure capture-inclusive visible feedback p50/p95/p99 of 34.382/61.906/75.425 ms uncontended and 33.675/63.140/69.017 ms under controlled load. The later M0 input p95 50 ms and submission p95 25 ms targets are not established by these S0 measurements. Off-thread preparation and bounded delivery remain M0 work.
 
 **Windows development S0 acceptance:** The independent native reviewer verified the exact frozen executable, complete static-source/composition evidence, consecutive moving-source activity, actual control/accessibility/material results, five target-passing startup runs and the three idle visibility intervals. No blocker remains for this Windows 11 development setup at 96 DPI. Native submission inventories include expose/input as well as scheduled animation; their counts do not establish a universal 60-fps cap. The root's final exact-content `cargo xtask verify`, 145-test Python suite and `git diff --check` all pass. S0's reusable development boundary is accepted and M0 may begin. Actual mixed-DPI, macOS and Linux X11/Wayland qualification remain pending; no compositor frame-age or move-loop edge-gap measurement is claimed.
+
+**M0 implementation entry:** Commit `cabcf4e` preserves the accepted development S0 boundary. Execution, pure contracts and owner-export enforcement use fresh exclusive worktrees under `E:\devprojects`, rooted at that commit. Application owns semantic scope/job/surface generations; execution owns admission, factories, actual-stop observation, joins and delivery. Generic typed submission ports retain private task erasure, with no public runtime handles. Lifecycle work may consume unused ordinary capacity while ordinary work cannot consume reserved capacity. Delivery credits remain held until typed result transfer; cloned result-memory leases retain the original byte charge until the last guard drops. Scope/job abandonment requests cancellation while execution retains the real lifetime. Explicit shutdown reports unresolved work and retains ownership for retry; final executor destruction belongs after native UI teardown and joins retained workers.
+
+The first implemented contracts behavior is canonical localization: all five existing locale records and their coverage/fallback test move unchanged from splash to the domain contracts owner. Host and renderer callers consume that owner directly; the existing public splash text exports remain supported. Architecture/testing policy registers the new owner. Initial focused tests pass; lockfile regeneration initially refreshed unrelated transitive entries, which were restored. Offline minimal resolution now adds only the contracts package and its two workspace dependency edges, preserving all existing dependency versions. No M0 execution, native responsiveness or later supervision acceptance is claimed yet.
+
+
+**M0 contract/readiness development receipt (2026-10-11):** Contracts now own the unchanged English, Simplified Chinese, Japanese, Korean and Spanish locale registry. Splash and host callers consume that owner; the existing public splash localization exports remain supported. The domain execution boundary has owned scopes/jobs, typed admission and terminal outcomes, scheduler-neutral clock/cancellation waits, shared retained-byte leases and bounded native completion metadata. One release returns each byte charge only after its final lease; terminal transfer independently acknowledges delivery capacity. Factories execute only after admission on an execution worker. Cancellation requests remain separate from actual stop. Panic text copies into a fresh bounded UTF-8 allocation rather than retaining an arbitrarily large input capacity. Eleven execution-contract tests pass.
+
+Accepted scope and job IDs are independently increasing within one executor lifetime. The adapter retains bounded high-water marks instead of animation-rate retired-ID sets; rejected admission does not advance them. Sixty-four live/retained scopes cap metadata. Interactive CPU jobs require a surface replacement key; other classes reject one. Queue/ordinary/lifecycle, completion and memory reservations remain atomic, with a new replacement requiring its own terminal credit before retiring the old pending job. Private adapter implementation and rejection/lifecycle tests are still underway.
+
+The implemented frontend-readiness protocol accepts schema one, checks the 4096-byte bound before JSON parsing, rejects unknown fields/versions and nonpositive identities, and requires usable frontend graph/canvas/loading plus completed SugarCubes registration/readiness. Observed version labels and diagnostic detail have separate bounds. Typed failure detail is preserved without becoming product copy; JSON display reports category/location without echoing untrusted field names. The immutable receipt carries launch and navigation identities, grants no native authority, and requires desktop-origin validation before parsing. Persistence governance registers its exact sources with reject-only schema compatibility. Seven protocol tests and five application tests cover complete/incomplete evidence, malformed/oversized data, stale or future navigation, foreign launches, terminal duplicates, original failures, reload and permanent cancellation. This proves protocol/application rules, not an actual webview or Comfy readiness.
+
+Actual lead commands are `cargo test --locked -p sugarsubstitute-contracts -p sugarsubstitute-application` (19 + 5 passing tests), focused strict all-target/all-feature Clippy for contracts/application/host/splash, formatting and governance. The integrated owner-export gate consumes canonical dependency rename metadata; the temporary unused-field warning is resolved. Full exact-content repository verification is the next commit prerequisite. Existing external dependency versions remain unchanged; lock resolution added only implemented workspace packages/edges. Fresh execution, governance and CPU worktrees are under `E:\devprojects`; all test temporary storage and receipts are configured on the permitted artifact drive.
+
+
+**M0 owner-export governance development receipt (2026-10-11):** The integrated gate inspects declared public execution boundaries while retaining private runtime implementations. Rejection fixtures cover Cargo renames, lexical/type aliases, grouped/glob/nested re-exports, public fields/signatures/generic defaults, trait/union/reference and explicit associated-type projections, function-pointer initializers, direct and conditionally exported macros, local recursive macro initializers, emitted helper signatures and platform module-path alternatives. Review found and fixed missed default trait constants, public union/local-trait projections, hidden type macros and conditional exports; valid private generic implementations and tracing field names remain accepted. Thirty-seven tooling tests pass in the canonical checkout. Static declaration analysis does not establish lifecycle correctness or arbitrary behavior-body/external-macro inference; execution tests and source review retain those responsibilities. The absence of a registered canonical execution adapter still forbids all consumer scheduling.
+
+Independent review accepted the bounded readiness/navigation and locale move. Six additional malformed-input probes rejected duplicate IDs/status/evidence, floating-point identity, missing evidence and unknown failure fields; the equivalent regression now runs in the protocol owner. Actual command `python -m unittest discover -s tools/splash_parity -p "test_*.py" -q` selected 145 passing qualification-tool tests. Native graphics/readiness claims remain the existing S0 receipts and pending production integration, respectively.
+
+**M0 first boundary verification receipt (2026-10-11):** Canonical exact runtime/tooling contents passed cargo xtask verify on Windows with Rust 1.93.1-x86_64-pc-windows-msvc: governance, formatting, strict workspace/all-target/all-feature Clippy, 139 Rust tests (host 9, contracts 19, application 5, desktop 22, splash 47, tooling 37), no ignored tests, and warning-free Rustdoc. Cargo.lock SHA-256: f55692b8b594a77203757bae44b50cc15b72ca1ba41a68cb23c9195158468b97. Qualification-tool suite: 145 passing tests. New crates have real protocol/admission behavior and registered test ownership. The execution runtime remains in its implementation worktree and is not yet registered in the canonical checkout; native M0 targets, startup configuration and M1/K1 remain pending. This coherent boundary outcome is ready for the next authorized interval commit; it is not M0 acceptance.

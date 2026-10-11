@@ -9,7 +9,7 @@ use serde::Deserialize;
 
 use crate::{
     error::{Result, read, require},
-    execution_source,
+    execution_exports, execution_source,
     policy::Architecture,
     source::{resolve, rust_files},
     workspace::Workspace,
@@ -45,6 +45,18 @@ pub(crate) fn check(
         let permitted = policy.owner.as_deref() == Some(owner.package.as_str());
         let package = workspace.packages.iter().find(|package| package.name == owner.package);
         require(package.is_some(), format!("execution: missing package {}", owner.package))?;
+        if permitted && let Some(package) = package {
+            let findings =
+                execution_exports::findings(&resolve(root, &owner.root)?, &package.dependencies)?;
+            require(
+                findings.is_empty(),
+                format!(
+                    "execution: {} exports raw scheduling capabilities: {}",
+                    owner.package,
+                    findings.join(", ")
+                ),
+            )?;
+        }
         if !permitted && let Some(package) = package {
             for dependency in &package.dependencies {
                 require(

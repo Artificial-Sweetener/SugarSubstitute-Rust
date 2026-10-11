@@ -8,6 +8,18 @@ source_roots = ["crates", "tools"]
 layers = ["domain", "application", "adapter", "host", "tooling"]
 
 [[owners]]
+package = "sugarsubstitute-contracts"
+root = "crates/sugarsubstitute-contracts"
+layer = "domain"
+concern = "Runtime-independent application contracts and product localization"
+
+[[owners]]
+package = "sugarsubstitute-application"
+root = "crates/sugarsubstitute-application"
+layer = "application"
+concern = "Application readiness and navigation lifecycle"
+
+[[owners]]
 package = "sugarsubstitute"
 root = "crates/sugarsubstitute"
 layer = "host"
