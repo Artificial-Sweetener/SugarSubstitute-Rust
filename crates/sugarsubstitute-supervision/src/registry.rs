@@ -131,6 +131,7 @@ impl Record {
 #[must_use = "Keep the registry alive until actual family settlement and observation transfer"]
 pub struct WindowsProcessRegistry {
     owner: CoordinatorKey,
+    identity: RegistryIdentity,
     records: [Option<Record>; 128],
     next_process: u64,
     launch_open: bool,
@@ -144,6 +145,7 @@ impl WindowsProcessRegistry {
     pub fn new(owner: CoordinatorKey) -> Self {
         Self {
             owner,
+            identity: RegistryIdentity::new(),
             records: std::array::from_fn(|_| None),
             next_process: 1,
             launch_open: true,
@@ -283,7 +285,9 @@ impl Drop for WindowsProcessRegistry {
         }
     }
 }
+mod claim_identity;
 mod cleanup;
+pub(crate) use claim_identity::RegistryIdentity;
 mod completion;
 mod observation_retirement;
 mod submission;

@@ -1882,6 +1882,7 @@ dependencies = [
 name = "sugarsubstitute-supervision"
 version = "0.1.0"
 dependencies = [
+ "sha2",
  "sugarsubstitute-contracts",
  "sugarsubstitute-execution",
  "tracing",

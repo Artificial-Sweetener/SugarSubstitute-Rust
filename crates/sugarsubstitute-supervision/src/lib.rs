@@ -11,9 +11,18 @@ mod command;
 mod errors;
 
 #[cfg(windows)]
+mod claim_error;
+#[cfg(windows)]
+mod claim_types;
+#[cfg(windows)]
+mod claims;
+#[cfg(windows)]
 mod environment;
 #[cfg(windows)]
 pub mod lifecycle_protocol;
+#[cfg(windows)]
+#[allow(unsafe_code)]
+mod native_claims;
 #[cfg(windows)]
 #[allow(unsafe_code)]
 mod native_process;
@@ -29,6 +38,15 @@ mod registry_types;
 pub use command::{MAX_WINDOWS_ARGUMENTS, WindowsLaunchBuffers, WindowsLaunchCommand};
 pub use errors::LaunchCommandError;
 
+#[cfg(windows)]
+pub use claim_error::{ClaimAdmissionError, ClaimError};
+#[cfg(windows)]
+pub use claim_types::{
+    CLAIM_POOL_BYTES, ClaimLaunchJobs, ClaimObservation, ClaimTarget, ManagedLaunchInput,
+    ResolutionTicket,
+};
+#[cfg(windows)]
+pub use claims::{CLAIM_OPERATION_BYTES, WindowsResourceClaims};
 #[cfg(windows)]
 pub use environment::{EnvironmentOverride, LaunchEnvironment, LaunchEnvironmentError};
 #[cfg(windows)]

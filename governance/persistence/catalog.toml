@@ -77,3 +77,15 @@ current_version = 1
 accepted_versions = [1]
 compatibility = "reject"
 migrations = []
+
+[[formats]]
+id = "windows-resource-claim-generation"
+owner = "sugarsubstitute-supervision"
+sources = ["crates/sugarsubstitute-supervision/src/native_claims/records.rs", "crates/sugarsubstitute-supervision/src/native_claims/records/storage.rs", "crates/sugarsubstitute-supervision/src/native_claims/paths.rs", "crates/sugarsubstitute-supervision/src/native_claims/account.rs"]
+source_sha256 = "sha256:eb2bf290baccd742a79488945ce19917d1d530e846a2ac10007f1f8faa376451"
+classification = "authoritative_state"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []

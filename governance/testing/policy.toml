@@ -40,8 +40,8 @@ minimum_tests = 1
 [[owners]]
 package = "sugarsubstitute-supervision"
 root = "crates/sugarsubstitute-supervision"
-concern = "Exact Windows launch inputs, retained containment, typed exits, cleanup failures and bounded lifecycle framing"
-minimum_tests = 83
+concern = "Windows launch inputs, retained containment, resource exclusions, actual claim retirement and bounded lifecycle framing"
+minimum_tests = 115
 
 [[owners]]
 package = "sugarsubstitute-splash"
