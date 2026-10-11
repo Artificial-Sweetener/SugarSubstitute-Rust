@@ -11,9 +11,25 @@ pub use crate::fixture_session::{
     FixtureChildEvents, FixtureObservation, FixtureSession, FixtureSessionControl,
     FixtureSessionError, FixtureSessionReport, MIN_FIXTURE_SESSION_BYTES,
 };
+use crate::native::NativeObservationError;
 use crate::{ExecutionClient, windows::NativeCorrelation};
 use std::os::windows::io::BorrowedHandle;
 use sugarsubstitute_contracts::execution::{AdmissionError, JobSpec, Scope};
+
+impl FixtureDeadline {
+    /// Translate one original parent campaign deadline into fixed absolute QPC ticks.
+    ///
+    /// QPF/QPC are sampled before reading the remaining `Instant` duration. Checked
+    /// integer flooring makes this deadline conservative; pass its unchanged ticks
+    /// and frequency to every child. This neither renews the campaign nor changes
+    /// the parent's independently admitted execution deadline. Reject expired,
+    /// sub-tick, invalid-counter or overflowing input, preserving native clock causes.
+    pub fn until(original: std::time::Instant) -> Result<Self, NativeObservationError> {
+        deadline::sampled(child_port::sample, || {
+            original.checked_duration_since(std::time::Instant::now())
+        })
+    }
+}
 
 impl ExecutionClient {
     /// Admit one parent session before any native event creation or registration.
@@ -72,6 +88,8 @@ mod child_native;
 #[allow(unsafe_code)]
 #[path = "windows_fixture/child_port.rs"]
 mod child_port;
+#[path = "windows_fixture/deadline.rs"]
+mod deadline;
 #[allow(unsafe_code)]
 #[path = "windows_fixture/native.rs"]
 mod native;
