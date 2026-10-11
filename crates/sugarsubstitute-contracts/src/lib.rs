@@ -4,6 +4,7 @@
 
 pub mod configuration;
 pub mod execution;
+pub mod lifecycle;
 pub mod localization;
 pub mod presentation;
 pub mod startup;

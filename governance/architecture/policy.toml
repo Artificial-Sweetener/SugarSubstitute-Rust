@@ -17,7 +17,7 @@ concern = "Runtime-independent application contracts and product localization"
 package = "sugarsubstitute-application"
 root = "crates/sugarsubstitute-application"
 layer = "application"
-concern = "Acknowledged startup, settled retry, readiness and frame publication lifecycle"
+concern = "Acknowledged startup, settled retry, readiness, frame publication and supervision policy"
 
 [[owners]]
 package = "sugarsubstitute-comfy"
