@@ -15,6 +15,10 @@ pub(super) struct Fake {
     pub(super) fail_close_after_job: AtomicBool,
     pub(super) fail_resume_close: AtomicBool,
     pub(super) fail_duplicate: AtomicBool,
+    pub(super) fail_enrollment: AtomicBool,
+    pub(super) hold_enrollment: AtomicBool,
+    pub(super) enrollment_entered: AtomicBool,
+    pub(super) creation_order: Mutex<[u8; 4]>,
     pub(super) fail_terminate: AtomicBool,
     pub(super) advance_clock: Mutex<Option<Arc<TestClock>>>,
     pub(super) root_alive: AtomicBool,
@@ -26,6 +30,19 @@ pub(super) struct Fake {
     pub(super) changed: Condvar,
 }
 impl Fake {
+    pub(super) fn entered_enrollment(&self) -> Result<(), Box<dyn Error>> {
+        let guard = lock(&self.state);
+        let (_guard, timed) = self
+            .changed
+            .wait_timeout_while(guard, Duration::from_secs(10), |_| {
+                !self.enrollment_entered.load(Ordering::Acquire)
+            })
+            .map_err(|_| "Native enrollment fixture poisoned")?;
+        if timed.timed_out() {
+            return Err("Native enrollment boundary was not entered".into());
+        }
+        Ok(())
+    }
     pub(super) fn new() -> Arc<Self> {
         Arc::new(Self { root_alive: AtomicBool::new(true), ..Self::default() })
     }
@@ -67,6 +84,7 @@ impl NativePort for Fake {
         _: &mut WindowsLaunchInput,
     ) -> Result<Identity, RegistryError> {
         self.creates.fetch_add(1, Ordering::AcqRel);
+        *lock(&self.creation_order) = [1, 0, 0, 0];
         family.job = Some(10);
         family.thread = Some(11);
         family.members[0] =
@@ -91,6 +109,7 @@ impl NativePort for Fake {
         Ok(ROOT)
     }
     fn resume(&self, family: &mut Family) -> Result<(), RegistryError> {
+        lock(&self.creation_order)[3] = 4;
         self.resumes.fetch_add(1, Ordering::AcqRel);
         family.resumed = true;
         if self.fail_resume_close.load(Ordering::Acquire) {
@@ -109,7 +128,38 @@ impl NativePort for Fake {
                 std::io::Error::from_raw_os_error(6),
             ));
         }
+        lock(&self.creation_order)[1] = 2;
         Ok(WatchInput::Simulated)
+    }
+    fn enroll_desktop(
+        &self,
+        _: &mut Family,
+        run: sugarsubstitute_contracts::lifecycle::RunKey,
+        key: ProcessKey,
+    ) -> Result<(), RegistryError> {
+        if key.owner != run.owner || *lock(&self.creation_order) != [1, 2, 0, 0] {
+            return Err(RegistryError::invalid("fake_enrollment_order"));
+        }
+        lock(&self.creation_order)[2] = 3;
+        let guard = lock(&self.state);
+        self.enrollment_entered.store(true, Ordering::Release);
+        self.changed.notify_all();
+        if self.hold_enrollment.load(Ordering::Acquire) {
+            let (_guard, timed) = self
+                .changed
+                .wait_timeout_while(guard, Duration::from_secs(10), |state| !state.1)
+                .map_err(|_| RegistryError::invalid("fake_enrollment_latch"))?;
+            if timed.timed_out() {
+                return Err(RegistryError::invalid("fake_enrollment_latch"));
+            }
+        }
+        if self.fail_enrollment.load(Ordering::Acquire) {
+            return Err(RegistryError::new(
+                "lifecycle_enrollment_rejected",
+                std::io::Error::from_raw_os_error(6),
+            ));
+        }
+        Ok(())
     }
     fn seal(&self, family: &mut Family) -> Result<(), RegistryError> {
         self.seals.fetch_add(1, Ordering::AcqRel);

@@ -258,3 +258,8 @@ impl LifecyclePipeBootstrap {
 #[cfg(test)]
 #[path = "windows_lifecycle_pipe/input_tests.rs"]
 mod input_tests;
+
+#[cfg(test)]
+#[allow(unsafe_code)]
+#[path = "windows_lifecycle_pipe/native_abi_tests.rs"]
+mod native_abi_tests;

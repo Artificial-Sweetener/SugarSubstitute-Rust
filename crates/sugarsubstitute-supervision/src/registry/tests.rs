@@ -216,6 +216,7 @@ mod claim_identity;
 mod cleanup_failure;
 mod completions;
 mod descendant_facts;
+mod enrollment;
 mod force;
 mod lifecycle;
 mod observation_retirement;

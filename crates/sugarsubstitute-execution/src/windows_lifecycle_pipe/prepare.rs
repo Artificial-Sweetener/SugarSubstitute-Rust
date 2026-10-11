@@ -84,7 +84,7 @@ impl Lease {
         let raw = unsafe {
             CreateFileW(
                 PCWSTR(data.name.as_ptr()),
-                FILE_READ_DATA.0 | FILE_WRITE_DATA.0 | FILE_READ_ATTRIBUTES.0 | SYNCHRONIZE.0,
+                CLIENT_ACCESS,
                 FILE_SHARE_MODE(0),
                 None,
                 OPEN_EXISTING,

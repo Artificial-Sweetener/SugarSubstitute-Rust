@@ -1,0 +1,93 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Artificial Sweetener and contributors
+//! Keep native pump alive until every pipe and actual family retires before workers.
+use super::{Result, parent::Parent};
+use std::{num::NonZeroUsize, sync::Arc, time::Instant};
+use sugarsubstitute_contracts::execution::{CompletionWake, ExecutionPort, ScopeId, ScopeSpec};
+use sugarsubstitute_desktop::{HeadlessLifetime, HeadlessStep};
+use sugarsubstitute_execution::ExecutionOwner;
+
+impl HeadlessLifetime for Parent {
+    fn start(&mut self, wake: Arc<dyn CompletionWake>) -> Result<()> {
+        if self.owner.is_some() || self.closing {
+            return Err("Lifecycle parent cannot start twice/after closure".into());
+        }
+        self.owner = Some(ExecutionOwner::new(self.clock.clone(), wake)?);
+        let client = self.owner.as_ref().ok_or("Lifecycle parent execution missing")?.client();
+        self.client = Some(client.clone());
+        self.scope =
+            Some(client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?);
+        self.pipe_scope = Some(
+            client.create_native_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?,
+        );
+        self.reserve_next()
+    }
+    fn activity(&mut self, max: NonZeroUsize) -> Result<HeadlessStep> {
+        Parent::activity(self, max)
+    }
+    fn next_deadline(&self) -> Option<Instant> {
+        let original = (!self.deadline_observed).then_some(self.deadline);
+        let stop = self
+            .cases
+            .get(self.current)
+            .and_then(|case| case.stop.as_ref())
+            .and_then(|stop| stop.next_deadline());
+        match (original, stop) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        }
+    }
+    fn request_shutdown(&mut self) -> Result<()> {
+        if self.closing {
+            return Ok(());
+        }
+        self.closing = true;
+        self.registry.close_launch_admission();
+        for case in &mut self.cases {
+            if let Some(session) = &case.session {
+                case.pipe_close_requested = true;
+                session.control.close();
+            }
+        }
+        self.ensure_stop()
+    }
+    fn poll_shutdown(&mut self) -> Result<bool> {
+        if !self.closing
+            || !self.registry.is_empty()
+            || self.cases.iter().any(|case| case.session.is_some() && !case.pipe_terminal)
+        {
+            return Ok(false);
+        }
+        let Some(owner) = &mut self.owner else { return Ok(true) };
+        if !self.execution_stopping {
+            self.execution_stopping = true;
+            owner.request_shutdown(self.execution_deadline);
+        }
+        let progress = owner.poll_shutdown()?;
+        if progress.deadline_expired && !self.deadline_observed {
+            self.deadline_observed = true;
+            return Err("Lifecycle execution remains owned after original campaign deadline".into());
+        }
+        if progress.settled {
+            self.workers = Some(progress.workers);
+        }
+        Ok(progress.settled)
+    }
+    fn finish_shutdown(&mut self) -> Result<()> {
+        if !self.poll_shutdown()? {
+            return Err("Lifecycle parent cannot finish with owned native resources".into());
+        }
+        if let Some(owner) = &mut self.owner {
+            owner.finish_shutdown()?;
+        }
+        for case in &mut self.cases {
+            case.session = None;
+        }
+        self.pipe_scope = None;
+        self.scope = None;
+        self.client = None;
+        self.owner = None;
+        self.finished = true;
+        Ok(())
+    }
+}

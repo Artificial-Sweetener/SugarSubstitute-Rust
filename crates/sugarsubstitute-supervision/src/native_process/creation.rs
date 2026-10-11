@@ -44,7 +44,8 @@ impl WindowsPort {
             )
         }
         .map_err(|cause| RegistryError::new("job_containment_limits", cause))?;
-        let attribute_count = if family.fixture_events.is_some() { 2 } else { 1 };
+        let inherited = family.fixture_events.is_some() || family.lifecycle_bootstrap.is_some();
+        let attribute_count = if inherited { 2 } else { 1 };
         let mut bytes = 0;
         // SAFETY: sizing query has no list; the documented insufficient-buffer result supplies its required size.
         let sized =
@@ -91,20 +92,36 @@ impl WindowsPort {
             }
             .map_err(|cause| RegistryError::new("fixture_handle_allowlist", cause))?;
         }
+        if family.lifecycle_bootstrap.is_some() {
+            // SAFETY: exactly one read-only section is pinned by this stable family
+            // until actual attribute deletion. No other handle is inherited.
+            unsafe {
+                UpdateProcThreadAttribute(
+                    list,
+                    0,
+                    PROC_THREAD_ATTRIBUTE_HANDLE_LIST as usize,
+                    Some(family.lifecycle_handles.as_ptr().cast()),
+                    size_of_val(&family.lifecycle_handles),
+                    None,
+                    None,
+                )
+            }
+            .map_err(|cause| RegistryError::new("lifecycle_handle_allowlist", cause))?;
+        }
         let mut startup = STARTUPINFOEXW::default();
         startup.StartupInfo.cb = size_of::<STARTUPINFOEXW>() as u32;
         startup.lpAttributeList = list;
         let mut process = PROCESS_INFORMATION::default();
         // SAFETY: validated explicit mutable argv, application/cwd/environment live through the call.
-        // Ordinary launches inherit no handles. The fixture inherits only its exact
-        // four-event HANDLE_LIST; the owned Job and process handles remain private.
+        // Ordinary launches inherit no handles. A typed input retains either four
+        // fixture events or one read-only bootstrap section in its exact HANDLE_LIST.
         let created = unsafe {
             CreateProcessW(
                 PCWSTR(input.command.application_name.as_ptr()),
                 Some(PWSTR(input.command.command_line.as_mut_ptr())),
                 None,
                 None,
-                family.fixture_events.is_some(),
+                inherited,
                 EXTENDED_STARTUPINFO_PRESENT | CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT,
                 Some(input.environment.as_utf16().as_ptr().cast()),
                 PCWSTR(input.command.working_directory.as_ptr()),
@@ -197,8 +214,10 @@ impl WindowsPort {
             family.attributes_initialized = false;
         }
         // Deletion has returned, or initialization never committed. Only now can
-        // the execution worker retire the duplicated event handles.
+        // the execution worker retire the pinned duplicated inheritance handles.
         drop(family.fixture_events.take());
         family.fixture_handles = [0; 4];
+        drop(family.lifecycle_bootstrap.take());
+        family.lifecycle_handles = [0];
     }
 }

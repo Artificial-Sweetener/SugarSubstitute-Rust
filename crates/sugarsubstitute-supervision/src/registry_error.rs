@@ -6,6 +6,8 @@ use sugarsubstitute_contracts::execution::{AdmissionError, PanicCause};
 
 /// Reject bounded launch storage before execution admission or native effects.
 pub enum RegistryInputError {
+    /// Bootstrap and enrollment do not belong to the exact same admitted session.
+    LifecycleProvenance,
     /// Checked capacity accounting overflowed or exceeded supported storage.
     Capacity,
     /// Retained storage could not be allocated.
@@ -21,7 +23,7 @@ impl fmt::Display for RegistryInputError {
 impl Error for RegistryInputError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            Self::Capacity => None,
+            Self::Capacity | Self::LifecycleProvenance => None,
             Self::Allocation(cause) => Some(cause),
             Self::Environment(cause) => Some(cause),
         }

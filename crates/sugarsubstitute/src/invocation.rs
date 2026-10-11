@@ -27,6 +27,12 @@ pub(crate) enum Invocation {
     /// Windows root-exit/surviving-descendant campaign receipt destination.
     #[cfg(target_os = "windows")]
     NativeDescendantFixture(PathBuf),
+    /// Windows authenticated lifecycle pipe campaign receipt destination.
+    #[cfg(target_os = "windows")]
+    NativePipeFixture(PathBuf),
+    /// Windows child admitted before adopting its single read-only bootstrap section.
+    #[cfg(target_os = "windows")]
+    NativePipeChild(crate::pipe_fixture::ChildOptions),
     /// Actual cross-process claim qualification with an isolated D-drive workspace.
     #[cfg(target_os = "windows")]
     NativeClaimFixture(crate::claim_fixture::CampaignOptions),
@@ -91,11 +97,20 @@ impl Invocation {
             return Ok(Self::NativeHeldChild(crate::held_child::ChildOptions::parse(arguments)?));
         }
         #[cfg(target_os = "windows")]
+        if arguments.peek().is_some_and(|argument| argument == "--internal-native-pipe-child") {
+            arguments.next();
+            return Ok(Self::NativePipeChild(crate::pipe_fixture::ChildOptions::parse(arguments)?));
+        }
+        #[cfg(target_os = "windows")]
+        let pipe =
+            arguments.peek().is_some_and(|argument| argument == "--internal-native-pipe-fixture");
+        #[cfg(target_os = "windows")]
         let held = arguments
             .peek()
             .is_some_and(|argument| argument == "--internal-native-held-registry-fixture");
         #[cfg(target_os = "windows")]
         if held
+            || pipe
             || arguments
                 .peek()
                 .is_some_and(|argument| argument == "--internal-native-registry-fixture")
@@ -109,7 +124,9 @@ impl Invocation {
             if !path.is_absolute() || arguments.next().is_some() {
                 return Err("Native registry fixture requires one absolute receipt path".into());
             }
-            return Ok(if held {
+            return Ok(if pipe {
+                Self::NativePipeFixture(path)
+            } else if held {
                 Self::NativeHeldRegistryFixture(path)
             } else {
                 Self::NativeRegistryFixture(path)

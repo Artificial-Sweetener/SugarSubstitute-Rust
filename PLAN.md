@@ -56,8 +56,8 @@ The maintainer selected a busy-system timing margin for Windows development qual
 | --- | --- | --- | --- | --- |
 | 1 | S0 | Complete on the Windows development setup: controls, raster parity, clipping and bounded source audit | Windows 11 at 96 DPI accepted: 429 frames, five startup runs, native controls/drag/load/idle matrix pass; other platforms and mixed DPI pending | Proceed to M0; retain separately pending native platform/DPI qualification. |
 | 2 | M0 | Complete development foundation: execution, acknowledged startup/retry policy, configuration/readiness, governed raster preparation, immutable publication and nonblocking native delivery implemented | Windows development foundation accepted with the explicit busy timing profile: release-14 complete normal/load campaigns and five startup runs pass; strict input failures remain recorded. Canonical owner checks pass 306 Rust and 353 Python tests. Final-artifact and other-platform qualification remain pending. | Proceed to M1. Production startup composition and exact K1 native qualification remain later obligations. |
-| 3 | M1 | In progress: scoped resource/lease, desktop-exit and UI challenge policy implemented; native execution, launch inputs, retained containment registry, headless pump, event sessions and lifecycle transport implemented; receiving-platform integration underway | Combined owner checks pass 661 Rust tests. Retained Windows releases qualify immediate-exit families, 64 simultaneously held children, exact four-event inheritance, watch cancellation with continued response, explicit release and worker teardown. Claims qualification covers coordinator/backend exclusion, managed-family retention/release and unresolved predecessors. The surviving-descendant campaign proves natural root exit, a fresh child response, original grace/force/settlement and joined workers. Authenticated IPC, recovery/security fault cases and UI progress remain pending | Integrate suspended lifecycle enrollment and qualify actual authenticated communication. |
-| 4 | L1–L5 | Not started: reusable presentation/proof components are B4–B8 | Pending | Build main host, production splash, Comfy adapter, qualification and native crash capture in parallel after M0/M1 ports are accepted. |
+| 3 | M1 | In progress: scoped resource/lease, desktop-exit and UI challenge policy implemented; native execution, launch inputs, retained containment registry, headless pump, event sessions, lifecycle transport and suspended enrollment implemented | Combined owner checks pass 687 Rust tests. Windows qualifies immediate-exit and surviving-descendant families, 64 held children, claims, exact inheritance, watch cancellation and worker teardown. Actual lifecycle registration authenticates the valid child and rejects wrong capability and stale generation; all three families retire. Production lease/completion effects, recovery/security fault cases and native UI progress remain pending | Compose authenticated application operations and complete concurrent/owner-loss/failure qualification. |
+| 4 | L1–L5 | In progress in E: lane worktrees: transcript and output-owner candidates plus pure Comfy launch/readiness are independently reviewed; main-window ownership and native capture are being authored | Candidate owner checks pass; canonical integration and actual output/browser/Comfy/crash qualification pending | Integrate the frozen candidates continuously while completing main-window and capture adapters. |
 | 5 | K1 | Not started | Pending | Integrate and hand off the first actual Comfy/SugarCubes host after L1–L5 components are ready. |
 | 6 | C0 | Not started | Pending | Implement desktop wire/provenance/layout contracts from the working K1 host. |
 | 7 | P1–P6 | Not started | Pending | Build native composition, negotiation, SugarCubes desktop UI, outputs, static mock and harness in parallel after C0. |
@@ -283,7 +283,7 @@ Desktop exit classification requires matching current authenticated intent/compl
 
 ### 3.1 M1.1 — Establish the process arrangement and lifetime authority
 
-**Implementation:** Not started. **Verification:** Pending.
+**Implementation:** Partial: isolated same-executable/headless qualification roles and supervised execution are implemented; production supervisor/desktop composition remains pending. **Verification:** Windows fixture receipts pass; production roles and other platforms remain pending.
 
 - [ ] Implement executable supervisor/desktop/guardian modes and their explicit lifetime authorities.
 
@@ -297,7 +297,7 @@ The splash receives immutable startup events and emits typed intents. A desktop 
 
 ### 3.2 M1.2 — Freeze identities, leases, locks and authenticated lifecycle messages
 
-**Implementation:** Not started. **Verification:** Pending.
+**Implementation:** Partial: scoped identities/lease policy, Windows claims, versioned codec, authenticated transport and suspended enrollment are implemented. **Verification:** Windows claim and valid/wrong-capability/stale-generation transport campaigns pass; connection-bound production lease/completion effects and the remaining security/reconciliation matrix are pending.
 
 - [ ] Implement scoped resource identities, multi-client leases, claims, authenticated lifecycle IPC and atomic records.
 
@@ -313,7 +313,7 @@ Publish runtime records atomically with schema and complete ownership generation
 
 ### 3.3 M1.3 — Implement containment and explicit terminal outcomes
 
-**Implementation:** Not started. **Verification:** Pending.
+**Implementation:** Partial: Windows creation-time containment, retained native family registry, exact exit/watch/settlement facts and typed owner outcomes are implemented. **Verification:** Immediate-exit, held64 and surviving-descendant Windows campaigns pass; owner-loss/fault integration and other-platform adapters remain pending.
 
 - [ ] Implement qualified native containment and typed terminal outcomes.
 
@@ -327,7 +327,7 @@ Model normal completion, explicit cancellation, startup failure, unexpected term
 
 ### 3.4 M1.4 — Establish external crash observation, startup and shutdown transactions
 
-**Implementation:** Not started. **Verification:** Pending.
+**Implementation:** Partial: acknowledged startup/retry, desktop-exit and UI-watchdog policy plus original-budget native shutdown are implemented. **Verification:** Deterministic policy and selected Windows shutdown/worker fixtures pass; production UI challenge, authenticated completion, crash and joint startup/shutdown integration remain pending.
 
 - [ ] Implement external exit observation, UI watchdog and bounded startup/shutdown transactions.
 
@@ -395,7 +395,7 @@ Prove concurrent independent instances and distinct profiles; concurrent leases 
 
 ### 4.1 L1: Native main window, webview and browser services
 
-**Implementation:** Not started; reusable splash-window adapters are B7. **Verification:** Pending.
+**Implementation:** In progress in the L1 lane: native ownership contracts and bounded readiness observations are being authored; reusable splash-window adapters are B7. **Verification:** Wry partial-resource ownership is under source review; actual main-window/browser qualification remains pending.
 
 - [ ] Extend existing native adapters into a production main window with Wry, runtime/profile admission and browser services.
 
@@ -439,7 +439,7 @@ Development tools are explicit dev configuration; production has no remote inspe
 
 ### 4.2 L2: Production native splash and bounded transcript
 
-**Implementation:** Not started; reusable splash is B4–B6. **Verification:** Pending.
+**Implementation:** Partial in the L2 lanes: bounded transcript and execution-owned stdout/stderr transport are implemented as reviewed candidates; reusable splash is B4–B6. **Verification:** Candidate owner/failure tests pass; canonical import, actual stdio inheritance/drain, production console presentation and native qualification remain pending.
 
 - [ ] Extend the existing splash with bounded live transcript, native accessibility and production startup events.
 
@@ -455,7 +455,7 @@ L2 tests scripted events against the real view and startup events against an in-
 
 ### 4.3 L3: Trusted launch/attach, readiness and cleanup
 
-**Implementation:** Not started. **Verification:** Pending.
+**Implementation:** Partial in the L3 lane: effective managed arguments, bounded actual-response decoding and installed frontend/Cube path comparison are independently reviewed candidates. **Verification:** 26 candidate package tests and affected gates pass; canonical integration and actual transport/listener/launch/attach authority remain pending.
 
 - [ ] Implement trusted Comfy launch/attach/readiness/retry through M1 leases and containment.
 
@@ -473,7 +473,7 @@ M1's application lifetime owner coordinates desktop/backend leases and terminal 
 
 ### 4.4 L4: Prepare independent qualification in parallel
 
-**Implementation:** Not started; reusable tools are B8. **Verification:** Pending.
+**Implementation:** Partial: independent bounded native observers and controlled ownership/claim/descendant/IPC fixtures extend B8. **Verification:** Selected Windows fixtures pass with exact artifact receipts; the complete browser/output/Comfy/crash K1 matrix remains pending.
 
 - [ ] Extend existing parity/native observation tools with independent startup, process and fault qualification.
 
@@ -483,7 +483,7 @@ Cover occupied port, invalid interpreter/root/runtime, slow/no HTTP, server earl
 
 ### 4.5 L5: Native crash capture and independent incident reporting
 
-**Implementation:** Not started. **Verification:** Pending.
+**Implementation:** In progress in the L5 lane: pinned source acquisition, reproducible CPU build preparation and retained native registration/capture owners are being authored. **Verification:** Independent source review is in progress; actual capture, symbols, incident storage and reporting qualification remain pending.
 
 - [ ] Implement native crash capture, bounded incident persistence, symbolization and independent reporting.
 
@@ -1046,3 +1046,13 @@ Independent review accepts all 73 source identities and 13 gate logs in `m1/desc
 Release `m1/descendant-build-01`, EXE SHA-256 `99f393fe2645931fe9fed5ff39ab915954f7d361e92d68f675859de25aecc0df`, fails actual campaign `m1/descendant-native-01`: PID 79584, birth 134362278368612131, clean exit 1 after 10268.8934 ms with actual diagnostic closure and no observer force. After actual family retirement clears its registry key, the fixture attempted to transfer the already-used event pin again. Enrollment now remains closed after retirement. Its production-method regression fails before the correction and passes afterward; the original failure and counterfactual log remain retained. Independent review accepts this correction, which changes no native deadline or shutdown budget.
 
 Exact corrected `cargo xtask verify` passes 661 Rust tests, governance, formatting, strict Clippy and warning-free Rustdoc in `m1/descendant-canonical-verify-02.log`, SHA-256 `48239a4e4ddd5b5bd4fdbbf45105813c68bac6be01b19e8e1898781f9344f60c`. All 579 before/after inputs match release build `m1/descendant-build-02`, built with pinned Rust 1.93.1 and explicit VS2022 / MSVC 14.43 / SDK 10.0.26100.0. EXE SHA-256 is `7a9d7c61e70574861cf13623a859218d01747fc1c491b51b67e449ac905be490`; PDB is `bd3baa61e610e1773edcfc07807e23268e39a5d9a115c601d0983d467c4bdb45`. Actual campaign `m1/descendant-native-02` passes: PID 31708, birth 134362282130682302, exit zero after 10232.4986 ms, empty stdout/stderr, actual EOF and no observer force or cleanup error. Its native receipt SHA-256 is `4554fc63f2cbe20d7990a4d68cbbed50bc1835bdc8d8660b2e8a415d4d98a183`. The parent observes a fresh response after natural root exit, then successful force at the original ten-second grace, actual child exit 1, family settlement within fifteen seconds, empty registry and all three joined workers. Root acceptance `m1/descendant-native-02/acceptance.json`, SHA-256 `6ca36f9eca92b63b3ab63dcc54a3f78f6e18bfac5a85e221f4f1d1cbc6303321`, binds exact inputs, review, regression, event ABI, build, rejecting validator and native evidence. Authenticated IPC, recovery/security faults, UI progress and K1 composition remain pending; no other-platform native execution is claimed.
+
+**M1 suspended enrollment and actual authenticated registration (2026-10-11):** The registry validates the exact desktop run and same-session bootstrap/enrollment provenance before admission, retains the single read-only section through native attribute deletion, binds the actual suspended PID/birth watch, transfers its checked duplicate to the pipe owner, and only then resumes the child. Independent review accepts the 30-source consumer receipt `m1/pipe-fixture-01/receipt.json`, SHA-256 `f28d8b194e0b75f273f78505ffb88541918e58ff5f4d1e7921baf183b6b6d463`, and the canonical composition preserving the committed descendant and execution owners. Root import `canonical-import-01.json`, SHA-256 `9a96b2bbfb7b16fdef4e9a4d2d88fea89ce08754d814ccdad389e6f072c3fc6d`, adds 20 host and four registry tests. Initial canonical verification passes 685 tests in `m1/pipe-fixture-canonical-verify-01.log`, SHA-256 `719f8eba005c5b5bddc1e5dacf87bf4fe267427e35eaf247e643e7748f42dc13`.
+
+Actual campaign `m1/pipe-native-01` fails cleanly after 263.2188 ms with parent `pipe_issue` error 109 and unexpected child exit; no observer force or diagnostic cleanup failure occurs. The retained actual client-preparation regression in `m1/pipe-observer-01/client-mode-regression-before-02.log` runs one test and fails at `pipe_client_message_mode`. The client lacked `FILE_WRITE_ATTRIBUTES` for `SetNamedPipeHandleState`; the corrected individual access mask grants that right while excluding generic write and `FILE_CREATE_PIPE_INSTANCE`. Independent source review accepts the correction and the real production-owner regression. Two tests pass afterward, including actual read-only bootstrap transfer, successful message-mode preparation and both checked native terminals. The earlier compile-only regression attempt is retained separately and supplies no behavioral evidence.
+
+Exact corrected `cargo xtask verify` passes 687 Rust tests, governance, formatting, strict Clippy and warning-free Rustdoc in `m1/pipe-fixture-canonical-verify-02.log`, SHA-256 `fa8823601205ceeb993bca9b20b6c67991a9a34baa06f2ee0149e7437e823372`. All 599 before/after inputs match `m1/pipe-fixture-build-02`, built with pinned Rust 1.93.1 and explicit VS2022 / MSVC 14.43 / SDK 10.0.26100.0. EXE SHA-256 is `a8c96c1d4fb51537475c3eb78d9f8eef572aea16e5dd1aea2881dfa9ae00fd85`; PDB is `c85f1a0384e91d82114e781d6140eccfbd83e175a149546a4e1f8f1b498ccd8b`. Root runs the exact artifact with `--internal-native-pipe-fixture --receipt <D-drive-native-receipt>` under the bounded original 90-second observer; each child retains the original 60-second campaign and each shutdown its original ten/fifteen-second transaction.
+
+Actual campaign `m1/pipe-native-02` passes: parent PID 26592, birth 134362296431657672, exit zero after 344.0835 ms, empty stdout/stderr, actual EOF and no observer force or cleanup failure. The valid child PID 60248/birth 134362296432000875/session 1 authenticates and completes Hello/Welcome/Register/Acknowledged exchange, then retires an actually pending read through intentional cancellation and exits zero. Wrong capability is rejected at `pipe_capability_mismatch`; stale generation is rejected before granting authentication. Both denied children observe actual peer closure and exit 37. All three families settle and retire, the registry is empty and all three execution workers join. Native receipt SHA-256 is `e31ec166bbec283c0dee71abebce97d5653484713363f4b31b75fcbde4da8ca5`. Three validator test groups reject missing/wrong facts, roles, shapes, numeric identities and renewed budgets. Root acceptance `m1/pipe-native-02/acceptance.json`, SHA-256 `98a1cb49242bdc01def04a5a7e244bfc305fbc0941f910b79a7a884435c7a98b`, binds exact source/build/gate/regression/observer/native identities. Production authenticated lease/completion effects, reconciliation/replay/overload/owner-loss faults, actual UI progress and K1 composition remain pending; no other-platform native qualification is claimed.
+
+**Reviewed L2/L3 lane candidates (2026-10-11):** The bounded transcript candidate is frozen in `l2/transcript-01/receipt.json`, SHA-256 `a25b196541f10527d32894ed4bdde677bddf6fe3e2fb12af06e2da6a70a2498e`, with 110 affected Rust tests and one borrow-only snapshot compile-fail doctest passing. Corrected output-owner receipt `l2/output-01/receipt02.json`, SHA-256 `771f0bc4cc08ab35293b1b820f040529f84b2c979c0529615a77b6689a93c0d2`, has 16 owner tests and affected gates passing; independent review caught and verified the end-clock panic terminal-loss regression. Actual stdout/stderr pipes and launch inheritance remain unrun. Pure Comfy receipt `l3/comfy-01/receipt.json`, SHA-256 `fedc4cebd23b1fc952ebeece221435bc0fadb2918b6f22011a3d80127cc75b21`, has 26 package tests and affected gates passing; its lock proposal adds only an existing pinned serde_json edge. Decoded response/version/path metadata grants no listener/process/remote-version readiness authority. These are independently reviewed lane candidates, pending canonical integration and the actual output/browser/Comfy/crash K1 matrix.

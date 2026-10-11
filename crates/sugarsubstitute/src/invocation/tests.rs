@@ -75,6 +75,74 @@ fn native_claim_fixture_dispatch_requires_exact_ordered_headless_inputs()
     Ok(())
 }
 
+/// Pipe roles use the actual parser while reserving all native effects for execution.
+#[cfg(target_os = "windows")]
+#[test]
+fn native_pipe_roles_require_exact_inputs() -> Result<(), Box<dyn Error>> {
+    let path = r"D:\evidence\pipe.json";
+    assert!(matches!(Invocation::parse_arguments(
+        ["--internal-native-pipe-fixture", "--receipt", path].map(OsString::from)
+    )?, Invocation::NativePipeFixture(actual) if actual == std::path::Path::new(path)));
+    for case in ["valid", "wrong-capability", "foreign-generation"] {
+        assert!(matches!(
+            Invocation::parse_arguments(
+                [
+                    "--internal-native-pipe-child",
+                    "--section",
+                    "42",
+                    "--deadline-qpc",
+                    "200",
+                    "--qpc-frequency",
+                    "100",
+                    "--case",
+                    case,
+                ]
+                .map(OsString::from)
+            )?,
+            Invocation::NativePipeChild(_)
+        ));
+    }
+    Ok(())
+}
+
+/// Mixed, reordered and non-Unicode role inputs fail before native adoption.
+#[cfg(target_os = "windows")]
+#[test]
+fn native_pipe_roles_reject_ambiguous_invocations() {
+    use std::os::windows::ffi::OsStringExt;
+    for arguments in [
+        vec!["--internal-native-pipe-fixture"],
+        vec!["--internal-native-pipe-fixture", "--receipt", "relative.json"],
+        vec!["--internal-native-pipe-fixture", "--receipt", "D:relative.json"],
+        vec!["--internal-native-pipe-fixture", "--receipt", r"D:\pipe.json", "--light"],
+        vec!["--light", "--internal-native-pipe-fixture", "--receipt", r"D:\pipe.json"],
+        vec!["--internal-native-pipe-child", "--section", "42", "--case", "valid"],
+        vec![
+            "--internal-native-pipe-child",
+            "--section",
+            "42",
+            "--deadline-qpc",
+            "200",
+            "--qpc-frequency",
+            "100",
+            "--case",
+            "valid",
+            "--receipt",
+            r"D:\pipe.json",
+        ],
+    ] {
+        assert!(Invocation::parse_arguments(arguments.into_iter().map(OsString::from)).is_err());
+    }
+    assert!(
+        Invocation::parse_arguments([
+            OsString::from("--internal-native-pipe-fixture"),
+            OsString::from_wide(&[0xd800]),
+            OsString::from(r"D:\pipe.json"),
+        ])
+        .is_err()
+    );
+}
+
 /// Preserve the native proof's combined presentation and receipt options.
 #[test]
 fn demonstration_options_keep_their_invocation_role() -> Result<(), Box<dyn Error>> {
@@ -106,6 +174,10 @@ fn demonstration_options_keep_their_invocation_role() -> Result<(), Box<dyn Erro
         #[cfg(target_os = "windows")]
         Invocation::NativeHeldChild(_) => {
             return Err("Presentation options selected a held child fixture".into());
+        }
+        #[cfg(target_os = "windows")]
+        Invocation::NativePipeFixture(_) | Invocation::NativePipeChild(_) => {
+            return Err("Presentation options selected a lifecycle pipe fixture".into());
         }
         #[cfg(target_os = "windows")]
         Invocation::NativeHeldRegistryFixture(_) => {

@@ -32,6 +32,13 @@ mod prepare;
 #[path = "security.rs"]
 mod security;
 use handles::*;
+// Message-mode setup needs attribute-write access; generic write would also
+// grant FILE_CREATE_PIPE_INSTANCE through the append-data bit.
+pub(super) const CLIENT_ACCESS: u32 = FILE_READ_DATA.0
+    | FILE_WRITE_DATA.0
+    | FILE_READ_ATTRIBUTES.0
+    | FILE_WRITE_ATTRIBUTES.0
+    | SYNCHRONIZE.0;
 pub(super) struct Lease {
     server: bool,
     run: Option<RunKey>,

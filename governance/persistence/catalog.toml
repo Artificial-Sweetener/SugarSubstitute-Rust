@@ -137,3 +137,15 @@ current_version = 1
 accepted_versions = [1]
 compatibility = "reject"
 migrations = []
+
+[[formats]]
+id = "native-lifecycle-pipe-report"
+owner = "sugarsubstitute"
+sources = ["crates/sugarsubstitute/src/pipe_fixture/receipt.rs"]
+source_sha256 = "sha256:d790eeb235aaff6452444fd81e2d9744dd9507077a7206025692721931fca514"
+classification = "authored_document"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []

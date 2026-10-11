@@ -27,6 +27,16 @@ impl WindowsProcessRegistry {
         if binding.owner() != self.owner {
             return Err(RegistryAdmissionError::ForeignOwner);
         }
+        if let Some(launch) = &input.lifecycle
+            && (binding != FamilyBinding::Desktop(launch.run)
+                || input.fixture_events.is_some()
+                || launch
+                    .enrollment
+                    .as_ref()
+                    .is_none_or(|enrollment| !launch.bootstrap.matches_enrollment(enrollment)))
+        {
+            return Err(RegistryAdmissionError::InvalidSpecification);
+        }
         if !self.launch_open {
             return Err(RegistryAdmissionError::Closed);
         }
@@ -122,7 +132,7 @@ impl WindowsProcessRegistry {
         };
         self.next_process = next;
         let job = execution.submit_blocking(creation_scope, creation, move |context| {
-            create(shared, input, context)
+            create(shared, input, context, ticket)
         });
         match job {
             Ok(job) => record.creation = Some(job),
@@ -169,6 +179,7 @@ fn create(
     shared: Arc<Shared>,
     input: WindowsLaunchInput,
     context: JobContext,
+    ticket: LaunchTicket,
 ) -> Result<(), RegistryError> {
     let bytes = input.required_reservation_bytes() - crate::registry_input::FAMILY_STORAGE_BYTES;
     let claim =
@@ -177,7 +188,7 @@ fn create(
     let family = Family::new(context.memory())?;
     let mut state = lock(&shared.native);
     state.family = Some(family);
-    let result = create_owned(&shared, &mut state, &mut charged.input, &context);
+    let result = create_owned(&shared, &mut state, &mut charged.input, &context, ticket);
     if let Err(cause) = &result {
         state.failure = Some(cause.clone());
     }
@@ -188,12 +199,14 @@ fn create_owned(
     state: &mut NativeState,
     input: &mut WindowsLaunchInput,
     context: &JobContext,
+    ticket: LaunchTicket,
 ) -> Result<(), RegistryError> {
     if stopped(context) || shared.admission.load(Ordering::Acquire) == CLOSED {
         return Err(RegistryError::invalid("creation_canceled_before_effect"));
     }
     let family = state.family.as_mut().ok_or_else(|| RegistryError::invalid("creation_owner"))?;
     family.adopt_fixture_events(input)?;
+    family.adopt_lifecycle(input)?;
     let root = shared.port.create(family, input)?;
     state.creation = Some(CreationFacts { root, resumed: false });
     let duplicate = shared.port.duplicate(family, 0)?;
@@ -201,6 +214,9 @@ fn create_owned(
         .take()
         .ok_or_else(|| RegistryError::invalid("root_watch_reservation"))?;
     state.watch = bind(permit, duplicate);
+    if let FamilyBinding::Desktop(run) = ticket.binding {
+        shared.port.enroll_desktop(family, run, ticket.process)?;
+    }
     if stopped(context)
         || shared
             .admission

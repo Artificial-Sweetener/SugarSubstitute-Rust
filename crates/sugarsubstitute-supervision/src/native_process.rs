@@ -12,7 +12,11 @@ use std::{
     sync::Arc,
 };
 use sugarsubstitute_contracts::execution::{MemoryClaim, MemoryLease};
+use sugarsubstitute_contracts::lifecycle::{ProcessKey, RunKey};
 use sugarsubstitute_execution::windows_fixture::FixtureChildEvents;
+use sugarsubstitute_execution::windows_lifecycle_pipe::{
+    LifecycleDesktopEnrollment, LifecyclePipeBootstrap,
+};
 use windows::Win32::Foundation::{CloseHandle, HANDLE};
 
 pub(crate) const MAX_MEMBERS: usize = 256;
@@ -39,6 +43,10 @@ pub(crate) struct Family {
     pub(crate) job_list: [usize; 1],
     pub(crate) fixture_handles: [usize; 4],
     pub(crate) fixture_events: Option<FixtureChildEvents>,
+    pub(crate) lifecycle_bootstrap: Option<LifecyclePipeBootstrap>,
+    pub(crate) lifecycle_enrollment: Option<LifecycleDesktopEnrollment>,
+    pub(crate) lifecycle_run: Option<RunKey>,
+    pub(crate) lifecycle_handles: [usize; 1],
     pub(crate) sealed: bool,
     pub(crate) incomplete: bool,
     pub(crate) forced: bool,
@@ -79,6 +87,10 @@ impl Family {
             job_list: [0],
             fixture_handles: [0; 4],
             fixture_events: None,
+            lifecycle_bootstrap: None,
+            lifecycle_enrollment: None,
+            lifecycle_run: None,
+            lifecycle_handles: [0],
             sealed: false,
             incomplete: false,
             forced: false,
@@ -159,6 +171,12 @@ pub(crate) trait NativePort: Send + Sync {
     ) -> Result<Identity, RegistryError>;
     fn resume(&self, family: &mut Family) -> Result<(), RegistryError>;
     fn duplicate(&self, family: &mut Family, index: usize) -> Result<WatchInput, RegistryError>;
+    fn enroll_desktop(
+        &self,
+        family: &mut Family,
+        run: RunKey,
+        key: ProcessKey,
+    ) -> Result<(), RegistryError>;
     fn seal(&self, family: &mut Family) -> Result<(), RegistryError>;
     fn inventory(&self, family: &mut Family) -> Result<Inventory, RegistryError>;
     fn terminate(&self, family: &mut Family) -> Result<(), RegistryError>;
@@ -185,4 +203,5 @@ pub(crate) fn close_slot(
 }
 mod cleanup;
 mod creation;
+mod lifecycle;
 mod membership;

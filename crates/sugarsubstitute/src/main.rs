@@ -18,6 +18,8 @@ mod held_child;
 #[cfg(target_os = "windows")]
 mod held_fixture;
 mod invocation;
+#[cfg(target_os = "windows")]
+mod pipe_fixture;
 mod preparation;
 mod preparation_task;
 #[cfg(target_os = "windows")]
@@ -84,6 +86,22 @@ fn execute() -> Result<(), Box<dyn Error>> {
         Ok(invocation::Invocation::NativeHeldRegistryFixture(path)) => {
             initialize_diagnostics()?;
             let receipt = held_fixture::run()?;
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::write(path, serde_json::to_vec_pretty(&receipt)?)?;
+            return Ok(());
+        }
+        #[cfg(target_os = "windows")]
+        Ok(invocation::Invocation::NativePipeChild(options)) => {
+            initialize_diagnostics()?;
+            let code = pipe_fixture::run_child(options)?;
+            std::process::exit(code);
+        }
+        #[cfg(target_os = "windows")]
+        Ok(invocation::Invocation::NativePipeFixture(path)) => {
+            initialize_diagnostics()?;
+            let receipt = pipe_fixture::run()?;
             if let Some(parent) = path.parent() {
                 std::fs::create_dir_all(parent)?;
             }

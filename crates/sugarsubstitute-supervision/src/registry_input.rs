@@ -4,6 +4,8 @@
 use crate::{LaunchEnvironment, RegistryInputError, WindowsLaunchBuffers, WindowsLaunchCommand};
 use std::fmt;
 use sugarsubstitute_execution::windows_fixture::FixtureChildEvents;
+mod lifecycle;
+use lifecycle::DesktopLaunch;
 
 // Fixed family state, 256 retained members, aligned attribute storage and query scratch.
 // This is an admission peak, not an estimate of unobservable kernel allocations.
@@ -14,6 +16,7 @@ pub struct WindowsLaunchInput {
     pub(crate) command: WindowsLaunchBuffers,
     pub(crate) environment: LaunchEnvironment,
     pub(crate) fixture_events: Option<FixtureChildEvents>,
+    pub(crate) lifecycle: Option<DesktopLaunch>,
     required: u64,
 }
 impl WindowsLaunchInput {
@@ -42,7 +45,7 @@ impl WindowsLaunchInput {
         required = required
             .checked_add(environment.allocated_bytes().map_err(RegistryInputError::Environment)?)
             .ok_or(RegistryInputError::Capacity)?;
-        Ok(Self { command, environment, fixture_events: None, required })
+        Ok(Self { command, environment, fixture_events: None, lifecycle: None, required })
     }
     /// Move an execution-owned four-event launch pin into this explicit fixture input.
     ///

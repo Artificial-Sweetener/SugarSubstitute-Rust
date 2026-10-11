@@ -73,6 +73,7 @@ impl WindowsPort {
         keep(close_slot(&mut family.job, "close_job"));
         keep(close_slot(&mut family.thread, "close_primary_thread"));
         keep(close_slot(&mut family.watch_duplicate, "close_watch_duplicate"));
+        drop(family.lifecycle_enrollment.take());
         for member in family.members.iter_mut().flatten() {
             keep(close_slot(&mut member.handle, "close_member_process"));
         }
@@ -95,6 +96,14 @@ impl NativePort for WindowsPort {
     }
     fn duplicate(&self, family: &mut Family, index: usize) -> Result<WatchInput, RegistryError> {
         self.duplicate_native(family, index)
+    }
+    fn enroll_desktop(
+        &self,
+        family: &mut Family,
+        run: RunKey,
+        key: ProcessKey,
+    ) -> Result<(), RegistryError> {
+        self.enroll_native(family, run, key)
     }
     fn seal(&self, family: &mut Family) -> Result<(), RegistryError> {
         let result = self.seal_native(family);
