@@ -57,7 +57,7 @@ impl Core {
     }
 
     pub(crate) fn acknowledge(&self, id: JobId) {
-        let removed = {
+        let (removed, wake) = {
             let mut state = lock(&self.state);
             self.mailbox.remove(id);
             let deferred =
@@ -71,9 +71,11 @@ impl Core {
                 state.jobs.remove(&id)
             };
             Self::retire_scopes(&mut state);
-            removed
+            let wake = self.capacity_ready(&mut state);
+            (removed, wake)
         };
         drop(removed);
+        self.deliver_capacity_wake(wake);
         self.changed();
     }
 }

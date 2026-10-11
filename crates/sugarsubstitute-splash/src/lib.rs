@@ -9,6 +9,7 @@ mod caption_icons;
 mod character;
 mod chrome;
 mod layout;
+mod packaged_png;
 mod progress;
 mod projection;
 mod render;
@@ -21,7 +22,10 @@ pub use character::{CharacterError, CharacterLibrary, PoseAsset};
 pub use layout::{Appearance, Control, LOGICAL_SIZE};
 pub use progress::ProgressFrame;
 pub use projection::{Bounds, Point, projected_quad};
-pub use render::{RenderError, SplashRenderer};
+pub use render::{
+    PreparationError, RenderError, SPLASH_CACHE_RESERVATION_BYTES, SplashInitializationTask,
+    SplashPreparationResult, SplashRenderRequest, SplashRenderTask, SplashRenderer,
+};
 pub use sugarsubstitute_contracts::{
     configuration::Theme,
     localization::{LOCALES, Messages, messages},

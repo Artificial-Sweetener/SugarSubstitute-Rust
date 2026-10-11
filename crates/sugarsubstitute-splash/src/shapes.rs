@@ -3,7 +3,15 @@
 
 //! Build the small rounded silhouettes shared by the console and loading bar.
 
-use tiny_skia::{Mask, Path, PathBuilder, PathSegment};
+use tiny_skia::{Path, PathBuilder, PathSegment};
+
+#[path = "shapes_composite.rs"]
+mod composite;
+#[path = "shapes_raster.rs"]
+mod raster;
+pub(crate) use composite::PaintCursor;
+pub(crate) use raster::CoverageRaster;
+use raster::cut;
 
 /// Report a required CPU coverage buffer that could not be allocated.
 #[derive(Debug)]
@@ -152,8 +160,15 @@ fn corner(path: &mut PathBuilder, points: [[f64; 2]; 4], scale: f64, depth: u8) 
 /// Integrate a convex physical silhouette's pixel area without coarse sample coverage.
 ///
 /// Return the required buffer's allocation cause or invalid raster dimensions.
-pub(crate) fn coverage(path: &Path, width: u32, height: u32) -> Result<Mask, AllocationError> {
-    rasterize(path, width, height, true)
+#[cfg(test)]
+pub(crate) fn coverage(
+    path: &Path,
+    width: u32,
+    height: u32,
+) -> Result<tiny_skia::Mask, AllocationError> {
+    let mut raster = CoverageRaster::new(path, width, height, true)?;
+    while !raster.step(8192) {}
+    raster.finish()
 }
 
 /// Append an adaptively flattened logical cubic with snapped physical vertices.
@@ -183,178 +198,6 @@ pub(crate) fn intersect(path: &Path, right: f32, bottom: f32) -> Option<Path> {
     result.finish()
 }
 
-/// Share bounded pixel-area integration between convex fills and single stroke outlines.
-fn rasterize(path: &Path, width: u32, height: u32, convex: bool) -> Result<Mask, AllocationError> {
-    let polygon: Vec<[f64; 2]> = path
-        .segments()
-        .filter_map(|segment| match segment {
-            PathSegment::MoveTo(point) | PathSegment::LineTo(point) => {
-                Some([f64::from(point.x), f64::from(point.y)])
-            }
-            _ => None,
-        })
-        .collect();
-    let bounds = path.bounds();
-    let center = f64::from(bounds.left() + bounds.right()) * 0.5;
-    let size =
-        tiny_skia::IntSize::from_wh(width, height).ok_or(AllocationError::InvalidDimensions)?;
-    let length =
-        (width as usize).checked_mul(height as usize).ok_or(AllocationError::InvalidDimensions)?;
-    let mut buffer = Vec::new();
-    buffer.try_reserve_exact(length).map_err(AllocationError::Buffer)?;
-    buffer.resize(length, 0);
-    let mut mask = Mask::from_vec(buffer, size).ok_or(AllocationError::InvalidDimensions)?;
-    for row in
-        bounds.top().floor().max(0.0) as u32..bounds.bottom().ceil().min(height as f32) as u32
-    {
-        let strip = raster_cut(
-            &raster_cut(&polygon, 1, f64::from(row), true),
-            1,
-            f64::from(row + 1),
-            false,
-        );
-        if strip.is_empty() {
-            continue;
-        }
-        let left = strip.iter().map(|point| point[0]).fold(f64::INFINITY, f64::min);
-        let right = strip.iter().map(|point| point[0]).fold(f64::NEG_INFINITY, f64::max);
-        let inner_left = strip
-            .iter()
-            .filter(|point| point[0] <= center)
-            .map(|point| point[0])
-            .fold(left, f64::max);
-        let inner_right = strip
-            .iter()
-            .filter(|point| point[0] >= center)
-            .map(|point| point[0])
-            .fold(right, f64::min);
-        let top = strip.iter().map(|point| point[1]).fold(f64::INFINITY, f64::min);
-        let bottom = strip.iter().map(|point| point[1]).fold(f64::NEG_INFINITY, f64::max);
-        for column in left.floor().max(0.0) as u32..right.ceil().min(f64::from(width)) as u32 {
-            let area = if convex
-                && f64::from(column) >= inner_left
-                && f64::from(column + 1) <= inner_right
-            {
-                bottom - top
-            } else {
-                let pixel = raster_cut(
-                    &raster_cut(&strip, 0, f64::from(column), true),
-                    0,
-                    f64::from(column + 1),
-                    false,
-                );
-                let mut twice_area = 0.0;
-                for (index, point) in pixel.iter().enumerate() {
-                    let next = pixel[(index + 1) % pixel.len()];
-                    twice_area += point[0] * next[1] - point[1] * next[0];
-                }
-                twice_area.abs() * 0.5
-            };
-            mask.data_mut()[(row * width + column) as usize] =
-                (area * 256.0).ceil().min(255.0) as u8;
-        }
-    }
-    Ok(mask)
-}
-
-/// Clip a convex polygon to one axis-aligned half-plane, retaining its winding.
-fn cut(polygon: &[[f64; 2]], axis: usize, bound: f64, greater: bool) -> Vec<[f64; 2]> {
-    let mut output = Vec::with_capacity(polygon.len() + 2);
-    for (index, &point) in polygon.iter().enumerate() {
-        let next = polygon[(index + 1) % polygon.len()];
-        let inside = (point[axis] >= bound) == greater;
-        let next_inside = (next[axis] >= bound) == greater;
-        if inside {
-            output.push(point);
-        }
-        if inside != next_inside {
-            let fraction = (bound - point[axis]) / (next[axis] - point[axis]);
-            output.push([
-                point[0] + fraction * (next[0] - point[0]),
-                point[1] + fraction * (next[1] - point[1]),
-            ]);
-        }
-    }
-    output
-}
-
-/// Partition raster cells on the painter's 24.8 grid after silhouette intersection.
-fn raster_cut(polygon: &[[f64; 2]], axis: usize, bound: f64, greater: bool) -> Vec<[f64; 2]> {
-    cut(polygon, axis, bound, greater)
-        .into_iter()
-        .map(|mut point| {
-            point[1 - axis] = (point[1 - axis] * 256.0).floor() / 256.0;
-            point
-        })
-        .collect()
-}
-
-/// Composite one independently rounded reference paint pass through a convex silhouette.
-///
-/// Return an allocation error before compositing when the required coverage buffer fails.
-pub(crate) fn paint(
-    target: &mut tiny_skia::Pixmap,
-    path: &tiny_skia::Path,
-    color: [u8; 4],
-    outer: Option<&Mask>,
-) -> Result<(), AllocationError> {
-    let mask = coverage(path, target.width(), target.height())?;
-    composite(target, path, color, outer, &mask, None);
-    Ok(())
-}
-
-/// Paint a concave stroke outline as one independently rounded source-over pass.
-///
-/// Return an allocation error before compositing when the required coverage buffer fails.
-pub(crate) fn paint_outline(
-    target: &mut tiny_skia::Pixmap,
-    path: &Path,
-    color: [u8; 4],
-    clip: tiny_skia::Rect,
-) -> Result<(), AllocationError> {
-    let mask = rasterize(path, target.width(), target.height(), false)?;
-    composite(target, path, color, None, &mask, Some(clip));
-    Ok(())
-}
-
-/// Composite an already prepared mask over the target's premultiplied bytes.
-fn composite(
-    target: &mut tiny_skia::Pixmap,
-    path: &Path,
-    color: [u8; 4],
-    outer: Option<&Mask>,
-    mask: &Mask,
-    clip: Option<tiny_skia::Rect>,
-) {
-    let Some(bounds) = clip.map_or(Some(path.bounds()), |clip| path.bounds().intersect(&clip))
-    else {
-        return;
-    };
-    for row in bounds.top().floor().max(0.0) as u32
-        ..bounds.bottom().ceil().min(target.height() as f32) as u32
-    {
-        for column in bounds.left().floor().max(0.0) as u32
-            ..bounds.right().ceil().min(target.width() as f32) as u32
-        {
-            let index = (row * target.width() + column) as usize;
-            let coverage = outer.map_or(mask.data()[index], |outer| {
-                byte_product(mask.data()[index], outer.data()[index])
-            });
-            let alpha = byte_product(color[3], coverage);
-            let source = [
-                byte_product(byte_product(color[0], color[3]), coverage),
-                byte_product(byte_product(color[1], color[3]), coverage),
-                byte_product(byte_product(color[2], color[3]), coverage),
-                alpha,
-            ];
-            let pixels = target.data_mut();
-            for channel in 0..4 {
-                pixels[index * 4 + channel] =
-                    source[channel] + byte_product(pixels[index * 4 + channel], 255 - alpha);
-            }
-        }
-    }
-}
 /// Round a byte channel's normalized coverage before source-over composition.
 pub(crate) fn byte_product(channel: u8, coverage: u8) -> u8 {
     let product = u16::from(channel) * u16::from(coverage);

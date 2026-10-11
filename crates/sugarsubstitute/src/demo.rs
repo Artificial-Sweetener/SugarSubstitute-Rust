@@ -3,12 +3,16 @@
 
 //! Drive an explicit demonstration without claiming real application startup progress.
 
-use std::{error::Error, time::Duration};
-use sugarsubstitute_desktop::{
-    AccessibleControl, ControlBounds, Frame, HitTarget, KeyAction, Pointer, PointerAction,
-    WindowContent,
+use crate::preparation::PreparationDriver;
+use std::{error::Error, num::NonZeroUsize, sync::Arc, time::Duration};
+use sugarsubstitute_contracts::{
+    execution::CompletionWake,
+    presentation::{FrameShape, PreparedFrame},
 };
-use sugarsubstitute_splash::{Appearance, Control, PaperFlip, ProgressFrame, SplashRenderer};
+use sugarsubstitute_desktop::{
+    AccessibleControl, ControlBounds, HitTarget, KeyAction, Pointer, PointerAction, WindowContent,
+};
+use sugarsubstitute_splash::{Appearance, Control, PaperFlip, ProgressFrame};
 
 /// Keep splash-specific interaction semantics outside the shared desktop adapter.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -22,12 +26,10 @@ enum DemoTarget {
 
 /// Compose the presentation driver used until real startup supplies semantic events.
 pub(crate) struct SplashDemo {
-    renderer: SplashRenderer,
+    preparation: PreparationDriver,
     animation: PaperFlip,
     appearance: Appearance,
     elapsed: Duration,
-    bootstrap_presented: bool,
-    enriched: bool,
     pressed_target: Option<DemoTarget>,
     reduced_motion: bool,
     controls: [AccessibleControl; 2],
@@ -45,12 +47,10 @@ impl SplashDemo {
         animation.set_reduced_motion(reduced_motion);
         let messages = sugarsubstitute_contracts::localization::messages(locale);
         Ok(Self {
-            renderer: SplashRenderer::new(locale)?,
+            preparation: PreparationDriver::new(locale)?,
             animation,
             appearance,
             elapsed: Duration::ZERO,
-            bootstrap_presented: false,
-            enriched: false,
             pressed_target: None,
             reduced_motion,
             messages,
@@ -77,9 +77,13 @@ impl SplashDemo {
 }
 
 impl SplashDemo {
-    /// Update the painted disclosure and its native accessible action together.
+    /// Change requested disclosure state before invalidating preparation.
     fn toggle_output(&mut self) {
         self.appearance.expanded = !self.appearance.expanded;
+    }
+
+    /// Publish the control snapshot with its matching current-state pixels.
+    fn publish_controls(&mut self) {
         self.controls[0].label = if self.appearance.expanded {
             self.messages.hide_output
         } else {
@@ -115,14 +119,17 @@ impl SplashDemo {
 }
 
 impl WindowContent for SplashDemo {
-    /// Feed demonstration completion from the driver, never from the splash renderer.
-    fn render(
+    /// Start one execution lifetime after the desktop establishes its native wake.
+    fn start(&mut self, wake: Arc<dyn CompletionWake>) -> Result<(), Box<dyn Error>> {
+        self.preparation.start(wake)
+    }
+
+    /// Sample lightweight view state and submit governed preparation without rasterizing.
+    fn request_frame(
         &mut self,
-        width: u32,
-        height: u32,
-        scale: f64,
+        shape: FrameShape,
         elapsed: Duration,
-    ) -> Result<Frame, Box<dyn Error>> {
+    ) -> Result<(), Box<dyn Error>> {
         self.elapsed = elapsed;
         self.animation.tick(elapsed);
         let cycle = if self.reduced_motion { 0.0 } else { elapsed.as_secs_f32() % 12.0 };
@@ -133,22 +140,39 @@ impl WindowContent for SplashDemo {
             Some((elapsed.as_secs_f32() % 1.8) / 1.8)
         };
         let feedback = ProgressFrame { completed, activity };
-        if !self.bootstrap_presented {
-            let pixels =
-                self.renderer.render_bootstrap(width, height, scale, self.appearance, feedback)?;
-            self.bootstrap_presented = true;
-            return Ok(Frame { width, height, premultiplied_rgba: pixels.take() });
+        self.preparation.request(shape, self.appearance, self.animation.frame(elapsed), feedback)
+    }
+
+    /// Observe bounded terminal work and publish only matching current-state results.
+    fn poll_frame(
+        &mut self,
+        maximum: NonZeroUsize,
+    ) -> Result<Option<PreparedFrame>, Box<dyn Error>> {
+        let frame = self.preparation.poll(maximum)?;
+        if frame.is_some() {
+            self.publish_controls();
         }
-        let pixels = self.renderer.render(
-            width,
-            height,
-            scale,
-            self.appearance,
-            self.animation.frame(elapsed),
-            feedback,
-        )?;
-        self.enriched = true;
-        Ok(Frame { width, height, premultiplied_rgba: pixels.take() })
+        Ok(frame)
+    }
+
+    /// Invalidate visibility before subsequent raster admission or publication.
+    fn set_visible(&mut self, visible: bool) -> Result<(), Box<dyn Error>> {
+        self.preparation.set_visible(visible)
+    }
+
+    /// Close admission and request actual cancellation without waiting on this callback.
+    fn request_shutdown(&mut self) -> Result<(), Box<dyn Error>> {
+        self.preparation.request_shutdown()
+    }
+
+    /// Keep terminal and worker settlement observable while the native loop remains alive.
+    fn poll_shutdown(&mut self) -> Result<bool, Box<dyn Error>> {
+        self.preparation.poll_shutdown()
+    }
+
+    /// Release retained cache resources and join settled workers after native teardown.
+    fn finish_shutdown(&mut self) -> Result<(), Box<dyn Error>> {
+        self.preparation.finish_shutdown()
     }
 
     /// Reserve native drag and close behavior without exposing view-specific targets.
@@ -192,9 +216,13 @@ impl WindowContent for SplashDemo {
                 self.pressed_target = None;
             }
         }
-        animation_changed
+        let changed = animation_changed
             || before
-                != (self.appearance.hovered, self.appearance.pressed, self.appearance.expanded)
+                != (self.appearance.hovered, self.appearance.pressed, self.appearance.expanded);
+        if changed {
+            self.preparation.invalidate();
+        }
+        changed
     }
 
     /// Route the adapter's keyboard disclosure intent to the same view state.
@@ -202,12 +230,13 @@ impl WindowContent for SplashDemo {
         match action {
             KeyAction::Tab => self.toggle_output(),
         }
+        self.preparation.invalidate();
         true
     }
 
     /// Freeze both scripted progress and mascot motion when reduced motion is selected.
     fn animating(&self) -> bool {
-        !self.reduced_motion || !self.enriched
+        !self.reduced_motion || !self.preparation.enriched()
     }
 
     /// Expose only the two existing caption controls through stable native identities.
@@ -219,6 +248,7 @@ impl WindowContent for SplashDemo {
     fn activate(&mut self, id: u16) -> bool {
         if id == 1 {
             self.toggle_output();
+            self.preparation.invalidate();
             true
         } else {
             false
@@ -227,138 +257,9 @@ impl WindowContent for SplashDemo {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
+#[path = "demo_tests.rs"]
+mod tests;
 
-    /// Cancel an interrupted disclosure click and accept a matching press/release.
-    #[test]
-    fn disclosure_requires_matching_control_and_retains_blank_output() -> Result<(), Box<dyn Error>>
-    {
-        let mut demo = SplashDemo::new("en", Appearance::demo(), false)?;
-        let toggle = Pointer { x: 480.0, y: 16.0 };
-        demo.pointer(PointerAction::Press, toggle);
-        demo.pointer(PointerAction::Release, Pointer { x: 10.0, y: 16.0 });
-        assert!(demo.appearance.expanded);
-        demo.pointer(PointerAction::Press, toggle);
-        demo.pointer(PointerAction::Release, toggle);
-        assert!(!demo.appearance.expanded);
-        demo.key(KeyAction::Tab);
-        assert!(demo.appearance.expanded);
-        assert_eq!(demo.hit_test(Pointer { x: 100.0, y: 400.0 }), HitTarget::Client);
-        Ok(())
-    }
-
-    /// Give the console overlay input priority over the covered mascot rectangle.
-    #[test]
-    fn covered_character_does_not_receive_console_clicks() -> Result<(), Box<dyn Error>> {
-        let mut demo = SplashDemo::new("en", Appearance::demo(), false)?;
-        let overlap = Pointer { x: 200.0, y: 380.0 };
-        assert_eq!(demo.classify(overlap), DemoTarget::Console);
-        let before = demo.animation.frame(Duration::from_millis(100));
-        demo.pointer(PointerAction::Press, overlap);
-        assert_eq!(demo.animation.frame(Duration::from_millis(100)), before);
-        demo.pointer(PointerAction::Press, Pointer { x: 200.0, y: 200.0 });
-        assert_ne!(demo.animation.frame(Duration::from_millis(100)), before);
-        Ok(())
-    }
-
-    /// Keep the caption draggable where its transparent paint overlaps the mascot.
-    #[test]
-    fn caption_input_precedes_the_character_beneath_it() -> Result<(), Box<dyn Error>> {
-        for expanded in [false, true] {
-            let mut appearance = Appearance::demo();
-            appearance.expanded = expanded;
-            let mut demo = SplashDemo::new("en", appearance, false)?;
-            let caption = Pointer { x: 250.0, y: 16.0 };
-            let before = demo.animation.frame(Duration::from_millis(100));
-            assert_eq!(demo.hit_test(caption), HitTarget::Caption);
-            assert!(!demo.pointer(PointerAction::Press, caption));
-            assert_eq!(demo.animation.frame(Duration::from_millis(100)), before);
-            assert_eq!(demo.classify(Pointer { x: 480.0, y: 16.0 }), DemoTarget::Toggle);
-            assert_eq!(demo.hit_test(Pointer { x: 535.0, y: 16.0 }), HitTarget::Close);
-            assert_eq!(demo.hit_test(Pointer { x: 250.0, y: 200.0 }), HitTarget::Client);
-        }
-        Ok(())
-    }
-
-    /// Ignore pointer motion across unchanged painted regions and redundant leaves.
-    #[test]
-    fn pointer_dirty_state_tracks_only_visible_control_changes() -> Result<(), Box<dyn Error>> {
-        let mut demo = SplashDemo::new("en", Appearance::demo(), false)?;
-        assert!(!demo.pointer(PointerAction::Move, Pointer { x: 10.0, y: 50.0 }));
-        assert!(!demo.pointer(PointerAction::Move, Pointer { x: 11.0, y: 50.0 }));
-        assert!(demo.pointer(PointerAction::Move, Pointer { x: 480.0, y: 16.0 }));
-        assert!(!demo.pointer(PointerAction::Move, Pointer { x: 490.0, y: 16.0 }));
-        assert!(demo.pointer(PointerAction::Leave, Pointer::default()));
-        assert!(!demo.pointer(PointerAction::Leave, Pointer::default()));
-        Ok(())
-    }
-
-    /// Publish bootstrap, enrich once, then sleep with static reduced-motion producer state.
-    #[test]
-    fn reduced_motion_enriches_once_and_repaints_only_meaningful_events()
-    -> Result<(), Box<dyn Error>> {
-        let mut demo = SplashDemo::new("en", Appearance::demo(), true)?;
-        assert!(demo.animating());
-        let bootstrap = demo.render(558, 558, 1.0, Duration::ZERO)?;
-        assert!(demo.animating());
-        let static_frame = demo.render(558, 558, 1.0, Duration::from_secs(1))?;
-        assert!(!demo.animating());
-        let later_frame = demo.render(558, 558, 1.0, Duration::from_secs(8))?;
-        assert_eq!(static_frame.premultiplied_rgba, later_frame.premultiplied_rgba);
-        assert_eq!(bootstrap.premultiplied_rgba, static_frame.premultiplied_rgba);
-        assert!(!demo.pointer(PointerAction::Press, Pointer { x: 200.0, y: 200.0 }));
-        assert!(demo.key(KeyAction::Tab));
-        assert!(!demo.animating());
-        Ok(())
-    }
-
-    /// Publish light-theme close feedback from dirty input while animation remains asleep.
-    #[test]
-    fn static_light_close_press_and_cancel_repaint_without_animation() -> Result<(), Box<dyn Error>>
-    {
-        let mut appearance = Appearance::demo();
-        appearance.theme = sugarsubstitute_splash::Theme::Light;
-        let mut demo = SplashDemo::new("en", appearance, true)?;
-        demo.render(558, 558, 1.0, Duration::ZERO)?;
-        let neutral = demo.render(558, 558, 1.0, Duration::from_secs(1))?;
-        assert!(!demo.animating());
-        let close = Pointer { x: 535.0, y: 16.0 };
-        assert!(demo.pointer(PointerAction::Move, close));
-        assert!(demo.pointer(PointerAction::Press, close));
-        assert!(!demo.animating());
-        let pressed = demo.render(558, 558, 1.0, Duration::from_secs(2))?;
-        let sample = (8 * 558 + 518) * 4;
-        assert_eq!(&pressed.premultiplied_rgba[sample..sample + 4], &[241, 112, 122, 255]);
-        assert_ne!(neutral.premultiplied_rgba, pressed.premultiplied_rgba);
-        assert!(demo.pointer(PointerAction::Leave, close));
-        assert!(!demo.pointer(PointerAction::Release, close));
-        assert!(!demo.animating());
-        let cancelled = demo.render(558, 558, 1.0, Duration::from_secs(3))?;
-        assert_eq!(neutral.premultiplied_rgba, cancelled.premultiplied_rgba);
-        Ok(())
-    }
-
-    /// Keep native localized control intent and all disclosure routes with the same owner.
-    #[test]
-    fn accessible_disclosure_reflects_pointer_keyboard_and_native_activation()
-    -> Result<(), Box<dyn Error>> {
-        for locale in sugarsubstitute_contracts::localization::LOCALES {
-            let mut demo = SplashDemo::new(locale.id, Appearance::demo(), true)?;
-            assert_eq!(demo.accessible_controls()[0].label, locale.hide_output);
-            assert_eq!(demo.accessible_controls()[1].label, locale.cancel);
-            assert!(demo.accessible_controls()[1].close);
-            assert!(demo.activate(1));
-            assert_eq!(demo.accessible_controls()[0].label, locale.show_output);
-            assert!(!demo.activate(2));
-            assert!(!demo.activate(0));
-            assert!(demo.key(KeyAction::Tab));
-            assert_eq!(demo.accessible_controls()[0].label, locale.hide_output);
-            let toggle = Pointer { x: 480.0, y: 16.0 };
-            demo.pointer(PointerAction::Press, toggle);
-            demo.pointer(PointerAction::Release, toggle);
-            assert_eq!(demo.accessible_controls()[0].label, locale.show_output);
-        }
-        Ok(())
-    }
-}
+#[cfg(test)]
+#[path = "demo_test_support.rs"]
+mod test_support;

@@ -51,6 +51,14 @@ impl Mailbox {
         should_wake
     }
 
+    /// Coalesce admission-capacity activity without inventing terminal metadata.
+    pub(crate) fn signal_capacity(&self) -> bool {
+        let mut pending = lock(&self.pending);
+        let should_wake = !pending.wake_pending;
+        pending.wake_pending = true;
+        should_wake
+    }
+
     pub(crate) fn deliver_wake(&self) {
         let result = match catch_unwind(AssertUnwindSafe(|| self.wake.wake())) {
             Ok(result) => result,

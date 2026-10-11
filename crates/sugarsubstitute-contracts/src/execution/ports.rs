@@ -56,11 +56,19 @@ pub struct CompletionBatch {
     pub remaining: usize,
 }
 
-/// Wake an actual native event loop after the execution owner publishes metadata.
+/// Wake an actual native event loop for terminal metadata or a pending admission retry.
 ///
 /// The native adapter owns its thread-safe event-loop proxy. The execution adapter
 /// owns the bounded mailbox and coalesces pending wakes. This port neither carries
 /// job payloads nor exposes a channel, event loop or raw scheduler handle.
+/// Queue, completion-credit and feasible memory rejections arm bounded retry
+/// interests. An actual release that makes the rejected capacity available wakes
+/// the consumer, even when no terminal metadata remains. Consumers retry their
+/// pending admissions after every wake, including an empty metadata drain.
+/// These execution-wide activity hints reserve no capacity and can outlive the
+/// rejecting scope; consumers recheck their own scope, cancellation and pending work.
+/// Shutdown clears retry interests before retained result guards can outlive UI teardown.
+/// A wake already entered at shutdown remains owned until it returns.
 pub trait CompletionWake: Send + Sync {
     /// Request an observed native wake without blocking for UI consumption.
     ///
@@ -151,6 +159,8 @@ pub trait ExecutionPort: Send + Sync {
     /// The adapter clamps `max` to 32 and reports remaining metadata; it coalesces
     /// and reissues native wakes for pending batches. Consumers bound their own UI
     /// callback work and take typed outcomes through the corresponding owned job.
+    /// An empty batch can accompany a capacity-release wake; consumers must still
+    /// retry pending admissions. Capacity activity never fabricates terminal metadata.
     ///
     /// # Errors
     /// Preserves unexpected mailbox/wake failures with their original cause.

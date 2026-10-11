@@ -7,6 +7,10 @@
 
 mod capture;
 mod demo;
+mod preparation;
+mod preparation_task;
+mod render_transfer;
+mod timing_receipt;
 
 use std::{
     error::Error,
@@ -26,6 +30,7 @@ struct Options {
     duration: Option<Duration>,
     receipt: Option<PathBuf>,
     frame_audit: Option<PathBuf>,
+    timing_audit: bool,
     scenarios: Option<PathBuf>,
     output: Option<PathBuf>,
 }
@@ -33,6 +38,13 @@ struct Options {
 impl Options {
     /// Parse only implemented controls, rejecting incomplete or unknown options.
     fn parse() -> Result<Self, Box<dyn Error>> {
+        Self::parse_arguments(std::env::args_os().skip(1))
+    }
+
+    /// Validate explicit qualification inputs before constructing any native or execution owner.
+    fn parse_arguments(
+        arguments: impl IntoIterator<Item = std::ffi::OsString>,
+    ) -> Result<Self, Box<dyn Error>> {
         let mut options = Self {
             appearance: Appearance::demo(),
             locale: "en".into(),
@@ -40,15 +52,17 @@ impl Options {
             duration: None,
             receipt: None,
             frame_audit: None,
+            timing_audit: false,
             scenarios: None,
             output: None,
         };
-        let mut arguments = std::env::args_os().skip(1);
+        let mut arguments = arguments.into_iter();
         while let Some(argument) = arguments.next() {
             match argument.to_str().ok_or("Option name is not valid Unicode")? {
                 "--collapsed" => options.appearance.expanded = false,
                 "--light" => options.appearance.theme = Theme::Light,
                 "--reduced-motion" => options.reduced_motion = true,
+                "--timing-audit" => options.timing_audit = true,
                 "--locale" => {
                     options.locale = arguments
                         .next()
@@ -89,6 +103,9 @@ impl Options {
         {
             return Err("--frame-audit requires --receipt in native qualification mode".into());
         }
+        if options.timing_audit && (options.receipt.is_none() || options.scenarios.is_some()) {
+            return Err("--timing-audit requires --receipt in native qualification mode".into());
+        }
         Ok(options)
     }
 }
@@ -119,22 +136,28 @@ fn execute() -> Result<(), Box<dyn Error>> {
             dark: options.appearance.theme == Theme::Dark,
             duration: options.duration,
             audit_frames: options.frame_audit.is_some(),
+            audit_timings: options.timing_audit,
         },
         content,
     )?;
     tracing::info!(operation="splash_demo", first_frame_ms=(before_native+receipt.first_frame).as_secs_f64()*1000.0, frames=receipt.frames_presented, material=?receipt.material, "Native splash proof finished");
+    let native_timings = match (options.timing_audit, receipt.timings) {
+        (true, Some(timings)) => timing_receipt::encode(timings),
+        (false, None) => serde_json::Value::Null,
+        _ => return Err("Native timing audit did not match the requested qualification".into()),
+    };
     let (frame_audit, native_move_audit) = match (options.frame_audit, receipt.frame_audit) {
         (Some(path), Some(audit)) => {
             if let Some(parent) = path.parent() {
                 std::fs::create_dir_all(parent)?;
             }
-            std::fs::write(&path, &audit.first_frame.premultiplied_rgba)?;
+            std::fs::write(&path, audit.first_frame.pixels())?;
             let frame_audit = serde_json::json!({
-                "width": audit.first_frame.width,
-                "height": audit.first_frame.height,
+                "width": audit.first_frame.width(),
+                "height": audit.first_frame.height(),
                 "presented_frames": audit.presented_frames,
                 "content_changes": audit.content_changes,
-                "byte_count": audit.first_frame.premultiplied_rgba.len(),
+                "byte_count": audit.first_frame.pixels().len(),
                 "source_path": path,
             });
             let presentations: Vec<_> = audit
@@ -167,12 +190,15 @@ fn execute() -> Result<(), Box<dyn Error>> {
             "entry_to_first_submission_ms":(before_native+receipt.first_frame).as_secs_f64()*1000.0,
             "native_entry_to_first_submission_ms":receipt.first_frame.as_secs_f64()*1000.0,
             "frames_presented":receipt.frames_presented,
+            "prepared_frames_presented":receipt.prepared_frames_presented,
+            "retained_frame_exposes":receipt.retained_frame_exposes,
             "material":format!("{:?}",receipt.material),
             "mean_frame_work_ms":receipt.total_frame_work.as_secs_f64()*1000.0 / receipt.frames_presented.max(1) as f64,
             "mean_frame_interval_ms":receipt.total_frame_intervals.as_secs_f64()*1000.0 / receipt.frames_presented.saturating_sub(1).max(1) as f64,
             "longest_frame_interval_ms":receipt.longest_frame_interval.as_secs_f64()*1000.0,
             "frame_audit": frame_audit,
             "native_move_audit": native_move_audit,
+            "native_timings": native_timings,
             "elapsed_ms":started.elapsed().as_secs_f64()*1000.0
         });
         std::fs::write(path, serde_json::to_vec_pretty(&data)?)?;
@@ -188,5 +214,37 @@ fn main() -> ExitCode {
             tracing::error!(operation="splash_proof",cause=%error,"SugarSubstitute could not show the native proof");
             ExitCode::FAILURE
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Timing evidence requires a native receipt destination and cannot silently disappear offline.
+    #[test]
+    fn timing_qualification_rejects_missing_receipt_and_offline_export()
+    -> Result<(), Box<dyn Error>> {
+        let arguments =
+            |values: &[&str]| values.iter().map(std::ffi::OsString::from).collect::<Vec<_>>();
+        assert!(Options::parse_arguments(arguments(&["--timing-audit"])).is_err());
+        assert!(
+            Options::parse_arguments(arguments(&[
+                "--timing-audit",
+                "--receipt",
+                "receipt.json",
+                "--scenarios",
+                "inputs.json",
+                "--output",
+                "frames",
+            ]))
+            .is_err()
+        );
+        let options =
+            Options::parse_arguments(arguments(&["--timing-audit", "--receipt", "receipt.json"]))?;
+        assert!(options.timing_audit);
+        assert_eq!(options.receipt, Some(PathBuf::from("receipt.json")));
+        assert!(options.frame_audit.is_none());
+        Ok(())
     }
 }

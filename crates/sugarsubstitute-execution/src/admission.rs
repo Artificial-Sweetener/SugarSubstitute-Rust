@@ -67,6 +67,8 @@ pub(crate) struct State {
     pub(crate) bytes: u64,
     pub(crate) stopping: bool,
     pub(crate) notifications_inflight: usize,
+    capacity_wait: capacity::CapacityWait,
+    capacity_wakes_inflight: usize,
     latest_job: Option<JobId>,
     latest_scope: Option<ScopeId>,
 }
@@ -76,6 +78,7 @@ impl State {
         self.jobs.is_empty()
             && self.retired.is_empty()
             && self.notifications_inflight == 0
+            && self.capacity_wakes_inflight == 0
             && !self.scopes.values().any(|scope| scope.cancel.pending())
     }
 }
@@ -109,6 +112,8 @@ impl Core {
                 bytes: 0,
                 stopping: false,
                 notifications_inflight: 0,
+                capacity_wait: capacity::CapacityWait::default(),
+                capacity_wakes_inflight: 0,
                 latest_job: None,
                 latest_scope: None,
             }),
@@ -195,26 +200,7 @@ impl Core {
                         .is_some_and(|pending| pending.surface == key.surface)
             })
         });
-        let queued_ordinary =
-            state.queue.iter().filter(|queued| ordinary(queued.context.spec().class)).count();
-        if replacement_index.is_none()
-            && (state.queue.len() >= 32 || (ordinary(spec.class) && queued_ordinary >= 28))
-        {
-            return Err(AdmissionError::QueueSaturated { class: spec.class });
-        }
-        if state.jobs.len() >= 48
-            || (ordinary(spec.class)
-                && state.jobs.values().filter(|record| ordinary(record.spec.class)).count() >= 44)
-        {
-            return Err(AdmissionError::CompletionSaturated);
-        }
-        let available_bytes = 256 * 1024 * 1024 - state.bytes;
-        if spec.reservation_bytes > available_bytes {
-            return Err(AdmissionError::MemorySaturated {
-                requested_bytes: spec.reservation_bytes,
-                available_bytes,
-            });
-        }
+        Self::check_capacity(&mut state, spec, replacement_index.is_some())?;
         state.bytes += spec.reservation_bytes;
         if let Some(stored) = state.scopes.get_mut(&scope.id()) {
             stored.bytes += spec.reservation_bytes;
@@ -262,6 +248,7 @@ impl Core {
     pub(crate) fn shutdown(&self) {
         let mut state = lock(&self.state);
         state.stopping = true;
+        state.capacity_wait = capacity::CapacityWait::default();
         for scope in state.scopes.values_mut() {
             scope.closed = true;
             scope.cancel.request();
@@ -324,6 +311,9 @@ impl Core {
             record.phase = JobPhase::Running;
         }
         queued.job.running();
+        let wake = self.capacity_ready(&mut state);
+        drop(state);
+        self.deliver_capacity_wake(wake);
         Some(queued)
     }
 
@@ -339,6 +329,9 @@ impl Core {
             record.retiring = true;
         }
         queued.job.running();
+        let wake = self.capacity_ready(&mut state);
+        drop(state);
+        self.deliver_capacity_wake(wake);
         Some(queued)
     }
 
@@ -369,3 +362,6 @@ mod notification;
 
 #[path = "admission_terminal.rs"]
 mod terminal;
+
+#[path = "admission_capacity.rs"]
+mod capacity;

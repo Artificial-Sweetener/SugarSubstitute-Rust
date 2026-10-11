@@ -8,6 +8,11 @@ use tao::event_loop::ControlFlow;
 /// Cap animated frames at approximately sixty hertz without adding raster work to the period.
 const FRAME_INTERVAL: Duration = Duration::from_nanos(16_666_667);
 
+/// Poll only the closing native event loop, leaving all execution workers with their owner.
+pub(crate) fn closing_wait(now: Instant) -> ControlFlow {
+    ControlFlow::WaitUntil(now + Duration::from_millis(16))
+}
+
 /// Suspend static or hidden native surfaces while preserving bounded qualification exit.
 pub(crate) fn presentation_wait(
     visible: bool,
@@ -40,6 +45,13 @@ pub(crate) fn advance_deadline(deadline: Instant, now: Instant) -> Instant {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Owned close remains responsive independently of hidden/static preparation cadence.
+    #[test]
+    fn closing_poll_has_a_bounded_native_deadline() {
+        let now = Instant::now();
+        assert_eq!(closing_wait(now), ControlFlow::WaitUntil(now + Duration::from_millis(16)));
+    }
 
     /// Preserve early input cadence and skip missed animation periods without catch-up work.
     #[test]

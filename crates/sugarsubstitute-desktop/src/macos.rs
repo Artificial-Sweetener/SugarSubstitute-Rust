@@ -2,8 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Present CPU pixels into an AppKit surface with an explicit native theme fallback.
 
-use crate::{DesktopError, Frame, NativeMaterial};
+use crate::{DesktopError, NativeMaterial};
 use std::{num::NonZeroU32, rc::Rc};
+use sugarsubstitute_contracts::presentation::PreparedFrame;
 use tao::window::Window;
 
 /// Retain the borrowed AppKit window and CPU presentation context in drop order.
@@ -28,10 +29,10 @@ impl Presenter {
     }
 
     /// Composite premultiplied pixels in CPU memory before submitting the RGB surface.
-    pub(crate) fn present(&mut self, frame: &Frame) -> Result<(), DesktopError> {
-        let width = NonZeroU32::new(frame.width)
+    pub(crate) fn present(&mut self, frame: &PreparedFrame) -> Result<(), DesktopError> {
+        let width = NonZeroU32::new(frame.width())
             .ok_or_else(|| DesktopError::message("resize_appkit_surface", "empty frame width"))?;
-        let height = NonZeroU32::new(frame.height)
+        let height = NonZeroU32::new(frame.height())
             .ok_or_else(|| DesktopError::message("resize_appkit_surface", "empty frame height"))?;
         self.surface
             .resize(width, height)
@@ -40,7 +41,7 @@ impl Presenter {
             .surface
             .buffer_mut()
             .map_err(|error| DesktopError::new("borrow_appkit_buffer", error))?;
-        for (source, target) in frame.premultiplied_rgba.chunks_exact(4).zip(buffer.iter_mut()) {
+        for (source, target) in frame.pixels().chunks_exact(4).zip(buffer.iter_mut()) {
             let remainder = (u32::from(self.background) * (255 - u32::from(source[3])) + 127) / 255;
             *target = ((u32::from(source[0]) + remainder) << 16)
                 | ((u32::from(source[1]) + remainder) << 8)

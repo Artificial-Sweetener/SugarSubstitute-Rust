@@ -8,7 +8,11 @@
 
 use crate::{DesktopError, runtime::NativeAction, windows_subclass::destroy_callback};
 use std::cell::RefCell;
+#[path = "timing_native_callback.rs"]
+mod timing;
+use crate::timing::{NativeCallbackKind, TimingObserver};
 use tao::event_loop::EventLoopProxy;
+use timing::NativeCallbackObservation;
 use windows::Win32::{
     Foundation::{HWND, LPARAM, LRESULT, WPARAM},
     Graphics::Gdi::ValidateRect,
@@ -25,13 +29,17 @@ use windows::Win32::{
 /// Keep immutable peer identities and the UI-only wake proxy behind stable reference ownership.
 pub(crate) struct Callback {
     proxy: EventLoopProxy<NativeAction>,
+    timings: Option<TimingObserver>,
     controls: RefCell<Vec<(HWND, u16, NativeAction)>>,
 }
 
 impl Callback {
     /// Start an empty native inventory before constructing child HWNDs.
-    pub(crate) fn new(proxy: EventLoopProxy<NativeAction>) -> Self {
-        Self { proxy, controls: RefCell::new(Vec::new()) }
+    pub(crate) fn new(
+        proxy: EventLoopProxy<NativeAction>,
+        timings: Option<TimingObserver>,
+    ) -> Self {
+        Self { proxy, timings, controls: RefCell::new(Vec::new()) }
     }
 
     /// Register one created peer; no callback borrow is held across native construction.
@@ -81,32 +89,52 @@ pub(crate) unsafe extern "system" fn parent_proc(
     _id: usize,
     data: usize,
 ) -> LRESULT {
-    if message == WM_NCDESTROY {
-        // SAFETY: This callback still owns its transferred Rc until this final message.
-        return unsafe {
-            destroy_callback::<Callback>(hwnd, Some(parent_proc), wparam, lparam, data)
-        };
-    }
-    // SAFETY: This installed subclass owns one raw Rc clone throughout the call.
-    let callback = unsafe { &*(data as *const Callback) };
-    if message == WM_COMMAND
-        && lparam.0 != 0
-        && (wparam.0 >> 16) == 0
-        && let Some(action) = callback
-            .action(HWND(lparam.0 as *mut std::ffi::c_void), Some((wparam.0 & 0xffff) as u16))
-    {
-        callback.send(action);
-        return LRESULT(0);
-    }
-    if let Some(phase) = move_trace_phase(message, wparam) {
-        tracing::info!(
-            operation = "native_caption_move_observed",
-            phase,
-            "Observed owned parent native movement message"
-        );
-    }
-    // SAFETY: Preserve Tao's procedure and every unrelated native subclass.
-    unsafe { DefSubclassProc(hwnd, message, wparam, lparam) }
+    // SAFETY: Each installed subclass owns its transferred reference through this invocation.
+    let (timings, proxy) = {
+        // SAFETY: Installed data is live; this short borrow ends before final destruction or forwarding.
+        let callback = unsafe { &*(data as *const Callback) };
+        (callback.timings.clone(), callback.proxy.clone())
+    };
+    let mut observation =
+        NativeCallbackObservation::new(timings, proxy, NativeCallbackKind::WindowsParent);
+    let result = (|| {
+        if message == WM_NCDESTROY {
+            // SAFETY: This callback still owns its transferred Rc until this final message.
+            return unsafe {
+                destroy_callback::<Callback>(hwnd, Some(parent_proc), wparam, lparam, data)
+            };
+        }
+        // SAFETY: The nonfinal invocation still owns its installed reference.
+        let callback = unsafe { &*(data as *const Callback) };
+        if message == WM_COMMAND
+            && lparam.0 != 0
+            && (wparam.0 >> 16) == 0
+            && let Some(action) = callback
+                .action(HWND(lparam.0 as *mut std::ffi::c_void), Some((wparam.0 & 0xffff) as u16))
+        {
+            callback.send(action);
+            return LRESULT(0);
+        }
+        if let Some(phase) = move_trace_phase(message, wparam) {
+            tracing::info!(
+                operation = "native_caption_move_observed",
+                phase,
+                "Observed owned parent native movement message"
+            );
+        }
+        // SAFETY: Preserve Tao's procedure and every unrelated native subclass.
+        if message == WM_SYSCOMMAND && (wparam.0 & 0xfff0) == SC_MOVE as usize {
+            observation.delegated(|| {
+                // SAFETY: Forward this live owned HWND and unchanged message through its subclass chain.
+                unsafe { DefSubclassProc(hwnd, message, wparam, lparam) }
+            })
+        } else {
+            // SAFETY: Forward this live owned HWND and unchanged message through its subclass chain.
+            unsafe { DefSubclassProc(hwnd, message, wparam, lparam) }
+        }
+    })();
+    observation.finish();
+    result
 }
 
 /// Identify native movement diagnostics without retaining data across default-procedure reentry.
@@ -129,49 +157,61 @@ pub(crate) unsafe extern "system" fn child_proc(
     _id: usize,
     data: usize,
 ) -> LRESULT {
-    if message == WM_NCDESTROY {
-        // SAFETY: This callback still owns its transferred Rc until this final message.
-        return unsafe {
-            destroy_callback::<Callback>(hwnd, Some(child_proc), wparam, lparam, data)
-        };
-    }
-    // SAFETY: The installed subclass keeps this allocation live even if its owner was dropped.
-    let callback = unsafe { &*(data as *const Callback) };
-    match message {
-        WM_NCHITTEST => return LRESULT(HTTRANSPARENT as isize),
-        WM_ERASEBKGND => return LRESULT(1),
-        WM_PAINT => {
-            // SAFETY: Validate this child while the content paints its control rectangle.
-            if !unsafe { ValidateRect(Some(hwnd), None) }.as_bool() {
-                tracing::error!(
-                    operation = "validate_accessible_control_paint",
-                    "ValidateRect failed"
-                );
-            }
-            return LRESULT(0);
+    // SAFETY: Each installed subclass owns its transferred reference through this invocation.
+    let (timings, proxy) = {
+        // SAFETY: Installed data is live; this short borrow ends before final destruction or forwarding.
+        let callback = unsafe { &*(data as *const Callback) };
+        (callback.timings.clone(), callback.proxy.clone())
+    };
+    let observation =
+        NativeCallbackObservation::new(timings, proxy, NativeCallbackKind::WindowsChild);
+    let result = (|| {
+        if message == WM_NCDESTROY {
+            // SAFETY: This callback still owns its transferred Rc until this final message.
+            return unsafe {
+                destroy_callback::<Callback>(hwnd, Some(child_proc), wparam, lparam, data)
+            };
         }
-        WM_SETFOCUS | WM_KILLFOCUS => callback.send(NativeAction::FocusChanged),
-        WM_KEYDOWN => match wparam.0 {
-            0x1b => {
-                callback.send(NativeAction::Close);
-                return LRESULT(0);
-            }
-            0x09 => {
-                callback.send(NativeAction::Disclosure);
-                return LRESULT(0);
-            }
-            0x0d => {
-                if let Some(action) = callback.action(hwnd, None) {
-                    callback.send(action);
+        // SAFETY: The nonfinal invocation still owns its installed reference.
+        let callback = unsafe { &*(data as *const Callback) };
+        match message {
+            WM_NCHITTEST => return LRESULT(HTTRANSPARENT as isize),
+            WM_ERASEBKGND => return LRESULT(1),
+            WM_PAINT => {
+                // SAFETY: Validate this child while the content paints its control rectangle.
+                if !unsafe { ValidateRect(Some(hwnd), None) }.as_bool() {
+                    tracing::error!(
+                        operation = "validate_accessible_control_paint",
+                        "ValidateRect failed"
+                    );
                 }
                 return LRESULT(0);
             }
+            WM_SETFOCUS | WM_KILLFOCUS => callback.send(NativeAction::FocusChanged),
+            WM_KEYDOWN => match wparam.0 {
+                0x1b => {
+                    callback.send(NativeAction::Close);
+                    return LRESULT(0);
+                }
+                0x09 => {
+                    callback.send(NativeAction::Disclosure);
+                    return LRESULT(0);
+                }
+                0x0d => {
+                    if let Some(action) = callback.action(hwnd, None) {
+                        callback.send(action);
+                    }
+                    return LRESULT(0);
+                }
+                _ => {}
+            },
             _ => {}
-        },
-        _ => {}
-    }
-    // SAFETY: Preserve WM_GETOBJECT, BM_CLICK and OS-managed focused/pressed button state.
-    unsafe { DefSubclassProc(hwnd, message, wparam, lparam) }
+        }
+        // SAFETY: Preserve WM_GETOBJECT, BM_CLICK and OS-managed focused/pressed button state.
+        unsafe { DefSubclassProc(hwnd, message, wparam, lparam) }
+    })();
+    observation.finish();
+    result
 }
 
 #[cfg(test)]

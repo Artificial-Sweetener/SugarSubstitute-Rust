@@ -2,8 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Present premultiplied CPU pixels into DWM's transparent window redirection surface.
 
-use crate::{DesktopError, Frame, NativeMaterial};
+use crate::{DesktopError, NativeMaterial, native_storage::Dib};
 use std::{ffi::c_void, rc::Rc};
+use sugarsubstitute_contracts::presentation::PreparedFrame;
 use tao::{dpi::PhysicalPosition, platform::windows::WindowExtWindows, window::Window};
 use windows::Win32::{
     Foundation::{E_INVALIDARG, E_NOTIMPL, HWND, POINT, RECT},
@@ -14,10 +15,8 @@ use windows::Win32::{
             DwmSetWindowAttribute,
         },
         Gdi::{
-            BI_RGB, BITMAPINFO, BITMAPINFOHEADER, BitBlt, CreateCompatibleDC, CreateDIBSection,
-            DIB_RGB_COLORS, DeleteDC, DeleteObject, GetDC, GetMonitorInfoW, HBITMAP, HDC, HGDIOBJ,
-            MONITOR_DEFAULTTOPRIMARY, MONITORINFO, MonitorFromPoint, ReleaseDC, SRCCOPY,
-            SelectObject,
+            BitBlt, GetDC, GetMonitorInfoW, MONITOR_DEFAULTTOPRIMARY, MONITORINFO,
+            MonitorFromPoint, ReleaseDC, SRCCOPY,
         },
     },
     UI::{Controls::MARGINS, WindowsAndMessaging::GetCursorPos},
@@ -77,28 +76,20 @@ impl Presenter {
         })
     }
 
-    /// Copy CPU BGRA bytes without replacing transparent pixels with an opaque fill.
-    pub(crate) fn present(&mut self, frame: &Frame) -> Result<(), DesktopError> {
-        if self
-            .dib
-            .as_ref()
-            .is_none_or(|dib| dib.width != frame.width || dib.height != frame.height)
-        {
-            self.dib = Some(Dib::new(frame.width, frame.height)?);
+    /// Release copied native storage while its original frame reservation remains charged.
+    pub(crate) fn shutdown(&mut self) -> Result<(), DesktopError> {
+        if let Some(dib) = &mut self.dib {
+            dib.close()?;
         }
-        let Some(dib) = &mut self.dib else {
-            return Err(DesktopError::message(
-                "present_frame",
-                "DIB allocation did not produce a surface",
-            ));
-        };
-        // SAFETY: The DIB owns an allocation of exactly width*height*4 bytes until drop;
-        // frame validation has bounded the matching source and the UI thread is exclusive.
-        let destination = unsafe {
-            std::slice::from_raw_parts_mut(dib.pixels.cast::<u8>(), frame.premultiplied_rgba.len())
-        };
-        for (source, target) in
-            frame.premultiplied_rgba.chunks_exact(4).zip(destination.chunks_exact_mut(4))
+        self.dib = None;
+        Ok(())
+    }
+
+    /// Copy CPU BGRA bytes without replacing transparent pixels with an opaque fill.
+    pub(crate) fn present(&mut self, frame: &PreparedFrame) -> Result<(), DesktopError> {
+        let dib = Dib::for_frame(&mut self.dib, frame)?;
+        let destination = dib.pixels_mut()?;
+        for (source, target) in frame.pixels().chunks_exact(4).zip(destination.chunks_exact_mut(4))
         {
             if self.material == NativeMaterial::Mica {
                 target.copy_from_slice(&[source[2], source[1], source[0], source[3]]);
@@ -125,9 +116,9 @@ impl Presenter {
                 target,
                 0,
                 0,
-                dib.width as i32,
-                dib.height as i32,
-                Some(dib.dc),
+                dib.width() as i32,
+                dib.height() as i32,
+                Some(dib.dc()),
                 0,
                 0,
                 SRCCOPY,
@@ -218,125 +209,11 @@ fn set_attribute(
     }
 }
 
-/// Own one selected top-down DIB and the DC into which it is selected.
-struct Dib {
-    dc: HDC,
-    bitmap: HBITMAP,
-    previous: HGDIOBJ,
-    pixels: *mut c_void,
-    width: u32,
-    height: u32,
-}
-
-impl Dib {
-    /// Allocate a bounded device-size raster and preserve the DC's original selection.
-    fn new(width: u32, height: u32) -> Result<Self, DesktopError> {
-        let signed_width =
-            i32::try_from(width).map_err(|error| DesktopError::new("allocate_dib", error))?;
-        let signed_height =
-            i32::try_from(height).map_err(|error| DesktopError::new("allocate_dib", error))?;
-        let info = BITMAPINFO {
-            bmiHeader: BITMAPINFOHEADER {
-                biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
-                biWidth: signed_width,
-                biHeight: -signed_height,
-                biPlanes: 1,
-                biBitCount: 32,
-                biCompression: BI_RGB.0,
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-        let mut pixels = std::ptr::null_mut();
-        // SAFETY: The structure is a valid top-down 32-bit DIB descriptor. The returned
-        // handles and storage are owned here; failures release previously allocated state.
-        unsafe {
-            let dc = CreateCompatibleDC(None);
-            if dc.is_invalid() {
-                return Err(DesktopError::message("allocate_dib_dc", "CreateCompatibleDC failed"));
-            }
-            let bitmap =
-                match CreateDIBSection(Some(dc), &info, DIB_RGB_COLORS, &mut pixels, None, 0) {
-                    Ok(bitmap) => bitmap,
-                    Err(error) => {
-                        if !DeleteDC(dc).as_bool() {
-                            tracing::error!(
-                                operation = "release_failed_dib_dc",
-                                "DeleteDC failed during allocation recovery"
-                            );
-                        }
-                        return Err(DesktopError::new("allocate_dib", error));
-                    }
-                };
-            let previous = SelectObject(dc, bitmap.into());
-            if !valid_selection(previous) || pixels.is_null() {
-                if valid_selection(previous) && !valid_selection(SelectObject(dc, previous)) {
-                    tracing::error!(
-                        operation = "restore_failed_dib_selection",
-                        "SelectObject failed during allocation recovery"
-                    );
-                }
-                if !DeleteObject(bitmap.into()).as_bool() {
-                    tracing::error!(
-                        operation = "release_failed_dib",
-                        "DeleteObject failed during allocation recovery"
-                    );
-                }
-                if !DeleteDC(dc).as_bool() {
-                    tracing::error!(
-                        operation = "release_failed_dib_dc",
-                        "DeleteDC failed during allocation recovery"
-                    );
-                }
-                return Err(DesktopError::message(
-                    "select_dib",
-                    "SelectObject returned an invalid DIB selection",
-                ));
-            }
-            Ok(Self { dc, bitmap, previous, pixels, width, height })
-        }
-    }
-}
-
-impl Drop for Dib {
-    /// Restore selection before releasing the bitmap and its storage.
-    fn drop(&mut self) {
-        // SAFETY: These resources were created and remain exclusively owned by this DIB.
-        // The original object is restored before deleting the selected bitmap and DC.
-        unsafe {
-            if !valid_selection(SelectObject(self.dc, self.previous)) {
-                tracing::error!(
-                    operation = "restore_dib_selection",
-                    "SelectObject failed during surface teardown"
-                );
-            }
-            if !DeleteObject(self.bitmap.into()).as_bool() {
-                tracing::error!(
-                    operation = "release_dib",
-                    "DeleteObject failed during surface teardown"
-                );
-            }
-            if !DeleteDC(self.dc).as_bool() {
-                tracing::error!(
-                    operation = "release_dib_dc",
-                    "DeleteDC failed during surface teardown"
-                );
-            }
-        }
-    }
-}
-
-/// Treat both documented GDI selection failure sentinels as invalid.
-fn valid_selection(object: HGDIOBJ) -> bool {
-    !object.is_invalid() && object.0 as isize != -1
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{Dib, centered_origin};
+    use super::centered_origin;
     use tao::dpi::PhysicalPosition;
     use windows::Win32::Foundation::RECT;
-    use windows::Win32::Graphics::Gdi::{BITMAP, GetObjectW};
 
     /// Preserve cursor-monitor work-area placement for negative origins and reject invalid bounds.
     #[test]
@@ -355,29 +232,6 @@ mod tests {
             )
             .is_err()
         );
-        Ok(())
-    }
-
-    /// Exercise native ownership rather than assuming Rust drop released the selected GDI bitmap.
-    #[test]
-    fn native_dib_drop_releases_bitmap_after_restoring_selection()
-    -> Result<(), Box<dyn std::error::Error>> {
-        let dib = Dib::new(2, 2)?;
-        let handle = dib.bitmap.into();
-        let mut bitmap = BITMAP::default();
-        // SAFETY: The owned bitmap is live and the output buffer has its documented size.
-        let before = unsafe {
-            GetObjectW(handle, std::mem::size_of::<BITMAP>() as i32, Some((&raw mut bitmap).cast()))
-        };
-        assert!(before > 0);
-        assert_eq!(bitmap.bmWidth, 2);
-        assert_eq!(bitmap.bmHeight, 2);
-        drop(dib);
-        // SAFETY: Querying an invalid GDI handle is defined to return zero; no storage is dereferenced.
-        let after = unsafe {
-            GetObjectW(handle, std::mem::size_of::<BITMAP>() as i32, Some((&raw mut bitmap).cast()))
-        };
-        assert_eq!(after, 0);
         Ok(())
     }
 }

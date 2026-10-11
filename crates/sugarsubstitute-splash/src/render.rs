@@ -4,16 +4,22 @@
 //! Compose the replaceable CPU splash view from immutable presentation inputs.
 
 use std::{error::Error, fmt};
+use sugarsubstitute_contracts::execution::{MemoryClaim, MemoryClaimError, MemoryLease};
+use sugarsubstitute_contracts::presentation::FrameError;
+#[path = "render_task.rs"]
+mod preparation;
+#[path = "render_stages.rs"]
+mod stages;
+pub use preparation::{
+    PreparationError, SPLASH_CACHE_RESERVATION_BYTES, SplashInitializationTask,
+    SplashPreparationResult, SplashRenderRequest, SplashRenderTask,
+};
 use sugarsubstitute_contracts::localization::messages;
 use tiny_skia::Pixmap;
 
 use crate::{
-    AnimationFrame, Appearance, CharacterError, CharacterLibrary, Control, IconError,
-    ProgressFrame, Theme,
-    assets::POSE_ASSETS,
-    caption_icons::{CaptionIcon, CaptionIcons},
-    chrome, progress,
-    text::StatusText,
+    AnimationFrame, Appearance, CharacterError, CharacterLibrary, IconError, ProgressFrame,
+    assets::POSE_ASSETS, caption_icons::CaptionIcons, text::StatusText,
 };
 
 /// Preserve errors at the rendering boundary without turning them into startup policy.
@@ -21,6 +27,8 @@ use crate::{
 pub enum RenderError {
     /// An external frame size, scale or progress value violates presentation bounds.
     InvalidFrame,
+    /// Resumable preparation requires an admitted persistent cache reservation.
+    UnadmittedCache,
     /// CPU raster allocation failed.
     Allocation,
     /// Bounded paint coverage allocation failed, retaining its allocator cause.
@@ -31,6 +39,12 @@ pub enum RenderError {
     Font(std::io::Error),
     /// Packaged caption glyph validation or decoding failed.
     Icon(IconError),
+    /// A bounded CPU allocation failed, retaining its allocator cause.
+    Buffer(std::collections::TryReserveError),
+    /// The admitted memory budget could not cover a live allocation.
+    Memory(MemoryClaimError),
+    /// Immutable output shape or premultiplied storage validation failed.
+    Frame(FrameError),
 }
 
 impl fmt::Display for RenderError {
@@ -40,6 +54,9 @@ impl fmt::Display for RenderError {
             Self::InvalidFrame => {
                 formatter.write_str("Invalid splash frame dimensions, scale or progress")
             }
+            Self::UnadmittedCache => {
+                formatter.write_str("Splash preparation requires an admitted cache owner")
+            }
             Self::Allocation => formatter.write_str("Cannot allocate splash CPU frame"),
             Self::RasterAllocation(error) => {
                 write!(formatter, "Cannot prepare splash coverage: {error}")
@@ -47,6 +64,9 @@ impl fmt::Display for RenderError {
             Self::Character(error) => error.fmt(formatter),
             Self::Font(error) => write!(formatter, "Cannot prepare splash status fonts: {error}"),
             Self::Icon(error) => error.fmt(formatter),
+            Self::Buffer(error) => write!(formatter, "Cannot allocate splash buffer: {error}"),
+            Self::Memory(error) => error.fmt(formatter),
+            Self::Frame(error) => error.fmt(formatter),
         }
     }
 }
@@ -59,6 +79,9 @@ impl Error for RenderError {
             Self::Font(error) => Some(error),
             Self::RasterAllocation(error) => Some(error),
             Self::Icon(error) => Some(error),
+            Self::Buffer(error) => Some(error),
+            Self::Memory(error) => Some(error),
+            Self::Frame(error) => Some(error),
             _ => None,
         }
     }
@@ -77,6 +100,8 @@ pub struct SplashRenderer {
     icons: CaptionIcons,
     text: Option<StatusText>,
     locale: String,
+    // Cache claims release after all decoded rasters and native font resources.
+    cache_claim: Option<MemoryClaim>,
 }
 
 /// Keep a validated frame's composition parameters together through both startup stages.
@@ -98,7 +123,30 @@ impl SplashRenderer {
             icons: CaptionIcons::new(),
             text: None,
             locale: messages(locale).id.to_owned(),
+            cache_claim: None,
         })
+    }
+
+    /// Validate lazy cache metadata on an admitted CPU lane and retain its full cache budget.
+    ///
+    /// Native font objects are free-threaded; all drawing remains serialized on execution.
+    /// Idle destruction may occur on the owning caller thread. No PNG or font work occurs here.
+    ///
+    /// # Errors
+    /// Preserve metadata and aggregate memory-claim failures before returning an owner.
+    pub fn new_admitted(locale: &str, lease: MemoryLease) -> Result<Self, RenderError> {
+        let claim = lease.claim(SPLASH_CACHE_RESERVATION_BYTES).map_err(RenderError::Memory)?;
+        let mut renderer = Self::new(locale)?;
+        renderer.cache_claim = Some(claim);
+        Ok(renderer)
+    }
+    /// Capture initialization inputs cheaply; admitted execution establishes lazy caches.
+    pub fn initialize(locale: String, lease: MemoryLease) -> SplashInitializationTask {
+        SplashInitializationTask::new(locale, lease)
+    }
+    /// Move this exclusive renderer into a resumable preparation job without doing raster work.
+    pub fn prepare(self, request: SplashRenderRequest, lease: MemoryLease) -> SplashRenderTask {
+        SplashRenderTask::new(self, request, lease)
     }
 
     /// Rasterize the current view in device pixels, retaining transparent native-material areas.
@@ -155,59 +203,9 @@ impl SplashRenderer {
 
     /// Validate and compose one frame while retaining this view's prepared resources.
     fn render_frame(&mut self, frame: RenderFrame) -> Result<Pixmap, RenderError> {
-        let RenderFrame { width, height, scale, appearance, character, feedback, status } = frame;
-        if width == 0
-            || height == 0
-            || width > 4096
-            || height > 4096
-            || !scale.is_finite()
-            || !(0.5..=4.0).contains(&scale)
-            || !feedback.is_valid()
-        {
-            return Err(RenderError::InvalidFrame);
-        }
-        let mut target = Pixmap::new(width, height).ok_or(RenderError::Allocation)?;
-        let mut bounds = appearance.mascot();
-        bounds.x *= scale;
-        bounds.y *= scale;
-        bounds.width *= scale;
-        bounds.height *= scale;
-        self.characters.render(&mut target, bounds, character).map_err(RenderError::Character)?;
-        if appearance.expanded {
-            chrome::console(&mut target, appearance.theme, scale as f32)
-                .map_err(RenderError::from)?;
-        } else if status {
-            if self.text.is_none() {
-                self.text = Some(StatusText::new(&self.locale).map_err(RenderError::Font)?);
-            }
-            if let Some(text) = &mut self.text {
-                text.paint(
-                    &mut target,
-                    messages(&self.locale).loading,
-                    appearance.theme,
-                    scale as f32,
-                )
-                .map_err(RenderError::Font)?;
-            }
-        }
-        progress::paint(&mut target, appearance, feedback, scale as f32)
-            .map_err(RenderError::from)?;
-        chrome::controls(&mut target, appearance, scale as f32);
-        let foreground = if appearance.theme == Theme::Dark { [255; 3] } else { [0; 3] };
-        self.icons
-            .draw(&mut target, scale, CaptionIcon::Console, foreground)
-            .map_err(RenderError::Icon)?;
-        let close_foreground = if appearance.hovered == Some(Control::Close)
-            || appearance.pressed == Some(Control::Close)
-        {
-            [255; 3]
-        } else {
-            foreground
-        };
-        self.icons
-            .draw(&mut target, scale, CaptionIcon::Close, close_foreground)
-            .map_err(RenderError::Icon)?;
-        Ok(target)
+        let mut stages = stages::RenderStages::new(frame)?;
+        while !stages.step(self)? {}
+        stages.finish()
     }
 }
 

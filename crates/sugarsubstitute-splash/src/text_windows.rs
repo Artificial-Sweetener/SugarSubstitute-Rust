@@ -3,12 +3,13 @@
 
 //! Own native Windows font shaping and bounded grayscale status coverage.
 //!
-//! DirectWrite objects and callback buffers remain within this owner. Draw is
-//! synchronous; copied runs retain their font faces. No HWND or COM apartment
-//! initialization is required by the shared DirectWrite factory. The owner is
-//! used on one presentation thread and exposes only ordinary owned pixel data.
+//! DirectWrite objects and copied callback buffers remain owned by a worker's
+//! preparation cursor. Layout Draw is synchronous and limited to 4096 UTF-16
+//! units, 256 runs and 4096 glyphs. Shared-factory operations require no HWND or
+//! COM apartment. Opaque native font storage is outside the Rust allocation claim.
 
-use std::{cell::RefCell, io, mem::ManuallyDrop};
+use std::{cell::RefCell, io};
+use sugarsubstitute_contracts::execution::MemoryLease;
 use tiny_skia::Pixmap;
 use windows::{
     Win32::Graphics::DirectWrite::*,
@@ -19,7 +20,11 @@ use crate::Theme;
 
 #[path = "text_windows_runs.rs"]
 mod runs;
+use super::memory::{self, Allocation, MAX_GLYPHS, MAX_RUNS, METADATA_BYTES};
 use runs::{Collector, GlyphRun};
+#[path = "text_windows_cursor.rs"]
+mod cursor;
+pub(crate) use cursor::StatusPaint;
 
 /// Retain native font discovery after the first splash submission.
 pub(crate) struct StatusText {
@@ -33,7 +38,8 @@ impl StatusText {
         if locale.len() > 64 || locale.contains('\0') {
             return Err(io::Error::new(io::ErrorKind::InvalidInput, "Invalid status font locale"));
         }
-        let locale: Vec<u16> = locale.encode_utf16().chain(Some(0)).collect();
+        let mut native_locale = memory::reserve::<u16>(65, 130)?;
+        native_locale.extend(locale.encode_utf16().chain(Some(0)));
         // SAFETY: Factory creation owns its returned COM reference. UTF-16 pointers
         // remain terminated and alive through CreateTextFormat, which copies them.
         let (factory, format) = unsafe {
@@ -45,7 +51,7 @@ impl StatusText {
                 DWRITE_FONT_STYLE_NORMAL,
                 DWRITE_FONT_STRETCH_NORMAL,
                 14.0,
-                PCWSTR(locale.as_ptr()),
+                PCWSTR(native_locale.as_ptr()),
             )?;
             let builder = factory.CreateFontFallbackBuilder()?;
             // Preserve the production label's explicit family priority, then
@@ -70,52 +76,75 @@ impl StatusText {
         Ok(Self { factory, format })
     }
 
-    /// Paint bottom-aligned native glyphs in device pixels after bounded shaping.
+    /// Prepare an owned cooperative cursor against an actual admitted reservation.
     ///
-    /// Errors retain native shaping/raster causes. UTF-16 input is bounded to
-    /// 4096 units, positive device scales to four and raster textures to four MiB.
-    pub(crate) fn paint(
+    /// Font creation and this bounded native shaping call run on the preparation
+    /// worker. Rust metadata claims precede allocations; no destination is touched.
+    /// Native layout is indivisible and cancellation is observed after it returns.
+    pub(crate) fn prepare(
         &mut self,
-        target: &mut Pixmap,
         message: &str,
         theme: Theme,
         scale: f32,
-    ) -> Result<(), io::Error> {
-        if !scale.is_finite() || scale <= 0.0 || scale > 4.0 {
-            return Err(io::Error::new(io::ErrorKind::InvalidInput, "Invalid status device scale"));
-        }
-        let runs = self.shape(message)?;
-        let last_baseline = runs.iter().map(|run| run.baseline.1).reduce(f32::max).unwrap_or(15.0);
-        // QWidget clips its QLabel paint to the widget, including the eight-pixel
-        // bottom contents margin: QRect(24, 486, 510, 44) in logical pixels.
-        let mut surface = LabelSurface {
-            pixels: target,
-            bounds: [
-                (24.0 * scale).round() as i32,
-                (486.0 * scale).round() as i32,
-                (534.0 * scale).round() as i32,
-                (530.0 * scale).round() as i32,
-            ],
-        };
-        for run in &runs {
-            self.paint_run(&mut surface, run, theme, scale, 518.0 - last_baseline)?;
-        }
-        Ok(())
+        width: u32,
+        height: u32,
+        lease: MemoryLease,
+    ) -> io::Result<crate::text::StatusPaint> {
+        self.begin(message, theme, scale, width, height, Allocation(Some(lease)))
     }
 
-    /// Copy bounded native shaping into independent font-face and glyph ownership.
-    fn shape(&self, message: &str) -> Result<Vec<GlyphRun>, io::Error> {
-        let text: Vec<u16> = message.encode_utf16().take(4097).collect();
-        if text.len() > 4096 {
+    /// Prepare the same cursor for synchronous offline raster qualification.
+    ///
+    /// This path owns allocations without an execution reservation. Production
+    /// frame jobs use `prepare` and keep their real byte claims with the cursor.
+    pub(crate) fn prepare_offline(
+        &mut self,
+        message: &str,
+        theme: Theme,
+        scale: f32,
+        width: u32,
+        height: u32,
+    ) -> io::Result<StatusPaint> {
+        self.begin(message, theme, scale, width, height, Allocation(None))
+    }
+
+    fn begin(
+        &self,
+        message: &str,
+        theme: Theme,
+        scale: f32,
+        width: u32,
+        height: u32,
+        allocation: Allocation,
+    ) -> io::Result<StatusPaint> {
+        memory::validate(message, scale, width, height)?;
+        let metadata = allocation.claim(METADATA_BYTES)?;
+        let runs = self.shape(message)?;
+        Ok(StatusPaint::new(
+            self.factory.clone(),
+            runs,
+            metadata,
+            allocation,
+            memory::PaintSpec { theme, scale, width, height },
+        ))
+    }
+
+    /// Copy native shaping buffers within the already admitted metadata allowance.
+    fn shape(&self, message: &str) -> io::Result<Vec<GlyphRun>> {
+        if message.encode_utf16().take(MAX_GLYPHS + 1).count() > MAX_GLYPHS {
             return Err(io::Error::new(io::ErrorKind::InvalidInput, "Status exceeds UTF-16 bound"));
         }
-        if text.is_empty() {
+        if message.is_empty() {
             return Ok(Vec::new());
         }
-        let collector = ComObject::new(Collector { runs: RefCell::new(Vec::new()) });
+        let mut text = memory::reserve::<u16>(MAX_GLYPHS, METADATA_BYTES)?;
+        text.extend(message.encode_utf16());
+        let runs = memory::reserve::<GlyphRun>(MAX_RUNS, METADATA_BYTES / 2)?;
+        let collector =
+            ComObject::new(Collector { runs: RefCell::new(runs), failure: RefCell::new(None) });
         let renderer: IDWriteTextRenderer = collector.to_interface();
-        // SAFETY: Input slice and owned format remain valid through layout creation.
-        // Draw is synchronous and retains the renderer for each callback invocation.
+        // SAFETY: The bounded UTF-16 slice and format remain valid through layout
+        // creation. Draw is synchronous and retains the renderer during callbacks.
         unsafe {
             let layout = self.factory.CreateGdiCompatibleTextLayout(
                 &text,
@@ -126,138 +155,17 @@ impl StatusText {
                 None,
                 false,
             )?;
-            layout.Draw(None, &renderer, 0.0, 0.0)?;
+            let result = layout.Draw(None, &renderer, 0.0, 0.0);
+            if let Some(cause) = collector.get().failure.replace(None) {
+                return Err(cause);
+            }
+            result?;
         }
         Ok(collector.get().runs.replace(Vec::new()))
     }
-
-    /// Rasterize one retained native run and composite its bounded coverage.
-    ///
-    /// Qt's glyph cache retains the logical font size with a device transform.
-    /// Its default full hinting floors each glyph's device X and rounds baseline Y.
-    fn paint_run(
-        &self,
-        target: &mut LabelSurface<'_>,
-        run: &GlyphRun,
-        theme: Theme,
-        scale: f32,
-        origin_y: f32,
-    ) -> Result<(), io::Error> {
-        let mut pen = run.baseline.0;
-        for (index, glyph) in run.indices.iter().enumerate() {
-            let offset = DWRITE_GLYPH_OFFSET {
-                advanceOffset: run.offsets[index].advanceOffset,
-                ascenderOffset: run.offsets[index].ascenderOffset,
-            };
-            let raw = DWRITE_GLYPH_RUN {
-                fontFace: ManuallyDrop::new(Some(run.face.clone())),
-                fontEmSize: run.size,
-                glyphCount: 1,
-                glyphIndices: glyph,
-                glyphAdvances: &0.0,
-                glyphOffsets: &offset,
-                isSideways: false.into(),
-                bidiLevel: run.level,
-            };
-            self.paint_glyph(
-                target,
-                raw,
-                theme,
-                ((24.0 + pen) * scale).floor(),
-                ((origin_y + run.baseline.1) * scale).round(),
-                scale,
-            )?;
-            pen += if run.level.is_multiple_of(2) {
-                run.advances[index]
-            } else {
-                -run.advances[index]
-            };
-        }
-        Ok(())
-    }
-
-    /// Keep default full-hinting glyph coverage on the native device pixel grid.
-    fn paint_glyph(
-        &self,
-        target: &mut LabelSurface<'_>,
-        mut raw: DWRITE_GLYPH_RUN,
-        theme: Theme,
-        x: f32,
-        y: f32,
-        scale: f32,
-    ) -> Result<(), io::Error> {
-        let mode = if raw.fontEmSize > 16.0 {
-            DWRITE_RENDERING_MODE_NATURAL_SYMMETRIC
-        } else {
-            DWRITE_RENDERING_MODE_GDI_CLASSIC
-        };
-        let measuring = if raw.fontEmSize > 16.0 {
-            DWRITE_MEASURING_MODE_NATURAL
-        } else {
-            DWRITE_MEASURING_MODE_GDI_CLASSIC
-        };
-        // SAFETY: All run arrays have the same validated length and remain alive
-        // through the synchronous analysis. The COM face outlives analysis creation.
-        let analysis = unsafe {
-            let transform = DWRITE_MATRIX { m11: scale, m22: scale, ..Default::default() };
-            self.factory.CreateGlyphRunAnalysis(
-                &raw,
-                Some(&transform),
-                mode,
-                measuring,
-                DWRITE_GRID_FIT_MODE_DEFAULT,
-                DWRITE_TEXT_ANTIALIAS_MODE_CLEARTYPE,
-                x / scale,
-                y / scale,
-            )
-        };
-        // The ABI field has no automatic destructor; release our owned clone.
-        // SAFETY: This field owns exactly one clone and is no longer used by analysis.
-        unsafe { ManuallyDrop::drop(&mut raw.fontFace) };
-        let analysis = analysis?;
-        // SAFETY: Analysis returns an owned rectangle and writes into its exact-size slice.
-        let bounds = unsafe { analysis.GetAlphaTextureBounds(DWRITE_TEXTURE_CLEARTYPE_3x1)? };
-        let width = bounds
-            .right
-            .checked_sub(bounds.left)
-            .ok_or_else(|| io::Error::other("Invalid native glyph width"))?;
-        let height = bounds
-            .bottom
-            .checked_sub(bounds.top)
-            .ok_or_else(|| io::Error::other("Invalid native glyph height"))?;
-        if width <= 0 || height <= 0 {
-            return Ok(());
-        }
-        let length = (width as usize)
-            .checked_mul(height as usize)
-            .and_then(|pixels| pixels.checked_mul(3))
-            .filter(|length| *length <= 4 * 1024 * 1024)
-            .ok_or_else(|| io::Error::other("Status raster exceeds memory bound"))?;
-        let mut coverage = vec![0; length];
-        // SAFETY: The rectangle and allocated slice have exactly width*height*3 bytes.
-        unsafe {
-            analysis.CreateAlphaTexture(DWRITE_TEXTURE_CLEARTYPE_3x1, &bounds, &mut coverage)?
-        };
-        for y in 0..height {
-            for x in 0..width {
-                let offset = (y as usize * width as usize + x as usize) * 3;
-                let channels = &coverage[offset..offset + 3];
-                // Qt's transparent ARGB surface reduces ClearType coverage via
-                // qdrawhelper.cpp's qRgbAvg: red/green/blue weights 5/6/5. This
-                // path applies no display gamma or font-smoothing contrast.
-                let gray = (u32::from(channels[0]) * 5
-                    + u32::from(channels[1]) * 6
-                    + u32::from(channels[2]) * 5)
-                    / 16;
-                target.composite(bounds.left + x, bounds.top + y, gray as u8, theme);
-            }
-        }
-        Ok(())
-    }
 }
-
 /// Borrow the destination with the QLabel's half-open device-pixel clip rectangle.
-struct LabelSurface<'a> {
+pub(super) struct LabelSurface<'a> {
     pixels: &'a mut Pixmap,
     bounds: [i32; 4],
 }

@@ -22,7 +22,9 @@ impl MemoryRelease for Release {
                 scope.bytes -= bytes;
             }
             Core::retire_scopes(&mut state);
+            let wake = core.capacity_ready(&mut state);
             drop(state);
+            core.deliver_capacity_wake(wake);
             core.changed();
         }
     }

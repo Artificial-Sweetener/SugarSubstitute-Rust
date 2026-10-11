@@ -3,6 +3,7 @@
 
 //! Copy DirectWrite's synchronous shaping callbacks into owned glyph runs.
 
+use crate::text::memory::{self, MAX_GLYPHS, MAX_RUNS, METADATA_BYTES};
 use std::{cell::RefCell, ffi::c_void};
 use windows::{
     Win32::{Foundation::E_INVALIDARG, Graphics::DirectWrite::*},
@@ -32,6 +33,8 @@ pub(super) struct GlyphRun {
 pub(super) struct Collector {
     /// Owned results become available after the layout returns.
     pub runs: RefCell<Vec<GlyphRun>>,
+    /// Preserve Rust allocator causes that cannot be represented by the COM HRESULT.
+    pub failure: RefCell<Option<std::io::Error>>,
 }
 
 impl IDWritePixelSnapping_Impl for Collector_Impl {
@@ -80,7 +83,7 @@ impl IDWriteTextRenderer_Impl for Collector_Impl {
         if run.glyphCount == 0 {
             return Ok(());
         }
-        if run.glyphCount > 4096
+        if run.glyphCount > MAX_GLYPHS as u32
             || run.glyphIndices.is_null()
             || run.glyphAdvances.is_null()
             || run.glyphOffsets.is_null()
@@ -93,14 +96,25 @@ impl IDWriteTextRenderer_Impl for Collector_Impl {
             return Err(E_INVALIDARG.into());
         }
         let count = run.glyphCount as usize;
-        // SAFETY: DirectWrite owns these count-element arrays through the callback.
-        let (indices, advances, offsets) = unsafe {
-            (
-                std::slice::from_raw_parts(run.glyphIndices, count).to_vec(),
-                std::slice::from_raw_parts(run.glyphAdvances, count).to_vec(),
-                std::slice::from_raw_parts(run.glyphOffsets, count).to_vec(),
-            )
+        let mut runs =
+            self.runs.try_borrow_mut().map_err(|_| windows::core::Error::from(E_INVALIDARG))?;
+        let total: usize = runs.iter().map(|run| run.indices.len()).sum();
+        if runs.len() >= MAX_RUNS || total.saturating_add(count) > MAX_GLYPHS {
+            return Err(E_INVALIDARG.into());
+        }
+        let allocation_error = |cause| {
+            self.failure.replace(Some(cause));
+            windows::core::Error::from(E_INVALIDARG)
         };
+        let mut indices = memory::reserve(count, METADATA_BYTES / 8).map_err(allocation_error)?;
+        let mut advances = memory::reserve(count, METADATA_BYTES / 8).map_err(allocation_error)?;
+        let mut offsets = memory::reserve(count, METADATA_BYTES / 8).map_err(allocation_error)?;
+        // SAFETY: DirectWrite owns these count-element arrays through the callback.
+        unsafe {
+            indices.extend_from_slice(std::slice::from_raw_parts(run.glyphIndices, count));
+            advances.extend_from_slice(std::slice::from_raw_parts(run.glyphAdvances, count));
+            offsets.extend_from_slice(std::slice::from_raw_parts(run.glyphOffsets, count));
+        }
         if advances.iter().any(|advance| !advance.is_finite())
             || offsets.iter().any(|offset| {
                 !offset.advanceOffset.is_finite() || !offset.ascenderOffset.is_finite()
@@ -109,12 +123,6 @@ impl IDWriteTextRenderer_Impl for Collector_Impl {
             return Err(E_INVALIDARG.into());
         }
         let face = run.fontFace.as_ref().ok_or(windows::core::Error::from(E_INVALIDARG))?.clone();
-        let mut runs =
-            self.runs.try_borrow_mut().map_err(|_| windows::core::Error::from(E_INVALIDARG))?;
-        let total: usize = runs.iter().map(|run| run.indices.len()).sum();
-        if total.saturating_add(count) > 4096 {
-            return Err(E_INVALIDARG.into());
-        }
         runs.push(GlyphRun {
             face,
             size: run.fontEmSize,

@@ -22,3 +22,7 @@ windows-core.workspace = true
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+sugarsubstitute-execution = { path = "../sugarsubstitute-execution" }
+cosmic-text.workspace = true

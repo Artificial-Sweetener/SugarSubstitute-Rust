@@ -22,14 +22,14 @@ minimum_tests = 6
 [[owners]]
 package = "sugarsubstitute"
 root = "crates/sugarsubstitute"
-concern = "Product identity, demo input and controlled rendering composition"
-minimum_tests = 1
+concern = "Product identity, native input, admitted preparation and actual host shutdown"
+minimum_tests = 18
 
 [[owners]]
 package = "sugarsubstitute-execution"
 root = "crates/sugarsubstitute-execution"
 concern = "Admission, CPU scheduling, cancellation, retained ownership and observed worker teardown"
-minimum_tests = 43
+minimum_tests = 52
 
 [[owners]]
 package = "sugarsubstitute-xtask"
@@ -40,11 +40,11 @@ minimum_tests = 1
 [[owners]]
 package = "sugarsubstitute-splash"
 root = "crates/sugarsubstitute-splash"
-concern = "Character animation, appearance and presentation behavior"
-minimum_tests = 1
+concern = "Character animation, bounded admitted raster and glyph preparation with immutable output"
+minimum_tests = 65
 
 [[owners]]
 package = "sugarsubstitute-desktop"
 root = "crates/sugarsubstitute-desktop"
-concern = "Frame validation, input boundaries and native window qualification"
-minimum_tests = 1
+concern = "Nonblocking frame delivery, retained native storage, input and timing boundaries"
+minimum_tests = 57

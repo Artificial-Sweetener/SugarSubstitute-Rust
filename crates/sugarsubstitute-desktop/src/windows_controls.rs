@@ -55,10 +55,11 @@ impl Controls {
         window: Rc<Window>,
         proxy: EventLoopProxy<NativeAction>,
         controls: &[AccessibleControl],
+        timings: Option<crate::timing::TimingObserver>,
     ) -> Result<Self, DesktopError> {
         validate_controls(controls)?;
         let parent = HWND(window.hwnd() as *mut c_void);
-        let callback = Rc::new(Callback::new(proxy));
+        let callback = Rc::new(Callback::new(proxy, timings));
         let mut owner = Self {
             window,
             callback,

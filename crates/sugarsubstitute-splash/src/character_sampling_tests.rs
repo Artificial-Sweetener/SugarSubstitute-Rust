@@ -3,9 +3,8 @@
 
 //! Qualify the native character sampler's interpolation, composition, and clipping.
 
-use super::{
-    DeviceTransform, bounded_count, circle_above, multiply, over, paint, paper_edge, sample,
-};
+use super::sample::{bounded_count, sample};
+use super::{DeviceTransform, circle_above, multiply, over, paint, paper_edge};
 use crate::projection::{Bounds, Point};
 use std::error::Error;
 use tiny_skia::Pixmap;
@@ -115,5 +114,42 @@ fn fractional_widget_origins_snap_once_to_device_pixels() -> Result<(), Box<dyn 
         assert_eq!(target.pixel(10, first_row - 1).map(|pixel| pixel.alpha()), Some(0));
         assert_eq!(target.pixel(10, first_row).map(|pixel| pixel.alpha()), Some(89));
     }
+    Ok(())
+}
+
+/// Preserve the callback span count across eight-row sampling slices and its 256-span flush.
+#[test]
+fn sampling_yields_keep_cross_row_native_span_history() -> Result<(), Box<dyn Error>> {
+    let mut source = Pixmap::new(4, 4).ok_or("Cannot allocate bounded source")?;
+    source.fill(tiny_skia::Color::WHITE);
+    let quad = [
+        Point { x: 3.0, y: 0.0 },
+        Point { x: 40.0, y: 3.0 },
+        Point { x: 40.0, y: 317.0 },
+        Point { x: 3.0, y: 320.0 },
+    ];
+    let mapping = DeviceTransform::from_quad(quad, 4.0, Point { x: 0.0, y: 0.0 }, 1.0);
+    let mut target = Pixmap::new(64, 320).ok_or("Cannot allocate bounded target")?;
+    let mut cursor = super::SamplingCursor::new(
+        64,
+        320,
+        quad,
+        Bounds { x: 0.0, y: 0.0, width: 64.0, height: 320.0 },
+        mapping,
+    )?;
+    let mut retained = false;
+    let mut flushed = false;
+    loop {
+        let previous_row = cursor.row;
+        let previous_spans = cursor.span_count;
+        let done = cursor.step(&mut target, &source)?;
+        assert!(cursor.row - previous_row <= 8);
+        retained |= cursor.span_count > 100;
+        flushed |= cursor.span_count < previous_spans;
+        if done {
+            break;
+        }
+    }
+    assert!(retained && flushed);
     Ok(())
 }

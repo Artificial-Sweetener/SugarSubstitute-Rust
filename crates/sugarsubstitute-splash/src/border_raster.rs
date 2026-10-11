@@ -3,23 +3,56 @@
 
 //! Rasterize the console CSS border's independently painted, square-capped cubic arcs.
 
-use crate::shapes::{AllocationError, append_cubic, byte_product, paint_outline};
+use crate::shapes::{AllocationError, PaintCursor, append_cubic, byte_product};
 use tiny_skia::{PathBuilder, Pixmap, Rect};
 
 /// Paint one logical cubic using the reference cosmetic pen at one device pixel.
 ///
 /// Larger device pens use an allocated outline mask and propagate its allocation cause.
-pub(super) fn paint(
-    target: &mut Pixmap,
+/// Keep generic outline coverage resumable; one-pixel cosmetic arcs have fixed small input.
+pub(super) enum BorderCursor {
+    Cosmetic { points: [[f64; 2]; 4], color: [u8; 4], clip: Rect },
+    Outline(PaintCursor),
+    Done,
+}
+impl BorderCursor {
+    /// Capture one half-corner without initializing a physical coverage plane.
+    pub(super) fn new(
+        width: u32,
+        height: u32,
+        points: [[f64; 2]; 4],
+        color: [u8; 4],
+        scale: f32,
+        clip: Rect,
+    ) -> Result<Self, AllocationError> {
+        if scale == 1.0 {
+            Ok(Self::Cosmetic { points, color, clip })
+        } else {
+            Ok(Self::Outline(outline(width, height, points, color, scale, clip)?))
+        }
+    }
+    /// Paint a <=64-segment cosmetic arc or advance a <=32768-pixel generic slice.
+    pub(super) fn step(&mut self, target: &mut Pixmap) -> Result<bool, AllocationError> {
+        match self {
+            Self::Cosmetic { points, color, clip } => {
+                cosmetic(target, *points, *color, 6, (true, true), *clip);
+                *self = Self::Done;
+                Ok(true)
+            }
+            Self::Outline(cursor) => cursor.step(target, None, 32768),
+            Self::Done => Ok(true),
+        }
+    }
+}
+/// Build the same square-capped generic stroke outline for synchronous and job callers.
+fn outline(
+    width: u32,
+    height: u32,
     points: [[f64; 2]; 4],
     color: [u8; 4],
     scale: f32,
     clip: Rect,
-) -> Result<(), AllocationError> {
-    if scale == 1.0 {
-        cosmetic(target, points, color, 6, (true, true), clip);
-        return Ok(());
-    }
+) -> Result<PaintCursor, AllocationError> {
     let normals =
         [normal(points[0], points[1]), normal(points[1], points[2]), normal(points[2], points[3])];
     let inner = offset(points, normals, 0.5);
@@ -43,10 +76,8 @@ pub(super) fn paint(
         path.line_to(point[0], point[1]);
     }
     path.close();
-    if let Some(path) = path.finish() {
-        paint_outline(target, &path, color, clip)?;
-    }
-    Ok(())
+    let path = path.finish().ok_or(AllocationError::InvalidDimensions)?;
+    PaintCursor::new(&path, width, height, color, Some(clip), false)
 }
 
 /// Derive the unit normal of a nonzero cubic control edge.

@@ -1,53 +1,65 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Compose one native event loop, borrowed surface presenter, and replaceable content.
+//! Pump native callbacks while preparation and owned shutdown progress without UI waits.
 
-use crate::cadence::{advance_deadline, presentation_wait};
-use crate::frame_audit::FrameAudit;
+#[cfg(any(target_os = "linux", test))]
+#[path = "linux_callback_failure.rs"]
+pub(crate) mod callback_failure;
+#[path = "runtime_input.rs"]
+mod input;
+#[path = "runtime_present.rs"]
+mod presentation;
+#[path = "runtime_state.rs"]
+mod state;
+#[path = "runtime_wake.rs"]
+mod wake;
+
+#[cfg(target_os = "windows")]
+use crate::KeyAction;
+use crate::cadence::{advance_deadline, closing_wait, presentation_wait};
 #[cfg(target_os = "linux")]
 use crate::linux::Presenter;
 #[cfg(target_os = "macos")]
 use crate::macos::Presenter;
 #[cfg(target_os = "windows")]
 use crate::windows::Presenter;
-use crate::{
-    DesktopError, DesktopOptions, DesktopReceipt, HitTarget, KeyAction, Pointer, PointerAction,
-    WindowContent,
-};
-use std::{
-    rc::Rc,
-    time::{Duration, Instant},
-};
+use crate::{DesktopError, DesktopOptions, DesktopReceipt, Pointer, WindowContent};
+use std::{num::NonZeroUsize, rc::Rc, sync::Arc, time::Instant};
+use sugarsubstitute_contracts::presentation::FrameShape;
 use tao::{
     dpi::{LogicalSize, PhysicalPosition},
-    event::{ElementState, Event, MouseButton, WindowEvent},
+    event::Event,
     event_loop::{ControlFlow, EventLoopBuilder},
-    keyboard::Key,
     platform::run_return::EventLoopExtRunReturn,
     window::{Theme, WindowBuilder},
 };
 
-/// Forward native peer activation without lending callbacks the content owner.
+/// Queue native peer intent without lending callbacks content or scheduling handles.
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum NativeAction {
+    /// Bounded completion metadata is available, including during owned close.
+    Completions,
     /// Activate a surface-local control.
     #[cfg(target_os = "windows")]
     Activate(u16),
-    /// Close the surface through the same native terminal path as pointer/Escape.
+    /// Request the shared owned close protocol.
     #[cfg(target_os = "windows")]
     Close,
-    /// Preserve the demonstration's existing disclosure shortcut.
+    /// Forward the content disclosure shortcut.
     #[cfg(target_os = "windows")]
     Disclosure,
-    /// Repaint a changed native focus cue over a fresh CPU frame.
+    /// Repaint the retained source to restore a changed native focus cue.
     #[cfg(target_os = "windows")]
     FocusChanged,
 }
 
-/// Run a native surface on the calling main thread until closed or its qualification deadline.
+/// Run a main-thread native surface through actual owned shutdown and native teardown.
 ///
-/// The content owns presentation state. This adapter never launches processes, negotiates
-/// startup, or depends on a particular splash. Errors close the owned surface and preserve causes.
+/// Preparation is submitted and polled through content; redraw consumes immutable
+/// validated storage. Closing disables admission/publication/input, continues bounded
+/// terminal disposal and native callbacks, and exits only after actual settlement.
+/// The first error is retained while shutdown proceeds. Final owner teardown occurs
+/// after controls, presenter, window and event loop have all been dropped.
 pub fn run(
     options: DesktopOptions,
     mut content: impl WindowContent,
@@ -55,6 +67,7 @@ pub fn run(
     if options.logical_width == 0 || options.logical_height == 0 {
         return Err(DesktopError::message("create_window", "client dimensions must be positive"));
     }
+    let timings = crate::timing::TimingObserver::native(options.audit_timings)?;
     let started = Instant::now();
     let shutdown_deadline = match options.duration {
         Some(duration) => Some(started.checked_add(duration).ok_or_else(|| {
@@ -94,241 +107,201 @@ pub fn run(
         Rc::clone(&window),
         event_loop.create_proxy(),
         content.accessible_controls(),
+        timings.clone(),
     )?;
-    let mut first_frame = None;
-    let mut frames_presented = 0;
-    let mut total_frame_work = Duration::ZERO;
-    let mut total_frame_intervals = Duration::ZERO;
-    let mut longest_frame_interval = Duration::ZERO;
-    let mut last_submission = None::<Instant>;
+    let drain_budget = NonZeroUsize::new(32).ok_or_else(|| {
+        DesktopError::message("start_content", "completion drain budget must be positive")
+    })?;
+    let wake_lifetime = wake::WakeLifetime::new();
+    let completion_wake =
+        Arc::new(wake::ProxyWake::new(event_loop.create_proxy(), wake_lifetime.clone()));
+    let mut surface = state::SurfaceState::new();
+    if let Err(error) = content.start(completion_wake) {
+        surface.fail(&mut content, DesktopError::boxed("start_content", error));
+    }
+    let mut presentations = presentation::Presentations::new(started, options.audit_frames);
     let mut pointer = Pointer::default();
     let mut pressed = None;
-    let mut failure = None;
-    let mut next_frame = started;
-    let mut frame_audit = options.audit_frames.then(FrameAudit::default);
-    window.set_visible(true);
-    window.set_focus();
+    let mut next_preparation = started;
     let mut redraw_pending = false;
-    invalidate(&window, &mut redraw_pending);
+    if !surface.closing {
+        window.set_visible(true);
+        window.set_focus();
+    }
     event_loop.run_return(|event, _, control| {
-        *control = ControlFlow::Wait;
-        if options.duration.is_some_and(|duration| started.elapsed() >= duration) {
-            *control = ControlFlow::Exit;
-            return;
-        }
-        match event {
-            Event::WindowEvent { window_id, event, .. } if window_id == window.id() => {
-                match event {
-                    WindowEvent::CloseRequested => *control = ControlFlow::Exit,
-                    WindowEvent::CursorMoved { position, .. } => {
-                        let scale = window.scale_factor();
-                        pointer = Pointer { x: position.x / scale, y: position.y / scale };
-                        if content.pointer(PointerAction::Move, pointer) {
-                            invalidate(&window, &mut redraw_pending);
-                        }
-                    }
-                    WindowEvent::CursorLeft { .. } => {
-                        pressed = None;
-                        if content.pointer(PointerAction::Leave, pointer) {
-                            invalidate(&window, &mut redraw_pending);
-                        }
-                    }
-                    WindowEvent::Focused(false) => {
-                        pressed = None;
-                        if content.pointer(PointerAction::Leave, pointer) {
-                            invalidate(&window, &mut redraw_pending);
-                        }
-                    }
-                    WindowEvent::MouseInput { state, button: MouseButton::Left, .. } => {
-                        let target = content.hit_test(pointer);
-                        if state == ElementState::Pressed {
-                            pressed = Some(target);
-                            if content.pointer(PointerAction::Press, pointer) {
-                                invalidate(&window, &mut redraw_pending);
-                            }
-                            if target == HitTarget::Caption {
-                                tracing::info!(
-                                    operation = "native_caption_press",
-                                    target = ?target,
-                                    elapsed_ms = started.elapsed().as_secs_f64() * 1000.0,
-                                    "Classified caption pointer press"
-                                );
-                                #[cfg(target_os = "windows")]
-                                let drag = crate::windows_drag::begin(&window);
-                                #[cfg(not(target_os = "windows"))]
-                                let drag = window
-                                    .drag_window()
-                                    .map_err(|error| DesktopError::new("drag_window", error));
-                                match drag {
-                                    Ok(()) => {
-                                        pressed = None;
-                                        if content.pointer(PointerAction::Leave, pointer) {
-                                            invalidate(&window, &mut redraw_pending);
-                                        }
-                                    }
-                                    Err(error) => {
-                                        failure = Some(error);
-                                        *control = ControlFlow::Exit;
-                                    }
-                                }
-                            }
-                        } else {
-                            if content.pointer(PointerAction::Release, pointer) {
-                                invalidate(&window, &mut redraw_pending);
-                            }
-                            if pressed == Some(HitTarget::Close) && target == HitTarget::Close {
-                                *control = ControlFlow::Exit;
-                            }
-                            pressed = None;
-                        }
-                    }
-                    WindowEvent::KeyboardInput { event, .. }
-                        if event.state == ElementState::Pressed && !event.repeat =>
-                    {
-                        match event.logical_key {
-                            Key::Escape => *control = ControlFlow::Exit,
-                            Key::Tab => {
-                                if content.key(KeyAction::Tab) {
-                                    invalidate(&window, &mut redraw_pending);
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                    WindowEvent::Resized(_)
-                    | WindowEvent::ScaleFactorChanged { .. }
-                    | WindowEvent::Focused(true) => invalidate(&window, &mut redraw_pending),
-                    _ => {}
-                }
+        let began = match timings.as_ref().map(crate::timing::TimingObserver::mark).transpose() {
+            Ok(began) => began,
+            Err(cause) => {
+                surface.fail(&mut content, cause);
+                None
             }
-            Event::UserEvent(action) => match action {
-                #[cfg(target_os = "windows")]
-                NativeAction::Activate(id) => {
-                    if content.activate(id) {
-                        invalidate(&window, &mut redraw_pending);
-                    }
+        };
+        if let Some(cause) = timings.as_ref().and_then(crate::timing::TimingObserver::take_failure)
+        {
+            surface.fail(&mut content, cause);
+        }
+        let kind = callback_kind(&event);
+        let observation = crate::timing::observe_callback(timings.as_ref(), began, kind, || {
+            #[cfg(target_os = "linux")]
+            if let Err(error) = presenter.check_callbacks() {
+                surface.fail(&mut content, error);
+            }
+            if options.duration.is_some_and(|duration| started.elapsed() >= duration) {
+                surface.close(&mut content);
+            }
+            let actual_shape = match surface_shape(&window) {
+                Ok(shape) => shape,
+                Err(error) => {
+                    surface.fail(&mut content, error);
+                    None
                 }
-                #[cfg(target_os = "windows")]
-                NativeAction::Close => *control = ControlFlow::Exit,
-                #[cfg(target_os = "windows")]
-                NativeAction::Disclosure => {
-                    if content.key(KeyAction::Tab) {
-                        invalidate(&window, &mut redraw_pending);
-                    }
-                }
-                #[cfg(target_os = "windows")]
-                NativeAction::FocusChanged => invalidate(&window, &mut redraw_pending),
-            },
-            Event::RedrawRequested(window_id) if window_id == window.id() => {
-                redraw_pending = false;
-                let size = window.inner_size();
-                if window.is_visible()
-                    && !window.is_minimized()
-                    && size.width > 0
-                    && size.height > 0
+            };
+            let visible = window.is_visible() && !window.is_minimized() && actual_shape.is_some();
+            surface.visibility(&mut content, visible);
+            match event {
+                Event::WindowEvent { window_id, event, .. }
+                    if window_id == window.id() && !surface.closing =>
                 {
-                    let frame_started = Instant::now();
-                    let result =
-                        observe_move(&window, frame_audit.is_some()).and_then(|move_before| {
-                            let frame = content
-                                .render(
-                                    size.width,
-                                    size.height,
-                                    window.scale_factor(),
-                                    started.elapsed(),
-                                )
-                                .map_err(|error| DesktopError::boxed("render_frame", error))?;
-                            frame.validate()?;
-                            presenter.present(&frame)?;
-                            #[cfg(target_os = "windows")]
-                            {
-                                controls.update(content.accessible_controls())?;
-                                controls.draw_focus()?;
+                    match input::dispatch(&mut content, &window, event, &mut pointer, &mut pressed)
+                    {
+                        Ok(effect) => {
+                            if effect.close {
+                                surface.close(&mut content);
                             }
-                            let move_after = observe_move(&window, frame_audit.is_some())?;
-                            let move_elapsed =
-                                (move_before && move_after).then(|| started.elapsed());
-                            Ok((frame, move_elapsed))
-                        });
-                    let result = result.and_then(|(frame, move_elapsed)| match &mut frame_audit {
-                        Some(audit) => audit.record(Ok(frame), move_elapsed),
-                        None => Ok(()),
-                    });
-                    match result {
-                        Ok(()) => {
-                            let submitted = Instant::now();
-                            total_frame_work += submitted.duration_since(frame_started);
-                            if let Some(previous) = last_submission {
-                                let interval = submitted.duration_since(previous);
-                                total_frame_intervals += interval;
-                                longest_frame_interval = longest_frame_interval.max(interval);
+                            if effect.dirty {
+                                surface.dirty();
                             }
-                            last_submission = Some(submitted);
-                            if first_frame.is_none() {
-                                let elapsed = started.elapsed();
-                                tracing::info!(
-                                    operation = "native_first_frame",
-                                    elapsed_us = elapsed.as_micros(),
-                                    "Submitted the first CPU frame"
-                                );
-                                first_frame = Some(elapsed);
+                            if effect.expose && !surface.closing {
+                                invalidate(&window, &mut redraw_pending);
                             }
-                            frames_presented += 1;
                         }
-                        Err(error) => {
-                            failure = Some(error);
-                            *control = ControlFlow::Exit;
+                        Err(error) => surface.fail(&mut content, error),
+                    }
+                }
+                Event::UserEvent(NativeAction::Completions) => {
+                    if surface.poll(&mut content, actual_shape, drain_budget, started.elapsed()) {
+                        invalidate(&window, &mut redraw_pending);
+                    }
+                }
+                #[cfg(target_os = "windows")]
+                Event::UserEvent(NativeAction::Close) => surface.close(&mut content),
+                #[cfg(target_os = "windows")]
+                Event::UserEvent(NativeAction::Activate(id)) if !surface.closing => {
+                    if content.activate(id) {
+                        surface.dirty();
+                    }
+                }
+                #[cfg(target_os = "windows")]
+                Event::UserEvent(NativeAction::Disclosure) if !surface.closing => {
+                    if content.key(KeyAction::Tab) {
+                        surface.dirty();
+                    }
+                }
+                #[cfg(target_os = "windows")]
+                Event::UserEvent(NativeAction::FocusChanged) if !surface.closing => {
+                    invalidate(&window, &mut redraw_pending);
+                }
+                Event::RedrawRequested(window_id) if window_id == window.id() => {
+                    redraw_pending = false;
+                    if let Some(frame) = surface.exposable(actual_shape)
+                        && let Err(error) = presentations.submit(
+                            &window,
+                            &mut presenter,
+                            frame,
+                            timings.as_ref(),
+                            &content,
+                            #[cfg(target_os = "windows")]
+                            &mut controls,
+                        )
+                    {
+                        surface.fail(&mut content, error);
+                    }
+                }
+                Event::MainEventsCleared => {
+                    if surface.closing {
+                        surface.poll(&mut content, actual_shape, drain_budget, started.elapsed());
+                        surface.poll_shutdown(&mut content);
+                    } else {
+                        let now = Instant::now();
+                        let due = surface.visible && content.animating() && now >= next_preparation;
+                        surface.prepare(&mut content, actual_shape, started.elapsed(), due);
+                        if due {
+                            next_preparation = advance_deadline(next_preparation, now);
                         }
                     }
                 }
-                next_frame = advance_deadline(next_frame, Instant::now());
+                _ => {}
             }
-            Event::MainEventsCleared
-                if Instant::now() >= next_frame
-                    && content.animating()
-                    && window.is_visible()
-                    && !window.is_minimized() =>
-            {
-                invalidate(&window, &mut redraw_pending)
-            }
-            _ => {}
-        }
-        if !matches!(*control, ControlFlow::ExitWithCode(_)) {
-            *control = presentation_wait(
-                window.is_visible(),
-                window.is_minimized(),
-                content.animating().then_some(next_frame),
-                shutdown_deadline,
-            );
+            *control = if surface.settled {
+                ControlFlow::Exit
+            } else if surface.closing {
+                closing_wait(Instant::now())
+            } else {
+                presentation_wait(
+                    surface.visible,
+                    false,
+                    content.animating().then_some(next_preparation),
+                    shutdown_deadline,
+                )
+            };
+        });
+        if let Err(cause) = observation {
+            surface.fail(&mut content, cause);
+            *control =
+                if surface.settled { ControlFlow::Exit } else { closing_wait(Instant::now()) };
         }
     });
+    // No worker can still emit callbacks after settlement. Reject retained external
+    // wake guards before beginning the ordered native teardown below.
+    wake_lifetime.disconnect();
     let material = presenter.material();
     #[cfg(target_os = "windows")]
     if let Err(error) = controls.shutdown() {
-        failure.get_or_insert(error);
+        DesktopError::retain_first(&mut surface.failure, error);
     }
     #[cfg(target_os = "windows")]
     drop(controls);
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    if let Err(error) = presenter.shutdown() {
+        DesktopError::retain_first(&mut surface.failure, error);
+    }
     drop(presenter);
     drop(window);
-    if let Some(error) = failure {
-        return Err(error);
+    drop(event_loop);
+    surface.retained = None;
+    if let Err(error) = content.finish_shutdown() {
+        DesktopError::retain_first(
+            &mut surface.failure,
+            DesktopError::boxed("finish_shutdown", error),
+        );
     }
-    let first_frame = first_frame.ok_or_else(|| {
-        DesktopError::message("present_frame", "window closed before the first frame")
-    })?;
-    Ok(DesktopReceipt {
-        first_frame,
-        frames_presented,
-        material,
-        total_frame_work,
-        total_frame_intervals,
-        longest_frame_interval,
-        frame_audit: frame_audit.and_then(FrameAudit::finish),
-    })
+    let timing_receipt = match timings.map(crate::timing::TimingObserver::finish).transpose() {
+        Ok(receipt) => receipt,
+        Err(cause) => {
+            DesktopError::retain_first(&mut surface.failure, cause);
+            None
+        }
+    };
+    if let Some(cause) = surface.failure {
+        return Err(cause);
+    }
+    let mut receipt = presentations.finish(material)?;
+    receipt.timings = timing_receipt;
+    Ok(receipt)
 }
 
-/// Query opt-in native move evidence around submission; portable surfaces have no Windows evidence.
+/// Validate actual device shape without scanning or touching retained pixel storage.
+fn surface_shape(window: &tao::window::Window) -> Result<Option<FrameShape>, DesktopError> {
+    let size = window.inner_size();
+    if size.width == 0 || size.height == 0 {
+        return Ok(None);
+    }
+    FrameShape::new(size.width, size.height, window.scale_factor())
+        .map(Some)
+        .map_err(|cause| DesktopError::new("native_frame_shape", cause))
+}
+
+/// Query opt-in move evidence around submission; portable surfaces have no Windows evidence.
 fn observe_move(window: &tao::window::Window, auditing: bool) -> Result<bool, DesktopError> {
     #[cfg(target_os = "windows")]
     if auditing {
@@ -339,10 +312,23 @@ fn observe_move(window: &tao::window::Window, auditing: bool) -> Result<bool, De
     Ok(false)
 }
 
-/// Coalesce meaningful input invalidations until the native redraw is consumed.
+/// Coalesce completion/expose redraws independently of preparation requests.
 fn invalidate(window: &tao::window::Window, pending: &mut bool) {
     if !*pending {
         *pending = true;
         window.request_redraw();
+    }
+}
+
+/// Classify callbacks without borrowing content or touching frame storage.
+fn callback_kind(event: &Event<'_, NativeAction>) -> crate::timing::NativeCallbackKind {
+    use crate::timing::NativeCallbackKind;
+    match event {
+        Event::WindowEvent { .. } => NativeCallbackKind::WindowEvent,
+        Event::UserEvent(NativeAction::Completions) => NativeCallbackKind::CompletionDrain,
+        Event::UserEvent(_) => NativeCallbackKind::NativeAction,
+        Event::RedrawRequested(_) => NativeCallbackKind::Redraw,
+        Event::MainEventsCleared => NativeCallbackKind::LoopProgress,
+        _ => NativeCallbackKind::Other,
     }
 }

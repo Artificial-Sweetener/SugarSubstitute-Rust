@@ -3,7 +3,10 @@
 //! Paint bundled caption glyph alpha with the production device-pixel phase.
 
 use std::{error::Error, fmt};
-use tiny_skia::{FilterQuality, Pixmap, PixmapPaint, Transform};
+use tiny_skia::Pixmap;
+#[path = "caption_render.rs"]
+mod raster;
+pub(crate) use raster::CaptionCursor;
 
 /// Preserve invalid device scales and packaged icon decoder failures.
 #[derive(Debug)]
@@ -12,6 +15,8 @@ pub enum IconError {
     InvalidScale,
     /// A packaged PNG could not be decoded.
     Decode(png::DecodingError),
+    /// A reviewed PNG format or bounded buffer allocation failed, preserving its cause.
+    Preparation(Box<dyn Error + Send + Sync>),
 }
 impl fmt::Display for IconError {
     /// Describe the failing caption operation for host diagnostics.
@@ -19,6 +24,7 @@ impl fmt::Display for IconError {
         match self {
             Self::InvalidScale => formatter.write_str("Invalid caption device scale"),
             Self::Decode(error) => write!(formatter, "Cannot decode caption glyph: {error}"),
+            Self::Preparation(error) => write!(formatter, "Cannot prepare caption glyph: {error}"),
         }
     }
 }
@@ -27,6 +33,7 @@ impl Error for IconError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::Decode(error) => Some(error),
+            Self::Preparation(error) => Some(error.as_ref()),
             Self::InvalidScale => None,
         }
     }
@@ -54,6 +61,7 @@ impl CaptionIcons {
     ///
     /// # Errors
     /// Reject invalid scales and preserve failures decoding the selected resource pair.
+    #[cfg(test)]
     pub(crate) fn draw(
         &mut self,
         target: &mut Pixmap,
@@ -61,47 +69,8 @@ impl CaptionIcons {
         kind: CaptionIcon,
         tint: [u8; 3],
     ) -> Result<(), IconError> {
-        if !scale.is_finite() || !(0.5..=4.0).contains(&scale) {
-            return Err(IconError::InvalidScale);
-        }
-        let index = ASSETS
-            .iter()
-            .enumerate()
-            .min_by(|(_, a), (_, b)| (a.0 - scale).abs().total_cmp(&(b.0 - scale).abs()))
-            .map_or(0, |(index, _)| index);
-        if self.decoded.as_ref().is_none_or(|(loaded, _)| *loaded != index) {
-            let (_, console, close) = ASSETS[index];
-            self.decoded = Some((
-                index,
-                [
-                    Pixmap::decode_png(console).map_err(IconError::Decode)?,
-                    Pixmap::decode_png(close).map_err(IconError::Decode)?,
-                ],
-            ));
-        }
-        if let Some((_, icons)) = &self.decoded {
-            let (position, offset) = match kind {
-                CaptionIcon::Console => (0, 466.0),
-                CaptionIcon::Close => (1, 512.0),
-            };
-            let mut glyph = icons[position].clone();
-            for pixel in glyph.data_mut().chunks_exact_mut(4) {
-                for channel in 0..3 {
-                    let product = u16::from(tint[channel]) * u16::from(pixel[3]);
-                    pixel[channel] = ((product + (product >> 8) + 128) >> 8) as u8;
-                }
-            }
-            let ratio = (scale / ASSETS[index].0) as f32;
-            let paint = PixmapPaint { quality: FilterQuality::Bilinear, ..PixmapPaint::default() };
-            target.draw_pixmap(
-                0,
-                0,
-                glyph.as_ref(),
-                &paint,
-                Transform::from_row(ratio, 0.0, 0.0, ratio, (offset * scale).floor() as f32, 0.0),
-                None,
-            );
-        }
+        let mut cursor = CaptionCursor::new(scale, kind, tint)?;
+        while !cursor.step(self, target)? {}
         Ok(())
     }
 }

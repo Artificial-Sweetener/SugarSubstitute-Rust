@@ -11,7 +11,18 @@ mod frame_audit;
 mod linux;
 #[cfg(target_os = "macos")]
 mod macos;
+#[cfg(any(target_os = "windows", target_os = "linux", test))]
+#[allow(unsafe_code)]
+mod native_storage;
 mod runtime;
+mod timing;
+#[cfg(target_os = "windows")]
+#[allow(unsafe_code)]
+mod windows_timing;
+pub use timing::{
+    NativeCallbackKind, NativeCallbackTiming, NativeSubmissionTiming, NativeTickInterval,
+    NativeTimingReceipt, NativeTimingSource,
+};
 #[cfg(target_os = "windows")]
 #[allow(unsafe_code)]
 mod windows;
@@ -32,7 +43,7 @@ mod windows_move_state;
 mod windows_subclass;
 
 pub use contract::{
-    AccessibleControl, ControlBounds, DesktopError, DesktopOptions, DesktopReceipt, Frame,
+    AccessibleControl, ControlBounds, DesktopError, DesktopOptions, DesktopReceipt,
     FrameAuditReceipt, HitTarget, KeyAction, MovePresentation, NativeMaterial, Pointer,
     PointerAction, WindowContent,
 };

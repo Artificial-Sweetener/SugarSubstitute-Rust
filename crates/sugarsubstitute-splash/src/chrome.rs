@@ -7,7 +7,7 @@ use tiny_skia::{PathBuilder, Pixmap, Rect};
 
 use crate::{
     Appearance, Control, Theme,
-    shapes::{AllocationError, paint as paint_silhouette, rounded},
+    shapes::{AllocationError, rounded},
 };
 
 #[path = "border_raster.rs"]
@@ -16,11 +16,23 @@ mod border_raster;
 /// Retain the terminal's translucent fill and independently painted CSS border edges.
 ///
 /// Return the underlying cause when a required physical coverage buffer cannot be allocated.
+#[cfg(test)]
 pub(crate) fn console(
     target: &mut Pixmap,
     theme: Theme,
     scale: f32,
 ) -> Result<(), AllocationError> {
+    let mut cursor = ConsoleCursor::new(target.width(), target.height(), theme, scale)?;
+    while !cursor.step(target)? {}
+    Ok(())
+}
+#[path = "chrome_console.rs"]
+mod console_cursor;
+pub(crate) use console_cursor::ConsoleCursor;
+use console_cursor::ConsolePass;
+
+fn console_passes(theme: Theme, scale: f32) -> Result<Vec<ConsolePass>, AllocationError> {
+    let mut passes = Vec::with_capacity(13);
     let clip = Rect::from_ltrb(
         (24.0 * scale).round(),
         (356.0 * scale).round(),
@@ -33,7 +45,7 @@ pub(crate) fn console(
             Theme::Dark => [8, 10, 12, 247],
             Theme::Light => [252, 253, 255, 244],
         };
-        paint_silhouette(target, &path, fill, None)?;
+        passes.push(ConsolePass::Fill(path, fill));
     }
     let foreground = if theme == Theme::Dark { 255 } else { 0 };
     let side = if theme == Theme::Dark { 56 } else { 40 };
@@ -63,24 +75,21 @@ pub(crate) fn console(
         let color = [foreground, foreground, foreground, alpha];
         let (x, y, width, height) = rectangle;
         if let Some(rect) = Rect::from_xywh(x * scale, y * scale, width * scale, height * scale) {
-            paint_silhouette(target, &PathBuilder::from_rect(rect), color, None)?;
+            passes.push(ConsolePass::Fill(PathBuilder::from_rect(rect), color));
         }
         for (center, quadrant, second, reverse) in corners {
-            border_arc(target, center, (quadrant, second, reverse), color, scale, clip)?;
+            passes.push(ConsolePass::Arc(
+                arc_points(center, (quadrant, second, reverse)),
+                color,
+                clip,
+            ));
         }
     }
-    Ok(())
+    Ok(passes)
 }
 
-/// Paint one square-capped half-corner as its own reference border pass.
-fn border_arc(
-    target: &mut Pixmap,
-    center: (f64, f64),
-    arc: (u8, bool, bool),
-    color: [u8; 4],
-    scale: f32,
-    clip: Rect,
-) -> Result<(), AllocationError> {
+/// Compute one independently capped half-corner in the original CSS order.
+fn arc_points(center: (f64, f64), arc: (u8, bool, bool)) -> [[f64; 2]; 4] {
     let (quadrant, second, reverse) = arc;
     let radius = 5.5;
     let curve = radius * 0.552_284_749_8;
@@ -99,18 +108,41 @@ fn border_arc(
     if reverse {
         points.reverse();
     }
-    let points = points.map(|mut point| {
+    points.map(|mut point| {
         for _ in 0..quadrant {
             point = [-point[1], point[0]];
         }
         [point[0] + center.0, point[1] + center.1]
-    });
-    border_raster::paint(target, points, color, scale, clip)
+    })
 }
 /// Paint disclosure and close backgrounds inside their original logical hit rectangles.
+#[cfg(test)]
 pub(crate) fn controls(target: &mut Pixmap, appearance: Appearance, scale: f32) {
-    let foreground = if appearance.theme == Theme::Dark { 255 } else { 0 };
-    for (control, x) in [(Control::ConsoleToggle, 466.0), (Control::Close, 512.0)] {
+    let mut cursor = ControlsCursor::new(appearance, scale);
+    while !cursor.step(target) {}
+}
+/// Retain caption background order while painting only one bounded button per slice.
+pub(crate) struct ControlsCursor {
+    appearance: Appearance,
+    scale: f32,
+    index: usize,
+}
+impl ControlsCursor {
+    /// Capture two fixed hit rectangles without touching destination pixels.
+    pub(crate) fn new(appearance: Appearance, scale: f32) -> Self {
+        Self { appearance, scale, index: 0 }
+    }
+    /// Paint at most one button, bounded by 23680 physical pixels at scale<=4.
+    pub(crate) fn step(&mut self, target: &mut Pixmap) -> bool {
+        let Some((control, x)) =
+            [(Control::ConsoleToggle, 466.0), (Control::Close, 512.0)].get(self.index).copied()
+        else {
+            return true;
+        };
+        self.index += 1;
+        let appearance = self.appearance;
+        let scale = self.scale;
+        let foreground = if appearance.theme == Theme::Dark { 255 } else { 0 };
         let pressed = appearance.pressed == Some(control);
         let hovered = appearance.hovered == Some(control);
         let color = if control == Control::Close && (pressed || hovered) {
@@ -140,6 +172,7 @@ pub(crate) fn controls(target: &mut Pixmap, appearance: Appearance, scale: f32) 
                 border_raster::pixel(target, i64::from(column), i64::from(row), color, coverage);
             }
         }
+        self.index == 2
     }
 }
 

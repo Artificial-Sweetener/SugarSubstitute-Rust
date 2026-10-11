@@ -10,6 +10,8 @@ publish.workspace = true
 
 [dependencies]
 sugarsubstitute-contracts = { path = "../sugarsubstitute-contracts" }
+sugarsubstitute-application = { path = "../sugarsubstitute-application" }
+sugarsubstitute-execution = { path = "../sugarsubstitute-execution" }
 sugarsubstitute-splash = { path = "../sugarsubstitute-splash" }
 sugarsubstitute-desktop = { path = "../sugarsubstitute-desktop" }
 tracing.workspace = true

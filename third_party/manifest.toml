@@ -9,11 +9,18 @@ files = [
   "crates/sugarsubstitute-splash/src/border_raster.rs",
   "crates/sugarsubstitute-splash/src/character.rs",
   "crates/sugarsubstitute-splash/src/character_sampling.rs",
+  "crates/sugarsubstitute-splash/src/character_sample.rs",
+  "crates/sugarsubstitute-splash/src/character_render.rs",
   "crates/sugarsubstitute-splash/src/character_transform.rs",
   "crates/sugarsubstitute-splash/src/chrome.rs",
+  "crates/sugarsubstitute-splash/src/chrome_console.rs",
   "crates/sugarsubstitute-splash/src/progress.rs",
+  "crates/sugarsubstitute-splash/src/progress_render.rs",
   "crates/sugarsubstitute-splash/src/shapes.rs",
+  "crates/sugarsubstitute-splash/src/shapes_raster.rs",
+  "crates/sugarsubstitute-splash/src/shapes_composite.rs",
   "crates/sugarsubstitute-splash/src/text_windows.rs",
+  "crates/sugarsubstitute-splash/src/text_windows_cursor.rs",
 ]
 
 [[components]]
