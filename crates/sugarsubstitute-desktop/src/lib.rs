@@ -18,6 +18,9 @@ mod runtime;
 mod timing;
 #[cfg(target_os = "windows")]
 #[allow(unsafe_code)]
+mod windows_animation_period;
+#[cfg(target_os = "windows")]
+#[allow(unsafe_code)]
 mod windows_timing;
 pub use timing::{
     NativeCallbackKind, NativeCallbackTiming, NativeSubmissionTiming, NativeTickInterval,

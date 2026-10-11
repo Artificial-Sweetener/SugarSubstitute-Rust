@@ -124,6 +124,8 @@ pub fn run(
     let mut pressed = None;
     let mut next_preparation = started;
     let mut redraw_pending = false;
+    #[cfg(target_os = "windows")]
+    let mut animation_period = crate::windows_animation_period::WindowsAnimationPeriod::new();
     if !surface.closing {
         window.set_visible(true);
         window.set_focus();
@@ -232,6 +234,12 @@ pub fn run(
                 }
                 _ => {}
             }
+            #[cfg(target_os = "windows")]
+            if let Err(cause) = animation_period
+                .reconcile(surface.visible && content.animating() && !surface.closing)
+            {
+                surface.fail(&mut content, cause);
+            }
             *control = if surface.settled {
                 ControlFlow::Exit
             } else if surface.closing {
@@ -247,10 +255,21 @@ pub fn run(
         });
         if let Err(cause) = observation {
             surface.fail(&mut content, cause);
+            #[cfg(target_os = "windows")]
+            if let Err(cause) = animation_period.reconcile(false) {
+                surface.fail(&mut content, cause);
+            }
             *control =
                 if surface.settled { ControlFlow::Exit } else { closing_wait(Instant::now()) };
         }
     });
+    #[cfg(target_os = "windows")]
+    {
+        if let Err(cause) = animation_period.shutdown() {
+            DesktopError::retain_first(&mut surface.failure, cause);
+        }
+        drop(animation_period);
+    }
     // No worker can still emit callbacks after settlement. Reject retained external
     // wake guards before beginning the ordered native teardown below.
     wake_lifetime.disconnect();
