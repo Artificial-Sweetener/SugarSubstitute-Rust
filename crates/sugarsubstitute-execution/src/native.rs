@@ -151,11 +151,12 @@ impl Binding {
 
 /// Reserve all queue, delivery and memory capacity before creating or binding a process.
 ///
-/// Dropping the permit cancels its admitted job; execution-owned cleanup retains
-/// the real lifetime. Binding is one-shot and never performs a second admission.
+/// Dropping the permit cancels its admitted job and abandons result delivery;
+/// execution-owned cleanup retains the real lifetime. Binding or explicit unbound
+/// cancellation consumes it once and preserves typed terminal observation.
 /// Cancellation retains an unconsumed permit until binding or drop. Consume or
 /// drop permits before the owner's final blocking teardown.
-#[must_use = "A process-watch permit must be bound or explicitly dropped"]
+#[must_use = "Bind, cancel_unbound, or drop a process-watch permit before final teardown"]
 pub struct ProcessWatchPermit {
     pub(crate) job: Arc<Job<ProcessExit, NativeObservationError>>,
     binding: Arc<Binding>,
@@ -163,6 +164,14 @@ pub struct ProcessWatchPermit {
     transferred: bool,
 }
 impl ProcessWatchPermit {
+    pub(crate) fn cancel_input(mut self) -> OwnedJob<ProcessExit, NativeObservationError> {
+        *lock(&self.binding.state) = BindingState::Abandoned;
+        self.job.cancel();
+        self.transferred = true;
+        self.core.changed();
+        OwnedJob::new(self.job.scope_id, self.job.spec, Box::new(JobHandle(self.job.clone())))
+    }
+
     pub(crate) fn bind_input(
         mut self,
         input: Box<dyn ProcessLease>,

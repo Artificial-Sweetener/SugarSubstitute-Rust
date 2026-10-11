@@ -42,6 +42,20 @@ fn process_input(access: u32, same_access: bool) -> TestResult<OwnedHandle> {
 }
 
 #[test]
+fn native_unbound_cancellation_delivers_retirement_without_a_process_handle() -> TestResult {
+    let rig = Rig::new()?;
+    let scope = native_scope(&rig)?;
+    let mut job = request(&rig, &scope)?.cancel_unbound();
+    let completion = rig.completion(&mut job)?;
+    assert!(matches!(completion.outcome, JobOutcome::Cancelled));
+    drop(completion.memory);
+    drop(rig.owner);
+    assert_eq!(scope.snapshot().terminal_unobserved, 0);
+    assert_eq!(scope.snapshot().reserved_bytes, 0);
+    Ok(())
+}
+
+#[test]
 fn native_api_rejects_ordinary_class_before_accepting_a_process_handle() -> TestResult {
     let rig = Rig::new()?;
     let scope = native_scope(&rig)?;

@@ -44,6 +44,17 @@ impl ExecutionClient {
     }
 }
 impl ProcessWatchPermit {
+    /// Retire an unused reservation while preserving its observed terminal delivery.
+    ///
+    /// Consumes the unbound permit, preventing later binding, and requests cancellation.
+    /// Execution publishes the typed outcome after actual reservation retirement;
+    /// an already expired deadline retains its timeout classification. Taking that
+    /// result acknowledges delivery, while its memory guard retains the byte charge.
+    /// No process handle is accepted and no native process is created or terminated.
+    pub fn cancel_unbound(self) -> OwnedJob<ProcessExit, NativeObservationError> {
+        self.cancel_input()
+    }
+
     /// Consume a process handle without a second capacity decision or native UI wait.
     ///
     /// The execution worker duplicates it non-inheritably and validates kernel PID

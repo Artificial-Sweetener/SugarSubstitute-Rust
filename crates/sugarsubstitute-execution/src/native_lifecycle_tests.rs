@@ -35,6 +35,54 @@ fn ordinary_barrier(rig: &Rig, id: u64) -> TestResult {
 }
 
 #[test]
+fn explicit_unbound_retirement_preserves_delivery_and_retained_memory() -> TestResult {
+    let rig = Rig::new()?;
+    let scope = native_scope(&rig)?;
+    let mut job = permit(&rig, &scope, 1)?.cancel_input();
+    let completion = rig.completion(&mut job)?;
+    assert!(matches!(completion.outcome, JobOutcome::Cancelled));
+    assert_eq!(completion.scope_id, scope.id());
+    assert_eq!(completion.spec.id, JobId::new(1)?);
+    assert_eq!(scope.snapshot().reserved_bytes, 4096);
+    assert!(job.try_take_completion().is_none());
+    drop(completion.memory);
+    drop(rig.owner);
+    assert_eq!(scope.snapshot().terminal_unobserved, 0);
+    assert_eq!(scope.snapshot().reserved_bytes, 0);
+    Ok(())
+}
+
+#[test]
+fn explicit_unbound_retirement_resolves_an_already_requested_shutdown() -> TestResult {
+    let mut rig = Rig::new()?;
+    let scope = native_scope(&rig)?;
+    let reserved = permit(&rig, &scope, 1)?;
+    rig.owner.request_shutdown(Moment::from_nanos(0));
+    assert!(rig.owner.poll_shutdown()?.unresolved_job_ids.contains(&JobId::new(1)?));
+    let mut job = reserved.cancel_input();
+    let completion = rig.completion(&mut job)?;
+    assert!(matches!(completion.outcome, JobOutcome::Cancelled));
+    drop(completion.memory);
+    drop(rig.owner);
+    assert_eq!(scope.snapshot().reserved_bytes, 0);
+    assert_eq!(scope.snapshot().terminal_unobserved, 0);
+    Ok(())
+}
+
+#[test]
+fn explicit_unbound_retirement_preserves_an_expired_original_deadline() -> TestResult {
+    let rig = Rig::new()?;
+    let scope = native_scope(&rig)?;
+    let mut request = native_spec(1)?;
+    request.deadline = Some(Moment::from_nanos(10));
+    let reserved = reserve(&rig.client.core, &scope, request, NativeCorrelation::new(1)?)?;
+    rig.clock.advance(10);
+    let mut job = reserved.cancel_input();
+    assert!(matches!(rig.completion(&mut job)?.outcome, JobOutcome::TimedOut));
+    Ok(())
+}
+
+#[test]
 fn cancelled_unbound_permit_keeps_credit_until_consumption_and_actual_handle_close() -> TestResult {
     let rig = Rig::new()?;
     let scope = native_scope(&rig)?;
