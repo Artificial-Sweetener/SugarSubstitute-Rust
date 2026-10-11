@@ -38,6 +38,12 @@ concern = "Governance rejection behavior and verification orchestration"
 minimum_tests = 1
 
 [[owners]]
+package = "sugarsubstitute-supervision"
+root = "crates/sugarsubstitute-supervision"
+concern = "Exact bounded Windows process launch input preparation"
+minimum_tests = 13
+
+[[owners]]
 package = "sugarsubstitute-splash"
 root = "crates/sugarsubstitute-splash"
 concern = "Character animation, bounded admitted raster and glyph preparation with immutable output"

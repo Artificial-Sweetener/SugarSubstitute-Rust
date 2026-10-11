@@ -44,6 +44,12 @@ layer = "tooling"
 concern = "Repository governance and verification"
 
 [[owners]]
+package = "sugarsubstitute-supervision"
+root = "crates/sugarsubstitute-supervision"
+layer = "adapter"
+concern = "Bounded Windows process launch input preparation"
+
+[[owners]]
 package = "sugarsubstitute-splash"
 root = "crates/sugarsubstitute-splash"
 layer = "adapter"
