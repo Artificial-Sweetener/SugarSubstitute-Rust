@@ -26,6 +26,7 @@ try:
     from .region_capture import Region, RegionCapture
     from .move_entry_windows import observe_move_entry
     from .startup_windows import ReferenceProcesses
+    from .disclosure_label_windows import DisclosureLabel, DisclosureError, LABELS
 except ImportError:
     from native_timing import analyse, distribution, integer, read_terminal, validate
     from native_windows import MonitorInfo, NativePointer, NativeWindows, observe_exposure, write_json
@@ -33,6 +34,7 @@ except ImportError:
     from region_capture import Region, RegionCapture
     from move_entry_windows import observe_move_entry
     from startup_windows import ReferenceProcesses
+    from disclosure_label_windows import DisclosureLabel, DisclosureError, LABELS
 
 
 class Qpc:
@@ -71,11 +73,43 @@ def pixels_changed(left, right):
                                                for i in range(0, 16, 4))
 
 
-def input_samples(pointer, capture, clock, samples, observations):
+def wait_disclosure(disclosure, expected, clock, start, record):
+    """Wait for submitted-state readiness without copying known-unready display pixels."""
+    deadline, previous = start + clock.frequency, start
+    for _ in range(256):
+        try:
+            observed = disclosure.read(deadline)
+        except BaseException:
+            if getattr(disclosure, "last_read", None) is not None:
+                record["label_observations"].append(dict(disclosure.last_read))
+            raise
+        record["label_observations"].append(observed)
+        begin = integer(observed["begin_ticks"], "name observation begin", 0, 0x7fffffffffffffff)
+        end = integer(observed["end_ticks"], "name observation end", 0, 0x7fffffffffffffff)
+        if observed["qpc_frequency"] != clock.frequency or not previous <= begin <= end:
+            raise DisclosureError("observe_disclosure", "Clock or name observation ordering changed")
+        if end >= deadline:
+            raise DisclosureError("disclosure_deadline", "Name change exceeded original input deadline")
+        if observed["label"] == expected:
+            record["label_ready_end_ticks"] = end
+            return
+        if observed["label"] not in LABELS:
+            raise DisclosureError("observe_disclosure", "Unexpected disclosure state")
+        previous = end
+        # A condition poll yields the target's posted completion/redraw queue. This
+        # scheduling time stays inside the original measured interval.
+        now = clock.read()
+        if now >= deadline:
+            raise DisclosureError("disclosure_deadline", "Name change did not arrive within one second")
+        time.sleep(min(.002, (deadline - now) / clock.frequency))
+    raise DisclosureError("disclosure_inventory", "Name change exceeded256 bounded reads")
+
+
+def input_samples(pointer, capture, clock, samples, observations, disclosure):
     """Return causal click-to-observed-pixel upper bounds, preserving complete QPC sampling brackets."""
     if samples != 32:
         raise ValueError("M0 input qualification requires exactly32 physical clicks")
-    states, previous = [], None
+    states, previous, previous_label = [], None, None
     for index in range(samples):
         first = capture.sample()
         if first.qpc_frequency != clock.frequency:
@@ -92,9 +126,14 @@ def input_samples(pointer, capture, clock, samples, observations):
             raise RuntimeError("Input baseline exceeded bounded sampling inventory")
         if previous is not None and not pixels_close(previous, baseline.bgra):
             raise RuntimeError("Owned disclosure baseline changed without a measured click")
+        label_baseline = disclosure.read(clock.read() + clock.frequency)
+        if label_baseline["label"] not in LABELS or previous_label is not None and label_baseline["label"] != previous_label:
+            raise DisclosureError("observe_disclosure", "Published name changed without a measured click")
+        expected_label = LABELS[1 - LABELS.index(label_baseline["label"])]
         start = clock.read()
         record = {"index": index, "input_begin_ticks": start, "baseline": sample_record(baseline),
-                  "observations": [], "accepted": False}
+                  "baseline_label": label_baseline, "expected_label": expected_label,
+                  "label_observations": [], "observations": [], "accepted": False}
         observations.append(record)
         try:
             record["input_injection"] = pointer.click()
@@ -108,6 +147,7 @@ def input_samples(pointer, capture, clock, samples, observations):
                 or injection.get("prechecked") is not True or injection.get("postchecked") is not True):
             raise RuntimeError("Owned input click lacks exact two button insertions and completed safety checks")
         record["input_dispatch_end_ticks"] = clock.read()
+        wait_disclosure(disclosure, expected_label, clock, start, record)
         for _ in range(256):
             observed = capture.sample()
             if observed.qpc_frequency != clock.frequency or observed.begin_ticks < start:
@@ -123,6 +163,7 @@ def input_samples(pointer, capture, clock, samples, observations):
                 else:
                     states[index % 2] = observed.bgra
                 previous = observed.bgra
+                previous_label = expected_label
                 record.update(accepted=True, input_to_visible_ms=(observed.end_ticks - start) * 1000 / clock.frequency,
                               observed_end_ticks=observed.end_ticks,
                               observer_sample_ms=(observed.end_ticks - observed.begin_ticks) * 1000 / clock.frequency)
@@ -131,7 +172,7 @@ def input_samples(pointer, capture, clock, samples, observations):
             raise RuntimeError("Input response exceeded bounded sampling inventory")
     result = distribution([item["input_to_visible_ms"] for item in observations])
     return {"input_to_visible": result, "p95_below_50ms": result["p95_ms"] < 50,
-            "scope": "Physical press dispatch through actual owned composited ROI end observation, including full ownership/copy/sampling work; no overhead subtraction", "samples": observations}
+            "scope": "Physical click safety checks and dispatch through submitted-state name readiness and actual owned composited ROI end observation, including full wait/native/ownership/copy/sampling work; no overhead subtraction", "samples": observations}
 
 
 def drag_path(observer, pointer, hwnd, pid, origin, cursor, direction, deadline, samples, clock, observations):
@@ -263,7 +304,8 @@ def run(args):
     terminal = args.output / "terminal.json"
     command = performance_command(executable, terminal)
     source_files = ("m0_windows.py", "native_timing.py", "native_windows.py", "region_capture.py",
-                    "operational_windows.py", "move_entry_windows.py", "startup_windows.py", "contention_worker.py")
+                    "operational_windows.py", "move_entry_windows.py", "startup_windows.py", "contention_worker.py",
+                    "disclosure_label_windows.py")
     harness = {name: hashlib.sha256(Path(__file__).with_name(name).read_bytes()).hexdigest() for name in source_files}
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=environment, creationflags=0x08000000)
     output = OperationalOutput(process, args.output)
@@ -294,11 +336,12 @@ def run(args):
                 state["drag"] = physical_drag(observer, hwnd, process.pid, clock, state["drag_state"])
                 client = native.client(hwnd, process.pid)
                 region = Region(round(30 * client.scale), round(400 * client.scale), 2, 2)
-                with RegionCapture(hwnd, process.pid, region, creation_ticks=creation) as capture:
+                with DisclosureLabel(hwnd, process.pid, creation, ui_thread, clock) as disclosure, \
+                        RegionCapture(hwnd, process.pid, region, creation_ticks=creation) as capture:
                     with NativePointer(native, hwnd, process.pid) as pointer:
                         pointer.move((489, 16))
                         state["input_samples"] = []
-                        state["input"] = input_samples(pointer, capture, clock, 32, state["input_samples"])
+                        state["input"] = input_samples(pointer, capture, clock, 32, state["input_samples"], disclosure)
         finally:
             if load is not None:
                 state["contention"] = load.receipt()

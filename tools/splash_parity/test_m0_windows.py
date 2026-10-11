@@ -31,7 +31,9 @@ class Capture:
     def __init__(self, clock, cost=1000):
         self.clock, self.cost, self.expanded, self.pressed = clock, cost, False, False
         self.foreign, self.late, self.stuck, self.wrong_frequency = False, False, False, False
+        self.calls = 0
     def sample(self):
+        self.calls += 1
         if self.foreign and self.pressed:
             raise RuntimeError("Foreign ROI ownership")
         begin = self.clock.read()
@@ -42,6 +44,22 @@ class Capture:
         return RegionSample(raw, 11, 55, 99, Geometry(558, 558, 96, 100, 100), Region(30, 400, 2, 2),
                             self.clock.frequency + int(self.wrong_frequency), begin, begin, None, None,
                             begin, end, end, end)
+
+
+class Disclosure:
+    def __init__(self, capture):
+        self.capture, self.clock, self.calls = capture, capture.clock, 0
+        self.pending = 0
+    def read(self, deadline):
+        begin = self.clock.read()
+        self.clock.ticks += 100
+        end = self.clock.read()
+        self.calls += 1
+        label = owner.LABELS[int(self.capture.expanded)]
+        if self.capture.pressed and self.pending:
+            self.pending -= 1
+            label = owner.LABELS[1 - int(self.capture.expanded)]
+        return dict(label=label, begin_ticks=begin, end_ticks=end, qpc_frequency=self.clock.frequency)
 
 
 class Pointer:
@@ -149,7 +167,7 @@ class M0WindowsTests(unittest.TestCase):
         clock = Clock()
         capture = Capture(clock)
         pointer, records = Pointer(capture), []
-        result = owner.input_samples(pointer, capture, clock, 32, records)
+        result = owner.input_samples(pointer, capture, clock, 32, records, Disclosure(capture))
         self.assertTrue(result["p95_below_50ms"])
         self.assertEqual(result["input_to_visible"]["count"], 32)
         self.assertEqual(pointer.events, ["click"] * 32)
@@ -169,7 +187,7 @@ class M0WindowsTests(unittest.TestCase):
             return click()
         pointer.click = checked_click
         records = []
-        result = owner.input_samples(pointer, capture, clock, 32, records)
+        result = owner.input_samples(pointer, capture, clock, 32, records, Disclosure(capture))
         self.assertFalse(result["p95_below_50ms"])
         self.assertTrue(all(item["input_to_visible_ms"] > 100 for item in records))
         self.assertTrue(all(item["input_dispatch_end_ticks"] - item["input_begin_ticks"] > 100000 for item in records))
@@ -184,7 +202,7 @@ class M0WindowsTests(unittest.TestCase):
             pointer = Pointer(capture)
             pointer.click = lambda receipt=receipt: receipt
             records = []
-            self.assertRaises(RuntimeError, owner.input_samples, pointer, capture, clock, 32, records)
+            self.assertRaises(RuntimeError, owner.input_samples, pointer, capture, clock, 32, records, Disclosure(capture))
             self.assertFalse(records[0]["accepted"])
             self.assertEqual(records[0]["observations"], [])
         clock = Clock()
@@ -196,16 +214,135 @@ class M0WindowsTests(unittest.TestCase):
         pointer.click = failed_click
         records = []
         with self.assertRaisesRegex(RuntimeError, "partial batch insertion"):
-            owner.input_samples(pointer, capture, clock, 32, records)
+            owner.input_samples(pointer, capture, clock, 32, records, Disclosure(capture))
         self.assertEqual(records[0]["input_injection"]["inserted_events"], 1)
         self.assertFalse(records[0]["accepted"])
 
     def test_observer_cost_not_subtracted_to_pass_budget(self):
         clock = Clock()
         capture = Capture(clock, cost=60000)
-        result = owner.input_samples(Pointer(capture), capture, clock, 32, [])
+        result = owner.input_samples(Pointer(capture), capture, clock, 32, [], Disclosure(capture))
         self.assertFalse(result["p95_below_50ms"])
         self.assertGreater(result["input_to_visible"]["p95_ms"], 60)
+
+    def test_old_label_never_copies_display_and_wait_scheduling_is_measured(self):
+        clock, records = Clock(), []
+        capture = Capture(clock)
+        disclosure = Disclosure(capture)
+        disclosure.pending = 2
+        pointer = Pointer(capture)
+        first_click = pointer.click
+        def click():
+            disclosure.pending = 2
+            return first_click()
+        pointer.click = click
+        real_read = disclosure.read
+        calls_at_reads = []
+        def read(deadline):
+            calls_at_reads.append(capture.calls)
+            return real_read(deadline)
+        disclosure.read = read
+        def condition_wait(seconds):
+            clock.ticks += round(seconds * clock.frequency)
+        with patch.object(owner.time, "sleep", side_effect=condition_wait):
+            result = owner.input_samples(pointer, capture, clock, 32, records, disclosure)
+        self.assertTrue(result["p95_below_50ms"])
+        for index, item in enumerate(records):
+            self.assertEqual(len(item["label_observations"]), 3)
+            self.assertEqual(len(item["observations"]), 1)
+            self.assertEqual(calls_at_reads[index * 4:index * 4 + 4], [index * 3 + 2] * 4)
+            self.assertGreaterEqual(item["label_ready_end_ticks"] - item["input_dispatch_end_ticks"], 4000)
+            self.assertGreaterEqual(item["observations"][0]["begin_ticks"], item["label_ready_end_ticks"])
+            self.assertEqual(item["input_to_visible_ms"],
+                             (item["observed_end_ticks"] - item["input_begin_ticks"]) / 1000)
+
+    def test_never_ready_late_and_foreign_label_cannot_reach_screen_copy(self):
+        for mode in ("never", "late", "foreign", "wrong_frequency", "reversed", "unexpected"):
+            with self.subTest(mode=mode):
+                clock, records = Clock(), []
+                capture = Capture(clock)
+                disclosure = Disclosure(capture)
+                read = disclosure.read
+                def observed(deadline):
+                    sample = read(deadline)
+                    if capture.pressed:
+                        if mode == "never":
+                            sample["label"] = owner.LABELS[0]
+                        elif mode == "late":
+                            sample["end_ticks"] = deadline
+                        elif mode == "foreign":
+                            raise owner.DisclosureError("verify_disclosure", "Foreign BUTTON")
+                        elif mode == "wrong_frequency":
+                            sample["qpc_frequency"] += 1
+                        elif mode == "reversed":
+                            sample["begin_ticks"] = sample["end_ticks"] + 1
+                        elif mode == "unexpected":
+                            sample["label"] = "Unexpected action"
+                    return sample
+                disclosure.read = observed
+                with patch.object(owner.time, "sleep"):
+                    self.assertRaises(owner.DisclosureError, owner.input_samples,
+                                      Pointer(capture), capture, clock, 32, records, disclosure)
+                self.assertEqual(capture.calls, 2)
+                self.assertFalse(records[0]["accepted"])
+                self.assertEqual(records[0]["observations"], [])
+                if mode == "never":
+                    self.assertEqual(len(records[0]["label_observations"]), 256)
+
+    def test_label_only_never_accepts_missing_or_wrong_display_pixels(self):
+        clock, records = Clock(), []
+        capture = Capture(clock)
+        capture.stuck = True
+        self.assertRaises(RuntimeError, owner.input_samples, Pointer(capture), capture,
+                          clock, 32, records, Disclosure(capture))
+        self.assertEqual(records[0]["label_observations"][-1]["label"], owner.LABELS[1])
+        self.assertFalse(records[0]["accepted"])
+        self.assertEqual(len(records[0]["observations"]), 256)
+
+    def test_label_wait_cost_is_not_subtracted_and_deadline_precedes_matching_state(self):
+        clock, records = Clock(), []
+        capture, disclosure = Capture(clock), None
+        disclosure = Disclosure(capture)
+        actual = disclosure.read
+        def read(deadline):
+            if capture.pressed:
+                clock.ticks += 60000
+            return actual(deadline)
+        disclosure.read = read
+        result = owner.input_samples(Pointer(capture), capture, clock, 32, records, disclosure)
+        self.assertFalse(result["p95_below_50ms"])
+        self.assertTrue(all(item["input_to_visible_ms"] > 60 for item in records))
+        self.assertTrue(all(item["observations"][0]["begin_ticks"] >= item["label_ready_end_ticks"] for item in records))
+
+    def test_label_baseline_cannot_change_without_measured_click_and_failed_read_retains_cause(self):
+        clock, records = Clock(), []
+        capture, disclosure = Capture(clock), None
+        disclosure = Disclosure(capture)
+        read = disclosure.read
+        def observed(deadline):
+            sample = read(deadline)
+            if disclosure.calls == 3:
+                sample["label"] = owner.LABELS[0]
+            return sample
+        disclosure.read = observed
+        self.assertRaises(owner.DisclosureError, owner.input_samples, Pointer(capture), capture,
+                          clock, 32, records, disclosure)
+        self.assertEqual(len(records), 1)
+        self.assertTrue(records[0]["accepted"])
+        clock, records = Clock(), []
+        capture = Capture(clock)
+        disclosure = Disclosure(capture)
+        read = disclosure.read
+        def failed(deadline):
+            if capture.pressed:
+                disclosure.last_read = dict(accepted=False, failure=dict(message="original WM_GETTEXT failure"))
+                raise owner.DisclosureError("read_disclosure_text", "original WM_GETTEXT failure")
+            return read(deadline)
+        disclosure.read = failed
+        self.assertRaises(owner.DisclosureError, owner.input_samples, Pointer(capture), capture,
+                          clock, 32, records, disclosure)
+        self.assertIn("original WM_GETTEXT failure", records[0]["label_observations"][0]["failure"]["message"])
+        self.assertFalse(records[0]["accepted"])
 
     def test_late_changed_frame_foreign_roi_missing_feedback_and_clock_reject(self):
         for field in ("late", "foreign", "stuck", "wrong_frequency"):
@@ -215,7 +352,7 @@ class M0WindowsTests(unittest.TestCase):
                 setattr(capture, field, True)
                 records = []
                 with self.assertRaises(RuntimeError):
-                    owner.input_samples(Pointer(capture), capture, clock, 32, records)
+                    owner.input_samples(Pointer(capture), capture, clock, 32, records, Disclosure(capture))
                 self.assertTrue(all(not record["accepted"] for record in records))
 
     def test_alpha_drift_alone_and_one_pixel_changes_never_prove_disclosure(self):
@@ -258,7 +395,7 @@ class M0WindowsTests(unittest.TestCase):
             self.assertFalse(records[0]["accepted"])
 
     def test_wrong_sample_inventory_is_rejected(self):
-        self.assertRaises(ValueError, owner.input_samples, None, None, None, 31, [])
+        self.assertRaises(ValueError, owner.input_samples, None, None, None, 31, [], None)
         self.assertRaises(ValueError, owner.drag_path, None, None, 11, 55, None, None, None, 0, 31, None, [])
 
     def failed_run(self, directory, *, collect_failure=False, foreign=False, bad_identity=False):
