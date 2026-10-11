@@ -21,8 +21,10 @@ from PIL import Image
 
 try:
     from .native_decisions import accessible_controls, startup_decision
+    from .timing_policy import TIMING_PROFILES, assess_timing
 except ImportError:
     from native_decisions import accessible_controls, startup_decision
+    from timing_policy import TIMING_PROFILES, assess_timing
 
 class BitmapHeader(ctypes.Structure):
     """Match the native top-down 32-bit BITMAPINFOHEADER ABI."""
@@ -809,6 +811,7 @@ def observe_caption(native: NativeWindows, hwnd: int, process: subprocess.Popen[
 
 def qualify(arguments: argparse.Namespace) -> None:
     """Run one bounded native proof, save distinct receipts, and preserve process failure output."""
+    assess_timing(None, 1, profile=arguments.timing_profile)
     native = NativeWindows()
     output: Path = arguments.output
     output.mkdir(parents=True, exist_ok=True)
@@ -903,7 +906,7 @@ def qualify(arguments: argparse.Namespace) -> None:
                     "Native Tab input did not collapse the console within the deadline"
                 )
             if arguments.startup:
-                startup = startup_decision(first_visible, first_interactive)
+                startup = startup_decision(first_visible, first_interactive, profile=arguments.timing_profile)
                 write_json(output / "startup.json", startup)
                 if not startup["accepted"]:
                     raise RuntimeError("External visible/interactive startup exceeds S0 targets")
@@ -1008,6 +1011,7 @@ def main() -> int:
     parser.add_argument("--input", action="store_true")
     parser.add_argument("--compositor", action="store_true")
     parser.add_argument("--startup", action="store_true", help="Enforce external 500 ms visible/750 ms interactive targets")
+    parser.add_argument("--timing-profile", choices=TIMING_PROFILES, default="strict")
     parser.add_argument("--accessibility", action="store_true", help="Inspect actual owned UI Automation caption buttons")
     parser.add_argument("--console-name", default="Show Comfy output", help="Expected collapsed accessible caption name in the active locale")
     parser.add_argument("--expanded-console-name", default="Hide Comfy output", help="Expected expanded accessible caption name in the active locale")

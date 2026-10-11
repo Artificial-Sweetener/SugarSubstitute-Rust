@@ -6,6 +6,10 @@
 from __future__ import annotations
 
 import math
+try:
+    from .timing_policy import assess_timing
+except ImportError:
+    from timing_policy import assess_timing
 
 
 def accessible_controls(records: list[dict[str, object]], pid: int, names: tuple[str, str]) -> None:
@@ -49,13 +53,19 @@ def accessible_controls(records: list[dict[str, object]], pid: int, names: tuple
             raise ValueError("Accessible caption control is offscreen")
 
 
-def startup_decision(visible_ms: float | None, interactive_ms: float | None) -> dict[str, object]:
-    """Apply S0 limits only to compositor paint and observed disclosure response."""
-    return {
+def startup_decision(visible_ms: float | None, interactive_ms: float | None, *, profile="strict") -> dict[str, object]:
+    """Assess actual startup; busy derived reports add explicit budgets and retain strict flags."""
+    visible = assess_timing(visible_ms, 500, profile=profile, inclusive=True)
+    interactive = assess_timing(interactive_ms, 750, profile=profile, inclusive=True)
+    result = {
         "visible_frame_ms": visible_ms,
         "interactive_control_ms": interactive_ms,
-        "visible_within_500_ms": visible_ms is not None and 0 <= visible_ms <= 500,
-        "interactive_within_750_ms": interactive_ms is not None and 0 <= interactive_ms <= 750,
-        "accepted": visible_ms is not None and interactive_ms is not None
-        and 0 <= visible_ms <= 500 and 0 <= interactive_ms <= 750,
+        "visible_within_500_ms": visible["strict_passed"],
+        "interactive_within_750_ms": interactive["strict_passed"],
+        "accepted": visible["accepted"] and interactive["accepted"],
     }
+    if profile == "busy":
+        result["timing_assessment"] = {"profile": profile, "visible": visible, "interactive": interactive,
+                                       "strict_accepted": visible["strict_passed"] and interactive["strict_passed"],
+                                       "accepted": result["accepted"]}
+    return result

@@ -21,6 +21,7 @@ from pathlib import Path
 
 try:
     from .native_timing import analyse, distribution, integer, read_terminal, validate
+    from .timing_policy import TIMING_PROFILES, assess_timing
     from .native_windows import MonitorInfo, NativePointer, NativeWindows, observe_exposure, write_json
     from .operational_windows import ObservationWindows, OperationalOutput, OwnedContention, affinity, error_causes
     from .region_capture import RegionCapture
@@ -32,6 +33,7 @@ try:
     from .disclosure_label_windows import DisclosureLabel, DisclosureError, LABELS
 except ImportError:
     from native_timing import analyse, distribution, integer, read_terminal, validate
+    from timing_policy import TIMING_PROFILES, assess_timing
     from native_windows import MonitorInfo, NativePointer, NativeWindows, observe_exposure, write_json
     from operational_windows import ObservationWindows, OperationalOutput, OwnedContention, affinity, error_causes
     from region_capture import RegionCapture
@@ -125,8 +127,9 @@ def wait_disclosure(disclosure, expected, clock, start, record):
     raise DisclosureError("disclosure_inventory", "Name change exceeded256 bounded reads")
 
 
-def input_samples(pointer, capture, clock, samples, observations, disclosure):
+def input_samples(pointer, capture, clock, samples, observations, disclosure, *, profile="strict"):
     """Return causal click-to-observed-pixel upper bounds, preserving complete QPC sampling brackets."""
+    assess_timing(None, 1, profile=profile)
     if samples != 32:
         raise ValueError("M0 input qualification requires exactly32 physical clicks")
     states, previous, previous_label = [], None, None
@@ -189,8 +192,11 @@ def input_samples(pointer, capture, clock, samples, observations, disclosure):
         else:
             raise RuntimeError("Input response exceeded bounded sampling inventory")
     result = distribution([item["input_to_visible_ms"] for item in observations])
-    return {"input_to_visible": result, "p95_below_50ms": result["p95_ms"] < 50,
+    report = {"input_to_visible": result, "p95_below_50ms": result["p95_ms"] < 50,
             "scope": "Physical click safety checks and dispatch through submitted-state name readiness and actual owned composited ROI end observation, including full wait/native/ownership/copy/sampling work; no overhead subtraction", "samples": observations}
+    if profile == "busy":
+        report["timing_assessment"] = assess_timing(result["p95_ms"], 50, profile=profile)
+    return report
 
 
 def drag_path(observer, pointer, hwnd, pid, origin, cursor, direction, deadline, samples, clock, observations):
@@ -308,6 +314,8 @@ def performance_command(executable, receipt):
 
 
 def run(args):
+    profile = args.timing_profile
+    assess_timing(None, 1, profile=profile)
     helper = enroll_helper(getattr(args, "capture_helper", None), getattr(args, "capture_helper_sha256", None))
     library = DxgiLibrary(helper) if helper is not None else None
     executable = args.executable.resolve(strict=True)
@@ -325,7 +333,7 @@ def run(args):
     command = performance_command(executable, terminal)
     source_files = ("m0_windows.py", "native_timing.py", "native_windows.py", "region_capture.py",
                     "operational_windows.py", "move_entry_windows.py", "startup_windows.py", "contention_worker.py",
-                    "disclosure_label_windows.py", "region_records.py", "gdi_storage.py", "dxgi_abi.py", "dxgi_storage.py")
+                    "disclosure_label_windows.py", "region_records.py", "gdi_storage.py", "dxgi_abi.py", "dxgi_storage.py", "timing_policy.py")
     harness = {name: hashlib.sha256(Path(__file__).with_name(name).read_bytes()).hexdigest() for name in source_files}
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=environment, creationflags=0x08000000)
     output = OperationalOutput(process, args.output)
@@ -336,6 +344,8 @@ def run(args):
              "timing_source_audit_enabled": False, "qualification_accepted": False,
              "preparation_cadence": "Controlled by exact host configuration; this fixture does not synthesize producer cadence",
              "source_and_compositor_frame_age": "Not measured by performance fixture"}
+    if profile == "busy":
+        state["timing_profile"] = profile
     try:
         identity_pid, identity_path, creation = processes.identity(int(process._handle))
         if (identity_pid, identity_path) != (process.pid, executable) or not processes.alive(int(process._handle)):
@@ -364,7 +374,7 @@ def run(args):
                     with NativePointer(native, hwnd, process.pid, clock=clock) as pointer:
                         pointer.move((489, 16))
                         state["input_samples"] = []
-                        state["input"] = input_samples(pointer, capture, clock, 32, state["input_samples"], disclosure)
+                        state["input"] = input_samples(pointer, capture, clock, 32, state["input_samples"], disclosure, profile=profile)
         finally:
             if load is not None:
                 state["contention"] = load.receipt()
@@ -381,10 +391,15 @@ def run(args):
             raise RuntimeError("Terminal native timing UI thread differs from the actual owned window")
         if raw["frequency"] != clock.frequency:
             raise RuntimeError("Terminal and external observation QPC frequencies differ")
-        state["native_timings"] = analyse(raw)
+        state["native_timings"] = analyse(raw, profile=profile)
         state["campaign"] = campaign_decision(raw, state["drag"], state["input"])
         state["terminal_sha256"] = hashlib.sha256(terminal.read_bytes()).hexdigest()
-        state["qualification_accepted"] = state["native_timings"]["accepted"] and state["campaign"]["accepted"] and state["input"]["p95_below_50ms"]
+        input_accepted = (state["input"]["p95_below_50ms"] if profile == "strict"
+                          else state["input"]["timing_assessment"]["accepted"])
+        state["qualification_accepted"] = state["native_timings"]["accepted"] and state["campaign"]["accepted"] and input_accepted
+        if profile == "busy":
+            state["strict_qualification_accepted"] = (state["native_timings"]["timing_assessment"]["strict_accepted"]
+                                                       and state["campaign"]["accepted"] and state["input"]["p95_below_50ms"])
         return 0 if state["qualification_accepted"] else 1
     except BaseException as error:
         primary = error
@@ -409,6 +424,8 @@ def run(args):
         if primary is not None or cleanup:
             state["failure_causes"] = [cause for error in ([primary] if primary else []) + cleanup for cause in error_causes(error)]
             state["qualification_accepted"] = False
+            if profile == "busy":
+                state["strict_qualification_accepted"] = False
         try:
             write_json(args.output / "observation.json", state)
         except BaseException as error:
@@ -425,6 +442,7 @@ def main():
     parser.add_argument("--capture-helper-sha256")
     parser.add_argument("--workers", type=int, default=0)
     parser.add_argument("--affinity-cpus")
+    parser.add_argument("--timing-profile", choices=TIMING_PROFILES, default="strict")
     args = parser.parse_args()
     if not 0 <= args.workers <= 8 or args.workers and not args.affinity_cpus:
         parser.error("Owned zero..8 worker load requires explicit logical CPU affinity")

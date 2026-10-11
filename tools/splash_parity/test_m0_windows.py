@@ -130,6 +130,100 @@ def campaign_fixture():
 
 
 class M0WindowsTests(unittest.TestCase):
+    def test_busy_input_preserves_every_raw_sample_and_strict_flag(self):
+        reports = []
+        for profile in ("strict", "busy"):
+            clock = Clock()
+            capture = Capture(clock, cost=60000)
+            reports.append(owner.input_samples(Pointer(capture), capture, clock, 32, [], Disclosure(capture), profile=profile))
+        strict, busy = reports
+        self.assertFalse(strict["p95_below_50ms"])
+        self.assertFalse(busy["p95_below_50ms"])
+        self.assertTrue(busy["timing_assessment"]["accepted"])
+        self.assertFalse(busy["timing_assessment"]["strict_passed"])
+        self.assertEqual(strict["samples"], busy["samples"])
+        self.assertEqual(strict["input_to_visible"], busy["input_to_visible"])
+        self.assertNotIn("timing_assessment", strict)
+
+    def test_busy_never_accepts_missing_pixels_or_unknown_profile(self):
+        clock = Clock()
+        capture = Capture(clock)
+        capture.stuck = True
+        self.assertRaises(RuntimeError, owner.input_samples, Pointer(capture), capture, clock, 32, [], Disclosure(capture), profile="busy")
+        before = capture.calls
+        self.assertRaises(ValueError, owner.input_samples, Pointer(capture), capture, clock, 32, [], Disclosure(capture), profile="unknown")
+        self.assertEqual(capture.calls, before)
+        with patch.object(owner, "enroll_helper") as helper, patch.object(owner, "NativeWindows") as native:
+            self.assertRaises(ValueError, owner.run, SimpleNamespace(timing_profile="unknown"))
+        helper.assert_not_called()
+        native.assert_not_called()
+
+    def test_busy_run_propagates_profile_without_weakening_campaign_or_cleanup(self):
+        from unittest.mock import MagicMock
+        for profile, missing in (("strict", False), ("busy", False), ("busy", True)):
+            with self.subTest(profile=profile, missing=missing), tempfile.TemporaryDirectory() as directory:
+                executable = Path(directory) / "fixture.exe"
+                executable.write_bytes(b"exact fixture")
+                raw, drag, _ = campaign_fixture()
+                for index, sample in enumerate(raw["submissions"], 1):
+                    sample.update(begin_ticks=1000 + index * 30000, end_ticks=1100 + index * 30000)
+                if missing:
+                    raw["callbacks"][0]["kind"] = "other"
+                process = SimpleNamespace(pid=55, _handle=10, returncode=None, poll=lambda: process.returncode)
+                clock = Clock()
+                capture, pointer, disclosure = Capture(clock, cost=60000), None, None
+                capture.last_attempt = None
+                pointer, disclosure = Pointer(capture), Disclosure(capture)
+                contexts = []
+                for value in (capture, pointer, disclosure):
+                    context = MagicMock()
+                    context.__enter__.return_value = value
+                    contexts.append(context)
+                pointer.move = lambda point: None
+                events = []
+                class Output:
+                    complete = False
+                    def __init__(self, *args):
+                        self.target = args[1] / "terminal.json"
+                    def collect(self, phase):
+                        events.append(phase)
+                        process.returncode, self.complete = 0, True
+                        self.target.write_text(owner.json.dumps(dict(frames_presented=33, native_timings=raw)))
+                    def receipt(self):
+                        return dict(complete=self.complete, exit_code=process.returncode)
+                def thread(hwnd, pid):
+                    pid._obj.value = 55
+                    return 71
+                native = SimpleNamespace(user=SimpleNamespace(GetWindowThreadProcessId=thread), find_window=lambda *_: 11,
+                                         post=lambda *_: events.append("WM_CLOSE"), client=lambda *_: SimpleNamespace(scale=1))
+                processes = SimpleNamespace(identity=lambda *_: (55, executable.resolve(), 99), alive=lambda *_: True)
+                args = SimpleNamespace(executable=executable, output=Path(directory) / "out", workers=0, affinity_cpus=None,
+                                       timing_profile=profile)
+                with ExitStack() as stack:
+                    for name, boundary in (("NativeWindows", lambda: native), ("ReferenceProcesses", lambda: processes),
+                                           ("Qpc", lambda: clock), ("ObservationWindows", lambda *_: None),
+                                           ("OperationalOutput", Output), ("observe_exposure", lambda *_: None),
+                                           ("physical_drag", lambda *_: drag), ("RegionCapture", lambda *a, **k: contexts[0]),
+                                           ("NativePointer", lambda *a, **k: contexts[1]), ("DisclosureLabel", lambda *_: contexts[2])):
+                        stack.enter_context(patch.object(owner, name, boundary))
+                    stack.enter_context(patch.object(owner.subprocess, "Popen", return_value=process))
+                    result = owner.run(args)
+                saved = owner.json.loads((args.output / "observation.json").read_text())
+                self.assertEqual(result, 0 if profile == "busy" and not missing else 1)
+                self.assertFalse(saved["input"]["p95_below_50ms"])
+                self.assertFalse(saved["native_timings"]["producer_p95_below_25ms"])
+                self.assertEqual(len(saved["input_samples"]), 32)
+                self.assertEqual(events, ["WM_CLOSE", "graceful_close"])
+                if profile == "busy":
+                    self.assertFalse(saved["strict_qualification_accepted"])
+
+    def test_busy_failed_teardown_cannot_qualify(self):
+        with tempfile.TemporaryDirectory() as directory:
+            _, error, receipt = self.failed_run(directory, profile="busy", collect_failure=True)
+        self.assertIsInstance(error, BaseExceptionGroup)
+        self.assertFalse(receipt["qualification_accepted"])
+        self.assertEqual(receipt["timing_profile"], "busy")
+
     def test_complete_campaign_requires_new_intervals_categories_and_actual_delegated_overlap(self):
         raw, drag, inputs = campaign_fixture()
         result = owner.campaign_decision(raw, drag, inputs)
@@ -479,17 +573,17 @@ class M0WindowsTests(unittest.TestCase):
             fixture = Path(directory) / "helper.dll"
             fixture.write_bytes(b"test fixture")
             for helper, digest in ((None, "0" * 64), (fixture, None), (fixture, "0" * 64), (Path("relative.dll"), "0" * 64)):
-                args = SimpleNamespace(capture_helper=helper, capture_helper_sha256=digest)
+                args = SimpleNamespace(capture_helper=helper, capture_helper_sha256=digest, timing_profile="strict")
                 with patch.object(owner.subprocess, "Popen") as launch:
                     self.assertRaises(ValueError, owner.run, args)
                 launch.assert_not_called()
             digest = owner.hashlib.sha256(fixture.read_bytes()).hexdigest()
-            args = SimpleNamespace(capture_helper=fixture, capture_helper_sha256=digest)
+            args = SimpleNamespace(capture_helper=fixture, capture_helper_sha256=digest, timing_profile="strict")
             with patch.object(owner, "DxgiLibrary", side_effect=AttributeError("Missing ABI export")), patch.object(owner.subprocess, "Popen") as launch:
                 self.assertRaises(AttributeError, owner.run, args)
             launch.assert_not_called()
 
-    def failed_run(self, directory, *, collect_failure=False, foreign=False, bad_identity=False):
+    def failed_run(self, directory, *, collect_failure=False, foreign=False, bad_identity=False, profile="strict"):
         executable = Path(directory) / "fixture.exe"
         executable.write_bytes(b"fixture")
         process = SimpleNamespace(pid=55, _handle=10, returncode=None, poll=lambda: process.returncode)
@@ -515,7 +609,7 @@ class M0WindowsTests(unittest.TestCase):
                                  owns=lambda *_: not foreign)
         processes = SimpleNamespace(identity=lambda *_: (56 if bad_identity else 55, executable.resolve(), 99),
                                     alive=lambda *_: True)
-        args = SimpleNamespace(executable=executable, output=Path(directory) / "out", workers=0, affinity_cpus=None)
+        args = SimpleNamespace(executable=executable, output=Path(directory) / "out", workers=0, affinity_cpus=None, timing_profile=profile)
         with ExitStack() as stack:
             for name, value in (("NativeWindows", lambda: native), ("ReferenceProcesses", lambda: processes),
                                 ("Qpc", Clock), ("ObservationWindows", lambda _: None), ("OperationalOutput", Output),

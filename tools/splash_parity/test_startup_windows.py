@@ -204,11 +204,41 @@ class StartupLaunchTests(unittest.TestCase):
         self.executable = self.root / "fixture.exe"
         self.executable.write_bytes(b"fixture")
 
-    def arguments(self, mode: str) -> argparse.Namespace:
+    def arguments(self, mode: str, profile="strict") -> argparse.Namespace:
         """Select explicit trusted entrypoints and an isolated output location."""
         return argparse.Namespace(mode=mode, temporary=self.root, legacy_root=self.root,
                                   interpreter=self.executable, executable=self.executable,
-                                  duration_ms=5000, locale="ja", light=True, timing_audit=False)
+                                  duration_ms=5000, locale="ja", light=True, timing_audit=False, timing_profile=profile)
+
+    def test_unknown_profile_rejects_before_output_or_launch_effects(self):
+        target = self.root / "invalid-profile"
+        with patch("tools.splash_parity.startup_windows.subprocess.Popen") as process:
+            self.assertRaises(ValueError, observe, self.arguments("rust", "unknown"), target, 0, Mock())
+        self.assertFalse(target.exists())
+        process.assert_not_called()
+
+    def test_busy_startup_uses_actual_observations_and_same_physical_gesture(self):
+        native = Mock()
+        native.find_window.return_value = 1
+        native.client.return_value = Mock(width=558, height=558, dpi=96, scale=1)
+        native.capture.return_value = Image.new("RGB", (558, 558), (60, 60, 60))
+        process = Mock(pid=42, returncode=0)
+        process.communicate.return_value = (b"", b"")
+        process.poll.return_value = 0
+        pointer, fixture = MagicMock(), MagicMock(receipt={})
+        pointer.__enter__.return_value = pointer
+        with patch("tools.splash_parity.startup_windows.subprocess.Popen", return_value=process), \
+                patch("tools.splash_parity.startup_windows.ForegroundLauncher", return_value=fixture), \
+                patch("tools.splash_parity.startup_windows.NativePointer", return_value=pointer), \
+                patch("tools.splash_parity.startup_windows.observe_compositor", return_value=(Image.new("RGB", (558, 558)), .6, .04)), \
+                patch("tools.splash_parity.startup_windows.time.perf_counter", side_effect=[0, .8]):
+            result = observe(self.arguments("rust", "busy"), self.root / "busy-observation", 0, native)
+        self.assertTrue(result["startup"]["accepted"])
+        self.assertFalse(result["startup"]["timing_assessment"]["strict_accepted"])
+        self.assertEqual(result["startup"]["interactive_control_ms"], 800)
+        pointer.move.assert_called_once_with((489, 16))
+        pointer.press.assert_called_once()
+        pointer.release.assert_called_once()
 
     def test_timing_diagnostics_preserve_launch_options_and_reject_reference(self) -> None:
         arguments = self.arguments("rust")

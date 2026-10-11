@@ -20,6 +20,24 @@ from tools.splash_parity.native_windows import ExposureFailure, MouseEvent, Nati
 class NativeExposureMetadataTests(unittest.TestCase):
     """Keep actual observer decisions while faking window inventory and native rectangles."""
 
+    def test_invalid_timing_profile_cannot_create_output_or_load_native_libraries(self):
+        with patch("tools.splash_parity.native_windows.NativeWindows") as native, \
+                patch.object(Path, "mkdir") as mkdir:
+            self.assertRaises(ValueError, qualify, argparse.Namespace(timing_profile="unknown"))
+        native.assert_not_called()
+        mkdir.assert_not_called()
+
+    def test_native_cli_passes_strict_default_and_explicit_busy_to_actual_entrypoint(self):
+        from tools.splash_parity import native_windows
+        for profile in (None, "busy"):
+            command = ["fixture", "--executable", "fixture.exe", "--output", "out"]
+            if profile is not None:
+                command += ["--timing-profile", profile]
+            with self.subTest(profile=profile), patch.object(native_windows.sys, "argv", command), \
+                    patch.object(native_windows, "qualify") as run:
+                self.assertEqual(native_windows.main(), 0)
+            self.assertEqual(run.call_args.args[0].timing_profile, profile or "strict")
+
     def native(self) -> NativeWindows:
         """Provide a foreign foreground and one overlapping window above the owned client."""
         native = object.__new__(NativeWindows)
@@ -595,7 +613,7 @@ class CompositorObservationTests(unittest.TestCase):
             output = Path(directory)
             arguments = argparse.Namespace(output=output, executable=output / "fixture.exe",
                                            duration_ms=5000, locale="en", light=True,
-                                           reduced_motion=True, compositor=True)
+                                           reduced_motion=True, compositor=True, timing_profile="strict")
             with patch("tools.splash_parity.native_windows.NativeWindows", return_value=self.native), \
                     patch("tools.splash_parity.native_windows.subprocess.Popen", return_value=self.process), \
                     patch("tools.splash_parity.native_windows.observe_compositor",

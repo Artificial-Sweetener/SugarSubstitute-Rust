@@ -5,7 +5,10 @@ import copy
 import json
 import tempfile
 import unittest
+import io
+import sys
 from pathlib import Path
+from unittest.mock import patch
 
 try:
     from .native_timing import MAX_FILE_BYTES, MAX_SAMPLES, STARTUP_STAGES, analyse, read_terminal, validate
@@ -95,6 +98,58 @@ class StartupTimingTests(unittest.TestCase):
 
 
 class NativeTimingTests(unittest.TestCase):
+    def test_busy_declares_callback_and_producer_margins_and_keeps_strict_verdicts(self):
+        value = fixture()
+        value["callbacks"][0].update(begin_ticks=100, end_ticks=10100, authored_ticks=10000)
+        value["callbacks"][1].update(begin_ticks=100, end_ticks=11100, authored_ticks=10900)
+        value["submissions"][2].update(begin_ticks=63000, end_ticks=63100)
+        preserved = copy.deepcopy(value)
+        strict, busy = analyse(value), analyse(value, profile="busy")
+        self.assertFalse(strict["accepted"])
+        self.assertTrue(busy["accepted"])
+        self.assertFalse(busy["callbacks_budget_passed"])
+        self.assertFalse(busy["producer_p95_below_25ms"])
+        self.assertFalse(busy["timing_assessment"]["strict_accepted"])
+        self.assertEqual(busy["timing_assessment"]["producer"]["nominal_limit_ms"], 25)
+        self.assertAlmostEqual(busy["timing_assessment"]["producer"]["margin_ms"], 1000 / 60)
+        for kind in ("windows_parent", "completion_drain"):
+            self.assertEqual(strict["callbacks_by_kind"][kind]["authored"], busy["callbacks_by_kind"][kind]["authored"])
+            self.assertEqual(busy["callbacks_by_kind"][kind]["timing_assessment"]["p95"]["nominal_limit_ms"], 4)
+        self.assertEqual(value, preserved)
+        self.assertEqual(strict, analyse(value, profile="strict"))
+        self.assertNotIn("timing_assessment", strict)
+
+    def test_busy_cannot_accept_empty_missing_or_omitted_native_evidence(self):
+        for buffer, count in (("callbacks", "callbacks_observed"), ("submissions", "submissions_observed")):
+            value = fixture()
+            value[buffer], value[count] = [], 0
+            self.assertFalse(analyse(value, profile="busy")["accepted"])
+        value = fixture()
+        value["callbacks"] = [dict(sequence=i, kind="other", begin_ticks=200, end_ticks=200,
+                                   authored_ticks=0, delegated_drag=None) for i in range(1, MAX_SAMPLES + 1)]
+        value.update(callbacks_observed=MAX_SAMPLES + 1, callback_samples_omitted=1)
+        self.assertFalse(analyse(value, profile="busy")["accepted"])
+        for change in (dict(frequency=float("inf")), dict(callbacks=None), dict(end_ticks=float("nan"))):
+            self.assertRaises(ValueError, analyse, dict(fixture(), **change), profile="busy")
+        self.assertRaises(ValueError, analyse, None, profile="unknown")
+
+    def test_all_timing_clis_reject_unknown_profile_before_filesystem_or_native_effects(self):
+        from tools.splash_parity import native_timing, native_windows, startup_windows, m0_windows
+        cases = [(native_timing, ["missing.json", "--output", "out.json"], "read_terminal"),
+                 (native_windows, ["--executable", "missing.exe", "--output", "out"], "NativeWindows"),
+                 (m0_windows, ["--executable", "missing.exe", "--output", "out"], "NativeWindows"),
+                 (startup_windows, ["--mode", "rust", "--executable", "missing.exe", "--output", "out", "--temporary", "tmp"], "NativeWindows")]
+        for module, arguments, boundary in cases:
+            with self.subTest(module=module.__name__), patch.object(sys, "argv", ["fixture", *arguments, "--timing-profile", "unknown"]), \
+                    patch.object(sys, "stderr", io.StringIO()), patch.object(module, boundary) as external, \
+                    patch.object(Path, "mkdir") as mkdir, patch.object(Path, "open") as read:
+                with self.assertRaises(SystemExit) as caught:
+                    module.main()
+                self.assertEqual(caught.exception.code, 2)
+                external.assert_not_called()
+                mkdir.assert_not_called()
+                read.assert_not_called()
+
     def reject(self, mutation):
         value = fixture()
         mutation(value)

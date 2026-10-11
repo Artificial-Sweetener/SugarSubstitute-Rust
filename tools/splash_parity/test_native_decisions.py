@@ -81,6 +81,27 @@ class NativeDecisionTests(unittest.TestCase):
             with self.subTest(visible=visible, interactive=interactive):
                 self.assertFalse(startup_decision(visible, interactive)["accepted"])
 
+    def test_busy_startup_adds_declared_limits_without_changing_raw_or_strict_flags(self):
+        self.assertEqual(startup_decision(500, 750), {"visible_frame_ms": 500, "interactive_control_ms": 750,
+                         "visible_within_500_ms": True, "interactive_within_750_ms": True, "accepted": True})
+        result = startup_decision(600, 900, profile="busy")
+        self.assertTrue(result["accepted"])
+        self.assertFalse(result["visible_within_500_ms"])
+        self.assertFalse(result["interactive_within_750_ms"])
+        self.assertEqual((result["visible_frame_ms"], result["interactive_control_ms"]), (600, 900))
+        self.assertEqual(result["timing_assessment"]["visible"]["effective_limit_ms"], 625)
+        self.assertEqual(result["timing_assessment"]["interactive"]["effective_limit_ms"], 937.5)
+        self.assertFalse(result["timing_assessment"]["strict_accepted"])
+
+    def test_busy_startup_rejects_missing_invalid_and_beyond_effective_observations(self):
+        for observed in (None, True, -1, float("nan"), float("inf"), "600"):
+            with self.subTest(observed=observed):
+                self.assertFalse(startup_decision(observed, 1, profile="busy")["accepted"])
+                self.assertFalse(startup_decision(1, observed, profile="busy")["accepted"])
+        self.assertFalse(startup_decision(625.01, 1, profile="busy")["accepted"])
+        self.assertFalse(startup_decision(1, 937.51, profile="busy")["accepted"])
+        self.assertRaises(ValueError, startup_decision, 1, 1, profile="unknown")
+
 
 if __name__ == "__main__":
     unittest.main()

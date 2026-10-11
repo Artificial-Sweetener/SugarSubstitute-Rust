@@ -7,6 +7,10 @@ import argparse
 import json
 import math
 from pathlib import Path
+try:
+    from .timing_policy import TIMING_PROFILES, assess_timing
+except ImportError:
+    from timing_policy import TIMING_PROFILES, assess_timing
 
 MAX_SAMPLES = 16384
 MAX_FILE_BYTES = 8 * 1024 * 1024
@@ -146,13 +150,15 @@ def distribution(values):
                                     for percent in (50, 95, 99)}, "max_ms": ordered[-1]}
 
 
-def analyse(receipt):
-    """Keep full/delegated/authored evidence and assess explicit strict native budgets."""
+def analyse(receipt, *, profile="strict"):
+    """Keep raw schemas1/2 unchanged; busy derived reports add budgets and both verdicts."""
+    assess_timing(None, 1, profile=profile)
     validate(receipt)
     factor = 1000 / receipt["frequency"]
     complete = receipt["callback_samples_omitted"] == receipt["submission_samples_omitted"] == 0
     groups = {}
     callback_passes = []
+    selected_callback_passes = []
     for kind in sorted(KINDS):
         samples = [sample for sample in receipt["callbacks"] if sample["kind"] == kind]
         full = distribution([(sample["end_ticks"] - sample["begin_ticks"]) * factor for sample in samples])
@@ -163,13 +169,21 @@ def analyse(receipt):
                                            for sample in samples if sample["delegated_drag"] is not None]}
         if samples:
             callback_passes.append(passed)
+        if profile == "busy":
+            p95 = assess_timing(authored["p95_ms"], 4, profile=profile)
+            p99 = assess_timing(authored["p99_ms"], 8, profile=profile)
+            selected = bool(samples) and p95["accepted"] and p99["accepted"]
+            groups[kind]["timing_assessment"] = {"p95": p95, "p99": p99, "strict_passed": passed,
+                                                  "accepted": selected}
+            if samples:
+                selected_callback_passes.append(selected)
     all_submissions = receipt["submissions"]
     fresh = [sample for sample in all_submissions if not sample["retained"]]
     intervals = lambda samples: distribution([(right["end_ticks"] - left["end_ticks"]) * factor
                                               for left, right in zip(samples, samples[1:])])
     fresh_intervals, lifetime_intervals = intervals(fresh), intervals(all_submissions)
     producer_passed = fresh_intervals["count"] > 0 and fresh_intervals["p95_ms"] < 25
-    return {"schema_version": 2, "source": receipt["source"], "frequency": receipt["frequency"],
+    result = {"schema_version": 2, "source": receipt["source"], "frequency": receipt["frequency"],
             "native_receipt_schema_version": receipt["schema_version"],
             "startup_milestones": [{**mark, "elapsed_ms": (mark["ticks"] - receipt["begin_ticks"]) * factor}
                                    for mark in receipt.get("startup_milestones", [])],
@@ -182,6 +196,15 @@ def analyse(receipt):
             "accepted": complete and bool(callback_passes) and all(callback_passes) and producer_passed,
             "acceptance_scope": "Observed native distributions; campaign completeness is separately assessed by the orchestrator",
             "scope": "Native successful submission end-to-end intervals; retained exposures excluded from producer cadence. Full nested callback distributions are never summed. Display latency is outside this receipt."}
+    if profile == "busy":
+        producer = assess_timing(fresh_intervals["p95_ms"], 25, profile=profile)
+        callbacks_accepted = bool(selected_callback_passes) and all(selected_callback_passes)
+        strict = result["accepted"]
+        result["accepted"] = complete and callbacks_accepted and fresh_intervals["count"] > 0 and producer["accepted"]
+        result["timing_assessment"] = {"profile": profile, "producer": producer,
+                                       "callbacks_accepted": callbacks_accepted, "strict_accepted": strict,
+                                       "accepted": result["accepted"]}
+    return result
 
 
 def unique_object(pairs):
@@ -213,8 +236,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("receipt", type=Path)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--timing-profile", choices=TIMING_PROFILES, default="strict")
     args = parser.parse_args()
-    result = analyse(read_terminal(args.receipt))
+    result = analyse(read_terminal(args.receipt), profile=args.timing_profile)
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     return 0 if result["accepted"] else 1
 

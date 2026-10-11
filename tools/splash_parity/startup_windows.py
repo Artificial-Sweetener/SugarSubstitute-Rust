@@ -18,10 +18,12 @@ from ctypes import wintypes
 try:
     from .native_windows import ExposureFailure, NativePointer, NativeWindows, observe_compositor, rgb_pixel, write_json
     from .native_decisions import startup_decision
+    from .timing_policy import TIMING_PROFILES, assess_timing
     from .foreground_launcher import ForegroundLauncher
 except ImportError:
     from native_windows import ExposureFailure, NativePointer, NativeWindows, observe_compositor, rgb_pixel, write_json
     from native_decisions import startup_decision
+    from timing_policy import TIMING_PROFILES, assess_timing
     from foreground_launcher import ForegroundLauncher
 
 
@@ -271,6 +273,7 @@ def retain_diagnostics(arguments: argparse.Namespace, output: Path,
 def observe(arguments: argparse.Namespace, output: Path, ordinal: int,
             native: NativeWindows) -> dict[str, object]:
     """Observe compositor paint and a causal caption response before writing bulky images."""
+    assess_timing(None, 1, profile=arguments.timing_profile)
     output.mkdir(parents=True, exist_ok=False)
     command, cwd, environment = launch(arguments, output)
     receipt: dict[str, object] = {
@@ -354,7 +357,7 @@ def observe(arguments: argparse.Namespace, output: Path, ordinal: int,
                     raise RuntimeError("The caption disclosure did not visibly respond to its first gesture")
                 time.sleep(0.005)
             interactive_ms = (time.perf_counter() - started) * 1000
-        receipt.update(startup=startup_decision(visible_ms, interactive_ms),
+        receipt.update(startup=startup_decision(visible_ms, interactive_ms, profile=arguments.timing_profile),
                        observation_method="Owned unoccluded DWM compositor capture; first caption gesture response")
         image.save(output / "visible.png")
         changed.save(output / "interactive.png")
@@ -425,6 +428,7 @@ def main() -> int:
     parser.add_argument("--duration-ms", type=int, default=5000)
     parser.add_argument("--enforce-targets", action="store_true")
     parser.add_argument("--timing-audit", action="store_true", help="Collect bounded native Rust startup diagnostics")
+    parser.add_argument("--timing-profile", choices=TIMING_PROFILES, default="strict")
     args = parser.parse_args()
     if not 1 <= args.runs <= 30 or not 1000 <= args.duration_ms <= 30000:
         parser.error("Use 1 through 30 sequential runs with a 1000 through 30000 ms lifetime")
