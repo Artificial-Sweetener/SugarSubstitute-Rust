@@ -548,7 +548,8 @@ class NativeWindows:
             if self.user.IsWindowVisible(previous) and not self.user.IsIconic(previous):
                 if not self.user.GetWindowRect(previous, ctypes.byref(rect)):
                     raise ctypes.WinError(ctypes.get_last_error())
-                if (rect.left < origin.x + client.width
+                if (rect.right > rect.left and rect.bottom > rect.top
+                and rect.left < origin.x + client.width
                 and rect.right > origin.x
                 and rect.top < origin.y + client.height
                 and rect.bottom > origin.y):

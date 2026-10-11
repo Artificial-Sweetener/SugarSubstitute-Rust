@@ -66,6 +66,63 @@ class NativeExposureMetadataTests(unittest.TestCase):
             with self.assertRaisesRegex(OSError, "unknown occluder bounds"):
                 native.occluded(1, 42)
 
+    def rectangles(self, native, values) -> None:
+        """Replace only the native bounds returned for each actual inventory entry."""
+        def rectangle(hwnd, pointer):
+            rect = ctypes.cast(pointer, ctypes.POINTER(wintypes.RECT)).contents
+            rect.left, rect.top, rect.right, rect.bottom = values[hwnd]
+            return True
+        native.user.GetWindowRect.side_effect = rectangle
+
+    def test_empty_rectangles_inside_client_have_no_occluding_area(self) -> None:
+        """Zero and reversed extents follow Win32 IsRectEmpty geometry."""
+        for bounds in [(130, 230, 130, 230), (130, 230, 130, 500), (130, 230, 500, 230),
+                       (500, 230, 130, 500), (130, 500, 500, 230)]:
+            with self.subTest(bounds=bounds):
+                native = self.native()
+                self.rectangles(native, {2: bounds, 3: (130, 230, 130, 230)})
+                self.assertFalse(native.occluded(1, 42))
+                self.assertEqual(native.user.GetWindowRect.call_count, 2)
+                native.user.GetWindowThreadProcessId.assert_not_called()
+
+    def test_boundary_touch_is_not_positive_area_overlap(self) -> None:
+        """A visible rectangle touching any client edge covers no client pixels."""
+        for bounds in [(0, 220, 100, 400), (658, 220, 800, 400),
+                       (120, 0, 400, 200), (120, 758, 400, 900)]:
+            with self.subTest(bounds=bounds):
+                native = self.native()
+                self.rectangles(native, {2: bounds, 3: (130, 230, 130, 230)})
+                self.assertEqual(native.occluding_windows(1, 42), [])
+
+    def test_one_pixel_overlap_and_enclosing_windows_remain_occluders(self) -> None:
+        """Keep exact blocking HWND/PID/bounds for every positive-area intersection."""
+        for bounds in [(99, 220, 101, 400), (657, 220, 800, 400),
+                       (120, 199, 400, 201), (120, 757, 400, 900), (0, 0, 900, 900)]:
+            with self.subTest(bounds=bounds):
+                native = self.native()
+                self.rectangles(native, {2: bounds, 3: (130, 230, 130, 230)})
+                self.assertEqual(native.occluding_windows(1, 42),
+                                 [{"hwnd": 2, "pid": 99, "screen_bounds": list(bounds)}])
+
+    def test_empty_upper_window_does_not_stop_later_overlap_observation(self) -> None:
+        """Continue the same z-order inventory beyond an empty rectangle."""
+        native = self.native()
+        self.rectangles(native, {2: (130, 230, 130, 230), 3: (100, 200, 101, 201)})
+        self.assertEqual(native.occluding_windows(1, 42),
+                         [{"hwnd": 3, "pid": 777, "screen_bounds": [100, 200, 101, 201]}])
+
+    def test_empty_upper_window_cannot_hide_later_native_identity_failure(self) -> None:
+        """An overlapping window still requires a successful native identity query."""
+        native = self.native()
+        self.rectangles(native, {2: (130, 230, 130, 230), 3: (100, 200, 101, 201)})
+        native.user.GetWindowThreadProcessId.side_effect = None
+        native.user.GetWindowThreadProcessId.return_value = 0
+        cause = OSError("unknown overlapping window identity")
+        with patch("tools.splash_parity.native_windows.ctypes.WinError", return_value=cause):
+            with self.assertRaises(OSError) as caught:
+                native.occluded(1, 42)
+        self.assertIs(caught.exception, cause)
+
 
 class NativePointerTests(unittest.TestCase):
     """Reject foreign input and preserve human movement while releasing only injected button state."""

@@ -4,16 +4,92 @@
 """Verify startup fixtures launch the production reference and preserve cache/environment state."""
 
 import argparse
+import ctypes
 import os
 import json
 import tempfile
 import unittest
 from pathlib import Path
+from ctypes import wintypes
 from unittest.mock import MagicMock, Mock, patch
 
 from PIL import Image
 
-from tools.splash_parity.startup_windows import ReferenceOwner, launch, observe, reference_base, retain_diagnostics
+from tools.splash_parity.startup_windows import ReferenceOwner, ReferenceProcesses, launch, observe, reference_base, retain_diagnostics
+
+
+class RetainedProcessIdentityTests(unittest.TestCase):
+    """Exercise actual retained-object identity APIs with fake native calls, including after exit."""
+
+    def native(self):
+        native = object.__new__(ReferenceProcesses)
+        native.kernel = Mock()
+        native.kernel.GetProcessId.return_value = 42
+        def timestamps(handle, creation, *remaining):
+            self.assertEqual(handle, 7)
+            value = ctypes.cast(creation, ctypes.POINTER(wintypes.FILETIME)).contents
+            value.dwHighDateTime, value.dwLowDateTime = 3, 19
+            return True
+        native.kernel.GetProcessTimes.side_effect = timestamps
+        return native
+
+    def test_retained_lifetime_reads_pid_and_creation_without_live_image_query(self):
+        native = self.native()
+        native.kernel.QueryFullProcessImageNameW.side_effect = OSError("image query unavailable after exit")
+        self.assertEqual(native.lifetime_identity(7), (42, (3 << 32) | 19))
+        native.kernel.GetProcessId.assert_called_once_with(7)
+        native.kernel.GetProcessTimes.assert_called_once()
+        native.kernel.QueryFullProcessImageNameW.assert_not_called()
+
+    def test_invalid_handles_and_scalar_metadata_do_not_establish_identity(self):
+        for handle in (0, -1, True, 7.0, None, ctypes.c_void_p(-1).value):
+            native = self.native()
+            with self.subTest(handle=handle), self.assertRaises(ValueError):
+                native.lifetime_identity(handle)
+            self.assertEqual(native.kernel.mock_calls, [])
+        for pid in (True, 42.0, -1, 0x100000000):
+            native = self.native()
+            native.kernel.GetProcessId.return_value = pid
+            with self.subTest(pid=pid), self.assertRaises(RuntimeError):
+                native.lifetime_identity(7)
+            native.kernel.GetProcessTimes.assert_not_called()
+        native = self.native()
+        native.kernel.GetProcessTimes.side_effect = None
+        native.kernel.GetProcessTimes.return_value = True
+        self.assertRaisesRegex(RuntimeError, "creation time", native.lifetime_identity, 7)
+
+    def test_failed_native_pid_or_times_preserves_original_cause(self):
+        for operation in ("GetProcessId", "GetProcessTimes"):
+            native = self.native()
+            call = getattr(native.kernel, operation)
+            call.side_effect, call.return_value = None, 0
+            cause = OSError(f"native {operation} failed")
+            with self.subTest(operation=operation), patch("tools.splash_parity.startup_windows.ctypes.WinError", return_value=cause):
+                with self.assertRaises(OSError) as caught:
+                    native.lifetime_identity(7)
+            self.assertIs(caught.exception, cause)
+            native.kernel.QueryFullProcessImageNameW.assert_not_called()
+
+    def test_live_path_identity_reuses_lifetime_and_keeps_path_failure(self):
+        native = self.native()
+        with tempfile.TemporaryDirectory() as directory:
+            executable = Path(directory) / "live.exe"
+            executable.write_bytes(b"fixture")
+            def image(handle, flags, target, capacity):
+                self.assertEqual((handle, flags), (7, 0))
+                target.value = str(executable)
+                return True
+            native.kernel.QueryFullProcessImageNameW.side_effect = image
+            self.assertEqual(native.identity(7), (42, executable.resolve(strict=True), (3 << 32) | 19))
+            native.kernel.GetProcessId.assert_called_once_with(7)
+            native.kernel.GetProcessTimes.assert_called_once()
+            native.kernel.QueryFullProcessImageNameW.side_effect = None
+            native.kernel.QueryFullProcessImageNameW.return_value = False
+            cause = OSError("live image query failed")
+            with patch("tools.splash_parity.startup_windows.ctypes.WinError", return_value=cause):
+                with self.assertRaises(OSError) as caught:
+                    native.identity(7)
+            self.assertIs(caught.exception, cause)
 
 
 class ReferenceOwnershipTests(unittest.TestCase):

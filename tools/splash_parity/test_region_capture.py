@@ -326,6 +326,65 @@ class RegionCaptureTests(unittest.TestCase):
             with self.assertRaisesRegex(OSError, "unknown occluder"):
                 capture.sample()
 
+    def test_empty_rectangles_at_roi_do_not_occlude_owned_pixels(self):
+        for bounds in [(-589, 213, -589, 213), (-589, 210, -589, 220),
+                       (-592, 213, -580, 213), (-580, 210, -592, 220), (-592, 220, -580, 210)]:
+            with self.subTest(bounds=bounds):
+                boundary = Boundary()
+                boundary.above_values = [9]
+                boundary.bound_values[9] = bounds
+                with self.capture(boundary) as capture:
+                    self.assertEqual(capture.sample().bgra, bytes(range(16)))
+                self.assertEqual(Counter(name for name, _ in boundary.calls)["bounds"], 3)
+                self.assertEqual(Counter(name for name, _ in boundary.calls)["hit"], 12)
+
+    def test_edge_touch_is_clear_but_one_pixel_roi_overlap_rejects_before_copy(self):
+        cases = [((-600, 212, -590, 214), False), ((-588, 212, -580, 214), False),
+                 ((-590, 200, -588, 212), False), ((-590, 214, -588, 220), False),
+                 ((-600, 212, -589, 214), True), ((-589, 212, -580, 214), True),
+                 ((-590, 200, -588, 213), True), ((-590, 213, -588, 220), True)]
+        for bounds, occludes in cases:
+            with self.subTest(bounds=bounds):
+                boundary = Boundary()
+                with self.capture(boundary) as capture:
+                    boundary.above_values = [9]
+                    boundary.bound_values[9] = bounds
+                    if occludes:
+                        with self.assertRaisesRegex(RuntimeError, "occludes"):
+                            capture.sample()
+                        self.assertNotIn("copy", [name for name, _ in boundary.calls])
+                    else:
+                        self.assertEqual(capture.sample().bgra, bytes(range(16)))
+
+    def test_empty_window_cannot_hide_later_bounds_failure(self):
+        boundary = Boundary()
+        with self.capture(boundary) as capture:
+            boundary.above_values = [8, 9]
+            boundary.bound_values[8] = (-589, 213, -589, 213)
+            cause = OSError("later window bounds failed")
+            original = boundary.bounds
+            def bounds(hwnd):
+                if hwnd == 9:
+                    raise cause
+                return original(hwnd)
+            boundary.bounds = bounds
+            with self.assertRaises(OSError) as caught:
+                capture.sample()
+            self.assertIs(caught.exception, cause)
+            self.assertNotIn("copy", [name for name, _ in boundary.calls])
+
+    def test_positive_overlap_after_copy_remains_failed_observation(self):
+        boundary = Boundary()
+        with self.capture(boundary) as capture:
+            boundary.above_values = [9]
+            boundary.bound_values[9] = (-589, 213, -589, 213)
+            boundary.after_copy = lambda: boundary.bound_values.update({9: (-589, 213, -588, 214)})
+            with self.assertRaisesRegex(RuntimeError, "occludes"):
+                capture.sample()
+            self.assertFalse(capture.last_attempt["accepted"])
+            self.assertEqual(capture.last_attempt["byte_count"], 16)
+            self.assertEqual(Counter(name for name, _ in boundary.calls)["copy"], 1)
+
     def test_every_native_observation_failure_remains_a_failure(self):
         operations = ["thread_id", "dpi_context", "dpi_equal", "process_alive", "creation", "window_pid", "root", "visible", "minimized",
                       "foreground", "geometry", "above", "hit", "ticks", "copy", "gdi_flush", "read", "dwm_flush"]

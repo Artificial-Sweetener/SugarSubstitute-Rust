@@ -5,7 +5,9 @@
 #include "descriptor_update.h"
 #include "desktop_identity.h"
 #include "format_acquisition.h"
+#include "native_error.h"
 #include <Windows.h>
+#include <cerrno>
 #include <cstdio>
 #include <cstring>
 #include <d3d11.h>
@@ -15,6 +17,39 @@
 using Microsoft::WRL::ComPtr;
 // Diagnostic-only timeout. Observer ABI acquisition remains capped at 5 ms.
 constexpr UINT format_probe_timeout_ms = 500;
+bool readiness_failure(const char *api, const char *domain, int64_t code) noexcept {
+    if (std::fprintf(stderr,
+                     "{\"event\":\"format_readiness_failure\",\"api\":\"%s\","
+                     "\"error_domain\":\"%s\",\"error_code\":%lld}\n",
+                     api, domain, code) < 0 ||
+        std::fflush(stderr) != 0)
+        return false;
+    return false;
+}
+// Publication acknowledges enrollment only. The parent owns any pointer input;
+// this thread immediately enters one acquisition without an IPC wait or loop.
+bool publish_acquisition_readiness(HMONITOR monitor) noexcept {
+    LARGE_INTEGER frequency{}, ticks{};
+    if (!QueryPerformanceFrequency(&frequency))
+        return readiness_failure("QueryPerformanceFrequency", "HRESULT",
+                                 ss::dxgi::win32_failure(GetLastError()));
+    if (frequency.QuadPart <= 0)
+        return readiness_failure("QueryPerformanceFrequency", "HRESULT", E_UNEXPECTED);
+    if (!QueryPerformanceCounter(&ticks))
+        return readiness_failure("QueryPerformanceCounter", "HRESULT",
+                                 ss::dxgi::win32_failure(GetLastError()));
+    if (ticks.QuadPart <= 0)
+        return readiness_failure("QueryPerformanceCounter", "HRESULT", E_UNEXPECTED);
+    if (std::printf("{\"schema_version\":1,\"event\":\"format_acquisition_ready\",\"pid\":%lu,"
+                    "\"thread\":%lu,\"monitor\":%llu,\"qpc_frequency\":%lld,\"ready_qpc\":%lld}\n",
+                    GetCurrentProcessId(), GetCurrentThreadId(),
+                    reinterpret_cast<unsigned long long>(monitor), frequency.QuadPart,
+                    ticks.QuadPart) < 0)
+        return readiness_failure("printf", "errno", errno ? errno : EIO);
+    if (std::fflush(stdout) != 0)
+        return readiness_failure("fflush", "errno", errno ? errno : EIO);
+    return true;
+}
 int main(int argc, char **argv) {
     if (argc == 2 && std::strcmp(argv[1], "--desktop-identity-only") == 0)
         return print_desktop_identity();
@@ -22,11 +57,13 @@ int main(int argc, char **argv) {
         argc == 2 && std::strcmp(argv[1], "--acquire-format-hdr-inventory-owned-update-once") == 0;
     const bool after_first =
         argc == 2 && std::strcmp(argv[1], "--acquire-format-update-after-first-once") == 0;
+    const bool pointer_trigger =
+        argc == 2 && std::strcmp(argv[1], "--acquire-format-pointer-trigger-once") == 0;
     const bool owned_update =
         hdr_inventory || after_first ||
         (argc == 2 && std::strcmp(argv[1], "--acquire-format-owned-update-once") == 0);
-    const bool acquire_format =
-        owned_update || (argc == 2 && std::strcmp(argv[1], "--acquire-format-once") == 0);
+    const bool acquire_format = pointer_trigger || owned_update ||
+                                (argc == 2 && std::strcmp(argv[1], "--acquire-format-once") == 0);
     if (argc != 1 && !acquire_format)
         return 2;
     const auto prior = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
@@ -124,7 +161,8 @@ int main(int argc, char **argv) {
             if (after_first)
                 inspect_next_format(*duplication.Get(), format_probe_timeout_ms, first);
             if ((!after_first || format_acquisition_settled(first)) &&
-                (!owned_update || begin_desktop_update(update)))
+                (!owned_update || begin_desktop_update(update)) &&
+                (!pointer_trigger || publish_acquisition_readiness(monitor)))
                 inspect_next_format(*duplication.Get(), format_probe_timeout_ms, observed);
         }
         duplication.Reset();
@@ -161,6 +199,8 @@ int main(int argc, char **argv) {
         hdr_inventory ? "true" : "false", hdr_hr, static_cast<UINT>(hdr_requested.ModeDesc.Format),
         hdr_requested.ModeDesc.Width, hdr_requested.ModeDesc.Height,
         static_cast<UINT>(hdr_requested.Rotation));
+    if (pointer_trigger)
+        std::printf("\"acquisition_mode\":\"pointer_trigger_once\",");
     std::printf("\"acquisition_attempts_requested\":%u,", !acquire_format ? 0u
                                                           : after_first   ? 2u
                                                                           : 1u);

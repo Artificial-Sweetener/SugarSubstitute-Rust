@@ -110,7 +110,7 @@ class RegionCapture:
         for other in native.above(self.hwnd):
             if native.visible(other) and not native.minimized(other):
                 x1, y1, x2, y2 = native.bounds(other)
-                if left < x2 and right > x1 and top < y2 and bottom > y1:
+                if x2 > x1 and y2 > y1 and left < x2 and right > x1 and top < y2 and bottom > y1:
                     raise RuntimeError("A native window above the owned client occludes the region")
         for y in range(top, bottom):
             for x in range(left, right):

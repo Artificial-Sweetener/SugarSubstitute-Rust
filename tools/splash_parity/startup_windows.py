@@ -59,17 +59,30 @@ class ReferenceProcesses:
         if not self.kernel.CloseHandle(handle):
             raise ctypes.WinError(ctypes.get_last_error())
 
-    def identity(self, handle: int) -> tuple[int, Path, int]:
-        """Read executable path and creation time from the exact retained process object."""
+    def lifetime_identity(self, handle: int) -> tuple[int, int]:
+        """Read PID and creation100ns from a caller-retained process object, including after exit."""
+        if type(handle) is not int or not 0 < handle < ctypes.c_void_p(-1).value:
+            raise ValueError("Process identity requires a retained positive native handle")
         pid = self.kernel.GetProcessId(handle)
-        path = ctypes.create_unicode_buffer(32768)
-        capacity = wintypes.DWORD(len(path))
-        if not pid or not self.kernel.QueryFullProcessImageNameW(handle, 0, path, ctypes.byref(capacity)):
+        if not pid:
             raise ctypes.WinError(ctypes.get_last_error())
+        if type(pid) is not int or not 0 < pid <= 0xFFFFFFFF:
+            raise RuntimeError("Retained process PID has invalid native metadata")
         timestamps = [wintypes.FILETIME() for _ in range(4)]
         if not self.kernel.GetProcessTimes(handle, *(ctypes.byref(value) for value in timestamps)):
             raise ctypes.WinError(ctypes.get_last_error())
         creation = (timestamps[0].dwHighDateTime << 32) | timestamps[0].dwLowDateTime
+        if creation == 0:
+            raise RuntimeError("Retained process creation time is not positive")
+        return pid, creation
+
+    def identity(self, handle: int) -> tuple[int, Path, int]:
+        """Read the live executable path together with the exact retained lifetime identity."""
+        pid, creation = self.lifetime_identity(handle)
+        path = ctypes.create_unicode_buffer(32768)
+        capacity = wintypes.DWORD(len(path))
+        if not self.kernel.QueryFullProcessImageNameW(handle, 0, path, ctypes.byref(capacity)):
+            raise ctypes.WinError(ctypes.get_last_error())
         return pid, Path(path.value).resolve(strict=True), creation
 
     def children(self, parent: int) -> list[tuple[int, str]]:

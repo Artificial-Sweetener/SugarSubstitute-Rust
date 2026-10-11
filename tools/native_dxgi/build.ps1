@@ -66,16 +66,21 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Color fixture compile/link failed' }
     & $compiler @common (Join-Path $sourceRoot 'descriptor_probe.cpp') (Join-Path $sourceRoot 'descriptor_update.cpp') (Join-Path $sourceRoot 'desktop_identity.cpp') (Join-Path $sourceRoot 'format_acquisition.cpp') "/Fe$buildRoot\descriptor_probe.exe" /link /INCREMENTAL:NO /DEBUG "/PDB:$buildRoot\descriptor_probe.pdb" d3d11.lib dxgi.lib user32.lib gdi32.lib dwmapi.lib
     if ($LASTEXITCODE -ne 0) { throw 'Noncapture descriptor probe compile/link failed' }
+    & $compiler @common (Join-Path $sourceRoot 'descriptor_readiness_tests.cpp') (Join-Path $sourceRoot 'descriptor_update.cpp') (Join-Path $sourceRoot 'desktop_identity.cpp') (Join-Path $sourceRoot 'format_acquisition.cpp') "/Fe$buildRoot\descriptor_readiness_tests.exe" /link /INCREMENTAL:NO /DEBUG "/PDB:$buildRoot\descriptor_readiness_tests.pdb" d3d11.lib dxgi.lib user32.lib gdi32.lib dwmapi.lib
+    if ($LASTEXITCODE -ne 0) { throw 'Descriptor readiness tests compile/link failed' }
     if ($RunTests) {
         & (Join-Path $buildRoot 'observer_tests.exe') 2>&1 | Tee-Object -FilePath (Join-Path $buildRoot 'owner-tests.log')
         if ($LASTEXITCODE -ne 0) { throw 'DXGI owner tests failed' }
+        & (Join-Path $buildRoot 'descriptor_readiness_tests.exe') 2>&1 | Tee-Object -FilePath (Join-Path $buildRoot 'readiness-tests.log')
+        if ($LASTEXITCODE -ne 0) { throw 'Descriptor readiness tests failed' }
     }
 } catch { $buildFailure = $_ } finally { Stop-Transcript | Out-Null; Pop-Location }
 $sourceAfter = Get-NativeSourceHashes
 $sourcesStable = ($sourceBefore | ConvertTo-Json -Compress) -ceq ($sourceAfter | ConvertTo-Json -Compress)
 $artifacts = [ordered]@{}
 foreach ($name in @('native_dxgi.dll', 'native_dxgi.pdb', 'color_fixture.exe', 'color_fixture.pdb',
-        'descriptor_probe.exe', 'descriptor_probe.pdb', 'observer_tests.exe', 'observer_tests.pdb')) {
+        'descriptor_probe.exe', 'descriptor_probe.pdb', 'observer_tests.exe', 'observer_tests.pdb',
+        'descriptor_readiness_tests.exe', 'descriptor_readiness_tests.pdb')) {
     $path = Join-Path $buildRoot $name
     if (Test-Path -LiteralPath $path) {
         $artifacts[$name] = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
