@@ -56,7 +56,7 @@ The maintainer selected a busy-system timing margin for Windows development qual
 | --- | --- | --- | --- | --- |
 | 1 | S0 | Complete on the Windows development setup: controls, raster parity, clipping and bounded source audit | Windows 11 at 96 DPI accepted: 429 frames, five startup runs, native controls/drag/load/idle matrix pass; other platforms and mixed DPI pending | Proceed to M0; retain separately pending native platform/DPI qualification. |
 | 2 | M0 | Complete development foundation: execution, acknowledged startup/retry policy, configuration/readiness, governed raster preparation, immutable publication and nonblocking native delivery implemented | Windows development foundation accepted with the explicit busy timing profile: release-14 complete normal/load campaigns and five startup runs pass; strict input failures remain recorded. Canonical owner checks pass 306 Rust and 353 Python tests. Final-artifact and other-platform qualification remain pending. | Proceed to M1. Production startup composition and exact K1 native qualification remain later obligations. |
-| 3 | M1 | Not started | Pending | Implement supervision, scoped identities/leases, authenticated lifecycle and containment after M0. |
+| 3 | M1 | In progress: scoped resource/lease and desktop-exit authority slice; native execution/containment boundaries being prepared | Pending: pure policy implementation and real supervised-process fixtures remain unaccepted | Freeze implemented authority contracts, then integrate native ownership, authenticated lifecycle and containment. |
 | 4 | L1–L5 | Not started: reusable presentation/proof components are B4–B8 | Pending | Build main host, production splash, Comfy adapter, qualification and native crash capture in parallel after M0/M1 ports are accepted. |
 | 5 | K1 | Not started | Pending | Integrate and hand off the first actual Comfy/SugarCubes host after L1–L5 components are ready. |
 | 6 | C0 | Not started | Pending | Implement desktop wire/provenance/layout contracts from the working K1 host. |
@@ -337,7 +337,11 @@ Use an actual UI-event-loop challenge for suspected hangs: at most one pending c
 
 ### 3.5 M1.5 — Parallel foundation work and acceptance
 
-**Implementation:** Not started. **Verification:** Pending.
+**Implementation:** In progress for the first application authority slice. **Verification:** Pending.
+
+**Windows M1 entry:** Commit `a5ce575` delivers the explicit busy timing profile and the scoped M0 development acceptance above. Exact canonical `cargo xtask verify` passes 306 Rust tests, governance, formatting, strict Clippy and warning-free Rustdoc; the canonical qualification suite passes 353 Python tests. `m0/timing-canonical-acceptance-01.json`, SHA-256 `1adc1afc0da1e7e4738871dd10cfce8e6fe1030ed67505850dce8121c44c066f`, freezes those source, gate and offline evidence identities. The first M1 authority checkout is `E:\devprojects\SugarSubstitute-Rust-m1-authority` at that baseline. New lifecycle contracts and concrete application resource/exit owners preserve `StartupSession` as the acknowledged startup owner. Native handles remain with the future adapter registry through cancelled or discarded execution results; request/kill completion is not family settlement. Independent review checks that lost connections cannot prematurely release browser profile claims while descendants remain.
+
+Native wait preparation found two supported scheduling entry points missing from the execution checker: `RegisterWaitForSingleObject` and `SetThreadpoolWaitEx`. Both now reject outside the sole execution owner, including aliases, macro tokens, linked symbols and test/platform sources; owner reexports also reject. The focused `cargo test --locked -p sugarsubstitute-xtask execution_` selects 16 passing tests. This is source-governance coverage, not an implemented process wait or native containment receipt.
 
 - [ ] Integrate the parallel supervision components and run real multi-instance/owner-loss/failure fixtures.
 

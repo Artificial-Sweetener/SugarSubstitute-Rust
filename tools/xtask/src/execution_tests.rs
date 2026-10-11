@@ -65,6 +65,36 @@ fn scheduling_capabilities_include_async_pools_and_native_ffi() -> Result<()> {
     Ok(())
 }
 
+/// Confine Windows wait callbacks and their aliases to the registered execution owner.
+#[test]
+fn native_wait_registration_cannot_escape_execution_ownership() -> Result<()> {
+    let fixture = Repository::new()?;
+    let policy = Policy { schema_version: 1, owner: None };
+    for source in [
+        "fn wait() { unsafe { windows::Win32::System::Threading::RegisterWaitForSingleObject(); } }",
+        "use windows::Win32::System::Threading::RegisterWaitForSingleObject as register; fn wait() { unsafe { register(); } }",
+        "unsafe extern \"system\" { #[link_name = \"RegisterWaitForSingleObject\"] fn register(); } fn wait() { unsafe { register(); } }",
+        "macro_rules! wait { () => { unsafe { RegisterWaitForSingleObject(); } }; }",
+        "fn wait() { unsafe { windows::Win32::System::Threading::SetThreadpoolWaitEx(); } }",
+        "use windows::Win32::System::Threading::SetThreadpoolWaitEx as arm; fn wait() { unsafe { arm(); } }",
+        "unsafe extern \"system\" { #[link_name = \"SetThreadpoolWaitEx\"] fn arm(); }",
+        "#[cfg(test)] mod tests { fn wait() { unsafe { r#RegisterWaitForSingleObject(); } } }",
+    ] {
+        assert!(!findings(source)?.is_empty(), "accepted {source}");
+        write(fixture.root(), "crates/host/src/waits.rs", source)?;
+        let error = check(fixture.root(), &policy, &fixture.architecture, &fixture.workspace)
+            .err()
+            .map(|error| error.to_string())
+            .unwrap_or_default();
+        assert!(error.contains("outside the execution owner"), "unexpected result: {error}");
+    }
+    assert!(
+        findings("const NOTE: &str = \"RegisterWaitForSingleObject SetThreadpoolWaitEx\";")?
+            .is_empty()
+    );
+    Ok(())
+}
+
 /// Preserve language-level async, subprocess ownership, synchronization and inert prose.
 #[test]
 fn ordinary_logic_and_process_creation_are_not_thread_scheduling() -> Result<()> {

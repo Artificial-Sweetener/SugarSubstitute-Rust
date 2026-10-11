@@ -215,6 +215,8 @@ pub(crate) fn restricted_path(path: &[String]) -> bool {
                     | "StartThreadpoolIo"
                     | "SetThreadpoolTimer"
                     | "SetThreadpoolWait"
+                    | "SetThreadpoolWaitEx"
+                    | "RegisterWaitForSingleObject"
                     | "SubmitThreadpoolWork"
                     | "TrySubmitThreadpoolCallback"
                     | "pthread_create"
