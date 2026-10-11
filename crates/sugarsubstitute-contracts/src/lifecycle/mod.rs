@@ -6,6 +6,7 @@ mod desktop_exit;
 mod error;
 mod identity;
 mod resource;
+mod watchdog;
 pub use desktop_exit::{CompletionIntent, DesktopExitKind, DesktopObservation, ShutdownBudget};
 pub use error::{LifecycleFailure, LifecycleFailureCode, LifecycleRejection, RejectedObservation};
 pub use identity::{
@@ -16,4 +17,8 @@ pub use identity::{
 pub use resource::{
     BackendTarget, ClientBinding, ClientRegistration, RequestOutcome, ResourceCommand,
     ResourceEffect, ResourceObservation, ResourceReply, ResourceRequest, ResourceTransition,
+};
+pub use watchdog::{
+    UI_CHALLENGE_CADENCE, UI_SUSPICION_THRESHOLD, UiChallengeId, UiChallengeKey,
+    UiWatchdogActivity, UiWatchdogEffect, UiWatchdogObservation,
 };

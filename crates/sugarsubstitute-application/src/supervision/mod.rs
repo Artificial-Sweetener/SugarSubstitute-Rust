@@ -7,9 +7,11 @@ mod resource_observations;
 mod resource_requests;
 mod resource_state;
 mod resources;
+mod watchdog;
 pub use desktop_exit::{DesktopExitSnapshot, DesktopExitTransaction};
 pub use resource_state::{
     MAX_LEASES, MAX_REQUESTS, MAX_RESOURCES, MAX_RUN_REQUESTS, MAX_RUNS, REQUEST_HISTORY,
     ResourcePhase,
 };
 pub use resources::{CoordinatorSnapshot, ResourceCoordinator};
+pub use watchdog::{UiChallengePhase, UiWatchdog, UiWatchdogSnapshot};

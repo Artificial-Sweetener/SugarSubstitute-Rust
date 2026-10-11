@@ -5,13 +5,13 @@ platforms = ["windows", "macos", "linux"]
 package = "sugarsubstitute-contracts"
 root = "crates/sugarsubstitute-contracts"
 concern = "Owned contracts, localization, memory claims, immutable frames and scoped lifecycle facts"
-minimum_tests = 41
+minimum_tests = 43
 
 [[owners]]
 package = "sugarsubstitute-application"
 root = "crates/sugarsubstitute-application"
-concern = "Acknowledged startup, settled retry, frame publication, backend leases and desktop exit policy"
-minimum_tests = 33
+concern = "Acknowledged startup, settled retry, frame publication, backend leases, desktop exit and UI challenge policy"
+minimum_tests = 45
 
 [[owners]]
 package = "sugarsubstitute-comfy"
