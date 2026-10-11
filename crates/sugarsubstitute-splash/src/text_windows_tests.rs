@@ -3,9 +3,62 @@
 
 //! Exercise actual Windows font ownership, bounds and stable native raster output.
 
-use super::StatusText;
+use super::{LabelSurface, StatusText};
 use crate::{LOCALES, Theme};
 use tiny_skia::Pixmap;
+
+/// Clip every label over prepainted pixels without changing interior native glyph coverage.
+#[test]
+fn all_labels_preserve_pixels_outside_status_widget() -> Result<(), Box<dyn std::error::Error>> {
+    for locale in LOCALES {
+        let mut text = StatusText::new(locale.id)?;
+        for scale in [1.0_f32, 1.25, 1.5, 1.75, 2.0] {
+            let size = (558.0 * scale).round() as u32;
+            let bounds = [
+                (24.0 * scale).round() as u32,
+                (486.0 * scale).round() as u32,
+                (534.0 * scale).round() as u32,
+                (530.0 * scale).round() as u32,
+            ];
+            for theme in [Theme::Dark, Theme::Light] {
+                let mut target = Pixmap::new(size, size).ok_or("Cannot allocate clip test")?;
+                target.fill(tiny_skia::Color::from_rgba8(44, 77, 99, 180));
+                let before = target.data().to_vec();
+                let mut unclipped = target.clone();
+                let runs = text.shape(locale.loading)?;
+                let baseline =
+                    runs.iter().map(|run| run.baseline.1).reduce(f32::max).ok_or("No glyphs")?;
+                let mut surface = LabelSurface {
+                    pixels: &mut unclipped,
+                    bounds: [0, 0, size as i32, size as i32],
+                };
+                for run in &runs {
+                    text.paint_run(&mut surface, run, theme, scale, 518.0 - baseline)?;
+                }
+                text.paint(&mut target, locale.loading, theme, scale)?;
+                let mut visible = false;
+                for (index, ((actual, original), expected)) in target
+                    .data()
+                    .chunks_exact(4)
+                    .zip(before.chunks_exact(4))
+                    .zip(unclipped.data().chunks_exact(4))
+                    .enumerate()
+                {
+                    let x = index as u32 % size;
+                    let y = index as u32 / size;
+                    if x < bounds[0] || y < bounds[1] || x >= bounds[2] || y >= bounds[3] {
+                        assert_eq!(actual, original, "{} scale {scale} at ({x},{y})", locale.id);
+                    } else {
+                        assert_eq!(actual, expected, "{} scale {scale} at ({x},{y})", locale.id);
+                        visible |= actual != original;
+                    }
+                }
+                assert!(visible, "{} scale {scale} has no interior glyph coverage", locale.id);
+            }
+        }
+    }
+    Ok(())
+}
 
 /// Every release-enabled label uses actual native font discovery and produces coverage.
 #[test]

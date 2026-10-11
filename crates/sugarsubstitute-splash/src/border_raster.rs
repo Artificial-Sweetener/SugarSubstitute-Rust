@@ -4,7 +4,7 @@
 //! Rasterize the console CSS border's independently painted, square-capped cubic arcs.
 
 use crate::shapes::{AllocationError, append_cubic, byte_product, paint_outline};
-use tiny_skia::{PathBuilder, Pixmap};
+use tiny_skia::{PathBuilder, Pixmap, Rect};
 
 /// Paint one logical cubic using the reference cosmetic pen at one device pixel.
 ///
@@ -14,9 +14,10 @@ pub(super) fn paint(
     points: [[f64; 2]; 4],
     color: [u8; 4],
     scale: f32,
+    clip: Rect,
 ) -> Result<(), AllocationError> {
     if scale == 1.0 {
-        cosmetic(target, points, color, 6, true, true);
+        cosmetic(target, points, color, 6, (true, true), clip);
         return Ok(());
     }
     let normals =
@@ -43,7 +44,7 @@ pub(super) fn paint(
     }
     path.close();
     if let Some(path) = path.finish() {
-        paint_outline(target, &path, color)?;
+        paint_outline(target, &path, color, clip)?;
     }
     Ok(())
 }
@@ -80,8 +81,8 @@ fn cosmetic(
     points: [[f64; 2]; 4],
     color: [u8; 4],
     depth: u8,
-    start_cap: bool,
-    end_cap: bool,
+    caps: (bool, bool),
+    clip: Rect,
 ) {
     let [a, b, c, d] = points;
     let chord = [a[0] - d[0], a[1] - d[1]];
@@ -89,7 +90,7 @@ fn cosmetic(
     let cross =
         |point: [f64; 2]| (chord[0] * (d[1] - point[1]) - chord[1] * (d[0] - point[0])).abs();
     if depth == 0 || (cross(b) < tolerance && cross(c) < tolerance) {
-        line(target, a, d, color, start_cap, end_cap);
+        line(target, a, d, color, caps, clip);
         return;
     }
     let middle = |a: [f64; 2], b: [f64; 2]| [(a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5];
@@ -99,8 +100,8 @@ fn cosmetic(
     let abc = middle(ab, bc);
     let bcd = middle(bc, cd);
     let split = middle(abc, bcd);
-    cosmetic(target, [a, ab, abc, split], color, depth - 1, start_cap, false);
-    cosmetic(target, [split, bcd, cd, d], color, depth - 1, false, end_cap);
+    cosmetic(target, [a, ab, abc, split], color, depth - 1, (caps.0, false), clip);
+    cosmetic(target, [split, bcd, cd, d], color, depth - 1, (false, caps.1), clip);
 }
 
 /// Integrate one antialiased line on a 26.6 position and 16.16 slope grid.
@@ -109,9 +110,10 @@ fn line(
     a: [f64; 2],
     b: [f64; 2],
     color: [u8; 4],
-    mut start_cap: bool,
-    mut end_cap: bool,
+    caps: (bool, bool),
+    clip: Rect,
 ) {
+    let (mut start_cap, mut end_cap) = caps;
     let mut a = a.map(|value| (value * 64.0) as i64);
     let mut b = b.map(|value| (value * 64.0) as i64);
     let vertical = (b[0] - a[0]).abs() < (b[1] - a[1]).abs();
@@ -153,7 +155,13 @@ fn line(
             [(transverse >> 16, 255 - fraction), ((transverse >> 16) + 1, fraction)]
         {
             let (x, y) = if vertical { (minor, major) } else { (major, minor) };
-            pixel(target, x, y, color, ((weight * extent) >> 6) as u8);
+            if x >= clip.left() as i64
+                && x < clip.right() as i64
+                && y >= clip.top() as i64
+                && y < clip.bottom() as i64
+            {
+                pixel(target, x, y, color, ((weight * extent) >> 6) as u8);
+            }
         }
         transverse += slope;
     }

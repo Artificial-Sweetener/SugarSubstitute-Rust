@@ -6,6 +6,7 @@ mod cadence;
 mod contract;
 #[cfg(target_os = "windows")]
 mod control_geometry;
+mod frame_audit;
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "macos")]
@@ -29,6 +30,6 @@ mod windows_subclass;
 
 pub use contract::{
     AccessibleControl, ControlBounds, DesktopError, DesktopOptions, DesktopReceipt, Frame,
-    HitTarget, KeyAction, NativeMaterial, Pointer, PointerAction, WindowContent,
+    FrameAuditReceipt, HitTarget, KeyAction, NativeMaterial, Pointer, PointerAction, WindowContent,
 };
 pub use runtime::run;

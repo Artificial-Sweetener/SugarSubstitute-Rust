@@ -24,6 +24,7 @@ struct Options {
     reduced_motion: bool,
     duration: Option<Duration>,
     receipt: Option<PathBuf>,
+    frame_audit: Option<PathBuf>,
     scenarios: Option<PathBuf>,
     output: Option<PathBuf>,
 }
@@ -37,6 +38,7 @@ impl Options {
             reduced_motion: false,
             duration: None,
             receipt: None,
+            frame_audit: None,
             scenarios: None,
             output: None,
         };
@@ -63,6 +65,10 @@ impl Options {
                     options.receipt =
                         Some(arguments.next().ok_or("--receipt requires a path")?.into())
                 }
+                "--frame-audit" => {
+                    options.frame_audit =
+                        Some(arguments.next().ok_or("--frame-audit requires a path")?.into())
+                }
                 "--scenarios" => {
                     options.scenarios =
                         Some(arguments.next().ok_or("--scenarios requires a path")?.into())
@@ -76,6 +82,11 @@ impl Options {
         }
         if options.scenarios.is_some() != options.output.is_some() {
             return Err("--scenarios and --output must be supplied together".into());
+        }
+        if options.frame_audit.is_some()
+            && (options.receipt.is_none() || options.scenarios.is_some())
+        {
+            return Err("--frame-audit requires --receipt in native qualification mode".into());
         }
         Ok(options)
     }
@@ -106,10 +117,29 @@ fn execute() -> Result<(), Box<dyn Error>> {
             logical_height: 558,
             dark: options.appearance.theme == Theme::Dark,
             duration: options.duration,
+            audit_frames: options.frame_audit.is_some(),
         },
         content,
     )?;
     tracing::info!(operation="splash_demo", first_frame_ms=(before_native+receipt.first_frame).as_secs_f64()*1000.0, frames=receipt.frames_presented, material=?receipt.material, "Native splash proof finished");
+    let frame_audit = match (options.frame_audit, receipt.frame_audit) {
+        (Some(path), Some(audit)) => {
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::write(&path, &audit.first_frame.premultiplied_rgba)?;
+            serde_json::json!({
+                "width": audit.first_frame.width,
+                "height": audit.first_frame.height,
+                "presented_frames": audit.presented_frames,
+                "content_changes": audit.content_changes,
+                "byte_count": audit.first_frame.premultiplied_rgba.len(),
+                "source_path": path,
+            })
+        }
+        (None, None) => serde_json::Value::Null,
+        _ => return Err("Native frame audit did not match the requested qualification".into()),
+    };
     if let Some(path) = options.receipt {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
@@ -122,6 +152,7 @@ fn execute() -> Result<(), Box<dyn Error>> {
             "mean_frame_work_ms":receipt.total_frame_work.as_secs_f64()*1000.0 / receipt.frames_presented.max(1) as f64,
             "mean_frame_interval_ms":receipt.total_frame_intervals.as_secs_f64()*1000.0 / receipt.frames_presented.saturating_sub(1).max(1) as f64,
             "longest_frame_interval_ms":receipt.longest_frame_interval.as_secs_f64()*1000.0,
+            "frame_audit": frame_audit,
             "elapsed_ms":started.elapsed().as_secs_f64()*1000.0
         });
         std::fs::write(path, serde_json::to_vec_pretty(&data)?)?;

@@ -86,8 +86,19 @@ impl StatusText {
         }
         let runs = self.shape(message)?;
         let last_baseline = runs.iter().map(|run| run.baseline.1).reduce(f32::max).unwrap_or(15.0);
+        // QWidget clips its QLabel paint to the widget, including the eight-pixel
+        // bottom contents margin: QRect(24, 486, 510, 44) in logical pixels.
+        let mut surface = LabelSurface {
+            pixels: target,
+            bounds: [
+                (24.0 * scale).round() as i32,
+                (486.0 * scale).round() as i32,
+                (534.0 * scale).round() as i32,
+                (530.0 * scale).round() as i32,
+            ],
+        };
         for run in &runs {
-            self.paint_run(target, run, theme, scale, 518.0 - last_baseline)?;
+            self.paint_run(&mut surface, run, theme, scale, 518.0 - last_baseline)?;
         }
         Ok(())
     }
@@ -126,7 +137,7 @@ impl StatusText {
     /// Its default full hinting floors each glyph's device X and rounds baseline Y.
     fn paint_run(
         &self,
-        target: &mut Pixmap,
+        target: &mut LabelSurface<'_>,
         run: &GlyphRun,
         theme: Theme,
         scale: f32,
@@ -168,7 +179,7 @@ impl StatusText {
     /// Keep default full-hinting glyph coverage on the native device pixel grid.
     fn paint_glyph(
         &self,
-        target: &mut Pixmap,
+        target: &mut LabelSurface<'_>,
         mut raw: DWRITE_GLYPH_RUN,
         theme: Theme,
         x: f32,
@@ -238,25 +249,42 @@ impl StatusText {
                     + u32::from(channels[1]) * 6
                     + u32::from(channels[2]) * 5)
                     / 16;
-                composite(target, bounds.left + x, bounds.top + y, gray as u8, theme);
+                target.composite(bounds.left + x, bounds.top + y, gray as u8, theme);
             }
         }
         Ok(())
     }
 }
 
-/// Composite one coverage sample while preserving target premultiplication.
-fn composite(target: &mut Pixmap, x: i32, y: i32, alpha: u8, theme: Theme) {
-    if x < 0 || y < 0 || x >= target.width() as i32 || y >= target.height() as i32 || alpha == 0 {
-        return;
+/// Borrow the destination with the QLabel's half-open device-pixel clip rectangle.
+struct LabelSurface<'a> {
+    pixels: &'a mut Pixmap,
+    bounds: [i32; 4],
+}
+
+impl LabelSurface<'_> {
+    /// Clip font overhang before compositing while preserving premultiplication.
+    fn composite(&mut self, x: i32, y: i32, alpha: u8, theme: Theme) {
+        if x < self.bounds[0]
+            || y < self.bounds[1]
+            || x >= self.bounds[2]
+            || y >= self.bounds[3]
+            || x < 0
+            || y < 0
+            || x >= self.pixels.width() as i32
+            || y >= self.pixels.height() as i32
+            || alpha == 0
+        {
+            return;
+        }
+        let offset = (y as usize * self.pixels.width() as usize + x as usize) * 4;
+        let pixel = &mut self.pixels.data_mut()[offset..offset + 4];
+        let source = if theme == Theme::Dark { alpha } else { 0 };
+        for channel in pixel.iter_mut().take(3) {
+            *channel = source.saturating_add(multiply(*channel, 255 - alpha));
+        }
+        pixel[3] = alpha.saturating_add(multiply(pixel[3], 255 - alpha));
     }
-    let offset = (y as usize * target.width() as usize + x as usize) * 4;
-    let pixel = &mut target.data_mut()[offset..offset + 4];
-    let source = if theme == Theme::Dark { alpha } else { 0 };
-    for channel in pixel.iter_mut().take(3) {
-        *channel = source.saturating_add(multiply(*channel, 255 - alpha));
-    }
-    pixel[3] = alpha.saturating_add(multiply(pixel[3], 255 - alpha));
 }
 
 /// Divide the byte product with nearest integer coverage rounding.

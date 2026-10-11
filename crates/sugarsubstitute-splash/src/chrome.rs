@@ -21,6 +21,13 @@ pub(crate) fn console(
     theme: Theme,
     scale: f32,
 ) -> Result<(), AllocationError> {
+    let clip = Rect::from_ltrb(
+        (24.0 * scale).round(),
+        (356.0 * scale).round(),
+        (534.0 * scale).round(),
+        (534.0 * scale).round(),
+    )
+    .ok_or(AllocationError::InvalidDimensions)?;
     if let Some(path) = rounded(24.5, 356.5, 509.0, 177.0, 5.5, scale) {
         let fill = match theme {
             Theme::Dark => [8, 10, 12, 247],
@@ -59,7 +66,7 @@ pub(crate) fn console(
             paint_silhouette(target, &PathBuilder::from_rect(rect), color, None)?;
         }
         for (center, quadrant, second, reverse) in corners {
-            border_arc(target, center, quadrant, second, reverse, color, scale)?;
+            border_arc(target, center, (quadrant, second, reverse), color, scale, clip)?;
         }
     }
     Ok(())
@@ -69,12 +76,12 @@ pub(crate) fn console(
 fn border_arc(
     target: &mut Pixmap,
     center: (f64, f64),
-    quadrant: u8,
-    second: bool,
-    reverse: bool,
+    arc: (u8, bool, bool),
     color: [u8; 4],
     scale: f32,
+    clip: Rect,
 ) -> Result<(), AllocationError> {
+    let (quadrant, second, reverse) = arc;
     let radius = 5.5;
     let curve = radius * 0.552_284_749_8;
     let midpoint = |a: [f64; 2], b: [f64; 2]| [(a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5];
@@ -98,7 +105,7 @@ fn border_arc(
         }
         [point[0] + center.0, point[1] + center.1]
     });
-    border_raster::paint(target, points, color, scale)
+    border_raster::paint(target, points, color, scale, clip)
 }
 /// Paint disclosure and close backgrounds inside their original logical hit rectangles.
 pub(crate) fn controls(target: &mut Pixmap, appearance: Appearance, scale: f32) {
@@ -141,6 +148,40 @@ mod tests {
     use super::{console, controls};
     use crate::{Appearance, Control, Theme};
     use tiny_skia::Pixmap;
+
+    /// Retain the QWidget's rectangular paint clip even when a cosmetic cap extends outward.
+    #[test]
+    fn console_border_preserves_pixels_outside_its_widget() -> Result<(), Box<dyn std::error::Error>>
+    {
+        for scale in [1.0_f32, 1.25, 1.5, 1.75, 2.0] {
+            let (left, top, right, bottom) = (
+                (24.0 * scale).round() as u32,
+                (356.0 * scale).round() as u32,
+                (534.0 * scale).round() as u32,
+                (534.0 * scale).round() as u32,
+            );
+            for theme in [Theme::Dark, Theme::Light] {
+                let mut target =
+                    Pixmap::new(1116, 1116).ok_or("Cannot allocate widget-clip raster")?;
+                target.fill(tiny_skia::Color::from_rgba8(34, 51, 68, 255));
+                console(&mut target, theme, scale)?;
+                assert_ne!(target.pixel(left + 12, top + 12).map(|pixel| pixel.red()), Some(34));
+                for y in 0..target.height() {
+                    for x in 0..target.width() {
+                        if x < left || x >= right || y < top || y >= bottom {
+                            let pixel = target.pixel(x, y).ok_or("Missing widget-clip pixel")?;
+                            assert_eq!(
+                                [pixel.red(), pixel.green(), pixel.blue(), pixel.alpha()],
+                                [34, 51, 68, 255],
+                                "{theme:?} at {scale}: ({x}, {y})"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
 
     /// Keep checked caption fill inside its observed fractional-DPI child widget clip.
     #[test]

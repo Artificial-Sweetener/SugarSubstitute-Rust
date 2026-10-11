@@ -3,6 +3,7 @@
 //! Compose one native event loop, borrowed surface presenter, and replaceable content.
 
 use crate::cadence::{advance_deadline, presentation_wait};
+use crate::frame_audit::FrameAudit;
 #[cfg(target_os = "linux")]
 use crate::linux::Presenter;
 #[cfg(target_os = "macos")]
@@ -104,6 +105,7 @@ pub fn run(
     let mut pressed = None;
     let mut failure = None;
     let mut next_frame = started;
+    let mut frame_audit = options.audit_frames.then(FrameAudit::default);
     window.set_visible(true);
     window.set_focus();
     let mut redraw_pending = false;
@@ -145,6 +147,12 @@ pub fn run(
                                 invalidate(&window, &mut redraw_pending);
                             }
                             if target == HitTarget::Caption {
+                                tracing::info!(
+                                    operation = "native_caption_press",
+                                    target = ?target,
+                                    elapsed_ms = started.elapsed().as_secs_f64() * 1000.0,
+                                    "Classified caption pointer press"
+                                );
                                 #[cfg(target_os = "windows")]
                                 let drag = crate::windows_drag::begin(&window);
                                 #[cfg(not(target_os = "windows"))]
@@ -231,8 +239,12 @@ pub fn run(
                                 controls.update(content.accessible_controls())?;
                                 controls.draw_focus()?;
                             }
-                            Ok(())
+                            Ok(frame)
                         });
+                    let result = match &mut frame_audit {
+                        Some(audit) => audit.record(result),
+                        None => result.map(|_| ()),
+                    };
                     match result {
                         Ok(()) => {
                             let submitted = Instant::now();
@@ -303,6 +315,7 @@ pub fn run(
         total_frame_work,
         total_frame_intervals,
         longest_frame_interval,
+        frame_audit: frame_audit.and_then(FrameAudit::finish),
     })
 }
 

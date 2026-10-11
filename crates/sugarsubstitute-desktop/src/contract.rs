@@ -16,6 +16,9 @@ pub struct DesktopOptions {
     pub dark: bool,
     /// Automatically close qualification runs after this duration.
     pub duration: Option<Duration>,
+    /// Retain an in-memory whole-frame audit for explicit native qualification.
+    /// Callers normally disable this; recording allocates no background work or files.
+    pub audit_frames: bool,
 }
 
 /// Report measured presentation work without making launch-speed assumptions.
@@ -33,6 +36,23 @@ pub struct DesktopReceipt {
     pub total_frame_intervals: Duration,
     /// Longest measured submission interval; zero when fewer than two frames were presented.
     pub longest_frame_interval: Duration,
+    /// Optional full-source audit collected after successful native presentations.
+    /// Pixel ownership transfers to the caller after native window teardown.
+    pub frame_audit: Option<FrameAuditReceipt>,
+}
+
+/// Report every whole-frame source transition in an explicitly audited native run.
+///
+/// Comparison includes device dimensions and every premultiplied RGBA byte.
+/// Native focus overlays and compositor effects are outside this source audit.
+#[derive(Debug)]
+pub struct FrameAuditReceipt {
+    /// First successfully presented source frame, retained with its original allocation.
+    pub first_frame: Frame,
+    /// Total valid frames whose native presentation and control painting succeeded.
+    pub presented_frames: u64,
+    /// Transitions from the preceding presented source, including change then restoration.
+    pub content_changes: u64,
 }
 
 /// Describe the actual native background selected by the platform adapter.
@@ -45,6 +65,7 @@ pub enum NativeMaterial {
 }
 
 /// Carry an owned CPU-rasterized image in premultiplied RGBA byte order.
+#[derive(Debug)]
 pub struct Frame {
     /// Width in device pixels.
     pub width: u32,

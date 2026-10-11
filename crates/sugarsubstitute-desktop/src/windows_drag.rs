@@ -13,7 +13,7 @@ use tao::{platform::windows::WindowExtWindows, window::Window};
 use windows::Win32::{
     Foundation::{HWND, LPARAM, WPARAM},
     UI::{
-        Input::KeyboardAndMouse::{GetCapture, ReleaseCapture},
+        Input::KeyboardAndMouse::{GetAsyncKeyState, GetCapture, ReleaseCapture, VK_LBUTTON},
         WindowsAndMessaging::{HTCAPTION, PostMessageW, SC_MOVE, WM_SYSCOMMAND},
     },
 };
@@ -25,8 +25,17 @@ use windows::Win32::{
 /// Errors preserve capture and queue causes; another window's capture is retained.
 pub(crate) fn begin(window: &Window) -> Result<(), DesktopError> {
     let hwnd = HWND(window.hwnd() as *mut c_void);
+    // SAFETY: This native query reads the current physical button state without changing capture.
+    let left_button_down = unsafe { GetAsyncKeyState(i32::from(VK_LBUTTON.0)) } < 0;
     // SAFETY: Runtime owns this HWND on its creating UI thread until native loop teardown.
-    unsafe { queue_system_move(hwnd) }
+    let result = unsafe { queue_system_move(hwnd) };
+    tracing::info!(
+        operation = "native_caption_drag_queued",
+        left_button_down,
+        queued = result.is_ok(),
+        "Observed native caption move queue result"
+    );
+    result
 }
 
 /// Release only this window's capture and queue its native pointer-move command.

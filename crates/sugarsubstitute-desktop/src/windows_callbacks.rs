@@ -15,8 +15,9 @@ use windows::Win32::{
     UI::{
         Shell::DefSubclassProc,
         WindowsAndMessaging::{
-            HTTRANSPARENT, WM_COMMAND, WM_ERASEBKGND, WM_KEYDOWN, WM_KILLFOCUS, WM_NCDESTROY,
-            WM_NCHITTEST, WM_PAINT, WM_SETFOCUS,
+            HTTRANSPARENT, SC_MOVE, WM_COMMAND, WM_ENTERSIZEMOVE, WM_ERASEBKGND, WM_EXITSIZEMOVE,
+            WM_KEYDOWN, WM_KILLFOCUS, WM_NCDESTROY, WM_NCHITTEST, WM_PAINT, WM_SETFOCUS,
+            WM_SYSCOMMAND,
         },
     },
 };
@@ -97,8 +98,26 @@ pub(crate) unsafe extern "system" fn parent_proc(
         callback.send(action);
         return LRESULT(0);
     }
+    if let Some(phase) = move_trace_phase(message, wparam) {
+        tracing::info!(
+            operation = "native_caption_move_observed",
+            phase,
+            "Observed owned parent native movement message"
+        );
+    }
     // SAFETY: Preserve Tao's procedure and every unrelated native subclass.
     unsafe { DefSubclassProc(hwnd, message, wparam, lparam) }
+}
+
+/// Identify native movement diagnostics without retaining data across default-procedure reentry.
+/// The owned surface is nonresizable; move-loop entry/exit refer to that same parent window.
+fn move_trace_phase(message: u32, wparam: WPARAM) -> Option<&'static str> {
+    match message {
+        WM_SYSCOMMAND if (wparam.0 & 0xfff0) == SC_MOVE as usize => Some("command"),
+        WM_ENTERSIZEMOVE => Some("entered"),
+        WM_EXITSIZEMOVE => Some("exited"),
+        _ => None,
+    }
 }
 
 /// Retain OS accessibility/Space activation while the content paints and owns pointer behavior.
@@ -153,4 +172,27 @@ pub(crate) unsafe extern "system" fn child_proc(
     }
     // SAFETY: Preserve WM_GETOBJECT, BM_CLICK and OS-managed focused/pressed button state.
     unsafe { DefSubclassProc(hwnd, message, wparam, lparam) }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use windows::Win32::UI::WindowsAndMessaging::{HTCAPTION, SC_CLOSE, SC_SIZE};
+
+    /// Trace both caption and keyboard move commands while leaving unrelated traffic silent.
+    #[test]
+    fn native_move_trace_filters_commands_without_changing_native_parameters() {
+        assert_eq!(move_trace_phase(WM_SYSCOMMAND, WPARAM(SC_MOVE as usize)), Some("command"));
+        assert_eq!(
+            move_trace_phase(WM_SYSCOMMAND, WPARAM((SC_MOVE | HTCAPTION) as usize)),
+            Some("command")
+        );
+        assert_eq!(move_trace_phase(WM_ENTERSIZEMOVE, WPARAM(0)), Some("entered"));
+        assert_eq!(move_trace_phase(WM_EXITSIZEMOVE, WPARAM(0)), Some("exited"));
+        for command in [SC_CLOSE, SC_SIZE] {
+            assert_eq!(move_trace_phase(WM_SYSCOMMAND, WPARAM(command as usize)), None);
+        }
+        assert_eq!(move_trace_phase(WM_COMMAND, WPARAM(SC_MOVE as usize)), None);
+        assert_eq!(move_trace_phase(WM_PAINT, WPARAM(0)), None);
+    }
 }

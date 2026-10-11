@@ -106,8 +106,6 @@ class NativePointer:
             (native.user.GetSystemMetrics, [ctypes.c_int], ctypes.c_int),
             (native.user.GetAsyncKeyState, [ctypes.c_int], ctypes.c_short),
             (native.user.WindowFromPoint, [wintypes.POINT], wintypes.HWND),
-            (native.user.GetAncestor, [wintypes.HWND, wintypes.UINT], wintypes.HWND),
-            (native.user.GetForegroundWindow, [], wintypes.HWND),
         ):
             function.argtypes, function.restype = arguments, result
 
@@ -268,6 +266,8 @@ class NativeWindows:
                 wintypes.BOOL,
             ),
             (self.user.GetWindow, [wintypes.HWND, wintypes.UINT], wintypes.HWND),
+            (self.user.GetAncestor, [wintypes.HWND, wintypes.UINT], wintypes.HWND),
+            (self.user.GetForegroundWindow, [], wintypes.HWND),
             (self.user.IsIconic, [wintypes.HWND], wintypes.BOOL),
             (self.user.GetDC, [wintypes.HWND], wintypes.HDC),
             (self.user.ReleaseDC, [wintypes.HWND, wintypes.HDC], ctypes.c_int),
@@ -429,29 +429,53 @@ class NativeWindows:
             result[name] = {"hresult": status, "value": value.value}
         return result
 
-    def occluded(self, hwnd: int, pid: int) -> bool:
-        """Conservatively reject any other visible window above the owned client rectangle."""
+    def occluding_windows(self, hwnd: int, pid: int) -> list[dict[str, object]]:
+        """Identify overlapping visible windows above the owned client without reading titles or commands."""
         client = self.client(hwnd, pid)
         origin = wintypes.POINT()
         if not self.user.ClientToScreen(hwnd, ctypes.byref(origin)):
             raise ctypes.WinError(ctypes.get_last_error())
         visited: set[int] = set()
+        occluders = []
         previous = self.user.GetWindow(hwnd, 3)
         while previous and previous not in visited:
             visited.add(previous)
             rect = wintypes.RECT()
-            if (
-                self.user.IsWindowVisible(previous)
-                and not self.user.IsIconic(previous)
-                and self.user.GetWindowRect(previous, ctypes.byref(rect))
-                and rect.left < origin.x + client.width
+            if len(visited) > 4096:
+                raise RuntimeError("Owned occlusion observation exceeded its window inventory bound")
+            if self.user.IsWindowVisible(previous) and not self.user.IsIconic(previous):
+                if not self.user.GetWindowRect(previous, ctypes.byref(rect)):
+                    raise ctypes.WinError(ctypes.get_last_error())
+                if (rect.left < origin.x + client.width
                 and rect.right > origin.x
                 and rect.top < origin.y + client.height
-                and rect.bottom > origin.y
-            ):
-                return True
+                and rect.bottom > origin.y):
+                    identity = wintypes.DWORD()
+                    if not self.user.GetWindowThreadProcessId(previous, ctypes.byref(identity)):
+                        raise ctypes.WinError(ctypes.get_last_error())
+                    occluders.append({"hwnd": previous, "pid": identity.value,
+                                      "screen_bounds": [rect.left, rect.top, rect.right, rect.bottom]})
+                    if len(occluders) >= 16:
+                        break
             previous = self.user.GetWindow(previous, 3)
-        return False
+        return occluders
+
+    def occluded(self, hwnd: int, pid: int) -> bool:
+        """Conservatively reject any other visible window above the owned client rectangle."""
+        return bool(self.occluding_windows(hwnd, pid))
+
+    def exposure_state(self, hwnd: int, pid: int) -> dict[str, object]:
+        """Capture actual foreground and occlusion evidence without changing window activation."""
+        self.client(hwnd, pid)
+        foreground = self.user.GetForegroundWindow()
+        root = self.user.GetAncestor(foreground, 2)
+        identity = wintypes.DWORD()
+        if foreground and not self.user.GetWindowThreadProcessId(foreground, ctypes.byref(identity)):
+            raise ctypes.WinError(ctypes.get_last_error())
+        return {"owned_hwnd": hwnd, "owned_pid": pid, "foreground_hwnd": foreground or 0,
+                "foreground_root_hwnd": root or 0, "foreground_pid": identity.value,
+                "foreground_owned": root == hwnd, "visible": bool(self.user.IsWindowVisible(hwnd)),
+                "minimized": bool(self.user.IsIconic(hwnd)), "occluding_windows": self.occluding_windows(hwnd, pid)}
 
     def capture(self, hwnd: int, pid: int, *, compositor: bool = False) -> Image.Image:
         """Capture the owned client; compositor capture requires a fully unoccluded rectangle."""
@@ -616,9 +640,36 @@ def observe_disclosure(native: NativeWindows, hwnd: int, process: subprocess.Pop
     raise RuntimeError("Accessible caption action did not change the displayed disclosure state")
 
 
+class ExposureFailure(RuntimeError):
+    """Retain the last actual foreground/occlusion observation beside a failed exposure deadline."""
+
+    def __init__(self, state: dict[str, object]) -> None:
+        """Preserve native observer metadata while keeping a concise developer diagnostic."""
+        super().__init__("The owned window did not become foreground and unoccluded within the deadline")
+        self.state = state
+
+
+def observe_exposure(native: NativeWindows, hwnd: int, process: subprocess.Popen[bytes],
+                     deadline: float) -> float:
+    """Wait for asynchronous show/focus to expose the owned client, retaining the original deadline."""
+    state: dict[str, object] = {}
+    while time.perf_counter() < deadline and process.poll() is None:
+        native.client(hwnd, process.pid)
+        foreground = native.user.GetForegroundWindow()
+        if native.user.GetAncestor(foreground, 2) == hwnd and not native.occluded(hwnd, process.pid):
+            observed = time.perf_counter()
+            if observed < deadline and process.poll() is None:
+                return observed
+        state = native.exposure_state(hwnd, process.pid)
+        time.sleep(.005)
+    state = {**state, "owned_process_exit_code": process.poll()}
+    raise ExposureFailure(state)
+
+
 def observe_compositor(native: NativeWindows, hwnd: int, process: subprocess.Popen[bytes],
-                       deadline: float) -> tuple[Image.Image, float]:
-    """Wait for owned, unoccluded character paint, returning the external observation time."""
+                       deadline: float) -> tuple[Image.Image, float, float]:
+    """Wait for initial exposure and character paint, returning paint/exposure observation times."""
+    exposed = observe_exposure(native, hwnd, process, deadline)
     while time.perf_counter() < deadline and process.poll() is None:
         native.client(hwnd, process.pid)
         image = native.capture(hwnd, process.pid, compositor=True)
@@ -629,7 +680,7 @@ def observe_compositor(native: NativeWindows, hwnd: int, process: subprocess.Pop
         if not isinstance(image, Image.Image) or image.size != (client.width, client.height):
             raise RuntimeError("Compositor observation did not return the complete owned client frame")
         if observed < deadline and process.poll() is None and has_mascot(image, client.scale):
-            return image, observed
+            return image, observed, exposed
         time.sleep(0.005)
     raise RuntimeError("The owned compositor did not expose character paint within the deadline")
 
@@ -709,14 +760,17 @@ def qualify(arguments: argparse.Namespace) -> None:
         if arguments.compositor:
             result: dict[str, object] = {"captured": False}
             try:
-                visible, observed = observe_compositor(native, hwnd, process, deadline)
+                visible, observed, exposed = observe_compositor(native, hwnd, process, deadline)
             except Exception as error:
                 result.update(error_type=type(error).__name__, reason=str(error))
+                if isinstance(error, ExposureFailure):
+                    result["exposure_state"] = error.state
                 write_json(output / "compositor.json", result)
                 raise
             first_visible = (observed - started) * 1000
             visible.save(output / "native-compositor.png")
             result.update(occluded=False, captured=True,
+                          first_owned_foreground_unoccluded_ms=(exposed - started) * 1000,
                           first_owned_compositor_capture_with_character_ms=first_visible)
             write_json(output / "compositor.json", result)
         if arguments.input:

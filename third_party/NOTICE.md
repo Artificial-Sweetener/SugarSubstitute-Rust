@@ -17,7 +17,9 @@ The splash raster contains Rust adaptations of numerical rules from
 stroke integration, cubic outline mapping, pixel coverage, gradient lookup,
 premultiplied byte composition and affine image sampling. The source references
 are `qcosmeticstroker.cpp`, `qbezier.cpp`, `qoutlinemapper.cpp`, `qgrayraster.c`,
-`qdrawhelper.cpp`, `qpaintengine_raster.cpp`, `qtransform.cpp` and `qcssutil.cpp`.
+`qdrawhelper.cpp`, `qdrawhelper_p.h`, `qpaintengine_raster.cpp`, `qtransform.cpp`
+and `qcssutil.cpp`. Windows status rendering applies the native grayscale glyph
+coverage and premultiplied byte rounding rules through DirectWrite.
 The adapted runtime files are listed in the manifest. Their Rust implementation
 is maintained with the splash owner and its tests.
 

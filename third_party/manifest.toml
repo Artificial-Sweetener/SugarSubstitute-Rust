@@ -13,6 +13,7 @@ files = [
   "crates/sugarsubstitute-splash/src/chrome.rs",
   "crates/sugarsubstitute-splash/src/progress.rs",
   "crates/sugarsubstitute-splash/src/shapes.rs",
+  "crates/sugarsubstitute-splash/src/text_windows.rs",
 ]
 
 [[components]]

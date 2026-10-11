@@ -4,15 +4,67 @@
 """Prove native qualification observes compositor paint and causal caption feedback."""
 
 import argparse
+import ctypes
 import json
 import tempfile
 import unittest
 from pathlib import Path
+from ctypes import wintypes
 from unittest.mock import Mock, patch
 
 from PIL import Image
 
-from tools.splash_parity.native_windows import MouseEvent, NativePointer, observe_caption, observe_compositor, qualify
+from tools.splash_parity.native_windows import ExposureFailure, MouseEvent, NativePointer, NativeWindows, observe_caption, observe_compositor, observe_exposure, qualify
+
+
+class NativeExposureMetadataTests(unittest.TestCase):
+    """Keep actual observer decisions while faking window inventory and native rectangles."""
+
+    def native(self) -> NativeWindows:
+        """Provide a foreign foreground and one overlapping window above the owned client."""
+        native = object.__new__(NativeWindows)
+        native.user = Mock()
+        native.client = Mock(return_value=Mock(width=558, height=558))
+        native.user.GetForegroundWindow.return_value = 9
+        native.user.GetAncestor.return_value = 9
+        native.user.IsWindowVisible.return_value = True
+        native.user.IsIconic.return_value = False
+        native.user.GetWindow.side_effect = lambda hwnd, relation: {1: 2, 2: 3, 3: None}[hwnd]
+
+        def origin(hwnd, pointer):
+            point = ctypes.cast(pointer, ctypes.POINTER(wintypes.POINT)).contents
+            point.x, point.y = 100, 200
+            return True
+
+        def rectangle(hwnd, pointer):
+            rect = ctypes.cast(pointer, ctypes.POINTER(wintypes.RECT)).contents
+            rect.left, rect.top, rect.right, rect.bottom = (50, 150, 400, 500) if hwnd == 2 else (1000, 0, 1500, 100)
+            return True
+
+        def identity(hwnd, pointer):
+            ctypes.cast(pointer, ctypes.POINTER(wintypes.DWORD)).contents.value = 99 if hwnd == 2 else 777
+            return 1
+
+        native.user.ClientToScreen.side_effect = origin
+        native.user.GetWindowRect.side_effect = rectangle
+        native.user.GetWindowThreadProcessId.side_effect = identity
+        return native
+
+    def test_foreground_and_occluder_identity_explain_failed_exposure(self) -> None:
+        """Keep the blocking HWND/PID/bounds without reading another application's text."""
+        state = self.native().exposure_state(1, 42)
+        self.assertFalse(state["foreground_owned"])
+        self.assertEqual(state["foreground_pid"], 777)
+        self.assertEqual(state["occluding_windows"], [{"hwnd": 2, "pid": 99, "screen_bounds": [50, 150, 400, 500]}])
+
+    def test_unknown_visible_window_bounds_are_not_unoccluded_acceptance(self) -> None:
+        """A failed external bounds query cannot conceal an overlapping native window."""
+        native = self.native()
+        native.user.GetWindowRect.side_effect = None
+        native.user.GetWindowRect.return_value = False
+        with patch("tools.splash_parity.native_windows.ctypes.WinError", return_value=OSError("unknown occluder bounds")):
+            with self.assertRaisesRegex(OSError, "unknown occluder bounds"):
+                native.occluded(1, 42)
 
 
 class NativePointerTests(unittest.TestCase):
@@ -109,26 +161,30 @@ class CompositorObservationTests(unittest.TestCase):
         self.client = Mock(width=558, height=558, scale=1, dpi=96)
         self.native.client.return_value = self.client
         self.native.occluded.return_value = False
+        self.native.user.GetAncestor.return_value = 1
+        self.native.user.GetForegroundWindow.return_value = 1
+        self.native.exposure_state.return_value = {"foreground_owned": False, "occluding_windows": [{"hwnd": 2, "pid": 99}]}
         self.process = Mock(pid=42)
         self.process.poll.return_value = None
 
     def test_blank_then_painted_compositor_qualifies_at_second_observation(self) -> None:
         """An asynchronous show/fade frame must be followed by real compositor paint."""
         self.native.capture.side_effect = [self.blank, self.painted]
-        with patch("tools.splash_parity.native_windows.time.perf_counter", side_effect=[0, .1, .2, .3]), \
+        with patch("tools.splash_parity.native_windows.time.perf_counter", side_effect=[0, .01, .02, .1, .2, .3]), \
                 patch("tools.splash_parity.native_windows.time.sleep"):
-            image, observed = observe_compositor(self.native, 1, self.process, 1)
+            image, observed, exposed = observe_compositor(self.native, 1, self.process, 1)
         self.assertIs(image, self.painted)
         self.assertEqual(observed, .3)
         self.assertEqual(self.native.capture.call_count, 2)
-        self.assertEqual(self.native.client.call_count, 4)
+        self.assertEqual(exposed, .01)
+        self.assertEqual(self.native.client.call_count, 5)
         for call in self.native.capture.call_args_list:
             self.assertEqual(call.kwargs, {"compositor": True})
 
     def test_never_painted_compositor_rejects_at_deadline(self) -> None:
         """A valid PrintWindow frame cannot replace missing desktop compositor paint."""
         self.native.capture.return_value = self.blank
-        with patch("tools.splash_parity.native_windows.time.perf_counter", side_effect=[0, .1, 2]), \
+        with patch("tools.splash_parity.native_windows.time.perf_counter", side_effect=[0, .01, .02, .1, 2]), \
                 patch("tools.splash_parity.native_windows.time.sleep"):
             with self.assertRaisesRegex(RuntimeError, "within the deadline"):
                 observe_compositor(self.native, 1, self.process, 1)
@@ -137,7 +193,7 @@ class CompositorObservationTests(unittest.TestCase):
     def test_paint_returned_after_deadline_cannot_qualify(self) -> None:
         """A late external capture remains a failed startup observation."""
         self.native.capture.return_value = self.painted
-        with patch("tools.splash_parity.native_windows.time.perf_counter", side_effect=[0, 2, 3]), \
+        with patch("tools.splash_parity.native_windows.time.perf_counter", side_effect=[0, .01, .02, 2, 3]), \
                 patch("tools.splash_parity.native_windows.time.sleep"):
             with self.assertRaisesRegex(RuntimeError, "within the deadline"):
                 observe_compositor(self.native, 1, self.process, 1)
@@ -145,11 +201,12 @@ class CompositorObservationTests(unittest.TestCase):
     def test_occlusion_and_lost_ownership_are_terminal(self) -> None:
         """Never retry away a foreign window or an obstructed compositor capture."""
         self.native.capture.return_value = self.painted
-        self.native.occluded.return_value = True
+        self.native.occluded.side_effect = [False, True]
         with self.assertRaisesRegex(RuntimeError, "occluded"):
             observe_compositor(self.native, 1, self.process, float("inf"))
+        self.native.occluded.side_effect = None
         self.native.occluded.return_value = False
-        self.native.client.side_effect = [self.client, RuntimeError("Window ownership changed")]
+        self.native.client.side_effect = [self.client, self.client, RuntimeError("Window ownership changed")]
         with self.assertRaisesRegex(RuntimeError, "ownership changed"):
             observe_compositor(self.native, 1, self.process, float("inf"))
 
@@ -192,6 +249,27 @@ class CompositorObservationTests(unittest.TestCase):
             self.assertEqual(receipt["reason"], failure["error"])
             self.assertEqual(receipt["error_type"], "RuntimeError")
             self.assertFalse((output / "native-compositor.png").exists())
+
+    def test_initial_pending_exposure_then_owned_foreground_is_accepted(self) -> None:
+        """Visible-style window discovery may precede actual asynchronous foreground exposure."""
+        self.native.user.GetAncestor.side_effect = [2, 1]
+        with patch("tools.splash_parity.native_windows.time.perf_counter", side_effect=[0, .1, .2]), \
+                patch("tools.splash_parity.native_windows.time.sleep"):
+            self.assertEqual(observe_exposure(self.native, 1, self.process, 1), .2)
+        self.native.capture.assert_not_called()
+
+    def test_never_exposed_and_foreign_ownership_reject_before_capture(self) -> None:
+        """Waiting for initial show neither accepts an occluded window nor suppresses identity loss."""
+        self.native.occluded.return_value = True
+        with patch("tools.splash_parity.native_windows.time.perf_counter", side_effect=[0, 2]), \
+                patch("tools.splash_parity.native_windows.time.sleep"):
+            with self.assertRaisesRegex(ExposureFailure, "foreground and unoccluded") as failed:
+                observe_exposure(self.native, 1, self.process, 1)
+        self.assertEqual(failed.exception.state["occluding_windows"], [{"hwnd": 2, "pid": 99}])
+        self.native.client.side_effect = RuntimeError("Foreign window ownership")
+        with self.assertRaisesRegex(RuntimeError, "Foreign window ownership"):
+            observe_exposure(self.native, 1, self.process, float("inf"))
+        self.native.capture.assert_not_called()
 
 
 class CaptionObservationTests(unittest.TestCase):
