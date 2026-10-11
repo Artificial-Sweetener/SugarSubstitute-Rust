@@ -147,7 +147,7 @@ impl Fixture {
             child_deadline,
             deadline_observed: false,
             owner_key,
-            registry: WindowsProcessRegistry::new(owner_key),
+            registry: WindowsProcessRegistry::new(owner_key)?,
             owner: None,
             client: None,
             creation_scope: None,

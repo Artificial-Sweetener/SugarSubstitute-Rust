@@ -34,11 +34,11 @@ impl Harness {
         let scope =
             client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
         let fake = Arc::new(Fake::default());
-        let mut claims = WindowsResourceClaims::new();
+        let mut claims = WindowsResourceClaims::new()?;
         claims.port = fake.clone();
         Ok(Self {
             claims,
-            registry: crate::WindowsProcessRegistry::new(owner()?),
+            registry: crate::WindowsProcessRegistry::new(owner()?)?,
             _executor: executor,
             client,
             scope,

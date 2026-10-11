@@ -6,6 +6,8 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 mod capture;
+#[cfg(target_os = "windows")]
+mod claim_fixture;
 mod demo;
 #[cfg(target_os = "windows")]
 mod held_child;
@@ -31,6 +33,21 @@ fn execute() -> Result<(), Box<dyn Error>> {
         Ok(invocation::Invocation::Demo(options)) => options,
         #[cfg(target_os = "windows")]
         Ok(invocation::Invocation::NativeExitFixture(code)) => std::process::exit(code),
+        #[cfg(target_os = "windows")]
+        Ok(invocation::Invocation::NativeClaimFixture(options)) => {
+            initialize_diagnostics()?;
+            let path = options.receipt.clone();
+            let receipt = claim_fixture::run(options)?;
+            std::fs::write(path, serde_json::to_vec_pretty(&receipt)?)?;
+            return Ok(());
+        }
+        #[cfg(target_os = "windows")]
+        Ok(invocation::Invocation::NativeClaimChild(options)) => {
+            initialize_diagnostics()?;
+            let result = claim_fixture::run_child(options)?;
+            std::fs::write(result.path, serde_json::to_vec_pretty(&result.receipt)?)?;
+            std::process::exit(result.exit_code);
+        }
         #[cfg(target_os = "windows")]
         Ok(invocation::Invocation::NativeHeldChild(options)) => {
             initialize_diagnostics()?;

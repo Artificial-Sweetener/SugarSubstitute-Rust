@@ -6,9 +6,21 @@ use super::*;
 use sugarsubstitute_contracts::lifecycle::{ResourceGeneration, ResourceId, ResourceKey};
 
 #[test]
+fn retained_family_records_fit_the_native_composition_stack_budget() -> TestResult {
+    assert!(std::mem::size_of::<WindowsProcessRegistry>() <= 4096);
+    let first = WindowsProcessRegistry::new(owner()?)?;
+    let second = WindowsProcessRegistry::new(owner()?)?;
+    assert_eq!(first.records.len(), 128);
+    assert!(first.records.iter().all(Option::is_none));
+    assert!(!std::ptr::eq(first.records.as_ptr(), second.records.as_ptr()));
+    assert!(first.is_empty() && second.is_empty());
+    Ok(())
+}
+
+#[test]
 fn matching_coordinator_facts_do_not_substitute_for_retained_registry_identity() -> TestResult {
-    let first = WindowsProcessRegistry::new(owner()?);
-    let second = WindowsProcessRegistry::new(owner()?);
+    let first = WindowsProcessRegistry::new(owner()?)?;
+    let second = WindowsProcessRegistry::new(owner()?)?;
     let pinned = first.claim_identity(owner()?)?;
     assert!(pinned.same_as(&first.claim_identity(owner()?)?));
     assert!(pinned.clone().same_as(&pinned));
@@ -16,7 +28,7 @@ fn matching_coordinator_facts_do_not_substitute_for_retained_registry_identity()
     let foreign = CoordinatorKey { epoch: CoordinatorEpoch::new([2; 16])?, ..owner()? };
     assert!(matches!(first.claim_identity(foreign), Err(RegistryAdmissionError::ForeignOwner)));
     drop(first);
-    assert!(!pinned.same_as(&WindowsProcessRegistry::new(owner()?).claim_identity(owner()?)?));
+    assert!(!pinned.same_as(&WindowsProcessRegistry::new(owner()?)?.claim_identity(owner()?)?));
     Ok(())
 }
 

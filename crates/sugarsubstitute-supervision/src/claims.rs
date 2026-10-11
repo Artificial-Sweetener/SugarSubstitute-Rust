@@ -84,13 +84,18 @@ struct Pending {
     target: ClaimTarget,
 }
 struct Events {
-    entries: [Option<ClaimObservation>; 512],
+    entries: Box<[Option<ClaimObservation>]>,
     head: usize,
     length: usize,
 }
 impl Events {
-    fn new() -> Self {
-        Self { entries: std::array::from_fn(|_| None), head: 0, length: 0 }
+    fn new() -> Result<Self, ClaimError> {
+        let mut entries = Vec::new();
+        entries
+            .try_reserve_exact(512)
+            .map_err(|cause| ClaimError::new("claim_events_allocation", cause))?;
+        entries.resize_with(512, || None);
+        Ok(Self { entries: entries.into_boxed_slice(), head: 0, length: 0 })
     }
     fn push(&mut self, value: ClaimObservation) {
         // Admission reserves three event positions per pending finite operation.
@@ -132,9 +137,12 @@ pub struct WindowsResourceClaims {
     events: Events,
 }
 impl WindowsResourceClaims {
-    /// Create native-free state. Initialization must complete before new resolutions.
-    pub fn new() -> Self {
-        Self {
+    /// Create native-free state with a checked, fixed-capacity heap observation table.
+    /// Allocation failure retains its original cause. Initialization must complete
+    /// before new resolutions; no native ownership exists on construction failure.
+    pub fn new() -> Result<Self, ClaimError> {
+        let events = Events::new()?;
+        Ok(Self {
             origin: Arc::new(()),
             root: Shared::new(Root::new()),
             port: Arc::new(native_claims::SystemPort),
@@ -151,8 +159,8 @@ impl WindowsResourceClaims {
             resolutions: std::array::from_fn(|_| None),
             backends: std::array::from_fn(|_| None),
             pending: std::array::from_fn(|_| None),
-            events: Events::new(),
-        }
+            events,
+        })
     }
     /// Stop new initialization, resolution, claim and launch admission without discarding work.
     pub fn close_admission(&mut self) {
@@ -246,11 +254,6 @@ impl WindowsResourceClaims {
         } else {
             Ok(())
         }
-    }
-}
-impl Default for WindowsResourceClaims {
-    fn default() -> Self {
-        Self::new()
     }
 }
 impl Drop for WindowsResourceClaims {

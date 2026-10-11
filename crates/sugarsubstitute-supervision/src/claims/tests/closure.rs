@@ -25,7 +25,7 @@ fn binding_requires_actual_coordinator_and_rejects_repeated_binding() -> TestRes
     let foreign = crate::WindowsProcessRegistry::new(CoordinatorKey {
         epoch: CoordinatorEpoch::new([3; 16])?,
         ..owner()?
-    });
+    })?;
     // A different lifetime remains rejected, even after initialization and with no processes.
     assert!(matches!(
         harness.claims.bind_process_registry(&foreign),
@@ -44,7 +44,7 @@ fn binding_requires_actual_coordinator_and_rejects_repeated_binding() -> TestRes
 fn desktop_only_close_requires_pinned_registry_and_seals_before_empty_proof() -> TestResult {
     let mut harness = Harness::new()?;
     harness.initialize()?;
-    let mut foreign = crate::WindowsProcessRegistry::new(owner()?);
+    let mut foreign = crate::WindowsProcessRegistry::new(owner()?)?;
     harness.claims.close_admission();
     let spec = harness.spec(CLAIM_OPERATION_BYTES)?;
     assert!(matches!(
@@ -180,7 +180,7 @@ fn unattempted_backend_release_rejects_a_different_empty_registry() -> TestResul
         &ticket,
     )?;
     harness.drain()?;
-    let foreign = crate::WindowsProcessRegistry::new(owner()?);
+    let foreign = crate::WindowsProcessRegistry::new(owner()?)?;
     let spec = harness.spec(CLAIM_OPERATION_BYTES)?;
     assert!(matches!(
         harness.claims.submit_backend_release(

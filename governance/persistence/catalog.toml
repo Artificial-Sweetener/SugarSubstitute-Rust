@@ -82,8 +82,32 @@ migrations = []
 id = "windows-resource-claim-generation"
 owner = "sugarsubstitute-supervision"
 sources = ["crates/sugarsubstitute-supervision/src/native_claims/records.rs", "crates/sugarsubstitute-supervision/src/native_claims/records/storage.rs", "crates/sugarsubstitute-supervision/src/native_claims/paths.rs", "crates/sugarsubstitute-supervision/src/native_claims/account.rs"]
-source_sha256 = "sha256:eb2bf290baccd742a79488945ce19917d1d530e846a2ac10007f1f8faa376451"
+source_sha256 = "sha256:c6556e9051f0802bf7b45ac4f207971863a2bff59ae382dfaf3526b822d3ca44"
 classification = "authoritative_state"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []
+
+[[formats]]
+id = "native-claim-child-report"
+owner = "sugarsubstitute"
+sources = ["crates/sugarsubstitute/src/claim_fixture/receipt.rs"]
+source_sha256 = "sha256:307b26b8a7fc48ff655db7c1dfa3bfb3787bfc51553fd43e1a690a3685b2436c"
+classification = "authored_document"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []
+
+[[formats]]
+id = "native-resource-claims-report"
+owner = "sugarsubstitute"
+sources = ["crates/sugarsubstitute/src/claim_fixture/parent/receipt.rs", "crates/sugarsubstitute/src/claim_fixture/parent/delivery.rs"]
+source_sha256 = "sha256:a4571586434a4b873f2770ebf8746acfef791c50af01ede07e1f6720042cedc7"
+classification = "authored_document"
 preservation = "must_preserve"
 current_version = 1
 accepted_versions = [1]

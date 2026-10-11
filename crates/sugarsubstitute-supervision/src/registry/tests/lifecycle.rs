@@ -100,7 +100,7 @@ fn drop_cancels_and_closes_owned_job_after_inflight_factory_returns_without_sett
     h.fake.hold_create.store(true, Ordering::Release);
     let _ticket = h.launch(1)?;
     h.fake.entered()?;
-    let old = std::mem::replace(&mut h.registry, WindowsProcessRegistry::new(owner()?));
+    let old = std::mem::replace(&mut h.registry, WindowsProcessRegistry::new(owner()?)?);
     drop(old);
     assert_eq!(h.fake.closes.load(Ordering::Acquire), 0);
     h.fake.release();

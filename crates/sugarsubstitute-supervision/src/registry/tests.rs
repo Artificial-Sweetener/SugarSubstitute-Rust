@@ -74,7 +74,7 @@ impl Harness {
             client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
         let owner = owner()?;
         let fake = Fake::new();
-        let mut registry = WindowsProcessRegistry::new(owner);
+        let mut registry = WindowsProcessRegistry::new(owner)?;
         registry.port = fake.clone();
         Ok(Self {
             registry,

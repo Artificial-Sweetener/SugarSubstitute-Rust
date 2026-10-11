@@ -132,7 +132,7 @@ impl Record {
 pub struct WindowsProcessRegistry {
     owner: CoordinatorKey,
     identity: RegistryIdentity,
-    records: [Option<Record>; 128],
+    records: Box<[Option<Record>]>,
     next_process: u64,
     launch_open: bool,
     cursor: usize,
@@ -141,18 +141,25 @@ pub struct WindowsProcessRegistry {
 }
 impl WindowsProcessRegistry {
     /// Construct an empty native registry for a trusted current coordinator lifetime.
+    /// The fixed record table uses checked heap storage, keeping composition off the
+    /// native main-thread stack. Allocation failure preserves its original cause.
     /// No native effect, process enumeration or environment capture occurs.
-    pub fn new(owner: CoordinatorKey) -> Self {
-        Self {
+    pub fn new(owner: CoordinatorKey) -> Result<Self, RegistryError> {
+        let mut records = Vec::new();
+        records
+            .try_reserve_exact(128)
+            .map_err(|cause| RegistryError::new("registry_records_allocation", cause))?;
+        records.resize_with(128, || None);
+        Ok(Self {
             owner,
             identity: RegistryIdentity::new(),
-            records: std::array::from_fn(|_| None),
+            records: records.into_boxed_slice(),
             next_process: 1,
             launch_open: true,
             cursor: 0,
             cleanup_watches: 0,
             port: native_process::production(),
-        }
+        })
     }
     /// Stop all future family admissions and close pending exact resume commitments.
     /// Already-linearized resume/native work remains owned and requires actual cleanup.

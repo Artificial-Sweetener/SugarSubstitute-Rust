@@ -4,6 +4,20 @@
 use super::*;
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
+#[test]
+fn canonical_ancestor_retention_never_opens_an_incomplete_verbatim_drive() -> TestResult {
+    for prefix in ["E:", r"\\?\E:"] {
+        let path = PathBuf::from(format!("{prefix}\\root\\installation"));
+        let directories: Vec<_> = ancestor_paths(&path)?.collect();
+        assert_eq!(
+            directories,
+            [PathBuf::from(format!("{prefix}\\")), PathBuf::from(format!("{prefix}\\root"))]
+        );
+        assert!(directories.iter().all(|path| path.as_os_str() != std::ffi::OsStr::new(prefix)));
+    }
+    Ok(())
+}
+
 fn configuration(
     args: &[&str],
     port: u16,

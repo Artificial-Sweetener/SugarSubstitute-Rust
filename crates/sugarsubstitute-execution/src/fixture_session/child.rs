@@ -139,11 +139,22 @@ pub(crate) struct ChildWork {
 #[must_use = "Bind or cancel the admitted fixture child reservation"]
 pub struct FixtureChildPermit {
     job: Arc<Job<FixtureChildReport, NativeObservationError>>,
+    deadline: Moment,
     binding: Arc<ChildBinding>,
     core: Arc<Core>,
     transferred: bool,
 }
 impl FixtureChildPermit {
+    /// Read the original admitted deadline in this execution owner's monotonic nanoseconds.
+    ///
+    /// This immutable matching value permits finite pre-bind work to share the
+    /// already translated parent budget. It performs no clock/native operation,
+    /// transfers no ownership, and remains unchanged through cancellation or late
+    /// binding. Bind or cancel the permit and consume its actual typed terminal
+    /// before final execution teardown; the deadline is not settlement evidence.
+    pub const fn deadline(&self) -> Moment {
+        self.deadline
+    }
     pub(crate) fn bind_lease(
         mut self,
         lease: Box<dyn ChildLease>,
@@ -226,7 +237,10 @@ pub(crate) fn reserve_child(
             job: job.clone(),
             work: Work::Native(crate::native::NativeWork::FixtureChild(work)),
         };
-        (queued, FixtureChildPermit { job, binding, core: core.clone(), transferred: false })
+        (
+            queued,
+            FixtureChildPermit { job, deadline, binding, core: core.clone(), transferred: false },
+        )
     })
     .map_err(FixtureChildAdmissionError::Admission)
 }

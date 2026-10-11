@@ -10,6 +10,18 @@ use support::*;
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[test]
+fn retained_claim_observations_fit_the_native_composition_stack_budget() -> TestResult {
+    assert!(std::mem::size_of::<WindowsResourceClaims>() <= 32 * 1024);
+    let first = WindowsResourceClaims::new()?;
+    let second = WindowsResourceClaims::new()?;
+    assert_eq!(first.events.entries.len(), 512);
+    assert_eq!(second.events.entries.len(), 512);
+    assert!(first.events.entries.iter().all(Option::is_none));
+    assert!(!std::ptr::eq(first.events.entries.as_ptr(), second.events.entries.as_ptr()));
+    Ok(())
+}
+
+#[test]
 fn diagnostics_redact_private_causes_and_preserve_source() {
     use std::error::Error;
     let cause = ClaimError::new("fixture", std::io::Error::other("private-path-secret"));
@@ -83,7 +95,7 @@ fn exact_resolution_ticket_cannot_be_recreated_by_another_claim_owner() -> TestR
     harness.initialize()?;
     let ticket = harness.resolve()?;
     assert!(harness.claims.resolved_configuration(&ticket).is_ok());
-    let other = WindowsResourceClaims::new();
+    let other = WindowsResourceClaims::new()?;
     assert!(matches!(other.resolved_configuration(&ticket), Err(ClaimAdmissionError::Identity)));
     harness.retire(&ticket)?;
     harness.close(0)?;

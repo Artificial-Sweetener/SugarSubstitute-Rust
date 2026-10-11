@@ -228,18 +228,30 @@ pub(crate) fn pin_ancestors(
     handles: &mut Vec<Handle>,
     budget: files::Budget,
 ) -> Result<(), ClaimError> {
+    for current in ancestor_paths(path)? {
+        open_retained(&current, true, true, budget.clone(), handles)?;
+    }
+    Ok(())
+}
+
+/// Yield actual ancestor directories, including the drive root, in retention order.
+/// A verbatim drive prefix reports a root lexically before its separator exists;
+/// that incomplete prefix cannot name a directory in CreateFileW.
+fn ancestor_paths(path: &Path) -> Result<impl Iterator<Item = PathBuf> + '_, ClaimError> {
     let parent = path.parent().ok_or_else(|| ClaimError::invalid("path_parent"))?;
     if parent.components().count() > 128 {
         return Err(ClaimError::invalid("path_component_bound"));
     }
-    let mut current = PathBuf::new();
-    for component in parent.components() {
-        current.push(component.as_os_str());
-        if current.has_root() {
-            open_retained(&current, true, true, budget.clone(), handles)?;
-        }
-    }
-    Ok(())
+    Ok(parent
+        .components()
+        .scan(PathBuf::new(), |current, component| {
+            current.push(component.as_os_str());
+            Some(
+                (!matches!(component, std::path::Component::Prefix(_)) && current.has_root())
+                    .then(|| current.clone()),
+            )
+        })
+        .flatten())
 }
 pub(crate) fn create_directory(
     path: &Path,

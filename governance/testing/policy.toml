@@ -23,13 +23,13 @@ minimum_tests = 6
 package = "sugarsubstitute"
 root = "crates/sugarsubstitute"
 concern = "Product identity, native input, admitted preparation, process qualification and actual host shutdown"
-minimum_tests = 67
+minimum_tests = 78
 
 [[owners]]
 package = "sugarsubstitute-execution"
 root = "crates/sugarsubstitute-execution"
 concern = "Admission, CPU scheduling, cancellation, retained ownership and observed worker teardown"
-minimum_tests = 118
+minimum_tests = 119
 
 [[owners]]
 package = "sugarsubstitute-xtask"
@@ -41,7 +41,7 @@ minimum_tests = 1
 package = "sugarsubstitute-supervision"
 root = "crates/sugarsubstitute-supervision"
 concern = "Windows launch inputs, retained containment, resource exclusions, actual claim retirement and bounded lifecycle framing"
-minimum_tests = 115
+minimum_tests = 118
 
 [[owners]]
 package = "sugarsubstitute-splash"

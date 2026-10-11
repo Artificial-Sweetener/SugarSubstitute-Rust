@@ -56,7 +56,7 @@ fn rejected_managed_attempt_requires_exact_registry_and_observed_watch_retiremen
         ),
         Err(ClaimAdmissionError::Busy)
     ));
-    let foreign = crate::WindowsProcessRegistry::new(owner()?);
+    let foreign = crate::WindowsProcessRegistry::new(owner()?)?;
     let spec = harness.spec(CLAIM_OPERATION_BYTES)?;
     assert!(matches!(
         harness.claims.submit_backend_release(

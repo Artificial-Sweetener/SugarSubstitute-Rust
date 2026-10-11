@@ -98,7 +98,7 @@ impl WindowsProcessRegistry {
                 record.unread[2] = !record.rejected_launch;
             }
         }
-        for slot in &mut self.records {
+        for slot in self.records.iter_mut() {
             if slot.as_ref().is_some_and(|record| record.rejected_launch && record.settled) {
                 *slot = None;
             }

@@ -45,7 +45,7 @@ fn public_registry_matches_exact_coordinator_without_pid_authority() -> TestResu
         namespace: NamespaceId::new([1; 32]),
         epoch: CoordinatorEpoch::new([1; 16])?,
     };
-    let mut registry = WindowsProcessRegistry::new(owner);
+    let mut registry = WindowsProcessRegistry::new(owner)?;
     assert!(registry.is_empty());
     let key = ProcessKey { owner, id: ProcessId::new(1)? };
     assert!(matches!(registry.snapshot(key), Err(RegistryAdmissionError::Stale)));
