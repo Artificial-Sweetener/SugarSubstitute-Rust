@@ -44,7 +44,7 @@ from .sugarcubes.runtime import queue_observer_registry
 from .sugarcubes.model_library.integration import install_model_library
 
 WEB_DIRECTORY = "web"
-__version__ = "0.15.0"
+__version__ = "0.15.3"
 _EXTENSION_ROOT = extension_root()
 _LOGGER = logging.getLogger(__name__)
 

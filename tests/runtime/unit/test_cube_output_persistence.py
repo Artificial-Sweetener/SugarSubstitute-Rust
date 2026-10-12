@@ -26,7 +26,7 @@ import numpy as np
 from numpy.typing import NDArray
 import pytest
 
-from sugarcubes.runtime.cube_output_images import build_cube_output_preview
+from sugarcubes.runtime.cube_output_images import build_image_output_preview
 
 
 class ImageItem:
@@ -82,7 +82,7 @@ def test_output_policy_writes_to_output_or_temp_and_retains_preview(
     monkeypatch.setitem(sys.modules, "folder_paths", paths)
     monkeypatch.setitem(sys.modules, "comfy.cli_args", args)
 
-    ui, artifacts = build_cube_output_preview(ImageBatch(), save_outputs=saved)
+    ui, artifacts = build_image_output_preview(ImageBatch(), save_outputs=saved)
 
     assert len(artifacts) == 1
     artifact = artifacts[0]
@@ -97,4 +97,4 @@ def test_output_policy_writes_to_output_or_temp_and_retains_preview(
 
 def test_opaque_outputs_pass_through_without_files() -> None:
     """Keep non-image Cube values available to execution without inventing file persistence."""
-    assert build_cube_output_preview("text", save_outputs=True) == ({}, ())
+    assert build_image_output_preview("text", save_outputs=True) == ({}, ())

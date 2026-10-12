@@ -23,8 +23,7 @@ from .runtime import (
     CubeOutputEvent,
     notify_cube_output_observers,
 )
-
-from .runtime.cube_output_images import build_cube_output_preview
+from .runtime.cube_output_preview import build_cube_output_preview
 
 
 class AnyType(str):
@@ -202,7 +201,9 @@ class CubeOutput:
             default_alias=cleaned_default_alias,
             instance_alias=cleaned_instance_alias or cleaned_default_alias,
             instance_id=cleaned_instance_id,
-            media_kind="image" if artifacts else _media_kind_for_value(value),
+            media_kind=(
+                artifacts[0].media_kind if artifacts else _media_kind_for_value(value)
+            ),
             value_type=_value_type_name(value),
             artifacts=artifacts,
         )

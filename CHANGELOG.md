@@ -1,3 +1,24 @@
+## [0.15.3](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.15.2...v0.15.3) (2026-10-11)
+
+
+### Bug Fixes
+
+* **execution:** prepare source noise capture before cube queue validation ([f5ceede](https://github.com/Artificial-Sweetener/SugarCubes/commit/f5ceede20cadbbe4c1c01606c28206956932d687))
+
+## [0.15.2](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.15.1...v0.15.2) (2026-09-27)
+
+
+### Bug Fixes
+
+* **outputs:** make video Cube outputs available for playback ([9409dbb](https://github.com/Artificial-Sweetener/SugarCubes/commit/9409dbb8c9ebbfbcb3bcaa3721a765247bbdf150))
+
+## [0.15.1](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.15.0...v0.15.1) (2026-09-26)
+
+
+### Bug Fixes
+
+* **dependencies:** install node packs without repeated catalog reloads ([498dd4a](https://github.com/Artificial-Sweetener/SugarCubes/commit/498dd4a80508c2356ab6b7b862655d25d18391f1))
+
 # [0.15.0](https://github.com/Artificial-Sweetener/SugarCubes/compare/v0.14.10...v0.15.0) (2026-09-23)
 
 
