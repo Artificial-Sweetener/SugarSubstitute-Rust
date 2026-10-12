@@ -43,8 +43,8 @@ describe('SimpleSyrup Cube preview surface', () => {
     const previewEvents = new EventTarget();
     const rootGraph = {};
     const previewCatalog = new ComfyCubePreviewCatalog({
-      getNodeOutputs: () => ({}),
-      getNodePreviewImages: () => ({ '9:detailer': detailPreviews }),
+      getOutput: () => null,
+      getLivePreview: (path) => (path === '9:detailer' ? detailPreviews : []),
       buildOutputImageUrl: () => null,
     });
     const presenter = new CubeSurfacePresenter({
@@ -56,7 +56,12 @@ describe('SimpleSyrup Cube preview surface', () => {
       logger: console,
       renderer: { mount: () => ({ refresh() {}, unmount() {} }), dispose() {} },
       previewCatalog,
-      previewEvents,
+      previewChanges: {
+        subscribe(listener) {
+          previewEvents.addEventListener('executed', listener);
+          return () => previewEvents.removeEventListener('executed', listener);
+        },
+      },
     });
 
     await flushMount();

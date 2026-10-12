@@ -52,7 +52,7 @@ export class ComfyPromptSubmissionObserver implements PromptQueueObserver {
     return {
       prepared: (prepared) => {
         if (!active) return;
-        const sources = decodeComfyPromptSources(prepared);
+        const sources = decodeComfyPromptSources(prepared, captured.sources);
         if (sources.length) context = Object.freeze({ ...submission, sources });
       },
       accepted: (response) => {
@@ -69,7 +69,7 @@ export class ComfyPromptSubmissionObserver implements PromptQueueObserver {
           return;
         }
         const executionSources = isRecord(response)
-          ? decodeComfyPromptSources({ output: response.execution_prompt })
+          ? decodeComfyPromptSources({ output: response.execution_prompt }, context.sources)
           : [];
         if (executionSources.length)
           context = Object.freeze({ ...submission, sources: executionSources });

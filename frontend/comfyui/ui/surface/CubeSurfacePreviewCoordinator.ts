@@ -18,11 +18,6 @@
 import { CubeRendererTransitionStabilizer } from './CubeRendererTransitionStabilizer.js';
 import type { ComfyRendererMode } from '../core/ComfyRendererMode.js';
 
-export interface ComfyNodePreviewEventSource {
-  addEventListener(type: 'executed', listener: EventListener): void;
-  removeEventListener(type: 'executed', listener: EventListener): void;
-}
-
 interface CubeSurfacePreviewCoordinatorOptions {
   document: Document;
   rootGraph: object;
@@ -31,14 +26,12 @@ interface CubeSurfacePreviewCoordinatorOptions {
   setDirtyCanvas(foreground?: boolean, background?: boolean): void;
   refreshVuePreviews(): void;
   previewChanges?: { subscribe(listener: () => void): () => void };
-  previewEvents?: ComfyNodePreviewEventSource;
 }
 
 /** Translate preview change sources into renderer-specific refresh behavior. */
 export class CubeSurfacePreviewCoordinator {
   private readonly stabilizer: CubeRendererTransitionStabilizer;
   private readonly unsubscribe: () => void;
-  private readonly onExecuted: EventListener;
 
   constructor(private readonly options: CubeSurfacePreviewCoordinatorOptions) {
     const windowRef = options.document.defaultView;
@@ -48,12 +41,10 @@ export class CubeSurfacePreviewCoordinator {
       frameCount: 120,
     });
     this.unsubscribe =
-      options.previewChanges?.subscribe(() => options.refreshVuePreviews()) ?? (() => undefined);
-    this.onExecuted = () => {
-      options.refreshVuePreviews();
-      if (options.getRendererMode() === 'litegraph') this.scheduleLegacyRedraw();
-    };
-    options.previewEvents?.addEventListener('executed', this.onExecuted);
+      options.previewChanges?.subscribe(() => {
+        options.refreshVuePreviews();
+        if (options.getRendererMode() === 'litegraph') this.scheduleLegacyRedraw();
+      }) ?? (() => undefined);
   }
 
   /** Repaint while Comfy decodes native legacy preview images. */
@@ -73,7 +64,6 @@ export class CubeSurfacePreviewCoordinator {
 
   /** Remove every preview subscription and delayed redraw. */
   dispose(): void {
-    this.options.previewEvents?.removeEventListener('executed', this.onExecuted);
     this.unsubscribe();
     this.stabilizer.dispose();
   }

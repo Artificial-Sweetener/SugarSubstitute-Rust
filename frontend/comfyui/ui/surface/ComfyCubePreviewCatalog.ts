@@ -13,14 +13,12 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Adapt Comfy's output and live-preview maps into Cube preview media. */
+/** Project workflow-owned media through native Cube boundary and ancestry lookup. */
 
 import type { CubeNode } from '../cube/node/ComfyCubeNodeFactory.js';
-import { readInstanceId } from '../cube/node/CubeNodeCatalog.js';
 import { buildCubeOutputExecutionId } from '../cube/execution/CubeOutputExecutionIdentity.js';
 import { buildLinkIndex } from '../graph/GraphQuery.js';
 import { isRecord } from '../types/common.js';
-import type { UnknownRecord } from '../types/common.js';
 import type { ComfyGraph, ComfyNode } from '../types/graph.js';
 import type {
   CubeOutputPreview,
@@ -28,18 +26,15 @@ import type {
   CubePreviewItem,
   CubePreviewSnapshot,
 } from './CubePreviewModel.js';
-import { CubePreviewRetentionStore } from './CubePreviewRetentionStore.js';
+import type { WorkflowOutputSet, OutputFileReference } from '../execution/domain/WorkflowOutput.js';
 import { upstreamPreviewLocatorLayers } from './CubeOutputPreviewAncestry.js';
 
 export interface ComfyCubePreviewHost {
   getRootGraph?(): ComfyGraph;
   getEffectiveLinks?(): readonly CubePreviewLink[];
-  getCubeOutput?(executionId: string): unknown;
-  getNodeOutputs(): UnknownRecord;
-  getNodePreviewImages(): UnknownRecord;
-  buildOutputImageUrl(image: UnknownRecord): string | null;
-  logger?: Pick<Console, 'debug'>;
-  retention?: CubePreviewRetentionStore;
+  getOutput(executionPath: string): WorkflowOutputSet | null;
+  getLivePreview(executionPath: string): readonly string[];
+  buildOutputImageUrl(image: OutputFileReference): string | null;
 }
 
 export interface CubePreviewLink {
@@ -61,32 +56,20 @@ interface PreviewGraph {
 /** Own Comfy media lookup while leaving preview composition to the surface. */
 export class ComfyCubePreviewCatalog implements CubePreviewCatalog {
   readonly #host: ComfyCubePreviewHost;
-  readonly #lastUnmatchedSignature = new WeakMap<CubeNode, string>();
-  readonly #retention: CubePreviewRetentionStore;
-  readonly #fallbackRootGraph = {};
-  #rootGraphScope: object | null = null;
 
-  /** Bind Comfy's current media maps and URL adapter. */
+  /** Bind qualified workflow media and the host file URL adapter. */
   constructor(host: ComfyCubePreviewHost) {
     this.#host = host;
-    this.#retention = host.retention ?? new CubePreviewRetentionStore();
   }
 
   /** Collect media belonging to the Cube's output boundaries. */
   snapshot(cube: CubeNode): CubePreviewSnapshot {
-    const instanceId = readInstanceId(cube);
     const locatedNodes = locateInternalNodes(cube);
     const locatorByNode = new Map(locatedNodes.map(({ node, locator }) => [node, locator]));
     const outputs: CubeOutputPreview[] = cube.subgraph.outputs.map((output, index) => {
       const id = readString(output.name) || String(index);
       const executionId = buildCubeOutputExecutionId(cube.id, index);
-      const capturedItems = this.#readOutputItems(
-        this.#host.getCubeOutput?.(executionId),
-        executionId,
-        id,
-      );
-      const markerItems =
-        capturedItems.length > 0 ? capturedItems : this.#readNodeItems(executionId, id);
+      const markerItems = this.#readNodeItems(executionId, id);
       const source = resolveOutputNode(cube, index);
       const locator = source ? (locatorByNode.get(source) ?? '') : '';
       const directItems =
@@ -105,18 +88,7 @@ export class ComfyCubePreviewCatalog implements CubePreviewCatalog {
               : this.#readDownstreamOutputItems(cube, index, id);
       return { id, label: id, items };
     });
-    const current = { outputs };
-    const outputSignature = outputs.map((output) => output.id).join('\u0000');
-    this.#rootGraphScope ??= this.#host.getRootGraph?.() ?? this.#fallbackRootGraph;
-    const rootGraph = this.#rootGraphScope;
-    const hasMedia = outputs.some((output) => output.items.length > 0);
-    if (hasMedia) {
-      this.#retention.retain(rootGraph, instanceId, outputSignature, current);
-    }
-    const retained = this.#retention.read(rootGraph, instanceId, outputSignature);
-    const snapshot = !hasMedia && retained ? retained : current;
-    this.#reportUnmatchedMedia(cube, locatedNodes, snapshot);
-    return snapshot;
+    return { outputs };
   }
 
   /** Resolve final Comfy media from the nearest consumer of one Cube output. */
@@ -157,43 +129,9 @@ export class ComfyCubePreviewCatalog implements CubePreviewCatalog {
     return [];
   }
 
-  /** Report a changed host-media inventory when none belongs to this Cube. */
-  #reportUnmatchedMedia(
-    cube: CubeNode,
-    locatedNodes: readonly LocatedPreviewNode[],
-    snapshot: CubePreviewSnapshot,
-  ): void {
-    if (!this.#host.logger) return;
-    if (snapshot.outputs.some((output) => output.items.length > 0)) {
-      this.#lastUnmatchedSignature.delete(cube);
-      return;
-    }
-    const outputKeys = Object.keys(this.#host.getNodeOutputs()).sort();
-    const previewKeys = Object.keys(this.#host.getNodePreviewImages()).sort();
-    if (outputKeys.length === 0 && previewKeys.length === 0) return;
-    const expectedLocators = locatedNodes.map(({ locator }) => locator).sort();
-    const signature = JSON.stringify([String(cube.id), outputKeys, previewKeys, expectedLocators]);
-    if (signature === this.#lastUnmatchedSignature.get(cube)) return;
-    this.#lastUnmatchedSignature.set(cube, signature);
-    this.#host.logger.debug(
-      'SugarCubes found no Cube preview for the current Comfy media inventory.',
-      JSON.stringify({
-        cubeNodeId: cube.id,
-        expectedLocators,
-        outputKeys,
-        previewKeys,
-      }),
-    );
-  }
-
   /** Prefer composite execution identity before a transient internal-node preview identity. */
   #readLocatedNodeItems(located: LocatedPreviewNode, label: string): CubePreviewItem[] {
-    const scopedItems = this.#readNodeItems(located.locator, label);
-    if (scopedItems.length > 0) return scopedItems;
-    const localNodeId = readNodeId(located.node.id);
-    return localNodeId && localNodeId !== located.locator
-      ? this.#readNodeItems(localNodeId, label)
-      : [];
+    return this.#readNodeItems(located.locator, label);
   }
 
   /** Read the nearest live sampler/detailer preview feeding one Cube output. */
@@ -212,7 +150,7 @@ export class ComfyCubePreviewCatalog implements CubePreviewCatalog {
 
   /** Read durable execution media before renderer-owned transient previews. */
   #readNodeItems(locator: string, label: string): CubePreviewItem[] {
-    const output = this.#host.getNodeOutputs()[locator];
+    const output = this.#host.getOutput(locator);
     const outputItems = this.#readOutputItems(output, locator, label);
     if (outputItems.length > 0) return outputItems;
 
@@ -221,8 +159,7 @@ export class ComfyCubePreviewCatalog implements CubePreviewCatalog {
 
   /** Convert renderer-owned live preview URLs without treating them as finals. */
   #readLivePreviewItems(locator: string, label: string): CubePreviewItem[] {
-    const livePreviews = this.#host.getNodePreviewImages()[locator];
-    if (!Array.isArray(livePreviews)) return [];
+    const livePreviews = this.#host.getLivePreview(locator);
     return livePreviews
       .filter((value): value is string => typeof value === 'string' && value.length > 0)
       .map((url, index) => ({
@@ -234,16 +171,20 @@ export class ComfyCubePreviewCatalog implements CubePreviewCatalog {
   }
 
   /** Convert one durable execution payload into preview items. */
-  #readOutputItems(output: unknown, locator: string, label: string): CubePreviewItem[] {
-    if (isRecord(output) && Array.isArray(output.images)) {
-      const items = output.images
-        .map<CubePreviewItem | null>((image, index) => {
-          if (!isRecord(image)) return null;
-          const builtUrl = this.#host.buildOutputImageUrl(image);
+  #readOutputItems(
+    output: WorkflowOutputSet | null,
+    locator: string,
+    label: string,
+  ): CubePreviewItem[] {
+    if (output) {
+      const items = output.items
+        .map<CubePreviewItem | null>((item) => {
+          if (item.mediaKind !== 'image') return null;
+          const builtUrl = this.#host.buildOutputImageUrl(item.file);
           const url = builtUrl ? stabilizeComfyViewUrl(builtUrl) : null;
           return url
             ? {
-                key: `${locator}:output:${index}`,
+                key: `${locator}:output:${item.batchIndex}`,
                 url,
                 label,
                 sourceLocator: locator,

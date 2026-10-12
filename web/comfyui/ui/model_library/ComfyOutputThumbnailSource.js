@@ -21,12 +21,12 @@ import { buildCubeOutputExecutionId } from '../cube/execution/CubeOutputExecutio
 export class ComfyOutputThumbnailSource {
     #app;
     #document;
-    #cubeOutput;
+    #output;
     /** Read the live host only when a menu opens or an image is explicitly chosen. */
-    constructor(app, documentRef, cubeOutput) {
+    constructor(app, documentRef, output) {
         this.#app = app;
         this.#document = documentRef;
-        this.#cubeOutput = cubeOutput;
+        this.#output = output;
     }
     /** Return each concrete completed image once in graph and batch order. */
     choices() {
@@ -54,18 +54,14 @@ export class ComfyOutputThumbnailSource {
     /** Traverse native execution paths without interpreting cube internals as model policy. */
     #outputs() {
         const app = isRecord(this.#app) ? this.#app : {};
-        const outputs = isRecord(app.nodeOutputs) ? app.nodeOutputs : {};
         const result = [];
         const seenImages = new Map();
-        const seenGraphs = new Set();
-        const pending = [
-            { graph: app.rootGraph ?? app.graph, path: [], title: '' },
-        ];
+        const pending = [{ graph: app.rootGraph ?? app.graph, path: [], title: '', ancestors: new Set() }];
         while (pending.length) {
             const next = pending.shift();
-            if (!next || !isRecord(next.graph) || seenGraphs.has(next.graph))
+            if (!next || !isRecord(next.graph) || next.ancestors.has(next.graph) || next.path.length > 32)
                 continue;
-            seenGraphs.add(next.graph);
+            const ancestors = new Set([...next.ancestors, next.graph]);
             const nodes = Array.isArray(next.graph._nodes) ? next.graph._nodes : next.graph.nodes;
             if (!Array.isArray(nodes))
                 continue;
@@ -81,7 +77,7 @@ export class ComfyOutputThumbnailSource {
                         : 'Output';
                 const sourceLabel = next.title ? `${next.title} / ${title}` : title;
                 if (isRecord(node.subgraph))
-                    pending.push({ graph: node.subgraph, path, title: sourceLabel });
+                    pending.push({ graph: node.subgraph, path, title: sourceLabel, ancestors });
                 const boundaryOutputs = isRecord(node.subgraph) && Array.isArray(node.subgraph.outputs)
                     ? node.subgraph.outputs
                     : [];
@@ -90,19 +86,17 @@ export class ComfyOutputThumbnailSource {
                     sourceLabel: isRecord(boundary) && typeof boundary.name === 'string'
                         ? `${sourceLabel} / ${boundary.name}`
                         : sourceLabel,
-                    output: this.#cubeOutput(buildCubeOutputExecutionId(locator, slot)),
+                    output: this.#output(buildCubeOutputExecutionId(locator, slot)),
                 }));
-                candidates.push({ locator, sourceLabel, output: outputs[locator] });
+                candidates.push({ locator, sourceLabel, output: this.#output(locator) });
                 for (const candidate of candidates) {
                     const output = candidate.output;
-                    if (!isRecord(output) || !Array.isArray(output.images))
+                    if (!output)
                         continue;
-                    output.images.forEach((image, index) => {
-                        if (!isRecord(image) ||
-                            typeof image.filename !== 'string' ||
-                            !image.filename.trim() ||
-                            (image.type !== 'output' && image.type !== 'temp') ||
-                            (image.subfolder !== undefined && typeof image.subfolder !== 'string'))
+                    output.items.forEach((item) => {
+                        const image = item.file;
+                        const index = item.batchIndex;
+                        if (item.mediaKind !== 'image' || (image.type !== 'output' && image.type !== 'temp'))
                             return;
                         const url = new URL('/view', this.#document.baseURI);
                         url.searchParams.set('filename', image.filename);
@@ -116,7 +110,7 @@ export class ComfyOutputThumbnailSource {
                         }
                         const located = {
                             choice: {
-                                id: url.href,
+                                id: item.id,
                                 sceneKey: '',
                                 sceneTitle: '',
                                 sceneOrder: 0,

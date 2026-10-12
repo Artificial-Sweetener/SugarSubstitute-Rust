@@ -24,8 +24,6 @@ import type { CubeAffordanceHostLifecycle } from '../affordance/CubeAffordanceHo
 import type { ComfyCubeRuntime } from './ComfyCubeRuntime.js';
 import type { ComfyCubeRuntimeLifecycle } from './ComfyCubeRuntimeLifecycle.js';
 import type { CubeWorkflowPreconfiguration } from './CubeWorkflowPreconfiguration.js';
-import type { ComfyCubeOutputHistoryAdapter } from './execution/ComfyCubeOutputHistoryAdapter.js';
-import type { CubeOutputExecutionStore } from './execution/CubeOutputExecutionStore.js';
 
 interface LifecycleLogger {
   error(...values: unknown[]): void;
@@ -39,8 +37,6 @@ interface CubeGraphConfigurationLifecycleOptions {
   preconfiguration: CubeWorkflowPreconfiguration;
   affordances: CubeAffordanceHostLifecycle;
   overlays: OverlayManager;
-  outputStore: CubeOutputExecutionStore;
-  outputHistory: ComfyCubeOutputHistoryAdapter;
   feedback: CubeHostFeedback;
   logger: LifecycleLogger;
 }
@@ -54,7 +50,6 @@ export class CubeGraphConfigurationLifecycle {
     const options = this.options;
     try {
       options.runtimeLifecycle.reset();
-      options.outputStore.clear();
       options.preconfiguration.prepare(graphData);
       options.affordances.attach(options.requireRuntime());
       options.overlays.proximity.resetOverlayState();
@@ -86,7 +81,6 @@ export class CubeGraphConfigurationLifecycle {
         );
       }
       options.affordances.adaptMissingNodes(missingNodeTypes);
-      void options.outputHistory.hydrateRecent();
       const graph = options.app?.canvas?.graph ?? comfyApp.graph ?? options.app?.graph;
       options.preconfiguration.restoreWidgets(graph);
       options.overlays.proximity.refreshOverlayState({

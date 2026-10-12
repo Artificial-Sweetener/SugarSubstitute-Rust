@@ -41,7 +41,7 @@ beforeEach(() => {
   app.reset();
   app.graph = {};
   app.canvas = setupCanvas();
-  app.extensionManager = { registerSidebarTab: () => {} };
+  app.extensionManager.registerSidebarTab = () => {};
   app.clean = () => {};
 
   globalThis.requestAnimationFrame = (callback) => {

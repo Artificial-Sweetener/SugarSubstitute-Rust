@@ -17,6 +17,7 @@
 import { modelOutputThumbnailMenu } from '../../../frontend/comfyui/ui/model_library/ModelOutputThumbnailMenu.js';
 import type { ModelOutputThumbnailChoice } from '../../../frontend/comfyui/ui/model_library/ModelOutputThumbnails.js';
 import { ComfyOutputThumbnailSource } from '../../../frontend/comfyui/ui/model_library/ComfyOutputThumbnailSource.js';
+import { workflowSnapshotOutput } from '../../execution/support/workflow_results.js';
 import { buildCubeOutputExecutionId } from '../../../frontend/comfyui/ui/cube/execution/CubeOutputExecutionIdentity.js';
 
 /** Construct one concrete reference choice without coupling grouping to image transport. */
@@ -75,7 +76,11 @@ test('reuses captured cube boundary results and labels before deduplicating inte
   const source = new ComfyOutputThumbnailSource(
     { graph, nodeOutputs: { 'cube:2': { images } } },
     document,
-    (executionId) => (executionId === marker ? { images } : undefined),
+    (executionId) =>
+      workflowSnapshotOutput(
+        executionId,
+        executionId === marker || executionId === 'cube:2' ? { images } : null,
+      ),
   );
   expect(source.choices()).toHaveLength(1);
   expect(source.choices()[0]).toMatchObject({
@@ -106,7 +111,10 @@ test.each([0, 2])(
     };
     const marker = buildCubeOutputExecutionId('cube', 0);
     const source = new ComfyOutputThumbnailSource(app, document, (executionId) =>
-      executionId === marker ? { images } : undefined,
+      workflowSnapshotOutput(
+        executionId,
+        executionId === marker || executionId === 'cube:2' ? { images } : null,
+      ),
     );
     const choices = source.choices();
     expect(choices).toHaveLength(2);
@@ -194,7 +202,9 @@ test('reads durable nested outputs, deduplicates concrete images and ignores pre
     nodePreviewImages: { '3:7': ['blob:live'] },
     canvas: { selected_nodes: { '7': node } },
   };
-  const source = new ComfyOutputThumbnailSource(app, document, () => undefined);
+  const source = new ComfyOutputThumbnailSource(app, document, (path) =>
+    workflowSnapshotOutput(path, path === '3:7' ? app.nodeOutputs['3:7'] : null),
+  );
   expect(source.choices()).toHaveLength(2);
   expect(source.choices()[0]?.sourceLabel).toBe('Cube / <img>Result');
   expect(source.activeChoice()?.id).toBe(source.choices()[1]?.id);
@@ -205,4 +215,41 @@ test('reads durable nested outputs, deduplicates concrete images and ignores pre
     'no longer available',
   );
   expect(source.choices()).toEqual([]);
+});
+
+test('refuses a thumbnail selection from another workflow even when its file and node identity collide', async () => {
+  const app = { graph: { _nodes: [{ id: 7, title: 'Result' }] } };
+  const media = { images: [{ filename: 'same-file.png', type: 'output' }] };
+  let output = workflowSnapshotOutput('7', media, 'workflow-a');
+  const source = new ComfyOutputThumbnailSource(app, document, () => output);
+  const chosen = source.choices()[0];
+  if (!chosen) throw new Error('Missing output');
+  output = workflowSnapshotOutput('7', media, 'workflow-b');
+  expect(source.choices()[0]?.id).not.toBe(chosen.id);
+  await expect(source.image(chosen.id, new AbortController().signal)).rejects.toThrow(
+    'no longer available',
+  );
+});
+
+test('offers distinct output images from two instances of the same nested graph definition', () => {
+  const definition = { _nodes: [{ id: 7, title: 'Result' }], outputs: [] };
+  const app = {
+    graph: {
+      _nodes: [
+        { id: 1, title: 'First', subgraph: definition },
+        { id: 2, title: 'Second', subgraph: definition },
+      ],
+    },
+  };
+  const source = new ComfyOutputThumbnailSource(app, document, (path) =>
+    path.endsWith(':7')
+      ? workflowSnapshotOutput(path, {
+          images: [{ filename: `${path.replace(':', '-')}.png`, type: 'output' }],
+        })
+      : null,
+  );
+  expect(source.choices().map((item) => [item.sourceKey, item.sourceLabel])).toEqual([
+    ['1:7', 'First / Result'],
+    ['2:7', 'Second / Result'],
+  ]);
 });

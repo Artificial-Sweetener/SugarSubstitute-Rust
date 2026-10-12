@@ -197,7 +197,12 @@ describe('CubeSurfacePresenter', () => {
         dispose() {},
       },
       previewCatalog: { snapshot },
-      previewEvents,
+      previewChanges: {
+        subscribe(listener) {
+          previewEvents.addEventListener('executed', listener);
+          return () => previewEvents.removeEventListener('executed', listener);
+        },
+      },
     });
     await flushMount();
     const initialCalls = snapshot.mock.calls.length;
@@ -243,7 +248,12 @@ describe('CubeSurfacePresenter', () => {
         setDirty: jest.fn(),
       },
       setDirtyCanvas,
-      previewEvents,
+      previewChanges: {
+        subscribe(listener) {
+          previewEvents.addEventListener('executed', listener);
+          return () => previewEvents.removeEventListener('executed', listener);
+        },
+      },
     });
     await flushMount();
     setDirtyCanvas.mockClear();

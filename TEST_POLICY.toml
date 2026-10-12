@@ -473,7 +473,7 @@ area = "execution"
 
 [[subscription]]
 boundary = "workflow_execution_results"
-groups = ["surface/integration", "output_canvas/integration"]
+groups = ["surface/integration", "surface/unit", "model_library/unit", "output_canvas/integration"]
 
 [[boundary]]
 name = "canvas_view"

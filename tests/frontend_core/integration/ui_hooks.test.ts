@@ -130,7 +130,7 @@ beforeEach(() => {
     processMouseUp: () => {},
     onNodeMoved: () => {},
   };
-  app.extensionManager = { registerSidebarTab: () => {} };
+  app.extensionManager.registerSidebarTab = () => {};
   app.clean = () => {};
 
   localStorage.clear();

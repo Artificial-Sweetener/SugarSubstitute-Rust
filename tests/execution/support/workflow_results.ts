@@ -142,3 +142,19 @@ export class WorkflowEventApi {
     for (const listener of this.listeners.get(name) ?? []) listener({ detail });
   }
 }
+
+/** Decode an external test payload through the real snapshot owner into a provenance-qualified result. */
+export function workflowSnapshotOutput(path: string, media: unknown, key = 'fixture') {
+  const decoded = decodeComfyMedia(media);
+  if (!decoded) return null;
+  const store = new WorkflowResultStore();
+  const session = workflowSubmission(key).session;
+  store.synchronize([session]);
+  store.restore(
+    session,
+    { id: outputSourceId(path), executionPath: path, label: path, breadcrumb: [], order: 0 },
+    decoded.payload,
+    key,
+  );
+  return store.read(session.sessionId)?.outputs[0] ?? null;
+}

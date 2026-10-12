@@ -95,7 +95,7 @@ test.each([false, true])(
           expect.objectContaining({
             executionPath: '42:23',
             label: '<literal>',
-            breadcrumb: ['42'],
+            breadcrumb: [],
           }),
         ],
       }),

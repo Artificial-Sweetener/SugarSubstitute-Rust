@@ -56,10 +56,7 @@ import { ComfyNativeSlotLayoutCoordinator } from './ComfyNativeSlotLayoutCoordin
 import type { CanvasGraphChangeSource } from './ComfyCanvasGraphChangeAdapter.js';
 import { CubeRendererTransitionStabilizer } from './CubeRendererTransitionStabilizer.js';
 import { CubeSurfaceRendererLifecycle } from './CubeSurfaceRendererLifecycle.js';
-import {
-  CubeSurfacePreviewCoordinator,
-  type ComfyNodePreviewEventSource,
-} from './CubeSurfacePreviewCoordinator.js';
+import { CubeSurfacePreviewCoordinator } from './CubeSurfacePreviewCoordinator.js';
 import { resolveCubeExternalInterface } from '../cube/graph/CubeExternalInterface.js';
 import { filterCubePreviewOutputs } from './CubePreviewModel.js';
 import type {
@@ -93,7 +90,6 @@ export interface CubeSurfacePresenterOptions {
   chromeActions?: CubeFaceChromeActions;
   portPresentation?: CubePortPresentationController;
   previewChanges?: { subscribe(listener: () => void): () => void };
-  previewEvents?: ComfyNodePreviewEventSource;
   graphChanges?: CanvasGraphChangeSource;
   rendererChanges?: ComfyRendererModeChangeSource;
   resolveIdentitySource?(metadata: UnknownRecord): CubeIdentitySource | null;
@@ -101,8 +97,6 @@ export interface CubeSurfacePresenterOptions {
   canEdit?(node: CubeNode): Promise<boolean>;
   onEditDenied?(node: CubeNode): void;
 }
-
-export type { ComfyNodePreviewEventSource } from './CubeSurfacePreviewCoordinator.js';
 
 interface MountedCubeSurface {
   root: HTMLElement;
@@ -241,7 +235,6 @@ export class CubeSurfacePresenter {
       setDirtyCanvas: this.#setDirtyCanvas,
       refreshVuePreviews: () => this.#refreshPreviews(),
       ...(options.previewChanges ? { previewChanges: options.previewChanges } : {}),
-      ...(options.previewEvents ? { previewEvents: options.previewEvents } : {}),
     });
     ensureCubeSurfaceStyles(options.document);
     this.#stabilizeSync();

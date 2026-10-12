@@ -16,7 +16,7 @@
 /** Characterize Comfy media lookup for the Cube preview rail. */
 
 import { ComfyCubePreviewCatalog } from '../../../frontend/comfyui/ui/surface/ComfyCubePreviewCatalog.js';
-import { CubePreviewRetentionStore } from '../../../frontend/comfyui/ui/surface/CubePreviewRetentionStore.js';
+import { workflowSnapshotOutput } from '../support/workflow_results.js';
 import type { NativeCubeSubgraph } from '../../../frontend/comfyui/ui/cube/ComfyCubeGraphBuilder.js';
 import type { CubeNode } from '../../../frontend/comfyui/ui/cube/node/ComfyCubeNodeFactory.js';
 import { buildCubeOutputExecutionId } from '../../../frontend/comfyui/ui/cube/execution/CubeOutputExecutionIdentity.js';
@@ -27,14 +27,16 @@ describe('ComfyCubePreviewCatalog', () => {
     const sampler = { id: 'sampler', type: 'KSampler', title: 'Sampler' };
     const cube = container('definition', [outputNode, sampler], ['image'], outputNode);
     const catalog = new ComfyCubePreviewCatalog({
-      getNodeOutputs: () => ({
-        'container-definition:save': {
-          images: [{ filename: 'output.png', subfolder: '', type: 'output' }],
-        },
-      }),
-      getNodePreviewImages: () => ({
-        'container-definition:sampler': ['blob:live-sample'],
-      }),
+      getOutput: (path) =>
+        snapshotFromMap(path, {
+          'container-definition:save': {
+            images: [{ filename: 'output.png', subfolder: '', type: 'output' }],
+          },
+        }),
+      getLivePreview: (path) =>
+        previewFromMap(path, {
+          'container-definition:sampler': ['blob:live-sample'],
+        }),
       buildOutputImageUrl: (image) => `/view?filename=${String(image.filename)}`,
     });
 
@@ -64,12 +66,13 @@ describe('ComfyCubePreviewCatalog', () => {
     };
     const cube = container('definition', [maskLoader], []);
     const catalog = new ComfyCubePreviewCatalog({
-      getNodeOutputs: () => ({
-        'load-mask-batch': {
-          images: [{ filename: 'selected-mask.png', subfolder: '', type: 'temp' }],
-        },
-      }),
-      getNodePreviewImages: () => ({}),
+      getOutput: (path) =>
+        snapshotFromMap(path, {
+          'load-mask-batch': {
+            images: [{ filename: 'selected-mask.png', subfolder: '', type: 'temp' }],
+          },
+        }),
+      getLivePreview: () => [],
       buildOutputImageUrl: (image) => `/view?filename=${String(image.filename)}`,
     });
 
@@ -81,12 +84,13 @@ describe('ComfyCubePreviewCatalog', () => {
     const cube = container('definition', [outputNode], ['output.image'], outputNode);
     const sinkId = buildCubeOutputExecutionId(cube.id, 0);
     const catalog = new ComfyCubePreviewCatalog({
-      getNodeOutputs: () => ({
-        [sinkId]: {
-          images: [{ filename: 'cube-output.png', subfolder: '', type: 'temp' }],
-        },
-      }),
-      getNodePreviewImages: () => ({}),
+      getOutput: (path) =>
+        snapshotFromMap(path, {
+          [sinkId]: {
+            images: [{ filename: 'cube-output.png', subfolder: '', type: 'temp' }],
+          },
+        }),
+      getLivePreview: () => [],
       buildOutputImageUrl: (image) => `/view?filename=${String(image.filename)}`,
     });
 
@@ -110,9 +114,8 @@ describe('ComfyCubePreviewCatalog', () => {
       },
     };
     const catalog = new ComfyCubePreviewCatalog({
-      getCubeOutput: (executionId) => capturedOutputs[executionId],
-      getNodeOutputs: () => ({}),
-      getNodePreviewImages: () => ({}),
+      getOutput: (path) => workflowSnapshotOutput(path, capturedOutputs[path]),
+      getLivePreview: () => [],
       buildOutputImageUrl: (image) => `/view?filename=${String(image.filename)}`,
     });
 
@@ -131,8 +134,8 @@ describe('ComfyCubePreviewCatalog', () => {
     const cube = container('definition', [outputNode], ['image'], outputNode);
     let nodeOutputs: Record<string, unknown> = {};
     const catalog = new ComfyCubePreviewCatalog({
-      getNodeOutputs: () => nodeOutputs,
-      getNodePreviewImages: () => ({}),
+      getOutput: (path) => workflowSnapshotOutput(path, nodeOutputs[path]),
+      getLivePreview: () => [],
       buildOutputImageUrl: (image) => `/view?filename=${String(image.filename)}`,
     });
 
@@ -150,14 +153,16 @@ describe('ComfyCubePreviewCatalog', () => {
     const outputNode = { id: 'save', type: 'PreviewImage' };
     const cube = container('definition', [outputNode], ['image'], outputNode);
     const catalog = new ComfyCubePreviewCatalog({
-      getNodeOutputs: () => ({
-        'container-definition:save': {
-          images: [{ filename: 'durable.png', subfolder: '', type: 'temp' }],
-        },
-      }),
-      getNodePreviewImages: () => ({
-        'container-definition:save': ['blob:transient-preview'],
-      }),
+      getOutput: (path) =>
+        snapshotFromMap(path, {
+          'container-definition:save': {
+            images: [{ filename: 'durable.png', subfolder: '', type: 'temp' }],
+          },
+        }),
+      getLivePreview: (path) =>
+        previewFromMap(path, {
+          'container-definition:save': ['blob:transient-preview'],
+        }),
       buildOutputImageUrl: (image) => `/view?filename=${String(image.filename)}`,
     });
 
@@ -177,10 +182,11 @@ describe('ComfyCubePreviewCatalog', () => {
     };
     const cube = container('definition', [detailer, color], ['output.image'], color);
     const catalog = new ComfyCubePreviewCatalog({
-      getNodeOutputs: () => ({}),
-      getNodePreviewImages: () => ({
-        'container-definition:detailer': ['blob:simple-syrup-full-context-detail-preview'],
-      }),
+      getOutput: () => null,
+      getLivePreview: (path) =>
+        previewFromMap(path, {
+          'container-definition:detailer': ['blob:simple-syrup-full-context-detail-preview'],
+        }),
       buildOutputImageUrl: () => null,
     });
 
@@ -212,10 +218,11 @@ describe('ComfyCubePreviewCatalog', () => {
     };
     const cube = container('definition', [sampler, decode, color], ['image'], color);
     const catalog = new ComfyCubePreviewCatalog({
-      getNodeOutputs: () => ({}),
-      getNodePreviewImages: () => ({
-        'container-definition:sampler': ['blob:sampling-preview'],
-      }),
+      getOutput: () => null,
+      getLivePreview: (path) =>
+        previewFromMap(path, {
+          'container-definition:sampler': ['blob:sampling-preview'],
+        }),
       buildOutputImageUrl: () => null,
     });
 
@@ -229,10 +236,11 @@ describe('ComfyCubePreviewCatalog', () => {
     const cube = container('definition', [outputNode], ['image'], outputNode);
     let refresh = 0;
     const catalog = new ComfyCubePreviewCatalog({
-      getNodeOutputs: () => ({
-        'container-definition:save': { images: [{ filename: 'stable.png', type: 'temp' }] },
-      }),
-      getNodePreviewImages: () => ({}),
+      getOutput: (path) =>
+        snapshotFromMap(path, {
+          'container-definition:save': { images: [{ filename: 'stable.png', type: 'temp' }] },
+        }),
+      getLivePreview: () => [],
       buildOutputImageUrl: () =>
         `/api/view?filename=stable.png&type=temp&rand=${String(++refresh)}`,
     });
@@ -248,12 +256,13 @@ describe('ComfyCubePreviewCatalog', () => {
     const outputNode = { id: 'save', type: 'PreviewImage' };
     const cube = container('definition', [outputNode], ['image'], outputNode);
     const catalog = new ComfyCubePreviewCatalog({
-      getNodeOutputs: () => ({
-        'container-definition:save': {
-          images: [{ filename: 'executed.png', subfolder: '', type: 'output' }],
-        },
-      }),
-      getNodePreviewImages: () => ({}),
+      getOutput: (path) =>
+        snapshotFromMap(path, {
+          'container-definition:save': {
+            images: [{ filename: 'executed.png', subfolder: '', type: 'output' }],
+          },
+        }),
+      getLivePreview: () => [],
       buildOutputImageUrl: (image) => `/view?filename=${String(image.filename)}`,
     });
 
@@ -268,12 +277,13 @@ describe('ComfyCubePreviewCatalog', () => {
     const cube = container('serialized-definition', [outputNode], ['image'], outputNode);
     cube.subgraph.id = 'live-definition';
     const catalog = new ComfyCubePreviewCatalog({
-      getNodeOutputs: () => ({
-        'container-serialized-definition:save': {
-          images: [{ filename: 'live.png', subfolder: '', type: 'output' }],
-        },
-      }),
-      getNodePreviewImages: () => ({}),
+      getOutput: (path) =>
+        snapshotFromMap(path, {
+          'container-serialized-definition:save': {
+            images: [{ filename: 'live.png', subfolder: '', type: 'output' }],
+          },
+        }),
+      getLivePreview: () => [],
       buildOutputImageUrl: (image) => `/view?filename=${String(image.filename)}`,
     });
 
@@ -289,10 +299,11 @@ describe('ComfyCubePreviewCatalog', () => {
     };
     const cube = container('cube-definition', [nestedSubgraph], []);
     const catalog = new ComfyCubePreviewCatalog({
-      getNodeOutputs: () => ({}),
-      getNodePreviewImages: () => ({
-        'container-cube-definition:nested:sampler': ['blob:nested-sample'],
-      }),
+      getOutput: () => null,
+      getLivePreview: (path) =>
+        previewFromMap(path, {
+          'container-cube-definition:nested:sampler': ['blob:nested-sample'],
+        }),
       buildOutputImageUrl: () => null,
     });
 
@@ -335,12 +346,13 @@ describe('ComfyCubePreviewCatalog', () => {
     };
     const catalog = new ComfyCubePreviewCatalog({
       getRootGraph: () => rootGraph,
-      getNodeOutputs: () => ({
-        preview: {
-          images: [{ filename: 'downstream.png', subfolder: '', type: 'temp' }],
-        },
-      }),
-      getNodePreviewImages: () => ({}),
+      getOutput: (path) =>
+        snapshotFromMap(path, {
+          preview: {
+            images: [{ filename: 'downstream.png', subfolder: '', type: 'temp' }],
+          },
+        }),
+      getLivePreview: () => [],
       buildOutputImageUrl: (image) => `/view?filename=${String(image.filename)}`,
     });
 
@@ -362,12 +374,13 @@ describe('ComfyCubePreviewCatalog', () => {
     const catalog = new ComfyCubePreviewCatalog({
       getRootGraph: () => ({ _nodes: [cube, preview], links: {} }),
       getEffectiveLinks: () => [{ originId: cube.id, originSlot: 0, targetId: preview.id }],
-      getNodeOutputs: () => ({
-        preview: {
-          images: [{ filename: 'auto-connected.png', subfolder: '', type: 'temp' }],
-        },
-      }),
-      getNodePreviewImages: () => ({}),
+      getOutput: (path) =>
+        snapshotFromMap(path, {
+          preview: {
+            images: [{ filename: 'auto-connected.png', subfolder: '', type: 'temp' }],
+          },
+        }),
+      getLivePreview: () => [],
       buildOutputImageUrl: (image) => `/view?filename=${String(image.filename)}`,
     });
 
@@ -376,7 +389,7 @@ describe('ComfyCubePreviewCatalog', () => {
     );
   });
 
-  test('retains the last executed media across transient graph lifecycle resets', () => {
+  test('removes media when its effective output route is removed', () => {
     const outputNode = { id: 'decode', type: 'VAEDecode' };
     const cube = container('definition', [outputNode], ['image'], outputNode);
     cube.outputs = [{ name: 'image', type: 'IMAGE', links: null }];
@@ -385,39 +398,39 @@ describe('ComfyCubePreviewCatalog', () => {
     const catalog = new ComfyCubePreviewCatalog({
       getRootGraph: () => ({ _nodes: [cube, preview], links: {} }),
       getEffectiveLinks: () => effectiveLinks,
-      getNodeOutputs: () => ({
-        preview: {
-          images: [{ filename: 'retained.png', subfolder: '', type: 'temp' }],
-        },
-      }),
-      getNodePreviewImages: () => ({}),
+      getOutput: (path) =>
+        snapshotFromMap(path, {
+          preview: {
+            images: [{ filename: 'retained.png', subfolder: '', type: 'temp' }],
+          },
+        }),
+      getLivePreview: () => [],
       buildOutputImageUrl: (image) => `/view?filename=${String(image.filename)}`,
     });
 
     expect(catalog.snapshot(cube).outputs[0]?.items[0]?.url).toBe('/view?filename=retained.png');
     effectiveLinks = [];
 
-    expect(catalog.snapshot(cube).outputs[0]?.items[0]?.url).toBe('/view?filename=retained.png');
+    expect(catalog.snapshot(cube).outputs[0]?.items).toEqual([]);
   });
 
   test('retains executed media when Comfy replaces the Cube node object', () => {
     const outputNode = { id: 'decode', type: 'VAEDecode' };
     const original = container('definition', [outputNode], ['image'], outputNode);
-    let nodeOutputs: Record<string, unknown> = {
+    const nodeOutputs: Record<string, unknown> = {
       'container-definition:decode': {
         images: [{ filename: 'retained-after-navigation.png', subfolder: '', type: 'temp' }],
       },
     };
     const catalog = new ComfyCubePreviewCatalog({
-      getNodeOutputs: () => nodeOutputs,
-      getNodePreviewImages: () => ({}),
+      getOutput: (path) => workflowSnapshotOutput(path, nodeOutputs[path]),
+      getLivePreview: () => [],
       buildOutputImageUrl: (image) => `/view?filename=${String(image.filename)}`,
     });
 
     expect(catalog.snapshot(original).outputs[0]?.items[0]?.url).toBe(
       '/view?filename=retained-after-navigation.png',
     );
-    nodeOutputs = {};
     const replacementOutput = { id: 'decode', type: 'VAEDecode' };
     const replacement = container('definition', [replacementOutput], ['image'], replacementOutput);
 
@@ -430,16 +443,18 @@ describe('ComfyCubePreviewCatalog', () => {
     const rootGraph = { _nodes: [], links: {} };
     const outputNode = { id: 'decode', type: 'VAEDecode' };
     const original = container('definition', [outputNode], ['image'], outputNode);
-    const retention = new CubePreviewRetentionStore();
+    const retainedOutput = workflowSnapshotOutput('container-definition:decode', {
+      images: [{ filename: 'retained-after-runtime-reset.png', type: 'temp' }],
+    });
     const populated = new ComfyCubePreviewCatalog({
       getRootGraph: () => rootGraph,
-      retention,
-      getNodeOutputs: () => ({
-        'container-definition:decode': {
-          images: [{ filename: 'retained-after-runtime-reset.png', type: 'temp' }],
-        },
-      }),
-      getNodePreviewImages: () => ({}),
+      getOutput: (path) =>
+        snapshotFromMap(path, {
+          'container-definition:decode': {
+            images: [{ filename: 'retained-after-runtime-reset.png', type: 'temp' }],
+          },
+        }),
+      getLivePreview: () => [],
       buildOutputImageUrl: (image) => `/view?filename=${String(image.filename)}`,
     });
 
@@ -451,10 +466,9 @@ describe('ComfyCubePreviewCatalog', () => {
     const replacement = container('definition', [replacementOutput], ['image'], replacementOutput);
     const reconstructed = new ComfyCubePreviewCatalog({
       getRootGraph: () => rootGraph,
-      retention,
-      getNodeOutputs: () => ({}),
-      getNodePreviewImages: () => ({}),
-      buildOutputImageUrl: () => null,
+      getOutput: () => retainedOutput,
+      getLivePreview: () => [],
+      buildOutputImageUrl: (image) => `/view?filename=${image.filename}`,
     });
 
     expect(reconstructed.snapshot(replacement).outputs[0]?.items[0]?.url).toBe(
@@ -511,4 +525,14 @@ function container(
     connect() {},
     serialize: () => ({}),
   };
+}
+
+/** Decode a selected external fixture record through shared workflow result ownership. */
+function snapshotFromMap(path: string, outputs: Readonly<Record<string, unknown>>) {
+  return workflowSnapshotOutput(path, outputs[path]);
+}
+
+/** Supply a typed already-qualified preview boundary for catalog presentation tests. */
+function previewFromMap(path: string, previews: Readonly<Record<string, readonly string[]>>) {
+  return previews[path] ?? [];
 }
