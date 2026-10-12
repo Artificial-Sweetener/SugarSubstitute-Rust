@@ -17,6 +17,10 @@
 
 import { jest } from '@jest/globals';
 import { ComfyPromptQueueBridge } from '../../../frontend/comfyui/ui/cube/execution/ComfyPromptQueueBridge.js';
+import type {
+  ComfyPromptQueueApi,
+  ComfyPromptQueueOptions,
+} from '../../../frontend/comfyui/ui/cube/execution/ComfyPromptQueueBridge.js';
 
 test('transforms prompts and restores only its own queue wrapper', async () => {
   const queuePrompt = jest.fn(
@@ -87,3 +91,192 @@ test('queues directly when SugarCubes owns the request and preserves legacy fall
   expect(queuePrompt).toHaveBeenCalledWith(0, 'substitute', undefined);
   bridge.dispose();
 });
+
+test('preserves ordinary callback order, host receiver, options and response identity', async () => {
+  const calls: string[] = [];
+  const input = { output: {} };
+  const prepared = { output: { prepared: {} } };
+  const transformed = { output: { transformed: {} } };
+  const response = { prompt_id: 'ordinary-prompt' };
+  const options: ComfyPromptQueueOptions = {
+    partialExecutionTargets: ['nested:output'],
+    previewMethod: 'latent2rgb',
+  };
+  const api: ComfyPromptQueueApi = {
+    async queuePrompt(this: ComfyPromptQueueApi, position, payload, forwardedOptions) {
+      calls.push('host');
+      expect(this).toBe(api);
+      expect(position).toBe(-1);
+      expect(payload).toBe(transformed);
+      expect(forwardedOptions).toBe(options);
+      return response;
+    },
+  };
+  const bridge = new ComfyPromptQueueBridge({
+    api,
+    prepare: (payload) => {
+      calls.push('prepare');
+      expect(payload).toBe(input);
+      return prepared;
+    },
+    transform: async (payload) => {
+      calls.push('transform');
+      expect(payload).toBe(prepared);
+      return transformed;
+    },
+    executeDirect: async () => {
+      throw new Error('Ordinary submissions must use the host queue.');
+    },
+    shouldExecuteDirect: (payload) => {
+      calls.push('decision');
+      expect(payload).toBe(input);
+      return false;
+    },
+    preflight: () => calls.push('preflight'),
+  });
+  bridge.install();
+
+  expect(await api.queuePrompt?.(-1, input, options)).toBe(response);
+  expect(calls).toEqual(['decision', 'prepare', 'transform', 'host']);
+  bridge.dispose();
+});
+
+test('direct submission decides on original input and preflights before preparation', async () => {
+  const calls: string[] = [];
+  const input = { workflow: { id: 'workflow-a' } };
+  const prepared = { output: {} };
+  const response = { prompt_id: 'direct-prompt' };
+  const options = { partialExecutionTargets: ['output'] };
+  const queuePrompt = jest.fn(async () => response);
+  const api: ComfyPromptQueueApi = { queuePrompt };
+  const bridge = new ComfyPromptQueueBridge({
+    api,
+    shouldExecuteDirect: (payload) => {
+      calls.push('decision');
+      expect(payload).toBe(input);
+      return true;
+    },
+    preflight: () => calls.push('preflight'),
+    prepare: () => {
+      calls.push('prepare');
+      return prepared;
+    },
+    transform: async () => {
+      throw new Error('Direct submissions must bypass transformation.');
+    },
+    executeDirect: async (position, payload, forwardedOptions) => {
+      calls.push('direct');
+      expect(position).toBe(3);
+      expect(payload).toBe(prepared);
+      expect(forwardedOptions).toBe(options);
+      return response;
+    },
+  });
+  bridge.install();
+
+  expect(await api.queuePrompt?.(3, input, options)).toBe(response);
+  expect(calls).toEqual(['decision', 'preflight', 'prepare', 'direct']);
+  expect(queuePrompt).not.toHaveBeenCalled();
+  bridge.dispose();
+});
+
+test.each(['prepare', 'transform', 'host', 'direct'] as const)(
+  'preserves the original %s failure and prevents downstream queue calls',
+  async (failureStage) => {
+    const failure = new Error(`${failureStage} rejected`);
+    const calls: string[] = [];
+    const api: ComfyPromptQueueApi = {
+      queuePrompt: async () => {
+        calls.push('host');
+        throw failure;
+      },
+    };
+    const bridge = new ComfyPromptQueueBridge({
+      api,
+      prepare: (payload) => {
+        calls.push('prepare');
+        if (failureStage === 'prepare') throw failure;
+        return payload;
+      },
+      transform: async (payload) => {
+        calls.push('transform');
+        if (failureStage === 'transform') throw failure;
+        return payload;
+      },
+      executeDirect: async () => {
+        calls.push('direct');
+        throw failure;
+      },
+      shouldExecuteDirect: () => failureStage === 'direct',
+    });
+    bridge.install();
+
+    await expect(api.queuePrompt?.(0, {})).rejects.toBe(failure);
+    expect(calls).toEqual(
+      failureStage === 'prepare'
+        ? ['prepare']
+        : failureStage === 'transform'
+          ? ['prepare', 'transform']
+          : failureStage === 'host'
+            ? ['prepare', 'transform', 'host']
+            : ['prepare', 'direct'],
+    );
+    bridge.dispose();
+  },
+);
+
+test('an already started submission completes through the captured host after disposal', async () => {
+  const pending = pendingTransformation();
+  const response = { prompt_id: 'pending-prompt' };
+  const queuePrompt = jest.fn(async (_position: number, _payload: unknown) => response);
+  const api: ComfyPromptQueueApi = { queuePrompt };
+  const bridge = new ComfyPromptQueueBridge({ api, transform: () => pending.promise });
+  bridge.install();
+  const request = api.queuePrompt?.(4, { workflow: { id: 'workflow-a' } });
+
+  bridge.dispose();
+  expect(api.queuePrompt).toBe(queuePrompt);
+  pending.resolve({ output: { prepared: {} } });
+
+  expect(await request).toBe(response);
+  expect(queuePrompt).toHaveBeenCalledWith(4, { output: { prepared: {} } }, undefined);
+});
+
+test('repeated installation is stable and disposal preserves a later extension wrapper', () => {
+  const original = jest.fn(async () => ({}));
+  const api: ComfyPromptQueueApi = { queuePrompt: original };
+  const bridge = new ComfyPromptQueueBridge({ api, transform: async (payload) => payload });
+  bridge.install();
+  const installed = api.queuePrompt;
+  bridge.install();
+  expect(api.queuePrompt).toBe(installed);
+
+  const replacement = jest.fn(async () => ({ prompt_id: 'other-extension' }));
+  api.queuePrompt = replacement;
+  bridge.dispose();
+  bridge.dispose();
+  expect(api.queuePrompt).toBe(replacement);
+});
+
+test('installation without a host queue fails without creating a replacement', () => {
+  const api: ComfyPromptQueueApi = {};
+  const bridge = new ComfyPromptQueueBridge({ api, transform: async (payload) => payload });
+  expect(() => bridge.install()).toThrow('Comfy queuePrompt is unavailable.');
+  expect(api.queuePrompt).toBeUndefined();
+  bridge.dispose();
+});
+
+/** Hold transformation at its external async boundary until a lifecycle transition settles. */
+function pendingTransformation(): { promise: Promise<unknown>; resolve(value: unknown): void } {
+  let complete: ((value: unknown) => void) | undefined;
+  const promise = new Promise<unknown>((resolve) => {
+    complete = resolve;
+  });
+  return {
+    promise,
+    resolve(value) {
+      if (!complete) throw new Error('The pending transformation has not been initialized.');
+      complete(value);
+    },
+  };
+}
