@@ -4,6 +4,17 @@
 //! Reject malformed and premature web readiness at the protocol owner.
 
 use super::*;
+
+/// Every consumer uses the same byte bound and exact ASCII grammar as readiness receipts.
+#[test]
+fn shared_version_validator_preserves_exact_boundary_and_grammar() {
+    for value in ["1", "1.2.3+build-dev_1", &"a".repeat(64)] {
+        assert!(validate_frontend_version(value).is_ok());
+    }
+    for value in ["", "a b", "a\0b", "a/b", "é", &"a".repeat(65)] {
+        assert!(matches!(validate_frontend_version(value), Err(ReadinessError::InvalidVersion)));
+    }
+}
 use serde_json::{Value, json};
 
 /// Supply every independently required observation from the installed owners.

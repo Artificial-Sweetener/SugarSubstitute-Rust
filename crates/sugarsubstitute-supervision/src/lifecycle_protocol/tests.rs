@@ -5,7 +5,9 @@ use super::*;
 use std::{error::Error, path::PathBuf};
 use sugarsubstitute_contracts::{
     configuration::{LaunchConfiguration, LoopbackOrigin},
+    execution::Generation,
     lifecycle::*,
+    startup::{LaunchId, MainIdentity},
 };
 type TestResult = Result<(), Box<dyn Error>>;
 fn header(kind: u16) -> Result<WireHeader, Box<dyn Error>> {
@@ -53,3 +55,16 @@ fn set_length(frame: &mut [u8]) {
 mod framing;
 mod payloads;
 mod targets;
+
+fn main() -> Result<MainIdentity, Box<dyn Error>> {
+    Ok(MainIdentity {
+        run: header(4)?.run,
+        launch: LaunchId::new(37)?,
+        navigation: Generation::new(41)?,
+    })
+}
+mod extensions;
+
+mod output;
+
+mod admission;

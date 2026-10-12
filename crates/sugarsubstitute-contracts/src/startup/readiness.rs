@@ -122,9 +122,8 @@ impl ReadinessReceipt {
             Generation::new(wire.navigation_generation).map_err(ReadinessError::Identity)?;
         match &wire.outcome {
             ReadinessOutcome::Ready { evidence } => {
-                if !version(&evidence.frontend_version) || !version(&evidence.sugarcubes_version) {
-                    return Err(ReadinessError::InvalidVersion);
-                }
+                validate_frontend_version(&evidence.frontend_version)?;
+                validate_frontend_version(&evidence.sugarcubes_version)?;
                 if !(evidence.app_graph_ready
                     && evidence.canvas_connected
                     && evidence.loading_finished
@@ -174,11 +173,20 @@ struct WireReceipt {
     outcome: ReadinessOutcome,
 }
 
-/// Reject unbounded or control-bearing observed version labels.
-fn version(value: &str) -> bool {
-    !value.is_empty()
+/// Validate a nonempty observed frontend or extension version without granting source trust.
+/// Labels contain at most 64 ASCII alphanumeric or `.+-_` bytes.
+///
+/// # Errors
+/// Returns `InvalidVersion` for labels outside this bound or grammar.
+pub fn validate_frontend_version(value: &str) -> Result<(), ReadinessError> {
+    if !value.is_empty()
         && value.len() <= 64
         && value.bytes().all(|byte| byte.is_ascii_alphanumeric() || b".+-_".contains(&byte))
+    {
+        Ok(())
+    } else {
+        Err(ReadinessError::InvalidVersion)
+    }
 }
 
 /// Distinguish malformed protocol data from incomplete presentation evidence.

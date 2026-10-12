@@ -20,5 +20,5 @@ pub use main_identity::MainIdentity;
 
 pub use readiness::{
     FrontendEvidence, LaunchId, ProbeFailure, ReadinessError, ReadinessFailure, ReadinessOutcome,
-    ReadinessReceipt,
+    ReadinessReceipt, validate_frontend_version,
 };

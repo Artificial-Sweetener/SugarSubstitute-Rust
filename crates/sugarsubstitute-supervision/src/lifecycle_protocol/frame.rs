@@ -24,7 +24,7 @@ impl WireHeader {
         let valid = match kind {
             1 => self.connection.is_none() && self.request.is_none(),
             2 | 9 => self.connection.is_some() && self.request.is_none(),
-            3..=8 | 10..=11 => self.connection.is_some() && self.request.is_some(),
+            3..=8 | 10..=18 => self.connection.is_some() && self.request.is_some(),
             _ => return Err(ProtocolError::UnsupportedTag),
         };
         if valid { Ok(()) } else { Err(ProtocolError::Identity) }

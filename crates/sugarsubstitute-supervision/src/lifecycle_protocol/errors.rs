@@ -7,6 +7,14 @@ use sugarsubstitute_contracts::configuration::ConfigurationError;
 /// Reject a malformed or unsupported frame without native or authentication effects.
 #[derive(Debug)]
 pub enum ProtocolError {
+    /// Raw Windows units are empty, oversized or have an odd byte count.
+    RawWindowsPath,
+    /// Folder total, offset or chunk count violates the fixed two-fragment partition.
+    FragmentShape,
+    /// A bounded label violates the shared readiness version grammar.
+    VersionLabel,
+    /// Output bytes, flags or explicit loss violate the bounded raw-batch shape.
+    OutputShape,
     /// The complete frame exceeds the 64 KiB control limit.
     FrameTooLarge,
     /// A fixed field or length-prefixed value is incomplete.

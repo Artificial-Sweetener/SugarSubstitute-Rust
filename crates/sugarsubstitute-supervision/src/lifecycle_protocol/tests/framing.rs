@@ -8,7 +8,7 @@ fn exact_header_layout_and_large_integer_ticks_match_independent_goldens() -> Te
     let encoded = encoded(WirePayload::Register)?;
     let mut golden = Vec::new();
     golden.extend(b"SSLC");
-    golden.extend(1u16.to_le_bytes());
+    golden.extend(2u16.to_le_bytes());
     golden.extend(104u16.to_le_bytes());
     golden.extend(104u32.to_le_bytes());
     golden.extend(3u16.to_le_bytes());
@@ -26,7 +26,7 @@ fn exact_header_layout_and_large_integer_ticks_match_independent_goldens() -> Te
 #[test]
 fn unknown_schema_kind_reserved_and_frame_size_fail_closed() -> TestResult {
     let original = encoded(WirePayload::Register)?;
-    for (offset, replacement) in [(0, 0), (4, 2), (6, 103), (12, 0), (12, 12), (14, 1)] {
+    for (offset, replacement) in [(0, 0), (4, 1), (6, 103), (12, 0), (12, 19), (14, 1)] {
         let mut frame = original.clone();
         frame[offset] = replacement;
         assert!(FrameCodec::decode(&frame).is_err(), "Offset{offset}");

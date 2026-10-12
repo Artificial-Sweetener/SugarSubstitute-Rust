@@ -13,7 +13,7 @@ fn all_fixed_operations_roundtrip_with_stable_kind_and_payload_lengths() -> Test
         (WirePayload::Welcome { qpc_frequency: 10_000_000 }, 2, 8),
         (WirePayload::Register, 3, 0),
         (WirePayload::Release(reference), 5, 24),
-        (WirePayload::Reload(reference), 6, 24),
+        (WirePayload::Reload { lease: reference, identity: main()? }, 6, 40),
         (
             WirePayload::ExitIntent {
                 shutdown,
@@ -53,7 +53,7 @@ fn all_fixed_operations_roundtrip_with_stable_kind_and_payload_lengths() -> Test
             DecodedPayload::Hello(secret) => assert_eq!(secret.bytes(), &[0xAB; 32]),
             DecodedPayload::Welcome { qpc_frequency } => assert_eq!(qpc_frequency, 10_000_000),
             DecodedPayload::Register => assert_eq!(kind, 3),
-            DecodedPayload::Release(value) | DecodedPayload::Reload(value) => {
+            DecodedPayload::Release(value) | DecodedPayload::Reload { lease: value, .. } => {
                 assert_eq!(value, reference)
             }
             DecodedPayload::ExitIntent { shutdown: id, intent, expected_code } => {
@@ -66,7 +66,7 @@ fn all_fixed_operations_roundtrip_with_stable_kind_and_payload_lengths() -> Test
                 assert_eq!(value, challenge)
             }
             DecodedPayload::Reply(value) => assert_eq!(value, ReplyOutcome::Acknowledged),
-            DecodedPayload::Acquire(_) => return Err("Unexpected target operation".into()),
+            _ => return Err("Unexpected target operation".into()),
         }
     }
     for (intent, tag) in [
@@ -91,11 +91,9 @@ fn every_reply_classification_has_explicit_stable_tags_and_exact_roundtrip() -> 
         (ReplyOutcome::Released, vec![4]),
         (ReplyOutcome::Cancelled, vec![6]),
     ];
-    for (reply, tag) in [
-        (ReplyOutcome::Pending(reference), 2),
-        (ReplyOutcome::Granted(reference), 3),
-        (ReplyOutcome::Reloaded(reference), 5),
-    ] {
+    for (reply, tag) in
+        [(ReplyOutcome::Pending(reference), 2), (ReplyOutcome::Reloaded(reference), 5)]
+    {
         let mut bytes = vec![tag];
         for value in [17u64, 19, 23] {
             bytes.extend(value.to_le_bytes());
@@ -136,7 +134,7 @@ fn every_reply_classification_has_explicit_stable_tags_and_exact_roundtrip() -> 
 #[test]
 fn unknown_reply_intent_and_zero_nested_identity_fail_closed() -> TestResult {
     for (payload, offset, replacement) in [
-        (WirePayload::Reply(ReplyOutcome::Acknowledged), 104, 9),
+        (WirePayload::Reply(ReplyOutcome::Acknowledged), 104, 15),
         (WirePayload::Reply(ReplyOutcome::Failed(LifecycleFailureCode::Deadline)), 105, 5),
         (WirePayload::Reply(ReplyOutcome::Rejected(LifecycleRejection::EndpointMismatch)), 105, 11),
         (

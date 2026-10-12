@@ -2,9 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Decode complete fixed-schema frames without allocating launch data.
 use super::{
-    ArgumentRefs, CapabilityRef, DecodedFrame, DecodedPayload, DecodedTarget, HEADER_BYTES,
-    LeaseReference, MAX_FRAME_BYTES, ManagedTargetRef, ProtocolError, ReplyOutcome, Utf16Text,
-    WIRE_VERSION, WireHeader, binary::Reader, reply,
+    ArgumentRefs, CapabilityRef, DecodedFrame, DecodedPayload, DecodedTarget, FolderFragment,
+    HEADER_BYTES, LeaseReference, MAX_FRAME_BYTES, ManagedTargetRef, ProtocolError, Utf16Text,
+    WIRE_VERSION, WireHeader, binary::Reader, main_fields, reply_codec,
 };
 use std::num::NonZeroU16;
 use sugarsubstitute_contracts::{
@@ -12,7 +12,7 @@ use sugarsubstitute_contracts::{
     lifecycle::{
         CompletionIntent, ConnectionId, CoordinatorEpoch, CoordinatorKey, InstanceId, LeaseId,
         NamespaceId, RequestId, ResourceGeneration, ResourceId, RunGeneration, RunKey, ShutdownId,
-        UiChallengeId,
+        UiChallengeId, UiWatchdogActivity,
     },
 };
 
@@ -73,9 +73,15 @@ pub(super) fn frame(source: &[u8]) -> Result<DecodedFrame<'_>, ProtocolError> {
             DecodedPayload::Welcome { qpc_frequency }
         }
         3 => DecodedPayload::Register,
-        4 => DecodedPayload::Acquire(target(&mut input, source)?),
+        4 => DecodedPayload::Acquire {
+            identity: main_fields::read_identity(&mut input, run)?,
+            target: target(&mut input, source)?,
+        },
         5 => DecodedPayload::Release(lease(&mut input)?),
-        6 => DecodedPayload::Reload(lease(&mut input)?),
+        6 => DecodedPayload::Reload {
+            lease: lease(&mut input)?,
+            identity: main_fields::read_identity(&mut input, run)?,
+        },
         7 => DecodedPayload::ExitIntent {
             shutdown: ShutdownId::new(input.u64()?).map_err(|_| ProtocolError::Identity)?,
             intent: intent(input.u8()?)?,
@@ -90,7 +96,28 @@ pub(super) fn frame(source: &[u8]) -> Result<DecodedFrame<'_>, ProtocolError> {
         10 => DecodedPayload::UiResponse(
             UiChallengeId::new(input.u64()?).map_err(|_| ProtocolError::Identity)?,
         ),
-        11 => DecodedPayload::Reply(outcome(&mut input)?),
+        11 => DecodedPayload::Reply(reply_codec::read(&mut input, run)?),
+        12 => DecodedPayload::RequestedProfileFolder(FolderFragment::read(&mut input, run)?),
+        13 => DecodedPayload::EnvironmentPrepared(FolderFragment::read(&mut input, run)?),
+        14 => DecodedPayload::ControllerPrepared {
+            identity: main_fields::read_identity(&mut input, run)?,
+            browser_process_id: main_fields::read_pid(&mut input)?,
+        },
+        15 => DecodedPayload::MainRetired(main_fields::read_identity(&mut input, run)?),
+        16 => DecodedPayload::NativeActivity {
+            revision: main_fields::read_positive(&mut input)?,
+            activity: match input.u8()? {
+                1 => UiWatchdogActivity::VisibleActive,
+                2 => UiWatchdogActivity::Inactive,
+                3 => UiWatchdogActivity::Suspended,
+                _ => return Err(ProtocolError::UnsupportedTag),
+            },
+        },
+        17 => DecodedPayload::OutputPull {
+            lease: lease(&mut input)?,
+            acknowledged_delivery: std::num::NonZeroU64::new(input.u64()?),
+        },
+        18 => DecodedPayload::MainFailed(main_fields::read_stage_failure(&mut input, run)?),
         _ => return Err(ProtocolError::UnsupportedTag),
     };
     input.finish()?;
@@ -127,7 +154,7 @@ fn target<'a>(
 fn port(value: u16) -> Result<NonZeroU16, ProtocolError> {
     NonZeroU16::new(value).ok_or(ProtocolError::Configuration(ConfigurationError::InvalidPort))
 }
-fn lease(input: &mut Reader<'_>) -> Result<LeaseReference, ProtocolError> {
+pub(super) fn lease(input: &mut Reader<'_>) -> Result<LeaseReference, ProtocolError> {
     Ok(LeaseReference {
         resource: ResourceId::new(input.u64()?).map_err(|_| ProtocolError::Identity)?,
         generation: ResourceGeneration::new(input.u64()?).map_err(|_| ProtocolError::Identity)?,
@@ -139,19 +166,6 @@ fn intent(tag: u8) -> Result<CompletionIntent, ProtocolError> {
         1 => Ok(CompletionIntent::Normal),
         2 => Ok(CompletionIntent::StartupCancelled),
         3 => Ok(CompletionIntent::StartupFailed),
-        _ => Err(ProtocolError::UnsupportedTag),
-    }
-}
-fn outcome(input: &mut Reader<'_>) -> Result<ReplyOutcome, ProtocolError> {
-    match input.u8()? {
-        1 => Ok(ReplyOutcome::Acknowledged),
-        2 => Ok(ReplyOutcome::Pending(lease(input)?)),
-        3 => Ok(ReplyOutcome::Granted(lease(input)?)),
-        4 => Ok(ReplyOutcome::Released),
-        5 => Ok(ReplyOutcome::Reloaded(lease(input)?)),
-        6 => Ok(ReplyOutcome::Cancelled),
-        7 => Ok(ReplyOutcome::Failed(reply::failure(input.u8()?)?)),
-        8 => Ok(ReplyOutcome::Rejected(reply::rejection(input.u8()?)?)),
         _ => Err(ProtocolError::UnsupportedTag),
     }
 }

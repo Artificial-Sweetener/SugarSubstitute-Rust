@@ -1,18 +1,21 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Assign stable explicit wire tags independently of Rust enum layouts.
-use super::{LeaseReference, ProtocolError};
+use super::{GrantedContext, LeaseReference, MainStageFailure, OutputDelivery, ProtocolError};
+use std::num::NonZeroU32;
 use sugarsubstitute_contracts::lifecycle::{LifecycleFailureCode, LifecycleRejection};
+use sugarsubstitute_contracts::startup::MainIdentity;
 
 /// Bounded wire disposition; native causes and actual cleanup ownership stay local.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ReplyOutcome {
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ReplyOutcome<'a> {
     /// Tag 1: the requested finite logical operation was acknowledged.
     Acknowledged,
     /// Tag 2: lease reservation exists but readiness has not been established.
     Pending(LeaseReference),
-    /// Tag 3: actual readiness established the matching lease.
-    Granted(LeaseReference),
+    /// Tag 3: claimed matching ready lease and current main origin/versions.
+    /// Native authentication and actual retained readiness/source proof remain separate.
+    Granted(GrantedContext<'a>),
     /// Tag 4: lease release recorded; family settlement is independent.
     Released,
     /// Tag 5: matching lease retained through frontend reload.
@@ -23,6 +26,28 @@ pub enum ReplyOutcome {
     Failed(LifecycleFailureCode),
     /// Tag 8: unchanged input rejected by the authoritative application owner.
     Rejected(LifecycleRejection),
+    /// Tag9: exact pending environment stage authorization; native proof stays local.
+    EnvironmentAuthorized(MainIdentity),
+    /// Tag10: exact pending browser stage authorization; no serialized kernel authority.
+    BrowserAuthorized {
+        /// Current main attempt that received native family validation.
+        identity: MainIdentity,
+        /// Exact matching controller PID; retained birth/Job proof remains local.
+        browser_process_id: NonZeroU32,
+    },
+    /// Tag11: bounded assembly progress; grants no native continuation.
+    FolderChunkAccepted {
+        /// Current main folder transaction.
+        identity: MainIdentity,
+        /// Positive next offset/complete total, at most32766 units; root matches actual assembly.
+        next_offset_units: u32,
+    },
+    /// Tag12: one borrowed raw output batch, without ingestion or process-settlement inference.
+    OutputDelivery(OutputDelivery<'a>),
+    /// Tag13: no currently available batch; never synthetic EOF.
+    OutputIdle(LeaseReference),
+    /// Tag14: bounded authorization/native stage failure; custody remains separately owned.
+    MainStageFailed(MainStageFailure),
 }
 pub(super) const fn failure_tag(code: LifecycleFailureCode) -> u8 {
     match code {

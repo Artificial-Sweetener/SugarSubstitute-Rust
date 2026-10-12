@@ -2,19 +2,19 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Preflight the entire immutable input before mutating caller-owned output.
 use super::{
-    HEADER_BYTES, LeaseReference, MAX_FRAME_BYTES, ProtocolError, ReplyOutcome, WIRE_VERSION,
-    WireMessage, WirePayload, reply,
+    HEADER_BYTES, LeaseReference, MAX_FRAME_BYTES, ProtocolError, WIRE_VERSION, WireMessage,
+    WirePayload, binary::Writer, main_fields, reply_codec,
 };
 use sugarsubstitute_contracts::{
     configuration::{LoopbackHost, MAX_ARGUMENT_BYTES, MAX_ARGUMENTS, MAX_TOTAL_ARGUMENT_BYTES},
-    lifecycle::{BackendTarget, CompletionIntent},
+    lifecycle::{BackendTarget, CompletionIntent, RunKey, UiWatchdogActivity},
 };
 
 pub(super) fn frame(message: &WireMessage<'_>, output: &mut [u8]) -> Result<usize, ProtocolError> {
     let kind = message.payload.kind();
     message.header.validate(kind)?;
     let mut measured = Writer::measure();
-    payload(&message.payload, &mut measured)?;
+    payload(&message.payload, message.header.run, &mut measured)?;
     let length = HEADER_BYTES.checked_add(measured.position).ok_or(ProtocolError::Length)?;
     if length > MAX_FRAME_BYTES {
         return Err(ProtocolError::FrameTooLarge);
@@ -37,57 +37,14 @@ pub(super) fn frame(message: &WireMessage<'_>, output: &mut [u8]) -> Result<usiz
     writer.u64(header.connection.map_or(0, |id| id.get()))?;
     writer.u64(header.request.map_or(0, |id| id.get()))?;
     writer.put(&header.deadline_qpc.to_le_bytes())?;
-    payload(&message.payload, &mut writer)?;
+    payload(&message.payload, message.header.run, &mut writer)?;
     Ok(length)
 }
-struct Writer<'a> {
-    output: Option<&'a mut [u8]>,
-    position: usize,
-}
-impl Writer<'_> {
-    fn measure() -> Self {
-        Self { output: None, position: 0 }
-    }
-    fn put(&mut self, bytes: &[u8]) -> Result<(), ProtocolError> {
-        let end = self.position.checked_add(bytes.len()).ok_or(ProtocolError::Length)?;
-        if end > MAX_FRAME_BYTES {
-            return Err(ProtocolError::FrameTooLarge);
-        }
-        if let Some(output) = &mut self.output {
-            let destination = output.get_mut(self.position..end).ok_or(ProtocolError::Length)?;
-            destination.copy_from_slice(bytes);
-        }
-        self.position = end;
-        Ok(())
-    }
-    fn u8(&mut self, value: u8) -> Result<(), ProtocolError> {
-        self.put(&[value])
-    }
-    fn u16(&mut self, value: u16) -> Result<(), ProtocolError> {
-        self.put(&value.to_le_bytes())
-    }
-    fn u32(&mut self, value: u32) -> Result<(), ProtocolError> {
-        self.put(&value.to_le_bytes())
-    }
-    fn u64(&mut self, value: u64) -> Result<(), ProtocolError> {
-        self.put(&value.to_le_bytes())
-    }
-    fn text(&mut self, value: &str, maximum_units: usize) -> Result<(), ProtocolError> {
-        let units = value.encode_utf16().count();
-        if units > maximum_units {
-            return Err(ProtocolError::Length);
-        }
-        if value.contains('\0') {
-            return Err(ProtocolError::InteriorNul);
-        }
-        self.u32(u32::try_from(units).map_err(|_| ProtocolError::Length)?)?;
-        for unit in value.encode_utf16() {
-            self.u16(unit)?;
-        }
-        Ok(())
-    }
-}
-fn payload(payload: &WirePayload<'_>, writer: &mut Writer<'_>) -> Result<(), ProtocolError> {
+fn payload(
+    payload: &WirePayload<'_>,
+    run: RunKey,
+    writer: &mut Writer<'_>,
+) -> Result<(), ProtocolError> {
     match payload {
         WirePayload::Hello(secret) => writer.put(secret.bytes()),
         WirePayload::Welcome { qpc_frequency } => {
@@ -97,9 +54,14 @@ fn payload(payload: &WirePayload<'_>, writer: &mut Writer<'_>) -> Result<(), Pro
             writer.put(&qpc_frequency.to_le_bytes())
         }
         WirePayload::Register => Ok(()),
-        WirePayload::Acquire(target) => encode_target(target, writer),
-        WirePayload::Release(reference) | WirePayload::Reload(reference) => {
-            lease(*reference, writer)
+        WirePayload::Acquire { identity, target } => {
+            main_fields::write_identity(*identity, run, writer)?;
+            encode_target(target, writer)
+        }
+        WirePayload::Release(reference) => lease(*reference, writer),
+        WirePayload::Reload { lease: reference, identity } => {
+            lease(*reference, writer)?;
+            main_fields::write_identity(*identity, run, writer)
         }
         WirePayload::ExitIntent { shutdown, intent, expected_code } => {
             writer.u64(shutdown.get())?;
@@ -114,7 +76,27 @@ fn payload(payload: &WirePayload<'_>, writer: &mut Writer<'_>) -> Result<(), Pro
         WirePayload::UiChallenge(challenge) | WirePayload::UiResponse(challenge) => {
             writer.u64(challenge.get())
         }
-        WirePayload::Reply(reply) => outcome(*reply, writer),
+        WirePayload::Reply(reply) => reply_codec::write(*reply, run, writer),
+        WirePayload::RequestedProfileFolder(fragment)
+        | WirePayload::EnvironmentPrepared(fragment) => fragment.write(run, writer),
+        WirePayload::ControllerPrepared { identity, browser_process_id } => {
+            main_fields::write_identity(*identity, run, writer)?;
+            writer.u32(browser_process_id.get())
+        }
+        WirePayload::MainRetired(identity) => main_fields::write_identity(*identity, run, writer),
+        WirePayload::NativeActivity { revision, activity } => {
+            writer.u64(revision.get())?;
+            writer.u8(match activity {
+                UiWatchdogActivity::VisibleActive => 1,
+                UiWatchdogActivity::Inactive => 2,
+                UiWatchdogActivity::Suspended => 3,
+            })
+        }
+        WirePayload::OutputPull { lease: reference, acknowledged_delivery } => {
+            lease(*reference, writer)?;
+            writer.u64(acknowledged_delivery.map_or(0, std::num::NonZeroU64::get))
+        }
+        WirePayload::MainFailed(value) => main_fields::write_stage_failure(*value, run, writer),
     }
 }
 fn encode_target(target: &BackendTarget, writer: &mut Writer<'_>) -> Result<(), ProtocolError> {
@@ -156,35 +138,11 @@ fn encode_target(target: &BackendTarget, writer: &mut Writer<'_>) -> Result<(), 
         }
     }
 }
-fn lease(reference: LeaseReference, writer: &mut Writer<'_>) -> Result<(), ProtocolError> {
+pub(super) fn lease(
+    reference: LeaseReference,
+    writer: &mut Writer<'_>,
+) -> Result<(), ProtocolError> {
     writer.u64(reference.resource.get())?;
     writer.u64(reference.generation.get())?;
     writer.u64(reference.lease.get())
-}
-fn outcome(outcome: ReplyOutcome, writer: &mut Writer<'_>) -> Result<(), ProtocolError> {
-    match outcome {
-        ReplyOutcome::Acknowledged => writer.u8(1),
-        ReplyOutcome::Pending(reference) => {
-            writer.u8(2)?;
-            lease(reference, writer)
-        }
-        ReplyOutcome::Granted(reference) => {
-            writer.u8(3)?;
-            lease(reference, writer)
-        }
-        ReplyOutcome::Released => writer.u8(4),
-        ReplyOutcome::Reloaded(reference) => {
-            writer.u8(5)?;
-            lease(reference, writer)
-        }
-        ReplyOutcome::Cancelled => writer.u8(6),
-        ReplyOutcome::Failed(code) => {
-            writer.u8(7)?;
-            writer.u8(reply::failure_tag(code))
-        }
-        ReplyOutcome::Rejected(code) => {
-            writer.u8(8)?;
-            writer.u8(reply::rejection_tag(code))
-        }
-    }
 }
