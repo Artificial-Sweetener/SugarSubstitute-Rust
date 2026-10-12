@@ -1,19 +1,25 @@
 import {
+  canvasContextActions
+} from "../../../chunk-OKGOB56C.js";
+import {
   CanvasOverlay
-} from "../../../chunk-CP7YOWFW.js";
-import "../../../chunk-OVL65VLS.js";
-import "../../../chunk-R5Y5EX6O.js";
-import "../../../chunk-HDLA7PWP.js";
+} from "../../../chunk-LCQN2BM6.js";
+import {
+  canvasNavigationSnapshot
+} from "../../../chunk-HDLA7PWP.js";
 import {
   ensureCanvasOverlayStyles
-} from "../../../chunk-FNZ3LMZP.js";
-import "../../../chunk-BBIMJ2PJ.js";
-import "../../../chunk-KMETGHKY.js";
+} from "../../../chunk-5XNNGA4Q.js";
+import "../../../chunk-MS5JIV6F.js";
+import "../../../chunk-OVL65VLS.js";
 import {
   createApp,
   h,
   shallowRef
 } from "../../../chunk-MNPWJMUZ.js";
+
+// frontend/comfyui/ui/output_canvas/presentation/vue/CanvasOverlayRuntime.ts
+import { ContextMenu } from "../../../menus/ContextMenu.js";
 
 // frontend/comfyui/ui/output_canvas/domain/CanvasIdentity.ts
 function sameCanvasAttachment(left, right) {
@@ -21,7 +27,7 @@ function sameCanvasAttachment(left, right) {
 }
 
 // frontend/comfyui/ui/output_canvas/presentation/vue/CanvasOverlayRuntime.ts
-function mountCanvasOverlay(element, port, reportFailure) {
+function mountCanvasOverlay(element, port, reportFailure, interactionSurface = element) {
   ensureCanvasOverlayStyles(element.ownerDocument);
   const initial = port.read();
   const state = shallowRef(initial);
@@ -50,9 +56,38 @@ function mountCanvasOverlay(element, port, reportFailure) {
       }
     }
   }
+  const menu = new ContextMenu(element.ownerDocument);
+  function openMenu(event) {
+    if (event instanceof KeyboardEvent && event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10"))
+      return;
+    const target = event.target;
+    if (target instanceof Element && target.closest("input,select,textarea")) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const bounds = interactionSurface.getBoundingClientRect();
+    menu.open({
+      label: "Output actions",
+      anchor: {
+        kind: "pointer",
+        x: event instanceof MouseEvent ? event.clientX : bounds.left + 12,
+        y: event instanceof MouseEvent ? event.clientY : bounds.bottom - 48
+      },
+      trigger: target instanceof HTMLElement ? target : interactionSurface,
+      entries: canvasContextActions(state.value, port.capabilities, send)
+    });
+  }
+  interactionSurface.addEventListener("contextmenu", openMenu);
+  interactionSurface.addEventListener("keydown", openMenu);
+  function closeInteraction() {
+    menu.close();
+    interactionSurface.removeEventListener("contextmenu", openMenu);
+    interactionSurface.removeEventListener("keydown", openMenu);
+  }
   const unsubscribe = port.subscribe((snapshot) => {
     if (!active || !sameCanvasAttachment(initial.address, snapshot.address) || snapshot.revision <= state.value.revision)
       return;
+    if (menu.isOpen() && canvasNavigationSnapshot(snapshot, state.value) !== state.value)
+      menu.updateEntries(canvasContextActions(snapshot, port.capabilities, send));
     const spoken = canvasAnnouncement(state.value, snapshot);
     if (spoken !== null) announcement.value = spoken;
     state.value = snapshot;
@@ -69,6 +104,7 @@ function mountCanvasOverlay(element, port, reportFailure) {
     app.mount(element);
   } catch (error) {
     active = false;
+    closeInteraction();
     unsubscribe();
     reportFailure(error, null);
     throw error;
@@ -78,6 +114,7 @@ function mountCanvasOverlay(element, port, reportFailure) {
     dispose() {
       if (!active) return;
       active = false;
+      closeInteraction();
       unsubscribe();
       app.unmount();
     }

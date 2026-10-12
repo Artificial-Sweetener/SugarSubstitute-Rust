@@ -371,3 +371,14 @@ At emulated density two, the actual 256 px image renders at 128 CSS px in physic
 **Repository acceptance:** The final code slice is `c59727e`, following the cohesive implementation commits recorded in Git. Focused canvas proofs pass 29 suites/199 tests. Policy-selected `test:changed`, exact-index `architecture:staged`, `test:commit`, and the full `check:commit` pass, including strict TypeScript, strict mypy (668 source files plus its separate single-file check), format/lint/standards, architecture, generated-output verification, and all policy proof groups. Architecture reports 28 structural warnings and no blocking errors. Headers were maintained and deployment JavaScript regenerated through the compiler build. No dependency or third-party asset was added for this canvas. Nothing was pushed.
 
 **Artifacts and cleanup:** Traces, switching/loading evidence, ephemeral CPU fixtures, isolated server user/input/output/temp directories, logs, and the final `output-canvas-final.png` were written directly under `D:\devartifacts\SugarCubes\output-canvas`. The old connection-error tab could not be controlled through the browser URL policy while its generated `data:` page was open. The subsequent browser inventory is empty, confirming that every goal-owned test tab is closed. The working test tab was closed and the owned port-8189 server was stopped; its listening socket is absent; unrelated user tabs and servers are preserved.
+
+
+## 15. Align the visible overlay with Substitute's reference
+
+- [x] Replace the permanent toolbar, comparison form, zoom/dimension bar, and Outputs header with a floating segmented source tab strip. Show compact batch navigation only for multi-image sources.
+- [x] Keep optional inspection/comparison actions in the shared SugarCubes context menu, opened by right click or Shift+F10. Keep surface ports and native-overlay reuse independent of browser image rendering.
+- [x] Preserve actionable image-load/admission feedback, keyboard tab navigation, comparison wipe, camera behavior, and bounded image lifetimes. Retire menus/listeners with their attachment; camera updates do not rebuild menu rows.
+- [x] Verify the revised presentation in Codex in-app Chromium with Nodes 1.0, Nodes 2.0, and masonry; run focused/policy-selected proofs, worktree/index governance, and the complete commit-ready gate.
+
+
+Observed source selection in Nodes 1.0 and Nodes 2.0, renderer switching, Fluent masonry, keyboard tabs, double-click native zoom, context-menu comparison selection, and keyboard wipe movement in in-app Chromium. The browser overlay presents no permanent toolbar, comparison form, zoom/dimension bar, or Outputs header. The shared menu and its Fluent registration use their canonical deployment modules; a compiled-dependency contract guards constructor identity.

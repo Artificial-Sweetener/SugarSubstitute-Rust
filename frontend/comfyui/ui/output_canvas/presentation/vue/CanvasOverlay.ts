@@ -21,9 +21,7 @@ import type {
   CanvasCommand,
   CanvasViewSnapshot,
 } from '../../domain/CanvasViewPort.js';
-import { CanvasCompareControls } from './CanvasCompareControls.js';
 import { CanvasSourceTabs } from './CanvasSourceTabs.js';
-import { CanvasToolbar } from './CanvasToolbar.js';
 import { CanvasWipeSeparator } from './CanvasWipeSeparator.js';
 import { canvasNavigationSnapshot } from './CanvasNavigationSnapshot.js';
 
@@ -43,75 +41,60 @@ export const CanvasOverlay = defineComponent({
     );
     return () => {
       const snapshot = props.snapshot;
-      const zoom = snapshot.zoom;
-      const dimensions = zoom.dimensions;
-      const label =
-        zoom.mode === 'fit'
-          ? 'Fit'
-          : zoom.mode === 'native'
-            ? '1:1'
-            : `${Math.round(zoom.physicalScale * 100)}%`;
       return h('div', { class: 'sc-output-overlay', 'data-canvas-view': snapshot.address.viewId }, [
         snapshot.view.mode === 'image' &&
         snapshot.view.comparison &&
         props.capabilities.commands.includes('wipe')
           ? h(CanvasWipeSeparator, { snapshot, send: props.send })
           : null,
-        h('div', { class: 'sc-output-navigation' }, [
-          h(CanvasToolbar, {
-            snapshot: navigation.value,
-            capabilities: props.capabilities,
-            send: props.send,
-          }),
-          snapshot.view.mode === 'image' && snapshot.view.comparison
-            ? h(CanvasCompareControls, {
-                snapshot: navigation.value,
-                capabilities: props.capabilities,
-                send: props.send,
-              })
-            : null,
-        ]),
-        h('div', { class: 'sc-output-status' }, [
-          h('span', { 'aria-label': 'Zoom' }, label),
-          dimensions ? h('span', `${dimensions.width} × ${dimensions.height}`) : null,
-          zoom.secondaryPhysicalScale && zoom.secondaryDimensions
-            ? h(
+        !snapshot.connected ||
+        (snapshot.resource.state !== 'ready' && Boolean(snapshot.resource.message)) ||
+        snapshot.resource.canRetry ||
+        snapshot.resource.canAdmitLargeImage ||
+        (snapshot.secondaryResource?.state !== 'ready' &&
+          Boolean(snapshot.secondaryResource?.message)) ||
+        snapshot.secondaryResource?.canRetry ||
+        snapshot.secondaryResource?.canAdmitLargeImage
+          ? h('div', { class: 'sc-output-status' }, [
+              snapshot.connected ? null : h('span', 'Disconnected'),
+              h('span', snapshot.resource.state !== 'ready' ? snapshot.resource.message : ''),
+              h(
                 'span',
-                { 'aria-label': 'B display scale' },
-                `B: ${Math.round(zoom.secondaryPhysicalScale.x * 100)}% × ${Math.round(zoom.secondaryPhysicalScale.y * 100)}%; ${zoom.secondaryDimensions.width} × ${zoom.secondaryDimensions.height}`,
-              )
-            : null,
-          snapshot.preview ? h('span', 'Live preview') : null,
-          snapshot.connected ? null : h('span', 'Disconnected'),
-          h('span', snapshot.resource.message),
-          snapshot.resource.canRetry && props.capabilities.commands.includes('retry')
-            ? h(
-                'button',
-                { type: 'button', onClick: () => props.send({ type: 'retry' }) },
-                'Retry image',
-              )
-            : null,
-          snapshot.resource.canAdmitLargeImage &&
-          props.capabilities.commands.includes('admit-large-image')
-            ? h(
-                'button',
-                { type: 'button', onClick: () => props.send({ type: 'admit-large-image' }) },
-                'Load large image',
-              )
-            : null,
-          snapshot.selected?.mediaKind !== undefined &&
-          snapshot.selected.mediaKind !== 'image' &&
-          props.capabilities.commands.includes('open-media')
-            ? h(
-                'button',
-                {
-                  type: 'button',
-                  onClick: () => props.send({ type: 'open-media', target: 'primary' }),
-                },
-                'Open media',
-              )
-            : null,
-        ]),
+                snapshot.secondaryResource?.state !== 'ready'
+                  ? snapshot.secondaryResource?.message
+                  : '',
+              ),
+              (snapshot.resource.canRetry || snapshot.secondaryResource?.canRetry) &&
+              props.capabilities.commands.includes('retry')
+                ? h(
+                    'button',
+                    { type: 'button', onClick: () => props.send({ type: 'retry' }) },
+                    'Retry image',
+                  )
+                : null,
+              (snapshot.resource.canAdmitLargeImage ||
+                snapshot.secondaryResource?.canAdmitLargeImage) &&
+              props.capabilities.commands.includes('admit-large-image')
+                ? h(
+                    'button',
+                    { type: 'button', onClick: () => props.send({ type: 'admit-large-image' }) },
+                    'Load large image',
+                  )
+                : null,
+              snapshot.selected?.mediaKind !== undefined &&
+              snapshot.selected.mediaKind !== 'image' &&
+              props.capabilities.commands.includes('open-media')
+                ? h(
+                    'button',
+                    {
+                      type: 'button',
+                      onClick: () => props.send({ type: 'open-media', target: 'primary' }),
+                    },
+                    'Open media',
+                  )
+                : null,
+            ])
+          : null,
         h(
           'span',
           {
@@ -122,8 +105,12 @@ export const CanvasOverlay = defineComponent({
           },
           props.announcement,
         ),
-        props.capabilities.commands.includes('select-source')
-          ? h(CanvasSourceTabs, { snapshot: navigation.value, send: props.send })
+        props.capabilities.commands.includes('select-source') && snapshot.sources.length > 0
+          ? h(CanvasSourceTabs, {
+              snapshot: navigation.value,
+              capabilities: props.capabilities,
+              send: props.send,
+            })
           : null,
       ]);
     };
