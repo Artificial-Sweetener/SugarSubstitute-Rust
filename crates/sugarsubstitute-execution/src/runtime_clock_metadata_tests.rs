@@ -216,6 +216,9 @@ fn client_timestamp_preserves_supplied_clock_panic_without_fabricating_metadata(
             .source()
             .is_some_and(|source| source.to_string().contains("timestamp boundary failure"))
     );
+    // An already admitted worker sample may still be returning from the provider.
+    // Joining the owner distinguishes that custody from a fresh post-failure call.
+    drop(owner);
     clock.permanent.store(true, Ordering::Release);
     let sticky = client.now().err().ok_or("Failed metadata returned a cached timestamp")?;
     assert!(
@@ -227,7 +230,6 @@ fn client_timestamp_preserves_supplied_clock_panic_without_fabricating_metadata(
         client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None),
         Err(AdmissionError::ShuttingDown)
     ));
-    drop(owner);
     assert_eq!(clock.calls_after_failure.load(Ordering::Acquire), 0);
     Ok(())
 }
