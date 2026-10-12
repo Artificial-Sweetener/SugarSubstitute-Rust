@@ -17,6 +17,7 @@
 import { afterEach, expect, jest, test } from '@jest/globals';
 import { WorkflowMasonryTransition } from '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryTransition.js';
 import { fluentMotion } from '../../../frontend/comfyui/ui/surface/appearance/FluentThemeRuntime.js';
+import { WorkflowMasonryGraphReveal } from '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryGraphReveal.js';
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -77,41 +78,102 @@ test('reverses from displayed opacity and old completion cannot cancel the new f
   expect(setup.effects[1]?.cancel).toHaveBeenCalledTimes(1);
 });
 
+test('runs graph navigation fades on the masonry timeline and retains suppression until exit completes', async () => {
+  const setup = fixture(true);
+  const transition = new WorkflowMasonryTransition();
+  const entry = transition.run(setup.view, true, false);
+  expect(setup.frames).toEqual([
+    [{ opacity: '1' }, { opacity: '0' }],
+    [{ opacity: '1' }, { opacity: '0' }],
+    [{ opacity: 0 }, { opacity: 1 }],
+  ]);
+  expect(setup.options.every((option) => option.duration === fluentMotion.duration)).toBe(true);
+  expect(setup.options.every((option) => option.easing === fluentMotion.easing)).toBe(true);
+  expect(setup.toolbar.inert).toBe(true);
+  expect(setup.minimap.inert).toBe(true);
+  setup.effects.forEach((effect) => effect.finish());
+  await entry;
+  expect(setup.toolbar.style.opacity).toBe('0');
+  expect(setup.minimap.style.opacity).toBe('0');
+  const exit = transition.run(setup.view, false, false);
+  expect(setup.frames.slice(3)).toEqual([
+    [{ opacity: '0' }, { opacity: '1' }],
+    [{ opacity: '0' }, { opacity: '1' }],
+    [{ opacity: 1 }, { opacity: 0 }],
+  ]);
+  expect(setup.toolbar.inert).toBe(true);
+  setup.effects.slice(3).forEach((effect) => effect.finish());
+  await exit;
+  setup.view.reveal?.dispose();
+  expect(setup.toolbar.inert).toBe(false);
+  expect(setup.toolbar.style.opacity).toBe('1');
+});
+
+test('switches graph navigation immediately with reduced masonry motion', async () => {
+  const setup = fixture(true);
+  const transition = new WorkflowMasonryTransition();
+  await transition.run(setup.view, true, true);
+  expect(setup.effects).toHaveLength(0);
+  expect(setup.toolbar.style.opacity).toBe('0');
+  expect(setup.minimap.inert).toBe(true);
+  await transition.run(setup.view, false, true);
+  expect(setup.effects).toHaveLength(0);
+  expect(setup.toolbar.style.opacity).toBe('1');
+  setup.view.reveal?.dispose();
+  expect(setup.minimap.inert).toBe(false);
+});
+
 /** Model the external WAAPI completion boundary without mocking transition policy. */
-function fixture() {
+function fixture(chrome = false) {
   const surface = document.createElement('section');
   const backdrop = document.createElement('div');
   surface.style.opacity = '0';
   const card = document.createElement('article');
   card.style.transform = 'translate(12px, 80px)';
   surface.append(card);
-  document.body.append(backdrop, surface);
+  const root = document.createElement('div');
+  root.id = 'graph-canvas-container';
+  const toolbar = document.createElement('div');
+  toolbar.setAttribute('aria-label', 'Canvas Toolbar');
+  const minimap = document.createElement('div');
+  minimap.className = 'minimap-main-container';
+  for (const element of [toolbar, minimap]) {
+    element.style.opacity = '1';
+    element.inert = false;
+  }
+  root.append(backdrop, surface);
+  if (chrome) root.append(toolbar, minimap);
+  document.body.append(root);
   const effects: Array<{ cancel: ReturnType<typeof jest.fn>; finish(): void }> = [];
   const frames: Keyframe[][] = [];
   const options: KeyframeAnimationOptions[] = [];
-  Object.defineProperty(backdrop, 'animate', {
-    value: (keyframes: Keyframe[], timing: KeyframeAnimationOptions) => {
-      const completion: { resolve?: () => void; reject?: (reason: Error) => void } = {};
-      const finished = new Promise<void>((resolve, reject) => {
-        completion.resolve = resolve;
-        completion.reject = reject;
-      });
-      const effect = {
-        finished,
-        finish: () => completion.resolve?.(),
-        cancel: jest.fn(() => completion.reject?.(new Error('Cancelled'))),
-      };
-      effects.push(effect);
-      frames.push(keyframes);
-      options.push(timing);
-      return effect;
-    },
-  });
+  for (const element of chrome ? [backdrop, toolbar, minimap] : [backdrop])
+    Object.defineProperty(element, 'animate', {
+      value: (keyframes: Keyframe[], timing: KeyframeAnimationOptions) => {
+        const completion: { resolve?: () => void; reject?: (reason: Error) => void } = {};
+        const finished = new Promise<void>((resolve, reject) => {
+          completion.resolve = resolve;
+          completion.reject = reject;
+        });
+        const effect = {
+          finished,
+          finish: () => completion.resolve?.(),
+          cancel: jest.fn(() => completion.reject?.(new Error('Cancelled'))),
+        };
+        effects.push(effect);
+        frames.push(keyframes);
+        options.push(timing);
+        return effect;
+      },
+    });
+  const reveal = new WorkflowMasonryGraphReveal();
+  if (chrome) reveal.reconcile(root, []);
   const view = {
     surface,
     backdrop,
     cards: [],
     graph: { cards: new Map(), layers: [], viewport: surface.getBoundingClientRect() },
+    ...(chrome ? { reveal } : {}),
   };
-  return { surface, backdrop, card, effects, frames, options, view };
+  return { surface, backdrop, card, effects, frames, options, view, toolbar, minimap };
 }

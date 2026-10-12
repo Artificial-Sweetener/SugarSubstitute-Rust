@@ -13,18 +13,19 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Fade graph-only nodes alongside card travel and preserve their native resting presentation. */
+/** Fade graph-only surfaces alongside card travel and preserve their native resting presentation. */
 import type { WorkflowMasonrySection } from './WorkflowMasonryProjection.js';
 
-interface GraphNodeOpacity {
+interface GraphSurfaceOpacity {
   value: string;
   priority: string;
   opacity: string;
+  inert: boolean;
 }
 
-/** Own suppression only for top-level native nodes absent from the masonry projection. */
+/** Own suppression for unprojected native nodes and graph navigation on the masonry timeline. */
 export class WorkflowMasonryGraphReveal {
-  readonly #nodes = new Map<HTMLElement, GraphNodeOpacity>();
+  readonly #surfaces = new Map<HTMLElement, GraphSurfaceOpacity>();
   #hidden = false;
 
   /** Reconcile known graph presentation membership at topology lifecycles, never popup activity. */
@@ -44,25 +45,33 @@ export class WorkflowMasonryGraphReveal {
           !participating.has(element.dataset.nodeId ?? ''),
       ),
     );
-    for (const [element, saved] of this.#nodes)
+    for (const control of root.querySelectorAll<HTMLElement>(
+      '[aria-label="Canvas Toolbar"], .minimap-main-container',
+    ))
+      nodes.add(control);
+    for (const [element, saved] of this.#surfaces)
       if (!nodes.has(element)) {
         this.#restore(element, saved);
-        this.#nodes.delete(element);
+        this.#surfaces.delete(element);
       }
     for (const element of nodes) {
-      if (this.#nodes.has(element)) continue;
-      this.#nodes.set(element, {
+      if (this.#surfaces.has(element)) continue;
+      this.#surfaces.set(element, {
         value: element.style.getPropertyValue('opacity'),
         priority: element.style.getPropertyPriority('opacity'),
         opacity: getComputedStyle(element).opacity || '1',
+        inert: element.inert ?? false,
       });
-      if (this.#hidden) element.style.setProperty('opacity', '0');
+      if (this.#hidden) {
+        element.style.setProperty('opacity', '0');
+        element.inert = true;
+      }
     }
   }
 
   /** Supply concurrent fades while keeping hidden nodes suppressed before an exit can paint. */
   frames(entering: boolean): Array<{ element: HTMLElement; frames: Keyframe[] }> {
-    const requests = [...this.#nodes].map(([element, saved]) => ({
+    const requests = [...this.#surfaces].map(([element, saved]) => ({
       element,
       frames: [
         { opacity: getComputedStyle(element).opacity || (this.#hidden ? '0' : saved.opacity) },
@@ -71,20 +80,23 @@ export class WorkflowMasonryGraphReveal {
     }));
     this.#hidden = entering;
     // Important native declarations would override the fade; restore their priority at teardown.
-    for (const [element, saved] of this.#nodes)
+    for (const [element, saved] of this.#surfaces) {
       element.style.setProperty('opacity', entering ? '0' : saved.opacity);
+      element.inert = true;
+    }
     return requests;
   }
 
   /** Release every retained node and restore exact native inline opacity on teardown. */
   dispose(): void {
-    for (const [element, saved] of this.#nodes) this.#restore(element, saved);
-    this.#nodes.clear();
+    for (const [element, saved] of this.#surfaces) this.#restore(element, saved);
+    this.#surfaces.clear();
   }
 
   /** Preserve host priorities and the absence of inline styling. */
-  #restore(element: HTMLElement, saved: GraphNodeOpacity): void {
+  #restore(element: HTMLElement, saved: GraphSurfaceOpacity): void {
     if (saved.value) element.style.setProperty('opacity', saved.value, saved.priority);
     else element.style.removeProperty('opacity');
+    element.inert = saved.inert;
   }
 }
