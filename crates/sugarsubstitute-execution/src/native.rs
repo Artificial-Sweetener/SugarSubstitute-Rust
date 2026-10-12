@@ -181,6 +181,7 @@ pub(crate) enum NativeWork {
     FixtureForward(crate::fixture_forwarding::ForwardWork),
     Output(crate::output::OutputWork),
     CoordinatorEntry(crate::coordinator_entry::EntryWork),
+    CaptureAttach(Box<crate::capture_attach::AttachWork>),
 }
 impl NativeWork {
     pub(crate) fn ready(&self) -> bool {
@@ -192,12 +193,22 @@ impl NativeWork {
             Self::FixtureForward(work) => work.ready(),
             Self::Output(_) => true,
             Self::CoordinatorEntry(_) => true,
+            Self::CaptureAttach(_) => true,
+        }
+    }
+    pub(crate) fn initial_custody(&self) -> Option<Arc<crate::capture_attach::control::Custody>> {
+        match self {
+            Self::CaptureAttach(work) => Some(work.shared.custody.clone()),
+            _ => None,
         }
     }
     pub(crate) fn initial_deadlines(&self) -> Option<crate::native_deadlines::Deadlines> {
         match self {
             Self::LifecyclePipe(work) => Some(crate::lifecycle_pipe::initial_deadlines(work)),
             Self::CoordinatorEntry(work) => Some(crate::coordinator_entry::initial_deadlines(work)),
+            Self::CaptureAttach(work) => {
+                Some(crate::native_deadlines::Deadlines::handshake(work.handshake))
+            }
             _ => None,
         }
     }

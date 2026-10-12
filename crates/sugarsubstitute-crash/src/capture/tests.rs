@@ -16,6 +16,7 @@ use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner, windows::Native
 mod support;
 use support::*;
 
+mod attach_tests;
 mod deadline_tests;
 mod registered_tests;
 
@@ -197,10 +198,45 @@ fn queued_cancellation_never_constructs_native_boundary() -> TestResult {
     }
     rig.observe_until(&mut capture, |capture| capture.start.is_none() && capture.watch.is_none())?;
     assert_eq!(port.created.load(Ordering::Acquire), 0);
-    assert_eq!(rig.scope.snapshot().reserved_bytes, crate::input::STORAGE_BYTES as u64);
     let cleanup =
         rig.client.create_scope(ScopeSpec { id: ScopeId::new(3)?, deadline: None }, None)?;
-    capture.submit_close(&rig.client, &cleanup, close_spec(5, budget.until())?)?;
+    let returned = Arc::new(Barrier::default());
+    let finish = Arc::new(Gate::default());
+    struct ReleaseWorkers(Arc<Gate>);
+    impl Drop for ReleaseWorkers {
+        fn drop(&mut self) {
+            self.0.open();
+        }
+    }
+    let release_workers = ReleaseWorkers(finish.clone());
+    let mut followers = Vec::new();
+    for id in [5, 6] {
+        let returned = returned.clone();
+        let finish = finish.clone();
+        followers.push(rig.client.submit_blocking(
+            &cleanup,
+            close_spec(id, budget.until())?,
+            move |_| -> Result<(), CrashError> {
+                returned.arrive();
+                finish.wait().map_err(|cause| {
+                    CrashError::new(
+                        sugarsubstitute_contracts::crash::CaptureOperation::Runtime,
+                        cause,
+                    )
+                })
+            },
+        )?);
+    }
+    // ExecutionOwner has exactly two blocking workers. Both gated follow-ups
+    // entered, so both earlier factory contexts have actually returned.
+    returned.wait(2)?;
+    assert_eq!(rig.scope.snapshot().reserved_bytes, crate::input::STORAGE_BYTES as u64);
+    finish.open();
+    for job in &mut followers {
+        assert!(matches!(rig.completion(job)?.outcome, JobOutcome::Success(())));
+    }
+    drop(release_workers);
+    capture.submit_close(&rig.client, &cleanup, close_spec(7, budget.until())?)?;
     rig.observe_until(&mut capture, |capture| capture.snapshot().state == CaptureState::Closed)?;
     Ok(())
 }

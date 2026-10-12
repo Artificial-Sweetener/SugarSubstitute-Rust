@@ -10,6 +10,13 @@ pub(super) fn start(
     context: JobContext,
 ) -> Result<(), CrashError> {
     crate::native::check_deadline(&context)?;
+    let memory = context
+        .memory()
+        .claim(crate::capture_endpoint::SOURCE_BYTES)
+        .map_err(|cause| CrashError::new(CaptureOperation::Runtime, cause))?;
+    let attempts = crate::capture_endpoint::Attempts::new(owner, memory)
+        .map_err(|cause| CrashError::new(CaptureOperation::Runtime, cause))?;
+    *lock(&shared.attempts) = Some(attempts);
     let lease = shared.port.create(context.memory())?;
     let mut native = lock(&shared.native);
     native.lease = Some(lease);
@@ -78,6 +85,20 @@ pub(super) fn start(
 }
 
 pub(super) fn close(shared: Arc<Shared>, context: JobContext) -> Result<(), CrashError> {
+    // Fence new source use before touching the real registration. Pending or
+    // unsettled attachment custody preserves the actual handler/source owners.
+    let borrowed = {
+        let mut attempts = lock(&shared.attempts);
+        if let Some(attempts) = attempts.as_mut() {
+            attempts.close();
+            attempts.has_unretired()
+        } else {
+            false
+        }
+    };
+    if borrowed {
+        return Ok(());
+    }
     let mut native = lock(&shared.native);
     let deadline =
         context.deadline().ok_or_else(|| CrashError::invalid(CaptureOperation::Retirement))?;

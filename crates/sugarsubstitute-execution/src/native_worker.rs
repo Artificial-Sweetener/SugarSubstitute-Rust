@@ -116,6 +116,7 @@ enum Active {
     Forward(crate::fixture_forwarding::worker::Active),
     Output(crate::output::worker::Active),
     Entry(crate::coordinator_entry::worker::Active),
+    CaptureAttach(crate::capture_attach::worker::Active),
 }
 impl Active {
     fn new(queued: QueuedJob, core: &Arc<Core>, now: Moment) -> Option<Self> {
@@ -139,6 +140,9 @@ impl Active {
             NativeWork::CoordinatorEntry(work) => Self::Entry(
                 crate::coordinator_entry::worker::Active::new(work, queued.context, core, now),
             ),
+            NativeWork::CaptureAttach(work) => Self::CaptureAttach(
+                crate::capture_attach::worker::Active::new(*work, queued.context, core, now),
+            ),
             NativeWork::Output(work) => {
                 Self::Output(crate::output::worker::Active::new(work, queued.context, core, now))
             }
@@ -153,6 +157,7 @@ impl Active {
             Self::Forward(active) => active.fail_owner(cause),
             Self::Output(active) => active.fail_owner(cause),
             Self::Entry(active) => active.fail_owner(cause),
+            Self::CaptureAttach(active) => active.fail_owner(cause),
         }
     }
     fn progress(&mut self, core: &Core, now: Moment, clock_available: bool) {
@@ -164,6 +169,7 @@ impl Active {
             Self::Forward(active) => active.progress(core, now, clock_available),
             Self::Output(active) => active.progress(core, now, clock_available),
             Self::Entry(active) => active.progress(core, now, clock_available),
+            Self::CaptureAttach(active) => active.progress(core, now, clock_available),
         }
     }
     fn completed(&self) -> bool {
@@ -175,6 +181,7 @@ impl Active {
             Self::Forward(active) => active.completed(),
             Self::Output(active) => active.completed(),
             Self::Entry(active) => active.completed(),
+            Self::CaptureAttach(active) => active.completed(),
         }
     }
 }

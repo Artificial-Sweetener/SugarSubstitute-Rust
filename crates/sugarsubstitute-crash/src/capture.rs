@@ -14,6 +14,8 @@ use sugarsubstitute_contracts::{
 use sugarsubstitute_execution::windows::{NativeObservationError, ProcessExit, ProcessWatchPermit};
 
 mod activity;
+mod attach;
+pub use attach::CaptureBootstrapRejection;
 mod submission;
 #[cfg(test)]
 mod tests;
@@ -28,19 +30,24 @@ pub(crate) fn lock<T>(value: &Mutex<T>) -> MutexGuard<'_, T> {
     }
 }
 
-struct Shared {
-    native: Mutex<NativeState>,
+pub(crate) struct Shared {
+    pub(crate) native: Mutex<NativeState>,
+    pub(crate) attempts: Mutex<Option<Box<crate::capture_endpoint::Attempts>>>,
+    pub(crate) owner: CoordinatorKey,
+    pub(crate) build: [u8; 64],
+    pub(crate) build_length: usize,
+    pub(crate) execution_id: sugarsubstitute_contracts::execution::ExecutionId,
     input: Mutex<Option<CaptureStartInput>>,
     permit: Mutex<Option<ProcessWatchPermit>>,
     port: Arc<dyn NativePort>,
     retained_memory: Mutex<Option<sugarsubstitute_contracts::execution::MemoryLease>>,
 }
-struct NativeState {
-    lease: Option<Box<dyn CaptureLease>>,
+pub(crate) struct NativeState {
+    pub(crate) lease: Option<Box<dyn CaptureLease>>,
     watch: Option<WatchJob>,
-    registered: bool,
-    handler: Option<CaptureHandlerIdentity>,
-    retired: bool,
+    pub(crate) registered: bool,
+    pub(crate) handler: Option<CaptureHandlerIdentity>,
+    pub(crate) retired: bool,
     deadline: Option<Moment>,
     close_deadline: Option<Moment>,
     errors: [Option<CrashError>; 9],

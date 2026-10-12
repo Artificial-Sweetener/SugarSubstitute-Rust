@@ -4,6 +4,7 @@
 //! Preserve admission decisions separately from unexpected adapter failures.
 
 use super::{ExecutionId, Generation, JobClass, JobId, Moment, Operation, ReplacementKey, ScopeId};
+use crate::lifecycle::RunKey;
 use std::{error::Error, fmt};
 
 /// Preserve an unexpected adapter failure and its original owned cause.
@@ -37,7 +38,6 @@ impl Error for ExecutionError {
 }
 
 /// Reject work before its factory executes or any scheduling handle escapes.
-#[derive(Debug)]
 pub enum AdmissionError {
     /// The requested scope no longer accepts work.
     ScopeClosed {
@@ -95,6 +95,12 @@ pub enum AdmissionError {
         /// Reused application job identity.
         job_id: JobId,
     },
+    /// Another native capture reservation still holds actual custody for this full run.
+    /// This conflicts across scopes until physical/source retirement and sampling settle.
+    ConflictingNativeRun(
+        /// Exact coordinator, instance and generation whose custody remains held.
+        RunKey,
+    ),
     /// An accepted job identity must advance the executor's bounded high-water mark.
     JobIdentityOrder {
         /// Latest job identity accepted by this executor lifetime.
@@ -130,6 +136,75 @@ pub enum AdmissionError {
     },
     /// Admission itself encountered an unexpected adapter failure.
     Unexpected(ExecutionError),
+}
+
+impl fmt::Debug for AdmissionError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::ScopeClosed { scope_id } => {
+                formatter.debug_struct("ScopeClosed").field("scope_id", scope_id).finish()
+            }
+            Self::ShuttingDown => formatter.write_str("ShuttingDown"),
+            Self::QueueSaturated { class } => {
+                formatter.debug_struct("QueueSaturated").field("class", class).finish()
+            }
+            Self::CompletionSaturated => formatter.write_str("CompletionSaturated"),
+            Self::MemorySaturated { requested_bytes, available_bytes } => formatter
+                .debug_struct("MemorySaturated")
+                .field("requested_bytes", requested_bytes)
+                .field("available_bytes", available_bytes)
+                .finish(),
+            Self::DeadlineRequired => formatter.write_str("DeadlineRequired"),
+            Self::DeadlineExpired { deadline, now } => formatter
+                .debug_struct("DeadlineExpired")
+                .field("deadline", deadline)
+                .field("now", now)
+                .finish(),
+            Self::DuplicateScopeId { scope_id } => {
+                formatter.debug_struct("DuplicateScopeId").field("scope_id", scope_id).finish()
+            }
+            Self::ScopeIdentityOrder { latest } => {
+                formatter.debug_struct("ScopeIdentityOrder").field("latest", latest).finish()
+            }
+            Self::ScopeCapacity => formatter.write_str("ScopeCapacity"),
+            Self::NativeScopeRequired => formatter.write_str("NativeScopeRequired"),
+            Self::NativeReservationTooSmall { requested_bytes, minimum_bytes } => formatter
+                .debug_struct("NativeReservationTooSmall")
+                .field("requested_bytes", requested_bytes)
+                .field("minimum_bytes", minimum_bytes)
+                .finish(),
+            Self::DuplicateJobId { job_id } => {
+                formatter.debug_struct("DuplicateJobId").field("job_id", job_id).finish()
+            }
+            Self::ConflictingNativeRun(_) => {
+                formatter.write_str("ConflictingNativeRun { redacted }")
+            }
+            Self::JobIdentityOrder { latest } => {
+                formatter.debug_struct("JobIdentityOrder").field("latest", latest).finish()
+            }
+            Self::ForeignScope { expected_owner, actual_owner } => formatter
+                .debug_struct("ForeignScope")
+                .field("expected_owner", expected_owner)
+                .field("actual_owner", actual_owner)
+                .finish(),
+            Self::StaleReplacement { replacement, current_revision } => formatter
+                .debug_struct("StaleReplacement")
+                .field("replacement", replacement)
+                .field("current_revision", current_revision)
+                .finish(),
+            Self::WrongClass { operation, class } => formatter
+                .debug_struct("WrongClass")
+                .field("operation", operation)
+                .field("class", class)
+                .finish(),
+            Self::InvalidReplacement { class, replacement } => formatter
+                .debug_struct("InvalidReplacement")
+                .field("class", class)
+                .field("replacement", replacement)
+                .finish(),
+            Self::Unexpected(value) => formatter.debug_tuple("Unexpected").field(value).finish(),
+        }
+    }
 }
 
 impl fmt::Display for AdmissionError {
@@ -175,6 +250,9 @@ impl fmt::Display for AdmissionError {
             Self::DuplicateJobId { job_id } => {
                 write!(formatter, "Job identity {} was already used", job_id.get())
             }
+            Self::ConflictingNativeRun(_) => {
+                formatter.write_str("Native capture run custody is already reserved")
+            }
             Self::JobIdentityOrder { latest } => {
                 write!(formatter, "Job identity must advance {}", latest.get())
             }
@@ -213,6 +291,28 @@ impl Error for AdmissionError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn native_run_conflict_preserves_full_matching_fact_and_redacts_diagnostics()
+    -> Result<(), Box<dyn Error>> {
+        use crate::lifecycle::{
+            CoordinatorEpoch, CoordinatorKey, InstanceId, NamespaceId, RunGeneration,
+        };
+        let run = RunKey {
+            owner: CoordinatorKey {
+                namespace: NamespaceId::new([79; 32]),
+                epoch: CoordinatorEpoch::new([81; 16])?,
+            },
+            instance: InstanceId::new(2)?,
+            generation: RunGeneration::new(3)?,
+        };
+        let error = AdmissionError::ConflictingNativeRun(run);
+        assert!(matches!(error, AdmissionError::ConflictingNativeRun(actual) if actual == run));
+        assert_eq!(format!("{error:?}"), "ConflictingNativeRun { redacted }");
+        assert_eq!(error.to_string(), "Native capture run custody is already reserved");
+        assert!(error.source().is_none());
+        Ok(())
+    }
 
     #[test]
     fn unexpected_admission_preserves_typed_original_cause() -> Result<(), Box<dyn Error>> {

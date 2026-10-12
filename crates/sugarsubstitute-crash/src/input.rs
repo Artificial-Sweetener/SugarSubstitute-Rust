@@ -11,6 +11,11 @@ use std::{os::windows::ffi::OsStrExt, path::Prefix};
 use sugarsubstitute_contracts::crash::CaptureOperation;
 
 pub(crate) const STORAGE_BYTES: usize = 2 * 1024 * 1024;
+#[cfg(windows)]
+pub(crate) const SOURCE_STORAGE_BYTES: usize = 16 * 1024;
+#[cfg(windows)]
+pub(crate) const NATIVE_STORAGE_BYTES: usize =
+    STORAGE_BYTES - SOURCE_STORAGE_BYTES - 64 * 1024 - 1024 * 1024;
 pub(crate) const MAX_UNITS: usize = 32766;
 pub(crate) const MAX_ANCESTORS: usize = 128;
 
@@ -67,8 +72,11 @@ impl CaptureStartInput {
     }
     /// Reserve first-party input/scratch/retained native storage before effects.
     ///
-    /// The fixed 2MiB covers three bounded input path capacities and protected generation storage, UTF-16 conversion,
-    /// 1028 retained ancestor/target/partial handles, hashing scratch and bridge context.
+    /// The fixed 2MiB assigns 16KiB to registration-lifetime replay/source storage,
+    /// 966656 bytes to bounded input/native scratch, 64KiB to process-pinned
+    /// callbacks and 1MiB to protected generation storage. Native storage covers
+    /// three input path capacities, bounded UTF16/canonical conversion, 1028
+    /// retained ancestor/target/partial handles and hashing scratch.
     /// Crashpad's vendored runtime allocations/mapped code are separate native
     /// allocations; this value does not claim an OS working-set limit.
     pub const fn required_reservation_bytes(&self) -> usize {

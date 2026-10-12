@@ -9,13 +9,17 @@
 
 #[cfg(windows)]
 mod capture;
+#[cfg(windows)]
+mod capture_endpoint;
 mod error;
 mod input;
 #[cfg(windows)]
 #[allow(unsafe_code)]
 mod native;
 #[cfg(windows)]
-pub use capture::{CaptureSnapshot, CaptureUpdates, StartRejected, WindowsCrashCapture};
+pub use capture::{
+    CaptureBootstrapRejection, CaptureSnapshot, CaptureUpdates, StartRejected, WindowsCrashCapture,
+};
 pub use error::{CrashAdmissionError, CrashError};
 pub use input::CaptureStartInput;
 

@@ -4,6 +4,8 @@
 
 mod admission;
 mod blocking;
+#[cfg(any(windows, test))]
+mod capture_attach;
 mod clock;
 mod clock_retirement;
 #[cfg(any(windows, test))]
@@ -38,6 +40,9 @@ mod windows_fixture_forwarding;
 
 #[cfg(windows)]
 pub mod windows;
+#[cfg(windows)]
+#[allow(unsafe_code)]
+pub mod windows_capture_attach;
 #[cfg(windows)]
 pub mod windows_diagnostic_pipe;
 #[cfg(windows)]

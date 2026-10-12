@@ -39,7 +39,10 @@ impl Core {
         );
         #[cfg(any(windows, test))]
         let valid_method = valid_method
-            || matches!((kind, spec.class), (RequestKind::Native, JobClass::NativeObservation));
+            || matches!(
+                (kind, spec.class),
+                (RequestKind::Native | RequestKind::CaptureAttach(_), JobClass::NativeObservation)
+            );
         if !valid_method || !spec.validates_class() {
             return Err(AdmissionError::WrongClass {
                 operation: spec.operation,
@@ -67,6 +70,17 @@ impl Core {
                 operation: spec.operation,
                 class: spec.class,
             });
+        }
+        #[cfg(any(windows, test))]
+        if let RequestKind::CaptureAttach(run) = kind
+            && state.jobs.values().any(|record| {
+                record
+                    .native_custody
+                    .as_ref()
+                    .is_some_and(|custody| custody.expected.run() == run && custody.held())
+            })
+        {
+            return Err(AdmissionError::ConflictingNativeRun(run));
         }
         if state.jobs.contains_key(&spec.id) {
             return Err(AdmissionError::DuplicateJobId { job_id: spec.id });
@@ -119,6 +133,11 @@ impl Core {
         state.jobs.insert(
             spec.id,
             Record {
+                #[cfg(any(windows, test))]
+                native_custody: match &queued.work {
+                    crate::task::Work::Native(work) => work.initial_custody(),
+                    _ => None,
+                },
                 #[cfg(any(windows, test))]
                 native_deadlines: match &queued.work {
                     crate::task::Work::Native(work) => work.initial_deadlines(),

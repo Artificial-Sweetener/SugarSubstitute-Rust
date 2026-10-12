@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain partial outputs before status and close only after actual kernel facts.
 use super::{BindFailed, CaptureLease, WatchJob, bridge, pins};
-use crate::{CaptureStartInput, CrashError, input::STORAGE_BYTES};
+use crate::{CaptureStartInput, CrashError, input::NATIVE_STORAGE_BYTES};
 use std::os::windows::io::{FromRawHandle, OwnedHandle};
 use sugarsubstitute_contracts::{
     crash::{CaptureHandlerIdentity, CaptureOperation},
@@ -38,9 +38,10 @@ pub(super) struct Capture {
 }
 impl Capture {
     pub(super) fn new(memory: &MemoryLease) -> Result<Box<Self>, CrashError> {
-        // Both actual claims precede every native effect/allocation owner.
+        // The source owner already retains its separate 16KiB claim. These three
+        // claims cover actual native owners before any allocation or effect.
         let storage = memory
-            .claim((STORAGE_BYTES - super::CALLBACK_PIN_BYTES - 1024 * 1024) as u64)
+            .claim(NATIVE_STORAGE_BYTES as u64)
             .map_err(|cause| CrashError::new(CaptureOperation::Runtime, cause))?;
         let pin_claim = memory
             .claim(super::CALLBACK_PIN_BYTES as u64)
@@ -50,6 +51,14 @@ impl Capture {
             .map_err(|cause| CrashError::new(CaptureOperation::Runtime, cause))?;
         let protected = sugarsubstitute_supervision::ProtectedStorageRoot::new(storage_claim)
             .map_err(|cause| CrashError::new(CaptureOperation::Runtime, cause))?;
+        const _: () = assert!(
+            size_of::<Fields>()
+                + size_of::<Capture>()
+                + size_of::<crate::capture::Shared>()
+                + 2 * size_of::<usize>()
+                + 64
+                < 16 * 1024
+        );
         Ok(Box::new(Self {
             fields: Some(Box::new(Fields {
                 pins: pins::Pins::new()?,
@@ -306,6 +315,23 @@ impl CaptureLease for Capture {
     }
     fn registered(&self) -> bool {
         self.fields.as_ref().is_some_and(|fields| fields.registered)
+    }
+    fn endpoint(
+        &self,
+        expected: sugarsubstitute_execution::windows_capture_attach::CaptureAttachExpectation,
+    ) -> Result<
+        sugarsubstitute_execution::windows_capture_attach::CaptureEndpointObservation,
+        CrashError,
+    > {
+        let fields = self
+            .fields
+            .as_ref()
+            .filter(|fields| fields.registered && !fields.stop_requested)
+            .ok_or_else(|| CrashError::invalid(CaptureOperation::Observation))?;
+        fields
+            .api
+            .ok_or_else(|| CrashError::invalid(CaptureOperation::Observation))?
+            .endpoint(expected)
     }
     fn callback_pin_bytes(&self) -> u64 {
         bridge::pinned_bytes()

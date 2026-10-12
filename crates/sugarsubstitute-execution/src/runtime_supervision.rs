@@ -78,14 +78,24 @@ pub(super) async fn supervise(core: Arc<Core>) {
             let (mut deadline, mut expired_native) = deadlines(&state, now);
             #[cfg(any(windows, test))]
             for record in state.jobs.values_mut() {
-                if !timers_enabled {
-                    continue;
-                }
-                if !matches!(record.phase, JobPhase::Queued | JobPhase::Running) {
-                    continue;
-                }
+                let commands =
+                    timers_enabled && matches!(record.phase, JobPhase::Queued | JobPhase::Running);
+                let capture_cleanup = record.native_custody.is_some() && record.held_native();
                 if let Some(slots) = &mut record.native_deadlines {
-                    let (command_deadline, command_expired) = slots.scan(now);
+                    let (command_deadline, command_expired) =
+                        if commands { slots.scan(now) } else { (None, false) };
+                    let (cleanup_deadline, cleanup_expired) = if capture_cleanup {
+                        slots.scan_capture_cleanup(now)
+                    } else {
+                        (None, false)
+                    };
+                    expired_native |= cleanup_expired;
+                    if let Some(cleanup_deadline) = cleanup_deadline {
+                        deadline = Some(
+                            deadline
+                                .map_or(cleanup_deadline, |earlier| earlier.min(cleanup_deadline)),
+                        );
+                    }
                     expired_native |= command_expired;
                     if let Some(command_deadline) = command_deadline {
                         deadline = Some(

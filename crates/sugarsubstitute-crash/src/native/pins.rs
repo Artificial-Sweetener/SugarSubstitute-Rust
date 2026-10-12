@@ -53,7 +53,32 @@ pub(super) fn wide(path: &Path) -> Result<Vec<u16>, CrashError> {
         .map_err(|cause| CrashError::new(CaptureOperation::Runtime, cause))?;
     units.extend(path.as_os_str().encode_wide());
     units.push(0);
+    if units.capacity() > MAX_UNITS + 1 {
+        return Err(CrashError::invalid(CaptureOperation::Runtime));
+    }
     Ok(units)
+}
+fn prefix() -> Result<PathBuf, CrashError> {
+    let mut path = PathBuf::new();
+    path.try_reserve_exact(MAX_UNITS * 3)
+        .map_err(|cause| CrashError::new(CaptureOperation::Runtime, cause))?;
+    if path.capacity() > MAX_UNITS * 3 {
+        return Err(CrashError::invalid(CaptureOperation::Runtime));
+    }
+    Ok(path)
+}
+fn canonical(units: &[u16]) -> Result<PathBuf, CrashError> {
+    if units.len() > MAX_UNITS {
+        return Err(CrashError::invalid(CaptureOperation::Runtime));
+    }
+    let path = PathBuf::from(OsString::from_wide(units));
+    // Lossless standard conversion may briefly grow beyond the retained bound.
+    // Its rejected 131064-byte capacity is included in the native scratch claim.
+    if path.capacity() > MAX_UNITS * 3 {
+        return Err(CrashError::invalid(CaptureOperation::Runtime));
+    }
+    crate::input::validate_path(&path)?;
+    Ok(path)
 }
 pub(super) fn deadline(context: &JobContext) -> Result<(), CrashError> {
     if context.cancellation_requested()
@@ -70,6 +95,9 @@ impl Pins {
         values
             .try_reserve_exact(MAX_HANDLES)
             .map_err(|cause| CrashError::new(CaptureOperation::Runtime, cause))?;
+        if values.capacity() > MAX_HANDLES {
+            return Err(CrashError::invalid(CaptureOperation::Runtime));
+        }
         Ok(Self { values })
     }
     pub(super) fn adopt(&mut self, raw: usize) -> Result<usize, CrashError> {
@@ -192,9 +220,7 @@ impl Pins {
         if count == 0 || count as usize >= units.len() {
             return Err(CrashError::invalid(CaptureOperation::Runtime));
         }
-        let result = PathBuf::from(OsString::from_wide(&units[..count as usize]));
-        crate::input::validate_path(&result)?;
-        Ok(result)
+        canonical(&units[..count as usize])
     }
     pub(super) fn resolve(
         &mut self,
@@ -203,7 +229,7 @@ impl Pins {
         context: &JobContext,
     ) -> Result<(PathBuf, usize), CrashError> {
         let start = self.values.len();
-        let mut prefix = PathBuf::new();
+        let mut prefix = prefix()?;
         let count = path.components().count();
         for (position, component) in path.components().enumerate() {
             prefix.push(component.as_os_str());

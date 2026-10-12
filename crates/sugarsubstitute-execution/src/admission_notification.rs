@@ -11,6 +11,8 @@ impl Core {
         if let Some(scope) = lock(&self.state).scopes.get(&id) {
             scope.cancel.request();
         }
+        #[cfg(any(windows, test))]
+        self.stop_cancelled_capture(crate::capture_attach::control::CleanupTrigger::ScopeShutdown);
         self.changed();
     }
     pub(crate) fn cancel_job(&self, id: JobId) {
@@ -21,8 +23,39 @@ impl Core {
         {
             record.job.cancellation().request();
         }
+        #[cfg(any(windows, test))]
+        let custody = state.jobs.get(&id).and_then(|record| record.native_custody.clone());
         drop(state);
+        #[cfg(any(windows, test))]
+        if let Some(custody) = custody {
+            crate::capture_attach::control::request(
+                &custody,
+                crate::capture_attach::control::CleanupTrigger::Cancelled,
+            );
+        }
         self.changed();
+    }
+
+    #[cfg(any(windows, test))]
+    pub(crate) fn stop_cancelled_capture(
+        &self,
+        trigger: crate::capture_attach::control::CleanupTrigger,
+    ) {
+        let capture = {
+            let state = lock(&self.state);
+            state
+                .jobs
+                .values()
+                .filter(|record| {
+                    record.job.cancellation().is_requested()
+                        || state.scopes.get(&record.scope_id).is_none_or(|scope| scope.closed)
+                })
+                .filter_map(|record| record.native_custody.clone())
+                .collect::<Vec<_>>()
+        };
+        for custody in capture {
+            crate::capture_attach::control::request(&custody, trigger);
+        }
     }
 
     pub(crate) fn flush_notifications(&self) {
@@ -62,7 +95,9 @@ impl Core {
                     .jobs
                     .iter()
                     .filter(|(_, record)| {
-                        record.acknowledged && !record.job.cancellation().pending()
+                        record.acknowledged
+                            && !record.job.cancellation().pending()
+                            && !record.held_native()
                     })
                     .map(|(id, _)| *id)
                     .collect::<Vec<_>>()

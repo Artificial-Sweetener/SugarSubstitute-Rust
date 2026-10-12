@@ -27,9 +27,13 @@ pub(crate) enum RequestKind {
     Cpu,
     #[cfg(any(windows, test))]
     Native,
+    #[cfg(any(windows, test))]
+    CaptureAttach(sugarsubstitute_contracts::lifecycle::RunKey),
 }
 
 pub(crate) struct Record {
+    #[cfg(any(windows, test))]
+    pub(crate) native_custody: Option<Arc<crate::capture_attach::control::Custody>>,
     #[cfg(any(windows, test))]
     pub(crate) native_deadlines: Option<crate::native_deadlines::Deadlines>,
     pub(crate) deadline: Option<Moment>,
@@ -39,6 +43,32 @@ pub(crate) struct Record {
     pub(crate) job: Arc<dyn ErasedJob>,
     pub(crate) retiring: bool,
     pub(crate) acknowledged: bool,
+}
+
+impl Record {
+    pub(crate) fn held_native(&self) -> bool {
+        #[cfg(any(windows, test))]
+        {
+            self.native_custody.as_ref().is_some_and(|custody| custody.held())
+        }
+        #[cfg(not(any(windows, test)))]
+        {
+            false
+        }
+    }
+    fn active(&self) -> bool {
+        if self.phase == JobPhase::Running && !self.retiring {
+            return true;
+        }
+        #[cfg(any(windows, test))]
+        {
+            self.native_custody.as_ref().is_some_and(|custody| custody.active())
+        }
+        #[cfg(not(any(windows, test)))]
+        {
+            false
+        }
+    }
 }
 
 #[cfg(test)]
@@ -164,7 +194,20 @@ impl Core {
                 record.job.cancellation().request();
             }
         }
+        #[cfg(any(windows, test))]
+        let capture = state
+            .jobs
+            .values()
+            .filter_map(|record| record.native_custody.clone())
+            .collect::<Vec<_>>();
         drop(state);
+        #[cfg(any(windows, test))]
+        for custody in capture {
+            crate::capture_attach::control::request(
+                &custody,
+                crate::capture_attach::control::CleanupTrigger::OwnerShutdown,
+            );
+        }
         self.changed();
     }
 
@@ -172,7 +215,7 @@ impl Core {
         let running: Vec<_> = state
             .jobs
             .values()
-            .filter(|record| record.phase == JobPhase::Running && !record.retiring)
+            .filter(|record| record.active())
             .map(|record| record.spec.class)
             .collect();
         match class {

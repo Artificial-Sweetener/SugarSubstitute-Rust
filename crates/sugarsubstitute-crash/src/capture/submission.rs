@@ -58,7 +58,14 @@ impl WindowsCrashCapture {
                 )),
             }
         };
+        let mut build = [0; 64];
+        build[..input.build.len()].copy_from_slice(input.build.as_bytes());
         let shared = Arc::new(Shared {
+            attempts: Mutex::new(None),
+            owner: self.owner,
+            build,
+            build_length: input.build.len(),
+            execution_id: scope.owner_id(),
             native: Mutex::new(NativeState {
                 lease: None,
                 watch: None,
@@ -131,6 +138,9 @@ impl WindowsCrashCapture {
             return Err(CrashAdmissionError::Busy);
         }
         let shared = self.shared.as_ref().ok_or(CrashAdmissionError::Busy)?.clone();
+        if let Some(attempts) = lock(&shared.attempts).as_mut() {
+            attempts.close();
+        }
         let deadline = spec.deadline.ok_or(CrashAdmissionError::InvalidSpecification)?;
         self.close_deadline = Some(self.close_deadline.map_or(deadline, |old| old.min(deadline)));
         let job = execution

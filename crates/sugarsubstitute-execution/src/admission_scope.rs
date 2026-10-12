@@ -8,7 +8,7 @@ use crate::scope::ScopeHandle;
 use sugarsubstitute_contracts::execution::{ScopeSnapshot, ScopeSpec};
 
 impl Core {
-    pub(super) fn owned_scope<'a>(
+    pub(crate) fn owned_scope<'a>(
         &self,
         state: &'a State,
         scope: &Scope,
@@ -104,6 +104,8 @@ impl Core {
         }
         Self::retire_scopes(&mut state);
         drop(state);
+        #[cfg(any(windows, test))]
+        self.stop_cancelled_capture(crate::capture_attach::control::CleanupTrigger::ScopeShutdown);
         self.changed();
     }
 
@@ -123,7 +125,15 @@ impl Core {
             cancellation_requested: stored.is_none_or(|scope| scope.cancel.is_requested()),
             queued: count(|phase| phase == JobPhase::Queued),
             running: count(|phase| phase == JobPhase::Running),
-            terminal_unobserved: count(|phase| matches!(phase, JobPhase::Terminal(_))),
+            terminal_unobserved: state
+                .jobs
+                .values()
+                .filter(|record| {
+                    record.scope_id == id
+                        && !record.acknowledged
+                        && matches!(record.phase, JobPhase::Terminal(_))
+                })
+                .count(),
             children_live: state.scopes.values().filter(|scope| scope.parent == Some(id)).count(),
             reserved_bytes: stored.map_or(0, |scope| scope.bytes),
         }

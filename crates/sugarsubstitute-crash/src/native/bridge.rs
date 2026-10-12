@@ -44,10 +44,38 @@ pub(super) struct ResultValue {
 }
 type Start = unsafe extern "C" fn(*const Input, *mut ResultValue);
 type Retire = unsafe extern "C" fn(*mut ResultValue);
+#[repr(C)]
+struct EndpointExpectation {
+    version: u32,
+    creator_pid: u32,
+    creator_birth: u64,
+    handler_pid: u32,
+    reserved: u32,
+    handler_birth: u64,
+}
+#[repr(C)]
+struct EndpointValue {
+    version: u32,
+    status: u32,
+    provenance: u32,
+    length: u32,
+    creator_pid: u32,
+    handler_pid: u32,
+    creator_birth: u64,
+    handler_birth: u64,
+    error: u32,
+    reserved: u32,
+    endpoint: [u16; 256],
+}
+type Endpoint = unsafe extern "C" fn(*const EndpointExpectation, *mut EndpointValue) -> bool;
+const _: () = assert!(size_of::<EndpointExpectation>() == 32);
+const _: () = assert!(size_of::<EndpointValue>() == 560);
+const _: () = assert!(std::mem::offset_of!(EndpointValue, endpoint) == 48);
 #[derive(Clone, Copy)]
 pub(super) struct Api {
     start: Start,
     retire: Retire,
+    endpoint: Option<Endpoint>,
 }
 struct Pin {
     _module: usize,
@@ -125,15 +153,88 @@ pub(super) fn load(
     let (Some(start), Some(retire)) = (start, retire) else {
         return Err((CrashError::invalid(CaptureOperation::Runtime), None));
     };
+    // SAFETY: Optional new export is resolved once from the same process-pinned,
+    // hash-verified module; old registration remains available when it is absent.
+    let endpoint =
+        unsafe { GetProcAddress(module, PCSTR(c"ss_capture_endpoint_v1".as_ptr().cast())) };
     // SAFETY: Hash-verified first-party bridge exports exactly these repr(C) signatures.
     Ok(unsafe {
         Api {
             start: std::mem::transmute::<unsafe extern "system" fn() -> isize, Start>(start),
             retire: std::mem::transmute::<unsafe extern "system" fn() -> isize, Retire>(retire),
+            endpoint: endpoint.map(|function| {
+                std::mem::transmute::<unsafe extern "system" fn() -> isize, Endpoint>(function)
+            }),
         }
     })
 }
 impl Api {
+    pub(super) fn endpoint(
+        self,
+        expected: sugarsubstitute_execution::windows_capture_attach::CaptureAttachExpectation,
+    ) -> Result<
+        sugarsubstitute_execution::windows_capture_attach::CaptureEndpointObservation,
+        CrashError,
+    > {
+        use sugarsubstitute_execution::windows_capture_attach::{
+            CaptureEndpointObservation, CaptureEndpointProvenance, CaptureProcessFacts,
+        };
+        let getter =
+            self.endpoint.ok_or_else(|| CrashError::invalid(CaptureOperation::Observation))?;
+        let input = EndpointExpectation {
+            version: 1,
+            creator_pid: expected.creator().process_id(),
+            creator_birth: expected.creator().creation_time_100ns(),
+            handler_pid: expected.handler().process_id(),
+            reserved: 0,
+            handler_birth: expected.handler().creation_time_100ns(),
+        };
+        let mut output = EndpointValue {
+            version: 0,
+            status: 0,
+            provenance: 0,
+            length: 0,
+            creator_pid: 0,
+            handler_pid: 0,
+            creator_birth: 0,
+            handler_birth: 0,
+            error: 0,
+            reserved: 0,
+            endpoint: [0; 256],
+        };
+        // SAFETY: Process-pinned getter borrows exactly these initialized fixed
+        // ABI buffers; it performs no callback, allocation, load or kernel query.
+        let success = unsafe { getter(&input, &mut output) };
+        if output.error != 0 {
+            return Err(CrashError::new(
+                CaptureOperation::Observation,
+                std::io::Error::from_raw_os_error(output.error as i32),
+            ));
+        }
+        if !success
+            || output.version != 1
+            || output.status != 1
+            || output.provenance != 1
+            || output.reserved != 0
+            || output.length == 0
+            || output.length > 256
+            || output.endpoint[output.length.min(256) as usize..].iter().any(|unit| *unit != 0)
+        {
+            return Err(CrashError::invalid(CaptureOperation::Observation));
+        }
+        let creator = CaptureProcessFacts::new(output.creator_pid, output.creator_birth)
+            .map_err(|cause| CrashError::new(CaptureOperation::Observation, cause))?;
+        let handler = CaptureProcessFacts::new(output.handler_pid, output.handler_birth)
+            .map_err(|cause| CrashError::new(CaptureOperation::Observation, cause))?;
+        CaptureEndpointObservation::new(
+            &expected,
+            CaptureEndpointProvenance::CreatorInherited,
+            creator,
+            handler,
+            &output.endpoint[..output.length as usize],
+        )
+        .map_err(|cause| CrashError::new(CaptureOperation::Observation, cause))
+    }
     pub(super) fn start(self, input: &Input) -> ResultValue {
         let mut output = ResultValue::default();
         // SAFETY: Borrowed arrays remain valid for this finite synchronous call;

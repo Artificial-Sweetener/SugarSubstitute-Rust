@@ -108,6 +108,11 @@ pub(super) struct Rig {
     pub(super) native_scope: Scope,
 }
 impl Rig {
+    /// Join the actual execution owner before returning its original scope for observation.
+    pub(super) fn join(self) -> Scope {
+        drop(self._owner);
+        self.native_scope
+    }
     pub(super) fn new() -> TestResult<Self> {
         let clock = Arc::new(ManualClock::default());
         let wake = Arc::new(Wake::default());
@@ -179,6 +184,8 @@ impl Rig {
 }
 #[derive(Default)]
 pub(super) struct FakePort {
+    pub(super) endpoint_reads: Arc<AtomicUsize>,
+    pub(super) endpoint_unavailable: Arc<AtomicUsize>,
     pub(super) created: AtomicUsize,
     pub(super) dropped: Arc<AtomicUsize>,
     pub(super) stopped: Arc<AtomicUsize>,
@@ -192,6 +199,8 @@ pub(super) struct FakePort {
     pub(super) cancelled_permits: Arc<Mutex<Vec<WatchJob>>>,
 }
 struct FakeLease {
+    endpoint_reads: Arc<AtomicUsize>,
+    endpoint_unavailable: Arc<AtomicUsize>,
     _memory: MemoryClaim,
     dropped: Arc<AtomicUsize>,
     stopped: Arc<AtomicUsize>,
@@ -208,9 +217,16 @@ impl NativePort for FakePort {
     fn create(&self, memory: &MemoryLease) -> Result<Box<dyn CaptureLease>, CrashError> {
         self.created.fetch_add(1, Ordering::AcqRel);
         Ok(Box::new(FakeLease {
-            _memory: memory.claim(crate::input::STORAGE_BYTES as u64).map_err(|cause| {
-                CrashError::new(sugarsubstitute_contracts::crash::CaptureOperation::Runtime, cause)
-            })?,
+            endpoint_reads: self.endpoint_reads.clone(),
+            endpoint_unavailable: self.endpoint_unavailable.clone(),
+            _memory: memory
+                .claim((crate::input::STORAGE_BYTES - crate::input::SOURCE_STORAGE_BYTES) as u64)
+                .map_err(|cause| {
+                    CrashError::new(
+                        sugarsubstitute_contracts::crash::CaptureOperation::Runtime,
+                        cause,
+                    )
+                })?,
             dropped: self.dropped.clone(),
             stopped: self.stopped.clone(),
             fail_stop: self.fail_stop.clone(),
@@ -253,6 +269,28 @@ impl CaptureLease for FakeLease {
     }
     fn registered(&self) -> bool {
         self.healthy.load(Ordering::Acquire) != 0
+    }
+    fn endpoint(
+        &self,
+        expected: sugarsubstitute_execution::windows_capture_attach::CaptureAttachExpectation,
+    ) -> Result<
+        sugarsubstitute_execution::windows_capture_attach::CaptureEndpointObservation,
+        CrashError,
+    > {
+        self.endpoint_reads.fetch_add(1, Ordering::AcqRel);
+        if self.endpoint_unavailable.load(Ordering::Acquire) != 0 {
+            return Err(CrashError::new(
+                sugarsubstitute_contracts::crash::CaptureOperation::Observation,
+                std::io::Error::other("controlled-endpoint-unavailable"),
+            ));
+        }
+        sugarsubstitute_execution::windows_capture_attach::CaptureEndpointObservation::new(
+            &expected,
+            sugarsubstitute_execution::windows_capture_attach::CaptureEndpointProvenance::CreatorInherited,
+            expected.creator(), expected.handler(),
+            &r"\\.\pipe\crashpad_fixture".encode_utf16().collect::<Vec<_>>(),
+        ).map_err(|cause| CrashError::new(
+            sugarsubstitute_contracts::crash::CaptureOperation::Observation, cause))
     }
     fn callback_pin_bytes(&self) -> u64 {
         0

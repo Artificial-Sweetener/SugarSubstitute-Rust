@@ -33,6 +33,7 @@ struct Entry {
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct Deadlines {
     entries: [Option<Entry>; 3],
+    cleanup: [Option<Entry>; 2],
     stopped: bool,
 }
 impl Deadlines {
@@ -75,26 +76,29 @@ impl Deadlines {
         true
     }
     pub(crate) fn scan(&mut self, now: Moment) -> (Option<Moment>, bool) {
-        let mut future: Option<Moment> = None;
-        let mut expired = false;
-        for entry in self.entries.iter_mut().flatten() {
-            if entry.phase != Phase::Armed {
-                continue;
-            }
-            if entry.deadline <= now {
-                entry.phase = Phase::Due;
-                expired = true;
-            } else {
-                future = Some(future.map_or(entry.deadline, |earlier| earlier.min(entry.deadline)));
-            }
-        }
-        (future, expired)
+        scan_entries(&mut self.entries, now)
+    }
+    pub(crate) fn scan_capture_cleanup(&mut self, now: Moment) -> (Option<Moment>, bool) {
+        scan_entries(&mut self.cleanup, now)
     }
     pub(crate) fn expired(&self, now: Moment) -> bool {
         self.entries
             .iter()
             .flatten()
             .any(|entry| entry.phase != Phase::Retiring && entry.deadline <= now)
+    }
+    pub(crate) fn latch_capture_cleanup(
+        &mut self,
+        budget: sugarsubstitute_contracts::lifecycle::ShutdownBudget,
+    ) {
+        if self.cleanup.iter().any(Option::is_some) {
+            return;
+        }
+        self.cleanup = [budget.graceful_until, budget.settle_until]
+            .map(|deadline| Some(Entry { operation: 0, deadline, phase: Phase::Armed }));
+    }
+    pub(crate) fn capture_cleanup_due(&self, now: Moment) -> [bool; 2] {
+        self.cleanup.map(|entry| entry.is_some_and(|entry| entry.deadline <= now))
     }
     pub(crate) fn stop(&mut self) {
         self.stopped = true;
@@ -105,6 +109,23 @@ impl Deadlines {
     pub(crate) fn stopped(&self) -> bool {
         self.stopped
     }
+}
+
+fn scan_entries(entries: &mut [Option<Entry>], now: Moment) -> (Option<Moment>, bool) {
+    let mut future: Option<Moment> = None;
+    let mut expired = false;
+    for entry in entries.iter_mut().flatten() {
+        if entry.phase != Phase::Armed {
+            continue;
+        }
+        if entry.deadline <= now {
+            entry.phase = Phase::Due;
+            expired = true;
+        } else {
+            future = Some(future.map_or(entry.deadline, |earlier| earlier.min(entry.deadline)));
+        }
+    }
+    (future, expired)
 }
 
 #[cfg(test)]

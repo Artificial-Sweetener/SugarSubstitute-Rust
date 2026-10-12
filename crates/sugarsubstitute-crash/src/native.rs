@@ -9,6 +9,9 @@ use sugarsubstitute_contracts::{
     lifecycle::CoordinatorKey,
 };
 use sugarsubstitute_execution::windows::{NativeObservationError, ProcessExit, ProcessWatchPermit};
+use sugarsubstitute_execution::windows_capture_attach::{
+    CaptureAttachExpectation, CaptureEndpointObservation,
+};
 
 mod bridge;
 mod capture;
@@ -30,6 +33,10 @@ pub(crate) trait CaptureLease: Send {
     fn handler(&self) -> Option<CaptureHandlerIdentity>;
     fn has_process(&self) -> bool;
     fn registered(&self) -> bool;
+    fn endpoint(
+        &self,
+        expected: CaptureAttachExpectation,
+    ) -> Result<CaptureEndpointObservation, CrashError>;
     fn callback_pin_bytes(&self) -> u64;
     fn callback_pin_reservation_bytes(&self) -> u64;
     fn bind_watch(&mut self, permit: ProcessWatchPermit) -> Result<WatchJob, BindFailed>;

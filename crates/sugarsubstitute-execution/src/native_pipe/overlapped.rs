@@ -95,6 +95,34 @@ impl Operation {
             Err(e) => Err(error(if connect { "pipe_connect" } else { "pipe_issue" }, e)),
         }
     }
+    /// Issue a finite transaction using this exact prepared operation's custody.
+    /// The caller owns both fixed buffers through completion/quiescence and holds
+    /// its actual issue fence. Acceptance precedes every completion/status query.
+    pub(crate) fn transact(
+        &mut self,
+        pipe: HANDLE,
+        input: &[u8],
+        output: &mut [u8],
+    ) -> Result<AcceptedIssue, NativePipeError> {
+        let input_length =
+            u32::try_from(input.len()).map_err(|_| invariant("pipe_transaction_input_bound"))?;
+        let output_length =
+            u32::try_from(output.len()).map_err(|_| invariant("pipe_transaction_output_bound"))?;
+        // SAFETY: caller retains both bounded allocations and this pinned
+        // OVERLAPPED until actual completion, cancellation and callback quiescence.
+        let result = unsafe {
+            windows::Win32::System::Pipes::TransactNamedPipe(
+                pipe,
+                Some(input.as_ptr().cast()),
+                input_length,
+                Some(output.as_mut_ptr().cast()),
+                output_length,
+                std::ptr::null_mut(),
+                Some(self.pointer()),
+            )
+        };
+        self.accept(result, false)
+    }
     /// Poll synchronous data counts only after acceptance has been preserved.
     pub(crate) fn initial_progress(
         &mut self,

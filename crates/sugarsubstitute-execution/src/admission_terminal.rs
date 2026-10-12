@@ -56,12 +56,26 @@ impl Core {
         }
     }
 
+    #[cfg(any(windows, test))]
+    pub(crate) fn retire_native_custody(&self, id: JobId) {
+        let acknowledged = {
+            let state = lock(&self.state);
+            state.jobs.get(&id).is_some_and(|record| record.acknowledged && !record.held_native())
+        };
+        if acknowledged {
+            self.acknowledge(id);
+        }
+        self.changed();
+    }
+
     pub(crate) fn acknowledge(&self, id: JobId) {
         let (removed, wake) = {
             let mut state = lock(&self.state);
             self.mailbox.remove(id);
-            let deferred =
-                state.jobs.get(&id).is_some_and(|record| record.job.cancellation().pending());
+            let deferred = state
+                .jobs
+                .get(&id)
+                .is_some_and(|record| record.job.cancellation().pending() || record.held_native());
             let removed = if deferred {
                 if let Some(record) = state.jobs.get_mut(&id) {
                     record.acknowledged = true;

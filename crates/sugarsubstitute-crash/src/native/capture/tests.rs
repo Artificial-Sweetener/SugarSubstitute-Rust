@@ -119,3 +119,88 @@ fn diagnostic_panic_cannot_drop_irrevocably_retained_owner_or_actual_charge()
     drop(scope);
     Ok(())
 }
+
+#[test]
+fn actual_source_native_callback_and_protected_claims_exactly_fit_two_mebibytes()
+-> Result<(), Box<dyn std::error::Error>> {
+    use sugarsubstitute_contracts::lifecycle::{CoordinatorEpoch, CoordinatorKey, NamespaceId};
+    let wake = Arc::new(WakeBoundary::default());
+    let owner = ExecutionOwner::new(Arc::new(ClockBoundary), wake.clone())?;
+    let client = owner.client();
+    let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
+    let request = JobSpec {
+        id: JobId::new(1)?,
+        operation: Operation::NativeLifecycle,
+        class: JobClass::InfrastructureLifecycle,
+        deadline: Some(Moment::from_nanos(1)),
+        reservation_bytes: crate::input::STORAGE_BYTES as u64,
+        replacement: None,
+    };
+    let key = CoordinatorKey {
+        namespace: NamespaceId::new([1; 32]),
+        epoch: CoordinatorEpoch::new([2; 16])?,
+    };
+    let mut job = client.submit_blocking(&scope, request, move |context| {
+        let memory = context.memory();
+        let source = memory
+            .claim(crate::input::SOURCE_STORAGE_BYTES as u64)
+            .map_err(|cause| cause.to_string())?;
+        let ledger = crate::capture_endpoint::Attempts::new(key, source)
+            .map_err(|cause| cause.to_string())?;
+        let capture = super::Capture::new(memory).map_err(|cause| cause.to_string())?;
+        let fields = capture.fields.as_ref().ok_or("Missing actual native owner")?;
+        assert_eq!(fields._storage.bytes(), 966_656);
+        assert_eq!(fields.pin_claim.as_ref().map(MemoryClaim::bytes), Some(65_536));
+        let rejected =
+            memory.claim(1).err().ok_or("Actual owners undercharged live allocations")?;
+        assert_eq!(rejected.available_bytes, 0);
+        assert!(fields.pins.is_empty());
+        assert!(fields.storage.is_retired());
+        assert!(
+            size_of::<super::Fields>()
+                + size_of::<super::Capture>()
+                + size_of::<crate::capture::Shared>()
+                + 2 * size_of::<usize>()
+                + 64
+                < 16_384
+        );
+        // Empty allocation-only native owners have no unresolved kernel effects.
+        // Their real Drop releases exactly the three distinct guarded claims.
+        drop(capture);
+        let remaining = memory.claim(2_097_152 - 16_384).map_err(|cause| cause.to_string())?;
+        assert!(memory.claim(1).is_err());
+        drop(remaining);
+        Ok::<_, String>(ledger)
+    })?;
+    let completion = loop {
+        let previous = *wake.count.lock().map_err(|_| "Poisoned test wake")?;
+        if let Some(completion) = job.try_take_completion() {
+            break completion;
+        }
+        client.drain_completions(NonZeroUsize::MIN)?;
+        if let Some(completion) = job.try_take_completion() {
+            break completion;
+        }
+        let (count, timeout) = wake
+            .changed
+            .wait_timeout_while(
+                wake.count.lock().map_err(|_| "Poisoned test wake")?,
+                Duration::from_secs(10),
+                |count| *count == previous,
+            )
+            .map_err(|_| "Poisoned test wake")?;
+        if timeout.timed_out() && *count == previous {
+            return Err("Actual allocation job did not finish".into());
+        }
+    };
+    let JobOutcome::Success(ledger) = completion.outcome else {
+        return Err("Actual allocation job failed".into());
+    };
+    drop(completion.memory);
+    assert_eq!(scope.snapshot().reserved_bytes, 2_097_152);
+    drop(ledger);
+    drop(job);
+    drop(owner);
+    assert_eq!(scope.snapshot().reserved_bytes, 0);
+    Ok(())
+}
