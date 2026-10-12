@@ -113,9 +113,9 @@ fn diagnostic_panic_cannot_drop_irrevocably_retained_owner_or_actual_charge()
     // process-lifetime owner stays retained exactly as the production fallback does.
     charge.lock().map_err(|_| "Poisoned test charge")?.take();
     drop(job);
+    drop(owner);
     assert_eq!(scope.snapshot().reserved_bytes, 0);
     assert_eq!(dropped.load(Ordering::Acquire), 0);
     drop(scope);
-    drop(owner);
     Ok(())
 }

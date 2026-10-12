@@ -20,6 +20,9 @@ use sugarsubstitute_contracts::execution::{Clock, Moment, WaitFuture};
 pub(super) struct TimerBoundary {
     pub(super) clock: Arc<ManualClock>,
     pub(super) armed: AtomicBool,
+    hold_first_poll: AtomicBool,
+    pub(super) polling: Gate,
+    pub(super) poll_release: Gate,
     pub(super) disposing: Gate,
     pub(super) release: Gate,
     pub(super) native_start_release: Gate,
@@ -33,6 +36,9 @@ impl TimerBoundary {
         Arc::new(Self {
             clock: Arc::new(ManualClock::default()),
             armed: AtomicBool::new(false),
+            hold_first_poll: AtomicBool::new(true),
+            polling: Gate::default(),
+            poll_release: Gate::default(),
             disposing: Gate::default(),
             release: Gate::default(),
             native_start_release: Gate::default(),
@@ -71,7 +77,16 @@ struct Timer {
 impl Future for Timer {
     type Output = ();
     fn poll(mut self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<()> {
-        self.inner.as_mut().poll(context)
+        let result = self.inner.as_mut().poll(context);
+        if result.is_pending() && self.boundary.hold_first_poll.swap(false, Ordering::AcqRel) {
+            // Keep this registered timer alive until the test arms its disposal
+            // and publishes the notification that must win the actual select.
+            self.boundary.polling.open();
+            if let Err(error) = self.boundary.poll_release.wait() {
+                *lock(&self.boundary.failure) = Some(error.to_string());
+            }
+        }
+        result
     }
 }
 impl Drop for Timer {
@@ -87,6 +102,7 @@ impl Drop for Timer {
 pub(super) struct ReleaseOnDrop(pub(super) Arc<TimerBoundary>);
 impl Drop for ReleaseOnDrop {
     fn drop(&mut self) {
+        self.0.poll_release.open();
         self.0.release.open();
         self.0.native_start_release.open();
     }

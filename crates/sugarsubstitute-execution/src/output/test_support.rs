@@ -98,6 +98,25 @@ impl Boundary {
         })
     }
 }
+/// Release a controlled external retirement hold before the execution owner joins.
+pub(super) struct RetirementHold(Arc<Boundary>);
+impl RetirementHold {
+    /// Hold checked retirement until the test explicitly releases it or exits.
+    pub(super) fn new(boundary: &Arc<Boundary>) -> Self {
+        boundary.allow_retire.store(false, Ordering::Release);
+        Self(boundary.clone())
+    }
+}
+impl Drop for RetirementHold {
+    fn drop(&mut self) {
+        self.0.allow_retire.store(true, Ordering::Release);
+        if let Some(signals) = lock(&self.0.signals).as_ref() {
+            for signal in signals {
+                signal.complete();
+            }
+        }
+    }
+}
 pub(super) struct Lease(pub(super) Arc<Boundary>);
 impl OutputLease for Lease {
     fn prepare(

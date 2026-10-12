@@ -158,7 +158,7 @@ fn partial_native_creation_and_failed_retirement_preserve_original_cause_until_l
     let boundary = Boundary::new();
     boundary.fail_prepare.store(true, Ordering::Release);
     boundary.fail_retire.store(1, Ordering::Release);
-    boundary.allow_retire.store(false, Ordering::Release);
+    let _retirement = RetirementHold::new(&boundary);
     let scope = rig.client.core.create_scope_kind(
         ScopeSpec { id: ScopeId::new(2)?, deadline: None },
         None,
@@ -189,9 +189,10 @@ fn partial_native_creation_and_failed_retirement_preserve_original_cause_until_l
 fn pending_issue_panic_keeps_admitted_storage_through_blocked_retirement() -> TestResult {
     let rig = Rig::new()?;
     let boundary = Boundary::new();
-    boundary.panic_read.store(true, Ordering::Release);
-    boundary.allow_retire.store(false, Ordering::Release);
+    let _retirement = RetirementHold::new(&boundary);
     let mut session = session(&rig, &boundary)?;
+    boundary.panic_read.store(true, Ordering::Release);
+    boundary.wake(0)?;
     boundary.retiring.wait()?;
     assert!(session.completion.try_take_completion().is_none());
     assert!(lock(&rig.client.core.state).bytes >= MIN_WINDOWS_OUTPUT_BYTES);

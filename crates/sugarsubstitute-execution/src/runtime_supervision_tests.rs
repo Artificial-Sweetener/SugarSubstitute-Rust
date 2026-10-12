@@ -135,11 +135,12 @@ fn notification_discarded_timer_still_retires_native_at_fresh_expired_scan() -> 
     )?
     .bind_input(Box::new(Input { process: boundary.clone(), timer: timer.clone() }));
     boundary.started.wait()?;
-    rig.clock.wait_until_registered(deadline)?;
+    timer.polling.wait()?;
     timer.armed.store(true, Ordering::Release);
-    // At time 0 the timer is still pending, so only the notification branch
-    // can select. Its disposal barrier prevents the next fresh clock scan.
+    // The actual pending timer is held inside poll until this notification
+    // exists. Its disposal barrier prevents the next fresh clock scan.
     rig.client.core.changed();
+    timer.poll_release.open();
     timer.disposing.wait()?;
     // Registration is held until the earlier native unpark token exists. The
     // third native clock sample acknowledges a full zero-time park/loop pass,

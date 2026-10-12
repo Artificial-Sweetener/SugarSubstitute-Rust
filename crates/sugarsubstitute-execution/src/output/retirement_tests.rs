@@ -8,7 +8,7 @@ fn cancelled_pending_read_retains_actual_bytes_only_after_checked_retirement() -
     let rig = Rig::new()?;
     let boundary = Boundary::new();
     boundary.defer_read[0].store(true, Ordering::Release);
-    boundary.allow_retire.store(false, Ordering::Release);
+    let _retirement = RetirementHold::new(&boundary);
     lock(&boundary.data)[0].push_back(b"completed before cancel".to_vec());
     let mut session = session(&rig, &boundary)?;
     boundary.issued.wait()?;
