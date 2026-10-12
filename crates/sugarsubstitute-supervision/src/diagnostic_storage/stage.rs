@@ -2,6 +2,13 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain streaming publication stages before native creation and after uncertainty.
 use super::*;
+pub(super) mod slots;
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum StageRole {
+    Migration(summary_migration::MigrationRole),
+    PayloadCandidate,
+    PayloadJournal,
+}
 
 pub(super) struct RetainedStage {
     pub(super) id: u64,
@@ -12,7 +19,7 @@ pub(super) struct RetainedStage {
     pub(super) flushed: Option<DiagnosticReadFacts>,
     pub(super) recovered: Option<RecordedDiagnosticFileFacts>,
     pub(super) recovery_predecessor: Option<DiagnosticPredecessor>,
-    pub(super) migration: Option<summary_migration::MigrationRole>,
+    pub(super) role: Option<StageRole>,
     pub(super) activated: bool,
 }
 
@@ -127,7 +134,7 @@ impl DiagnosticStorage {
             flushed: None,
             recovered: None,
             recovery_predecessor: None,
-            migration: None,
+            role: None,
             activated: false,
         });
         let native_id = state
@@ -178,7 +185,7 @@ impl DiagnosticStage {
             .position(|value| value.id == self.id)
             .ok_or_else(|| error(self.operation, Code::Closed))?;
         let stage = &mut state.stages[index];
-        if stage.recovered.is_some() || stage.migration.is_some() {
+        if stage.recovered.is_some() || stage.role.is_some() {
             return Err(error(self.operation, Code::Busy));
         }
         let end = stage
@@ -205,7 +212,7 @@ impl DiagnosticStage {
     ) -> Result<DiagnosticStageFacts, DiagnosticStorageError> {
         let mut state = lock(&self.shared);
         check(&mut state, self.operation, context, false)?;
-        if state.migration.is_some() {
+        if state.migration.is_some() || state.payload.is_some() {
             return Err(error(self.operation, Code::Busy));
         }
         let index = state
@@ -238,7 +245,7 @@ impl DiagnosticStage {
         let Some(index) = state.stages.iter().position(|value| value.id == self.id) else {
             return Ok(());
         };
-        if state.stages[index].migration.is_some() {
+        if state.stages[index].role.is_some() {
             return Err(error(self.operation, Code::Busy));
         }
         if let Some(id) = state.stages[index].native {
@@ -290,7 +297,7 @@ pub(super) fn mutation(
     if !state.writer {
         return Err(error(key, Code::Busy));
     }
-    if state.migration.is_some() {
+    if state.migration.is_some() || state.payload.is_some() {
         return Err(error(key, Code::Busy));
     }
     if !state.inventory_complete {

@@ -1,25 +1,26 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Settle retained migration stage slots without replaying uncertain effects.
-use super::*;
-pub(super) fn stage_index(
+//! Settle retained publication stage slots without replaying uncertain effects.
+use super::super::*;
+use super::StageRole;
+pub(in crate::diagnostic_storage) fn stage_index(
     state: &State,
     id: u64,
     key: LogicalStoreOperationKey,
 ) -> Result<usize, DiagnosticStorageError> {
     state.stages.iter().position(|stage| stage.id == id).ok_or_else(|| error(key, Code::Closed))
 }
-pub(super) fn stage_facts(
+pub(in crate::diagnostic_storage) fn stage_facts(
     state: &State,
     id: u64,
     key: LogicalStoreOperationKey,
 ) -> Result<DiagnosticReadFacts, DiagnosticStorageError> {
     state.stages[stage_index(state, id, key)?].flushed.ok_or_else(|| error(key, Code::Flush))
 }
-pub(super) fn reserve_stage(
+pub(in crate::diagnostic_storage) fn reserve_stage(
     state: &mut State,
     object: DiagnosticObject,
-    role: MigrationRole,
+    role: StageRole,
     reserved: u64,
     key: LogicalStoreOperationKey,
 ) -> Result<u64, DiagnosticStorageError> {
@@ -48,12 +49,12 @@ pub(super) fn reserve_stage(
         flushed: None,
         recovered: None,
         recovery_predecessor: None,
-        migration: Some(role),
+        role: Some(role),
         activated: false,
     });
     Ok(id)
 }
-pub(super) fn create_stage(
+pub(in crate::diagnostic_storage) fn create_stage(
     state: &mut State,
     id: u64,
     key: LogicalStoreOperationKey,
@@ -72,7 +73,7 @@ pub(super) fn create_stage(
     }
     check(state, key, context, false)
 }
-pub(super) fn append_stage(
+pub(in crate::diagnostic_storage) fn append_stage(
     state: &mut State,
     id: u64,
     bytes: &[u8],
@@ -99,7 +100,7 @@ pub(super) fn append_stage(
     state.stages[index].written = end;
     check(state, key, context, false)
 }
-pub(super) fn flush_stage(
+pub(in crate::diagnostic_storage) fn flush_stage(
     state: &mut State,
     id: u64,
     key: LogicalStoreOperationKey,
@@ -120,7 +121,7 @@ pub(super) fn flush_stage(
     state.stages[index].flushed = Some(actual);
     Ok(actual)
 }
-pub(super) fn close_read(
+pub(in crate::diagnostic_storage) fn close_read(
     state: &mut State,
     id: u64,
     key: LogicalStoreOperationKey,
@@ -138,7 +139,7 @@ pub(super) fn close_read(
     state.reads.remove(index);
     Ok(())
 }
-pub(super) fn close_stage(
+pub(in crate::diagnostic_storage) fn close_stage(
     state: &mut State,
     id: u64,
     key: LogicalStoreOperationKey,
@@ -152,10 +153,12 @@ pub(super) fn close_stage(
     state.stages.remove(index);
     Ok(())
 }
-pub(super) fn predecessor(facts: DiagnosticReadFacts) -> DiagnosticPredecessor {
+pub(in crate::diagnostic_storage) fn predecessor(
+    facts: DiagnosticReadFacts,
+) -> DiagnosticPredecessor {
     DiagnosticPredecessor::Exact { file_identity: facts.identity, sha256: facts.sha256 }
 }
-pub(super) fn settle_stage(
+pub(in crate::diagnostic_storage) fn settle_stage(
     state: &mut State,
     id: u64,
     expected: DiagnosticPredecessor,
@@ -167,9 +170,17 @@ pub(super) fn settle_stage(
     let facts = stage_facts(state, id, key)?;
     let object = state.stages[index].object;
     if let Some(native_id) = state.stages[index].native {
+        let actual = state
+            .port
+            .observe_file(native_id, context)
+            .map_err(|cause| native(key, Code::Read, cause))?;
+        check(state, key, context, false)?;
+        if actual != facts {
+            return Err(error(key, Code::ChangedIdentity));
+        }
         let target = state
             .port
-            .migration_stage_target(native_id, object, context)
+            .stage_target(native_id, object, context)
             .map_err(|cause| native(key, Code::Read, cause))?;
         check(state, key, context, false)?;
         if let Some(actual) = target {
@@ -210,4 +221,11 @@ pub(super) fn settle_stage(
     state.stages.remove(index);
     state.inventory_complete = false;
     Ok(actual)
+}
+
+pub(in crate::diagnostic_storage) fn required(
+    id: Option<u64>,
+    key: LogicalStoreOperationKey,
+) -> Result<u64, DiagnosticStorageError> {
+    id.ok_or_else(|| error(key, Code::Closed))
 }

@@ -7,14 +7,16 @@
 //! Dropping a lease never closes native custody or proves durable disposition.
 mod activation;
 mod boundary;
-pub(crate) use boundary::MigrationStageAccess;
 pub(crate) use boundary::Port;
+pub(crate) use boundary::SummaryStageAccess;
 mod deletion;
 mod disposition;
 #[cfg(any(test, feature = "boundary-fixtures"))]
 pub mod fixture;
 pub(crate) mod inventory;
 mod operation;
+mod payload_discard;
+pub use payload_discard::*;
 mod read;
 mod recovery;
 use operation::{check, next_lease};
@@ -100,6 +102,7 @@ struct State {
     reads: Vec<read::RetainedRead>,
     deletion: Option<deletion::RetainedDeletion>,
     migration: Option<Box<summary_migration::MigrationIntent>>,
+    payload: Option<Box<payload_discard::intent::PayloadIntent>>,
     archives: Vec<summary_migration::MigrationArchive>,
     scan_generation: u64,
     scan_entries: Vec<inventory::ObservedEntry>,
@@ -163,6 +166,7 @@ impl DiagnosticStorage {
                 reads,
                 deletion: None,
                 migration: None,
+                payload: None,
                 archives: Vec::new(),
                 scan_generation: 0,
                 scan_entries: Vec::new(),
@@ -236,6 +240,7 @@ impl DiagnosticStorage {
             || !state.reads.is_empty()
             || state.deletion.is_some()
             || state.migration.is_some()
+            || state.payload.is_some()
         {
             return Err(error(operation.key, Code::Busy));
         }

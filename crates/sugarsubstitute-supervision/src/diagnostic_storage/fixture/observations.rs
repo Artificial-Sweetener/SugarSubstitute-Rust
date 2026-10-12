@@ -90,6 +90,8 @@ impl Filesystem {
         let mut disk = lock(&self.0);
         *match failure {
             DiagnosticFixtureFailure::PartialCreate => &mut disk.faults.partial_stage,
+            DiagnosticFixtureFailure::PartialWrite => &mut disk.faults.partial_write,
+            DiagnosticFixtureFailure::Flush => &mut disk.faults.flush,
             DiagnosticFixtureFailure::PartialOpen => &mut disk.faults.partial_open,
             DiagnosticFixtureFailure::ReadCorruption => &mut disk.faults.corrupt_read,
             DiagnosticFixtureFailure::Close => &mut disk.faults.close,

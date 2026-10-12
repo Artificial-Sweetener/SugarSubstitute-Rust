@@ -38,6 +38,14 @@ impl DiagnosticStorage {
         {
             return Err(error(operation.key, Code::InvalidIdentity));
         }
+        payload_discard::intent::admit_read(
+            &state,
+            crate::protected_storage::record_file::diagnostic_object_binding(
+                object,
+                operation.key.owner().namespace,
+            ),
+            operation.key,
+        )?;
         let id = reserve(&mut state, operation.key, Some(object), None)?;
         let result = state.port.open(object, bound, context);
         finish(&mut state, &self.shared, operation.key, id, bound, result, context)
@@ -62,6 +70,11 @@ impl DiagnosticStorage {
         {
             return Err(error(operation.key, Code::InvalidIdentity));
         }
+        payload_discard::intent::admit_read(
+            &state,
+            (entry.observed.class, entry.observed.digest),
+            operation.key,
+        )?;
         let id = reserve(
             &mut state,
             operation.key,
@@ -207,7 +220,9 @@ impl DiagnosticReadLease {
         let Some(index) = state.reads.iter().position(|value| value.id == self.id) else {
             return Ok(());
         };
-        if summary_migration::intent::pins_read(&state, self.id) {
+        if summary_migration::intent::pins_read(&state, self.id)
+            || payload_discard::intent::pins_read(&state, self.id)
+        {
             return Err(error(self.operation, Code::Busy));
         }
         if let Some(id) = state.reads[index].native {

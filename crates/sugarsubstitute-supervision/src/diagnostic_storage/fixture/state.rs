@@ -7,8 +7,12 @@ use std::sync::Weak;
 #[derive(Default)]
 pub(in crate::diagnostic_storage) struct Faults {
     pub(in crate::diagnostic_storage) partial_stage: bool,
+    pub(in crate::diagnostic_storage) partial_write: bool,
+    pub(in crate::diagnostic_storage) flush: bool,
     pub(in crate::diagnostic_storage) partial_open: bool,
     pub(in crate::diagnostic_storage) close: bool,
+    pub(in crate::diagnostic_storage) close_object: Option<DiagnosticObject>,
+    pub(in crate::diagnostic_storage) delete_object: Option<DiagnosticObject>,
     pub(in crate::diagnostic_storage) activate: bool,
     pub(in crate::diagnostic_storage) absence: bool,
     pub(in crate::diagnostic_storage) scan_incomplete: bool,
@@ -122,7 +126,7 @@ pub(super) fn facts(file: &File) -> DiagnosticReadFacts {
     }
 }
 pub(super) fn handle(disk: &mut Disk, file: usize) -> Result<u64, ClaimError> {
-    if disk.handles.iter().filter(|handle| handle.live).count() >= DIAGNOSTIC_HANDLE_BOUND {
+    if disk.handles.iter().filter(|handle| handle.live).count() >= 16 {
         return Err(ClaimError::invalid("fake_handle_capacity"));
     }
     let memory = disk.memory.upgrade().ok_or_else(|| ClaimError::invalid("fake_missing_claim"))?;

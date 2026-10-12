@@ -9,6 +9,7 @@ mod disposition;
 mod fixture;
 mod inventory;
 mod migration;
+mod payload_discard;
 mod recovery;
 use super::fixture::boundary::Filesystem;
 use super::*;

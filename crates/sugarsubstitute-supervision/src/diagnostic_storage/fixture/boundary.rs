@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Fake only external filesystem effects; the real storage owner runs every transition.
+#[path = "files.rs"]
+mod files;
 #[path = "observations.rs"]
 mod observations;
 #[path = "stages.rs"]
@@ -97,34 +99,9 @@ impl Port for Filesystem {
         &mut self,
         object: DiagnosticObject,
         bound: u64,
-        _: &JobContext,
+        context: &JobContext,
     ) -> Result<(NativeId, DiagnosticReadFacts), ClaimError> {
-        let mut disk = lock(&self.0);
-        let file = disk
-            .files
-            .iter()
-            .position(|file| file.object == object && file.active && file.identity != [0; 24])
-            .ok_or_else(|| ClaimError::invalid("fake_missing_file"))?;
-        let writable = disk
-            .handles
-            .iter()
-            .find(|output| output.file == file && output.live && output.writable)
-            .map(|output| (output.id, output.stage));
-        let id = if let Some((id, false)) = writable {
-            id
-        } else if writable.is_some() {
-            return Err(ClaimError::invalid("fake_read_sharing"));
-        } else {
-            handle(&mut disk, file)?
-        };
-        let facts = facts(&disk.files[file]);
-        if let Some(clock) = &disk.after_open {
-            clock.observe(disk.after_open_time);
-        }
-        if disk.faults.partial_open || facts.bytes > bound {
-            return Err(ClaimError::invalid("fake_open_after_adoption"));
-        }
-        Ok((id, facts))
+        files::open(self, object, bound, context)
     }
     fn open_inventory(
         &mut self,
@@ -132,22 +109,7 @@ impl Port for Filesystem {
         bound: u64,
         context: &JobContext,
     ) -> Result<(NativeId, DiagnosticReadFacts), ClaimError> {
-        let object = {
-            let disk = lock(&self.0);
-            disk.files
-                .iter()
-                .find(|file| file.identity == observed.identity)
-                .map(|file| file.object)
-                .ok_or_else(|| ClaimError::invalid("fake_inventory_identity"))?
-        };
-        let result = self.open(object, bound, context)?;
-        if lock(&self.0).faults.changed_inventory
-            || result.1.identity != observed.identity
-            || result.1.bytes != observed.bytes
-        {
-            return Err(ClaimError::invalid("fake_changed_inventory"));
-        }
-        Ok(result)
+        files::open_inventory(self, observed, bound, context)
     }
     fn create_stage(
         &mut self,
@@ -184,12 +146,12 @@ impl Port for Filesystem {
     ) -> Result<(NativeId, DiagnosticReadFacts), ClaimError> {
         self.recover_existing(object, historical, expected, true, context)
     }
-    fn recover_migration_stage(
+    fn recover_summary_stage(
         &mut self,
         object: DiagnosticObject,
         historical: LogicalStoreOperationKey,
         expected: RecordedDiagnosticFileFacts,
-        access: MigrationStageAccess,
+        access: SummaryStageAccess,
         context: &JobContext,
     ) -> Result<(NativeId, DiagnosticReadFacts), ClaimError> {
         if !matches!(object, DiagnosticObject::Summary(_)) {
@@ -199,7 +161,7 @@ impl Port for Filesystem {
             object,
             historical,
             expected,
-            access == MigrationStageAccess::Candidate,
+            access == SummaryStageAccess::Candidate,
             context,
         )
     }
@@ -215,7 +177,7 @@ impl Port for Filesystem {
         }
         Ok(facts(&disk.files[output.file]))
     }
-    fn migration_stage_target(
+    fn stage_target(
         &mut self,
         id: NativeId,
         object: DiagnosticObject,
@@ -231,47 +193,25 @@ impl Port for Filesystem {
         id: NativeId,
         offset: u64,
         output: &mut [u8],
-        _: &JobContext,
+        context: &JobContext,
     ) -> Result<usize, ClaimError> {
-        let disk = lock(&self.0);
-        let file = disk.handles[index(&disk, id)?].file;
-        let end = offset as usize + output.len();
-        let source = disk.files[file]
-            .bytes
-            .get(offset as usize..end)
-            .ok_or_else(|| ClaimError::invalid("fake_read_range"))?;
-        output.copy_from_slice(source);
-        if disk.faults.corrupt_read && !output.is_empty() {
-            output[0] ^= 1;
-        }
-        Ok(output.len())
+        files::read(self, id, offset, output, context)
     }
     fn write(
         &mut self,
         id: NativeId,
         offset: u64,
         input: &[u8],
-        _: &JobContext,
+        context: &JobContext,
     ) -> Result<(), ClaimError> {
-        let mut disk = lock(&self.0);
-        let index = index(&disk, id)?;
-        if !disk.handles[index].writable || !disk.handles[index].live {
-            return Err(ClaimError::invalid("fake_readonly_write"));
-        }
-        let file = disk.handles[index].file;
-        if offset as usize != disk.files[file].bytes.len() {
-            return Err(ClaimError::invalid("fake_append_offset"));
-        }
-        disk.files[file].bytes.extend_from_slice(input);
-        disk.mutations += 1;
-        Ok(())
+        files::write(self, id, offset, input, context)
     }
-    fn flush(&mut self, id: NativeId, _: &JobContext) -> Result<DiagnosticReadFacts, ClaimError> {
-        let disk = lock(&self.0);
-        if !disk.handles[index(&disk, id)?].writable {
-            return Err(ClaimError::invalid("fake_readonly_flush"));
-        }
-        Ok(facts(&disk.files[disk.handles[index(&disk, id)?].file]))
+    fn flush(
+        &mut self,
+        id: NativeId,
+        context: &JobContext,
+    ) -> Result<DiagnosticReadFacts, ClaimError> {
+        files::flush(self, id, context)
     }
     fn activate(
         &mut self,
@@ -365,46 +305,21 @@ impl Port for Filesystem {
     fn delete(
         &mut self,
         id: NativeId,
-        _: DiagnosticObject,
+        object: DiagnosticObject,
         expected: DiagnosticReadFacts,
-        _: &JobContext,
+        context: &JobContext,
     ) -> Result<(), ClaimError> {
-        let mut disk = lock(&self.0);
-        let index = index(&disk, id)?;
-        let file = disk.handles[index].file;
-        if disk.handles[index].deleted {
-            return Ok(());
-        }
-        if facts(&disk.files[file]) != expected {
-            return Err(ClaimError::invalid("fake_changed_delete"));
-        }
-        disk.handles[index].deleted = true;
-        disk.mutations += 1;
-        Ok(())
+        files::delete(self, id, object, expected, context)
     }
-    fn absent(&mut self, object: DiagnosticObject, _: &JobContext) -> Result<bool, ClaimError> {
-        let disk = lock(&self.0);
-        if disk.faults.absence {
-            return Err(ClaimError::invalid("fake_absence"));
-        }
-        Ok(!disk
-            .files
-            .iter()
-            .any(|file| file.object == object && file.active && file.identity != [0; 24]))
+    fn absent(
+        &mut self,
+        object: DiagnosticObject,
+        context: &JobContext,
+    ) -> Result<bool, ClaimError> {
+        files::absent(self, object, context)
     }
-    fn close(&mut self, id: NativeId, _: &JobContext) -> Result<(), ClaimError> {
-        let mut disk = lock(&self.0);
-        let index = index(&disk, id)?;
-        if disk.faults.close {
-            return Err(ClaimError::invalid("fake_close"));
-        }
-        disk.handles[index].live = false;
-        disk.handles[index].memory = None;
-        if disk.handles[index].deleted {
-            let file = disk.handles[index].file;
-            disk.files[file].identity = [0; 24];
-        }
-        Ok(())
+    fn close(&mut self, id: NativeId, context: &JobContext) -> Result<(), ClaimError> {
+        files::close(self, id, context)
     }
     fn retire(&mut self, context: &JobContext) -> Result<(), ClaimError> {
         let ids: Vec<_> = lock(&self.0)
@@ -417,6 +332,9 @@ impl Port for Filesystem {
             self.close(id, context)?;
         }
         Ok(())
+    }
+    fn retained_files(&self) -> usize {
+        self.live_handles()
     }
     fn live_handles(&self) -> usize {
         lock(&self.0).handles.iter().filter(|handle| handle.live).count()

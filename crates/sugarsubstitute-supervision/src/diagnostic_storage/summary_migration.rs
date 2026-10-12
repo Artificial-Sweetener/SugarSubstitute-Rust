@@ -4,12 +4,11 @@
 mod archive;
 pub(super) mod intent;
 mod recovery;
-mod stages;
 mod types;
+use super::stage::slots::*;
 use super::*;
 use intent::*;
 use source::{canonical, read_by_id, retained_source, stage_by_id, whole};
-use stages::*;
 pub use types::*;
 pub(super) use types::{MigrationArchive, MigrationIntent, MigrationRole};
 impl DiagnosticStorage {
@@ -53,7 +52,7 @@ impl DiagnosticStorage {
         let copy = reserve_stage(
             &mut state,
             object,
-            MigrationRole::Original,
+            stage::StageRole::Migration(MigrationRole::Original),
             DIAGNOSTIC_IO_BYTES as u64,
             operation.key,
         )?;
@@ -61,7 +60,7 @@ impl DiagnosticStorage {
         let candidate = reserve_stage(
             &mut state,
             object,
-            MigrationRole::Candidate,
+            stage::StageRole::Migration(MigrationRole::Candidate),
             DIAGNOSTIC_IO_BYTES as u64,
             operation.key,
         )?;
@@ -138,7 +137,7 @@ impl DiagnosticStorage {
         let journal = reserve_stage(
             &mut state,
             DiagnosticObject::Journal(plan.historical),
-            MigrationRole::Journal,
+            stage::StageRole::Migration(MigrationRole::Journal),
             DIAGNOSTIC_IO_BYTES as u64,
             operation.key,
         )?;

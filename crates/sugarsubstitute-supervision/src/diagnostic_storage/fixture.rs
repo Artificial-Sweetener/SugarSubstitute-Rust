@@ -20,6 +20,10 @@ pub(in crate::diagnostic_storage) trait BoundaryClock:
 pub enum DiagnosticFixtureFailure {
     /// Adopt a newly created output before returning failure.
     PartialCreate,
+    /// Write actual bytes before returning an external failure.
+    PartialWrite,
+    /// Fail checked actual flush without publication proof.
+    Flush,
     /// Adopt an opened output before returning failure.
     PartialOpen,
     /// Return bytes differing from the retained file digest.

@@ -198,19 +198,19 @@ impl Port for StreamingPort {
             context,
         )
     }
-    fn recover_migration_stage(
+    fn recover_summary_stage(
         &mut self,
         object: DiagnosticObject,
         historical: LogicalStoreOperationKey,
         expected: RecordedDiagnosticFileFacts,
-        access: diagnostic::MigrationStageAccess,
+        access: diagnostic::SummaryStageAccess,
         context: &JobContext,
     ) -> Result<(NativeId, DiagnosticReadFacts), ClaimError> {
         let access = match access {
-            diagnostic::MigrationStageAccess::PreservedOriginal => {
+            diagnostic::SummaryStageAccess::PreservedOriginal => {
                 recovery::StageRecoveryAccess::PreservedOriginal
             }
-            diagnostic::MigrationStageAccess::Candidate => recovery::StageRecoveryAccess::Candidate,
+            diagnostic::SummaryStageAccess::Candidate => recovery::StageRecoveryAccess::Candidate,
         };
         self.recover_stage_owned(object, historical, expected, access, context)
     }
@@ -225,7 +225,7 @@ impl Port for StreamingPort {
         }
         self.observe(index, context)
     }
-    fn migration_stage_target(
+    fn stage_target(
         &mut self,
         id: NativeId,
         object: DiagnosticObject,
@@ -318,6 +318,9 @@ impl Port for StreamingPort {
         }
         self.writer = None;
         self.root.retire(context)
+    }
+    fn retained_files(&self) -> usize {
+        self.files.len()
     }
     fn live_handles(&self) -> usize {
         self.root.live_handles()

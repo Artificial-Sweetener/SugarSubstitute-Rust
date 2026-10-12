@@ -41,7 +41,7 @@ impl DiagnosticStorage {
             written: expected.bytes(),
             flushed: None,
             recovered: Some(expected),
-            migration: None,
+            role: None,
             activated: false,
             recovery_predecessor: Some(DiagnosticPredecessor::Exact {
                 file_identity: original.file_identity(),

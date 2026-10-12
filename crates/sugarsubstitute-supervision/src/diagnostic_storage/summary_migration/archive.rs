@@ -75,7 +75,7 @@ impl DiagnosticStorage {
                 let id = reserve_stage(
                     &mut state,
                     DiagnosticObject::Journal(permit.plan.historical),
-                    MigrationRole::Archive,
+                    stage::StageRole::Migration(MigrationRole::Archive),
                     DIAGNOSTIC_IO_BYTES as u64,
                     operation.key,
                 )?;

@@ -28,8 +28,8 @@ pub struct DiagnosticDeleteLease {
 }
 /// Observe checked by-handle deletion, final closure and protected absence.
 pub struct DiagnosticDeletion {
-    object: DiagnosticObject,
-    facts: DiagnosticReadFacts,
+    pub(super) object: DiagnosticObject,
+    pub(super) facts: DiagnosticReadFacts,
 }
 impl DiagnosticDeletion {
     /// Observe the exact durably disposed object.
@@ -56,6 +56,8 @@ impl DiagnosticStorage {
             let mut state = self.check(operation, context)?;
             if stage.plan.operation != operation.key
                 || state.deletion.is_some()
+                || state.migration.is_some()
+                || state.payload.is_some()
                 || !Arc::ptr_eq(&stage.stage.shared, &self.shared)
             {
                 return Err(error(operation.key, Code::InvalidIdentity));

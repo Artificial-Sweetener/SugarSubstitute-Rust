@@ -158,7 +158,7 @@ impl DiagnosticStorage {
         context: &JobContext,
     ) -> Result<DiagnosticInventory, DiagnosticStorageError> {
         let mut state = self.check(operation, context)?;
-        if state.migration.is_some() {
+        if state.migration.is_some() || state.payload.is_some() {
             return Err(error(operation.key, Code::Busy));
         }
         state.inventory_complete = false;

@@ -26,12 +26,6 @@ impl MigrationIntent {
         }
     }
 }
-pub(super) fn required(
-    id: Option<u64>,
-    key: LogicalStoreOperationKey,
-) -> Result<u64, DiagnosticStorageError> {
-    id.ok_or_else(|| error(key, Code::Closed))
-}
 pub(super) fn migration(
     state: &mut State,
     id: u64,
@@ -133,20 +127,20 @@ pub(super) fn adopt_stage(
         return Err(error(key, Code::InventoryIncomplete));
     }
     let (expected, access) = match role {
-        MigrationRole::Original => (plan.original_stage, MigrationStageAccess::PreservedOriginal),
-        MigrationRole::Candidate => (plan.candidate_stage, MigrationStageAccess::Candidate),
+        MigrationRole::Original => (plan.original_stage, SummaryStageAccess::PreservedOriginal),
+        MigrationRole::Candidate => (plan.candidate_stage, SummaryStageAccess::Candidate),
         _ => return Err(error(key, Code::InvalidIdentity)),
     };
     if state.stages.iter().any(|stage| stage.recovered == Some(expected)) {
         return Err(error(key, Code::Busy));
     }
-    let id = reserve_stage(state, object, role, 0, key)?;
+    let id = reserve_stage(state, object, stage::StageRole::Migration(role), 0, key)?;
     let index = stage_index(state, id, key)?;
     state.stages[index].recovered = Some(expected);
     state.stages[index].written = expected.bytes;
     let (native_id, actual) = state
         .port
-        .recover_migration_stage(object, plan.historical, expected, access, context)
+        .recover_summary_stage(object, plan.historical, expected, access, context)
         .map_err(|cause| native(key, Code::Read, cause))?;
     state.stages[index].native = Some(native_id);
     if native_id == 0 || !expected.matches(actual) {

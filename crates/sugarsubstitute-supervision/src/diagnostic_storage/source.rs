@@ -47,7 +47,7 @@ pub(super) fn stage_by_id(
     }
     let target = state
         .port
-        .migration_stage_target(native_id, object, context)
+        .stage_target(native_id, object, context)
         .map_err(|cause| native(operation.key, Code::Read, cause))?;
     check(&mut state, operation.key, context, false)?;
     let mut bytes = Vec::new();
@@ -173,7 +173,7 @@ pub(super) fn retained_source(
             let object = source.object.ok_or_else(|| error(key, Code::InvalidIdentity))?;
             let target = state
                 .port
-                .migration_stage_target(source.native, object, context)
+                .stage_target(source.native, object, context)
                 .map_err(|cause| native(key, Code::Read, cause))?;
             check(state, key, context, false)?;
             let (active, digest) = crate::protected_storage::record_file::diagnostic_object_binding(

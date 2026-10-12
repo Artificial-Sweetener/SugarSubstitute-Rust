@@ -3,7 +3,7 @@
 //! Define the sole private protected-filesystem primitive boundary and closed stage access.
 use super::*;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum MigrationStageAccess {
+pub(crate) enum SummaryStageAccess {
     PreservedOriginal,
     Candidate,
 }
@@ -44,12 +44,12 @@ pub(crate) trait Port: Send {
         expected: RecordedDiagnosticFileFacts,
         context: &JobContext,
     ) -> Result<(NativeId, DiagnosticReadFacts), ClaimError>;
-    fn recover_migration_stage(
+    fn recover_summary_stage(
         &mut self,
         object: DiagnosticObject,
         historical: LogicalStoreOperationKey,
         expected: RecordedDiagnosticFileFacts,
-        access: MigrationStageAccess,
+        access: SummaryStageAccess,
         context: &JobContext,
     ) -> Result<(NativeId, DiagnosticReadFacts), ClaimError>;
     fn observe_file(
@@ -57,7 +57,7 @@ pub(crate) trait Port: Send {
         id: NativeId,
         context: &JobContext,
     ) -> Result<DiagnosticReadFacts, ClaimError>;
-    fn migration_stage_target(
+    fn stage_target(
         &mut self,
         id: NativeId,
         object: DiagnosticObject,
@@ -110,4 +110,5 @@ pub(crate) trait Port: Send {
     fn close(&mut self, id: NativeId, context: &JobContext) -> Result<(), ClaimError>;
     fn retire(&mut self, context: &JobContext) -> Result<(), ClaimError>;
     fn live_handles(&self) -> usize;
+    fn retained_files(&self) -> usize;
 }
