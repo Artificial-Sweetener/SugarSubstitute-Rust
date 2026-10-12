@@ -45,3 +45,14 @@ export function outputResultId(
 ): OutputResultId {
   return `result:${JSON.stringify([session, prompt, source, revision, batch])}`;
 }
+
+/** Identify host-owned restoration without inventing a backend job identity. */
+export function snapshotOutputResultId(
+  sessionId: WorkflowSessionId,
+  snapshotId: string,
+  sourceId: OutputSourceId,
+  revision: number,
+  batchIndex: number,
+): OutputResultId {
+  return `result:${JSON.stringify(['snapshot', sessionId, snapshotId, sourceId, revision, batchIndex])}`;
+}

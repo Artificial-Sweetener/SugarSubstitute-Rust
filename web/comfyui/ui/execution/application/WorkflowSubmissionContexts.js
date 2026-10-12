@@ -14,18 +14,13 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Associate exact constructed objects with immutable entry-time workflow ownership. */
+import { freezeWorkflowSubmissionContext } from '../domain/WorkflowSubmission.js';
 /** Retain lightweight associations weakly so batch reuse requires neither guessing nor a strong cache. */
 export class WorkflowSubmissionContexts {
     #contexts = new WeakMap();
     /** Bind the original result object without adding fields to persisted workflow data. */
     associate(prompt, session, sources) {
-        this.#contexts.set(prompt, Object.freeze({
-            session: Object.freeze({ ...session }),
-            sources: Object.freeze(sources.map((source) => Object.freeze({
-                ...source,
-                breadcrumb: Object.freeze([...source.breadcrumb]),
-            }))),
-        }));
+        this.#contexts.set(prompt, freezeWorkflowSubmissionContext({ session, sources }));
     }
     /** Resolve only the exact known prompt object, including explicit reuse for multiple batch requests. */
     read(prompt) {

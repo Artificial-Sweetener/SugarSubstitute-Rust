@@ -18,11 +18,11 @@ import { isRecord } from '../../types/common.js';
 import { outputSourceId } from '../domain/ExecutionIdentity.js';
 /** Read source identities from a compiled prompt; results determine which paths produce visible media. */
 export function decodeComfyPromptSources(payload) {
-    if (!isRecord(payload) || !isRecord(payload.output))
+    if (!isRecord(payload) || !isRecord(payload.output) || Array.isArray(payload.output))
         return Object.freeze([]);
     const sources = [];
     for (const [executionPath, node] of Object.entries(payload.output)) {
-        if (!executionPath || executionPath.length > 4096 || !isRecord(node))
+        if (!executionPath || executionPath.length > 4096 || !isRecord(node) || Array.isArray(node))
             continue;
         const meta = isRecord(node._meta) ? node._meta : null;
         const title = text(meta?.title) || text(node.class_type) || `Node ${executionPath}`;

@@ -33,9 +33,8 @@ export interface OutputFileReference {
   readonly type: 'input' | 'output' | 'temp';
 }
 
-export interface OutputProvenance {
+export interface OutputProvenanceContext {
   readonly sessionId: WorkflowSessionId;
-  readonly promptId: PromptId;
   readonly sourceId: OutputSourceId;
   readonly executionPath: string;
   readonly generation: number;
@@ -44,14 +43,22 @@ export interface OutputProvenance {
   readonly revision: number;
 }
 
+export type OutputProvenance = OutputProvenanceContext &
+  (
+    | { readonly kind: 'execution'; readonly promptId: PromptId }
+    | { readonly kind: 'workflow-snapshot'; readonly promptId: null; readonly snapshotId: string }
+  );
+
 export interface WorkflowOutputItem {
   readonly id: OutputResultId;
   readonly provenance: OutputProvenance;
   readonly batchIndex: number;
   readonly file: OutputFileReference;
   readonly dimensions: ImageDimensions | null;
-  readonly mediaKind: 'image' | 'animated' | 'video';
+  readonly mediaKind: WorkflowMediaKind;
 }
+
+export type WorkflowMediaKind = 'image' | 'animated' | 'video' | 'unsupported';
 
 export interface WorkflowOutputSource {
   readonly id: OutputSourceId;
@@ -66,6 +73,7 @@ export interface WorkflowOutputSet {
   readonly provenance: OutputProvenance;
   readonly items: readonly WorkflowOutputItem[];
   readonly text: readonly string[];
+  readonly batchCount: number;
 }
 
 export type WorkflowRunStatus = 'queued' | 'running' | 'complete' | 'cancelled' | 'error';
