@@ -20,7 +20,7 @@ export function browserCanvasSnapshot(address, plan, catalog, images, camera, co
     const secondary = images.find((slot) => slot.slot === 'secondary');
     const frame = primary?.frame;
     const preview = Boolean(frame?.preview && plan.preview);
-    let resource = primary?.status ?? status('empty', 'Choose a workflow output.');
+    let resource = primary?.status ?? status('empty', '');
     if (plan.primary && !plan.primary.sourcePresent)
         resource = status('unavailable', 'The selected workflow output is unavailable.');
     else if (plan.primary?.item && plan.primary.item.mediaKind !== 'image')

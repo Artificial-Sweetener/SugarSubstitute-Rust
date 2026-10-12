@@ -21,7 +21,7 @@ export class ComfyCubeRootMutationAdapter {
     #remove;
     #getNodeById;
     #getLink;
-    /** Capture bound host methods once so every mutation owner sees one graph. */
+    /** Bind one graph while allowing its native lifecycle hooks to attach and retire. */
     constructor(graph) {
         this.#add = requireBoundMethod(graph, 'add');
         this.#remove = requireBoundMethod(graph, 'remove');
@@ -46,10 +46,14 @@ export class ComfyCubeRootMutationAdapter {
         return isRecord(value) ? value : null;
     }
 }
-/** Require and bind one dynamic Comfy graph method. */
+/** Validate the initial capability and resolve its current hook chain at invocation. */
 function requireBoundMethod(owner, name) {
-    const value = owner[name];
-    if (typeof value !== 'function')
+    if (typeof owner[name] !== 'function')
         throw new TypeError(`LGraph.${name} is unavailable.`);
-    return (...args) => Reflect.apply(value, owner, args);
+    return (...args) => {
+        const method = owner[name];
+        if (typeof method !== 'function')
+            throw new TypeError(`LGraph.${name} is unavailable.`);
+        return Reflect.apply(method, owner, args);
+    };
 }

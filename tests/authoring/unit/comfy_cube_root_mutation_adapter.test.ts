@@ -18,6 +18,7 @@
 import { jest } from '@jest/globals';
 import { ComfyCubeRootMutationAdapter } from '../../../frontend/comfyui/ui/cube/ComfyCubeRootMutationAdapter.js';
 import type { CubeNode } from '../../../frontend/comfyui/ui/cube/node/ComfyCubeNodeFactory.js';
+import { NativeSubgraphChangeObserver } from '../../../frontend/comfyui/ui/surface/NativeSubgraphChangeObserver.js';
 
 test('binds root mutations and narrows dynamic link values', () => {
   const node = { id: 'cube' } as CubeNode;
@@ -35,4 +36,33 @@ test('binds root mutations and narrows dynamic link values', () => {
   expect(adapter.getNodeById('cube')).toBe(node);
   expect(adapter.getLink(1)).toEqual({ id: 1 });
   expect(adapter.getLink(2)).toBeNull();
+});
+
+test('notifies observers installed after adapter construction and after observer replacement', async () => {
+  const node = { id: 'cube' } as CubeNode;
+  const graph = { add: jest.fn(), remove: jest.fn(), getNodeById: jest.fn(), getLink: jest.fn() };
+  const adapter = new ComfyCubeRootMutationAdapter(graph);
+  const relations = jest.fn();
+  const outputs = jest.fn();
+  const relationObserver = new NativeSubgraphChangeObserver(graph, relations);
+  let outputObserver = new NativeSubgraphChangeObserver(graph, outputs);
+  adapter.add(node);
+  await Promise.resolve();
+  expect(relations).toHaveBeenCalledWith([{ kind: 'add', info: node }]);
+  expect(outputs).toHaveBeenCalledWith([{ kind: 'add', info: node }]);
+  outputObserver.dispose();
+  outputObserver = new NativeSubgraphChangeObserver(graph, outputs);
+  adapter.remove(node);
+  await Promise.resolve();
+  expect(relations).toHaveBeenLastCalledWith([{ kind: 'remove', info: node }]);
+  expect(outputs).toHaveBeenLastCalledWith([{ kind: 'remove', info: node }]);
+  outputObserver.dispose();
+  relationObserver.dispose();
+});
+
+test('fails closed if a required host method becomes unavailable', () => {
+  const graph = { add: jest.fn(), remove: jest.fn(), getNodeById: jest.fn(), getLink: jest.fn() };
+  const adapter = new ComfyCubeRootMutationAdapter(graph);
+  Reflect.set(graph, 'add', null);
+  expect(() => adapter.add({ id: 'cube' } as CubeNode)).toThrow('LGraph.add is unavailable.');
 });

@@ -20,10 +20,19 @@ import type {
   CanvasCapabilities,
   CanvasCommand,
   CanvasViewSnapshot,
+  CanvasResourceStatus,
 } from '../../domain/CanvasViewPort.js';
 import { CanvasSourceTabs } from './CanvasSourceTabs.js';
 import { CanvasWipeSeparator } from './CanvasWipeSeparator.js';
 import { canvasNavigationSnapshot } from './CanvasNavigationSnapshot.js';
+import { CanvasLoadingIndicator } from './CanvasLoadingIndicator.js';
+
+/** Keep loading feedback in its delayed indicator while retaining actionable resource messages. */
+function resourceMessage(resource: CanvasResourceStatus | null): string {
+  return resource && resource.state !== 'ready' && resource.state !== 'loading'
+    ? resource.message
+    : '';
+}
 
 /** Render one view's status and navigation over any qualified surface. */
 export const CanvasOverlay = defineComponent({
@@ -41,6 +50,8 @@ export const CanvasOverlay = defineComponent({
     );
     return () => {
       const snapshot = props.snapshot;
+      const primaryMessage = resourceMessage(snapshot.resource);
+      const secondaryMessage = resourceMessage(snapshot.secondaryResource);
       return h('div', { class: 'sc-output-overlay', 'data-canvas-view': snapshot.address.viewId }, [
         snapshot.view.mode === 'image' &&
         snapshot.view.comparison &&
@@ -48,22 +59,16 @@ export const CanvasOverlay = defineComponent({
           ? h(CanvasWipeSeparator, { snapshot, send: props.send })
           : null,
         !snapshot.connected ||
-        (snapshot.resource.state !== 'ready' && Boolean(snapshot.resource.message)) ||
+        Boolean(primaryMessage) ||
         snapshot.resource.canRetry ||
         snapshot.resource.canAdmitLargeImage ||
-        (snapshot.secondaryResource?.state !== 'ready' &&
-          Boolean(snapshot.secondaryResource?.message)) ||
+        Boolean(secondaryMessage) ||
         snapshot.secondaryResource?.canRetry ||
         snapshot.secondaryResource?.canAdmitLargeImage
           ? h('div', { class: 'sc-output-status' }, [
               snapshot.connected ? null : h('span', 'Disconnected'),
-              h('span', snapshot.resource.state !== 'ready' ? snapshot.resource.message : ''),
-              h(
-                'span',
-                snapshot.secondaryResource?.state !== 'ready'
-                  ? snapshot.secondaryResource?.message
-                  : '',
-              ),
+              h('span', primaryMessage),
+              h('span', secondaryMessage),
               (snapshot.resource.canRetry || snapshot.secondaryResource?.canRetry) &&
               props.capabilities.commands.includes('retry')
                 ? h(
@@ -95,6 +100,12 @@ export const CanvasOverlay = defineComponent({
                 : null,
             ])
           : null,
+        h(CanvasLoadingIndicator, {
+          loading:
+            snapshot.connected &&
+            (snapshot.resource.state === 'loading' ||
+              snapshot.secondaryResource?.state === 'loading'),
+        }),
         h(
           'span',
           {

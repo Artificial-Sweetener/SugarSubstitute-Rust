@@ -390,3 +390,14 @@ Observed source selection in Nodes 1.0 and Nodes 2.0, renderer switching, Fluent
 - [x] Keep Comfy's native graph toolbar inside its content rectangle so it does not cover the output tabs.
 - [x] Observe source switching, divider keyboard resizing, Nodes 1.0/2.0 switching, and Fluent masonry in a visible in-app Chromium tab. Keep the corrected review tab and its test server available for user inspection.
 - [x] Run policy-selected proofs, worktree/index architecture validation, and the complete commit-ready gate before committing this placement correction.
+
+## 17. Restore live feature updates and refine output chrome
+
+- [x] Characterize insertion/removal through the root mutation adapter with observers attached after construction and replaced during workflow lifetime. Resolve host methods at invocation so normal Cube operations reach the current relation, output, and placement hooks.
+- [x] Verify eligible sampler overrides, separate prompt linking, and output discovery on a populated workflow in the normal custom-node review server. Preserve Cube stack and workflow data.
+- [x] Match the original QFluent SegmentedWidget's bottom-left placement, rounded selected segment, 14 px text, and centered 16 × 3 px active indicator.
+- [x] Replace immediate loading text with a centered accessible spinner after 250 ms. Cancel it on load completion, failure, disconnection, and attachment retirement; retain retry and admission feedback.
+- [x] Remove the canvas close button and the initial "Choose a workflow output" bar. Keep visibility on the toolbar toggle, drawer backdrop dismissal, and accessible drawer focus.
+- [x] Run focused and policy-selected proofs, worktree/index governance, and the full commit-ready gate. Observe the corrections in the visible in-app Chromium across applicable renderers, retain one useful review tab, and commit cohesive snapshots.
+
+Observed in in-app Chromium: Nodes 1.0 and Nodes 2.0 graph output tabs, renderer switches, and Nodes 2.0 Fluent masonry. The strip is 8 px from the canvas's left and bottom edges; its active indicator measures 16 × 3 px. A held image request shows a centered 28 px spinner after the delay and clears after loading; the timeout/retry path remains actionable. The populated Anima workflow exposes Sampler, Scheduler, Steps, CFG, and Seed override choices. Editing its positive prompt propagates to the linked upscale prompt; the original text is restored. A temporary Cube insertion changes each eligible override membership from two to three and removal restores two without reloading. The temporary browser tab is closed, the owned copy is removed, Nodes 2.0 is restored, and the normal custom-node server and one review tab remain available. Screenshots are under `D:\devartifacts\SugarCubes\output-canvas\captures`.
