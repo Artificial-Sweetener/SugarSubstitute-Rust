@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Own application lifecycle decisions independently of native and runtime adapters.
 
+pub mod incident;
 pub mod presentation;
 pub mod readiness;
 pub mod startup;

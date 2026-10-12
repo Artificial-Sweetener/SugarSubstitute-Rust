@@ -24,6 +24,8 @@ pub(super) struct RequestRecord {
 }
 pub(super) struct RunRecord {
     pub registration: ClientRegistration,
+    pub incident_seed_admitted: bool,
+    pub incident_failure_admitted: bool,
     pub connected: bool,
     pub settled: bool,
     pub highwater: u64,

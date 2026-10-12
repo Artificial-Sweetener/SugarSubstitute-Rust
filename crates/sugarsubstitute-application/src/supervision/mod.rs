@@ -3,6 +3,7 @@
 //! Own lease/resource and desktop-exit policy; startup presentation remains with StartupSession.
 //! Native containment, authenticated IPC and OS process registries remain adapter work.
 mod desktop_exit;
+mod incident_admission;
 mod main_authorization;
 mod resource_observations;
 mod resource_requests;

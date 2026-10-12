@@ -95,6 +95,8 @@ impl ResourceCoordinator {
             run.instance,
             RunRecord {
                 registration,
+                incident_seed_admitted: false,
+                incident_failure_admitted: false,
                 connected: true,
                 settled: false,
                 highwater: 0,

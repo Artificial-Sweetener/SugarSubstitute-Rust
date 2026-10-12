@@ -250,6 +250,20 @@ impl DesktopExitTransaction {
             actual_status: exit.code,
         })
     }
+    /// Return a clean seed subject only after accepted completion and actual settlement.
+    /// A failed cleanup or unexpected exit cannot retire a clean seed.
+    pub(crate) fn completed_incident_seed(
+        &self,
+    ) -> Result<(RunKey, ProcessKey), LifecycleRejection> {
+        let exit = self.exit.ok_or(LifecycleRejection::WrongPhase)?;
+        if !matches!(exit.attribution, DesktopExitKind::Normal | DesktopExitKind::StartupCancelled)
+            || !self.resources_settled
+            || self.failure.is_some()
+        {
+            return Err(LifecycleRejection::WrongPhase);
+        }
+        Ok((self.run, self.process))
+    }
     /// Inspect fixed deadlines using the same injected monotonic epoch.
     ///
     /// Regressing time rejects without mutation. Expiry never removes native ownership
