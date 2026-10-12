@@ -92,6 +92,48 @@ describe('ComfyCubeOutputHistoryAdapter', () => {
     adapter.dispose();
     expect(api.listenerCount).toBe(0);
   });
+
+  test('reports history failures with their original cause and preserves retained results', async () => {
+    const executionId = buildCubeOutputExecutionId('cube-instance', 0);
+    const output = { images: [{ filename: 'retained.png', subfolder: '', type: 'temp' }] };
+    const store = new CubeOutputExecutionStore();
+    store.retain(executionId, output);
+    const api = new FakeHistoryApi({});
+    const failure = new Error('Connection interrupted.');
+    jest.spyOn(api, 'fetchApi').mockRejectedValueOnce(failure);
+    const logger = { error: jest.fn(), debug: jest.fn() };
+    const adapter = new ComfyCubeOutputHistoryAdapter({ api, store, logger });
+
+    expect(await adapter.reconcilePrompt(' queued/prompt ')).toBe(0);
+    expect(api.fetchApi).toHaveBeenCalledWith('/history/queued%2Fprompt');
+    expect(store.read(executionId)).toBe(output);
+    expect(logger.error).toHaveBeenCalledWith(
+      'SugarCubes failed to reconcile Cube output history.',
+      { path: '/history/queued%2Fprompt', reason: failure.message, error: failure },
+    );
+  });
+
+  test('filters malformed history entries while retaining complete cube output payloads', async () => {
+    const executionId = buildCubeOutputExecutionId('cube-instance', 1);
+    const output = {
+      images: [{ filename: 'batch.png', subfolder: 'batch', type: 'output' }],
+      text: ['associated metadata'],
+      animated: [false],
+    };
+    const api = new FakeHistoryApi({
+      '/history/prompt-3': {
+        malformed: null,
+        invalidOutputs: { outputs: [] },
+        'prompt-3': { outputs: { ordinary: { images: [] }, [executionId]: output } },
+      },
+    });
+    const store = new CubeOutputExecutionStore();
+    const adapter = new ComfyCubeOutputHistoryAdapter({ api, store });
+
+    expect(await adapter.reconcilePrompt('prompt-3')).toBe(1);
+    expect(store.read(executionId)).toBe(output);
+    expect(store.size).toBe(1);
+  });
 });
 
 class FakeHistoryApi {
