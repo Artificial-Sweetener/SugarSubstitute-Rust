@@ -26,7 +26,9 @@ export interface CanvasSelection {
 export interface NormalizedInspection {
   readonly centerX: number;
   readonly centerY: number;
+  /** Describe normalized image distance per physical display pixel, independent of viewport size. */
   readonly spanX: number;
+  /** Describe normalized image distance per physical display pixel, independent of viewport size. */
   readonly spanY: number;
 }
 
