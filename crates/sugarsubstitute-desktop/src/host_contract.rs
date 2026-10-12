@@ -12,6 +12,7 @@ use std::{
 use sugarsubstitute_contracts::{
     configuration::{LoopbackOrigin, ProfileId},
     execution::{MemoryClaim, MemoryClaimError, MemoryLease},
+    lifecycle::{RunKey, UiChallengeKey, UiWatchdogActivity},
     startup::{LaunchId, ReadinessReceipt, StartupFailure},
 };
 
@@ -237,6 +238,9 @@ impl Error for MainRequestError {
 
 /// Execute at most one explicit application command per bounded native drain.
 pub enum DesktopStartupCommand {
+    /// Process an authenticated matching challenge on the actual existing UI event loop.
+    /// Closing retires queued challenges without granting a response.
+    ProcessUiChallenge(UiChallengeKey),
     /// Create a covered, actual-size main host after successful splash submission.
     PrepareMain(Box<MainWindowRequest>),
     /// Advance only the exact paused environment after current-generation off-UI profile proof.
@@ -258,6 +262,20 @@ pub enum DesktopStartupCommand {
 
 /// Transfer native facts to the authoritative application StartupSession.
 pub enum DesktopStartupObservation {
+    /// Actual native eligibility from owned windows and acknowledged native suspension.
+    NativeActivity {
+        /// Exact retained desktop run; page state supplies no native evidence.
+        run: RunKey,
+        /// Positive monotonic native revision; never reused within this lifetime.
+        revision: std::num::NonZeroU64,
+        /// Actual visible active, inactive or acknowledged suspended native state.
+        activity: UiWatchdogActivity,
+    },
+    /// The actual UI event loop dispatched the exact admitted challenge.
+    UiChallengeProcessed(UiChallengeKey),
+    /// Main receivers/controllers/windows and splash controls/presenter/window have retired.
+    /// Content may still communicate final completion; this does not prove executor settlement.
+    NativeRetired(RunKey),
     /// The splash's native pixels and controls were successfully submitted.
     SplashPresented(LaunchId),
     /// Effective native folder data, awaiting authoritative file-ID/live-profile-lease validation.
@@ -308,6 +326,9 @@ pub enum DesktopStartupObservation {
 /// StartupSession; they do not construct another startup policy. Calls must be
 /// bounded/nonblocking. Native error observations never claim work stopped.
 pub trait StartupWindowContent: WindowContent {
+    /// Return the immutable coordinator-bound run for this desktop's entire native lifetime.
+    /// A retry may change launch/navigation identities while retaining this exact run.
+    fn run_key(&self) -> RunKey;
     /// Return the current launch from the authoritative application startup session.
     /// Frame and navigation generations cannot substitute for this identity.
     fn launch_id(&self) -> LaunchId;

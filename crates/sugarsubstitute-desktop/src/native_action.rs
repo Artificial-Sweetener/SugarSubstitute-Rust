@@ -6,6 +6,9 @@
 pub(crate) enum NativeAction {
     /// Bounded execution metadata is available, including during owned close.
     Completions,
+    /// Bounded actual native eligibility facts are ready for UI-thread dispatch.
+    #[cfg(target_os = "windows")]
+    Activity,
     /// Bounded main construction/receiver observations are available.
     #[cfg(target_os = "windows")]
     Main,

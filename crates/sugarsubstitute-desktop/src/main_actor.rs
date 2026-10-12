@@ -109,6 +109,11 @@ impl MainActor {
     pub(crate) fn retired(&self) -> bool {
         self.retired
     }
+    /// Borrow this exact owned native surface only while its admission remains live.
+    /// The activity adapter retains its own callback/window custody before observing HWND facts.
+    pub(crate) fn activity_window(&self) -> Option<&Rc<Window>> {
+        if self.admission.closing() || self.retired { None } else { self.window.as_ref() }
+    }
     pub(crate) fn material(&self) -> Option<NativeMaterial> {
         self.material
     }

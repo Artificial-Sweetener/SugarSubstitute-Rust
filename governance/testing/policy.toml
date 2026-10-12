@@ -53,7 +53,7 @@ minimum_tests = 65
 package = "sugarsubstitute-desktop"
 root = "crates/sugarsubstitute-desktop"
 concern = "Nonblocking frame delivery, headless settlement, retained native storage, input and timing boundaries"
-minimum_tests = 134
+minimum_tests = 152
 
 [[owners]]
 package = "sugarsubstitute-crash"

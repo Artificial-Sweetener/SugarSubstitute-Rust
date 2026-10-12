@@ -6,8 +6,12 @@
 mod custody;
 #[path = "startup_events.rs"]
 mod events;
+#[path = "native_activity.rs"]
+mod native_activity;
 #[path = "startup_surface.rs"]
 mod surface;
+#[path = "windows_activity.rs"]
+mod windows_activity;
 use crate::{
     DesktopError, DesktopOptions, DesktopStartupObservation, StartupDesktopReceipt,
     StartupWindowContent, main_actor::MainActor, native_action::NativeAction,
@@ -21,6 +25,8 @@ use tao::{
 use crate::timing::{NativeStartupStage, observe_startup};
 
 struct Session {
+    activity: native_activity::NativeActivity,
+    observers: windows_activity::Observers,
     splash: surface::Splash,
     main: Option<MainActor>,
     closing: bool,
@@ -42,7 +48,9 @@ impl Session {
         custody::ShutdownFacts {
             closing: self.closing,
             splash_retired: self.splash.retired,
-            main_retired: self.main.as_ref().is_none_or(MainActor::retired),
+            main_retired: self.main.as_ref().is_none_or(MainActor::retired)
+                && self.observers.retired()
+                && self.activity.retired(),
             execution_settled: self.splash.state.settled,
         }
     }
@@ -51,6 +59,8 @@ impl Session {
             return;
         }
         self.closing = true;
+        self.activity.close();
+        self.observers.close();
         self.splash.state.close(content);
         if let Err(cause) = self.splash.begin_retirement(content) {
             self.retain(cause);
@@ -130,6 +140,8 @@ pub fn run_startup(
     let drain = NonZeroUsize::new(32)
         .ok_or_else(|| DesktopError::message("startup_drain", "zero budget"))?;
     let mut session = Session {
+        activity: native_activity::NativeActivity::new(content.run_key()),
+        observers: windows_activity::Observers::new(event_loop.create_proxy()),
         splash,
         main: None,
         closing: false,
