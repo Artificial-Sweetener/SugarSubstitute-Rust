@@ -56,6 +56,29 @@ pub struct ExecutionClient {
     pub(crate) core: Arc<Core>,
 }
 
+impl ExecutionClient {
+    /// Sample the existing owner's monotonic clock outside internal locks.
+    ///
+    /// The result is nanoseconds in this executor's injected epoch, useful for
+    /// validating original use-case budgets before admission. It exposes no
+    /// scheduler, timer or clock-provider capability.
+    ///
+    /// # Errors
+    /// A supplied clock panic is an unexpected owner failure with its bounded
+    /// original panic cause. It permanently closes admission and requests actual
+    /// cancellation. Later calls retain that cause; cached retirement metadata
+    /// cannot establish fresh elapsed time, deadline expiry or timer progress.
+    pub fn now(&self) -> Result<Moment, ExecutionError> {
+        match self.core.clock.metadata() {
+            Ok(moment) => Ok(moment),
+            Err(cause) => {
+                self.core.shutdown();
+                Err(cause)
+            }
+        }
+    }
+}
+
 pub(crate) fn error(cause: impl std::error::Error + Send + Sync + 'static) -> ExecutionError {
     ExecutionError::new(Operation::Infrastructure, Box::new(cause))
 }
@@ -86,7 +109,11 @@ impl ExecutionOwner {
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
             .map_err(|_| error(std::io::Error::other("Execution identity exhausted")))?;
         let id = ExecutionId::new(raw_id).map_err(error)?;
-        let core = Core::new(id, clock, wake);
+        let core =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| Core::new(id, clock, wake)))
+                .map_err(|payload| {
+                error(std::io::Error::other(task::panic_cause(payload).as_str().to_owned()))
+            })?;
         let runtime = Builder::new_multi_thread()
             .worker_threads(2)
             .max_blocking_threads(2)
@@ -158,7 +185,7 @@ impl ExecutionOwner {
         if let Some(error) = self.core.mailbox.take_failure() {
             return Err(error);
         }
-        let now = self.core.clock.now();
+        let now = self.core.clock.retirement_now();
         let state = lock(&self.core.state);
         let mut unresolved_job_ids: Vec<_> = state.jobs.keys().copied().collect();
         unresolved_job_ids.sort_unstable();
@@ -186,7 +213,8 @@ impl ExecutionOwner {
             && workers.native_finished;
         Ok(ShutdownProgress {
             settled,
-            deadline_expired: !settled
+            deadline_expired: !self.core.clock.failed()
+                && !settled
                 && self.shutdown_deadline.is_some_and(|deadline| now >= deadline),
             unresolved_job_ids,
             queued,
@@ -247,6 +275,10 @@ use supervision::supervise;
 #[cfg(test)]
 #[path = "runtime_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "runtime_clock_metadata_tests.rs"]
+mod clock_metadata_tests;
 
 #[path = "runtime_submit.rs"]
 mod submission;

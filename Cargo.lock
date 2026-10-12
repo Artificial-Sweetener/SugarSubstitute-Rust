@@ -1844,6 +1844,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "sugarsubstitute-crash"
+version = "0.1.0"
+dependencies = [
+ "sha2",
+ "sugarsubstitute-contracts",
+ "sugarsubstitute-execution",
+ "sugarsubstitute-supervision",
+ "tracing",
+ "windows 0.62.2",
+]
+
+
+[[package]]
 name = "sugarsubstitute-desktop"
 version = "0.1.0"
 dependencies = [

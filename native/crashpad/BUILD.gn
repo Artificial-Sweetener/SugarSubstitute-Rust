@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Artificial Sweetener and contributors
+import("//build/crashpad_buildconfig.gni")
+
+loadable_module("sugarsubstitute_crashpad_client") {
+  sources = [ "capture_bridge.cc", "capture_bridge.h" ]
+  deps = [ "//client" ]
+}
+
+group("capture_bundle") {
+  deps = [ ":sugarsubstitute_crashpad_client", "//handler:crashpad_handler" ]
+}
+
+executable("owned_registration_tests") {
+  sources = [ "owned_registration.cc", "owned_registration_tests.cc" ]
+  include_dirs = [ "//" ]
+  libs = [ "kernel32.lib", "advapi32.lib" ]
+}

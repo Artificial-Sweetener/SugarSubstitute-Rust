@@ -11,52 +11,6 @@ use windows::Win32::{
     },
     UI::Shell::*,
 };
-fn token_sid(token: HANDLE) -> Result<Vec<u8>, ClaimError> {
-    // TOKEN_USER and its referenced SID share this aligned, strictly bounded buffer.
-    let mut buffer = vec![0_usize; 256];
-    let mut returned = 0;
-    // SAFETY: The aligned initialized buffer owns the advertised writable byte count.
-    unsafe {
-        GetTokenInformation(
-            token,
-            TokenUser,
-            Some(buffer.as_mut_ptr().cast()),
-            (buffer.len() * size_of::<usize>()) as u32,
-            &mut returned,
-        )
-    }
-    .map_err(|e| ClaimError::new("account_token", e))?;
-    if returned as usize > buffer.len() * size_of::<usize>()
-        || (returned as usize) < size_of::<TOKEN_USER>()
-    {
-        return Err(ClaimError::invalid("account_token_bound"));
-    }
-    // SAFETY: A successful token query returned at least the aligned TOKEN_USER header.
-    let user = unsafe { &*buffer.as_ptr().cast::<TOKEN_USER>() };
-    let start = buffer.as_ptr() as usize;
-    let end = start + returned as usize;
-    let sid = user.User.Sid;
-    let pointer = sid.0 as usize;
-    if pointer < start || pointer + 8 > end {
-        return Err(ClaimError::invalid("account_sid"));
-    }
-    // SAFETY: The fixed SID header was checked inside the live token buffer.
-    let authorities = unsafe { sid.0.cast::<u8>().add(1).read() } as usize;
-    if authorities > 15 || pointer + 8 + 4 * authorities > end {
-        return Err(ClaimError::invalid("account_sid_bound"));
-    }
-    // SAFETY: Every subauthority declared by the header lies inside this token buffer.
-    if !unsafe { IsValidSid(sid) }.as_bool() {
-        return Err(ClaimError::invalid("account_sid"));
-    }
-    // SAFETY: The complete SID was validated while the token buffer remains live.
-    let length = unsafe { GetLengthSid(sid) } as usize;
-    if length > SECURITY_MAX_SID_SIZE as usize || pointer + length > end {
-        return Err(ClaimError::invalid("account_sid_bound"));
-    }
-    // SAFETY: The complete checked byte range remains inside the aligned token allocation.
-    Ok(unsafe { std::slice::from_raw_parts(sid.0.cast::<u8>(), length) }.to_vec())
-}
 pub(crate) fn initialize(root: &mut Root, installation: &Path) -> Result<(), ClaimError> {
     let pool = root.pool.as_ref().ok_or_else(|| ClaimError::invalid("missing_pool"))?.clone();
     let budget = files::Budget::Core(pool);
@@ -74,7 +28,7 @@ pub(crate) fn initialize(root: &mut Root, installation: &Path) -> Result<(), Cla
         return Err(ClaimError::invalid("missing_primary_token"));
     }
     let token = root.handles[0].raw();
-    root.sid = token_sid(token)?;
+    root.sid = crate::protected_storage::account::token_sid(token)?;
     let installed =
         paths::open_retained(installation, true, false, budget.clone(), &mut root.handles)?;
     let installed_path = paths::final_path(&root.handles[installed])?;

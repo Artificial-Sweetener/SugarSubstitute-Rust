@@ -4,10 +4,10 @@
 //! Native handles are noninheritable. Finite workers retain this state before FFI;
 //! checked closure preserves failed handles and active records for explicit retry.
 mod account;
-mod files;
+pub(crate) mod files;
 mod paths;
 mod records;
-mod security;
+use crate::protected_storage::security;
 use crate::{ClaimError, claims::pool::SlotUse};
 use files::{Handle, HeldFile};
 pub(crate) use records::{Record, RecordState};

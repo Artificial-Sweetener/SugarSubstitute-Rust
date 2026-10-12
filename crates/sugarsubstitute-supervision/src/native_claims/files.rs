@@ -17,12 +17,14 @@ use windows::core::PCWSTR;
 pub(crate) enum Budget {
     Core(Arc<crate::claims::pool::Pool>),
     Slot(Arc<SlotUse>),
+    Protected(Arc<sugarsubstitute_contracts::execution::MemoryClaim>),
 }
 impl Budget {
     pub(crate) fn retain_failed(&self) {
         match self {
             Self::Core(value) => std::mem::forget(value.clone()),
             Self::Slot(value) => std::mem::forget(value.clone()),
+            Self::Protected(value) => std::mem::forget(value.clone()),
         }
     }
 }

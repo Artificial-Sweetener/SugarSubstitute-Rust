@@ -104,3 +104,17 @@ files = [
   "crates/sugarsubstitute-splash/assets/poses/syl.png",
   "crates/sugarsubstitute-splash/assets/poses/witchy.png",
 ]
+
+[[components]]
+id = "crashpad-native-registration-adaptations"
+source_url = "https://chromium.googlesource.com/crashpad/crashpad/+/60dd943f48d77dc8d05dabc04badbd8561d0b8c4/"
+license = "Apache-2.0 AND GPL-3.0-or-later"
+license_file = "third_party/licenses/crashpad.Apache-2.0.txt"
+files = ["native/crashpad/owned_start.h", "native/crashpad/owned_registration.cc"]
+
+[[components]]
+id = "crashpad-source-build-adaptations"
+source_url = "https://chromium.googlesource.com/crashpad/crashpad/+/60dd943f48d77dc8d05dabc04badbd8561d0b8c4/DEPS"
+license = "Apache-2.0 AND BSD-3-Clause AND GPL-3.0-or-later"
+license_file = "third_party/licenses/crashpad-mini-chromium.Apache-2.0-and-BSD.txt"
+files = ["tools/crashpad/prepare_source.py"]

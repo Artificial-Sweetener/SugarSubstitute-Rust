@@ -81,8 +81,8 @@ migrations = []
 [[formats]]
 id = "windows-resource-claim-generation"
 owner = "sugarsubstitute-supervision"
-sources = ["crates/sugarsubstitute-supervision/src/native_claims/records.rs", "crates/sugarsubstitute-supervision/src/native_claims/records/storage.rs", "crates/sugarsubstitute-supervision/src/native_claims/paths.rs", "crates/sugarsubstitute-supervision/src/native_claims/account.rs"]
-source_sha256 = "sha256:c6556e9051f0802bf7b45ac4f207971863a2bff59ae382dfaf3526b822d3ca44"
+sources = ["crates/sugarsubstitute-supervision/src/native_claims/records.rs", "crates/sugarsubstitute-supervision/src/native_claims/records/storage.rs", "crates/sugarsubstitute-supervision/src/native_claims/paths.rs", "crates/sugarsubstitute-supervision/src/native_claims/account.rs", "crates/sugarsubstitute-supervision/src/protected_storage/account.rs", "crates/sugarsubstitute-supervision/src/protected_storage/paths.rs", "crates/sugarsubstitute-supervision/src/protected_storage/security.rs", "crates/sugarsubstitute-supervision/src/protected_storage/security/descriptor.rs"]
+source_sha256 = "sha256:8b7759cc18ffc92dbe9459b6fc74926371dcd8afd7f7167be248b81b629351a6"
 classification = "authoritative_state"
 preservation = "must_preserve"
 current_version = 1
@@ -144,6 +144,30 @@ owner = "sugarsubstitute"
 sources = ["crates/sugarsubstitute/src/pipe_fixture/receipt.rs"]
 source_sha256 = "sha256:d790eeb235aaff6452444fd81e2d9744dd9507077a7206025692721931fca514"
 classification = "authored_document"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []
+
+[[formats]]
+id = "windows-capture-generation-namespace"
+owner = "sugarsubstitute-supervision"
+sources = ["crates/sugarsubstitute-supervision/src/protected_storage.rs", "crates/sugarsubstitute-supervision/src/protected_storage/generation.rs", "crates/sugarsubstitute-supervision/src/protected_storage/account.rs", "crates/sugarsubstitute-supervision/src/protected_storage/paths.rs", "crates/sugarsubstitute-supervision/src/protected_storage/security.rs", "crates/sugarsubstitute-supervision/src/protected_storage/security/descriptor.rs", "crates/sugarsubstitute-supervision/src/native_claims/files.rs"]
+source_sha256 = "sha256:126cbd2d43f28aea2e8b7651f36705c9b6a507a91bde68da36389411b63e0644"
+classification = "authoritative_state"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []
+
+[[formats]]
+id = "windows-native-capture-bridge"
+owner = "sugarsubstitute-crash"
+sources = ["crates/sugarsubstitute-crash/src/native/bridge.rs"]
+source_sha256 = "sha256:193d26d78a023456cc516aef6f5b7fc3bcb31e5a6071741aae2d7f34fc59d98d"
+classification = "protocol"
 preservation = "must_preserve"
 current_version = 1
 accepted_versions = [1]

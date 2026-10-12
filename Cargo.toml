@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/sugarsubstitute", "crates/sugarsubstitute-contracts", "crates/sugarsubstitute-application", "crates/sugarsubstitute-comfy", "crates/sugarsubstitute-execution", "crates/sugarsubstitute-supervision", "crates/sugarsubstitute-splash", "crates/sugarsubstitute-desktop", "tools/xtask"]
+members = ["crates/sugarsubstitute", "crates/sugarsubstitute-contracts", "crates/sugarsubstitute-application", "crates/sugarsubstitute-comfy", "crates/sugarsubstitute-execution", "crates/sugarsubstitute-supervision", "crates/sugarsubstitute-splash", "crates/sugarsubstitute-desktop", "crates/sugarsubstitute-crash", "tools/xtask"]
 default-members = ["crates/sugarsubstitute"]
 resolver = "3"
 

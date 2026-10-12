@@ -13,10 +13,10 @@ impl Core {
         kind: RequestKind,
         build: impl FnOnce(JobContext, Arc<Cancellation>, Moment) -> (QueuedJob, R),
     ) -> Result<R, AdmissionError> {
-        let now = self.clock.now();
+        let now = self.clock.retirement_now();
         let owner_id = scope.owner_id();
         let mut state = lock(&self.state);
-        if state.stopping {
+        if state.stopping || self.clock.failed() {
             return Err(AdmissionError::ShuttingDown);
         }
         let stored = self.owned_scope(&state, scope, owner_id)?;

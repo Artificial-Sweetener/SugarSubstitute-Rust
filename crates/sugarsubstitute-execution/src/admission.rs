@@ -95,7 +95,7 @@ pub(crate) struct Core {
     pub(crate) native_identity_unrestored: std::sync::atomic::AtomicBool,
     pub(crate) id: ExecutionId,
     pub(crate) state: Mutex<State>,
-    pub(crate) clock: Arc<dyn Clock>,
+    pub(crate) clock: Arc<crate::clock_retirement::RetirementClock>,
     pub(crate) mailbox: Mailbox,
     pub(crate) notify: Arc<Notify>,
     pub(crate) cpu_changed: Condvar,
@@ -116,7 +116,7 @@ impl Core {
     ) -> Arc<Self> {
         let mailbox = Mailbox::new(wake);
         let notify = mailbox.notify.clone();
-        Arc::new(Self {
+        Arc::new_cyclic(|owner| Self {
             #[cfg(any(windows, test))]
             native_thread: std::sync::OnceLock::new(),
             #[cfg(any(windows, test))]
@@ -135,7 +135,7 @@ impl Core {
                 latest_job: None,
                 latest_scope: None,
             }),
-            clock,
+            clock: Arc::new(crate::clock_retirement::RetirementClock::new(clock, owner.clone())),
             mailbox,
             notify,
             cpu_changed: Condvar::new(),
@@ -208,7 +208,7 @@ impl Core {
     }
 
     pub(crate) fn take(&self, accepts: impl Fn(JobClass) -> bool) -> Option<QueuedJob> {
-        let now = self.clock.now();
+        let now = self.clock.retirement_now();
         let mut state = lock(&self.state);
         let index = state.queue.iter().position(|queued| {
             accepts(queued.context.spec().class)
@@ -227,7 +227,7 @@ impl Core {
     }
 
     pub(crate) fn take_stopped_cpu(&self, accepts: impl Fn(JobClass) -> bool) -> Option<QueuedJob> {
-        let now = self.clock.now();
+        let now = self.clock.retirement_now();
         let mut state = lock(&self.state);
         let index = state.queue.iter().position(|queued| {
             accepts(queued.context.spec().class) && stop_reason_at(&queued.context, now).is_some()

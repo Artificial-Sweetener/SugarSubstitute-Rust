@@ -29,6 +29,11 @@ mod managed_output;
 mod native_claims;
 #[cfg(windows)]
 #[allow(unsafe_code)]
+mod protected_storage;
+#[cfg(windows)]
+pub use protected_storage::{ProtectedStorageGeneration, ProtectedStorageRoot};
+#[cfg(windows)]
+#[allow(unsafe_code)]
 mod native_process;
 #[cfg(windows)]
 mod registry;

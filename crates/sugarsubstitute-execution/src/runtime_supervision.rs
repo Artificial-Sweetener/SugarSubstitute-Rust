@@ -55,7 +55,7 @@ pub(super) async fn supervise(core: Arc<Core>) {
                 task::stop_queued(queued, reason);
                 continue;
             }
-            let started = core.clock.now();
+            let started = core.clock.retirement_now();
             let future = match queued.work {
                 Work::Async(factory) | Work::Blocking(factory) => {
                     factory(queued.context.clone(), started)
@@ -71,7 +71,7 @@ pub(super) async fn supervise(core: Arc<Core>) {
                 started,
             });
         }
-        let now = core.clock.now();
+        let now = core.clock.retirement_now();
         let (stopping, deadline, expired_native) = {
             let mut state = lock(&core.state);
             let timers_enabled = !state.stopping;
@@ -111,7 +111,7 @@ pub(super) async fn supervise(core: Arc<Core>) {
         }
         let deadline_wait = async {
             match deadline {
-                Some(deadline) => core.clock.sleep_until(deadline).await,
+                Some(deadline) => core.clock.retirement_sleep_until(deadline).await,
                 None => std::future::pending().await,
             }
         };

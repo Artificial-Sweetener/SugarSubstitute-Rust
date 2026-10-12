@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Compare bounded native security without allocating foreign descriptor strings.
 mod descriptor;
-use super::{ClaimError, files::Handle};
+use crate::{ClaimError, native_claims::files::Handle};
 use windows::{Win32::Security::*, core::PWSTR};
 pub(crate) struct Descriptor {
     words: Vec<u32>,

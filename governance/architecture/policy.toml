@@ -60,3 +60,9 @@ package = "sugarsubstitute-desktop"
 root = "crates/sugarsubstitute-desktop"
 layer = "adapter"
 concern = "Native window, headless event loop and CPU surface lifetime"
+
+[[owners]]
+package = "sugarsubstitute-crash"
+root = "crates/sugarsubstitute-crash"
+layer = "adapter"
+concern = "Retained Windows supervisor capture and actual handler/native retirement"

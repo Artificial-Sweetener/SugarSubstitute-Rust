@@ -5,6 +5,7 @@
 mod admission;
 mod blocking;
 mod clock;
+mod clock_retirement;
 mod cpu;
 #[cfg(any(windows, test))]
 mod fixture_forwarding;

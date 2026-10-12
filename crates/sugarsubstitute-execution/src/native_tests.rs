@@ -8,6 +8,9 @@ use crate::runtime_test_support::{Gate, Rig, TestResult, spec};
 use std::sync::atomic::{AtomicI32, AtomicU64, AtomicUsize};
 use sugarsubstitute_contracts::execution::*;
 
+#[path = "native_permit_metadata_tests.rs"]
+mod permit_metadata;
+
 struct Boundary {
     started: Gate,
     retiring: Gate,

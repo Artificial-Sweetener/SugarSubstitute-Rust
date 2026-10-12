@@ -18,7 +18,7 @@ use std::{
     },
 };
 use sugarsubstitute_contracts::execution::{
-    AdmissionError, ExecutionError, JobSpec, OwnedJob, Scope,
+    AdmissionError, ExecutionError, ExecutionId, JobSpec, Moment, OwnedJob, Scope,
 };
 
 /// Correlate one native observation with an application-assigned positive identity.
@@ -125,8 +125,22 @@ pub struct ProcessWatchPermit {
     binding: Arc<Binding>,
     core: Arc<Core>,
     transferred: bool,
+    deadline: Option<Moment>,
 }
 impl ProcessWatchPermit {
+    /// Return the exact executor lifetime owning this admitted reservation.
+    /// This immutable matching fact exposes no scheduler or native capability.
+    pub fn owner_id(&self) -> ExecutionId {
+        self.core.id
+    }
+
+    /// Return its immutable effective deadline in the owner's nanosecond epoch.
+    /// The value was latched from actual admitted context, including every ancestor
+    /// scope, before queueing. Binding/cancellation never translates or renews it.
+    pub const fn deadline(&self) -> Option<Moment> {
+        self.deadline
+    }
+
     pub(crate) fn cancel_input(mut self) -> OwnedJob<ProcessExit, NativeObservationError> {
         *lock(&self.binding.state) = BindingState::Abandoned;
         self.job.cancel();
@@ -195,6 +209,7 @@ pub(crate) fn reserve(
     core.admit(scope, spec, RequestKind::Native, |context, cancel, admitted| {
         let job = Job::new(scope.id(), spec, admitted, cancel, Arc::downgrade(core));
         let binding = Binding::new();
+        let deadline = context.deadline();
         let queued = QueuedJob {
             context,
             job: job.clone(),
@@ -204,7 +219,8 @@ pub(crate) fn reserve(
                 correlation,
             })),
         };
-        let permit = ProcessWatchPermit { job, binding, core: core.clone(), transferred: false };
+        let permit =
+            ProcessWatchPermit { job, binding, core: core.clone(), transferred: false, deadline };
         (queued, permit)
     })
 }

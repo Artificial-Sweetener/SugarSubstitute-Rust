@@ -41,10 +41,10 @@ impl Core {
         parent: Option<&Scope>,
         native: bool,
     ) -> Result<Scope, AdmissionError> {
-        let now = self.clock.now();
+        let now = self.clock.retirement_now();
         let parent_owner = parent.map(Scope::owner_id);
         let mut state = lock(&self.state);
-        if state.stopping {
+        if state.stopping || self.clock.failed() {
             return Err(AdmissionError::ShuttingDown);
         }
         if state.scopes.contains_key(&spec.id) {

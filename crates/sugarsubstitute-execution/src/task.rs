@@ -259,7 +259,7 @@ impl<T: Send + 'static, E: Send + 'static> JobControl<T, E> for JobHandle<T, E> 
 
 #[path = "task_async.rs"]
 mod asynchronous;
-pub(crate) use asynchronous::{panic_cause, run_async};
+pub(crate) use asynchronous::{borrowed_panic_cause, panic_cause, run_async};
 
 /// Dispose accepted ownership exclusively on an execution-owned worker.
 pub(crate) fn retire(retired: crate::admission::Retirement) {

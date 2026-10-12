@@ -11,7 +11,7 @@ use std::{
     task::{Context, Poll},
 };
 
-pub(crate) fn panic_cause(payload: Box<dyn Any + Send>) -> PanicCause {
+pub(crate) fn borrowed_panic_cause(payload: &(dyn Any + Send)) -> PanicCause {
     let text = if let Some(text) = payload.downcast_ref::<String>() {
         text.as_str()
     } else if let Some(text) = payload.downcast_ref::<&str>() {
@@ -23,7 +23,11 @@ pub(crate) fn panic_cause(payload: Box<dyn Any + Send>) -> PanicCause {
     while !text.is_char_boundary(end) {
         end -= 1;
     }
-    let first = text[..end].to_owned();
+    PanicCause::new(text[..end].to_owned())
+}
+
+pub(crate) fn panic_cause(payload: Box<dyn Any + Send>) -> PanicCause {
+    let first = borrowed_panic_cause(payload.as_ref()).as_str().to_owned();
     let mut next = Some(payload);
     let mut destructor_failed = false;
     while let Some(payload) = next.take() {

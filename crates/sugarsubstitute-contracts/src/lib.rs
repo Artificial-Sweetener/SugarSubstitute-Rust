@@ -3,6 +3,7 @@
 //! Define owned application contracts independently of desktop and execution adapters.
 
 pub mod configuration;
+pub mod crash;
 pub mod execution;
 pub mod lifecycle;
 pub mod localization;

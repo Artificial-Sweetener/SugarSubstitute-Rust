@@ -31,3 +31,15 @@ file contains both license texts. Modifications are copyright Artificial
 Sweetener and contributors (2026). The application uses these raster rules in
 its Rust renderer. This software is based in part on the work of the FreeType
 Team. The original FreeType license is also preserved as `licenses/FTL.TXT`.
+
+
+Crashpad registration and source-build adaptations derive from Crashpad commit
+60dd943f48d77dc8d05dabc04badbd8561d0b8c4 (Apache-2.0) and mini-chromium commit
+e5169551c51f3a52eee36b3b03f219cefe380237 (BSD-3-Clause). The manifest identifies
+the exact maintained derivatives and preserved upstream license texts. Changes
+are copyright Artificial Sweetener and contributors (2026), GPL-3.0-or-later.
+The native capture bundle uses Crashpad, mini-chromium, ICU, zlib and getopt;
+its source-build receipt records their pinned sources and runtime license texts.
+The Crashpad client and registration portions retain Copyright 2015 The Crashpad
+Authors. The mini-chromium Windows build-helper portion retains Copyright 2017
+The Chromium Authors.
