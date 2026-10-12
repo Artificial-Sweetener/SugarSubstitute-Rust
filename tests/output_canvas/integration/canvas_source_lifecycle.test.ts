@@ -76,6 +76,57 @@ function fixture() {
 }
 
 describe('canvas source and workflow lifetimes', () => {
+  test('discovers replaced nested instances and undo membership reported through generic completion', async () => {
+    const f = fixture();
+    const replacement = new CanvasGraphFixture();
+    replacement.add({ id: 99, title: 'Replaced', type: 'PreviewImage' });
+    f.graph._nodes[1]!.subgraph = replacement;
+    const count = f.graph.serializations;
+    f.graph.afterChange(f.graph._nodes[1]);
+    await Promise.resolve();
+    expect(f.graph.serializations).toBe(count + 1);
+    expect(f.inventory.read(f.a).map((source) => source.executionPath)).toContain('7:99');
+    expect(f.inventory.read(f.a).map((source) => source.executionPath)).not.toContain('7:23');
+    f.graph._nodes.splice(0, 1, { id: 2, title: 'Undo restored', type: 'PreviewImage' });
+    f.graph.afterChange();
+    await Promise.resolve();
+    expect(f.inventory.read(f.a)[0]?.executionPath).toBe('2');
+    f.adapter.dispose();
+    f.coordinator.dispose();
+  });
+
+  test('discovers exposure membership changes but refreshes output captions without serializing', async () => {
+    const f = fixture();
+    f.graph._nodes[1]!.properties = { sugarcubes_kind: 'cube' };
+    f.nested.outputs.push({ name: 'One' });
+    f.graph.afterChange(f.graph._nodes[1]);
+    await Promise.resolve();
+    const before = f.inventory.read(f.a).length;
+    const count = f.graph.serializations;
+    f.nested.outputs.push({ name: 'Two' });
+    f.nested.afterChange();
+    await Promise.resolve();
+    expect(f.graph.serializations).toBe(count + 1);
+    expect(f.inventory.read(f.a).length).toBe(before + 1);
+    const output = f.nested.outputs[0]!;
+    output.name = '<b>Literal rename</b>';
+    f.nested.afterChange();
+    await Promise.resolve();
+    expect(f.graph.serializations).toBe(count + 1);
+    expect(f.inventory.read(f.a).some((source) => source.label === output.name)).toBe(true);
+    f.nested.outputs.reverse();
+    f.nested.afterChange();
+    await Promise.resolve();
+    expect(f.graph.serializations).toBe(count + 2);
+    expect(
+      f.inventory
+        .read(f.a)
+        .filter((source) => source.breadcrumb.includes('First nested'))
+        .map((source) => source.label),
+    ).toEqual(['Two', '<b>Literal rename</b>', 'Inside']);
+    f.adapter.dispose();
+    f.coordinator.dispose();
+  });
   test('discovers full nested instance paths once and never serializes for scoped values or unrelated UI', async () => {
     const f = fixture();
     expect(f.inventory.read(f.a).map((source) => source.executionPath)).toEqual([

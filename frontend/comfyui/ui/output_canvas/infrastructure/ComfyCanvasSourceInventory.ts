@@ -26,6 +26,7 @@ import {
   type NativeGraphChange,
 } from '../../surface/NativeSubgraphChangeObserver.js';
 import type { CanvasSourceInventory } from '../application/CanvasSourceInventory.js';
+import { CanvasGraphSourceTopology } from './CanvasGraphSourceTopology.js';
 
 interface AuthoredSource {
   readonly nodes: readonly UnknownRecord[];
@@ -37,6 +38,7 @@ interface AuthoredSource {
 export class ComfyCanvasSourceInventory {
   readonly #observers: NativeSubgraphChangeObserver[] = [];
   readonly #authored = new Map<string, AuthoredSource>();
+  readonly #topology = new Map<UnknownRecord, CanvasGraphSourceTopology>();
   readonly #listeners = new Set<() => void>();
   #context: WorkflowSessionContext | null = null;
   #stop: (() => void) | null = null;
@@ -143,9 +145,12 @@ export class ComfyCanvasSourceInventory {
       };
       visit(root, [], new Set(), []);
       for (const graph of graphs) {
+        this.#topology.set(graph, new CanvasGraphSourceTopology(graph));
         if (typeof graph.add !== 'function' || typeof graph.remove !== 'function') continue;
         this.#observers.push(
-          new NativeSubgraphChangeObserver(graph, (changes) => this.#changed(context, changes)),
+          new NativeSubgraphChangeObserver(graph, (changes) =>
+            this.#changed(context, graph, changes),
+          ),
         );
       }
       this.#publish();
@@ -161,10 +166,17 @@ export class ComfyCanvasSourceInventory {
     }
   }
 
-  /** Generic value/presentation changes read cached handles; only native mutations discover topology. */
-  #changed(context: WorkflowSessionContext, changes: readonly NativeGraphChange[]): void {
+  /** Discover only changed native membership/exposure facts; refresh labels from scoped cached handles. */
+  #changed(
+    context: WorkflowSessionContext,
+    graph: UnknownRecord,
+    changes: readonly NativeGraphChange[],
+  ): void {
     if (this.#context !== context || this.#disposed) return;
-    if (changes.some((change) => change.kind !== 'change')) {
+    if (
+      changes.some((change) => change.kind !== 'change') ||
+      this.#topology.get(graph)?.changed()
+    ) {
       this.#discover(context);
       return;
     }
@@ -210,6 +222,7 @@ export class ComfyCanvasSourceInventory {
   #release(): void {
     for (const observer of this.#observers.splice(0)) observer.dispose();
     this.#authored.clear();
+    this.#topology.clear();
   }
 
   /** Publish metadata without allocating images or consulting execution state. */

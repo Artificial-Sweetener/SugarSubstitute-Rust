@@ -45,8 +45,13 @@ export class ComfyWorkflowOutputProjection {
 
   /** Refresh only mounted consumers of the active workflow, including a committed tab transition. */
   subscribe(listener: () => void): () => void {
+    let outputs = this.#activeOutputs();
     const results = this.results.subscribe((id) => {
-      if (this.sessions.read().active?.sessionId === id) listener();
+      if (this.sessions.read().active?.sessionId !== id) return;
+      const next = this.#activeOutputs();
+      if (next === outputs) return;
+      outputs = next;
+      listener();
     });
     const previews = this.previews.subscribe(listener);
     let previous = this.sessions.read().active;
@@ -57,6 +62,7 @@ export class ComfyWorkflowOutputProjection {
         previous?.generation !== active?.generation
       ) {
         previous = active;
+        outputs = this.#activeOutputs();
         listener();
       }
     });
@@ -65,5 +71,13 @@ export class ComfyWorkflowOutputProjection {
       sessions();
       previews();
     };
+  }
+
+  /** Ignore lightweight preview/run metadata when retained final descriptor identity has not changed. */
+  #activeOutputs(): readonly WorkflowOutputSet[] | null {
+    const active = this.sessions.read().active;
+    if (!active) return null;
+    const result = this.results.read(active.sessionId);
+    return result?.context.generation === active.generation ? result.outputs : null;
   }
 }

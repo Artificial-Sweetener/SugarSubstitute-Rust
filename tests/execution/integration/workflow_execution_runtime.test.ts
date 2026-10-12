@@ -344,7 +344,10 @@ test('admits one requested cube preview at fifteen frames per second and release
     blob: new Blob(['unrequested']),
   });
   expect(f.created).toHaveLength(0);
-  const stop = f.runtime.outputs.subscribe(() => undefined);
+  let refreshes = 0;
+  const stop = f.runtime.outputs.subscribe(() => {
+    refreshes++;
+  });
   f.runtime.outputs.livePreview('42:23');
   for (let i = 0; i < 50; i++)
     f.api.emit('b_preview_with_metadata', {
@@ -354,6 +357,7 @@ test('admits one requested cube preview at fifteen frames per second and release
     });
   expect(f.created).toHaveLength(1);
   expect(f.revoked).toEqual([]);
+  expect(refreshes).toBe(1);
   f.clock.advance(67);
   f.api.emit('b_preview_with_metadata', {
     jobId: 'job-1',
@@ -362,8 +366,10 @@ test('admits one requested cube preview at fifteen frames per second and release
   });
   expect(f.created).toHaveLength(2);
   expect(f.revoked).toEqual(['blob:owned-1']);
+  expect(refreshes).toBe(2);
   await f.host.loadGraphData({}, true, true, f.b);
   expect(f.revoked).toEqual(['blob:owned-1', 'blob:owned-2']);
+  const suspendedRefreshes = refreshes;
   f.clock.advance(67);
   f.api.emit('b_preview_with_metadata', {
     jobId: 'job-1',
@@ -371,6 +377,40 @@ test('admits one requested cube preview at fifteen frames per second and release
     blob: new Blob(['background']),
   });
   expect(f.created).toHaveLength(2);
+  expect(refreshes).toBe(suspendedRefreshes);
+  stop();
+  f.bridge.dispose();
+  f.runtime.dispose();
+});
+
+test('accepts a source final and refuses late preview bytes without allocating a replacement URL', async () => {
+  const f = fixture();
+  f.runtime.install();
+  f.bridge.install();
+  await f.api.queuePrompt(0, await f.host.graphToPrompt());
+  const stop = f.runtime.outputs.subscribe(() => undefined);
+  f.runtime.outputs.livePreview('42:23');
+  f.api.emit('b_preview_with_metadata', {
+    jobId: 'job-1',
+    nodeId: '42:23',
+    blob: new Blob(['frame']),
+  });
+  expect(f.created).toHaveLength(1);
+  f.api.emit('executed', {
+    prompt_id: 'job-1',
+    node: '42:23',
+    output: { images: [{ filename: 'final.png' }] },
+  });
+  expect(f.revoked).toEqual(['blob:owned-1']);
+  f.clock.advance(67);
+  f.api.emit('b_preview_with_metadata', {
+    jobId: 'job-1',
+    nodeId: '42:23',
+    blob: new Blob(['late']),
+  });
+  expect(f.created).toHaveLength(1);
+  expect(f.runtime.outputs.livePreview('42:23')).toEqual([]);
+  expect(f.runtime.outputs.output('42:23')?.items[0]?.file.filename).toBe('final.png');
   stop();
   f.bridge.dispose();
   f.runtime.dispose();

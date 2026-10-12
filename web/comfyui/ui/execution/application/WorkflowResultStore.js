@@ -128,7 +128,10 @@ export class WorkflowResultStore {
             sourceOrder: update.source.order,
             revision: oldRevision + 1,
         });
-        this.#retain(session, update.source, provenance, payload, delivery);
+        const carried = !update.containsImages && inputPreview
+            ? previous.output.items.filter((item) => item.batchIndex < previous.payload.images.length)
+            : [];
+        this.#retain(session, update.source, provenance, payload, delivery, carried);
         return true;
     }
     /** Restore only an explicitly named host workflow snapshot and never fabricate a prompt ID. */
@@ -155,6 +158,7 @@ export class WorkflowResultStore {
     publishPreview(preview) {
         const session = this.#sessions.get(preview.sessionId);
         if (!session ||
+            (session.outputs.get(preview.sourceId)?.mediaRunOrder ?? -1) >= preview.runOrder ||
             session.snapshot.context.generation !== preview.generation ||
             preview.runOrder < session.snapshot.runOrder ||
             (preview.runOrder === session.snapshot.runOrder &&
@@ -194,13 +198,19 @@ export class WorkflowResultStore {
         const session = this.#sessions.get(context.sessionId);
         return session?.snapshot.context.generation === context.generation ? session : null;
     }
-    /** Construct immutable batch items from validated media, preserving unavailable positions. */
-    #retain(session, source, provenance, payload, delivery) {
+    /** Preserve carried input identities while constructing attributable new media and unavailable positions. */
+    #retain(session, source, provenance, payload, delivery, carried = []) {
         const media = [...payload.images, ...payload.videos];
         const items = [];
+        const preserved = new Map(carried.map((item) => [item.batchIndex, item]));
         media.forEach((entry, batchIndex) => {
             if (!entry)
                 return;
+            const existing = preserved.get(batchIndex);
+            if (existing) {
+                items.push(existing);
+                return;
+            }
             const id = provenance.kind === 'execution'
                 ? outputResultId(provenance.sessionId, provenance.promptId, source.id, provenance.revision, batchIndex)
                 : snapshotOutputResultId(provenance.sessionId, provenance.snapshotId, source.id, provenance.revision, batchIndex);
@@ -213,7 +223,8 @@ export class WorkflowResultStore {
             text: payload.text,
             batchCount: media.length,
         });
-        session.outputs.set(source.id, { output, payload, delivery });
+        const mediaRunOrder = items.reduce((latest, item) => Math.max(latest, item.provenance.runOrder), session.outputs.get(source.id)?.mediaRunOrder ?? -1);
+        session.outputs.set(source.id, { output, payload, delivery, mediaRunOrder });
         const outputs = Object.freeze([...session.outputs.values()]
             .map((retained) => retained.output)
             .sort((a, b) => a.source.order - b.source.order));
@@ -221,9 +232,7 @@ export class WorkflowResultStore {
         this.#publish(session, {
             ...session.snapshot,
             outputs,
-            preview: preview?.sourceId === source.id && preview.promptId === provenance.promptId
-                ? null
-                : preview,
+            preview: preview?.sourceId === source.id && mediaRunOrder >= preview.runOrder ? null : preview,
         });
     }
     /** Increment one coherent session snapshot revision before notifying its subscribers. */
