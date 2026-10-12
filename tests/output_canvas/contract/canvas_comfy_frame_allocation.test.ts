@@ -19,7 +19,10 @@ import { ComfyCanvasFrameAllocation } from '../../../frontend/comfyui/ui/output_
 
 /** Build only the installed public frame/chrome shape, leaving all renderer children in place. */
 function frame() {
+  const parent = document.createElement('div');
+  parent.className = 'comfyui-body';
   const root = document.createElement('div');
+  parent.append(root);
   root.id = 'graph-canvas-container';
   const chrome = document.createElement('div');
   const panel = document.createElement('div');
@@ -30,7 +33,7 @@ function frame() {
   const nodes = document.createElement('div');
   nodes.className = 'ph-no-capture';
   root.append(chrome, canvas, nodes);
-  return { root, chrome, panel, canvas, nodes };
+  return { parent, root, chrome, panel, canvas, nodes };
 }
 
 test('allocates a common graph origin and compensates only identified native chrome', () => {
@@ -42,6 +45,7 @@ test('allocates a common graph origin and compensates only identified native chr
   expect(f.chrome.style.left).toBe('-480px');
   expect(f.chrome.style.width).toBe('calc(100% + 480px)');
   expect(f.root.style.clipPath).toBe('inset(0px 0px 0px -480px)');
+  expect(f.parent.style.overflow).toBe('clip');
   expect(f.root.children).toHaveLength(3);
   expect(f.canvas.parentElement).toBe(f.root);
   expect(f.nodes.parentElement).toBe(f.root);
@@ -49,6 +53,7 @@ test('allocates a common graph origin and compensates only identified native chr
   adapter.apply(0);
   expect(f.root.style.cssText).toBe('');
   expect(f.chrome.style.cssText).toBe('');
+  expect(f.parent.style.cssText).toBe('');
   adapter.dispose();
 });
 
@@ -56,6 +61,7 @@ test('restores pre-existing inline styles and priorities on disposal and rejects
   const f = frame();
   f.root.style.setProperty('width', '90%', 'important');
   f.root.style.setProperty('overflow', 'clip');
+  f.parent.style.setProperty('overflow', 'hidden', 'important');
   f.chrome.style.setProperty('left', '2px');
   const original = f.root.style.cssText;
   const chromeOriginal = f.chrome.style.cssText;
@@ -65,6 +71,8 @@ test('restores pre-existing inline styles and priorities on disposal and rejects
   adapter.dispose();
   expect(f.root.style.cssText).toBe(original);
   expect(f.chrome.style.cssText).toBe(chromeOriginal);
+  expect(f.parent.style.getPropertyValue('overflow')).toBe('hidden');
+  expect(f.parent.style.getPropertyPriority('overflow')).toBe('important');
   adapter.apply(500);
   expect(f.root.style.cssText).toBe(original);
   expect(() => new ComfyCanvasFrameAllocation(document.createElement('div'), f.panel)).toThrow(

@@ -18,6 +18,7 @@
 export class ComfyCanvasFrameAllocation {
     root;
     #chrome;
+    #frame;
     #styles;
     #inset = 0;
     #disposed = false;
@@ -26,13 +27,17 @@ export class ComfyCanvasFrameAllocation {
         this.root = root;
         const chrome = [...root.children].find((child) => child.contains(panel));
         const canvas = root.querySelector(':scope > #graph-canvas');
+        const frame = root.parentElement;
         if (root.id !== 'graph-canvas-container' ||
             !panel.matches('.graph-canvas-panel') ||
             !(chrome instanceof HTMLElement) ||
-            !canvas)
+            !canvas ||
+            !frame?.matches('.comfyui-body'))
             throw new Error('The Comfy graph workspace layout is unsupported.');
         this.#chrome = chrome;
+        this.#frame = frame;
         this.#styles = [
+            { element: frame, property: 'overflow' },
             ...['width', 'margin-left', 'overflow', 'clip-path'].map((property) => ({
                 element: root,
                 property,
@@ -58,7 +63,8 @@ export class ComfyCanvasFrameAllocation {
         }
         this.root.style.setProperty('width', `calc(100% - ${inset}px)`);
         this.root.style.setProperty('margin-left', `${inset}px`);
-        // The native chrome extends to the original frame; clip to that frame instead of the reduced graph box.
+        // Hidden overflow permits focus-driven scrolling; the qualified outer frame must remain stationary.
+        this.#frame.style.setProperty('overflow', 'clip');
         this.root.style.setProperty('overflow', 'visible');
         this.root.style.setProperty('clip-path', `inset(0px 0px 0px -${inset}px)`);
         this.#chrome.style.setProperty('left', `-${inset}px`);

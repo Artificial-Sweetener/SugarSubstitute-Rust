@@ -63,7 +63,7 @@ var CanvasToolbar = defineComponent({
           h(
             "span",
             { class: "sc-output-batch", "aria-label": "Batch position" },
-            props.snapshot.preview ? "Source preview" : selection ? state.comparison && batch >= count ? `Pinned image ${batch + 1}; latest batch ${count}` : `${batch + 1} / ${count}` : "No image"
+            props.snapshot.preview || count === 0 && selectedSource?.preview ? "Source preview" : selection ? !state.comparison && count === 0 ? "No final images" : state.comparison && batch >= count ? `Pinned image ${batch + 1}; latest batch ${count}` : `${batch + 1} / ${count}` : "No image"
           ),
           button(
             "Next image",

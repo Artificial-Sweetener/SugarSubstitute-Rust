@@ -12,7 +12,7 @@ import {
 } from "./chunk-BBIMJ2PJ.js";
 import {
   CanvasToolbar
-} from "./chunk-TLPXQNW6.js";
+} from "./chunk-KMETGHKY.js";
 import {
   computed,
   defineComponent,

@@ -22,6 +22,27 @@ import {
 } from '../support/CanvasImageFixture.js';
 
 describe('canvas image lifetime', () => {
+  test('reports known admission cost and an unknown comparison partner without allocating it', async () => {
+    const f = canvasImageFixture();
+    const dimensions = { width: 8192, height: 8192 };
+    f.resources.update([{ slot: 'a', input: canvasImageInput('large', false, null) }]);
+    f.port.ready(0, dimensions);
+    await settleCanvasImages();
+    expect(f.resources.read()[0]?.status.message).toContain('256 MiB estimated RGBA storage');
+    expect(f.port.allocations).toBe(0);
+    f.budget.allowance(268435456);
+    f.resources.update([{ slot: 'a', input: canvasImageInput('large', false, null) }], true);
+    f.port.ready(1, dimensions);
+    await settleCanvasImages();
+    f.resources.update([
+      { slot: 'a', input: canvasImageInput('large', false, null) },
+      { slot: 'b', input: canvasImageInput('unknown', false, null) },
+    ]);
+    expect(f.resources.read()[1]?.status.message).toContain('next image size is unknown');
+    expect(f.resources.read()[1]?.status.message).toContain('256 MiB already owned');
+    expect(f.port.requests).toHaveLength(2);
+    f.resources.dispose();
+  });
   test('keeps the actual outgoing image inspection slot until its replacement is decoded', async () => {
     const f = canvasImageFixture();
     f.resources.update([{ slot: 'a', input: canvasImageInput('old') }]);
