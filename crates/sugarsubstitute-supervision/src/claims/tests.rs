@@ -51,12 +51,13 @@ fn checked_cleanup_preserves_primary_and_every_secondary_without_rendering_secre
 }
 
 #[test]
-fn oversized_path_is_rejected_before_cloning_or_slot_admission() -> TestResult {
+fn oversized_configuration_is_rejected_before_cloning_or_slot_admission() -> TestResult {
     let mut harness = Harness::new()?;
     harness.initialize()?;
-    let huge = PathBuf::from(format!("E:\\{}", "x".repeat(160_000)));
-    let configuration =
-        LaunchConfiguration::new(huge, PathBuf::from("E:\\python.exe"), vec![], 8188)?;
+    let root = PathBuf::from(format!("E:\\{}", "x".repeat(32_763)));
+    let interpreter = PathBuf::from(format!("E:\\{}", "y".repeat(32_763)));
+    let arguments = vec!["a".repeat(4096); 16];
+    let configuration = LaunchConfiguration::new(root, interpreter, arguments, 8188)?;
     let spec = harness.spec(CLAIM_OPERATION_BYTES)?;
     assert!(matches!(
         harness.claims.submit_resolve_launch(&harness.client, &harness.scope, spec, configuration),

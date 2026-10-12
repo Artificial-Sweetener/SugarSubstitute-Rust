@@ -3,6 +3,8 @@
 //! Define owned application contracts independently of desktop and execution adapters.
 
 pub mod configuration;
+/// Bound independent invocation facts without native coordinator authority.
+pub mod coordinator_entry;
 pub mod crash;
 pub mod execution;
 pub mod incident;

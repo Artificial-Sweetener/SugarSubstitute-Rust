@@ -93,20 +93,57 @@ impl LaunchConfiguration {
         port: u16,
     ) -> Result<Self, ConfigurationError> {
         for path in [&root, &interpreter] {
-            if !path.is_absolute()
-                || path.to_str().is_none_or(|text| text.contains('\0'))
-                || path
-                    .components()
-                    .any(|component| matches!(component, Component::ParentDir | Component::CurDir))
-            {
-                return Err(ConfigurationError::InvalidLaunchPath);
-            }
+            Self::validate_path(path)?;
         }
-        if arguments.len() > MAX_ARGUMENTS {
+        Self::validate_arguments(arguments.iter().map(String::as_str))?;
+        let port = NonZeroU16::new(port).ok_or(ConfigurationError::InvalidPort)?;
+        Ok(Self { root, interpreter, arguments, port })
+    }
+
+    /// Measure actual retained path, argument-vector and string capacities in bytes.
+    /// Admission consumers must charge these capacities before moving the request.
+    /// Returns None if the checked total cannot be represented; fixed Self is excluded.
+    pub fn allocated_bytes(&self) -> Option<usize> {
+        let mut bytes = self.root.capacity().checked_add(self.interpreter.capacity())?;
+        bytes = bytes.checked_add(self.arguments.capacity().checked_mul(size_of::<String>())?)?;
+        for argument in &self.arguments {
+            bytes = bytes.checked_add(argument.capacity())?;
+        }
+        Some(bytes)
+    }
+
+    /// Validate lexical absolute paths while preserving exact Windows UTF-16 units.
+    /// This performs no filesystem discovery or executable authentication.
+    /// # Errors
+    /// Rejects ambiguous components, NUL, excessive units or invalid platform spelling.
+    pub fn validate_path(path: &Path) -> Result<(), ConfigurationError> {
+        if !path.is_absolute()
+            || !valid_path_units(path)
+            || path
+                .components()
+                .any(|component| matches!(component, Component::ParentDir | Component::CurDir))
+        {
+            return Err(ConfigurationError::InvalidLaunchPath);
+        }
+        Ok(())
+    }
+
+    /// Validate exact borrowed UTF-8 arguments without copying or normalizing them.
+    /// Owned and decoded request consumers share this sole argument grammar.
+    /// # Errors
+    /// Rejects count, individual/combined byte limits or an embedded NUL.
+    pub fn validate_arguments<'a>(
+        arguments: impl IntoIterator<Item = &'a str>,
+    ) -> Result<(), ConfigurationError> {
+        let arguments = arguments.into_iter();
+        if arguments.size_hint().0 > MAX_ARGUMENTS {
             return Err(ConfigurationError::TooManyArguments);
         }
         let mut total = 0;
-        for argument in &arguments {
+        for (index, argument) in arguments.enumerate() {
+            if index >= MAX_ARGUMENTS {
+                return Err(ConfigurationError::TooManyArguments);
+            }
             if argument.contains('\0') {
                 return Err(ConfigurationError::ArgumentContainsNul);
             }
@@ -118,8 +155,7 @@ impl LaunchConfiguration {
         if total > MAX_TOTAL_ARGUMENT_BYTES {
             return Err(ConfigurationError::ArgumentsTooLarge);
         }
-        let port = NonZeroU16::new(port).ok_or(ConfigurationError::InvalidPort)?;
-        Ok(Self { root, interpreter, arguments, port })
+        Ok(())
     }
 
     /// Borrow the requested absolute ComfyUI root; no trust is implied.
@@ -188,6 +224,17 @@ impl StartupConfiguration {
     pub fn presentation(&self) -> Presentation {
         self.presentation
     }
+}
+
+#[cfg(target_os = "windows")]
+fn valid_path_units(path: &Path) -> bool {
+    use std::os::windows::ffi::OsStrExt;
+    path.as_os_str().encode_wide().enumerate().all(|(index, unit)| index < 32766 && unit != 0)
+}
+
+#[cfg(not(target_os = "windows"))]
+fn valid_path_units(path: &Path) -> bool {
+    path.to_str().is_some_and(|text| !text.contains('\0') && text.encode_utf16().count() <= 32766)
 }
 
 #[cfg(test)]

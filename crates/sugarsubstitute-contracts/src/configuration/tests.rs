@@ -175,3 +175,82 @@ fn attachment_rejects_remote_hosts_credentials_and_url_payloads() {
         assert!(error.is_none_or(|error| !error.to_string().contains("secret")));
     }
 }
+
+#[test]
+fn borrowed_profile_and_arguments_preserve_owned_grammar_error_order() {
+    for value in ["", "a/b", "valid_1"] {
+        assert_eq!(ProfileId::validate(value), ProfileId::new(value.to_owned()).map(|_| ()));
+    }
+    let excessive = "x".repeat(MAX_ARGUMENT_BYTES);
+    let mut arguments = vec![excessive.as_str(); 17];
+    arguments.push("bad\0argument");
+    assert_eq!(
+        LaunchConfiguration::validate_arguments(arguments.iter().copied()),
+        Err(ConfigurationError::ArgumentContainsNul)
+    );
+    assert_eq!(
+        LaunchConfiguration::validate_arguments(["bad\0argument"; 65]),
+        Err(ConfigurationError::TooManyArguments)
+    );
+}
+
+#[test]
+fn managed_capacity_includes_spare_paths_vector_and_argument_storage()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (mut root, mut interpreter) = paths();
+    root.reserve(1024);
+    interpreter.reserve(2048);
+    let mut argument = String::with_capacity(4096);
+    argument.push_str("exact text");
+    let mut arguments = Vec::with_capacity(8);
+    arguments.push(argument);
+    let expected = root.capacity()
+        + interpreter.capacity()
+        + arguments.capacity() * size_of::<String>()
+        + arguments[0].capacity();
+    let value = LaunchConfiguration::new(root, interpreter, arguments, 8188)?;
+    assert_eq!(value.allocated_bytes(), Some(expected));
+    assert_eq!(value.arguments(), ["exact text"]);
+    Ok(())
+}
+
+#[cfg(windows)]
+#[test]
+fn managed_paths_preserve_unpaired_windows_units_without_native_inspection()
+-> Result<(), Box<dyn std::error::Error>> {
+    use std::os::windows::ffi::{OsStrExt, OsStringExt};
+    let units = [69, 58, 92, 0xd800, 97, 0xdc01];
+    let root = PathBuf::from(std::ffi::OsString::from_wide(&units));
+    let (_, interpreter) = paths();
+    assert!(root.to_str().is_none());
+    let value = LaunchConfiguration::new(root, interpreter, vec![], 8188)?;
+    assert_eq!(value.root().as_os_str().encode_wide().collect::<Vec<_>>(), units);
+    Ok(())
+}
+
+#[cfg(windows)]
+#[test]
+fn managed_windows_path_units_enforce_exact_limit_nul_and_traversal() {
+    use std::os::windows::ffi::OsStringExt;
+    let mut units = vec![69, 58, 92];
+    units.resize(32766, 97);
+    assert!(
+        LaunchConfiguration::validate_path(Path::new(&std::ffi::OsString::from_wide(&units)))
+            .is_ok()
+    );
+    units.push(97);
+    assert_eq!(
+        LaunchConfiguration::validate_path(Path::new(&std::ffi::OsString::from_wide(&units))),
+        Err(ConfigurationError::InvalidLaunchPath)
+    );
+    units.truncate(4);
+    units[3] = 0;
+    assert_eq!(
+        LaunchConfiguration::validate_path(Path::new(&std::ffi::OsString::from_wide(&units))),
+        Err(ConfigurationError::InvalidLaunchPath)
+    );
+    assert_eq!(
+        LaunchConfiguration::validate_path(Path::new(r"E:\root\..\outside")),
+        Err(ConfigurationError::InvalidLaunchPath)
+    );
+}

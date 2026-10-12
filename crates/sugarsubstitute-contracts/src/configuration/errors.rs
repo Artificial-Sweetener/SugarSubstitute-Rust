@@ -8,7 +8,7 @@ use std::{error::Error, fmt};
 /// A startup value failed semantic validation before acquiring runtime resources.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ConfigurationError {
-    /// A root or interpreter is not an absolute, unambiguous Unicode path.
+    /// A root or interpreter is not an absolute, bounded, unambiguous path.
     InvalidLaunchPath,
     /// More than the accepted number of subprocess arguments were supplied.
     TooManyArguments,
@@ -34,7 +34,7 @@ impl fmt::Display for ConfigurationError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(match self {
             Self::InvalidLaunchPath => {
-                "Launch paths must be absolute Unicode paths without NUL or parent traversal"
+                "Launch paths must be absolute bounded paths without NUL or parent traversal"
             }
             Self::TooManyArguments => "Launch accepts at most 64 arguments",
             Self::ArgumentTooLong => "Each launch argument must fit within 4096 UTF-8 bytes",

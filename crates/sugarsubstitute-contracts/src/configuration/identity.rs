@@ -15,6 +15,14 @@ impl ProfileId {
     ///
     /// Returns [`ConfigurationError::InvalidProfile`] for all other input.
     pub fn new(value: String) -> Result<Self, ConfigurationError> {
+        Self::validate(&value)?;
+        Ok(Self(value))
+    }
+
+    /// Validate an exact borrowed namespace using the owned identifier grammar.
+    /// # Errors
+    /// Returns [`ConfigurationError::InvalidProfile`] for invalid spelling.
+    pub fn validate(value: &str) -> Result<(), ConfigurationError> {
         if value.is_empty()
             || value.len() > 64
             || !value
@@ -23,7 +31,7 @@ impl ProfileId {
         {
             return Err(ConfigurationError::InvalidProfile);
         }
-        Ok(Self(value))
+        Ok(())
     }
 
     /// Borrow the validated namespace identity without transforming its spelling.

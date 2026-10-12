@@ -4,8 +4,8 @@ platforms = ["windows", "macos", "linux"]
 [[owners]]
 package = "sugarsubstitute-contracts"
 root = "crates/sugarsubstitute-contracts"
-concern = "Owned contracts, localization, memory claims, immutable frames, scoped lifecycle and bounded transcript facts; bounded incident evidence, durable acknowledgment facts and namespace eviction ledger"
-minimum_tests = 74
+concern = "Owned contracts, localization, memory claims, immutable frames, scoped lifecycle and bounded transcript facts; bounded incident evidence, durable acknowledgment facts and namespace eviction ledger; bounded coordinator-entry identity, launch input and setup deadlines"
+minimum_tests = 94
 
 [[owners]]
 package = "sugarsubstitute-application"
