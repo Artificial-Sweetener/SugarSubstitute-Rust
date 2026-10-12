@@ -20,6 +20,27 @@ import { jest } from '@jest/globals';
 import { NativeSubgraphChangeObserver } from '../../../frontend/comfyui/ui/surface/NativeSubgraphChangeObserver.js';
 
 describe('NativeSubgraphChangeObserver', () => {
+  test('filters generic value changes before scheduling topology notifications', async () => {
+    const subgraph = {
+      onAfterChange: null as ((graph: unknown, info?: unknown) => void) | null,
+      add: jest.fn(),
+      remove: jest.fn(),
+    };
+    const changed = jest.fn();
+    const observer = new NativeSubgraphChangeObserver(
+      subgraph,
+      changed,
+      (kind) => kind !== 'change',
+    );
+    for (let index = 0; index < 50; index++) subgraph.onAfterChange?.(subgraph, { value: index });
+    await Promise.resolve();
+    expect(changed).not.toHaveBeenCalled();
+    subgraph.add();
+    subgraph.remove();
+    await Promise.resolve();
+    expect(changed).toHaveBeenCalledTimes(1);
+    observer.dispose();
+  });
   test('releases pending notifications with the observed graph lifetime', async () => {
     const subgraph = {
       onAfterChange: null as ((graph: unknown) => void) | null,
@@ -54,6 +75,11 @@ describe('NativeSubgraphChangeObserver', () => {
     expect(add).toHaveBeenCalledWith('node');
     expect(remove).toHaveBeenCalledWith('node');
     expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith([
+      { kind: 'change', info: 'info' },
+      { kind: 'add', info: 'node' },
+      { kind: 'remove', info: 'node' },
+    ]);
 
     observer.dispose();
     expect(subgraph.onAfterChange).toBe(previousAfterChange);

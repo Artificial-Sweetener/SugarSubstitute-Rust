@@ -137,6 +137,21 @@ test('rejects old revisions and delivery from another attachment', async () => {
   mounted.dispose();
 });
 
+test('shows an explicit chooser for comparison without a distinct second image', () => {
+  const initial = canvasSnapshot('empty-comparison');
+  const port = new CanvasPortFixture({
+    ...initial,
+    view: { ...initial.view, comparison: { secondary: null, orientation: 'vertical', split: 0.5 } },
+  });
+  const element = root();
+  const mounted = mountCanvasOverlay(element, port, jest.fn());
+  const chooser = element.querySelector<HTMLSelectElement>('[aria-label="Comparison source"]');
+  expect(chooser?.value).toBe('');
+  expect(chooser?.selectedOptions[0]?.textContent).toBe('Choose an output');
+  expect(button(element, 'Swap A/B').disabled).toBe(true);
+  mounted.dispose();
+});
+
 test('labels unknown preview batch position and keeps comparison availability truthful', () => {
   const initial = canvasSnapshot('preview');
   const port = new CanvasPortFixture({ ...initial, preview: true });

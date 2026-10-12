@@ -1,6 +1,6 @@
 import {
   CanvasCompareControls
-} from "./chunk-NDQ7H2BO.js";
+} from "./chunk-VMDE2JL6.js";
 import {
   CanvasSourceTabs
 } from "./chunk-OJGHAI47.js";

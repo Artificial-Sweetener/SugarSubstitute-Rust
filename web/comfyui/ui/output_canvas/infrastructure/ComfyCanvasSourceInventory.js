@@ -1,0 +1,199 @@
+//    SugarCubes - composable workflow units for ComfyUI
+//    Copyright (C) 2026  Artificial Sweetener and contributors
+//
+//    This program is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU Affero General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU Affero General Public License for more details.
+//
+//    You should have received a copy of the GNU Affero General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/** Discover workflow sources only at graph boundaries and refresh cached labels in scope. */
+import { isRecord } from '../../types/common.js';
+import { decodeComfyWorkflowSources } from '../../execution/infrastructure/ComfyWorkflowSourceDecoder.js';
+import { buildCubeOutputExecutionId } from '../../cube/execution/CubeOutputExecutionIdentity.js';
+import { NativeSubgraphChangeObserver, } from '../../surface/NativeSubgraphChangeObserver.js';
+/** Keep native node handles inside the adapter, never in catalog or application state. */
+export class ComfyCanvasSourceInventory {
+    sessions;
+    inventory;
+    root;
+    logger;
+    #observers = [];
+    #authored = new Map();
+    #listeners = new Set();
+    #context = null;
+    #stop = null;
+    #disposed = false;
+    /** Receive public root access explicitly rather than reading a host global. */
+    constructor(sessions, inventory, root, logger) {
+        this.sessions = sessions;
+        this.inventory = inventory;
+        this.root = root;
+        this.logger = logger;
+    }
+    /** Observe committed workflow activation and release cached handles during loading. */
+    install() {
+        if (this.#stop || this.#disposed)
+            return;
+        this.#stop = this.sessions.subscribe(() => this.#synchronize());
+        this.#synchronize();
+    }
+    /** Subscribe to actual catalog membership or authored label changes. */
+    subscribe(listener) {
+        this.#listeners.add(listener);
+        return () => this.#listeners.delete(listener);
+    }
+    /** Rebuild membership for an explicitly named exposure/topology lifecycle. */
+    topologyChanged() {
+        if (this.#context && !this.#disposed)
+            this.#discover(this.#context);
+    }
+    /** Release every graph wrapper and handle when this integration ends. */
+    dispose() {
+        this.#disposed = true;
+        this.#stop?.();
+        this.#stop = null;
+        this.#release();
+        this.#context = null;
+        this.#listeners.clear();
+    }
+    /** Keep only metadata for open sessions while active graph handles remain replaceable. */
+    #synchronize() {
+        const snapshot = this.sessions.read();
+        const active = snapshot.active;
+        if (active?.sessionId === this.#context?.sessionId &&
+            active?.generation === this.#context?.generation)
+            return;
+        this.#release();
+        this.#context = active;
+        if (active)
+            this.#discover(active);
+        else
+            this.#publish();
+    }
+    /** Serialize once and bind ordinary, nested and cube marker paths to native metadata. */
+    #discover(context) {
+        this.#release();
+        this.#context = context;
+        try {
+            const root = this.root();
+            if (!isRecord(root) || typeof root.serialize !== 'function')
+                throw new TypeError('Canvas workflow graph serialization is unavailable.');
+            const sources = decodeComfyWorkflowSources(root.serialize.call(root));
+            this.inventory.replace(context, sources);
+            const declared = new Map(sources.map((source) => [source.executionPath, source]));
+            const graphs = new Set();
+            const visit = (graph, prefix, ancestors, chain) => {
+                if (prefix.length > 32 || ancestors.has(graph))
+                    return;
+                graphs.add(graph);
+                const nodes = Array.isArray(graph._nodes)
+                    ? graph._nodes
+                    : Array.isArray(graph.nodes)
+                        ? graph.nodes
+                        : [];
+                for (const node of nodes) {
+                    if (!isRecord(node) || (typeof node.id !== 'string' && typeof node.id !== 'number'))
+                        continue;
+                    const segments = [...prefix, String(node.id)];
+                    const path = segments.join(':');
+                    const nodes = [...chain, node];
+                    const source = declared.get(path);
+                    if (source)
+                        this.#authored.set(path, { source, nodes, output: null });
+                    if (!isRecord(node.subgraph))
+                        continue;
+                    const outputs = Array.isArray(node.subgraph.outputs) ? node.subgraph.outputs : [];
+                    outputs.forEach((output, slot) => {
+                        const marker = buildCubeOutputExecutionId(path, slot);
+                        const source = declared.get(marker);
+                        if (source)
+                            this.#authored.set(marker, {
+                                source,
+                                nodes,
+                                output: isRecord(output) ? output : null,
+                            });
+                    });
+                    visit(node.subgraph, segments, new Set([...ancestors, graph]), nodes);
+                }
+            };
+            visit(root, [], new Set(), []);
+            for (const graph of graphs) {
+                if (typeof graph.add !== 'function' || typeof graph.remove !== 'function')
+                    continue;
+                this.#observers.push(new NativeSubgraphChangeObserver(graph, (changes) => this.#changed(context, changes)));
+            }
+            this.#publish();
+        }
+        catch (error) {
+            this.#release();
+            this.inventory.replace(context, []);
+            this.#publish();
+            this.logger.error('[SugarCubes] Canvas source inventory failed', {
+                sessionId: context.sessionId,
+                generation: context.generation,
+                error,
+            });
+        }
+    }
+    /** Generic value/presentation changes read cached handles; only native mutations discover topology. */
+    #changed(context, changes) {
+        if (this.#context !== context || this.#disposed)
+            return;
+        if (changes.some((change) => change.kind !== 'change')) {
+            this.#discover(context);
+            return;
+        }
+        const targets = new Set(changes.map((change) => change.info));
+        const changed = [];
+        for (const authored of this.#authored.values()) {
+            if (!targets.has(undefined) &&
+                !targets.has(null) &&
+                !authored.nodes.some((node) => targets.has(node)))
+                continue;
+            const captions = authored.nodes.map((node, index) => label(node.title) ||
+                (isRecord(node.subgraph) ? label(node.subgraph.name) : '') ||
+                label(node.type) ||
+                authored.source.breadcrumb[index] ||
+                authored.source.label);
+            const markerLabel = authored.output
+                ? label(authored.output.name) || authored.source.label
+                : null;
+            const next = {
+                ...authored.source,
+                label: markerLabel ?? captions.at(-1) ?? authored.source.label,
+                breadcrumb: markerLabel ? captions : captions.slice(0, -1),
+            };
+            if (next.label !== authored.source.label ||
+                next.breadcrumb.join('\0') !== authored.source.breadcrumb.join('\0')) {
+                changed.push(next);
+                this.#authored.set(authored.source.executionPath, { ...authored, source: next });
+            }
+        }
+        if (!changed.length)
+            return;
+        this.inventory.refreshMetadata(context, changed);
+        this.#publish();
+    }
+    /** Release old graph handles before any replacement is observed. */
+    #release() {
+        for (const observer of this.#observers.splice(0))
+            observer.dispose();
+        this.#authored.clear();
+    }
+    /** Publish metadata without allocating images or consulting execution state. */
+    #publish() {
+        for (const listener of this.#listeners)
+            listener();
+    }
+}
+/** Bound literal host titles at the adapter boundary. */
+function label(value) {
+    return typeof value === 'string' ? value.trim().slice(0, 4096) : '';
+}

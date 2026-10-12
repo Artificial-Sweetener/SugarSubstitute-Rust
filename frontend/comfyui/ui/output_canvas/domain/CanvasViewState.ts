@@ -31,7 +31,7 @@ export interface NormalizedInspection {
 }
 
 export interface CanvasComparison {
-  readonly secondary: CanvasSelection;
+  readonly secondary: CanvasSelection | null;
   readonly orientation: 'vertical' | 'horizontal';
   readonly split: number;
 }
@@ -67,7 +67,9 @@ export function freezeCanvasViewState(state: CanvasViewState, revision: number):
     comparison: state.comparison
       ? Object.freeze({
           ...state.comparison,
-          secondary: Object.freeze({ ...state.comparison.secondary }),
+          secondary: state.comparison.secondary
+            ? Object.freeze({ ...state.comparison.secondary })
+            : null,
         })
       : null,
   });

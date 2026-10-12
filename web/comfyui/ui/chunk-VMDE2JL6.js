@@ -18,7 +18,7 @@ var CanvasCompareControls = defineComponent({
       if (!comparison) return null;
       const secondary = comparison.secondary;
       const source = props.snapshot.sources.find(
-        (candidate) => candidate.id === secondary.sourceId
+        (candidate) => candidate.id === secondary?.sourceId
       );
       return h("div", { class: "sc-output-comparison", "aria-label": "Comparison controls" }, [
         h("span", "B"),
@@ -26,7 +26,7 @@ var CanvasCompareControls = defineComponent({
           "select",
           {
             "aria-label": "Comparison source",
-            value: secondary.sourceId,
+            value: secondary?.sourceId ?? "",
             onChange: (event) => {
               const target = event.currentTarget;
               if (!(target instanceof HTMLSelectElement)) return;
@@ -36,32 +36,40 @@ var CanvasCompareControls = defineComponent({
               if (chosen)
                 props.send({
                   type: "select-comparison",
-                  selection: { ...secondary, sourceId: chosen.id }
+                  selection: { sourceId: chosen.id, batchIndex: secondary?.batchIndex ?? 0 }
                 });
             }
           },
-          props.snapshot.sources.map(
-            (candidate) => h("option", { key: candidate.id, value: candidate.id }, candidate.label)
-          )
+          [
+            h("option", { value: "", disabled: true }, "Choose an output"),
+            ...props.snapshot.sources.map(
+              (candidate) => h("option", { key: candidate.id, value: candidate.id }, candidate.label)
+            )
+          ]
         ) : h("span", source?.label ?? "Unavailable output"),
         props.capabilities.commands.includes("select-comparison") ? h("input", {
           "aria-label": "Comparison batch",
           type: "number",
           min: 1,
           max: Math.max(1, source?.batchCount ?? 0),
-          value: secondary.batchIndex + 1,
+          value: (secondary?.batchIndex ?? 0) + 1,
+          disabled: !secondary,
           onChange: (event) => {
             const target = event.currentTarget;
             if (!(target instanceof HTMLInputElement)) return;
             const index = target.valueAsNumber - 1;
-            if (Number.isSafeInteger(index) && index >= 0)
+            if (secondary && Number.isSafeInteger(index) && index >= 0)
               props.send({
                 type: "select-comparison",
                 selection: { ...secondary, batchIndex: index }
               });
           }
         }) : null,
-        props.capabilities.commands.includes("swap") ? h("button", { type: "button", onClick: () => props.send({ type: "swap" }) }, "Swap A/B") : null,
+        props.capabilities.commands.includes("swap") ? h(
+          "button",
+          { type: "button", disabled: !secondary, onClick: () => props.send({ type: "swap" }) },
+          "Swap A/B"
+        ) : null,
         props.capabilities.commands.includes("wipe") ? h(
           "button",
           {
