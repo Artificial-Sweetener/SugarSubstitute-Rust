@@ -5,6 +5,9 @@
 //! IDs here are matching facts. Only exact owned families can be stopped; attached
 //! processes have no registry entry. Normal teardown settles and retires every
 //! record before executor shutdown. Drop is owned containment, never clean proof.
+pub(crate) mod family_proof;
+pub(crate) mod profile;
+
 use crate::{
     FamilyBinding, LaunchTicket, RegistryAdmissionError, RegistryError, RegistryObservation,
     RegistrySnapshot, RootObservationOutcome, WindowsLaunchInput,

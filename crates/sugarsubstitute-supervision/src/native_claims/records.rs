@@ -5,8 +5,8 @@ use super::*;
 mod storage;
 #[cfg(test)]
 mod tests;
-pub(crate) use storage::{Stage, check_predecessor, publish};
-use windows::Win32::Security::Cryptography::*;
+pub(crate) use storage::{check_predecessor, publish};
+
 const MAGIC: &[u8; 8] = b"SSCLAIM1";
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum RecordState {
@@ -104,22 +104,4 @@ impl Record {
             digest: std::array::from_fn(|i| bytes[84 + i]),
         })
     }
-}
-pub(crate) fn hex(bytes: &[u8]) -> String {
-    const DIGITS: &[u8; 16] = b"0123456789abcdef";
-    bytes
-        .iter()
-        .flat_map(|b| [DIGITS[(b >> 4) as usize] as char, DIGITS[(b & 15) as usize] as char])
-        .collect()
-}
-pub(crate) fn random() -> Result<[u8; 16], ClaimError> {
-    let mut bytes = [0; 16];
-    // SAFETY: The initialized output slice is writable; the selected system RNG needs no algorithm handle.
-    unsafe { BCryptGenRandom(None, &mut bytes, BCRYPT_USE_SYSTEM_PREFERRED_RNG) }
-        .ok()
-        .map_err(|e| ClaimError::new("claim_randomness", e))?;
-    if bytes.iter().all(|b| *b == 0) {
-        return Err(ClaimError::invalid("claim_randomness"));
-    }
-    Ok(bytes)
 }

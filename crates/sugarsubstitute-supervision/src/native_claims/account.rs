@@ -46,8 +46,10 @@ pub(crate) fn initialize(root: &mut Root, installation: &Path) -> Result<(), Cla
         &root.sid,
         &installed_identity,
     ]));
-    let epoch = sugarsubstitute_contracts::lifecycle::CoordinatorEpoch::new(records::random()?)
-        .map_err(|e| ClaimError::new("coordinator_epoch", e))?;
+    let epoch = sugarsubstitute_contracts::lifecycle::CoordinatorEpoch::new(
+        crate::protected_storage::record_file::random()?,
+    )
+    .map_err(|e| ClaimError::new("coordinator_epoch", e))?;
     let key = CoordinatorKey { namespace, epoch };
     root.key = Some(key);
     // SAFETY: The retained primary token has QUERY|IMPERSONATE access; the GUID is static.
@@ -78,7 +80,9 @@ pub(crate) fn initialize(root: &mut Root, installation: &Path) -> Result<(), Cla
             &mut root.handles,
         )?;
     }
-    let stem = directory.join("coordinators").join(records::hex(namespace.bytes()));
+    let stem = directory
+        .join("coordinators")
+        .join(crate::protected_storage::record_file::hex(namespace.bytes()));
     HeldFile::acquire_into(
         &mut root.coordinator,
         &stem.with_extension("claim"),

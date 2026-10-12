@@ -10,8 +10,12 @@
 //! Crashpad database contents remain opaque preserved external authoritative data.
 
 pub(crate) mod account;
+mod directories;
+pub(crate) mod exclusion;
 mod generation;
+mod leaf;
 pub(crate) mod paths;
+pub(crate) mod record_file;
 pub(crate) mod security;
 #[cfg(test)]
 mod tests;
@@ -44,6 +48,7 @@ struct State {
     root: Option<(PathBuf, [u8; 24], usize)>,
     attempted: bool,
     generation: Option<ProtectedStorageGeneration>,
+    profile_leaf: bool,
     execution: Option<ExecutionId>,
     start_deadline: Option<Moment>,
     close_deadline: Option<Moment>,
@@ -91,6 +96,7 @@ impl ProtectedStorageRoot {
                 root: None,
                 attempted: false,
                 generation: None,
+                profile_leaf: false,
                 execution: None,
                 start_deadline: None,
                 close_deadline: None,

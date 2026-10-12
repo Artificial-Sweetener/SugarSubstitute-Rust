@@ -7,9 +7,10 @@ mod account;
 pub(crate) mod files;
 mod paths;
 mod records;
+use crate::protected_storage::exclusion::HeldFile;
 use crate::protected_storage::security;
 use crate::{ClaimError, claims::pool::SlotUse};
-use files::{Handle, HeldFile};
+use files::Handle;
 pub(crate) use records::{Record, RecordState};
 use std::{
     path::{Path, PathBuf},

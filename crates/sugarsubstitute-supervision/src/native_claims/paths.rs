@@ -3,10 +3,9 @@
 //! Installation and backend identities use shared retained path validation.
 use super::*;
 #[cfg(test)]
-use crate::protected_storage::paths::ancestor_paths;
+use crate::protected_storage::paths::{ancestor_paths, wide};
 pub(crate) use crate::protected_storage::paths::{
-    create_directory, file_identity, final_path, open_retained, pin_ancestors, validate_regular,
-    verify_pinned, wide,
+    create_directory, file_identity, final_path, open_retained, pin_ancestors, verify_pinned,
 };
 use sha2::{Digest, Sha256};
 #[cfg(test)]

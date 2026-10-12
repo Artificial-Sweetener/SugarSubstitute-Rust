@@ -28,6 +28,8 @@ mod managed_output;
 #[allow(unsafe_code)]
 mod native_claims;
 #[cfg(windows)]
+pub mod profiles;
+#[cfg(windows)]
 #[allow(unsafe_code)]
 mod protected_storage;
 #[cfg(windows)]
