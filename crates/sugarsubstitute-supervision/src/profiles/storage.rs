@@ -130,8 +130,13 @@ impl ProfilePort for WindowsProfilePort {
         HeldFile::acquire_into(&mut state.file, &exclusion_path, record_path, sid, budget)?;
         check(context)?;
         let file = state.file.as_ref().ok_or_else(|| ClaimError::invalid("profile_exclusion"))?;
-        let previous =
-            record_file::read(file)?.map(|bytes| record::Record::decode(&bytes)).transpose()?;
+        let previous = match record_file::read_shape(file)? {
+            record_file::RecordRead::Missing => None,
+            record_file::RecordRead::Empty => {
+                return Err(ClaimError::invalid("empty_profile_record"));
+            }
+            record_file::RecordRead::Present(bytes) => Some(record::Record::decode(&bytes)?),
+        };
         if !match previous {
             Some(old) => old.admits_successor(record),
             None => file.created,
@@ -140,11 +145,13 @@ impl ProfilePort for WindowsProfilePort {
         }
         state.record = Some(record);
         record_file::publish(file, &record.encode(), |old| {
-            if old
-                .map(|bytes| record::Record::decode(bytes))
-                .transpose()?
-                .is_some_and(|old| !old.permits_replacement(record))
-            {
+            if match old {
+                record_file::RecordRead::Present(bytes) => {
+                    !record::Record::decode(bytes)?.permits_replacement(record)
+                }
+                record_file::RecordRead::Missing => false,
+                record_file::RecordRead::Empty => true,
+            } {
                 Err(ClaimError::invalid("profile_changed_record"))
             } else {
                 Ok(())
@@ -201,11 +208,13 @@ impl ProfilePort for WindowsProfilePort {
                 .as_ref()
                 .ok_or_else(|| ClaimError::invalid("profile_release_exclusion"))?;
             record_file::publish(file, &record.encode(), |old| {
-                if old
-                    .map(|bytes| record::Record::decode(bytes))
-                    .transpose()?
-                    .map_or(!file.created, |old| !old.permits_replacement(record))
-                {
+                if match old {
+                    record_file::RecordRead::Present(bytes) => {
+                        !record::Record::decode(bytes)?.permits_replacement(record)
+                    }
+                    record_file::RecordRead::Missing => !file.created,
+                    record_file::RecordRead::Empty => true,
+                } {
                     Err(ClaimError::invalid("profile_release_changed_record"))
                 } else {
                     Ok(())

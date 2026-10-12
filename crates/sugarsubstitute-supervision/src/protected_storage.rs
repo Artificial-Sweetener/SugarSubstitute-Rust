@@ -32,6 +32,7 @@ use sugarsubstitute_contracts::{
     execution::{ExecutionId, JobContext, MemoryClaim, Moment},
     lifecycle::CoordinatorKey,
 };
+
 use windows::Win32::{
     Foundation::HANDLE,
     Security::TOKEN_QUERY,
@@ -85,13 +86,19 @@ impl ProtectedStorageRoot {
     /// # Errors
     /// Rejects a claim smaller than the fixed 1MiB storage allocation bound.
     pub fn new(memory: MemoryClaim) -> Result<Self, ClaimError> {
+        Self::from_shared_claim(Arc::new(memory))
+    }
+    /// Retain a shared actual execution claim before any protected root output.
+    /// # Errors
+    /// Rejects insufficient owner memory before native root resolution.
+    pub(crate) fn from_shared_claim(memory: Arc<MemoryClaim>) -> Result<Self, ClaimError> {
         if memory.bytes() < STORAGE_BYTES {
             return Err(ClaimError::invalid("protected_storage_capacity"));
         }
         Ok(Self {
             state: Some(Box::new(State {
                 handles: Vec::new(),
-                memory: Arc::new(memory),
+                memory,
                 sid: Vec::new(),
                 root: None,
                 attempted: false,
@@ -101,6 +108,41 @@ impl ProtectedStorageRoot {
                 start_deadline: None,
                 close_deadline: None,
             })),
+        })
+    }
+    /// Pin the exact diagnostic namespace beneath the actual protected root.
+    /// # Errors
+    /// Preserves partial handles on context, protection, identity or path failure.
+    pub(crate) fn diagnostic_directory(
+        &mut self,
+        namespace: sugarsubstitute_contracts::lifecycle::NamespaceId,
+        context: &JobContext,
+    ) -> Result<(PathBuf, Vec<u8>), ClaimError> {
+        let state = self.state.as_mut().ok_or_else(|| ClaimError::invalid("retired_storage"))?;
+        bind_context(state, context, false)?;
+        let (mut path, _, mut parent) =
+            state.root.clone().ok_or_else(|| ClaimError::invalid("unresolved_storage"))?;
+        for child in [
+            "diagnostics".to_owned(),
+            "incident-v1".to_owned(),
+            record_file::hex(namespace.bytes()),
+        ] {
+            path.push(child);
+            parent = directories::open_relative(
+                state,
+                &path,
+                parent,
+                directories::Mode::OpenOrCreate,
+                context,
+            )?;
+            path = paths::final_path(&state.handles[parent])?;
+        }
+        Ok((path, state.sid.clone()))
+    }
+    /// Count actual retained native outputs, including partially resolved custody.
+    pub(crate) fn live_handles(&self) -> usize {
+        self.state.as_ref().map_or(0, |state| {
+            state.handles.iter().filter(|handle| !handle.raw().0.is_null()).count()
         })
     }
     /// Resolve and retain an existing local root with exact account/System protection.

@@ -16,7 +16,12 @@ pub(crate) fn check_predecessor(
     if file.account_sid != sid {
         return Err(ClaimError::invalid("claim_account_binding"));
     }
-    match record_file::read(file)?.map(|bytes| Record::decode(&bytes)).transpose()? {
+    let previous = match record_file::read_shape(file)? {
+        record_file::RecordRead::Missing => None,
+        record_file::RecordRead::Empty => return Err(ClaimError::invalid("empty_claim_record")),
+        record_file::RecordRead::Present(bytes) => Some(Record::decode(&bytes)?),
+    };
+    match previous {
         Some(record) if record.state == RecordState::Released && same_claim(&record, expected) => {
             Ok(())
         }
@@ -27,7 +32,7 @@ pub(crate) fn check_predecessor(
 
 pub(crate) fn publish(file: &HeldFile, record: &Record) -> Result<(), ClaimError> {
     record_file::publish(file, &record.encode(), |old| {
-        if let Some(old) = old
+        if let record_file::RecordRead::Present(old) = old
             && !permits_replacement(&Record::decode(old)?, record)
         {
             return Err(ClaimError::invalid("changed_claim_generation"));

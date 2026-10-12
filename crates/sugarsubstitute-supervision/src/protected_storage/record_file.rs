@@ -1,15 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Activate bounded bytes through one retained staging inode; codecs stay with owners.
+mod streaming;
 use super::{exclusion::HeldFile, paths, security};
 use crate::{
     ClaimError,
     native_claims::{files::Handle, lock},
 };
-use std::{
-    io::{Read, Seek, SeekFrom, Write},
-    path::PathBuf,
-};
+use std::path::PathBuf;
+pub(crate) use streaming::StreamingPort;
+pub(crate) use streaming::layout::binding as diagnostic_object_binding;
+pub(crate) use streaming::layout::subject as diagnostic_subject_digest;
 use windows::{
     Win32::{Foundation::ERROR_FILE_NOT_FOUND, Security::Cryptography::*, Storage::FileSystem::*},
     core::PCWSTR,
@@ -22,7 +23,18 @@ pub(crate) struct Stage<const N: usize> {
     activated: Option<[u8; N]>,
 }
 
-pub(crate) fn read<const N: usize>(file: &HeldFile<N>) -> Result<Option<[u8; N]>, ClaimError> {
+pub(crate) enum RecordRead<const N: usize> {
+    Missing,
+    Empty,
+    Present([u8; N]),
+}
+pub(crate) fn read_shape<const N: usize>(file: &HeldFile<N>) -> Result<RecordRead<N>, ClaimError> {
+    read_shape_bound(file, None)
+}
+fn read_shape_bound<const N: usize>(
+    file: &HeldFile<N>,
+    expected_identity: Option<[u8; 24]>,
+) -> Result<RecordRead<N>, ClaimError> {
     let path = paths::wide(&file.record_path)?;
     let mut handles = lock(&file.temporary_handles);
     if handles.len() >= 16 || !(16..=1024).contains(&N) {
@@ -42,21 +54,41 @@ pub(crate) fn read<const N: usize>(file: &HeldFile<N>) -> Result<Option<[u8; N]>
         )
     } {
         Ok(raw) => raw,
-        Err(cause) if cause.code() == ERROR_FILE_NOT_FOUND.to_hresult() => return Ok(None),
+        Err(cause) if cause.code() == ERROR_FILE_NOT_FOUND.to_hresult() => {
+            return Ok(RecordRead::Missing);
+        }
         Err(cause) => return Err(ClaimError::new("read_claim_record", cause)),
     };
     let index = handles.len();
     handles.push(Handle::new(raw, file.handle.budget()));
     let handle = &mut handles[index];
     let result = (|| {
-        paths::validate_regular(handle, Some(N as i64))?;
+        paths::validate_regular(handle, None)?;
         security::verify(handle, &file.account_sid)?;
-        let mut input = handle.take_file();
+        if let Some(expected) = expected_identity
+            && paths::file_identity(handle)? != expected
+        {
+            return Err(ClaimError::invalid("changed_retirement_record_identity"));
+        }
+        let mut length = 0_i64;
+        // SAFETY: The retained source and exact initialized length output stay live.
+        unsafe { GetFileSizeEx(handle.raw(), &mut length) }
+            .map_err(|cause| ClaimError::new("claim_record_shape", cause))?;
+        if length == 0 {
+            return Ok(RecordRead::Empty);
+        }
+        if length != N as i64 {
+            return Err(ClaimError::invalid("claim_file_shape"));
+        }
         let mut bytes = [0; N];
-        let result = input.read_exact(&mut bytes);
-        handle.put_file(input);
-        result.map_err(|e| ClaimError::new("read_claim_record", e))?;
-        Ok(Some(bytes))
+        let mut count = 0;
+        // SAFETY: Exact initialized fixed output and synchronous source remain owned.
+        unsafe { ReadFile(handle.raw(), Some(&mut bytes), Some(&mut count), None) }
+            .map_err(|cause| ClaimError::new("read_claim_record", cause))?;
+        if count as usize != N {
+            return Err(ClaimError::invalid("short_claim_record"));
+        }
+        Ok(RecordRead::Present(bytes))
     })();
     let cleanup = handle.close();
     if cleanup.is_ok() {
@@ -68,7 +100,7 @@ pub(crate) fn read<const N: usize>(file: &HeldFile<N>) -> Result<Option<[u8; N]>
 pub(crate) fn publish<const N: usize>(
     file: &HeldFile<N>,
     encoded: &[u8; N],
-    validate_predecessor: impl FnOnce(Option<&[u8; N]>) -> Result<(), ClaimError>,
+    validate_predecessor: impl FnOnce(&RecordRead<N>) -> Result<(), ClaimError>,
 ) -> Result<(), ClaimError> {
     if !file.is_locked() || !(16..=1024).contains(&N) {
         return Err(ClaimError::invalid("publication_without_exclusion"));
@@ -84,11 +116,15 @@ pub(crate) fn publish<const N: usize>(
             return Ok(());
         }
     }
-    let old = read(file)?;
-    validate_predecessor(old.as_ref())?;
-    if old.is_none() && !file.created {
-        return Err(ClaimError::invalid("missing_claim_record"));
+    let old = read_shape(file)?;
+    match &old {
+        RecordRead::Empty => return Err(ClaimError::invalid("empty_claim_record")),
+        RecordRead::Missing if !file.created => {
+            return Err(ClaimError::invalid("missing_claim_record"));
+        }
+        _ => (),
     }
+    validate_predecessor(&old)?;
     if retained.is_none() {
         let path = file.record_path.with_extension(format!("{}.stage", hex(&random()?)));
         let wide = paths::wide(&path)?;
@@ -140,16 +176,25 @@ pub(crate) fn publish<const N: usize>(
     stage.identity = Some(identity);
     paths::validate_regular(&stage.handle, None)?;
     security::verify(&stage.handle, &file.account_sid)?;
-    let mut output = stage.handle.take_file();
-    let result = output
-        .seek(SeekFrom::Start(0))
-        .and_then(|_| output.set_len(N as u64))
-        .and_then(|()| output.write_all(encoded))
-        .and_then(|()| output.sync_all());
-    stage.handle.put_file(output);
-    result.map_err(|e| ClaimError::new("flush_claim_record", e))?;
+    let mut written = 0;
+    // SAFETY: The exact retained writable stage remains armed throughout synchronous
+    // bounded seek/truncate/write/flush; no temporary File can drop its native custody.
+    unsafe {
+        SetFilePointerEx(stage.handle.raw(), 0, None, FILE_BEGIN)
+            .map_err(|cause| ClaimError::new("seek_claim_record", cause))?;
+        SetEndOfFile(stage.handle.raw())
+            .map_err(|cause| ClaimError::new("truncate_claim_record", cause))?;
+        WriteFile(stage.handle.raw(), Some(encoded), Some(&mut written), None)
+            .map_err(|cause| ClaimError::new("write_claim_record", cause))?;
+        if written as usize != N {
+            return Err(ClaimError::invalid("short_claim_write"));
+        }
+        FlushFileBuffers(stage.handle.raw())
+            .map_err(|cause| ClaimError::new("flush_claim_record", cause))?;
+    }
     let target = paths::wide(&file.record_path)?;
-    activate(&stage.handle, &target)?;
+    activate(&stage.handle, &target, true)?;
+    stage.path = file.record_path.clone();
     stage.activated = Some(*encoded);
     finish_activation(&mut stage.activated, encoded, || flush_close(&mut stage.handle))?;
     *retained = None;
@@ -157,10 +202,9 @@ pub(crate) fn publish<const N: usize>(
 }
 
 fn flush_close(handle: &mut Handle) -> Result<(), ClaimError> {
-    let output = handle.take_file();
-    let result = output.sync_all().map_err(|e| ClaimError::new("flush_activated_claim", e));
-    handle.put_file(output);
-    result?;
+    // SAFETY: The actual retained writable owner remains armed through flush.
+    unsafe { FlushFileBuffers(handle.raw()) }
+        .map_err(|cause| ClaimError::new("flush_activated_claim", cause))?;
     handle.close()
 }
 pub(crate) fn finish_activation<const N: usize>(
@@ -176,7 +220,7 @@ pub(crate) fn finish_activation<const N: usize>(
     *state = None;
     Ok(matched)
 }
-fn activate(handle: &Handle, target: &[u16]) -> Result<(), ClaimError> {
+fn activate(handle: &Handle, target: &[u16], replace: bool) -> Result<(), ClaimError> {
     let units = target.len().checked_sub(1).ok_or_else(|| ClaimError::invalid("record_target"))?;
     let offset = std::mem::offset_of!(FILE_RENAME_INFO, FileName);
     let bytes = offset + target.len() * 2;
@@ -185,7 +229,7 @@ fn activate(handle: &Handle, target: &[u16]) -> Result<(), ClaimError> {
     // already bounded UTF16 destination. The stage's actual handle stays retained.
     unsafe {
         let information = buffer.as_mut_ptr().cast::<FILE_RENAME_INFO>();
-        (*information).Anonymous.ReplaceIfExists = true;
+        (*information).Anonymous.ReplaceIfExists = replace;
         (*information).FileNameLength = (units * 2) as u32;
         std::ptr::copy_nonoverlapping(
             target.as_ptr(),

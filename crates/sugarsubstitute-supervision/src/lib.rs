@@ -22,6 +22,8 @@ mod claim_types;
 #[cfg(windows)]
 mod claims;
 #[cfg(windows)]
+pub mod diagnostic_storage;
+#[cfg(windows)]
 mod environment;
 #[cfg(windows)]
 pub mod fixture_descendant;
