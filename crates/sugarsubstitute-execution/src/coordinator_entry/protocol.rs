@@ -3,6 +3,7 @@
 //! Own the private entry schema and borrowed decoded payload without native authority.
 mod decode;
 mod encode;
+pub(crate) mod launch_payload;
 mod raw_windows;
 #[cfg(test)]
 mod tests;

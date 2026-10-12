@@ -39,5 +39,7 @@ mod issue;
 mod kernel;
 #[path = "retirement_tests.rs"]
 mod retirement;
+#[path = "startup_snapshot/tests.rs"]
+mod startup_snapshot;
 #[path = "worker_tests.rs"]
 mod worker;

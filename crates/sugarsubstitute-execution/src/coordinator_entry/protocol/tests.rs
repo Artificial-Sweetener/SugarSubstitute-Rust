@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise closed wire shape against real domain validators and exact immutable bytes.
+#[path = "tests/launch_body.rs"]
+mod launch_body;
 use super::*;
 use std::{error::Error, path::PathBuf};
 use sugarsubstitute_contracts::{

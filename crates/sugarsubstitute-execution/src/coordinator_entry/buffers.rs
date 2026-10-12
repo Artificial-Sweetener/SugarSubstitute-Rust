@@ -25,7 +25,7 @@ pub(super) struct ReceivedEntryFrame {
     pub(super) shared: Arc<Shared>,
 }
 impl ReceivedEntryFrame {
-    fn bytes(&self) -> &[u8] {
+    pub(super) fn bytes(&self) -> &[u8] {
         self.buffer.as_ref().map_or(&[], |buffer| &buffer.bytes[..self.length])
     }
 }

@@ -10,6 +10,7 @@ mod port;
 mod protocol;
 mod replay;
 mod schedule;
+mod startup_snapshot;
 mod state;
 mod types;
 pub(crate) use issue::{IssueDispatch, NativeIssue};
@@ -29,6 +30,7 @@ pub use control::{
 };
 pub use observation::EntryTransportObservation;
 pub(crate) use port::{EntryLease, KernelPeer, Progress};
+pub use startup_snapshot::{PreparedStartupSnapshot, StartupSnapshotRejection};
 use state::{Command, Connection, Reply, RequestRoute, Shared, State};
 use std::sync::{Arc, Mutex, Weak};
 use sugarsubstitute_contracts::execution::{JobContext, Moment};

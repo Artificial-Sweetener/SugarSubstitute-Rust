@@ -275,8 +275,8 @@ migrations = []
 [[formats]]
 id = "native-coordinator-entry"
 owner = "sugarsubstitute-execution"
-sources = ["crates/sugarsubstitute-execution/src/coordinator_entry/protocol.rs", "crates/sugarsubstitute-execution/src/coordinator_entry/protocol/decode.rs", "crates/sugarsubstitute-execution/src/coordinator_entry/protocol/encode.rs", "crates/sugarsubstitute-execution/src/coordinator_entry/protocol/raw_windows.rs", "crates/sugarsubstitute-execution/src/coordinator_entry/types.rs"]
-source_sha256 = "sha256:ad87579e2a7edf5c41588d1bdbd6ab064c508795ace2ef5f86de00a2454fbe25"
+sources = ["crates/sugarsubstitute-execution/src/coordinator_entry/protocol.rs", "crates/sugarsubstitute-execution/src/coordinator_entry/protocol/decode.rs", "crates/sugarsubstitute-execution/src/coordinator_entry/protocol/encode.rs", "crates/sugarsubstitute-execution/src/coordinator_entry/protocol/raw_windows.rs", "crates/sugarsubstitute-execution/src/coordinator_entry/types.rs", "crates/sugarsubstitute-execution/src/coordinator_entry/protocol/launch_payload.rs", "crates/sugarsubstitute-execution/src/coordinator_entry/protocol/launch_payload/encode.rs", "crates/sugarsubstitute-execution/src/coordinator_entry/protocol/launch_payload/decode.rs"]
+source_sha256 = "sha256:fb618025ebd64fcc2b0709d4bc2fef2d6d04c302cdef0ff2ffc248774f9cb85d"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 1
