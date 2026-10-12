@@ -8,6 +8,7 @@
 
 mod eviction;
 mod evidence;
+mod helper;
 mod identity;
 mod report;
 mod summary;
@@ -18,6 +19,7 @@ mod time;
 
 pub use eviction::*;
 pub use evidence::*;
+pub use helper::*;
 pub use identity::*;
 pub use report::*;
 pub use summary::*;
@@ -50,6 +52,8 @@ pub enum IncidentError {
     InvalidIdentity,
     /// A revision cannot advance without wrapping.
     RevisionExhausted,
+    /// A helper/session operation identity cannot advance without wrapping.
+    OperationExhausted,
     /// A cumulative summary-eviction category cannot advance without wrapping.
     EvictionCountExhausted,
     /// UTC time is outside the supported epoch or related timestamps regress.

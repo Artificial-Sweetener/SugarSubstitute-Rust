@@ -9,6 +9,7 @@ use crate::lifecycle::{
 
 mod eviction;
 mod evidence;
+mod helper;
 mod identity;
 mod report;
 mod summary;
