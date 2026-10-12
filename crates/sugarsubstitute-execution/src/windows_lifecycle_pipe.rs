@@ -7,7 +7,7 @@ pub use crate::lifecycle_pipe::{
     LifecyclePipeError, LifecyclePipeFailure, LifecyclePipeObservation, LifecyclePipeOperationId,
     LifecyclePipeReport, LifecyclePipeSession, LifecyclePipeWriteBuffer,
     LifecyclePipeWriteRejection, MAX_LIFECYCLE_MESSAGE_BYTES, MIN_LIFECYCLE_PIPE_BYTES,
-    ReceivedLifecycleFrame, VerifiedLifecyclePeer,
+    NativeWriteAdmission, NativeWriteRevocation, ReceivedLifecycleFrame, VerifiedLifecyclePeer,
 };
 use crate::{
     ExecutionClient,

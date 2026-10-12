@@ -14,12 +14,21 @@ pub(super) struct Boundary {
     pub(super) closes: AtomicUsize,
     pub(super) adopted: AtomicUsize,
     pub(super) retire_failures: AtomicUsize,
+    pub(super) close_failed: Gate,
     pub(super) fail_prepare: AtomicBool,
     pub(super) panic_prepare: AtomicBool,
     pub(super) panic_retire: AtomicBool,
     pub(super) hold_read: AtomicBool,
     pub(super) read_release: Gate,
     pub(super) writes: AtomicUsize,
+    pub(super) preparing_write: Gate,
+    pub(super) hold_write: AtomicBool,
+    pub(super) write_release: Gate,
+    pub(super) fail_write_issue: AtomicBool,
+    pub(super) fail_write_completion: AtomicBool,
+    pub(super) early_read: AtomicBool,
+    pub(super) write_quiesced: AtomicUsize,
+    pub(super) fail_write_quiesce: AtomicBool,
     pub(super) writing: Gate,
     pub(super) pending_write: AtomicBool,
     pub(super) fail_read: AtomicBool,
@@ -49,12 +58,21 @@ impl Boundary {
             closes: AtomicUsize::new(0),
             adopted: AtomicUsize::new(0),
             retire_failures: AtomicUsize::new(0),
+            close_failed: Gate::default(),
             fail_prepare: AtomicBool::new(false),
             panic_prepare: AtomicBool::new(false),
             panic_retire: AtomicBool::new(false),
             hold_read: AtomicBool::new(false),
             read_release: Gate::default(),
             writes: AtomicUsize::new(0),
+            preparing_write: Gate::default(),
+            hold_write: AtomicBool::new(false),
+            write_release: Gate::default(),
+            fail_write_issue: AtomicBool::new(false),
+            fail_write_completion: AtomicBool::new(false),
+            early_read: AtomicBool::new(false),
+            write_quiesced: AtomicUsize::new(0),
+            fail_write_quiesce: AtomicBool::new(false),
             writing: Gate::default(),
             pending_write: AtomicBool::new(false),
             fail_read: AtomicBool::new(false),
@@ -87,9 +105,7 @@ impl PipeLease for Lease {
         context: &JobContext,
         _: Moment,
     ) -> Result<usize, LifecyclePipeFailure> {
-        if self.0.panic_read.load(Ordering::Acquire) || self.0.panic_write.load(Ordering::Acquire) {
-            *lock(&self.0.memory) = Some(context.memory().clone());
-        }
+        *lock(&self.0.memory) = Some(context.memory().clone());
         *lock(&self.0.signals) = Some(signals);
         *lock(&self.0.owner_thread) = Some(std::thread::current().id());
         self.0.prepares.fetch_add(1, Ordering::AcqRel);
@@ -133,17 +149,39 @@ impl PipeLease for Lease {
             Progress::Complete(5)
         })
     }
-    fn write(&mut self, bytes: &[u8]) -> Result<Progress, LifecyclePipeFailure> {
-        self.0.writes.fetch_add(1, Ordering::AcqRel);
-        self.0.writing.open();
-        if self.0.panic_write.swap(false, Ordering::AcqRel) {
-            std::panic::resume_unwind(Box::new("Pending write issue panic"));
+    fn write(
+        &mut self,
+        bytes: &[u8],
+        issue: WriteIssue<'_>,
+    ) -> Result<WriteDispatch<Progress>, LifecyclePipeFailure> {
+        self.0.preparing_write.open();
+        if self.0.hold_write.load(Ordering::Acquire) {
+            self.0.write_release.wait().map_err(|_| failure("held_write"))?;
         }
-        Ok(if self.0.pending_write.load(Ordering::Acquire) {
-            Progress::Pending
-        } else {
-            Progress::Complete(bytes.len() as u32)
-        })
+        let result = issue.execute(|| {
+            self.0.writes.fetch_add(1, Ordering::AcqRel);
+            if self.0.panic_write.swap(false, Ordering::AcqRel) {
+                std::panic::resume_unwind(Box::new("Pending write issue panic"));
+            }
+            if self.0.fail_write_issue.load(Ordering::Acquire) {
+                return Err(failure("write_issue_rejected"));
+            }
+            if self.0.early_read.load(Ordering::Acquire) {
+                self.0.wake(Role::Read).map_err(|_| failure("early_read"))?;
+            }
+            Ok(if self.0.pending_write.load(Ordering::Acquire) {
+                Progress::Pending
+            } else {
+                Progress::Complete(bytes.len() as u32)
+            })
+        })?;
+        self.0.writing.open();
+        if matches!(result, WriteDispatch::Issued(_))
+            && self.0.fail_write_completion.load(Ordering::Acquire)
+        {
+            return Err(failure("write_completion_rejected"));
+        }
+        Ok(result)
     }
     fn poll(&mut self, role: Role) -> Result<Progress, LifecyclePipeFailure> {
         if role == Role::Write {
@@ -151,7 +189,13 @@ impl PipeLease for Lease {
         }
         Ok(Progress::Complete(5))
     }
-    fn quiesce(&mut self, _: Role) -> Result<(), LifecyclePipeFailure> {
+    fn quiesce(&mut self, role: Role) -> Result<(), LifecyclePipeFailure> {
+        if role == Role::Write {
+            self.0.write_quiesced.fetch_add(1, Ordering::AcqRel);
+            if self.0.fail_write_quiesce.load(Ordering::Acquire) {
+                return Err(failure("write_callback_quiesce"));
+            }
+        }
         Ok(())
     }
     fn verify_message(&mut self) -> Result<(), LifecyclePipeFailure> {
@@ -205,6 +249,7 @@ impl PipeLease for Lease {
             .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1))
             .is_ok()
         {
+            self.0.close_failed.open();
             return Err(failure("pipe_checked_close"));
         }
         if !self.0.allow_retire.load(Ordering::Acquire) {

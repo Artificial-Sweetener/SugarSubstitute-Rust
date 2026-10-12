@@ -46,6 +46,15 @@ pub(super) fn observe(case: &mut Case, observation: LifecyclePipeObservation) ->
             }
             case.peer = Some(peer);
         }
+        LifecyclePipeObservation::WriteIssued { operation, at: _ } => match operation.get() {
+            2 if case.welcome_sent && !case.welcome_written => {}
+            4 if case.reply_sent && !case.reply_written => {}
+            _ => return Err("Lifecycle parent issued-write identity/order differs".into()),
+        },
+        LifecyclePipeObservation::WriteRevoked { operation: _, buffer } => {
+            drop(buffer);
+            return Err("Lifecycle parent observed an unexpected write revocation".into());
+        }
         LifecyclePipeObservation::Written { operation, bytes } => {
             if bytes == 0 {
                 return Err("Lifecycle parent observed an empty write".into());

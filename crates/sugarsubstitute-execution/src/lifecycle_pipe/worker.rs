@@ -5,6 +5,8 @@ use super::*;
 use sugarsubstitute_contracts::execution::{ExecutionError, JobOutcome, PanicCause};
 #[path = "protocol.rs"]
 mod protocol;
+#[path = "write_revocation.rs"]
+mod write_revocation;
 pub(crate) struct Active {
     work: PipeWork,
     context: JobContext,
@@ -174,7 +176,11 @@ impl Active {
             // require release before native/session settlement can complete.
             for _ in 0..s.observations.len() {
                 if let Some(fact) = s.observations.pop_front() {
-                    if matches!(fact, LifecyclePipeObservation::Received { .. }) {
+                    if matches!(
+                        fact,
+                        LifecyclePipeObservation::Received { .. }
+                            | LifecyclePipeObservation::WriteRevoked { .. }
+                    ) {
                         abandoned.push_back(fact);
                     } else {
                         s.observations.push_back(fact);
@@ -231,6 +237,7 @@ impl Active {
             if bytes as usize == write.length {
                 let mut state = lock(&self.work.shared.state);
                 state.written += 1;
+                state.write_slots = 0;
                 state.observations.push_back(LifecyclePipeObservation::Written {
                     operation: write.command.operation,
                     bytes,

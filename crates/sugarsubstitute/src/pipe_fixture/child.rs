@@ -149,6 +149,15 @@ impl Child {
                 }
                 _ => return Err("Lifecycle child pending-read identity/order differs".into()),
             },
+            LifecyclePipeObservation::WriteIssued { operation, at: _ } => match operation.get() {
+                2 if self.hello_sent && !self.hello_written => {}
+                3 if self.register_sent && !self.register_written => {}
+                _ => return Err("Lifecycle child issued-write identity/order differs".into()),
+            },
+            LifecyclePipeObservation::WriteRevoked { operation: _, buffer } => {
+                drop(buffer);
+                return Err("Lifecycle child observed an unexpected write revocation".into());
+            }
             LifecyclePipeObservation::Written { operation, bytes } => {
                 if bytes == 0 {
                     return Err("Lifecycle child observed empty write".into());

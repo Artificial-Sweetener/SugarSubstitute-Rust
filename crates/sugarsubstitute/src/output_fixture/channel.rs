@@ -89,9 +89,12 @@ impl Channel {
         let control = &self.session.control;
         let mut buffer = control.take_write_buffer()?.ok_or("Output protocol write buffer busy")?;
         buffer.as_mut_bytes()[..bytes.len()].copy_from_slice(bytes);
-        if let Err(rejected) = control.write(id, control.original_deadline(), buffer, bytes.len()) {
-            return Err(Box::new(rejected.error));
-        }
+        let admission = match control.write(id, control.original_deadline(), buffer, bytes.len()) {
+            Ok(admission) => admission,
+            Err(rejected) => return Err(Box::new(rejected.error)),
+        };
+        // This fixture never revokes a write; token Drop preserves the admitted operation.
+        drop(admission);
         self.write_active = true;
         self.expected_write = Some((id, bytes.len()));
         Ok(())
@@ -191,6 +194,17 @@ impl Channel {
                     }
                 }
                 LifecyclePipeObservation::ReadPending { .. } => {}
+                LifecyclePipeObservation::WriteIssued { operation, at: _ } => {
+                    if !self.write_active
+                        || self.expected_write.is_none_or(|(expected, _)| expected != operation)
+                    {
+                        return Err("Output protocol issued-write identity/order differs".into());
+                    }
+                }
+                LifecyclePipeObservation::WriteRevoked { operation: _, buffer } => {
+                    drop(buffer);
+                    return Err("Output protocol observed an unexpected write revocation".into());
+                }
                 LifecyclePipeObservation::Written { bytes, operation } => {
                     if !self.write_active
                         || self.expected_write != Some((operation, bytes as usize))

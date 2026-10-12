@@ -90,13 +90,15 @@ impl LifecyclePipeControl {
     }
     /// Transfer an encoded message without a second allocation or capacity decision.
     /// Rejection returns the original buffer, preserving its charge and ownership.
+    /// The passive admission can veto this exact write before issue; dropping it does not revoke.
+    /// WriteIssued reports actual acceptance separately from later native completion.
     pub fn write(
         &self,
         operation: LifecyclePipeOperationId,
         original_deadline: Moment,
         mut buffer: LifecyclePipeWriteBuffer,
         encoded_length: usize,
-    ) -> Result<(), LifecyclePipeWriteRejection> {
+    ) -> Result<NativeWriteAdmission, LifecyclePipeWriteRejection> {
         let result = self.commit(|s, slots, now| {
             validate(s, operation, original_deadline, now)?;
             if !Arc::ptr_eq(&buffer.shared, &self.shared)
@@ -106,7 +108,7 @@ impl LifecyclePipeControl {
             {
                 return Err(LifecyclePipeError::InvalidMessage);
             }
-            if s.write_busy || !s.room(1) {
+            if s.write_busy || !s.room(2) {
                 return Err(LifecyclePipeError::Busy);
             }
             if !slots.arm(Role::Write, operation.get(), original_deadline) {
@@ -116,6 +118,9 @@ impl LifecyclePipeControl {
             s.loans -= 1;
             s.latest = operation.get();
             s.write_busy = true;
+            s.write_slots = 2;
+            s.write_admission =
+                Some(admission::Admission { operation, phase: admission::Phase::Queued });
             s.write = Some(Write {
                 command: Command { operation, deadline: original_deadline },
                 buffer: storage,
@@ -123,7 +128,9 @@ impl LifecyclePipeControl {
             });
             Ok(())
         });
-        result.map_err(|error| LifecyclePipeWriteRejection { error, buffer })
+        result
+            .map(|()| NativeWriteAdmission { shared: self.shared.clone(), operation })
+            .map_err(|error| LifecyclePipeWriteRejection { error, buffer })
     }
     /// Queue one capability comparison after the bounded Hello read has completed.
     /// This is a trusted native adapter operation, not a decoded authentication fact.

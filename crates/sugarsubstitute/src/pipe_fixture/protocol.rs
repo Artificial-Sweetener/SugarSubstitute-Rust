@@ -33,15 +33,20 @@ pub(super) fn write(
     let mut buffer =
         control.take_write_buffer()?.ok_or("Lifecycle output buffer is still owned")?;
     let count = FrameCodec::encode(&message, buffer.as_mut_bytes())?;
-    if let Err(rejected) = control.write(
+    let admission = match control.write(
         LifecyclePipeOperationId::new(id)?,
         control.original_deadline(),
         buffer,
         count,
     ) {
-        // Passive buffer Drop returns the original storage to this same session.
-        return Err(Box::new(rejected.error));
-    }
+        Ok(admission) => admission,
+        Err(rejected) => {
+            // Passive buffer Drop returns the original storage to this same session.
+            return Err(Box::new(rejected.error));
+        }
+    };
+    // This fixture never revokes a write; token Drop preserves the admitted operation.
+    drop(admission);
     Ok(count)
 }
 pub(super) fn read(control: &LifecyclePipeControl, id: u64) -> Result<()> {

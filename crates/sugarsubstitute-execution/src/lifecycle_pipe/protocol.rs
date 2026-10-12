@@ -88,21 +88,33 @@ impl Active {
                 if state.stopping || s.stopped { None } else { s.write.take() }
             };
             if let Some(write) = next {
-                if write.command.deadline <= core.clock.now() {
-                    self.write = Some(write);
-                    self.outcome = Some(JobOutcome::TimedOut);
-                    return Ok(());
-                }
                 self.signals[2].reset();
                 self.write = Some(write);
                 let write = self.write.as_ref().ok_or_else(|| failure("pipe_write_owner"))?;
                 // Any unwind after issue leaves immutable storage in this retained Active.
-                let progress = self
-                    .lease
-                    .as_mut()
-                    .ok_or_else(|| failure("pipe_missing_lease"))?
-                    .write(&write.buffer.bytes[..write.length])?;
-                self.write_progress(core, progress)?;
+                let progress =
+                    self.lease.as_mut().ok_or_else(|| failure("pipe_missing_lease"))?.write(
+                        &write.buffer.bytes[..write.length],
+                        WriteIssue {
+                            core,
+                            shared: &self.work.shared,
+                            context: &self.context,
+                            command: &write.command,
+                        },
+                    )?;
+                match progress {
+                    WriteDispatch::Issued(progress) => {
+                        self.publish(core);
+                        self.write_progress(core, progress)?;
+                    }
+                    WriteDispatch::Revoked => self.write_revoked(core)?,
+                    WriteDispatch::Stopped => {
+                        self.outcome = Some(JobOutcome::Cancelled);
+                    }
+                    WriteDispatch::Expired => {
+                        self.outcome = Some(JobOutcome::TimedOut);
+                    }
+                }
             }
         } else if self.signals[2].completed() {
             let result = self
@@ -223,6 +235,7 @@ impl Active {
                 slots.clear(Role::Write, write.command.operation.get());
             }
             s.write_busy = false;
+            s.write_slots = 0;
             s.written += 1;
             s.write_buffer = Some(write.buffer);
             s.observations.push_back(LifecyclePipeObservation::Written {

@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Own closed lifecycle transport sessions and fixed command slots after real admission.
+mod admission;
 mod buffers;
 mod control;
 pub(crate) mod enrollment;
+mod issue;
 #[cfg(test)]
 mod tests;
 mod types;
@@ -15,10 +17,12 @@ use crate::{
     scope::lock,
     task::{Job, JobHandle, QueuedJob, Work},
 };
+pub use admission::{NativeWriteAdmission, NativeWriteRevocation};
 pub use buffers::{LifecyclePipeWriteBuffer, ReceivedLifecycleFrame};
 pub use control::{
     LifecyclePipeBootstrap, LifecyclePipeControl, LifecyclePipeSession, LifecyclePipeWriteRejection,
 };
+pub(crate) use issue::{WriteDispatch, WriteIssue};
 use std::{
     collections::VecDeque,
     sync::{Arc, Mutex, Weak},
@@ -55,7 +59,11 @@ pub(crate) trait PipeLease: Send {
     fn capability(&self) -> Option<[u8; 32]>;
     fn connect(&mut self) -> Result<Progress, LifecyclePipeFailure>;
     fn read(&mut self, bytes: &mut [u8]) -> Result<Progress, LifecyclePipeFailure>;
-    fn write(&mut self, bytes: &[u8]) -> Result<Progress, LifecyclePipeFailure>;
+    fn write(
+        &mut self,
+        bytes: &[u8],
+        issue: WriteIssue<'_>,
+    ) -> Result<WriteDispatch<Progress>, LifecyclePipeFailure>;
     fn poll(&mut self, role: Role) -> Result<Progress, LifecyclePipeFailure>;
     fn quiesce(&mut self, role: Role) -> Result<(), LifecyclePipeFailure>;
     fn verify_message(&mut self) -> Result<(), LifecyclePipeFailure>;
@@ -106,6 +114,8 @@ pub(crate) struct State {
     pub(crate) authenticate: Option<Authentication>,
     pub(crate) read_busy: bool,
     pub(crate) write_busy: bool,
+    pub(crate) write_slots: usize,
+    pub(crate) write_admission: Option<admission::Admission>,
     pub(crate) loans: u8,
     pub(crate) read_buffer: Option<buffers::Buffer>,
     pub(crate) write_buffer: Option<buffers::Buffer>,
@@ -137,6 +147,8 @@ impl State {
             authenticate: None,
             read_busy: false,
             write_busy: false,
+            write_slots: 0,
+            write_admission: None,
             loans: 0,
             read_buffer: None,
             write_buffer: None,
@@ -148,7 +160,7 @@ impl State {
     pub(crate) fn room(&self, additional: usize) -> bool {
         self.observations.len()
             + 2 * usize::from(self.read_busy)
-            + usize::from(self.write_busy)
+            + self.write_slots
             + usize::from(self.auth_busy)
             + additional
             <= 8

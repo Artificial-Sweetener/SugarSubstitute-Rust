@@ -4,6 +4,11 @@
 use super::*;
 use crate::native::wait::Wait;
 use std::error::Error;
+pub(crate) enum AcceptedIssue {
+    Pending,
+    Synchronous,
+    Connected,
+}
 pub(crate) struct Operation {
     event: Handle,
     overlapped: Box<OVERLAPPED>,
@@ -64,26 +69,36 @@ impl Operation {
     pub(crate) fn pointer(&mut self) -> *mut OVERLAPPED {
         self.overlapped.as_mut()
     }
-    pub(crate) fn issued(
+    /// Adopt native acceptance before any fallible completion polling.
+    pub(crate) fn accept(
         &mut self,
         result: windows::core::Result<()>,
-        pipe: HANDLE,
         connect: bool,
-    ) -> Result<Progress, LifecyclePipeFailure> {
+    ) -> Result<AcceptedIssue, LifecyclePipeFailure> {
         match result {
-            Ok(()) if connect => Ok(Progress::Complete(0)),
+            Ok(()) if connect => Ok(AcceptedIssue::Connected),
             Ok(()) => {
-                // OVERLAPPED counts come only from actual GetOverlappedResult,
-                // including synchronously successful ReadFile/WriteFile issues.
                 self.pending = true;
-                self.poll(pipe)
+                Ok(AcceptedIssue::Synchronous)
             }
             Err(e) if code(&e, ERROR_IO_PENDING) => {
                 self.pending = true;
-                Ok(Progress::Pending)
+                Ok(AcceptedIssue::Pending)
             }
-            Err(e) if connect && code(&e, ERROR_PIPE_CONNECTED) => Ok(Progress::Complete(0)),
+            Err(e) if connect && code(&e, ERROR_PIPE_CONNECTED) => Ok(AcceptedIssue::Connected),
             Err(e) => Err(error(if connect { "pipe_connect" } else { "pipe_issue" }, e)),
+        }
+    }
+    /// Poll synchronous data counts only after acceptance has been preserved.
+    pub(crate) fn initial_progress(
+        &mut self,
+        accepted: AcceptedIssue,
+        pipe: HANDLE,
+    ) -> Result<Progress, LifecyclePipeFailure> {
+        match accepted {
+            AcceptedIssue::Pending => Ok(Progress::Pending),
+            AcceptedIssue::Connected => Ok(Progress::Complete(0)),
+            AcceptedIssue::Synchronous => self.poll(pipe),
         }
     }
     pub(crate) fn poll(&mut self, pipe: HANDLE) -> Result<Progress, LifecyclePipeFailure> {

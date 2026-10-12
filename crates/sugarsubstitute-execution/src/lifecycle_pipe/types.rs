@@ -143,6 +143,21 @@ pub enum LifecyclePipeObservation {
         /// Complete bytes and their retained real memory claim.
         frame: super::ReceivedLifecycleFrame,
     },
+    /// Actual native write acceptance, sampled immediately before issue in the local epoch.
+    /// This historical fact does not assert completion or current application eligibility.
+    WriteIssued {
+        /// Exact admitted write identity.
+        operation: LifecyclePipeOperationId,
+        /// Execution-owner local clock sample at native issue.
+        at: sugarsubstitute_contracts::execution::Moment,
+    },
+    /// The write was vetoed before native issue and its prepared callback quiesced.
+    WriteRevoked {
+        /// Exact revoked write identity.
+        operation: LifecyclePipeOperationId,
+        /// Original charged allocation; dropping returns it to this session.
+        buffer: super::LifecyclePipeWriteBuffer,
+    },
     /// The original write actually completed with this byte count and callback quiescence.
     /// This effect may be observed during retirement after a stop; it does not assert
     /// on-time success or peer processing, and never changes the original terminal outcome.
@@ -167,6 +182,12 @@ impl fmt::Debug for LifecyclePipeObservation {
                 .field("operation", operation)
                 .field("bytes", &frame.as_bytes().len())
                 .finish(),
+            Self::WriteIssued { operation, at } => {
+                f.debug_struct("WriteIssued").field("operation", operation).field("at", at).finish()
+            }
+            Self::WriteRevoked { operation, .. } => {
+                f.debug_struct("WriteRevoked").field("operation", operation).finish_non_exhaustive()
+            }
             Self::Written { operation, bytes } => f
                 .debug_struct("Written")
                 .field("operation", operation)

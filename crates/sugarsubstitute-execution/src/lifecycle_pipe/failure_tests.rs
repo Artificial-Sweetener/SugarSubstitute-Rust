@@ -103,15 +103,28 @@ fn original_native_failure_then_retirement_panic_preserves_fatal_flag_and_first_
     let rig = Rig::new()?;
     let scope = scope(&rig)?;
     let boundary = Boundary::new();
+    boundary.allow_retire.store(false, Ordering::Release);
     boundary.fail_prepare.store(true, Ordering::Release);
     boundary.panic_retire.store(true, Ordering::Release);
     boundary.retire_failures.store(1, Ordering::Release);
     let mut session = session(&rig, &scope, &boundary, true)?;
+    boundary.close_failed.wait()?;
+    // The failed external close is observed before its recovery can release custody.
+    assert_eq!(boundary.retire_failures.load(Ordering::Acquire), 0);
+    assert_eq!(boundary.closes.load(Ordering::Acquire), 0);
+    assert!(session.completion.try_take_completion().is_none());
+    assert_eq!(scope.snapshot().reserved_bytes, MIN_LIFECYCLE_PIPE_BYTES);
+    assert!(lock(&rig.client.core.state).stopping);
+    let memory = lock(&boundary.memory).take().ok_or("Missing retained storage")?;
+    assert!(memory.claim(1).is_err());
+    boundary.allow_retire.store(true, Ordering::Release);
+    boundary.wake(Role::Handshake)?;
     let JobOutcome::Failure(error) = completion(&rig, &mut session)?.outcome else {
         return Err("Expected retained failure".into());
     };
     assert_eq!(error.native_cause().stage(), "partial_pipe_creation");
     assert!(error.contains_owner_panic());
+    assert!(!error.requires_process_shutdown());
     assert_eq!(boundary.closes.load(Ordering::Acquire), 1);
     assert!(!format!("{error:?}").contains("Secret"));
     Ok(())
@@ -259,9 +272,13 @@ fn terminal_retains_passive_actual_write_and_pending_read_observations() -> Test
     assert!(matches!(completion(&rig, &mut session)?.outcome, JobOutcome::Cancelled));
     assert_eq!(boundary.closes.load(Ordering::Acquire), 1);
     let mut write = false;
+    let mut issued = false;
     let mut pending = false;
     while let Some(fact) = session.control.take_observation() {
         match fact {
+            LifecyclePipeObservation::WriteIssued { operation, .. } if operation.get() == 1 => {
+                issued = true;
+            }
             LifecyclePipeObservation::Written { operation, bytes: 1 } if operation.get() == 1 => {
                 write = true
             }
@@ -271,7 +288,7 @@ fn terminal_retains_passive_actual_write_and_pending_read_observations() -> Test
             _ => return Err("Unexpected retained fact".into()),
         }
     }
-    assert!(write && pending);
+    assert!(issued && write && pending);
     Ok(())
 }
 
@@ -304,6 +321,9 @@ fn concurrent_write_retirement_preserves_exact_effect_without_rewriting_read_fai
         assert_eq!(error.native_cause().stage(), "concurrent_read_failure");
         assert_eq!(boundary.write_polls.load(Ordering::Acquire), 0);
         assert_eq!(boundary.closes.load(Ordering::Acquire), 1);
+        assert!(
+            matches!(session.control.take_observation(), Some(LifecyclePipeObservation::WriteIssued { operation, .. }) if operation.get() == 1)
+        );
         if actual == Some(4) {
             assert!(
                 matches!(session.control.take_observation(), Some(LifecyclePipeObservation::Written { operation, bytes: 4 }) if operation.get() == 1)

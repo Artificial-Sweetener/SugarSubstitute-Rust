@@ -132,7 +132,8 @@ impl PipeLease for Lease {
         operation.prepare()?;
         // SAFETY: operation storage/event/callback are owned before Issue and remain retained.
         let result = unsafe { ConnectNamedPipe(pipe, Some(operation.pointer())) };
-        operation.issued(result, pipe, true)
+        let accepted = operation.accept(result, true)?;
+        operation.initial_progress(accepted, pipe)
     }
     fn read(&mut self, bytes: &mut [u8]) -> Result<Progress, LifecyclePipeFailure> {
         let pipe = self.pipe.raw();
@@ -140,19 +141,33 @@ impl PipeLease for Lease {
         operation.prepare()?;
         // SAFETY: admitted fixed buffer remains owned by Active until completion and quiescence.
         let result = unsafe { ReadFile(pipe, Some(bytes), None, Some(operation.pointer())) };
-        let result = operation.issued(result, pipe, false)?;
+        let accepted = operation.accept(result, false)?;
+        let result = operation.initial_progress(accepted, pipe)?;
         if matches!(result, Progress::Complete(_)) {
             self.read_completed = true;
         }
         Ok(result)
     }
-    fn write(&mut self, bytes: &[u8]) -> Result<Progress, LifecyclePipeFailure> {
+    fn write(
+        &mut self,
+        bytes: &[u8],
+        issue: WriteIssue<'_>,
+    ) -> Result<WriteDispatch<Progress>, LifecyclePipeFailure> {
         let pipe = self.pipe.raw();
         let operation = self.operation(Role::Write)?;
         operation.prepare()?;
-        // SAFETY: exact bounded immutable message buffer stays retained through native settlement.
-        let result = unsafe { WriteFile(pipe, Some(bytes), None, Some(operation.pointer())) };
-        operation.issued(result, pipe, false)
+        match issue.execute(|| {
+            // SAFETY: exact immutable buffer and prepared OVERLAPPED stay retained through settlement.
+            let result = unsafe { WriteFile(pipe, Some(bytes), None, Some(operation.pointer())) };
+            operation.accept(result, false)
+        })? {
+            WriteDispatch::Issued(accepted) => {
+                Ok(WriteDispatch::Issued(operation.initial_progress(accepted, pipe)?))
+            }
+            WriteDispatch::Revoked => Ok(WriteDispatch::Revoked),
+            WriteDispatch::Stopped => Ok(WriteDispatch::Stopped),
+            WriteDispatch::Expired => Ok(WriteDispatch::Expired),
+        }
     }
     fn poll(&mut self, role: Role) -> Result<Progress, LifecyclePipeFailure> {
         let pipe = self.pipe.raw();

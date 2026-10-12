@@ -134,29 +134,39 @@ impl RetirementClock {
         }
     }
 }
-impl Clock for RetirementClock {
-    fn now(&self) -> Moment {
+impl RetirementClock {
+    /// Sample without calling the owner while a native issue fence is held.
+    /// The caller must release its locks before latching a returned panic payload.
+    pub(crate) fn observe_unlatched(&self) -> Result<Moment, Box<dyn std::any::Any + Send>> {
         {
             let state = lock(&self.state);
             if state.failure.is_some() {
-                return state.last;
+                return Ok(state.last);
             }
         }
-        let observed = match catch_unwind(AssertUnwindSafe(|| self.supplied.now())) {
-            Ok(observed) => observed,
-            Err(payload) => {
-                self.latch(payload.as_ref());
-                std::panic::resume_unwind(payload)
-            }
-        };
+        let observed = catch_unwind(AssertUnwindSafe(|| self.supplied.now()))?;
         let mut state = lock(&self.state);
         if state.failure.is_none() {
             state.last = state.last.max(observed);
-            observed
+            Ok(observed)
         } else {
-            state.last
+            Ok(state.last)
         }
     }
+    /// Preserve and resume a failed sample after the caller releases its issue fence.
+    pub(crate) fn fail_observation(&self, payload: Box<dyn std::any::Any + Send>) -> ! {
+        self.latch(payload.as_ref());
+        std::panic::resume_unwind(payload)
+    }
+}
+impl Clock for RetirementClock {
+    fn now(&self) -> Moment {
+        match self.observe_unlatched() {
+            Ok(observed) => observed,
+            Err(payload) => self.fail_observation(payload),
+        }
+    }
+
     fn sleep_until(&self, deadline: Moment) -> WaitFuture {
         if self.failed() {
             // Failure cannot fabricate elapsed time or immediate timer progress.
