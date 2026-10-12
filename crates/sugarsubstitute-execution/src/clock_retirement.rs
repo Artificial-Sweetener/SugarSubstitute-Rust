@@ -167,8 +167,9 @@ impl RetirementClock {
     }
 }
 impl RetirementClock {
-    /// Sample without calling the owner while a native issue fence is held.
-    /// The caller must release its locks before latching a returned panic payload.
+    /// Observe the supplied clock outside every admission and lifetime lock.
+    /// Revalidate current ownership under the native issue fence after this returns.
+    /// A returned panic payload preserves its original cause for the caller to latch.
     pub(crate) fn observe_unlatched(&self) -> Result<Moment, Box<dyn std::any::Any + Send>> {
         let completed_before_sample = {
             let state = lock(&self.state);
@@ -182,7 +183,7 @@ impl RetirementClock {
         if state.failure.is_none() {
             if observed < completed_before_sample {
                 // Fence concurrent admission immediately. Owner shutdown and wake
-                // delivery remain deferred until the caller releases its issue fence.
+                // delivery remain deferred until the caller handles this original payload.
                 state.failure = Some(Arc::new(Failure::from_payload(&TimeError::Regression)));
                 return Err(Box::new(TimeError::Regression));
             }
@@ -195,7 +196,7 @@ impl RetirementClock {
             Ok(state.last)
         }
     }
-    /// Preserve and resume a failed sample after the caller releases its issue fence.
+    /// Preserve and resume the original failed sample outside admission and lifetime locks.
     pub(crate) fn fail_observation(&self, payload: Box<dyn std::any::Any + Send>) -> ! {
         self.latch(payload.as_ref());
         std::panic::resume_unwind(payload)

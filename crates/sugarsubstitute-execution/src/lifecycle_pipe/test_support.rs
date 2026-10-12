@@ -3,6 +3,8 @@
 //! Model only external pipe effects while the production owner advances every lifetime.
 use super::*;
 pub(super) struct Boundary {
+    pub(super) context_override: Mutex<Option<JobContext>>,
+    pub(super) clock_probe: Mutex<Option<(Role, crate::runtime_test_support::ClockCallback)>>,
     pub(super) binding: Mutex<Option<PeerBinding>>,
     pub(super) authenticated_binding: Mutex<Option<PeerBinding>>,
     pub(super) preparing_connect: Gate,
@@ -54,6 +56,8 @@ pub(super) struct Boundary {
 impl Boundary {
     pub(super) fn new() -> Arc<Self> {
         Arc::new(Self {
+            clock_probe: Mutex::new(None),
+            context_override: Mutex::new(None),
             binding: Mutex::new(None),
             authenticated_binding: Mutex::new(None),
             preparing_connect: Gate::default(),
@@ -103,6 +107,19 @@ impl Boundary {
             owner_thread: Mutex::new(None),
         })
     }
+    fn arm_clock_probe(&self, role: Role) {
+        let probe = {
+            let mut stored = lock(&self.clock_probe);
+            if stored.as_ref().is_some_and(|(selected, _)| *selected == role) {
+                stored.take().map(|(_, probe)| probe)
+            } else {
+                None
+            }
+        };
+        if let Some(probe) = probe {
+            probe();
+        }
+    }
     pub(super) fn wake(&self, role: Role) -> TestResult {
         lock(&self.signals).as_ref().ok_or("Pipe not prepared")?[role.index()].complete();
         Ok(())
@@ -146,6 +163,7 @@ impl PipeLease for Lease {
         if self.0.hold_connect.load(Ordering::Acquire) {
             self.0.connect_release.wait().map_err(|_| failure("held_connect"))?;
         }
+        self.0.arm_clock_probe(Role::Handshake);
         issue.execute(|| {
             self.0.connected.open();
             Ok(Progress::Complete(0))
@@ -160,6 +178,7 @@ impl PipeLease for Lease {
         if self.0.hold_read.load(Ordering::Acquire) {
             self.0.read_release.wait().map_err(|_| failure("held_read"))?;
         }
+        self.0.arm_clock_probe(Role::Read);
         issue.execute(|| {
             if self.0.fail_read.load(Ordering::Acquire) {
                 return Err(failure("concurrent_read_failure"));
@@ -185,6 +204,9 @@ impl PipeLease for Lease {
         if self.0.hold_write.load(Ordering::Acquire) {
             self.0.write_release.wait().map_err(|_| failure("held_write"))?;
         }
+        self.0.arm_clock_probe(Role::Write);
+        let alternate = lock(&self.0.context_override).take();
+        let issue = Issue { context: alternate.as_ref().unwrap_or(issue.context), ..issue };
         let result = issue.execute(|| {
             self.0.writes.fetch_add(1, Ordering::AcqRel);
             if self.0.panic_write.swap(false, Ordering::AcqRel) {

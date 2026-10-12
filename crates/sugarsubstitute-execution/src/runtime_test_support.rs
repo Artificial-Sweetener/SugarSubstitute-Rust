@@ -20,8 +20,14 @@ use sugarsubstitute_contracts::execution::*;
 
 pub(crate) type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 
+pub(crate) type ClockCallback = Box<dyn FnOnce() + Send>;
+struct ObservationCallback {
+    thread: std::thread::ThreadId,
+    action: ClockCallback,
+}
 #[derive(Default)]
 pub(crate) struct ManualClock {
+    observation_callback: Mutex<Option<ObservationCallback>>,
     current: Mutex<MomentState>,
     next_waiter: AtomicU64,
     pub(crate) sleep_calls: AtomicU64,
@@ -35,6 +41,26 @@ struct MomentState {
 }
 
 impl ManualClock {
+    pub(crate) fn on_next_current_thread_observation(&self, action: ClockCallback) {
+        *lock(&self.observation_callback) =
+            Some(ObservationCallback { thread: std::thread::current().id(), action });
+    }
+    fn observe_callback(&self) {
+        let callback = {
+            let mut stored = lock(&self.observation_callback);
+            if stored
+                .as_ref()
+                .is_some_and(|callback| callback.thread == std::thread::current().id())
+            {
+                stored.take()
+            } else {
+                None
+            }
+        };
+        if let Some(callback) = callback {
+            (callback.action)();
+        }
+    }
     pub(crate) fn wait_until_registered(&self, deadline: Moment) -> TestResult {
         let (state, timeout) = self
             .registered
@@ -94,6 +120,7 @@ impl Drop for ManualWait {
 pub(crate) struct ClockPort(pub(crate) Arc<ManualClock>);
 impl Clock for ClockPort {
     fn now(&self) -> Moment {
+        self.0.observe_callback();
         Moment::from_nanos(lock(&self.0.current).nanos)
     }
     fn sleep_until(&self, deadline: Moment) -> WaitFuture {
@@ -254,4 +281,25 @@ pub(crate) fn spec(id: u64, class: JobClass, bytes: u64) -> TestResult<JobSpec> 
             None
         },
     })
+}
+
+/// Produce real admitted context with caller-selected labels, keeping its scope live.
+pub(crate) fn admitted_context(
+    rig: &Rig,
+    scope_id: u64,
+    job_id: u64,
+) -> TestResult<(Scope, JobContext)> {
+    let scope =
+        rig.client.create_scope(ScopeSpec { id: ScopeId::new(scope_id)?, deadline: None }, None)?;
+    let mut job = rig.client.submit_blocking(
+        &scope,
+        spec(job_id, JobClass::InfrastructureOrdinary, 4096)?,
+        |context| Ok::<_, std::io::Error>(context.clone()),
+    )?;
+    let completion = rig.completion(&mut job)?;
+    let JobOutcome::Success(context) = completion.outcome else {
+        return Err("Actual context factory did not succeed".into());
+    };
+    drop(completion.memory);
+    Ok((scope, context))
 }

@@ -22,18 +22,32 @@ impl NativeIssue<'_> {
         self,
         native: impl FnOnce() -> Result<T, EntryTransportError>,
     ) -> Result<IssueDispatch<T>, EntryTransportError> {
+        let at = match self.core.clock.observe_unlatched() {
+            Ok(at) => at,
+            Err(payload) => self.core.clock.fail_observation(payload),
+        };
         let state = lock(&self.core.state);
         let stopping = state.stopping;
-        let stopped = state
-            .jobs
-            .get(&self.shared.job_id)
-            .and_then(|record| record.native_deadlines)
-            .is_none_or(|slots| slots.stopped());
+        let record = state.jobs.get(&self.shared.job_id);
+        let current = self.context.owner_id() == self.core.id
+            && record.is_some_and(|record| {
+                !record.retiring
+                    && !matches!(
+                        record.phase,
+                        sugarsubstitute_contracts::execution::JobPhase::Terminal(_)
+                    )
+                    && record.scope_id == self.context.scope_id()
+                    && record.spec.id == self.context.job_id()
+            });
+        let stopped =
+            record.and_then(|record| record.native_deadlines).is_none_or(|slots| slots.stopped());
+        let policy_deadline = record.and_then(|record| record.deadline);
         let entry = lock(&self.shared.state);
         drop(state);
         let slot =
             entry.connections.get(self.index).ok_or(EntryTransportError::InvalidOperation)?;
-        if stopping
+        if !current
+            || stopping
             || stopped
             || entry.stopped
             || slot.id != Some(self.connection)
@@ -47,17 +61,11 @@ impl NativeIssue<'_> {
         {
             return Ok(IssueDispatch::Closed);
         }
-        let at = match self.core.clock.observe_unlatched() {
-            Ok(at) => at,
-            Err(payload) => {
-                drop(entry);
-                self.core.clock.fail_observation(payload)
-            }
-        };
         if self.core.clock.failed() || self.context.cancellation_requested() {
             return Ok(IssueDispatch::Closed);
         }
-        if self.deadline.is_some_and(|deadline| at >= deadline)
+        if policy_deadline.is_some_and(|deadline| at >= deadline)
+            || self.deadline.is_some_and(|deadline| at >= deadline)
             || slot.until.is_some_and(|until| at >= until)
             || ((!self.shared.server || entry.owner.is_none())
                 && at >= self.shared.original_preparation)

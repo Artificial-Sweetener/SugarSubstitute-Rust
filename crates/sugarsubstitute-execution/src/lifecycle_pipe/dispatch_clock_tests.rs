@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Exercise a clock panic under the issue fence against the actual revocation lock order.
+//! Exercise an unlocked clock panic against actual revocation, shutdown and retained storage.
 use super::*;
 use crate::runtime_test_support::{ClockPort, ManualClock, Wake};
 struct IssueClock {
@@ -28,8 +28,7 @@ impl Clock for IssueClock {
     }
 }
 #[test]
-fn clock_failure_releases_issue_fence_before_shutdown_acquires_core_and_retains_storage()
--> TestResult {
+fn clock_failure_outside_issue_fence_preserves_shutdown_and_retained_storage() -> TestResult {
     let boundary = Boundary::new();
     boundary.hold_write.store(true, Ordering::Release);
     boundary.allow_retire.store(false, Ordering::Release);
@@ -60,7 +59,7 @@ fn clock_failure_releases_issue_fence_before_shutdown_acquires_core_and_retains_
     boundary.write_release.open();
     clock.sampled.wait()?;
     // Exercise the very same Core-before-State helper used by public revoke. The
-    // failing native clock currently owns State; shutdown must wait until it drops it.
+    // provider owns no pipe State; original panic shutdown waits for this Core guard.
     {
         let mut core = lock(&rig.client.core.state);
         clock.release.open();

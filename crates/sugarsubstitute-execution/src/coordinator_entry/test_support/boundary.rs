@@ -4,6 +4,10 @@
 use super::*;
 pub(in crate::coordinator_entry::tests) struct Boundary {
     pub(in crate::coordinator_entry::tests) server: bool,
+    pub(in crate::coordinator_entry::tests) context_override: Mutex<Option<JobContext>>,
+    pub(in crate::coordinator_entry::tests) issue_finished: Gate,
+    pub(in crate::coordinator_entry::tests) clock_probe:
+        Mutex<Option<(crate::native_deadlines::Role, crate::runtime_test_support::ClockCallback)>>,
     pub(in crate::coordinator_entry::tests) rig_clock:
         Arc<crate::runtime_test_support::ManualClock>,
     pub(in crate::coordinator_entry::tests) signals: Mutex<Vec<[Arc<Signal>; 3]>>,
@@ -42,6 +46,9 @@ impl Boundary {
     ) -> TestResult<Arc<Self>> {
         Ok(Arc::new(Self {
             server,
+            clock_probe: Mutex::new(None),
+            context_override: Mutex::new(None),
+            issue_finished: Gate::default(),
             rig_clock: rig.clock.clone(),
             signals: Mutex::new(Vec::new()),
             incoming: Mutex::new(VecDeque::new()),
@@ -115,6 +122,17 @@ impl Boundary {
                 .wait()
                 .map_err(|cause| failure_from("entry_fixture_issue_gate", cause))?;
         }
+        let probe = {
+            let mut stored = lock(&self.clock_probe);
+            if index == 0 && stored.as_ref().is_some_and(|(selected, _)| *selected == role) {
+                stored.take().map(|(_, probe)| probe)
+            } else {
+                None
+            }
+        };
+        if let Some(probe) = probe {
+            probe();
+        }
         Ok(())
     }
 }
@@ -155,7 +173,9 @@ impl EntryLease for Lease {
         issue: NativeIssue<'_>,
     ) -> Result<IssueDispatch<Progress>, EntryTransportError> {
         self.0.prepare_issue(index, crate::native_deadlines::Role::Handshake)?;
-        issue.execute(|| {
+        let alternate = lock(&self.0.context_override).clone();
+        let issue = NativeIssue { context: alternate.as_ref().unwrap_or(issue.context), ..issue };
+        let result = issue.execute(|| {
             self.0.connects_issued.fetch_add(1, Ordering::AcqRel);
             if let Some(stage) = *lock(&self.0.connect_failure) {
                 return Err(failure(stage));
@@ -165,7 +185,9 @@ impl EntryLease for Lease {
             } else {
                 Ok(Progress::Pending)
             }
-        })
+        });
+        self.0.issue_finished.open();
+        result
     }
     fn read(
         &mut self,

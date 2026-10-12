@@ -28,11 +28,20 @@ impl Issue<'_> {
         self,
         native: impl FnOnce() -> Result<T, LifecyclePipeFailure>,
     ) -> Result<Dispatch<T>, LifecyclePipeFailure> {
+        let at = match self.core.clock.observe_unlatched() {
+            Ok(at) => at,
+            Err(payload) => self.core.clock.fail_observation(payload),
+        };
         let state = lock(&self.core.state);
         let stopping = state.stopping;
         let record = state.jobs.get(&self.shared.id);
-        let current =
-            record.is_some_and(|r| !r.retiring && !matches!(r.phase, JobPhase::Terminal(_)));
+        let current = self.context.owner_id() == self.core.id
+            && record.is_some_and(|r| {
+                !r.retiring
+                    && !matches!(r.phase, JobPhase::Terminal(_))
+                    && r.scope_id == self.context.scope_id()
+                    && r.spec.id == self.context.job_id()
+            });
         let deadlines = record.and_then(|r| r.native_deadlines);
         let mut pipe = lock(&self.shared.state);
         drop(state);
@@ -53,13 +62,6 @@ impl Issue<'_> {
         if !current || stopping || pipe.stopped || self.context.cancellation_requested() {
             return Ok(Dispatch::Stopped);
         }
-        let at = match self.core.clock.observe_unlatched() {
-            Ok(at) => at,
-            Err(payload) => {
-                drop(pipe);
-                self.core.clock.fail_observation(payload)
-            }
-        };
         if self.core.clock.failed()
             || pipe.stopped
             || self.context.cancellation_requested()

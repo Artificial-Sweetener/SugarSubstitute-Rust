@@ -31,6 +31,8 @@ fn cleanup_retains_typed_original_and_each_native_cause_without_identity_flatten
 mod admission;
 #[path = "authentication_tests.rs"]
 mod authentication;
+#[path = "clock_callback_tests.rs"]
+mod clock_callback;
 #[path = "issue_tests.rs"]
 mod issue;
 #[path = "test_support.rs"]
