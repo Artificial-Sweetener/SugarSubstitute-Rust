@@ -59,7 +59,10 @@ impl Port for Filesystem {
                 identity: file.identity,
                 bytes: file.bytes.len() as u64,
                 protected_regular: true,
-                payload_group: (class == DiagnosticEntryClass::Payload).then_some(digest),
+                payload_group:
+                    crate::protected_storage::record_file::diagnostic_payload_group_digest(
+                        file.object,
+                    ),
             });
         }
         disk.stage_scan = disk
@@ -87,7 +90,8 @@ impl Port for Filesystem {
                 identity: *identity,
                 bytes: *bytes,
                 protected_regular: true,
-                payload_group: None,
+                payload_group:
+                    crate::protected_storage::record_file::diagnostic_payload_group_digest(*object),
             });
         }
         Ok(crate::diagnostic_storage::inventory::Scan {

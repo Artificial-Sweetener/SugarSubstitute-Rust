@@ -142,7 +142,8 @@ impl DiagnosticInventory {
     pub const fn unknown_entries(&self) -> usize {
         self.unknown_entries
     }
-    /// Observe distinct canonical physical payload-group digests before codec validation.
+    /// Count physical subject/publication-revision groups, including preserved payload stages.
+    /// Current Summary references and attachment kinds do not merge distinct generations.
     pub const fn payload_groups(&self) -> usize {
         self.payload_groups
     }

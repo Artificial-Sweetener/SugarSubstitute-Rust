@@ -57,12 +57,7 @@ impl DiagnosticStorage {
     ) -> Result<DiagnosticStage, DiagnosticStorageError> {
         let mut state = self.check(operation, context)?;
         mutation(&state, operation.key)?;
-        let group = match object {
-            DiagnosticObject::Payload(key, ..) => {
-                Some(crate::protected_storage::record_file::diagnostic_subject_digest(key))
-            }
-            _ => None,
-        };
+        let group = crate::protected_storage::record_file::diagnostic_payload_group_digest(object);
         if let Some(group) = group
             && !state.payload_groups.contains(&group)
         {

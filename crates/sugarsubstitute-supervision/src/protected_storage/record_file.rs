@@ -20,6 +20,7 @@ pub(crate) use publication::{PublicationAuthority, PublicationBinding, Stage, pu
 pub(crate) use retirement::{PublicationRetirement, retire_publication};
 pub(crate) use streaming::StreamingPort;
 pub(crate) use streaming::layout::binding as diagnostic_object_binding;
+pub(crate) use streaming::layout::object_payload_group as diagnostic_payload_group_digest;
 pub(crate) use streaming::layout::subject as diagnostic_subject_digest;
 /// Distinguish protected absence, exact empty shape and complete bounded bytes.
 pub(crate) enum RecordRead<const N: usize> {

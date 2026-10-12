@@ -2,7 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Derive bounded diagnostic leaf names from complete typed identities.
 use super::*;
-use sugarsubstitute_contracts::incident::{AttachmentKind, IncidentKey, IncidentSubject};
+use sugarsubstitute_contracts::incident::{
+    AttachmentKind, IncidentKey, IncidentRevision, IncidentSubject,
+};
 
 fn coordinator(hash: &mut Sha256, owner: sugarsubstitute_contracts::lifecycle::CoordinatorKey) {
     hash.update(owner.namespace.bytes());
@@ -21,6 +23,21 @@ pub(crate) fn subject(key: IncidentKey) -> [u8; 32] {
         IncidentSubject::Supervisor(_) => hash.update([2]),
     }
     hash.finalize().into()
+}
+/// Count one immutable payload generation independently of its attachment kinds.
+pub(super) fn payload_group(digest: [u8; 32], revision: IncidentRevision) -> [u8; 32] {
+    let mut hash = Sha256::new();
+    hash.update(b"sugarsubstitute-incident-payload-group-v1\0");
+    hash.update(digest);
+    hash.update(revision.get().to_le_bytes());
+    hash.finalize().into()
+}
+/// Project physical accounting data without changing the object's subject binding.
+pub(crate) fn object_payload_group(object: DiagnosticObject) -> Option<[u8; 32]> {
+    match object {
+        DiagnosticObject::Payload(key, revision, _) => Some(payload_group(subject(key), revision)),
+        _ => None,
+    }
 }
 pub(super) fn operation(key: LogicalStoreOperationKey) -> [u8; 32] {
     let mut hash = Sha256::new();
@@ -80,6 +97,39 @@ mod tests {
         incident::IncidentOperationId,
         lifecycle::{CoordinatorEpoch, CoordinatorKey},
     };
+    #[test]
+    fn diagnostic_generation_typed_groups_keep_original_leaf_and_subject_binding()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let namespace = NamespaceId::new([1; 32]);
+        let key = IncidentKey::new(IncidentSubject::Supervisor(CoordinatorKey {
+            namespace,
+            epoch: CoordinatorEpoch::new([2; 16])?,
+        }));
+        let revision = IncidentRevision::new(7)?;
+        let log = DiagnosticObject::Payload(key, revision, AttachmentKind::Log);
+        let fault = DiagnosticObject::Payload(key, revision, AttachmentKind::Fault);
+        assert_eq!(object_payload_group(log), object_payload_group(fault));
+        assert_ne!(
+            object_payload_group(log),
+            object_payload_group(DiagnosticObject::Payload(
+                key,
+                IncidentRevision::new(8)?,
+                AttachmentKind::Log
+            ))
+        );
+        assert_eq!(binding(log, namespace), (DiagnosticEntryClass::Payload, subject(key)));
+        assert_eq!(
+            leaf(log, namespace),
+            format!(
+                "{}.p-0000000000000007-4.payload",
+                crate::protected_storage::record_file::hex(&subject(key))
+            )
+        );
+        assert_eq!(object_payload_group(DiagnosticObject::Summary(key)), None);
+        assert_eq!(object_payload_group(DiagnosticObject::Seed(key)), None);
+        assert_eq!(object_payload_group(DiagnosticObject::StoreState), None);
+        Ok(())
+    }
     #[test]
     fn diagnostic_journal_names_distinguish_historical_coordinator_operation_one()
     -> Result<(), Box<dyn std::error::Error>> {

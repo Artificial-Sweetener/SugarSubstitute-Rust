@@ -130,23 +130,18 @@ impl StreamingPort {
                         complete = false;
                         break 'pages;
                     }
-                    let (digest, class) = classify(&name);
+                    let classified = classify(&name);
+                    let (digest, class) = (classified.digest, classified.class);
                     let regular = info.FileAttributes
                         & (FILE_ATTRIBUTE_DIRECTORY.0 | FILE_ATTRIBUTE_REPARSE_POINT.0)
                         == 0;
-                    let payload_group = (class == DiagnosticEntryClass::Payload
-                        || (class == DiagnosticEntryClass::Stage
-                            && name
-                                .split_once('.')
-                                .is_some_and(|(_, rest)| rest.starts_with("p-"))))
-                    .then_some(digest);
                     let mut observed = ObservedEntry {
                         digest,
                         class,
                         identity: [0; 24],
                         bytes: u64::try_from(info.EndOfFile).unwrap_or(u64::MAX),
                         protected_regular: false,
-                        payload_group,
+                        payload_group: classified.payload_group,
                     };
                     if regular && class != DiagnosticEntryClass::Unknown {
                         match self.inspect_entry(directory.join(&name), context) {

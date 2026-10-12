@@ -7,6 +7,7 @@ mod clocks;
 mod custody;
 mod disposition;
 mod fixture;
+mod group_inventory;
 mod inventory;
 mod migration;
 mod payload_discard;
