@@ -5,12 +5,15 @@
 use crate::job_sequence::JobSequence;
 use crate::{
     preparation_task::{
-        FramePreparation, InitializationPreparation, PreparationFailure, PreparationOutput,
+        FramePreparation, InitializationPreparation, PendingPreparation, PreparationFailure,
+        PreparationFrame, PreparationOutput,
     },
-    render_transfer::RendererTransfer,
+    render_transfer::PreparationTransfer,
 };
 use std::error::Error;
 use sugarsubstitute_application::presentation::{FramePublicationDecision, FramePublicationGate};
+use sugarsubstitute_application::transcript::TranscriptSnapshot;
+use sugarsubstitute_contracts::lifecycle::ResourceKey;
 use sugarsubstitute_contracts::{
     execution::{
         AdmissionError, CompletionBatch, ExecutionPort, Generation, IdentityError, JobClass,
@@ -32,13 +35,15 @@ struct ActivePreparation {
     job: OwnedJob<PreparationOutput, PreparationFailure>,
     identity: Option<FrameIdentity>,
     bootstrap: bool,
+    // Actual accepted request remains retained until its observed terminal disposal, even if uninvoked.
+    _request: Option<PreparationTransfer<SplashRenderRequest>>,
 }
 
 #[cfg(test)]
 #[path = "preparation_tests.rs"]
 mod tests;
 
-/// Own one active preparation and one latest plain-data request for this surface.
+/// Own one active preparation and one latest immutable request for this surface.
 ///
 /// Cache resources move only when an admitted worker invokes its factory. Ordinary
 /// completed preparation returns cache ownership; hidden or stale pixels are
@@ -51,8 +56,9 @@ pub(crate) struct PreparationDriver {
     scope: Scope,
     jobs: JobSequence,
     active: Option<ActivePreparation>,
-    renderer: Option<RendererTransfer<SplashRenderer>>,
-    pending: Option<SplashRenderRequest>,
+    renderer: Option<PreparationTransfer<SplashRenderer>>,
+    pending: Option<PendingPreparation>,
+    console_binding: Option<(ResourceKey, u64)>,
     next_identity: Generation,
     state_dirty: bool,
     closing: bool,
@@ -87,6 +93,7 @@ impl PreparationDriver {
             active: None,
             renderer: None,
             pending: None,
+            console_binding: None,
             next_identity: Generation::new(1)?,
             state_dirty: false,
             closing: false,
@@ -132,8 +139,23 @@ impl PreparationDriver {
         appearance: Appearance,
         character: AnimationFrame,
         feedback: ProgressFrame,
+        console: Option<TranscriptSnapshot>,
     ) -> Result<(), Box<dyn Error>> {
+        let binding = console.as_ref().map(|view| (view.resource(), view.revision()));
+        if matches!((self.console_binding,binding), (Some((old_resource,old_revision)),Some((resource,revision)))
+            if old_resource == resource && revision < old_revision)
+        {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "Console revision regressed",
+            )
+            .into());
+        }
+        if self.console_binding != binding {
+            self.state_dirty = true;
+        }
         self.synchronize_state()?;
+        self.console_binding = binding;
         self.gate.resize(shape)?;
         if self.closing || !self.gate.visible() {
             return Ok(());
@@ -150,8 +172,9 @@ impl PreparationDriver {
                 sequence,
             },
             bootstrap: !self.bootstrap_published,
+            console,
         };
-        self.pending = Some(request);
+        self.pending = Some(PendingPreparation::new(request));
         self.submit_pending()
     }
 
@@ -168,10 +191,12 @@ impl PreparationDriver {
             return Ok(());
         }
         let initializing = self.renderer.is_none();
-        let mut request = *self.pending.as_ref().ok_or("Pending preparation absent")?;
-        request.bootstrap = !self.bootstrap_published;
-        let reservation_bytes =
-            if initializing { SPLASH_CACHE_RESERVATION_BYTES } else { request.reservation_bytes() };
+        let request = self.pending.as_ref().ok_or("Pending preparation absent")?;
+        let identity = request.identity;
+        let bytes = request.bytes;
+        let input = request.input.clone();
+        let bootstrap = !self.bootstrap_published;
+        let reservation_bytes = if initializing { SPLASH_CACHE_RESERVATION_BYTES } else { bytes };
         let revision = self.allocate_identity()?;
         let spec = JobSpec {
             id: self.jobs.allocate()?,
@@ -183,7 +208,7 @@ impl PreparationDriver {
         };
         let client = &self.client;
         let scope = &self.scope;
-        let (admission, identity, bootstrap) = if initializing {
+        let (admission, identity, bootstrap, retained) = if initializing {
             let locale = self.locale.clone();
             (
                 client.submit_cpu(scope, spec, move |context| {
@@ -191,16 +216,16 @@ impl PreparationDriver {
                 }),
                 None,
                 false,
+                None,
             )
         } else {
-            let identity = request.identity;
-            let bootstrap = request.bootstrap;
+            let retained = input.clone();
             let transfer = self.renderer.as_ref().ok_or("Idle renderer absent")?.clone();
             // A rejected factory drops this cheap handle; the retained transfer still owns the cache.
             let job = client.submit_cpu(scope, spec, move |context| {
-                FramePreparation::new(transfer, request, context.memory().clone())
+                FramePreparation::new(transfer, input, bootstrap, context.memory().clone())
             });
-            (job, Some(identity), bootstrap)
+            (job, Some(identity), bootstrap, Some(retained))
         };
         let job = match admission {
             Ok(job) => job,
@@ -214,7 +239,7 @@ impl PreparationDriver {
         if !initializing {
             self.pending = None;
         }
-        self.active = Some(ActivePreparation { job, identity, bootstrap });
+        self.active = Some(ActivePreparation { job, identity, bootstrap, _request: retained });
         Ok(())
     }
 

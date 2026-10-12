@@ -42,6 +42,7 @@ fn request(scale: f64, expanded: bool) -> TestResult<SplashRenderRequest> {
         character: AnimationFrame::bootstrap(),
         feedback: ProgressFrame { completed: 0.4, activity: Some(0.5) },
         bootstrap: false,
+        console: None,
     })
 }
 fn initialize(rig: &Rig) -> TestResult<SplashRenderer> {
@@ -64,29 +65,27 @@ fn admitted_cold_and_warm_frames_preserve_pixels_cache_and_memory() -> TestResul
     let mut previous_steps = 0;
     for id in 2..=3 {
         let request = request(1.25, true)?;
+        let sample = request.frame();
+        let identity = request.identity;
+        let bytes = request.reservation_bytes();
         let steps = Arc::new(AtomicUsize::new(0));
         let count = steps.clone();
-        let mut job = rig.client.submit_cpu(
-            &rig.scope,
-            spec(id, request.reservation_bytes())?,
-            move |context| Counted {
-                task: renderer.prepare(request, context.memory().clone()),
-                steps: count,
-            },
-        )?;
+        let mut job = rig.client.submit_cpu(&rig.scope, spec(id, bytes)?, move |context| {
+            Counted { task: renderer.prepare(request, context.memory().clone()), steps: count }
+        })?;
         let result = success(rig.completion(&mut job)?)?;
         let frame = result.frame?;
         renderer = result.renderer;
         let expected = offline.render(
-            request.shape.width(),
-            request.shape.height(),
-            request.shape.scale(),
-            request.appearance,
-            request.character,
-            request.feedback,
+            sample.width,
+            sample.height,
+            sample.scale,
+            sample.appearance,
+            sample.character,
+            sample.feedback,
         )?;
         assert_eq!(frame.pixels(), expected.data());
-        assert_eq!(frame.identity(), request.identity);
+        assert_eq!(frame.identity(), identity);
         assert_eq!(renderer.characters.decoded_count(), 1);
         let count = steps.load(Ordering::Relaxed);
         if id == 2 {
@@ -95,16 +94,10 @@ fn admitted_cold_and_warm_frames_preserve_pixels_cache_and_memory() -> TestResul
         } else {
             assert!(count + 400 < previous_steps);
         }
-        assert_eq!(
-            rig.scope.snapshot().reserved_bytes,
-            SPLASH_CACHE_RESERVATION_BYTES + request.reservation_bytes()
-        );
+        assert_eq!(rig.scope.snapshot().reserved_bytes, SPLASH_CACHE_RESERVATION_BYTES + bytes);
         let clone = frame.clone();
         drop(frame);
-        assert_eq!(
-            rig.scope.snapshot().reserved_bytes,
-            SPLASH_CACHE_RESERVATION_BYTES + request.reservation_bytes()
-        );
+        assert_eq!(rig.scope.snapshot().reserved_bytes, SPLASH_CACHE_RESERVATION_BYTES + bytes);
         drop(clone);
         assert!(rig.scope.snapshot().reserved_bytes >= SPLASH_CACHE_RESERVATION_BYTES);
     }
@@ -194,6 +187,7 @@ fn cancellation_disposes_admitted_renderer_only_after_actual_step_return() -> Te
     let rig = Rig::new()?;
     let renderer = initialize(&rig)?;
     let request = request(1.0, true)?;
+    let bytes = request.reservation_bytes();
     let entered = Arc::new(support::Gate::default());
     let release = Arc::new(support::Gate::default());
     let worker_entered = entered.clone();
@@ -211,10 +205,7 @@ fn cancellation_disposes_admitted_renderer_only_after_actual_step_return() -> Te
     entered.wait()?;
     job.cancel();
     assert!(job.try_take_completion().is_none());
-    assert_eq!(
-        rig.scope.snapshot().reserved_bytes,
-        SPLASH_CACHE_RESERVATION_BYTES + request.reservation_bytes()
-    );
+    assert_eq!(rig.scope.snapshot().reserved_bytes, SPLASH_CACHE_RESERVATION_BYTES + bytes);
     release.open()?;
     assert!(matches!(
         rig.completion(&mut job)?.outcome,
@@ -315,5 +306,129 @@ fn validation_handoff_cannot_publish_an_undercharged_completed_raster() -> TestR
     assert_eq!(rig.scope.snapshot().reserved_bytes, SPLASH_CACHE_RESERVATION_BYTES);
     drop(result.renderer);
     assert_eq!(rig.scope.snapshot().reserved_bytes, 0);
+    Ok(())
+}
+
+/// Pause only after the actual task has dropped raster scratch and installed its validator.
+struct ValidationPaused {
+    task: SplashRenderTask,
+    entered: Arc<support::Gate>,
+    release: Arc<support::Gate>,
+    paused: bool,
+}
+impl CpuTask<SplashPreparationResult, PreparationError> for ValidationPaused {
+    fn step(
+        &mut self,
+        context: &JobContext,
+    ) -> Result<CpuStep<SplashPreparationResult>, PreparationError> {
+        let outcome = self.task.step(context)?;
+        if !self.paused && self.task.validator.is_some() {
+            assert!(self.task.raster.is_none());
+            assert!(self.task.request.console.is_some());
+            self.paused = true;
+            self.entered.open().map_err(|_| PreparationError::InvalidTaskState)?;
+            self.release.wait().map_err(|_| PreparationError::InvalidTaskState)?;
+        }
+        Ok(outcome)
+    }
+}
+
+/// Four real credits remain consumed during validation, late delivery and returned-result disposal.
+#[test]
+fn transcript_credit_survives_actual_validator_and_terminal_result() -> TestResult {
+    use sugarsubstitute_contracts::transcript::TranscriptError;
+    let store = support::transcript()?;
+    let held = [store.snapshot_tail(1)?, store.snapshot_tail(1)?, store.snapshot_tail(1)?];
+    let rig = Rig::new()?;
+    let renderer = initialize(&rig)?;
+    let mut input = request(1.0, true)?;
+    input.bootstrap = true;
+    input.console = Some(store.snapshot_tail(1)?);
+    let entered = Arc::new(support::Gate::default());
+    let release = Arc::new(support::Gate::default());
+    let worker_entered = entered.clone();
+    let worker_release = release.clone();
+    let mut job =
+        rig.client.submit_cpu(&rig.scope, spec(2, input.reservation_bytes())?, move |context| {
+            ValidationPaused {
+                task: renderer.prepare(input, context.memory().clone()),
+                entered: worker_entered,
+                release: worker_release,
+                paused: false,
+            }
+        })?;
+    entered.wait()?;
+    assert!(matches!(store.snapshot_tail(1), Err(TranscriptError::SnapshotCapacity)));
+    assert!(job.try_take_completion().is_none());
+    release.open()?;
+    rig.terminal(&job)?;
+    assert!(matches!(store.snapshot_tail(1), Err(TranscriptError::SnapshotCapacity)));
+    let result = success(rig.completion(&mut job)?)?;
+    assert!(result.frame.is_ok());
+    assert_eq!(result.console_clipped_rows, 0);
+    assert!(result.renderer.text.is_none());
+    assert!(matches!(store.snapshot_tail(1), Err(TranscriptError::SnapshotCapacity)));
+    assert_eq!(result.console.as_ref().ok_or("Original pin absent")?.revision(), store.revision());
+    drop(result);
+    assert!(store.snapshot_tail(1).is_ok());
+    drop(held);
+    Ok(())
+}
+
+/// Cancellation intent does not release the validation-stage pin until the real step returns.
+#[test]
+fn transcript_credit_cancelled_at_validation_waits_for_actual_task_disposal() -> TestResult {
+    use sugarsubstitute_contracts::{execution::JobOutcome, transcript::TranscriptError};
+    let store = support::transcript()?;
+    let held = [store.snapshot_tail(1)?, store.snapshot_tail(1)?, store.snapshot_tail(1)?];
+    let rig = Rig::new()?;
+    let renderer = initialize(&rig)?;
+    let mut input = request(1.0, true)?;
+    input.bootstrap = true;
+    input.console = Some(store.snapshot_tail(1)?);
+    let entered = Arc::new(support::Gate::default());
+    let release = Arc::new(support::Gate::default());
+    let worker_entered = entered.clone();
+    let worker_release = release.clone();
+    let mut job =
+        rig.client.submit_cpu(&rig.scope, spec(2, input.reservation_bytes())?, move |context| {
+            ValidationPaused {
+                task: renderer.prepare(input, context.memory().clone()),
+                entered: worker_entered,
+                release: worker_release,
+                paused: false,
+            }
+        })?;
+    entered.wait()?;
+    job.cancel();
+    assert!(matches!(store.snapshot_tail(1), Err(TranscriptError::SnapshotCapacity)));
+    assert!(job.try_take_completion().is_none());
+    release.open()?;
+    assert!(matches!(rig.completion(&mut job)?.outcome, JobOutcome::Cancelled));
+    assert!(store.snapshot_tail(1).is_ok());
+    drop(held);
+    Ok(())
+}
+
+/// Ordinary render failure returns the same fourth credit with the original typed error.
+#[test]
+fn transcript_credit_returns_with_ordinary_error_until_result_disposal() -> TestResult {
+    use sugarsubstitute_contracts::transcript::TranscriptError;
+    let store = support::transcript()?;
+    let held = [store.snapshot_tail(1)?, store.snapshot_tail(1)?, store.snapshot_tail(1)?];
+    let rig = Rig::new()?;
+    let renderer = initialize(&rig)?;
+    let mut input = request(0.25, true)?;
+    input.console = Some(store.snapshot_tail(1)?);
+    let mut job = rig.client.submit_cpu(&rig.scope, spec(2, 1024)?, move |context| {
+        renderer.prepare(input, context.memory().clone())
+    })?;
+    let result = success(rig.completion(&mut job)?)?;
+    assert!(matches!(result.frame, Err(RenderError::InvalidFrame)));
+    assert_eq!(result.console_clipped_rows, 0);
+    assert!(matches!(store.snapshot_tail(1), Err(TranscriptError::SnapshotCapacity)));
+    drop(result);
+    assert!(store.snapshot_tail(1).is_ok());
+    drop(held);
     Ok(())
 }

@@ -18,7 +18,7 @@ use windows::Win32::{Foundation::RECT, Graphics::DirectWrite::*};
 /// while initializing/compositing. Native analysis and texture calls are indivisible
 /// and limited to a single glyph and a four-MiB texture; their return is observed
 /// before the execution owner can claim cancellation has stopped this work.
-pub(crate) struct StatusPaint {
+pub(crate) struct GlyphPaint {
     factory: IDWriteFactory2,
     runs: Vec<GlyphRun>,
     texture: Option<Texture>,
@@ -26,6 +26,8 @@ pub(crate) struct StatusPaint {
     glyph: usize,
     pen: f32,
     baseline: f32,
+    origin_x: f32,
+    background: Option<super::console::ConsoleBackground>,
     theme: Theme,
     scale: f32,
     width: u32,
@@ -48,7 +50,7 @@ struct Texture {
     _claim: Option<MemoryClaim>,
 }
 
-impl StatusPaint {
+impl GlyphPaint {
     pub(super) fn new(
         factory: IDWriteFactory2,
         runs: Vec<GlyphRun>,
@@ -68,6 +70,8 @@ impl StatusPaint {
             glyph: 0,
             pen,
             baseline,
+            origin_x: 24.0,
+            background: None,
             theme,
             scale,
             width,
@@ -83,6 +87,20 @@ impl StatusPaint {
         }
     }
 
+    /// Retain actual console layout geometry until every bounded background query completes.
+    pub(super) fn bind_console(
+        &mut self,
+        spec: crate::text::console::ConsolePaintSpec,
+        background: super::console::ConsoleBackground,
+    ) {
+        self.origin_x = 30.0;
+        self.baseline = spec.top();
+        self.clip = spec.clip();
+        self.clip[1] = self.clip[1].max((spec.top() * self.scale).round() as i32);
+        self.clip[3] = self.clip[3].min(((spec.top() + 16.0) * self.scale).round() as i32);
+        self.background = Some(background);
+    }
+
     /// Advance bounded authored work into the original device-sized destination.
     ///
     /// Returns true only after every glyph is composited. A different target shape
@@ -90,6 +108,12 @@ impl StatusPaint {
     pub(crate) fn step(&mut self, target: &mut Pixmap, max: NonZeroUsize) -> io::Result<bool> {
         if target.width() != self.width || target.height() != self.height {
             return Err(io::Error::new(io::ErrorKind::InvalidInput, "Status target shape changed"));
+        }
+        if let Some(background) = &mut self.background {
+            if background.step(target, max)? {
+                self.background = None;
+            }
+            return Ok(false);
         }
         if self.run == self.runs.len() {
             return Ok(true);
@@ -135,7 +159,12 @@ impl StatusPaint {
                 / 16;
             let x = texture.bounds.left + (index % texture.width) as i32;
             let y = texture.bounds.top + (index / texture.width) as i32;
-            surface.composite(x, y, gray as u8, self.theme);
+            let color = self.runs[self.run].color.unwrap_or(if self.theme == Theme::Dark {
+                [255; 3]
+            } else {
+                [0; 3]
+            });
+            surface.composite(x, y, gray as u8, color);
         }
         texture.position = end;
         if end == texture.length / 3 {
@@ -174,7 +203,7 @@ impl StatusPaint {
             isSideways: false.into(),
             bidiLevel: run.level,
         };
-        let x = ((24.0 + self.pen) * self.scale).floor();
+        let x = ((self.origin_x + self.pen) * self.scale).floor();
         let y = ((self.baseline + run.baseline.1) * self.scale).round();
         let mode = if run.size > 16.0 {
             DWRITE_RENDERING_MODE_NATURAL_SYMMETRIC

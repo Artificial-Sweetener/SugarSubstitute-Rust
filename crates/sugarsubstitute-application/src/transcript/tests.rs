@@ -3,6 +3,7 @@
 //! Exercise real incremental parsing, retention and immutable snapshot ownership.
 mod boundaries;
 mod retention;
+mod tail;
 use super::*;
 use std::error::Error;
 use sugarsubstitute_contracts::{lifecycle::*, transcript::*};

@@ -21,7 +21,7 @@ impl MemoryRelease for Release {
 
 /// Exercise the preexisting library draw boundary as an independent raster reference.
 fn reference(
-    text: &StatusText,
+    text: &FontOwner,
     target: &mut Pixmap,
     message: &str,
     theme: Theme,
@@ -61,7 +61,7 @@ fn reference(
 fn portable_status_chunks_match_library_raster_and_release_claims() -> Result<(), Box<dyn Error>> {
     let released = Arc::new(AtomicUsize::new(0));
     for locale in crate::LOCALES {
-        let mut text = StatusText::new(locale.id)?;
+        let mut text = FontOwner::new(locale.id)?;
         for scale in [1.0_f32, 1.25, 1.5, 1.75, 2.0] {
             let size = (558.0 * scale).round() as u32;
             for theme in [Theme::Dark, Theme::Light] {
@@ -73,7 +73,7 @@ fn portable_status_chunks_match_library_raster_and_release_claims() -> Result<()
                     let lease =
                         MemoryLease::new(6 * 1024 * 1024, Box::new(Release(released.clone())));
                     let mut cursor =
-                        text.prepare(locale.loading, theme, scale, size, size, lease)?;
+                        text.prepare_status(locale.loading, theme, scale, size, size, lease)?;
                     let mut actual =
                         Pixmap::new(size, size).ok_or("Cannot allocate portable fixture")?;
                     actual.fill(tiny_skia::Color::from_rgba8(44, 77, 99, 180));
@@ -98,14 +98,15 @@ fn portable_status_chunks_match_library_raster_and_release_claims() -> Result<()
 #[test]
 fn portable_status_rejects_input_and_scratch_atomically() -> Result<(), Box<dyn Error>> {
     let released = Arc::new(AtomicUsize::new(0));
-    let mut text = StatusText::new("en")?;
+    let mut text = FontOwner::new("en")?;
     for scale in [f32::NAN, f32::INFINITY, -1.0, 0.0, 4.01] {
-        assert!(text.prepare_offline("Loading...", Theme::Dark, scale, 558, 558).is_err());
+        assert!(text.prepare_status_offline("Loading...", Theme::Dark, scale, 558, 558).is_err());
     }
-    assert!(text.prepare_offline(&"x".repeat(4097), Theme::Dark, 1.0, 558, 558).is_err());
-    assert!(text.prepare_offline("Loading...", Theme::Dark, 1.0, 4097, 558).is_err());
+    assert!(text.prepare_status_offline(&"x".repeat(4097), Theme::Dark, 1.0, 558, 558).is_err());
+    assert!(text.prepare_status_offline("Loading...", Theme::Dark, 1.0, 4097, 558).is_err());
     let lease = MemoryLease::new(1024 * 1024, Box::new(Release(released.clone())));
-    let mut cursor = text.prepare("Loading...", Theme::Dark, 1.0, 558, 558, lease.clone())?;
+    let mut cursor =
+        text.prepare_status("Loading...", Theme::Dark, 1.0, 558, 558, lease.clone())?;
     let max = NonZeroUsize::new(1).ok_or("Invalid budget")?;
     let mut target = Pixmap::new(558, 558).ok_or("Cannot allocate portable fixture")?;
     assert!(cursor.step(&mut target, max).is_err());
@@ -114,7 +115,7 @@ fn portable_status_rejects_input_and_scratch_atomically() -> Result<(), Box<dyn 
     assert!(lease.claim(1024 * 1024).is_ok());
     drop(lease);
     assert_eq!(released.load(Ordering::SeqCst), 1);
-    let mut cursor = text.prepare_offline("Loading...", Theme::Dark, 1.0, 558, 558)?;
+    let mut cursor = text.prepare_status_offline("Loading...", Theme::Dark, 1.0, 558, 558)?;
     let mut wrong = Pixmap::new(557, 558).ok_or("Cannot allocate portable fixture")?;
     assert!(cursor.step(&mut wrong, max).is_err());
     assert!(wrong.data().iter().all(|byte| *byte == 0));
@@ -128,16 +129,16 @@ fn portable_status_rejects_input_and_scratch_atomically() -> Result<(), Box<dyn 
 #[test]
 fn portable_status_font_access_never_waits() -> Result<(), Box<dyn Error>> {
     fn worker_owned<T: Send>() {}
-    worker_owned::<StatusPaint>();
-    let mut text = StatusText::new("en")?;
+    worker_owned::<GlyphPaint>();
+    let mut text = FontOwner::new("en")?;
     let owner = text.fonts.clone();
     let held = cursor::fonts(&owner)?;
     let failure = text
-        .prepare_offline("Loading...", Theme::Dark, 1.0, 558, 558)
+        .prepare_status_offline("Loading...", Theme::Dark, 1.0, 558, 558)
         .err()
         .ok_or("Overlapping font access unexpectedly succeeded")?;
     assert!(failure.get_ref().is_some_and(|cause| cause.is::<cursor::FontAccessError>()));
     drop(held);
-    assert!(text.prepare_offline("Loading...", Theme::Dark, 1.0, 558, 558).is_ok());
+    assert!(text.prepare_status_offline("Loading...", Theme::Dark, 1.0, 558, 558).is_ok());
     Ok(())
 }

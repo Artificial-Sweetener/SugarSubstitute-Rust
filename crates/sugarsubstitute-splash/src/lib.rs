@@ -8,6 +8,7 @@ pub mod assets;
 mod caption_icons;
 mod character;
 mod chrome;
+mod console_render;
 mod layout;
 mod packaged_png;
 mod progress;

@@ -24,7 +24,7 @@ pub(super) struct Glyph {
 /// and cursor steps; overlapping use is a typed error rather than an implicit wait.
 /// Opaque library rasterization is indivisible and receives one bounded 14*scale
 /// glyph. Its returned image must fit the preclaimed four-MiB capacity before use.
-pub(crate) struct StatusPaint {
+pub(crate) struct GlyphPaint {
     fonts: Arc<Mutex<FontSystem>>,
     plans: Vec<Glyph>,
     cache: SwashCache,
@@ -32,6 +32,9 @@ pub(crate) struct StatusPaint {
     glyph: usize,
     scale: f32,
     origin_y: f32,
+    origin_x: f32,
+    clip: Option<[i32; 4]>,
+    background: Option<crate::text::console::BackgroundPaint>,
     width: u32,
     height: u32,
     allocation: Allocation,
@@ -71,7 +74,7 @@ impl fmt::Display for FontAccessError {
 }
 impl Error for FontAccessError {}
 
-impl StatusPaint {
+impl GlyphPaint {
     #[cfg(test)]
     pub(super) fn cached_images(&self) -> usize {
         self.cache.image_cache.len()
@@ -93,11 +96,28 @@ impl StatusPaint {
             glyph: 0,
             scale,
             origin_y,
+            origin_x: 24.0 * scale,
+            clip: None,
+            background: None,
             width,
             height,
             allocation,
             _metadata: metadata,
         }
+    }
+
+    /// Retain actual cluster geometry while restricting console glyph overhang to its row.
+    pub(super) fn bind_console(
+        &mut self,
+        spec: crate::text::console::ConsolePaintSpec,
+        background: crate::text::console::BackgroundPaint,
+    ) {
+        self.origin_x = 30.0 * self.scale;
+        let mut clip = spec.clip();
+        clip[1] = clip[1].max((spec.top() * self.scale).round() as i32);
+        clip[3] = clip[3].min(((spec.top() + 16.0) * self.scale).round() as i32);
+        self.clip = Some(clip);
+        self.background = Some(background);
     }
 
     /// Visit at most min(max,65536) source pixels or perform one opaque glyph call.
@@ -107,6 +127,12 @@ impl StatusPaint {
     pub(crate) fn step(&mut self, target: &mut Pixmap, max: NonZeroUsize) -> io::Result<bool> {
         if target.width() != self.width || target.height() != self.height {
             return Err(io::Error::new(io::ErrorKind::InvalidInput, "Status target shape changed"));
+        }
+        if let Some(background) = &mut self.background {
+            if background.step(target, max)? {
+                self.background = None;
+            }
+            return Ok(false);
         }
         if self.glyph == self.plans.len() {
             return Ok(true);
@@ -169,9 +195,17 @@ impl StatusPaint {
                 + (index % image.data.placement.width as usize) as i64;
             let y = i64::from(plan.physical.y) - i64::from(image.data.placement.top)
                 + (index / image.data.placement.width as usize) as i64;
-            if let Some(rect) =
-                Rect::from_xywh(24.0 * self.scale + x as f32, self.origin_y + y as f32, 1.0, 1.0)
-            {
+            let device_x = self.origin_x + x as f32;
+            let device_y = self.origin_y + y as f32;
+            if self.clip.is_some_and(|clip| {
+                device_x < clip[0] as f32
+                    || device_y < clip[1] as f32
+                    || device_x >= clip[2] as f32
+                    || device_y >= clip[3] as f32
+            }) {
+                continue;
+            }
+            if let Some(rect) = Rect::from_xywh(device_x, device_y, 1.0, 1.0) {
                 // Preserve portable pixel placement and tiny-skia blending while
                 // keeping the authored outer loop bounded by the caller's budget.
                 let mut paint = Paint { anti_alias: false, ..Paint::default() };

@@ -3,7 +3,7 @@
 //! Verify the authored texture phases independently of a native font's small glyph size.
 
 use super::*;
-use crate::text::StatusText;
+use crate::text::FontOwner;
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
@@ -21,11 +21,11 @@ impl MemoryRelease for Release {
 /// Its real retained analysis remains owned but is never invoked for the synthetic rectangle.
 fn fixture(
     ready: bool,
-) -> Result<(StatusPaint, Pixmap, Arc<AtomicUsize>), Box<dyn std::error::Error>> {
+) -> Result<(GlyphPaint, Pixmap, Arc<AtomicUsize>), Box<dyn std::error::Error>> {
     let released = Arc::new(AtomicUsize::new(0));
     let lease = MemoryLease::new(6 * 1024 * 1024, Box::new(Release(released.clone())));
-    let mut text = StatusText::new("en")?;
-    let mut cursor = text.prepare("L", Theme::Dark, 1.0, 558, 558, lease.clone())?;
+    let mut text = FontOwner::new("en")?;
+    let mut cursor = text.prepare_status("L", Theme::Dark, 1.0, 558, 558, lease.clone())?;
     let mut target = Pixmap::new(558, 558).ok_or("Cannot allocate budget fixture")?;
     assert!(!cursor.step(&mut target, NonZeroUsize::new(1).ok_or("Invalid budget")?)?);
     let native = cursor.texture.take().ok_or("No native glyph analysis")?;

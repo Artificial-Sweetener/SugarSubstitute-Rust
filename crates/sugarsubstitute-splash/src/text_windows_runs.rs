@@ -26,6 +26,8 @@ pub(super) struct GlyphRun {
     pub offsets: Vec<DWRITE_GLYPH_OFFSET>,
     /// Preserve direction established by the native shaper.
     pub level: u32,
+    /// Foreground copied from this layout's retained private drawing effect.
+    pub color: Option<[u8; 3]>,
 }
 
 /// Receive only synchronous callbacks from this owner's DirectWrite layout.
@@ -35,6 +37,8 @@ pub(super) struct Collector {
     pub runs: RefCell<Vec<GlyphRun>>,
     /// Preserve Rust allocator causes that cannot be represented by the COM HRESULT.
     pub failure: RefCell<Option<std::io::Error>>,
+    /// Exact effect references installed only by the current console layout owner.
+    pub colors: Vec<(IUnknown, [u8; 3])>,
 }
 
 impl IDWritePixelSnapping_Impl for Collector_Impl {
@@ -73,7 +77,7 @@ impl IDWriteTextRenderer_Impl for Collector_Impl {
         _: DWRITE_MEASURING_MODE,
         run: *const DWRITE_GLYPH_RUN,
         _: *const DWRITE_GLYPH_RUN_DESCRIPTION,
-        _: Ref<IUnknown>,
+        effect: Ref<IUnknown>,
     ) -> windows::core::Result<()> {
         if run.is_null() {
             return Err(E_INVALIDARG.into());
@@ -95,6 +99,16 @@ impl IDWriteTextRenderer_Impl for Collector_Impl {
         {
             return Err(E_INVALIDARG.into());
         }
+        let color = match effect.as_ref() {
+            None => None,
+            Some(effect) => Some(
+                self.colors
+                    .iter()
+                    .find(|(identity, _)| identity == effect)
+                    .ok_or(windows::core::Error::from(E_INVALIDARG))?
+                    .1,
+            ),
+        };
         let count = run.glyphCount as usize;
         let mut runs =
             self.runs.try_borrow_mut().map_err(|_| windows::core::Error::from(E_INVALIDARG))?;
@@ -131,6 +145,7 @@ impl IDWriteTextRenderer_Impl for Collector_Impl {
             advances,
             offsets,
             level: run.bidiLevel,
+            color,
         });
         Ok(())
     }

@@ -11,6 +11,28 @@ use std::{
 use sugarsubstitute_contracts::execution::*;
 use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner};
 pub(super) type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
+/// Construct the actual transcript source; no alternate snapshot constructor exists.
+pub(super) fn transcript() -> TestResult<sugarsubstitute_application::transcript::TranscriptStore> {
+    use sugarsubstitute_contracts::{lifecycle::*, transcript::*};
+    let resource = ResourceKey {
+        owner: CoordinatorKey {
+            namespace: NamespaceId::new([1; 32]),
+            epoch: CoordinatorEpoch::new([2; 16])?,
+        },
+        id: ResourceId::new(1)?,
+        generation: ResourceGeneration::new(1)?,
+    };
+    let mut store = sugarsubstitute_application::transcript::TranscriptStore::new(resource);
+    store.apply(&OutputBatch::new(
+        resource,
+        OutputStream::Stdout,
+        StreamSequence::new(1)?,
+        "original 日本語😀\n".as_bytes(),
+        None,
+        false,
+    )?)?;
+    Ok(store)
+}
 struct FixedClock;
 impl Clock for FixedClock {
     fn now(&self) -> Moment {
@@ -67,19 +89,44 @@ impl Rig {
             if let Some(completion) = job.try_take_completion() {
                 return Ok(completion);
             }
-            let (count, timeout) = self
-                .wake
-                .changed
-                .wait_timeout_while(
-                    self.wake.count.lock().map_err(|error| error.to_string())?,
-                    Duration::from_secs(20),
-                    |count| *count == observed,
-                )
-                .map_err(|error| error.to_string())?;
-            if timeout.timed_out() && *count == observed {
-                return Err("Preparation did not complete at the observed boundary".into());
+            if !self.wait_after(observed)? {
+                return job
+                    .try_take_completion()
+                    .ok_or_else(|| "Preparation did not complete at the observed boundary".into());
             }
         }
+    }
+    /// Observe a real terminal result while leaving its typed payload unacknowledged.
+    pub(super) fn terminal<T, E>(&self, job: &OwnedJob<T, E>) -> TestResult {
+        loop {
+            let observed = *self.wake.count.lock().map_err(|error| error.to_string())?;
+            if matches!(job.status().phase, JobPhase::Terminal(_)) {
+                return Ok(());
+            }
+            self.client.drain_completions(NonZeroUsize::MIN)?;
+            if matches!(job.status().phase, JobPhase::Terminal(_)) {
+                return Ok(());
+            }
+            if !self.wait_after(observed)? {
+                return if matches!(job.status().phase, JobPhase::Terminal(_)) {
+                    Ok(())
+                } else {
+                    Err("Preparation did not complete at the observed boundary".into())
+                };
+            }
+        }
+    }
+    fn wait_after(&self, observed: u64) -> TestResult<bool> {
+        let (count, timeout) = self
+            .wake
+            .changed
+            .wait_timeout_while(
+                self.wake.count.lock().map_err(|error| error.to_string())?,
+                Duration::from_secs(20),
+                |count| *count == observed,
+            )
+            .map_err(|error| error.to_string())?;
+        Ok(!timeout.timed_out() || *count != observed)
     }
 }
 pub(super) fn spec(id: u64, bytes: u64) -> TestResult<JobSpec> {

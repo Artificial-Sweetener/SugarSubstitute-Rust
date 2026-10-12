@@ -10,8 +10,8 @@ minimum_tests = 96
 [[owners]]
 package = "sugarsubstitute-application"
 root = "crates/sugarsubstitute-application"
-concern = "Acknowledged startup, settled retry, frame publication, backend leases, desktop exit, UI challenge and bounded transcript policy; original connection and frontend campaign deadlines"
-minimum_tests = 100
+concern = "Acknowledged startup, settled retry, frame publication, backend leases, desktop exit, UI challenge and bounded transcript policy; original connection and frontend campaign deadlines; indexed actual-tail selection and shared immutable snapshot admission"
+minimum_tests = 106
 
 [[owners]]
 package = "sugarsubstitute-comfy"
@@ -22,8 +22,8 @@ minimum_tests = 68
 [[owners]]
 package = "sugarsubstitute"
 root = "crates/sugarsubstitute"
-concern = "Product identity, native input, admitted preparation, process qualification and actual host shutdown"
-minimum_tests = 144
+concern = "Product identity, native input, admitted preparation, process qualification and actual host shutdown; admitted transcript input custody and current resource/revision publication"
+minimum_tests = 147
 
 [[owners]]
 package = "sugarsubstitute-execution"
@@ -46,8 +46,8 @@ minimum_tests = 256
 [[owners]]
 package = "sugarsubstitute-splash"
 root = "crates/sugarsubstitute-splash"
-concern = "Character animation, bounded admitted raster and glyph preparation with immutable output"
-minimum_tests = 65
+concern = "Character animation, bounded admitted raster and glyph preparation with immutable output; bounded styled console projection, actual task/result pin custody and clipped composition"
+minimum_tests = 75
 
 [[owners]]
 package = "sugarsubstitute-desktop"

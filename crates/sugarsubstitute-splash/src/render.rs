@@ -19,7 +19,7 @@ use tiny_skia::Pixmap;
 
 use crate::{
     AnimationFrame, Appearance, CharacterError, CharacterLibrary, IconError, ProgressFrame,
-    assets::POSE_ASSETS, caption_icons::CaptionIcons, text::StatusText,
+    assets::POSE_ASSETS, caption_icons::CaptionIcons, text::FontOwner,
 };
 
 /// Preserve errors at the rendering boundary without turning them into startup policy.
@@ -98,7 +98,7 @@ impl From<crate::shapes::AllocationError> for RenderError {
 pub struct SplashRenderer {
     characters: CharacterLibrary,
     icons: CaptionIcons,
-    text: Option<StatusText>,
+    text: Option<FontOwner>,
     locale: String,
     // Cache claims release after all decoded rasters and native font resources.
     cache_claim: Option<MemoryClaim>,

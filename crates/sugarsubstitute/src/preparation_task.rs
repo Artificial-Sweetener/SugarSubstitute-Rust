@@ -2,23 +2,47 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Adapt admitted splash initialization and raster tasks to one typed host result.
 
-use crate::render_transfer::{RendererTransfer, TransferError};
+use crate::render_transfer::{PreparationTransfer, TransferError};
 use std::{error::Error, fmt};
+use sugarsubstitute_application::transcript::TranscriptSnapshot;
 use sugarsubstitute_contracts::{
     execution::{CpuStep, CpuTask, JobContext, MemoryLease},
-    presentation::PreparedFrame,
+    presentation::{FrameIdentity, PreparedFrame},
 };
 use sugarsubstitute_splash::{
     PreparationError, RenderError, SplashInitializationTask, SplashRenderRequest, SplashRenderTask,
     SplashRenderer,
 };
 
+/// Retain the actual non-clonable request across rejection or an uninvoked accepted factory.
+pub(crate) struct PendingPreparation {
+    pub(crate) identity: FrameIdentity,
+    pub(crate) bytes: u64,
+    pub(crate) input: PreparationTransfer<SplashRenderRequest>,
+}
+impl PendingPreparation {
+    pub(crate) fn new(request: SplashRenderRequest) -> Self {
+        Self {
+            identity: request.identity,
+            bytes: request.reservation_bytes(),
+            input: PreparationTransfer::new(request),
+        }
+    }
+}
+
 /// Return cache ownership with every ordinarily completed raster operation.
-pub(crate) enum PreparationOutput {
+pub(crate) struct PreparationOutput {
+    pub(crate) renderer: SplashRenderer,
+    pub(crate) frame: PreparationFrame,
+    pub(crate) console: Option<TranscriptSnapshot>,
+    pub(crate) console_clipped_rows: u8,
+}
+/// Distinguish initialization from an ordinarily completed frame without duplicating owned storage.
+pub(crate) enum PreparationFrame {
     /// Initialization completed without decoding unrequested poses or discovering fonts.
-    Initialized(SplashRenderer),
+    Initialized,
     /// Raster work completed, retaining the renderer even when ordinary rendering failed.
-    Prepared { renderer: SplashRenderer, frame: Result<PreparedFrame, RenderError> },
+    Prepared(Result<PreparedFrame, RenderError>),
 }
 
 /// Preserve original task and transfer failures at the composed execution boundary.
@@ -69,7 +93,12 @@ impl CpuTask<PreparationOutput, PreparationFailure> for InitializationPreparatio
         match self.0.step(context).map_err(PreparationFailure::Task)? {
             CpuStep::Yield => Ok(CpuStep::Yield),
             CpuStep::Complete(renderer) => renderer
-                .map(PreparationOutput::Initialized)
+                .map(|renderer| PreparationOutput {
+                    renderer,
+                    frame: PreparationFrame::Initialized,
+                    console: None,
+                    console_clipped_rows: 0,
+                })
                 .map(CpuStep::Complete)
                 .map_err(PreparationFailure::Render),
         }
@@ -77,16 +106,31 @@ impl CpuTask<PreparationOutput, PreparationFailure> for InitializationPreparatio
 }
 
 /// Own the admitted raster cursor or its original cache transfer failure.
-pub(crate) struct FramePreparation(Result<SplashRenderTask, TransferError>);
+pub(crate) struct FramePreparation {
+    task: Result<SplashRenderTask, TransferError>,
+    // Retain actual input through CPU destruction when cache acquisition failed.
+    _failed_console: Option<TranscriptSnapshot>,
+}
 
 impl FramePreparation {
     /// Take cache ownership on the worker, never during UI-thread submission.
     pub(crate) fn new(
-        transfer: RendererTransfer<SplashRenderer>,
-        request: SplashRenderRequest,
+        transfer: PreparationTransfer<SplashRenderer>,
+        request: PreparationTransfer<SplashRenderRequest>,
+        bootstrap: bool,
         memory: MemoryLease,
     ) -> Self {
-        Self(transfer.take().map(|renderer| renderer.prepare(request, memory)))
+        let mut request = match request.take() {
+            Ok(request) => request,
+            Err(cause) => return Self { task: Err(cause), _failed_console: None },
+        };
+        request.bootstrap = bootstrap;
+        match transfer.take() {
+            Ok(renderer) => {
+                Self { task: Ok(renderer.prepare(request, memory)), _failed_console: None }
+            }
+            Err(cause) => Self { task: Err(cause), _failed_console: request.console },
+        }
     }
 }
 
@@ -95,12 +139,14 @@ impl CpuTask<PreparationOutput, PreparationFailure> for FramePreparation {
         &mut self,
         context: &JobContext,
     ) -> Result<CpuStep<PreparationOutput>, PreparationFailure> {
-        match &mut self.0 {
+        match &mut self.task {
             Ok(task) => match task.step(context).map_err(PreparationFailure::Task)? {
                 CpuStep::Yield => Ok(CpuStep::Yield),
-                CpuStep::Complete(result) => Ok(CpuStep::Complete(PreparationOutput::Prepared {
+                CpuStep::Complete(result) => Ok(CpuStep::Complete(PreparationOutput {
                     renderer: result.renderer,
-                    frame: result.frame,
+                    frame: PreparationFrame::Prepared(result.frame),
+                    console: result.console,
+                    console_clipped_rows: result.console_clipped_rows,
                 })),
             },
             Err(error) => Err(PreparationFailure::Transfer(match error {

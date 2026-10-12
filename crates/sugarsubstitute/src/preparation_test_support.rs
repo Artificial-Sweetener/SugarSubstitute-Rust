@@ -15,6 +15,54 @@ use sugarsubstitute_contracts::execution::{
 use sugarsubstitute_contracts::execution::{ExecutionError, JobCompletion, JobPhase};
 use sugarsubstitute_execution::ExecutionOwner;
 
+/// Preserve real snapshot admission while tests vary only inert resource generation.
+pub(super) fn transcript(
+    generation: u64,
+) -> Result<sugarsubstitute_application::transcript::TranscriptStore, Box<dyn Error>> {
+    use sugarsubstitute_contracts::lifecycle::*;
+    Ok(sugarsubstitute_application::transcript::TranscriptStore::new(ResourceKey {
+        owner: CoordinatorKey {
+            namespace: NamespaceId::new([1; 32]),
+            epoch: CoordinatorEpoch::new([2; 16])?,
+        },
+        id: ResourceId::new(1)?,
+        generation: ResourceGeneration::new(generation)?,
+    }))
+}
+
+/// Hold real global memory admission without blocking a worker or sleeping.
+pub(super) fn saturate(
+    driver: &PreparationDriver,
+    owner: &ExecutionOwner,
+) -> Result<OwnedJob<(), Infallible>, Box<dyn Error>> {
+    let client = &driver.client;
+    let scope = client.create_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?;
+    Ok(client.submit_blocking(
+        &scope,
+        JobSpec {
+            id: driver.jobs.allocate()?,
+            operation: Operation::Infrastructure,
+            class: JobClass::InfrastructureOrdinary,
+            deadline: None,
+            reservation_bytes: owner.limits().memory_bytes,
+            replacement: None,
+        },
+        |_| Ok::<(), Infallible>(()),
+    )?)
+}
+
+/// Occupy a real CPU worker at a controlled finite external boundary.
+pub(super) struct CpuHold(pub(super) Arc<BlockingLatch>);
+impl sugarsubstitute_contracts::execution::CpuTask<(), std::io::Error> for CpuHold {
+    fn step(
+        &mut self,
+        _: &sugarsubstitute_contracts::execution::JobContext,
+    ) -> Result<sugarsubstitute_contracts::execution::CpuStep<()>, std::io::Error> {
+        self.0.run()?;
+        Ok(sugarsubstitute_contracts::execution::CpuStep::Complete(()))
+    }
+}
+
 /// Bound failures without assigning elapsed sleeps to asynchronous progress.
 fn deadline() -> Result<Instant, Box<dyn Error>> {
     Instant::now()
@@ -112,6 +160,7 @@ pub(super) fn request(
         Appearance::demo(),
         PaperFlip::new(1).frame(Duration::ZERO),
         ProgressFrame { completed, activity: None },
+        None,
     )
 }
 

@@ -23,20 +23,41 @@ impl PreparationDriver {
             outcome = ?completion.outcome.kind(), reserved_bytes = completion.memory.bytes(),
             "Observed preparation termination");
         match completion.outcome {
-            JobOutcome::Success(PreparationOutput::Initialized(renderer)) => {
+            JobOutcome::Success(PreparationOutput {
+                renderer,
+                frame: PreparationFrame::Initialized,
+                console,
+                console_clipped_rows,
+            }) => {
+                if console.is_some() || console_clipped_rows != 0 {
+                    return Err("Initialization returned a frame input".into());
+                }
                 if expected_identity.is_some() {
                     return Err("Frame job returned initialization".into());
                 }
-                self.renderer = Some(RendererTransfer::new(renderer));
+                self.renderer = Some(PreparationTransfer::new(renderer));
                 Ok(None)
             }
-            JobOutcome::Success(PreparationOutput::Prepared { renderer, frame }) => {
-                self.renderer = Some(RendererTransfer::new(renderer));
+            JobOutcome::Success(PreparationOutput {
+                renderer,
+                frame: PreparationFrame::Prepared(frame),
+                console,
+                console_clipped_rows,
+            }) => {
+                tracing::debug!(
+                    operation = "splash_preparation",
+                    job_id = expected_job.get(),
+                    console_clipped_rows,
+                    "Observed projected console clipping"
+                );
+                self.renderer = Some(PreparationTransfer::new(renderer));
                 let frame = frame?;
                 if Some(frame.identity()) != expected_identity {
                     return Err("Prepared pixels do not match their admitted request".into());
                 }
-                if self.gate.accept(&frame) == FramePublicationDecision::Accepted {
+                let decision = self.gate.accept(&frame);
+                drop(console);
+                if decision == FramePublicationDecision::Accepted {
                     self.bootstrap_published = true;
                     self.enriched |= !bootstrap;
                     Ok(Some(frame))
@@ -54,7 +75,7 @@ impl PreparationDriver {
                 }
                 if let Some(transfer) = self.renderer.take() {
                     match transfer.take() {
-                        Ok(renderer) => self.renderer = Some(RendererTransfer::new(renderer)),
+                        Ok(renderer) => self.renderer = Some(PreparationTransfer::new(renderer)),
                         Err(crate::render_transfer::TransferError::Consumed) => {}
                         Err(error) => return Err(error.into()),
                     }

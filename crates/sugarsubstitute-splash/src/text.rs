@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 
-//! Prepare platform status glyphs after the first splash submission.
+//! Own bounded platform status and console shaping after the first splash submission.
 
+#[path = "text_console.rs"]
+pub(crate) mod console;
 #[path = "text_memory.rs"]
 mod memory;
 
@@ -22,6 +24,6 @@ mod portable_probe;
 mod native;
 
 #[cfg(target_os = "windows")]
-pub(crate) use native::{StatusPaint, StatusText};
+pub(crate) use native::{FontOwner, GlyphPaint};
 #[cfg(not(target_os = "windows"))]
-pub(crate) use portable::{StatusPaint, StatusText};
+pub(crate) use portable::{FontOwner, GlyphPaint};

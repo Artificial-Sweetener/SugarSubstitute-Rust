@@ -19,14 +19,16 @@ use sugarsubstitute_contracts::execution::MemoryLease;
 #[path = "text_portable_cursor.rs"]
 mod cursor;
 use cursor::Glyph;
-pub(crate) use cursor::StatusPaint;
+pub(crate) use cursor::GlyphPaint;
+#[path = "text_portable_console.rs"]
+mod console;
 
 /// Retain font discovery while each cursor owns its uncached glyph image lifetime.
-pub(crate) struct StatusText {
+pub(crate) struct FontOwner {
     fonts: Arc<Mutex<FontSystem>>,
 }
 
-impl StatusText {
+impl FontOwner {
     /// Discover installed fonts on the preparation worker after bootstrap.
     pub(crate) fn new(locale: &str) -> io::Result<Self> {
         if locale.len() > 64 || locale.contains('\0') {
@@ -51,7 +53,7 @@ impl StatusText {
     /// Library shaping is indivisible, with at most 4096 UTF-16 units and glyphs.
     /// No destination is borrowed; opaque font/scaler allocations remain separate
     /// from the explicitly claimed plan/image capacities.
-    pub(crate) fn prepare(
+    pub(crate) fn prepare_status(
         &mut self,
         message: &str,
         theme: Theme,
@@ -59,19 +61,19 @@ impl StatusText {
         width: u32,
         height: u32,
         lease: MemoryLease,
-    ) -> io::Result<StatusPaint> {
+    ) -> io::Result<GlyphPaint> {
         self.begin(message, theme, scale, width, height, Allocation(Some(lease)))
     }
 
     /// Prepare the same cursor for synchronous offline qualification without a lease.
-    pub(crate) fn prepare_offline(
+    pub(crate) fn prepare_status_offline(
         &mut self,
         message: &str,
         theme: Theme,
         scale: f32,
         width: u32,
         height: u32,
-    ) -> io::Result<StatusPaint> {
+    ) -> io::Result<GlyphPaint> {
         self.begin(message, theme, scale, width, height, Allocation(None))
     }
 
@@ -83,7 +85,7 @@ impl StatusText {
         width: u32,
         height: u32,
         allocation: Allocation,
-    ) -> io::Result<StatusPaint> {
+    ) -> io::Result<GlyphPaint> {
         memory::validate(message, scale, width, height)?;
         let metadata = allocation.claim(METADATA_BYTES)?;
         let mut plans = memory::reserve::<Glyph>(MAX_GLYPHS, METADATA_BYTES)?;
@@ -109,7 +111,7 @@ impl StatusText {
         }
         drop(buffer);
         drop(fonts);
-        Ok(StatusPaint::new(
+        Ok(GlyphPaint::new(
             self.fonts.clone(),
             plans,
             allocation,

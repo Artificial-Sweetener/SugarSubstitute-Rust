@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Retain idle renderer ownership across rejected or cancelled preparation factories.
+//! Retain renderer or immutable request ownership across rejected or cancelled factories.
 
 use std::{
     error::Error,
@@ -8,24 +8,24 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-/// Transfer an owned renderer only when an admitted worker invokes its factory.
+/// Transfer owned preparation input only when an admitted worker invokes its factory.
 ///
 /// A rejected or uninvoked factory drops only its shared transfer handle. The
-/// application retains the renderer without calling its destructor on the UI
+/// application retains the input without calling its destructor on the UI
 /// thread. The application never takes while an accepted job is running; its
 /// terminal outcome first establishes whether the factory consumed ownership.
-pub(crate) struct RendererTransfer<T>(Arc<Mutex<Option<T>>>);
+pub(crate) struct PreparationTransfer<T>(Arc<Mutex<Option<T>>>);
 
-impl<T> Clone for RendererTransfer<T> {
+impl<T> Clone for PreparationTransfer<T> {
     fn clone(&self) -> Self {
         Self(Arc::clone(&self.0))
     }
 }
 
-impl<T> RendererTransfer<T> {
+impl<T> PreparationTransfer<T> {
     /// Keep idle owned state available until an accepted preparation begins.
-    pub(crate) fn new(renderer: T) -> Self {
-        Self(Arc::new(Mutex::new(Some(renderer))))
+    pub(crate) fn new(value: T) -> Self {
+        Self(Arc::new(Mutex::new(Some(value))))
     }
 
     /// Move state exactly once without invoking renderer code while locked.
@@ -50,8 +50,8 @@ pub(crate) enum TransferError {
 impl fmt::Display for TransferError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(match self {
-            Self::Consumed => "The preparation factory consumed renderer ownership",
-            Self::Poisoned => "Renderer transfer ownership is uncertain",
+            Self::Consumed => "The preparation factory consumed input ownership",
+            Self::Poisoned => "Preparation transfer ownership is uncertain",
         })
     }
 }
@@ -72,7 +72,7 @@ mod tests {
     #[test]
     fn uninvoked_factory_drop_keeps_owned_renderer_available() -> Result<(), TransferError> {
         let drops = Arc::new(AtomicUsize::new(0));
-        let transfer = RendererTransfer::new(Renderer(drops.clone()));
+        let transfer = PreparationTransfer::new(Renderer(drops.clone()));
         let captured = transfer.clone();
         let factory = move || captured.take();
         drop(factory);
@@ -88,7 +88,7 @@ mod tests {
     #[test]
     fn factory_takes_the_same_state_once_and_cannot_duplicate_it() -> Result<(), TransferError> {
         let drops = Arc::new(AtomicUsize::new(0));
-        let transfer = RendererTransfer::new(Renderer(drops.clone()));
+        let transfer = PreparationTransfer::new(Renderer(drops.clone()));
         let captured = transfer.clone();
         let factory = move || captured.take();
         let renderer = factory()?;

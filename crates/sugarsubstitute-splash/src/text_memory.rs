@@ -12,7 +12,7 @@ pub(super) const TEXTURE_BYTES: usize = 4 * 1024 * 1024;
 
 /// Keep immutable paint coordinates and destination identity together.
 #[derive(Clone, Copy)]
-pub(super) struct PaintSpec {
+pub(crate) struct PaintSpec {
     pub(super) theme: crate::Theme,
     pub(super) scale: f32,
     pub(super) width: u32,

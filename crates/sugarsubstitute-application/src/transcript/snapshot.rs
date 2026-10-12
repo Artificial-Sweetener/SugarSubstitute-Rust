@@ -80,19 +80,45 @@ impl TranscriptStore {
         first: Option<RecordId>,
         max_records: usize,
     ) -> Result<TranscriptSnapshot, TranscriptError> {
-        if max_records == 0 || max_records > MAX_SNAPSHOT_RECORDS {
-            return Err(TranscriptError::Bound);
-        }
+        let limit = snapshot_limit(max_records)?;
+        self.pin_snapshot(
+            self.records.iter().filter(|r| first.is_none_or(|id| r.id() >= id)),
+            limit,
+        )
+    }
+
+    /// Pin the newest contiguous retained range in its original forward order.
+    ///
+    /// Require1..=128 records and share the existing four snapshot credits. Select
+    /// from the actual deque tail before pinning, stopping at256KiB complete text.
+    /// Inspect at most twice the requested number of record metadata entries;
+    /// never scan the older prefix or copy/reparse foreign text. Snapshots retain
+    /// current record versions and survive later mutations, trimming or store drop.
+    ///
+    /// # Errors
+    /// Return the original bound or snapshot-capacity rejection without mutation.
+    pub fn snapshot_tail(&self, max_records: usize) -> Result<TranscriptSnapshot, TranscriptError> {
+        let limit = snapshot_limit(max_records)?;
+        let start = tail_start(self.records.iter().enumerate().rev(), self.records.len(), limit);
+        self.pin_snapshot(self.records.range(start..), limit)
+    }
+
+    /// Admit one exact immutable range using the same credit, byte and pin rules.
+    pub(super) fn pin_snapshot<'a>(
+        &self,
+        candidates: impl Iterator<Item = &'a Arc<TranscriptRecord>>,
+        limit: usize,
+    ) -> Result<TranscriptSnapshot, TranscriptError> {
         self.snapshots
             .live
             .fetch_update(Ordering::AcqRel, Ordering::Acquire, |live| {
                 (live < MAX_SNAPSHOTS).then_some(live + 1)
             })
             .map_err(|_| TranscriptError::SnapshotCapacity)?;
-        let mut records = Vec::with_capacity(max_records);
+        let mut records = Vec::with_capacity(limit);
         let mut bytes = 0;
-        for record in self.records.iter().filter(|r| first.is_none_or(|id| r.id() >= id)) {
-            if records.len() == max_records || bytes + record.text().len() > MAX_SNAPSHOT_BYTES {
+        for record in candidates.take(limit) {
+            if bytes + record.text().len() > MAX_SNAPSHOT_BYTES {
                 break;
             }
             bytes += record.text().len();
@@ -106,4 +132,31 @@ impl TranscriptStore {
             diagnostics: self.diagnostics(),
         })
     }
+}
+
+/// Validate both public range factories before selection or admission.
+fn snapshot_limit(max_records: usize) -> Result<usize, TranscriptError> {
+    if max_records == 0 || max_records > MAX_SNAPSHOT_RECORDS {
+        Err(TranscriptError::Bound)
+    } else {
+        Ok(max_records)
+    }
+}
+
+/// Select an actual indexed suffix without walking the older prefix.
+pub(super) fn tail_start<'a>(
+    newest_first: impl Iterator<Item = (usize, &'a Arc<TranscriptRecord>)>,
+    end: usize,
+    limit: usize,
+) -> usize {
+    let mut start = end;
+    let mut bytes = 0;
+    for (index, record) in newest_first.take(limit) {
+        if bytes + record.text().len() > MAX_SNAPSHOT_BYTES {
+            break;
+        }
+        bytes += record.text().len();
+        start = index;
+    }
+    start
 }

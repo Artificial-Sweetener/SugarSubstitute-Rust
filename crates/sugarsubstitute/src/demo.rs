@@ -161,6 +161,7 @@ impl WindowContent for SplashDemo {
             self.appearance,
             self.animation.frame(elapsed),
             feedback,
+            None,
         )
     }
 

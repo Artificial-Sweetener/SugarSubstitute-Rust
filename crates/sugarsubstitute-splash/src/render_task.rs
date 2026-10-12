@@ -6,6 +6,7 @@
 use super::{RenderError, RenderFrame, SplashRenderer, stages::RenderStages};
 use crate::{AnimationFrame, Appearance, ProgressFrame};
 use std::{error::Error, fmt, num::NonZeroUsize};
+use sugarsubstitute_application::transcript::TranscriptSnapshot;
 use sugarsubstitute_contracts::{
     execution::{CpuStep, CpuTask, JobContext, MemoryClaim, MemoryLease},
     presentation::{FrameIdentity, FrameShape, FrameValidator, PreparedFrame},
@@ -20,7 +21,6 @@ const GEOMETRY_SCRATCH: u64 = 1024 * 1024;
 const DECODER_AND_GLYPH_SCRATCH: u64 = 6 * 1024 * 1024;
 
 /// Capture one immutable view revision for a retained exclusive renderer.
-#[derive(Clone, Copy)]
 pub struct SplashRenderRequest {
     /// Validated tightly packed device-pixel shape; splash scale must additionally be >=0.5.
     pub shape: FrameShape,
@@ -34,6 +34,9 @@ pub struct SplashRenderRequest {
     pub feedback: ProgressFrame,
     /// Defer status font preparation for the first frame.
     pub bootstrap: bool,
+    /// Actual immutable transcript pin, retained through validation and result disposal.
+    /// Root verifies its resource against the current managed resource; presentation grants no authority.
+    pub console: Option<TranscriptSnapshot>,
 }
 impl SplashRenderRequest {
     /// Bound output plus live scratch and the host's later RGBA/BGRA retained pair.
@@ -68,6 +71,12 @@ pub struct SplashPreparationResult {
     pub renderer: SplashRenderer,
     /// Immutable prepared pixels or the original typed rendering error.
     pub frame: Result<PreparedFrame, RenderError>,
+    /// Return the same original snapshot after task scratch/validation disposal.
+    /// Keep it until the observed terminal result is published, rejected or discarded.
+    pub console: Option<TranscriptSnapshot>,
+    /// Actual rows clipped by projection bounds, from zero through ten.
+    /// Bootstrap and absent-console requests report zero; full source text remains pinned.
+    pub console_clipped_rows: u8,
 }
 /// Reject repeated use or a broken private task-state invariant.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -108,7 +117,6 @@ impl CpuTask<Result<SplashRenderer, RenderError>, PreparationError> for SplashIn
 /// adapter observes cancellation/deadlines between steps and owns actual task destruction.
 /// Renderer native resources are free-threaded but drawing is exclusively serialized.
 pub struct SplashRenderTask {
-    request: SplashRenderRequest,
     lease: Option<MemoryLease>,
     raster: Option<RenderStages>,
     validator: Option<FrameValidator>,
@@ -116,9 +124,12 @@ pub struct SplashRenderTask {
     renderer: Option<SplashRenderer>,
     started: bool,
     terminal: bool,
+    console_clipped_rows: u8,
     // Live pixel/scratch allocations above are destroyed before their claims.
     output_claim: Option<MemoryClaim>,
     scratch_claim: Option<MemoryClaim>,
+    // The original history pin releases last, after actual cursor/native/validation and claim disposal.
+    request: SplashRenderRequest,
 }
 impl SplashRenderTask {
     pub(super) fn new(
@@ -134,6 +145,7 @@ impl SplashRenderTask {
             validator: None,
             started: false,
             terminal: false,
+            console_clipped_rows: 0,
             output_claim: None,
             scratch_claim: None,
         }
@@ -170,10 +182,15 @@ impl SplashRenderTask {
                     Some(lease.claim(self.request.scratch_bytes()).map_err(RenderError::Memory)?);
             }
             let renderer = self.renderer.as_mut().ok_or(RenderError::InvalidFrame)?;
-            if !raster.step_admitted(renderer, Some(lease.clone()))? {
+            if !raster.step_admitted(
+                renderer,
+                Some(lease.clone()),
+                self.request.console.as_ref(),
+            )? {
                 return Ok(None);
             }
             let raster = self.raster.take().ok_or(RenderError::InvalidFrame)?;
+            self.console_clipped_rows = raster.console_clipped_rows();
             let pixels = raster.finish()?.take();
             self.scratch_claim = None;
             let lease = self.lease.take().ok_or(RenderError::InvalidFrame)?;
@@ -197,6 +214,9 @@ impl SplashRenderTask {
         &mut self,
         frame: Result<PreparedFrame, RenderError>,
     ) -> Result<CpuStep<SplashPreparationResult>, PreparationError> {
+        if let Some(raster) = &self.raster {
+            self.console_clipped_rows = raster.console_clipped_rows();
+        }
         self.raster = None;
         self.validator = None;
         self.output_claim = None;
@@ -204,7 +224,12 @@ impl SplashRenderTask {
         self.lease = None;
         self.terminal = true;
         let renderer = self.renderer.take().ok_or(PreparationError::InvalidTaskState)?;
-        Ok(CpuStep::Complete(SplashPreparationResult { renderer, frame }))
+        Ok(CpuStep::Complete(SplashPreparationResult {
+            renderer,
+            frame,
+            console: self.request.console.take(),
+            console_clipped_rows: self.console_clipped_rows,
+        }))
     }
 }
 impl CpuTask<SplashPreparationResult, PreparationError> for SplashRenderTask {
