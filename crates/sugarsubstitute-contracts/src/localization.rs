@@ -3,6 +3,9 @@
 
 //! Own SugarSubstitute's product copy and its sole supported-locale inventory.
 
+/// Localized native incident reporting copy.
+pub mod incident;
+
 /// Bind one supported locale to every user-facing splash message.
 pub struct Messages {
     /// Locale identifier accepted by the executable.
@@ -15,6 +18,8 @@ pub struct Messages {
     pub hide_output: &'static str,
     /// Accessible intent for the close button.
     pub cancel: &'static str,
+    /// Complete native report surface copy.
+    pub report: &'static incident::ReportMessages,
 }
 
 /// Keep the sole locale inventory together with complete owned-surface coverage.
@@ -25,6 +30,7 @@ pub static LOCALES: &[Messages] = &[
         show_output: "Show Comfy output",
         hide_output: "Hide Comfy output",
         cancel: "Cancel loading",
+        report: &incident::EN,
     },
     Messages {
         id: "zh-Hans",
@@ -32,6 +38,7 @@ pub static LOCALES: &[Messages] = &[
         show_output: "显示 Comfy 输出",
         hide_output: "隐藏 Comfy 输出",
         cancel: "取消加载",
+        report: &incident::ZH_HANS,
     },
     Messages {
         id: "ja",
@@ -39,6 +46,7 @@ pub static LOCALES: &[Messages] = &[
         show_output: "Comfy の出力を表示",
         hide_output: "Comfy の出力を非表示",
         cancel: "読み込みをキャンセル",
+        report: &incident::JA,
     },
     Messages {
         id: "ko",
@@ -46,6 +54,7 @@ pub static LOCALES: &[Messages] = &[
         show_output: "Comfy 출력 표시",
         hide_output: "Comfy 출력 숨기기",
         cancel: "불러오기 취소",
+        report: &incident::KO,
     },
     Messages {
         id: "es",
@@ -53,6 +62,7 @@ pub static LOCALES: &[Messages] = &[
         show_output: "Mostrar la salida de Comfy",
         hide_output: "Ocultar la salida de Comfy",
         cancel: "Cancelar la carga",
+        report: &incident::ES,
     },
 ];
 
@@ -73,8 +83,9 @@ mod tests {
             assert!(identities.insert(locale.id));
             assert!(
                 [locale.loading, locale.show_output, locale.hide_output, locale.cancel]
-                    .iter()
-                    .all(|text| !text.is_empty())
+                    .into_iter()
+                    .chain(locale.report.labels())
+                    .all(|text| !text.is_empty() && !text.contains('\0'))
             );
         }
         assert_eq!(messages("unrecognized").id, "en");

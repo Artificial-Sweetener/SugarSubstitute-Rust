@@ -35,6 +35,8 @@ mod native_action;
 mod native_storage;
 #[allow(unsafe_code)]
 mod native_surface;
+/// Own one scoped native incident report surface independently of webviews.
+pub mod report;
 mod runtime;
 #[path = "startup_custody.rs"]
 mod shutdown;

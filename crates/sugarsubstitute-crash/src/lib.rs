@@ -24,3 +24,5 @@ pub use error::{CrashAdmissionError, CrashError};
 pub use input::CaptureStartInput;
 
 pub mod incident;
+/// Format bounded charged redacted incident facts for native presentation.
+pub mod report_view;

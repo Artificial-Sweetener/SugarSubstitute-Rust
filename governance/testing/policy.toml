@@ -4,8 +4,8 @@ platforms = ["windows", "macos", "linux"]
 [[owners]]
 package = "sugarsubstitute-contracts"
 root = "crates/sugarsubstitute-contracts"
-concern = "Owned contracts, localization, memory claims, immutable frames, scoped lifecycle and bounded transcript facts; bounded incident evidence, durable acknowledgment facts and namespace eviction ledger; bounded coordinator-entry identity, launch input and setup deadlines"
-minimum_tests = 97
+concern = "Owned contracts, localization, memory claims, immutable frames, scoped lifecycle and bounded transcript facts; bounded incident evidence, durable acknowledgment facts and namespace eviction ledger; bounded coordinator-entry identity, launch input and setup deadlines; sole five-locale native incident report messages and complete consent disclosure"
+minimum_tests = 98
 
 [[owners]]
 package = "sugarsubstitute-application"
@@ -52,11 +52,11 @@ minimum_tests = 75
 [[owners]]
 package = "sugarsubstitute-desktop"
 root = "crates/sugarsubstitute-desktop"
-concern = "Nonblocking frame delivery, pre-Tao preparation, lossless wake handoff, bounded native dispatch, headless settlement, retained native storage, input and timing boundaries"
-minimum_tests = 199
+concern = "Nonblocking frame delivery, pre-Tao preparation, lossless wake handoff, bounded native dispatch, headless settlement, retained native storage, input and timing boundaries; current-view native reporter controls, explicit consent and inert save selection, clipboard transfer, bounded modal input and checked font/callback retirement"
+minimum_tests = 229
 
 [[owners]]
 package = "sugarsubstitute-crash"
 root = "crates/sugarsubstitute-crash"
-concern = "Bounded capture input, immutable budgets, retained partial registration and actual native retirement"
-minimum_tests = 110
+concern = "Bounded capture input, immutable budgets, retained partial registration and actual native retirement; bounded charged redacted report views, categorical absence and symbol failures"
+minimum_tests = 117
