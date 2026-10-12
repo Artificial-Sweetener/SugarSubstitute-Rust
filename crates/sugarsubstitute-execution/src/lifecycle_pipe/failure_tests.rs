@@ -293,6 +293,15 @@ fn terminal_retains_passive_actual_write_and_pending_read_observations() -> Test
     Ok(())
 }
 
+/// Release the held external write before the fixture ExecutionOwner joins its worker.
+struct WriteReturnHold(Arc<Boundary>);
+impl Drop for WriteReturnHold {
+    /// Unblock the accepted write on every normal, assertion and error teardown path.
+    fn drop(&mut self) {
+        self.0.write_release.open();
+    }
+}
+
 #[test]
 fn concurrent_write_retirement_preserves_exact_effect_without_rewriting_read_failure() -> TestResult
 {
@@ -301,6 +310,8 @@ fn concurrent_write_retirement_preserves_exact_effect_without_rewriting_read_fai
         let scope = scope(&rig)?;
         let boundary = Boundary::new();
         boundary.pending_write.store(true, Ordering::Release);
+        boundary.hold_write_return.store(true, Ordering::Release);
+        let _release_on_failure = WriteReturnHold(boundary.clone());
         let mut session = session(&rig, &scope, &boundary, true)?;
         connect(&rig, &session)?;
         let mut output = session.control.take_write_buffer()?.ok_or("Missing output")?;
@@ -310,12 +321,13 @@ fn concurrent_write_retirement_preserves_exact_effect_without_rewriting_read_fai
             .write(LifecyclePipeOperationId::new(1)?, Moment::from_nanos(900), output, 4)
             .map_err(|e| e.error)?;
         boundary.writing.wait()?;
-        // Model the external kernel's completed, partial or aborted write. Read fails
-        // first in the same protocol pass, before that write completion can be polled.
+        // The accepted external write cannot return until the read is queued;
+        // the next actual protocol pass therefore observes its failure first.
         *lock(&boundary.retired_write) = actual;
         boundary.fail_read.store(true, Ordering::Release);
         session.control.read(LifecyclePipeOperationId::new(2)?, Moment::from_nanos(900))?;
         boundary.wake(Role::Write)?;
+        boundary.write_release.open();
         let JobOutcome::Failure(error) = completion(&rig, &mut session)?.outcome else {
             return Err("Expected original read failure".into());
         };

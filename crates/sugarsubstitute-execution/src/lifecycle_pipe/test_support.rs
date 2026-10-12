@@ -31,6 +31,7 @@ pub(super) struct Boundary {
     pub(super) writes: AtomicUsize,
     pub(super) preparing_write: Gate,
     pub(super) hold_write: AtomicBool,
+    pub(super) hold_write_return: AtomicBool,
     pub(super) write_release: Gate,
     pub(super) fail_write_issue: AtomicBool,
     pub(super) fail_write_completion: AtomicBool,
@@ -84,6 +85,7 @@ impl Boundary {
             writes: AtomicUsize::new(0),
             preparing_write: Gate::default(),
             hold_write: AtomicBool::new(false),
+            hold_write_return: AtomicBool::new(false),
             write_release: Gate::default(),
             fail_write_issue: AtomicBool::new(false),
             fail_write_completion: AtomicBool::new(false),
@@ -225,6 +227,9 @@ impl PipeLease for Lease {
             })
         })?;
         self.0.writing.open();
+        if self.0.hold_write_return.load(Ordering::Acquire) {
+            self.0.write_release.wait().map_err(|_| failure("held_write_return"))?;
+        }
         if matches!(result, Dispatch::Issued(_))
             && self.0.fail_write_completion.load(Ordering::Acquire)
         {
