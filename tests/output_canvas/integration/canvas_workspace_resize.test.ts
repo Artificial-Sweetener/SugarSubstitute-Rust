@@ -55,14 +55,14 @@ function pointer(element: HTMLElement, type: string, x: number, id = 1): void {
 
 test('coalesces a captured resize and commits its final release coordinate exactly once', () => {
   const f = fixture();
-  pointer(f.divider, 'pointerdown', 560);
-  for (let step = 0; step < 100; step++) pointer(f.divider, 'pointermove', 560 + step);
+  pointer(f.divider, 'pointerdown', 840);
+  for (let step = 0; step < 100; step++) pointer(f.divider, 'pointermove', 840 - step);
   expect(f.frames.pending).toBe(1);
   expect(f.preview).not.toHaveBeenCalled();
   f.frames.advance(16);
   expect(f.preview).toHaveBeenCalledTimes(1);
   expect(f.model.read().canvas.width).toBe(659);
-  pointer(f.divider, 'pointerup', 720);
+  pointer(f.divider, 'pointerup', 680);
   expect(f.model.read().canvas.width).toBe(720);
   expect(f.commit.mock.calls).toEqual([[720]]);
   expect(f.captures.size).toBe(0);
@@ -72,15 +72,15 @@ test('coalesces a captured resize and commits its final release coordinate exact
 
 test('cancels capture and restores accepted width without allowing queued work after retirement', () => {
   const f = fixture();
-  pointer(f.divider, 'pointerdown', 560);
-  pointer(f.divider, 'pointermove', 800);
+  pointer(f.divider, 'pointerdown', 840);
+  pointer(f.divider, 'pointermove', 600);
   f.frames.advance(16);
   expect(f.model.read().canvas.width).toBe(800);
-  pointer(f.divider, 'pointercancel', 800);
+  pointer(f.divider, 'pointercancel', 600);
   expect(f.model.read().canvas.width).toBe(560);
   expect(f.commit).not.toHaveBeenCalled();
-  pointer(f.divider, 'pointerdown', 560);
-  pointer(f.divider, 'pointermove', 900);
+  pointer(f.divider, 'pointerdown', 840);
+  pointer(f.divider, 'pointermove', 500);
   f.input.dispose();
   f.frames.advance(16);
   expect(f.captures.size).toBe(0);
@@ -107,10 +107,10 @@ test('clamps keyboard resizing through the model and preserves modified host sho
   expect(f.commit).toHaveBeenLastCalledWith(320);
   key('End');
   expect(f.commit).toHaveBeenLastCalledWith(1040);
-  key('ArrowLeft');
+  key('ArrowRight');
   expect(f.commit).toHaveBeenLastCalledWith(1020);
-  pointer(f.divider, 'pointerdown', 1020);
-  pointer(f.divider, 'pointermove', 1300);
+  pointer(f.divider, 'pointerdown', 380);
+  pointer(f.divider, 'pointermove', 100);
   key('Escape');
   expect(f.captures.size).toBe(0);
   expect(f.model.read().canvas.width).toBe(560);

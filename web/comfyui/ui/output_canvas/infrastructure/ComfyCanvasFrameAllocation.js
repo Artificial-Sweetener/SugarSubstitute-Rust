@@ -14,9 +14,10 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Allocate the installed Comfy graph frame while retaining native chrome and coordinate origins. */
-/** Move the graph origin and its complete render layers together, leaving native navigation in place. */
+/** Reserve right-side canvas space across graph layers while retaining the native graph origin. */
 export class ComfyCanvasFrameAllocation {
     root;
+    panel;
     #chrome;
     #frame;
     #styles;
@@ -25,6 +26,7 @@ export class ComfyCanvasFrameAllocation {
     /** Qualify a direct native chrome ancestor and the public graph canvas before changing host geometry. */
     constructor(root, panel) {
         this.root = root;
+        this.panel = panel;
         const chrome = [...root.children].find((child) => child.contains(panel));
         const canvas = root.querySelector(':scope > #graph-canvas');
         const frame = root.parentElement;
@@ -38,6 +40,7 @@ export class ComfyCanvasFrameAllocation {
         this.#frame = frame;
         this.#styles = [
             { element: frame, property: 'overflow' },
+            { element: panel, property: '--sc-output-workspace-reserved-width' },
             ...['width', 'margin-left', 'overflow', 'clip-path'].map((property) => ({
                 element: root,
                 property,
@@ -62,12 +65,13 @@ export class ComfyCanvasFrameAllocation {
             return;
         }
         this.root.style.setProperty('width', `calc(100% - ${inset}px)`);
-        this.root.style.setProperty('margin-left', `${inset}px`);
+        this.panel.style.setProperty('--sc-output-workspace-reserved-width', `${inset}px`);
+        this.root.style.setProperty('margin-left', '0px');
         // Hidden overflow permits focus-driven scrolling; the qualified outer frame must remain stationary.
         this.#frame.style.setProperty('overflow', 'clip');
         this.root.style.setProperty('overflow', 'visible');
-        this.root.style.setProperty('clip-path', `inset(0px 0px 0px -${inset}px)`);
-        this.#chrome.style.setProperty('left', `-${inset}px`);
+        this.root.style.setProperty('clip-path', `inset(0px -${inset}px 0px 0px)`);
+        this.#chrome.style.setProperty('left', '0px');
         this.#chrome.style.setProperty('width', `calc(100% + ${inset}px)`);
     }
     /** Restore exact inline values and priorities after graph-workspace suspension or replacement. */

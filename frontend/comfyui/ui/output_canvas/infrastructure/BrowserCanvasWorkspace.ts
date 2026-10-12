@@ -193,14 +193,14 @@ export class BrowserCanvasWorkspace {
     const allocation = this.model.read();
     this.#allocation = allocation;
     const visible = allocation.visible && !this.#suspended;
-    const inset = visible ? allocation.content.x : 0;
+    const inset = visible && allocation.mode === 'docked' ? allocation.canvas.width : 0;
     this.#frame.apply(inset);
-    this.content.style.left = `${inset}px`;
+    this.content.style.left = '0px';
     this.content.style.width = `calc(100% - ${inset}px)`;
     this.#pane.style.width = `${allocation.canvas.width}px`;
     this.#pane.hidden = !visible;
     this.#backdrop.hidden = !visible || allocation.mode !== 'drawer';
-    this.#backdrop.style.left = `${allocation.canvas.width}px`;
+    this.#backdrop.style.right = `${allocation.canvas.width}px`;
     this.#divider.setAttribute('aria-valuenow', String(Math.round(allocation.canvas.width)));
     this.#divider.setAttribute('aria-valuemin', String(Math.round(allocation.minimumWidth)));
     this.#divider.setAttribute('aria-valuemax', String(Math.round(allocation.maximumWidth)));

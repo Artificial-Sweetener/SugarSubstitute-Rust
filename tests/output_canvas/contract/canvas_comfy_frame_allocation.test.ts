@@ -40,11 +40,12 @@ test('allocates a common graph origin and compensates only identified native chr
   const f = frame();
   const adapter = new ComfyCanvasFrameAllocation(f.root, f.panel);
   adapter.apply(480);
-  expect(f.root.style.marginLeft).toBe('480px');
+  expect(f.root.style.marginLeft).toBe('0px');
   expect(f.root.style.width).toBe('calc(100% - 480px)');
-  expect(f.chrome.style.left).toBe('-480px');
+  expect(f.panel.style.getPropertyValue('--sc-output-workspace-reserved-width')).toBe('480px');
+  expect(f.chrome.style.left).toBe('0px');
   expect(f.chrome.style.width).toBe('calc(100% + 480px)');
-  expect(f.root.style.clipPath).toBe('inset(0px 0px 0px -480px)');
+  expect(f.root.style.clipPath).toBe('inset(0px -480px 0px 0px)');
   expect(f.parent.style.overflow).toBe('clip');
   expect(f.root.children).toHaveLength(3);
   expect(f.canvas.parentElement).toBe(f.root);
@@ -54,6 +55,7 @@ test('allocates a common graph origin and compensates only identified native chr
   expect(f.root.style.cssText).toBe('');
   expect(f.chrome.style.cssText).toBe('');
   expect(f.parent.style.cssText).toBe('');
+  expect(f.panel.style.cssText).toBe('');
   adapter.dispose();
 });
 
@@ -63,6 +65,7 @@ test('restores pre-existing inline styles and priorities on disposal and rejects
   f.root.style.setProperty('overflow', 'clip');
   f.parent.style.setProperty('overflow', 'hidden', 'important');
   f.chrome.style.setProperty('left', '2px');
+  f.panel.style.setProperty('--sc-output-workspace-reserved-width', '10px', 'important');
   const original = f.root.style.cssText;
   const chromeOriginal = f.chrome.style.cssText;
   const adapter = new ComfyCanvasFrameAllocation(f.root, f.panel);
@@ -73,6 +76,10 @@ test('restores pre-existing inline styles and priorities on disposal and rejects
   expect(f.chrome.style.cssText).toBe(chromeOriginal);
   expect(f.parent.style.getPropertyValue('overflow')).toBe('hidden');
   expect(f.parent.style.getPropertyPriority('overflow')).toBe('important');
+  expect(f.panel.style.getPropertyValue('--sc-output-workspace-reserved-width')).toBe('10px');
+  expect(f.panel.style.getPropertyPriority('--sc-output-workspace-reserved-width')).toBe(
+    'important',
+  );
   adapter.apply(500);
   expect(f.root.style.cssText).toBe(original);
   expect(() => new ComfyCanvasFrameAllocation(document.createElement('div'), f.panel)).toThrow(
