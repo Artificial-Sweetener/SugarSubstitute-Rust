@@ -23,6 +23,8 @@ pub mod fixture_descendant;
 #[cfg(windows)]
 pub mod lifecycle_protocol;
 #[cfg(windows)]
+mod managed_output;
+#[cfg(windows)]
 #[allow(unsafe_code)]
 mod native_claims;
 #[cfg(windows)]
@@ -51,6 +53,8 @@ pub use claim_types::{
 pub use claims::{CLAIM_OPERATION_BYTES, WindowsResourceClaims};
 #[cfg(windows)]
 pub use environment::{EnvironmentOverride, LaunchEnvironment, LaunchEnvironmentError};
+#[cfg(windows)]
+pub use managed_output::RejectedManagedOutputLaunch;
 #[cfg(windows)]
 pub use registry::WindowsProcessRegistry;
 #[cfg(windows)]

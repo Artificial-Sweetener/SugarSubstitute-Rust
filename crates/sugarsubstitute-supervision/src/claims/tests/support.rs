@@ -15,6 +15,7 @@ use sugarsubstitute_contracts::{
 };
 use sugarsubstitute_execution::ExecutionOwner;
 mod boundary;
+mod managed_output_native;
 pub(super) use boundary::*;
 pub(super) struct Harness {
     pub(super) claims: WindowsResourceClaims,
