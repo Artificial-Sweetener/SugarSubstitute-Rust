@@ -3,6 +3,41 @@
 //! Require exact original jobs and consumed success before publishing cached authority.
 use super::*;
 #[test]
+fn original_owner_getters_preserve_actual_admission_cutoff_and_retained_custody() -> TestResult {
+    let mut h = Harness::new()?;
+    let original = h.owner.original_setup_budget();
+    assert_eq!(original, h.budget);
+    assert_eq!(h.owner.original_execution_owner(), None);
+    h.discover()?;
+    assert_eq!(h.owner.original_execution_owner(), Some(h.scope.owner_id()));
+    assert_eq!(h.owner.original_setup_budget(), original);
+    let other = ExecutionOwner::new(h.clock.clone(), Arc::new(Wake::default()))?;
+    let foreign = other.client();
+    let scope = foreign.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
+    assert_ne!(h.owner.original_execution_owner(), Some(scope.owner_id()));
+    let spec = h.setup_spec()?;
+    assert!(matches!(
+        h.owner.submit_election(&foreign, &scope, spec),
+        Err(EntryAdmissionError::Identity)
+    ));
+    assert_eq!(h.fake.calls[1].load(Ordering::Acquire), 0);
+    assert!(matches!(h.elect()?, EntryObservation::ElectionHeld));
+    assert_eq!(h.owner.original_execution_owner(), Some(h.scope.owner_id()));
+    assert_eq!(h.owner.original_setup_budget(), original);
+    assert!(h.fake.locked.load(Ordering::Acquire));
+    h.owner.close_admission();
+    assert_eq!(h.owner.original_execution_owner(), Some(h.scope.owner_id()));
+    assert_eq!(h.owner.original_setup_budget(), original);
+    assert!(lock(&h.owner.lifetime.state).memory.is_some());
+    assert!(!h.owner.lifetime.retired.load(Ordering::Acquire));
+    assert!(matches!(h.close(Moment::from_nanos(40_000_000_000))?, EntryObservation::Retired));
+    assert!(lock(&h.owner.lifetime.state).memory.is_none());
+    assert!(!h.fake.locked.load(Ordering::Acquire));
+    assert_eq!(h.owner.original_setup_budget(), original);
+    h.join_execution_after_retirement()?;
+    Ok(())
+}
+#[test]
 fn cached_namespace_requires_actual_consumed_discovery_and_transfers_only_once() -> TestResult {
     let mut h = Harness::new()?;
     assert!(h.owner.take_namespace().is_none());

@@ -101,6 +101,16 @@ impl CoordinatorEntryOwner {
             events: std::array::from_fn(|_| None),
         }
     }
+    /// Return the unchanged original setup budget as inert matching data.
+    /// Native authority and current-time validation remain with the retained owner.
+    pub const fn original_setup_budget(&self) -> EntrySetupBudget {
+        self.budget
+    }
+    /// Return the actual execution identity retained after admitted discovery.
+    /// This cached identity grants no native authority or scheduler capability.
+    pub const fn original_execution_owner(&self) -> Option<ExecutionId> {
+        self.execution
+    }
     /// Observe cached immutable metadata without native access or mutex locking.
     pub fn snapshot(&self) -> EntrySnapshot {
         EntrySnapshot {
