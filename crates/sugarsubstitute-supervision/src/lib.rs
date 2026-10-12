@@ -6,6 +6,11 @@
 //! callers separately establish canonical trust and authenticated launch authority.
 //! The Windows registry retains native families through cancellation and observed cleanup.
 
+#[cfg(windows)]
+pub mod backend_listener;
+#[cfg(windows)]
+pub mod installed_frontend;
+
 mod arguments;
 mod command;
 mod errors;

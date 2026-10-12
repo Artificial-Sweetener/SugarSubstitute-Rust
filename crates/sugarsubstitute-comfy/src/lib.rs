@@ -5,3 +5,5 @@
 pub mod configuration;
 pub mod launch;
 pub mod readiness;
+#[cfg(windows)]
+pub mod readiness_transport;

@@ -102,12 +102,14 @@ impl JobSpec {
             (
                 Operation::Startup | Operation::PipeDrain | Operation::Readiness,
                 JobClass::IoLifecycle
-            ) | (
-                Operation::NativeLifecycle,
-                JobClass::IoLifecycle
-                    | JobClass::InfrastructureLifecycle
-                    | JobClass::NativeObservation
-            ) | (Operation::FramePrepare, JobClass::CpuInteractive)
+            ) | (Operation::Readiness, JobClass::InfrastructureLifecycle)
+                | (
+                    Operation::NativeLifecycle,
+                    JobClass::IoLifecycle
+                        | JobClass::InfrastructureLifecycle
+                        | JobClass::NativeObservation
+                )
+                | (Operation::FramePrepare, JobClass::CpuInteractive)
                 | (Operation::ImageDecode, JobClass::CpuDecode)
                 | (
                     Operation::Infrastructure,
@@ -129,7 +131,7 @@ mod tests {
         let allowed = [
             (Operation::Startup, vec![JobClass::IoLifecycle]),
             (Operation::PipeDrain, vec![JobClass::IoLifecycle]),
-            (Operation::Readiness, vec![JobClass::IoLifecycle]),
+            (Operation::Readiness, vec![JobClass::IoLifecycle, JobClass::InfrastructureLifecycle]),
             (
                 Operation::NativeLifecycle,
                 vec![
