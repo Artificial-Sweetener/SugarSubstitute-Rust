@@ -49,6 +49,7 @@ impl StreamingPort {
             return Err(ClaimError::invalid("diagnostic_changed_stage"));
         }
         let units = paths::wide(&target)?;
+        self.check(context)?;
         super::super::activate(
             &self.files[index].handle,
             &units,
@@ -75,7 +76,24 @@ impl StreamingPort {
             return Err(ClaimError::invalid("diagnostic_unchecked_reconcile"));
         };
         let path = self.path(object)?;
-        let (id, facts) = self.open_file(path, object.bound(), false, true, context)?;
+        let mut retained = self.files.iter().filter(|file| {
+            file.path == path && file.writable && !file.deleted && !file.handle.raw().0.is_null()
+        });
+        let id = retained.next().map(|file| file.id);
+        if retained.next().is_some() {
+            return Err(ClaimError::invalid("diagnostic_ambiguous_reconcile"));
+        }
+        let (id, facts) = if let Some(id) = id {
+            let index = self.index(id)?;
+            if paths::final_path(&self.files[index].handle)? != path {
+                return Err(ClaimError::invalid("diagnostic_changed_reconcile_path"));
+            }
+            let facts = self.observe(index, context)?;
+            self.files[index].facts = Some(facts);
+            (id, facts)
+        } else {
+            self.open_file(path, object.bound(), false, true, context)?
+        };
         if facts.identity != file_identity || facts.sha256 != sha256 {
             return Err(ClaimError::invalid("diagnostic_changed_reconcile"));
         }
@@ -106,6 +124,7 @@ impl StreamingPort {
             return Err(ClaimError::invalid("diagnostic_changed_deletion"));
         }
         let information = FILE_DISPOSITION_INFO { DeleteFile: true };
+        self.check(context)?;
         // SAFETY: The exact retained DELETE-capable file is validated immediately
         // above. Initialized native disposition remains live through the call.
         unsafe {
@@ -166,6 +185,7 @@ impl StreamingPort {
             facts: None,
             bound: 0,
             stage: false,
+            writable: false,
             deleted: false,
         });
         paths::validate_regular(&self.files[index].handle, None)?;

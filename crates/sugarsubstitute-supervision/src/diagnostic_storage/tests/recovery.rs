@@ -5,6 +5,8 @@ mod clocks;
 mod inventory;
 mod settlement;
 mod stage;
+mod victim;
+mod victim_context;
 use super::*;
 use sha2::{Digest, Sha256};
 use std::sync::atomic::AtomicUsize;

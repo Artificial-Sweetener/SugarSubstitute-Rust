@@ -4,14 +4,16 @@
 mod errors;
 mod stage;
 mod types;
+mod victim;
 use super::*;
 use deletion::RetainedDeletion;
 pub use errors::{DiagnosticRecoveryValidationCode, DiagnosticRecoveryValidationError};
-use sha2::{Digest, Sha256};
+use source::{canonical, retained_source, whole};
 pub use types::{
     DiagnosticRecoveryDecision, DiagnosticRecoveryLedgerCase, DiagnosticRecoverySource,
     DiagnosticRecoveryValidator,
 };
+pub use victim::DiagnosticRecoveredVictimState;
 
 impl DiagnosticStorage {
     /// Recover summary-eviction authority from complete actual journal and ledger reads.
@@ -68,8 +70,8 @@ impl DiagnosticStorage {
         {
             return Err(error(operation.key, Code::ChangedIdentity));
         }
-        let journal_index = retained_source(&state, &journal_source, operation.key)?;
-        retained_source(&state, &ledger_source, operation.key)?;
+        let journal_index = retained_source(&mut state, &journal_source, operation.key, context)?;
+        retained_source(&mut state, &ledger_source, operation.key, context)?;
         let id = next_lease(&mut state, operation.key)?;
         state.deletion = Some(RetainedDeletion {
             id,
@@ -110,7 +112,7 @@ impl DiagnosticStorage {
                 .ok_or_else(|| error(operation.key, Code::Closed))?
                 .victim_settled = true;
         }
-        let ledger_index = retained_source(&state, &ledger_source, operation.key)?;
+        let ledger_index = retained_source(&mut state, &ledger_source, operation.key, context)?;
         state
             .port
             .close(ledger_source.native, context)
@@ -119,92 +121,4 @@ impl DiagnosticStorage {
         state.reads.remove(ledger_index);
         Ok(DurableDeletionPermit { shared: self.shared.clone(), operation: operation.key, id })
     }
-}
-fn whole(
-    storage: &DiagnosticStorage,
-    lease: &mut DiagnosticReadLease,
-    operation: &DiagnosticStorageOperation,
-    context: &JobContext,
-) -> Result<DiagnosticRecoverySource, DiagnosticStorageError> {
-    if !Arc::ptr_eq(&storage.shared, &lease.shared) || lease.operation != operation.key {
-        return Err(error(operation.key, Code::InvalidIdentity));
-    }
-    let (native_id, object, class, name_digest) = {
-        let state = storage.check(operation, context)?;
-        let retained = state
-            .reads
-            .iter()
-            .find(|value| value.id == lease.id)
-            .ok_or_else(|| error(operation.key, Code::Closed))?;
-        if retained.facts != Some(lease.facts()) || lease.facts().bytes > DIAGNOSTIC_IO_BYTES as u64
-        {
-            return Err(error(operation.key, Code::ChangedIdentity));
-        }
-        let namespace = state.namespace.ok_or_else(|| error(operation.key, Code::Closed))?;
-        let binding = match (retained.object, retained.candidate) {
-            (Some(object), candidate) => {
-                let actual = crate::protected_storage::record_file::diagnostic_object_binding(
-                    object, namespace,
-                );
-                if candidate.is_some_and(|observed| observed != actual) {
-                    return Err(error(operation.key, Code::InvalidIdentity));
-                }
-                actual
-            }
-            (None, Some(candidate)) => candidate,
-            _ => return Err(error(operation.key, Code::InvalidIdentity)),
-        };
-        (
-            retained.native.ok_or_else(|| error(operation.key, Code::Closed))?,
-            retained.object,
-            binding.0,
-            binding.1,
-        )
-    };
-    let size =
-        usize::try_from(lease.facts().bytes).map_err(|_| error(operation.key, Code::Capacity))?;
-    let mut bytes = Vec::new();
-    bytes.try_reserve_exact(size).map_err(|cause| {
-        native(operation.key, Code::Capacity, ClaimError::new("diagnostic_recovery_bytes", cause))
-    })?;
-    bytes.resize(size, 0);
-    if lease.read_chunk(0, &mut bytes, context)? != size
-        || <[u8; 32]>::from(Sha256::digest(&bytes)) != lease.facts().sha256
-    {
-        return Err(error(operation.key, Code::ChangedIdentity));
-    }
-    Ok(DiagnosticRecoverySource {
-        bytes,
-        facts: lease.facts(),
-        object,
-        class,
-        name_digest,
-        lease: lease.id,
-        native: native_id,
-    })
-}
-fn canonical(
-    source: &DiagnosticRecoverySource,
-    object: DiagnosticObject,
-    namespace: NamespaceId,
-) -> bool {
-    source.object.is_none_or(|actual| actual == object)
-        && (source.class, source.name_digest)
-            == crate::protected_storage::record_file::diagnostic_object_binding(object, namespace)
-}
-fn retained_source(
-    state: &State,
-    source: &DiagnosticRecoverySource,
-    key: LogicalStoreOperationKey,
-) -> Result<usize, DiagnosticStorageError> {
-    state
-        .reads
-        .iter()
-        .position(|value| {
-            value.id == source.lease
-                && value.native == Some(source.native)
-                && value.facts == Some(source.facts)
-                && value.object == source.object
-        })
-        .ok_or_else(|| error(key, Code::ChangedIdentity))
 }

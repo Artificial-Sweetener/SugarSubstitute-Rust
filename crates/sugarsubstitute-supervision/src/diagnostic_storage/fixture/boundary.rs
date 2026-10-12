@@ -11,6 +11,7 @@ mod state;
 pub(in crate::diagnostic_storage) use state::Filesystem;
 use state::*;
 impl Port for Filesystem {
+    fn bind_operation(&mut self, _: &JobContext) {}
     fn resolve(
         &mut self,
         _: &Path,
@@ -104,7 +105,18 @@ impl Port for Filesystem {
             .iter()
             .position(|file| file.object == object && file.active && file.identity != [0; 24])
             .ok_or_else(|| ClaimError::invalid("fake_missing_file"))?;
-        let id = handle(&mut disk, file)?;
+        let writable = disk
+            .handles
+            .iter()
+            .find(|output| output.file == file && output.live && output.writable)
+            .map(|output| (output.id, output.stage));
+        let id = if let Some((id, false)) = writable {
+            id
+        } else if writable.is_some() {
+            return Err(ClaimError::invalid("fake_read_sharing"));
+        } else {
+            handle(&mut disk, file)?
+        };
         let facts = facts(&disk.files[file]);
         if let Some(clock) = &disk.after_open {
             clock.observe(disk.after_open_time);
@@ -155,6 +167,9 @@ impl Port for Filesystem {
         });
         disk.mutations += 1;
         let id = handle(&mut disk, file)?;
+        let index = index(&disk, id)?;
+        disk.handles[index].writable = true;
+        disk.handles[index].stage = true;
         if disk.faults.partial_stage {
             return Err(ClaimError::invalid("fake_stage_after_adoption"));
         }
@@ -167,7 +182,49 @@ impl Port for Filesystem {
         expected: RecordedDiagnosticFileFacts,
         context: &JobContext,
     ) -> Result<(NativeId, DiagnosticReadFacts), ClaimError> {
-        self.recover_existing(object, historical, expected, context)
+        self.recover_existing(object, historical, expected, true, context)
+    }
+    fn recover_migration_stage(
+        &mut self,
+        object: DiagnosticObject,
+        historical: LogicalStoreOperationKey,
+        expected: RecordedDiagnosticFileFacts,
+        access: MigrationStageAccess,
+        context: &JobContext,
+    ) -> Result<(NativeId, DiagnosticReadFacts), ClaimError> {
+        if !matches!(object, DiagnosticObject::Summary(_)) {
+            return Err(ClaimError::invalid("fake_unbound_migration_stage"));
+        }
+        self.recover_existing(
+            object,
+            historical,
+            expected,
+            access == MigrationStageAccess::Candidate,
+            context,
+        )
+    }
+    fn observe_file(
+        &mut self,
+        id: NativeId,
+        _: &JobContext,
+    ) -> Result<DiagnosticReadFacts, ClaimError> {
+        let disk = lock(&self.0);
+        let output = &disk.handles[index(&disk, id)?];
+        if !output.live {
+            return Err(ClaimError::invalid("fake_closed_observation"));
+        }
+        Ok(facts(&disk.files[output.file]))
+    }
+    fn migration_stage_target(
+        &mut self,
+        id: NativeId,
+        object: DiagnosticObject,
+        context: &JobContext,
+    ) -> Result<Option<DiagnosticReadFacts>, ClaimError> {
+        let actual = self.observe_file(id, context)?;
+        let disk = lock(&self.0);
+        let file = &disk.files[disk.handles[index(&disk, id)?].file];
+        Ok((file.active && file.object == object).then_some(actual))
     }
     fn read(
         &mut self,
@@ -197,7 +254,11 @@ impl Port for Filesystem {
         _: &JobContext,
     ) -> Result<(), ClaimError> {
         let mut disk = lock(&self.0);
-        let file = disk.handles[index(&disk, id)?].file;
+        let index = index(&disk, id)?;
+        if !disk.handles[index].writable || !disk.handles[index].live {
+            return Err(ClaimError::invalid("fake_readonly_write"));
+        }
+        let file = disk.handles[index].file;
         if offset as usize != disk.files[file].bytes.len() {
             return Err(ClaimError::invalid("fake_append_offset"));
         }
@@ -207,6 +268,9 @@ impl Port for Filesystem {
     }
     fn flush(&mut self, id: NativeId, _: &JobContext) -> Result<DiagnosticReadFacts, ClaimError> {
         let disk = lock(&self.0);
+        if !disk.handles[index(&disk, id)?].writable {
+            return Err(ClaimError::invalid("fake_readonly_flush"));
+        }
         Ok(facts(&disk.files[disk.handles[index(&disk, id)?].file]))
     }
     fn activate(
@@ -219,7 +283,11 @@ impl Port for Filesystem {
         let actual = self.flush(id, context)?;
         {
             let mut disk = lock(&self.0);
-            let current = disk.handles[index(&disk, id)?].file;
+            let index = index(&disk, id)?;
+            if !disk.handles[index].writable || !disk.handles[index].stage {
+                return Err(ClaimError::invalid("fake_readonly_activation"));
+            }
+            let current = disk.handles[index].file;
             let previous = disk.files.iter().position(|file| {
                 file.object == object
                     && file.active
@@ -234,6 +302,9 @@ impl Port for Filesystem {
                 _ => return Err(ClaimError::invalid("fake_changed_predecessor")),
             }
             if let Some(old) = previous {
+                if disk.handles.iter().any(|output| output.file == old && output.live) {
+                    return Err(ClaimError::invalid("fake_activation_sharing"));
+                }
                 disk.files[old].identity = [0; 24];
             }
             disk.files[current].active = true;
@@ -248,10 +319,46 @@ impl Port for Filesystem {
     fn reconcile_activation(
         &mut self,
         object: DiagnosticObject,
-        _: DiagnosticPredecessor,
+        expected: DiagnosticPredecessor,
         context: &JobContext,
     ) -> Result<DiagnosticReadFacts, ClaimError> {
-        let (id, facts) = self.open(object, object.bound(), context)?;
+        let (id, facts) = {
+            let mut disk = lock(&self.0);
+            let file = disk
+                .files
+                .iter()
+                .position(|file| file.object == object && file.active && file.identity != [0; 24])
+                .ok_or_else(|| ClaimError::invalid("fake_missing_reconcile"))?;
+            if disk
+                .handles
+                .iter()
+                .any(|output| output.file == file && output.live && !output.writable)
+            {
+                return Err(ClaimError::invalid("fake_reconcile_sharing"));
+            }
+            let id = if let Some(output) = disk
+                .handles
+                .iter()
+                .find(|output| output.file == file && output.live && output.writable)
+            {
+                output.id
+            } else {
+                let id = handle(&mut disk, file)?;
+                let index = index(&disk, id)?;
+                disk.handles[index].writable = true;
+                id
+            };
+            let facts = facts(&disk.files[file]);
+            if expected
+                != (DiagnosticPredecessor::Exact {
+                    file_identity: facts.identity,
+                    sha256: facts.sha256,
+                })
+            {
+                return Err(ClaimError::invalid("fake_changed_reconcile"));
+            }
+            (id, facts)
+        };
         self.close(id, context)?;
         Ok(facts)
     }

@@ -13,13 +13,13 @@ pub enum DiagnosticRecoveryLedgerCase {
 /// Observe private whole-read bytes under the retained source's actual identity.
 /// Construction is restricted to the storage owner after complete digest validation.
 pub struct DiagnosticRecoverySource {
-    pub(super) bytes: Vec<u8>,
-    pub(super) facts: DiagnosticReadFacts,
-    pub(super) object: Option<DiagnosticObject>,
-    pub(super) class: DiagnosticEntryClass,
-    pub(super) name_digest: [u8; 32],
-    pub(super) lease: u64,
-    pub(super) native: NativeId,
+    pub(in crate::diagnostic_storage) bytes: Vec<u8>,
+    pub(in crate::diagnostic_storage) facts: DiagnosticReadFacts,
+    pub(in crate::diagnostic_storage) object: Option<DiagnosticObject>,
+    pub(in crate::diagnostic_storage) class: DiagnosticEntryClass,
+    pub(in crate::diagnostic_storage) name_digest: [u8; 32],
+    pub(in crate::diagnostic_storage) origin: crate::diagnostic_storage::source::SourceOrigin,
+    pub(in crate::diagnostic_storage) native: NativeId,
 }
 impl DiagnosticRecoverySource {
     /// Borrow at most64KiB whole actual bytes; the source retains its native pin.

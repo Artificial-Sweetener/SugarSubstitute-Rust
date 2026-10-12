@@ -49,6 +49,7 @@ impl StreamingPort {
             facts: None,
             bound: 0,
             stage: false,
+            writable: false,
             deleted: false,
         });
         paths::validate_object(&self.files[index].handle, true, true)?;
@@ -215,6 +216,7 @@ impl StreamingPort {
             facts: None,
             bound: 0,
             stage: false,
+            writable: false,
             deleted: false,
         });
         let file = &self.files[index];

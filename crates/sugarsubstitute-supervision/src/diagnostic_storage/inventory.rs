@@ -44,6 +44,7 @@ impl DiagnosticEntryClass {
         }
     }
 }
+#[derive(Clone)]
 pub(crate) struct ObservedEntry {
     pub(crate) digest: [u8; 32],
     pub(crate) class: DiagnosticEntryClass,
@@ -157,6 +158,9 @@ impl DiagnosticStorage {
         context: &JobContext,
     ) -> Result<DiagnosticInventory, DiagnosticStorageError> {
         let mut state = self.check(operation, context)?;
+        if state.migration.is_some() {
+            return Err(error(operation.key, Code::Busy));
+        }
         state.inventory_complete = false;
         let namespace = state.namespace.ok_or_else(|| error(operation.key, Code::Closed))?;
         let scan = state
@@ -166,6 +170,15 @@ impl DiagnosticStorage {
         if scan.entries.len() > DIAGNOSTIC_SCAN_BOUND {
             return Err(error(operation.key, Code::InventoryIncomplete));
         }
+        state.scan_generation = state
+            .scan_generation
+            .checked_add(1)
+            .ok_or_else(|| error(operation.key, Code::Capacity))?;
+        state.scan_entries.clear();
+        state.scan_entries.try_reserve_exact(scan.entries.len()).map_err(|cause| {
+            native(operation.key, Code::Capacity, ClaimError::new("diagnostic_scan_binding", cause))
+        })?;
+        state.scan_entries.extend(scan.entries.iter().cloned());
         let mut result = DiagnosticInventory {
             entries: Vec::new(),
             status: DiagnosticInventoryStatus::Incomplete,

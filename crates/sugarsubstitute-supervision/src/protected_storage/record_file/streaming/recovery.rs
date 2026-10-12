@@ -2,18 +2,28 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Adopt a uniquely observed historical stage without creating or rewriting bytes.
 use super::*;
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum StageRecoveryAccess {
+    Ledger,
+    PreservedOriginal,
+    Candidate,
+}
 impl StreamingPort {
     pub(super) fn recover_stage_owned(
         &mut self,
         object: DiagnosticObject,
         historical: LogicalStoreOperationKey,
         expected: RecordedDiagnosticFileFacts,
+        access: StageRecoveryAccess,
         context: &JobContext,
     ) -> Result<(NativeId, DiagnosticReadFacts), ClaimError> {
         self.check(context)?;
         if !self.stage_scan_complete
             || !self.writer.as_ref().is_some_and(HeldFile::is_locked)
-            || object != DiagnosticObject::StoreState
+            || !match access {
+                StageRecoveryAccess::Ledger => object == DiagnosticObject::StoreState,
+                _ => matches!(object, DiagnosticObject::Summary(_)),
+            }
             || Some(historical.owner().namespace) != self.namespace
             || expected.bytes() > DIAGNOSTIC_IO_BYTES as u64
         {
@@ -45,7 +55,8 @@ impl StreamingPort {
             .as_ref()
             .ok_or_else(|| ClaimError::invalid("diagnostic_unresolved"))?
             .join(leaf);
-        let (id, actual) = self.open_file(path, expected.bytes(), false, true, context)?;
+        let writable = access != StageRecoveryAccess::PreservedOriginal;
+        let (id, actual) = self.open_file(path, expected.bytes(), false, writable, context)?;
         let index = self.index(id)?;
         if expected.file_identity() != actual.file_identity()
             || expected.sha256() != actual.sha256()
@@ -53,7 +64,7 @@ impl StreamingPort {
         {
             return Err(ClaimError::invalid("diagnostic_changed_recovery_stage"));
         }
-        self.files[index].stage = true;
+        self.files[index].stage = writable;
         self.check(context)?;
         Ok((id, actual))
     }

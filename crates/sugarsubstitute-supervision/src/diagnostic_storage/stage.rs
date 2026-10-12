@@ -12,6 +12,8 @@ pub(super) struct RetainedStage {
     pub(super) flushed: Option<DiagnosticReadFacts>,
     pub(super) recovered: Option<RecordedDiagnosticFileFacts>,
     pub(super) recovery_predecessor: Option<DiagnosticPredecessor>,
+    pub(super) migration: Option<summary_migration::MigrationRole>,
+    pub(super) activated: bool,
 }
 
 /// Pin one owner-retained stage; dropping the pin preserves its charge and custody.
@@ -22,7 +24,7 @@ pub struct DiagnosticStage {
 }
 /// Observe checked actual flushed stage bytes without granting activation authority.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct DiagnosticStageFacts(DiagnosticReadFacts);
+pub struct DiagnosticStageFacts(pub(super) DiagnosticReadFacts);
 impl DiagnosticStageFacts {
     /// Observe actual flushed identity, digest and length.
     pub const fn read_facts(self) -> DiagnosticReadFacts {
@@ -125,6 +127,8 @@ impl DiagnosticStorage {
             flushed: None,
             recovered: None,
             recovery_predecessor: None,
+            migration: None,
+            activated: false,
         });
         let native_id = state
             .port
@@ -174,7 +178,7 @@ impl DiagnosticStage {
             .position(|value| value.id == self.id)
             .ok_or_else(|| error(self.operation, Code::Closed))?;
         let stage = &mut state.stages[index];
-        if stage.recovered.is_some() {
+        if stage.recovered.is_some() || stage.migration.is_some() {
             return Err(error(self.operation, Code::Busy));
         }
         let end = stage
@@ -201,6 +205,9 @@ impl DiagnosticStage {
     ) -> Result<DiagnosticStageFacts, DiagnosticStorageError> {
         let mut state = lock(&self.shared);
         check(&mut state, self.operation, context, false)?;
+        if state.migration.is_some() {
+            return Err(error(self.operation, Code::Busy));
+        }
         let index = state
             .stages
             .iter()
@@ -231,6 +238,9 @@ impl DiagnosticStage {
         let Some(index) = state.stages.iter().position(|value| value.id == self.id) else {
             return Ok(());
         };
+        if state.stages[index].migration.is_some() {
+            return Err(error(self.operation, Code::Busy));
+        }
         if let Some(id) = state.stages[index].native {
             state
                 .port
@@ -278,6 +288,9 @@ pub(super) fn mutation(
     key: LogicalStoreOperationKey,
 ) -> Result<(), DiagnosticStorageError> {
     if !state.writer {
+        return Err(error(key, Code::Busy));
+    }
+    if state.migration.is_some() {
         return Err(error(key, Code::Busy));
     }
     if !state.inventory_complete {

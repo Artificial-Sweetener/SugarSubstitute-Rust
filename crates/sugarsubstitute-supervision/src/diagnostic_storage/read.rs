@@ -17,7 +17,7 @@ pub struct DiagnosticReadLease {
     pub(super) shared: Shared,
     pub(super) operation: LogicalStoreOperationKey,
     pub(super) id: u64,
-    facts: DiagnosticReadFacts,
+    pub(super) facts: DiagnosticReadFacts,
 }
 impl DiagnosticStorage {
     /// Open exact typed bytes and validate actual size/identity/digest before return.
@@ -207,6 +207,9 @@ impl DiagnosticReadLease {
         let Some(index) = state.reads.iter().position(|value| value.id == self.id) else {
             return Ok(());
         };
+        if summary_migration::intent::pins_read(&state, self.id) {
+            return Err(error(self.operation, Code::Busy));
+        }
         if let Some(id) = state.reads[index].native {
             state
                 .port

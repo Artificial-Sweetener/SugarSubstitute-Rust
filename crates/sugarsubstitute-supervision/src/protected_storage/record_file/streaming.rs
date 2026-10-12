@@ -38,6 +38,7 @@ struct NativeFile {
     facts: Option<DiagnosticReadFacts>,
     bound: u64,
     stage: bool,
+    writable: bool,
     deleted: bool,
 }
 pub(crate) struct StreamingPort {
@@ -51,6 +52,7 @@ pub(crate) struct StreamingPort {
     next: u64,
     stage_candidates: Vec<StageCandidate>,
     stage_scan_complete: bool,
+    original_context: Option<JobContext>,
 }
 impl StreamingPort {
     pub(crate) fn new(memory: Arc<MemoryClaim>) -> Result<Self, ClaimError> {
@@ -70,10 +72,11 @@ impl StreamingPort {
             next: 1,
             stage_candidates: Vec::new(),
             stage_scan_complete: false,
+            original_context: None,
         })
     }
     fn check(&self, context: &JobContext) -> Result<(), ClaimError> {
-        super::super::check(context)?;
+        check_context(&self.original_context, context)?;
         if self.live_handles() >= DIAGNOSTIC_HANDLE_BOUND {
             return Err(ClaimError::invalid("diagnostic_handle_bound"));
         }
@@ -99,6 +102,9 @@ impl StreamingPort {
     }
 }
 impl Port for StreamingPort {
+    fn bind_operation(&mut self, context: &JobContext) {
+        self.original_context = Some(context.clone());
+    }
     fn resolve(
         &mut self,
         root: &Path,
@@ -184,7 +190,52 @@ impl Port for StreamingPort {
         expected: RecordedDiagnosticFileFacts,
         context: &JobContext,
     ) -> Result<(NativeId, DiagnosticReadFacts), ClaimError> {
-        self.recover_stage_owned(object, historical, expected, context)
+        self.recover_stage_owned(
+            object,
+            historical,
+            expected,
+            recovery::StageRecoveryAccess::Ledger,
+            context,
+        )
+    }
+    fn recover_migration_stage(
+        &mut self,
+        object: DiagnosticObject,
+        historical: LogicalStoreOperationKey,
+        expected: RecordedDiagnosticFileFacts,
+        access: diagnostic::MigrationStageAccess,
+        context: &JobContext,
+    ) -> Result<(NativeId, DiagnosticReadFacts), ClaimError> {
+        let access = match access {
+            diagnostic::MigrationStageAccess::PreservedOriginal => {
+                recovery::StageRecoveryAccess::PreservedOriginal
+            }
+            diagnostic::MigrationStageAccess::Candidate => recovery::StageRecoveryAccess::Candidate,
+        };
+        self.recover_stage_owned(object, historical, expected, access, context)
+    }
+    fn observe_file(
+        &mut self,
+        id: NativeId,
+        context: &JobContext,
+    ) -> Result<DiagnosticReadFacts, ClaimError> {
+        let index = self.index(id)?;
+        if paths::final_path(&self.files[index].handle)? != self.files[index].path {
+            return Err(ClaimError::invalid("diagnostic_changed_observed_path"));
+        }
+        self.observe(index, context)
+    }
+    fn migration_stage_target(
+        &mut self,
+        id: NativeId,
+        object: DiagnosticObject,
+        context: &JobContext,
+    ) -> Result<Option<DiagnosticReadFacts>, ClaimError> {
+        let target = self.path(object)?;
+        let index = self.index(id)?;
+        let is_target = self.files[index].path == target;
+        let actual = self.observe_file(id, context)?;
+        Ok(is_target.then_some(actual))
     }
     fn read(
         &mut self,
@@ -247,13 +298,13 @@ impl Port for StreamingPort {
         self.absent_owned(object, context)
     }
     fn close(&mut self, id: NativeId, context: &JobContext) -> Result<(), ClaimError> {
-        super::super::check(context)?;
+        self.check(context)?;
         let index = self.index(id)?;
         self.files[index].handle.close()?;
         if !self.files[index].deleted {
             self.files.remove(index);
         }
-        super::super::check(context)
+        self.check(context)
     }
     fn retire(&mut self, context: &JobContext) -> Result<(), ClaimError> {
         for file in self.files.iter_mut().rev() {
@@ -275,4 +326,18 @@ impl Port for StreamingPort {
                 self.writer.as_ref().is_some_and(|writer| !writer.handle.raw().0.is_null()),
             )
     }
+}
+fn check_context(original: &Option<JobContext>, current: &JobContext) -> Result<(), ClaimError> {
+    let first =
+        original.as_ref().ok_or_else(|| ClaimError::invalid("diagnostic_unbound_context"))?;
+    if first.owner_id() != current.owner_id()
+        || first.scope_id() != current.scope_id()
+        || first.deadline().is_none()
+        || current.deadline().is_none()
+        || current.deadline() > first.deadline()
+    {
+        return Err(ClaimError::invalid("diagnostic_changed_context"));
+    }
+    super::super::check(first)?;
+    super::super::check(current)
 }

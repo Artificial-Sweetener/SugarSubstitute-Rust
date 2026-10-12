@@ -11,6 +11,32 @@ impl StreamingPort {
         stage: bool,
         context: &JobContext,
     ) -> Result<(NativeId, DiagnosticReadFacts), ClaimError> {
+        if !stage {
+            self.check(context)?;
+            let mut retained = self.files.iter().filter(|file| {
+                file.path == path
+                    && file.writable
+                    && !file.stage
+                    && !file.deleted
+                    && !file.handle.raw().0.is_null()
+            });
+            let id = retained.next().map(|file| file.id);
+            if retained.next().is_some() {
+                return Err(ClaimError::invalid("diagnostic_ambiguous_retained_target"));
+            }
+            if let Some(id) = id {
+                let index = self.index(id)?;
+                if paths::final_path(&self.files[index].handle)? != path {
+                    return Err(ClaimError::invalid("diagnostic_changed_retained_target"));
+                }
+                let facts = self.observe(index, context)?;
+                if facts.bytes > bound {
+                    return Err(ClaimError::invalid("diagnostic_size_bound"));
+                }
+                self.files[index].facts = Some(facts);
+                return Ok((id, facts));
+            }
+        }
         self.open_file(path, bound, stage, stage, context)
     }
     pub(super) fn open_file(
@@ -31,6 +57,7 @@ impl StreamingPort {
         let units = paths::wide(&path)?;
         let descriptor = security::Descriptor::new(&self.sid)?;
         let attributes = descriptor.attributes();
+        self.check(context)?;
         // SAFETY: Bounded owned name and protected noninheritable descriptor remain
         // live. CREATE_NEW never overwrites; all read leases exclude writes/deletion.
         let raw = unsafe {
@@ -53,6 +80,7 @@ impl StreamingPort {
             facts: None,
             bound,
             stage,
+            writable,
             deleted: false,
         });
         let file = &self.files[index];
@@ -90,7 +118,7 @@ impl StreamingPort {
         seek(&file.handle, 0)?;
         let mut remaining = bytes;
         while remaining != 0 {
-            super::super::super::check(context)?;
+            check_context(&self.original_context, context)?;
             let count = usize::try_from(remaining.min(buffer.len() as u64))
                 .map_err(|cause| ClaimError::new("diagnostic_chunk", cause))?;
             read_exact(&file.handle, &mut buffer[..count])?;
@@ -101,7 +129,7 @@ impl StreamingPort {
         if paths::file_identity(&file.handle)? != identity {
             return Err(ClaimError::invalid("diagnostic_changed_identity"));
         }
-        super::super::super::check(context)?;
+        check_context(&self.original_context, context)?;
         Ok(DiagnosticReadFacts { identity, sha256: hash.finalize().into(), bytes })
     }
     pub(super) fn read_owned(
@@ -123,6 +151,7 @@ impl StreamingPort {
             return Err(ClaimError::invalid("diagnostic_read_range"));
         }
         seek(&file.handle, offset)?;
+        check_context(&self.original_context, context)?;
         read_exact(&file.handle, output)?;
         self.check(context)?;
         Ok(output.len())
@@ -150,6 +179,7 @@ impl StreamingPort {
             return Err(ClaimError::invalid("diagnostic_changed_stage"));
         }
         seek(&file.handle, offset)?;
+        check_context(&self.original_context, context)?;
         let mut written = 0;
         // SAFETY: The complete caller slice is bounded above; actual synchronous
         // file custody stays armed through every status and clock observation.

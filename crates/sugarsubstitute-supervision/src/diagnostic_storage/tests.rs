@@ -8,6 +8,7 @@ mod custody;
 mod disposition;
 mod fixture;
 mod inventory;
+mod migration;
 mod recovery;
 use super::fixture::boundary::Filesystem;
 use super::*;

@@ -83,6 +83,7 @@ impl DiagnosticStorage {
         state.stages.clear();
         state.reads.clear();
         state.deletion = None;
+        state.migration = None;
         state.writer = false;
         state.inventory_complete = false;
         Ok(())
@@ -99,7 +100,7 @@ impl DiagnosticStorage {
             handles: state.port.live_handles(),
             stages: state.stages.len(),
             reads: state.reads.len(),
-            disposition: state.deletion.is_some(),
+            disposition: state.deletion.is_some() || state.migration.is_some(),
         }
     }
 }

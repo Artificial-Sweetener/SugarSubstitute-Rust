@@ -50,6 +50,7 @@ impl Filesystem {
         object: DiagnosticObject,
         historical: LogicalStoreOperationKey,
         expected: RecordedDiagnosticFileFacts,
+        writable: bool,
         _: &JobContext,
     ) -> Result<(NativeId, DiagnosticReadFacts), ClaimError> {
         let mut disk = lock(&self.0);
@@ -73,6 +74,9 @@ impl Filesystem {
             return Err(ClaimError::invalid("fake_missing_stage_path"));
         }
         let id = handle(&mut disk, file)?;
+        let index = index(&disk, id)?;
+        disk.handles[index].writable = writable;
+        disk.handles[index].stage = writable;
         let actual = facts(&disk.files[file]);
         if let Some(clock) = &disk.after_open {
             clock.observe(disk.after_open_time);

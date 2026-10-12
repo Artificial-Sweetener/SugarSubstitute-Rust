@@ -6,6 +6,9 @@
 //! partial stages remain in this owner outside cancellable result lifetimes.
 //! Dropping a lease never closes native custody or proves durable disposition.
 mod activation;
+mod boundary;
+pub(crate) use boundary::MigrationStageAccess;
+pub(crate) use boundary::Port;
 mod deletion;
 mod disposition;
 #[cfg(any(test, feature = "boundary-fixtures"))]
@@ -16,7 +19,9 @@ mod read;
 mod recovery;
 use operation::{check, next_lease};
 mod retirement;
+mod source;
 mod stage;
+mod summary_migration;
 #[cfg(test)]
 mod tests;
 mod types;
@@ -31,6 +36,7 @@ pub use read::DiagnosticReadLease;
 pub use recovery::*;
 pub use retirement::DiagnosticStorageSnapshot;
 pub use stage::{DiagnosticDispositionStage, DiagnosticStage, DiagnosticStageFacts};
+pub use summary_migration::*;
 pub use types::*;
 
 use crate::ClaimError;
@@ -47,7 +53,6 @@ use types::DiagnosticStorageFailureCode as Code;
 
 type Shared = Arc<Mutex<State>>;
 pub(crate) type NativeId = u64;
-
 /// One constructor-private operation binding, including its original deadline.
 pub struct DiagnosticStorageOperation {
     shared: Shared,
@@ -66,6 +71,7 @@ impl DiagnosticStorageOperation {
 }
 
 struct Binding {
+    context: JobContext,
     key: LogicalStoreOperationKey,
     execution: ExecutionId,
     scope: ScopeId,
@@ -93,91 +99,11 @@ struct State {
     stages: Vec<stage::RetainedStage>,
     reads: Vec<read::RetainedRead>,
     deletion: Option<deletion::RetainedDeletion>,
+    migration: Option<Box<summary_migration::MigrationIntent>>,
+    archives: Vec<summary_migration::MigrationArchive>,
+    scan_generation: u64,
+    scan_entries: Vec<inventory::ObservedEntry>,
     next_lease: u64,
-}
-
-pub(crate) trait Port: Send {
-    fn resolve(
-        &mut self,
-        root: &Path,
-        namespace: NamespaceId,
-        context: &JobContext,
-    ) -> Result<(), ClaimError>;
-    fn acquire_writer(&mut self, context: &JobContext) -> Result<(), ClaimError>;
-    fn scan(&mut self, context: &JobContext) -> Result<inventory::Scan, ClaimError>;
-    fn open(
-        &mut self,
-        object: DiagnosticObject,
-        bound: u64,
-        context: &JobContext,
-    ) -> Result<(NativeId, DiagnosticReadFacts), ClaimError>;
-    fn open_inventory(
-        &mut self,
-        observed: &inventory::ObservedEntry,
-        bound: u64,
-        context: &JobContext,
-    ) -> Result<(NativeId, DiagnosticReadFacts), ClaimError>;
-    fn create_stage(
-        &mut self,
-        object: DiagnosticObject,
-        operation: LogicalStoreOperationKey,
-        reserved: u64,
-        context: &JobContext,
-    ) -> Result<NativeId, ClaimError>;
-    fn recover_stage(
-        &mut self,
-        object: DiagnosticObject,
-        historical: LogicalStoreOperationKey,
-        expected: RecordedDiagnosticFileFacts,
-        context: &JobContext,
-    ) -> Result<(NativeId, DiagnosticReadFacts), ClaimError>;
-    fn read(
-        &mut self,
-        id: NativeId,
-        offset: u64,
-        output: &mut [u8],
-        context: &JobContext,
-    ) -> Result<usize, ClaimError>;
-    fn write(
-        &mut self,
-        id: NativeId,
-        offset: u64,
-        input: &[u8],
-        context: &JobContext,
-    ) -> Result<(), ClaimError>;
-    fn flush(
-        &mut self,
-        id: NativeId,
-        context: &JobContext,
-    ) -> Result<DiagnosticReadFacts, ClaimError>;
-    fn activate(
-        &mut self,
-        id: NativeId,
-        object: DiagnosticObject,
-        expected: DiagnosticPredecessor,
-        context: &JobContext,
-    ) -> Result<DiagnosticReadFacts, ClaimError>;
-    fn reconcile_activation(
-        &mut self,
-        object: DiagnosticObject,
-        expected: DiagnosticPredecessor,
-        context: &JobContext,
-    ) -> Result<DiagnosticReadFacts, ClaimError>;
-    fn delete(
-        &mut self,
-        id: NativeId,
-        object: DiagnosticObject,
-        expected: DiagnosticReadFacts,
-        context: &JobContext,
-    ) -> Result<(), ClaimError>;
-    fn absent(
-        &mut self,
-        object: DiagnosticObject,
-        context: &JobContext,
-    ) -> Result<bool, ClaimError>;
-    fn close(&mut self, id: NativeId, context: &JobContext) -> Result<(), ClaimError>;
-    fn retire(&mut self, context: &JobContext) -> Result<(), ClaimError>;
-    fn live_handles(&self) -> usize;
 }
 
 /// Own one bounded account-protected store independently of a failed desktop.
@@ -236,6 +162,10 @@ impl DiagnosticStorage {
                 stages,
                 reads,
                 deletion: None,
+                migration: None,
+                archives: Vec::new(),
+                scan_generation: 0,
+                scan_entries: Vec::new(),
                 next_lease: 1,
             })),
         })
@@ -282,6 +212,7 @@ impl DiagnosticStorage {
         state.last_observed = Some(now);
         state.operation = Some(Binding {
             key,
+            context: context.clone(),
             execution: context.owner_id(),
             scope: context.scope_id(),
             deadline,
@@ -289,6 +220,7 @@ impl DiagnosticStorage {
             cleanup_scope: None,
             last_observed: now,
         });
+        state.port.bind_operation(context);
         Ok(DiagnosticStorageOperation { shared: self.shared.clone(), key, deadline })
     }
     /// Complete an operation only after all access/stage/disposition custody settles.
@@ -300,7 +232,11 @@ impl DiagnosticStorage {
         context: &JobContext,
     ) -> Result<(), DiagnosticStorageError> {
         let mut state = self.check(operation, context)?;
-        if !state.stages.is_empty() || !state.reads.is_empty() || state.deletion.is_some() {
+        if !state.stages.is_empty()
+            || !state.reads.is_empty()
+            || state.deletion.is_some()
+            || state.migration.is_some()
+        {
             return Err(error(operation.key, Code::Busy));
         }
         state.high_water = operation.key.id().get();

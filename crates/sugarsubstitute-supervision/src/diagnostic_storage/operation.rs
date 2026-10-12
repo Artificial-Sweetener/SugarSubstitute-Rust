@@ -13,7 +13,12 @@ pub(super) fn check(
         return Err(error(key, Code::InvalidIdentity));
     }
     let deadline = context.deadline().ok_or_else(|| error(key, Code::Admission))?;
+    let original_now = (!cleanup).then(|| binding.context.now());
     let now = context.now();
+    if original_now.is_some_and(|original| original < binding.last_observed || now < original) {
+        state.closed = true;
+        return Err(error(key, Code::Deadline));
+    }
     if now < binding.last_observed {
         state.closed = true;
         return Err(error(key, Code::Deadline));
@@ -30,6 +35,9 @@ pub(super) fn check(
         return Err(error(key, Code::Admission));
     }
     if context.cancellation_requested() {
+        return Err(error(key, Code::Cancelled));
+    }
+    if !cleanup && binding.context.cancellation_requested() {
         return Err(error(key, Code::Cancelled));
     }
     let limit = if cleanup {

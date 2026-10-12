@@ -27,6 +27,8 @@ pub(super) struct Handle {
     pub(super) file: usize,
     pub(super) live: bool,
     pub(super) deleted: bool,
+    pub(super) writable: bool,
+    pub(super) stage: bool,
     pub(super) memory: Option<Arc<MemoryClaim>>,
 }
 pub(in crate::diagnostic_storage) struct Disk {
@@ -127,7 +129,15 @@ pub(super) fn handle(disk: &mut Disk, file: usize) -> Result<u64, ClaimError> {
     let id = disk.next;
     disk.next =
         disk.next.checked_add(1).ok_or_else(|| ClaimError::invalid("fake_output_id_exhausted"))?;
-    let output = Handle { id, file, live: true, deleted: false, memory: Some(memory) };
+    let output = Handle {
+        id,
+        file,
+        live: true,
+        deleted: false,
+        writable: false,
+        stage: false,
+        memory: Some(memory),
+    };
     if let Some(old) = disk.handles.iter_mut().find(|handle| !handle.live) {
         *old = output;
     } else {
