@@ -3,12 +3,18 @@
 //! Own lease/resource and desktop-exit policy; startup presentation remains with StartupSession.
 //! Native containment, authenticated IPC and OS process registries remain adapter work.
 mod desktop_exit;
+mod main_authorization;
 mod resource_observations;
 mod resource_requests;
 mod resource_state;
 mod resources;
 mod watchdog;
 pub use desktop_exit::{DesktopExitSnapshot, DesktopExitTransaction};
+pub use main_authorization::{
+    MAIN_AUTHORIZATION_HISTORY, MainAuthorizationEffect, MainAuthorizationError,
+    MainAuthorizationObservation, MainAuthorizationRejected, MainAuthorizationSession,
+    MainAuthorizationSnapshot, MainAuthorizationStage,
+};
 pub use resource_state::{
     MAX_LEASES, MAX_REQUESTS, MAX_RESOURCES, MAX_RUN_REQUESTS, MAX_RUNS, REQUEST_HISTORY,
     ResourcePhase,
