@@ -136,6 +136,17 @@ impl Core {
                 .count(),
             children_live: state.scopes.values().filter(|scope| scope.parent == Some(id)).count(),
             reserved_bytes: stored.map_or(0, |scope| scope.bytes),
+            native_reservations: state
+                .symbol_resources
+                .values()
+                .filter(|resource| resource.scope_id == id)
+                .count(),
+            native_outputs_in_custody: state
+                .symbol_resources
+                .values()
+                .filter(|resource| resource.scope_id == id)
+                .map(|resource| usize::from(resource.observation.snapshot().0))
+                .sum(),
         }
     }
 
@@ -148,6 +159,10 @@ impl Core {
                     scope.abandoned
                         && !scope.cancel.pending()
                         && scope.bytes == 0
+                        && !state
+                            .symbol_resources
+                            .values()
+                            .any(|resource| resource.scope_id == **id)
                         && !state.jobs.values().any(|job| job.scope_id == **id)
                         && !state.scopes.values().any(|child| child.parent == Some(**id))
                 })

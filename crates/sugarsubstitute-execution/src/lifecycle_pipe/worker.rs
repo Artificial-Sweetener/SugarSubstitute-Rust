@@ -7,7 +7,7 @@ use sugarsubstitute_contracts::execution::{ExecutionError, JobOutcome, PanicCaus
 mod protocol;
 #[path = "write_revocation.rs"]
 mod write_revocation;
-pub(crate) struct Active {
+pub(super) struct ActiveState {
     work: PipeWork,
     context: JobContext,
     started: Moment,
@@ -24,7 +24,7 @@ pub(crate) struct Active {
     completed: bool,
     native_retired: bool,
 }
-impl Active {
+impl ActiveState {
     pub(crate) fn new(
         mut work: PipeWork,
         context: JobContext,
@@ -71,7 +71,14 @@ impl Active {
             ));
             core.mailbox.deliver_wake();
         }
-        retain_failure(&mut self.outcome, error);
+        if !error.requires_process_shutdown()
+            && self.outcome.is_none()
+            && let Some(reason) = error.admission_stop()
+        {
+            self.outcome = Some(crate::task::stopped_outcome(reason));
+        } else {
+            retain_failure(&mut self.outcome, error);
+        }
     }
     fn stop(&mut self, core: &Core, now: Moment) -> bool {
         if self.outcome.is_some() {
@@ -82,6 +89,12 @@ impl Active {
             return true;
         }
         let state = lock(&core.state);
+        if let Some(reason) =
+            crate::symbol_admission::original_stop(&state, self.context.job_id(), now)
+        {
+            self.outcome = Some(crate::task::stopped_outcome(reason));
+            return true;
+        }
         let s = lock(&self.work.shared.state);
         if s.stopped {
             self.outcome = Some(JobOutcome::Cancelled);
@@ -106,8 +119,13 @@ impl Active {
         if let Some(peer) = peer
             && let Some(lease) = &mut self.lease
         {
-            lease.adopt(peer);
-            self.enrolled = true;
+            match lease.adopt(peer) {
+                Ok(()) => self.enrolled = true,
+                Err((error, peer)) => {
+                    lock(&self.work.shared.state).peer = Some(peer);
+                    self.error(core, *error);
+                }
+            }
         }
         let observed = if clock_available { core.clock.now() } else { now };
         self.stop(core, observed);
@@ -204,8 +222,14 @@ impl Active {
         // with the pin snapshot so retirement cannot skip a late transfer.
         if let Some(peer) = peer {
             if let Some(lease) = &mut self.lease {
-                lease.adopt(peer);
-                self.enrolled = true;
+                match lease.adopt(peer) {
+                    Ok(()) => self.enrolled = true,
+                    Err((error, peer)) => {
+                        lock(&self.work.shared.state).peer = Some(peer);
+                        self.error(core, *error);
+                        return;
+                    }
+                }
             } else {
                 lock(&self.work.shared.state).peer = Some(peer);
                 self.error(core, failure("pipe_missing_lease"));
@@ -275,6 +299,43 @@ impl Active {
                 }
             };
             self.work.owner.finish(&self.context, self.started, ended, outcome, facts);
+        }
+    }
+}
+
+/// Keep every buffer, lease and original cause together when settlement is unproved.
+pub(crate) struct Active {
+    owner: Option<Box<ActiveState>>,
+}
+impl Active {
+    pub(crate) fn new(work: PipeWork, context: JobContext, core: &Arc<Core>, now: Moment) -> Self {
+        Self { owner: Some(Box::new(ActiveState::new(work, context, core, now))) }
+    }
+    pub(crate) fn completed(&self) -> bool {
+        self.owner.as_ref().is_some_and(|owner| owner.completed())
+    }
+    pub(crate) fn fail_owner(&mut self, cause: &PanicCause) {
+        if let Some(owner) = &mut self.owner {
+            owner.fail_owner(cause);
+        }
+    }
+    pub(crate) fn progress(&mut self, core: &Core, now: Moment, clock_available: bool) {
+        if let Some(owner) = &mut self.owner {
+            owner.progress(core, now, clock_available);
+        }
+    }
+}
+impl Drop for Active {
+    fn drop(&mut self) {
+        if let Some(owner) = self.owner.take()
+            && !owner.completed
+        {
+            let retained = Box::leak(owner);
+            tracing::error!(
+                operation = "native_pipe_uncertain_drop",
+                job_id = retained.context.job_id().get(),
+                "Native pipe buffers, output custody and original causes retained before diagnostics"
+            );
         }
     }
 }

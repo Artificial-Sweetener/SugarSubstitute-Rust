@@ -13,11 +13,12 @@ mod errors;
 mod identity;
 mod lifetime;
 mod memory;
+mod native_handles;
 mod outcome;
 mod ports;
 mod spec;
 
-pub use context::{CancelControl, Clock, JobContext, WaitFuture};
+pub use context::{AdmittedJobResources, CancelControl, Clock, JobContext, WaitFuture};
 pub use counter_deadline::{CounterDeadline, CounterDeadlineError};
 pub use errors::{AdmissionError, ExecutionError};
 pub use identity::{
@@ -25,6 +26,10 @@ pub use identity::{
 };
 pub use lifetime::{JobControl, JobPhase, JobStatus, OwnedJob, Scope, ScopeControl, ScopeSnapshot};
 pub use memory::{MemoryClaim, MemoryClaimError, MemoryLease, MemoryRelease};
+pub use native_handles::{
+    NativeHandleClaim, NativeHandleLease, NativeHandleObservation, NativeHandleOutput,
+    NativeHandleRelease, NativeResourceError, SymbolNativePartition,
+};
 pub use outcome::{JobCompletion, JobOutcome, PanicCause, TerminalKind};
 pub use ports::{
     CompletionBatch, CompletionNotification, CompletionWake, CpuStep, CpuTask, ExecutionPort,

@@ -135,6 +135,8 @@ impl ScopeControl for ScopeHandle {
                 terminal_unobserved: 0,
                 children_live: 0,
                 reserved_bytes: 0,
+                native_reservations: 0,
+                native_outputs_in_custody: 0,
             },
             |core| core.scope_snapshot(self.id),
         )

@@ -42,8 +42,8 @@ impl Lease {
             server,
             expected,
             slots: Vec::new(),
-            own_token: Handle(0),
-            own_image: Handle(0),
+            own_token: Handle::new(),
+            own_image: Handle::new(),
             identity: None,
         }
     }
@@ -119,7 +119,7 @@ impl EntryLease for Lease {
             let name = endpoint(self.expected.namespace());
             let slot = self.slot(index)?;
             return issue.execute(|| {
-                if slot.pipe.0 == 0 {
+                if slot.pipe.value() == 0 {
                     open_client(slot, &name)?;
                 }
                 slot.connected = true;

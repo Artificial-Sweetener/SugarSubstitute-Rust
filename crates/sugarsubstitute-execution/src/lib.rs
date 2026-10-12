@@ -21,6 +21,14 @@ mod fixture_session;
 mod lifecycle_pipe;
 mod mailbox;
 mod memory;
+mod native_resources;
+mod symbol_admission;
+mod symbol_cleanup;
+pub use symbol_admission::{
+    DiagnosticPipeResources, SymbolResourceRejection, SymbolSubmissionRejection,
+    SymbolTransportReservation,
+};
+pub use symbol_cleanup::{CleanupDeadline, SymbolCleanupBeginRejection, SymbolCleanupPermit};
 #[cfg(any(windows, test))]
 mod native;
 #[cfg(any(windows, test))]
@@ -54,7 +62,8 @@ pub mod windows_output;
 
 pub use clock::MonotonicClock;
 pub use runtime::{
-    ExecutionClient, ExecutionLimits, ExecutionOwner, ShutdownProgress, WorkerStatus,
+    ExecutionClient, ExecutionLimits, ExecutionOwner, NativeOutputCustody, ShutdownProgress,
+    WorkerStatus,
 };
 
 #[cfg(test)]
@@ -72,3 +81,6 @@ mod windows_clock;
 #[cfg(windows)]
 #[allow(unsafe_code)]
 mod windows_counter;
+
+#[cfg(test)]
+mod symbol_test_support;

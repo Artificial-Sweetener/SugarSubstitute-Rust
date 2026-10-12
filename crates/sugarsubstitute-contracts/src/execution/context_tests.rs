@@ -110,7 +110,10 @@ fn context_preserves_identity_deadline_and_owned_waits_without_scheduler_access(
         Some(Moment::from_nanos(60)),
         Arc::new(ManualCancel(cancel_state.clone())),
         Arc::new(ManualClock(clock_state.clone())),
-        MemoryLease::new(12, Box::new(ReleaseCount(released.clone()))),
+        AdmittedJobResources::new(
+            MemoryLease::new(12, Box::new(ReleaseCount(released.clone()))),
+            None,
+        ),
     );
     let retained = context.clone();
     assert_eq!(retained.owner_id(), owner_id);

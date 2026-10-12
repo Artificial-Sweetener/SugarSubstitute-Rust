@@ -16,6 +16,10 @@ pub(crate) enum AcceptedIssue {
     Connected,
 }
 pub(crate) struct Operation {
+    accounting: Option<(
+        Arc<sugarsubstitute_contracts::execution::NativeHandleClaim>,
+        crate::native_resources::EffectContext,
+    )>,
     event: Handle,
     overlapped: Box<OVERLAPPED>,
     wait: Option<Wait>,
@@ -31,7 +35,8 @@ unsafe impl Send for Operation {}
 impl Operation {
     pub(crate) fn new(signal: Arc<Signal>) -> Self {
         Self {
-            event: Handle(0),
+            accounting: None,
+            event: Handle::new(),
             overlapped: Box::new(OVERLAPPED::default()),
             wait: None,
             signal,
@@ -39,6 +44,14 @@ impl Operation {
             cancel_attempted: false,
             completed: None,
         }
+    }
+    pub(crate) fn attach(
+        &mut self,
+        handles: Arc<sugarsubstitute_contracts::execution::NativeHandleClaim>,
+        original: crate::native_resources::EffectContext,
+    ) {
+        self.event.attach(handles.clone(), original.clone());
+        self.accounting = Some((handles, original));
     }
     fn begin_reuse(&mut self) -> Result<(), NativePipeError> {
         if self.wait.is_some() || self.pending {
@@ -50,14 +63,17 @@ impl Operation {
     }
     pub(crate) fn prepare(&mut self) -> Result<(), NativePipeError> {
         self.begin_reuse()?;
-        if self.event.0 == 0 {
+        if self.event.value() == 0 {
+            self.event.reserve("pipe_create_event")?;
             // SAFETY: initial-false manual-reset event is exclusively owned here.
             let event = unsafe { CreateEventW(None, true, false, None) }
                 .map_err(|e| error("pipe_create_event", e))?;
             adopt(&mut self.event, event, "pipe_create_event")?;
         }
+        self.event.check("pipe_reset_event")?;
         // SAFETY: prior callback was quiesced before reusing the event/OVERLAPPED.
         unsafe { ResetEvent(self.event.raw()) }.map_err(|e| error("pipe_reset_event", e))?;
+        self.event.check("pipe_reset_event")?;
         *self.overlapped = OVERLAPPED { hEvent: self.event.raw(), ..Default::default() };
         self.cancel_attempted = false;
         self.signal.reset();
@@ -66,6 +82,11 @@ impl Operation {
             "pipe_register_event",
             "pipe_unregister_event",
         ));
+        if let Some((handles, original)) = &self.accounting
+            && let Some(wait) = &mut self.wait
+        {
+            wait.attach(handles.clone(), original.clone());
+        }
         self.wait
             .as_mut()
             .ok_or_else(|| invariant("pipe_wait_owner"))?
@@ -129,13 +150,23 @@ impl Operation {
         accepted: AcceptedIssue,
         pipe: HANDLE,
     ) -> Result<Progress, NativePipeError> {
+        self.check("pipe_issue_accepted")?;
         match accepted {
             AcceptedIssue::Pending => Ok(Progress::Pending),
             AcceptedIssue::Connected => Ok(Progress::Complete(0)),
             AcceptedIssue::Synchronous => self.poll(pipe),
         }
     }
+    fn check(&self, stage: &'static str) -> Result<(), NativePipeError> {
+        self.event.check(stage)
+    }
     pub(crate) fn poll(&mut self, pipe: HANDLE) -> Result<Progress, NativePipeError> {
+        self.check("pipe_completion")?;
+        let result = self.poll_retirement(pipe);
+        self.check("pipe_completion")?;
+        result
+    }
+    fn poll_retirement(&mut self, pipe: HANDLE) -> Result<Progress, NativePipeError> {
         if !self.pending {
             return Err(invariant("pipe_poll_without_pending"));
         }
@@ -180,7 +211,7 @@ impl Operation {
             self.cancel_attempted = true;
         }
         if self.pending {
-            match self.poll(pipe) {
+            match self.poll_retirement(pipe) {
                 Ok(Progress::Pending) => return Ok(false),
                 Ok(Progress::Complete(_)) => {}
                 Err(e)

@@ -49,7 +49,7 @@ pub(crate) enum PeerInput {
     Simulated,
 }
 pub(crate) trait PipeLease: Send {
-    fn adopt(&mut self, input: PeerInput);
+    fn adopt(&mut self, input: PeerInput) -> Result<(), (Box<LifecyclePipeFailure>, PeerInput)>;
     fn prepare(
         &mut self,
         signals: [Arc<Signal>; 3],
@@ -213,54 +213,8 @@ pub(crate) fn reserve(
         admit(core, scope, spec, run.map(PeerBinding::Desktop), handshake, lease, Owner::Desktop)?;
     Ok(LifecyclePipeSession { control: LifecyclePipeControl { inner }, completion })
 }
-pub(crate) fn admit<T: Send + 'static>(
-    core: &Arc<Core>,
-    scope: &Scope,
-    spec: JobSpec,
-    binding: Option<PeerBinding>,
-    handshake: Moment,
-    lease: Box<dyn PipeLease>,
-    owner: fn(Arc<Job<T, LifecyclePipeFailure>>) -> Owner,
-) -> Result<(Control, OwnedJob<T, LifecyclePipeFailure>), AdmissionError> {
-    if spec.reservation_bytes < MIN_LIFECYCLE_PIPE_BYTES {
-        return Err(AdmissionError::NativeReservationTooSmall {
-            requested_bytes: spec.reservation_bytes,
-            minimum_bytes: MIN_LIFECYCLE_PIPE_BYTES,
-        });
-    }
-    let now = core.clock.now();
-    if handshake <= now {
-        return Err(AdmissionError::DeadlineExpired { deadline: handshake, now });
-    }
-    core.admit(scope, spec, RequestKind::Native, |context, cancel, admitted| {
-        let job = Job::new(scope.id(), spec, admitted, cancel, Arc::downgrade(core));
-        let shared = Arc::new(Shared {
-            original_deadline: handshake,
-            state: Mutex::new(State::new(binding)),
-            memory: Mutex::new(None),
-            core: Arc::downgrade(core),
-            id: spec.id,
-        });
-        let retained = owner(job.clone());
-        let queued = QueuedJob {
-            context,
-            job: job.clone(),
-            work: Work::Native(crate::native::NativeWork::LifecyclePipe(PipeWork {
-                shared: shared.clone(),
-                owner: retained.clone(),
-                lease: Some(lease),
-                handshake,
-            })),
-        };
-        (
-            queued,
-            (
-                Control { shared, owner: retained },
-                OwnedJob::new(scope.id(), spec, Box::new(JobHandle(job))),
-            ),
-        )
-    })
-}
+mod submission;
+pub(crate) use submission::{PipeAdmission, admit, admit_owned};
 pub(crate) fn failure(stage: &'static str) -> LifecyclePipeFailure {
     LifecyclePipeFailure::native(NativeObservationError::new(
         stage,

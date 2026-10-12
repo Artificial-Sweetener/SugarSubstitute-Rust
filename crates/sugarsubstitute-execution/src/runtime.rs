@@ -30,7 +30,7 @@ static NEXT_OWNER: AtomicU64 = AtomicU64::new(1);
 
 #[path = "runtime_policy.rs"]
 mod policy;
-pub use policy::{ExecutionLimits, ShutdownProgress, WorkerStatus};
+pub use policy::{ExecutionLimits, NativeOutputCustody, ShutdownProgress, WorkerStatus};
 
 /// Own runtime and CPU joins through teardown after the native event loop exits.
 ///
@@ -206,12 +206,15 @@ impl ExecutionOwner {
                 }
             },
         };
+        let native_output_custody = crate::native_resources::output_custody(&state);
         let settled = state.stopping
+            && native_output_custody.is_empty()
             && state.settled()
             && workers.async_finished
             && workers.cpu_finished
             && workers.native_finished;
         Ok(ShutdownProgress {
+            native_output_custody,
             settled,
             deadline_expired: !self.core.clock.failed()
                 && !settled

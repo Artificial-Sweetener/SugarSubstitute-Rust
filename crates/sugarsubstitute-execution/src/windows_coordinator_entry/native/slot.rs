@@ -13,7 +13,7 @@ pub(super) struct Slot {
 impl Slot {
     pub(super) fn new() -> Self {
         Self {
-            pipe: Handle(0),
+            pipe: Handle::new(),
             peer: PeerPin::new(),
             operations: std::array::from_fn(|_| None),
             signals: None,

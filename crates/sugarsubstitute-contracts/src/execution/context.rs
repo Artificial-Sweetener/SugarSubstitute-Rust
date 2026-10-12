@@ -3,7 +3,10 @@
 
 //! Provide job identity, cancellation, clock and retained memory without scheduling access.
 
-use super::{ExecutionId, JobId, JobSpec, MemoryLease, Moment, ScopeId};
+use super::{
+    ExecutionId, JobId, JobSpec, MemoryLease, Moment, NativeHandleLease, NativeHandleRelease,
+    ScopeId,
+};
 use std::{future::Future, pin::Pin, sync::Arc};
 
 /// Own a scheduler-neutral wait without exposing a runtime, channel or raw waker.
@@ -35,6 +38,20 @@ pub trait CancelControl: Send + Sync {
     fn cancelled(&self) -> WaitFuture;
 }
 
+/// Transfer byte and optional fixed symbol accounting already accepted by execution admission.
+/// Only the actual admission owner supplies a release port; ordinary contexts supply `None`.
+pub struct AdmittedJobResources {
+    memory: MemoryLease,
+    symbol_release: Option<Box<dyn NativeHandleRelease>>,
+}
+impl AdmittedJobResources {
+    /// Bundle already-admitted byte ownership and its optional fixed symbol reservation release.
+    /// This constructs no queue, memory, native-output credit or native authority.
+    pub fn new(memory: MemoryLease, symbol_release: Option<Box<dyn NativeHandleRelease>>) -> Self {
+        Self { memory, symbol_release }
+    }
+}
+
 /// Own the bounded capabilities available to one admitted job.
 ///
 /// Clones retain cancellation/clock ports and the same byte charge. Contexts expose
@@ -48,6 +65,7 @@ pub struct JobContext {
     cancellation: Arc<dyn CancelControl>,
     clock: Arc<dyn Clock>,
     memory: MemoryLease,
+    native_handles: Option<NativeHandleLease>,
 }
 
 impl JobContext {
@@ -62,9 +80,21 @@ impl JobContext {
         deadline: Option<Moment>,
         cancellation: Arc<dyn CancelControl>,
         clock: Arc<dyn Clock>,
-        memory: MemoryLease,
+        resources: AdmittedJobResources,
     ) -> Self {
-        Self { owner_id, scope_id, spec, deadline, cancellation, clock, memory }
+        let native_handles = resources
+            .symbol_release
+            .map(|release| NativeHandleLease::new(owner_id, scope_id, spec.id, release));
+        Self {
+            owner_id,
+            scope_id,
+            spec,
+            deadline,
+            cancellation,
+            clock,
+            memory: resources.memory,
+            native_handles,
+        }
     }
 
     /// Return the executor identity owning this job and its clock epoch.
@@ -115,6 +145,10 @@ impl JobContext {
     /// Borrow the shared memory charge; clone it when result buffers outlive context.
     pub fn memory(&self) -> &MemoryLease {
         &self.memory
+    }
+    /// Borrow original fixed symbol output accounting; ordinary jobs return `None`.
+    pub fn native_handles(&self) -> Option<&NativeHandleLease> {
+        self.native_handles.as_ref()
     }
 }
 

@@ -246,3 +246,44 @@ fn overlapped_pipe_lifetimes_cannot_escape_execution_ownership() -> Result<()> {
     );
     Ok(())
 }
+
+/// Reject production constructors and native release authority in tests, aliases and macro tokens.
+#[test]
+fn symbol_resource_producers_cannot_hide_outside_contract_or_execution_owners() -> Result<()> {
+    let fixture = Repository::new()?;
+    let policy = Policy { schema_version: 1, owner: None };
+    for source in [
+        "fn forged() { sugarsubstitute_contracts::execution::JobContext::new(); }",
+        "use sugarsubstitute_contracts::execution::JobContext as Context; fn forged() { Context::new(); }",
+        "type Context = sugarsubstitute_contracts::execution::JobContext; fn forged() { Context::new(); }",
+        "use sugarsubstitute_contracts::execution::AdmittedJobResources as Resources; fn forged() { Resources::new(memory, port); }",
+        "type Resources = sugarsubstitute_contracts::execution::AdmittedJobResources; fn forged() { Resources::new(memory, port); }",
+        "use sugarsubstitute_contracts::execution::NativeHandleRelease as Release; struct Fake; impl Release for Fake {}",
+        "macro_rules! forged { () => { JobContext::new() }; }",
+        "macro_rules! forged { ($t:ident,$f:ident) => { $t::$f() }; } fn caller() { forged!(JobContext,new); }",
+        "#[cfg(test)] mod tests { fn forged() { AdmittedJobResources::new(memory, port); } }",
+        "fn forged() { NativeHandleLease::new(owner, scope, job, port); }",
+    ] {
+        assert!(
+            !crate::execution_source::symbol_producer_findings(source)?.is_empty(),
+            "accepted {source}"
+        );
+        write(fixture.root(), "crates/host/src/symbol.rs", source)?;
+        let rejected = check(fixture.root(), &policy, &fixture.architecture, &fixture.workspace)
+            .err()
+            .map(|cause| cause.to_string())
+            .unwrap_or_default();
+        assert!(
+            rejected.contains("outside the contract and execution owners"),
+            "unexpected result {rejected}"
+        );
+    }
+    assert!(crate::execution_source::symbol_producer_findings("use sugarsubstitute_contracts::execution::{JobContext, NativeHandleClaim}; fn consume(context: JobContext, claim: NativeHandleClaim) { claim.matches_lease(context.native_handles()); }")?.is_empty());
+    assert!(
+        crate::execution_source::symbol_producer_findings(
+            "const TEXT: &str = \"JobContext::new NativeHandleRelease\";"
+        )?
+        .is_empty()
+    );
+    Ok(())
+}

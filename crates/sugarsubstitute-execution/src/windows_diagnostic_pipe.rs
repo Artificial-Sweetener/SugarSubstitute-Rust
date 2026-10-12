@@ -98,6 +98,31 @@ impl DiagnosticPipeSession {
         )))
     }
 }
+/// Preserve original accounting custody when actual diagnostic admission rejects.
+pub struct DiagnosticPipeAdmissionRejection {
+    /// Actual central decision or original clock/conversion cause.
+    pub error: LifecyclePipeAdmissionError,
+    /// The exact submitted accounting ownership, without native adoption.
+    pub resources: crate::DiagnosticPipeResources,
+}
+impl std::fmt::Debug for DiagnosticPipeAdmissionRejection {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("DiagnosticPipeAdmissionRejection")
+            .field("error", &self.error)
+            .finish_non_exhaustive()
+    }
+}
+impl std::fmt::Display for DiagnosticPipeAdmissionRejection {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(&self.error, formatter)
+    }
+}
+impl std::error::Error for DiagnosticPipeAdmissionRejection {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.error)
+    }
+}
 /// Reserve the fixed child role before inheriting, mapping or connecting any handle.
 pub struct DiagnosticPipeClientPermit {
     original_deadline: Moment,
@@ -182,19 +207,57 @@ impl ExecutionClient {
         spec: JobSpec,
         expected_role: DiagnosticRole,
         original: LifecyclePipeDeadline,
-    ) -> Result<DiagnosticPipeClientPermit, LifecyclePipeAdmissionError> {
-        self.diagnostic_persistent_scope(scope, spec)?;
-        let until = self.decode_lifecycle_deadline(original)?;
-        let (inner, completion) = lifecycle_pipe::admit(
+        resources: crate::DiagnosticPipeResources,
+    ) -> Result<DiagnosticPipeClientPermit, DiagnosticPipeAdmissionRejection> {
+        let preflight = self.diagnostic_persistent_scope(scope, spec).and_then(|()| {
+            if matches!(&resources, crate::DiagnosticPipeResources::Symbol(_))
+                && expected_role != DiagnosticRole::Symbolize
+            {
+                return Err(LifecyclePipeAdmissionError::Admission(
+                    sugarsubstitute_contracts::execution::AdmissionError::InvalidSymbolAdmission,
+                ));
+            }
+            self.decode_lifecycle_deadline(original)
+        });
+        let until = match preflight {
+            Ok(until) => until,
+            Err(error) => return Err(DiagnosticPipeAdmissionRejection { error, resources }),
+        };
+        let kind = match &resources {
+            crate::DiagnosticPipeResources::Standard => crate::admission::RequestKind::Native,
+            crate::DiagnosticPipeResources::Symbol(reservation) => {
+                crate::admission::RequestKind::SymbolNative {
+                    original: reservation.original.as_ref().clone(),
+                    handles: reservation.handles.clone(),
+                }
+            }
+        };
+        let (inner, completion) = lifecycle_pipe::admit_owned(
             &self.core,
             scope,
             spec,
-            None,
-            until,
-            Box::new(native::Lease::diagnostic_client(expected_role, original)),
-            Owner::Diagnostic,
+            lifecycle_pipe::PipeAdmission {
+                binding: None,
+                handshake: until,
+                owner: Owner::Diagnostic,
+            },
+            kind,
+            resources,
+            |resources| {
+                Box::new(native::Lease::diagnostic_client(
+                    expected_role,
+                    original,
+                    match resources {
+                        crate::DiagnosticPipeResources::Standard => None,
+                        crate::DiagnosticPipeResources::Symbol(reservation) => Some(reservation),
+                    },
+                ))
+            },
         )
-        .map_err(LifecyclePipeAdmissionError::Admission)?;
+        .map_err(|(error, resources)| DiagnosticPipeAdmissionRejection {
+            error: LifecyclePipeAdmissionError::Admission(error),
+            resources,
+        })?;
         Ok(DiagnosticPipeClientPermit {
             original_deadline: until,
             session: Some(DiagnosticPipeSession {

@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Return a vetoed allocation only after the real prepared callback quiesces.
 use super::*;
-impl Active {
+impl ActiveState {
     pub(super) fn write_revoked(&mut self, core: &Core) -> Result<(), LifecyclePipeFailure> {
         self.lease.as_mut().ok_or_else(|| failure("pipe_missing_lease"))?.quiesce(Role::Write)?;
         let write = self.write.take().ok_or_else(|| failure("pipe_write_owner"))?;

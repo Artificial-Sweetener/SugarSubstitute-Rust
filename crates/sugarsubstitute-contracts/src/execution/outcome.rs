@@ -100,6 +100,8 @@ pub struct JobCompletion<T, E> {
     pub outcome: JobOutcome<T, E>,
     /// Shared retained-byte reservation, independent of delivery credit.
     pub memory: MemoryLease,
+    /// Original output accounting remains charged independently of terminal acknowledgement.
+    pub native_handles: Option<super::NativeHandleLease>,
 }
 
 #[cfg(test)]

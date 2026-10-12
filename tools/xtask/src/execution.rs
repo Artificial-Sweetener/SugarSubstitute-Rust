@@ -69,7 +69,19 @@ pub(crate) fn check(
             }
         }
         for path in rust_files(&resolve(root, &owner.root)?)? {
-            let findings = execution_source::findings(&read(&path)?)?;
+            let source = read(&path)?;
+            if !permitted && owner.package != "sugarsubstitute-contracts" {
+                let producer = execution_source::symbol_producer_findings(&source)?;
+                require(
+                    producer.is_empty(),
+                    format!(
+                        "execution: {} constructs original execution/symbol resources outside the contract and execution owners: {}",
+                        path.strip_prefix(root).unwrap_or(&path).display(),
+                        producer.join(", ")
+                    ),
+                )?;
+            }
+            let findings = execution_source::findings(&source)?;
             if !permitted {
                 require(
                     findings.is_empty(),

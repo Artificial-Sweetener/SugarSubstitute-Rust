@@ -33,10 +33,10 @@ pub(super) struct PeerPin {
 impl PeerPin {
     pub(super) fn new() -> Self {
         Self {
-            process: Handle(0),
-            token: Handle(0),
-            image: Handle(0),
-            message_token: Handle(0),
+            process: Handle::new(),
+            token: Handle::new(),
+            image: Handle::new(),
+            message_token: Handle::new(),
             pid: 0,
             birth: 0,
             image_identity: None,
@@ -65,7 +65,7 @@ impl PeerPin {
         if pid == 0 || session != expected.session_id() || (self.pid != 0 && pid != self.pid) {
             return Err(EntryTransportError::Authentication);
         }
-        if self.process.0 == 0 {
+        if self.process.value() == 0 {
             // SAFETY: only query and synchronization rights are requested for the actual pipe peer.
             let process = unsafe {
                 OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_SYNCHRONIZE, false, pid)
@@ -74,7 +74,7 @@ impl PeerPin {
             adopt(&mut self.process, process, "entry_open_actual_peer")?;
         }
         alive(self.process.raw())?;
-        let before = security::process_facts(self.process.raw())?;
+        let before = security::process_facts(self.process.raw(), &self.process)?;
         if before.0 != pid || (self.birth != 0 && before.1 != self.birth) {
             return Err(EntryTransportError::Authentication);
         }
@@ -99,7 +99,7 @@ impl PeerPin {
                 return Err(EntryTransportError::Authentication);
             }
         }
-        let after = security::process_facts(self.process.raw())?;
+        let after = security::process_facts(self.process.raw(), &self.process)?;
         alive(self.process.raw())?;
         if before != after {
             return Err(EntryTransportError::Authentication);

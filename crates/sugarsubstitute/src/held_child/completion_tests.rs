@@ -108,6 +108,7 @@ impl Harness {
                 execution_time: Duration::ZERO,
                 outcome: JobOutcome::Success(report()?),
                 memory,
+                native_handles: None,
             })),
         });
         let mut state = ChildCompletion::new(correlation()?);

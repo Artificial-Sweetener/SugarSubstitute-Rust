@@ -20,12 +20,21 @@ struct Callback {
     signal: Arc<Signal>,
     timed_out: AtomicBool,
 }
-pub(crate) struct Wait {
+struct Owner {
     handle: Option<usize>,
     callback: Box<Callback>,
     uncertain_registration: bool,
+    accounting: Option<(
+        Arc<sugarsubstitute_contracts::execution::NativeHandleClaim>,
+        crate::native_resources::EffectContext,
+    )>,
+    output: Option<sugarsubstitute_contracts::execution::NativeHandleOutput>,
+    cause: Option<NativeObservationError>,
     register_stage: &'static str,
     retire_stage: &'static str,
+}
+pub(crate) struct Wait {
+    owner: Option<Box<Owner>>,
 }
 impl Wait {
     pub(crate) fn new(signal: Arc<Signal>) -> Self {
@@ -37,19 +46,54 @@ impl Wait {
         retire_stage: &'static str,
     ) -> Self {
         Self {
-            handle: None,
-            callback: Box::new(Callback { signal, timed_out: AtomicBool::new(false) }),
-            uncertain_registration: false,
-            register_stage,
-            retire_stage,
+            owner: Some(Box::new(Owner {
+                handle: None,
+                callback: Box::new(Callback { signal, timed_out: AtomicBool::new(false) }),
+                uncertain_registration: false,
+                accounting: None,
+                output: None,
+                cause: None,
+                register_stage,
+                retire_stage,
+            })),
         }
     }
+    pub(crate) fn attach(
+        &mut self,
+        handles: Arc<sugarsubstitute_contracts::execution::NativeHandleClaim>,
+        context: crate::native_resources::EffectContext,
+    ) {
+        if let Some(owner) = &mut self.owner {
+            owner.accounting = Some((handles, context));
+        }
+    }
+    pub(crate) fn retained(&self) -> bool {
+        self.owner
+            .as_ref()
+            .is_some_and(|owner| owner.handle.is_some() || owner.uncertain_registration)
+    }
     pub(crate) fn register(&mut self, process: HANDLE) -> Result<(), NativeObservationError> {
+        let owner = self.owner.as_mut().ok_or_else(|| {
+            NativeObservationError::new("wait_owner", std::io::Error::other("Wait owner absent"))
+        })?;
+        if owner.handle.is_some() || owner.uncertain_registration || owner.output.is_some() {
+            return Err(NativeObservationError::new(
+                owner.register_stage,
+                std::io::Error::other("Wait registration already retained"),
+            ));
+        }
+        owner.check()?;
+        if let Some((handles, _)) = &owner.accounting {
+            owner.output = Some(
+                handles
+                    .reserve_output()
+                    .map_err(|cause| NativeObservationError::new(owner.register_stage, cause))?,
+            );
+        }
         let mut handle = HANDLE::default();
-        let context = self.callback.as_ref() as *const Callback;
-        // SAFETY: callback Box has a stable address before registration, including
-        // synchronous/reentrant delivery. Its owner retains both it and process
-        // until UnregisterWaitEx(INVALID_HANDLE_VALUE) succeeds on another thread.
+        let context = owner.callback.as_ref() as *const Callback;
+        // SAFETY: stable boxed callback precedes even reentrant delivery and stays retained
+        // until synchronous unregister proves completion on a separate native owner thread.
         let result = unsafe {
             RegisterWaitForSingleObject(
                 &mut handle,
@@ -61,39 +105,94 @@ impl Wait {
             )
         };
         if !handle.is_invalid() {
-            self.handle = Some(handle.0 as usize);
+            owner.handle = Some(handle.0 as usize);
         }
-        result.map_err(|cause| NativeObservationError::new(self.register_stage, cause))?;
-        if self.handle.is_none() {
-            self.uncertain_registration = true;
-            return Err(NativeObservationError::new(
-                self.register_stage,
+        if let Err(cause) = result {
+            if owner.handle.is_none() {
+                owner.output = None;
+            }
+            let failure = NativeObservationError::new(owner.register_stage, cause);
+            owner.retain(&failure);
+            return Err(failure);
+        }
+        if owner.handle.is_none() {
+            owner.uncertain_registration = true;
+            let failure = NativeObservationError::new(
+                owner.register_stage,
                 std::io::Error::other("Successful registration returned no wait identity"),
-            ));
+            );
+            owner.retain(&failure);
+            return Err(failure);
         }
-        Ok(())
+        owner.check()
     }
     pub(crate) fn timed_out(&self) -> bool {
-        self.callback.timed_out.load(Ordering::Acquire)
+        self.owner.as_ref().is_some_and(|owner| owner.callback.timed_out.load(Ordering::Acquire))
     }
     pub(crate) fn retire(&mut self) -> Result<(), NativeObservationError> {
-        if self.uncertain_registration {
+        self.retire_with(|handle| {
+            // SAFETY: the exact registration is exclusively retained, outside its callback;
+            // the sentinel waits for actual callback completion before storage can be reclaimed.
+            unsafe { UnregisterWaitEx(handle, Some(INVALID_HANDLE_VALUE)) }
+        })
+    }
+    fn retire_with(
+        &mut self,
+        unregister: impl FnOnce(HANDLE) -> windows::core::Result<()>,
+    ) -> Result<(), NativeObservationError> {
+        let owner = self.owner.as_mut().ok_or_else(|| {
+            NativeObservationError::new("wait_owner", std::io::Error::other("Wait owner absent"))
+        })?;
+        if owner.uncertain_registration {
             return Err(NativeObservationError::new(
-                self.retire_stage,
+                owner.retire_stage,
                 std::io::Error::other(
-                    "Successful native registration has no retirement identity; callback lifetime remains unresolved",
+                    "Registration has no retirement identity; callback lifetime remains unresolved",
                 ),
             ));
         }
-        if let Some(handle) = self.handle {
-            // SAFETY: this is the unique registration owner, never its callback
-            // thread. The sentinel makes return wait for actual callback completion.
-            // On failure identity and callback storage stay retained for retry.
-            unsafe { UnregisterWaitEx(HANDLE(handle as *mut _), Some(INVALID_HANDLE_VALUE)) }
-                .map_err(|cause| NativeObservationError::new(self.retire_stage, cause))?;
-            self.handle = None;
+        if let Some(handle) = owner.handle {
+            if let Err(cause) = unregister(HANDLE(handle as *mut _)) {
+                let failure = NativeObservationError::new(owner.retire_stage, cause);
+                owner.retain(&failure);
+                return Err(failure);
+            }
+            owner.handle = None;
+            owner.output = None;
         }
         Ok(())
+    }
+}
+impl Owner {
+    fn check(&self) -> Result<(), NativeObservationError> {
+        if let Some((_, context)) = &self.accounting {
+            context
+                .check()
+                .map_err(|cause| NativeObservationError::new(self.register_stage, cause))?;
+        }
+        Ok(())
+    }
+    fn retain(&mut self, cause: &NativeObservationError) {
+        if let Some(first) = &mut self.cause {
+            first.retain_cleanup(cause.clone());
+        } else {
+            self.cause = Some(cause.clone());
+        }
+    }
+}
+impl Drop for Wait {
+    fn drop(&mut self) {
+        let retained = self.retained();
+        if let Some(owner) = self.owner.take()
+            && retained
+        {
+            let retained = Box::leak(owner);
+            tracing::error!(
+                operation = "native_wait_uncertain_drop",
+                stage = retained.retire_stage,
+                "Native callback and output custody retained without proven quiescence"
+            );
+        }
     }
 }
 unsafe extern "system" fn callback(context: *mut std::ffi::c_void, timed_out: bool) {
@@ -105,3 +204,7 @@ unsafe extern "system" fn callback(context: *mut std::ffi::c_void, timed_out: bo
     // Core mutex, native handle cleanup, allocation or user clock in this ABI body.
     callback.signal.complete();
 }
+
+#[cfg(test)]
+#[path = "windows_wait_custody_tests.rs"]
+mod tests;

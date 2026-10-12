@@ -217,6 +217,20 @@ impl LifecyclePipeFailure {
     pub(crate) fn native(cause: NativeObservationError) -> Self {
         Self { cause, identity_unrestored: false }
     }
+    /// Recognize an expected original admission veto without replacing native failure causes.
+    pub(crate) fn admission_stop(&self) -> Option<crate::task::Stop> {
+        use sugarsubstitute_contracts::execution::{AdmissionError, NativeResourceError};
+        let cause = std::error::Error::source(&self.cause)?.downcast_ref::<AdmissionError>()?;
+        match cause {
+            AdmissionError::DeadlineExpired { .. } => Some(crate::task::Stop::TimedOut),
+            AdmissionError::ScopeClosed { .. }
+            | AdmissionError::ShuttingDown
+            | AdmissionError::NativeResources(NativeResourceError::OriginalAdmissionRetired) => {
+                Some(crate::task::Stop::Cancelled)
+            }
+            _ => None,
+        }
+    }
     /// Return whether Windows failed to restore the native owner's original identity.
     /// The composing process must shut down; this failure is never a retryable peer rejection.
     pub const fn requires_process_shutdown(&self) -> bool {

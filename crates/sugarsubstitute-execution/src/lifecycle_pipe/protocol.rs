@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Commit actual command completions only after callback quiescence and fresh deadlines.
 use super::*;
-impl Active {
+impl ActiveState {
     pub(super) fn protocol(&mut self, core: &Core) -> Result<(), LifecyclePipeFailure> {
         if self.stop(core, core.clock.now()) {
             return Ok(());

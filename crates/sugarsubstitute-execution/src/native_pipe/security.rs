@@ -36,7 +36,12 @@ impl Identity {
         }
     }
 }
-fn sid(buffer: &[usize; 256], returned: usize, sid: PSID) -> Result<Sid, NativePipeError> {
+fn sid(
+    token: &Handle,
+    buffer: &[usize; 256],
+    returned: usize,
+    sid: PSID,
+) -> Result<Sid, NativePipeError> {
     let start = buffer.as_ptr() as usize;
     let end = start.checked_add(returned).ok_or_else(|| invariant("pipe_sid_bound"))?;
     let pointer = sid.0 as usize;
@@ -50,7 +55,15 @@ fn sid(buffer: &[usize; 256], returned: usize, sid: PSID) -> Result<Sid, NativeP
         return Err(invariant("pipe_sid_bound"));
     }
     // SAFETY: all declared SID subauthorities were bounded inside the token allocation.
-    if !unsafe { IsValidSid(sid) }.as_bool() || unsafe { GetLengthSid(sid) } as usize != length {
+    token.check("pipe_validate_sid")?;
+    // SAFETY: the entire bounded SID is retained in the token output allocation.
+    let valid = unsafe { IsValidSid(sid) }.as_bool();
+    token.check("pipe_validate_sid")?;
+    token.check("pipe_sid_length")?;
+    // SAFETY: the validated bounded SID remains in this live fixed allocation.
+    let actual_length = unsafe { GetLengthSid(sid) } as usize;
+    token.check("pipe_sid_length")?;
+    if !valid || actual_length != length {
         return Err(invariant("pipe_invalid_sid"));
     }
     let mut bytes = [0; 68];
@@ -60,15 +73,16 @@ fn sid(buffer: &[usize; 256], returned: usize, sid: PSID) -> Result<Sid, NativeP
     Ok(Sid { bytes, length })
 }
 fn information(
-    token: HANDLE,
+    token: &Handle,
     class: TOKEN_INFORMATION_CLASS,
     buffer: &mut [usize; 256],
 ) -> Result<usize, NativePipeError> {
     let mut returned = 0;
+    token.check("pipe_token_information")?;
     // SAFETY: aligned initialized fixed output is advertised at its exact byte size.
     unsafe {
         GetTokenInformation(
-            token,
+            token.raw(),
             class,
             Some(buffer.as_mut_ptr().cast()),
             size_of_val(buffer) as u32,
@@ -76,12 +90,13 @@ fn information(
         )
     }
     .map_err(|e| error("pipe_token_information", e))?;
+    token.check("pipe_token_information")?;
     if returned as usize > size_of_val(buffer) {
         return Err(invariant("pipe_token_information_bound"));
     }
     Ok(returned as usize)
 }
-pub(crate) fn identity(token: HANDLE) -> Result<Identity, NativePipeError> {
+pub(crate) fn identity(token: &Handle) -> Result<Identity, NativePipeError> {
     let mut buffer = [0usize; 256];
     let size = information(token, TokenUser, &mut buffer)?;
     if size < size_of::<TOKEN_USER>() {
@@ -89,7 +104,7 @@ pub(crate) fn identity(token: HANDLE) -> Result<Identity, NativePipeError> {
     }
     // SAFETY: successful bounded output contains the aligned header.
     let user = unsafe { &*buffer.as_ptr().cast::<TOKEN_USER>() };
-    let account = sid(&buffer, size, user.User.Sid)?;
+    let account = sid(token, &buffer, size, user.User.Sid)?;
     let mut groups = [0usize; 256];
     let size = information(token, TokenLogonSid, &mut groups)?;
     if size < size_of::<TOKEN_GROUPS>() {
@@ -102,7 +117,7 @@ pub(crate) fn identity(token: HANDLE) -> Result<Identity, NativePipeError> {
     {
         return Err(invariant("pipe_token_logon_group"));
     }
-    let logon = sid(&groups, size, group.Groups[0].Sid)?;
+    let logon = sid(token, &groups, size, group.Groups[0].Sid)?;
     let mut session = [0usize; 256];
     let size = information(token, TokenSessionId, &mut session)?;
     if size != size_of::<u32>() {
@@ -116,21 +131,21 @@ pub(crate) fn process_identity(
     process: HANDLE,
     token: &mut Handle,
 ) -> Result<Identity, NativePipeError> {
+    token.reserve("pipe_open_process_token")?;
     let mut raw = HANDLE::default();
     // SAFETY: process is retained by the caller, and raw output is adopted before checking.
     let result = unsafe { OpenProcessToken(process, TOKEN_QUERY, &mut raw) };
-    if !raw.is_invalid() {
-        token.0 = raw.0 as usize;
-    }
-    result.map_err(|e| error("pipe_open_process_token", e))?;
-    if token.0 == 0 {
-        return Err(invariant("pipe_missing_process_token"));
-    }
-    identity(token.raw())
+    token.finish_output(raw, result, "pipe_open_process_token")?;
+    identity(token)
 }
-pub(crate) fn process_facts(process: HANDLE) -> Result<(u32, u64), NativePipeError> {
+pub(crate) fn process_facts(
+    process: HANDLE,
+    custody: &Handle,
+) -> Result<(u32, u64), NativePipeError> {
+    custody.check("pipe_process_id")?;
     // SAFETY: caller retains a process handle with QUERY_LIMITED_INFORMATION rights.
     let pid = unsafe { GetProcessId(process) };
+    custody.check("pipe_process_id")?;
     if pid == 0 {
         return Err(error("pipe_process_id", last_error()));
     }
@@ -138,9 +153,11 @@ pub(crate) fn process_facts(process: HANDLE) -> Result<(u32, u64), NativePipeErr
     let mut exit = FILETIME::default();
     let mut kernel = FILETIME::default();
     let mut user = FILETIME::default();
+    custody.check("pipe_process_birth")?;
     // SAFETY: retained handle and live fixed FILETIME outputs remain valid for this finite query.
     unsafe { GetProcessTimes(process, &mut birth, &mut exit, &mut kernel, &mut user) }
         .map_err(|e| error("pipe_process_birth", e))?;
+    custody.check("pipe_process_birth")?;
     let birth = ((birth.dwHighDateTime as u64) << 32) | birth.dwLowDateTime as u64;
     if birth == 0 {
         return Err(invariant("pipe_positive_process_birth"));
@@ -208,6 +225,7 @@ pub(crate) fn message_identity(
     pipe: HANDLE,
     token: &mut Handle,
 ) -> Result<Identity, NativePipeError> {
+    token.reserve("pipe_open_message_token")?;
     // SAFETY: pipe belongs to this native worker and a bounded message was actually read.
     unsafe { ImpersonateNamedPipeClient(pipe) }.map_err(|e| error("pipe_impersonate", e))?;
     // Restore identity even if a private Rust error allocation/panic occurs while inspecting it.
@@ -215,12 +233,10 @@ pub(crate) fn message_identity(
         let mut raw = HANDLE::default();
         // SAFETY: pseudo-thread is current; output is durably adopted before checking.
         let opened = unsafe { OpenThreadToken(GetCurrentThread(), TOKEN_QUERY, true, &mut raw) };
-        if !raw.is_invalid() {
-            token.0 = raw.0 as usize;
-        }
+        token.adopt_partial(raw);
         opened.map_err(|e| error("pipe_open_message_token", e))?;
         let mut level = [0usize; 256];
-        let size = information(token.raw(), TokenImpersonationLevel, &mut level)?;
+        let size = information(token, TokenImpersonationLevel, &mut level)?;
         if size != size_of::<SECURITY_IMPERSONATION_LEVEL>() {
             return Err(invariant("pipe_impersonation_level_bound"));
         }
@@ -229,7 +245,7 @@ pub(crate) fn message_identity(
         if level.0 < SecurityIdentification.0 {
             return Err(invariant("pipe_insufficient_identification"));
         }
-        identity(token.raw())
+        identity(token)
     }));
     // SAFETY: restores this exact thread; failure is fatal, not retryable authentication.
     let reverted = unsafe { RevertToSelf() }.map_err(|cause| error("pipe_revert_identity", cause));

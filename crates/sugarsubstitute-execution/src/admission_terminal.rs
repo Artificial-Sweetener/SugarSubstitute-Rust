@@ -17,6 +17,10 @@ impl Core {
         let Some(record) = state.jobs.get_mut(&id) else {
             return false;
         };
+        if record.terminal_published {
+            return false;
+        }
+        record.terminal_published = true;
         record.phase = JobPhase::Terminal(kind);
         let notice =
             CompletionNotification { scope_id: record.scope_id, job_id: id, kind, replacement };

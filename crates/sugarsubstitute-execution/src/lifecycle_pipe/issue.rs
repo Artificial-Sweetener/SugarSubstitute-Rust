@@ -35,6 +35,7 @@ impl Issue<'_> {
         let state = lock(&self.core.state);
         let stopping = state.stopping;
         let record = state.jobs.get(&self.shared.id);
+        let original_stop = crate::symbol_admission::original_stop(&state, self.shared.id, at);
         let current = self.context.owner_id() == self.core.id
             && record.is_some_and(|r| {
                 !r.retiring
@@ -58,6 +59,12 @@ impl Issue<'_> {
             if !matches!(phase, Phase::Queued) {
                 return Err(failure("pipe_write_issue_phase"));
             }
+        }
+        if let Some(reason) = original_stop {
+            return Ok(match reason {
+                crate::task::Stop::TimedOut => Dispatch::Expired,
+                _ => Dispatch::Stopped,
+            });
         }
         if !current || stopping || pipe.stopped || self.context.cancellation_requested() {
             return Ok(Dispatch::Stopped);

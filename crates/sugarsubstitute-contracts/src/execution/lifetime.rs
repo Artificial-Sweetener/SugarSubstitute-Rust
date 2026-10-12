@@ -24,6 +24,10 @@ pub struct ScopeSnapshot {
     pub children_live: usize,
     /// Shared byte charges retained by jobs, completions or result guards.
     pub reserved_bytes: u64,
+    /// Original symbol reservations retained by leases, claims or output guards.
+    pub native_reservations: usize,
+    /// Actual accounting outputs in original scope custody; no native-close proof.
+    pub native_outputs_in_custody: usize,
 }
 
 /// Own a real scope's executor identity, cancellation and abandonment boundary.

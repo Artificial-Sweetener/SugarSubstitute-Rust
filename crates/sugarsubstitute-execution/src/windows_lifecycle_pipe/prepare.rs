@@ -24,6 +24,7 @@ impl Lease {
         let name = bootstrap::name(binding);
         let mut descriptor = security::Descriptor::new(identity)?;
         let attributes = descriptor.attributes();
+        self.pipe.reserve("pipe_create_local_server")?;
         // SAFETY: bounded NUL-terminated local name, explicit ACL, sole instance and overlapped mode.
         let raw = unsafe {
             CreateNamedPipeW(
@@ -49,7 +50,8 @@ impl Lease {
         };
         random.ok().map_err(|e| error("pipe_capability_random", e))?;
         // SAFETY: The current-process pseudo handle is valid for identity queries.
-        let (pid, birth) = security::process_facts(unsafe { GetCurrentProcess() })?;
+        let (pid, birth) =
+            security::process_facts(unsafe { GetCurrentProcess() }, &self.own_token)?;
         let data = bootstrap::Data {
             binding,
             pid,
@@ -62,12 +64,11 @@ impl Lease {
         let bytes = bootstrap::encode(&data)?;
         self.data = Some(data);
         self.section.publish(&mut descriptor, &bytes)?;
-        Ok(self.section.inherited.0)
+        Ok(self.section.inherited())
     }
     pub(super) fn prepare_client(&mut self) -> Result<usize, LifecyclePipeFailure> {
         let original = self.original.ok_or_else(|| failure("pipe_client_deadline"))?;
-        self.section.master.0 = self.input.0;
-        self.input.0 = 0;
+        self.section.accept_input(&mut self.input);
         let bytes = self.section.read()?;
         self.data = Some(bootstrap::decode(&bytes, original, self.expected)?);
         // SAFETY: The current-process pseudo handle remains valid and is never closed.
@@ -78,35 +79,79 @@ impl Lease {
         if data.session != identity.session {
             return Err(failure("pipe_bootstrap_session"));
         }
+        self.pipe.check("pipe_client_counter")?;
         let (now, frequency) =
             crate::windows_counter::sample().map_err(LifecyclePipeFailure::native)?;
+        self.pipe.check("pipe_client_counter")?;
         if frequency != original.frequency as u64 || now >= original.ticks as u64 {
             return Err(failure("pipe_expired_bootstrap"));
         }
         self.binding = Some(data.binding);
         Ok(0)
     }
-    pub(super) fn open_client(&mut self) -> Result<(), LifecyclePipeFailure> {
+    /// Claim only pre-reserved custody while the actual connect admission is fenced.
+    pub(super) fn claim_client_open(
+        &mut self,
+    ) -> Result<ClientOpenStage<'_>, LifecyclePipeFailure> {
         let data = self.data.as_ref().ok_or_else(|| failure("pipe_bootstrap_owner"))?;
-        // SAFETY: exact validated local name, explicit restricted access/SQOS and overlapped mode.
-        let raw = unsafe {
-            CreateFileW(
-                PCWSTR(data.name.as_ptr()),
-                CLIENT_ACCESS,
-                FILE_SHARE_MODE(0),
-                None,
-                OPEN_EXISTING,
-                FILE_FLAG_OVERLAPPED | SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION,
-                None,
-            )
-        }
-        .map_err(|e| error("pipe_open_local_client", e))?;
-        adopt(&mut self.pipe, raw, "pipe_open_local_client")?;
+        self.pipe.reserve_custody("pipe_open_local_client")?;
+        Ok(ClientOpenStage { pipe: &mut self.pipe, name: &data.name })
+    }
+    pub(super) fn configure_client(&mut self) -> Result<(), LifecyclePipeFailure> {
+        self.pipe.check("pipe_open_local_client")?;
+        self.pipe.check("pipe_client_message_mode")?;
         // SAFETY: exact owned pipe; client handles initially default to byte-read mode.
         unsafe {
             SetNamedPipeHandleState(self.pipe.raw(), Some(&PIPE_READMODE_MESSAGE), None, None)
         }
         .map_err(|e| error("pipe_client_message_mode", e))?;
+        self.pipe.check("pipe_client_message_mode")?;
         Ok(())
     }
 }
+
+/// Own the exact accepted finite-open stage; no native call occurs while claiming it.
+pub(super) struct ClientOpenStage<'a> {
+    pipe: &'a mut Handle,
+    name: &'a [u16],
+}
+impl ClientOpenStage<'_> {
+    /// Execute accepted finite work on the same native worker after all owner fences leave.
+    pub(super) fn open(self) -> Result<(), LifecyclePipeFailure> {
+        self.run(|name| {
+            // SAFETY: exact validated local name, restricted access/SQOS and overlapped mode.
+            unsafe {
+                CreateFileW(
+                    PCWSTR(name.as_ptr()),
+                    CLIENT_ACCESS,
+                    FILE_SHARE_MODE(0),
+                    None,
+                    OPEN_EXISTING,
+                    FILE_FLAG_OVERLAPPED | SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION,
+                    None,
+                )
+            }
+        })
+    }
+    fn run(
+        self,
+        native: impl FnOnce(&[u16]) -> windows::core::Result<HANDLE>,
+    ) -> Result<(), LifecyclePipeFailure> {
+        let result = native(self.name);
+        match result {
+            Ok(raw) => adopt(self.pipe, raw, "pipe_open_local_client").map_err(Into::into),
+            Err(cause) => {
+                self.pipe.adopt_partial(HANDLE::default());
+                let mut failure = error("pipe_open_local_client", cause);
+                if let Err(after) = self.pipe.check("pipe_open_local_client") {
+                    failure.cause.retain_cleanup(after.cause);
+                }
+                Err(failure)
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "finite_stage_tests.rs"]
+mod tests;

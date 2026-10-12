@@ -73,6 +73,15 @@ impl<'ast> Visit<'ast> for Imports {
         ));
     }
 
+    /// Retain type aliases that can redirect a contract constructor or producer trait.
+    fn visit_item_type(&mut self, item: &'ast syn::ItemType) {
+        if let syn::Type::Path(ty) = item.ty.as_ref() {
+            let path = ty.path.segments.iter().map(|part| part.ident.to_string()).collect();
+            self.aliases.entry(item.ident.to_string()).or_default().insert(path);
+        }
+        syn::visit::visit_item_type(self, item);
+    }
+
     /// Classify renamed foreign functions through their explicit linker identities.
     fn visit_attribute(&mut self, attribute: &'ast syn::Attribute) {
         if let syn::Meta::NameValue(value) = &attribute.meta
@@ -247,12 +256,13 @@ fn inspect(
     prefix: &[String],
     imports: &Imports,
     found: &mut BTreeSet<String>,
+    restricted: fn(&[String]) -> bool,
 ) {
     let tokens: Vec<_> = tokens.into_iter().collect();
     let mut index = 0;
     while index < tokens.len() {
         match &tokens[index] {
-            TokenTree::Group(group) => inspect(group.stream(), prefix, imports, found),
+            TokenTree::Group(group) => inspect(group.stream(), prefix, imports, found, restricted),
             TokenTree::Ident(name) => {
                 let mut path = prefix.to_vec();
                 path.push(name.to_string().trim_start_matches("r#").to_owned());
@@ -263,7 +273,7 @@ fn inspect(
                 {
                     let TokenTree::Ident(segment) = &tokens[next + 2] else {
                         if let TokenTree::Group(group) = &tokens[next + 2] {
-                            inspect(group.stream(), &path, imports, found);
+                            inspect(group.stream(), &path, imports, found, restricted);
                             next += 3;
                         } else if matches!(&tokens[next + 2], TokenTree::Punct(p) if p.as_char() == '*')
                         {
@@ -280,7 +290,7 @@ fn inspect(
                     let ordinary_name = expanded.len() == 1
                         && !aliased
                         && expanded.first().is_some_and(|name| restricted_crate(name));
-                    if !ordinary_name && restricted_path(&expanded) {
+                    if !ordinary_name && restricted(&expanded) {
                         found.insert(expanded.join("::"));
                     }
                 }
@@ -295,6 +305,35 @@ fn inspect(
 
 /// Return deterministic source findings; invalid Rust never receives a clean inspection result.
 pub(crate) fn findings(source: &str) -> Result<Vec<String>> {
+    filtered_findings(source, restricted_path, scheduling_fragments)
+}
+
+/// Reject original symbol reservation construction and producer ports outside their two owners.
+pub(crate) fn symbol_producer_findings(source: &str) -> Result<Vec<String>> {
+    filtered_findings(source, symbol_producer_path, symbol_fragments)
+}
+fn symbol_producer_path(path: &[String]) -> bool {
+    path.last().is_some_and(|name| name == "NativeHandleRelease")
+        || path.windows(2).any(|pair| {
+            matches!(pair[0].as_str(), "JobContext" | "AdmittedJobResources" | "NativeHandleLease")
+                && pair[1] == "new"
+        })
+}
+fn scheduling_fragments(names: &BTreeSet<String>) -> bool {
+    names.contains("std") && (names.contains("thread") || names.contains("mpsc"))
+}
+fn symbol_fragments(names: &BTreeSet<String>) -> bool {
+    names.contains("NativeHandleRelease")
+        || names.contains("new")
+            && names.iter().any(|name| {
+                matches!(name.as_str(), "JobContext" | "AdmittedJobResources" | "NativeHandleLease")
+            })
+}
+fn filtered_findings(
+    source: &str,
+    restricted: fn(&[String]) -> bool,
+    fragments: fn(&BTreeSet<String>) -> bool,
+) -> Result<Vec<String>> {
     let parsed = syn::parse_file(source)
         .map_err(|error| Failure::external("parse execution ownership", error))?;
     let mut imports = Imports::default();
@@ -306,19 +345,19 @@ pub(crate) fn findings(source: &str) -> Result<Vec<String>> {
             .flat_map(|name| imports.expand(vec![name.clone()]))
             .flatten()
             .collect();
-        if expanded.contains("std") && (expanded.contains("thread") || expanded.contains("mpsc")) {
+        if fragments(&expanded) {
             found.insert(format!("{name}! scheduling capability fragments"));
         }
     }
     for path in &imports.paths {
         for expanded in imports.expand(path.clone()) {
-            if restricted_path(&expanded) {
+            if restricted(&expanded) {
                 found.insert(expanded.join("::"));
             }
         }
     }
     let tokens =
         source.parse().map_err(|error| Failure::external("tokenize execution ownership", error))?;
-    inspect(tokens, &[], &imports, &mut found);
+    inspect(tokens, &[], &imports, &mut found, restricted);
     Ok(found.into_iter().collect())
 }

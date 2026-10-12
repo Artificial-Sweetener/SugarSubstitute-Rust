@@ -5,7 +5,7 @@ platforms = ["windows", "macos", "linux"]
 package = "sugarsubstitute-contracts"
 root = "crates/sugarsubstitute-contracts"
 concern = "Owned contracts, localization, memory claims, immutable frames, scoped lifecycle and bounded transcript facts; bounded incident evidence, durable acknowledgment facts and namespace eviction ledger; bounded coordinator-entry identity, launch input and setup deadlines; sole five-locale native incident report messages and complete consent disclosure"
-minimum_tests = 98
+minimum_tests = 101
 
 [[owners]]
 package = "sugarsubstitute-application"
@@ -29,13 +29,13 @@ minimum_tests = 147
 package = "sugarsubstitute-execution"
 root = "crates/sugarsubstitute-execution"
 concern = "Admission, CPU scheduling, cancellation, retained ownership and observed worker teardown; authenticated bounded coordinator entry transport, replay and native issue fences"
-minimum_tests = 343
+minimum_tests = 370
 
 [[owners]]
 package = "sugarsubstitute-xtask"
 root = "tools/xtask"
 concern = "Governance rejection behavior and verification orchestration"
-minimum_tests = 39
+minimum_tests = 40
 
 [[owners]]
 package = "sugarsubstitute-supervision"

@@ -134,6 +134,10 @@ pub enum AdmissionError {
         /// Supplied application surface revision, if any.
         replacement: Option<ReplacementKey>,
     },
+    /// A fixed symbol reservation or paired cleanup binding is invalid.
+    InvalidSymbolAdmission,
+    /// Native accounting does not belong to the actual original admission.
+    NativeResources(super::NativeResourceError),
     /// Admission itself encountered an unexpected adapter failure.
     Unexpected(ExecutionError),
 }
@@ -145,6 +149,10 @@ impl fmt::Debug for AdmissionError {
                 formatter.debug_struct("ScopeClosed").field("scope_id", scope_id).finish()
             }
             Self::ShuttingDown => formatter.write_str("ShuttingDown"),
+            Self::InvalidSymbolAdmission => formatter.write_str("InvalidSymbolAdmission"),
+            Self::NativeResources(error) => {
+                formatter.debug_tuple("NativeResources").field(error).finish()
+            }
             Self::QueueSaturated { class } => {
                 formatter.debug_struct("QueueSaturated").field("class", class).finish()
             }
@@ -276,6 +284,10 @@ impl fmt::Display for AdmissionError {
                 write!(formatter, "Execution {class:?} has invalid replacement {replacement:?}")
             }
             Self::Unexpected(error) => fmt::Display::fmt(error, formatter),
+            Self::InvalidSymbolAdmission => {
+                formatter.write_str("Invalid fixed symbol admission or cleanup binding")
+            }
+            Self::NativeResources(error) => fmt::Display::fmt(error, formatter),
         }
     }
 }
@@ -283,6 +295,7 @@ impl Error for AdmissionError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::Unexpected(error) => Some(error),
+            Self::NativeResources(error) => Some(error),
             _ => None,
         }
     }

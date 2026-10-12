@@ -51,13 +51,15 @@ pub(super) async fn supervise(core: Arc<Core>) {
                     | sugarsubstitute_contracts::execution::JobClass::InfrastructureLifecycle
             )
         }) {
-            if let Some(reason) = task::stop_reason(&queued.context) {
+            if let Some(reason) = task::stop_reason(&queued.context)
+                && !matches!(queued.work, Work::BlockingHeld(_))
+            {
                 task::stop_queued(queued, reason);
                 continue;
             }
             let started = core.clock.retirement_now();
             let future = match queued.work {
-                Work::Async(factory) | Work::Blocking(factory) => {
+                Work::Async(factory) | Work::Blocking(factory) | Work::BlockingHeld(factory) => {
                     factory(queued.context.clone(), started)
                 }
                 Work::Cpu(_) => continue,
@@ -184,3 +186,7 @@ mod tests;
 #[cfg(test)]
 #[path = "runtime_supervision_pipe_tests.rs"]
 mod pipe_tests;
+
+#[cfg(test)]
+#[path = "symbol_cleanup_timer_tests.rs"]
+mod symbol_timer_tests;

@@ -28,6 +28,8 @@ mod credentials;
 mod peer;
 #[path = "prepare.rs"]
 mod prepare;
+#[path = "resource_binding.rs"]
+mod resource_binding;
 use crate::native_pipe::{
     handles::{Handle, adopt, last_error},
     overlapped, security,
@@ -40,6 +42,7 @@ pub(super) const CLIENT_ACCESS: u32 = FILE_READ_DATA.0
     | FILE_WRITE_ATTRIBUTES.0
     | SYNCHRONIZE.0;
 pub(crate) struct Lease {
+    symbol: Option<crate::SymbolTransportReservation>,
     server: bool,
     binding: Option<PeerBinding>,
     original: Option<LifecyclePipeDeadline>,
@@ -66,20 +69,21 @@ impl Lease {
         expected: bootstrap::Kind,
     ) -> Self {
         Self {
+            symbol: None,
             server,
             binding,
             expected,
             original,
             data: None,
-            input: Handle(0),
+            input: Handle::new(),
             process: None,
-            pipe: Handle(0),
+            pipe: Handle::new(),
             section: bootstrap::Section::new(),
-            own_token: Handle(0),
-            peer_token: Handle(0),
-            observed_token: Handle(0),
-            message_token: Handle(0),
-            observed_process: Handle(0),
+            own_token: Handle::new(),
+            peer_token: Handle::new(),
+            observed_token: Handle::new(),
+            message_token: Handle::new(),
+            observed_process: Handle::new(),
             identity: None,
             operations: std::array::from_fn(|_| None),
             read_completed: false,
@@ -99,8 +103,15 @@ impl Lease {
             bootstrap::Kind::Diagnostic(key.role()),
         )
     }
-    pub(crate) fn diagnostic_client(role: DiagnosticRole, original: LifecyclePipeDeadline) -> Self {
-        Self::new(false, None, Some(original), bootstrap::Kind::Diagnostic(role))
+    pub(crate) fn diagnostic_client(
+        role: DiagnosticRole,
+        original: LifecyclePipeDeadline,
+        symbol: Option<crate::SymbolTransportReservation>,
+    ) -> Self {
+        let mut lease = Self::new(false, None, Some(original), bootstrap::Kind::Diagnostic(role));
+        lease.symbol = symbol;
+        lease.bind_original_context();
+        lease
     }
     fn operation(
         &mut self,
@@ -110,16 +121,20 @@ impl Lease {
     }
 }
 impl PipeLease for Lease {
-    fn adopt(&mut self, input: PeerInput) {
+    fn adopt(&mut self, input: PeerInput) -> Result<(), (Box<LifecyclePipeFailure>, PeerInput)> {
+        if let Err(cause) = self.input.reserve_custody("pipe_adopt_input_accounting") {
+            return Err((Box::new(cause.into()), input));
+        }
         match input {
             PeerInput::Owned { handle, process } => {
                 self.process = process;
-                self.input.0 = handle.into_raw_handle() as usize;
+                self.input.adopt_partial(HANDLE(handle.into_raw_handle()));
             }
-            PeerInput::Inherited { section } => self.input.0 = section,
+            PeerInput::Inherited { section } => self.input.adopt_partial(HANDLE(section as *mut _)),
             #[cfg(test)]
             PeerInput::Simulated => {}
         }
+        Ok(())
     }
     fn prepare(
         &mut self,
@@ -127,8 +142,16 @@ impl PipeLease for Lease {
         context: &JobContext,
         handshake: Moment,
     ) -> Result<usize, LifecyclePipeFailure> {
+        self.bind_effect_context(context);
         for (slot, signal) in self.operations.iter_mut().zip(signals) {
-            *slot = Some(overlapped::Operation::new(signal));
+            let mut operation = overlapped::Operation::new(signal);
+            if let Some(symbol) = &self.symbol {
+                operation.attach(
+                    symbol.handles.clone(),
+                    crate::native_resources::EffectContext::new(symbol).for_child(context),
+                );
+            }
+            *slot = Some(operation);
         }
         if self.server { self.prepare_server(context, handshake) } else { self.prepare_client() }
     }
@@ -143,14 +166,17 @@ impl PipeLease for Lease {
     }
     fn connect(&mut self, issue: Issue<'_>) -> Result<Dispatch<Progress>, LifecyclePipeFailure> {
         if !self.server {
-            let result = issue.execute(|| {
-                self.open_client()?;
-                Ok(Progress::Complete(0))
-            })?;
-            if matches!(result, Dispatch::Issued(_)) {
-                self.verified_kernel()?;
-            }
-            return Ok(result);
+            return match issue.execute(|| self.claim_client_open())? {
+                Dispatch::Issued(stage) => {
+                    stage.open()?;
+                    self.configure_client()?;
+                    self.verified_kernel()?;
+                    Ok(Dispatch::Issued(Progress::Complete(0)))
+                }
+                Dispatch::Revoked => Ok(Dispatch::Revoked),
+                Dispatch::Stopped => Ok(Dispatch::Stopped),
+                Dispatch::Expired => Ok(Dispatch::Expired),
+            };
         }
         let pipe = self.pipe.raw();
         let operation = self.operation(Role::Handshake)?;

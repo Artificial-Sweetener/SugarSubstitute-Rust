@@ -3,7 +3,21 @@
 
 //! Report fixed admission limits and actual shutdown observations.
 
-use sugarsubstitute_contracts::execution::JobId;
+use sugarsubstitute_contracts::execution::{JobId, ScopeId};
+
+/// Report original symbol accounting still retained by actual native output owners.
+/// Counters describe custody and never establish successful OS close or quiescence.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct NativeOutputCustody {
+    /// Scope that originally admitted the fixed symbol reservation.
+    pub original_scope_id: ScopeId,
+    /// Job that originally admitted the fixed symbol reservation.
+    pub original_job_id: JobId,
+    /// Unreleased output accounting guards, in native output slots.
+    pub outputs_in_custody: u16,
+    /// Maximum simultaneous custody observed for this original reservation.
+    pub high_water: u16,
+}
 
 /// Fixed capacity policy for the production execution owner.
 ///
@@ -84,6 +98,8 @@ pub struct WorkerStatus {
 /// Observe shutdown while retaining work, untransferred results and cancellation callbacks.
 #[derive(Debug)]
 pub struct ShutdownProgress {
+    /// Nonzero original symbol output custody retained independently of job ACK.
+    pub native_output_custody: Vec<NativeOutputCustody>,
     /// Every admitted job is transferred or disposed and cancellation callbacks have returned.
     /// Every retained supervisor/job join, CPU worker and native worker has stopped.
     /// Runtime facilities are destroyed by `finish_shutdown` after this observation.

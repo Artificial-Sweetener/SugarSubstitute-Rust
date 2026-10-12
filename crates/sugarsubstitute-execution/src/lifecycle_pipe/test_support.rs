@@ -129,8 +129,9 @@ impl Boundary {
 }
 pub(super) struct Lease(pub(super) Arc<Boundary>);
 impl PipeLease for Lease {
-    fn adopt(&mut self, _: PeerInput) {
+    fn adopt(&mut self, _: PeerInput) -> Result<(), (Box<LifecyclePipeFailure>, PeerInput)> {
         self.0.adopted.fetch_add(1, Ordering::AcqRel);
+        Ok(())
     }
     fn prepare(
         &mut self,

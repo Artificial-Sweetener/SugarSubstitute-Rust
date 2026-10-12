@@ -48,6 +48,8 @@ impl ScopeControl for ScopeProbe {
             terminal_unobserved: 3,
             children_live: 1,
             reserved_bytes: 64,
+            native_reservations: 0,
+            native_outputs_in_custody: 0,
         }
     }
     fn abandon(&self) {
@@ -169,6 +171,7 @@ fn terminal_transfer_acknowledges_once_and_retained_result_memory_outlives_handl
         execution_time: Duration::from_nanos(5),
         outcome: JobOutcome::Success(19),
         memory: MemoryLease::new(64, Box::new(Release(released.clone()))),
+        native_handles: None,
     };
     let mut job = OwnedJob::new(
         scope_id,

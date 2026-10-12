@@ -68,12 +68,12 @@ impl Lease {
     pub(super) fn new(expected: CaptureAttachExpectation) -> Self {
         Self {
             expected,
-            creator: Handle(0),
-            handler: Handle(0),
-            own_token: Handle(0),
-            creator_token: Handle(0),
-            handler_token: Handle(0),
-            pipe: Handle(0),
+            creator: Handle::new(),
+            handler: Handle::new(),
+            own_token: Handle::new(),
+            creator_token: Handle::new(),
+            handler_token: Handle::new(),
+            pipe: Handle::new(),
             ping: None,
             ping_complete: false,
             prepared: false,
@@ -98,9 +98,14 @@ impl Lease {
             Err(cause) => Err(NativeObservationError::new("capture_open_process", cause)),
         }
     }
-    fn proof(process: HANDLE, token: &mut Handle) -> Result<ProcessProof, NativeObservationError> {
+    fn proof(
+        process: HANDLE,
+        custody: &Handle,
+        token: &mut Handle,
+    ) -> Result<ProcessProof, NativeObservationError> {
         token.close("capture_close_previous_token").map_err(|cause| cause.cause)?;
-        let (pid, birth) = security::process_facts(process).map_err(|cause| cause.cause)?;
+        let (pid, birth) =
+            security::process_facts(process, custody).map_err(|cause| cause.cause)?;
         let facts = CaptureProcessFacts::new(pid, birth)
             .map_err(|cause| NativeObservationError::new("capture_process_facts", cause))?;
         let identity = security::process_identity(process, token).map_err(|cause| cause.cause)?;
@@ -121,8 +126,8 @@ impl Lease {
     }
     fn verify(&mut self) -> Result<(), NativeObservationError> {
         let own = self.own.ok_or_else(|| ping::invariant("capture_current_owner"))?;
-        let creator = Self::proof(self.creator.raw(), &mut self.creator_token)?;
-        let handler = Self::proof(self.handler.raw(), &mut self.handler_token)?;
+        let creator = Self::proof(self.creator.raw(), &self.creator, &mut self.creator_token)?;
+        let handler = Self::proof(self.handler.raw(), &self.handler, &mut self.handler_token)?;
         let mut server_pid = 0;
         // SAFETY: exact retained connected local endpoint; no alternate-name lookup.
         unsafe { GetNamedPipeServerProcessId(self.pipe.raw(), &mut server_pid) }
@@ -156,7 +161,7 @@ impl AttachLease for Lease {
         }
         // SAFETY: bounded current process identity; no handle ownership transfer.
         let current = unsafe { GetCurrentProcess() };
-        self.own = Some(Self::proof(current, &mut self.own_token)?);
+        self.own = Some(Self::proof(current, &Handle::new(), &mut self.own_token)?);
         if self.own.is_none_or(|own| own.facts != self.expected.creator()) {
             return Err(ping::invariant("capture_creator_not_actual_owner"));
         }
@@ -199,7 +204,7 @@ impl AttachLease for Lease {
     }
     fn progress(&mut self) -> Result<Option<[usize; 2]>, NativeObservationError> {
         if self.prepared {
-            return Ok(Some([self.creator.0, self.handler.0]));
+            return Ok(Some([self.creator.value(), self.handler.value()]));
         }
         if !self.ping_complete {
             if !self
@@ -217,7 +222,7 @@ impl AttachLease for Lease {
             return Ok(None);
         }
         self.prepared = true;
-        Ok(Some([self.creator.0, self.handler.0]))
+        Ok(Some([self.creator.value(), self.handler.value()]))
     }
     fn prepared(&self) -> bool {
         self.prepared

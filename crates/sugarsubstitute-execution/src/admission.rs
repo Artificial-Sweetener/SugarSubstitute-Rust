@@ -20,11 +20,22 @@ use sugarsubstitute_contracts::execution::{
 };
 use tokio::sync::Notify;
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(crate) enum RequestKind {
     Async,
     Blocking,
     Cpu,
+    SymbolCleanup {
+        main_scope: sugarsubstitute_contracts::execution::ScopeSpec,
+        main_spec: JobSpec,
+    },
+    SymbolHelper {
+        cleanup: JobId,
+    },
+    SymbolNative {
+        original: JobContext,
+        handles: Arc<sugarsubstitute_contracts::execution::NativeHandleClaim>,
+    },
     #[cfg(any(windows, test))]
     Native,
     #[cfg(any(windows, test))]
@@ -32,6 +43,8 @@ pub(crate) enum RequestKind {
 }
 
 pub(crate) struct Record {
+    pub(crate) symbol_original: Option<JobId>,
+    pub(crate) symbol_cleanup: Option<crate::symbol_cleanup::Binding>,
     #[cfg(any(windows, test))]
     pub(crate) native_custody: Option<Arc<crate::capture_attach::control::Custody>>,
     #[cfg(any(windows, test))]
@@ -43,6 +56,7 @@ pub(crate) struct Record {
     pub(crate) job: Arc<dyn ErasedJob>,
     pub(crate) retiring: bool,
     pub(crate) acknowledged: bool,
+    pub(crate) terminal_published: bool,
 }
 
 impl Record {
@@ -95,6 +109,7 @@ impl Retirement {
 }
 
 pub(crate) struct State {
+    pub(crate) symbol_resources: HashMap<JobId, crate::native_resources::ResourceRecord>,
     pub(crate) scopes: HashMap<ScopeId, ScopeState>,
     pub(crate) jobs: HashMap<JobId, Record>,
     pub(crate) queue: VecDeque<QueuedJob>,
@@ -153,6 +168,7 @@ impl Core {
             native_identity_unrestored: std::sync::atomic::AtomicBool::new(false),
             id,
             state: Mutex::new(State {
+                symbol_resources: HashMap::new(),
                 scopes: HashMap::new(),
                 jobs: HashMap::new(),
                 queue: VecDeque::with_capacity(416),
@@ -256,7 +272,8 @@ impl Core {
         let index = state.queue.iter().position(|queued| {
             accepts(queued.context.spec().class)
                 && (stop_reason_at(&queued.context, now).is_some()
-                    || Self::has_capacity(&state, queued.context.spec().class))
+                    || (!matches!(queued.work, crate::task::Work::BlockingHeld(_))
+                        && Self::has_capacity(&state, queued.context.spec().class)))
         })?;
         let queued = state.queue.remove(index)?;
         if let Some(record) = state.jobs.get_mut(&queued.context.job_id()) {

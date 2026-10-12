@@ -82,10 +82,15 @@ impl Deadlines {
         scan_entries(&mut self.cleanup, now)
     }
     pub(crate) fn expired(&self, now: Moment) -> bool {
+        self.expired_deadline(now).is_some()
+    }
+    pub(crate) fn expired_deadline(&self, now: Moment) -> Option<Moment> {
         self.entries
             .iter()
             .flatten()
-            .any(|entry| entry.phase != Phase::Retiring && entry.deadline <= now)
+            .filter(|entry| entry.phase != Phase::Retiring && entry.deadline <= now)
+            .map(|entry| entry.deadline)
+            .min()
     }
     pub(crate) fn latch_capture_cleanup(
         &mut self,

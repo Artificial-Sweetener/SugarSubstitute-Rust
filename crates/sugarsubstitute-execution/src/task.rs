@@ -25,12 +25,17 @@ pub(crate) enum Work {
     Native(crate::native::NativeWork),
     Async(TaskFactory),
     Blocking(TaskFactory),
+    BlockingHeld(TaskFactory),
     Cpu(Box<dyn FnOnce(JobContext, Moment) -> Box<dyn crate::cpu::CpuWork> + Send>),
 }
 
 #[cfg(test)]
 #[path = "task_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "terminal_publication_tests.rs"]
+mod terminal_tests;
 
 pub(crate) struct QueuedJob {
     pub(crate) context: JobContext,
@@ -153,19 +158,20 @@ impl<T: Send + 'static, E: Send + 'static> Job<T, E> {
             JobOutcome::Coalesced { replacement } => Some(*replacement),
             _ => None,
         };
-        let completion = JobCompletion {
+        let mut completion = Some(JobCompletion {
             scope_id: self.scope_id,
             spec: self.spec,
             queue_time: duration(start, self.admitted),
             execution_time: duration(ended, start),
             outcome,
             memory: context.memory().clone(),
-        };
+            native_handles: context.native_handles().cloned(),
+        });
         if let Some(core) = self.core.upgrade() {
             let wake = core.terminal(self.spec.id, kind, replacement, || {
                 let mut cell = lock(&self.cell);
                 cell.phase = JobPhase::Terminal(kind);
-                cell.completion = Some(completion);
+                cell.completion = completion.take();
                 !cell.abandoned
             });
             if wake {

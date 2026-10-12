@@ -37,9 +37,13 @@ fn actual_diagnostic_server_and_client_reject_job_deadline_before_any_effect() -
             &scope,
             job,
             DiagnosticRole::Storage,
-            LifecyclePipeDeadline::new(1000, 100)?
+            LifecyclePipeDeadline::new(1000, 100)?,
+            crate::DiagnosticPipeResources::Standard
         ),
-        Err(LifecyclePipeAdmissionError::ConflictingDeadline)
+        Err(DiagnosticPipeAdmissionRejection {
+            error: LifecyclePipeAdmissionError::ConflictingDeadline,
+            ..
+        })
     ));
     assert_eq!(rig.client.core.scope_snapshot(scope.id()).reserved_bytes, 0);
     Ok(())
@@ -68,9 +72,13 @@ fn actual_diagnostic_server_and_client_reject_effective_ancestor_deadline_before
             &scope,
             job,
             DiagnosticRole::Storage,
-            LifecyclePipeDeadline::new(1000, 100)?
+            LifecyclePipeDeadline::new(1000, 100)?,
+            crate::DiagnosticPipeResources::Standard
         ),
-        Err(LifecyclePipeAdmissionError::ConflictingDeadline)
+        Err(DiagnosticPipeAdmissionRejection {
+            error: LifecyclePipeAdmissionError::ConflictingDeadline,
+            ..
+        })
     ));
     assert_eq!(rig.client.core.scope_snapshot(scope.id()).reserved_bytes, 0);
     Ok(())
