@@ -32,6 +32,7 @@ pub(super) struct Boundary {
     pub(super) writing: Gate,
     pub(super) pending_write: AtomicBool,
     pub(super) fail_read: AtomicBool,
+    pub(super) peer_closed: AtomicBool,
     pub(super) retired_write: Mutex<Option<u32>>,
     pub(super) write_polls: AtomicUsize,
     pub(super) panic_read: AtomicBool,
@@ -76,6 +77,7 @@ impl Boundary {
             writing: Gate::default(),
             pending_write: AtomicBool::new(false),
             fail_read: AtomicBool::new(false),
+            peer_closed: AtomicBool::new(false),
             retired_write: Mutex::new(None),
             write_polls: AtomicUsize::new(0),
             panic_read: AtomicBool::new(false),
@@ -184,6 +186,9 @@ impl PipeLease for Lease {
         Ok(result)
     }
     fn poll(&mut self, role: Role) -> Result<Progress, LifecyclePipeFailure> {
+        if role == Role::Read && self.0.peer_closed.load(Ordering::Acquire) {
+            return Err(failure("passive_peer_closed"));
+        }
         if role == Role::Write {
             self.0.write_polls.fetch_add(1, Ordering::AcqRel);
         }

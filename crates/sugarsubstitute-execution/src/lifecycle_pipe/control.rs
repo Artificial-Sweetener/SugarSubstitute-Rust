@@ -84,7 +84,37 @@ impl LifecyclePipeControl {
             }
             s.latest = operation.get();
             s.read_busy = true;
-            s.read = Some(Command { operation, deadline: original_deadline });
+            s.read = Some(ReadCommand {
+                operation,
+                deadline: ReadDeadline::Original(original_deadline),
+            });
+            Ok(())
+        })
+    }
+    /// Queue one passive receive using this authenticated session's preclaimed read buffer.
+    ///
+    /// Idle receive has no command timer. Received bytes remain untrusted; their typed
+    /// consumer must validate each request's original header deadline and identities.
+    /// Cancellation, original finite operations and peer closure still retire the same
+    /// native read, callback and buffer before terminal publication.
+    /// # Errors
+    /// Rejects unauthenticated/noncurrent sessions, reused identities, occupied read
+    /// storage and observation capacity. Rejection preserves timers and storage.
+    pub fn read_passive(
+        &self,
+        operation: LifecyclePipeOperationId,
+    ) -> Result<(), LifecyclePipeError> {
+        self.commit(|s, slots, _| {
+            if !s.authenticated || slots.handshake_deadline().is_some() {
+                return Err(LifecyclePipeError::NotReady);
+            }
+            validate_operation(s, operation)?;
+            if s.read_busy || s.read_buffer.is_none() || !s.room(2) {
+                return Err(LifecyclePipeError::Busy);
+            }
+            s.latest = operation.get();
+            s.read_busy = true;
+            s.read = Some(ReadCommand { operation, deadline: ReadDeadline::Passive });
             Ok(())
         })
     }
@@ -199,14 +229,21 @@ fn validate(
     deadline: Moment,
     now: Moment,
 ) -> Result<(), LifecyclePipeError> {
+    validate_operation(s, operation)?;
+    if deadline <= now {
+        return Err(LifecyclePipeError::DeadlineExpired);
+    }
+    Ok(())
+}
+fn validate_operation(
+    s: &State,
+    operation: LifecyclePipeOperationId,
+) -> Result<(), LifecyclePipeError> {
     if !s.connected {
         return Err(LifecyclePipeError::NotReady);
     }
     if operation.get() <= s.latest {
         return Err(LifecyclePipeError::InvalidOperation);
-    }
-    if deadline <= now {
-        return Err(LifecyclePipeError::DeadlineExpired);
     }
     Ok(())
 }

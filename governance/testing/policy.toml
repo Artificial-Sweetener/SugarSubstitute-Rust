@@ -29,7 +29,7 @@ minimum_tests = 143
 package = "sugarsubstitute-execution"
 root = "crates/sugarsubstitute-execution"
 concern = "Admission, CPU scheduling, cancellation, retained ownership and observed worker teardown"
-minimum_tests = 221
+minimum_tests = 228
 
 [[owners]]
 package = "sugarsubstitute-xtask"

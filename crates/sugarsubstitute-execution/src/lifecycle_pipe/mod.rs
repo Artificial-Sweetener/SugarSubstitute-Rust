@@ -74,6 +74,17 @@ pub(crate) struct Command {
     pub(crate) operation: LifecyclePipeOperationId,
     pub(crate) deadline: Moment,
 }
+/// Preserve finite command facts or an authenticated passive receive with no idle timer.
+#[derive(Clone, Copy)]
+pub(crate) enum ReadDeadline {
+    Original(Moment),
+    Passive,
+}
+/// Bind one monotonic read identity to the policy admitted by its session control.
+pub(crate) struct ReadCommand {
+    pub(crate) operation: LifecyclePipeOperationId,
+    pub(crate) deadline: ReadDeadline,
+}
 pub(crate) struct Write {
     pub(crate) command: Command,
     pub(crate) buffer: buffers::Buffer,
@@ -105,7 +116,7 @@ pub(crate) struct State {
     pub(crate) deadline: Option<LifecyclePipeDeadline>,
     pub(crate) capability: Option<[u8; 32]>,
     pub(crate) latest: u64,
-    pub(crate) read: Option<Command>,
+    pub(crate) read: Option<ReadCommand>,
     pub(crate) write: Option<Write>,
     pub(crate) authenticate: Option<Authentication>,
     pub(crate) read_busy: bool,

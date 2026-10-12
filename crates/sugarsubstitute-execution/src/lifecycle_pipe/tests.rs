@@ -26,6 +26,8 @@ mod failures;
 mod identity_failures;
 #[path = "late_input_tests.rs"]
 mod late_input;
+#[path = "passive_read_tests.rs"]
+mod passive_read;
 fn run() -> TestResult<RunKey> {
     Ok(RunKey {
         owner: CoordinatorKey {

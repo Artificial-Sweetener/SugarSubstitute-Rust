@@ -47,7 +47,9 @@ impl Active {
                 }
             };
             if let Some((command, buffer)) = next {
-                if command.deadline <= core.clock.now() {
+                if let ReadDeadline::Original(until) = command.deadline
+                    && until <= core.clock.now()
+                {
                     self.read = Some((command, buffer));
                     self.outcome = Some(JobOutcome::TimedOut);
                     return Ok(());
@@ -184,8 +186,11 @@ impl Active {
         {
             let mut state = lock(&core.state);
             let mut s = lock(&self.work.shared.state);
-            if let Some(slots) =
-                state.jobs.get_mut(&self.context.job_id()).and_then(|r| r.native_deadlines.as_mut())
+            if matches!(command.deadline, ReadDeadline::Original(_))
+                && let Some(slots) = state
+                    .jobs
+                    .get_mut(&self.context.job_id())
+                    .and_then(|r| r.native_deadlines.as_mut())
             {
                 slots.clear(Role::Read, command.operation.get());
             }

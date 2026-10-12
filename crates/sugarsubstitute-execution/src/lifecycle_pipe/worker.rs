@@ -18,7 +18,7 @@ pub(crate) struct Active {
     enrolled: bool,
     connecting: bool,
     connected: bool,
-    read: Option<(Command, buffers::Buffer)>,
+    read: Option<(ReadCommand, buffers::Buffer)>,
     write: Option<Write>,
     outcome: Option<JobOutcome<LifecyclePipeReport, LifecyclePipeFailure>>,
     completed: bool,
