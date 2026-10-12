@@ -195,7 +195,12 @@ test('reserves workflow space below Run and creates every field through the widg
     jest.fn(),
     { mount, mountChoice: mount },
     new NativeOverrideToolbarHost(document),
-    { read: () => ({ docked: false, floating: null }), write: jest.fn() },
+    {
+      read: () => ({ docked: false, floating: null, anchor: null }),
+      write: jest.fn(),
+      readCollapsed: () => false,
+      writeCollapsed: jest.fn(),
+    },
   );
   toolbar.reconcile();
   expect(mount).not.toHaveBeenCalled();

@@ -18,6 +18,7 @@ import { fluentMotion } from '../../surface/appearance/FluentThemeRuntime.js';
 import { setSurfaceGeometryMoving } from '../../surface/motion/SurfaceGeometryMotion.js';
 /** Own compact presentation, focus access, and one interruptible width animation. */
 export class OverrideToolbarDisclosure {
+    store;
     #root;
     #fields;
     #button;
@@ -30,17 +31,20 @@ export class OverrideToolbarDisclosure {
     #frame = null;
     #direction = 'right';
     /** Bind one native widget strip to its chrome without remounting controls. */
-    constructor(root, fields, button, geometry, reportError) {
+    constructor(root, fields, button, geometry, reportError, store) {
+        this.store = store;
         this.#root = root;
         this.#fields = fields;
         this.#button = button;
         this.#geometry = geometry;
         this.#reportError = reportError;
+        this.#collapsed = store.readCollapsed();
         this.#icon = root.ownerDocument.createElement('span');
         this.#icon.setAttribute('aria-hidden', 'true');
         button.append(this.#icon);
         button.addEventListener('click', this.#toggle);
         this.#present();
+        fields.hidden = this.#collapsed;
     }
     /** Coalesce settled size changes from native mounts and host reattachment. */
     refresh() {
@@ -94,6 +98,7 @@ export class OverrideToolbarDisclosure {
                 : '1';
         this.finish();
         this.#collapsed = !this.#collapsed;
+        this.store.writeCollapsed(this.#collapsed);
         this.#present();
         if (this.#collapsed &&
             (this.#fields.contains(this.#root.ownerDocument.activeElement) ||

@@ -17,6 +17,14 @@
 import { fluentMotion } from '../../surface/appearance/FluentThemeRuntime.js';
 import { setSurfaceGeometryMoving } from '../../surface/motion/SurfaceGeometryMotion.js';
 
+/** Persist user disclosure intent independently of placement and native widget state. */
+export interface OverrideToolbarDisclosureStore {
+  /** Restore the last compact or expanded presentation. */
+  readCollapsed(): boolean;
+  /** Save a completed user disclosure choice. */
+  writeCollapsed(collapsed: boolean): void;
+}
+
 /** Own compact presentation, focus access, and one interruptible width animation. */
 export class OverrideToolbarDisclosure {
   readonly #root: HTMLElement;
@@ -38,17 +46,20 @@ export class OverrideToolbarDisclosure {
     button: HTMLButtonElement,
     geometry: (width: number, height: number) => void,
     reportError: (error: unknown) => void,
+    private readonly store: OverrideToolbarDisclosureStore,
   ) {
     this.#root = root;
     this.#fields = fields;
     this.#button = button;
     this.#geometry = geometry;
     this.#reportError = reportError;
+    this.#collapsed = store.readCollapsed();
     this.#icon = root.ownerDocument.createElement('span');
     this.#icon.setAttribute('aria-hidden', 'true');
     button.append(this.#icon);
     button.addEventListener('click', this.#toggle);
     this.#present();
+    fields.hidden = this.#collapsed;
   }
 
   /** Coalesce settled size changes from native mounts and host reattachment. */
@@ -103,6 +114,7 @@ export class OverrideToolbarDisclosure {
         : '1';
     this.finish();
     this.#collapsed = !this.#collapsed;
+    this.store.writeCollapsed(this.#collapsed);
     this.#present();
     if (
       this.#collapsed &&

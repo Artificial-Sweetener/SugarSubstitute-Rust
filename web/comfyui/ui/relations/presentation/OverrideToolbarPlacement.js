@@ -1,3 +1,4 @@
+import { captureOverrideToolbarAnchor, resolveOverrideToolbarAnchor, } from './OverrideToolbarFloatingGeometry.js';
 /** Reconcile host placement and settled sizes without observing disclosure animation frames. */
 export class OverrideToolbarPlacement {
     root;
@@ -13,6 +14,7 @@ export class OverrideToolbarPlacement {
     #observer = null;
     #frame = null;
     #desired = null;
+    #anchor = null;
     #applied = { x: 0, y: 0 };
     #size = { width: 0, height: 0 };
     #gesture = null;
@@ -29,6 +31,7 @@ export class OverrideToolbarPlacement {
         const saved = store.read();
         this.#requestedDocked = saved.docked;
         this.#desired = saved.floating;
+        this.#anchor = saved.anchor;
         this.#unsubscribeLayout = host.subscribeLayout(this.#hostResized);
         root.dataset.placement = 'floating';
     }
@@ -76,6 +79,7 @@ export class OverrideToolbarPlacement {
             return;
         gesture.moved = true;
         this.#pointerPlaced = true;
+        this.#anchor = null;
         this.#requestedDocked = false;
         if (this.#docked) {
             this.#setDocked(false);
@@ -103,8 +107,11 @@ export class OverrideToolbarPlacement {
             this.#setDocked(true);
             this.attached();
         }
-        if (accepted && gesture?.moved)
+        if (accepted && gesture?.moved) {
+            this.#pointerPlaced = false;
+            this.#place();
             this.#save();
+        }
     }
     /** Offer keyboard docking without requiring a pointer gesture. */
     toggleDock() {
@@ -118,6 +125,8 @@ export class OverrideToolbarPlacement {
     /** Move an undocked toolbar through the same bounded coordinate owner. */
     shift(x, y) {
         this.#requestedDocked = false;
+        this.#pointerPlaced = false;
+        this.#anchor = null;
         if (this.#docked) {
             this.#setDocked(false);
             this.attached();
@@ -130,6 +139,7 @@ export class OverrideToolbarPlacement {
     reset() {
         this.#requestedDocked = true;
         this.#desired = null;
+        this.#anchor = null;
         this.#pointerPlaced = false;
         this.attached();
         this.#save();
@@ -158,9 +168,17 @@ export class OverrideToolbarPlacement {
     }
     /** Persist the chosen placement only after a completed pointer or keyboard action. */
     #save() {
+        if (!this.#requestedDocked && !this.#docked) {
+            const surface = this.host.floatingBounds();
+            this.#desired = { ...this.#applied };
+            this.#anchor = surface
+                ? captureOverrideToolbarAnchor(this.#desired, surface.bounds, this.#size)
+                : null;
+        }
         this.store.write({
             docked: this.#requestedDocked,
             floating: this.#desired ? { ...this.#desired } : null,
+            anchor: this.#anchor ? { ...this.#anchor } : null,
         });
     }
     /** Accept only the placeholder surface, leaving Run controls outside the drop zone. */
@@ -215,15 +233,17 @@ export class OverrideToolbarPlacement {
         const panel = surface.bounds;
         if (panel.width <= 0 || panel.height <= 0)
             return;
-        this.#desired ??= surface.origin;
+        const desired = this.#anchor && !this.#gesture
+            ? resolveOverrideToolbarAnchor(this.#anchor, panel, this.#size)
+            : (this.#desired ?? surface.origin);
         const minimumX = panel.left + 4;
         // Native dragging may carry a wide bar past the viewport; keep its recovery controls reachable.
         const visibleWidth = this.#pointerPlaced ? Math.min(88, this.#size.width) : this.#size.width;
         const maximumX = Math.max(minimumX, panel.right - 4 - visibleWidth);
         const maximumY = Math.max(panel.top, panel.bottom - 4 - this.#size.height);
         this.#applied = {
-            x: Math.max(minimumX, Math.min(maximumX, this.#desired.x)),
-            y: Math.max(panel.top, Math.min(maximumY, this.#desired.y)),
+            x: Math.max(minimumX, Math.min(maximumX, desired.x)),
+            y: Math.max(panel.top, Math.min(maximumY, desired.y)),
         };
         const left = `${this.#applied.x}px`, top = `${this.#applied.y}px`;
         if (this.root.style.left !== left)

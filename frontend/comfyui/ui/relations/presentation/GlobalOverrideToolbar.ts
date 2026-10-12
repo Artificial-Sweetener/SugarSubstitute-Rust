@@ -18,7 +18,10 @@ import type { WorkflowRelations } from '../application/WorkflowRelations.js';
 import type { OverrideGroup } from '../domain/RelationContracts.js';
 import { ContextMenu } from '../../menus/ContextMenu.js';
 import type { RelationWidgetRenderer } from './RelationWidgetRenderer.js';
-import { OverrideToolbarDisclosure } from './OverrideToolbarDisclosure.js';
+import {
+  OverrideToolbarDisclosure,
+  type OverrideToolbarDisclosureStore,
+} from './OverrideToolbarDisclosure.js';
 import { OverrideToolbarDrag } from './OverrideToolbarDrag.js';
 import { OverrideToolbarPlacement } from './OverrideToolbarPlacement.js';
 import type { OverrideToolbarHost } from './OverrideToolbarPlacement.js';
@@ -52,7 +55,7 @@ export class GlobalOverrideToolbar {
     private readonly reportError: (error: unknown) => void,
     private readonly widgets: RelationWidgetRenderer,
     host: OverrideToolbarHost,
-    placementStore: OverrideToolbarPlacementStore,
+    stateStore: OverrideToolbarPlacementStore & OverrideToolbarDisclosureStore,
     presentation: OverrideToolbarPresentation = 'comfy',
   ) {
     this.element = document.createElement('div');
@@ -124,7 +127,7 @@ export class GlobalOverrideToolbar {
       host,
       (docked) => this.#disclosure.setExpansionDirection(docked ? 'left' : 'right'),
       () => this.#fieldLayout.reconcile(),
-      placementStore,
+      stateStore,
     );
     this.#drag = new OverrideToolbarDrag(this.element, grip, this.#placement, () => {
       this.#menu.close();
@@ -139,6 +142,7 @@ export class GlobalOverrideToolbar {
         this.#placement.resize(width, height);
       },
       reportError,
+      stateStore,
     );
     this.#labels = new MutationObserver(this.#measureLabels);
     this.#labels.observe(this.element, { childList: true, subtree: true, characterData: true });
