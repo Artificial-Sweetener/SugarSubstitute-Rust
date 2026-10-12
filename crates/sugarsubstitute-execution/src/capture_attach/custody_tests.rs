@@ -64,6 +64,8 @@ fn long_lived_prepared_pin_latches_first_scope_shutdown_without_launch_time_clea
     rig.clock.advance(3_600_000_000_000);
     assert!(matches!(pin.shared.custody.snapshot(), CaptureCleanupSnapshot::Dormant));
     scope.cancel();
+    assert!(pin.shared.custody.stopped());
+    rig.clock.wait_until_registered(Moment::from_nanos(3_610_000_000_000))?;
     let CaptureCleanupSnapshot::Latched { budget: original, .. } = pin.shared.custody.snapshot()
     else {
         return Err("Scope shutdown failed to stop terminal preparation custody".into());
@@ -120,11 +122,12 @@ fn cleanup_total_publishes_uncertain_once_and_late_close_preserves_original_term
     Ok(())
 }
 
-struct SamplingClock {
-    clock: Arc<crate::runtime_test_support::ManualClock>,
-    target: Mutex<Option<std::thread::ThreadId>>,
-    entered: crate::runtime_test_support::Gate,
-    release: crate::runtime_test_support::Gate,
+pub(super) struct SamplingClock {
+    pub(super) clock: Arc<crate::runtime_test_support::ManualClock>,
+    pub(super) target: Mutex<Option<std::thread::ThreadId>>,
+    pub(super) entered: crate::runtime_test_support::Gate,
+    pub(super) release: crate::runtime_test_support::Gate,
+    pub(super) fail: bool,
 }
 impl Clock for SamplingClock {
     fn now(&self) -> Moment {
@@ -141,7 +144,9 @@ impl Clock for SamplingClock {
             if let Err(cause) = self.release.wait() {
                 std::panic::resume_unwind(Box::new(cause.to_string()));
             }
-            std::panic::resume_unwind(Box::new(TimeError::Regression));
+            if self.fail {
+                std::panic::resume_unwind(Box::new(TimeError::Regression));
+            }
         }
         crate::runtime_test_support::ClockPort(self.clock.clone()).now()
     }
@@ -159,6 +164,7 @@ fn first_cleanup_claim_retains_charge_and_cause_when_native_retirement_wins_samp
         target: Mutex::new(None),
         entered: Gate::default(),
         release: Gate::default(),
+        fail: true,
     });
     let wake = Arc::new(Wake::default());
     let owner = crate::ExecutionOwner::new(clock.clone(), wake.clone())?;

@@ -15,6 +15,8 @@ pub(crate) mod issue;
 #[cfg(test)]
 mod issue_tests;
 #[cfg(test)]
+mod scope_sampling_tests;
+#[cfg(test)]
 pub(crate) mod test_support;
 #[cfg(test)]
 mod tests;
