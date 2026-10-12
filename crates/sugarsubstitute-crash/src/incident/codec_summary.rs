@@ -10,8 +10,8 @@ use super::{
 use serde::{Deserialize, Serialize};
 use sugarsubstitute_contracts::{
     incident::{
-        ExitAttribution, IncidentRevision, IncidentSummary, IncidentUtc, ReportAttempt,
-        ReportDisposition, ReportFailure, RetentionFacts, SummaryFacts,
+        ExitAttribution, IncidentRevision, IncidentSummary, IncidentUtc, PayloadDisposition,
+        ReportAttempt, ReportDisposition, ReportFailure, RetentionFacts, SummaryFacts,
     },
     lifecycle::DesktopExitKind,
 };
@@ -161,5 +161,103 @@ impl From<&IncidentSummary> for SummaryRecord {
             },
             symbols: facts.symbols().into(),
         }
+    }
+}
+
+/// Persist one summary independently of its immutable attachment publication generation.
+/// These matching facts grant no native custody, payload availability or activation proof.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StoredIncidentSummary {
+    summary: IncidentSummary,
+    payload_revision: Option<IncidentRevision>,
+}
+impl StoredIncidentSummary {
+    /// Bind retained attachments to an independently preserved publication revision.
+    /// # Errors
+    /// Retained payloads require a generation between the seed and summary revisions;
+    /// all other payload dispositions require no generation.
+    pub fn new(
+        summary: IncidentSummary,
+        payload_revision: Option<IncidentRevision>,
+    ) -> Result<Self, IncidentStoreError> {
+        let retained = matches!(summary.facts().payload(), PayloadDisposition::Retained(_));
+        if retained != payload_revision.is_some()
+            || payload_revision.is_some_and(|revision| {
+                revision < summary.seed().revision() || revision > summary.revision()
+            })
+        {
+            return Err(IncidentStoreError::RecoveryConflict);
+        }
+        Ok(Self { summary, payload_revision })
+    }
+    /// Borrow domain facts without exposing native storage identities.
+    pub const fn summary(&self) -> &IncidentSummary {
+        &self.summary
+    }
+    /// Observe the independently immutable payload publication generation.
+    pub const fn payload_revision(&self) -> Option<IncidentRevision> {
+        self.payload_revision
+    }
+}
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct StoredRecord {
+    summary: SummaryRecord,
+    #[serde(deserialize_with = "super::codec::required_option")]
+    payload_revision: Option<u64>,
+}
+/// Encode canonical schema-two whole summary bytes within 64KiB.
+/// # Errors
+/// Preserves encoding causes and rejects oversized complete records.
+pub fn encode_summary(summary: &StoredIncidentSummary) -> Result<Vec<u8>, IncidentStoreError> {
+    let bytes = serde_json::to_vec(&super::codec::Record {
+        schema_version: 2,
+        content: StoredRecord {
+            summary: summary.summary().into(),
+            payload_revision: summary.payload_revision().map(IncidentRevision::get),
+        },
+    })?;
+    if bytes.len() > super::codec::STATE_BOUND {
+        return Err(IncidentStoreError::RecordBound);
+    }
+    Ok(bytes)
+}
+/// Decode only strict schema-two summary bytes; legacy conversion is explicit.
+/// # Errors
+/// Rejects unknown fields/versions, inconsistent payload references and malformed bytes.
+pub fn decode_summary(bytes: &[u8]) -> Result<StoredIncidentSummary, IncidentStoreError> {
+    if bytes.len() > super::codec::STATE_BOUND {
+        return Err(IncidentStoreError::RecordBound);
+    }
+    let record: super::codec::Record<StoredRecord> = serde_json::from_slice(bytes)?;
+    if record.schema_version != 2 {
+        return Err(IncidentStoreError::UnsupportedSchema(record.schema_version));
+    }
+    StoredIncidentSummary::new(
+        record.content.summary.into_summary()?,
+        record.content.payload_revision.map(IncidentRevision::new).transpose()?,
+    )
+}
+/// Convert strict legacy-one bytes to canonical schema two without modifying the input.
+/// Valid schema-two input is decoded and canonically re-encoded; this grants no durability.
+/// # Errors
+/// Rejects malformed/unknown schemas and fields, invalid facts and oversized records,
+/// preserving the original decoder cause. Legacy retained references derive only from
+/// that legacy summary's own revision.
+pub fn migrate_summary_v1(bytes: &[u8]) -> Result<Vec<u8>, IncidentStoreError> {
+    if bytes.len() > super::codec::STATE_BOUND {
+        return Err(IncidentStoreError::RecordBound);
+    }
+    let envelope: super::codec::Record<serde::de::IgnoredAny> = serde_json::from_slice(bytes)?;
+    match envelope.schema_version {
+        1 => {
+            let summary = super::codec::decode::<SummaryRecord>(bytes, super::codec::STATE_BOUND)?
+                .into_summary()?;
+            let revision = matches!(summary.facts().payload(), PayloadDisposition::Retained(_))
+                .then_some(summary.revision());
+            encode_summary(&StoredIncidentSummary::new(summary, revision)?)
+        }
+        2 => encode_summary(&decode_summary(bytes)?),
+        version => Err(IncidentStoreError::UnsupportedSchema(version)),
     }
 }

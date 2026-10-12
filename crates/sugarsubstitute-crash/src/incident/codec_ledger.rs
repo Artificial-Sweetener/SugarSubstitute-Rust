@@ -6,6 +6,9 @@ use super::{
     codec::{STATE_BOUND, decode, encode, required_option, utc},
     codec_capture::{CaptureDispositionPlan, CaptureJournalRecord},
     codec_identity::{OperationRecord, SubjectRecord},
+    codec_migration::{
+        MigrationArchiveRecord, MigrationRecord, SummaryMigrationArchive, SummaryMigrationJournal,
+    },
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -157,6 +160,10 @@ pub enum IncidentStoreState {
     SummaryEviction(Box<SummaryEvictionJournal>),
     /// Exact historical capture stages and committed completion, without native authority.
     CapturePromotion(Box<CaptureDispositionPlan>),
+    /// Exact original-copy and candidate expectations awaiting checked migration.
+    SummaryMigration(Box<SummaryMigrationJournal>),
+    /// Recorded original-copy preservation after migration; never mutation authority.
+    SummaryMigrationArchive(Box<SummaryMigrationArchive>),
 }
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "record", rename_all = "snake_case", deny_unknown_fields)]
@@ -164,6 +171,8 @@ enum StoreRecord {
     Ledger { ledger: LedgerRecord },
     SummaryEviction { journal: Box<JournalRecord> },
     CapturePromotion { journal: Box<CaptureJournalRecord> },
+    SummaryMigration(Box<MigrationRecord>),
+    SummaryMigrationArchive(Box<MigrationArchiveRecord>),
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -234,13 +243,13 @@ impl From<SummaryEvictions> for LedgerRecord {
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct FileRecord {
+pub(super) struct FileRecord {
     identity: [u8; 24],
     sha256: [u8; 32],
     bytes: u64,
 }
 impl FileRecord {
-    fn into_facts(self) -> Result<IncidentFileFacts, IncidentStoreError> {
+    pub(super) fn into_facts(self) -> Result<IncidentFileFacts, IncidentStoreError> {
         IncidentFileFacts::new(self.identity, self.sha256, self.bytes)
     }
 }
@@ -283,6 +292,12 @@ pub fn encode_store_state(state: &IncidentStoreState) -> Result<Vec<u8>, Inciden
                     candidate_sha256: journal.candidate_sha256,
                 }),
             },
+            IncidentStoreState::SummaryMigration(journal) => {
+                StoreRecord::SummaryMigration(Box::new(journal.as_ref().into()))
+            }
+            IncidentStoreState::SummaryMigrationArchive(archive) => {
+                StoreRecord::SummaryMigrationArchive(Box::new(archive.as_ref().into()))
+            }
             IncidentStoreState::CapturePromotion(plan) => {
                 StoreRecord::CapturePromotion { journal: Box::new(plan.as_ref().into()) }
             }
@@ -296,6 +311,12 @@ pub fn encode_store_state(state: &IncidentStoreState) -> Result<Vec<u8>, Inciden
 pub fn decode_store_state(bytes: &[u8]) -> Result<IncidentStoreState, IncidentStoreError> {
     Ok(match decode::<StoreRecord>(bytes, STATE_BOUND)? {
         StoreRecord::Ledger { ledger } => IncidentStoreState::Ledger(ledger.into_ledger()?),
+        StoreRecord::SummaryMigration(journal) => {
+            IncidentStoreState::SummaryMigration(Box::new(journal.into_journal()?))
+        }
+        StoreRecord::SummaryMigrationArchive(archive) => {
+            IncidentStoreState::SummaryMigrationArchive(Box::new(archive.into_archive()?))
+        }
         StoreRecord::CapturePromotion { journal } => {
             IncidentStoreState::CapturePromotion(Box::new(journal.into_plan()?))
         }

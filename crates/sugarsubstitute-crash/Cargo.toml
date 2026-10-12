@@ -22,3 +22,6 @@ windows = { workspace = true, features = ["Win32_Storage_FileSystem", "Win32_Sys
 
 [lints]
 workspace = true
+
+[target.'cfg(windows)'.dev-dependencies]
+sugarsubstitute-supervision = { path = "../sugarsubstitute-supervision", features = ["boundary-fixtures"] }

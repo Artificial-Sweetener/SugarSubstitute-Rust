@@ -47,13 +47,13 @@ fn bounded_tail_counts_source_omission_separately_from_marker() -> Result<(), Bo
 #[test]
 fn external_json_errors_redact_owner_output_and_preserve_original_cause()
 -> Result<(), Box<dyn Error>> {
-    let text = String::from_utf8(encode_summary(&summary()?)?)?;
+    let text = String::from_utf8(encode_summary(&StoredIncidentSummary::new(summary()?, None)?)?)?;
     for (sentinel, changed) in [
         (
             "PRIVATE_JSON_FIELD_8ca312",
             text.replace(
-                "\"schema_version\":1",
-                "\"schema_version\":1,\"PRIVATE_JSON_FIELD_8ca312\":0",
+                "\"schema_version\":2",
+                "\"schema_version\":2,\"PRIVATE_JSON_FIELD_8ca312\":0",
             ),
         ),
         (

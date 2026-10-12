@@ -7,22 +7,22 @@ use super::*;
 fn seed_summary_roundtrip_preserves_unexplained_native_zero() -> Result<(), Box<dyn Error>> {
     let seed = seed()?;
     assert_eq!(decode_seed(&encode_seed(&seed)?)?, seed);
-    let summary = summary()?;
+    let summary = StoredIncidentSummary::new(summary()?, None)?;
     let decoded = decode_summary(&encode_summary(&summary)?)?;
     assert_eq!(decoded, summary);
     assert_eq!(
-        decoded.facts().exit(),
+        decoded.summary().facts().exit(),
         ExitAttribution::Desktop { kind: DesktopExitKind::Unexpected, status: 0 }
     );
     Ok(())
 }
 #[test]
 fn strict_fields_nullable_fields_and_versions_are_required() -> Result<(), Box<dyn Error>> {
-    let bytes = encode_summary(&summary()?)?;
+    let bytes = encode_summary(&StoredIncidentSummary::new(summary()?, None)?)?;
     let text = String::from_utf8(bytes)?;
     for changed in [
-        text.replace("\"schema_version\":1", "\"schema_version\":2"),
-        text.replace("\"schema_version\":1", "\"schema_version\":1,\"unknown\":true"),
+        text.replace("\"schema_version\":2", "\"schema_version\":3"),
+        text.replace("\"schema_version\":2", "\"schema_version\":2,\"unknown\":true"),
         text.replace("\"acknowledged\":null,", ""),
         text.replace("\"last\":null", "\"last\":null,\"extra\":0"),
         text.replace("\"unexplained\"", "\"invented\""),
@@ -46,7 +46,7 @@ fn duplicate_fields_trailing_content_and_oversize_are_rejected() -> Result<(), B
 }
 #[test]
 fn summary_cross_facts_and_timestamps_are_checked() -> Result<(), Box<dyn Error>> {
-    let text = String::from_utf8(encode_summary(&summary()?)?)?;
+    let text = String::from_utf8(encode_summary(&StoredIncidentSummary::new(summary()?, None)?)?)?;
     assert!(
         decode_summary(text.replace("\"occurred\":101", "\"occurred\":99").as_bytes()).is_err()
     );
@@ -192,7 +192,7 @@ fn all_format_bounds_apply_before_parse() {
 
 #[test]
 fn nested_unit_variants_reject_unknown_fields() -> Result<(), Box<dyn Error>> {
-    let text = String::from_utf8(encode_summary(&summary()?)?)?;
+    let text = String::from_utf8(encode_summary(&StoredIncidentSummary::new(summary()?, None)?)?)?;
     for changed in [
         text.replace(
             "\"mechanism\":\"unexplained\"",
@@ -285,6 +285,7 @@ fn retained_text_counts_markers_separately_and_rejects_duplicate_kinds()
             facts.symbols().clone(),
         ),
     )?;
+    let retained = StoredIncidentSummary::new(retained.clone(), Some(retained.revision()))?;
     let text = String::from_utf8(encode_summary(&retained)?)?;
     assert_eq!(decode_summary(text.as_bytes())?, retained);
     assert!(
@@ -342,6 +343,7 @@ fn wrong_release_dump_and_actual_fault_address_fail_summary_validation()
             )),
         ),
     )?;
+    let resolved = StoredIncidentSummary::new(resolved, None)?;
     let text = String::from_utf8(encode_summary(&resolved)?)?;
     assert_eq!(decode_summary(text.as_bytes())?, resolved);
     assert!(

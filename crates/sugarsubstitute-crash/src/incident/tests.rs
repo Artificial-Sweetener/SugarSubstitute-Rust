@@ -3,7 +3,23 @@
 //! Exercise strict persisted records through actual codecs and domain constructors.
 mod capture_codec;
 mod codec;
+mod migration;
+#[cfg(windows)]
+mod migration_recovery;
+#[cfg(windows)]
+mod migration_runtime;
+#[cfg(windows)]
+mod migration_runtime_fixture;
+#[cfg(windows)]
+mod publication;
+#[cfg(windows)]
+mod recovery;
 mod redaction;
+#[cfg(windows)]
+mod reporting;
+#[cfg(windows)]
+mod reporting_fixture;
+mod summary_schema;
 use super::*;
 use std::error::Error;
 use sugarsubstitute_contracts::{incident::*, lifecycle::*};

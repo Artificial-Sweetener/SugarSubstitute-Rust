@@ -4,12 +4,11 @@
 use super::{
     IncidentStoreError,
     codec_seed::SeedRecord,
-    codec_summary::SummaryRecord,
     codec_symbols::{ReleaseRecord, SymbolsRecord},
 };
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use sugarsubstitute_contracts::incident::{
-    IncidentError, IncidentSeed, IncidentSummary, IncidentUtc, ReleaseSymbols, SymbolOutcome,
+    IncidentError, IncidentSeed, IncidentUtc, ReleaseSymbols, SymbolOutcome,
 };
 
 pub(super) fn required_option<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(
@@ -68,18 +67,6 @@ pub fn decode_seed(bytes: &[u8]) -> Result<IncidentSeed, IncidentStoreError> {
 /// Returns an encoding error or the fixed encoded-byte bound error.
 pub fn encode_seed(seed: &IncidentSeed) -> Result<Vec<u8>, IncidentStoreError> {
     encode(SeedRecord::from(seed), SEED_BOUND)
-}
-/// Decode a strict schema-one immutable summary within 64 KiB.
-/// # Errors
-/// Rejects malformed encoding, unknown fields/versions and inconsistent domain facts.
-pub fn decode_summary(bytes: &[u8]) -> Result<IncidentSummary, IncidentStoreError> {
-    decode::<SummaryRecord>(bytes, STATE_BOUND)?.into_summary()
-}
-/// Encode canonical summary content independently of actual activation.
-/// # Errors
-/// Rejects encoding failures or encoded content exceeding 64 KiB.
-pub fn encode_summary(summary: &IncidentSummary) -> Result<Vec<u8>, IncidentStoreError> {
-    encode(SummaryRecord::from(summary), STATE_BOUND)
 }
 /// Decode exact release matching facts; packaged installation provenance is separate.
 /// # Errors
