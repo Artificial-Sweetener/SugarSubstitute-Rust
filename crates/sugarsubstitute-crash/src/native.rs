@@ -60,3 +60,11 @@ pub(crate) fn port() -> Arc<dyn NativePort> {
 pub(crate) fn check_deadline(context: &JobContext) -> Result<(), CrashError> {
     pins::deadline(context)
 }
+
+/// Identify only the current native clock observer for deterministic callbacks.
+/// No thread handle, scheduler, creation, waiting or authority is exposed.
+#[cfg(test)]
+pub(crate) fn current_clock_observer() -> u32 {
+    // SAFETY: This metadata-only Win32 call has no arguments or retained outputs.
+    unsafe { windows::Win32::System::Threading::GetCurrentThreadId() }
+}

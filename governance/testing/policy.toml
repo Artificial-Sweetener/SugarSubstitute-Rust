@@ -59,4 +59,4 @@ minimum_tests = 229
 package = "sugarsubstitute-crash"
 root = "crates/sugarsubstitute-crash"
 concern = "Bounded capture input, immutable budgets, retained partial registration and actual native retirement; bounded charged redacted report views, categorical absence and symbol failures"
-minimum_tests = 117
+minimum_tests = 125

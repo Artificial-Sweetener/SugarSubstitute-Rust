@@ -6,19 +6,22 @@ use std::{
     num::NonZeroUsize,
     sync::{
         Condvar,
-        atomic::{AtomicU64, AtomicUsize, Ordering},
+        atomic::{AtomicUsize, Ordering},
     },
     time::Duration,
 };
 use sugarsubstitute_contracts::execution::*;
 use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner, windows::NativeCorrelation};
 
+mod clock;
 mod support;
 use support::*;
 
 mod attach_tests;
 mod deadline_tests;
+mod loan_tests;
 mod registered_tests;
+mod stop_panic_tests;
 
 #[test]
 fn inert_owner_and_input_reject_unbounded_capacities_and_private_diagnostics() -> TestResult {

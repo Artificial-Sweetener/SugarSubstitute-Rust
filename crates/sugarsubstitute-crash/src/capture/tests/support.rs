@@ -35,16 +35,8 @@ pub(super) fn close_spec(id: u64, deadline: Moment) -> TestResult<JobSpec> {
     spec.reservation_bytes = 4096;
     Ok(spec)
 }
-#[derive(Default)]
-pub(super) struct ManualClock(pub(super) AtomicU64);
-impl Clock for ManualClock {
-    fn now(&self) -> Moment {
-        Moment::from_nanos(self.0.load(Ordering::Acquire))
-    }
-    fn sleep_until(&self, _: Moment) -> WaitFuture {
-        Box::pin(std::future::pending())
-    }
-}
+pub(super) use super::clock::{ClockCallback, ManualClock};
+pub(super) type LeaseProbe = Box<dyn FnOnce(&JobContext) + Send>;
 #[derive(Default)]
 pub(super) struct Gate {
     state: Mutex<bool>,
@@ -104,7 +96,7 @@ pub(super) struct Rig {
     pub(super) client: ExecutionClient,
     pub(super) clock: Arc<ManualClock>,
     wake: Arc<Wake>,
-    pub(super) scope: Scope,
+    pub(super) scope: Arc<Scope>,
     pub(super) native_scope: Scope,
 }
 impl Rig {
@@ -118,8 +110,9 @@ impl Rig {
         let wake = Arc::new(Wake::default());
         let owner = ExecutionOwner::new(clock.clone(), wake.clone())?;
         let client = owner.client();
-        let scope =
-            client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
+        let scope = Arc::new(
+            client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?,
+        );
         let native_scope =
             client.create_native_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?;
         Ok(Self { _owner: owner, client, clock, wake, scope, native_scope })
@@ -166,6 +159,27 @@ impl Rig {
             self.wait(old)?;
         }
     }
+    /// Observe actual terminal custody after an explicitly expected fatal cause.
+    /// Every fatal mailbox cause is checked; this does not mint new admission.
+    pub(super) fn fatal_completion<T, E>(
+        &self,
+        job: &mut OwnedJob<T, E>,
+        original: &str,
+    ) -> TestResult<JobCompletion<T, E>> {
+        loop {
+            let old = self.count();
+            if let Some(value) = job.try_take_completion() {
+                return Ok(value);
+            }
+            if let Err(cause) = self.client.drain_completions(NonZeroUsize::MIN) {
+                assert!(cause.to_string().contains(original));
+            }
+            if let Some(value) = job.try_take_completion() {
+                return Ok(value);
+            }
+            self.wait(old)?;
+        }
+    }
     pub(super) fn observe_until(
         &self,
         capture: &mut WindowsCrashCapture,
@@ -184,12 +198,17 @@ impl Rig {
 }
 #[derive(Default)]
 pub(super) struct FakePort {
+    pub(super) start_address: Arc<AtomicUsize>,
+    pub(super) retire_address: Arc<AtomicUsize>,
+    pub(super) start_probe: Arc<Mutex<Option<LeaseProbe>>>,
+    pub(super) retire_probe: Arc<Mutex<Option<LeaseProbe>>>,
     pub(super) endpoint_reads: Arc<AtomicUsize>,
     pub(super) endpoint_unavailable: Arc<AtomicUsize>,
     pub(super) created: AtomicUsize,
     pub(super) dropped: Arc<AtomicUsize>,
     pub(super) stopped: Arc<AtomicUsize>,
     pub(super) fail_stop: Arc<AtomicUsize>,
+    pub(super) stop_failure: Arc<Mutex<Option<CrashError>>>,
     pub(super) entered: Arc<Gate>,
     pub(super) release: Arc<Gate>,
     pub(super) partial_process: Arc<AtomicUsize>,
@@ -199,12 +218,17 @@ pub(super) struct FakePort {
     pub(super) cancelled_permits: Arc<Mutex<Vec<WatchJob>>>,
 }
 struct FakeLease {
+    start_address: Arc<AtomicUsize>,
+    retire_address: Arc<AtomicUsize>,
+    start_probe: Arc<Mutex<Option<LeaseProbe>>>,
+    retire_probe: Arc<Mutex<Option<LeaseProbe>>>,
     endpoint_reads: Arc<AtomicUsize>,
     endpoint_unavailable: Arc<AtomicUsize>,
     _memory: MemoryClaim,
     dropped: Arc<AtomicUsize>,
     stopped: Arc<AtomicUsize>,
     fail_stop: Arc<AtomicUsize>,
+    stop_failure: Arc<Mutex<Option<CrashError>>>,
     entered: Arc<Gate>,
     release: Arc<Gate>,
     partial_process: Arc<AtomicUsize>,
@@ -217,6 +241,10 @@ impl NativePort for FakePort {
     fn create(&self, memory: &MemoryLease) -> Result<Box<dyn CaptureLease>, CrashError> {
         self.created.fetch_add(1, Ordering::AcqRel);
         Ok(Box::new(FakeLease {
+            start_address: self.start_address.clone(),
+            retire_address: self.retire_address.clone(),
+            start_probe: self.start_probe.clone(),
+            retire_probe: self.retire_probe.clone(),
             endpoint_reads: self.endpoint_reads.clone(),
             endpoint_unavailable: self.endpoint_unavailable.clone(),
             _memory: memory
@@ -230,6 +258,7 @@ impl NativePort for FakePort {
             dropped: self.dropped.clone(),
             stopped: self.stopped.clone(),
             fail_stop: self.fail_stop.clone(),
+            stop_failure: self.stop_failure.clone(),
             entered: self.entered.clone(),
             release: self.release.clone(),
             partial_process: self.partial_process.clone(),
@@ -245,12 +274,17 @@ impl CaptureLease for FakeLease {
         &mut self,
         _: &CaptureStartInput,
         _: CoordinatorKey,
-        _: &JobContext,
+        context: &JobContext,
     ) -> Result<(), CrashError> {
+        self.start_address.store(std::ptr::from_ref(self) as usize, Ordering::Release);
         self.entered.open();
         self.release.wait().map_err(|cause| {
             CrashError::new(sugarsubstitute_contracts::crash::CaptureOperation::Registration, cause)
         })?;
+        let probe = lock(&self.start_probe).take();
+        if let Some(probe) = probe {
+            probe(context);
+        }
         if self.healthy.load(Ordering::Acquire) != 0 {
             return Ok(());
         }
@@ -311,13 +345,21 @@ impl CaptureLease for FakeLease {
     }
     fn request_stop(&mut self) -> Result<(), CrashError> {
         self.stopped.fetch_add(1, Ordering::AcqRel);
+        if let Some(cause) = lock(&self.stop_failure).clone() {
+            return Err(cause);
+        }
         if self.fail_stop.load(Ordering::Acquire) != 0 {
             Err(CrashError::invalid(sugarsubstitute_contracts::crash::CaptureOperation::Stop))
         } else {
             Ok(())
         }
     }
-    fn retire(&mut self, _: &JobContext) -> Result<bool, CrashError> {
+    fn retire(&mut self, context: &JobContext) -> Result<bool, CrashError> {
+        self.retire_address.store(std::ptr::from_ref(self) as usize, Ordering::Release);
+        let probe = lock(&self.retire_probe).take();
+        if let Some(probe) = probe {
+            probe(context);
+        }
         Ok(self.stopped.load(Ordering::Acquire) >= 2 || self.fail_stop.load(Ordering::Acquire) == 0)
     }
     fn take_error(&mut self) -> Option<CrashError> {

@@ -16,6 +16,7 @@ use sugarsubstitute_execution::windows::{NativeObservationError, ProcessExit, Pr
 mod activity;
 mod attach;
 pub use attach::CaptureBootstrapRejection;
+mod loan;
 mod submission;
 #[cfg(test)]
 mod tests;
@@ -44,6 +45,7 @@ pub(crate) struct Shared {
 }
 pub(crate) struct NativeState {
     pub(crate) lease: Option<Box<dyn CaptureLease>>,
+    borrowed: bool,
     watch: Option<WatchJob>,
     pub(crate) registered: bool,
     pub(crate) handler: Option<CaptureHandlerIdentity>,

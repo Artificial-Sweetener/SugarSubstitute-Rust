@@ -68,6 +68,7 @@ impl WindowsCrashCapture {
             execution_id: scope.owner_id(),
             native: Mutex::new(NativeState {
                 lease: None,
+                borrowed: false,
                 watch: None,
                 registered: false,
                 handler: None,
