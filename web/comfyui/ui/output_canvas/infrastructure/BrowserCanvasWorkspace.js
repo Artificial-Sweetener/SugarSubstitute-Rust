@@ -16,12 +16,11 @@
 /** Mount explicitly allocated canvas/content siblings inside the qualified Comfy workspace. */
 import { CanvasWorkspaceResizeInput } from '../presentation/browser/CanvasWorkspaceResizeInput.js';
 import { ComfyCanvasFrameAllocation } from './ComfyCanvasFrameAllocation.js';
+import { ComfyCanvasWorkspaceFrame } from './ComfyCanvasWorkspaceFrame.js';
 import { ensureBrowserCanvasWorkspaceStyles } from './BrowserCanvasWorkspaceStyles.js';
 /** Keep graph frame, sibling bounds, and resize input coordinated without owning workflow results. */
 export class BrowserCanvasWorkspace {
-    panel;
     model;
-    frames;
     actions;
     content;
     canvas;
@@ -29,17 +28,14 @@ export class BrowserCanvasWorkspace {
     #backdrop;
     #divider;
     #frame;
-    #resize;
+    #workspaceFrame;
     #input;
-    #pending = null;
     #allocation = null;
     #suspended = false;
     #disposed = false;
     /** Allocate only owned nodes, keeping Comfy's chrome and every native render layer in its original parent. */
     constructor(root, panel, model, frames, actions) {
-        this.panel = panel;
         this.model = model;
-        this.frames = frames;
         this.actions = actions;
         this.#frame = new ComfyCanvasFrameAllocation(root, panel);
         const document = panel.ownerDocument;
@@ -65,9 +61,15 @@ export class BrowserCanvasWorkspace {
         this.#backdrop.type = 'button';
         this.#backdrop.setAttribute('aria-label', 'Close output canvas drawer');
         this.#backdrop.addEventListener('click', actions.close);
-        panel.append(this.content, this.#backdrop, this.#pane);
+        this.#workspaceFrame = new ComfyCanvasWorkspaceFrame(root, panel, frames, (width, height) => {
+            const previous = model.read().mode;
+            model.bounds(width, height);
+            if (model.read().mode !== previous)
+                this.#input.cancel();
+            this.#render();
+        });
+        this.#workspaceFrame.element.append(this.content, this.#backdrop, this.#pane);
         let input = null;
-        let observer = null;
         try {
             this.#input = input = new CanvasWorkspaceResizeInput(this.#divider, frames, {
                 width: () => model.read().canvas.width,
@@ -81,18 +83,12 @@ export class BrowserCanvasWorkspace {
                     this.#render();
                 },
             });
-            const Observer = document.defaultView?.ResizeObserver;
-            this.#resize = observer = Observer ? new Observer(this.#schedule) : null;
-            this.#resize?.observe(panel);
-            document.defaultView?.addEventListener('resize', this.#schedule);
-            this.#measure();
+            this.#workspaceFrame.measure();
         }
         catch (error) {
             this.#disposed = true;
             input?.dispose();
-            observer?.disconnect();
-            this.#pending?.();
-            document.defaultView?.removeEventListener('resize', this.#schedule);
+            this.#workspaceFrame.dispose();
             this.#backdrop.removeEventListener('click', actions.close);
             this.#frame.dispose();
             this.#pane.remove();
@@ -132,35 +128,12 @@ export class BrowserCanvasWorkspace {
             return;
         this.#disposed = true;
         this.#input.dispose();
-        this.#pending?.();
-        this.#pending = null;
-        this.#resize?.disconnect();
-        this.panel.ownerDocument.defaultView?.removeEventListener('resize', this.#schedule);
+        this.#workspaceFrame.dispose();
         this.#backdrop.removeEventListener('click', this.actions.close);
         this.#frame.dispose();
         this.#pane.remove();
         this.#backdrop.remove();
         this.content.remove();
-    }
-    /** Coalesce native workspace resize notifications without observing arbitrary presentation mutations. */
-    #schedule = () => {
-        if (this.#pending || this.#disposed)
-            return;
-        this.#pending = this.frames.request(() => {
-            this.#pending = null;
-            this.#measure();
-        });
-    };
-    /** Measure the compensated native workspace, whose bounds remain independent of the reduced graph origin. */
-    #measure() {
-        if (this.#disposed)
-            return;
-        const bounds = this.panel.getBoundingClientRect();
-        const previous = this.model.read().mode;
-        this.model.bounds(bounds.width, bounds.height);
-        if (this.model.read().mode !== previous)
-            this.#input.cancel();
-        this.#render();
     }
     /** Apply one authoritative rectangle to masonry, its backdrop, rail, and finder through their shared parent. */
     #render() {
