@@ -20,6 +20,9 @@ mod native;
 #[cfg(any(windows, test))]
 mod native_deadlines;
 #[cfg(any(windows, test))]
+#[allow(unsafe_code)]
+mod native_pipe;
+#[cfg(any(windows, test))]
 mod output;
 mod runtime;
 mod scope;

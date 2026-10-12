@@ -13,7 +13,7 @@ use windows::{
     Win32::{
         Foundation::*,
         Storage::FileSystem::*,
-        System::{IO::*, Pipes::*, Threading::*},
+        System::{Pipes::*, Threading::*},
     },
     core::PCWSTR,
 };
@@ -21,17 +21,14 @@ use windows::{
 mod bootstrap;
 #[path = "counter.rs"]
 pub(crate) mod counter;
-#[path = "handles.rs"]
-mod handles;
-#[path = "overlapped.rs"]
-mod overlapped;
 #[path = "peer.rs"]
 mod peer;
 #[path = "prepare.rs"]
 mod prepare;
-#[path = "security.rs"]
-mod security;
-use handles::*;
+use crate::native_pipe::{
+    handles::{Handle, adopt, last_error},
+    overlapped, security,
+};
 // Message-mode setup needs attribute-write access; generic write would also
 // grant FILE_CREATE_PIPE_INSTANCE through the append-data bit.
 pub(super) const CLIENT_ACCESS: u32 = FILE_READ_DATA.0
@@ -133,7 +130,7 @@ impl PipeLease for Lease {
         // SAFETY: operation storage/event/callback are owned before Issue and remain retained.
         let result = unsafe { ConnectNamedPipe(pipe, Some(operation.pointer())) };
         let accepted = operation.accept(result, true)?;
-        operation.initial_progress(accepted, pipe)
+        operation.initial_progress(accepted, pipe).map_err(LifecyclePipeFailure::from)
     }
     fn read(&mut self, bytes: &mut [u8]) -> Result<Progress, LifecyclePipeFailure> {
         let pipe = self.pipe.raw();
@@ -159,7 +156,7 @@ impl PipeLease for Lease {
         match issue.execute(|| {
             // SAFETY: exact immutable buffer and prepared OVERLAPPED stay retained through settlement.
             let result = unsafe { WriteFile(pipe, Some(bytes), None, Some(operation.pointer())) };
-            operation.accept(result, false)
+            operation.accept(result, false).map_err(LifecyclePipeFailure::from)
         })? {
             WriteDispatch::Issued(accepted) => {
                 Ok(WriteDispatch::Issued(operation.initial_progress(accepted, pipe)?))
@@ -178,7 +175,7 @@ impl PipeLease for Lease {
         Ok(result)
     }
     fn quiesce(&mut self, role: Role) -> Result<(), LifecyclePipeFailure> {
-        self.operation(role)?.quiesce()
+        self.operation(role)?.quiesce().map_err(LifecyclePipeFailure::from)
     }
     fn verify_message(&mut self) -> Result<(), LifecyclePipeFailure> {
         if !self.server {
@@ -267,7 +264,7 @@ impl PipeLease for Lease {
                         first.identity_unrestored |= error.identity_unrestored;
                         first.cause.retain_cleanup(error.cause);
                     } else {
-                        failure = Some(error);
+                        failure = Some(error.into());
                     }
                 }
             }
@@ -297,4 +294,11 @@ impl PipeLease for Lease {
         }
         Ok(true)
     }
+}
+
+fn error(
+    stage: &'static str,
+    cause: impl std::error::Error + Send + Sync + 'static,
+) -> LifecyclePipeFailure {
+    LifecyclePipeFailure::native(NativeObservationError::new(stage, cause))
 }

@@ -249,3 +249,10 @@ impl std::error::Error for LifecyclePipeFailure {
         Some(&self.cause)
     }
 }
+
+#[cfg(windows)]
+impl From<crate::native_pipe::NativePipeError> for LifecyclePipeFailure {
+    fn from(error: crate::native_pipe::NativePipeError) -> Self {
+        Self { cause: error.cause, identity_unrestored: error.identity_unrestored }
+    }
+}

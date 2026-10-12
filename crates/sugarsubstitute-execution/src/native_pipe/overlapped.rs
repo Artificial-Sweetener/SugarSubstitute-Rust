@@ -1,9 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Pin one operation's event, OVERLAPPED and callback through actual completion/quiescence.
-use super::*;
+use super::{NativePipeError, Progress, handles::*};
+use crate::native::Signal;
 use crate::native::wait::Wait;
 use std::error::Error;
+use std::sync::Arc;
+use windows::Win32::{
+    Foundation::*,
+    System::{IO::*, Threading::*},
+};
 pub(crate) enum AcceptedIssue {
     Pending,
     Synchronous,
@@ -34,15 +40,15 @@ impl Operation {
             completed: None,
         }
     }
-    fn begin_reuse(&mut self) -> Result<(), LifecyclePipeFailure> {
+    fn begin_reuse(&mut self) -> Result<(), NativePipeError> {
         if self.wait.is_some() || self.pending {
-            return Err(failure("pipe_live_overlapped_reuse"));
+            return Err(invariant("pipe_live_overlapped_reuse"));
         }
         // Old operation evidence must not survive a later preparation failure.
         self.completed = None;
         Ok(())
     }
-    pub(crate) fn prepare(&mut self) -> Result<(), LifecyclePipeFailure> {
+    pub(crate) fn prepare(&mut self) -> Result<(), NativePipeError> {
         self.begin_reuse()?;
         if self.event.0 == 0 {
             // SAFETY: initial-false manual-reset event is exclusively owned here.
@@ -62,9 +68,9 @@ impl Operation {
         ));
         self.wait
             .as_mut()
-            .ok_or_else(|| failure("pipe_wait_owner"))?
+            .ok_or_else(|| invariant("pipe_wait_owner"))?
             .register(self.event.raw())
-            .map_err(LifecyclePipeFailure::native)
+            .map_err(NativePipeError::native)
     }
     pub(crate) fn pointer(&mut self) -> *mut OVERLAPPED {
         self.overlapped.as_mut()
@@ -74,7 +80,7 @@ impl Operation {
         &mut self,
         result: windows::core::Result<()>,
         connect: bool,
-    ) -> Result<AcceptedIssue, LifecyclePipeFailure> {
+    ) -> Result<AcceptedIssue, NativePipeError> {
         match result {
             Ok(()) if connect => Ok(AcceptedIssue::Connected),
             Ok(()) => {
@@ -94,16 +100,16 @@ impl Operation {
         &mut self,
         accepted: AcceptedIssue,
         pipe: HANDLE,
-    ) -> Result<Progress, LifecyclePipeFailure> {
+    ) -> Result<Progress, NativePipeError> {
         match accepted {
             AcceptedIssue::Pending => Ok(Progress::Pending),
             AcceptedIssue::Connected => Ok(Progress::Complete(0)),
             AcceptedIssue::Synchronous => self.poll(pipe),
         }
     }
-    pub(crate) fn poll(&mut self, pipe: HANDLE) -> Result<Progress, LifecyclePipeFailure> {
+    pub(crate) fn poll(&mut self, pipe: HANDLE) -> Result<Progress, NativePipeError> {
         if !self.pending {
-            return Err(failure("pipe_poll_without_pending"));
+            return Err(invariant("pipe_poll_without_pending"));
         }
         let mut transferred = 0;
         // SAFETY: pipe and pinned OVERLAPPED/buffer remain live; this never waits.
@@ -122,12 +128,12 @@ impl Operation {
             }
         }
     }
-    pub(crate) fn quiesce(&mut self) -> Result<(), LifecyclePipeFailure> {
+    pub(crate) fn quiesce(&mut self) -> Result<(), NativePipeError> {
         if self.pending {
-            return Err(failure("pipe_quiesce_pending_io"));
+            return Err(invariant("pipe_quiesce_pending_io"));
         }
         if let Some(wait) = &mut self.wait {
-            wait.retire().map_err(LifecyclePipeFailure::native)?;
+            wait.retire().map_err(NativePipeError::native)?;
         }
         self.wait = None;
         Ok(())
@@ -135,7 +141,7 @@ impl Operation {
     pub(crate) fn take_completed(&mut self) -> Option<u32> {
         if self.pending || self.wait.is_some() { None } else { self.completed.take() }
     }
-    pub(crate) fn retire(&mut self, pipe: HANDLE) -> Result<bool, LifecyclePipeFailure> {
+    pub(crate) fn retire(&mut self, pipe: HANDLE) -> Result<bool, NativePipeError> {
         if self.pending && !self.cancel_attempted {
             // SAFETY: cancellation names only this exact live operation; it proves no completion.
             if let Err(e) = unsafe { CancelIoEx(pipe, Some(self.overlapped.as_ref())) }
@@ -161,6 +167,10 @@ impl Operation {
         self.event.close("pipe_close_event")?;
         Ok(true)
     }
+}
+
+fn invariant(stage: &'static str) -> NativePipeError {
+    error(stage, std::io::Error::other("Native pipe operation invariant rejected"))
 }
 
 #[cfg(test)]

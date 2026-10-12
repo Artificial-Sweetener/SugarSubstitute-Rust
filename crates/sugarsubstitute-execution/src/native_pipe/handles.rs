@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Keep every returned handle in a durable slot until checked close actually succeeds.
-use super::*;
+use super::NativePipeError;
+use crate::native::NativeObservationError;
+use windows::Win32::Foundation::*;
 pub(crate) struct Handle(pub(crate) usize);
 impl Handle {
     pub(crate) fn raw(&self) -> HANDLE {
         HANDLE(self.0 as *mut _)
     }
-    pub(crate) fn close(&mut self, stage: &'static str) -> Result<(), LifecyclePipeFailure> {
+    pub(crate) fn close(&mut self, stage: &'static str) -> Result<(), NativePipeError> {
         if self.0 == 0 {
             return Ok(());
         }
@@ -21,7 +23,7 @@ pub(crate) fn adopt(
     slot: &mut Handle,
     raw: HANDLE,
     stage: &'static str,
-) -> Result<(), LifecyclePipeFailure> {
+) -> Result<(), NativePipeError> {
     if raw.is_invalid() {
         return Err(error(stage, last_error()));
     }
@@ -43,6 +45,6 @@ pub(crate) fn code(error: &windows::core::Error, expected: WIN32_ERROR) -> bool 
 pub(crate) fn error(
     stage: &'static str,
     cause: impl std::error::Error + Send + Sync + 'static,
-) -> LifecyclePipeFailure {
-    LifecyclePipeFailure::native(NativeObservationError::new(stage, cause))
+) -> NativePipeError {
+    NativePipeError::native(NativeObservationError::new(stage, cause))
 }

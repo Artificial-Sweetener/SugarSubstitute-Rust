@@ -33,11 +33,7 @@ use sugarsubstitute_contracts::{
 };
 pub use types::*;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum Progress {
-    Pending,
-    Complete(u32),
-}
+pub(crate) use crate::native_pipe::Progress;
 pub(crate) enum PeerInput {
     #[cfg(windows)]
     Owned { handle: std::os::windows::io::OwnedHandle, process: Option<ProcessKey> },
