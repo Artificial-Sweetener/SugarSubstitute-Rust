@@ -43,3 +43,17 @@ export function freezeCanvasViewState(state, revision) {
             : null,
     });
 }
+/** Identify camera/wipe-only presentation transitions that require no catalog or resource reconciliation. */
+export function sameCanvasNavigation(previous, next) {
+    return (previous.viewId === next.viewId &&
+        previous.sessionId === next.sessionId &&
+        previous.follow === next.follow &&
+        previous.mode === next.mode &&
+        previous.sourcePreview === next.sourcePreview &&
+        previous.linked === next.linked &&
+        previous.selection?.sourceId === next.selection?.sourceId &&
+        previous.selection?.batchIndex === next.selection?.batchIndex &&
+        Boolean(previous.comparison) === Boolean(next.comparison) &&
+        previous.comparison?.secondary?.sourceId === next.comparison?.secondary?.sourceId &&
+        previous.comparison?.secondary?.batchIndex === next.comparison?.secondary?.batchIndex);
+}

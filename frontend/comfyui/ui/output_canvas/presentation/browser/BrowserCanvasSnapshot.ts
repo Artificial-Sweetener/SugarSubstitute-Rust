@@ -20,7 +20,11 @@ import type { CanvasInspectionTarget } from '../../application/CanvasInspectionS
 import type { CanvasCatalogSnapshot } from '../../domain/CanvasCatalog.js';
 import type { CanvasAttachmentAddress } from '../../domain/CanvasIdentity.js';
 import type { CanvasImageSlotSnapshot } from '../../domain/CanvasImageResource.js';
-import type { CanvasResourceStatus, CanvasViewSnapshot } from '../../domain/CanvasViewPort.js';
+import type {
+  CanvasResourceStatus,
+  CanvasViewSnapshot,
+  CanvasSourceSummary,
+} from '../../domain/CanvasViewPort.js';
 
 /** Project only lightweight status, keeping DOM handles out of the renderer-independent port. */
 export function browserCanvasSnapshot(
@@ -31,6 +35,7 @@ export function browserCanvasSnapshot(
   camera: CanvasInspectionTarget | null,
   connected: boolean,
   previewStarted: boolean,
+  sources: readonly CanvasSourceSummary[],
 ): CanvasViewSnapshot {
   const primary = images.find((slot) => slot.slot === 'primary');
   const secondary = images.find((slot) => slot.slot === 'secondary');
@@ -66,16 +71,26 @@ export function browserCanvasSnapshot(
     resource = { ...resource, message: 'Loading the selected image; showing the previous image.' };
   const physicalScale = camera ? camera.camera.scale * camera.geometry.density : 0;
   const b = secondary?.frame;
+  let secondaryResource: CanvasResourceStatus | null = plan.view.comparison
+    ? (secondary?.status ?? status('empty', 'Choose an output for B.'))
+    : null;
+  if (plan.secondary && (!plan.secondary.sourcePresent || !plan.secondary.item))
+    secondaryResource = status('unavailable', 'The selected B image is unavailable.');
+  else if (plan.secondary?.item && plan.secondary.item.mediaKind !== 'image')
+    secondaryResource = status('unavailable', 'Open B in the host viewer.');
+  if (!frame && b) resource = { ...resource, message: `${resource.message} Showing B.` };
+  if (plan.view.mode === 'overview') resource = status('empty', 'Workflow output overview.');
   return Object.freeze({
     schema: 1,
     address,
     revision: 0,
     view: plan.view,
-    sources: Object.freeze(catalog.entries.map((entry) => entry.summary)),
+    sources,
     selected: plan.primary?.item ?? null,
     secondary: plan.secondary?.item ?? null,
     preview,
     resource: Object.freeze(resource),
+    secondaryResource: secondaryResource ? Object.freeze(secondaryResource) : null,
     runStatus: catalog.result.runStatus,
     connected,
     zoom: Object.freeze({

@@ -50,10 +50,10 @@ var CanvasToolbar = defineComponent({
             state.mode === "overview"
           ),
           button("Link", { type: "link", enabled: !state.linked }, state.linked),
-          button("Fit", { type: "fit" }),
-          button("1:1", { type: "native" }),
-          button("Zoom out", { type: "zoom", factor: 0.8 }),
-          button("Zoom in", { type: "zoom", factor: 1.25 }),
+          button("Fit", { type: "fit" }, void 0, state.mode === "overview"),
+          button("1:1", { type: "native" }, void 0, state.mode === "overview"),
+          button("Zoom out", { type: "zoom", factor: 0.8 }, void 0, state.mode === "overview"),
+          button("Zoom in", { type: "zoom", factor: 1.25 }, void 0, state.mode === "overview"),
           button(
             "Previous image",
             { type: "batch", index: Math.max(0, batch - 1) },
@@ -63,7 +63,7 @@ var CanvasToolbar = defineComponent({
           h(
             "span",
             { class: "sc-output-batch", "aria-label": "Batch position" },
-            props.snapshot.preview ? "Source preview" : selection ? `${batch + 1} / ${count}` : "No image"
+            props.snapshot.preview ? "Source preview" : selection ? state.comparison && batch >= count ? `Pinned image ${batch + 1}; latest batch ${count}` : `${batch + 1} / ${count}` : "No image"
           ),
           button(
             "Next image",
@@ -75,7 +75,7 @@ var CanvasToolbar = defineComponent({
             "Compare",
             { type: "comparison", enabled: !state.comparison },
             Boolean(state.comparison),
-            !state.comparison && (!selection || !props.snapshot.selected || props.snapshot.preview || props.snapshot.resource.state !== "ready" || props.snapshot.selected.mediaKind !== "image")
+            state.mode === "overview" || !state.comparison && (!selection || !props.snapshot.selected || props.snapshot.preview || props.snapshot.resource.state !== "ready" || props.snapshot.selected.mediaKind !== "image")
           )
         ]
       );

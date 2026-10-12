@@ -82,6 +82,7 @@ export function canvasSnapshot(key: string): CanvasViewSnapshot {
       secondaryDimensions: null,
     },
     resource: { state: 'empty', message: '', canRetry: false, canAdmitLargeImage: false },
+    secondaryResource: null,
     runStatus: 'idle',
     connected: true,
   };

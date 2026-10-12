@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Describe actual displayed image fidelity and loading state for reusable overlay controls. */
 /** Project only lightweight status, keeping DOM handles out of the renderer-independent port. */
-export function browserCanvasSnapshot(address, plan, catalog, images, camera, connected, previewStarted) {
+export function browserCanvasSnapshot(address, plan, catalog, images, camera, connected, previewStarted, sources) {
     const primary = images.find((slot) => slot.slot === 'primary');
     const secondary = images.find((slot) => slot.slot === 'secondary');
     const frame = primary?.frame;
@@ -44,16 +44,28 @@ export function browserCanvasSnapshot(address, plan, catalog, images, camera, co
         resource = { ...resource, message: 'Loading the selected image; showing the previous image.' };
     const physicalScale = camera ? camera.camera.scale * camera.geometry.density : 0;
     const b = secondary?.frame;
+    let secondaryResource = plan.view.comparison
+        ? (secondary?.status ?? status('empty', 'Choose an output for B.'))
+        : null;
+    if (plan.secondary && (!plan.secondary.sourcePresent || !plan.secondary.item))
+        secondaryResource = status('unavailable', 'The selected B image is unavailable.');
+    else if (plan.secondary?.item && plan.secondary.item.mediaKind !== 'image')
+        secondaryResource = status('unavailable', 'Open B in the host viewer.');
+    if (!frame && b)
+        resource = { ...resource, message: `${resource.message} Showing B.` };
+    if (plan.view.mode === 'overview')
+        resource = status('empty', 'Workflow output overview.');
     return Object.freeze({
         schema: 1,
         address,
         revision: 0,
         view: plan.view,
-        sources: Object.freeze(catalog.entries.map((entry) => entry.summary)),
+        sources,
         selected: plan.primary?.item ?? null,
         secondary: plan.secondary?.item ?? null,
         preview,
         resource: Object.freeze(resource),
+        secondaryResource: secondaryResource ? Object.freeze(secondaryResource) : null,
         runStatus: catalog.result.runStatus,
         connected,
         zoom: Object.freeze({

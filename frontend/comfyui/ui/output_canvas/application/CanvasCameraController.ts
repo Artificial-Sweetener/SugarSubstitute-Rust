@@ -25,7 +25,11 @@ import {
   type CanvasCamera,
   type CanvasCameraGeometry,
 } from '../domain/CanvasCamera.js';
-import { resizeCanvasCamera } from '../domain/CanvasInspection.js';
+import {
+  resizeCanvasCamera,
+  captureCanvasInspection,
+  projectCanvasInspection,
+} from '../domain/CanvasInspection.js';
 import type { CanvasViewId } from '../domain/CanvasIdentity.js';
 import type { CanvasSelection } from '../domain/CanvasViewState.js';
 import type { CanvasInspectionStore, CanvasInspectionTarget } from './CanvasInspectionStore.js';
@@ -46,6 +50,7 @@ export class CanvasCameraController {
   #target: { readonly selection: CanvasSelection; readonly geometry: CanvasCameraGeometry } | null =
     null;
   #disposed = false;
+  #comparison = false;
 
   /** Bind an enrolled view's inspection owner and this attachment's cancellable frame clock. */
   constructor(private readonly options: CanvasCameraControllerOptions) {
@@ -84,9 +89,19 @@ export class CanvasCameraController {
     const camera =
       sameSlot && sameImage
         ? resizeCanvasCamera(previous.camera, previous.geometry, geometry)
-        : this.options.inspections.camera(this.options.view, selection, geometry);
+        : this.#comparison && previous
+          ? projectCanvasInspection(
+              captureCanvasInspection(previous.camera, previous.geometry),
+              geometry,
+            )
+          : this.options.inspections.camera(this.options.view, selection, geometry);
     this.#target = { selection: Object.freeze({ ...selection }), geometry };
     this.#transition.set(camera);
+  }
+
+  /** Preserve the common reveal region when changing comparison partners, independently of solo linking. */
+  comparison(enabled: boolean): void {
+    this.#comparison = enabled;
   }
 
   /** Reconcile a link preference through the existing inspection owner, preserving independent slot state. */

@@ -1,13 +1,20 @@
 import {
+  CanvasWipeSeparator
+} from "./chunk-OVL65VLS.js";
+import {
   CanvasCompareControls
-} from "./chunk-VMDE2JL6.js";
+} from "./chunk-R5Y5EX6O.js";
+import {
+  canvasNavigationSnapshot
+} from "./chunk-HDLA7PWP.js";
 import {
   CanvasSourceTabs
 } from "./chunk-BBIMJ2PJ.js";
 import {
   CanvasToolbar
-} from "./chunk-UL5SOQL2.js";
+} from "./chunk-TLPXQNW6.js";
 import {
+  computed,
   defineComponent,
   h
 } from "./chunk-MNPWJMUZ.js";
@@ -23,16 +30,24 @@ var CanvasOverlay = defineComponent({
   },
   /** Compose reported surface status with capability-gated control groups. */
   setup(props) {
+    const navigation = computed(
+      (previous) => canvasNavigationSnapshot(props.snapshot, previous)
+    );
     return () => {
       const snapshot = props.snapshot;
       const zoom = snapshot.zoom;
       const dimensions = zoom.dimensions;
       const label = zoom.mode === "fit" ? "Fit" : zoom.mode === "native" ? "1:1" : `${Math.round(zoom.physicalScale * 100)}%`;
       return h("div", { class: "sc-output-overlay", "data-canvas-view": snapshot.address.viewId }, [
+        snapshot.view.mode === "image" && snapshot.view.comparison && props.capabilities.commands.includes("wipe") ? h(CanvasWipeSeparator, { snapshot, send: props.send }) : null,
         h("div", { class: "sc-output-navigation" }, [
-          h(CanvasToolbar, { snapshot, capabilities: props.capabilities, send: props.send }),
-          snapshot.view.comparison ? h(CanvasCompareControls, {
-            snapshot,
+          h(CanvasToolbar, {
+            snapshot: navigation.value,
+            capabilities: props.capabilities,
+            send: props.send
+          }),
+          snapshot.view.mode === "image" && snapshot.view.comparison ? h(CanvasCompareControls, {
+            snapshot: navigation.value,
             capabilities: props.capabilities,
             send: props.send
           }) : null
@@ -40,6 +55,11 @@ var CanvasOverlay = defineComponent({
         h("div", { class: "sc-output-status" }, [
           h("span", { "aria-label": "Zoom" }, label),
           dimensions ? h("span", `${dimensions.width} \xD7 ${dimensions.height}`) : null,
+          zoom.secondaryPhysicalScale && zoom.secondaryDimensions ? h(
+            "span",
+            { "aria-label": "B display scale" },
+            `B: ${Math.round(zoom.secondaryPhysicalScale.x * 100)}% \xD7 ${Math.round(zoom.secondaryPhysicalScale.y * 100)}%; ${zoom.secondaryDimensions.width} \xD7 ${zoom.secondaryDimensions.height}`
+          ) : null,
           snapshot.preview ? h("span", "Live preview") : null,
           snapshot.connected ? null : h("span", "Disconnected"),
           h("span", snapshot.resource.message),
@@ -72,7 +92,7 @@ var CanvasOverlay = defineComponent({
           },
           props.announcement
         ),
-        props.capabilities.commands.includes("select-source") ? h(CanvasSourceTabs, { snapshot, send: props.send }) : null
+        props.capabilities.commands.includes("select-source") ? h(CanvasSourceTabs, { snapshot: navigation.value, send: props.send }) : null
       ]);
     };
   }

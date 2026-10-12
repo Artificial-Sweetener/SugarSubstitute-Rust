@@ -55,6 +55,7 @@ export interface CanvasViewSnapshot {
   readonly preview: boolean;
   readonly zoom: CanvasZoomStatus;
   readonly resource: CanvasResourceStatus;
+  readonly secondaryResource: CanvasResourceStatus | null;
   readonly runStatus: 'idle' | 'queued' | 'running' | 'complete' | 'cancelled' | 'error';
   readonly connected: boolean;
 }

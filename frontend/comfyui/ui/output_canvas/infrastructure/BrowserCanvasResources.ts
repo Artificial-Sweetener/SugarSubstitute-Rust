@@ -34,6 +34,7 @@ import type {
   CanvasImageAllowanceInput,
 } from '../application/CanvasImageAllowances.js';
 import type { BrowserCanvasImagePayload } from './BrowserCanvasImageLoader.js';
+import type { CanvasOverviewCell } from '../application/CanvasOverviewWindow.js';
 
 /** Keep ephemeral byte delivery separate from catalog updates and final-file loading. */
 export class BrowserCanvasResources {
@@ -70,6 +71,7 @@ export class BrowserCanvasResources {
     this.#configureBudget();
     if (!changed && !retry) return;
     this.#previewStarted = false;
+    if (plan.view.mode === 'overview') return;
     const images: CanvasVisibleImage<BrowserCanvasImagePayload>[] = [];
     if (plan.view.mode === 'image') {
       for (const [name, slot] of [
@@ -85,6 +87,22 @@ export class BrowserCanvasResources {
       if (snapshot.frame && !plan.availableSources.includes(snapshot.frame.selection.sourceId))
         this.resources.releaseSlot(snapshot.slot);
     this.resources.update(images, retry);
+  }
+
+  /** Admit only the overview's intersecting final-image cells through the same byte/decode limits. */
+  overview(cells: readonly CanvasOverviewCell[]): void {
+    const plan = this.#plan;
+    if (!plan || plan.view.mode !== 'overview' || !this.#active || this.#disposed) return;
+    const images: CanvasVisibleImage<BrowserCanvasImagePayload>[] = [];
+    for (const cell of cells) {
+      const input = this.#final({
+        selection: cell.selection,
+        item: cell.item,
+        sourcePresent: plan.availableSources.includes(cell.selection.sourceId),
+      });
+      if (input) images.push({ slot: cell.key, input: { ...input, role: 'thumbnail' } });
+    }
+    this.resources.update(images);
   }
 
   /** Refuse stale/foreign bytes before handing their ownership to a visible resource slot. */

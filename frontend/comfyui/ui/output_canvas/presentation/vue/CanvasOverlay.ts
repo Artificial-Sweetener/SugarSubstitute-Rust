@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Compose reusable floating controls independently of Comfy and image rendering. */
 
-import { defineComponent, h, type PropType } from 'vue';
+import { computed, defineComponent, h, type PropType } from 'vue';
 import type {
   CanvasCapabilities,
   CanvasCommand,
@@ -24,6 +24,8 @@ import type {
 import { CanvasCompareControls } from './CanvasCompareControls.js';
 import { CanvasSourceTabs } from './CanvasSourceTabs.js';
 import { CanvasToolbar } from './CanvasToolbar.js';
+import { CanvasWipeSeparator } from './CanvasWipeSeparator.js';
+import { canvasNavigationSnapshot } from './CanvasNavigationSnapshot.js';
 
 /** Render one view's status and navigation over any qualified surface. */
 export const CanvasOverlay = defineComponent({
@@ -36,6 +38,9 @@ export const CanvasOverlay = defineComponent({
   },
   /** Compose reported surface status with capability-gated control groups. */
   setup(props) {
+    const navigation = computed<CanvasViewSnapshot>((previous) =>
+      canvasNavigationSnapshot(props.snapshot, previous),
+    );
     return () => {
       const snapshot = props.snapshot;
       const zoom = snapshot.zoom;
@@ -47,11 +52,20 @@ export const CanvasOverlay = defineComponent({
             ? '1:1'
             : `${Math.round(zoom.physicalScale * 100)}%`;
       return h('div', { class: 'sc-output-overlay', 'data-canvas-view': snapshot.address.viewId }, [
+        snapshot.view.mode === 'image' &&
+        snapshot.view.comparison &&
+        props.capabilities.commands.includes('wipe')
+          ? h(CanvasWipeSeparator, { snapshot, send: props.send })
+          : null,
         h('div', { class: 'sc-output-navigation' }, [
-          h(CanvasToolbar, { snapshot, capabilities: props.capabilities, send: props.send }),
-          snapshot.view.comparison
+          h(CanvasToolbar, {
+            snapshot: navigation.value,
+            capabilities: props.capabilities,
+            send: props.send,
+          }),
+          snapshot.view.mode === 'image' && snapshot.view.comparison
             ? h(CanvasCompareControls, {
-                snapshot,
+                snapshot: navigation.value,
                 capabilities: props.capabilities,
                 send: props.send,
               })
@@ -60,6 +74,13 @@ export const CanvasOverlay = defineComponent({
         h('div', { class: 'sc-output-status' }, [
           h('span', { 'aria-label': 'Zoom' }, label),
           dimensions ? h('span', `${dimensions.width} × ${dimensions.height}`) : null,
+          zoom.secondaryPhysicalScale && zoom.secondaryDimensions
+            ? h(
+                'span',
+                { 'aria-label': 'B display scale' },
+                `B: ${Math.round(zoom.secondaryPhysicalScale.x * 100)}% × ${Math.round(zoom.secondaryPhysicalScale.y * 100)}%; ${zoom.secondaryDimensions.width} × ${zoom.secondaryDimensions.height}`,
+              )
+            : null,
           snapshot.preview ? h('span', 'Live preview') : null,
           snapshot.connected ? null : h('span', 'Disconnected'),
           h('span', snapshot.resource.message),
@@ -102,7 +123,7 @@ export const CanvasOverlay = defineComponent({
           props.announcement,
         ),
         props.capabilities.commands.includes('select-source')
-          ? h(CanvasSourceTabs, { snapshot, send: props.send })
+          ? h(CanvasSourceTabs, { snapshot: navigation.value, send: props.send })
           : null,
       ]);
     };
