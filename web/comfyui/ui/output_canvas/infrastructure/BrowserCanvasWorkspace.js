@@ -28,7 +28,6 @@ export class BrowserCanvasWorkspace {
     #pane;
     #backdrop;
     #divider;
-    #close;
     #frame;
     #resize;
     #input;
@@ -51,12 +50,7 @@ export class BrowserCanvasWorkspace {
         this.#pane.className = 'sc-output-workspace-pane';
         this.#pane.setAttribute('aria-label', 'Workflow output canvas');
         this.#pane.setAttribute('data-capture-wheel', 'true');
-        this.#close = document.createElement('button');
-        this.#close.className = 'sc-output-workspace-close';
-        this.#close.type = 'button';
-        this.#close.setAttribute('aria-label', 'Close output canvas');
-        this.#close.textContent = '×';
-        this.#close.addEventListener('click', actions.close);
+        this.#pane.tabIndex = -1;
         this.canvas = document.createElement('div');
         this.canvas.className = 'sc-output-workspace-view';
         this.#divider = document.createElement('div');
@@ -65,7 +59,7 @@ export class BrowserCanvasWorkspace {
         this.#divider.setAttribute('role', 'separator');
         this.#divider.setAttribute('aria-label', 'Resize output canvas');
         this.#divider.setAttribute('aria-orientation', 'vertical');
-        this.#pane.append(this.canvas, this.#close, this.#divider);
+        this.#pane.append(this.canvas, this.#divider);
         this.#backdrop = document.createElement('button');
         this.#backdrop.className = 'sc-output-workspace-backdrop';
         this.#backdrop.type = 'button';
@@ -99,7 +93,6 @@ export class BrowserCanvasWorkspace {
             observer?.disconnect();
             this.#pending?.();
             document.defaultView?.removeEventListener('resize', this.#schedule);
-            this.#close.removeEventListener('click', actions.close);
             this.#backdrop.removeEventListener('click', actions.close);
             this.#frame.dispose();
             this.#pane.remove();
@@ -122,7 +115,7 @@ export class BrowserCanvasWorkspace {
         this.model.drawer(open);
         this.#render();
         if (open && this.#allocation?.mode === 'drawer')
-            this.#close.focus({ preventScroll: true });
+            this.#pane.focus({ preventScroll: true });
     }
     /** Keep content identity while the host temporarily hides graph mode or configures its workflow. */
     suspend(suspended) {
@@ -143,7 +136,6 @@ export class BrowserCanvasWorkspace {
         this.#pending = null;
         this.#resize?.disconnect();
         this.panel.ownerDocument.defaultView?.removeEventListener('resize', this.#schedule);
-        this.#close.removeEventListener('click', this.actions.close);
         this.#backdrop.removeEventListener('click', this.actions.close);
         this.#frame.dispose();
         this.#pane.remove();

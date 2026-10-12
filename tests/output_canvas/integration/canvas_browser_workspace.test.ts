@@ -79,6 +79,7 @@ function fixture(width = 1400) {
 test('keeps masonry content identity and restores the native frame through close, suspension, and disposal', () => {
   const f = fixture();
   expect(f.workspace.visible).toBe(true);
+  expect(f.panel.querySelector('[aria-label="Close output canvas"]')).toBeNull();
   expect(f.workspace.content.style.left).toBe('0px');
   expect(f.workspace.content.style.width).toBe('calc(100% - 560px)');
   expect(f.root.style.marginLeft).toBe('0px');
@@ -119,7 +120,7 @@ test('requires explicit narrow activation and exposes authoritative keyboard wid
   expect(f.panel.querySelector<HTMLElement>('.sc-output-workspace-backdrop')!.style.right).toBe(
     '640px',
   );
-  expect(document.activeElement?.getAttribute('aria-label')).toBe('Close output canvas');
+  expect(document.activeElement?.getAttribute('aria-label')).toBe('Workflow output canvas');
   f.panel.querySelector<HTMLButtonElement>('.sc-output-workspace-backdrop')!.click();
   expect(f.actions.close).toHaveBeenCalledTimes(1);
   f.resize(1400);

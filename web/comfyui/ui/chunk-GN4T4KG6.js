@@ -12,8 +12,8 @@ function ensureCanvasOverlayStyles(document) {
       background:var(--sugarcubes-card-surface,var(--comfy-menu-bg,#202020));
       box-shadow:0 2px 8px #0003; box-sizing:border-box;
     }
-    .sc-output-tabstrip { position:absolute; bottom:12px; left:50%; transform:translateX(-50%);
-      max-width:calc(100% - 24px); padding:3px; z-index:2; }
+    .sc-output-tabstrip { position:absolute; bottom:8px; left:8px;
+      max-width:calc(100% - 16px); padding:4px; z-index:2; }
     .sc-output-tabs { display:flex; align-items:center; gap:0; overflow-x:auto; min-width:0;
       white-space:nowrap; overscroll-behavior:contain; scrollbar-width:thin; }
     .sc-output-batch-navigation { display:flex; align-items:center; flex-shrink:0; }
@@ -40,12 +40,23 @@ function ensureCanvasOverlayStyles(document) {
     .sc-output-wipe[data-orientation="vertical"] { top:0; bottom:0; width:4px; transform:translateX(-50%); cursor:ew-resize; }
     .sc-output-wipe[data-orientation="horizontal"] { left:0; right:0; height:4px; transform:translateY(-50%); cursor:ns-resize; }
     .sc-output-wipe span { border-radius:20px; padding:8px; color:#111; background:#eee; box-shadow:0 1px 6px #0008; }
-    .sc-output-tabs button { position:relative; background:transparent; border:0; border-radius:4px;
-      padding:6px 12px; min-height:30px; box-shadow:none; }
-    .sc-output-tabs button[aria-selected="true"] { box-shadow:none; background:var(--secondary-background-hover,#ffffff0c); }
+    .sc-output-tabs button { position:relative; background:transparent; border:1px solid transparent; border-radius:5px;
+      padding:6px 12px; min-height:30px; box-shadow:none; font-size:14px; }
+    .sc-output-tabs button:hover:not(:disabled) { background:color-mix(in srgb,var(--fg-color,#fff) 3.5%,transparent); }
+    .sc-output-tabs button:active:not(:disabled) { background:color-mix(in srgb,var(--fg-color,#fff) 2.5%,transparent); }
+    .sc-output-tabs button[aria-selected="true"] { box-shadow:none;
+      border-color:color-mix(in srgb,var(--fg-color,#fff) 5.5%,transparent);
+      background:color-mix(in srgb,var(--fg-color,#fff) 6%,transparent); }
     .sc-output-tabs button[aria-selected="true"]::after { content:""; position:absolute; bottom:0;
-      left:12px; right:12px; height:3px; border-radius:2px; background:var(--p-primary-color,var(--ring,#df258e)); }
+      left:calc(50% - 8px); width:16px; height:3px; border-radius:1.5px; background:var(--p-primary-color,var(--ring,#df258e)); }
     .sc-output-overlay .sc-output-batch-arrow { border:0; background:transparent; padding:2px 6px; }
+    .sc-output-loading { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+      pointer-events:none; z-index:2; display:grid; place-items:center; }
+    .sc-output-spinner { width:28px; height:28px; box-sizing:border-box; border-radius:50%;
+      border:3px solid color-mix(in srgb,var(--fg-color,#ddd) 25%,transparent);
+      border-top-color:var(--p-primary-color,var(--ring,#df258e)); animation:sc-output-spin .9s linear infinite; }
+    @keyframes sc-output-spin { to { transform:rotate(360deg); } }
+    @media (prefers-reduced-motion:reduce) { .sc-output-spinner { animation:none; } }
 
     .sc-output-announcement { position:absolute; width:1px; height:1px; padding:0; margin:-1px;
       overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
