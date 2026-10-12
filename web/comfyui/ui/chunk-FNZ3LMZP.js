@@ -33,6 +33,12 @@ function ensureCanvasOverlayStyles(document) {
     .sc-output-comparison select { min-width:0; max-width:60%; }
     .sc-output-comparison input { width:64px; }
     .sc-output-status span:empty { display:none; }
+    .sc-output-wipe { position:absolute; pointer-events:auto; touch-action:none; z-index:1;
+      display:flex; align-items:center; justify-content:center; background:#fff8; outline:none; }
+    .sc-output-wipe[data-orientation="vertical"] { top:0; bottom:0; width:4px; transform:translateX(-50%); cursor:ew-resize; }
+    .sc-output-wipe[data-orientation="horizontal"] { left:0; right:0; height:4px; transform:translateY(-50%); cursor:ns-resize; }
+    .sc-output-wipe span { border-radius:20px; padding:8px; color:#111; background:#eee; box-shadow:0 1px 6px #0008; }
+    .sc-output-navigation,.sc-output-status,.sc-output-tabs { z-index:2; }
     .sc-output-announcement { position:absolute; width:1px; height:1px; padding:0; margin:-1px;
       overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
   `;

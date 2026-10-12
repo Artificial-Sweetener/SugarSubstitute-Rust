@@ -133,5 +133,7 @@ function canvasAnnouncement(
   )
     return `${source?.label ?? 'Output'}: image ${current.selected.batchIndex + 1} ready.`;
   if (previous.connected && !current.connected) return 'Disconnected.';
+  if (current.secondaryResource?.state === 'error' && previous.secondaryResource?.state !== 'error')
+    return `B: ${current.secondaryResource.message}`;
   return null;
 }

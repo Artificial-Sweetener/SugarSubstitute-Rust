@@ -57,6 +57,25 @@ function fixture(reduced = false) {
 }
 
 describe('canvas camera attachment orchestration', () => {
+  test('retains the common comparison region when solo cameras are unlinked', () => {
+    const f = fixture(true);
+    f.camera.show(f.slots[0]!, f.geometry);
+    f.camera.link(false);
+    f.camera.native();
+    f.camera.pan({ x: -40, y: -20 });
+    f.camera.comparison(true);
+    const smaller = canvasCameraGeometry({ width: 1920, height: 1080 }, f.geometry.viewport, 1)!;
+    f.camera.show(f.slots[1]!, smaller);
+    expect(f.camera.read()?.camera.scale).toBe(2);
+    expect(f.camera.read()?.camera.mode).toBe('custom');
+    f.camera.comparison(false);
+    f.camera.show(f.slots[2]!, f.geometry);
+    expect(f.camera.read()?.camera.mode).toBe('fit');
+    f.camera.show(f.slots[0]!, f.geometry);
+    expect(f.camera.read()?.camera.scale).toBe(1);
+    f.camera.dispose();
+    expect(f.clock.pending).toBe(0);
+  });
   test('ends Auto for deliberate input and ignores repeated unchanged preview geometry', () => {
     const f = fixture();
     const slot = f.slots[0]!;

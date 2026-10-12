@@ -250,4 +250,145 @@ describe('composed browser canvas attachment', () => {
     expect(f.views.accepts(f.address)).toBe(false);
     expect(f.frames.pending).toBe(0);
   });
+
+  test('pins a differently shaped B, swaps admitted handles, and wipes without catalog reads or image reloads', async () => {
+    const f = fixture();
+    const read = jest.fn(f.options.catalog);
+    const surface = new BrowserCanvasAttachment(f.root, { ...f.options, catalog: read });
+    const a = await f.loader.ready(0);
+    f.clock.advance(100);
+    await f.command(surface, { type: 'comparison', enabled: true });
+    const b = await f.loader.ready(1, { width: 2160, height: 3840 });
+    f.clock.advance(100);
+    f.frames.advance(16);
+    expect(f.root.querySelectorAll('img')).toHaveLength(2);
+    const scale = surface.port.read().zoom.secondaryPhysicalScale;
+    expect(scale?.x).toBeCloseTo((800 / 3840) * (3840 / 2160));
+    expect(scale?.y).toBeCloseTo((800 / 3840) * (2160 / 3840));
+    const selected = surface.port.read().selected;
+    const secondary = surface.port.read().secondary;
+    f.replace(canvasCatalogFixture(2));
+    surface.refresh();
+    expect(surface.port.read().selected?.id).toBe(selected?.id);
+    expect(surface.port.read().secondary?.id).toBe(secondary?.id);
+    const reads = read.mock.calls.length;
+    for (let index = 0; index < 100; index++)
+      await f.command(surface, { type: 'wipe', orientation: 'horizontal', split: index / 100 });
+    expect(read.mock.calls).toHaveLength(reads);
+    expect(f.loader.requests).toHaveLength(2);
+    await f.command(surface, { type: 'swap' });
+    f.clock.advance(100);
+    f.frames.advance(16);
+    expect(f.root.querySelector('.sc-output-image-layer img')).toBe(b);
+    expect(f.root.querySelectorAll('img')).toContain(a);
+    expect(f.loader.requests).toHaveLength(2);
+    expect(surface.port.read().selected?.id).toBe(secondary?.id);
+    surface.dispose();
+    expect(f.frames.pending).toBe(0);
+    expect(f.errors).toEqual([]);
+  });
+
+  test('renders bounded exact overview cells, preserves keyboard focus, and returns through selection authority', async () => {
+    const f = fixture();
+    const surface = new BrowserCanvasAttachment(f.root, f.options);
+    await f.loader.ready(0);
+    await f.command(surface, { type: 'overview', enabled: true });
+    await nextTick();
+    expect(f.root.classList.contains('sc-output-overview-mode')).toBe(true);
+    expect(f.loader.requests[0]?.released).toBe(true);
+    const cells = f.root.querySelectorAll<HTMLButtonElement>('.sc-output-overview-cell');
+    expect(cells).toHaveLength(6);
+    expect(cells[0]?.textContent).toContain('<b>Output</b>');
+    expect(f.root.querySelector('b')).toBeNull();
+    expect(f.loader.requests.slice(1).every((request) => request.input.role === 'thumbnail')).toBe(
+      true,
+    );
+    expect(surface.diagnostics().pendingDecodes).toBeLessThanOrEqual(2);
+    await f.loader.ready(1);
+    expect(f.root.querySelector('.sc-output-overview img')).not.toBeNull();
+    cells[1]?.focus();
+    surface.refresh();
+    expect(document.activeElement).toBe(cells[1]);
+    expect(f.root.querySelectorAll('.sc-output-overview-cell')).toHaveLength(6);
+    cells[1]?.click();
+    expect(f.views.read(f.view).selection?.batchIndex).toBe(1);
+    expect(f.views.read(f.view).mode).toBe('image');
+    expect(surface.port.read().resource.state).toBe('unavailable');
+    expect(surface.diagnostics().displayed).toBe(0);
+    expect(surface.diagnostics().pendingDecodes).toBe(0);
+    surface.dispose();
+    expect(f.frames.pending).toBe(0);
+    expect(f.errors).toEqual([]);
+  });
+
+  test('retries a failed B independently and retains B when its A source is deleted', async () => {
+    const f = fixture();
+    const surface = new BrowserCanvasAttachment(f.root, f.options);
+    const a = await f.loader.ready(0);
+    f.clock.advance(100);
+    await f.command(surface, { type: 'comparison', enabled: true });
+    await f.loader.fail(1);
+    f.clock.advance(100);
+    expect(surface.port.read().resource.state).toBe('ready');
+    expect(surface.port.read().secondaryResource?.state).toBe('error');
+    expect(f.root.querySelector('img')).toBe(a);
+    await f.command(surface, { type: 'retry' });
+    expect(f.loader.requests).toHaveLength(3);
+    const b = await f.loader.ready(2, { width: 2160, height: 3840 });
+    f.replace({ ...f.catalog, entries: f.catalog.entries.slice(1) });
+    surface.refresh();
+    f.frames.advance(16);
+    expect(surface.port.read().resource.state).toBe('unavailable');
+    expect(surface.port.read().resource.message).toContain('Showing B.');
+    expect(surface.port.read().zoom.dimensions).toEqual({ width: 2160, height: 3840 });
+    expect(f.root.querySelectorAll('img')).toHaveLength(1);
+    expect(f.root.querySelector('img')).toBe(b);
+    expect(f.loader.requests[0]?.released).toBe(true);
+    surface.dispose();
+    expect(f.frames.pending).toBe(0);
+    expect(f.errors).toHaveLength(1);
+  });
+
+  test('bounds mounted gallery cells and resource interests while scrolling a large batch', async () => {
+    const f = fixture();
+    const entry = f.catalog.entries[0]!;
+    const item = entry.items[0]!;
+    f.replace({
+      ...f.catalog,
+      entries: [
+        {
+          ...entry,
+          summary: { ...entry.summary, batchCount: 100000 },
+          items: Array.from({ length: 32 }, (_, batchIndex) => ({
+            ...item,
+            id: `result:gallery:${batchIndex}`,
+            batchIndex,
+            dimensions: { width: 128, height: 128 },
+          })),
+        },
+      ],
+    });
+    const surface = new BrowserCanvasAttachment(f.root, f.options);
+    await f.command(surface, { type: 'overview', enabled: true });
+    const gallery = f.root.querySelector<HTMLElement>('.sc-output-overview')!;
+    for (let step = 0; step < 100; step++) {
+      gallery.scrollTop = step * 200 + 0.5;
+      gallery.dispatchEvent(new Event('scroll'));
+      gallery.dispatchEvent(new Event('scroll'));
+      expect(f.frames.pending).toBeLessThanOrEqual(2);
+      f.frames.advance(16);
+      expect(gallery.querySelectorAll('button').length).toBeLessThanOrEqual(8);
+      expect(surface.diagnostics().pendingDecodes).toBeLessThanOrEqual(2);
+      expect(surface.diagnostics().queuedInputs).toBeLessThanOrEqual(8);
+      expect(surface.diagnostics().estimatedBytes).toBeLessThanOrEqual(128 * 1024 * 1024);
+    }
+    expect(surface.wants(f.catalog.result.context.sessionId, 0, entry.source.id)).toBe(false);
+    surface.dispose();
+    for (let index = 0; index < f.loader.requests.length; index++) await f.loader.ready(index);
+    expect(f.loader.requests.every((request) => request.released)).toBe(true);
+    expect(surface.diagnostics().pendingDecodes).toBe(0);
+    expect(surface.diagnostics().estimatedBytes).toBe(0);
+    expect(f.frames.pending).toBe(0);
+    expect(f.errors).toEqual([]);
+  });
 });

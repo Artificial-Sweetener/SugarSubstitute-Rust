@@ -21,7 +21,52 @@ var CanvasCompareControls = defineComponent({
         (candidate) => candidate.id === secondary?.sourceId
       );
       return h("div", { class: "sc-output-comparison", "aria-label": "Comparison controls" }, [
+        h(
+          "span",
+          `A: ${props.snapshot.sources.find((candidate) => candidate.id === props.snapshot.view.selection?.sourceId)?.label ?? "Unavailable output"}`
+        ),
+        h("span", "A/B pinned"),
+        props.capabilities.commands.includes("select") && props.snapshot.view.selection ? h(
+          "button",
+          {
+            type: "button",
+            title: "Use the latest result for the selected A source and batch.",
+            onClick: () => {
+              const selection = props.snapshot.view.selection;
+              if (selection) props.send({ type: "select", selection });
+            }
+          },
+          "Replace A"
+        ) : null,
+        props.capabilities.commands.includes("select-comparison") && secondary ? h(
+          "button",
+          {
+            type: "button",
+            title: "Use the latest result for the selected B source and batch.",
+            onClick: () => props.send({ type: "select-comparison", selection: secondary })
+          },
+          "Replace B"
+        ) : null,
         h("span", "B"),
+        h(
+          "span",
+          { class: "sc-output-secondary-status" },
+          props.snapshot.secondaryResource?.message ?? ""
+        ),
+        props.snapshot.secondaryResource?.canRetry && props.capabilities.commands.includes("retry") ? h("button", { type: "button", onClick: () => props.send({ type: "retry" }) }, "Retry B") : null,
+        props.snapshot.secondaryResource?.canAdmitLargeImage && props.capabilities.commands.includes("admit-large-image") ? h(
+          "button",
+          { type: "button", onClick: () => props.send({ type: "admit-large-image" }) },
+          "Load large pair"
+        ) : null,
+        props.snapshot.secondary && props.snapshot.secondary.mediaKind !== "image" && props.capabilities.commands.includes("open-media") ? h(
+          "button",
+          {
+            type: "button",
+            onClick: () => props.send({ type: "open-media", target: "secondary" })
+          },
+          "Open B media"
+        ) : null,
         props.capabilities.commands.includes("select-comparison") ? h(
           "select",
           {
@@ -51,7 +96,7 @@ var CanvasCompareControls = defineComponent({
           "aria-label": "Comparison batch",
           type: "number",
           min: 1,
-          max: Math.max(1, source?.batchCount ?? 0),
+          max: Math.max(1, source?.batchCount ?? 0, (secondary?.batchIndex ?? 0) + 1),
           value: (secondary?.batchIndex ?? 0) + 1,
           disabled: !secondary,
           onChange: (event) => {

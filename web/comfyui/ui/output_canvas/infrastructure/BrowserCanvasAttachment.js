@@ -21,8 +21,10 @@ import { CanvasImageDecodeScheduler } from '../application/CanvasImageDecodeSche
 import { CanvasImageResources } from '../application/CanvasImageResources.js';
 import { CanvasStatusPublisher } from '../application/CanvasStatusPublisher.js';
 import { canvasCameraGeometry } from '../domain/CanvasCamera.js';
+import { sameCanvasNavigation } from '../domain/CanvasViewState.js';
 import { BrowserCanvasImages } from '../presentation/browser/BrowserCanvasImages.js';
 import { BrowserCanvasInput } from '../presentation/browser/BrowserCanvasInput.js';
+import { BrowserCanvasOverview } from '../presentation/browser/BrowserCanvasOverview.js';
 import { browserCanvasSnapshot } from '../presentation/browser/BrowserCanvasSnapshot.js';
 import { mountCanvasOverlay, } from '../presentation/vue/CanvasOverlayRuntime.js';
 import { BrowserCanvasGeometry } from './BrowserCanvasGeometry.js';
@@ -37,6 +39,7 @@ export class BrowserCanvasAttachment {
     viewport;
     port;
     #images;
+    #overview;
     #input;
     #geometry;
     #camera;
@@ -45,6 +48,8 @@ export class BrowserCanvasAttachment {
     #overlay;
     #stopView;
     #catalog;
+    #sources;
+    #sourceSignature;
     #plan;
     #surface = null;
     #signature = '';
@@ -59,6 +64,8 @@ export class BrowserCanvasAttachment {
         if (!catalog || catalog.sessionId !== options.address.sessionId)
             throw new Error('Canvas workflow catalog is unavailable.');
         this.#catalog = catalog;
+        this.#sources = Object.freeze(catalog.entries.map((entry) => entry.summary));
+        this.#sourceSignature = JSON.stringify(this.#sources);
         this.#plan = this.#displayPlan();
         this.#enroll();
         const document = element.ownerDocument;
@@ -69,6 +76,13 @@ export class BrowserCanvasAttachment {
         overlay.className = 'sc-output-overlay-root';
         element.append(this.viewport, overlay);
         this.#images = new BrowserCanvasImages(this.viewport, options.frames);
+        this.#overview = new BrowserCanvasOverview(element, options.frames, (cells) => this.#browserResources.overview(cells), (cell) => {
+            if (!this.#disposed && options.accepts())
+                options.selection.apply(options.address.viewId, this.#catalog, {
+                    type: cell.preview ? 'select-source' : 'select',
+                    selection: cell.selection,
+                });
+        });
         const budget = new CanvasImageBudget();
         const decodes = new CanvasImageDecodeScheduler(options.loader, options.clock);
         const resources = new CanvasImageResources({
@@ -99,6 +113,7 @@ export class BrowserCanvasAttachment {
                 commands: [
                     'select',
                     'select-source',
+                    'overview',
                     'batch',
                     'follow',
                     'link',
@@ -122,7 +137,7 @@ export class BrowserCanvasAttachment {
                 camera: this.#camera,
                 resources: this.#browserResources,
                 selection: options.selection,
-                snapshot: this.#snapshot(),
+                snapshot: command.type === 'comparison' ? this.#snapshot() : this.port.read(),
                 open: options.open,
             }),
             geometry: (geometry) => this.#resize(geometry),
@@ -131,6 +146,7 @@ export class BrowserCanvasAttachment {
         });
         const cleanup = [
             () => this.#images.dispose(),
+            () => this.#overview.dispose(),
             () => this.#browserResources.dispose(),
             () => this.#status.dispose(),
             () => this.#camera.dispose(),
@@ -164,7 +180,16 @@ export class BrowserCanvasAttachment {
             cleanup.push(() => this.#input.dispose());
             this.#geometry = new BrowserCanvasGeometry(this.viewport, options.frames, (geometry) => this.port.updateSurface(options.address, geometry));
             cleanup.push(() => this.#geometry.dispose());
-            this.#stopView = options.views.subscribe(options.address.viewId, () => this.refresh());
+            this.#stopView = options.views.subscribe(options.address.viewId, (view) => {
+                if (sameCanvasNavigation(this.#plan.view, view)) {
+                    const orientationChanged = this.#plan.view.comparison?.orientation !== view.comparison?.orientation;
+                    this.#plan = Object.freeze({ ...this.#plan, view });
+                    this.#images.wipe(view.comparison);
+                    this.#status.changed(orientationChanged);
+                }
+                else
+                    this.refresh();
+            });
             cleanup.push(this.#stopView);
             this.#ready = true;
             this.#resize(this.#geometry.read());
@@ -189,6 +214,12 @@ export class BrowserCanvasAttachment {
         if (!catalog || catalog.generation !== this.#catalog.generation)
             return;
         this.#catalog = catalog;
+        const sources = catalog.entries.map((entry) => entry.summary);
+        const sourceSignature = JSON.stringify(sources);
+        if (sourceSignature !== this.#sourceSignature) {
+            this.#sources = Object.freeze(sources);
+            this.#sourceSignature = sourceSignature;
+        }
         this.#plan = this.#displayPlan();
         this.#enroll();
         const linked = this.#plan.view.linked;
@@ -197,7 +228,11 @@ export class BrowserCanvasAttachment {
             this.#camera.link(linked);
         }
         this.#images.wipe(this.#plan.view.comparison);
+        this.#camera.comparison(Boolean(this.#plan.view.comparison));
+        const overview = this.#plan.view.mode === 'overview';
+        this.element.classList.toggle('sc-output-overview-mode', overview);
         this.#browserResources.reconcile(this.#plan);
+        this.#overview.reconcile(catalog, overview);
         const view = this.#plan.view;
         const signature = JSON.stringify([
             view.selection,
@@ -209,7 +244,7 @@ export class BrowserCanvasAttachment {
             view.comparison?.orientation,
             this.#plan.primary?.item?.id,
             this.#plan.secondary?.item?.id,
-            catalog.entries.map((entry) => entry.summary),
+            this.#sourceSignature,
             catalog.result.runStatus,
             catalog.result.recovery,
             this.options.connected(),
@@ -256,10 +291,12 @@ export class BrowserCanvasAttachment {
         this.#camera.dispose();
         this.#overlay.dispose();
         this.#images.dispose();
+        this.#overview.dispose();
         this.#browserResources.dispose();
         this.options.disposeLoader();
         this.options.views.releaseAttachment(this.options.address);
         this.element.replaceChildren();
+        this.element.classList.remove('sc-output-overview-mode');
     }
     /** Resolve only current or deliberately pinned DTOs through the authoritative selection owner. */
     #displayPlan() {
@@ -280,6 +317,14 @@ export class BrowserCanvasAttachment {
             return;
         this.#browserResources.measured();
         const images = this.#browserResources.resources.read();
+        this.#overview.images(images);
+        if (this.#plan.view.mode === 'overview') {
+            this.#images.images(null, null);
+            this.#input.cancel();
+            this.#camera.suspend();
+            this.#status.changed();
+            return;
+        }
         const primary = images.find((slot) => slot.slot === 'primary')?.frame ?? null;
         const secondary = images.find((slot) => slot.slot === 'secondary')?.frame ?? null;
         this.#images.images(primary, secondary);
@@ -300,6 +345,7 @@ export class BrowserCanvasAttachment {
     #resize(surface) {
         this.#surface = surface;
         this.#browserResources.active(surface.visible);
+        this.#overview.resize();
         this.#resourcesChanged();
     }
     /** Publish the current actual display at bounded cadence, without graph access. */
@@ -309,6 +355,6 @@ export class BrowserCanvasAttachment {
     }
     /** Report actual camera/fidelity rather than the incoming selection's unshown dimensions. */
     #snapshot() {
-        return browserCanvasSnapshot(this.options.address, this.#plan, this.#catalog, this.#browserResources.resources.read(), this.#camera.read(), this.options.connected(), this.#browserResources.previewStarted);
+        return browserCanvasSnapshot(this.options.address, this.#plan, this.#catalog, this.#browserResources.resources.read(), this.#camera.read(), this.options.connected(), this.#browserResources.previewStarted, this.#sources);
     }
 }

@@ -1,12 +1,14 @@
 import {
   CanvasOverlay
-} from "../../../chunk-QGOBDL5C.js";
-import "../../../chunk-VMDE2JL6.js";
+} from "../../../chunk-WIYG7ZLI.js";
+import "../../../chunk-OVL65VLS.js";
+import "../../../chunk-R5Y5EX6O.js";
+import "../../../chunk-HDLA7PWP.js";
 import {
   ensureCanvasOverlayStyles
-} from "../../../chunk-2ZUSVEBN.js";
+} from "../../../chunk-FNZ3LMZP.js";
 import "../../../chunk-BBIMJ2PJ.js";
-import "../../../chunk-UL5SOQL2.js";
+import "../../../chunk-TLPXQNW6.js";
 import {
   createApp,
   h,
@@ -90,6 +92,8 @@ function canvasAnnouncement(previous, current) {
   if (!current.preview && current.resource.state === "ready" && current.selected && (previous.selected?.id !== current.selected.id || previous.resource.state !== "ready" || previous.preview))
     return `${source?.label ?? "Output"}: image ${current.selected.batchIndex + 1} ready.`;
   if (previous.connected && !current.connected) return "Disconnected.";
+  if (current.secondaryResource?.state === "error" && previous.secondaryResource?.state !== "error")
+    return `B: ${current.secondaryResource.message}`;
   return null;
 }
 export {

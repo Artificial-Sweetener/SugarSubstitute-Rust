@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Coordinate one attachment's displayed camera with durable view-relative inspection. */
 import { centeredCanvasCamera, doubleClickCanvasCamera, panCanvasCamera, zoomCanvasCamera, canvasWheelFactor, } from '../domain/CanvasCamera.js';
-import { resizeCanvasCamera } from '../domain/CanvasInspection.js';
+import { resizeCanvasCamera, captureCanvasInspection, projectCanvasInspection, } from '../domain/CanvasInspection.js';
 import { CanvasCameraTransition } from './CanvasCameraTransition.js';
 /** Keep browser input and DOM transforms outside authoritative camera and inspection transitions. */
 export class CanvasCameraController {
@@ -23,6 +23,7 @@ export class CanvasCameraController {
     #transition;
     #target = null;
     #disposed = false;
+    #comparison = false;
     /** Bind an enrolled view's inspection owner and this attachment's cancellable frame clock. */
     constructor(options) {
         this.options = options;
@@ -56,9 +57,15 @@ export class CanvasCameraController {
             return;
         const camera = sameSlot && sameImage
             ? resizeCanvasCamera(previous.camera, previous.geometry, geometry)
-            : this.options.inspections.camera(this.options.view, selection, geometry);
+            : this.#comparison && previous
+                ? projectCanvasInspection(captureCanvasInspection(previous.camera, previous.geometry), geometry)
+                : this.options.inspections.camera(this.options.view, selection, geometry);
         this.#target = { selection: Object.freeze({ ...selection }), geometry };
         this.#transition.set(camera);
+    }
+    /** Preserve the common reveal region when changing comparison partners, independently of solo linking. */
+    comparison(enabled) {
+        this.#comparison = enabled;
     }
     /** Reconcile a link preference through the existing inspection owner, preserving independent slot state. */
     link(enabled) {

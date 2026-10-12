@@ -39,6 +39,52 @@ function button(element: HTMLElement, text: string): HTMLButtonElement {
 
 afterEach(() => document.body.replaceChildren());
 
+test('keeps source and comparison catalogs outside continuous camera and wipe rendering', async () => {
+  const initial = canvasSnapshot('navigation-cadence');
+  let labelReads = 0;
+  Object.defineProperty(initial.sources[0]!, 'label', {
+    get: () => {
+      labelReads++;
+      return 'Saved image';
+    },
+  });
+  const port = new CanvasPortFixture({
+    ...initial,
+    view: {
+      ...initial.view,
+      comparison: { secondary: null, split: 0.5, orientation: 'vertical' },
+    },
+  });
+  const element = root();
+  const mounted = mountCanvasOverlay(element, port, jest.fn());
+  const tab = element.querySelector('[role="tab"]');
+  labelReads = 0;
+  for (let update = 2; update <= 100; update++) {
+    const snapshot = port.read();
+    port.publish({
+      ...snapshot,
+      revision: update,
+      view: {
+        ...snapshot.view,
+        comparison: { secondary: null, split: update / 100, orientation: 'vertical' },
+      },
+      zoom: { ...snapshot.zoom, physicalScale: update / 10 },
+    });
+    await nextTick();
+  }
+  expect(labelReads).toBe(0);
+  expect(element.querySelector('[role="tab"]')).toBe(tab);
+  expect(element.querySelector('[role="separator"]')?.getAttribute('aria-valuenow')).toBe('100');
+  port.publish({
+    ...port.read(),
+    revision: 101,
+    sources: initial.sources.map((source) => ({ ...source, label: 'Renamed' })),
+  });
+  await nextTick();
+  expect(element.querySelector('[role="tab"]')?.textContent).toBe('Renamed');
+  mounted.dispose();
+});
+
 test('keeps zoom and preview changes outside the live announcement region', async () => {
   const initial = canvasSnapshot('announcements');
   const port = new CanvasPortFixture(initial);
