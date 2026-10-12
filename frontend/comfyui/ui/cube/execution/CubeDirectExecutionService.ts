@@ -21,7 +21,7 @@ import type { ComfyGraph, ComfyHostApi } from '../../types/graph.js';
 import type { CubeNode } from '../node/ComfyCubeNodeFactory.js';
 import { requireCubeIdentity } from '../node/ComfyCubeNodeFactory.js';
 import { CubeExecutionApiClient } from './CubeExecutionApiClient.js';
-import type { ComfyPromptQueueOptions } from './ComfyPromptQueueBridge.js';
+import type { ComfyPromptQueueOptions } from '../../execution/infrastructure/ComfyPromptQueueBridge.js';
 
 export interface CubeDirectExecutionServiceOptions {
   client: CubeExecutionApiClient;

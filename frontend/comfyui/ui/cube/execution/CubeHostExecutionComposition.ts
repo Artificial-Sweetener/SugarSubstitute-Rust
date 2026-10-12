@@ -17,8 +17,8 @@
 import type { ComfyGraph } from '../../types/graph.js';
 import type { CubeNode } from '../node/ComfyCubeNodeFactory.js';
 import type { NativeSubgraphBoundaryResolver } from '../graph/NativeSubgraphBoundaryResolver.js';
-import { ComfyPromptQueueBridge } from './ComfyPromptQueueBridge.js';
-import type { ComfyPromptQueueApi } from './ComfyPromptQueueBridge.js';
+import { ComfyPromptQueueBridge } from '../../execution/infrastructure/ComfyPromptQueueBridge.js';
+import type { ComfyPromptQueueApi } from '../../execution/infrastructure/ComfyPromptQueueBridge.js';
 import { CubePromptPipeline } from './CubePromptPipeline.js';
 import { CubeOutputPromptAdapter } from './CubeOutputPromptAdapter.js';
 import { createCubeDirectExecution } from './CubeDirectExecutionService.js';
