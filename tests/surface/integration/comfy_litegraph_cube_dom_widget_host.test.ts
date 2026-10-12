@@ -89,6 +89,45 @@ describe('ComfyLiteGraphCubeDomWidgetHost', () => {
     original.remove();
   });
 
+  test('keeps native fields in the canvas host through replacement and detachment', () => {
+    const original = document.createElement('div');
+    const replacement = document.createElement('div');
+    const nativeOwner = document.createElement('div');
+    const textarea = document.createElement('textarea');
+    nativeOwner.append(textarea);
+    document.body.append(original, replacement, nativeOwner);
+    const { canvas, host } = createHost();
+    original.append(canvas);
+    const item = cubeItem(textarea);
+    try {
+      host.sync([item]);
+      const root = textarea.closest<HTMLElement>('[data-sugarcubes-cube-face-dom-widgets]');
+      expect(root?.parentElement).toBe(original);
+      textarea.value = 'retain the focused native field';
+      textarea.focus();
+      replacement.append(canvas);
+      host.sync([item]);
+      expect(root?.parentElement).toBe(replacement);
+      expect(document.activeElement).toBe(textarea);
+      expect(textarea.value).toBe('retain the focused native field');
+      canvas.remove();
+      host.sync([item]);
+      expect(root?.isConnected).toBe(false);
+      original.append(canvas);
+      host.sync([item]);
+      expect(root?.parentElement).toBe(original);
+      expect(root?.querySelector('textarea')).toBe(textarea);
+      host.sync([]);
+      expect(root?.isConnected).toBe(false);
+      expect(textarea.parentElement).toBe(nativeOwner);
+    } finally {
+      host.dispose();
+      original.remove();
+      replacement.remove();
+      nativeOwner.remove();
+    }
+  });
+
   test('does not mount a DOM widget whose value is consumed by a graph link', () => {
     const original = document.createElement('div');
     const textarea = document.createElement('textarea');

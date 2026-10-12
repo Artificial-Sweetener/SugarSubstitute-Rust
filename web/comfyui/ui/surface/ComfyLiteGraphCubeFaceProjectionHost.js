@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Project embedded Nodes 1.0 node-local DOM affordances onto Cube-face cards. */
+import { mountLiteGraphCanvasOverlay } from './ComfyLiteGraphCanvasOverlay.js';
 /** Identify the host projection contract exposed on embedded LiteGraph nodes. */
 export const CUBE_FACE_PROJECTION_SYMBOL = Symbol.for('sugarcubes.cube-face-projection.v1');
 /** Own the reversible cross-extension projection seam for visible Cube cards. */
@@ -51,6 +52,8 @@ export class ComfyLiteGraphCubeFaceProjectionHost {
             mounted.card = card;
             this.#position(mounted);
         }
+        if (this.#mounted.size > 0)
+            this.#ensureRoot();
         this.#removeEmptyRoot();
     }
     /** Restore every node property and release the viewport host. */
@@ -151,22 +154,23 @@ export class ComfyLiteGraphCubeFaceProjectionHost {
         mounted.container.remove();
         this.#mounted.delete(mounted.node);
     }
-    /** Create one pointer-transparent viewport layer for all projected cards. */
+    /** Keep projected controls inside the active canvas host's clipping and stacking boundary. */
     #ensureRoot() {
-        if (this.#root)
-            return this.#root;
-        const root = this.#document.createElement('div');
-        root.dataset.sugarcubesCubeFaceProjections = '';
-        Object.assign(root.style, {
-            position: 'fixed',
-            inset: '0',
-            overflow: 'hidden',
-            pointerEvents: 'none',
-            zIndex: '2',
-        });
-        root.hidden = this.#suspended;
-        this.#document.body.append(root);
-        this.#root = root;
+        let root = this.#root;
+        if (!root) {
+            root = this.#document.createElement('div');
+            root.dataset.sugarcubesCubeFaceProjections = '';
+            Object.assign(root.style, {
+                position: 'fixed',
+                inset: '0',
+                overflow: 'hidden',
+                pointerEvents: 'none',
+                zIndex: '2',
+            });
+            root.hidden = this.#suspended;
+            this.#root = root;
+        }
+        mountLiteGraphCanvasOverlay(this.#canvas.canvas, root);
         return root;
     }
     /** Remove the projection layer as soon as no visible card needs it. */

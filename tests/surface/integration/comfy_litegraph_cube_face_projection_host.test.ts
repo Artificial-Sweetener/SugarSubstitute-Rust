@@ -19,7 +19,34 @@ import {
   CUBE_FACE_PROJECTION_SYMBOL,
   ComfyLiteGraphCubeFaceProjectionHost,
   type CubeFaceProjection,
+  type LiteGraphCubeFaceProjectionItem,
 } from '../../../frontend/comfyui/ui/surface/ComfyLiteGraphCubeFaceProjectionHost.js';
+import type { CubeCanvasRect } from '../../../frontend/comfyui/ui/surface/CubeCanvasLayout.js';
+import type { ComfyNode } from '../../../frontend/comfyui/ui/types/graph.js';
+
+/** Supply a typed visible face card without unrelated Cube frame and port geometry. */
+function projectionItem(
+  node: ComfyNode,
+  rect: CubeCanvasRect,
+  bodyHeight: number,
+): LiteGraphCubeFaceProjectionItem {
+  return {
+    layout: {
+      cards: [
+        {
+          node,
+          id: 'inside',
+          label: 'Inside',
+          enabled: true,
+          showActivationControl: false,
+          activationAction: null,
+          bodyHeight,
+          rect,
+        },
+      ],
+    },
+  };
+}
 
 describe('ComfyLiteGraphCubeFaceProjectionHost', () => {
   test('projects node-local rectangles into a clipped Cube-card surface', () => {
@@ -36,26 +63,16 @@ describe('ComfyLiteGraphCubeFaceProjectionHost', () => {
         height: 600,
         toJSON: () => ({}),
       }) as DOMRect;
-    document.body.append(canvas);
+    const graphHost = document.createElement('div');
+    graphHost.append(canvas);
+    document.body.append(graphHost);
     const node = { id: 'inside' };
     const host = new ComfyLiteGraphCubeFaceProjectionHost({
       document,
       canvas: { canvas, ds: { scale: 2, offset: [5, 7] } },
     });
 
-    host.sync([
-      {
-        layout: {
-          cards: [
-            {
-              node,
-              bodyHeight: 150,
-              rect: { x: 100, y: 200, width: 300, height: 180 },
-            },
-          ],
-        } as never,
-      },
-    ]);
+    host.sync([projectionItem(node, { x: 100, y: 200, width: 300, height: 180 }, 150)]);
 
     const projection = Reflect.get(node, CUBE_FACE_PROJECTION_SYMBOL) as CubeFaceProjection;
     expect(projection.projectRect([10, 40, 50, 60])).toEqual({
@@ -71,6 +88,7 @@ describe('ComfyLiteGraphCubeFaceProjectionHost', () => {
     expect(projection.container.style.overflow).toBe('hidden');
 
     const root = document.querySelector<HTMLElement>('[data-sugarcubes-cube-face-projections]');
+    expect(root?.parentElement).toBe(graphHost);
     canvas.dispatchEvent(new Event('pointerdown'));
     expect(root?.hidden).toBe(true);
     document.dispatchEvent(new Event('pointerup'));
@@ -95,19 +113,7 @@ describe('ComfyLiteGraphCubeFaceProjectionHost', () => {
       document,
       canvas: { canvas },
     });
-    host.sync([
-      {
-        layout: {
-          cards: [
-            {
-              node,
-              bodyHeight: 90,
-              rect: { x: 0, y: 0, width: 100, height: 120 },
-            },
-          ],
-        } as never,
-      },
-    ]);
+    host.sync([projectionItem(node, { x: 0, y: 0, width: 100, height: 120 }, 90)]);
 
     host.dispose();
 
@@ -115,5 +121,42 @@ describe('ComfyLiteGraphCubeFaceProjectionHost', () => {
     expect(Object.prototype.propertyIsEnumerable.call(node, CUBE_FACE_PROJECTION_SYMBOL)).toBe(
       false,
     );
+  });
+
+  test('follows canvas host replacement and detachment without replacing projected controls', () => {
+    const canvas = document.createElement('canvas');
+    const original = document.createElement('div');
+    const replacement = document.createElement('div');
+    original.append(canvas);
+    document.body.append(original, replacement);
+    const node = { id: 'inside' };
+    const items = [projectionItem(node, { x: 0, y: 0, width: 100, height: 120 }, 90)];
+    const host = new ComfyLiteGraphCubeFaceProjectionHost({ document, canvas: { canvas } });
+    try {
+      host.sync(items);
+      const projection = Reflect.get(node, CUBE_FACE_PROJECTION_SYMBOL) as CubeFaceProjection;
+      const root = projection.container.parentElement;
+      const control = document.createElement('button');
+      projection.container.append(control);
+      replacement.append(canvas);
+      host.sync(items);
+      expect(root?.parentElement).toBe(replacement);
+      expect(projection.container.firstElementChild).toBe(control);
+      expect(Reflect.get(node, CUBE_FACE_PROJECTION_SYMBOL)).toBe(projection);
+      canvas.remove();
+      host.sync(items);
+      expect(root?.isConnected).toBe(false);
+      original.append(canvas);
+      host.sync(items);
+      expect(root?.parentElement).toBe(original);
+      expect(projection.container.firstElementChild).toBe(control);
+      expect(document.querySelectorAll('[data-sugarcubes-cube-face-projections]')).toHaveLength(1);
+      host.sync([]);
+      expect(root?.isConnected).toBe(false);
+    } finally {
+      host.dispose();
+      original.remove();
+      replacement.remove();
+    }
   });
 });
