@@ -20,6 +20,8 @@ use sugarsubstitute_contracts::{
 /// once. `Running` requires acknowledged native reveal, not compositor visibility. Cancellation
 /// requests cannot prove blocking/native work stopped. A successful retirement
 /// preserves readiness; connection cleanup is reserved for failure/cancellation.
+/// Startup failures may retain thread-affine diagnostic causes; keep this session
+/// on its owning application thread and submit only typed adapter work/results.
 pub struct StartupSession {
     configuration: StartupConfiguration,
     readiness: ReadinessGate,

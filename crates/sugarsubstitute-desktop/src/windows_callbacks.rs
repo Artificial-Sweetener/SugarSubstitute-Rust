@@ -6,7 +6,11 @@
 //! successful install transfers one Rc clone to Win32; explicit successful removal
 //! or WM_NCDESTROY returns that clone exactly once. Unrelated procedures remain chained.
 
-use crate::{DesktopError, runtime::NativeAction, windows_subclass::destroy_callback};
+use crate::{
+    DesktopError,
+    native_action::NativeAction,
+    windows_subclass::{callback, destroy_callback},
+};
 use std::cell::RefCell;
 #[path = "timing_native_callback.rs"]
 mod timing;
@@ -31,6 +35,7 @@ pub(crate) struct Callback {
     proxy: EventLoopProxy<NativeAction>,
     timings: Option<TimingObserver>,
     controls: RefCell<Vec<(HWND, u16, NativeAction)>>,
+    paint_mode: crate::windows_controls::PaintMode,
 }
 
 impl Callback {
@@ -38,8 +43,23 @@ impl Callback {
     pub(crate) fn new(
         proxy: EventLoopProxy<NativeAction>,
         timings: Option<TimingObserver>,
-    ) -> Self {
-        Self { proxy, timings, controls: RefCell::new(Vec::new()) }
+        paint_mode: crate::windows_controls::PaintMode,
+        count: usize,
+    ) -> Result<Self, DesktopError> {
+        let mut controls = Vec::new();
+        controls
+            .try_reserve_exact(count)
+            .map_err(|cause| DesktopError::new("allocate_native_identities", cause))?;
+        if controls.capacity() != count {
+            return Err(DesktopError::message(
+                "allocate_native_identities",
+                "identity capacity exceeded",
+            ));
+        }
+        Ok(Self { proxy, timings, controls: RefCell::new(controls), paint_mode })
+    }
+    pub(crate) fn prepared_pixels(&self) -> bool {
+        self.paint_mode == crate::windows_controls::PaintMode::PreparedPixels
     }
 
     /// Register one created peer; no callback borrow is held across native construction.
@@ -49,10 +69,17 @@ impl Callback {
         id: u16,
         action: NativeAction,
     ) -> Result<(), DesktopError> {
-        self.controls
+        let mut controls = self
+            .controls
             .try_borrow_mut()
-            .map_err(|error| DesktopError::new("register_accessible_identity", error))?
-            .push((hwnd, id, action));
+            .map_err(|error| DesktopError::new("register_accessible_identity", error))?;
+        if controls.len() == controls.capacity() {
+            return Err(DesktopError::message(
+                "register_accessible_identity",
+                "identity capacity exhausted",
+            ));
+        }
+        controls.push((hwnd, id, action));
         Ok(())
     }
 
@@ -92,7 +119,7 @@ pub(crate) unsafe extern "system" fn parent_proc(
     // SAFETY: Each installed subclass owns its transferred reference through this invocation.
     let (timings, proxy) = {
         // SAFETY: Installed data is live; this short borrow ends before final destruction or forwarding.
-        let callback = unsafe { &*(data as *const Callback) };
+        let callback = unsafe { callback::<Callback>(data) };
         (callback.timings.clone(), callback.proxy.clone())
     };
     let mut observation =
@@ -105,7 +132,7 @@ pub(crate) unsafe extern "system" fn parent_proc(
             };
         }
         // SAFETY: The nonfinal invocation still owns its installed reference.
-        let callback = unsafe { &*(data as *const Callback) };
+        let callback = unsafe { callback::<Callback>(data) };
         if message == WM_COMMAND
             && lparam.0 != 0
             && (wparam.0 >> 16) == 0
@@ -160,7 +187,7 @@ pub(crate) unsafe extern "system" fn child_proc(
     // SAFETY: Each installed subclass owns its transferred reference through this invocation.
     let (timings, proxy) = {
         // SAFETY: Installed data is live; this short borrow ends before final destruction or forwarding.
-        let callback = unsafe { &*(data as *const Callback) };
+        let callback = unsafe { callback::<Callback>(data) };
         (callback.timings.clone(), callback.proxy.clone())
     };
     let observation =
@@ -173,11 +200,21 @@ pub(crate) unsafe extern "system" fn child_proc(
             };
         }
         // SAFETY: The nonfinal invocation still owns its installed reference.
-        let callback = unsafe { &*(data as *const Callback) };
+        let callback = unsafe { callback::<Callback>(data) };
         match message {
-            WM_NCHITTEST => return LRESULT(HTTRANSPARENT as isize),
-            WM_ERASEBKGND => return LRESULT(1),
-            WM_PAINT => {
+            WM_NCHITTEST
+                if callback.paint_mode == crate::windows_controls::PaintMode::PreparedPixels =>
+            {
+                return LRESULT(HTTRANSPARENT as isize);
+            }
+            WM_ERASEBKGND
+                if callback.paint_mode == crate::windows_controls::PaintMode::PreparedPixels =>
+            {
+                return LRESULT(1);
+            }
+            WM_PAINT
+                if callback.paint_mode == crate::windows_controls::PaintMode::PreparedPixels =>
+            {
                 // SAFETY: Validate this child while the content paints its control rectangle.
                 if !unsafe { ValidateRect(Some(hwnd), None) }.as_bool() {
                     tracing::error!(
@@ -187,8 +224,10 @@ pub(crate) unsafe extern "system" fn child_proc(
                 }
                 return LRESULT(0);
             }
-            WM_SETFOCUS | WM_KILLFOCUS => callback.send(NativeAction::FocusChanged),
-            WM_KEYDOWN => match wparam.0 {
+            WM_SETFOCUS | WM_KILLFOCUS if callback.prepared_pixels() => {
+                callback.send(NativeAction::FocusChanged)
+            }
+            WM_KEYDOWN if callback.prepared_pixels() => match wparam.0 {
                 0x1b => {
                     callback.send(NativeAction::Close);
                     return LRESULT(0);

@@ -7,12 +7,12 @@ use std::{num::NonZeroUsize, time::Duration};
 use sugarsubstitute_contracts::presentation::{FrameShape, PreparedFrame};
 
 /// Own the event-loop phase and the last successfully published immutable result.
-pub(super) struct SurfaceState {
-    pub(super) closing: bool,
-    pub(super) settled: bool,
-    pub(super) visible: bool,
-    pub(super) failure: Option<DesktopError>,
-    pub(super) retained: Option<PreparedFrame>,
+pub(crate) struct SurfaceState {
+    pub(crate) closing: bool,
+    pub(crate) settled: bool,
+    pub(crate) visible: bool,
+    pub(crate) failure: Option<DesktopError>,
+    pub(crate) retained: Option<PreparedFrame>,
     dirty: bool,
     requested_shape: Option<FrameShape>,
     timings: Option<crate::timing::TimingObserver>,
@@ -20,7 +20,7 @@ pub(super) struct SurfaceState {
 
 impl SurfaceState {
     /// Start hidden with a pending first preparation once native visibility is established.
-    pub(super) fn new(timings: Option<crate::timing::TimingObserver>) -> Self {
+    pub(crate) fn new(timings: Option<crate::timing::TimingObserver>) -> Self {
         Self {
             closing: false,
             settled: false,
@@ -34,20 +34,20 @@ impl SurfaceState {
     }
 
     /// Record input preparation without requesting presentation of the old frame.
-    pub(super) fn dirty(&mut self) {
+    pub(crate) fn dirty(&mut self) {
         if !self.closing {
             self.dirty = true;
         }
     }
 
     /// Preserve the first cause and enter the same owned close path as user closure.
-    pub(super) fn fail(&mut self, content: &mut impl WindowContent, error: DesktopError) {
+    pub(crate) fn fail(&mut self, content: &mut impl WindowContent, error: DesktopError) {
         DesktopError::retain_first(&mut self.failure, error);
         self.close(content);
     }
 
     /// Disable publication/input before invalidation and one nonblocking shutdown request.
-    pub(super) fn close(&mut self, content: &mut impl WindowContent) {
+    pub(crate) fn close(&mut self, content: &mut impl WindowContent) {
         if self.closing {
             return;
         }
@@ -69,7 +69,7 @@ impl SurfaceState {
     }
 
     /// Invalidate changed visibility before any admission; hidden work still gets polled.
-    pub(super) fn visibility(&mut self, content: &mut impl WindowContent, visible: bool) {
+    pub(crate) fn visibility(&mut self, content: &mut impl WindowContent, visible: bool) {
         if self.closing || visible == self.visible {
             return;
         }
@@ -83,7 +83,7 @@ impl SurfaceState {
     }
 
     /// Submit only dirty/due visible work, without touching the retained native image.
-    pub(super) fn prepare(
+    pub(crate) fn prepare(
         &mut self,
         content: &mut impl WindowContent,
         shape: Option<FrameShape>,
@@ -119,7 +119,7 @@ impl SurfaceState {
     ///
     /// Only a visible running surface with the actual shape replaces retained pixels.
     /// The content owner has already enforced surface/state/sample publication identity.
-    pub(super) fn poll(
+    pub(crate) fn poll(
         &mut self,
         content: &mut impl WindowContent,
         actual_shape: Option<FrameShape>,
@@ -148,7 +148,7 @@ impl SurfaceState {
     }
 
     /// Exit becomes legal only after the owner proves actual settlement.
-    pub(super) fn poll_shutdown(&mut self, content: &mut impl WindowContent) {
+    pub(crate) fn poll_shutdown(&mut self, content: &mut impl WindowContent) {
         if !self.closing || self.settled {
             return;
         }
@@ -164,7 +164,7 @@ impl SurfaceState {
     }
 
     /// Borrow matching retained pixels for native exposure without admitting preparation.
-    pub(super) fn exposable(&self, shape: Option<FrameShape>) -> Option<&PreparedFrame> {
+    pub(crate) fn exposable(&self, shape: Option<FrameShape>) -> Option<&PreparedFrame> {
         if self.closing || !self.visible {
             return None;
         }

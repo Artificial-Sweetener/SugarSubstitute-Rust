@@ -23,9 +23,9 @@ coverage and premultiplied byte rounding rules through DirectWrite.
 The adapted runtime files are listed in the manifest. Their Rust implementation
 is maintained with the splash owner and its tests.
 
-Qt portions are copyright The Qt Company Ltd. (2016–2022) and Intel Corporation
+Qt portions are copyright The Qt Company Ltd. (2016â€“2022) and Intel Corporation
 (2018), distributed here under GPL-3.0-only. The FreeType-derived coverage rules
-are copyright David Turner, Robert Wilhelm and Werner Lemberg (2000–2016),
+are copyright David Turner, Robert Wilhelm and Werner Lemberg (2000â€“2016),
 distributed here under the FreeType Project License (FTL). The combined license
 file contains both license texts. Modifications are copyright Artificial
 Sweetener and contributors (2026). The application uses these raster rules in
@@ -43,3 +43,10 @@ its source-build receipt records their pinned sources and runtime license texts.
 The Crashpad client and registration portions retain Copyright 2015 The Crashpad
 Authors. The mini-chromium Windows build-helper portion retains Copyright 2017
 The Chromium Authors.
+
+
+Wry 0.57.0 supplies the native browser adapter under Apache-2.0 or MIT.
+Maintained Windows derivatives add staged UI-affine construction and checked
+retirement. Those changes are copyright Artificial Sweetener and contributors
+(2026), GPL-3.0-or-later. The manifest identifies the exact packaged files and
+preserved upstream license texts.

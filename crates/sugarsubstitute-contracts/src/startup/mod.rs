@@ -11,10 +11,12 @@
 
 mod events;
 mod intents;
+mod main_identity;
 mod readiness;
 
 pub use events::{StartupEvent, StartupFailure, StartupFailureCode, StartupObservation};
 pub use intents::{ConnectionCleanup, SplashIntent, StartupEffect};
+pub use main_identity::MainIdentity;
 
 pub use readiness::{
     FrontendEvidence, LaunchId, ProbeFailure, ReadinessError, ReadinessFailure, ReadinessOutcome,

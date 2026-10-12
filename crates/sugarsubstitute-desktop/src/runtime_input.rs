@@ -11,14 +11,14 @@ use tao::{
 
 /// Separate preparation dirtiness from native exposure and terminal intent.
 #[derive(Default)]
-pub(super) struct InputEffect {
-    pub(super) dirty: bool,
-    pub(super) expose: bool,
-    pub(super) close: bool,
+pub(crate) struct InputEffect {
+    pub(crate) dirty: bool,
+    pub(crate) expose: bool,
+    pub(crate) close: bool,
 }
 
 /// Forward UI-affine input; caller never invokes this once the close phase begins.
-pub(super) fn dispatch(
+pub(crate) fn dispatch(
     content: &mut impl WindowContent,
     window: &Window,
     event: WindowEvent<'_>,

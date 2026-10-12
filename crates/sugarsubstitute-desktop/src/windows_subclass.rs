@@ -8,9 +8,11 @@
 //! type in both paths. Native final destruction always chains the previous procedure.
 
 use crate::DesktopError;
-use std::rc::Rc;
+#[path = "windows_registration.rs"]
+mod registration;
+pub(crate) use registration::{Registration, callback};
 use windows::Win32::{
-    Foundation::{HWND, LPARAM, LRESULT, WPARAM},
+    Foundation::{GetLastError, HWND, LPARAM, LRESULT, WPARAM},
     UI::{
         Shell::{
             DefSubclassProc, GetWindowSubclass, RemoveWindowSubclass, SUBCLASSPROC,
@@ -28,7 +30,7 @@ use windows::Win32::{
 pub(crate) unsafe fn install<T>(
     hwnd: HWND,
     procedure: SUBCLASSPROC,
-    callback: &Rc<T>,
+    registration: &Registration<T>,
 ) -> Result<(), DesktopError> {
     let mut existing = 0;
     // SAFETY: The caller owns the native window on this thread; querying does not retain data.
@@ -38,34 +40,54 @@ pub(crate) unsafe fn install<T>(
             "native subclass identity is already installed",
         ));
     }
-    let raw = Rc::into_raw(Rc::clone(callback));
-    // SAFETY: The transferred reference stays live until explicit removal or final
-    // destruction. Registration failure reclaims the still-local clone immediately.
-    unsafe {
-        if let Err(error) = SetWindowSubclass(hwnd, procedure, 1, raw as usize).ok() {
-            drop(Rc::from_raw(raw));
-            return Err(DesktopError::new("register_accessible_subclass", error));
+    registration.install(|raw| {
+        // SAFETY: Provisional ownership is recorded before native reentry. Failure
+        // captures its immediate cause before reclaiming any still-owned reference.
+        if !unsafe { SetWindowSubclass(hwnd, procedure, 1, raw) }.as_bool() {
+            return Err(bool_failure("register_accessible_subclass"));
         }
-    }
-    Ok(())
+        Ok(())
+    })
 }
 
 /// Reclaim only the confirmed installed data reference belonging to this owner and procedure.
 /// A failed removal leaves Win32 owning the reference until its final-destruction callback.
-pub(crate) fn remove<T>(hwnd: HWND, procedure: SUBCLASSPROC, callback: &Rc<T>) -> bool {
-    let mut existing = 0;
-    // SAFETY: The queried data identity must match the owner's separately retained Rc.
-    // Only confirmed removal returns the installed clone; no failed path returns it.
-    unsafe {
-        if GetWindowSubclass(hwnd, procedure, 1, Some(&raw mut existing)).as_bool()
-            && existing == Rc::as_ptr(callback) as usize
-            && RemoveWindowSubclass(hwnd, procedure, 1).as_bool()
-        {
-            drop(Rc::from_raw(existing as *const T));
-            return true;
+pub(crate) fn remove<T>(
+    hwnd: HWND,
+    procedure: SUBCLASSPROC,
+    registration: &Registration<T>,
+) -> Result<(), DesktopError> {
+    registration.remove(|expected| {
+        let mut existing = 0;
+        // SAFETY: Compare identities without dereferencing foreign native data.
+        if !unsafe { GetWindowSubclass(hwnd, procedure, 1, Some(&raw mut existing)) }.as_bool() {
+            return Err(bool_failure("query_accessible_subclass"));
         }
+        if existing != expected {
+            return Err(DesktopError::message(
+                "remove_accessible_subclass",
+                "native registration belongs to another owner",
+            ));
+        }
+        // SAFETY: This exact procedure/data identity is retained on its owning UI thread.
+        if !unsafe { RemoveWindowSubclass(hwnd, procedure, 1) }.as_bool() {
+            return Err(bool_failure("remove_accessible_subclass"));
+        }
+        Ok(())
+    })
+}
+
+fn bool_failure(operation: &'static str) -> DesktopError {
+    // SAFETY: Capture the thread's immediate failure fact before cleanup or diagnostics.
+    let code = unsafe { GetLastError() }.0;
+    if code == 0 {
+        DesktopError::message(operation, "native BOOL failed without a Win32 failure code")
+    } else {
+        DesktopError::new(
+            operation,
+            windows::core::Error::from(windows::core::HRESULT::from_win32(code)),
+        )
     }
-    false
 }
 
 /// Chain final destruction, then return the still-installed subclass's one native reference.
@@ -83,14 +105,17 @@ pub(crate) unsafe fn destroy_callback<T>(
     // SAFETY: WM_NCDESTROY is final for this HWND. Its reference stays live through
     // the procedure chain; this UI thread cannot concurrently remove the subclass.
     unsafe {
-        if !RemoveWindowSubclass(hwnd, procedure, 1).as_bool() {
+        let removed = RemoveWindowSubclass(hwnd, procedure, 1).as_bool();
+        let code = if removed { 0 } else { GetLastError().0 };
+        let result = DefSubclassProc(hwnd, WM_NCDESTROY, wparam, lparam);
+        registration::reclaim::<T>(data, true);
+        if !removed {
             tracing::warn!(
                 operation = "remove_destroyed_native_subclass",
-                "Native final-destruction subclass removal was not confirmed"
+                win32_code = code,
+                "Native final-destruction removal was not confirmed before chaining"
             );
         }
-        let result = DefSubclassProc(hwnd, WM_NCDESTROY, wparam, lparam);
-        drop(Rc::from_raw(data as *const T));
         result
     }
 }
@@ -98,7 +123,7 @@ pub(crate) unsafe fn destroy_callback<T>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{cell::Cell, error::Error};
+    use std::{cell::Cell, error::Error, rc::Rc};
     use windows::{
         Win32::UI::WindowsAndMessaging::{
             CreateWindowExW, DestroyWindow, SendMessageW, WINDOW_EX_STYLE, WINDOW_STYLE, WM_NULL,
@@ -154,7 +179,7 @@ mod tests {
         if message == WM_NCDESTROY {
             // SAFETY: This installed procedure owns one Rc<Cell<u32>> until final destruction.
             unsafe {
-                (&*(data as *const Cell<u32>)).set(1);
+                callback::<Cell<u32>>(data).set(1);
                 return destroy_callback::<Cell<u32>>(
                     hwnd,
                     Some(fixture_proc),
@@ -211,6 +236,7 @@ mod tests {
     -> Result<(), Box<dyn Error>> {
         let window = HiddenWindow::new()?;
         let state = Rc::new(Cell::new(0));
+        let registration = Registration::new(&state);
         // SAFETY: The borrowed cell remains live through synchronous fixture destruction;
         // the distinct subclass ID is owned by the OS until that same destruction.
         unsafe {
@@ -219,12 +245,12 @@ mod tests {
         }
         // SAFETY: The fixture HWND belongs to this thread and fixture_proc consumes Rc<Cell<u32>>.
         unsafe {
-            install(window.0, Some(fixture_proc), &state)?;
+            install(window.0, Some(fixture_proc), &registration)?;
         }
-        assert_eq!(Rc::strong_count(&state), 2);
+        assert_eq!(registration.reference_count(), 2);
         drop(window);
         assert_eq!(state.get(), 7);
-        assert_eq!(Rc::strong_count(&state), 1);
+        assert_eq!(registration.reference_count(), 1);
         Ok(())
     }
 
@@ -234,20 +260,21 @@ mod tests {
     {
         let window = HiddenWindow::new()?;
         let state = Rc::new(Cell::new(0));
+        let registration = Registration::new(&state);
         // SAFETY: The fixture HWND belongs to this thread and fixture_proc consumes Rc<Cell<u32>>.
         unsafe {
-            install(window.0, Some(fixture_proc), &state)?;
+            install(window.0, Some(fixture_proc), &registration)?;
         }
-        assert_eq!(Rc::strong_count(&state), 2);
+        assert_eq!(registration.reference_count(), 2);
         // SAFETY: The existing fixture procedure uses the same data type and UI thread.
-        assert!(unsafe { install(window.0, Some(fixture_proc), &state) }.is_err());
-        assert_eq!(Rc::strong_count(&state), 2);
-        assert!(remove(window.0, Some(fixture_proc), &state));
-        assert_eq!(Rc::strong_count(&state), 1);
-        assert!(!remove(window.0, Some(fixture_proc), &state));
+        assert!(unsafe { install(window.0, Some(fixture_proc), &registration) }.is_err());
+        assert_eq!(registration.reference_count(), 2);
+        assert!(remove(window.0, Some(fixture_proc), &registration).is_ok());
+        assert_eq!(registration.reference_count(), 1);
+        assert!(remove(window.0, Some(fixture_proc), &registration).is_err());
         drop(window);
         assert_eq!(state.get(), 0);
-        assert_eq!(Rc::strong_count(&state), 1);
+        assert_eq!(registration.reference_count(), 1);
         Ok(())
     }
 
@@ -257,18 +284,20 @@ mod tests {
     {
         let window = HiddenWindow::new()?;
         let state = Rc::new(Cell::new(0));
+        let registration = Registration::new(&state);
         // SAFETY: The fixture HWND belongs to this thread and fixture_proc consumes Rc<Cell<u32>>.
         unsafe {
-            install(window.0, Some(fixture_proc), &state)?;
+            install(window.0, Some(fixture_proc), &registration)?;
         }
         let foreign_state = Rc::new(Cell::new(0));
-        assert!(!remove(window.0, Some(fixture_proc), &foreign_state));
-        assert_eq!(Rc::strong_count(&foreign_state), 1);
-        assert!(!remove(window.0, Some(foreign_proc), &state));
-        assert_eq!(Rc::strong_count(&state), 2);
+        let foreign_registration = Registration::new(&foreign_state);
+        assert!(remove(window.0, Some(fixture_proc), &foreign_registration).is_err());
+        assert_eq!(foreign_registration.reference_count(), 1);
+        assert!(remove(window.0, Some(foreign_proc), &registration).is_err());
+        assert_eq!(registration.reference_count(), 2);
         drop(window);
         assert_eq!(state.get(), 1);
-        assert_eq!(Rc::strong_count(&state), 1);
+        assert_eq!(registration.reference_count(), 1);
         Ok(())
     }
 
@@ -276,9 +305,10 @@ mod tests {
     #[test]
     fn failed_native_registration_retains_only_the_owner_reference() {
         let state = Rc::new(Cell::new(0));
+        let registration = Registration::new(&state);
         // SAFETY: The invalid HWND cannot install a callback; its expected data type matches.
-        assert!(unsafe { install(HWND::default(), Some(fixture_proc), &state) }.is_err());
-        assert_eq!(Rc::strong_count(&state), 1);
+        assert!(unsafe { install(HWND::default(), Some(fixture_proc), &registration) }.is_err());
+        assert_eq!(registration.reference_count(), 1);
         assert_eq!(state.get(), 0);
     }
 }

@@ -11,7 +11,7 @@ minimum_tests = 46
 package = "sugarsubstitute-application"
 root = "crates/sugarsubstitute-application"
 concern = "Acknowledged startup, settled retry, frame publication, backend leases, desktop exit, UI challenge and bounded transcript policy"
-minimum_tests = 65
+minimum_tests = 66
 
 [[owners]]
 package = "sugarsubstitute-comfy"
@@ -53,7 +53,7 @@ minimum_tests = 65
 package = "sugarsubstitute-desktop"
 root = "crates/sugarsubstitute-desktop"
 concern = "Nonblocking frame delivery, headless settlement, retained native storage, input and timing boundaries"
-minimum_tests = 80
+minimum_tests = 134
 
 [[owners]]
 package = "sugarsubstitute-crash"

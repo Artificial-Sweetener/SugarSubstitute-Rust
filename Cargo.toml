@@ -1,5 +1,7 @@
 [workspace]
 members = ["crates/sugarsubstitute", "crates/sugarsubstitute-contracts", "crates/sugarsubstitute-application", "crates/sugarsubstitute-comfy", "crates/sugarsubstitute-execution", "crates/sugarsubstitute-supervision", "crates/sugarsubstitute-splash", "crates/sugarsubstitute-desktop", "crates/sugarsubstitute-crash", "tools/xtask"]
+exclude = ["third_party/wry"]
+
 default-members = ["crates/sugarsubstitute"]
 resolver = "3"
 
@@ -15,6 +17,7 @@ publish = false
 proc-macro2 = { version = "=1.0.107", features = ["span-locations"] }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
+url = "=2.5.8"
 sha2 = "=0.10.9"
 syn = { version = "=2.0.114", features = ["full", "visit"] }
 tempfile = "=3.24.0"
@@ -26,8 +29,10 @@ png = "=0.18.1"
 cosmic-text = { version = "=0.19.0", default-features = false, features = ["std", "swash"] }
 tao = "=0.37.0"
 softbuffer = { version = "=0.4.8", default-features = false }
-windows = { version = "=0.62.2", features = ["Win32_Foundation", "Win32_Media", "Win32_Graphics_Dwm", "Win32_Graphics_Gdi", "Win32_Graphics_DirectWrite", "Win32_System_Performance", "Win32_System_Threading", "Win32_UI_Controls", "Win32_UI_Shell", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "=0.62.2", features = ["Win32_Foundation", "Win32_Media", "Win32_Graphics_Dwm", "Win32_Graphics_Gdi", "Win32_Graphics_DirectWrite", "Win32_System_Performance", "Win32_System_Com", "Win32_System_Threading", "Win32_UI_Controls", "Win32_UI_Shell", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_WindowsAndMessaging"] }
 windows-core = "=0.62.2"
+wry = { version = "=0.57.0", default-features = false, features = ["tracing"] }
+webview2-com = "=0.39.0"
 gtk = "=0.18.2"
 cairo-rs = "=0.18.5"
 tracing = "=0.1.41"
@@ -54,3 +59,6 @@ unwrap_used = "deny"
 codegen-units = 1
 debug = "line-tables-only"
 lto = "thin"
+
+[patch.crates-io]
+wry = { path = "third_party/wry" }

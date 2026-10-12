@@ -30,6 +30,12 @@ impl ProfileId {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    /// Return actual retained namespace allocation capacity, in UTF-8 bytes.
+    /// Admission owners use this metadata without cloning or granting path authority.
+    pub fn allocated_bytes(&self) -> usize {
+        self.0.capacity()
+    }
 }
 
 /// An exact member of the authoritative supported-locale registry.

@@ -26,15 +26,18 @@ pub enum StartupFailureCode {
 /// Native causes may own opaque adapter data. This is not an untrusted wire
 /// payload or an allocation-budget claim. Product copy uses the classification,
 /// while explicit diagnostics can inspect the preserved source.
+/// The cause remains on its owning thread; this value does not require `Send`.
+/// Keep native retirement owners separate from diagnostic causes. Execution jobs
+/// return their own transferable errors; compose this failure after owned delivery.
 #[derive(Debug)]
 pub struct StartupFailure {
     code: StartupFailureCode,
-    cause: Box<dyn Error + Send + Sync>,
+    cause: Box<dyn Error>,
 }
 
 impl StartupFailure {
     /// Preserve an already owned adapter error without stringifying its source.
-    pub fn new(code: StartupFailureCode, cause: Box<dyn Error + Send + Sync>) -> Self {
+    pub fn new(code: StartupFailureCode, cause: Box<dyn Error>) -> Self {
         Self { code, cause }
     }
 
@@ -63,6 +66,8 @@ impl Error for StartupFailure {
 /// These values report facts; they do not prove origin authentication,
 /// filesystem trust or process ownership. The emitting adapter establishes
 /// those guarantees before sending an observation to the application.
+/// Failure observations can retain thread-affine diagnostic causes. Deliver them
+/// on the application owner thread rather than submitting them as execution jobs.
 #[derive(Debug)]
 pub enum StartupObservation {
     /// Native presentation and control submission actually succeeded.

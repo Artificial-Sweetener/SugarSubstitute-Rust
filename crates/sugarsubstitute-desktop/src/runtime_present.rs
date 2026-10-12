@@ -9,7 +9,7 @@ use sugarsubstitute_contracts::presentation::{FrameIdentity, PreparedFrame};
 use tao::window::Window;
 
 /// Retain native timing and at most two explicitly audited prepared allocations.
-pub(super) struct Presentations {
+pub(crate) struct Presentations {
     started: Instant,
     first: Option<Duration>,
     count: u64,
@@ -25,7 +25,7 @@ pub(super) struct Presentations {
 
 impl Presentations {
     /// Start measurements without preparing pixels or starting a scheduler.
-    pub(super) fn new(started: Instant, audit: bool) -> Self {
+    pub(crate) fn new(started: Instant, audit: bool) -> Self {
         Self {
             started,
             first: None,
@@ -42,7 +42,7 @@ impl Presentations {
     }
 
     /// Submit validated storage and paint native controls; never scan alpha or rasterize.
-    pub(super) fn submit(
+    pub(crate) fn submit(
         &mut self,
         window: &Window,
         presenter: &mut Presenter,
@@ -112,7 +112,7 @@ impl Presentations {
     }
 
     /// Transfer guarded audit results only after native teardown finishes.
-    pub(super) fn finish(self, material: NativeMaterial) -> Result<DesktopReceipt, DesktopError> {
+    pub(crate) fn finish(self, material: NativeMaterial) -> Result<DesktopReceipt, DesktopError> {
         Ok(DesktopReceipt {
             first_frame: self.first.ok_or_else(|| {
                 DesktopError::message("present_frame", "window closed before the first frame")

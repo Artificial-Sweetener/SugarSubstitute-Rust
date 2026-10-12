@@ -3,7 +3,7 @@
 //! Observe authored native subclass bodies while retaining timing ownership across final destruction.
 
 use crate::{
-    runtime::NativeAction,
+    native_action::NativeAction,
     timing::{NativeCallbackKind, NativeTickInterval, Stamp, TimingObserver},
 };
 use tao::event_loop::EventLoopProxy;
