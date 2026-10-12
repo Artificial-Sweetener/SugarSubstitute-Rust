@@ -209,7 +209,10 @@ async function main(): Promise<void> {
     '../ModelDetectorDialog.js',
     '../../menus/ContextMenu.js',
   ]);
-  await bundleVueSurface(['surface/stack/vue', 'picker/vue'], ['/scripts/*']);
+  await bundleVueSurface(
+    ['surface/stack/vue', 'picker/vue', 'output_canvas/presentation/vue'],
+    ['/scripts/*'],
+  );
   stageStaticAssets();
   synchronizeArtifacts(checkOnly);
   console.log(checkOnly ? 'Web artifacts are current.' : 'Web artifacts updated.');
