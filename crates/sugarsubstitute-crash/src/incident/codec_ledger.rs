@@ -4,6 +4,7 @@
 use super::{
     IncidentStoreError,
     codec::{STATE_BOUND, decode, encode, required_option, utc},
+    codec_capture::{CaptureDispositionPlan, CaptureJournalRecord},
     codec_identity::{OperationRecord, SubjectRecord},
 };
 use serde::{Deserialize, Serialize};
@@ -154,12 +155,15 @@ pub enum IncidentStoreState {
     Ledger(SummaryEvictions),
     /// One victim-bound summary-eviction tombstone awaiting actual settlement.
     SummaryEviction(Box<SummaryEvictionJournal>),
+    /// Exact historical capture stages and committed completion, without native authority.
+    CapturePromotion(Box<CaptureDispositionPlan>),
 }
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "record", rename_all = "snake_case", deny_unknown_fields)]
 enum StoreRecord {
     Ledger { ledger: LedgerRecord },
     SummaryEviction { journal: Box<JournalRecord> },
+    CapturePromotion { journal: Box<CaptureJournalRecord> },
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -279,6 +283,9 @@ pub fn encode_store_state(state: &IncidentStoreState) -> Result<Vec<u8>, Inciden
                     candidate_sha256: journal.candidate_sha256,
                 }),
             },
+            IncidentStoreState::CapturePromotion(plan) => {
+                StoreRecord::CapturePromotion { journal: Box::new(plan.as_ref().into()) }
+            }
         },
         STATE_BOUND,
     )
@@ -289,6 +296,9 @@ pub fn encode_store_state(state: &IncidentStoreState) -> Result<Vec<u8>, Inciden
 pub fn decode_store_state(bytes: &[u8]) -> Result<IncidentStoreState, IncidentStoreError> {
     Ok(match decode::<StoreRecord>(bytes, STATE_BOUND)? {
         StoreRecord::Ledger { ledger } => IncidentStoreState::Ledger(ledger.into_ledger()?),
+        StoreRecord::CapturePromotion { journal } => {
+            IncidentStoreState::CapturePromotion(Box::new(journal.into_plan()?))
+        }
         StoreRecord::SummaryEviction { journal } => {
             let expected_original = journal.original_sha256;
             let expected_candidate = journal.candidate_sha256;

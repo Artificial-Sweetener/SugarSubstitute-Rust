@@ -239,8 +239,8 @@ migrations = []
 [[formats]]
 id = "incident-store-state-v1"
 owner = "sugarsubstitute-crash"
-sources = ["crates/sugarsubstitute-crash/src/incident/codec.rs", "crates/sugarsubstitute-crash/src/incident/codec_identity.rs", "crates/sugarsubstitute-crash/src/incident/codec_ledger.rs", "crates/sugarsubstitute-crash/src/incident/error.rs"]
-source_sha256 = "sha256:07581e1df55499b1630bb0b14e7fbd9d15eae2f4034ec711761f743075ba437f"
+sources = ["crates/sugarsubstitute-crash/src/incident/codec.rs", "crates/sugarsubstitute-crash/src/incident/codec_capture.rs", "crates/sugarsubstitute-crash/src/incident/codec_evidence.rs", "crates/sugarsubstitute-crash/src/incident/codec_identity.rs", "crates/sugarsubstitute-crash/src/incident/codec_ledger.rs", "crates/sugarsubstitute-crash/src/incident/error.rs"]
+source_sha256 = "sha256:3bfedec7c9699c1b86e9b96771f963f0e70aa9646c7ce6c1cb51c50e16252f62"
 classification = "authoritative_state"
 preservation = "must_preserve"
 current_version = 1

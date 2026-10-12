@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise strict persisted records through actual codecs and domain constructors.
+mod capture_codec;
 mod codec;
 mod redaction;
 use super::*;
