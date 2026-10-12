@@ -62,9 +62,13 @@ fn regressing_consume_cannot_publish_already_completed_actual_success() -> TestR
 #[test]
 fn regressing_attempt_submission_permanently_closes_fresh_input_admission() -> TestResult {
     let mut h = Harness::new()?;
-    h.set_time(10);
-    assert_eq!(h.campaign.consume(&empty_batch(), h.now())?, CampaignStep::NeedsInput);
+    // The campaign's supplied observation is independent of the executor provider:
+    // only this owner sees regression; its actual execution clock remains monotonic.
     h.set_time(9);
+    assert_eq!(
+        h.campaign.consume(&empty_batch(), Moment::from_nanos(10))?,
+        CampaignStep::NeedsInput
+    );
     let spec = h.spec(Moment::from_nanos(2_000_000_000))?;
     let input = ReadinessProbeInput::attached(h.lease.clone(), 8188)?;
     assert!(matches!(
@@ -91,8 +95,8 @@ fn regressing_cleanup_submission_revokes_pending_readiness_and_retains_real_owne
     let mut h = Harness::new()?;
     h.submit(Behavior::Success, None, false, None)?;
     assert_eq!(h.completion()?, CampaignStep::Ready);
-    h.set_time(10);
-    assert_eq!(h.campaign.consume(&empty_batch(), h.now())?, CampaignStep::Ready);
+    // Exercise the campaign fence without regressing the executor provider.
+    assert_eq!(h.campaign.consume(&empty_batch(), Moment::from_nanos(10))?, CampaignStep::Ready);
     let original_charge = h.retained_bytes();
     h.set_time(9);
     let spec = h.spec(Moment::from_nanos(5_000_000_000))?;

@@ -8,7 +8,6 @@ use crate::fixture_session::child::{
 };
 use crate::native::NativeObservationError;
 use sugarsubstitute_contracts::execution::OwnedJob;
-use windows::Win32::System::Performance::{QueryPerformanceCounter, QueryPerformanceFrequency};
 
 impl ExecutionClient {
     /// Reserve child lifetime before passing inherited input; takes no handle ownership.
@@ -27,7 +26,7 @@ impl ExecutionClient {
         deadline: FixtureDeadline,
     ) -> Result<FixtureChildPermit, FixtureChildAdmissionError> {
         child::reserve_sampled(&self.core, scope, spec, correlation, deadline, || {
-            sample().map_err(FixtureChildAdmissionError::Clock)
+            crate::windows_counter::sample().map_err(FixtureChildAdmissionError::Clock)
         })
     }
 }
@@ -42,21 +41,4 @@ impl FixtureChildPermit {
     ) -> OwnedJob<FixtureChildReport, NativeObservationError> {
         self.bind_lease(Box::new(super::child_native::Lease::new(events)))
     }
-}
-pub(super) fn sample() -> Result<(u64, u64), NativeObservationError> {
-    let mut frequency = 0;
-    let mut ticks = 0;
-    // SAFETY: bounded native clock queries write only these live signed counters.
-    unsafe { QueryPerformanceFrequency(&mut frequency) }
-        .map_err(|cause| NativeObservationError::new("fixture_qpc_frequency", cause))?;
-    // SAFETY: finite clock query writes the live signed counter only.
-    unsafe { QueryPerformanceCounter(&mut ticks) }
-        .map_err(|cause| NativeObservationError::new("fixture_qpc_counter", cause))?;
-    if frequency <= 0 || ticks <= 0 {
-        return Err(NativeObservationError::new(
-            "fixture_positive_clock",
-            std::io::Error::other("QPC/QPF returned nonpositive values"),
-        ));
-    }
-    Ok((ticks as u64, frequency as u64))
 }

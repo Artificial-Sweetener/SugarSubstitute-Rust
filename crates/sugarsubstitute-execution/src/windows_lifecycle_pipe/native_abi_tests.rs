@@ -20,7 +20,7 @@ fn ffi_actual_client_prepares_message_mode_and_retires_both_native_sessions() ->
     let scope =
         rig.client.create_native_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?;
     let mut namespace = [73; 32];
-    let (ticks, _) = native::counter::sample()?;
+    let (ticks, _) = crate::windows_counter::sample()?;
     namespace[..8].copy_from_slice(&ticks.to_le_bytes());
     // SAFETY: current-process identity needs no borrowed handle or mutable native output.
     namespace[8..12].copy_from_slice(

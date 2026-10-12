@@ -40,12 +40,6 @@ fn provider_future_poll_failure_latches_original_cancels_owned_work_and_joins_wo
         if let Some(value) = timer.try_take_completion() {
             break value;
         }
-        if let Err(cause) = client.drain_completions(NonZeroUsize::MIN) {
-            assert!(cause.source().is_some());
-        }
-        if let Some(value) = timer.try_take_completion() {
-            break value;
-        }
         wake.wait_after(observed)?;
     };
     assert!(matches!(completion.outcome, JobOutcome::Panicked(_)));
@@ -57,6 +51,15 @@ fn provider_future_poll_failure_latches_original_cancels_owned_work_and_joins_wo
             .contains("original provider future poll failure"))
     );
     owner.request_shutdown(Moment::from_nanos(17));
+    let retained = owner
+        .poll_shutdown()
+        .err()
+        .ok_or("Taking the timer completion erased its independent failure notice")?;
+    assert!(
+        retained.source().is_some_and(|cause| cause
+            .to_string()
+            .contains("original provider future poll failure"))
+    );
     let pending = owner.poll_shutdown()?;
     assert!(!pending.settled);
     assert!(!pending.deadline_expired);

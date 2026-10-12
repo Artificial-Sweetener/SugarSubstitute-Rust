@@ -12,12 +12,14 @@ impl Lease {
         let identity =
             security::process_identity(unsafe { GetCurrentProcess() }, &mut self.own_token)?;
         self.identity = Some(identity);
-        let counter = counter::sample().map_err(LifecyclePipeFailure::native)?;
-        let remaining = handshake
-            .checked_duration_since(context.now())
-            .map_err(|e| error("pipe_handshake_remaining", e))?;
-        let deadline = crate::windows_lifecycle_pipe::deadline::parent(counter, remaining)
-            .map_err(LifecyclePipeFailure::native)?;
+        let counter = crate::counter_deadline::encode_sampled(
+            crate::windows_counter::sample,
+            || Ok(context.now()),
+            handshake,
+        )
+        .map_err(LifecyclePipeFailure::native)?;
+        let deadline = LifecyclePipeDeadline::new(counter.ticks(), counter.frequency())
+            .map_err(|cause| error("pipe_handshake_deadline", cause))?;
         let run = self.run.ok_or_else(|| failure("pipe_server_run"))?;
         let name = bootstrap::name(run);
         let mut descriptor = security::Descriptor::new(identity)?;
@@ -76,7 +78,8 @@ impl Lease {
         if data.session != identity.session {
             return Err(failure("pipe_bootstrap_session"));
         }
-        let (now, frequency) = counter::sample().map_err(LifecyclePipeFailure::native)?;
+        let (now, frequency) =
+            crate::windows_counter::sample().map_err(LifecyclePipeFailure::native)?;
         if frequency != original.frequency as u64 || now >= original.ticks as u64 {
             return Err(failure("pipe_expired_bootstrap"));
         }

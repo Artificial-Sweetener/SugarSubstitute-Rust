@@ -227,12 +227,28 @@ fn cleanup_clock_regression_rejects_without_force_or_settlement() -> TestResult 
     let ticket = h.launch(1)?;
     let key = ticket.process();
     h.created(key)?;
-    h.clock.0.store(100, Ordering::Release);
-    h.stop(key)?;
+    // Supply the registry's budget independently; its cleanup observes 99 while
+    // the executor provider remains monotonic rather than failing admission first.
     h.clock.0.store(99, Ordering::Release);
+    let original = ShutdownBudget::new(Moment::from_nanos(100))?;
+    let shutdown = ShutdownId::new(1)?;
+    h.registry.begin_stop(key, shutdown, original)?;
     h.cleanup(key)?;
     assert_eq!(h.fake.forces.load(Ordering::Acquire), 0);
     assert!(!h.registry.snapshot(key)?.settled);
+    assert_eq!(h.registry.snapshot(key)?.shutdown, Some((shutdown, original)));
+    assert_eq!(h.fake.closes.load(Ordering::Acquire), 0);
+    let index = h.registry.index(key)?;
+    let error = h.registry.records[index]
+        .as_ref()
+        .and_then(|record| record.error.as_ref())
+        .ok_or("Missing retained cleanup failure")?;
+    // The fake root watch already reports cancellation; cleanup must preserve
+    // that first failure and retain its own exact regression cause separately.
+    assert_eq!(error.stage(), "process_observation_not_exit");
+    assert!(
+        error.cleanup_causes().iter().any(|cause| cause.stage() == "shutdown_clock_regression")
+    );
     Ok(())
 }
 

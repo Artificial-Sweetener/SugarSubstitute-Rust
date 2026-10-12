@@ -19,8 +19,6 @@ use windows::{
 };
 #[path = "bootstrap.rs"]
 mod bootstrap;
-#[path = "counter.rs"]
-pub(crate) mod counter;
 #[path = "peer.rs"]
 mod peer;
 #[path = "prepare.rs"]

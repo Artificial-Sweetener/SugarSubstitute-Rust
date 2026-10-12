@@ -29,7 +29,7 @@ impl FixtureDeadline {
     /// the parent's independently admitted execution deadline. Reject expired,
     /// sub-tick, invalid-counter or overflowing input, preserving native clock causes.
     pub fn until(original: std::time::Instant) -> Result<Self, NativeObservationError> {
-        deadline::sampled(child_port::sample, || {
+        deadline::sampled(crate::windows_counter::sample, || {
             original.checked_duration_since(std::time::Instant::now())
         })
     }
@@ -46,7 +46,7 @@ impl ExecutionClient {
         deadline: FixtureDeadline,
     ) -> Result<FixtureForwardingPermit, FixtureChildAdmissionError> {
         crate::fixture_forwarding::reserve(&self.core, scope, spec, correlation, deadline, || {
-            child_port::sample().map_err(FixtureChildAdmissionError::Clock)
+            crate::windows_counter::sample().map_err(FixtureChildAdmissionError::Clock)
         })
     }
     /// Admit one parent session before any native event creation or registration.
@@ -102,7 +102,6 @@ impl FixtureChildEvents {
 #[allow(unsafe_code)]
 #[path = "windows_fixture/child.rs"]
 mod child_native;
-#[allow(unsafe_code)]
 #[path = "windows_fixture/child_port.rs"]
 mod child_port;
 #[path = "windows_fixture/deadline.rs"]

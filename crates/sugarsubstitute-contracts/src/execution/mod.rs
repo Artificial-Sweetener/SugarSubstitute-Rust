@@ -8,6 +8,7 @@
 //! terminal observation. Cancellation requests do not establish that work stopped.
 
 mod context;
+mod counter_deadline;
 mod errors;
 mod identity;
 mod lifetime;
@@ -17,6 +18,7 @@ mod ports;
 mod spec;
 
 pub use context::{CancelControl, Clock, JobContext, WaitFuture};
+pub use counter_deadline::{CounterDeadline, CounterDeadlineError};
 pub use errors::{AdmissionError, ExecutionError};
 pub use identity::{
     ExecutionId, Generation, IdentityError, JobId, Moment, ScopeId, SurfaceId, TimeError,

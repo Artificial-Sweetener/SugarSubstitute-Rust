@@ -24,8 +24,6 @@ use sugarsubstitute_contracts::{
     lifecycle::{ProcessKey, RunKey},
 };
 
-#[path = "windows_lifecycle_pipe/deadline.rs"]
-mod deadline;
 #[allow(unsafe_code)]
 #[path = "windows_lifecycle_pipe/native.rs"]
 mod native;
@@ -163,10 +161,7 @@ impl ExecutionClient {
         if spec.deadline.is_some() {
             return Err(LifecyclePipeAdmissionError::ConflictingDeadline);
         }
-        let before = self.core.clock.now();
-        let counter = native::counter::sample().map_err(LifecyclePipeAdmissionError::Clock)?;
-        let until = deadline::child(before, counter, original)
-            .map_err(LifecyclePipeAdmissionError::Clock)?;
+        let until = self.decode_lifecycle_deadline(original)?;
         let session = lifecycle_pipe::reserve(
             &self.core,
             scope,

@@ -9,20 +9,40 @@ use std::{
     panic::{AssertUnwindSafe, catch_unwind},
     sync::{Arc, Mutex, Weak},
 };
-use sugarsubstitute_contracts::execution::{Clock, ExecutionError, Moment, WaitFuture};
+use sugarsubstitute_contracts::execution::{Clock, ExecutionError, Moment, TimeError, WaitFuture};
 
 #[derive(Debug)]
-struct Failure(String);
-impl fmt::Display for Failure {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.0)
+struct Failure {
+    message: String,
+    time: Option<TimeError>,
+}
+impl Failure {
+    fn from_payload(payload: &(dyn std::any::Any + Send)) -> Self {
+        let time = payload.downcast_ref::<TimeError>().copied();
+        Self {
+            message: time.map_or_else(
+                || task::borrowed_panic_cause(payload).as_str().to_owned(),
+                |cause| cause.to_string(),
+            ),
+            time,
+        }
     }
 }
-impl std::error::Error for Failure {}
+impl fmt::Display for Failure {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.message)
+    }
+}
+impl std::error::Error for Failure {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.time.as_ref().map(|cause| cause as &dyn std::error::Error)
+    }
+}
 
 struct State {
     last: Moment,
     failure: Option<Arc<Failure>>,
+    notified: bool,
 }
 
 pub(crate) struct RetirementClock {
@@ -34,7 +54,11 @@ impl RetirementClock {
     /// Establish a real epoch observation before any runtime or worker exists.
     pub(crate) fn new(supplied: Arc<dyn Clock>, owner: Weak<crate::admission::Core>) -> Self {
         let last = supplied.now();
-        Self { supplied, owner, state: Arc::new(Mutex::new(State { last, failure: None })) }
+        Self {
+            supplied,
+            owner,
+            state: Arc::new(Mutex::new(State { last, failure: None, notified: false })),
+        }
     }
 
     pub(crate) fn failed(&self) -> bool {
@@ -57,14 +81,16 @@ impl RetirementClock {
         owner: &Weak<crate::admission::Core>,
         payload: &(dyn std::any::Any + Send),
     ) {
-        let cause = Arc::new(Failure(task::borrowed_panic_cause(payload).as_str().to_owned()));
         let notice = {
             let mut state = lock(state);
-            if state.failure.is_some() {
+            if state.failure.is_none() {
+                state.failure = Some(Arc::new(Failure::from_payload(payload)));
+            }
+            if state.notified {
                 None
             } else {
-                state.failure = Some(cause.clone());
-                Some(crate::runtime::error(cause))
+                state.notified = true;
+                state.failure.as_ref().map(|cause| crate::runtime::error(cause.clone()))
             }
         };
         if let Some(owner) = owner.upgrade() {
@@ -77,9 +103,15 @@ impl RetirementClock {
     }
 
     fn discard_payload(&self, payload: Box<dyn std::any::Any + Send>) {
+        if payload.is::<TimeError>() {
+            // This fixed typed clock failure is already retained by latch_state.
+            return;
+        }
         let observed = task::panic_cause(payload);
-        let changed =
-            lock(&self.state).failure.as_ref().is_some_and(|cause| cause.0 != observed.as_str());
+        let changed = lock(&self.state)
+            .failure
+            .as_ref()
+            .is_some_and(|cause| cause.message != observed.as_str());
         if changed && let Some(owner) = self.owner.upgrade() {
             owner.mailbox.record_failure(crate::runtime::error(std::io::Error::other(
                 observed.as_str().to_owned(),
@@ -138,17 +170,27 @@ impl RetirementClock {
     /// Sample without calling the owner while a native issue fence is held.
     /// The caller must release its locks before latching a returned panic payload.
     pub(crate) fn observe_unlatched(&self) -> Result<Moment, Box<dyn std::any::Any + Send>> {
-        {
+        let completed_before_sample = {
             let state = lock(&self.state);
             if state.failure.is_some() {
                 return Ok(state.last);
             }
-        }
+            state.last
+        };
         let observed = catch_unwind(AssertUnwindSafe(|| self.supplied.now()))?;
         let mut state = lock(&self.state);
         if state.failure.is_none() {
+            if observed < completed_before_sample {
+                // Fence concurrent admission immediately. Owner shutdown and wake
+                // delivery remain deferred until the caller releases its issue fence.
+                state.failure = Some(Arc::new(Failure::from_payload(&TimeError::Regression)));
+                return Err(Box::new(TimeError::Regression));
+            }
+            // Concurrent provider calls may finish out of sampling order. Only
+            // completions preceding this call bound its result; publishing the
+            // completed maximum keeps every consumer's remaining budget conservative.
             state.last = state.last.max(observed);
-            Ok(observed)
+            Ok(state.last)
         } else {
             Ok(state.last)
         }
@@ -159,6 +201,10 @@ impl RetirementClock {
         std::panic::resume_unwind(payload)
     }
 }
+
+#[cfg(test)]
+#[path = "clock_retirement_tests.rs"]
+mod tests;
 impl Clock for RetirementClock {
     fn now(&self) -> Moment {
         match self.observe_unlatched() {

@@ -106,6 +106,21 @@ impl ToggleClock {
 #[test]
 fn worker_first_clock_panic_preserves_panicked_completion_then_retires_without_provider()
 -> TestResult {
+    worker_clock_failure_observation(FailureObservationOrder::CompletionFirst)
+}
+
+#[test]
+fn worker_clock_failure_is_observed_before_completion_without_losing_retirement() -> TestResult {
+    worker_clock_failure_observation(FailureObservationOrder::FailureFirst)
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum FailureObservationOrder {
+    CompletionFirst,
+    FailureFirst,
+}
+
+fn worker_clock_failure_observation(order: FailureObservationOrder) -> TestResult {
     use std::error::Error;
     let clock = ToggleClock::new();
     clock.clock.advance(17);
@@ -114,24 +129,42 @@ fn worker_first_clock_panic_preserves_panicked_completion_then_retires_without_p
     let client = owner.client();
     let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
     let worker_clock = clock.clone();
+    let failed = Arc::new(Gate::default());
+    let release = Arc::new(Gate::default());
+    let worker_failed = failed.clone();
+    let worker_release = release.clone();
     let mut request = spec(1, JobClass::InfrastructureOrdinary, 4096)?;
     request.deadline = Some(Moment::from_nanos(100));
     let mut job = client.submit_blocking(&scope, request, move |context| {
         *worker_clock.worker.lock().unwrap_or_else(std::sync::PoisonError::into_inner) =
             Some(std::thread::current().id());
         worker_clock.fail.store(true, Ordering::Release);
-        let _real_observation = context.now();
-        Ok::<(), ()>(())
+        let observation = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| context.now()));
+        worker_failed.open();
+        if order == FailureObservationOrder::FailureFirst {
+            worker_release.wait().map_err(|cause| cause.to_string())?;
+        }
+        match observation {
+            Err(payload) => std::panic::resume_unwind(payload),
+            Ok(_) => Err::<(), _>("The actual worker clock did not fail".to_owned()),
+        }
     })?;
+    if order == FailureObservationOrder::FailureFirst {
+        failed.wait()?;
+        assert!(job.try_take_completion().is_none());
+        let cause = client
+            .drain_completions(NonZeroUsize::MIN)
+            .err()
+            .ok_or("Original failure was not retained before completion")?;
+        assert!(
+            cause
+                .source()
+                .is_some_and(|source| source.to_string().contains("timestamp boundary failure"))
+        );
+        release.open();
+    }
     let completion = loop {
         let observed = wake.count();
-        if let Some(completion) = job.try_take_completion() {
-            break completion;
-        }
-        // The original owner failure and guarded job panic are separately retained.
-        if let Err(cause) = client.drain_completions(NonZeroUsize::MIN) {
-            assert!(cause.source().is_some());
-        }
         if let Some(completion) = job.try_take_completion() {
             break completion;
         }
@@ -150,6 +183,17 @@ fn worker_first_clock_panic_preserves_panicked_completion_then_retires_without_p
         Err(AdmissionError::ShuttingDown)
     ));
     owner.request_shutdown(Moment::from_nanos(17));
+    if order == FailureObservationOrder::CompletionFirst {
+        let cause = owner
+            .poll_shutdown()
+            .err()
+            .ok_or("Taking the completion erased its independent failure notice")?;
+        assert!(
+            cause
+                .source()
+                .is_some_and(|source| source.to_string().contains("timestamp boundary failure"))
+        );
+    }
     assert!(!owner.poll_shutdown()?.deadline_expired);
     drop(completion);
     drop(job);

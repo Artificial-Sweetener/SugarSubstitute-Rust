@@ -6,6 +6,8 @@ mod admission;
 mod blocking;
 mod clock;
 mod clock_retirement;
+#[cfg(any(windows, test))]
+mod counter_deadline;
 mod cpu;
 #[cfg(any(windows, test))]
 mod fixture_forwarding;
@@ -27,6 +29,12 @@ mod output;
 mod runtime;
 mod scope;
 mod task;
+
+#[cfg(windows)]
+mod windows_clock;
+#[cfg(windows)]
+#[allow(unsafe_code)]
+mod windows_counter;
 
 #[cfg(windows)]
 #[allow(unsafe_code)]
