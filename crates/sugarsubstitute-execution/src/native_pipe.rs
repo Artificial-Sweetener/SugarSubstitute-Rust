@@ -4,6 +4,8 @@
 #[cfg(windows)]
 mod errors;
 #[cfg(windows)]
+pub(crate) mod event;
+#[cfg(windows)]
 pub(crate) mod handles;
 #[cfg(windows)]
 pub(crate) mod overlapped;

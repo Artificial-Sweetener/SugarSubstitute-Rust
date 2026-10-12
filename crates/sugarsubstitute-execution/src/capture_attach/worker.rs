@@ -110,7 +110,7 @@ impl Active {
             // Source association commits the original admission even if cancellation
             // won before acquisition. Memory and the actual view are retained before
             // any external source callback or native boundary can fail or unwind.
-            match self.work.source.observe(self.work.shared.custody.expected, &self.context) {
+            match self.work.source.observe(self.work.shared.expected, &self.context) {
                 Ok(endpoint) => lock(&self.work.shared.state).endpoint = Some(endpoint),
                 Err(cause) if self.outcome.is_none() => {
                     self.outcome = Some(JobOutcome::Failure(CaptureAttachFailure::Source(cause)));
@@ -139,8 +139,7 @@ impl Active {
             match self.work.lease.progress() {
                 Ok(Some(handles)) if self.work.lease.prepared() => {
                     let original = lock(&self.work.shared.state).endpoint;
-                    match self.work.source.observe(self.work.shared.custody.expected, &self.context)
-                    {
+                    match self.work.source.observe(self.work.shared.expected, &self.context) {
                         Ok(current) if Some(current) == original => {}
                         Ok(_) => self.failed(
                             core,
@@ -229,7 +228,7 @@ impl Active {
             }
         }
         let report = CaptureAttachRetirementReport {
-            run: self.work.shared.custody.expected.run(),
+            run: self.work.shared.custody.full_run,
             execution: self.work.shared.custody.execution,
             job: self.work.shared.custody.job,
         };

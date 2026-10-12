@@ -151,7 +151,7 @@ fn actual_provider_original_attach_equality_expires_without_issue_or_budget_rene
     let (completion, causes) = completion(&rig, &mut job)?;
     assert!(matches!(completion.outcome, JobOutcome::TimedOut));
     assert!(causes.is_empty());
-    assert_eq!(shared.custody.expected.attach_budget().until(), Moment::from_nanos(60_000_000_000));
+    assert_eq!(shared.custody.attach_until, Moment::from_nanos(60_000_000_000));
     Ok(())
 }
 #[test]

@@ -1,29 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Pin one operation's event, OVERLAPPED and callback through actual completion/quiescence.
+use super::event::Event;
 use super::{NativePipeError, Progress, handles::*};
 use crate::native::Signal;
-use crate::native::wait::Wait;
 use std::error::Error;
 use std::sync::Arc;
-use windows::Win32::{
-    Foundation::*,
-    System::{IO::*, Threading::*},
-};
+use windows::Win32::{Foundation::*, System::IO::*};
 pub(crate) enum AcceptedIssue {
     Pending,
     Synchronous,
     Connected,
 }
 pub(crate) struct Operation {
-    accounting: Option<(
-        Arc<sugarsubstitute_contracts::execution::NativeHandleClaim>,
-        crate::native_resources::EffectContext,
-    )>,
-    event: Handle,
+    event: Event,
     overlapped: Box<OVERLAPPED>,
-    wait: Option<Wait>,
-    signal: Arc<Signal>,
     pending: bool,
     cancel_attempted: bool,
     completed: Option<u32>,
@@ -35,11 +26,8 @@ unsafe impl Send for Operation {}
 impl Operation {
     pub(crate) fn new(signal: Arc<Signal>) -> Self {
         Self {
-            accounting: None,
-            event: Handle::new(),
+            event: Event::new(signal),
             overlapped: Box::new(OVERLAPPED::default()),
-            wait: None,
-            signal,
             pending: false,
             cancel_attempted: false,
             completed: None,
@@ -50,11 +38,10 @@ impl Operation {
         handles: Arc<sugarsubstitute_contracts::execution::NativeHandleClaim>,
         original: crate::native_resources::EffectContext,
     ) {
-        self.event.attach(handles.clone(), original.clone());
-        self.accounting = Some((handles, original));
+        self.event.attach(handles, original);
     }
     fn begin_reuse(&mut self) -> Result<(), NativePipeError> {
-        if self.wait.is_some() || self.pending {
+        if self.event.registered() || self.pending {
             return Err(invariant("pipe_live_overlapped_reuse"));
         }
         // Old operation evidence must not survive a later preparation failure.
@@ -63,35 +50,10 @@ impl Operation {
     }
     pub(crate) fn prepare(&mut self) -> Result<(), NativePipeError> {
         self.begin_reuse()?;
-        if self.event.value() == 0 {
-            self.event.reserve("pipe_create_event")?;
-            // SAFETY: initial-false manual-reset event is exclusively owned here.
-            let event = unsafe { CreateEventW(None, true, false, None) }
-                .map_err(|e| error("pipe_create_event", e))?;
-            adopt(&mut self.event, event, "pipe_create_event")?;
-        }
-        self.event.check("pipe_reset_event")?;
-        // SAFETY: prior callback was quiesced before reusing the event/OVERLAPPED.
-        unsafe { ResetEvent(self.event.raw()) }.map_err(|e| error("pipe_reset_event", e))?;
-        self.event.check("pipe_reset_event")?;
+        self.event.prepare()?;
         *self.overlapped = OVERLAPPED { hEvent: self.event.raw(), ..Default::default() };
         self.cancel_attempted = false;
-        self.signal.reset();
-        self.wait = Some(Wait::for_operation(
-            self.signal.clone(),
-            "pipe_register_event",
-            "pipe_unregister_event",
-        ));
-        if let Some((handles, original)) = &self.accounting
-            && let Some(wait) = &mut self.wait
-        {
-            wait.attach(handles.clone(), original.clone());
-        }
-        self.wait
-            .as_mut()
-            .ok_or_else(|| invariant("pipe_wait_owner"))?
-            .register(self.event.raw())
-            .map_err(NativePipeError::native)
+        Ok(())
     }
     pub(crate) fn pointer(&mut self) -> *mut OVERLAPPED {
         self.overlapped.as_mut()
@@ -191,14 +153,10 @@ impl Operation {
         if self.pending {
             return Err(invariant("pipe_quiesce_pending_io"));
         }
-        if let Some(wait) = &mut self.wait {
-            wait.retire().map_err(NativePipeError::native)?;
-        }
-        self.wait = None;
-        Ok(())
+        self.event.quiesce()
     }
     pub(crate) fn take_completed(&mut self) -> Option<u32> {
-        if self.pending || self.wait.is_some() { None } else { self.completed.take() }
+        if self.pending || self.event.registered() { None } else { self.completed.take() }
     }
     pub(crate) fn retire(&mut self, pipe: HANDLE) -> Result<bool, NativePipeError> {
         if self.pending && !self.cancel_attempted {
@@ -223,7 +181,7 @@ impl Operation {
             }
         }
         self.quiesce()?;
-        self.event.close("pipe_close_event")?;
+        self.event.close()?;
         Ok(true)
     }
 }

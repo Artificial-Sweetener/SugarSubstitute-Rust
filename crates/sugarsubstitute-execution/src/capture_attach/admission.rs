@@ -132,8 +132,9 @@ pub(crate) fn reserve(
         RequestKind::CaptureAttach(expected.run()),
         |context, cancel, admitted| {
             let job = Job::new(scope.id(), spec, admitted, cancel, Arc::downgrade(core));
-            let custody = Custody::new(core, spec.id, expected);
+            let custody = Custody::new(core, spec.id, expected.run(), handshake);
             let shared = Arc::new(Shared {
+                expected,
                 custody,
                 state: Mutex::new(PinState {
                     pinned: false,

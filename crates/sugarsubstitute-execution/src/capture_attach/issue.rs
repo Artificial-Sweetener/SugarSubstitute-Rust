@@ -53,7 +53,7 @@ pub(crate) fn execute<T>(
     {
         return Ok(Dispatch::Stopped);
     }
-    if observed >= shared.custody.expected.attach_budget().until()
+    if observed >= shared.custody.attach_until
         || policy_deadline.is_some_and(|until| observed >= until)
         || deadlines.is_some_and(|deadlines| deadlines.expired(observed))
     {

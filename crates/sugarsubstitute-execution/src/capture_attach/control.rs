@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain one actual cleanup transaction through sampling, delivery and native retirement.
-use super::types::CaptureAttachExpectation;
 use crate::{admission::Core, native::NativeObservationError, scope::lock};
 use std::sync::{Arc, Mutex, Weak};
 use sugarsubstitute_contracts::{
-    execution::{ExecutionError, ExecutionId, JobId, MemoryClaim, Operation},
+    execution::{ExecutionError, ExecutionId, JobId, MemoryClaim, Moment, Operation},
     lifecycle::{RunKey, ShutdownBudget},
 };
 
@@ -94,21 +93,34 @@ pub(crate) struct CleanupState {
     sampling: bool,
     pub(crate) memory: Option<MemoryClaim>,
 }
+impl CleanupState {
+    /// Observe retained physical/source custody and in-flight sampling under its existing guard.
+    /// This passive predicate neither acquires a lock nor invokes an external provider.
+    pub(crate) fn held(&self) -> bool {
+        !self.native_retired || !self.source_retired || self.sampling
+    }
+}
+
 pub(crate) struct Custody {
-    pub(crate) expected: CaptureAttachExpectation,
+    pub(crate) full_run: RunKey,
+    pub(crate) attach_until: Moment,
     pub(crate) execution: ExecutionId,
     pub(crate) job: JobId,
     pub(crate) core: Weak<Core>,
     pub(crate) state: Mutex<CleanupState>,
 }
 impl Custody {
+    /// Retain exact local deadline facts without reconstructing an attachment duration.
+    /// Parent uses its original budget; child uses the authoritative counter conversion.
     pub(crate) fn new(
         core: &Arc<Core>,
         job: JobId,
-        expected: CaptureAttachExpectation,
+        full_run: RunKey,
+        attach_until: Moment,
     ) -> Arc<Self> {
         Arc::new(Self {
-            expected,
+            full_run,
+            attach_until,
             execution: core.id,
             job,
             core: Arc::downgrade(core),
@@ -125,8 +137,7 @@ impl Custody {
         })
     }
     pub(crate) fn held(&self) -> bool {
-        let state = lock(&self.state);
-        !state.native_retired || !state.source_retired || state.sampling
+        lock(&self.state).held()
     }
     pub(crate) fn active(&self) -> bool {
         let state = lock(&self.state);

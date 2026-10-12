@@ -61,6 +61,7 @@ pub(crate) struct PinState {
     pub(crate) retirement_published: bool,
 }
 pub(crate) struct Shared {
+    pub(crate) expected: types::CaptureAttachExpectation,
     pub(crate) custody: Arc<Custody>,
     pub(crate) state: Mutex<PinState>,
 }

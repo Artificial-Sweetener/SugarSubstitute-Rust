@@ -114,7 +114,7 @@ impl Core {
                     record
                         .native_custody
                         .as_ref()
-                        .is_some_and(|custody| custody.expected.run() == *run && custody.held())
+                        .is_some_and(|custody| custody.full_run == *run && custody.held())
                 })
             {
                 return Err(AdmissionError::ConflictingNativeRun(*run));
