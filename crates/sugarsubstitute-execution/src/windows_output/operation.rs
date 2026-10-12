@@ -65,7 +65,7 @@ impl Operation {
         let result = unsafe { ReadFile(pipe, Some(bytes), None, Some(self.overlapped.as_mut())) };
         match result {
             Ok(()) => self.poll(pipe),
-            Err(e) if code(&e, ERROR_IO_PENDING) => Ok(Progress::Pending),
+            Err(e) if code(&e, ERROR_IO_PENDING) => Ok(Progress::IssuedPending),
             Err(e) if code(&e, ERROR_BROKEN_PIPE) => {
                 self.pending = false;
                 self.completed = Some(Progress::Eof);

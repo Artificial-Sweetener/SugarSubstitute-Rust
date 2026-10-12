@@ -19,6 +19,8 @@ mod held_child;
 mod held_fixture;
 mod invocation;
 #[cfg(target_os = "windows")]
+mod output_fixture;
+#[cfg(target_os = "windows")]
 mod pipe_fixture;
 mod preparation;
 mod preparation_task;
@@ -39,6 +41,17 @@ fn execute() -> Result<(), Box<dyn Error>> {
         Ok(invocation::Invocation::Demo(options)) => options,
         #[cfg(target_os = "windows")]
         Ok(invocation::Invocation::NativeExitFixture(code)) => std::process::exit(code),
+        #[cfg(target_os = "windows")]
+        Ok(invocation::Invocation::NativeOutputChild(options)) => {
+            std::process::exit(output_fixture::run_child(options)?);
+        }
+        #[cfg(target_os = "windows")]
+        Ok(invocation::Invocation::NativeOutputFixture(path)) => {
+            initialize_diagnostics()?;
+            let receipt = output_fixture::run()?;
+            std::fs::write(path, serde_json::to_vec_pretty(&receipt)?)?;
+            return Ok(());
+        }
         #[cfg(target_os = "windows")]
         Ok(invocation::Invocation::NativeForwardingRoot(options)) => {
             initialize_diagnostics()?;

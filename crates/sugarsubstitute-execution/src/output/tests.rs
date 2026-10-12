@@ -15,6 +15,8 @@ use kernel::*;
 mod launch;
 #[path = "ordering_tests.rs"]
 mod ordering;
+#[path = "pending_tests.rs"]
+mod pending;
 #[path = "retirement_tests.rs"]
 mod retirement;
 #[test]

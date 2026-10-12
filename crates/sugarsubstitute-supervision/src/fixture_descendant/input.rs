@@ -12,6 +12,7 @@ pub struct FixtureDescendantInput {
     pub(super) command: WindowsLaunchBuffers,
     pub(super) module: PathBuf,
     pub(super) events: Option<FixtureForwardingEvents>,
+    pub(super) output_mode: bool,
     pub(super) correlation: NativeCorrelation,
     pub(super) deadline: FixtureDeadline,
     pub(super) required: u64,
@@ -63,12 +64,63 @@ impl FixtureDescendantInput {
                 .ok_or_else(|| RegistryError::invalid("fixture_descendant_capacity"))?,
         )
         .map_err(|cause| RegistryError::new("fixture_descendant_capacity", cause))?;
-        Ok(Self { command, module, events: Some(events), correlation, deadline, required })
+        Ok(Self {
+            command,
+            module,
+            events: Some(events),
+            output_mode: false,
+            correlation,
+            deadline,
+            required,
+        })
+    }
+    /// Select only the same executable's output leaf in the current containment chain.
+    /// The admitted native lease verifies and duplicates exactly inherited standard
+    /// input/output/error. No arbitrary handles, environment or child target exist.
+    /// The leaf retains writer handles until the outer registry's actual owned stop;
+    /// its OS death is required evidence, never a graceful child shutdown claim.
+    pub fn current_output(
+        deadline: FixtureDeadline,
+        correlation: NativeCorrelation,
+    ) -> Result<Self, RegistryError> {
+        let module = std::env::current_exe()
+            .map_err(|cause| RegistryError::new("fixture_output_module", cause))?;
+        let cwd = module.parent().ok_or_else(|| RegistryError::invalid("fixture_output_cwd"))?;
+        let argv = output_arguments();
+        let command = WindowsLaunchCommand::from_os(&module, cwd, &argv)
+            .map_err(|cause| RegistryError::new("fixture_output_command", cause))?
+            .into_native_parts();
+        let units = command
+            .application_name
+            .capacity()
+            .checked_add(command.command_line.capacity())
+            .and_then(|n| n.checked_add(command.working_directory.capacity()))
+            .and_then(|n| n.checked_add(module.capacity()))
+            .ok_or_else(|| RegistryError::invalid("fixture_output_capacity"))?;
+        let required = u64::try_from(
+            units
+                .checked_mul(2)
+                .and_then(|n| n.checked_add(8192))
+                .ok_or_else(|| RegistryError::invalid("fixture_output_capacity"))?,
+        )
+        .map_err(|cause| RegistryError::new("fixture_output_capacity", cause))?;
+        Ok(Self {
+            command,
+            module,
+            events: None,
+            output_mode: true,
+            correlation,
+            deadline,
+            required,
+        })
     }
     /// Required admitted byte reservation for actual fixed state and retained native input capacities.
     pub const fn required_reservation_bytes(&self) -> u64 {
         self.required
     }
+}
+pub(super) fn output_arguments() -> [OsString; 3] {
+    ["--internal-native-output-child", "--case", "leaf"].map(OsString::from)
 }
 pub(super) fn arguments(
     raw: [usize; 4],

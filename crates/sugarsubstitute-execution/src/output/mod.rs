@@ -31,6 +31,7 @@ pub use types::*;
 #[derive(Clone, Copy)]
 pub(crate) enum Progress {
     Pending,
+    IssuedPending,
     Bytes(u32),
     Empty,
     Eof,
@@ -87,6 +88,8 @@ pub(crate) struct State {
     prepared: bool,
     stopped: bool,
     retired: bool,
+    pending_reads: [bool; 2],
+    pending_read_issues: [u64; 2],
     stdio_taken: bool,
     pin: bool,
     handles: [usize; 3],
@@ -108,6 +111,8 @@ impl State {
             prepared: false,
             stopped: false,
             retired: false,
+            pending_reads: [false; 2],
+            pending_read_issues: [0; 2],
             stdio_taken: false,
             pin: false,
             handles: [0; 3],
@@ -128,6 +133,8 @@ impl State {
         WindowsOutputReport {
             resource,
             prepared: self.prepared,
+            pending_reads: self.pending_reads,
+            pending_read_issues: self.pending_read_issues,
             eof: self.eof_sequence.map(|s| s.is_some()),
             counters: self.counters,
             queued_bytes: self.queued_bytes as u64,

@@ -173,3 +173,15 @@ current_version = 1
 accepted_versions = [1]
 compatibility = "reject"
 migrations = []
+
+[[formats]]
+id = "native-contained-output-report"
+owner = "sugarsubstitute"
+sources = ["crates/sugarsubstitute/src/output_fixture/receipt.rs"]
+source_sha256 = "sha256:48ca7a498860f2a21d033279b65d752dd8d0fde0938350891b4c19014010ec6d"
+classification = "authored_document"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []

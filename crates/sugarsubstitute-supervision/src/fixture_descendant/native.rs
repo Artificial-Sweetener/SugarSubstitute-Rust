@@ -21,6 +21,8 @@ use windows::{
     },
     core::{BOOL, PCWSTR, PWSTR},
 };
+#[path = "stdio.rs"]
+mod stdio;
 pub(super) struct NativeLease {
     process: Option<usize>,
     thread: Option<usize>,
@@ -28,6 +30,7 @@ pub(super) struct NativeLease {
     initialized: bool,
     handles: [usize; 4],
     events: Option<FixtureForwardingEvents>,
+    stdio: [Option<usize>; 3],
 }
 impl NativeLease {
     pub(super) fn new() -> Self {
@@ -38,6 +41,7 @@ impl NativeLease {
             initialized: false,
             handles: [0; 4],
             events: None,
+            stdio: [None; 3],
         }
     }
 }
@@ -72,18 +76,27 @@ impl Lease for NativeLease {
         .map_err(|cause| RegistryError::new("fixture_root_job_limits", cause))?;
         native_checks::parent(member.as_bool(), limits.BasicLimitInformation.LimitFlags.0)?;
         check_deadline(input.deadline)?;
-        self.events = input.events.take();
-        let view = self
-            .events
-            .as_ref()
-            .ok_or_else(|| RegistryError::invalid("fixture_descendant_events"))?
-            .borrow_inheritance();
-        self.handles = [
-            view.ready.as_raw_handle() as usize,
-            view.release.as_raw_handle() as usize,
-            view.challenge.as_raw_handle() as usize,
-            view.response.as_raw_handle() as usize,
-        ];
+        let handle_count = if input.output_mode {
+            if input.events.is_some() {
+                return Err(RegistryError::invalid("fixture_output_event_conflict"));
+            }
+            self.prepare_stdio()?;
+            3
+        } else {
+            self.events = input.events.take();
+            let view = self
+                .events
+                .as_ref()
+                .ok_or_else(|| RegistryError::invalid("fixture_descendant_events"))?
+                .borrow_inheritance();
+            self.handles = [
+                view.ready.as_raw_handle() as usize,
+                view.release.as_raw_handle() as usize,
+                view.challenge.as_raw_handle() as usize,
+                view.response.as_raw_handle() as usize,
+            ];
+            4
+        };
         let mut bytes = 0;
         // SAFETY: documented size query supplies exact required attribute-list bytes.
         if let Err(cause) = unsafe { InitializeProcThreadAttributeList(None, 1, None, &mut bytes) }
@@ -106,7 +119,7 @@ impl Lease for NativeLease {
                 0,
                 PROC_THREAD_ATTRIBUTE_HANDLE_LIST as usize,
                 Some(self.handles.as_ptr().cast()),
-                size_of_val(&self.handles),
+                handle_count * size_of::<usize>(),
                 None,
                 None,
             )
@@ -115,14 +128,20 @@ impl Lease for NativeLease {
         let mut startup = STARTUPINFOEXW::default();
         startup.StartupInfo.cb = size_of::<STARTUPINFOEXW>() as u32;
         startup.lpAttributeList = list;
+        if input.output_mode {
+            startup.StartupInfo.dwFlags |= STARTF_USESTDHANDLES;
+            startup.StartupInfo.hStdInput = HANDLE(self.handles[0] as *mut _);
+            startup.StartupInfo.hStdOutput = HANDLE(self.handles[1] as *mut _);
+            startup.StartupInfo.hStdError = HANDLE(self.handles[2] as *mut _);
+        }
         let mut output = PROCESS_INFORMATION::default();
         let environment = [0_u16, 0];
         check_deadline(input.deadline)?;
         if context.cancellation_requested() {
             return Err(RegistryError::invalid("fixture_descendant_before_create"));
         }
-        // SAFETY: exact validated self-EXE/cwd/argv/empty environment remain live. Only four
-        // events inherit. No JOB_LIST or breakaway exists: all parent Jobs are inherited.
+        // SAFETY: exact validated self-EXE/cwd/argv/empty environment remain live. Only the
+        // selected four events or three stdio duplicates inherit. Parent Jobs are inherited.
         let result = unsafe {
             CreateProcessW(
                 PCWSTR(input.command.application_name.as_ptr()),
@@ -202,7 +221,7 @@ impl Lease for NativeLease {
         drop(self.events.take());
         self.handles = [0; 4];
         let mut failure: Option<RegistryError> = None;
-        for slot in [&mut self.thread, &mut self.process] {
+        for slot in self.stdio.iter_mut().chain([&mut self.thread, &mut self.process]) {
             if let Some(raw) = *slot {
                 // SAFETY: unique native output; failed closure leaves its exact slot retained.
                 match unsafe { CloseHandle(HANDLE(raw as *mut _)) } {

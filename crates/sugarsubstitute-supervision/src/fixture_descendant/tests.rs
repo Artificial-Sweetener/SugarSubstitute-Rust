@@ -157,6 +157,7 @@ pub(super) fn specification(id: u64, bytes: u64) -> TestResult<JobSpec> {
 }
 pub(super) fn input() -> TestResult<FixtureDescendantInput> {
     Ok(FixtureDescendantInput {
+        output_mode: false,
         command: crate::WindowsLaunchCommand::from_utf16(
             &"E:\\fixture.exe".encode_utf16().collect::<Vec<_>>(),
             &"E:\\".encode_utf16().collect::<Vec<_>>(),
@@ -169,6 +170,13 @@ pub(super) fn input() -> TestResult<FixtureDescendantInput> {
         deadline: sugarsubstitute_execution::windows_fixture::FixtureDeadline::new(1000, 1000)?,
         required: 4096,
     })
+}
+#[test]
+fn output_descendant_role_is_closed_and_does_not_reuse_four_event_arguments() {
+    assert_eq!(
+        input::output_arguments(),
+        ["--internal-native-output-child", "--case", "leaf"].map(std::ffi::OsString::from)
+    );
 }
 #[test]
 fn partial_creation_outputs_remain_charged_and_nonterminal_until_checked_close() -> TestResult {

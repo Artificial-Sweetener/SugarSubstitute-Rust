@@ -49,6 +49,13 @@ pub struct WindowsOutputReport {
     pub resource: ResourceKey,
     /// Native pipes and all three child handles were prepared.
     pub prepared: bool,
+    /// Retained evidence of actual ERROR_IO_PENDING reads, not a fresh kernel query.
+    /// Normal observed results clear it; stopping may retain it until the whole
+    /// native owner completes checked retirement, including a held launch pin.
+    pub pending_reads: [bool; 2],
+    /// Checked counts of actual ERROR_IO_PENDING issue results, per stream.
+    /// Admission, polling and ERROR_IO_INCOMPLETE do not increment these.
+    pub pending_read_issues: [u64; 2],
     /// Independently observed stdout/stderr EOF, never inferred from close/cancel.
     pub eof: [bool; 2],
     /// Fixed stdout/stderr raw counters.

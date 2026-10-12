@@ -176,7 +176,10 @@ fn demonstration_options_keep_their_invocation_role() -> Result<(), Box<dyn Erro
             return Err("Presentation options selected a held child fixture".into());
         }
         #[cfg(target_os = "windows")]
-        Invocation::NativePipeFixture(_) | Invocation::NativePipeChild(_) => {
+        Invocation::NativePipeFixture(_)
+        | Invocation::NativePipeChild(_)
+        | Invocation::NativeOutputFixture(_)
+        | Invocation::NativeOutputChild(_) => {
             return Err("Presentation options selected a lifecycle pipe fixture".into());
         }
         #[cfg(target_os = "windows")]

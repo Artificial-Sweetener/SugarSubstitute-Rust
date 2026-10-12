@@ -18,6 +18,10 @@ use sugarsubstitute_contracts::execution::{
     ExecutionError, JobContext, JobOutcome, Moment, PanicCause,
 };
 
+#[cfg(test)]
+#[path = "native_dispatch_tests.rs"]
+mod dispatch_tests;
+
 struct ProcessActive {
     work: ProcessWork,
     context: JobContext,
@@ -209,11 +213,12 @@ impl Drop for NativeWorker {
     }
 }
 
+/// Close admission and retain real retirement metadata after a fatal boundary.
 fn owner_panicked(
     core: &Core,
     fatal: &mut Option<PanicCause>,
     payload: Box<dyn std::any::Any + Send>,
-) {
+) -> Moment {
     let cause = task::panic_cause(payload);
     core.mailbox
         .record_failure(crate::runtime::error(std::io::Error::other(cause.as_str().to_owned())));
@@ -222,6 +227,7 @@ fn owner_panicked(
         core.shutdown();
     }
     core.mailbox.deliver_wake();
+    core.clock.retirement_now()
 }
 
 fn worker(core: Arc<Core>) {
@@ -242,17 +248,29 @@ fn worker(core: Arc<Core>) {
         {
             match catch_unwind(AssertUnwindSafe(|| core.clock.now())) {
                 Ok(observed) => now = observed,
-                Err(payload) => owner_panicked(&core, &mut fatal, payload),
+                Err(payload) => now = owner_panicked(&core, &mut fatal, payload),
             }
         }
         while let Some((queued, wake)) = core.take_native_at(now) {
+            // A job can be admitted after the iteration sample. Observe dispatch
+            // after dequeue, retaining its bound resources outside the unwind.
+            if fatal.is_none()
+                && !core.native_identity_unrestored.load(std::sync::atomic::Ordering::Acquire)
+            {
+                match catch_unwind(AssertUnwindSafe(|| core.clock.now())) {
+                    Ok(observed) => now = observed,
+                    Err(payload) => now = owner_panicked(&core, &mut fatal, payload),
+                }
+            } else if fatal.is_some() {
+                now = core.clock.retirement_now();
+            }
             if let Some(item) = Active::new(queued, &core, now) {
                 active.push(item);
             }
             if let Err(payload) =
                 catch_unwind(AssertUnwindSafe(|| core.deliver_capacity_wake(wake)))
             {
-                owner_panicked(&core, &mut fatal, payload);
+                now = owner_panicked(&core, &mut fatal, payload);
             }
         }
         let mut index = 0;
@@ -270,7 +288,7 @@ fn worker(core: Arc<Core>) {
                             .load(std::sync::atomic::Ordering::Acquire),
                 )
             })) {
-                owner_panicked(&core, &mut fatal, payload);
+                now = owner_panicked(&core, &mut fatal, payload);
             }
             if active[index].completed() {
                 // Stable removal preserves initial enrollment order of retained

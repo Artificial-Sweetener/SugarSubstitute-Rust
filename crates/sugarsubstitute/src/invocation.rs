@@ -12,6 +12,12 @@ pub(crate) enum Invocation {
     /// Windows qualification-only process exit; no splash or child process is created.
     #[cfg(target_os = "windows")]
     NativeExitFixture(i32),
+    /// Windows same-executable output qualification receipt destination.
+    #[cfg(target_os = "windows")]
+    NativeOutputFixture(PathBuf),
+    /// Fixed source-write/held-writer role with explicit optional bootstrap.
+    #[cfg(target_os = "windows")]
+    NativeOutputChild(crate::output_fixture::ChildOptions),
     /// Windows headless same-executable registry qualification receipt destination.
     #[cfg(target_os = "windows")]
     NativeRegistryFixture(PathBuf),
@@ -53,6 +59,25 @@ impl Invocation {
         let arguments = arguments.into_iter();
         #[cfg(target_os = "windows")]
         let mut arguments = arguments.peekable();
+        #[cfg(target_os = "windows")]
+        if arguments.peek().is_some_and(|argument| argument == "--internal-native-output-child") {
+            arguments.next();
+            return Ok(Self::NativeOutputChild(crate::output_fixture::ChildOptions::parse(
+                arguments,
+            )?));
+        }
+        #[cfg(target_os = "windows")]
+        if arguments.peek().is_some_and(|argument| argument == "--internal-native-output-fixture") {
+            arguments.next();
+            if arguments.next().as_deref() != Some(std::ffi::OsStr::new("--receipt")) {
+                return Err("Output fixture requires --receipt".into());
+            }
+            let path = PathBuf::from(arguments.next().ok_or("Output fixture receipt missing")?);
+            if !path.is_absolute() || arguments.next().is_some() {
+                return Err("Output fixture requires one absolute receipt path".into());
+            }
+            return Ok(Self::NativeOutputFixture(path));
+        }
         #[cfg(target_os = "windows")]
         if arguments.peek().is_some_and(|argument| argument == "--internal-native-forwarding-root")
         {

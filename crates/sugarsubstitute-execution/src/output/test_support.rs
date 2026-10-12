@@ -122,7 +122,10 @@ impl OutputLease for Lease {
         stream: OutputStream,
         bytes: &mut [u8],
     ) -> Result<Progress, NativeObservationError> {
-        self.0.effect(stream, bytes)
+        self.0.effect(stream, bytes).map(|progress| match progress {
+            Progress::Pending => Progress::IssuedPending,
+            other => other,
+        })
     }
     fn poll(
         &mut self,
@@ -193,10 +196,10 @@ pub(super) fn session_with(
     boundary.prepared.wait()?;
     loop {
         let count = rig.wake.count();
+        rig.client.drain_completions(NonZeroUsize::MIN)?;
         if session.control.snapshot().prepared {
             break;
         }
-        rig.client.drain_completions(NonZeroUsize::MIN)?;
         rig.wake.wait_after(count)?;
     }
     Ok(session)

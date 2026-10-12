@@ -158,6 +158,10 @@ impl Active {
                 break;
             }
             let lease = self.lease.as_mut().ok_or_else(|| invariant("output_missing_lease"))?;
+            let issuing = !self.pending[i];
+            if issuing && lock(&self.work.shared.state).pending_read_issues[i] == u64::MAX {
+                return Err(invariant("output_pending_issue_exhausted"));
+            }
             let progress = if self.pending[i] {
                 if !self.signals[i].completed() {
                     continue;
@@ -170,8 +174,24 @@ impl Active {
                     self.buffers[i].as_mut().ok_or_else(|| invariant("output_read_buffer"))?;
                 lease.read(stream, &mut buffer.bytes)?
             };
+            if !matches!(progress, Progress::Pending | Progress::IssuedPending) {
+                lock(&self.work.shared.state).pending_reads[i] = false;
+            }
             match progress {
                 Progress::Pending => self.pending[i] = true,
+                Progress::IssuedPending => {
+                    self.pending[i] = true;
+                    let mut s = lock(&self.work.shared.state);
+                    s.pending_reads[i] = true;
+                    if !issuing {
+                        return Err(invariant("output_pending_issue_from_poll"));
+                    }
+                    s.pending_read_issues[i] = s.pending_read_issues[i]
+                        .checked_add(1)
+                        .ok_or_else(|| invariant("output_pending_issue_exhausted"))?;
+                    drop(s);
+                    self.publish(core);
+                }
                 Progress::Empty => {
                     self.pending[i] = false;
                     lease.quiesce(stream)?;
@@ -250,7 +270,9 @@ impl Active {
                         }),
                     Progress::Eof => lock(&self.work.shared.state).eof(stream),
                     Progress::Empty => Ok(()),
-                    Progress::Pending => Err(invariant("output_unsettled_retired_read")),
+                    Progress::Pending | Progress::IssuedPending => {
+                        Err(invariant("output_unsettled_retired_read"))
+                    }
                 };
                 if let Err(error) = result {
                     self.fail(error);
@@ -265,6 +287,7 @@ impl Active {
             let mut s = lock(&self.work.shared.state);
             s.handles = [0; 3];
             s.retired = true;
+            s.pending_reads = [false; 2];
         }
         let ended = if clock_available { core.clock.now() } else { now };
         if let Some(mut outcome) = self.outcome.take() {
