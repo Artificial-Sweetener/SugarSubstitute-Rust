@@ -17,6 +17,7 @@
 import { isRecord } from '../../types/common.js';
 import { decodeComfyWorkflowSources } from '../../execution/infrastructure/ComfyWorkflowSourceDecoder.js';
 import { buildCubeOutputExecutionId } from '../../cube/execution/CubeOutputExecutionIdentity.js';
+import { resolveCubeModelTitle } from '../../cube/CubeModelTitlePresentation.js';
 import { NativeSubgraphChangeObserver, } from '../../surface/NativeSubgraphChangeObserver.js';
 import { CanvasGraphSourceTopology } from './CanvasGraphSourceTopology.js';
 /** Keep native node handles inside the adapter, never in catalog or application state. */
@@ -100,7 +101,6 @@ export class ComfyCanvasSourceInventory {
             if (!isRecord(root) || typeof root.serialize !== 'function')
                 throw new TypeError('Canvas workflow graph serialization is unavailable.');
             const sources = decodeComfyWorkflowSources(root.serialize.call(root));
-            this.inventory.replace(context, sources);
             const declared = new Map(sources.map((source) => [source.executionPath, source]));
             const graphs = new Set();
             const visit = (graph, prefix, ancestors, chain) => {
@@ -138,6 +138,15 @@ export class ComfyCanvasSourceInventory {
                 }
             };
             visit(root, [], new Set(), []);
+            const presented = sources.map((source) => {
+                const authored = this.#authored.get(source.executionPath);
+                if (!authored)
+                    return source;
+                const next = sourceCaption(authored);
+                this.#authored.set(source.executionPath, { ...authored, source: next });
+                return next;
+            });
+            this.inventory.replace(context, presented);
             for (const graph of graphs) {
                 this.#topology.set(graph, new CanvasGraphSourceTopology(graph));
                 if (typeof graph.add !== 'function' || typeof graph.remove !== 'function')
@@ -173,19 +182,7 @@ export class ComfyCanvasSourceInventory {
                 !targets.has(null) &&
                 !authored.nodes.some((node) => targets.has(node)))
                 continue;
-            const captions = authored.nodes.map((node, index) => label(node.title) ||
-                (isRecord(node.subgraph) ? label(node.subgraph.name) : '') ||
-                label(node.type) ||
-                authored.source.breadcrumb[index] ||
-                authored.source.label);
-            const markerLabel = authored.output
-                ? label(authored.output.name) || authored.source.label
-                : null;
-            const next = {
-                ...authored.source,
-                label: markerLabel ?? captions.at(-1) ?? authored.source.label,
-                breadcrumb: markerLabel ? captions : captions.slice(0, -1),
-            };
+            const next = sourceCaption(authored);
             if (next.label !== authored.source.label ||
                 next.breadcrumb.join('\0') !== authored.source.breadcrumb.join('\0')) {
                 changed.push(next);
@@ -210,6 +207,34 @@ export class ComfyCanvasSourceInventory {
         for (const listener of this.#listeners)
             listener();
     }
+}
+/** Name Cube outputs after their source, retaining exact output names in multi-output captions and provenance. */
+function sourceCaption(authored) {
+    const captions = authored.nodes.map((node, index) => label(node.title) ||
+        (isRecord(node.subgraph) ? label(node.subgraph.name) : '') ||
+        label(node.type) ||
+        authored.source.breadcrumb[index] ||
+        authored.source.label);
+    const node = authored.nodes.at(-1);
+    if (!authored.output || !node)
+        return {
+            ...authored.source,
+            label: captions.at(-1) ?? authored.source.label,
+            breadcrumb: captions.slice(0, -1),
+        };
+    const properties = isRecord(node.properties) ? node.properties : null;
+    const metadata = isRecord(properties?.sugarcubes_cube) ? properties.sugarcubes_cube : null;
+    const name = resolveCubeModelTitle({
+        targetModel: metadata?.target_model,
+        title: captions.at(-1),
+    }).nameText;
+    const outputName = label(authored.output.name) || 'Output';
+    const outputs = isRecord(node.subgraph) ? node.subgraph.outputs : null;
+    return {
+        ...authored.source,
+        label: Array.isArray(outputs) && outputs.length > 1 ? `${name} · ${outputName}` : name,
+        breadcrumb: [...captions, outputName],
+    };
 }
 /** Bound literal host titles at the adapter boundary. */
 function label(value) {

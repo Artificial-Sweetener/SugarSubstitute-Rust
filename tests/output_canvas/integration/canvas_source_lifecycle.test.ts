@@ -24,6 +24,7 @@ import { CanvasSelectionController } from '../../../frontend/comfyui/ui/output_c
 import { CanvasSessionCoordinator } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasSessionCoordinator.js';
 import { ComfyCanvasSourceInventory } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/ComfyCanvasSourceInventory.js';
 import { CanvasGraphFixture } from '../support/CanvasGraphFixture.js';
+import { buildCubeOutputExecutionId } from '../../../frontend/comfyui/ui/cube/execution/CubeOutputExecutionIdentity.js';
 
 /** Create colliding workflow IDs and distinct nested instance paths. */
 function fixture() {
@@ -76,6 +77,29 @@ function fixture() {
 }
 
 describe('canvas source and workflow lifetimes', () => {
+  test('presents single Cube outputs by source name and keeps exact binding identity through caption changes', async () => {
+    const f = fixture();
+    const node = f.graph._nodes[1]!;
+    node.title = 'Anima/Text to Image';
+    node.properties = { sugarcubes_kind: 'cube', sugarcubes_cube: { target_model: 'Anima' } };
+    f.nested.outputs.push({ name: 'image' });
+    f.graph.afterChange(node);
+    await Promise.resolve();
+    const source = f.inventory
+      .read(f.a)
+      .find((source) => source.executionPath === buildCubeOutputExecutionId('7', 0));
+    expect(source?.label).toBe('Text to Image');
+    const serializations = f.graph.serializations;
+    node.title = '<b>Literal source</b>';
+    f.graph.afterChange(node);
+    await Promise.resolve();
+    expect(f.graph.serializations).toBe(serializations);
+    expect(f.inventory.read(f.a).find((value) => value.id === source?.id)?.label).toBe(
+      '<b>Literal source</b>',
+    );
+    f.adapter.dispose();
+    f.coordinator.dispose();
+  });
   test('discovers replaced nested instances and undo membership reported through generic completion', async () => {
     const f = fixture();
     const replacement = new CanvasGraphFixture();
@@ -113,7 +137,9 @@ describe('canvas source and workflow lifetimes', () => {
     f.nested.afterChange();
     await Promise.resolve();
     expect(f.graph.serializations).toBe(count + 1);
-    expect(f.inventory.read(f.a).some((source) => source.label === output.name)).toBe(true);
+    expect(f.inventory.read(f.a).some((source) => source.breadcrumb.includes(output.name))).toBe(
+      true,
+    );
     f.nested.outputs.reverse();
     f.nested.afterChange();
     await Promise.resolve();
@@ -123,7 +149,7 @@ describe('canvas source and workflow lifetimes', () => {
         .read(f.a)
         .filter((source) => source.breadcrumb.includes('First nested'))
         .map((source) => source.label),
-    ).toEqual(['Two', '<b>Literal rename</b>', 'Inside']);
+    ).toEqual(['First nested · Two', 'First nested · <b>Literal rename</b>', 'Inside']);
     f.adapter.dispose();
     f.coordinator.dispose();
   });

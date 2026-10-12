@@ -19,7 +19,7 @@ export interface CanvasNodeFixture {
   id: number;
   title: string;
   type: string;
-  properties?: { sugarcubes_kind: string };
+  properties?: { sugarcubes_kind: string; sugarcubes_cube?: { target_model: string } };
   subgraph?: CanvasGraphFixture;
 }
 
