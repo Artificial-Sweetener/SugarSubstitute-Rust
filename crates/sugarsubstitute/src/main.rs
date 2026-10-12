@@ -20,6 +20,7 @@ mod held_child;
 #[cfg(target_os = "windows")]
 mod held_fixture;
 mod invocation;
+mod job_sequence;
 #[cfg(target_os = "windows")]
 mod output_fixture;
 #[cfg(target_os = "windows")]

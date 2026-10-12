@@ -2,22 +2,23 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Compose governed raster ownership with current-state application publication.
 
+use crate::job_sequence::JobSequence;
 use crate::{
     preparation_task::{
         FramePreparation, InitializationPreparation, PreparationFailure, PreparationOutput,
     },
     render_transfer::RendererTransfer,
 };
-use std::{error::Error, num::NonZeroUsize, sync::Arc, time::Duration};
+use std::error::Error;
 use sugarsubstitute_application::presentation::{FramePublicationDecision, FramePublicationGate};
 use sugarsubstitute_contracts::{
     execution::{
-        AdmissionError, Clock, CompletionWake, ExecutionPort, Generation, IdentityError, JobClass,
-        JobId, JobSpec, Operation, OwnedJob, ReplacementKey, Scope, ScopeId, ScopeSpec, SurfaceId,
+        AdmissionError, CompletionBatch, ExecutionPort, Generation, IdentityError, JobClass,
+        JobSpec, Operation, OwnedJob, ReplacementKey, Scope, SurfaceId,
     },
     presentation::{FrameIdentity, FrameShape, PreparedFrame},
 };
-use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner, MonotonicClock};
+use sugarsubstitute_execution::ExecutionClient;
 use sugarsubstitute_splash::{
     AnimationFrame, Appearance, ProgressFrame, SPLASH_CACHE_RESERVATION_BYTES, SplashRenderRequest,
     SplashRenderer,
@@ -41,14 +42,14 @@ mod tests;
 ///
 /// Cache resources move only when an admitted worker invokes its factory. Ordinary
 /// completed preparation returns cache ownership; hidden or stale pixels are
-/// rejected separately. Shutdown remains observable while the native loop lives.
+/// rejected separately. Render retirement remains observable while the composition
+/// owner stays alive.
 pub(crate) struct PreparationDriver {
     locale: String,
     gate: FramePublicationGate,
-    clock: Arc<MonotonicClock>,
-    owner: Option<ExecutionOwner>,
-    client: Option<ExecutionClient>,
-    scope: Option<Scope>,
+    client: ExecutionClient,
+    scope: Scope,
+    jobs: JobSequence,
     active: Option<ActivePreparation>,
     renderer: Option<RendererTransfer<SplashRenderer>>,
     pending: Option<SplashRenderRequest>,
@@ -57,12 +58,21 @@ pub(crate) struct PreparationDriver {
     closing: bool,
     bootstrap_published: bool,
     enriched: bool,
-    shutdown_deadline_reported: bool,
 }
 
 impl PreparationDriver {
-    /// Construct view state without decoding, fonts, native handles or worker creation.
-    pub(crate) fn new(locale: &str) -> Result<Self, Box<dyn Error>> {
+    /// Bind an exclusive render scope and the composition owner's shared job sequence.
+    ///
+    /// This constructor performs no decoding or worker creation. The caller owns
+    /// execution, mailbox routing, original shutdown budget and actual worker joins.
+    /// The supplied scope must belong to `client`; real admission rejects foreign
+    /// or closed scopes before a render factory can acquire cache ownership.
+    pub(crate) fn new(
+        locale: &str,
+        client: ExecutionClient,
+        scope: Scope,
+        jobs: JobSequence,
+    ) -> Result<Self, Box<dyn Error>> {
         Ok(Self {
             locale: locale.to_owned(),
             gate: FramePublicationGate::new(
@@ -71,10 +81,9 @@ impl PreparationDriver {
                 Generation::new(1)?,
                 false,
             ),
-            clock: MonotonicClock::new(),
-            owner: None,
-            client: None,
-            scope: None,
+            client,
+            scope,
+            jobs,
             active: None,
             renderer: None,
             pending: None,
@@ -83,21 +92,7 @@ impl PreparationDriver {
             closing: false,
             bootstrap_published: false,
             enriched: false,
-            shutdown_deadline_reported: false,
         })
-    }
-
-    /// Create the sole executor after the native wake proxy exists; retain partial ownership.
-    pub(crate) fn start(&mut self, wake: Arc<dyn CompletionWake>) -> Result<(), Box<dyn Error>> {
-        if self.owner.is_some() || self.closing {
-            return Err("Preparation lifetime cannot be started again".into());
-        }
-        self.owner = Some(ExecutionOwner::new(self.clock.clone(), wake)?);
-        let client = self.owner.as_ref().ok_or("Execution owner absent")?.client();
-        self.client = Some(client.clone());
-        self.scope =
-            Some(client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?);
-        Ok(())
     }
 
     /// Mark semantic input before subsequently admitting or publishing any pixels.
@@ -160,7 +155,7 @@ impl PreparationDriver {
         self.submit_pending()
     }
 
-    /// Allocate strictly increasing job/sample identities, including across state revisions.
+    /// Allocate surface sample and replacement revisions across semantic state changes.
     fn allocate_identity(&mut self) -> Result<Generation, IdentityError> {
         let current = self.next_identity;
         self.next_identity = current.next()?;
@@ -179,15 +174,15 @@ impl PreparationDriver {
             if initializing { SPLASH_CACHE_RESERVATION_BYTES } else { request.reservation_bytes() };
         let revision = self.allocate_identity()?;
         let spec = JobSpec {
-            id: JobId::new(revision.get())?,
+            id: self.jobs.allocate()?,
             operation: Operation::FramePrepare,
             class: JobClass::CpuInteractive,
             deadline: None,
             reservation_bytes,
             replacement: Some(ReplacementKey { surface: self.gate.surface(), revision }),
         };
-        let client = self.client.as_ref().ok_or("Preparation has not started")?;
-        let scope = self.scope.as_ref().ok_or("Preparation scope absent")?;
+        let client = &self.client;
+        let scope = &self.scope;
         let (admission, identity, bootstrap) = if initializing {
             let locale = self.locale.clone();
             (
@@ -223,75 +218,56 @@ impl PreparationDriver {
         Ok(())
     }
 
-    /// Drain bounded metadata and transfer actual results without waiting for execution.
-    pub(crate) fn poll(
+    /// Consume the composition owner's bounded batch without draining its shared mailbox.
+    ///
+    /// Foreign notices remain available to their owners. Empty batches still retry
+    /// pending admission after an execution-owned capacity wake.
+    pub(crate) fn consume(
         &mut self,
-        maximum: NonZeroUsize,
+        batch: &CompletionBatch,
     ) -> Result<Option<PreparedFrame>, Box<dyn Error>> {
         self.synchronize_state()?;
-        if let Some(client) = &self.client {
-            client.drain_completions(maximum)?;
-        }
-        let result = self.take_terminal()?;
+        let matching = self.active.as_ref().is_some_and(|active| {
+            batch.notifications.iter().any(|notice| {
+                notice.job_id == active.job.spec().id && notice.scope_id == self.scope.id()
+            })
+        });
+        let result = if matching { self.take_terminal()? } else { None };
         self.submit_pending()?;
         Ok(result)
     }
 
-    /// Close admission and cancel accepted work while keeping terminal disposal observable.
-    pub(crate) fn request_shutdown(&mut self) -> Result<(), Box<dyn Error>> {
+    /// Close rendering admission and cancel only its scope, retaining actual result ownership.
+    pub(crate) fn request_retirement(&mut self) -> Result<(), Box<dyn Error>> {
         if self.closing {
             return Ok(());
         }
         self.closing = true;
         self.pending = None;
-        let visibility_result = self.gate.set_visible(false);
-        if let Some(scope) = &self.scope {
-            scope.cancel();
-        }
-        let deadline = self.clock.now().checked_add(Duration::from_secs(5));
-        if let Some(owner) = &mut self.owner {
-            owner.request_shutdown(
-                deadline
-                    .unwrap_or(sugarsubstitute_contracts::execution::Moment::from_nanos(u64::MAX)),
-            );
-        }
-        visibility_result?;
-        deadline?;
+        self.scope.cancel();
+        self.gate.set_visible(false)?;
         Ok(())
     }
 
-    /// Observe stopped jobs/workers; retained native/audit buffers do not impersonate work.
-    pub(crate) fn poll_shutdown(&mut self) -> Result<bool, Box<dyn Error>> {
-        if !self.closing {
-            return Ok(false);
-        }
-        self.poll(NonZeroUsize::MIN)?;
-        match &self.owner {
-            Some(owner) => {
-                let progress = owner.poll_shutdown()?;
-                if progress.deadline_expired && !self.shutdown_deadline_reported {
-                    self.shutdown_deadline_reported = true;
-                    tracing::warn!(operation = "splash_shutdown", unresolved_jobs = ?progress.unresolved_job_ids,
-                        queued = progress.queued, running = progress.running, "Owned shutdown deadline expired");
-                }
-                Ok(progress.settled)
-            }
-            None => Ok(true),
-        }
+    /// Observe rendering settlement after its completion was routed by the composition owner.
+    ///
+    /// Retained frame/cache byte charges do not impersonate queued or running work.
+    pub(crate) fn poll_retirement(&mut self) -> Result<bool, Box<dyn Error>> {
+        let snapshot = self.scope.snapshot();
+        Ok(self.closing
+            && self.active.is_none()
+            && snapshot.queued == 0
+            && snapshot.running == 0
+            && snapshot.terminal_unobserved == 0
+            && snapshot.children_live == 0)
     }
 
-    /// Release idle cache and observe worker joins only after native window teardown.
-    pub(crate) fn finish_shutdown(&mut self) -> Result<(), Box<dyn Error>> {
-        if !self.poll_shutdown()? {
-            return Err("Preparation shutdown is unsettled".into());
+    /// Release idle cache only after actual rendering settlement; execution joins belong to root.
+    pub(crate) fn finish_retirement(&mut self) -> Result<(), Box<dyn Error>> {
+        if !self.poll_retirement()? {
+            return Err("Preparation retirement is unsettled".into());
         }
         self.renderer = None;
-        self.scope = None;
-        self.client = None;
-        if let Some(owner) = &mut self.owner {
-            owner.finish_shutdown()?;
-        }
-        self.owner = None;
         Ok(())
     }
 }

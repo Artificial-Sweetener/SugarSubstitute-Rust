@@ -4,11 +4,16 @@
 //! Observe real preparation outcomes and cancellation with test-owned notifications.
 
 use super::*;
+use std::{num::NonZeroUsize, sync::Arc, time::Duration};
 use std::{
     sync::{Condvar, Mutex},
     time::Instant,
 };
+use sugarsubstitute_contracts::execution::{
+    Clock, CompletionWake, Moment, ScopeId, ScopeSpec, WaitFuture,
+};
 use sugarsubstitute_contracts::execution::{ExecutionError, JobCompletion, JobPhase};
+use sugarsubstitute_execution::ExecutionOwner;
 
 /// Bound failures without assigning elapsed sleeps to asynchronous progress.
 fn deadline() -> Result<Instant, Box<dyn Error>> {
@@ -67,13 +72,34 @@ impl CompletionWake for Wake {
     }
 }
 
-/// Start a real isolated execution lifetime without a native window.
-pub(super) fn started() -> Result<(PreparationDriver, Arc<Wake>), Box<dyn Error>> {
-    let mut driver = PreparationDriver::new("en")?;
+/// Keep execution time deterministic; synchronization deadlines only bound test failures.
+struct FrozenClock;
+impl Clock for FrozenClock {
+    fn now(&self) -> Moment {
+        Moment::from_nanos(0)
+    }
+    fn sleep_until(&self, _: Moment) -> WaitFuture {
+        Box::pin(std::future::pending())
+    }
+}
+
+/// Construct the real execution boundary with a deterministic injected epoch.
+pub(super) fn started() -> Result<(PreparationDriver, Arc<Wake>, ExecutionOwner), Box<dyn Error>> {
     let wake = Wake::new();
-    driver.start(wake.clone())?;
+    let owner = ExecutionOwner::new(Arc::new(FrozenClock), wake.clone())?;
+    let client = owner.client();
+    let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
+    let mut driver = PreparationDriver::new("en", client, scope, JobSequence::new())?;
     driver.set_visible(true)?;
-    Ok((driver, wake))
+    Ok((driver, wake, owner))
+}
+
+/// Route one centrally drained batch through the rendering consumer.
+pub(super) fn poll(
+    driver: &mut PreparationDriver,
+) -> Result<Option<PreparedFrame>, Box<dyn Error>> {
+    let batch = driver.client.drain_completions(NonZeroUsize::MIN)?;
+    driver.consume(&batch)
 }
 
 /// Submit one plain-data render request through production admission.
@@ -107,13 +133,11 @@ pub(super) fn pending_frame(
     let deadline = deadline()?;
     loop {
         let revision = wake.revision()?;
-        if let Some(frame) = driver.poll(NonZeroUsize::MIN)? {
+        if let Some(frame) = poll(driver)? {
             return Ok(frame);
         }
         if !wake.wait_after(revision, deadline)? {
-            return driver
-                .poll(NonZeroUsize::MIN)?
-                .ok_or_else(|| "Preparation frame deadline expired".into());
+            return poll(driver)?.ok_or_else(|| "Preparation frame deadline expired".into());
         }
     }
 }
@@ -156,23 +180,51 @@ pub(super) fn completion<T, E>(
     }
 }
 
-/// Prove stopped workers while retained frame/cache memory remains independently owned.
+/// Prove rendering work stopped while retained frame/cache memory remains independently owned.
 pub(super) fn settle(driver: &mut PreparationDriver, wake: &Wake) -> Result<(), Box<dyn Error>> {
-    driver.request_shutdown()?;
+    driver.request_retirement()?;
     let deadline = deadline()?;
     loop {
         let revision = wake.revision()?;
-        if driver.poll_shutdown()? {
+        poll(driver)?;
+        if driver.poll_retirement()? {
             return Ok(());
         }
         if !wake.wait_after(revision, deadline)? {
             // Worker exit can follow its final terminal notification. Inspect real
             // settlement once at the failure boundary rather than treating a wake as stop.
-            return if driver.poll_shutdown()? {
+            poll(driver)?;
+            return if driver.poll_retirement()? {
                 Ok(())
             } else {
-                Err("Preparation shutdown deadline expired".into())
+                Err("Preparation retirement deadline expired".into())
             };
+        }
+    }
+}
+
+/// Retire the sole execution owner after rendering; retain real joins until observed settlement.
+pub(super) fn finish(
+    owner: &mut ExecutionOwner,
+    driver: &mut PreparationDriver,
+    wake: &Wake,
+) -> Result<(), Box<dyn Error>> {
+    settle(driver, wake)?;
+    driver.finish_retirement()?;
+    owner.request_shutdown(Moment::from_nanos(5_000_000_000));
+    let deadline = deadline()?;
+    loop {
+        let revision = wake.revision()?;
+        let batch = owner.client().drain_completions(NonZeroUsize::MIN)?;
+        driver.consume(&batch)?;
+        if owner.poll_shutdown()?.settled {
+            return Ok(owner.finish_shutdown()?);
+        }
+        if !wake.wait_after(revision, deadline)? {
+            if owner.poll_shutdown()?.settled {
+                return Ok(owner.finish_shutdown()?);
+            }
+            return Err("Execution settlement deadline expired".into());
         }
     }
 }

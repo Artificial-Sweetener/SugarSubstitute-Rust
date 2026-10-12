@@ -84,6 +84,7 @@ fn reduced_motion_enriches_once_and_repaints_only_meaningful_events() -> Result<
     assert!(!demo.pointer(PointerAction::Press, Pointer { x: 200.0, y: 200.0 }));
     assert!(demo.key(KeyAction::Tab));
     assert!(!demo.animating());
+    test_support::finish(&mut demo, &wake)?;
     Ok(())
 }
 
@@ -110,6 +111,7 @@ fn static_light_close_press_and_cancel_repaint_without_animation() -> Result<(),
     assert!(!demo.animating());
     let cancelled = test_support::prepare(&mut demo, &wake, Duration::from_secs(3))?;
     assert_eq!(neutral.pixels(), cancelled.pixels());
+    test_support::finish(&mut demo, &wake)?;
     Ok(())
 }
 
@@ -138,6 +140,26 @@ fn accessible_disclosure_reflects_pointer_keyboard_and_native_activation()
         demo.pointer(PointerAction::Release, toggle);
         drop(test_support::prepare(&mut demo, &wake, Duration::from_millis(30))?);
         assert_eq!(demo.accessible_controls()[0].label, locale.show_output);
+        test_support::finish(&mut demo, &wake)?;
     }
+    Ok(())
+}
+
+/// Preserve shutdown before native start and reject repeated execution lifetimes.
+#[test]
+fn execution_start_and_shutdown_preserve_one_owned_lifetime() -> Result<(), Box<dyn Error>> {
+    let mut never_started = SplashDemo::new("en", Appearance::demo(), true)?;
+    never_started.request_shutdown()?;
+    assert!(never_started.poll_shutdown()?);
+    never_started.finish_shutdown()?;
+    assert!(never_started.start(test_support::Wake::new()).is_err());
+    let mut demo = SplashDemo::new("en", Appearance::demo(), true)?;
+    let wake = test_support::start(&mut demo)?;
+    assert!(demo.start(wake.clone()).is_err());
+    drop(test_support::prepare(&mut demo, &wake, Duration::ZERO)?);
+    demo.request_shutdown()?;
+    demo.request_shutdown()?;
+    test_support::finish(&mut demo, &wake)?;
+    assert!(demo.preparation.is_none() && demo.execution.is_none());
     Ok(())
 }

@@ -4,9 +4,13 @@
 //! Drive an explicit demonstration without claiming real application startup progress.
 
 use crate::preparation::PreparationDriver;
+use sugarsubstitute_execution::{ExecutionOwner, MonotonicClock};
+
+#[path = "demo_lifetime.rs"]
+mod lifetime;
 use std::{error::Error, num::NonZeroUsize, sync::Arc, time::Duration};
 use sugarsubstitute_contracts::{
-    execution::CompletionWake,
+    execution::{Clock, CompletionWake},
     presentation::{FrameShape, PreparedFrame},
 };
 use sugarsubstitute_desktop::{
@@ -26,7 +30,13 @@ enum DemoTarget {
 
 /// Compose the presentation driver used until real startup supplies semantic events.
 pub(crate) struct SplashDemo {
-    preparation: PreparationDriver,
+    preparation: Option<PreparationDriver>,
+    locale: String,
+    execution: Option<ExecutionOwner>,
+    clock: Arc<dyn Clock>,
+    visible: bool,
+    closing: bool,
+    shutdown_deadline_reported: bool,
     animation: PaperFlip,
     appearance: Appearance,
     elapsed: Duration,
@@ -47,7 +57,13 @@ impl SplashDemo {
         animation.set_reduced_motion(reduced_motion);
         let messages = sugarsubstitute_contracts::localization::messages(locale);
         Ok(Self {
-            preparation: PreparationDriver::new(locale)?,
+            preparation: None,
+            locale: locale.to_owned(),
+            execution: None,
+            clock: MonotonicClock::new(),
+            visible: false,
+            closing: false,
+            shutdown_deadline_reported: false,
             animation,
             appearance,
             elapsed: Duration::ZERO,
@@ -121,7 +137,7 @@ impl SplashDemo {
 impl WindowContent for SplashDemo {
     /// Start one execution lifetime after the desktop establishes its native wake.
     fn start(&mut self, wake: Arc<dyn CompletionWake>) -> Result<(), Box<dyn Error>> {
-        self.preparation.start(wake)
+        self.start_execution(wake)
     }
 
     /// Sample lightweight view state and submit governed preparation without rasterizing.
@@ -140,7 +156,12 @@ impl WindowContent for SplashDemo {
             Some((elapsed.as_secs_f32() % 1.8) / 1.8)
         };
         let feedback = ProgressFrame { completed, activity };
-        self.preparation.request(shape, self.appearance, self.animation.frame(elapsed), feedback)
+        self.preparation.as_mut().ok_or("Demo execution has not started")?.request(
+            shape,
+            self.appearance,
+            self.animation.frame(elapsed),
+            feedback,
+        )
     }
 
     /// Observe bounded terminal work and publish only matching current-state results.
@@ -148,7 +169,7 @@ impl WindowContent for SplashDemo {
         &mut self,
         maximum: NonZeroUsize,
     ) -> Result<Option<PreparedFrame>, Box<dyn Error>> {
-        let frame = self.preparation.poll(maximum)?;
+        let frame = self.consume_preparation(maximum)?;
         if frame.is_some() {
             self.publish_controls();
         }
@@ -157,22 +178,26 @@ impl WindowContent for SplashDemo {
 
     /// Invalidate visibility before subsequent raster admission or publication.
     fn set_visible(&mut self, visible: bool) -> Result<(), Box<dyn Error>> {
-        self.preparation.set_visible(visible)
+        self.visible = visible && !self.closing;
+        if let Some(preparation) = &mut self.preparation {
+            preparation.set_visible(self.visible)?;
+        }
+        Ok(())
     }
 
     /// Close admission and request actual cancellation without waiting on this callback.
     fn request_shutdown(&mut self) -> Result<(), Box<dyn Error>> {
-        self.preparation.request_shutdown()
+        self.retire_execution()
     }
 
     /// Keep terminal and worker settlement observable while the native loop remains alive.
     fn poll_shutdown(&mut self) -> Result<bool, Box<dyn Error>> {
-        self.preparation.poll_shutdown()
+        self.poll_execution_retirement()
     }
 
     /// Release retained cache resources and join settled workers after native teardown.
     fn finish_shutdown(&mut self) -> Result<(), Box<dyn Error>> {
-        self.preparation.finish_shutdown()
+        self.finish_execution_retirement()
     }
 
     /// Reserve native drag and close behavior without exposing view-specific targets.
@@ -219,8 +244,8 @@ impl WindowContent for SplashDemo {
         let changed = animation_changed
             || before
                 != (self.appearance.hovered, self.appearance.pressed, self.appearance.expanded);
-        if changed {
-            self.preparation.invalidate();
+        if changed && let Some(preparation) = &mut self.preparation {
+            preparation.invalidate();
         }
         changed
     }
@@ -230,13 +255,15 @@ impl WindowContent for SplashDemo {
         match action {
             KeyAction::Tab => self.toggle_output(),
         }
-        self.preparation.invalidate();
+        if let Some(preparation) = &mut self.preparation {
+            preparation.invalidate();
+        }
         true
     }
 
     /// Freeze both scripted progress and mascot motion when reduced motion is selected.
     fn animating(&self) -> bool {
-        !self.reduced_motion || !self.preparation.enriched()
+        !self.reduced_motion || !self.preparation.as_ref().is_some_and(PreparationDriver::enriched)
     }
 
     /// Expose only the two existing caption controls through stable native identities.
@@ -248,7 +275,9 @@ impl WindowContent for SplashDemo {
     fn activate(&mut self, id: u16) -> bool {
         if id == 1 {
             self.toggle_output();
-            self.preparation.invalidate();
+            if let Some(preparation) = &mut self.preparation {
+                preparation.invalidate();
+            }
             true
         } else {
             false
