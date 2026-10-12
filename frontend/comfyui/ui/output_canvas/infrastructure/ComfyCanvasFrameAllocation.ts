@@ -22,7 +22,7 @@ interface SavedStyle {
   readonly priority: string;
 }
 
-/** Move the graph origin and its complete render layers together, leaving native navigation in place. */
+/** Reserve right-side canvas space across graph layers while retaining the native graph origin. */
 export class ComfyCanvasFrameAllocation {
   readonly #chrome: HTMLElement;
   readonly #frame: HTMLElement;
@@ -33,7 +33,7 @@ export class ComfyCanvasFrameAllocation {
   /** Qualify a direct native chrome ancestor and the public graph canvas before changing host geometry. */
   constructor(
     private readonly root: HTMLElement,
-    panel: HTMLElement,
+    private readonly panel: HTMLElement,
   ) {
     const chrome = [...root.children].find((child) => child.contains(panel));
     const canvas = root.querySelector<HTMLCanvasElement>(':scope > #graph-canvas');
@@ -50,6 +50,7 @@ export class ComfyCanvasFrameAllocation {
     this.#frame = frame;
     this.#styles = [
       { element: frame, property: 'overflow' },
+      { element: panel, property: '--sc-output-workspace-reserved-width' },
       ...['width', 'margin-left', 'overflow', 'clip-path'].map((property) => ({
         element: root,
         property,
@@ -74,12 +75,13 @@ export class ComfyCanvasFrameAllocation {
       return;
     }
     this.root.style.setProperty('width', `calc(100% - ${inset}px)`);
-    this.root.style.setProperty('margin-left', `${inset}px`);
+    this.panel.style.setProperty('--sc-output-workspace-reserved-width', `${inset}px`);
+    this.root.style.setProperty('margin-left', '0px');
     // Hidden overflow permits focus-driven scrolling; the qualified outer frame must remain stationary.
     this.#frame.style.setProperty('overflow', 'clip');
     this.root.style.setProperty('overflow', 'visible');
-    this.root.style.setProperty('clip-path', `inset(0px 0px 0px -${inset}px)`);
-    this.#chrome.style.setProperty('left', `-${inset}px`);
+    this.root.style.setProperty('clip-path', `inset(0px -${inset}px 0px 0px)`);
+    this.#chrome.style.setProperty('left', '0px');
     this.#chrome.style.setProperty('width', `calc(100% + ${inset}px)`);
   }
 

@@ -77,7 +77,7 @@ export class CanvasWorkspaceResizeInput {
             return;
         event.preventDefault();
         event.stopPropagation();
-        this.#pending = Math.max(0, pointer.width + event.clientX - pointer.x);
+        this.#pending = Math.max(0, pointer.width + pointer.x - event.clientX);
         if (!this.#frame)
             this.#frame = this.frames.request(() => {
                 this.#frame = null;
@@ -106,9 +106,9 @@ export class CanvasWorkspaceResizeInput {
             this.#release(false);
             return;
         }
-        const width = event.key === 'ArrowLeft'
+        const width = event.key === 'ArrowRight'
             ? Math.max(0, this.owner.width() - 20)
-            : event.key === 'ArrowRight'
+            : event.key === 'ArrowLeft'
                 ? this.owner.width() + 20
                 : event.key === 'Home'
                     ? 1

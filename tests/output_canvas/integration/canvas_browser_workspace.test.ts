@@ -79,8 +79,9 @@ function fixture(width = 1400) {
 test('keeps masonry content identity and restores the native frame through close, suspension, and disposal', () => {
   const f = fixture();
   expect(f.workspace.visible).toBe(true);
-  expect(f.workspace.content.style.left).toBe('560px');
-  expect(f.root.style.marginLeft).toBe('560px');
+  expect(f.workspace.content.style.left).toBe('0px');
+  expect(f.workspace.content.style.width).toBe('calc(100% - 560px)');
+  expect(f.root.style.marginLeft).toBe('0px');
   const borrowed = document.createElement('input');
   f.workspace.content.append(borrowed);
   f.workspace.suspend(true);
@@ -92,7 +93,8 @@ test('keeps masonry content identity and restores the native frame through close
   expect(f.workspace.content.style.left).toBe('0px');
   f.workspace.preferences({ visible: true, width: 600 });
   expect(f.workspace.content.contains(borrowed)).toBe(true);
-  expect(f.workspace.content.style.left).toBe('600px');
+  expect(f.workspace.content.style.left).toBe('0px');
+  expect(f.workspace.content.style.width).toBe('calc(100% - 600px)');
   expect(f.graph.parentElement).toBe(f.root);
   const changed = f.actions.changed.mock.calls.length;
   f.dispose();
@@ -114,7 +116,7 @@ test('requires explicit narrow activation and exposes authoritative keyboard wid
   const divider = f.panel.querySelector('[role="separator"]')!;
   expect(divider.getAttribute('aria-valuenow')).toBe('640');
   expect(divider.getAttribute('aria-valuemax')).toBe('776');
-  expect(f.panel.querySelector<HTMLElement>('.sc-output-workspace-backdrop')!.style.left).toBe(
+  expect(f.panel.querySelector<HTMLElement>('.sc-output-workspace-backdrop')!.style.right).toBe(
     '640px',
   );
   expect(document.activeElement?.getAttribute('aria-label')).toBe('Close output canvas');
@@ -122,7 +124,7 @@ test('requires explicit narrow activation and exposes authoritative keyboard wid
   expect(f.actions.close).toHaveBeenCalledTimes(1);
   f.resize(1400);
   f.frames.advance(16);
-  expect(f.root.style.marginLeft).toBe('560px');
+  expect(f.root.style.marginLeft).toBe('0px');
   f.resize(800);
   f.frames.advance(16);
   expect(f.workspace.visible).toBe(false);
@@ -136,7 +138,8 @@ test('coalesces workspace measurements and cancels pending observation on teardo
   expect(f.frames.pending).toBe(1);
   expect(f.actions.changed).toHaveBeenCalledTimes(changed);
   f.frames.advance(16);
-  expect(f.workspace.content.style.left).toBe('599.6px');
+  expect(f.workspace.content.style.left).toBe('0px');
+  expect(f.workspace.content.style.width).toBe('calc(100% - 599.6px)');
   expect(f.actions.changed).toHaveBeenCalledTimes(changed + 1);
   f.resize(1600);
   f.dispose();

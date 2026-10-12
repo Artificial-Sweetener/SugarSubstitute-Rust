@@ -31,18 +31,20 @@ export function ensureBrowserCanvasWorkspaceStyles(document) {
     .sc-output-canvas-toggle span { width:20px; height:20px; background:currentColor; pointer-events:none;
       mask:var(--sc-output-icon) center / contain no-repeat; }
     .sc-output-workspace-content { position:absolute; inset:0; pointer-events:none; }
-    .sc-output-workspace-pane { position:absolute; left:0; top:0; bottom:0; z-index:${MASONRY_STACK_Z_INDEX + 2};
+    .graph-canvas-panel > .pointer-events-auto > [role="toolbar"][data-pc-name="buttongroup"] {
+      right:var(--sc-output-workspace-reserved-width,0px); }
+    .sc-output-workspace-pane { position:absolute; right:0; top:0; bottom:0; z-index:${MASONRY_STACK_Z_INDEX + 2};
       display:flex; flex-direction:column; box-sizing:border-box; pointer-events:auto;
       color:var(--fg-color,#ddd); background:var(--comfy-menu-bg,#202020);
-      border-right:1px solid var(--interface-stroke,#454545); font:13px var(--fontFamilyBase,"Segoe UI",system-ui,sans-serif); }
+      border-left:1px solid var(--interface-stroke,#454545); font:13px var(--fontFamilyBase,"Segoe UI",system-ui,sans-serif); }
     .sc-output-workspace-pane[hidden],.sc-output-workspace-backdrop[hidden] { display:none; }
     .sc-output-workspace-close { position:absolute; top:8px; right:14px; z-index:3; opacity:0;
       cursor:pointer; color:inherit; background:var(--comfy-menu-bg,#202020); border:0;
       border-radius:4px; width:28px; height:28px; font-size:20px; }
     .sc-output-workspace-pane:hover .sc-output-workspace-close,.sc-output-workspace-close:focus-visible { opacity:1; }
     .sc-output-workspace-close:hover { background:var(--secondary-background-hover,#444); }
-    .sc-output-workspace-view { position:relative; flex:1; min-height:0; margin-right:6px; overflow:hidden; }
-    .sc-output-workspace-divider { position:absolute; top:0; bottom:0; right:0; width:6px; cursor:ew-resize;
+    .sc-output-workspace-view { position:relative; flex:1; min-height:0; margin-left:6px; overflow:hidden; }
+    .sc-output-workspace-divider { position:absolute; top:0; bottom:0; left:0; width:6px; cursor:ew-resize;
       touch-action:none; background:var(--interface-stroke,#454545); pointer-events:auto; }
     .sc-output-workspace-divider:hover { background:var(--p-primary-color,var(--ring,#df258e)); }
     .sc-output-workspace-divider:focus-visible,.sc-output-workspace-close:focus-visible {

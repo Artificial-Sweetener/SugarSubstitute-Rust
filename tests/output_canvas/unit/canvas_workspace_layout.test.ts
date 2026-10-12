@@ -20,12 +20,15 @@ import { CanvasWorkspaceLayout } from '../../../frontend/comfyui/ui/output_canva
 
 test('allocates forty percent while retaining useful content and clamps persisted user widths', () => {
   const preferences = { visible: true, width: 0 };
-  expect(allocateCanvasWorkspace(1400, 800, preferences, false).canvas.width).toBe(560);
+  const normal = allocateCanvasWorkspace(1400, 800, preferences, false);
+  expect(normal.canvas).toEqual({ x: 840, y: 0, width: 560, height: 800 });
+  expect(normal.content).toEqual({ x: 0, y: 0, width: 840, height: 800 });
   expect(allocateCanvasWorkspace(960, 800, { ...preferences, width: 20 }, false).canvas.width).toBe(
     320,
   );
   const wide = allocateCanvasWorkspace(1400, 800, { ...preferences, width: 5000 }, false);
-  expect(wide.content).toEqual({ x: 1040, y: 0, width: 360, height: 800 });
+  expect(wide.content).toEqual({ x: 0, y: 0, width: 360, height: 800 });
+  expect(wide.canvas.x).toBe(wide.content.width);
   expect(wide.canvas.width + wide.content.width).toBe(1400);
 });
 
@@ -36,6 +39,7 @@ test('keeps narrow drawers explicitly opened, overlays content, and closes on br
   layout.drawer(true);
   expect(layout.read().mode).toBe('drawer');
   expect(layout.read().canvas.width).toBe(640);
+  expect(layout.read().canvas.x).toBe(160);
   expect(layout.read().content).toEqual({ x: 0, y: 0, width: 800, height: 600 });
   layout.bounds(1400, 800);
   expect(layout.read().visible).toBe(true);

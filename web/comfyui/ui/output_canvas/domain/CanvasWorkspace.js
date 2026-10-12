@@ -30,7 +30,7 @@ export function allocateCanvasWorkspace(width, height, preferences, drawerOpen) 
         visible,
         minimumWidth: minimum,
         maximumWidth: maximum,
-        canvas: Object.freeze({ x: 0, y: 0, width: paneWidth, height }),
-        content: Object.freeze({ x: inset, y: 0, width: Math.max(0, width - inset), height }),
+        canvas: Object.freeze({ x: Math.max(0, width - paneWidth), y: 0, width: paneWidth, height }),
+        content: Object.freeze({ x: 0, y: 0, width: Math.max(0, width - inset), height }),
     });
 }
