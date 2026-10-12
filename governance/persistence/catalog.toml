@@ -308,3 +308,15 @@ current_version = 2
 accepted_versions = [2]
 compatibility = "reject"
 migrations = []
+
+[[formats]]
+id = "native-diagnostic-command"
+owner = "sugarsubstitute-crash"
+sources = ["crates/sugarsubstitute-crash/src/diagnostic_client.rs", "crates/sugarsubstitute-crash/src/diagnostic_client/codec.rs", "crates/sugarsubstitute-crash/src/diagnostic_client/command_codec.rs", "crates/sugarsubstitute-crash/src/diagnostic_client/command_codec/fields.rs", "crates/sugarsubstitute-crash/src/diagnostic_client/command_codec/read.rs", "crates/sugarsubstitute-crash/src/diagnostic_client/command_codec/write.rs", "crates/sugarsubstitute-crash/src/diagnostic_client/commands.rs", "crates/sugarsubstitute-crash/src/diagnostic_client/error.rs", "crates/sugarsubstitute-crash/src/diagnostic_client/identity.rs", "crates/sugarsubstitute-crash/src/diagnostic_client/reader.rs", "crates/sugarsubstitute-crash/src/diagnostic_client/replay.rs", "crates/sugarsubstitute-crash/src/diagnostic_client/types.rs", "crates/sugarsubstitute-crash/src/diagnostic_client/validation.rs", "crates/sugarsubstitute-crash/src/diagnostic_client/writer.rs"]
+source_sha256 = "sha256:54b11e7f49972ba31411c0fb1dc4ec0010c5e677524f1e6aa28900915bf4816e"
+classification = "protocol"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []

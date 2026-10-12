@@ -58,5 +58,5 @@ minimum_tests = 229
 [[owners]]
 package = "sugarsubstitute-crash"
 root = "crates/sugarsubstitute-crash"
-concern = "Bounded capture input, immutable budgets, retained partial registration and actual native retirement; bounded charged redacted report views, categorical absence and symbol failures"
-minimum_tests = 125
+concern = "Bounded capture input, immutable budgets, retained partial registration and actual native retirement; bounded charged redacted report views, categorical absence and symbol failures; closed bounded diagnostic wire, replay high-water, exact result and transfer correlation, original transport guard custody"
+minimum_tests = 161

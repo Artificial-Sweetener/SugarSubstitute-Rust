@@ -26,3 +26,6 @@ pub use input::CaptureStartInput;
 pub mod incident;
 /// Format bounded charged redacted incident facts for native presentation.
 pub mod report_view;
+
+/// Bounded diagnostic schema1 frames, replay and actual transport loan routing.
+pub mod diagnostic_client;
