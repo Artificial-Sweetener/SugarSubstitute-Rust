@@ -248,8 +248,13 @@ proofs = ["contract", "unit"]
 
 [[area]]
 name = "execution"
-sources = ["sugarcubes/execution/**", "frontend/comfyui/ui/cube/execution/**"]
+sources = ["sugarcubes/execution/**", "frontend/comfyui/ui/cube/execution/**", "frontend/comfyui/ui/execution/**", "web/comfyui/ui/execution/**"]
 proofs = ["contract", "integration", "unit"]
+
+[[area]]
+name = "output_canvas"
+sources = ["frontend/comfyui/ui/output_canvas/**", "web/comfyui/ui/output_canvas/**"]
+proofs = ["unit", "contract", "integration"]
 
 [[area]]
 name = "cube"
@@ -460,4 +465,24 @@ groups = [
 
 [[subscription]]
 boundary = "execution_prompt"
-groups = ["surface/integration", "relations/integration"]
+groups = ["surface/integration", "relations/integration", "output_canvas/integration"]
+
+[[boundary]]
+name = "workflow_execution_results"
+area = "execution"
+
+[[subscription]]
+boundary = "workflow_execution_results"
+groups = ["surface/integration", "output_canvas/integration"]
+
+[[boundary]]
+name = "canvas_view"
+area = "output_canvas"
+
+[[boundary]]
+name = "canvas_workspace"
+area = "output_canvas"
+
+[[subscription]]
+boundary = "canvas_workspace"
+groups = ["surface/integration", "frontend_core/integration"]

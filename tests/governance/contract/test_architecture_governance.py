@@ -20,6 +20,8 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from tools.architecture.checker import check_repository
 from tools.architecture.registry import RegistryError, load_waivers
 from tools.architecture.registry import load_policy
@@ -225,6 +227,41 @@ def test_typescript_dependency_direction_is_enforced(tmp_path: Path) -> None:
 name = "CORE"
 paths = ["src/core.ts"]
 forbidden_typescript_paths = ["src/ui"]
+""",
+    )
+    _write_empty_registries(tmp_path)
+
+    result = check_repository(tmp_path)
+
+    assert "DEPENDENCY_CORE" in {item.rule for item in result.diagnostics}
+
+
+@pytest.mark.parametrize(
+    ("source", "target"),
+    (
+        ("import { ref } from 'vue';\n", "node_modules/vue"),
+        ("export { app } from '/scripts/app.js';\n", "/scripts"),
+        ("const adapter = import('./ui.js');\n", "src/ui"),
+        ("const host = import('/scripts/api.js');\n", "/scripts"),
+        ("import 'vue';\n", "node_modules/vue"),
+        ("import type { Ref } from 'vue';\n", "node_modules/vue"),
+    ),
+)
+def test_typescript_external_and_dynamic_dependencies_are_enforced(
+    tmp_path: Path, source: str, target: str
+) -> None:
+    """Prevent lower-layer imports from bypassing governance through host or package syntax."""
+
+    source_root = tmp_path / "src"
+    source_root.mkdir()
+    (source_root / "core.ts").write_text(source, encoding="utf-8")
+    _write_policy(
+        tmp_path,
+        dependencies=f"""
+[[dependency]]
+name = "CORE"
+paths = ["src/core.ts"]
+forbidden_typescript_paths = ["{target}"]
 """,
     )
     _write_empty_registries(tmp_path)

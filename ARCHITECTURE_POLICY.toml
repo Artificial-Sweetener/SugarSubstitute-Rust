@@ -61,6 +61,83 @@ forbidden_typescript_paths = [
 ]
 
 [[dependency]]
+name = "TYPESCRIPT_EXECUTION_DOMAIN"
+paths = ["frontend/comfyui/ui/execution/domain/*.ts"]
+forbidden_typescript_paths = [
+  "frontend/comfyui/ui/execution/application",
+  "frontend/comfyui/ui/execution/infrastructure",
+  "frontend/comfyui/ui/output_canvas",
+  "frontend/comfyui/ui/surface",
+  "frontend/comfyui/ui/cube",
+  "types/comfyui",
+  "node_modules",
+  "/scripts",
+  "frontend/comfyui/ui/types/graph",
+]
+
+[[dependency]]
+name = "TYPESCRIPT_EXECUTION_APPLICATION"
+paths = ["frontend/comfyui/ui/execution/application/*.ts"]
+forbidden_typescript_paths = [
+  "frontend/comfyui/ui/execution/infrastructure",
+  "frontend/comfyui/ui/output_canvas",
+  "frontend/comfyui/ui/surface",
+  "frontend/comfyui/ui/cube",
+  "types/comfyui",
+  "node_modules",
+  "/scripts",
+  "frontend/comfyui/ui/types/graph",
+]
+
+[[dependency]]
+name = "TYPESCRIPT_CANVAS_DOMAIN"
+paths = ["frontend/comfyui/ui/output_canvas/domain/*.ts"]
+forbidden_typescript_paths = [
+  "frontend/comfyui/ui/output_canvas/application",
+  "frontend/comfyui/ui/output_canvas/infrastructure",
+  "frontend/comfyui/ui/output_canvas/presentation",
+  "frontend/comfyui/ui/execution/application",
+  "frontend/comfyui/ui/execution/infrastructure",
+  "frontend/comfyui/ui/surface",
+  "frontend/comfyui/ui/cube",
+  "types/comfyui",
+  "node_modules",
+  "/scripts",
+  "frontend/comfyui/ui/types/graph",
+]
+
+[[dependency]]
+name = "TYPESCRIPT_CANVAS_APPLICATION"
+paths = ["frontend/comfyui/ui/output_canvas/application/*.ts"]
+forbidden_typescript_paths = [
+  "frontend/comfyui/ui/output_canvas/infrastructure",
+  "frontend/comfyui/ui/output_canvas/presentation",
+  "frontend/comfyui/ui/execution/infrastructure",
+  "frontend/comfyui/ui/surface",
+  "frontend/comfyui/ui/cube",
+  "types/comfyui",
+  "node_modules",
+  "/scripts",
+  "frontend/comfyui/ui/types/graph",
+]
+
+[[dependency]]
+name = "TYPESCRIPT_CANVAS_OVERLAY"
+paths = ["frontend/comfyui/ui/output_canvas/presentation/vue/*.ts"]
+forbidden_typescript_paths = [
+  "frontend/comfyui/ui/output_canvas/application",
+  "frontend/comfyui/ui/output_canvas/infrastructure",
+  "frontend/comfyui/ui/output_canvas/presentation/browser",
+  "frontend/comfyui/ui/execution/application",
+  "frontend/comfyui/ui/execution/infrastructure",
+  "frontend/comfyui/ui/surface",
+  "frontend/comfyui/ui/cube",
+  "types/comfyui",
+  "/scripts",
+  "frontend/comfyui/ui/types/graph",
+]
+
+[[dependency]]
 name = "TYPESCRIPT_WORKFLOW_APPLICATION"
 paths = ["frontend/comfyui/ui/workflow/application/*.ts"]
 forbidden_typescript_paths = [

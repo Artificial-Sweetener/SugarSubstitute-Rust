@@ -19,7 +19,7 @@
     "test:changed": "python -m tools.test changed",
     "test:staged": "python -m tools.test staged",
     "test:commit": "python -m tools.test staged --commit",
-    "typecheck": "tsc --project tsconfig.json --noEmit && tsc --project tsconfig.tests.json --noEmit && python scripts/run_mypy.py",
+    "typecheck": "tsc --project tsconfig.json --noEmit && tsc --project tsconfig.tests.json --noEmit && tsc --project tsconfig.output-canvas-tests.json --noEmit && python scripts/run_mypy.py",
     "audit:standards": "python scripts/standards_audit.py && tsx scripts/standards-audit.ts",
     "architecture": "python -m tools.check_architecture",
     "architecture:staged": "python -m tools.check_architecture --staged",

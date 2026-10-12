@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["frontend/**/*.ts", "tests/output_canvas/**/*.ts", "types/**/*.d.ts"],
+  "exclude": ["scripts"]
+}

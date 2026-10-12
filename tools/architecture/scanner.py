@@ -31,6 +31,9 @@ _TYPESCRIPT_MODULE_PATTERN = re.compile(
     r"[\"'](?P<module>[^\"']+)[\"']",
     re.MULTILINE,
 )
+_TYPESCRIPT_DYNAMIC_MODULE_PATTERN = re.compile(
+    r"\bimport\s*\(\s*[\"'](?P<module>[^\"']+)[\"']", re.MULTILINE
+)
 _COMMENT_PREFIXES = ("#", "//", "/*", "*", "*/")
 
 
@@ -246,15 +249,22 @@ def _python_imports(path: str, source: str) -> frozenset[str]:
 
 
 def _typescript_imports(path: str, source: str) -> frozenset[str]:
-    """Return repository-relative targets imported by one TypeScript module."""
+    """Normalize relative, host-absolute and package targets, including dynamic imports."""
 
     parent = PurePosixPath(path).parent.as_posix()
     imports: set[str] = set()
-    for match in _TYPESCRIPT_MODULE_PATTERN.finditer(source):
+    matches = (
+        *_TYPESCRIPT_MODULE_PATTERN.finditer(source),
+        *_TYPESCRIPT_DYNAMIC_MODULE_PATTERN.finditer(source),
+    )
+    for match in matches:
         module = match.group("module")
-        if not module.startswith("."):
-            continue
-        resolved = posixpath.normpath(posixpath.join(parent, module))
+        if module.startswith("."):
+            resolved = posixpath.normpath(posixpath.join(parent, module))
+        elif module.startswith("/"):
+            resolved = posixpath.normpath(module)
+        else:
+            resolved = f"node_modules/{module}"
         for suffix in (".js", ".ts", ".tsx"):
             if resolved.endswith(suffix):
                 resolved = resolved[: -len(suffix)]
