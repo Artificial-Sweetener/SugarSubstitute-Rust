@@ -108,6 +108,12 @@ class CubeExecutionCoordinator:
             )
             materialized = ComposedValueMaterializer().materialize(normalized)
             workflow = read_canonical_workflow(materialized)
+            observed_workflow = (
+                read_canonical_workflow(request.workflow)
+                if request.proximity_connections
+                and self._workflow_normalizer is not None
+                else None
+            )
         except CanonicalWorkflowError as error:
             raise CubeWorkflowError(
                 error.code,
@@ -119,7 +125,9 @@ class CubeExecutionCoordinator:
             request.proximity_connections
             or self._proximity_matcher.match(workflow.payload)
         )
-        topology = build_cube_topology(workflow, proximity_connections)
+        topology = build_cube_topology(
+            workflow, proximity_connections, observed_workflow=observed_workflow
+        )
         measurements.finish("topology")
         lowered = self._lowerer.lower(workflow, topology)
         if self._live_defaults is not None:
