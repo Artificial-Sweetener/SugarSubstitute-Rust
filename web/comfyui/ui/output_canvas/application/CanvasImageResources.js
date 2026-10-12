@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own visible image slots, latest preview queues and atomic display replacement. */
-import { CanvasImageSlot, canvasImageIntent, canvasResourceStatus, } from './CanvasImageSlot.js';
+import { CanvasImageSlot, canvasImageIntent, canvasResourceStatus, canvasMemoryAdmissionStatus, } from './CanvasImageSlot.js';
 /** Keep browser resource policy bounded without storing payloads in workflow/session results. */
 export class CanvasImageResources {
     options;
@@ -191,7 +191,7 @@ export class CanvasImageResources {
                 continue;
             }
             if (!reservation) {
-                slot.status = canvasResourceStatus('budget', 'Image admission is waiting for the estimated memory budget.', false, input.role === 'main');
+                slot.status = canvasMemoryAdmissionStatus(size, this.options.budget.estimatedBytes, input.role === 'main');
                 continue;
             }
             slot.queued = null;
@@ -246,7 +246,7 @@ export class CanvasImageResources {
         if (!admitted) {
             image.release();
             this.options.budget.release(reservation);
-            slot.status = canvasResourceStatus('budget', 'The decoded image exceeds the estimated memory allowance. Load it explicitly to continue.', false, requested.role === 'main');
+            slot.status = canvasMemoryAdmissionStatus(dimensions, this.options.budget.estimatedBytes, requested.role === 'main');
         }
         else {
             slot.dropDisplay();

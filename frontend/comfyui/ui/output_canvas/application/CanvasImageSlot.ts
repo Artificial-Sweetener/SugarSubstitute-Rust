@@ -17,6 +17,8 @@
 
 import type { CanvasResourceStatus } from '../domain/CanvasViewPort.js';
 import type { CanvasSelection } from '../domain/CanvasViewState.js';
+import type { ImageDimensions } from '../../execution/domain/WorkflowOutput.js';
+import { canvasImageBytes } from '../domain/CanvasImageResource.js';
 import type {
   CanvasDecodedImage,
   CanvasImageFrame,
@@ -157,4 +159,22 @@ export function canvasResourceStatus(
   canAdmitLargeImage = false,
 ): CanvasResourceStatus {
   return Object.freeze({ state, message, canRetry, canAdmitLargeImage });
+}
+
+/** Explain admission using the resource authority's estimates, including unknown intrinsic sizes. */
+export function canvasMemoryAdmissionStatus(
+  dimensions: ImageDimensions | null,
+  occupiedBytes: number,
+  canAdmit: boolean,
+): CanvasResourceStatus {
+  const occupied = Math.ceil(occupiedBytes / (1024 * 1024));
+  const cost = dimensions
+    ? `This image needs ${Math.ceil(canvasImageBytes(dimensions) / (1024 * 1024))} MiB estimated RGBA storage`
+    : 'The next image size is unknown';
+  return canvasResourceStatus(
+    'budget',
+    `${cost}; ${occupied} MiB already owned. Browser memory use can be higher.`,
+    false,
+    canAdmit,
+  );
 }

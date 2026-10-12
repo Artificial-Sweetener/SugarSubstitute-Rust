@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own one visible lane's queued payload, pending lease and releasable displayed frame. */
+import { canvasImageBytes } from '../domain/CanvasImageResource.js';
 /** Keep exact cancellation and release transitions separate from multi-slot scheduling. */
 export class CanvasImageSlot {
     budget;
@@ -108,4 +109,12 @@ export function canvasImageIntent(input) {
 /** Publish explicit recoverable state through the shared overlay contract. */
 export function canvasResourceStatus(state, message, canRetry = false, canAdmitLargeImage = false) {
     return Object.freeze({ state, message, canRetry, canAdmitLargeImage });
+}
+/** Explain admission using the resource authority's estimates, including unknown intrinsic sizes. */
+export function canvasMemoryAdmissionStatus(dimensions, occupiedBytes, canAdmit) {
+    const occupied = Math.ceil(occupiedBytes / (1024 * 1024));
+    const cost = dimensions
+        ? `This image needs ${Math.ceil(canvasImageBytes(dimensions) / (1024 * 1024))} MiB estimated RGBA storage`
+        : 'The next image size is unknown';
+    return canvasResourceStatus('budget', `${cost}; ${occupied} MiB already owned. Browser memory use can be higher.`, false, canAdmit);
 }

@@ -28,6 +28,7 @@ import {
   CanvasImageSlot,
   canvasImageIntent,
   canvasResourceStatus,
+  canvasMemoryAdmissionStatus,
   type CanvasImageIntent,
 } from './CanvasImageSlot.js';
 import { CanvasImageDecodeScheduler } from './CanvasImageDecodeScheduler.js';
@@ -238,10 +239,9 @@ export class CanvasImageResources<Payload, Handle> {
         continue;
       }
       if (!reservation) {
-        slot.status = canvasResourceStatus(
-          'budget',
-          'Image admission is waiting for the estimated memory budget.',
-          false,
+        slot.status = canvasMemoryAdmissionStatus(
+          size,
+          this.options.budget.estimatedBytes,
           input.role === 'main',
         );
         continue;
@@ -305,10 +305,9 @@ export class CanvasImageResources<Payload, Handle> {
     if (!admitted) {
       image.release();
       this.options.budget.release(reservation);
-      slot.status = canvasResourceStatus(
-        'budget',
-        'The decoded image exceeds the estimated memory allowance. Load it explicitly to continue.',
-        false,
+      slot.status = canvasMemoryAdmissionStatus(
+        dimensions,
+        this.options.budget.estimatedBytes,
         requested.role === 'main',
       );
     } else {

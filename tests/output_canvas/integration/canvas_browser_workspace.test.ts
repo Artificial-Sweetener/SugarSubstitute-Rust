@@ -32,7 +32,10 @@ function fixture(width = 1400) {
   const graph = document.createElement('canvas');
   graph.id = 'graph-canvas';
   root.append(chrome, graph);
-  document.body.append(root);
+  const frame = document.createElement('div');
+  frame.className = 'comfyui-body';
+  frame.append(root);
+  document.body.append(frame);
   let measuredWidth = width;
   jest.spyOn(panel, 'getBoundingClientRect').mockImplementation(() => ({
     x: 0,

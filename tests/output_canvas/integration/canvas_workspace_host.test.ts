@@ -77,7 +77,10 @@ function fixture() {
   const canvas = document.createElement('canvas');
   canvas.id = 'graph-canvas';
   root.append(chrome, canvas);
-  document.body.append(root);
+  const frame = document.createElement('div');
+  frame.className = 'comfyui-body';
+  frame.append(root);
+  document.body.append(frame);
   return {
     host,
     preferences,

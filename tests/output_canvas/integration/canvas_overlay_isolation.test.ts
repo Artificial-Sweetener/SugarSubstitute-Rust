@@ -39,6 +39,28 @@ function button(element: HTMLElement, text: string): HTMLButtonElement {
 
 afterEach(() => document.body.replaceChildren());
 
+test('describes a reactivated preview-only source before its next frame arrives', () => {
+  const initial = canvasSnapshot('waiting-preview');
+  const port = new CanvasPortFixture({
+    ...initial,
+    sources: initial.sources.map((source) => ({ ...source, batchCount: 0, preview: true })),
+    resource: {
+      state: 'empty',
+      message: 'Waiting for a fresh source preview.',
+      canRetry: false,
+      canAdmitLargeImage: false,
+    },
+  });
+  const element = root();
+  const mounted = mountCanvasOverlay(element, port, jest.fn());
+  expect(element.querySelector('[aria-label="Batch position"]')?.textContent).toBe(
+    'Source preview',
+  );
+  expect(element.textContent).not.toContain('/ 0');
+  expect(button(element, 'Next image').disabled).toBe(true);
+  mounted.dispose();
+});
+
 test('keeps source and comparison catalogs outside continuous camera and wipe rendering', async () => {
   const initial = canvasSnapshot('navigation-cadence');
   let labelReads = 0;
