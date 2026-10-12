@@ -7321,8 +7321,10 @@ if (false) {
 export {
   ref,
   shallowRef,
+  nextTick,
   watch2 as watch,
   defineComponent,
+  onMounted,
   onBeforeUpdate,
   onUpdated,
   onBeforeUnmount,

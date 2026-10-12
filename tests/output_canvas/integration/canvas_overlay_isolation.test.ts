@@ -46,10 +46,39 @@ function button(element: HTMLElement, text: string): HTMLElement {
   return found;
 }
 
+/** Exercise an actual anchored row picker without mutating a private selection state. */
+async function choose(element: HTMLElement, label: string, text: string): Promise<void> {
+  const anchor = element.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
+  anchor.click();
+  await nextTick();
+  const list = element.querySelector(`[role="listbox"][aria-label="${label} choices"]`)!;
+  const row = [...list.querySelectorAll<HTMLButtonElement>('[role="option"]')].find(
+    (item) => item.textContent === text,
+  );
+  if (!row) throw new Error(`Missing picker row: ${text}`);
+  row.click();
+  await nextTick();
+}
+
 afterEach(() => {
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   document.body.replaceChildren();
   jest.restoreAllMocks();
+});
+
+test('shows numbered sets and source tabs without adding a canvas mode', () => {
+  const port = new CanvasPortFixture({
+    ...canvasSnapshot('reference-controls'),
+  });
+  const element = root();
+  const mounted = mountCanvasOverlay(element, port, jest.fn());
+  expect(element.querySelector('[aria-label="Canvas content"]')).toBeNull();
+  expect(element.querySelector('select')).toBeNull();
+  expect(
+    element.querySelector('[aria-label="Previous image"],[aria-label="Next image"]'),
+  ).toBeNull();
+  expect(element.querySelector('[aria-label="Output image"]')?.textContent).toBe('3');
+  mounted.dispose();
 });
 
 test('offers only the reference comparison toggle outside comparison mode', () => {
@@ -97,7 +126,7 @@ test('keeps source and comparison catalogs outside continuous camera and wipe re
   });
   const element = root();
   const mounted = mountCanvasOverlay(element, port, jest.fn());
-  const tab = element.querySelector('[role="tab"]');
+  const picker = element.querySelector('[aria-label="First output"]');
   labelReads = 0;
   for (let update = 2; update <= 100; update++) {
     const snapshot = port.read();
@@ -113,7 +142,7 @@ test('keeps source and comparison catalogs outside continuous camera and wipe re
     await nextTick();
   }
   expect(labelReads).toBe(0);
-  expect(element.querySelector('[role="tab"]')).toBe(tab);
+  expect(element.querySelector('[aria-label="First output"]')).toBe(picker);
   expect(element.querySelector('[role="separator"]')?.getAttribute('aria-valuenow')).toBe('100');
   port.publish({
     ...port.read(),
@@ -121,7 +150,7 @@ test('keeps source and comparison catalogs outside continuous camera and wipe re
     sources: initial.sources.map((source) => ({ ...source, label: 'Renamed' })),
   });
   await nextTick();
-  expect(element.querySelector('[role="tab"]')?.textContent).toBe('Renamed');
+  expect(element.querySelector('[aria-label="First output"]')?.textContent).toBe('Renamed');
   mounted.dispose();
 });
 
@@ -281,7 +310,7 @@ test('rejects old revisions and delivery from another attachment', async () => {
   mounted.dispose();
 });
 
-test('keeps comparison actions transient and delegates source selection without exposing form controls', async () => {
+test('delegates both on-canvas comparison choosers through the renderer-independent port', async () => {
   const initial = canvasSnapshot('comparison');
   const port = new CanvasPortFixture({
     ...initial,
@@ -296,7 +325,9 @@ test('keeps comparison actions transient and delegates source selection without 
   });
   const element = root();
   const mounted = mountCanvasOverlay(element, port, jest.fn());
-  expect(element.querySelector('select,input,[role="toolbar"]')).toBeNull();
+  expect(element.querySelector('input,[role="toolbar"]')).toBeNull();
+  await choose(element, 'First output', 'Detail');
+  await choose(element, 'Comparison output', 'Saved image');
   const actions = canvasContextActions(port.read(), port.capabilities, (command) => {
     void port.dispatch({
       schema: 1,
@@ -307,11 +338,11 @@ test('keeps comparison actions transient and delegates source selection without 
     });
   });
   actions.find((entry) => entry.label === 'Compare outputs')?.select?.();
-  actions.find((entry) => entry.label === 'Compare with')?.children?.[0]?.select?.();
   await nextTick();
   expect(port.requests.map((value) => value.command)).toEqual([
-    { type: 'comparison', enabled: false },
+    { type: 'select', selection: { sourceId: 'source:42:23', batchIndex: 2 } },
     { type: 'select-comparison', selection: { sourceId: 'source:7', batchIndex: 2 } },
+    { type: 'comparison', enabled: false },
   ]);
   mounted.dispose();
 });
@@ -428,18 +459,17 @@ test('returns root subscriptions and DOM to baseline through repeated lifecycle 
   expect(port.releases).toHaveLength(0);
 });
 
-test('uses compact batch controls only for multiple images and retains truthful pinned positions', async () => {
+test('uses a numbered batch picker only for multiple images and retains exact unavailable positions', async () => {
   const initial = canvasSnapshot('batch-strip');
   const port = new CanvasPortFixture(initial);
   const element = root();
   const mounted = mountCanvasOverlay(element, port, jest.fn());
-  expect(element.querySelector('[aria-label="Batch position"]')?.textContent).toBe('3 / 3');
-  element.querySelector<HTMLButtonElement>('[aria-label="Previous image"]')?.click();
-  await nextTick();
+  expect(element.querySelector('[aria-label="Output image"]')?.textContent).toBe('3');
+  await choose(element, 'Output image', '2');
   expect(port.requests.at(-1)?.command).toEqual({ type: 'batch', index: 1 });
-  expect(element.querySelector<HTMLButtonElement>('[aria-label="Next image"]')?.disabled).toBe(
-    true,
-  );
+  expect(
+    element.querySelector('[aria-label="Previous image"],[aria-label="Next image"]'),
+  ).toBeNull();
   port.publish({
     ...initial,
     revision: 2,
@@ -450,7 +480,7 @@ test('uses compact batch controls only for multiple images and retains truthful 
     },
   });
   await nextTick();
-  expect(element.querySelector('[aria-label="Batch position"]')?.textContent).toBe('Image 5');
+  expect(element.querySelector('[aria-label="First output image"]')?.textContent).toBe('5');
   mounted.dispose();
 });
 
@@ -472,5 +502,53 @@ test('keeps actionable image failure feedback available over the simplified pres
   button(element, 'Retry image').click();
   await nextTick();
   expect(port.requests.at(-1)?.command).toEqual({ type: 'retry' });
+  mounted.dispose();
+});
+
+test('hides lone-source chrome without adding input or output modes', async () => {
+  const initial = canvasSnapshot('routes');
+  const port = new CanvasPortFixture({
+    ...initial,
+    sources: initial.sources.slice(0, 1).map((source) => ({ ...source, batchCount: 1 })),
+    comparisonAvailable: false,
+  });
+  const element = root();
+  const mounted = mountCanvasOverlay(element, port, jest.fn());
+  expect(element.querySelector('.sc-output-tabstrip')).toBeNull();
+  port.publish({
+    ...port.read(),
+    revision: 2,
+  });
+  await nextTick();
+  expect(element.querySelector('[aria-label="Canvas content"]')).toBeNull();
+  expect(element.querySelectorAll('[role="tab"]')).toHaveLength(0);
+  mounted.dispose();
+  expect(port.listenerCount).toBe(0);
+});
+
+test('shares numbered sets across sources and opens the selected source batch grid through zero', async () => {
+  const initial = canvasSnapshot('numbered-sets');
+  const port = new CanvasPortFixture({
+    ...initial,
+    sources: initial.sources.map((source, index) => ({
+      ...source,
+      batchCount: index === 0 ? 1 : 3,
+    })),
+    view: { ...initial.view, selection: { sourceId: initial.sources[0]!.id, batchIndex: 0 } },
+  });
+  const element = root();
+  const mounted = mountCanvasOverlay(element, port, jest.fn());
+  await choose(element, 'Output image', '0');
+  expect(port.requests.at(-1)?.command).toEqual({ type: 'overview', enabled: true });
+  port.publish({
+    ...port.read(),
+    revision: port.read().revision + 1,
+    view: { ...port.read().view, mode: 'overview' },
+  });
+  await nextTick();
+  expect(element.querySelector('[aria-label="Output image"]')?.textContent).toBe('0');
+  await choose(element, 'Output image', '3');
+  expect(port.requests.at(-1)?.command).toEqual({ type: 'batch', index: 2 });
+  expect(element.querySelector('select')).toBeNull();
   mounted.dispose();
 });

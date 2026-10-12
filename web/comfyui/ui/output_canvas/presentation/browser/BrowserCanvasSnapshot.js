@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Describe actual displayed image fidelity and loading state for reusable overlay controls. */
+import { canvasComparisonAvailable } from '../../application/CanvasComparisonSelection.js';
 /** Project only lightweight status, keeping DOM handles out of the renderer-independent port. */
 export function browserCanvasSnapshot(address, plan, catalog, images, camera, connected, previewStarted, sources) {
     const primary = images.find((slot) => slot.slot === 'primary');
@@ -54,13 +55,15 @@ export function browserCanvasSnapshot(address, plan, catalog, images, camera, co
     if (!frame && b)
         resource = { ...resource, message: `${resource.message} Showing B.` };
     if (plan.view.mode === 'overview')
-        resource = status('empty', 'Workflow output overview.');
+        resource = status('empty', '');
     return Object.freeze({
         schema: 1,
         address,
         revision: 0,
         view: plan.view,
         sources,
+        grid: plan.grid,
+        comparisonAvailable: canvasComparisonAvailable(catalog),
         selected: plan.primary?.item ?? null,
         secondary: plan.secondary?.item ?? null,
         preview,

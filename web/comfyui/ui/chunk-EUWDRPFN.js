@@ -4,7 +4,7 @@ import {
   onBeforeUnmount,
   ref,
   watch
-} from "./chunk-MNPWJMUZ.js";
+} from "./chunk-LFPAN2S3.js";
 
 // frontend/comfyui/ui/output_canvas/presentation/vue/CanvasLoadingIndicator.ts
 var CanvasLoadingIndicator = defineComponent({

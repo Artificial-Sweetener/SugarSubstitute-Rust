@@ -18,9 +18,10 @@
 import type { WorkflowOutputItem } from '../../execution/domain/WorkflowOutput.js';
 import type { WorkflowPreview } from '../../execution/domain/WorkflowPreview.js';
 import type { OutputSourceId } from '../../execution/domain/ExecutionIdentity.js';
-import type { CanvasCatalogSnapshot } from '../domain/CanvasCatalog.js';
+import { canvasBatchGridCatalog } from './CanvasContentSelection.js';
+import type { CanvasCatalogEntry, CanvasCatalogSnapshot } from '../domain/CanvasCatalog.js';
 import type { CanvasSelection, CanvasViewState } from '../domain/CanvasViewState.js';
-import type { CanvasPinnedPair } from './CanvasResultPins.js';
+import type { CanvasImagePair } from './CanvasComparisonSelection.js';
 
 export interface CanvasDisplaySlot {
   readonly selection: CanvasSelection;
@@ -32,6 +33,7 @@ export interface CanvasDisplayPlan {
   readonly view: CanvasViewState;
   readonly generation: number;
   readonly signature: string;
+  readonly grid: readonly CanvasCatalogEntry[];
   readonly availableSources: readonly OutputSourceId[];
   readonly primary: CanvasDisplaySlot | null;
   readonly secondary: CanvasDisplaySlot | null;
@@ -54,7 +56,7 @@ export function canvasPreviewLane(preview: WorkflowPreview): string {
 export function canvasDisplayPlan(
   view: CanvasViewState,
   catalog: CanvasCatalogSnapshot,
-  items: CanvasPinnedPair,
+  items: CanvasImagePair,
   preview: WorkflowPreview | null,
 ): CanvasDisplayPlan {
   if (view.sessionId !== catalog.sessionId)
@@ -73,9 +75,18 @@ export function canvasDisplayPlan(
   const primary = slot(view.selection, items.primary);
   const secondary = slot(view.comparison?.secondary ?? null, items.secondary);
   const availableSources = Object.freeze(catalog.entries.map((entry) => entry.source.id));
+  const grid =
+    view.mode === 'overview'
+      ? canvasBatchGridCatalog(catalog, view.selection, view.follow === 'auto').entries
+      : Object.freeze([]);
   const signature = JSON.stringify([
     catalog.generation,
     view.mode,
+    grid.map((entry) => [
+      entry.source.id,
+      entry.items.map((item) => item.id),
+      entry.preview ? canvasPreviewLane(entry.preview) : null,
+    ]),
     availableSources,
     primary?.selection,
     primary?.sourcePresent,
@@ -90,6 +101,7 @@ export function canvasDisplayPlan(
     generation: catalog.generation,
     signature,
     availableSources,
+    grid,
     primary,
     secondary,
     preview,

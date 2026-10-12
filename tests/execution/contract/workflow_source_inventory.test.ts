@@ -18,6 +18,7 @@
 import { decodeComfyWorkflowSources } from '../../../frontend/comfyui/ui/execution/infrastructure/ComfyWorkflowSourceDecoder.js';
 import { decodeComfyPromptSources } from '../../../frontend/comfyui/ui/execution/infrastructure/ComfyPromptSourceDecoder.js';
 import { buildCubeOutputExecutionId } from '../../../frontend/comfyui/ui/cube/execution/CubeOutputExecutionIdentity.js';
+import { outputSourceId } from '../../../frontend/comfyui/ui/execution/domain/ExecutionIdentity.js';
 
 test('gives repeated definition instances distinct full paths and literal named breadcrumbs', () => {
   const workflow = {
@@ -93,6 +94,78 @@ test('rejects malformed collection values and terminates cyclic definition refer
     '1',
     '1:1',
   ]);
+});
+
+test('routes compiled Cube internals to the exposed stage while preserving authored source order', () => {
+  const marker = buildCubeOutputExecutionId(23, 0);
+  const sources = decodeComfyPromptSources({
+    output: {
+      'instance:sampler': { class_type: 'KSampler' },
+      'instance:decode': { class_type: 'VAEDecode' },
+      [marker]: {
+        class_type: 'SugarCubes.CubeOutput',
+        inputs: { instance_id: 'instance', value: ['instance:decode', 0] },
+      },
+      'other:decode': { class_type: 'PreviewImage' },
+    },
+  });
+  expect(sources.find((source) => source.executionPath === 'instance:sampler')).toMatchObject({
+    id: outputSourceId(marker),
+    transientOnly: true,
+  });
+  expect(sources.find((source) => source.executionPath === 'instance:decode')).toMatchObject({
+    id: outputSourceId(marker),
+  });
+  expect(sources.find((source) => source.executionPath === 'instance:decode')).not.toHaveProperty(
+    'transientOnly',
+  );
+  expect(sources.find((source) => source.executionPath === 'other:decode')?.id).toBe(
+    outputSourceId('other:decode'),
+  );
+  expect(sources.find((source) => source.executionPath === marker)?.order).toBe(
+    sources.find((source) => source.executionPath === 'instance:sampler')?.order,
+  );
+});
+
+test('does not guess between two Cube outputs or accept foreign bound producer identities', () => {
+  const first = buildCubeOutputExecutionId(23, 0);
+  const second = buildCubeOutputExecutionId(23, 1);
+  const sources = decodeComfyPromptSources({
+    output: {
+      'instance:sampler': { class_type: 'KSampler' },
+      'instance:a': { class_type: 'VAEDecode' },
+      'instance:b': { class_type: 'VAEDecode' },
+      [first]: {
+        class_type: 'SugarCubes.CubeOutput',
+        inputs: { instance_id: 'instance', value: ['instance:a', 0] },
+      },
+      [second]: {
+        class_type: 'SugarCubes.CubeOutput',
+        inputs: { instance_id: 'instance', value: ['instance:b', 0] },
+      },
+    },
+  });
+  expect(sources.find((source) => source.executionPath === 'instance:sampler')?.id).toBe(
+    outputSourceId('instance:sampler'),
+  );
+  expect(sources.find((source) => source.executionPath === 'instance:a')?.id).toBe(
+    outputSourceId(first),
+  );
+  expect(sources.find((source) => source.executionPath === 'instance:b')?.id).toBe(
+    outputSourceId(second),
+  );
+  const foreign = decodeComfyPromptSources({
+    output: {
+      'instance:a': { class_type: 'VAEDecode' },
+      [first]: {
+        class_type: 'SugarCubes.CubeOutput',
+        inputs: { instance_id: 'instance', value: ['foreign:a', 0] },
+      },
+    },
+  });
+  expect(foreign.find((source) => source.executionPath === 'instance:a')?.id).toBe(
+    outputSourceId('instance:a'),
+  );
 });
 
 test('generates distinct opaque session identities without the secure-context UUID method', async () => {

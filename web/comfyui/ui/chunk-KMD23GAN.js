@@ -2,7 +2,7 @@ import {
   defineComponent,
   h,
   watch
-} from "./chunk-MNPWJMUZ.js";
+} from "./chunk-LFPAN2S3.js";
 
 // frontend/comfyui/ui/core/CubeFallbackIconRenderer.ts
 var FALLBACK_ICON_STYLE = Object.freeze({

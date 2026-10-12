@@ -24,6 +24,8 @@ export interface WorkflowResultSession {
   readonly revision: number;
   readonly outputs: readonly WorkflowOutputSet[];
   readonly runOrder: number;
+  /** Keep the accepted visual handoff monotonic even after transient previews retire. */
+  readonly presentedRunOrder: number;
   readonly runStatus: WorkflowRunStatus | 'idle';
   readonly preview: WorkflowPreview | null;
   readonly recovery: {

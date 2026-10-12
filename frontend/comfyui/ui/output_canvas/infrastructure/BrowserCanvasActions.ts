@@ -30,7 +30,7 @@ export interface BrowserCanvasActionOwners {
   readonly resources: BrowserCanvasResources;
   readonly selection: CanvasSelectionController;
   readonly snapshot: CanvasViewSnapshot;
-  /** Open an exact current/pinned item through the host adapter. */
+  /** Open the exact selected final through the host adapter. */
   open(item: WorkflowOutputItem): void;
 }
 

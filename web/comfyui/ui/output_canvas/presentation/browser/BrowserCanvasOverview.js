@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Present a virtual, keyboard-accessible gallery without owning image loading or result history. */
+/** Present packed batch images without owning image loading or result history. */
 import { canvasOverviewWindow, } from '../../application/CanvasOverviewWindow.js';
 /** Keep only the visible window's controls and adopt already-admitted image handles. */
 export class BrowserCanvasOverview {
@@ -31,6 +31,8 @@ export class BrowserCanvasOverview {
     #active = false;
     #signature = '';
     #disposed = false;
+    #columns = null;
+    #reference = null;
     /** Bind explicit visible-interest and navigation collaborators without accessing the Comfy host. */
     constructor(parent, frames, visible, select) {
         this.frames = frames;
@@ -67,6 +69,8 @@ export class BrowserCanvasOverview {
             this.#frame?.();
             this.#frame = null;
             this.#signature = '';
+            this.#columns = null;
+            this.#reference = null;
             this.#images = [];
             this.#cells.clear();
             this.#window.replaceChildren();
@@ -80,7 +84,8 @@ export class BrowserCanvasOverview {
     /** Attach resource-owned handles without copying pixels, URLs, or decode authority. */
     images(images) {
         this.#images = images;
-        this.#present();
+        if (this.#active)
+            this.#render(false);
     }
     /** Stop finite scroll/resize work and detach this gallery's controls and image references. */
     dispose() {
@@ -109,11 +114,20 @@ export class BrowserCanvasOverview {
         if (!this.#catalog || !this.#active || this.#disposed)
             return;
         const bounds = this.element.getBoundingClientRect();
-        const window = canvasOverviewWindow(this.#catalog, bounds.width, bounds.height, this.element.scrollTop);
+        this.#reference =
+            this.#catalog.entries[0]?.preview?.dimensions ??
+                this.#catalog.entries[0]?.items[0]?.dimensions ??
+                this.#images.find((image) => image.frame)?.frame?.dimensions ??
+                this.#reference;
+        const window = canvasOverviewWindow(this.#catalog, bounds.width, bounds.height, this.element.scrollTop, this.#reference, this.#columns);
+        this.#columns = window.columns;
         this.#track.style.height = `${window.totalHeight}px`;
         this.#window.style.top = `${window.offset}px`;
+        this.#window.style.left = `${window.left}px`;
+        this.#window.style.width = `${window.width}px`;
         this.#window.style.gridTemplateColumns = `repeat(${window.columns},minmax(0,1fr))`;
-        this.#window.style.gridAutoRows = `${window.rowHeight}px`;
+        this.#window.style.gridAutoRows = `${window.cellHeight}px`;
+        this.#window.style.gap = `${window.gap}px`;
         const keys = new Set(window.cells.map((cell) => cell.key));
         for (const [key, elements] of this.#cells)
             if (!keys.has(key)) {
@@ -134,6 +148,12 @@ export class BrowserCanvasOverview {
             }
             if (this.#window.children[index] !== elements.button)
                 this.#window.insertBefore(elements.button, this.#window.children[index] ?? null);
+            const finalCount = window.count % window.columns;
+            const finalRow = window.count <= 8 && finalCount > 0 && index >= window.count - finalCount;
+            const shift = finalRow
+                ? ((window.columns - finalCount) * (window.width + window.gap)) / window.columns / 2
+                : 0;
+            elements.button.style.transform = shift ? `translateX(${shift}px)` : '';
         }
         const signature = JSON.stringify(window.cells.map((cell) => [cell.key, cell.item?.id, cell.preview]));
         if (force || signature !== this.#signature) {
@@ -142,7 +162,7 @@ export class BrowserCanvasOverview {
         }
         this.#present();
     }
-    /** Build literal labels and exact selection intents, including unavailable batch positions. */
+    /** Keep source descriptions accessible without placing captions over the batch images. */
     #cell(cell) {
         const document = this.element.ownerDocument;
         const button = document.createElement('button');
@@ -151,11 +171,9 @@ export class BrowserCanvasOverview {
         button.setAttribute('aria-label', cell.label);
         const image = document.createElement('div');
         image.className = 'sc-output-overview-image';
-        const label = document.createElement('span');
-        label.textContent = cell.label;
         const status = document.createElement('span');
         status.className = 'sc-output-overview-cell-status';
-        button.append(image, label, status);
+        button.append(image, status);
         button.addEventListener('click', () => this.select(cell));
         return { cell, button, image, status };
     }
@@ -171,15 +189,17 @@ export class BrowserCanvasOverview {
             }
             else if (!handle)
                 elements.image.replaceChildren();
-            elements.status.textContent =
-                snapshot?.status.message ||
-                    (elements.cell.preview
-                        ? 'Select to view the live source preview.'
+            elements.status.textContent = handle
+                ? ''
+                : snapshot?.status.state === 'error' || snapshot?.status.state === 'budget'
+                    ? snapshot.status.message
+                    : elements.cell.preview
+                        ? ''
                         : !elements.cell.item
                             ? 'This batch image is unavailable.'
                             : elements.cell.item.mediaKind !== 'image'
                                 ? 'Select to open this media.'
-                                : '');
+                                : '';
         }
     }
 }

@@ -45,6 +45,7 @@ export function canvasCatalogFixture(
   generation = 0,
   sources = canvasSources(),
   key = 'canvas',
+  revision = run,
 ): CanvasCatalogSnapshot {
   const context = { sessionId: workflowSessionId(key), generation, title: key, path: '' };
   const outputs = sources.map((source) => {
@@ -54,12 +55,12 @@ export function canvasCatalogFixture(
       executionPath: source.executionPath,
       runOrder: run,
       sourceOrder: source.order,
-      revision: run,
+      revision,
       kind: 'execution' as const,
       promptId: promptId(String(run)),
     };
     const item: WorkflowOutputItem = {
-      id: `result:${key}-${generation}-${source.id}-${run}`,
+      id: `result:${key}-${generation}-${source.id}-${revision}`,
       provenance,
       batchIndex: 0,
       file: { filename: `${run}.png`, subfolder: '', type: 'output' },
@@ -70,9 +71,10 @@ export function canvasCatalogFixture(
   });
   const result: WorkflowResultSession = {
     context,
-    revision: run,
+    revision,
     outputs,
     runOrder: run,
+    presentedRunOrder: run,
     runStatus: 'complete',
     preview: null,
     recovery: { state: 'idle', message: '' },

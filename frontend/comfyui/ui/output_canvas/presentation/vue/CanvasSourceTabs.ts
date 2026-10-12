@@ -15,12 +15,14 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Render source navigation from renderer-independent view snapshots. */
 
-import { defineComponent, h, type PropType, type VNode } from 'vue';
+import { defineComponent, h, onBeforeUnmount, onMounted, onUpdated, ref, type PropType } from 'vue';
 import type {
   CanvasCapabilities,
   CanvasCommand,
   CanvasViewSnapshot,
 } from '../../domain/CanvasViewPort.js';
+import { CanvasSelectionPicker } from './CanvasSelectionPicker.js';
+import { CanvasBatchPicker } from './CanvasBatchPicker.js';
 
 /** Keep source labels literal and retain the chosen batch when switching. */
 export const CanvasSourceTabs = defineComponent({
@@ -32,6 +34,35 @@ export const CanvasSourceTabs = defineComponent({
   },
   /** Bind source navigation while preserving the selected batch position. */
   setup(props) {
+    const strip = ref<HTMLElement | null>(null);
+    const tabs = ref<HTMLElement | null>(null);
+    const collapsed = ref(false);
+    let observer: ResizeObserver | null = null;
+    let observedTabs: HTMLElement | null = null;
+    /** Measure settled content width while keeping the tab measurement independent of collapse. */
+    function measure(): void {
+      const parent = strip.value?.parentElement;
+      if (!parent || !tabs.value || !parent.clientWidth) return;
+      const fixed = [
+        ...(strip.value?.querySelectorAll<HTMLElement>('[data-sc-fixed-navigation]') ?? []),
+      ].reduce((width, element) => width + element.offsetWidth, 0);
+      collapsed.value = tabs.value.scrollWidth + fixed + 24 > parent.clientWidth - 16;
+    }
+    onMounted(() => {
+      if (typeof ResizeObserver === 'undefined' || !strip.value?.parentElement) return;
+      observer = new ResizeObserver(measure);
+      observer.observe(strip.value.parentElement);
+      measure();
+    });
+    onUpdated(() => {
+      if (observedTabs !== tabs.value) {
+        if (observedTabs) observer?.unobserve(observedTabs);
+        observedTabs = tabs.value;
+        if (observedTabs) observer?.observe(observedTabs);
+      }
+      measure();
+    });
+    onBeforeUnmount(() => observer?.disconnect());
     /** Activate a declared source without treating its live preview as a numbered batch. */
     function choose(index: number): void {
       const source = props.snapshot.sources[index];
@@ -69,77 +100,67 @@ export const CanvasSourceTabs = defineComponent({
     return () => {
       const selection = props.snapshot.view.selection;
       const source = props.snapshot.sources.find((value) => value.id === selection?.sourceId);
-      const count = source?.batchCount ?? 0;
-      const batch = selection?.batchIndex ?? 0;
-      const navigation: VNode[] = [];
-      if (count > 1 && selection && props.capabilities.commands.includes('batch'))
-        navigation.push(
-          h(
-            'button',
-            {
-              type: 'button',
-              class: 'sc-output-batch-arrow',
-              'aria-label': 'Previous image',
-              disabled: batch === 0,
-              onClick: () => props.send({ type: 'batch', index: Math.max(0, batch - 1) }),
-            },
-            '\u2039',
-          ),
-          h(
-            'span',
-            { class: 'sc-output-batch', 'aria-label': 'Batch position' },
-            props.snapshot.preview
-              ? 'Preview'
-              : props.snapshot.view.comparison && batch >= count
-                ? `Image ${batch + 1}`
-                : `${batch + 1} / ${count}`,
-          ),
-          h(
-            'button',
-            {
-              type: 'button',
-              class: 'sc-output-batch-arrow',
-              'aria-label': 'Next image',
-              disabled: batch + 1 >= count,
-              onClick: () => props.send({ type: 'batch', index: batch + 1 }),
-            },
-            '\u203a',
-          ),
-        );
-      return h('div', { class: 'sc-output-tabstrip' }, [
-        h('div', { class: 'sc-output-batch-navigation' }, navigation),
-        h(
-          'nav',
-          {
-            class: 'sc-output-tabs',
-            role: 'tablist',
-            'aria-label': 'Workflow output sources',
-            'data-capture-wheel': 'true',
-          },
-          props.snapshot.sources.map((source, index) =>
-            h(
-              'button',
+      return h('div', { class: 'sc-output-tabstrip', ref: strip }, [
+        props.capabilities.commands.includes('batch')
+          ? h('div', { 'data-sc-fixed-navigation': 'true' }, [
+              h(CanvasBatchPicker, {
+                count: Math.max(0, ...props.snapshot.sources.map((value) => value.batchCount)),
+                grid: props.snapshot.view.mode === 'overview',
+                includeGrid:
+                  Boolean(source?.batchCount) && props.capabilities.commands.includes('overview'),
+                selection,
+                label: 'Output image',
+                send: props.send,
+              }),
+            ])
+          : null,
+        props.snapshot.sources.length > 1
+          ? h(
+              'nav',
               {
-                key: source.id,
-                type: 'button',
-                role: 'tab',
-                'aria-selected': props.snapshot.view.selection?.sourceId === source.id,
-                tabIndex:
-                  props.snapshot.view.selection?.sourceId === source.id ||
-                  (index === 0 &&
-                    !props.snapshot.sources.some(
-                      (value) => value.id === props.snapshot.view.selection?.sourceId,
-                    ))
-                    ? 0
-                    : -1,
-                title: [...source.breadcrumb, source.label].join(' / '),
-                onClick: () => choose(index),
-                onKeydown: (event: KeyboardEvent) => navigate(event, index),
+                class: collapsed.value ? 'sc-output-tabs sc-output-tabs-measure' : 'sc-output-tabs',
+                ref: tabs,
+                'aria-hidden': collapsed.value ? 'true' : undefined,
+                role: 'tablist',
+                'aria-label': 'Workflow output sources',
+                'data-capture-wheel': 'true',
               },
-              source.label,
-            ),
-          ),
-        ),
+              props.snapshot.sources.map((source, index) =>
+                h(
+                  'button',
+                  {
+                    key: source.id,
+                    type: 'button',
+                    role: 'tab',
+                    'aria-selected': props.snapshot.view.selection?.sourceId === source.id,
+                    tabIndex: collapsed.value
+                      ? -1
+                      : props.snapshot.view.selection?.sourceId === source.id ||
+                          (index === 0 &&
+                            !props.snapshot.sources.some(
+                              (value) => value.id === props.snapshot.view.selection?.sourceId,
+                            ))
+                        ? 0
+                        : -1,
+                    title: [...source.breadcrumb, source.label].join(' / '),
+                    onClick: () => choose(index),
+                    onKeydown: (event: KeyboardEvent) => navigate(event, index),
+                  },
+                  source.label,
+                ),
+              ),
+            )
+          : null,
+        collapsed.value
+          ? h(CanvasSelectionPicker, {
+              sources: props.snapshot.sources,
+              selection,
+              label: 'Output source',
+              preview: true,
+              includeBatch: false,
+              send: props.send,
+            })
+          : null,
       ]);
     };
   },

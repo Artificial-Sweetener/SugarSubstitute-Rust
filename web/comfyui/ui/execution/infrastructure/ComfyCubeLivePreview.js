@@ -57,7 +57,7 @@ export class ComfyCubeLivePreview {
                     const active = sessions.read().active;
                     return (visibility.read() &&
                         this.#listeners.size > 0 &&
-                        this.#wanted.has(source.source.executionPath) &&
+                        this.#wanted.has(source.source.id) &&
                         active?.sessionId === source.run.session.sessionId &&
                         active.generation === source.run.session.generation);
                 },
@@ -77,7 +77,7 @@ export class ComfyCubeLivePreview {
     }
     /** Return only the owned current source frame; host-global preview maps are never consulted. */
     read(path) {
-        this.#wanted.add(path);
+        this.#wanted.add(outputSourceId(path));
         const frame = this.#frame;
         const active = this.sessions.read().active;
         if (!frame ||

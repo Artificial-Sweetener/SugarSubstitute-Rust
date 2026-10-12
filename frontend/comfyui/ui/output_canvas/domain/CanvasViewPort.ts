@@ -17,6 +17,7 @@
 
 import type { OutputSourceId } from '../../execution/domain/ExecutionIdentity.js';
 import type { ImageDimensions, WorkflowOutputItem } from '../../execution/domain/WorkflowOutput.js';
+import type { CanvasCatalogEntry } from './CanvasCatalog.js';
 import type { CanvasAttachmentAddress } from './CanvasIdentity.js';
 import type { CanvasSelection, CanvasViewState } from './CanvasViewState.js';
 
@@ -50,6 +51,9 @@ export interface CanvasViewSnapshot {
   readonly revision: number;
   readonly view: CanvasViewState;
   readonly sources: readonly CanvasSourceSummary[];
+  /** Publish resource-free progressive batch descriptors for any renderer. */
+  readonly grid: readonly CanvasCatalogEntry[];
+  readonly comparisonAvailable: boolean;
   readonly selected: WorkflowOutputItem | null;
   readonly secondary: WorkflowOutputItem | null;
   readonly preview: boolean;

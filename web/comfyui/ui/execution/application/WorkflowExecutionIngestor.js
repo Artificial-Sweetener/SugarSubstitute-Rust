@@ -86,6 +86,8 @@ export class WorkflowExecutionIngestor {
         if (this.options.runs.isClosed(event.promptId))
             return false;
         const attributed = this.resolveSource(event.promptId, event.executionPaths);
+        if (attributed?.source.transientOnly)
+            return false;
         if (!attributed) {
             if (!this.options.runs.read(event.promptId)) {
                 const early = this.#stage(event.promptId);

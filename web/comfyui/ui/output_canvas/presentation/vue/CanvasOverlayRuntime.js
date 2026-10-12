@@ -1,23 +1,27 @@
 import {
+  ensureCanvasOverlayStyles
+} from "../../../chunk-UJLJJQ66.js";
+import {
   canvasContextActions
-} from "../../../chunk-WAW2YKKC.js";
+} from "../../../chunk-MSLW7STS.js";
 import {
   CanvasOverlay
-} from "../../../chunk-UGJKIAX4.js";
-import "../../../chunk-OVL65VLS.js";
-import "../../../chunk-ZAPDTI3U.js";
+} from "../../../chunk-FDYCPMBS.js";
+import "../../../chunk-5BXDB3BG.js";
+import "../../../chunk-7LFGLXDD.js";
+import "../../../chunk-BESRJTPC.js";
+import "../../../chunk-YOT4H4QS.js";
+import "../../../chunk-F5KWFYMM.js";
+import "../../../chunk-LZQHJ4KN.js";
+import "../../../chunk-EUWDRPFN.js";
 import {
   canvasNavigationSnapshot
 } from "../../../chunk-HDLA7PWP.js";
 import {
-  ensureCanvasOverlayStyles
-} from "../../../chunk-GN4T4KG6.js";
-import "../../../chunk-MS5JIV6F.js";
-import {
   createApp,
   h,
   shallowRef
-} from "../../../chunk-MNPWJMUZ.js";
+} from "../../../chunk-LFPAN2S3.js";
 
 // frontend/comfyui/ui/output_canvas/presentation/vue/CanvasOverlayRuntime.ts
 import { ContextMenu } from "../../../menus/ContextMenu.js";

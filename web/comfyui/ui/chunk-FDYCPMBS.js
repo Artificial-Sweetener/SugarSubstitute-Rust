@@ -1,20 +1,23 @@
 import {
+  CanvasSourceTabs
+} from "./chunk-5BXDB3BG.js";
+import {
   CanvasWipeSeparator
-} from "./chunk-OVL65VLS.js";
+} from "./chunk-7LFGLXDD.js";
+import {
+  CanvasComparisonNavigation
+} from "./chunk-BESRJTPC.js";
 import {
   CanvasLoadingIndicator
-} from "./chunk-ZAPDTI3U.js";
+} from "./chunk-EUWDRPFN.js";
 import {
   canvasNavigationSnapshot
 } from "./chunk-HDLA7PWP.js";
 import {
-  CanvasSourceTabs
-} from "./chunk-MS5JIV6F.js";
-import {
   computed,
   defineComponent,
   h
-} from "./chunk-MNPWJMUZ.js";
+} from "./chunk-LFPAN2S3.js";
 
 // frontend/comfyui/ui/output_canvas/presentation/vue/CanvasOverlay.ts
 function resourceMessage(resource) {
@@ -75,7 +78,7 @@ var CanvasOverlay = defineComponent({
           },
           props.announcement
         ),
-        props.capabilities.commands.includes("select-source") && snapshot.sources.length > 0 ? h(CanvasSourceTabs, {
+        snapshot.view.comparison && props.capabilities.commands.includes("select-comparison") ? h(CanvasComparisonNavigation, { snapshot: navigation.value, send: props.send }) : props.capabilities.commands.includes("select-source") && (snapshot.sources.length > 1 || (snapshot.sources[0]?.batchCount ?? 0) > 1) ? h(CanvasSourceTabs, {
           snapshot: navigation.value,
           capabilities: props.capabilities,
           send: props.send

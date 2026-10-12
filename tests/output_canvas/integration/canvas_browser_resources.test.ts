@@ -162,7 +162,11 @@ describe('browser resource composition', () => {
     expect(f.resources.diagnostics().queuedInputs).toBe(1);
     await f.ready(1);
     expect(f.resources.read()[0]?.frame?.preview).toBe(true);
-    const final = canvasCatalogFixture(2);
+    const final = canvasCatalogFixture(
+      2,
+      0,
+      f.catalog.entries.slice(0, 1).map((entry) => entry.source),
+    );
     f.selection.reconcile(f.view, final);
     f.browser.reconcile(f.plan(final));
     expect(f.loads).toHaveLength(3);

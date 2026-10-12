@@ -14,15 +14,8 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own navigation, execution following, and bounded comparison revision intent. */
-import { CanvasResultPins } from './CanvasResultPins.js';
-/** Resolve an exact slot without substituting a neighboring batch image. */
-export function canvasSelectedItem(catalog, selection) {
-    if (!selection)
-        return null;
-    return (catalog.entries
-        .find((entry) => entry.source.id === selection.sourceId)
-        ?.items.find((item) => item.batchIndex === selection.batchIndex) ?? null);
-}
+import { canvasComparisonPair } from './CanvasComparisonSelection.js';
+import { canvasSelectedItem, canvasAvailableSelection, canvasItemSelection, canvasBatchGridCatalog, } from './CanvasContentSelection.js';
 /** Compare attributable execution progress independently of delivery order. */
 function later(left, right) {
     for (let index = 0; index < left.length; index++) {
@@ -67,7 +60,6 @@ function autoCandidate(catalog) {
 export class CanvasSelectionController {
     views;
     #cursors = new Map();
-    #pins = new CanvasResultPins();
     /** Use the existing view authority for every published state transition. */
     constructor(views) {
         this.views = views;
@@ -80,10 +72,9 @@ export class CanvasSelectionController {
         let cursor = this.#cursors.get(viewId);
         if (!cursor || cursor.generation !== catalog.generation) {
             const replacement = Boolean(cursor);
-            cursor = { generation: catalog.generation, frontier: null };
+            cursor = { generation: catalog.generation, frontier: null, presentedRun: 0 };
             this.#cursors.set(viewId, cursor);
             if (replacement) {
-                this.#pins.clear(viewId);
                 state = this.views.update(viewId, (current) => ({
                     ...current,
                     selection: null,
@@ -94,9 +85,29 @@ export class CanvasSelectionController {
                 }));
             }
         }
+        const candidate = autoCandidate(catalog);
+        if (candidate && candidate.frontier[0] > cursor.presentedRun) {
+            cursor.presentedRun = candidate.frontier[0];
+            cursor.frontier = null;
+            state = this.views.update(viewId, (current) => ({
+                ...current,
+                follow: 'auto',
+                sourcePreview: true,
+                comparison: null,
+                mode: 'image',
+            }));
+        }
+        if (state.selection && state.sourcePreview) {
+            const activeCatalog = catalog;
+            const entry = activeCatalog.entries.find((entry) => entry.source.id === state.selection?.sourceId);
+            if (!entry?.preview) {
+                const available = canvasAvailableSelection(activeCatalog, state.selection);
+                if (available.batchIndex !== state.selection.batchIndex)
+                    state = this.views.update(viewId, (current) => ({ ...current, selection: available }));
+            }
+        }
         if (state.follow !== 'auto')
             return state;
-        const candidate = autoCandidate(catalog);
         const currentSourceExists = catalog.entries.some((entry) => entry.source.id === state.selection?.sourceId);
         if (!candidate ||
             (currentSourceExists && cursor.frontier && !later(candidate.frontier, cursor.frontier)))
@@ -105,12 +116,16 @@ export class CanvasSelectionController {
         if (state.selection && candidate.frontier[0] < catalog.result.runOrder)
             return state;
         cursor.frontier = candidate.frontier;
+        const batch = canvasBatchGridCatalog(catalog, candidate.selection, true);
+        const mode = (batch.entries[0]?.summary.batchCount ?? 0) > 1 ? 'overview' : 'image';
         if (state.selection?.sourceId === candidate.selection.sourceId &&
-            state.selection.batchIndex === candidate.selection.batchIndex)
+            state.selection.batchIndex === candidate.selection.batchIndex &&
+            state.mode === mode)
             return state;
         return this.views.update(viewId, (current) => ({
             ...current,
             selection: candidate.selection,
+            mode,
             sourcePreview: true,
         }));
     }
@@ -126,13 +141,17 @@ export class CanvasSelectionController {
                 this.#select(viewId, catalog, command.selection, false, true);
                 return true;
             case 'batch':
-                if (state.selection)
+                if (state.selection &&
+                    canvasSelectedItem(catalog, { ...state.selection, batchIndex: command.index }))
                     this.#select(viewId, catalog, { ...state.selection, batchIndex: command.index }, false, false);
                 return true;
             case 'follow':
                 if (command.mode === 'auto') {
-                    this.#pins.clear(viewId);
-                    this.#cursors.set(viewId, { generation: catalog.generation, frontier: null });
+                    this.#cursors.set(viewId, {
+                        generation: catalog.generation,
+                        frontier: null,
+                        presentedRun: this.#cursors.get(viewId)?.presentedRun ?? 0,
+                    });
                     this.views.update(viewId, (current) => ({
                         ...current,
                         follow: 'auto',
@@ -146,10 +165,15 @@ export class CanvasSelectionController {
                     this.manual(viewId);
                 return true;
             case 'overview':
+                if (command.enabled &&
+                    (!state.selection ||
+                        !catalog.entries.some((entry) => entry.source.id === state.selection?.sourceId && entry.items.length)))
+                    return true;
                 this.views.update(viewId, (current) => ({
                     ...current,
                     follow: 'manual',
                     mode: command.enabled ? 'overview' : 'image',
+                    comparison: null,
                 }));
                 return true;
             case 'link':
@@ -165,9 +189,6 @@ export class CanvasSelectionController {
             case 'swap': {
                 const comparison = state.comparison;
                 if (comparison?.secondary && state.selection) {
-                    const pair = this.#pins.read(viewId);
-                    if (pair)
-                        this.#pins.set(viewId, { primary: pair.secondary, secondary: pair.primary });
                     this.views.update(viewId, (current) => ({
                         ...current,
                         follow: 'manual',
@@ -196,20 +217,16 @@ export class CanvasSelectionController {
                 return false;
         }
     }
-    /** Suspend following as soon as a user starts an inspection gesture. */
+    /** Hold deliberate content navigation for the current output session. */
     manual(viewId) {
         this.views.update(viewId, (state) => state.follow === 'manual' ? state : { ...state, follow: 'manual' });
     }
-    /** Read pinned revisions only while their current workflow source still exists. */
+    /** Resolve both semantic selections to current finals without retaining superseded revisions. */
     items(viewId, catalog) {
         const state = this.views.read(viewId);
-        const pinned = state.comparison ? this.#pins.read(viewId) : null;
-        const valid = (selection, item) => catalog.entries.some((entry) => entry.source.id === selection?.sourceId) ? item : null;
         return {
-            primary: pinned
-                ? valid(state.selection, pinned.primary)
-                : canvasSelectedItem(catalog, state.selection),
-            secondary: pinned ? valid(state.comparison?.secondary ?? null, pinned.secondary) : null,
+            primary: canvasSelectedItem(catalog, state.selection),
+            secondary: canvasSelectedItem(catalog, state.comparison?.secondary ?? null),
         };
     }
     /** Admit source-level preview interest without assigning unknown preview bytes to an explicit batch. */
@@ -217,7 +234,9 @@ export class CanvasSelectionController {
         const state = this.views.read(viewId);
         return (state.sessionId === catalog.sessionId &&
             this.#cursors.get(viewId)?.generation === catalog.generation &&
-            state.mode === 'image' &&
+            (state.mode === 'image' ||
+                (state.mode === 'overview' &&
+                    (catalog.result.runStatus === 'running' || catalog.result.runStatus === 'queued'))) &&
             state.comparison === null &&
             state.sourcePreview &&
             state.selection?.sourceId === source &&
@@ -231,28 +250,33 @@ export class CanvasSelectionController {
     /** Release all selection-owned references when a view closes. */
     remove(viewId) {
         this.#cursors.delete(viewId);
-        this.#pins.clear(viewId);
     }
-    /** End this integration without retaining lightweight comparison history. */
+    /** Release navigation state at integration teardown. */
     dispose() {
         this.#cursors.clear();
-        this.#pins.dispose();
     }
     /** Preserve exact requested slots, including explicit unavailable states. */
     #select(viewId, catalog, selection, secondary, sourcePreview) {
         if (!Number.isSafeInteger(selection.batchIndex) || selection.batchIndex < 0)
             throw new TypeError('Canvas batch index is invalid.');
         const state = this.views.read(viewId);
-        if (state.comparison) {
-            const pair = this.#pins.read(viewId) ?? { primary: null, secondary: null };
-            this.#pins.set(viewId, secondary
-                ? { ...pair, secondary: canvasSelectedItem(catalog, selection) }
-                : { ...pair, primary: canvasSelectedItem(catalog, selection) });
+        if (sourcePreview || state.comparison) {
+            const entry = catalog.entries.find((entry) => entry.source.id === selection.sourceId);
+            if (!entry)
+                return;
+            if (sourcePreview && state.mode === 'overview') {
+                if (!entry.items.length && !entry.preview)
+                    return;
+            }
+            else if (!canvasSelectedItem(catalog, selection)) {
+                if (!sourcePreview || !entry.preview || entry.items.length)
+                    return;
+            }
         }
         this.views.update(viewId, (current) => ({
             ...current,
             follow: 'manual',
-            mode: 'image',
+            mode: sourcePreview && current.mode === 'overview' ? 'overview' : 'image',
             selection: secondary ? current.selection : selection,
             sourcePreview: secondary ? current.sourcePreview : sourcePreview,
             comparison: secondary && current.comparison
@@ -260,29 +284,27 @@ export class CanvasSelectionController {
                 : current.comparison,
         }));
     }
-    /** Pin only final still images, with an empty chooser when no distinct B is available. */
+    /** Start reveal comparison with the first and last final stages in the selected batch. */
     #compare(viewId, catalog, enabled) {
         const state = this.views.read(viewId);
         if (!enabled) {
-            this.#pins.clear(viewId);
             this.views.update(viewId, (current) => ({ ...current, comparison: null, follow: 'manual' }));
             return;
         }
         if (state.comparison)
             return;
-        const primary = canvasSelectedItem(catalog, state.selection);
-        const secondary = catalog.entries
-            .flatMap((entry) => entry.items)
-            .find((item) => item.mediaKind === 'image' && item.id !== primary?.id) ?? null;
-        this.#pins.set(viewId, { primary, secondary });
+        const pair = canvasComparisonPair(catalog, state.selection?.batchIndex ?? 0);
+        if (!pair?.primary || !pair.secondary)
+            return;
+        const { primary, secondary } = pair;
         this.views.update(viewId, (current) => ({
             ...current,
             follow: 'manual',
             mode: 'image',
+            selection: canvasItemSelection(primary),
+            sourcePreview: false,
             comparison: {
-                secondary: secondary
-                    ? { sourceId: secondary.provenance.sourceId, batchIndex: secondary.batchIndex }
-                    : null,
+                secondary: canvasItemSelection(secondary),
                 orientation: 'vertical',
                 split: 0.5,
             },
