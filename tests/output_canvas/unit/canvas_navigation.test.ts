@@ -37,6 +37,63 @@ function fixture() {
 }
 
 describe('canvas workflow navigation', () => {
+  test('admits preview metadata only for source intent within a current non-comparison image view', () => {
+    const f = fixture();
+    const source = f.catalog.entries[0]!.source;
+    const preview = {
+      sessionId: f.catalog.result.context.sessionId,
+      generation: 0,
+      promptId: 'prompt:two' as const,
+      sourceId: source.id,
+      runOrder: 2,
+      sequence: 1,
+      token: 'frame',
+      dimensions: null,
+    };
+    const catalog = canvasOutputCatalog(
+      { ...f.catalog.result, runOrder: 2, runStatus: 'running', preview },
+      canvasSources(),
+    );
+    f.selection.reconcile(f.view, catalog);
+    expect(f.selection.preview(f.view, catalog)).toBe(preview);
+    f.selection.apply(f.view, catalog, { type: 'batch', index: 0 });
+    expect(f.selection.preview(f.view, catalog)).toBeNull();
+    f.selection.apply(f.view, catalog, {
+      type: 'select-source',
+      selection: { sourceId: source.id, batchIndex: 2 },
+    });
+    expect(f.selection.preview(f.view, catalog)).toBe(preview);
+    const deleted = canvasOutputCatalog(catalog.result, []);
+    expect(f.selection.preview(f.view, deleted)).toBeNull();
+    expect(f.selection.preview(f.view, { ...catalog, generation: 1 })).toBeNull();
+    f.selection.apply(f.view, catalog, { type: 'comparison', enabled: true });
+    expect(f.selection.preview(f.view, catalog)).toBeNull();
+    f.selection.apply(f.view, catalog, { type: 'comparison', enabled: false });
+    f.selection.apply(f.view, catalog, { type: 'overview', enabled: true });
+    expect(f.selection.preview(f.view, catalog)).toBeNull();
+  });
+  test('distinguishes source preview interest from an explicitly requested batch, including batch zero', () => {
+    const f = fixture();
+    expect(f.views.read(f.view)).toMatchObject({ sourcePreview: true });
+    f.selection.manual(f.view);
+    expect(f.views.read(f.view)).toMatchObject({ sourcePreview: true });
+    f.selection.apply(f.view, f.catalog, { type: 'batch', index: 0 });
+    expect(f.views.read(f.view)).toMatchObject({ sourcePreview: false });
+    const source = f.catalog.entries[0]!.source;
+    f.selection.apply(f.view, f.catalog, {
+      type: 'select-source',
+      selection: { sourceId: source.id, batchIndex: 2 },
+    });
+    expect(f.views.read(f.view)).toMatchObject({ sourcePreview: true, follow: 'manual' });
+    expect(f.views.read(f.view).selection?.batchIndex).toBe(2);
+    f.selection.apply(f.view, f.catalog, {
+      type: 'select',
+      selection: { sourceId: source.id, batchIndex: 0 },
+    });
+    expect(f.views.read(f.view)).toMatchObject({ sourcePreview: false });
+    f.selection.apply(f.view, f.catalog, { type: 'follow', mode: 'auto' });
+    expect(f.views.read(f.view)).toMatchObject({ sourcePreview: true, follow: 'auto' });
+  });
   test('labels carried media by its actual run rather than the source latest text revision', () => {
     const catalog = canvasCatalogFixture();
     const result = {

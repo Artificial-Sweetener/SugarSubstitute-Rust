@@ -108,6 +108,7 @@ export const CanvasToolbar = defineComponent({
               (!selection ||
                 !props.snapshot.selected ||
                 props.snapshot.preview ||
+                props.snapshot.resource.state !== 'ready' ||
                 props.snapshot.selected.mediaKind !== 'image'),
           ),
         ],

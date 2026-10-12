@@ -75,7 +75,7 @@ var CanvasToolbar = defineComponent({
             "Compare",
             { type: "comparison", enabled: !state.comparison },
             Boolean(state.comparison),
-            !state.comparison && (!selection || !props.snapshot.selected || props.snapshot.preview || props.snapshot.selected.mediaKind !== "image")
+            !state.comparison && (!selection || !props.snapshot.selected || props.snapshot.preview || props.snapshot.resource.state !== "ready" || props.snapshot.selected.mediaKind !== "image")
           )
         ]
       );

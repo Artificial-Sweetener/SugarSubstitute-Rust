@@ -27,26 +27,68 @@ export const CanvasSourceTabs = defineComponent({
   },
   /** Bind source navigation while preserving the selected batch position. */
   setup(props) {
+    /** Activate a declared source without treating its live preview as a numbered batch. */
+    function choose(index: number): void {
+      const source = props.snapshot.sources[index];
+      if (source)
+        props.send({
+          type: 'select-source',
+          selection: {
+            sourceId: source.id,
+            batchIndex: props.snapshot.view.selection?.batchIndex ?? 0,
+          },
+        });
+    }
+    /** Follow tab-list keyboard conventions while keeping focus scoped to this overlay root. */
+    function navigate(event: KeyboardEvent, index: number): void {
+      if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      const count = props.snapshot.sources.length;
+      const next =
+        event.key === 'Home'
+          ? 0
+          : event.key === 'End'
+            ? count - 1
+            : event.key === 'ArrowRight'
+              ? (index + 1) % count
+              : event.key === 'ArrowLeft'
+                ? (index + count - 1) % count
+                : null;
+      if (next === null || !count) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const button = event.currentTarget;
+      if (button instanceof HTMLButtonElement)
+        button.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
+      choose(next);
+    }
     return () =>
       h(
         'nav',
-        { class: 'sc-output-tabs', 'aria-label': 'Workflow output sources' },
-        props.snapshot.sources.map((source) =>
+        {
+          class: 'sc-output-tabs',
+          role: 'tablist',
+          'aria-label': 'Workflow output sources',
+          'data-capture-wheel': 'true',
+        },
+        props.snapshot.sources.map((source, index) =>
           h(
             'button',
             {
               key: source.id,
               type: 'button',
-              'aria-pressed': props.snapshot.view.selection?.sourceId === source.id,
+              role: 'tab',
+              'aria-selected': props.snapshot.view.selection?.sourceId === source.id,
+              tabIndex:
+                props.snapshot.view.selection?.sourceId === source.id ||
+                (index === 0 &&
+                  !props.snapshot.sources.some(
+                    (value) => value.id === props.snapshot.view.selection?.sourceId,
+                  ))
+                  ? 0
+                  : -1,
               title: [...source.breadcrumb, source.label].join(' / '),
-              onClick: () =>
-                props.send({
-                  type: 'select',
-                  selection: {
-                    sourceId: source.id,
-                    batchIndex: props.snapshot.view.selection?.batchIndex ?? 0,
-                  },
-                }),
+              onClick: () => choose(index),
+              onKeydown: (event: KeyboardEvent) => navigate(event, index),
             },
             source.label,
           ),

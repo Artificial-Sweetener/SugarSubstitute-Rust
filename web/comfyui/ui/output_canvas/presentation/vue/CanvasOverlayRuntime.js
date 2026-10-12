@@ -1,9 +1,12 @@
 import {
   CanvasOverlay
-} from "../../../chunk-N5OYA5SV.js";
+} from "../../../chunk-QGOBDL5C.js";
 import "../../../chunk-VMDE2JL6.js";
-import "../../../chunk-OJGHAI47.js";
-import "../../../chunk-XB46K7OE.js";
+import {
+  ensureCanvasOverlayStyles
+} from "../../../chunk-2ZUSVEBN.js";
+import "../../../chunk-BBIMJ2PJ.js";
+import "../../../chunk-UL5SOQL2.js";
 import {
   createApp,
   h,
@@ -17,6 +20,7 @@ function sameCanvasAttachment(left, right) {
 
 // frontend/comfyui/ui/output_canvas/presentation/vue/CanvasOverlayRuntime.ts
 function mountCanvasOverlay(element, port, reportFailure) {
+  ensureCanvasOverlayStyles(element.ownerDocument);
   const initial = port.read();
   const state = shallowRef(initial);
   const announcement = shallowRef("");
@@ -47,6 +51,8 @@ function mountCanvasOverlay(element, port, reportFailure) {
   const unsubscribe = port.subscribe((snapshot) => {
     if (!active || !sameCanvasAttachment(initial.address, snapshot.address) || snapshot.revision <= state.value.revision)
       return;
+    const spoken = canvasAnnouncement(state.value, snapshot);
+    if (spoken !== null) announcement.value = spoken;
     state.value = snapshot;
   });
   const app = createApp({
@@ -74,6 +80,17 @@ function mountCanvasOverlay(element, port, reportFailure) {
       app.unmount();
     }
   };
+}
+function canvasAnnouncement(previous, current) {
+  const source = current.sources.find((entry) => entry.id === current.view.selection?.sourceId);
+  if (previous.view.selection?.sourceId !== current.view.selection?.sourceId)
+    return source?.label ?? "Output source is unavailable.";
+  if (current.resource.state === "error" && (previous.resource.state !== "error" || previous.resource.message !== current.resource.message))
+    return current.resource.message;
+  if (!current.preview && current.resource.state === "ready" && current.selected && (previous.selected?.id !== current.selected.id || previous.resource.state !== "ready" || previous.preview))
+    return `${source?.label ?? "Output"}: image ${current.selected.batchIndex + 1} ready.`;
+  if (previous.connected && !current.connected) return "Disconnected.";
+  return null;
 }
 export {
   mountCanvasOverlay

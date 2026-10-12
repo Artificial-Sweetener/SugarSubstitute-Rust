@@ -57,6 +57,17 @@ export class CanvasImageResources {
         this.#pump();
         this.#notify();
     }
+    /** Relinquish one obsolete logical lane without clearing its valid comparison partner. */
+    releaseSlot(name) {
+        const slot = this.#slots.get(name);
+        if (!slot)
+            return;
+        this.#drops += slot.release();
+        this.#slots.delete(name);
+        this.#prune();
+        this.#pump();
+        this.#notify();
+    }
     /** Resume the privately queued latest input after an explicit current-selection allowance changes. */
     admissionChanged() {
         if (!this.options.budget.thumbnailsAllowed)
@@ -245,6 +256,7 @@ export class CanvasImageResources {
                 reservation,
                 frame: Object.freeze({
                     key: requested.key,
+                    selection: requested.selection,
                     preview: requested.preview,
                     handle: image.handle,
                     dimensions: image.dimensions,

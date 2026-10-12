@@ -3,10 +3,10 @@ import {
 } from "./chunk-VMDE2JL6.js";
 import {
   CanvasSourceTabs
-} from "./chunk-OJGHAI47.js";
+} from "./chunk-BBIMJ2PJ.js";
 import {
   CanvasToolbar
-} from "./chunk-XB46K7OE.js";
+} from "./chunk-UL5SOQL2.js";
 import {
   defineComponent,
   h
@@ -29,18 +29,20 @@ var CanvasOverlay = defineComponent({
       const dimensions = zoom.dimensions;
       const label = zoom.mode === "fit" ? "Fit" : zoom.mode === "native" ? "1:1" : `${Math.round(zoom.physicalScale * 100)}%`;
       return h("div", { class: "sc-output-overlay", "data-canvas-view": snapshot.address.viewId }, [
-        h(CanvasToolbar, { snapshot, capabilities: props.capabilities, send: props.send }),
-        snapshot.view.comparison ? h(CanvasCompareControls, {
-          snapshot,
-          capabilities: props.capabilities,
-          send: props.send
-        }) : null,
-        h("div", { class: "sc-output-status", role: "status", "aria-live": "polite" }, [
+        h("div", { class: "sc-output-navigation" }, [
+          h(CanvasToolbar, { snapshot, capabilities: props.capabilities, send: props.send }),
+          snapshot.view.comparison ? h(CanvasCompareControls, {
+            snapshot,
+            capabilities: props.capabilities,
+            send: props.send
+          }) : null
+        ]),
+        h("div", { class: "sc-output-status" }, [
           h("span", { "aria-label": "Zoom" }, label),
           dimensions ? h("span", `${dimensions.width} \xD7 ${dimensions.height}`) : null,
           snapshot.preview ? h("span", "Live preview") : null,
           snapshot.connected ? null : h("span", "Disconnected"),
-          h("span", props.announcement || snapshot.resource.message),
+          h("span", snapshot.resource.message),
           snapshot.resource.canRetry && props.capabilities.commands.includes("retry") ? h(
             "button",
             { type: "button", onClick: () => props.send({ type: "retry" }) },
@@ -60,7 +62,17 @@ var CanvasOverlay = defineComponent({
             "Open media"
           ) : null
         ]),
-        props.capabilities.commands.includes("select") ? h(CanvasSourceTabs, { snapshot, send: props.send }) : null
+        h(
+          "span",
+          {
+            class: "sc-output-announcement",
+            role: "status",
+            "aria-live": "polite",
+            "aria-atomic": "true"
+          },
+          props.announcement
+        ),
+        props.capabilities.commands.includes("select-source") ? h(CanvasSourceTabs, { snapshot, send: props.send }) : null
       ]);
     };
   }

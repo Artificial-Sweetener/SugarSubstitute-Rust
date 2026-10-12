@@ -16,6 +16,7 @@
 /** Control image loading, cancellation and owned-handle release without browser caches. */
 
 import type { ImageDimensions } from '../../../frontend/comfyui/ui/execution/domain/WorkflowOutput.js';
+import { outputSourceId } from '../../../frontend/comfyui/ui/execution/domain/ExecutionIdentity.js';
 import type {
   CanvasDecodedImage,
   CanvasImageInput,
@@ -118,6 +119,7 @@ export function canvasImageInput(
 ): CanvasImageInput<string> {
   return {
     key,
+    selection: { sourceId: outputSourceId(key), batchIndex: 0 },
     lane: preview ? 'preview:current-run' : key,
     fallbackKey: null,
     preview,

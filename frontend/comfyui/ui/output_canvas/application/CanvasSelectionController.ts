@@ -16,6 +16,8 @@
 /** Own navigation, execution following, and bounded comparison revision intent. */
 
 import type { WorkflowOutputItem } from '../../execution/domain/WorkflowOutput.js';
+import type { OutputSourceId } from '../../execution/domain/ExecutionIdentity.js';
+import type { WorkflowPreview } from '../../execution/domain/WorkflowPreview.js';
 import type { CanvasCatalogSnapshot } from '../domain/CanvasCatalog.js';
 import type { CanvasViewId } from '../domain/CanvasIdentity.js';
 import type { CanvasCommand } from '../domain/CanvasViewPort.js';
@@ -110,6 +112,7 @@ export class CanvasSelectionController {
         state = this.views.update(viewId, (current) => ({
           ...current,
           selection: null,
+          sourcePreview: true,
           comparison: null,
           follow: 'auto',
           mode: 'image',
@@ -134,7 +137,11 @@ export class CanvasSelectionController {
       state.selection.batchIndex === candidate.selection.batchIndex
     )
       return state;
-    return this.views.update(viewId, (current) => ({ ...current, selection: candidate.selection }));
+    return this.views.update(viewId, (current) => ({
+      ...current,
+      selection: candidate.selection,
+      sourcePreview: true,
+    }));
   }
 
   /** Apply navigation intents; rendering and resource commands belong to their own owners. */
@@ -143,11 +150,20 @@ export class CanvasSelectionController {
     const state = this.views.read(viewId);
     switch (command.type) {
       case 'select':
-        this.#select(viewId, catalog, command.selection, false);
+        this.#select(viewId, catalog, command.selection, false, false);
+        return true;
+      case 'select-source':
+        this.#select(viewId, catalog, command.selection, false, true);
         return true;
       case 'batch':
         if (state.selection)
-          this.#select(viewId, catalog, { ...state.selection, batchIndex: command.index }, false);
+          this.#select(
+            viewId,
+            catalog,
+            { ...state.selection, batchIndex: command.index },
+            false,
+            false,
+          );
         return true;
       case 'follow':
         if (command.mode === 'auto') {
@@ -156,6 +172,7 @@ export class CanvasSelectionController {
           this.views.update(viewId, (current) => ({
             ...current,
             follow: 'auto',
+            sourcePreview: true,
             comparison: null,
             mode: 'image',
           }));
@@ -176,7 +193,7 @@ export class CanvasSelectionController {
         this.#compare(viewId, catalog, command.enabled);
         return true;
       case 'select-comparison':
-        if (state.comparison) this.#select(viewId, catalog, command.selection, true);
+        if (state.comparison) this.#select(viewId, catalog, command.selection, true, false);
         return true;
       case 'swap': {
         const comparison = state.comparison;
@@ -187,6 +204,7 @@ export class CanvasSelectionController {
             ...current,
             follow: 'manual',
             selection: comparison.secondary,
+            sourcePreview: false,
             comparison: { ...comparison, secondary: state.selection },
           }));
         }
@@ -235,6 +253,30 @@ export class CanvasSelectionController {
     };
   }
 
+  /** Admit source-level preview interest without assigning unknown preview bytes to an explicit batch. */
+  allowsSourcePreview(
+    viewId: CanvasViewId,
+    catalog: CanvasCatalogSnapshot,
+    source: OutputSourceId,
+  ): boolean {
+    const state = this.views.read(viewId);
+    return (
+      state.sessionId === catalog.sessionId &&
+      this.#cursors.get(viewId)?.generation === catalog.generation &&
+      state.mode === 'image' &&
+      state.comparison === null &&
+      state.sourcePreview &&
+      state.selection?.sourceId === source &&
+      catalog.entries.some((entry) => entry.source.id === source)
+    );
+  }
+
+  /** Read qualified transient metadata for the selected visible source without retaining its bytes. */
+  preview(viewId: CanvasViewId, catalog: CanvasCatalogSnapshot): WorkflowPreview | null {
+    const preview = catalog.result.preview;
+    return preview && this.allowsSourcePreview(viewId, catalog, preview.sourceId) ? preview : null;
+  }
+
   /** Release all selection-owned references when a view closes. */
   remove(viewId: CanvasViewId): void {
     this.#cursors.delete(viewId);
@@ -253,6 +295,7 @@ export class CanvasSelectionController {
     catalog: CanvasCatalogSnapshot,
     selection: CanvasSelection,
     secondary: boolean,
+    sourcePreview: boolean,
   ): void {
     if (!Number.isSafeInteger(selection.batchIndex) || selection.batchIndex < 0)
       throw new TypeError('Canvas batch index is invalid.');
@@ -271,6 +314,7 @@ export class CanvasSelectionController {
       follow: 'manual',
       mode: 'image',
       selection: secondary ? current.selection : selection,
+      sourcePreview: secondary ? current.sourcePreview : sourcePreview,
       comparison:
         secondary && current.comparison
           ? { ...current.comparison, secondary: selection }
