@@ -33,7 +33,8 @@ export interface CanvasZoomStatus {
   readonly mode: 'fit' | 'native' | 'custom';
   readonly physicalScale: number;
   readonly dimensions: ImageDimensions | null;
-  readonly secondaryPhysicalScale: number | null;
+  readonly secondaryPhysicalScale: { readonly x: number; readonly y: number } | null;
+  readonly secondaryDimensions: ImageDimensions | null;
 }
 
 export interface CanvasResourceStatus {
@@ -60,6 +61,7 @@ export interface CanvasViewSnapshot {
 
 export type CanvasCommand =
   | { readonly type: 'select'; readonly selection: CanvasSelection }
+  | { readonly type: 'select-source'; readonly selection: CanvasSelection }
   | { readonly type: 'batch'; readonly index: number }
   | { readonly type: 'follow'; readonly mode: 'auto' | 'manual' }
   | { readonly type: 'overview'; readonly enabled: boolean }

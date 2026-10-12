@@ -17,9 +17,12 @@
 
 import type { ImageDimensions } from '../../execution/domain/WorkflowOutput.js';
 import type { CanvasResourceStatus } from './CanvasViewPort.js';
+import type { CanvasSelection } from './CanvasViewState.js';
 
 export interface CanvasImageInput<Payload> {
   readonly key: string;
+  /** Correlate the actual displayed handle with its logical inspection slot during replacement. */
+  readonly selection: CanvasSelection;
   readonly lane: string;
   readonly fallbackKey: string | null;
   readonly dimensions: ImageDimensions | null;
@@ -48,6 +51,7 @@ export interface CanvasImageLoadPort<Payload, Handle> {
 
 export interface CanvasImageFrame<Handle> {
   readonly key: string;
+  readonly selection: CanvasSelection;
   readonly preview: boolean;
   readonly handle: Handle;
   readonly dimensions: ImageDimensions;

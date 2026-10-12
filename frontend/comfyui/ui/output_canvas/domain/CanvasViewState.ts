@@ -41,6 +41,8 @@ export interface CanvasComparison {
 export interface CanvasViewState extends CanvasViewAddress {
   readonly revision: number;
   readonly selection: CanvasSelection | null;
+  /** Permit source-level previews; an explicitly selected batch requires exact final media. */
+  readonly sourcePreview: boolean;
   readonly follow: 'auto' | 'manual';
   readonly mode: 'image' | 'overview';
   readonly linked: boolean;
@@ -53,6 +55,7 @@ export function initialCanvasViewState(address: CanvasViewAddress): CanvasViewSt
     ...address,
     revision: 0,
     selection: null,
+    sourcePreview: true,
     follow: 'auto',
     mode: 'image',
     linked: true,

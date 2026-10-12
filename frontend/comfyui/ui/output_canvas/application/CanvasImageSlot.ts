@@ -16,6 +16,7 @@
 /** Own one visible lane's queued payload, pending lease and releasable displayed frame. */
 
 import type { CanvasResourceStatus } from '../domain/CanvasViewPort.js';
+import type { CanvasSelection } from '../domain/CanvasViewState.js';
 import type {
   CanvasDecodedImage,
   CanvasImageFrame,
@@ -26,6 +27,7 @@ import type { CanvasDecodeLease } from './CanvasImageDecodeScheduler.js';
 
 export interface CanvasImageIntent {
   readonly key: string;
+  readonly selection: CanvasSelection;
   readonly lane: string;
   readonly fallbackKey: string | null;
   readonly preview: boolean;
@@ -139,6 +141,7 @@ export class CanvasImageSlot<Payload, Handle> {
 export function canvasImageIntent<Payload>(input: CanvasImageInput<Payload>): CanvasImageIntent {
   return Object.freeze({
     key: input.key,
+    selection: Object.freeze({ ...input.selection }),
     lane: input.lane,
     fallbackKey: input.fallbackKey,
     preview: input.preview,

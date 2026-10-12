@@ -21,8 +21,10 @@ import type {
   CanvasCommand,
   CanvasCommandRequest,
   CanvasViewPort,
+  CanvasViewSnapshot,
 } from '../../domain/CanvasViewPort.js';
 import { CanvasOverlay } from './CanvasOverlay.js';
+import { ensureCanvasOverlayStyles } from './CanvasOverlayStyles.js';
 
 export interface MountedCanvasOverlay {
   /** Release this root's subscription and controls without releasing its surface. */
@@ -35,6 +37,7 @@ export function mountCanvasOverlay(
   port: CanvasViewPort,
   reportFailure: (error: unknown, request: CanvasCommandRequest | null) => void,
 ): MountedCanvasOverlay {
+  ensureCanvasOverlayStyles(element.ownerDocument);
   const initial = port.read();
   const state = shallowRef(initial);
   const announcement = shallowRef('');
@@ -75,6 +78,8 @@ export function mountCanvasOverlay(
       snapshot.revision <= state.value.revision
     )
       return;
+    const spoken = canvasAnnouncement(state.value, snapshot);
+    if (spoken !== null) announcement.value = spoken;
     state.value = snapshot;
   });
   const app = createApp({
@@ -103,4 +108,30 @@ export function mountCanvasOverlay(
       app.unmount();
     },
   };
+}
+
+/** Announce meaningful navigation/completion/failure without narrating camera or preview frames. */
+function canvasAnnouncement(
+  previous: CanvasViewSnapshot,
+  current: CanvasViewSnapshot,
+): string | null {
+  const source = current.sources.find((entry) => entry.id === current.view.selection?.sourceId);
+  if (previous.view.selection?.sourceId !== current.view.selection?.sourceId)
+    return source?.label ?? 'Output source is unavailable.';
+  if (
+    current.resource.state === 'error' &&
+    (previous.resource.state !== 'error' || previous.resource.message !== current.resource.message)
+  )
+    return current.resource.message;
+  if (
+    !current.preview &&
+    current.resource.state === 'ready' &&
+    current.selected &&
+    (previous.selected?.id !== current.selected.id ||
+      previous.resource.state !== 'ready' ||
+      previous.preview)
+  )
+    return `${source?.label ?? 'Output'}: image ${current.selected.batchIndex + 1} ready.`;
+  if (previous.connected && !current.connected) return 'Disconnected.';
+  return null;
 }

@@ -47,20 +47,22 @@ export const CanvasOverlay = defineComponent({
             ? '1:1'
             : `${Math.round(zoom.physicalScale * 100)}%`;
       return h('div', { class: 'sc-output-overlay', 'data-canvas-view': snapshot.address.viewId }, [
-        h(CanvasToolbar, { snapshot, capabilities: props.capabilities, send: props.send }),
-        snapshot.view.comparison
-          ? h(CanvasCompareControls, {
-              snapshot,
-              capabilities: props.capabilities,
-              send: props.send,
-            })
-          : null,
-        h('div', { class: 'sc-output-status', role: 'status', 'aria-live': 'polite' }, [
+        h('div', { class: 'sc-output-navigation' }, [
+          h(CanvasToolbar, { snapshot, capabilities: props.capabilities, send: props.send }),
+          snapshot.view.comparison
+            ? h(CanvasCompareControls, {
+                snapshot,
+                capabilities: props.capabilities,
+                send: props.send,
+              })
+            : null,
+        ]),
+        h('div', { class: 'sc-output-status' }, [
           h('span', { 'aria-label': 'Zoom' }, label),
           dimensions ? h('span', `${dimensions.width} × ${dimensions.height}`) : null,
           snapshot.preview ? h('span', 'Live preview') : null,
           snapshot.connected ? null : h('span', 'Disconnected'),
-          h('span', props.announcement || snapshot.resource.message),
+          h('span', snapshot.resource.message),
           snapshot.resource.canRetry && props.capabilities.commands.includes('retry')
             ? h(
                 'button',
@@ -89,7 +91,17 @@ export const CanvasOverlay = defineComponent({
               )
             : null,
         ]),
-        props.capabilities.commands.includes('select')
+        h(
+          'span',
+          {
+            class: 'sc-output-announcement',
+            role: 'status',
+            'aria-live': 'polite',
+            'aria-atomic': 'true',
+          },
+          props.announcement,
+        ),
+        props.capabilities.commands.includes('select-source')
           ? h(CanvasSourceTabs, { snapshot, send: props.send })
           : null,
       ]);

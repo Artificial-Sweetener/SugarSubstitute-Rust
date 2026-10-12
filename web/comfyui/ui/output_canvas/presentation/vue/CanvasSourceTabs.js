@@ -1,6 +1,6 @@
 import {
   CanvasSourceTabs
-} from "../../../chunk-OJGHAI47.js";
+} from "../../../chunk-BBIMJ2PJ.js";
 import "../../../chunk-MNPWJMUZ.js";
 export {
   CanvasSourceTabs

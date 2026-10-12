@@ -39,6 +39,64 @@ function button(element: HTMLElement, text: string): HTMLButtonElement {
 
 afterEach(() => document.body.replaceChildren());
 
+test('keeps zoom and preview changes outside the live announcement region', async () => {
+  const initial = canvasSnapshot('announcements');
+  const port = new CanvasPortFixture(initial);
+  const element = root();
+  const mounted = mountCanvasOverlay(element, port, jest.fn());
+  const live = element.querySelector('[aria-live="polite"]')!;
+  expect(live.querySelector('[aria-label="Zoom"]')).toBeNull();
+  port.publish({
+    ...initial,
+    revision: 2,
+    view: { ...initial.view, selection: { sourceId: initial.sources[1]!.id, batchIndex: 0 } },
+  });
+  await nextTick();
+  expect(live.textContent).toBe('Detail');
+  for (let update = 3; update <= 100; update++)
+    port.publish({
+      ...port.read(),
+      revision: update,
+      preview: true,
+      zoom: { ...port.read().zoom, physicalScale: update / 10 },
+    });
+  await nextTick();
+  expect(live.textContent).toBe('Detail');
+  port.publish({
+    ...port.read(),
+    revision: 101,
+    resource: { ...initial.resource, state: 'error', message: 'Image failed.' },
+  });
+  await nextTick();
+  expect(live.textContent).toBe('Image failed.');
+  mounted.dispose();
+});
+
+test('navigates source tabs by keyboard within their root while retaining the requested batch', async () => {
+  const port = new CanvasPortFixture(canvasSnapshot('keyboard'));
+  const other = new CanvasPortFixture(canvasSnapshot('other-root'));
+  const element = root();
+  const otherRoot = root();
+  const mounted = mountCanvasOverlay(element, port, jest.fn());
+  const isolated = mountCanvasOverlay(otherRoot, other, jest.fn());
+  const tabs = [...element.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+  expect(tabs.map((tab) => tab.tabIndex)).toEqual([0, -1]);
+  tabs[0]!.focus();
+  tabs[0]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+  await nextTick();
+  expect(document.activeElement).toBe(tabs[1]);
+  expect(port.requests.at(-1)?.command).toEqual({
+    type: 'select-source',
+    selection: { sourceId: 'source:42:23', batchIndex: 2 },
+  });
+  tabs[1]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+  await nextTick();
+  expect(document.activeElement).toBe(tabs[0]);
+  expect(other.requests).toEqual([]);
+  mounted.dispose();
+  isolated.dispose();
+});
+
 test('mounts browser and host-backed contract roots without Comfy or browser image allocation', async () => {
   const browser = new CanvasPortFixture(canvasSnapshot('browser'));
   const host = new CanvasPortFixture({
@@ -48,6 +106,7 @@ test('mounts browser and host-backed contract roots without Comfy or browser ima
       physicalScale: 1,
       dimensions: { width: 16384, height: 8192 },
       secondaryPhysicalScale: null,
+      secondaryDimensions: null,
     },
   });
   const browserRoot = root();
@@ -63,7 +122,7 @@ test('mounts browser and host-backed contract roots without Comfy or browser ima
   expect(host.requests).toHaveLength(0);
   expect(browser.requests.map((request) => request.command)).toEqual([
     { type: 'fit' },
-    { type: 'select', selection: { sourceId: 'source:42:23', batchIndex: 2 } },
+    { type: 'select-source', selection: { sourceId: 'source:42:23', batchIndex: 2 } },
   ]);
   expect(browser.requests[0]?.address).toBe(browser.read().address);
   expect(browser.requests[0]?.expectedRevision).toBe(1);
@@ -87,7 +146,7 @@ test('renders markup-like metadata literally and hides unsupported commands', ()
         label: '<img src=x onerror=alert(1)>',
       })),
     },
-    ['select', 'fit'],
+    ['select-source', 'fit'],
   );
   const element = root();
   const mounted = mountCanvasOverlay(element, port, jest.fn());

@@ -90,9 +90,10 @@ function decodeCommand(value: unknown): CanvasCommand | null {
     case 'retry':
     case 'admit-large-image':
       return Object.freeze({ type: value.type });
-    case 'select': {
+    case 'select':
+    case 'select-source': {
       const selection = decodeSelection(value.selection);
-      return selection ? Object.freeze({ type: 'select', selection }) : null;
+      return selection ? Object.freeze({ type: value.type, selection }) : null;
     }
     case 'select-comparison': {
       const selection = decodeSelection(value.selection);

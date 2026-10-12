@@ -22,6 +22,24 @@ import {
 } from '../support/CanvasImageFixture.js';
 
 describe('canvas image lifetime', () => {
+  test('keeps the actual outgoing image inspection slot until its replacement is decoded', async () => {
+    const f = canvasImageFixture();
+    f.resources.update([{ slot: 'a', input: canvasImageInput('old') }]);
+    f.port.ready(0);
+    await settleCanvasImages();
+    f.resources.update([{ slot: 'a', input: canvasImageInput('new') }]);
+    expect(f.resources.read()[0]?.frame?.selection).toEqual({
+      sourceId: 'source:old',
+      batchIndex: 0,
+    });
+    f.port.ready(1);
+    await settleCanvasImages();
+    expect(f.resources.read()[0]?.frame?.selection).toEqual({
+      sourceId: 'source:new',
+      batchIndex: 0,
+    });
+    f.resources.dispose();
+  });
   test('moves a selected partner into single view but decodes duplicate chosen images independently', async () => {
     const f = canvasImageFixture();
     f.resources.update([

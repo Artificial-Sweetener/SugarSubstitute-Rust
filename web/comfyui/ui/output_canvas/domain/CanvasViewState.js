@@ -20,6 +20,7 @@ export function initialCanvasViewState(address) {
         ...address,
         revision: 0,
         selection: null,
+        sourcePreview: true,
         follow: 'auto',
         mode: 'image',
         linked: true,

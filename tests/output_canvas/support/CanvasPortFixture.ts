@@ -79,6 +79,7 @@ export function canvasSnapshot(key: string): CanvasViewSnapshot {
       physicalScale: 0.5,
       dimensions: { width: 4096, height: 2160 },
       secondaryPhysicalScale: null,
+      secondaryDimensions: null,
     },
     resource: { state: 'empty', message: '', canRetry: false, canAdmitLargeImage: false },
     runStatus: 'idle',
@@ -106,6 +107,7 @@ export class CanvasPortFixture implements CanvasViewPort {
     snapshot: CanvasViewSnapshot,
     commands: CanvasCapabilities['commands'] = [
       'select',
+      'select-source',
       'batch',
       'follow',
       'overview',
