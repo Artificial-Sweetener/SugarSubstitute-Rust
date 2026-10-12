@@ -31,7 +31,7 @@ from . import CubeOutputArtifact
 _logger = logging.getLogger(__name__)
 
 
-def build_cube_output_preview(
+def build_image_output_preview(
     value: object,
     *,
     save_outputs: bool = False,
