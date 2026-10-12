@@ -25,6 +25,7 @@ import {
 import type { WorkflowSessionContext } from '../../../frontend/comfyui/ui/execution/domain/WorkflowSession.js';
 import type { WorkflowRun } from '../../../frontend/comfyui/ui/execution/domain/WorkflowRun.js';
 import type { WorkflowOutputSource } from '../../../frontend/comfyui/ui/execution/domain/WorkflowOutput.js';
+import type { WorkflowPreview } from '../../../frontend/comfyui/ui/execution/domain/WorkflowPreview.js';
 import { decodeComfyMedia } from '../../../frontend/comfyui/ui/execution/infrastructure/ComfyMediaDecoder.js';
 
 const a: WorkflowSessionContext = {
@@ -60,6 +61,53 @@ function retain(
     ...(expectedRevision !== undefined ? { expectedRevision } : {}),
   });
 }
+
+/** Declare a source-level transient frame for a known accepted job. */
+function preview(run: WorkflowRun): WorkflowPreview {
+  return {
+    sessionId: run.session.sessionId,
+    generation: run.session.generation,
+    promptId: run.promptId,
+    sourceId: source.id,
+    runOrder: run.order,
+    sequence: 1,
+    token: 'frame',
+    dimensions: null,
+  };
+}
+
+test('rejects late source previews after its same-run final even while other nodes are running', () => {
+  const store = new WorkflowResultStore();
+  const runs = new WorkflowRunRegistry();
+  store.synchronize([a]);
+  const run = runs.accept(runs.reserve({ session: a, sources: [source] }), promptId('one'));
+  expect(store.publishPreview(preview(run))).toBe(true);
+  retain(store, run, { images: [{ filename: 'final.png' }] });
+  expect(store.read(a.sessionId)?.preview).toBeNull();
+  expect(store.read(a.sessionId)?.runStatus).toBe('running');
+  expect(store.publishPreview({ ...preview(run), sequence: 2 })).toBe(false);
+  expect(store.read(a.sessionId)?.preview).toBeNull();
+  retain(store, run, { text: 'metadata-only replacement' });
+  expect(store.read(a.sessionId)?.outputs[0]?.items).toEqual([]);
+  expect(store.publishPreview({ ...preview(run), sequence: 3 })).toBe(false);
+  const next = runs.accept(runs.reserve({ session: a, sources: [source] }), promptId('two'));
+  expect(store.publishPreview(preview(next))).toBe(true);
+});
+
+test('carried input snapshot media retains its actual provenance through text and can receive a new-run preview', () => {
+  const store = new WorkflowResultStore();
+  const runs = new WorkflowRunRegistry();
+  store.synchronize([a]);
+  const decoded = decodeComfyMedia({ images: [{ filename: 'input.png', type: 'input' }] })!;
+  store.restore(a, source, decoded.payload, 'input-snapshot');
+  const original = store.read(a.sessionId)?.outputs[0]?.items[0];
+  const run = runs.accept(runs.reserve({ session: a, sources: [source] }), promptId('one'));
+  expect(store.publishPreview(preview(run))).toBe(true);
+  retain(store, run, { images: [], text: ['metadata'] });
+  expect(store.read(a.sessionId)?.outputs[0]?.items[0]).toBe(original);
+  expect(store.read(a.sessionId)?.preview).toEqual(preview(run));
+  expect(store.publishPreview({ ...preview(run), sequence: 2 })).toBe(true);
+});
 
 test('keeps identical paths and graph IDs separate between two workflows', () => {
   const store = new WorkflowResultStore();
@@ -172,8 +220,9 @@ test('keeps previous finals during previews, releases preview metadata on final/
   const store = new WorkflowResultStore();
   const runs = new WorkflowRunRegistry();
   store.synchronize([a]);
-  const run = runs.accept(runs.reserve({ session: a, sources: [source] }), promptId('one'));
-  retain(store, run, { images: [{ filename: 'final.png' }] });
+  const previous = runs.accept(runs.reserve({ session: a, sources: [source] }), promptId('one'));
+  retain(store, previous, { images: [{ filename: 'final.png' }] });
+  const run = runs.accept(runs.reserve({ session: a, sources: [source] }), promptId('two'));
   const preview = {
     sessionId: a.sessionId,
     generation: 0,

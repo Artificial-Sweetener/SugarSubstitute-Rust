@@ -42,7 +42,9 @@ export function canvasOutputCatalog(
           breadcrumb: source.breadcrumb,
           batchCount: output?.batchCount ?? 0,
           preview: Boolean(preview),
-          previousRun: Boolean(output && output.provenance.runOrder < result.runOrder),
+          previousRun: Boolean(
+            output?.items.some((item) => item.provenance.runOrder < result.runOrder),
+          ),
         }),
       }),
     );

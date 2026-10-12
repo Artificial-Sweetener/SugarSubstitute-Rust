@@ -37,6 +37,24 @@ function fixture() {
 }
 
 describe('canvas workflow navigation', () => {
+  test('labels carried media by its actual run rather than the source latest text revision', () => {
+    const catalog = canvasCatalogFixture();
+    const result = {
+      ...catalog.result,
+      outputs: catalog.result.outputs.map((output) => ({
+        ...output,
+        items: output.items.map((item) => ({
+          ...item,
+          provenance: { ...item.provenance, runOrder: 0 },
+        })),
+      })),
+    };
+    expect(
+      canvasOutputCatalog(result, canvasSources()).entries.every(
+        (entry) => entry.summary.previousRun,
+      ),
+    ).toBe(true);
+  });
   test('Auto deliberately chooses a valid remaining source when its current source is deleted', () => {
     const f = fixture();
     const catalog = canvasOutputCatalog(f.catalog.result, canvasSources().slice(0, 1));
