@@ -64,6 +64,22 @@ pub struct ReadinessProbeOwner {
     execution: Option<sugarsubstitute_contracts::execution::ExecutionId>,
 }
 impl ReadinessProbeOwner {
+    /// Construct real HTTP custody with a concrete external HTTP boundary fake.
+    #[cfg(test)]
+    pub(crate) fn from_fixture(
+        input: ReadinessProbeInput,
+        port: Arc<super::campaign_fixture::FixtureHttp>,
+    ) -> Self {
+        let mut owner = Self::new(input);
+        owner.port = port;
+        owner
+    }
+    /// Request cancellation while retaining the actual finite job and native custody.
+    pub(crate) fn request_cancel(&self) {
+        if let Some(job) = &self.pending {
+            job.cancel();
+        }
+    }
     /// Prepare inert retained custody before admission; this performs no HTTP or process query.
     pub fn new(input: ReadinessProbeInput) -> Self {
         Self {
@@ -136,6 +152,12 @@ impl ReadinessProbeOwner {
         match completion.outcome {
             JobOutcome::Success(()) => (),
             JobOutcome::Failure(cause) => return Err(cause),
+            JobOutcome::Panicked(cause) => {
+                return Err(ReadinessTransportError::new(
+                    "attempt_terminal",
+                    super::terminal::ProbePanic(cause),
+                ));
+            }
             _ => return Err(ReadinessTransportError::invalid("attempt_terminal")),
         }
         let guard = lock(&self.shared.transaction);

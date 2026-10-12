@@ -2197,6 +2197,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "sugarsubstitute-application",
  "sugarsubstitute-contracts",
  "sugarsubstitute-execution",
  "sugarsubstitute-supervision",
@@ -2221,17 +2222,17 @@ dependencies = [
  "sugarsubstitute-execution",
  "sugarsubstitute-supervision",
  "tracing",
- "windows 0.62.2",
+ "windows",
 ]
 
 [[package]]
 name = "sugarsubstitute-desktop"
 version = "0.1.0"
 dependencies = [
- "serde",
- "serde_json",
  "cairo-rs",
  "gtk",
+ "serde",
+ "serde_json",
  "softbuffer",
  "sugarsubstitute-contracts",
  "tao",

@@ -107,3 +107,6 @@ impl ManagedListenerLease {
         Ok(BackendPeerIdentity { process_id: identity.pid, creation_time_100ns: identity.birth })
     }
 }
+
+#[cfg(feature = "boundary-fixtures")]
+pub mod boundary_fixture;

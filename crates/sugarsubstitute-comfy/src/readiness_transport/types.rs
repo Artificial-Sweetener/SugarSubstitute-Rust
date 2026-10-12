@@ -18,6 +18,23 @@ pub struct ReadinessProbeInput {
     pub(super) listener: Listener,
 }
 impl ReadinessProbeInput {
+    /// Compare the retained effective target without granting native authority.
+    pub(crate) fn matches_target(
+        &self,
+        target: &sugarsubstitute_contracts::lifecycle::BackendTarget,
+    ) -> bool {
+        use sugarsubstitute_contracts::lifecycle::BackendTarget;
+        match (&self.listener, target) {
+            (Listener::Managed(_, retained), BackendTarget::Managed(expected)) => {
+                retained == expected
+            }
+            (Listener::Attached(_, port), BackendTarget::Attached(origin)) => {
+                origin.host() == sugarsubstitute_contracts::configuration::LoopbackHost::Ipv4
+                    && *port == origin.port().get()
+            }
+            _ => false,
+        }
+    }
     /// Bind a managed lease and the complete actual effective launch configuration.
     /// # Errors
     /// Rejects retired installed sources and configurations whose retained storage exceeds the bound.
@@ -133,14 +150,35 @@ impl VerifiedReadiness {
         Ok(())
     }
 }
+/// Classify retry eligibility at the original native failure boundary.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ProbeRetryDisposition {
+    /// A native request failed to establish or retain its first unverified connection.
+    TransientConnectionUnavailable,
+    /// Trust, shape, identity, deadline, cancellation, admission or cleanup failed.
+    Terminal,
+}
+
 /// Preserve an original boundary cause while redacting private response/path data.
 pub struct ReadinessTransportError {
     stage: &'static str,
     cause: Box<dyn Error + Send + Sync>,
+    disposition: ProbeRetryDisposition,
 }
 impl ReadinessTransportError {
     pub(super) fn new(stage: &'static str, cause: impl Error + Send + Sync + 'static) -> Self {
-        Self { stage, cause: Box::new(cause) }
+        Self { stage, cause: Box::new(cause), disposition: ProbeRetryDisposition::Terminal }
+    }
+    /// Preserve a typed native first-connection failure eligible only for campaign retry.
+    pub(super) fn unavailable(
+        stage: &'static str,
+        cause: impl Error + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            stage,
+            cause: Box::new(cause),
+            disposition: ProbeRetryDisposition::TransientConnectionUnavailable,
+        }
     }
     pub(super) fn invalid(stage: &'static str) -> Self {
         Self::new(stage, std::io::Error::other("Readiness transport rejected"))
@@ -148,6 +186,10 @@ impl ReadinessTransportError {
     /// Borrow the stable operation label.
     pub const fn stage(&self) -> &'static str {
         self.stage
+    }
+    /// Return the failure owner's stored decision without inspecting text or the cause chain.
+    pub const fn retry_disposition(&self) -> ProbeRetryDisposition {
+        self.disposition
     }
 }
 impl fmt::Display for ReadinessTransportError {

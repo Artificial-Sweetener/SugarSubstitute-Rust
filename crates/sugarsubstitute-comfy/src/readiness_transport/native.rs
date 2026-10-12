@@ -17,6 +17,7 @@ use windows::{
     core::{PCWSTR, w},
 };
 pub(super) struct SystemPort;
+mod retry;
 impl HttpPort for SystemPort {
     fn begin(
         &self,
@@ -103,12 +104,12 @@ impl HttpPort for SystemPort {
         timeout(state.request, context)?;
         // SAFETY: Retained synchronous request; GET sends no body, extra headers, credentials or callback context.
         unsafe { WinHttpSendRequest(raw(state.request), None, None, 0, 0, 0) }
-            .map_err(|e| ReadinessTransportError::new("http_send", e))?;
+            .map_err(|e| retry::request_failure("http_send", e, state.peer.is_some()))?;
         checkpoint(context)?;
         timeout(state.request, context)?;
         // SAFETY: Synchronous owned request has no asynchronous reserved context.
         unsafe { WinHttpReceiveResponse(raw(state.request), std::ptr::null_mut()) }
-            .map_err(|e| ReadinessTransportError::new("http_receive", e))?;
+            .map_err(|e| retry::request_failure("http_receive", e, state.peer.is_some()))?;
         checkpoint(context)?;
         let before = connection(state.request, input.port(), context)?;
         qualify(state, input, before, context)?;
