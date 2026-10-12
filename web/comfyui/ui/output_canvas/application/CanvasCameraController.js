@@ -76,7 +76,7 @@ export class CanvasCameraController {
         if (target)
             this.#transition.set(this.options.inspections.camera(this.options.view, target.selection, target.geometry));
     }
-    /** Fit the displayed image deliberately and end execution following. */
+    /** Fit the displayed image without changing content following. */
     fit() {
         return this.#move((target) => centeredCanvasCamera(target.geometry), null);
     }
@@ -104,7 +104,6 @@ export class CanvasCameraController {
         const target = this.read();
         if (!target || this.#disposed)
             return false;
-        this.options.markManual();
         this.#transition.set(panCanvasCamera(target.camera, delta, target.geometry));
         return true;
     }
@@ -113,7 +112,6 @@ export class CanvasCameraController {
         const target = this.read();
         if (!target || this.#disposed)
             return false;
-        this.options.markManual();
         const zoomed = zoomCanvasCamera(target.camera, factor, anchor, target.geometry);
         this.#transition.set(panCanvasCamera(zoomed, delta, target.geometry));
         return true;
@@ -143,12 +141,11 @@ export class CanvasCameraController {
         this.#disposed = true;
         this.#transition.dispose();
     }
-    /** Apply a discrete camera intent from its visible origin and durable Manual transition. */
+    /** Apply an inspection intent independently of content navigation. */
     #move(destination, anchor, wheel = false) {
         const target = this.read();
         if (!target || this.#disposed)
             return false;
-        this.options.markManual();
         this.#transition.move(destination(target), target.geometry, anchor, this.options.reducedMotion(), wheel);
         return true;
     }

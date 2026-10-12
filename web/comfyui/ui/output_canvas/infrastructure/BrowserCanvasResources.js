@@ -25,6 +25,8 @@ export class BrowserCanvasResources {
     #plan = null;
     #budgetScope = '';
     #previewStarted = false;
+    #overviewImages = [];
+    #overviewPreviewSlot = null;
     #disposed = false;
     #active = true;
     #refreshNeeded = false;
@@ -57,6 +59,8 @@ export class BrowserCanvasResources {
         this.#previewStarted = false;
         if (plan.view.mode === 'overview')
             return;
+        this.#overviewImages = [];
+        this.#overviewPreviewSlot = null;
         const images = [];
         if (plan.view.mode === 'image') {
             for (const [name, slot] of [
@@ -80,7 +84,10 @@ export class BrowserCanvasResources {
         if (!plan || plan.view.mode !== 'overview' || !this.#active || this.#disposed)
             return;
         const images = [];
+        this.#overviewPreviewSlot = null;
         for (const cell of cells) {
+            if (cell.preview)
+                this.#overviewPreviewSlot = cell.key;
             const input = this.#final({
                 selection: cell.selection,
                 item: cell.item,
@@ -89,6 +96,7 @@ export class BrowserCanvasResources {
             if (input)
                 images.push({ slot: cell.key, input: { ...input, role: 'thumbnail' } });
         }
+        this.#overviewImages = images;
         this.resources.update(images);
     }
     /** Refuse stale/foreign bytes before handing their ownership to a visible resource slot. */
@@ -113,13 +121,19 @@ export class BrowserCanvasResources {
             dimensions: this.resources.dimensions(lane) ??
                 preview.dimensions ??
                 this.allowances.dimensions(plan.view.viewId, plan.generation, lane),
-            role: 'main',
+            role: plan.view.mode === 'overview' ? 'thumbnail' : 'main',
             preview: true,
             payload: { kind: 'preview', blob },
         };
         this.#previewStarted = true;
-        if (!this.resources.offer('primary', input))
-            this.resources.update([{ slot: 'primary', input }]);
+        const target = plan.view.mode === 'overview' ? this.#overviewPreviewSlot : 'primary';
+        if (!target)
+            return;
+        if (!this.resources.offer(target, input))
+            this.resources.update([
+                ...this.#overviewImages.filter((image) => image.slot !== target),
+                { slot: target, input },
+            ]);
     }
     /** Approve exactly the current logical image/pair and resume privately queued work. */
     admit() {
@@ -170,7 +184,7 @@ export class BrowserCanvasResources {
         this.#plan = null;
         this.resources.dispose();
     }
-    /** Build a full-fidelity final request from an exact selected/pinned item. */
+    /** Build a full-fidelity request from an exact selected final. */
     #final(slot) {
         const plan = this.#plan;
         const item = slot.item;

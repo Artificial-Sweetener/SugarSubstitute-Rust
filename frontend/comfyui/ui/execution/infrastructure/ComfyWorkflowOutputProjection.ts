@@ -19,6 +19,7 @@ import type { WorkflowSessionStore } from '../application/WorkflowSessionStore.j
 import type { WorkflowResultStore } from '../application/WorkflowResultStore.js';
 import type { WorkflowOutputSet } from '../domain/WorkflowOutput.js';
 import type { ComfyCubeLivePreview } from './ComfyCubeLivePreview.js';
+import { outputSourceId } from '../domain/ExecutionIdentity.js';
 
 /** Qualify cube and thumbnail lookups through explicit active-session commitment. */
 export class ComfyWorkflowOutputProjection {
@@ -29,13 +30,15 @@ export class ComfyWorkflowOutputProjection {
     private readonly results: WorkflowResultStore,
   ) {}
 
-  /** Read one exact full source path within the committed workflow generation. */
+  /** Read one semantic source identity within the committed workflow generation. */
   output(executionPath: string): WorkflowOutputSet | null {
     const active = this.sessions.read().active;
     if (!active) return null;
     const session = this.results.read(active.sessionId);
     if (session?.context.generation !== active.generation) return null;
-    return session.outputs.find((output) => output.source.executionPath === executionPath) ?? null;
+    return (
+      session.outputs.find((output) => output.source.id === outputSourceId(executionPath)) ?? null
+    );
   }
 
   /** Read the active cube frame from its allocation owner rather than a shared host URL map. */

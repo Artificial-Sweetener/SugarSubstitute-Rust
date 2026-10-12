@@ -41,6 +41,8 @@ export class BrowserCanvasResources {
   #plan: CanvasDisplayPlan | null = null;
   #budgetScope = '';
   #previewStarted = false;
+  #overviewImages: CanvasVisibleImage<BrowserCanvasImagePayload>[] = [];
+  #overviewPreviewSlot: string | null = null;
   #disposed = false;
   #active = true;
   #refreshNeeded = false;
@@ -72,6 +74,8 @@ export class BrowserCanvasResources {
     if (!changed && !retry) return;
     this.#previewStarted = false;
     if (plan.view.mode === 'overview') return;
+    this.#overviewImages = [];
+    this.#overviewPreviewSlot = null;
     const images: CanvasVisibleImage<BrowserCanvasImagePayload>[] = [];
     if (plan.view.mode === 'image') {
       for (const [name, slot] of [
@@ -94,7 +98,9 @@ export class BrowserCanvasResources {
     const plan = this.#plan;
     if (!plan || plan.view.mode !== 'overview' || !this.#active || this.#disposed) return;
     const images: CanvasVisibleImage<BrowserCanvasImagePayload>[] = [];
+    this.#overviewPreviewSlot = null;
     for (const cell of cells) {
+      if (cell.preview) this.#overviewPreviewSlot = cell.key;
       const input = this.#final({
         selection: cell.selection,
         item: cell.item,
@@ -102,6 +108,7 @@ export class BrowserCanvasResources {
       });
       if (input) images.push({ slot: cell.key, input: { ...input, role: 'thumbnail' } });
     }
+    this.#overviewImages = images;
     this.resources.update(images);
   }
 
@@ -130,13 +137,18 @@ export class BrowserCanvasResources {
         this.resources.dimensions(lane) ??
         preview.dimensions ??
         this.allowances.dimensions(plan.view.viewId, plan.generation, lane),
-      role: 'main',
+      role: plan.view.mode === 'overview' ? 'thumbnail' : 'main',
       preview: true,
       payload: { kind: 'preview', blob },
     };
     this.#previewStarted = true;
-    if (!this.resources.offer('primary', input))
-      this.resources.update([{ slot: 'primary', input }]);
+    const target = plan.view.mode === 'overview' ? this.#overviewPreviewSlot : 'primary';
+    if (!target) return;
+    if (!this.resources.offer(target, input))
+      this.resources.update([
+        ...this.#overviewImages.filter((image) => image.slot !== target),
+        { slot: target, input },
+      ]);
   }
 
   /** Approve exactly the current logical image/pair and resume privately queued work. */
@@ -185,7 +197,7 @@ export class BrowserCanvasResources {
     this.resources.dispose();
   }
 
-  /** Build a full-fidelity final request from an exact selected/pinned item. */
+  /** Build a full-fidelity request from an exact selected final. */
   #final(slot: CanvasDisplaySlot): CanvasImageInput<BrowserCanvasImagePayload> | null {
     const plan = this.#plan;
     const item = slot.item;

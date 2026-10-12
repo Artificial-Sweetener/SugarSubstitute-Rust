@@ -23,6 +23,7 @@ import type {
   CanvasResourceStatus,
 } from '../../domain/CanvasViewPort.js';
 import { CanvasSourceTabs } from './CanvasSourceTabs.js';
+import { CanvasComparisonNavigation } from './CanvasComparisonNavigation.js';
 import { CanvasWipeSeparator } from './CanvasWipeSeparator.js';
 import { canvasNavigationSnapshot } from './CanvasNavigationSnapshot.js';
 import { CanvasLoadingIndicator } from './CanvasLoadingIndicator.js';
@@ -116,13 +117,16 @@ export const CanvasOverlay = defineComponent({
           },
           props.announcement,
         ),
-        props.capabilities.commands.includes('select-source') && snapshot.sources.length > 0
-          ? h(CanvasSourceTabs, {
-              snapshot: navigation.value,
-              capabilities: props.capabilities,
-              send: props.send,
-            })
-          : null,
+        snapshot.view.comparison && props.capabilities.commands.includes('select-comparison')
+          ? h(CanvasComparisonNavigation, { snapshot: navigation.value, send: props.send })
+          : props.capabilities.commands.includes('select-source') &&
+              (snapshot.sources.length > 1 || (snapshot.sources[0]?.batchCount ?? 0) > 1)
+            ? h(CanvasSourceTabs, {
+                snapshot: navigation.value,
+                capabilities: props.capabilities,
+                send: props.send,
+              })
+            : null,
       ]);
     };
   },

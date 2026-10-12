@@ -17,6 +17,7 @@
 
 import { canvasOverviewWindow } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasOverviewWindow.js';
 import { canvasCatalogFixture } from '../support/CanvasCatalogFixture.js';
+import { canvasBatchLayout } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasBatchLayout.js';
 
 test('keeps all intersecting cells bounded across narrow, tall, and fractionally scrolled viewports', () => {
   const catalog = canvasCatalogFixture();
@@ -63,4 +64,47 @@ test('refuses invalid viewport geometry and returns no cells for an empty/hidden
   expect(() => canvasOverviewWindow(catalog, 600, 600, -1)).toThrow(RangeError);
   expect(canvasOverviewWindow({ ...catalog, entries: [] }, 600, 600, 0).cells).toEqual([]);
   expect(canvasOverviewWindow(catalog, 600, 0, 0).cells).toEqual([]);
+});
+
+test('packs a two-image landscape batch vertically in a tall canvas without card allocation', () => {
+  const catalog = canvasCatalogFixture();
+  const entry = catalog.entries[0]!;
+  const batch = {
+    ...catalog,
+    entries: [{ ...entry, summary: { ...entry.summary, batchCount: 2 } }],
+  };
+  const window = canvasOverviewWindow(batch, 900, 1400, 0, { width: 3840, height: 2160 });
+  expect(window.columns).toBe(1);
+  expect(window.width).toBeCloseTo(900);
+  expect(window.cellHeight).toBeCloseTo(506.25);
+  expect(window.offset).toBeGreaterThan(190);
+  expect(window.gap).toBeLessThan(3);
+  expect(window.totalHeight).toBe(1400);
+  expect(window.cells).toHaveLength(2);
+});
+
+test('packs a two-image landscape batch horizontally in a wide canvas', () => {
+  const catalog = canvasCatalogFixture();
+  const entry = catalog.entries[0]!;
+  const batch = {
+    ...catalog,
+    entries: [{ ...entry, summary: { ...entry.summary, batchCount: 2 } }],
+  };
+  const window = canvasOverviewWindow(batch, 1800, 600, 0, { width: 3840, height: 2160 });
+  expect(window.columns).toBe(2);
+  expect(window.cellHeight).toBeGreaterThan(500);
+  expect(window.cellHeight).toBeLessThan(600);
+  expect(window.offset).toBeGreaterThan(0);
+});
+
+test('retains the previous packed topology near a tie and releases it after a useful area gain', () => {
+  const reference = { width: 1920, height: 1080 };
+  expect(canvasBatchLayout(2, { width: 1610, height: 900 }, reference, 1).columns).toBe(1);
+  expect(canvasBatchLayout(2, { width: 1700, height: 900 }, reference, 1).columns).toBe(2);
+  expect(() => canvasBatchLayout(9, { width: 1700, height: 900 }, reference, null)).toThrow(
+    RangeError,
+  );
+  expect(() => canvasBatchLayout(2, { width: 0, height: 900 }, reference, null)).toThrow(
+    RangeError,
+  );
 });

@@ -15,29 +15,41 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Project current source membership and authoritative execution results into stable navigation. */
 import { canvasSessionId } from '../domain/CanvasIdentity.js';
-/** Include only declared workflow sources with attributable media or a current live preview. */
+/** Retain displayed workflow media until the first visual hands over to the current Run. */
 export function canvasOutputCatalog(result, inventory) {
+    const presentedRun = result.outputs.reduce((latest, output) => output.items.reduce((run, item) => (item.file.type === 'input' ? run : Math.max(run, item.provenance.runOrder)), latest), Math.max(result.presentedRunOrder, result.preview?.runOrder ?? 0));
     const outputs = new Map(result.outputs.map((output) => [output.source.id, output]));
     const entries = [];
     for (const source of [...inventory].sort((a, b) => a.order - b.order)) {
         const output = outputs.get(source.id);
+        const input = Boolean(output?.items.length && output.items.every((item) => item.file.type === 'input'));
+        const items = output?.items.filter((item) => (input && presentedRun === 0) || item.provenance.runOrder === presentedRun) ?? [];
         const preview = result.preview?.sourceId === source.id ? result.preview : null;
-        if (!preview && !output?.batchCount)
+        if (!preview && !items.length)
             continue;
         entries.push(Object.freeze({
             source,
-            items: output?.items ?? Object.freeze([]),
+            items: Object.freeze(items),
             preview,
             summary: Object.freeze({
                 id: source.id,
                 label: source.label,
                 breadcrumb: source.breadcrumb,
-                batchCount: output?.batchCount ?? 0,
+                batchCount: items.length ? (output?.batchCount ?? 0) : 0,
                 preview: Boolean(preview),
-                previousRun: Boolean(output?.items.some((item) => item.provenance.runOrder < result.runOrder)),
+                previousRun: Boolean(items.some((item) => item.provenance.runOrder < result.runOrder)),
             }),
         }));
     }
+    return Object.freeze({
+        sessionId: canvasSessionId(result.context.sessionId),
+        generation: result.context.generation,
+        entries: Object.freeze(qualifiedCaptions(entries)),
+        result,
+    });
+}
+/** Disambiguate collisions within the output catalog without prefixing every authored source caption. */
+function qualifiedCaptions(entries) {
     const labels = new Map();
     for (const entry of entries)
         labels.set(entry.summary.label, (labels.get(entry.summary.label) ?? 0) + 1);
@@ -47,7 +59,7 @@ export function canvasOutputCatalog(result, inventory) {
         const caption = [...entry.source.breadcrumb, entry.source.label].join(' / ');
         captions.set(caption, (captions.get(caption) ?? 0) + 1);
     }
-    const qualified = entries.map((entry) => {
+    return entries.map((entry) => {
         if ((labels.get(entry.summary.label) ?? 0) <= 1)
             return entry;
         const label = [...entry.source.breadcrumb, entry.source.label].join(' / ');
@@ -61,11 +73,5 @@ export function canvasOutputCatalog(result, inventory) {
                 label: repeated ? `${label} (${occurrence})` : label,
             }),
         });
-    });
-    return Object.freeze({
-        sessionId: canvasSessionId(result.context.sessionId),
-        generation: result.context.generation,
-        entries: Object.freeze(qualified),
-        result,
     });
 }

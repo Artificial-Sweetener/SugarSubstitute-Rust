@@ -13,18 +13,25 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Project a bounded visible gallery window without expanding the workflow's complete batch catalog. */
-/** Limit visible cells to eight by using at most two columns and at most four intersecting rows. */
-export function canvasOverviewWindow(catalog, width, height, scrollTop) {
+/** Pack small batches and virtualize larger batches without expanding the complete catalog. */
+import { canvasBatchLayout } from './CanvasBatchLayout.js';
+/** Fit up to eight images together; bound larger batches to eight intersecting cells. */
+export function canvasOverviewWindow(catalog, width, height, scrollTop, reference = null, previousColumns = null) {
     if (![width, height, scrollTop].every((value) => Number.isFinite(value) && value >= 0))
         throw new RangeError('Canvas overview viewport is invalid.');
-    const columns = width >= 480 ? 2 : 1;
-    const rowHeight = Math.max(196, Math.ceil(height / 3));
     const count = catalog.entries.reduce((sum, entry) => sum + Math.max(entry.summary.batchCount, entry.preview ? 1 : 0), 0);
     if (!Number.isSafeInteger(count))
         throw new RangeError('Canvas overview catalog is too large.');
+    const dimensions = reference ??
+        catalog.entries[0]?.items[0]?.dimensions ??
+        catalog.entries[0]?.preview?.dimensions ?? { width: 1, height: 1 };
+    const packed = count > 0 && count <= 8 && width > 0 && height > 0
+        ? canvasBatchLayout(count, { width, height }, dimensions, previousColumns)
+        : null;
+    const columns = packed?.columns ?? (width >= 480 ? 2 : 1);
+    const rowHeight = packed ? packed.cellHeight + packed.gap : Math.max(196, Math.ceil(height / 3));
     const logicalHeight = Math.ceil(count / columns) * rowHeight;
-    if (!Number.isSafeInteger(logicalHeight))
+    if (!Number.isFinite(logicalHeight) || logicalHeight > Number.MAX_SAFE_INTEGER)
         throw new RangeError('Canvas overview extent is invalid.');
     // Browser scroll extents have finite pixel limits; map large logical catalogs onto a safe track.
     const totalHeight = Math.min(8_000_000, logicalHeight);
@@ -34,7 +41,9 @@ export function canvasOverviewWindow(catalog, width, height, scrollTop) {
     const firstRow = Math.floor(logicalScroll / rowHeight);
     const first = firstRow * columns;
     const end = width > 0 && height > 0
-        ? Math.min(count, Math.ceil((logicalScroll + height) / rowHeight) * columns)
+        ? packed
+            ? count
+            : Math.min(count, Math.ceil((logicalScroll + height) / rowHeight) * columns)
         : first;
     const cells = [];
     let preceding = 0;
@@ -46,13 +55,17 @@ export function canvasOverviewWindow(catalog, width, height, scrollTop) {
             const start = Math.max(0, first - preceding);
             const stop = Math.min(batchCount, end - preceding);
             for (let index = start; index < stop; index++) {
-                const selection = Object.freeze({ sourceId: entry.source.id, batchIndex: index });
-                const preview = entry.summary.batchCount === 0 && entry.preview !== null;
+                const item = entry.items.find((item) => item.batchIndex === index) ?? null;
+                const preview = entry.preview !== null && index === 0;
+                const selection = Object.freeze({
+                    sourceId: preview ? entry.source.id : (item?.provenance.sourceId ?? entry.source.id),
+                    batchIndex: index,
+                });
                 cells.push(Object.freeze({
                     key: JSON.stringify([selection.sourceId, index]),
                     selection,
                     label: `${entry.summary.label} · ${preview ? 'Source preview' : `Image ${index + 1}`}`,
-                    item: entry.items.find((item) => item.batchIndex === index) ?? null,
+                    item,
                     preview,
                 }));
             }
@@ -62,9 +75,13 @@ export function canvasOverviewWindow(catalog, width, height, scrollTop) {
     return Object.freeze({
         columns,
         rowHeight,
-        offset: scroll + firstRow * rowHeight - logicalScroll,
-        totalHeight,
+        offset: packed?.top ?? scroll + firstRow * rowHeight - logicalScroll,
+        totalHeight: packed ? height : totalHeight,
         count,
         cells: Object.freeze(cells),
+        left: packed?.left ?? 0,
+        width: packed?.width ?? width,
+        cellHeight: packed?.cellHeight ?? rowHeight,
+        gap: packed?.gap ?? 0,
     });
 }

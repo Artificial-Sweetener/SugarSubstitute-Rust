@@ -16,6 +16,7 @@
 /** Describe actual displayed image fidelity and loading state for reusable overlay controls. */
 
 import type { CanvasDisplayPlan } from '../../application/CanvasDisplayPlan.js';
+import { canvasComparisonAvailable } from '../../application/CanvasComparisonSelection.js';
 import type { CanvasInspectionTarget } from '../../application/CanvasInspectionStore.js';
 import type { CanvasCatalogSnapshot } from '../../domain/CanvasCatalog.js';
 import type { CanvasAttachmentAddress } from '../../domain/CanvasIdentity.js';
@@ -78,13 +79,15 @@ export function browserCanvasSnapshot(
   else if (plan.secondary?.item && plan.secondary.item.mediaKind !== 'image')
     secondaryResource = status('unavailable', 'Open B in the host viewer.');
   if (!frame && b) resource = { ...resource, message: `${resource.message} Showing B.` };
-  if (plan.view.mode === 'overview') resource = status('empty', 'Workflow output overview.');
+  if (plan.view.mode === 'overview') resource = status('empty', '');
   return Object.freeze({
     schema: 1,
     address,
     revision: 0,
     view: plan.view,
     sources,
+    grid: plan.grid,
+    comparisonAvailable: canvasComparisonAvailable(catalog),
     selected: plan.primary?.item ?? null,
     secondary: plan.secondary?.item ?? null,
     preview,

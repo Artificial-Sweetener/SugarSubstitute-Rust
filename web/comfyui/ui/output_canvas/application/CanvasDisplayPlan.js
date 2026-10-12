@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Describe visible logical image interests without retaining platform handles or preview bytes. */
+import { canvasBatchGridCatalog } from './CanvasContentSelection.js';
 /** Qualify lightweight preview admission to one source/run rather than each transport frame. */
 export function canvasPreviewLane(preview) {
     return JSON.stringify([
@@ -39,9 +40,17 @@ export function canvasDisplayPlan(view, catalog, items, preview) {
     const primary = slot(view.selection, items.primary);
     const secondary = slot(view.comparison?.secondary ?? null, items.secondary);
     const availableSources = Object.freeze(catalog.entries.map((entry) => entry.source.id));
+    const grid = view.mode === 'overview'
+        ? canvasBatchGridCatalog(catalog, view.selection, view.follow === 'auto').entries
+        : Object.freeze([]);
     const signature = JSON.stringify([
         catalog.generation,
         view.mode,
+        grid.map((entry) => [
+            entry.source.id,
+            entry.items.map((item) => item.id),
+            entry.preview ? canvasPreviewLane(entry.preview) : null,
+        ]),
         availableSources,
         primary?.selection,
         primary?.sourcePresent,
@@ -56,6 +65,7 @@ export function canvasDisplayPlan(view, catalog, items, preview) {
         generation: catalog.generation,
         signature,
         availableSources,
+        grid,
         primary,
         secondary,
         preview,

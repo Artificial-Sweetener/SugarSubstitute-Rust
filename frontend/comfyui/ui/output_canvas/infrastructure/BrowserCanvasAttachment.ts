@@ -159,7 +159,6 @@ export class BrowserCanvasAttachment {
       clock: options.frames,
       reducedMotion: () =>
         Boolean(document.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)').matches),
-      markManual: () => options.selection.manual(options.address.viewId),
       present: (target) => {
         this.#images.camera(target);
         if (this.#ready) this.#status.changed();
@@ -290,7 +289,7 @@ export class BrowserCanvasAttachment {
     const overview = this.#plan.view.mode === 'overview';
     this.element.classList.toggle('sc-output-overview-mode', overview);
     this.#browserResources.reconcile(this.#plan);
-    this.#overview.reconcile(catalog, overview);
+    this.#overview.reconcile({ ...catalog, entries: this.#plan.grid }, overview);
     const view = this.#plan.view;
     const signature = JSON.stringify([
       view.selection,
@@ -360,7 +359,7 @@ export class BrowserCanvasAttachment {
     this.element.classList.remove('sc-output-overview-mode');
   }
 
-  /** Resolve only current or deliberately pinned DTOs through the authoritative selection owner. */
+  /** Resolve current route selections through the authoritative navigation owner. */
   #displayPlan(): CanvasDisplayPlan {
     const { address, selection, views } = this.options;
     return canvasDisplayPlan(
@@ -371,7 +370,7 @@ export class BrowserCanvasAttachment {
     );
   }
 
-  /** Prune durable independent cameras against current slots and still-valid comparison pins. */
+  /** Prune independent cameras against current output slots. */
   #enroll(): void {
     const slots = this.#catalog.entries.flatMap((entry) =>
       entry.items.map((item) => ({ sourceId: entry.source.id, batchIndex: item.batchIndex })),

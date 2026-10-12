@@ -17,27 +17,33 @@
 import { isRecord } from '../../types/common.js';
 import { outputSourceId } from '../domain/ExecutionIdentity.js';
 import { decodeComfyWorkflowSources } from './ComfyWorkflowSourceDecoder.js';
+import { ComfyCubeStageRoutes } from './ComfyCubeStageRoutes.js';
 /** Read source identities from a compiled prompt; results determine which paths produce visible media. */
 export function decodeComfyPromptSources(payload, capturedSources = []) {
     if (!isRecord(payload) || !isRecord(payload.output) || Array.isArray(payload.output))
         return Object.freeze([]);
     const sources = [];
+    const routes = new ComfyCubeStageRoutes(payload.output);
     const authored = new Map([...capturedSources, ...decodeComfyWorkflowSources(payload.workflow)].map((source) => [
         source.executionPath,
         source,
     ]));
+    const positions = new Map(Object.keys(payload.output).map((path, index) => [path, index]));
     for (const [executionPath, node] of Object.entries(payload.output)) {
         if (!executionPath || executionPath.length > 4096 || !isRecord(node) || Array.isArray(node))
             continue;
         const meta = isRecord(node._meta) ? node._meta : null;
         const title = text(meta?.title) || text(node.class_type) || `Node ${executionPath}`;
-        const source = authored.get(executionPath);
+        const route = routes.resolve(executionPath);
+        const semanticPath = route?.outputPath ?? executionPath;
+        const source = authored.get(semanticPath);
         sources.push(Object.freeze({
-            id: outputSourceId(executionPath),
+            id: outputSourceId(semanticPath),
             executionPath,
             label: source?.label ?? title,
             breadcrumb: source?.breadcrumb ?? Object.freeze([]),
-            order: source?.order ?? authored.size + sources.length,
+            order: source?.order ?? authored.size + (positions.get(semanticPath) ?? sources.length),
+            ...(route && route.boundPath !== executionPath ? { transientOnly: true } : {}),
         }));
     }
     return Object.freeze(sources);

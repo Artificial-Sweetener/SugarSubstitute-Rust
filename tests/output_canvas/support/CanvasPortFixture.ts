@@ -53,6 +53,7 @@ export function canvasSnapshot(key: string): CanvasViewSnapshot {
       ...initialCanvasViewState(address),
       selection: { sourceId: outputSourceId('7'), batchIndex: 2 },
     },
+    grid: [],
     sources: [
       {
         id: outputSourceId('7'),
@@ -71,6 +72,7 @@ export function canvasSnapshot(key: string): CanvasViewSnapshot {
         previousRun: false,
       },
     ],
+    comparisonAvailable: true,
     selected: null,
     secondary: null,
     preview: false,

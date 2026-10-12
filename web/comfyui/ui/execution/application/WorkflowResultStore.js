@@ -16,7 +16,7 @@
 /** Own session-qualified latest media, revisions and execution status without browser allocations. */
 import { outputResultId, snapshotOutputResultId, } from '../domain/ExecutionIdentity.js';
 import { combineWorkflowMedia, freezeWorkflowMedia } from '../domain/WorkflowMedia.js';
-/** Retain one latest set per source; views own the limited older A/B descriptors they explicitly pin. */
+/** Retain bounded source descriptors and a monotonic visual handoff for each workflow. */
 export class WorkflowResultStore {
     #sessions = new Map();
     #listeners = new Set();
@@ -45,6 +45,7 @@ export class WorkflowResultStore {
                     revision: (previous?.snapshot.revision ?? 0) + 1,
                     outputs: Object.freeze([]),
                     runOrder: 0,
+                    presentedRunOrder: 0,
                     runStatus: 'idle',
                     preview: null,
                     recovery: Object.freeze({ state: 'idle', message: '' }),
@@ -173,6 +174,7 @@ export class WorkflowResultStore {
                 dimensions: preview.dimensions ? Object.freeze({ ...preview.dimensions }) : null,
             }),
             runOrder: preview.runOrder,
+            presentedRunOrder: Math.max(session.snapshot.presentedRunOrder, preview.runOrder),
             runStatus: 'running',
         });
         return true;
@@ -232,6 +234,7 @@ export class WorkflowResultStore {
         this.#publish(session, {
             ...session.snapshot,
             outputs,
+            presentedRunOrder: items.reduce((latest, item) => item.file.type === 'input' ? latest : Math.max(latest, item.provenance.runOrder), session.snapshot.presentedRunOrder),
             preview: preview?.sourceId === source.id && mediaRunOrder >= preview.runOrder ? null : preview,
         });
     }

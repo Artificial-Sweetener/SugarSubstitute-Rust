@@ -16,10 +16,9 @@
 /** Prove source membership, exact navigation, execution following, and stable comparison revisions. */
 
 import { CanvasViewRegistry } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasViewRegistry.js';
-import {
-  CanvasSelectionController,
-  canvasSelectedItem,
-} from '../../../frontend/comfyui/ui/output_canvas/application/CanvasSelectionController.js';
+import { CanvasSelectionController } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasSelectionController.js';
+import { canvasSelectedItem } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasContentSelection.js';
+import { canvasComparisonPair } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasComparisonSelection.js';
 import { CanvasSourceInventory } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasSourceInventory.js';
 import { canvasOutputCatalog } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasOutputCatalog.js';
 import { windowId } from '../../../frontend/comfyui/ui/output_canvas/domain/CanvasIdentity.js';
@@ -37,6 +36,53 @@ function fixture() {
 }
 
 describe('canvas workflow navigation', () => {
+  test('compares first and last stages in the chosen batch rather than an arbitrary other image', () => {
+    const catalog = canvasCatalogFixture();
+    const result = {
+      ...catalog.result,
+      outputs: catalog.result.outputs.map((output) => ({
+        ...output,
+        items: output.items.flatMap((item) => [
+          item,
+          { ...item, id: `${item.id}:batch1` as const, batchIndex: 1 },
+        ]),
+      })),
+    };
+    const pair = canvasComparisonPair(canvasOutputCatalog(result, canvasSources()), 1);
+    expect(pair?.primary?.provenance.sourceId).toBe(canvasSources()[0]?.id);
+    expect(pair?.secondary?.provenance.sourceId).toBe(canvasSources()[2]?.id);
+    expect(pair?.primary?.batchIndex).toBe(1);
+    expect(pair?.secondary?.batchIndex).toBe(1);
+  });
+
+  test('settles manually selected source previews onto a real final without changing explicit batch intent', () => {
+    const f = fixture();
+    const source = f.catalog.entries[0]!.source;
+    const preview = {
+      sessionId: f.catalog.result.context.sessionId,
+      generation: 0,
+      promptId: 'prompt:next' as const,
+      sourceId: source.id,
+      runOrder: 2,
+      sequence: 1,
+      token: 'frame',
+      dimensions: null,
+    };
+    const current = canvasOutputCatalog(
+      { ...f.catalog.result, runOrder: 2, preview },
+      canvasSources(),
+    );
+    f.selection.apply(f.view, current, {
+      type: 'select-source',
+      selection: { sourceId: source.id, batchIndex: 2 },
+    });
+    const final = canvasCatalogFixture(2, 0, [source]);
+    f.selection.reconcile(f.view, final);
+    expect(f.views.read(f.view)).toMatchObject({ follow: 'manual', selection: { batchIndex: 0 } });
+    f.selection.apply(f.view, final, { type: 'batch', index: 2 });
+    f.selection.reconcile(f.view, final);
+    expect(f.views.read(f.view).selection?.batchIndex).toBe(0);
+  });
   test('admits preview metadata only for source intent within a current non-comparison image view', () => {
     const f = fixture();
     const source = f.catalog.entries[0]!.source;
@@ -56,7 +102,10 @@ describe('canvas workflow navigation', () => {
     );
     f.selection.reconcile(f.view, catalog);
     expect(f.selection.preview(f.view, catalog)).toBe(preview);
-    f.selection.apply(f.view, catalog, { type: 'batch', index: 0 });
+    f.selection.apply(f.view, catalog, {
+      type: 'select',
+      selection: { sourceId: source.id, batchIndex: 0 },
+    });
     expect(f.selection.preview(f.view, catalog)).toBeNull();
     f.selection.apply(f.view, catalog, {
       type: 'select-source',
@@ -67,10 +116,12 @@ describe('canvas workflow navigation', () => {
     expect(f.selection.preview(f.view, deleted)).toBeNull();
     expect(f.selection.preview(f.view, { ...catalog, generation: 1 })).toBeNull();
     f.selection.apply(f.view, catalog, { type: 'comparison', enabled: true });
-    expect(f.selection.preview(f.view, catalog)).toBeNull();
+    expect(f.views.read(f.view).comparison).toBeNull();
+    expect(f.selection.preview(f.view, catalog)).toBe(preview);
     f.selection.apply(f.view, catalog, { type: 'comparison', enabled: false });
     f.selection.apply(f.view, catalog, { type: 'overview', enabled: true });
-    expect(f.selection.preview(f.view, catalog)).toBeNull();
+    expect(f.views.read(f.view).mode).toBe('image');
+    expect(f.selection.preview(f.view, catalog)).toBe(preview);
   });
   test('distinguishes source preview interest from an explicitly requested batch, including batch zero', () => {
     const f = fixture();
@@ -82,10 +133,10 @@ describe('canvas workflow navigation', () => {
     const source = f.catalog.entries[0]!.source;
     f.selection.apply(f.view, f.catalog, {
       type: 'select-source',
-      selection: { sourceId: source.id, batchIndex: 2 },
+      selection: { sourceId: source.id, batchIndex: 0 },
     });
     expect(f.views.read(f.view)).toMatchObject({ sourcePreview: true, follow: 'manual' });
-    expect(f.views.read(f.view).selection?.batchIndex).toBe(2);
+    expect(f.views.read(f.view).selection?.batchIndex).toBe(0);
     f.selection.apply(f.view, f.catalog, {
       type: 'select',
       selection: { sourceId: source.id, batchIndex: 0 },
@@ -155,7 +206,7 @@ describe('canvas workflow navigation', () => {
       );
     expect(f.views.read(f.view)).toBe(state);
   });
-  test('follows an attributable source preview without destroying its previous final', () => {
+  test('hands navigation over to the new preview while retiring previous finals from the catalog', () => {
     const f = fixture();
     const source = f.catalog.entries[0]?.source;
     if (!source) throw new Error('Fixture source is missing.');
@@ -175,8 +226,9 @@ describe('canvas workflow navigation', () => {
     );
     f.selection.reconcile(f.view, catalog);
     expect(f.views.read(f.view).selection?.sourceId).toBe(source.id);
-    expect(catalog.entries[0]?.summary).toMatchObject({ preview: true, previousRun: true });
-    expect(f.selection.items(f.view, catalog).primary?.provenance.runOrder).toBe(1);
+    expect(catalog.entries[0]?.summary).toMatchObject({ preview: true, previousRun: false });
+    expect(f.selection.items(f.view, catalog).primary).toBeNull();
+    expect(catalog.entries).toHaveLength(1);
     const completed = canvasCatalogFixture(2, 0, canvasSources().slice(0, 1));
     f.selection.reconcile(f.view, completed);
     expect(f.selection.items(f.view, completed).primary?.provenance.runOrder).toBe(2);
@@ -220,8 +272,11 @@ describe('canvas workflow navigation', () => {
     const delayed = { ...f.catalog, result: { ...f.catalog.result, runOrder: 2 } };
     f.selection.reconcile(f.view, delayed);
     expect(f.selection.items(f.view, next).primary?.provenance.runOrder).toBe(2);
-    f.selection.apply(f.view, next, { type: 'batch', index: 2 });
-    f.selection.reconcile(f.view, canvasCatalogFixture(3));
+    f.selection.apply(f.view, next, {
+      type: 'select',
+      selection: { sourceId: next.entries[2]!.source.id, batchIndex: 2 },
+    });
+    f.selection.reconcile(f.view, canvasCatalogFixture(2, 0, canvasSources(), 'canvas', 3));
     expect(f.views.read(f.view)).toMatchObject({ follow: 'manual', selection: { batchIndex: 2 } });
     expect(f.selection.items(f.view, next).primary).toBeNull();
     expect(canvasSelectedItem(next, f.views.read(f.view).selection)).toBeNull();
@@ -229,24 +284,27 @@ describe('canvas workflow navigation', () => {
     expect(f.selection.items(f.view, next).primary?.batchIndex).toBe(0);
   });
 
-  test('pins two exact revisions through arrivals, swaps, wipes, and surface movement', () => {
+  test('retains two stage selections through final revisions, swaps, wipes, and surface movement', () => {
     const f = fixture();
     f.selection.apply(f.view, f.catalog, { type: 'comparison', enabled: true });
     const pinned = f.selection.items(f.view, f.catalog);
     expect(pinned.primary?.id).not.toBe(pinned.secondary?.id);
-    const next = canvasCatalogFixture(2);
+    const next = canvasCatalogFixture(1, 0, canvasSources(), 'canvas', 2);
     f.selection.reconcile(f.view, next);
-    expect(f.selection.items(f.view, next)).toEqual(pinned);
+    const refreshed = f.selection.items(f.view, next);
+    expect(refreshed.primary?.provenance.sourceId).toBe(pinned.primary?.provenance.sourceId);
+    expect(refreshed.secondary?.provenance.sourceId).toBe(pinned.secondary?.provenance.sourceId);
+    expect(refreshed.primary?.id).not.toBe(pinned.primary?.id);
     f.selection.apply(f.view, next, { type: 'wipe', split: 0.8, orientation: 'horizontal' });
     const first = f.views.prepareAttachment(f.view, windowId('primary'));
     f.views.commitAttachment(first);
     const moved = f.views.prepareAttachment(f.view, windowId('another'));
     f.views.commitAttachment(moved);
-    expect(f.selection.items(f.view, next)).toEqual(pinned);
+    expect(f.selection.items(f.view, next)).toEqual(refreshed);
     f.selection.apply(f.view, next, { type: 'swap' });
     expect(f.selection.items(f.view, next)).toEqual({
-      primary: pinned.secondary,
-      secondary: pinned.primary,
+      primary: refreshed.secondary,
+      secondary: refreshed.primary,
     });
     expect(f.views.read(f.view).comparison).toMatchObject({
       split: 0.8,
@@ -254,23 +312,23 @@ describe('canvas workflow navigation', () => {
     });
   });
 
-  test('opens an empty comparison chooser when only one image is available', () => {
+  test('keeps comparison disabled when only one actual final image is available', () => {
     const f = fixture();
     const single = canvasCatalogFixture(2, 0, canvasSources().slice(0, 1));
     f.selection.reconcile(f.view, single);
     f.selection.apply(f.view, single, { type: 'comparison', enabled: true });
-    expect(f.views.read(f.view).comparison?.secondary).toBeNull();
+    expect(f.views.read(f.view).comparison).toBeNull();
     expect(f.selection.items(f.view, single).secondary).toBeNull();
   });
 
-  test('keeps Manual selection unavailable after source deletion while preserving a valid comparison partner', () => {
+  test('keeps the surviving comparison stage and marks its deleted partner unavailable', () => {
     const f = fixture();
     f.selection.apply(f.view, f.catalog, { type: 'comparison', enabled: true });
     const filtered = canvasOutputCatalog(f.catalog.result, canvasSources().slice(0, 1));
     f.selection.reconcile(f.view, filtered);
-    expect(f.selection.items(f.view, filtered).primary).toBeNull();
-    expect(f.selection.items(f.view, filtered).secondary).not.toBeNull();
-    expect(f.views.read(f.view).selection?.sourceId).toBe(canvasSources()[2]?.id);
+    expect(f.selection.items(f.view, filtered).primary).not.toBeNull();
+    expect(f.selection.items(f.view, filtered).secondary).toBeNull();
+    expect(f.views.read(f.view).selection?.sourceId).toBe(canvasSources()[0]?.id);
   });
 
   test('resets a replacement generation and releases pins without changing another view', () => {
@@ -286,5 +344,55 @@ describe('canvas workflow navigation', () => {
     ).toThrow('another workflow');
     f.selection.remove(f.view);
     f.selection.dispose();
+  });
+});
+
+test('keeps the exact set when switching sources and rejects missing sets', () => {
+  const f = fixture();
+  const a = f.catalog.entries[0]!;
+  const catalog = {
+    ...f.catalog,
+    entries: f.catalog.entries.map((entry) =>
+      entry === a
+        ? {
+            ...entry,
+            items: [
+              ...entry.items,
+              { ...entry.items[0]!, id: 'result:second' as const, batchIndex: 1 },
+            ],
+            summary: { ...entry.summary, batchCount: 2 },
+          }
+        : entry,
+    ),
+  };
+  f.selection.apply(f.view, catalog, {
+    type: 'select',
+    selection: { sourceId: a.source.id, batchIndex: 1 },
+  });
+  f.selection.apply(f.view, catalog, {
+    type: 'select-source',
+    selection: { sourceId: catalog.entries[1]!.source.id, batchIndex: 1 },
+  });
+  expect(f.views.read(f.view).selection).toEqual({ sourceId: a.source.id, batchIndex: 1 });
+  f.selection.apply(f.view, catalog, { type: 'batch', index: 8 });
+  expect(f.views.read(f.view).selection).toEqual({ sourceId: a.source.id, batchIndex: 1 });
+});
+
+test('preserves grid navigation and last numbered set while switching source tabs', () => {
+  const f = fixture();
+  f.selection.apply(f.view, f.catalog, { type: 'overview', enabled: true });
+  f.selection.apply(f.view, f.catalog, {
+    type: 'select-source',
+    selection: { sourceId: f.catalog.entries[0]!.source.id, batchIndex: 0 },
+  });
+  expect(f.views.read(f.view)).toMatchObject({
+    mode: 'overview',
+    selection: { sourceId: f.catalog.entries[0]!.source.id, batchIndex: 0 },
+  });
+  f.selection.apply(f.view, f.catalog, { type: 'batch', index: 0 });
+  expect(f.views.read(f.view)).toMatchObject({
+    mode: 'image',
+    sourcePreview: false,
+    selection: { batchIndex: 0 },
   });
 });

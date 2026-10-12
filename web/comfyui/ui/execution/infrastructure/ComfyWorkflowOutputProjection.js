@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Project shared workflow results into the currently committed Comfy surface without a second cache. */
+import { outputSourceId } from '../domain/ExecutionIdentity.js';
 /** Qualify cube and thumbnail lookups through explicit active-session commitment. */
 export class ComfyWorkflowOutputProjection {
     previews;
@@ -25,7 +26,7 @@ export class ComfyWorkflowOutputProjection {
         this.sessions = sessions;
         this.results = results;
     }
-    /** Read one exact full source path within the committed workflow generation. */
+    /** Read one semantic source identity within the committed workflow generation. */
     output(executionPath) {
         const active = this.sessions.read().active;
         if (!active)
@@ -33,7 +34,7 @@ export class ComfyWorkflowOutputProjection {
         const session = this.results.read(active.sessionId);
         if (session?.context.generation !== active.generation)
             return null;
-        return session.outputs.find((output) => output.source.executionPath === executionPath) ?? null;
+        return (session.outputs.find((output) => output.source.id === outputSourceId(executionPath)) ?? null);
     }
     /** Read the active cube frame from its allocation owner rather than a shared host URL map. */
     livePreview(executionPath) {

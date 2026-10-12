@@ -99,7 +99,6 @@ export class BrowserCanvasAttachment {
             inspections: options.inspections,
             clock: options.frames,
             reducedMotion: () => Boolean(document.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)').matches),
-            markManual: () => options.selection.manual(options.address.viewId),
             present: (target) => {
                 this.#images.camera(target);
                 if (this.#ready)
@@ -232,7 +231,7 @@ export class BrowserCanvasAttachment {
         const overview = this.#plan.view.mode === 'overview';
         this.element.classList.toggle('sc-output-overview-mode', overview);
         this.#browserResources.reconcile(this.#plan);
-        this.#overview.reconcile(catalog, overview);
+        this.#overview.reconcile({ ...catalog, entries: this.#plan.grid }, overview);
         const view = this.#plan.view;
         const signature = JSON.stringify([
             view.selection,
@@ -298,12 +297,12 @@ export class BrowserCanvasAttachment {
         this.element.replaceChildren();
         this.element.classList.remove('sc-output-overview-mode');
     }
-    /** Resolve only current or deliberately pinned DTOs through the authoritative selection owner. */
+    /** Resolve current route selections through the authoritative navigation owner. */
     #displayPlan() {
         const { address, selection, views } = this.options;
         return canvasDisplayPlan(views.read(address.viewId), this.#catalog, selection.items(address.viewId, this.#catalog), selection.preview(address.viewId, this.#catalog));
     }
-    /** Prune durable independent cameras against current slots and still-valid comparison pins. */
+    /** Prune independent cameras against current output slots. */
     #enroll() {
         const slots = this.#catalog.entries.flatMap((entry) => entry.items.map((item) => ({ sourceId: entry.source.id, batchIndex: item.batchIndex })));
         for (const slot of [this.#plan.primary, this.#plan.secondary])

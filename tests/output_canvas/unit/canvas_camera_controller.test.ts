@@ -43,7 +43,6 @@ function fixture(reduced = false) {
     inspections,
     clock,
     reducedMotion: () => reduced,
-    markManual: () => selection.manual(view),
     present: (target) => {
       shown.push(target);
     },
@@ -76,7 +75,7 @@ describe('canvas camera attachment orchestration', () => {
     f.camera.dispose();
     expect(f.clock.pending).toBe(0);
   });
-  test('ends Auto for deliberate input and ignores repeated unchanged preview geometry', () => {
+  test('preserves Auto during inspection and ignores repeated unchanged preview geometry', () => {
     const f = fixture();
     const slot = f.slots[0]!;
     expect(f.camera.fit()).toBe(false);
@@ -86,7 +85,7 @@ describe('canvas camera attachment orchestration', () => {
     expect(f.clock.pending).toBe(1);
     f.clock.advance(45);
     expect(f.camera.read()?.camera.mode).toBe('native');
-    expect(f.views.read(f.view).follow).toBe('manual');
+    expect(f.views.read(f.view).follow).toBe('auto');
     f.camera.pan({ x: -30, y: -20 });
     const count = f.shown.length;
     for (let frame = 0; frame < 100; frame++) f.camera.show(slot, f.geometry);

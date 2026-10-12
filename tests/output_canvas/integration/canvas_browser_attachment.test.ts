@@ -251,14 +251,14 @@ describe('composed browser canvas attachment', () => {
     expect(f.frames.pending).toBe(0);
   });
 
-  test('pins a differently shaped B, swaps admitted handles, and wipes without catalog reads or image reloads', async () => {
+  test('refreshes compared stage revisions and swaps admitted handles without reloads during wipe movement', async () => {
     const f = fixture();
     const read = jest.fn(f.options.catalog);
     const surface = new BrowserCanvasAttachment(f.root, { ...f.options, catalog: read });
-    const a = await f.loader.ready(0);
+    await f.loader.ready(0);
     f.clock.advance(100);
     await f.command(surface, { type: 'comparison', enabled: true });
-    const b = await f.loader.ready(1, { width: 2160, height: 3840 });
+    await f.loader.ready(1, { width: 2160, height: 3840 });
     f.clock.advance(100);
     f.frames.advance(16);
     expect(f.root.querySelectorAll('img')).toHaveLength(2);
@@ -267,28 +267,40 @@ describe('composed browser canvas attachment', () => {
     expect(scale?.y).toBeCloseTo((800 / 3840) * (2160 / 3840));
     const selected = surface.port.read().selected;
     const secondary = surface.port.read().secondary;
-    f.replace(canvasCatalogFixture(2));
+    f.replace(
+      canvasCatalogFixture(
+        1,
+        0,
+        f.catalog.entries.map((entry) => entry.source),
+        'canvas',
+        2,
+      ),
+    );
     surface.refresh();
-    expect(surface.port.read().selected?.id).toBe(selected?.id);
-    expect(surface.port.read().secondary?.id).toBe(secondary?.id);
+    expect(surface.port.read().selected?.id).not.toBe(selected?.id);
+    expect(surface.port.read().secondary?.id).not.toBe(secondary?.id);
+    const refreshedSecondary = surface.port.read().secondary;
+    const a = await f.loader.ready(2);
+    const b = await f.loader.ready(3, { width: 2160, height: 3840 });
+    f.clock.advance(100);
     const reads = read.mock.calls.length;
     for (let index = 0; index < 100; index++)
       await f.command(surface, { type: 'wipe', orientation: 'horizontal', split: index / 100 });
     expect(read.mock.calls).toHaveLength(reads);
-    expect(f.loader.requests).toHaveLength(2);
+    expect(f.loader.requests).toHaveLength(4);
     await f.command(surface, { type: 'swap' });
     f.clock.advance(100);
     f.frames.advance(16);
     expect(f.root.querySelector('.sc-output-image-layer img')).toBe(b);
     expect(f.root.querySelectorAll('img')).toContain(a);
-    expect(f.loader.requests).toHaveLength(2);
-    expect(surface.port.read().selected?.id).toBe(secondary?.id);
+    expect(f.loader.requests).toHaveLength(4);
+    expect(surface.port.read().selected?.id).toBe(refreshedSecondary?.id);
     surface.dispose();
     expect(f.frames.pending).toBe(0);
     expect(f.errors).toEqual([]);
   });
 
-  test('renders bounded exact overview cells, preserves keyboard focus, and returns through selection authority', async () => {
+  test('renders only the selected source batch grid, preserves focus, and returns through selection authority', async () => {
     const f = fixture();
     const surface = new BrowserCanvasAttachment(f.root, f.options);
     await f.loader.ready(0);
@@ -297,8 +309,9 @@ describe('composed browser canvas attachment', () => {
     expect(f.root.classList.contains('sc-output-overview-mode')).toBe(true);
     expect(f.loader.requests[0]?.released).toBe(true);
     const cells = f.root.querySelectorAll<HTMLButtonElement>('.sc-output-overview-cell');
-    expect(cells).toHaveLength(6);
-    expect(cells[0]?.textContent).toContain('<b>Output</b>');
+    expect(cells).toHaveLength(3);
+    expect(cells[0]?.getAttribute('aria-label')).toContain('<b>Output</b>');
+    expect(cells[0]?.textContent).not.toContain('<b>Output</b>');
     expect(f.root.querySelector('b')).toBeNull();
     expect(f.loader.requests.slice(1).every((request) => request.input.role === 'thumbnail')).toBe(
       true,
@@ -306,10 +319,11 @@ describe('composed browser canvas attachment', () => {
     expect(surface.diagnostics().pendingDecodes).toBeLessThanOrEqual(2);
     await f.loader.ready(1);
     expect(f.root.querySelector('.sc-output-overview img')).not.toBeNull();
+    expect(cells[0]?.textContent).toBe('');
     cells[1]?.focus();
     surface.refresh();
     expect(document.activeElement).toBe(cells[1]);
-    expect(f.root.querySelectorAll('.sc-output-overview-cell')).toHaveLength(6);
+    expect(f.root.querySelectorAll('.sc-output-overview-cell')).toHaveLength(3);
     cells[1]?.click();
     expect(f.views.read(f.view).selection?.batchIndex).toBe(1);
     expect(f.views.read(f.view).mode).toBe('image');

@@ -66,6 +66,8 @@ export interface WorkflowOutputSource {
   readonly label: string;
   readonly breadcrumb: readonly string[];
   readonly order: number;
+  /** Route intermediate execution frames without treating their other media as the bound final. */
+  readonly transientOnly?: true;
 }
 
 export interface WorkflowOutputSet {

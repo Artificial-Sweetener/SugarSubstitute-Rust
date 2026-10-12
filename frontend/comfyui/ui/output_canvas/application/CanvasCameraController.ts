@@ -40,7 +40,6 @@ export interface CanvasCameraControllerOptions {
   readonly inspections: CanvasInspectionStore;
   readonly clock: CanvasFrameClock;
   readonly reducedMotion: () => boolean;
-  readonly markManual: () => void;
   readonly present: (target: CanvasInspectionTarget | null) => void;
 }
 
@@ -115,7 +114,7 @@ export class CanvasCameraController {
       );
   }
 
-  /** Fit the displayed image deliberately and end execution following. */
+  /** Fit the displayed image without changing content following. */
   fit(): boolean {
     return this.#move((target) => centeredCanvasCamera(target.geometry), null);
   }
@@ -149,7 +148,6 @@ export class CanvasCameraController {
   pan(delta: CanvasAnchor): boolean {
     const target = this.read();
     if (!target || this.#disposed) return false;
-    this.options.markManual();
     this.#transition.set(panCanvasCamera(target.camera, delta, target.geometry));
     return true;
   }
@@ -158,7 +156,6 @@ export class CanvasCameraController {
   pinch(factor: number, anchor: CanvasAnchor, delta: CanvasAnchor): boolean {
     const target = this.read();
     if (!target || this.#disposed) return false;
-    this.options.markManual();
     const zoomed = zoomCanvasCamera(target.camera, factor, anchor, target.geometry);
     this.#transition.set(panCanvasCamera(zoomed, delta, target.geometry));
     return true;
@@ -194,7 +191,7 @@ export class CanvasCameraController {
     this.#transition.dispose();
   }
 
-  /** Apply a discrete camera intent from its visible origin and durable Manual transition. */
+  /** Apply an inspection intent independently of content navigation. */
   #move(
     destination: (target: CanvasInspectionTarget) => CanvasCamera,
     anchor: CanvasAnchor | null,
@@ -202,7 +199,6 @@ export class CanvasCameraController {
   ): boolean {
     const target = this.read();
     if (!target || this.#disposed) return false;
-    this.options.markManual();
     this.#transition.move(
       destination(target),
       target.geometry,

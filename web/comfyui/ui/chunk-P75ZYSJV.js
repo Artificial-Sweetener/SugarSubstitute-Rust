@@ -5,7 +5,7 @@ import {
 import {
   onBeforeUnmount,
   ref
-} from "./chunk-MNPWJMUZ.js";
+} from "./chunk-LFPAN2S3.js";
 
 // frontend/comfyui/ui/surface/stack/vue/CubeStackPointerDrag.ts
 function useCubeStackPointerDrag(options) {

@@ -5,7 +5,7 @@ import {
 import {
   defineComponent,
   h
-} from "./chunk-MNPWJMUZ.js";
+} from "./chunk-LFPAN2S3.js";
 
 // frontend/comfyui/ui/surface/stack/vue/CubeStackSelectionIndicator.ts
 var CubeStackSelectionIndicator = defineComponent({
