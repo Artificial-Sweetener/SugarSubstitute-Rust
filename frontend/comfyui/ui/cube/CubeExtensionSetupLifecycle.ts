@@ -19,7 +19,7 @@ import type { SugarCubesUI } from '../SugarCubesUI.js';
 import { CubeBlueprintPersistenceGuard } from '../affordance/CubeBlueprintPersistenceGuard.js';
 import type { ComfyCubeOutputEventBridge } from './execution/ComfyCubeOutputEventBridge.js';
 import type { ComfyCubeOutputHistoryAdapter } from './execution/ComfyCubeOutputHistoryAdapter.js';
-import type { ComfyPromptQueueBridge } from './execution/ComfyPromptQueueBridge.js';
+import type { ComfyPromptQueueBridge } from '../execution/infrastructure/ComfyPromptQueueBridge.js';
 import type { HostSettingsController } from '../settings/HostSettingsController.js';
 import type { ComfyApplication } from '../types/graph.js';
 

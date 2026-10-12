@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Prove relation preparation precedes both native Comfy and direct Cube queue paths. */
 import { expect, test, jest } from '@jest/globals';
-import { ComfyPromptQueueBridge } from '../../../frontend/comfyui/ui/cube/execution/ComfyPromptQueueBridge.js';
+import { ComfyPromptQueueBridge } from '../../../frontend/comfyui/ui/execution/infrastructure/ComfyPromptQueueBridge.js';
 
 test.each([true, false])(
   'prepares relation values once before queue ownership is dispatched: %s',

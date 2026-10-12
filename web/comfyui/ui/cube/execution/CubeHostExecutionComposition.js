@@ -1,4 +1,4 @@
-import { ComfyPromptQueueBridge } from './ComfyPromptQueueBridge.js';
+import { ComfyPromptQueueBridge } from '../../execution/infrastructure/ComfyPromptQueueBridge.js';
 import { CubePromptPipeline } from './CubePromptPipeline.js';
 import { CubeOutputPromptAdapter } from './CubeOutputPromptAdapter.js';
 import { createCubeDirectExecution } from './CubeDirectExecutionService.js';

@@ -16,11 +16,11 @@
 /** Verify the sole SugarCubes queue adapter owns only host interception. */
 
 import { jest } from '@jest/globals';
-import { ComfyPromptQueueBridge } from '../../../frontend/comfyui/ui/cube/execution/ComfyPromptQueueBridge.js';
+import { ComfyPromptQueueBridge } from '../../../frontend/comfyui/ui/execution/infrastructure/ComfyPromptQueueBridge.js';
 import type {
   ComfyPromptQueueApi,
   ComfyPromptQueueOptions,
-} from '../../../frontend/comfyui/ui/cube/execution/ComfyPromptQueueBridge.js';
+} from '../../../frontend/comfyui/ui/execution/infrastructure/ComfyPromptQueueBridge.js';
 
 test('transforms prompts and restores only its own queue wrapper', async () => {
   const queuePrompt = jest.fn(
@@ -264,6 +264,28 @@ test('installation without a host queue fails without creating a replacement', (
   expect(() => bridge.install()).toThrow('Comfy queuePrompt is unavailable.');
   expect(api.queuePrompt).toBeUndefined();
   bridge.dispose();
+});
+
+test('a retained later wrapper still delegates after disposal and a fresh installation', async () => {
+  const original = jest.fn(async () => ({ prompt_id: 'original' }));
+  const transform = jest.fn(async (payload: unknown) => payload);
+  const api: ComfyPromptQueueApi = { queuePrompt: original };
+  const bridge = new ComfyPromptQueueBridge({ api, transform });
+  bridge.install();
+  const retained = api.queuePrompt;
+  if (!retained) throw new Error('Missing installed queue');
+  const later = async (position: number, payload: unknown, options?: ComfyPromptQueueOptions) =>
+    await retained.call(api, position, payload, options);
+  api.queuePrompt = later;
+  bridge.dispose();
+  await expect(api.queuePrompt(0, {})).resolves.toEqual({ prompt_id: 'original' });
+  expect(transform).not.toHaveBeenCalled();
+  bridge.install();
+  await expect(api.queuePrompt(0, {})).resolves.toEqual({ prompt_id: 'original' });
+  expect(transform).toHaveBeenCalledTimes(1);
+  expect(original).toHaveBeenCalledTimes(2);
+  bridge.dispose();
+  expect(api.queuePrompt).toBe(later);
 });
 
 /** Hold transformation at its external async boundary until a lifecycle transition settles. */
