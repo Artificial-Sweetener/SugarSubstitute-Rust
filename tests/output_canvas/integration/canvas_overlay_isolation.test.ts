@@ -18,6 +18,8 @@
 import { jest } from '@jest/globals';
 import { nextTick } from 'vue';
 import { mountCanvasOverlay } from '../../../frontend/comfyui/ui/output_canvas/presentation/vue/CanvasOverlayRuntime.js';
+import { ContextMenu } from '../../../frontend/comfyui/ui/menus/ContextMenu.js';
+import { canvasContextActions } from '../../../frontend/comfyui/ui/output_canvas/presentation/vue/CanvasContextActions.js';
 import { windowId } from '../../../frontend/comfyui/ui/output_canvas/domain/CanvasIdentity.js';
 import { CanvasPortFixture, canvasSnapshot } from '../support/CanvasPortFixture.js';
 
@@ -29,15 +31,26 @@ function root(): HTMLElement {
 }
 
 /** Resolve controls by accessible text rather than source order. */
-function button(element: HTMLElement, text: string): HTMLButtonElement {
+function button(element: HTMLElement, text: string): HTMLElement {
   const found = [...element.querySelectorAll('button')].find(
     (candidate) => candidate.textContent === text,
   );
-  if (!found) throw new Error(`Missing test control: ${text}`);
+  if (!found) {
+    element.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    const item = [
+      ...document.querySelectorAll<HTMLElement>('[role="menuitem"],[role="menuitemcheckbox"]'),
+    ].find((candidate) => candidate.textContent === text);
+    if (!item) throw new Error(`Missing test control: ${text}`);
+    return item;
+  }
   return found;
 }
 
-afterEach(() => document.body.replaceChildren());
+afterEach(() => {
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  document.body.replaceChildren();
+  jest.restoreAllMocks();
+});
 
 test('describes a reactivated preview-only source before its next frame arrives', () => {
   const initial = canvasSnapshot('waiting-preview');
@@ -53,11 +66,9 @@ test('describes a reactivated preview-only source before its next frame arrives'
   });
   const element = root();
   const mounted = mountCanvasOverlay(element, port, jest.fn());
-  expect(element.querySelector('[aria-label="Batch position"]')?.textContent).toBe(
-    'Source preview',
-  );
+  expect(element.querySelector('[aria-label="Batch position"]')).toBeNull();
   expect(element.textContent).not.toContain('/ 0');
-  expect(button(element, 'Next image').disabled).toBe(true);
+  expect(element.querySelector('[aria-label="Next image"]')).toBeNull();
   mounted.dispose();
 });
 
@@ -183,7 +194,7 @@ test('mounts browser and host-backed contract roots without Comfy or browser ima
   const a = mountCanvasOverlay(browserRoot, browser, report);
   const b = mountCanvasOverlay(hostRoot, host, report);
   expect(document.querySelectorAll('img, canvas')).toHaveLength(0);
-  expect(hostRoot.querySelector('[aria-label="Zoom"]')?.textContent).toBe('1:1');
+  expect(hostRoot.querySelector('[aria-label="Zoom"]')).toBeNull();
   button(browserRoot, 'Fit').click();
   button(browserRoot, 'Detail').click();
   await nextTick();
@@ -197,7 +208,7 @@ test('mounts browser and host-backed contract roots without Comfy or browser ima
   a.dispose();
   expect(browser.listenerCount).toBe(0);
   expect(host.listenerCount).toBe(1);
-  expect(hostRoot.textContent).toContain('16384 × 8192');
+  expect(hostRoot.textContent).not.toContain('16384');
   expect(browser.releases).toHaveLength(0);
   b.dispose();
   expect(host.listenerCount).toBe(0);
@@ -221,7 +232,6 @@ test('renders markup-like metadata literally and hides unsupported commands', ()
   expect(element.querySelector('img, script')).toBeNull();
   expect(element.textContent).toContain('<img src=x onerror=alert(1)>');
   expect([...element.querySelectorAll('button')].map((control) => control.textContent)).toEqual([
-    'Fit',
     '<img src=x onerror=alert(1)>',
     '<img src=x onerror=alert(1)>',
   ]);
@@ -236,7 +246,7 @@ test('rejects old revisions and delivery from another attachment', async () => {
   port.publish({
     ...initial,
     revision: 2,
-    resource: { ...initial.resource, message: 'Current state' },
+    resource: { ...initial.resource, state: 'error', message: 'Current state' },
   });
   await nextTick();
   expect(element.textContent).toContain('Current state');
@@ -264,34 +274,7 @@ test('rejects old revisions and delivery from another attachment', async () => {
   mounted.dispose();
 });
 
-test('shows an explicit chooser for comparison without a distinct second image', () => {
-  const initial = canvasSnapshot('empty-comparison');
-  const port = new CanvasPortFixture({
-    ...initial,
-    view: { ...initial.view, comparison: { secondary: null, orientation: 'vertical', split: 0.5 } },
-  });
-  const element = root();
-  const mounted = mountCanvasOverlay(element, port, jest.fn());
-  const chooser = element.querySelector<HTMLSelectElement>('[aria-label="Comparison source"]');
-  expect(chooser?.value).toBe('');
-  expect(chooser?.selectedOptions[0]?.textContent).toBe('Choose an output');
-  expect(button(element, 'Swap A/B').disabled).toBe(true);
-  mounted.dispose();
-});
-
-test('labels unknown preview batch position and keeps comparison availability truthful', () => {
-  const initial = canvasSnapshot('preview');
-  const port = new CanvasPortFixture({ ...initial, preview: true });
-  const element = root();
-  const mounted = mountCanvasOverlay(element, port, jest.fn());
-  expect(element.querySelector('[aria-label="Batch position"]')?.textContent).toBe(
-    'Source preview',
-  );
-  expect(button(element, 'Compare').disabled).toBe(true);
-  mounted.dispose();
-});
-
-test('delegates comparison activation and secondary selection as separate intents', async () => {
+test('keeps comparison actions transient and delegates source selection without exposing form controls', async () => {
   const initial = canvasSnapshot('comparison');
   const port = new CanvasPortFixture({
     ...initial,
@@ -306,16 +289,83 @@ test('delegates comparison activation and secondary selection as separate intent
   });
   const element = root();
   const mounted = mountCanvasOverlay(element, port, jest.fn());
-  button(element, 'Compare').click();
-  const chooser = element.querySelector('select');
-  if (!chooser) throw new Error('Missing comparison source chooser.');
-  chooser.value = 'source:7';
-  chooser.dispatchEvent(new Event('change'));
+  expect(element.querySelector('select,input,[role="toolbar"]')).toBeNull();
+  const actions = canvasContextActions(port.read(), port.capabilities, (command) => {
+    void port.dispatch({
+      schema: 1,
+      address: initial.address,
+      requestId: port.requests.length + 1,
+      expectedRevision: 1,
+      command,
+    });
+  });
+  actions.find((entry) => entry.label === 'Compare')?.select?.();
+  actions.find((entry) => entry.label === 'Compare with')?.children?.[0]?.select?.();
   await nextTick();
   expect(port.requests.map((value) => value.command)).toEqual([
     { type: 'comparison', enabled: false },
     { type: 'select-comparison', selection: { sourceId: 'source:7', batchIndex: 2 } },
   ]);
+  mounted.dispose();
+});
+
+test('disables comparison for previews and renders only tabs for a ready single output', () => {
+  const initial = canvasSnapshot('preview');
+  const port = new CanvasPortFixture({
+    ...initial,
+    preview: true,
+    sources: initial.sources.map((source) => ({ ...source, batchCount: 1 })),
+    resource: { ...initial.resource, state: 'ready' },
+  });
+  const element = root();
+  const mounted = mountCanvasOverlay(element, port, jest.fn());
+  expect(element.querySelector('.sc-output-status,[role="toolbar"],input,select')).toBeNull();
+  expect(element.querySelectorAll('button')).toHaveLength(2);
+  expect(
+    canvasContextActions(port.read(), port.capabilities, jest.fn()).find(
+      (entry) => entry.label === 'Compare',
+    )?.disabled,
+  ).toBe(true);
+  mounted.dispose();
+});
+
+test('opens actions by keyboard only within the explicit interaction surface and removes the menu on teardown', () => {
+  const port = new CanvasPortFixture(canvasSnapshot('scoped-menu'));
+  const element = root();
+  const surface = root();
+  surface.append(element);
+  const unrelated = root();
+  const mounted = mountCanvasOverlay(element, port, jest.fn(), surface);
+  unrelated.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }));
+  expect(document.querySelector('[role="menu"]')).toBeNull();
+  surface.dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true, cancelable: true }),
+  );
+  expect(document.querySelector('[role="menu"]')?.getAttribute('aria-label')).toBe(
+    'Output actions',
+  );
+  mounted.dispose();
+  expect(document.querySelector('[role="menu"]')).toBeNull();
+  surface.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }));
+  expect(document.querySelector('[role="menu"]')).toBeNull();
+});
+
+test('retains the context menu through camera updates without rebuilding catalog-bearing rows', async () => {
+  const port = new CanvasPortFixture(canvasSnapshot('menu-cadence'));
+  const element = root();
+  const mounted = mountCanvasOverlay(element, port, jest.fn());
+  element.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }));
+  const row = document.activeElement;
+  const update = jest.spyOn(ContextMenu.prototype, 'updateEntries');
+  for (let revision = 2; revision < 50; revision++)
+    port.publish({
+      ...port.read(),
+      revision,
+      zoom: { ...port.read().zoom, physicalScale: revision },
+    });
+  await nextTick();
+  expect(document.activeElement).toBe(row);
+  expect(update).not.toHaveBeenCalled();
   mounted.dispose();
 });
 
@@ -369,4 +419,51 @@ test('returns root subscriptions and DOM to baseline through repeated lifecycle 
     expect(element.childElementCount).toBe(0);
   }
   expect(port.releases).toHaveLength(0);
+});
+
+test('uses compact batch controls only for multiple images and retains truthful pinned positions', async () => {
+  const initial = canvasSnapshot('batch-strip');
+  const port = new CanvasPortFixture(initial);
+  const element = root();
+  const mounted = mountCanvasOverlay(element, port, jest.fn());
+  expect(element.querySelector('[aria-label="Batch position"]')?.textContent).toBe('3 / 3');
+  element.querySelector<HTMLButtonElement>('[aria-label="Previous image"]')?.click();
+  await nextTick();
+  expect(port.requests.at(-1)?.command).toEqual({ type: 'batch', index: 1 });
+  expect(element.querySelector<HTMLButtonElement>('[aria-label="Next image"]')?.disabled).toBe(
+    true,
+  );
+  port.publish({
+    ...initial,
+    revision: 2,
+    view: {
+      ...initial.view,
+      selection: { sourceId: initial.sources[0]!.id, batchIndex: 4 },
+      comparison: { secondary: null, split: 0.5, orientation: 'vertical' },
+    },
+  });
+  await nextTick();
+  expect(element.querySelector('[aria-label="Batch position"]')?.textContent).toBe('Image 5');
+  mounted.dispose();
+});
+
+test('keeps actionable image failure feedback available over the simplified presentation', async () => {
+  const initial = canvasSnapshot('failure-feedback');
+  const port = new CanvasPortFixture({
+    ...initial,
+    resource: { ...initial.resource, state: 'ready' },
+    secondaryResource: {
+      state: 'error',
+      message: 'Comparison failed.',
+      canRetry: true,
+      canAdmitLargeImage: false,
+    },
+  });
+  const element = root();
+  const mounted = mountCanvasOverlay(element, port, jest.fn());
+  expect(element.textContent).toContain('Comparison failed.');
+  button(element, 'Retry image').click();
+  await nextTick();
+  expect(port.requests.at(-1)?.command).toEqual({ type: 'retry' });
+  mounted.dispose();
 });

@@ -51,16 +51,12 @@ export class BrowserCanvasWorkspace {
         this.#pane.className = 'sc-output-workspace-pane';
         this.#pane.setAttribute('aria-label', 'Workflow output canvas');
         this.#pane.setAttribute('data-capture-wheel', 'true');
-        const header = document.createElement('div');
-        header.className = 'sc-output-workspace-header';
-        const title = document.createElement('h2');
-        title.textContent = 'Outputs';
         this.#close = document.createElement('button');
+        this.#close.className = 'sc-output-workspace-close';
         this.#close.type = 'button';
         this.#close.setAttribute('aria-label', 'Close output canvas');
         this.#close.textContent = '×';
         this.#close.addEventListener('click', actions.close);
-        header.append(title, this.#close);
         this.canvas = document.createElement('div');
         this.canvas.className = 'sc-output-workspace-view';
         this.#divider = document.createElement('div');
@@ -69,7 +65,7 @@ export class BrowserCanvasWorkspace {
         this.#divider.setAttribute('role', 'separator');
         this.#divider.setAttribute('aria-label', 'Resize output canvas');
         this.#divider.setAttribute('aria-orientation', 'vertical');
-        this.#pane.append(header, this.canvas, this.#divider);
+        this.#pane.append(this.canvas, this.#close, this.#divider);
         this.#backdrop = document.createElement('button');
         this.#backdrop.className = 'sc-output-workspace-backdrop';
         this.#backdrop.type = 'button';

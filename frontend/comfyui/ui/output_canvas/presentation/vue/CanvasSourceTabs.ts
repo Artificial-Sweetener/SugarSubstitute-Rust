@@ -15,14 +15,19 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Render source navigation from renderer-independent view snapshots. */
 
-import { defineComponent, h, type PropType } from 'vue';
-import type { CanvasCommand, CanvasViewSnapshot } from '../../domain/CanvasViewPort.js';
+import { defineComponent, h, type PropType, type VNode } from 'vue';
+import type {
+  CanvasCapabilities,
+  CanvasCommand,
+  CanvasViewSnapshot,
+} from '../../domain/CanvasViewPort.js';
 
 /** Keep source labels literal and retain the chosen batch when switching. */
 export const CanvasSourceTabs = defineComponent({
   name: 'CanvasSourceTabs',
   props: {
     snapshot: { type: Object as PropType<CanvasViewSnapshot>, required: true },
+    capabilities: { type: Object as PropType<CanvasCapabilities>, required: true },
     send: { type: Function as PropType<(command: CanvasCommand) => void>, required: true },
   },
   /** Bind source navigation while preserving the selected batch position. */
@@ -61,38 +66,81 @@ export const CanvasSourceTabs = defineComponent({
         button.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
       choose(next);
     }
-    return () =>
-      h(
-        'nav',
-        {
-          class: 'sc-output-tabs',
-          role: 'tablist',
-          'aria-label': 'Workflow output sources',
-          'data-capture-wheel': 'true',
-        },
-        props.snapshot.sources.map((source, index) =>
+    return () => {
+      const selection = props.snapshot.view.selection;
+      const source = props.snapshot.sources.find((value) => value.id === selection?.sourceId);
+      const count = source?.batchCount ?? 0;
+      const batch = selection?.batchIndex ?? 0;
+      const navigation: VNode[] = [];
+      if (count > 1 && selection && props.capabilities.commands.includes('batch'))
+        navigation.push(
           h(
             'button',
             {
-              key: source.id,
               type: 'button',
-              role: 'tab',
-              'aria-selected': props.snapshot.view.selection?.sourceId === source.id,
-              tabIndex:
-                props.snapshot.view.selection?.sourceId === source.id ||
-                (index === 0 &&
-                  !props.snapshot.sources.some(
-                    (value) => value.id === props.snapshot.view.selection?.sourceId,
-                  ))
-                  ? 0
-                  : -1,
-              title: [...source.breadcrumb, source.label].join(' / '),
-              onClick: () => choose(index),
-              onKeydown: (event: KeyboardEvent) => navigate(event, index),
+              class: 'sc-output-batch-arrow',
+              'aria-label': 'Previous image',
+              disabled: batch === 0,
+              onClick: () => props.send({ type: 'batch', index: Math.max(0, batch - 1) }),
             },
-            source.label,
+            '\u2039',
+          ),
+          h(
+            'span',
+            { class: 'sc-output-batch', 'aria-label': 'Batch position' },
+            props.snapshot.preview
+              ? 'Preview'
+              : props.snapshot.view.comparison && batch >= count
+                ? `Image ${batch + 1}`
+                : `${batch + 1} / ${count}`,
+          ),
+          h(
+            'button',
+            {
+              type: 'button',
+              class: 'sc-output-batch-arrow',
+              'aria-label': 'Next image',
+              disabled: batch + 1 >= count,
+              onClick: () => props.send({ type: 'batch', index: batch + 1 }),
+            },
+            '\u203a',
+          ),
+        );
+      return h('div', { class: 'sc-output-tabstrip' }, [
+        h('div', { class: 'sc-output-batch-navigation' }, navigation),
+        h(
+          'nav',
+          {
+            class: 'sc-output-tabs',
+            role: 'tablist',
+            'aria-label': 'Workflow output sources',
+            'data-capture-wheel': 'true',
+          },
+          props.snapshot.sources.map((source, index) =>
+            h(
+              'button',
+              {
+                key: source.id,
+                type: 'button',
+                role: 'tab',
+                'aria-selected': props.snapshot.view.selection?.sourceId === source.id,
+                tabIndex:
+                  props.snapshot.view.selection?.sourceId === source.id ||
+                  (index === 0 &&
+                    !props.snapshot.sources.some(
+                      (value) => value.id === props.snapshot.view.selection?.sourceId,
+                    ))
+                    ? 0
+                    : -1,
+                title: [...source.breadcrumb, source.label].join(' / '),
+                onClick: () => choose(index),
+                onKeydown: (event: KeyboardEvent) => navigate(event, index),
+              },
+              source.label,
+            ),
           ),
         ),
-      );
+      ]);
+    };
   },
 });

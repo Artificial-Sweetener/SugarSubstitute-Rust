@@ -211,7 +211,7 @@ async function main(): Promise<void> {
   ]);
   await bundleVueSurface(
     ['surface/stack/vue', 'picker/vue', 'output_canvas/presentation/vue'],
-    ['/scripts/*'],
+    ['/scripts/*', '../../../menus/ContextMenu.js'],
   );
   stageStaticAssets();
   synchronizeArtifacts(checkOnly);

@@ -153,7 +153,7 @@ export class BrowserCanvasAttachment {
             () => this.port.dispose(),
         ];
         try {
-            this.#overlay = mountCanvasOverlay(overlay, this.port, options.report);
+            this.#overlay = mountCanvasOverlay(overlay, this.port, options.report, element);
             cleanup.push(() => this.#overlay.dispose());
             this.#input = new BrowserCanvasInput(this.viewport, {
                 contains: (point) => this.#images.contains(point),
