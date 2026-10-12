@@ -52,6 +52,13 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
+test('offers only the reference comparison toggle outside comparison mode', () => {
+  const port = new CanvasPortFixture(canvasSnapshot('reference-menu'));
+  expect(
+    canvasContextActions(port.read(), port.capabilities, jest.fn()).map((entry) => entry.label),
+  ).toEqual(['Compare outputs']);
+});
+
 test('describes a reactivated preview-only source before its next frame arrives', () => {
   const initial = canvasSnapshot('waiting-preview');
   const port = new CanvasPortFixture({
@@ -195,12 +202,12 @@ test('mounts browser and host-backed contract roots without Comfy or browser ima
   const b = mountCanvasOverlay(hostRoot, host, report);
   expect(document.querySelectorAll('img, canvas')).toHaveLength(0);
   expect(hostRoot.querySelector('[aria-label="Zoom"]')).toBeNull();
-  button(browserRoot, 'Fit').click();
+  button(browserRoot, 'Saved image').click();
   button(browserRoot, 'Detail').click();
   await nextTick();
   expect(host.requests).toHaveLength(0);
   expect(browser.requests.map((request) => request.command)).toEqual([
-    { type: 'fit' },
+    { type: 'select-source', selection: { sourceId: 'source:7', batchIndex: 2 } },
     { type: 'select-source', selection: { sourceId: 'source:42:23', batchIndex: 2 } },
   ]);
   expect(browser.requests[0]?.address).toBe(browser.read().address);
@@ -299,7 +306,7 @@ test('keeps comparison actions transient and delegates source selection without 
       command,
     });
   });
-  actions.find((entry) => entry.label === 'Compare')?.select?.();
+  actions.find((entry) => entry.label === 'Compare outputs')?.select?.();
   actions.find((entry) => entry.label === 'Compare with')?.children?.[0]?.select?.();
   await nextTick();
   expect(port.requests.map((value) => value.command)).toEqual([
@@ -323,7 +330,7 @@ test('disables comparison for previews and renders only tabs for a ready single 
   expect(element.querySelectorAll('button')).toHaveLength(2);
   expect(
     canvasContextActions(port.read(), port.capabilities, jest.fn()).find(
-      (entry) => entry.label === 'Compare',
+      (entry) => entry.label === 'Compare outputs',
     )?.disabled,
   ).toBe(true);
   mounted.dispose();
@@ -375,7 +382,7 @@ test('disposes pending commands without updating a replacement root', async () =
   const element = root();
   const report = jest.fn();
   const mounted = mountCanvasOverlay(element, old, report);
-  button(element, 'Fit').click();
+  button(element, 'Detail').click();
   mounted.dispose();
   const replacement = new CanvasPortFixture(canvasSnapshot('new'));
   const current = mountCanvasOverlay(element, replacement, report);
@@ -397,7 +404,7 @@ test('reports unexpected command failures with their cause and inline feedback',
   const report = jest.fn();
   const alert = jest.spyOn(window, 'alert').mockImplementation(() => undefined);
   const mounted = mountCanvasOverlay(element, port, report);
-  button(element, 'Fit').click();
+  button(element, 'Detail').click();
   await nextTick();
   await nextTick();
   expect(report).toHaveBeenCalledWith(port.failure, port.requests[0]);

@@ -13,24 +13,7 @@ function canvasContextActions(snapshot, capabilities, send) {
     });
   }
   action(
-    "Follow outputs",
-    { type: "follow", mode: state.follow === "auto" ? "manual" : "auto" },
-    false,
-    state.follow === "auto"
-  );
-  action(
-    "Overview",
-    { type: "overview", enabled: state.mode !== "overview" },
-    false,
-    state.mode === "overview"
-  );
-  action("Linked pan and zoom", { type: "link", enabled: !state.linked }, false, state.linked);
-  action("Fit", { type: "fit" }, state.mode === "overview");
-  action("1:1", { type: "native" }, state.mode === "overview");
-  action("Zoom out", { type: "zoom", factor: 0.8 }, state.mode === "overview");
-  action("Zoom in", { type: "zoom", factor: 1.25 }, state.mode === "overview");
-  action(
-    "Compare",
+    "Compare outputs",
     { type: "comparison", enabled: !comparison },
     state.mode === "overview" || !comparison && (!snapshot.selected || snapshot.preview || snapshot.resource.state !== "ready" || snapshot.selected.mediaKind !== "image"),
     Boolean(comparison)
@@ -80,12 +63,6 @@ function canvasContextActions(snapshot, capabilities, send) {
       orientation: comparison.orientation === "vertical" ? "horizontal" : "vertical"
     });
   }
-  const zoom = snapshot.zoom;
-  const dimensions = zoom.dimensions;
-  entries.push({
-    label: `${zoom.mode === "fit" ? "Fit" : zoom.mode === "native" ? "1:1" : `${Math.round(zoom.physicalScale * 100)}%`}${dimensions ? ` \xB7 ${dimensions.width} \xD7 ${dimensions.height}` : ""}`,
-    section: true
-  });
   return entries;
 }
 
