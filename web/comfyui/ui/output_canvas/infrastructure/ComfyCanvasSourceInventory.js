@@ -32,12 +32,23 @@ export class ComfyCanvasSourceInventory {
     #context = null;
     #stop = null;
     #disposed = false;
+    #discoveries = 0;
+    #metadataRefreshes = 0;
     /** Receive public root access explicitly rather than reading a host global. */
     constructor(sessions, inventory, root, logger) {
         this.sessions = sessions;
         this.inventory = inventory;
         this.root = root;
         this.logger = logger;
+    }
+    /** Report explicit topology work separately from scoped labels without retaining graph history. */
+    diagnostics() {
+        return {
+            discoveries: this.#discoveries,
+            metadataRefreshes: this.#metadataRefreshes,
+            graphs: this.#topology.size,
+            sources: this.#authored.size,
+        };
     }
     /** Observe committed workflow activation and release cached handles during loading. */
     install() {
@@ -81,6 +92,7 @@ export class ComfyCanvasSourceInventory {
     }
     /** Serialize once and bind ordinary, nested and cube marker paths to native metadata. */
     #discover(context) {
+        this.#discoveries++;
         this.#release();
         this.#context = context;
         try {
@@ -182,6 +194,7 @@ export class ComfyCanvasSourceInventory {
         }
         if (!changed.length)
             return;
+        this.#metadataRefreshes++;
         this.inventory.refreshMetadata(context, changed);
         this.#publish();
     }

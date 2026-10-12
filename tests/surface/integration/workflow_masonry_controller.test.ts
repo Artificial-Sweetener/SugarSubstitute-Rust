@@ -579,6 +579,26 @@ describe('workflow masonry controller', () => {
   });
 });
 
+test('mounts every masonry region in its explicitly allocated content parent and leaves sibling controls intact', async () => {
+  const f = fixture();
+  const workspace = document.createElement('div');
+  workspace.id = 'graph-canvas-container';
+  const output = document.createElement('button');
+  output.textContent = 'Output controls';
+  f.container.style.left = '480px';
+  f.container.style.width = 'calc(100% - 480px)';
+  workspace.append(output, f.container);
+  document.body.append(workspace);
+  await f.controller.toggle();
+  expect(f.container.querySelector('.sugarcubes-workflow-masonry')).not.toBeNull();
+  expect(output.parentElement).toBe(workspace);
+  expect(output.textContent).toBe('Output controls');
+  f.controller.leaveImmediately();
+  expect(f.container.querySelector('.sugarcubes-workflow-masonry')).toBeNull();
+  expect(output.parentElement).toBe(workspace);
+  expect(f.container.style.left).toBe('480px');
+});
+
 /** Bind a controllable host boundary to the real presentation state machine and view. */
 function fixture(
   createLinkMotion?: WorkflowMasonryControllerOptions['createLinkMotion'],

@@ -45,8 +45,7 @@ export class WorkflowMasonryHostLifecycle {
         });
         this.#controller = new WorkflowMasonryController({
             document: options.document,
-            getContainer: () => options.document.querySelector('.graph-canvas-panel') ??
-                options.document.getElementById('graph-canvas-container'),
+            getContainer: options.getContainer,
             isNodes2: () => this.#isNodes2(),
             getSections: () => {
                 const graph = options.app?.canvas?.graph ?? options.app?.graph;

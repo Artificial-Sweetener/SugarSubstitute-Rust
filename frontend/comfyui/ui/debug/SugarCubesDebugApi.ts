@@ -18,15 +18,18 @@
 import type { SugarCubesUI } from '../SugarCubesUI.js';
 import { computeInnerBounds } from '../graph/CubeBounds.js';
 import type { ComfyApplication } from '../types/graph.js';
+import type { ComfyCanvasHost } from '../output_canvas/infrastructure/ComfyCanvasHost.js';
 
 interface DebugApiOptions {
   ui: SugarCubesUI;
   app: ComfyApplication | null;
+  canvas(): ReturnType<ComfyCanvasHost['diagnostics']>;
 }
 
 /** Create the existing debugging API from authoritative UI owners. */
-export function createSugarCubesDebugApi({ ui, app }: DebugApiOptions) {
+export function createSugarCubesDebugApi({ ui, app, canvas }: DebugApiOptions) {
   return {
+    canvas,
     getDirtyState(instanceId: unknown) {
       return ui.dirtyManager.getDebugState(instanceId);
     },
