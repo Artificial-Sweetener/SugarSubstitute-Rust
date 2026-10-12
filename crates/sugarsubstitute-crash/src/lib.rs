@@ -18,3 +18,5 @@ mod native;
 pub use capture::{CaptureSnapshot, CaptureUpdates, StartRejected, WindowsCrashCapture};
 pub use error::{CrashAdmissionError, CrashError};
 pub use input::CaptureStartInput;
+
+pub mod incident;

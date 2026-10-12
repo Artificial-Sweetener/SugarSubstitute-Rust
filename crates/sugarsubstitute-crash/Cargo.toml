@@ -10,12 +10,14 @@ publish.workspace = true
 
 [dependencies]
 sugarsubstitute-contracts = { path = "../sugarsubstitute-contracts" }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 sugarsubstitute-execution = { path = "../sugarsubstitute-execution" }
 sugarsubstitute-supervision = { path = "../sugarsubstitute-supervision" }
 tracing.workspace = true
-sha2.workspace = true
 windows = { workspace = true, features = ["Win32_Storage_FileSystem", "Win32_System_LibraryLoader", "Win32_System_IO", "Win32_Security"] }
 
 [lints]

@@ -2217,6 +2217,8 @@ dependencies = [
 name = "sugarsubstitute-crash"
 version = "0.1.0"
 dependencies = [
+ "serde",
+ "serde_json",
  "sha2",
  "sugarsubstitute-contracts",
  "sugarsubstitute-execution",

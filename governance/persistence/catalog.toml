@@ -211,3 +211,63 @@ current_version = 1
 accepted_versions = [1]
 compatibility = "reject"
 migrations = []
+
+[[formats]]
+id = "incident-run-seed-v1"
+owner = "sugarsubstitute-crash"
+sources = ["crates/sugarsubstitute-crash/src/incident/codec.rs", "crates/sugarsubstitute-crash/src/incident/codec_identity.rs", "crates/sugarsubstitute-crash/src/incident/codec_seed.rs", "crates/sugarsubstitute-crash/src/incident/error.rs"]
+source_sha256 = "sha256:70e6c9e6caf9296c6974345d50793b482a29b78552e820f75013a227f0a68414"
+classification = "authoritative_state"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []
+
+[[formats]]
+id = "incident-summary-v1"
+owner = "sugarsubstitute-crash"
+sources = ["crates/sugarsubstitute-crash/src/incident/codec.rs", "crates/sugarsubstitute-crash/src/incident/codec_evidence.rs", "crates/sugarsubstitute-crash/src/incident/codec_identity.rs", "crates/sugarsubstitute-crash/src/incident/codec_seed.rs", "crates/sugarsubstitute-crash/src/incident/codec_summary.rs", "crates/sugarsubstitute-crash/src/incident/codec_symbols.rs", "crates/sugarsubstitute-crash/src/incident/error.rs"]
+source_sha256 = "sha256:4f9ed2b0af537963bdd31daa1f11083a154ebc89b8c47a6971f7ff4f49b29973"
+classification = "authoritative_state"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []
+
+[[formats]]
+id = "incident-store-state-v1"
+owner = "sugarsubstitute-crash"
+sources = ["crates/sugarsubstitute-crash/src/incident/codec.rs", "crates/sugarsubstitute-crash/src/incident/codec_identity.rs", "crates/sugarsubstitute-crash/src/incident/codec_ledger.rs", "crates/sugarsubstitute-crash/src/incident/error.rs"]
+source_sha256 = "sha256:07581e1df55499b1630bb0b14e7fbd9d15eae2f4034ec711761f743075ba437f"
+classification = "authoritative_state"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []
+
+[[formats]]
+id = "release-symbol-association-v1"
+owner = "sugarsubstitute-crash"
+sources = ["crates/sugarsubstitute-crash/src/incident/codec.rs", "crates/sugarsubstitute-crash/src/incident/codec_symbols.rs", "crates/sugarsubstitute-crash/src/incident/error.rs"]
+source_sha256 = "sha256:4889a013fcfade7bac3423009b159d55d3780f8be2992dc72eb96bd4709397be"
+classification = "authoritative_state"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []
+
+[[formats]]
+id = "symbolized-fault-report-v1"
+owner = "sugarsubstitute-crash"
+sources = ["crates/sugarsubstitute-crash/src/incident/codec.rs", "crates/sugarsubstitute-crash/src/incident/codec_symbols.rs", "crates/sugarsubstitute-crash/src/incident/error.rs"]
+source_sha256 = "sha256:4889a013fcfade7bac3423009b159d55d3780f8be2992dc72eb96bd4709397be"
+classification = "authoritative_state"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []
