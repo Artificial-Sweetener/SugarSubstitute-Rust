@@ -8,6 +8,9 @@
 //! splash retirement preserves the connection, while cancellation closes admission
 //! and requires observed settlement before an increasing-identity retry.
 
+mod budget;
+pub use budget::{ConnectionBudget, ConnectionBudgetKind, FrontendBudget, ProbeBudgetError};
+
 mod session;
 pub use session::StartupSession;
 
