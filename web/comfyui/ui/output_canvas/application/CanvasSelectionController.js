@@ -96,12 +96,17 @@ export class CanvasSelectionController {
         if (state.follow !== 'auto')
             return state;
         const candidate = autoCandidate(catalog);
-        if (!candidate || (cursor.frontier && !later(candidate.frontier, cursor.frontier)))
+        const currentSourceExists = catalog.entries.some((entry) => entry.source.id === state.selection?.sourceId);
+        if (!candidate ||
+            (currentSourceExists && cursor.frontier && !later(candidate.frontier, cursor.frontier)))
             return state;
         // An older run can remain visible, but cannot displace the frontier after a new run begins.
         if (state.selection && candidate.frontier[0] < catalog.result.runOrder)
             return state;
         cursor.frontier = candidate.frontier;
+        if (state.selection?.sourceId === candidate.selection.sourceId &&
+            state.selection.batchIndex === candidate.selection.batchIndex)
+            return state;
         return this.views.update(viewId, (current) => ({ ...current, selection: candidate.selection }));
     }
     /** Apply navigation intents; rendering and resource commands belong to their own owners. */

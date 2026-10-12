@@ -37,6 +37,49 @@ function fixture() {
 }
 
 describe('canvas workflow navigation', () => {
+  test('Auto deliberately chooses a valid remaining source when its current source is deleted', () => {
+    const f = fixture();
+    const catalog = canvasOutputCatalog(f.catalog.result, canvasSources().slice(0, 1));
+    f.selection.reconcile(f.view, catalog);
+    expect(f.views.read(f.view).selection?.sourceId).toBe(catalog.entries[0]?.source.id);
+  });
+  test('does not republish unchanged navigation for every frame of the selected source preview', () => {
+    const f = fixture();
+    const source = f.catalog.entries[0]?.source;
+    if (!source) throw new Error('Fixture source is missing.');
+    const preview = {
+      sessionId: f.catalog.result.context.sessionId,
+      generation: 0,
+      promptId: 'prompt:new' as const,
+      sourceId: source.id,
+      runOrder: 2,
+      sequence: 1,
+      token: 'frame:1',
+      dimensions: null,
+    };
+    f.selection.reconcile(
+      f.view,
+      canvasOutputCatalog(
+        { ...f.catalog.result, runOrder: 2, runStatus: 'running', preview },
+        canvasSources(),
+      ),
+    );
+    const state = f.views.read(f.view);
+    for (let sequence = 2; sequence < 100; sequence++)
+      f.selection.reconcile(
+        f.view,
+        canvasOutputCatalog(
+          {
+            ...f.catalog.result,
+            runOrder: 2,
+            runStatus: 'running',
+            preview: { ...preview, sequence, token: `frame:${sequence}` },
+          },
+          canvasSources(),
+        ),
+      );
+    expect(f.views.read(f.view)).toBe(state);
+  });
   test('follows an attributable source preview without destroying its previous final', () => {
     const f = fixture();
     const source = f.catalog.entries[0]?.source;
