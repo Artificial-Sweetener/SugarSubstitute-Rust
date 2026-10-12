@@ -367,6 +367,57 @@ test('docking reserves the existing Run strip and keeps native controls, values,
   }
 });
 
+test('Run feedback preserves docking and permits redocking while jobs or errors are displayed', () => {
+  const f = fixture({ docked: true, floating: null, anchor: null });
+  const column = document.createElement('div');
+  const row = document.createElement('div');
+  const feedback = document.createElement('div');
+  f.bar.replaceWith(column);
+  row.append(f.bar);
+  column.append(row, feedback);
+  const interrupt = document.createElement('button');
+  interrupt.setAttribute('aria-label', 'Interrupt all running jobs');
+  interrupt.getBoundingClientRect = () => bounds(800, 60, 32, 32);
+  const jobs = document.createElement('button');
+  jobs.textContent = 'View all jobs';
+  jobs.getBoundingClientRect = () => bounds(850, 60, 100, 32);
+  f.run.addEventListener('click', () => {
+    feedback.append(interrupt, jobs);
+    f.placement.attached();
+  });
+  try {
+    f.placement.attached();
+    expect(f.root.dataset.placement).toBe('docked');
+    const width = f.root.style.maxWidth;
+    const field = f.input;
+    f.run.click();
+    expect(f.root.dataset.placement).toBe('docked');
+    expect(f.root.style.maxWidth).toBe(width);
+    expect(f.write).not.toHaveBeenCalled();
+    f.placement.toggleDock();
+    expect(f.root.dataset.placement).toBe('floating');
+    f.host.dragging(true);
+    expect(f.bar.querySelector('.sc-overrides-dock-target')).not.toBeNull();
+    f.host.dragging(false);
+    f.placement.toggleDock();
+    expect(f.root.dataset.placement).toBe('docked');
+    const error = document.createElement('button');
+    error.textContent = 'Show Report';
+    error.getBoundingClientRect = () => bounds(650, 120, 200, 32);
+    feedback.replaceChildren(error);
+    f.placement.attached();
+    expect(f.root.dataset.placement).toBe('docked');
+    expect(f.root.style.maxWidth).toBe(width);
+    expect(f.root.querySelector('input')).toBe(field);
+    expect(field.value).toBe('123456789');
+    feedback.replaceChildren();
+    f.placement.attached();
+    expect(f.root.dataset.placement).toBe('docked');
+  } finally {
+    f.dispose();
+  }
+});
+
 test('keeps the top-strip dock independent of the movable native Run panel', () => {
   const f = fixture();
   try {
