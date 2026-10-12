@@ -4,7 +4,7 @@ import("//build/crashpad_buildconfig.gni")
 
 loadable_module("sugarsubstitute_crashpad_client") {
   sources = [ "capture_bridge.cc", "capture_bridge.h" ]
-  deps = [ "//client" ]
+  deps = [ "//client", ":finished_report_parser" ]
 }
 
 group("capture_bundle") {
@@ -15,4 +15,27 @@ executable("owned_registration_tests") {
   sources = [ "owned_registration.cc", "owned_registration_tests.cc" ]
   include_dirs = [ "//" ]
   libs = [ "kernel32.lib", "advapi32.lib" ]
+}
+
+source_set("finished_report_parser") {
+  sources = [
+    "bounded_metadata.h",
+    "bounded_metadata.cc",
+    "incident_bridge.h",
+    "incident_bridge.cc",
+  ]
+}
+
+executable("bounded_metadata_tests") {
+  sources = [ "bounded_metadata_tests.cc" ]
+  deps = [ ":finished_report_parser" ]
+}
+
+executable("incident_bridge_tests") {
+  sources = [ "incident_bridge_tests.cc" ]
+  deps = [ ":finished_report_parser" ]
+}
+
+group("finished_parser_tests") {
+  deps = [ ":bounded_metadata_tests", ":incident_bridge_tests" ]
 }

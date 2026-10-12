@@ -86,6 +86,28 @@ class BuildTests(unittest.TestCase):
         self.assertEqual(len(receipt["files"]), 4)
         self.assertEqual(self.runner.call_count, 2)
 
+    def test_selected_parser_targets_require_all_actual_outputs(self):
+        self.inventory(False)
+        with self.assertRaisesRegex(ValueError, "parser test outputs"):
+            build_native.run(Source(), self.root, self.tools, 1, parser_tests=True)
+        command = self.runner.call_args_list[1].args[0]
+        self.assertIn("finished_parser_tests", command)
+        self.assertFalse((self.root / "build-receipt.json").exists())
+
+    def test_parser_symbols_bind_receipt_without_running_test_or_runtime(self):
+        self.inventory(False)
+        for name in ("bounded_metadata_tests.exe", "bounded_metadata_tests.pdb",
+                     "incident_bridge_tests.exe", "incident_bridge_tests.pdb"):
+            (self.output / name).write_bytes(b"fake-parser-output")
+        build_native.run(Source(), self.root, self.tools, 1, parser_tests=True)
+        receipt = json.loads((self.root / "build-receipt.json").read_text())
+        self.assertTrue(receipt["parser_tests_selected"])
+        self.assertFalse(receipt["parser_tests_executed"])
+        self.assertFalse(receipt["runtime_executed"])
+        self.assertEqual(len(receipt["parser_test_files"]), 4)
+        self.assertEqual(len(receipt["files"]), 4)
+        self.assertEqual(self.runner.call_count, 2)
+
 
 if __name__ == "__main__":
     unittest.main()

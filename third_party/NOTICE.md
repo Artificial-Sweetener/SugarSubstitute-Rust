@@ -50,3 +50,12 @@ Maintained Windows derivatives add staged UI-affine construction and checked
 retirement. Those changes are copyright Artificial Sweetener and contributors
 (2026), GPL-3.0-or-later. The manifest identifies the exact packaged files and
 preserved upstream license texts.
+
+The bounded finished-report parser implements the Windows metadata version-one
+and minidump Crashpad-info version-one layouts from Crashpad commit
+60dd943f48d77dc8d05dabc04badbd8561d0b8c4 (Copyright The Crashpad Authors,
+Apache-2.0). The manifest records its exact source and test files. These maintained
+parsers use fixed storage, file-relative bounded reads, and complete module
+identity dictionaries. Adaptations are copyright Artificial Sweetener and
+contributors (2026), GPL-3.0-or-later. The upstream license text is preserved in
+`licenses/crashpad.Apache-2.0.txt`.

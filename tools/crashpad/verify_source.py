@@ -9,7 +9,8 @@ import tarfile
 from prepare_source import PINNED, transform
 
 AUTHORED = frozenset({"BUILD.gn", "capture_bridge.h", "capture_bridge.cc", "owned_start.h",
-                     "owned_registration.cc", "owned_registration_tests.cc"})
+                     "owned_registration.cc", "owned_registration_tests.cc",
+                     "bounded_metadata.h", "bounded_metadata.cc", "bounded_metadata_tests.cc", "incident_bridge.h", "incident_bridge.cc", "incident_bridge_tests.cc"})
 PACKAGES = (
     ("crashpad", "60dd943f48d77dc8d05dabc04badbd8561d0b8c4", "96dfd1ecdf44095f1feaf893ce189d267707d11b5866f8f3474ee34188bdc2b8", "", "crashpad"),
     ("mini_chromium", "e5169551c51f3a52eee36b3b03f219cefe380237", "e35ed2d041232fde0bbfbc1517431c3902890526c696d64ee062dc370baf2b9d", "third_party/mini_chromium/mini_chromium", "mini_chromium"),
@@ -34,7 +35,7 @@ def authored_inputs(authored):
     regular(authored)
     paths = list(authored.iterdir())
     if {path.name for path in paths} != AUTHORED:
-        raise ValueError("Authored native source inventory differs from reviewed six files")
+        raise ValueError("Authored native source inventory differs from reviewed twelve files")
     for path in paths:
         regular(path)
         if not path.is_file():

@@ -48,7 +48,7 @@ class SourceTests(unittest.TestCase):
 
     def test_complete_inventory_hashes_actual_immutable_and_authored_files(self):
         result = self.check()
-        self.assertEqual(len(result["files"]), 7)
+        self.assertEqual(len(result["files"]), 13)
         self.assertEqual(json.loads(self.receipt.read_text()), result)
         self.assertEqual(result, self.check())
 
@@ -75,7 +75,7 @@ class SourceTests(unittest.TestCase):
     def test_authored_unknown_or_directory_is_rejected(self):
         extra = self.authored / "extra.cc"
         extra.write_text("unknown")
-        with self.assertRaisesRegex(ValueError, "six files"):
+        with self.assertRaisesRegex(ValueError, "twelve files"):
             authored_inputs(self.authored)
         extra.unlink()
         path = self.authored / "BUILD.gn"
@@ -83,6 +83,23 @@ class SourceTests(unittest.TestCase):
         path.mkdir()
         with self.assertRaisesRegex(ValueError, "regular file"):
             authored_inputs(self.authored)
+
+    def test_each_new_parser_authored_input_is_required(self):
+        for name in ("bounded_metadata.h", "bounded_metadata.cc", "bounded_metadata_tests.cc",
+                     "incident_bridge.h", "incident_bridge.cc", "incident_bridge_tests.cc"):
+            with self.subTest(name=name):
+                path = self.authored / name
+                original = path.read_bytes()
+                path.unlink()
+                with self.assertRaisesRegex(ValueError, "twelve files"):
+                    authored_inputs(self.authored)
+                path.write_bytes(original)
+
+    def test_changed_actual_parser_copy_cannot_get_source_receipt(self):
+        (self.source / "sugarsubstitute/incident_bridge.cc").write_bytes(b"modified")
+        with self.assertRaisesRegex(ValueError, "differs"):
+            self.check()
+        self.assertFalse(self.receipt.exists())
 
     def test_traversal_foreign_prefix_link_and_duplicate_archive_members_are_rejected(self):
         for name, kind in (("fixture-pin/../outside", tarfile.REGTYPE), ("foreign-pin/input", tarfile.REGTYPE), ("fixture-pin/link", tarfile.SYMTYPE)):

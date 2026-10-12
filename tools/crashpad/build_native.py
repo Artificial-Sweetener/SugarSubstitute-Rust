@@ -36,7 +36,7 @@ def verify_environment(output, temporary):
         raise ValueError("Generated compiler executable path escaped the reviewed instance")
 
 
-def run(source, artifacts, tools, jobs):
+def run(source, artifacts, tools, jobs, parser_tests=False):
     recipe_names = ("build_native.py", "prepare_source.py", "verify_source.py", "repair_ninja.py")
     recipe_hashes = {name: digest(Path(__file__).with_name(name)) for name in recipe_names}
     if sys.version_info[:2] != (3, 12):
@@ -69,6 +69,8 @@ def run(source, artifacts, tools, jobs):
     commands = [[str(tools / "gn.exe"), "gen", str(output), "--root=" + str(source),
                  "--root-target=//sugarsubstitute", "--script-executable=" + sys.executable, "--args=" + arguments],
                 [str(tools / "ninja.exe"), "-C", str(output), "-j", str(jobs), "capture_bundle"]]
+    if parser_tests:
+        commands[1].append("finished_parser_tests")
     for index, command in enumerate(commands):
         if index == 1:
             verify_environment(output, temporary)
@@ -88,11 +90,18 @@ def run(source, artifacts, tools, jobs):
                                         "sugarsubstitute_crashpad_client.dll", "sugarsubstitute_crashpad_client.pdb")]
     if not all(path.is_file() for path in files):
         raise ValueError("Exact capture runtime and matching symbol outputs are incomplete")
+    parser_files = [output / name for name in (
+        "bounded_metadata_tests.exe", "bounded_metadata_tests.pdb",
+        "incident_bridge_tests.exe", "incident_bridge_tests.pdb")] if parser_tests else []
+    if not all(path.is_file() for path in parser_files):
+        raise ValueError("Selected parser test outputs are incomplete")
     receipt = {"commands": commands, "python": sys.executable, "visual_studio": matching[0]["catalog"]["productDisplayVersion"],
                "msvc": MSVC, "sdk": SDK, "gn_sha256": GN_SHA, "ninja_sha256": NINJA_SHA,
                "source_inventory_before_sha256": digest(before_inventory),
                "source_inventory_after_sha256": digest(after_inventory),
                "recipe_sha256": recipe_hashes,
+               "parser_tests_selected": parser_tests, "parser_tests_executed": False,
+               "parser_test_files": [{"name": path.name, "bytes": path.stat().st_size, "sha256": digest(path)} for path in sorted(parser_files)],
                "runtime_executed": False, "files": [{"name": path.name, "bytes": path.stat().st_size, "sha256": digest(path)} for path in sorted(files)]}
     (artifacts / "build-receipt.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
 
@@ -103,5 +112,6 @@ if __name__ == "__main__":
     parser.add_argument("--artifacts", required=True, type=Path)
     parser.add_argument("--tools", required=True, type=Path)
     parser.add_argument("--jobs", type=int, default=4, choices=range(1, 9))
+    parser.add_argument("--parser-tests", action="store_true", help="Build both deterministic parser test executables without running them")
     args = parser.parse_args()
-    run(args.source, args.artifacts, args.tools, args.jobs)
+    run(args.source, args.artifacts, args.tools, args.jobs, args.parser_tests)
