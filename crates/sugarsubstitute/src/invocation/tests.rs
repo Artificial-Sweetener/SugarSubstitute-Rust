@@ -168,6 +168,10 @@ fn demonstration_options_keep_their_invocation_role() -> Result<(), Box<dyn Erro
             return Err("Presentation options selected an exit fixture".into());
         }
         #[cfg(target_os = "windows")]
+        Invocation::NativeCaptureFixture(_) => {
+            return Err("Presentation options selected a capture fixture".into());
+        }
+        #[cfg(target_os = "windows")]
         Invocation::NativeRegistryFixture(_) => {
             return Err("Presentation options selected a registry fixture".into());
         }
@@ -353,5 +357,48 @@ fn timing_qualification_rejects_missing_receipt_and_offline_export() -> Result<(
     assert!(options.timing_audit);
     assert_eq!(options.receipt, Some(PathBuf::from("receipt.json")));
     assert!(options.frame_audit.is_none());
+    Ok(())
+}
+
+/// Capture dispatch validates the ordered role before native or filesystem effects.
+#[cfg(target_os = "windows")]
+#[test]
+fn native_capture_fixture_dispatch_requires_exact_role_and_complete_inputs()
+-> Result<(), Box<dyn Error>> {
+    let arguments: Vec<OsString> = [
+        "--internal-native-capture-fixture",
+        "--client",
+        r"E:\bundle\client.dll",
+        "--handler",
+        r"E:\bundle\handler.exe",
+        "--capture-root",
+        r"D:\proof\protected",
+        "--client-sha256",
+        &"01".repeat(32),
+        "--handler-sha256",
+        &"02".repeat(32),
+        "--namespace",
+        &"03".repeat(32),
+        "--epoch",
+        &"04".repeat(16),
+        "--build",
+        "fixture-build",
+        "--receipt",
+        r"D:\proof\receipt.json",
+    ]
+    .into_iter()
+    .map(OsString::from)
+    .collect();
+    assert!(
+        matches!(Invocation::parse_arguments(arguments.clone())?, Invocation::NativeCaptureFixture(options)
+        if options.receipt == std::path::Path::new(r"D:\proof\receipt.json"))
+    );
+    let mut extra = arguments.clone();
+    extra.push("--light".into());
+    assert!(Invocation::parse_arguments(extra).is_err());
+    let mut mixed = arguments.clone();
+    mixed.insert(0, "--light".into());
+    assert!(Invocation::parse_arguments(mixed).is_err());
+    assert!(Invocation::parse_arguments(arguments.into_iter().take(1)).is_err());
     Ok(())
 }

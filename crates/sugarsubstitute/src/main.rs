@@ -7,6 +7,8 @@
 
 mod capture;
 #[cfg(target_os = "windows")]
+mod capture_fixture;
+#[cfg(target_os = "windows")]
 mod claim_fixture;
 mod demo;
 #[cfg(target_os = "windows")]
@@ -39,6 +41,14 @@ fn execute() -> Result<(), Box<dyn Error>> {
     let started = Instant::now();
     let options = match invocation::Invocation::parse() {
         Ok(invocation::Invocation::Demo(options)) => options,
+        #[cfg(target_os = "windows")]
+        Ok(invocation::Invocation::NativeCaptureFixture(options)) => {
+            initialize_diagnostics()?;
+            return capture_fixture::run(options)?.finish_with(|path, bytes| {
+                std::fs::write(path, bytes)?;
+                Ok(())
+            });
+        }
         #[cfg(target_os = "windows")]
         Ok(invocation::Invocation::NativeExitFixture(code)) => std::process::exit(code),
         #[cfg(target_os = "windows")]

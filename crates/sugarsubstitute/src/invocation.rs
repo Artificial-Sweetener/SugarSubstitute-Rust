@@ -9,6 +9,9 @@ use sugarsubstitute_splash::{Appearance, Theme};
 pub(crate) enum Invocation {
     /// Existing interactive/off-screen demonstration inputs.
     Demo(DemoOptions),
+    /// Qualify actual bounded capture registration and retirement.
+    #[cfg(target_os = "windows")]
+    NativeCaptureFixture(crate::capture_fixture::Options),
     /// Windows qualification-only process exit; no splash or child process is created.
     #[cfg(target_os = "windows")]
     NativeExitFixture(i32),
@@ -59,6 +62,14 @@ impl Invocation {
         let arguments = arguments.into_iter();
         #[cfg(target_os = "windows")]
         let mut arguments = arguments.peekable();
+        #[cfg(target_os = "windows")]
+        if arguments.peek().is_some_and(|argument| argument == "--internal-native-capture-fixture")
+        {
+            arguments.next();
+            return Ok(Self::NativeCaptureFixture(crate::capture_fixture::Options::parse(
+                arguments,
+            )?));
+        }
         #[cfg(target_os = "windows")]
         if arguments.peek().is_some_and(|argument| argument == "--internal-native-output-child") {
             arguments.next();

@@ -23,7 +23,7 @@ minimum_tests = 26
 package = "sugarsubstitute"
 root = "crates/sugarsubstitute"
 concern = "Product identity, native input, admitted preparation, process qualification and actual host shutdown"
-minimum_tests = 125
+minimum_tests = 138
 
 [[owners]]
 package = "sugarsubstitute-execution"

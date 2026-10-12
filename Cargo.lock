@@ -1809,6 +1809,7 @@ dependencies = [
  "serde_json",
  "sugarsubstitute-application",
  "sugarsubstitute-contracts",
+ "sugarsubstitute-crash",
  "sugarsubstitute-desktop",
  "sugarsubstitute-execution",
  "sugarsubstitute-splash",

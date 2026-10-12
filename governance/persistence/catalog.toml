@@ -185,3 +185,15 @@ current_version = 1
 accepted_versions = [1]
 compatibility = "reject"
 migrations = []
+
+[[formats]]
+id = "native-capture-registration-report"
+owner = "sugarsubstitute"
+sources = ["crates/sugarsubstitute/src/capture_fixture/receipt.rs"]
+source_sha256 = "sha256:4ec04e89a0e505ddaa313ea4a8aa9a9811550e95e10acde87725d06a61374996"
+classification = "authored_document"
+preservation = "must_preserve"
+current_version = 2
+accepted_versions = [2]
+compatibility = "reject"
+migrations = []
