@@ -9,7 +9,7 @@ namespace sugarsubstitute {
 namespace {
 const RegistrationApi system_api = {&QueryPerformanceCounter, &CloseHandle,
     &GetLastError, &SetLastError, &CancelIoEx, &WaitForSingleObject,
-    &GetOverlappedResult, &CreateFileW, &WaitNamedPipeW,
+    &GetOverlappedResult, &CreateFileW,
     &GetNamedPipeServerProcessId, &GetProcessId, &SetNamedPipeHandleState,
     &CreateEventW, &TransactNamedPipe};
 const RegistrationApi& Api(OwnedStart* owner) {
@@ -92,28 +92,47 @@ bool RetireRegistration(OwnedStart* owner) {
   return pipe_closed && event_closed && initial_closed && bootstrap_closed;
 }
 
-bool ConfirmHandler(const std::wstring& name, OwnedStart* owner) {
-  for (;;) {
-    const DWORD remaining = Remaining(owner);
-    if (!remaining) return Fail(owner, owner->error ? owner->error : ERROR_TIMEOUT);
-    owner->pipe = Api(owner).open(name.c_str(), GENERIC_READ | GENERIC_WRITE, 0,
-        nullptr, OPEN_EXISTING, FILE_FLAG_OVERLAPPED | SECURITY_SQOS_PRESENT |
-        SECURITY_IDENTIFICATION, nullptr);
-    if (owner->pipe != INVALID_HANDLE_VALUE) break;
-    const DWORD error = Api(owner).last_error();
-    if (error != ERROR_PIPE_BUSY) return Fail(owner, error);
-    if (!Api(owner).pipe_wait(name.c_str(), remaining))
-      return Fail(owner, Api(owner).last_error());
-  }
+bool PrepareInheritedRegistration(const std::wstring& name, OwnedStart* owner) {
+  if (owner->prepared || owner->process || !owner->initial_pipe ||
+      !owner->bootstrap_process || owner->pipe != INVALID_HANDLE_VALUE)
+    return Fail(owner, ERROR_INVALID_STATE);
+  if (!CheckDeadline(owner)) return false;
+  ULONG initial_pid = 0;
+  if (!Api(owner).server_id(owner->initial_pipe, &initial_pid))
+    return Fail(owner, Api(owner).last_error());
+  owner->creator_pid = Api(owner).process_id(owner->bootstrap_process);
+  if (!owner->creator_pid) return Fail(owner, Api(owner).last_error());
+  if (initial_pid != owner->creator_pid) return Fail(owner, ERROR_ACCESS_DENIED);
+  // Connect before inheritance while the creator retains the first instance.
+  // Confirmation uses this exact endpoint, never a later instance by name.
+  owner->pipe = Api(owner).open(name.c_str(), GENERIC_READ | GENERIC_WRITE, 0,
+      nullptr, OPEN_EXISTING, FILE_FLAG_OVERLAPPED | SECURITY_SQOS_PRESENT |
+      SECURITY_IDENTIFICATION, nullptr);
+  if (owner->pipe == INVALID_HANDLE_VALUE)
+    return Fail(owner, Api(owner).last_error());
   ULONG server_pid = 0;
   if (!Api(owner).server_id(owner->pipe, &server_pid))
     return Fail(owner, Api(owner).last_error());
-  const DWORD handler_pid = Api(owner).process_id(owner->process);
-  if (!handler_pid) return Fail(owner, Api(owner).last_error());
-  if (server_pid != handler_pid) return Fail(owner, ERROR_ACCESS_DENIED);
+  if (server_pid != owner->creator_pid) return Fail(owner, ERROR_ACCESS_DENIED);
   DWORD mode = PIPE_READMODE_MESSAGE;
   if (!Api(owner).mode(owner->pipe, &mode, nullptr, nullptr))
     return Fail(owner, Api(owner).last_error());
+  if (!CheckDeadline(owner)) return false;
+  owner->prepared = true;
+  return true;
+}
+
+bool ConfirmHandler(OwnedStart* owner) {
+  if (!owner->prepared || owner->pipe == INVALID_HANDLE_VALUE ||
+      !owner->initial_pipe || !owner->process || owner->completed || owner->pending)
+    return Fail(owner, ERROR_INVALID_STATE);
+  if (!CheckDeadline(owner)) return false;
+  const DWORD handler_pid = Api(owner).process_id(owner->process);
+  if (!handler_pid) return Fail(owner, Api(owner).last_error());
+  if (handler_pid == owner->creator_pid) return Fail(owner, ERROR_ACCESS_DENIED);
+  const DWORD before = Api(owner).wait(owner->process, 0);
+  if (before != WAIT_TIMEOUT)
+    return Fail(owner, before == WAIT_FAILED ? Api(owner).last_error() : ERROR_PROCESS_ABORTED);
   owner->event = Api(owner).event(nullptr, TRUE, FALSE, nullptr);
   if (!owner->event) return Fail(owner, Api(owner).last_error());
   owner->overlapped.hEvent = owner->event;
@@ -141,6 +160,9 @@ bool ConfirmHandler(const std::wstring& name, OwnedStart* owner) {
     owner->pending = false;
   }
   if (transferred != sizeof(owner->response)) return Fail(owner, ERROR_INVALID_DATA);
+  const DWORD after = Api(owner).wait(owner->process, 0);
+  if (after != WAIT_TIMEOUT)
+    return Fail(owner, after == WAIT_FAILED ? Api(owner).last_error() : ERROR_PROCESS_ABORTED);
   if (!CheckDeadline(owner)) return false;
   owner->completed = true;
   return RetireRegistration(owner);

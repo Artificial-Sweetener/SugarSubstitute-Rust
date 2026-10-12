@@ -21,7 +21,6 @@ struct RegistrationApi {
   decltype(&WaitForSingleObject) wait;
   decltype(&GetOverlappedResult) result;
   decltype(&CreateFileW) open;
-  decltype(&WaitNamedPipeW) pipe_wait;
   decltype(&GetNamedPipeServerProcessId) server_id;
   decltype(&GetProcessId) process_id;
   decltype(&SetNamedPipeHandleState) mode;
@@ -49,11 +48,18 @@ struct OwnedStart {
   size_t cleanup_count = 0;
   uint64_t omitted_cleanup = 0;
   const RegistrationApi* api = nullptr;
+  DWORD creator_pid = 0;
+  bool prepared = false;
   bool pending = false;
   bool completed = false;
 };
 
-bool ConfirmHandler(const std::wstring& name, OwnedStart* owner);
+// Acquire and authenticate the connected inherited-instance capability before
+// child creation. Failure retains every acquired handle for checked retirement.
+bool PrepareInheritedRegistration(const std::wstring& name, OwnedStart* owner);
+// Confirm the already-connected endpoint with the actual retained live child.
+// This never discovers another instance by name or renews the original deadline.
+bool ConfirmHandler(OwnedStart* owner);
 // Returns false while actual cancellation completion/checked closure is pending.
 bool RetireRegistration(OwnedStart* owner);
 bool CheckDeadline(OwnedStart* owner);

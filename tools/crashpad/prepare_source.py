@@ -22,6 +22,22 @@ def replace(text, old, new):
     return text.replace(old, new)
 
 
+def transform_owned_launch(text):
+    """Bind registration before child creation and retain every partial output."""
+    text = replace(text, "  PROCESS_INFORMATION process_info;", "  if (command_line.size() >= 32767 || (data->owner && is_embedded_in_dll)) {\n    if (data->owner) data->owner->error = ERROR_INVALID_PARAMETER;\n    SetLastError(ERROR_INVALID_PARAMETER); return false;\n  }\n  if (data->owner && !sugarsubstitute::PrepareInheritedRegistration(data->ipc_pipe, data->owner)) return false;\n  if (data->owner && !sugarsubstitute::CheckDeadline(data->owner)) return false;\n  PROCESS_INFORMATION process_info = {};")
+    text = replace(text, "  if (!rv) {\n    PLOG(ERROR) << \"CreateProcess\";", """  const DWORD create_error = rv ? ERROR_SUCCESS : GetLastError();
+  if (data->owner) {
+    // Adopt partial outputs before examining success or any later fallible call.
+    data->owner->process = process_info.hProcess;
+    data->owner->thread = process_info.hThread;
+  }
+  if (!rv) {
+    if (data->owner && !data->owner->error) data->owner->error = create_error;
+    SetLastError(create_error);
+    PLOG(ERROR) << "CreateProcess";""")
+    return replace(text, "  rv = CloseHandle(process_info.hThread);", "  if (data->owner) {\n    // The connected endpoint and original server stay owned through confirmation.\n    if (!sugarsubstitute::ConfirmHandler(data->owner)) return false;\n    scoped_startup_state_caller.SetSuccessful();\n    return true;\n  }\n\n  rv = CloseHandle(process_info.hThread);")
+
+
 def transform(name, text):
     if name == "client/crashpad_client.h":
         text = replace(text, "namespace crashpad {", "namespace sugarsubstitute { struct OwnedStart; }\n\nnamespace crashpad {")
@@ -75,18 +91,7 @@ def transform(name, text):
     startup_info.StartupInfo.hStdError = GetStdHandle(STD_ERROR_HANDLE);
   }""")
     text = replace(text, "    creation_flags = 0;", "    if (data->owner) { SetLastError(ERROR_NOT_SUPPORTED); return false; }\n    creation_flags = 0;")
-    text = replace(text, "  PROCESS_INFORMATION process_info;", "  if (command_line.size() >= 32767 || (data->owner && is_embedded_in_dll)) {\n    if (data->owner) data->owner->error = ERROR_INVALID_PARAMETER;\n    SetLastError(ERROR_INVALID_PARAMETER); return false;\n  }\n  if (data->owner && !sugarsubstitute::CheckDeadline(data->owner)) return false;\n  PROCESS_INFORMATION process_info = {};")
-    text = replace(text, "  if (!rv) {\n    PLOG(ERROR) << \"CreateProcess\";", """  const DWORD create_error = rv ? ERROR_SUCCESS : GetLastError();
-  if (data->owner) {
-    // Adopt partial outputs before examining success or any later fallible call.
-    data->owner->process = process_info.hProcess;
-    data->owner->thread = process_info.hThread;
-  }
-  if (!rv) {
-    if (data->owner && !data->owner->error) data->owner->error = create_error;
-    SetLastError(create_error);
-    PLOG(ERROR) << "CreateProcess";""")
-    text = replace(text, "  rv = CloseHandle(process_info.hThread);", "  if (data->owner) {\n    if (!CloseHandle(data->owner->initial_pipe)) {\n      data->owner->error = GetLastError();\n      return false;\n    }\n    data->owner->initial_pipe = nullptr;\n    if (!sugarsubstitute::ConfirmHandler(data->ipc_pipe, data->owner)) return false;\n    scoped_startup_state_caller.SetSuccessful();\n    return true;\n  }\n\n  rv = CloseHandle(process_info.hThread);")
+    text = transform_owned_launch(text)
     text = replace(text, "  CreatePipe(&ipc_pipe_, &ipc_pipe_handle);", "  if (!CreatePipe(&ipc_pipe_, &ipc_pipe_handle)) {\n    if (owned_start_) owned_start_->error = GetLastError();\n    SetHandlerStartupState(StartupState::kFailed);\n    return false;\n  }\n  if (owned_start_) owned_start_->initial_pipe = ipc_pipe_handle.release();")
     for name in ("g_signal_exception", "g_wer_registration.dump_without_crashing", "g_wer_registration.dump_completed"):
         old = name + " =\n      CreateEvent(&security_attributes, false /* auto reset */, false, nullptr);"
