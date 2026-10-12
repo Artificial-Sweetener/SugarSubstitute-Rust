@@ -89,3 +89,24 @@ test('hides newly mounted graph-only nodes and releases removed nodes during top
   reveal.dispose();
   expect(second.style.opacity).toBe('');
 });
+
+test('suppresses late navigation mounts and restores host opacity priority and inert state', () => {
+  const root = document.createElement('div');
+  document.body.append(root);
+  const reveal = new WorkflowMasonryGraphReveal();
+  reveal.reconcile(root, []);
+  reveal.frames(true);
+  const toolbar = document.createElement('div');
+  toolbar.setAttribute('aria-label', 'Canvas Toolbar');
+  toolbar.style.setProperty('opacity', '0.65', 'important');
+  toolbar.inert = true;
+  root.append(toolbar);
+  reveal.reconcile(root, []);
+  expect(toolbar.style.opacity).toBe('0');
+  expect(toolbar.inert).toBe(true);
+  reveal.frames(false);
+  expect(toolbar.style.opacity).toBe('0.65');
+  reveal.dispose();
+  expect(toolbar.style.getPropertyPriority('opacity')).toBe('important');
+  expect(toolbar.inert).toBe(true);
+});

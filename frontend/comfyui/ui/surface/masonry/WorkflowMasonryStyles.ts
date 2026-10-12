@@ -100,10 +100,18 @@ export function ensureWorkflowMasonryStyles(documentRef: Document): void {
     #graph-canvas-container[data-sugarcubes-masonry="true"] > .ph-no-capture,
     #graph-canvas-container[data-sugarcubes-masonry="true"] > .ph-no-capture *,
     #graph-canvas-container[data-sugarcubes-masonry="true"] > .isolate,
-    #graph-canvas-container[data-sugarcubes-masonry="true"] > .isolate *,
-    .graph-canvas-panel[data-sugarcubes-masonry="true"] [aria-label="Canvas Toolbar"],
-    .graph-canvas-panel[data-sugarcubes-masonry="true"] .litegraph-minimap {
+    #graph-canvas-container[data-sugarcubes-masonry="true"] > .isolate * {
       visibility:hidden !important; pointer-events:none !important;
+    }
+    #graph-canvas-container[data-sugarcubes-masonry="true"] [aria-label="Canvas Toolbar"],
+    #graph-canvas-container[data-sugarcubes-masonry="true"] .minimap-main-container {
+      visibility:hidden !important;
+    }
+    #graph-canvas-container:has(.sugarcubes-workflow-masonry) [aria-label="Canvas Toolbar"],
+    #graph-canvas-container:has(.sugarcubes-workflow-masonry) [aria-label="Canvas Toolbar"] *,
+    #graph-canvas-container:has(.sugarcubes-workflow-masonry) .minimap-main-container,
+    #graph-canvas-container:has(.sugarcubes-workflow-masonry) .minimap-main-container * {
+      pointer-events:none !important;
     }
     .sugarcubes-workflow-masonry__empty { padding:32px; opacity:.7; }
   `;

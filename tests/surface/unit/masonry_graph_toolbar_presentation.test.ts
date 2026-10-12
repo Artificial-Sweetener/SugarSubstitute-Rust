@@ -19,7 +19,8 @@ import { ensureWorkflowMasonryStyles } from '../../../frontend/comfyui/ui/surfac
 
 beforeEach(() => {
   const style = document.createElement('style');
-  style.textContent = '.selection-toolbox button { pointer-events:auto; }';
+  style.textContent =
+    '.selection-toolbox button, .graph-canvas-panel button { pointer-events:auto; }';
   document.head.append(style);
 });
 
@@ -41,6 +42,59 @@ function toolbox() {
   wrapper.append(panel);
   return { wrapper, panel, button };
 }
+
+/** Model native navigation beside the allocated masonry workspace, including minimap chrome. */
+function graphNavigation() {
+  const panel = document.createElement('div');
+  panel.className = 'graph-canvas-panel';
+  const workspace = document.createElement('div');
+  workspace.className = 'sc-output-workspace-content';
+  const toolbar = document.createElement('div');
+  toolbar.setAttribute('aria-label', 'Canvas Toolbar');
+  const zoom = document.createElement('button');
+  toolbar.append(zoom);
+  const minimap = document.createElement('div');
+  minimap.className = 'minimap-main-container';
+  const map = document.createElement('div');
+  map.className = 'litegraph-minimap';
+  const settings = document.createElement('button');
+  minimap.append(map, settings);
+  panel.append(toolbar, minimap, workspace);
+  return { panel, workspace, toolbar, zoom, minimap, settings };
+}
+
+test('suppresses navigation with root masonry state across workspace allocations and restores native controls', () => {
+  ensureWorkflowMasonryStyles(document);
+  const root = document.createElement('div');
+  root.id = 'graph-canvas-container';
+  const native = graphNavigation();
+  const unrelated = graphNavigation();
+  root.append(native.panel);
+  document.body.append(root, unrelated.panel);
+  const surface = document.createElement('div');
+  surface.className = 'sugarcubes-workflow-masonry';
+  for (const parent of [native.panel, native.workspace]) {
+    parent.append(surface);
+    root.dataset.sugarcubesMasonry = 'true';
+    for (const element of [native.toolbar, native.minimap]) {
+      const style = getComputedStyle(element);
+      expect(style.visibility).toBe('hidden');
+    }
+    for (const element of [native.zoom, native.settings])
+      expect(getComputedStyle(element).pointerEvents).toBe('none');
+    expect(getComputedStyle(surface).visibility).toBe('visible');
+    expect(getComputedStyle(unrelated.toolbar).visibility).toBe('visible');
+    delete root.dataset.sugarcubesMasonry;
+    for (const element of [native.toolbar, native.minimap]) {
+      expect(getComputedStyle(element).visibility).toBe('visible');
+    }
+    expect(getComputedStyle(native.zoom).pointerEvents).toBe('none');
+    surface.remove();
+    for (const element of [native.zoom, native.settings])
+      expect(getComputedStyle(element).pointerEvents).toBe('auto');
+    expect(root.querySelector('[aria-label="Canvas Toolbar"]')).toBe(native.toolbar);
+  }
+});
 
 test('suppresses selection controls throughout preparation, travel and exit without losing native identity', () => {
   ensureWorkflowMasonryStyles(document);
