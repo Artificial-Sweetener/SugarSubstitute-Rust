@@ -22,6 +22,7 @@ import { cubeFaceNodeWidgetStartY } from './CubeFaceNodePresentationPolicy.js';
 import { cubeFaceUnconsumedWidgets } from './CubeFaceWidgetPolicy.js';
 import { isNativeWidgetPresented } from './NativeWidgetPresentation.js';
 import { CubePromptDomWidgetSizingHost } from './CubePromptDomWidgetSizingHost.js';
+import { mountLiteGraphCanvasOverlay } from './ComfyLiteGraphCanvasOverlay.js';
 
 export interface LiteGraphCubeDomWidgetCanvas {
   canvas: HTMLCanvasElement;
@@ -110,6 +111,7 @@ export class ComfyLiteGraphCubeDomWidgetHost {
       this.#promptSizing.reconcile(mounted.element, geometry.promptWidget);
       this.#position(mounted.wrapper, geometry);
     }
+    if (this.#mounted.size > 0) this.#ensureRoot();
     this.#removeEmptyRoot();
   }
 
@@ -244,17 +246,19 @@ export class ComfyLiteGraphCubeDomWidgetHost {
     this.#mounted.delete(element);
   }
 
-  /** Create the pointer-transparent overlay without intercepting graph input. */
+  /** Keep the pointer-transparent widget layer inside the active canvas host. */
   #ensureRoot(): HTMLDivElement {
-    if (this.#root) return this.#root;
-    const root = this.#document.createElement('div');
-    root.dataset.sugarcubesCubeFaceDomWidgets = '';
-    root.style.position = 'fixed';
-    root.style.inset = '0';
-    root.style.pointerEvents = 'none';
-    root.style.overflow = 'hidden';
-    this.#document.body.append(root);
-    this.#root = root;
+    let root = this.#root;
+    if (!root) {
+      root = this.#document.createElement('div');
+      root.dataset.sugarcubesCubeFaceDomWidgets = '';
+      root.style.position = 'fixed';
+      root.style.inset = '0';
+      root.style.pointerEvents = 'none';
+      root.style.overflow = 'hidden';
+      this.#root = root;
+    }
+    mountLiteGraphCanvasOverlay(this.#canvas.canvas, root);
     return root;
   }
 

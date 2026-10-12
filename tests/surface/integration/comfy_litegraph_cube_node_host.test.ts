@@ -276,6 +276,9 @@ describe('ComfyLiteGraphCubeNodeHost', () => {
     const nodes = new CubeNodeCatalog();
     nodes.add(node);
     const canvasElement = document.createElement('canvas');
+    const graphHost = document.createElement('div');
+    graphHost.append(canvasElement);
+    document.body.append(graphHost);
     canvasElement.getBoundingClientRect = jest.fn(
       () =>
         ({
@@ -335,6 +338,7 @@ describe('ComfyLiteGraphCubeNodeHost', () => {
     host.dispose();
     expect(textarea.parentElement).toBe(nativeOwner);
     nativeOwner.remove();
+    graphHost.remove();
   });
 
   test('allocates Nodes 1 outer frame growth to the persisted preview width', () => {

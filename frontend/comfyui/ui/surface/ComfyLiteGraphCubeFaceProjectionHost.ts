@@ -17,6 +17,7 @@
 
 import type { ComfyNode } from '../types/graph.js';
 import type { CubeCanvasCard, CubeCanvasLayout } from './CubeCanvasLayout.js';
+import { mountLiteGraphCanvasOverlay } from './ComfyLiteGraphCanvasOverlay.js';
 
 /** Identify the host projection contract exposed on embedded LiteGraph nodes. */
 export const CUBE_FACE_PROJECTION_SYMBOL = Symbol.for('sugarcubes.cube-face-projection.v1');
@@ -44,9 +45,9 @@ export interface LiteGraphCubeFaceProjectionCanvas {
   };
 }
 
-/** Pair one active Cube with the canvas layout used by its projections. */
+/** Expose only the face cards required by native DOM projections. */
 export interface LiteGraphCubeFaceProjectionItem {
-  layout: CubeCanvasLayout;
+  layout: Pick<CubeCanvasLayout, 'cards'>;
 }
 
 interface MountedProjection {
@@ -94,6 +95,7 @@ export class ComfyLiteGraphCubeFaceProjectionHost {
       mounted.card = card;
       this.#position(mounted);
     }
+    if (this.#mounted.size > 0) this.#ensureRoot();
     this.#removeEmptyRoot();
   }
 
@@ -199,21 +201,23 @@ export class ComfyLiteGraphCubeFaceProjectionHost {
     this.#mounted.delete(mounted.node);
   }
 
-  /** Create one pointer-transparent viewport layer for all projected cards. */
+  /** Keep projected controls inside the active canvas host's clipping and stacking boundary. */
   #ensureRoot(): HTMLDivElement {
-    if (this.#root) return this.#root;
-    const root = this.#document.createElement('div');
-    root.dataset.sugarcubesCubeFaceProjections = '';
-    Object.assign(root.style, {
-      position: 'fixed',
-      inset: '0',
-      overflow: 'hidden',
-      pointerEvents: 'none',
-      zIndex: '2',
-    });
-    root.hidden = this.#suspended;
-    this.#document.body.append(root);
-    this.#root = root;
+    let root = this.#root;
+    if (!root) {
+      root = this.#document.createElement('div');
+      root.dataset.sugarcubesCubeFaceProjections = '';
+      Object.assign(root.style, {
+        position: 'fixed',
+        inset: '0',
+        overflow: 'hidden',
+        pointerEvents: 'none',
+        zIndex: '2',
+      });
+      root.hidden = this.#suspended;
+      this.#root = root;
+    }
+    mountLiteGraphCanvasOverlay(this.#canvas.canvas, root);
     return root;
   }
 

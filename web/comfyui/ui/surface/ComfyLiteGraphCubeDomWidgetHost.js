@@ -19,6 +19,7 @@ import { cubeFaceNodeWidgetStartY } from './CubeFaceNodePresentationPolicy.js';
 import { cubeFaceUnconsumedWidgets } from './CubeFaceWidgetPolicy.js';
 import { isNativeWidgetPresented } from './NativeWidgetPresentation.js';
 import { CubePromptDomWidgetSizingHost } from './CubePromptDomWidgetSizingHost.js';
+import { mountLiteGraphCanvasOverlay } from './ComfyLiteGraphCanvasOverlay.js';
 const DEFAULT_WIDGET_MARGIN = 10;
 const DEFAULT_WIDGET_HEIGHT = 50;
 /** Own reparenting and graph-to-viewport positioning for native DOM widgets. */
@@ -54,6 +55,8 @@ export class ComfyLiteGraphCubeDomWidgetHost {
             this.#promptSizing.reconcile(mounted.element, geometry.promptWidget);
             this.#position(mounted.wrapper, geometry);
         }
+        if (this.#mounted.size > 0)
+            this.#ensureRoot();
         this.#removeEmptyRoot();
     }
     /** Restore native ownership for every element and remove the overlay root. */
@@ -185,18 +188,19 @@ export class ComfyLiteGraphCubeDomWidgetHost {
         wrapper.remove();
         this.#mounted.delete(element);
     }
-    /** Create the pointer-transparent overlay without intercepting graph input. */
+    /** Keep the pointer-transparent widget layer inside the active canvas host. */
     #ensureRoot() {
-        if (this.#root)
-            return this.#root;
-        const root = this.#document.createElement('div');
-        root.dataset.sugarcubesCubeFaceDomWidgets = '';
-        root.style.position = 'fixed';
-        root.style.inset = '0';
-        root.style.pointerEvents = 'none';
-        root.style.overflow = 'hidden';
-        this.#document.body.append(root);
-        this.#root = root;
+        let root = this.#root;
+        if (!root) {
+            root = this.#document.createElement('div');
+            root.dataset.sugarcubesCubeFaceDomWidgets = '';
+            root.style.position = 'fixed';
+            root.style.inset = '0';
+            root.style.pointerEvents = 'none';
+            root.style.overflow = 'hidden';
+            this.#root = root;
+        }
+        mountLiteGraphCanvasOverlay(this.#canvas.canvas, root);
         return root;
     }
     /** Remove an unused root so it cannot outlive the active renderer mode. */
