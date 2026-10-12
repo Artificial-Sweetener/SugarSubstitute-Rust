@@ -17,7 +17,7 @@
 
 import { MASONRY_STACK_Z_INDEX } from '../../core/OverlayStacking.js';
 
-/** Install static allocation chrome without changing native toolbar or renderer selectors. */
+/** Install scoped allocation rules for owned regions and qualified native chrome. */
 export function ensureBrowserCanvasWorkspaceStyles(document: Document): void {
   if (document.getElementById('sugarcubes-output-workspace-styles')) return;
   const style = document.createElement('style');
@@ -31,8 +31,12 @@ export function ensureBrowserCanvasWorkspaceStyles(document: Document): void {
     .sc-output-canvas-toggle:disabled { opacity:.5; cursor:default; }
     .sc-output-canvas-toggle span { width:20px; height:20px; background:currentColor; pointer-events:none;
       mask:var(--sc-output-icon) center / contain no-repeat; }
+    .sc-output-workspace-frame { position:absolute; z-index:998; isolation:isolate; pointer-events:none; }
+    .sc-output-workspace-topmenu { height:var(--sc-output-toolbar-height); flex-shrink:0; overflow:visible; }
+    .sc-output-workspace-topmenu > * { flex-shrink:0; }
     .sc-output-workspace-content { position:absolute; inset:0; pointer-events:none; }
-    .graph-canvas-panel > .pointer-events-auto > [role="toolbar"][data-pc-name="buttongroup"] {
+    .graph-canvas-panel > .pointer-events-auto > [role="toolbar"][data-pc-name="buttongroup"],
+    .graph-canvas-panel > .minimap-main-container {
       right:var(--sc-output-workspace-reserved-width,0px); }
     .sc-output-workspace-pane { position:absolute; right:0; top:0; bottom:0; z-index:${MASONRY_STACK_Z_INDEX + 2};
       display:flex; flex-direction:column; box-sizing:border-box; pointer-events:auto;

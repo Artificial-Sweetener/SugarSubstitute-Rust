@@ -114,14 +114,14 @@ test('requires explicit narrow activation and exposes authoritative keyboard wid
   expect(f.workspace.visible).toBe(true);
   expect(f.root.style.marginLeft).toBe('');
   expect(f.workspace.content.style.left).toBe('0px');
-  const divider = f.panel.querySelector('[role="separator"]')!;
+  const divider = f.root.querySelector('[role="separator"]')!;
   expect(divider.getAttribute('aria-valuenow')).toBe('640');
   expect(divider.getAttribute('aria-valuemax')).toBe('776');
-  expect(f.panel.querySelector<HTMLElement>('.sc-output-workspace-backdrop')!.style.right).toBe(
+  expect(f.root.querySelector<HTMLElement>('.sc-output-workspace-backdrop')!.style.right).toBe(
     '640px',
   );
   expect(document.activeElement?.getAttribute('aria-label')).toBe('Workflow output canvas');
-  f.panel.querySelector<HTMLButtonElement>('.sc-output-workspace-backdrop')!.click();
+  f.root.querySelector<HTMLButtonElement>('.sc-output-workspace-backdrop')!.click();
   expect(f.actions.close).toHaveBeenCalledTimes(1);
   f.resize(1400);
   f.frames.advance(16);
@@ -129,6 +129,25 @@ test('requires explicit narrow activation and exposes authoritative keyboard wid
   f.resize(800);
   f.frames.advance(16);
   expect(f.workspace.visible).toBe(false);
+  f.dispose();
+});
+
+test('keeps native minimap chrome aligned with the remaining graph allocation', () => {
+  const f = fixture();
+  const minimap = document.createElement('div');
+  minimap.className = 'minimap-main-container';
+  f.panel.append(minimap);
+  // jsdom does not resolve custom properties in geometry; inspect the matching CSSOM rule.
+  const rule = [...document.styleSheets]
+    .flatMap((sheet) => [...sheet.cssRules])
+    .filter((entry): entry is CSSStyleRule => entry instanceof CSSStyleRule)
+    .find((entry) => minimap.matches(entry.selectorText) && entry.style.getPropertyValue('right'));
+  expect(rule?.style.getPropertyValue('right')).toBe(
+    'var(--sc-output-workspace-reserved-width,0px)',
+  );
+  expect(f.panel.style.getPropertyValue('--sc-output-workspace-reserved-width')).toBe('560px');
+  f.workspace.preferences({ visible: false, width: 560 });
+  expect(f.panel.style.getPropertyValue('--sc-output-workspace-reserved-width')).toBe('');
   f.dispose();
 });
 
