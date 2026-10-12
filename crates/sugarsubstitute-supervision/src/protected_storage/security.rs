@@ -3,7 +3,7 @@
 //! Compare bounded native security without allocating foreign descriptor strings.
 mod descriptor;
 use crate::{ClaimError, native_claims::files::Handle};
-use windows::{Win32::Security::*, core::PWSTR};
+use windows::Win32::Security::*;
 pub(crate) struct Descriptor {
     words: Vec<u32>,
 }
@@ -50,19 +50,4 @@ pub(crate) fn verify(handle: &Handle, sid: &[u8]) -> Result<(), ClaimError> {
     // SAFETY: Successful native output reported this checked byte count inside the owned allocation.
     let bytes = unsafe { std::slice::from_raw_parts(words.as_ptr().cast::<u8>(), needed as usize) };
     descriptor::verify(bytes, sid)
-}
-pub(crate) unsafe fn bounded_text(text: PWSTR, maximum: usize) -> Result<String, ClaimError> {
-    if text.is_null() {
-        return Err(ClaimError::invalid("native_text"));
-    }
-    let mut units = Vec::new();
-    for index in 0..maximum {
-        // SAFETY: The caller supplies a valid NUL-terminated allocation; scanning stops at its terminator.
-        let unit = unsafe { text.0.add(index).read() };
-        if unit == 0 {
-            return String::from_utf16(&units).map_err(|e| ClaimError::new("native_unicode", e));
-        }
-        units.push(unit);
-    }
-    Err(ClaimError::invalid("native_text_bound"))
 }

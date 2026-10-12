@@ -46,7 +46,7 @@ fn desktop_only_close_requires_pinned_registry_and_seals_before_empty_proof() ->
     harness.initialize()?;
     let mut foreign = crate::WindowsProcessRegistry::new(owner()?)?;
     harness.claims.close_admission();
-    let spec = harness.spec(CLAIM_OPERATION_BYTES)?;
+    let spec = harness.close_spec()?;
     assert!(matches!(
         harness.claims.submit_close(&harness.client, &harness.scope, spec, &mut foreign),
         Err(ClaimAdmissionError::Identity)
@@ -86,7 +86,7 @@ fn desktop_only_close_requires_pinned_registry_and_seals_before_empty_proof() ->
         Err(crate::RegistryAdmissionError::Execution(_))
     ));
     assert!(!harness.registry.is_empty());
-    let spec = harness.spec(CLAIM_OPERATION_BYTES)?;
+    let spec = harness.close_spec()?;
     assert!(matches!(
         harness.claims.submit_close(&harness.client, &harness.scope, spec, &mut harness.registry),
         Err(ClaimAdmissionError::Busy)
@@ -209,7 +209,7 @@ fn unattempted_backend_release_rejects_a_different_empty_registry() -> TestResul
 fn partial_initialization_cleanup_never_seals_an_unowned_registry() -> TestResult {
     let mut harness = Harness::new()?;
     harness.claims.close_admission();
-    let spec = harness.spec(CLAIM_OPERATION_BYTES)?;
+    let spec = harness.close_spec()?;
     harness.claims.submit_close(&harness.client, &harness.scope, spec, &mut harness.registry)?;
     harness.arm_memory_release(0)?;
     harness.drain()?;
@@ -248,5 +248,28 @@ fn partial_initialization_cleanup_never_seals_an_unowned_registry() -> TestResul
     ));
     assert!(!harness.registry.is_empty());
     harness.drain_registry()?;
+    Ok(())
+}
+
+#[test]
+fn cleanup_deadline_survives_rejected_admission_and_failed_native_close() -> TestResult {
+    let mut harness = Harness::new()?;
+    harness.initialize()?;
+    let original = harness.close_spec()?.deadline.ok_or("cleanup deadline absent")?;
+    let mut foreign = crate::WindowsProcessRegistry::new(owner()?)?;
+    harness.claims.close_admission();
+    let spec = harness.close_spec()?;
+    assert!(matches!(
+        harness.claims.submit_close(&harness.client, &harness.scope, spec, &mut foreign),
+        Err(ClaimAdmissionError::Identity)
+    ));
+    harness.clock.advance(std::time::Duration::from_secs(1))?;
+    assert_eq!(harness.close_spec()?.deadline, Some(original));
+    *lock(&harness.fake.failure) = Some(Stage::Close);
+    harness.close(crate::CLAIM_POOL_BYTES)?;
+    harness.clock.advance(std::time::Duration::from_secs(1))?;
+    assert_eq!(harness.close_spec()?.deadline, Some(original));
+    harness.close(0)?;
+    assert_eq!(*lock(&harness.fake.close_deadlines), [original, original]);
     Ok(())
 }

@@ -1,85 +1,34 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Derive namespace and protected storage from the primary token and pinned installation.
+//! Initialize coordinator claims through the sole actual account/namespace resolver.
 use super::*;
-use windows::Win32::{
-    Foundation::HANDLE,
-    Security::*,
-    System::{
-        Com::CoTaskMemFree,
-        Threading::{GetCurrentProcess, OpenProcessToken},
-    },
-    UI::Shell::*,
-};
-pub(crate) fn initialize(root: &mut Root, installation: &Path) -> Result<(), ClaimError> {
+pub(crate) fn initialize(
+    root: &mut Root,
+    installation: &Path,
+    context: &sugarsubstitute_contracts::execution::JobContext,
+) -> Result<(), ClaimError> {
     let pool = root.pool.as_ref().ok_or_else(|| ClaimError::invalid("missing_pool"))?.clone();
     let budget = files::Budget::Core(pool);
-    let mut token_raw = HANDLE::default();
-    // SAFETY: The pseudo-process handle is borrowed; token_raw is writable owned output.
-    let opened = unsafe {
-        OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY | TOKEN_IMPERSONATE, &mut token_raw)
-    }
-    .map_err(|e| ClaimError::new("primary_token", e));
-    if !token_raw.0.is_null() {
-        root.handles.push(Handle::new(token_raw, budget.clone()));
-    }
-    opened?;
-    if token_raw.0.is_null() {
-        return Err(ClaimError::invalid("missing_primary_token"));
-    }
-    let token = root.handles[0].raw();
-    root.sid = crate::protected_storage::account::token_sid(token)?;
-    let installed =
-        paths::open_retained(installation, true, false, budget.clone(), &mut root.handles)?;
-    let installed_path = paths::final_path(&root.handles[installed])?;
-    let installed_identity = paths::file_identity(&root.handles[installed])?;
-    paths::pin_ancestors(&installed_path, &mut root.handles, budget.clone())?;
-    paths::verify_pinned(
-        &installed_path,
-        installed_identity,
+    let resolved = crate::protected_storage::account::resolve_namespace(
+        installation,
         &mut root.handles,
-        true,
         budget.clone(),
     )?;
-    let namespace = sugarsubstitute_contracts::lifecycle::NamespaceId::new(paths::hash(&[
-        b"SugarSubstitute.coordinator-namespace.v1",
-        &root.sid,
-        &installed_identity,
-    ]));
+    let guard = root
+        .entry_election
+        .as_ref()
+        .map(|proof| proof.lock_for_initialization(context, &resolved))
+        .transpose()?;
+    let namespace = resolved.namespace;
+    root.sid = resolved.account_sid;
+    root.directory = resolved.directory;
+    let directory = &root.directory;
     let epoch = sugarsubstitute_contracts::lifecycle::CoordinatorEpoch::new(
         crate::protected_storage::record_file::random()?,
     )
     .map_err(|e| ClaimError::new("coordinator_epoch", e))?;
     let key = CoordinatorKey { namespace, epoch };
     root.key = Some(key);
-    // SAFETY: The retained primary token has QUERY|IMPERSONATE access; the GUID is static.
-    let path =
-        unsafe { SHGetKnownFolderPath(&FOLDERID_LocalAppData, KNOWN_FOLDER_FLAG(0), Some(token)) }
-            .map_err(|e| ClaimError::new("account_storage", e))?;
-    // SAFETY: Shell returns a valid NUL-terminated UTF-16 allocation on success.
-    let text = unsafe { security::bounded_text(path, 32767) };
-    // SAFETY: This exact Shell allocation is released once using its documented allocator.
-    unsafe { CoTaskMemFree(Some(path.0.cast())) };
-    let known = PathBuf::from(text?);
-    let known_handle =
-        paths::open_retained(&known, true, false, budget.clone(), &mut root.handles)?;
-    let mut directory = paths::final_path(&root.handles[known_handle])?;
-    let known_identity = paths::file_identity(&root.handles[known_handle])?;
-    paths::pin_ancestors(&directory, &mut root.handles, budget.clone())?;
-    paths::verify_pinned(&directory, known_identity, &mut root.handles, true, budget.clone())?;
-    for component in ["SugarSubstitute", "runtime", "claims"] {
-        directory.push(component);
-        paths::create_directory(&directory, &root.sid, budget.clone(), &mut root.handles)?;
-    }
-    root.directory = directory.clone();
-    for component in ["coordinators", "backends"] {
-        paths::create_directory(
-            &directory.join(component),
-            &root.sid,
-            budget.clone(),
-            &mut root.handles,
-        )?;
-    }
     let stem = directory
         .join("coordinators")
         .join(crate::protected_storage::record_file::hex(namespace.bytes()));
@@ -92,12 +41,31 @@ pub(crate) fn initialize(root: &mut Root, installation: &Path) -> Result<(), Cla
     )?;
     let held = root.coordinator.as_ref().ok_or_else(|| ClaimError::invalid("missing_claim"))?;
     let record = Record::coordinator(key);
-    records::check_predecessor(held, &root.sid, &record)?;
+    if let Some(guard) = &guard {
+        guard.check_record(&crate::protected_storage::record_file::read_shape(held, context)?)?;
+    }
+    if !guard.as_ref().is_some_and(|guard| {
+        matches!(
+            guard.proof.origin,
+            crate::coordinator_entry::election::ElectionRecordOrigin::Fresh(_)
+        )
+    }) {
+        root.original_released = records::check_predecessor(held, &root.sid, &record, context)?;
+    }
     root.record = Some(record);
-    records::publish(
-        held,
-        root.record.as_ref().ok_or_else(|| ClaimError::invalid("missing_record"))?,
-    )?;
+    let record = root.record.as_ref().ok_or_else(|| ClaimError::invalid("missing_record"))?;
+    if let Some(guard) = &guard
+        && matches!(
+            guard.proof.origin,
+            crate::coordinator_entry::election::ElectionRecordOrigin::Fresh(_)
+        )
+    {
+        let permission = guard
+            .publication(held, crate::protected_storage::paths::file_identity(&held.handle)?)?;
+        records::publish_fresh(held, record, &permission, context)?;
+    } else {
+        records::publish(held, record, context)?;
+    }
     root.claimed = true;
     Ok(())
 }

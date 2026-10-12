@@ -8,10 +8,13 @@ pub(crate) mod files;
 mod paths;
 mod records;
 use crate::protected_storage::exclusion::HeldFile;
-use crate::protected_storage::security;
 use crate::{ClaimError, claims::pool::SlotUse};
 use files::Handle;
 pub(crate) use records::{Record, RecordState};
+#[cfg(test)]
+pub(crate) use records::{
+    permits_replacement, prepare_backend_release, prepare_coordinator_release,
+};
 use std::{
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
@@ -30,9 +33,13 @@ pub(crate) struct Root {
     pub(crate) directory: PathBuf,
     pub(crate) coordinator: Option<HeldFile>,
     pub(crate) record: Option<Record>,
+    pub(crate) original_released: Option<[u8; 128]>,
     pub(crate) handles: Vec<Handle>,
     pub(crate) pool: Option<Arc<crate::claims::pool::Pool>>,
     pub(crate) claimed: bool,
+    pub(crate) execution_owner: Option<sugarsubstitute_contracts::execution::ExecutionId>,
+    pub(crate) close_deadline: Option<sugarsubstitute_contracts::execution::Moment>,
+    pub(crate) entry_election: Option<crate::coordinator_entry::election::RetainedElectionProof>,
 }
 impl Root {
     pub(crate) fn new() -> Self {
@@ -42,9 +49,13 @@ impl Root {
             directory: PathBuf::new(),
             coordinator: None,
             record: None,
+            original_released: None,
             handles: Vec::new(),
             pool: None,
             claimed: false,
+            execution_owner: None,
+            close_deadline: None,
+            entry_election: None,
         }
     }
 }
@@ -76,41 +87,72 @@ pub(crate) struct Backend {
     pub(crate) proof: Arc<Resolution>,
     pub(crate) file: Option<HeldFile>,
     pub(crate) record: Option<Record>,
+    pub(crate) original_released: Option<[u8; 128]>,
     pub(crate) claimed: bool,
     pub(crate) released: bool,
 }
 
 /// Real adapter boundary used by owner tests; it grants no scheduling capability.
 pub(crate) trait NativePort: Send + Sync {
-    fn initialize(&self, root: &mut Root, installation: &Path) -> Result<(), ClaimError>;
+    fn initialize(
+        &self,
+        root: &mut Root,
+        installation: &Path,
+        context: &sugarsubstitute_contracts::execution::JobContext,
+    ) -> Result<(), ClaimError>;
     fn resolve(&self, resolution: &mut Resolution, sid: &[u8]) -> Result<(), ClaimError>;
-    fn acquire(&self, backend: &mut Backend, directory: &Path) -> Result<(), ClaimError>;
+    fn acquire(
+        &self,
+        backend: &mut Backend,
+        directory: &Path,
+        context: &sugarsubstitute_contracts::execution::JobContext,
+    ) -> Result<(), ClaimError>;
     fn publish(
         &self,
         backend: &mut Backend,
         state: RecordState,
         process: u64,
+        context: &sugarsubstitute_contracts::execution::JobContext,
     ) -> Result<(), ClaimError>;
-    fn release(&self, backend: &mut Backend) -> Result<(), ClaimError>;
-    fn close(&self, root: &mut Root) -> Result<(), ClaimError>;
+    fn release(
+        &self,
+        backend: &mut Backend,
+        context: &sugarsubstitute_contracts::execution::JobContext,
+    ) -> Result<(), ClaimError>;
+    fn close(
+        &self,
+        root: &mut Root,
+        context: &sugarsubstitute_contracts::execution::JobContext,
+    ) -> Result<(), ClaimError>;
 }
 pub(crate) struct SystemPort;
 impl NativePort for SystemPort {
-    fn initialize(&self, root: &mut Root, installation: &Path) -> Result<(), ClaimError> {
-        account::initialize(root, installation)
+    fn initialize(
+        &self,
+        root: &mut Root,
+        installation: &Path,
+        context: &sugarsubstitute_contracts::execution::JobContext,
+    ) -> Result<(), ClaimError> {
+        account::initialize(root, installation, context)
     }
     fn resolve(&self, resolution: &mut Resolution, sid: &[u8]) -> Result<(), ClaimError> {
         paths::resolve(resolution, sid)
     }
-    fn acquire(&self, backend: &mut Backend, directory: &Path) -> Result<(), ClaimError> {
-        files::acquire_backend(backend, directory)?;
-        self.publish(backend, RecordState::LaunchPending, 0)
+    fn acquire(
+        &self,
+        backend: &mut Backend,
+        directory: &Path,
+        context: &sugarsubstitute_contracts::execution::JobContext,
+    ) -> Result<(), ClaimError> {
+        files::acquire_backend(backend, directory, context)?;
+        self.publish(backend, RecordState::LaunchPending, 0, context)
     }
     fn publish(
         &self,
         backend: &mut Backend,
         state: RecordState,
         process: u64,
+        context: &sugarsubstitute_contracts::execution::JobContext,
     ) -> Result<(), ClaimError> {
         let record =
             backend.record.as_mut().ok_or_else(|| ClaimError::invalid("missing_record"))?;
@@ -119,20 +161,26 @@ impl NativePort for SystemPort {
         records::publish(
             backend.file.as_ref().ok_or_else(|| ClaimError::invalid("missing_claim"))?,
             record,
+            context,
         )
     }
-    fn release(&self, backend: &mut Backend) -> Result<(), ClaimError> {
+    fn release(
+        &self,
+        backend: &mut Backend,
+        context: &sugarsubstitute_contracts::execution::JobContext,
+    ) -> Result<(), ClaimError> {
+        check_close_context(context)?;
         backend.proof.close()?;
-        if backend.file.as_ref().is_some_and(HeldFile::is_locked)
-            && let Some(record) = &mut backend.record
-        {
-            record.state = RecordState::Released;
-            record.process = 0;
-            records::publish(
-                backend.file.as_ref().ok_or_else(|| ClaimError::invalid("missing_claim"))?,
-                record,
+        check_close_context(context)?;
+        if let Some(file) = backend.file.as_ref().filter(|file| file.is_locked()) {
+            records::retire_backend(
+                file,
+                &mut backend.record,
+                backend.original_released.as_ref(),
+                context,
             )?;
         }
+        check_close_context(context)?;
         if let Some(file) = &mut backend.file {
             file.close()?;
         }
@@ -141,22 +189,60 @@ impl NativePort for SystemPort {
         backend.released = true;
         Ok(())
     }
-    fn close(&self, root: &mut Root) -> Result<(), ClaimError> {
-        if root.coordinator.as_ref().is_some_and(HeldFile::is_locked)
-            && let Some(record) = &mut root.record
-        {
-            record.state = RecordState::Released;
-            records::publish(
-                root.coordinator.as_ref().ok_or_else(|| ClaimError::invalid("missing_claim"))?,
-                record,
-            )?;
+    fn close(
+        &self,
+        root: &mut Root,
+        context: &sugarsubstitute_contracts::execution::JobContext,
+    ) -> Result<(), ClaimError> {
+        if root.execution_owner.is_some_and(|owner| owner != context.owner_id()) {
+            return Err(ClaimError::invalid("foreign_claim_close_execution"));
         }
-        files::close_all(&mut root.handles)?;
+        let deadline =
+            context.deadline().ok_or_else(|| ClaimError::invalid("claim_close_deadline"))?;
+        if root.close_deadline.is_some_and(|old| deadline > old) {
+            return Err(ClaimError::invalid("claim_close_renewed"));
+        }
+        root.close_deadline = Some(root.close_deadline.map_or(deadline, |old| old.min(deadline)));
+        if context.cancellation_requested() || context.now() >= deadline {
+            return Err(ClaimError::invalid("claim_close_expired"));
+        }
+        if let Some(file) = root.coordinator.as_ref().filter(|file| file.is_locked()) {
+            let released = match root.entry_election.as_ref().map(|proof| &proof.origin) {
+                Some(crate::coordinator_entry::election::ElectionRecordOrigin::Released(bytes)) => {
+                    Some(bytes)
+                }
+                _ => root.original_released.as_ref(),
+            };
+            records::retire_coordinator(file, &mut root.record, released, context)?;
+        }
+        check_close_context(context)?;
+        for handle in root.handles.iter_mut().rev() {
+            check_close_context(context)?;
+            handle.close()?;
+        }
+        root.handles.clear();
+        check_close_context(context)?;
         if let Some(file) = &mut root.coordinator {
             file.close()?;
         }
+        check_close_context(context)?;
         root.coordinator = None;
+        root.record = None;
+        root.original_released = None;
+        root.entry_election = None;
         root.pool = None;
+        Ok(())
+    }
+}
+
+fn check_close_context(
+    context: &sugarsubstitute_contracts::execution::JobContext,
+) -> Result<(), ClaimError> {
+    if context.cancellation_requested()
+        || context.deadline().is_none_or(|until| context.now() >= until)
+    {
+        Err(ClaimError::invalid("claim_close_expired"))
+    } else {
         Ok(())
     }
 }

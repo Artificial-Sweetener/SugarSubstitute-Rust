@@ -5,7 +5,13 @@ use super::*;
 mod storage;
 #[cfg(test)]
 mod tests;
-pub(crate) use storage::{check_predecessor, publish};
+pub(crate) use storage::{
+    check_predecessor, publish, publish_fresh, retire_backend, retire_coordinator,
+};
+#[cfg(test)]
+pub(crate) use storage::{
+    permits_replacement, prepare_backend_release, prepare_coordinator_release,
+};
 
 const MAGIC: &[u8; 8] = b"SSCLAIM1";
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

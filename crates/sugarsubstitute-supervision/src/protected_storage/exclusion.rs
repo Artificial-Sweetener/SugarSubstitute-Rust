@@ -2,6 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain stable exclusion files independently of each owner's record policy.
 use super::{paths, record_file::Stage, security};
+#[cfg(test)]
+pub(crate) mod fixture;
 use crate::{
     ClaimError,
     native_claims::{
@@ -29,6 +31,9 @@ pub(crate) struct HeldFile<const N: usize = 128> {
     pub(crate) account_sid: Vec<u8>,
     pub(crate) temporary_handles: Mutex<Vec<Handle>>,
     pub(crate) stage: Mutex<Option<Stage<N>>>,
+    pub(crate) publication: Mutex<Option<super::record_file::PublicationBinding<N>>>,
+    #[cfg(test)]
+    fixture_receipt: Option<fixture::FixtureReceipt>,
 }
 impl<const N: usize> HeldFile<N> {
     pub(crate) fn is_locked(&self) -> bool {
@@ -63,6 +68,9 @@ impl<const N: usize> HeldFile<N> {
             account_sid,
             temporary_handles: Mutex::new(Vec::new()),
             stage: Mutex::new(None),
+            publication: Mutex::new(None),
+            #[cfg(test)]
+            fixture_receipt: None,
         });
         let held = retained.as_mut().ok_or_else(|| ClaimError::invalid("missing_claim"))?;
         // SAFETY: The bounded NUL path and noninheritable protected descriptor
@@ -94,6 +102,9 @@ impl<const N: usize> HeldFile<N> {
     }
 
     pub(crate) fn close(&mut self) -> Result<(), ClaimError> {
+        if self.locked && self.handle.raw().0.is_null() {
+            return Err(ClaimError::invalid("missing_locked_exclusion_handle"));
+        }
         close_all(&mut lock(&self.temporary_handles))?;
         if let Some(stage) = lock(&self.stage).as_mut() {
             stage.handle.close()?;

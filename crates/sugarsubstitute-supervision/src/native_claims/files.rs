@@ -72,7 +72,11 @@ pub(crate) fn close_all(handles: &mut Vec<Handle>) -> Result<(), ClaimError> {
     Ok(())
 }
 
-pub(crate) fn acquire_backend(backend: &mut Backend, directory: &Path) -> Result<(), ClaimError> {
+pub(crate) fn acquire_backend(
+    backend: &mut Backend,
+    directory: &Path,
+    context: &sugarsubstitute_contracts::execution::JobContext,
+) -> Result<(), ClaimError> {
     let digest = crate::protected_storage::record_file::hex(&backend.proof.digest);
     let stem = directory.join("backends").join(digest);
     HeldFile::acquire_into(
@@ -84,9 +88,10 @@ pub(crate) fn acquire_backend(backend: &mut Backend, directory: &Path) -> Result
     )?;
     let file = backend.file.as_ref().ok_or_else(|| ClaimError::invalid("missing_claim"))?;
     let record = Record::backend(backend.resource, backend.proof.digest);
-    records::check_predecessor(file, &backend.proof.account_sid, &record)?;
+    backend.original_released =
+        records::check_predecessor(file, &backend.proof.account_sid, &record, context)?;
     backend.record = Some(record.clone());
-    records::publish(file, &record)?;
+    records::publish(file, &record, context)?;
     backend.claimed = true;
     Ok(())
 }

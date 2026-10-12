@@ -24,13 +24,16 @@ pub(super) struct Harness {
     pub(super) client: ExecutionClient,
     pub(super) scope: Scope,
     pub(super) fake: Arc<Fake>,
+    pub(super) clock: Arc<ClockPort>,
     wake: Arc<Wake>,
     next: u64,
+    cleanup_deadline: Option<Moment>,
 }
 impl Harness {
     pub(super) fn new() -> Result<Self, Box<dyn Error>> {
         let wake = Arc::new(Wake::default());
-        let executor = ExecutionOwner::new(Arc::new(ClockPort::default()), wake.clone())?;
+        let clock = Arc::new(ClockPort::default());
+        let executor = ExecutionOwner::new(clock.clone(), wake.clone())?;
         let client = executor.client();
         let scope =
             client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
@@ -44,8 +47,10 @@ impl Harness {
             client,
             scope,
             fake,
+            clock,
             wake,
             next: 1,
+            cleanup_deadline: None,
         })
     }
     pub(super) fn spec(&mut self, bytes: u64) -> Result<JobSpec, Box<dyn Error>> {
@@ -59,6 +64,20 @@ impl Harness {
             reservation_bytes: bytes,
             replacement: None,
         })
+    }
+    /// Latch the original finite cleanup deadline before admission and reuse it after failure.
+    pub(super) fn close_spec(&mut self) -> Result<JobSpec, Box<dyn Error>> {
+        let until = match self.cleanup_deadline {
+            Some(until) => until,
+            None => {
+                let until = self.client.now()?.checked_add(Duration::from_secs(15))?;
+                self.cleanup_deadline = Some(until);
+                until
+            }
+        };
+        let mut spec = self.spec(CLAIM_OPERATION_BYTES)?;
+        spec.deadline = Some(until);
+        Ok(spec)
     }
     pub(super) fn initialize(&mut self) -> Result<(), Box<dyn Error>> {
         let spec = self.spec(crate::CLAIM_POOL_BYTES)?;
@@ -87,7 +106,7 @@ impl Harness {
     /// Observe typed closure and the exact surviving reservation, including failed closure.
     pub(super) fn close(&mut self, expected_retained_bytes: u64) -> Result<(), Box<dyn Error>> {
         self.claims.close_admission();
-        let spec = self.spec(CLAIM_OPERATION_BYTES)?;
+        let spec = self.close_spec()?;
         if self.claims.owner.is_some() && self.claims.registry.is_none() {
             self.claims.bind_process_registry(&self.registry)?;
         }

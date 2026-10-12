@@ -33,12 +33,6 @@ use sugarsubstitute_contracts::{
     lifecycle::CoordinatorKey,
 };
 
-use windows::Win32::{
-    Foundation::HANDLE,
-    Security::TOKEN_QUERY,
-    System::Threading::{GetCurrentProcess, OpenProcessToken},
-};
-
 const STORAGE_BYTES: u64 = 1024 * 1024;
 const HANDLE_BOUND: usize = 260;
 
@@ -165,18 +159,12 @@ impl ProtectedStorageRoot {
             .try_reserve_exact(HANDLE_BOUND)
             .map_err(|e| ClaimError::new("storage_handle_reservation", e))?;
         let budget = files::Budget::Protected(state.memory.clone());
-        let mut token = HANDLE::default();
-        // SAFETY: Initialized token output is adopted before status inspection.
-        let opened = unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) }
-            .map_err(|e| ClaimError::new("primary_token", e));
-        if !token.0.is_null() {
-            state.handles.push(Handle::new(token, budget.clone()));
-        }
-        opened?;
-        if token.0.is_null() {
-            return Err(ClaimError::invalid("missing_primary_token"));
-        }
-        state.sid = account::token_sid(token)?;
+        let current = account::resolve_current(
+            &mut state.handles,
+            budget.clone(),
+            account::PrimaryAccountAccess::Query,
+        )?;
+        state.sid = current.sid;
         check(context)?;
         let index = paths::open_retained(path, true, false, budget.clone(), &mut state.handles)?;
         let canonical = paths::final_path(&state.handles[index])?;

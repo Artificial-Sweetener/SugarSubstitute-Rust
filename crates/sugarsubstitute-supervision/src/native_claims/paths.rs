@@ -5,19 +5,11 @@ use super::*;
 #[cfg(test)]
 use crate::protected_storage::paths::{ancestor_paths, wide};
 pub(crate) use crate::protected_storage::paths::{
-    create_directory, file_identity, final_path, open_retained, pin_ancestors, verify_pinned,
+    file_identity, final_path, open_retained, pin_ancestors, verify_pinned,
 };
 use sha2::{Digest, Sha256};
 #[cfg(test)]
 mod tests;
-pub(crate) fn hash(parts: &[&[u8]]) -> [u8; 32] {
-    let mut hash = Sha256::new();
-    for part in parts {
-        hash.update((part.len() as u64).to_le_bytes());
-        hash.update(part);
-    }
-    hash.finalize().into()
-}
 pub(crate) fn resolve(resolution: &mut Resolution, sid: &[u8]) -> Result<(), ClaimError> {
     let budget = files::Budget::Slot(resolution.slot.clone());
     let mut handles = lock(&resolution.handles);

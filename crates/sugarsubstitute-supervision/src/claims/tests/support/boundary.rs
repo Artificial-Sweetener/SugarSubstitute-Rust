@@ -8,6 +8,16 @@ use std::sync::{
 };
 #[derive(Default)]
 pub(in crate::claims::tests) struct ClockPort(AtomicU64);
+impl ClockPort {
+    pub(in crate::claims::tests) fn advance(
+        &self,
+        elapsed: Duration,
+    ) -> Result<(), Box<dyn Error>> {
+        let now = Moment::from_nanos(self.0.load(Ordering::Acquire));
+        self.0.store(now.checked_add(elapsed)?.as_nanos(), Ordering::Release);
+        Ok(())
+    }
+}
 impl Clock for ClockPort {
     fn now(&self) -> Moment {
         Moment::from_nanos(self.0.load(Ordering::Acquire))
@@ -30,6 +40,7 @@ impl CompletionWake for Wake {
 }
 #[derive(Default)]
 pub(in crate::claims::tests) struct Fake {
+    pub(in crate::claims::tests) close_deadlines: Mutex<Vec<Moment>>,
     pub(in crate::claims::tests) resolutions: AtomicUsize,
     pub(in crate::claims::tests) initializations: AtomicUsize,
     pub(in crate::claims::tests) gate: Mutex<Option<(Stage, Arc<Barrier>)>>,
@@ -112,7 +123,12 @@ impl Fake {
     }
 }
 impl NativePort for Fake {
-    fn initialize(&self, root: &mut Root, _: &std::path::Path) -> Result<(), ClaimError> {
+    fn initialize(
+        &self,
+        root: &mut Root,
+        _: &std::path::Path,
+        _: &sugarsubstitute_contracts::execution::JobContext,
+    ) -> Result<(), ClaimError> {
         root.key = Some(owner()?);
         root.sid = vec![1];
         root.claimed = true;
@@ -126,7 +142,12 @@ impl NativePort for Fake {
         resolution.digest = [2; 32];
         self.pause(Stage::Resolve)
     }
-    fn acquire(&self, backend: &mut Backend, _: &std::path::Path) -> Result<(), ClaimError> {
+    fn acquire(
+        &self,
+        backend: &mut Backend,
+        _: &std::path::Path,
+        _: &sugarsubstitute_contracts::execution::JobContext,
+    ) -> Result<(), ClaimError> {
         backend.claimed = true;
         self.pause(Stage::Acquire)
     }
@@ -135,15 +156,26 @@ impl NativePort for Fake {
         _: &mut Backend,
         _: native_claims::RecordState,
         _: u64,
+        _: &sugarsubstitute_contracts::execution::JobContext,
     ) -> Result<(), ClaimError> {
         Ok(())
     }
-    fn release(&self, backend: &mut Backend) -> Result<(), ClaimError> {
+    fn release(
+        &self,
+        backend: &mut Backend,
+        _: &sugarsubstitute_contracts::execution::JobContext,
+    ) -> Result<(), ClaimError> {
         backend.proof.close()?;
         backend.released = true;
         self.pause(Stage::Release)
     }
-    fn close(&self, root: &mut Root) -> Result<(), ClaimError> {
+    fn close(
+        &self,
+        root: &mut Root,
+        context: &sugarsubstitute_contracts::execution::JobContext,
+    ) -> Result<(), ClaimError> {
+        lock(&self.close_deadlines)
+            .push(context.deadline().ok_or_else(|| ClaimError::invalid("fixture_close_deadline"))?);
         self.pause(Stage::Close)?;
         root.pool = None;
         Ok(())

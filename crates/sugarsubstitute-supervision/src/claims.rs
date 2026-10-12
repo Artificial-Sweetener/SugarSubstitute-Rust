@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain actual native claims before typed delivery and bind release to owned families.
 mod completion;
+pub(crate) mod entry;
 mod launch;
 pub(crate) mod pool;
 mod release;
@@ -123,6 +124,8 @@ pub struct WindowsResourceClaims {
     port: Arc<dyn NativePort>,
     open: Arc<AtomicBool>,
     initialized: bool,
+    entry_initialized_held: Arc<AtomicBool>,
+    entry_initialization: Option<crate::coordinator_entry::election::RetainedElectionProof>,
     initialization_started: bool,
     initialization_pending: bool,
     closed: bool,
@@ -148,6 +151,8 @@ impl WindowsResourceClaims {
             port: Arc::new(native_claims::SystemPort),
             open: Arc::new(AtomicBool::new(true)),
             initialized: false,
+            entry_initialized_held: Arc::new(AtomicBool::new(false)),
+            entry_initialization: None,
             initialization_started: false,
             initialization_pending: false,
             closed: false,
@@ -164,6 +169,7 @@ impl WindowsResourceClaims {
     }
     /// Stop new initialization, resolution, claim and launch admission without discarding work.
     pub fn close_admission(&mut self) {
+        self.entry_initialized_held.store(false, Ordering::Release);
         self.open.store(false, Ordering::Release);
     }
     /// Bind the one process owner after actual coordinator acquisition, without native effects.
@@ -258,6 +264,7 @@ impl WindowsResourceClaims {
 }
 impl Drop for WindowsResourceClaims {
     fn drop(&mut self) {
+        self.entry_initialized_held.store(false, Ordering::Release);
         self.open.store(false, Ordering::Release);
         for pending in self.pending.iter().flatten() {
             pending.job.cancel();

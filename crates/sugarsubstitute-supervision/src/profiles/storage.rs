@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Perform profile filesystem effects under the shared protected-storage owner.
+#[cfg(test)]
+mod tests;
 use super::*;
 use crate::{
     ProtectedStorageRoot,
@@ -14,6 +16,7 @@ pub(super) struct NativeState {
     pub(super) root: Option<ProtectedStorageRoot>,
     pub(super) file: Option<HeldFile<160>>,
     pub(super) record: Option<record::Record>,
+    pub(super) original_released: Option<[u8; 160]>,
     pub(super) folder: Option<Vec<u16>>,
     pub(super) held: bool,
     pub(super) retired: bool,
@@ -38,6 +41,7 @@ impl NativeState {
             file: None,
             memory: None,
             record: None,
+            original_released: None,
             folder: None,
             held: false,
             retired: true,
@@ -130,33 +134,42 @@ impl ProfilePort for WindowsProfilePort {
         HeldFile::acquire_into(&mut state.file, &exclusion_path, record_path, sid, budget)?;
         check(context)?;
         let file = state.file.as_ref().ok_or_else(|| ClaimError::invalid("profile_exclusion"))?;
-        let previous = match record_file::read_shape(file)? {
+        let previous = match record_file::read_shape(file, context)? {
             record_file::RecordRead::Missing => None,
             record_file::RecordRead::Empty => {
                 return Err(ClaimError::invalid("empty_profile_record"));
             }
-            record_file::RecordRead::Present(bytes) => Some(record::Record::decode(&bytes)?),
+            record_file::RecordRead::Present(bytes) => {
+                Some((record::Record::decode(&bytes)?, bytes))
+            }
         };
         if !match previous {
-            Some(old) => old.admits_successor(record),
+            Some((old, _)) => old.admits_successor(record),
             None => file.created,
         } {
             return Err(ClaimError::invalid("profile_unresolved_predecessor"));
         }
+        state.original_released = previous.map(|(_, bytes)| bytes);
         state.record = Some(record);
-        record_file::publish(file, &record.encode(), |old| {
-            if match old {
-                record_file::RecordRead::Present(bytes) => {
-                    !record::Record::decode(bytes)?.permits_replacement(record)
+        record_file::publish(
+            file,
+            &record.encode(),
+            record_file::PublicationAuthority::Ordinary,
+            context,
+            |old| {
+                if match old {
+                    record_file::RecordRead::Present(bytes) => {
+                        !record::Record::decode(bytes)?.permits_replacement(record)
+                    }
+                    record_file::RecordRead::Missing => false,
+                    record_file::RecordRead::Empty => true,
+                } {
+                    Err(ClaimError::invalid("profile_changed_record"))
+                } else {
+                    Ok(())
                 }
-                record_file::RecordRead::Missing => false,
-                record_file::RecordRead::Empty => true,
-            } {
-                Err(ClaimError::invalid("profile_changed_record"))
-            } else {
-                Ok(())
-            }
-        })?;
+            },
+        )?;
         state.held = true;
         check(context)
     }
@@ -198,28 +211,27 @@ impl ProfilePort for WindowsProfilePort {
     }
     fn release(&self, state: &mut NativeState, context: &JobContext) -> Result<(), ClaimError> {
         check(context)?;
-        if state.record.is_some() && !state.release_published {
-            let record = record::Record {
-                state: record::State::Released,
-                ..state.record.ok_or_else(|| ClaimError::invalid("profile_release_record"))?
-            };
-            let file = state
-                .file
-                .as_ref()
-                .ok_or_else(|| ClaimError::invalid("profile_release_exclusion"))?;
-            record_file::publish(file, &record.encode(), |old| {
-                if match old {
-                    record_file::RecordRead::Present(bytes) => {
-                        !record::Record::decode(bytes)?.permits_replacement(record)
-                    }
-                    record_file::RecordRead::Missing => !file.created,
-                    record_file::RecordRead::Empty => true,
-                } {
-                    Err(ClaimError::invalid("profile_release_changed_record"))
-                } else {
-                    Ok(())
-                }
-            })?;
+        if let Some(file) = state.file.as_ref().filter(|file| file.is_locked()) {
+            let expected = state.record.map(record::Record::encode);
+            let observed = record_file::retire_publication(file, expected.as_ref(), context)?;
+            if prepare_release(observed, &mut state.record, state.original_released.as_ref())? {
+                let record =
+                    state.record.ok_or_else(|| ClaimError::invalid("profile_release_record"))?;
+                record_file::publish(
+                    file,
+                    &record.encode(),
+                    record_file::PublicationAuthority::Ordinary,
+                    context,
+                    |old| match old {
+                        record_file::RecordRead::Present(bytes)
+                            if record::Record::decode(bytes)?.permits_replacement(record) =>
+                        {
+                            Ok(())
+                        }
+                        _ => Err(ClaimError::invalid("profile_release_changed_record")),
+                    },
+                )?;
+            }
             state.release_published = true;
         }
         check(context)?;
@@ -245,4 +257,33 @@ pub(super) fn check(context: &JobContext) -> Result<(), ClaimError> {
     } else {
         Ok(())
     }
+}
+
+/// Prove actual profile ownership before retaining a new Released generation.
+/// # Errors
+/// Reject corrupt or changed ownership without altering the retained generation.
+fn prepare_release(
+    observed: record_file::PublicationRetirement<160>,
+    expected: &mut Option<record::Record>,
+    original_released: Option<&[u8; 160]>,
+) -> Result<bool, ClaimError> {
+    let bytes = match observed {
+        record_file::PublicationRetirement::Preserved(
+            record_file::RecordRead::Missing | record_file::RecordRead::Empty,
+        ) => return Ok(false),
+        record_file::PublicationRetirement::Preserved(record_file::RecordRead::Present(bytes))
+        | record_file::PublicationRetirement::Activated(bytes) => bytes,
+    };
+    let actual = record::Record::decode(&bytes)?;
+    if original_released == Some(&bytes) && actual.state == record::State::Released {
+        return Ok(false);
+    }
+    let own = expected.ok_or_else(|| ClaimError::invalid("profile_retirement_generation"))?;
+    if actual.account != own.account || actual.folder != own.folder || actual.run != own.run {
+        return Err(ClaimError::invalid("changed_profile_retirement_generation"));
+    }
+    let released = record::Record { state: record::State::Released, ..actual };
+    let needed = bytes != released.encode();
+    *expected = Some(released);
+    Ok(needed)
 }

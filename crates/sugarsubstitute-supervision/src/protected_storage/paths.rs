@@ -7,10 +7,16 @@ use crate::{
     native_claims::files::{self, Handle},
 };
 use std::{
-    os::windows::ffi::OsStrExt,
+    ffi::OsString,
+    os::windows::ffi::{OsStrExt, OsStringExt},
     path::{Path, PathBuf},
 };
-use windows::{Win32::Storage::FileSystem::*, core::PCWSTR};
+use windows::{
+    Win32::Storage::FileSystem::*,
+    core::{PCWSTR, PWSTR},
+};
+#[cfg(test)]
+mod tests;
 pub(crate) fn wide(path: &Path) -> Result<Vec<u16>, ClaimError> {
     use std::path::{Component, Prefix};
     if !path.is_absolute()
@@ -104,14 +110,7 @@ pub(crate) fn validate_object(
     if flags & 0x01000000 != 0x01000000 {
         return Err(ClaimError::invalid("unverified_path_volume"));
     }
-    let final_name = final_path(handle)?;
-    let text = final_name.to_str().ok_or_else(|| ClaimError::invalid("path_unicode"))?;
-    if !text.starts_with("\\\\?\\")
-        || text.starts_with("\\\\?\\UNC\\")
-        || text.as_bytes().get(5) != Some(&b':')
-    {
-        return Err(ClaimError::invalid("non_local_path"));
-    }
+    validate_canonical_local(&final_path(handle)?)?;
     Ok(())
 }
 pub(crate) fn validate_regular(handle: &Handle, length: Option<i64>) -> Result<(), ClaimError> {
@@ -138,11 +137,62 @@ pub(crate) fn final_path(handle: &Handle) -> Result<PathBuf, ClaimError> {
     if length as usize >= units.len() {
         return Err(ClaimError::invalid("canonical_path_bound"));
     }
-    units.truncate(length as usize);
-    String::from_utf16(&units)
-        .map(PathBuf::from)
-        .map_err(|e| ClaimError::new("canonical_path_unicode", e))
+    decode_native_result(&units[..length as usize])
 }
+/// Decode bounded actual normalized Windows path units without scalar conversion.
+fn decode_native_result(units: &[u16]) -> Result<PathBuf, ClaimError> {
+    if units.is_empty() || units.len() >= 32767 || units.contains(&0) {
+        return Err(ClaimError::invalid("canonical_path_bound"));
+    }
+    let path = PathBuf::from(OsString::from_wide(units));
+    validate_canonical_local(&path)?;
+    Ok(path)
+}
+/// Require the existing local verbatim drive authority shape.
+fn validate_canonical_local(path: &Path) -> Result<(), ClaimError> {
+    use std::path::{Component, Prefix};
+    wide(path)?;
+    if !matches!(path.components().next(),Some(Component::Prefix(prefix)) if matches!(prefix.kind(),Prefix::VerbatimDisk(_)))
+    {
+        return Err(ClaimError::invalid("non_local_path"));
+    }
+    let mut units = path.as_os_str().encode_wide();
+    if units.next() != Some(92)
+        || units.next() != Some(92)
+        || units.next() != Some(63)
+        || units.next() != Some(92)
+        || !units.next().is_some_and(|unit| (65..=90).contains(&unit) || (97..=122).contains(&unit))
+        || units.next() != Some(58)
+        || units.next() != Some(92)
+    {
+        return Err(ClaimError::invalid("non_local_path"));
+    }
+    Ok(())
+}
+/// Read the actual Shell-owned NUL path while its documented allocation is live.
+/// Errors preserve the original caller-owned allocation for checked allocator release.
+/// # Safety
+/// The pointer remains valid for each unit before its first NUL, or for all `maximum`
+/// units when unterminated. The caller retains allocator ownership on every outcome.
+pub(crate) unsafe fn read_native_path(text: PWSTR, maximum: usize) -> Result<PathBuf, ClaimError> {
+    if text.is_null() || maximum == 0 || maximum > 32767 {
+        return Err(ClaimError::invalid("native_path_bound"));
+    }
+    let mut units = Vec::new();
+    units.try_reserve_exact(maximum).map_err(|e| ClaimError::new("native_path_reservation", e))?;
+    for index in 0..maximum {
+        // SAFETY: The caller's valid native allocation stays live and ends at NUL.
+        let unit = unsafe { text.0.add(index).read() };
+        if unit == 0 {
+            let path = PathBuf::from(OsString::from_wide(&units));
+            wide(&path)?;
+            return Ok(path);
+        }
+        units.push(unit);
+    }
+    Err(ClaimError::invalid("native_path_bound"))
+}
+
 pub(crate) fn file_identity(handle: &Handle) -> Result<[u8; 24], ClaimError> {
     let info: FILE_ID_INFO = info(handle, FileIdInfo)?;
     let mut bytes = [0; 24];

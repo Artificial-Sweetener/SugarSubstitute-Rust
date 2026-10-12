@@ -22,6 +22,8 @@ mod claim_types;
 #[cfg(windows)]
 mod claims;
 #[cfg(windows)]
+pub mod coordinator_entry;
+#[cfg(windows)]
 pub mod diagnostic_storage;
 #[cfg(windows)]
 mod environment;

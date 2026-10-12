@@ -40,6 +40,15 @@ impl WindowsResourceClaims {
                     _ => None,
                 };
             }
+            if matches!(pending.action, Action::Initialize) {
+                self.entry_initialized_held.store(
+                    kind == TerminalKind::Success
+                        && failure.is_none()
+                        && self.initialized
+                        && self.open.load(Ordering::Acquire),
+                    Ordering::Release,
+                );
+            }
             if let Some(cause) = failure {
                 self.close_admission();
                 self.events

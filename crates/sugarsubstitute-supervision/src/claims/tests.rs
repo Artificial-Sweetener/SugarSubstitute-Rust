@@ -3,6 +3,7 @@
 //! Exercise claim ownership through real admitted jobs and a synchronized native boundary.
 mod cancellation;
 mod closure;
+mod entry;
 mod managed;
 mod support;
 use super::*;

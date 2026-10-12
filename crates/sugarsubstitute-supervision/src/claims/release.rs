@@ -99,7 +99,7 @@ impl WindowsResourceClaims {
                     .memory()
                     .claim(CLAIM_OPERATION_BYTES)
                     .map_err(|e| shared.fail(ClaimError::new("release_scratch", e)))?;
-                port.release(&mut lock(&shared.value)).map_err(|e| shared.fail(e))
+                port.release(&mut lock(&shared.value), &context).map_err(|e| shared.fail(e))
             })
             .map_err(ClaimAdmissionError::Execution)?;
         entry.pending = true;
@@ -148,7 +148,7 @@ impl WindowsResourceClaims {
                     .memory()
                     .claim(CLAIM_OPERATION_BYTES)
                     .map_err(|e| shared.fail(ClaimError::new("close_scratch", e)))?;
-                port.close(&mut lock(&shared.value)).map_err(|e| shared.fail(e))
+                port.close(&mut lock(&shared.value), &context).map_err(|e| shared.fail(e))
             })
             .map_err(ClaimAdmissionError::Execution)?;
         self.pending[pending] =

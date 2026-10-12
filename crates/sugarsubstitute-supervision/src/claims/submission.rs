@@ -15,6 +15,18 @@ impl WindowsResourceClaims {
         if self.initialization_started || !self.open.load(Ordering::Acquire) {
             return Err(ClaimAdmissionError::Closed);
         }
+        if let Some(proof) = &self.entry_initialization {
+            proof.validate_live().map_err(ClaimAdmissionError::Native)?;
+            if proof.execution != scope.owner_id()
+                || spec.deadline.is_none_or(|until| until > proof.budget.until())
+            {
+                return Err(ClaimAdmissionError::Identity);
+            }
+        }
+        let entry_proof = self
+            .entry_initialization
+            .as_ref()
+            .map(crate::coordinator_entry::election::RetainedElectionProof::retained);
         let index = self.admit_index(spec, true)?;
         if !installation.is_absolute() || installation.as_os_str().len() > 32766 * 3 {
             return Err(ClaimAdmissionError::Specification);
@@ -27,11 +39,13 @@ impl WindowsResourceClaims {
             .submit_blocking(scope, spec, move |context| {
                 let pool = pool::Pool::new(context.memory()).map_err(|e| shared.fail(e))?;
                 let mut root = lock(&shared.value);
+                root.execution_owner = Some(context.owner_id());
+                root.entry_election = entry_proof;
                 root.pool = Some(pool);
                 if context.cancellation_requested() || !open.load(Ordering::Acquire) {
                     return Ok(());
                 }
-                port.initialize(&mut root, &installation).map_err(|e| shared.fail(e))
+                port.initialize(&mut root, &installation, &context).map_err(|e| shared.fail(e))
             })
             .map_err(ClaimAdmissionError::Execution)?;
         self.initialization_started = true;
@@ -155,6 +169,7 @@ impl WindowsResourceClaims {
             proof: proof.clone(),
             file: None,
             record: None,
+            original_released: None,
             claimed: false,
             released: false,
         });
@@ -171,7 +186,8 @@ impl WindowsResourceClaims {
                 if context.cancellation_requested() || !open.load(Ordering::Acquire) {
                     return Ok(());
                 }
-                port.acquire(&mut lock(&worker.value), &directory).map_err(|e| worker.fail(e))
+                port.acquire(&mut lock(&worker.value), &directory, &context)
+                    .map_err(|e| worker.fail(e))
             })
             .map_err(ClaimAdmissionError::Execution)?;
         self.resolutions[resolution] = None;

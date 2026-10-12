@@ -74,12 +74,6 @@ fn backend_identity_binds_account_actual_objects_argument_boundaries_order_and_p
 }
 
 #[test]
-fn namespace_hash_has_domain_and_part_boundaries() {
-    assert_ne!(hash(&[b"namespace.v1", b"a", b"bc"]), hash(&[b"namespace.v1", b"ab", b"c"]));
-    assert_ne!(hash(&[b"namespace.v1", b"a"]), hash(&[b"backend.v1", b"a"]));
-}
-
-#[test]
 fn native_path_conversion_rejects_remote_device_nul_and_oversized_input() -> TestResult {
     for value in [
         "relative",
