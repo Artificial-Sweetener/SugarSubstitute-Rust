@@ -16,8 +16,9 @@
 /** Build the opt-in SugarCubes host debugging surface. */
 import { computeInnerBounds } from '../graph/CubeBounds.js';
 /** Create the existing debugging API from authoritative UI owners. */
-export function createSugarCubesDebugApi({ ui, app }) {
+export function createSugarCubesDebugApi({ ui, app, canvas }) {
     return {
+        canvas,
         getDirtyState(instanceId) {
             return ui.dirtyManager.getDebugState(instanceId);
         },

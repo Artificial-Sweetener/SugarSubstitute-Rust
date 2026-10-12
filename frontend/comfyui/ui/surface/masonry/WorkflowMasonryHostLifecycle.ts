@@ -49,6 +49,8 @@ export interface WorkflowMasonryHostLifecycleOptions {
   >;
   app: ComfyApplication | null;
   document: Document;
+  /** Read the authoritative remaining workspace allocation supplied by the canvas layout owner. */
+  getContainer(): HTMLElement | null;
   getCubes(): readonly CubeNode[];
   getCardState(): CubeFaceCardStateService | null;
   getGraphChanges(): CanvasGraphChangeSource | null;
@@ -93,9 +95,7 @@ export class WorkflowMasonryHostLifecycle {
     });
     this.#controller = new WorkflowMasonryController({
       document: options.document,
-      getContainer: () =>
-        options.document.querySelector<HTMLElement>('.graph-canvas-panel') ??
-        options.document.getElementById('graph-canvas-container'),
+      getContainer: options.getContainer,
       isNodes2: () => this.#isNodes2(),
       getSections: () => {
         const graph = options.app?.canvas?.graph ?? options.app?.graph;

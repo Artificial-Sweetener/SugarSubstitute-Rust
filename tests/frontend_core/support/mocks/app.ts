@@ -78,6 +78,7 @@ interface MockApp extends UnknownRecord {
       addSetting(payload: MockSettingDefinition): unknown;
       getSettingValue(id: string, fallback: unknown): unknown;
       setSettingValue(id: string, value: unknown): Promise<void>;
+      setSettingValueAsync(id: string, value: unknown): Promise<void>;
     };
   };
   registerExtension(extension: MockExtension): void;
@@ -94,6 +95,10 @@ function createMockSettings(): NonNullable<MockApp['ui']>['settings'] {
     async setSettingValue(id, value) {
       values.set(id, value);
       definitions.get(id)?.onChange?.(value);
+    },
+    async setSettingValueAsync(id, value) {
+      definitions.get(id)?.onChange?.(value);
+      values.set(id, value);
     },
   };
 }

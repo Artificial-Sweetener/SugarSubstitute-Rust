@@ -444,6 +444,7 @@ function fixture(rootCount = 1) {
       },
     },
     document,
+    getContainer: () => container,
     getCubes: () => [],
     getCardState: () => cardState,
     getGraphChanges: () => changes,

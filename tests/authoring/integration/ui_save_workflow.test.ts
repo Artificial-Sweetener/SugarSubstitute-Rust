@@ -810,8 +810,10 @@ describe('save workflow payload', () => {
     await flushPromises();
 
     expect(errorSpy).toHaveBeenCalled();
-    const message = String(errorSpy.mock.calls[0]?.[0] || '');
-    expect(message).toContain('Workflow payload unavailable');
+    const messages = errorSpy.mock.calls.map((call) => String(call[0]));
+    expect(messages).toEqual(
+      expect.arrayContaining([expect.stringContaining('Workflow payload unavailable')]),
+    );
     errorSpy.mockRestore();
   });
 
