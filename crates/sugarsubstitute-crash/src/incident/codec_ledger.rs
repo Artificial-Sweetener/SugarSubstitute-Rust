@@ -9,6 +9,7 @@ use super::{
     codec_migration::{
         MigrationArchiveRecord, MigrationRecord, SummaryMigrationArchive, SummaryMigrationJournal,
     },
+    codec_retention::{PayloadDiscardJournal, PayloadDiscardRecord},
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -164,6 +165,8 @@ pub enum IncidentStoreState {
     SummaryMigration(Box<SummaryMigrationJournal>),
     /// Recorded original-copy preservation after migration; never mutation authority.
     SummaryMigrationArchive(Box<SummaryMigrationArchive>),
+    /// Exact summary replacement and immutable payload-generation reclamation intent.
+    PayloadDiscard(Box<PayloadDiscardJournal>),
 }
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "record", rename_all = "snake_case", deny_unknown_fields)]
@@ -173,6 +176,7 @@ enum StoreRecord {
     CapturePromotion { journal: Box<CaptureJournalRecord> },
     SummaryMigration(Box<MigrationRecord>),
     SummaryMigrationArchive(Box<MigrationArchiveRecord>),
+    PayloadDiscard { journal: Box<PayloadDiscardRecord> },
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -301,6 +305,9 @@ pub fn encode_store_state(state: &IncidentStoreState) -> Result<Vec<u8>, Inciden
             IncidentStoreState::CapturePromotion(plan) => {
                 StoreRecord::CapturePromotion { journal: Box::new(plan.as_ref().into()) }
             }
+            IncidentStoreState::PayloadDiscard(journal) => {
+                StoreRecord::PayloadDiscard { journal: Box::new(journal.as_ref().into()) }
+            }
         },
         STATE_BOUND,
     )
@@ -319,6 +326,9 @@ pub fn decode_store_state(bytes: &[u8]) -> Result<IncidentStoreState, IncidentSt
         }
         StoreRecord::CapturePromotion { journal } => {
             IncidentStoreState::CapturePromotion(Box::new(journal.into_plan()?))
+        }
+        StoreRecord::PayloadDiscard { journal } => {
+            IncidentStoreState::PayloadDiscard(Box::new(journal.into_journal()?))
         }
         StoreRecord::SummaryEviction { journal } => {
             let expected_original = journal.original_sha256;

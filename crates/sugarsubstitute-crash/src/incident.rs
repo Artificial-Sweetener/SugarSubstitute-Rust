@@ -7,6 +7,7 @@ mod codec_evidence;
 mod codec_identity;
 mod codec_ledger;
 mod codec_migration;
+mod codec_retention;
 mod codec_seed;
 mod codec_summary;
 mod codec_symbols;
@@ -48,6 +49,7 @@ pub use codec_ledger::{
     encode_store_state,
 };
 pub use codec_migration::{SummaryMigrationArchive, SummaryMigrationJournal};
+pub use codec_retention::{PayloadDiscardJournal, PayloadDiscardVictimFacts};
 pub use codec_summary::{
     StoredIncidentSummary, decode_summary, encode_summary, migrate_summary_v1,
 };

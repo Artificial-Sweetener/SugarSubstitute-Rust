@@ -19,6 +19,7 @@ mod redaction;
 mod reporting;
 #[cfg(windows)]
 mod reporting_fixture;
+mod retention;
 mod summary_schema;
 use super::*;
 use std::error::Error;
