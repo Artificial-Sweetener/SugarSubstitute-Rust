@@ -136,10 +136,13 @@ export class NativeOverrideToolbarHost {
             }
             ancestor = ancestor.parentElement;
         }
+        let runColumn = actionbar;
+        while (runColumn !== line && runColumn.parentElement && runColumn.parentElement !== line)
+            runColumn = runColumn.parentElement;
         const grip = [...actionbar.querySelectorAll('.actionbar .drag-handle')].find((element) => !element.closest('.sc-overrides-toolbar')) ?? null;
-        return { panel, runRow, actionbar, grip, line };
+        return { panel, runRow, actionbar, grip, line, runColumn };
     }
-    /** Keep native controls at their existing width while only override fields surrender space. */
+    /** Reserve workflow controls and native Run width while excluding feedback in its shared column. */
     #budget() {
         const surfaces = this.#surfaces;
         if (!surfaces)
@@ -152,7 +155,7 @@ export class NativeOverrideToolbarHost {
             ? Number.parseFloat(this.#target.style.width) || 0
             : 0;
         const nativeWidth = bar.width - slot - (slot ? 8 : 0) - targetWidth - (targetWidth ? 8 : 0);
-        const buttons = [...surfaces.line.querySelectorAll('button')].filter((button) => !surfaces.actionbar.contains(button));
+        const buttons = [...surfaces.line.querySelectorAll('button')].filter((button) => !surfaces.runColumn.contains(button));
         const bounds = buttons
             .map((button) => button.getBoundingClientRect())
             .filter((bound) => bound.width > 0);

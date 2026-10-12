@@ -27,6 +27,7 @@ interface ToolbarSurfaces {
   actionbar: HTMLElement;
   grip: HTMLElement | null;
   line: HTMLElement;
+  runColumn: HTMLElement;
 }
 
 /** Reserve an owned dock slot and measure the width left after native Run and workflow controls. */
@@ -166,14 +167,17 @@ export class NativeOverrideToolbarHost implements OverrideToolbarHost {
       }
       ancestor = ancestor.parentElement;
     }
+    let runColumn = actionbar;
+    while (runColumn !== line && runColumn.parentElement && runColumn.parentElement !== line)
+      runColumn = runColumn.parentElement;
     const grip =
       [...actionbar.querySelectorAll<HTMLElement>('.actionbar .drag-handle')].find(
         (element) => !element.closest('.sc-overrides-toolbar'),
       ) ?? null;
-    return { panel, runRow, actionbar, grip, line };
+    return { panel, runRow, actionbar, grip, line, runColumn };
   }
 
-  /** Keep native controls at their existing width while only override fields surrender space. */
+  /** Reserve workflow controls and native Run width while excluding feedback in its shared column. */
   #budget(): number {
     const surfaces = this.#surfaces;
     if (!surfaces) return 0;
@@ -188,7 +192,7 @@ export class NativeOverrideToolbarHost implements OverrideToolbarHost {
         : 0;
     const nativeWidth = bar.width - slot - (slot ? 8 : 0) - targetWidth - (targetWidth ? 8 : 0);
     const buttons = [...surfaces.line.querySelectorAll<HTMLElement>('button')].filter(
-      (button) => !surfaces.actionbar.contains(button),
+      (button) => !surfaces.runColumn.contains(button),
     );
     const bounds = buttons
       .map((button) => button.getBoundingClientRect())
