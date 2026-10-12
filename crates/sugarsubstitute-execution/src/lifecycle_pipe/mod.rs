@@ -2,6 +2,12 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Own closed lifecycle transport sessions and fixed command slots after real admission.
 mod admission;
+mod binding;
+mod commands;
+mod owner;
+pub(crate) use binding::{Observation, PeerBinding, VerifiedPeer};
+pub(crate) use commands::{Control, retain_failure};
+pub(crate) use owner::Owner;
 mod buffers;
 mod control;
 pub(crate) mod enrollment;
@@ -22,7 +28,7 @@ pub use buffers::{LifecyclePipeWriteBuffer, ReceivedLifecycleFrame};
 pub use control::{
     LifecyclePipeBootstrap, LifecyclePipeControl, LifecyclePipeSession, LifecyclePipeWriteRejection,
 };
-pub(crate) use issue::{WriteDispatch, WriteIssue};
+pub(crate) use issue::{Activity, Dispatch, Issue};
 use std::{
     collections::VecDeque,
     sync::{Arc, Mutex, Weak},
@@ -50,23 +56,24 @@ pub(crate) trait PipeLease: Send {
         context: &JobContext,
         handshake: Moment,
     ) -> Result<usize, LifecyclePipeFailure>;
-    fn run(&self) -> Option<RunKey>;
+    fn binding(&self) -> Option<PeerBinding>;
     fn deadline(&self) -> Option<LifecyclePipeDeadline>;
     fn capability(&self) -> Option<[u8; 32]>;
-    fn connect(&mut self) -> Result<Progress, LifecyclePipeFailure>;
-    fn read(&mut self, bytes: &mut [u8]) -> Result<Progress, LifecyclePipeFailure>;
+    fn connect(&mut self, issue: Issue<'_>) -> Result<Dispatch<Progress>, LifecyclePipeFailure>;
+    fn read(
+        &mut self,
+        bytes: &mut [u8],
+        issue: Issue<'_>,
+    ) -> Result<Dispatch<Progress>, LifecyclePipeFailure>;
     fn write(
         &mut self,
         bytes: &[u8],
-        issue: WriteIssue<'_>,
-    ) -> Result<WriteDispatch<Progress>, LifecyclePipeFailure>;
+        issue: Issue<'_>,
+    ) -> Result<Dispatch<Progress>, LifecyclePipeFailure>;
     fn poll(&mut self, role: Role) -> Result<Progress, LifecyclePipeFailure>;
     fn quiesce(&mut self, role: Role) -> Result<(), LifecyclePipeFailure>;
     fn verify_message(&mut self) -> Result<(), LifecyclePipeFailure>;
-    fn authenticate(
-        &mut self,
-        candidate: &[u8; 32],
-    ) -> Result<VerifiedLifecyclePeer, LifecyclePipeFailure>;
+    fn authenticate(&mut self, candidate: &[u8; 32]) -> Result<VerifiedPeer, LifecyclePipeFailure>;
     fn take_completed_write(&mut self) -> Option<u32>;
     fn retire(&mut self, launch_pinned: bool) -> Result<bool, LifecyclePipeFailure>;
 }
@@ -81,6 +88,7 @@ pub(crate) enum ReadDeadline {
     Passive,
 }
 /// Bind one monotonic read identity to the policy admitted by its session control.
+#[derive(Clone, Copy)]
 pub(crate) struct ReadCommand {
     pub(crate) operation: LifecyclePipeOperationId,
     pub(crate) deadline: ReadDeadline,
@@ -105,7 +113,7 @@ pub(crate) struct State {
     pub(crate) connected: bool,
     pub(crate) authenticated: bool,
     pub(crate) auth_busy: bool,
-    pub(crate) run: Option<RunKey>,
+    pub(crate) binding: Option<PeerBinding>,
     pub(crate) peer: Option<PeerInput>,
     pub(crate) enrolled: bool,
     pub(crate) enrollment_taken: bool,
@@ -126,26 +134,26 @@ pub(crate) struct State {
     pub(crate) loans: u8,
     pub(crate) read_buffer: Option<buffers::Buffer>,
     pub(crate) write_buffer: Option<buffers::Buffer>,
-    pub(crate) observations: VecDeque<LifecyclePipeObservation>,
+    pub(crate) observations: VecDeque<Observation>,
     pub(crate) received: u64,
     pub(crate) written: u64,
 }
 impl State {
-    fn new(run: Option<RunKey>) -> Self {
+    fn new(binding: Option<PeerBinding>) -> Self {
         Self {
             stopped: false,
             prepared: false,
             connected: false,
             authenticated: false,
             auth_busy: false,
-            run,
+            binding,
             peer: None,
             enrolled: false,
             enrollment_taken: false,
             inherited: 0,
             pin: false,
             transferred: false,
-            input_pin: run.is_none(),
+            input_pin: binding.is_none(),
             deadline: None,
             capability: None,
             latest: 0,
@@ -189,7 +197,7 @@ impl Shared {
 }
 pub(crate) struct PipeWork {
     pub(crate) shared: Arc<Shared>,
-    pub(crate) job: Arc<Job<LifecyclePipeReport, LifecyclePipeFailure>>,
+    pub(crate) owner: Owner,
     pub(crate) lease: Option<Box<dyn PipeLease>>,
     pub(crate) handshake: Moment,
 }
@@ -201,39 +209,56 @@ pub(crate) fn reserve(
     handshake: Moment,
     lease: Box<dyn PipeLease>,
 ) -> Result<LifecyclePipeSession, AdmissionError> {
+    let (inner, completion) =
+        admit(core, scope, spec, run.map(PeerBinding::Desktop), handshake, lease, Owner::Desktop)?;
+    Ok(LifecyclePipeSession { control: LifecyclePipeControl { inner }, completion })
+}
+pub(crate) fn admit<T: Send + 'static>(
+    core: &Arc<Core>,
+    scope: &Scope,
+    spec: JobSpec,
+    binding: Option<PeerBinding>,
+    handshake: Moment,
+    lease: Box<dyn PipeLease>,
+    owner: fn(Arc<Job<T, LifecyclePipeFailure>>) -> Owner,
+) -> Result<(Control, OwnedJob<T, LifecyclePipeFailure>), AdmissionError> {
     if spec.reservation_bytes < MIN_LIFECYCLE_PIPE_BYTES {
         return Err(AdmissionError::NativeReservationTooSmall {
             requested_bytes: spec.reservation_bytes,
             minimum_bytes: MIN_LIFECYCLE_PIPE_BYTES,
         });
     }
-    if handshake <= core.clock.now() {
-        return Err(AdmissionError::DeadlineExpired { deadline: handshake, now: core.clock.now() });
+    let now = core.clock.now();
+    if handshake <= now {
+        return Err(AdmissionError::DeadlineExpired { deadline: handshake, now });
     }
     core.admit(scope, spec, RequestKind::Native, |context, cancel, admitted| {
         let job = Job::new(scope.id(), spec, admitted, cancel, Arc::downgrade(core));
         let shared = Arc::new(Shared {
             original_deadline: handshake,
-            state: Mutex::new(State::new(run)),
+            state: Mutex::new(State::new(binding)),
             memory: Mutex::new(None),
             core: Arc::downgrade(core),
             id: spec.id,
         });
+        let retained = owner(job.clone());
         let queued = QueuedJob {
             context,
             job: job.clone(),
             work: Work::Native(crate::native::NativeWork::LifecyclePipe(PipeWork {
                 shared: shared.clone(),
-                job: job.clone(),
+                owner: retained.clone(),
                 lease: Some(lease),
                 handshake,
             })),
         };
-        let session = LifecyclePipeSession {
-            control: LifecyclePipeControl { shared, job: job.clone() },
-            completion: OwnedJob::new(scope.id(), spec, Box::new(JobHandle(job))),
-        };
-        (queued, session)
+        (
+            queued,
+            (
+                Control { shared, owner: retained },
+                OwnedJob::new(scope.id(), spec, Box::new(JobHandle(job))),
+            ),
+        )
     })
 }
 pub(crate) fn failure(stage: &'static str) -> LifecyclePipeFailure {

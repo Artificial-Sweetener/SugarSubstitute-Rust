@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Publish one versioned immutable unnamed section without secret argv/environment material.
 use super::*;
+use sugarsubstitute_contracts::incident::{DiagnosticKey, DiagnosticRole, DiagnosticSessionId};
 use sugarsubstitute_contracts::lifecycle::{
     CoordinatorEpoch, CoordinatorKey, InstanceId, NamespaceId, RunGeneration,
 };
@@ -114,7 +115,7 @@ impl Section {
     }
 }
 pub(crate) struct Data {
-    pub(crate) run: RunKey,
+    pub(crate) binding: PeerBinding,
     pub(crate) pid: u32,
     pub(crate) birth: u64,
     pub(crate) session: u32,
@@ -129,30 +130,67 @@ fn hex(bytes: &[u8]) -> String {
         .flat_map(|b| [DIGITS[(b >> 4) as usize] as char, DIGITS[(b & 15) as usize] as char])
         .collect()
 }
-pub(crate) fn name(run: RunKey) -> Vec<u16> {
-    format!(
-        "\\\\.\\pipe\\SugarSubstitute.lifecycle.v1.{}.{}.{}.{}",
-        hex(run.owner.namespace.bytes()),
-        hex(run.owner.epoch.bytes()),
-        run.instance.get(),
-        run.generation.get()
-    )
-    .encode_utf16()
-    .chain(Some(0))
-    .collect()
+#[derive(Clone, Copy)]
+pub(crate) enum Kind {
+    Desktop,
+    Diagnostic(DiagnosticRole),
+}
+fn role_code(role: DiagnosticRole) -> u32 {
+    match role {
+        DiagnosticRole::Storage => 1,
+        DiagnosticRole::Symbolize => 2,
+        DiagnosticRole::Reporter => 3,
+    }
+}
+pub(crate) fn name(binding: PeerBinding) -> Vec<u16> {
+    let value = match binding {
+        PeerBinding::Desktop(run) => format!(
+            "\\\\.\\pipe\\SugarSubstitute.lifecycle.v1.{}.{}.{}.{}",
+            hex(run.owner.namespace.bytes()),
+            hex(run.owner.epoch.bytes()),
+            run.instance.get(),
+            run.generation.get()
+        ),
+        PeerBinding::Diagnostic(key) => format!(
+            "\\\\.\\pipe\\SugarSubstitute.diagnostic.v2.{}.{}.{}.{}",
+            hex(key.owner().namespace.bytes()),
+            hex(key.owner().epoch.bytes()),
+            role_code(key.role()),
+            key.session().get()
+        ),
+    };
+    value.encode_utf16().chain(Some(0)).collect()
 }
 pub(crate) fn encode(data: &Data) -> Result<[u8; BOOTSTRAP_BYTES], LifecyclePipeFailure> {
+    if matches!(data.binding, PeerBinding::Diagnostic(_)) && data.capability == [0; 32] {
+        return Err(failure("pipe_bootstrap_capability"));
+    }
     if data.name.len() > 256 || data.name.last() != Some(&0) {
         return Err(failure("pipe_bootstrap_name_bound"));
     }
     let mut out = [0; BOOTSTRAP_BYTES];
     out[..4].copy_from_slice(b"SSLB");
-    out[4..6].copy_from_slice(&1u16.to_le_bytes());
+    out[4..6].copy_from_slice(
+        &(match data.binding {
+            PeerBinding::Desktop(_) => 1u16,
+            PeerBinding::Diagnostic(_) => 2u16,
+        })
+        .to_le_bytes(),
+    );
     out[6..8].copy_from_slice(&(BOOTSTRAP_BYTES as u16).to_le_bytes());
-    out[8..40].copy_from_slice(data.run.owner.namespace.bytes());
-    out[40..56].copy_from_slice(data.run.owner.epoch.bytes());
-    out[56..64].copy_from_slice(&data.run.instance.get().to_le_bytes());
-    out[64..72].copy_from_slice(&data.run.generation.get().to_le_bytes());
+    out[8..40].copy_from_slice(data.binding.owner().namespace.bytes());
+    out[40..56].copy_from_slice(data.binding.owner().epoch.bytes());
+    match data.binding {
+        PeerBinding::Desktop(run) => {
+            out[56..64].copy_from_slice(&run.instance.get().to_le_bytes());
+            out[64..72].copy_from_slice(&run.generation.get().to_le_bytes());
+        }
+        PeerBinding::Diagnostic(key) => {
+            out[56..60].copy_from_slice(&2u32.to_le_bytes());
+            out[60..64].copy_from_slice(&role_code(key.role()).to_le_bytes());
+            out[64..72].copy_from_slice(&key.session().get().to_le_bytes());
+        }
+    }
     out[72..76].copy_from_slice(&data.pid.to_le_bytes());
     out[76..80].copy_from_slice(&data.session.to_le_bytes());
     out[80..88].copy_from_slice(&data.birth.to_le_bytes());
@@ -174,24 +212,43 @@ fn number<const N: usize>(bytes: &[u8], start: usize) -> Result<[u8; N], Lifecyc
 pub(crate) fn decode(
     bytes: &[u8; BOOTSTRAP_BYTES],
     expected: LifecyclePipeDeadline,
+    kind: Kind,
 ) -> Result<Data, LifecyclePipeFailure> {
     if &bytes[..4] != b"SSLB"
-        || number::<2>(bytes, 4)? != 1u16.to_le_bytes()
+        || number::<2>(bytes, 4)?
+            != (match kind {
+                Kind::Desktop => 1u16,
+                Kind::Diagnostic(_) => 2u16,
+            })
+            .to_le_bytes()
         || number::<2>(bytes, 6)? != (BOOTSTRAP_BYTES as u16).to_le_bytes()
         || bytes[138..144].iter().any(|b| *b != 0)
     {
         return Err(failure("pipe_bootstrap_version"));
     }
-    let run = RunKey {
-        owner: CoordinatorKey {
-            namespace: NamespaceId::new(number(bytes, 8)?),
-            epoch: CoordinatorEpoch::new(number(bytes, 40)?)
-                .map_err(|e| error("pipe_bootstrap_epoch", e))?,
-        },
-        instance: InstanceId::new(u64::from_le_bytes(number(bytes, 56)?))
-            .map_err(|e| error("pipe_bootstrap_instance", e))?,
-        generation: RunGeneration::new(u64::from_le_bytes(number(bytes, 64)?))
-            .map_err(|e| error("pipe_bootstrap_generation", e))?,
+    let owner = CoordinatorKey {
+        namespace: NamespaceId::new(number(bytes, 8)?),
+        epoch: CoordinatorEpoch::new(number(bytes, 40)?)
+            .map_err(|e| error("pipe_bootstrap_epoch", e))?,
+    };
+    let binding = match kind {
+        Kind::Desktop => PeerBinding::Desktop(RunKey {
+            owner,
+            instance: InstanceId::new(u64::from_le_bytes(number(bytes, 56)?))
+                .map_err(|e| error("pipe_bootstrap_instance", e))?,
+            generation: RunGeneration::new(u64::from_le_bytes(number(bytes, 64)?))
+                .map_err(|e| error("pipe_bootstrap_generation", e))?,
+        }),
+        Kind::Diagnostic(role) => {
+            if number::<4>(bytes, 56)? != 2u32.to_le_bytes()
+                || number::<4>(bytes, 60)? != role_code(role).to_le_bytes()
+            {
+                return Err(failure("pipe_bootstrap_diagnostic_role"));
+            }
+            let session = DiagnosticSessionId::new(u64::from_le_bytes(number(bytes, 64)?))
+                .map_err(|e| error("pipe_bootstrap_diagnostic_session", e))?;
+            PeerBinding::Diagnostic(DiagnosticKey::new(owner, role, session))
+        }
     };
     let deadline = LifecyclePipeDeadline::new(
         i64::from_le_bytes(number(bytes, 88)?),
@@ -210,7 +267,7 @@ pub(crate) fn decode(
         .chunks_exact(2)
         .map(|u| u16::from_le_bytes([u[0], u[1]]))
         .collect();
-    if name != self::name(run) {
+    if name != self::name(binding) {
         return Err(failure("pipe_bootstrap_endpoint"));
     }
     let pid = u32::from_le_bytes(number(bytes, 72)?);
@@ -218,16 +275,23 @@ pub(crate) fn decode(
     if pid == 0 || birth == 0 {
         return Err(failure("pipe_bootstrap_process"));
     }
+    let capability = number(bytes, 104)?;
+    if matches!(kind, Kind::Diagnostic(_)) && capability == [0; 32] {
+        return Err(failure("pipe_bootstrap_capability"));
+    }
     Ok(Data {
-        run,
+        binding,
         pid,
         birth,
         session: u32::from_le_bytes(number(bytes, 76)?),
         deadline,
-        capability: number(bytes, 104)?,
+        capability,
         name,
     })
 }
+#[cfg(test)]
+#[path = "diagnostic_bootstrap_tests.rs"]
+mod diagnostic_tests;
 #[cfg(test)]
 #[path = "bootstrap_tests.rs"]
 mod tests;

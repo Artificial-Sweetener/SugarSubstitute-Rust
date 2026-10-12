@@ -19,7 +19,7 @@ impl Active {
             pipe.write_busy = false;
             pipe.write_slots = 0;
             pipe.loans += 1;
-            pipe.observations.push_back(LifecyclePipeObservation::WriteRevoked {
+            pipe.observations.push_back(Observation::WriteRevoked {
                 operation: write.command.operation,
                 buffer: LifecyclePipeWriteBuffer {
                     buffer: Some(write.buffer),

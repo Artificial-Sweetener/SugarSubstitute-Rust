@@ -3,10 +3,16 @@
 //! Model only external pipe effects while the production owner advances every lifetime.
 use super::*;
 pub(super) struct Boundary {
+    pub(super) binding: Mutex<Option<PeerBinding>>,
+    pub(super) authenticated_binding: Mutex<Option<PeerBinding>>,
+    pub(super) preparing_connect: Gate,
+    pub(super) hold_connect: AtomicBool,
+    pub(super) connect_release: Gate,
     pub(super) signals: Mutex<Option<[Arc<Signal>; 3]>>,
     pub(super) prepared: Gate,
     pub(super) connected: Gate,
     pub(super) reading: Gate,
+    pub(super) preparing_read: Gate,
     pub(super) retiring: Gate,
     pub(super) allow_retire: AtomicBool,
     pub(super) pending_read: AtomicBool,
@@ -48,10 +54,16 @@ pub(super) struct Boundary {
 impl Boundary {
     pub(super) fn new() -> Arc<Self> {
         Arc::new(Self {
+            binding: Mutex::new(None),
+            authenticated_binding: Mutex::new(None),
+            preparing_connect: Gate::default(),
+            hold_connect: AtomicBool::new(false),
+            connect_release: Gate::default(),
             signals: Mutex::new(None),
             prepared: Gate::default(),
             connected: Gate::default(),
             reading: Gate::default(),
+            preparing_read: Gate::default(),
             retiring: Gate::default(),
             allow_retire: AtomicBool::new(true),
             pending_read: AtomicBool::new(false),
@@ -120,8 +132,8 @@ impl PipeLease for Lease {
         }
         Ok(19)
     }
-    fn run(&self) -> Option<RunKey> {
-        run().ok()
+    fn binding(&self) -> Option<PeerBinding> {
+        lock(&self.0.binding).or_else(|| run().ok().map(PeerBinding::Desktop))
     }
     fn deadline(&self) -> Option<LifecyclePipeDeadline> {
         LifecyclePipeDeadline::new(1000, 1000).ok()
@@ -129,33 +141,46 @@ impl PipeLease for Lease {
     fn capability(&self) -> Option<[u8; 32]> {
         Some([7; 32])
     }
-    fn connect(&mut self) -> Result<Progress, LifecyclePipeFailure> {
-        self.0.connected.open();
-        Ok(Progress::Complete(0))
+    fn connect(&mut self, issue: Issue<'_>) -> Result<Dispatch<Progress>, LifecyclePipeFailure> {
+        self.0.preparing_connect.open();
+        if self.0.hold_connect.load(Ordering::Acquire) {
+            self.0.connect_release.wait().map_err(|_| failure("held_connect"))?;
+        }
+        issue.execute(|| {
+            self.0.connected.open();
+            Ok(Progress::Complete(0))
+        })
     }
-    fn read(&mut self, bytes: &mut [u8]) -> Result<Progress, LifecyclePipeFailure> {
-        if self.0.fail_read.load(Ordering::Acquire) {
-            return Err(failure("concurrent_read_failure"));
-        }
-        bytes[..5].copy_from_slice(b"Hello");
-        self.0.reading.open();
-        if self.0.panic_read.swap(false, Ordering::AcqRel) {
-            std::panic::resume_unwind(Box::new("Pending read issue panic"));
-        }
+    fn read(
+        &mut self,
+        bytes: &mut [u8],
+        issue: Issue<'_>,
+    ) -> Result<Dispatch<Progress>, LifecyclePipeFailure> {
+        self.0.preparing_read.open();
         if self.0.hold_read.load(Ordering::Acquire) {
             self.0.read_release.wait().map_err(|_| failure("held_read"))?;
         }
-        Ok(if self.0.pending_read.load(Ordering::Acquire) {
-            Progress::Pending
-        } else {
-            Progress::Complete(5)
+        issue.execute(|| {
+            if self.0.fail_read.load(Ordering::Acquire) {
+                return Err(failure("concurrent_read_failure"));
+            }
+            bytes[..5].copy_from_slice(b"Hello");
+            self.0.reading.open();
+            if self.0.panic_read.swap(false, Ordering::AcqRel) {
+                std::panic::resume_unwind(Box::new("Pending read issue panic"));
+            }
+            Ok(if self.0.pending_read.load(Ordering::Acquire) {
+                Progress::Pending
+            } else {
+                Progress::Complete(5)
+            })
         })
     }
     fn write(
         &mut self,
         bytes: &[u8],
-        issue: WriteIssue<'_>,
-    ) -> Result<WriteDispatch<Progress>, LifecyclePipeFailure> {
+        issue: Issue<'_>,
+    ) -> Result<Dispatch<Progress>, LifecyclePipeFailure> {
         self.0.preparing_write.open();
         if self.0.hold_write.load(Ordering::Acquire) {
             self.0.write_release.wait().map_err(|_| failure("held_write"))?;
@@ -178,7 +203,7 @@ impl PipeLease for Lease {
             })
         })?;
         self.0.writing.open();
-        if matches!(result, WriteDispatch::Issued(_))
+        if matches!(result, Dispatch::Issued(_))
             && self.0.fail_write_completion.load(Ordering::Acquire)
         {
             return Err(failure("write_completion_rejected"));
@@ -216,10 +241,7 @@ impl PipeLease for Lease {
         }
         Ok(())
     }
-    fn authenticate(
-        &mut self,
-        candidate: &[u8; 32],
-    ) -> Result<VerifiedLifecyclePeer, LifecyclePipeFailure> {
+    fn authenticate(&mut self, candidate: &[u8; 32]) -> Result<VerifiedPeer, LifecyclePipeFailure> {
         if self.0.fatal_auth.load(Ordering::Acquire) {
             self.0.restoration_failed.store(true, Ordering::Release);
             let mut error = failure("failed_identity_restore");
@@ -229,8 +251,10 @@ impl PipeLease for Lease {
         if candidate != &[7; 32] {
             return Err(failure("fake_credential_rejection"));
         }
-        Ok(VerifiedLifecyclePeer {
-            run: run().map_err(|_| failure("fake_run"))?,
+        Ok(VerifiedPeer {
+            binding: lock(&self.0.authenticated_binding)
+                .or_else(|| self.binding())
+                .ok_or_else(|| failure("fake_binding"))?,
             process: None,
             pid: 71,
             birth: 99,

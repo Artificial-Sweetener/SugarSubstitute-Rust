@@ -40,9 +40,58 @@ pub(crate) fn identity(
     }
     Ok(())
 }
+pub(crate) fn live(
+    process: windows::Win32::Foundation::HANDLE,
+) -> Result<(), LifecyclePipeFailure> {
+    // SAFETY: the exact query/synchronize process pin remains owned; timeout zero cannot block.
+    let status = unsafe { windows::Win32::System::Threading::WaitForSingleObject(process, 0) };
+    let result = if status == WAIT_FAILED { Err(last_error()) } else { Ok(status) };
+    liveness(result)
+}
+fn liveness(status: Result<WAIT_EVENT, windows::core::Error>) -> Result<(), LifecyclePipeFailure> {
+    match status.map_err(|cause| error("pipe_peer_liveness", cause))? {
+        WAIT_TIMEOUT => Ok(()),
+        WAIT_OBJECT_0 => Err(failure("pipe_peer_exited")),
+        status => Err(LifecyclePipeFailure::native(NativeObservationError::new(
+            "pipe_peer_liveness",
+            UnexpectedProcessWaitStatus(status.0),
+        ))),
+    }
+}
+/// Preserve an impossible successful wait result rather than inferring process exit.
+#[derive(Debug)]
+struct UnexpectedProcessWaitStatus(u32);
+impl std::fmt::Display for UnexpectedProcessWaitStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Unexpected process wait status {}", self.0)
+    }
+}
+impl std::error::Error for UnexpectedProcessWaitStatus {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn zero_duration_process_signal_is_authoritative_and_query_failure_preserves_cause() {
+        assert!(liveness(Ok(WAIT_TIMEOUT)).is_ok());
+        let exited = liveness(Ok(WAIT_OBJECT_0)).err();
+        assert!(exited.is_some_and(|error| error.native_cause().stage() == "pipe_peer_exited"));
+        for status in [WAIT_ABANDONED, WAIT_EVENT(259)] {
+            let error = liveness(Ok(status)).err();
+            assert!(error.is_some_and(|error| {
+                let source = std::error::Error::source(error.native_cause())
+                    .and_then(|source| source.downcast_ref::<UnexpectedProcessWaitStatus>());
+                error.native_cause().stage() == "pipe_peer_liveness"
+                    && error.win32_code().is_none()
+                    && source.is_some_and(|source| source.0 == status.0)
+            }));
+        }
+        let cause =
+            windows::core::Error::from_hresult(windows::core::HRESULT(0x80070005u32 as i32));
+        let error = liveness(Err(cause)).err();
+        assert!(error.is_some_and(|error| error.native_cause().stage() == "pipe_peer_liveness"
+            && error.win32_code() == Some(5)));
+    }
+
     #[test]
     fn peer_address_and_birth_reject_pid_reuse_foreign_session_and_zero_facts() {
         assert!(address(71, 1, (71, 99), 1).is_ok());

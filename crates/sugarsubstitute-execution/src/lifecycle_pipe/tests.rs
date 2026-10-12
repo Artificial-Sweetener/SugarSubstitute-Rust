@@ -14,6 +14,8 @@ mod enrollment;
 #[path = "test_support.rs"]
 mod kernel;
 use kernel::{Boundary, Lease};
+#[path = "diagnostic_tests.rs"]
+mod diagnostic;
 #[path = "dispatch_tests.rs"]
 mod dispatch;
 #[path = "dispatch_clock_tests.rs"]

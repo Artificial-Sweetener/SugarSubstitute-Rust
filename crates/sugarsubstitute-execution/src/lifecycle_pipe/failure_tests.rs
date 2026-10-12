@@ -33,7 +33,7 @@ fn fresh_deadline_after_native_read_prevents_later_write_effect_and_success_publ
     let mut session = session(&rig, &scope, &boundary, true)?;
     connect(&rig, &session)?;
     session.control.read(LifecyclePipeOperationId::new(1)?, Moment::from_nanos(400))?;
-    boundary.reading.wait()?;
+    boundary.preparing_read.wait()?;
     let mut output = session.control.take_write_buffer()?.ok_or("Missing output")?;
     output.as_mut_bytes()[0] = 1;
     session
@@ -179,14 +179,15 @@ fn admission_rejection_has_no_native_effect_or_identity_consumption() -> TestRes
 }
 #[test]
 fn bounded_failure_inventory_preserves_original_panic_and_fatal_identity_flags() -> TestResult {
-    let mut outcome = Some(JobOutcome::Failure(failure("first_native")));
+    let mut outcome: Option<JobOutcome<(), LifecyclePipeFailure>> =
+        Some(JobOutcome::Failure(failure("first_native")));
     for _ in 0..10 {
-        control::retain_failure(&mut outcome, failure("secondary"));
+        retain_failure(&mut outcome, failure("secondary"));
     }
     let mut fatal = failure("late_fatal");
     fatal.identity_unrestored = true;
     fatal.cause.retain_panic(&PanicCause::new("Secret panic".to_owned()));
-    control::retain_failure(&mut outcome, fatal);
+    retain_failure(&mut outcome, fatal);
     let Some(JobOutcome::Failure(error)) = outcome else {
         return Err("Missing aggregated failure".into());
     };
@@ -255,9 +256,9 @@ fn terminal_retains_passive_actual_write_and_pending_read_observations() -> Test
     loop {
         let observed = rig.wake.count();
         let ready = || {
-            let state = lock(&session.control.shared.state);
-            state.observations.iter().any(|f| matches!(f, LifecyclePipeObservation::Written { operation, bytes: 1 } if operation.get() == 1))
-                && state.observations.iter().any(|f| matches!(f, LifecyclePipeObservation::ReadPending { operation } if operation.get() == 2))
+            let state = lock(&session.control.inner.shared.state);
+            state.observations.iter().any(|f| matches!(f, Observation::Written { operation, bytes: 1 } if operation.get() == 1))
+                && state.observations.iter().any(|f| matches!(f, Observation::ReadPending { operation } if operation.get() == 2))
         };
         if ready() {
             break;

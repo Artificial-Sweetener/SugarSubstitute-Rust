@@ -13,23 +13,26 @@ fn enrollment_rejects_foreign_run_and_owner_without_transferring_input() -> Test
     let scope = scope(&rig)?;
     let boundary = Boundary::new();
     let mut session = session(&rig, &scope, &boundary, true)?;
-    let mut enrollment = Enrollment::take(&session.control)?;
+    let mut enrollment = Enrollment::take(&session.control.inner)?;
     assert_eq!(
-        Enrollment::take(&session.control).err(),
+        Enrollment::take(&session.control.inner).err(),
         Some(LifecyclePipeError::AlreadyTransferred)
     );
     let run = run()?;
     let mut foreign = run;
     foreign.generation = RunGeneration::new(2)?;
-    let result = enrollment.bind(foreign, key(run)?, 17, |_| PeerInput::Simulated);
+    let result =
+        enrollment.bind(PeerBinding::Desktop(foreign), key(run)?, 17, |_| PeerInput::Simulated);
     assert_eq!(result, Err((LifecyclePipeError::Closed, 17)));
     let mut process = key(run)?;
     process.owner.epoch = CoordinatorEpoch::new([3; 16])?;
     assert_eq!(
-        enrollment.bind(run, process, 19, |_| PeerInput::Simulated),
+        enrollment.bind(PeerBinding::Desktop(run), process, 19, |_| PeerInput::Simulated),
         Err((LifecyclePipeError::Closed, 19))
     );
-    enrollment.bind(run, key(run)?, (), |_| PeerInput::Simulated).map_err(|(error, _)| error)?;
+    enrollment
+        .bind(PeerBinding::Desktop(run), key(run)?, (), |_| PeerInput::Simulated)
+        .map_err(|(error, _)| error)?;
     drop(enrollment);
     fact(&rig, &session.control, |f| matches!(f, LifecyclePipeObservation::Connected))?;
     assert_eq!(boundary.adopted.load(Ordering::Acquire), 1);
@@ -46,13 +49,13 @@ fn cancelled_enrollment_retains_untransferred_input_and_pin_until_drop() -> Test
     let scope = scope(&rig)?;
     let boundary = Boundary::new();
     let mut session = session(&rig, &scope, &boundary, true)?;
-    let mut enrollment = Enrollment::take(&session.control)?;
+    let mut enrollment = Enrollment::take(&session.control.inner)?;
     session.control.close();
     boundary.retiring.wait()?;
     assert!(session.completion.try_take_completion().is_none());
     let run = run()?;
     assert_eq!(
-        enrollment.bind(run, key(run)?, 23, |_| PeerInput::Simulated),
+        enrollment.bind(PeerBinding::Desktop(run), key(run)?, 23, |_| PeerInput::Simulated),
         Err((LifecyclePipeError::Closed, 23))
     );
     assert!(session.completion.try_take_completion().is_none());
@@ -83,7 +86,7 @@ fn same_run_different_sessions_cannot_mix_bootstrap_and_enrollment() -> TestResu
         Moment::from_nanos(1000),
         Box::new(Lease(second_boundary.clone())),
     )?;
-    let enrollment = Enrollment::take(&first.control)?;
+    let enrollment = Enrollment::take(&first.control.inner)?;
     fact(&rig, &first.control, |f| matches!(f, LifecyclePipeObservation::Prepared))?;
     fact(&rig, &second.control, |f| matches!(f, LifecyclePipeObservation::Prepared))?;
     let first_bootstrap = first.control.take_bootstrap()?.ok_or("Missing first bootstrap")?;

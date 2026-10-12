@@ -8,7 +8,10 @@ use crate::{
 };
 use std::{os::windows::io::IntoRawHandle, sync::Arc};
 use sugarsubstitute_contracts::execution::{JobContext, Moment};
-use sugarsubstitute_contracts::lifecycle::{ProcessKey, RunKey};
+use sugarsubstitute_contracts::{
+    incident::{DiagnosticKey, DiagnosticRole},
+    lifecycle::{ProcessKey, RunKey},
+};
 use windows::{
     Win32::{
         Foundation::*,
@@ -19,6 +22,8 @@ use windows::{
 };
 #[path = "bootstrap.rs"]
 mod bootstrap;
+#[path = "credentials.rs"]
+mod credentials;
 #[path = "peer.rs"]
 mod peer;
 #[path = "prepare.rs"]
@@ -34,10 +39,11 @@ pub(super) const CLIENT_ACCESS: u32 = FILE_READ_DATA.0
     | FILE_READ_ATTRIBUTES.0
     | FILE_WRITE_ATTRIBUTES.0
     | SYNCHRONIZE.0;
-pub(super) struct Lease {
+pub(crate) struct Lease {
     server: bool,
-    run: Option<RunKey>,
+    binding: Option<PeerBinding>,
     original: Option<LifecyclePipeDeadline>,
+    expected: bootstrap::Kind,
     data: Option<bootstrap::Data>,
     input: Handle,
     process: Option<ProcessKey>,
@@ -53,10 +59,16 @@ pub(super) struct Lease {
     read_completed: bool,
 }
 impl Lease {
-    fn new(server: bool, run: Option<RunKey>, original: Option<LifecyclePipeDeadline>) -> Self {
+    fn new(
+        server: bool,
+        binding: Option<PeerBinding>,
+        original: Option<LifecyclePipeDeadline>,
+        expected: bootstrap::Kind,
+    ) -> Self {
         Self {
             server,
-            run,
+            binding,
+            expected,
             original,
             data: None,
             input: Handle(0),
@@ -74,10 +86,21 @@ impl Lease {
         }
     }
     pub(super) fn server(run: RunKey) -> Self {
-        Self::new(true, Some(run), None)
+        Self::new(true, Some(PeerBinding::Desktop(run)), None, bootstrap::Kind::Desktop)
     }
     pub(super) fn client(original: LifecyclePipeDeadline) -> Self {
-        Self::new(false, None, Some(original))
+        Self::new(false, None, Some(original), bootstrap::Kind::Desktop)
+    }
+    pub(crate) fn diagnostic_server(key: DiagnosticKey) -> Self {
+        Self::new(
+            true,
+            Some(PeerBinding::Diagnostic(key)),
+            None,
+            bootstrap::Kind::Diagnostic(key.role()),
+        )
+    }
+    pub(crate) fn diagnostic_client(role: DiagnosticRole, original: LifecyclePipeDeadline) -> Self {
+        Self::new(false, None, Some(original), bootstrap::Kind::Diagnostic(role))
     }
     fn operation(
         &mut self,
@@ -109,8 +132,8 @@ impl PipeLease for Lease {
         }
         if self.server { self.prepare_server(context, handshake) } else { self.prepare_client() }
     }
-    fn run(&self) -> Option<RunKey> {
-        self.run
+    fn binding(&self) -> Option<PeerBinding> {
+        self.binding
     }
     fn deadline(&self) -> Option<LifecyclePipeDeadline> {
         self.data.as_ref().map(|data| data.deadline)
@@ -118,27 +141,54 @@ impl PipeLease for Lease {
     fn capability(&self) -> Option<[u8; 32]> {
         if self.server { None } else { self.data.as_ref().map(|data| data.capability) }
     }
-    fn connect(&mut self) -> Result<Progress, LifecyclePipeFailure> {
+    fn connect(&mut self, issue: Issue<'_>) -> Result<Dispatch<Progress>, LifecyclePipeFailure> {
         if !self.server {
-            return Ok(Progress::Complete(0));
+            let result = issue.execute(|| {
+                self.open_client()?;
+                Ok(Progress::Complete(0))
+            })?;
+            if matches!(result, Dispatch::Issued(_)) {
+                self.verified_kernel()?;
+            }
+            return Ok(result);
         }
         let pipe = self.pipe.raw();
         let operation = self.operation(Role::Handshake)?;
         operation.prepare()?;
-        // SAFETY: operation storage/event/callback are owned before Issue and remain retained.
-        let result = unsafe { ConnectNamedPipe(pipe, Some(operation.pointer())) };
-        let accepted = operation.accept(result, true)?;
-        operation.initial_progress(accepted, pipe).map_err(LifecyclePipeFailure::from)
+        match issue.execute(|| {
+            // SAFETY: retained prepared OVERLAPPED remains pinned through checked native retirement.
+            let result = unsafe { ConnectNamedPipe(pipe, Some(operation.pointer())) };
+            operation.accept(result, true).map_err(LifecyclePipeFailure::from)
+        })? {
+            Dispatch::Issued(accepted) => {
+                Ok(Dispatch::Issued(operation.initial_progress(accepted, pipe)?))
+            }
+            Dispatch::Revoked => Ok(Dispatch::Revoked),
+            Dispatch::Stopped => Ok(Dispatch::Stopped),
+            Dispatch::Expired => Ok(Dispatch::Expired),
+        }
     }
-    fn read(&mut self, bytes: &mut [u8]) -> Result<Progress, LifecyclePipeFailure> {
+    fn read(
+        &mut self,
+        bytes: &mut [u8],
+        issue: Issue<'_>,
+    ) -> Result<Dispatch<Progress>, LifecyclePipeFailure> {
         let pipe = self.pipe.raw();
         let operation = self.operation(Role::Read)?;
         operation.prepare()?;
-        // SAFETY: admitted fixed buffer remains owned by Active until completion and quiescence.
-        let result = unsafe { ReadFile(pipe, Some(bytes), None, Some(operation.pointer())) };
-        let accepted = operation.accept(result, false)?;
-        let result = operation.initial_progress(accepted, pipe)?;
-        if matches!(result, Progress::Complete(_)) {
+        let result = match issue.execute(|| {
+            // SAFETY: exact charged buffer and pinned operation remain outside cancellable results.
+            let result = unsafe { ReadFile(pipe, Some(bytes), None, Some(operation.pointer())) };
+            operation.accept(result, false).map_err(LifecyclePipeFailure::from)
+        })? {
+            Dispatch::Issued(accepted) => {
+                Dispatch::Issued(operation.initial_progress(accepted, pipe)?)
+            }
+            Dispatch::Revoked => Dispatch::Revoked,
+            Dispatch::Stopped => Dispatch::Stopped,
+            Dispatch::Expired => Dispatch::Expired,
+        };
+        if matches!(result, Dispatch::Issued(Progress::Complete(_))) {
             self.read_completed = true;
         }
         Ok(result)
@@ -146,8 +196,8 @@ impl PipeLease for Lease {
     fn write(
         &mut self,
         bytes: &[u8],
-        issue: WriteIssue<'_>,
-    ) -> Result<WriteDispatch<Progress>, LifecyclePipeFailure> {
+        issue: Issue<'_>,
+    ) -> Result<Dispatch<Progress>, LifecyclePipeFailure> {
         let pipe = self.pipe.raw();
         let operation = self.operation(Role::Write)?;
         operation.prepare()?;
@@ -156,12 +206,12 @@ impl PipeLease for Lease {
             let result = unsafe { WriteFile(pipe, Some(bytes), None, Some(operation.pointer())) };
             operation.accept(result, false).map_err(LifecyclePipeFailure::from)
         })? {
-            WriteDispatch::Issued(accepted) => {
-                Ok(WriteDispatch::Issued(operation.initial_progress(accepted, pipe)?))
+            Dispatch::Issued(accepted) => {
+                Ok(Dispatch::Issued(operation.initial_progress(accepted, pipe)?))
             }
-            WriteDispatch::Revoked => Ok(WriteDispatch::Revoked),
-            WriteDispatch::Stopped => Ok(WriteDispatch::Stopped),
-            WriteDispatch::Expired => Ok(WriteDispatch::Expired),
+            Dispatch::Revoked => Ok(Dispatch::Revoked),
+            Dispatch::Stopped => Ok(Dispatch::Stopped),
+            Dispatch::Expired => Ok(Dispatch::Expired),
         }
     }
     fn poll(&mut self, role: Role) -> Result<Progress, LifecyclePipeFailure> {
@@ -176,11 +226,12 @@ impl PipeLease for Lease {
         self.operation(role)?.quiesce().map_err(LifecyclePipeFailure::from)
     }
     fn verify_message(&mut self) -> Result<(), LifecyclePipeFailure> {
-        if !self.server {
-            return Ok(());
-        }
         if !self.read_completed {
             return Err(failure("pipe_verify_before_read"));
+        }
+        self.verified_kernel()?;
+        if !self.server {
+            return Ok(());
         }
         let identity = self.identity.ok_or_else(|| failure("pipe_identity_owner"))?;
         // The previous token remains owned until this checked close succeeds.
@@ -188,61 +239,11 @@ impl PipeLease for Lease {
         let actual = security::message_identity(self.pipe.raw(), &mut self.message_token)?;
         peer::identity(actual, identity, "pipe_message_identity_mismatch")
     }
-    fn authenticate(
-        &mut self,
-        candidate: &[u8; 32],
-    ) -> Result<VerifiedLifecyclePeer, LifecyclePipeFailure> {
+    fn authenticate(&mut self, candidate: &[u8; 32]) -> Result<VerifiedPeer, LifecyclePipeFailure> {
+        let peer = self.verified_kernel()?;
         let data = self.data.as_ref().ok_or_else(|| failure("pipe_bootstrap_owner"))?;
         peer::capability(candidate, &data.capability)?;
-        let mut pid = 0;
-        let mut session = 0;
-        if self.server {
-            if !self.read_completed {
-                return Err(failure("pipe_authenticate_before_read"));
-            }
-            // SAFETY: The live owned connected server pipe and fixed output are valid.
-            unsafe { GetNamedPipeClientProcessId(self.pipe.raw(), &mut pid) }
-                .map_err(|e| error("pipe_client_pid", e))?;
-            // SAFETY: The same connected server pipe owns this bounded session query.
-            unsafe { GetNamedPipeClientSessionId(self.pipe.raw(), &mut session) }
-                .map_err(|e| error("pipe_client_session", e))?;
-        } else {
-            // SAFETY: The live owned client pipe and fixed output are valid.
-            unsafe { GetNamedPipeServerProcessId(self.pipe.raw(), &mut pid) }
-                .map_err(|e| error("pipe_server_pid", e))?;
-            // SAFETY: The same connected client pipe owns this bounded session query.
-            unsafe { GetNamedPipeServerSessionId(self.pipe.raw(), &mut session) }
-                .map_err(|e| error("pipe_server_session", e))?;
-        }
-        let expected = if self.server {
-            security::process_facts(self.input.raw())?
-        } else {
-            (data.pid, data.birth)
-        };
-        peer::address(pid, session, expected, data.session)?;
-        // SAFETY: Only query access is requested for the actual kernel-reported peer PID.
-        let raw = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) }
-            .map_err(|e| error("pipe_open_actual_peer", e))?;
-        adopt(&mut self.observed_process, raw, "pipe_open_actual_peer")?;
-        peer::birth(security::process_facts(self.observed_process.raw())?, expected)?;
-        let identity = self.identity.ok_or_else(|| failure("pipe_identity_owner"))?;
-        let actual =
-            security::process_identity(self.observed_process.raw(), &mut self.observed_token)?;
-        peer::identity(actual, identity, "pipe_peer_account_logon_session_mismatch")?;
-        if self.server {
-            peer::identity(
-                security::process_identity(self.input.raw(), &mut self.peer_token)?,
-                identity,
-                "pipe_enrolled_account_mismatch",
-            )?;
-        }
-        Ok(VerifiedLifecyclePeer {
-            run: data.run,
-            process: self.process,
-            pid,
-            birth: expected.1,
-            session,
-        })
+        Ok(peer)
     }
     fn take_completed_write(&mut self) -> Option<u32> {
         self.operations[Role::Write.index()]

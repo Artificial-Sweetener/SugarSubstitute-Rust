@@ -1,48 +1,57 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Serialize final native write acceptance against exact-operation revocation.
+//! Fence actual connect/read/write acceptance against close, cancellation and original deadlines.
 use super::*;
 use admission::Phase;
-pub(crate) enum WriteDispatch<T> {
+use sugarsubstitute_contracts::execution::JobPhase;
+pub(crate) enum Dispatch<T> {
     Issued(T),
     Revoked,
     Stopped,
     Expired,
 }
-pub(crate) struct WriteIssue<'a> {
+#[derive(Clone, Copy)]
+pub(crate) enum Activity<'a> {
+    Connect,
+    Read(&'a ReadCommand),
+    Write(&'a Command),
+}
+pub(crate) struct Issue<'a> {
     pub(crate) core: &'a Core,
     pub(crate) shared: &'a Shared,
     pub(crate) context: &'a JobContext,
-    pub(crate) command: &'a Command,
+    pub(crate) activity: Activity<'a>,
 }
-impl WriteIssue<'_> {
-    /// Execute only the nonblocking external issue and custody adoption under this fence.
-    /// Completion polling and external diagnostic/wake delivery happen after it releases.
+impl Issue<'_> {
+    /// Keep only nonblocking native acceptance and partial custody adoption inside the final fence.
     pub(crate) fn execute<T>(
         self,
         native: impl FnOnce() -> Result<T, LifecyclePipeFailure>,
-    ) -> Result<WriteDispatch<T>, LifecyclePipeFailure> {
+    ) -> Result<Dispatch<T>, LifecyclePipeFailure> {
         let state = lock(&self.core.state);
         let stopping = state.stopping;
-        let deadlines = state.jobs.get(&self.shared.id).and_then(|record| record.native_deadlines);
+        let record = state.jobs.get(&self.shared.id);
+        let current =
+            record.is_some_and(|r| !r.retiring && !matches!(r.phase, JobPhase::Terminal(_)));
+        let deadlines = record.and_then(|r| r.native_deadlines);
         let mut pipe = lock(&self.shared.state);
-        // Admission/revocation acquire Core first. Copy fixed timers, then release
-        // Core before clocks or native effects while State preserves the issue fence.
         drop(state);
-        let phase = pipe
-            .write_admission
-            .as_ref()
-            .filter(|admission| admission.operation == self.command.operation)
-            .map(|admission| admission.phase)
-            .ok_or_else(|| failure("pipe_write_admission"))?;
-        if matches!(phase, Phase::Revoked) {
-            return Ok(WriteDispatch::Revoked);
+        if let Activity::Write(command) = self.activity {
+            let phase = pipe
+                .write_admission
+                .as_ref()
+                .filter(|a| a.operation == command.operation)
+                .map(|a| a.phase)
+                .ok_or_else(|| failure("pipe_write_admission"))?;
+            if matches!(phase, Phase::Revoked) {
+                return Ok(Dispatch::Revoked);
+            }
+            if !matches!(phase, Phase::Queued) {
+                return Err(failure("pipe_write_issue_phase"));
+            }
         }
-        if !matches!(phase, Phase::Queued) {
-            return Err(failure("pipe_write_issue_phase"));
-        }
-        if stopping || pipe.stopped || self.context.cancellation_requested() {
-            return Ok(WriteDispatch::Stopped);
+        if !current || stopping || pipe.stopped || self.context.cancellation_requested() {
+            return Ok(Dispatch::Stopped);
         }
         let at = match self.core.clock.observe_unlatched() {
             Ok(at) => at,
@@ -51,35 +60,69 @@ impl WriteIssue<'_> {
                 self.core.clock.fail_observation(payload)
             }
         };
-        if self.core.clock.failed() || pipe.stopped || self.context.cancellation_requested() {
-            return Ok(WriteDispatch::Stopped);
-        }
-        if deadlines.is_none_or(|deadlines| deadlines.stopped()) {
-            return Ok(WriteDispatch::Stopped);
-        }
-        if deadlines.is_some_and(|deadlines| deadlines.expired(at))
-            || self.command.deadline <= at
-            || self.context.deadline().is_some_and(|deadline| deadline <= at)
+        if self.core.clock.failed()
+            || pipe.stopped
+            || self.context.cancellation_requested()
+            || deadlines.is_none_or(|d| d.stopped())
         {
-            return Ok(WriteDispatch::Expired);
+            return Ok(Dispatch::Stopped);
         }
-        let admission =
-            pipe.write_admission.as_mut().ok_or_else(|| failure("pipe_write_admission"))?;
-        admission.phase = Phase::Issuing(at);
+        let deadline = match self.activity {
+            Activity::Connect => {
+                if !pipe.prepared || !pipe.enrolled || pipe.connected {
+                    return Err(failure("pipe_connect_phase"));
+                }
+                Some(self.shared.original_deadline)
+            }
+            Activity::Read(command) => {
+                if !pipe.connected || !pipe.read_busy {
+                    return Err(failure("pipe_read_phase"));
+                }
+                match command.deadline {
+                    ReadDeadline::Original(until) => Some(until),
+                    ReadDeadline::Passive => {
+                        if !pipe.authenticated {
+                            return Err(failure("pipe_passive_identity"));
+                        }
+                        None
+                    }
+                }
+            }
+            Activity::Write(command) => Some(command.deadline),
+        };
+        if deadlines.is_some_and(|d| d.expired(at))
+            || deadline.is_some_and(|until| until <= at)
+            || self.context.deadline().is_some_and(|until| until <= at)
+        {
+            return Ok(Dispatch::Expired);
+        }
+        if let Activity::Write(command) = self.activity {
+            let admission =
+                pipe.write_admission.as_mut().ok_or_else(|| failure("pipe_write_admission"))?;
+            if admission.operation != command.operation {
+                return Err(failure("pipe_write_admission"));
+            }
+            admission.phase = Phase::Issuing(at);
+        }
         let accepted = match native() {
-            Ok(accepted) => accepted,
+            Ok(value) => value,
             Err(error) => {
-                admission.phase = Phase::Retired;
+                if let Activity::Write(_) = self.activity
+                    && let Some(admission) = &mut pipe.write_admission
+                {
+                    admission.phase = Phase::Retired;
+                }
                 return Err(error);
             }
         };
-        admission.phase = Phase::Issued { at, eligible: true };
-        pipe.write_slots -= 1;
-        pipe.observations.push_back(LifecyclePipeObservation::WriteIssued {
-            operation: self.command.operation,
-            at,
-        });
-        drop(pipe);
-        Ok(WriteDispatch::Issued(accepted))
+        if let Activity::Write(command) = self.activity {
+            let admission =
+                pipe.write_admission.as_mut().ok_or_else(|| failure("pipe_write_admission"))?;
+            admission.phase = Phase::Issued { at, eligible: true };
+            pipe.write_slots -= 1;
+            pipe.observations
+                .push_back(Observation::WriteIssued { operation: command.operation, at });
+        }
+        Ok(Dispatch::Issued(accepted))
     }
 }

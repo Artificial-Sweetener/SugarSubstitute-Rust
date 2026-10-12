@@ -147,11 +147,11 @@ fn stopped_child_cannot_export_capability_and_clears_shared_secrets_before_late_
     boundary.allow_retire.store(false, Ordering::Release);
     let mut session = session(&rig, &scope, &boundary, false)?;
     connect(&rig, &session)?;
-    assert!(lock(&session.control.shared.state).capability.is_some());
+    assert!(lock(&session.control.inner.shared.state).capability.is_some());
     session.control.close();
     boundary.retiring.wait()?;
     assert_eq!(session.control.take_client_capability().err(), Some(LifecyclePipeError::Closed));
-    let state = lock(&session.control.shared.state);
+    let state = lock(&session.control.inner.shared.state);
     assert!(state.capability.is_none());
     assert!(state.authenticate.is_none());
     drop(state);

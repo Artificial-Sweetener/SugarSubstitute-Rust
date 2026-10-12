@@ -55,18 +55,18 @@ fn consumed_revoked_buffer_blocks_terminal_but_unconsumed_buffer_is_abandoned() 
         } else {
             loop {
                 let observed = rig.wake.count();
-                if lock(&session.control.shared.state)
+                if lock(&session.control.inner.shared.state)
                     .observations
                     .iter()
-                    .any(|f| matches!(f, LifecyclePipeObservation::WriteRevoked { .. }))
+                    .any(|f| matches!(f, Observation::WriteRevoked { .. }))
                 {
                     break;
                 }
                 rig.client.drain_completions(NonZeroUsize::MIN)?;
-                if lock(&session.control.shared.state)
+                if lock(&session.control.inner.shared.state)
                     .observations
                     .iter()
-                    .any(|f| matches!(f, LifecyclePipeObservation::WriteRevoked { .. }))
+                    .any(|f| matches!(f, Observation::WriteRevoked { .. }))
                 {
                     break;
                 }

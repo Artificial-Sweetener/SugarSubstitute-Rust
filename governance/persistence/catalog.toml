@@ -119,7 +119,7 @@ migrations = []
 id = "native-lifecycle-bootstrap"
 owner = "sugarsubstitute-execution"
 sources = ["crates/sugarsubstitute-execution/src/windows_lifecycle_pipe/bootstrap.rs"]
-source_sha256 = "sha256:cb32f556feea29a1de45822c4969752d4a17d50215b642576c5baea6c4dc5186"
+source_sha256 = "sha256:164d4d11afa7e65d44fc7f20e6e11118f96cd54be7cbc2ca0ee89a5189c9fad6"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 1
@@ -294,5 +294,17 @@ classification = "authoritative_state"
 preservation = "must_preserve"
 current_version = 1
 accepted_versions = [1]
+compatibility = "reject"
+migrations = []
+
+[[formats]]
+id = "native-diagnostic-bootstrap"
+owner = "sugarsubstitute-execution"
+sources = ["crates/sugarsubstitute-execution/src/windows_lifecycle_pipe/bootstrap.rs"]
+source_sha256 = "sha256:164d4d11afa7e65d44fc7f20e6e11118f96cd54be7cbc2ca0ee89a5189c9fad6"
+classification = "protocol"
+preservation = "must_preserve"
+current_version = 2
+accepted_versions = [2]
 compatibility = "reject"
 migrations = []

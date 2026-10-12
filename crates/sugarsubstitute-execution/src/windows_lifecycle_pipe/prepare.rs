@@ -20,8 +20,8 @@ impl Lease {
         .map_err(LifecyclePipeFailure::native)?;
         let deadline = LifecyclePipeDeadline::new(counter.ticks(), counter.frequency())
             .map_err(|cause| error("pipe_handshake_deadline", cause))?;
-        let run = self.run.ok_or_else(|| failure("pipe_server_run"))?;
-        let name = bootstrap::name(run);
+        let binding = self.binding.ok_or_else(|| failure("pipe_server_binding"))?;
+        let name = bootstrap::name(binding);
         let mut descriptor = security::Descriptor::new(identity)?;
         let attributes = descriptor.attributes();
         // SAFETY: bounded NUL-terminated local name, explicit ACL, sole instance and overlapped mode.
@@ -51,7 +51,7 @@ impl Lease {
         // SAFETY: The current-process pseudo handle is valid for identity queries.
         let (pid, birth) = security::process_facts(unsafe { GetCurrentProcess() })?;
         let data = bootstrap::Data {
-            run,
+            binding,
             pid,
             birth,
             session: identity.session,
@@ -69,7 +69,7 @@ impl Lease {
         self.section.master.0 = self.input.0;
         self.input.0 = 0;
         let bytes = self.section.read()?;
-        self.data = Some(bootstrap::decode(&bytes, original)?);
+        self.data = Some(bootstrap::decode(&bytes, original, self.expected)?);
         // SAFETY: The current-process pseudo handle remains valid and is never closed.
         let identity =
             security::process_identity(unsafe { GetCurrentProcess() }, &mut self.own_token)?;
@@ -83,6 +83,11 @@ impl Lease {
         if frequency != original.frequency as u64 || now >= original.ticks as u64 {
             return Err(failure("pipe_expired_bootstrap"));
         }
+        self.binding = Some(data.binding);
+        Ok(0)
+    }
+    pub(super) fn open_client(&mut self) -> Result<(), LifecyclePipeFailure> {
+        let data = self.data.as_ref().ok_or_else(|| failure("pipe_bootstrap_owner"))?;
         // SAFETY: exact validated local name, explicit restricted access/SQOS and overlapped mode.
         let raw = unsafe {
             CreateFileW(
@@ -102,7 +107,6 @@ impl Lease {
             SetNamedPipeHandleState(self.pipe.raw(), Some(&PIPE_READMODE_MESSAGE), None, None)
         }
         .map_err(|e| error("pipe_client_message_mode", e))?;
-        self.run = Some(data.run);
-        Ok(0)
+        Ok(())
     }
 }

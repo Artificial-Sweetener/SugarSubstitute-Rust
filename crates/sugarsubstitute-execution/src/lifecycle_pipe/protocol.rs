@@ -19,14 +19,29 @@ impl Active {
                 }
             } else {
                 self.connecting = true;
-                lease.connect()?
+                match lease.connect(Issue {
+                    core,
+                    shared: &self.work.shared,
+                    context: &self.context,
+                    activity: Activity::Connect,
+                })? {
+                    Dispatch::Issued(progress) => progress,
+                    Dispatch::Stopped | Dispatch::Revoked => {
+                        self.outcome = Some(JobOutcome::Cancelled);
+                        return Ok(());
+                    }
+                    Dispatch::Expired => {
+                        self.outcome = Some(JobOutcome::TimedOut);
+                        return Ok(());
+                    }
+                }
             };
             if let Progress::Complete(_) = progress {
                 lease.quiesce(Role::Handshake)?;
                 self.connected = true;
                 let mut s = lock(&self.work.shared.state);
                 s.connected = true;
-                s.observations.push_back(LifecyclePipeObservation::Connected);
+                s.observations.push_back(Observation::Connected);
                 drop(s);
                 self.publish(core);
             }
@@ -59,15 +74,31 @@ impl Active {
                 self.read = Some((command, buffer));
                 let (_, buffer) = self.read.as_mut().ok_or_else(|| failure("pipe_read_owner"))?;
                 // The pinned buffer is durable before any native issue or private panic.
-                let progress = self
-                    .lease
-                    .as_mut()
-                    .ok_or_else(|| failure("pipe_missing_lease"))?
-                    .read(&mut buffer.bytes)?;
+                let progress =
+                    self.lease.as_mut().ok_or_else(|| failure("pipe_missing_lease"))?.read(
+                        &mut buffer.bytes,
+                        Issue {
+                            core,
+                            shared: &self.work.shared,
+                            context: &self.context,
+                            activity: Activity::Read(&command),
+                        },
+                    )?;
+                let progress = match progress {
+                    Dispatch::Issued(progress) => progress,
+                    Dispatch::Stopped | Dispatch::Revoked => {
+                        self.outcome = Some(JobOutcome::Cancelled);
+                        return Ok(());
+                    }
+                    Dispatch::Expired => {
+                        self.outcome = Some(JobOutcome::TimedOut);
+                        return Ok(());
+                    }
+                };
                 if progress == Progress::Pending {
                     lock(&self.work.shared.state)
                         .observations
-                        .push_back(LifecyclePipeObservation::ReadPending { operation });
+                        .push_back(Observation::ReadPending { operation });
                     self.publish(core);
                 }
                 self.read_progress(core, progress)?;
@@ -97,23 +128,23 @@ impl Active {
                 let progress =
                     self.lease.as_mut().ok_or_else(|| failure("pipe_missing_lease"))?.write(
                         &write.buffer.bytes[..write.length],
-                        WriteIssue {
+                        Issue {
                             core,
                             shared: &self.work.shared,
                             context: &self.context,
-                            command: &write.command,
+                            activity: Activity::Write(&write.command),
                         },
                     )?;
                 match progress {
-                    WriteDispatch::Issued(progress) => {
+                    Dispatch::Issued(progress) => {
                         self.publish(core);
                         self.write_progress(core, progress)?;
                     }
-                    WriteDispatch::Revoked => self.write_revoked(core)?,
-                    WriteDispatch::Stopped => {
+                    Dispatch::Revoked => self.write_revoked(core)?,
+                    Dispatch::Stopped => {
                         self.outcome = Some(JobOutcome::Cancelled);
                     }
-                    WriteDispatch::Expired => {
+                    Dispatch::Expired => {
                         self.outcome = Some(JobOutcome::TimedOut);
                     }
                 }
@@ -156,9 +187,12 @@ impl Active {
                 {
                     slots.clear(Role::Handshake, 0);
                 }
+                if s.binding != Some(peer.binding) {
+                    return Err(failure("pipe_authenticated_binding"));
+                }
                 s.auth_busy = false;
                 s.authenticated = true;
-                s.observations.push_back(LifecyclePipeObservation::Authenticated(peer));
+                s.observations.push_back(Observation::Authenticated(peer));
             }
             core.changed();
             self.publish(core);
@@ -197,7 +231,7 @@ impl Active {
             s.read_busy = false;
             s.received += 1;
             s.loans += 1;
-            s.observations.push_back(LifecyclePipeObservation::Received {
+            s.observations.push_back(Observation::Received {
                 operation: command.operation,
                 frame: ReceivedLifecycleFrame {
                     buffer: Some(buffer),
@@ -243,10 +277,8 @@ impl Active {
             s.write_slots = 0;
             s.written += 1;
             s.write_buffer = Some(write.buffer);
-            s.observations.push_back(LifecyclePipeObservation::Written {
-                operation: write.command.operation,
-                bytes,
-            });
+            s.observations
+                .push_back(Observation::Written { operation: write.command.operation, bytes });
         }
         core.changed();
         self.publish(core);

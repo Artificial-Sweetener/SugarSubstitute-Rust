@@ -26,7 +26,7 @@ use sugarsubstitute_contracts::{
 
 #[allow(unsafe_code)]
 #[path = "windows_lifecycle_pipe/native.rs"]
-mod native;
+pub(crate) mod native;
 /// Preserve clock/admission rejection without taking ownership of inherited input.
 pub enum LifecyclePipeAdmissionError {
     /// Actual central execution admission rejection.
@@ -74,6 +74,10 @@ pub struct InheritedLifecycleBootstrap {
     raw: usize,
 }
 impl InheritedLifecycleBootstrap {
+    pub(crate) fn into_raw(self) -> usize {
+        self.raw
+    }
+
     /// Validate a positive pointer-sized non-pseudo token without taking a handle.
     /// Only supply the dedicated child's exclusively inherited section token.
     pub fn new(value: u64) -> Result<Self, LifecyclePipeError> {
@@ -103,14 +107,14 @@ impl LifecyclePipeClientPermit {
     /// The worker validates, clears inheritance, maps/reads and checks actual closure.
     pub fn bind(mut self, section: InheritedLifecycleBootstrap) -> Option<LifecyclePipeSession> {
         let session = self.session.take()?;
-        session.control.bind_input(PeerInput::Inherited { section: section.raw });
+        session.control.bind_input(PeerInput::Inherited { section: section.into_raw() });
         Some(session)
     }
     /// Cancel an unused reservation while retaining actual typed terminal delivery.
     pub fn cancel_unbound(mut self) -> Option<LifecyclePipeSession> {
         let session = self.session.take()?;
         {
-            lock(&session.control.shared.state).input_pin = false;
+            lock(&session.control.inner.shared.state).input_pin = false;
         }
         session.control.close();
         Some(session)
@@ -120,7 +124,7 @@ impl Drop for LifecyclePipeClientPermit {
     fn drop(&mut self) {
         if let Some(session) = self.session.take() {
             {
-                lock(&session.control.shared.state).input_pin = false;
+                lock(&session.control.inner.shared.state).input_pin = false;
             }
             session.control.close();
         }
@@ -179,6 +183,7 @@ impl ExecutionClient {
 /// Drop cancels the session and releases only the pin; it performs no native closure.
 pub struct LifecycleDesktopEnrollment {
     inner: lifecycle_pipe::enrollment::Enrollment,
+    run: RunKey,
 }
 /// Return both untransferred authorities when exact enrollment is rejected.
 pub struct LifecycleDesktopEnrollmentRejection {
@@ -192,7 +197,7 @@ pub struct LifecycleDesktopEnrollmentRejection {
 impl LifecycleDesktopEnrollment {
     /// Original admitted run; identity facts do not prove caller authentication.
     pub fn run(&self) -> RunKey {
-        self.inner.run
+        self.run
     }
     /// Transfer the exact suspended process before the registry selects ResumeThread.
     /// `trusted_run` and `key` come from the registry, never decoded request fields.
@@ -203,10 +208,12 @@ impl LifecycleDesktopEnrollment {
         key: ProcessKey,
         process: OwnedHandle,
     ) -> Result<(), LifecycleDesktopEnrollmentRejection> {
-        match self.inner.bind(trusted_run, key, process, |handle| PeerInput::Owned {
-            handle,
-            process: Some(key),
-        }) {
+        match self.inner.bind(
+            lifecycle_pipe::PeerBinding::Desktop(trusted_run),
+            key,
+            process,
+            |handle| PeerInput::Owned { handle, process: Some(key) },
+        ) {
             Ok(()) => Ok(()),
             Err((error, process)) => {
                 Err(LifecycleDesktopEnrollmentRejection { error, process, enrollment: self })
@@ -220,8 +227,13 @@ impl LifecyclePipeControl {
     pub fn take_desktop_enrollment(
         &self,
     ) -> Result<LifecycleDesktopEnrollment, LifecyclePipeError> {
-        lifecycle_pipe::enrollment::Enrollment::take(self)
-            .map(|inner| LifecycleDesktopEnrollment { inner })
+        lifecycle_pipe::enrollment::Enrollment::take(&self.inner).and_then(|inner| {
+            let run = inner
+                .binding()
+                .and_then(lifecycle_pipe::PeerBinding::desktop)
+                .ok_or(LifecyclePipeError::NotReady)?;
+            Ok(LifecycleDesktopEnrollment { inner, run })
+        })
     }
 }
 /// Borrow only the read-only inherited bootstrap section required by HANDLE_LIST.
@@ -232,7 +244,7 @@ pub struct LifecyclePipeInheritance<'a> {
 impl LifecyclePipeBootstrap {
     /// Return the exact original admitted run without granting authentication.
     pub fn run(&self) -> Option<RunKey> {
-        lock(&self.shared.state).run
+        lock(&self.shared.state).binding.and_then(lifecycle_pipe::PeerBinding::desktop)
     }
     /// Verify both launch artifacts belong to the same admitted session and run.
     /// Matching names/IDs alone cannot replace this single-owner provenance check.

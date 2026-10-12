@@ -13,13 +13,13 @@ fn data() -> TestResult<Data> {
         generation: RunGeneration::new(9)?,
     };
     Ok(Data {
-        run,
+        binding: PeerBinding::Desktop(run),
         pid: 71,
         birth: 99,
         session: 1,
         deadline: LifecyclePipeDeadline::new(1000, 100)?,
         capability: [7; 32],
-        name: name(run),
+        name: name(PeerBinding::Desktop(run)),
     })
 }
 #[test]
@@ -27,8 +27,8 @@ fn bootstrap_roundtrip_preserves_exact_scoped_identity_capability_and_original_d
 -> TestResult {
     let data = data()?;
     let encoded = encode(&data)?;
-    let decoded = decode(&encoded, data.deadline)?;
-    assert_eq!(decoded.run, data.run);
+    let decoded = decode(&encoded, data.deadline, Kind::Desktop)?;
+    assert_eq!(decoded.binding.desktop(), data.binding.desktop());
     assert_eq!((decoded.pid, decoded.birth, decoded.session), (71, 99, 1));
     assert_eq!(decoded.capability, [7; 32]);
     assert_eq!(decoded.name, data.name);
@@ -54,11 +54,14 @@ fn bootstrap_version_scope_process_endpoint_padding_and_deadline_fail_closed() -
         } else {
             bytes[index] ^= 1;
         }
-        assert!(decode(&bytes, data.deadline).is_err(), "accepted altered offset {index}");
+        assert!(
+            decode(&bytes, data.deadline, Kind::Desktop).is_err(),
+            "accepted altered offset {index}"
+        );
     }
     let mut oversized = valid;
     oversized[136..138].copy_from_slice(&257u16.to_le_bytes());
-    assert!(decode(&oversized, data.deadline).is_err());
-    assert!(decode(&valid, LifecyclePipeDeadline::new(1001, 100)?).is_err());
+    assert!(decode(&oversized, data.deadline, Kind::Desktop).is_err());
+    assert!(decode(&valid, LifecyclePipeDeadline::new(1001, 100)?, Kind::Desktop).is_err());
     Ok(())
 }

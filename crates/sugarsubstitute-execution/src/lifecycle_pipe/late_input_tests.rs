@@ -74,8 +74,10 @@ fn input_published_at_cancellation_checkpoint_is_adopted_before_retirement() -> 
     let boundary = Boundary::new();
     let mut session = session(&rig, &scope, &boundary, false)?;
     *lock(&clock.transfer) = Some(LifecyclePipeControl {
-        shared: session.control.shared.clone(),
-        job: session.control.job.clone(),
+        inner: Control {
+            shared: session.control.inner.shared.clone(),
+            owner: session.control.inner.owner.clone(),
+        },
     });
     clock.stage.store(3, Ordering::Release);
     clock.release_dispatch.open();

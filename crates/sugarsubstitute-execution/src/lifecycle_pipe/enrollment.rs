@@ -2,39 +2,61 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Hold the single suspended-process handoff until exact acceptance or cancellation.
 use super::*;
-use crate::task::ErasedJob;
 
 pub(crate) struct Enrollment {
     shared: Arc<Shared>,
-    job: Arc<Job<LifecyclePipeReport, LifecyclePipeFailure>>,
-    pub(crate) run: RunKey,
+    owner: Owner,
     active: bool,
 }
 impl Enrollment {
+    pub(crate) fn binding(&self) -> Option<PeerBinding> {
+        lock(&self.shared.state).binding
+    }
     pub(crate) fn matches(&self, shared: &Arc<Shared>) -> bool {
         self.active && Arc::ptr_eq(&self.shared, shared)
     }
-    pub(crate) fn take(control: &LifecyclePipeControl) -> Result<Self, LifecyclePipeError> {
+    pub(crate) fn take(control: &Control) -> Result<Self, LifecyclePipeError> {
         control.commit(|s, _, _| {
-            let run = s.run.ok_or(LifecyclePipeError::NotReady)?;
+            s.binding.ok_or(LifecyclePipeError::NotReady)?;
             if s.enrollment_taken || s.enrolled || s.peer.is_some() {
                 return Err(LifecyclePipeError::AlreadyTransferred);
             }
             s.enrollment_taken = true;
             s.input_pin = true;
-            Ok(Self { shared: control.shared.clone(), job: control.job.clone(), run, active: true })
+            Ok(Self { shared: control.shared.clone(), owner: control.owner.clone(), active: true })
+        })
+    }
+    pub(crate) fn take_bootstrap(
+        control: &Control,
+    ) -> Result<Option<(LifecyclePipeBootstrap, Self)>, LifecyclePipeError> {
+        control.commit(|s, _, _| {
+            s.binding.ok_or(LifecyclePipeError::NotReady)?;
+            if s.transferred || s.enrollment_taken || s.enrolled || s.peer.is_some() {
+                return Err(LifecyclePipeError::AlreadyTransferred);
+            }
+            if !s.prepared || s.inherited == 0 {
+                return Ok(None);
+            }
+            s.transferred = true;
+            s.pin = true;
+            s.enrollment_taken = true;
+            s.input_pin = true;
+            Ok(Some((
+                LifecyclePipeBootstrap { shared: control.shared.clone() },
+                Self { shared: control.shared.clone(), owner: control.owner.clone(), active: true },
+            )))
         })
     }
     pub(crate) fn bind<T>(
         &mut self,
-        trusted_run: RunKey,
+        trusted: PeerBinding,
         key: ProcessKey,
         input: T,
         convert: impl FnOnce(T) -> PeerInput,
     ) -> Result<(), (LifecyclePipeError, T)> {
         let mut input = Some(input);
-        let result = control::commit(&self.shared, &self.job, |s, _, _| {
-            if !self.active || trusted_run != self.run || key.owner != self.run.owner {
+        let result = commands::commit(&self.shared, &self.owner, |s, _, _| {
+            if !self.active || Some(trusted) != s.binding || key.owner != trusted.owner() {
                 return Err(LifecyclePipeError::Closed);
             }
             if s.enrolled || s.peer.is_some() {
@@ -61,7 +83,7 @@ impl Drop for Enrollment {
             {
                 lock(&self.shared.state).input_pin = false;
             }
-            self.job.cancel();
+            self.owner.cancel();
             self.shared.changed();
         }
     }

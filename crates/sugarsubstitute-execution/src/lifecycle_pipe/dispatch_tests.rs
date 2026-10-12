@@ -24,7 +24,7 @@ fn veto_first_returns_exact_allocation_disarms_write_and_keeps_channel_usable() 
     assert_eq!(admission.operation().get(), 1);
     boundary.preparing_write.wait()?;
     assert!(session.control.take_observation().is_none());
-    assert_eq!(lock(&session.control.shared.state).write_slots, 2);
+    assert_eq!(lock(&session.control.inner.shared.state).write_slots, 2);
     assert_eq!(admission.revoke(), NativeWriteRevocation::RevokedBeforeIssue);
     assert_eq!(admission.revoke(), NativeWriteRevocation::AlreadyRevoked);
     rig.clock.advance(101);
@@ -41,7 +41,7 @@ fn veto_first_returns_exact_allocation_disarms_write_and_keeps_channel_usable() 
     assert_eq!(&buffer.as_mut_bytes()[..5], b"hello");
     assert_eq!(boundary.writes.load(Ordering::Acquire), 0);
     assert_eq!(boundary.write_quiesced.load(Ordering::Acquire), 1);
-    assert_eq!(lock(&session.control.shared.state).write_slots, 0);
+    assert_eq!(lock(&session.control.inner.shared.state).write_slots, 0);
     boundary.hold_write.store(false, Ordering::Release);
     let next = session
         .control
@@ -93,7 +93,7 @@ fn issue_first_revocation_preserves_pending_io_original_time_and_actual_terminal
     assert_eq!(at, Moment::from_nanos(75));
     assert_eq!(admission.revoke(), NativeWriteRevocation::AlreadyIssued { at });
     assert_eq!(admission.revoke(), NativeWriteRevocation::AlreadyIssued { at });
-    assert_eq!(lock(&session.control.shared.state).write_slots, 1);
+    assert_eq!(lock(&session.control.inner.shared.state).write_slots, 1);
     assert!(session.control.take_write_buffer()?.is_none());
     assert_eq!(boundary.closes.load(Ordering::Acquire), 0);
     assert_eq!(boundary.write_quiesced.load(Ordering::Acquire), 0);
@@ -208,9 +208,9 @@ fn two_slot_preflight_rejects_without_transferring_the_original_buffer() -> Test
     let mut buffer = output(&session.control)?;
     let address = buffer.as_mut_bytes().as_ptr();
     {
-        let mut state = lock(&session.control.shared.state);
+        let mut state = lock(&session.control.inner.shared.state);
         for _ in 0..7 {
-            state.observations.push_back(LifecyclePipeObservation::Prepared);
+            state.observations.push_back(Observation::Prepared);
         }
     }
     let mut rejected = session
@@ -221,7 +221,7 @@ fn two_slot_preflight_rejects_without_transferring_the_original_buffer() -> Test
     assert_eq!(rejected.error, LifecyclePipeError::Busy);
     assert_eq!(rejected.buffer.as_mut_bytes().as_ptr(), address);
     assert_eq!(&rejected.buffer.as_mut_bytes()[..5], b"hello");
-    assert_eq!(lock(&session.control.shared.state).write_slots, 0);
+    assert_eq!(lock(&session.control.inner.shared.state).write_slots, 0);
     assert_eq!(boundary.writes.load(Ordering::Acquire), 0);
     while session.control.take_observation().is_some() {}
     drop(rejected);

@@ -10,6 +10,8 @@ mod clock_retirement;
 mod counter_deadline;
 mod cpu;
 #[cfg(any(windows, test))]
+pub mod diagnostic_pipe;
+#[cfg(any(windows, test))]
 mod fixture_forwarding;
 #[cfg(any(windows, test))]
 mod fixture_session;
@@ -36,6 +38,8 @@ mod windows_fixture_forwarding;
 
 #[cfg(windows)]
 pub mod windows;
+#[cfg(windows)]
+pub mod windows_diagnostic_pipe;
 #[cfg(windows)]
 pub mod windows_fixture;
 #[cfg(windows)]

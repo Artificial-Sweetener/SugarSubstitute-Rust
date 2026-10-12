@@ -20,7 +20,7 @@ pub(crate) struct Active {
     connected: bool,
     read: Option<(ReadCommand, buffers::Buffer)>,
     write: Option<Write>,
-    outcome: Option<JobOutcome<LifecyclePipeReport, LifecyclePipeFailure>>,
+    outcome: Option<JobOutcome<(), LifecyclePipeFailure>>,
     completed: bool,
     native_retired: bool,
 }
@@ -71,7 +71,7 @@ impl Active {
             ));
             core.mailbox.deliver_wake();
         }
-        control::retain_failure(&mut self.outcome, error);
+        retain_failure(&mut self.outcome, error);
     }
     fn stop(&mut self, core: &Core, now: Moment) -> bool {
         if self.outcome.is_some() {
@@ -117,7 +117,7 @@ impl Active {
                 self.error(core, error);
             }
         }
-        let server = lock(&self.work.shared.state).run.is_some();
+        let server = lock(&self.work.shared.state).binding.is_some();
         if !self.prepared && self.outcome.is_none() && (server || self.enrolled) {
             if self.stop(core, core.clock.now()) {
                 self.retirement(core, now, clock_available);
@@ -129,16 +129,22 @@ impl Active {
             match result {
                 Ok(inherited) => {
                     self.prepared = true;
-                    let run = self.lease.as_ref().and_then(|lease| lease.run());
+                    let binding = self.lease.as_ref().and_then(|lease| lease.binding());
                     let deadline = self.lease.as_ref().and_then(|lease| lease.deadline());
                     let capability = self.lease.as_ref().and_then(|lease| lease.capability());
                     let mut s = lock(&self.work.shared.state);
+                    if binding.is_none() || (s.binding.is_some() && s.binding != binding) {
+                        drop(s);
+                        self.error(core, failure("pipe_prepared_binding"));
+                        self.retirement(core, now, clock_available);
+                        return;
+                    }
                     s.inherited = inherited;
-                    s.run = run;
+                    s.binding = binding;
                     s.prepared = true;
                     s.deadline = deadline;
                     s.capability = capability;
-                    s.observations.push_back(LifecyclePipeObservation::Prepared);
+                    s.observations.push_back(Observation::Prepared);
                     drop(s);
                     self.publish(core);
                 }
@@ -178,8 +184,7 @@ impl Active {
                 if let Some(fact) = s.observations.pop_front() {
                     if matches!(
                         fact,
-                        LifecyclePipeObservation::Received { .. }
-                            | LifecyclePipeObservation::WriteRevoked { .. }
+                        Observation::Received { .. } | Observation::WriteRevoked { .. }
                     ) {
                         abandoned.push_back(fact);
                     } else {
@@ -221,7 +226,7 @@ impl Active {
         match result {
             Ok(false) => return,
             Err(error) => {
-                control::retain_failure(&mut self.outcome, error.clone());
+                retain_failure(&mut self.outcome, error.clone());
                 core.mailbox.record_failure(ExecutionError::new(
                     self.context.spec().operation,
                     Box::new(error),
@@ -238,14 +243,13 @@ impl Active {
                 let mut state = lock(&self.work.shared.state);
                 state.written += 1;
                 state.write_slots = 0;
-                state.observations.push_back(LifecyclePipeObservation::Written {
-                    operation: write.command.operation,
-                    bytes,
-                });
+                state
+                    .observations
+                    .push_back(Observation::Written { operation: write.command.operation, bytes });
                 drop(state);
                 self.publish(core);
             } else {
-                control::retain_failure(&mut self.outcome, failure("pipe_partial_write"));
+                retain_failure(&mut self.outcome, failure("pipe_partial_write"));
             }
         }
         if lock(&self.work.shared.state).loans != 0 || pinned {
@@ -262,7 +266,15 @@ impl Active {
         let ended = if clock_available { core.clock.now() } else { now };
         self.completed = true;
         if let Some(outcome) = self.outcome.take() {
-            self.work.job.finish_at(&self.context, Some(self.started), ended, outcome);
+            let facts = {
+                let state = lock(&self.work.shared.state);
+                owner::RetiredFacts {
+                    binding: state.binding,
+                    received: state.received,
+                    written: state.written,
+                }
+            };
+            self.work.owner.finish(&self.context, self.started, ended, outcome, facts);
         }
     }
 }
