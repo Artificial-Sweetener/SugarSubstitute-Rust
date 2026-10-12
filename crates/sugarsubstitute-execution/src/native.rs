@@ -180,6 +180,7 @@ pub(crate) enum NativeWork {
     LifecyclePipe(crate::lifecycle_pipe::PipeWork),
     FixtureForward(crate::fixture_forwarding::ForwardWork),
     Output(crate::output::OutputWork),
+    CoordinatorEntry(crate::coordinator_entry::EntryWork),
 }
 impl NativeWork {
     pub(crate) fn ready(&self) -> bool {
@@ -190,11 +191,13 @@ impl NativeWork {
             Self::LifecyclePipe(_) => true,
             Self::FixtureForward(work) => work.ready(),
             Self::Output(_) => true,
+            Self::CoordinatorEntry(_) => true,
         }
     }
     pub(crate) fn initial_deadlines(&self) -> Option<crate::native_deadlines::Deadlines> {
         match self {
             Self::LifecyclePipe(work) => Some(crate::lifecycle_pipe::initial_deadlines(work)),
+            Self::CoordinatorEntry(work) => Some(crate::coordinator_entry::initial_deadlines(work)),
             _ => None,
         }
     }

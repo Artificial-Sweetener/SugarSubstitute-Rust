@@ -20,6 +20,12 @@ pub(crate) struct Identity {
     logon: Sid,
     pub(crate) session: u32,
 }
+impl Identity {
+    /// Borrow exact kernel-validated account SID bytes without granting native authority.
+    pub(crate) fn account_sid(&self) -> &[u8] {
+        &self.account.bytes[..self.account.length]
+    }
+}
 #[cfg(test)]
 impl Identity {
     pub(crate) fn fixture(account: u8, logon: u8, session: u32) -> Self {

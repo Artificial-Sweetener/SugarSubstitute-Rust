@@ -271,3 +271,15 @@ current_version = 1
 accepted_versions = [1]
 compatibility = "reject"
 migrations = []
+
+[[formats]]
+id = "native-coordinator-entry"
+owner = "sugarsubstitute-execution"
+sources = ["crates/sugarsubstitute-execution/src/coordinator_entry/protocol.rs", "crates/sugarsubstitute-execution/src/coordinator_entry/protocol/decode.rs", "crates/sugarsubstitute-execution/src/coordinator_entry/protocol/encode.rs", "crates/sugarsubstitute-execution/src/coordinator_entry/protocol/raw_windows.rs", "crates/sugarsubstitute-execution/src/coordinator_entry/types.rs"]
+source_sha256 = "sha256:ad87579e2a7edf5c41588d1bdbd6ab064c508795ace2ef5f86de00a2454fbe25"
+classification = "protocol"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []

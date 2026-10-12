@@ -31,12 +31,6 @@ mod scope;
 mod task;
 
 #[cfg(windows)]
-mod windows_clock;
-#[cfg(windows)]
-#[allow(unsafe_code)]
-mod windows_counter;
-
-#[cfg(windows)]
 #[allow(unsafe_code)]
 mod windows_fixture_forwarding;
 
@@ -56,3 +50,16 @@ pub use runtime::{
 
 #[cfg(test)]
 mod runtime_test_support;
+
+#[cfg(any(windows, test))]
+mod coordinator_entry;
+#[cfg(any(windows, test))]
+pub use coordinator_entry::*;
+#[cfg(windows)]
+mod windows_coordinator_entry;
+
+#[cfg(windows)]
+mod windows_clock;
+#[cfg(windows)]
+#[allow(unsafe_code)]
+mod windows_counter;
