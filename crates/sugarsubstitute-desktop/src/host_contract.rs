@@ -320,12 +320,37 @@ pub enum DesktopStartupObservation {
     },
 }
 
+/// Return actual pre-surface preparation progress on the retained native loop.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum StartupPreparationStep {
+    /// Authentication, capture attachment or their bounded completion disposal remains pending.
+    Waiting,
+    /// Actual required bootstrap authentication and capture attachment completed successfully.
+    Ready,
+    /// Admission is closed; retain execution/transport/capture ownership until actual settlement.
+    Closing,
+}
+
 /// Extend the accepted splash content boundary with actual startup composition.
 ///
 /// Every method runs on the one native event-loop thread. Implementations reuse
 /// StartupSession; they do not construct another startup policy. Calls must be
 /// bounded/nonblocking. Native error observations never claim work stopped.
 pub trait StartupWindowContent: WindowContent {
+    /// Route at most `min(maximum, 32)` shared completion notices before native UI admission.
+    ///
+    /// Called after the single start attempt on the same Tao loop, before STA entry,
+    /// splash controls or a WebView. Ready requires actual current authentication and
+    /// required capture attachment; it cannot be inferred from launch intent. Closing
+    /// continues bounded terminal disposal. Implementations retain original deadlines.
+    ///
+    /// # Errors
+    /// Preserve the original cause while the native loop continues actual owned shutdown.
+    fn prepare_native_ui(
+        &mut self,
+        maximum: std::num::NonZeroUsize,
+    ) -> Result<StartupPreparationStep, Box<dyn Error>>;
+
     /// Return the immutable coordinator-bound run for this desktop's entire native lifetime.
     /// A retry may change launch/navigation identities while retaining this exact run.
     fn run_key(&self) -> RunKey;

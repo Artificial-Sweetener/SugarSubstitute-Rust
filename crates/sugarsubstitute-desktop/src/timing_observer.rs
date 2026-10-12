@@ -17,18 +17,23 @@ pub(crate) struct TimingObserver {
 }
 impl TimingObserver {
     /// Reserve native buffers only for an explicitly requested Windows qualification.
-    pub(crate) fn native(enabled: bool) -> Result<Option<Self>, DesktopError> {
+    pub(crate) fn native(
+        enabled: bool,
+        order: NativeStartupOrder,
+    ) -> Result<Option<Self>, DesktopError> {
         if !enabled {
             return Ok(None);
         }
         #[cfg(target_os = "windows")]
         {
-            Ok(Some(Self::new(TimingAudit::new(Box::new(
-                crate::windows_timing::WindowsClock::new()?,
-            ))?)))
+            Ok(Some(Self::new(TimingAudit::new(
+                Box::new(crate::windows_timing::WindowsClock::new()?),
+                order,
+            )?)))
         }
         #[cfg(not(target_os = "windows"))]
         {
+            let _ = order;
             Err(error("raw QPC timing is supported only on Windows"))
         }
     }

@@ -51,7 +51,10 @@ impl TimingClock for Counter {
 #[test]
 fn equal_ticks_commit_seven_ordered_slots_and_later_requests_do_not_sample() -> TestResult {
     let clock = Counter::new();
-    let observer = TimingObserver::new(TimingAudit::new(Box::new(clock.clone()))?);
+    let observer = TimingObserver::new(TimingAudit::new(
+        Box::new(clock.clone()),
+        crate::timing::NativeStartupOrder::SurfaceFirst,
+    )?);
     for stage in STAGES {
         observe_startup(Some(&observer), stage)?;
     }
@@ -72,7 +75,8 @@ fn equal_ticks_commit_seven_ordered_slots_and_later_requests_do_not_sample() -> 
 #[test]
 fn duplicate_and_out_of_order_stages_reject_before_clock_read_or_slot_mutation() -> TestResult {
     let clock = Counter::new();
-    let mut audit = TimingAudit::new(Box::new(clock.clone()))?;
+    let mut audit =
+        TimingAudit::new(Box::new(clock.clone()), crate::timing::NativeStartupOrder::SurfaceFirst)?;
     assert!(audit.startup(STAGES[1]).is_err());
     assert_eq!(clock.reads.get(), 1);
     assert!(audit.receipt.startup_milestones.iter().all(Option::is_none));
@@ -94,7 +98,10 @@ fn invalid_raw_startup_observations_preserve_the_last_valid_prefix() -> TestResu
         Stamp { ticks: 10, thread: 7, source: 2 },
     ] {
         let clock = Counter::new();
-        let mut audit = TimingAudit::new(Box::new(clock.clone()))?;
+        let mut audit = TimingAudit::new(
+            Box::new(clock.clone()),
+            crate::timing::NativeStartupOrder::SurfaceFirst,
+        )?;
         audit.startup(STAGES[0])?;
         let prefix = audit.receipt.startup_milestones;
         clock.stamp.set(invalid);
@@ -109,7 +116,8 @@ fn invalid_raw_startup_observations_preserve_the_last_valid_prefix() -> TestResu
 fn failed_clock_preserves_cause_and_partial_teardown_receipt_keeps_only_observed_prefix()
 -> TestResult {
     let clock = Counter::new();
-    let mut audit = TimingAudit::new(Box::new(clock.clone()))?;
+    let mut audit =
+        TimingAudit::new(Box::new(clock.clone()), crate::timing::NativeStartupOrder::SurfaceFirst)?;
     audit.startup(STAGES[0])?;
     clock.failure.set(true);
     let cause = audit.startup(STAGES[1]).err().ok_or("Clock failure missing")?;
@@ -124,7 +132,9 @@ fn failed_clock_preserves_cause_and_partial_teardown_receipt_keeps_only_observed
 
 #[test]
 fn disabled_startup_observation_does_not_read_or_allocate_a_collector() -> TestResult {
-    assert!(TimingObserver::native(false)?.is_none());
+    assert!(
+        TimingObserver::native(false, crate::timing::NativeStartupOrder::SurfaceFirst)?.is_none()
+    );
     for stage in STAGES {
         observe_startup(None, stage)?;
     }
@@ -138,7 +148,8 @@ fn successful_submission_requires_first_actual_preparation_observation() -> Test
         presentation::FrameIdentity,
     };
     let clock = Counter::new();
-    let mut audit = TimingAudit::new(Box::new(clock.clone()))?;
+    let mut audit =
+        TimingAudit::new(Box::new(clock.clone()), crate::timing::NativeStartupOrder::SurfaceFirst)?;
     let identity = FrameIdentity {
         surface: SurfaceId::new(1)?,
         state_generation: Generation::new(1)?,
@@ -157,5 +168,33 @@ fn successful_submission_requires_first_actual_preparation_observation() -> Test
     let begin = audit.mark()?;
     audit.submission(begin, identity)?;
     assert_eq!(audit.receipt.submissions_observed, 1);
+    Ok(())
+}
+
+#[test]
+fn both_orders_reject_every_wrong_next_stage_without_sampling_then_record_exact_prefix()
+-> TestResult {
+    for order in [NativeStartupOrder::SurfaceFirst, NativeStartupOrder::ExecutionFirst] {
+        let clock = Counter::new();
+        let mut audit = TimingAudit::new(Box::new(clock.clone()), order)?;
+        let stages = order.stages();
+        for (index, next) in stages.into_iter().enumerate() {
+            for wrong in stages.into_iter().filter(|candidate| *candidate != next) {
+                let prefix = audit.receipt.startup_milestones;
+                let reads = clock.reads.get();
+                assert!(audit.startup(wrong).is_err());
+                assert_eq!(clock.reads.get(), reads);
+                assert_eq!(audit.receipt.startup_milestones, prefix);
+            }
+            audit.startup(next)?;
+            assert_eq!(audit.receipt.startup_milestones[index].ok_or("Stage lost")?.stage, next);
+        }
+        let receipt = audit.finish()?;
+        assert_eq!(receipt.startup_order, order);
+        assert_eq!(
+            receipt.startup_milestones.map(|slot| slot.map(|sample| sample.stage)),
+            stages.map(Some)
+        );
+    }
     Ok(())
 }

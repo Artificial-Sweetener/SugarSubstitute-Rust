@@ -19,6 +19,10 @@ use tao::{
 };
 use windows::Win32::{Foundation::HWND, UI::WindowsAndMessaging::DestroyWindow};
 
+#[path = "startup_surface_custody.rs"]
+mod custody;
+use custody::{Initialization, SurfacePort};
+
 /// Retain the complete splash native lifetime across presentation-only retirement and failures.
 pub(super) struct Splash {
     pub(super) window: Option<Rc<Window>>,
@@ -32,20 +36,21 @@ pub(super) struct Splash {
     pub(super) presented: bool,
     pub(super) launch: sugarsubstitute_contracts::startup::LaunchId,
     material: crate::NativeMaterial,
+    initialization: Initialization,
 }
 impl Splash {
+    /// Retain an inert surface owner before any native creation is attempted.
     pub(super) fn new(
         options: &DesktopOptions,
-        event_loop: &EventLoop<NativeAction>,
         content: &impl crate::StartupWindowContent,
         started: Instant,
         timings: Option<crate::timing::TimingObserver>,
-    ) -> Result<Self, DesktopError> {
-        let mut owner = Self {
+    ) -> Self {
+        Self {
             window: None,
             presenter: None,
             controls: None,
-            state: SurfaceState::new(timings.clone()),
+            state: SurfaceState::new(timings),
             presentations: Some(Presentations::new(started, options.audit_frames)),
             receipt: None,
             retiring: false,
@@ -53,36 +58,31 @@ impl Splash {
             presented: false,
             launch: content.launch_id(),
             material: crate::NativeMaterial::ThemedFallback,
-        };
-        owner.window = Some(Rc::new(
-            WindowBuilder::new()
-                .with_title(&options.title)
-                .with_inner_size(LogicalSize::new(options.logical_width, options.logical_height))
-                .with_decorations(false)
-                .with_resizable(false)
-                .with_transparent(true)
-                .with_theme(Some(if options.dark { Theme::Dark } else { Theme::Light }))
-                .with_visible(false)
-                .build(event_loop)
-                .map_err(|cause| DesktopError::new("create_startup_splash", cause))?,
-        ));
-        observe_startup(timings.as_ref(), NativeStartupStage::WindowCreated)?;
-        let window = owner.window()?.clone();
-        owner.presenter = Some(Presenter::new(window.clone(), options.dark)?);
-        observe_startup(timings.as_ref(), NativeStartupStage::PresenterReady)?;
-        owner.material = owner
+            initialization: Initialization::new(),
+        }
+    }
+
+    /// Create native slots once while the outer session owns this actual partial surface.
+    pub(super) fn initialize(
+        &mut self,
+        options: &DesktopOptions,
+        event_loop: &EventLoop<NativeAction>,
+        content: &impl crate::StartupWindowContent,
+        timings: Option<crate::timing::TimingObserver>,
+    ) -> Result<(), DesktopError> {
+        let mut port =
+            SplashPort { options, event_loop, controls: content.accessible_controls(), timings };
+        let result = self.initialization.initialize(
+            &mut self.window,
+            &mut self.presenter,
+            &mut self.controls,
+            &mut port,
+        );
+        self.material = self
             .presenter
             .as_ref()
             .map_or(crate::NativeMaterial::ThemedFallback, Presenter::material);
-        owner.controls = Some(Controls::new(
-            window,
-            event_loop.create_proxy(),
-            content.accessible_controls(),
-            PaintMode::PreparedPixels,
-            timings.clone(),
-        )?);
-        observe_startup(timings.as_ref(), NativeStartupStage::ControlsReady)?;
-        Ok(owner)
+        result
     }
     /// Bind a retry to fresh pixels; an exposed prior-launch frame cannot submit this launch.
     pub(super) fn bind_launch(&mut self, launch: sugarsubstitute_contracts::startup::LaunchId) {
@@ -151,6 +151,60 @@ impl Splash {
         Ok(true)
     }
 }
+/// Borrow native inputs without owning or hiding any partial returned resource.
+struct SplashPort<'a> {
+    options: &'a DesktopOptions,
+    event_loop: &'a EventLoop<NativeAction>,
+    controls: &'a [crate::AccessibleControl],
+    timings: Option<crate::timing::TimingObserver>,
+}
+impl SurfacePort for SplashPort<'_> {
+    type Window = Rc<Window>;
+    type Presenter = Presenter;
+    type Controls = Controls;
+    fn window(&mut self) -> Result<Self::Window, DesktopError> {
+        Ok(Rc::new(
+            WindowBuilder::new()
+                .with_title(&self.options.title)
+                .with_inner_size(LogicalSize::new(
+                    self.options.logical_width,
+                    self.options.logical_height,
+                ))
+                .with_decorations(false)
+                .with_resizable(false)
+                .with_transparent(true)
+                .with_theme(Some(if self.options.dark { Theme::Dark } else { Theme::Light }))
+                .with_visible(false)
+                .build(self.event_loop)
+                .map_err(|cause| DesktopError::new("create_startup_splash", cause))?,
+        ))
+    }
+    fn window_adopted(&mut self) -> Result<(), DesktopError> {
+        observe_startup(self.timings.as_ref(), NativeStartupStage::WindowCreated)
+    }
+    fn presenter(&mut self, window: &Self::Window) -> Result<Presenter, DesktopError> {
+        Presenter::new(window.clone(), self.options.dark)
+    }
+    fn presenter_adopted(&mut self) -> Result<(), DesktopError> {
+        observe_startup(self.timings.as_ref(), NativeStartupStage::PresenterReady)
+    }
+    fn controls(&mut self, window: &Self::Window) -> Result<Controls, DesktopError> {
+        Controls::new(
+            window.clone(),
+            self.event_loop.create_proxy(),
+            self.controls,
+            PaintMode::PreparedPixels,
+            self.timings.clone(),
+        )
+    }
+    fn initialize_controls(&mut self, controls: &mut Controls) -> Result<(), DesktopError> {
+        controls.initialize()
+    }
+    fn controls_adopted(&mut self) -> Result<(), DesktopError> {
+        observe_startup(self.timings.as_ref(), NativeStartupStage::ControlsReady)
+    }
+}
+
 impl Drop for Splash {
     fn drop(&mut self) {
         if !self.retired {
@@ -205,6 +259,7 @@ mod tests {
             presented: true,
             launch: first,
             material: crate::NativeMaterial::ThemedFallback,
+            initialization: Initialization::new(),
         };
         let released = Arc::new(AtomicUsize::new(0));
         let shape = FrameShape::new(1, 1, 1.0)?;

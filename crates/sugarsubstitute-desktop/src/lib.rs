@@ -34,6 +34,8 @@ mod native_storage;
 #[allow(unsafe_code)]
 mod native_surface;
 mod runtime;
+#[path = "startup_custody.rs"]
+mod shutdown;
 #[cfg(target_os = "windows")]
 #[allow(unsafe_code)]
 mod startup_runtime;
@@ -53,8 +55,9 @@ mod windows_timing;
 #[allow(unsafe_code)]
 mod windows_ui_apartment;
 pub use timing::{
-    NativeCallbackKind, NativeCallbackTiming, NativeStartupStage, NativeStartupTiming,
-    NativeSubmissionTiming, NativeTickInterval, NativeTimingReceipt, NativeTimingSource,
+    NativeCallbackKind, NativeCallbackTiming, NativeStartupOrder, NativeStartupStage,
+    NativeStartupTiming, NativeSubmissionTiming, NativeTickInterval, NativeTimingReceipt,
+    NativeTimingSource,
 };
 #[cfg(target_os = "windows")]
 #[allow(unsafe_code)]
@@ -85,7 +88,7 @@ pub use runtime::run;
 pub use host_contract::{
     DesktopStartupCommand, DesktopStartupObservation, MainCaptionLabels, MainIdentity,
     MainRequestError, MainWindowRequest, MainWindowSettings, ServedFrontendVersions,
-    StartupDesktopReceipt, StartupWindowContent,
+    StartupDesktopReceipt, StartupPreparationStep, StartupWindowContent,
 };
 
 pub use main_environment::{MainEnvironmentError, MainEnvironmentFacts};

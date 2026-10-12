@@ -132,7 +132,10 @@ fn startup_observer(
     failure: std::rc::Rc<std::cell::Cell<bool>>,
 ) -> Result<crate::timing::TimingObserver, DesktopError> {
     use crate::timing::{NativeStartupStage as Stage, TimingAudit, TimingObserver};
-    let observer = TimingObserver::new(TimingAudit::new(Box::new(StartupClock(failure)))?);
+    let observer = TimingObserver::new(TimingAudit::new(
+        Box::new(StartupClock(failure)),
+        crate::timing::NativeStartupOrder::SurfaceFirst,
+    )?);
     for stage in [
         Stage::EventLoopReady,
         Stage::WindowCreated,

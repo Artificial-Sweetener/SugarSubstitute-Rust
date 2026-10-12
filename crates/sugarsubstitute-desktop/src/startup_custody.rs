@@ -1,17 +1,19 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Keep startup's loop and STA custody until actual native retirement and execution settlement.
+//! Retain native teardown and final content custody until actual settlement and joins.
 
 use crate::DesktopError;
 
 /// Current owner observations; a native-loop return supplies none of these facts.
+#[cfg(target_os = "windows")]
 #[derive(Clone, Copy)]
-pub(super) struct ShutdownFacts {
-    pub(super) closing: bool,
-    pub(super) splash_retired: bool,
-    pub(super) main_retired: bool,
-    pub(super) execution_settled: bool,
+pub(crate) struct ShutdownFacts {
+    pub(crate) closing: bool,
+    pub(crate) splash_retired: bool,
+    pub(crate) main_retired: bool,
+    pub(crate) execution_settled: bool,
 }
+#[cfg(target_os = "windows")]
 impl ShutdownFacts {
     fn settled(self) -> bool {
         self.closing && self.splash_retired && self.main_retired && self.execution_settled
@@ -19,22 +21,24 @@ impl ShutdownFacts {
 }
 
 /// Own the single final teardown admission independently of native event-loop return status.
-pub(super) struct LoopCustody {
+#[cfg(target_os = "windows")]
+pub(crate) struct LoopCustody {
     teardown_claimed: bool,
 }
+#[cfg(target_os = "windows")]
 impl LoopCustody {
-    pub(super) const fn new() -> Self {
+    pub(crate) const fn new() -> Self {
         Self { teardown_claimed: false }
     }
 
     /// Request loop exit only after every retained owner actually settles.
-    pub(super) fn may_exit(&self, facts: ShutdownFacts) -> bool {
+    pub(crate) fn may_exit(&self, facts: ShutdownFacts) -> bool {
         !self.teardown_claimed && facts.settled()
     }
 
     /// Check facts again after the loop returns, preserving an unexpected native status.
     /// An early return retains custody; its caller closes admission through the existing owner.
-    pub(super) fn native_return(&mut self, facts: ShutdownFacts, exit_code: i32) -> NativeReturn {
+    pub(crate) fn native_return(&mut self, facts: ShutdownFacts, exit_code: i32) -> NativeReturn {
         let ready = self.may_exit(facts);
         let failure = (!ready || exit_code != 0).then(|| {
             DesktopError::message(
@@ -51,20 +55,56 @@ impl LoopCustody {
 }
 
 /// Return status and an independently established, single-use teardown proof.
-pub(super) struct NativeReturn {
-    pub(super) failure: Option<DesktopError>,
-    pub(super) teardown: Option<TeardownPermit>,
+#[cfg(target_os = "windows")]
+pub(crate) struct NativeReturn {
+    pub(crate) failure: Option<DesktopError>,
+    pub(crate) teardown: Option<TeardownPermit>,
 }
 
-/// A consumed proof allows the original loop, retired native holders and outer STA to release.
-pub(super) struct TeardownPermit(());
+/// A consumed native permit orders holder/loop drop before the actual final content join.
+/// It grants no joined-worker fact and cannot by itself authorize releasing the STA.
+#[cfg(target_os = "windows")]
+pub(crate) struct TeardownPermit(());
+#[cfg(target_os = "windows")]
 impl TeardownPermit {
-    /// Run final teardown once; this proof cannot be cloned or issued a second time.
-    pub(super) fn finish<R>(self, teardown: impl FnOnce() -> R) -> R {
-        teardown()
+    /// Drop actual native holders/loop first, then finish settled workers while outer STA stays held.
+    pub(crate) fn finish<N, R>(
+        self,
+        native: impl FnOnce() -> N,
+        workers: impl FnOnce(N) -> R,
+    ) -> R {
+        let retired = native();
+        workers(retired)
     }
 }
 
-#[cfg(test)]
+/// Finish the consumed actual content owner only after native holders and loop retired.
+///
+/// Success disposes that finished owner before the final native release. Failure retains
+/// one already-admitted owner without running Drop or granting a joined-worker fact.
+/// This defensive path adds no task, queue, allocation or deadline: admission is closed
+/// and its original buffers/claims/handles remain inaccessible until process termination.
+/// The caller's acquired STA reference must remain unreleased on that path; its existing
+/// apartment owner drops without CoUninitialize. Preserve the earliest original cause.
+pub(crate) fn finish_after_native<C>(
+    mut content: C,
+    finish: impl FnOnce(&mut C) -> Result<(), DesktopError>,
+    after_join: impl FnOnce() -> Result<(), DesktopError>,
+    failure: &mut Option<DesktopError>,
+) {
+    if let Err(cause) = finish(&mut content) {
+        tracing::error!(operation = "retain_final_content", cause = %cause,
+            "Retaining one unresolved final content owner until process termination");
+        DesktopError::retain_first(failure, cause);
+        std::mem::forget(content);
+        return;
+    }
+    drop(content);
+    if let Err(cause) = after_join() {
+        DesktopError::retain_first(failure, cause);
+    }
+}
+
+#[cfg(all(test, target_os = "windows"))]
 #[path = "startup_custody_tests.rs"]
 mod tests;

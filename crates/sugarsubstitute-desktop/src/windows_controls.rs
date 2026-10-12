@@ -32,6 +32,10 @@ use windows::{
     core::{PCWSTR, w},
 };
 
+#[path = "windows_controls_creation.rs"]
+mod creation;
+use creation::{Creation, NativePort};
+
 /// Retain a stable native identity and the last applied content snapshot.
 struct Peer {
     hwnd: HWND,
@@ -53,13 +57,13 @@ pub(crate) enum PaintMode {
 pub(crate) struct Controls {
     window: Rc<Window>,
     callback: Rc<Callback>,
-    peers: Vec<Peer>,
-    parent_registration: Option<Registration<Callback>>,
-    teardown_error: Option<DesktopError>,
+    creation: Creation<Registration<Callback>, Peer>,
+    planned: Vec<AccessibleControl>,
+    paint_mode: PaintMode,
 }
 
 impl Controls {
-    /// Register standard BUTTON peers whose default OS providers expose name, role and invoke.
+    /// Allocate inert retained callback/control data before any native initialization.
     pub(crate) fn new(
         window: Rc<Window>,
         proxy: EventLoopProxy<NativeAction>,
@@ -68,103 +72,44 @@ impl Controls {
         timings: Option<crate::timing::TimingObserver>,
     ) -> Result<Self, DesktopError> {
         validate_controls(controls)?;
-        let parent = HWND(window.hwnd() as *mut c_void);
         let callback = Rc::new(Callback::new(proxy, timings, paint_mode, controls.len())?);
-        let mut owner = Self {
-            window,
-            callback,
-            peers: Vec::new(),
-            parent_registration: None,
-            teardown_error: None,
-        };
-        owner
-            .peers
+        let mut planned = Vec::new();
+        planned
             .try_reserve_exact(controls.len())
-            .map_err(|cause| DesktopError::new("allocate_accessible_peers", cause))?;
-        if owner.peers.capacity() != controls.len() {
-            return Err(DesktopError::message(
-                "allocate_accessible_peers",
-                "peer capacity exceeded",
-            ));
-        }
-        owner.parent_registration = Some(Registration::new(&owner.callback));
-        // SAFETY: This thread owns parent and parent_proc consumes the transferred Rc<Callback>.
-        unsafe {
-            install(
-                parent,
-                Some(parent_proc),
-                owner.parent_registration.as_ref().ok_or_else(|| {
-                    DesktopError::message(
-                        "register_accessible_parent",
-                        "missing parent registration",
-                    )
-                })?,
-            )?;
-        }
-        for control in controls {
-            let label: Vec<u16> = control.label.encode_utf16().chain(Some(0)).collect();
-            let rect = physical_bounds(control, owner.window.scale_factor())?;
-            // SAFETY: BUTTON is an OS-owned class; the label is copied synchronously.
-            // The nonzero control ID is a child menu identity, not an owned menu handle.
-            let hwnd = unsafe {
-                CreateWindowExW(
-                    WINDOW_EX_STYLE::default(),
-                    w!("BUTTON"),
-                    PCWSTR(label.as_ptr()),
-                    WS_CHILD | WS_VISIBLE | WS_TABSTOP | WINDOW_STYLE(BS_PUSHBUTTON as u32),
-                    rect.left,
-                    rect.top,
-                    rect.right - rect.left,
-                    rect.bottom - rect.top,
-                    Some(parent),
-                    Some(HMENU(usize::from(control.id) as *mut c_void)),
-                    None,
-                    None,
-                )
-            }
-            .map_err(|error| DesktopError::new("create_accessible_control", error))?;
-            owner.peers.push(Peer {
-                hwnd,
-                snapshot: *control,
-                rect,
-                registration: Some(Registration::new(&owner.callback)),
-            });
-            owner.callback.register(
-                hwnd,
-                control.id,
-                match paint_mode {
-                    PaintMode::NativeButtons(identity) => {
-                        NativeAction::MainControl(identity, control.id)
-                    }
-                    PaintMode::PreparedPixels if control.close => NativeAction::Close,
-                    PaintMode::PreparedPixels => NativeAction::Activate(control.id),
-                },
-            )?;
-            // SAFETY: This thread owns child and child_proc consumes the transferred Rc<Callback>.
-            unsafe {
-                let registration = owner
-                    .peers
-                    .last()
-                    .and_then(|peer| peer.registration.as_ref())
-                    .ok_or_else(|| {
-                    DesktopError::message("register_accessible_child", "missing child registration")
-                })?;
-                install(hwnd, Some(child_proc), registration)?;
-            }
-        }
-        Ok(owner)
+            .map_err(|cause| DesktopError::new("allocate_accessible_plan", cause))?;
+        planned.extend_from_slice(controls);
+        Ok(Self { window, callback, creation: Creation::new(controls.len())?, planned, paint_mode })
+    }
+
+    /// Initialize once, with this owner already retained by its native surface.
+    pub(crate) fn initialize(&mut self) -> Result<(), DesktopError> {
+        let mut port = ControlPort {
+            window: &self.window,
+            callback: &self.callback,
+            planned: &self.planned,
+            paint_mode: self.paint_mode,
+        };
+        self.creation.initialize(&mut port)
     }
 
     /// Apply disclosure labels and DPI bounds without reconstructing native identities.
     pub(crate) fn update(&mut self, controls: &[AccessibleControl]) -> Result<(), DesktopError> {
+        if !self.creation.writable() {
+            return Err(DesktopError::message(
+                "update_accessible_controls",
+                "control initialization is incomplete or closing",
+            ));
+        }
         validate_controls(controls)?;
-        if controls.len() != self.peers.len() {
+        if controls.len() != self.creation.peers.len() {
             return Err(DesktopError::message(
                 "update_accessible_controls",
                 "control inventory changed during the surface lifetime",
             ));
         }
-        for (control, peer) in controls.iter().zip(&mut self.peers) {
+        for (control, peer) in
+            controls.iter().zip(self.creation.peers.iter_mut().map(|slot| &mut slot.value))
+        {
             if control.id != peer.snapshot.id || control.close != peer.snapshot.close {
                 return Err(DesktopError::message(
                     "update_accessible_controls",
@@ -202,67 +147,13 @@ impl Controls {
     /// End every native callback borrow before returning a surface outcome.
     /// Any OS cleanup failure remains an observable failed terminal result.
     pub(crate) fn shutdown(&mut self) -> Result<(), DesktopError> {
-        // SAFETY: Native peers and subclass borrows belong to this creating thread.
-        // Removal precedes destruction and the callback allocation remains live here.
-        unsafe {
-            let mut remaining = Vec::new();
-            remaining
-                .try_reserve_exact(self.peers.len())
-                .map_err(|cause| DesktopError::new("allocate_control_retirement", cause))?;
-            for mut peer in self.peers.drain(..) {
-                if peer.registration.as_ref().is_some_and(Registration::destroyed)
-                    || self.parent_registration.as_ref().is_some_and(Registration::destroyed)
-                {
-                    continue;
-                }
-                if let Some(registration) = &peer.registration {
-                    if registration.installed()
-                        && let Err(cause) = remove(peer.hwnd, Some(child_proc), registration)
-                    {
-                        DesktopError::retain_first(&mut self.teardown_error, cause);
-                        remaining.push(peer);
-                        continue;
-                    }
-                    peer.registration = None;
-                }
-                if let Err(error) = DestroyWindow(peer.hwnd) {
-                    DesktopError::retain_first(
-                        &mut self.teardown_error,
-                        DesktopError::new("destroy_accessible_control", error),
-                    );
-                    remaining.push(peer);
-                }
-            }
-            self.peers = remaining;
-            if self.peers.is_empty()
-                && let Some(registration) = &self.parent_registration
-            {
-                let parent = HWND(self.window.hwnd() as *mut c_void);
-                if registration.destroyed() || !registration.installed() {
-                    self.parent_registration = None;
-                } else {
-                    match remove(parent, Some(parent_proc), registration) {
-                        Ok(()) => self.parent_registration = None,
-                        Err(cause) => DesktopError::retain_first(&mut self.teardown_error, cause),
-                    }
-                }
-            }
-        }
-        if self.peers.is_empty()
-            && self.parent_registration.is_none()
-            && Rc::strong_count(&self.callback) != 1
-        {
-            self.teardown_error.get_or_insert_with(|| {
-                DesktopError::message(
-                    "release_accessible_callbacks",
-                    "native callback references survived completed subclass teardown",
-                )
-            });
-        }
-        match self.teardown_error.take() {
-            Some(error) => Err(error),
-            None => Ok(()),
-        }
+        let mut port = ControlPort {
+            window: &self.window,
+            callback: &self.callback,
+            planned: &self.planned,
+            paint_mode: self.paint_mode,
+        };
+        self.creation.shutdown(&mut port)
     }
 
     /// Draw a native focus cue once after each full CPU blit; never XOR an existing cue twice.
@@ -272,7 +163,9 @@ impl Controls {
         }
         // SAFETY: GetFocus only reads this calling UI thread's focus identity.
         let focus = unsafe { GetFocus() };
-        if let Some(peer) = self.peers.iter().find(|peer| peer.hwnd == focus) {
+        if let Some(peer) =
+            self.creation.peers.iter().map(|slot| &slot.value).find(|peer| peer.hwnd == focus)
+        {
             let mut rect = peer.rect;
             rect.left += 3;
             rect.top += 3;
@@ -304,7 +197,7 @@ impl Controls {
 impl Controls {
     /// Require every peer and native callback registration to be actually retired.
     pub(crate) fn retired(&self) -> bool {
-        self.peers.is_empty() && self.parent_registration.is_none()
+        self.creation.retired(Rc::strong_count(&self.callback) == 1)
     }
 }
 
@@ -314,12 +207,108 @@ impl Drop for Controls {
         if !self.retired() {
             std::mem::forget(self.window.clone());
             std::mem::forget(self.callback.clone());
-            std::mem::forget(std::mem::take(&mut self.peers));
-            std::mem::forget(self.parent_registration.take());
+            self.creation.retain_unresolved();
             tracing::error!(
                 operation = "native_controls_unresolved_drop",
                 "Retaining native controls until process termination"
             );
         }
+    }
+}
+
+/// Borrow the exact retained parent/callback and bounded planned metadata for native effects.
+struct ControlPort<'a> {
+    window: &'a Window,
+    callback: &'a Rc<Callback>,
+    planned: &'a [AccessibleControl],
+    paint_mode: PaintMode,
+}
+impl NativePort for ControlPort<'_> {
+    type Parent = Registration<Callback>;
+    type Peer = Peer;
+    fn parent(&mut self) -> Result<Self::Parent, DesktopError> {
+        Ok(Registration::new(self.callback))
+    }
+    fn install_parent(&mut self, parent: &Self::Parent) -> Result<(), DesktopError> {
+        // SAFETY: This thread owns the retained parent and exact Callback registration.
+        unsafe { install(HWND(self.window.hwnd() as *mut c_void), Some(parent_proc), parent) }
+    }
+    fn peer(&mut self, index: usize) -> Result<Self::Peer, DesktopError> {
+        let control = *self.planned.get(index).ok_or_else(|| {
+            DesktopError::message("create_accessible_control", "planned identity missing")
+        })?;
+        let label: Vec<u16> = control.label.encode_utf16().chain(Some(0)).collect();
+        let rect = physical_bounds(&control, self.window.scale_factor())?;
+        // SAFETY: The owned parent belongs to this thread; BUTTON copies the bounded label.
+        let hwnd = unsafe {
+            CreateWindowExW(
+                WINDOW_EX_STYLE::default(),
+                w!("BUTTON"),
+                PCWSTR(label.as_ptr()),
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP | WINDOW_STYLE(BS_PUSHBUTTON as u32),
+                rect.left,
+                rect.top,
+                rect.right - rect.left,
+                rect.bottom - rect.top,
+                Some(HWND(self.window.hwnd() as *mut c_void)),
+                Some(HMENU(usize::from(control.id) as *mut c_void)),
+                None,
+                None,
+            )
+        }
+        .map_err(|cause| DesktopError::new("create_accessible_control", cause))?;
+        Ok(Peer {
+            hwnd,
+            snapshot: control,
+            rect,
+            registration: Some(Registration::new(self.callback)),
+        })
+    }
+    fn register_peer(&mut self, peer: &Self::Peer) -> Result<(), DesktopError> {
+        self.callback.register(
+            peer.hwnd,
+            peer.snapshot.id,
+            match self.paint_mode {
+                PaintMode::NativeButtons(identity) => {
+                    NativeAction::MainControl(identity, peer.snapshot.id)
+                }
+                PaintMode::PreparedPixels if peer.snapshot.close => NativeAction::Close,
+                PaintMode::PreparedPixels => NativeAction::Activate(peer.snapshot.id),
+            },
+        )
+    }
+    fn install_peer(&mut self, peer: &Self::Peer) -> Result<(), DesktopError> {
+        let registration = peer.registration.as_ref().ok_or_else(|| {
+            DesktopError::message("register_accessible_child", "retained registration missing")
+        })?;
+        // SAFETY: The transaction retains this exact child and Callback before native reentry.
+        unsafe { install(peer.hwnd, Some(child_proc), registration) }
+    }
+    fn destroyed(&self, peer: &Self::Peer, parent: Option<&Self::Parent>) -> bool {
+        peer.registration.as_ref().is_some_and(Registration::destroyed)
+            || parent.is_some_and(Registration::destroyed)
+    }
+    fn remove_peer(&mut self, peer: &mut Self::Peer) -> Result<(), DesktopError> {
+        if let Some(registration) = &peer.registration {
+            if registration.installed() {
+                remove(peer.hwnd, Some(child_proc), registration)?;
+            }
+            peer.registration = None;
+        }
+        Ok(())
+    }
+    fn destroy_peer(&mut self, peer: &Self::Peer) -> Result<(), DesktopError> {
+        // SAFETY: The transaction observed successful callback removal before this effect.
+        unsafe { DestroyWindow(peer.hwnd) }
+            .map_err(|cause| DesktopError::new("destroy_accessible_control", cause))
+    }
+    fn retire_parent(&mut self, parent: &Self::Parent) -> Result<(), DesktopError> {
+        if parent.destroyed() || !parent.installed() {
+            return Ok(());
+        }
+        remove(HWND(self.window.hwnd() as *mut c_void), Some(parent_proc), parent)
+    }
+    fn callbacks_retired(&self) -> bool {
+        Rc::strong_count(self.callback) == 1
     }
 }

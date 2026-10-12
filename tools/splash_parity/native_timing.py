@@ -21,6 +21,11 @@ RECEIPT_KEYS = frozenset(("schema_version", "source", "begin_ticks", "end_ticks"
                         "submissions_observed", "submission_samples_omitted", "callbacks", "submissions"))
 STARTUP_STAGES = ("event_loop_ready", "window_created", "presenter_ready", "controls_ready",
                   "execution_ready", "show_focus_returned", "first_preparation_request")
+STARTUP_ORDERS = {
+    "surface_first": STARTUP_STAGES,
+    "execution_first": ("event_loop_ready", "execution_ready", "window_created", "presenter_ready",
+                        "controls_ready", "show_focus_returned", "first_preparation_request"),
+}
 
 
 def integer(value, name, minimum=0, maximum=(1 << 64) - 1):
@@ -51,8 +56,14 @@ def validate(receipt):
     """
     if not isinstance(receipt, dict):
         raise ValueError("Native timings require an object")
-    version = integer(receipt.get("schema_version"), "schema version", 1, 2)
-    keys(receipt, RECEIPT_KEYS | ({"startup_milestones"} if version == 2 else set()), "native timings")
+    version = integer(receipt.get("schema_version"), "schema version", 1, 3)
+    extra = {"startup_milestones"} if version >= 2 else set()
+    if version == 3:
+        extra.add("startup_order")
+    keys(receipt, RECEIPT_KEYS | extra, "native timings")
+    if version == 3 and (not isinstance(receipt["startup_order"], str)
+                         or receipt["startup_order"] not in STARTUP_ORDERS):
+        raise ValueError("Unknown native startup order")
     if receipt["source"] != "windows_qpc":
         raise ValueError("Unsupported native clock schema")
     integer(receipt["frequency"], "QPC frequency", 1, (1 << 63) - 1)
@@ -60,7 +71,7 @@ def validate(receipt):
     lifetime = interval(receipt, (0, (1 << 63) - 1), "native lifetime")
     if lifetime[0] == lifetime[1]:
         raise ValueError("Native timing lifetime must be positive")
-    if version == 2:
+    if version >= 2:
         validate_startup(receipt, lifetime)
     for buffer, count, omitted in (("callbacks", "callbacks_observed", "callback_samples_omitted"),
                                    ("submissions", "submissions_observed", "submission_samples_omitted")):
@@ -120,18 +131,19 @@ def validate(receipt):
 
 def validate_startup(receipt, lifetime):
     """Require exact ordered native startup checkpoints before any successful submission."""
+    stages = STARTUP_ORDERS[receipt["startup_order"]] if receipt["schema_version"] == 3 else STARTUP_STAGES
     milestones = receipt["startup_milestones"]
-    if not isinstance(milestones, list) or len(milestones) > len(STARTUP_STAGES):
+    if not isinstance(milestones, list) or len(milestones) > len(stages):
         raise ValueError("Startup milestones exceed the seven-stage inventory")
     previous = lifetime[0]
     for index, milestone in enumerate(milestones):
         keys(milestone, ("stage", "ticks"), "startup milestone")
-        if milestone["stage"] != STARTUP_STAGES[index]:
+        if milestone["stage"] != stages[index]:
             raise ValueError("Startup stages must form the exact ordered prefix")
         previous = integer(milestone["ticks"], "startup milestone ticks", previous, lifetime[1])
     submissions = receipt["submissions"]
     if isinstance(submissions, list) and submissions:
-        if len(milestones) != len(STARTUP_STAGES):
+        if len(milestones) != len(stages):
             raise ValueError("Successful native submission requires every startup milestone")
         first = submissions[0]
         if (not isinstance(first, dict) or type(first.get("begin_ticks")) is not int
@@ -151,7 +163,7 @@ def distribution(values):
 
 
 def analyse(receipt, *, profile="strict"):
-    """Keep raw schemas1/2 unchanged; busy derived reports add budgets and both verdicts."""
+    """Keep raw schemas1/2/3 unchanged; busy derived reports add budgets and both verdicts."""
     assess_timing(None, 1, profile=profile)
     validate(receipt)
     factor = 1000 / receipt["frequency"]
@@ -196,6 +208,8 @@ def analyse(receipt, *, profile="strict"):
             "accepted": complete and bool(callback_passes) and all(callback_passes) and producer_passed,
             "acceptance_scope": "Observed native distributions; campaign completeness is separately assessed by the orchestrator",
             "scope": "Native successful submission end-to-end intervals; retained exposures excluded from producer cadence. Full nested callback distributions are never summed. Display latency is outside this receipt."}
+    if receipt["schema_version"] == 3:
+        result["native_startup_order"] = receipt["startup_order"]
     if profile == "busy":
         producer = assess_timing(fresh_intervals["p95_ms"], 25, profile=profile)
         callbacks_accepted = bool(selected_callback_passes) and all(selected_callback_passes)

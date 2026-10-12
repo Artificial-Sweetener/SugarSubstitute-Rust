@@ -39,7 +39,10 @@ fn counter(frequency: i64, thread: u32) -> (Counter, Rc<Cell<Stamp>>, Rc<Cell<bo
     (Counter { stamp: stamp.clone(), frequency, thread, failure: failure.clone() }, stamp, failure)
 }
 fn audit() -> Result<TimingAudit, DesktopError> {
-    let mut audit = TimingAudit::new(Box::new(counter(1_000, 7).0))?;
+    let mut audit = TimingAudit::new(
+        Box::new(counter(1_000, 7).0),
+        crate::timing::NativeStartupOrder::SurfaceFirst,
+    )?;
     for stage in [
         NativeStartupStage::EventLoopReady,
         NativeStartupStage::WindowCreated,
@@ -90,7 +93,10 @@ fn both_buffers_are_preallocated_and_never_grow_when_observations_overflow() -> 
 #[test]
 fn nested_callbacks_keep_raw_overlap_and_exclude_only_parent_modal_segment() -> TestResult {
     let (clock, stamp, _) = counter(1_000, 7);
-    let observer = TimingObserver::new(TimingAudit::new(Box::new(clock))?);
+    let observer = TimingObserver::new(TimingAudit::new(
+        Box::new(clock),
+        crate::timing::NativeStartupOrder::SurfaceFirst,
+    )?);
     let parent = observer.mark()?;
     let delegated_begin = observer.mark()?;
     // No collector borrow spans the delegated operation: nested native/Tao calls remain observable.
@@ -153,7 +159,8 @@ fn wrong_source_thread_negative_ticks_and_regression_reject_before_sample_append
         Stamp { ticks: 9, thread: 7, source: QPC_SOURCE },
     ] {
         let (clock, stamp, _) = counter(1_000, 7);
-        let mut audit = TimingAudit::new(Box::new(clock))?;
+        let mut audit =
+            TimingAudit::new(Box::new(clock), crate::timing::NativeStartupOrder::SurfaceFirst)?;
         stamp.set(invalid);
         assert!(audit.mark().is_err());
         assert_eq!(audit.last_tick, 10);
@@ -161,7 +168,13 @@ fn wrong_source_thread_negative_ticks_and_regression_reject_before_sample_append
         assert_eq!(audit.receipt.submissions_observed, 0);
     }
     for (frequency, thread) in [(0, 7), (-1, 7), (1_000, 0)] {
-        assert!(TimingAudit::new(Box::new(counter(frequency, thread).0)).is_err());
+        assert!(
+            TimingAudit::new(
+                Box::new(counter(frequency, thread).0),
+                crate::timing::NativeStartupOrder::SurfaceFirst
+            )
+            .is_err()
+        );
     }
     Ok(())
 }
@@ -243,9 +256,12 @@ fn native_failure_survives_callback_owner_release_and_consumption_is_exactly_onc
 
 #[test]
 fn clock_boundary_failure_preserves_cause_and_disabling_audit_avoids_collector() -> TestResult {
-    assert!(TimingObserver::native(false)?.is_none());
+    assert!(
+        TimingObserver::native(false, crate::timing::NativeStartupOrder::SurfaceFirst)?.is_none()
+    );
     let (clock, _, failure) = counter(1_000, 7);
-    let mut audit = TimingAudit::new(Box::new(clock))?;
+    let mut audit =
+        TimingAudit::new(Box::new(clock), crate::timing::NativeStartupOrder::SurfaceFirst)?;
     failure.set(true);
     let error = audit.mark().err().ok_or("Counter failure accepted")?;
     assert!(error.to_string().contains("injected_counter"));
@@ -258,7 +274,8 @@ fn clock_boundary_failure_preserves_cause_and_disabling_audit_avoids_collector()
 #[test]
 fn actual_qpc_adapter_preserves_source_frequency_and_creating_thread() -> TestResult {
     let clock = crate::windows_timing::WindowsClock::new()?;
-    let mut audit = TimingAudit::new(Box::new(clock))?;
+    let mut audit =
+        TimingAudit::new(Box::new(clock), crate::timing::NativeStartupOrder::SurfaceFirst)?;
     let begin = audit.mark()?;
     audit.callback(begin, NativeCallbackKind::Other, None)?;
     let receipt = audit.finish()?;
@@ -324,7 +341,7 @@ fn failed_native_or_control_submission_never_changes_actual_success_identity() -
 #[cfg(not(target_os = "windows"))]
 #[test]
 fn enabling_qpc_audit_on_another_platform_is_observable_before_native_construction() {
-    assert!(TimingObserver::native(true).is_err());
+    assert!(TimingObserver::native(true, crate::timing::NativeStartupOrder::SurfaceFirst).is_err());
 }
 
 #[test]

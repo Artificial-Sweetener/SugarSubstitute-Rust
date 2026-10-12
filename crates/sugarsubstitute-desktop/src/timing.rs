@@ -12,7 +12,7 @@ pub use contract::*;
 #[path = "timing_startup.rs"]
 mod startup;
 pub(crate) use startup::observe_startup;
-pub use startup::{NativeStartupStage, NativeStartupTiming};
+pub use startup::{NativeStartupOrder, NativeStartupStage, NativeStartupTiming};
 
 pub(crate) const SAMPLE_LIMIT: usize = 16_384;
 pub(crate) const QPC_SOURCE: u64 = 1;
@@ -53,7 +53,10 @@ fn error(message: &'static str) -> DesktopError {
 impl TimingAudit {
     /// Reserve both buffers before native callback admission; failures retain allocator causes.
     #[cfg(any(target_os = "windows", test))]
-    pub(crate) fn new(mut clock: Box<dyn TimingClock>) -> Result<Self, DesktopError> {
+    pub(crate) fn new(
+        mut clock: Box<dyn TimingClock>,
+        startup_order: NativeStartupOrder,
+    ) -> Result<Self, DesktopError> {
         let frequency =
             u64::try_from(clock.frequency()).map_err(|_| error("counter frequency is negative"))?;
         let thread = clock.thread();
@@ -76,6 +79,7 @@ impl TimingAudit {
             last_identity: None,
             receipt: NativeTimingReceipt {
                 source: NativeTimingSource::WindowsQpc,
+                startup_order,
                 begin_ticks: begin.ticks,
                 end_ticks: begin.ticks,
                 frequency,

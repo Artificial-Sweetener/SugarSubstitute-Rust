@@ -37,6 +37,54 @@ def startup_fixture():
 
 
 class StartupTimingTests(unittest.TestCase):
+    def test_explicit_modes_preserve_both_actual_orders_without_mutating_legacy_bytes(self):
+        orders = {
+            "surface_first": STARTUP_STAGES,
+            "execution_first": ("event_loop_ready", "execution_ready", "window_created", "presenter_ready",
+                                "controls_ready", "show_focus_returned", "first_preparation_request"),
+        }
+        for mode, stages in orders.items():
+            value = startup_fixture()
+            value.update(schema_version=3, startup_order=mode,
+                         startup_milestones=[dict(stage=stage, ticks=120 + index * 10)
+                                             for index, stage in enumerate(stages)])
+            preserved = json.dumps(value)
+            self.assertIs(validate(value), value)
+            self.assertEqual(analyse(value)["native_startup_order"], mode)
+            self.assertEqual(analyse(value)["native_receipt_schema_version"], 3)
+            self.assertEqual(json.dumps(value), preserved)
+            for index in range(7):
+                for wrong in stages:
+                    if wrong == stages[index]:
+                        continue
+                    invalid = copy.deepcopy(value)
+                    invalid["startup_milestones"][index]["stage"] = wrong
+                    self.assertRaises(ValueError, validate, invalid)
+            partial = copy.deepcopy(value)
+            partial.update(submissions=[], submissions_observed=0)
+            for length in range(8):
+                partial["startup_milestones"] = value["startup_milestones"][:length]
+                self.assertIs(validate(partial), partial)
+            partial.update(submissions=value["submissions"], submissions_observed=3)
+            partial["startup_milestones"] = value["startup_milestones"][:6]
+            self.assertRaises(ValueError, validate, partial)
+        for legacy in (fixture(), startup_fixture()):
+            preserved = json.dumps(legacy)
+            self.assertNotIn("native_startup_order", analyse(legacy))
+            self.assertEqual(json.dumps(legacy), preserved)
+
+    def test_unknown_missing_or_mismatched_mode_cannot_reinterpret_observations(self):
+        for mode in (None, "unknown", [], True, "execution_first"):
+            value = startup_fixture()
+            value.update(schema_version=3, startup_order=mode)
+            self.assertRaises(ValueError, validate, value)
+        value = startup_fixture()
+        value.update(schema_version=3)
+        self.assertRaises(ValueError, validate, value)
+        legacy = startup_fixture()
+        legacy["startup_order"] = "surface_first"
+        self.assertRaises(ValueError, validate, legacy)
+
     def test_current_and_preserved_receipts_keep_exact_observed_startup_ticks(self):
         result = analyse(startup_fixture())
         self.assertEqual(result["native_receipt_schema_version"], 2)

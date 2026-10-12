@@ -4,6 +4,41 @@
 
 use super::{DesktopError, TimingAudit, TimingObserver, error};
 
+/// Select the immutable observed construction order for a native lifetime.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NativeStartupOrder {
+    /// Ordinary surfaces initialize before content execution starts.
+    SurfaceFirst,
+    /// Startup content authenticates and attaches capture before native surface admission.
+    ExecutionFirst,
+}
+impl NativeStartupOrder {
+    /// Return the exact seven required stages in observed order.
+    pub fn stages(self) -> [NativeStartupStage; 7] {
+        use NativeStartupStage::*;
+        match self {
+            Self::SurfaceFirst => [
+                EventLoopReady,
+                WindowCreated,
+                PresenterReady,
+                ControlsReady,
+                ExecutionReady,
+                ShowFocusReturned,
+                FirstPreparationRequest,
+            ],
+            Self::ExecutionFirst => [
+                EventLoopReady,
+                ExecutionReady,
+                WindowCreated,
+                PresenterReady,
+                ControlsReady,
+                ShowFocusReturned,
+                FirstPreparationRequest,
+            ],
+        }
+    }
+}
+
 /// Identify an ordered native setup boundary or the first actual content request.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NativeStartupStage {
@@ -23,21 +58,6 @@ pub enum NativeStartupStage {
     FirstPreparationRequest,
 }
 
-impl NativeStartupStage {
-    /// Select one fixed receipt slot, preserving the native setup order.
-    fn index(self) -> usize {
-        match self {
-            Self::EventLoopReady => 0,
-            Self::WindowCreated => 1,
-            Self::PresenterReady => 2,
-            Self::ControlsReady => 3,
-            Self::ExecutionReady => 4,
-            Self::ShowFocusReturned => 5,
-            Self::FirstPreparationRequest => 6,
-        }
-    }
-}
-
 /// Retain one validated raw QPC observation in the receipt's fixed startup slots.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct NativeStartupTiming {
@@ -50,7 +70,13 @@ pub struct NativeStartupTiming {
 impl TimingAudit {
     /// Reject repetition/order violations before reading the clock or committing a slot.
     pub(super) fn startup(&mut self, stage: NativeStartupStage) -> Result<(), DesktopError> {
-        let index = stage.index();
+        let index = self
+            .receipt
+            .startup_order
+            .stages()
+            .iter()
+            .position(|candidate| *candidate == stage)
+            .ok_or_else(|| error("startup stage is not part of the retained order"))?;
         if self.receipt.startup_milestones[index].is_some()
             || self.receipt.startup_milestones[..index].iter().any(Option::is_none)
         {

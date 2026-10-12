@@ -23,7 +23,7 @@ minimum_tests = 68
 package = "sugarsubstitute"
 root = "crates/sugarsubstitute"
 concern = "Product identity, native input, admitted preparation, process qualification and actual host shutdown"
-minimum_tests = 143
+minimum_tests = 144
 
 [[owners]]
 package = "sugarsubstitute-execution"
@@ -53,7 +53,7 @@ minimum_tests = 65
 package = "sugarsubstitute-desktop"
 root = "crates/sugarsubstitute-desktop"
 concern = "Nonblocking frame delivery, headless settlement, retained native storage, input and timing boundaries"
-minimum_tests = 152
+minimum_tests = 173
 
 [[owners]]
 package = "sugarsubstitute-crash"

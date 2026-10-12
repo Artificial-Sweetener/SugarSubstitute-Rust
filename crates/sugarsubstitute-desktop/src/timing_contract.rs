@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Define raw, bounded native callback and successful-submission evidence.
 
-use super::NativeStartupTiming;
+use super::{NativeStartupOrder, NativeStartupTiming};
 use sugarsubstitute_contracts::presentation::FrameIdentity;
 
 /// Identify the native counter that owns every tick in one receipt.
@@ -89,6 +89,8 @@ pub struct NativeSubmissionTiming {
 /// Compositor latency is outside these measurements. Nonzero omissions mean incomplete evidence.
 #[derive(Debug)]
 pub struct NativeTimingReceipt {
+    /// Exact immutable construction order owning the fixed startup slots.
+    pub startup_order: NativeStartupOrder,
     /// Clock identity shared by every observation.
     pub source: NativeTimingSource,
     /// First native adapter counter observation, before window and content construction.

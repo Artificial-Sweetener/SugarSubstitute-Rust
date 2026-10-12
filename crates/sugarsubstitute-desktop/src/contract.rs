@@ -208,6 +208,8 @@ pub trait WindowContent {
     ///
     /// This is called only after `poll_shutdown` returned true. Preserve underlying
     /// teardown errors; unresolved owned work must never be joined on the UI thread.
+    /// Success confirms final joins and disposal. An error leaves final custody uncertain;
+    /// the native adapter retains the consumed content owner and any acquired STA reference.
     fn finish_shutdown(&mut self) -> Result<(), Box<dyn Error>>;
     /// Classify logical pointer positions for native close and drag behavior.
     fn hit_test(&self, pointer: Pointer) -> HitTarget;

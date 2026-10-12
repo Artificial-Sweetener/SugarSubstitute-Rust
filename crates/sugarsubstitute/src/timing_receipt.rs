@@ -4,7 +4,8 @@
 
 use serde_json::{Value, json};
 use sugarsubstitute_desktop::{
-    NativeCallbackKind, NativeStartupStage, NativeTimingReceipt, NativeTimingSource,
+    NativeCallbackKind, NativeStartupOrder, NativeStartupStage, NativeTimingReceipt,
+    NativeTimingSource,
 };
 
 /// Serialize native timing evidence after teardown, keeping omissions and frame identity explicit.
@@ -50,7 +51,11 @@ pub(crate) fn encode(receipt: NativeTimingReceipt) -> Value {
         .map(|sample| json!({"stage": startup_stage(sample.stage), "ticks": sample.ticks}))
         .collect();
     json!({
-        "schema_version": 2,
+        "schema_version": 3,
+        "startup_order": match receipt.startup_order {
+            NativeStartupOrder::SurfaceFirst => "surface_first",
+            NativeStartupOrder::ExecutionFirst => "execution_first",
+        },
         "source": match receipt.source { NativeTimingSource::WindowsQpc => "windows_qpc" },
         "begin_ticks": receipt.begin_ticks,
         "end_ticks": receipt.end_ticks,
@@ -111,6 +116,7 @@ mod tests {
     -> Result<(), Box<dyn Error>> {
         let encoded = encode(NativeTimingReceipt {
             source: NativeTimingSource::WindowsQpc,
+            startup_order: NativeStartupOrder::SurfaceFirst,
             begin_ticks: 9_007_199_254_740_992,
             end_ticks: 9_007_199_254_741_004,
             frequency: 10_000_000,
@@ -164,7 +170,8 @@ mod tests {
         assert_eq!(roundtrip["submissions"][0]["retained"], true);
         assert_eq!(roundtrip["submissions"][0]["identity"]["sequence"], 13);
         assert_eq!(roundtrip["source"], "windows_qpc");
-        assert_eq!(roundtrip["schema_version"], 2);
+        assert_eq!(roundtrip["schema_version"], 3);
+        assert_eq!(roundtrip["startup_order"], "surface_first");
         assert_eq!(
             roundtrip["startup_milestones"].as_array().ok_or("Milestones missing")?.len(),
             7
@@ -188,6 +195,7 @@ mod tests {
         });
         let encoded = encode(NativeTimingReceipt {
             source: NativeTimingSource::WindowsQpc,
+            startup_order: NativeStartupOrder::SurfaceFirst,
             begin_ticks: 9_007_199_254_740_992,
             end_ticks: 9_007_199_254_740_994,
             frequency: 10_000_000,
@@ -200,7 +208,7 @@ mod tests {
             submissions_observed: 0,
             submission_samples_omitted: 0,
         });
-        assert_eq!(encoded["schema_version"], 2);
+        assert_eq!(encoded["schema_version"], 3);
         assert_eq!(
             encoded["startup_milestones"],
             json!([
@@ -208,5 +216,39 @@ mod tests {
             ])
         );
         assert_eq!(encoded["submissions"], json!([]));
+    }
+
+    /// Persist actual execution-first observations explicitly without sorting them into old order.
+    #[test]
+    fn execution_first_receipt_preserves_its_exact_mode_and_observed_prefix() {
+        let mut milestones = [None; 7];
+        for (index, stage) in
+            NativeStartupOrder::ExecutionFirst.stages().into_iter().take(2).enumerate()
+        {
+            milestones[index] = Some(NativeStartupTiming { stage, ticks: 10 + index as i64 });
+        }
+        let encoded = encode(NativeTimingReceipt {
+            source: NativeTimingSource::WindowsQpc,
+            startup_order: NativeStartupOrder::ExecutionFirst,
+            begin_ticks: 9,
+            end_ticks: 12,
+            frequency: 1000,
+            ui_thread_id: 7,
+            callbacks: Vec::new(),
+            submissions: Vec::new(),
+            startup_milestones: milestones,
+            callbacks_observed: 0,
+            callback_samples_omitted: 0,
+            submissions_observed: 0,
+            submission_samples_omitted: 0,
+        });
+        assert_eq!(encoded["schema_version"], 3);
+        assert_eq!(encoded["startup_order"], "execution_first");
+        assert_eq!(
+            encoded["startup_milestones"],
+            json!([
+                {"stage":"event_loop_ready","ticks":10},{"stage":"execution_ready","ticks":11}
+            ])
+        );
     }
 }

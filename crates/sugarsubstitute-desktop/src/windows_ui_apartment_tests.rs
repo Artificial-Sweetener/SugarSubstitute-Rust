@@ -116,3 +116,60 @@ fn failed_release_keeps_ownership_until_checked_retry() -> Result<(), DesktopErr
     assert_eq!(released.get(), 1);
     Ok(())
 }
+
+#[test]
+fn final_content_failure_retains_actual_apartment_reference_while_success_drops_before_release()
+-> Result<(), DesktopError> {
+    struct Content(Rc<Cell<u32>>);
+    impl Drop for Content {
+        fn drop(&mut self) {
+            self.0.set(self.0.get() + 1);
+        }
+    }
+    for fails in [false, true] {
+        let boundary = fake(Err(Error::from(CO_E_NOTINITIALIZED)));
+        let acquired = boundary.acquired.clone();
+        let released = boundary.released.clone();
+        let mut apartment = Owner::enter(boundary)?;
+        let drops = Rc::new(Cell::new(0));
+        let finish_calls = Cell::new(0);
+        let mut failure = None;
+        crate::shutdown::finish_after_native(
+            Content(drops.clone()),
+            |_| {
+                finish_calls.set(finish_calls.get() + 1);
+                if fails {
+                    Err(DesktopError::new("final_join", Error::from(E_FAIL)))
+                } else {
+                    Ok(())
+                }
+            },
+            || {
+                assert_eq!(finish_calls.get(), 1);
+                assert_eq!(drops.get(), 1);
+                apartment.release()
+            },
+            &mut failure,
+        );
+        assert_eq!(acquired.get(), 1);
+        assert_eq!(finish_calls.get(), 1);
+        assert_eq!(drops.get(), u32::from(!fails));
+        assert_eq!(released.get(), u32::from(!fails));
+        assert_eq!(failure.is_some(), fails);
+        if fails {
+            assert!(apartment.ownership == Ownership::Acquired);
+            assert_eq!(
+                failure
+                    .as_ref()
+                    .and_then(|cause| cause.source())
+                    .and_then(|cause| cause.downcast_ref::<Error>())
+                    .map(Error::code),
+                Some(E_FAIL)
+            );
+        }
+        drop(apartment);
+        assert_eq!(drops.get(), u32::from(!fails));
+        assert_eq!(released.get(), u32::from(!fails));
+    }
+    Ok(())
+}

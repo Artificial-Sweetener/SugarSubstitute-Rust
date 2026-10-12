@@ -76,6 +76,15 @@ impl MainActor {
                     PaintMode::NativeButtons(self.identity()),
                     None,
                 )?);
+                self.controls
+                    .as_mut()
+                    .ok_or_else(|| {
+                        DesktopError::message(
+                            "initialize_main_controls",
+                            "retained controls absent",
+                        )
+                    })?
+                    .initialize()?;
                 self.stage = ConstructionStage::Begin;
             }
             ConstructionStage::Begin => {
