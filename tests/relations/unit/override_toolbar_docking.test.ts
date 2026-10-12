@@ -44,7 +44,9 @@ function bounds(x: number, y: number, width: number, height: number): DOMRect {
 }
 
 /** Model Comfy's header, fixed native controls, and one width-constrained override toolbar. */
-function fixture(saved: OverrideToolbarPlacementState = { docked: false, floating: null }) {
+function fixture(
+  saved: OverrideToolbarPlacementState = { docked: false, floating: null, anchor: null },
+) {
   ensureRelationStyles(document);
   let width = 1000;
   const canvas = document.createElement('div');
@@ -124,6 +126,7 @@ function fixture(saved: OverrideToolbarPlacementState = { docked: false, floatin
     button,
     (w, h) => placement.resize(w, h),
     jest.fn(),
+    { readCollapsed: () => false, writeCollapsed: jest.fn() },
   );
   const drag = new OverrideToolbarDrag(root, grip, placement, () => disclosure.finish());
   placement.attached();
@@ -169,7 +172,7 @@ function pointer(grip: HTMLElement, type: string, x: number, y: number): void {
 }
 
 test('starts in the preferred dock and retains that preference through temporary width fallback', () => {
-  const f = fixture({ docked: true, floating: null });
+  const f = fixture({ docked: true, floating: null, anchor: null });
   try {
     expect(f.root.dataset.placement).toBe('docked');
     expect(f.root.parentElement?.parentElement).toBe(f.bar);
@@ -203,7 +206,7 @@ test('retries the preferred dock after pane resize even when floating legacy pla
     unobserve(): void {}
   }
   Object.defineProperty(window, 'ResizeObserver', { configurable: true, value: PaneObserver });
-  const f = fixture({ docked: true, floating: null });
+  const f = fixture({ docked: true, floating: null, anchor: null });
   try {
     const empty = document.createElement('div');
     empty.dataset.testid = 'legacy-topbar-container';
@@ -238,7 +241,9 @@ test('remembers completed floating movement and docking when the toolbar is recr
   let saved: OverrideToolbarPlacementState | undefined;
   try {
     f.placement.shift(140, 100);
-    expect(f.write).toHaveBeenLastCalledWith({ docked: false, floating: { x: 144, y: 152 } });
+    expect(f.write).toHaveBeenLastCalledWith(
+      expect.objectContaining({ docked: false, floating: { x: 144, y: 152 } }),
+    );
     saved = f.write.mock.calls.at(-1)?.[0];
   } finally {
     f.dispose();
@@ -261,18 +266,66 @@ test('remembers completed floating movement and docking when the toolbar is recr
     expect(docked.root.dataset.placement).toBe('docked');
     expect(docked.write).not.toHaveBeenCalled();
     docked.placement.reset();
-    expect(docked.write).toHaveBeenLastCalledWith({ docked: true, floating: null });
+    expect(docked.write).toHaveBeenLastCalledWith({ docked: true, floating: null, anchor: null });
   } finally {
     docked.dispose();
   }
 });
 
 test('clamps restored offscreen coordinates without overwriting the saved position', () => {
-  const f = fixture({ docked: false, floating: { x: 9000, y: -400 } });
+  const f = fixture({ docked: false, floating: { x: 9000, y: -400 }, anchor: null });
   try {
     expect(f.root.style.left).toBe('496px');
     expect(f.root.style.top).toBe('0px');
     expect(f.write).not.toHaveBeenCalled();
+  } finally {
+    f.dispose();
+  }
+});
+
+test('restores edge anchoring after resizing and toolbar recreation without saving layout fallbacks', () => {
+  const f = fixture();
+  let saved: OverrideToolbarPlacementState | undefined;
+  try {
+    f.placement.shift(492, 180);
+    expect(f.root.style.left).toBe('496px');
+    expect(f.root.style.top).toBe('232px');
+    saved = f.write.mock.calls.at(-1)?.[0];
+    f.resize(700);
+    expect(f.root.style.left).toBe('196px');
+    expect(f.root.style.top).toBe('232px');
+    f.resize(550);
+    expect(f.root.style.left).toBe('46px');
+    f.resize(1000);
+    expect(f.root.style.left).toBe('496px');
+    expect(f.write).toHaveBeenCalledTimes(1);
+  } finally {
+    f.dispose();
+    f.panel.parentElement?.remove();
+  }
+  if (!saved) throw new Error('Anchored placement was not saved');
+  const restored = fixture(saved);
+  try {
+    restored.resize(700);
+    expect(restored.root.style.left).toBe('196px');
+    expect(restored.root.style.top).toBe('232px');
+    expect(restored.write).not.toHaveBeenCalled();
+  } finally {
+    restored.dispose();
+  }
+});
+
+test('saves the visible resting position after a completed drag reaches a viewport edge', () => {
+  const f = fixture();
+  try {
+    f.placement.begin(14, 62);
+    f.placement.move(1500, 900);
+    f.placement.end(1500, 900, true);
+    expect(f.root.style.left).toBe('496px');
+    expect(f.root.style.top).toBe('554px');
+    expect(f.write).toHaveBeenLastCalledWith(
+      expect.objectContaining({ docked: false, floating: { x: 496, y: 554 } }),
+    );
   } finally {
     f.dispose();
   }

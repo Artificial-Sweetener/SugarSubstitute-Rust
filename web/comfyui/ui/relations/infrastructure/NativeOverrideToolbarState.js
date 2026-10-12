@@ -16,6 +16,7 @@
 /** Persist toolbar placement in the same browser-local scope as Comfy's Run panel. */
 import { isRecord } from '../../types/common.js';
 const KEY = 'SugarCubes.GlobalOverrides.Placement';
+const COLLAPSED_KEY = 'SugarCubes.GlobalOverrides.Collapsed';
 /** Validate browser storage before exposing remembered placement to presentation. */
 export class NativeOverrideToolbarState {
     getStorage;
@@ -30,27 +31,28 @@ export class NativeOverrideToolbarState {
         try {
             const raw = this.getStorage()?.getItem(KEY);
             if (!raw)
-                return { docked: true, floating: null };
+                return { docked: true, floating: null, anchor: null };
             const value = JSON.parse(raw);
             if (!isRecord(value) || typeof value.docked !== 'boolean')
                 throw new Error('Invalid override toolbar placement.');
             const floating = value.floating;
+            const anchor = readAnchor(value.anchor);
             if (floating === null)
-                return { docked: value.docked, floating: null };
+                return { docked: value.docked, floating: null, anchor: null };
             if (!isRecord(floating) ||
                 typeof floating.x !== 'number' ||
                 typeof floating.y !== 'number' ||
                 !Number.isFinite(floating.x) ||
                 !Number.isFinite(floating.y))
                 throw new Error('Invalid override toolbar floating coordinates.');
-            return { docked: value.docked, floating: { x: floating.x, y: floating.y } };
+            return { docked: value.docked, floating: { x: floating.x, y: floating.y }, anchor };
         }
         catch (error) {
             this.logger.warn('SugarCubes override toolbar placement could not be restored', {
                 operation: 'read',
                 error,
             });
-            return { docked: true, floating: null };
+            return { docked: true, floating: null, anchor: null };
         }
     }
     /** Save completed user placement without persisting temporary layout fallbacks. */
@@ -65,6 +67,64 @@ export class NativeOverrideToolbarState {
             });
         }
     }
+    /** Restore compact presentation independently of floating placement and workflow values. */
+    readCollapsed() {
+        try {
+            const raw = this.getStorage()?.getItem(COLLAPSED_KEY);
+            if (!raw)
+                return false;
+            const value = JSON.parse(raw);
+            if (typeof value !== 'boolean')
+                throw new Error('Invalid override toolbar disclosure.');
+            return value;
+        }
+        catch (error) {
+            this.logger.warn('SugarCubes override toolbar disclosure could not be restored', {
+                operation: 'readCollapsed',
+                error,
+            });
+            return false;
+        }
+    }
+    /** Persist only the user's disclosure action without replacing saved placement. */
+    writeCollapsed(collapsed) {
+        try {
+            this.getStorage()?.setItem(COLLAPSED_KEY, JSON.stringify(collapsed));
+        }
+        catch (error) {
+            this.logger.warn('SugarCubes override toolbar disclosure could not be saved', {
+                operation: 'writeCollapsed',
+                error,
+            });
+        }
+    }
+}
+/** Validate added anchoring metadata while preserving existing browser-local coordinate records. */
+function readAnchor(value) {
+    if (value === undefined || value === null)
+        return null;
+    if (!isRecord(value))
+        throw new Error('Invalid override toolbar anchor.');
+    const edge = value.edge;
+    if ((edge !== 'left' && edge !== 'right' && edge !== 'top' && edge !== 'bottom') ||
+        typeof value.distance !== 'number' ||
+        !Number.isFinite(value.distance) ||
+        value.distance < 0 ||
+        typeof value.horizontalRatio !== 'number' ||
+        !Number.isFinite(value.horizontalRatio) ||
+        value.horizontalRatio < 0 ||
+        value.horizontalRatio > 1 ||
+        typeof value.verticalRatio !== 'number' ||
+        !Number.isFinite(value.verticalRatio) ||
+        value.verticalRatio < 0 ||
+        value.verticalRatio > 1)
+        throw new Error('Invalid override toolbar anchor.');
+    return {
+        edge,
+        distance: value.distance,
+        horizontalRatio: value.horizontalRatio,
+        verticalRatio: value.verticalRatio,
+    };
 }
 /** Resolve the toolbar's own browser storage while keeping restricted-access failures observable. */
 export function createNativeOverrideToolbarState(document, logger) {

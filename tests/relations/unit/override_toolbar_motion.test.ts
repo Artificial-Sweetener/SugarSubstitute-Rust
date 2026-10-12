@@ -20,6 +20,44 @@ import { OverrideToolbarDrag } from '../../../frontend/comfyui/ui/relations/pres
 import { OverrideToolbarPlacement } from '../../../frontend/comfyui/ui/relations/presentation/OverrideToolbarPlacement.js';
 import { ensureRelationStyles } from '../../../frontend/comfyui/ui/relations/presentation/RelationStyles.js';
 
+/** Supply independent default disclosure intent for each motion proof. */
+function disclosureState() {
+  return { readCollapsed: () => false, writeCollapsed: jest.fn<(collapsed: boolean) => void>() };
+}
+
+test('restores collapsed controls before display and saves only explicit disclosure choices', () => {
+  const { root, fields, button } = surface();
+  let collapsed = true;
+  const state = {
+    readCollapsed: () => collapsed,
+    writeCollapsed: jest.fn((value: boolean) => {
+      collapsed = value;
+    }),
+  };
+  const disclosure = new OverrideToolbarDisclosure(
+    root,
+    fields,
+    button,
+    jest.fn(),
+    jest.fn(),
+    state,
+  );
+  expect(fields.hidden).toBe(true);
+  expect(fields.inert).toBe(true);
+  expect(button.getAttribute('aria-expanded')).toBe('false');
+  disclosure.refresh();
+  disclosure.setExpansionDirection('left');
+  expect(state.writeCollapsed).not.toHaveBeenCalled();
+  button.click();
+  disclosure.finish();
+  expect(state.writeCollapsed).toHaveBeenLastCalledWith(false);
+  disclosure.dispose();
+  const restored = new OverrideToolbarDisclosure(root, fields, button, jest.fn(), jest.fn(), state);
+  expect(fields.hidden).toBe(false);
+  expect(button.getAttribute('aria-expanded')).toBe('true');
+  restored.dispose();
+});
+
 const originalMedia = Object.getOwnPropertyDescriptor(window, 'matchMedia');
 const originalResize = Object.getOwnPropertyDescriptor(window, 'ResizeObserver');
 
@@ -107,7 +145,14 @@ test('animates the complete bar, preserves input identity, and excludes compact 
   Object.defineProperty(fields, 'animate', { value: animate });
   const geometry = jest.fn();
   const error = jest.fn();
-  const disclosure = new OverrideToolbarDisclosure(root, fields, button, geometry, error);
+  const disclosure = new OverrideToolbarDisclosure(
+    root,
+    fields,
+    button,
+    geometry,
+    error,
+    disclosureState(),
+  );
   input.focus();
   button.click();
   expect(root.dataset.collapsed).toBe('true');
@@ -154,7 +199,14 @@ test('reversals cancel stale completion and teardown releases every animation', 
   Object.defineProperty(root, 'animate', { value: animate });
   Object.defineProperty(fields, 'animate', { value: animate });
   const error = jest.fn();
-  const disclosure = new OverrideToolbarDisclosure(root, fields, button, jest.fn(), error);
+  const disclosure = new OverrideToolbarDisclosure(
+    root,
+    fields,
+    button,
+    jest.fn(),
+    error,
+    disclosureState(),
+  );
   button.click();
   button.click();
   effects[0]?.complete();
@@ -182,7 +234,14 @@ test('reduced motion settles immediately and failed effects restore usable contr
     value: () => ({ matches: true }),
   });
   const error = jest.fn();
-  const disclosure = new OverrideToolbarDisclosure(root, fields, button, jest.fn(), error);
+  const disclosure = new OverrideToolbarDisclosure(
+    root,
+    fields,
+    button,
+    jest.fn(),
+    error,
+    disclosureState(),
+  );
   button.click();
   expect(fields.hidden).toBe(true);
   expect(animate).not.toHaveBeenCalled();
@@ -200,7 +259,14 @@ test('reduced motion settles immediately and failed effects restore usable contr
 
 test('collapsing transfers keyboard focus from the disappearing grip to the expansion button', () => {
   const { root, fields, grip, button } = surface();
-  const disclosure = new OverrideToolbarDisclosure(root, fields, button, jest.fn(), jest.fn());
+  const disclosure = new OverrideToolbarDisclosure(
+    root,
+    fields,
+    button,
+    jest.fn(),
+    jest.fn(),
+    disclosureState(),
+  );
   grip.focus();
   button.click();
   expect(document.activeElement).toBe(button);
@@ -237,7 +303,7 @@ function floatingPlacement(root: HTMLElement, grip: HTMLElement): OverrideToolba
     },
     jest.fn(),
     jest.fn(),
-    { read: () => ({ docked: false, floating: null }), write: jest.fn() },
+    { read: () => ({ docked: false, floating: null, anchor: null }), write: jest.fn() },
   );
 }
 

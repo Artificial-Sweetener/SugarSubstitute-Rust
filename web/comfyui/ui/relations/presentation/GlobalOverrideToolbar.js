@@ -1,5 +1,5 @@
 import { ContextMenu } from '../../menus/ContextMenu.js';
-import { OverrideToolbarDisclosure } from './OverrideToolbarDisclosure.js';
+import { OverrideToolbarDisclosure, } from './OverrideToolbarDisclosure.js';
 import { OverrideToolbarDrag } from './OverrideToolbarDrag.js';
 import { OverrideToolbarPlacement } from './OverrideToolbarPlacement.js';
 import { OverrideToolbarFieldLayout } from './OverrideToolbarFieldLayout.js';
@@ -21,7 +21,7 @@ export class GlobalOverrideToolbar {
     #placement;
     #signature = '';
     /** Bind toolbar edits directly to the authoritative application owner. */
-    constructor(document, relations, reportError, widgets, host, placementStore, presentation = 'comfy') {
+    constructor(document, relations, reportError, widgets, host, stateStore, presentation = 'comfy') {
         this.document = document;
         this.relations = relations;
         this.reportError = reportError;
@@ -89,7 +89,7 @@ export class GlobalOverrideToolbar {
             queueMicrotask(this.#measureLabels);
         });
         this.element.append(grip, this.#menuButton, this.#fields, disclosure);
-        this.#placement = new OverrideToolbarPlacement(this.element, grip, host, (docked) => this.#disclosure.setExpansionDirection(docked ? 'left' : 'right'), () => this.#fieldLayout.reconcile(), placementStore);
+        this.#placement = new OverrideToolbarPlacement(this.element, grip, host, (docked) => this.#disclosure.setExpansionDirection(docked ? 'left' : 'right'), () => this.#fieldLayout.reconcile(), stateStore);
         this.#drag = new OverrideToolbarDrag(this.element, grip, this.#placement, () => {
             this.#menu.close();
             this.#disclosure.finish();
@@ -97,7 +97,7 @@ export class GlobalOverrideToolbar {
         this.#disclosure = new OverrideToolbarDisclosure(this.element, this.#fields, disclosure, (width, height) => {
             this.#fieldLayout.reconcile();
             this.#placement.resize(width, height);
-        }, reportError);
+        }, reportError, stateStore);
         this.#labels = new MutationObserver(this.#measureLabels);
         this.#labels.observe(this.element, { childList: true, subtree: true, characterData: true });
     }

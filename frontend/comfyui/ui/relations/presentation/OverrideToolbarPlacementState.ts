@@ -19,9 +19,18 @@ export interface OverrideToolbarPosition {
   y: number;
 }
 
+/** Retain the nearest edge and proportional position along it through viewport changes. */
+export interface OverrideToolbarFloatingAnchor {
+  edge: 'left' | 'right' | 'top' | 'bottom';
+  distance: number;
+  horizontalRatio: number;
+  verticalRatio: number;
+}
+
 export interface OverrideToolbarPlacementState {
   docked: boolean;
   floating: OverrideToolbarPosition | null;
+  anchor: OverrideToolbarFloatingAnchor | null;
 }
 
 export interface OverrideToolbarPlacementStore {
