@@ -24,6 +24,7 @@ export class NativeSubgraphChangeObserver {
     #previousRemove;
     #removeListener;
     #notificationQueued = false;
+    #changes = [];
     #active = true;
     /** Attach without replacing behavior already installed by Comfy. */
     constructor(subgraph, onChange, accepts = () => true) {
@@ -31,33 +32,36 @@ export class NativeSubgraphChangeObserver {
             throw new TypeError('Comfy native subgraph topology methods are unavailable.');
         }
         this.#subgraph = subgraph;
-        const notify = (kind) => {
+        const notify = (kind, info) => {
             if (!this.#active || !accepts(kind))
                 return;
+            if (!this.#changes.some((change) => change.kind === kind && change.info === info))
+                this.#changes.push(Object.freeze({ kind, info }));
             if (this.#notificationQueued)
                 return;
             this.#notificationQueued = true;
             queueMicrotask(() => {
                 this.#notificationQueued = false;
+                const changes = Object.freeze(this.#changes.splice(0));
                 if (this.#active)
-                    onChange();
+                    onChange(changes);
             });
         };
         this.#previous = typeof subgraph.onAfterChange === 'function' ? subgraph.onAfterChange : null;
         this.#listener = (graph, info) => {
             this.#previous?.call(subgraph, graph, info);
-            notify('change');
+            notify('change', info);
         };
         this.#previousAdd = subgraph.add;
         this.#addListener = (...args) => {
             const result = this.#previousAdd.apply(subgraph, args);
-            notify('add');
+            notify('add', args[0]);
             return result;
         };
         this.#previousRemove = subgraph.remove;
         this.#removeListener = (...args) => {
             const result = this.#previousRemove.apply(subgraph, args);
-            notify('remove');
+            notify('remove', args[0]);
             return result;
         };
         subgraph.onAfterChange = this.#listener;
@@ -67,6 +71,7 @@ export class NativeSubgraphChangeObserver {
     /** Restore the callback only while this observer still owns the boundary. */
     dispose() {
         this.#active = false;
+        this.#changes.length = 0;
         if (this.#subgraph.onAfterChange === this.#listener) {
             this.#subgraph.onAfterChange = this.#previous;
         }

@@ -126,7 +126,7 @@ describe('canvas view lifetime', () => {
     selection.batchIndex = 3;
     secondary.batchIndex = 2;
     expect(published.selection?.batchIndex).toBe(1);
-    expect(published.comparison?.secondary.batchIndex).toBe(0);
+    expect(published.comparison?.secondary?.batchIndex).toBe(0);
     expect(Object.isFrozen(published.selection)).toBe(true);
     expect(Object.isFrozen(published.comparison)).toBe(true);
     expect(Object.isFrozen(published.comparison?.secondary)).toBe(true);

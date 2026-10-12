@@ -21,6 +21,11 @@ type NativeMutation = (...args: unknown[]) => unknown;
 /** Distinguish native topology from generic changes before scheduling notifications. */
 export type NativeGraphChangeKind = 'change' | 'add' | 'remove';
 
+export interface NativeGraphChange {
+  readonly kind: NativeGraphChangeKind;
+  readonly info: unknown;
+}
+
 export interface ObservableNativeSubgraph {
   onAfterChange?: NativeAfterChange | null;
   add?: (...args: never[]) => unknown;
@@ -37,42 +42,46 @@ export class NativeSubgraphChangeObserver {
   readonly #previousRemove: NativeMutation;
   readonly #removeListener: NativeMutation;
   #notificationQueued = false;
+  readonly #changes: NativeGraphChange[] = [];
   #active = true;
 
   /** Attach without replacing behavior already installed by Comfy. */
   constructor(
     subgraph: ObservableNativeSubgraph,
-    onChange: () => void,
+    onChange: (changes: readonly NativeGraphChange[]) => void,
     accepts: (kind: NativeGraphChangeKind) => boolean = () => true,
   ) {
     if (typeof subgraph.add !== 'function' || typeof subgraph.remove !== 'function') {
       throw new TypeError('Comfy native subgraph topology methods are unavailable.');
     }
     this.#subgraph = subgraph;
-    const notify = (kind: NativeGraphChangeKind): void => {
+    const notify = (kind: NativeGraphChangeKind, info: unknown): void => {
       if (!this.#active || !accepts(kind)) return;
+      if (!this.#changes.some((change) => change.kind === kind && change.info === info))
+        this.#changes.push(Object.freeze({ kind, info }));
       if (this.#notificationQueued) return;
       this.#notificationQueued = true;
       queueMicrotask(() => {
         this.#notificationQueued = false;
-        if (this.#active) onChange();
+        const changes = Object.freeze(this.#changes.splice(0));
+        if (this.#active) onChange(changes);
       });
     };
     this.#previous = typeof subgraph.onAfterChange === 'function' ? subgraph.onAfterChange : null;
     this.#listener = (graph, info): void => {
       this.#previous?.call(subgraph, graph, info);
-      notify('change');
+      notify('change', info);
     };
     this.#previousAdd = subgraph.add as NativeMutation;
     this.#addListener = (...args): unknown => {
       const result = this.#previousAdd.apply(subgraph, args);
-      notify('add');
+      notify('add', args[0]);
       return result;
     };
     this.#previousRemove = subgraph.remove as NativeMutation;
     this.#removeListener = (...args): unknown => {
       const result = this.#previousRemove.apply(subgraph, args);
-      notify('remove');
+      notify('remove', args[0]);
       return result;
     };
     subgraph.onAfterChange = this.#listener;
@@ -83,6 +92,7 @@ export class NativeSubgraphChangeObserver {
   /** Restore the callback only while this observer still owns the boundary. */
   dispose(): void {
     this.#active = false;
+    this.#changes.length = 0;
     if (this.#subgraph.onAfterChange === this.#listener) {
       this.#subgraph.onAfterChange = this.#previous;
     }

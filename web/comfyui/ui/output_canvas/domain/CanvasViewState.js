@@ -35,7 +35,9 @@ export function freezeCanvasViewState(state, revision) {
         comparison: state.comparison
             ? Object.freeze({
                 ...state.comparison,
-                secondary: Object.freeze({ ...state.comparison.secondary }),
+                secondary: state.comparison.secondary
+                    ? Object.freeze({ ...state.comparison.secondary })
+                    : null,
             })
             : null,
     });
