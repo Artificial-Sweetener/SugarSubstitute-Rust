@@ -168,3 +168,90 @@ fn foreign_proofs_and_second_failure_return_owned_causes_without_state_changes()
     );
     Ok(())
 }
+
+#[test]
+fn failed_incident_requires_matching_actual_exit_and_preserves_full_native_status() -> TestResult {
+    let (run, process, _) = identities()?;
+    for code in [0, i64::MIN, i64::MAX] {
+        let mut transaction = DesktopExitTransaction::new(run, process)?;
+        assert_eq!(transaction.failed_incident(), Err(LifecycleRejection::WrongPhase));
+        let foreign = ProcessKey { id: ProcessId::new(2)?, ..process };
+        assert_eq!(
+            observe(&mut transaction, DesktopObservation::Exited { process: foreign, code }),
+            Err(LifecycleRejection::StaleIdentity)
+        );
+        assert_eq!(transaction.failed_incident(), Err(LifecycleRejection::WrongPhase));
+        observe(&mut transaction, DesktopObservation::Exited { process, code })?;
+        let fact = transaction.failed_incident()?;
+        assert_eq!(fact.run(), run);
+        assert_eq!(fact.process(), process);
+        assert_eq!(fact.attribution(), DesktopExitKind::Unexpected);
+        assert_eq!(fact.actual_status(), code);
+        assert_eq!(transaction.failed_incident()?, fact);
+    }
+    Ok(())
+}
+
+#[test]
+fn completed_startup_failure_retains_exact_accepted_status() -> TestResult {
+    let (run, process, shutdown) = identities()?;
+    let mut transaction = DesktopExitTransaction::new(run, process)?;
+    transaction.begin(
+        run,
+        shutdown,
+        CompletionIntent::StartupFailed,
+        -17,
+        Moment::from_nanos(0),
+    )?;
+    observe(&mut transaction, DesktopObservation::Completed { run, shutdown })?;
+    assert_eq!(transaction.failed_incident(), Err(LifecycleRejection::WrongPhase));
+    observe(&mut transaction, DesktopObservation::Exited { process, code: -17 })?;
+    let fact = transaction.failed_incident()?;
+    assert_eq!(fact.attribution(), DesktopExitKind::StartupFailed);
+    assert_eq!(fact.actual_status(), -17);
+    assert_eq!(fact.run(), run);
+    assert_eq!(fact.process(), process);
+    Ok(())
+}
+
+#[test]
+fn normal_and_cancelled_exit_cannot_admit_failed_incidents() -> TestResult {
+    let (run, process, shutdown) = identities()?;
+    for intent in [CompletionIntent::Normal, CompletionIntent::StartupCancelled] {
+        let mut transaction = DesktopExitTransaction::new(run, process)?;
+        transaction.begin(run, shutdown, intent, 0, Moment::from_nanos(0))?;
+        observe(&mut transaction, DesktopObservation::Completed { run, shutdown })?;
+        observe(&mut transaction, DesktopObservation::Exited { process, code: 0 })?;
+        assert_eq!(transaction.failed_incident(), Err(LifecycleRejection::WrongPhase));
+        observe(&mut transaction, DesktopObservation::ResourcesSettled { run, shutdown })?;
+        assert_eq!(transaction.failed_incident(), Err(LifecycleRejection::WrongPhase));
+    }
+    Ok(())
+}
+
+#[test]
+fn rejected_duplicates_and_cleanup_expiry_cannot_rewrite_failed_exit_facts() -> TestResult {
+    let (run, process, shutdown) = identities()?;
+    let mut transaction = DesktopExitTransaction::new(run, process)?;
+    transaction.begin(run, shutdown, CompletionIntent::Normal, 0, Moment::from_nanos(0))?;
+    observe(&mut transaction, DesktopObservation::Completed { run, shutdown })?;
+    observe(&mut transaction, DesktopObservation::Exited { process, code: 37 })?;
+    let fact = transaction.failed_incident()?;
+    assert_eq!(fact.attribution(), DesktopExitKind::Unexpected);
+    assert_eq!(fact.actual_status(), 37);
+    assert_eq!(
+        observe(&mut transaction, DesktopObservation::Exited { process, code: 0 }),
+        Err(LifecycleRejection::WrongPhase)
+    );
+    assert_eq!(
+        observe(&mut transaction, DesktopObservation::Completed { run, shutdown }),
+        Err(LifecycleRejection::WrongPhase)
+    );
+    let budget = transaction.begin_cleanup(run, shutdown, Moment::from_nanos(0))?;
+    assert!(transaction.poll(budget.settle_until)?.deadline_expired);
+    assert_eq!(transaction.failed_incident()?, fact);
+    observe(&mut transaction, DesktopObservation::ResourcesSettled { run, shutdown })?;
+    assert!(transaction.poll(budget.settle_until)?.settled);
+    assert_eq!(transaction.failed_incident()?, fact);
+    Ok(())
+}

@@ -11,7 +11,7 @@ minimum_tests = 94
 package = "sugarsubstitute-application"
 root = "crates/sugarsubstitute-application"
 concern = "Acknowledged startup, settled retry, frame publication, backend leases, desktop exit, UI challenge and bounded transcript policy; original connection and frontend campaign deadlines"
-minimum_tests = 96
+minimum_tests = 100
 
 [[owners]]
 package = "sugarsubstitute-comfy"

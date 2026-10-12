@@ -10,6 +10,43 @@ struct ShutdownTransaction {
     budget: ShutdownBudget,
 }
 
+#[derive(Clone, Copy)]
+struct AcceptedExit {
+    attribution: DesktopExitKind,
+    code: i64,
+}
+
+/// Preserve one accepted failed desktop exit for incident admission.
+///
+/// Only the matching exit transaction constructs this fact. Its classification
+/// and native status remain unchanged by later cleanup or completion messages.
+/// The host must supply observations from its actual retained process registry.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct FailedDesktopFact {
+    run: RunKey,
+    process: ProcessKey,
+    attribution: DesktopExitKind,
+    actual_status: i64,
+}
+impl FailedDesktopFact {
+    /// Return the exact desktop run accepted by its exit transaction.
+    pub const fn run(self) -> RunKey {
+        self.run
+    }
+    /// Return the exact retained registry process whose exit was accepted.
+    pub const fn process(self) -> ProcessKey {
+        self.process
+    }
+    /// Return the original StartupFailed or Unexpected classification.
+    pub const fn attribution(self) -> DesktopExitKind {
+        self.attribution
+    }
+    /// Return the accepted native exit code without truncating or reclassifying it.
+    pub const fn actual_status(self) -> i64 {
+        self.actual_status
+    }
+}
+
 /// Observe the transaction without equating expiry or exit to clean settlement.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DesktopExitSnapshot {
@@ -36,7 +73,7 @@ pub struct DesktopExitTransaction {
     process: ProcessKey,
     transaction: Option<ShutdownTransaction>,
     completed: bool,
-    exit: Option<DesktopExitKind>,
+    exit: Option<AcceptedExit>,
     resources_settled: bool,
     failure: Option<LifecycleFailure>,
     last_now: Option<Moment>,
@@ -171,7 +208,7 @@ impl DesktopExitTransaction {
         match observation {
             DesktopObservation::Completed { .. } => self.completed = true,
             DesktopObservation::Exited { code, .. } => {
-                self.exit = Some(if self.completed {
+                let attribution = if self.completed {
                     match self.transaction.and_then(|transaction| transaction.intent) {
                         Some((intent, expected)) if code == expected => match intent {
                             CompletionIntent::Normal => DesktopExitKind::Normal,
@@ -182,7 +219,8 @@ impl DesktopExitTransaction {
                     }
                 } else {
                     DesktopExitKind::Unexpected
-                });
+                };
+                self.exit = Some(AcceptedExit { attribution, code });
             }
             DesktopObservation::ResourcesSettled { .. } => self.resources_settled = true,
             DesktopObservation::Failed { failure, .. } => self.failure = Some(failure),
@@ -192,6 +230,25 @@ impl DesktopExitTransaction {
     /// Borrow the original first cleanup failure; formatting is redacted by its owner.
     pub fn failure(&self) -> Option<&LifecycleFailure> {
         self.failure.as_ref()
+    }
+    /// Return incident facts from the accepted matching failed exit.
+    ///
+    /// Cleanup settlement is independent and may still be outstanding. Calling
+    /// this method neither consumes the fact nor admits a restart or native job.
+    /// # Errors
+    /// Rejects before actual exit and after Normal or StartupCancelled attribution.
+    pub fn failed_incident(&self) -> Result<FailedDesktopFact, LifecycleRejection> {
+        let exit = self.exit.ok_or(LifecycleRejection::WrongPhase)?;
+        if !matches!(exit.attribution, DesktopExitKind::StartupFailed | DesktopExitKind::Unexpected)
+        {
+            return Err(LifecycleRejection::WrongPhase);
+        }
+        Ok(FailedDesktopFact {
+            run: self.run,
+            process: self.process,
+            attribution: exit.attribution,
+            actual_status: exit.code,
+        })
     }
     /// Inspect fixed deadlines using the same injected monotonic epoch.
     ///
@@ -204,7 +261,7 @@ impl DesktopExitTransaction {
         let settled = self.exit.is_some() && self.resources_settled && self.failure.is_none();
         Ok(DesktopExitSnapshot {
             budget,
-            exit: self.exit,
+            exit: self.exit.map(|exit| exit.attribution),
             resources_settled: self.resources_settled,
             settled,
             graceful_expired: !settled && budget.is_some_and(|b| now >= b.graceful_until),
