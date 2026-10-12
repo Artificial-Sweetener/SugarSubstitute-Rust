@@ -2,6 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Own native window lifetime and CPU frame presentation independently of UI content.
 
+#[cfg(target_os = "windows")]
+mod bootstrap;
 mod cadence;
 mod completion_wake;
 mod contract;

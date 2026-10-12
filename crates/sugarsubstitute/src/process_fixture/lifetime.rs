@@ -17,6 +17,21 @@ impl HeadlessLifetime for Fixture {
             Some(client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?);
         self.launch_next()
     }
+    fn prepare_native_runtime(
+        &mut self,
+        max: NonZeroUsize,
+    ) -> Result<sugarsubstitute_desktop::StartupPreparationStep> {
+        if max.get() > 32 {
+            return Err("Fixture preparation exceeds native drain bound".into());
+        }
+        if self.closing {
+            return Ok(sugarsubstitute_desktop::StartupPreparationStep::Closing);
+        }
+        if self.owner.is_none() || self.client.is_none() || self.scope.is_none() {
+            return Err("Fixture original execution/native admission is incomplete".into());
+        }
+        Ok(sugarsubstitute_desktop::StartupPreparationStep::Ready)
+    }
     fn activity(&mut self, max: NonZeroUsize) -> Result<HeadlessStep> {
         self.advance(max)
     }

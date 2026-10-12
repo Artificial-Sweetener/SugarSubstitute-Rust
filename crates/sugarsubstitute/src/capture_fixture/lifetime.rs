@@ -51,6 +51,24 @@ impl HeadlessLifetime for Fixture {
             }
         }
     }
+    fn prepare_native_runtime(
+        &mut self,
+        max: NonZeroUsize,
+    ) -> Result<sugarsubstitute_desktop::StartupPreparationStep> {
+        if max.get() > 32 {
+            return Err("Capture preparation exceeds native drain bound".into());
+        }
+        if self.closing {
+            return Ok(sugarsubstitute_desktop::StartupPreparationStep::Closing);
+        }
+        if self.owner.is_none() || self.client.is_none() || !self.start_admitted {
+            return Err("Capture fixture original registration admission is incomplete".into());
+        }
+        match self.advance(max)? {
+            HeadlessStep::Shutdown => Ok(sugarsubstitute_desktop::StartupPreparationStep::Closing),
+            HeadlessStep::Active => Ok(sugarsubstitute_desktop::StartupPreparationStep::Waiting),
+        }
+    }
     fn activity(&mut self, max: NonZeroUsize) -> Result<HeadlessStep> {
         self.advance(max)
     }

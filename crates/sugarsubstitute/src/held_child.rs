@@ -95,6 +95,21 @@ impl HeadlessLifetime for HeldChild {
             self.options.events.take().ok_or("Held child inherited inputs already transferred")?;
         self.state.install(permit.bind(events))
     }
+    fn prepare_native_runtime(
+        &mut self,
+        max: NonZeroUsize,
+    ) -> Result<sugarsubstitute_desktop::StartupPreparationStep> {
+        if max.get() > 32 {
+            return Err("Fixture preparation exceeds native drain bound".into());
+        }
+        if self.state.closing() {
+            return Ok(sugarsubstitute_desktop::StartupPreparationStep::Closing);
+        }
+        if self.owner.is_none() || self.client.is_none() || self.scope.is_none() {
+            return Err("Fixture original execution/native admission is incomplete".into());
+        }
+        Ok(sugarsubstitute_desktop::StartupPreparationStep::Ready)
+    }
     fn activity(&mut self, max: NonZeroUsize) -> Result<HeadlessStep> {
         if let Some(client) = &self.client {
             let batch = client.drain_completions(max)?;

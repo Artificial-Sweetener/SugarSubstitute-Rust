@@ -247,7 +247,7 @@ mod tests {
         assert_eq!(
             encoded["startup_milestones"],
             json!([
-                {"stage":"event_loop_ready","ticks":10},{"stage":"execution_ready","ticks":11}
+                {"stage":"execution_ready","ticks":10},{"stage":"event_loop_ready","ticks":11}
             ])
         );
     }

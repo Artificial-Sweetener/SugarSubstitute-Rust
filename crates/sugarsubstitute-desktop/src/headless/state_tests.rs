@@ -31,6 +31,8 @@ impl CompletionWake for CountWake {
 #[derive(Default)]
 struct Lifetime {
     steps: VecDeque<HeadlessStep>,
+    preparations: VecDeque<Result<super::super::StartupPreparationStep, Box<dyn Error>>>,
+    preparation_budgets: Vec<usize>,
     calls: Rc<RefCell<Vec<&'static str>>>,
     budgets: Vec<usize>,
     deadline: Option<Instant>,
@@ -51,6 +53,14 @@ impl HeadlessLifetime for Lifetime {
             return Err(Box::new(Cause("start")));
         }
         Ok(())
+    }
+    fn prepare_native_runtime(
+        &mut self,
+        max: NonZeroUsize,
+    ) -> Result<super::super::StartupPreparationStep, Box<dyn Error>> {
+        self.calls.borrow_mut().push("prepare");
+        self.preparation_budgets.push(max.get());
+        self.preparations.pop_front().unwrap_or(Ok(super::super::StartupPreparationStep::Waiting))
     }
     fn activity(&mut self, max: NonZeroUsize) -> Result<HeadlessStep, Box<dyn Error>> {
         self.calls.borrow_mut().push("activity");
@@ -274,3 +284,6 @@ fn finish_failure_survives_after_successful_settlement_and_native_teardown() -> 
     );
     Ok(())
 }
+
+#[path = "preparation_tests.rs"]
+mod preparation_tests;

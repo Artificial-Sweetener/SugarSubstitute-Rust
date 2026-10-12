@@ -325,7 +325,7 @@ pub enum DesktopStartupObservation {
 pub enum StartupPreparationStep {
     /// Authentication, capture attachment or their bounded completion disposal remains pending.
     Waiting,
-    /// Actual required bootstrap authentication and capture attachment completed successfully.
+    /// The role's actual required bootstrap authentication and capture attachment completed.
     Ready,
     /// Admission is closed; retain execution/transport/capture ownership until actual settlement.
     Closing,
@@ -339,13 +339,13 @@ pub enum StartupPreparationStep {
 pub trait StartupWindowContent: WindowContent {
     /// Route at most `min(maximum, 32)` shared completion notices before native UI admission.
     ///
-    /// Called after the single start attempt on the same Tao loop, before STA entry,
+    /// Called after the single start attempt on the creating main thread, before Tao, STA entry,
     /// splash controls or a WebView. Ready requires actual current authentication and
     /// required capture attachment; it cannot be inferred from launch intent. Closing
     /// continues bounded terminal disposal. Implementations retain original deadlines.
     ///
     /// # Errors
-    /// Preserve the original cause while the native loop continues actual owned shutdown.
+    /// Preserve the original cause while the same main-thread pump continues owned shutdown.
     fn prepare_native_ui(
         &mut self,
         maximum: std::num::NonZeroUsize,

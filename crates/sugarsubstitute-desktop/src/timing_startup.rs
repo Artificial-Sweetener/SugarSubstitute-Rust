@@ -27,8 +27,8 @@ impl NativeStartupOrder {
                 FirstPreparationRequest,
             ],
             Self::ExecutionFirst => [
-                EventLoopReady,
                 ExecutionReady,
+                EventLoopReady,
                 WindowCreated,
                 PresenterReady,
                 ControlsReady,

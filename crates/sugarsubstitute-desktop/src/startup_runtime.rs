@@ -3,6 +3,8 @@
 //! Pump splash, nonblocking browser construction and composing execution on one outer STA.
 
 use crate::shutdown as custody;
+#[path = "startup_admission.rs"]
+mod admission;
 #[path = "startup_events.rs"]
 mod events;
 #[path = "native_activity.rs"]
@@ -11,17 +13,17 @@ mod native_activity;
 mod preparation;
 #[path = "startup_surface.rs"]
 mod surface;
+#[cfg(test)]
+#[path = "startup_preparation_test_content.rs"]
+mod test_content;
 #[path = "windows_activity.rs"]
 mod windows_activity;
 use crate::{
     DesktopError, DesktopOptions, DesktopStartupObservation, StartupDesktopReceipt,
     StartupWindowContent, main_actor::MainActor, native_action::NativeAction,
 };
-use std::{num::NonZeroUsize, sync::Arc, time::Instant};
-use tao::{
-    event_loop::{ControlFlow, EventLoopBuilder},
-    platform::run_return::EventLoopExtRunReturn,
-};
+use std::{num::NonZeroUsize, time::Instant};
+use tao::{event_loop::ControlFlow, platform::run_return::EventLoopExtRunReturn};
 
 use crate::timing::{NativeStartupStage, observe_startup};
 
@@ -123,41 +125,22 @@ pub fn run_startup(
         options.audit_timings,
         crate::timing::NativeStartupOrder::ExecutionFirst,
     )?;
-    let mut event_loop = EventLoopBuilder::<NativeAction>::with_user_event().build();
-    observe_startup(timings.as_ref(), NativeStartupStage::EventLoopReady)?;
-    let wake_lifetime = crate::completion_wake::WakeLifetime::new();
-    let wake = Arc::new(crate::completion_wake::ProxyWake::new(
-        event_loop.create_proxy(),
-        wake_lifetime.clone(),
-        NativeAction::Completions,
-    ));
-    let drain = NonZeroUsize::new(32)
-        .ok_or_else(|| DesktopError::message("startup_drain", "zero budget"))?;
-    let (prepared, mut failure) =
-        preparation::prepare(&mut event_loop, &mut content, wake, drain, limit, timings.as_ref());
-    if prepared == preparation::PreparationExit::Closed {
-        wake_lifetime.disconnect();
-        drop(event_loop);
-        custody::finish_after_native(
-            content,
-            |content| {
-                content
-                    .finish_shutdown()
-                    .map_err(|cause| DesktopError::boxed("finish_preparation_shutdown", cause))
-            },
-            || Ok(()),
-            &mut failure,
-        );
-        if let Err(cause) = timings.map(crate::timing::TimingObserver::finish).transpose() {
-            DesktopError::retain_first(&mut failure, cause);
-        }
-        return Err(failure.unwrap_or_else(|| {
-            DesktopError::message(
-                "startup_preparation",
-                "startup closed before native surface admission",
-            )
-        }));
-    }
+    let bootstrap = crate::bootstrap::Bootstrap::new()?;
+    let drain = NonZeroUsize::MIN.saturating_add(31);
+    let (mut event_loop, wake_lifetime) =
+        match admission::admit(&bootstrap, &mut content, drain, limit, timings.as_ref()) {
+            Ok(admitted) => admitted,
+            Err(cause) => {
+                let mut failure = Some(cause);
+                finish_before_loop(content, &mut failure);
+                if let Err(cause) = timings.map(crate::timing::TimingObserver::finish).transpose() {
+                    DesktopError::retain_first(&mut failure, cause);
+                }
+                return Err(failure.unwrap_or_else(|| {
+                    DesktopError::message("startup_preparation", "Tao admission failed")
+                }));
+            }
+        };
     let mut apartment = match crate::windows_ui_apartment::UiApartment::enter() {
         Ok(apartment) => apartment,
         Err(cause) => {
@@ -168,6 +151,7 @@ pub fn run_startup(
                 limit,
                 cause,
             );
+            bootstrap.retain_close_failure(&mut failure);
             wake_lifetime.disconnect();
             drop(event_loop);
             custody::finish_after_native(
@@ -267,6 +251,7 @@ pub fn run_startup(
                 session.retain(cause);
             }
             drop(animation_period);
+            bootstrap.retain_close_failure(&mut session.failure);
             wake_lifetime.disconnect();
             if let Some(main) = session.main.take() {
                 session.navigations += main.navigations();
@@ -305,6 +290,20 @@ pub fn run_startup(
     })?;
     splash.timings = timing_receipt?;
     Ok(StartupDesktopReceipt { splash, main_material, navigations_started })
+}
+
+/// No Tao/window was admitted; actual settled content finalization still owns worker joins.
+fn finish_before_loop(content: impl StartupWindowContent, failure: &mut Option<DesktopError>) {
+    custody::finish_after_native(
+        content,
+        |content| {
+            content
+                .finish_shutdown()
+                .map_err(|cause| DesktopError::boxed("finish_preparation_shutdown", cause))
+        },
+        || Ok(()),
+        failure,
+    );
 }
 
 /// Failed optional timing cannot suppress actual closing callbacks or their original causes.

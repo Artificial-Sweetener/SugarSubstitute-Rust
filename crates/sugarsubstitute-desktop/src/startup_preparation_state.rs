@@ -11,7 +11,7 @@ use sugarsubstitute_contracts::execution::CompletionWake;
 /// Distinguish a deliberate prepared transition from actually settled early closure.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::startup_runtime) enum PreparationExit {
-    /// Keep the same loop, wake and execution lifetime for surface construction.
+    /// Keep the same wake and execution lifetime for loop and surface construction.
     Ready,
     /// No surface was created and the composing owner actually settled.
     Closed,

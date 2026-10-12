@@ -17,7 +17,7 @@ serde.workspace = true
 serde_json.workspace = true
 
 [target.'cfg(target_os = "windows")'.dependencies]
-windows.workspace = true
+windows = { workspace = true, features = ["Win32_Security"] }
 windows-core.workspace = true
 wry.workspace = true
 webview2-com.workspace = true
@@ -28,6 +28,9 @@ softbuffer.workspace = true
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk.workspace = true
 cairo-rs.workspace = true
+
+[dev-dependencies]
+sugarsubstitute-execution = { path = "../sugarsubstitute-execution" }
 
 [lints]
 workspace = true

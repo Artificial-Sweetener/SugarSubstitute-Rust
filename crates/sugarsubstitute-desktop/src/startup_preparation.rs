@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Prepare actual content on the retained native loop before STA or surface admission.
+//! Prepare actual content before Tao, then retain existing teardown on the native loop.
 
 #[path = "startup_preparation_state.rs"]
 mod state;
-use crate::{DesktopError, StartupWindowContent, native_action::NativeAction};
+use crate::{
+    DesktopError, StartupWindowContent,
+    bootstrap::{Bootstrap, WaitOutcome},
+    native_action::NativeAction,
+};
 pub(super) use state::PreparationExit;
 use state::PreparationState;
 use std::{num::NonZeroUsize, sync::Arc, time::Instant};
@@ -15,9 +19,9 @@ use tao::{
     platform::run_return::EventLoopExtRunReturn,
 };
 
-/// Retain the exact event loop/proxy while the content supplies actual prerequisites.
+/// Start once and retain actual prerequisites before creating any Tao event loop.
 pub(super) fn prepare(
-    event_loop: &mut EventLoop<NativeAction>,
+    bootstrap: &Bootstrap,
     content: &mut impl StartupWindowContent,
     wake: Arc<dyn CompletionWake>,
     maximum: NonZeroUsize,
@@ -33,7 +37,52 @@ pub(super) fn prepare(
     {
         state.fail(content, cause);
     }
-    drive(event_loop, content, maximum, limit, state)
+    drive_before_loop(bootstrap, content, maximum, limit, state)
+}
+
+/// Retain already started content after failed loop construction or wake handoff.
+pub(super) fn close_before_loop(
+    bootstrap: &Bootstrap,
+    content: &mut impl StartupWindowContent,
+    maximum: NonZeroUsize,
+    limit: Option<Instant>,
+    cause: DesktopError,
+) -> Option<DesktopError> {
+    let state = PreparationState::closing_started(content, cause);
+    drive_before_loop(bootstrap, content, maximum, limit, state).1
+}
+fn drive_before_loop(
+    bootstrap: &Bootstrap,
+    content: &mut impl StartupWindowContent,
+    maximum: NonZeroUsize,
+    limit: Option<Instant>,
+    mut state: PreparationState,
+) -> (PreparationExit, Option<DesktopError>) {
+    loop {
+        if let Err(cause) = bootstrap.begin_turn() {
+            state.fail(content, cause);
+        }
+        if limit.is_some_and(|deadline| Instant::now() >= deadline) {
+            state.close(content);
+        }
+        state.activity(content, maximum);
+        if let Some(exit) = state.exit() {
+            return (exit, state.take_failure());
+        }
+        let deadline =
+            match preparation_wait(state.closing(), content.next_deadline(), limit, Instant::now())
+            {
+                ControlFlow::WaitUntil(deadline) => Some(deadline),
+                _ => None,
+            };
+        match bootstrap.wait(deadline) {
+            Ok(WaitOutcome::Quit(status)) => {
+                state.native_return(content, status);
+            }
+            Ok(WaitOutcome::Woken | WaitOutcome::Deadline) => {}
+            Err(cause) => state.fail(content, cause),
+        }
+    }
 }
 
 /// Retire already started content after a failed STA boundary without starting it again.

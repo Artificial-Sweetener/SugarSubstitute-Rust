@@ -3,7 +3,8 @@
 //! Pump a main-thread native lifetime without application windows or presentation.
 mod state;
 use crate::{
-    DesktopError,
+    DesktopError, StartupPreparationStep,
+    bootstrap::{Bootstrap, WaitOutcome},
     completion_wake::{ProxyWake, WakeLifetime},
 };
 use std::{error::Error, num::NonZeroUsize, sync::Arc, time::Instant};
@@ -27,11 +28,21 @@ pub enum HeadlessStep {
 /// blocking/native joins remain with the execution adapter. A cancellation request
 /// does not prove stopping. The caller retains this borrowed owner throughout errors.
 pub trait HeadlessLifetime {
-    /// Start once after the native proxy exists; early completion wakes are allowed.
+    /// Start once against the retained native completion wake before Tao construction.
     /// The returned wake is thread-safe and supplies no window/runtime authority.
     /// # Errors
     /// Preserve the original cause; even partial startup must support owned shutdown.
     fn start(&mut self, wake: Arc<dyn CompletionWake>) -> Result<(), Box<dyn Error>>;
+    /// Complete this role's actual prerequisites before Tao event-loop construction.
+    /// Runs on the main thread with the same wake/execution lifetime as `start`.
+    /// `Ready` is control flow only; the composing owner retains actual authority.
+    /// `Closing` closes admission while the pump still drains actual owned work.
+    /// # Errors
+    /// Preserve the original cause and remain capable of bounded owned shutdown.
+    fn prepare_native_runtime(
+        &mut self,
+        max: NonZeroUsize,
+    ) -> Result<StartupPreparationStep, Box<dyn Error>>;
     /// Consume at most `max` typed completion records or bounded deadline decisions.
     /// After shutdown admission closes, this only drains/acknowledges existing work.
     /// # Errors
@@ -63,7 +74,9 @@ enum HeadlessAction {
 
 /// Run one main-thread native pump with no application window, frame or focus work.
 ///
-/// The proxy exists before `start`; each activity call receives budget 32. Active
+/// A private native event exists before `start`; preparation completes before Tao.
+/// The same wake endpoint then retargets to the actual proxy under synchronization.
+/// Each activity call receives budget 32. Active
 /// waiting uses the owner's earliest deadline or actual completion. Closing uses
 /// the existing bounded native cadence while keeping the loop/proxy alive until
 /// actual settlement. An early native return is an error and re-enters the same
@@ -76,15 +89,35 @@ enum HeadlessAction {
 /// This function must run on the native main thread. It performs no process launch,
 /// application-window creation, raw worker scheduling or blocking owner join.
 pub fn run_headless(lifetime: &mut impl HeadlessLifetime) -> Result<(), DesktopError> {
-    let mut event_loop = EventLoopBuilder::<HeadlessAction>::with_user_event().build();
+    let bootstrap = Bootstrap::new()?;
+    let mut state = state::HeadlessState::new();
+    state.start(lifetime, bootstrap.wake());
+    prepare_before_loop(&bootstrap, &mut state, lifetime);
+    if state.settled() {
+        state.retire_bootstrap(&bootstrap);
+        return state.finish(lifetime, || {});
+    }
+    let mut event_loop = match crate::bootstrap::construct_loop(|| {
+        EventLoopBuilder::<HeadlessAction>::with_user_event().build()
+    }) {
+        Ok(event_loop) => event_loop,
+        Err(cause) => {
+            state.fail(lifetime, cause);
+            prepare_before_loop(&bootstrap, &mut state, lifetime);
+            state.retire_bootstrap(&bootstrap);
+            return state.finish(lifetime, || {});
+        }
+    };
     let wake_lifetime = WakeLifetime::new();
     let wake = Arc::new(ProxyWake::new(
         event_loop.create_proxy(),
         wake_lifetime.clone(),
         HeadlessAction::Completions,
     ));
-    let mut state = state::HeadlessState::new();
-    state.start(lifetime, wake);
+    if let Err(cause) = bootstrap.handoff(wake) {
+        state.fail(lifetime, cause);
+        prepare_before_loop(&bootstrap, &mut state, lifetime);
+    }
     while !state.settled() {
         let exit_code = event_loop.run_return(|event, _, control| {
             match event {
@@ -99,8 +132,35 @@ pub fn run_headless(lifetime: &mut impl HeadlessLifetime) -> Result<(), DesktopE
         });
         state.native_return(lifetime, exit_code);
     }
+    state.retire_bootstrap(&bootstrap);
     state.finish(lifetime, || {
         wake_lifetime.disconnect();
         drop(event_loop);
     })
+}
+
+/// Closing keeps the same original lifetime, with at most 32 owner/message notices per turn.
+fn prepare_before_loop(
+    bootstrap: &Bootstrap,
+    state: &mut state::HeadlessState,
+    lifetime: &mut impl HeadlessLifetime,
+) {
+    while !state.prepared() && !state.settled() {
+        if let Err(cause) = bootstrap.begin_turn() {
+            state.fail(lifetime, cause);
+        }
+        state.prepare(lifetime);
+        if state.prepared() || state.settled() {
+            break;
+        }
+        let deadline = match state.control(lifetime, Instant::now()) {
+            tao::event_loop::ControlFlow::WaitUntil(deadline) => Some(deadline),
+            _ => None,
+        };
+        match bootstrap.wait(deadline) {
+            Ok(WaitOutcome::Quit(status)) => state.native_return(lifetime, status),
+            Ok(WaitOutcome::Woken | WaitOutcome::Deadline) => {}
+            Err(cause) => state.fail(lifetime, cause),
+        }
+    }
 }

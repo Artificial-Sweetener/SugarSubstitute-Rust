@@ -2237,6 +2237,7 @@ dependencies = [
  "serde_json",
  "softbuffer",
  "sugarsubstitute-contracts",
+ "sugarsubstitute-execution",
  "tao",
  "tracing",
  "url",

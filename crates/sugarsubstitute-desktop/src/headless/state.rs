@@ -8,22 +8,53 @@ use sugarsubstitute_contracts::execution::CompletionWake;
 use tao::event_loop::ControlFlow;
 
 pub(super) struct HeadlessState {
+    started: bool,
+    prepared: bool,
     closing: bool,
     settled: bool,
     failure: Option<DesktopError>,
 }
 impl HeadlessState {
     pub(super) const fn new() -> Self {
-        Self { closing: false, settled: false, failure: None }
+        Self { started: false, prepared: false, closing: false, settled: false, failure: None }
     }
     pub(super) fn start(
         &mut self,
         lifetime: &mut impl HeadlessLifetime,
         wake: Arc<dyn CompletionWake>,
     ) {
+        if self.started {
+            self.fail(lifetime, DesktopError::message("headless_start", "Content already started"));
+            return;
+        }
+        self.started = true;
         if let Err(cause) = lifetime.start(wake) {
             self.fail(lifetime, DesktopError::boxed("headless_start", cause));
         }
+    }
+    /// Only the exact role's actual preparation can admit Tao, never a wake/deadline.
+    pub(super) fn prepare(&mut self, lifetime: &mut impl HeadlessLifetime) {
+        if self.prepared || self.settled {
+            return;
+        }
+        if !self.started {
+            self.fail(lifetime, DesktopError::message("headless_prepare", "Content not started"));
+        }
+        if !self.closing {
+            match lifetime.prepare_native_runtime(NonZeroUsize::MIN.saturating_add(31)) {
+                Ok(super::StartupPreparationStep::Ready) => self.prepared = true,
+                Ok(super::StartupPreparationStep::Closing) => self.close(lifetime),
+                Ok(super::StartupPreparationStep::Waiting) => {}
+                Err(cause) => self.fail(lifetime, DesktopError::boxed("headless_prepare", cause)),
+            }
+        }
+        if self.closing {
+            self.activity(lifetime);
+            self.poll_shutdown(lifetime);
+        }
+    }
+    pub(super) const fn prepared(&self) -> bool {
+        self.prepared && !self.closing
     }
     pub(super) fn activity(&mut self, lifetime: &mut impl HeadlessLifetime) {
         if self.settled {
@@ -41,6 +72,7 @@ impl HeadlessState {
             return;
         }
         self.closing = true;
+        self.prepared = false;
         if let Err(cause) = lifetime.request_shutdown() {
             DesktopError::retain_first(
                 &mut self.failure,
@@ -48,7 +80,7 @@ impl HeadlessState {
             );
         }
     }
-    fn fail(&mut self, lifetime: &mut impl HeadlessLifetime, cause: DesktopError) {
+    pub(super) fn fail(&mut self, lifetime: &mut impl HeadlessLifetime, cause: DesktopError) {
         DesktopError::retain_first(&mut self.failure, cause);
         self.close(lifetime);
     }
@@ -95,6 +127,9 @@ impl HeadlessState {
                 ),
             );
         }
+    }
+    pub(super) fn retire_bootstrap(&mut self, bootstrap: &crate::bootstrap::Bootstrap) {
+        bootstrap.retain_close_failure(&mut self.failure);
     }
     pub(super) fn finish(
         self,
