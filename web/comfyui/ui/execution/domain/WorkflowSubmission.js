@@ -14,4 +14,13 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Describe captured workflow ownership independently of host prompt object lifetimes. */
-export {};
+/** Copy ownership metadata so neither callers nor host mutations can change accepted routing. */
+export function freezeWorkflowSubmissionContext(context) {
+    return Object.freeze({
+        session: Object.freeze({ ...context.session }),
+        sources: Object.freeze(context.sources.map((source) => Object.freeze({
+            ...source,
+            breadcrumb: Object.freeze([...source.breadcrumb]),
+        }))),
+    });
+}

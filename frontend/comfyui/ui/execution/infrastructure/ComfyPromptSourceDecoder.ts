@@ -21,10 +21,12 @@ import type { WorkflowOutputSource } from '../domain/WorkflowOutput.js';
 
 /** Read source identities from a compiled prompt; results determine which paths produce visible media. */
 export function decodeComfyPromptSources(payload: unknown): readonly WorkflowOutputSource[] {
-  if (!isRecord(payload) || !isRecord(payload.output)) return Object.freeze([]);
+  if (!isRecord(payload) || !isRecord(payload.output) || Array.isArray(payload.output))
+    return Object.freeze([]);
   const sources: WorkflowOutputSource[] = [];
   for (const [executionPath, node] of Object.entries(payload.output)) {
-    if (!executionPath || executionPath.length > 4096 || !isRecord(node)) continue;
+    if (!executionPath || executionPath.length > 4096 || !isRecord(node) || Array.isArray(node))
+      continue;
     const meta = isRecord(node._meta) ? node._meta : null;
     const title = text(meta?.title) || text(node.class_type) || `Node ${executionPath}`;
     sources.push(

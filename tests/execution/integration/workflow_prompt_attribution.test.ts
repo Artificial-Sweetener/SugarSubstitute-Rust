@@ -74,7 +74,12 @@ test.each([false, true])(
       ...(direct
         ? { executeDirect: async () => await response.promise, shouldExecuteDirect: () => true }
         : {}),
-      observer: new ComfyPromptSubmissionObserver({ contexts, logger, accepted }),
+      observer: new ComfyPromptSubmissionObserver({
+        contexts,
+        logger,
+        accepted,
+        submitting: (context) => ({ ...context, order: 1 }),
+      }),
     });
     bridge.install();
     const queued = api.queuePrompt?.(0, original);
@@ -115,7 +120,12 @@ test('leaves foreign raw objects and construction during loading unassigned', as
   await host.graphToPrompt();
   expect(contexts.read(payload)).toBeNull();
   const accepted = jest.fn();
-  const submission = new ComfyPromptSubmissionObserver({ contexts, logger, accepted });
+  const submission = new ComfyPromptSubmissionObserver({
+    contexts,
+    logger,
+    accepted,
+    submitting: (context) => ({ ...context, order: 1 }),
+  });
   expect(submission.capture({ ...payload })).toBeNull();
   expect(submission.capture(payload)).toBeNull();
   observer.dispose();
@@ -131,7 +141,12 @@ test('allows repeated batch requests from an exact known object but never associ
   contexts.associate(payload, context, []);
   const accepted = jest.fn<(context: WorkflowSubmissionContext, id: PromptId) => void>();
   const logger = { error: jest.fn(), warn: jest.fn() };
-  const observer = new ComfyPromptSubmissionObserver({ contexts, logger, accepted });
+  const observer = new ComfyPromptSubmissionObserver({
+    contexts,
+    logger,
+    accepted,
+    submitting: (context) => ({ ...context, order: 1 }),
+  });
   observer.capture(payload)?.accepted({ prompt_id: 'one' });
   observer.capture(payload)?.accepted({ prompt_id: 'two' });
   const rejected = observer.capture(payload);
@@ -140,4 +155,39 @@ test('allows repeated batch requests from an exact known object but never associ
   observer.capture(payload)?.accepted({ prompt_id: 42 });
   expect(accepted.mock.calls.map((call) => call[1])).toEqual(['prompt:one', 'prompt:two']);
   expect(logger.warn).toHaveBeenCalledTimes(1);
+});
+
+test('uses the direct backend receipt execution snapshot including prompt-only cube marker sources', () => {
+  const contexts = new WorkflowSubmissionContexts();
+  const payload = { workflow: { nodes: [] }, output: {} };
+  contexts.associate(payload, { ...a, generation: 0 }, []);
+  const accepted = jest.fn<(context: WorkflowSubmissionContext, id: PromptId) => void>();
+  const observer = new ComfyPromptSubmissionObserver({
+    submitting: (context) => ({ ...context, order: 1 }),
+    contexts,
+    logger: { error: jest.fn(), warn: jest.fn() },
+    accepted,
+  });
+  observer.capture(payload)?.accepted({
+    prompt_id: 'direct',
+    execution_prompt: {
+      '__sugarcubes_cube_output__:7:0': {
+        class_type: 'SugarCubes.CubeOutput',
+        _meta: { title: 'Authored image binding' },
+      },
+      '7:23': { class_type: 'PreviewImage', _meta: { title: 'Internal preview' } },
+    },
+  });
+  expect(accepted).toHaveBeenCalledWith(
+    expect.objectContaining({
+      sources: [
+        expect.objectContaining({
+          executionPath: '__sugarcubes_cube_output__:7:0',
+          label: 'Authored image binding',
+        }),
+        expect.objectContaining({ executionPath: '7:23', label: 'Internal preview' }),
+      ],
+    }),
+    'prompt:direct',
+  );
 });

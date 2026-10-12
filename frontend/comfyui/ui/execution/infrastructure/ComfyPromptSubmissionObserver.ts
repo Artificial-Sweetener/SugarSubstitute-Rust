@@ -17,7 +17,10 @@
 
 import { isRecord } from '../../types/common.js';
 import { promptId, type PromptId } from '../domain/ExecutionIdentity.js';
-import type { WorkflowSubmissionContext } from '../domain/WorkflowSubmission.js';
+import type {
+  WorkflowSubmissionContext,
+  WorkflowOrderedSubmission,
+} from '../domain/WorkflowSubmission.js';
 import type { WorkflowSubmissionContexts } from '../application/WorkflowSubmissionContexts.js';
 import type { PromptQueueObservation, PromptQueueObserver } from './ComfyPromptQueueBridge.js';
 import { decodeComfyPromptSources } from './ComfyPromptSourceDecoder.js';
@@ -25,7 +28,8 @@ import { decodeComfyPromptSources } from './ComfyPromptSourceDecoder.js';
 export interface ComfyPromptSubmissionObserverOptions {
   readonly contexts: WorkflowSubmissionContexts;
   readonly logger: Pick<Console, 'error' | 'warn'>;
-  accepted(context: WorkflowSubmissionContext, id: PromptId): void;
+  submitting(context: WorkflowSubmissionContext): WorkflowOrderedSubmission;
+  accepted(context: WorkflowOrderedSubmission, id: PromptId): void;
 }
 
 /** Resolve only observed or explicitly associated prompts and contain diagnostic failures in the bridge. */
@@ -42,13 +46,14 @@ export class ComfyPromptSubmissionObserver implements PromptQueueObserver {
     if (!isRecord(payload)) return null;
     const captured = this.options.contexts.read(payload);
     if (!captured) return null;
-    let context = captured;
+    const submission = this.options.submitting(captured);
+    let context = submission;
     let active = true;
     return {
       prepared: (prepared) => {
         if (!active) return;
         const sources = decodeComfyPromptSources(prepared);
-        if (sources.length) context = Object.freeze({ session: captured.session, sources });
+        if (sources.length) context = Object.freeze({ ...submission, sources });
       },
       accepted: (response) => {
         if (!active) return;
@@ -63,6 +68,11 @@ export class ComfyPromptSubmissionObserver implements PromptQueueObserver {
           );
           return;
         }
+        const executionSources = isRecord(response)
+          ? decodeComfyPromptSources({ output: response.execution_prompt })
+          : [];
+        if (executionSources.length)
+          context = Object.freeze({ ...submission, sources: executionSources });
         this.options.accepted(context, promptId(id));
       },
       rejected: () => {

@@ -30,3 +30,7 @@ export function outputSourceId(executionPath) {
 export function outputResultId(session, prompt, source, revision, batch) {
     return `result:${JSON.stringify([session, prompt, source, revision, batch])}`;
 }
+/** Identify host-owned restoration without inventing a backend job identity. */
+export function snapshotOutputResultId(sessionId, snapshotId, sourceId, revision, batchIndex) {
+    return `result:${JSON.stringify(['snapshot', sessionId, snapshotId, sourceId, revision, batchIndex])}`;
+}

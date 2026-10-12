@@ -22,3 +22,24 @@ export interface WorkflowSubmissionContext {
   readonly session: WorkflowSessionContext;
   readonly sources: readonly WorkflowOutputSource[];
 }
+
+export interface WorkflowOrderedSubmission extends WorkflowSubmissionContext {
+  readonly order: number;
+}
+
+/** Copy ownership metadata so neither callers nor host mutations can change accepted routing. */
+export function freezeWorkflowSubmissionContext(
+  context: WorkflowSubmissionContext,
+): WorkflowSubmissionContext {
+  return Object.freeze({
+    session: Object.freeze({ ...context.session }),
+    sources: Object.freeze(
+      context.sources.map((source) =>
+        Object.freeze({
+          ...source,
+          breadcrumb: Object.freeze([...source.breadcrumb]),
+        }),
+      ),
+    ),
+  });
+}

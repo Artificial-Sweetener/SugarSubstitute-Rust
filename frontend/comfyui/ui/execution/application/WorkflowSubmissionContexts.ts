@@ -17,6 +17,7 @@
 
 import type { WorkflowSessionContext } from '../domain/WorkflowSession.js';
 import type { WorkflowSubmissionContext } from '../domain/WorkflowSubmission.js';
+import { freezeWorkflowSubmissionContext } from '../domain/WorkflowSubmission.js';
 import type { WorkflowOutputSource } from '../domain/WorkflowOutput.js';
 
 /** Retain lightweight associations weakly so batch reuse requires neither guessing nor a strong cache. */
@@ -29,20 +30,7 @@ export class WorkflowSubmissionContexts {
     session: WorkflowSessionContext,
     sources: readonly WorkflowOutputSource[],
   ): void {
-    this.#contexts.set(
-      prompt,
-      Object.freeze({
-        session: Object.freeze({ ...session }),
-        sources: Object.freeze(
-          sources.map((source) =>
-            Object.freeze({
-              ...source,
-              breadcrumb: Object.freeze([...source.breadcrumb]),
-            }),
-          ),
-        ),
-      }),
-    );
+    this.#contexts.set(prompt, freezeWorkflowSubmissionContext({ session, sources }));
   }
 
   /** Resolve only the exact known prompt object, including explicit reuse for multiple batch requests. */
