@@ -15,13 +15,19 @@ impl Parent {
             return Ok(());
         }
         let Some(key) = case.process else { return Ok(()) };
-        if case.needs_stop(self.registry.snapshot(key)?) {
+        if case.needs_stop(
+            self.registry.as_ref().ok_or("Actual registry is not prepared")?.snapshot(key)?,
+        ) {
             let stop = Stop::new(
                 ShutdownId::new(self.current as u64 + 1)?,
                 self.clock.now(),
                 Instant::now(),
             )?;
-            self.registry.begin_stop(key, stop.id, stop.budget)?;
+            self.registry.as_mut().ok_or("Actual registry is not prepared")?.begin_stop(
+                key,
+                stop.id,
+                stop.budget,
+            )?;
             case.stop = Some(stop);
             case.cleanup_requested = true;
         }
@@ -34,7 +40,14 @@ impl Parent {
             return Ok(());
         };
         for _ in 0..5 {
-            let Some(observation) = self.registry.take_observation(key)? else { break };
+            let Some(observation) = self
+                .registry
+                .as_mut()
+                .ok_or("Actual registry is not prepared")?
+                .take_observation(key)?
+            else {
+                break;
+            };
             let case = &mut self.cases[self.current];
             match observation {
                 RegistryObservation::ContainedStarted { process }
@@ -77,7 +90,8 @@ impl Parent {
         if self.closing || self.cases[self.current].exited.is_some() {
             self.ensure_stop()?;
         }
-        let snapshot = self.registry.snapshot(key)?;
+        let snapshot =
+            self.registry.as_ref().ok_or("Actual registry is not prepared")?.snapshot(key)?;
         let case = &mut self.cases[self.current];
         case.reconsider_cleanup(snapshot);
         if snapshot.forced {
@@ -118,7 +132,7 @@ impl Parent {
             }
         }
         if snapshot.settled {
-            self.registry.retire_settled(key)?;
+            self.registry.as_mut().ok_or("Actual registry is not prepared")?.retire_settled(key)?;
             case.retired = true;
             if !self.closing
                 && (!case.settled
@@ -135,13 +149,17 @@ impl Parent {
                 None
             };
             let step = self.spec(JobClass::InfrastructureLifecycle, 4096, false)?;
-            let id = self.registry.submit_cleanup_step(
-                self.client.as_ref().ok_or("Output cleanup client missing")?,
-                key,
-                self.scope.as_ref().ok_or("Output cleanup scope missing")?,
-                step,
-                watch,
-            )?;
+            let id = self
+                .registry
+                .as_mut()
+                .ok_or("Actual registry is not prepared")?
+                .submit_cleanup_step(
+                    self.client.as_ref().ok_or("Output cleanup client missing")?,
+                    key,
+                    self.scope.as_ref().ok_or("Output cleanup scope missing")?,
+                    step,
+                    watch,
+                )?;
             let case = &mut self.cases[self.current];
             case.record_cleanup_admission(id, watch.map(|spec| spec.id));
         }

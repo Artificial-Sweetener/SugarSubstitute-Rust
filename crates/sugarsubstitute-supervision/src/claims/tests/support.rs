@@ -20,9 +20,11 @@ pub(super) use boundary::*;
 pub(super) struct Harness {
     pub(super) claims: WindowsResourceClaims,
     pub(super) registry: crate::WindowsProcessRegistry,
+    tables: Vec<crate::registry::construction_fixture::TableAdmission>,
     _executor: ExecutionOwner,
     pub(super) client: ExecutionClient,
     pub(super) scope: Scope,
+    table_scope: Scope,
     pub(super) fake: Arc<Fake>,
     pub(super) clock: Arc<ClockPort>,
     wake: Arc<Wake>,
@@ -30,6 +32,27 @@ pub(super) struct Harness {
     cleanup_deadline: Option<Moment>,
 }
 impl Harness {
+    /// Construct another actual independent registry without replacing its admitted ledger.
+    pub(super) fn construct_registry(
+        &mut self,
+        owner: sugarsubstitute_contracts::lifecycle::CoordinatorKey,
+    ) -> Result<crate::WindowsProcessRegistry, Box<dyn std::error::Error>> {
+        let spec = self.spec(crate::WindowsProcessRegistry::required_reservation_bytes())?;
+        crate::registry::construction_fixture::construct(
+            &self.client,
+            &self.table_scope,
+            spec,
+            owner,
+            self.wake.as_ref(),
+            &mut self.tables,
+            |batch| {
+                self.claims.consume(batch)?;
+                self.registry.consume(batch)?;
+                Ok(())
+            },
+        )
+    }
+
     pub(super) fn new() -> Result<Self, Box<dyn Error>> {
         let wake = Arc::new(Wake::default());
         let clock = Arc::new(ClockPort::default());
@@ -37,19 +60,33 @@ impl Harness {
         let client = executor.client();
         let scope =
             client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
+        let table_scope =
+            client.create_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?;
         let fake = Arc::new(Fake::default());
         let mut claims = WindowsResourceClaims::new()?;
         claims.port = fake.clone();
+        let mut tables = Vec::new();
+        let registry = crate::registry::construction_fixture::construct(
+            &client,
+            &table_scope,
+            crate::registry::construction_fixture::first_spec()?,
+            owner()?,
+            wake.as_ref(),
+            &mut tables,
+            |_| Ok(()),
+        )?;
         Ok(Self {
             claims,
-            registry: crate::WindowsProcessRegistry::new(owner()?)?,
+            registry,
+            tables,
             _executor: executor,
             client,
             scope,
+            table_scope,
             fake,
             clock,
             wake,
-            next: 1,
+            next: 2,
             cleanup_deadline: None,
         })
     }
@@ -126,6 +163,11 @@ impl Harness {
     ) -> Result<(), Box<dyn Error>> {
         let requested_bytes = (256_u64 * 1024 * 1024)
             .checked_sub(expected_retained_bytes)
+            .and_then(|bytes| {
+                self.tables
+                    .iter()
+                    .try_fold(bytes, |remaining, table| remaining.checked_sub(table.memory.bytes()))
+            })
             .filter(|bytes| *bytes != 0)
             .ok_or("Expected retained storage exceeds the memory-release fixture bound")?;
         let spec = self.spec(requested_bytes)?;
@@ -215,7 +257,7 @@ impl Harness {
     }
     pub(super) fn fresh_scope(&mut self) -> Result<Scope, Box<dyn Error>> {
         let scope =
-            self.client.create_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?;
+            self.client.create_scope(ScopeSpec { id: ScopeId::new(3)?, deadline: None }, None)?;
         Ok(std::mem::replace(&mut self.scope, scope))
     }
     pub(super) fn drain(&mut self) -> Result<(), Box<dyn Error>> {

@@ -19,6 +19,9 @@ impl Fixture {
             self.deadline_observed = true;
             return Err("Held campaign exceeded its original60-second deadline".into());
         }
+        if self.registry.is_none() {
+            return Ok(if self.closing { HeadlessStep::Shutdown } else { HeadlessStep::Active });
+        }
         // Five cases transfer at most two facts, one terminal and two decisions
         // each. Sentinel and global advancement keep the total below32.
         for _ in 0..5 {
@@ -42,7 +45,12 @@ impl Fixture {
         if let Some(key) = self.sentinel.process
             && !self.sentinel.retired
         {
-            if let Some(observation) = self.registry.take_observation(key)? {
+            if let Some(observation) = self
+                .registry
+                .as_mut()
+                .ok_or("Actual registry is not prepared")?
+                .take_observation(key)?
+            {
                 if matches!(&observation, RegistryObservation::FamilySettled { process, .. } if *process == key)
                 {
                     self.sentinel_settlement_observed = true;
@@ -105,7 +113,11 @@ impl Fixture {
         }
         if let Some(key) = self.cases[index].evidence.process
             && !self.cases[index].evidence.retired
-            && let Some(observation) = self.registry.take_observation(key)?
+            && let Some(observation) = self
+                .registry
+                .as_mut()
+                .ok_or("Actual registry is not prepared")?
+                .take_observation(key)?
         {
             if matches!(&observation, RegistryObservation::ContainedStarted { process } if *process == key)
             {
@@ -146,7 +158,11 @@ impl Fixture {
         match self.phase {
             Phase::Cancelling if evidence.cancel_requested.is_none() => {
                 let key = evidence.process.ok_or("Held cancellation lacks family")?;
-                let job = self.registry.request_observation_retirement(key)?;
+                let job = self
+                    .registry
+                    .as_mut()
+                    .ok_or("Actual held registry is not prepared")?
+                    .request_observation_retirement(key)?;
                 self.cases[index].evidence.request_cancel(job)?;
                 Ok(true)
             }

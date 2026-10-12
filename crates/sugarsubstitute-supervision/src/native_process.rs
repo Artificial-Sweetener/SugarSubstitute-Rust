@@ -13,7 +13,11 @@ use std::{
     sync::Arc,
 };
 use sugarsubstitute_contracts::execution::{MemoryClaim, MemoryLease};
+use sugarsubstitute_contracts::incident::DiagnosticKey;
 use sugarsubstitute_contracts::lifecycle::{ProcessKey, ResourceKey, RunKey};
+use sugarsubstitute_execution::windows_diagnostic_pipe::{
+    DiagnosticEnrollment, DiagnosticPipeBootstrap,
+};
 use sugarsubstitute_execution::windows_fixture::FixtureChildEvents;
 use sugarsubstitute_execution::windows_lifecycle_pipe::{
     LifecycleDesktopEnrollment, LifecyclePipeBootstrap,
@@ -46,6 +50,9 @@ pub(crate) struct Family {
     pub(crate) lifecycle_bootstrap: Option<LifecyclePipeBootstrap>,
     pub(crate) lifecycle_enrollment: Option<LifecycleDesktopEnrollment>,
     pub(crate) lifecycle_run: Option<RunKey>,
+    pub(crate) diagnostic_bootstrap: Option<DiagnosticPipeBootstrap>,
+    pub(crate) diagnostic_enrollment: Option<DiagnosticEnrollment>,
+    pub(crate) diagnostic_key: Option<DiagnosticKey>,
     pub(crate) output_pin: Option<OutputPin>,
     pub(crate) output_cancel: Option<OutputCancellation>,
     pub(crate) output_resource: Option<ResourceKey>,
@@ -60,6 +67,7 @@ pub(crate) struct Family {
     _memory: MemoryClaim,
 }
 impl Family {
+    /// Claim the original fixed family budget before allocating bounded native storage.
     pub(crate) fn new(memory: &MemoryLease) -> Result<Box<Self>, RegistryError> {
         let claim = memory
             .claim(crate::registry_input::FAMILY_STORAGE_BYTES)
@@ -75,6 +83,7 @@ impl Family {
             .map_err(|cause| RegistryError::new("inventory_storage", cause))?;
         query.resize(MAX_MEMBERS + 2, 0);
         let actual = std::mem::size_of::<Self>()
+            + crate::registry::family_shared_storage_bytes()
             + (attributes.capacity() + query.capacity()) * std::mem::size_of::<usize>();
         if actual as u64 > claim.bytes() {
             return Err(RegistryError::invalid("family_capacity"));
@@ -94,6 +103,9 @@ impl Family {
             lifecycle_bootstrap: None,
             lifecycle_enrollment: None,
             lifecycle_run: None,
+            diagnostic_bootstrap: None,
+            diagnostic_enrollment: None,
+            diagnostic_key: None,
             output_pin: None,
             output_cancel: None,
             output_resource: None,
@@ -162,6 +174,12 @@ pub(crate) trait NativePort: Send + Sync {
         run: RunKey,
         key: ProcessKey,
     ) -> Result<(), RegistryError>;
+    fn enroll_diagnostic(
+        &self,
+        family: &mut Family,
+        binding: DiagnosticKey,
+        key: ProcessKey,
+    ) -> Result<(), RegistryError>;
     fn seal(&self, family: &mut Family) -> Result<(), RegistryError>;
     fn inventory(&self, family: &mut Family) -> Result<Inventory, RegistryError>;
     fn terminate(&self, family: &mut Family) -> Result<(), RegistryError>;
@@ -188,6 +206,7 @@ pub(crate) fn close_slot(
 }
 mod cleanup;
 mod creation;
+mod diagnostic;
 mod inheritance;
 mod lifecycle;
 mod membership;

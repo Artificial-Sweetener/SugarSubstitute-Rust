@@ -24,13 +24,24 @@ impl Fixture {
     pub(super) fn drain(&mut self, max: NonZeroUsize) -> Result<bool> {
         let Some(client) = &self.client else { return Ok(false) };
         let batch = client.drain_completions(max)?;
-        self.registry.consume(&batch)?;
+        let _table_changed = crate::process_fixture::registry::poll(
+            &mut self.registry_creation,
+            &mut self.registry,
+            self.closing,
+        )?;
+        if let Some(registry) = &mut self.registry {
+            registry.consume(&batch)?;
+        }
         if let Some((index, id)) = self.cleanup_busy
             && let Some(notice) = batch.notifications.iter().find(|notice| notice.job_id == id)
         {
             self.cleanup_busy = None;
             if let Some(key) = self.process(index) {
-                let snapshot = self.registry.snapshot(key)?;
+                let snapshot = self
+                    .registry
+                    .as_ref()
+                    .ok_or("Actual registry is not prepared")?
+                    .snapshot(key)?;
                 self.cleanup[index].inventory_completed(
                     notice.kind,
                     snapshot.member_watch_required,

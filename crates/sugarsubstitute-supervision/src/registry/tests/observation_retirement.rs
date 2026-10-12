@@ -117,7 +117,7 @@ fn observation_retirement_fact_requires_actual_typed_completion_and_preserves_fa
         match observation {
             RegistryObservation::RootObservationRetired { process, job, outcome } => {
                 assert_eq!(process, key);
-                assert_eq!(job.get(), 1);
+                assert_eq!(job.get(), 2);
                 assert_eq!(outcome, RootObservationOutcome::Cancelled);
                 retired += 1;
             }

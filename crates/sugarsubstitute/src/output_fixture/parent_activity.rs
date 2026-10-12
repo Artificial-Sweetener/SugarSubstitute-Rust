@@ -15,7 +15,25 @@ impl Parent {
         for case in &mut self.cases {
             case.capture(&batch)?;
         }
-        self.registry.consume(&batch)?;
+        let _table_changed = crate::process_fixture::registry::poll(
+            &mut self.registry_creation,
+            &mut self.registry,
+            self.closing,
+        )?;
+        if let Some(registry) = &mut self.registry {
+            registry.consume(&batch)?;
+        }
+        if self.registry.is_none() {
+            if !self.deadline_observed && Instant::now() >= self.deadline {
+                self.deadline_observed = true;
+                return Err("Registry construction exceeded original qualifier deadline".into());
+            }
+            return Ok(if self.closing {
+                sugarsubstitute_desktop::HeadlessStep::Shutdown
+            } else {
+                sugarsubstitute_desktop::HeadlessStep::Active
+            });
+        }
         if self.current == self.cases.len() {
             return Ok(HeadlessStep::Shutdown);
         }

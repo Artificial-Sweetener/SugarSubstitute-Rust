@@ -129,15 +129,45 @@ impl storage::ProfilePort for Fake {
 pub(super) struct Harness {
     pub(super) lease: WindowsProfileLease,
     pub(super) registry: WindowsProcessRegistry,
+    tables: Vec<crate::registry::construction_fixture::TableAdmission>,
     executor: Option<ExecutionOwner>,
     pub(super) client: ExecutionClient,
     pub(super) scope: Scope,
+    table_scope: Scope,
     pub(super) clock: Arc<TestClock>,
     wake: Arc<Wake>,
     pub(super) fake: Arc<Fake>,
     next: u64,
 }
 impl Harness {
+    /// Return actual retained constructor completion bytes for the global capacity proof.
+    pub(super) fn table_reserved_bytes(&self) -> u64 {
+        self.tables.iter().map(|table| table.memory.bytes()).sum()
+    }
+
+    /// Construct another actual independent registry without replacing its admitted ledger.
+    pub(super) fn construct_registry(
+        &mut self,
+        owner: sugarsubstitute_contracts::lifecycle::CoordinatorKey,
+    ) -> Result<crate::WindowsProcessRegistry, Box<dyn std::error::Error>> {
+        let mut spec = self.spec(100)?;
+        spec.reservation_bytes = WindowsProcessRegistry::required_reservation_bytes();
+        crate::registry::construction_fixture::construct(
+            &self.client,
+            &self.table_scope,
+            spec,
+            owner,
+            self.wake.as_ref(),
+            &mut self.tables,
+            |batch| {
+                if self.lease.consume(batch)?.is_some() {
+                    return Err("Unexpected profile completion during construction".into());
+                }
+                Ok(())
+            },
+        )
+    }
+
     pub(super) fn new() -> Result<Self, Box<dyn Error>> {
         let clock = Arc::new(TestClock(AtomicU64::new(0)));
         let wake = Arc::new(Wake::default());
@@ -145,7 +175,18 @@ impl Harness {
         let client = executor.client();
         let scope =
             client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
-        let registry = WindowsProcessRegistry::new(run()?.owner)?;
+        let table_scope =
+            client.create_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?;
+        let mut tables = Vec::new();
+        let registry = crate::registry::construction_fixture::construct(
+            &client,
+            &table_scope,
+            crate::registry::construction_fixture::first_spec()?,
+            run()?.owner,
+            wake.as_ref(),
+            &mut tables,
+            |_| Ok(()),
+        )?;
         let mut lease =
             WindowsProfileLease::new(run()?, PathBuf::from(r"E:\fixture\profile"), &registry)?;
         let fake = Arc::new(Fake::default());
@@ -153,13 +194,15 @@ impl Harness {
         Ok(Self {
             lease,
             registry,
+            tables,
             executor: Some(executor),
             client,
             scope,
+            table_scope,
             clock,
             wake,
             fake,
-            next: 1,
+            next: 2,
         })
     }
     pub(super) fn spec(&mut self, deadline: u64) -> Result<JobSpec, Box<dyn Error>> {
@@ -260,4 +303,24 @@ pub(super) fn input() -> Result<crate::WindowsLaunchInput, Box<dyn Error>> {
         command,
         crate::LaunchEnvironment::from_snapshot_utf16(&[0, 0], &[])?,
     )?)
+}
+
+impl crate::registry::construction_fixture::ConstructionWake for Wake {
+    fn revision(&self) -> u64 {
+        *crate::registry::lock(&self.count) as u64
+    }
+    fn wait_revision(&self, previous: u64) -> Result<(), Box<dyn std::error::Error>> {
+        let guard = crate::registry::lock(&self.count);
+        let (_guard, timed) = self
+            .changed
+            .wait_timeout_while(guard, std::time::Duration::from_secs(10), |value| {
+                *value as u64 == previous
+            })
+            .map_err(|_| "Constructor completion wake poisoned")?;
+        if timed.timed_out() {
+            Err("Actual constructor completion did not arrive".into())
+        } else {
+            Ok(())
+        }
+    }
 }

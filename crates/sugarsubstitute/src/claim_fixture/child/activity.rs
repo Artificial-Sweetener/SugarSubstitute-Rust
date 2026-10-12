@@ -6,7 +6,26 @@ impl Child {
     fn drain(&mut self, max: NonZeroUsize) -> Result<bool> {
         let Some(client) = &self.client else { return Ok(false) };
         let batch = client.drain_completions(max)?;
-        let mut changed = !batch.notifications.is_empty();
+        let table_changed = crate::process_fixture::registry::poll(
+            &mut self.registry_creation,
+            &mut self.registry,
+            self.closing,
+        )?;
+        if table_changed && self.registry_binding_pending {
+            self.registry_binding_pending = false;
+            if !self.closing {
+                self.claims.bind_process_registry(
+                    self.registry.as_ref().ok_or("Actual registry constructor lacks success")?,
+                )?;
+                self.phase = match self.options.role {
+                    Role::ActiveHolder => Phase::Protocol,
+                    Role::BackendContender | Role::BackendSuccess => Phase::Resolving,
+                    _ => return Err("Unexpected acquired coordinator role".into()),
+                };
+            }
+        }
+
+        let mut changed = table_changed || !batch.notifications.is_empty();
         if self.claims.consume(&batch)? != 0 {
             self.pending = false;
         }
@@ -76,14 +95,9 @@ impl Child {
                     return Err("Claim child received duplicate coordinator acquisition".into());
                 }
                 self.key = Some(key);
-                let registry = WindowsProcessRegistry::new(key)?;
-                self.claims.bind_process_registry(&registry)?;
-                self.registry = Some(registry);
-                self.phase = match self.options.role {
-                    Role::ActiveHolder => Phase::Protocol,
-                    Role::BackendContender | Role::BackendSuccess => Phase::Resolving,
-                    _ => return Err("Coordinator contender unexpectedly acquired exclusion".into()),
-                };
+                self.begin_registry(key)?;
+                self.registry_binding_pending = true;
+                self.phase = Phase::Registry;
             }
             ClaimObservation::LaunchResolved(_) => {
                 if self.phase != Phase::Resolving || self.resolution.is_none() {
@@ -147,6 +161,9 @@ impl Child {
             return Ok(false);
         }
         self.cleanup_context()?;
+        if self.registry_creation.is_some() || self.registry.is_none() {
+            return Ok(false);
+        }
         let spec = self.spec(CLAIM_OPERATION_BYTES, true)?;
         let client = self.client.as_ref().ok_or("Claim child client missing")?;
         let scope = self.cleanup_scope.as_ref().ok_or("Claim child cleanup scope missing")?;

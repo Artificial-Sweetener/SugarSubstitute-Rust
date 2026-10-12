@@ -12,7 +12,10 @@ fn terminal(kind: Option<sugarsubstitute_contracts::execution::TerminalKind>) ->
 }
 impl Parent {
     pub(super) fn receipt(&self) -> Result<serde_json::Value> {
-        if !self.finished || !self.registry.is_empty() || !self.cases.iter().all(Case::complete) {
+        if !self.finished
+            || !self.registry.as_ref().is_none_or(|registry| registry.is_empty())
+            || !self.cases.iter().all(Case::complete)
+        {
             return Err("Output receipt requires every actual independent milestone".into());
         }
         let workers = self.workers.ok_or("Output receipt lacks actual worker settlement")?;

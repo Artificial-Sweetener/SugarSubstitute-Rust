@@ -6,12 +6,34 @@ use sugarsubstitute_execution::windows_fixture::FixtureObservation;
 impl Fixture {
     pub(super) fn advance(&mut self, max: NonZeroUsize) -> Result<HeadlessStep> {
         let batch = self.client.as_ref().ok_or("Descendant client")?.drain_completions(max)?;
-        self.registry.consume(&batch)?;
+        let _table_changed = crate::process_fixture::registry::poll(
+            &mut self.registry_creation,
+            &mut self.registry,
+            self.closing,
+        )?;
+        if let Some(registry) = &mut self.registry {
+            registry.consume(&batch)?;
+        }
+        if self.registry.is_none() {
+            if !self.deadline_observed && Instant::now() >= self.original {
+                self.deadline_observed = true;
+                return Err("Registry construction exceeded original qualifier deadline".into());
+            }
+            return Ok(if self.closing {
+                sugarsubstitute_desktop::HeadlessStep::Shutdown
+            } else {
+                sugarsubstitute_desktop::HeadlessStep::Active
+            });
+        }
         for notice in &batch.notifications {
             if Some(notice.job_id) == self.cleanup_job {
                 self.cleanup_job = None;
                 if let Some(key) = self.key {
-                    let snapshot = self.registry.snapshot(key)?;
+                    let snapshot = self
+                        .registry
+                        .as_ref()
+                        .ok_or("Actual registry is not prepared")?
+                        .snapshot(key)?;
                     self.cleanup_needed |= notice.kind == TerminalKind::Success
                         && snapshot.member_watch_required
                         && !snapshot.cleanup_pending
@@ -25,7 +47,8 @@ impl Fixture {
             }
         }
         if let Some(key) = self.key {
-            let snapshot = self.registry.snapshot(key)?;
+            let snapshot =
+                self.registry.as_ref().ok_or("Actual registry is not prepared")?.snapshot(key)?;
             self.evidence.forced |= snapshot.forced;
             self.evidence.retained = self.evidence.retained.max(snapshot.retained_members);
             if let Some(exit) = snapshot.last_member_exit {
@@ -38,7 +61,14 @@ impl Fixture {
                 )?;
             }
             for _ in 0..max.get() {
-                let Some(observation) = self.registry.take_observation(key)? else { break };
+                let Some(observation) = self
+                    .registry
+                    .as_mut()
+                    .ok_or("Actual registry is not prepared")?
+                    .take_observation(key)?
+                else {
+                    break;
+                };
                 match observation {
                     RegistryObservation::ContainedStarted { process } if process == key => {
                         self.evidence.started = true
@@ -56,7 +86,8 @@ impl Fixture {
                     _ => return Err("Unexpected descendant family observation".into()),
                 }
             }
-            let snapshot = self.registry.snapshot(key)?;
+            let snapshot =
+                self.registry.as_ref().ok_or("Actual registry is not prepared")?.snapshot(key)?;
             self.evidence.retained = self.evidence.retained.max(snapshot.retained_members);
             if let Some(stop) = &mut self.stop {
                 let now = self.clock.now();
@@ -72,7 +103,10 @@ impl Fixture {
                 }
             }
             if self.evidence.can_retire_family(snapshot.settled, self.closing) {
-                self.registry.retire_settled(key)?;
+                self.registry
+                    .as_mut()
+                    .ok_or("Actual registry is not prepared")?
+                    .retire_settled(key)?;
                 self.key = None;
                 self.evidence.retired = true;
             }
@@ -99,7 +133,7 @@ impl Fixture {
             self.evidence.challenge = true;
         }
         self.cleanup()?;
-        if self.registry.is_empty()
+        if self.registry.as_ref().is_none_or(|registry| registry.is_empty())
             && self.key.is_none()
             && self.evidence.retired
             && let Some(session) = &self.session

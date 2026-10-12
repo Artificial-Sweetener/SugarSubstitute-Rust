@@ -218,3 +218,23 @@ pub(crate) fn resolved() -> ResolvedNamespace {
         directory: PathBuf::from(r"E:\entry-external-boundary"),
     }
 }
+
+impl crate::registry::construction_fixture::ConstructionWake for Wake {
+    fn revision(&self) -> u64 {
+        *crate::registry::lock(&self.revision)
+    }
+    fn wait_revision(&self, previous: u64) -> Result<(), Box<dyn std::error::Error>> {
+        let guard = crate::registry::lock(&self.revision);
+        let (_guard, timed) = self
+            .changed
+            .wait_timeout_while(guard, std::time::Duration::from_secs(10), |value| {
+                *value == previous
+            })
+            .map_err(|_| "Constructor completion wake poisoned")?;
+        if timed.timed_out() {
+            Err("Actual constructor completion did not arrive".into())
+        } else {
+            Ok(())
+        }
+    }
+}

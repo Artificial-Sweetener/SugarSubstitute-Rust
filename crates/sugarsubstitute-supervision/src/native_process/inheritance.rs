@@ -12,6 +12,8 @@ impl Family {
             || self.attributes_initialized
             || self.fixture_events.is_some()
             || self.lifecycle_bootstrap.is_some()
+            || self.diagnostic_bootstrap.is_some()
+            || self.diagnostic_enrollment.is_some()
             || self.output_pin.is_some()
     }
     pub(crate) fn adopt_fixture_events(
@@ -34,7 +36,9 @@ impl Family {
             return Err(RegistryError::invalid("output_inheritance_owner"));
         }
         if let Some(output) = &input.output
-            && (!output.validates(binding) || self.fixture_events.is_some())
+            && (!output.validates(binding)
+                || self.fixture_events.is_some()
+                || self.diagnostic_bootstrap.is_some())
         {
             return Err(RegistryError::invalid("output_inheritance_binding"));
         }
@@ -58,10 +62,22 @@ impl Family {
         } else {
             None
         };
+        if self.diagnostic_bootstrap.is_some()
+            && (self.lifecycle_bootstrap.is_some()
+                || self.fixture_events.is_some()
+                || self.output_pin.is_some())
+        {
+            return Err(RegistryError::invalid("diagnostic_inheritance_conflict"));
+        }
         let section = self
             .lifecycle_bootstrap
             .as_ref()
-            .map(|bootstrap| bootstrap.borrow_inheritance().section.as_raw_handle() as usize);
+            .map(|bootstrap| bootstrap.borrow_inheritance().section.as_raw_handle() as usize)
+            .or_else(|| {
+                self.diagnostic_bootstrap.as_ref().map(|bootstrap| {
+                    bootstrap.borrow_inheritance().section.as_raw_handle() as usize
+                })
+            });
         let stdio = if let Some(pin) = &self.output_pin {
             let resource =
                 self.output_resource.ok_or_else(|| RegistryError::invalid("output_resource"))?;
@@ -113,6 +129,7 @@ impl Family {
         }
         drop(self.fixture_events.take());
         drop(self.lifecycle_bootstrap.take());
+        drop(self.diagnostic_bootstrap.take());
         if let Some(pin) = self.output_pin.take() {
             self.output_cancel = Some(pin.release());
         }

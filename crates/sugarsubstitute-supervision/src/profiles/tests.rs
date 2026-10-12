@@ -128,7 +128,7 @@ fn outstanding_capsule_blocks_release_until_its_exact_drop() -> TestResult {
 fn foreign_registry_cannot_release_matching_public_run_facts() -> TestResult {
     let mut h = Harness::new()?;
     h.acquire()?;
-    let foreign = WindowsProcessRegistry::new(run()?.owner)?;
+    let foreign = h.construct_registry(run()?.owner)?;
     let spec = h.spec(100)?;
     assert!(h.lease.submit_release(&h.client, &h.scope, spec, &foreign).is_err());
     assert_eq!(h.fake.releases.load(Ordering::Acquire), 0);
@@ -218,7 +218,7 @@ fn rejected_launch_without_native_record_can_release_its_exact_profile() -> Test
     let creation = h.spec(100)?;
     let root_watch = h.spec(100)?;
     let jobs = crate::ClaimLaunchJobs {
-        native_scope: ScopeSpec { id: ScopeId::new(2)?, deadline: None },
+        native_scope: ScopeSpec { id: ScopeId::new(3)?, deadline: None },
         creation,
         root_watch,
     };
@@ -239,7 +239,7 @@ fn foreign_capsule_cannot_create_a_family_in_another_matching_run_owner() -> Tes
     let creation = foreign.spec(100)?;
     let root_watch = foreign.spec(100)?;
     let jobs = crate::ClaimLaunchJobs {
-        native_scope: ScopeSpec { id: ScopeId::new(2)?, deadline: None },
+        native_scope: ScopeSpec { id: ScopeId::new(3)?, deadline: None },
         creation,
         root_watch,
     };

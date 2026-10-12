@@ -11,6 +11,14 @@ impl Fixture {
             self.deadline_observed = true;
             return Err("Registry qualification exceeded its original sixty-second deadline".into());
         }
+        if !self.closing
+            && self.registry_creation.is_none()
+            && self.registry.is_some()
+            && self.current < self.cases.len()
+            && self.cases[self.current].process.is_none()
+        {
+            self.launch_next()?;
+        }
         if self.current == self.cases.len() {
             return Ok(HeadlessStep::Shutdown);
         }
@@ -19,13 +27,21 @@ impl Fixture {
         };
         // Each record has five unread fact classes; no dynamic event list is retained.
         for _ in 0..5 {
-            let Some(observation) = self.registry.take_observation(key)? else { break };
+            let Some(observation) = self
+                .registry
+                .as_mut()
+                .ok_or("Actual registry is not prepared")?
+                .take_observation(key)?
+            else {
+                break;
+            };
             self.cases[self.current].observe(observation)?;
         }
         if self.cases[self.current].exited.is_some() || self.closing {
             self.ensure_stop()?;
         }
-        let snapshot = self.registry.snapshot(key)?;
+        let snapshot =
+            self.registry.as_ref().ok_or("Actual registry is not prepared")?.snapshot(key)?;
         if let Some(stop) = &mut self.stop {
             let due = stop.due(self.clock.now(), snapshot.settled);
             self.cleanup_requested |= due.cleanup;
@@ -34,7 +50,7 @@ impl Fixture {
             }
         }
         if self.cases[self.current].settled {
-            self.registry.retire_settled(key)?;
+            self.registry.as_mut().ok_or("Actual registry is not prepared")?.retire_settled(key)?;
             self.cases[self.current].retired = true;
             if !self.closing && !self.cases[self.current].complete() {
                 return Err(
@@ -69,7 +85,7 @@ impl Fixture {
         let watch =
             if watch_required { Some(self.spec(JobClass::NativeObservation, 4096)?) } else { None };
         let step = self.spec(JobClass::InfrastructureLifecycle, 4096)?;
-        match self.registry.submit_cleanup_step(
+        match self.registry.as_mut().ok_or("Actual registry is not prepared")?.submit_cleanup_step(
             self.client.as_ref().ok_or("Fixture execution client missing")?,
             key,
             self.scope.as_ref().ok_or("Fixture cleanup scope missing")?,

@@ -8,6 +8,7 @@ mod activity;
 mod lifetime;
 pub(crate) mod progress;
 mod receipt;
+pub(crate) mod registry;
 #[cfg(test)]
 mod tests;
 
@@ -54,7 +55,8 @@ struct Fixture {
     execution_deadline: Moment,
     deadline_observed: bool,
     owner_key: CoordinatorKey,
-    registry: WindowsProcessRegistry,
+    registry: Option<WindowsProcessRegistry>,
+    registry_creation: Option<crate::process_fixture::registry::PendingRegistry>,
     owner: Option<ExecutionOwner>,
     client: Option<ExecutionClient>,
     scope: Option<Scope>,
@@ -90,7 +92,8 @@ impl Fixture {
             execution_deadline,
             deadline_observed: false,
             owner_key,
-            registry: WindowsProcessRegistry::new(owner_key)?,
+            registry: None,
+            registry_creation: None,
             owner: None,
             client: None,
             scope: None,
@@ -145,15 +148,16 @@ impl Fixture {
             instance: InstanceId::new(1)?,
             generation: RunGeneration::new(u64::try_from(self.current)? + 1)?,
         };
-        let ticket = self.registry.submit_launch(
-            self.client.as_ref().ok_or("Fixture execution client missing")?,
-            self.scope.as_ref().ok_or("Fixture creation scope missing")?,
-            native_scope,
-            creation,
-            watch,
-            FamilyBinding::Desktop(run),
-            input,
-        )?;
+        let ticket =
+            self.registry.as_mut().ok_or("Actual registry is not prepared")?.submit_launch(
+                self.client.as_ref().ok_or("Fixture execution client missing")?,
+                self.scope.as_ref().ok_or("Fixture creation scope missing")?,
+                native_scope,
+                creation,
+                watch,
+                FamilyBinding::Desktop(run),
+                input,
+            )?;
         self.cases[self.current].bind(ticket.process())?;
         Ok(())
     }
@@ -164,7 +168,11 @@ impl Fixture {
         if self.stop.is_none() {
             let plan = StopPlan::new(self.clock.now(), Instant::now())?;
             let shutdown = ShutdownId::new(u64::try_from(self.current)? + 1)?;
-            self.registry.begin_stop(key, shutdown, plan.budget)?;
+            self.registry.as_mut().ok_or("Actual registry is not prepared")?.begin_stop(
+                key,
+                shutdown,
+                plan.budget,
+            )?;
             self.cases[self.current].stop = Some((shutdown, plan.budget));
             self.stop = Some(plan);
             self.cleanup_requested = true;
@@ -174,13 +182,28 @@ impl Fixture {
     fn drain(&mut self, max: NonZeroUsize) -> Result<()> {
         if let Some(client) = &self.client {
             let batch = client.drain_completions(max)?;
-            self.registry.consume(&batch)?;
+            let table_changed = crate::process_fixture::registry::poll(
+                &mut self.registry_creation,
+                &mut self.registry,
+                self.closing,
+            )?;
+            if let Some(registry) = &mut self.registry {
+                registry.consume(&batch)?;
+            }
+            if table_changed && !self.closing {
+                self.launch_next()?;
+            }
             let progress =
                 batch.notifications.iter().any(|notice| Some(notice.job_id) != self.cleanup_job);
             if batch.notifications.iter().any(|notice| Some(notice.job_id) == self.cleanup_job) {
                 self.cleanup_job = None;
                 if let Some(key) = self.cases.get(self.current).and_then(|case| case.process)
-                    && self.registry.snapshot(key)?.member_watch_required
+                    && self
+                        .registry
+                        .as_ref()
+                        .ok_or("Actual registry is not prepared")?
+                        .snapshot(key)?
+                        .member_watch_required
                 {
                     self.cleanup_requested = true;
                 }

@@ -22,7 +22,7 @@ fn binding_requires_actual_coordinator_and_rejects_repeated_binding() -> TestRes
         PathBuf::from("E:\\fixture"),
     )?;
     harness.drain()?;
-    let foreign = crate::WindowsProcessRegistry::new(CoordinatorKey {
+    let foreign = harness.construct_registry(CoordinatorKey {
         epoch: CoordinatorEpoch::new([3; 16])?,
         ..owner()?
     })?;
@@ -44,7 +44,7 @@ fn binding_requires_actual_coordinator_and_rejects_repeated_binding() -> TestRes
 fn desktop_only_close_requires_pinned_registry_and_seals_before_empty_proof() -> TestResult {
     let mut harness = Harness::new()?;
     harness.initialize()?;
-    let mut foreign = crate::WindowsProcessRegistry::new(owner()?)?;
+    let mut foreign = harness.construct_registry(owner()?)?;
     harness.claims.close_admission();
     let spec = harness.close_spec()?;
     assert!(matches!(
@@ -54,7 +54,7 @@ fn desktop_only_close_requires_pinned_registry_and_seals_before_empty_proof() ->
     assert_eq!(harness.scope.snapshot().reserved_bytes, crate::CLAIM_POOL_BYTES);
 
     let cancelled =
-        harness.client.create_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?;
+        harness.client.create_scope(ScopeSpec { id: ScopeId::new(3)?, deadline: None }, None)?;
     cancelled.cancel();
     let command = crate::WindowsLaunchCommand::from_utf16(
         &"E:\\fixture\\child.exe".encode_utf16().collect::<Vec<_>>(),
@@ -77,7 +77,7 @@ fn desktop_only_close_requires_pinned_registry_and_seals_before_empty_proof() ->
         harness.registry.submit_launch(
             &harness.client,
             &cancelled,
-            ScopeSpec { id: ScopeId::new(3)?, deadline: None },
+            ScopeSpec { id: ScopeId::new(4)?, deadline: None },
             creation,
             watch,
             binding,
@@ -108,7 +108,7 @@ fn desktop_only_close_requires_pinned_registry_and_seals_before_empty_proof() ->
         harness.registry.submit_launch(
             &harness.client,
             &harness.scope,
-            ScopeSpec { id: ScopeId::new(4)?, deadline: None },
+            ScopeSpec { id: ScopeId::new(5)?, deadline: None },
             creation,
             watch,
             binding,
@@ -180,7 +180,7 @@ fn unattempted_backend_release_rejects_a_different_empty_registry() -> TestResul
         &ticket,
     )?;
     harness.drain()?;
-    let foreign = crate::WindowsProcessRegistry::new(owner()?)?;
+    let foreign = harness.construct_registry(owner()?)?;
     let spec = harness.spec(CLAIM_OPERATION_BYTES)?;
     assert!(matches!(
         harness.claims.submit_backend_release(
@@ -215,7 +215,7 @@ fn partial_initialization_cleanup_never_seals_an_unowned_registry() -> TestResul
     harness.drain()?;
     harness.wait_reserved(&harness.scope, 0)?;
     let cancelled =
-        harness.client.create_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?;
+        harness.client.create_scope(ScopeSpec { id: ScopeId::new(3)?, deadline: None }, None)?;
     cancelled.cancel();
     let command = crate::WindowsLaunchCommand::from_utf16(
         &"E:\\fixture\\child.exe".encode_utf16().collect::<Vec<_>>(),
@@ -238,7 +238,7 @@ fn partial_initialization_cleanup_never_seals_an_unowned_registry() -> TestResul
         harness.registry.submit_launch(
             &harness.client,
             &cancelled,
-            ScopeSpec { id: ScopeId::new(3)?, deadline: None },
+            ScopeSpec { id: ScopeId::new(4)?, deadline: None },
             creation,
             watch,
             binding,
@@ -256,7 +256,7 @@ fn cleanup_deadline_survives_rejected_admission_and_failed_native_close() -> Tes
     let mut harness = Harness::new()?;
     harness.initialize()?;
     let original = harness.close_spec()?.deadline.ok_or("cleanup deadline absent")?;
-    let mut foreign = crate::WindowsProcessRegistry::new(owner()?)?;
+    let mut foreign = harness.construct_registry(owner()?)?;
     harness.claims.close_admission();
     let spec = harness.close_spec()?;
     assert!(matches!(

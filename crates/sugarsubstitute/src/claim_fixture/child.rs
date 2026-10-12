@@ -77,6 +77,7 @@ pub(crate) fn run_child(options: ChildOptions) -> Result<ChildResult> {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Phase {
+    Registry,
     Initializing,
     Resolving,
     Acquiring,
@@ -94,6 +95,8 @@ struct Child {
     native_scope: Option<Scope>,
     claims: WindowsResourceClaims,
     registry: Option<WindowsProcessRegistry>,
+    registry_creation: Option<crate::process_fixture::registry::PendingRegistry>,
+    registry_binding_pending: bool,
     key: Option<CoordinatorKey>,
     resolution: Option<ResolutionTicket>,
     resource: Option<ResourceKey>,
@@ -119,6 +122,21 @@ struct Child {
     finished: bool,
 }
 impl Child {
+    /// Retain one actual finite table constructor on the existing cleanup-capable scope.
+    fn begin_registry(&mut self, key: CoordinatorKey) -> Result<()> {
+        let specification = self.spec(
+            sugarsubstitute_supervision::WindowsProcessRegistry::required_reservation_bytes(),
+            self.closing,
+        )?;
+        self.registry_creation = Some(crate::process_fixture::registry::PendingRegistry::submit(
+            self.client.as_ref().ok_or("Registry client missing")?,
+            self.cleanup_scope.as_ref().ok_or("Registry cleanup scope missing")?,
+            specification,
+            key,
+        )?);
+        Ok(())
+    }
+
     fn new(options: ChildOptions) -> Result<Self> {
         Ok(Self {
             options,
@@ -130,6 +148,8 @@ impl Child {
             native_scope: None,
             claims: WindowsResourceClaims::new()?,
             registry: None,
+            registry_creation: None,
+            registry_binding_pending: false,
             key: None,
             resolution: None,
             resource: None,
@@ -182,11 +202,11 @@ impl Child {
         )?)
     }
     fn cleanup_context(&mut self) -> Result<()> {
-        if self.registry.is_none() {
+        if self.registry.is_none() && self.registry_creation.is_none() {
             // This actual parent key supplies only an empty cleanup object when
             // initialization never acquired an owner. Claims does not bind it,
             // seal it or interpret this input as authentication/settlement proof.
-            self.registry = Some(WindowsProcessRegistry::new(self.options.parent)?);
+            self.begin_registry(self.options.parent)?;
         }
         Ok(())
     }

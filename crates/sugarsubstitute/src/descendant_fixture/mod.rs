@@ -36,7 +36,8 @@ struct Fixture {
     deadline: Moment,
     qpc_deadline: FixtureDeadline,
     owner_key: CoordinatorKey,
-    registry: WindowsProcessRegistry,
+    registry: Option<WindowsProcessRegistry>,
+    registry_creation: Option<crate::process_fixture::registry::PendingRegistry>,
     owner: Option<ExecutionOwner>,
     client: Option<ExecutionClient>,
     creation_scope: Option<Scope>,
@@ -76,7 +77,8 @@ impl Fixture {
             deadline,
             qpc_deadline,
             owner_key,
-            registry: WindowsProcessRegistry::new(owner_key)?,
+            registry: None,
+            registry_creation: None,
             owner: None,
             client: None,
             creation_scope: None,
@@ -117,14 +119,18 @@ impl Fixture {
         }
         let Some(key) = self.key else { return Ok(()) };
         let plan = StopPlan::new(self.clock.now(), Instant::now())?;
-        self.registry.begin_stop(key, ShutdownId::new(1)?, plan.budget)?;
+        self.registry.as_mut().ok_or("Actual registry is not prepared")?.begin_stop(
+            key,
+            ShutdownId::new(1)?,
+            plan.budget,
+        )?;
         self.stop = Some(plan);
         self.cleanup_needed = true;
         Ok(())
     }
     fn receipt(&self) -> Result<serde_json::Value> {
         if !self.finished
-            || !self.registry.is_empty()
+            || !self.registry.as_ref().is_none_or(|registry| registry.is_empty())
             || !self.session_retired
             || !self.evidence.complete()
         {

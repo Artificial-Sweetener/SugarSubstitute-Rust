@@ -19,13 +19,35 @@ impl Parent {
                     )?;
                 }
             }
-            self.registry.consume(&batch)?;
+            let _table_changed = crate::process_fixture::registry::poll(
+                &mut self.registry_creation,
+                &mut self.registry,
+                self.closing,
+            )?;
+            if let Some(registry) = &mut self.registry {
+                registry.consume(&batch)?;
+            }
+            if self.registry.is_none() {
+                if !self.deadline_observed && Instant::now() >= self.deadline {
+                    self.deadline_observed = true;
+                    return Err("Registry construction exceeded original qualifier deadline".into());
+                }
+                return Ok(if self.closing {
+                    sugarsubstitute_desktop::HeadlessStep::Shutdown
+                } else {
+                    sugarsubstitute_desktop::HeadlessStep::Active
+                });
+            }
             for case in &mut self.cases {
                 for notice in &batch.notifications {
                     if case.cleanup_job == Some(notice.job_id) {
                         case.cleanup_job = None;
                         if let Some(key) = case.process {
-                            let snapshot = self.registry.snapshot(key)?;
+                            let snapshot = self
+                                .registry
+                                .as_ref()
+                                .ok_or("Actual registry is not prepared")?
+                                .snapshot(key)?;
                             case.cleanup_requested |= notice.kind == TerminalKind::Success
                                 && snapshot.member_watch_required
                                 && !snapshot.cleanup_pending
@@ -69,7 +91,14 @@ impl Parent {
         }
         if let Some(key) = self.cases[index].process.filter(|_| !self.cases[index].retired) {
             for _ in 0..5 {
-                let Some(observation) = self.registry.take_observation(key)? else { break };
+                let Some(observation) = self
+                    .registry
+                    .as_mut()
+                    .ok_or("Actual registry is not prepared")?
+                    .take_observation(key)?
+                else {
+                    break;
+                };
                 let root_exit = matches!(
                     &observation,
                     sugarsubstitute_supervision::RegistryObservation::RootExited { .. }
@@ -80,7 +109,8 @@ impl Parent {
             if self.cases[index].exited.is_some() || self.closing {
                 self.ensure_stop()?;
             }
-            let snapshot = self.registry.snapshot(key)?;
+            let snapshot =
+                self.registry.as_ref().ok_or("Actual registry is not prepared")?.snapshot(key)?;
             if let Some(stop) = &mut self.cases[index].stop {
                 let (cleanup, expired) = stop.due(self.clock.now(), snapshot.settled);
                 self.cases[index].cleanup_requested |= cleanup;
@@ -89,7 +119,10 @@ impl Parent {
                 }
             }
             if self.cases[index].can_retire(self.closing, snapshot.settled) {
-                self.registry.retire_settled(key)?;
+                self.registry
+                    .as_mut()
+                    .ok_or("Actual registry is not prepared")?
+                    .retire_settled(key)?;
                 self.cases[index].retired = true;
             } else if self.cases[index].stop.is_some()
                 && self.cases[index].cleanup_requested

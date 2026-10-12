@@ -13,7 +13,7 @@ fn foreign_owner_and_invalid_job_order_have_no_native_or_scope_effect() -> TestR
         return Err("Invalid fixture".into());
     };
     run.owner.epoch = CoordinatorEpoch::new([2; 16])?;
-    let native = ScopeSpec { id: ScopeId::new(2)?, deadline: None };
+    let native = ScopeSpec { id: ScopeId::new(3)?, deadline: None };
     assert!(matches!(
         h.registry.submit_launch(
             &h.client,
@@ -32,7 +32,7 @@ fn foreign_owner_and_invalid_job_order_have_no_native_or_scope_effect() -> TestR
         Err(RegistryAdmissionError::InvalidSpecification)
     ));
     let still_fresh = h.client.create_scope(native, None)?;
-    assert_eq!(still_fresh.id().get(), 2);
+    assert_eq!(still_fresh.id().get(), 3);
     assert_eq!(h.fake.creates.load(Ordering::Acquire), 0);
     assert!(h.registry.is_empty());
     Ok(())
@@ -49,7 +49,7 @@ fn memory_undersizing_and_native_deadlines_reject_before_watch_or_creation() -> 
         h.registry.submit_launch(
             &h.client,
             &h.scope,
-            ScopeSpec { id: ScopeId::new(2)?, deadline: None },
+            ScopeSpec { id: ScopeId::new(3)?, deadline: None },
             create,
             watch,
             binding(1)?,
@@ -63,7 +63,7 @@ fn memory_undersizing_and_native_deadlines_reject_before_watch_or_creation() -> 
         h.registry.submit_launch(
             &h.client,
             &h.scope,
-            ScopeSpec { id: ScopeId::new(2)?, deadline: Some(Moment::from_nanos(1)) },
+            ScopeSpec { id: ScopeId::new(3)?, deadline: Some(Moment::from_nanos(1)) },
             create,
             watch,
             binding(1)?,
@@ -89,7 +89,7 @@ fn rejected_creation_retains_actual_unbound_retirement_then_releases_private_slo
     ));
     h.drain_until(WindowsProcessRegistry::is_empty)?;
     assert_eq!(h.fake.creates.load(Ordering::Acquire), 0);
-    assert_eq!(h.next_job, 3);
+    assert_eq!(h.next_job, 4);
     Ok(())
 }
 
@@ -109,7 +109,7 @@ fn current_or_changed_generation_cannot_overlap_retained_owned_family() -> TestR
         h.registry.submit_launch(
             &h.client,
             &h.scope,
-            ScopeSpec { id: ScopeId::new(3)?, deadline: None },
+            ScopeSpec { id: ScopeId::new(4)?, deadline: None },
             create,
             watch,
             FamilyBinding::Desktop(run),

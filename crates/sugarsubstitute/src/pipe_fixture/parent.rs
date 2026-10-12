@@ -30,7 +30,8 @@ pub(super) struct Parent {
     pub(super) deadline: Instant,
     pub(super) execution_deadline: Moment,
     pub(super) deadline_observed: bool,
-    pub(super) registry: WindowsProcessRegistry,
+    pub(super) registry: Option<WindowsProcessRegistry>,
+    pub(super) registry_creation: Option<crate::process_fixture::registry::PendingRegistry>,
     pub(super) owner: Option<ExecutionOwner>,
     pub(super) client: Option<ExecutionClient>,
     pub(super) scope: Option<Scope>,
@@ -68,7 +69,8 @@ impl Parent {
             deadline,
             execution_deadline,
             deadline_observed: false,
-            registry: WindowsProcessRegistry::new(owner_key)?,
+            registry: None,
+            registry_creation: None,
             owner: None,
             client: None,
             scope: None,
@@ -153,15 +155,16 @@ impl Parent {
         let native_spec = ScopeSpec { id: ScopeId::new(self.next_scope)?, deadline: None };
         self.next_scope =
             self.next_scope.checked_add(1).ok_or("Lifecycle native scope identity exhausted")?;
-        let ticket = self.registry.submit_launch(
-            self.client.as_ref().ok_or("Lifecycle client missing")?,
-            self.scope.as_ref().ok_or("Lifecycle creation scope missing")?,
-            native_spec,
-            creation,
-            watch,
-            FamilyBinding::Desktop(run),
-            input,
-        )?;
+        let ticket =
+            self.registry.as_mut().ok_or("Actual registry is not prepared")?.submit_launch(
+                self.client.as_ref().ok_or("Lifecycle client missing")?,
+                self.scope.as_ref().ok_or("Lifecycle creation scope missing")?,
+                native_spec,
+                creation,
+                watch,
+                FamilyBinding::Desktop(run),
+                input,
+            )?;
         self.cases[self.current].process = Some(ticket.process());
         self.cases[self.current].creation_job = Some(creation.id);
         Ok(())

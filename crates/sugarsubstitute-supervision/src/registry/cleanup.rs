@@ -113,7 +113,7 @@ impl WindowsProcessRegistry {
     }
 }
 fn cleanup_owned(
-    shared: Arc<Shared>,
+    shared: SharedOwner,
     budget: ShutdownBudget,
     root_exit: Option<Identity>,
     member_exit: Option<Identity>,

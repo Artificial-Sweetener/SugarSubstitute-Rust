@@ -34,7 +34,11 @@ impl Fixture {
         }
         let plan = StopPlan::new(self.clock.now(), Instant::now())?;
         let shutdown = ShutdownId::new(u64::try_from(index)? + 1)?;
-        self.registry.begin_stop(key, shutdown, plan.budget)?;
+        self.registry.as_mut().ok_or("Actual registry is not prepared")?.begin_stop(
+            key,
+            shutdown,
+            plan.budget,
+        )?;
         self.cleanup[index].stop = Some(plan);
         self.cleanup[index].requested = true;
         if index == SENTINEL {
@@ -56,7 +60,8 @@ impl Fixture {
         if retired {
             return Ok(false);
         }
-        let snapshot = self.registry.snapshot(key)?;
+        let snapshot =
+            self.registry.as_ref().ok_or("Actual registry is not prepared")?.snapshot(key)?;
         if let Some(stop) = &mut self.cleanup[index].stop {
             let due = stop.due(self.clock.now(), snapshot.settled);
             self.cleanup[index].requested |= due.cleanup;
@@ -77,7 +82,7 @@ impl Fixture {
             if !observed {
                 return Ok(false);
             }
-            self.registry.retire_settled(key)?;
+            self.registry.as_mut().ok_or("Actual registry is not prepared")?.retire_settled(key)?;
             if index == SENTINEL {
                 self.sentinel.retired = true;
             } else {
@@ -108,7 +113,8 @@ impl Fixture {
             if retired {
                 continue;
             }
-            let snapshot = self.registry.snapshot(key)?;
+            let snapshot =
+                self.registry.as_ref().ok_or("Actual registry is not prepared")?.snapshot(key)?;
             if snapshot.creation_pending || snapshot.cleanup_pending || snapshot.settled {
                 continue;
             }
@@ -119,13 +125,17 @@ impl Fixture {
             };
             let spec = self.spec(JobClass::InfrastructureLifecycle, 4096)?;
             self.cleanup[index].requested = false;
-            let id = self.registry.submit_cleanup_step(
-                self.client.as_ref().ok_or("Campaign client missing")?,
-                key,
-                self.creation_scope.as_ref().ok_or("Campaign cleanup scope missing")?,
-                spec,
-                watch,
-            )?;
+            let id = self
+                .registry
+                .as_mut()
+                .ok_or("Actual registry is not prepared")?
+                .submit_cleanup_step(
+                    self.client.as_ref().ok_or("Campaign client missing")?,
+                    key,
+                    self.creation_scope.as_ref().ok_or("Campaign cleanup scope missing")?,
+                    spec,
+                    watch,
+                )?;
             self.cleanup[index].member_watch = watch.map(|spec| spec.id);
             self.cleanup_busy = Some((index, id));
             return Ok(true);

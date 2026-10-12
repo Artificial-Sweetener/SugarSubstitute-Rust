@@ -4,10 +4,11 @@
 use crate::RegistryError;
 use sugarsubstitute_contracts::{
     execution::{JobId, Moment},
+    incident::DiagnosticKey,
     lifecycle::{CoordinatorKey, ProcessKey, ResourceKey, RunKey, ShutdownBudget, ShutdownId},
 };
 
-/// Bind a trusted owned launch to one desktop run or managed backend lifetime.
+/// Bind a trusted owned launch to one desktop, managed backend or diagnostic helper lifetime.
 /// IDs are facts, not authentication or canonical installation ownership proof.
 /// Attached/user-owned backends are never admitted to this native registry.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -16,16 +17,40 @@ pub enum FamilyBinding {
     Desktop(RunKey),
     /// Trusted canonically resolved managed resource and current generation.
     Managed(ResourceKey),
+    /// Trusted helper role/session; matching facts confer no incident or storage authority.
+    Diagnostic(DiagnosticKey),
 }
 impl FamilyBinding {
     pub(crate) const fn owner(self) -> CoordinatorKey {
         match self {
             Self::Desktop(run) => run.owner,
             Self::Managed(resource) => resource.owner,
+            Self::Diagnostic(key) => key.owner(),
         }
     }
-    pub(crate) const fn desktop(self) -> bool {
-        matches!(self, Self::Desktop(_))
+    /// Select the independently bounded retained family table partition.
+    pub(crate) const fn kind(self) -> FamilyKind {
+        match self {
+            Self::Desktop(_) => FamilyKind::Desktop,
+            Self::Managed(_) => FamilyKind::Managed,
+            Self::Diagnostic(_) => FamilyKind::Diagnostic,
+        }
+    }
+}
+/// Retained record quotas remain independent across the three native family concerns.
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub(crate) enum FamilyKind {
+    Desktop,
+    Managed,
+    Diagnostic,
+}
+impl FamilyKind {
+    /// Bound every live, pending, or uncertain record in this partition.
+    pub(crate) const fn capacity(self) -> usize {
+        match self {
+            Self::Desktop | Self::Managed => 64,
+            Self::Diagnostic => 3,
+        }
     }
 }
 /// Identify an admitted family without granting handle, PID or URL control authority.

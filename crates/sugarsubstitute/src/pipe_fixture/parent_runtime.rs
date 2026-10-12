@@ -20,6 +20,18 @@ impl HeadlessLifetime for Parent {
         self.pipe_scope = Some(
             client.create_native_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?,
         );
+        let mut table_spec = self.spec(
+            sugarsubstitute_contracts::execution::JobClass::InfrastructureLifecycle,
+            sugarsubstitute_supervision::WindowsProcessRegistry::required_reservation_bytes(),
+        )?;
+        table_spec.deadline = Some(self.execution_deadline);
+        self.registry_creation = Some(crate::process_fixture::registry::PendingRegistry::submit(
+            self.client.as_ref().ok_or("Registry execution missing")?,
+            self.scope.as_ref().ok_or("Registry constructor scope missing")?,
+            table_spec,
+            self.cases[0].run.owner,
+        )?);
+
         self.reserve_next()
     }
     fn prepare_native_runtime(
@@ -38,6 +50,10 @@ impl HeadlessLifetime for Parent {
             || self.pipe_scope.is_none()
         {
             return Err("Fixture original execution/native admission is incomplete".into());
+        }
+        self.activity(max)?;
+        if self.registry_creation.is_some() || self.registry.is_none() {
+            return Ok(sugarsubstitute_desktop::StartupPreparationStep::Waiting);
         }
         Ok(sugarsubstitute_desktop::StartupPreparationStep::Ready)
     }
@@ -61,7 +77,12 @@ impl HeadlessLifetime for Parent {
             return Ok(());
         }
         self.closing = true;
-        self.registry.close_launch_admission();
+        if let Some(pending) = &self.registry_creation {
+            pending.cancel();
+        }
+        if let Some(registry) = &mut self.registry {
+            registry.close_launch_admission();
+        }
         for case in &mut self.cases {
             if let Some(session) = &case.session {
                 case.pipe_close_requested = true;
@@ -71,8 +92,11 @@ impl HeadlessLifetime for Parent {
         self.ensure_stop()
     }
     fn poll_shutdown(&mut self) -> Result<bool> {
+        if self.registry_creation.is_some() {
+            return Ok(false);
+        }
         if !self.closing
-            || !self.registry.is_empty()
+            || !self.registry.as_ref().is_none_or(|registry| registry.is_empty())
             || self.cases.iter().any(|case| case.session.is_some() && !case.pipe_terminal)
         {
             return Ok(false);
@@ -80,6 +104,7 @@ impl HeadlessLifetime for Parent {
         let Some(owner) = &mut self.owner else { return Ok(true) };
         if !self.execution_stopping {
             self.execution_stopping = true;
+            drop(self.registry.take());
             owner.request_shutdown(self.execution_deadline);
         }
         let progress = owner.poll_shutdown()?;

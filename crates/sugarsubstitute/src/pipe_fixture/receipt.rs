@@ -5,7 +5,10 @@ use super::{Result, evidence::Case, parent::Parent};
 
 impl Parent {
     pub(super) fn receipt(&self) -> Result<serde_json::Value> {
-        if !self.finished || !self.registry.is_empty() || !self.cases.iter().all(Case::complete) {
+        if !self.finished
+            || !self.registry.as_ref().is_none_or(|registry| registry.is_empty())
+            || !self.cases.iter().all(Case::complete)
+        {
             return Err("Lifecycle receipt requires all actual independent milestones".into());
         }
         let workers = self.workers.ok_or("Lifecycle receipt lacks actual worker settlement")?;

@@ -18,6 +18,8 @@ use std::sync::{
     atomic::{AtomicU8, Ordering},
 };
 pub(crate) use submission::validate_blocking;
+mod shared_owner;
+use shared_owner::SharedOwner;
 use sugarsubstitute_contracts::{
     execution::{CompletionBatch, ExecutionPort, JobContext, JobId, JobSpec, OwnedJob, Scope},
     lifecycle::{CoordinatorKey, ProcessId, ProcessKey, ShutdownBudget, ShutdownId},
@@ -44,6 +46,7 @@ struct Shared {
     permit: Mutex<Option<ProcessWatchPermit>>,
 }
 struct NativeState {
+    pending_input: Option<WindowsLaunchInput>,
     family: Option<Box<Family>>,
     watch: Option<WatchJob>,
     creation: Option<CreationFacts>,
@@ -68,6 +71,11 @@ impl Drop for NativeState {
         }
     }
 }
+/// Return the actual Shared/header footprint for table pre-reservation and
+/// the conservative fixed per-family capacity check.
+pub(crate) fn family_shared_storage_bytes() -> usize {
+    std::mem::size_of::<Shared>() + 2 * std::mem::size_of::<usize>()
+}
 #[derive(Clone, Copy)]
 struct CreationFacts {
     root: Identity,
@@ -83,7 +91,7 @@ struct CleanupFacts {
 }
 struct Record {
     ticket: LaunchTicket,
-    shared: Arc<Shared>,
+    shared: SharedOwner,
     native_scope: Scope,
     rejected_launch: bool,
     creation: Option<OwnedJob<(), RegistryError>>,
@@ -137,14 +145,14 @@ impl Record {
         }
     }
 }
-/// Own up to64 desktop and64 managed family records, including pending/uncertain cleanup.
+/// Own64 desktop,64 managed and3 diagnostic family records, including pending/uncertain cleanup.
 /// Methods submit finite work without native UI waits. The injected execution owner
 /// alone chooses workers; this adapter exports no thread/runtime/wait-registration API.
 #[must_use = "Keep the registry alive until actual family settlement and observation transfer"]
 pub struct WindowsProcessRegistry {
     owner: CoordinatorKey,
+    records: Vec<Option<Record>>,
     identity: RegistryIdentity,
-    records: Box<[Option<Record>]>,
     next_process: u64,
     launch_open: bool,
     cursor: usize,
@@ -152,27 +160,6 @@ pub struct WindowsProcessRegistry {
     port: Arc<dyn NativePort>,
 }
 impl WindowsProcessRegistry {
-    /// Construct an empty native registry for a trusted current coordinator lifetime.
-    /// The fixed record table uses checked heap storage, keeping composition off the
-    /// native main-thread stack. Allocation failure preserves its original cause.
-    /// No native effect, process enumeration or environment capture occurs.
-    pub fn new(owner: CoordinatorKey) -> Result<Self, RegistryError> {
-        let mut records = Vec::new();
-        records
-            .try_reserve_exact(128)
-            .map_err(|cause| RegistryError::new("registry_records_allocation", cause))?;
-        records.resize_with(128, || None);
-        Ok(Self {
-            owner,
-            identity: RegistryIdentity::new(),
-            records: records.into_boxed_slice(),
-            next_process: 1,
-            launch_open: true,
-            cursor: 0,
-            cleanup_watches: 0,
-            port: native_process::production(),
-        })
-    }
     /// Stop all future family admissions and close pending exact resume commitments.
     /// Already-linearized resume/native work remains owned and requires actual cleanup.
     pub fn close_launch_admission(&mut self) {
@@ -306,9 +293,13 @@ impl Drop for WindowsProcessRegistry {
 }
 mod claim_identity;
 mod cleanup;
+mod construction;
 pub(crate) use claim_identity::RegistryIdentity;
 mod completion;
 mod observation_retirement;
 mod submission;
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+pub(crate) mod construction_fixture;

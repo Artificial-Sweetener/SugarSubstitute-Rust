@@ -52,19 +52,20 @@ impl Fixture {
         let watch = self.spec(JobClass::NativeObservation, 4096)?;
         let creation =
             self.spec(JobClass::InfrastructureLifecycle, input.required_reservation_bytes())?;
-        let ticket = self.registry.submit_launch(
-            self.client.as_ref().ok_or("Descendant client")?,
-            self.creation_scope.as_ref().ok_or("Descendant creation scope")?,
-            ScopeSpec { id: ScopeId::new(3)?, deadline: None },
-            creation,
-            watch,
-            FamilyBinding::Desktop(RunKey {
-                owner: self.owner_key,
-                instance: InstanceId::new(1)?,
-                generation: RunGeneration::new(1)?,
-            }),
-            input,
-        )?;
+        let ticket =
+            self.registry.as_mut().ok_or("Actual registry is not prepared")?.submit_launch(
+                self.client.as_ref().ok_or("Descendant client")?,
+                self.creation_scope.as_ref().ok_or("Descendant creation scope")?,
+                ScopeSpec { id: ScopeId::new(3)?, deadline: None },
+                creation,
+                watch,
+                FamilyBinding::Desktop(RunKey {
+                    owner: self.owner_key,
+                    instance: InstanceId::new(1)?,
+                    generation: RunGeneration::new(1)?,
+                }),
+                input,
+            )?;
         self.key = Some(ticket.process());
         self.evidence.root_job = Some(watch.id);
         Ok(())
@@ -74,7 +75,8 @@ impl Fixture {
             return Ok(());
         }
         let Some(key) = self.key else { return Ok(()) };
-        let snapshot = self.registry.snapshot(key)?;
+        let snapshot =
+            self.registry.as_ref().ok_or("Actual registry is not prepared")?.snapshot(key)?;
         // A live member watch does not block finite sealing/force cleanup. This
         // consumer's cleanup_job tracks the actual finite operation separately.
         if self.stop.is_none() || snapshot.creation_pending || snapshot.settled {
@@ -87,13 +89,15 @@ impl Fixture {
         };
         let spec = self.spec(JobClass::InfrastructureLifecycle, 4096)?;
         self.cleanup_needed = false;
-        self.cleanup_job = Some(self.registry.submit_cleanup_step(
-            self.client.as_ref().ok_or("Descendant client")?,
-            key,
-            self.creation_scope.as_ref().ok_or("Descendant scope")?,
-            spec,
-            watch,
-        )?);
+        self.cleanup_job = Some(
+            self.registry.as_mut().ok_or("Actual registry is not prepared")?.submit_cleanup_step(
+                self.client.as_ref().ok_or("Descendant client")?,
+                key,
+                self.creation_scope.as_ref().ok_or("Descendant scope")?,
+                spec,
+                watch,
+            )?,
+        );
         if let Some(watch) = watch {
             self.member_job = Some(watch.id);
             self.evidence.bind_member(watch.id)?;

@@ -171,7 +171,10 @@ fn retained_old_folder_rejects_new_admission_until_its_actual_charge_is_released
     let mut h = Harness::new()?;
     h.acquire()?;
     let mut spec = h.spec(100)?;
-    spec.reservation_bytes = 254 * 1024 * 1024;
+    let table_bytes = h.table_reserved_bytes();
+    spec.reservation_bytes = (254 * 1024 * 1024_u64)
+        .checked_sub(table_bytes)
+        .ok_or("Actual table exceeded capacity fixture")?;
     h.lease.submit_folder_preparation(&h.client, &h.scope, spec, main(1)?)?;
     assert_eq!(h.completion()?.kind, TerminalKind::Success);
     let retained = h.lease.take_folder_facts().ok_or("missing retained folder")?;
@@ -185,7 +188,7 @@ fn retained_old_folder_rejects_new_admission_until_its_actual_charge_is_released
             sugarsubstitute_contracts::execution::AdmissionError::MemorySaturated { .. }
         ))
     ));
-    assert_eq!(h.scope.snapshot().reserved_bytes, 256 * 1024 * 1024);
+    assert_eq!(h.scope.snapshot().reserved_bytes + table_bytes, 256 * 1024 * 1024);
     assert!(!retained.validates(&h.lease, main(1)?));
     drop(retained);
     h.lease.retire_main_attempt(main(2)?)?;

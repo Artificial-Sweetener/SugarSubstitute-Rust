@@ -24,19 +24,80 @@ impl WindowsProcessRegistry {
         binding: FamilyBinding,
         input: WindowsLaunchInput,
     ) -> Result<LaunchTicket, RegistryAdmissionError> {
+        let mut input = Some(input);
+        self.submit_owned(
+            execution,
+            creation_scope,
+            native_scope_spec,
+            creation,
+            root_watch,
+            binding,
+            &mut input,
+        )
+    }
+    /// Admit one original diagnostic family without losing rejected input ownership.
+    /// Errors preserve `input:Some` until actual creation admission transfers it;
+    /// already reserved root observation remains registry-owned and must be observed.
+    ///
+    /// # Errors
+    /// Rejects missing/foreign pins, role predecessor, quota, invalid jobs or actual capacity.
+    #[allow(clippy::too_many_arguments)]
+    pub fn submit_diagnostic_launch(
+        &mut self,
+        execution: &ExecutionClient,
+        creation_scope: &Scope,
+        native_scope_spec: ScopeSpec,
+        creation: JobSpec,
+        root_watch: JobSpec,
+        binding: sugarsubstitute_contracts::incident::DiagnosticKey,
+        input: &mut Option<WindowsLaunchInput>,
+    ) -> Result<LaunchTicket, RegistryAdmissionError> {
+        self.submit_owned(
+            execution,
+            creation_scope,
+            native_scope_spec,
+            creation,
+            root_watch,
+            FamilyBinding::Diagnostic(binding),
+            input,
+        )
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn submit_owned(
+        &mut self,
+        execution: &ExecutionClient,
+        creation_scope: &Scope,
+        native_scope_spec: ScopeSpec,
+        creation: JobSpec,
+        root_watch: JobSpec,
+        binding: FamilyBinding,
+        input: &mut Option<WindowsLaunchInput>,
+    ) -> Result<LaunchTicket, RegistryAdmissionError> {
+        let original = input.as_ref().ok_or(RegistryAdmissionError::InvalidSpecification)?;
+        if let FamilyBinding::Diagnostic(key) = binding {
+            if original.diagnostic.as_ref().is_none_or(|launch| !launch.validates(key))
+                || original.lifecycle.is_some()
+                || original.output.is_some()
+                || original.fixture_events.is_some()
+            {
+                return Err(RegistryAdmissionError::InvalidSpecification);
+            }
+        } else if original.diagnostic.is_some() {
+            return Err(RegistryAdmissionError::InvalidSpecification);
+        }
         if binding.owner() != self.owner {
             return Err(RegistryAdmissionError::ForeignOwner);
         }
-        if input
+        if original
             .output
             .as_ref()
-            .is_some_and(|output| !output.validates(binding) || input.fixture_events.is_some())
+            .is_some_and(|output| !output.validates(binding) || original.fixture_events.is_some())
         {
             return Err(RegistryAdmissionError::InvalidSpecification);
         }
-        if let Some(launch) = &input.lifecycle
+        if let Some(launch) = &original.lifecycle
             && (binding != FamilyBinding::Desktop(launch.run)
-                || input.fixture_events.is_some()
+                || original.fixture_events.is_some()
                 || launch
                     .enrollment
                     .as_ref()
@@ -51,17 +112,17 @@ impl WindowsProcessRegistry {
         validate_watch(root_watch)?;
         if root_watch.id >= creation.id
             || native_scope_spec.deadline.is_some()
-            || creation.reservation_bytes < input.required_reservation_bytes()
+            || creation.reservation_bytes < original.required_reservation_bytes()
         {
             return Err(RegistryAdmissionError::InvalidSpecification);
         }
-        let desktop_count = self
+        let kind_count = self
             .records
             .iter()
             .flatten()
-            .filter(|record| record.ticket.binding.desktop() == binding.desktop())
+            .filter(|record| record.ticket.binding.kind() == binding.kind())
             .count();
-        if desktop_count == 64 {
+        if kind_count >= binding.kind().capacity() {
             return Err(RegistryAdmissionError::Saturated);
         }
         // A current run/resource cannot overlap a retained uncertain predecessor.
@@ -70,6 +131,9 @@ impl WindowsProcessRegistry {
                 old.instance == new.instance
             }
             (FamilyBinding::Managed(old), FamilyBinding::Managed(new)) => old.id == new.id,
+            (FamilyBinding::Diagnostic(old), FamilyBinding::Diagnostic(new)) => {
+                old.owner() == new.owner() && old.role() == new.role()
+            }
             _ => false,
         }) {
             return Err(RegistryAdmissionError::Busy);
@@ -92,20 +156,24 @@ impl WindowsProcessRegistry {
         let permit = execution
             .reserve_process_watch(&native_scope, root_watch, correlation)
             .map_err(RegistryAdmissionError::Execution)?;
-        let shared = Arc::new(Shared {
-            admission: AtomicU8::new(OPEN),
-            native: Mutex::new(NativeState {
-                family: None,
-                watch: None,
-                creation: None,
-                cleanup: None,
-                failure: None,
-                forced: false,
+        let shared = SharedOwner::new(
+            Shared {
+                admission: AtomicU8::new(OPEN),
+                native: Mutex::new(NativeState {
+                    pending_input: input.take(),
+                    family: None,
+                    watch: None,
+                    creation: None,
+                    cleanup: None,
+                    failure: None,
+                    forced: false,
+                    port: self.port.clone(),
+                }),
                 port: self.port.clone(),
-            }),
-            port: self.port.clone(),
-            permit: Mutex::new(Some(permit)),
-        });
+                permit: Mutex::new(Some(permit)),
+            },
+            self.identity.clone(),
+        );
         let ticket =
             LaunchTicket { process: ProcessKey { owner: self.owner, id: process_id }, binding };
         let mut record = Record {
@@ -139,11 +207,16 @@ impl WindowsProcessRegistry {
         };
         self.next_process = next;
         let job = execution.submit_blocking(creation_scope, creation, move |context| {
+            let input = lock(&shared.native)
+                .pending_input
+                .take()
+                .ok_or_else(|| RegistryError::invalid("creation_input_owner"))?;
             create(shared, input, context, ticket)
         });
         match job {
             Ok(job) => record.creation = Some(job),
             Err(cause) => {
+                *input = lock(&record.shared.native).pending_input.take();
                 record.rejected_launch = true;
                 record.closed_native = true;
                 record.shared.admission.store(CLOSED, Ordering::Release);
@@ -183,7 +256,7 @@ struct ChargedInput {
     _claim: sugarsubstitute_contracts::execution::MemoryClaim,
 }
 fn create(
-    shared: Arc<Shared>,
+    shared: SharedOwner,
     input: WindowsLaunchInput,
     context: JobContext,
     ticket: LaunchTicket,
@@ -219,6 +292,7 @@ fn create_owned(
     let family = state.family.as_mut().ok_or_else(|| RegistryError::invalid("creation_owner"))?;
     family.adopt_fixture_events(input)?;
     family.adopt_lifecycle(input)?;
+    family.adopt_diagnostic(input)?;
     family.adopt_output(input, ticket.binding)?;
     family.prepare_inheritance()?;
     let root = shared.port.create(family, input)?;
@@ -228,8 +302,12 @@ fn create_owned(
         .take()
         .ok_or_else(|| RegistryError::invalid("root_watch_reservation"))?;
     state.watch = bind(permit, duplicate);
-    if let FamilyBinding::Desktop(run) = ticket.binding {
-        shared.port.enroll_desktop(family, run, ticket.process)?;
+    match ticket.binding {
+        FamilyBinding::Desktop(run) => shared.port.enroll_desktop(family, run, ticket.process)?,
+        FamilyBinding::Diagnostic(key) => {
+            shared.port.enroll_diagnostic(family, key, ticket.process)?
+        }
+        FamilyBinding::Managed(_) => {}
     }
     family.validate_output_for_resume()?;
     if stopped(context)
@@ -259,7 +337,7 @@ fn stopped(context: &JobContext) -> bool {
         || context.deadline().is_some_and(|deadline| context.now() >= deadline)
 }
 struct CreationOutputGuard {
-    shared: Arc<Shared>,
+    shared: SharedOwner,
     armed: bool,
 }
 impl Drop for CreationOutputGuard {

@@ -156,26 +156,27 @@ impl NativePort for Fake {
         if key.owner != run.owner || *lock(&self.creation_order) != [1, 2, 0, 0] {
             return Err(RegistryError::invalid("fake_enrollment_order"));
         }
-        lock(&self.creation_order)[2] = 3;
-        let guard = lock(&self.state);
-        self.enrollment_entered.store(true, Ordering::Release);
-        self.changed.notify_all();
-        if self.hold_enrollment.load(Ordering::Acquire) {
-            let (_guard, timed) = self
-                .changed
-                .wait_timeout_while(guard, Duration::from_secs(10), |state| !state.1)
-                .map_err(|_| RegistryError::invalid("fake_enrollment_latch"))?;
-            if timed.timed_out() {
-                return Err(RegistryError::invalid("fake_enrollment_latch"));
-            }
+        self.enrollment()
+    }
+    fn enroll_diagnostic(
+        &self,
+        family: &mut Family,
+        binding: sugarsubstitute_contracts::incident::DiagnosticKey,
+        key: ProcessKey,
+    ) -> Result<(), RegistryError> {
+        if key.owner != binding.owner()
+            || family.diagnostic_key != Some(binding)
+            || family.resumed
+            || *lock(&self.creation_order) != [1, 2, 0, 0]
+            || family
+                .diagnostic_bootstrap
+                .as_ref()
+                .zip(family.diagnostic_enrollment.as_ref())
+                .is_none_or(|(bootstrap, enrollment)| !bootstrap.matches_enrollment(enrollment))
+        {
+            return Err(RegistryError::invalid("fake_diagnostic_enrollment_order"));
         }
-        if self.fail_enrollment.load(Ordering::Acquire) {
-            return Err(RegistryError::new(
-                "lifecycle_enrollment_rejected",
-                std::io::Error::from_raw_os_error(6),
-            ));
-        }
-        Ok(())
+        self.enrollment()
     }
     fn seal(&self, family: &mut Family) -> Result<(), RegistryError> {
         self.seals.fetch_add(1, Ordering::AcqRel);
@@ -233,8 +234,35 @@ impl NativePort for Fake {
         self.changed.notify_all();
         family.job = None;
         family.thread = None;
+        drop(family.diagnostic_enrollment.take());
         for member in family.members.iter_mut().flatten() {
             member.handle = None;
+        }
+        Ok(())
+    }
+}
+
+impl Fake {
+    /// Hold only the external enrollment effect after real registry ownership/order checks.
+    fn enrollment(&self) -> Result<(), RegistryError> {
+        lock(&self.creation_order)[2] = 3;
+        let guard = lock(&self.state);
+        self.enrollment_entered.store(true, Ordering::Release);
+        self.changed.notify_all();
+        if self.hold_enrollment.load(Ordering::Acquire) {
+            let (_guard, timed) = self
+                .changed
+                .wait_timeout_while(guard, Duration::from_secs(10), |state| !state.1)
+                .map_err(|_| RegistryError::invalid("fake_enrollment_latch"))?;
+            if timed.timed_out() {
+                return Err(RegistryError::invalid("fake_enrollment_latch"));
+            }
+        }
+        if self.fail_enrollment.load(Ordering::Acquire) {
+            return Err(RegistryError::new(
+                "lifecycle_enrollment_rejected",
+                std::io::Error::from_raw_os_error(6),
+            ));
         }
         Ok(())
     }

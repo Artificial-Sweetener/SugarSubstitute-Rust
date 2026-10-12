@@ -5,7 +5,7 @@ use super::*;
 impl Fixture {
     pub(super) fn receipt(&self) -> Result<serde_json::Value> {
         if !self.finished
-            || !self.registry.is_empty()
+            || !self.registry.as_ref().is_none_or(|registry| registry.is_empty())
             || !self.cases.iter().all(CaseProgress::complete)
         {
             return Err("Registry fixture receipt requires all actual retirement evidence".into());

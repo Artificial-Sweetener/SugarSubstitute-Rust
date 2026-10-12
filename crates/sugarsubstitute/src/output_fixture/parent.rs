@@ -40,7 +40,8 @@ pub(super) struct Parent {
     pub(super) deadline: Instant,
     pub(super) original: Moment,
     pub(super) deadline_observed: bool,
-    pub(super) registry: WindowsProcessRegistry,
+    pub(super) registry: Option<WindowsProcessRegistry>,
+    pub(super) registry_creation: Option<crate::process_fixture::registry::PendingRegistry>,
     pub(super) owner: Option<ExecutionOwner>,
     pub(super) client: Option<ExecutionClient>,
     pub(super) wake: Option<Arc<dyn CompletionWake>>,
@@ -91,7 +92,8 @@ impl Parent {
             deadline,
             original,
             deadline_observed: false,
-            registry: WindowsProcessRegistry::new(owner)?,
+            registry: None,
+            registry_creation: None,
             owner: None,
             client: None,
             wake: None,
@@ -221,15 +223,16 @@ impl Parent {
             self.spec(JobClass::InfrastructureLifecycle, input.required_reservation_bytes(), true)?;
         let native_spec = ScopeSpec { id: ScopeId::new(self.next_scope)?, deadline: None };
         self.next_scope = self.next_scope.checked_add(1).ok_or("Output native scope exhausted")?;
-        let ticket = self.registry.submit_launch(
-            self.client.as_ref().ok_or("Output launch client missing")?,
-            self.scope.as_ref().ok_or("Output launch scope missing")?,
-            native_spec,
-            creation,
-            watch,
-            binding,
-            input,
-        )?;
+        let ticket =
+            self.registry.as_mut().ok_or("Actual registry is not prepared")?.submit_launch(
+                self.client.as_ref().ok_or("Output launch client missing")?,
+                self.scope.as_ref().ok_or("Output launch scope missing")?,
+                native_spec,
+                creation,
+                watch,
+                binding,
+                input,
+            )?;
         let case = &mut self.cases[self.current];
         case.process = Some(ticket.process());
         if let Some(channel) = &mut case.channel {

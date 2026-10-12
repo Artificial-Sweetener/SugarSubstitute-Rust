@@ -68,7 +68,7 @@ fn cancellation_during_native_creation_keeps_containment_and_original_memory() -
     assert!(!h.registry.snapshot(key)?.settled);
     assert!(h.scope.snapshot().reserved_bytes >= crate::registry_input::FAMILY_STORAGE_BYTES);
     let cleanup_scope =
-        h.client.create_scope(ScopeSpec { id: ScopeId::new(3)?, deadline: None }, None)?;
+        h.client.create_scope(ScopeSpec { id: ScopeId::new(4)?, deadline: None }, None)?;
     let old_scope = std::mem::replace(&mut h.scope, cleanup_scope);
     h.fake.root_alive.store(false, Ordering::Release);
     h.exit(key, ROOT, true, 37)?;
@@ -100,7 +100,8 @@ fn drop_cancels_and_closes_owned_job_after_inflight_factory_returns_without_sett
     h.fake.hold_create.store(true, Ordering::Release);
     let _ticket = h.launch(1)?;
     h.fake.entered()?;
-    let old = std::mem::replace(&mut h.registry, WindowsProcessRegistry::new(owner()?)?);
+    let replacement = h.construct_registry(owner()?)?;
+    let old = std::mem::replace(&mut h.registry, replacement);
     drop(old);
     assert_eq!(h.fake.closes.load(Ordering::Acquire), 0);
     h.fake.release();

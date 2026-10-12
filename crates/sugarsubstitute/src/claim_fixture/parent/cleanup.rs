@@ -110,6 +110,9 @@ impl Fixture {
             return Ok(false);
         }
         self.fallback_registry()?;
+        if self.registry_creation.is_some() || self.registry.is_none() {
+            return Ok(false);
+        }
         let spec = self.spec(JobClass::InfrastructureLifecycle, CLAIM_OPERATION_BYTES, false)?;
         let client = self.client.as_ref().ok_or("Claim campaign client missing")?;
         let scope = self.cleanup_scope.as_ref().ok_or("Claim campaign cleanup scope missing")?;

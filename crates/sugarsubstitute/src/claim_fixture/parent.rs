@@ -55,6 +55,7 @@ pub(crate) fn run(options: CampaignOptions) -> Result<serde_json::Value> {
 }
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Phase {
+    Registry,
     Setup,
     Initialize,
     Resolve,
@@ -135,6 +136,8 @@ struct Fixture {
     wake: Option<Arc<dyn CompletionWake>>,
     claims: WindowsResourceClaims,
     registry: Option<WindowsProcessRegistry>,
+    registry_creation: Option<crate::process_fixture::registry::PendingRegistry>,
+    registry_binding_pending: bool,
     key: Option<CoordinatorKey>,
     resolution: Option<ResolutionTicket>,
     resource: Option<ResourceKey>,
@@ -160,6 +163,22 @@ struct Fixture {
     root_exit_before_release: bool,
 }
 impl Fixture {
+    /// Retain one actual finite table constructor on the existing cleanup-capable scope.
+    fn begin_registry(&mut self, key: CoordinatorKey) -> Result<()> {
+        let specification = self.spec(
+            JobClass::InfrastructureLifecycle,
+            sugarsubstitute_supervision::WindowsProcessRegistry::required_reservation_bytes(),
+            !self.closing,
+        )?;
+        self.registry_creation = Some(crate::process_fixture::registry::PendingRegistry::submit(
+            self.client.as_ref().ok_or("Registry client missing")?,
+            self.cleanup_scope.as_ref().ok_or("Registry cleanup scope missing")?,
+            specification,
+            key,
+        )?);
+        Ok(())
+    }
+
     fn new(options: CampaignOptions) -> Result<Self> {
         let started = Instant::now();
         let clock = MonotonicClock::new();
@@ -186,6 +205,8 @@ impl Fixture {
             wake: None,
             claims: WindowsResourceClaims::new()?,
             registry: None,
+            registry_creation: None,
+            registry_binding_pending: false,
             key: None,
             resolution: None,
             resource: None,
@@ -240,13 +261,13 @@ impl Fixture {
         )?)
     }
     fn fallback_registry(&mut self) -> Result<()> {
-        if self.registry.is_none() {
+        if self.registry.is_none() && self.registry_creation.is_none() {
             // No acquired coordinator means no family could have been launched.
             // This empty cleanup object is matching data, never authentication.
-            self.registry = Some(WindowsProcessRegistry::new(CoordinatorKey {
+            self.begin_registry(CoordinatorKey {
                 namespace: NamespaceId::new([0; 32]),
                 epoch: CoordinatorEpoch::new([1; 16])?,
-            })?);
+            })?;
         }
         Ok(())
     }

@@ -21,6 +21,19 @@ impl HeadlessLifetime for Parent {
         self.owner = Some(owner);
         self.client = Some(client);
         self.wake = Some(wake);
+        let mut table_spec = self.spec(
+            sugarsubstitute_contracts::execution::JobClass::InfrastructureLifecycle,
+            sugarsubstitute_supervision::WindowsProcessRegistry::required_reservation_bytes(),
+            true,
+        )?;
+        table_spec.deadline = Some(self.original);
+        self.registry_creation = Some(crate::process_fixture::registry::PendingRegistry::submit(
+            self.client.as_ref().ok_or("Registry execution missing")?,
+            self.scope.as_ref().ok_or("Registry constructor scope missing")?,
+            table_spec,
+            self.cases[0].run.owner,
+        )?);
+
         self.reserve_next()
     }
     fn prepare_native_runtime(
@@ -40,6 +53,10 @@ impl HeadlessLifetime for Parent {
             || self.wake.is_none()
         {
             return Err("Fixture original execution/native admission is incomplete".into());
+        }
+        self.activity(max)?;
+        if self.registry_creation.is_some() || self.registry.is_none() {
+            return Ok(sugarsubstitute_desktop::StartupPreparationStep::Waiting);
         }
         Ok(sugarsubstitute_desktop::StartupPreparationStep::Ready)
     }
@@ -64,7 +81,12 @@ impl HeadlessLifetime for Parent {
             return Ok(());
         }
         self.closing = true;
-        self.registry.close_launch_admission();
+        if let Some(pending) = &self.registry_creation {
+            pending.cancel();
+        }
+        if let Some(registry) = &mut self.registry {
+            registry.close_launch_admission();
+        }
         for case in &mut self.cases {
             drop(case.guard.take());
             if let Some(session) = &case.output {
@@ -80,8 +102,11 @@ impl HeadlessLifetime for Parent {
         self.ensure_stop()
     }
     fn poll_shutdown(&mut self) -> Result<bool> {
+        if self.registry_creation.is_some() {
+            return Ok(false);
+        }
         if !self.closing
-            || !self.registry.is_empty()
+            || !self.registry.as_ref().is_none_or(|registry| registry.is_empty())
             || self.cases.iter().any(|case| {
                 case.store_job.is_some()
                     || case.output.is_some() && case.output_terminal.is_none()
@@ -92,6 +117,7 @@ impl HeadlessLifetime for Parent {
         }
         if !self.execution_stopping {
             self.execution_stopping = true;
+            drop(self.registry.take());
             for case in &mut self.cases {
                 case.output = None;
                 case.store = None;

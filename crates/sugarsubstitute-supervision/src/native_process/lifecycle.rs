@@ -13,7 +13,8 @@ impl Family {
         if input.lifecycle.is_some()
             && (self.fixture_events.is_some()
                 || self.attributes_initialized
-                || self.lifecycle_bootstrap.is_some())
+                || self.lifecycle_bootstrap.is_some()
+                || self.diagnostic_bootstrap.is_some())
         {
             return Err(RegistryError::invalid("lifecycle_inheritance_owner"));
         }

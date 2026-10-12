@@ -10,7 +10,7 @@ pub(crate) struct RetainedFamilyProof {
     pub(crate) identity: RegistryIdentity,
     pub(crate) ticket: LaunchTicket,
     execution: ExecutionId,
-    shared: Arc<Shared>,
+    shared: SharedOwner,
 }
 impl WindowsProcessRegistry {
     /// Obtain an opaque current family; public matching facts cannot recreate it.

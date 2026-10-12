@@ -92,6 +92,14 @@ impl NativePort for Fake {
     ) -> Result<(), RegistryError> {
         Ok(())
     }
+    fn enroll_diagnostic(
+        &self,
+        _: &mut Family,
+        _: sugarsubstitute_contracts::incident::DiagnosticKey,
+        _: ProcessKey,
+    ) -> Result<(), RegistryError> {
+        Err(RegistryError::invalid("profile_fixture_diagnostic_role"))
+    }
     fn seal(&self, family: &mut Family) -> Result<(), RegistryError> {
         family.sealed = true;
         Ok(())
@@ -125,9 +133,11 @@ impl NativePort for Fake {
 }
 struct Harness {
     registry: WindowsProcessRegistry,
+    _tables: Vec<crate::registry::construction_fixture::TableAdmission>,
     _owner: ExecutionOwner,
     client: ExecutionClient,
     scope: Scope,
+    _table_scope: Scope,
     wake: Arc<Wake>,
     fake: Arc<Fake>,
     next: u64,
@@ -140,6 +150,8 @@ impl Harness {
         let client = owner.client();
         let scope =
             client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
+        let table_scope =
+            client.create_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?;
         let fake = Arc::new(Fake {
             inventories: AtomicUsize::new(0),
             current: AtomicUsize::new(123),
@@ -147,9 +159,28 @@ impl Harness {
             late: AtomicBool::new(false),
             clock,
         });
-        let mut registry = WindowsProcessRegistry::new(run()?.owner)?;
+        let mut tables = Vec::new();
+        let mut registry = crate::registry::construction_fixture::construct(
+            &client,
+            &table_scope,
+            crate::registry::construction_fixture::first_spec()?,
+            run()?.owner,
+            wake.as_ref(),
+            &mut tables,
+            |_| Ok(()),
+        )?;
         registry.port = fake.clone();
-        Ok(Self { registry, _owner: owner, client, scope, wake, fake, next: 1 })
+        Ok(Self {
+            registry,
+            _tables: tables,
+            _owner: owner,
+            client,
+            scope,
+            _table_scope: table_scope,
+            wake,
+            fake,
+            next: 2,
+        })
     }
     fn spec(
         &mut self,
@@ -184,7 +215,7 @@ impl Harness {
         let ticket = self.registry.submit_launch(
             &self.client,
             &self.scope,
-            ScopeSpec { id: ScopeId::new(2)?, deadline: None },
+            ScopeSpec { id: ScopeId::new(3)?, deadline: None },
             create,
             watch,
             FamilyBinding::Desktop(run()?),
@@ -303,4 +334,24 @@ fn matching_public_facts_do_not_allow_a_foreign_executor_to_query_membership() -
     assert!(matches!(foreign.qualify(proof, 123)?, JobOutcome::Failure(_)));
     assert_eq!(original.fake.inventories.load(Ordering::Acquire), 0);
     Ok(())
+}
+
+impl crate::registry::construction_fixture::ConstructionWake for Wake {
+    fn revision(&self) -> u64 {
+        *crate::registry::lock(&self.count) as u64
+    }
+    fn wait_revision(&self, previous: u64) -> Result<(), Box<dyn std::error::Error>> {
+        let guard = crate::registry::lock(&self.count);
+        let (_guard, timed) = self
+            .changed
+            .wait_timeout_while(guard, std::time::Duration::from_secs(10), |value| {
+                *value as u64 == previous
+            })
+            .map_err(|_| "Constructor completion wake poisoned")?;
+        if timed.timed_out() {
+            Err("Actual constructor completion did not arrive".into())
+        } else {
+            Ok(())
+        }
+    }
 }

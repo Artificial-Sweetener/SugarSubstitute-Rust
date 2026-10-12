@@ -87,6 +87,9 @@ impl HeadlessLifetime for Child {
             return Ok(());
         }
         self.closing = true;
+        if let Some(pending) = &self.registry_creation {
+            pending.cancel();
+        }
         self.claims.close_admission();
         if let Some(scope) = &self.scope {
             scope.cancel();
@@ -100,6 +103,9 @@ impl HeadlessLifetime for Child {
         self.notify()
     }
     fn poll_shutdown(&mut self) -> Result<bool> {
+        if self.registry_creation.is_some() {
+            return Ok(false);
+        }
         if !self.closing
             || (self.initialization_admitted && !self.claims_closed)
             || self.pending
@@ -111,6 +117,7 @@ impl HeadlessLifetime for Child {
         let Some(owner) = &mut self.owner else { return Ok(true) };
         if !self.execution_stopping {
             self.execution_stopping = true;
+            drop(self.registry.take());
             // If admission itself failed, no translated budget or native job
             // exists. Immediate shutdown does not create a replacement deadline.
             let deadline = self.deadline.unwrap_or_else(|| self.clock.now());

@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise actual qualification decisions without creating a process or native loop.
 use super::*;
+mod construction;
 use sugarsubstitute_contracts::lifecycle::{ProcessId, ProcessKey, ShutdownBudget};
 use sugarsubstitute_desktop::HeadlessLifetime;
 use sugarsubstitute_supervision::RegistryObservation;
@@ -191,6 +192,7 @@ fn registry_failure_preserves_original_typed_source_through_case_observation() -
         CompletionBatch, CompletionNotification, TerminalKind,
     };
     let mut fixture = Fixture::new()?;
+    construction::prepare_registry(&mut fixture)?;
     let notification = CompletionNotification {
         scope_id: ScopeId::new(1)?,
         job_id: JobId::new(1)?,
@@ -199,6 +201,8 @@ fn registry_failure_preserves_original_typed_source_through_case_observation() -
     };
     let error = fixture
         .registry
+        .as_mut()
+        .ok_or("Missing actual admitted registry")?
         .consume(&CompletionBatch { notifications: vec![notification; 33], remaining: 0 })
         .err()
         .ok_or("Missing real registry boundary failure")?;

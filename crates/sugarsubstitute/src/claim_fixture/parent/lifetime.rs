@@ -68,6 +68,9 @@ impl HeadlessLifetime for Fixture {
             return Ok(());
         }
         self.closing = true;
+        if let Some(pending) = &self.registry_creation {
+            pending.cancel();
+        }
         self.claims.close_admission();
         if let Some(registry) = &mut self.registry {
             registry.close_launch_admission();
@@ -78,6 +81,9 @@ impl HeadlessLifetime for Fixture {
         self.notify()
     }
     fn poll_shutdown(&mut self) -> Result<bool> {
+        if self.registry_creation.is_some() {
+            return Ok(false);
+        }
         if !self.closing
             || (self.initialization_admitted && !self.claims_closed)
             || self.claims_pending
@@ -90,6 +96,7 @@ impl HeadlessLifetime for Fixture {
         let Some(owner) = &mut self.owner else { return Ok(true) };
         if !self.execution_stopping {
             self.execution_stopping = true;
+            drop(self.registry.take());
             owner.request_shutdown(self.execution_deadline);
         }
         let progress = owner.poll_shutdown()?;

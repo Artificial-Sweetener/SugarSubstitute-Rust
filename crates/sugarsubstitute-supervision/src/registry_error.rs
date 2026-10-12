@@ -14,6 +14,10 @@ pub enum RegistryInputError {
     OutputConflict,
     /// Bootstrap and enrollment do not belong to the exact same admitted session.
     LifecycleProvenance,
+    /// Diagnostic pins are missing or belong to different actual sessions/bindings.
+    DiagnosticProvenance,
+    /// Diagnostic channel ownership conflicts with another inherited native role.
+    DiagnosticConflict,
     /// Checked capacity accounting overflowed or exceeded supported storage.
     Capacity,
     /// Retained storage could not be allocated.
@@ -31,6 +35,8 @@ impl Error for RegistryInputError {
         match self {
             Self::Capacity
             | Self::LifecycleProvenance
+            | Self::DiagnosticProvenance
+            | Self::DiagnosticConflict
             | Self::OutputBinding
             | Self::OutputProvenance
             | Self::OutputConflict => None,

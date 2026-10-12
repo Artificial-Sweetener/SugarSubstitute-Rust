@@ -10,7 +10,7 @@ fn prepared(
     resource: ResourceKey,
 ) -> Result<(WindowsOutputSession, Scope), Box<dyn Error>> {
     let scope = h.client.create_native_scope(
-        ScopeSpec { id: ScopeId::new(resource.id.get() + 1)?, deadline: None },
+        ScopeSpec { id: ScopeId::new(resource.id.get() + 2)?, deadline: None },
         None,
     )?;
     let mut spec = h.spec(MIN_WINDOWS_OUTPUT_BYTES)?;

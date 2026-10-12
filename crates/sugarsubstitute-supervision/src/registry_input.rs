@@ -4,8 +4,10 @@
 use crate::{LaunchEnvironment, RegistryInputError, WindowsLaunchBuffers, WindowsLaunchCommand};
 use std::fmt;
 use sugarsubstitute_execution::windows_fixture::FixtureChildEvents;
+mod diagnostic;
 mod lifecycle;
 pub(crate) mod output;
+use diagnostic::DiagnosticLaunch;
 use lifecycle::DesktopLaunch;
 pub use output::RejectedOutputLaunch;
 
@@ -19,6 +21,7 @@ pub struct WindowsLaunchInput {
     pub(crate) environment: LaunchEnvironment,
     pub(crate) fixture_events: Option<FixtureChildEvents>,
     pub(crate) lifecycle: Option<DesktopLaunch>,
+    pub(crate) diagnostic: Option<DiagnosticLaunch>,
     pub(crate) output: Option<output::OutputLaunch>,
     required: u64,
 }
@@ -53,6 +56,7 @@ impl WindowsLaunchInput {
             environment,
             fixture_events: None,
             lifecycle: None,
+            diagnostic: None,
             output: None,
             required,
         })

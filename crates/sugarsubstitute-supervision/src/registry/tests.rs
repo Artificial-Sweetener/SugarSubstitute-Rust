@@ -55,9 +55,11 @@ impl Wake {
 }
 struct Harness {
     registry: WindowsProcessRegistry,
+    tables: Vec<crate::registry::construction_fixture::TableAdmission>,
     _executor: ExecutionOwner,
     client: ExecutionClient,
     scope: Scope,
+    table_scope: Scope,
     clock: Arc<TestClock>,
     wake: Arc<Wake>,
     fake: Arc<Fake>,
@@ -65,6 +67,29 @@ struct Harness {
     next_scope: u64,
 }
 impl Harness {
+    /// Construct another actual independent registry without replacing its admitted ledger.
+    pub(super) fn construct_registry(
+        &mut self,
+        owner: sugarsubstitute_contracts::lifecycle::CoordinatorKey,
+    ) -> Result<crate::WindowsProcessRegistry, Box<dyn std::error::Error>> {
+        let spec = self.spec(
+            JobClass::InfrastructureLifecycle,
+            WindowsProcessRegistry::required_reservation_bytes(),
+        )?;
+        crate::registry::construction_fixture::construct(
+            &self.client,
+            &self.table_scope,
+            spec,
+            owner,
+            self.wake.as_ref(),
+            &mut self.tables,
+            |batch| {
+                self.registry.consume(batch)?;
+                Ok(())
+            },
+        )
+    }
+
     fn new() -> Result<Self, Box<dyn Error>> {
         let clock = Arc::new(TestClock(AtomicU64::new(0)));
         let wake = Arc::new(Wake::default());
@@ -73,19 +98,32 @@ impl Harness {
         let scope =
             client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
         let owner = owner()?;
+        let table_scope =
+            client.create_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?;
         let fake = Fake::new();
-        let mut registry = WindowsProcessRegistry::new(owner)?;
+        let mut tables = Vec::new();
+        let mut registry = crate::registry::construction_fixture::construct(
+            &client,
+            &table_scope,
+            crate::registry::construction_fixture::first_spec()?,
+            owner,
+            wake.as_ref(),
+            &mut tables,
+            |_| Ok(()),
+        )?;
         registry.port = fake.clone();
         Ok(Self {
             registry,
+            tables,
             _executor: executor,
             client,
             scope,
+            table_scope,
             clock,
             wake,
             fake,
-            next_job: 1,
-            next_scope: 2,
+            next_job: 2,
+            next_scope: 3,
         })
     }
     fn spec(&mut self, class: JobClass, bytes: u64) -> Result<JobSpec, Box<dyn Error>> {
@@ -215,7 +253,9 @@ mod bounds;
 mod claim_identity;
 mod cleanup_failure;
 mod completions;
+mod construction;
 mod descendant_facts;
+mod diagnostic;
 mod enrollment;
 mod force;
 mod lifecycle;
@@ -226,3 +266,23 @@ mod retirement;
 
 mod native_fake;
 use native_fake::{Fake, LEAF, ROOT};
+
+impl crate::registry::construction_fixture::ConstructionWake for Wake {
+    fn revision(&self) -> u64 {
+        *crate::registry::lock(&self.count) as u64
+    }
+    fn wait_revision(&self, previous: u64) -> Result<(), Box<dyn std::error::Error>> {
+        let guard = crate::registry::lock(&self.count);
+        let (_guard, timed) = self
+            .changed
+            .wait_timeout_while(guard, std::time::Duration::from_secs(10), |value| {
+                *value as u64 == previous
+            })
+            .map_err(|_| "Constructor completion wake poisoned")?;
+        if timed.timed_out() {
+            Err("Actual constructor completion did not arrive".into())
+        } else {
+            Ok(())
+        }
+    }
+}

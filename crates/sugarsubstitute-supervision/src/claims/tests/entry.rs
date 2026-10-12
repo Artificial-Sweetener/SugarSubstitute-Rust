@@ -48,7 +48,7 @@ fn entry_serving_requires_consumed_claim_success_and_exact_registry_then_obeys_c
     let gate = Arc::new(Barrier::default());
     *lock(&fake.gate) = Some((Stage::Initialize, gate.clone()));
     let mut claims = claims(&entry, fake)?;
-    let mut registry = crate::WindowsProcessRegistry::new(owner()?)?;
+    let mut registry = construct_registry(&mut entry)?;
     let spec = initialization_spec(&mut entry)?;
     let expected = claims.submit_initialize(
         &entry.client,
@@ -63,7 +63,7 @@ fn entry_serving_requires_consumed_claim_success_and_exact_registry_then_obeys_c
     entry.consume_claims(&mut claims, expected)?;
     assert!(claims.entry_initialized_held.load(Ordering::Acquire));
     claims.bind_process_registry(&registry)?;
-    let foreign = crate::WindowsProcessRegistry::new(owner()?)?;
+    let foreign = construct_registry(&mut entry)?;
     assert!(entry.owner.bind_coordinator(&claims, &foreign, owner()?).is_err());
     let uninitialized = WindowsResourceClaims::new()?;
     assert!(entry.owner.bind_coordinator(&uninitialized, &registry, owner()?).is_err());
@@ -90,7 +90,7 @@ fn failed_or_late_cancelled_claim_acquisition_retains_custody_and_never_grants_s
             *lock(&fake.failure) = Some(Stage::Initialize);
         }
         let mut claims = claims(&entry, fake)?;
-        let mut registry = crate::WindowsProcessRegistry::new(owner()?)?;
+        let mut registry = construct_registry(&mut entry)?;
         let spec = initialization_spec(&mut entry)?;
         let expected = claims.submit_initialize(
             &entry.client,
@@ -120,4 +120,25 @@ fn failed_or_late_cancelled_claim_acquisition_retains_custody_and_never_grants_s
         retire(&mut entry, &mut claims, &mut registry)?;
     }
     Ok(())
+}
+
+/// Use the existing entry owner/counter/wake to observe admitted registry construction.
+fn construct_registry(
+    entry: &mut EntryHarness,
+) -> Result<crate::WindowsProcessRegistry, Box<dyn std::error::Error>> {
+    let mut spec = entry.setup_spec()?;
+    spec.reservation_bytes = crate::WindowsProcessRegistry::required_reservation_bytes();
+    let mut tables = Vec::new();
+    crate::registry::construction_fixture::construct(
+        &entry.client,
+        &entry.scope,
+        spec,
+        owner()?,
+        entry.wake.as_ref(),
+        &mut tables,
+        |batch| {
+            entry.owner.consume(batch)?;
+            Ok(())
+        },
+    )
 }

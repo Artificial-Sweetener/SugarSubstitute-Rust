@@ -54,6 +54,7 @@ pub(crate) fn binding_matches(binding: FamilyBinding, resource: ResourceKey) -> 
         && match binding {
             FamilyBinding::Managed(expected) => expected == resource,
             FamilyBinding::Desktop(_) => true,
+            FamilyBinding::Diagnostic(_) => false,
         }
 }
 impl WindowsLaunchInput {
@@ -97,7 +98,7 @@ pub(crate) fn association_error(
     control_resource: ResourceKey,
     same_session: bool,
 ) -> Option<RegistryInputError> {
-    if input.output.is_some() || input.fixture_events.is_some() {
+    if input.output.is_some() || input.fixture_events.is_some() || input.diagnostic.is_some() {
         Some(RegistryInputError::OutputConflict)
     } else if !binding_matches(binding, resource)
         || input

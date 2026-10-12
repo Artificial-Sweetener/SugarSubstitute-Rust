@@ -24,13 +24,13 @@ fn rejected_managed_attempt_requires_exact_registry_and_observed_watch_retiremen
         .claims
         .prepare_managed_launch(resource, LaunchEnvironment::from_snapshot_utf16(&[0, 0], &[])?)?;
     let creation_scope =
-        harness.client.create_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?;
+        harness.client.create_scope(ScopeSpec { id: ScopeId::new(3)?, deadline: None }, None)?;
     creation_scope.cancel();
     let mut watch = harness.spec(4096)?;
     watch.class = JobClass::NativeObservation;
     let creation = harness.spec(input.required_reservation_bytes())?;
     let jobs = ClaimLaunchJobs {
-        native_scope: ScopeSpec { id: ScopeId::new(3)?, deadline: None },
+        native_scope: ScopeSpec { id: ScopeId::new(4)?, deadline: None },
         creation,
         root_watch: watch,
     };
@@ -56,7 +56,7 @@ fn rejected_managed_attempt_requires_exact_registry_and_observed_watch_retiremen
         ),
         Err(ClaimAdmissionError::Busy)
     ));
-    let foreign = crate::WindowsProcessRegistry::new(owner()?)?;
+    let foreign = harness.construct_registry(owner()?)?;
     let spec = harness.spec(CLAIM_OPERATION_BYTES)?;
     assert!(matches!(
         harness.claims.submit_backend_release(

@@ -15,6 +15,18 @@ impl HeadlessLifetime for Fixture {
             client.create_native_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?,
         );
         self.client = Some(client);
+        let mut table_spec = self.spec(
+            sugarsubstitute_contracts::execution::JobClass::InfrastructureLifecycle,
+            sugarsubstitute_supervision::WindowsProcessRegistry::required_reservation_bytes(),
+        )?;
+        table_spec.deadline = Some(self.deadline);
+        self.registry_creation = Some(crate::process_fixture::registry::PendingRegistry::submit(
+            self.client.as_ref().ok_or("Registry execution missing")?,
+            self.creation_scope.as_ref().ok_or("Registry constructor scope missing")?,
+            table_spec,
+            self.owner_key,
+        )?);
+
         self.enroll_events()
     }
     fn prepare_native_runtime(
@@ -34,6 +46,10 @@ impl HeadlessLifetime for Fixture {
         {
             return Err("Fixture original execution/native admission is incomplete".into());
         }
+        self.advance(max)?;
+        if self.registry_creation.is_some() || self.registry.is_none() {
+            return Ok(sugarsubstitute_desktop::StartupPreparationStep::Waiting);
+        }
         Ok(sugarsubstitute_desktop::StartupPreparationStep::Ready)
     }
     fn activity(&mut self, max: NonZeroUsize) -> Result<HeadlessStep> {
@@ -49,7 +65,12 @@ impl HeadlessLifetime for Fixture {
     }
     fn request_shutdown(&mut self) -> Result<()> {
         self.closing = true;
-        self.registry.close_launch_admission();
+        if let Some(pending) = &self.registry_creation {
+            pending.cancel();
+        }
+        if let Some(registry) = &mut self.registry {
+            registry.close_launch_admission();
+        }
         self.begin_stop()?;
         self.cleanup_needed = true;
         if let Some(session) = &self.session {
@@ -58,12 +79,19 @@ impl HeadlessLifetime for Fixture {
         Ok(())
     }
     fn poll_shutdown(&mut self) -> Result<bool> {
-        if !self.closing || !self.registry.is_empty() || self.session.is_some() {
+        if self.registry_creation.is_some() {
+            return Ok(false);
+        }
+        if !self.closing
+            || !self.registry.as_ref().is_none_or(|registry| registry.is_empty())
+            || self.session.is_some()
+        {
             return Ok(false);
         }
         let Some(owner) = &mut self.owner else { return Ok(true) };
         if !self.stopping {
             self.stopping = true;
+            drop(self.registry.take());
             owner.request_shutdown(self.deadline);
         }
         let progress = owner.poll_shutdown()?;

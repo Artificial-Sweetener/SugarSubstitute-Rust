@@ -12,7 +12,15 @@ impl Parent {
     pub(super) fn ensure_stop(&mut self) -> Result<()> {
         let Some(case) = self.cases.get_mut(self.current) else { return Ok(()) };
         let Some(key) = case.process else { return Ok(()) };
-        if case.stop.is_some() || case.retired || self.registry.snapshot(key)?.settled {
+        if case.stop.is_some()
+            || case.retired
+            || self
+                .registry
+                .as_ref()
+                .ok_or("Actual registry is not prepared")?
+                .snapshot(key)?
+                .settled
+        {
             return Ok(());
         }
         let stop = Stop::new(
@@ -20,7 +28,11 @@ impl Parent {
             self.clock.now(),
             Instant::now(),
         )?;
-        self.registry.begin_stop(key, stop.id, stop.budget)?;
+        self.registry.as_mut().ok_or("Actual registry is not prepared")?.begin_stop(
+            key,
+            stop.id,
+            stop.budget,
+        )?;
         case.stop = Some(stop);
         case.cleanup_requested = true;
         Ok(())
@@ -35,13 +47,14 @@ impl Parent {
         // A failed admission is itself failed qualification. Retry only after an
         // actual admitted completion or original grace/total boundary, never cadence.
         self.cases[self.current].cleanup_requested = false;
-        let id = self.registry.submit_cleanup_step(
-            self.client.as_ref().ok_or("Lifecycle cleanup client missing")?,
-            key,
-            self.scope.as_ref().ok_or("Lifecycle cleanup scope missing")?,
-            step,
-            watch,
-        )?;
+        let id =
+            self.registry.as_mut().ok_or("Actual registry is not prepared")?.submit_cleanup_step(
+                self.client.as_ref().ok_or("Lifecycle cleanup client missing")?,
+                key,
+                self.scope.as_ref().ok_or("Lifecycle cleanup scope missing")?,
+                step,
+                watch,
+            )?;
         self.cases[self.current].cleanup_job = Some(id);
         self.cases[self.current].member_job = watch.map(|spec| spec.id);
         Ok(())

@@ -75,15 +75,16 @@ impl Fixture {
             instance: InstanceId::new(u64::try_from(index)? + 1)?,
             generation: RunGeneration::new(1)?,
         });
-        let ticket = self.registry.submit_launch(
-            self.client.as_ref().ok_or("Campaign client missing")?,
-            self.creation_scope.as_ref().ok_or("Campaign creation scope missing")?,
-            native,
-            creation,
-            watch,
-            binding,
-            input,
-        )?;
+        let ticket =
+            self.registry.as_mut().ok_or("Actual registry is not prepared")?.submit_launch(
+                self.client.as_ref().ok_or("Campaign client missing")?,
+                self.creation_scope.as_ref().ok_or("Campaign creation scope missing")?,
+                native,
+                creation,
+                watch,
+                binding,
+                input,
+            )?;
         self.cases[index].creation_job = Some(creation.id);
         self.cases[index].evidence.bind(ticket.process(), watch.id)
     }
@@ -110,15 +111,16 @@ impl Fixture {
             id: ResourceId::new(1)?,
             generation: ResourceGeneration::new(1)?,
         });
-        let ticket = self.registry.submit_launch(
-            self.client.as_ref().ok_or("Campaign client missing")?,
-            self.creation_scope.as_ref().ok_or("Campaign creation scope missing")?,
-            native,
-            creation,
-            watch,
-            binding,
-            input,
-        )?;
+        let ticket =
+            self.registry.as_mut().ok_or("Actual registry is not prepared")?.submit_launch(
+                self.client.as_ref().ok_or("Campaign client missing")?,
+                self.creation_scope.as_ref().ok_or("Campaign creation scope missing")?,
+                native,
+                creation,
+                watch,
+                binding,
+                input,
+            )?;
         self.sentinel.bind(ticket.process())?;
         self.sentinel_watch = Some(watch.id);
         self.sentinel_creation = Some(creation.id);

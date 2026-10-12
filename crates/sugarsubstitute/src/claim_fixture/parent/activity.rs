@@ -6,7 +6,22 @@ impl Fixture {
     fn drain(&mut self, max: NonZeroUsize) -> Result<bool> {
         let Some(client) = &self.client else { return Ok(false) };
         let batch = client.drain_completions(max)?;
-        let mut changed = !batch.notifications.is_empty();
+        let table_changed = crate::process_fixture::registry::poll(
+            &mut self.registry_creation,
+            &mut self.registry,
+            self.closing,
+        )?;
+        if table_changed && self.registry_binding_pending {
+            self.registry_binding_pending = false;
+            if !self.closing {
+                self.claims.bind_process_registry(
+                    self.registry.as_ref().ok_or("Actual registry constructor lacks success")?,
+                )?;
+                self.phase = Phase::Resolve;
+            }
+        }
+
+        let mut changed = table_changed || !batch.notifications.is_empty();
         if self.claims.consume(&batch)? != 0 {
             self.claims_pending = false;
         }
@@ -100,11 +115,9 @@ impl Fixture {
                     return Err("Duplicate claim coordinator fact".into());
                 }
                 self.key = Some(key);
-                self.registry = Some(WindowsProcessRegistry::new(key)?);
-                self.claims.bind_process_registry(
-                    self.registry.as_ref().ok_or("Claim registry missing")?,
-                )?;
-                self.phase = Phase::Resolve;
+                self.begin_registry(key)?;
+                self.registry_binding_pending = true;
+                self.phase = Phase::Registry;
             }
             ClaimObservation::LaunchResolved(_) => {
                 if self.resolution.is_none() || self.phase != Phase::Resolve {

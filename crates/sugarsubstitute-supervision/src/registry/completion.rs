@@ -107,10 +107,19 @@ impl WindowsProcessRegistry {
     }
 }
 fn creation(record: &mut Record, completion: JobCompletion<(), RegistryError>) {
-    let (facts, failure, watch, no_family) = {
+    let (facts, failure, watch, no_family, pending_input) = {
         let mut state = lock(&record.shared.native);
-        (state.creation.take(), state.failure.take(), state.watch.take(), state.family.is_none())
+        (
+            state.creation.take(),
+            state.failure.take(),
+            state.watch.take(),
+            state.family.is_none(),
+            state.pending_input.take(),
+        )
     };
+    // Actual terminal consumption ends accepted, never-started input custody.
+    // Release callbacks run after the finite worker returned and outside its lock.
+    drop(pending_input);
     record.root_watch = watch;
     if let Some(permit) = lock(&record.shared.permit).take() {
         record.root_watch = Some(permit.cancel_unbound());

@@ -15,7 +15,19 @@ impl HeadlessLifetime for Fixture {
         self.client = Some(client.clone());
         self.scope =
             Some(client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?);
-        self.launch_next()
+        let mut table_spec = self.spec(
+            sugarsubstitute_contracts::execution::JobClass::InfrastructureLifecycle,
+            sugarsubstitute_supervision::WindowsProcessRegistry::required_reservation_bytes(),
+        )?;
+        table_spec.deadline = Some(self.execution_deadline);
+        self.registry_creation = Some(crate::process_fixture::registry::PendingRegistry::submit(
+            self.client.as_ref().ok_or("Registry execution missing")?,
+            self.scope.as_ref().ok_or("Registry constructor scope missing")?,
+            table_spec,
+            self.owner_key,
+        )?);
+
+        Ok(())
     }
     fn prepare_native_runtime(
         &mut self,
@@ -29,6 +41,10 @@ impl HeadlessLifetime for Fixture {
         }
         if self.owner.is_none() || self.client.is_none() || self.scope.is_none() {
             return Err("Fixture original execution/native admission is incomplete".into());
+        }
+        self.advance(max)?;
+        if self.registry_creation.is_some() || self.registry.is_none() {
+            return Ok(sugarsubstitute_desktop::StartupPreparationStep::Waiting);
         }
         Ok(sugarsubstitute_desktop::StartupPreparationStep::Ready)
     }
@@ -44,16 +60,25 @@ impl HeadlessLifetime for Fixture {
     }
     fn request_shutdown(&mut self) -> Result<()> {
         self.closing = true;
-        self.registry.close_launch_admission();
+        if let Some(pending) = &self.registry_creation {
+            pending.cancel();
+        }
+        if let Some(registry) = &mut self.registry {
+            registry.close_launch_admission();
+        }
         self.ensure_stop()
     }
     fn poll_shutdown(&mut self) -> Result<bool> {
-        if !self.closing || !self.registry.is_empty() {
+        if self.registry_creation.is_some() {
+            return Ok(false);
+        }
+        if !self.closing || !self.registry.as_ref().is_none_or(|registry| registry.is_empty()) {
             return Ok(false);
         }
         let Some(owner) = &mut self.owner else { return Ok(true) };
         if !self.execution_stopping {
             self.execution_stopping = true;
+            drop(self.registry.take());
             owner.request_shutdown(self.execution_deadline);
         }
         let progress = owner.poll_shutdown()?;
@@ -69,7 +94,9 @@ impl HeadlessLifetime for Fixture {
         Ok(progress.settled)
     }
     fn finish_shutdown(&mut self) -> Result<()> {
-        if !self.registry.is_empty() || !self.poll_shutdown()? {
+        if !self.registry.as_ref().is_none_or(|registry| registry.is_empty())
+            || !self.poll_shutdown()?
+        {
             return Err("Registry fixture cannot finish with retained native families/work".into());
         }
         if let Some(owner) = &mut self.owner {
