@@ -93,7 +93,6 @@ export function createComfyCubeRuntime(options) {
         ...(options.feedback ? { feedback: options.feedback } : {}),
     });
     const titleHeight = readPositiveNumber(liteGraph.NODE_TITLE_HEIGHT, 30);
-    const previewEvents = readPreviewEventSource(api);
     const createNode = (type) => {
         const value = createNodeFunction.call(liteGraph, type);
         return isNativeGraphNode(value) ? value : null;
@@ -237,12 +236,9 @@ export function createComfyCubeRuntime(options) {
         logger: options.logger,
         previewCatalog: new ComfyCubePreviewCatalog({
             getRootGraph: () => graph,
-            ...(options.getCubeOutput ? { getCubeOutput: options.getCubeOutput } : {}),
-            ...(options.previewRetention ? { retention: options.previewRetention } : {}),
+            getOutput: options.getWorkflowOutput,
+            getLivePreview: options.getWorkflowPreview,
             getEffectiveLinks: () => options.getPreviewLinks?.() ?? [],
-            logger: options.logger,
-            getNodeOutputs: () => (isRecord(app.nodeOutputs) ? app.nodeOutputs : {}),
-            getNodePreviewImages: () => (isRecord(app.nodePreviewImages) ? app.nodePreviewImages : {}),
             buildOutputImageUrl(image) {
                 const filename = readNonEmptyString(image.filename);
                 if (!filename)
@@ -272,7 +268,6 @@ export function createComfyCubeRuntime(options) {
         graphChanges: canvasGraphChanges,
         rendererChanges,
         ...buildCubeRuntimePresentationBindings(options),
-        ...(previewEvents ? { previewEvents } : {}),
         ...(options.onBoundaryGeometryChange
             ? { onBoundaryGeometryChange: options.onBoundaryGeometryChange }
             : {}),
@@ -463,22 +458,6 @@ function requireFunction(value, name) {
     if (typeof value !== 'function')
         throw new TypeError(`${name} is unavailable.`);
     return value;
-}
-/** Adapt Comfy's EventTarget-shaped API without leaking its dynamic receiver inward. */
-function readPreviewEventSource(api) {
-    if (typeof api.addEventListener !== 'function' || typeof api.removeEventListener !== 'function') {
-        return null;
-    }
-    const addEventListener = requireFunction(api.addEventListener, 'Comfy API.addEventListener');
-    const removeEventListener = requireFunction(api.removeEventListener, 'Comfy API.removeEventListener');
-    return {
-        addEventListener(type, listener) {
-            addEventListener.call(api, type, listener);
-        },
-        removeEventListener(type, listener) {
-            removeEventListener.call(api, type, listener);
-        },
-    };
 }
 /** Require the host-owned selection set used by native graph conversion. */
 function requireSet(value, name) {

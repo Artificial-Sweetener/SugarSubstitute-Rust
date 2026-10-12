@@ -22,7 +22,7 @@ import { createEditorActionsRuntime } from './ui/editor_actions/EditorActionsCom
 import { createComfyCubeRuntime } from './ui/cube/ComfyCubeRuntime.js';
 import { CubeGraphApi } from './ui/workflow/infrastructure/CubeGraphApi.js';
 import { ComfyCubeRuntimeLifecycle } from './ui/cube/ComfyCubeRuntimeLifecycle.js';
-import { CubePreviewRetentionStore } from './ui/surface/CubePreviewRetentionStore.js';
+import { createComfyWorkflowExecutionRuntime } from './ui/execution/infrastructure/ComfyWorkflowExecutionRuntime.js';
 import { projectCubeProximityPreviewLinks } from './ui/surface/CubeProximityPreviewLinks.js';
 import { CubeAuthoringHostCommands } from './ui/cube/CubeAuthoringHostCommands.js';
 import { createCubeHostExecution } from './ui/cube/execution/CubeHostExecutionComposition.js';
@@ -103,7 +103,7 @@ const hostFeedback = new CubeHostFeedback({
     toast: toastService,
 });
 const cubePreconfiguration = ui.workflowPreconfiguration;
-const cubePreviewRetention = new CubePreviewRetentionStore();
+const workflowExecution = createComfyWorkflowExecutionRuntime({ app: appRef, api, logger });
 const cubeRuntimeLifecycle = new ComfyCubeRuntimeLifecycle(createCubeRuntime);
 /** Compose shared appearance without adding styling behavior to host registration. */
 const fluentAppearance = new FluentAppearanceHost({
@@ -145,15 +145,25 @@ const workflowRelations = new RelationHostLifecycle({
         pushToastMessage('error', 'Shared field unavailable', readErrorMessage(error));
     },
 });
-const { outputStore: cubeOutputExecutionStore, outputEvents: cubeOutputEventBridge, outputHistory: cubeOutputHistoryAdapter, queue: promptQueueBridge, } = createCubeHostExecution({
+const promptQueueBridge = createCubeHostExecution({
     api,
+    observer: workflowExecution.submissionObserver,
     logger,
     boundaryResolver: nativeBoundaryResolver,
     getGraph: () => appRef?.graph,
     getCubes: () => cubeRuntimeLifecycle.current()?.nodes.list() ?? [],
     getProximityMatches: () => overlayManager.proximity.resolveExecutionMatches(appRef?.canvas?.graph ?? appRef?.graph),
     applyProximity: (payload) => overlayManager.proximity.applyProximityToPrompt(payload),
-    prepareRelations: (payload) => workflowRelations.prepare(payload),
+    prepareRelations: (payload) => {
+        try {
+            workflowExecution.assertCurrentPrompt(payload);
+            return workflowRelations.prepare(payload);
+        }
+        catch (error) {
+            pushToastMessage('error', 'Workflow run not queued', readErrorMessage(error));
+            throw error;
+        }
+    },
     preflight: () => {
         try {
             assertNoNestedCubes('run this workflow');
@@ -216,9 +226,9 @@ function createCubeRuntime() {
         },
         feedback: toastService,
         boundaryResolver: nativeBoundaryResolver,
-        previewRetention: cubePreviewRetention,
-        getCubeOutput: (executionId) => cubeOutputExecutionStore.read(executionId),
-        subscribePreviewChanges: (listener) => cubeOutputExecutionStore.subscribe(listener),
+        getWorkflowOutput: (path) => workflowExecution.outputs.output(path),
+        getWorkflowPreview: (path) => workflowExecution.outputs.livePreview(path),
+        subscribePreviewChanges: (listener) => workflowExecution.outputs.subscribe(listener),
         presentationChanges: ui.workflowLibraryState,
         resolveIdentitySource: (metadata) => ui.workflowLibraryPresentation.resolveSource(metadata),
         onBoundaryGeometryChange: () => overlayManager.proximity.schedulePreview({
@@ -263,8 +273,6 @@ const graphConfigurationLifecycle = new CubeGraphConfigurationLifecycle({
     preconfiguration: cubePreconfiguration,
     affordances: cubeAffordances,
     overlays: overlayManager,
-    outputStore: cubeOutputExecutionStore,
-    outputHistory: cubeOutputHistoryAdapter,
     feedback: hostFeedback,
     logger,
 });
@@ -274,8 +282,7 @@ const extensionSetupLifecycle = new CubeExtensionSetupLifecycle({
     ui,
     settings: hostSettingsController,
     promptQueue: promptQueueBridge,
-    outputEvents: cubeOutputEventBridge,
-    outputHistory: cubeOutputHistoryAdapter,
+    execution: workflowExecution,
     logger,
 });
 const workflowMasonry = new WorkflowMasonryHostLifecycle({
@@ -338,7 +345,7 @@ const modelPickers = new ModelPickerHost({
     feedback: (severity, message) => pushToastMessage(severity, 'Model library', message),
     updates: modelUpdates,
     detectors: modelDetectors,
-    outputs: new ComfyOutputThumbnailSource(appRef, documentRef ?? document, (executionId) => cubeOutputExecutionStore.read(executionId)),
+    outputs: new ComfyOutputThumbnailSource(appRef, documentRef ?? document, (executionId) => workflowExecution.outputs.output(executionId)),
     reportError: modelBackgroundReporter(logger, 'model picker'),
     discovery: {
         discovery: new ModelDiscoveryClient((path, options) => api.fetchApi(path, options), async () => {

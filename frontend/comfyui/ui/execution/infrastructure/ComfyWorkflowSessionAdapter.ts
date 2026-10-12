@@ -94,13 +94,14 @@ export class ComfyWorkflowSessionAdapter {
         });
         if (workflow === this.#workflow.activeWorkflow) selected = sessionId;
       }
-      const closed = this.options.sessions.synchronize(bindings, selected);
-      for (const sessionId of closed) {
-        const previous = this.#open.get(sessionId);
-        if (previous) this.#identities.delete(previous);
-      }
+      const previousOpen = new Map(this.#open);
       this.#open.clear();
       for (const [id, workflow] of nextOpen) this.#open.set(id, workflow);
+      const closed = this.options.sessions.synchronize(bindings, selected);
+      for (const sessionId of closed) {
+        const previous = previousOpen.get(sessionId);
+        if (previous) this.#identities.delete(previous);
+      }
       return true;
     } catch (error: unknown) {
       this.options.sessions.suspend();
@@ -114,6 +115,13 @@ export class ComfyWorkflowSessionAdapter {
     const workflow = this.#open.get(sessionId);
     const tracker = workflow && isRecord(workflow.changeTracker) ? workflow.changeTracker : null;
     return tracker?.nodeOutputs;
+  }
+
+  /** Read the same named workflow's serialized topology for validating restoration source membership. */
+  readStoredWorkflow(sessionId: WorkflowSessionId): unknown {
+    const workflow = this.#open.get(sessionId);
+    const tracker = workflow && isRecord(workflow.changeTracker) ? workflow.changeTracker : null;
+    return tracker?.activeState;
   }
 
   /** Stop this adapter's subscription while leaving session/resource teardown to their owners. */

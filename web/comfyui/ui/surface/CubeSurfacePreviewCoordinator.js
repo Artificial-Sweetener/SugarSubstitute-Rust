@@ -20,7 +20,6 @@ export class CubeSurfacePreviewCoordinator {
     options;
     stabilizer;
     unsubscribe;
-    onExecuted;
     constructor(options) {
         this.options = options;
         const windowRef = options.document.defaultView;
@@ -30,13 +29,11 @@ export class CubeSurfacePreviewCoordinator {
             frameCount: 120,
         });
         this.unsubscribe =
-            options.previewChanges?.subscribe(() => options.refreshVuePreviews()) ?? (() => undefined);
-        this.onExecuted = () => {
-            options.refreshVuePreviews();
-            if (options.getRendererMode() === 'litegraph')
-                this.scheduleLegacyRedraw();
-        };
-        options.previewEvents?.addEventListener('executed', this.onExecuted);
+            options.previewChanges?.subscribe(() => {
+                options.refreshVuePreviews();
+                if (options.getRendererMode() === 'litegraph')
+                    this.scheduleLegacyRedraw();
+            }) ?? (() => undefined);
     }
     /** Repaint while Comfy decodes native legacy preview images. */
     scheduleLegacyRedraw() {
@@ -52,7 +49,6 @@ export class CubeSurfacePreviewCoordinator {
     }
     /** Remove every preview subscription and delayed redraw. */
     dispose() {
-        this.options.previewEvents?.removeEventListener('executed', this.onExecuted);
         this.unsubscribe();
         this.stabilizer.dispose();
     }

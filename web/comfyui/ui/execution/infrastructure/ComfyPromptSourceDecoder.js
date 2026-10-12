@@ -16,22 +16,28 @@
 /** Decode submitted execution paths and display metadata without consulting the current graph. */
 import { isRecord } from '../../types/common.js';
 import { outputSourceId } from '../domain/ExecutionIdentity.js';
+import { decodeComfyWorkflowSources } from './ComfyWorkflowSourceDecoder.js';
 /** Read source identities from a compiled prompt; results determine which paths produce visible media. */
-export function decodeComfyPromptSources(payload) {
+export function decodeComfyPromptSources(payload, capturedSources = []) {
     if (!isRecord(payload) || !isRecord(payload.output) || Array.isArray(payload.output))
         return Object.freeze([]);
     const sources = [];
+    const authored = new Map([...capturedSources, ...decodeComfyWorkflowSources(payload.workflow)].map((source) => [
+        source.executionPath,
+        source,
+    ]));
     for (const [executionPath, node] of Object.entries(payload.output)) {
         if (!executionPath || executionPath.length > 4096 || !isRecord(node) || Array.isArray(node))
             continue;
         const meta = isRecord(node._meta) ? node._meta : null;
         const title = text(meta?.title) || text(node.class_type) || `Node ${executionPath}`;
+        const source = authored.get(executionPath);
         sources.push(Object.freeze({
             id: outputSourceId(executionPath),
             executionPath,
-            label: title,
-            breadcrumb: Object.freeze(executionPath.split(':').slice(0, -1)),
-            order: sources.length,
+            label: source?.label ?? title,
+            breadcrumb: source?.breadcrumb ?? Object.freeze([]),
+            order: source?.order ?? authored.size + sources.length,
         }));
     }
     return Object.freeze(sources);

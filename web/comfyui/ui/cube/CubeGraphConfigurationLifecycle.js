@@ -25,7 +25,6 @@ export class CubeGraphConfigurationLifecycle {
         const options = this.options;
         try {
             options.runtimeLifecycle.reset();
-            options.outputStore.clear();
             options.preconfiguration.prepare(graphData);
             options.affordances.attach(options.requireRuntime());
             options.overlays.proximity.resetOverlayState();
@@ -50,7 +49,6 @@ export class CubeGraphConfigurationLifecycle {
                     'The workflow was preserved, but execution and Cube saving are blocked until the nested wrapper is removed.');
             }
             options.affordances.adaptMissingNodes(missingNodeTypes);
-            void options.outputHistory.hydrateRecent();
             const graph = options.app?.canvas?.graph ?? comfyApp.graph ?? options.app?.graph;
             options.preconfiguration.restoreWidgets(graph);
             options.overlays.proximity.refreshOverlayState({

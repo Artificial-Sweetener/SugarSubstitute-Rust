@@ -2,22 +2,8 @@ import { ComfyPromptQueueBridge } from '../../execution/infrastructure/ComfyProm
 import { CubePromptPipeline } from './CubePromptPipeline.js';
 import { CubeOutputPromptAdapter } from './CubeOutputPromptAdapter.js';
 import { createCubeDirectExecution } from './CubeDirectExecutionService.js';
-import { ComfyCubeOutputEventBridge } from './ComfyCubeOutputEventBridge.js';
-import { ComfyCubeOutputHistoryAdapter } from './ComfyCubeOutputHistoryAdapter.js';
-import { CubeOutputExecutionStore } from './CubeOutputExecutionStore.js';
 /** Preserve existing execution sequencing while adding a common relation boundary for both queue paths. */
 export function createCubeHostExecution(options) {
-    const outputStore = new CubeOutputExecutionStore();
-    const outputEvents = new ComfyCubeOutputEventBridge({
-        api: options.api,
-        store: outputStore,
-        logger: options.logger,
-    });
-    const outputHistory = new ComfyCubeOutputHistoryAdapter({
-        api: options.api,
-        store: outputStore,
-        logger: options.logger,
-    });
     const outputAdapter = new CubeOutputPromptAdapter({
         getCubes: options.getCubes,
         boundaryResolver: options.boundaryResolver,
@@ -34,11 +20,12 @@ export function createCubeHostExecution(options) {
     });
     const queue = new ComfyPromptQueueBridge({
         api: options.api,
+        observer: options.observer,
         preflight: options.preflight,
         prepare: options.prepareRelations,
         transform: (payload) => pipeline.transform(payload),
         executeDirect: (position, payload, queueOptions) => direct.queue(position, payload, queueOptions),
         shouldExecuteDirect: (payload) => direct.owns(payload),
     });
-    return { outputStore, outputEvents, outputHistory, queue };
+    return queue;
 }

@@ -30,7 +30,7 @@ import { ComfyRendererPresenceObserver } from './ComfyRendererPresenceObserver.j
 import { ComfyNativeSlotLayoutCoordinator } from './ComfyNativeSlotLayoutCoordinator.js';
 import { CubeRendererTransitionStabilizer } from './CubeRendererTransitionStabilizer.js';
 import { CubeSurfaceRendererLifecycle } from './CubeSurfaceRendererLifecycle.js';
-import { CubeSurfacePreviewCoordinator, } from './CubeSurfacePreviewCoordinator.js';
+import { CubeSurfacePreviewCoordinator } from './CubeSurfacePreviewCoordinator.js';
 import { resolveCubeExternalInterface } from '../cube/graph/CubeExternalInterface.js';
 import { filterCubePreviewOutputs } from './CubePreviewModel.js';
 import { ComfyVueCubeDropTargetBridge } from './ComfyVueCubeDropTargetBridge.js';
@@ -162,7 +162,6 @@ export class CubeSurfacePresenter {
             setDirtyCanvas: this.#setDirtyCanvas,
             refreshVuePreviews: () => this.#refreshPreviews(),
             ...(options.previewChanges ? { previewChanges: options.previewChanges } : {}),
-            ...(options.previewEvents ? { previewEvents: options.previewEvents } : {}),
         });
         ensureCubeSurfaceStyles(options.document);
         this.#stabilizeSync();

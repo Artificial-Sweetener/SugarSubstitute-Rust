@@ -148,7 +148,7 @@ function setupBaseApp() {
     processMouseMove: () => {},
     processMouseDown: () => {},
   };
-  app.extensionManager = { registerSidebarTab: () => {} };
+  app.extensionManager.registerSidebarTab = () => {};
   app.clean = () => {};
 }
 
@@ -352,7 +352,7 @@ beforeEach(() => {
 
 describe('save workflow payload', () => {
   const configureGraphToPrompt = ({ withWorkflow }: { withWorkflow: boolean }): void => {
-    app.graphToPrompt = () => {
+    app.graphToPrompt = async () => {
       const output = {
         1: { class_type: 'KSampler', inputs: {}, _meta: { title: 'Node' } },
       };
@@ -531,7 +531,7 @@ describe('save workflow payload', () => {
         },
       ],
     ]);
-    app.graphToPrompt = () => ({
+    app.graphToPrompt = async () => ({
       output: {
         1: { class_type: 'KSampler', inputs: {}, _meta: { title: 'Node' } },
       },
@@ -612,7 +612,7 @@ describe('save workflow payload', () => {
         },
       ],
     ]);
-    app.graphToPrompt = () => ({
+    app.graphToPrompt = async () => ({
       output: {
         1: { class_type: 'KSampler', inputs: {}, _meta: { title: 'Node' } },
       },

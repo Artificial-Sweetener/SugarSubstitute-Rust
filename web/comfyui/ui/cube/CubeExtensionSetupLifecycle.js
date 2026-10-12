@@ -35,10 +35,8 @@ export class CubeExtensionSetupLifecycle {
             else {
                 options.logger.warn('SugarCubes: Comfy Blueprint persistence guard is unavailable.');
             }
+            options.execution.install();
             options.promptQueue.install();
-            options.outputEvents.install();
-            options.outputHistory.install();
-            await options.outputHistory.hydrateRecent();
             await options.settings.refresh({ checkForUpdates: false });
             const graph = options.app?.canvas?.graph ?? options.app?.graph;
             options.ui.overlayManager.proximity.refreshOverlayState({

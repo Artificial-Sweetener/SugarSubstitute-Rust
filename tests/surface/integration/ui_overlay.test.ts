@@ -124,7 +124,7 @@ beforeEach(() => {
     strokeStyle: '#fff',
   };
 
-  app.extensionManager = { registerSidebarTab: () => {} };
+  app.extensionManager.registerSidebarTab = () => {};
   app.clean = () => {};
 
   globalThis.requestAnimationFrame = (callback) => {

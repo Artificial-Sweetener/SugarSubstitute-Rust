@@ -19,17 +19,14 @@ import type { CubeNode } from '../node/ComfyCubeNodeFactory.js';
 import type { NativeSubgraphBoundaryResolver } from '../graph/NativeSubgraphBoundaryResolver.js';
 import { ComfyPromptQueueBridge } from '../../execution/infrastructure/ComfyPromptQueueBridge.js';
 import type { ComfyPromptQueueApi } from '../../execution/infrastructure/ComfyPromptQueueBridge.js';
+import type { PromptQueueObserver } from '../../execution/infrastructure/ComfyPromptQueueBridge.js';
 import { CubePromptPipeline } from './CubePromptPipeline.js';
 import { CubeOutputPromptAdapter } from './CubeOutputPromptAdapter.js';
 import { createCubeDirectExecution } from './CubeDirectExecutionService.js';
-import { ComfyCubeOutputEventBridge } from './ComfyCubeOutputEventBridge.js';
-import type { ComfyExecutionEventApi } from './ComfyCubeOutputEventBridge.js';
-import { ComfyCubeOutputHistoryAdapter } from './ComfyCubeOutputHistoryAdapter.js';
-import type { ComfyCubeOutputHistoryApi } from './ComfyCubeOutputHistoryAdapter.js';
-import { CubeOutputExecutionStore } from './CubeOutputExecutionStore.js';
 
 export interface CubeHostExecutionOptions {
   api: unknown;
+  observer: PromptQueueObserver;
   logger: Pick<Console, 'debug' | 'warn' | 'error'>;
   boundaryResolver: NativeSubgraphBoundaryResolver;
   getGraph(): ComfyGraph | null | undefined;
@@ -41,23 +38,7 @@ export interface CubeHostExecutionOptions {
 }
 
 /** Preserve existing execution sequencing while adding a common relation boundary for both queue paths. */
-export function createCubeHostExecution(options: CubeHostExecutionOptions): {
-  outputStore: CubeOutputExecutionStore;
-  outputEvents: ComfyCubeOutputEventBridge;
-  outputHistory: ComfyCubeOutputHistoryAdapter;
-  queue: ComfyPromptQueueBridge;
-} {
-  const outputStore = new CubeOutputExecutionStore();
-  const outputEvents = new ComfyCubeOutputEventBridge({
-    api: options.api as ComfyExecutionEventApi,
-    store: outputStore,
-    logger: options.logger,
-  });
-  const outputHistory = new ComfyCubeOutputHistoryAdapter({
-    api: options.api as ComfyCubeOutputHistoryApi,
-    store: outputStore,
-    logger: options.logger,
-  });
+export function createCubeHostExecution(options: CubeHostExecutionOptions): ComfyPromptQueueBridge {
   const outputAdapter = new CubeOutputPromptAdapter({
     getCubes: options.getCubes,
     boundaryResolver: options.boundaryResolver,
@@ -74,6 +55,7 @@ export function createCubeHostExecution(options: CubeHostExecutionOptions): {
   });
   const queue = new ComfyPromptQueueBridge({
     api: options.api as ComfyPromptQueueApi,
+    observer: options.observer,
     preflight: options.preflight,
     prepare: options.prepareRelations,
     transform: (payload) => pipeline.transform(payload),
@@ -81,5 +63,5 @@ export function createCubeHostExecution(options: CubeHostExecutionOptions): {
       direct.queue(position, payload, queueOptions),
     shouldExecuteDirect: (payload) => direct.owns(payload),
   });
-  return { outputStore, outputEvents, outputHistory, queue };
+  return queue;
 }

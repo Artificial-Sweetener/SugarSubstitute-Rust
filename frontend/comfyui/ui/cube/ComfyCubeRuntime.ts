@@ -46,7 +46,7 @@ import { CubeSurfacePresenter } from '../surface/CubeSurfacePresenter.js';
 import type { NativeNodeCardRenderer } from '../surface/NativeNodeCardRenderer.js';
 import { ComfyCubePreviewCatalog } from '../surface/ComfyCubePreviewCatalog.js';
 import type { CubePreviewLink } from '../surface/ComfyCubePreviewCatalog.js';
-import type { CubePreviewRetentionStore } from '../surface/CubePreviewRetentionStore.js';
+import type { WorkflowOutputSet } from '../execution/domain/WorkflowOutput.js';
 import { CubeEditorNavigationPresenter } from '../surface/CubeEditorNavigationPresenter.js';
 import {
   CubeEditorMetadataHud,
@@ -94,7 +94,6 @@ import {
   resolveComfyRendererMode,
 } from '../core/ComfyRendererMode.js';
 import { NativeCubeGeometryCoordinator } from './geometry/NativeCubeGeometryCoordinator.js';
-import type { ComfyNodePreviewEventSource } from '../surface/CubeSurfacePresenter.js';
 import { CubeEditorWorkspaceChromeAdapter } from '../surface/CubeEditorWorkspaceChromeAdapter.js';
 import { createComfyCubePreviewActions } from '../surface/ComfyCubePreviewActions.js';
 import { CubeEditorContextResolver } from '../surface/CubeEditorContextResolver.js';
@@ -127,8 +126,8 @@ export interface ComfyCubeRuntimeOptions {
   document: Document;
   logger: Pick<Console, 'debug' | 'error' | 'warn'>;
   getPreviewLinks?(): readonly CubePreviewLink[];
-  getCubeOutput?(executionId: string): unknown;
-  previewRetention?: CubePreviewRetentionStore;
+  getWorkflowOutput(executionPath: string): WorkflowOutputSet | null;
+  getWorkflowPreview(executionPath: string): readonly string[];
   boundaryResolver: NativeSubgraphBoundaryResolver;
   subscribePreviewChanges?(listener: () => void): () => void;
   onBoundaryGeometryChange?(): void;
@@ -199,7 +198,6 @@ export function createComfyCubeRuntime(options: ComfyCubeRuntimeOptions): ComfyC
     ...(options.feedback ? { feedback: options.feedback } : {}),
   });
   const titleHeight = readPositiveNumber(liteGraph.NODE_TITLE_HEIGHT, 30);
-  const previewEvents = readPreviewEventSource(api);
 
   const createNode = (type: string): NativeGraphNode | null => {
     const value = createNodeFunction.call(liteGraph, type);
@@ -364,12 +362,9 @@ export function createComfyCubeRuntime(options: ComfyCubeRuntimeOptions): ComfyC
     logger: options.logger,
     previewCatalog: new ComfyCubePreviewCatalog({
       getRootGraph: () => graph,
-      ...(options.getCubeOutput ? { getCubeOutput: options.getCubeOutput } : {}),
-      ...(options.previewRetention ? { retention: options.previewRetention } : {}),
+      getOutput: options.getWorkflowOutput,
+      getLivePreview: options.getWorkflowPreview,
       getEffectiveLinks: () => options.getPreviewLinks?.() ?? [],
-      logger: options.logger,
-      getNodeOutputs: () => (isRecord(app.nodeOutputs) ? app.nodeOutputs : {}),
-      getNodePreviewImages: () => (isRecord(app.nodePreviewImages) ? app.nodePreviewImages : {}),
       buildOutputImageUrl(image) {
         const filename = readNonEmptyString(image.filename);
         if (!filename) return null;
@@ -396,7 +391,6 @@ export function createComfyCubeRuntime(options: ComfyCubeRuntimeOptions): ComfyC
     graphChanges: canvasGraphChanges,
     rendererChanges,
     ...buildCubeRuntimePresentationBindings(options),
-    ...(previewEvents ? { previewEvents } : {}),
     ...(options.onBoundaryGeometryChange
       ? { onBoundaryGeometryChange: options.onBoundaryGeometryChange }
       : {}),
@@ -597,26 +591,6 @@ function requireRecord(value: unknown, name: string): UnknownRecord {
 function requireFunction(value: unknown, name: string): (...args: unknown[]) => unknown {
   if (typeof value !== 'function') throw new TypeError(`${name} is unavailable.`);
   return value as (...args: unknown[]) => unknown;
-}
-
-/** Adapt Comfy's EventTarget-shaped API without leaking its dynamic receiver inward. */
-function readPreviewEventSource(api: UnknownRecord): ComfyNodePreviewEventSource | null {
-  if (typeof api.addEventListener !== 'function' || typeof api.removeEventListener !== 'function') {
-    return null;
-  }
-  const addEventListener = requireFunction(api.addEventListener, 'Comfy API.addEventListener');
-  const removeEventListener = requireFunction(
-    api.removeEventListener,
-    'Comfy API.removeEventListener',
-  );
-  return {
-    addEventListener(type, listener) {
-      addEventListener.call(api, type, listener);
-    },
-    removeEventListener(type, listener) {
-      removeEventListener.call(api, type, listener);
-    },
-  };
 }
 
 /** Require the host-owned selection set used by native graph conversion. */

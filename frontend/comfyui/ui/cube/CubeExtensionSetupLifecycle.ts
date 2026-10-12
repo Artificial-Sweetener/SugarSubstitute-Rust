@@ -17,8 +17,7 @@
 
 import type { SugarCubesUI } from '../SugarCubesUI.js';
 import { CubeBlueprintPersistenceGuard } from '../affordance/CubeBlueprintPersistenceGuard.js';
-import type { ComfyCubeOutputEventBridge } from './execution/ComfyCubeOutputEventBridge.js';
-import type { ComfyCubeOutputHistoryAdapter } from './execution/ComfyCubeOutputHistoryAdapter.js';
+import type { ComfyWorkflowExecutionRuntime } from '../execution/infrastructure/ComfyWorkflowExecutionRuntime.js';
 import type { ComfyPromptQueueBridge } from '../execution/infrastructure/ComfyPromptQueueBridge.js';
 import type { HostSettingsController } from '../settings/HostSettingsController.js';
 import type { ComfyApplication } from '../types/graph.js';
@@ -34,8 +33,7 @@ interface CubeExtensionSetupLifecycleOptions {
   ui: SugarCubesUI;
   settings: HostSettingsController;
   promptQueue: ComfyPromptQueueBridge;
-  outputEvents: ComfyCubeOutputEventBridge;
-  outputHistory: ComfyCubeOutputHistoryAdapter;
+  execution: ComfyWorkflowExecutionRuntime;
   logger: SetupLogger;
 }
 
@@ -57,10 +55,8 @@ export class CubeExtensionSetupLifecycle {
       } else {
         options.logger.warn('SugarCubes: Comfy Blueprint persistence guard is unavailable.');
       }
+      options.execution.install();
       options.promptQueue.install();
-      options.outputEvents.install();
-      options.outputHistory.install();
-      await options.outputHistory.hydrateRecent();
       await options.settings.refresh({ checkForUpdates: false });
       const graph = options.app?.canvas?.graph ?? options.app?.graph;
       options.ui.overlayManager.proximity.refreshOverlayState({

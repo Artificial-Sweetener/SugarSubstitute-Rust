@@ -66,7 +66,7 @@ function setupBaseApp() {
     processMouseMove: () => {},
     processMouseDown: () => {},
   };
-  app.extensionManager = { registerSidebarTab: () => {} };
+  app.extensionManager.registerSidebarTab = () => {};
   const settings = app.ui?.settings;
   if (!settings) throw new Error('Mock settings were not initialized.');
   app.ui = {

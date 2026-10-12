@@ -13,6 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+import { WorkflowHostFixture, workflowFixture } from '../../../execution/support/workflow_host.js';
 import type { UnknownRecord } from '../../../../frontend/comfyui/ui/types/common.js';
 import type {
   ComfyCanvas,
@@ -47,6 +48,7 @@ export interface MockSidebarTab extends UnknownRecord {
 }
 
 export interface MockExtensionManager extends UnknownRecord {
+  workflow: WorkflowHostFixture['extensionManager']['workflow'];
   registerSidebarTab(payload: MockSidebarTab): unknown;
 }
 
@@ -69,6 +71,8 @@ interface MockApp extends UnknownRecord {
   canvas: MockCanvas;
   extensionManager: MockExtensionManager;
   clean(): unknown;
+  loadGraphData(data: unknown): Promise<void>;
+  graphToPrompt(): Promise<object>;
   ui?: {
     settings: {
       addSetting(payload: MockSettingDefinition): unknown;
@@ -94,6 +98,11 @@ function createMockSettings(): NonNullable<MockApp['ui']>['settings'] {
   };
 }
 
+/** Reuse the execution contract fixture for the public workflow-store capability. */
+function createMockWorkflowStore(): MockExtensionManager['workflow'] {
+  return new WorkflowHostFixture(workflowFixture('Test workflow')).extensionManager.workflow;
+}
+
 const createMockApp = (): MockApp => ({
   _extensions: [],
   graph: null,
@@ -109,9 +118,15 @@ const createMockApp = (): MockApp => ({
     onNodeMoved: () => undefined,
     setDirty: () => undefined,
   },
-  extensionManager: { registerSidebarTab: () => undefined },
+  extensionManager: { registerSidebarTab: () => undefined, workflow: createMockWorkflowStore() },
   ui: { settings: createMockSettings() },
   clean: () => undefined,
+  /** Expose the public async load boundary without configuring a graph in a setup-only fixture. */
+  async loadGraphData(_data: unknown) {},
+  /** Return an exact public construction object for queue observation. */
+  async graphToPrompt() {
+    return { workflow: {}, output: {} };
+  },
   registerExtension(ext: MockExtension) {
     this._extensions.push(ext);
   },
@@ -130,9 +145,14 @@ const createMockApp = (): MockApp => ({
       onNodeMoved: () => undefined,
       setDirty: () => undefined,
     };
-    this.extensionManager = { registerSidebarTab: () => undefined };
+    this.extensionManager = {
+      registerSidebarTab: () => undefined,
+      workflow: createMockWorkflowStore(),
+    };
     this.ui = { settings: createMockSettings() };
     this.clean = () => undefined;
+    this.loadGraphData = async (_data: unknown) => undefined;
+    this.graphToPrompt = async () => ({ workflow: {}, output: {} });
   },
 });
 
