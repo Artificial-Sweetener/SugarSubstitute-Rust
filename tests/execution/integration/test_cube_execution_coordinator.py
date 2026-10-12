@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from collections.abc import Mapping
+from typing import cast
 
 import pytest
 
@@ -69,6 +70,74 @@ def test_prepare_executes_embedded_wild_cube_without_catalog_resolution() -> Non
 
     assert prepared.prompt
     assert {owner.instance_id for owner in prepared.node_owners.values()} == {"cube-a"}
+
+
+@pytest.mark.parametrize("explicit", [False, True])
+def test_prepare_preserves_observed_native_proximity_after_boundary_normalization(
+    explicit: bool,
+) -> None:
+    """Translate accepted host names by socket position before canonical execution."""
+
+    workflow = cube_workflow(
+        {"cube-a": provider_document(), "cube-b": consumer_document()},
+        links=[[1, 1, 0, 2, 0, "STRING"]] if explicit else [],
+    )
+    nodes = cast(list[dict[str, object]], workflow["nodes"])
+    cast(list[dict[str, object]], nodes[0]["outputs"])[0]["name"] = "rendered"
+    cast(list[dict[str, object]], nodes[1]["inputs"])[0]["name"] = "source"
+    original = deepcopy(workflow)
+    connection = ProximityConnection(
+        source=CubeBoundaryEndpoint("cube-a", "rendered"),
+        target=CubeBoundaryEndpoint("cube-b", "source"),
+    )
+
+    prepared = CubeExecutionCoordinator(
+        workflow_normalizer=NativeWorkflowNormalizer(_UnexpectedResolver())
+    ).prepare(CubeExecutionRequest(workflow, proximity_connections=(connection,)))
+
+    assert workflow == original
+    assert len(prepared.report.topology_edges) == 1
+    edge = prepared.report.topology_edges[0]
+    assert edge.source == CubeBoundaryEndpoint("cube-a", "output.resource")
+    assert edge.target == CubeBoundaryEndpoint("cube-b", "input.resource")
+    assert edge.origin.value == ("explicit" if explicit else "proximity")
+    assert prepared.prompt["cube-b:__topology__"]["inputs"] == {
+        "resource": ["cube-a:__topology__", 0]
+    }
+
+
+@pytest.mark.parametrize(
+    ("names", "binding", "code"),
+    [
+        (["rendered"], "missing", "execution.topology.unknown_boundary"),
+        (["rendered", "rendered"], "rendered", "execution.topology.ambiguous_boundary"),
+        (["rendered", "removed"], "removed", "execution.topology.missing_boundary"),
+    ],
+)
+def test_prepare_rejects_invalid_observed_boundaries_after_normalization(
+    names: list[str], binding: str, code: str
+) -> None:
+    """Keep normalization from legitimizing unknown, duplicate, or removed sockets."""
+
+    workflow = cube_workflow(
+        {"cube-a": provider_document(), "cube-b": consumer_document()}
+    )
+    nodes = cast(list[dict[str, object]], workflow["nodes"])
+    nodes[0]["outputs"] = [{"name": name, "type": "*"} for name in names]
+    connection = ProximityConnection(
+        source=CubeBoundaryEndpoint("cube-a", binding),
+        target=CubeBoundaryEndpoint("cube-b", "input.resource"),
+    )
+    coordinator = CubeExecutionCoordinator(
+        workflow_normalizer=NativeWorkflowNormalizer(_UnexpectedResolver())
+    )
+
+    with pytest.raises(CubeTopologyError) as captured:
+        coordinator.prepare(
+            CubeExecutionRequest(workflow, proximity_connections=(connection,))
+        )
+
+    assert captured.value.code == code
 
 
 def test_prepare_returns_complete_report_and_never_mutates_saved_workflow() -> None:

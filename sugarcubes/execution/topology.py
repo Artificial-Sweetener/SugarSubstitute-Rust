@@ -39,10 +39,14 @@ class CubeTopologyBuilder:
         self,
         workflow: CanonicalWorkflow,
         proximity_connections: Sequence[ProximityConnection] = (),
+        *,
+        observed_workflow: CanonicalWorkflow | None = None,
     ) -> CubeTopology:
         """Validate projected dependencies before an execution consumer uses them."""
 
-        topology = self.project(workflow, proximity_connections)
+        topology = self.project(
+            workflow, proximity_connections, observed_workflow=observed_workflow
+        )
         _reject_cycles(topology.instances, topology.edges)
         return topology
 
@@ -50,6 +54,8 @@ class CubeTopologyBuilder:
         self,
         workflow: CanonicalWorkflow,
         proximity_connections: Sequence[ProximityConnection] = (),
+        *,
+        observed_workflow: CanonicalWorkflow | None = None,
     ) -> CubeTopology:
         """Describe editable graph facts without imposing execution readiness.
 
@@ -67,6 +73,11 @@ class CubeTopologyBuilder:
         instances = {instance.instance_id: instance for instance in workflow.instances}
         by_node_id = {instance.node_id: instance for instance in workflow.instances}
         root_nodes = _root_nodes(workflow.payload)
+        observed_nodes = (
+            _root_nodes(observed_workflow.payload)
+            if observed_workflow is not None
+            else root_nodes
+        )
         edges: dict[tuple[str, str, str, str], CubeBoundaryConnection] = {}
         for link_index, raw_link in enumerate(_workflow_links(workflow.payload)):
             parsed = _parse_link(raw_link)
@@ -101,11 +112,13 @@ class CubeTopologyBuilder:
                 ConnectionOrigin.EXPLICIT,
             )
         for connection in proximity_connections:
-            _validate_endpoint(connection.source, instances, root_nodes, "outputs")
-            _validate_endpoint(connection.target, instances, root_nodes, "inputs")
             edge = CubeBoundaryConnection(
-                connection.source,
-                connection.target,
+                _project_endpoint(
+                    connection.source, instances, root_nodes, observed_nodes, "outputs"
+                ),
+                _project_endpoint(
+                    connection.target, instances, root_nodes, observed_nodes, "inputs"
+                ),
                 ConnectionOrigin.PROXIMITY,
             )
             edges.setdefault(edge.semantic_key, edge)
@@ -123,10 +136,14 @@ class CubeTopologyBuilder:
 def build_cube_topology(
     workflow: CanonicalWorkflow,
     proximity_connections: Sequence[ProximityConnection] = (),
+    *,
+    observed_workflow: CanonicalWorkflow | None = None,
 ) -> CubeTopology:
     """Build topology through the single authoritative stateless owner."""
 
-    return CubeTopologyBuilder().build(workflow, proximity_connections)
+    return CubeTopologyBuilder().build(
+        workflow, proximity_connections, observed_workflow=observed_workflow
+    )
 
 
 def _workflow_links(payload: Mapping[str, object]) -> Sequence[object]:
@@ -235,13 +252,19 @@ def _boundary_name(
     return name.strip()
 
 
-def _validate_endpoint(
+def _project_endpoint(
     endpoint: CubeBoundaryEndpoint,
     instances: Mapping[str, CubeInstance],
     root_nodes: Mapping[str, Mapping[str, object]],
+    observed_nodes: Mapping[str, Mapping[str, object]],
     direction: str,
-) -> None:
-    """Reject proximity observations that do not address a real Cube boundary."""
+) -> CubeBoundaryEndpoint:
+    """Validate the observed socket and retain its slot through boundary normalization.
+
+    Native labels belong to the submitted workflow. Preparation may replace them
+    with exact portable names, while preserving socket order and node identity.
+    Resolve only a unique observed name rather than guessing from text prefixes.
+    """
 
     instance = instances.get(endpoint.instance_id)
     if instance is None:
@@ -250,7 +273,7 @@ def _validate_endpoint(
             f"Proximity connection references unknown Cube '{endpoint.instance_id}'.",
             (endpoint.instance_id,),
         )
-    node = root_nodes.get(instance.node_id, {})
+    node = observed_nodes.get(instance.node_id, {})
     values = node.get(direction)
     entries = (
         values
@@ -258,19 +281,34 @@ def _validate_endpoint(
         and not isinstance(values, (str, bytes, bytearray))
         else ()
     )
-    names = {
-        name
-        for value in entries
+    slots = [
+        slot
+        for slot, value in enumerate(entries)
         if isinstance(value, Mapping)
         for name in (value.get("name"),)
-        if isinstance(name, str)
-    }
-    if endpoint.binding not in names:
+        if name == endpoint.binding
+    ]
+    if not slots:
         raise CubeTopologyError(
             "execution.topology.unknown_boundary",
             f"Cube '{endpoint.instance_id}' has no {direction[:-1]} '{endpoint.binding}'.",
             (endpoint.instance_id,),
         )
+    if len(slots) != 1:
+        raise CubeTopologyError(
+            "execution.topology.ambiguous_boundary",
+            f"Cube '{endpoint.instance_id}' has duplicate {direction[:-1]} '{endpoint.binding}'.",
+            (endpoint.instance_id,),
+        )
+    return CubeBoundaryEndpoint(
+        endpoint.instance_id,
+        _boundary_name(
+            root_nodes.get(instance.node_id, {}),
+            direction,
+            slots[0],
+            f"Cube '{endpoint.instance_id}' observed {direction[:-1]} '{endpoint.binding}'",
+        ),
+    )
 
 
 def _reject_cycles(
