@@ -6,15 +6,19 @@ use std::{
     num::NonZeroU16,
     os::windows::ffi::OsStrExt,
     sync::{
-        Arc,
+        Arc, Condvar, Mutex,
         atomic::{AtomicU64, Ordering},
     },
 };
 use sugarsubstitute_contracts::{
     configuration::{LoopbackOrigin, Presentation, Theme},
     coordinator_entry::{EntryArgumentsView, EntryEnvironmentView, EntryFrontendView},
+    execution::{
+        Clock, CompletionWake, ExecutionError, JobCompletion, JobOutcome, ScopeId, ScopeSpec,
+        TerminalKind, WaitFuture,
+    },
 };
-type TestResult = Result<(), Box<dyn Error>>;
+type TestResult = Result<(), Box<dyn Error + Send + Sync>>;
 
 struct Release(Arc<AtomicU64>);
 impl sugarsubstitute_contracts::execution::MemoryRelease for Release {
@@ -26,13 +30,13 @@ impl sugarsubstitute_contracts::execution::MemoryRelease for Release {
 fn bytes(units: impl IntoIterator<Item = u16>) -> Vec<u8> {
     units.into_iter().flat_map(u16::to_le_bytes).collect()
 }
-fn path_view(source: &[u8]) -> Result<EntryWindowsPathView<'_>, Box<dyn Error>> {
+fn path_view(source: &[u8]) -> Result<EntryWindowsPathView<'_>, Box<dyn Error + Send + Sync>> {
     Ok(EntryWindowsPathView::from_le_bytes(source)?)
 }
 fn view<'a>(
     connection: EntryConnectionView<'a>,
     directory: EntryWindowsPathView<'a>,
-) -> Result<EntryLaunchRequestView<'a>, Box<dyn Error>> {
+) -> Result<EntryLaunchRequestView<'a>, Box<dyn Error + Send + Sync>> {
     Ok(EntryLaunchRequestView::new(
         connection,
         EntryFrontendView::new(directory, directory, directory, directory),
@@ -136,5 +140,166 @@ fn exhausted_original_claim_rejects_main_projection_without_changing_input() -> 
     assert_eq!(released.load(Ordering::Acquire), 0);
     drop(occupied);
     assert_eq!(released.load(Ordering::Acquire), RESERVATION_BYTES);
+    Ok(())
+}
+
+/// The external clock stays frozen while the real executor owns all work and scopes.
+struct FrozenClock;
+impl Clock for FrozenClock {
+    fn now(&self) -> Moment {
+        Moment::from_nanos(0)
+    }
+    fn sleep_until(&self, _: Moment) -> WaitFuture {
+        Box::pin(std::future::pending())
+    }
+}
+/// Coalesce actual wake revisions without introducing another scheduler or channel.
+#[derive(Default)]
+struct Wake {
+    revision: Mutex<u64>,
+    changed: Condvar,
+}
+impl CompletionWake for Wake {
+    fn wake(&self) -> Result<(), ExecutionError> {
+        let mut revision = self.revision.lock().map_err(|_| {
+            ExecutionError::new(
+                Operation::Infrastructure,
+                Box::new(std::io::Error::other("Configuration test observer poisoned")),
+            )
+        })?;
+        *revision = revision.checked_add(1).ok_or_else(|| {
+            ExecutionError::new(
+                Operation::Infrastructure,
+                Box::new(std::io::Error::other("Configuration test observer exhausted")),
+            )
+        })?;
+        self.changed.notify_all();
+        Ok(())
+    }
+}
+/// Share the same real execution boundary for these two finite preparation owners.
+pub(in crate::production::child) struct Rig {
+    pub(in crate::production::child) owner: sugarsubstitute_execution::ExecutionOwner,
+    pub(in crate::production::child) client: ExecutionClient,
+    pub(in crate::production::child) scope: Scope,
+    wake: Arc<Wake>,
+}
+impl Rig {
+    /// Start one original execution owner, with only clock/wake faked externally.
+    pub(in crate::production::child) fn new() -> Result<Self, Box<dyn Error + Send + Sync>> {
+        let wake = Arc::new(Wake::default());
+        let owner =
+            sugarsubstitute_execution::ExecutionOwner::new(Arc::new(FrozenClock), wake.clone())?;
+        let client = owner.client();
+        let scope =
+            client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
+        Ok(Self { owner, client, scope, wake })
+    }
+    /// Await the actual matching terminal notice and retained typed completion.
+    pub(in crate::production::child) fn completion<T: Send + 'static, E: Send + 'static>(
+        &self,
+        job: &mut OwnedJob<T, E>,
+    ) -> Result<JobCompletion<T, E>, Box<dyn Error + Send + Sync>> {
+        let mut noticed = false;
+        let until = std::time::Instant::now()
+            .checked_add(std::time::Duration::from_secs(10))
+            .ok_or("Configuration test observation cutoff overflow")?;
+        loop {
+            let before = *self.wake.revision.lock().map_err(|_| "Wake poisoned")?;
+            let batch = self.client.drain_completions(std::num::NonZeroUsize::MIN)?;
+            for notice in batch.notifications {
+                if (notice.scope_id, notice.job_id) == (job.scope_id(), job.spec().id) {
+                    noticed = true;
+                }
+            }
+            if noticed && let Some(completed) = job.try_take_completion() {
+                return Ok(completed);
+            }
+            let revision = self.wake.revision.lock().map_err(|_| "Wake poisoned")?;
+            let remaining = until
+                .checked_duration_since(std::time::Instant::now())
+                .ok_or("Actual worker completion absent")?;
+            let (next, timeout) = self
+                .wake
+                .changed
+                .wait_timeout_while(revision, remaining, |revision| *revision == before)
+                .map_err(|_| "Wake wait poisoned")?;
+            if timeout.timed_out() && *next == before {
+                return Err("Actual worker completion absent".into());
+            }
+        }
+    }
+}
+/// Construct only inert requested data using the actual worker's original memory.
+pub(in crate::production::child) fn main_input(
+    context: &JobContext,
+) -> Result<PreparedMainInput, Box<dyn Error + Send + Sync>> {
+    let directory: Vec<_> = "E:\\profile".encode_utf16().flat_map(u16::to_le_bytes).collect();
+    let path = EntryWindowsPathView::from_le_bytes(&directory)?;
+    let requested = EntryLaunchRequestView::new(
+        EntryConnectionView::Attached(LoopbackOrigin::parse("http://127.0.0.1:8188", 8188)?),
+        EntryFrontendView::new(path, path, path, path),
+        path,
+        "Profile_1",
+        Presentation::new("ja", Theme::Light, true)?,
+        EntryEnvironmentView::from_le_bytes(&[0, 0, 0, 0])?,
+    )?;
+    Ok(project_main(requested, context.memory())?)
+}
+
+/// The original invalid combination rejects synchronously; the same ID then executes conversion.
+#[test]
+fn finite_projection_spec_rejects_startup_then_admits_original_lifecycle_conversion() -> TestResult
+{
+    let rig = Rig::new()?;
+    let original = Moment::from_nanos(100);
+    let spec = request(JobId::new(1)?, original);
+    let entered = Arc::new(AtomicU64::new(0));
+    let rejected_calls = entered.clone();
+    let rejected = rig.client.submit_blocking(
+        &rig.scope,
+        JobSpec { operation: Operation::Startup, ..spec },
+        move |_| {
+            rejected_calls.fetch_add(1, Ordering::AcqRel);
+            Ok::<_, ProjectionError>(())
+        },
+    );
+    assert!(matches!(
+        rejected,
+        Err(AdmissionError::WrongClass {
+            operation: Operation::Startup,
+            class: JobClass::InfrastructureLifecycle
+        })
+    ));
+    assert_eq!(entered.load(Ordering::Acquire), 0);
+    assert_eq!(rig.scope.snapshot().reserved_bytes, 0);
+    let mut job = rig.client.submit_blocking(&rig.scope, spec, move |context| {
+        checkpoint(&context)?;
+        let claim = context.memory().claim(PROJECTION_BYTES).map_err(ProjectionError::Memory)?;
+        let directory = bytes("E:\\profile".encode_utf16());
+        let origin = LoopbackOrigin::parse("http://127.0.0.1:8188", 8188)?;
+        let requested = view(EntryConnectionView::Attached(origin), path_view(&directory)?)?;
+        let configuration = project(requested)?;
+        let main = project_main(requested, context.memory())?;
+        checkpoint(&context)?;
+        Ok::<_, Box<dyn Error + Send + Sync>>((configuration, main, claim))
+    })?;
+    let completed = rig.completion(&mut job)?;
+    assert_eq!(completed.spec, spec);
+    assert_eq!(completed.spec.deadline, Some(original));
+    assert_eq!(completed.outcome.kind(), TerminalKind::Success);
+    assert_eq!(completed.memory.bytes(), RESERVATION_BYTES);
+    let JobOutcome::Success((configuration, main, claim)) = completed.outcome else {
+        return Err("Conversion failed".into());
+    };
+    assert_eq!(configuration.profile().as_str(), "Profile_1");
+    assert_eq!(configuration.presentation(), Presentation::new("ja", Theme::Light, true)?);
+    assert_eq!(main.directory(), Path::new("E:\\profile"));
+    drop((completed.memory, job));
+    let Rig { owner, scope, .. } = rig;
+    drop(owner);
+    assert_eq!(scope.snapshot().reserved_bytes, RESERVATION_BYTES);
+    drop((configuration, main, claim));
+    assert_eq!(scope.snapshot().reserved_bytes, 0);
     Ok(())
 }

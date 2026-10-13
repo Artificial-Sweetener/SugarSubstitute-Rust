@@ -73,7 +73,7 @@ pub(super) fn submit(
         scope,
         JobSpec {
             id,
-            operation: Operation::Startup,
+            operation: Operation::Infrastructure,
             class: JobClass::InfrastructureOrdinary,
             deadline: Some(original),
             reservation_bytes: MainWindowRequest::KNOWN_STORAGE_BYTES,
@@ -180,3 +180,7 @@ fn copy(value: &str) -> std::result::Result<String, MainError> {
     owned.push_str(value);
     Ok(owned)
 }
+
+#[cfg(test)]
+#[path = "worker/tests.rs"]
+mod tests;

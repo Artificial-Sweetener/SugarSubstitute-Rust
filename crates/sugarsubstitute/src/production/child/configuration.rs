@@ -174,38 +174,39 @@ pub(super) fn submit(
     source: AuthenticatedStartupSnapshot,
     original: Moment,
 ) -> Result<OwnedJob<PreparedChildConfiguration, ChildConfigurationFailure>, AdmissionError> {
-    client.submit_blocking(
-        scope,
-        JobSpec {
-            id,
-            operation: Operation::Startup,
-            class: JobClass::InfrastructureLifecycle,
-            deadline: Some(original),
-            reservation_bytes: RESERVATION_BYTES,
-            replacement: None,
-        },
-        move |context| {
-            let prepared = (|| {
-                checkpoint(&context)?;
-                let claim =
-                    context.memory().claim(PROJECTION_BYTES).map_err(ProjectionError::Memory)?;
-                let view = source.view().map_err(ProjectionError::Source)?;
-                let configuration = project(view)?;
-                let main = project_main(view, context.memory())?;
-                checkpoint(&context)?;
-                Ok::<_, ProjectionError>((configuration, main, claim))
-            })();
-            match prepared {
-                Ok((configuration, main, claim)) => Ok(PreparedChildConfiguration {
-                    configuration,
-                    main,
-                    source: Some(source),
-                    _allocation: claim,
-                }),
-                Err(cause) => Err(ChildConfigurationFailure { cause, source: Some(source) }),
-            }
-        },
-    )
+    client.submit_blocking(scope, request(id, original), move |context| {
+        let prepared = (|| {
+            checkpoint(&context)?;
+            let claim =
+                context.memory().claim(PROJECTION_BYTES).map_err(ProjectionError::Memory)?;
+            let view = source.view().map_err(ProjectionError::Source)?;
+            let configuration = project(view)?;
+            let main = project_main(view, context.memory())?;
+            checkpoint(&context)?;
+            Ok::<_, ProjectionError>((configuration, main, claim))
+        })();
+        match prepared {
+            Ok((configuration, main, claim)) => Ok(PreparedChildConfiguration {
+                configuration,
+                main,
+                source: Some(source),
+                _allocation: claim,
+            }),
+            Err(cause) => Err(ChildConfigurationFailure { cause, source: Some(source) }),
+        }
+    })
+}
+
+/// Keep finite conversion on its original reserved lifecycle worker capacity.
+pub(super) fn request(id: JobId, original: Moment) -> JobSpec {
+    JobSpec {
+        id,
+        operation: Operation::Infrastructure,
+        class: JobClass::InfrastructureLifecycle,
+        deadline: Some(original),
+        reservation_bytes: RESERVATION_BYTES,
+        replacement: None,
+    }
 }
 
 fn checkpoint(context: &JobContext) -> Result<(), ProjectionError> {
@@ -265,4 +266,4 @@ fn path(value: EntryWindowsPathView<'_>) -> Result<PathBuf, ProjectionError> {
 
 #[cfg(test)]
 #[path = "configuration/tests.rs"]
-mod tests;
+pub(super) mod tests;
