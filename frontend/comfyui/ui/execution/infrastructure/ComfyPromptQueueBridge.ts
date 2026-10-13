@@ -30,6 +30,8 @@ export interface ComfyPromptQueueApi {
   queuePrompt?: QueuePrompt;
 }
 
+export type ComfyPromptSubmission = (payload: unknown) => Promise<unknown>;
+
 /** Describe one captured submission without sharing mutable context between queue requests. */
 export interface PromptQueueObservation {
   prepared(payload: unknown): void;
@@ -51,7 +53,8 @@ export interface ComfyPromptQueueBridgeOptions {
   executeDirect?(
     position: number,
     payload: unknown,
-    options?: ComfyPromptQueueOptions,
+    options: ComfyPromptQueueOptions | undefined,
+    submit: ComfyPromptSubmission,
   ): Promise<unknown>;
   shouldExecuteDirect?(payload: unknown): boolean;
   observer?: PromptQueueObserver;
@@ -70,9 +73,7 @@ export class ComfyPromptQueueBridge {
   readonly #preflight: () => void;
   readonly #transform: (payload: unknown) => Promise<unknown>;
   readonly #prepare: (payload: unknown) => unknown;
-  readonly #executeDirect:
-    | ((position: number, payload: unknown, options?: ComfyPromptQueueOptions) => Promise<unknown>)
-    | null;
+  readonly #executeDirect: NonNullable<ComfyPromptQueueBridgeOptions['executeDirect']> | null;
   readonly #shouldExecuteDirect: (payload: unknown) => boolean;
   readonly #observer: PromptQueueObserver | undefined;
   #installation: QueueInstallation | null = null;
@@ -117,7 +118,9 @@ export class ComfyPromptQueueBridge {
           }
           const result =
             direct && this.#executeDirect
-              ? await this.#executeDirect(position, payload, options)
+              ? await this.#executeDirect(position, payload, options, (prepared) =>
+                  original.call(this.#api, position, prepared, options),
+                )
               : await original.call(this.#api, position, payload, options);
           if (installation.active && observation)
             this.#observe('accepted', () => observation?.accepted(result));

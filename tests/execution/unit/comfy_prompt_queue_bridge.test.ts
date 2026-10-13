@@ -86,7 +86,7 @@ test('queues directly when SugarCubes owns the request and preserves legacy fall
   await api.queuePrompt(0, 'substitute');
 
   expect(executeDirect).toHaveBeenCalledTimes(1);
-  expect(executeDirect).toHaveBeenCalledWith(0, { output: {} }, options);
+  expect(executeDirect).toHaveBeenCalledWith(0, { output: {} }, options, expect.any(Function));
   expect(transform).toHaveBeenCalledWith('substitute');
   expect(queuePrompt).toHaveBeenCalledWith(0, 'substitute', undefined);
   bridge.dispose();

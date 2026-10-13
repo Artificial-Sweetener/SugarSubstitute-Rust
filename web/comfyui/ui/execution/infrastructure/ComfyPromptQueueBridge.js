@@ -66,7 +66,7 @@ export class ComfyPromptQueueBridge {
                         observation = null;
                     }
                     const result = direct && this.#executeDirect
-                        ? await this.#executeDirect(position, payload, options)
+                        ? await this.#executeDirect(position, payload, options, (prepared) => original.call(this.#api, position, prepared, options))
                         : await original.call(this.#api, position, payload, options);
                     if (installation.active && observation)
                         this.#observe('accepted', () => observation?.accepted(result));

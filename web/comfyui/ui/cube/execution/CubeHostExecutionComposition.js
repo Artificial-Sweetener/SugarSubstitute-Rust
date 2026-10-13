@@ -1,4 +1,5 @@
 import { ComfyPromptQueueBridge } from '../../execution/infrastructure/ComfyPromptQueueBridge.js';
+import { ComfyDirectPromptTransport } from '../../execution/infrastructure/ComfyDirectPromptTransport.js';
 import { CubePromptPipeline } from './CubePromptPipeline.js';
 import { CubeOutputPromptAdapter } from './CubeOutputPromptAdapter.js';
 import { createCubeDirectExecution } from './CubeDirectExecutionService.js';
@@ -18,13 +19,14 @@ export function createCubeHostExecution(options) {
         getGraph: options.getGraph,
         getProximityMatches: options.getProximityMatches,
     });
+    const transport = new ComfyDirectPromptTransport({ api: options.api });
     const queue = new ComfyPromptQueueBridge({
         api: options.api,
         observer: options.observer,
         preflight: options.preflight,
         prepare: options.prepareRelations,
         transform: (payload) => pipeline.transform(payload),
-        executeDirect: (position, payload, queueOptions) => direct.queue(position, payload, queueOptions),
+        executeDirect: (position, payload, queueOptions, submit) => transport.queue(payload, () => direct.queue(position, payload, queueOptions), submit),
         shouldExecuteDirect: (payload) => direct.owns(payload),
     });
     return queue;
