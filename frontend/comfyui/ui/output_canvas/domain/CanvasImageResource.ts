@@ -54,6 +54,8 @@ export interface CanvasImageLoadPort<Payload, Handle> {
 export interface CanvasImageFrame<Handle> {
   readonly key: string;
   readonly runOrder: number;
+  /** Keep one preview composition stable across transport frames and separate from final peers. */
+  readonly previewLane: string | null;
   readonly selection: CanvasSelection;
   readonly preview: boolean;
   readonly handle: Handle;

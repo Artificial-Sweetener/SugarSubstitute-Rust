@@ -19,10 +19,17 @@ export function canvasCameraGeometry(image, viewport, density) {
     if (!image ||
         ![image.width, image.height, viewport.width, viewport.height, density].every((value) => Number.isFinite(value) && value > 0))
         return null;
-    const fit = Math.min(viewport.width / image.width, viewport.height / image.height, 1 / density);
+    const fit = Math.min(viewport.width / image.width, viewport.height / image.height);
     if (!Number.isSafeInteger(image.width) ||
         !Number.isSafeInteger(image.height) ||
-        ![fit, 10 / density, (image.width * 10) / density, (image.height * 10) / density].every((value) => Number.isFinite(value) && value > 0))
+        ![
+            fit,
+            image.width * fit,
+            image.height * fit,
+            10 / density,
+            (image.width * 10) / density,
+            (image.height * 10) / density,
+        ].every((value) => Number.isFinite(value) && value > 0))
         return null;
     return Object.freeze({
         image: Object.freeze({ ...image }),
@@ -34,9 +41,9 @@ export function canvasCameraGeometry(image, viewport, density) {
 export function sameCanvasScale(left, right) {
     return Math.abs(left - right) <= Math.max(left, right, Number.EPSILON) * 1e-8;
 }
-/** Fit small images without upscaling past one source pixel per physical pixel. */
+/** Fill the available viewport while preserving aspect ratio, including enlargement of previews. */
 export function canvasFitScale(geometry) {
-    return Math.min(geometry.viewport.width / geometry.image.width, geometry.viewport.height / geometry.image.height, 1 / geometry.density);
+    return Math.min(geometry.viewport.width / geometry.image.width, geometry.viewport.height / geometry.image.height);
 }
 /** Report a truthful mode for this image's decoded pixels. */
 export function canvasCameraMode(scale, geometry) {
@@ -65,7 +72,7 @@ function constrainedAxis(translation, imageExtent, viewportExtent) {
 }
 /** Settle transient anchored slack through one shared scale and pan policy. */
 export function settleCanvasCamera(camera, geometry) {
-    const scale = Math.max(canvasFitScale(geometry), Math.min(10 / geometry.density, camera.scale));
+    const scale = constrainedScale(camera.scale, geometry);
     return Object.freeze({
         scale,
         x: constrainedAxis(camera.x, geometry.image.width * scale, geometry.viewport.width),
@@ -77,7 +84,7 @@ export function settleCanvasCamera(camera, geometry) {
 export function anchoredCanvasCamera(camera, scale, anchor, geometry) {
     if (![scale, anchor.x, anchor.y].every(Number.isFinite) || scale <= 0)
         throw new RangeError('Canvas anchored scale or position is invalid.');
-    const next = Math.max(canvasFitScale(geometry), Math.min(10 / geometry.density, scale));
+    const next = constrainedScale(scale, geometry);
     return Object.freeze({
         scale: next,
         x: anchor.x - ((anchor.x - camera.x) * next) / camera.scale,
@@ -117,4 +124,11 @@ export function canvasWheelFactor(delta, units, viewportHeight) {
         return 1;
     const pixels = delta * (units === 1 ? 16 : units === 2 ? viewportHeight : 1);
     return Math.pow(1.25, -Math.max(-1200, Math.min(1200, pixels)) / 100);
+}
+/** Keep Fit and native reachable when a small image's Fit exceeds physical 1:1. */
+function constrainedScale(scale, geometry) {
+    const fit = canvasFitScale(geometry);
+    const minimum = Math.min(fit, 1 / geometry.density);
+    const maximum = Math.max(fit, 10 / geometry.density);
+    return Math.max(minimum, Math.min(maximum, scale));
 }

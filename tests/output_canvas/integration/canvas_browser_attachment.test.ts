@@ -157,6 +157,51 @@ describe('composed browser canvas attachment', () => {
     expect(f.errors).toEqual([]);
   });
 
+  test('starts a newly displayed preview fitted without inheriting or overwriting final inspection', async () => {
+    const f = fixture();
+    const surface = new BrowserCanvasAttachment(f.root, f.options);
+    await f.loader.ready(0);
+    await f.command(surface, { type: 'native' });
+    f.frames.advance(45);
+    const entry = f.catalog.entries[0]!;
+    const preview = {
+      sessionId: f.catalog.result.context.sessionId,
+      generation: f.catalog.generation,
+      promptId: f.catalog.result.outputs[0]!.provenance.promptId!,
+      sourceId: entry.source.id,
+      runOrder: 1,
+      sequence: 1,
+      token: 'new-preview',
+      dimensions: { width: 512, height: 288 },
+    };
+    f.replace({
+      ...f.catalog,
+      result: { ...f.catalog.result, preview },
+      entries: [{ ...entry, preview }, ...f.catalog.entries.slice(1)],
+    });
+    surface.refresh();
+    surface.receive(preview, new Blob(['preview']));
+    f.clock.advance(100);
+    expect(surface.port.read().zoom.mode).toBe('native');
+    await f.loader.ready(1, preview.dimensions);
+    f.clock.advance(100);
+    expect(surface.port.read().zoom.mode).toBe('fit');
+    expect(surface.port.read().zoom.physicalScale).toBe(800 / 512);
+    await f.command(surface, { type: 'zoom', factor: 2 });
+    f.frames.advance(45);
+    f.replace(f.catalog);
+    surface.refresh();
+    await f.command(surface, {
+      type: 'select',
+      selection: { sourceId: entry.source.id, batchIndex: 0 },
+    });
+    await f.loader.ready(2);
+    f.clock.advance(100);
+    expect(surface.port.read().zoom.mode).toBe('native');
+    surface.dispose();
+    expect(f.errors).toEqual([]);
+  });
+
   test('mounts full-fidelity admitted handles and controls with literal source labels and actual zoom status', async () => {
     const f = fixture();
     const surface = new BrowserCanvasAttachment(f.root, f.options);

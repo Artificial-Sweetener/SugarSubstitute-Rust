@@ -1,5 +1,6 @@
 {
   "testEnvironment": "jsdom",
+  "maxWorkers": 2,
   "setupFiles": [
     "<rootDir>/tests/frontend_core/support/browser_css.ts",
     "<rootDir>/tests/frontend_core/support/browser_forms.ts"

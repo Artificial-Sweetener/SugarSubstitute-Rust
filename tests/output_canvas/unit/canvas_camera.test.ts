@@ -54,6 +54,21 @@ function geometry(
 }
 
 describe('browser canvas camera', () => {
+  test.each([1, 2])(
+    'fills the viewport with a small preview and keeps native distinct at density %s',
+    (density) => {
+      const g = geometry(512, 288, density, 1024, 576);
+      const fit = centeredCanvasCamera(g);
+      expect(fit).toEqual({ scale: 2, x: 0, y: 0, mode: 'fit' });
+      const native = doubleClickCanvasCamera(fit, { x: 512, y: 288 }, g);
+      expect(native.mode).toBe('native');
+      expect(native.scale * density).toBe(1);
+      expect(doubleClickCanvasCamera(native, { x: 512, y: 288 }, g)).toEqual(fit);
+      expect(settleCanvasCamera(native, g)).toEqual(native);
+      expect(zoomCanvasCamera(native, 100, { x: 512, y: 288 }, g).scale).toBe(2);
+    },
+  );
+
   test.each([1, 1.25, 1.5, 2])('uses physical native pixels at density %s', (density) => {
     const g = geometry(4000, 2000, density);
     expect(centeredCanvasCamera(g, 'native').scale * density).toBe(1);
@@ -139,7 +154,7 @@ describe('browser canvas camera', () => {
     expect(panCanvasCamera(fit, { x: 1000, y: 1000 }, g)).toEqual(fit);
   });
 
-  test('toggles Fit/native and keeps tiny images centered without upscaling or oscillation', () => {
+  test('toggles Fit/native for large and tiny images without oscillation', () => {
     const g = geometry();
     const fit = centeredCanvasCamera(g);
     const native = doubleClickCanvasCamera(fit, { x: 350, y: 200 }, g);
@@ -147,8 +162,10 @@ describe('browser canvas camera', () => {
     expect(doubleClickCanvasCamera(native, { x: 350, y: 200 }, g)).toEqual(fit);
     const tiny = geometry(100, 50, 2);
     const smallFit = centeredCanvasCamera(tiny);
-    expect(smallFit.scale).toBe(0.5);
-    expect(doubleClickCanvasCamera(smallFit, { x: 0, y: 0 }, tiny)).toEqual(smallFit);
+    expect(smallFit.scale).toBe(10);
+    const smallNative = doubleClickCanvasCamera(smallFit, { x: 0, y: 0 }, tiny);
+    expect(smallNative).toMatchObject({ scale: 0.5, mode: 'native' });
+    expect(doubleClickCanvasCamera(smallNative, { x: 0, y: 0 }, tiny)).toEqual(smallFit);
   });
 
   test('projects image-relative magnification conservatively and never borrows a native label', () => {
@@ -202,18 +219,18 @@ describe('browser canvas camera', () => {
     for (const view of [a, b]) {
       store.synchronize(view, 0, [slot]);
       expect(store.presentRun(view, 1)).toBe(true);
-      store.capture(view, slot, native, g);
+      store.capture(view, slot, native, g, null);
     }
     expect(store.presentRun(a, 2)).toBe(true);
-    expect(store.camera(a, slot, g).mode).toBe('fit');
-    expect(store.camera(b, slot, g)).toEqual(native);
-    store.capture(a, slot, native, g);
+    expect(store.camera(a, slot, g, null).mode).toBe('fit');
+    expect(store.camera(b, slot, g, null)).toEqual(native);
+    store.capture(a, slot, native, g, null);
     expect(store.presentRun(a, 2)).toBe(false);
     expect(store.presentRun(a, 1)).toBe(false);
-    expect(store.camera(a, slot, g)).toEqual(native);
+    expect(store.camera(a, slot, g, null)).toEqual(native);
     store.synchronize(a, 1, [slot]);
     expect(store.presentRun(a, 1)).toBe(true);
-    expect(store.camera(a, slot, g).mode).toBe('fit');
+    expect(store.camera(a, slot, g, null).mode).toBe('fit');
     store.dispose();
   });
 
@@ -227,22 +244,22 @@ describe('browser canvas camera', () => {
     const native = centeredCanvasCamera(g, 'native');
     store.synchronize(a, 0, [first, second]);
     store.synchronize(b, 0, [first, second]);
-    store.capture(a, first, native, g);
-    expect(store.camera(a, second, g)).toEqual(native);
-    expect(store.camera(b, first, g).mode).toBe('fit');
-    store.setLinked(a, false, { selection: first, camera: native, geometry: g });
-    expect(store.camera(a, second, g).mode).toBe('fit');
-    store.capture(a, first, native, g);
-    expect(store.camera(a, first, g)).toEqual(native);
-    expect(store.camera(a, second, g).mode).toBe('fit');
+    store.capture(a, first, native, g, null);
+    expect(store.camera(a, second, g, null)).toEqual(native);
+    expect(store.camera(b, first, g, null).mode).toBe('fit');
+    store.setLinked(a, false, { selection: first, camera: native, geometry: g, previewLane: null });
+    expect(store.camera(a, second, g, null).mode).toBe('fit');
+    store.capture(a, first, native, g, null);
+    expect(store.camera(a, first, g, null)).toEqual(native);
+    expect(store.camera(a, second, g, null).mode).toBe('fit');
     store.synchronize(a, 0, [second]);
-    expect(store.camera(a, first, g).mode).toBe('fit');
+    expect(store.camera(a, first, g, null).mode).toBe('fit');
     store.setLinked(a, true, null);
-    expect(store.camera(a, second, g)).toEqual(native);
+    expect(store.camera(a, second, g, null)).toEqual(native);
     store.synchronize(a, 1, [first, second]);
-    expect(store.camera(a, first, g).mode).toBe('fit');
+    expect(store.camera(a, first, g, null).mode).toBe('fit');
     store.remove(a);
-    expect(() => store.camera(a, first, g)).toThrow('unavailable');
+    expect(() => store.camera(a, first, g, null)).toThrow('unavailable');
     store.dispose();
   });
 

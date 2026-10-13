@@ -319,6 +319,7 @@ export class CanvasImageResources<Payload, Handle> {
         frame: Object.freeze({
           key: requested.key,
           runOrder: requested.runOrder,
+          previewLane: requested.preview ? requested.lane : null,
           selection: requested.selection,
           preview: requested.preview,
           handle: image.handle,

@@ -46,8 +46,7 @@ export interface CanvasCameraControllerOptions {
 /** Keep browser input and DOM transforms outside authoritative camera and inspection transitions. */
 export class CanvasCameraController {
   readonly #transition: CanvasCameraTransition;
-  #target: { readonly selection: CanvasSelection; readonly geometry: CanvasCameraGeometry } | null =
-    null;
+  #target: Omit<CanvasInspectionTarget, 'camera'> | null = null;
   #disposed = false;
   #comparison = false;
 
@@ -56,7 +55,13 @@ export class CanvasCameraController {
     this.#transition = new CanvasCameraTransition(options.clock, (camera) => {
       const target = this.#target;
       if (!target || this.#disposed) return;
-      options.inspections.capture(options.view, target.selection, camera, target.geometry);
+      options.inspections.capture(
+        options.view,
+        target.selection,
+        camera,
+        target.geometry,
+        target.previewLane,
+      );
       options.present(Object.freeze({ ...target, camera }));
     });
   }
@@ -67,11 +72,17 @@ export class CanvasCameraController {
     return this.#target && camera ? Object.freeze({ ...this.#target, camera }) : null;
   }
 
-  /** Fit new-Run pixels; restore same-Run inspection against settled decoded geometry. */
-  show(selection: CanvasSelection, geometry: CanvasCameraGeometry, runOrder: number): void {
+  /** Fit fresh preview compositions and new Runs; preserve inspection within one asset's updates. */
+  show(
+    selection: CanvasSelection,
+    geometry: CanvasCameraGeometry,
+    runOrder: number,
+    previewLane: string | null,
+  ): void {
     if (this.#disposed) return;
     const freshRun = this.options.inspections.presentRun(this.options.view, runOrder);
-    const previous = freshRun ? null : this.read();
+    const displayed = this.read();
+    const previous = freshRun || displayed?.previewLane !== previewLane ? null : displayed;
     const sameSlot =
       previous?.selection.sourceId === selection.sourceId &&
       previous.selection.batchIndex === selection.batchIndex;
@@ -94,8 +105,8 @@ export class CanvasCameraController {
               captureCanvasInspection(previous.camera, previous.geometry),
               geometry,
             )
-          : this.options.inspections.camera(this.options.view, selection, geometry);
-    this.#target = { selection: Object.freeze({ ...selection }), geometry };
+          : this.options.inspections.camera(this.options.view, selection, geometry, previewLane);
+    this.#target = { selection: Object.freeze({ ...selection }), geometry, previewLane };
     this.#transition.set(camera);
   }
 
@@ -111,7 +122,12 @@ export class CanvasCameraController {
     const target = this.#target;
     if (target)
       this.#transition.set(
-        this.options.inspections.camera(this.options.view, target.selection, target.geometry),
+        this.options.inspections.camera(
+          this.options.view,
+          target.selection,
+          target.geometry,
+          target.previewLane,
+        ),
       );
   }
 

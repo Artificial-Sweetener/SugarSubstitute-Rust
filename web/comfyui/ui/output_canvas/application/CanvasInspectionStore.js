@@ -29,6 +29,7 @@ export class CanvasInspectionStore {
                 linked: true,
                 shared: null,
                 individual: new Map(),
+                previews: new Map(),
             };
             this.#views.set(view, record);
         }
@@ -36,6 +37,9 @@ export class CanvasInspectionStore {
         for (const slot of record.individual.keys())
             if (!valid.has(slot))
                 record.individual.delete(slot);
+        for (const slot of record.previews.keys())
+            if (!valid.has(slot))
+                record.previews.delete(slot);
     }
     /** Retire previous-Run cameras only when a newer Run's pixels are actually presented. */
     presentRun(view, runOrder) {
@@ -45,6 +49,7 @@ export class CanvasInspectionStore {
         record.presentedRun = runOrder;
         record.shared = null;
         record.individual.clear();
+        record.previews.clear();
         return true;
     }
     /** Change link policy without overwriting saved independent slot cameras. */
@@ -52,7 +57,7 @@ export class CanvasInspectionStore {
         const record = this.#require(view);
         if (record.linked === linked)
             return;
-        if (current) {
+        if (current && current.previewLane === null) {
             const inspection = captureCanvasInspection(current.camera, current.geometry);
             const key = selectionKey(current.selection);
             if (linked)
@@ -62,19 +67,28 @@ export class CanvasInspectionStore {
         }
         record.linked = linked;
     }
-    /** Save accepted inspection without copying a camera into another workflow or view. */
-    capture(view, slot, camera, geometry) {
+    /** Save preview inspection within its composition and final inspection within its link group. */
+    capture(view, slot, camera, geometry, previewLane) {
         const record = this.#require(view);
         const inspection = captureCanvasInspection(camera, geometry);
-        if (record.linked)
+        if (previewLane !== null)
+            record.previews.set(selectionKey(slot), { lane: previewLane, inspection });
+        else if (record.linked)
             record.shared = inspection;
         else
             record.individual.set(selectionKey(slot), inspection);
     }
-    /** Reproject normalized inspection against actual decoded dimensions and current density. */
-    camera(view, slot, geometry) {
+    /** Fit new preview compositions independently of existing linked final inspection. */
+    camera(view, slot, geometry, previewLane) {
         const record = this.#require(view);
-        const inspection = record.linked ? record.shared : record.individual.get(selectionKey(slot));
+        const preview = record.previews.get(selectionKey(slot));
+        const inspection = previewLane !== null
+            ? preview?.lane === previewLane
+                ? preview.inspection
+                : null
+            : record.linked
+                ? record.shared
+                : record.individual.get(selectionKey(slot));
         return inspection
             ? projectCanvasInspection(inspection, geometry)
             : centeredCanvasCamera(geometry);

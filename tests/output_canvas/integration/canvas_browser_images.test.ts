@@ -32,6 +32,7 @@ function frame(key: string, width = 3840, height = 2160): CanvasImageFrame<HTMLI
   return {
     key,
     runOrder: 1,
+    previewLane: null,
     selection: { sourceId: outputSourceId(key), batchIndex: 0 },
     preview: false,
     dimensions: { width, height },
@@ -49,6 +50,7 @@ describe('browser image presentation', () => {
     surface.images(image, null);
     for (let step = 0; step < 100; step++)
       surface.camera({
+        previewLane: null,
         selection: image.selection,
         geometry,
         camera: { scale: 2, x: -step, y: -20, mode: 'custom' },
@@ -77,6 +79,7 @@ describe('browser image presentation', () => {
     const geometry = canvasCameraGeometry(a.dimensions, { width: 800, height: 600 }, 2)!;
     surface.images(a, b);
     surface.camera({
+      previewLane: null,
       selection: a.selection,
       geometry,
       camera: { scale: 0.5, x: 0, y: 0, mode: 'native' },
@@ -107,8 +110,18 @@ describe('browser image presentation', () => {
     const geometry = canvasCameraGeometry(a.dimensions, { width: 800, height: 600 }, 1)!;
     first.images(a, null);
     second.images(b, null);
-    first.camera({ selection: a.selection, geometry, camera: centeredCanvasCamera(geometry) });
-    second.camera({ selection: b.selection, geometry, camera: centeredCanvasCamera(geometry) });
+    first.camera({
+      previewLane: null,
+      selection: a.selection,
+      geometry,
+      camera: centeredCanvasCamera(geometry),
+    });
+    second.camera({
+      previewLane: null,
+      selection: b.selection,
+      geometry,
+      camera: centeredCanvasCamera(geometry),
+    });
     first.camera(null);
     expect(clock.pending).toBe(1);
     expect(first.contains({ x: 100, y: 100 })).toBe(false);
