@@ -18,6 +18,7 @@ import type { ComfyGraph } from '../../types/graph.js';
 import type { CubeNode } from '../node/ComfyCubeNodeFactory.js';
 import type { NativeSubgraphBoundaryResolver } from '../graph/NativeSubgraphBoundaryResolver.js';
 import { ComfyPromptQueueBridge } from '../../execution/infrastructure/ComfyPromptQueueBridge.js';
+import { ComfyDirectPromptTransport } from '../../execution/infrastructure/ComfyDirectPromptTransport.js';
 import type { ComfyPromptQueueApi } from '../../execution/infrastructure/ComfyPromptQueueBridge.js';
 import type { PromptQueueObserver } from '../../execution/infrastructure/ComfyPromptQueueBridge.js';
 import { CubePromptPipeline } from './CubePromptPipeline.js';
@@ -53,14 +54,15 @@ export function createCubeHostExecution(options: CubeHostExecutionOptions): Comf
     getGraph: options.getGraph,
     getProximityMatches: options.getProximityMatches,
   });
+  const transport = new ComfyDirectPromptTransport({ api: options.api });
   const queue = new ComfyPromptQueueBridge({
     api: options.api as ComfyPromptQueueApi,
     observer: options.observer,
     preflight: options.preflight,
     prepare: options.prepareRelations,
     transform: (payload) => pipeline.transform(payload),
-    executeDirect: (position, payload, queueOptions) =>
-      direct.queue(position, payload, queueOptions),
+    executeDirect: (position, payload, queueOptions, submit) =>
+      transport.queue(payload, () => direct.queue(position, payload, queueOptions), submit),
     shouldExecuteDirect: (payload) => direct.owns(payload),
   });
   return queue;
