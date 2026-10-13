@@ -88,6 +88,19 @@ export class CanvasImageBudget {
     );
   }
 
+  /** Reclassify an already admitted frame without allocating or bypassing the current allowance. */
+  reclassify(reservation: CanvasImageReservation, thumbnail: boolean): boolean {
+    const admission = this.#reservations.get(reservation);
+    if (
+      !admission ||
+      this.estimatedBytes > this.#allowance ||
+      (thumbnail && !this.thumbnailsAllowed)
+    )
+      return false;
+    this.#reservations.set(reservation, { ...admission, thumbnail });
+    return true;
+  }
+
   /** Release obsolete accounting exactly once, including late cancellation cleanup. */
   release(reservation: CanvasImageReservation): void {
     const admission = this.#reservations.get(reservation);

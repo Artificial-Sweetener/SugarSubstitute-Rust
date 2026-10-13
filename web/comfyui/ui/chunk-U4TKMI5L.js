@@ -1,12 +1,12 @@
 import {
   CanvasSourceTabs
-} from "./chunk-5BXDB3BG.js";
+} from "./chunk-N7VBIF5C.js";
 import {
   CanvasWipeSeparator
 } from "./chunk-7LFGLXDD.js";
 import {
   CanvasComparisonNavigation
-} from "./chunk-BESRJTPC.js";
+} from "./chunk-DKQ6J2X7.js";
 import {
   CanvasLoadingIndicator
 } from "./chunk-EUWDRPFN.js";

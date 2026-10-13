@@ -92,7 +92,7 @@ test('describes a reactivated preview-only source before its next frame arrives'
   const initial = canvasSnapshot('waiting-preview');
   const port = new CanvasPortFixture({
     ...initial,
-    sources: initial.sources.map((source) => ({ ...source, batchCount: 0, preview: true })),
+    sources: initial.sources.map((source) => ({ ...source, batchCount: 1, preview: true })),
     resource: {
       state: 'empty',
       message: 'Waiting for a fresh source preview.',

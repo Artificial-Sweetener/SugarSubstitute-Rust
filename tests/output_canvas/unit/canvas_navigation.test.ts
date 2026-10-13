@@ -74,7 +74,7 @@ describe('canvas workflow navigation', () => {
     );
     f.selection.apply(f.view, current, {
       type: 'select-source',
-      selection: { sourceId: source.id, batchIndex: 2 },
+      selection: { sourceId: source.id, batchIndex: 0 },
     });
     const final = canvasCatalogFixture(2, 0, [source]);
     f.selection.reconcile(f.view, final);
@@ -83,7 +83,7 @@ describe('canvas workflow navigation', () => {
     f.selection.reconcile(f.view, final);
     expect(f.views.read(f.view).selection?.batchIndex).toBe(0);
   });
-  test('admits preview metadata only for source intent within a current non-comparison image view', () => {
+  test('admits preview metadata only for source intent within a current non-comparison view', () => {
     const f = fixture();
     const source = f.catalog.entries[0]!.source;
     const preview = {
@@ -111,6 +111,11 @@ describe('canvas workflow navigation', () => {
       type: 'select-source',
       selection: { sourceId: source.id, batchIndex: 2 },
     });
+    expect(f.selection.preview(f.view, catalog)).toBeNull();
+    f.selection.apply(f.view, catalog, {
+      type: 'select-source',
+      selection: { sourceId: source.id, batchIndex: 0 },
+    });
     expect(f.selection.preview(f.view, catalog)).toBe(preview);
     const deleted = canvasOutputCatalog(catalog.result, []);
     expect(f.selection.preview(f.view, deleted)).toBeNull();
@@ -120,7 +125,7 @@ describe('canvas workflow navigation', () => {
     expect(f.selection.preview(f.view, catalog)).toBe(preview);
     f.selection.apply(f.view, catalog, { type: 'comparison', enabled: false });
     f.selection.apply(f.view, catalog, { type: 'overview', enabled: true });
-    expect(f.views.read(f.view).mode).toBe('image');
+    expect(f.views.read(f.view).mode).toBe('overview');
     expect(f.selection.preview(f.view, catalog)).toBe(preview);
   });
   test('distinguishes source preview interest from an explicitly requested batch, including batch zero', () => {

@@ -38,8 +38,8 @@ interface RetainedOutput {
   readonly output: WorkflowOutputSet;
   readonly payload: WorkflowMediaPayload;
   readonly delivery: string;
-  /** Preserve the accepted media frontier through later metadata-only payload replacement. */
-  readonly mediaRunOrder: number;
+  /** Keep first-member preview retirement monotonic through metadata-only replacement. */
+  readonly completedPreviewRunOrder: number;
 }
 interface ResultSession {
   snapshot: WorkflowResultSession;
@@ -233,7 +233,7 @@ export class WorkflowResultStore {
     const session = this.#sessions.get(preview.sessionId);
     if (
       !session ||
-      (session.outputs.get(preview.sourceId)?.mediaRunOrder ?? -1) >= preview.runOrder ||
+      (session.outputs.get(preview.sourceId)?.completedPreviewRunOrder ?? -1) >= preview.runOrder ||
       session.snapshot.context.generation !== preview.generation ||
       preview.runOrder < session.snapshot.runOrder ||
       (preview.runOrder === session.snapshot.runOrder &&
@@ -323,11 +323,14 @@ export class WorkflowResultStore {
       text: payload.text,
       batchCount: media.length,
     });
-    const mediaRunOrder = items.reduce(
-      (latest, item) => Math.max(latest, item.provenance.runOrder),
-      session.outputs.get(source.id)?.mediaRunOrder ?? -1,
+    const completedPreviewRunOrder = items.reduce(
+      (latest, item) =>
+        item.batchIndex === 0 && item.file.type !== 'input'
+          ? Math.max(latest, item.provenance.runOrder)
+          : latest,
+      session.outputs.get(source.id)?.completedPreviewRunOrder ?? -1,
     );
-    session.outputs.set(source.id, { output, payload, delivery, mediaRunOrder });
+    session.outputs.set(source.id, { output, payload, delivery, completedPreviewRunOrder });
     const outputs = Object.freeze(
       [...session.outputs.values()]
         .map((retained) => retained.output)
@@ -343,7 +346,9 @@ export class WorkflowResultStore {
         session.snapshot.presentedRunOrder,
       ),
       preview:
-        preview?.sourceId === source.id && mediaRunOrder >= preview.runOrder ? null : preview,
+        preview?.sourceId === source.id && completedPreviewRunOrder >= preview.runOrder
+          ? null
+          : preview,
     });
   }
 

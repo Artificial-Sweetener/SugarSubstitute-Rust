@@ -35,7 +35,7 @@ export function canvasOutputCatalog(result, inventory) {
                 id: source.id,
                 label: source.label,
                 breadcrumb: source.breadcrumb,
-                batchCount: items.length ? (output?.batchCount ?? 0) : 0,
+                batchCount: Math.max(preview ? 1 : 0, items.length ? (output?.batchCount ?? 0) : 0),
                 preview: Boolean(preview),
                 previousRun: Boolean(items.some((item) => item.provenance.runOrder < result.runOrder)),
             }),

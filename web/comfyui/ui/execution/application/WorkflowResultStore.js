@@ -159,7 +159,7 @@ export class WorkflowResultStore {
     publishPreview(preview) {
         const session = this.#sessions.get(preview.sessionId);
         if (!session ||
-            (session.outputs.get(preview.sourceId)?.mediaRunOrder ?? -1) >= preview.runOrder ||
+            (session.outputs.get(preview.sourceId)?.completedPreviewRunOrder ?? -1) >= preview.runOrder ||
             session.snapshot.context.generation !== preview.generation ||
             preview.runOrder < session.snapshot.runOrder ||
             (preview.runOrder === session.snapshot.runOrder &&
@@ -225,8 +225,10 @@ export class WorkflowResultStore {
             text: payload.text,
             batchCount: media.length,
         });
-        const mediaRunOrder = items.reduce((latest, item) => Math.max(latest, item.provenance.runOrder), session.outputs.get(source.id)?.mediaRunOrder ?? -1);
-        session.outputs.set(source.id, { output, payload, delivery, mediaRunOrder });
+        const completedPreviewRunOrder = items.reduce((latest, item) => item.batchIndex === 0 && item.file.type !== 'input'
+            ? Math.max(latest, item.provenance.runOrder)
+            : latest, session.outputs.get(source.id)?.completedPreviewRunOrder ?? -1);
+        session.outputs.set(source.id, { output, payload, delivery, completedPreviewRunOrder });
         const outputs = Object.freeze([...session.outputs.values()]
             .map((retained) => retained.output)
             .sort((a, b) => a.source.order - b.source.order));
@@ -235,7 +237,9 @@ export class WorkflowResultStore {
             ...session.snapshot,
             outputs,
             presentedRunOrder: items.reduce((latest, item) => item.file.type === 'input' ? latest : Math.max(latest, item.provenance.runOrder), session.snapshot.presentedRunOrder),
-            preview: preview?.sourceId === source.id && mediaRunOrder >= preview.runOrder ? null : preview,
+            preview: preview?.sourceId === source.id && completedPreviewRunOrder >= preview.runOrder
+                ? null
+                : preview,
         });
     }
     /** Increment one coherent session snapshot revision before notifying its subscribers. */

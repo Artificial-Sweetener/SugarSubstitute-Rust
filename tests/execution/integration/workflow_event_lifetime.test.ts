@@ -17,6 +17,7 @@
 
 import { ComfyWorkflowEventAdapter } from '../../../frontend/comfyui/ui/execution/infrastructure/ComfyWorkflowEventAdapter.js';
 import { WorkflowEventApi, workflowResultsFixture } from '../support/workflow_results.js';
+import { promptId } from '../../../frontend/comfyui/ui/execution/domain/ExecutionIdentity.js';
 
 /** Bind the real event adapter to observable preview and diagnostic boundaries. */
 function fixture() {
@@ -63,10 +64,31 @@ test('delivers enhanced preview bytes once and refuses to guess from an unassign
   expect(f.previews).toEqual([enhanced]);
   const legacy = new Blob(['legacy']);
   f.api.emit('b_preview', legacy);
-  expect(f.previews).toEqual([enhanced, legacy]);
+  expect(f.previews).toEqual([enhanced]);
   f.api.emit('execution_success', { prompt_id: 'one' });
   f.api.emit('b_preview_with_metadata', { jobId: 'one', nodeId: '42:23', blob: new Blob() });
-  expect(f.previews).toHaveLength(2);
+  expect(f.previews).toHaveLength(1);
+  f.adapter.dispose();
+});
+
+test('never assigns delayed unqualified bytes to a newer executing generation', () => {
+  const f = fixture();
+  f.adapter.install();
+  f.api.emit('execution_start', { prompt_id: 'one' });
+  f.api.emit('executing', '42:23');
+  const old = new Blob(['previous-generation']);
+  f.api.emit('execution_interrupted', { prompt_id: 'one' });
+  f.ingestor.accepted(f.ingestor.submitting(f.a), promptId('two'));
+  f.api.emit('execution_start', { prompt_id: 'two' });
+  f.api.emit('executing', '42:23');
+  f.api.emit('b_preview', old);
+  expect(f.previews).toEqual([]);
+  f.api.emit('b_preview_with_metadata', { jobId: 'one', nodeId: '42:23', blob: old });
+  f.api.emit('b_preview', new Blob(['previous-generation']));
+  expect(f.previews).toEqual([]);
+  const current = new Blob(['current-generation']);
+  f.api.emit('b_preview_with_metadata', { jobId: 'two', nodeId: '42:23', blob: current });
+  expect(f.previews).toEqual([current]);
   f.adapter.dispose();
 });
 

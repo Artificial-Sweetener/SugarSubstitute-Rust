@@ -1,9 +1,9 @@
 import {
   CanvasSelectionPicker
-} from "./chunk-YOT4H4QS.js";
+} from "./chunk-CNHJ3WOH.js";
 import {
   CanvasBatchPicker
-} from "./chunk-F5KWFYMM.js";
+} from "./chunk-QLIZ5IFY.js";
 import {
   defineComponent,
   h,

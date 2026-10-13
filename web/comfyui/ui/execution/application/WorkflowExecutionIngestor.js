@@ -20,8 +20,6 @@ export class WorkflowExecutionIngestor {
     #early = new Map();
     #earlyFinals = 0;
     #cancelExpiry = null;
-    #activeBackendJob = null;
-    #legacySource = null;
     #disposed = false;
     /** Bind focused state owners, a deterministic clock and a single history-recovery collaborator. */
     constructor(options) {
@@ -112,12 +110,10 @@ export class WorkflowExecutionIngestor {
             ...(expectedRevision !== undefined ? { expectedRevision } : {}),
         });
     }
-    /** Track the backend's current job even when it belongs to another client, disabling legacy guessing. */
+    /** Publish a job-qualified start, staging early transport events until queue acceptance. */
     started(promptId) {
         if (this.#disposed)
             return;
-        this.#activeBackendJob = promptId;
-        this.#legacySource = null;
         if (this.options.runs.isClosed(promptId))
             return;
         const run = this.options.runs.setStatus(promptId, 'running');
@@ -126,45 +122,21 @@ export class WorkflowExecutionIngestor {
         else
             this.#stage(promptId).started = true;
     }
-    /** Record an attributable execution source for qualified progress and unique legacy preview fallback. */
+    /** Publish running status only for an explicitly attributable job and execution path. */
     executing(promptId, executionPaths) {
         if (this.#disposed)
             return;
-        this.#activeBackendJob = promptId;
-        this.#legacySource = null;
         const attributed = this.resolveSource(promptId, executionPaths);
         if (!attributed || ['complete', 'cancelled', 'error'].includes(attributed.run.status))
             return;
-        this.#activeBackendJob = promptId;
-        this.#legacySource = attributed;
         const run = this.options.runs.setStatus(promptId, 'running');
         if (run)
             this.options.results.updateRun(run);
-    }
-    /** Resolve Comfy's node-only executing notification through a uniquely identified backend job. */
-    executingLegacy(executionPaths) {
-        if (!this.#activeBackendJob)
-            return;
-        this.#legacySource = this.resolveSource(this.#activeBackendJob, executionPaths);
-    }
-    /** Expose a legacy preview association only while the same known job remains active. */
-    legacyPreviewSource() {
-        const source = this.#legacySource;
-        if (!source || source.run.promptId !== this.#activeBackendJob)
-            return null;
-        const current = this.resolveSource(source.run.promptId, [source.source.executionPath]);
-        return current && !['complete', 'cancelled', 'error'].includes(current.run.status)
-            ? current
-            : null;
     }
     /** Set terminal status, retain the last valid finals and reconcile only this known successful job. */
     terminal(promptId, status) {
         if (this.#disposed)
             return;
-        if (this.#activeBackendJob === promptId) {
-            this.#activeBackendJob = null;
-            this.#legacySource = null;
-        }
         if (this.options.runs.isClosed(promptId)) {
             this.options.runs.retire(promptId);
             return;
@@ -199,24 +171,16 @@ export class WorkflowExecutionIngestor {
         if (!run)
             return;
         this.options.results.updateRun(run);
-        if (this.#activeBackendJob === promptId) {
-            this.#activeBackendJob = null;
-            this.#legacySource = null;
-        }
         this.options.runs.retire(promptId);
     }
-    /** Remove ambiguous transient associations after a disconnect while preserving known finals and jobs. */
+    /** Clear transient previews after a disconnect while preserving known finals and jobs for recovery. */
     disconnected() {
-        this.#activeBackendJob = null;
-        this.#legacySource = null;
         for (const run of this.options.runs.outstanding())
             this.options.results.clearPreview(run.session.sessionId);
     }
     /** Drop closed workflow metadata while retaining minimal outstanding late-event rejection identities. */
     closeSession(sessionId) {
         this.options.runs.closeSession(sessionId);
-        if (this.#legacySource?.run.session.sessionId === sessionId)
-            this.#legacySource = null;
     }
     /** Release the finite early queue and its sole timer with the integration lifetime. */
     dispose() {

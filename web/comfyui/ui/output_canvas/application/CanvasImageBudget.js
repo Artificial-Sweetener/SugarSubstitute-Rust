@@ -67,6 +67,16 @@ export class CanvasImageBudget {
         return (this.estimatedBytes <= this.#allowance &&
             (!admission.thumbnail || this.#allowance === CANVAS_IMAGE_BYTE_LIMIT));
     }
+    /** Reclassify an already admitted frame without allocating or bypassing the current allowance. */
+    reclassify(reservation, thumbnail) {
+        const admission = this.#reservations.get(reservation);
+        if (!admission ||
+            this.estimatedBytes > this.#allowance ||
+            (thumbnail && !this.thumbnailsAllowed))
+            return false;
+        this.#reservations.set(reservation, { ...admission, thumbnail });
+        return true;
+    }
     /** Release obsolete accounting exactly once, including late cancellation cleanup. */
     release(reservation) {
         const admission = this.#reservations.get(reservation);

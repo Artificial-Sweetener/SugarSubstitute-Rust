@@ -218,3 +218,102 @@ test('automatically presents the progressive batch and replaces only presentable
     selection: { sourceId: f.sources[1]!.id, batchIndex: 1 },
   });
 });
+
+test('refuses a preview-only source that lacks the exact manually selected batch position', () => {
+  const f = fixture();
+  const active = f.run(1);
+  f.final(active, 0, 3);
+  f.preview(active, 1);
+  f.selection.apply(f.view, f.catalog(), {
+    type: 'select',
+    selection: { sourceId: f.sources[0]!.id, batchIndex: 2 },
+  });
+  f.selection.apply(f.view, f.catalog(), {
+    type: 'select-source',
+    selection: { sourceId: f.sources[1]!.id, batchIndex: 2 },
+  });
+  expect(f.views.read(f.view)).toMatchObject({
+    follow: 'manual',
+    selection: { sourceId: f.sources[0]!.id, batchIndex: 2 },
+  });
+  f.preview(active, 1);
+  expect(f.selection.preview(f.view, f.catalog())).toBeNull();
+  expect(f.selection.items(f.view, f.catalog()).primary?.file.filename).toBe('1-0-2.png');
+  f.final(active, 1, 3);
+  f.selection.apply(f.view, f.catalog(), {
+    type: 'select-source',
+    selection: { sourceId: f.sources[1]!.id, batchIndex: 2 },
+  });
+  expect(f.selection.items(f.view, f.catalog()).primary?.file.filename).toBe('1-1-2.png');
+});
+
+test('admits a source preview only in its first position or a source overview', () => {
+  const f = fixture();
+  const active = f.run(1);
+  f.final(active, 0, 3);
+  f.preview(active, 1);
+  f.selection.apply(f.view, f.catalog(), {
+    type: 'select-source',
+    selection: { sourceId: f.sources[1]!.id, batchIndex: 0 },
+  });
+  expect(f.selection.preview(f.view, f.catalog())?.sourceId).toBe(f.sources[1]!.id);
+  f.views.update(f.view, (state) => ({
+    ...state,
+    mode: 'image',
+    selection: { sourceId: f.sources[1]!.id, batchIndex: 2 },
+  }));
+  expect(f.selection.preview(f.view, f.catalog())).toBeNull();
+});
+
+test('opens the live first batch position from a progressive overview', () => {
+  const f = fixture();
+  const active = f.run(1);
+  f.final(active, 0, 3);
+  f.preview(active, 1);
+  f.selection.apply(f.view, f.catalog(), { type: 'batch', index: 0 });
+  expect(f.views.read(f.view)).toMatchObject({
+    mode: 'image',
+    follow: 'manual',
+    sourcePreview: true,
+    selection: { sourceId: f.sources[1]!.id, batchIndex: 0 },
+  });
+  expect(f.selection.preview(f.view, f.catalog())?.sourceId).toBe(f.sources[1]!.id);
+});
+
+test('opens an explicit preview without changing source-tab overview navigation', () => {
+  const f = fixture();
+  const active = f.run(1);
+  f.final(active, 0, 3);
+  f.preview(active, 1);
+  f.selection.apply(f.view, f.catalog(), {
+    type: 'select-preview',
+    sourceId: f.sources[1]!.id,
+  });
+  expect(f.views.read(f.view)).toMatchObject({
+    mode: 'image',
+    follow: 'manual',
+    sourcePreview: true,
+  });
+  f.preview(active, 1);
+  expect(f.views.read(f.view).mode).toBe('image');
+  f.final(active, 1, 3);
+  f.selection.apply(f.view, f.catalog(), { type: 'batch', index: 2 });
+  f.selection.apply(f.view, f.catalog(), {
+    type: 'select-preview',
+    sourceId: f.sources[1]!.id,
+  });
+  expect(f.views.read(f.view).selection?.batchIndex).toBe(2);
+  expect(f.selection.preview(f.view, f.catalog())).toBeNull();
+});
+
+test('keeps the source overview available while its first position is a live preview', () => {
+  const f = fixture();
+  const active = f.run(1);
+  f.final(active, 0, 3);
+  f.preview(active, 1);
+  expect(f.catalog().entries[1]?.summary.batchCount).toBe(1);
+  f.selection.apply(f.view, f.catalog(), { type: 'select-preview', sourceId: f.sources[1]!.id });
+  f.selection.apply(f.view, f.catalog(), { type: 'overview', enabled: true });
+  expect(f.views.read(f.view)).toMatchObject({ mode: 'overview', sourcePreview: true });
+  expect(f.selection.preview(f.view, f.catalog())?.sourceId).toBe(f.sources[1]!.id);
+});

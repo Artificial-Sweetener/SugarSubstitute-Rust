@@ -40,6 +40,7 @@ interface Candidate {
   selection: CanvasSelection;
   frontier: Frontier;
 }
+type SelectionIntent = 'image' | 'source' | 'preview' | 'comparison';
 
 /** Compare attributable execution progress independently of delivery order. */
 function later(left: Frontier, right: Frontier): boolean {
@@ -167,24 +168,24 @@ export class CanvasSelectionController {
     const state = this.views.read(viewId);
     switch (command.type) {
       case 'select':
-        this.#select(viewId, catalog, command.selection, false, false);
+        this.#select(viewId, catalog, command.selection, 'image');
         return true;
       case 'select-source':
-        this.#select(viewId, catalog, command.selection, false, true);
+        this.#select(viewId, catalog, command.selection, 'source');
         return true;
-      case 'batch':
-        if (
-          state.selection &&
-          canvasSelectedItem(catalog, { ...state.selection, batchIndex: command.index })
-        )
-          this.#select(
-            viewId,
-            catalog,
-            { ...state.selection, batchIndex: command.index },
-            false,
-            false,
-          );
+      case 'select-preview':
+        this.#select(viewId, catalog, { sourceId: command.sourceId, batchIndex: 0 }, 'preview');
         return true;
+      case 'batch': {
+        if (!state.selection) return true;
+        const selection = { ...state.selection, batchIndex: command.index };
+        const preview =
+          command.index === 0 &&
+          catalog.entries.some((entry) => entry.source.id === selection.sourceId && entry.preview);
+        if (preview || canvasSelectedItem(catalog, selection))
+          this.#select(viewId, catalog, selection, preview ? 'preview' : 'image');
+        return true;
+      }
       case 'follow':
         if (command.mode === 'auto') {
           this.#cursors.set(viewId, {
@@ -207,7 +208,9 @@ export class CanvasSelectionController {
           command.enabled &&
           (!state.selection ||
             !catalog.entries.some(
-              (entry) => entry.source.id === state.selection?.sourceId && entry.items.length,
+              (entry) =>
+                entry.source.id === state.selection?.sourceId &&
+                (entry.items.length || entry.preview),
             ))
         )
           return true;
@@ -215,6 +218,7 @@ export class CanvasSelectionController {
           ...current,
           follow: 'manual',
           mode: command.enabled ? 'overview' : 'image',
+          sourcePreview: command.enabled || current.sourcePreview,
           comparison: null,
         }));
         return true;
@@ -225,7 +229,7 @@ export class CanvasSelectionController {
         this.#compare(viewId, catalog, command.enabled);
         return true;
       case 'select-comparison':
-        if (state.comparison) this.#select(viewId, catalog, command.selection, true, false);
+        if (state.comparison) this.#select(viewId, catalog, command.selection, 'comparison');
         return true;
       case 'swap': {
         const comparison = state.comparison;
@@ -290,6 +294,7 @@ export class CanvasSelectionController {
           (catalog.result.runStatus === 'running' || catalog.result.runStatus === 'queued'))) &&
       state.comparison === null &&
       state.sourcePreview &&
+      (state.mode === 'overview' || state.selection?.batchIndex === 0) &&
       state.selection?.sourceId === source &&
       catalog.entries.some((entry) => entry.source.id === source)
     );
@@ -316,25 +321,32 @@ export class CanvasSelectionController {
     viewId: CanvasViewId,
     catalog: CanvasCatalogSnapshot,
     selection: CanvasSelection,
-    secondary: boolean,
-    sourcePreview: boolean,
+    intent: SelectionIntent,
   ): void {
     if (!Number.isSafeInteger(selection.batchIndex) || selection.batchIndex < 0)
       throw new TypeError('Canvas batch index is invalid.');
     const state = this.views.read(viewId);
+    const secondary = intent === 'comparison';
+    const sourcePreview = intent === 'source' || intent === 'preview';
+    const overview = intent === 'source' && state.mode === 'overview';
+    if (
+      intent === 'preview' &&
+      !catalog.entries.some((entry) => entry.source.id === selection.sourceId && entry.preview)
+    )
+      return;
     if (sourcePreview || state.comparison) {
       const entry = catalog.entries.find((entry) => entry.source.id === selection.sourceId);
       if (!entry) return;
-      if (sourcePreview && state.mode === 'overview') {
+      if (overview) {
         if (!entry.items.length && !entry.preview) return;
       } else if (!canvasSelectedItem(catalog, selection)) {
-        if (!sourcePreview || !entry.preview || entry.items.length) return;
+        if (!sourcePreview || !entry.preview || selection.batchIndex !== 0) return;
       }
     }
     this.views.update(viewId, (current) => ({
       ...current,
       follow: 'manual',
-      mode: sourcePreview && current.mode === 'overview' ? 'overview' : 'image',
+      mode: overview ? 'overview' : 'image',
       selection: secondary ? current.selection : selection,
       sourcePreview: secondary ? current.sourcePreview : sourcePreview,
       comparison:

@@ -78,10 +78,9 @@ export class BrowserCanvasAttachment {
         this.#images = new BrowserCanvasImages(this.viewport, options.frames);
         this.#overview = new BrowserCanvasOverview(element, options.frames, (cells) => this.#browserResources.overview(cells), (cell) => {
             if (!this.#disposed && options.accepts())
-                options.selection.apply(options.address.viewId, this.#catalog, {
-                    type: cell.preview ? 'select-source' : 'select',
-                    selection: cell.selection,
-                });
+                options.selection.apply(options.address.viewId, this.#catalog, cell.preview
+                    ? { type: 'select-preview', sourceId: cell.selection.sourceId }
+                    : { type: 'select', selection: cell.selection });
         });
         const budget = new CanvasImageBudget();
         const decodes = new CanvasImageDecodeScheduler(options.loader, options.clock);
@@ -112,6 +111,7 @@ export class BrowserCanvasAttachment {
                 commands: [
                     'select',
                     'select-source',
+                    'select-preview',
                     'overview',
                     'batch',
                     'follow',
