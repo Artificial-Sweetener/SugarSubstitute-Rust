@@ -25,6 +25,9 @@ mod claim_error;
 mod claim_types;
 #[cfg(windows)]
 mod claims;
+#[cfg(all(windows, feature = "boundary-fixtures"))]
+#[doc(hidden)]
+pub use claims::boundary_fixture as claim_boundary_fixture;
 #[cfg(windows)]
 pub mod coordinator_entry;
 #[cfg(windows)]

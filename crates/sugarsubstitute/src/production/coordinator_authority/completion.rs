@@ -44,35 +44,33 @@ impl CoordinatorAuthority {
         {
             self.close_job = None;
         }
-        // During startup these are only coordinator initialization/closure observations.
-        // Later resource observers remain in the same claims owner's public queue.
-        if !self.serving || self.close_job.is_some() {
-            for _ in 0..32 {
-                if self.observation_count == 32 {
-                    break;
+        // The same classifier drains actual resource terminals during serving as
+        // well as coordinator initialization/closure. Retained capacity fences dequeue.
+        for _ in 0..32 {
+            if self.observation_count == 32 {
+                break;
+            }
+            let Some(observation) = self.claims.take_observation() else { break };
+            match observation {
+                ClaimObservation::CoordinatorClaimed(key) => {
+                    if self.key.is_some_and(|old| old != key) {
+                        return Err(AuthorityIssue::Identity);
+                    }
+                    self.key = Some(key);
                 }
-                let Some(observation) = self.claims.take_observation() else { break };
-                match observation {
-                    ClaimObservation::CoordinatorClaimed(key) => {
-                        if self.key.is_some_and(|old| old != key) {
-                            return Err(AuthorityIssue::Identity);
-                        }
-                        self.key = Some(key);
-                    }
-                    ClaimObservation::Failed { target: ClaimTarget::Coordinator, cause } => {
-                        self.fail(Failure::Claims(cause))
-                    }
-                    ClaimObservation::Stopped { target: ClaimTarget::Coordinator, kind } => {
-                        self.stopped.get_or_insert(kind);
-                        self.notice(AuthorityIssue::Stopped);
-                        self.request_close();
-                    }
-                    ClaimObservation::NativeClaimsClosed => {
-                        self.closed = true;
-                        self.close_job = None;
-                    }
-                    other => self.retain_observation(other),
+                ClaimObservation::Failed { target: ClaimTarget::Coordinator, cause } => {
+                    self.fail(Failure::Claims(cause))
                 }
+                ClaimObservation::Stopped { target: ClaimTarget::Coordinator, kind } => {
+                    self.stopped.get_or_insert(kind);
+                    self.notice(AuthorityIssue::Stopped);
+                    self.request_close();
+                }
+                ClaimObservation::NativeClaimsClosed => {
+                    self.closed = true;
+                    self.close_job = None;
+                }
+                other => self.retain_observation(other),
             }
         }
         self.poll_registry(batch)?;

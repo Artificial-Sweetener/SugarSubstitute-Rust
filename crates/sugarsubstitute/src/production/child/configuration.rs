@@ -138,6 +138,8 @@ impl Error for ChildConfigurationFailure {
 pub(super) enum ProjectionError {
     Source(EntryTransportError),
     Configuration(ConfigurationError),
+    /// Preserve the sole Comfy owner's complete-command policy rejection.
+    ManagedLaunch(sugarsubstitute_comfy::launch::ManagedLaunchError),
     Capacity(TryReserveError),
     Memory(MemoryClaimError),
     Cancelled,
@@ -153,6 +155,7 @@ impl Error for ProjectionError {
         match self {
             Self::Source(cause) => Some(cause),
             Self::Configuration(cause) => Some(cause),
+            Self::ManagedLaunch(cause) => Some(cause),
             Self::Capacity(cause) => Some(cause),
             Self::Memory(cause) => Some(cause),
             Self::Cancelled | Self::Deadline => None,
@@ -230,9 +233,13 @@ fn project(view: EntryLaunchRequestView<'_>) -> Result<StartupConfiguration, Pro
             for argument in arguments.iter() {
                 owned.push(text(argument)?);
             }
+            let requested = LaunchConfiguration::new(root, interpreter, owned, port.get())
+                .map_err(ProjectionError::Configuration)?;
+            // Match the independently projected parent's semantic target using
+            // the same sole option owner; the original projection claim covers both values.
             ConnectionConfiguration::Launch(
-                LaunchConfiguration::new(root, interpreter, owned, port.get())
-                    .map_err(ProjectionError::Configuration)?,
+                sugarsubstitute_comfy::launch::effective_managed_launch(&requested)
+                    .map_err(ProjectionError::ManagedLaunch)?,
             )
         }
     };

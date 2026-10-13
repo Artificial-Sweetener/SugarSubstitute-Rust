@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain actual native claims before typed delivery and bind release to owned families.
+#[cfg(feature = "boundary-fixtures")]
+pub mod boundary_fixture;
 mod completion;
 pub(crate) mod entry;
 mod launch;

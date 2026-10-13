@@ -108,6 +108,11 @@ impl Mailbox {
 
     pub(crate) fn take_failure(&self) -> Option<ExecutionError> {
         let mut pending = lock(&self.pending);
+        Self::take_pending_failure(&mut pending)
+    }
+
+    /// Preserve original causes and omitted counts while the caller holds the pending mutex.
+    fn take_pending_failure(pending: &mut Pending) -> Option<ExecutionError> {
         if pending.failures.is_empty() {
             return None;
         }
@@ -127,20 +132,23 @@ impl Mailbox {
     }
 
     pub(crate) fn drain(&self, maximum: NonZeroUsize) -> Result<CompletionBatch, ExecutionError> {
-        if let Some(error) = self.take_failure() {
-            return Err(error);
-        }
-        let (batch, should_wake) = {
+        let (result, should_wake) = {
             let mut pending = lock(&self.pending);
-            let count = maximum.get().min(32).min(pending.notices.len());
-            let notifications = pending.notices.drain(..count).collect();
+            let result = if let Some(error) = Self::take_pending_failure(&mut pending) {
+                // Observing the fatal wake acknowledges it without consuming terminal facts.
+                Err(error)
+            } else {
+                let count = maximum.get().min(32).min(pending.notices.len());
+                let notifications = pending.notices.drain(..count).collect();
+                Ok(CompletionBatch { notifications, remaining: pending.notices.len() })
+            };
             let remaining = pending.notices.len();
             pending.wake_pending = remaining != 0;
-            (CompletionBatch { notifications, remaining }, remaining != 0)
+            (result, remaining != 0)
         };
         if should_wake {
             self.deliver_wake();
         }
-        Ok(batch)
+        result
     }
 }

@@ -17,6 +17,8 @@ use sugarsubstitute_contracts::{
 use sugarsubstitute_execution::ExecutionOwner;
 use sugarsubstitute_supervision::coordinator_entry::CoordinatorEntryInput;
 type TestResult = Result<(), Box<dyn Error>>;
+#[path = "claim_delivery_tests.rs"]
+mod claim_delivery;
 
 #[test]
 fn observed_failure_closes_runner_admission_once_and_keeps_first_causes() -> TestResult {

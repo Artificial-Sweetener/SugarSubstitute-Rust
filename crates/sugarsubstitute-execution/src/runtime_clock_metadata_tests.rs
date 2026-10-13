@@ -161,7 +161,9 @@ fn worker_clock_failure_observation(order: FailureObservationOrder) -> TestResul
                 .source()
                 .is_some_and(|source| source.to_string().contains("timestamp boundary failure"))
         );
+        let observed = wake.count();
         release.open();
+        wake.wait_after(observed)?;
     }
     let completion = loop {
         let observed = wake.count();

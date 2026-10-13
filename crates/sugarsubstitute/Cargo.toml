@@ -25,5 +25,8 @@ sugarsubstitute-comfy = { path = "../sugarsubstitute-comfy" }
 sugarsubstitute-crash = { path = "../sugarsubstitute-crash" }
 sugarsubstitute-supervision = { path = "../sugarsubstitute-supervision" }
 
+[target.'cfg(windows)'.dev-dependencies]
+sugarsubstitute-supervision = { path = "../sugarsubstitute-supervision", features = ["boundary-fixtures"] }
+
 [lints]
 workspace = true

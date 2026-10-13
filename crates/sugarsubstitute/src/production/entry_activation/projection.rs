@@ -251,6 +251,15 @@ struct Fields {
     backend_environment: Option<LaunchEnvironment>,
     desktop_environment: LaunchEnvironment,
 }
+#[cfg(test)]
+impl super::ProductionActivation {
+    /// Exercise the actual parent field projection without constructing authentication or admission.
+    pub(in crate::production) fn projected_target_for_test(
+        view: EntryLaunchRequestView<'_>,
+    ) -> Result<BackendTarget, Box<dyn Error + Send + Sync>> {
+        Ok(fields(view)?.target)
+    }
+}
 fn fields(view: EntryLaunchRequestView<'_>) -> Result<Fields, Box<dyn Error + Send + Sync>> {
     let profile_units = collect_units(view.profile_directory())?;
     let requested_profile = PathBuf::from(OsString::from_wide(&profile_units));
@@ -271,11 +280,12 @@ fn fields(view: EntryLaunchRequestView<'_>) -> Result<Fields, Box<dyn Error + Se
             for argument in arguments.iter() {
                 owned.push(copy_string(argument)?);
             }
-            BackendTarget::Managed(LaunchConfiguration::new(
-                path(root)?,
-                path(interpreter)?,
-                owned,
-                port.get(),
+            let requested =
+                LaunchConfiguration::new(path(root)?, path(interpreter)?, owned, port.get())?;
+            // Schema-one arguments are extras. Resolve identity from the sole
+            // Comfy owner's complete command, while the original data claim is held.
+            BackendTarget::Managed(sugarsubstitute_comfy::launch::effective_managed_launch(
+                &requested,
             )?)
         }
     };

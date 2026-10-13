@@ -53,6 +53,14 @@ fn attached_projection_preserves_explicit_origin_profile_and_presentation() -> T
     let origin = LoopbackOrigin::parse("http://127.0.0.1:8188", 8188)?;
     let projected = project(view(EntryConnectionView::Attached(origin), path_view(&directory)?)?)?;
     assert_eq!(projected.connection(), &ConnectionConfiguration::Attach(origin));
+    let parent =
+        crate::production::entry_activation::ProductionActivation::projected_target_for_test(view(
+            EntryConnectionView::Attached(origin),
+            path_view(&directory)?,
+        )?);
+    assert!(
+        matches!(parent,Ok(sugarsubstitute_contracts::lifecycle::BackendTarget::Attached(actual)) if actual==origin)
+    );
     assert_eq!(projected.profile().as_str(), "Profile_1");
     assert_eq!(projected.presentation(), Presentation::new("ja", Theme::Light, true)?);
     Ok(())
@@ -61,10 +69,12 @@ fn attached_projection_preserves_explicit_origin_profile_and_presentation() -> T
 #[test]
 fn managed_projection_preserves_raw_windows_units_and_exact_unicode_arguments() -> TestResult {
     let mut root_units: Vec<u16> = "E:\\Comfy".encode_utf16().collect();
-    root_units.push(0xd800);
+    root_units.extend("日本語".encode_utf16());
     let root = bytes(root_units.iter().copied());
-    let interpreter = bytes("E:\\Comfy\\python.exe".encode_utf16());
-    let argument = "--name=日本語 🧁";
+    let mut interpreter_units: Vec<u16> = "E:\\Comfy\\python.exe".encode_utf16().collect();
+    interpreter_units.push(0xd800);
+    let interpreter = bytes(interpreter_units.iter().copied());
+    let argument = "--output-directory=日本語 🧁";
     let mut arguments = Vec::new();
     arguments.extend_from_slice(&u32::try_from(argument.len())?.to_le_bytes());
     arguments.extend_from_slice(argument.as_bytes());
@@ -79,9 +89,33 @@ fn managed_projection_preserves_raw_windows_units_and_exact_unicode_arguments() 
         return Err("Managed input changed connection mode".into());
     };
     assert_eq!(launch.root().as_os_str().encode_wide().collect::<Vec<_>>(), root_units);
-    assert_eq!(launch.interpreter(), std::path::Path::new("E:\\Comfy\\python.exe"));
-    assert_eq!(launch.arguments(), &[argument]);
+    assert_eq!(
+        launch.interpreter().as_os_str().encode_wide().collect::<Vec<_>>(),
+        interpreter_units
+    );
+    assert_eq!(
+        &launch.arguments()[..7],
+        [
+            "-u",
+            "E:\\Comfy日本語\\main.py",
+            "--listen",
+            "127.0.0.1",
+            "--port",
+            "8188",
+            "--disable-auto-launch"
+        ]
+    );
+    assert_eq!(&launch.arguments()[7..], &[argument]);
     assert_eq!(launch.port().get(), 8188);
+    let parent =
+        crate::production::entry_activation::ProductionActivation::projected_target_for_test(
+            view(requested, path_view(&interpreter)?)?,
+        )?;
+    assert_eq!(
+        parent,
+        sugarsubstitute_contracts::lifecycle::BackendTarget::Managed(launch.clone())
+    );
+    assert_eq!(&launch.arguments()[7..], [argument]);
     Ok(())
 }
 
@@ -301,5 +335,72 @@ fn finite_projection_spec_rejects_startup_then_admits_original_lifecycle_convers
     assert_eq!(scope.snapshot().reserved_bytes, RESERVATION_BYTES);
     drop((configuration, main, claim));
     assert_eq!(scope.snapshot().reserved_bytes, 0);
+    Ok(())
+}
+
+/// Both actual projections reject protected overrides while keeping the original borrowed bytes.
+#[test]
+fn managed_parent_and_child_reject_protected_extras_without_rewriting_source() -> TestResult {
+    let root = bytes("E:\\Comfy".encode_utf16());
+    let interpreter = bytes("E:\\Comfy\\python.exe".encode_utf16());
+    for extra in ["--listen=0.0.0.0", "--port=9999", "--auto-launch", "--front-end-root=private"] {
+        let mut raw = Vec::new();
+        raw.extend_from_slice(&u32::try_from(extra.len())?.to_le_bytes());
+        raw.extend_from_slice(extra.as_bytes());
+        let unchanged = raw.clone();
+        let requested = EntryConnectionView::Managed {
+            root: path_view(&root)?,
+            interpreter: path_view(&interpreter)?,
+            arguments: EntryArgumentsView::from_encoded(&raw, 1)?,
+            port: NonZeroU16::new(8188).ok_or("Invalid test port")?,
+        };
+        let original = view(requested, path_view(&interpreter)?)?;
+        assert!(matches!(
+            project(original),
+            Err(ProjectionError::ManagedLaunch(
+                sugarsubstitute_comfy::launch::ManagedLaunchError::ProtectedOption
+            ))
+        ));
+        let parent =
+            crate::production::entry_activation::ProductionActivation::projected_target_for_test(
+                original,
+            )
+            .err()
+            .ok_or("Parent admitted a protected option")?;
+        assert!(matches!(
+            parent.downcast_ref::<sugarsubstitute_comfy::launch::ManagedLaunchError>(),
+            Some(sugarsubstitute_comfy::launch::ManagedLaunchError::ProtectedOption)
+        ));
+        assert_eq!(raw, unchanged);
+    }
+    Ok(())
+}
+
+/// A root that cannot form the String script argument fails closed instead of changing raw units.
+#[test]
+fn non_unicode_managed_script_root_keeps_original_units_on_projection_rejection() -> TestResult {
+    let units = [69, 58, 92, 0xd800];
+    let root = bytes(units);
+    let interpreter = bytes("E:\\python.exe".encode_utf16());
+    let requested = EntryConnectionView::Managed {
+        root: path_view(&root)?,
+        interpreter: path_view(&interpreter)?,
+        arguments: EntryArgumentsView::from_encoded(&[], 0)?,
+        port: NonZeroU16::new(8188).ok_or("Invalid port")?,
+    };
+    let original = view(requested, path_view(&interpreter)?)?;
+    assert!(matches!(
+        project(original),
+        Err(ProjectionError::ManagedLaunch(
+            sugarsubstitute_comfy::launch::ManagedLaunchError::ArgumentShape
+        ))
+    ));
+    assert!(
+        crate::production::entry_activation::ProductionActivation::projected_target_for_test(
+            original
+        )
+        .is_err()
+    );
+    assert_eq!(path_view(&root)?.units().collect::<Vec<_>>(), units);
     Ok(())
 }
