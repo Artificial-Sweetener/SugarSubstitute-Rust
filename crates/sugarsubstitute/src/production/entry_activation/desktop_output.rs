@@ -161,12 +161,21 @@ impl DesktopOutput {
             if actual.run() != self.run {
                 return Err(WindowsOutputError::ForeignIdentity);
             }
-            self.diagnostic.feed(actual.stream(),actual.sequence().get(),actual.gap().is_some(),actual.end(),actual.bytes(),|phase| {
-                tracing::info!(operation="desktop_child_preparation",run=?self.run,
-                    capture_admitted=phase.capture_admitted,capture=phase.capture,registered=phase.registered,
-                    configuration=phase.configuration,original_failure=?phase.original_failure,
-                    capture_failure=%phase.capture_failure,
-                    failure_retained=phase.failure_retained,"Observed owned child's closed preparation diagnostic");
+            self.diagnostic.feed(actual.stream(),actual.sequence().get(),actual.gap().is_some(),actual.end(),actual.bytes(),|observed| {
+                match observed {
+                    diagnostic::Observation::Preparation(phase) => {
+                        tracing::info!(operation="desktop_child_preparation",run=?self.run,
+                            capture_admitted=phase.capture_admitted,capture=phase.capture,registered=phase.registered,
+                            configuration=phase.configuration,original_failure=?phase.original_failure,
+                            capture_failure=%phase.capture_failure,failure_retained=phase.failure_retained,
+                            "Observed owned child's closed preparation diagnostic");
+                    }
+                    diagnostic::Observation::Failure(failure) => {
+                        tracing::warn!(operation="desktop_child_failure",run=?self.run,
+                            boundary=%failure.boundary,kind=%failure.kind,
+                            "Observed first closed owned desktop failure");
+                    }
+                }
             });
             // Return the sole real delivery slot before taking another batch.
             self.loan = None;

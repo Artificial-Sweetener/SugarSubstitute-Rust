@@ -7,7 +7,7 @@ use std::{ffi::c_void, rc::Rc};
 use sugarsubstitute_contracts::presentation::PreparedFrame;
 use tao::{dpi::PhysicalPosition, platform::windows::WindowExtWindows, window::Window};
 use windows::Win32::{
-    Foundation::{E_INVALIDARG, E_NOTIMPL, HWND, POINT, RECT},
+    Foundation::{E_ACCESSDENIED, E_INVALIDARG, E_NOTIMPL, HWND, POINT, RECT},
     Graphics::{
         Dwm::{
             DWMWA_SYSTEMBACKDROP_TYPE, DWMWA_USE_IMMERSIVE_DARK_MODE,
@@ -133,7 +133,7 @@ impl Presenter {
     }
 }
 
-/// Center the hidden surface on the cursor's monitor without covering reserved system chrome.
+/// Center on the cursor monitor, using the primary monitor when cursor access is unavailable.
 fn center_on_cursor_work_area(window: &Window) -> Result<(), DesktopError> {
     let mut cursor = POINT::default();
     let mut info =
@@ -141,8 +141,8 @@ fn center_on_cursor_work_area(window: &Window) -> Result<(), DesktopError> {
     // SAFETY: Both output structures have their documented ABI and live through the
     // synchronous queries. MonitorFromPoint returns a borrowed system monitor handle.
     unsafe {
-        GetCursorPos(&raw mut cursor)
-            .map_err(|error| DesktopError::new("query_cursor_monitor", error))?;
+        let observed = GetCursorPos(&raw mut cursor).map(|()| cursor);
+        cursor = placement_point(observed)?;
         let monitor = MonitorFromPoint(cursor, MONITOR_DEFAULTTOPRIMARY);
         GetMonitorInfoW(monitor, &raw mut info)
             .ok()
@@ -166,6 +166,24 @@ fn center_on_cursor_work_area(window: &Window) -> Result<(), DesktopError> {
         .to_physical::<u32>(target_scale);
     window.set_outer_position(centered_origin(info.rcWork, size.width, size.height)?);
     Ok(())
+}
+
+/// Keep cursor placement optional on an inactive desktop while preserving unexpected failures.
+/// Windows denies GetCursorPos outside the input desktop; its primary monitor starts at (0, 0).
+/// # Errors
+/// Retains every native cursor failure other than access denied without formatting its cause.
+fn placement_point(observed: windows::core::Result<POINT>) -> Result<POINT, DesktopError> {
+    match observed {
+        Ok(point) => Ok(point),
+        Err(error) if error.code() == E_ACCESSDENIED => {
+            tracing::info!(
+                operation = "cursor_monitor_fallback",
+                "Placing window on the primary monitor because cursor access is unavailable"
+            );
+            Ok(POINT::default())
+        }
+        Err(error) => Err(DesktopError::new("query_cursor_monitor", error)),
+    }
 }
 
 /// Keep physical placement signed and bounded across monitors left of the primary screen.
@@ -211,9 +229,36 @@ fn set_attribute(
 
 #[cfg(test)]
 mod tests {
-    use super::centered_origin;
+    use super::{centered_origin, placement_point};
     use tao::dpi::PhysicalPosition;
-    use windows::Win32::Foundation::RECT;
+    use windows::Win32::Foundation::{E_ACCESSDENIED, E_INVALIDARG, POINT, RECT};
+
+    /// Preserve an available cursor and permit window placement when its desktop denies access.
+    #[test]
+    fn cursor_access_denied_uses_primary_monitor_without_changing_available_cursor()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let cursor = placement_point(Ok(POINT { x: -1200, y: 350 }))?;
+        assert_eq!((cursor.x, cursor.y), (-1200, 350));
+        let fallback = placement_point(Err(windows::core::Error::from_hresult(E_ACCESSDENIED)))?;
+        assert_eq!((fallback.x, fallback.y), (0, 0));
+        Ok(())
+    }
+
+    /// Keep unexpected native cursor errors typed instead of treating them as desktop isolation.
+    #[test]
+    fn unexpected_cursor_failure_preserves_original_native_cause()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use std::error::Error;
+        let failure = placement_point(Err(windows::core::Error::from_hresult(E_INVALIDARG)))
+            .err()
+            .ok_or("Unexpected cursor failure was accepted")?;
+        let cause = failure
+            .source()
+            .and_then(|cause| cause.downcast_ref::<windows::core::Error>())
+            .ok_or("Original typed cursor cause lost")?;
+        assert_eq!(cause.code(), E_INVALIDARG);
+        Ok(())
+    }
 
     /// Preserve cursor-monitor work-area placement for negative origins and reject invalid bounds.
     #[test]

@@ -76,8 +76,10 @@ fn split_complete_stderr_line_is_decoded_once_and_stdout_remains_opaque() {
         seen.push(v)
     });
     assert_eq!(seen.len(), 1);
-    assert!(seen[0].capture_admitted);
-    assert!(!seen[0].capture);
+    assert!(matches!(
+        seen[0],
+        Observation::Preparation(Phase { capture_admitted: true, capture: false, .. })
+    ));
 }
 #[test]
 fn gaps_replays_and_eof_cannot_stitch_partial_lines_or_emit_partial_facts() {
@@ -133,7 +135,15 @@ fn changing_diagnostics_remain_bounded_for_the_same_output_lifetime() {
             |v| seen.push(v),
         );
     }
+    assert_eq!(seen.len(), 31);
+    let failure = b"operation=\"desktop_failure_transition\" boundary=PollFrame kind=Other\n";
+    owner.feed(OutputStream::Stderr, 81, false, false, failure, |v| seen.push(v));
+    owner.feed(OutputStream::Stderr, 82, false, false, failure, |v| seen.push(v));
     assert_eq!(seen.len(), 32);
+    assert!(matches!(
+        seen.last(),
+        Some(Observation::Failure(Failure { boundary: "PollFrame", kind: "Other" }))
+    ));
 }
 #[test]
 fn actual_production_text_formatter_with_writer_and_time_boundaries_preserves_closed_fields()
@@ -182,13 +192,52 @@ fn actual_production_text_formatter_with_writer_and_time_boundaries_preserves_cl
         tracing::info!(operation="child_preparation_transition",capture_admitted=true,capture=false,
             registered=false,configuration=false,original_failure=?None::<u8>,capture_failure=%"None",failure_retained=false,
             "Child pre-UI preparation conditions changed");
+        tracing::warn!(operation="desktop_failure_transition",boundary=%"PollFrame",kind=%"Other",
+            "First owned desktop failure retained");
     });
     let bytes = bytes.lock().map_err(|_| std::io::Error::other("Writer fixture poisoned"))?;
     assert!(bytes.starts_with(b"2026-10-13T"));
     let mut owner = Diagnostic::new();
     let mut seen = Vec::new();
     owner.feed(OutputStream::Stderr, 1, false, false, &bytes, |v| seen.push(v));
-    assert_eq!(seen.len(), 1);
-    assert_eq!(parse(LINE.as_bytes()), seen.first().copied());
+    assert_eq!(seen.len(), 2);
+    assert_eq!(parse(LINE.as_bytes()).map(Observation::Preparation), seen.first().copied());
+    assert!(matches!(
+        seen.last(),
+        Some(Observation::Failure(Failure { boundary: "PollFrame", kind: "Other" }))
+    ));
     Ok(())
+}
+
+#[test]
+fn closed_desktop_failure_fields_reject_payloads_unknown_values_and_extra_operations() {
+    for boundary in [
+        "PollFrame",
+        "RequestFrame",
+        "ObserveStartup",
+        "TakeCommand",
+        "Visibility",
+        "PreSurface",
+        "Cleanup",
+        "Presentation",
+        "CursorMonitor",
+        "MonitorWorkArea",
+        "CenterWindow",
+        "Other",
+    ] {
+        for kind in ["TimedOut", "Disconnected", "Denied", "InvalidInput", "Io", "Other"] {
+            let line =
+                format!("operation=\"desktop_failure_transition\" boundary={boundary} kind={kind}");
+            assert_eq!(parse_failure(line.as_bytes()), Some(Failure { boundary, kind }));
+        }
+    }
+    for line in [
+        "operation=\"desktop_failure_transition\" boundary=PollFrame kind=Other cause=PRIVATE",
+        "operation=\"desktop_failure_transition\" boundary=secret kind=Other",
+        "operation=\"desktop_failure_transition\" boundary=PollFrame kind=0x80004005",
+        "operation=\"desktop_failure_transition\" boundary=PollFrame kind=Other kind=Denied",
+        "operation=\"other\" operation=\"desktop_failure_transition\" boundary=PollFrame kind=Other",
+    ] {
+        assert!(parse_failure(line.as_bytes()).is_none());
+    }
 }

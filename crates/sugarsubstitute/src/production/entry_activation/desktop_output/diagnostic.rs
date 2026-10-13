@@ -12,6 +12,18 @@ pub(super) struct Phase {
     pub(super) capture_failure: &'static str,
     pub(super) failure_retained: bool,
 }
+/// Retain the first whitelisted desktop failure as inert, run-bound output metadata.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) struct Failure {
+    pub(super) boundary: &'static str,
+    pub(super) kind: &'static str,
+}
+/// Distinguish preparation progress from the first native failure without granting authority.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum Observation {
+    Preparation(Phase),
+    Failure(Failure),
+}
 /// Fixed source scratch is covered by the containing Record's original metadata
 /// claim. Loss, oversized input and EOF invalidate partial lines; stdout is opaque.
 pub(super) struct Diagnostic {
@@ -21,6 +33,7 @@ pub(super) struct Diagnostic {
     sequences: [u64; 2],
     latest: Option<Phase>,
     emitted: u8,
+    failure_seen: bool,
 }
 impl Diagnostic {
     pub(super) const fn new() -> Self {
@@ -31,6 +44,7 @@ impl Diagnostic {
             sequences: [0; 2],
             latest: None,
             emitted: 0,
+            failure_seen: false,
         }
     }
     /// The authenticated output owner validates Run before these inert byte facts.
@@ -41,7 +55,7 @@ impl Diagnostic {
         gap: bool,
         end: bool,
         bytes: &[u8],
-        mut emit: impl FnMut(Phase),
+        mut emit: impl FnMut(Observation),
     ) {
         let at = stream.index();
         let discontinuity = gap || self.sequences[at].checked_add(1) != Some(sequence);
@@ -58,14 +72,24 @@ impl Diagnostic {
         }
         for &byte in bytes {
             if byte == b'\n' {
-                if !self.discard
-                    && let Some(phase) = parse(&self.bytes[..self.length])
-                    && self.latest != Some(phase)
-                {
-                    self.latest = Some(phase);
-                    if self.emitted < 32 {
-                        self.emitted += 1;
-                        emit(phase);
+                if !self.discard {
+                    if let Some(failure) = parse_failure(&self.bytes[..self.length]) {
+                        if !self.failure_seen {
+                            self.failure_seen = true;
+                            if self.emitted < 32 {
+                                self.emitted += 1;
+                                emit(Observation::Failure(failure));
+                            }
+                        }
+                    } else if let Some(phase) = parse(&self.bytes[..self.length])
+                        && self.latest != Some(phase)
+                    {
+                        self.latest = Some(phase);
+                        // Keep one of the unchanged32 observations for the first owned failure.
+                        if self.emitted < 31 {
+                            self.emitted += 1;
+                            emit(Observation::Preparation(phase));
+                        }
                     }
                 }
                 self.length = 0;
@@ -135,6 +159,43 @@ fn parse(bytes: &[u8]) -> Option<Phase> {
         capture_failure,
         failure_retained,
     })
+}
+/// Accept only one exact marker and complete closed fields, rejecting extra raw payloads.
+fn parse_failure(bytes: &[u8]) -> Option<Failure> {
+    let line = std::str::from_utf8(bytes).ok()?.trim_end_matches('\r');
+    let (prefix, fields) = line.split_once("operation=\"desktop_failure_transition\" ")?;
+    if prefix.contains("operation=") {
+        return None;
+    }
+    let mut fields = fields.split_ascii_whitespace();
+    let boundary = match fields.next()?.strip_prefix("boundary=")? {
+        "PollFrame" => "PollFrame",
+        "RequestFrame" => "RequestFrame",
+        "ObserveStartup" => "ObserveStartup",
+        "TakeCommand" => "TakeCommand",
+        "Visibility" => "Visibility",
+        "PreSurface" => "PreSurface",
+        "Cleanup" => "Cleanup",
+        "Presentation" => "Presentation",
+        "CursorMonitor" => "CursorMonitor",
+        "MonitorWorkArea" => "MonitorWorkArea",
+        "CenterWindow" => "CenterWindow",
+        "Other" => "Other",
+        _ => return None,
+    };
+    let kind = match fields.next()?.strip_prefix("kind=")? {
+        "TimedOut" => "TimedOut",
+        "Disconnected" => "Disconnected",
+        "Denied" => "Denied",
+        "InvalidInput" => "InvalidInput",
+        "Io" => "Io",
+        "Other" => "Other",
+        _ => return None,
+    };
+    if fields.next().is_some() {
+        return None;
+    }
+    Some(Failure { boundary, kind })
 }
 fn boolean(field: &str, prefix: &str) -> Option<bool> {
     match field.strip_prefix(prefix)? {

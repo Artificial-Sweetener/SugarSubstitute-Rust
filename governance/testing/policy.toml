@@ -23,7 +23,7 @@ minimum_tests = 68
 package = "sugarsubstitute"
 root = "crates/sugarsubstitute"
 concern = "Production desktop startup and retirement through actual execution, authenticated parent/child transport, shared backends, profiles and native window adapters; retained failures, captured startup, bounded console rendering and isolated qualification roles"
- minimum_tests = 361
+ minimum_tests = 362
 
 [[owners]]
 package = "sugarsubstitute-execution"
@@ -53,7 +53,7 @@ minimum_tests = 75
 package = "sugarsubstitute-desktop"
 root = "crates/sugarsubstitute-desktop"
 concern = "Nonblocking frame delivery, pre-Tao preparation, lossless wake handoff, bounded native dispatch, headless settlement, retained native storage, input and timing boundaries; current-view native reporter controls, explicit consent and inert save selection, clipboard transfer, bounded modal input and checked font/callback retirement"
-minimum_tests = 229
+minimum_tests = 233
 
 [[owners]]
 package = "sugarsubstitute-crash"

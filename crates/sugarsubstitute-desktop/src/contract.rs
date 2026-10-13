@@ -235,6 +235,9 @@ pub struct DesktopError {
     cause: Box<dyn Error>,
 }
 
+#[path = "desktop_failure_diagnostic.rs"]
+mod failure_diagnostic;
+
 impl DesktopError {
     /// Attach an external failure to its adapter operation.
     pub(crate) fn new(operation: &'static str, cause: impl Error + 'static) -> Self {
@@ -251,6 +254,7 @@ impl DesktopError {
 
     /// Keep the original returned cause and report subsequent failures without retaining a list.
     pub(crate) fn retain_first(failure: &mut Option<Self>, error: Self) {
+        let first = failure.is_none();
         Self::retain_first_with(failure, error, |error| {
             tracing::error!(
                 operation = error.operation,
@@ -258,6 +262,10 @@ impl DesktopError {
                 "Additional failure during owned native shutdown"
             );
         });
+        // Adopt the original cause before a logging subscriber can observe it.
+        if first && let Some(original) = failure {
+            failure_diagnostic::emit(original.operation, original.cause.as_ref());
+        }
     }
 
     /// Separate bounded primary storage from the structured secondary diagnostic sink.
