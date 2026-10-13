@@ -30,11 +30,17 @@ impl Active {
             (state.connections[index].id, state.connections[index].loan)
         };
         if let Some(connection) = connection {
+            let failure = self.connections[index]
+                .failure
+                .as_ref()
+                .filter(|cause| matches!(cause, EntryTransportError::PeerDisconnected(_)))
+                .cloned();
             self.emit(
                 core,
                 Some(index),
-                EntryTransportObservation::ConnectionRetired { connection },
+                EntryTransportObservation::ConnectionRetired { connection, failure },
             )?;
+            self.connections[index].failure = None;
             self.report.retired_connections += 1;
             let mut state = lock(&self.work.shared.state);
             let slot = &mut state.connections[index];

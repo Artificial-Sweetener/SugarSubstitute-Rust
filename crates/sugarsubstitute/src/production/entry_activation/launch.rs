@@ -40,6 +40,8 @@ pub(super) struct DesktopStart {
             sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeFailure,
         >,
     >,
+    checked_retirement:
+        Option<sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeRetirement>,
     captured: Option<CapturedLifecycleStart>,
     bootstrap: Option<LifecyclePipeBootstrap>,
     enrollment: Option<LifecycleDesktopEnrollment>,
@@ -86,6 +88,7 @@ impl DesktopStart {
             profile,
             pipe: None,
             pipe_terminal: None,
+            checked_retirement: None,
             captured: Some(CapturedLifecycleStart::new(pin, snapshot)),
             bootstrap: None,
             enrollment: None,
@@ -245,7 +248,7 @@ impl DesktopStart {
         }
     }
     /// Release only never-launched pins, then observe checked retirement of the actual pipe.
-    /// Failure/panic/timeout preserves its complete terminal guard and remains unsettled.
+    /// Every outcome retains its complete guard; only an independent checked proof permits settlement.
     pub(super) fn close_unlaunched(&mut self) -> Result<bool> {
         self.prepared = None;
         self.bootstrap = None;
@@ -257,13 +260,22 @@ impl DesktopStart {
         if self.pipe_terminal.is_none() {
             self.pipe_terminal = pipe.completion.try_take_completion();
         }
+        if self.checked_retirement.is_none() {
+            self.checked_retirement = pipe.control.take_checked_retirement();
+        }
         let Some(terminal) = &self.pipe_terminal else { return Ok(false) };
         if terminal.scope_id != pipe.completion.scope_id()
             || terminal.spec != pipe.completion.spec()
         {
             return Err("Actual unlaunched pipe completion identity mismatch".into());
         }
-        Ok(matches!(terminal.outcome, JobOutcome::Cancelled)
-            || matches!(&terminal.outcome, JobOutcome::Success(report) if report.run == Some(self.run)))
+        // The complete original outcome remains retained independently of physical settlement.
+        // A failure terminal cannot substitute for the actual checked worker proof.
+        Ok(self.checked_retirement.as_ref().is_some_and(|proof| {
+            proof.matches(&pipe.control)
+                && proof.scope_id() == terminal.scope_id
+                && proof.spec() == terminal.spec
+                && proof.run() == Some(self.run)
+        }))
     }
 }

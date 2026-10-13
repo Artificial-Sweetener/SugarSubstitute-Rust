@@ -148,7 +148,23 @@ impl fmt::Debug for FailureDisplay<'_> {
             if depth != 0 {
                 f.write_str("; caused by: ")?;
             }
-            fmt::Display::fmt(current, f)?;
+            if let Some(transport) = current.downcast_ref::<EntryTransportError>()
+                && matches!(
+                    transport,
+                    EntryTransportError::Closed
+                        | EntryTransportError::Busy
+                        | EntryTransportError::InvalidOperation
+                        | EntryTransportError::InvalidDeadline
+                        | EntryTransportError::InvalidPhase
+                        | EntryTransportError::Authentication
+                        | EntryTransportError::Malformed
+                        | EntryTransportError::Capacity
+                )
+            {
+                fmt::Debug::fmt(transport, f)?;
+            } else {
+                fmt::Display::fmt(current, f)?;
+            }
             if current
                 .downcast_ref::<sugarsubstitute_comfy::configuration::StartupConfigurationError>()
                 .is_some()

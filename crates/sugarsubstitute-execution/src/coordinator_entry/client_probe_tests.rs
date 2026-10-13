@@ -103,7 +103,7 @@ fn expired_client_probe_retains_staged_source_while_original_server_loan_and_rep
     fact(
         &rig,
         &server_session.control,
-        |fact| matches!(fact, EntryTransportObservation::ConnectionRetired { connection: actual } if *actual == connection),
+        |fact| matches!(fact, EntryTransportObservation::ConnectionRetired { connection: actual, .. } if *actual == connection),
     )?;
     server_session.control.reply(
         connection,

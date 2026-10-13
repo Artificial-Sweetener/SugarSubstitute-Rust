@@ -180,6 +180,13 @@ impl ProductionEntryIntake {
             };
         }
         match (side, observation) {
+            (
+                EntrySide::Server,
+                EntryTransportObservation::ConnectionRetired { connection, failure: Some(cause) },
+            ) => {
+                tracing::warn!(operation="entry_peer_disconnected",connection=?connection,cause=?cause,
+                    "Entry requester disconnected before its reply was delivered");
+            }
             (EntrySide::Server, EntryTransportObservation::Prepared) => {
                 let known = current_owner(owner)?;
                 owner.initializing_server_input().map_err(EntryIntakeFailure::Owner)?;

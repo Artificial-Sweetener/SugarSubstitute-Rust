@@ -50,5 +50,11 @@ mod client_probe;
 #[path = "observation_rearm_tests.rs"]
 mod observation_rearm;
 
+#[path = "reply_deadline_tests.rs"]
+mod reply_deadline;
+
 #[path = "startup_snapshot/captured_admission_tests.rs"]
 mod captured_admission;
+
+#[path = "peer_disconnect_tests.rs"]
+mod peer_disconnect;

@@ -95,6 +95,9 @@ pub(crate) struct ParentLifecycle {
     expected_terminal: Option<(ScopeId, JobSpec, TerminalKind)>,
     terminal: Option<JobCompletion<LifecyclePipeReport, LifecyclePipeFailure>>,
     terminal_accepted: bool,
+    checked_retirement:
+        Option<sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeRetirement>,
+    terminal_failure_reported: bool,
     rejected_frame: Option<ReceivedLifecycleFrame>,
     failure: Option<Cause>,
     secondary: [Option<Cause>; 8],
@@ -162,6 +165,8 @@ impl ParentLifecycle {
             expected_terminal: None,
             terminal: None,
             terminal_accepted: false,
+            checked_retirement: None,
+            terminal_failure_reported: false,
             rejected_frame: None,
             failure: None,
             secondary: [const { None }; 8],
@@ -261,15 +266,14 @@ impl ParentLifecycle {
     }
 
     /// Report only this exact pipe's checked native retirement and released loans.
-    /// Failure, a notice, requested cancellation and process exit are insufficient.
+    /// An outcome, notice, cancellation request or process exit without the checked proof is insufficient.
     pub(crate) fn native_retired(&self) -> bool {
         self.terminal_accepted
-            && self.terminal.as_ref().is_some_and(|terminal| {
-                matches!(
-                    terminal.outcome,
-                    sugarsubstitute_contracts::execution::JobOutcome::Success(_)
-                        | sugarsubstitute_contracts::execution::JobOutcome::Cancelled
-                )
+            && self.checked_retirement.as_ref().is_some_and(|proof| {
+                proof.run() == Some(self.run)
+                    && self.terminal.as_ref().is_some_and(|terminal| {
+                        proof.scope_id() == terminal.scope_id && proof.spec() == terminal.spec
+                    })
             })
             && self.read.is_none()
             && self.write.is_none()

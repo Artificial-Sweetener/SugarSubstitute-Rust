@@ -31,7 +31,7 @@ fn lost_connection_settles_original_run_and_fresh_nonce_retry_never_readmits() -
     fact(
         &rig,
         &session.control,
-        |fact| matches!(fact,EntryTransportObservation::ConnectionRetired {connection:retired} if *retired==connection),
+        |fact| matches!(fact,EntryTransportObservation::ConnectionRetired { connection: retired, .. } if *retired==connection),
     )?;
     let id = request.request_id();
     drop(request);
@@ -46,7 +46,7 @@ fn lost_connection_settles_original_run_and_fresh_nonce_retry_never_readmits() -
     fact(
         &rig,
         &session.control,
-        |fact| matches!(fact,EntryTransportObservation::ConnectionRetired {connection:retired} if *retired!=connection),
+        |fact| matches!(fact,EntryTransportObservation::ConnectionRetired { connection: retired, .. } if *retired!=connection),
     )?;
     let replies = lock(&boundary.replies);
     assert_eq!(replies.len(), 1);
@@ -207,7 +207,7 @@ fn expired_reconnect_cannot_relaunch_or_replace_late_actual_root_settlement() ->
     fact(
         &rig,
         &session.control,
-        |fact| matches!(fact,EntryTransportObservation::ConnectionRetired {connection:closed} if *closed==connection),
+        |fact| matches!(fact,EntryTransportObservation::ConnectionRetired { connection: closed, .. } if *closed==connection),
     )?;
     drop(request);
     rig.clock.advance(31_000_000_000);

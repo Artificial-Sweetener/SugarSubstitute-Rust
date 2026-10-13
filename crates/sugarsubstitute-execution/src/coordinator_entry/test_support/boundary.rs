@@ -34,6 +34,8 @@ pub(in crate::coordinator_entry::tests) struct Boundary {
     pub(in crate::coordinator_entry::tests) defer_client_outcome: AtomicBool,
     pub(in crate::coordinator_entry::tests) client_launches: Mutex<Vec<protocol::Header>>,
     pub(in crate::coordinator_entry::tests) memory: Mutex<Option<MemoryLease>>,
+    pub(in crate::coordinator_entry::tests) outcome_write_failure:
+        Mutex<Option<EntryTransportError>>,
     nonce: AtomicUsize,
     reads: Mutex<Vec<Option<u32>>>,
     pub(in crate::coordinator_entry::tests) pause_role:
@@ -77,6 +79,7 @@ impl Boundary {
             defer_client_outcome: AtomicBool::new(false),
             client_launches: Mutex::new(Vec::new()),
             memory: Mutex::new(None),
+            outcome_write_failure: Mutex::new(None),
             nonce: AtomicUsize::new(0),
             reads: Mutex::new(Vec::new()),
             pause_role: Mutex::new(None),
@@ -97,6 +100,16 @@ impl Boundary {
         let original = *lock(&self.source);
         let source =
             CounterDeadline::new(original.ticks() - i64::try_from(index)?, original.frequency())?;
+        self.connect_source_at(index, source)
+    }
+    pub(in crate::coordinator_entry::tests) fn connect_source_at(
+        &self,
+        index: usize,
+        source: CounterDeadline,
+    ) -> TestResult {
+        if index >= MAX_ENTRY_CONNECTIONS {
+            return Err("External endpoint index outside fixed capacity".into());
+        }
         let header = protocol::Header {
             namespace: facts()?.namespace(),
             epoch: Some(owner()?.epoch),
@@ -241,6 +254,13 @@ impl EntryLease for Lease {
         issue.execute(|| {
             self.0.writes.fetch_add(1, Ordering::AcqRel);
             let frame = protocol::decode(bytes)?;
+            if matches!(
+                frame.payload,
+                protocol::DecodedPayload::Accepted(_) | protocol::DecodedPayload::Rejected(_)
+            ) && let Some(error) = lock(&self.0.outcome_write_failure).take()
+            {
+                return Err(error);
+            }
             match frame.payload {
                 protocol::DecodedPayload::Challenge if self.0.server => {
                     let mut header = frame.header;

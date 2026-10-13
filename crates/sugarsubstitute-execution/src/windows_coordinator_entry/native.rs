@@ -27,6 +27,7 @@ use windows::{
 };
 
 mod slot;
+mod write_error;
 use slot::Slot;
 pub(super) struct Lease {
     server: bool,
@@ -190,7 +191,7 @@ impl EntryLease for Lease {
         match issue.execute(|| {
             // SAFETY: exact immutable buffer and prepared OVERLAPPED remain owned through settlement.
             let result = unsafe { WriteFile(pipe, Some(bytes), None, Some(operation.pointer())) };
-            operation.accept(result, false).map_err(EntryTransportError::from)
+            operation.accept(result, false).map_err(write_error::classify)
         })? {
             IssueDispatch::Issued(accepted) => {
                 Ok(IssueDispatch::Issued(operation.initial_progress(accepted, pipe)?))

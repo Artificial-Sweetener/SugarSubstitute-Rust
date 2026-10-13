@@ -187,7 +187,11 @@ impl Active {
                 self.error(core, error);
                 return;
             }
-            self.diagnostic(core, error.clone());
+            if !matches!(error, EntryTransportError::PeerDisconnected(_))
+                || error.contains_owner_panic()
+            {
+                self.diagnostic(core, error.clone());
+            }
             let slot = &mut self.connections[index];
             if let Some(original) = &mut slot.failure {
                 original.retain_cleanup(error.clone());

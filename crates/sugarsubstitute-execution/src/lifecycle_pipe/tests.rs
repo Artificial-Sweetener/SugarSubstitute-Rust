@@ -34,6 +34,8 @@ mod identity_failures;
 mod late_input;
 #[path = "passive_read_tests.rs"]
 mod passive_read;
+#[path = "retirement_proof_tests.rs"]
+mod retirement_proof;
 fn run() -> TestResult<RunKey> {
     Ok(RunKey {
         owner: CoordinatorKey {

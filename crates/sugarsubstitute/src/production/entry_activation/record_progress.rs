@@ -69,11 +69,16 @@ impl ProductionActivation {
                 .snapshot(ticket.process())?;
             if actual.started && !record.replied && !closing {
                 let value = start.value()?;
+                let reply_until = resources
+                    .client
+                    .now()?
+                    .checked_add(std::time::Duration::from_secs(2))?
+                    .min(value.until);
                 resources.intake.server().control.reply(
                     value.entry_connection,
                     value.entry_request,
                     EntryOperationId::new(1)?,
-                    value.until,
+                    reply_until,
                     EntryOutcome::Accepted(start.run),
                 )?;
                 record.replied = true;

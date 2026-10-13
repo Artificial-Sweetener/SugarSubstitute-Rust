@@ -32,14 +32,22 @@ impl Active {
                 && now < reply.command.deadline;
             if timely {
                 let index = index.ok_or(EntryTransportError::InvalidPhase)?;
-                self.send_outcome(
+                if let Err(error) = self.send_outcome(
                     core,
                     index,
                     reply.outcome,
                     Some(reply.command.operation),
                     reply.command.deadline,
                     now,
-                )?;
+                ) {
+                    if matches!(error, EntryTransportError::PeerDisconnected(_))
+                        && !error.contains_owner_panic()
+                    {
+                        self.close_connection(core, index, Some(error));
+                    } else {
+                        return Err(error);
+                    }
+                }
             } else if reply.charged
                 && let Some(index) = index
             {
@@ -77,7 +85,17 @@ impl Active {
                 self.close_connection(core, index, None);
                 return Ok(());
             }
-            self.send_outcome(core, index, outcome, None, schedule::probe(now, until)?, now)?;
+            if let Err(error) =
+                self.send_outcome(core, index, outcome, None, schedule::probe(now, until)?, now)
+            {
+                if matches!(error, EntryTransportError::PeerDisconnected(_))
+                    && !error.contains_owner_panic()
+                {
+                    self.close_connection(core, index, Some(error));
+                } else {
+                    return Err(error);
+                }
+            }
         }
         Ok(())
     }

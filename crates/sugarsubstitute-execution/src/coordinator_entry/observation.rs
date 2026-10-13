@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Expose closed actual transport facts while preserving separate root authority.
-use super::{AuthenticatedEntryLaunch, VerifiedEntryPeer};
+use super::{AuthenticatedEntryLaunch, EntryTransportError, VerifiedEntryPeer};
 use sugarsubstitute_contracts::{
     coordinator_entry::{
         EntryConnectionId, EntryDiscoveryPhase, EntryOperationId, EntryOutcome, EntryRequestId,
@@ -58,6 +58,9 @@ pub enum EntryTransportObservation {
     ConnectionRetired {
         /// Exact retired connection; an outstanding immutable frame loan still retains storage.
         connection: EntryConnectionId,
+        /// Original disconnected-requester write failure, after checked native retirement.
+        /// This connection-local observation does not fail the serving session.
+        failure: Option<EntryTransportError>,
     },
     /// Actual worker activated authenticated Serving metadata under unchanged preparation.
     ServerActivated {

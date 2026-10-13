@@ -160,6 +160,9 @@ pub enum EntryTransportError {
     Capacity,
     /// Preserve the original central/native clock failure.
     Clock(NativeObservationError),
+    /// An actual write found its requester disconnected before native acceptance.
+    /// The original cause remains in checked connection retirement observations.
+    PeerDisconnected(NativeObservationError),
     /// Preserve original native failure and sticky thread identity restoration facts.
     Native {
         /// Original owned cause, including bounded cleanup causes and owner panic.
@@ -195,7 +198,9 @@ impl EntryTransportError {
     pub fn native_cause(&self) -> Option<&NativeObservationError> {
         match self {
             Self::PreparedRetirement(_) => None,
-            Self::Clock(cause) | Self::Native { cause, .. } => Some(cause),
+            Self::Clock(cause) | Self::PeerDisconnected(cause) | Self::Native { cause, .. } => {
+                Some(cause)
+            }
             Self::Retirement { original, cleanup, .. } => match original.native_cause() {
                 Some(cause) => Some(cause),
                 None => Some(cleanup),
@@ -271,6 +276,10 @@ impl fmt::Debug for EntryTransportError {
                 .debug_struct("EntryTransportError::Native")
                 .field("stage", &cause.stage())
                 .field("identity_unrestored", identity_unrestored)
+                .finish_non_exhaustive(),
+            Self::PeerDisconnected(cause) => formatter
+                .debug_struct("EntryTransportError::PeerDisconnected")
+                .field("stage", &cause.stage())
                 .finish_non_exhaustive(),
             Self::Clock(cause) => formatter
                 .debug_struct("EntryTransportError::Clock")

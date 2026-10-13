@@ -20,6 +20,7 @@ pub(super) struct Boundary {
     pub(super) pending_read: AtomicBool,
     pub(super) prepares: AtomicUsize,
     pub(super) closes: AtomicUsize,
+    pub(super) lease_drops: AtomicUsize,
     pub(super) adopted: AtomicUsize,
     pub(super) retire_failures: AtomicUsize,
     pub(super) close_failed: Gate,
@@ -74,6 +75,7 @@ impl Boundary {
             pending_read: AtomicBool::new(false),
             prepares: AtomicUsize::new(0),
             closes: AtomicUsize::new(0),
+            lease_drops: AtomicUsize::new(0),
             adopted: AtomicUsize::new(0),
             retire_failures: AtomicUsize::new(0),
             close_failed: Gate::default(),
@@ -128,6 +130,11 @@ impl Boundary {
     }
 }
 pub(super) struct Lease(pub(super) Arc<Boundary>);
+impl Drop for Lease {
+    fn drop(&mut self) {
+        self.0.lease_drops.fetch_add(1, Ordering::AcqRel);
+    }
+}
 impl PipeLease for Lease {
     fn adopt(&mut self, _: PeerInput) -> Result<(), (Box<LifecyclePipeFailure>, PeerInput)> {
         self.0.adopted.fetch_add(1, Ordering::AcqRel);

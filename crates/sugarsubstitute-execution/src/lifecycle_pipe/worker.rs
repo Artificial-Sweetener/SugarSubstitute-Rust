@@ -23,6 +23,7 @@ pub(crate) struct ActiveState {
     outcome: Option<JobOutcome<(), LifecyclePipeFailure>>,
     completed: bool,
     native_retired: bool,
+    retirement_published: bool,
 }
 impl ActiveState {
     /// Count the actual boxed worker and outside private shared/control metadata.
@@ -58,6 +59,7 @@ impl ActiveState {
             outcome: None,
             completed: false,
             native_retired: false,
+            retirement_published: false,
         }
     }
     pub(crate) fn completed(&self) -> bool {
@@ -315,6 +317,16 @@ impl ActiveState {
         };
         drop((queued_read, queued_write, available_read, available_write));
         drop(self.lease.take());
+        if !self.retirement_published {
+            let mut state = lock(&self.work.shared.state);
+            state.checked_retirement = Some(super::retirement::CheckedRetirement {
+                execution: self.context.owner_id(),
+                scope: self.context.scope_id(),
+                spec: self.context.spec(),
+                run: state.binding.and_then(PeerBinding::desktop),
+            });
+            self.retirement_published = true;
+        }
         let ended = if clock_available { core.clock.now() } else { now };
         self.completed = true;
         if let Some(outcome) = self.outcome.take() {

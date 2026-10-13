@@ -276,25 +276,39 @@ impl ParentLifecycle {
         let Some((scope, spec, kind)) = self.expected_terminal else {
             return Ok(());
         };
-        let Some(completion) = resources.session.completion.try_take_completion() else {
-            return Ok(());
-        };
-        let valid = completion.scope_id == scope
-            && completion.spec == spec
-            && completion.outcome.kind() == kind;
-        self.terminal = Some(completion);
-        if !valid {
+        // Continue adoption for a retained original terminal after a prior semantic failure.
+        if self.terminal.is_none() {
+            self.terminal = resources.session.completion.try_take_completion();
+        }
+        let Some(terminal) = &self.terminal else { return Ok(()) };
+        if terminal.scope_id != scope || terminal.spec != spec || terminal.outcome.kind() != kind {
             return Err(ParentError::WrongPhase.into());
         }
-        match &self.terminal.as_ref().ok_or(ParentError::WrongPhase)?.outcome {
-            JobOutcome::Success(report) if report.run == Some(self.run) => {}
-            JobOutcome::Cancelled if self.cleanup.is_some() => {}
-            JobOutcome::Failure(cause) => return Err(cause.clone().into()),
-            _ => return Err(ParentError::OwnerFailed.into()),
+        if self.checked_retirement.is_none() {
+            self.checked_retirement = resources.session.control.take_checked_retirement();
+        }
+        let Some(proof) = &self.checked_retirement else { return Ok(()) };
+        if !proof.matches(&resources.session.control)
+            || proof.scope_id() != scope
+            || proof.spec() != spec
+            || proof.run() != Some(self.run)
+        {
+            return Err(ParentError::WrongPhase.into());
         }
         self.terminal_accepted = true;
         self.read = None;
         self.write = None;
+        if !self.terminal_failure_reported {
+            // Report once after adopting the independent physical proof. The first
+            // cause and complete typed terminal remain retained through later cleanup.
+            self.terminal_failure_reported = true;
+            match &terminal.outcome {
+                JobOutcome::Success(report) if report.run == Some(self.run) => {}
+                JobOutcome::Cancelled if self.cleanup.is_some() => {}
+                JobOutcome::Failure(cause) => return Err(cause.clone().into()),
+                _ => return Err(ParentError::OwnerFailed.into()),
+            }
+        }
         Ok(())
     }
 }

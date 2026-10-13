@@ -139,7 +139,7 @@ pub(super) fn rejected_connection(
         }
         while let Some(fact) = control.take_observation() {
             assert!(!matches!(fact, EntryTransportObservation::RequestAuthenticated { .. }));
-            if matches!(fact,EntryTransportObservation::ConnectionRetired {connection} if Some(connection)!=original)
+            if matches!(fact,EntryTransportObservation::ConnectionRetired {connection, ..} if Some(connection)!=original)
             {
                 while let Err(error) = rig.client.drain_completions(NonZeroUsize::MIN) {
                     failures.push(error);

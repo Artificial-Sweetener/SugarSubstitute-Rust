@@ -89,6 +89,13 @@ fn startup_diagnostic_preserves_nested_causes_and_bounds_cyclic_sources()
     let diagnostic = format!("{:?}", FailureDisplay(&configuration));
     assert!(!diagnostic.contains("retained-config-secret"));
     assert!(!diagnostic.contains("unrecognized"));
+    for (cause, expected) in [
+        (EntryTransportError::Closed, "Closed"),
+        (EntryTransportError::InvalidDeadline, "InvalidDeadline"),
+        (EntryTransportError::Authentication, "Authentication"),
+    ] {
+        assert_eq!(format!("{:?}", FailureDisplay(&cause)), expected);
+    }
     Ok(())
 }
 

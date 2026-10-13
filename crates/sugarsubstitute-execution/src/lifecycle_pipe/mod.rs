@@ -8,9 +8,11 @@ pub(crate) use shared::SharedRef;
 mod binding;
 mod commands;
 mod owner;
+mod retirement;
 pub(crate) use binding::{Observation, PeerBinding, VerifiedPeer};
 pub(crate) use commands::{Control, retain_failure};
 pub(crate) use owner::Owner;
+pub use retirement::LifecyclePipeRetirement;
 mod buffers;
 mod control;
 mod current_admission;
@@ -131,6 +133,7 @@ impl Drop for Authentication {
     }
 }
 pub(crate) struct State {
+    checked_retirement: Option<retirement::CheckedRetirement>,
     #[cfg(windows)]
     pub(crate) capture_inherited: Option<[usize; 2]>,
     #[cfg(windows)]
@@ -169,6 +172,7 @@ pub(crate) struct State {
 impl State {
     fn new(binding: Option<PeerBinding>) -> Self {
         Self {
+            checked_retirement: None,
             #[cfg(windows)]
             capture_inherited: None,
             #[cfg(windows)]
