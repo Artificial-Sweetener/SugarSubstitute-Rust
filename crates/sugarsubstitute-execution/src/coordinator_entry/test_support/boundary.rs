@@ -2,19 +2,22 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Supply controlled external pipe effects without implementing the owner state machine.
 use super::*;
+use std::sync::atomic::AtomicU64;
 pub(in crate::coordinator_entry::tests) struct Boundary {
     pub(in crate::coordinator_entry::tests) server: bool,
     pub(in crate::coordinator_entry::tests) context_override: Mutex<Option<JobContext>>,
     pub(in crate::coordinator_entry::tests) issue_finished: Gate,
     pub(in crate::coordinator_entry::tests) clock_probe:
         Mutex<Option<(crate::native_deadlines::Role, crate::runtime_test_support::ClockCallback)>>,
+    pub(in crate::coordinator_entry::tests) quiesce_probe:
+        Mutex<Option<(usize, crate::runtime_test_support::ClockCallback)>>,
     pub(in crate::coordinator_entry::tests) rig_clock:
         Arc<crate::runtime_test_support::ManualClock>,
     pub(in crate::coordinator_entry::tests) signals: Mutex<Vec<[Arc<Signal>; 3]>>,
-    incoming: Mutex<VecDeque<Vec<u8>>>,
+    incoming: Mutex<VecDeque<(usize, Vec<u8>)>>,
     pub(in crate::coordinator_entry::tests) replies: Mutex<Vec<(protocol::Header, EntryOutcome)>>,
     pub(in crate::coordinator_entry::tests) source: Mutex<CounterDeadline>,
-    pub(in crate::coordinator_entry::tests) available: AtomicBool,
+    pub(in crate::coordinator_entry::tests) available: AtomicU64,
     pub(in crate::coordinator_entry::tests) wrong_peer: AtomicBool,
     pub(in crate::coordinator_entry::tests) changed_nonce: AtomicBool,
     pub(in crate::coordinator_entry::tests) fail_prepare: AtomicBool,
@@ -28,6 +31,8 @@ pub(in crate::coordinator_entry::tests) struct Boundary {
     pub(in crate::coordinator_entry::tests) native_closes: AtomicUsize,
     pub(in crate::coordinator_entry::tests) drops: AtomicUsize,
     pub(in crate::coordinator_entry::tests) initializing: AtomicUsize,
+    pub(in crate::coordinator_entry::tests) defer_client_outcome: AtomicBool,
+    pub(in crate::coordinator_entry::tests) client_launches: Mutex<Vec<protocol::Header>>,
     pub(in crate::coordinator_entry::tests) memory: Mutex<Option<MemoryLease>>,
     nonce: AtomicUsize,
     reads: Mutex<Vec<Option<u32>>>,
@@ -47,6 +52,7 @@ impl Boundary {
         Ok(Arc::new(Self {
             server,
             clock_probe: Mutex::new(None),
+            quiesce_probe: Mutex::new(None),
             context_override: Mutex::new(None),
             issue_finished: Gate::default(),
             rig_clock: rig.clock.clone(),
@@ -54,7 +60,7 @@ impl Boundary {
             incoming: Mutex::new(VecDeque::new()),
             replies: Mutex::new(Vec::new()),
             source: Mutex::new(source()?),
-            available: AtomicBool::new(false),
+            available: AtomicU64::new(0),
             wrong_peer: AtomicBool::new(false),
             changed_nonce: AtomicBool::new(false),
             fail_prepare: AtomicBool::new(false),
@@ -68,6 +74,8 @@ impl Boundary {
             native_closes: AtomicUsize::new(0),
             drops: AtomicUsize::new(0),
             initializing: AtomicUsize::new(0),
+            defer_client_outcome: AtomicBool::new(false),
+            client_launches: Mutex::new(Vec::new()),
             memory: Mutex::new(None),
             nonce: AtomicUsize::new(0),
             reads: Mutex::new(Vec::new()),
@@ -80,7 +88,15 @@ impl Boundary {
         }))
     }
     pub(in crate::coordinator_entry::tests) fn connect(&self) -> TestResult {
-        let source = *lock(&self.source);
+        self.connect_at(0)
+    }
+    pub(in crate::coordinator_entry::tests) fn connect_at(&self, index: usize) -> TestResult {
+        if index >= MAX_ENTRY_CONNECTIONS {
+            return Err("External endpoint index outside fixed capacity".into());
+        }
+        let original = *lock(&self.source);
+        let source =
+            CounterDeadline::new(original.ticks() - i64::try_from(index)?, original.frequency())?;
         let header = protocol::Header {
             namespace: facts()?.namespace(),
             epoch: Some(owner()?.epoch),
@@ -90,9 +106,11 @@ impl Boundary {
         };
         let mut bytes = vec![0; protocol::HEADER_BYTES];
         protocol::encode(&mut bytes, &header, protocol::Payload::Hello)?;
-        lock(&self.incoming).push_back(bytes);
-        self.available.store(true, Ordering::Release);
-        self.wake();
+        lock(&self.incoming).push_back((index, bytes));
+        self.available.fetch_or(1 << index, Ordering::AcqRel);
+        if let Some(signals) = lock(&self.signals).get(index) {
+            signals[0].complete();
+        }
         Ok(())
     }
     pub(in crate::coordinator_entry::tests) fn wake(&self) {
@@ -102,13 +120,14 @@ impl Boundary {
     }
     fn push(
         &self,
+        index: usize,
         header: protocol::Header,
         payload: protocol::Payload<'_>,
     ) -> Result<(), EntryTransportError> {
         let mut bytes = vec![0; MAX_ENTRY_FRAME_BYTES];
         let length = protocol::encode(&mut bytes, &header, payload)?;
         bytes.truncate(length);
-        lock(&self.incoming).push_back(bytes);
+        lock(&self.incoming).push_back((index, bytes));
         Ok(())
     }
     fn prepare_issue(
@@ -180,7 +199,7 @@ impl EntryLease for Lease {
             if let Some(stage) = *lock(&self.0.connect_failure) {
                 return Err(failure(stage));
             }
-            if !self.0.server || (index == 0 && self.0.available.load(Ordering::Acquire)) {
+            if !self.0.server || (self.0.available.load(Ordering::Acquire) & (1 << index) != 0) {
                 Ok(Progress::Complete(0))
             } else {
                 Ok(Progress::Pending)
@@ -198,7 +217,12 @@ impl EntryLease for Lease {
         self.0.prepare_issue(index, crate::native_deadlines::Role::Read)?;
         issue.execute(|| {
             self.0.reads_issued.fetch_add(1, Ordering::AcqRel);
-            if let Some(frame) = lock(&self.0.incoming).pop_front() {
+            let frame = {
+                let mut incoming = lock(&self.0.incoming);
+                let position = incoming.iter().position(|(slot, _)| *slot == index);
+                position.and_then(|position| incoming.remove(position).map(|(_, bytes)| bytes))
+            };
+            if let Some(frame) = frame {
                 bytes[..frame.len()].copy_from_slice(&frame);
                 lock(&self.0.reads)[index] = Some(frame.len() as u32);
                 Ok(Progress::Complete(frame.len() as u32))
@@ -209,7 +233,7 @@ impl EntryLease for Lease {
     }
     fn write(
         &mut self,
-        _index: usize,
+        index: usize,
         bytes: &[u8],
         issue: NativeIssue<'_>,
     ) -> Result<IssueDispatch<Progress>, EntryTransportError> {
@@ -225,7 +249,7 @@ impl EntryLease for Lease {
                     }
                     let request =
                         request().map_err(|cause| failure_from("entry_fixture_request", cause))?;
-                    self.0.push(header, protocol::Payload::Launch(&request))?;
+                    self.0.push(index, header, protocol::Payload::Launch(&request))?;
                 }
                 protocol::DecodedPayload::Hello if !self.0.server => {
                     let mut header = frame.header;
@@ -238,23 +262,31 @@ impl EntryLease for Lease {
                         .is_ok()
                     {
                         header.epoch = None;
-                        self.0.push(header, protocol::Payload::Initializing)?;
+                        self.0.push(index, header, protocol::Payload::Initializing)?;
                     } else {
                         header.epoch = Some(
                             owner()
                                 .map_err(|cause| failure_from("entry_fixture_owner", cause))?
                                 .epoch,
                         );
-                        header.nonce = [7; 32];
-                        self.0.push(header, protocol::Payload::Challenge)?;
+                        let nonce = self.0.nonce.fetch_add(1, Ordering::AcqRel) + 1;
+                        header.nonce =
+                            [u8::try_from(nonce).map_err(|_| EntryTransportError::Capacity)?; 32];
+                        self.0.push(index, header, protocol::Payload::Challenge)?;
                     }
                 }
-                protocol::DecodedPayload::Launch(_) if !self.0.server => self.0.push(
-                    frame.header,
-                    protocol::Payload::Accepted(
-                        run().map_err(|cause| failure_from("entry_fixture_run", cause))?,
-                    ),
-                )?,
+                protocol::DecodedPayload::Launch(_) if !self.0.server => {
+                    lock(&self.0.client_launches).push(frame.header);
+                    if !self.0.defer_client_outcome.load(Ordering::Acquire) {
+                        self.0.push(
+                            index,
+                            frame.header,
+                            protocol::Payload::Accepted(
+                                run().map_err(|cause| failure_from("entry_fixture_run", cause))?,
+                            ),
+                        )?;
+                    }
+                }
                 protocol::DecodedPayload::Accepted(run) => {
                     lock(&self.0.replies).push((frame.header, EntryOutcome::Accepted(run)))
                 }
@@ -273,13 +305,14 @@ impl EntryLease for Lease {
         role: crate::native_deadlines::Role,
     ) -> Result<Progress, EntryTransportError> {
         match role {
-            crate::native_deadlines::Role::Handshake => {
-                Ok(if !self.0.server || (index == 0 && self.0.available.load(Ordering::Acquire)) {
+            crate::native_deadlines::Role::Handshake => Ok(
+                if !self.0.server || (self.0.available.load(Ordering::Acquire) & (1 << index) != 0)
+                {
                     Progress::Complete(0)
                 } else {
                     Progress::Pending
-                })
-            }
+                },
+            ),
             crate::native_deadlines::Role::Read => {
                 Ok(lock(&self.0.reads)[index].map_or(Progress::Pending, Progress::Complete))
             }
@@ -293,6 +326,21 @@ impl EntryLease for Lease {
     ) -> Result<(), EntryTransportError> {
         if role == crate::native_deadlines::Role::Read {
             lock(&self.0.reads)[index] = None;
+            let probe = {
+                let mut stored = lock(&self.0.quiesce_probe);
+                if index == 0
+                    && stored.as_ref().is_some_and(|(read, _)| {
+                        *read == self.0.reads_issued.load(Ordering::Acquire)
+                    })
+                {
+                    stored.take().map(|(_, probe)| probe)
+                } else {
+                    None
+                }
+            };
+            if let Some(probe) = probe {
+                probe();
+            }
         }
         Ok(())
     }
@@ -322,9 +370,7 @@ impl EntryLease for Lease {
             self.0.retiring.open();
             return Ok(false);
         }
-        if index == 0 {
-            self.0.available.store(false, Ordering::Release);
-        }
+        self.0.available.fetch_and(!(1 << index), Ordering::AcqRel);
         self.0.native_closes.fetch_add(1, Ordering::AcqRel);
         Ok(true)
     }

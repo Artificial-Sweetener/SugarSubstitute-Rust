@@ -39,13 +39,14 @@ impl Active {
             if let Some(buffer) = returned {
                 self.connections[index].read = Some(buffer);
             }
-            if closing
-                || expired
+            if closing {
+                self.close_connection(core, index, None);
+            } else if expired
                 || self.connections[index]
                     .pending
                     .is_some_and(|io| io.deadline.is_some_and(|deadline| now >= deadline))
             {
-                self.close_connection(core, index, None);
+                self.expire_probe(core, index, now)?;
             }
             if self.connections[index].phase == Phase::Retiring {
                 self.retire_connection(core, index)?;
@@ -82,6 +83,26 @@ impl Active {
             }
         }
         self.publish_deadline(core)
+    }
+    /// Retire the expired native operation before a bounded same-source reprobe.
+    /// The original setup cutoff and staged request remain unchanged; checked
+    /// connection retirement must finish before the existing reuse path can run.
+    fn expire_probe(
+        &mut self,
+        core: &Core,
+        index: usize,
+        now: Moment,
+    ) -> Result<(), EntryTransportError> {
+        if !self.work.shared.server {
+            if now < self.work.shared.original_preparation {
+                self.connections[index].retry_at =
+                    Some(schedule::probe(now, self.work.shared.original_preparation)?);
+            } else {
+                self.outcome.get_or_insert(JobOutcome::TimedOut);
+            }
+        }
+        self.close_connection(core, index, None);
+        Ok(())
     }
     fn step(&mut self, core: &Core, index: usize, now: Moment) -> Result<(), EntryTransportError> {
         match self.connections[index].phase {
@@ -153,10 +174,11 @@ impl Active {
             IssueDispatch::Issued(Progress::Complete(bytes)) => {
                 self.complete(core, index, io, bytes)
             }
-            IssueDispatch::Closed | IssueDispatch::Expired => {
+            IssueDispatch::Closed => {
                 self.close_connection(core, index, None);
                 Ok(())
             }
+            IssueDispatch::Expired => self.expire_probe(core, index, core.clock.now()),
         }
     }
     fn read_frame(
@@ -204,10 +226,11 @@ impl Active {
             IssueDispatch::Issued(Progress::Complete(bytes)) => {
                 self.complete(core, index, io, bytes)
             }
-            IssueDispatch::Closed | IssueDispatch::Expired => {
+            IssueDispatch::Closed => {
                 self.close_connection(core, index, None);
                 Ok(())
             }
+            IssueDispatch::Expired => self.expire_probe(core, index, core.clock.now()),
         }
     }
     pub(super) fn write_frame(
@@ -251,10 +274,11 @@ impl Active {
             IssueDispatch::Issued(Progress::Complete(bytes)) => {
                 self.complete(core, index, io, bytes)
             }
-            IssueDispatch::Closed | IssueDispatch::Expired => {
+            IssueDispatch::Closed => {
                 self.close_connection(core, index, None);
                 Ok(())
             }
+            IssueDispatch::Expired => self.expire_probe(core, index, core.clock.now()),
         }
     }
     fn complete(
@@ -269,6 +293,11 @@ impl Active {
         self.connections[index].pending = None;
         let now = core.clock.now();
         if io.deadline.is_some_and(|deadline| now >= deadline) {
+            if !self.work.shared.server {
+                // Checked quiescence returned after the finite probe. Discard
+                // these late bytes before any protocol outcome is decoded.
+                return self.expire_probe(core, index, now);
+            }
             return Err(EntryTransportError::InvalidDeadline);
         }
         match io.role {

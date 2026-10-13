@@ -95,6 +95,28 @@ impl CoordinatorEntryControl {
         self.shared.changed();
         Some(result)
     }
+    /// Rearm the coalesced host wake only while this session has queued facts.
+    /// Call after a bounded observation drain. Closed or terminal sessions may
+    /// still retain facts and charged loans; this operation grants no native
+    /// admission and samples no clock. Returns whether facts remained at the
+    /// queue check, not whether a wake succeeded or native custody settled.
+    /// The queue check and passive mailbox flag are atomic with respect to this
+    /// session's readers. The supplied wake runs after both locks are released;
+    /// its original failure remains observable through completion draining.
+    pub fn rearm_observations(&self) -> bool {
+        let Some(core) = self.shared.core.upgrade() else { return false };
+        let wake = {
+            let state = lock(&self.shared.state);
+            if state.observations.is_empty() {
+                return false;
+            }
+            core.mailbox.signal_capacity()
+        };
+        if wake {
+            core.mailbox.deliver_wake();
+        }
+        true
+    }
     /// Queue one closed protocol read with its unchanged absolute probe deadline.
     /// # Errors
     /// Rejects stale IDs, occupied read/loan slots, exhausted credits, expired or excessive deadlines.

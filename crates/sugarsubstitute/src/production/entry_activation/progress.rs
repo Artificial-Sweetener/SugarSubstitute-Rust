@@ -176,6 +176,13 @@ impl ProductionActivation {
                 pending.job = None;
             }
         }
+        if self.closing {
+            for pending in self.pending.iter_mut().flatten() {
+                if let Some(completed) = &mut pending.completion {
+                    projection::return_unused_source(&mut completed.outcome);
+                }
+            }
+        }
         for at in 0..self.pending.len() {
             let Some(pending) = &mut self.pending[at] else { continue };
             let Some(completion) = &pending.completion else { continue };

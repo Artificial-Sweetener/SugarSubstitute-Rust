@@ -51,6 +51,41 @@ pub(super) fn verify_proof(
     }
     Ok(())
 }
+/// Bind the authenticated server to the retained client instance before its ping.
+pub(super) struct ConnectedPeer {
+    pipe: usize,
+    server_pid: u32,
+}
+impl ConnectedPeer {
+    /// Preserve a failed connected-peer query instead of minting authentication.
+    pub(super) fn authenticate(
+        expected: CaptureAttachExpectation,
+        proofs: [ProcessProof; 3],
+        pipe: usize,
+        query: impl FnOnce() -> Result<u32, NativeObservationError>,
+    ) -> Result<Self, NativeObservationError> {
+        let server_pid = query()?;
+        verify_proof(expected, proofs[0], proofs[1], proofs[2], server_pid)?;
+        if pipe == 0 {
+            return Err(ping::invariant("capture_connected_pipe_missing"));
+        }
+        Ok(Self { pipe, server_pid })
+    }
+    /// Recheck retained process facts on the same instance after its valid reply.
+    /// Crashpad disconnects after replying; this historical peer proof grants no
+    /// permission to reconnect, query another endpoint, or skip process liveness.
+    pub(super) fn revalidate(
+        &self,
+        expected: CaptureAttachExpectation,
+        proofs: [ProcessProof; 3],
+        pipe: usize,
+    ) -> Result<(), NativeObservationError> {
+        if pipe != self.pipe {
+            return Err(ping::invariant("capture_connected_pipe_changed"));
+        }
+        verify_proof(expected, proofs[0], proofs[1], proofs[2], self.server_pid)
+    }
+}
 pub(super) struct Lease {
     expected: CaptureAttachExpectation,
     creator: Handle,
@@ -63,6 +98,7 @@ pub(super) struct Lease {
     ping_complete: bool,
     prepared: bool,
     own: Option<ProcessProof>,
+    connected: Option<ConnectedPeer>,
 }
 impl Lease {
     pub(super) fn new(expected: CaptureAttachExpectation) -> Self {
@@ -78,6 +114,7 @@ impl Lease {
             ping_complete: false,
             prepared: false,
             own: None,
+            connected: None,
         }
     }
     fn acquire_process(
@@ -124,15 +161,35 @@ impl Lease {
         };
         Ok(ProcessProof { facts, identity, live })
     }
-    fn verify(&mut self) -> Result<(), NativeObservationError> {
+    /// Observe the same retained process handles and their current token/liveness.
+    fn process_proofs(&mut self) -> Result<[ProcessProof; 3], NativeObservationError> {
         let own = self.own.ok_or_else(|| ping::invariant("capture_current_owner"))?;
         let creator = Self::proof(self.creator.raw(), &self.creator, &mut self.creator_token)?;
         let handler = Self::proof(self.handler.raw(), &self.handler, &mut self.handler_token)?;
-        let mut server_pid = 0;
-        // SAFETY: exact retained connected local endpoint; no alternate-name lookup.
-        unsafe { GetNamedPipeServerProcessId(self.pipe.raw(), &mut server_pid) }
-            .map_err(|cause| NativeObservationError::new("capture_pipe_server", cause))?;
-        verify_proof(self.expected, own, creator, handler, server_pid)
+        Ok([own, creator, handler])
+    }
+    /// Authenticate the connected endpoint before issuing any ping bytes.
+    fn verify_connected(&mut self) -> Result<(), NativeObservationError> {
+        let proofs = self.process_proofs()?;
+        let pipe = self.pipe.raw();
+        let connected =
+            ConnectedPeer::authenticate(self.expected, proofs, self.pipe.value(), || {
+                let mut server_pid = 0;
+                // SAFETY: exact retained connected local endpoint; no alternate-name lookup.
+                unsafe { GetNamedPipeServerProcessId(pipe, &mut server_pid) }
+                    .map_err(|cause| NativeObservationError::new("capture_pipe_server", cause))?;
+                Ok(server_pid)
+            })?;
+        self.connected = Some(connected);
+        Ok(())
+    }
+    /// Validate the actual reply's original peer without querying a disconnected pipe.
+    fn verify_completed_ping(&mut self) -> Result<(), NativeObservationError> {
+        let proofs = self.process_proofs()?;
+        self.connected
+            .as_ref()
+            .ok_or_else(|| ping::invariant("capture_connected_peer_missing"))?
+            .revalidate(self.expected, proofs, self.pipe.value())
     }
     fn close_temporary(&mut self) -> Result<bool, NativeObservationError> {
         if let Some(ping) = &mut self.ping
@@ -194,7 +251,7 @@ impl AttachLease for Lease {
         // SAFETY: uniquely retained opened message-mode pipe with attribute-write rights.
         unsafe { SetNamedPipeHandleState(self.pipe.raw(), Some(&mode), None, None) }
             .map_err(|cause| NativeObservationError::new("capture_pipe_message_mode", cause))?;
-        self.verify()?;
+        self.verify_connected()?;
         self.ping = Some(ping::Ping::new(signal));
         self.ping.as_mut().ok_or_else(|| ping::invariant("capture_ping_owner"))?.issue(
             self.pipe.raw(),
@@ -215,8 +272,8 @@ impl AttachLease for Lease {
             {
                 return Ok(None);
             }
+            self.verify_completed_ping()?;
             self.ping_complete = true;
-            self.verify()?;
         }
         if !self.close_temporary()? {
             return Ok(None);

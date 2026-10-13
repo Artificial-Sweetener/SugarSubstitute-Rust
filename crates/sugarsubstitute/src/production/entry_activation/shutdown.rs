@@ -7,6 +7,15 @@ use sugarsubstitute_supervision::{RegistryAdmissionError, profiles::PROFILE_OPER
 impl ProductionActivation {
     pub(super) fn close_records(&mut self, resources: &mut EntryResources<'_>) -> Result<()> {
         let budget = self.shutdown.ok_or("Original activation shutdown budget missing")?;
+        // An unlaunched source has no active captured consumer. Return its passive
+        // transport loan before waiting for the very transport job it keeps alive.
+        for record in self.records.iter_mut().flatten().map(|held| held.record.as_mut()) {
+            if record.start.is_none()
+                && let Some(completed) = &mut record.projected
+            {
+                projection::return_unused_source(&mut completed.outcome);
+            }
+        }
         let Some(retained_backend) = &mut self.backend else {
             for record in self.records.iter_mut().flatten().map(|retained| retained.record.as_mut())
             {

@@ -131,6 +131,10 @@ impl ProductionEntryIntake {
             }
             *output = Some(EntryIntakeEvent { side, observation, failure });
         }
+        self.server.control.rearm_observations();
+        if let Some(client) = &self.initial_client {
+            client.control.rearm_observations();
+        }
         EntryIntakeBatch { events }
     }
 

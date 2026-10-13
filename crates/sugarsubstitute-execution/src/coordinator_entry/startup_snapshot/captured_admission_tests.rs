@@ -35,6 +35,80 @@ fn snapshot(
     request.into_startup_snapshot().map_err(|failure| failure.error.into())
 }
 
+/// The ordinary allocation cannot admit the genuine captured pair or consume its identity.
+#[test]
+fn captured_parent_requires_its_actual_allocation_before_factory_and_preserves_pair() -> TestResult
+{
+    use crate::windows_lifecycle_pipe::{
+        CapturedLifecycleStart, MIN_CAPTURED_LIFECYCLE_PIPE_BYTES, MIN_LIFECYCLE_PIPE_BYTES,
+    };
+    let rig = Rig::new()?;
+    let boundary = Boundary::new(&rig, true)?;
+    let (_entry_scope, mut session) = server(&rig, &boundary)?;
+    let startup = snapshot(&rig, &boundary, &session)?;
+    let mut retirement = None;
+    let (_capture_scope, capture_job, pin, release) =
+        crate::capture_attach::test_support::admitted_pin(&rig, run()?)?;
+    retirement.replace(release);
+    let original_handshake = Moment::from_nanos(25_000_000_000);
+    let binding =
+        AdmissionBinding::project(run()?, original_handshake, &pin, startup.admission_binding()?);
+    drop(capture_job);
+    let core = &rig.client.core;
+    let receiving =
+        core.create_scope_kind(ScopeSpec { id: ScopeId::new(4)?, deadline: None }, None, true)?;
+    let mut request = spec(9, JobClass::NativeObservation, MIN_LIFECYCLE_PIPE_BYTES)?;
+    request.operation = Operation::NativeLifecycle;
+    let calls = AtomicUsize::new(0);
+    let input = CapturedLifecycleStart::new(pin, startup);
+    let rejected = core.admit_owned(
+        &receiving,
+        request,
+        RequestKind::CapturedLifecycle(&binding),
+        input,
+        |input, _, _, _| {
+            calls.fetch_add(1, Ordering::AcqRel);
+            Err::<(QueuedJob, ()), _>((AdmissionError::InvalidCaptureAdmission, input))
+        },
+    );
+    let input = match rejected {
+        Err((AdmissionError::InvalidCaptureAdmission, input)) => input,
+        _ => return Err("Ordinary allocation did not reject genuine captured input".into()),
+    };
+    assert!(!input.is_consumed());
+    assert_eq!(calls.load(Ordering::Acquire), 0);
+    assert_eq!(receiving.snapshot().reserved_bytes, 0);
+    assert_eq!(receiving.snapshot().queued, 0);
+    request.reservation_bytes = MIN_CAPTURED_LIFECYCLE_PIPE_BYTES;
+    let returned = core.admit_owned(
+        &receiving,
+        request,
+        RequestKind::CapturedLifecycle(&binding),
+        input,
+        |input, context, _, timing| {
+            calls.fetch_add(1, Ordering::AcqRel);
+            assert_eq!(context.deadline(), None);
+            assert_eq!(context.spec(), request);
+            assert_eq!(timing.native_handshake, Some(original_handshake));
+            // The external constructor rejects without moving either actual owner.
+            Err::<(QueuedJob, ()), _>((AdmissionError::InvalidCaptureAdmission, input))
+        },
+    );
+    let input = match returned {
+        Err((AdmissionError::InvalidCaptureAdmission, input)) => input,
+        _ => return Err("Expected complete original input from controlled constructor".into()),
+    };
+    assert_eq!(calls.load(Ordering::Acquire), 1);
+    assert!(!input.is_consumed());
+    assert_eq!(receiving.snapshot().reserved_bytes, 0);
+    assert_eq!(receiving.snapshot().queued, 0);
+    drop(input);
+    session.control.close();
+    assert!(matches!(rig.completion(&mut session.completion)?.outcome, JobOutcome::Success(_)));
+    drop(retirement);
+    Ok(())
+}
+
 #[test]
 fn captured_parent_rejects_closed_receiving_ancestor_before_constructor_and_id_use() -> TestResult {
     let rig = Rig::new()?;

@@ -15,6 +15,7 @@ impl Core {
         self.stop_cancelled_capture(crate::capture_attach::control::CleanupTrigger::ScopeShutdown);
         self.changed();
     }
+    /// Request job cleanup before result transfer; scopes own acknowledged native lifetimes.
     pub(crate) fn cancel_job(&self, id: JobId) {
         let state = lock(&self.state);
         if let Some(record) = state.jobs.get(&id)
@@ -24,7 +25,13 @@ impl Core {
             record.job.cancellation().request();
         }
         #[cfg(any(windows, test))]
-        let custody = state.jobs.get(&id).and_then(Record::native_custody_loan);
+        // Acknowledgment transfers the result's lifetime to its actual owner.
+        // Scope/owner shutdown still requests cleanup independently of this job.
+        let custody = state
+            .jobs
+            .get(&id)
+            .filter(|record| !record.acknowledged)
+            .and_then(Record::native_custody_loan);
         drop(state);
         #[cfg(any(windows, test))]
         if let Some(custody) = custody {

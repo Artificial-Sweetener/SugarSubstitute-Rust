@@ -80,6 +80,7 @@ impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
             return Ok(());
         }
         self.closing = true;
+        drop(self.pending_activation.take());
         if let Some(bootstrap) = &mut self.bootstrap {
             bootstrap.request_close();
         }

@@ -40,10 +40,12 @@ impl Core {
         }
     }
 
+    /// Dispose an untaken terminal value without revoking its acknowledged owner.
     pub(crate) fn dispose_terminal(&self, id: JobId) {
         let mut state = lock(&self.state);
         if let Some(record) = state.jobs.get_mut(&id)
             && matches!(record.phase, JobPhase::Terminal(_))
+            && !record.acknowledged
             && !record.retiring
         {
             record.retiring = true;

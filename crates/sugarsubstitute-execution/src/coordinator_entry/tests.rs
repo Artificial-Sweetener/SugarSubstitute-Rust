@@ -44,5 +44,11 @@ mod startup_snapshot;
 #[path = "worker_tests.rs"]
 mod worker;
 
+#[path = "client_probe_tests.rs"]
+mod client_probe;
+
+#[path = "observation_rearm_tests.rs"]
+mod observation_rearm;
+
 #[path = "startup_snapshot/captured_admission_tests.rs"]
 mod captured_admission;

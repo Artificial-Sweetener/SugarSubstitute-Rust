@@ -16,7 +16,7 @@ use sugarsubstitute_execution::{
     windows_capture_attach::CaptureAttachLaunchPin,
     windows_lifecycle_pipe::{
         CapturedLifecycleStart, LifecycleDesktopEnrollment, LifecyclePipeBootstrap,
-        LifecyclePipeDeadline, LifecyclePipeSession, MIN_LIFECYCLE_PIPE_BYTES,
+        LifecyclePipeDeadline, LifecyclePipeSession, MIN_CAPTURED_LIFECYCLE_PIPE_BYTES,
     },
 };
 use sugarsubstitute_supervision::{
@@ -129,7 +129,7 @@ impl DesktopStart {
             operation: Operation::NativeLifecycle,
             class: JobClass::NativeObservation,
             deadline: None,
-            reservation_bytes: MIN_LIFECYCLE_PIPE_BYTES,
+            reservation_bytes: MIN_CAPTURED_LIFECYCLE_PIPE_BYTES,
             replacement: None,
         };
         self.pipe = Some(resources.client.reserve_captured_lifecycle_pipe_server(

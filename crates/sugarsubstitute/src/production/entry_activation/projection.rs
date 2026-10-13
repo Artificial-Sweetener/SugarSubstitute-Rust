@@ -2,6 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Project one original authenticated entry under its admitted finite allocation.
 #[cfg(test)]
+#[path = "projection_retirement_tests.rs"]
+mod retirement_tests;
+#[cfg(test)]
 #[path = "projection_tests.rs"]
 mod tests;
 use std::{error::Error, ffi::OsString, fmt, os::windows::ffi::OsStringExt, path::PathBuf};
@@ -11,7 +14,7 @@ use sugarsubstitute_contracts::{
         EntryConnectionId, EntryConnectionView, EntryLaunchRequestView, EntryRequestId,
         EntryWindowsPathView,
     },
-    execution::{JobContext, MemoryClaim, MemoryClaimError, Moment},
+    execution::{JobContext, JobOutcome, MemoryClaim, MemoryClaimError, Moment},
     lifecycle::BackendTarget,
 };
 use sugarsubstitute_execution::{
@@ -76,6 +79,22 @@ pub(super) struct ProjectedEntry {
 pub(super) struct ProjectionFailure {
     retained: ChargedBlockingInput<ProjectionInput>,
 }
+/// Return a completed, unlaunched request's passive connection loan during
+/// shutdown. The complete outcome, first error, controls, metadata and original
+/// charges remain with the caller. This proves no transport/native settlement.
+/// An admitted captured session owns its transferred source and is excluded.
+pub(super) fn return_unused_source(outcome: &mut JobOutcome<ProjectedEntry, ProjectionFailure>) {
+    match outcome {
+        JobOutcome::Success(value) => drop(value.snapshot.take()),
+        JobOutcome::Failure(failure) => {
+            let input = failure.retained.input_mut();
+            drop(input.request.take());
+            drop(input.snapshot.take());
+        }
+        _ => {}
+    }
+}
+
 enum ProjectionCause {
     NotStarted,
     Claim(MemoryClaimError),
