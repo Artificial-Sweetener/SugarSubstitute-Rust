@@ -85,11 +85,11 @@ test('keeps masonry content identity and restores the native frame through close
   expect(f.root.style.marginLeft).toBe('0px');
   const borrowed = document.createElement('input');
   f.workspace.content.append(borrowed);
-  f.workspace.suspend(true);
+  f.workspace.suspend('app');
   expect(f.workspace.visible).toBe(false);
   expect(f.workspace.content.contains(borrowed)).toBe(true);
   expect(f.root.style.marginLeft).toBe('');
-  f.workspace.suspend(false);
+  f.workspace.suspend(null);
   f.workspace.preferences({ visible: false, width: 600 });
   expect(f.workspace.content.style.left).toBe('0px');
   f.workspace.preferences({ visible: true, width: 600 });
@@ -105,6 +105,16 @@ test('keeps masonry content identity and restores the native frame through close
   expect(f.frames.pending).toBe(0);
   window.dispatchEvent(new Event('resize'));
   expect(f.actions.changed).toHaveBeenCalledTimes(changed);
+});
+
+test('does not generate presentation mutations when accepted allocation is unchanged', () => {
+  const f = fixture();
+  const mutations = new MutationObserver(() => undefined);
+  mutations.observe(f.workspace.content, { attributes: true });
+  for (let index = 0; index < 100; index++) f.workspace.preferences({ visible: true, width: 0 });
+  expect(mutations.takeRecords()).toHaveLength(0);
+  mutations.disconnect();
+  f.dispose();
 });
 
 test('requires explicit narrow activation and exposes authoritative keyboard width bounds', () => {

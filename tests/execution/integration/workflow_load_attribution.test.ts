@@ -73,6 +73,35 @@ test('keeps the reused root unassigned until the loaded workflow has committed',
   expect(host.subscriberCount).toBe(0);
 });
 
+test('distinguishes stored workflow activation from replacement during overlapping round trips', async () => {
+  const a = workflowFixture('a');
+  const b = workflowFixture('b');
+  const host = new WorkflowHostFixture(a);
+  host.extensionManager.workflow.openWorkflows.push(b);
+  const sessions = new WorkflowSessionStore();
+  let key = 0;
+  const adapter = new ComfyWorkflowSessionAdapter({
+    app: host,
+    sessions,
+    nextKey: () => String(++key),
+    logger: { error: jest.fn() },
+  });
+  adapter.install();
+  const pending = deferred();
+  host.pauseAfterConfigure = () => pending.promise;
+  const observer = createComfyWorkflowLoadObserver(host, sessions, adapter, { error: jest.fn() });
+  observer.install();
+  const first = host.loadGraphData(b.changeTracker.activeState, true, true, b);
+  const second = host.loadGraphData(a.changeTracker.activeState, true, true, a);
+  pending.finish();
+  await Promise.all([first, second]);
+  expect(sessions.read().active?.generation).toBe(0);
+  await host.loadGraphData({}, true, true, a);
+  expect(sessions.read().active?.generation).toBe(1);
+  observer.dispose();
+  adapter.dispose();
+});
+
 test('preserves identity across rename and Save As but retires a closed binding before reopening', () => {
   const a = workflowFixture('a');
   const b = workflowFixture('b');
@@ -200,11 +229,11 @@ test('recognizes the raw history target through its tracker and rejects unrelate
   });
   Reflect.set(active.changeTracker, '_restoringState', true);
   const rawTarget = { ...active };
-  expect(adapter.isHistoryRestore([{}, false, false, rawTarget])).toBe(true);
-  expect(adapter.isHistoryRestore([{}, true, false, rawTarget])).toBe(false);
-  expect(adapter.isHistoryRestore([{}, false, true, rawTarget])).toBe(false);
-  expect(adapter.isHistoryRestore([{}, false, false, workflowFixture('other')])).toBe(false);
-  expect(adapter.isHistoryRestore([{}, false, false, null])).toBe(false);
+  expect(adapter.loadKind([{}, false, false, rawTarget])).toBe('history');
+  expect(adapter.loadKind([{}, true, false, rawTarget])).toBe('replace');
+  expect(adapter.loadKind([{}, false, true, rawTarget])).toBe('replace');
+  expect(adapter.loadKind([{}, false, false, workflowFixture('other')])).toBe('replace');
+  expect(adapter.loadKind([{}, false, false, null])).toBe('replace');
 });
 
 test('keeps a rejected host load unassigned and preserves its original failure', async () => {

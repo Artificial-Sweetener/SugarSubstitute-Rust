@@ -41,6 +41,14 @@ export class CubeStackDrawerMotion {
     get settledVisible() {
         return this.#position === fluentMotion.duration && this.#effects.length === 0;
     }
+    /** Restore a workflow's selected endpoint without creating compositor effects. */
+    restore(visible) {
+        if (this.#disposed)
+            return;
+        this.#generation++;
+        this.#target = visible;
+        this.#complete(visible);
+    }
     /** Reverse the same timeline from its current time; resolve false for superseded requests. */
     setVisible(visible) {
         if (this.#disposed)

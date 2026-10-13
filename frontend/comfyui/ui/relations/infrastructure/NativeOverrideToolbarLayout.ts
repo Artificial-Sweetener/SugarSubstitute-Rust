@@ -35,6 +35,7 @@ export class NativeOverrideToolbarLayout {
 
   /** Follow the actual native Run panel while excluding the owned dock slot. */
   mount(bar: HTMLElement | null): void {
+    if (this.#bar === bar) return;
     if (this.#bar !== bar) {
       this.#presence?.disconnect();
       this.#presence = null;

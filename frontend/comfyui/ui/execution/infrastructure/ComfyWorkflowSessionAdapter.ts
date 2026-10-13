@@ -17,7 +17,7 @@
 
 import { isRecord, type UnknownRecord } from '../../types/common.js';
 import { workflowSessionId, type WorkflowSessionId } from '../domain/ExecutionIdentity.js';
-import type { WorkflowSessionBinding } from '../domain/WorkflowSession.js';
+import type { WorkflowSessionBinding, WorkflowLoadToken } from '../domain/WorkflowSession.js';
 import type { WorkflowSessionStore } from '../application/WorkflowSessionStore.js';
 
 export interface ComfyWorkflowSessionAdapterOptions {
@@ -110,8 +110,26 @@ export class ComfyWorkflowSessionAdapter {
     }
   }
 
-  /** Recognize native undo/redo only for the active workflow's restoring tracker. */
-  isHistoryRestore(args: readonly unknown[]): boolean {
+  /** Distinguish native history, exact stored-state activation, and actual graph replacement. */
+  loadKind(args: readonly unknown[]): WorkflowLoadToken['kind'] {
+    if (this.#isHistoryRestore(args)) return 'history';
+    const target = args[3];
+    const tracker =
+      isRecord(target) && isRecord(target.changeTracker) ? target.changeTracker : null;
+    if (
+      args[1] === true &&
+      args[2] === true &&
+      tracker &&
+      isRecord(args[0]) &&
+      args[0] === tracker.activeState &&
+      [...this.#open.values()].some((workflow) => workflow.changeTracker === tracker)
+    )
+      return 'activate';
+    return 'replace';
+  }
+
+  /** Qualify history against the active workflow's restoring tracker rather than graph identity. */
+  #isHistoryRestore(args: readonly unknown[]): boolean {
     const target = args[3];
     const active = this.#workflow.activeWorkflow;
     if (args[1] !== false || args[2] !== false || !isRecord(target) || !isRecord(active))

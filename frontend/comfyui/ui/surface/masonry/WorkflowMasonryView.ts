@@ -146,7 +146,8 @@ export class WorkflowMasonryView {
           motion: this.#motion,
           getSource: (id) => this.#options.getSources?.().get(id) ?? null,
           onRemounted: () => {
-            if (!this.#mounting) this.#requestLayout();
+            // Let native appearance finish before measuring newly rebound controls.
+            if (!this.#mounting) this.#geometry.request();
             this.#options.onCardsChanged?.();
           },
         });

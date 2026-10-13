@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own lazy Comfy renderer/runtime acquisition and release. */
-import { loadComfyNativeNodeComponent, loadComfyVueRuntime, } from './ComfyRuntimeModuleLoader.js';
+import { comfyNativeNodeAssets } from './ComfyNativeNodeAssets.js';
 import { ComfyVueNodeCardRenderer } from './ComfyVueNodeCardRenderer.js';
 import { findComfyVueAppContext } from './ComfyVueTree.js';
 /** Retain renderer state only for the active Comfy Vue application. */
@@ -46,7 +46,9 @@ export class CubeSurfaceRendererLifecycle {
     getRuntime() {
         if (this.runtime)
             return this.runtime;
-        const pending = loadComfyVueRuntime(this.options.document).catch((error) => {
+        const pending = comfyNativeNodeAssets(this.options.document)
+            .runtime()
+            .catch((error) => {
             if (this.runtime === pending)
                 this.runtime = null;
             throw error;
@@ -80,7 +82,7 @@ export class CubeSurfaceRendererLifecycle {
         if (!appContext)
             throw new Error('Comfy Vue application context is not mounted.');
         const [component, runtime] = await Promise.all([
-            loadComfyNativeNodeComponent(this.options.document),
+            comfyNativeNodeAssets(this.options.document).component(),
             this.getRuntime(),
         ]);
         return new ComfyVueNodeCardRenderer({ component, appContext, runtime });

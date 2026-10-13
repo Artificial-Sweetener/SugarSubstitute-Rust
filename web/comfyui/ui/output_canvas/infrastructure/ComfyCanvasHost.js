@@ -86,7 +86,7 @@ export class ComfyCanvasHost {
                 this.#toolbar.update(this.#workspace.canvas !== null, this.#workspace.content !== null);
             }
         };
-        this.#workspace = new ComfyCanvasWorkspaceHost(app, document, this.#preferences, frames, changed, report);
+        this.#workspace = new ComfyCanvasWorkspaceHost(app, document, this.#preferences, frames, changed, report, options.presentation);
         this.#primary = new CanvasPrimarySurface({
             document,
             window: windowId(nextKey()),

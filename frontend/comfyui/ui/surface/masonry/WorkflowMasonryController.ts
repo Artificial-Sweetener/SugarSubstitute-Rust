@@ -87,6 +87,17 @@ export class WorkflowMasonryController {
     return (this.#desired && !this.#suspensions.has('app')) || this.#view !== null;
   }
 
+  /** Restore a committed workflow choice without replaying an explicit user-toggle transition. */
+  async restore(desired: boolean): Promise<void> {
+    if (this.#desired === desired) return;
+    this.#desired = desired;
+    const generation = ++this.#generation;
+    this.#transition.cancel();
+    this.#releaseView(desired && !this.#suspensions.has('app'));
+    this.#options.onStateChange();
+    if (this.active && this.#options.isNodes2()) await this.#show(generation, false);
+  }
+
   /** Release native mounts during host transitions without changing the user's view choice. */
   async setSuspended(reason: 'app' | 'configure', suspended: boolean): Promise<void> {
     if (this.#suspensions.has(reason) === suspended) return;

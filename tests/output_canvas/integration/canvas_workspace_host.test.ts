@@ -26,7 +26,7 @@ interface Setting {
 }
 
 /** Compose the actual observer and layout while providing only public Comfy settings/store and DOM geometry. */
-function fixture() {
+function fixture(width = 1400) {
   const definitions = new Map<string, Setting>();
   const values = new Map<string, unknown>();
   const listeners = new Set<() => void>();
@@ -55,7 +55,28 @@ function fixture() {
   const frames = new CanvasFrameFixture();
   const changed = jest.fn();
   const report = jest.fn();
-  const host = new ComfyCanvasWorkspaceHost(app, document, preferences, frames, changed, report);
+  const viewListeners = new Set<() => void>();
+  const presentation = {
+    ready: true,
+    snapshot: { canvas: true, masonry: false },
+    subscribe(listener: () => void) {
+      viewListeners.add(listener);
+      return () => viewListeners.delete(listener);
+    },
+    change(value: { canvas?: boolean; masonry?: boolean }) {
+      presentation.snapshot = { ...presentation.snapshot, ...value };
+      for (const listener of viewListeners) listener();
+    },
+  };
+  const host = new ComfyCanvasWorkspaceHost(
+    app,
+    document,
+    preferences,
+    frames,
+    changed,
+    report,
+    presentation,
+  );
   host.setup();
   const root = document.createElement('div');
   root.id = 'graph-canvas-container';
@@ -67,9 +88,9 @@ function fixture() {
     y: 0,
     left: 0,
     top: 0,
-    right: 1400,
+    right: width,
     bottom: 800,
-    width: 1400,
+    width,
     height: 800,
     toJSON: () => ({}),
   });
@@ -84,6 +105,7 @@ function fixture() {
   return {
     host,
     preferences,
+    presentation,
     frames,
     changed,
     report,
@@ -122,13 +144,40 @@ test('mounts identified surfaces and preserves allocated content through app/con
   f.host.toggle();
   expect(f.host.canvas).toBeNull();
   await Promise.resolve();
-  expect(f.preferences.snapshot.visible).toBe(false);
+  expect(f.presentation.snapshot.canvas).toBe(false);
+  expect(f.preferences.snapshot.visible).toBe(true);
   f.host.toggle();
   expect(f.host.canvas).not.toBeNull();
   f.dispose();
   expect(f.listeners.size).toBe(0);
   expect(f.frames.pending).toBe(0);
   expect(f.report).not.toHaveBeenCalled();
+});
+
+test('opens a narrow drawer when its accepted desktop visibility is already enabled', async () => {
+  const f = fixture(700);
+  await Promise.resolve();
+  expect(f.presentation.snapshot.canvas).toBe(true);
+  expect(f.host.canvas).toBeNull();
+  f.host.toggle();
+  expect(f.host.canvas).not.toBeNull();
+  f.host.toggle();
+  expect(f.host.canvas).toBeNull();
+  expect(f.presentation.snapshot.canvas).toBe(false);
+  f.dispose();
+});
+
+test('restores workflow visibility while retaining the workspace parent and global width preference', async () => {
+  const f = fixture();
+  await Promise.resolve();
+  const content = f.host.content;
+  f.presentation.change({ canvas: false });
+  expect(f.host.canvas).toBeNull();
+  f.presentation.change({ canvas: true });
+  expect(f.host.canvas).not.toBeNull();
+  expect(f.host.content).toBe(content);
+  expect(f.preferences.snapshot.visible).toBe(true);
+  f.dispose();
 });
 
 test('preserves canvas allocation during qualified history restoration while respecting app mode', async () => {
@@ -143,6 +192,21 @@ test('preserves canvas allocation during qualified history restoration while res
   expect(f.host.canvas).toBe(canvas);
   f.host.afterConfigureGraph();
   expect(f.host.canvas).toBe(canvas);
+  f.dispose();
+});
+
+test('keeps the workspace width stable during graph replacement instead of resizing every native control twice', async () => {
+  const f = fixture();
+  await Promise.resolve();
+  const width = f.host.content?.style.width;
+  expect(width).not.toBe('calc(100% - 0px)');
+  f.host.beforeConfigureGraph();
+  expect(f.host.canvas).toBeNull();
+  expect(f.host.content?.style.width).toBe(width);
+  f.host.afterConfigureGraph();
+  expect(f.host.content?.style.width).toBe(width);
+  f.mode('app');
+  expect(f.host.content?.style.width).toBe('calc(100% - 0px)');
   f.dispose();
 });
 

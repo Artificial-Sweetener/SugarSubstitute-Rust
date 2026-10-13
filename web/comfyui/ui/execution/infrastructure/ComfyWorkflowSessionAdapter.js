@@ -104,8 +104,23 @@ export class ComfyWorkflowSessionAdapter {
             return false;
         }
     }
-    /** Recognize native undo/redo only for the active workflow's restoring tracker. */
-    isHistoryRestore(args) {
+    /** Distinguish native history, exact stored-state activation, and actual graph replacement. */
+    loadKind(args) {
+        if (this.#isHistoryRestore(args))
+            return 'history';
+        const target = args[3];
+        const tracker = isRecord(target) && isRecord(target.changeTracker) ? target.changeTracker : null;
+        if (args[1] === true &&
+            args[2] === true &&
+            tracker &&
+            isRecord(args[0]) &&
+            args[0] === tracker.activeState &&
+            [...this.#open.values()].some((workflow) => workflow.changeTracker === tracker))
+            return 'activate';
+        return 'replace';
+    }
+    /** Qualify history against the active workflow's restoring tracker rather than graph identity. */
+    #isHistoryRestore(args) {
         const target = args[3];
         const active = this.#workflow.activeWorkflow;
         if (args[1] !== false || args[2] !== false || !isRecord(target) || !isRecord(active))

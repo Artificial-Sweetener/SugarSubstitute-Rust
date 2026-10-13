@@ -25,6 +25,10 @@ export class CanvasSessionCoordinator {
     selection;
     metadata;
     #primary = new Map();
+    #sessionsByView = new Map();
+    #contexts = new Map();
+    #catalogs = new Map();
+    #active = null;
     #listeners = new Set();
     #retired = new Set();
     #stops = [];
@@ -41,7 +45,11 @@ export class CanvasSessionCoordinator {
     install() {
         if (this.#stops.length)
             return;
-        this.#stops.push(this.sessions.subscribe(() => this.#synchronize()), this.results.subscribe((session) => this.#refresh(session)), this.metadata.subscribe(() => this.#synchronize()));
+        this.#stops.push(this.sessions.subscribe(() => this.#synchronize()), this.results.subscribe((session) => this.#refresh(session)), this.metadata.subscribe(() => {
+            const active = this.sessions.read().active;
+            if (active)
+                this.#refresh(active.sessionId);
+        }));
         this.#synchronize();
     }
     /** Retain the qualified browser view during history restoration and release it for graph replacement. */
@@ -51,11 +59,19 @@ export class CanvasSessionCoordinator {
     }
     /** Project an exact open session into its view without consulting the active graph. */
     catalog(view) {
-        const id = [...this.#primary].find(([, candidate]) => candidate === view)?.[0];
+        const id = this.#sessionsByView.get(view);
         if (!id)
             return null;
         const result = this.results.read(id);
-        return result ? canvasOutputCatalog(result, this.sources.read(result.context)) : null;
+        if (!result)
+            return null;
+        const sources = this.sources.read(result.context);
+        const previous = this.#catalogs.get(view);
+        if (previous?.result === result && previous.sources === sources)
+            return previous.catalog;
+        const catalog = canvasOutputCatalog(result, sources);
+        this.#catalogs.set(view, { result, sources, catalog });
+        return catalog;
     }
     /** Deliver scoped result changes and explicit active-view transitions. */
     subscribe(listener) {
@@ -73,6 +89,7 @@ export class CanvasSessionCoordinator {
             stop();
         for (const [session, view] of this.#primary)
             this.#remove(session, view);
+        this.#active = null;
         this.#listeners.clear();
         this.#retired.clear();
     }
@@ -84,11 +101,21 @@ export class CanvasSessionCoordinator {
             if (!open.has(session))
                 this.#remove(session, view);
         for (const session of snapshot.open) {
-            if (!this.#primary.has(session.sessionId))
-                this.#primary.set(session.sessionId, this.views.create(canvasSessionId(session.sessionId)).viewId);
-            this.#refresh(session.sessionId);
+            if (!this.#primary.has(session.sessionId)) {
+                const view = this.views.create(canvasSessionId(session.sessionId)).viewId;
+                this.#primary.set(session.sessionId, view);
+                this.#sessionsByView.set(view, session.sessionId);
+            }
+            if (this.#contexts.get(session.sessionId) !== session) {
+                this.#contexts.set(session.sessionId, session);
+                this.#refresh(session.sessionId);
+            }
         }
-        this.#publish(this.active());
+        const active = this.active();
+        if (this.#active !== active) {
+            this.#active = active;
+            this.#publish(active);
+        }
     }
     /** Reconcile one view using only existing topology metadata and current result descriptors. */
     #refresh(session) {
@@ -106,6 +133,9 @@ export class CanvasSessionCoordinator {
         this.views.remove(view);
         this.sources.remove(session);
         this.#primary.delete(session);
+        this.#sessionsByView.delete(view);
+        this.#contexts.delete(session);
+        this.#catalogs.delete(view);
         for (const listener of this.#retired)
             listener(view);
     }

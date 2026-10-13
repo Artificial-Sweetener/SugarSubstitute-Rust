@@ -205,7 +205,7 @@ test('binds the new runtime navigation source after workflow configuration', asy
   setup.changes.dispose();
 });
 
-test('releases navigation and topology observers during Nodes 1 fallback', async () => {
+test('releases observers during Nodes 1 fallback and restores the view when Nodes 2 returns', async () => {
   const setup = fixture();
   setup.host.toggle();
   await settle();
@@ -219,8 +219,6 @@ test('releases navigation and topology observers during Nodes 1 fallback', async
   await settle();
   expect(setup.mount).toHaveBeenCalledTimes(mounts);
   setup.setNodes2(true);
-  await settle();
-  setup.host.toggle();
   await settle();
   expect(document.querySelector('input')?.value).toBe('cube model');
   setup.host.dispose();
@@ -308,7 +306,7 @@ test('keeps app suspension through configuration and restores only the latest gr
   setup.changes.dispose();
 });
 
-test('falls back to graph when Nodes 1 is selected during app mode', async () => {
+test('preserves the requested view through Nodes 1 fallback during app mode', async () => {
   const setup = fixture();
   setup.host.toggle();
   await settle();
@@ -321,7 +319,7 @@ test('falls back to graph when Nodes 1 is selected during app mode', async () =>
   expect(setup.notifyRendererFallback).toHaveBeenCalledTimes(1);
   setup.setNodes2(true);
   await settle();
-  expect(document.querySelector('.sugarcubes-workflow-masonry')).toBeNull();
+  expect(document.querySelector('.sugarcubes-workflow-masonry')).not.toBeNull();
   setup.host.dispose();
   setup.changes.dispose();
 });
@@ -416,7 +414,18 @@ function fixture(rootCount = 1) {
       propertiesOpen = normalized;
     },
   };
+  let viewChoice = { canvas: true, masonry: false };
   const host = new WorkflowMasonryHostLifecycle({
+    presentation: {
+      ready: true,
+      get snapshot() {
+        return viewChoice;
+      },
+      subscribe: () => () => undefined,
+      change(value) {
+        viewChoice = { ...viewChoice, ...value };
+      },
+    },
     stack: {
       appearance: {
         appearance: { fluent: false, dark: true },
