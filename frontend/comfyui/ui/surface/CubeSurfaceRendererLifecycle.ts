@@ -15,11 +15,8 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own lazy Comfy renderer/runtime acquisition and release. */
 
-import {
-  loadComfyNativeNodeComponent,
-  loadComfyVueRuntime,
-  type ComfyVueRuntime,
-} from './ComfyRuntimeModuleLoader.js';
+import type { ComfyVueRuntime } from './ComfyRuntimeModuleLoader.js';
+import { comfyNativeNodeAssets } from './ComfyNativeNodeAssets.js';
 import { ComfyVueNodeCardRenderer } from './ComfyVueNodeCardRenderer.js';
 import { findComfyVueAppContext } from './ComfyVueTree.js';
 import type { NativeNodeCardRenderer } from './NativeNodeCardRenderer.js';
@@ -58,10 +55,12 @@ export class CubeSurfaceRendererLifecycle {
   /** Retain successful Vue identity while allowing failed native dependency loads to recover. */
   getRuntime(): Promise<ComfyVueRuntime> {
     if (this.runtime) return this.runtime;
-    const pending = loadComfyVueRuntime(this.options.document).catch((error: unknown) => {
-      if (this.runtime === pending) this.runtime = null;
-      throw error;
-    });
+    const pending = comfyNativeNodeAssets(this.options.document)
+      .runtime()
+      .catch((error: unknown) => {
+        if (this.runtime === pending) this.runtime = null;
+        throw error;
+      });
     this.runtime = pending;
     return pending;
   }
@@ -94,7 +93,7 @@ export class CubeSurfaceRendererLifecycle {
     const appContext = findComfyVueAppContext(vueRoot);
     if (!appContext) throw new Error('Comfy Vue application context is not mounted.');
     const [component, runtime] = await Promise.all([
-      loadComfyNativeNodeComponent(this.options.document),
+      comfyNativeNodeAssets(this.options.document).component(),
       this.getRuntime(),
     ]);
     return new ComfyVueNodeCardRenderer({ component, appContext, runtime });

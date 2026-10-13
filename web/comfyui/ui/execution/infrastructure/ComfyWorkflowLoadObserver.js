@@ -21,7 +21,7 @@ export function createComfyWorkflowLoadObserver(app, sessions, adapter, logger) 
         host: app,
         method: 'loadGraphData',
         logger,
-        enter: (args) => sessions.beginLoad(adapter.isHistoryRestore(args) ? 'history' : 'replace'),
+        enter: (args) => sessions.beginLoad(adapter.loadKind(args)),
         succeeded: (token) => {
             sessions.completeLoad(token, adapter.refresh());
         },

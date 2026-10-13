@@ -41,8 +41,10 @@ import { captureMasonryLinkPaths } from './ComfyMasonryLinkAdapter.js';
 import { WorkflowMasonryLinkMotion } from './WorkflowMasonryLinkMotion.js';
 import { MasonrySearchHost } from '../../search/infrastructure/MasonrySearchHost.js';
 import { CubeStackHost, type CubeStackHostOptions } from '../stack/CubeStackHost.js';
+import type { WorkflowViewSource } from '../../workflow/domain/WorkflowView.js';
 
 export interface WorkflowMasonryHostLifecycleOptions {
+  presentation: WorkflowViewSource;
   stack: Omit<
     CubeStackHostOptions,
     'document' | 'app' | 'refreshSurface' | 'revealSearchResults' | 'reportError'
@@ -73,8 +75,10 @@ export class WorkflowMasonryHostLifecycle {
   #unsubscribeCards: (() => void) | null = null;
   #unsubscribeNavigation: (() => void) | null = null;
   #unsubscribeAppMode: (() => void) | null = null;
+  #unsubscribePresentation: (() => void) | null = null;
   #appMode = false;
   #disposed = false;
+  #presentationRevision = 0;
 
   /** Bind native renderer capabilities and non-blocking fallback feedback. */
   constructor(options: WorkflowMasonryHostLifecycleOptions) {
@@ -167,12 +171,15 @@ export class WorkflowMasonryHostLifecycle {
     this.#unsubscribeRenderer = createComfyRendererModeChangeSource(this.#options.app).subscribe(
       () => {
         this.#controller.rendererChanged();
+        this.#restorePresentation();
       },
     );
     this.#toolbar.setup();
     this.#properties.setup();
     this.#search.setup();
     this.#stack.setup();
+    this.#unsubscribePresentation = this.#options.presentation.subscribe(this.#restorePresentation);
+    this.#restorePresentation();
     this.#refreshButton();
     this.#options.document.defaultView?.addEventListener('pagehide', this.#onPageHide);
   }
@@ -180,7 +187,11 @@ export class WorkflowMasonryHostLifecycle {
   /** Serve both the button and the registered Comfy command through the same use case. */
   toggle(): void {
     if (this.#disposed) return;
-    void this.#controller.toggle().catch((error: unknown) => this.#options.reportError(error));
+    if (!this.#isNodes2() || !this.#options.presentation.ready || this.#appMode) return;
+    const desired = !this.#options.presentation.snapshot.masonry;
+    const transition = this.#controller.toggle();
+    this.#options.presentation.change({ masonry: desired });
+    void transition.catch((error: unknown) => this.#options.reportError(error));
   }
 
   /** Refresh an accepted canonical stack mutation through the existing projected layout owner. */
@@ -198,6 +209,7 @@ export class WorkflowMasonryHostLifecycle {
 
   /** Restore the selected presentation against the newly configured workflow. */
   afterConfigureGraph(): void {
+    if (!this.#options.presentation.ready) return;
     void this.#controller
       .setSuspended('configure', false)
       .catch((error: unknown) => this.#options.reportError(error));
@@ -216,12 +228,30 @@ export class WorkflowMasonryHostLifecycle {
     this.#unsubscribeRenderer = null;
     this.#unsubscribeAppMode?.();
     this.#unsubscribeAppMode = null;
+    this.#unsubscribePresentation?.();
+    this.#unsubscribePresentation = null;
     this.#releaseGraphObservers();
     this.#options.document.defaultView?.removeEventListener('pagehide', this.#onPageHide);
   }
 
   /** Tear down before the browser releases the Comfy Vue application. */
   readonly #onPageHide = (): void => this.dispose();
+
+  /** Resume once at committed activation, restoring choices without entrance motion. */
+  readonly #restorePresentation = (): void => {
+    const presentation = this.#options.presentation;
+    if (this.#disposed) return;
+    const revision = ++this.#presentationRevision;
+    void (async () => {
+      if (!presentation.ready) {
+        await this.#controller.setSuspended('configure', true);
+        return;
+      }
+      await this.#controller.restore(presentation.snapshot.masonry && this.#isNodes2());
+      if (this.#disposed || revision !== this.#presentationRevision) return;
+      await this.#controller.setSuspended('configure', false);
+    })().catch(this.#options.reportError);
+  };
 
   /** Suspend borrowed native controls before Comfy hides the graph, preserving the view choice. */
   readonly #onAppModeChanged = (active: boolean): void => {
@@ -312,6 +342,7 @@ export class WorkflowMasonryHostLifecycle {
       this.#options.reportError(new Error('Comfy Cube editor navigation is unavailable.'));
       return;
     }
+    this.#options.presentation.change({ masonry: false });
     openSubgraph.call(canvas, cube.subgraph, cube);
   }
 }

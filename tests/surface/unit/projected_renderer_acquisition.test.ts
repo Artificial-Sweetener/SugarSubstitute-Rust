@@ -39,6 +39,15 @@ const { CubeSurfaceRendererLifecycle } = await import(
   '../../../frontend/comfyui/ui/surface/CubeSurfaceRendererLifecycle.js'
 );
 
+/** Model a separate installed frontend document for each immutable asset lifetime. */
+function applicationDocument(): Document {
+  const application = document.implementation.createHTMLDocument();
+  const entry = application.createElement('script');
+  entry.src = 'http://localhost/assets/index-fixture.js';
+  application.head.append(entry);
+  return application;
+}
+
 afterEach(() => {
   document.body.replaceChildren();
   loadComponent.mockReset();
@@ -48,19 +57,20 @@ afterEach(() => {
 });
 
 test('acquires the projection component even when a live graph node is already mounted', async () => {
-  const root = document.createElement('div');
+  const application = applicationDocument();
+  const root = application.createElement('div');
   root.id = 'vue-app';
   Reflect.set(root, '__vue_app__', { _context: {} });
   Reflect.set(root, '_vnode', { type: { __name: 'LGraphNode' } });
-  document.body.append(root);
-  const lifecycle = new CubeSurfaceRendererLifecycle({ document, logger: console });
+  application.body.append(root);
+  const lifecycle = new CubeSurfaceRendererLifecycle({ document: application, logger: console });
   const renderer = await lifecycle.getRenderer();
   expect(loadComponent).toHaveBeenCalledTimes(1);
-  expect(loadComponent).toHaveBeenCalledWith(document);
+  expect(loadComponent).toHaveBeenCalledWith(application);
   expect(await lifecycle.getRenderer()).toBe(renderer);
   lifecycle.release();
   expect(await lifecycle.getRenderer()).not.toBe(renderer);
-  expect(loadComponent).toHaveBeenCalledTimes(2);
+  expect(loadComponent).toHaveBeenCalledTimes(1);
   lifecycle.dispose();
 });
 
@@ -75,7 +85,11 @@ test('coalesces renderer acquisition and retries after a failed request', async 
     .fn<() => Promise<typeof renderer>>()
     .mockRejectedValueOnce(failure)
     .mockResolvedValue(renderer);
-  const lifecycle = new CubeSurfaceRendererLifecycle({ document, logger: console, createRenderer });
+  const lifecycle = new CubeSurfaceRendererLifecycle({
+    document: applicationDocument(),
+    logger: console,
+    createRenderer,
+  });
   const first = lifecycle.getRenderer();
   expect(lifecycle.getRenderer()).toBe(first);
   await expect(first).rejects.toBe(failure);
@@ -88,7 +102,10 @@ test('coalesces renderer acquisition and retries after a failed request', async 
 test('retries a failed Vue runtime and retains its successful identity', async () => {
   const failure = new TypeError('Failed to fetch');
   loadRuntime.mockRejectedValueOnce(failure);
-  const lifecycle = new CubeSurfaceRendererLifecycle({ document, logger: console });
+  const lifecycle = new CubeSurfaceRendererLifecycle({
+    document: applicationDocument(),
+    logger: console,
+  });
   const first = lifecycle.getRuntime();
   expect(lifecycle.getRuntime()).toBe(first);
   await expect(first).rejects.toBe(failure);

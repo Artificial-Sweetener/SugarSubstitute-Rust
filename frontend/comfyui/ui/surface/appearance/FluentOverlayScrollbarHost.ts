@@ -196,7 +196,6 @@ export class FluentOverlayScrollbarHost {
       this.#dirtyOwners.add(element);
       this.#views.set(vertical.element, vertical);
       this.#views.set(horizontal.element, horizontal);
-      this.#layers.mount(element, vertical.element, horizontal.element);
       this.#observeSize(element);
     }
     if (scrollable)
@@ -331,6 +330,8 @@ export class FluentOverlayScrollbarHost {
             this.#invalidateGeometry(element);
           }
         const spaces = new Map<HTMLElement, ScrollbarCoordinateSpace>();
+        const dirty: Array<{ owner: HTMLElement; vertical: HTMLElement; horizontal: HTMLElement }> =
+          [];
         for (const [element, owner] of this.#owners) {
           if (!element.isConnected) {
             this.#remove(element, owner);
@@ -338,21 +339,28 @@ export class FluentOverlayScrollbarHost {
             continue;
           }
           if (!this.#dirtyOwners.has(element) || this.#moving(element)) continue;
-          const layer = this.#layers.mount(
-            element,
-            owner.vertical.element,
-            owner.horizontal.element,
-          );
+          dirty.push({
+            owner: element,
+            vertical: owner.vertical.element,
+            horizontal: owner.horizontal.element,
+          });
+        }
+        const layers = this.#layers.mountMany(dirty);
+        const writes: Array<() => void> = [];
+        for (const { owner: element } of dirty) {
+          const owner = this.#owners.get(element);
+          const layer = layers.get(element);
+          if (!owner || !layer) continue;
           let space = spaces.get(layer);
           if (!space) {
             space = scrollbarCoordinateSpace(layer);
             spaces.set(layer, space);
           }
           const track = scrollbarTrack(element);
-          owner.vertical.update(track, space);
-          owner.horizontal.update(track, space);
+          writes.push(owner.vertical.prepare(track, space), owner.horizontal.prepare(track, space));
           this.#dirtyOwners.delete(element);
         }
+        for (const write of writes) write();
       } catch (error: unknown) {
         this.#reportError(error);
         this.clear();

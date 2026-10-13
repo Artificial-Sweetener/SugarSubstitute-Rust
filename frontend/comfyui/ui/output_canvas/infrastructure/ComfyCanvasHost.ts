@@ -29,6 +29,7 @@ import { BrowserCanvasAttachment } from './BrowserCanvasAttachment.js';
 import { BrowserCanvasImageLoader } from './BrowserCanvasImageLoader.js';
 import { ComfyCanvasSourceInventory } from './ComfyCanvasSourceInventory.js';
 import { ComfyCanvasPreferences } from './ComfyCanvasPreferences.js';
+import type { WorkflowViewSource } from '../../workflow/domain/WorkflowView.js';
 import { ComfyCanvasWorkspaceHost } from './ComfyCanvasWorkspaceHost.js';
 import { CanvasPrimarySurface } from './CanvasPrimarySurface.js';
 import { ComfyCanvasToolbar } from './ComfyCanvasToolbar.js';
@@ -36,6 +37,7 @@ import { comfyCanvasMediaUrl, openComfyCanvasMedia } from './ComfyCanvasMedia.js
 import { ensureBrowserCanvasWorkspaceStyles } from './BrowserCanvasWorkspaceStyles.js';
 
 export interface ComfyCanvasHostOptions {
+  readonly presentation: WorkflowViewSource;
   readonly app: unknown;
   readonly document: Document;
   readonly execution: ComfyWorkflowExecutionRuntime;
@@ -117,6 +119,7 @@ export class ComfyCanvasHost {
       frames,
       changed,
       report,
+      options.presentation,
     );
     this.#primary = new CanvasPrimarySurface({
       document,

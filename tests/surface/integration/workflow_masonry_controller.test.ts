@@ -37,6 +37,23 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
+test('restores a workflow view without animation and ignores identical restoration requests', async () => {
+  const setup = fixture();
+  const transition = jest.spyOn(WorkflowMasonryTransition.prototype, 'run');
+  await setup.controller.restore(true);
+  expect(setup.controller.active).toBe(true);
+  const surface = document.querySelector('.sugarcubes-workflow-masonry');
+  expect(transition).toHaveBeenLastCalledWith(expect.anything(), true, true);
+  transition.mockClear();
+  await setup.controller.restore(true);
+  expect(document.querySelector('.sugarcubes-workflow-masonry')).toBe(surface);
+  expect(transition).not.toHaveBeenCalled();
+  await setup.controller.restore(false);
+  expect(setup.controller.active).toBe(false);
+  expect(document.querySelector('.sugarcubes-workflow-masonry')).toBeNull();
+  expect(transition).not.toHaveBeenCalled();
+});
+
 test('restores workflow scroll and rebinds controls without replaying entry motion', async () => {
   const setup = fixture();
   const transition = jest.spyOn(WorkflowMasonryTransition.prototype, 'run');
@@ -219,6 +236,25 @@ describe('workflow masonry controller', () => {
       expect(setup.unmount).not.toHaveBeenCalled();
     }
     expect(measureSources).toHaveBeenCalledTimes(3);
+    measureSources.mockRestore();
+    await setup.controller.toggle();
+    const surface = document.querySelector<HTMLElement>('.sugarcubes-workflow-masonry');
+    const presented = surface?.querySelector<HTMLElement>('.sugarcubes-workflow-masonry__card');
+    const header = surface?.querySelector<HTMLElement>('.sugarcubes-workflow-masonry__section');
+    if (!surface || !presented || !header) throw new Error('Missing borrowed presentation');
+    presented.style.height = '301px';
+    surface.dispatchEvent(new Event('sugarcubes-disclosure-layout'));
+    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    expect(header.dataset.masonryHeight).toBe('345');
+    presented.style.height = '182px';
+    owner.reset([cell]);
+    queueMicrotask(() => {
+      presented.style.height = '301px';
+    });
+    await Promise.resolve();
+    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    expect(header.dataset.masonryHeight).toBe('345');
+    await setup.controller.toggle();
     owner.dispose();
   });
 

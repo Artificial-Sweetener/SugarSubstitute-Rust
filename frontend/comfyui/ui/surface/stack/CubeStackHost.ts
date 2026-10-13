@@ -116,6 +116,7 @@ export class CubeStackHost {
   /** Attach to already projected sections without triggering graph candidate discovery. */
   ready(view: CubeStackSurface, preparing = false): void {
     if (this.#disposed) return;
+    const restoring = this.#view !== view && !preparing;
     if (this.#view !== view) {
       this.release();
       this.#view = view;
@@ -125,7 +126,7 @@ export class CubeStackHost {
         this.#mounted?.update(this.#state());
       });
     }
-    this.#reconcile();
+    this.#reconcile(!restoring);
   }
 
   /** Start the rail on the owning masonry transition and retain it through reverse travel. */
@@ -162,7 +163,7 @@ export class CubeStackHost {
   }
 
   /** Match one rail lifetime to the current mounted surface and accepted visibility preference. */
-  #reconcile(): void {
+  #reconcile(animate = true): void {
     const view = this.#view;
     if (!this.#started || this.#disposed || !view) return;
     const reorder = this.#options.getReorder();
@@ -206,7 +207,7 @@ export class CubeStackHost {
       this.#mounted.setInteractive(false);
     }
     view.setStackWidth(state.compact ? 82 : 248);
-    if (this.#surfaceVisible) void this.#present(true).catch(this.#options.reportError);
+    if (this.#surfaceVisible) void this.#present(true, animate).catch(this.#options.reportError);
     this.#scrollSelection?.refresh(state.rows.map((row) => row.id));
   }
 
@@ -246,10 +247,15 @@ export class CubeStackHost {
   }
 
   /** Suspend captured drag intent while motion owns geometry and re-enable only the latest entry. */
-  async #present(visible: boolean): Promise<boolean> {
+  async #present(visible: boolean, animate = true): Promise<boolean> {
     const motion = this.#motion;
     const mounted = this.#mounted;
     if (!motion || !mounted) return false;
+    if (!animate) {
+      motion.restore(visible);
+      mounted.setInteractive(visible);
+      return true;
+    }
     if (visible && motion.settledVisible) {
       mounted.setInteractive(true);
       return true;

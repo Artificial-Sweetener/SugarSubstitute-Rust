@@ -26,6 +26,30 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
+test('measures all native layer boundaries before inserting any scrollbar layer', () => {
+  const surface = document.createElement('div');
+  surface.style.position = 'relative';
+  const first = document.createElement('div');
+  const second = document.createElement('div');
+  surface.append(first, second);
+  document.body.append(surface);
+  const read = jest.spyOn(window, 'getComputedStyle');
+  const write = jest.spyOn(surface, 'append');
+  const layers = new FluentScrollbarLayers(document);
+  const mounted = layers.mountMany(
+    [first, second].map((owner) => ({
+      owner,
+      vertical: document.createElement('div'),
+      horizontal: document.createElement('div'),
+    })),
+  );
+  expect(mounted.get(first)).toBe(mounted.get(second));
+  expect(Math.max(...read.mock.invocationCallOrder)).toBeLessThan(
+    write.mock.invocationCallOrder[0]!,
+  );
+  layers.clear();
+});
+
 test('shares a positioned native surface until its final scroll owner is released', () => {
   const surface = document.createElement('div');
   surface.style.position = 'relative';
@@ -136,10 +160,12 @@ test('maps viewport geometry through a zoomed and scrolled native layer while pr
     scrollHeight: { value: 1000 },
   });
   const view = new FluentScrollbarView(owner, 'vertical', 'owner', jest.fn());
-  view.update(
+  const commit = view.prepare(
     { left: 110, top: 20, width: 150, height: 100, horizontalBottom: 120, rtl: false },
     space,
   );
+  expect(view.element.style.left).toBe('');
+  commit();
   expect(view.element.style.left).toBe('296px');
   expect(view.element.style.top).toBe('142px');
   expect(view.element.style.width).toBe('24px');

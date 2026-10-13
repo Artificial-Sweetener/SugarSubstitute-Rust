@@ -49,8 +49,7 @@ import { CubeGraphConfigurationLifecycle } from './ui/cube/CubeGraphConfiguratio
 import { CubeExtensionSetupLifecycle } from './ui/cube/CubeExtensionSetupLifecycle.js';
 import { CubeHostFeedback } from './ui/core/CubeHostFeedback.js';
 import { createSugarCubesDebugApi } from './ui/debug/SugarCubesDebugApi.js';
-import { WorkflowMasonryHostLifecycle } from './ui/surface/masonry/WorkflowMasonryHostLifecycle.js';
-import { ComfyCanvasHost } from './ui/output_canvas/infrastructure/ComfyCanvasHost.js';
+import { ComfyWorkflowWorkspace } from './ui/surface/ComfyWorkflowWorkspace.js';
 import { createCubeStackCommands } from './ui/surface/stack/CubeStackCommands.js';
 import { FluentAppearanceHost } from './ui/surface/appearance/FluentAppearanceHost.js';
 import { ScrollSurfaceWheelHost } from './ui/surface/ScrollSurfaceWheelHost.js';
@@ -146,7 +145,7 @@ const fluentAppearance = new FluentAppearanceHost({
 
 const cubePicker = createComfyCubePickerIntegration({
   appearance: fluentAppearance.state,
-  onStackApplied: () => workflowMasonry.refresh(),
+  onStackApplied: () => workflowWorkspace.masonry.refresh(),
   api: cubeApi,
   app,
   document: documentRef ?? document,
@@ -326,54 +325,56 @@ const extensionSetupLifecycle = new CubeExtensionSetupLifecycle({
   logger,
 });
 
-const outputCanvas = new ComfyCanvasHost({
-  app: appRef,
-  document: documentRef ?? document,
-  execution: workflowExecution,
-  logger,
-  report: (error) => {
-    logger.error('SugarCubes output canvas failed', { error });
-    pushToastMessage('error', 'Output canvas unavailable', readErrorMessage(error));
+const workflowWorkspace = new ComfyWorkflowWorkspace(
+  {
+    app: appRef,
+    document: documentRef ?? document,
+    execution: workflowExecution,
+    logger,
+    report: (error) => {
+      logger.error('SugarCubes output canvas failed', { error });
+      pushToastMessage('error', 'Output canvas unavailable', readErrorMessage(error));
+    },
   },
-});
+  {
+    stack: createCubeStackCommands({
+      document: documentRef ?? document,
+      appearance: fluentAppearance.state,
+      picker: cubePicker,
+      library: ui.workflowLibraryActions,
+      dialogs: ui.dialogs,
+      getRuntime: () => cubeRuntimeLifecycle.current(),
+      resolveSource: (metadata) => ui.workflowLibraryPresentation.resolveSource(metadata),
+      reportError: (error) => {
+        logger.error('SugarCubes stack action failed.', { error });
+        pushToastMessage('error', 'Cube stack unavailable', readErrorMessage(error));
+      },
+    }),
+    app: appRef,
+    document: documentRef ?? document,
+    getCubes: () => cubeRuntimeLifecycle.current()?.nodes.list() ?? [],
+    getCardState: () => cubeRuntimeLifecycle.current()?.cardState ?? null,
+    getGraphChanges: () => cubeRuntimeLifecycle.current()?.graphChanges ?? null,
+    getConnections: (graph) => proximityWorkflowConnections(overlayManager.proximity, graph),
+    getRenderer: () => {
+      const runtime = cubeRuntimeLifecycle.current();
+      if (!runtime) throw new Error('SugarCubes native renderer is unavailable.');
+      return runtime.getNativeRenderer();
+    },
+    notifyRendererFallback: () =>
+      pushToastMessage('info', 'Switched to graph view', 'Masonry requires Nodes 2.0.'),
+    reportError: (error) => {
+      logger.error('SugarCubes workflow masonry failed', { error });
+      pushToastMessage('error', 'Masonry unavailable', readErrorMessage(error));
+    },
+  },
+  logger,
+);
 const workflowHistory = new ComfyCanvasHistoryAdapter(
   appRef,
   documentRef ?? document,
   workflowRelations.commitNativeTransaction,
 );
-const workflowMasonry = new WorkflowMasonryHostLifecycle({
-  stack: createCubeStackCommands({
-    document: documentRef ?? document,
-    appearance: fluentAppearance.state,
-    picker: cubePicker,
-    library: ui.workflowLibraryActions,
-    dialogs: ui.dialogs,
-    getRuntime: () => cubeRuntimeLifecycle.current(),
-    resolveSource: (metadata) => ui.workflowLibraryPresentation.resolveSource(metadata),
-    reportError: (error) => {
-      logger.error('SugarCubes stack action failed.', { error });
-      pushToastMessage('error', 'Cube stack unavailable', readErrorMessage(error));
-    },
-  }),
-  app: appRef,
-  document: documentRef ?? document,
-  getContainer: () => outputCanvas.content,
-  getCubes: () => cubeRuntimeLifecycle.current()?.nodes.list() ?? [],
-  getCardState: () => cubeRuntimeLifecycle.current()?.cardState ?? null,
-  getGraphChanges: () => cubeRuntimeLifecycle.current()?.graphChanges ?? null,
-  getConnections: (graph) => proximityWorkflowConnections(overlayManager.proximity, graph),
-  getRenderer: () => {
-    const runtime = cubeRuntimeLifecycle.current();
-    if (!runtime) throw new Error('SugarCubes native renderer is unavailable.');
-    return runtime.getNativeRenderer();
-  },
-  notifyRendererFallback: () =>
-    pushToastMessage('info', 'Switched to graph view', 'Masonry requires Nodes 2.0.'),
-  reportError: (error) => {
-    logger.error('SugarCubes workflow masonry failed', { error });
-    pushToastMessage('error', 'Masonry unavailable', readErrorMessage(error));
-  },
-});
 
 /** Compose theme-independent native scroll input once for the host document. */
 const scrollSurfaceInput = new ScrollSurfaceWheelHost(documentRef ?? document);
@@ -473,12 +474,12 @@ export const sugarCubesExtension: SugarCubesExtension = {
     {
       id: 'SugarCubes.ToggleMasonry',
       label: 'Toggle workflow masonry',
-      function: () => workflowMasonry.toggle(),
+      function: () => workflowWorkspace.masonry.toggle(),
     },
     {
       id: 'SugarCubes.ToggleOutputCanvas',
       label: 'Toggle output canvas',
-      function: () => outputCanvas.toggle(),
+      function: () => workflowWorkspace.canvas.toggle(),
     },
   ],
   addCustomNodeDefs(definitions) {
@@ -503,8 +504,7 @@ export const sugarCubesExtension: SugarCubesExtension = {
     await extensionSetupLifecycle.setup();
     workflowHistory.install();
     workflowRelations.setup();
-    workflowMasonry.setup();
-    outputCanvas.setup();
+    workflowWorkspace.setup();
     scrollSurfaceInput.setup();
     fluentAppearance.setup();
     modelPickers.setup();
@@ -518,15 +518,15 @@ export const sugarCubesExtension: SugarCubesExtension = {
   beforeConfigureGraph(graphData?: unknown) {
     workflowHistory.setConfiguring(true);
     workflowRelations.beforeConfigureGraph();
-    workflowMasonry.beforeConfigureGraph();
-    outputCanvas.beforeConfigureGraph();
+    workflowWorkspace.masonry.beforeConfigureGraph();
+    workflowWorkspace.canvas.beforeConfigureGraph();
     cubePicker.closeAddMenu();
     graphConfigurationLifecycle.beforeConfigureGraph(graphData);
   },
   afterConfigureGraph(missingNodeTypes: unknown[], comfyApp) {
     graphConfigurationLifecycle.afterConfigureGraph(missingNodeTypes, comfyApp);
-    outputCanvas.afterConfigureGraph();
-    workflowMasonry.afterConfigureGraph();
+    workflowWorkspace.canvas.afterConfigureGraph();
+    workflowWorkspace.masonry.afterConfigureGraph();
     workflowRelations.afterConfigureGraph();
     workflowHistory.setConfiguring(false);
   },
@@ -537,7 +537,7 @@ app.registerExtension(sugarCubesExtension);
 const debugApi = createSugarCubesDebugApi({
   ui,
   app: appRef,
-  canvas: () => outputCanvas.diagnostics(),
+  canvas: () => workflowWorkspace.canvas.diagnostics(),
 });
 
 if (windowRef) {

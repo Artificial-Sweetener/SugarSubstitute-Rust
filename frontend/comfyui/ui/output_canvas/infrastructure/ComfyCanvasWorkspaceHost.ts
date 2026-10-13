@@ -22,6 +22,7 @@ import { CanvasWorkspaceLayout } from '../application/CanvasWorkspaceLayout.js';
 import type { CanvasFrameClock } from '../application/CanvasCameraTransition.js';
 import { BrowserCanvasWorkspace } from './BrowserCanvasWorkspace.js';
 import type { ComfyCanvasPreferences } from './ComfyCanvasPreferences.js';
+import type { WorkflowViewSource } from '../../workflow/domain/WorkflowView.js';
 
 /** Retain content identity through temporary host suspension while retiring replaced native surfaces. */
 export class ComfyCanvasWorkspaceHost {
@@ -34,6 +35,7 @@ export class ComfyCanvasWorkspaceHost {
   #configuring = false;
   #disposed = false;
   #started = false;
+  #accepted: { visible: boolean; width: number } | null = null;
 
   /** Inject host lifecycle sources, accepted settings, and finite geometry scheduling. */
   constructor(
@@ -43,6 +45,7 @@ export class ComfyCanvasWorkspaceHost {
     private readonly frames: CanvasFrameClock,
     private readonly changed: () => void,
     private readonly report: (error: unknown) => void,
+    private readonly presentation: WorkflowViewSource,
   ) {}
 
   /** Expose the allocated remaining rectangle as the sole masonry mount parent. */
@@ -64,12 +67,14 @@ export class ComfyCanvasWorkspaceHost {
     this.#stops.push(
       mode.subscribe((active) => {
         this.#appMode = active;
-        this.#workspace?.suspend(active || this.#configuring);
+        this.#workspace?.suspend(this.#suspension());
         this.changed();
       }),
       this.preferences.subscribe(() => {
-        this.#workspace?.preferences(this.preferences.snapshot);
-        this.changed();
+        this.#refreshPreferences();
+      }),
+      this.presentation.subscribe(() => {
+        this.#refreshPreferences();
       }),
       createComfyRendererModeChangeSource(this.app).subscribe(() => {
         // Native renderer replacement retires its pixels before the new renderer becomes interactive.
@@ -88,7 +93,7 @@ export class ComfyCanvasWorkspaceHost {
   /** Preserve a qualified history surface while suspending primary pixels for graph replacement. */
   beforeConfigureGraph(retainCanvas = false): void {
     this.#configuring = !retainCanvas;
-    this.#workspace?.suspend(this.#appMode || this.#configuring);
+    this.#workspace?.suspend(this.#suspension());
     this.changed();
   }
 
@@ -96,7 +101,7 @@ export class ComfyCanvasWorkspaceHost {
   afterConfigureGraph(): void {
     this.#configuring = false;
     this.#reconcile();
-    this.#workspace?.suspend(this.#appMode);
+    this.#workspace?.suspend(this.#suspension());
     this.changed();
   }
 
@@ -121,10 +126,28 @@ export class ComfyCanvasWorkspaceHost {
   /** Route one local action through public Comfy persistence and preserve host-owned rollback semantics. */
   #visibility(visible: boolean): void {
     if (this.#disposed) return;
-    const pending = this.preferences.visible(visible);
+    this.presentation.change({ canvas: visible });
     this.#workspace?.drawer(visible);
     this.changed();
-    void pending.catch(this.report);
+  }
+
+  /** Combine global sizing with the workflow's authoritative visibility choice. */
+  #preferences() {
+    return { ...this.preferences.snapshot, visible: this.presentation.snapshot.canvas };
+  }
+
+  /** Hide replacement pixels without collapsing allocation; app mode relinquishes the whole frame. */
+  #suspension(): 'app' | 'configure' | null {
+    return this.#appMode ? 'app' : this.#configuring ? 'configure' : null;
+  }
+
+  /** Avoid layout and resize resets when session readiness changes without a preference change. */
+  #refreshPreferences(): void {
+    const next = this.#preferences();
+    if (this.#accepted?.visible === next.visible && this.#accepted.width === next.width) return;
+    this.#accepted = next;
+    this.#workspace?.preferences(next);
+    this.changed();
   }
 
   /** Mount only qualified siblings, releasing the old attachment before removing its allocation. */
@@ -140,7 +163,8 @@ export class ComfyCanvasWorkspaceHost {
     previous?.dispose();
     if (!root || !panel) return;
     try {
-      this.#layout.preferences(this.preferences.snapshot);
+      this.#accepted = this.#preferences();
+      this.#layout.preferences(this.#accepted);
       this.#workspace = new BrowserCanvasWorkspace(root, panel, this.#layout, this.frames, {
         width: (width) => {
           void this.preferences.width(width).catch(this.report);
@@ -149,7 +173,7 @@ export class ComfyCanvasWorkspaceHost {
         changed: this.changed,
       });
       this.#panel = panel;
-      this.#workspace.suspend(this.#appMode || this.#configuring);
+      this.#workspace.suspend(this.#suspension());
       this.changed();
     } catch (error: unknown) {
       this.report(error);

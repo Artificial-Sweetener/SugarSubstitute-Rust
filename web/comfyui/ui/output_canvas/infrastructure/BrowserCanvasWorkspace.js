@@ -22,6 +22,7 @@ import { ensureBrowserCanvasWorkspaceStyles } from './BrowserCanvasWorkspaceStyl
 export class BrowserCanvasWorkspace {
     model;
     actions;
+    #paintedAllocation = null;
     content;
     canvas;
     #pane;
@@ -31,7 +32,7 @@ export class BrowserCanvasWorkspace {
     #workspaceFrame;
     #input;
     #allocation = null;
-    #suspended = false;
+    #suspension = null;
     #disposed = false;
     /** Allocate only owned nodes, keeping Comfy's chrome and every native render layer in its original parent. */
     constructor(root, panel, model, frames, actions) {
@@ -99,7 +100,7 @@ export class BrowserCanvasWorkspace {
     }
     /** Read actual primary-surface availability rather than the stored desktop visibility preference. */
     get visible() {
-        return !this.#disposed && !this.#suspended && this.#allocation?.visible === true;
+        return !this.#disposed && this.#suspension === null && this.#allocation?.visible === true;
     }
     /** Apply accepted user settings without moving or remounting existing masonry controls. */
     preferences(preferences) {
@@ -114,10 +115,10 @@ export class BrowserCanvasWorkspace {
             this.#pane.focus({ preventScroll: true });
     }
     /** Keep content identity while the host temporarily hides graph mode or configures its workflow. */
-    suspend(suspended) {
-        if (this.#suspended === suspended || this.#disposed)
+    suspend(reason) {
+        if (this.#suspension === reason || this.#disposed)
             return;
-        this.#suspended = suspended;
+        this.#suspension = reason;
         this.#input.cancel();
         this.model.cancelResize();
         this.#render();
@@ -141,9 +142,24 @@ export class BrowserCanvasWorkspace {
             return;
         const allocation = this.model.read();
         this.#allocation = allocation;
-        const visible = allocation.visible && !this.#suspended;
-        const inset = visible && allocation.mode === 'docked' ? allocation.canvas.width : 0;
+        const visible = allocation.visible && this.#suspension === null;
+        const inset = allocation.visible && this.#suspension !== 'app' && allocation.mode === 'docked'
+            ? allocation.canvas.width
+            : 0;
         this.#frame.apply(inset);
+        const painted = JSON.stringify([
+            visible,
+            inset,
+            allocation.canvas.width,
+            allocation.mode,
+            allocation.minimumWidth,
+            allocation.maximumWidth,
+        ]);
+        if (this.#paintedAllocation === painted) {
+            this.actions.changed();
+            return;
+        }
+        this.#paintedAllocation = painted;
         this.content.style.left = '0px';
         this.content.style.width = `calc(100% - ${inset}px)`;
         this.#pane.style.width = `${allocation.canvas.width}px`;

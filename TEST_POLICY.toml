@@ -480,6 +480,14 @@ name = "canvas_view"
 area = "output_canvas"
 
 [[boundary]]
+name = "workflow_view_preferences"
+area = "workflow"
+
+[[subscription]]
+boundary = "workflow_view_preferences"
+groups = ["output_canvas/integration", "surface/integration", "frontend_core/integration"]
+
+[[boundary]]
 name = "canvas_workspace"
 area = "output_canvas"
 

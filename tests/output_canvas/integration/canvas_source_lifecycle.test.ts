@@ -16,6 +16,7 @@
 /** Prove source discovery, scoped metadata, and browser view lifetime against real application owners. */
 
 import { WorkflowSessionStore } from '../../../frontend/comfyui/ui/execution/application/WorkflowSessionStore.js';
+import { jest } from '@jest/globals';
 import { WorkflowResultStore } from '../../../frontend/comfyui/ui/execution/application/WorkflowResultStore.js';
 import { workflowSessionId } from '../../../frontend/comfyui/ui/execution/domain/ExecutionIdentity.js';
 import { CanvasSourceInventory } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasSourceInventory.js';
@@ -78,6 +79,24 @@ function fixture() {
 }
 
 describe('canvas source and workflow lifetimes', () => {
+  test('reuses unchanged catalogs and refreshes only the workflow whose metadata changed', () => {
+    const f = fixture();
+    const first = f.coordinator.active();
+    if (!first) throw new Error('Missing initial canvas view');
+    const catalog = f.coordinator.catalog(first);
+    expect(f.coordinator.catalog(first)).toBe(catalog);
+    const reconcile = jest.spyOn(f.selection, 'reconcile');
+    f.sessions.synchronize([f.a, f.b], f.b.sessionId);
+    const second = f.coordinator.active();
+    expect(second).not.toBe(first);
+    expect(reconcile.mock.calls.every(([view]) => view === second)).toBe(true);
+    reconcile.mockClear();
+    f.sessions.synchronize([f.a, f.b], f.b.sessionId);
+    expect(reconcile).not.toHaveBeenCalled();
+    f.adapter.dispose();
+    f.coordinator.dispose();
+    reconcile.mockRestore();
+  });
   test('preserves output batches and manual selection across native history restoration', () => {
     const f = fixture();
     const stop = f.sessions.subscribe((snapshot) => f.results.synchronize(snapshot.open));

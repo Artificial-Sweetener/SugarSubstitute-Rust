@@ -65,8 +65,8 @@ export class FluentScrollbarView {
     this.element.addEventListener('wheel', this.#wheel, { passive: false });
   }
 
-  /** Follow native range and viewport clipping inside the owning surface. */
-  update(track: ScrollbarTrack | null, space: ScrollbarCoordinateSpace): void {
+  /** Capture native range and clipping before sibling scrollbar writes invalidate style and layout. */
+  prepare(track: ScrollbarTrack | null, space: ScrollbarCoordinateSpace): () => void {
     const vertical = this.#axis === 'vertical';
     const style = this.#owner.ownerDocument.defaultView?.getComputedStyle(this.#owner);
     const overflow = (vertical ? style?.overflowY : style?.overflowX) || style?.overflow;
@@ -74,8 +74,9 @@ export class FluentScrollbarView {
       this.#owner !== this.#owner.ownerDocument.scrollingElement &&
       !/auto|scroll/.test(overflow ?? '')
     ) {
-      this.element.hidden = true;
-      return;
+      return () => {
+        this.element.hidden = true;
+      };
     }
     this.#rtl = track?.rtl ?? false;
     const viewport = vertical ? this.#owner.clientHeight : this.#owner.clientWidth;
@@ -85,8 +86,9 @@ export class FluentScrollbarView {
     this.#geometry = scrollbarGeometry(size, viewport, content, position);
     const geometry = this.#geometry;
     if (!track || !geometry) {
-      this.element.hidden = true;
-      return;
+      return () => {
+        this.element.hidden = true;
+      };
     }
     const offset = !vertical && this.#rtl ? geometry.travel - geometry.offset : geometry.offset;
     const left = vertical
@@ -95,15 +97,17 @@ export class FluentScrollbarView {
         : track.left + track.width - 12
       : track.left + 1 + offset;
     const top = vertical ? track.top + 1 + offset : track.horizontalBottom - 12;
-    this.element.hidden = false;
     const localLeft = (left - space.left) / space.scaleX;
     const localTop = (top - space.top) / space.scaleY;
     const width = (vertical ? 12 : geometry.length) / space.scaleX;
     const height = (vertical ? geometry.length : 12) / space.scaleY;
     const css = `left:${localLeft}px;top:${localTop}px;width:${width}px;height:${height}px;--sc-scrollbar-scale-x:${space.scaleX};--sc-scrollbar-scale-y:${space.scaleY}`;
-    if (this.element.getAttribute('style') !== css) this.element.setAttribute('style', css);
-    this.element.setAttribute('aria-valuemax', String(Math.round(geometry.maximum)));
-    this.element.setAttribute('aria-valuenow', String(Math.round(position)));
+    return () => {
+      this.element.hidden = false;
+      if (this.element.getAttribute('style') !== css) this.element.setAttribute('style', css);
+      this.element.setAttribute('aria-valuemax', String(Math.round(geometry.maximum)));
+      this.element.setAttribute('aria-valuenow', String(Math.round(position)));
+    };
   }
 
   /** Release capture and disconnect the owned control. */

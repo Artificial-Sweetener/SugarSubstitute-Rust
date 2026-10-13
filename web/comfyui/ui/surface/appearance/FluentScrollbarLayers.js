@@ -26,7 +26,22 @@ export class FluentScrollbarLayers {
     }
     /** Retain the same thumbs through reparenting and let ancestor clipping and stacking apply naturally. */
     mount(owner, vertical, horizontal) {
-        const surface = this.#surface(owner);
+        const layer = this.mountMany([{ owner, vertical, horizontal }]).get(owner);
+        if (!layer)
+            throw new Error('Scrollbar layer mount failed.');
+        return layer;
+    }
+    /** Read native positioning boundaries before any layer insertions invalidate browser styles. */
+    mountMany(mounts) {
+        const measured = mounts.map((mount) => ({
+            ...mount,
+            surface: this.#surface(mount.owner),
+            outset: scrollbarHorizontalOutset(mount.owner),
+        }));
+        return new Map(measured.map((mount) => [mount.owner, this.#mount(mount)]));
+    }
+    /** Apply already measured layer ownership without rereading native styles. */
+    #mount({ owner, vertical, horizontal, surface, outset, }) {
         if (this.#owners.get(owner) !== surface)
             this.release(owner);
         let layer = this.#layers.get(surface);
@@ -37,7 +52,6 @@ export class FluentScrollbarLayers {
             layer = { element, owners: new Map(), horizontalOutset: 0 };
             this.#layers.set(surface, layer);
         }
-        const outset = scrollbarHorizontalOutset(owner);
         if (layer.owners.get(owner) !== outset) {
             layer.owners.set(owner, outset);
             this.#measureOutset(layer);

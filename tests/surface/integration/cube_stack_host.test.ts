@@ -31,8 +31,18 @@ import { FluentAppearanceState } from '../../../frontend/comfyui/ui/surface/appe
 import { projectCubeStackRows } from '../../../frontend/comfyui/ui/surface/stack/CubeStackProjection.js';
 import type { CubeNode } from '../../../frontend/comfyui/ui/cube/node/ComfyCubeNodeFactory.js';
 import type { CubeGraphAnalysis } from '../../../frontend/comfyui/ui/workflow/domain/CubeGraphModels.js';
+import { CubeStackDrawerMotion } from '../../../frontend/comfyui/ui/surface/stack/CubeStackDrawerMotion.js';
 
 const owned: CubeStackHost[] = [];
+test('restores an already-selected workflow rail without allocating entrance animations', () => {
+  const fixture = setup();
+  fixture.host.setup();
+  const animate = jest.spyOn(CubeStackDrawerMotion.prototype, 'setVisible');
+  fixture.host.ready(fixture.surface, false);
+  expect(animate).not.toHaveBeenCalled();
+  expect(document.querySelector<HTMLElement>('.sc-cube-stack-host')?.style.opacity).toBe('1');
+  expect(document.querySelector<HTMLElement>('.sc-cube-stack-host')?.inert).not.toBe(true);
+});
 beforeEach(() => {
   jest.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => null);
 });

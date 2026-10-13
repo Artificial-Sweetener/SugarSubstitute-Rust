@@ -37,6 +37,7 @@ export interface BrowserCanvasWorkspaceActions {
 
 /** Keep graph frame, sibling bounds, and resize input coordinated without owning workflow results. */
 export class BrowserCanvasWorkspace {
+  #paintedAllocation: string | null = null;
   readonly content: HTMLDivElement;
   readonly canvas: HTMLDivElement;
   readonly #pane: HTMLElement;
@@ -46,7 +47,7 @@ export class BrowserCanvasWorkspace {
   readonly #workspaceFrame: ComfyCanvasWorkspaceFrame;
   readonly #input: CanvasWorkspaceResizeInput;
   #allocation: CanvasWorkspaceAllocation | null = null;
-  #suspended = false;
+  #suspension: 'app' | 'configure' | null = null;
   #disposed = false;
 
   /** Allocate only owned nodes, keeping Comfy's chrome and every native render layer in its original parent. */
@@ -118,7 +119,7 @@ export class BrowserCanvasWorkspace {
 
   /** Read actual primary-surface availability rather than the stored desktop visibility preference. */
   get visible(): boolean {
-    return !this.#disposed && !this.#suspended && this.#allocation?.visible === true;
+    return !this.#disposed && this.#suspension === null && this.#allocation?.visible === true;
   }
 
   /** Apply accepted user settings without moving or remounting existing masonry controls. */
@@ -135,9 +136,9 @@ export class BrowserCanvasWorkspace {
   }
 
   /** Keep content identity while the host temporarily hides graph mode or configures its workflow. */
-  suspend(suspended: boolean): void {
-    if (this.#suspended === suspended || this.#disposed) return;
-    this.#suspended = suspended;
+  suspend(reason: 'app' | 'configure' | null): void {
+    if (this.#suspension === reason || this.#disposed) return;
+    this.#suspension = reason;
     this.#input.cancel();
     this.model.cancelResize();
     this.#render();
@@ -161,9 +162,25 @@ export class BrowserCanvasWorkspace {
     if (this.#disposed) return;
     const allocation = this.model.read();
     this.#allocation = allocation;
-    const visible = allocation.visible && !this.#suspended;
-    const inset = visible && allocation.mode === 'docked' ? allocation.canvas.width : 0;
+    const visible = allocation.visible && this.#suspension === null;
+    const inset =
+      allocation.visible && this.#suspension !== 'app' && allocation.mode === 'docked'
+        ? allocation.canvas.width
+        : 0;
     this.#frame.apply(inset);
+    const painted = JSON.stringify([
+      visible,
+      inset,
+      allocation.canvas.width,
+      allocation.mode,
+      allocation.minimumWidth,
+      allocation.maximumWidth,
+    ]);
+    if (this.#paintedAllocation === painted) {
+      this.actions.changed();
+      return;
+    }
+    this.#paintedAllocation = painted;
     this.content.style.left = '0px';
     this.content.style.width = `calc(100% - ${inset}px)`;
     this.#pane.style.width = `${allocation.canvas.width}px`;
