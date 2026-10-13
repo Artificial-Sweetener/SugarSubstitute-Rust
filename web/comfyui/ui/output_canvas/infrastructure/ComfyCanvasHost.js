@@ -155,9 +155,10 @@ export class ComfyCanvasHost {
     toggle() {
         this.#workspace.toggle();
     }
-    /** Release primary pixels before graph replacement while preserving open workflow view state. */
+    /** Preserve qualified history pixels and retire primary resources before graph replacement. */
     beforeConfigureGraph() {
-        this.#workspace.beforeConfigureGraph();
+        const loading = this.options.execution.sessions.read().loading;
+        this.#workspace.beforeConfigureGraph(loading && this.#coordinator.active() !== null);
     }
     /** Restore a qualified allocation before masonry resumes borrowed native controls. */
     afterConfigureGraph() {

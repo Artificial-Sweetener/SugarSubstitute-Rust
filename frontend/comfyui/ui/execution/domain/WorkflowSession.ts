@@ -37,4 +37,5 @@ export interface WorkflowSessionSnapshot {
 export interface WorkflowLoadToken {
   readonly sequence: number;
   readonly previousSessionId: WorkflowSessionId | null;
+  readonly kind: 'replace' | 'history';
 }

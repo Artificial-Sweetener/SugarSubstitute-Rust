@@ -75,10 +75,10 @@ export class ComfyCanvasWorkspaceHost {
         this.#observer = new HostSurfaceObserver(this.document.body, '#graph-canvas-container, .graph-canvas-panel', () => this.#reconcile());
         this.#reconcile();
     }
-    /** Preserve lightweight view state while primary graph configuration has no deliverable surface. */
-    beforeConfigureGraph() {
-        this.#configuring = true;
-        this.#workspace?.suspend(true);
+    /** Preserve a qualified history surface while suspending primary pixels for graph replacement. */
+    beforeConfigureGraph(retainCanvas = false) {
+        this.#configuring = !retainCanvas;
+        this.#workspace?.suspend(this.#appMode || this.#configuring);
         this.changed();
     }
     /** Restore allocation before masonry asks for its existing content parent. */

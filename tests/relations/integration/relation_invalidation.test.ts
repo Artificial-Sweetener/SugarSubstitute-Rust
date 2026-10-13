@@ -21,6 +21,7 @@ import { CubeRelationPresenter } from '../../../frontend/comfyui/ui/relations/pr
 import { refreshNativeNodeCards } from '../../../frontend/comfyui/ui/surface/NativeNodeCardRefresh.js';
 import type { ComfyGraph } from '../../../frontend/comfyui/ui/types/graph.js';
 import type { ObservableNativeSubgraph } from '../../../frontend/comfyui/ui/surface/NativeSubgraphChangeObserver.js';
+import { emptyRelationState } from '../../../frontend/comfyui/ui/relations/domain/RelationContracts.js';
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -31,6 +32,148 @@ afterEach(() => {
 async function settle(): Promise<void> {
   for (let index = 0; index < 6; index++) await Promise.resolve();
 }
+
+test('blocks queued discovery and DOM value refresh throughout graph restoration', async () => {
+  const inventory = jest.spyOn(NativeRelationInventory.prototype, 'read');
+  const host = new RelationHostLifecycle({
+    app: { graph: { _nodes: [], extra: {} } },
+    document,
+    logger: console,
+    reportError: jest.fn(),
+    getCardState: () => null,
+  });
+  host.setup();
+  host.beforeConfigureGraph();
+  const root = document.createElement('div');
+  root.className = 'lg-node';
+  root.dataset.nodeId = '1';
+  const input = document.createElement('input');
+  root.append(input);
+  document.body.append(root);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  await settle();
+  expect(inventory).not.toHaveBeenCalled();
+  host.afterConfigureGraph();
+  await settle();
+  expect(inventory).toHaveBeenCalledTimes(1);
+  host.dispose();
+});
+
+test('restores effective values without adding history entries', async () => {
+  let value = 'euler';
+  const write = jest.fn((next: string | number | boolean) => {
+    value = String(next);
+  });
+  jest.spyOn(NativeRelationInventory.prototype, 'read').mockImplementation(() => ({
+    fields: ['a', 'b'].map((id) => ({
+      contract: {
+        id,
+        nodeId: id,
+        cubeId: id,
+        label: id,
+        name: 'sampler_name',
+        semantic: 'sampler_name',
+        value,
+        domain: { kind: 'choice', values: ['euler', 'heun'] },
+      },
+      read: () => value,
+      write,
+    })),
+    nodes: [],
+  }));
+  const beforeChange = jest.fn();
+  const afterChange = jest.fn();
+  const graph = {
+    _nodes: [],
+    extra: { sugarcubes_relations: emptyRelationState() },
+    beforeChange,
+    afterChange,
+  };
+  const host = new RelationHostLifecycle({
+    app: { graph },
+    document,
+    logger: console,
+    reportError: jest.fn(),
+    getCardState: () => null,
+  });
+  host.setup();
+  await settle();
+  host.beforeConfigureGraph();
+  const restored = emptyRelationState();
+  restored.overrides.sampler_name = { enabled: true, value: 'heun', seedMode: 'fixed' };
+  graph.extra = { sugarcubes_relations: restored };
+  beforeChange.mockClear();
+  afterChange.mockClear();
+  host.afterConfigureGraph();
+  await settle();
+  expect(value).toBe('heun');
+  expect(beforeChange).not.toHaveBeenCalled();
+  expect(afterChange).not.toHaveBeenCalled();
+  host.dispose();
+});
+
+test('cleans removed relation members before native history capture without a second edit', async () => {
+  let members = ['a', 'b'];
+  const inventory = jest
+    .spyOn(NativeRelationInventory.prototype, 'read')
+    .mockImplementation(() => ({
+      fields: members.map((id) => ({
+        contract: {
+          id,
+          nodeId: id,
+          cubeId: id,
+          label: id,
+          name: 'seed',
+          semantic: 'seed',
+          value: 10,
+          domain: { kind: 'number', minimum: 0, maximum: 100, step: 1, integer: true },
+        },
+        read: () => 10,
+        write: jest.fn(),
+      })),
+      nodes: [],
+    }));
+  const state = emptyRelationState();
+  state.locals.b = 10;
+  state.localSeedModes.b = 'fixed';
+  const beforeChange = jest.fn();
+  const afterChange = jest.fn();
+  const graph = {
+    _nodes: [],
+    extra: { sugarcubes_relations: state },
+    add() {},
+    remove() {
+      members = ['a'];
+    },
+    beforeChange,
+    afterChange,
+  };
+  const host = new RelationHostLifecycle({
+    app: { graph },
+    document,
+    logger: console,
+    reportError: jest.fn(),
+    getCardState: () => null,
+  });
+  try {
+    host.setup();
+    await settle();
+    inventory.mockClear();
+    beforeChange.mockClear();
+    afterChange.mockClear();
+    graph.remove();
+    host.commitNativeTransaction();
+    expect(graph.extra.sugarcubes_relations.locals.b).toBeUndefined();
+    expect(graph.extra.sugarcubes_relations.localSeedModes.b).toBeUndefined();
+    expect(inventory).toHaveBeenCalledTimes(1);
+    await settle();
+    expect(inventory).toHaveBeenCalledTimes(1);
+    expect(beforeChange).not.toHaveBeenCalled();
+    expect(afterChange).not.toHaveBeenCalled();
+  } finally {
+    host.dispose();
+  }
+});
 
 test('dock placeholders and native Run content do not refresh cards or rebuild field inventory', async () => {
   const inventory = jest.spyOn(NativeRelationInventory.prototype, 'read');
@@ -152,7 +295,7 @@ test('forwards Nodes 1 native DOM-widget value edits once through retained bindi
   host.dispose();
 });
 
-test('known relation transactions bypass rediscovery while native topology and undo still notify', async () => {
+test('known relation and native value transactions bypass rediscovery while topology still notifies', async () => {
   const graph: ComfyGraph & ObservableNativeSubgraph = {
     _nodes: [],
     extra: {},
@@ -175,9 +318,9 @@ test('known relation transactions bypass rediscovery while native topology and u
   expect(inventory).not.toHaveBeenCalled();
   graph.onAfterChange?.(graph);
   await settle();
-  expect(inventory).toHaveBeenCalledTimes(1);
+  expect(inventory).not.toHaveBeenCalled();
   graph.add?.({ id: 1 });
   await settle();
-  expect(inventory).toHaveBeenCalledTimes(2);
+  expect(inventory).toHaveBeenCalledTimes(1);
   host.dispose();
 });

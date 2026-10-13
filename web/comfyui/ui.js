@@ -27,6 +27,7 @@ import { projectCubeProximityPreviewLinks } from './ui/surface/CubeProximityPrev
 import { CubeAuthoringHostCommands } from './ui/cube/CubeAuthoringHostCommands.js';
 import { createCubeHostExecution } from './ui/cube/execution/CubeHostExecutionComposition.js';
 import { RelationHostLifecycle } from './ui/relations/RelationHostLifecycle.js';
+import { ComfyCanvasHistoryAdapter } from './ui/surface/ComfyCanvasHistoryAdapter.js';
 import { proximityWorkflowConnections } from './ui/overlays/proximity/ProximityWorkflowConnections.js';
 import { NativeSubgraphBoundaryResolver } from './ui/cube/graph/NativeSubgraphBoundaryResolver.js';
 import { buildShiftedPlacementPayload } from './ui/import/PlacementPayload.js';
@@ -296,6 +297,7 @@ const outputCanvas = new ComfyCanvasHost({
         pushToastMessage('error', 'Output canvas unavailable', readErrorMessage(error));
     },
 });
+const workflowHistory = new ComfyCanvasHistoryAdapter(appRef, documentRef ?? document, workflowRelations.commitNativeTransaction);
 const workflowMasonry = new WorkflowMasonryHostLifecycle({
     stack: createCubeStackCommands({
         document: documentRef ?? document,
@@ -421,6 +423,7 @@ export const sugarCubesExtension = {
     },
     async setup() {
         await extensionSetupLifecycle.setup();
+        workflowHistory.install();
         workflowRelations.setup();
         workflowMasonry.setup();
         outputCanvas.setup();
@@ -435,6 +438,7 @@ export const sugarCubesExtension = {
         modelUpdateLifecycle.start();
     },
     beforeConfigureGraph(graphData) {
+        workflowHistory.setConfiguring(true);
         workflowRelations.beforeConfigureGraph();
         workflowMasonry.beforeConfigureGraph();
         outputCanvas.beforeConfigureGraph();
@@ -446,6 +450,7 @@ export const sugarCubesExtension = {
         outputCanvas.afterConfigureGraph();
         workflowMasonry.afterConfigureGraph();
         workflowRelations.afterConfigureGraph();
+        workflowHistory.setConfiguring(false);
     },
 };
 app.registerExtension(sugarCubesExtension);

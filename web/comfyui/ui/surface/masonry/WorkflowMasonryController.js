@@ -38,6 +38,9 @@ export class WorkflowMasonryController {
     #renderer = null;
     #links = null;
     #graphInert = new Map();
+    #hiddenGraphRoots = new Set();
+    #scrollPositions = new WeakMap();
+    #viewScope = null;
     /** Bind host capabilities without importing host globals or owning graph mutations. */
     constructor(options) {
         this.#options = options;
@@ -50,7 +53,7 @@ export class WorkflowMasonryController {
     }
     /** Retain graph-only control exclusion until the departing masonry surface is released. */
     get presenting() {
-        return this.active || this.#view !== null;
+        return (this.#desired && !this.#suspensions.has('app')) || this.#view !== null;
     }
     /** Release native mounts during host transitions without changing the user's view choice. */
     async setSuspended(reason, suspended) {
@@ -62,14 +65,14 @@ export class WorkflowMasonryController {
             this.#suspensions.delete(reason);
         const generation = ++this.#generation;
         this.#transition.cancel();
-        this.#releaseView();
+        this.#releaseView(this.#desired && !this.#suspensions.has('app'));
         this.#options.onStateChange();
         if (!this.active || !this.#options.isNodes2())
             return;
         // Comfy commits its mode before Vue reveals the graph container and native controls.
         await this.#settled.settled(1);
         if (generation === this.#generation && this.active)
-            await this.#show(generation);
+            await this.#show(generation, false);
     }
     /** Reverse the presentation with one authoritative state transition. */
     async toggle() {
@@ -111,7 +114,7 @@ export class WorkflowMasonryController {
             }
             return;
         }
-        await this.#show(generation);
+        await this.#show(generation, true);
     }
     /** Release obsolete graph bindings immediately while retaining the chosen presentation. */
     async graphReplaced() {
@@ -124,12 +127,12 @@ export class WorkflowMasonryController {
         }
         const generation = ++this.#generation;
         this.#transition.cancel();
-        this.#releaseView();
+        this.#releaseView(true);
         this.#options.onStateChange();
-        await this.#show(generation);
+        await this.#show(generation, false);
     }
     /** Mount the current graph only while this presentation request still owns the lifecycle. */
-    async #show(generation) {
+    async #show(generation, animate) {
         try {
             if (!this.#view) {
                 const renderer = await this.#acquisition.acquire(() => this.#options.getRenderer());
@@ -154,10 +157,11 @@ export class WorkflowMasonryController {
                     },
                     onCardsChanged: () => {
                         if (this.#view && this.#desired)
-                            this.#options.onSurfaceReady?.(this.#view);
+                            this.#options.onSurfaceReady?.(this.#view, animate);
                     },
                 });
                 this.#container = container;
+                this.#viewScope = this.#options.getScope();
                 this.#reveal ??= new WorkflowMasonryGraphReveal();
                 this.#reveal.reconcile(container, sections);
                 const sources = this.#view.prepareSources();
@@ -174,9 +178,12 @@ export class WorkflowMasonryController {
             }
             if (generation !== this.#generation || !this.#desired)
                 return;
-            if (this.#view)
-                this.#options.onSurfaceReady?.(this.#view);
-            await this.#animate(true);
+            if (this.#view) {
+                this.#options.onSurfaceReady?.(this.#view, animate);
+                await this.#animate(true, animate);
+                if (generation === this.#generation && this.#viewScope && this.#view)
+                    this.#view.element.scrollTop = this.#scrollPositions.get(this.#viewScope) ?? 0;
+            }
             if (generation === this.#generation && this.#desired)
                 this.#setGraphHidden(true);
         }
@@ -235,7 +242,7 @@ export class WorkflowMasonryController {
             this.#mounting = this.#view.refresh(sections, this.#renderer);
             await this.#mounting;
             if (generation === this.#generation && this.#desired && this.#view)
-                this.#options.onSurfaceReady?.(this.#view);
+                this.#options.onSurfaceReady?.(this.#view, false);
         }
         catch (error) {
             if (generation !== this.#generation)
@@ -245,14 +252,14 @@ export class WorkflowMasonryController {
         }
     }
     /** Assemble native cards from actual graph bounds without changing saved node positions. */
-    async #animate(entering) {
+    async #animate(entering, animate = true) {
         const view = this.#view;
         const container = this.#container;
         if (!view || !container)
             return;
         this.#setGraphInert(true);
         view.setTransitioning(true);
-        const reducedMotion = this.#reducedMotion();
+        const reducedMotion = !animate || this.#reducedMotion();
         if (reducedMotion && this.#links) {
             const links = this.#links;
             this.#links = null;
@@ -263,7 +270,7 @@ export class WorkflowMasonryController {
         const noodles = entering ? this.#links?.run(true, reducedMotion) : undefined;
         await Promise.all([
             noodles,
-            this.#options.onSurfaceTransition?.(entering),
+            animate ? this.#options.onSurfaceTransition?.(entering) : undefined,
             this.#transition.run({
                 surface: view.element,
                 backdrop: view.backdrop,
@@ -276,9 +283,10 @@ export class WorkflowMasonryController {
             view.setTransitioning(false);
     }
     /** Remove presentation resources while preserving canonical graph and edit state. */
-    #releaseView() {
+    #releaseView(retainGraphSuppression = false) {
         this.#acquisition.cancel();
-        this.#setGraphHidden(false);
+        if (!retainGraphSuppression)
+            this.#setGraphHidden(false);
         this.#settled.cancel();
         const links = this.#links;
         this.#links = null;
@@ -294,6 +302,9 @@ export class WorkflowMasonryController {
     }
     /** Return borrowed controls before recapturing settled native noodle endpoints. */
     #disposePresentation() {
+        if (this.#view && this.#viewScope)
+            this.#scrollPositions.set(this.#viewScope, this.#view.element.scrollTop);
+        this.#viewScope = null;
         // Rail reservation is part of the animation's coordinate space until card travel completes.
         if (this.#view)
             this.#options.onSurfaceLeaving?.();
@@ -310,6 +321,12 @@ export class WorkflowMasonryController {
     /** Keep graph visible behind the fade and suppress it only after masonry is opaque. */
     #setGraphHidden(hidden) {
         this.#setGraphInert(hidden);
+        if (!hidden) {
+            for (const element of this.#hiddenGraphRoots)
+                delete element.dataset.sugarcubesMasonry;
+            this.#hiddenGraphRoots.clear();
+            return;
+        }
         const container = this.#container;
         if (!container)
             return;
@@ -317,10 +334,8 @@ export class WorkflowMasonryController {
         for (const element of new Set([container, graphRoot])) {
             if (!element)
                 continue;
-            if (hidden)
-                element.dataset.sugarcubesMasonry = 'true';
-            else
-                delete element.dataset.sugarcubesMasonry;
+            this.#hiddenGraphRoots.add(element);
+            element.dataset.sugarcubesMasonry = 'true';
         }
     }
     /** Keep graph controls dormant while presentation owns the pointer, retaining host inert state. */

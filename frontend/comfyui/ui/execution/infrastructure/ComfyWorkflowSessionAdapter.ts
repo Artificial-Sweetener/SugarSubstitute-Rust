@@ -110,6 +110,19 @@ export class ComfyWorkflowSessionAdapter {
     }
   }
 
+  /** Recognize native undo/redo only for the active workflow's restoring tracker. */
+  isHistoryRestore(args: readonly unknown[]): boolean {
+    const target = args[3];
+    const active = this.#workflow.activeWorkflow;
+    if (args[1] !== false || args[2] !== false || !isRecord(target) || !isRecord(active))
+      return false;
+    const tracker = active.changeTracker;
+    // Comfy passes the raw workflow while Pinia exposes its proxy; the tracker is markRaw.
+    return (
+      isRecord(tracker) && target.changeTracker === tracker && tracker._restoringState === true
+    );
+  }
+
   /** Read only the named workflow's host-owned output snapshot for validated restoration. */
   readStoredOutputs(sessionId: WorkflowSessionId): unknown {
     const workflow = this.#open.get(sessionId);

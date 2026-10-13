@@ -104,7 +104,7 @@ test('preserves identity across rename and Save As but retires a closed binding 
   adapter.dispose();
 });
 
-test('advances same-object reload and undo generations without resetting a tab-return generation', async () => {
+test('advances same-object reload generations without resetting a tab-return generation', async () => {
   const a = workflowFixture('a');
   const b = workflowFixture('b');
   const host = new WorkflowHostFixture(a);
@@ -129,6 +129,34 @@ test('advances same-object reload and undo generations without resetting a tab-r
   await host.loadGraphData({}, true, true, a);
   expect(sessions.read().active?.sessionId).toBe(firstId);
   expect(sessions.read().active?.generation).toBe(2);
+  observer.dispose();
+  adapter.dispose();
+});
+
+test('preserves a history restoration generation while blocking unfinished graph attribution', async () => {
+  const a = workflowFixture('a');
+  const host = new WorkflowHostFixture(a);
+  const sessions = new WorkflowSessionStore();
+  const adapter = new ComfyWorkflowSessionAdapter({
+    app: host,
+    sessions,
+    nextKey: () => 'a',
+    logger: { error: jest.fn() },
+  });
+  adapter.install();
+  const observer = createComfyWorkflowLoadObserver(host, sessions, adapter, { error: jest.fn() });
+  observer.install();
+  Reflect.set(a.changeTracker, '_restoringState', true);
+  const pending = deferred();
+  host.pauseAfterConfigure = () => pending.promise;
+  const load = host.loadGraphData({}, false, false, a);
+  expect(sessions.read().active).toBeNull();
+  pending.finish();
+  await load;
+  expect(sessions.read().active?.generation).toBe(0);
+  Reflect.set(a.changeTracker, '_restoringState', false);
+  await host.loadGraphData({}, false, false, a);
+  expect(sessions.read().active?.generation).toBe(1);
   observer.dispose();
   adapter.dispose();
 });
@@ -158,6 +186,25 @@ test('does not restore association if the public store is malformed when a load 
   expect(logger.error).toHaveBeenCalledTimes(1);
   observer.dispose();
   adapter.dispose();
+});
+
+test('recognizes the raw history target through its tracker and rejects unrelated restore flags', () => {
+  const active = workflowFixture('active');
+  const host = new WorkflowHostFixture(active);
+  const sessions = new WorkflowSessionStore();
+  const adapter = new ComfyWorkflowSessionAdapter({
+    app: host,
+    sessions,
+    nextKey: () => 'active',
+    logger: console,
+  });
+  Reflect.set(active.changeTracker, '_restoringState', true);
+  const rawTarget = { ...active };
+  expect(adapter.isHistoryRestore([{}, false, false, rawTarget])).toBe(true);
+  expect(adapter.isHistoryRestore([{}, true, false, rawTarget])).toBe(false);
+  expect(adapter.isHistoryRestore([{}, false, true, rawTarget])).toBe(false);
+  expect(adapter.isHistoryRestore([{}, false, false, workflowFixture('other')])).toBe(false);
+  expect(adapter.isHistoryRestore([{}, false, false, null])).toBe(false);
 });
 
 test('keeps a rejected host load unassigned and preserves its original failure', async () => {

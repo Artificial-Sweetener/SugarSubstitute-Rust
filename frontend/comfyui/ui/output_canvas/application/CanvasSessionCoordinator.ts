@@ -53,9 +53,9 @@ export class CanvasSessionCoordinator {
     this.#synchronize();
   }
 
-  /** Read the committed active browser view, with no view during graph replacement. */
+  /** Retain the qualified browser view during history restoration and release it for graph replacement. */
   active(): CanvasViewId | null {
-    const active = this.sessions.read().active;
+    const active = this.sessions.presentation();
     return active ? (this.#primary.get(active.sessionId) ?? null) : null;
   }
 

@@ -23,6 +23,7 @@ export class NativeSubgraphChangeObserver {
     #addListener;
     #previousRemove;
     #removeListener;
+    #deliver;
     #notificationQueued = false;
     #changes = [];
     #active = true;
@@ -32,6 +33,12 @@ export class NativeSubgraphChangeObserver {
             throw new TypeError('Comfy native subgraph topology methods are unavailable.');
         }
         this.#subgraph = subgraph;
+        this.#deliver = () => {
+            this.#notificationQueued = false;
+            const changes = Object.freeze(this.#changes.splice(0));
+            if (this.#active && changes.length)
+                onChange(changes);
+        };
         const notify = (kind, info) => {
             if (!this.#active || !accepts(kind))
                 return;
@@ -40,12 +47,7 @@ export class NativeSubgraphChangeObserver {
             if (this.#notificationQueued)
                 return;
             this.#notificationQueued = true;
-            queueMicrotask(() => {
-                this.#notificationQueued = false;
-                const changes = Object.freeze(this.#changes.splice(0));
-                if (this.#active)
-                    onChange(changes);
-            });
+            queueMicrotask(this.#deliver);
         };
         this.#previous = typeof subgraph.onAfterChange === 'function' ? subgraph.onAfterChange : null;
         this.#listener = (graph, info) => {
@@ -67,6 +69,10 @@ export class NativeSubgraphChangeObserver {
         subgraph.onAfterChange = this.#listener;
         subgraph.add = this.#addListener;
         subgraph.remove = this.#removeListener;
+    }
+    /** Deliver identified pending mutations before their native transaction commits. */
+    flush() {
+        this.#deliver();
     }
     /** Restore the callback only while this observer still owns the boundary. */
     dispose() {

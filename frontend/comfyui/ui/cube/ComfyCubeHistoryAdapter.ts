@@ -72,9 +72,14 @@ export function createComfyCubeHistoryAdapter(
   };
 }
 
-/** Read one optional dynamic host method without leaking an untyped callable. */
+/** Retain the chosen host capability while following lifecycle-installed transaction hooks. */
 function readMethod(owner: UnknownRecord, name: string): ((...args: unknown[]) => unknown) | null {
   const value = owner[name];
   if (typeof value !== 'function') return null;
-  return (...args: unknown[]) => Reflect.apply(value, owner, args);
+  return (...args: unknown[]) => {
+    const current = owner[name];
+    if (typeof current !== 'function')
+      throw new TypeError(`Comfy history method ${name} is unavailable.`);
+    return Reflect.apply(current, owner, args);
+  };
 }

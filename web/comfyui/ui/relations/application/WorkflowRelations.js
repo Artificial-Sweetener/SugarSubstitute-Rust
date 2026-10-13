@@ -14,6 +14,11 @@ export class WorkflowRelations {
     constructor(port) {
         this.port = port;
     }
+    /** Retire bindings and comparison state before the host replaces native node objects. */
+    invalidate() {
+        this.#snapshot = null;
+        this.#inventory = null;
+    }
     /** Discover on topology changes; reuse validated bindings for value-only edits. */
     reconcile(discover = true) {
         if (this.#reconciling && this.#snapshot)

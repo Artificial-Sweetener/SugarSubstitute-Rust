@@ -85,10 +85,10 @@ export class ComfyCanvasWorkspaceHost {
     this.#reconcile();
   }
 
-  /** Preserve lightweight view state while primary graph configuration has no deliverable surface. */
-  beforeConfigureGraph(): void {
-    this.#configuring = true;
-    this.#workspace?.suspend(true);
+  /** Preserve a qualified history surface while suspending primary pixels for graph replacement. */
+  beforeConfigureGraph(retainCanvas = false): void {
+    this.#configuring = !retainCanvas;
+    this.#workspace?.suspend(this.#appMode || this.#configuring);
     this.changed();
   }
 

@@ -170,6 +170,28 @@ function fixture() {
   };
 }
 
+test('retains the same image attachment through history restoration and releases it on failure', async () => {
+  const f = fixture();
+  try {
+    const address = f.primary.diagnostics().address;
+    const view = f.coordinator.active();
+    const token = f.sessions.beginLoad('history');
+    expect(f.sessions.read().active).toBeNull();
+    expect(f.coordinator.active()).toBe(view);
+    expect(f.primary.diagnostics().address).toBe(address);
+    expect(f.loaders).toHaveLength(1);
+    expect(f.loaders[0]?.disposed).toBe(false);
+    f.sessions.completeLoad(token, true);
+    expect(f.primary.diagnostics().address).toBe(address);
+    const failed = f.sessions.beginLoad('history');
+    f.sessions.completeLoad(failed, false);
+    expect(f.primary.diagnostics().address).toBeNull();
+    expect(f.loaders[0]?.disposed).toBe(true);
+  } finally {
+    f.dispose();
+  }
+});
+
 test('bounds ownership over 100 pending tab switches and preserves workflow Manual intent on return', async () => {
   const f = fixture();
   const first = f.coordinator.active()!;

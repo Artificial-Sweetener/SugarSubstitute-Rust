@@ -85,6 +85,29 @@ test('value edits reuse bindings and refresh only the affected relation members'
   expect(inventory).not.toHaveBeenCalled();
 });
 
+test('retires prior bindings and comparison state when undo restores local relation intent', () => {
+  const fixture = workflow();
+  fixture.relations.reconcile();
+  fixture.relations.setOverrideEnabled('sampler_name', false);
+  fixture.relations.setFieldValue('a', 'heun');
+  const previous = fixture.port.inventory();
+  const retiredWrite = jest.fn();
+  for (const field of previous.fields) field.write = retiredWrite;
+  const read = jest.spyOn(fixture.port, 'inventory').mockReturnValueOnce(previous);
+  fixture.relations.reconcile();
+  const restored = fixture.state();
+  restored.locals.a = 'euler';
+  fixture.port.save(restored);
+  // The host has replaced widgets; only newly discovered bindings may receive the restored value.
+  fixture.values.set('a', 'heun');
+  fixture.relations.invalidate();
+  fixture.relations.reconcile(false);
+  expect(fixture.state().locals.a).toBe('euler');
+  expect(fixture.values.get('a')).toBe('euler');
+  expect(retiredWrite).not.toHaveBeenCalled();
+  expect(read).toHaveBeenCalledTimes(2);
+});
+
 test('publishes changed link ownership without refreshing unchanged native values', () => {
   const fixture = workflow();
   fixture.values.set('b', 'euler');
