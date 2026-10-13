@@ -7,6 +7,8 @@ mod attachment_completion;
 mod capture;
 #[path = "entry_activation/delivery.rs"]
 mod delivery;
+#[path = "entry_activation/desktop_output.rs"]
+mod desktop_output;
 #[path = "entry_activation/desktop_role.rs"]
 pub(crate) mod desktop_role;
 #[path = "entry_activation/forwarding.rs"]
@@ -174,6 +176,13 @@ impl ProductionActivation {
                             .as_ref()
                             .and_then(|parent| parent.failure())
                             .map(|cause| cause as &(dyn Error + 'static))
+                            .or_else(|| {
+                                record
+                                    .start
+                                    .as_ref()
+                                    .and_then(|start| start.output.as_ref())
+                                    .and_then(|output| output.failure())
+                            })
                             .or_else(|| match &record.projected.as_ref()?.outcome {
                                 JobOutcome::Failure(cause) => Some(cause as &(dyn Error + 'static)),
                                 _ => None,

@@ -10,7 +10,8 @@ use sugarsubstitute_contracts::{
     transcript::{OutputBatch, TranscriptDiagnostics},
 };
 use sugarsubstitute_execution::windows_output::{
-    AdmittedOutputBatch, WindowsOutputReport, WindowsOutputSession,
+    AdmittedOutputBatch, DesktopOutputBatch, OutputIdentity, WindowsOutputReport,
+    WindowsOutputSession,
 };
 pub(super) const STORE_BYTES: u64 = MAX_OWNER_ALLOCATION_BYTES as u64 + 65536;
 pub(super) struct Store {
@@ -33,6 +34,21 @@ impl Store {
             raw: [Vec::with_capacity(256), Vec::with_capacity(256)],
             _claim: claim,
         }
+    }
+    /// Qualify Domain parsing separately under this fixture's original Store claim.
+    /// The native source remains Desktop(run); this bounded parser input uses the
+    /// independently assigned test resource and is never process/backend authority.
+    /// The unchanged extra 64KiB covers this one 32KiB copy and the bounded raw corpus.
+    pub(super) fn apply_desktop(&mut self, role: Role, batch: &DesktopOutputBatch) -> Result<()> {
+        let input = OutputBatch::new(
+            self.transcript.resource(),
+            batch.stream(),
+            batch.sequence(),
+            batch.bytes(),
+            batch.gap(),
+            batch.end(),
+        )?;
+        self.apply(role, &input)
     }
     pub(super) fn apply(&mut self, role: Role, batch: &OutputBatch) -> Result<()> {
         let i = batch.stream().index();
@@ -192,6 +208,13 @@ pub(super) struct Case {
     pub(super) drained: bool,
 }
 impl Case {
+    pub(super) fn output_identity(&self) -> OutputIdentity {
+        if self.role.authenticated() {
+            OutputIdentity::Desktop(self.run)
+        } else {
+            OutputIdentity::Managed(self.resource)
+        }
+    }
     pub(super) fn new(role: Role, resource: ResourceKey, run: RunKey) -> Self {
         Self {
             role,

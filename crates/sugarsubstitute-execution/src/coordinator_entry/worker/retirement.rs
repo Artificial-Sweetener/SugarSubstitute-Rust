@@ -33,7 +33,13 @@ impl Active {
             let failure = self.connections[index]
                 .failure
                 .as_ref()
-                .filter(|cause| matches!(cause, EntryTransportError::PeerDisconnected(_)))
+                .filter(|cause| {
+                    matches!(
+                        cause,
+                        EntryTransportError::PeerDisconnected(_)
+                            | EntryTransportError::EndpointAbsent(_)
+                    )
+                })
                 .cloned();
             self.emit(
                 core,

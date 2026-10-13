@@ -49,7 +49,24 @@ struct PreparationObservation {
     registered: bool,
     configuration: bool,
     original_failure: Option<ChildBootstrapIssue>,
+    capture_failure: CaptureFailureKind,
     failure_retained: bool,
+}
+
+/// Redact the first owned capture failure to a closed data-only category.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CaptureFailureKind {
+    None,
+    State,
+    Identity,
+    Admission,
+    Data,
+    Source,
+    Native,
+    TimedOut,
+    Cancelled,
+    Uncertain,
+    Other,
 }
 
 #[cfg(test)]
@@ -257,6 +274,7 @@ impl ChildBootstrap {
         let scope = self.scope.as_ref().ok_or(ChildBootstrapIssue::Identity)?;
         let state = scope.snapshot();
         if state.closed || state.cancellation_requested {
+            self.issue.get_or_insert(ChildBootstrapIssue::State);
             self.close_initialization();
             return Err(ChildBootstrapIssue::State);
         }
@@ -271,6 +289,7 @@ impl ChildBootstrap {
             .now()
             .map_err(|cause| self.record(ChildBootstrapIssue::Deadline, Box::new(cause)))?;
         if now >= until {
+            self.issue.get_or_insert(ChildBootstrapIssue::Deadline);
             self.close_initialization();
             return Err(ChildBootstrapIssue::Deadline);
         }
@@ -341,6 +360,7 @@ impl ChildBootstrap {
                 registered = observation.registered,
                 configuration = observation.configuration,
                 original_failure = ?observation.original_failure,
+                capture_failure = ?observation.capture_failure,
                 failure_retained = observation.failure_retained,
                 "Child pre-UI preparation conditions changed"
             );
@@ -354,6 +374,7 @@ impl ChildBootstrap {
             registered: self.channel.registered(),
             configuration: self.prepared.is_some() || self.delivered,
             original_failure: self.issue,
+            capture_failure: self.capture_failure_kind(),
             failure_retained: self.failure_source().is_some(),
         };
         if self.last_preparation == Some(observation) {
@@ -361,6 +382,37 @@ impl ChildBootstrap {
         }
         self.last_preparation = Some(observation);
         Some(observation)
+    }
+    /// Inspect only supported concrete first-cause types; never format their payload.
+    fn capture_failure_kind(&self) -> CaptureFailureKind {
+        use super::capture::ChildCaptureError;
+        use sugarsubstitute_contracts::execution::AdmissionError;
+        use sugarsubstitute_execution::windows::NativeObservationError;
+        if self.issue != Some(ChildBootstrapIssue::Capture) {
+            return CaptureFailureKind::None;
+        }
+        let Some(cause) = self.failure_source() else { return CaptureFailureKind::None };
+        if let Some(cause) = cause.downcast_ref::<ChildCaptureError>() {
+            return match cause {
+                ChildCaptureError::State => CaptureFailureKind::State,
+                ChildCaptureError::Identity => CaptureFailureKind::Identity,
+            };
+        }
+        if cause.is::<AdmissionError>() {
+            return CaptureFailureKind::Admission;
+        }
+        if cause.is::<NativeObservationError>() {
+            return CaptureFailureKind::Native;
+        }
+        match cause.downcast_ref::<CaptureAttachFailure>() {
+            Some(CaptureAttachFailure::Data(_)) => CaptureFailureKind::Data,
+            Some(CaptureAttachFailure::Source(_)) => CaptureFailureKind::Source,
+            Some(CaptureAttachFailure::Native(_)) => CaptureFailureKind::Native,
+            Some(CaptureAttachFailure::TimedOut) => CaptureFailureKind::TimedOut,
+            Some(CaptureAttachFailure::Cancelled) => CaptureFailureKind::Cancelled,
+            Some(CaptureAttachFailure::Uncertain) => CaptureFailureKind::Uncertain,
+            None => CaptureFailureKind::Other,
+        }
     }
     /// Observe configuration work independently of transport or native retirement.
     pub(super) fn projection_pending(&self) -> bool {

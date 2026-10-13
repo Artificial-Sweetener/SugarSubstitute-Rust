@@ -6,10 +6,7 @@ use crate::{
     output::*,
 };
 use std::sync::Arc;
-use sugarsubstitute_contracts::{
-    lifecycle::ResourceKey,
-    transcript::{MAX_BATCH_BYTES, OutputStream},
-};
+use sugarsubstitute_contracts::transcript::{MAX_BATCH_BYTES, OutputStream};
 use windows::{
     Win32::{
         Foundation::*,
@@ -79,13 +76,13 @@ impl Lease {
 impl OutputLease for Lease {
     fn prepare(
         &mut self,
-        resource: ResourceKey,
+        identity: OutputIdentity,
         signals: [Arc<Signal>; 2],
     ) -> Result<[usize; 3], NativeObservationError> {
         for (index, signal) in signals.into_iter().enumerate() {
             self.operations[index] = Some(operation::Operation::new(signal));
         }
-        self.prepare_handles(resource)?;
+        self.prepare_handles(identity)?;
         Ok(self.child.each_ref().map(|h| h.0))
     }
     fn release_child_ends(&mut self) -> Result<(), NativeObservationError> {

@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Fake only external read/close effects while real execution owns admitted lifetimes.
 use super::*;
+use sugarsubstitute_contracts::lifecycle::ResourceKey;
 pub(super) struct Boundary {
     pub(super) scope: Mutex<Option<sugarsubstitute_contracts::execution::Scope>>,
     pub(super) data: Mutex<[VecDeque<Vec<u8>>; 2]>,
@@ -121,7 +122,7 @@ pub(super) struct Lease(pub(super) Arc<Boundary>);
 impl OutputLease for Lease {
     fn prepare(
         &mut self,
-        _: ResourceKey,
+        _: OutputIdentity,
         signals: [Arc<Signal>; 2],
     ) -> Result<[usize; 3], NativeObservationError> {
         *lock(&self.0.signals) = Some(signals);
@@ -200,6 +201,23 @@ pub(super) fn session_with(
     job_id: u64,
     deadline: Option<sugarsubstitute_contracts::execution::Moment>,
 ) -> TestResult<WindowsOutputSession> {
+    session_identity(
+        rig,
+        boundary,
+        scope_id,
+        job_id,
+        deadline,
+        OutputIdentity::Managed(resource()?),
+    )
+}
+pub(super) fn session_identity(
+    rig: &Rig,
+    boundary: &Arc<Boundary>,
+    scope_id: u64,
+    job_id: u64,
+    deadline: Option<sugarsubstitute_contracts::execution::Moment>,
+    identity: OutputIdentity,
+) -> TestResult<WindowsOutputSession> {
     use sugarsubstitute_contracts::execution::*;
     let scope = rig.client.core.create_scope_kind(
         ScopeSpec { id: ScopeId::new(scope_id)?, deadline: None },
@@ -210,7 +228,7 @@ pub(super) fn session_with(
     job.deadline = deadline;
     job.operation = Operation::NativeLifecycle;
     let session =
-        reserve(&rig.client.core, &scope, job, resource()?, Box::new(Lease(boundary.clone())))?;
+        reserve(&rig.client.core, &scope, job, identity, Box::new(Lease(boundary.clone())))?;
     *lock(&boundary.scope) = Some(scope);
     boundary.prepared.wait()?;
     loop {

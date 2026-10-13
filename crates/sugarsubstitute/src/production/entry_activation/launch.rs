@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Transfer actual capture and profile custody into one contained desktop launch.
 use super::{
+    desktop_output::DesktopOutput,
     desktop_role,
     projection::{ProjectedEntry, ProjectionFailure},
 };
@@ -34,6 +35,7 @@ pub(super) struct DesktopStart {
     pub(super) projection: JobCompletion<ProjectedEntry, ProjectionFailure>,
     pub(super) profile: WindowsProfileLease,
     pub(super) pipe: Option<LifecyclePipeSession>,
+    pub(super) output: Option<DesktopOutput>,
     pipe_terminal: Option<
         JobCompletion<
             sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeReport,
@@ -87,6 +89,7 @@ impl DesktopStart {
             projection,
             profile,
             pipe: None,
+            output: None,
             pipe_terminal: None,
             checked_retirement: None,
             captured: Some(CapturedLifecycleStart::new(pin, snapshot)),
@@ -160,6 +163,17 @@ impl DesktopStart {
         if !self.profile.snapshot().held || self.profile.snapshot().pending {
             return Ok(false);
         }
+        if self.output.is_none() {
+            self.output = Some(DesktopOutput::new(
+                self.run,
+                resources.client,
+                resources.native,
+                resources.jobs,
+            )?);
+        }
+        if !self.output.as_ref().is_some_and(DesktopOutput::prepared) {
+            return Ok(false);
+        }
         let pipe = self.pipe.as_ref().ok_or("Actual captured channel missing")?;
         if self.bootstrap.is_none() {
             let Some(bootstrap) = pipe.control.take_bootstrap()? else { return Ok(false) };
@@ -190,6 +204,8 @@ impl DesktopStart {
                 bootstrap,
                 enrollment,
             )?;
+            let input =
+                self.output.as_mut().ok_or("Actual desktop output missing")?.attach(input)?;
             self.prepared = Some(self.profile.prepare_desktop_launch(input)?);
         }
         let until = self.value()?.until;
@@ -254,7 +270,14 @@ impl DesktopStart {
         self.bootstrap = None;
         self.enrollment = None;
         self.captured = None;
-        let Some(pipe) = &mut self.pipe else { return Ok(true) };
+        let output_settled = if let Some(output) = &mut self.output {
+            output.request_close();
+            output.observe()?;
+            output.settled()
+        } else {
+            true
+        };
+        let Some(pipe) = &mut self.pipe else { return Ok(output_settled) };
         pipe.control.close();
         while pipe.control.take_observation().is_some() {}
         if self.pipe_terminal.is_none() {
@@ -271,11 +294,12 @@ impl DesktopStart {
         }
         // The complete original outcome remains retained independently of physical settlement.
         // A failure terminal cannot substitute for the actual checked worker proof.
-        Ok(self.checked_retirement.as_ref().is_some_and(|proof| {
-            proof.matches(&pipe.control)
-                && proof.scope_id() == terminal.scope_id
-                && proof.spec() == terminal.spec
-                && proof.run() == Some(self.run)
-        }))
+        Ok(output_settled
+            && self.checked_retirement.as_ref().is_some_and(|proof| {
+                proof.matches(&pipe.control)
+                    && proof.scope_id() == terminal.scope_id
+                    && proof.spec() == terminal.spec
+                    && proof.run() == Some(self.run)
+            }))
     }
 }

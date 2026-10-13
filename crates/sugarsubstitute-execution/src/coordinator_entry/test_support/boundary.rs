@@ -44,6 +44,7 @@ pub(in crate::coordinator_entry::tests) struct Boundary {
     pub(in crate::coordinator_entry::tests) issue_release: Gate,
     pub(in crate::coordinator_entry::tests) connects_issued: AtomicUsize,
     pub(in crate::coordinator_entry::tests) connect_failure: Mutex<Option<&'static str>>,
+    pub(in crate::coordinator_entry::tests) absent_endpoint: AtomicBool,
     pub(in crate::coordinator_entry::tests) reads_issued: AtomicUsize,
 }
 impl Boundary {
@@ -87,6 +88,7 @@ impl Boundary {
             issue_release: Gate::default(),
             connects_issued: AtomicUsize::new(0),
             connect_failure: Mutex::new(None),
+            absent_endpoint: AtomicBool::new(false),
             reads_issued: AtomicUsize::new(0),
         }))
     }
@@ -209,6 +211,12 @@ impl EntryLease for Lease {
         let issue = NativeIssue { context: alternate.as_ref().unwrap_or(issue.context), ..issue };
         let result = issue.execute(|| {
             self.0.connects_issued.fetch_add(1, Ordering::AcqRel);
+            if self.0.absent_endpoint.load(Ordering::Acquire) {
+                return Err(EntryTransportError::EndpointAbsent(NativeObservationError::new(
+                    "entry_open_client",
+                    std::io::Error::from_raw_os_error(2),
+                )));
+            }
             if let Some(stage) = *lock(&self.0.connect_failure) {
                 return Err(failure(stage));
             }

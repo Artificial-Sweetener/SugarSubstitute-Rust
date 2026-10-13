@@ -171,18 +171,7 @@ impl ChildCapture {
                 return Err(ChildCaptureError::State);
             };
             if let Some(completion) = session.job().try_take_completion() {
-                let matches = correlation.completion(
-                    completion.scope_id,
-                    completion.spec,
-                    completion.outcome.kind(),
-                ) && completion.memory.bytes() == completion.spec.reservation_bytes
-                    && completion.native_handles.as_ref().is_some_and(|native| {
-                        correlation.native(
-                            native.owner_id(),
-                            native.original_scope_id(),
-                            native.original_job_id(),
-                        )
-                    })
+                let matches = correlation.completion(&completion)
                     && match &completion.outcome {
                         JobOutcome::Success(attached) => correlation.attached(
                             attached.run(),

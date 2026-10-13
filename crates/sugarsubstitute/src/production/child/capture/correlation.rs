@@ -3,7 +3,9 @@
 //! Match observed facts to one genuine admitted child job; facts grant no custody.
 use super::ChildCaptureError;
 use sugarsubstitute_contracts::{
-    execution::{CompletionNotification, ExecutionId, JobId, JobSpec, ScopeId, TerminalKind},
+    execution::{
+        CompletionNotification, ExecutionId, JobCompletion, JobId, JobSpec, ScopeId, TerminalKind,
+    },
     lifecycle::RunKey,
 };
 /// Keep original admission facts independently of actual result and source ownership.
@@ -42,13 +44,17 @@ impl CaptureCorrelation {
     pub(super) const fn noticed(&self) -> bool {
         self.notice.is_some()
     }
-    /// Compare the complete original specification and observed outcome kind.
-    pub(super) fn completion(&self, scope: ScopeId, spec: JobSpec, kind: TerminalKind) -> bool {
-        scope == self.scope && spec == self.spec && self.notice == Some(kind)
+    /// Compare the original owned completion, including its complete memory reservation.
+    /// Desktop capture has its own two-output owner, so SymbolHelper's optional
+    /// handle ledger is absent. This observation grants no native closure or Ready.
+    pub(super) fn completion<T, E>(&self, completion: &JobCompletion<T, E>) -> bool {
+        self.terminal(completion.scope_id, completion.spec, completion.outcome.kind())
+            && completion.memory.bytes() == self.spec.reservation_bytes
+            && completion.native_handles.is_none()
     }
-    /// Match the real output lease's immutable original accounting association.
-    pub(super) fn native(&self, execution: ExecutionId, scope: ScopeId, job: JobId) -> bool {
-        (execution, scope, job) == (self.execution, self.scope, self.spec.id)
+    /// Compare immutable terminal metadata before inspecting any owned result.
+    pub(super) fn terminal(&self, scope: ScopeId, spec: JobSpec, kind: TerminalKind) -> bool {
+        scope == self.scope && spec == self.spec && self.notice == Some(kind)
     }
     /// Match facts borrowed from the worker-constructed successful registration.
     pub(super) fn attached(&self, run: RunKey, execution: ExecutionId, job: JobId) -> bool {

@@ -5,7 +5,7 @@ use super::super::test_support::InertDriver;
 use super::*;
 use std::sync::{
     Arc,
-    atomic::{AtomicUsize, Ordering},
+    atomic::{AtomicU64, AtomicUsize, Ordering},
 };
 use sugarsubstitute_contracts::{
     execution::{Clock, CompletionWake, ExecutionError, ExecutionPort, ScopeId, WaitFuture},
@@ -29,6 +29,16 @@ struct Wake;
 impl CompletionWake for Wake {
     fn wake(&self) -> Result<(), ExecutionError> {
         Ok(())
+    }
+}
+/// Control only the external clock; real execution owns every scope and cancellation.
+struct ControlledClock(AtomicU64);
+impl Clock for ControlledClock {
+    fn now(&self) -> Moment {
+        Moment::from_nanos(self.0.load(Ordering::Acquire))
+    }
+    fn sleep_until(&self, _: Moment) -> WaitFuture {
+        Box::pin(std::future::pending())
     }
 }
 fn runtime() -> Result<ExecutionOwner, Box<dyn Error>> {
@@ -190,6 +200,81 @@ fn preparation_diagnostics_suppress_repeats_and_retain_redacted_original_failure
     assert!(child.changed_preparation().is_none());
     assert_eq!(child.issue, Some(ChildBootstrapIssue::Deadline));
     assert_eq!(child.failure_source().ok_or("Original failure lost")?.to_string(), "private-path");
+    assert_eq!(calls.load(Ordering::Acquire), 0);
+    Ok(())
+}
+
+/// Quiet expiry and actual scope cancellation latch the original diagnostic phase.
+#[test]
+fn current_scope_and_clock_failure_latch_first_issue_without_synthetic_cause() -> TestResult {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let clock = Arc::new(ControlledClock(AtomicU64::new(0)));
+    let owner = ExecutionOwner::new(clock.clone(), Arc::new(Wake))?;
+    let client = owner.client();
+    for (id, first) in [(1, ChildBootstrapIssue::Deadline), (2, ChildBootstrapIssue::State)] {
+        let scope =
+            client.create_scope(ScopeSpec { id: ScopeId::new(id)?, deadline: None }, None)?;
+        let mut child = bootstrap(&calls, None)?;
+        // Retain genuine application scope/client without admitting the inert native input.
+        child.scope = Some(scope);
+        child.client = Some(client.clone());
+        child.original = Some(Moment::from_nanos(id * 100));
+        assert!(child.check_current().is_ok());
+        assert_eq!(
+            child.changed_preparation().ok_or("Initial observation missing")?.original_failure,
+            None
+        );
+        if first == ChildBootstrapIssue::State {
+            child.scope().ok_or("Original scope missing")?.cancel();
+        }
+        clock.0.store(id * 100, Ordering::Release);
+        assert_eq!(child.check_current(), Err(first));
+        let observation = child.changed_preparation().ok_or("Failure transition missing")?;
+        assert_eq!(observation.original_failure, Some(first));
+        assert!(!observation.failure_retained);
+        assert!(child.failure_source().is_none());
+        assert!(child.closing);
+        assert_eq!(child.check_current(), Err(first));
+        assert!(child.changed_preparation().is_none());
+        child.scope().ok_or("Original scope missing")?.cancel();
+        assert_eq!(child.check_current(), Err(ChildBootstrapIssue::State));
+        assert_eq!(child.issue, Some(first));
+        assert!(child.changed_preparation().is_none());
+        assert!(!child.capture_admitted());
+        assert_eq!(calls.load(Ordering::Acquire), 0);
+        drop(child);
+    }
+    drop(owner);
+    Ok(())
+}
+
+/// Typed capture causes remain intact while closed diagnostics discard arbitrary payloads.
+#[test]
+fn capture_failure_kind_preserves_first_identity_and_redacts_native_payload() -> TestResult {
+    use crate::production::child::capture::ChildCaptureError;
+    use sugarsubstitute_execution::windows::NativeObservationError;
+    let calls = Arc::new(AtomicUsize::new(0));
+    let mut identity = bootstrap(&calls, None)?;
+    identity.record(ChildBootstrapIssue::Capture, Box::new(ChildCaptureError::Identity));
+    let first = identity.changed_preparation().ok_or("Capture transition missing")?;
+    assert_eq!(first.capture_failure, CaptureFailureKind::Identity);
+    assert!(identity.failure_source().is_some_and(|cause| cause.is::<ChildCaptureError>()));
+    identity.record(ChildBootstrapIssue::Capture, Box::new(ChildCaptureError::State));
+    assert!(identity.changed_preparation().is_none());
+    assert_eq!(identity.capture_failure_kind(), CaptureFailureKind::Identity);
+    let mut native = bootstrap(&calls, None)?;
+    native.record(
+        ChildBootstrapIssue::Capture,
+        Box::new(CaptureAttachFailure::Native(NativeObservationError::new(
+            "private-stage",
+            std::io::Error::other("private-path"),
+        ))),
+    );
+    let observation = native.changed_preparation().ok_or("Native transition missing")?;
+    assert_eq!(observation.capture_failure, CaptureFailureKind::Native);
+    assert!(observation.failure_retained);
+    assert!(!format!("{observation:?}").contains("private-"));
+    assert!(native.failure_source().is_some_and(|cause| cause.is::<CaptureAttachFailure>()));
     assert_eq!(calls.load(Ordering::Acquire), 0);
     Ok(())
 }

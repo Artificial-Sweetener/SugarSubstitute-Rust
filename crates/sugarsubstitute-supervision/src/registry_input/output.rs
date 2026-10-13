@@ -3,7 +3,7 @@
 //! Bind exact captured output to one trusted owned launch without closing rejected sources.
 use super::*;
 use crate::FamilyBinding;
-use sugarsubstitute_contracts::lifecycle::ResourceKey;
+use sugarsubstitute_execution::windows_output::OutputIdentity;
 use sugarsubstitute_execution::windows_output::{
     WindowsChildStdio, WindowsOutputCancellation, WindowsOutputControl, WindowsOutputError,
 };
@@ -36,78 +36,77 @@ impl std::error::Error for RejectedOutputLaunch {
 }
 pub(crate) struct OutputLaunch {
     pub(crate) binding: FamilyBinding,
-    pub(crate) resource: ResourceKey,
+    pub(crate) identity: OutputIdentity,
     pub(crate) stdio: OutputPin,
 }
 impl OutputLaunch {
     pub(crate) fn validates(&self, binding: FamilyBinding) -> bool {
         self.binding == binding
-            && binding_matches(binding, self.resource)
-            && self.stdio.resource() == self.resource
+            && binding_matches(binding, self.identity)
+            && self.stdio.identity() == self.identity
     }
     pub(crate) fn request_close(&self) {
         self.stdio.request_close();
     }
 }
-pub(crate) fn binding_matches(binding: FamilyBinding, resource: ResourceKey) -> bool {
-    binding.owner() == resource.owner
-        && match binding {
-            FamilyBinding::Managed(expected) => expected == resource,
-            FamilyBinding::Desktop(_) => true,
-            FamilyBinding::Diagnostic(_) => false,
-        }
+pub(crate) fn binding_matches(binding: FamilyBinding, identity: OutputIdentity) -> bool {
+    match (binding, identity) {
+        (FamilyBinding::Managed(expected), OutputIdentity::Managed(actual)) => expected == actual,
+        (FamilyBinding::Desktop(expected), OutputIdentity::Desktop(actual)) => expected == actual,
+        _ => false,
+    }
 }
 impl WindowsLaunchInput {
     /// Attach one exact output session to an owned desktop or managed launch.
-    /// Managed output must match its exact resource generation. Desktop output is
-    /// an explicit trusted association with an existing backend resource; it does
-    /// not derive a backend identity from a run, PID or URL. Session Arc provenance
+    /// Managed output matches its exact resource generation; desktop output matches
+    /// its exact Run generation. Session Arc provenance
     /// is checked independently of these matching facts before any admission.
-    /// Fixture events are mutually exclusive; lifecycle+output uses exactly four
-    /// inherited handles. Rejection returns both inputs without closing a foreign
+    /// Fixture events are mutually exclusive. Lifecycle plus stdio uses four
+    /// handles; captured lifecycle includes two source pins for a total of six.
+    /// Rejection returns both inputs without closing a foreign
     /// output. Accepted input Drop requests output retirement if never transferred.
-    /// The caller retains the original output session/scope with its resource;
+    /// The caller retains the original output session/scope with its identity;
     /// process/family settlement does not establish output EOF or retirement.
     pub fn with_owned_output(
         mut self,
         binding: FamilyBinding,
-        resource: ResourceKey,
+        identity: OutputIdentity,
         control: &WindowsOutputControl,
         stdio: WindowsChildStdio,
     ) -> Result<Self, RejectedOutputLaunch> {
         let error = association_error(
             &self,
             binding,
-            resource,
-            stdio.resource(),
-            control.snapshot().resource,
+            identity,
+            stdio.identity(),
+            control.snapshot().identity,
             control.matches_child_stdio(&stdio),
         );
         if let Some(error) = error {
             return Err(RejectedOutputLaunch { input: Box::new(self), stdio, error });
         }
-        self.output = Some(OutputLaunch { binding, resource, stdio: OutputPin::Native(stdio) });
+        self.output = Some(OutputLaunch { binding, identity, stdio: OutputPin::Native(stdio) });
         Ok(self)
     }
 }
 pub(crate) fn association_error(
     input: &WindowsLaunchInput,
     binding: FamilyBinding,
-    resource: ResourceKey,
-    pin_resource: ResourceKey,
-    control_resource: ResourceKey,
+    identity: OutputIdentity,
+    pin_identity: OutputIdentity,
+    control_identity: OutputIdentity,
     same_session: bool,
 ) -> Option<RegistryInputError> {
     if input.output.is_some() || input.fixture_events.is_some() || input.diagnostic.is_some() {
         Some(RegistryInputError::OutputConflict)
-    } else if !binding_matches(binding, resource)
+    } else if !binding_matches(binding, identity)
         || input
             .lifecycle
             .as_ref()
             .is_some_and(|launch| binding != FamilyBinding::Desktop(launch.run))
     {
         Some(RegistryInputError::OutputBinding)
-    } else if pin_resource != resource || control_resource != resource || !same_session {
+    } else if pin_identity != identity || control_identity != identity || !same_session {
         Some(RegistryInputError::OutputProvenance)
     } else {
         None
@@ -133,23 +132,26 @@ pub(crate) enum OutputCancellation {
     Simulated(std::sync::Arc<fake::Source>),
 }
 impl OutputPin {
-    pub(crate) fn resource(&self) -> ResourceKey {
+    pub(crate) fn identity(&self) -> OutputIdentity {
         match self {
-            Self::Native(pin) => pin.resource(),
+            Self::Native(pin) => pin.identity(),
             #[cfg(test)]
-            Self::Simulated(pin) => pin.0.resource,
+            Self::Simulated(pin) => pin.0.identity,
         }
     }
-    pub(crate) fn handles(&self, resource: ResourceKey) -> Result<[usize; 3], WindowsOutputError> {
+    pub(crate) fn handles(
+        &self,
+        identity: OutputIdentity,
+    ) -> Result<[usize; 3], WindowsOutputError> {
         match self {
             Self::Native(pin) => {
                 use std::os::windows::io::AsRawHandle;
-                let view = pin.borrow_inheritance(resource)?;
+                let view = pin.borrow_inheritance(identity)?;
                 Ok([view.stdin, view.stdout, view.stderr]
                     .map(|handle| handle.as_raw_handle() as usize))
             }
             #[cfg(test)]
-            Self::Simulated(pin) => pin.0.handles(resource),
+            Self::Simulated(pin) => pin.0.handles(identity),
         }
     }
     pub(crate) fn request_close(&self) {
@@ -188,15 +190,15 @@ pub(crate) mod fake {
         atomic::{AtomicBool, AtomicUsize, Ordering},
     };
     pub(crate) struct Source {
-        pub(crate) resource: ResourceKey,
+        pub(crate) identity: OutputIdentity,
         pub(crate) requests: AtomicUsize,
         pub(crate) releases: AtomicUsize,
         pub(crate) closed: AtomicBool,
     }
     impl Source {
-        pub(crate) fn new(resource: ResourceKey) -> Arc<Self> {
+        pub(crate) fn new(identity: OutputIdentity) -> Arc<Self> {
             Arc::new(Self {
-                resource,
+                identity,
                 requests: AtomicUsize::new(0),
                 releases: AtomicUsize::new(0),
                 closed: AtomicBool::new(false),
@@ -204,10 +206,10 @@ pub(crate) mod fake {
         }
         pub(super) fn handles(
             &self,
-            resource: ResourceKey,
+            identity: OutputIdentity,
         ) -> Result<[usize; 3], WindowsOutputError> {
-            if resource != self.resource {
-                return Err(WindowsOutputError::ForeignResource);
+            if identity != self.identity {
+                return Err(WindowsOutputError::ForeignIdentity);
             }
             if self.closed.load(Ordering::Acquire) {
                 return Err(WindowsOutputError::Closed);

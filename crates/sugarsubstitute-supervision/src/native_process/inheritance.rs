@@ -43,7 +43,7 @@ impl Family {
             return Err(RegistryError::invalid("output_inheritance_binding"));
         }
         if let Some(output) = input.output.take() {
-            self.output_resource = Some(output.resource);
+            self.output_identity = Some(output.identity);
             // The unique pin is durable before any borrow or fallible native step.
             self.output_pin = Some(output.stdio);
         }
@@ -85,10 +85,10 @@ impl Family {
                 .map(|handles| handles.map(|handle| handle.as_raw_handle() as usize))
         });
         let stdio = if let Some(pin) = &self.output_pin {
-            let resource =
-                self.output_resource.ok_or_else(|| RegistryError::invalid("output_resource"))?;
+            let identity =
+                self.output_identity.ok_or_else(|| RegistryError::invalid("output_identity"))?;
             let stdio = pin
-                .handles(resource)
+                .handles(identity)
                 .map_err(|e| RegistryError::new("output_borrow_inheritance", e))?;
             Some(stdio)
         } else {
@@ -110,10 +110,10 @@ impl Family {
     }
     pub(crate) fn validate_output_for_resume(&self) -> Result<(), RegistryError> {
         if let Some(pin) = &self.output_pin {
-            let resource =
-                self.output_resource.ok_or_else(|| RegistryError::invalid("output_resource"))?;
+            let identity =
+                self.output_identity.ok_or_else(|| RegistryError::invalid("output_identity"))?;
             let handles = pin
-                .handles(resource)
+                .handles(identity)
                 .map_err(|cause| RegistryError::new("output_before_resume", cause))?;
             if handles != self.stdio_handles {
                 return Err(RegistryError::invalid("output_before_resume_identity"));

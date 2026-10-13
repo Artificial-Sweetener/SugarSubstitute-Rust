@@ -46,6 +46,8 @@ mod worker;
 
 #[path = "client_probe_tests.rs"]
 mod client_probe;
+#[path = "endpoint_absence_tests.rs"]
+mod endpoint_absence;
 
 #[path = "observation_rearm_tests.rs"]
 mod observation_rearm;

@@ -71,8 +71,11 @@ fn cancelled_launch_retains_stdio_pin_and_foreign_generation_never_borrows_handl
     assert!(session.control.matches_child_stdio(&pin));
     let mut foreign = resource()?;
     foreign.generation = foreign.generation.next()?;
-    assert_eq!(pin.handles(foreign), Err(WindowsOutputError::ForeignResource));
-    assert_eq!(pin.handles(resource()?), Ok([11, 12, 13]));
+    assert_eq!(
+        pin.handles(OutputIdentity::Managed(foreign)),
+        Err(WindowsOutputError::ForeignIdentity)
+    );
+    assert_eq!(pin.handles(OutputIdentity::Managed(resource()?)), Ok([11, 12, 13]));
     session.control.close();
     boundary.retiring.wait()?;
     assert!(session.completion.try_take_completion().is_none());
@@ -170,7 +173,7 @@ fn partial_native_creation_and_failed_retirement_preserve_original_cause_until_l
         &rig.client.core,
         &scope,
         specification,
-        resource()?,
+        OutputIdentity::Managed(resource()?),
         Box::new(Lease(boundary.clone())),
     )?;
     boundary.retiring.wait()?;

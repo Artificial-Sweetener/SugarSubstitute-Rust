@@ -169,7 +169,17 @@ impl Active {
             deadline: io.deadline,
         };
         let lease = self.lease.as_mut().ok_or(EntryTransportError::InvalidPhase)?;
-        match lease.connect(index, issue)? {
+        let connected = lease.connect(index, issue);
+        if let Err(error @ EntryTransportError::EndpointAbsent(_)) = &connected
+            && !self.work.shared.server
+            && !error.contains_owner_panic()
+        {
+            // Retire this exact unaccepted attempt before an original-budget retry.
+            // Missing endpoint facts never authenticate a peer or grant election authority.
+            self.connections[index].failure = Some(error.clone());
+            return self.expire_probe(core, index, core.clock.now());
+        }
+        match connected? {
             IssueDispatch::Issued(Progress::Pending) => Ok(()),
             IssueDispatch::Issued(Progress::Complete(bytes)) => {
                 self.complete(core, index, io, bytes)

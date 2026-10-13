@@ -83,7 +83,7 @@ impl Active {
             .lease
             .as_mut()
             .ok_or_else(|| invariant("output_missing_lease"))?
-            .prepare(self.work.shared.resource, self.signals.clone())?;
+            .prepare(self.work.shared.identity, self.signals.clone())?;
         if handles.contains(&0) {
             return Err(invariant("output_stdio_handles"));
         }
@@ -131,7 +131,7 @@ impl Active {
             && lock(&self.work.shared.state).eof_sequence.iter().all(Option::is_some)
         {
             self.outcome = Some(JobOutcome::Success(
-                lock(&self.work.shared.state).report(self.work.shared.resource),
+                lock(&self.work.shared.state).report(self.work.shared.identity),
             ));
         }
         if self.outcome.is_some() {
@@ -293,7 +293,7 @@ impl Active {
         if let Some(mut outcome) = self.outcome.take() {
             if matches!(outcome, JobOutcome::Success(_)) {
                 outcome = JobOutcome::Success(
-                    lock(&self.work.shared.state).report(self.work.shared.resource),
+                    lock(&self.work.shared.state).report(self.work.shared.identity),
                 );
             }
             self.work.job.finish_at(&self.context, Some(self.started), ended, outcome);

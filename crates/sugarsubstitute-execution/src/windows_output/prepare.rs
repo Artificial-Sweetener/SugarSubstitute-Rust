@@ -5,7 +5,7 @@ use super::*;
 impl Lease {
     pub(super) fn prepare_handles(
         &mut self,
-        _resource: ResourceKey,
+        _resource: OutputIdentity,
     ) -> Result<(), NativeObservationError> {
         let attributes = SECURITY_ATTRIBUTES {
             nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,

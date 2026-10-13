@@ -12,7 +12,21 @@ fn actual_table_capacity_and_identity_pin_retain_original_constructor_charge() -
     );
     assert_eq!(size_of::<SharedOwner>(), size_of::<Arc<Shared>>() + size_of::<RegistryIdentity>());
     if cfg!(target_pointer_width = "64") {
-        assert_eq!(bytes, 253792);
+        use sugarsubstitute_contracts::lifecycle::ResourceKey;
+        use sugarsubstitute_execution::windows_output::OutputIdentity;
+        assert_eq!(size_of::<ResourceKey>(), 64);
+        assert_eq!(size_of::<OutputIdentity>(), 72);
+        // Each pre-reserved Shared retains one inline pending launch input. Its
+        // output identity now distinguishes a desktop Run from a managed resource.
+        let output_growth = size_of::<OutputIdentity>() - size_of::<ResourceKey>();
+        assert_eq!(bytes, 253_792 + 131 * output_growth as u64);
+        assert_eq!(bytes, 254_840);
+        // The boxed native family's own identity growth remains covered by its
+        // original fixed claim and actual production capacity preflight.
+        let family_peak = size_of::<Family>()
+            + family_shared_storage_bytes()
+            + (2048 + native_process::MAX_MEMBERS + 2) * size_of::<usize>();
+        assert!(family_peak as u64 <= crate::registry_input::FAMILY_STORAGE_BYTES);
     }
 
     assert_eq!(h.registry.records.len(), 131);

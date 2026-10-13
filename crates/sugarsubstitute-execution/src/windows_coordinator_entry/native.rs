@@ -26,6 +26,7 @@ use windows::{
     core::PCWSTR,
 };
 
+mod open_error;
 mod slot;
 mod write_error;
 use slot::Slot;
@@ -315,7 +316,7 @@ fn open_client(slot: &mut Slot, name: &[u16; 100]) -> Result<(), EntryTransportE
             None,
         )
     }
-    .map_err(|cause| error("entry_open_client", cause))?;
+    .map_err(open_error::classify)?;
     adopt(&mut slot.pipe, raw, "entry_open_client")?;
     let mode = PIPE_READMODE_MESSAGE;
     // SAFETY: the retained owned handle grants attribute-write access for message-mode selection.

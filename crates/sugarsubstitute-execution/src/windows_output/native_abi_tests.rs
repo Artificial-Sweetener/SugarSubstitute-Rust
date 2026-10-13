@@ -115,7 +115,11 @@ fn ffi_actual_stdio_rights_raw_drain_and_dual_eof_retire() -> TestResult {
     let resource = resource()?;
     let mut output_spec = spec(1, JobClass::NativeObservation, MIN_WINDOWS_OUTPUT_BYTES)?;
     output_spec.operation = Operation::NativeLifecycle;
-    let mut session = rig.client.reserve_windows_output(&scope, output_spec, resource)?;
+    let mut session = rig.client.reserve_windows_output(
+        &scope,
+        output_spec,
+        OutputIdentity::Managed(resource),
+    )?;
     loop {
         let observed = rig.wake.count();
         rig.client.drain_completions(NonZeroUsize::MIN)?;
@@ -135,7 +139,7 @@ fn ffi_actual_stdio_rights_raw_drain_and_dual_eof_retire() -> TestResult {
         spec(2, JobClass::InfrastructureOrdinary, 4096)?,
         move |_| {
             let inheritance = stdio
-                .borrow_inheritance(resource)
+                .borrow_inheritance(OutputIdentity::Managed(resource))
                 .map_err(|cause| NativeObservationError::new("output_abi_borrow", cause))?;
             let handles = [inheritance.stdin, inheritance.stdout, inheritance.stderr]
                 .map(|handle| HANDLE(handle.as_raw_handle()));
@@ -159,7 +163,7 @@ fn ffi_actual_stdio_rights_raw_drain_and_dual_eof_retire() -> TestResult {
         return Err(format!("Actual output ended unexpectedly: {:?}", completion.outcome).into());
     };
     assert!(report.retired);
-    assert_eq!(report.resource, resource);
+    assert_eq!(report.identity, OutputIdentity::Managed(resource));
     assert_eq!(report.eof, [true; 2]);
     let mut captured = [Vec::new(), Vec::new()];
     let mut sequences = [0; 2];

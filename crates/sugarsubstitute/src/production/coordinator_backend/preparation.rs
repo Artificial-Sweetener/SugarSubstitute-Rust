@@ -150,7 +150,7 @@ impl CoordinatorBackend {
             record.output = Some(resources.client.reserve_windows_output(
                 resources.native,
                 spec,
-                record.key,
+                sugarsubstitute_execution::windows_output::OutputIdentity::Managed(record.key),
             )?);
         }
         let output = record.output.as_ref().ok_or(LifecycleRejection::WrongPhase)?;

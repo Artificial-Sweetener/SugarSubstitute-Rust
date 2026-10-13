@@ -2,16 +2,14 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Continuously drain exactly owned stdout/stderr through the central native owner.
 pub use crate::output::{
-    AdmittedOutputBatch, MAX_WINDOWS_OUTPUT_CHUNKS, MAX_WINDOWS_OUTPUT_QUEUED_BYTES,
-    MIN_WINDOWS_OUTPUT_BYTES, WindowsChildStdio, WindowsOutputCancellation, WindowsOutputControl,
-    WindowsOutputCounters, WindowsOutputError, WindowsOutputReport, WindowsOutputSession,
+    AdmittedOutputBatch, DesktopOutputBatch, MAX_WINDOWS_OUTPUT_CHUNKS,
+    MAX_WINDOWS_OUTPUT_QUEUED_BYTES, MIN_WINDOWS_OUTPUT_BYTES, OutputIdentity, WindowsChildStdio,
+    WindowsOutputCancellation, WindowsOutputControl, WindowsOutputCounters, WindowsOutputError,
+    WindowsOutputReport, WindowsOutputSession,
 };
 use crate::{ExecutionClient, output};
 use std::os::windows::io::BorrowedHandle;
-use sugarsubstitute_contracts::{
-    execution::{AdmissionError, JobSpec, Scope},
-    lifecycle::ResourceKey,
-};
+use sugarsubstitute_contracts::execution::{AdmissionError, JobSpec, Scope};
 #[allow(unsafe_code)]
 #[path = "windows_output/native.rs"]
 mod native;
@@ -29,12 +27,12 @@ pub struct WindowsOutputInheritance<'a> {
     pub stderr: BorrowedHandle<'a>,
 }
 impl WindowsChildStdio {
-    /// Reject foreign/stale resource before exposing pinned native launch handles.
+    /// Reject foreign/stale identity before exposing pinned native launch handles.
     /// Identity is a trusted composing-owner fact, not authentication evidence.
     #[allow(unsafe_code)]
     pub fn borrow_inheritance(
         &self,
-        expected: ResourceKey,
+        expected: OutputIdentity,
     ) -> Result<WindowsOutputInheritance<'_>, WindowsOutputError> {
         let [stdin, stdout, stderr] = self.handles(expected)?;
         // SAFETY: this noncloneable live pin prevents checked closure throughout
@@ -50,15 +48,15 @@ impl WindowsChildStdio {
 }
 impl ExecutionClient {
     /// Admit all output storage before any native pipe/event/NUL creation.
-    /// Keep scope/control with the resource, independently of splash/console views.
+    /// Keep scope/control with the identity, independently of splash/console views.
     /// Use a native scope whose lifetime can outlive launch cancellation and cleanup.
     /// EOF is an actual per-stream fact, never root exit or family settlement.
     pub fn reserve_windows_output(
         &self,
         scope: &Scope,
         spec: JobSpec,
-        resource: ResourceKey,
+        identity: OutputIdentity,
     ) -> Result<WindowsOutputSession, AdmissionError> {
-        output::reserve(&self.core, scope, spec, resource, Box::new(native::Lease::new()))
+        output::reserve(&self.core, scope, spec, identity, Box::new(native::Lease::new()))
     }
 }

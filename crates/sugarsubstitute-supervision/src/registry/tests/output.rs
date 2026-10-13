@@ -8,6 +8,7 @@ use crate::registry_input::output::{
     fake::{Pin, Source},
 };
 use sugarsubstitute_contracts::lifecycle::{ResourceGeneration, ResourceId, ResourceKey};
+use sugarsubstitute_execution::windows_output::OutputIdentity;
 fn resource() -> Result<ResourceKey, Box<dyn Error>> {
     Ok(ResourceKey {
         owner: owner()?,
@@ -22,7 +23,7 @@ fn captured(
     let mut input = input()?;
     input.output = Some(OutputLaunch {
         binding,
-        resource: source.resource,
+        identity: source.identity,
         stdio: OutputPin::Simulated(Pin(source.clone())),
     });
     Ok(input)
@@ -45,22 +46,38 @@ fn submit(
     h.next_scope += 1;
     h.registry.submit_launch(&h.client, &h.scope, scope, creation, watch, binding, input)
 }
+fn identity(binding: FamilyBinding) -> Result<OutputIdentity, Box<dyn Error>> {
+    match binding {
+        FamilyBinding::Desktop(run) => Ok(OutputIdentity::Desktop(run)),
+        FamilyBinding::Managed(resource) => Ok(OutputIdentity::Managed(resource)),
+        _ => Err("Diagnostic output is not supported".into()),
+    }
+}
 #[test]
 fn managed_output_requires_exact_owner_and_resource_generation() -> TestResult {
     let current = resource()?;
-    assert!(binding_matches(FamilyBinding::Managed(current), current));
+    assert!(binding_matches(FamilyBinding::Managed(current), OutputIdentity::Managed(current)));
     let mut stale = current;
     stale.generation = stale.generation.next()?;
-    assert!(!binding_matches(FamilyBinding::Managed(current), stale));
+    assert!(!binding_matches(FamilyBinding::Managed(current), OutputIdentity::Managed(stale)));
     let mut foreign = current;
     foreign.owner.epoch = CoordinatorEpoch::new([2; 16])?;
-    assert!(!binding_matches(binding(1)?, foreign));
-    assert!(binding_matches(binding(1)?, current));
+    assert!(!binding_matches(FamilyBinding::Managed(current), OutputIdentity::Managed(foreign)));
+    assert!(!binding_matches(binding(1)?, OutputIdentity::Managed(current)));
     Ok(())
 }
 #[test]
-fn association_rejects_foreign_session_and_stale_resource_without_touching_sources() -> TestResult {
-    let current = resource()?;
+fn desktop_output_requires_exact_run_and_rejects_other_output_kinds() -> TestResult {
+    let current = binding(1)?;
+    assert!(binding_matches(current, identity(current)?));
+    assert!(!binding_matches(current, identity(binding(2)?)?));
+    assert!(!binding_matches(current, OutputIdentity::Managed(resource()?)));
+    assert!(!binding_matches(FamilyBinding::Managed(resource()?), identity(current)?));
+    Ok(())
+}
+#[test]
+fn association_rejects_foreign_session_and_stale_run_without_touching_sources() -> TestResult {
+    let current = identity(binding(1)?)?;
     let launch = input()?;
     let source = Source::new(current);
     let foreign = Source::new(current);
@@ -69,14 +86,13 @@ fn association_rejects_foreign_session_and_stale_resource_without_touching_sourc
         association_error(&launch, binding(1)?, current, current, current, false),
         Some(RegistryInputError::OutputProvenance)
     ));
-    let mut stale = current;
-    stale.generation = stale.generation.next()?;
+    let stale = identity(binding(2)?)?;
     assert!(matches!(
         association_error(&launch, binding(1)?, current, stale, current, true),
         Some(RegistryInputError::OutputProvenance)
     ));
     assert!(matches!(
-        association_error(&launch, FamilyBinding::Managed(stale), current, current, current, true),
+        association_error(&launch, binding(2)?, current, current, current, true),
         Some(RegistryInputError::OutputBinding)
     ));
     assert_eq!(source.requests.load(Ordering::Acquire), 0);
@@ -93,7 +109,7 @@ fn association_rejects_foreign_session_and_stale_resource_without_touching_sourc
 fn rejected_creation_admission_cancels_owned_output_and_observes_unbound_watch_retirement()
 -> TestResult {
     let mut h = Harness::new()?;
-    let source = Source::new(resource()?);
+    let source = Source::new(identity(binding(1)?)?);
     h.scope.cancel();
     assert!(matches!(
         submit(&mut h, binding(1)?, captured(binding(1)?, &source)?),
@@ -107,8 +123,8 @@ fn rejected_creation_admission_cancels_owned_output_and_observes_unbound_watch_r
 }
 #[test]
 fn dropping_accepted_unsubmitted_input_requests_only_its_owned_output() -> TestResult {
-    let source = Source::new(resource()?);
-    let other = Source::new(resource()?);
+    let source = Source::new(identity(binding(1)?)?);
+    let other = Source::new(identity(binding(1)?)?);
     drop(captured(binding(1)?, &source)?);
     assert_eq!(source.requests.load(Ordering::Acquire), 1);
     assert_eq!(source.releases.load(Ordering::Acquire), 1);
@@ -118,7 +134,7 @@ fn dropping_accepted_unsubmitted_input_requests_only_its_owned_output() -> TestR
 #[test]
 fn changed_binding_rejects_before_watch_admission_and_native_effects() -> TestResult {
     let mut h = Harness::new()?;
-    let source = Source::new(resource()?);
+    let source = Source::new(identity(binding(1)?)?);
     assert!(matches!(
         submit(&mut h, binding(2)?, captured(binding(1)?, &source)?),
         Err(RegistryAdmissionError::InvalidSpecification)
@@ -131,7 +147,7 @@ fn changed_binding_rejects_before_watch_admission_and_native_effects() -> TestRe
 #[test]
 fn standalone_output_sets_only_three_std_handles_and_success_does_not_cancel() -> TestResult {
     let mut h = Harness::new()?;
-    let source = Source::new(resource()?);
+    let source = Source::new(identity(binding(1)?)?);
     let key = submit(&mut h, binding(1)?, captured(binding(1)?, &source)?)?.process();
     h.created(key)?;
     assert_eq!(*lock(&h.fake.inherited), ([71, 72, 73, 0, 0, 0], 3, [71, 72, 73], true));
@@ -149,7 +165,7 @@ fn standalone_output_sets_only_three_std_handles_and_success_does_not_cancel() -
 fn cancellation_during_partial_creation_retains_pin_until_actual_attribute_deletion() -> TestResult
 {
     let mut h = Harness::new()?;
-    let source = Source::new(resource()?);
+    let source = Source::new(identity(binding(1)?)?);
     h.fake.hold_create.store(true, Ordering::Release);
     let key = submit(&mut h, binding(1)?, captured(binding(1)?, &source)?)?.process();
     h.fake.entered()?;
@@ -176,7 +192,7 @@ fn cancellation_during_partial_creation_retains_pin_until_actual_attribute_delet
 #[test]
 fn creation_panic_preserves_original_fatal_cause_and_cancels_the_adopted_source() -> TestResult {
     let mut h = Harness::new()?;
-    let source = Source::new(resource()?);
+    let source = Source::new(identity(binding(1)?)?);
     h.fake.panic_create.store(true, Ordering::Release);
     let key = submit(&mut h, binding(1)?, captured(binding(1)?, &source)?)?.process();
     h.created(key)?;
@@ -196,7 +212,7 @@ fn creation_panic_preserves_original_fatal_cause_and_cancels_the_adopted_source(
 #[test]
 fn failed_post_resume_close_keeps_pin_and_started_fact_until_checked_cleanup() -> TestResult {
     let mut h = Harness::new()?;
-    let source = Source::new(resource()?);
+    let source = Source::new(identity(binding(1)?)?);
     h.fake.fail_resume_close.store(true, Ordering::Release);
     let key = submit(&mut h, binding(1)?, captured(binding(1)?, &source)?)?.process();
     h.created(key)?;
@@ -210,7 +226,7 @@ fn failed_post_resume_close_keeps_pin_and_started_fact_until_checked_cleanup() -
 #[test]
 fn output_closed_during_native_creation_never_reaches_resume() -> TestResult {
     let mut h = Harness::new()?;
-    let source = Source::new(resource()?);
+    let source = Source::new(identity(binding(1)?)?);
     h.fake.hold_create.store(true, Ordering::Release);
     let key = submit(&mut h, binding(1)?, captured(binding(1)?, &source)?)?.process();
     h.fake.entered()?;
@@ -267,7 +283,7 @@ fn queued_creation_cancellation_drops_accepted_pin_without_entering_native_bound
 {
     use sugarsubstitute_contracts::execution::ExecutionPort;
     let mut h = Harness::new()?;
-    let source = Source::new(resource()?);
+    let source = Source::new(identity(binding(1)?)?);
     let blockers =
         Arc::new(BlockedWorkers { state: Mutex::new((0, false)), changed: Condvar::new() });
     let release = ReleaseWorkers(blockers.clone());

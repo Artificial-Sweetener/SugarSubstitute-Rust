@@ -14,7 +14,7 @@ use std::{
 };
 use sugarsubstitute_contracts::execution::{MemoryClaim, MemoryLease};
 use sugarsubstitute_contracts::incident::DiagnosticKey;
-use sugarsubstitute_contracts::lifecycle::{ProcessKey, ResourceKey, RunKey};
+use sugarsubstitute_contracts::lifecycle::{ProcessKey, RunKey};
 use sugarsubstitute_execution::windows_diagnostic_pipe::{
     DiagnosticEnrollment, DiagnosticPipeBootstrap,
 };
@@ -55,7 +55,7 @@ pub(crate) struct Family {
     pub(crate) diagnostic_key: Option<DiagnosticKey>,
     pub(crate) output_pin: Option<OutputPin>,
     pub(crate) output_cancel: Option<OutputCancellation>,
-    pub(crate) output_resource: Option<ResourceKey>,
+    pub(crate) output_identity: Option<sugarsubstitute_execution::windows_output::OutputIdentity>,
     pub(crate) inherited_handles: [usize; 6],
     pub(crate) inherited_count: usize,
     pub(crate) stdio_handles: [usize; 3],
@@ -108,7 +108,7 @@ impl Family {
             diagnostic_key: None,
             output_pin: None,
             output_cancel: None,
-            output_resource: None,
+            output_identity: None,
             inherited_handles: [0; 6],
             inherited_count: 0,
             stdio_handles: [0; 3],

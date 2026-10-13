@@ -74,7 +74,7 @@ impl Case {
             match completion.outcome {
                 JobOutcome::Success(report)
                     if self.role != Role::Idle
-                        && report.resource == self.resource
+                        && report.identity == self.output_identity()
                         && report.retired => {}
                 JobOutcome::Cancelled if closing || self.pending_before_cancel.is_some() => {}
                 JobOutcome::Failure(error) => return Err(Box::new(error)),
@@ -87,7 +87,7 @@ impl Case {
     pub(super) fn drain_output(&mut self, closing: bool) -> Result<bool> {
         let Some(session) = &self.output else { return Ok(false) };
         let report = session.control.snapshot();
-        if report.resource != self.resource
+        if report.identity != self.output_identity()
             || report.queued_chunks as usize > MAX_WINDOWS_OUTPUT_CHUNKS
             || report.queued_bytes > MAX_WINDOWS_OUTPUT_QUEUED_BYTES as u64
         {
@@ -116,9 +116,19 @@ impl Case {
         // No guard means all presently available bounded data was consumed. A live
         // source remains eligible for later actual output/callback wake.
         if let Some(guard) = guard {
-            let batch = guard.batch().ok_or("Admitted output guard has no payload")?;
             if !closing {
-                self.store.as_mut().ok_or("Output store missing")?.apply(self.role, batch)?;
+                let store = self.store.as_mut().ok_or("Output store missing")?;
+                if self.role.authenticated() {
+                    let batch =
+                        guard.desktop_batch().ok_or("Desktop output guard has no payload")?;
+                    if batch.run() != self.run {
+                        return Err("Foreign desktop output run".into());
+                    }
+                    store.apply_desktop(self.role, batch)?;
+                } else {
+                    let batch = guard.batch().ok_or("Managed output guard has no payload")?;
+                    store.apply(self.role, batch)?;
+                }
             }
             drop(guard);
             return Ok(true);

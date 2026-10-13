@@ -23,7 +23,6 @@ use std::{
 };
 use sugarsubstitute_contracts::{
     execution::{AdmissionError, JobContext, JobSpec, MemoryClaim, MemoryLease, OwnedJob, Scope},
-    lifecycle::ResourceKey,
     transcript::{MAX_BATCH_BYTES, OutputBatch, OutputGap, OutputStream, StreamSequence},
 };
 pub use types::*;
@@ -39,7 +38,7 @@ pub(crate) enum Progress {
 pub(crate) trait OutputLease: Send {
     fn prepare(
         &mut self,
-        resource: ResourceKey,
+        identity: OutputIdentity,
         signals: [Arc<Signal>; 2],
     ) -> Result<[usize; 3], NativeObservationError>;
     fn release_child_ends(&mut self) -> Result<(), NativeObservationError>;
@@ -71,6 +70,39 @@ impl Buffer {
         }
         bytes.extend_from_slice(source);
         Ok(Self { bytes, _claim: claim })
+    }
+}
+enum Batch {
+    Managed(OutputBatch),
+    Desktop(DesktopOutputBatch),
+}
+impl Batch {
+    fn new(
+        identity: OutputIdentity,
+        stream: OutputStream,
+        sequence: StreamSequence,
+        bytes: &[u8],
+        gap: Option<OutputGap>,
+        end: bool,
+    ) -> Result<Self, sugarsubstitute_contracts::transcript::TranscriptError> {
+        match identity {
+            OutputIdentity::Managed(resource) => {
+                OutputBatch::new(resource, stream, sequence, bytes, gap, end).map(Self::Managed)
+            }
+            OutputIdentity::Desktop(run) => {
+                if bytes.len() > MAX_BATCH_BYTES {
+                    return Err(sugarsubstitute_contracts::transcript::TranscriptError::Bound);
+                }
+                Ok(Self::Desktop(DesktopOutputBatch {
+                    run,
+                    stream,
+                    sequence,
+                    bytes: bytes.into(),
+                    gap,
+                    end,
+                }))
+            }
+        }
     }
 }
 pub(crate) struct Chunk {
@@ -129,9 +161,9 @@ impl State {
             metadata: None,
         }
     }
-    fn report(&self, resource: ResourceKey) -> WindowsOutputReport {
+    fn report(&self, identity: OutputIdentity) -> WindowsOutputReport {
         WindowsOutputReport {
-            resource,
+            identity,
             prepared: self.prepared,
             pending_reads: self.pending_reads,
             pending_read_issues: self.pending_read_issues,
@@ -146,7 +178,7 @@ impl State {
 }
 pub(crate) struct Shared {
     state: Mutex<State>,
-    resource: ResourceKey,
+    identity: OutputIdentity,
     core: Weak<Core>,
 }
 impl Shared {
@@ -165,7 +197,7 @@ pub(crate) fn reserve(
     core: &Arc<Core>,
     scope: &Scope,
     spec: JobSpec,
-    resource: ResourceKey,
+    identity: OutputIdentity,
     lease: Box<dyn OutputLease>,
 ) -> Result<WindowsOutputSession, AdmissionError> {
     if spec.reservation_bytes < MIN_WINDOWS_OUTPUT_BYTES {
@@ -179,7 +211,7 @@ pub(crate) fn reserve(
         let job = Job::new(scope.id(), spec, admitted, cancel, Arc::downgrade(core));
         let shared = Arc::new(Shared {
             state: Mutex::new(State::new()),
-            resource,
+            identity,
             core: Arc::downgrade(core),
         });
         let queued = QueuedJob {

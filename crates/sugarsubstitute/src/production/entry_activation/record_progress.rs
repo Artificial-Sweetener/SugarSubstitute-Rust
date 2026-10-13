@@ -39,6 +39,7 @@ impl ProductionActivation {
         }
         Self::adopt_attachment(record, resources, closing)?;
         let Some(start) = &mut record.start else { return Ok(()) };
+        let output_failure = start.output.as_mut().and_then(|output| output.observe().err());
         if record.parent.is_none()
             && let Some(completion) = start.profile.consume(batch)?
         {
@@ -110,6 +111,9 @@ impl ProductionActivation {
                 tracing::warn!(operation="desktop_ui_watchdog",run=?record.run,suspected,
                     "Desktop watchdog status changed");
             }
+        }
+        if let Some(cause) = output_failure {
+            return Err(cause);
         }
         Ok(())
     }

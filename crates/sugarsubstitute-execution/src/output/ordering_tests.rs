@@ -21,25 +21,42 @@ fn rejected_reservations_do_not_create_native_state_or_consume_the_job_identity(
             &rig.client.core,
             &scope,
             too_small,
-            resource()?,
+            OutputIdentity::Managed(resource()?),
             Box::new(Lease(boundary.clone()))
         ),
         Err(AdmissionError::NativeReservationTooSmall { .. })
     ));
     assert!(matches!(
-        reserve(&rig.client.core, &rig.scope, good, resource()?, Box::new(Lease(boundary.clone()))),
+        reserve(
+            &rig.client.core,
+            &rig.scope,
+            good,
+            OutputIdentity::Managed(resource()?),
+            Box::new(Lease(boundary.clone()))
+        ),
         Err(AdmissionError::NativeScopeRequired)
     ));
     let mut wrong = good;
     wrong.class = JobClass::InfrastructureLifecycle;
     assert!(matches!(
-        reserve(&rig.client.core, &scope, wrong, resource()?, Box::new(Lease(boundary.clone()))),
+        reserve(
+            &rig.client.core,
+            &scope,
+            wrong,
+            OutputIdentity::Managed(resource()?),
+            Box::new(Lease(boundary.clone()))
+        ),
         Err(AdmissionError::WrongClass { .. })
     ));
     assert_eq!(boundary.prepares.load(Ordering::Acquire), 0);
     assert_eq!(lock(&rig.client.core.state).bytes, 0);
-    let mut session =
-        reserve(&rig.client.core, &scope, good, resource()?, Box::new(Lease(boundary.clone())))?;
+    let mut session = reserve(
+        &rig.client.core,
+        &scope,
+        good,
+        OutputIdentity::Managed(resource()?),
+        Box::new(Lease(boundary.clone())),
+    )?;
     session.control.close();
     assert!(matches!(completion(&rig, &mut session)?.outcome, JobOutcome::Cancelled));
     Ok(())
@@ -53,7 +70,7 @@ fn same_resource_does_not_make_another_sessions_stdio_provenance_valid() -> Test
     let mut a = session(&rig, &first)?;
     let mut b = session_with(&rig, &second, 3, 2, None)?;
     let pin = a.control.take_child_stdio()?;
-    assert_eq!(a.control.snapshot().resource, b.control.snapshot().resource);
+    assert_eq!(a.control.snapshot().identity, b.control.snapshot().identity);
     assert!(a.control.matches_child_stdio(&pin));
     assert!(!b.control.matches_child_stdio(&pin));
     assert_eq!(a.control.take_child_stdio().err(), Some(WindowsOutputError::AlreadyTransferred));

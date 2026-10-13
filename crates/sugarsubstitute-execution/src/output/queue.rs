@@ -127,14 +127,14 @@ impl State {
     }
     pub(super) fn batch(
         &mut self,
-        resource: ResourceKey,
-    ) -> Result<Option<(OutputBatch, MemoryClaim)>, WindowsOutputError> {
+        identity: OutputIdentity,
+    ) -> Result<Option<(Batch, MemoryClaim)>, WindowsOutputError> {
         let memory = self.memory.as_ref().ok_or(WindowsOutputError::NotReady)?;
         let claim =
             memory.claim(MAX_BATCH_BYTES as u64).map_err(|_| WindowsOutputError::MemoryBusy)?;
         if let Some(chunk) = self.queue.front() {
-            let batch = OutputBatch::new(
-                resource,
+            let batch = Batch::new(
+                identity,
                 chunk.stream,
                 StreamSequence::new(chunk.sequence).map_err(|_| WindowsOutputError::Exhausted)?,
                 &chunk.buffer.bytes,
@@ -161,8 +161,8 @@ impl State {
                 Some(value) => value,
                 None => self.next(stream).map_err(|_| WindowsOutputError::Exhausted)?,
             };
-            let batch = OutputBatch::new(
-                resource,
+            let batch = Batch::new(
+                identity,
                 stream,
                 StreamSequence::new(sequence).map_err(|_| WindowsOutputError::Exhausted)?,
                 &[],

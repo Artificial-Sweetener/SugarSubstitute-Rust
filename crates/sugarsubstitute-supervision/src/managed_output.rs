@@ -47,7 +47,7 @@ impl ManagedLaunchInput {
         };
         match input.with_owned_output(
             FamilyBinding::Managed(self.resource),
-            self.resource,
+            sugarsubstitute_execution::windows_output::OutputIdentity::Managed(self.resource),
             control,
             stdio,
         ) {

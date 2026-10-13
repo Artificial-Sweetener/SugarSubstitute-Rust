@@ -15,7 +15,11 @@ fn prepared(
     )?;
     let mut spec = h.spec(MIN_WINDOWS_OUTPUT_BYTES)?;
     spec.class = JobClass::NativeObservation;
-    let mut session = h.client.reserve_windows_output(&scope, spec, resource)?;
+    let mut session = h.client.reserve_windows_output(
+        &scope,
+        spec,
+        sugarsubstitute_execution::windows_output::OutputIdentity::Managed(resource),
+    )?;
     let deadline = Instant::now() + Duration::from_secs(10);
     loop {
         let revision = *lock(&h.wake.revision);
@@ -73,7 +77,9 @@ fn ffi_actual_managed_output_rejection_preserves_capsule_and_accepts_exact_sessi
     assert!(Arc::ptr_eq(&preparation, &rejected.input.prepared));
     assert_eq!(preparation.load(Ordering::Acquire), 1);
     assert_eq!(rejected.input.required_reservation_bytes(), required);
-    rejected.stdio.borrow_inheritance(resource)?;
+    rejected.stdio.borrow_inheritance(
+        sugarsubstitute_execution::windows_output::OutputIdentity::Managed(resource),
+    )?;
     assert!(!matching.control.snapshot().retired);
     assert!(!foreign.control.snapshot().retired);
     let capsule = (*rejected.input).with_owned_output(&matching.control, rejected.stdio)?;
@@ -86,7 +92,9 @@ fn ffi_actual_managed_output_rejection_preserves_capsule_and_accepts_exact_sessi
         .err()
         .ok_or("Second output replaced the original session")?;
     assert!(matches!(rejected.error, crate::RegistryInputError::OutputConflict));
-    rejected.stdio.borrow_inheritance(foreign_resource)?;
+    rejected.stdio.borrow_inheritance(
+        sugarsubstitute_execution::windows_output::OutputIdentity::Managed(foreign_resource),
+    )?;
     assert_eq!(preparation.load(Ordering::Acquire), 1);
     drop(rejected);
     assert_eq!(preparation.load(Ordering::Acquire), 2);

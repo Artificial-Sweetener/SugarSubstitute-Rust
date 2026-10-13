@@ -163,6 +163,9 @@ pub enum EntryTransportError {
     /// An actual write found its requester disconnected before native acceptance.
     /// The original cause remains in checked connection retirement observations.
     PeerDisconnected(NativeObservationError),
+    /// Actual unaccepted client open found no local endpoint. This observation
+    /// grants no peer, election or ownership authority; bounded original probing remains required.
+    EndpointAbsent(NativeObservationError),
     /// Preserve original native failure and sticky thread identity restoration facts.
     Native {
         /// Original owned cause, including bounded cleanup causes and owner panic.
@@ -198,9 +201,10 @@ impl EntryTransportError {
     pub fn native_cause(&self) -> Option<&NativeObservationError> {
         match self {
             Self::PreparedRetirement(_) => None,
-            Self::Clock(cause) | Self::PeerDisconnected(cause) | Self::Native { cause, .. } => {
-                Some(cause)
-            }
+            Self::Clock(cause)
+            | Self::PeerDisconnected(cause)
+            | Self::EndpointAbsent(cause)
+            | Self::Native { cause, .. } => Some(cause),
             Self::Retirement { original, cleanup, .. } => match original.native_cause() {
                 Some(cause) => Some(cause),
                 None => Some(cleanup),
@@ -279,6 +283,10 @@ impl fmt::Debug for EntryTransportError {
                 .finish_non_exhaustive(),
             Self::PeerDisconnected(cause) => formatter
                 .debug_struct("EntryTransportError::PeerDisconnected")
+                .field("stage", &cause.stage())
+                .finish_non_exhaustive(),
+            Self::EndpointAbsent(cause) => formatter
+                .debug_struct("EntryTransportError::EndpointAbsent")
                 .field("stage", &cause.stage())
                 .finish_non_exhaustive(),
             Self::Clock(cause) => formatter

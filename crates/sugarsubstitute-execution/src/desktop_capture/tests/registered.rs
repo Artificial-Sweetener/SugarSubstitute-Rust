@@ -113,6 +113,8 @@ fn registered_temporary_transfer_retains_original_capsule_without_physical_retir
     let completion =
         session.job().try_take_completion().ok_or("Actual registered result missing")?;
     assert!(matches!(completion.outcome, JobOutcome::Success(_)));
+    assert!(completion.native_handles.is_none());
+    assert_eq!(completion.memory.bytes(), 4_194_304);
     drop(completion);
     assert!(!active.completed());
     assert_eq!(session.control().temporary_settled(), DesktopCaptureTemporaryState::Pending);

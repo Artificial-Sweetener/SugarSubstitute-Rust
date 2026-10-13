@@ -18,6 +18,7 @@ pub(super) fn retire(
     if !start.profile.snapshot().released
         || start.profile.snapshot().pending
         || !parent.native_retired()
+        || start.output.as_ref().is_some_and(|output| !output.settled())
     {
         return Ok(None);
     }

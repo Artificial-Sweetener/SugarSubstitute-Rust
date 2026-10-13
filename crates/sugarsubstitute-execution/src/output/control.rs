@@ -5,7 +5,7 @@ use super::*;
 use crate::task::ErasedJob;
 /// Own continuous output drainage and its actual native terminal observation.
 pub struct WindowsOutputSession {
-    /// Fixed output/launch operations; keep with the shared resource lifetime.
+    /// Fixed output/launch operations; keep with the shared identity lifetime.
     pub control: WindowsOutputControl,
     /// Terminal occurs only after actual I/O, callbacks and handles retire.
     pub completion: OwnedJob<WindowsOutputReport, NativeObservationError>,
@@ -18,7 +18,7 @@ pub struct WindowsOutputControl {
 impl WindowsOutputControl {
     /// Return current retained facts even after native terminal; no text is decoded.
     pub fn snapshot(&self) -> WindowsOutputReport {
-        lock(&self.shared.state).report(self.shared.resource)
+        lock(&self.shared.state).report(self.shared.identity)
     }
     /// Take the sole exact three-handle launch artifact after checked preparation.
     pub fn take_child_stdio(&self) -> Result<WindowsChildStdio, WindowsOutputError> {
@@ -49,7 +49,7 @@ impl WindowsOutputControl {
         if !s.prepared && s.memory.is_none() {
             return Err(WindowsOutputError::NotReady);
         }
-        let Some((batch, claim)) = s.batch(self.shared.resource)? else { return Ok(None) };
+        let Some((batch, claim)) = s.batch(self.shared.identity)? else { return Ok(None) };
         s.loan = true;
         Ok(Some(AdmittedOutputBatch {
             batch: Some(batch),
@@ -65,7 +65,7 @@ impl WindowsOutputControl {
         self.job.cancel();
         self.shared.changed();
     }
-    /// Verify a launch artifact belongs to this exact admitted session and resource.
+    /// Verify a launch artifact belongs to this exact admitted session and identity.
     pub fn matches_child_stdio(&self, stdio: &WindowsChildStdio) -> bool {
         Arc::ptr_eq(&self.shared, &stdio.shared)
     }
@@ -79,18 +79,29 @@ impl Drop for WindowsOutputControl {
         self.close();
     }
 }
-/// Keep a copied OutputBatch charged while its consumer parses the borrowed bytes.
+/// Keep a managed batch or desktop diagnostics charged through borrowed consumption.
 /// No extraction or clone can separate storage from admission. Drop returns the
 /// sole delivery slot; held loans never stop the native drain of either stream.
 pub struct AdmittedOutputBatch {
-    batch: Option<OutputBatch>,
+    batch: Option<Batch>,
     claim: Option<MemoryClaim>,
     shared: Arc<Shared>,
 }
 impl AdmittedOutputBatch {
-    /// Borrow the bounded authoritative source batch for transcript ingestion.
+    /// Borrow managed backend input for Transcript; desktop sources return None.
     pub fn batch(&self) -> Option<&OutputBatch> {
-        self.batch.as_ref()
+        match self.batch.as_ref() {
+            Some(Batch::Managed(batch)) => Some(batch),
+            _ => None,
+        }
+    }
+    /// Borrow raw desktop diagnostics with the exact original Run association.
+    /// The same admitted guard retains bytes and returns the sole delivery slot.
+    pub fn desktop_batch(&self) -> Option<&DesktopOutputBatch> {
+        match self.batch.as_ref() {
+            Some(Batch::Desktop(batch)) => Some(batch),
+            _ => None,
+        }
     }
 }
 impl Drop for AdmittedOutputBatch {
@@ -111,9 +122,9 @@ pub struct WindowsChildStdio {
     pub(crate) shared: Arc<Shared>,
 }
 impl WindowsChildStdio {
-    /// Exact resource generation matching fact, never authentication evidence.
-    pub fn resource(&self) -> ResourceKey {
-        self.shared.resource
+    /// Exact identity generation matching fact, never authentication evidence.
+    pub fn identity(&self) -> OutputIdentity {
+        self.shared.identity
     }
     /// Request output retirement after a failed owned launch. No handle closes here;
     /// this pin must still remain until actual native attribute deletion returns.
@@ -129,9 +140,12 @@ impl WindowsChildStdio {
         drop(self);
         cancellation
     }
-    pub(crate) fn handles(&self, expected: ResourceKey) -> Result<[usize; 3], WindowsOutputError> {
-        if expected != self.shared.resource {
-            return Err(WindowsOutputError::ForeignResource);
+    pub(crate) fn handles(
+        &self,
+        expected: OutputIdentity,
+    ) -> Result<[usize; 3], WindowsOutputError> {
+        if expected != self.shared.identity {
+            return Err(WindowsOutputError::ForeignIdentity);
         }
         let s = lock(&self.shared.state);
         if s.stopped || !s.pin {
@@ -150,8 +164,8 @@ pub struct WindowsOutputCancellation {
 }
 impl WindowsOutputCancellation {
     /// Return the exact source generation; identity alone grants no privilege.
-    pub fn resource(&self) -> ResourceKey {
-        self.shared.resource
+    pub fn identity(&self) -> OutputIdentity {
+        self.shared.identity
     }
     /// Request checked output retirement; terminal and actual EOF remain observed.
     pub fn request_close(&self) {

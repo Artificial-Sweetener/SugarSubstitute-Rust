@@ -132,12 +132,13 @@ impl Parent {
             return Ok(());
         }
         let spec = self.spec(JobClass::NativeObservation, MIN_WINDOWS_OUTPUT_BYTES, true)?;
+        let identity = self.cases[self.current].output_identity();
         let resource = self.cases[self.current].resource;
         let client = self.client.as_ref().ok_or("Output execution missing")?;
         let session = client.reserve_windows_output(
             self.native_scope.as_ref().ok_or("Output native scope missing")?,
             spec,
-            resource,
+            identity,
         )?;
         self.cases[self.current].output = Some(session);
         if self.cases[self.current].role.authenticated() {
@@ -214,7 +215,7 @@ impl Parent {
         let control = &case.output.as_ref().ok_or("Output prepared session missing")?.control;
         let input = input.with_owned_output(
             binding,
-            case.resource,
+            case.output_identity(),
             control,
             control.take_child_stdio()?,
         )?;

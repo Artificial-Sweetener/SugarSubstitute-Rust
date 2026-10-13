@@ -58,7 +58,8 @@ pub enum EntryTransportObservation {
     ConnectionRetired {
         /// Exact retired connection; an outstanding immutable frame loan still retains storage.
         connection: EntryConnectionId,
-        /// Original disconnected-requester write failure, after checked native retirement.
+        /// Original disconnected-requester write or absent-client-endpoint cause,
+        /// after checked native retirement; this grants no authenticated peer facts.
         /// This connection-local observation does not fail the serving session.
         failure: Option<EntryTransportError>,
     },

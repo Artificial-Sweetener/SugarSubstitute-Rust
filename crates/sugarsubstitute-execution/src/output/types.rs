@@ -1,7 +1,55 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Describe bounded native stream facts without equating EOF with process settlement.
-use sugarsubstitute_contracts::lifecycle::ResourceKey;
+use sugarsubstitute_contracts::{
+    lifecycle::{ResourceKey, RunKey},
+    transcript::{OutputGap, OutputStream, StreamSequence},
+};
+/// Exact owned launch association; matching facts grant no process authority.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum OutputIdentity {
+    /// Output from one managed backend resource generation.
+    Managed(ResourceKey),
+    /// Startup and runtime diagnostics from one desktop run generation.
+    Desktop(RunKey),
+}
+/// One bounded desktop stream fact, borrowed only through its charged delivery guard.
+/// Desktop diagnostics remain distinct from managed backend Transcript input.
+#[derive(Debug)]
+pub struct DesktopOutputBatch {
+    pub(super) run: RunKey,
+    pub(super) stream: OutputStream,
+    pub(super) sequence: StreamSequence,
+    pub(super) bytes: Box<[u8]>,
+    pub(super) gap: Option<OutputGap>,
+    pub(super) end: bool,
+}
+impl DesktopOutputBatch {
+    /// Return the exact desktop generation, without a process capability.
+    pub const fn run(&self) -> RunKey {
+        self.run
+    }
+    /// Identify stdout or stderr independently.
+    pub const fn stream(&self) -> OutputStream {
+        self.stream
+    }
+    /// Return the unchanged checked per-stream sequence.
+    pub const fn sequence(&self) -> StreamSequence {
+        self.sequence
+    }
+    /// Borrow raw source bytes; no decoding or logging occurs here.
+    pub fn bytes(&self) -> &[u8] {
+        &self.bytes
+    }
+    /// Return preceding bounded-queue loss for this stream.
+    pub const fn gap(&self) -> Option<OutputGap> {
+        self.gap
+    }
+    /// Report actual producer EOF, independently of process settlement.
+    pub const fn end(&self) -> bool {
+        self.end
+    }
+}
 /// Combined raw queued payload bound, independent of visibility.
 pub const MAX_WINDOWS_OUTPUT_QUEUED_BYTES: usize = 1024 * 1024;
 /// Fixed queue index bound, including tiny read completions.
@@ -20,7 +68,7 @@ pub enum WindowsOutputError {
     /// Another admitted batch still owns the delivery slot.
     LoanBusy,
     /// The caller supplied another resource or acquisition generation.
-    ForeignResource,
+    ForeignIdentity,
     /// Original charged storage could not cover a bounded copy.
     MemoryBusy,
     /// Bounded output sequence/counter cannot advance.
@@ -46,7 +94,7 @@ pub struct WindowsOutputCounters {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct WindowsOutputReport {
     /// Exact coordinator/resource generation supplied by the trusted owner.
-    pub resource: ResourceKey,
+    pub identity: OutputIdentity,
     /// Native pipes and all three child handles were prepared.
     pub prepared: bool,
     /// Retained evidence of actual ERROR_IO_PENDING reads, not a fresh kernel query.

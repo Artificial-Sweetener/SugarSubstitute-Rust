@@ -107,14 +107,14 @@ fn conflicting_notice_preserves_first_kind_and_rejects_replacement() -> TestResu
         reservation_bytes: 4_194_304,
         replacement: None,
     };
-    assert!(!original.completion(ScopeId::new(6)?, spec, TerminalKind::Failure));
-    assert!(actual.completion(ScopeId::new(6)?, spec, TerminalKind::Failure));
-    assert!(!actual.completion(
+    assert!(!original.terminal(ScopeId::new(6)?, spec, TerminalKind::Failure));
+    assert!(actual.terminal(ScopeId::new(6)?, spec, TerminalKind::Failure));
+    assert!(!actual.terminal(
         ScopeId::new(6)?,
         JobSpec { reservation_bytes: 1, ..spec },
         TerminalKind::Failure
     ));
-    assert!(!actual.completion(ScopeId::new(6)?, spec, TerminalKind::Success));
+    assert!(!actual.terminal(ScopeId::new(6)?, spec, TerminalKind::Success));
     Ok(())
 }
 #[test]
@@ -136,15 +136,110 @@ fn source_run_execution_generation_and_job_must_all_match() -> TestResult {
     Ok(())
 }
 #[test]
-fn native_accounting_must_keep_original_execution_scope_and_job() -> TestResult {
-    let actual = correlation()?;
-    assert!(actual.native(ExecutionId::new(5)?, ScopeId::new(6)?, JobId::new(7)?));
-    for (execution, scope, job) in [(9, 6, 7), (5, 9, 7), (5, 6, 9)] {
-        assert!(!actual.native(
-            ExecutionId::new(execution)?,
-            ScopeId::new(scope)?,
-            JobId::new(job)?
-        ));
+fn actual_non_symbol_completion_keeps_original_metadata_without_symbol_ledger() -> TestResult {
+    use sugarsubstitute_contracts::execution::{
+        Clock, CompletionWake, ExecutionError, ExecutionPort, Moment, ScopeSpec, WaitFuture,
+    };
+    /// Fake only the external clock; execution owns the real record and completion.
+    struct ClockBoundary;
+    impl Clock for ClockBoundary {
+        fn now(&self) -> Moment {
+            Moment::from_nanos(0)
+        }
+        fn sleep_until(&self, _: Moment) -> WaitFuture {
+            Box::pin(std::future::pending())
+        }
     }
+    /// Coalesce actual completion wakes at the test's external observation boundary.
+    struct WakeBoundary {
+        notified: std::sync::Mutex<bool>,
+        changed: std::sync::Condvar,
+    }
+    impl CompletionWake for WakeBoundary {
+        fn wake(&self) -> Result<(), ExecutionError> {
+            let mut notified = self.notified.lock().map_err(|_| {
+                ExecutionError::new(
+                    Operation::NativeLifecycle,
+                    Box::new(std::io::Error::other("Capture test observation poisoned")),
+                )
+            })?;
+            *notified = true;
+            self.changed.notify_one();
+            Ok(())
+        }
+    }
+    let wake = Arc::new(WakeBoundary {
+        notified: std::sync::Mutex::new(false),
+        changed: std::sync::Condvar::new(),
+    });
+    let owner =
+        sugarsubstitute_execution::ExecutionOwner::new(Arc::new(ClockBoundary), wake.clone())?;
+    let client = owner.client();
+    let scope = client.create_scope(ScopeSpec { id: ScopeId::new(6)?, deadline: None }, None)?;
+    let spec = JobSpec {
+        id: JobId::new(7)?,
+        operation: Operation::NativeLifecycle,
+        class: JobClass::InfrastructureLifecycle,
+        deadline: Some(Moment::from_nanos(100)),
+        reservation_bytes: 4_194_304,
+        replacement: None,
+    };
+    let run = RunKey {
+        owner: CoordinatorKey {
+            namespace: NamespaceId::new([1; 32]),
+            epoch: CoordinatorEpoch::new([2; 16])?,
+        },
+        instance: InstanceId::new(3)?,
+        generation: RunGeneration::new(4)?,
+    };
+    let mut actual = CaptureCorrelation::new(run, scope.owner_id(), scope.id(), spec);
+    let mut job = client.submit_blocking(&scope, spec, |context| {
+        if context.native_handles().is_some() {
+            return Err(std::io::Error::other("Non-Symbol job received Symbol ledger"));
+        }
+        Ok(())
+    })?;
+    let until = std::time::Instant::now()
+        .checked_add(std::time::Duration::from_secs(10))
+        .ok_or("Capture test observation cutoff overflow")?;
+    let mut completed = loop {
+        let batch = client.drain_completions(std::num::NonZeroUsize::MIN)?;
+        for notice in batch.notifications {
+            actual.notice(notice)?;
+        }
+        if actual.noticed()
+            && let Some(value) = job.try_take_completion()
+        {
+            break value;
+        }
+        let mut notified = wake.notified.lock().map_err(|_| "Capture test observation poisoned")?;
+        while !*notified {
+            let remaining = until
+                .checked_duration_since(std::time::Instant::now())
+                .ok_or("Capture completion did not publish")?;
+            let (next, timed) = wake
+                .changed
+                .wait_timeout(notified, remaining)
+                .map_err(|_| "Capture test observation poisoned")?;
+            notified = next;
+            if timed.timed_out() && !*notified {
+                return Err("Capture completion did not publish".into());
+            }
+        }
+        *notified = false;
+    };
+    assert!(completed.native_handles.is_none());
+    assert_eq!(completed.memory.bytes(), 4_194_304);
+    assert!(actual.completion(&completed));
+    completed.scope_id = ScopeId::new(9)?;
+    assert!(!actual.completion(&completed));
+    completed.scope_id = scope.id();
+    completed.spec.reservation_bytes += 1;
+    assert!(!actual.completion(&completed));
+    completed.spec = spec;
+    completed.outcome = JobOutcome::Failure(std::io::Error::other("Changed outcome"));
+    assert!(!actual.completion(&completed));
+    drop((completed, job, scope));
+    drop(owner);
     Ok(())
 }
