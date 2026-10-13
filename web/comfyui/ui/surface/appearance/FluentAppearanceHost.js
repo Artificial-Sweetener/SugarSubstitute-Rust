@@ -81,7 +81,7 @@ export class FluentAppearanceHost {
         this.#accent = new AccentThemeHost(options.document, options.app, options.reportError);
         this.#iconAppearance = new CubeIconAppearanceHost(options.document, this.state);
         this.#scrollbars = new FluentOverlayScrollbarHost(options.document, options.reportError);
-        this.#adapter = new NativeFluentCardAdapter(options.app);
+        this.#adapter = new NativeFluentCardAdapter(options.app, options.seedReuse);
         this.#graphGeometry = new NativeFluentGraphGeometry({
             document: options.document,
             ...(options.getSlotLayoutSync ? { getSynchronizer: options.getSlotLayoutSync } : {}),

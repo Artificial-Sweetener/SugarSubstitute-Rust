@@ -16,6 +16,7 @@
 /** Mount shared values and link selectors through Comfy's exact widget component family. */
 import { isRecord } from '../../types/common.js';
 import { NativeLinkLabelLayout } from './NativeLinkLabelLayout.js';
+import { NativeSeedWidgetMode } from './NativeSeedWidgetMode.js';
 import { NativeLinkChoiceLabels } from './NativeLinkChoiceLabels.js';
 import { scopeNativeVueMountContext } from '../../surface/NativeVueMountContext.js';
 import { findComfyVueAppContext } from '../../surface/ComfyVueTree.js';
@@ -28,12 +29,16 @@ import { choiceRestrictions } from '../domain/FieldCompatibility.js';
 export class NativeRelationWidgetRenderer {
     document;
     reportError;
+    reuse;
+    appearance;
     #labelLayout;
     #runtime = null;
     /** Bind the host; resolve its native capabilities when the first surface mounts. */
-    constructor(document, reportError) {
+    constructor(document, reportError, reuse, appearance) {
         this.document = document;
         this.reportError = reportError;
+        this.reuse = reuse;
+        this.appearance = appearance;
         this.#labelLayout = new NativeLinkLabelLayout(document, reportError);
     }
     /** Mount one native field backed by an automatically discovered shared value. */
@@ -45,6 +50,7 @@ export class NativeRelationWidgetRenderer {
                 modes: ['fixed', 'randomize', 'increment', 'decrement'],
                 readMode: () => group.seedMode,
                 writeMode: changeMode,
+                ...(this.reuse ? { reuse: this.reuse(initial.key) } : {}),
             }
             : null;
         const mount = this.#mount(root, () => {
@@ -174,6 +180,12 @@ export class NativeRelationWidgetRenderer {
         let render = null;
         let unmount = null;
         let presentationQueued = false;
+        const seedMode = new NativeSeedWidgetMode();
+        const appearance = this.appearance?.();
+        const stopAppearance = appearance?.subscribeAppearance(() => {
+            if (request().seed)
+                render?.();
+        });
         const constraints = new NativeChoiceRestrictions(root);
         this.#runtime ??= loadComfyNativeWidgetRuntime(this.document);
         void this.#runtime
@@ -189,7 +201,15 @@ export class NativeRelationWidgetRenderer {
                 if (disposed)
                     return;
                 const { component, widget, value, seed, choices } = request();
+                const previousKey = seedMode.key;
+                const focused = root.contains(this.document.activeElement)
+                    ? this.document.activeElement
+                    : null;
+                const key = seed
+                    ? seedMode.prepare(widget, seed, appearance?.appearance.fluent ?? false)
+                    : null;
                 const vnode = runtime.h(runtime.components.get(component), {
+                    ...(key === null ? {} : { key }),
                     widget,
                     modelValue: value,
                     'onUpdate:modelValue': (next) => {
@@ -201,6 +221,21 @@ export class NativeRelationWidgetRenderer {
                     throw new TypeError('Comfy returned an invalid widget VNode.');
                 vnode.appContext = scopedContext;
                 runtime.render(vnode, root);
+                // WidgetWithControl initializes its local mode once; restore focus when history requires reinitialization.
+                if (seedMode.key !== previousKey && focused instanceof HTMLElement) {
+                    if (focused instanceof HTMLInputElement) {
+                        const input = root.querySelector('input[role="spinbutton"]');
+                        input?.focus({ preventScroll: true });
+                        if (input?.type === 'text' &&
+                            focused.selectionStart !== null &&
+                            focused.selectionEnd !== null)
+                            input.setSelectionRange(focused.selectionStart, focused.selectionEnd);
+                    }
+                    else
+                        root
+                            .querySelector('[data-testid="value-control"]')
+                            ?.focus({ preventScroll: true });
+                }
                 registerNativeWidgetMount(root, { vnode, seed });
                 constraints.update(choices);
                 if (!presentationQueued) {
@@ -220,6 +255,7 @@ export class NativeRelationWidgetRenderer {
             refresh: () => render?.(),
             dispose: () => {
                 disposed = true;
+                stopAppearance?.();
                 constraints.dispose();
                 releaseNativeWidgetMount(root);
                 for (const name of events)

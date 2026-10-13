@@ -19,12 +19,14 @@ import type {
   FieldValue,
   NodeContract,
   RelationState,
+  RelationSeedMode,
 } from '../domain/RelationContracts.js';
 
 export interface EditableRelationField {
   readonly contract: FieldContract;
   read(): FieldValue;
   write(value: FieldValue): void;
+  writeSeedMode?(mode: RelationSeedMode): void;
 }
 export interface RelationInventory {
   readonly fields: readonly EditableRelationField[];

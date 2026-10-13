@@ -17,7 +17,7 @@ preserved in `licenses/fluentui-system-icons.NOTICE.txt`.
 
 Masonry uses App Generic, Edit, Eraser, Folder, Brain Circuit, Color, and Image.
 The view switch uses Board for masonry and Flowchart for graph.
-Seed actions use Add and Subtract. Model updates use Arrow Circle Up Sparkle.
+Seed actions use Add, Subtract, and Arrow Counterclockwise. Model updates use Arrow Circle Up Sparkle.
 Model picker filters use Eye for Show all and Eye Off for Show only an architecture.
 CSS masks adapt their color to the current theme without modifying the SVGs.
 

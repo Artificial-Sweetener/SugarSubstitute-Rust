@@ -29,6 +29,25 @@ export function findMountedNodeVNode(root) {
     }
     return null;
 }
+/** Resolve exact production card mounts when Vue omits development-only component ancestry. */
+export function findNativeNodeVNode(root) {
+    const direct = findMountedNodeVNode(root);
+    if (direct)
+        return direct;
+    const mount = root.closest('.sugarcubes-native-node-card') ?? root.ownerDocument.getElementById('vue-app');
+    const record = isRecord(mount) ? mount : {};
+    return (findVueComponents(record._vnode, 'LGraphNode').find((vnode) => resolveVueElement(vnode) === root) ?? null);
+}
+/** Narrow a mounted component's actual element across native and wrapped Vue VNodes. */
+export function resolveVueElement(vnode) {
+    const component = isRecord(vnode.component) ? vnode.component : {};
+    const tree = isRecord(component.subTree) ? component.subTree : {};
+    return tree.el instanceof HTMLElement
+        ? tree.el
+        : vnode.el instanceof HTMLElement
+            ? vnode.el
+            : null;
+}
 /** Resolve Comfy's mounted Vue application context independently of graph contents. */
 export function findComfyVueAppContext(root) {
     const rootRecord = isRecord(root) ? root : {};

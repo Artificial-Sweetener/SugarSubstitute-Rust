@@ -16,7 +16,12 @@
 /** Identify native Vue presentation boundaries without touching custom widget internals. */
 import { isRecord } from '../../types/common.js';
 import type { UnknownRecord } from '../../types/common.js';
-import { findVueComponents, findMountedNodeVNode } from '../ComfyVueTree.js';
+import {
+  findVueComponents,
+  findMountedNodeVNode,
+  findNativeNodeVNode,
+  resolveVueElement,
+} from '../ComfyVueTree.js';
 import {
   classifyNativeField,
   planNativeFields,
@@ -26,6 +31,7 @@ import type { NativeFieldDescriptor } from './NativeFieldPresentation.js';
 import { readNativeNumericField } from './ComfyNativeNumericField.js';
 import type { NativeNumericField } from './ComfyNativeNumericField.js';
 import { ComfyNativeSeedControlAdapter } from './ComfyNativeSeedControl.js';
+import type { NativeSeedReuseResolver } from './ComfyNativeSeedControl.js';
 import type { NativeSeedField } from './NativeSeedControls.js';
 import { readNativeWidgetMount } from '../NativeWidgetMountBoundary.js';
 import {
@@ -54,8 +60,8 @@ export class NativeFluentCardAdapter {
   readonly #seeds: ComfyNativeSeedControlAdapter;
 
   /** Resolve native execution controls through the supplied Comfy application boundary. */
-  constructor(app: unknown = null) {
-    this.#seeds = new ComfyNativeSeedControlAdapter(app);
+  constructor(app: unknown = null, reuse?: NativeSeedReuseResolver) {
+    this.#seeds = new ComfyNativeSeedControlAdapter(app, reuse);
   }
 
   /** Index graph component roots once for a coalesced host update. */
@@ -71,7 +77,7 @@ export class NativeFluentCardAdapter {
     const mount = documentRef.getElementById('vue-app');
     const record: UnknownRecord = isRecord(mount) ? mount : {};
     for (const vnode of findVueComponents(record._vnode, 'LGraphNode')) {
-      const element = resolveVNodeElement(vnode);
+      const element = resolveVueElement(vnode);
       if (element && unresolved.includes(element)) this.#graphNodes.set(element, vnode);
     }
   }
@@ -125,14 +131,14 @@ export class NativeFluentCardAdapter {
   annotate(root: HTMLElement): FluentCardBoundary {
     const annotated = this.#annotations.begin(root);
     mark(root, 'node', annotated);
-    const vnode = this.#vnodes.get(root) ?? this.#graphNodes.get(root) ?? resolveNodeVNode(root);
+    const vnode = this.#vnodes.get(root) ?? this.#graphNodes.get(root) ?? findNativeNodeVNode(root);
     if (vnode) this.#vnodes.set(root, vnode);
     const descriptors: NativeFieldDescriptor[] = [];
     const numericFields: NativeNumericField[] = [];
     const seedFields: NativeSeedField[] = [];
     const labelElements: HTMLElement[] = [];
     for (const widgets of findVueComponents(vnode, 'NodeWidgets')) {
-      const container = resolveVNodeElement(widgets);
+      const container = resolveVueElement(widgets);
       if (!container || container.closest('.lg-node') !== root) continue;
       mark(container, 'fields', annotated);
       const containerFields: NativeFieldDescriptor[] = [];
@@ -154,7 +160,7 @@ export class NativeFluentCardAdapter {
           const props = isRecord(component.props) ? component.props : {};
           const widget = isRecord(props.widget) ? props.widget : {};
           const options = isRecord(widget.options) ? widget.options : {};
-          const element = resolveVNodeElement(candidate);
+          const element = resolveVueElement(candidate);
           return options.advanced === true && element !== null && child.contains(element);
         });
         if (advanced) mark(child, 'advanced-row', annotated);
@@ -184,7 +190,7 @@ export class NativeFluentCardAdapter {
       }
     }
     const headerVNode = findVueComponents(vnode, 'NodeHeader')[0];
-    const header = headerVNode ? resolveVNodeElement(headerVNode) : null;
+    const header = headerVNode ? resolveVueElement(headerVNode) : null;
     const title = header?.querySelector<HTMLElement>(
       '[data-testid="node-title"] .editable-text > span',
     );
@@ -210,7 +216,7 @@ export class NativeFluentCardAdapter {
     );
     if (visibleFields && !root.closest('.sugarcubes-cube-face__node-card')) {
       for (const slots of findVueComponents(vnode, 'NodeSlots')) {
-        const container = resolveVNodeElement(slots);
+        const container = resolveVueElement(slots);
         if (container?.closest('.lg-node') === root && container.querySelector('.lg-slot'))
           mark(container, 'ports', annotated);
       }
@@ -256,18 +262,6 @@ function mark(element: HTMLElement, name: string, annotated: NativeFluentAnnotat
   annotated.attribute(element, `data-sc-fluent-${name}`);
 }
 
-/** Resolve the actual node instance without crossing into a nested Cube card. */
-function resolveNodeVNode(root: HTMLElement): UnknownRecord | null {
-  const mount =
-    root.closest('.sugarcubes-native-node-card') ?? root.ownerDocument.getElementById('vue-app');
-  const record: UnknownRecord = isRecord(mount) ? mount : {};
-  return (
-    findVueComponents(record._vnode, 'LGraphNode').find(
-      (vnode) => resolveVNodeElement(vnode) === root,
-    ) ?? null
-  );
-}
-
 /** Read a core widget's identity and annotate its native layout, excluding DOM/custom bridges. */
 function resolveFieldDescriptor(
   row: HTMLElement,
@@ -279,7 +273,7 @@ function resolveFieldDescriptor(
   seeds: ComfyNativeSeedControlAdapter,
 ): NativeFieldDescriptor | null {
   const contains = (vnode: UnknownRecord): boolean => {
-    const element = resolveVNodeElement(vnode);
+    const element = resolveVueElement(vnode);
     return element !== null && row.contains(element);
   };
   if (
@@ -296,9 +290,9 @@ function resolveFieldDescriptor(
     if (typeof widget.name !== 'string') continue;
     const descriptor = { name: widget.name, component: name };
     if (!classifyNativeField(descriptor)) continue;
-    const control = resolveVNodeElement(vnode);
+    const control = resolveVueElement(vnode);
     const layoutVNode = findVueComponents(vnode, 'WidgetLayoutField')[0];
-    const layout = layoutVNode ? resolveVNodeElement(layoutVNode) : null;
+    const layout = layoutVNode ? resolveVueElement(layoutVNode) : null;
     if (control) {
       mark(control, 'control', annotated);
       const input = control.querySelector<HTMLInputElement | HTMLTextAreaElement>(
@@ -348,11 +342,4 @@ function indexFieldComponents(widgets: UnknownRecord): FieldComponent[] {
   return [...NATIVE_FIELD_COMPONENTS, 'WidgetDOM', 'WidgetLegacy'].flatMap((name) =>
     findVueComponents(widgets, name).map((vnode) => ({ name, vnode })),
   );
-}
-
-/** Narrow the root element of a mounted native component. */
-function resolveVNodeElement(vnode: UnknownRecord): HTMLElement | null {
-  const component = isRecord(vnode.component) ? vnode.component : {};
-  const subTree = isRecord(component.subTree) ? component.subTree : {};
-  return subTree.el instanceof HTMLElement ? subTree.el : null;
 }

@@ -160,3 +160,34 @@ test('rolls back accessories when the native subscription fails', () => {
   expect(f.root.querySelector('[data-sc-seed-split]')).toBeNull();
   expect(f.field.numeric.spinner.hasAttribute('data-sc-seed-box')).toBe(false);
 });
+
+test('offers a disabled reuse action before a seed is recorded and restores through the owner when available', () => {
+  const f = fixture();
+  f.arrow.click();
+  expect(
+    document.querySelector('[data-sc-seed-option="reuse-last"]')?.getAttribute('aria-disabled'),
+  ).toBe('true');
+  f.arrow.click();
+  let last: number | null = null;
+  const reuse = jest.fn(() => {
+    if (last === null) return;
+    f.field.numeric.writeValue(last);
+    f.field.control.writeMode('fixed');
+  });
+  f.field.control = { ...f.field.control, reuse: { readLast: () => last, reuse } };
+  f.controls.reconcile(f.root, [f.field]);
+  last = 42;
+  f.arrow.click();
+  const option = document.querySelector<HTMLButtonElement>('[data-sc-seed-option="reuse-last"]');
+  expect(option?.textContent).toContain('Reuse last');
+  expect(option?.querySelector('[data-sc-seed-icon]')?.getAttribute('style')).toContain(
+    'reuse-last.svg',
+  );
+  option?.click();
+  expect(reuse).toHaveBeenCalledTimes(1);
+  expect(f.field.numeric.input.value).toBe('42');
+  expect(f.field.control.readMode()).toBe('fixed');
+  expect(f.arrow.getAttribute('aria-expanded')).toBe('false');
+  expect(f.primary.title).toBe('Use Current');
+  f.controls.clear();
+});

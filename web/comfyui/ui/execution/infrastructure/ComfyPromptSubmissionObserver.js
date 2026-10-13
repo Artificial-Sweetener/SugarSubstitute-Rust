@@ -17,6 +17,7 @@
 import { isRecord } from '../../types/common.js';
 import { promptId } from '../domain/ExecutionIdentity.js';
 import { decodeComfyPromptSources } from './ComfyPromptSourceDecoder.js';
+import { decodeComfySubmittedSeeds } from './ComfySubmittedSeeds.js';
 /** Resolve only observed or explicitly associated prompts and contain diagnostic failures in the bridge. */
 export class ComfyPromptSubmissionObserver {
     options;
@@ -35,11 +36,13 @@ export class ComfyPromptSubmissionObserver {
             return null;
         const submission = this.options.submitting(captured);
         let context = submission;
+        let preparedPayload = payload;
         let active = true;
         return {
             prepared: (prepared) => {
                 if (!active)
                     return;
+                preparedPayload = prepared;
                 const sources = decodeComfyPromptSources(prepared, captured.sources);
                 if (sources.length)
                     context = Object.freeze({ ...submission, sources });
@@ -60,6 +63,12 @@ export class ComfyPromptSubmissionObserver {
                     : [];
                 if (executionSources.length)
                     context = Object.freeze({ ...submission, sources: executionSources });
+                const prompt = isRecord(response) && Object.hasOwn(response, 'execution_prompt')
+                    ? response.execution_prompt
+                    : isRecord(preparedPayload)
+                        ? preparedPayload.output
+                        : null;
+                this.options.seeds?.record(context.session, context.order, decodeComfySubmittedSeeds(prompt));
                 this.options.accepted(context, promptId(id));
             },
             rejected: () => {

@@ -16,6 +16,7 @@
 /** Compose the shared execution lifetime while keeping host registration and cube queue policy thin. */
 import { WorkflowSessionStore } from '../application/WorkflowSessionStore.js';
 import { WorkflowResultStore } from '../application/WorkflowResultStore.js';
+import { WorkflowSeedHistory } from '../application/WorkflowSeedHistory.js';
 import { WorkflowRunRegistry } from '../application/WorkflowRunRegistry.js';
 import { WorkflowSubmissionContexts } from '../application/WorkflowSubmissionContexts.js';
 import { WorkflowExecutionIngestor } from '../application/WorkflowExecutionIngestor.js';
@@ -37,6 +38,7 @@ export class ComfyWorkflowExecutionRuntime {
     options;
     sessions = new WorkflowSessionStore();
     results = new WorkflowResultStore();
+    seeds = new WorkflowSeedHistory();
     previews;
     outputs;
     submissionObserver;
@@ -45,6 +47,7 @@ export class ComfyWorkflowExecutionRuntime {
     #contexts = new WorkflowSubmissionContexts();
     #ingestor;
     #connections = new Set();
+    #stopSeeds;
     #adapter = null;
     #events = null;
     #history = null;
@@ -57,6 +60,7 @@ export class ComfyWorkflowExecutionRuntime {
     /** Construct pure owners immediately and defer public-host capability access until extension setup. */
     constructor(options) {
         this.options = options;
+        this.#stopSeeds = this.sessions.subscribe((snapshot) => this.seeds.synchronize(snapshot));
         this.#ingestor = new WorkflowExecutionIngestor({
             runs: this.#runs,
             results: this.results,
@@ -69,6 +73,7 @@ export class ComfyWorkflowExecutionRuntime {
         this.submissionObserver = new ComfyPromptSubmissionObserver({
             contexts: this.#contexts,
             logger: options.logger,
+            seeds: this.seeds,
             submitting: (context) => this.#ingestor.submitting(context),
             accepted: (context, id) => this.#ingestor.accepted(context, id),
         });
@@ -166,6 +171,8 @@ export class ComfyWorkflowExecutionRuntime {
         this.#contexts.dispose();
         this.#runs.dispose();
         this.results.dispose();
+        this.#stopSeeds();
+        this.seeds.dispose();
         this.sessions.dispose();
         this.#connections.clear();
     }

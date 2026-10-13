@@ -26,7 +26,7 @@ import { createComfyWorkflowExecutionRuntime } from './ui/execution/infrastructu
 import { projectCubeProximityPreviewLinks } from './ui/surface/CubeProximityPreviewLinks.js';
 import { CubeAuthoringHostCommands } from './ui/cube/CubeAuthoringHostCommands.js';
 import { createCubeHostExecution } from './ui/cube/execution/CubeHostExecutionComposition.js';
-import { RelationHostLifecycle } from './ui/relations/RelationHostLifecycle.js';
+import { createWorkflowFieldHost } from './ui/relations/WorkflowFieldComposition.js';
 import { ComfyCanvasHistoryAdapter } from './ui/surface/ComfyCanvasHistoryAdapter.js';
 import { proximityWorkflowConnections } from './ui/overlays/proximity/ProximityWorkflowConnections.js';
 import { NativeSubgraphBoundaryResolver } from './ui/cube/graph/NativeSubgraphBoundaryResolver.js';
@@ -46,7 +46,6 @@ import { CubeHostFeedback } from './ui/core/CubeHostFeedback.js';
 import { createSugarCubesDebugApi } from './ui/debug/SugarCubesDebugApi.js';
 import { ComfyWorkflowWorkspace } from './ui/surface/ComfyWorkflowWorkspace.js';
 import { createCubeStackCommands } from './ui/surface/stack/CubeStackCommands.js';
-import { FluentAppearanceHost } from './ui/surface/appearance/FluentAppearanceHost.js';
 import { ScrollSurfaceWheelHost } from './ui/surface/ScrollSurfaceWheelHost.js';
 import { ModelPickerHost } from './ui/model_library/ModelPickerHost.js';
 import { ComfyOutputThumbnailSource } from './ui/model_library/ComfyOutputThumbnailSource.js';
@@ -106,13 +105,21 @@ const hostFeedback = new CubeHostFeedback({
 const cubePreconfiguration = ui.workflowPreconfiguration;
 const workflowExecution = createComfyWorkflowExecutionRuntime({ app: appRef, api, logger });
 const cubeRuntimeLifecycle = new ComfyCubeRuntimeLifecycle(createCubeRuntime);
-/** Compose shared appearance without adding styling behavior to host registration. */
-const fluentAppearance = new FluentAppearanceHost({
+const { appearance: fluentAppearance, relations: workflowRelations } = createWorkflowFieldHost({
     app: appRef,
     document: documentRef ?? document,
-    reportError: (error) => {
+    seeds: workflowExecution.seeds,
+    sessions: workflowExecution.sessions,
+    getCardState: () => cubeRuntimeLifecycle.current()?.cardState ?? null,
+    getConnections: (graph) => proximityWorkflowConnections(overlayManager.proximity, graph),
+    logger,
+    reportAppearanceError: (error) => {
         logger.error('SugarCubes Fluent appearance failed', { error });
         pushToastMessage('error', 'Fluent theme unavailable', readErrorMessage(error));
+    },
+    reportRelationError: (error) => {
+        logger.error('SugarCubes workflow relations failed', { error });
+        pushToastMessage('error', 'Shared field unavailable', readErrorMessage(error));
     },
 });
 const cubePicker = createComfyCubePickerIntegration({
@@ -135,17 +142,6 @@ const cubeCatalogInvalidation = new CubeCatalogInvalidationCoordinator({
 });
 invalidateCubeCatalogs = () => cubeCatalogInvalidation.invalidate();
 const nativeBoundaryResolver = new NativeSubgraphBoundaryResolver(logger);
-const workflowRelations = new RelationHostLifecycle({
-    getCardState: () => cubeRuntimeLifecycle.current()?.cardState ?? null,
-    getConnections: (graph) => proximityWorkflowConnections(overlayManager.proximity, graph),
-    app: appRef,
-    document: documentRef ?? document,
-    logger,
-    reportError: (error) => {
-        logger.error('SugarCubes workflow relations failed', { error });
-        pushToastMessage('error', 'Shared field unavailable', readErrorMessage(error));
-    },
-});
 const promptQueueBridge = createCubeHostExecution({
     api,
     observer: workflowExecution.submissionObserver,
