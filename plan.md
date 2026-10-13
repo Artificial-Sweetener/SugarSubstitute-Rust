@@ -433,3 +433,13 @@ Acceptance observations, 2026-10-12:
 Captures and verification logs are under `D:\devartifacts\SugarCubes\output-canvas`; current captures include `plain-batch-nodes1.jpg`, `plain-batch-nodes2-masonry.jpg`, `progressive-batch-nodes2-masonry.jpg`, `comparison-nodes2-masonry.jpg`, and `plain-tabs-nodes2-graph.jpg`.
 
 The completed snapshot passes `npm run test:changed`, `npm run architecture`, `npm run check`, `npm run architecture:staged`, `npm run test:commit`, and `npm run check:commit`. The full product frontend suite passes 450 suites/2,634 tests, alongside the policy-selected Python and focused proof groups. The source and generated deployment tree are synchronized.
+
+## 19. Scope inspection to displayed Runs
+
+1. [x] Reproduce the outgoing-image camera carryover with a composed surface regression test before changing camera ownership.
+2. [x] Carry each decoded image's Run identity through resource admission and presentation. Reset shared and independent inspection when newer Run pixels first display, retaining outgoing inspection during decode and preserving adjustments through same-Run replacements. Keep this policy in the renderer-independent inspection owner.
+3. [x] Cover same-slot/same-size replacement, comparison handoff, independent cameras, attachment suspension, stale Run identity, workflow generation replacement and isolation between views.
+4. [x] Verify real Run clicks in the built-in Chromium with Nodes 2.0/masonry and Nodes 1.0/graph: a previous 3840×2160 image at scale 1 gives way to a centered 512×288 preview at fit scale 1. In Nodes 1.0, keyboard zoom to scale 1.25 persists through subsequent preview frames. The acceptance workflow uses its existing embedded definitions; the recovered user workflow remains untouched.
+5. [x] Run the changed-path, full quality and staged commit gates, then commit this correction.
+
+The Run captures `fresh-run-fit-chromium.jpg` and `fresh-run-adjustment-nodes1.jpg` live under `D:\devartifacts\SugarCubes\output-canvas`. The owned test tab is closed and Nodes 2.0 is restored. The correction passes `npm run test:changed`, `npm run architecture`, `npm run check`, `npm run architecture:staged`, `npm run test:commit`, and `npm run check:commit`; the complete frontend suite passes 450 suites/2,637 tests and the product Python suite passes 1,332 tests.

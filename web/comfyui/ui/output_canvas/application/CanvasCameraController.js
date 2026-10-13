@@ -40,11 +40,12 @@ export class CanvasCameraController {
         const camera = this.#transition.read();
         return this.#target && camera ? Object.freeze({ ...this.#target, camera }) : null;
     }
-    /** Restore a selected slot or project settled resize/density against its actual decoded image. */
-    show(selection, geometry) {
+    /** Fit new-Run pixels; restore same-Run inspection against settled decoded geometry. */
+    show(selection, geometry, runOrder) {
         if (this.#disposed)
             return;
-        const previous = this.read();
+        const freshRun = this.options.inspections.presentRun(this.options.view, runOrder);
+        const previous = freshRun ? null : this.read();
         const sameSlot = previous?.selection.sourceId === selection.sourceId &&
             previous.selection.batchIndex === selection.batchIndex;
         const sameImage = previous?.geometry.image.width === geometry.image.width &&

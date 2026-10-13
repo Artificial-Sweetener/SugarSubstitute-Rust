@@ -31,6 +31,7 @@ function frame(key: string, width = 3840, height = 2160): CanvasImageFrame<HTMLI
   handle.draggable = false;
   return {
     key,
+    runOrder: 1,
     selection: { sourceId: outputSourceId(key), batchIndex: 0 },
     preview: false,
     dimensions: { width, height },

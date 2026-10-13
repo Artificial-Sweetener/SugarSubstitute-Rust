@@ -56,21 +56,52 @@ function fixture(reduced = false) {
 }
 
 describe('canvas camera attachment orchestration', () => {
+  test('resets shared and independent inspection once per displayed Run without carrying a comparison camera', () => {
+    const f = fixture(true);
+    const a = f.slots[0]!;
+    const b = f.slots[1]!;
+    f.camera.show(a, f.geometry, 1);
+    f.camera.native();
+    f.camera.link(false);
+    f.camera.show(b, f.geometry, 1);
+    f.camera.native();
+    f.camera.comparison(true);
+    f.camera.show(a, f.geometry, 2);
+    expect(f.camera.read()?.camera.mode).toBe('fit');
+    f.camera.comparison(false);
+    f.camera.show(b, f.geometry, 2);
+    expect(f.camera.read()?.camera.mode).toBe('fit');
+    f.camera.native();
+    f.camera.pan({ x: -40, y: -20 });
+    const adjusted = f.camera.read()!.camera;
+    f.camera.show(b, f.geometry, 2);
+    expect(f.camera.read()?.camera).toEqual(adjusted);
+    f.camera.suspend();
+    f.camera.show(b, f.geometry, 2);
+    expect(f.camera.read()?.camera).toMatchObject({ mode: adjusted.mode, scale: adjusted.scale });
+    expect(f.camera.read()?.camera.x).toBeCloseTo(adjusted.x);
+    expect(f.camera.read()?.camera.y).toBeCloseTo(adjusted.y);
+    f.camera.link(true);
+    f.camera.show(b, f.geometry, 3);
+    expect(f.camera.read()?.camera.mode).toBe('fit');
+    f.camera.dispose();
+    f.inspections.dispose();
+  });
   test('retains the common comparison region when solo cameras are unlinked', () => {
     const f = fixture(true);
-    f.camera.show(f.slots[0]!, f.geometry);
+    f.camera.show(f.slots[0]!, f.geometry, 1);
     f.camera.link(false);
     f.camera.native();
     f.camera.pan({ x: -40, y: -20 });
     f.camera.comparison(true);
     const smaller = canvasCameraGeometry({ width: 1920, height: 1080 }, f.geometry.viewport, 1)!;
-    f.camera.show(f.slots[1]!, smaller);
+    f.camera.show(f.slots[1]!, smaller, 1);
     expect(f.camera.read()?.camera.scale).toBe(2);
     expect(f.camera.read()?.camera.mode).toBe('custom');
     f.camera.comparison(false);
-    f.camera.show(f.slots[2]!, f.geometry);
+    f.camera.show(f.slots[2]!, f.geometry, 1);
     expect(f.camera.read()?.camera.mode).toBe('fit');
-    f.camera.show(f.slots[0]!, f.geometry);
+    f.camera.show(f.slots[0]!, f.geometry, 1);
     expect(f.camera.read()?.camera.scale).toBe(1);
     f.camera.dispose();
     expect(f.clock.pending).toBe(0);
@@ -79,7 +110,7 @@ describe('canvas camera attachment orchestration', () => {
     const f = fixture();
     const slot = f.slots[0]!;
     expect(f.camera.fit()).toBe(false);
-    f.camera.show(slot, f.geometry);
+    f.camera.show(slot, f.geometry, 1);
     expect(f.views.read(f.view).follow).toBe('auto');
     expect(f.camera.native()).toBe(true);
     expect(f.clock.pending).toBe(1);
@@ -88,7 +119,7 @@ describe('canvas camera attachment orchestration', () => {
     expect(f.views.read(f.view).follow).toBe('auto');
     f.camera.pan({ x: -30, y: -20 });
     const count = f.shown.length;
-    for (let frame = 0; frame < 100; frame++) f.camera.show(slot, f.geometry);
+    for (let frame = 0; frame < 100; frame++) f.camera.show(slot, f.geometry, 1);
     expect(f.shown).toHaveLength(count);
     expect(f.clock.pending).toBe(0);
     f.camera.dispose();
@@ -98,13 +129,13 @@ describe('canvas camera attachment orchestration', () => {
   test('preserves native scale for display-density resize but scene inspection for image replacement', () => {
     const f = fixture(true);
     const slot = f.slots[0]!;
-    f.camera.show(slot, f.geometry);
+    f.camera.show(slot, f.geometry, 1);
     f.camera.native();
     const resized = canvasCameraGeometry(f.geometry.image, { width: 900, height: 650 }, 2)!;
-    f.camera.show(slot, resized);
+    f.camera.show(slot, resized, 1);
     expect(f.camera.read()?.camera).toMatchObject({ scale: 0.5, mode: 'native' });
     const replaced = canvasCameraGeometry({ width: 7680, height: 4320 }, resized.viewport, 2)!;
-    f.camera.show(slot, replaced);
+    f.camera.show(slot, replaced, 1);
     expect(f.camera.read()?.camera).toMatchObject({ scale: 0.25, mode: 'custom' });
     f.camera.dispose();
     f.inspections.dispose();
@@ -114,18 +145,18 @@ describe('canvas camera attachment orchestration', () => {
     const f = fixture(true);
     const a = f.slots[0]!;
     const b = f.slots[1]!;
-    f.camera.show(a, f.geometry);
+    f.camera.show(a, f.geometry, 1);
     f.camera.native();
     f.camera.link(false);
-    f.camera.show(b, f.geometry);
+    f.camera.show(b, f.geometry, 1);
     expect(f.camera.read()?.camera.mode).toBe('fit');
     f.camera.native();
     f.camera.zoom(2);
     expect(f.camera.read()?.camera.scale).toBe(2);
-    f.camera.show(a, f.geometry);
+    f.camera.show(a, f.geometry, 1);
     expect(f.camera.read()?.camera.scale).toBe(1);
     f.camera.link(true);
-    f.camera.show(b, f.geometry);
+    f.camera.show(b, f.geometry, 1);
     expect(f.camera.read()?.camera.scale).toBe(1);
     f.camera.link(false);
     expect(f.camera.read()?.camera.scale).toBe(2);
@@ -136,7 +167,7 @@ describe('canvas camera attachment orchestration', () => {
   test('retires suspended tween frames and restores the displayed origin on reactivation', () => {
     const f = fixture();
     const slot = f.slots[0]!;
-    f.camera.show(slot, f.geometry);
+    f.camera.show(slot, f.geometry, 1);
     f.camera.native();
     f.clock.advance(10);
     const displayed = f.camera.read()!;
@@ -145,12 +176,12 @@ describe('canvas camera attachment orchestration', () => {
     expect(f.camera.read()).toBeNull();
     expect(f.clock.pending).toBe(0);
     expect(f.camera.pan({ x: 10, y: 10 })).toBe(false);
-    f.camera.show(slot, f.geometry);
+    f.camera.show(slot, f.geometry, 1);
     expect(f.camera.read()?.camera.scale).toBeCloseTo(displayed.camera.scale);
     f.camera.dispose();
     const count = f.shown.length;
     f.clock.advance(100);
-    f.camera.show(slot, f.geometry);
+    f.camera.show(slot, f.geometry, 1);
     expect(f.camera.zoom(2)).toBe(false);
     f.camera.dispose();
     expect(f.shown).toHaveLength(count);
@@ -161,7 +192,7 @@ describe('canvas camera attachment orchestration', () => {
   test('runs continuous pinch/pan without inertia and routes double click through the same camera', () => {
     const f = fixture(true);
     const slot = f.slots[0]!;
-    f.camera.show(slot, f.geometry);
+    f.camera.show(slot, f.geometry, 1);
     f.camera.doubleClick({ x: 400, y: 300 });
     const before = f.camera.read()!.camera;
     f.camera.pinch(1, { x: 400, y: 300 }, { x: -20, y: 10 });

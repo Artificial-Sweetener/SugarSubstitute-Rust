@@ -21,6 +21,8 @@ import type { CanvasSelection } from './CanvasViewState.js';
 
 export interface CanvasImageInput<Payload> {
   readonly key: string;
+  /** Qualify inspection to the Run that owns these pixels, including outgoing replacement frames. */
+  readonly runOrder: number;
   /** Correlate the actual displayed handle with its logical inspection slot during replacement. */
   readonly selection: CanvasSelection;
   readonly lane: string;
@@ -51,6 +53,7 @@ export interface CanvasImageLoadPort<Payload, Handle> {
 
 export interface CanvasImageFrame<Handle> {
   readonly key: string;
+  readonly runOrder: number;
   readonly selection: CanvasSelection;
   readonly preview: boolean;
   readonly handle: Handle;

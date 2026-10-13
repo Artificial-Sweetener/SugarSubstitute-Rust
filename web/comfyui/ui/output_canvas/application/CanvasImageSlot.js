@@ -99,6 +99,7 @@ export class CanvasImageSlot {
 export function canvasImageIntent(input) {
     return Object.freeze({
         key: input.key,
+        runOrder: input.runOrder,
         selection: Object.freeze({ ...input.selection }),
         lane: input.lane,
         fallbackKey: input.fallbackKey,

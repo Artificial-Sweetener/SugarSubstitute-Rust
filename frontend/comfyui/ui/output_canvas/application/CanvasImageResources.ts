@@ -318,6 +318,7 @@ export class CanvasImageResources<Payload, Handle> {
         reservation,
         frame: Object.freeze({
           key: requested.key,
+          runOrder: requested.runOrder,
           selection: requested.selection,
           preview: requested.preview,
           handle: image.handle,

@@ -130,6 +130,33 @@ describe('composed browser canvas attachment', () => {
     jest.restoreAllMocks();
   });
 
+  test('fits the first decoded image of a fresh Run while retaining inspection through same-Run replacements', async () => {
+    const f = fixture();
+    const surface = new BrowserCanvasAttachment(f.root, f.options);
+    await f.loader.ready(0);
+    await f.command(surface, { type: 'native' });
+    f.frames.advance(45);
+    f.clock.advance(100);
+    expect(surface.port.read().zoom.mode).toBe('native');
+    const sources = f.catalog.entries.map((entry) => entry.source);
+    f.replace(canvasCatalogFixture(2, 0, sources));
+    surface.refresh();
+    f.clock.advance(100);
+    expect(surface.port.read().zoom.mode).toBe('native');
+    await f.loader.ready(1);
+    f.clock.advance(100);
+    expect(surface.port.read().zoom.mode).toBe('fit');
+    await f.command(surface, { type: 'native' });
+    f.frames.advance(45);
+    f.replace(canvasCatalogFixture(2, 0, sources, 'canvas', 3));
+    surface.refresh();
+    await f.loader.ready(2);
+    f.clock.advance(100);
+    expect(surface.port.read().zoom.mode).toBe('native');
+    surface.dispose();
+    expect(f.errors).toEqual([]);
+  });
+
   test('mounts full-fidelity admitted handles and controls with literal source labels and actual zoom status', async () => {
     const f = fixture();
     const surface = new BrowserCanvasAttachment(f.root, f.options);
