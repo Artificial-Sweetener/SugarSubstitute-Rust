@@ -35,9 +35,17 @@ import type {
 } from '../application/CanvasImageAllowances.js';
 import type { BrowserCanvasImagePayload } from './BrowserCanvasImageLoader.js';
 import type { CanvasOverviewCell } from '../application/CanvasOverviewWindow.js';
+import {
+  CanvasImagePreparation,
+  type CanvasImagePreparationLease,
+} from '../application/CanvasImagePreparation.js';
+import { canvasSelectedItem } from '../application/CanvasContentSelection.js';
+import type { CanvasCatalogSnapshot } from '../domain/CanvasCatalog.js';
+import type { CanvasSelection } from '../domain/CanvasViewState.js';
 
 /** Keep ephemeral byte delivery separate from catalog updates and final-file loading. */
 export class BrowserCanvasResources {
+  readonly #preparation: CanvasImagePreparation<BrowserCanvasImagePayload, HTMLImageElement>;
   #plan: CanvasDisplayPlan | null = null;
   #budgetScope = '';
   #previewStarted = false;
@@ -53,7 +61,43 @@ export class BrowserCanvasResources {
     private readonly budget: CanvasImageBudget,
     private readonly allowances: CanvasImageAllowances,
     private readonly url: (item: WorkflowOutputItem) => string,
-  ) {}
+  ) {
+    this.#preparation = new CanvasImagePreparation(resources);
+  }
+
+  /** Warm only the requested source's visible finals under the current shared budget. */
+  prepareSource(
+    selection: CanvasSelection,
+    catalog: CanvasCatalogSnapshot,
+    cells: readonly CanvasOverviewCell[] | null,
+  ): CanvasImagePreparationLease | null {
+    const plan = this.#plan;
+    if (!plan || cells?.some((cell) => cell.preview)) return null;
+    const targets = cells ?? [
+      { key: 'primary', selection, item: canvasSelectedItem(catalog, selection) },
+    ];
+    const images: CanvasVisibleImage<BrowserCanvasImagePayload>[] = [];
+    for (const target of targets) {
+      const input = this.#final({
+        selection: target.selection,
+        item: target.item,
+        sourcePresent: plan.availableSources.includes(target.selection.sourceId),
+      });
+      if (!input) return null;
+      images.push({ slot: target.key, input: cells ? { ...input, role: 'thumbnail' } : input });
+    }
+    return images.length ? this.#preparation.prepare(images) : null;
+  }
+
+  /** Relinquish pending source navigation when another intent supersedes it. */
+  cancelPreparation(): void {
+    this.#preparation.cancel();
+  }
+
+  /** Report staging independently of the currently displayed frame's ready status. */
+  get preparing(): boolean {
+    return this.#preparation.pending;
+  }
 
   /** Replace resource interests only at a logical display change, preserving same-run pending previews. */
   reconcile(plan: CanvasDisplayPlan, retry = false): void {
@@ -69,7 +113,7 @@ export class BrowserCanvasResources {
     this.#plan = plan;
     if (!this.#active) return;
     this.#refreshNeeded = false;
-    if (replaced) this.resources.update([]);
+    if (replaced) this.#preparation.update([]);
     this.#configureBudget();
     this.resources.retirePreviewsExcept(plan.preview ? canvasPreviewLane(plan.preview) : null);
     if (!changed && !retry) return;
@@ -91,7 +135,7 @@ export class BrowserCanvasResources {
     for (const snapshot of this.resources.read())
       if (snapshot.frame && !plan.availableSources.includes(snapshot.frame.selection.sourceId))
         this.resources.releaseSlot(snapshot.slot);
-    this.resources.update(
+    this.#preparation.update(
       images,
       retry,
       plan.preview && plan.primary
@@ -125,7 +169,7 @@ export class BrowserCanvasResources {
     }
     this.#overviewImages = images;
     const previewCell = cells.find((cell) => cell.preview);
-    this.resources.update(
+    this.#preparation.update(
       images,
       false,
       plan.preview && previewCell
@@ -176,7 +220,7 @@ export class BrowserCanvasResources {
     const target = plan.view.mode === 'overview' ? this.#overviewPreviewSlot : 'primary';
     if (!target) return;
     if (!this.resources.offer(target, input))
-      this.resources.update([
+      this.#preparation.update([
         ...this.#overviewImages.filter((image) => image.slot !== target),
         { slot: target, input },
       ]);
@@ -211,6 +255,7 @@ export class BrowserCanvasResources {
     if (this.#disposed || this.#active === active) return;
     this.#active = active;
     this.#refreshNeeded = true;
+    if (!active) this.#preparation.cancel();
     this.resources.active(active);
     if (active && this.#plan) this.reconcile(this.#plan);
   }
@@ -225,6 +270,7 @@ export class BrowserCanvasResources {
     if (this.#disposed) return;
     this.#disposed = true;
     this.#plan = null;
+    this.#preparation.dispose();
     this.resources.dispose();
   }
 

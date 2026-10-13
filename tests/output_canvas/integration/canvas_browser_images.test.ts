@@ -122,6 +122,21 @@ describe('browser image presentation', () => {
       geometry,
       camera: centeredCanvasCamera(geometry),
     });
+    expect(a.handle.style.transform).not.toBe('');
+    expect(b.handle.style.transform).not.toBe('');
+    expect(clock.pending).toBe(0);
+    first.camera({
+      previewLane: null,
+      selection: a.selection,
+      geometry,
+      camera: { ...centeredCanvasCamera(geometry), x: 20 },
+    });
+    second.camera({
+      previewLane: null,
+      selection: b.selection,
+      geometry,
+      camera: { ...centeredCanvasCamera(geometry), x: 20 },
+    });
     first.camera(null);
     expect(clock.pending).toBe(1);
     expect(first.contains({ x: 100, y: 100 })).toBe(false);

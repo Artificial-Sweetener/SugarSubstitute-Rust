@@ -98,6 +98,19 @@ export class BrowserCanvasOverview {
     if (this.#active && !this.#disposed) this.#render(true);
   }
 
+  /** Project a pending source's visible cells without replacing the current gallery. */
+  cells(catalog: CanvasCatalogSnapshot): readonly CanvasOverviewCell[] {
+    const bounds = this.element.getBoundingClientRect();
+    return canvasOverviewWindow(
+      catalog,
+      bounds.width,
+      bounds.height,
+      this.element.scrollTop,
+      catalog.entries[0]?.items[0]?.dimensions ?? this.#reference,
+      this.#columns,
+    ).cells;
+  }
+
   /** Attach resource-owned handles without copying pixels, URLs, or decode authority. */
   images(images: readonly CanvasImageSlotSnapshot<HTMLImageElement>[]): void {
     this.#images = images;

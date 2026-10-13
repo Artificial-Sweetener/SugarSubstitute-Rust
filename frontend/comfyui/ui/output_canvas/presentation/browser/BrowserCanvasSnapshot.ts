@@ -37,6 +37,7 @@ export function browserCanvasSnapshot(
   connected: boolean,
   previewStarted: boolean,
   sources: readonly CanvasSourceSummary[],
+  preparing: boolean,
 ): CanvasViewSnapshot {
   const primary = images.find((slot) => slot.slot === 'primary');
   const secondary = images.find((slot) => slot.slot === 'secondary');
@@ -80,6 +81,7 @@ export function browserCanvasSnapshot(
     secondaryResource = status('unavailable', 'Open B in the host viewer.');
   if (!frame && b) resource = { ...resource, message: `${resource.message} Showing B.` };
   if (plan.view.mode === 'overview') resource = status('empty', '');
+  if (preparing) resource = status('loading', 'Loading workflow output…');
   return Object.freeze({
     schema: 1,
     address,

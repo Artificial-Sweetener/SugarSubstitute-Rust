@@ -25,6 +25,7 @@ import { CanvasImageAllowances } from '../../../frontend/comfyui/ui/output_canva
 import { windowId } from '../../../frontend/comfyui/ui/output_canvas/domain/CanvasIdentity.js';
 import type { CanvasCommand } from '../../../frontend/comfyui/ui/output_canvas/domain/CanvasViewPort.js';
 import type { CanvasCatalogSnapshot } from '../../../frontend/comfyui/ui/output_canvas/domain/CanvasCatalog.js';
+import type { WorkflowOutputItem } from '../../../frontend/comfyui/ui/execution/domain/WorkflowOutput.js';
 import { canvasCatalogFixture } from '../support/CanvasCatalogFixture.js';
 import { CanvasFrameFixture } from '../support/CanvasFrameFixture.js';
 import { BrowserCanvasPlatformFixture } from '../support/BrowserCanvasPlatformFixture.js';
@@ -128,6 +129,119 @@ describe('composed browser canvas attachment', () => {
   afterEach(() => {
     document.body.replaceChildren();
     jest.restoreAllMocks();
+  });
+
+  test.each(['image', 'overview'] as const)(
+    'commits a prepared source and its %s pixels together without a blank intermediate presentation',
+    async (mode) => {
+      const f = fixture();
+      const catalog = {
+        ...f.catalog,
+        entries: f.catalog.entries.map((entry) => ({
+          ...entry,
+          items: [0, 1, 2].map(
+            (batchIndex): WorkflowOutputItem => ({
+              ...entry.items[0]!,
+              id: `${entry.items[0]!.id}:${batchIndex}`,
+              batchIndex,
+              dimensions: { width: 1080, height: 1512 },
+            }),
+          ),
+        })),
+      };
+      f.replace(catalog);
+      const first = catalog.entries[0]!,
+        second = catalog.entries[1]!;
+      f.views.update(f.view, (state) => ({
+        ...state,
+        mode,
+        selection: { sourceId: first.source.id, batchIndex: 1 },
+      }));
+      const surface = new BrowserCanvasAttachment(f.root, f.options);
+      const count = mode === 'overview' ? 3 : 1;
+      for (let index = 0; index < count; index++)
+        await f.loader.ready(index, { width: 1080, height: 1512 });
+      f.frames.advance(2);
+      f.clock.advance(100);
+      const oldImages = [...f.root.querySelectorAll('img')];
+      const pending = f.command(surface, {
+        type: 'select-source',
+        selection: { sourceId: second.source.id, batchIndex: 1 },
+      });
+      expect(f.views.read(f.view).selection?.sourceId).toBe(first.source.id);
+      expect([...f.root.querySelectorAll('img')]).toEqual(oldImages);
+      for (let index = 0; index < count; index++) {
+        if (index === count - 1) {
+          expect(f.views.read(f.view).selection?.sourceId).toBe(first.source.id);
+          expect([...f.root.querySelectorAll('img')]).toEqual(oldImages);
+        }
+        await f.loader.ready(count + index, { width: 1080, height: 1512 });
+      }
+      expect((await pending).status).toBe('applied');
+      f.frames.advance(2);
+      f.clock.advance(100);
+      expect(f.views.read(f.view).selection).toEqual({ sourceId: second.source.id, batchIndex: 1 });
+      expect(f.root.querySelectorAll('img')).toHaveLength(count);
+      expect([...f.root.querySelectorAll('img')].every((image) => !oldImages.includes(image))).toBe(
+        true,
+      );
+      expect(f.loader.requests).toHaveLength(count * 2);
+      surface.dispose();
+      expect(f.errors).toEqual([]);
+    },
+  );
+
+  test('a superseding camera command cancels source preparation and releases late decoded pixels', async () => {
+    const f = fixture(),
+      surface = new BrowserCanvasAttachment(f.root, f.options);
+    const old = await f.loader.ready(0);
+    f.frames.advance(2);
+    f.clock.advance(100);
+    const pending = f.command(surface, {
+      type: 'select-source',
+      selection: { sourceId: f.catalog.entries[1]!.source.id, batchIndex: 0 },
+    });
+    await f.command(surface, { type: 'fit' });
+    expect((await pending).status).toBe('stale');
+    const late = await f.loader.ready(1);
+    expect(late.isConnected).toBe(false);
+    expect(f.root.querySelector('img')).toBe(old);
+    expect(f.views.read(f.view).selection?.sourceId).toBe(f.catalog.entries[0]!.source.id);
+    surface.dispose();
+    expect(f.errors).toEqual([]);
+  });
+
+  test('target metadata supersession cannot commit prepared obsolete pixels', async () => {
+    const f = fixture(),
+      surface = new BrowserCanvasAttachment(f.root, f.options);
+    const old = await f.loader.ready(0);
+    f.frames.advance(2);
+    f.clock.advance(100);
+    const pending = f.command(surface, {
+      type: 'select-source',
+      selection: { sourceId: f.catalog.entries[1]!.source.id, batchIndex: 0 },
+    });
+    f.replace({
+      ...f.catalog,
+      entries: f.catalog.entries.map((entry, index) =>
+        index === 1
+          ? {
+              ...entry,
+              items: entry.items.map(
+                (item): WorkflowOutputItem => ({ ...item, id: 'result:revised-target' }),
+              ),
+            }
+          : entry,
+      ),
+    });
+    surface.refresh();
+    const obsolete = await f.loader.ready(1);
+    expect((await pending).status).toBe('unsupported');
+    expect(obsolete.isConnected).toBe(false);
+    expect(f.root.querySelector('img')).toBe(old);
+    expect(f.views.read(f.view).selection?.sourceId).toBe(f.catalog.entries[0]!.source.id);
+    surface.dispose();
+    expect(f.errors).toEqual([]);
   });
 
   test('opens a clicked overview preview as a fitted image route', async () => {

@@ -77,7 +77,11 @@ export class BrowserCanvasPort {
             return { status: 'stale', revision };
         this.#request = request.requestId;
         try {
-            const applied = this.options.apply(request.command);
+            const applied = await this.options.apply(request.command);
+            if (this.#disposed || !this.options.accepts())
+                return { status: 'cancelled', revision: this.#snapshot.revision };
+            if (request.requestId !== this.#request)
+                return { status: 'stale', revision: this.#snapshot.revision };
             return { status: applied ? 'applied' : 'unsupported', revision: this.#snapshot.revision };
         }
         catch (error) {

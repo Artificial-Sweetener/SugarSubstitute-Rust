@@ -31,6 +31,7 @@ import { BrowserCanvasGeometry } from './BrowserCanvasGeometry.js';
 import { BrowserCanvasPort } from './BrowserCanvasPort.js';
 import { BrowserCanvasResources } from './BrowserCanvasResources.js';
 import { applyBrowserCanvasCommand } from './BrowserCanvasActions.js';
+import { BrowserCanvasSourceNavigation } from './BrowserCanvasSourceNavigation.js';
 import { ensureBrowserCanvasStyles } from './BrowserCanvasStyles.js';
 /** Keep composition thin: navigation, cameras, admissions, input, and DOM each retain their own owner. */
 export class BrowserCanvasAttachment {
@@ -104,6 +105,12 @@ export class BrowserCanvasAttachment {
                     this.#status.changed();
             },
         });
+        const sources = new BrowserCanvasSourceNavigation({
+            resources: this.#browserResources,
+            selection: options.selection,
+            read: () => !this.#disposed && options.accepts() ? { plan: this.#plan, catalog: this.#catalog } : null,
+            cells: (catalog) => this.#overview.cells(catalog),
+        });
         this.port = new BrowserCanvasPort(this.#snapshot(), {
             origin: document.location.origin,
             capabilities: {
@@ -136,6 +143,7 @@ export class BrowserCanvasAttachment {
                 camera: this.#camera,
                 resources: this.#browserResources,
                 selection: options.selection,
+                sources,
                 snapshot: command.type === 'comparison' ? this.#snapshot() : this.port.read(),
                 open: options.open,
             }),
@@ -354,6 +362,6 @@ export class BrowserCanvasAttachment {
     }
     /** Report actual camera/fidelity rather than the incoming selection's unshown dimensions. */
     #snapshot() {
-        return browserCanvasSnapshot(this.options.address, this.#plan, this.#catalog, this.#browserResources.resources.read(), this.#camera.read(), this.options.connected(), this.#browserResources.previewStarted, this.#sources);
+        return browserCanvasSnapshot(this.options.address, this.#plan, this.#catalog, this.#browserResources.resources.read(), this.#camera.read(), this.options.connected(), this.#browserResources.previewStarted, this.#sources, this.#browserResources.preparing);
     }
 }

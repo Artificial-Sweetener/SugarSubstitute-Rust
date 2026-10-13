@@ -53,6 +53,7 @@ import { BrowserCanvasPort } from './BrowserCanvasPort.js';
 import { BrowserCanvasResources } from './BrowserCanvasResources.js';
 import type { BrowserCanvasImagePayload } from './BrowserCanvasImageLoader.js';
 import { applyBrowserCanvasCommand } from './BrowserCanvasActions.js';
+import { BrowserCanvasSourceNavigation } from './BrowserCanvasSourceNavigation.js';
 import { ensureBrowserCanvasStyles } from './BrowserCanvasStyles.js';
 
 export interface BrowserCanvasAttachmentOptions {
@@ -167,6 +168,13 @@ export class BrowserCanvasAttachment {
         if (this.#ready) this.#status.changed();
       },
     });
+    const sources = new BrowserCanvasSourceNavigation({
+      resources: this.#browserResources,
+      selection: options.selection,
+      read: () =>
+        !this.#disposed && options.accepts() ? { plan: this.#plan, catalog: this.#catalog } : null,
+      cells: (catalog) => this.#overview.cells(catalog),
+    });
     this.port = new BrowserCanvasPort(this.#snapshot(), {
       origin: document.location.origin,
       capabilities: {
@@ -200,6 +208,7 @@ export class BrowserCanvasAttachment {
           camera: this.#camera,
           resources: this.#browserResources,
           selection: options.selection,
+          sources,
           snapshot: command.type === 'comparison' ? this.#snapshot() : this.port.read(),
           open: options.open,
         }),
@@ -447,6 +456,7 @@ export class BrowserCanvasAttachment {
       this.options.connected(),
       this.#browserResources.previewStarted,
       this.#sources,
+      this.#browserResources.preparing,
     );
   }
 }

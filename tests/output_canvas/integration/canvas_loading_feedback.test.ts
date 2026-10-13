@@ -40,6 +40,7 @@ test('renders an unselected canvas without an empty-state status bar', () => {
     true,
     false,
     [],
+    false,
   );
   const root = document.createElement('section');
   document.body.append(root);

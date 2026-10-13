@@ -22,6 +22,7 @@ import type { CanvasSelectionController } from '../application/CanvasSelectionCo
 import type { CanvasCatalogSnapshot } from '../domain/CanvasCatalog.js';
 import type { CanvasCommand, CanvasViewSnapshot } from '../domain/CanvasViewPort.js';
 import type { BrowserCanvasResources } from './BrowserCanvasResources.js';
+import type { BrowserCanvasSourceNavigation } from './BrowserCanvasSourceNavigation.js';
 
 export interface BrowserCanvasActionOwners {
   readonly plan: CanvasDisplayPlan;
@@ -30,16 +31,19 @@ export interface BrowserCanvasActionOwners {
   readonly resources: BrowserCanvasResources;
   readonly selection: CanvasSelectionController;
   readonly snapshot: CanvasViewSnapshot;
+  readonly sources: BrowserCanvasSourceNavigation;
   /** Open the exact selected final through the host adapter. */
   open(item: WorkflowOutputItem): void;
 }
 
 /** Dispatch one operation without adding image, navigation, or camera policy to composition. */
-export function applyBrowserCanvasCommand(
+export async function applyBrowserCanvasCommand(
   command: CanvasCommand,
   owners: BrowserCanvasActionOwners,
-): boolean {
+): Promise<boolean> {
   const { plan, camera, resources, snapshot } = owners;
+  if (command.type === 'select-source') return await owners.sources.select(command.selection);
+  owners.sources.cancel();
   switch (command.type) {
     case 'fit':
       return camera.fit();
