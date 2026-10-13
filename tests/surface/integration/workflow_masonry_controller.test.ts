@@ -37,6 +37,63 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
+test('restores workflow scroll and rebinds controls without replaying entry motion', async () => {
+  const setup = fixture();
+  const transition = jest.spyOn(WorkflowMasonryTransition.prototype, 'run');
+  await setup.controller.toggle();
+  const initial = document.querySelector<HTMLElement>('.sugarcubes-workflow-masonry');
+  if (!initial) throw new Error('Masonry fixture is missing');
+  initial.scrollTop = 240;
+  transition.mockClear();
+  await setup.controller.setSuspended('configure', true);
+  expect(setup.controller.presenting).toBe(true);
+  expect(setup.container.dataset.sugarcubesMasonry).toBe('true');
+  setup.node.widgets![0]!.value = 'restored';
+  await setup.controller.setSuspended('configure', false);
+  expect(document.querySelector('.sugarcubes-workflow-masonry')).not.toBe(initial);
+  expect(document.querySelector<HTMLElement>('.sugarcubes-workflow-masonry')?.scrollTop).toBe(240);
+  expect(
+    document.querySelector<HTMLInputElement>('.sugarcubes-workflow-masonry input')?.value,
+  ).toBe('restored');
+  expect(transition).toHaveBeenCalledTimes(1);
+  expect(transition).toHaveBeenLastCalledWith(expect.anything(), true, true);
+  expect(
+    document
+      .querySelector('.sugarcubes-workflow-masonry')
+      ?.hasAttribute('data-sc-masonry-preparing'),
+  ).toBe(false);
+  setup.controller.leaveImmediately();
+  expect(setup.container.dataset.sugarcubesMasonry).toBeUndefined();
+});
+
+test('keeps scroll positions scoped to workflow identities and releases suppression for app mode', async () => {
+  const setup = fixture();
+  const first = {};
+  const second = {};
+  setup.setScope(first);
+  await setup.controller.toggle();
+  const surface = (): HTMLElement => {
+    const element = document.querySelector<HTMLElement>('.sugarcubes-workflow-masonry');
+    if (!element) throw new Error('Masonry fixture is missing');
+    return element;
+  };
+  surface().scrollTop = 240;
+  await setup.controller.setSuspended('configure', true);
+  setup.setScope(second);
+  await setup.controller.setSuspended('configure', false);
+  expect(surface().scrollTop).toBe(0);
+  surface().scrollTop = 90;
+  await setup.controller.setSuspended('configure', true);
+  setup.setScope(first);
+  await setup.controller.setSuspended('configure', false);
+  expect(surface().scrollTop).toBe(240);
+  await setup.controller.setSuspended('configure', true);
+  await setup.controller.setSuspended('app', true);
+  expect(setup.controller.presenting).toBe(false);
+  expect(setup.container.dataset.sugarcubesMasonry).toBeUndefined();
+  setup.controller.leaveImmediately();
+});
+
 /** Retain requested masonry and recover automatically when native assets become reachable. */
 test('recovers a transient native asset failure without an unavailable toast or second toggle', async () => {
   const setup = fixture();
@@ -612,6 +669,7 @@ function fixture(
     return 0;
   });
   const container = document.createElement('div');
+  let scope: object = container;
   document.body.append(container);
   const node: ComfyNode = {
     id: 1,
@@ -661,6 +719,7 @@ function fixture(
   const controller = new WorkflowMasonryController({
     document,
     getContainer: () => container,
+    getScope: () => scope,
     isNodes2: () => nodes2,
     getSections,
     getRenderer,
@@ -686,6 +745,9 @@ function fixture(
     getCardState: () => cardState,
     notifyRendererFallback,
     reportError,
+    setScope: (value: object) => {
+      scope = value;
+    },
     setNodes2: (value: boolean) => {
       nodes2 = value;
     },

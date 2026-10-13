@@ -41,6 +41,7 @@ export class NativeSubgraphChangeObserver {
   readonly #addListener: NativeMutation;
   readonly #previousRemove: NativeMutation;
   readonly #removeListener: NativeMutation;
+  readonly #deliver: () => void;
   #notificationQueued = false;
   readonly #changes: NativeGraphChange[] = [];
   #active = true;
@@ -55,17 +56,18 @@ export class NativeSubgraphChangeObserver {
       throw new TypeError('Comfy native subgraph topology methods are unavailable.');
     }
     this.#subgraph = subgraph;
+    this.#deliver = () => {
+      this.#notificationQueued = false;
+      const changes = Object.freeze(this.#changes.splice(0));
+      if (this.#active && changes.length) onChange(changes);
+    };
     const notify = (kind: NativeGraphChangeKind, info: unknown): void => {
       if (!this.#active || !accepts(kind)) return;
       if (!this.#changes.some((change) => change.kind === kind && change.info === info))
         this.#changes.push(Object.freeze({ kind, info }));
       if (this.#notificationQueued) return;
       this.#notificationQueued = true;
-      queueMicrotask(() => {
-        this.#notificationQueued = false;
-        const changes = Object.freeze(this.#changes.splice(0));
-        if (this.#active) onChange(changes);
-      });
+      queueMicrotask(this.#deliver);
     };
     this.#previous = typeof subgraph.onAfterChange === 'function' ? subgraph.onAfterChange : null;
     this.#listener = (graph, info): void => {
@@ -87,6 +89,11 @@ export class NativeSubgraphChangeObserver {
     subgraph.onAfterChange = this.#listener;
     subgraph.add = this.#addListener;
     subgraph.remove = this.#removeListener;
+  }
+
+  /** Deliver identified pending mutations before their native transaction commits. */
+  flush(): void {
+    this.#deliver();
   }
 
   /** Restore the callback only while this observer still owns the boundary. */

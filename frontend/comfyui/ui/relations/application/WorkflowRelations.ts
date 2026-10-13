@@ -55,6 +55,12 @@ export class WorkflowRelations {
   /** Bind one typed workflow adapter rather than accessing native graphs from policy. */
   constructor(private readonly port: RelationWorkflowPort) {}
 
+  /** Retire bindings and comparison state before the host replaces native node objects. */
+  invalidate(): void {
+    this.#snapshot = null;
+    this.#inventory = null;
+  }
+
   /** Discover on topology changes; reuse validated bindings for value-only edits. */
   reconcile(discover = true): RelationSnapshot {
     if (this.#reconciling && this.#snapshot) return this.#snapshot;

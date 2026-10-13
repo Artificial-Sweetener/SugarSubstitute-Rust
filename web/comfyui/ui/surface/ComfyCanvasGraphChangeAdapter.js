@@ -59,9 +59,11 @@ export class ComfyCanvasGraphChangeAdapter {
     }
     /** Preserve Comfy's receiver and notify only after a successful transition. */
     #setGraph(graph, args) {
+        const previous = this.#canvas.graph;
         const result = this.#originalSetGraph.call(this.#canvas, graph, ...args);
-        for (const listener of this.#listeners)
-            listener();
+        if (previous !== this.#canvas.graph)
+            for (const listener of this.#listeners)
+                listener();
         return result;
     }
 }

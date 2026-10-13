@@ -25,6 +25,7 @@ import { CanvasSessionCoordinator } from '../../../frontend/comfyui/ui/output_ca
 import { ComfyCanvasSourceInventory } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/ComfyCanvasSourceInventory.js';
 import { CanvasGraphFixture } from '../support/CanvasGraphFixture.js';
 import { buildCubeOutputExecutionId } from '../../../frontend/comfyui/ui/cube/execution/CubeOutputExecutionIdentity.js';
+import { decodeComfyMedia } from '../../../frontend/comfyui/ui/execution/infrastructure/ComfyMediaDecoder.js';
 
 /** Create colliding workflow IDs and distinct nested instance paths. */
 function fixture() {
@@ -77,6 +78,38 @@ function fixture() {
 }
 
 describe('canvas source and workflow lifetimes', () => {
+  test('preserves output batches and manual selection across native history restoration', () => {
+    const f = fixture();
+    const stop = f.sessions.subscribe((snapshot) => f.results.synchronize(snapshot.open));
+    const source = f.inventory.read(f.a)[0];
+    const media = decodeComfyMedia({
+      images: [
+        { filename: 'one.png', type: 'output' },
+        { filename: 'two.png', type: 'output' },
+      ],
+    });
+    if (!source || !media) throw new Error('Missing history canvas fixture');
+    f.results.restore(f.a, source, media.payload, 'before-undo');
+    const view = f.coordinator.active();
+    if (!view) throw new Error('Missing history canvas view');
+    f.selection.manual(view);
+    const before = f.views.read(view);
+    const outputs = f.results.read(f.a.sessionId)?.outputs;
+    for (let index = 0; index < 4; index++) {
+      const token = f.sessions.beginLoad('history');
+      expect(f.coordinator.active()).toBe(view);
+      expect(f.sessions.read().active).toBeNull();
+      f.sessions.completeLoad(token, true);
+      expect(f.coordinator.active()).toBe(view);
+      expect(f.results.read(f.a.sessionId)?.outputs).toBe(outputs);
+      expect(f.coordinator.catalog(view)?.entries[0]?.items).toHaveLength(2);
+      expect(f.views.read(view).selection).toEqual(before.selection);
+      expect(f.views.read(view).follow).toBe('manual');
+    }
+    stop();
+    f.adapter.dispose();
+    f.coordinator.dispose();
+  });
   test('presents single Cube outputs by source name and keeps exact binding identity through caption changes', async () => {
     const f = fixture();
     const node = f.graph._nodes[1]!;

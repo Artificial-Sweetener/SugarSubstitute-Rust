@@ -46,6 +46,11 @@ export class WorkflowMasonryHostLifecycle {
         this.#controller = new WorkflowMasonryController({
             document: options.document,
             getContainer: options.getContainer,
+            getScope: () => {
+                const manager = options.app?.extensionManager;
+                const store = isRecord(manager) && isRecord(manager.workflow) ? manager.workflow : null;
+                return store && isRecord(store.activeWorkflow) ? store.activeWorkflow : null;
+            },
             isNodes2: () => this.#isNodes2(),
             getSections: () => {
                 const graph = options.app?.canvas?.graph ?? options.app?.graph;
@@ -77,9 +82,9 @@ export class WorkflowMasonryHostLifecycle {
             notifyRendererFallback: options.notifyRendererFallback,
             reportError: options.reportError,
             onStateChange: () => this.#refreshButton(),
-            onSurfaceReady: (view) => {
+            onSurfaceReady: (view, preparing) => {
                 this.#search.ready(view);
-                this.#stack.ready(view, true);
+                this.#stack.ready(view, preparing);
             },
             onSurfaceTransition: (entering) => this.#stack.transition(entering),
             onSurfaceLeaving: () => {

@@ -60,3 +60,21 @@ test('does not publish a failed host graph transition', () => {
   expect(changed).not.toHaveBeenCalled();
   adapter.dispose();
 });
+
+test('delegates same-graph undo view restoration without publishing another navigation', () => {
+  const graph = { id: 'root' };
+  const canvas = {
+    graph,
+    setGraph: jest.fn(function (this: { graph: object }, value: object): void {
+      this.graph = value;
+    }),
+  };
+  const adapter = new ComfyCanvasGraphChangeAdapter(canvas);
+  const changed = jest.fn();
+  adapter.subscribe(changed);
+  canvas.setGraph(graph);
+  expect(changed).not.toHaveBeenCalled();
+  canvas.setGraph({ id: 'other' });
+  expect(changed).toHaveBeenCalledTimes(1);
+  adapter.dispose();
+});

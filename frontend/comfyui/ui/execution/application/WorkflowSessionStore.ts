@@ -33,6 +33,7 @@ export class WorkflowSessionStore {
   #revision = 0;
   #sequence = 0;
   #loadFailed = false;
+  readonly #replaced = new Set<WorkflowSessionId>();
 
   /** Read a coherent immutable session snapshot without retaining host objects. */
   read(): WorkflowSessionSnapshot {
@@ -42,6 +43,18 @@ export class WorkflowSessionStore {
       active: this.#ready && this.#selected ? (this.#sessions.get(this.#selected) ?? null) : null,
       loading: this.#pending.size > 0,
     });
+  }
+
+  /** Retain qualified presentation during same-workflow history while execution attribution is paused. */
+  presentation(): WorkflowSessionContext | null {
+    if (!this.#selected || this.#loadFailed) return null;
+    const retainingHistory =
+      this.#pending.size > 0 &&
+      this.#replaced.size === 0 &&
+      [...this.#pending.values()].every(
+        (token) => token.kind === 'history' && token.previousSessionId === this.#selected,
+      );
+    return this.#ready || retainingHistory ? (this.#sessions.get(this.#selected) ?? null) : null;
   }
 
   /** Synchronize explicit open bindings and return closed identities for adapter cleanup. */
@@ -73,9 +86,16 @@ export class WorkflowSessionStore {
   }
 
   /** Suspend association before the public graph-load operation reaches asynchronous hooks. */
-  beginLoad(): WorkflowLoadToken {
-    if (this.#pending.size === 0) this.#loadFailed = false;
-    const token = Object.freeze({ sequence: ++this.#sequence, previousSessionId: this.#selected });
+  beginLoad(kind: WorkflowLoadToken['kind'] = 'replace'): WorkflowLoadToken {
+    if (this.#pending.size === 0) {
+      this.#loadFailed = false;
+      this.#replaced.clear();
+    }
+    const token = Object.freeze({
+      sequence: ++this.#sequence,
+      previousSessionId: this.#selected,
+      kind,
+    });
     this.#pending.set(token.sequence, token);
     this.#ready = false;
     this.#publish();
@@ -87,9 +107,11 @@ export class WorkflowSessionStore {
     if (this.#pending.get(token.sequence) !== token) return;
     this.#pending.delete(token.sequence);
     this.#loadFailed ||= !succeeded;
+    if (token.kind === 'replace' && token.previousSessionId)
+      this.#replaced.add(token.previousSessionId);
     if (this.#pending.size === 0) {
       this.#ready = !this.#loadFailed;
-      if (this.#ready && this.#selected && this.#selected === token.previousSessionId) {
+      if (this.#ready && this.#selected && this.#replaced.has(this.#selected)) {
         const current = this.#sessions.get(this.#selected);
         if (current)
           this.#sessions.set(
@@ -117,6 +139,7 @@ export class WorkflowSessionStore {
   /** Cancel obsolete observation lifetimes without allowing delayed completions to revive them. */
   dispose(): void {
     this.#pending.clear();
+    this.#replaced.clear();
     this.#sessions.clear();
     this.#selected = null;
     this.#ready = false;

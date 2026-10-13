@@ -61,6 +61,8 @@ export class RelationHostLifecycle {
   #valuesPending = false;
   #active = false;
   #rendering = false;
+  #configuring = false;
+  #generation = 0;
   #unsubscribeChoices: (() => void) | null = null;
 
   /** Compose explicit collaborators against the root workflow rather than the navigated canvas graph. */
@@ -136,28 +138,54 @@ export class RelationHostLifecycle {
     this.#unsubscribeChoices = subscribeNativeNodeCardRefresh(this.options.document, [], () =>
       this.#schedule(),
     );
-    this.afterConfigureGraph();
+    this.#schedule();
   }
 
   /** Drop stale mounted views before another native workflow is configured. */
   beforeConfigureGraph(): void {
+    this.#configuring = true;
+    this.#generation++;
+    this.#pending = false;
+    this.#valuesPending = false;
     for (const observer of this.#graphs.values()) observer.dispose();
     this.#graphs.clear();
     this.#cards.dispose();
     this.#views.clear();
     this.#visibility.dispose();
     this.#seedModes.dispose();
+    this.relations.invalidate();
   }
 
   /** Discover loaded instances without relying on whether their native cards have mounted. */
   afterConfigureGraph(): void {
-    this.#schedule();
+    this.#configuring = false;
+    if (!this.#active) return;
+    try {
+      this.#observeGraphs();
+      this.#port.joinTransaction(() => this.relations.reconcile());
+    } catch (error: unknown) {
+      this.options.reportError(error);
+    }
   }
 
   /** Reconcile reordered membership inside the graph mutation owner's native history transaction. */
   reconcileCubeOrder(): void {
     this.#port.joinTransaction(() => this.relations.reconcile());
   }
+
+  /** Finish identified topology and value consequences inside the native mutation's history entry. */
+  readonly commitNativeTransaction = (): void => {
+    if (!this.#active || this.#configuring || this.#port.editing) return;
+    for (const observer of this.#graphs.values()) observer.flush();
+    const discover = this.#pending;
+    if (!discover && !this.#valuesPending) return;
+    this.#pending = false;
+    this.#valuesPending = false;
+    this.#port.joinTransaction(() => {
+      if (discover) this.#observeGraphs();
+      this.relations.reconcile(discover);
+    });
+  };
 
   /** Prepare either queue path through the same workflow relation owner. */
   prepare(payload: unknown): unknown {
@@ -179,16 +207,30 @@ export class RelationHostLifecycle {
 
   /** Coalesce native edits after their own promoted-widget forwarding callbacks. */
   readonly #nativeEdit = (event: Event): void => {
+    if (!this.#active || this.#configuring) return;
     if (!(event.target instanceof Element)) return;
     if (!event.target.closest('.lg-node,.dom-widget,[data-cube-node-id],[data-masonry-card]'))
       return;
     if (event.target.closest('[role="listbox"],.sc-field-relation,.sc-model-popup')) return;
+    this.#scheduleValues();
+  };
+
+  /** Coalesce native value delivery without rebuilding validated topology bindings. */
+  #scheduleValues(): void {
+    if (!this.#active || this.#configuring) return;
     if (this.#valuesPending) return;
     this.#valuesPending = true;
+    const generation = this.#generation;
     queueMicrotask(() =>
       queueMicrotask(() => {
+        if (
+          !this.#active ||
+          this.#configuring ||
+          generation !== this.#generation ||
+          !this.#valuesPending
+        )
+          return;
         this.#valuesPending = false;
-        if (!this.#active) return;
         try {
           this.relations.reconcile(false);
         } catch (error: unknown) {
@@ -196,7 +238,7 @@ export class RelationHostLifecycle {
         }
       }),
     );
-  };
+  }
 
   /** Observe topology changes independently from the currently active graph or masonry surface. */
   #observeGraphs(): void {
@@ -215,7 +257,10 @@ export class RelationHostLifecycle {
           graph,
           new NativeSubgraphChangeObserver(
             graph,
-            () => this.#schedule(),
+            (changes) => {
+              if (changes.some((change) => change.kind !== 'change')) this.#schedule();
+              else this.#scheduleValues();
+            },
             (kind) => kind !== 'change' || !this.#port.editing,
           ),
         );
@@ -230,11 +275,13 @@ export class RelationHostLifecycle {
 
   /** Reconcile once per native event batch and report failures through SugarCubes feedback. */
   #schedule(): void {
-    if (!this.#active || this.#pending) return;
+    if (!this.#active || this.#configuring || this.#pending) return;
     this.#pending = true;
+    const generation = this.#generation;
     queueMicrotask(() => {
+      if (!this.#active || this.#configuring || generation !== this.#generation || !this.#pending)
+        return;
       this.#pending = false;
-      if (!this.#active) return;
       try {
         this.#observeGraphs();
         this.relations.reconcile();
@@ -246,7 +293,7 @@ export class RelationHostLifecycle {
 
   /** Render from a completed application snapshot without re-entering candidate discovery. */
   #present(): void {
-    if (!this.#active) return;
+    if (!this.#active || this.#configuring) return;
     this.#rendering = true;
     try {
       const snapshot = this.relations.snapshot();

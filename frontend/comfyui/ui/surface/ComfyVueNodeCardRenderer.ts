@@ -37,6 +37,7 @@ import { NativeProjectedAdvancedInputs } from './NativeProjectedAdvancedInputs.j
 import { NativeProjectedNodeScrollBoundary } from './NativeProjectedNodeScrollBoundary.js';
 import { NativeProjectedNodeTitleBoundary } from './NativeProjectedNodeTitleBoundary.js';
 import { NATIVE_NODE_CARD_DISPOSE_EVENT } from './NativeNodeCardRenderer.js';
+import { projectNativeWidgetEdits } from './NativeProjectedWidgetEdits.js';
 import { subscribeNativeNodeCardRefresh } from './NativeNodeCardRefresh.js';
 import type {
   NativeNodeCardMount,
@@ -111,11 +112,13 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
         renderCard,
         options.allowCollapse,
       );
+      nodeData.widgets = projectNativeWidgetEdits(node, nodeData.widgets);
       for (const source of options.widgetSources ?? []) {
         const ownerData = createCubeFaceNodeData(
           this.#runtime.extractVueNodeData(source.node),
           source.node,
         );
+        ownerData.widgets = projectNativeWidgetEdits(source.node, ownerData.widgets);
         const widget = Array.isArray(ownerData.widgets)
           ? ownerData.widgets.find(
               (value: unknown) => isRecord(value) && value.name === source.name,

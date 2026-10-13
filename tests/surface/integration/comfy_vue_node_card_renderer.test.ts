@@ -23,6 +23,16 @@ import { refreshNativeNodeCards } from '../../../frontend/comfyui/ui/surface/Nat
 import { isRecord } from '../../../frontend/comfyui/ui/types/common.js';
 import { NativeWidgetPresentation } from '../../../frontend/comfyui/ui/surface/NativeWidgetPresentation.js';
 
+/** Exercise the native component's projected control rather than its internal callback identity. */
+function editProjectedWidget(props: unknown, value: unknown): void {
+  if (!isRecord(props) || !isRecord(props.nodeData) || !Array.isArray(props.nodeData.widgets))
+    throw new Error('Missing projected native widgets');
+  const widget: unknown = props.nodeData.widgets[0];
+  if (!isRecord(widget) || typeof widget.callback !== 'function')
+    throw new Error('Missing native edit callback');
+  widget.callback(value);
+}
+
 describe('ComfyVueNodeCardRenderer', () => {
   test.each([true, false])(
     'animates widget visibility with extracted native fields=%s, including unlink and override release',
@@ -255,7 +265,7 @@ describe('ComfyVueNodeCardRenderer', () => {
             {
               name: 'text',
               widgetId: 'cube:prompt',
-              callback,
+              callback: expect.any(Function),
               ...(subgraph
                 ? {
                     sugarcubesNativeWidgetOrigins: [
@@ -267,6 +277,9 @@ describe('ComfyVueNodeCardRenderer', () => {
           ],
         }),
       });
+      editProjectedWidget(h.mock.calls[0]?.[0], 'edited');
+      expect(owner.widgets?.[0]?.value).toBe('edited');
+      expect(callback).toHaveBeenCalledWith('edited');
       mount.unmount();
     },
   );
@@ -312,7 +325,7 @@ describe('ComfyVueNodeCardRenderer', () => {
     const rawWidget = { name: 'steps', type: 'number', value: 20 };
     const callback = jest.fn();
     const safeWidget = { name: 'steps', type: 'number', widgetId: 'graph:1:steps', callback };
-    const h = jest.fn(() => ({ type: 'node' }));
+    const h = jest.fn((_component: unknown, _props: unknown) => ({ type: 'node' }));
     const renderer = new ComfyVueNodeCardRenderer({
       component: { __name: 'LGraphNode' },
       appContext: {},
@@ -326,9 +339,14 @@ describe('ComfyVueNodeCardRenderer', () => {
     expect(h).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        nodeData: expect.objectContaining({ widgets: [safeWidget] }),
+        nodeData: expect.objectContaining({
+          widgets: [{ ...safeWidget, callback: expect.any(Function) }],
+        }),
       }),
     );
+    editProjectedWidget(h.mock.calls[0]?.[1], 21);
+    expect(rawWidget.value).toBe(21);
+    expect(callback).toHaveBeenCalledWith(21);
   });
   test('uses Comfy extraction and component rendering without cloning the graph node', () => {
     const widgets = [{ name: 'steps' }];
@@ -357,7 +375,7 @@ describe('ComfyVueNodeCardRenderer', () => {
         id: 'inside-1',
         inputs: [],
         outputs: [],
-        widgets: nodeData.widgets,
+        widgets: [expect.objectContaining({ name: 'steps', callback: expect.any(Function) })],
         flags: { collapsed: false },
       }),
     });
@@ -401,7 +419,9 @@ describe('ComfyVueNodeCardRenderer', () => {
     expect(h).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        nodeData: expect.objectContaining({ widgets: [editable] }),
+        nodeData: expect.objectContaining({
+          widgets: [{ ...editable, callback: expect.any(Function) }],
+        }),
       }),
     );
     expect(node.widgets).toBe(widgets);

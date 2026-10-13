@@ -131,6 +131,21 @@ test('mounts identified surfaces and preserves allocated content through app/con
   expect(f.report).not.toHaveBeenCalled();
 });
 
+test('preserves canvas allocation during qualified history restoration while respecting app mode', async () => {
+  const f = fixture();
+  await Promise.resolve();
+  const canvas = f.host.canvas;
+  f.host.beforeConfigureGraph(true);
+  expect(f.host.canvas).toBe(canvas);
+  f.mode('app');
+  expect(f.host.canvas).toBeNull();
+  f.mode('graph');
+  expect(f.host.canvas).toBe(canvas);
+  f.host.afterConfigureGraph();
+  expect(f.host.canvas).toBe(canvas);
+  f.dispose();
+});
+
 test('ignores popup churn and retires removed workspace allocation before any later native mount', async () => {
   const f = fixture();
   await Promise.resolve();

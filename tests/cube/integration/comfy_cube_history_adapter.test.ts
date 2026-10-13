@@ -19,6 +19,18 @@ import { jest } from '@jest/globals';
 import { createComfyCubeHistoryAdapter } from '../../../frontend/comfyui/ui/cube/ComfyCubeHistoryAdapter.js';
 
 describe('createComfyCubeHistoryAdapter', () => {
+  test('uses the current host transaction methods after lifecycle hooks are installed', () => {
+    const canvas = { emitBeforeChange: jest.fn(), emitAfterChange: jest.fn(), setDirty: jest.fn() };
+    const history = createComfyCubeHistoryAdapter({ canvas, graph: {} });
+    const before = jest.fn();
+    const after = jest.fn();
+    canvas.emitBeforeChange = before;
+    canvas.emitAfterChange = after;
+    history.beforeChange();
+    history.afterChange();
+    expect(before).toHaveBeenCalledTimes(1);
+    expect(after).toHaveBeenCalledTimes(1);
+  });
   test('uses canvas history events instead of graph callbacks when both exist', () => {
     const emitBeforeChange = jest.fn();
     const emitAfterChange = jest.fn();

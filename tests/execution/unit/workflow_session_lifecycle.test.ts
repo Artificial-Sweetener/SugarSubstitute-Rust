@@ -55,6 +55,44 @@ test('ignores forged, duplicate and disposed load completions', () => {
   expect(sessions.read().active).toBeNull();
 });
 
+test('preserves history generations and retains replacement invalidation across overlapping loads', () => {
+  const sessions = new WorkflowSessionStore();
+  sessions.synchronize([a], a.sessionId);
+  const history = sessions.beginLoad('history');
+  sessions.completeLoad(history, true);
+  expect(sessions.read().active?.generation).toBe(0);
+  const replacement = sessions.beginLoad();
+  const overlappingHistory = sessions.beginLoad('history');
+  sessions.completeLoad(replacement, true);
+  expect(sessions.read().active).toBeNull();
+  sessions.completeLoad(overlappingHistory, true);
+  expect(sessions.read().active?.generation).toBe(1);
+});
+
+test('retains presentation only while every overlapping load restores the same workflow history', () => {
+  const sessions = new WorkflowSessionStore();
+  sessions.synchronize([a, b], a.sessionId);
+  const first = sessions.beginLoad('history');
+  const second = sessions.beginLoad('history');
+  expect(sessions.read().active).toBeNull();
+  expect(sessions.presentation()?.sessionId).toBe(a.sessionId);
+  sessions.completeLoad(first, true);
+  expect(sessions.presentation()?.sessionId).toBe(a.sessionId);
+  const replacement = sessions.beginLoad();
+  expect(sessions.presentation()).toBeNull();
+  sessions.completeLoad(replacement, true);
+  expect(sessions.presentation()).toBeNull();
+  sessions.completeLoad(second, true);
+  expect(sessions.presentation()?.generation).toBe(1);
+  const switched = sessions.beginLoad('history');
+  sessions.synchronize([a, b], b.sessionId);
+  expect(sessions.presentation()).toBeNull();
+  sessions.completeLoad(switched, true);
+  expect(sessions.presentation()?.sessionId).toBe(b.sessionId);
+  sessions.suspend();
+  expect(sessions.presentation()).toBeNull();
+});
+
 test('keeps snapshots immutable and releases closed session metadata', () => {
   const sessions = new WorkflowSessionStore();
   sessions.synchronize([a, b], a.sessionId);

@@ -20,6 +20,18 @@ import { jest } from '@jest/globals';
 import { NativeSubgraphChangeObserver } from '../../../frontend/comfyui/ui/surface/NativeSubgraphChangeObserver.js';
 
 describe('NativeSubgraphChangeObserver', () => {
+  test('flushes pending topology before history capture without another microtask delivery', async () => {
+    const subgraph = { add: jest.fn(), remove: jest.fn() };
+    const changed = jest.fn();
+    const observer = new NativeSubgraphChangeObserver(subgraph, changed);
+    subgraph.remove();
+    expect(changed).not.toHaveBeenCalled();
+    observer.flush();
+    expect(changed).toHaveBeenCalledTimes(1);
+    await Promise.resolve();
+    expect(changed).toHaveBeenCalledTimes(1);
+    observer.dispose();
+  });
   test('filters generic value changes before scheduling topology notifications', async () => {
     const subgraph = {
       onAfterChange: null as ((graph: unknown, info?: unknown) => void) | null,

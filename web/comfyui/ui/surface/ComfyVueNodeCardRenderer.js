@@ -29,6 +29,7 @@ import { NativeProjectedAdvancedInputs } from './NativeProjectedAdvancedInputs.j
 import { NativeProjectedNodeScrollBoundary } from './NativeProjectedNodeScrollBoundary.js';
 import { NativeProjectedNodeTitleBoundary } from './NativeProjectedNodeTitleBoundary.js';
 import { NATIVE_NODE_CARD_DISPOSE_EVENT } from './NativeNodeCardRenderer.js';
+import { projectNativeWidgetEdits } from './NativeProjectedWidgetEdits.js';
 import { subscribeNativeNodeCardRefresh } from './NativeNodeCardRefresh.js';
 /** Own native Vue mounts while leaving component rendering and widget UI to Comfy. */
 export class ComfyVueNodeCardRenderer {
@@ -68,8 +69,10 @@ export class ComfyVueNodeCardRenderer {
             if (disposed)
                 return;
             const nodeData = createCubeFaceNodeData(this.#runtime.extractVueNodeData(node), node, renderCard, options.allowCollapse);
+            nodeData.widgets = projectNativeWidgetEdits(node, nodeData.widgets);
             for (const source of options.widgetSources ?? []) {
                 const ownerData = createCubeFaceNodeData(this.#runtime.extractVueNodeData(source.node), source.node);
+                ownerData.widgets = projectNativeWidgetEdits(source.node, ownerData.widgets);
                 const widget = Array.isArray(ownerData.widgets)
                     ? ownerData.widgets.find((value) => isRecord(value) && value.name === source.name)
                     : undefined;
