@@ -192,6 +192,30 @@ export class WorkflowRelations {
     });
   }
 
+  /** Restore one accepted seed and lock its authoritative shared or local owner in a single edit. */
+  reuseSeed(id: string, value: number): void {
+    this.#edit((state) => {
+      const snapshot = this.snapshot();
+      const resolved = snapshot.resolved.find((item) => item.field.id === id);
+      if (!resolved || resolved.field.semantic !== 'seed')
+        throw new Error('The seed field is unavailable.');
+      if (resolved.override) {
+        const group = snapshot.groups.find((item) => item.key === resolved.override);
+        validateSharedEdit(group?.domain ?? null, value);
+        if (group) state.overrides[group.key] = { enabled: true, value, seedMode: 'fixed' };
+        return;
+      }
+      const ownerId = resolved.source ?? id;
+      const members = linkedFieldMembers(ownerId, snapshot.fields, snapshot.nodes, state);
+      validateSharedEdit(commonFieldDomain(members), value);
+      state.locals[ownerId] = value;
+      if (members.length > 1) state.localSeedModes[ownerId] = 'fixed';
+      const owner = this.#inventory?.fields.find((item) => item.contract.id === ownerId);
+      owner?.write(value);
+      owner?.writeSeedMode?.('fixed');
+    });
+  }
+
   /** Link one configurable field to another Cube while rejecting incompatible groups and cycles. */
   linkField(targetId: string, sourceId: string | null): void {
     this.#edit((state) => {

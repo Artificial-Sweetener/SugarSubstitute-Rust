@@ -118,6 +118,12 @@ runtime_file = "web/icons/seed/subtract.svg"
 sha256 = "cb2825b8c04cf792c55bd9c0cd37a0a15d5bc9e708127195acb2d2bdae76b190"
 
 [[component.asset]]
+source_path = "assets/Arrow Counterclockwise/SVG/ic_fluent_arrow_counterclockwise_20_regular.svg"
+vendored_file = "frontend/static/icons/seed/reuse-last.svg"
+runtime_file = "web/icons/seed/reuse-last.svg"
+sha256 = "34f7c4fe968e48e2bab176b5e4d9feb8247ace5b9d532a1954501b2e0dc46d0f"
+
+[[component.asset]]
 source_path = "assets/Arrow Circle Up Sparkle/SVG/ic_fluent_arrow_circle_up_sparkle_20_regular.svg"
 vendored_file = "frontend/static/icons/model/update.svg"
 runtime_file = "web/icons/model/update.svg"

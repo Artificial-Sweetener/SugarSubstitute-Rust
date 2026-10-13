@@ -37,6 +37,7 @@ import { NativeAdvancedDisclosure } from './NativeAdvancedDisclosure.js';
 import { NativeNumericControls } from './NativeNumericControls.js';
 import { NativeLabelPresentation } from './NativeLabelPresentation.js';
 import { NativeSeedControls } from './NativeSeedControls.js';
+import type { NativeSeedReuseResolver } from './ComfyNativeSeedControl.js';
 import { readComfyDarkTheme } from './ComfyColorScheme.js';
 import { FluentOverlayScrollbarHost } from './FluentOverlayScrollbarHost.js';
 import { isBorrowedNativeCardPresentation } from '../NativeCardPresentationOwner.js';
@@ -56,6 +57,7 @@ const surfaceSelector =
 export interface FluentAppearanceHostOptions {
   document: Document;
   app: unknown;
+  seedReuse?: NativeSeedReuseResolver;
   getSlotLayoutSync?(): Promise<() => void>;
   reportError(error: unknown): void;
 }
@@ -100,7 +102,7 @@ export class FluentAppearanceHost {
     this.#accent = new AccentThemeHost(options.document, options.app, options.reportError);
     this.#iconAppearance = new CubeIconAppearanceHost(options.document, this.state);
     this.#scrollbars = new FluentOverlayScrollbarHost(options.document, options.reportError);
-    this.#adapter = new NativeFluentCardAdapter(options.app);
+    this.#adapter = new NativeFluentCardAdapter(options.app, options.seedReuse);
     this.#graphGeometry = new NativeFluentGraphGeometry({
       document: options.document,
       ...(options.getSlotLayoutSync ? { getSynchronizer: options.getSlotLayoutSync } : {}),

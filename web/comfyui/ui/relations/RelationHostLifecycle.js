@@ -7,6 +7,8 @@ import { NativeRelationWorkflowPort } from './infrastructure/NativeRelationWorkf
 import { NativeRelationExecution } from './infrastructure/NativeRelationExecution.js';
 import { NativeRelationViews } from './infrastructure/NativeRelationViews.js';
 import { NativeSharedSeedModes } from './infrastructure/NativeSharedSeedModes.js';
+import { NativeWorkflowSeedReuse } from './infrastructure/NativeWorkflowSeedReuse.js';
+import { NativeSeedMenuHost } from '../surface/appearance/NativeSeedMenuHost.js';
 import { NativeRelationWidgetRenderer } from './infrastructure/NativeRelationWidgetRenderer.js';
 import { NativeRelationVisibility } from './infrastructure/NativeRelationVisibility.js';
 import { NativeOverrideToolbarHost } from './infrastructure/NativeOverrideToolbarHost.js';
@@ -19,6 +21,8 @@ export class RelationHostLifecycle {
     options;
     #port;
     relations;
+    seedReuse;
+    #seedMenus;
     #execution;
     #toolbar;
     #cards;
@@ -40,8 +44,10 @@ export class RelationHostLifecycle {
         this.options = options;
         this.#port = new NativeRelationWorkflowPort(() => options.app?.graph, options.document, options.logger, options.getCardState, options.getConnections);
         this.relations = new WorkflowRelations(this.#port);
+        this.seedReuse = new NativeWorkflowSeedReuse(options.app, options.sessions, options.seeds, this.relations, this.#port.inventorySource, options.document, options.reportError);
+        this.#seedMenus = new NativeSeedMenuHost(options.app, options.document, (node, name) => this.seedReuse.field(node, name), options.reportError);
         this.#execution = new NativeRelationExecution(this.relations, this.#port.inventorySource, options.logger, () => options.app?.graph?.serialize?.());
-        const widgets = new NativeRelationWidgetRenderer(options.document, options.reportError);
+        const widgets = new NativeRelationWidgetRenderer(options.document, options.reportError, (key) => this.seedReuse.group(key), options.appearance);
         this.#views = new NativeRelationViews(options.document);
         this.#toolbar = new GlobalOverrideToolbar(options.document, this.relations, options.reportError, widgets, new NativeOverrideToolbarHost(options.document), createNativeOverrideToolbarState(options.document, options.logger));
         this.#cards = new CubeRelationPresenter(options.document, this.relations, () => {
@@ -60,6 +66,7 @@ export class RelationHostLifecycle {
         if (this.#active)
             return;
         this.#active = true;
+        this.#seedMenus.setup();
         ensureRelationStyles(this.options.document);
         const changed = (changes) => {
             this.#views.invalidate(changes.map((change) => change.element));
@@ -76,6 +83,7 @@ export class RelationHostLifecycle {
     /** Drop stale mounted views before another native workflow is configured. */
     beforeConfigureGraph() {
         this.#configuring = true;
+        this.#seedMenus.close();
         this.#generation++;
         this.#pending = false;
         this.#valuesPending = false;
@@ -129,6 +137,7 @@ export class RelationHostLifecycle {
     /** Release all reversible host hooks and presentation at application teardown. */
     dispose() {
         this.#active = false;
+        this.#seedMenus.dispose();
         this.#presence?.disconnect();
         this.#chromePresence?.disconnect();
         this.#unsubscribeChoices?.();

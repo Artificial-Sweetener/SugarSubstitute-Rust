@@ -150,6 +150,11 @@ export class NativeRelationInventory {
                 },
                 read: () => (isFieldValue(widget.value) ? widget.value : ''),
                 write: (value) => writeNativeField(node, widget, value),
+                ...(seedMode
+                    ? {
+                        writeSeedMode: (mode) => readNativeSeedControl(node, widget.name)?.writeMode(mode, false),
+                    }
+                    : {}),
             },
         ];
     }

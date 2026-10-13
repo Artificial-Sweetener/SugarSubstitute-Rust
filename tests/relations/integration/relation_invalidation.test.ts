@@ -15,6 +15,8 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Prove host presentation changes cannot invalidate workflow relation discovery. */
 import { afterEach, expect, jest, test } from '@jest/globals';
+import { WorkflowSeedHistory } from '../../../frontend/comfyui/ui/execution/application/WorkflowSeedHistory.js';
+import { WorkflowSessionStore } from '../../../frontend/comfyui/ui/execution/application/WorkflowSessionStore.js';
 import { RelationHostLifecycle } from '../../../frontend/comfyui/ui/relations/RelationHostLifecycle.js';
 import { NativeRelationInventory } from '../../../frontend/comfyui/ui/relations/infrastructure/NativeRelationInventory.js';
 import { CubeRelationPresenter } from '../../../frontend/comfyui/ui/relations/presentation/CubeRelationPresenter.js';
@@ -36,6 +38,8 @@ async function settle(): Promise<void> {
 test('blocks queued discovery and DOM value refresh throughout graph restoration', async () => {
   const inventory = jest.spyOn(NativeRelationInventory.prototype, 'read');
   const host = new RelationHostLifecycle({
+    seeds: new WorkflowSeedHistory(),
+    sessions: new WorkflowSessionStore(),
     app: { graph: { _nodes: [], extra: {} } },
     document,
     logger: console,
@@ -90,6 +94,8 @@ test('restores effective values without adding history entries', async () => {
     afterChange,
   };
   const host = new RelationHostLifecycle({
+    seeds: new WorkflowSeedHistory(),
+    sessions: new WorkflowSessionStore(),
     app: { graph },
     document,
     logger: console,
@@ -149,6 +155,8 @@ test('cleans removed relation members before native history capture without a se
     afterChange,
   };
   const host = new RelationHostLifecycle({
+    seeds: new WorkflowSeedHistory(),
+    sessions: new WorkflowSessionStore(),
     app: { graph },
     document,
     logger: console,
@@ -179,6 +187,8 @@ test('dock placeholders and native Run content do not refresh cards or rebuild f
   const inventory = jest.spyOn(NativeRelationInventory.prototype, 'read');
   const cards = jest.spyOn(CubeRelationPresenter.prototype, 'reconcile');
   const host = new RelationHostLifecycle({
+    seeds: new WorkflowSeedHistory(),
+    sessions: new WorkflowSessionStore(),
     app: { graph: { _nodes: [], extra: {} } },
     document,
     logger: console,
@@ -213,6 +223,8 @@ test('ignores popup mounts, search input, and unrelated DOM replacement', async 
   const inventory = jest.spyOn(NativeRelationInventory.prototype, 'read');
   const errors = jest.fn();
   const host = new RelationHostLifecycle({
+    seeds: new WorkflowSeedHistory(),
+    sessions: new WorkflowSessionStore(),
     app: { graph: { _nodes: [], extra: {} } },
     document,
     logger: console,
@@ -242,6 +254,8 @@ test('ignores popup mounts, search input, and unrelated DOM replacement', async 
 test('binds newly mounted native surfaces without rediscovering workflow fields', async () => {
   const inventory = jest.spyOn(NativeRelationInventory.prototype, 'read');
   const host = new RelationHostLifecycle({
+    seeds: new WorkflowSeedHistory(),
+    sessions: new WorkflowSessionStore(),
     app: { graph: { _nodes: [], extra: {} } },
     document,
     logger: console,
@@ -270,6 +284,8 @@ test('binds newly mounted native surfaces without rediscovering workflow fields'
 test('forwards Nodes 1 native DOM-widget value edits once through retained bindings', async () => {
   const inventory = jest.spyOn(NativeRelationInventory.prototype, 'read');
   const host = new RelationHostLifecycle({
+    seeds: new WorkflowSeedHistory(),
+    sessions: new WorkflowSessionStore(),
     app: { graph: { _nodes: [], extra: {} } },
     document,
     logger: console,
@@ -304,6 +320,8 @@ test('known relation and native value transactions bypass rediscovery while topo
     afterChange: () => graph.onAfterChange?.(graph),
   };
   const host = new RelationHostLifecycle({
+    seeds: new WorkflowSeedHistory(),
+    sessions: new WorkflowSessionStore(),
     app: { graph },
     document,
     logger: console,

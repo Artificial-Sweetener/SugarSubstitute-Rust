@@ -24,10 +24,13 @@ import type {
 import type { WorkflowSubmissionContexts } from '../application/WorkflowSubmissionContexts.js';
 import type { PromptQueueObservation, PromptQueueObserver } from './ComfyPromptQueueBridge.js';
 import { decodeComfyPromptSources } from './ComfyPromptSourceDecoder.js';
+import { decodeComfySubmittedSeeds } from './ComfySubmittedSeeds.js';
+import type { WorkflowSeedHistory } from '../application/WorkflowSeedHistory.js';
 
 export interface ComfyPromptSubmissionObserverOptions {
   readonly contexts: WorkflowSubmissionContexts;
   readonly logger: Pick<Console, 'error' | 'warn'>;
+  readonly seeds?: WorkflowSeedHistory;
   submitting(context: WorkflowSubmissionContext): WorkflowOrderedSubmission;
   accepted(context: WorkflowOrderedSubmission, id: PromptId): void;
 }
@@ -48,10 +51,12 @@ export class ComfyPromptSubmissionObserver implements PromptQueueObserver {
     if (!captured) return null;
     const submission = this.options.submitting(captured);
     let context = submission;
+    let preparedPayload: unknown = payload;
     let active = true;
     return {
       prepared: (prepared) => {
         if (!active) return;
+        preparedPayload = prepared;
         const sources = decodeComfyPromptSources(prepared, captured.sources);
         if (sources.length) context = Object.freeze({ ...submission, sources });
       },
@@ -73,6 +78,17 @@ export class ComfyPromptSubmissionObserver implements PromptQueueObserver {
           : [];
         if (executionSources.length)
           context = Object.freeze({ ...submission, sources: executionSources });
+        const prompt =
+          isRecord(response) && Object.hasOwn(response, 'execution_prompt')
+            ? response.execution_prompt
+            : isRecord(preparedPayload)
+              ? preparedPayload.output
+              : null;
+        this.options.seeds?.record(
+          context.session,
+          context.order,
+          decodeComfySubmittedSeeds(prompt),
+        );
         this.options.accepted(context, promptId(id));
       },
       rejected: () => {

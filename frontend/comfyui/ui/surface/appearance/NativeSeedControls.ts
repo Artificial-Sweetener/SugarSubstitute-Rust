@@ -17,6 +17,8 @@
 import type { NativeNumericField } from './ComfyNativeNumericField.js';
 import type { NativeSeedControl } from './ComfyNativeSeedControl.js';
 import type { SeedMode } from '../../graph/ComfySeedMode.js';
+import { nativeSeedMenuEntries, modeLabels } from './SeedMenuEntries.js';
+import { seedIconImage } from './SeedActionIcons.js';
 import { ContextMenu } from '../../menus/ContextMenu.js';
 
 export interface NativeSeedField {
@@ -28,26 +30,6 @@ interface SeedBinding {
   field: NativeSeedField;
   synchronize(): void;
   release(): void;
-}
-
-const modeLabels: Readonly<Record<SeedMode, string>> = {
-  fixed: 'Use Current',
-  randomize: 'Randomize',
-  increment: 'Increment',
-  decrement: 'Decrement',
-};
-
-const modeIcons: Readonly<Record<SeedMode, string>> = {
-  fixed: 'locked',
-  randomize: 'game-die',
-  increment: 'add',
-  decrement: 'subtract',
-};
-
-/** Resolve the pinned Microsoft asset for each supported seed operation. */
-function seedIconImage(mode: SeedMode): string {
-  const url = new URL(`../../../../icons/seed/${modeIcons[mode]}.svg`, import.meta.url);
-  return `url("${url.href}")`;
 }
 
 /** Own seed accessories separately from native numeric entry and general spinner styling. */
@@ -147,19 +129,13 @@ export class NativeSeedControls {
         focusChecked: true,
         attributes: { 'data-sc-seed-options': '' },
         closed: () => menuButton.setAttribute('aria-expanded', 'false'),
-        entries: control.modes.map((mode) => ({
-          label: modeLabels[mode],
-          checked: control.readMode() === mode,
-          attributes: { 'data-sc-seed-option': mode },
-          icon: (document) => {
-            const icon = document.createElement('span');
-            icon.dataset.scSeedIcon = '';
-            icon.style.cssText = `background:currentColor;mask:${seedIconImage(mode)} center/contain no-repeat;`;
-            icon.style.setProperty('--sc-seed-icon', seedIconImage(mode));
-            return icon;
-          },
-          select: () => choose(mode),
-        })),
+        entries: nativeSeedMenuEntries(control, choose, () => {
+          if (binding.field.numeric.disabled()) return;
+          binding.field.control.reuse?.reuse();
+          binding.synchronize();
+          close();
+          primary.focus();
+        }),
       });
     };
     const binding: SeedBinding = {

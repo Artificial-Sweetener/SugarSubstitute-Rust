@@ -19,11 +19,18 @@ import type { UnknownRecord } from '../../types/common.js';
 
 import { isSeedMode, isComfySeedModeControl } from '../../graph/ComfySeedMode.js';
 import type { SeedMode } from '../../graph/ComfySeedMode.js';
+import type { SeedReuseControl } from '../../execution/domain/WorkflowSeed.js';
+
+export type NativeSeedReuseResolver = (
+  node: UnknownRecord,
+  name: string,
+) => SeedReuseControl | null;
 
 export interface NativeSeedControl {
   readonly modes: readonly SeedMode[];
+  readonly reuse?: SeedReuseControl;
   readMode(): SeedMode;
-  writeMode(mode: SeedMode): void;
+  writeMode(mode: SeedMode, notifyGraph?: boolean): void;
 }
 
 const seedNames = new Set(['seed', 'noise_seed', 'variation_seed']);
@@ -34,7 +41,10 @@ export class ComfyNativeSeedControlAdapter {
   readonly #nodes = new Map<string, UnknownRecord>();
 
   /** Bind the application graph boundary without relying on browser globals. */
-  constructor(app: unknown) {
+  constructor(
+    app: unknown,
+    private readonly reuse?: NativeSeedReuseResolver,
+  ) {
     this.#app = app;
   }
 
@@ -76,7 +86,9 @@ export class ComfyNativeSeedControlAdapter {
     const locator = widget.nodeLocatorId;
     const node = typeof locator === 'string' ? this.#nodes.get(locator) : undefined;
     if (!node) return null;
-    return readNativeSeedControl(node, widget.name, spec.control_after_generate === true);
+    const control = readNativeSeedControl(node, widget.name, spec.control_after_generate === true);
+    const reuse = this.reuse?.(node, widget.name);
+    return control && reuse ? { ...control, reuse } : control;
   }
 }
 
@@ -86,7 +98,7 @@ export function readNativeSeedControl(
   name: string,
   allowFallback = false,
 ): NativeSeedControl | null {
-  const owner = resolveOwner(node, name, new Set());
+  const owner = resolveNativeSeedOwner(node, name);
   if (!owner) return null;
   const linked = owner.widget.linkedWidgets;
   const candidates = Array.isArray(linked) ? linked : [];
@@ -107,7 +119,7 @@ export function readNativeSeedControl(
   return {
     modes,
     readMode: () => (isSeedMode(nativeControl.value) ? nativeControl.value : 'fixed'),
-    writeMode: (mode) => {
+    writeMode: (mode, notifyGraph = true) => {
       if (!modes.includes(mode) || nativeControl.value === mode) return;
       const previous = nativeControl.value;
       nativeControl.value = mode;
@@ -122,16 +134,16 @@ export function readNativeSeedControl(
           nativeControl,
         );
       const graph = isRecord(owner.node.graph) ? owner.node.graph : {};
-      if (typeof graph.afterChange === 'function') graph.afterChange.call(graph);
+      if (notifyGraph && typeof graph.afterChange === 'function') graph.afterChange.call(graph);
     },
   };
 }
 
 /** Follow exposed subgraph inputs to the original widget and its linked execution control. */
-function resolveOwner(
+export function resolveNativeSeedOwner(
   node: UnknownRecord,
   name: string,
-  seen: Set<object>,
+  seen = new Set<object>(),
 ): { node: UnknownRecord; widget: UnknownRecord } | null {
   if (seen.has(node)) return null;
   seen.add(node);
@@ -162,7 +174,7 @@ function resolveOwner(
       const input: unknown = target.inputs[link.target_slot];
       const binding = isRecord(input) && isRecord(input.widget) ? input.widget : {};
       if (typeof binding.name !== 'string') continue;
-      const resolved = resolveOwner(target, binding.name, seen);
+      const resolved = resolveNativeSeedOwner(target, binding.name, seen);
       if (resolved) return resolved;
     }
   }

@@ -25,6 +25,11 @@ import { NativeRelationWorkflowPort } from './infrastructure/NativeRelationWorkf
 import { NativeRelationExecution } from './infrastructure/NativeRelationExecution.js';
 import { NativeRelationViews } from './infrastructure/NativeRelationViews.js';
 import { NativeSharedSeedModes } from './infrastructure/NativeSharedSeedModes.js';
+import { NativeWorkflowSeedReuse } from './infrastructure/NativeWorkflowSeedReuse.js';
+import { NativeSeedMenuHost } from '../surface/appearance/NativeSeedMenuHost.js';
+import type { FluentAppearanceSource } from '../surface/appearance/FluentAppearanceState.js';
+import type { WorkflowSeedHistory } from '../execution/application/WorkflowSeedHistory.js';
+import type { WorkflowSessionStore } from '../execution/application/WorkflowSessionStore.js';
 import { NativeRelationWidgetRenderer } from './infrastructure/NativeRelationWidgetRenderer.js';
 import { NativeRelationVisibility } from './infrastructure/NativeRelationVisibility.js';
 import { NativeOverrideToolbarHost } from './infrastructure/NativeOverrideToolbarHost.js';
@@ -39,6 +44,9 @@ export interface RelationHostOptions {
   app: ComfyApplication | null;
   document: Document;
   logger: Pick<Console, 'warn'>;
+  seeds: WorkflowSeedHistory;
+  sessions: WorkflowSessionStore;
+  appearance?(): FluentAppearanceSource;
   reportError(error: unknown): void;
   getCardState(): CubeFaceCardStateService | null;
   getConnections?(graph: ComfyGraph): readonly WorkflowNodeConnection[];
@@ -48,6 +56,8 @@ export interface RelationHostOptions {
 export class RelationHostLifecycle {
   readonly #port: NativeRelationWorkflowPort;
   readonly relations: WorkflowRelations;
+  readonly seedReuse: NativeWorkflowSeedReuse;
+  readonly #seedMenus: NativeSeedMenuHost;
   readonly #execution: NativeRelationExecution;
   readonly #toolbar: GlobalOverrideToolbar;
   readonly #cards: CubeRelationPresenter;
@@ -75,13 +85,33 @@ export class RelationHostLifecycle {
       options.getConnections,
     );
     this.relations = new WorkflowRelations(this.#port);
+    this.seedReuse = new NativeWorkflowSeedReuse(
+      options.app,
+      options.sessions,
+      options.seeds,
+      this.relations,
+      this.#port.inventorySource,
+      options.document,
+      options.reportError,
+    );
+    this.#seedMenus = new NativeSeedMenuHost(
+      options.app,
+      options.document,
+      (node, name) => this.seedReuse.field(node, name),
+      options.reportError,
+    );
     this.#execution = new NativeRelationExecution(
       this.relations,
       this.#port.inventorySource,
       options.logger,
       () => options.app?.graph?.serialize?.(),
     );
-    const widgets = new NativeRelationWidgetRenderer(options.document, options.reportError);
+    const widgets = new NativeRelationWidgetRenderer(
+      options.document,
+      options.reportError,
+      (key) => this.seedReuse.group(key),
+      options.appearance,
+    );
     this.#views = new NativeRelationViews(options.document);
     this.#toolbar = new GlobalOverrideToolbar(
       options.document,
@@ -117,6 +147,7 @@ export class RelationHostLifecycle {
   setup(): void {
     if (this.#active) return;
     this.#active = true;
+    this.#seedMenus.setup();
     ensureRelationStyles(this.options.document);
     const changed = (changes: readonly HostSurfaceChange[]): void => {
       this.#views.invalidate(changes.map((change) => change.element));
@@ -144,6 +175,7 @@ export class RelationHostLifecycle {
   /** Drop stale mounted views before another native workflow is configured. */
   beforeConfigureGraph(): void {
     this.#configuring = true;
+    this.#seedMenus.close();
     this.#generation++;
     this.#pending = false;
     this.#valuesPending = false;
@@ -195,6 +227,7 @@ export class RelationHostLifecycle {
   /** Release all reversible host hooks and presentation at application teardown. */
   dispose(): void {
     this.#active = false;
+    this.#seedMenus.dispose();
     this.#presence?.disconnect();
     this.#chromePresence?.disconnect();
     this.#unsubscribeChoices?.();

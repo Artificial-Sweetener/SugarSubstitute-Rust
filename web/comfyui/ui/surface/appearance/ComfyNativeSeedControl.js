@@ -19,10 +19,12 @@ import { isSeedMode, isComfySeedModeControl } from '../../graph/ComfySeedMode.js
 const seedNames = new Set(['seed', 'noise_seed', 'variation_seed']);
 /** Resolve native numeric owners by scoped locator, retaining subgraph identity. */
 export class ComfyNativeSeedControlAdapter {
+    reuse;
     #app;
     #nodes = new Map();
     /** Bind the application graph boundary without relying on browser globals. */
-    constructor(app) {
+    constructor(app, reuse) {
+        this.reuse = reuse;
         this.#app = app;
     }
     /** Index each live graph once per coalesced appearance batch. */
@@ -69,12 +71,14 @@ export class ComfyNativeSeedControlAdapter {
         const node = typeof locator === 'string' ? this.#nodes.get(locator) : undefined;
         if (!node)
             return null;
-        return readNativeSeedControl(node, widget.name, spec.control_after_generate === true);
+        const control = readNativeSeedControl(node, widget.name, spec.control_after_generate === true);
+        const reuse = this.reuse?.(node, widget.name);
+        return control && reuse ? { ...control, reuse } : control;
     }
 }
 /** Share native promoted seed ownership with execution controls and relation coordination. */
 export function readNativeSeedControl(node, name, allowFallback = false) {
-    const owner = resolveOwner(node, name, new Set());
+    const owner = resolveNativeSeedOwner(node, name);
     if (!owner)
         return null;
     const linked = owner.widget.linkedWidgets;
@@ -97,7 +101,7 @@ export function readNativeSeedControl(node, name, allowFallback = false) {
     return {
         modes,
         readMode: () => (isSeedMode(nativeControl.value) ? nativeControl.value : 'fixed'),
-        writeMode: (mode) => {
+        writeMode: (mode, notifyGraph = true) => {
             if (!modes.includes(mode) || nativeControl.value === mode)
                 return;
             const previous = nativeControl.value;
@@ -107,13 +111,13 @@ export function readNativeSeedControl(node, name, allowFallback = false) {
             if (typeof owner.node.onWidgetChanged === 'function')
                 owner.node.onWidgetChanged.call(owner.node, nativeControl.name, mode, previous, nativeControl);
             const graph = isRecord(owner.node.graph) ? owner.node.graph : {};
-            if (typeof graph.afterChange === 'function')
+            if (notifyGraph && typeof graph.afterChange === 'function')
                 graph.afterChange.call(graph);
         },
     };
 }
 /** Follow exposed subgraph inputs to the original widget and its linked execution control. */
-function resolveOwner(node, name, seen) {
+export function resolveNativeSeedOwner(node, name, seen = new Set()) {
     if (seen.has(node))
         return null;
     seen.add(node);
@@ -143,7 +147,7 @@ function resolveOwner(node, name, seen) {
             const binding = isRecord(input) && isRecord(input.widget) ? input.widget : {};
             if (typeof binding.name !== 'string')
                 continue;
-            const resolved = resolveOwner(target, binding.name, seen);
+            const resolved = resolveNativeSeedOwner(target, binding.name, seen);
             if (resolved)
                 return resolved;
         }

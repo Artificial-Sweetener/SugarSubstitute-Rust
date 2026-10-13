@@ -16,6 +16,8 @@
 /** Mount shared values and link selectors through Comfy's exact widget component family. */
 import { isRecord } from '../../types/common.js';
 import { NativeLinkLabelLayout } from './NativeLinkLabelLayout.js';
+import { NativeSeedWidgetMode } from './NativeSeedWidgetMode.js';
+import type { FluentAppearanceSource } from '../../surface/appearance/FluentAppearanceState.js';
 import { NativeLinkChoiceLabels } from './NativeLinkChoiceLabels.js';
 import type { UnknownRecord } from '../../types/common.js';
 import { scopeNativeVueMountContext } from '../../surface/NativeVueMountContext.js';
@@ -29,6 +31,7 @@ import { NativeChoiceRestrictions } from '../../surface/NativeChoiceRestrictions
 import { prepareNativePresentation } from '../../surface/NativePresentationReady.js';
 import type { NativeChoiceRestriction } from '../../surface/NativeChoiceRestrictions.js';
 import type { NativeSeedControl } from '../../surface/appearance/ComfyNativeSeedControl.js';
+import type { SeedReuseControl } from '../../execution/domain/WorkflowSeed.js';
 import { choiceRestrictions } from '../domain/FieldCompatibility.js';
 import type { FieldValue, OverrideGroup, RelationSeedMode } from '../domain/RelationContracts.js';
 import type {
@@ -55,6 +58,8 @@ export class NativeRelationWidgetRenderer implements RelationWidgetRenderer {
   constructor(
     private readonly document: Document,
     private readonly reportError: (error: unknown) => void,
+    private readonly reuse?: (key: string) => SeedReuseControl,
+    private readonly appearance?: () => FluentAppearanceSource,
   ) {
     this.#labelLayout = new NativeLinkLabelLayout(document, reportError);
   }
@@ -74,6 +79,7 @@ export class NativeRelationWidgetRenderer implements RelationWidgetRenderer {
             modes: ['fixed', 'randomize', 'increment', 'decrement'],
             readMode: () => group.seedMode,
             writeMode: changeMode,
+            ...(this.reuse ? { reuse: this.reuse(initial.key) } : {}),
           }
         : null;
     const mount = this.#mount(
@@ -224,6 +230,11 @@ export class NativeRelationWidgetRenderer implements RelationWidgetRenderer {
     let render: (() => void) | null = null;
     let unmount: (() => void) | null = null;
     let presentationQueued = false;
+    const seedMode = new NativeSeedWidgetMode();
+    const appearance = this.appearance?.();
+    const stopAppearance = appearance?.subscribeAppearance(() => {
+      if (request().seed) render?.();
+    });
     const constraints = new NativeChoiceRestrictions(root);
     this.#runtime ??= loadComfyNativeWidgetRuntime(this.document);
     void this.#runtime
@@ -236,7 +247,15 @@ export class NativeRelationWidgetRenderer implements RelationWidgetRenderer {
         render = () => {
           if (disposed) return;
           const { component, widget, value, seed, choices } = request();
+          const previousKey = seedMode.key;
+          const focused = root.contains(this.document.activeElement)
+            ? this.document.activeElement
+            : null;
+          const key = seed
+            ? seedMode.prepare(widget, seed, appearance?.appearance.fluent ?? false)
+            : null;
           const vnode = runtime.h(runtime.components.get(component), {
+            ...(key === null ? {} : { key }),
             widget,
             modelValue: value,
             'onUpdate:modelValue': (next: unknown) => {
@@ -247,6 +266,22 @@ export class NativeRelationWidgetRenderer implements RelationWidgetRenderer {
           if (!isRecord(vnode)) throw new TypeError('Comfy returned an invalid widget VNode.');
           vnode.appContext = scopedContext;
           runtime.render(vnode, root);
+          // WidgetWithControl initializes its local mode once; restore focus when history requires reinitialization.
+          if (seedMode.key !== previousKey && focused instanceof HTMLElement) {
+            if (focused instanceof HTMLInputElement) {
+              const input = root.querySelector<HTMLInputElement>('input[role="spinbutton"]');
+              input?.focus({ preventScroll: true });
+              if (
+                input?.type === 'text' &&
+                focused.selectionStart !== null &&
+                focused.selectionEnd !== null
+              )
+                input.setSelectionRange(focused.selectionStart, focused.selectionEnd);
+            } else
+              root
+                .querySelector<HTMLButtonElement>('[data-testid="value-control"]')
+                ?.focus({ preventScroll: true });
+          }
           registerNativeWidgetMount(root, { vnode, seed });
           constraints.update(choices);
           if (!presentationQueued) {
@@ -265,6 +300,7 @@ export class NativeRelationWidgetRenderer implements RelationWidgetRenderer {
       refresh: () => render?.(),
       dispose: () => {
         disposed = true;
+        stopAppearance?.();
         constraints.dispose();
         releaseNativeWidgetMount(root);
         for (const name of events) root.removeEventListener(name, retainInteraction);
