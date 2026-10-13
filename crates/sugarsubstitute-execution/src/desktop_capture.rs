@@ -16,6 +16,7 @@ mod native_failures;
 mod native_reply;
 pub(crate) mod process_lifetime;
 mod publication;
+mod registered_lifetime;
 pub(crate) mod resources;
 mod retirement;
 mod submission;

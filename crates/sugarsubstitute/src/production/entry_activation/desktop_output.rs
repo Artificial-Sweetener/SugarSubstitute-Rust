@@ -175,6 +175,10 @@ impl DesktopOutput {
                             boundary=%failure.boundary,kind=%failure.kind,
                             "Observed first closed owned desktop failure");
                     }
+                    diagnostic::Observation::Connection(stage) => {
+                        tracing::info!(operation="desktop_child_connection",run=?self.run,stage=?stage,
+                            "Observed owned child's closed connection progress");
+                    }
                 }
             });
             // Return the sole real delivery slot before taking another batch.

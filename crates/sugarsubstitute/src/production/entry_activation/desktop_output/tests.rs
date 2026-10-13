@@ -192,6 +192,10 @@ fn actual_production_text_formatter_with_writer_and_time_boundaries_preserves_cl
         tracing::info!(operation="child_preparation_transition",capture_admitted=true,capture=false,
             registered=false,configuration=false,original_failure=?None::<u8>,capture_failure=%"None",failure_retained=false,
             "Child pre-UI preparation conditions changed");
+        for stage in [Connection::Queued, Connection::Admitted, Connection::ReplyReceived] {
+            tracing::info!(operation="child_connection_transition",stage=?stage,
+                "Original child connection request advanced");
+        }
         tracing::warn!(operation="desktop_failure_transition",boundary=%"PollFrame",kind=%"Other",
             "First owned desktop failure retained");
     });
@@ -200,8 +204,16 @@ fn actual_production_text_formatter_with_writer_and_time_boundaries_preserves_cl
     let mut owner = Diagnostic::new();
     let mut seen = Vec::new();
     owner.feed(OutputStream::Stderr, 1, false, false, &bytes, |v| seen.push(v));
-    assert_eq!(seen.len(), 2);
+    assert_eq!(seen.len(), 5);
     assert_eq!(parse(LINE.as_bytes()).map(Observation::Preparation), seen.first().copied());
+    assert_eq!(
+        &seen[1..4],
+        &[
+            Observation::Connection(Connection::Queued),
+            Observation::Connection(Connection::Admitted),
+            Observation::Connection(Connection::ReplyReceived),
+        ]
+    );
     assert!(matches!(
         seen.last(),
         Some(Observation::Failure(Failure { boundary: "PollFrame", kind: "Other" }))
@@ -240,4 +252,82 @@ fn closed_desktop_failure_fields_reject_payloads_unknown_values_and_extra_operat
     ] {
         assert!(parse_failure(line.as_bytes()).is_none());
     }
+}
+
+/// Exact progression rejects unknown fields, regressions and duplicates without using more slots.
+#[test]
+fn closed_connection_progress_rejects_extensions_replays_and_regressions() {
+    let mut owner = Diagnostic::new();
+    let mut seen = Vec::new();
+    let mut sequence = 0;
+    for token in [
+        "Admitted",
+        "Queued",
+        "Queued",
+        "Unknown",
+        "Queued payload=secret",
+        "Admitted stage=ReplyReceived",
+        "ReplyReceived",
+        "Admitted",
+        "Queued",
+        "ReplyReceived",
+        "ReplyReceived",
+    ] {
+        sequence += 1;
+        let line = format!("operation=\"child_connection_transition\" stage={token}\n");
+        owner.feed(OutputStream::Stderr, sequence, false, false, line.as_bytes(), |v| seen.push(v));
+    }
+    assert_eq!(
+        seen,
+        vec![
+            Observation::Connection(Connection::Queued),
+            Observation::Connection(Connection::Admitted),
+            Observation::Connection(Connection::ReplyReceived)
+        ]
+    );
+    assert!(
+        parse_connection(
+            b"operation=\"other\" operation=\"child_connection_transition\" stage=Queued"
+        )
+        .is_none()
+    );
+}
+
+/// Connection fragments and shared saturation retain the unchanged first-failure reserve.
+#[test]
+fn connection_chunks_share_original_diagnostic_cap_and_cannot_stitch_gaps() {
+    let mut owner = Diagnostic::new();
+    let mut seen = Vec::new();
+    let queued = b"operation=\"child_connection_transition\" stage=Queued\n";
+    let at = queued.len() / 2;
+    owner.feed(OutputStream::Stderr, 1, false, false, &queued[..at], |v| seen.push(v));
+    owner.feed(OutputStream::Stderr, 3, true, false, &queued[at..], |v| seen.push(v));
+    assert!(seen.is_empty());
+    owner.feed(OutputStream::Stderr, 4, false, false, &queued[..at], |v| seen.push(v));
+    owner.feed(OutputStream::Stderr, 5, false, false, &queued[at..], |v| seen.push(v));
+    owner.feed(OutputStream::Stderr, 5, false, false, queued, |v| seen.push(v));
+    assert_eq!(seen, vec![Observation::Connection(Connection::Queued)]);
+    for sequence in 6..70 {
+        let capture = sequence % 2 == 0;
+        let line = format!("{}\n", LINE.replace("capture=false", &format!("capture={capture}")));
+        owner.feed(OutputStream::Stderr, sequence, false, false, line.as_bytes(), |v| seen.push(v));
+    }
+    owner.feed(
+        OutputStream::Stderr,
+        70,
+        false,
+        false,
+        b"operation=\"child_connection_transition\" stage=Admitted\n",
+        |v| seen.push(v),
+    );
+    owner.feed(
+        OutputStream::Stderr,
+        71,
+        false,
+        false,
+        b"operation=\"desktop_failure_transition\" boundary=PollFrame kind=TimedOut\n",
+        |v| seen.push(v),
+    );
+    assert_eq!(seen.len(), 32);
+    assert!(matches!(seen.last(), Some(Observation::Failure(Failure { kind: "TimedOut", .. }))));
 }

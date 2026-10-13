@@ -13,15 +13,45 @@ pub(super) struct PendingAcquire {
     pub(super) original: Moment,
     pub(super) admitted: bool,
 }
+/// Closed progress facts describe wire ownership, never backend or grant authority.
+#[derive(Clone, Copy, Debug)]
+pub(super) enum ConnectionStage {
+    /// The actual ledger retained the immutable original request and cutoff.
+    Queued,
+    /// The original channel accepted the exact encoded request for writing.
+    Admitted,
+    /// The original matching frame transferred to its semantic owner.
+    ReplyReceived,
+}
+impl ConnectionStage {
+    /// Emit one closed token at the genuine owner transition without payload or paths.
+    pub(super) fn report(self) {
+        tracing::info!(operation="child_connection_transition",stage=?self,
+            "Original child connection request advanced");
+    }
+}
 impl PendingAcquire {
+    /// Reject the unchanged original cutoff before wire effects or reply-loan transfer.
+    fn check_current(self, now: Moment) -> std::io::Result<()> {
+        if now >= self.original {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "Original connection acquisition budget expired",
+            ))
+        } else {
+            Ok(())
+        }
+    }
     /// Transfer only this request's exact observed reply; unrelated owners retain theirs.
     /// Matching metadata grants no payload, native grant or readiness authority.
     fn take_matching<T>(
         self,
+        now: Moment,
         observed: Option<WireHeader>,
         take: impl FnOnce() -> Option<T>,
-    ) -> Option<T> {
-        if observed == Some(self.header) { take() } else { None }
+    ) -> std::io::Result<Option<T>> {
+        self.check_current(now)?;
+        Ok(if observed == Some(self.header) { take() } else { None })
     }
 }
 impl ProductionChild {
@@ -37,10 +67,12 @@ impl ProductionChild {
         self.connection_budget = Some(budget);
         let header = self.bootstrap.channel_mut().prepare_request(budget.until())?;
         self.acquire = Some(PendingAcquire { header, original: budget.until(), admitted: false });
+        ConnectionStage::Queued.report();
         self.send_acquire(prepared)
     }
     pub(super) fn send_acquire(&mut self, prepared: &PreparedChildStartup) -> Result<()> {
         let Some(pending) = self.acquire else { return Ok(()) };
+        pending.check_current(self.client()?.now()?)?;
         if pending.admitted {
             return Ok(());
         }
@@ -55,17 +87,20 @@ impl ProductionChild {
             pending.original,
         )? {
             self.acquire.as_mut().ok_or("Original acquire disappeared")?.admitted = true;
+            ConnectionStage::Admitted.report();
         }
         Ok(())
     }
     pub(super) fn receive_acquire(&mut self) -> Result<()> {
         let Some(pending) = self.acquire else { return Ok(()) };
+        let now = self.client()?.now()?;
+        pending.check_current(now)?;
         if !pending.admitted {
             return Ok(());
         }
         let observed = self.bootstrap.channel_mut().received_header()?;
         let Some(frame) =
-            pending.take_matching(observed, || self.bootstrap.channel_mut().take_frame())
+            pending.take_matching(now, observed, || self.bootstrap.channel_mut().take_frame())?
         else {
             return Ok(());
         };
@@ -76,6 +111,7 @@ impl ProductionChild {
         if frame.header != pending.header {
             return Err("Acquire reply differs from original request".into());
         }
+        ConnectionStage::ReplyReceived.report();
         match frame.payload {
             DecodedPayload::Reply(ReplyOutcome::Granted(grant))
                 if grant.identity == self.identity =>
@@ -105,6 +141,11 @@ impl ProductionChild {
         }
     }
     pub(super) fn activity(&mut self, prepared: Option<&PreparedChildStartup>) -> Result<()> {
+        if !self.shutdown.closing()
+            && let Some(pending) = self.acquire
+        {
+            pending.check_current(self.client()?.now()?)?;
+        }
         self.bootstrap.channel_mut().activity(NonZeroUsize::MIN.saturating_add(31))?;
         if self.shutdown.closing() {
             return self.advance_shutdown();

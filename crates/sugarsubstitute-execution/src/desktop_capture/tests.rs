@@ -424,3 +424,5 @@ fn actual_two_output_owner_retires_after_native_failure_preserving_original_term
 }
 
 mod registered;
+#[path = "tests/registered_lifetime.rs"]
+mod registered_lifetime;

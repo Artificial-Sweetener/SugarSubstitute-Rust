@@ -3,7 +3,7 @@
 //! Drive actual successful registration, temporary settlement and permanent charge transfer.
 use super::*;
 /// Fake only the successful native reply; all admission/counter/transfer owners are real.
-struct RegisteredDriver(Driver);
+pub(super) struct RegisteredDriver(pub(super) Driver);
 impl NativeCaptureDriver for RegisteredDriver {
     fn prepare(
         &mut self,

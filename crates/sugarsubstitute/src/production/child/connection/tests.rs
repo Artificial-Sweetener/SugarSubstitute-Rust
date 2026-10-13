@@ -76,10 +76,10 @@ fn activity_ack_before_acquire_grant_keeps_original_owner_and_cutoffs()
     let mut takes = 0;
     assert!(
         pending
-            .take_matching(Some(observed.header), || {
+            .take_matching(Moment::from_nanos(20), Some(observed.header), || {
                 takes += 1;
                 Some(&bytes[..count])
-            })
+            })?
             .is_none()
     );
     assert_eq!(takes, 0);
@@ -113,19 +113,20 @@ fn activity_ack_before_acquire_grant_keeps_original_owner_and_cutoffs()
     assert!(
         pending
             .take_matching(
+                Moment::from_nanos(30),
                 Some(WireHeader { deadline_qpc: acquire.deadline_qpc + 1, ..acquire }),
                 || {
                     takes += 1;
                     Some(&bytes[..count])
                 }
-            )
+            )?
             .is_none()
     );
     let transferred = pending
-        .take_matching(Some(observed.header), || {
+        .take_matching(Moment::from_nanos(30), Some(observed.header), || {
             takes += 1;
             Some(&bytes[..count])
-        })
+        })?
         .ok_or("Exact Acquire reply not selected")?;
     let decoded = FrameCodec::decode(transferred)?;
     assert_eq!(decoded.header, acquire);
@@ -137,5 +138,119 @@ fn activity_ack_before_acquire_grant_keeps_original_owner_and_cutoffs()
     assert_eq!(pending.header.deadline_qpc, 2000);
     requests.consumed(acquire)?;
     assert!(requests.consumed(activity).is_err());
+    Ok(())
+}
+
+/// Advance only the supplied clock; all worker lifetime remains with the actual executor.
+struct AcquireClock(std::sync::atomic::AtomicU64);
+impl sugarsubstitute_contracts::execution::Clock for AcquireClock {
+    fn now(&self) -> Moment {
+        Moment::from_nanos(self.0.load(std::sync::atomic::Ordering::Acquire))
+    }
+    fn sleep_until(&self, _: Moment) -> sugarsubstitute_contracts::execution::WaitFuture {
+        Box::pin(std::future::pending())
+    }
+}
+/// The no-job boundary has no completion subscriber; it creates no additional scheduler.
+struct AcquireWake;
+impl sugarsubstitute_contracts::execution::CompletionWake for AcquireWake {
+    fn wake(
+        &self,
+    ) -> std::result::Result<(), sugarsubstitute_contracts::execution::ExecutionError> {
+        Ok(())
+    }
+}
+
+/// The real admitted ledger remains intact when a quiet request reaches its original cutoff.
+#[test]
+fn quiet_admitted_acquire_expires_without_transferring_or_replacing_original_request()
+-> std::result::Result<(), Box<dyn Error>> {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    };
+    let clock = Arc::new(AcquireClock(AtomicU64::new(10)));
+    let owner =
+        sugarsubstitute_execution::ExecutionOwner::new(clock.clone(), Arc::new(AcquireWake))?;
+    let client = owner.client();
+    let mut requests = requests()?;
+    let until = Moment::from_nanos(1000);
+    let header = requests.prepare(until, CounterDeadline::new(2000, 100)?)?;
+    requests.outbound(header, until, client.now()?)?;
+    requests.admitted(header)?;
+    let pending = PendingAcquire { header, original: until, admitted: true };
+    let mut effects = 0;
+    assert!(
+        pending
+            .take_matching(client.now()?, None, || {
+                effects += 1;
+                Some(())
+            })?
+            .is_none()
+    );
+    clock.0.store(1000, Ordering::Release);
+    let cause = pending
+        .take_matching(client.now()?, None, || {
+            effects += 1;
+            Some(())
+        })
+        .err()
+        .ok_or("Quiet Acquire renewed its cutoff")?;
+    assert_eq!(cause.kind(), std::io::ErrorKind::TimedOut);
+    assert_eq!(effects, 0);
+    assert_eq!(pending.header, header);
+    assert_eq!(pending.original, until);
+    assert!(requests.outbound(header, until, client.now()?).is_err());
+    assert!(requests.consumed(header).is_err());
+    assert!(requests.received(header, client.now()?).is_err());
+    drop(owner);
+    Ok(())
+}
+
+/// Matching and foreign late inert replies keep their exact byte owner untouched.
+#[test]
+fn late_acquire_reply_cannot_transfer_matching_or_foreign_frame_at_or_after_cutoff()
+-> std::result::Result<(), Box<dyn Error>> {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    };
+    let clock = Arc::new(AcquireClock(AtomicU64::new(10)));
+    let owner =
+        sugarsubstitute_execution::ExecutionOwner::new(clock.clone(), Arc::new(AcquireWake))?;
+    let client = owner.client();
+    let mut requests = requests()?;
+    let until = Moment::from_nanos(1000);
+    let header = requests.prepare(until, CounterDeadline::new(2000, 100)?)?;
+    requests.outbound(header, until, client.now()?)?;
+    requests.admitted(header)?;
+    let pending = PendingAcquire { header, original: until, admitted: true };
+    // Receive the original wire metadata before expiry; the semantic owner has not taken bytes.
+    requests.received(header, client.now()?)?;
+    let mut bytes = [0; 512];
+    for (sample, observed) in
+        [(1000, header), (1001, WireHeader { request: Some(RequestId::new(99)?), ..header })]
+    {
+        let count = FrameCodec::encode(
+            &WireMessage {
+                header: observed,
+                payload: WirePayload::Reply(ReplyOutcome::Acknowledged),
+            },
+            &mut bytes,
+        )?;
+        let decoded = FrameCodec::decode(&bytes[..count])?;
+        let mut retained = Some(&bytes[..count]);
+        clock.0.store(sample, Ordering::Release);
+        let cause = pending
+            .take_matching(client.now()?, Some(decoded.header), || retained.take())
+            .err()
+            .ok_or("Late reply transferred its retained input")?;
+        assert_eq!(cause.kind(), std::io::ErrorKind::TimedOut);
+        assert_eq!(retained, Some(&bytes[..count]));
+        assert_eq!(pending.header, header);
+        assert_eq!(pending.original, until);
+    }
+    requests.consumed(header)?;
+    drop(owner);
     Ok(())
 }

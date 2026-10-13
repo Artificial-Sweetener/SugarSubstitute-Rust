@@ -10,13 +10,25 @@ pub(crate) fn scope_deadline(
     state: &State,
     record: &Record,
 ) -> Result<Option<Moment>, AdmissionError> {
+    let ancestry = scope_ancestry_deadline(core, state, record)?;
+    Ok(crate::scope::earliest(record.deadline, ancestry))
+}
+
+/// Observe only actual scope/cancellation ownership after a finite job has completed.
+/// Callers must separately prove their retained native lifetime and original record.
+/// This creates no fresh effect authority and changes no original job deadline.
+pub(crate) fn scope_ancestry_deadline(
+    core: &Core,
+    state: &State,
+    record: &Record,
+) -> Result<Option<Moment>, AdmissionError> {
     if state.stopping || core.clock.failed() {
         return Err(AdmissionError::ShuttingDown);
     }
     if record.job.cancellation().is_requested() {
         return Err(AdmissionError::ScopeClosed { scope_id: record.scope_id });
     }
-    let mut cutoff = record.deadline;
+    let mut cutoff = None;
     let mut current = Some(record.scope_id);
     let mut ancestors = 0;
     while let Some(id) = current {

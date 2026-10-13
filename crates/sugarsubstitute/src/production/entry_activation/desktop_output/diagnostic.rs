@@ -18,11 +18,22 @@ pub(super) struct Failure {
     pub(super) boundary: &'static str,
     pub(super) kind: &'static str,
 }
+/// Closed wire progress cannot establish a backend grant or native readiness.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum Connection {
+    /// The original bounded request was prepared.
+    Queued,
+    /// The same request was admitted to its native writer.
+    Admitted,
+    /// Its exact reply transferred to the semantic owner.
+    ReplyReceived,
+}
 /// Distinguish preparation progress from the first native failure without granting authority.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum Observation {
     Preparation(Phase),
     Failure(Failure),
+    Connection(Connection),
 }
 /// Fixed source scratch is covered by the containing Record's original metadata
 /// claim. Loss, oversized input and EOF invalidate partial lines; stdout is opaque.
@@ -32,6 +43,7 @@ pub(super) struct Diagnostic {
     discard: bool,
     sequences: [u64; 2],
     latest: Option<Phase>,
+    connection: Option<Connection>,
     emitted: u8,
     failure_seen: bool,
 }
@@ -43,6 +55,7 @@ impl Diagnostic {
             discard: false,
             sequences: [0; 2],
             latest: None,
+            connection: None,
             emitted: 0,
             failure_seen: false,
         }
@@ -81,6 +94,21 @@ impl Diagnostic {
                                 emit(Observation::Failure(failure));
                             }
                         }
+                    } else if let Some(connection) = parse_connection(&self.bytes[..self.length]) {
+                        let next = match self.connection {
+                            None => Some(Connection::Queued),
+                            Some(Connection::Queued) => Some(Connection::Admitted),
+                            Some(Connection::Admitted) => Some(Connection::ReplyReceived),
+                            Some(Connection::ReplyReceived) => None,
+                        };
+                        if next == Some(connection) {
+                            self.connection = Some(connection);
+                            // All nonfailure observations share the original cap and reserve.
+                            if self.emitted < 31 {
+                                self.emitted += 1;
+                                emit(Observation::Connection(connection));
+                            }
+                        }
                     } else if let Some(phase) = parse(&self.bytes[..self.length])
                         && self.latest != Some(phase)
                     {
@@ -108,6 +136,20 @@ impl Diagnostic {
             self.length = 0;
             self.discard = false;
         }
+    }
+}
+/// Accept one exact closed token, rejecting fields, duplicates and raw payload extensions.
+fn parse_connection(bytes: &[u8]) -> Option<Connection> {
+    let line = std::str::from_utf8(bytes).ok()?.trim_end_matches('\r');
+    let (prefix, fields) = line.split_once("operation=\"child_connection_transition\" ")?;
+    if prefix.contains("operation=") {
+        return None;
+    }
+    match fields {
+        "stage=Queued" => Some(Connection::Queued),
+        "stage=Admitted" => Some(Connection::Admitted),
+        "stage=ReplyReceived" => Some(Connection::ReplyReceived),
+        _ => None,
     }
 }
 fn parse(bytes: &[u8]) -> Option<Phase> {

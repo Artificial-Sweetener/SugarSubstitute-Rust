@@ -115,6 +115,8 @@ impl CoordinatorBackend {
         record.source.submit_inspection(resources.client, &record.scope, spec)?;
         record.source_job = true;
         record.source_closed = false;
+        tracing::info!(operation="backend_preparation_transition",resource=?key,stage="SourceSubmitted",
+            "Original backend preparation advanced");
         if let BackendTarget::Managed(configuration) = &record.target {
             let spec = Self::spec(
                 resources,
@@ -130,6 +132,8 @@ impl CoordinatorBackend {
                 configuration.clone(),
             )?);
             record.resolution_pending = true;
+            tracing::info!(operation="backend_preparation_transition",resource=?key,stage="ResolutionSubmitted",
+                "Original backend preparation advanced");
         }
         Ok(())
     }
@@ -193,6 +197,8 @@ impl CoordinatorBackend {
             ClaimLaunchJobs { native_scope, creation, root_watch },
             input,
         )?);
+        tracing::info!(operation="backend_preparation_transition",resource=?record.key,stage="LaunchSubmitted",
+            "Original backend preparation advanced");
         Ok(())
     }
     pub(super) fn probe(&mut self, at: usize, resources: &mut BackendResources<'_>) -> Result<()> {

@@ -134,10 +134,23 @@ impl DesktopCaptureActive {
         self.work.shared.request(Stop::Cancelled, CleanupTrigger::FailedPreparation);
     }
     /// Use only current owner observations; no callback is made while locks are held.
-    fn stop(&mut self, now: Moment) {
-        let reason = task::stop_reason_at(&self.context, now).or_else(|| {
-            (!self.terminal && now >= self.work.original_until).then_some(Stop::TimedOut)
-        });
+    fn stop(&mut self, core: &Core, now: Moment) {
+        let registered = self.terminal && lock(&self.work.shared.state).registered_published;
+        let reason = if registered && self.work.shared.cleanup.stopped() {
+            None
+        } else if registered {
+            match super::registered_lifetime::stop(core, &self.work, &self.context, now) {
+                Ok(reason) => reason,
+                Err(cause) => {
+                    self.failed(core, error("capture_registered_lifetime", cause));
+                    return;
+                }
+            }
+        } else {
+            task::stop_reason_at(&self.context, now).or_else(|| {
+                (!self.terminal && now >= self.work.original_until).then_some(Stop::TimedOut)
+            })
+        };
         if let Some(reason) = reason {
             if !self.terminal && self.outcome.is_none() {
                 self.outcome = Some(task::stopped_outcome(reason));
@@ -158,7 +171,7 @@ impl DesktopCaptureActive {
     /// Finite provider/native work and panic resumption run outside all owner locks.
     pub(crate) fn progress(&mut self, core: &Core, now: Moment, clock_available: bool) {
         let observed = if clock_available { core.clock.now() } else { now };
-        self.stop(observed);
+        self.stop(core, observed);
         if !self.initialized && !self.work.shared.cleanup.stopped() {
             self.initialized = true;
             if let Err(cause) = self.prepare() {
@@ -166,13 +179,13 @@ impl DesktopCaptureActive {
             }
         }
         let observed = if clock_available { core.clock.now() } else { now };
-        self.stop(observed);
+        self.stop(core, observed);
         if self.prepared && !self.terminal && !self.work.shared.cleanup.stopped() {
             if let Err(cause) = self.advance(core) {
                 self.failed(core, cause);
             }
             let observed = if clock_available { core.clock.now() } else { now };
-            self.stop(observed);
+            self.stop(core, observed);
             if !self.work.shared.cleanup.stopped() {
                 self.publish_registered(core, observed);
             }

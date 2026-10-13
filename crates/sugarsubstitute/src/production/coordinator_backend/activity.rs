@@ -42,6 +42,8 @@ impl CoordinatorBackend {
         match observation {
             ClaimObservation::LaunchResolved(_) => {
                 record.resolution_pending = false;
+                tracing::info!(operation="backend_preparation_transition",resource=?key,stage="ResolutionTerminal",
+                    "Original backend preparation advanced");
                 if record.shutdown.is_none() {
                     record.budget.probe_until(resources.client.now()?)?;
                     let ticket =
@@ -70,11 +72,15 @@ impl CoordinatorBackend {
                     record.resolution = None;
                     record.claim_pending = true;
                     record.backend_admitted = true;
+                    tracing::info!(operation="backend_preparation_transition",resource=?key,stage="ClaimSubmitted",
+                        "Original backend preparation advanced");
                 }
             }
             ClaimObservation::BackendClaimed(_) => {
                 record.claim_pending = false;
                 record.claimed = true;
+                tracing::info!(operation="backend_preparation_transition",resource=?key,stage="ClaimTerminal",
+                    "Original backend preparation advanced");
                 transition = self.observe(ResourceObservation::ClaimAcquired(key))?;
             }
             ClaimObservation::BackendReleased(_) => {
@@ -87,8 +93,16 @@ impl CoordinatorBackend {
             }
             ClaimObservation::Failed { target, cause } => {
                 match target {
-                    ClaimTarget::Resolution(_) => record.resolution_pending = false,
+                    ClaimTarget::Resolution(_) => {
+                        record.resolution_pending = false;
+                        tracing::info!(operation="backend_preparation_transition",resource=?key,stage="ResolutionTerminal",
+                            "Original backend preparation advanced");
+                    }
                     ClaimTarget::Backend(_) => {
+                        if record.claim_pending {
+                            tracing::info!(operation="backend_preparation_transition",resource=?key,stage="ClaimTerminal",
+                                "Original backend preparation advanced");
+                        }
                         record.claim_pending = false;
                         record.release_pending = false;
                     }
@@ -98,8 +112,16 @@ impl CoordinatorBackend {
             }
             ClaimObservation::Stopped { target, kind } => {
                 match target {
-                    ClaimTarget::Resolution(_) => record.resolution_pending = false,
+                    ClaimTarget::Resolution(_) => {
+                        record.resolution_pending = false;
+                        tracing::info!(operation="backend_preparation_transition",resource=?key,stage="ResolutionTerminal",
+                            "Original backend preparation advanced");
+                    }
                     ClaimTarget::Backend(_) => {
+                        if record.claim_pending {
+                            tracing::info!(operation="backend_preparation_transition",resource=?key,stage="ClaimTerminal",
+                                "Original backend preparation advanced");
+                        }
                         record.claim_pending = false;
                         record.release_pending = false;
                     }
@@ -137,6 +159,8 @@ impl CoordinatorBackend {
                 };
                 match observation {
                     RegistryObservation::ContainedStarted { process } => {
+                        tracing::info!(operation="backend_preparation_transition",resource=?key,stage="LaunchStarted",
+                            "Original backend preparation advanced");
                         self.records[at]
                             .as_mut()
                             .ok_or(LifecycleRejection::StaleIdentity)?
@@ -202,11 +226,15 @@ impl CoordinatorBackend {
             match record.source.take_inspection() {
                 Ok(Some(source)) => {
                     record.source_job = false;
+                    tracing::info!(operation="backend_preparation_transition",resource=?record.key,stage="SourceTerminal",
+                        "Original backend preparation advanced");
                     record.source_lease = Some(source);
                 }
                 Ok(None) => {}
                 Err(cause) => {
                     record.source_job = false;
+                    tracing::info!(operation="backend_preparation_transition",resource=?record.key,stage="SourceTerminal",
+                        "Original backend preparation advanced");
                     return Err(Box::new(cause));
                 }
             }
