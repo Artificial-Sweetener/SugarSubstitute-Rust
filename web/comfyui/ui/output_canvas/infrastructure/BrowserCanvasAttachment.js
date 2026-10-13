@@ -333,7 +333,7 @@ export class BrowserCanvasAttachment {
             ? canvasCameraGeometry(basis.dimensions, surface.viewport, surface.physicalPixelsPerCssPixel)
             : null;
         if (basis && geometry)
-            this.#camera.show(basis.selection, geometry, basis.runOrder);
+            this.#camera.show(basis.selection, geometry, basis.runOrder, basis.previewLane);
         else {
             this.#input.cancel();
             this.#camera.suspend();

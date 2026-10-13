@@ -31,7 +31,7 @@ export class CanvasCameraController {
             const target = this.#target;
             if (!target || this.#disposed)
                 return;
-            options.inspections.capture(options.view, target.selection, camera, target.geometry);
+            options.inspections.capture(options.view, target.selection, camera, target.geometry, target.previewLane);
             options.present(Object.freeze({ ...target, camera }));
         });
     }
@@ -40,12 +40,13 @@ export class CanvasCameraController {
         const camera = this.#transition.read();
         return this.#target && camera ? Object.freeze({ ...this.#target, camera }) : null;
     }
-    /** Fit new-Run pixels; restore same-Run inspection against settled decoded geometry. */
-    show(selection, geometry, runOrder) {
+    /** Fit fresh preview compositions and new Runs; preserve inspection within one asset's updates. */
+    show(selection, geometry, runOrder, previewLane) {
         if (this.#disposed)
             return;
         const freshRun = this.options.inspections.presentRun(this.options.view, runOrder);
-        const previous = freshRun ? null : this.read();
+        const displayed = this.read();
+        const previous = freshRun || displayed?.previewLane !== previewLane ? null : displayed;
         const sameSlot = previous?.selection.sourceId === selection.sourceId &&
             previous.selection.batchIndex === selection.batchIndex;
         const sameImage = previous?.geometry.image.width === geometry.image.width &&
@@ -60,8 +61,8 @@ export class CanvasCameraController {
             ? resizeCanvasCamera(previous.camera, previous.geometry, geometry)
             : this.#comparison && previous
                 ? projectCanvasInspection(captureCanvasInspection(previous.camera, previous.geometry), geometry)
-                : this.options.inspections.camera(this.options.view, selection, geometry);
-        this.#target = { selection: Object.freeze({ ...selection }), geometry };
+                : this.options.inspections.camera(this.options.view, selection, geometry, previewLane);
+        this.#target = { selection: Object.freeze({ ...selection }), geometry, previewLane };
         this.#transition.set(camera);
     }
     /** Preserve the common reveal region when changing comparison partners, independently of solo linking. */
@@ -75,7 +76,7 @@ export class CanvasCameraController {
         this.options.inspections.setLinked(this.options.view, enabled, this.read());
         const target = this.#target;
         if (target)
-            this.#transition.set(this.options.inspections.camera(this.options.view, target.selection, target.geometry));
+            this.#transition.set(this.options.inspections.camera(this.options.view, target.selection, target.geometry, target.previewLane));
     }
     /** Fit the displayed image without changing content following. */
     fit() {
