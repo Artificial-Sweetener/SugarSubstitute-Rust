@@ -41,6 +41,17 @@ pub(super) enum ChildBootstrapIssue {
     Deadline,
 }
 
+/// Closed diagnostic facts; none grants native, configuration or readiness authority.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct PreparationObservation {
+    capture_admitted: bool,
+    capture: bool,
+    registered: bool,
+    configuration: bool,
+    original_failure: Option<ChildBootstrapIssue>,
+    failure_retained: bool,
+}
+
 #[cfg(test)]
 #[path = "bootstrap/tests.rs"]
 mod tests;
@@ -73,6 +84,7 @@ pub(super) struct ChildBootstrap {
     issue: Option<ChildBootstrapIssue>,
     started: bool,
     closing: bool,
+    last_preparation: Option<PreparationObservation>,
 }
 impl ChildBootstrap {
     /// Compose inert owners and application-assigned identities without native effects.
@@ -107,6 +119,7 @@ impl ChildBootstrap {
             issue: None,
             started: false,
             closing: false,
+            last_preparation: None,
         })
     }
 
@@ -313,9 +326,41 @@ impl ChildBootstrap {
         self.native_scope.as_ref()
     }
     /// Borrow the original capture or authenticated handshake cutoff without renewal.
-    #[cfg(test)]
     pub(super) fn original_deadline(&self) -> Option<Moment> {
         self.original.or_else(|| self.channel.original_deadline())
+    }
+
+    /// Observe actual preparation transitions after all admission/native guards are released.
+    /// Only booleans and the original typed phase are logged; cause custody stays owned.
+    pub(super) fn report_preparation(&mut self) {
+        if let Some(observation) = self.changed_preparation() {
+            tracing::info!(
+                operation = "child_preparation_transition",
+                capture_admitted = observation.capture_admitted,
+                capture = observation.capture,
+                registered = observation.registered,
+                configuration = observation.configuration,
+                original_failure = ?observation.original_failure,
+                failure_retained = observation.failure_retained,
+                "Child pre-UI preparation conditions changed"
+            );
+        }
+    }
+    /// Cache one closed observation to suppress identical polling diagnostics.
+    fn changed_preparation(&mut self) -> Option<PreparationObservation> {
+        let observation = PreparationObservation {
+            capture_admitted: self.capture.admitted(),
+            capture: self.capture.ready(),
+            registered: self.channel.registered(),
+            configuration: self.prepared.is_some() || self.delivered,
+            original_failure: self.issue,
+            failure_retained: self.failure_source().is_some(),
+        };
+        if self.last_preparation == Some(observation) {
+            return None;
+        }
+        self.last_preparation = Some(observation);
+        Some(observation)
     }
     /// Observe configuration work independently of transport or native retirement.
     pub(super) fn projection_pending(&self) -> bool {

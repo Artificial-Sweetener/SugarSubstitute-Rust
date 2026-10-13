@@ -116,3 +116,80 @@ fn persistent_channel_deadline_is_rejected_inertly() -> TestResult {
     assert_eq!(calls.load(Ordering::Acquire), 0);
     Ok(())
 }
+
+/// Exercise the actual owner's passive deadline view without native readiness authority.
+#[test]
+fn quiet_pre_ui_owner_keeps_original_cutoff_until_ready_or_shutdown() -> TestResult {
+    use crate::production::child::ProductionChild;
+    use sugarsubstitute_desktop::{MainCaptionLabels, MainWindowSettings};
+    let calls = Arc::new(AtomicUsize::new(0));
+    let mut bootstrap = bootstrap(&calls, None)?;
+    let original = Moment::from_nanos(100);
+    // This inert cached boundary value grants no admitted capture or transport proof.
+    bootstrap.original = Some(original);
+    let run = RunKey {
+        owner: CoordinatorKey {
+            namespace: NamespaceId::new([1; 32]),
+            epoch: CoordinatorEpoch::new([2; 16])?,
+        },
+        instance: InstanceId::new(1)?,
+        generation: RunGeneration::new(1)?,
+    };
+    let mut child = ProductionChild::assemble(
+        bootstrap,
+        run,
+        (LaunchId::new(1)?, Generation::new(1)?),
+        MainWindowSettings {
+            logical_width: 1280,
+            logical_height: 720,
+            dark: true,
+            labels: MainCaptionLabels {
+                minimize: "minimize",
+                maximize: "maximize",
+                restore: "restore",
+                close: "close",
+            },
+        },
+    );
+    assert_eq!(child.next_deadline(), Some(original));
+    assert_eq!(child.next_deadline(), Some(original));
+    assert!(child.bootstrap.take_prepared_startup().is_none());
+    // Test only this passive phase flag's deadline selection; publish no Ready or UI.
+    child.prepared = true;
+    assert_eq!(child.next_deadline(), None);
+    child.prepared = false;
+    assert_eq!(child.next_deadline(), Some(original));
+    assert!(child.begin_shutdown()?.is_none());
+    assert_eq!(child.next_deadline(), None);
+    let budget = ShutdownBudget::new(Moment::from_nanos(200))?;
+    child.request_shutdown(budget)?;
+    assert_eq!(child.next_deadline(), Some(budget.settle_until));
+    assert_eq!(calls.load(Ordering::Acquire), 0);
+    Ok(())
+}
+
+/// Emit only changed closed facts while retaining the first actual supplied cause.
+#[test]
+fn preparation_diagnostics_suppress_repeats_and_retain_redacted_original_failure() -> TestResult {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let mut child = bootstrap(&calls, None)?;
+    let initial = child.changed_preparation().ok_or("Initial observation missing")?;
+    assert!(!initial.capture_admitted);
+    assert!(!initial.capture && !initial.registered && !initial.configuration);
+    assert_eq!(initial.original_failure, None);
+    assert!(!initial.failure_retained);
+    assert!(child.changed_preparation().is_none());
+    child.record(ChildBootstrapIssue::Deadline, Box::new(std::io::Error::other("private-path")));
+    let failure = child.changed_preparation().ok_or("Failure transition missing")?;
+    assert!(!failure.capture_admitted);
+    assert_eq!(failure.original_failure, Some(ChildBootstrapIssue::Deadline));
+    assert!(failure.failure_retained);
+    assert!(!format!("{failure:?}").contains("private-path"));
+    assert!(child.changed_preparation().is_none());
+    child.record(ChildBootstrapIssue::Transport, Box::new(std::io::Error::other("later")));
+    assert!(child.changed_preparation().is_none());
+    assert_eq!(child.issue, Some(ChildBootstrapIssue::Deadline));
+    assert_eq!(child.failure_source().ok_or("Original failure lost")?.to_string(), "private-path");
+    assert_eq!(calls.load(Ordering::Acquire), 0);
+    Ok(())
+}

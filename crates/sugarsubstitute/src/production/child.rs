@@ -100,14 +100,20 @@ impl ProductionChild {
             inputs.native_scope,
             inputs.identity,
         )?;
-        Ok(Self {
+        Ok(Self::assemble(bootstrap, inputs.run, inputs.identity, inputs.settings))
+    }
+    /// Assemble inert application state around its actual bootstrap owner.
+    /// Native driver selection remains exclusively at the outer constructor boundary.
+    fn assemble(
+        bootstrap: ChildBootstrap,
+        run: RunKey,
+        identity: (LaunchId, Generation),
+        settings: MainWindowSettings,
+    ) -> Self {
+        Self {
             bootstrap,
-            run: inputs.run,
-            identity: MainIdentity {
-                run: inputs.run,
-                launch: inputs.identity.0,
-                navigation: inputs.identity.1,
-            },
+            run,
+            identity: MainIdentity { run, launch: identity.0, navigation: identity.1 },
             client: None,
             jobs: None,
             connection_budget: None,
@@ -116,7 +122,7 @@ impl ProductionChild {
             lease: None,
             grant: None,
             grant_header: None,
-            main: main::MainPreparation::new(inputs.settings),
+            main: main::MainPreparation::new(settings),
             output: output::ChildOutput::new(),
             snapshot: None,
             commands: std::array::from_fn(|_| None),
@@ -131,7 +137,7 @@ impl ProductionChild {
             phase: None,
             probe_queued: false,
             finished: false,
-        })
+        }
     }
     /// Transfer the genuine child scope before any fallible bootstrap admission.
     /// # Errors
@@ -152,6 +158,7 @@ impl ProductionChild {
             Ok(())
         })();
         self.failed |= result.is_err();
+        self.bootstrap.report_preparation();
         result
     }
     /// Deliver one immutable batch to every actual owner before resolving any failure.
@@ -178,6 +185,7 @@ impl ProductionChild {
             self.activity(prepared)
         })();
         self.failed |= result.is_err();
+        self.bootstrap.report_preparation();
         result
     }
     /// Drive only actual capture/authentication/configuration before native surface admission.
@@ -195,6 +203,7 @@ impl ProductionChild {
             Ok(step)
         })();
         self.failed |= result.is_err();
+        self.bootstrap.report_preparation();
         result
     }
     /// Move the complete guarded application state once after actual Ready.
@@ -294,6 +303,9 @@ impl ProductionChild {
     /// Borrow the earliest original pending operation or cleanup cutoff without renewing it.
     pub(in crate::production) fn next_deadline(&self) -> Option<Moment> {
         [
+            (!self.prepared && !self.shutdown.closing())
+                .then(|| self.bootstrap.original_deadline())
+                .flatten(),
             self.bootstrap.ui_deadline(),
             self.acquire.map(|p| p.original),
             self.main.deadline(),

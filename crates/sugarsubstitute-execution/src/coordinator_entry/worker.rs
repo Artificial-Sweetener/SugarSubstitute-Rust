@@ -199,9 +199,12 @@ impl Active {
                 slot.failure = Some(error);
             }
         }
+        let transitioned = self.connections[index].phase != Phase::Retiring;
         self.connections[index].phase = Phase::Retiring;
         lock(&self.work.shared.state).connections[index].closing = true;
-        core.changed();
+        if transitioned {
+            core.changed();
+        }
     }
     pub(crate) fn progress(&mut self, core: &Core, now: Moment, clock_available: bool) {
         let observed = if clock_available { core.clock.now() } else { now };

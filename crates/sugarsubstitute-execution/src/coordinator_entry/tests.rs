@@ -58,3 +58,6 @@ mod captured_admission;
 
 #[path = "peer_disconnect_tests.rs"]
 mod peer_disconnect;
+
+#[path = "close_progress_tests.rs"]
+mod close_progress;
