@@ -30,7 +30,7 @@ export class CanvasImageSlot {
         this.wanted = canvasImageIntent(input);
         this.status = canvasResourceStatus('loading', 'Loading image…');
     }
-    /** Replace interest, allowing a current preview decode to complete despite faster incoming frames. */
+    /** Replace interest without presenting another source or batch beneath the incoming controls. */
     update(input, retry) {
         if (this.wanted.key === input.key &&
             (!retry || !['budget', 'error', 'empty'].includes(this.status.state)))
@@ -41,7 +41,11 @@ export class CanvasImageSlot {
         if (this.pending &&
             (!input.preview || !this.pending.intent.preview || this.pending.intent.lane !== input.lane))
             drops += this.cancel();
-        if (this.displayed?.frame.preview && (!input.preview || this.displayed.lane !== input.lane))
+        const displayed = this.displayed;
+        if (displayed &&
+            (displayed.frame.selection.sourceId !== input.selection.sourceId ||
+                displayed.frame.selection.batchIndex !== input.selection.batchIndex ||
+                (displayed.frame.preview && (!input.preview || displayed.lane !== input.lane))))
             this.dropDisplay();
         this.wanted = canvasImageIntent(input);
         if (!input.preview && this.displayed?.frame.key === input.key) {

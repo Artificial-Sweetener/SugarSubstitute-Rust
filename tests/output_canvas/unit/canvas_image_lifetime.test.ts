@@ -43,16 +43,14 @@ describe('canvas image lifetime', () => {
     expect(f.port.requests).toHaveLength(2);
     f.resources.dispose();
   });
-  test('keeps the actual outgoing image inspection slot until its replacement is decoded', async () => {
+  test('clears the outgoing source while its replacement is decoding', async () => {
     const f = canvasImageFixture();
     f.resources.update([{ slot: 'a', input: canvasImageInput('old') }]);
     f.port.ready(0);
     await settleCanvasImages();
     f.resources.update([{ slot: 'a', input: canvasImageInput('new') }]);
-    expect(f.resources.read()[0]?.frame?.selection).toEqual({
-      sourceId: 'source:old',
-      batchIndex: 0,
-    });
+    expect(f.resources.read()[0]?.frame).toBeNull();
+    expect(f.port.allocations).toBe(1);
     f.port.ready(1);
     await settleCanvasImages();
     expect(f.resources.read()[0]?.frame?.selection).toEqual({
@@ -60,6 +58,44 @@ describe('canvas image lifetime', () => {
       batchIndex: 0,
     });
     f.resources.dispose();
+  });
+  test('clears another batch position from the same source before replacement decode', async () => {
+    const f = canvasImageFixture();
+    const first = canvasImageInput('first');
+    f.resources.update([{ slot: 'a', input: first }]);
+    f.port.ready(0);
+    await settleCanvasImages();
+    f.resources.update([
+      {
+        slot: 'a',
+        input: { ...canvasImageInput('third'), selection: { ...first.selection, batchIndex: 2 } },
+      },
+    ]);
+    expect(f.resources.read()[0]?.frame).toBeNull();
+    f.port.ready(1);
+    await settleCanvasImages();
+    expect(f.resources.read()[0]?.frame?.selection).toEqual({ ...first.selection, batchIndex: 2 });
+    f.resources.dispose();
+    expect(f.port.allocations).toBe(0);
+  });
+  test('refuses retaining previews into an unavailable overview allowance or a foreign lane', async () => {
+    for (const restricted of [true, false]) {
+      const f = canvasImageFixture();
+      const input = canvasImageInput('preview', true);
+      f.resources.update([{ slot: 'primary', input }]);
+      f.port.ready(0, { width: 512, height: 288 });
+      await settleCanvasImages();
+      if (restricted) f.budget.allowance(256 * 1024 * 1024);
+      f.resources.update([], false, {
+        slot: 'grid',
+        lane: restricted ? input.lane : 'foreign-run',
+        selection: input.selection,
+        role: 'thumbnail',
+      });
+      expect(f.resources.read()).toEqual([]);
+      expect(f.port.allocations).toBe(0);
+      f.resources.dispose();
+    }
   });
   test('moves a selected partner into single view but decodes duplicate chosen images independently', async () => {
     const f = canvasImageFixture();
@@ -103,8 +139,14 @@ describe('canvas image lifetime', () => {
       activeDeadlines: 0,
     });
     f.resources.update([
-      { slot: 'a', input: canvasImageInput('a2') },
-      { slot: 'b', input: canvasImageInput('b2') },
+      {
+        slot: 'a',
+        input: { ...canvasImageInput('a2'), selection: canvasImageInput('a').selection },
+      },
+      {
+        slot: 'b',
+        input: { ...canvasImageInput('b2'), selection: canvasImageInput('b').selection },
+      },
     ]);
     expect(f.resources.read().map((slot) => slot.frame?.key)).toEqual(['a', 'b']);
     expect(f.port.allocations).toBe(4);

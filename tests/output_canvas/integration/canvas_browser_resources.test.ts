@@ -145,6 +145,96 @@ function fixture() {
 }
 
 describe('browser resource composition', () => {
+  test.each(['final', 'next-run'])(
+    'retires an overview preview at %s before deferred cell layout',
+    async (transition) => {
+      const f = fixture();
+      const preview = f.preview(1);
+      const entry = f.catalog.entries[0]!;
+      const current: CanvasCatalogSnapshot = {
+        ...f.catalog,
+        result: { ...f.catalog.result, runOrder: 2, runStatus: 'running', preview },
+        entries: [{ ...entry, items: [], preview }],
+      };
+      f.views.update(f.view, (state) => ({ ...state, mode: 'overview' }));
+      f.browser.reconcile(f.plan(current, preview));
+      f.browser.overview([
+        {
+          key: 'preview',
+          selection: { sourceId: entry.source.id, batchIndex: 0 },
+          label: 'Preview',
+          item: null,
+          preview: true,
+        },
+      ]);
+      f.browser.receive(preview, new Blob(['preview']));
+      await f.ready(0, { width: 512, height: 288 });
+      if (transition === 'final')
+        f.browser.reconcile(f.plan(canvasCatalogFixture(2, 0, [entry.source])));
+      else {
+        const next = { ...preview, promptId: 'prompt:next' as const, runOrder: 3, token: 'next' };
+        const catalog: CanvasCatalogSnapshot = {
+          ...current,
+          result: { ...current.result, runOrder: 3, presentedRunOrder: 3, preview: next },
+          entries: [{ ...entry, items: [], preview: next }],
+        };
+        f.browser.reconcile(f.plan(catalog, next));
+      }
+      expect(f.resources.read()).toEqual([]);
+      expect(f.loads[0]?.released).toBe(true);
+      f.browser.dispose();
+    },
+  );
+
+  test.each([0, 2])(
+    'moves a visible same-run preview from overview position %i without awaiting another frame',
+    async (index) => {
+      const f = fixture();
+      const preview = f.preview(1);
+      const entry = f.catalog.entries[0]!;
+      const current: CanvasCatalogSnapshot = {
+        ...f.catalog,
+        result: { ...f.catalog.result, runOrder: 2, runStatus: 'running', preview },
+        entries: [{ ...entry, items: [], preview }],
+      };
+      const cell = {
+        key: 'preview-cell',
+        selection: { sourceId: entry.source.id, batchIndex: 0 },
+        label: 'Preview',
+        item: null,
+        preview: true,
+      };
+      f.views.update(f.view, (state) => ({
+        ...state,
+        mode: 'overview',
+        selection: { sourceId: entry.source.id, batchIndex: index },
+      }));
+      f.browser.reconcile(f.plan(current, preview));
+      f.browser.overview([cell]);
+      f.browser.receive(preview, new Blob(['preview']));
+      await f.ready(0, { width: 512, height: 288 });
+      const frame = f.resources.read()[0]!.frame;
+      expect(frame?.selection.batchIndex).toBe(0);
+      f.views.update(f.view, (state) => ({ ...state, mode: 'image', selection: cell.selection }));
+      f.browser.reconcile(f.plan(current, preview));
+      expect(f.resources.read()[0]?.frame).toBe(frame);
+      expect(f.resources.read()[0]?.slot).toBe('primary');
+      expect(f.browser.previewStarted).toBe(true);
+      f.views.update(f.view, (state) => ({ ...state, mode: 'overview' }));
+      f.browser.reconcile(f.plan(current, preview));
+      f.browser.overview([cell]);
+      expect(f.resources.read()[0]?.frame).toBe(frame);
+      expect(f.resources.read()[0]?.slot).toBe(cell.key);
+      expect(f.loads).toHaveLength(1);
+      const next = { ...preview, promptId: 'prompt:next' as const, runOrder: 3, token: 'new-run' };
+      f.views.update(f.view, (state) => ({ ...state, mode: 'image' }));
+      f.browser.reconcile(f.plan(current, next));
+      expect(f.resources.read()).toEqual([]);
+      expect(f.loads[0]?.released).toBe(true);
+      f.browser.dispose();
+    },
+  );
+
   test('does not restart pending same-run previews for metadata/camera/wipe changes and finals bypass their cadence', async () => {
     const f = fixture();
     f.browser.reconcile(f.plan());
@@ -179,17 +269,17 @@ describe('browser resource composition', () => {
     expect(f.resources.diagnostics().estimatedBytes).toBe(0);
   });
 
-  test('retains the actual outgoing slot route during ordinary navigation and releases it on source deletion', async () => {
+  test('releases an outgoing image before displaying controls for another source', async () => {
     const f = fixture();
     f.browser.reconcile(f.plan());
     await f.ready(0);
-    const original = f.resources.read()[0]?.frame;
     f.selection.apply(f.view, f.catalog, {
       type: 'select',
       selection: { sourceId: f.catalog.entries[1]!.source.id, batchIndex: 0 },
     });
     f.browser.reconcile(f.plan());
-    expect(f.resources.read()[0]?.frame).toBe(original);
+    expect(f.resources.read()[0]?.frame).toBeNull();
+    expect(f.loads[0]?.released).toBe(true);
     const deleted = { ...f.catalog, entries: f.catalog.entries.slice(1) };
     f.browser.reconcile(f.plan(deleted));
     expect(f.resources.read()[0]?.frame).toBeNull();

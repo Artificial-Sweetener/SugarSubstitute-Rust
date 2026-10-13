@@ -30,14 +30,21 @@ export class CanvasImageResources {
         this.options = options;
     }
     /** Replace the complete visible interest set, retaining at most one queued input per slot. */
-    update(images, retry = false) {
+    update(images, retry = false, preview = null) {
         if (!this.#active || this.#disposed)
             return;
         const named = new Set(images.map((image) => image.slot));
+        const additional = preview && !named.has(preview.slot) ? preview.role : null;
         if (named.size !== images.length ||
-            images.filter((image) => image.input.role === 'main').length > 2 ||
-            images.filter((image) => image.input.role === 'thumbnail').length > 8)
+            images.filter((image) => image.input.role === 'main').length + Number(additional === 'main') >
+                2 ||
+            images.filter((image) => image.input.role === 'thumbnail').length +
+                Number(additional === 'thumbnail') >
+                8)
             throw new RangeError('Canvas visible image slots exceed their bounds.');
+        const retained = additional && preview ? this.#retainPreview(preview) : null;
+        if (retained)
+            named.add(retained);
         this.#reuse(images);
         for (const [name, slot] of this.#slots)
             if (!named.has(name)) {
@@ -57,6 +64,46 @@ export class CanvasImageResources {
         this.#pump();
         this.#notify();
     }
+    /** Move one owned preview atomically, refusing different runs/sources and invalid batch positions. */
+    #retainPreview(interest) {
+        if (interest.selection.batchIndex !== 0 ||
+            (interest.role === 'thumbnail' && !this.options.budget.thumbnailsAllowed))
+            return null;
+        const current = this.#slots.get(interest.slot);
+        if (current?.wanted.preview &&
+            current.wanted.lane === interest.lane &&
+            current.wanted.role === interest.role &&
+            current.wanted.selection.sourceId === interest.selection.sourceId &&
+            current.wanted.selection.batchIndex === 0)
+            return interest.slot;
+        const owner = [...this.#slots].find(([, slot]) => slot.displayed?.frame.preview &&
+            slot.displayed.lane === interest.lane &&
+            slot.displayed.frame.selection.sourceId === interest.selection.sourceId &&
+            slot.displayed.frame.selection.batchIndex === 0);
+        const displayed = owner?.[1].displayed;
+        if (!owner ||
+            !displayed ||
+            !this.options.budget.reclassify(displayed.reservation, interest.role === 'thumbnail'))
+            return null;
+        owner[1].takeDisplay();
+        this.#drops += owner[1].release();
+        this.#slots.delete(owner[0]);
+        if (current && current !== owner[1])
+            this.#drops += current.release();
+        const intent = canvasImageIntent({
+            key: displayed.frame.key,
+            runOrder: displayed.frame.runOrder,
+            selection: interest.selection,
+            lane: interest.lane,
+            fallbackKey: null,
+            preview: true,
+            role: interest.role,
+        });
+        const target = new CanvasImageSlot(intent, this.options.budget);
+        target.adopt(displayed);
+        this.#slots.set(interest.slot, target);
+        return interest.slot;
+    }
     /** Relinquish one obsolete logical lane without clearing its valid comparison partner. */
     releaseSlot(name) {
         const slot = this.#slots.get(name);
@@ -64,6 +111,22 @@ export class CanvasImageResources {
             return;
         this.#drops += slot.release();
         this.#slots.delete(name);
+        this.#prune();
+        this.#pump();
+        this.#notify();
+    }
+    /** Retire obsolete transient lanes before deferred layout can present a different run or source. */
+    retirePreviewsExcept(lane) {
+        let changed = false;
+        for (const [name, slot] of this.#slots) {
+            if (!slot.wanted.preview || slot.wanted.lane === lane)
+                continue;
+            this.#drops += slot.release();
+            this.#slots.delete(name);
+            changed = true;
+        }
+        if (!changed)
+            return;
         this.#prune();
         this.#pump();
         this.#notify();
@@ -138,6 +201,10 @@ export class CanvasImageResources {
     /** Read bounded lightweight geometry after a provisional decode requires explicit approval. */
     dimensions(key) {
         return this.#measured.get(key) ?? this.#previewDimensions.get(key) ?? null;
+    }
+    /** Identify admitted preview bytes, including pending decoding, without exposing payloads. */
+    hasPreviewInterest(lane) {
+        return [...this.#slots.values()].some((slot) => slot.wanted.preview && slot.wanted.lane === lane);
     }
     /** Count owned resources at lifecycle boundaries without running a telemetry loop. */
     diagnostics() {

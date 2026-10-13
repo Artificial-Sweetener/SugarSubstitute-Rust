@@ -54,6 +54,7 @@ export class BrowserCanvasResources {
         if (replaced)
             this.resources.update([]);
         this.#configureBudget();
+        this.resources.retirePreviewsExcept(plan.preview ? canvasPreviewLane(plan.preview) : null);
         if (!changed && !retry)
             return;
         this.#previewStarted = false;
@@ -76,7 +77,15 @@ export class BrowserCanvasResources {
         for (const snapshot of this.resources.read())
             if (snapshot.frame && !plan.availableSources.includes(snapshot.frame.selection.sourceId))
                 this.resources.releaseSlot(snapshot.slot);
-        this.resources.update(images, retry);
+        this.resources.update(images, retry, plan.preview && plan.primary
+            ? {
+                slot: 'primary',
+                lane: canvasPreviewLane(plan.preview),
+                selection: plan.primary.selection,
+                role: 'main',
+            }
+            : null);
+        this.#previewStarted = Boolean(plan.preview && this.resources.hasPreviewInterest(canvasPreviewLane(plan.preview)));
     }
     /** Admit only the overview's intersecting final-image cells through the same byte/decode limits. */
     overview(cells) {
@@ -97,7 +106,16 @@ export class BrowserCanvasResources {
                 images.push({ slot: cell.key, input: { ...input, role: 'thumbnail' } });
         }
         this.#overviewImages = images;
-        this.resources.update(images);
+        const previewCell = cells.find((cell) => cell.preview);
+        this.resources.update(images, false, plan.preview && previewCell
+            ? {
+                slot: previewCell.key,
+                lane: canvasPreviewLane(plan.preview),
+                selection: previewCell.selection,
+                role: 'thumbnail',
+            }
+            : null);
+        this.#previewStarted = Boolean(plan.preview && this.resources.hasPreviewInterest(canvasPreviewLane(plan.preview)));
     }
     /** Refuse stale/foreign bytes before handing their ownership to a visible resource slot. */
     receive(preview, blob) {
@@ -116,7 +134,7 @@ export class BrowserCanvasResources {
         const input = {
             key: preview.token,
             runOrder: preview.runOrder,
-            selection: slot.selection,
+            selection: { sourceId: preview.sourceId, batchIndex: 0 },
             lane,
             fallbackKey: slot.item?.id ?? null,
             dimensions: this.resources.dimensions(lane) ??

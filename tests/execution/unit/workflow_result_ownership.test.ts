@@ -94,6 +94,22 @@ test('rejects late source previews after its same-run final even while other nod
   expect(store.publishPreview(preview(next))).toBe(true);
 });
 
+test('retires a source preview only when its first batch member becomes final', () => {
+  const store = new WorkflowResultStore();
+  const runs = new WorkflowRunRegistry();
+  store.synchronize([a]);
+  const run = runs.accept(runs.reserve({ session: a, sources: [source] }), promptId('partial'));
+  expect(store.publishPreview(preview(run))).toBe(true);
+  retain(store, run, { images: [null, { filename: 'second.png' }, { filename: 'third.png' }] });
+  expect(store.read(a.sessionId)?.preview?.promptId).toBe(run.promptId);
+  expect(store.publishPreview({ ...preview(run), sequence: 2 })).toBe(true);
+  retain(store, run, {
+    images: [{ filename: 'first.png' }, { filename: 'second.png' }, { filename: 'third.png' }],
+  });
+  expect(store.read(a.sessionId)?.preview).toBeNull();
+  expect(store.publishPreview({ ...preview(run), sequence: 3 })).toBe(false);
+});
+
 test('carried input snapshot media retains its actual provenance through text and can receive a new-run preview', () => {
   const store = new WorkflowResultStore();
   const runs = new WorkflowRunRegistry();

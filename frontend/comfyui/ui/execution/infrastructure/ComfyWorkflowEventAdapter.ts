@@ -36,11 +36,10 @@ export interface ComfyWorkflowEventAdapterOptions {
   reconnect(): void;
 }
 
-/** Register one execution/preview/recovery boundary; shared host preview URLs are never copied or revoked. */
+/** Register job-qualified execution and previews without assigning anonymous bytes to current UI state. */
 export class ComfyWorkflowEventAdapter {
   readonly #api: UnknownRecord;
   readonly #listeners = new Map<string, (event: unknown) => void>();
-  #enhanced = new WeakSet<Blob>();
   #installed = false;
 
   /** Validate host capabilities without depending on private frontend stores or WebSocket internals. */
@@ -75,12 +74,7 @@ export class ComfyWorkflowEventAdapter {
       execution_cached: (event) => this.#job(event, (id) => this.options.ingestor.cached(id)),
       progress: (event) => this.#progress(event),
       progress_state: (event) => this.#progressState(event),
-      executing: (event) => {
-        const detail = isRecord(event) ? event.detail : null;
-        this.options.ingestor.executingLegacy(decodeComfyExecutionPaths([detail]));
-      },
       b_preview_with_metadata: (event) => this.#enhancedPreview(event),
-      b_preview: (event) => this.#legacyPreview(event),
       disconnected: () => {
         this.options.ingestor.disconnected();
         this.options.connection(false);
@@ -113,7 +107,7 @@ export class ComfyWorkflowEventAdapter {
     }
   }
 
-  /** Remove precisely this adapter's listeners and transient duplicate suppression state. */
+  /** Detach precisely this adapter's listeners while preserving unrelated host subscriptions. */
   dispose(): void {
     this.#installed = false;
     const remove = this.#api.removeEventListener;
@@ -130,7 +124,6 @@ export class ComfyWorkflowEventAdapter {
       }
     }
     this.#listeners.clear();
-    this.#enhanced = new WeakSet();
   }
 
   /** Dispatch a validated job-qualified status without forwarding dynamic external values into application code. */
@@ -168,11 +161,10 @@ export class ComfyWorkflowEventAdapter {
         );
   }
 
-  /** Suppress the identical legacy delivery even when the enhanced event cannot safely be attributed. */
+  /** Require the backend's accepted job and executing path before admitting preview bytes. */
   #enhancedPreview(event: unknown): void {
     const detail = comfyEventDetail(event);
     if (!detail || !(detail.blob instanceof Blob)) return;
-    this.#enhanced.add(detail.blob);
     const id = decodeComfyPromptId(detail.jobId);
     if (!id) return;
     const source = this.options.ingestor.resolveSource(
@@ -186,13 +178,5 @@ export class ComfyWorkflowEventAdapter {
     );
     if (source && !['complete', 'cancelled', 'error'].includes(source.run.status))
       this.options.preview(source, detail.blob);
-  }
-
-  /** Accept legacy bytes only when one known executing job and source supply their missing context. */
-  #legacyPreview(event: unknown): void {
-    const blob = isRecord(event) ? event.detail : null;
-    if (!(blob instanceof Blob) || this.#enhanced.has(blob)) return;
-    const source = this.options.ingestor.legacyPreviewSource();
-    if (source) this.options.preview(source, blob);
   }
 }

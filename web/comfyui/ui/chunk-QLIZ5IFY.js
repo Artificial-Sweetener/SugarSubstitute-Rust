@@ -18,7 +18,7 @@ var CanvasBatchPicker = defineComponent({
     secondary: { type: Boolean, default: false },
     send: { type: Function, required: true }
   },
-  /** Show only contextual batch choices; source previews remain unnumbered. */
+  /** Show batch positions and the source overview for the active workflow. */
   setup(props) {
     return () => {
       const count = props.count;

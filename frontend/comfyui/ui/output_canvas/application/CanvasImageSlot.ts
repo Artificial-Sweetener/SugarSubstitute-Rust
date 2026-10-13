@@ -59,14 +59,14 @@ export class CanvasImageSlot<Payload, Handle> {
 
   /** Bind the shared accounting authority without taking ownership of another lane. */
   constructor(
-    input: CanvasImageInput<Payload>,
+    input: CanvasImageIntent,
     private readonly budget: CanvasImageBudget,
   ) {
     this.wanted = canvasImageIntent(input);
     this.status = canvasResourceStatus('loading', 'Loading image…');
   }
 
-  /** Replace interest, allowing a current preview decode to complete despite faster incoming frames. */
+  /** Replace interest without presenting another source or batch beneath the incoming controls. */
   update(input: CanvasImageInput<Payload>, retry: boolean): number {
     if (
       this.wanted.key === input.key &&
@@ -80,7 +80,13 @@ export class CanvasImageSlot<Payload, Handle> {
       (!input.preview || !this.pending.intent.preview || this.pending.intent.lane !== input.lane)
     )
       drops += this.cancel();
-    if (this.displayed?.frame.preview && (!input.preview || this.displayed.lane !== input.lane))
+    const displayed = this.displayed;
+    if (
+      displayed &&
+      (displayed.frame.selection.sourceId !== input.selection.sourceId ||
+        displayed.frame.selection.batchIndex !== input.selection.batchIndex ||
+        (displayed.frame.preview && (!input.preview || displayed.lane !== input.lane)))
+    )
       this.dropDisplay();
     this.wanted = canvasImageIntent(input);
     if (!input.preview && this.displayed?.frame.key === input.key) {
@@ -141,7 +147,7 @@ export class CanvasImageSlot<Payload, Handle> {
 }
 
 /** Copy light routing metadata without retaining opaque payloads in pending/displayed records. */
-export function canvasImageIntent<Payload>(input: CanvasImageInput<Payload>): CanvasImageIntent {
+export function canvasImageIntent(input: CanvasImageIntent): CanvasImageIntent {
   return Object.freeze({
     key: input.key,
     runOrder: input.runOrder,

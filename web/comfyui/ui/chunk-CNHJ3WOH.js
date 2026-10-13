@@ -1,6 +1,6 @@
 import {
   CanvasBatchPicker
-} from "./chunk-F5KWFYMM.js";
+} from "./chunk-QLIZ5IFY.js";
 import {
   CanvasAnchoredPicker
 } from "./chunk-LZQHJ4KN.js";

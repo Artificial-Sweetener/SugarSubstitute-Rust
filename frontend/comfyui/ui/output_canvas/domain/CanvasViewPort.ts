@@ -25,6 +25,7 @@ export interface CanvasSourceSummary {
   readonly id: OutputSourceId;
   readonly label: string;
   readonly breadcrumb: readonly string[];
+  /** Count available source positions, including its live first-position placeholder. */
   readonly batchCount: number;
   readonly preview: boolean;
   readonly previousRun: boolean;
@@ -67,6 +68,7 @@ export interface CanvasViewSnapshot {
 export type CanvasCommand =
   | { readonly type: 'select'; readonly selection: CanvasSelection }
   | { readonly type: 'select-source'; readonly selection: CanvasSelection }
+  | { readonly type: 'select-preview'; readonly sourceId: OutputSourceId }
   | { readonly type: 'batch'; readonly index: number }
   | { readonly type: 'follow'; readonly mode: 'auto' | 'manual' }
   | { readonly type: 'overview'; readonly enabled: boolean }

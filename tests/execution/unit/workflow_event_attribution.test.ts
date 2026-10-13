@@ -49,28 +49,26 @@ test('keeps interleaved jobs with colliding paths in their captured workflows', 
   expect(f.results.read(f.a.session.sessionId)?.outputs[0]?.items[0]?.file.filename).toBe('a.png');
 });
 
-test('a foreign qualified progress event clears legacy preview attribution', () => {
+test('foreign progress cannot create an association with another workflow job', () => {
   const f = workflowResultsFixture();
   f.ingestor.accepted(f.ingestor.submitting(f.a), f.id);
   f.ingestor.started(f.id);
-  f.ingestor.executingLegacy(['42:23']);
-  expect(f.ingestor.legacyPreviewSource()?.run.promptId).toBe(f.id);
+  f.ingestor.executing(f.id, ['42:23']);
+  expect(f.ingestor.resolveSource(f.id, ['42:23'])?.run.promptId).toBe(f.id);
   f.ingestor.executing(promptId('foreign'), ['42:23']);
-  expect(f.ingestor.legacyPreviewSource()).toBeNull();
-  f.ingestor.executingLegacy(['42:23']);
-  expect(f.ingestor.legacyPreviewSource()).toBeNull();
+  expect(f.ingestor.resolveSource(promptId('foreign'), ['42:23'])).toBeNull();
   f.ingestor.executing(f.id, ['42:23']);
   f.ingestor.disconnected();
-  expect(f.ingestor.legacyPreviewSource()).toBeNull();
+  expect(f.results.read(f.a.session.sessionId)?.preview).toBeNull();
 });
 
-test('late acceptance cannot reset the backend job after a foreign job has started', () => {
+test('late acceptance preserves its captured identity independently of foreign job starts', () => {
   const f = workflowResultsFixture();
   f.ingestor.started(f.id);
   f.ingestor.started(promptId('foreign'));
   f.ingestor.accepted(f.ingestor.submitting(f.a), f.id);
-  f.ingestor.executingLegacy(['42:23']);
-  expect(f.ingestor.legacyPreviewSource()).toBeNull();
+  expect(f.ingestor.resolveSource(promptId('foreign'), ['42:23'])).toBeNull();
+  expect(f.ingestor.resolveSource(f.id, ['42:23'])?.run.promptId).toBe(f.id);
 });
 
 test('bounds early final deliveries and evicts old unknown jobs without retaining timers indefinitely', () => {

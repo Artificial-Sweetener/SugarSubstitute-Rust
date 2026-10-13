@@ -43,7 +43,7 @@ test('accepts only bound finals and routes stage previews independently of the v
   f.ingestor.accepted(context, f.id);
   f.ingestor.started(f.id);
   f.ingestor.executing(f.id, ['instance:sampler']);
-  const attributed = f.ingestor.legacyPreviewSource();
+  const attributed = f.ingestor.resolveSource(f.id, ['instance:sampler']);
   expect(attributed?.source.id).toBe(outputSourceId(marker));
   if (!attributed) throw new Error('Missing attributable stage preview');
   const sessions = new WorkflowSessionStore();

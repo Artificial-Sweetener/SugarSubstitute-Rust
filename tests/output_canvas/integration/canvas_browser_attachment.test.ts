@@ -130,6 +130,38 @@ describe('composed browser canvas attachment', () => {
     jest.restoreAllMocks();
   });
 
+  test('opens a clicked overview preview as a fitted image route', async () => {
+    const f = fixture();
+    const entry = f.catalog.entries[0]!;
+    const preview = {
+      sessionId: f.catalog.result.context.sessionId,
+      generation: 0,
+      promptId: 'prompt:stream' as const,
+      sourceId: entry.source.id,
+      runOrder: 1,
+      sequence: 1,
+      token: 'overview-preview',
+      dimensions: null,
+    };
+    f.replace({
+      ...f.catalog,
+      result: { ...f.catalog.result, runStatus: 'running', preview },
+      entries: [{ ...entry, items: [], preview }],
+    });
+    f.views.update(f.view, (state) => ({ ...state, mode: 'overview' }));
+    const surface = new BrowserCanvasAttachment(f.root, f.options);
+    const button = [...f.root.querySelectorAll('button')].find((element) =>
+      element.getAttribute('aria-label')?.endsWith('Source preview'),
+    );
+    expect(button).toBeDefined();
+    button!.click();
+    await nextTick();
+    expect(f.views.read(f.view)).toMatchObject({ mode: 'image', sourcePreview: true });
+    expect(surface.wants(preview.sessionId, preview.generation, preview.sourceId)).toBe(true);
+    surface.dispose();
+    expect(f.errors).toEqual([]);
+  });
+
   test('fits the first decoded image of a fresh Run while retaining inspection through same-Run replacements', async () => {
     const f = fixture();
     const surface = new BrowserCanvasAttachment(f.root, f.options);
@@ -230,7 +262,7 @@ describe('composed browser canvas attachment', () => {
     expect(f.errors).toEqual([]);
   });
 
-  test('keeps independent camera routing on the actually displayed outgoing image until replacement', async () => {
+  test('suspends interaction during source replacement without modifying the outgoing inspection', async () => {
     const f = fixture();
     const surface = new BrowserCanvasAttachment(f.root, f.options);
     await f.loader.ready(0);
@@ -242,6 +274,7 @@ describe('composed browser canvas attachment', () => {
       type: 'select',
       selection: { sourceId: f.catalog.entries[1]!.source.id, batchIndex: 0 },
     });
+    expect(surface.diagnostics().displayed).toBe(0);
     await f.command(surface, { type: 'zoom', factor: 2 });
     f.frames.advance(45);
     await f.loader.ready(1);
@@ -253,7 +286,7 @@ describe('composed browser canvas attachment', () => {
     });
     await f.loader.ready(2);
     f.clock.advance(100);
-    expect(surface.port.read().zoom.physicalScale).toBe(2);
+    expect(surface.port.read().zoom.physicalScale).toBe(1);
     surface.dispose();
   });
 

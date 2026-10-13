@@ -99,6 +99,10 @@ function decodeCommand(value: unknown): CanvasCommand | null {
       const selection = decodeSelection(value.selection);
       return selection ? Object.freeze({ type: 'select-comparison', selection }) : null;
     }
+    case 'select-preview':
+      return sourceIdentity(value.sourceId)
+        ? Object.freeze({ type: 'select-preview', sourceId: value.sourceId })
+        : null;
     case 'batch':
       return nonnegativeInteger(value.index)
         ? Object.freeze({ type: 'batch', index: value.index })
