@@ -7,7 +7,11 @@ use super::{
     verification::Requests,
     *,
 };
+use std::time::Duration;
 use sugarsubstitute_contracts::execution::JobContext;
+
+/// Bound one actual phase independently of total installed cohort size.
+const ASSETS_PER_STEP: usize = 4;
 #[derive(Clone, Copy)]
 pub(super) struct ExpectedAsset<'a> {
     pub(super) path: &'a str,
@@ -60,29 +64,52 @@ pub(super) fn inspect(
     state: &mut Transaction,
     input: &ReadinessProbeInput,
     context: &JobContext,
-) -> Result<(), ReadinessTransportError> {
+) -> Result<(usize, bool), ReadinessTransportError> {
     input.source.validate_live().map_err(|e| ReadinessTransportError::new("expected_source", e))?;
     let manifest = input.source.manifest();
+    let start = state.verified_assets;
+    let total = manifest.assets().len();
+    if total == 0 || start > total {
+        return Err(ReadinessTransportError::invalid("served_empty_or_changed_cohort"));
+    }
     let configuration = match &input.listener {
         Listener::Managed(_, configuration) => Some(configuration),
         Listener::Attached(_, _) => None,
     };
     let mut requests = BoundRequests { port, state, input, context };
-    super::verification::verify(
+    super::verification::metadata(
         &mut requests,
         manifest.frontend_version(),
         manifest.cube_version(),
         manifest.sugarcubes_paths(),
-        manifest.assets().iter().map(|asset| ExpectedAsset {
-            path: asset.path(),
-            bytes: asset.bytes(),
-            hash: asset.sha256(),
-        }),
         configuration,
     )?;
+    let mut next = start;
+    for asset in manifest.assets().iter().skip(start).take(ASSETS_PER_STEP) {
+        checkpoint(context)?;
+        let now = context.now();
+        let until = context
+            .deadline()
+            .ok_or_else(|| ReadinessTransportError::invalid("attempt_deadline"))?;
+        if total > ASSETS_PER_STEP
+            && !until
+                .checked_duration_since(now)
+                .is_ok_and(|remaining| remaining > Duration::from_secs(1))
+        {
+            break;
+        }
+        super::verification::asset(
+            &mut requests,
+            ExpectedAsset { path: asset.path(), bytes: asset.bytes(), hash: asset.sha256() },
+        )?;
+        next += 1;
+    }
     input
         .source
         .validate_live()
         .map_err(|e| ReadinessTransportError::new("expected_source_after_requests", e))?;
-    checkpoint(context)
+    checkpoint(context)?;
+    // A multi-phase cohort confirms metadata again in its final phase after all
+    // asset indices have been committed by their actual timely completions.
+    Ok((next, next == total && (start == 0 || start == total)))
 }

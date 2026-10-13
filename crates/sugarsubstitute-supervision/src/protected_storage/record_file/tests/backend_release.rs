@@ -106,3 +106,60 @@ fn fixed_record_backend_held_pending_owned_release_uses_new_inode_then_settles_o
     }
     Ok(())
 }
+
+#[test]
+fn rejected_backend_acquisition_retires_own_outputs_without_rewriting_predecessor() -> TestResult {
+    for state in
+        [Some(RecordState::Held), Some(RecordState::LaunchPending), Some(RecordState::Owned), None]
+    {
+        let mut predecessor = generation(1)?;
+        if let Some(state) = state {
+            predecessor.state = state;
+            predecessor.process = if state == RecordState::Owned { 42 } else { 0 };
+        }
+        let original = state.map_or([0; 128], |_| predecessor.encode());
+        with_record::<128>(Some(original.to_vec()), move |file, fake, context| {
+            let mut expected = None;
+            let inode = fake.target_identity();
+            let effects = fake.effect_count();
+            let retired = retirement::retire_with_boundary(file, None, context, fake)?;
+            assert!(!prepare_backend_release(retired, &mut expected, None)?);
+            assert!(expected.is_none());
+            assert_eq!(fake.target_identity(), inode);
+            assert_eq!(fake.effect_count(), effects);
+            let observed = fake.read_shape(file, None, &mut || Ok(()))?;
+            assert!(matches!(observed, RecordRead::Present(bytes) if bytes == original));
+            Ok(())
+        })?;
+    }
+    Ok(())
+}
+
+#[test]
+fn activated_backend_generation_requires_its_original_expected_owner_during_retirement()
+-> TestResult {
+    let held = generation(2)?;
+    let mut predecessor = generation(1)?;
+    predecessor.state = RecordState::Released;
+    with_record::<128>(Some(predecessor.encode().to_vec()), move |file, fake, context| {
+        fake.fail_activated_close(true);
+        assert!(ordinary(file, &held, fake, context).is_err());
+        fake.fail_activated_close(false);
+        fake.fail_close(false);
+        let inode = fake.target_identity();
+        let effects = fake.effect_count();
+        assert!(retirement::retire_with_boundary(file, None, context, fake).is_err());
+        assert_eq!(fake.target_identity(), inode);
+        assert_eq!(fake.effect_count(), effects);
+        let actual = retirement::retire_with_boundary(file, Some(&held.encode()), context, fake)?;
+        assert!(
+            matches!(&actual, PublicationRetirement::Activated(bytes) if *bytes == held.encode())
+        );
+        let mut missing_owner = None;
+        assert!(prepare_backend_release(actual, &mut missing_owner, None).is_err());
+        assert!(missing_owner.is_none());
+        let observed = fake.read_shape(file, None, &mut || Ok(()))?;
+        assert!(matches!(observed, RecordRead::Present(bytes) if bytes == held.encode()));
+        Ok(())
+    })
+}

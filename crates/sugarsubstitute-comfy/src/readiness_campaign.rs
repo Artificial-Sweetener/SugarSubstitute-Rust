@@ -8,6 +8,7 @@
 //! sleeps. Retry admission follows actual partial native closure; successful
 //! read-only attached identity remains retained until explicit final cleanup.
 mod consume;
+mod continuation;
 mod error;
 #[cfg(test)]
 mod tests;
@@ -32,6 +33,8 @@ pub enum CampaignStep {
     Waiting,
     /// Previous native outputs closed; a fresh authoritative input may be supplied.
     NeedsInput,
+    /// A timely partial result closed its HTTP outputs; resume the identical owner.
+    NeedsContinuation,
     /// Actual completion was consumed and explicit cleanup is now required.
     Progressed,
     /// Actual source/HTTP/peer verification delivered current readiness.
@@ -219,6 +222,10 @@ impl ReadinessCampaign {
     pub fn next_deadline(&self) -> Option<Moment> {
         if let Some(attempt) = &self.attempt {
             Some(attempt.until.min(self.budget.until()))
+        } else if !self.terminal
+            && self.owner.as_ref().is_some_and(ReadinessProbeOwner::continuation_ready)
+        {
+            Some(self.last_now.min(self.budget.until()))
         } else if self.owner.is_some() && (self.terminal || !self.ready || self.cleanup.is_some()) {
             Some(self.cleanup_until.unwrap_or_else(|| {
                 self.shutdown.map_or(self.budget.until(), |budget| budget.settle_until)

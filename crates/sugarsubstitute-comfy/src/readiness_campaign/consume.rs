@@ -43,6 +43,14 @@ impl ReadinessCampaign {
                 .as_mut()
                 .ok_or(CampaignError::Rejected(CampaignRejection::WrongPhase))?;
             match owner.take_readiness() {
+                Ok(None) if owner.continuation_ready() => {
+                    self.attempt = None;
+                    return Ok(if self.terminal {
+                        CampaignStep::Failed
+                    } else {
+                        CampaignStep::NeedsContinuation
+                    });
+                }
                 Ok(None) => return Ok(CampaignStep::Waiting),
                 Ok(Some(proof)) if !self.terminal => {
                     self.attempt = None;
@@ -127,6 +135,8 @@ impl ReadinessCampaign {
             Ok(CampaignStep::Failed)
         } else if self.ready {
             Ok(CampaignStep::Ready)
+        } else if self.needs_continuation(now)? {
+            Ok(CampaignStep::NeedsContinuation)
         } else if self.needs_input(now)? {
             Ok(CampaignStep::NeedsInput)
         } else {

@@ -218,6 +218,17 @@ impl CoordinatorBackend {
             return Ok(());
         }
         let now = resources.client.now()?;
+        if record.campaign.needs_continuation(now)? {
+            let spec = Self::spec(
+                resources,
+                Operation::Readiness,
+                JobClass::InfrastructureLifecycle,
+                sugarsubstitute_comfy::readiness_transport::READINESS_TRANSPORT_BYTES,
+                Some(record.budget.probe_until(now)?),
+            )?;
+            record.campaign.submit_continuation(resources.client, &record.scope, spec)?;
+            return Ok(());
+        }
         if !record.campaign.needs_input(now)? {
             return Ok(());
         }

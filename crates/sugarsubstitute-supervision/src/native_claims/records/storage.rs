@@ -181,13 +181,23 @@ pub(crate) fn retire_backend(
     Ok(())
 }
 /// Preserve predecessor bytes until actual publication proves this backend's generation.
+/// An acquisition rejected before adopting a generation retires only its own
+/// unactivated outputs; preserved predecessor bytes confer no release authority.
 /// # Errors
-/// Reject corrupt or changed ownership without altering the retained generation.
+/// Reject unexpected activation and corrupt or changed owned generations.
 pub(crate) fn prepare_backend_release(
     observed: record_file::PublicationRetirement<128>,
     expected: &mut Option<Record>,
     original_released: Option<&[u8; 128]>,
 ) -> Result<bool, ClaimError> {
+    if expected.is_none() {
+        return match observed {
+            record_file::PublicationRetirement::Preserved(_) => Ok(false),
+            record_file::PublicationRetirement::Activated(_) => {
+                Err(ClaimError::invalid("backend_retirement_generation"))
+            }
+        };
+    }
     let bytes = match observed {
         record_file::PublicationRetirement::Preserved(
             record_file::RecordRead::Missing | record_file::RecordRead::Empty,

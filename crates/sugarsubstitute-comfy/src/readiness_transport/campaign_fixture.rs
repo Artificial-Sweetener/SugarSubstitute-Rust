@@ -11,7 +11,7 @@ use std::{
     error::Error,
     sync::{
         Arc, Condvar, Mutex,
-        atomic::{AtomicBool, AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     },
     time::{Duration, Instant},
 };
@@ -32,6 +32,14 @@ pub(crate) struct FixtureHttp {
     pub(crate) behavior: Behavior,
     pub(crate) closed: Mutex<Vec<usize>>,
     pub(crate) phases: Mutex<Vec<(&'static str, u64)>>,
+    /// Actual endpoint observations made by the retained probe worker.
+    pub(crate) requests: Mutex<Vec<String>>,
+    /// Deterministic external response time; does not schedule work.
+    pub(crate) response_nanos: AtomicU64,
+    /// Corrupt one selected external body, leaving the expected source unchanged.
+    pub(crate) corrupt_asset: AtomicUsize,
+    /// Every phase must borrow the identical original claimed transaction.
+    claim_identity: AtomicUsize,
     fail_close: AtomicBool,
     panic_close: AtomicBool,
     gate: Mutex<(bool, bool)>,
@@ -52,6 +60,10 @@ impl FixtureHttp {
             behavior,
             closed: Mutex::new(Vec::new()),
             phases: Mutex::new(Vec::new()),
+            requests: Mutex::new(Vec::new()),
+            response_nanos: AtomicU64::new(0),
+            corrupt_asset: AtomicUsize::new(usize::MAX),
+            claim_identity: AtomicUsize::new(0),
             fail_close: AtomicBool::new(fail_close),
             panic_close: AtomicBool::new(matches!(behavior, Behavior::CleanupPanicked)),
             gate: Mutex::new((false, false)),
@@ -101,6 +113,14 @@ impl HttpPort for FixtureHttp {
         _: u16,
         context: &JobContext,
     ) -> Result<(), ReadinessTransportError> {
+        let identity = Arc::as_ptr(&state._claim) as usize;
+        if self
+            .claim_identity
+            .compare_exchange(0, identity, Ordering::AcqRel, Ordering::Acquire)
+            .is_err_and(|original| original != identity)
+        {
+            return Err(ReadinessTransportError::invalid("fixture_changed_original_claim"));
+        }
         state.session = 1;
         state.connect = 2;
         state.request = 3;
@@ -125,6 +145,7 @@ impl HttpPort for FixtureHttp {
         consume: &mut dyn FnMut(&[u8]) -> Result<(), ReadinessTransportError>,
     ) -> Result<(), ReadinessTransportError> {
         self.phase("get", context);
+        lock(&self.requests).push(endpoint.path().to_owned());
         state.peer = Some(
             sugarsubstitute_supervision::backend_listener::boundary_fixture::fixed_http_peer(),
         );
@@ -135,11 +156,16 @@ impl HttpPort for FixtureHttp {
             "/index.html" if matches!(self.behavior, Behavior::WrongAsset) => b"altered index",
             "/index.html" => b"fixture index",
             "/extensions/SugarCubes/main.js" => b"fixture cube",
+            path if path.starts_with("/assets/") => {
+                let corrupt = self.corrupt_asset.load(Ordering::Acquire);
+                if path == format!("/assets/{corrupt}.bin") { b"corrupt asset" } else { b"fixture asset" }
+            }
             _ => return Err(ReadinessTransportError::invalid("unexpected_fixture_endpoint")),
         };
         for chunk in body.chunks(7) {
             consume(chunk)?;
         }
+        self.clock.fetch_add(self.response_nanos.load(Ordering::Acquire), Ordering::AcqRel);
         Ok(())
     }
     fn close(

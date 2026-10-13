@@ -7,6 +7,7 @@ use crate::runtime_test_support::{Rig, TestResult};
 use std::sync::atomic::Ordering;
 use sugarsubstitute_contracts::execution::*;
 
+/// Observe the actual cleanup timer after shutdown's concurrent first clock sample.
 #[test]
 fn stopping_keeps_original_cleanup_timers_after_acknowledged_success_until_actual_close()
 -> TestResult {
@@ -22,6 +23,8 @@ fn stopping_keeps_original_cleanup_timers_after_acknowledged_success_until_actua
     assert_eq!(job.status().phase, JobPhase::Terminal(TerminalKind::Success));
     rig.owner.request_shutdown(Moment::from_nanos(100_000_000_000));
     assert!(lock(&rig.client.core.state).stopping);
+    assert!(shared.custody.stopped());
+    rig.clock.wait_until_registered(Moment::from_nanos(10_000_000_000))?;
     let CaptureCleanupSnapshot::Latched { budget, .. } = shared.custody.snapshot() else {
         return Err("Owner shutdown did not latch actual cleanup".into());
     };
@@ -29,7 +32,6 @@ fn stopping_keeps_original_cleanup_timers_after_acknowledged_success_until_actua
     assert_eq!(budget.settle_until, Moment::from_nanos(15_000_000_000));
     let mut retirement = pin.release();
     boundary.retiring.wait()?;
-    rig.clock.wait_until_registered(budget.graceful_until)?;
     rig.clock.advance(10_000_000_000);
     rig.clock.wait_until_registered(budget.settle_until)?;
     assert!(retirement.try_take_report().is_none());

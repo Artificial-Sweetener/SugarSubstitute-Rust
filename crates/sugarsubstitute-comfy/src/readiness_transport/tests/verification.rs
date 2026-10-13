@@ -5,7 +5,7 @@ use super::*;
 use crate::readiness_transport::{
     probe::ExpectedAsset,
     types::ReadinessTransportError,
-    verification::{Requests, verify},
+    verification::{Requests, asset as verify_asset, metadata},
 };
 use serde_json::json;
 use sha2::{Digest, Sha256};
@@ -72,14 +72,8 @@ fn inspect(
     boundary: &mut Boundary,
     asset: ExpectedAsset<'_>,
 ) -> Result<(), ReadinessTransportError> {
-    verify(
-        boundary,
-        "1.47.11",
-        "0.15.0",
-        &["/extensions/SugarCubes/main.js".into()],
-        std::iter::once(asset),
-        None,
-    )
+    metadata(boundary, "1.47.11", "0.15.0", &["/extensions/SugarCubes/main.js".into()], None)?;
+    verify_asset(boundary, asset)
 }
 #[test]
 fn complete_metadata_and_exact_streamed_file_hash_pass_across_chunk_boundaries() -> TestResult {
@@ -156,12 +150,11 @@ fn managed_response_requires_full_effective_argv_while_attachment_does_not() -> 
     )?;
     let mut boundary = boundary()?;
     assert!(
-        verify(
+        metadata(
             &mut boundary,
             "1.47.11",
             "0.15.0",
             &["/extensions/SugarCubes/main.js".into()],
-            std::iter::once(expected()),
             Some(&configuration)
         )
         .is_err()

@@ -5,7 +5,7 @@ use super::{types::*, *};
 use std::sync::{Arc, Mutex};
 use sugarsubstitute_contracts::execution::{
     AdmissionError, ExecutionError, ExecutionPort, JobClass, JobContext, JobId, JobOutcome,
-    JobSpec, MemoryClaim, Moment, Operation, OwnedJob, Scope,
+    JobSpec, MemoryClaim, Moment, Operation, OwnedJob, Scope, ScopeId,
 };
 use sugarsubstitute_execution::ExecutionClient;
 pub(super) struct Transaction {
@@ -15,6 +15,12 @@ pub(super) struct Transaction {
     pub(super) _claim: Arc<MemoryClaim>,
     pub(super) deadline: Moment,
     pub(super) peer: Option<sugarsubstitute_supervision::backend_listener::BackendPeerIdentity>,
+    /// Complete asset indices committed only after successful timely delivery.
+    pub(super) verified_assets: usize,
+    /// Worker candidate remains unqualified until its actual job result is consumed.
+    candidate_assets: usize,
+    /// Final metadata confirmation applies to the complete retained cohort.
+    candidate_complete: bool,
 }
 pub(super) struct Shared {
     pub(super) transaction: Mutex<Option<Box<Transaction>>>,
@@ -60,8 +66,11 @@ pub struct ReadinessProbeOwner {
     port: Arc<dyn HttpPort>,
     pending: Option<OwnedJob<(), ReadinessTransportError>>,
     submitted: bool,
+    partial: bool,
     client: Option<ExecutionClient>,
     execution: Option<sugarsubstitute_contracts::execution::ExecutionId>,
+    /// The genuine original attempt scope remains the sole continuation destination.
+    attempt_scope: Option<ScopeId>,
 }
 impl ReadinessProbeOwner {
     /// Construct real HTTP custody with a concrete external HTTP boundary fake.
@@ -88,8 +97,10 @@ impl ReadinessProbeOwner {
             port: Arc::new(super::native::SystemPort),
             pending: None,
             submitted: false,
+            partial: false,
             client: None,
             execution: None,
+            attempt_scope: None,
         }
     }
     /// Submit one finite readiness attempt with immutable effective deadline.
@@ -105,50 +116,105 @@ impl ReadinessProbeOwner {
         if self.submitted {
             return Err(invalid("Readiness attempt already submitted"));
         }
+        self.submit_step(client, scope, spec, false)
+    }
+    /// Resume only this identical retained owner after a checked partial success.
+    /// Admission supplies a new finite phase; the original claim/cursor are reused.
+    pub(crate) fn submit_continuation(
+        &mut self,
+        client: &ExecutionClient,
+        scope: &Scope,
+        spec: JobSpec,
+    ) -> Result<JobId, AdmissionError> {
+        validate(spec)?;
+        if !self.partial
+            || self.pending.is_some()
+            || self.execution != Some(scope.owner_id())
+            || self.attempt_scope != Some(scope.id())
+        {
+            return Err(invalid("Readiness continuation unavailable or foreign"));
+        }
+        self.submit_step(client, scope, spec, true)
+    }
+    /// Admit one actual phase without replacing unresolved native outputs or their claim.
+    fn submit_step(
+        &mut self,
+        client: &ExecutionClient,
+        scope: &Scope,
+        spec: JobSpec,
+        continuation: bool,
+    ) -> Result<JobId, AdmissionError> {
         let shared = self.shared.clone();
         let input = self.input.clone();
         let port = self.port.clone();
         let job = client.submit_blocking(scope, spec, move |context| {
             checkpoint(&context)?;
-            let claim = Arc::new(
-                context
-                    .memory()
-                    .claim(READINESS_TRANSPORT_BYTES - 128 * 1024)
-                    .map_err(|e| ReadinessTransportError::new("attempt_memory", e))?,
-            );
             let mut guard = lock(&shared.transaction);
-            *guard = Some(Box::new(Transaction {
-                session: 0,
-                connect: 0,
-                request: 0,
-                _claim: claim,
-                deadline: context
-                    .deadline()
-                    .ok_or_else(|| ReadinessTransportError::invalid("attempt_deadline"))?,
-                peer: None,
-            }));
+            if !continuation {
+                if guard.is_some() {
+                    return Err(ReadinessTransportError::invalid("attempt_duplicate_custody"));
+                }
+                let claim = Arc::new(
+                    context
+                        .memory()
+                        .claim(READINESS_TRANSPORT_BYTES - 128 * 1024)
+                        .map_err(|e| ReadinessTransportError::new("attempt_memory", e))?,
+                );
+                *guard = Some(Box::new(Transaction {
+                    session: 0,
+                    connect: 0,
+                    request: 0,
+                    _claim: claim,
+                    deadline: context
+                        .deadline()
+                        .ok_or_else(|| ReadinessTransportError::invalid("attempt_deadline"))?,
+                    peer: None,
+                    verified_assets: 0,
+                    candidate_assets: 0,
+                    candidate_complete: false,
+                }));
+            }
             let state = guard
                 .as_mut()
                 .ok_or_else(|| ReadinessTransportError::invalid("attempt_custody"))?;
+            if state.session != 0 || state.connect != 0 || state.request != 0 {
+                return Err(ReadinessTransportError::invalid("attempt_unsettled_predecessor"));
+            }
+            state.deadline = context
+                .deadline()
+                .ok_or_else(|| ReadinessTransportError::invalid("attempt_deadline"))?;
+            state.candidate_assets = state.verified_assets;
+            state.candidate_complete = false;
             port.begin(state, input.port(), &context)?;
-            super::probe::inspect(port.as_ref(), state, &input, &context)?;
+            let (assets, complete) = super::probe::inspect(port.as_ref(), state, &input, &context)?;
             port.close(state, &context)?;
-            checkpoint(&context)
+            checkpoint(&context)?;
+            state.candidate_assets = assets;
+            state.candidate_complete = complete;
+            Ok(())
         })?;
         self.pending = Some(job);
         self.submitted = true;
+        self.partial = false;
         self.client = Some(client.clone());
         self.execution = Some(scope.owner_id());
+        self.attempt_scope = Some(scope.id());
         Ok(spec.id)
+    }
+    /// Passive readiness to admit another same-owner phase; grants no verified readiness.
+    pub(crate) fn continuation_ready(&self) -> bool {
+        self.partial && self.pending.is_none()
     }
     /// Consume this owner's actual completion and qualify fresh delivery before creating readiness proof.
     /// # Errors
     /// Rejects cancellation, failure, late delivery, missing peer or retired installed sources.
+    /// A timely partial cohort returns `None`; `ReadinessCampaign` drives its same-owner continuation.
     pub fn take_readiness(&mut self) -> Result<Option<VerifiedReadiness>, ReadinessTransportError> {
         let Some(completion) = self.pending.as_mut().and_then(OwnedJob::try_take_completion) else {
             return Ok(None);
         };
         self.pending = None;
+        self.partial = false;
         match completion.outcome {
             JobOutcome::Success(()) => (),
             JobOutcome::Failure(cause) => return Err(cause),
@@ -160,29 +226,29 @@ impl ReadinessProbeOwner {
             }
             _ => return Err(ReadinessTransportError::invalid("attempt_terminal")),
         }
-        let guard = lock(&self.shared.transaction);
-        let state =
-            guard.as_ref().ok_or_else(|| ReadinessTransportError::invalid("attempt_no_custody"))?;
         let client = self
             .client
             .as_ref()
             .ok_or_else(|| ReadinessTransportError::invalid("attempt_no_executor"))?;
-        if client.now().map_err(|e| ReadinessTransportError::new("attempt_delivery_clock", e))?
-            >= state.deadline
-            || state.request != 0
-            || state.connect != 0
-            || state.session != 0
-        {
+        let now =
+            client.now().map_err(|e| ReadinessTransportError::new("attempt_delivery_clock", e))?;
+        let mut guard = lock(&self.shared.transaction);
+        let state =
+            guard.as_mut().ok_or_else(|| ReadinessTransportError::invalid("attempt_no_custody"))?;
+        if now >= state.deadline || state.request != 0 || state.connect != 0 || state.session != 0 {
             return Err(ReadinessTransportError::invalid("attempt_delivery_or_retirement"));
         }
         self.input
             .source
             .validate_live()
             .map_err(|e| ReadinessTransportError::new("expected_source_retired", e))?;
-        Ok(Some(VerifiedReadiness {
-            input: self.input.clone(),
-            peer: state.peer.ok_or_else(|| ReadinessTransportError::invalid("attempt_no_peer"))?,
-        }))
+        let peer = state.peer.ok_or_else(|| ReadinessTransportError::invalid("attempt_no_peer"))?;
+        state.verified_assets = state.candidate_assets;
+        if !state.candidate_complete {
+            self.partial = true;
+            return Ok(None);
+        }
+        Ok(Some(VerifiedReadiness { input: self.input.clone(), peer }))
     }
     /// Admit explicit partial cleanup on a finite shutdown deadline without resetting the attempt deadline.
     /// # Errors

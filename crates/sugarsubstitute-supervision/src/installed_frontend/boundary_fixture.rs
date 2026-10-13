@@ -8,7 +8,9 @@ use super::{
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use sugarsubstitute_contracts::execution::JobContext;
-struct FixedSource;
+struct FixedSource {
+    assets: usize,
+}
 impl SourcePort for FixedSource {
     fn inspect(
         &self,
@@ -39,6 +41,21 @@ impl SourcePort for FixedSource {
                 cube,
             )?;
         }
+        for index in 2..self.assets {
+            let bytes = b"fixture asset";
+            let mut identity = [0; 24];
+            identity[..8].copy_from_slice(&(index as u64 + 1).to_le_bytes());
+            super::manifest::enroll(
+                &mut manifest,
+                FrontendAsset {
+                    path: format!("/assets/{index}.bin"),
+                    bytes: bytes.len() as u64,
+                    hash: Sha256::digest(bytes).into(),
+                    identity,
+                },
+                false,
+            )?;
+        }
         state.manifest = Some(Arc::new(manifest));
         Ok(())
     }
@@ -54,6 +71,19 @@ impl SourcePort for FixedSource {
 /// Returns the ordinary installation-input validation error.
 #[doc(hidden)]
 pub fn owner() -> Result<InstalledFrontendOwner, FrontendSourceError> {
+    owner_with_asset_count(2)
+}
+/// Supply a bounded external installed inventory to the genuine source owner.
+/// No lease, native identity or readiness proof is created by this fixture.
+/// # Errors
+/// Rejects counts outside the actual installed cohort bound and ordinary input validation.
+#[doc(hidden)]
+pub fn owner_with_asset_count(
+    assets: usize,
+) -> Result<InstalledFrontendOwner, FrontendSourceError> {
+    if !(2..=MAX_FRONTEND_ASSETS).contains(&assets) {
+        return Err(FrontendSourceError::invalid("fixture_inventory_bound"));
+    }
     let input = FrontendInstallationInput::new(
         r"E:\fixture\package".into(),
         r"E:\fixture\METADATA".into(),
@@ -61,6 +91,6 @@ pub fn owner() -> Result<InstalledFrontendOwner, FrontendSourceError> {
         r"E:\fixture\main.py".into(),
     )?;
     let mut owner = InstalledFrontendOwner::new(input);
-    owner.port = Arc::new(FixedSource);
+    owner.port = Arc::new(FixedSource { assets });
     Ok(owner)
 }

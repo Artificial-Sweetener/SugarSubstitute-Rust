@@ -17,7 +17,7 @@ minimum_tests = 160
 package = "sugarsubstitute-comfy"
 root = "crates/sugarsubstitute-comfy"
 concern = "Bounded startup schema, effective managed argv and observed ComfyUI response contracts; Bounded fixed WinHTTP requests, installed runtime asset hash verification, deterministic readiness-owner custody and feature-gated external boundary fixtures; original-budget readiness campaigns and typed native retry classification"
-minimum_tests = 68
+minimum_tests = 74
 
 [[owners]]
 package = "sugarsubstitute"
@@ -41,7 +41,7 @@ minimum_tests = 42
 package = "sugarsubstitute-supervision"
 root = "crates/sugarsubstitute-supervision"
 concern = "Windows launch inputs, retained containment, resource exclusions, actual claim retirement, attempt-bound profile proofs and bounded lifecycle framing; Retained installed-file/hash custody and actual connected-loopback peer identity; authenticated fixed capture roles, same-job selected bundle and module credit custody, checked current-image/PE/PDB association and bounded original close retention"
-minimum_tests = 463
+minimum_tests = 465
 
 [[owners]]
 package = "sugarsubstitute-splash"

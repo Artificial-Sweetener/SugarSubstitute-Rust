@@ -3,6 +3,7 @@
 //! Exercise real campaign, source inspection, probe completion and cleanup owners.
 mod clock;
 mod harness;
+mod incremental;
 mod terminal;
 use super::*;
 use crate::readiness_transport::campaign_fixture::Behavior;

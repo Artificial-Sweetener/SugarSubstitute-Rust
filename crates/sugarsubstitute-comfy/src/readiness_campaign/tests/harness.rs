@@ -87,6 +87,10 @@ pub(super) struct Harness {
 }
 impl Harness {
     pub(super) fn new() -> TestResult<Self> {
+        Self::with_asset_count(2)
+    }
+    /// Inspect a genuine source with only its external inventory boundary varied.
+    pub(super) fn with_asset_count(assets: usize) -> TestResult<Self> {
         let clock = Arc::new(AtomicU64::new(0));
         let wake = Arc::new(Wake::default());
         let executor = ExecutionOwner::new(Arc::new(TestClock(clock.clone())), wake.clone())?;
@@ -97,7 +101,7 @@ impl Harness {
             client.create_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?;
         let cleanup =
             client.create_scope(ScopeSpec { id: ScopeId::new(3)?, deadline: None }, None)?;
-        let mut source = boundary_fixture::owner()?;
+        let mut source = boundary_fixture::owner_with_asset_count(assets)?;
         source.submit_inspection(
             &client,
             &source_scope,
@@ -185,6 +189,12 @@ impl Harness {
     pub(super) fn submit_close(&mut self, until: Moment) -> TestResult<JobId> {
         let spec = self.spec(until)?;
         Ok(self.campaign.submit_cleanup(&self.client, &self.cleanup, spec)?)
+    }
+    /// Admit the next real <=2sec job against the original retained campaign owner.
+    pub(super) fn continue_probe(&mut self) -> TestResult<JobId> {
+        let now = self.now();
+        let spec = self.spec(self.campaign.budget.probe_until(now)?)?;
+        Ok(self.campaign.submit_continuation(&self.client, &self.attempt, spec)?)
     }
     pub(super) fn save_batch(&mut self, batch: CompletionBatch) {
         self.saved = Some(batch);
