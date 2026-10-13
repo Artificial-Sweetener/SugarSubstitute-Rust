@@ -26,6 +26,11 @@ pub(crate) enum FreshRecordOrigin {
 pub(crate) enum ElectionRecordOrigin {
     Fresh(FreshRecordOrigin),
     Released([u8; 128]),
+    /// Exact predecessor and coordinator exclusion retained together with the entry exclusion.
+    RecoveredHeld {
+        record: [u8; 128],
+        coordinator_inode: [u8; 24],
+    },
 }
 pub(crate) struct RetainedElectionProof {
     pub(crate) lifetime: Arc<NamespaceLifetime>,
@@ -119,19 +124,25 @@ impl ElectionInitializationGuard<'_> {
         }
         self.proof.lifetime.port.validate_election(&self.state, self.proof, self.context)
     }
+    /// Match the exact original record shape while both initialization guards remain live.
+    /// # Errors
+    /// Rejects expired custody or any changed predecessor before publication.
     pub(crate) fn check_record(&self, record: &RecordRead<128>) -> Result<(), ClaimError> {
         self.validate_retained()?;
         if matches!(
             (self.proof.origin, record),
             (ElectionRecordOrigin::Fresh(FreshRecordOrigin::Missing), RecordRead::Missing)
                 | (ElectionRecordOrigin::Fresh(FreshRecordOrigin::Empty), RecordRead::Empty)
-        ) || matches!((self.proof.origin,record),(ElectionRecordOrigin::Released(original),RecordRead::Present(actual)) if original==*actual)
+        ) || matches!((self.proof.origin,record),(ElectionRecordOrigin::Released(original)|ElectionRecordOrigin::RecoveredHeld {record:original,..},RecordRead::Present(actual)) if original==*actual)
         {
             Ok(())
         } else {
             Err(ClaimError::invalid("entry_changed_election_record"))
         }
     }
+    /// Validate the protected coordinator file and original recovered inode under the entry guard.
+    /// # Errors
+    /// Rejects foreign paths, accounts, record sizes, inodes and expired custody.
     pub(crate) fn check_coordinator<const N: usize>(
         &self,
         file: &HeldFile<N>,
@@ -157,11 +168,40 @@ impl ElectionInitializationGuard<'_> {
         {
             return Err(ClaimError::invalid("entry_coordinator_exclusion_binding"));
         }
+        if let ElectionRecordOrigin::RecoveredHeld { coordinator_inode, .. } = self.proof.origin
+            && inode != coordinator_inode
+        {
+            return Err(ClaimError::invalid("entry_changed_recovered_coordinator"));
+        }
         self.proof.lifetime.port.validate_coordinator(
             &self.state,
             &file.handle,
             inode,
             self.context,
         )
+    }
+    /// Move the same acquired coordinator exclusion while retaining the entry guard.
+    /// # Errors
+    /// Rejects repeated/foreign handoff before changing either retained output slot.
+    pub(crate) fn adopt_recovered_coordinator(
+        &mut self,
+        output: &mut Option<HeldFile<128>>,
+    ) -> Result<(), ClaimError> {
+        self.validate_retained()?;
+        let ElectionRecordOrigin::RecoveredHeld { coordinator_inode, .. } = self.proof.origin
+        else {
+            return Err(ClaimError::invalid("entry_not_recovered_coordinator"));
+        };
+        if output.is_some() {
+            return Err(ClaimError::invalid("entry_recovered_output_occupied"));
+        }
+        let held = self
+            .state
+            .recovery_coordinator
+            .as_ref()
+            .ok_or_else(|| ClaimError::invalid("entry_recovered_coordinator_missing"))?;
+        self.check_coordinator(held, coordinator_inode)?;
+        *output = self.state.recovery_coordinator.take();
+        Ok(())
     }
 }

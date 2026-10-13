@@ -22,6 +22,7 @@ pub(super) struct NativeState {
     pub(super) namespace: Option<ResolvedNamespace>,
     pub(super) image_identity: Option<[u8; 24]>,
     pub(super) election: Option<HeldFile<128>>,
+    pub(super) recovery_coordinator: Option<HeldFile<128>>,
     pub(super) entry_inode: Option<[u8; 24]>,
     pub(super) record_origin: Option<ElectionRecordOrigin>,
     pub(super) memory: Option<Arc<MemoryClaim>>,
@@ -35,6 +36,7 @@ impl NativeState {
             namespace: None,
             image_identity: None,
             election: None,
+            recovery_coordinator: None,
             entry_inode: None,
             record_origin: None,
             memory: None,
@@ -45,6 +47,9 @@ impl NativeState {
 }
 impl Drop for NativeState {
     fn drop(&mut self) {
+        if let Some(coordinator) = self.recovery_coordinator.take() {
+            std::mem::forget(coordinator);
+        }
         if let Some(election) = self.election.take() {
             // Unresolved native exclusion Drop must not invoke native calls on the observer.
             std::mem::forget(election);

@@ -13,6 +13,17 @@ pub(super) struct PendingAcquire {
     pub(super) original: Moment,
     pub(super) admitted: bool,
 }
+impl PendingAcquire {
+    /// Transfer only this request's exact observed reply; unrelated owners retain theirs.
+    /// Matching metadata grants no payload, native grant or readiness authority.
+    fn take_matching<T>(
+        self,
+        observed: Option<WireHeader>,
+        take: impl FnOnce() -> Option<T>,
+    ) -> Option<T> {
+        if observed == Some(self.header) { take() } else { None }
+    }
+}
 impl ProductionChild {
     pub(super) fn begin_connection(&mut self, prepared: &PreparedChildStartup) -> Result<()> {
         if self.connection_budget.is_some() || self.acquire.is_some() || self.lease.is_some() {
@@ -52,7 +63,12 @@ impl ProductionChild {
         if !pending.admitted {
             return Ok(());
         }
-        let Some(frame) = self.bootstrap.channel_mut().take_frame() else { return Ok(()) };
+        let observed = self.bootstrap.channel_mut().received_header()?;
+        let Some(frame) =
+            pending.take_matching(observed, || self.bootstrap.channel_mut().take_frame())
+        else {
+            return Ok(());
+        };
         self.grant = Some(frame);
         let frame = FrameCodec::decode(
             self.grant.as_ref().ok_or("Original grant frame absent")?.as_bytes(),
@@ -112,3 +128,7 @@ impl ProductionChild {
         self.advance_output()
     }
 }
+
+#[cfg(test)]
+#[path = "connection/tests.rs"]
+mod tests;

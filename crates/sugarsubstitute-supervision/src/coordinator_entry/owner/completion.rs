@@ -70,6 +70,16 @@ impl CoordinatorEntryOwner {
                     Actual::Elected(Elected::OrdinaryReleased { record, inode }) => {
                         self.retain_election(ElectionRecordOrigin::Released(record), inode)?;
                     }
+                    Actual::Elected(Elected::RecoveredHeld {
+                        record,
+                        inode,
+                        coordinator_inode,
+                    }) => {
+                        self.retain_election(
+                            ElectionRecordOrigin::RecoveredHeld { record, coordinator_inode },
+                            inode,
+                        )?;
+                    }
                     Actual::Elected(Elected::Candidate(epoch)) => {
                         self.candidate = Some(epoch);
                         self.phase = EntryPhase::Candidate;

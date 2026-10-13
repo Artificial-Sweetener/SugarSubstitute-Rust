@@ -36,13 +36,13 @@ impl PublicationFixture {
         self.claims.close_admission();
     }
 }
-pub(crate) fn with_fresh_publication<T>(
+pub(crate) fn with_elected_publication<T>(
     proof: &RetainedElectionProof,
     file: &HeldFile<128>,
     coordinator_inode: [u8; 24],
     context: &JobContext,
     resolved: &ResolvedNamespace,
-    body: impl FnOnce(&FreshCoordinatorPublication<'_>, &HeldFile<128>) -> Result<T, ClaimError>,
+    body: impl FnOnce(&ElectedCoordinatorPublication<'_>, &HeldFile<128>) -> Result<T, ClaimError>,
 ) -> Result<T, ClaimError> {
     let guard = proof.lock_for_initialization(context, resolved)?;
     let permission = guard.publication(file, coordinator_inode)?;

@@ -17,7 +17,8 @@ pub(super) fn interrupted(
     let original = match origin {
         ElectionRecordOrigin::Fresh(FreshRecordOrigin::Missing) => RecordRead::Missing,
         ElectionRecordOrigin::Fresh(FreshRecordOrigin::Empty) => RecordRead::Empty,
-        ElectionRecordOrigin::Released(bytes) => RecordRead::Present(bytes),
+        ElectionRecordOrigin::Released(bytes)
+        | ElectionRecordOrigin::RecoveredHeld { record: bytes, .. } => RecordRead::Present(bytes),
     };
     let fake = Fake::new(original);
     let external = fake.clone();
@@ -59,26 +60,28 @@ pub(super) fn interrupted(
             let mut slot = lock(&owned);
             let file = slot.as_mut().ok_or_else(|| ClaimError::invalid("held_missing"))?;
             match origin {
-                ElectionRecordOrigin::Fresh(_) => with_fresh_publication(
-                    &proof,
-                    file,
-                    inode,
-                    &context,
-                    &resolved(),
-                    |authority, file| {
-                        publication_core::publish_with_boundary(
-                            file,
-                            &encoded,
-                            PublicationAuthority::FreshCoordinator(authority),
-                            &context,
-                            |old| authority.validate(file, old),
-                            &mut fake,
-                        )
-                    },
-                ),
+                ElectionRecordOrigin::Fresh(_) | ElectionRecordOrigin::RecoveredHeld { .. } => {
+                    with_elected_publication(
+                        &proof,
+                        file,
+                        inode,
+                        &context,
+                        &resolved(),
+                        |authority, file| {
+                            publication_core::publish_with_boundary(
+                                file,
+                                &encoded,
+                                PublicationAuthority::ElectedCoordinator(authority),
+                                &context,
+                                |old| authority.validate(file, old),
+                                &mut fake,
+                            )
+                        },
+                    )
+                }
                 ElectionRecordOrigin::Released(_) => {
                     assert!(
-                        with_fresh_publication(
+                        with_elected_publication(
                             &proof,
                             file,
                             inode,
@@ -165,7 +168,8 @@ pub(super) fn interrupted(
             let actual = retirement::retire_with_boundary(file, Some(&encoded), &context, &mut fake)?;
             assert_eq!(lock(&fake.0).effects.len(), effects);
             let original_released = match origin {
-                ElectionRecordOrigin::Released(ref bytes) => Some(bytes),
+                ElectionRecordOrigin::Released(ref bytes) => Some(crate::native_claims::CoordinatorPredecessor::Released(bytes)),
+                ElectionRecordOrigin::RecoveredHeld {ref record,..} => Some(crate::native_claims::CoordinatorPredecessor::RecoveredHeld(record)),
                 _ => None,
             };
             let mut expected = lock(&expected);

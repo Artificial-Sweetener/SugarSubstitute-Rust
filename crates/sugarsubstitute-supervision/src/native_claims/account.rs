@@ -2,6 +2,10 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Initialize coordinator claims through the sole actual account/namespace resolver.
 use super::*;
+/// Initialize the new generation while retaining election and coordinator custody.
+/// Recovered initialization moves the original held coordinator file without reacquisition.
+/// # Errors
+/// Preserves native/account failures and rejects changed predecessors before publication.
 pub(crate) fn initialize(
     root: &mut Root,
     installation: &Path,
@@ -14,7 +18,7 @@ pub(crate) fn initialize(
         &mut root.handles,
         budget.clone(),
     )?;
-    let guard = root
+    let mut guard = root
         .entry_election
         .as_ref()
         .map(|proof| proof.lock_for_initialization(context, &resolved))
@@ -34,14 +38,27 @@ pub(crate) fn initialize(
     let stem = directory
         .join("coordinators")
         .join(crate::protected_storage::record_file::hex(namespace.bytes()));
-    HeldFile::acquire_into(
-        &mut root.coordinator,
-        crate::protected_storage::native_name::NativeName::Ordinary(stem.with_extension("claim")),
-        crate::protected_storage::native_name::NativeName::Ordinary(stem.with_extension("record")),
-        crate::protected_storage::native_name::NativeSid::Ordinary(root.sid.clone()),
-        budget.clone(),
-        &mut crate::protected_storage::native_phase::NativePhase::ordinary(&budget)?,
-    )?;
+    if let Some(guard) = guard.as_mut()
+        && matches!(
+            guard.proof.origin,
+            crate::coordinator_entry::election::ElectionRecordOrigin::RecoveredHeld { .. }
+        )
+    {
+        guard.adopt_recovered_coordinator(&mut root.coordinator)?;
+    } else {
+        HeldFile::acquire_into(
+            &mut root.coordinator,
+            crate::protected_storage::native_name::NativeName::Ordinary(
+                stem.with_extension("claim"),
+            ),
+            crate::protected_storage::native_name::NativeName::Ordinary(
+                stem.with_extension("record"),
+            ),
+            crate::protected_storage::native_name::NativeSid::Ordinary(root.sid.clone()),
+            budget.clone(),
+            &mut crate::protected_storage::native_phase::NativePhase::ordinary(&budget)?,
+        )?;
+    }
     let held = root.coordinator.as_ref().ok_or_else(|| ClaimError::invalid("missing_claim"))?;
     let record = Record::coordinator(key);
     if let Some(guard) = &guard {
@@ -51,6 +68,7 @@ pub(crate) fn initialize(
         matches!(
             guard.proof.origin,
             crate::coordinator_entry::election::ElectionRecordOrigin::Fresh(_)
+                | crate::coordinator_entry::election::ElectionRecordOrigin::RecoveredHeld { .. }
         )
     }) {
         root.original_released = records::check_predecessor(held, &root.sid, &record, context)?;
@@ -61,6 +79,7 @@ pub(crate) fn initialize(
         && matches!(
             guard.proof.origin,
             crate::coordinator_entry::election::ElectionRecordOrigin::Fresh(_)
+                | crate::coordinator_entry::election::ElectionRecordOrigin::RecoveredHeld { .. }
         )
     {
         let permission = guard.publication(
@@ -72,7 +91,7 @@ pub(crate) fn initialize(
                 )?,
             )?,
         )?;
-        records::publish_fresh(held, record, &permission, context)?;
+        records::publish_elected(held, record, &permission, context)?;
     } else {
         records::publish(held, record, context)?;
     }

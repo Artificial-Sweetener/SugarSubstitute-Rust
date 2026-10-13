@@ -39,7 +39,7 @@ fn fixed_record_missing_and_empty_require_actual_sealed_fresh_publication() -> T
                 );
                 assert!(lock(&file.stage).is_none());
                 assert!(lock(&fake.0).effects.is_empty());
-                with_fresh_publication(
+                with_elected_publication(
                     &proof,
                     file,
                     inode,
@@ -49,7 +49,7 @@ fn fixed_record_missing_and_empty_require_actual_sealed_fresh_publication() -> T
                         publication_core::publish_with_boundary(
                             file,
                             &[42; 128],
-                            PublicationAuthority::FreshCoordinator(authority),
+                            PublicationAuthority::ElectedCoordinator(authority),
                             &context,
                             |_| Ok(()),
                             &mut fake,
@@ -107,7 +107,7 @@ fn fixed_record_partial_outputs_and_rename_failure_keep_real_stage_and_generatio
                 let mut slot = lock(&owned);
                 let file =
                     slot.as_mut().ok_or_else(|| ClaimError::invalid("fixture_held_missing"))?;
-                let result = with_fresh_publication(
+                let result = with_elected_publication(
                     &proof,
                     file,
                     inode,
@@ -117,7 +117,7 @@ fn fixed_record_partial_outputs_and_rename_failure_keep_real_stage_and_generatio
                         publication_core::publish_with_boundary(
                             file,
                             &[42; 128],
-                            PublicationAuthority::FreshCoordinator(authority),
+                            PublicationAuthority::ElectedCoordinator(authority),
                             &context,
                             |_| Ok(()),
                             &mut fake,
@@ -129,7 +129,7 @@ fn fixed_record_partial_outputs_and_rename_failure_keep_real_stage_and_generatio
                 assert!(fake.live() > 1);
                 let before = lock(&fake.0).effects.len();
                 assert!(
-                    with_fresh_publication(
+                    with_elected_publication(
                         &proof,
                         file,
                         inode,
@@ -138,7 +138,7 @@ fn fixed_record_partial_outputs_and_rename_failure_keep_real_stage_and_generatio
                         |authority, file| publication_core::publish_with_boundary(
                             file,
                             &[43; 128],
-                            PublicationAuthority::FreshCoordinator(authority),
+                            PublicationAuthority::ElectedCoordinator(authority),
                             &context,
                             |_| Ok(()),
                             &mut fake

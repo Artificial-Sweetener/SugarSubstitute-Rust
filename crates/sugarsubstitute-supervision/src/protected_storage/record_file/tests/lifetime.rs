@@ -51,7 +51,7 @@ fn interrupted_publication(interruption: Interruption) -> TestResult {
                 coordinator.observe_coordinator(inode);
                 let mut slot = lock(&owned);
                 let file = slot.as_mut().ok_or_else(|| ClaimError::invalid("missing_held"))?;
-                with_fresh_publication(
+                with_elected_publication(
                     &proof,
                     file,
                     inode,
@@ -61,7 +61,7 @@ fn interrupted_publication(interruption: Interruption) -> TestResult {
                         publication_core::publish_with_boundary(
                             file,
                             &[42; 128],
-                            PublicationAuthority::FreshCoordinator(authority),
+                            PublicationAuthority::ElectedCoordinator(authority),
                             &context,
                             |_| Ok(()),
                             &mut fake,

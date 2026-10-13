@@ -109,7 +109,8 @@ impl WindowsResourceClaims {
     }
 }
 
-pub(crate) struct FreshCoordinatorPublication<'a> {
+/// Borrow actual entry/coordinator custody and claims admission through exact publication.
+pub(crate) struct ElectedCoordinatorPublication<'a> {
     guard: &'a ElectionInitializationGuard<'a>,
     coordinator: &'a HeldFile<128>,
     coordinator_inode: [u8; 24],
@@ -117,12 +118,15 @@ pub(crate) struct FreshCoordinatorPublication<'a> {
     claim_admission: Arc<AtomicBool>,
 }
 impl<'a> ElectionInitializationGuard<'a> {
+    /// Bind fresh or recovered-Held publication to this live guard and exact coordinator file.
+    /// # Errors
+    /// Rejects incompatible origins, closed claims and changed file ownership.
     pub(crate) fn publication<'b>(
         &'b self,
         file: &'b HeldFile<128>,
         coordinator_inode: [u8; 24],
-    ) -> Result<FreshCoordinatorPublication<'b>, ClaimError> {
-        if !matches!(self.proof.origin, ElectionRecordOrigin::Fresh(_)) {
+    ) -> Result<ElectedCoordinatorPublication<'b>, ClaimError> {
+        if matches!(self.proof.origin, ElectionRecordOrigin::Released(_)) {
             return Err(ClaimError::invalid("released_origin_is_ordinary"));
         }
         self.check_coordinator(file, coordinator_inode)?;
@@ -136,7 +140,7 @@ impl<'a> ElectionInitializationGuard<'a> {
         if !claim_admission.load(Ordering::Acquire) {
             return Err(ClaimError::invalid("entry_claim_admission_closed"));
         }
-        Ok(FreshCoordinatorPublication {
+        Ok(ElectedCoordinatorPublication {
             guard: self,
             coordinator: file,
             coordinator_inode,
@@ -145,7 +149,10 @@ impl<'a> ElectionInitializationGuard<'a> {
         })
     }
 }
-impl FreshCoordinatorPublication<'_> {
+impl ElectedCoordinatorPublication<'_> {
+    /// Match the fixed original predecessor under continuously retained exclusions.
+    /// # Errors
+    /// Rejects changed bytes, sizes or expired custody before activation.
     pub(crate) fn validate<const N: usize>(
         &self,
         file: &HeldFile<N>,
@@ -159,10 +166,11 @@ impl FreshCoordinatorPublication<'_> {
             (self.guard.proof.origin, old),
             (ElectionRecordOrigin::Fresh(FreshRecordOrigin::Missing), RecordRead::Missing)
                 | (ElectionRecordOrigin::Fresh(FreshRecordOrigin::Empty), RecordRead::Empty)
-        ) {
+        ) || matches!((self.guard.proof.origin,old),(ElectionRecordOrigin::RecoveredHeld {record,..},RecordRead::Present(actual)) if record.as_slice()==actual.as_slice())
+        {
             Ok(())
         } else {
-            Err(ClaimError::invalid("entry_changed_fresh_record"))
+            Err(ClaimError::invalid("entry_changed_elected_record"))
         }
     }
     pub(crate) fn validate_retained<const N: usize>(
@@ -181,9 +189,9 @@ impl FreshCoordinatorPublication<'_> {
         }
         self.guard.check_coordinator(file, self.coordinator_inode)
     }
-    pub(crate) fn binding(&self) -> Result<FreshPublicationBinding, ClaimError> {
+    pub(crate) fn binding(&self) -> Result<ElectionPublicationBinding, ClaimError> {
         self.validate_retained(self.coordinator)?;
-        Ok(FreshPublicationBinding {
+        Ok(ElectionPublicationBinding {
             election: self.guard.proof.retained(),
             coordinator_inode: self.coordinator_inode,
             claim_origin: self.claim_origin.clone(),
@@ -191,20 +199,20 @@ impl FreshCoordinatorPublication<'_> {
         })
     }
 }
-pub(crate) struct FreshPublicationBinding {
+pub(crate) struct ElectionPublicationBinding {
     election: RetainedElectionProof,
     coordinator_inode: [u8; 24],
     claim_origin: Arc<()>,
     claim_admission: Arc<AtomicBool>,
 }
-impl FreshPublicationBinding {
+impl ElectionPublicationBinding {
     pub(crate) fn execution_owner(&self) -> ExecutionId {
         self.election.execution
     }
     pub(crate) fn validate<const N: usize>(
         &self,
         file: &HeldFile<N>,
-        current: &FreshCoordinatorPublication<'_>,
+        current: &ElectedCoordinatorPublication<'_>,
     ) -> Result<(), ClaimError> {
         if N != 128 {
             return Err(ClaimError::invalid("entry_coordinator_record_size"));

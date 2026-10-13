@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Execute finite native namespace discovery, stable election and checked retirement.
+mod election;
 use super::{
     election::{ElectionRecordOrigin, FreshRecordOrigin},
     namespace::NativeState,
@@ -35,6 +36,7 @@ pub(super) struct Discovered {
 pub(super) enum Elected {
     Fresh { origin: FreshRecordOrigin, inode: [u8; 24] },
     OrdinaryReleased { record: [u8; 128], inode: [u8; 24] },
+    RecoveredHeld { record: [u8; 128], inode: [u8; 24], coordinator_inode: [u8; 24] },
     Candidate(CoordinatorEpoch),
     Contended,
     Degraded(EntryOwnerDegradation),
@@ -266,75 +268,7 @@ impl NativePort for SystemPort {
         Ok(discovered)
     }
     fn elect(&self, state: &mut NativeState, context: &JobContext) -> Result<Elected, ClaimError> {
-        check(context)?;
-        if state.election.is_some() {
-            return Err(ClaimError::invalid("entry_election_repeated"));
-        }
-        let resolved = state
-            .namespace
-            .as_ref()
-            .ok_or_else(|| ClaimError::invalid("entry_namespace_missing"))?;
-        let memory = state
-            .memory
-            .as_ref()
-            .ok_or_else(|| ClaimError::invalid("entry_memory_missing"))?
-            .clone();
-        let stem = resolved
-            .directory
-            .join("coordinators")
-            .join(record_file::hex(resolved.namespace.bytes()));
-        let acquired = HeldFile::acquire_into(
-            &mut state.election,
-            crate::protected_storage::native_name::NativeName::Ordinary(
-                stem.with_extension("entry.claim"),
-            ),
-            crate::protected_storage::native_name::NativeName::Ordinary(
-                stem.with_extension("record"),
-            ),
-            crate::protected_storage::native_name::NativeSid::Ordinary(
-                resolved.account_sid.clone(),
-            ),
-            Budget::Protected(memory.clone()),
-            &mut crate::protected_storage::native_phase::NativePhase::ordinary(
-                &Budget::Protected(memory),
-            )?,
-        );
-        if let Err(cause) = acquired {
-            if is_contention(&cause) {
-                let held = state
-                    .election
-                    .as_ref()
-                    .ok_or_else(|| ClaimError::invalid("entry_partial_exclusion_missing"))?;
-                return classify(record_file::read_shape(held, context)?, resolved.namespace, None);
-            }
-            return Err(cause);
-        }
-        let held = state
-            .election
-            .as_ref()
-            .ok_or_else(|| ClaimError::invalid("entry_exclusion_missing"))?;
-        let inode = paths::file_identity(
-            &held.handle,
-            &mut crate::protected_storage::native_phase::NativePhase::ordinary(
-                &held.handle.budget(),
-            )?,
-        )?;
-        let read = record_file::read_shape(held, context)?;
-        check(context)?;
-        let outcome = classify(read, resolved.namespace, Some(inode))?;
-        match outcome {
-            Elected::Fresh { origin, .. } => {
-                state.entry_inode = Some(inode);
-                state.record_origin = Some(ElectionRecordOrigin::Fresh(origin));
-                Ok(Elected::Fresh { origin, inode })
-            }
-            Elected::OrdinaryReleased { record, .. } => {
-                state.entry_inode = Some(inode);
-                state.record_origin = Some(ElectionRecordOrigin::Released(record));
-                Ok(Elected::OrdinaryReleased { record, inode })
-            }
-            other => Ok(other),
-        }
+        election::elect(state, context)
     }
     fn close(&self, state: &mut NativeState, context: &JobContext) -> Result<(), ClaimError> {
         let until =
@@ -344,6 +278,11 @@ impl NativePort for SystemPort {
         }
         state.close_deadline = Some(state.close_deadline.map_or(until, |old| old.min(until)));
         check(context)?;
+        if let Some(held) = &mut state.recovery_coordinator {
+            check(context)?;
+            held.close()?;
+        }
+        state.recovery_coordinator = None;
         if let Some(held) = &mut state.election {
             check(context)?;
             held.close()?;

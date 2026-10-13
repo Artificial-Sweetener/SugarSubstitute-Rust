@@ -26,7 +26,7 @@ fn fixed_record_changed_native_path_or_same_bytes_new_inode_cannot_prove_activat
                 let file = slot.as_mut().ok_or_else(|| ClaimError::invalid("held_missing"))?;
                 lock(&fake.0).faults.activate = true;
                 assert!(
-                    with_fresh_publication(
+                    with_elected_publication(
                         &proof,
                         file,
                         inode,
@@ -35,7 +35,7 @@ fn fixed_record_changed_native_path_or_same_bytes_new_inode_cannot_prove_activat
                         |authority, file| publication_core::publish_with_boundary(
                             file,
                             &[42; 128],
-                            PublicationAuthority::FreshCoordinator(authority),
+                            PublicationAuthority::ElectedCoordinator(authority),
                             &context,
                             |_| Ok(()),
                             &mut fake

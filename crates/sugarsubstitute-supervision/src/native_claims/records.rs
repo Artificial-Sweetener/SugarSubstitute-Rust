@@ -6,7 +6,8 @@ mod storage;
 #[cfg(test)]
 mod tests;
 pub(crate) use storage::{
-    check_predecessor, publish, publish_fresh, retire_backend, retire_coordinator,
+    CoordinatorPredecessor, check_predecessor, publish, publish_elected, retire_backend,
+    retire_coordinator,
 };
 #[cfg(test)]
 pub(crate) use storage::{

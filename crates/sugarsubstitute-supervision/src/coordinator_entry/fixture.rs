@@ -36,3 +36,22 @@ mod boundary;
 mod harness;
 pub(crate) use boundary::{ClockPort, Fake, Gate, Stage, Wake, facts, resolved};
 pub(crate) use harness::Harness;
+/// Adopt a fixture boundary's real charged file into the retained namespace slot.
+pub(crate) fn install_recovery(
+    proof: &RetainedElectionProof,
+    file: &mut Option<crate::protected_storage::exclusion::HeldFile<128>>,
+) -> Result<(), ClaimError> {
+    let mut state = lock(&proof.lifetime.state);
+    if !matches!(proof.origin, ElectionRecordOrigin::RecoveredHeld { .. })
+        || state.recovery_coordinator.is_some()
+        || file.is_none()
+    {
+        return Err(ClaimError::invalid("recovery_fixture_state"));
+    }
+    state.recovery_coordinator = file.take();
+    Ok(())
+}
+/// Observe this actual mutex's WouldBlock result while an initializer borrows it.
+pub(crate) fn initialization_guard_held(proof: &RetainedElectionProof) -> bool {
+    matches!(proof.lifetime.state.try_lock(), Err(std::sync::TryLockError::WouldBlock))
+}

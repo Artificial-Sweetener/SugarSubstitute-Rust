@@ -126,7 +126,8 @@ pub struct EntrySnapshot {
 pub enum EntryObservation {
     /// Actual namespace and installed running image were retained successfully.
     NamespacePrepared(NamespaceId),
-    /// Actual fresh election and source-closed Missing/Empty observation are retained.
+    /// Actual entry exclusion retains Fresh/Released observation, or both exclusions
+    /// retain an exact validated Held predecessor for checked claims initialization.
     ElectionHeld,
     /// A valid record supplies only a candidate epoch, awaiting native peer proof.
     Candidate(CoordinatorEpoch),

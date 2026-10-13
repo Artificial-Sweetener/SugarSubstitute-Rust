@@ -167,6 +167,9 @@ impl NativePort for Fake {
             ElectionRecordOrigin::Released(record) => {
                 Elected::OrdinaryReleased { record, inode: [9; 24] }
             }
+            ElectionRecordOrigin::RecoveredHeld { record, coordinator_inode } => {
+                Elected::RecoveredHeld { record, inode: [9; 24], coordinator_inode }
+            }
         })
     }
     fn close(

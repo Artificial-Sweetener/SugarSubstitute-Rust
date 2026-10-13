@@ -11,11 +11,12 @@ mod records;
 use crate::protected_storage::exclusion::HeldFile;
 use crate::{ClaimError, claims::pool::SlotUse};
 use files::Handle;
-pub(crate) use records::{Record, RecordState};
 #[cfg(test)]
 pub(crate) use records::{
-    permits_replacement, prepare_backend_release, prepare_coordinator_release,
+    CoordinatorPredecessor, permits_replacement, prepare_backend_release,
+    prepare_coordinator_release,
 };
+pub(crate) use records::{Record, RecordState};
 use std::{
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
@@ -210,9 +211,13 @@ impl NativePort for SystemPort {
         if let Some(file) = root.coordinator.as_ref().filter(|file| file.is_locked()) {
             let released = match root.entry_election.as_ref().map(|proof| &proof.origin) {
                 Some(crate::coordinator_entry::election::ElectionRecordOrigin::Released(bytes)) => {
-                    Some(bytes)
+                    Some(records::CoordinatorPredecessor::Released(bytes))
                 }
-                _ => root.original_released.as_ref(),
+                Some(crate::coordinator_entry::election::ElectionRecordOrigin::RecoveredHeld {
+                    record,
+                    ..
+                }) => Some(records::CoordinatorPredecessor::RecoveredHeld(record)),
+                _ => root.original_released.as_ref().map(records::CoordinatorPredecessor::Released),
             };
             records::retire_coordinator(file, &mut root.record, released, context)?;
         }

@@ -138,6 +138,8 @@ impl CoordinatorEntryOwner {
         })
     }
     /// Bind current retained election metadata to an unused claims owner without native work.
+    /// A recovered Held predecessor retains both exclusions; initialization moves
+    /// the same coordinator file while its entry guard remains borrowed through CAS.
     /// # Errors
     /// Rejects absent/closed/foreign election or actual claims admission failure.
     pub fn prepare_claims(

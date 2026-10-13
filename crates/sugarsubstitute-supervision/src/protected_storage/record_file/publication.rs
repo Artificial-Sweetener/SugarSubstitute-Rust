@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Bind every fixed-record output to immutable bytes and original admission.
 use super::*;
-use crate::claims::entry::{FreshCoordinatorPublication, FreshPublicationBinding};
+use crate::claims::entry::{ElectedCoordinatorPublication, ElectionPublicationBinding};
 use std::path::PathBuf;
 use sugarsubstitute_contracts::execution::JobContext;
 /// Borrow actual initialization proof or retain ordinary predecessor policy.
@@ -10,11 +10,11 @@ pub(crate) enum PublicationAuthority<'a> {
     /// Require owner predecessor policy under actual locked exclusion.
     Ordinary,
     /// Require the actual sealed election and claim lifetime as well.
-    FreshCoordinator(&'a FreshCoordinatorPublication<'a>),
+    ElectedCoordinator(&'a ElectedCoordinatorPublication<'a>),
 }
 /// Retain admission before reads can leave a failed-close output without a stage.
 pub(crate) struct PublicationBinding<const N: usize> {
-    fresh: Option<FreshPublicationBinding>,
+    elected: Option<ElectionPublicationBinding>,
     encoded: Option<[u8; N]>,
     pub(super) context: context::PublicationContext,
 }
@@ -25,19 +25,19 @@ impl PublicationAuthority<'_> {
         current: &JobContext,
     ) -> Result<PublicationBinding<N>, ClaimError> {
         let context = context::PublicationContext::new(current)?;
-        let fresh = match self {
+        let elected = match self {
             Self::Ordinary => None,
-            Self::FreshCoordinator(proof) => Some(proof.binding()?),
+            Self::ElectedCoordinator(proof) => Some(proof.binding()?),
         };
-        if fresh.as_ref().is_some_and(|proof| proof.execution_owner() != current.owner_id()) {
-            return Err(ClaimError::invalid("foreign_fresh_publication_context"));
+        if elected.as_ref().is_some_and(|proof| proof.execution_owner() != current.owner_id()) {
+            return Err(ClaimError::invalid("foreign_elected_publication_context"));
         }
-        Ok(PublicationBinding { context, encoded: Some(*encoded), fresh })
+        Ok(PublicationBinding { context, encoded: Some(*encoded), elected })
     }
     fn validate_retained<const N: usize>(&self, file: &HeldFile<N>) -> Result<(), ClaimError> {
         match self {
             Self::Ordinary if file.is_locked() => Ok(()),
-            Self::FreshCoordinator(proof) => proof.validate_retained(file),
+            Self::ElectedCoordinator(proof) => proof.validate_retained(file),
             _ => Err(ClaimError::invalid("publication_without_exclusion")),
         }
     }
@@ -55,14 +55,18 @@ impl PublicationAuthority<'_> {
                 }
                 _ => Ok(()),
             },
-            Self::FreshCoordinator(proof) => proof.validate(file, old),
+            Self::ElectedCoordinator(proof) => proof.validate(file, old),
         }
     }
 }
 impl<const N: usize> PublicationBinding<N> {
     /// Retain an observation's ports while a failed source close remains owned.
     pub(super) fn read(current: &JobContext) -> Result<Self, ClaimError> {
-        Ok(Self { fresh: None, encoded: None, context: context::PublicationContext::new(current)? })
+        Ok(Self {
+            elected: None,
+            encoded: None,
+            context: context::PublicationContext::new(current)?,
+        })
     }
     /// Retain cleanup ports before a retirement read can leave a partial output.
     pub(super) fn cleanup(
@@ -71,7 +75,7 @@ impl<const N: usize> PublicationBinding<N> {
     ) -> Result<Self, ClaimError> {
         let mut context = context::PublicationContext::new(current)?;
         context.validate_cleanup(current)?;
-        Ok(Self { fresh: None, encoded: expected.copied(), context })
+        Ok(Self { elected: None, encoded: expected.copied(), context })
     }
     fn validate(
         &mut self,
@@ -83,9 +87,9 @@ impl<const N: usize> PublicationBinding<N> {
         if self.encoded.as_ref() != Some(encoded) {
             return Err(ClaimError::invalid("changed_publication_generation"));
         }
-        match (&self.fresh, authority) {
+        match (&self.elected, authority) {
             (None, PublicationAuthority::Ordinary) if file.is_locked() => (),
-            (Some(original), PublicationAuthority::FreshCoordinator(next)) => {
+            (Some(original), PublicationAuthority::ElectedCoordinator(next)) => {
                 original.validate(file, next)?
             }
             _ => return Err(ClaimError::invalid("changed_publication_authority")),

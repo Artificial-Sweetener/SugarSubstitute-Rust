@@ -64,16 +64,19 @@ pub(crate) fn permits_replacement(old: &Record, new: &Record) -> bool {
                 && old.generation == new.generation))
 }
 
-pub(crate) fn publish_fresh(
+/// Publish only under the retained election permission and its exact predecessor comparison.
+/// # Errors
+/// Preserves publication failures and rejects changed record or exclusion ownership.
+pub(crate) fn publish_elected(
     file: &HeldFile,
     record: &Record,
-    permission: &crate::claims::entry::FreshCoordinatorPublication<'_>,
+    permission: &crate::claims::entry::ElectedCoordinatorPublication<'_>,
     context: &sugarsubstitute_contracts::execution::JobContext,
 ) -> Result<(), ClaimError> {
     record_file::publish(
         file,
         &record.encode(),
-        record_file::PublicationAuthority::FreshCoordinator(permission),
+        record_file::PublicationAuthority::ElectedCoordinator(permission),
         context,
         |old| permission.validate(file, old),
     )
@@ -81,12 +84,12 @@ pub(crate) fn publish_fresh(
 pub(crate) fn retire_coordinator(
     file: &HeldFile,
     expected: &mut Option<Record>,
-    original_released: Option<&[u8; 128]>,
+    original_predecessor: Option<CoordinatorPredecessor<'_>>,
     context: &sugarsubstitute_contracts::execution::JobContext,
 ) -> Result<(), ClaimError> {
     let encoded = expected.as_ref().map(Record::encode);
     let observed = record_file::retire_publication(file, encoded.as_ref(), context)?;
-    if prepare_coordinator_release(observed, expected, original_released)? {
+    if prepare_coordinator_release(observed, expected, original_predecessor)? {
         publish(
             file,
             expected.as_ref().ok_or_else(|| ClaimError::invalid("missing_released_generation"))?,
@@ -95,17 +98,25 @@ pub(crate) fn retire_coordinator(
     }
     Ok(())
 }
+/// Borrow the exact predecessor established by an owning initialization policy.
+#[derive(Clone, Copy)]
+pub(crate) enum CoordinatorPredecessor<'a> {
+    /// Exact compatible Released record consumed before ordinary initialization.
+    Released(&'a [u8; 128]),
+    /// Exact Held record retained under both election and coordinator exclusions.
+    RecoveredHeld(&'a [u8; 128]),
+}
 /// Retain Released only after the sole record owner observed this exact generation.
-///
-/// Returns whether ordinary publication is still required. Unactivated absence,
-/// empty shape and the exact original Released predecessor remain unchanged.
+/// Unactivated absence, empty shape and the exact original predecessor remain unchanged.
+/// Recovered Held bytes are preserved only before actual new activation.
 /// # Errors
 /// Rejects corrupt or changed ownership without replacing the expected generation.
 pub(crate) fn prepare_coordinator_release(
     observed: record_file::PublicationRetirement<128>,
     expected: &mut Option<Record>,
-    original_released: Option<&[u8; 128]>,
+    original_predecessor: Option<CoordinatorPredecessor<'_>>,
 ) -> Result<bool, ClaimError> {
+    let preserved = matches!(&observed, record_file::PublicationRetirement::Preserved(_));
     let observed = match observed {
         record_file::PublicationRetirement::Preserved(observed) => observed,
         record_file::PublicationRetirement::Activated(bytes) => {
@@ -117,9 +128,16 @@ pub(crate) fn prepare_coordinator_release(
         record_file::RecordRead::Present(bytes) => bytes,
     };
     let actual = Record::decode(&bytes)?;
-    if original_released == Some(&bytes)
-        && actual.resource == 0
-        && actual.state == RecordState::Released
+    if actual.resource == 0
+        && match original_predecessor {
+            Some(CoordinatorPredecessor::Released(original)) => {
+                original == &bytes && actual.state == RecordState::Released
+            }
+            Some(CoordinatorPredecessor::RecoveredHeld(original)) => {
+                preserved && original == &bytes && actual.state == RecordState::Held
+            }
+            None => false,
+        }
     {
         return Ok(false);
     }

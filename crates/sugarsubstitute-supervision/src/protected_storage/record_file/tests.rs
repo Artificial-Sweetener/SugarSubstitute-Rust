@@ -12,12 +12,13 @@ mod lifetime;
 mod ordinary;
 mod publication;
 mod read_context;
+mod recovered;
 mod release;
 pub(crate) mod role_fixture;
 use super::publication as publication_core;
 use super::*;
 use crate::{
-    claims::entry::fixture::{PublicationFixture, with_fresh_publication},
+    claims::entry::fixture::{PublicationFixture, with_elected_publication},
     coordinator_entry::{
         election::{ElectionRecordOrigin, FreshRecordOrigin},
         fixture::resolved,
