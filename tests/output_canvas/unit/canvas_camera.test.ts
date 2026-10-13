@@ -192,6 +192,31 @@ describe('browser canvas camera', () => {
     );
   });
 
+  test('scopes displayed-Run resets to one view and ignores repeated or stale Run identities', () => {
+    const store = new CanvasInspectionStore();
+    const a = 'view:a' as const;
+    const b = 'view:b' as const;
+    const slot = { sourceId: 'source:1' as const, batchIndex: 0 };
+    const g = geometry();
+    const native = centeredCanvasCamera(g, 'native');
+    for (const view of [a, b]) {
+      store.synchronize(view, 0, [slot]);
+      expect(store.presentRun(view, 1)).toBe(true);
+      store.capture(view, slot, native, g);
+    }
+    expect(store.presentRun(a, 2)).toBe(true);
+    expect(store.camera(a, slot, g).mode).toBe('fit');
+    expect(store.camera(b, slot, g)).toEqual(native);
+    store.capture(a, slot, native, g);
+    expect(store.presentRun(a, 2)).toBe(false);
+    expect(store.presentRun(a, 1)).toBe(false);
+    expect(store.camera(a, slot, g)).toEqual(native);
+    store.synchronize(a, 1, [slot]);
+    expect(store.presentRun(a, 1)).toBe(true);
+    expect(store.camera(a, slot, g).mode).toBe('fit');
+    store.dispose();
+  });
+
   test('keeps linked views and independent slots separate, pruning replacement generations', () => {
     const store = new CanvasInspectionStore();
     const a = 'view:a' as const;

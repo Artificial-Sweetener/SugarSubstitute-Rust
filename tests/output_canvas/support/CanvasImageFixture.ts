@@ -119,6 +119,7 @@ export function canvasImageInput(
 ): CanvasImageInput<string> {
   return {
     key,
+    runOrder: 1,
     selection: { sourceId: outputSourceId(key), batchIndex: 0 },
     lane: preview ? 'preview:current-run' : key,
     fallbackKey: null,

@@ -29,6 +29,7 @@ import type { CanvasDecodeLease } from './CanvasImageDecodeScheduler.js';
 
 export interface CanvasImageIntent {
   readonly key: string;
+  readonly runOrder: number;
   readonly selection: CanvasSelection;
   readonly lane: string;
   readonly fallbackKey: string | null;
@@ -143,6 +144,7 @@ export class CanvasImageSlot<Payload, Handle> {
 export function canvasImageIntent<Payload>(input: CanvasImageInput<Payload>): CanvasImageIntent {
   return Object.freeze({
     key: input.key,
+    runOrder: input.runOrder,
     selection: Object.freeze({ ...input.selection }),
     lane: input.lane,
     fallbackKey: input.fallbackKey,

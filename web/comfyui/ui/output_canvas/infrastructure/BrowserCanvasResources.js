@@ -115,6 +115,7 @@ export class BrowserCanvasResources {
         const lane = canvasPreviewLane(preview);
         const input = {
             key: preview.token,
+            runOrder: preview.runOrder,
             selection: slot.selection,
             lane,
             fallbackKey: slot.item?.id ?? null,
@@ -192,6 +193,7 @@ export class BrowserCanvasResources {
             return null;
         return {
             key: item.id,
+            runOrder: item.provenance.runOrder,
             selection: slot.selection,
             lane: item.id,
             fallbackKey: null,

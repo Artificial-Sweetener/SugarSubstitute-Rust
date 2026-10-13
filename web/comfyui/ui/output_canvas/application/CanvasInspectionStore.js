@@ -23,13 +23,29 @@ export class CanvasInspectionStore {
     synchronize(view, generation, slots) {
         let record = this.#views.get(view);
         if (!record || record.generation !== generation) {
-            record = { generation, linked: true, shared: null, individual: new Map() };
+            record = {
+                generation,
+                presentedRun: null,
+                linked: true,
+                shared: null,
+                individual: new Map(),
+            };
             this.#views.set(view, record);
         }
         const valid = new Set(slots.map(selectionKey));
         for (const slot of record.individual.keys())
             if (!valid.has(slot))
                 record.individual.delete(slot);
+    }
+    /** Retire previous-Run cameras only when a newer Run's pixels are actually presented. */
+    presentRun(view, runOrder) {
+        const record = this.#require(view);
+        if (record.presentedRun !== null && runOrder <= record.presentedRun)
+            return false;
+        record.presentedRun = runOrder;
+        record.shared = null;
+        record.individual.clear();
+        return true;
     }
     /** Change link policy without overwriting saved independent slot cameras. */
     setLinked(view, linked, current) {

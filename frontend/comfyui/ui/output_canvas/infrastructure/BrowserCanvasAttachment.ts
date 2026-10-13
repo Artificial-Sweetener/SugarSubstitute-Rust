@@ -410,7 +410,7 @@ export class BrowserCanvasAttachment {
             surface.physicalPixelsPerCssPixel,
           )
         : null;
-    if (basis && geometry) this.#camera.show(basis.selection, geometry);
+    if (basis && geometry) this.#camera.show(basis.selection, geometry, basis.runOrder);
     else {
       this.#input.cancel();
       this.#camera.suspend();
