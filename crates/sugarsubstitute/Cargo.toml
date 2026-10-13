@@ -20,6 +20,7 @@ serde.workspace = true
 serde_json.workspace = true
 
 [target.'cfg(windows)'.dependencies]
+sugarsubstitute-comfy = { path = "../sugarsubstitute-comfy" }
 sugarsubstitute-crash = { path = "../sugarsubstitute-crash" }
 sugarsubstitute-supervision = { path = "../sugarsubstitute-supervision" }
 

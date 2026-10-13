@@ -30,8 +30,10 @@ impl Core {
         } else {
             record.phase = JobPhase::Queued;
             record.retiring = true;
-            let job = record.job.clone();
-            state.retired.push_back(Retirement::Outcome(job));
+            if !crate::entry_preparation::slot::defer_disposal(record.preparation.as_ref()) {
+                let job = record.job.clone();
+                state.retired.push_back(Retirement::Outcome(job));
+            }
             false
         }
     }
@@ -44,9 +46,11 @@ impl Core {
         {
             record.retiring = true;
             record.phase = JobPhase::Queued;
-            let job = record.job.clone();
             self.mailbox.remove(id);
-            state.retired.push_back(Retirement::Outcome(job));
+            if !crate::entry_preparation::slot::defer_disposal(record.preparation.as_ref()) {
+                let job = record.job.clone();
+                state.retired.push_back(Retirement::Outcome(job));
+            }
         }
         drop(state);
         self.changed();
@@ -60,7 +64,6 @@ impl Core {
         }
     }
 
-    #[cfg(any(windows, test))]
     pub(crate) fn retire_native_custody(&self, id: JobId) {
         let acknowledged = {
             let state = lock(&self.state);

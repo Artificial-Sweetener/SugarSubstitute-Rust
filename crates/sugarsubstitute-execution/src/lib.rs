@@ -4,6 +4,17 @@
 
 mod admission;
 mod blocking;
+mod entry_preparation;
+#[cfg(windows)]
+mod windows_entry_environment;
+#[cfg(any(windows, test))]
+pub use entry_preparation::submission::EntryPreparationAdmissionRejection;
+pub use entry_preparation::{
+    CapturedEntryEnvironment, EntryEnvironmentFailure, EntryEnvironmentObservation,
+    EntryPreparationCause, EntryPreparationContext, EntryPreparationControlCause,
+    EntryPreparationError, EntryPreparationFailure, EntryPreparationInputError,
+    EntryPreparationSuccess, EntryRequestAdoptionRejection, EntryRequestInput,
+};
 #[cfg(any(windows, test))]
 mod capture_attach;
 mod clock;
@@ -62,8 +73,8 @@ pub mod windows_output;
 
 pub use clock::MonotonicClock;
 pub use runtime::{
-    ExecutionClient, ExecutionLimits, ExecutionOwner, NativeOutputCustody, ShutdownProgress,
-    WorkerStatus,
+    EntryEnvironmentCustody, EntryEnvironmentExtent, ExecutionClient, ExecutionLimits,
+    ExecutionOwner, NativeOutputCustody, ShutdownProgress, WorkerStatus,
 };
 
 #[cfg(test)]

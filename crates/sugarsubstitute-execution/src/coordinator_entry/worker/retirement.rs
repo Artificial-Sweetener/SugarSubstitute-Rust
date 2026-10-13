@@ -160,6 +160,9 @@ impl Active {
         }
         self.replay = None;
         drop(self.work.input.take());
+        drop(self.source_pending.take());
+        drop(self.source_owner.take());
+        drop(self.source_input_claim.take());
         drop(self.lease.take());
         let ended = if clock_available { core.clock.now() } else { now };
         self.completed = true;

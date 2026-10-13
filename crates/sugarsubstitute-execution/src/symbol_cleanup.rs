@@ -152,7 +152,7 @@ impl ExecutionClient {
                             Box::pin(crate::blocking::run(task_job, context, started, factory))
                         })),
                     };
-                    (
+                    Ok((
                         queued,
                         SymbolCleanupPermit {
                             job: Box::new(OwnedJob::new(
@@ -162,7 +162,7 @@ impl ExecutionClient {
                             )),
                             core: Arc::downgrade(&self.core),
                         },
-                    )
+                    ))
                 },
             )
             .map_err(|(error, factory)| SymbolSubmissionRejection { error, factory })

@@ -95,9 +95,33 @@ pub struct WorkerStatus {
     pub cpu_finished: bool,
 }
 
+/// Observe an original environment allocation whose OS extent is not supplied.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EntryEnvironmentCustody {
+    /// Genuine original scope retained by the admitted memory lease.
+    pub scope_id: sugarsubstitute_contracts::execution::ScopeId,
+    /// Actual job, independently of terminal delivery acknowledgement.
+    pub job_id: JobId,
+    /// The OS-owned extent is unmeasured; copied units do not establish allocation size.
+    pub extent: EntryEnvironmentExtent,
+    /// Failed or panicked Free remains opaque, owned and nonretryable.
+    pub retirement_uncertain: bool,
+    /// The actual synchronous getter/read/free callback has returned.
+    pub callback_quiescent: bool,
+}
+
+/// Classify actual OS allocation knowledge without inventing a handle count or byte bound.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EntryEnvironmentExtent {
+    /// GetEnvironmentStringsW supplied no allocation extent.
+    Unmeasured,
+}
+
 /// Observe shutdown while retaining work, untransferred results and cancellation callbacks.
 #[derive(Debug)]
 pub struct ShutdownProgress {
+    /// Original held environment allocations; terminal ACK cannot erase these observations.
+    pub entry_environment_custody: Vec<EntryEnvironmentCustody>,
     /// Nonzero original symbol output custody retained independently of job ACK.
     pub native_output_custody: Vec<NativeOutputCustody>,
     /// Every admitted job is transferred or disposed and cancellation callbacks have returned.

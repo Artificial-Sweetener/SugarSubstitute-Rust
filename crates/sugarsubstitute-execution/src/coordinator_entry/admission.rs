@@ -86,18 +86,44 @@ pub(crate) fn reserve_client(
     mut lease: Box<dyn EntryLease>,
 ) -> Result<CoordinatorEntryClientSession, EntryTransportAdmissionError> {
     persistent(core, scope, spec, MIN_ENTRY_CLIENT_BYTES)?;
-    // Destination Moment precedes source counter sampling; the sole clock owner floors conversion.
-    let before = core.clock.now();
-    let sample = lease.sample_counter().map_err(EntryTransportAdmissionError::Clock)?;
-    let until = crate::counter_deadline::decode(before, sample, input.source_setup)
-        .map_err(EntryTransportAdmissionError::Clock)?;
-    validate_horizon(sample, input.source_setup).map_err(|error| match error {
-        EntryTransportError::Clock(cause) => EntryTransportAdmissionError::Clock(cause),
-        other => EntryTransportAdmissionError::Clock(NativeObservationError::new(
-            "entry_source_horizon",
-            other,
-        )),
-    })?;
+    // Destination observation precedes the original final pre-effect check.
+    // A failed destination sample still observes mandatory original controls.
+    let sampled = core
+        .clock
+        .metadata()
+        .map_err(|cause| NativeObservationError::new("entry_destination_counter_clock", cause));
+    let original = if sampled.is_ok() {
+        input.request.check_original_core(core)
+    } else {
+        input.request.observe_current_original_core(core).map(|()| None)
+    };
+    let (before, original_until) = match (sampled, original) {
+        (Err(first), after) => {
+            return Err(clock_rejection(&input.request, first, after.err()));
+        }
+        (Ok(_), Err(after)) => return Err(EntryTransportAdmissionError::Preparation(after)),
+        (Ok(before), Ok(until)) => (before, until),
+    };
+    let conversion = lease.sample_counter().and_then(|sample| {
+        let until = crate::counter_deadline::decode(before, sample, input.source_setup)?;
+        validate_horizon(sample, input.source_setup)
+            .map_err(|cause| NativeObservationError::new("entry_source_horizon", cause))?;
+        if original_until.is_some_and(|original| until > original) {
+            return Err(NativeObservationError::new(
+                "entry_original_preparation_renewal",
+                EntryTransportError::InvalidDeadline,
+            ));
+        }
+        Ok(until)
+    });
+    let post = input.request.observe_current_original_core(core);
+    let until = match (conversion, post) {
+        (Err(first), after) => {
+            return Err(clock_rejection(&input.request, first, after.err()));
+        }
+        (Ok(_), Err(after)) => return Err(EntryTransportAdmissionError::Preparation(after)),
+        (Ok(until), Ok(_)) => until,
+    };
     let facts = input.facts;
     let (control, completion) = reserve(
         core,
@@ -113,6 +139,21 @@ pub(crate) fn reserve_client(
     )?;
     Ok(CoordinatorEntryClientSession { control, completion })
 }
+fn clock_rejection(
+    input: &crate::EntryRequestInput,
+    first: NativeObservationError,
+    after: Option<crate::EntryPreparationError>,
+) -> EntryTransportAdmissionError {
+    if input.original_owner().is_none() && after.is_none() {
+        return EntryTransportAdmissionError::Clock(first);
+    }
+    EntryTransportAdmissionError::Prepared(EntryTransportError::prepared(
+        EntryTransportError::Clock(first),
+        after.map(EntryTransportError::Preparation),
+        input.original_owner(),
+    ))
+}
+
 struct Reservation {
     server: bool,
     facts: sugarsubstitute_contracts::coordinator_entry::EntryNativeIdentityFacts,

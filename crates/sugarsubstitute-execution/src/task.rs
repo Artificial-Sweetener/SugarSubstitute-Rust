@@ -267,10 +267,16 @@ impl<T: Send + 'static, E: Send + 'static> JobControl<T, E> for JobHandle<T, E> 
 mod asynchronous;
 pub(crate) use asynchronous::{borrowed_panic_cause, panic_cause, run_async};
 
+/// Distinguish actual finite disposal from separately supervised native custody.
+pub(crate) enum FiniteRetirement {
+    Factory(QueuedJob, Stop),
+    Outcome(Arc<dyn ErasedJob>),
+}
+
 /// Dispose accepted ownership exclusively on an execution-owned worker.
-pub(crate) fn retire(retired: crate::admission::Retirement) {
+pub(crate) fn retire(retired: FiniteRetirement) {
     match retired {
-        crate::admission::Retirement::Factory(queued, reason) => stop_queued(queued, reason),
-        crate::admission::Retirement::Outcome(job) => job.dispose(),
+        FiniteRetirement::Factory(queued, reason) => stop_queued(queued, reason),
+        FiniteRetirement::Outcome(job) => job.dispose(),
     }
 }

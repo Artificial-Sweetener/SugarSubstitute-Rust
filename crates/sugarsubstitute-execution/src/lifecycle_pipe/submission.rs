@@ -79,12 +79,12 @@ pub(crate) fn admit_owned<T: Send + 'static, M>(
                 handshake: admission.handshake,
             })),
         };
-        (
+        Ok((
             queued,
             (
                 Control { shared, owner: retained },
                 OwnedJob::new(scope.id(), spec, Box::new(JobHandle(job))),
             ),
-        )
+        ))
     })
 }

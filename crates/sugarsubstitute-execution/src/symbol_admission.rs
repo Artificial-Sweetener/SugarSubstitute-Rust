@@ -234,7 +234,7 @@ impl ExecutionClient {
                             Box::pin(crate::blocking::run(task_job, context, started, factory))
                         })),
                     };
-                    (queued, OwnedJob::new(scope.id(), spec, Box::new(JobHandle(job))))
+                    Ok((queued, OwnedJob::new(scope.id(), spec, Box::new(JobHandle(job)))))
                 },
             )
             .map_err(|(error, factory)| SymbolSubmissionRejection { error, factory })

@@ -14,6 +14,7 @@ mod cleanup;
 mod commands;
 mod handshake;
 mod retirement;
+mod source_staging;
 #[derive(Clone, Copy, Eq, PartialEq)]
 enum Phase {
     Available,
@@ -77,6 +78,9 @@ pub(crate) struct Active {
     outcome: Option<JobOutcome<EntryTransportReport, EntryTransportError>>,
     report: EntryTransportReport,
     completed: bool,
+    source_pending: Option<source_staging::EntrySourceOutcome>,
+    source_owner: Option<crate::entry_preparation::EntryPreparationOwner>,
+    source_input_claim: Option<sugarsubstitute_contracts::execution::MemoryClaim>,
 }
 impl Active {
     pub(crate) fn new(
@@ -109,12 +113,16 @@ impl Active {
                 completed_writes: 0,
             },
             completed: false,
+            source_pending: None,
+            source_owner: None,
+            source_input_claim: None,
         }
     }
     pub(crate) fn completed(&self) -> bool {
         self.completed
     }
     pub(crate) fn fail_owner(&mut self, cause: &PanicCause) {
+        self.preserve_pending_source_failure();
         if let Some(JobOutcome::Failure(error)) = &mut self.outcome {
             if let Some(native) = error.native_cause() {
                 let mut native = native.clone();

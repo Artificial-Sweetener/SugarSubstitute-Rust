@@ -309,24 +309,35 @@ pub(crate) fn findings(source: &str) -> Result<Vec<String>> {
 }
 
 /// Reject original symbol reservation construction and producer ports outside their two owners.
-pub(crate) fn symbol_producer_findings(source: &str) -> Result<Vec<String>> {
-    filtered_findings(source, symbol_producer_path, symbol_fragments)
+pub(crate) fn resource_producer_findings(source: &str) -> Result<Vec<String>> {
+    filtered_findings(source, resource_producer_path, resource_fragments)
 }
-fn symbol_producer_path(path: &[String]) -> bool {
+fn resource_producer_path(path: &[String]) -> bool {
     path.last().is_some_and(|name| name == "NativeHandleRelease")
         || path.windows(2).any(|pair| {
-            matches!(pair[0].as_str(), "JobContext" | "AdmittedJobResources" | "NativeHandleLease")
-                && pair[1] == "new"
+            matches!(
+                pair[0].as_str(),
+                "JobContext"
+                    | "AdmittedJobResources"
+                    | "NativeHandleLease"
+                    | "MemoryLeaseObservation"
+            ) && pair[1] == "new"
         })
 }
 fn scheduling_fragments(names: &BTreeSet<String>) -> bool {
     names.contains("std") && (names.contains("thread") || names.contains("mpsc"))
 }
-fn symbol_fragments(names: &BTreeSet<String>) -> bool {
+fn resource_fragments(names: &BTreeSet<String>) -> bool {
     names.contains("NativeHandleRelease")
         || names.contains("new")
             && names.iter().any(|name| {
-                matches!(name.as_str(), "JobContext" | "AdmittedJobResources" | "NativeHandleLease")
+                matches!(
+                    name.as_str(),
+                    "JobContext"
+                        | "AdmittedJobResources"
+                        | "NativeHandleLease"
+                        | "MemoryLeaseObservation"
+                )
             })
 }
 fn filtered_findings(

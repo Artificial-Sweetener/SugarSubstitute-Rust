@@ -71,7 +71,7 @@ pub(crate) fn check(
         for path in rust_files(&resolve(root, &owner.root)?)? {
             let source = read(&path)?;
             if !permitted && owner.package != "sugarsubstitute-contracts" {
-                let producer = execution_source::symbol_producer_findings(&source)?;
+                let producer = execution_source::resource_producer_findings(&source)?;
                 require(
                     producer.is_empty(),
                     format!(

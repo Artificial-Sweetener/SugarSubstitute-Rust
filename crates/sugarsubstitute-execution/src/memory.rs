@@ -5,15 +5,23 @@
 
 use crate::{admission::Core, scope::lock};
 use std::sync::Arc;
-use sugarsubstitute_contracts::execution::{MemoryRelease, ScopeId};
+use sugarsubstitute_contracts::execution::{JobId, MemoryRelease, ScopeId};
 
 pub(crate) struct Release {
     pub(crate) core: Arc<Core>,
     pub(crate) scope_id: ScopeId,
+    pub(crate) job_id: JobId,
 }
 
 impl MemoryRelease for Release {
     fn release(&self, bytes: u64) {
+        let observation = {
+            let mut state = lock(&self.core.state);
+            state.jobs.get_mut(&self.job_id).and_then(|record| record.memory.take())
+        };
+        // The weak record cannot prolong its control storage beyond byte reclaim.
+        // Dropping it outside Core invokes no provider or final admitted lease.
+        drop(observation);
         {
             let core = &self.core;
             let mut state = lock(&core.state);

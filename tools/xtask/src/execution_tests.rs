@@ -265,7 +265,7 @@ fn symbol_resource_producers_cannot_hide_outside_contract_or_execution_owners() 
         "fn forged() { NativeHandleLease::new(owner, scope, job, port); }",
     ] {
         assert!(
-            !crate::execution_source::symbol_producer_findings(source)?.is_empty(),
+            !crate::execution_source::resource_producer_findings(source)?.is_empty(),
             "accepted {source}"
         );
         write(fixture.root(), "crates/host/src/symbol.rs", source)?;
@@ -278,12 +278,37 @@ fn symbol_resource_producers_cannot_hide_outside_contract_or_execution_owners() 
             "unexpected result {rejected}"
         );
     }
-    assert!(crate::execution_source::symbol_producer_findings("use sugarsubstitute_contracts::execution::{JobContext, NativeHandleClaim}; fn consume(context: JobContext, claim: NativeHandleClaim) { claim.matches_lease(context.native_handles()); }")?.is_empty());
+    assert!(crate::execution_source::resource_producer_findings("use sugarsubstitute_contracts::execution::{JobContext, NativeHandleClaim}; fn consume(context: JobContext, claim: NativeHandleClaim) { claim.matches_lease(context.native_handles()); }")?.is_empty());
     assert!(
-        crate::execution_source::symbol_producer_findings(
+        crate::execution_source::resource_producer_findings(
             "const TEXT: &str = \"JobContext::new NativeHandleRelease\";"
         )?
         .is_empty()
     );
+    Ok(())
+}
+
+/// Reject actual reservation identity construction in nonowners, aliases and macro tokens.
+#[test]
+fn original_memory_observation_cannot_be_forged_outside_its_owners() -> Result<()> {
+    let fixture = Repository::new()?;
+    let policy = Policy { schema_version: 1, owner: None };
+    for source in [
+        "fn forge() { MemoryLeaseObservation::new(memory); }",
+        "use sugarsubstitute_contracts::execution::MemoryLeaseObservation as O; fn forge() { O::new(memory); }",
+        "type O = sugarsubstitute_contracts::execution::MemoryLeaseObservation; fn forge() { O::new(memory); }",
+        "macro_rules! forge { () => { MemoryLeaseObservation::new(memory) }; }",
+        "macro_rules! forge { ($t:ident,$m:ident) => { $t::$m(memory) }; } fn x() { forge!(MemoryLeaseObservation,new); }",
+        "#[cfg(test)] mod tests { fn forge() { MemoryLeaseObservation::new(memory); } }",
+    ] {
+        assert!(
+            !crate::execution_source::resource_producer_findings(source)?.is_empty(),
+            "accepted {source}"
+        );
+        write(fixture.root(), "crates/host/src/observation.rs", source)?;
+        assert!(check(fixture.root(), &policy, &fixture.architecture, &fixture.workspace).is_err());
+    }
+    assert!(crate::execution_source::resource_producer_findings(
+        "fn consume(observation: MemoryLeaseObservation, lease: &MemoryLease) { observation.matches_lease(lease); }")?.is_empty());
     Ok(())
 }

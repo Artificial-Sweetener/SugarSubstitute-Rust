@@ -2172,6 +2172,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sugarsubstitute-application",
+ "sugarsubstitute-comfy",
  "sugarsubstitute-contracts",
  "sugarsubstitute-crash",
  "sugarsubstitute-desktop",

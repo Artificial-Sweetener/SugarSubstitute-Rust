@@ -25,6 +25,7 @@ pub(crate) enum RequestKind {
     Async,
     Blocking,
     Cpu,
+    EntryPreparation(sugarsubstitute_contracts::coordinator_entry::EntrySetupBudget),
     SymbolCleanup {
         main_scope: sugarsubstitute_contracts::execution::ScopeSpec,
         main_spec: JobSpec,
@@ -43,6 +44,10 @@ pub(crate) enum RequestKind {
 }
 
 pub(crate) struct Record {
+    pub(crate) memory: Option<sugarsubstitute_contracts::execution::MemoryLeaseObservation>,
+    pub(crate) entry_setup: Option<sugarsubstitute_contracts::coordinator_entry::EntrySetupBudget>,
+    pub(crate) preparation_issued: bool,
+    pub(crate) preparation: Option<Arc<crate::entry_preparation::slot::PreparationSlot>>,
     pub(crate) symbol_original: Option<JobId>,
     pub(crate) symbol_cleanup: Option<crate::symbol_cleanup::Binding>,
     #[cfg(any(windows, test))]
@@ -61,6 +66,9 @@ pub(crate) struct Record {
 
 impl Record {
     pub(crate) fn held_native(&self) -> bool {
+        if self.preparation.as_ref().is_some_and(|slot| slot.held()) {
+            return true;
+        }
         #[cfg(any(windows, test))]
         {
             self.native_custody.as_ref().is_some_and(|custody| custody.held())
@@ -71,6 +79,9 @@ impl Record {
         }
     }
     fn active(&self) -> bool {
+        if self.preparation.as_ref().is_some_and(|slot| slot.held()) {
+            return true;
+        }
         if self.phase == JobPhase::Running && !self.retiring {
             return true;
         }
@@ -90,6 +101,8 @@ impl Record {
 mod tests;
 
 pub(crate) enum Retirement {
+    #[cfg(any(windows, test))]
+    Environment(crate::entry_preparation::retirement::EntryPreparationRetirement),
     Factory(QueuedJob, Stop),
     Outcome(Arc<dyn ErasedJob>),
 }
@@ -98,12 +111,16 @@ impl Retirement {
         match self {
             Self::Factory(queued, _) => accepts(queued.context.spec().class),
             Self::Outcome(_) => true,
+            #[cfg(any(windows, test))]
+            Self::Environment(_) => false,
         }
     }
     fn id(&self) -> JobId {
         match self {
             Self::Factory(queued, _) => queued.context.job_id(),
             Self::Outcome(job) => job.spec().id,
+            #[cfg(any(windows, test))]
+            Self::Environment(retired) => retired.job_id(),
         }
     }
 }
@@ -307,7 +324,7 @@ impl Core {
     pub(crate) fn take_retired_cpu(
         &self,
         accepts: impl Fn(JobClass) -> bool,
-    ) -> Option<Retirement> {
+    ) -> Option<crate::task::FiniteRetirement> {
         let mut state = lock(&self.state);
         let index = state.retired.iter().position(|retired| retired.accepts(&accepts))?;
         let retired = state.retired.remove(index)?;
@@ -315,7 +332,17 @@ impl Core {
             record.phase = JobPhase::Running;
             record.job.running();
         }
-        Some(retired)
+        match retired {
+            Retirement::Factory(queued, reason) => {
+                Some(crate::task::FiniteRetirement::Factory(queued, reason))
+            }
+            Retirement::Outcome(job) => Some(crate::task::FiniteRetirement::Outcome(job)),
+            #[cfg(any(windows, test))]
+            Retirement::Environment(retired) => {
+                state.retired.push_front(Retirement::Environment(retired));
+                None
+            }
+        }
     }
 
     pub(crate) fn settled(&self) -> bool {

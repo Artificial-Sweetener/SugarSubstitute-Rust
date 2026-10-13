@@ -117,6 +117,7 @@ enum Active {
     Output(crate::output::worker::Active),
     Entry(crate::coordinator_entry::worker::Active),
     CaptureAttach(crate::capture_attach::worker::Active),
+    Environment(crate::entry_preparation::retirement::EntryPreparationRetirement),
 }
 impl Active {
     fn new(queued: QueuedJob, core: &Arc<Core>, now: Moment) -> Option<Self> {
@@ -158,6 +159,7 @@ impl Active {
             Self::Output(active) => active.fail_owner(cause),
             Self::Entry(active) => active.fail_owner(cause),
             Self::CaptureAttach(active) => active.fail_owner(cause),
+            Self::Environment(active) => active.fail_owner(cause),
         }
     }
     fn progress(&mut self, core: &Core, now: Moment, clock_available: bool) {
@@ -170,6 +172,7 @@ impl Active {
             Self::Output(active) => active.progress(core, now, clock_available),
             Self::Entry(active) => active.progress(core, now, clock_available),
             Self::CaptureAttach(active) => active.progress(core, now, clock_available),
+            Self::Environment(active) => active.progress(core),
         }
     }
     fn completed(&self) -> bool {
@@ -182,6 +185,7 @@ impl Active {
             Self::Output(active) => active.completed(),
             Self::Entry(active) => active.completed(),
             Self::CaptureAttach(active) => active.completed(),
+            Self::Environment(active) => active.completed(),
         }
     }
 }
@@ -192,10 +196,18 @@ pub(crate) struct NativeWorker {
 }
 impl NativeWorker {
     pub(crate) fn start(core: Arc<Core>) -> Result<Self, ExecutionError> {
+        // Native512 plus all existing nonnative48 held delivery credits bound this owner.
+        let mut active = Vec::new();
+        active.try_reserve_exact(560).map_err(crate::runtime::error)?;
+        if active.capacity() != 560 {
+            return Err(crate::runtime::error(std::io::Error::other(
+                "Native owner storage exceeds derived held-credit bound",
+            )));
+        }
         let worker_core = core.clone();
         let handle = thread::Builder::new()
             .name("sugarsubstitute-native-retirement".into())
-            .spawn(move || worker(worker_core))
+            .spawn(move || worker(worker_core, active))
             .map_err(crate::runtime::error)?;
         Ok(Self { core, handle: Some(handle) })
     }
@@ -244,7 +256,7 @@ fn owner_panicked(
     core.clock.retirement_now()
 }
 
-fn worker(core: Arc<Core>) {
+fn worker(core: Arc<Core>, mut active: Vec<Active>) {
     if core.native_thread.set(thread::current()).is_err() {
         core.mailbox.record_failure(crate::runtime::error(std::io::Error::other(
             "Native worker identity installed twice",
@@ -253,7 +265,6 @@ fn worker(core: Arc<Core>) {
     }
     // Active native ownership never moves into an unwinding closure. Fatal
     // boundary/clock failure stops admission, then retires every retained lease.
-    let mut active: Vec<Active> = Vec::with_capacity(512);
     let mut fatal = None;
     let mut now = Moment::from_nanos(0);
     loop {
@@ -265,7 +276,14 @@ fn worker(core: Arc<Core>) {
                 Err(payload) => now = owner_panicked(&core, &mut fatal, payload),
             }
         }
-        while let Some((queued, wake)) = core.take_native_at(now) {
+        while active.len() < active.capacity() {
+            match core.take_environment_retirement() {
+                Some(retired) => active.push(Active::Environment(retired)),
+                None => break,
+            }
+        }
+        while active.len() < active.capacity() {
+            let Some((queued, wake)) = core.take_native_at(now) else { break };
             // A job can be admitted after the iteration sample. Observe dispatch
             // after dequeue, retaining its bound resources outside the unwind.
             if fatal.is_none()

@@ -14,7 +14,7 @@ tokio.workspace = true
 tracing.workspace = true
 
 [target.'cfg(windows)'.dependencies]
-windows = { workspace = true, features = ["Win32_Security", "Win32_Security_Cryptography", "Win32_System_Pipes", "Win32_System_IO", "Win32_System_Memory", "Win32_System_SystemServices", "Win32_Storage_FileSystem"] }
+windows = { workspace = true, features = ["Win32_Security", "Win32_Security_Cryptography", "Win32_System_Pipes", "Win32_System_IO", "Win32_System_Memory", "Win32_System_SystemServices", "Win32_System_Environment", "Win32_Storage_FileSystem"] }
 
 [lints]
 workspace = true

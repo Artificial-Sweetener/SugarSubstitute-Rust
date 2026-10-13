@@ -7,7 +7,7 @@ use std::{
     error::Error,
     fmt,
     sync::{
-        Arc,
+        Arc, Weak,
         atomic::{AtomicU64, Ordering},
     },
 };
@@ -71,6 +71,23 @@ impl MemoryLease {
 impl fmt::Debug for MemoryLease {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.debug_struct("MemoryLease").field("bytes", &self.bytes()).finish_non_exhaustive()
+    }
+}
+
+/// Observe only the identity of the original reservation allocation.
+/// The Contracts and Execution owners alone construct this noncloneable observation.
+/// It exposes neither a strong lease nor a release port, and invokes no callback.
+/// Execution detaches its record observation before returning the original charge.
+pub struct MemoryLeaseObservation(Weak<ReservationState>);
+impl MemoryLeaseObservation {
+    /// Observe an already-owned original ledger without creating admission authority.
+    /// Source governance restricts this producer to Contracts and Execution.
+    pub fn new(lease: &MemoryLease) -> Self {
+        Self(Arc::downgrade(&lease.0))
+    }
+    /// Compare the actual allocation, without upgrading or projecting its Weak owner.
+    pub fn matches_lease(&self, lease: &MemoryLease) -> bool {
+        self.0.as_ptr() == Arc::as_ptr(&lease.0)
     }
 }
 

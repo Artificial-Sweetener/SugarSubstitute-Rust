@@ -41,6 +41,10 @@ pub enum EntryAdmissionError {
     Identity,
     /// The requested finite operation or original deadline is invalid.
     Specification,
+    /// Preserve genuine original preparation control with unchanged custody.
+    Preparation(sugarsubstitute_execution::EntryPreparationError),
+    /// Preserve actual prepared transport conversion and bounded original post causes.
+    PreparedTransport(sugarsubstitute_execution::EntryTransportError),
     /// Actual execution admission rejected the operation.
     Execution(AdmissionError),
     /// Sampling the actual execution clock failed with its original cause.
@@ -59,6 +63,8 @@ impl Error for EntryAdmissionError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::Execution(cause) => Some(cause),
+            Self::Preparation(cause) => Some(cause),
+            Self::PreparedTransport(cause) => Some(cause),
             Self::Clock(cause) => Some(cause),
             Self::Native(cause) => Some(cause),
             Self::Claims(cause) => Some(cause),

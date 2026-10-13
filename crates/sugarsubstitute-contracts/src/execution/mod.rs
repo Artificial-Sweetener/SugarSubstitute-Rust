@@ -25,7 +25,9 @@ pub use identity::{
     ExecutionId, Generation, IdentityError, JobId, Moment, ScopeId, SurfaceId, TimeError,
 };
 pub use lifetime::{JobControl, JobPhase, JobStatus, OwnedJob, Scope, ScopeControl, ScopeSnapshot};
-pub use memory::{MemoryClaim, MemoryClaimError, MemoryLease, MemoryRelease};
+pub use memory::{
+    MemoryClaim, MemoryClaimError, MemoryLease, MemoryLeaseObservation, MemoryRelease,
+};
 pub use native_handles::{
     NativeHandleClaim, NativeHandleLease, NativeHandleObservation, NativeHandleOutput,
     NativeHandleRelease, NativeResourceError, SymbolNativePartition,

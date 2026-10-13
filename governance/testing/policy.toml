@@ -22,20 +22,20 @@ minimum_tests = 68
 [[owners]]
 package = "sugarsubstitute"
 root = "crates/sugarsubstitute"
-concern = "Product identity, native input, admitted preparation, process qualification and actual host shutdown; admitted transcript input custody and current resource/revision publication"
-minimum_tests = 147
+concern = "Product identity, native input, admitted preparation, process qualification and actual host shutdown; admitted transcript input custody and current resource/revision publication; actual bounded configuration factory, opaque original preparation request intake, retained namespace/election bootstrap and partial startup shutdown"
+minimum_tests = 170
 
 [[owners]]
 package = "sugarsubstitute-execution"
 root = "crates/sugarsubstitute-execution"
-concern = "Admission, CPU scheduling, cancellation, retained ownership and observed worker teardown; authenticated bounded coordinator entry transport, replay and native issue fences"
-minimum_tests = 370
+concern = "Admission, CPU scheduling, cancellation, retained ownership and observed worker teardown; authenticated bounded coordinator entry transport, replay and native issue fences; original whole preparation/native environment custody, retained error aliases and actual source/client staging fences"
+minimum_tests = 416
 
 [[owners]]
 package = "sugarsubstitute-xtask"
 root = "tools/xtask"
 concern = "Governance rejection behavior and verification orchestration"
-minimum_tests = 40
+minimum_tests = 41
 
 [[owners]]
 package = "sugarsubstitute-supervision"

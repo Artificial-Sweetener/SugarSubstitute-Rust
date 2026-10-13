@@ -17,7 +17,7 @@ use std::{
     sync::{Arc, OnceLock, atomic::Ordering},
 };
 use sugarsubstitute_contracts::{
-    coordinator_entry::{EntryLaunchRequest, EntrySetupBudget},
+    coordinator_entry::EntrySetupBudget,
     execution::{
         CompletionBatch, ExecutionId, ExecutionPort, JobClass, JobId, JobOutcome, JobSpec, Moment,
         Operation, OwnedJob, Scope,
@@ -25,7 +25,8 @@ use sugarsubstitute_contracts::{
     lifecycle::{CoordinatorEpoch, CoordinatorKey},
 };
 use sugarsubstitute_execution::{
-    CoordinatorEntryClientInput, CoordinatorEntryServerInput, ExecutionClient, VerifiedEntryPeer,
+    CoordinatorEntryClientInput, CoordinatorEntryServerInput, EntryRequestInput, ExecutionClient,
+    VerifiedEntryPeer,
 };
 
 mod admission;
@@ -50,7 +51,7 @@ struct Pending {
 /// Own original setup, finite jobs, atomic proof fences and actual native custody.
 pub struct CoordinatorEntryOwner {
     paths: Option<Arc<Paths>>,
-    request: Option<EntryLaunchRequest>,
+    request: Option<EntryRequestInput>,
     budget: EntrySetupBudget,
     lifetime: Arc<NamespaceLifetime>,
     port: Arc<dyn NativePort>,
@@ -202,13 +203,17 @@ impl CoordinatorEntryOwner {
         self.current()?;
         let known = self.discovered.ok_or(EntryAdmissionError::Identity)?;
         let client = self.client.as_ref().ok_or(EntryAdmissionError::Identity)?;
-        let source = client.encode_counter_deadline(self.budget.until()).map_err(|cause| {
-            EntryAdmissionError::Native(ClaimError::new("entry_source_deadline", cause))
-        })?;
+        let source = client
+            .encode_prepared_entry_deadline(
+                self.request.as_ref().ok_or(EntryAdmissionError::Closed)?,
+                self.budget,
+            )
+            .map_err(EntryAdmissionError::PreparedTransport)?;
         let request = self.request.take().ok_or(EntryAdmissionError::Closed)?;
-        CoordinatorEntryClientInput::new(known.facts, self.candidate, request, source).map_err(
-            |cause| EntryAdmissionError::Native(ClaimError::new("entry_client_input", cause)),
-        )
+        CoordinatorEntryClientInput::from_owned(known.facts, self.candidate, request, source)
+            .map_err(|cause| {
+                EntryAdmissionError::Native(ClaimError::new("entry_client_input", cause))
+            })
     }
     /// Validate current actual cached namespace/election/claim and authenticated peer facts.
     /// # Errors
