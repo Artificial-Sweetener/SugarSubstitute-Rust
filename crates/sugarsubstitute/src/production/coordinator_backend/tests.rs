@@ -11,7 +11,7 @@ use sugarsubstitute_execution::ExecutionOwner;
 #[path = "storage_tests.rs"]
 pub(crate) mod storage_tests;
 #[derive(Default)]
-struct TestClock(AtomicU64);
+pub(super) struct TestClock(AtomicU64);
 impl Clock for TestClock {
     fn now(&self) -> Moment {
         Moment::from_nanos(self.0.load(Ordering::Acquire))
@@ -20,13 +20,13 @@ impl Clock for TestClock {
         Box::pin(std::future::pending())
     }
 }
-struct Wake;
+pub(super) struct Wake;
 impl CompletionWake for Wake {
     fn wake(&self) -> std::result::Result<(), ExecutionError> {
         Ok(())
     }
 }
-fn key() -> Result<CoordinatorKey> {
+pub(super) fn key() -> Result<CoordinatorKey> {
     Ok(CoordinatorKey {
         namespace: NamespaceId::new([1; 32]),
         epoch: CoordinatorEpoch::new([2; 16])?,
@@ -34,7 +34,7 @@ fn key() -> Result<CoordinatorKey> {
 }
 /// Matching data populates pure policy only; every tested native boundary receives
 /// an actual inert authority and must reject it before admission.
-fn unadmitted_policy() -> Result<RetainedBackend> {
+pub(super) fn unadmitted_policy() -> Result<RetainedBackend> {
     let owner = key()?;
     let storage = storage_tests::claim(RetainedBackend::required_storage_bytes())?;
     let mut records = Vec::new();
@@ -60,6 +60,95 @@ fn inert_authority_cannot_construct_backend_driver() -> Result<()> {
     assert!(authority.registry().is_none());
     assert!(!authority.serving());
     Ok(())
+}
+
+#[test]
+fn failed_resource_diagnostic_borrows_the_original_source_cause_after_policy_adoption() -> Result<()>
+{
+    use super::activity::{FailureKind, FailureObservation};
+    let mut retained = unadmitted_policy()?;
+    let owner = retained.backend.as_mut();
+    let run =
+        RunKey { owner: key()?, instance: InstanceId::new(1)?, generation: RunGeneration::new(1)? };
+    let connection = ConnectionId::new(1)?;
+    owner.register_run(ClientRegistration {
+        run,
+        connection,
+        launch: sugarsubstitute_contracts::startup::LaunchId::new(1)?,
+        profile: sugarsubstitute_contracts::configuration::ProfileId::new("Diagnostic_1".into())?,
+    })?;
+    let transition = owner.policy.request(
+        ClientBinding { run, connection },
+        ResourceRequest {
+            run,
+            connection,
+            id: RequestId::new(1)?,
+            command: ResourceCommand::Acquire(BackendTarget::Attached(LoopbackOrigin::parse(
+                "http://127.0.0.1:8188",
+                8188,
+            )?)),
+        },
+    )?;
+    let Some(ResourceEffect::Prepare { resource, .. }) = transition.effects.first() else {
+        return Err(Box::new(LifecycleRejection::WrongPhase));
+    };
+    let resource = *resource;
+    let relative = std::path::PathBuf::from("private-relative-source");
+    let cause = match FrontendInstallationInput::new(
+        relative.clone(),
+        relative.clone(),
+        relative.clone(),
+        relative,
+    ) {
+        Err(cause) => Box::new(cause),
+        Ok(_) => return Err(Box::new(LifecycleRejection::WrongPhase)),
+    };
+    let original = std::ptr::from_ref(cause.as_ref());
+    let failure = LifecycleFailure::new(LifecycleFailureCode::Preparation, cause);
+    owner.begin_delivery()?;
+    owner.observe(ResourceObservation::Failed { resource, failure })?;
+    let retained_cause = owner.failure(resource).ok_or(LifecycleRejection::WrongPhase)?;
+    let observation = FailureObservation::retained(retained_cause);
+    assert_eq!(observation.kind, FailureKind::Source);
+    assert_eq!(observation.stage, "frontend_location_shape");
+    assert_eq!(
+        retained_cause
+            .source()
+            .and_then(|cause| cause.downcast_ref::<FrontendSourceError>())
+            .map(std::ptr::from_ref),
+        Some(original)
+    );
+    let pending = owner.take_pending_transition().ok_or(LifecycleRejection::WrongPhase)?;
+    assert_eq!(pending.replies.len(), 1);
+    assert_eq!(pending.replies[0].outcome, RequestOutcome::Failed);
+    assert_eq!(
+        FailureObservation::retained(
+            owner.failure(resource).ok_or(LifecycleRejection::WrongPhase)?
+        ),
+        observation
+    );
+    Ok(())
+}
+
+#[test]
+fn backend_failure_diagnostics_classify_campaign_without_formatting_unknown_causes() {
+    use super::activity::{FailureKind, FailureObservation};
+    use sugarsubstitute_comfy::readiness_campaign::{CampaignError, CampaignRejection};
+    let campaign = LifecycleFailure::new(
+        LifecycleFailureCode::Preparation,
+        Box::new(CampaignError::Rejected(CampaignRejection::WrongPhase)),
+    );
+    assert_eq!(
+        FailureObservation::retained(&campaign),
+        FailureObservation { kind: FailureKind::Campaign, stage: "campaign_rejected" }
+    );
+    let unknown = LifecycleFailure::new(
+        LifecycleFailureCode::Preparation,
+        Box::new(std::io::Error::other("private/path/response/secret")),
+    );
+    let observation = FailureObservation::retained(&unknown);
+    assert_eq!(observation, FailureObservation { kind: FailureKind::Other, stage: "unclassified" });
+    assert!(!format!("{observation:?}").contains("secret"));
 }
 
 #[test]
@@ -110,6 +199,7 @@ fn unavailable_authority_preserves_input_and_both_identity_sequences() -> Result
                     id: RequestId::new(1)?,
                     command: ResourceCommand::Acquire(target),
                 },
+                Some(ConnectionBudget::new(ConnectionBudgetKind::Attached, Moment::from_nanos(0))?),
                 &mut input,
                 &mut resources
             )

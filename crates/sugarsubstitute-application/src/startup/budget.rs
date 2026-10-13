@@ -25,6 +25,8 @@ pub enum ProbeBudgetError {
     Clock(TimeError),
     /// The attempt starts at or after the original campaign deadline.
     Expired,
+    /// Supplied remaining interval exceeds the configured original role bound.
+    IntervalTooLong,
 }
 
 impl fmt::Display for ProbeBudgetError {
@@ -32,6 +34,9 @@ impl fmt::Display for ProbeBudgetError {
         match self {
             Self::Clock(cause) => cause.fmt(formatter),
             Self::Expired => formatter.write_str("Original connection campaign deadline elapsed"),
+            Self::IntervalTooLong => {
+                formatter.write_str("Connection interval exceeds its role bound")
+            }
         }
     }
 }
@@ -40,7 +45,7 @@ impl Error for ProbeBudgetError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::Clock(cause) => Some(cause),
-            Self::Expired => None,
+            Self::Expired | Self::IntervalTooLong => None,
         }
     }
 }
@@ -67,6 +72,33 @@ impl ConnectionBudget {
             ConnectionBudgetKind::Managed => Duration::from_secs(180),
         };
         Ok(Self { kind, started, until: started.checked_add(duration)? })
+    }
+
+    /// Retain an already validated original cutoff in the composing clock epoch.
+    /// `observed` is the actual local receive time; `until` stays byte-for-byte
+    /// equivalent as a Moment across later dispatch and probe retries. This pure
+    /// data constructor authenticates no peer and grants no native authority.
+    ///
+    /// # Errors
+    /// Rejects equality/expiry and remaining intervals beyond the unchanged
+    /// attached30s or managed180s limit. Checked clock causes remain typed.
+    pub fn from_until(
+        kind: ConnectionBudgetKind,
+        observed: Moment,
+        until: Moment,
+    ) -> Result<Self, ProbeBudgetError> {
+        if observed >= until {
+            return Err(ProbeBudgetError::Expired);
+        }
+        let remaining = until.checked_duration_since(observed).map_err(ProbeBudgetError::Clock)?;
+        let maximum = match kind {
+            ConnectionBudgetKind::Attached => Duration::from_secs(30),
+            ConnectionBudgetKind::Managed => Duration::from_secs(180),
+        };
+        if remaining > maximum {
+            return Err(ProbeBudgetError::IntervalTooLong);
+        }
+        Ok(Self { kind, started: observed, until })
     }
 
     /// Return the connection ownership that selected the original duration.

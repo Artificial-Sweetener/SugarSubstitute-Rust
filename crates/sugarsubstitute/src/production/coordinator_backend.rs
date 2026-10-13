@@ -5,6 +5,9 @@
 mod activity;
 #[path = "coordinator_backend/cleanup.rs"]
 mod cleanup;
+#[cfg(test)]
+#[path = "coordinator_backend/cutoff_tests.rs"]
+mod cutoff_tests;
 #[path = "coordinator_backend/preparation.rs"]
 mod preparation;
 #[cfg(test)]
@@ -165,10 +168,12 @@ impl CoordinatorBackend {
         &mut self,
         binding: ClientBinding,
         request: ResourceRequest,
+        original: Option<ConnectionBudget>,
         input: &mut Option<BackendPreparation>,
         resources: &mut BackendResources<'_>,
     ) -> Result<ResourceTransition> {
         self.validate(resources)?;
+        Self::check_request_budget(&request.command, original, resources.client.now()?)?;
         if let ResourceCommand::Acquire(target) = &request.command
             && !self.records.iter().flatten().any(|r| r.target == *target && !r.settled)
             && input.is_none()
@@ -178,7 +183,7 @@ impl CoordinatorBackend {
         self.begin_delivery()?;
         let mut transition = self.policy.request(binding, request)?;
         self.retain_transition(&transition);
-        self.effects(&mut transition, input, None, resources)?;
+        self.effects(&mut transition, input, original, None, resources)?;
         Ok(self.undelivered.take().unwrap_or_default())
     }
 
@@ -197,8 +202,34 @@ impl CoordinatorBackend {
         self.begin_delivery()?;
         let mut transition = self.policy.disconnect_run(run, connection)?;
         self.retain_transition(&transition);
-        self.effects(&mut transition, &mut None, Some(original), resources)?;
+        self.effects(&mut transition, &mut None, None, Some(original), resources)?;
         Ok(self.undelivered.take().unwrap_or_default())
+    }
+
+    /// Check inert timing separately from actual serving/native binding validation.
+    fn check_request_budget(
+        command: &ResourceCommand,
+        original: Option<ConnectionBudget>,
+        now: Moment,
+    ) -> Result<()> {
+        match command {
+            ResourceCommand::Acquire(target) => {
+                let budget = original.ok_or(LifecycleRejection::WrongPhase)?;
+                let expected = match target {
+                    BackendTarget::Managed(_) => ConnectionBudgetKind::Managed,
+                    BackendTarget::Attached(_) => ConnectionBudgetKind::Attached,
+                };
+                if budget.kind() != expected {
+                    return Err(Box::new(LifecycleRejection::WrongPhase));
+                }
+                budget.probe_until(now)?;
+                Ok(())
+            }
+            ResourceCommand::Release(_) | ResourceCommand::Reload(_) if original.is_none() => {
+                Ok(())
+            }
+            _ => Err(Box::new(LifecycleRejection::WrongPhase)),
+        }
     }
 
     /// Retire run/profile policy only after the actual desktop owner checked retirement.

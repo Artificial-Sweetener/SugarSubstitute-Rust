@@ -14,9 +14,33 @@ impl ParentLifecycle {
         resources: &mut ParentResources<'_, '_>,
     ) -> Result<()> {
         let original_request = request.id;
+        let original_budget =
+            if let sugarsubstitute_contracts::lifecycle::ResourceCommand::Acquire(target) =
+                &request.command
+            {
+                let index =
+                    self.requests.find(original_request).ok_or(ParentError::StaleRequest)?;
+                let until = self.requests.get(index)?.until.ok_or(ParentError::WrongPhase)?;
+                let kind = match target {
+                    sugarsubstitute_contracts::lifecycle::BackendTarget::Managed(_) => {
+                        sugarsubstitute_application::startup::ConnectionBudgetKind::Managed
+                    }
+                    sugarsubstitute_contracts::lifecycle::BackendTarget::Attached(_) => {
+                        sugarsubstitute_application::startup::ConnectionBudgetKind::Attached
+                    }
+                };
+                Some(sugarsubstitute_application::startup::ConnectionBudget::from_until(
+                    kind,
+                    resources.execution.client.now()?,
+                    until,
+                )?)
+            } else {
+                None
+            };
         match resources.backend.request(
             binding,
             request,
+            original_budget,
             resources.preparation,
             resources.execution,
         ) {

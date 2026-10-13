@@ -5,6 +5,62 @@
 use super::*;
 
 #[test]
+fn received_original_cutoff_survives_delayed_dispatch_for_both_roles() -> Result<(), Box<dyn Error>>
+{
+    for kind in [ConnectionBudgetKind::Attached, ConnectionBudgetKind::Managed] {
+        let child = ConnectionBudget::new(kind, Moment::from_nanos(17))?;
+        let received = Moment::from_nanos(1_000_000_017);
+        let parent = ConnectionBudget::from_until(kind, received, child.until())?;
+        assert_eq!(parent.started(), received);
+        assert_eq!(parent.until(), child.until());
+        assert_eq!(parent.kind(), child.kind());
+        assert!(ConnectionBudget::new(kind, received)?.until() > parent.until());
+        assert_eq!(
+            parent.probe_until(Moment::from_nanos(parent.until().as_nanos() - 1))?,
+            child.until()
+        );
+        assert_eq!(parent.probe_until(child.until()), Err(ProbeBudgetError::Expired));
+    }
+    Ok(())
+}
+#[test]
+fn received_cutoff_rejects_expiry_and_role_interval_excess() -> Result<(), Box<dyn Error>> {
+    for (kind, nanos) in [
+        (ConnectionBudgetKind::Attached, 30_000_000_000),
+        (ConnectionBudgetKind::Managed, 180_000_000_000),
+    ] {
+        let now = Moment::from_nanos(100);
+        assert_eq!(ConnectionBudget::from_until(kind, now, now), Err(ProbeBudgetError::Expired));
+        assert_eq!(
+            ConnectionBudget::from_until(kind, now, Moment::from_nanos(99)),
+            Err(ProbeBudgetError::Expired)
+        );
+        assert_eq!(
+            ConnectionBudget::from_until(kind, now, Moment::from_nanos(101 + nanos)),
+            Err(ProbeBudgetError::IntervalTooLong)
+        );
+        assert_eq!(
+            ConnectionBudget::from_until(kind, now, Moment::from_nanos(100 + nanos))?.until(),
+            Moment::from_nanos(100 + nanos)
+        );
+    }
+    Ok(())
+}
+#[test]
+fn received_remaining_interval_near_clock_limit_never_reconstructs_overflowing_deadline()
+-> Result<(), Box<dyn Error>> {
+    let observed = Moment::from_nanos(u64::MAX - 10);
+    let until = Moment::from_nanos(u64::MAX);
+    for kind in [ConnectionBudgetKind::Attached, ConnectionBudgetKind::Managed] {
+        assert_eq!(ConnectionBudget::new(kind, observed), Err(TimeError::Overflow));
+        let original = ConnectionBudget::from_until(kind, observed, until)?;
+        assert_eq!(original.probe_until(observed)?, until);
+        assert_eq!(original.until(), until);
+    }
+    Ok(())
+}
+
+#[test]
 fn connection_kind_preserves_distinct_original_campaigns() -> Result<(), TimeError> {
     let started = Moment::from_nanos(17);
     let attached = ConnectionBudget::new(ConnectionBudgetKind::Attached, started)?;

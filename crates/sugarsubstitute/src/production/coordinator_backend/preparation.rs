@@ -7,6 +7,7 @@ impl CoordinatorBackend {
         &mut self,
         transition: &mut ResourceTransition,
         input: &mut Option<BackendPreparation>,
+        original_preparation: Option<ConnectionBudget>,
         original_shutdown: Option<ShutdownBudget>,
         resources: &mut BackendResources<'_>,
     ) -> Result<()> {
@@ -14,7 +15,9 @@ impl CoordinatorBackend {
         for effect in effects {
             match effect {
                 ResourceEffect::Prepare { resource, target } => {
-                    if let Err(cause) = self.prepare(resource, target, input, resources) {
+                    if let Err(cause) =
+                        self.prepare(resource, target, original_preparation, input, resources)
+                    {
                         if self.index(resource).is_ok() {
                             let next = self.failed(resource, cause, resources)?;
                             Self::merge(transition, next);
@@ -45,6 +48,7 @@ impl CoordinatorBackend {
         &mut self,
         key: ResourceKey,
         target: BackendTarget,
+        original_budget: Option<ConnectionBudget>,
         input: &mut Option<BackendPreparation>,
         resources: &mut BackendResources<'_>,
     ) -> Result<()> {
@@ -62,7 +66,11 @@ impl CoordinatorBackend {
             BackendTarget::Managed(_) => ConnectionBudgetKind::Managed,
             BackendTarget::Attached(_) => ConnectionBudgetKind::Attached,
         };
-        let budget = ConnectionBudget::new(kind, resources.client.now()?)?;
+        let budget = original_budget.ok_or(LifecycleRejection::WrongPhase)?;
+        if budget.kind() != kind {
+            return Err(Box::new(LifecycleRejection::WrongPhase));
+        }
+        budget.probe_until(resources.client.now()?)?;
         let campaign = ReadinessCampaign::new(target.clone(), budget)?;
         let scope = resources.client.create_scope(
             ScopeSpec { id: resources.scopes.allocate()?, deadline: Some(budget.until()) },
