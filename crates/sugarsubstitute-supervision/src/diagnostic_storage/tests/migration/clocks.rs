@@ -158,7 +158,7 @@ fn diagnostic_migration_callback_panic_and_global_clock_failure_preserve_actual_
                 .take()
                 .ok_or("fatal owner missing")?;
             // Only the primitive external fixture is retired; no public storage settlement is claimed.
-            Port::retire(&mut filesystem, &context)?;
+            filesystem.complete_external_closes(&context)?;
             assert_eq!(filesystem.snapshot().live_outputs(), 0);
             assert!(storage.snapshot().disposition_retained());
             assert_eq!(storage.snapshot().stages(), 2);

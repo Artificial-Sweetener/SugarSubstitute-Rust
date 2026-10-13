@@ -23,6 +23,12 @@ pub struct ResolutionTicket {
     pub(crate) id: u64,
     pub(crate) origin: Arc<()>,
 }
+impl ResolutionTicket {
+    /// Compare the original owner and retained resolution identity; this grants no authority.
+    pub fn same_resolution(&self, other: &Self) -> bool {
+        self.id == other.id && Arc::ptr_eq(&self.origin, &other.origin)
+    }
+}
 impl fmt::Debug for ResolutionTicket {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("ResolutionTicket").field(&self.id).finish()
@@ -108,4 +114,20 @@ pub enum ClaimObservation {
         /// Outcome transferred through the actual typed job handle.
         kind: TerminalKind,
     },
+}
+
+#[cfg(test)]
+mod resolution_identity_tests {
+    use super::*;
+    #[test]
+    fn resolution_matching_requires_original_owner_and_exact_retained_identity() {
+        let original = ResolutionTicket { id: 3, origin: Arc::new(()) };
+        let alias = original.clone();
+        let later = ResolutionTicket { id: 4, origin: original.origin.clone() };
+        let foreign = ResolutionTicket { id: 3, origin: Arc::new(()) };
+        assert!(original.same_resolution(&alias));
+        assert!(alias.same_resolution(&original));
+        assert!(!original.same_resolution(&later));
+        assert!(!original.same_resolution(&foreign));
+    }
 }

@@ -16,6 +16,8 @@ mod kernel;
 use kernel::{Boundary, Lease};
 #[path = "clock_callback_tests.rs"]
 mod clock_callback;
+#[path = "current_admission_tests.rs"]
+mod current_admission;
 #[path = "diagnostic_tests.rs"]
 mod diagnostic;
 #[path = "dispatch_tests.rs"]

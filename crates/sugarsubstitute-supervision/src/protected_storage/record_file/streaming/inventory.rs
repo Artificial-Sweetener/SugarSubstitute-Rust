@@ -5,90 +5,81 @@ mod names;
 use super::*;
 use crate::diagnostic_storage::inventory::{ObservedEntry, Scan};
 use names::classify;
-use windows::{
-    Win32::{Foundation::ERROR_NO_MORE_FILES, Storage::FileSystem::*},
-    core::PCWSTR,
-};
+use windows::Win32::{Foundation::ERROR_NO_MORE_FILES, Storage::FileSystem::*};
 impl StreamingPort {
     pub(super) fn scan_owned(&mut self, context: &JobContext) -> Result<Scan, ClaimError> {
         self.check(context)?;
         self.stage_scan_complete = false;
-        self.stage_candidates.clear();
-        let mut stages = Vec::new();
-        stages
-            .try_reserve_exact(DIAGNOSTIC_SCAN_BOUND)
-            .map_err(|cause| ClaimError::new("diagnostic_stage_scan_reservation", cause))?;
-        let directory =
-            self.directory.clone().ok_or_else(|| ClaimError::invalid("diagnostic_unresolved"))?;
-        let units = paths::wide(&directory)?;
-        let id = self.next;
-        self.next =
-            id.checked_add(1).ok_or_else(|| ClaimError::invalid("diagnostic_lease_exhausted"))?;
-        if self.files.len() >= FILE_SLOTS {
-            return Err(ClaimError::invalid("diagnostic_file_capacity"));
+        let retention =
+            self.original.scan_retention(context).map_err(ClaimError::diagnostic_allocation)?;
+        let mut session = session::Session::scan(&self.original, context)?;
+        let mut stages = NativeStageScan { candidates: Vec::new(), _retention: retention.clone() };
+        let mut scan =
+            Scan { entries: Vec::new(), complete: false, _native_retention: Some(retention) };
+        stages.candidates.try_reserve_exact(DIAGNOSTIC_SCAN_BOUND).map_err(|cause| {
+            session
+                .phase(context)
+                .error("diagnostic_stage_scan_reservation", BoundedNativeCause::Reserve(cause))
+        })?;
+        scan.entries.try_reserve_exact(DIAGNOSTIC_SCAN_BOUND).map_err(|cause| {
+            session
+                .phase(context)
+                .error("diagnostic_scan_reservation", BoundedNativeCause::Reserve(cause))
+        })?;
+        if stages.candidates.capacity() != DIAGNOSTIC_SCAN_BOUND
+            || scan.entries.capacity() != DIAGNOSTIC_SCAN_BOUND
+        {
+            return Err(session.phase(context).invalid("diagnostic_scan_capacity"));
         }
-        // SAFETY: The bounded pinned directory name stays live; the noninheritable
-        // synchronous scan handle is immediately retained before metadata checks.
-        let raw = unsafe {
-            CreateFileW(
-                PCWSTR(units.as_ptr()),
-                FILE_LIST_DIRECTORY.0 | FILE_READ_ATTRIBUTES.0 | READ_CONTROL.0,
-                FILE_SHARE_READ | FILE_SHARE_WRITE,
-                None,
-                OPEN_EXISTING,
-                FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
-                None,
-            )
+        let directory = self.directory.as_ref().ok_or_else(|| self.reject())?.clone();
+        let index = self.reserve_file(directory.clone(), 0, FileGrant::DirectoryScan, context)?;
+        let id = self.files[index].fields()?.id;
+        let original = self.original_context.as_ref().ok_or_else(|| self.reject())?;
+        let sid = self.sid.as_ref().ok_or_else(|| self.reject())?.bytes()?;
+        self.files[index].open(Some(sid), original, context, &mut session.phase(context))?;
+        let mut buffer = Vec::<u64>::new();
+        buffer.try_reserve_exact(DIAGNOSTIC_IO_BYTES / size_of::<u64>()).map_err(|cause| {
+            session
+                .phase(context)
+                .error("diagnostic_scan_page_reservation", BoundedNativeCause::Reserve(cause))
+        })?;
+        if buffer.capacity() != DIAGNOSTIC_IO_BYTES / size_of::<u64>() {
+            return Err(session.phase(context).invalid("diagnostic_scan_page_capacity"));
         }
-        .map_err(|cause| ClaimError::new("diagnostic_scan_open", cause))?;
-        let index = self.files.len();
-        self.files.push(NativeFile {
-            id,
-            handle: Handle::new(raw, Budget::Protected(self.memory.clone())),
-            path: directory.clone(),
-            facts: None,
-            bound: 0,
-            stage: false,
-            writable: false,
-            deleted: false,
-        });
-        paths::validate_object(&self.files[index].handle, true, true)?;
-        security::verify(&self.files[index].handle, &self.sid)?;
-        if paths::final_path(&self.files[index].handle)? != directory {
-            return Err(ClaimError::invalid("diagnostic_changed_scan_root"));
-        }
-        let mut entries = Vec::new();
-        entries
-            .try_reserve_exact(DIAGNOSTIC_SCAN_BOUND)
-            .map_err(|cause| ClaimError::new("diagnostic_scan_reservation", cause))?;
-        let mut buffer = vec![0_u64; DIAGNOSTIC_IO_BYTES / 8];
+        buffer.resize(DIAGNOSTIC_IO_BYTES / size_of::<u64>(), 0);
         let mut first = true;
         let mut complete = true;
         let mut scanned = 0_usize;
         'pages: loop {
             self.check(context)?;
+            session.phase(context).context(context)?;
             let index = self.index(id)?;
             // SAFETY: Aligned initialized64KiB output is advertised exactly. The
             // retained synchronous directory handle alone owns enumeration state.
             let page = unsafe {
                 GetFileInformationByHandleEx(
-                    self.files[index].handle.raw(),
+                    self.files[index].fields()?.handle.raw(),
                     if first { FileIdBothDirectoryRestartInfo } else { FileIdBothDirectoryInfo },
                     buffer.as_mut_ptr().cast(),
                     DIAGNOSTIC_IO_BYTES as u32,
                 )
             };
             first = false;
-            match page {
-                Err(cause) if cause.code() == ERROR_NO_MORE_FILES.to_hresult() => break,
-                Err(cause) => return Err(ClaimError::new("diagnostic_scan", cause)),
-                Ok(()) => (),
+            let page = match page {
+                Err(cause) if cause.code() == ERROR_NO_MORE_FILES.to_hresult() => Ok(false),
+                Err(cause) => Err(session
+                    .phase(context)
+                    .error("diagnostic_scan", BoundedNativeCause::Windows(cause))),
+                Ok(()) => Ok(true),
+            };
+            if !session.phase(context).post_context(page, context)? {
+                break;
             }
             let mut offset = 0;
             loop {
                 let header = std::mem::offset_of!(FILE_ID_BOTH_DIR_INFO, FileName);
                 if offset + header > DIAGNOSTIC_IO_BYTES || !offset.is_multiple_of(8) {
-                    return Err(ClaimError::invalid("diagnostic_scan_record"));
+                    return Err(session.phase(context).invalid("diagnostic_scan_record"));
                 }
                 // SAFETY: Offset alignment and header length were checked above;
                 // Windows wrote this FILE_ID_BOTH_DIR_INFO into our owned page.
@@ -101,11 +92,11 @@ impl StreamingPort {
                     .checked_add(header)
                     .and_then(|start| start.checked_add(name_bytes))
                     .filter(|end| *end <= DIAGNOSTIC_IO_BYTES)
-                    .ok_or_else(|| ClaimError::invalid("diagnostic_scan_name"))?;
+                    .ok_or_else(|| session.phase(context).invalid("diagnostic_scan_name"))?;
                 if !name_bytes.is_multiple_of(2)
                     || (next != 0 && (next < header + name_bytes || !next.is_multiple_of(8)))
                 {
-                    return Err(ClaimError::invalid("diagnostic_scan_record"));
+                    return Err(session.phase(context).invalid("diagnostic_scan_record"));
                 }
                 // SAFETY: Exact UTF16 byte range and alignment are bounded above.
                 let name_units = unsafe {
@@ -114,8 +105,11 @@ impl StreamingPort {
                         (end - offset - header) / 2,
                     )
                 };
-                let name = String::from_utf16(name_units)
-                    .map_err(|cause| ClaimError::new("diagnostic_scan_unicode", cause))?;
+                let name = String::from_utf16(name_units).map_err(|cause| {
+                    session
+                        .phase(context)
+                        .error("diagnostic_scan_unicode", BoundedNativeCause::Unicode(cause))
+                })?;
                 if name != "." && name != ".." {
                     scanned += 1;
                     if scanned > DIAGNOSTIC_SCAN_BOUND {
@@ -126,7 +120,7 @@ impl StreamingPort {
                 let owned_lock =
                     name == "writer.lock" && self.writer.as_ref().is_some_and(HeldFile::is_locked);
                 if name != "." && name != ".." && !owned_lock {
-                    if entries.len() == DIAGNOSTIC_SCAN_BOUND {
+                    if scan.entries.len() == DIAGNOSTIC_SCAN_BOUND {
                         complete = false;
                         break 'pages;
                     }
@@ -144,14 +138,36 @@ impl StreamingPort {
                         payload_group: classified.payload_group,
                     };
                     if regular && class != DiagnosticEntryClass::Unknown {
-                        match self.inspect_entry(directory.join(&name), context) {
+                        let path = session.name(&directory, &name, context)?;
+                        let inspected = self.inspect_entry(path, context, &mut session);
+                        match inspected {
                             Ok((identity, bytes)) => {
                                 observed.identity = identity;
                                 observed.bytes = bytes;
                                 observed.protected_regular = true;
                                 if class == DiagnosticEntryClass::Stage {
-                                    stages.push(StageCandidate {
-                                        leaf: name.clone(),
+                                    let mut retained_leaf = String::new();
+                                    if name.len() > leaf::LEAF_BYTES {
+                                        return Err(session
+                                            .phase(context)
+                                            .invalid("diagnostic_stage_leaf_bound"));
+                                    }
+                                    retained_leaf.try_reserve_exact(name.len()).map_err(
+                                        |cause| {
+                                            session.phase(context).error(
+                                                "diagnostic_stage_leaf_reservation",
+                                                BoundedNativeCause::Reserve(cause),
+                                            )
+                                        },
+                                    )?;
+                                    retained_leaf.push_str(&name);
+                                    if retained_leaf.capacity() > leaf::LEAF_BYTES {
+                                        return Err(session
+                                            .phase(context)
+                                            .invalid("diagnostic_stage_leaf_capacity"));
+                                    }
+                                    stages.candidates.push(StageCandidate {
+                                        leaf: retained_leaf,
                                         identity,
                                         bytes,
                                     });
@@ -160,7 +176,7 @@ impl StreamingPort {
                             Err(cause) => return Err(cause),
                         }
                     }
-                    entries.push(observed);
+                    scan.entries.push(observed);
                 }
                 if next == 0 {
                     break;
@@ -168,65 +184,50 @@ impl StreamingPort {
                 offset = offset
                     .checked_add(next)
                     .filter(|value| *value < DIAGNOSTIC_IO_BYTES)
-                    .ok_or_else(|| ClaimError::invalid("diagnostic_scan_next"))?;
+                    .ok_or_else(|| session.phase(context).invalid("diagnostic_scan_next"))?;
             }
         }
         self.close(id, context)?;
-        self.stage_candidates = stages;
+        self.stage_candidates = Some(stages);
         self.stage_scan_complete = complete;
-        Ok(Scan { entries, complete })
+        scan.complete = complete;
+        Ok(scan)
     }
     fn inspect_entry(
         &mut self,
-        path: PathBuf,
+        path: NativeName,
         context: &JobContext,
+        session: &mut session::Session,
     ) -> Result<([u8; 24], u64), ClaimError> {
         self.check(context)?;
-        let units = paths::wide(&path)?;
-        let id = self.next;
-        self.next =
-            id.checked_add(1).ok_or_else(|| ClaimError::invalid("diagnostic_lease_exhausted"))?;
-        if self.files.len() >= FILE_SLOTS {
-            return Err(ClaimError::invalid("diagnostic_file_capacity"));
+        let index = self.reserve_file(path, 0, FileGrant::InventoryMetadata, context)?;
+        let id = self.files[index].fields()?.id;
+        let original = self.original_context.as_ref().ok_or_else(|| self.reject())?;
+        let sid = self.sid.as_ref().ok_or_else(|| self.reject())?.bytes()?;
+        let mut phase = session.phase(context);
+        self.files[index].open(Some(sid), original, context, &mut phase)?;
+        let file = self.files[index].fields()?;
+        paths::validate_regular(&file.handle, None, &mut phase)?;
+        security::verify(&file.handle, sid, &mut phase)?;
+        let destination = phase.name_destination()?;
+        let actual = paths::final_path(&file.handle, &mut phase, destination)?;
+        if actual.path()? != file.path.path()? {
+            return Err(phase.invalid("diagnostic_changed_scan_entry"));
         }
-        // SAFETY: OPEN_EXISTING is read-only and its bounded output is retained
-        // before security/identity queries; reparse data never authorizes access.
-        let raw = unsafe {
-            CreateFileW(
-                PCWSTR(units.as_ptr()),
-                FILE_READ_ATTRIBUTES.0 | READ_CONTROL.0,
-                FILE_SHARE_READ | FILE_SHARE_DELETE,
-                None,
-                OPEN_EXISTING,
-                FILE_FLAG_OPEN_REPARSE_POINT,
-                None,
-            )
-        }
-        .map_err(|cause| ClaimError::new("diagnostic_scan_entry", cause))?;
-        let index = self.files.len();
-        self.files.push(NativeFile {
-            id,
-            handle: Handle::new(raw, Budget::Protected(self.memory.clone())),
-            path,
-            facts: None,
-            bound: 0,
-            stage: false,
-            writable: false,
-            deleted: false,
-        });
-        let file = &self.files[index];
-        paths::validate_regular(&file.handle, None)?;
-        security::verify(&file.handle, &self.sid)?;
-        if paths::final_path(&file.handle)? != file.path {
-            return Err(ClaimError::invalid("diagnostic_changed_scan_entry"));
-        }
-        let identity = paths::file_identity(&file.handle)?;
+        drop(actual);
+        let identity = paths::file_identity(&file.handle, &mut phase)?;
         let mut bytes = 0_i64;
-        // SAFETY: Exact initialized size output and actual retained file remain live.
-        unsafe { GetFileSizeEx(file.handle.raw(), &mut bytes) }
-            .map_err(|cause| ClaimError::new("diagnostic_scan_size", cause))?;
-        let bytes =
-            u64::try_from(bytes).map_err(|cause| ClaimError::new("diagnostic_scan_size", cause))?;
+        phase.context(context)?;
+        // SAFETY: This initialized exact size output and actual retained file
+        // remain live through the native result and unconditional post-control.
+        let result = unsafe { GetFileSizeEx(file.handle.raw(), &mut bytes) }.map_err(|cause| {
+            phase.error("diagnostic_scan_size", BoundedNativeCause::Windows(cause))
+        });
+        phase.post_context(result, context)?;
+        let bytes = u64::try_from(bytes).map_err(|cause| {
+            phase.error("diagnostic_scan_size", BoundedNativeCause::Integer(cause))
+        })?;
+
         self.close(id, context)?;
         Ok((identity, bytes))
     }

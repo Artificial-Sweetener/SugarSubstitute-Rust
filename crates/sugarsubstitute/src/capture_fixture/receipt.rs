@@ -39,14 +39,21 @@ impl Fixture {
             serde_json::json!({ "async_finished": w.async_finished,
             "cpu_finished": w.cpu_finished, "native_finished": w.native_finished })
         });
+        let selected = self.capture.registration_build();
+        let build = match selected.as_ref() {
+            Some(facts) => match facts.as_str() {
+                Ok(value) => serde_json::json!({"state":"observed","build":value}),
+                Err(_) => serde_json::json!({"state":"invalid_cached_identity"}),
+            },
+            None => serde_json::json!({"state":"unavailable"}),
+        };
         serde_json::json!({
-            "schema_version": 2,
+            "schema_version": 3,
             "kind": "native-capture-registration",
             "passed": passed,
             "coordinator": { "namespace": encoded_hex(self.options.coordinator.namespace.bytes()),
                 "epoch": encoded_hex(self.options.coordinator.epoch.bytes()) },
-            "runtime_bundle": { "build": self.options.build,
-                "client_sha256": encoded_hex(&self.options.client_hash), "handler_sha256": encoded_hex(&self.options.handler_hash) },
+            "runtime_bundle": {"selection":"authenticated-current-process-installed-release","registration_identity":build},
             "registration_budget_nanoseconds": { "started": self.budget.started().as_nanos(), "until": self.budget.until().as_nanos() },
             "shutdown_budget_nanoseconds": shutdown,
             "jobs": { "handler_watch": specification::WATCH_JOB, "registration": specification::START_JOB,

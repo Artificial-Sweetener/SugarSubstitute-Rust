@@ -289,7 +289,9 @@ impl RegisteredSource {
             && expected.run().instance.get() == self.reservation.instance
             && expected.run().generation.get() == self.reservation.generation
             && expected.attach_budget() == self.reservation.budget
-            && expected.build_bytes() == &self.shared.build[..self.shared.build_length]
+            && lock(&self.shared.build).as_ref().is_some_and(|actual| {
+                actual.as_str().is_ok_and(|build| expected.build_bytes() == build.as_bytes())
+            })
     }
 }
 fn source_error(cause: impl Error + Send + Sync + 'static) -> CaptureEndpointSourceError {
@@ -331,24 +333,14 @@ impl CaptureEndpointSource for RegisteredSource {
         if owner.closing {
             return Err(source_error(SourceFailure::Closing));
         }
-        let native = lock(&self.shared.native);
-        let actual = native.handler.ok_or_else(|| source_error(SourceFailure::Closing))?;
-        if !native.registered
-            || native.retired
-            || expected.handler().process_id() != actual.process_id
-            || expected.handler().creation_time_100ns() != actual.creation_time_100ns
-        {
-            return Err(source_error(SourceFailure::ForeignAssociation));
-        }
-        let result = native
-            .lease
-            .as_ref()
-            .ok_or_else(|| source_error(SourceFailure::Closing))?
-            .endpoint(expected)
-            .map_err(source_error);
-        drop(native);
         drop(attempts);
-        result
+        let result = crate::capture::observe_registered_endpoint(&self.shared, expected)
+            .map_err(source_error)?;
+        // A concurrent close cannot grant an endpoint from a now-closing source.
+        if lock(&self.shared.attempts).as_ref().is_none_or(|owner| owner.closing) {
+            return Err(source_error(SourceFailure::Closing));
+        }
+        Ok(result)
     }
     fn native_retired(
         &self,

@@ -27,7 +27,11 @@ fn retained_summary() -> Result<IncidentSummary, Box<dyn Error>> {
     )?)
 }
 fn legacy(summary: &IncidentSummary) -> Result<Vec<u8>, IncidentStoreError> {
-    super::super::codec::encode(super::super::codec_summary::SummaryRecord::from(summary), 65_536)
+    super::super::codec_encode::encode(
+        1,
+        super::super::codec_summary::SummaryRecord::from(summary),
+        65_536,
+    )
 }
 #[test]
 fn schema_two_roundtrips_retained_and_unavailable_generations() -> Result<(), Box<dyn Error>> {

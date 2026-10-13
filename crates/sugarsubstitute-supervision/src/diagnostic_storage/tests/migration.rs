@@ -38,6 +38,7 @@ impl Validator {
 impl DiagnosticSummaryMigrationValidator for Validator {
     fn validate_preparation(
         &self,
+        decode: &mut DiagnosticRecoveryDecodeLoan,
         _: LogicalStoreOperationKey,
         plan: &DiagnosticSummaryMigrationPlan,
         original: &DiagnosticRecoverySource,
@@ -52,10 +53,11 @@ impl DiagnosticSummaryMigrationValidator for Validator {
             return Err(Validation::rejected(DiagnosticRecoveryValidationCode::InvalidIdentity));
         }
         self.exact(original, plan.original_file(), LEGACY)?;
-        self.validate_recovered_stages(plan.historical_operation(), plan, copy, candidate)
+        self.validate_recovered_stages(decode, plan.historical_operation(), plan, copy, candidate)
     }
     fn validate_recovery(
         &self,
+        _decode: &mut DiagnosticRecoveryDecodeLoan,
         _: LogicalStoreOperationKey,
         journal: &DiagnosticRecoverySource,
         summary: &DiagnosticRecoverySource,
@@ -74,6 +76,7 @@ impl DiagnosticSummaryMigrationValidator for Validator {
     }
     fn validate_recovered_stages(
         &self,
+        _decode: &mut DiagnosticRecoveryDecodeLoan,
         _: LogicalStoreOperationKey,
         plan: &DiagnosticSummaryMigrationPlan,
         copy: &DiagnosticRecoverySource,
@@ -98,6 +101,7 @@ impl DiagnosticSummaryMigrationValidator for Validator {
     }
     fn validate_archive_original(
         &self,
+        _decode: &mut DiagnosticRecoveryDecodeLoan,
         _: LogicalStoreOperationKey,
         plan: &DiagnosticSummaryMigrationPlan,
         copy: &DiagnosticRecoverySource,
@@ -109,6 +113,7 @@ impl DiagnosticSummaryMigrationValidator for Validator {
     }
     fn validate_archive(
         &self,
+        _decode: &mut DiagnosticRecoveryDecodeLoan,
         _: LogicalStoreOperationKey,
         source: &DiagnosticRecoverySource,
     ) -> Result<DiagnosticSummaryMigrationArchiveDecision, Validation> {

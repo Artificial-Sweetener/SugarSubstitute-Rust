@@ -12,7 +12,8 @@ pub(super) fn original() -> Result<IncidentSummary, TestError> {
     super::summary().map_err(|cause| std::io::Error::other(cause.to_string()).into())
 }
 pub(super) fn legacy(summary: &IncidentSummary) -> Result<Vec<u8>, TestError> {
-    Ok(super::super::codec::encode(
+    Ok(super::super::codec_encode::encode(
+        1,
         super::super::codec_summary::SummaryRecord::from(summary),
         65_536,
     )?)

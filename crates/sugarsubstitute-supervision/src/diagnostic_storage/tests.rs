@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise storage through actual execution admission and private external fakes.
+#[path = "allocation/tests.rs"]
+mod allocation_tests;
 mod binding;
 
 mod clocks;
@@ -12,6 +14,7 @@ mod inventory;
 mod migration;
 mod payload_discard;
 mod recovery;
+mod retirement_provider;
 use super::fixture::boundary::Filesystem;
 use super::*;
 use std::{
@@ -131,9 +134,11 @@ fn setup(
     context: &JobContext,
     filesystem: Filesystem,
 ) -> Result<(DiagnosticStorage, DiagnosticStorageOperation), TestError> {
-    let memory = Arc::new(context.memory().claim(DIAGNOSTIC_STORAGE_BYTES)?);
-    filesystem.retain_claim(&memory)?;
-    let mut storage = DiagnosticStorage::from_port(memory, Box::new(filesystem))?;
+    let memory = context.memory().claim(DIAGNOSTIC_STORAGE_BYTES)?;
+    let allocation = allocation::owner(memory)?;
+    let filesystem = filesystem.retain_claim(&allocation)?;
+    let mut storage =
+        DiagnosticStorage::from_port(allocation, OwnedPort::new(Box::new(filesystem), None))?;
     let operation = storage.begin_operation(key(1)?, context)?;
     storage.resolve(
         Path::new("ignored-by-external-fake"),

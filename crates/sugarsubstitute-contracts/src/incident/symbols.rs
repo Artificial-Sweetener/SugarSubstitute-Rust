@@ -8,12 +8,15 @@ use std::num::NonZeroU32;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FileLabel(Box<str>);
 impl FileLabel {
+    /// Maximum retained validated UTF-8 bytes for this owned annotation.
+    pub const MAX_BYTES: usize = 128;
+
     /// Preserve 1..=128 ASCII basename bytes with no path/control syntax.
     /// # Errors
     /// Rejects empty/oversized labels, dot-only names and non-label characters.
     pub fn new(value: &str) -> Result<Self, IncidentError> {
         if value.is_empty()
-            || value.len() > 128
+            || value.len() > Self::MAX_BYTES
             || matches!(value, "." | "..")
             || !value.bytes().all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(&byte))
         {
@@ -30,11 +33,15 @@ impl FileLabel {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SymbolName(Box<str>);
 impl SymbolName {
+    /// Maximum retained validated UTF-8 bytes for this owned annotation.
+    pub const MAX_BYTES: usize = 512;
+
     /// Preserve at most 512 UTF-8 bytes without embedded controls or empty content.
     /// # Errors
     /// Returns `InvalidText` for invalid length or control characters.
     pub fn new(value: &str) -> Result<Self, IncidentError> {
-        if value.is_empty() || value.len() > 512 || value.chars().any(char::is_control) {
+        if value.is_empty() || value.len() > Self::MAX_BYTES || value.chars().any(char::is_control)
+        {
             return Err(IncidentError::InvalidText);
         }
         Ok(Self(value.into()))

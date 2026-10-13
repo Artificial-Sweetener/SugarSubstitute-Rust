@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 
-//! Compose the native splash proof and isolated Windows process-lifetime fixtures.
+//! Compose production desktop roles, the native splash and isolated qualification fixtures.
 
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
@@ -29,6 +29,10 @@ mod preparation;
 mod preparation_task;
 #[cfg(target_os = "windows")]
 mod process_fixture;
+#[cfg(target_os = "windows")]
+mod production;
+#[cfg(target_os = "windows")]
+mod production_output;
 mod render_transfer;
 mod timing_receipt;
 
@@ -37,14 +41,23 @@ use sugarsubstitute_contracts::localization::messages;
 use sugarsubstitute_desktop::{DesktopOptions, run};
 use sugarsubstitute_splash::Theme;
 
-/// Dispatch isolated process fixtures or run native/off-screen splash qualification.
+/// Dispatch actual production roles or isolated native/off-screen qualification.
 fn execute() -> Result<(), Box<dyn Error>> {
     let started = Instant::now();
-    let options = match invocation::Invocation::parse() {
+    initialize_diagnostics()?;
+    #[cfg(target_os = "windows")]
+    let invocation = {
+        let Some(arguments) = production::execute(std::env::args_os().skip(1))? else {
+            return Ok(());
+        };
+        invocation::Invocation::parse_arguments(arguments)
+    };
+    #[cfg(not(target_os = "windows"))]
+    let invocation = invocation::Invocation::parse();
+    let options = match invocation {
         Ok(invocation::Invocation::Demo(options)) => options,
         #[cfg(target_os = "windows")]
         Ok(invocation::Invocation::NativeCaptureFixture(options)) => {
-            initialize_diagnostics()?;
             return capture_fixture::run(options)?.finish_with(|path, bytes| {
                 std::fs::write(path, bytes)?;
                 Ok(())
@@ -58,26 +71,22 @@ fn execute() -> Result<(), Box<dyn Error>> {
         }
         #[cfg(target_os = "windows")]
         Ok(invocation::Invocation::NativeOutputFixture(path)) => {
-            initialize_diagnostics()?;
             let receipt = output_fixture::run()?;
             std::fs::write(path, serde_json::to_vec_pretty(&receipt)?)?;
             return Ok(());
         }
         #[cfg(target_os = "windows")]
         Ok(invocation::Invocation::NativeForwardingRoot(options)) => {
-            initialize_diagnostics()?;
             std::process::exit(forwarding_root::run(options)?);
         }
         #[cfg(target_os = "windows")]
         Ok(invocation::Invocation::NativeDescendantFixture(path)) => {
-            initialize_diagnostics()?;
             let receipt = descendant_fixture::run()?;
             std::fs::write(path, serde_json::to_vec_pretty(&receipt)?)?;
             return Ok(());
         }
         #[cfg(target_os = "windows")]
         Ok(invocation::Invocation::NativeClaimFixture(options)) => {
-            initialize_diagnostics()?;
             let path = options.receipt.clone();
             let receipt = claim_fixture::run(options)?;
             std::fs::write(path, serde_json::to_vec_pretty(&receipt)?)?;
@@ -85,20 +94,17 @@ fn execute() -> Result<(), Box<dyn Error>> {
         }
         #[cfg(target_os = "windows")]
         Ok(invocation::Invocation::NativeClaimChild(options)) => {
-            initialize_diagnostics()?;
             let result = claim_fixture::run_child(options)?;
             std::fs::write(result.path, serde_json::to_vec_pretty(&result.receipt)?)?;
             std::process::exit(result.exit_code);
         }
         #[cfg(target_os = "windows")]
         Ok(invocation::Invocation::NativeHeldChild(options)) => {
-            initialize_diagnostics()?;
             let code = held_child::run(options)?;
             std::process::exit(code);
         }
         #[cfg(target_os = "windows")]
         Ok(invocation::Invocation::NativeRegistryFixture(path)) => {
-            initialize_diagnostics()?;
             let receipt = process_fixture::run()?;
             if let Some(parent) = path.parent() {
                 std::fs::create_dir_all(parent)?;
@@ -108,7 +114,6 @@ fn execute() -> Result<(), Box<dyn Error>> {
         }
         #[cfg(target_os = "windows")]
         Ok(invocation::Invocation::NativeHeldRegistryFixture(path)) => {
-            initialize_diagnostics()?;
             let receipt = held_fixture::run()?;
             if let Some(parent) = path.parent() {
                 std::fs::create_dir_all(parent)?;
@@ -118,13 +123,11 @@ fn execute() -> Result<(), Box<dyn Error>> {
         }
         #[cfg(target_os = "windows")]
         Ok(invocation::Invocation::NativePipeChild(options)) => {
-            initialize_diagnostics()?;
             let code = pipe_fixture::run_child(options)?;
             std::process::exit(code);
         }
         #[cfg(target_os = "windows")]
         Ok(invocation::Invocation::NativePipeFixture(path)) => {
-            initialize_diagnostics()?;
             let receipt = pipe_fixture::run()?;
             if let Some(parent) = path.parent() {
                 std::fs::create_dir_all(parent)?;
@@ -133,11 +136,9 @@ fn execute() -> Result<(), Box<dyn Error>> {
             return Ok(());
         }
         Err(error) => {
-            initialize_diagnostics()?;
             return Err(error);
         }
     };
-    initialize_diagnostics()?;
     if let (Some(scenarios), Some(output)) = (&options.scenarios, &options.output) {
         capture::export(scenarios, output)?;
         return Ok(());
@@ -239,7 +240,7 @@ fn main() -> ExitCode {
     match execute() {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
-            tracing::error!(operation="splash_proof",cause=%error,"SugarSubstitute could not show the native proof");
+            tracing::error!(operation="application_startup",cause=%error,"SugarSubstitute could not complete its application lifetime");
             ExitCode::FAILURE
         }
     }

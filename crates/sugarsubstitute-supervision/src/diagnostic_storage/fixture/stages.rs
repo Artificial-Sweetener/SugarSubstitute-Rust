@@ -73,7 +73,7 @@ impl Filesystem {
         {
             return Err(ClaimError::invalid("fake_missing_stage_path"));
         }
-        let id = handle(&mut disk, file)?;
+        let id = handle(&mut disk, file, self)?;
         let index = index(&disk, id)?;
         disk.handles[index].writable = writable;
         disk.handles[index].stage = writable;

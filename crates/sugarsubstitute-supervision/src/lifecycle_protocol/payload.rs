@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Separate decoded request data from native authenticated observations.
-use super::{DecodedTarget, FolderFragment, MainStageFailure, ReplyOutcome};
+use super::{BorrowedBackendTarget, DecodedTarget, FolderFragment, MainStageFailure, ReplyOutcome};
 use std::{
     fmt,
     num::{NonZeroU32, NonZeroU64},
 };
 use sugarsubstitute_contracts::lifecycle::{
-    BackendTarget, CompletionIntent, LeaseId, ResourceGeneration, ResourceId, ShutdownId,
-    UiChallengeId, UiWatchdogActivity,
+    CompletionIntent, LeaseId, ResourceGeneration, ResourceId, ShutdownId, UiChallengeId,
+    UiWatchdogActivity,
 };
 use sugarsubstitute_contracts::startup::MainIdentity;
 
@@ -61,7 +61,7 @@ pub enum WirePayload<'a> {
         /// Exact claimed main attempt; full run must match the frame header.
         identity: MainIdentity,
         /// Existing bounded managed or attached target.
-        target: &'a BackendTarget,
+        target: BorrowedBackendTarget<'a>,
     },
     /// Tag 5: release this claimed resource-generation/lease reference.
     Release(LeaseReference),

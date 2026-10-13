@@ -60,6 +60,8 @@ pub enum AdmissionError {
         /// Available retained-byte budget.
         available_bytes: u64,
     },
+    /// The actual admitted reservation cannot fund independently owned input storage.
+    Memory(super::MemoryClaimError),
     /// This typed operation requires an explicit original job deadline.
     DeadlineRequired,
     /// The effective deadline has already elapsed.
@@ -216,6 +218,7 @@ impl fmt::Debug for AdmissionError {
                 .field("class", class)
                 .field("replacement", replacement)
                 .finish(),
+            Self::Memory(cause) => formatter.debug_tuple("Memory").field(cause).finish(),
             Self::Unexpected(value) => formatter.debug_tuple("Unexpected").field(value).finish(),
         }
     }
@@ -289,6 +292,7 @@ impl fmt::Display for AdmissionError {
             Self::InvalidReplacement { class, replacement } => {
                 write!(formatter, "Execution {class:?} has invalid replacement {replacement:?}")
             }
+            Self::Memory(cause) => fmt::Display::fmt(cause, formatter),
             Self::Unexpected(error) => fmt::Display::fmt(error, formatter),
             Self::InvalidSymbolAdmission => {
                 formatter.write_str("Invalid fixed symbol admission or cleanup binding")
@@ -306,6 +310,7 @@ impl fmt::Display for AdmissionError {
 impl Error for AdmissionError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
+            Self::Memory(cause) => Some(cause),
             Self::Unexpected(error) => Some(error),
             Self::NativeResources(error) => Some(error),
             _ => None,

@@ -63,12 +63,15 @@ impl IncidentRevision {
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct BuildIdentity(Box<str>);
 impl BuildIdentity {
+    /// Maximum retained validated UTF-8 bytes for this owned annotation.
+    pub const MAX_BYTES: usize = 64;
+
     /// Copy validated bounded text; no native path or release trust is inferred.
     /// # Errors
     /// Returns `InvalidText` for empty, oversized or non-annotation text.
     pub fn new(value: &str) -> Result<Self, IncidentError> {
         if value.is_empty()
-            || value.len() > 64
+            || value.len() > Self::MAX_BYTES
             || !value.bytes().all(|byte| byte.is_ascii_alphanumeric() || b"_-".contains(&byte))
         {
             return Err(IncidentError::InvalidText);

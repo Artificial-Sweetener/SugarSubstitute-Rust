@@ -39,23 +39,12 @@ pub(super) fn decode<T: DeserializeOwned>(
     if bytes.len() > bound {
         return Err(IncidentStoreError::RecordBound);
     }
-    let record: Record<T> = serde_json::from_slice(bytes)?;
+    let record: Record<T> = super::codec_parse::parse(bytes)?;
     if record.schema_version != 1 {
         return Err(IncidentStoreError::UnsupportedSchema(record.schema_version));
     }
     Ok(record.content)
 }
-pub(super) fn encode<T: Serialize>(
-    content: T,
-    bound: usize,
-) -> Result<Vec<u8>, IncidentStoreError> {
-    let bytes = serde_json::to_vec(&Record { schema_version: 1, content })?;
-    if bytes.len() > bound {
-        return Err(IncidentStoreError::RecordBound);
-    }
-    Ok(bytes)
-}
-
 /// Decode a schema-one seed within 4 KiB, preserving full historical subject identity.
 /// # Errors
 /// Rejects unknown fields/versions, invalid identities and inconsistent seed facts.
@@ -66,7 +55,14 @@ pub fn decode_seed(bytes: &[u8]) -> Result<IncidentSeed, IncidentStoreError> {
 /// # Errors
 /// Returns an encoding error or the fixed encoded-byte bound error.
 pub fn encode_seed(seed: &IncidentSeed) -> Result<Vec<u8>, IncidentStoreError> {
-    encode(SeedRecord::from(seed), SEED_BOUND)
+    super::codec_encode::encode(1, SeedRecord::from(seed), SEED_BOUND)
+}
+#[cfg(windows)]
+pub(super) fn write_seed<W: std::io::Write>(
+    seed: &IncidentSeed,
+    output: W,
+) -> Result<(), IncidentStoreError> {
+    super::codec_encode::write(1, &SeedRecord::from(seed), output)
 }
 /// Decode exact release matching facts; packaged installation provenance is separate.
 /// # Errors
@@ -78,7 +74,7 @@ pub fn decode_release_symbols(bytes: &[u8]) -> Result<ReleaseSymbols, IncidentSt
 /// # Errors
 /// Rejects encoding/bound errors.
 pub fn encode_release_symbols(release: &ReleaseSymbols) -> Result<Vec<u8>, IncidentStoreError> {
-    encode(ReleaseRecord::from(release), STATE_BOUND)
+    super::codec_encode::encode(1, ReleaseRecord::from(release), STATE_BOUND)
 }
 /// Decode one explicit failing-frame outcome within 256 KiB, preserving unavailable facts.
 /// # Errors
@@ -90,5 +86,5 @@ pub fn decode_symbol_report(bytes: &[u8]) -> Result<SymbolOutcome, IncidentStore
 /// # Errors
 /// Rejects encoding/bound errors.
 pub fn encode_symbol_report(outcome: &SymbolOutcome) -> Result<Vec<u8>, IncidentStoreError> {
-    encode(SymbolsRecord::from(outcome), REPORT_BOUND)
+    super::codec_encode::encode(1, SymbolsRecord::from(outcome), REPORT_BOUND)
 }

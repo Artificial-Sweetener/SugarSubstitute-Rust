@@ -6,7 +6,7 @@ impl DiagnosticStorage {
     /// Verify the same completion, then delete, close and observe Journal absence.
     /// This never increments Summary-eviction counters or deletes a different group.
     /// # Errors
-    /// Changed completion/current Summary and failed Journal effects retain actual state.
+    /// Changed completion/current Summary and failed Journal effects retain actual state.data_mut()?.
     pub fn finish_payload_discard(
         &mut self,
         permit: &mut DiagnosticPayloadDiscardPermit,
@@ -34,12 +34,13 @@ impl DiagnosticStorage {
             return Err(error(operation.key, Code::InvalidIdentity));
         }
         let actual = state
-            .port
-            .reconcile_activation(
-                completion.summary.object,
-                predecessor(completion.summary.facts),
-                context,
-            )
+            .call_native(|port| {
+                port.reconcile_activation(
+                    completion.summary.object,
+                    predecessor(completion.summary.facts),
+                    context,
+                )
+            })?
             .map_err(|cause| native(operation.key, Code::ActivationUncertain, cause))?;
         if actual != completion.summary.facts {
             return Err(error(operation.key, Code::ChangedIdentity));
@@ -59,8 +60,7 @@ impl DiagnosticStorage {
                     .ok_or_else(|| error(operation.key, Code::Closed))?
                     .attempted = true;
                 state
-                    .port
-                    .delete(native_id, object, facts, context)
+                    .call_native(|port| port.delete(native_id, object, facts, context))?
                     .map_err(|cause| native(operation.key, Code::DeleteUncertain, cause))?;
                 intent(&mut state, permit.id, operation.key)?
                     .journal
@@ -70,8 +70,7 @@ impl DiagnosticStorage {
                 check(&mut state, operation.key, context, false)?;
             }
             state
-                .port
-                .close(native_id, context)
+                .call_native(|port| port.close(native_id, context))?
                 .map_err(|cause| native(operation.key, Code::DeleteUncertain, cause))?;
             let journal = intent(&mut state, permit.id, operation.key)?
                 .journal
@@ -82,8 +81,7 @@ impl DiagnosticStorage {
             check(&mut state, operation.key, context, false)?;
         }
         if !state
-            .port
-            .absent(object, context)
+            .call_native(|port| port.absent(object, context))?
             .map_err(|cause| native(operation.key, Code::DeleteUncertain, cause))?
         {
             return Err(error(operation.key, Code::DeleteUncertain));
@@ -94,8 +92,8 @@ impl DiagnosticStorage {
             .ok_or_else(|| error(operation.key, Code::Closed))?
             .absent = true;
         check(&mut state, operation.key, context, false)?;
-        state.payload = None;
-        state.inventory_complete = false;
+        state.data_mut()?.payload = None;
+        state.data_mut()?.inventory_complete = false;
         Ok(DiagnosticDeletion { object, facts })
     }
 }

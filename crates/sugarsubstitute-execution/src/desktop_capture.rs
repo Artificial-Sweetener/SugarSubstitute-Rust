@@ -36,6 +36,7 @@ pub use process_lifetime::ProcessLifetimeCapture;
 pub use resources::DESKTOP_CAPTURE_NATIVE_WORKSPACE_BYTES;
 pub use submission::{
     DesktopCaptureAdmissionRejection, DesktopCaptureControl, DesktopCaptureSession,
+    DesktopCaptureTemporaryState,
 };
 pub use types::DesktopCaptureAttached;
 

@@ -59,6 +59,20 @@ impl std::error::Error for DesktopCaptureAdmissionRejection {
         Some(&self.error)
     }
 }
+/// Cache-only disposition of the actual temporary capture owner.
+/// These observations grant no fresh effects, Ready, or process-exit authority.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DesktopCaptureTemporaryState {
+    /// Temporary effects or an accepted callback remain active or unresolved.
+    Pending,
+    /// The original unused inherited loan returned before any native effect.
+    UnissuedReturned,
+    /// Actual temporary and unregistered native/source owners checked closed.
+    Retired,
+    /// Checked temporary outputs settled into the original permanent capsule.
+    /// Permanent module/source custody remains retained until actual process exit.
+    Transferred,
+}
 /// Observe original cleanup and consume actual permanent transfer separately from Ready.
 /// No native handle, executor primitive or new deadline is exposed.
 pub struct DesktopCaptureControl {
@@ -73,6 +87,31 @@ impl DesktopCaptureControl {
     /// Read cache-only original transaction facts without observing a provider.
     pub fn cleanup_snapshot(&self) -> CaptureCleanupSnapshot {
         self.shared.cleanup.snapshot()
+    }
+    /// Observe the authoritative stopped owner phase and its cached custody facts.
+    /// Takes only cleanup then stage guards; no provider, trait callback, native call,
+    /// deadline renewal, or result consumption occurs. Pending includes uncertainty.
+    pub fn temporary_settled(&self) -> DesktopCaptureTemporaryState {
+        use super::control::DesktopCapturePhase;
+        let cleanup = crate::scope::lock(&self.shared.cleanup.state);
+        let stage = crate::scope::lock(&self.shared.state);
+        if cleanup.active || stage.accepted_stage.is_some() || stage.accepted_cleanup.is_some() {
+            return DesktopCaptureTemporaryState::Pending;
+        }
+        match stage.phase {
+            DesktopCapturePhase::UnissuedReturned if !stage.registered_published => {
+                DesktopCaptureTemporaryState::UnissuedReturned
+            }
+            DesktopCapturePhase::Retired
+                if cleanup.native_retired && cleanup.source_retired && !cleanup.held() =>
+            {
+                DesktopCaptureTemporaryState::Retired
+            }
+            DesktopCapturePhase::Transferred if stage.registered_published => {
+                DesktopCaptureTemporaryState::Transferred
+            }
+            _ => DesktopCaptureTemporaryState::Pending,
+        }
     }
     /// Consume actual temporary-settlement/permanent-retention handoff once.
     /// Failure never rewrites the original registered job outcome.

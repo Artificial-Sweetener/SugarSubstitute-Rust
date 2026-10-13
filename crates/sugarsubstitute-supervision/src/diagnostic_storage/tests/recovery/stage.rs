@@ -107,9 +107,11 @@ fn diagnostic_recovery_death_after_candidate_activation_reconciles_same_inode_wi
             drop(permit);
             drop(operation);
             drop(storage);
-            let memory = Arc::new(context.memory().claim(DIAGNOSTIC_STORAGE_BYTES)?);
-            filesystem.retain_claim(&memory)?;
-            let mut storage = DiagnosticStorage::from_port(memory, Box::new(filesystem.clone()))?;
+            let memory = context.memory().claim(DIAGNOSTIC_STORAGE_BYTES)?;
+            let allocation = allocation::owner(memory)?;
+            let owned = filesystem.retain_claim(&allocation)?;
+            let mut storage =
+                DiagnosticStorage::from_port(allocation, OwnedPort::new(Box::new(owned), None))?;
             let operation = storage.begin_operation(key(2)?, &context)?;
             storage.resolve(
                 Path::new("ignored-by-external-fake"),

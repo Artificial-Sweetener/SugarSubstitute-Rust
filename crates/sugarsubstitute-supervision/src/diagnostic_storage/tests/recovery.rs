@@ -26,6 +26,7 @@ struct Validator {
 impl DiagnosticRecoveryValidator for Validator {
     fn validate(
         &self,
+        _decode: &mut DiagnosticRecoveryDecodeLoan,
         current: LogicalStoreOperationKey,
         journal: &DiagnosticRecoverySource,
         ledger: &DiagnosticRecoverySource,

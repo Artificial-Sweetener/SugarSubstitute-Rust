@@ -22,8 +22,12 @@ impl DiagnosticStorage {
         context: &JobContext,
     ) -> Result<DiagnosticRecoveredVictimState, DiagnosticStorageError> {
         let mut state = self.check(operation, context)?;
-        deletion::permit_check(&state, &self.shared, permit, operation.key)?;
-        let retained = state.deletion.as_ref().ok_or_else(|| error(operation.key, Code::Closed))?;
+        deletion::permit_check(&mut state, &self.shared, permit, operation.key)?;
+        let retained = state
+            .data_mut()?
+            .deletion
+            .as_ref()
+            .ok_or_else(|| error(operation.key, Code::Closed))?;
         let (case, _, _) =
             retained.recovery.ok_or_else(|| error(operation.key, Code::InvalidIdentity))?;
         let (journal, journal_facts) =
@@ -31,8 +35,7 @@ impl DiagnosticStorage {
         let (settled, victim, victim_facts, expected) =
             (retained.victim_settled, retained.victim, retained.victim_facts, retained.plan.facts);
         let actual = state
-            .port
-            .observe_file(journal, context)
+            .call_native(|port| port.observe_file(journal, context))?
             .map_err(|cause| native(operation.key, Code::Read, cause))?;
         if actual != journal_facts {
             return Err(error(operation.key, Code::ChangedIdentity));
@@ -49,8 +52,7 @@ impl DiagnosticStorage {
             }
             let id = victim.ok_or_else(|| error(operation.key, Code::Closed))?;
             let actual = state
-                .port
-                .observe_file(id, context)
+                .call_native(|port| port.observe_file(id, context))?
                 .map_err(|cause| native(operation.key, Code::Read, cause))?;
             if victim_facts != Some(actual) || !expected.matches(actual) {
                 return Err(error(operation.key, Code::ChangedIdentity));

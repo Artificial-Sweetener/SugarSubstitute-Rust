@@ -219,6 +219,81 @@ fn real_schema_failure_preserves_redaction_and_original_whole_claim() -> TestRes
     result
 }
 #[test]
+fn real_post_cancel_cause_stays_visible_without_replacing_read_or_schema_source() -> TestResult {
+    for schema in [false, true] {
+        let wake = Arc::new(Wake::default());
+        let owner = ExecutionOwner::new(Arc::new(FrozenClock), wake.clone())?;
+        let client = owner.client();
+        let scope = Arc::new(
+            client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?,
+        );
+        let original = scope.clone();
+        let retained = Arc::new(Mutex::new(None));
+        let destination = retained.clone();
+        let setup = EntrySetupBudget::new(Moment::from_nanos(0))?;
+        let spec = JobSpec {
+            id: JobSequence::new().allocate()?,
+            operation: Operation::NativeLifecycle,
+            class: JobClass::InfrastructureLifecycle,
+            deadline: Some(setup.until()),
+            reservation_bytes: CONFIGURATION_RESERVATION_BYTES,
+            replacement: None,
+        };
+        let mut job = client
+            .submit_entry_preparation(&scope, spec, setup, move |context| {
+                let parser = parse_startup_configuration(b"secret-token = broken");
+                original.cancel();
+                let after = match context.observe_control() {
+                    Err(cause) => cause,
+                    Ok(_) => return Err(ConfigurationCause::TooLarge),
+                };
+                let cause = if schema {
+                    let source = match parser {
+                        Err(cause) => cause,
+                        Ok(_) => return Err(ConfigurationCause::TooLarge),
+                    };
+                    ConfigurationCause::Schema { source: Box::new(source), after: Some(after) }
+                } else {
+                    ConfigurationCause::Read {
+                        source: std::io::Error::new(
+                            std::io::ErrorKind::PermissionDenied,
+                            "secret-read",
+                        ),
+                        after: Some(after),
+                    }
+                };
+                *destination.lock().map_err(|_| ConfigurationCause::TooLarge)? = Some(cause);
+                Ok::<_, ConfigurationCause>(())
+            })
+            .map_err(|rejected| rejected.error)?;
+        let completion = wake.completion(&mut job)?;
+        let memory = completion.memory.clone();
+        drop(completion);
+        let cause =
+            retained.lock().map_err(|_| "Retained cause poisoned")?.take().ok_or("Cause lost")?;
+        assert!(cause.post_control().is_some());
+        let first = cause.source().ok_or("Primary source lost")?;
+        if schema {
+            assert!(first.downcast_ref::<StartupConfigurationError>().is_some());
+        } else {
+            assert_eq!(
+                first.downcast_ref::<std::io::Error>().ok_or("Read source lost")?.kind(),
+                std::io::ErrorKind::PermissionDenied
+            );
+        }
+        let diagnostic = format!("{cause:?}");
+        assert!(diagnostic.contains("post_control: Some(EntryPreparationError"));
+        assert!(!diagnostic.contains("secret"));
+        assert!(memory.claim(1).is_err());
+        drop(cause);
+        assert_eq!(
+            memory.claim(CONFIGURATION_RESERVATION_BYTES)?.bytes(),
+            CONFIGURATION_RESERVATION_BYTES
+        );
+    }
+    Ok(())
+}
+#[test]
 fn real_parser_success_is_borrowed_under_same_preparation_claim_without_native_get() -> TestResult {
     let wake = Arc::new(Wake::default());
     let owner = ExecutionOwner::new(Arc::new(FrozenClock), wake.clone())?;

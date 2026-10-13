@@ -13,6 +13,7 @@ pub(crate) use commands::{Control, retain_failure};
 pub(crate) use owner::Owner;
 mod buffers;
 mod control;
+mod current_admission;
 pub(crate) mod enrollment;
 mod issue;
 #[cfg(test)]

@@ -3,7 +3,7 @@
 //! Characterize exact closed payload-generation intent and malformed persisted input.
 use super::*;
 
-fn journal() -> Result<PayloadDiscardJournal, Box<dyn Error>> {
+pub(super) fn journal() -> Result<PayloadDiscardJournal, Box<dyn Error>> {
     let attachments = AttachmentInventory::new(&[
         AttachmentFacts::new(AttachmentKind::Log, 7, 900, 893, [5; 32])?,
         AttachmentFacts::new(AttachmentKind::Minidump, 70_000, 70_000, 0, [6; 32])?,

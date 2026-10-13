@@ -69,7 +69,12 @@ impl EntryLease for Lease {
         let own = security::own_identity(&self.expected, &mut self.own_token, &mut self.own_image)?;
         self.identity = Some(own);
         let name = endpoint(self.expected.namespace());
-        let mut descriptor = Descriptor::new(own)?;
+        let purpose = if self.server {
+            crate::native_pipe::security::DescriptorPurpose::CoordinatorServer
+        } else {
+            crate::native_pipe::security::DescriptorPurpose::RestrictedEndpoint
+        };
+        let mut descriptor = Descriptor::new(own, purpose)?;
         for (index, slot) in self.slots.iter_mut().enumerate() {
             if context.cancellation_requested() {
                 return Err(EntryTransportError::Closed);

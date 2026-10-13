@@ -58,13 +58,11 @@ impl WindowsCrashCapture {
                 )),
             }
         };
-        let mut build = [0; 64];
-        build[..input.build.len()].copy_from_slice(input.build.as_bytes());
         let shared = Arc::new(Shared {
             attempts: Mutex::new(None),
             owner: self.owner,
-            build,
-            build_length: input.build.len(),
+            build: Mutex::new(None),
+            execution: execution.clone(),
             execution_id: scope.owner_id(),
             native: Mutex::new(NativeState {
                 lease: None,
@@ -72,6 +70,7 @@ impl WindowsCrashCapture {
                 watch: None,
                 registered: false,
                 handler: None,
+                creator: None,
                 retired: false,
                 deadline: None,
                 close_deadline: None,

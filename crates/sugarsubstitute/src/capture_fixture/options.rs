@@ -13,23 +13,14 @@ pub(crate) struct Options {
     pub(crate) receipt: PathBuf,
     pub(super) coordinator: CoordinatorKey,
     pub(super) input: Option<CaptureStartInput>,
-    pub(super) client_hash: [u8; 32],
-    pub(super) handler_hash: [u8; 32],
-    pub(super) build: String,
 }
 impl Options {
-    /// Require exact option ordering; hashes/naming facts confer no native authority.
+    /// Require exact root/coordinator/receipt options; release selection uses actual installed trust.
     pub(crate) fn parse(arguments: impl IntoIterator<Item = OsString>) -> Result<Self> {
         let mut arguments = arguments.into_iter();
-        let client = PathBuf::from(value(&mut arguments, "--client")?);
-        let handler = PathBuf::from(value(&mut arguments, "--handler")?);
         let root = PathBuf::from(value(&mut arguments, "--capture-root")?);
-        let client_hash = hex::<32>(&value(&mut arguments, "--client-sha256")?)?;
-        let handler_hash = hex::<32>(&value(&mut arguments, "--handler-sha256")?)?;
         let namespace = NamespaceId::new(hex::<32>(&value(&mut arguments, "--namespace")?)?);
         let epoch = CoordinatorEpoch::new(hex::<16>(&value(&mut arguments, "--epoch")?)?)?;
-        let build =
-            value(&mut arguments, "--build")?.into_string().map_err(|_| "Build is not Unicode")?;
         let receipt = PathBuf::from(value(&mut arguments, "--receipt")?);
         if arguments.next().is_some() {
             return Err("Capture fixture rejects trailing arguments".into());
@@ -42,17 +33,11 @@ impl Options {
         {
             return Err("Capture receipt requires a bounded absolute D-drive path".into());
         }
-        let input =
-            CaptureStartInput::new(client, handler, root, client_hash, handler_hash, &build)?;
-        let build = build.as_str().to_owned();
-        Ok(Self {
-            receipt,
-            coordinator: CoordinatorKey { namespace, epoch },
-            input: Some(input),
-            client_hash,
-            handler_hash,
-            build,
-        })
+        let input = CaptureStartInput::new(
+            root,
+            sugarsubstitute_supervision::InstalledReleaseOwner::new().capture_selection(),
+        )?;
+        Ok(Self { receipt, coordinator: CoordinatorKey { namespace, epoch }, input: Some(input) })
     }
 }
 /// Consume one ordered option pair without accepting mixed role syntax.

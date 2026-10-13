@@ -13,22 +13,56 @@ mod tests;
 pub(crate) fn resolve(resolution: &mut Resolution, sid: &[u8]) -> Result<(), ClaimError> {
     let budget = files::Budget::Slot(resolution.slot.clone());
     let mut handles = lock(&resolution.handles);
-    let root =
-        open_retained(resolution.configuration.root(), true, false, budget.clone(), &mut handles)?;
-    let root_path = final_path(&handles[root])?;
-    let root_identity = file_identity(&handles[root])?;
-    pin_ancestors(&root_path, &mut handles, files::Budget::Slot(resolution.slot.clone()))?;
-    let interpreter =
-        open_retained(resolution.configuration.interpreter(), false, false, budget, &mut handles)?;
-    let interpreter_path = final_path(&handles[interpreter])?;
-    let interpreter_identity = file_identity(&handles[interpreter])?;
-    pin_ancestors(&interpreter_path, &mut handles, files::Budget::Slot(resolution.slot.clone()))?;
+    let mut phase = crate::protected_storage::native_phase::NativePhase::ordinary(&budget)?;
+    let root = open_retained(
+        resolution.configuration.root(),
+        true,
+        false,
+        budget.clone(),
+        &mut handles,
+        &mut phase,
+    )?;
+    let root_path = final_path(
+        &handles[root],
+        &mut phase,
+        crate::protected_storage::native_name::NativeNameDestination::Ordinary,
+    )?
+    .into_ordinary()?;
+    let root_identity = file_identity(&handles[root], &mut phase)?;
+    pin_ancestors(
+        &root_path,
+        &mut handles,
+        files::Budget::Slot(resolution.slot.clone()),
+        &mut phase,
+    )?;
+    let interpreter = open_retained(
+        resolution.configuration.interpreter(),
+        false,
+        false,
+        budget.clone(),
+        &mut handles,
+        &mut phase,
+    )?;
+    let interpreter_path = final_path(
+        &handles[interpreter],
+        &mut phase,
+        crate::protected_storage::native_name::NativeNameDestination::Ordinary,
+    )?
+    .into_ordinary()?;
+    let interpreter_identity = file_identity(&handles[interpreter], &mut phase)?;
+    pin_ancestors(
+        &interpreter_path,
+        &mut handles,
+        files::Budget::Slot(resolution.slot.clone()),
+        &mut phase,
+    )?;
     verify_pinned(
         &root_path,
         root_identity,
         &mut handles,
         true,
         files::Budget::Slot(resolution.slot.clone()),
+        &mut phase,
     )?;
     verify_pinned(
         &interpreter_path,
@@ -36,6 +70,7 @@ pub(crate) fn resolve(resolution: &mut Resolution, sid: &[u8]) -> Result<(), Cla
         &mut handles,
         false,
         files::Budget::Slot(resolution.slot.clone()),
+        &mut phase,
     )?;
     let canonical = LaunchConfiguration::new(
         root_path,

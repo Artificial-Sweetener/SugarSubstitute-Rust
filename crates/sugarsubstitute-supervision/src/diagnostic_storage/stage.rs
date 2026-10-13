@@ -56,71 +56,79 @@ impl DiagnosticStorage {
         context: &JobContext,
     ) -> Result<DiagnosticStage, DiagnosticStorageError> {
         let mut state = self.check(operation, context)?;
-        mutation(&state, operation.key)?;
+        mutation(&mut state, operation.key)?;
         let group = crate::protected_storage::record_file::diagnostic_payload_group_digest(object);
         if let Some(group) = group
-            && !state.payload_groups.contains(&group)
+            && !state.data_mut()?.payload_groups.contains(&group)
         {
-            if state.payload_groups.len() >= sugarsubstitute_contracts::incident::MAX_FULL_INCIDENTS
+            if state.data_mut()?.payload_groups.len()
+                >= sugarsubstitute_contracts::incident::MAX_FULL_INCIDENTS
             {
                 return Err(error(operation.key, Code::Capacity));
             }
-            state.payload_groups.try_reserve_exact(1).map_err(|cause| {
-                native(
-                    operation.key,
-                    Code::Capacity,
-                    ClaimError::new("diagnostic_group_reservation", cause),
-                )
-            })?;
+            let reservation =
+                allocation::reservation(&state.data_mut()?.allocation, Some(operation.key))?;
+            state
+                .data_mut()?
+                .payload_groups
+                .try_reserve_exact(1)
+                .map_err(|cause| reservation.failed(cause))?;
         }
-        if object.namespace().is_some_and(|value| Some(value) != state.namespace)
+        let namespace = state.data_mut()?.namespace;
+        if object.namespace().is_some_and(|value| Some(value) != namespace)
             || reserved_bytes == 0
             || reserved_bytes > object.bound()
-            || state.stages.len() >= DIAGNOSTIC_STAGE_BOUND
+            || state.data_mut()?.stages.len() >= DIAGNOSTIC_STAGE_BOUND
         {
             return Err(error(operation.key, Code::Capacity));
         }
-        let charge = state
-            .stages
-            .iter()
-            .try_fold(state.charged_bytes, |sum, value| sum.checked_add(value.reserved))
-            .and_then(|sum| sum.checked_add(reserved_bytes));
-        if charge.is_none_or(|total| total > sugarsubstitute_contracts::incident::MAX_PAYLOAD_BYTES)
         {
-            return Err(error(operation.key, Code::Capacity));
-        }
-        let (slots, bound) = match object {
-            DiagnosticObject::Seed(_) => (&state.seeds, DIAGNOSTIC_SEED_BOUND),
-            DiagnosticObject::Summary(_) => {
-                (&state.summaries, sugarsubstitute_contracts::incident::MAX_SUMMARIES)
-            }
-            _ => (&state.seeds, usize::MAX),
-        };
-        if let DiagnosticObject::Seed(key) | DiagnosticObject::Summary(key) = object {
-            let digest = crate::protected_storage::record_file::diagnostic_subject_digest(key);
-            let pending = state
+            let data = state.data_mut()?;
+            let charge = data
                 .stages
                 .iter()
-                .filter(|stage| match (object, stage.object) {
-                    (DiagnosticObject::Seed(_), DiagnosticObject::Seed(key))
-                    | (DiagnosticObject::Summary(_), DiagnosticObject::Summary(key)) => !slots
-                        .contains(
-                            &crate::protected_storage::record_file::diagnostic_subject_digest(key),
-                        ),
-                    _ => false,
-                })
-                .count();
-            if !slots.contains(&digest) && slots.len() + pending >= bound {
+                .try_fold(data.charged_bytes, |sum, value| sum.checked_add(value.reserved))
+                .and_then(|sum| sum.checked_add(reserved_bytes));
+            if charge
+                .is_none_or(|total| total > sugarsubstitute_contracts::incident::MAX_PAYLOAD_BYTES)
+            {
                 return Err(error(operation.key, Code::Capacity));
+            }
+            let (slots, bound) = match object {
+                DiagnosticObject::Seed(_) => (&data.seeds, DIAGNOSTIC_SEED_BOUND),
+                DiagnosticObject::Summary(_) => {
+                    (&data.summaries, sugarsubstitute_contracts::incident::MAX_SUMMARIES)
+                }
+                _ => (&data.seeds, usize::MAX),
+            };
+            if let DiagnosticObject::Seed(key) | DiagnosticObject::Summary(key) = object {
+                let digest = crate::protected_storage::record_file::diagnostic_subject_digest(key);
+                let pending = data
+                    .stages
+                    .iter()
+                    .filter(|stage| match (object, stage.object) {
+                        (DiagnosticObject::Seed(_), DiagnosticObject::Seed(key))
+                        | (DiagnosticObject::Summary(_), DiagnosticObject::Summary(key)) => !slots
+                            .contains(
+                                &crate::protected_storage::record_file::diagnostic_subject_digest(
+                                    key,
+                                ),
+                            ),
+                        _ => false,
+                    })
+                    .count();
+                if !slots.contains(&digest) && slots.len() + pending >= bound {
+                    return Err(error(operation.key, Code::Capacity));
+                }
             }
         }
         let id = next_lease(&mut state, operation.key)?;
         if let Some(group) = group
-            && !state.payload_groups.contains(&group)
+            && !state.data_mut()?.payload_groups.contains(&group)
         {
-            state.payload_groups.push(group);
+            state.data_mut()?.payload_groups.push(group);
         }
-        state.stages.push(RetainedStage {
+        state.data_mut()?.stages.push(RetainedStage {
             id,
             native: None,
             object,
@@ -133,11 +141,10 @@ impl DiagnosticStorage {
             activated: false,
         });
         let native_id = state
-            .port
-            .create_stage(object, operation.key, reserved_bytes, context)
+            .call_native(|port| port.create_stage(object, operation.key, reserved_bytes, context))?
             .map_err(|cause| native(operation.key, Code::Write, cause))?;
-        let index = state.stages.len() - 1;
-        state.stages[index].native = Some(native_id);
+        let index = state.data_mut()?.stages.len() - 1;
+        state.data_mut()?.stages[index].native = Some(native_id);
         if native_id == 0 {
             return Err(error(operation.key, Code::ChangedIdentity));
         }
@@ -171,15 +178,16 @@ impl DiagnosticStage {
         input: &[u8],
         context: &JobContext,
     ) -> Result<(), DiagnosticStorageError> {
-        let mut state = lock(&self.shared);
+        let mut state = StateAccess::acquire(&self.shared, self.operation);
         check(&mut state, self.operation, context, false)?;
-        mutation(&state, self.operation)?;
+        mutation(&mut state, self.operation)?;
         let index = state
+            .data_mut()?
             .stages
             .iter()
             .position(|value| value.id == self.id)
             .ok_or_else(|| error(self.operation, Code::Closed))?;
-        let stage = &mut state.stages[index];
+        let stage = &mut state.data_mut()?.stages[index];
         if stage.recovered.is_some() || stage.role.is_some() {
             return Err(error(self.operation, Code::Busy));
         }
@@ -192,10 +200,9 @@ impl DiagnosticStage {
         let offset = stage.written;
         stage.flushed = None;
         state
-            .port
-            .write(id, offset, input, context)
+            .call_native(|port| port.write(id, offset, input, context))?
             .map_err(|cause| native(self.operation, Code::Write, cause))?;
-        state.stages[index].written = end;
+        state.data_mut()?.stages[index].written = end;
         check(&mut state, self.operation, context, false)
     }
     /// Flush and read back the actual entire stream before publishing exact facts.
@@ -205,52 +212,56 @@ impl DiagnosticStage {
         &mut self,
         context: &JobContext,
     ) -> Result<DiagnosticStageFacts, DiagnosticStorageError> {
-        let mut state = lock(&self.shared);
+        let mut state = StateAccess::acquire(&self.shared, self.operation);
         check(&mut state, self.operation, context, false)?;
-        if state.migration.is_some() || state.payload.is_some() {
+        if state.data_mut()?.migration.is_some() || state.data_mut()?.payload.is_some() {
             return Err(error(self.operation, Code::Busy));
         }
         let index = state
+            .data_mut()?
             .stages
             .iter()
             .position(|value| value.id == self.id)
             .ok_or_else(|| error(self.operation, Code::Closed))?;
-        let id = state.stages[index].native.ok_or_else(|| error(self.operation, Code::Closed))?;
+        let id = state.data_mut()?.stages[index]
+            .native
+            .ok_or_else(|| error(self.operation, Code::Closed))?;
         let facts = state
-            .port
-            .flush(id, context)
+            .call_native(|port| port.flush(id, context))?
             .map_err(|cause| native(self.operation, Code::Flush, cause))?;
         if facts.identity == [0; 24]
             || facts.sha256 == [0; 32]
-            || facts.bytes != state.stages[index].written
-            || state.stages[index].recovered.is_some_and(|expected| !expected.matches(facts))
+            || facts.bytes != state.data_mut()?.stages[index].written
+            || state.data_mut()?.stages[index]
+                .recovered
+                .is_some_and(|expected| !expected.matches(facts))
         {
             return Err(error(self.operation, Code::ChangedIdentity));
         }
         check(&mut state, self.operation, context, false)?;
-        state.stages[index].flushed = Some(facts);
+        state.data_mut()?.stages[index].flushed = Some(facts);
         Ok(DiagnosticStageFacts(facts))
     }
     /// Checked-close custody while preserving unactivated persistent stage bytes.
     /// # Errors
     /// Failed close retains the slot and original reservation.
     pub fn retire(&mut self, context: &JobContext) -> Result<(), DiagnosticStorageError> {
-        let mut state = lock(&self.shared);
+        let mut state = StateAccess::acquire(&self.shared, self.operation);
         check(&mut state, self.operation, context, false)?;
-        let Some(index) = state.stages.iter().position(|value| value.id == self.id) else {
+        let Some(index) = state.data_mut()?.stages.iter().position(|value| value.id == self.id)
+        else {
             return Ok(());
         };
-        if state.stages[index].role.is_some() {
+        if state.data_mut()?.stages[index].role.is_some() {
             return Err(error(self.operation, Code::Busy));
         }
-        if let Some(id) = state.stages[index].native {
+        if let Some(id) = state.data_mut()?.stages[index].native {
             state
-                .port
-                .close(id, context)
+                .call_native(|port| port.close(id, context))?
                 .map_err(|cause| native(self.operation, Code::Retirement, cause))?;
         }
-        state.stages.remove(index);
-        state.inventory_complete = false;
+        state.data_mut()?.stages.remove(index);
+        state.data_mut()?.inventory_complete = false;
         Ok(())
     }
 }
@@ -286,19 +297,19 @@ impl DiagnosticDispositionStage {
     }
 }
 pub(super) fn mutation(
-    state: &State,
+    state: &mut StateAccess<'_>,
     key: LogicalStoreOperationKey,
 ) -> Result<(), DiagnosticStorageError> {
-    if !state.writer {
+    if !state.data_mut()?.writer {
         return Err(error(key, Code::Busy));
     }
-    if state.migration.is_some() || state.payload.is_some() {
+    if state.data_mut()?.migration.is_some() || state.data_mut()?.payload.is_some() {
         return Err(error(key, Code::Busy));
     }
-    if !state.inventory_complete {
+    if !state.data_mut()?.inventory_complete {
         return Err(error(key, Code::InventoryIncomplete));
     }
-    if state.port.live_handles() >= DIAGNOSTIC_HANDLE_BOUND {
+    if state.data_mut()?.live_handles() >= DIAGNOSTIC_HANDLE_BOUND {
         return Err(error(key, Code::Capacity));
     }
     Ok(())

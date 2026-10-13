@@ -232,3 +232,38 @@ source_url = "https://chromium.googlesource.com/crashpad/crashpad/+/60dd943f48d7
 license = "Apache-2.0 AND GPL-3.0-or-later"
 license_file = "third_party/licenses/crashpad.Apache-2.0.txt"
 files = ["native/crashpad/bounded_metadata.h", "native/crashpad/bounded_metadata.cc", "native/crashpad/bounded_metadata_tests.cc", "native/crashpad/incident_bridge.h", "native/crashpad/incident_bridge.cc", "native/crashpad/incident_bridge_tests.cc"]
+
+[[components]]
+id = "crashpad-native-capture-attachment-adaptations"
+source_url = "https://chromium.googlesource.com/crashpad/crashpad/+/60dd943f48d77dc8d05dabc04badbd8561d0b8c4/"
+license = "Apache-2.0 AND BSD-3-Clause AND GPL-3.0-or-later"
+license_file = "third_party/licenses/crashpad-mini-chromium.Apache-2.0-and-BSD.txt"
+files = [
+  "native/crashpad/BUILD.gn",
+  "native/crashpad/capture_attach_boundary.cc",
+  "native/crashpad/capture_attach_boundary.h",
+  "native/crashpad/capture_attach_boundary_tests.cc",
+  "native/crashpad/capture_attach_v2.h",
+  "native/crashpad/capture_attach_validation.cc",
+  "native/crashpad/capture_attach_validation.h",
+  "native/crashpad/capture_attach_validation_tests.cc",
+  "native/crashpad/capture_bridge.cc",
+  "native/crashpad/capture_bridge.h",
+  "native/crashpad/capture_endpoint.h",
+  "native/crashpad/capture_event.cc",
+  "native/crashpad/capture_event.h",
+  "native/crashpad/capture_event_tests.cc",
+  "native/crashpad/capture_runtime_test_source.py",
+  "native/crashpad/capture_runtime_tests.cc",
+  "native/crashpad/capture_source.cc",
+  "native/crashpad/capture_source.h",
+  "native/crashpad/capture_source_tests.cc",
+  "native/crashpad/owned_attach.cc",
+  "native/crashpad/owned_attach.h",
+  "native/crashpad/owned_attach_protocol.cc",
+  "native/crashpad/owned_attach_test_support.h",
+  "native/crashpad/owned_attach_tests.cc",
+  "native/crashpad/owned_connection.cc",
+  "native/crashpad/owned_connection.h",
+  "native/crashpad/owned_registration_tests.cc",
+]

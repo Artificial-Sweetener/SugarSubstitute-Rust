@@ -2,12 +2,14 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Reconcile exact durable ledger/journal reads before independent protected absence.
 mod errors;
+mod incident_cause;
 mod stage;
 mod types;
 mod victim;
 use super::*;
 use deletion::RetainedDeletion;
 pub use errors::{DiagnosticRecoveryValidationCode, DiagnosticRecoveryValidationError};
+pub use incident_cause::DiagnosticIncidentValidationCause;
 use source::{canonical, retained_source, whole};
 pub use types::{
     DiagnosticRecoveryDecision, DiagnosticRecoveryLedgerCase, DiagnosticRecoverySource,
@@ -36,23 +38,18 @@ impl DiagnosticStorage {
         if journal.id == ledger.id {
             return Err(error(operation.key, Code::InvalidIdentity));
         }
-        let journal_source = whole(self, journal, operation, context)?;
-        let ledger_source = whole(self, ledger, operation, context)?;
-        let decision = validator.validate(operation.key, &journal_source, &ledger_source).map_err(
-            |cause| {
-                native(
-                    operation.key,
-                    Code::InvalidIdentity,
-                    ClaimError::new("diagnostic_recovery_validation", cause),
-                )
-            },
-        )?;
+        let journal_source = whole(&self.shared, journal, operation, context)?;
+        let ledger_source = whole(&self.shared, ledger, operation, context)?;
+        let decision = allocation::decode_callback(self, operation, context, |decode| {
+            validator.validate(decode, operation.key, &journal_source, &ledger_source)
+        })?;
         let mut state = self.check(operation, context)?;
-        super::stage::mutation(&state, operation.key)?;
+        super::stage::mutation(&mut state, operation.key)?;
         let plan = decision.plan;
-        let namespace = state.namespace.ok_or_else(|| error(operation.key, Code::Closed))?;
+        let namespace =
+            state.data_mut()?.namespace.ok_or_else(|| error(operation.key, Code::Closed))?;
         if plan.operation.owner().namespace != namespace
-            || state.deletion.is_some()
+            || state.data_mut()?.deletion.is_some()
             || !canonical(&journal_source, DiagnosticObject::Journal(plan.operation), namespace)
             || !canonical(&ledger_source, DiagnosticObject::StoreState, namespace)
             || journal_source.facts.sha256 != plan.journal_sha256
@@ -73,7 +70,7 @@ impl DiagnosticStorage {
         let journal_index = retained_source(&mut state, &journal_source, operation.key, context)?;
         retained_source(&mut state, &ledger_source, operation.key, context)?;
         let id = next_lease(&mut state, operation.key)?;
-        state.deletion = Some(RetainedDeletion {
+        state.data_mut()?.deletion = Some(RetainedDeletion {
             id,
             plan,
             journal: Some((journal_source.native, journal_source.facts)),
@@ -83,10 +80,9 @@ impl DiagnosticStorage {
             victim_settled: false,
             recovery: Some((decision.ledger_case, decision.candidate_stage, ledger_source.facts)),
         });
-        state.reads.remove(journal_index);
+        state.data_mut()?.reads.remove(journal_index);
         let absent = state
-            .port
-            .absent(plan.victim, context)
+            .call_native(|port| port.absent(plan.victim, context))?
             .map_err(|cause| native(operation.key, Code::DeleteUncertain, cause))?;
         check(&mut state, operation.key, context, false)?;
         if !absent {
@@ -94,11 +90,13 @@ impl DiagnosticStorage {
                 return Err(error(operation.key, Code::ChangedIdentity));
             }
             let (native_id, facts) = state
-                .port
-                .open(plan.victim, plan.victim.bound(), context)
+                .call_native(|port| port.open(plan.victim, plan.victim.bound(), context))?
                 .map_err(|cause| native(operation.key, Code::Read, cause))?;
-            let intent =
-                state.deletion.as_mut().ok_or_else(|| error(operation.key, Code::Closed))?;
+            let intent = state
+                .data_mut()?
+                .deletion
+                .as_mut()
+                .ok_or_else(|| error(operation.key, Code::Closed))?;
             intent.victim = Some(native_id);
             intent.victim_facts = Some(facts);
             if native_id == 0 || !plan.facts.matches(facts) {
@@ -107,6 +105,7 @@ impl DiagnosticStorage {
             check(&mut state, operation.key, context, false)?;
         } else {
             state
+                .data_mut()?
                 .deletion
                 .as_mut()
                 .ok_or_else(|| error(operation.key, Code::Closed))?
@@ -114,11 +113,10 @@ impl DiagnosticStorage {
         }
         let ledger_index = retained_source(&mut state, &ledger_source, operation.key, context)?;
         state
-            .port
-            .close(ledger_source.native, context)
+            .call_native(|port| port.close(ledger_source.native, context))?
             .map_err(|cause| native(operation.key, Code::Retirement, cause))?;
         check(&mut state, operation.key, context, false)?;
-        state.reads.remove(ledger_index);
+        state.data_mut()?.reads.remove(ledger_index);
         Ok(DurableDeletionPermit { shared: self.shared.clone(), operation: operation.key, id })
     }
 }

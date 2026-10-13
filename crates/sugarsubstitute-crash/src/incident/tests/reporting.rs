@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise durable report metadata through actual protected storage and execution owners.
 use super::{
-    publication::{admitted, setup},
+    publication_fixture::{admitted, setup},
     reporting_fixture::*,
     *,
 };
@@ -298,12 +298,25 @@ fn live_publication_ticket_blocks_report_metadata_before_effects() -> TestResult
     admitted(|context| {
         let (fixture, mut repository) = setup(&context)?;
         let summary = original()?;
-        let _ticket = repository.begin_publish(
-            summary.seed().clone(),
-            ExpectedSummary::Absent,
-            IncidentOperationId::new(1)?,
-            &context,
-        )?;
+        let _ticket = {
+            let expected = ExpectedSummary::Absent;
+            repository
+                .preflight_publication(
+                    summary.seed().clone(),
+                    expected,
+                    IncidentPublicationDemand::new(
+                        262_144,
+                        1,
+                        usize::from(matches!(expected, ExpectedSummary::Absent)),
+                        131_072,
+                    )?,
+                    IncidentUtc::from_unix_seconds(111)?,
+                    &context,
+                )
+                .and_then(|preflight| {
+                    repository.begin_publish(preflight, IncidentOperationId::new(1)?, &context)
+                })
+        }?;
         let before = fixture.snapshot().mutation_count();
         assert!(matches!(
             repository.record_attempt(binding(&summary)?, ReportAttempt::Presented, &context),

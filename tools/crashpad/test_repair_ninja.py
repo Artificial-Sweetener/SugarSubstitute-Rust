@@ -56,5 +56,39 @@ class RepairTests(unittest.TestCase):
                 self.repair(text)
 
 
+
+
+class CaptureActionRepairTests(unittest.TestCase):
+    def repair(self, text):
+        return repair_text(text, SOURCE, OUTPUT)
+    def command(self):
+        return ("  command = C$:/Python/python.exe " + BAD +
+                "/sugarsubstitute/capture_runtime_test_source.py --client " + BAD +
+                "/client/crashpad_client_win.cc --helper " + BAD +
+                "/util/win/critical_section_with_debug_info.cc --output gen/sugarsubstitute\n")
+
+    def test_exact_three_capture_action_positions_preserve_command(self):
+        text = self.command()
+        self.assertEqual(self.repair(text), text.replace(BAD, SOURCE.replace("E:", "E$:")))
+
+    def test_capture_script_client_helper_and_output_are_exact(self):
+        text = self.command()
+        for old, new in (("sugarsubstitute/capture_runtime_test_source.py", "unknown/capture_runtime_test_source.py"),
+                         ("client/crashpad_client_win.cc", "client/private.cc"),
+                         ("util/win/critical_section_with_debug_info.cc", "util/win/private.cc"),
+                         ("--client ", "--other "), ("--helper ", "--other "),
+                         ("gen/sugarsubstitute", "E$:/other")):
+            with self.subTest(new=new), self.assertRaises(ValueError):
+                self.repair(text.replace(old, new))
+
+    def test_capture_missing_repeated_foreign_and_extra_positions_reject(self):
+        text = self.command()
+        for mutated in (text.replace(BAD + "/client/crashpad_client_win.cc", "relative.cc"),
+                        text.replace(" --helper ", " " + BAD + "/client/crashpad_client_win.cc --helper "),
+                        text.replace(BAD, BAD.replace("E:", "C:"), 1),
+                        text.replace(" --output ", " " + BAD + "/private --output ")):
+            with self.subTest(mutated=mutated), self.assertRaises(ValueError):
+                self.repair(mutated)
+
 if __name__ == "__main__":
     unittest.main()

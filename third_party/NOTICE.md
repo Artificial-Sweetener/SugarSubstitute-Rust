@@ -59,3 +59,9 @@ parsers use fixed storage, file-relative bounded reads, and complete module
 identity dictionaries. Adaptations are copyright Artificial Sweetener and
 contributors (2026), GPL-3.0-or-later. The upstream license text is preserved in
 `licenses/crashpad.Apache-2.0.txt`.
+
+The native capture-attachment adapter and its deterministic boundary tests
+derive from the same pinned Crashpad and mini-chromium sources. The native
+client exposes separately named version-one capture/source operations and
+version-two attachment operations. Maintained adaptations and test extraction
+are copyright Artificial Sweetener and contributors (2026), GPL-3.0-or-later.

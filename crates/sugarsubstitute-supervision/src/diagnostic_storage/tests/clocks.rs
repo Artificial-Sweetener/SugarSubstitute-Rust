@@ -291,7 +291,7 @@ fn diagnostic_clock_regression_closes_admission_with_actual_custody_retained() -
     );
     // Observe only actual external fixture closure; the public storage owner has
     // no valid clock with which to acknowledge retirement or release its slot.
-    Port::retire(&mut filesystem, &context)?;
+    filesystem.complete_external_closes(&context)?;
     assert_eq!(Port::live_handles(&filesystem), 0);
     assert_eq!(storage.snapshot().reads(), 1);
     assert!(storage.snapshot().writer_held());

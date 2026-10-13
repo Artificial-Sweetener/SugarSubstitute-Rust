@@ -3,12 +3,17 @@
 //! Validate inert exact generation expectations before retained boundary comparison.
 use super::*;
 impl DiagnosticPayloadDiscardDecision {
+    #[cfg(test)]
+    pub(in crate::diagnostic_storage) fn allocated_victim_capacity(&self) -> usize {
+        self.victims.capacity()
+    }
     /// Validate bounded distinct metadata and an exact canonical attachment set.
     /// This constructor supplies recorded data and grants no native permission.
     /// # Errors
     /// Rejects namespace, metadata, generation, order, digest or identity discrepancies.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
+        mut allocation: DiagnosticPayloadDecisionAllocationLoan,
         selection: DiagnosticPayloadDiscardSelection,
         historical: LogicalStoreOperationKey,
         original_file: RecordedDiagnosticFileFacts,
@@ -53,13 +58,7 @@ impl DiagnosticPayloadDiscardDecision {
                 return Err(invalid());
             }
         }
-        let mut retained = Vec::new();
-        retained.try_reserve_exact(MAX_ATTACHMENTS).map_err(|cause| {
-            DiagnosticRecoveryValidationError::caused(
-                DiagnosticRecoveryValidationCode::InvalidIdentity,
-                cause,
-            )
-        })?;
+        let mut retained = std::mem::take(&mut allocation.victims);
         retained.extend_from_slice(victims);
         Ok(Self {
             selection,
@@ -69,6 +68,7 @@ impl DiagnosticPayloadDiscardDecision {
             victims: retained,
             journal_sha256,
             case,
+            _allocation: allocation,
         })
     }
 }

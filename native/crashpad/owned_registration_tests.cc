@@ -21,9 +21,12 @@ struct Boundary {
   bool server_query_failed = false;
   bool late_issue = false;
   bool late_result = false;
+  DWORD birth_error = ERROR_SUCCESS;
+  bool zero_birth = false;
   int counter_calls = 0;
   int result_calls = 0;
   int close_calls = 0;
+  int event_closes = 0;
   int transaction_calls = 0;
   int open_calls = 0;
   int process_waits = 0;
@@ -33,8 +36,9 @@ BOOL WINAPI Counter(LARGE_INTEGER* value) {
   if (boundary.late_issue && boundary.counter_calls == 2) boundary.now = 60100;
   value->QuadPart = boundary.now; return TRUE;
 }
-BOOL WINAPI Close(HANDLE) {
+BOOL WINAPI Close(HANDLE value) {
   ++boundary.close_calls; boundary.error = boundary.close_error;
+  if (value == reinterpret_cast<HANDLE>(2)) ++boundary.event_closes;
   return boundary.close_error == ERROR_SUCCESS;
 }
 DWORD WINAPI LastError() { return boundary.error; }
@@ -70,6 +74,13 @@ DWORD WINAPI ProcessId(HANDLE handle) {
   boundary.error = ERROR_INVALID_HANDLE;
   return handle == reinterpret_cast<HANDLE>(5) ? 61 : boundary.handler_pid;
 }
+BOOL WINAPI ProcessTimes(HANDLE handle, FILETIME* creation, FILETIME*, FILETIME*, FILETIME*) {
+  boundary.error = boundary.birth_error;
+  creation->dwHighDateTime = 0;
+  creation->dwLowDateTime = boundary.zero_birth ? 0 :
+      (handle == reinterpret_cast<HANDLE>(5) ? 101 : 202);
+  return boundary.birth_error == ERROR_SUCCESS;
+}
 BOOL WINAPI Mode(HANDLE, DWORD*, DWORD*, DWORD*) { return TRUE; }
 HANDLE WINAPI Event(LPSECURITY_ATTRIBUTES, BOOL, BOOL, LPCWSTR) { return reinterpret_cast<HANDLE>(2); }
 BOOL WINAPI Transact(HANDLE, void*, DWORD, void*, DWORD, DWORD* transferred, OVERLAPPED*) {
@@ -77,16 +88,16 @@ BOOL WINAPI Transact(HANDLE, void*, DWORD, void*, DWORD, DWORD* transferred, OVE
   if (boundary.late_result) boundary.now = 60100;
   *transferred = sizeof(crashpad::ServerToClientMessage); return TRUE;
 }
-const sugarsubstitute::RegistrationApi api = {&Counter, &Close, &LastError,
+const sugarsubstitute::ConnectionApi api = {&Counter, &Close, &LastError,
     &SetError, &Cancel, &Wait, &Result, &Open, &ServerId,
-    &ProcessId, &Mode, &Event, &Transact};
+    &ProcessId, &Mode, &Event, &Transact, &ProcessTimes};
 sugarsubstitute::OwnedStart Owner(bool pending) {
   sugarsubstitute::OwnedStart owner;
-  owner.api = &api; owner.frequency = 1000; owner.deadline_counter = 60100;
+  owner.connection.boundary = &api; owner.connection.frequency = 1000; owner.connection.deadline_counter = 60100;
   owner.process = reinterpret_cast<HANDLE>(4);
   if (pending) {
-    owner.pending = true; owner.pipe = reinterpret_cast<HANDLE>(1);
-    owner.event = reinterpret_cast<HANDLE>(2); owner.initial_pipe = reinterpret_cast<HANDLE>(3);
+    owner.connection.pending = true; owner.connection.pipe = reinterpret_cast<HANDLE>(1);
+    owner.connection.event = reinterpret_cast<HANDLE>(2); owner.initial_pipe = reinterpret_cast<HANDLE>(3);
   }
   return owner;
 }
@@ -106,55 +117,55 @@ bool Check(bool condition, const char* name) {
 bool UnknownQueryRetains() {
   boundary = {}; boundary.result_error = ERROR_INVALID_HANDLE;
   auto owner = Owner(true);
-  if (!Check(!sugarsubstitute::RetireRegistration(&owner) && owner.pending &&
-      boundary.close_calls == 0 && owner.cleanup_count == 1 &&
-      owner.cleanup_codes[0] == ERROR_INVALID_HANDLE, "unknown-query-retains")) return false;
+  if (!Check(!sugarsubstitute::RetireRegistration(&owner) && owner.connection.pending &&
+      boundary.close_calls == 0 && owner.connection.cleanup_count == 1 &&
+      owner.connection.cleanup_codes[0] == ERROR_INVALID_HANDLE, "unknown-query-retains")) return false;
   boundary.result_error = ERROR_OPERATION_ABORTED;
-  return Check(sugarsubstitute::RetireRegistration(&owner) && !owner.pending &&
+  return Check(sugarsubstitute::RetireRegistration(&owner) && !owner.connection.pending &&
       boundary.close_calls == 3, "actual-abort-retires");
 }
 bool IncompleteQueryRetains() {
   boundary = {}; boundary.result_error = ERROR_IO_INCOMPLETE;
   auto owner = Owner(true);
-  return Check(!sugarsubstitute::RetireRegistration(&owner) && owner.pending &&
-      !owner.cleanup_count && !boundary.close_calls, "incomplete-retains");
+  return Check(!sugarsubstitute::RetireRegistration(&owner) && owner.connection.pending &&
+      !owner.connection.cleanup_count && !boundary.close_calls, "incomplete-retains");
 }
 bool CancelRaceNeedsCompletion() {
   boundary = {}; auto owner = Owner(true);
-  return Check(sugarsubstitute::RetireRegistration(&owner) && !owner.pending &&
+  return Check(sugarsubstitute::RetireRegistration(&owner) && !owner.connection.pending &&
       boundary.result_calls == 1 && boundary.close_calls == 3, "not-found-queries-real-completion");
 }
 bool UnsignalledDoesNotQuery() {
   boundary = {}; boundary.wait_result = WAIT_TIMEOUT; auto owner = Owner(true);
-  return Check(!sugarsubstitute::RetireRegistration(&owner) && owner.pending &&
+  return Check(!sugarsubstitute::RetireRegistration(&owner) && owner.connection.pending &&
       !boundary.result_calls && !boundary.close_calls, "unsignalled-retains");
 }
 bool CloseErrorsBounded() {
   boundary = {}; boundary.cancel_error = ERROR_ACCESS_DENIED;
   boundary.close_error = ERROR_SHARING_VIOLATION; auto owner = Owner(true);
   for (int i = 0; i < 3; ++i) if (sugarsubstitute::RetireRegistration(&owner)) return false;
-  return Check(!owner.pending && owner.pipe != INVALID_HANDLE_VALUE && owner.event &&
-      owner.initial_pipe && owner.cleanup_error == ERROR_ACCESS_DENIED &&
-      owner.cleanup_count == 8 && owner.omitted_cleanup == 2,
+  return Check(!owner.connection.pending && owner.connection.pipe != INVALID_HANDLE_VALUE && owner.connection.event &&
+      owner.initial_pipe && owner.connection.cleanup_error == ERROR_ACCESS_DENIED &&
+      owner.connection.cleanup_count == 8 && owner.connection.omitted_cleanup == 2,
       "failed-closures-retain-first-and-bounded-secondary");
 }
 bool DeadlineBeforeIssue() {
   boundary = {}; auto owner = PreparedOwner();
   boundary.counter_calls = 0; boundary.late_issue = true;
   return Check(!sugarsubstitute::ConfirmHandler(&owner) && !owner.completed &&
-      owner.error == ERROR_TIMEOUT && !boundary.transaction_calls,
+      owner.connection.error == ERROR_TIMEOUT && !boundary.transaction_calls,
       "original-deadline-before-issue");
 }
 bool DeadlineBeforeSuccess() {
   boundary = {}; auto owner = PreparedOwner(); boundary.late_result = true;
   return Check(!sugarsubstitute::ConfirmHandler(&owner) && !owner.completed &&
-      owner.error == ERROR_TIMEOUT && boundary.transaction_calls == 1,
+      owner.connection.error == ERROR_TIMEOUT && boundary.transaction_calls == 1,
       "late-registration-not-healthy");
 }
 bool MatchingEndpointRequired() {
   boundary = {}; boundary.server_pid = 72; auto owner = PreparedOwner();
-  return Check(!owner.prepared && owner.pipe != INVALID_HANDLE_VALUE &&
-      owner.error == ERROR_ACCESS_DENIED && !boundary.transaction_calls,
+  return Check(!owner.prepared && owner.connection.pipe != INVALID_HANDLE_VALUE &&
+      owner.connection.error == ERROR_ACCESS_DENIED && !boundary.transaction_calls,
       "foreign-connected-instance-retained-without-authorization");
 }
 bool InheritedCreatorSucceeds() {
@@ -167,78 +178,201 @@ bool InheritedCreatorSucceeds() {
 }
 bool ForeignInitialCreatorRejected() {
   boundary = {}; boundary.initial_pid = 72; auto owner = PreparedOwner();
-  return Check(!owner.prepared && owner.error == ERROR_ACCESS_DENIED &&
+  return Check(!owner.prepared && owner.connection.error == ERROR_ACCESS_DENIED &&
       boundary.open_calls == 0 && !boundary.transaction_calls,
       "foreign-original-server-rejected-before-open");
 }
 bool MissingPreparationRejected() {
   boundary = {}; auto owner = Owner(false);
   return Check(!sugarsubstitute::ConfirmHandler(&owner) &&
-      owner.error == ERROR_INVALID_STATE && !boundary.open_calls &&
+      owner.connection.error == ERROR_INVALID_STATE && !boundary.open_calls &&
       !boundary.transaction_calls, "unprepared-confirmation-cannot-discover-server");
 }
 bool DuplicatePreparationRejected() {
   boundary = {}; auto owner = PreparedOwner(); owner.process = nullptr;
   return Check(!sugarsubstitute::PrepareInheritedRegistration(L"other", &owner) &&
-      owner.prepared && owner.error == ERROR_INVALID_STATE && boundary.open_calls == 1,
+      owner.prepared && owner.connection.error == ERROR_INVALID_STATE && boundary.open_calls == 1,
       "duplicate-preparation-retains-original-capability");
 }
 bool MissingOriginalCapabilityRejected() {
   boundary = {}; auto owner = Owner(false); owner.process = nullptr;
   return Check(!sugarsubstitute::PrepareInheritedRegistration(L"fake", &owner) &&
-      owner.error == ERROR_INVALID_STATE && !boundary.open_calls,
+      owner.connection.error == ERROR_INVALID_STATE && !boundary.open_calls,
       "missing-original-capability-rejected");
 }
 bool CreatorQueryFailureRejected() {
   boundary = {}; boundary.server_query_failed = true; auto owner = PreparedOwner();
-  return Check(!owner.prepared && owner.error == ERROR_INVALID_HANDLE &&
+  return Check(!owner.prepared && owner.connection.error == ERROR_INVALID_HANDLE &&
       !boundary.open_calls, "unknown-creator-rejected");
 }
 bool BusyInitialInstanceRejected() {
   boundary = {}; boundary.open_error = ERROR_PIPE_BUSY; auto owner = PreparedOwner();
-  return Check(!owner.prepared && owner.error == ERROR_PIPE_BUSY &&
+  return Check(!owner.prepared && owner.connection.error == ERROR_PIPE_BUSY &&
       boundary.open_calls == 1, "busy-original-instance-does-not-retry-other-instance");
 }
 bool ExpiredPreparationRejected() {
   boundary = {}; boundary.now = 60100; auto owner = PreparedOwner();
-  return Check(!owner.prepared && owner.error == ERROR_TIMEOUT &&
+  return Check(!owner.prepared && owner.connection.error == ERROR_TIMEOUT &&
       !boundary.open_calls, "expired-preparation-does-not-open");
 }
 bool LatePreparationRetains() {
   boundary = {}; boundary.late_issue = true; auto owner = PreparedOwner();
-  return Check(!owner.prepared && owner.error == ERROR_TIMEOUT &&
-      owner.pipe != INVALID_HANDLE_VALUE && !boundary.transaction_calls,
+  return Check(!owner.prepared && owner.connection.error == ERROR_TIMEOUT &&
+      owner.connection.pipe != INVALID_HANDLE_VALUE && !boundary.transaction_calls,
       "late-preparation-retains-endpoint-without-authorizing-launch");
 }
 bool HandlerQueryFailureRejected() {
   boundary = {}; auto owner = PreparedOwner(); boundary.handler_pid = 0;
   return Check(!sugarsubstitute::ConfirmHandler(&owner) &&
-      owner.error == ERROR_INVALID_HANDLE && !boundary.transaction_calls,
+      owner.connection.error == ERROR_INVALID_HANDLE && !boundary.transaction_calls,
       "unknown-handler-process-rejected");
 }
 bool CreatorCannotBeHandler() {
   boundary = {}; auto owner = PreparedOwner(); boundary.handler_pid = 61;
   return Check(!sugarsubstitute::ConfirmHandler(&owner) &&
-      owner.error == ERROR_ACCESS_DENIED && !boundary.transaction_calls,
+      owner.connection.error == ERROR_ACCESS_DENIED && !boundary.transaction_calls,
       "coordinator-handle-cannot-substitute-handler");
 }
 bool HandlerWaitFailureRejected() {
   boundary = {}; auto owner = PreparedOwner(); boundary.before_process_wait = WAIT_FAILED;
   return Check(!sugarsubstitute::ConfirmHandler(&owner) &&
-      owner.error == ERROR_INVALID_HANDLE && !boundary.transaction_calls,
+      owner.connection.error == ERROR_INVALID_HANDLE && !boundary.transaction_calls,
       "unknown-handler-liveness-rejected");
 }
 bool ExitedHandlerRejected() {
   boundary = {}; auto owner = PreparedOwner(); boundary.before_process_wait = WAIT_OBJECT_0;
   return Check(!sugarsubstitute::ConfirmHandler(&owner) &&
-      owner.error == ERROR_PROCESS_ABORTED && !boundary.transaction_calls,
+      owner.connection.error == ERROR_PROCESS_ABORTED && !boundary.transaction_calls,
       "already-exited-handler-does-not-issue");
 }
 bool LateHandlerExitRejected() {
   boundary = {}; auto owner = PreparedOwner(); boundary.after_process_wait = WAIT_OBJECT_0;
   return Check(!sugarsubstitute::ConfirmHandler(&owner) && !owner.completed &&
-      owner.error == ERROR_PROCESS_ABORTED && boundary.transaction_calls == 1 &&
+      owner.connection.error == ERROR_PROCESS_ABORTED && boundary.transaction_calls == 1 &&
       !boundary.close_calls, "handler-exits-before-response-publication-retains-custody");
+}
+bool BorrowedEventIsNotClosed() {
+  boundary = {};
+  auto owner = Owner(true);
+  owner.initial_pipe = nullptr;
+  owner.connection.event_custody = sugarsubstitute::EventCustody::Borrowed;
+  return Check(owner.connection.Retire(nullptr) && !owner.connection.pending &&
+      owner.connection.pipe == INVALID_HANDLE_VALUE && !owner.connection.event &&
+      boundary.close_calls == 1 && !boundary.event_closes,
+      "actual-borrowed-completion-event-is-not-owned-close-authority");
+}
+bool BorrowedPendingStorageSurvives() {
+  boundary = {}; boundary.result_error = ERROR_IO_INCOMPLETE;
+  auto owner = Owner(true);
+  owner.connection.event_custody = sugarsubstitute::EventCustody::Borrowed;
+  if (!Check(!owner.connection.Retire(nullptr) && owner.connection.pending &&
+      owner.connection.pipe == reinterpret_cast<HANDLE>(1) &&
+      owner.connection.event == reinterpret_cast<HANDLE>(2) && !boundary.close_calls,
+      "borrowed-event-and-original-overlapped-survive-incomplete-result")) return false;
+  boundary.result_error = ERROR_OPERATION_ABORTED;
+  return Check(owner.connection.Retire(nullptr) && !owner.connection.pending &&
+      boundary.result_calls == 2 && boundary.close_calls == 1 && !boundary.event_closes,
+      "actual-late-abort-releases-borrow-without-closing-external-event");
+}
+bool ConnectionFailedCloseRetains() {
+  boundary = {}; boundary.close_error = ERROR_SHARING_VIOLATION;
+  auto owner = Owner(true);
+  owner.connection.event_custody = sugarsubstitute::EventCustody::Borrowed;
+  if (!Check(!owner.connection.Retire(nullptr) && !owner.connection.pending &&
+      owner.connection.pipe == reinterpret_cast<HANDLE>(1) &&
+      owner.connection.cleanup_error == ERROR_SHARING_VIOLATION &&
+      owner.connection.cleanup_count == 1 && !boundary.event_closes,
+      "connection-failed-checked-close-retains-exact-pipe-and-first-cause")) return false;
+  boundary.close_error = ERROR_SUCCESS;
+  return Check(owner.connection.Retire(nullptr) && owner.connection.pipe == INVALID_HANDLE_VALUE &&
+      owner.connection.cleanup_error == ERROR_SHARING_VIOLATION &&
+      owner.connection.cleanup_count == 1 && boundary.close_calls == 2,
+      "actual-late-close-never-rewrites-original-cleanup-cause");
+}
+bool SubMillisecondBudgetNeverRoundsUp() {
+  boundary = {};
+  auto owner = Owner(false);
+  owner.connection.frequency = 1000000;
+  owner.connection.deadline_counter = 101;
+  return Check(!owner.connection.CheckDeadline() && owner.connection.error == ERROR_TIMEOUT &&
+      !boundary.transaction_calls && !boundary.open_calls,
+      "original-positive-sub-millisecond-tail-does-not-renew-budget");
+}
+bool CreatorBirthFailureBeforeOpen() {
+  boundary = {}; boundary.birth_error = ERROR_ACCESS_DENIED;
+  auto owner = PreparedOwner();
+  return Check(!owner.prepared && owner.connection.error == ERROR_ACCESS_DENIED &&
+      !owner.creator_birth && !boundary.open_calls && !boundary.transaction_calls,
+      "unknown-creator-birth-rejects-before-endpoint-open");
+}
+bool ZeroCreatorBirthRejected() {
+  boundary = {}; boundary.zero_birth = true;
+  auto owner = PreparedOwner();
+  return Check(!owner.prepared && owner.connection.error == ERROR_INVALID_DATA &&
+      !owner.creator_birth && !boundary.open_calls,
+      "zero-creator-birth-is-not-source-provenance");
+}
+bool HandlerBirthFailureBeforeIssue() {
+  boundary = {}; auto owner = PreparedOwner();
+  boundary.birth_error = ERROR_ACCESS_DENIED;
+  return Check(!sugarsubstitute::ConfirmHandler(&owner) &&
+      owner.connection.error == ERROR_ACCESS_DENIED && !owner.handler_birth &&
+      !boundary.transaction_calls && owner.connection.pipe != INVALID_HANDLE_VALUE,
+      "unknown-handler-birth-retains-original-capability-before-issue");
+}
+bool ZeroHandlerBirthRejected() {
+  boundary = {}; auto owner = PreparedOwner(); boundary.zero_birth = true;
+  return Check(!sugarsubstitute::ConfirmHandler(&owner) &&
+      owner.connection.error == ERROR_INVALID_DATA && !owner.handler_birth &&
+      !boundary.transaction_calls, "zero-handler-birth-is-not-source-provenance");
+}
+bool OriginalBirthFactsSurviveRetirement() {
+  boundary = {}; auto owner = PreparedOwner();
+  return Check(sugarsubstitute::ConfirmHandler(&owner) &&
+      owner.creator_pid == 61 && owner.handler_pid == 71 &&
+      owner.creator_birth == 101 && owner.handler_birth == 202 &&
+      !owner.bootstrap_process && !owner.initial_pipe &&
+      owner.connection.pipe == INVALID_HANDLE_VALUE && !owner.connection.event,
+      "actual-source-birth-facts-survive-checked-bootstrap-retirement");
+}
+bool PriorFailureStopsDeadlineWithoutNativeObservation() {
+  boundary = {}; auto owner = Owner(false);
+  owner.connection.Fail(ERROR_ACCESS_DENIED);
+  const DWORD thread_error = boundary.error;
+  return Check(!owner.connection.CheckDeadline() && !boundary.counter_calls &&
+      boundary.error == thread_error && owner.connection.error == ERROR_ACCESS_DENIED,
+      "previously-failed-owner-cannot-renew-deadline-observation");
+}
+bool PriorFailureStopsPreparationBeforeOpen() {
+  boundary = {}; auto owner = Owner(false);
+  owner.process = nullptr;
+  owner.initial_pipe = reinterpret_cast<HANDLE>(3);
+  owner.bootstrap_process = reinterpret_cast<HANDLE>(5);
+  owner.connection.Fail(ERROR_ACCESS_DENIED);
+  return Check(!sugarsubstitute::PrepareInheritedRegistration(L"fake", &owner) &&
+      !boundary.counter_calls && !boundary.open_calls && !boundary.transaction_calls &&
+      owner.connection.error == ERROR_ACCESS_DENIED,
+      "previously-failed-v1-owner-preparation-has-zero-new-effects");
+}
+bool PriorFailureStopsConfirmationBeforeIssue() {
+  boundary = {}; auto owner = PreparedOwner();
+  owner.connection.Fail(ERROR_ACCESS_DENIED);
+  const int original_counters = boundary.counter_calls;
+  return Check(!sugarsubstitute::ConfirmHandler(&owner) &&
+      boundary.counter_calls == original_counters && !boundary.transaction_calls &&
+      owner.connection.error == ERROR_ACCESS_DENIED,
+      "previously-failed-v1-owner-confirmation-keeps-original-first-cause");
+}
+bool LegacyV1CleanupStillClosesAfterMainDeadline() {
+  boundary = {}; auto owner = Owner(true);
+  owner.connection.pending = false;
+  owner.connection.Fail(ERROR_ACCESS_DENIED);
+  boundary.now = owner.connection.deadline_counter;
+  return Check(owner.connection.Retire(nullptr) &&
+      owner.connection.pipe == INVALID_HANDLE_VALUE && !owner.connection.event &&
+      boundary.close_calls == 2 && !boundary.counter_calls &&
+      owner.connection.error == ERROR_ACCESS_DENIED,
+      "public-v1-cleanup-after-main-expiry-preserves-existing-behavior");
 }
 }  // namespace
 int main() {
@@ -251,7 +385,14 @@ int main() {
       CreatorQueryFailureRejected() && BusyInitialInstanceRejected() &&
       ExpiredPreparationRejected() && LatePreparationRetains() &&
       HandlerQueryFailureRejected() && CreatorCannotBeHandler() &&
-      HandlerWaitFailureRejected() && ExitedHandlerRejected() && LateHandlerExitRejected();
-  if (passed) std::puts("22 CPU-only production-registration boundary cases PASS; no native calls");
+      HandlerWaitFailureRejected() && ExitedHandlerRejected() && LateHandlerExitRejected() &&
+      BorrowedEventIsNotClosed() && BorrowedPendingStorageSurvives() &&
+      ConnectionFailedCloseRetains() && SubMillisecondBudgetNeverRoundsUp() &&
+      CreatorBirthFailureBeforeOpen() && ZeroCreatorBirthRejected() &&
+      HandlerBirthFailureBeforeIssue() && ZeroHandlerBirthRejected() &&
+      OriginalBirthFactsSurviveRetirement() && PriorFailureStopsDeadlineWithoutNativeObservation() &&
+      PriorFailureStopsPreparationBeforeOpen() && PriorFailureStopsConfirmationBeforeIssue() &&
+      LegacyV1CleanupStillClosesAfterMainDeadline();
+  if (passed) std::puts("35 CPU-only production-registration/connection boundary cases PASS; no native calls");
   return passed ? 0 : 1;
 }

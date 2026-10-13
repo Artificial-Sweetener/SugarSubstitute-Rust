@@ -42,7 +42,9 @@ pub(crate) enum ConfigurationCause {
 }
 impl fmt::Debug for ConfigurationCause {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("ConfigurationCause { retained, redacted }")
+        f.debug_struct("ConfigurationCause")
+            .field("post_control", &self.post_control())
+            .finish_non_exhaustive()
     }
 }
 impl fmt::Display for ConfigurationCause {

@@ -12,7 +12,7 @@ mod preparation;
 mod stages;
 pub use preparation::{
     PreparationError, SPLASH_CACHE_RESERVATION_BYTES, SplashInitializationTask,
-    SplashPreparationResult, SplashRenderRequest, SplashRenderTask,
+    SplashPreparationResult, SplashRenderRequest, SplashRenderTask, TranscriptView,
 };
 use sugarsubstitute_contracts::localization::messages;
 use tiny_skia::Pixmap;
@@ -145,7 +145,11 @@ impl SplashRenderer {
         SplashInitializationTask::new(locale, lease)
     }
     /// Move this exclusive renderer into a resumable preparation job without doing raster work.
-    pub fn prepare(self, request: SplashRenderRequest, lease: MemoryLease) -> SplashRenderTask {
+    pub fn prepare<T: crate::TranscriptView>(
+        self,
+        request: SplashRenderRequest<T>,
+        lease: MemoryLease,
+    ) -> SplashRenderTask<T> {
         SplashRenderTask::new(self, request, lease)
     }
 

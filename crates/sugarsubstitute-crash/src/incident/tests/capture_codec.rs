@@ -4,7 +4,7 @@
 use super::*;
 use serde_json::{Value, json};
 
-fn capture_plan(discarded: bool) -> Result<CaptureDispositionPlan, Box<dyn Error>> {
+pub(super) fn capture_plan(discarded: bool) -> Result<CaptureDispositionPlan, Box<dyn Error>> {
     let source = CaptureRecordedFileFacts::new([3; 24], [3; 32], 512)?;
     let summary = CaptureRecordedFileFacts::new([8; 24], [8; 32], 64)?;
     Ok(CaptureDispositionPlan::new(

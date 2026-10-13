@@ -45,8 +45,16 @@ impl SourcePort for SystemPort {
             return Err(FrontendSourceError::invalid("cube_extension_directory_name"));
         }
         let script = pin(&input.script, false, retained, context)?;
-        manifest.script = paths::final_path(&retained.handles[script])
-            .map_err(|e| FrontendSourceError::new("backend_script_path", e))?;
+        manifest.script = paths::final_path(
+            &retained.handles[script],
+            &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+                &retained.handles[script].budget(),
+            )
+            .map_err(|cause| FrontendSourceError::new("source_native_phase", cause))?,
+            crate::protected_storage::native_name::NativeNameDestination::Ordinary,
+        )
+        .and_then(crate::protected_storage::native_name::NativeName::into_ordinary)
+        .map_err(|e| FrontendSourceError::new("backend_script_path", e))?;
         let length = file_size(script, MAX_FRONTEND_ASSET_BYTES, retained, context)?;
         let mut digest = Sha256::new();
         if stream(script, retained, context, |chunk| {
@@ -117,17 +125,42 @@ fn pin(
         false,
         Budget::Protected(retained.claim.clone()),
         &mut retained.handles,
+        &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+            &(Budget::Protected(retained.claim.clone())),
+        )
+        .map_err(|cause| FrontendSourceError::new("source_native_phase", cause))?,
     )
     .map_err(|e| FrontendSourceError::new("source_open", e))?;
     checkpoint(context)?;
     if !directory {
-        paths::validate_regular(&retained.handles[index], None)
-            .map_err(|e| FrontendSourceError::new("source_regular_file", e))?;
+        paths::validate_regular(
+            &retained.handles[index],
+            None,
+            &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+                &retained.handles[index].budget(),
+            )
+            .map_err(|cause| FrontendSourceError::new("source_native_phase", cause))?,
+        )
+        .map_err(|e| FrontendSourceError::new("source_regular_file", e))?;
     }
-    let canonical = paths::final_path(&retained.handles[index])
-        .map_err(|e| FrontendSourceError::new("source_canonical", e))?;
-    let identity = paths::file_identity(&retained.handles[index])
-        .map_err(|e| FrontendSourceError::new("source_identity", e))?;
+    let canonical = paths::final_path(
+        &retained.handles[index],
+        &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+            &retained.handles[index].budget(),
+        )
+        .map_err(|cause| FrontendSourceError::new("source_native_phase", cause))?,
+        crate::protected_storage::native_name::NativeNameDestination::Ordinary,
+    )
+    .and_then(crate::protected_storage::native_name::NativeName::into_ordinary)
+    .map_err(|e| FrontendSourceError::new("source_canonical", e))?;
+    let identity = paths::file_identity(
+        &retained.handles[index],
+        &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+            &retained.handles[index].budget(),
+        )
+        .map_err(|cause| FrontendSourceError::new("source_native_phase", cause))?,
+    )
+    .map_err(|e| FrontendSourceError::new("source_identity", e))?;
     checkpoint(context)?;
     paths::verify_pinned(
         &canonical,
@@ -135,6 +168,10 @@ fn pin(
         &mut retained.handles,
         directory,
         Budget::Protected(retained.claim.clone()),
+        &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+            &(Budget::Protected(retained.claim.clone())),
+        )
+        .map_err(|cause| FrontendSourceError::new("source_native_phase", cause))?,
     )
     .map_err(|e| FrontendSourceError::new("source_verify_chain", e))?;
     checkpoint(context)?;
@@ -146,22 +183,37 @@ fn pin_directory(
     context: &JobContext,
 ) -> Result<PathBuf, FrontendSourceError> {
     let index = pin(path, true, retained, context)?;
-    let canonical = paths::final_path(&retained.handles[index])
-        .map_err(|e| FrontendSourceError::new("source_directory_path", e))?;
+    let canonical = paths::final_path(
+        &retained.handles[index],
+        &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+            &retained.handles[index].budget(),
+        )
+        .map_err(|cause| FrontendSourceError::new("source_native_phase", cause))?,
+        crate::protected_storage::native_name::NativeNameDestination::Ordinary,
+    )
+    .and_then(crate::protected_storage::native_name::NativeName::into_ordinary)
+    .map_err(|e| FrontendSourceError::new("source_directory_path", e))?;
     checkpoint(context)?;
-    for ancestor in paths::ancestor_paths(&canonical)
-        .map_err(|e| FrontendSourceError::new("source_directory_ancestor_shape", e))?
-    {
+    for ancestor in paths::ancestor_paths(&canonical).map_err(|operation| {
+        FrontendSourceError::new(
+            "source_directory_ancestor_shape",
+            crate::ClaimError::invalid(operation),
+        )
+    })? {
         checkpoint(context)?;
         if retained.handles.len() >= 16384 {
             return Err(FrontendSourceError::invalid("source_handle_inventory"));
         }
         paths::open_retained(
-            &ancestor,
+            ancestor,
             true,
             true,
             Budget::Protected(retained.claim.clone()),
             &mut retained.handles,
+            &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+                &(Budget::Protected(retained.claim.clone())),
+            )
+            .map_err(|cause| FrontendSourceError::new("source_native_phase", cause))?,
         )
         .map_err(|e| FrontendSourceError::new("source_directory_ancestors", e))?;
         checkpoint(context)?;
@@ -295,8 +347,14 @@ fn inventory(
                     if observed != bytes {
                         return Err(FrontendSourceError::invalid("source_asset_changed_length"));
                     }
-                    let identity = paths::file_identity(&retained.handles[index])
-                        .map_err(|e| FrontendSourceError::new("source_asset_identity", e))?;
+                    let identity = paths::file_identity(
+                        &retained.handles[index],
+                        &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+                            &retained.handles[index].budget(),
+                        )
+                        .map_err(|cause| FrontendSourceError::new("source_native_phase", cause))?,
+                    )
+                    .map_err(|e| FrontendSourceError::new("source_asset_identity", e))?;
                     checkpoint(context)?;
                     super::manifest::enroll(
                         manifest,

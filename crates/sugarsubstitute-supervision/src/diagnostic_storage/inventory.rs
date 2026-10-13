@@ -65,6 +65,7 @@ impl ObservedEntry {
 pub(crate) struct Scan {
     pub(crate) entries: Vec<ObservedEntry>,
     pub(crate) complete: bool,
+    pub(crate) _native_retention: Option<allocation::DiagnosticNativeScanRetention>,
 }
 
 /// A constructor-private observation tied to the actual retained protected directory.
@@ -115,6 +116,7 @@ pub struct DiagnosticInventory {
     summary_slots: usize,
     unknown_entries: usize,
     payload_groups: usize,
+    _allocation: allocation::DiagnosticAllocationLoan,
 }
 impl DiagnosticInventory {
     /// Borrow immutable observations while their protected directory remains retained.
@@ -159,27 +161,39 @@ impl DiagnosticStorage {
         context: &JobContext,
     ) -> Result<DiagnosticInventory, DiagnosticStorageError> {
         let mut state = self.check(operation, context)?;
-        if state.migration.is_some() || state.payload.is_some() {
+        if state.data_mut()?.migration.is_some() || state.data_mut()?.payload.is_some() {
             return Err(error(operation.key, Code::Busy));
         }
-        state.inventory_complete = false;
-        let namespace = state.namespace.ok_or_else(|| error(operation.key, Code::Closed))?;
+        state.data_mut()?.inventory_complete = false;
+        let namespace =
+            state.data_mut()?.namespace.ok_or_else(|| error(operation.key, Code::Closed))?;
+        let inventory_allocation =
+            allocation::inventory(&state.data_mut()?.allocation, operation.key)?;
+        let scan_allocation =
+            allocation::scan_binding(&state.data_mut()?.allocation, operation.key)?;
         let scan = state
-            .port
-            .scan(context)
+            .call_native(|port| port.scan(context))?
             .map_err(|cause| native(operation.key, Code::InventoryIncomplete, cause))?;
         if scan.entries.len() > DIAGNOSTIC_SCAN_BOUND {
             return Err(error(operation.key, Code::InventoryIncomplete));
         }
-        state.scan_generation = state
+        state.data_mut()?.scan_generation = state
+            .data_mut()?
             .scan_generation
             .checked_add(1)
             .ok_or_else(|| error(operation.key, Code::Capacity))?;
-        state.scan_entries.clear();
-        state.scan_entries.try_reserve_exact(scan.entries.len()).map_err(|cause| {
-            native(operation.key, Code::Capacity, ClaimError::new("diagnostic_scan_binding", cause))
-        })?;
-        state.scan_entries.extend(scan.entries.iter().cloned());
+        let reservation =
+            allocation::reservation(&state.data_mut()?.allocation, Some(operation.key))?;
+        let mut scan_entries = Vec::new();
+        scan_entries
+            .try_reserve_exact(DIAGNOSTIC_SCAN_BOUND)
+            .map_err(|cause| reservation.failed(cause))?;
+        if scan_entries.capacity() != DIAGNOSTIC_SCAN_BOUND {
+            return Err(error(operation.key, Code::Capacity));
+        }
+        scan_entries.extend(scan.entries.iter().cloned());
+        let reservation =
+            allocation::reservation(&state.data_mut()?.allocation, Some(operation.key))?;
         let mut result = DiagnosticInventory {
             entries: Vec::new(),
             status: DiagnosticInventoryStatus::Incomplete,
@@ -188,35 +202,36 @@ impl DiagnosticStorage {
             summary_slots: 0,
             unknown_entries: 0,
             payload_groups: 0,
+            _allocation: inventory_allocation,
         };
-        result.entries.try_reserve_exact(scan.entries.len()).map_err(|cause| {
-            native(
-                operation.key,
-                Code::Capacity,
-                ClaimError::new("diagnostic_inventory_reservation", cause),
-            )
-        })?;
+        result
+            .entries
+            .try_reserve_exact(DIAGNOSTIC_SCAN_BOUND)
+            .map_err(|cause| reservation.failed(cause))?;
+        if result.entries.capacity() != DIAGNOSTIC_SCAN_BOUND {
+            return Err(error(operation.key, Code::Capacity));
+        }
         let mut complete = scan.complete;
+        let reservation =
+            allocation::reservation(&state.data_mut()?.allocation, Some(operation.key))?;
         let mut groups = Vec::new();
         let mut seeds = Vec::new();
         let mut summaries = Vec::new();
         seeds
             .try_reserve_exact(DIAGNOSTIC_SCAN_BOUND)
             .and_then(|()| summaries.try_reserve_exact(DIAGNOSTIC_SCAN_BOUND))
-            .map_err(|cause| {
-                native(
-                    operation.key,
-                    Code::Capacity,
-                    ClaimError::new("diagnostic_slot_reservation", cause),
-                )
-            })?;
-        groups.try_reserve_exact(DIAGNOSTIC_SCAN_BOUND).map_err(|cause| {
-            native(
-                operation.key,
-                Code::Capacity,
-                ClaimError::new("diagnostic_group_reservation", cause),
-            )
-        })?;
+            .map_err(|cause| reservation.failed(cause))?;
+        let reservation =
+            allocation::reservation(&state.data_mut()?.allocation, Some(operation.key))?;
+        groups
+            .try_reserve_exact(DIAGNOSTIC_SCAN_BOUND)
+            .map_err(|cause| reservation.failed(cause))?;
+        if groups.capacity() != DIAGNOSTIC_SCAN_BOUND
+            || seeds.capacity() != DIAGNOSTIC_SCAN_BOUND
+            || summaries.capacity() != DIAGNOSTIC_SCAN_BOUND
+        {
+            return Err(error(operation.key, Code::Capacity));
+        }
         for observed in scan.entries {
             if let Some(group) = observed.payload_group
                 && !groups.contains(&group)
@@ -263,13 +278,19 @@ impl DiagnosticStorage {
             && result.summary_slots <= sugarsubstitute_contracts::incident::MAX_SUMMARIES
             && result.payload_bytes <= sugarsubstitute_contracts::incident::MAX_PAYLOAD_BYTES;
         check(&mut state, operation.key, context, false)?;
-        state.inventory_complete = complete;
+        state.data_mut()?.inventory_complete = complete;
+        state.data_mut()?.scan_entries = scan_entries;
         if complete {
-            state.charged_bytes = result.payload_bytes;
-            state.payload_groups = groups;
-            state.seeds = seeds;
-            state.summaries = summaries;
+            state.data_mut()?.charged_bytes = result.payload_bytes;
+            state.data_mut()?.payload_groups = groups;
+            state.data_mut()?.seeds = seeds;
+            state.data_mut()?.summaries = summaries;
+        } else {
+            drop(groups);
+            drop(seeds);
+            drop(summaries);
         }
+        state.data_mut()?._scan_allocation = Some(scan_allocation);
         if complete {
             result.status = DiagnosticInventoryStatus::Complete;
         }

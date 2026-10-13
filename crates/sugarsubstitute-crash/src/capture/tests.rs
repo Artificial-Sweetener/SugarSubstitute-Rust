@@ -14,13 +14,14 @@ use sugarsubstitute_contracts::execution::*;
 use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner, windows::NativeCorrelation};
 
 mod clock;
-mod support;
+pub(crate) mod support;
 use support::*;
 
 mod attach_tests;
 mod deadline_tests;
 mod loan_tests;
 mod registered_tests;
+mod start_panic_tests;
 mod stop_panic_tests;
 
 #[test]
@@ -32,11 +33,7 @@ fn inert_owner_and_input_reject_unbounded_capacities_and_private_diagnostics() -
     assert!(
         CaptureStartInput::new(
             path,
-            r"E:\private\handler.exe".into(),
-            r"D:\private\capture-root".into(),
-            [0; 32],
-            [0; 32],
-            "build"
+            sugarsubstitute_supervision::InstalledReleaseOwner::new().capture_selection()
         )
         .is_err()
     );
@@ -72,7 +69,8 @@ fn future_budget_rejects_before_native_or_watch_consumption() -> TestResult {
         .ok_or("Future budget accepted")?;
     let (reason, watch, recovered) = rejection.into_parts()?;
     assert!(matches!(reason, CrashAdmissionError::InvalidSpecification));
-    assert_eq!(recovered.build, "test-build");
+    assert_eq!(recovered.capture_root, std::path::PathBuf::from(r"D:\capture\root"));
+    assert!(recovered.selection.is_some());
     assert_eq!(port.created.load(Ordering::Acquire), 0);
     assert_eq!(rig.native_scope.snapshot().terminal_unobserved, 0);
     let mut retired = watch.cancel_unbound();

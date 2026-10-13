@@ -4,9 +4,35 @@
 use super::{ArgumentRefs, ProtocolError, Utf16Text};
 use std::{num::NonZeroU16, path::PathBuf};
 use sugarsubstitute_contracts::{
-    configuration::{LaunchConfiguration, LoopbackHost, LoopbackOrigin},
+    configuration::{ConnectionConfiguration, LaunchConfiguration, LoopbackHost, LoopbackOrigin},
     lifecycle::BackendTarget,
 };
+
+/// Borrow the already validated configured or acquired backend without cloning its storage.
+/// This inert view grants no listener, process, readiness or filesystem authority.
+#[derive(Clone, Copy, Debug)]
+pub enum BorrowedBackendTarget<'a> {
+    /// Borrow the exact validated managed launch paths and argument allocations.
+    Managed(&'a LaunchConfiguration),
+    /// Copy the fixed-size validated loopback endpoint only.
+    Attached(LoopbackOrigin),
+}
+impl<'a> From<&'a BackendTarget> for BorrowedBackendTarget<'a> {
+    fn from(value: &'a BackendTarget) -> Self {
+        match value {
+            BackendTarget::Managed(value) => Self::Managed(value),
+            BackendTarget::Attached(value) => Self::Attached(*value),
+        }
+    }
+}
+impl<'a> From<&'a ConnectionConfiguration> for BorrowedBackendTarget<'a> {
+    fn from(value: &'a ConnectionConfiguration) -> Self {
+        match value {
+            ConnectionConfiguration::Launch(value) => Self::Managed(value),
+            ConnectionConfiguration::Attach(value) => Self::Attached(*value),
+        }
+    }
+}
 
 /// Preflighted Unicode launch data awaiting allocation admission and domain validation.
 #[derive(Clone, Copy, Debug)]

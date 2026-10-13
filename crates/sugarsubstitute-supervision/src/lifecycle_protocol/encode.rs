@@ -7,7 +7,7 @@ use super::{
 };
 use sugarsubstitute_contracts::{
     configuration::{LoopbackHost, MAX_ARGUMENT_BYTES, MAX_ARGUMENTS, MAX_TOTAL_ARGUMENT_BYTES},
-    lifecycle::{BackendTarget, CompletionIntent, RunKey, UiWatchdogActivity},
+    lifecycle::{CompletionIntent, RunKey, UiWatchdogActivity},
 };
 
 pub(super) fn frame(message: &WireMessage<'_>, output: &mut [u8]) -> Result<usize, ProtocolError> {
@@ -99,9 +99,12 @@ fn payload(
         WirePayload::MainFailed(value) => main_fields::write_stage_failure(*value, run, writer),
     }
 }
-fn encode_target(target: &BackendTarget, writer: &mut Writer<'_>) -> Result<(), ProtocolError> {
+fn encode_target(
+    target: &super::BorrowedBackendTarget<'_>,
+    writer: &mut Writer<'_>,
+) -> Result<(), ProtocolError> {
     match target {
-        BackendTarget::Managed(target) => {
+        super::BorrowedBackendTarget::Managed(target) => {
             if target.arguments().len() > MAX_ARGUMENTS {
                 return Err(ProtocolError::Length);
             }
@@ -127,7 +130,7 @@ fn encode_target(target: &BackendTarget, writer: &mut Writer<'_>) -> Result<(), 
             }
             Ok(())
         }
-        BackendTarget::Attached(target) => {
+        super::BorrowedBackendTarget::Attached(target) => {
             writer.u8(2)?;
             writer.u8(match target.host() {
                 LoopbackHost::Ipv4 => 1,

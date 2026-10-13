@@ -3,28 +3,58 @@
 //! Bind exact operations and original normal/cleanup deadlines across all storage calls.
 use super::*;
 pub(super) fn check(
-    state: &mut State,
+    state: &mut StateAccess<'_>,
     key: LogicalStoreOperationKey,
     context: &JobContext,
     cleanup: bool,
 ) -> Result<(), DiagnosticStorageError> {
-    let binding = state.operation.as_mut().ok_or_else(|| error(key, Code::Closed))?;
+    state.check(key, context, cleanup)
+}
+pub(super) struct ControlObservation {
+    original_now: Option<Moment>,
+    now: Moment,
+    original_cancelled: bool,
+    cancelled: bool,
+}
+impl ControlObservation {
+    pub(super) fn sample(original: Option<&JobContext>, context: &JobContext) -> Self {
+        Self {
+            original_now: original.map(JobContext::now),
+            now: context.now(),
+            original_cancelled: original.is_some_and(JobContext::cancellation_requested),
+            cancelled: context.cancellation_requested(),
+        }
+    }
+}
+pub(super) fn check_binding_observed(
+    binding: &mut Binding,
+    last_observed: &mut Option<Moment>,
+    closed: &mut bool,
+    key: LogicalStoreOperationKey,
+    context: &JobContext,
+    cleanup: bool,
+    observation: ControlObservation,
+) -> Result<(), DiagnosticStorageError> {
     if binding.key != key || binding.execution != context.owner_id() {
         return Err(error(key, Code::InvalidIdentity));
     }
     let deadline = context.deadline().ok_or_else(|| error(key, Code::Admission))?;
-    let original_now = (!cleanup).then(|| binding.context.now());
-    let now = context.now();
+    if (!cleanup && binding.scope != context.scope_id())
+        || (cleanup && binding.cleanup_scope.is_some_and(|scope| scope != context.scope_id()))
+    {
+        return Err(error(key, Code::InvalidIdentity));
+    }
+    let ControlObservation { original_now, now, original_cancelled, cancelled } = observation;
     if original_now.is_some_and(|original| original < binding.last_observed || now < original) {
-        state.closed = true;
+        *closed = true;
         return Err(error(key, Code::Deadline));
     }
     if now < binding.last_observed {
-        state.closed = true;
+        *closed = true;
         return Err(error(key, Code::Deadline));
     }
     binding.last_observed = now;
-    state.last_observed = Some(now);
+    *last_observed = Some(now);
     if now >= deadline {
         return Err(error(key, Code::Deadline));
     }
@@ -34,10 +64,10 @@ pub(super) fn check(
     {
         return Err(error(key, Code::Admission));
     }
-    if context.cancellation_requested() {
+    if cancelled {
         return Err(error(key, Code::Cancelled));
     }
-    if !cleanup && binding.context.cancellation_requested() {
+    if original_cancelled {
         return Err(error(key, Code::Cancelled));
     }
     let limit = if cleanup {
@@ -49,10 +79,13 @@ pub(super) fn check(
         if deadline > *limit {
             return Err(error(key, Code::Deadline));
         }
+        if binding.cleanup_context.is_none() {
+            binding.cleanup_context = Some(context.clone());
+        }
         *limit = (*limit).min(deadline);
         *limit
     } else {
-        if state.closed {
+        if *closed {
             return Err(error(key, Code::Closed));
         }
         if binding.scope != context.scope_id() {
@@ -70,10 +103,10 @@ pub(super) fn check(
     Ok(())
 }
 pub(super) fn next_lease(
-    state: &mut State,
+    state: &mut StateAccess<'_>,
     key: LogicalStoreOperationKey,
 ) -> Result<u64, DiagnosticStorageError> {
-    let id = state.next_lease;
-    state.next_lease = id.checked_add(1).ok_or_else(|| error(key, Code::Capacity))?;
+    let id = state.data_mut()?.next_lease;
+    state.data_mut()?.next_lease = id.checked_add(1).ok_or_else(|| error(key, Code::Capacity))?;
     Ok(id)
 }

@@ -422,3 +422,5 @@ fn actual_two_output_owner_retires_after_native_failure_preserving_original_term
     assert_eq!(boundary.retired.load(Ordering::Acquire), 1);
     Ok(())
 }
+
+mod registered;

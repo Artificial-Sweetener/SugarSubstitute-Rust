@@ -5,7 +5,7 @@ use crate::{CaptureStartInput, CrashError};
 use std::sync::Arc;
 use sugarsubstitute_contracts::{
     crash::CaptureHandlerIdentity,
-    execution::{JobContext, MemoryLease, OwnedJob},
+    execution::{JobContext, OwnedJob},
     lifecycle::CoordinatorKey,
 };
 use sugarsubstitute_execution::windows::{NativeObservationError, ProcessExit, ProcessWatchPermit};
@@ -15,6 +15,8 @@ use sugarsubstitute_execution::windows_capture_attach::{
 
 mod bridge;
 mod capture;
+pub(crate) mod desktop_driver;
+mod module_pin;
 mod pins;
 
 pub(crate) const CALLBACK_PIN_BYTES: usize = 64 * 1024;
@@ -26,10 +28,12 @@ pub(crate) struct BindFailed {
 pub(crate) trait CaptureLease: Send {
     fn start(
         &mut self,
-        input: &CaptureStartInput,
+        input: CaptureStartInput,
         owner: CoordinatorKey,
         context: &JobContext,
     ) -> Result<(), CrashError>;
+    fn creator(&self) -> Option<crate::capture::CaptureCreator>;
+    fn build_identity(&self) -> Option<&str>;
     fn handler(&self) -> Option<CaptureHandlerIdentity>;
     fn has_process(&self) -> bool;
     fn registered(&self) -> bool;
@@ -46,12 +50,20 @@ pub(crate) trait CaptureLease: Send {
     fn take_omitted_errors(&mut self) -> u64;
 }
 pub(crate) trait NativePort: Send + Sync {
-    fn create(&self, memory: &MemoryLease) -> Result<Box<dyn CaptureLease>, CrashError>;
+    fn create(
+        &self,
+        admission: sugarsubstitute_execution::CaptureBundleAdmission,
+        execution: sugarsubstitute_execution::ExecutionClient,
+    ) -> Result<Box<dyn CaptureLease>, CrashError>;
 }
 struct WindowsPort;
 impl NativePort for WindowsPort {
-    fn create(&self, memory: &MemoryLease) -> Result<Box<dyn CaptureLease>, CrashError> {
-        capture::Capture::new(memory).map(|value| value as Box<dyn CaptureLease>)
+    fn create(
+        &self,
+        admission: sugarsubstitute_execution::CaptureBundleAdmission,
+        execution: sugarsubstitute_execution::ExecutionClient,
+    ) -> Result<Box<dyn CaptureLease>, CrashError> {
+        capture::Capture::new(admission, execution).map(|value| value as Box<dyn CaptureLease>)
     }
 }
 pub(crate) fn port() -> Arc<dyn NativePort> {

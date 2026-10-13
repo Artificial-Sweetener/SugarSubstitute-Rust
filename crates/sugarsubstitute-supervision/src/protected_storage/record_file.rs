@@ -15,7 +15,7 @@ use crate::{
     native_claims::{files::Handle, lock},
 };
 use boundary::RecordBoundary;
-pub(crate) use native::{random, rename as activate};
+pub(crate) use native::random;
 pub(crate) use publication::{PublicationAuthority, PublicationBinding, Stage, publish};
 pub(crate) use retirement::{PublicationRetirement, retire_publication};
 pub(crate) use streaming::StreamingPort;
@@ -47,6 +47,9 @@ pub(crate) fn read_with_boundary<const N: usize>(
     context: &sugarsubstitute_contracts::execution::JobContext,
     boundary: &mut dyn RecordBoundary<N>,
 ) -> Result<RecordRead<N>, ClaimError> {
+    if !file.handle.budget().is_ordinary() {
+        return Err(file.handle.budget().rejection("fixed_record_ordinary_origin"));
+    }
     let mut pending = lock(&file.publication);
     let new_observation = pending.is_none();
     if new_observation {

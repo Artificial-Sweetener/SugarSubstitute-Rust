@@ -5,6 +5,8 @@
 
 /// Localized native incident reporting copy.
 pub mod incident;
+/// Localized native main-window controls.
+pub mod window;
 
 /// Bind one supported locale to every user-facing splash message.
 pub struct Messages {
@@ -20,6 +22,8 @@ pub struct Messages {
     pub cancel: &'static str,
     /// Complete native report surface copy.
     pub report: &'static incident::ReportMessages,
+    /// Accessible names for the native main-window caption controls.
+    pub window: &'static window::WindowMessages,
 }
 
 /// Keep the sole locale inventory together with complete owned-surface coverage.
@@ -31,6 +35,7 @@ pub static LOCALES: &[Messages] = &[
         hide_output: "Hide Comfy output",
         cancel: "Cancel loading",
         report: &incident::EN,
+        window: &window::EN,
     },
     Messages {
         id: "zh-Hans",
@@ -39,6 +44,7 @@ pub static LOCALES: &[Messages] = &[
         hide_output: "隐藏 Comfy 输出",
         cancel: "取消加载",
         report: &incident::ZH_HANS,
+        window: &window::ZH_HANS,
     },
     Messages {
         id: "ja",
@@ -47,6 +53,7 @@ pub static LOCALES: &[Messages] = &[
         hide_output: "Comfy の出力を非表示",
         cancel: "読み込みをキャンセル",
         report: &incident::JA,
+        window: &window::JA,
     },
     Messages {
         id: "ko",
@@ -55,6 +62,7 @@ pub static LOCALES: &[Messages] = &[
         hide_output: "Comfy 출력 숨기기",
         cancel: "불러오기 취소",
         report: &incident::KO,
+        window: &window::KO,
     },
     Messages {
         id: "es",
@@ -63,6 +71,7 @@ pub static LOCALES: &[Messages] = &[
         hide_output: "Ocultar la salida de Comfy",
         cancel: "Cancelar la carga",
         report: &incident::ES,
+        window: &window::ES,
     },
 ];
 
@@ -85,6 +94,7 @@ mod tests {
                 [locale.loading, locale.show_output, locale.hide_output, locale.cancel]
                     .into_iter()
                     .chain(locale.report.labels())
+                    .chain(locale.window.labels())
                     .all(|text| !text.is_empty() && !text.contains('\0'))
             );
         }

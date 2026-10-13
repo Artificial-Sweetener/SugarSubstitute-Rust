@@ -1,119 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise real repository commits and custody through the protected external fixture.
+use super::publication_fixture::{admitted, setup};
 use super::*;
-use std::{
-    num::NonZeroUsize,
-    path::Path,
-    sync::{Arc, Condvar, Mutex},
-    time::Duration,
-};
-use sugarsubstitute_contracts::execution::*;
-use sugarsubstitute_execution::ExecutionOwner;
 use sugarsubstitute_supervision::diagnostic_storage::{fixture::*, *};
 type TestError = Box<dyn Error + Send + Sync>;
 type TestResult = Result<(), TestError>;
-struct TestClock;
-impl Clock for TestClock {
-    fn now(&self) -> Moment {
-        Moment::from_nanos(17)
-    }
-    fn sleep_until(&self, _: Moment) -> WaitFuture {
-        Box::pin(std::future::pending())
-    }
-}
-#[derive(Default)]
-struct Wake {
-    count: Mutex<u64>,
-    changed: Condvar,
-}
-impl CompletionWake for Wake {
-    fn wake(&self) -> Result<(), ExecutionError> {
-        *self.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner) += 1;
-        self.changed.notify_all();
-        Ok(())
-    }
-}
-pub(super) fn admitted(work: impl FnOnce(JobContext) -> TestResult + Send + 'static) -> TestResult {
-    let wake = Arc::new(Wake::default());
-    let owner = ExecutionOwner::new(Arc::new(TestClock), wake.clone())?;
-    let client = owner.client();
-    let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
-    let mut job = client.submit_blocking(
-        &scope,
-        JobSpec {
-            id: JobId::new(1)?,
-            operation: Operation::NativeLifecycle,
-            class: JobClass::InfrastructureLifecycle,
-            deadline: Some(Moment::from_nanos(100)),
-            reservation_bytes: DIAGNOSTIC_STORAGE_BYTES,
-            replacement: None,
-        },
-        work,
-    )?;
-    let completion = loop {
-        let old = *wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        client.drain_completions(NonZeroUsize::MIN)?;
-        if let Some(completion) = job.try_take_completion() {
-            break completion;
-        }
-        let (count, timeout) = wake
-            .changed
-            .wait_timeout_while(
-                wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
-                Duration::from_secs(10),
-                |count| *count == old,
-            )
-            .map_err(|cause| std::io::Error::other(cause.to_string()))?;
-        if timeout.timed_out() && *count == old {
-            return Err("Repository completion stalled".into());
-        }
-    };
-    match completion.outcome {
-        JobOutcome::Success(()) => (),
-        JobOutcome::Failure(cause) => {
-            let mut chain = Vec::new();
-            let mut current: Option<&dyn Error> = Some(cause.as_ref());
-            while let Some(error) = current {
-                chain.push(error.to_string());
-                current = error.source();
-            }
-            return Err(chain.join(" -> ").into());
-        }
-        outcome => return Err(format!("Repository worker outcome: {outcome:?}").into()),
-    }
-    drop(completion.memory);
-    drop(job);
-    drop(owner);
-    assert_eq!(scope.snapshot().reserved_bytes, 0);
-    Ok(())
-}
-pub(super) fn setup(
-    context: &JobContext,
-) -> Result<(DiagnosticStorageFixture, IncidentRepository), TestError> {
-    let fixture = DiagnosticStorageFixture::new()?;
-    let owner = CoordinatorKey {
-        namespace: NamespaceId::new([1; 32]),
-        epoch: CoordinatorEpoch::new([2; 16])?,
-    };
-    let key = LogicalStoreOperationKey::new(owner, IncidentOperationId::new(1)?);
-    let ledger = SummaryEvictions::new(owner.namespace, 0, 0, 0, None)?;
-    fixture.put(
-        DiagnosticObject::StoreState,
-        &encode_store_state(&IncidentStoreState::Ledger(ledger))?,
-    )?;
-    let mut storage = fixture.storage(context)?;
-    let operation = storage.begin_operation(key, context)?;
-    storage.resolve(
-        Path::new("external-repository-fixture"),
-        owner.namespace,
-        &operation,
-        context,
-    )?;
-    storage.acquire_writer(&operation, context)?;
-    storage.inventory(&operation, context)?;
-    Ok((fixture, IncidentRepository::new(storage, operation)))
-}
 fn test_seed() -> Result<IncidentSeed, TestError> {
     super::seed().map_err(|cause| std::io::Error::other(cause.to_string()).into())
 }
@@ -153,12 +45,25 @@ fn repository_summary_commit_load_and_stale_cas_are_actual() -> TestResult {
     admitted(|context| {
         let (fixture, mut repository) = setup(&context)?;
         let summary = test_summary()?;
-        let mut ticket = repository.begin_publish(
-            summary.seed().clone(),
-            ExpectedSummary::Absent,
-            IncidentOperationId::new(1)?,
-            &context,
-        )?;
+        let mut ticket = {
+            let expected = ExpectedSummary::Absent;
+            repository
+                .preflight_publication(
+                    summary.seed().clone(),
+                    expected,
+                    IncidentPublicationDemand::new(
+                        262_144,
+                        1,
+                        usize::from(matches!(expected, ExpectedSummary::Absent)),
+                        131_072,
+                    )?,
+                    IncidentUtc::from_unix_seconds(111)?,
+                    &context,
+                )
+                .and_then(|preflight| {
+                    repository.begin_publish(preflight, IncidentOperationId::new(1)?, &context)
+                })
+        }?;
         let committed = repository.commit(&mut ticket, summary.clone(), &context)?;
         assert_eq!(committed.summary(), &summary);
         assert_eq!(
@@ -173,24 +78,50 @@ fn repository_summary_commit_load_and_stale_cas_are_actual() -> TestResult {
         assert_eq!(loaded.evictions().pending(), 0);
         let before = fixture.snapshot().mutation_count();
         assert!(matches!(
-            repository.begin_publish(
-                summary.seed().clone(),
-                ExpectedSummary::Absent,
-                IncidentOperationId::new(1)?,
-                &context
-            ),
+            {
+                let expected = ExpectedSummary::Absent;
+                repository
+                    .preflight_publication(
+                        summary.seed().clone(),
+                        expected,
+                        IncidentPublicationDemand::new(
+                            262_144,
+                            1,
+                            usize::from(matches!(expected, ExpectedSummary::Absent)),
+                            131_072,
+                        )?,
+                        IncidentUtc::from_unix_seconds(111)?,
+                        &context,
+                    )
+                    .and_then(|preflight| {
+                        repository.begin_publish(preflight, IncidentOperationId::new(1)?, &context)
+                    })
+            },
             Err(IncidentStoreError::StaleRevision)
         ));
         assert_eq!(fixture.snapshot().mutation_count(), before);
-        let mut next = repository.begin_publish(
-            summary.seed().clone(),
-            ExpectedSummary::Exact {
+        let mut next = {
+            let expected = ExpectedSummary::Exact {
                 revision: committed.revision(),
                 content_sha256: committed.content_sha256(),
-            },
-            IncidentOperationId::new(1)?,
-            &context,
-        )?;
+            };
+            repository
+                .preflight_publication(
+                    summary.seed().clone(),
+                    expected,
+                    IncidentPublicationDemand::new(
+                        262_144,
+                        1,
+                        usize::from(matches!(expected, ExpectedSummary::Absent)),
+                        131_072,
+                    )?,
+                    IncidentUtc::from_unix_seconds(111)?,
+                    &context,
+                )
+                .and_then(|preflight| {
+                    repository.begin_publish(preflight, IncidentOperationId::new(1)?, &context)
+                })
+        }?;
         let updated = IncidentSummary::new(
             summary.seed().clone(),
             summary.revision().next()?,
@@ -227,33 +158,84 @@ fn repository_ticket_drop_keeps_admission_and_foreign_operation_cannot_publish()
     admitted(|context| {
         let (fixture, mut repository) = setup(&context)?;
         assert!(
+            {
+                let expected = ExpectedSummary::Absent;
+                repository
+                    .preflight_publication(
+                        test_seed()?,
+                        expected,
+                        IncidentPublicationDemand::new(
+                            262_144,
+                            1,
+                            usize::from(matches!(expected, ExpectedSummary::Absent)),
+                            131_072,
+                        )?,
+                        IncidentUtc::from_unix_seconds(111)?,
+                        &context,
+                    )
+                    .and_then(|preflight| {
+                        repository.begin_publish(preflight, IncidentOperationId::new(2)?, &context)
+                    })
+            }
+            .is_err()
+        );
+        assert_eq!(fixture.snapshot().mutation_count(), 0);
+        assert!(
             repository
-                .begin_publish(
+                .preflight_publication(
                     test_seed()?,
                     ExpectedSummary::Absent,
-                    IncidentOperationId::new(2)?,
+                    IncidentPublicationDemand::new(0, 0, 1, 131_072)?,
+                    IncidentUtc::from_unix_seconds(111)?,
                     &context
                 )
                 .is_err()
         );
-        assert_eq!(fixture.snapshot().mutation_count(), 0);
+        repository.retire(&context)?;
+        drop(repository);
+        let (_, mut repository) = setup(&context)?;
         {
-            let _ticket = repository.begin_publish(
-                test_seed()?,
-                ExpectedSummary::Absent,
-                IncidentOperationId::new(1)?,
-                &context,
-            )?;
+            let _ticket = {
+                let expected = ExpectedSummary::Absent;
+                repository
+                    .preflight_publication(
+                        test_seed()?,
+                        expected,
+                        IncidentPublicationDemand::new(
+                            262_144,
+                            1,
+                            usize::from(matches!(expected, ExpectedSummary::Absent)),
+                            131_072,
+                        )?,
+                        IncidentUtc::from_unix_seconds(111)?,
+                        &context,
+                    )
+                    .and_then(|preflight| {
+                        repository.begin_publish(preflight, IncidentOperationId::new(1)?, &context)
+                    })
+            }?;
         }
         assert!(
-            repository
-                .begin_publish(
-                    test_seed()?,
-                    ExpectedSummary::Absent,
-                    IncidentOperationId::new(1)?,
-                    &context
-                )
-                .is_err()
+            {
+                let expected = ExpectedSummary::Absent;
+                repository
+                    .preflight_publication(
+                        test_seed()?,
+                        expected,
+                        IncidentPublicationDemand::new(
+                            262_144,
+                            1,
+                            usize::from(matches!(expected, ExpectedSummary::Absent)),
+                            131_072,
+                        )?,
+                        IncidentUtc::from_unix_seconds(111)?,
+                        &context,
+                    )
+                    .and_then(|preflight| {
+                        repository.begin_publish(preflight, IncidentOperationId::new(1)?, &context)
+                    })
+            }
+            .is_err()
         );
         repository.retire(&context)?;
         Ok(())
@@ -264,12 +246,25 @@ fn repository_text_payload_requires_actual_digest_and_changed_source_blocks_load
     admitted(|context| {
         let (fixture, mut repository) = setup(&context)?;
         let original = test_summary()?;
-        let mut ticket = repository.begin_publish(
-            original.seed().clone(),
-            ExpectedSummary::Absent,
-            IncidentOperationId::new(1)?,
-            &context,
-        )?;
+        let mut ticket = {
+            let expected = ExpectedSummary::Absent;
+            repository
+                .preflight_publication(
+                    original.seed().clone(),
+                    expected,
+                    IncidentPublicationDemand::new(
+                        262_144,
+                        1,
+                        usize::from(matches!(expected, ExpectedSummary::Absent)),
+                        131_072,
+                    )?,
+                    IncidentUtc::from_unix_seconds(111)?,
+                    &context,
+                )
+                .and_then(|preflight| {
+                    repository.begin_publish(preflight, IncidentOperationId::new(1)?, &context)
+                })
+        }?;
         let chunk = RedactedTextChunk::from_facts(&[RedactedDiagnosticFact::Failure(
             FailureEvidence::Unexplained,
         )])?;

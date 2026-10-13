@@ -51,12 +51,13 @@ pub(crate) enum Invocation {
 }
 impl Invocation {
     /// Parse process arguments without starting native or execution resources.
+    #[cfg(not(target_os = "windows"))]
     pub(crate) fn parse() -> Result<Self, Box<dyn Error>> {
         Self::parse_arguments(std::env::args_os().skip(1))
     }
 
     /// Keep internal fixture selection separate from demonstration presentation options.
-    fn parse_arguments(
+    pub(crate) fn parse_arguments(
         arguments: impl IntoIterator<Item = OsString>,
     ) -> Result<Self, Box<dyn Error>> {
         let arguments = arguments.into_iter();

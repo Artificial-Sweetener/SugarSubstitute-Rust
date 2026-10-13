@@ -12,6 +12,29 @@ use super::*;
 mod state;
 pub(in crate::diagnostic_storage) use state::Filesystem;
 use state::*;
+impl Filesystem {
+    #[cfg(test)]
+    pub(in crate::diagnostic_storage) fn observe_context_after_open(&self) {
+        lock(&self.0).observe_open_context = true;
+    }
+
+    #[cfg(test)]
+    /// Complete actual fake external closes after a fatal execution provider.
+    /// This does not acknowledge Storage retirement, release its slots or grant cleanup.
+    pub(in crate::diagnostic_storage) fn complete_external_closes(
+        &mut self,
+        context: &JobContext,
+    ) -> Result<(), ClaimError> {
+        loop {
+            let next =
+                lock(&self.0).handles.iter().find(|handle| handle.live).map(|handle| handle.id);
+            let Some(id) = next else {
+                return Ok(());
+            };
+            files::close(self, id, context)?;
+        }
+    }
+}
 impl Port for Filesystem {
     fn bind_operation(&mut self, _: &JobContext) {}
     fn resolve(
@@ -97,6 +120,7 @@ impl Port for Filesystem {
         Ok(crate::diagnostic_storage::inventory::Scan {
             entries,
             complete: !disk.faults.scan_incomplete,
+            _native_retention: None,
         })
     }
     fn open(
@@ -105,7 +129,12 @@ impl Port for Filesystem {
         bound: u64,
         context: &JobContext,
     ) -> Result<(NativeId, DiagnosticReadFacts), ClaimError> {
-        files::open(self, object, bound, context)
+        let result = files::open(self, object, bound, context);
+        if lock(&self.0).observe_open_context {
+            // The external fixture has already adopted any actual partial output.
+            let _observed = context.now();
+        }
+        result
     }
     fn open_inventory(
         &mut self,
@@ -132,7 +161,7 @@ impl Port for Filesystem {
             historical: Some(historical),
         });
         disk.mutations += 1;
-        let id = handle(&mut disk, file)?;
+        let id = handle(&mut disk, file, self)?;
         let index = index(&disk, id)?;
         disk.handles[index].writable = true;
         disk.handles[index].stage = true;
@@ -287,7 +316,7 @@ impl Port for Filesystem {
             {
                 output.id
             } else {
-                let id = handle(&mut disk, file)?;
+                let id = handle(&mut disk, file, self)?;
                 let index = index(&disk, id)?;
                 disk.handles[index].writable = true;
                 id
@@ -325,7 +354,11 @@ impl Port for Filesystem {
     fn close(&mut self, id: NativeId, context: &JobContext) -> Result<(), ClaimError> {
         files::close(self, id, context)
     }
-    fn retire(&mut self, context: &JobContext) -> Result<(), ClaimError> {
+    fn retire(
+        &mut self,
+        context: &JobContext,
+        control: &mut DiagnosticNativeRetirement<'_>,
+    ) -> Result<(), ClaimError> {
         let ids: Vec<_> = lock(&self.0)
             .handles
             .iter()
@@ -333,6 +366,12 @@ impl Port for Filesystem {
             .map(|handle| handle.id)
             .collect();
         for id in ids {
+            let original = self
+                .1
+                .as_ref()
+                .ok_or_else(|| ClaimError::invalid("fake_cleanup_original_owner"))?
+                .native_grant();
+            control.check(&original).map_err(ClaimError::diagnostic_allocation)?;
             self.close(id, context)?;
         }
         Ok(())

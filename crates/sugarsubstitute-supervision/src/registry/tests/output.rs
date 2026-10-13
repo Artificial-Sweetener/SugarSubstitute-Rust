@@ -134,7 +134,7 @@ fn standalone_output_sets_only_three_std_handles_and_success_does_not_cancel() -
     let source = Source::new(resource()?);
     let key = submit(&mut h, binding(1)?, captured(binding(1)?, &source)?)?.process();
     h.created(key)?;
-    assert_eq!(*lock(&h.fake.inherited), ([71, 72, 73, 0], 3, [71, 72, 73], true));
+    assert_eq!(*lock(&h.fake.inherited), ([71, 72, 73, 0, 0, 0], 3, [71, 72, 73], true));
     assert_eq!(source.releases.load(Ordering::Acquire), 1);
     assert_eq!(source.requests.load(Ordering::Acquire), 0);
     h.fake.root_alive.store(false, Ordering::Release);

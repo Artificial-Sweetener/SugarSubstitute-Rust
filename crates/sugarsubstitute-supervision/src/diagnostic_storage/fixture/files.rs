@@ -139,7 +139,7 @@ pub(super) fn open(
     } else if writable.is_some() {
         return Err(ClaimError::invalid("fake_read_sharing"));
     } else {
-        handle(&mut disk, file)?
+        handle(&mut disk, file, filesystem)?
     };
     let facts = facts(&disk.files[file]);
     if let Some(clock) = &disk.after_open {

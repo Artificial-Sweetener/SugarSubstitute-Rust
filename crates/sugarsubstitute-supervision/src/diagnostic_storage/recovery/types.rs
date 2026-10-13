@@ -20,6 +20,7 @@ pub struct DiagnosticRecoverySource {
     pub(in crate::diagnostic_storage) name_digest: [u8; 32],
     pub(in crate::diagnostic_storage) origin: crate::diagnostic_storage::source::SourceOrigin,
     pub(in crate::diagnostic_storage) native: NativeId,
+    pub(in crate::diagnostic_storage) _allocation: allocation::DiagnosticAllocationLoan,
 }
 impl DiagnosticRecoverySource {
     /// Borrow at most64KiB whole actual bytes; the source retains its native pin.
@@ -102,6 +103,7 @@ pub trait DiagnosticRecoveryValidator {
     /// Preserve unknown schemas, corrupt/mismatched facts and checked-overflow causes.
     fn validate(
         &self,
+        decode: &mut DiagnosticRecoveryDecodeLoan,
         current: LogicalStoreOperationKey,
         journal: &DiagnosticRecoverySource,
         ledger: &DiagnosticRecoverySource,

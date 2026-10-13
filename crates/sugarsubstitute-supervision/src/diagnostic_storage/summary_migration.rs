@@ -23,31 +23,35 @@ impl DiagnosticStorage {
         operation: &DiagnosticStorageOperation,
         context: &JobContext,
     ) -> Result<DiagnosticSummaryMigrationPreparation, DiagnosticStorageError> {
-        let source = whole(self, original, operation, context)?;
+        let source = whole(&self.shared, original, operation, context)?;
         let mut state = self.check(operation, context)?;
-        stage::mutation(&state, operation.key)?;
-        classified(&state, operation.key)?;
+        stage::mutation(&mut state, operation.key)?;
+        classified(&mut state, operation.key)?;
         let Some(object @ DiagnosticObject::Summary(_)) = source.object else {
             return Err(error(operation.key, Code::InvalidIdentity));
         };
-        let namespace = state.namespace.ok_or_else(|| error(operation.key, Code::Closed))?;
+        let namespace =
+            state.data_mut()?.namespace.ok_or_else(|| error(operation.key, Code::Closed))?;
         if !canonical(&source, object, namespace)
-            || state.deletion.is_some()
-            || state.archives.len() >= DIAGNOSTIC_MIGRATION_ARCHIVE_BOUND
-            || state.stages.len() + 2 > DIAGNOSTIC_STAGE_BOUND
+            || state.data_mut()?.deletion.is_some()
+            || state.data_mut()?.archives.len() >= DIAGNOSTIC_MIGRATION_ARCHIVE_BOUND
+            || state.data_mut()?.stages.len() + 2 > DIAGNOSTIC_STAGE_BOUND
         {
             return Err(error(operation.key, Code::Capacity));
         }
         retained_source(&mut state, &source, operation.key, context)?;
         let id = next_lease(&mut state, operation.key)?;
-        state.archives.try_reserve_exact(1).map_err(|cause| {
-            native(
-                operation.key,
-                Code::Capacity,
-                ClaimError::new("diagnostic_archive_reservation", cause),
-            )
-        })?;
-        state.migration = Some(Box::new(MigrationIntent::new(id, object)));
+        let reservation =
+            allocation::reservation(&state.data_mut()?.allocation, Some(operation.key))?;
+        state
+            .data_mut()?
+            .archives
+            .try_reserve_exact(1)
+            .map_err(|cause| reservation.failed(cause))?;
+        let allocation =
+            allocation::migration_intent(&state.data_mut()?.allocation, operation.key)?;
+        state.data_mut()?.migration =
+            Some(allocation.migration_intent(MigrationIntent::new(id, object)));
         migration(&mut state, id, operation.key)?.original_read = Some(original.id);
         let copy = reserve_stage(
             &mut state,
@@ -122,9 +126,16 @@ impl DiagnosticStorage {
         {
             return Err(error(operation.key, Code::ChangedIdentity));
         }
-        validator
-            .validate_preparation(operation.key, &plan, &original, &copy, &candidate)
-            .map_err(|cause| validation(operation.key, cause))?;
+        allocation::decode_callback(self, operation, context, |decode| {
+            validator.validate_preparation(
+                decode,
+                operation.key,
+                &plan,
+                &original,
+                &copy,
+                &candidate,
+            )
+        })?;
         let mut state = self.check(operation, context)?;
         revalidate(&mut state, &[&original, &copy, &candidate], operation.key, context)?;
         let intent = migration(&mut state, preparation.id, operation.key)?;
@@ -169,7 +180,7 @@ impl DiagnosticStorage {
             intent.journal_attempted = true;
             if intent.journal_facts.is_none() {
                 let id = required(intent.journal_stage, operation.key)?;
-                let expected = stage_facts(&state, id, operation.key)?;
+                let expected = stage_facts(&mut state, id, operation.key)?;
                 if expected.sha256 != plan.journal_sha256 {
                     return Err(error(operation.key, Code::ChangedIdentity));
                 }
@@ -192,7 +203,7 @@ impl DiagnosticStorage {
             operation,
             context,
         )?;
-        let source = whole(self, &mut lease, operation, context)?;
+        let source = whole(&self.shared, &mut lease, operation, context)?;
         let mut state = self.check(operation, context)?;
         let intent = migration(&mut state, journal.id, operation.key)?;
         if intent.journal_read.is_some()
@@ -219,7 +230,7 @@ impl DiagnosticSummaryMigrationPreparation {
         bytes: &[u8],
         context: &JobContext,
     ) -> Result<(), DiagnosticStorageError> {
-        let mut state = lock(&self.shared);
+        let mut state = StateAccess::acquire(&self.shared, self.operation);
         check(&mut state, self.operation, context, false)?;
         let intent = migration(&mut state, self.id, self.operation)?;
         if intent.validating || intent.plan.is_some() {
@@ -235,7 +246,7 @@ impl DiagnosticSummaryMigrationPreparation {
         &mut self,
         context: &JobContext,
     ) -> Result<DiagnosticStageFacts, DiagnosticStorageError> {
-        let mut state = lock(&self.shared);
+        let mut state = StateAccess::acquire(&self.shared, self.operation);
         check(&mut state, self.operation, context, false)?;
         let intent = migration(&mut state, self.id, self.operation)?;
         if intent.validating || intent.plan.is_some() {
@@ -254,7 +265,7 @@ impl DiagnosticSummaryMigrationJournalStage {
         bytes: &[u8],
         context: &JobContext,
     ) -> Result<(), DiagnosticStorageError> {
-        let mut state = lock(&self.shared);
+        let mut state = StateAccess::acquire(&self.shared, self.operation);
         check(&mut state, self.operation, context, false)?;
         let intent = migration(&mut state, self.id, self.operation)?;
         if intent.validating || intent.journal_attempted {
@@ -270,7 +281,7 @@ impl DiagnosticSummaryMigrationJournalStage {
         &mut self,
         context: &JobContext,
     ) -> Result<DiagnosticStageFacts, DiagnosticStorageError> {
-        let mut state = lock(&self.shared);
+        let mut state = StateAccess::acquire(&self.shared, self.operation);
         check(&mut state, self.operation, context, false)?;
         let intent = migration(&mut state, self.id, self.operation)?;
         let id = required(intent.journal_stage, self.operation)?;

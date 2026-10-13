@@ -11,6 +11,7 @@ import tarfile
 PINNED = {
     "client/crashpad_client.h": "7c7b56bb58f7e1adc102be6a3b257d0c8535b3da737a02fb1fa07140a33e1658",
     "client/crashpad_client_win.cc": "034724f0aa6295903908564eeb9326ca8d05a33b924bd27b003790e197beb4bb",
+    "util/win/critical_section_with_debug_info.cc": "fda0ed19b20faf0fc8f1140f27ff00eae894f9dc4faa4b17130e31d809cf5810",
     "client/BUILD.gn": "da905f5165e272c5ba5b976d0c8de8464a885eb9a69bdbbc9670b4674ab60896",
     "third_party/mini_chromium/mini_chromium/build/win_helper.py": "efab24ae793a93d65bafb0709d6524420281f01acbdce96c9bff156dd6528bc1",
 }
@@ -24,7 +25,7 @@ def replace(text, old, new):
 
 def transform_owned_launch(text):
     """Bind registration before child creation and retain every partial output."""
-    text = replace(text, "  PROCESS_INFORMATION process_info;", "  if (command_line.size() >= 32767 || (data->owner && is_embedded_in_dll)) {\n    if (data->owner) data->owner->error = ERROR_INVALID_PARAMETER;\n    SetLastError(ERROR_INVALID_PARAMETER); return false;\n  }\n  if (data->owner && !sugarsubstitute::PrepareInheritedRegistration(data->ipc_pipe, data->owner)) return false;\n  if (data->owner && !sugarsubstitute::CheckDeadline(data->owner)) return false;\n  PROCESS_INFORMATION process_info = {};")
+    text = replace(text, "  PROCESS_INFORMATION process_info;", "  if (command_line.size() >= 32767 || (data->owner && is_embedded_in_dll)) {\n    if (data->owner) data->owner->connection.Fail(ERROR_INVALID_PARAMETER);\n    SetLastError(ERROR_INVALID_PARAMETER); return false;\n  }\n  if (data->owner && !sugarsubstitute::PrepareInheritedRegistration(data->ipc_pipe, data->owner)) return false;\n  if (data->owner && !data->owner->connection.CheckDeadline()) return false;\n  PROCESS_INFORMATION process_info = {};")
     text = replace(text, "  if (!rv) {\n    PLOG(ERROR) << \"CreateProcess\";", """  const DWORD create_error = rv ? ERROR_SUCCESS : GetLastError();
   if (data->owner) {
     // Adopt partial outputs before examining success or any later fallible call.
@@ -32,15 +33,85 @@ def transform_owned_launch(text):
     data->owner->thread = process_info.hThread;
   }
   if (!rv) {
-    if (data->owner && !data->owner->error) data->owner->error = create_error;
+    if (data->owner) data->owner->connection.Fail(create_error);
     SetLastError(create_error);
     PLOG(ERROR) << "CreateProcess";""")
     return replace(text, "  rv = CloseHandle(process_info.hThread);", "  if (data->owner) {\n    // The connected endpoint and original server stay owned through confirmation.\n    if (!sugarsubstitute::ConfirmHandler(data->owner)) return false;\n    scoped_startup_state_caller.SetSuccessful();\n    return true;\n  }\n\n  rv = CloseHandle(process_info.hThread);")
 
 
+def transform_captured_runtime(text):
+    """Reuse actual Crashpad initialization/handlers with checked bounded storage."""
+    text = replace(text, '#include "sugarsubstitute/owned_start.h"', '#include "sugarsubstitute/owned_start.h"\n#include "sugarsubstitute/owned_attach.h"\n#include <errno.h>\n#include <new>')
+    text = replace(text, "void CommonInProcessInitialization() {", "bool CommonInProcessInitialization(sugarsubstitute::OwnedAttach* captured = nullptr) {")
+    text = replace(text, "  InitializeCriticalSectionWithDebugInfoIfPossible(\n      &g_critical_section_with_debug_info);", "  const bool initialized = InitializeCriticalSectionWithDebugInfoIfPossible(\n      &g_critical_section_with_debug_info);\n  if (captured && !initialized) return captured->connection.Fail(GetLastError());")
+    text = replace(text, "  g_non_crash_dump_lock = new base::Lock();", "  g_non_crash_dump_lock = captured ? new (std::nothrow) base::Lock() : new base::Lock();\n  if (captured && !g_non_crash_dump_lock)\n    return captured->connection.Fail(ERROR_NOT_ENOUGH_MEMORY);\n  return true;")
+    text = replace(text, "  vectored_handler_.reset(handler);", "  vectored_handler_.reset(handler);\n  if (!handler && captured_attach_)\n    captured_attach_->connection.Fail(GetLastError());")
+    text = replace(text, "  DCHECK_NE(rv, SIG_ERR);", "  if (rv == SIG_ERR && captured_attach_) {\n    captured_attach_->connection.FailErrno(errno);\n    return;\n  }\n  DCHECK_NE(rv, SIG_ERR);")
+    return replace(text, "void CrashpadClient::RegisterHandlers() {", CAPTURED_METHODS + "\nvoid CrashpadClient::RegisterHandlers() {")
+
+
+CAPTURED_METHODS = """bool CrashpadClient::InitializeCapturedAttach(sugarsubstitute::OwnedAttach* owner) {
+  if (!owner) { SetLastError(ERROR_INVALID_PARAMETER); return false; }
+  if (owned_start_ || captured_attach_ || !ipc_pipe_.empty() ||
+      g_signal_exception != INVALID_HANDLE_VALUE ||
+      g_wer_registration.dump_without_crashing != INVALID_HANDLE_VALUE ||
+      g_wer_registration.dump_completed != INVALID_HANDLE_VALUE ||
+      g_non_crash_dump_lock || g_critical_section_with_debug_info.DebugInfo)
+    return owner->connection.Fail(ERROR_ALREADY_INITIALIZED);
+  // Install the durable original owner before initialization can produce state.
+  captured_attach_ = owner;
+  if (!CommonInProcessInitialization(owner)) return false;
+  auto& message = owner->connection.request;
+  memset(&message, 0, sizeof(message));
+  message.type = ClientToServerMessage::kRegister;
+  message.registration.version = RegistrationRequest::kMessageVersion;
+  message.registration.client_process_id = GetCurrentProcessId();
+  message.registration.crash_exception_information =
+      FromPointerCast<WinVMAddress>(&g_crash_exception_information);
+  message.registration.non_crash_exception_information =
+      FromPointerCast<WinVMAddress>(&g_non_crash_exception_information);
+  message.registration.critical_section_address =
+      FromPointerCast<WinVMAddress>(&g_critical_section_with_debug_info);
+  return true;
+}
+
+bool CrashpadClient::CommitCapturedEvents(sugarsubstitute::OwnedAttach* owner) {
+  if (!owner || captured_attach_ != owner || owner->globals_committed ||
+      g_signal_exception != INVALID_HANDLE_VALUE ||
+      g_wer_registration.dump_without_crashing != INVALID_HANDLE_VALUE ||
+      g_wer_registration.dump_completed != INVALID_HANDLE_VALUE)
+    return owner ? owner->connection.Fail(ERROR_INVALID_STATE) : false;
+  for (size_t i = 0; i < 3; ++i)
+    if (!owner->response_events[i] ||
+        owner->response_custody[i] != sugarsubstitute::ResponseEvent::Owned)
+      return owner->connection.Fail(ERROR_INVALID_STATE);
+  // No fallible call occurs between global adoption and the retained PIN flags.
+  g_signal_exception = owner->response_events[0];
+  g_wer_registration.dump_without_crashing = owner->response_events[1];
+  g_wer_registration.dump_completed = owner->response_events[2];
+  for (size_t i = 0; i < 3; ++i)
+    owner->response_custody[i] = sugarsubstitute::ResponseEvent::CallbackPinned;
+  owner->globals_committed = true;
+  return true;
+}
+
+bool CrashpadClient::InstallCapturedHandlers(sugarsubstitute::OwnedAttach* owner) {
+  if (!owner || captured_attach_ != owner || !owner->globals_committed ||
+      owner->connection.error)
+    return owner ? owner->connection.Fail(ERROR_INVALID_STATE) : false;
+  // All callback-visible globals already belong to the process-lifetime owner.
+  SetHandlerStartupState(StartupState::kSucceeded);
+  RegisterHandlers();
+  return !owner->connection.error;
+}
+"""
+
+
 def transform(name, text):
+    if name == "util/win/critical_section_with_debug_info.cc":
+        return replace(text, '    PLOG(ERROR) << "InitializeCriticalSectionEx";\n    return false;', '    const DWORD error = GetLastError();\n    PLOG(ERROR) << "InitializeCriticalSectionEx";\n    SetLastError(error);\n    return false;')
     if name == "client/crashpad_client.h":
-        text = replace(text, "namespace crashpad {", "namespace sugarsubstitute { struct OwnedStart; }\n\nnamespace crashpad {")
+        text = replace(text, "namespace crashpad {", "namespace sugarsubstitute { struct OwnedStart; struct OwnedAttach; }\n\nnamespace crashpad {")
         text = replace(text, "  bool SetHandlerIPCPipe(const std::wstring& ipc_pipe);", """  bool SetHandlerIPCPipe(const std::wstring& ipc_pipe);
 
   //! Starts once synchronously, retaining every native partial output in owner.
@@ -49,10 +120,17 @@ def transform(name, text):
                          const base::FilePath& database,
                          const base::FilePath& metrics_dir,
                          const std::map<std::string, std::string>& annotations,
-                         sugarsubstitute::OwnedStart* owner);""")
-        return replace(text, "  std::wstring ipc_pipe_;", "  sugarsubstitute::OwnedStart* owned_start_ = nullptr;\n  std::wstring ipc_pipe_;")
+                         sugarsubstitute::OwnedStart* owner);
+
+  //! Finite captured stages run on the retained owner worker outside owner locks.
+  bool InitializeCapturedAttach(sugarsubstitute::OwnedAttach* owner);
+  //! Adopts all actual validated Events before any handler can reference them.
+  bool CommitCapturedEvents(sugarsubstitute::OwnedAttach* owner);
+  //! Installs existing Crashpad handlers with typed first/secondary causes.
+  bool InstallCapturedHandlers(sugarsubstitute::OwnedAttach* owner);""")
+        return replace(text, "  std::wstring ipc_pipe_;", "  sugarsubstitute::OwnedStart* owned_start_ = nullptr;\n  sugarsubstitute::OwnedAttach* captured_attach_ = nullptr;\n  std::wstring ipc_pipe_;")
     if name == "client/BUILD.gn":
-        return replace(text, '      "crashpad_client_win.cc",', '      "crashpad_client_win.cc",\n      "../sugarsubstitute/owned_registration.cc",\n      "../sugarsubstitute/owned_start.h",')
+        return replace(text, '      "crashpad_client_win.cc",', '      "crashpad_client_win.cc",\n      "../sugarsubstitute/owned_registration.cc",\n      "../sugarsubstitute/owned_start.h",\n      "../sugarsubstitute/owned_connection.cc",\n      "../sugarsubstitute/owned_connection.h",')
     if name.endswith("win_helper.py"):
         text = replace(text, "    archs = ('x86', 'amd64', 'arm64')", "    archs = ('amd64',) if os.environ.get('SUGAR_CRASHPAD_VS') else ('x86', 'amd64', 'arm64')")
         text = replace(text, "        args.extend((script_arch_name, '&&', 'set'))", """        if os.environ.get('SUGAR_CRASHPAD_VS'):
@@ -76,7 +154,7 @@ def transform(name, text):
     text = replace(text, "void CreatePipe(std::wstring* pipe_name, ScopedFileHANDLE* pipe_instance)", "bool CreatePipe(std::wstring* pipe_name, ScopedFileHANDLE* pipe_instance)")
     text = replace(text, '  PCHECK(pipe_instance->is_valid()) << "CreateNamedPipe";', '  return pipe_instance->is_valid();')
     text = replace(text, "  base::FilePath handler;", "  sugarsubstitute::OwnedStart* owner = nullptr;\n  base::FilePath handler;")
-    text = replace(text, '    PLOG(ERROR) << "OpenProcess";', '    if (data->owner && !data->owner->error) data->owner->error = GetLastError();\n    PLOG(ERROR) << "OpenProcess";')
+    text = replace(text, '    PLOG(ERROR) << "OpenProcess";', '    if (data->owner) data->owner->connection.Fail(GetLastError());\n    PLOG(ERROR) << "OpenProcess";')
     text = replace(text, "      this_process.get(),", "      data->owner ? data->owner->bootstrap_process : this_process.get(),")
     text = replace(text, "  InitialClientData initial_client_data(", "  if (data->owner && this_process.is_valid()) data->owner->bootstrap_process = this_process.release();\n  InitialClientData initial_client_data(")
     text = replace(text, "  startup_info.StartupInfo.dwFlags =\n      STARTF_USESTDHANDLES | STARTF_FORCEOFFFEEDBACK;", "  startup_info.StartupInfo.dwFlags = STARTF_FORCEOFFFEEDBACK |\n      (data->owner ? 0 : STARTF_USESTDHANDLES);")
@@ -92,16 +170,15 @@ def transform(name, text):
   }""")
     text = replace(text, "    creation_flags = 0;", "    if (data->owner) { SetLastError(ERROR_NOT_SUPPORTED); return false; }\n    creation_flags = 0;")
     text = transform_owned_launch(text)
-    text = replace(text, "  CreatePipe(&ipc_pipe_, &ipc_pipe_handle);", "  if (!CreatePipe(&ipc_pipe_, &ipc_pipe_handle)) {\n    if (owned_start_) owned_start_->error = GetLastError();\n    SetHandlerStartupState(StartupState::kFailed);\n    return false;\n  }\n  if (owned_start_) owned_start_->initial_pipe = ipc_pipe_handle.release();")
+    text = replace(text, "  CreatePipe(&ipc_pipe_, &ipc_pipe_handle);", "  if (!CreatePipe(&ipc_pipe_, &ipc_pipe_handle)) {\n    if (owned_start_) owned_start_->connection.Fail(GetLastError());\n    SetHandlerStartupState(StartupState::kFailed);\n    return false;\n  }\n  if (owned_start_) owned_start_->initial_pipe = ipc_pipe_handle.release();")
     for name in ("g_signal_exception", "g_wer_registration.dump_without_crashing", "g_wer_registration.dump_completed"):
         old = name + " =\n      CreateEvent(&security_attributes, false /* auto reset */, false, nullptr);"
-        text = replace(text, old, old + "\n  if (!" + name + " && owned_start_ && !owned_start_->error) owned_start_->error = GetLastError();")
+        text = replace(text, old, old + "\n  if (!" + name + " && owned_start_) owned_start_->connection.Fail(GetLastError());")
     for operation in ("InitializeProcThreadAttributeList (size)", "InitializeProcThreadAttributeList", "UpdateProcThreadAttribute"):
         old = '      PLOG(ERROR) << "' + operation + '";'
-        text = replace(text, old, '      if (data->owner && !data->owner->error) data->owner->error = GetLastError();\n' + old)
-    text = replace(text, "  CommonInProcessInitialization();\n\n  RegisterHandlers();", "  if (!g_signal_exception || !g_wer_registration.dump_without_crashing ||\n      !g_wer_registration.dump_completed) {\n    SetHandlerStartupState(StartupState::kFailed);\n    return false;\n  }\n  CommonInProcessInitialization();\n\n  RegisterHandlers();")
+        text = replace(text, old, '      if (data->owner) data->owner->connection.Fail(GetLastError());\n' + old)
     text = replace(text, "  if (asynchronous_start) {", "  data->owner = owned_start_;\n  if (asynchronous_start) {")
-    return replace(text, "void CrashpadClient::RegisterHandlers() {", """bool CrashpadClient::StartHandlerOwned(
+    text = replace(text, "void CrashpadClient::RegisterHandlers() {", """bool CrashpadClient::StartHandlerOwned(
     const base::FilePath& handler, const base::FilePath& database,
     const base::FilePath& metrics_dir,
     const std::map<std::string, std::string>& annotations,
@@ -116,6 +193,7 @@ def transform(name, text):
 }
 
 void CrashpadClient::RegisterHandlers() {""")
+    return transform_captured_runtime(text)
 
 
 def prepare(source, authored, receipt, downloads):

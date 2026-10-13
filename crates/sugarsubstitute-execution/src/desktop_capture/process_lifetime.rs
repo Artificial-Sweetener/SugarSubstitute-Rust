@@ -180,7 +180,8 @@ impl ProcessCaptureStorage {
 /// this value can be constructed. It never grants fresh Ready or native effects.
 #[must_use = "Retain the permanent capture owner for the desktop process lifetime"]
 pub struct ProcessLifetimeCapture {
-    capsule: Option<ProcessCaptureCapsule>,
+    /// Sole occupied custody; visibility stays inside this authoritative child owner.
+    pub(super) capsule: Option<ProcessCaptureCapsule>,
 }
 
 impl ProcessLifetimeCapture {

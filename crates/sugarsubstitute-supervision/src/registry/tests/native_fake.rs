@@ -19,7 +19,7 @@ pub(super) struct Fake {
     pub(super) hold_enrollment: AtomicBool,
     pub(super) enrollment_entered: AtomicBool,
     pub(super) creation_order: Mutex<[u8; 4]>,
-    pub(super) inherited: Mutex<([usize; 4], usize, [usize; 3], bool)>,
+    pub(super) inherited: Mutex<([usize; 6], usize, [usize; 3], bool)>,
     pub(super) fail_terminate: AtomicBool,
     pub(super) advance_clock: Mutex<Option<Arc<TestClock>>>,
     pub(super) root_alive: AtomicBool,

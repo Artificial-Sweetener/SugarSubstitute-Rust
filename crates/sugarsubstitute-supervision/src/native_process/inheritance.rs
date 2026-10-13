@@ -78,6 +78,12 @@ impl Family {
                     bootstrap.borrow_inheritance().section.as_raw_handle() as usize
                 })
             });
+        let captured = self.lifecycle_bootstrap.as_ref().and_then(|bootstrap| {
+            bootstrap
+                .borrow_inheritance()
+                .capture_processes
+                .map(|handles| handles.map(|handle| handle.as_raw_handle() as usize))
+        });
         let stdio = if let Some(pin) = &self.output_pin {
             let resource =
                 self.output_resource.ok_or_else(|| RegistryError::invalid("output_resource"))?;
@@ -88,7 +94,7 @@ impl Family {
         } else {
             None
         };
-        let (handles, count) = allowlist(fixture, section, stdio)?;
+        let (handles, count) = allowlist(fixture, section, captured, stdio)?;
         self.stdio_handles = stdio.unwrap_or([0; 3]);
         self.inherited_handles = handles;
         self.inherited_count = count;
@@ -133,7 +139,7 @@ impl Family {
         if let Some(pin) = self.output_pin.take() {
             self.output_cancel = Some(pin.release());
         }
-        self.inherited_handles = [0; 4];
+        self.inherited_handles = [0; 6];
         self.inherited_count = 0;
         self.stdio_handles = [0; 3];
         Ok(())
@@ -142,20 +148,28 @@ impl Family {
 fn allowlist(
     fixture: Option<[usize; 4]>,
     section: Option<usize>,
+    captured: Option<[usize; 2]>,
     stdio: Option<[usize; 3]>,
-) -> Result<([usize; 4], usize), RegistryError> {
-    if fixture.is_some() && (section.is_some() || stdio.is_some()) {
+) -> Result<([usize; 6], usize), RegistryError> {
+    if fixture.is_some() && (section.is_some() || captured.is_some() || stdio.is_some()) {
         return Err(RegistryError::invalid("fixture_inheritance_conflict"));
     }
-    let mut handles = [0; 4];
+    if captured.is_some() && section.is_none() {
+        return Err(RegistryError::invalid("captured_inheritance_without_section"));
+    }
+    let mut handles = [0; 6];
     let mut count = 0;
     if let Some(fixture) = fixture {
-        handles = fixture;
+        handles[..4].copy_from_slice(&fixture);
         count = 4;
     } else {
         if let Some(section) = section {
             handles[0] = section;
             count = 1;
+        }
+        if let Some(captured) = captured {
+            handles[count..count + 2].copy_from_slice(&captured);
+            count += 2;
         }
         if let Some(stdio) = stdio {
             handles[count..count + 3].copy_from_slice(&stdio);

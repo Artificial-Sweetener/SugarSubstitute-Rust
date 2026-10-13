@@ -7,7 +7,7 @@ pub(super) fn shape<const N: usize>(
     expected: Option<[u8; 24]>,
     check: &mut dyn FnMut() -> Result<(), ClaimError>,
 ) -> Result<RecordRead<N>, ClaimError> {
-    let path = paths::wide(&file.record_path)?;
+    let path = paths::wide(file.record_path.path()?)?;
     let mut handles = lock(&file.temporary_handles);
     if handles.len() >= 16 || !(16..=1024).contains(&N) {
         return Err(ClaimError::invalid("temporary_handle_bound"));
@@ -40,15 +40,35 @@ pub(super) fn shape<const N: usize>(
     let handle = &mut handles[index];
     let observed = (|| {
         check()?;
-        paths::validate_regular(handle, None)?;
+        paths::validate_regular(
+            handle,
+            None,
+            &mut crate::protected_storage::native_phase::NativePhase::ordinary(&(handle).budget())?,
+        )?;
         check()?;
-        security::verify(handle, &file.account_sid)?;
+        security::verify(
+            handle,
+            file.account_sid.bytes()?,
+            &mut crate::protected_storage::native_phase::NativePhase::ordinary(&(handle).budget())?,
+        )?;
         check()?;
-        if paths::final_path(handle)? != file.record_path {
+        if paths::final_path(
+            handle,
+            &mut crate::protected_storage::native_phase::NativePhase::ordinary(&(handle).budget())?,
+            crate::protected_storage::native_name::NativeNameDestination::Ordinary,
+        )
+        .and_then(crate::protected_storage::native_name::NativeName::into_ordinary)?
+            != file.record_path.path()?
+        {
             return Err(ClaimError::invalid("changed_record_path"));
         }
         if let Some(identity) = expected
-            && paths::file_identity(handle)? != identity
+            && paths::file_identity(
+                handle,
+                &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+                    &(handle).budget(),
+                )?,
+            )? != identity
         {
             return Err(ClaimError::invalid("changed_retirement_record_identity"));
         }
@@ -89,7 +109,11 @@ pub(super) fn activated<const N: usize>(
     check: &mut dyn FnMut() -> Result<(), ClaimError>,
 ) -> Result<(), ClaimError> {
     check()?;
-    paths::validate_regular(handle, Some(N as i64))?;
+    paths::validate_regular(
+        handle,
+        Some(N as i64),
+        &mut crate::protected_storage::native_phase::NativePhase::ordinary(&(handle).budget())?,
+    )?;
     check()?;
     let mut bytes = [0; N];
     let mut read = 0;

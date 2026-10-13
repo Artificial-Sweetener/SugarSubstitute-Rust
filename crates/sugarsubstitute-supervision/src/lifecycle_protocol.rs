@@ -75,7 +75,7 @@ pub use raw_windows::{
     FolderFragment, MAX_FOLDER_FRAGMENT_UNITS, MAX_PROFILE_FOLDER_UNITS, RawWindowsUnits,
 };
 pub use reply::ReplyOutcome;
-pub use target::{DecodedTarget, ManagedTargetRef};
+pub use target::{BorrowedBackendTarget, DecodedTarget, ManagedTargetRef};
 pub use utf16::{ArgumentRefs, Utf16Text};
 
 /// Exact supported wire version; unknown versions reject without negotiation.

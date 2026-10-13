@@ -28,7 +28,7 @@ fn managed_unicode_empty_and_shell_arguments_roundtrip_exactly_without_exposure(
         "a&b|c$(d);😀é".into(),
         "e\u{301}".into(),
     ])?;
-    let source = encoded(WirePayload::Acquire { identity: main()?, target: &target })?;
+    let source = encoded(WirePayload::Acquire { identity: main()?, target: (&target).into() })?;
     let decoded = FrameCodec::decode(&source)?;
     let DecodedPayload::Acquire { target: reference, .. } = decoded.payload else {
         return Err("Expected managed target".into());
@@ -51,7 +51,7 @@ fn every_supported_attachment_host_and_port_roundtrips_without_arbitrary_url_dat
     for host in ["127.0.0.1", "[::1]", "localhost"] {
         let target =
             BackendTarget::Attached(LoopbackOrigin::parse(&format!("http://{host}:65535"), 65535)?);
-        let source = encoded(WirePayload::Acquire { identity: main()?, target: &target })?;
+        let source = encoded(WirePayload::Acquire { identity: main()?, target: (&target).into() })?;
         assert_eq!(source.len(), 124);
         let DecodedPayload::Acquire { target: decoded, .. } = FrameCodec::decode(&source)?.payload
         else {
@@ -79,7 +79,7 @@ fn exact_64k_frame_encodes_and_one_additional_unit_rejects_without_output_change
         arguments.clone(),
         8188,
     )?);
-    let source = encoded(WirePayload::Acquire { identity: main()?, target: &target })?;
+    let source = encoded(WirePayload::Acquire { identity: main()?, target: (&target).into() })?;
     assert_eq!(source.len(), MAX_FRAME_BYTES);
     let DecodedPayload::Acquire { target: decoded, .. } = FrameCodec::decode(&source)?.payload
     else {
@@ -95,7 +95,7 @@ fn exact_64k_frame_encodes_and_one_additional_unit_rejects_without_output_change
     )?);
     let message = WireMessage {
         header: header(4)?,
-        payload: WirePayload::Acquire { identity: main()?, target: &oversized },
+        payload: WirePayload::Acquire { identity: main()?, target: (&oversized).into() },
     };
     let mut output = vec![0x72; MAX_FRAME_BYTES];
     assert!(matches!(FrameCodec::encode(&message, &mut output), Err(ProtocolError::FrameTooLarge)));
@@ -160,6 +160,40 @@ fn explicit_domain_conversion_rejects_relative_and_dot_paths_without_normalizing
             return Err("Expected target".into());
         };
         assert!(matches!(target.to_domain(), Err(ProtocolError::Configuration(_))));
+    }
+    Ok(())
+}
+
+#[test]
+fn configured_managed_view_preserves_exact_existing_acquire_bytes() -> Result<(), Box<dyn Error>> {
+    let target = managed(vec!["--name=Unicode-雪".into(), "".into()])?;
+    let BackendTarget::Managed(configuration) = &target else {
+        return Err("Managed fixture changed".into());
+    };
+    let owned_bytes =
+        encoded(WirePayload::Acquire { identity: main()?, target: (&target).into() })?;
+    let borrowed = BorrowedBackendTarget::Managed(configuration);
+    let borrowed_bytes = encoded(WirePayload::Acquire { identity: main()?, target: borrowed })?;
+    assert_eq!(owned_bytes, borrowed_bytes);
+    let BorrowedBackendTarget::Managed(retained) = borrowed else {
+        return Err("Borrowed managed view changed".into());
+    };
+    assert!(std::ptr::eq(configuration, retained));
+    Ok(())
+}
+
+#[test]
+fn configured_attachment_view_preserves_exact_existing_acquire_bytes() -> Result<(), Box<dyn Error>>
+{
+    for host in ["127.0.0.1", "[::1]", "localhost"] {
+        let origin = LoopbackOrigin::parse(&format!("http://{host}:8188"), 8188)?;
+        let target = BackendTarget::Attached(origin);
+        let configuration =
+            sugarsubstitute_contracts::configuration::ConnectionConfiguration::Attach(origin);
+        assert_eq!(
+            encoded(WirePayload::Acquire { identity: main()?, target: (&target).into() })?,
+            encoded(WirePayload::Acquire { identity: main()?, target: (&configuration).into() })?
+        );
     }
     Ok(())
 }

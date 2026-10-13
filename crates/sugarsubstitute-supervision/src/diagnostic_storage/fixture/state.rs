@@ -3,7 +3,7 @@
 //! Retain actual fake output custody and its original execution memory claim.
 use super::*;
 use sha2::{Digest, Sha256};
-use std::sync::Weak;
+use std::sync::atomic::{AtomicBool, Ordering};
 #[derive(Default)]
 pub(in crate::diagnostic_storage) struct Faults {
     pub(in crate::diagnostic_storage) partial_stage: bool,
@@ -33,9 +33,10 @@ pub(super) struct Handle {
     pub(super) deleted: bool,
     pub(super) writable: bool,
     pub(super) stage: bool,
-    pub(super) memory: Option<Arc<MemoryClaim>>,
+    pub(super) memory: Option<allocation::DiagnosticAllocationOwner>,
 }
 pub(in crate::diagnostic_storage) struct Disk {
+    pub(super) observe_open_context: bool,
     pub(super) files: Vec<File>,
     pub(super) handles: Vec<Handle>,
     pub(in crate::diagnostic_storage) faults: Faults,
@@ -45,7 +46,7 @@ pub(in crate::diagnostic_storage) struct Disk {
     pub(in crate::diagnostic_storage) after_open: Option<Arc<dyn BoundaryClock>>,
     pub(in crate::diagnostic_storage) after_open_time: u64,
     pub(super) next: u64,
-    pub(super) memory: Weak<MemoryClaim>,
+    pub(super) owned: Arc<AtomicBool>,
     pub(super) namespace: Option<NamespaceId>,
     pub(super) stage_scan: Vec<(usize, DiagnosticObject, LogicalStoreOperationKey, [u8; 24], u64)>,
     pub(super) stage_scan_complete: bool,
@@ -53,34 +54,41 @@ pub(in crate::diagnostic_storage) struct Disk {
 #[derive(Clone)]
 pub(in crate::diagnostic_storage) struct Filesystem(
     pub(in crate::diagnostic_storage) Arc<Mutex<Disk>>,
+    pub(super) Option<allocation::DiagnosticAllocationOwner>,
 );
 impl Filesystem {
     pub(in crate::diagnostic_storage) fn new() -> Self {
-        Self(Arc::new(Mutex::new(Disk {
-            files: Vec::new(),
-            handles: Vec::new(),
-            faults: Faults::default(),
-            observations: Vec::new(),
-            mutations: 0,
-            after_open: None,
-            after_open_time: 0,
-            next: 1,
-            memory: Weak::new(),
-            namespace: None,
-            stage_scan: Vec::new(),
-            stage_scan_complete: false,
-        })))
+        Self(
+            Arc::new(Mutex::new(Disk {
+                observe_open_context: false,
+                files: Vec::new(),
+                handles: Vec::new(),
+                faults: Faults::default(),
+                observations: Vec::new(),
+                mutations: 0,
+                after_open: None,
+                after_open_time: 0,
+                next: 1,
+                owned: Arc::new(AtomicBool::new(false)),
+                namespace: None,
+                stage_scan: Vec::new(),
+                stage_scan_complete: false,
+            })),
+            None,
+        )
     }
     pub(in crate::diagnostic_storage) fn retain_claim(
         &self,
-        memory: &Arc<MemoryClaim>,
-    ) -> Result<(), ClaimError> {
-        let mut disk = lock(&self.0);
-        if disk.handles.iter().any(|handle| handle.live) || disk.memory.upgrade().is_some() {
+        owner: &allocation::DiagnosticAllocationOwner,
+    ) -> Result<Self, ClaimError> {
+        let disk = lock(&self.0);
+        if disk.handles.iter().any(|handle| handle.live) || disk.owned.load(Ordering::Acquire) {
             return Err(ClaimError::invalid("fake_live_owner"));
         }
-        disk.memory = Arc::downgrade(memory);
-        Ok(())
+        owner
+            .retain_fixture(&disk.owned)
+            .map_err(|cause| ClaimError::new("fake_original_owner", cause))?;
+        Ok(Self(self.0.clone(), Some(owner.clone())))
     }
     #[cfg(test)]
     pub(in crate::diagnostic_storage) fn erase_existing(&self, object: DiagnosticObject) {
@@ -125,11 +133,11 @@ pub(super) fn facts(file: &File) -> DiagnosticReadFacts {
         bytes: file.bytes.len() as u64,
     }
 }
-pub(super) fn handle(disk: &mut Disk, file: usize) -> Result<u64, ClaimError> {
+pub(super) fn handle(disk: &mut Disk, file: usize, owner: &Filesystem) -> Result<u64, ClaimError> {
     if disk.handles.iter().filter(|handle| handle.live).count() >= 16 {
         return Err(ClaimError::invalid("fake_handle_capacity"));
     }
-    let memory = disk.memory.upgrade().ok_or_else(|| ClaimError::invalid("fake_missing_claim"))?;
+    let memory = owner.1.clone().ok_or_else(|| ClaimError::invalid("fake_missing_claim"))?;
     let id = disk.next;
     disk.next =
         disk.next.checked_add(1).ok_or_else(|| ClaimError::invalid("fake_output_id_exhausted"))?;

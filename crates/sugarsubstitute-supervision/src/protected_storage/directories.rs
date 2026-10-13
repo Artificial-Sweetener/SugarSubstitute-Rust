@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Atomically return one directory handle under an actual retained protected parent.
+use super::native_phase::NativePhase;
 use super::*;
-use std::os::windows::ffi::OsStrExt;
+use crate::claim_error::BoundedNativeCause;
 use windows::{
     Wdk::{
         Foundation::OBJECT_ATTRIBUTES,
@@ -38,43 +39,63 @@ fn accepted(mode: Mode, status: i32, information: usize) -> bool {
         }
     }
 }
+/// Specify one relative child under its retained actual parent.
+pub(super) struct RelativeDirectory<'a> {
+    pub(super) path: &'a Path,
+    pub(super) parent: usize,
+    pub(super) mode: Mode,
+}
 pub(super) fn open_relative(
-    state: &mut State,
-    path: &Path,
-    parent: usize,
-    mode: Mode,
+    handles: &mut Vec<Handle>,
+    sid: &[u8],
+    budget: files::Budget,
+    directory: RelativeDirectory<'_>,
     context: &JobContext,
+    phase: &mut NativePhase<'_>,
 ) -> Result<usize, ClaimError> {
-    check(context)?;
-    paths::wide(path)?;
-    if state.handles.len() == HANDLE_BOUND {
-        return Err(ClaimError::invalid("storage_handle_bound"));
+    let RelativeDirectory { path, parent, mode } = directory;
+    phase.context(context)?;
+    phase.check_budget(&budget)?;
+    paths::validate_local_shape(path).map_err(|operation| phase.invalid(operation))?;
+    if handles.len() == HANDLE_BOUND || handles.len() == handles.capacity() {
+        return Err(phase.invalid("storage_handle_bound"));
     }
-    let child = path.file_name().ok_or_else(|| ClaimError::invalid("generation_child_name"))?;
-    let mut units: Vec<u16> = child.encode_wide().collect();
-    if units.is_empty() || units.iter().any(|unit| matches!(*unit, 0 | 47 | 58 | 92)) {
-        return Err(ClaimError::invalid("directory_leaf_name"));
-    }
-    let length =
-        u16::try_from(units.len() * 2).map_err(|e| ClaimError::new("generation_child_bound", e))?;
-    let object_name =
-        UNICODE_STRING { Length: length, MaximumLength: length, Buffer: PWSTR(units.as_mut_ptr()) };
-    let descriptor = security::Descriptor::new(&state.sid)?;
-    let attributes = descriptor.attributes();
+    let parent_raw =
+        handles.get(parent).ok_or_else(|| phase.invalid("directory_parent_owner"))?.raw();
+    let child = path.file_name().ok_or_else(|| phase.invalid("generation_child_name"))?;
+    let mut producing = phase.relative_buffers(child, sid)?;
+    let length = match u16::try_from(producing.units().len() * 2) {
+        Ok(length) => length,
+        Err(cause) => {
+            drop(producing);
+            return Err(phase.error("generation_child_bound", BoundedNativeCause::Integer(cause)));
+        }
+    };
+    let object_name = UNICODE_STRING {
+        Length: length,
+        MaximumLength: length,
+        Buffer: PWSTR(producing.units().as_ptr().cast_mut()),
+    };
+    let attributes = match producing.attributes() {
+        Some(attributes) => attributes,
+        None => {
+            drop(producing);
+            return Err(phase.invalid("directory_descriptor_absent"));
+        }
+    };
     let object = OBJECT_ATTRIBUTES {
         Length: size_of::<OBJECT_ATTRIBUTES>() as u32,
-        RootDirectory: state
-            .handles
-            .get(parent)
-            .ok_or_else(|| ClaimError::invalid("directory_parent_owner"))?
-            .raw(),
+        RootDirectory: parent_raw,
         ObjectName: &object_name,
         Attributes: OBJ_CASE_INSENSITIVE | OBJ_DONT_REPARSE,
         SecurityDescriptor: attributes.lpSecurityDescriptor.cast(),
         ..Default::default()
     };
+    let index = handles.len();
+    handles.push(Handle::new(HANDLE::default(), budget.clone()));
     let mut raw = HANDLE::default();
     let mut io = IO_STATUS_BLOCK::default();
+    producing.context(context)?;
     // SAFETY: Fixed one-component relative name, actual retained parent and aligned
     // descriptor remain live. Synchronous FILE_CREATE atomically returns the created
     // directory handle; an existing name fails. No handle inherits or shares deletion.
@@ -93,40 +114,32 @@ pub(super) fn open_relative(
             0,
         )
     };
-    let budget = files::Budget::Protected(state.memory.clone());
-    let index = state.handles.len();
-    if !raw.0.is_null() {
-        state.handles.push(Handle::new(raw, budget));
-    }
+    handles[index].adopt_output(raw);
+    drop(producing);
     if status.0 != 0 && !(mode == Mode::OpenOrCreate && status.0 == 0x40000000) {
         // SAFETY: Pure conversion of this immediate native status preserves its error code.
         let code = unsafe { RtlNtStatusToDosError(status) };
-        return Err(ClaimError::new(
+        return Err(phase.error(
             "create_capture_generation",
-            std::io::Error::from_raw_os_error(code as i32),
+            BoundedNativeCause::RawIo(std::io::Error::from_raw_os_error(code as i32)),
         ));
     }
     // FILE_CREATED=2 is the pinned SDK result; success never substitutes existing state.
     if raw.0.is_null() || !accepted(mode, status.0, io.Information) {
-        return Err(ClaimError::invalid("generation_creation_output"));
+        return Err(phase.invalid("generation_creation_output"));
     }
-    paths::validate_object(&state.handles[index], true, true)?;
-    let identity = paths::file_identity(&state.handles[index])?;
-    security::verify(&state.handles[index], &state.sid)?;
-    let canonical = paths::final_path(&state.handles[index])?;
-    if (mode == Mode::CreateNew && canonical != path)
-        || (mode == Mode::OpenOrCreate && canonical.parent() != path.parent())
+    paths::validate_object(&handles[index], true, true, phase)?;
+    let identity = paths::file_identity(&handles[index], phase)?;
+    security::verify(&handles[index], sid, phase)?;
+    let destination = phase.name_destination()?;
+    let canonical = paths::final_path(&handles[index], phase, destination)?;
+    if (mode == Mode::CreateNew && canonical.path()? != path)
+        || (mode == Mode::OpenOrCreate && canonical.path()?.parent() != path.parent())
     {
-        return Err(ClaimError::invalid("capture_generation_resolution"));
+        return Err(phase.invalid("capture_generation_resolution"));
     }
-    paths::verify_pinned(
-        &canonical,
-        identity,
-        &mut state.handles,
-        true,
-        files::Budget::Protected(state.memory.clone()),
-    )?;
-    check(context)?;
+    paths::verify_pinned(canonical.path()?, identity, handles, true, budget, phase)?;
+    phase.context(context)?;
     Ok(index)
 }
 

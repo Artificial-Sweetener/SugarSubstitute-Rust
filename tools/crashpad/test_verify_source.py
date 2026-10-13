@@ -48,7 +48,7 @@ class SourceTests(unittest.TestCase):
 
     def test_complete_inventory_hashes_actual_immutable_and_authored_files(self):
         result = self.check()
-        self.assertEqual(len(result["files"]), 13)
+        self.assertEqual(len(result["files"]), 36)
         self.assertEqual(json.loads(self.receipt.read_text()), result)
         self.assertEqual(result, self.check())
 
@@ -75,7 +75,7 @@ class SourceTests(unittest.TestCase):
     def test_authored_unknown_or_directory_is_rejected(self):
         extra = self.authored / "extra.cc"
         extra.write_text("unknown")
-        with self.assertRaisesRegex(ValueError, "twelve files"):
+        with self.assertRaisesRegex(ValueError, "reviewed exact source set"):
             authored_inputs(self.authored)
         extra.unlink()
         path = self.authored / "BUILD.gn"
@@ -91,7 +91,7 @@ class SourceTests(unittest.TestCase):
                 path = self.authored / name
                 original = path.read_bytes()
                 path.unlink()
-                with self.assertRaisesRegex(ValueError, "twelve files"):
+                with self.assertRaisesRegex(ValueError, "reviewed exact source set"):
                     authored_inputs(self.authored)
                 path.write_bytes(original)
 

@@ -3,6 +3,7 @@
 //! Compose governed raster ownership with current-state application publication.
 
 use crate::job_sequence::JobSequence;
+use crate::preparation_task::RenderConsole;
 use crate::{
     preparation_task::{
         FramePreparation, InitializationPreparation, PendingPreparation, PreparationFailure,
@@ -12,7 +13,6 @@ use crate::{
 };
 use std::error::Error;
 use sugarsubstitute_application::presentation::{FramePublicationDecision, FramePublicationGate};
-use sugarsubstitute_application::transcript::TranscriptSnapshot;
 use sugarsubstitute_contracts::lifecycle::ResourceKey;
 use sugarsubstitute_contracts::{
     execution::{
@@ -36,7 +36,7 @@ struct ActivePreparation {
     identity: Option<FrameIdentity>,
     bootstrap: bool,
     // Actual accepted request remains retained until its observed terminal disposal, even if uninvoked.
-    _request: Option<PreparationTransfer<SplashRenderRequest>>,
+    _request: Option<PreparationTransfer<SplashRenderRequest<RenderConsole>>>,
 }
 
 #[cfg(test)]
@@ -139,7 +139,7 @@ impl PreparationDriver {
         appearance: Appearance,
         character: AnimationFrame,
         feedback: ProgressFrame,
-        console: Option<TranscriptSnapshot>,
+        console: Option<RenderConsole>,
     ) -> Result<(), Box<dyn Error>> {
         let binding = console.as_ref().map(|view| (view.resource(), view.revision()));
         if matches!((self.console_binding,binding), (Some((old_resource,old_revision)),Some((resource,revision)))

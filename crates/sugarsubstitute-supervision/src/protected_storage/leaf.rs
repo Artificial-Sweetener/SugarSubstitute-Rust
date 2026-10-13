@@ -6,12 +6,15 @@ use super::*;
 impl ProtectedStorageRoot {
     pub(crate) fn profile_folder(&self) -> Result<(&Path, [u8; 24], &[u8]), ClaimError> {
         let state = self.state.as_ref().ok_or_else(|| ClaimError::invalid("retired_storage"))?;
+        if !state.budget.is_ordinary() {
+            return Err(state.budget.rejection("profile_storage_origin"));
+        }
         if !state.profile_leaf {
             return Err(ClaimError::invalid("not_profile_storage"));
         }
         let (path, identity, _) =
             state.root.as_ref().ok_or_else(|| ClaimError::invalid("unresolved_profile_storage"))?;
-        Ok((path, *identity, &state.sid))
+        Ok((path.path()?, *identity, state.sid.bytes()?))
     }
     /// Open or create only the final profile directory under an existing protected parent.
     ///
@@ -28,7 +31,10 @@ impl ProtectedStorageRoot {
         path: &Path,
         context: &JobContext,
     ) -> Result<(), ClaimError> {
-        paths::wide(path)?;
+        if !self.state_mut()?.budget.is_ordinary() {
+            return Err(self.state_mut()?.budget.rejection("profile_storage_origin"));
+        }
+        paths::validate_local_shape(path).map_err(ClaimError::invalid)?;
         let child = path.file_name().ok_or_else(|| ClaimError::invalid("profile_leaf_name"))?;
         let parent = path.parent().ok_or_else(|| ClaimError::invalid("profile_parent"))?;
         if child.as_encoded_bytes().iter().any(|byte| matches!(*byte, 0 | b':' | b'/' | b'\\')) {
@@ -40,19 +46,36 @@ impl ProtectedStorageRoot {
         check(context)?;
         let (parent, _, parent_index) =
             state.root.take().ok_or_else(|| ClaimError::invalid("profile_parent_owner"))?;
-        let path = parent.join(child);
+        let path = parent.path()?.join(child);
         state.profile_leaf = true;
         let index = directories::open_relative(
-            state,
-            &path,
-            parent_index,
-            directories::Mode::OpenOrCreate,
+            &mut state.handles,
+            state.sid.bytes()?,
+            state.budget.clone(),
+            directories::RelativeDirectory {
+                path: &path,
+                parent: parent_index,
+                mode: directories::Mode::OpenOrCreate,
+            },
             context,
+            &mut crate::protected_storage::native_phase::NativePhase::ordinary(&state.budget)?,
         )?;
-        let canonical = paths::final_path(&state.handles[index])?;
-        let identity = paths::file_identity(&state.handles[index])?;
+        let canonical = paths::final_path(
+            &state.handles[index],
+            &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+                &state.handles[index].budget(),
+            )?,
+            crate::protected_storage::native_name::NativeNameDestination::Ordinary,
+        )
+        .and_then(crate::protected_storage::native_name::NativeName::into_ordinary)?;
+        let identity = paths::file_identity(
+            &state.handles[index],
+            &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+                &state.handles[index].budget(),
+            )?,
+        )?;
         check(context)?;
-        state.root = Some((canonical, identity, index));
+        state.root = Some((NativeName::Ordinary(canonical), identity, index));
         Ok(())
     }
 }

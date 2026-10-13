@@ -108,7 +108,11 @@ pub(crate) trait Port: Send {
         context: &JobContext,
     ) -> Result<bool, ClaimError>;
     fn close(&mut self, id: NativeId, context: &JobContext) -> Result<(), ClaimError>;
-    fn retire(&mut self, context: &JobContext) -> Result<(), ClaimError>;
+    fn retire(
+        &mut self,
+        context: &JobContext,
+        control: &mut DiagnosticNativeRetirement<'_>,
+    ) -> Result<(), ClaimError>;
     fn live_handles(&self) -> usize;
     fn retained_files(&self) -> usize;
 }

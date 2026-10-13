@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise strict semantic recovery through actual retained journal and ledger reads.
-use super::publication::{admitted, setup};
+use super::publication_fixture::{admitted, setup};
 use super::*;
 use sugarsubstitute_contracts::execution::JobContext;
 use sugarsubstitute_supervision::diagnostic_storage::{fixture::*, *};

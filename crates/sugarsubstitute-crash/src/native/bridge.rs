@@ -1,14 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exact v1 ABI; a process-lifetime pin precedes every possible callback installation.
-use crate::{CrashError, capture::lock, native::CALLBACK_PIN_BYTES};
-use std::sync::Mutex;
+use super::module_pin::{LegacyLoan, SLOT};
+use crate::CrashError;
 use sugarsubstitute_contracts::{crash::CaptureOperation, execution::MemoryClaim};
 use windows::{
-    Win32::{
-        Foundation::{FreeLibrary, HMODULE},
-        System::LibraryLoader::*,
-    },
+    Win32::{Foundation::HMODULE, System::LibraryLoader::*},
     core::{PCSTR, PCWSTR},
 };
 
@@ -77,94 +74,118 @@ pub(super) struct Api {
     retire: Retire,
     endpoint: Option<Endpoint>,
 }
-struct Pin {
-    _module: usize,
-    _memory: MemoryClaim,
-}
-// Exactly one native callback context per process; never cloned/exported.
-static PIN: Mutex<Option<Pin>> = Mutex::new(None);
-
+/// Preserve the genuine loader cause and any outputs not installed in the PIN slot.
+/// No new rejection allocation or replayable trust authority is created.
+type LoadFailure = (
+    CrashError,
+    Option<MemoryClaim>,
+    Option<Box<sugarsubstitute_supervision::installed_release::CaptureBundleParts>>,
+);
 pub(super) fn load(
-    path: &[u16],
+    parts: Box<sugarsubstitute_supervision::installed_release::CaptureBundleParts>,
     memory: MemoryClaim,
-) -> Result<Api, (CrashError, Option<MemoryClaim>)> {
-    let mut pinned = lock(&PIN);
-    if pinned.is_some() {
-        return Err((CrashError::invalid(CaptureOperation::Runtime), Some(memory)));
+) -> Result<Api, LoadFailure> {
+    let path = match parts
+        .retention
+        .client_path()
+        .map_err(|cause| CrashError::new(CaptureOperation::Runtime, cause))
+        .and_then(super::pins::wide)
+    {
+        Ok(path) => path,
+        Err(cause) => return Err((cause, Some(memory), Some(parts))),
+    };
+    let mut loan = match LegacyLoan::reserve(&SLOT, memory) {
+        Ok(loan) => loan,
+        Err(memory) => {
+            return Err((
+                CrashError::invalid(CaptureOperation::Runtime),
+                Some(memory),
+                Some(parts),
+            ));
+        }
+    };
+    if let Err(parts) = loan.install_bundle(parts) {
+        let callback = loan.return_unused().map(|value| value.0);
+        return Err((CrashError::invalid(CaptureOperation::Runtime), callback, Some(parts)));
     }
-    // SAFETY: Absolute pinned NUL path lives through loading; dependencies resolve
-    // exclusively in System32, not the current directory or ambient PATH.
+    let current = loan
+        .bundle()
+        .ok_or_else(|| CrashError::invalid(CaptureOperation::Runtime))
+        .and_then(|parts| {
+            parts
+                .loaded
+                .check_effect()
+                .map_err(|cause| CrashError::new(CaptureOperation::Runtime, cause))
+        });
+    if let Err(cause) = current {
+        let returned = loan.return_unused();
+        let (callback, parts) =
+            returned.map_or((None, None), |(callback, parts)| (Some(callback), parts));
+        return Err((cause, callback, parts));
+    }
+    // SAFETY: the same canonical no-write/no-delete file remains retained in the installed capsule.
+    // UTF16 storage and System32-only dependency lookup are bounded by the admitted native claim.
     let module = match unsafe {
         LoadLibraryExW(PCWSTR(path.as_ptr()), None, LOAD_LIBRARY_SEARCH_SYSTEM32)
     } {
         Ok(module) => module,
         Err(cause) => {
-            return Err((CrashError::new(CaptureOperation::Runtime, cause), Some(memory)));
+            let returned = loan.return_unused();
+            let (callback, parts) =
+                returned.map_or((None, None), |(callback, parts)| (Some(callback), parts));
+            return Err((CrashError::new(CaptureOperation::Runtime, cause), callback, parts));
         }
     };
-    // Pin before symbol lookup/entry: even a failed StartHandler can install callbacks.
-    let mut retained = HMODULE::default();
-    // SAFETY: The exact just-loaded absolute module is retained while Windows pins it.
+    loan.adopt_module(module.0 as usize);
+    if let Err(cause) = loan
+        .bundle()
+        .ok_or_else(|| CrashError::invalid(CaptureOperation::Runtime))
+        .and_then(|parts| {
+            parts
+                .pinned
+                .check_effect()
+                .map_err(|cause| CrashError::new(CaptureOperation::Runtime, cause))
+        })
+    {
+        return Err((cause, None, None));
+    }
+    loan.pin_attempt();
+    let mut pinned = HMODULE::default();
+    // SAFETY: the exact loaded reference, canonical name and whole verified capsule remain held.
     let result = unsafe {
-        GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_PIN, PCWSTR(path.as_ptr()), &mut retained)
+        GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_PIN, PCWSTR(path.as_ptr()), &mut pinned)
     };
-    // A partial nonnull PIN output is retained before status interpretation.
-    // It is never an unload proof, even if the API reports failure.
-    if !retained.0.is_null() {
-        *pinned = Some(Pin { _module: module.0 as usize, _memory: memory });
-        if let Err(cause) = result {
-            return Err((CrashError::new(CaptureOperation::Runtime, cause), None));
-        }
-        if retained != module {
-            return Err((CrashError::invalid(CaptureOperation::Runtime), None));
-        }
-    } else if result.is_ok() {
-        *pinned = Some(Pin { _module: module.0 as usize, _memory: memory });
-        return Err((CrashError::invalid(CaptureOperation::Runtime), None));
-    } else if let Err(cause) = result {
-        // Failed checked unload retains the actual module and its storage charge.
-        // SAFETY: This is our owned LoadLibrary reference, before callback entry.
-        if let Err(cleanup) = unsafe { FreeLibrary(module) } {
-            *pinned = Some(Pin { _module: module.0 as usize, _memory: memory });
-            return Err((
-                CrashError::new(CaptureOperation::Runtime, cause).with_secondary(cleanup),
-                None,
-            ));
-        }
-        return Err((CrashError::new(CaptureOperation::Runtime, cause), Some(memory)));
+    if let Err(cause) = result {
+        return Err((CrashError::new(CaptureOperation::Runtime, cause), None, None));
     }
-    // SAFETY: The process-pinned module owns both fixed C ABI exports permanently.
-    let start = unsafe { GetProcAddress(module, PCSTR(c"ss_capture_start_v1".as_ptr().cast())) };
-    let start_error = start.is_none().then(windows::core::Error::from_thread);
-    // SAFETY: The process-pinned module owns both fixed C ABI exports permanently.
-    let retire =
-        unsafe { GetProcAddress(module, PCSTR(c"ss_capture_retire_io_v1".as_ptr().cast())) };
-    let retire_error = retire.is_none().then(windows::core::Error::from_thread);
-    if let Some(cause) = start_error {
-        let mut failure = CrashError::new(CaptureOperation::Runtime, cause);
-        if let Some(secondary) = retire_error {
-            failure = failure.with_secondary(secondary);
-        }
-        return Err((failure, None));
+    if pinned.0.is_null() || pinned != module {
+        return Err((CrashError::invalid(CaptureOperation::Runtime), None, None));
     }
-    if let Some(cause) = retire_error {
-        return Err((CrashError::new(CaptureOperation::Runtime, cause), None));
-    }
-    let (Some(start), Some(retire)) = (start, retire) else {
-        return Err((CrashError::invalid(CaptureOperation::Runtime), None));
+    let mut symbol=|name:&'static std::ffi::CStr|->Result<unsafe extern "system" fn()->isize,CrashError> {
+        loan.bundle().ok_or_else(||CrashError::invalid(CaptureOperation::Runtime))?.retention.check_effect().map_err(|cause|CrashError::new(CaptureOperation::Runtime,cause))?;
+        // SAFETY: fixed reviewed names are resolved from the identical process-pinned DLL.
+        unsafe {GetProcAddress(module,PCSTR(name.as_ptr().cast()))}.ok_or_else(||CrashError::new(CaptureOperation::Runtime,windows::core::Error::from_thread()))
     };
-    // SAFETY: Optional new export is resolved once from the same process-pinned,
-    // hash-verified module; old registration remains available when it is absent.
-    let endpoint =
-        unsafe { GetProcAddress(module, PCSTR(c"ss_capture_endpoint_v1".as_ptr().cast())) };
-    // SAFETY: Hash-verified first-party bridge exports exactly these repr(C) signatures.
+    let start = match symbol(c"ss_capture_start_v1") {
+        Ok(value) => value,
+        Err(cause) => return Err((cause, None, None)),
+    };
+    let retire = match symbol(c"ss_capture_retire_io_v1") {
+        Ok(value) => value,
+        Err(cause) => return Err((cause, None, None)),
+    };
+    let endpoint = match symbol(c"ss_capture_endpoint_v1") {
+        Ok(value) => value,
+        Err(cause) => return Err((cause, None, None)),
+    };
+    // SAFETY: the authenticated reviewed first-party module implements these exact repr(C) exports.
     Ok(unsafe {
         Api {
             start: std::mem::transmute::<unsafe extern "system" fn() -> isize, Start>(start),
             retire: std::mem::transmute::<unsafe extern "system" fn() -> isize, Retire>(retire),
-            endpoint: endpoint.map(|function| {
-                std::mem::transmute::<unsafe extern "system" fn() -> isize, Endpoint>(function)
-            }),
+            endpoint: Some(std::mem::transmute::<unsafe extern "system" fn() -> isize, Endpoint>(
+                endpoint,
+            )),
         }
     })
 }
@@ -250,8 +271,8 @@ impl Api {
     }
 }
 pub(super) fn pinned_bytes() -> u64 {
-    if lock(&PIN).is_some() { CALLBACK_PIN_BYTES as u64 } else { 0 }
+    SLOT.legacy_bytes()
 }
 pub(super) fn pinned_reservation_bytes() -> u64 {
-    lock(&PIN).as_ref().map_or(0, |pin| pin._memory.reserved_bytes())
+    SLOT.legacy_reservation()
 }

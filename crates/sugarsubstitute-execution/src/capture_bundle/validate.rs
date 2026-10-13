@@ -6,8 +6,7 @@
 use super::origin::RESERVATION_BYTES;
 use crate::admission::{Core, Record, State};
 use sugarsubstitute_contracts::execution::{
-    AdmissionError, AdmittedJobResources, CancelControl, JobClass, JobContext, JobPhase, Moment,
-    Operation,
+    AdmissionError, AdmittedJobResources, JobClass, JobContext, JobPhase, Moment, Operation,
 };
 
 pub(crate) fn association<'a>(
@@ -40,29 +39,7 @@ fn live_facts(
     if record.phase != JobPhase::Running || record.retiring {
         return Err(AdmissionError::InvalidCaptureAdmission);
     }
-    if record.job.cancellation().is_requested() {
-        return Err(AdmissionError::ScopeClosed { scope_id: record.scope_id });
-    }
-    let mut cutoff = record.deadline;
-    let mut current = Some(record.scope_id);
-    let mut ancestors = 0;
-    while let Some(id) = current {
-        // Both currently supported scope partitions may occur in one genuine ancestry.
-        if ancestors >= 64 + 132 {
-            return Err(AdmissionError::ScopeClosed { scope_id: record.scope_id });
-        }
-        ancestors += 1;
-        let scope = state
-            .scopes
-            .get(&id)
-            .ok_or(AdmissionError::ScopeClosed { scope_id: record.scope_id })?;
-        if scope.closed || scope.abandoned || scope.cancel.is_requested() {
-            return Err(AdmissionError::ScopeClosed { scope_id: record.scope_id });
-        }
-        cutoff = crate::scope::earliest(cutoff, scope.deadline);
-        current = scope.parent;
-    }
-    Ok(cutoff)
+    crate::admission_liveness::scope_deadline(core, state, record)
 }
 
 pub(crate) fn live(

@@ -15,15 +15,17 @@ impl DiagnosticStorage {
         operation: &DiagnosticStorageOperation,
         context: &JobContext,
     ) -> Result<DiagnosticSummaryMigrationPermit, DiagnosticStorageError> {
-        let journal_source = whole(self, journal, operation, context)?;
-        let summary_source = whole(self, summary, operation, context)?;
+        let journal_source = whole(&self.shared, journal, operation, context)?;
+        let summary_source = whole(&self.shared, summary, operation, context)?;
         let id = {
             let mut state = self.check(operation, context)?;
-            stage::mutation(&state, operation.key)?;
-            if state.deletion.is_some() {
+            stage::mutation(&mut state, operation.key)?;
+            if state.data_mut()?.deletion.is_some() {
                 return Err(error(operation.key, Code::Busy));
             }
             let id = next_lease(&mut state, operation.key)?;
+            let allocation =
+                allocation::migration_intent(&state.data_mut()?.allocation, operation.key)?;
             let mut intent = MigrationIntent::new(
                 id,
                 summary_source.object.unwrap_or(DiagnosticObject::StoreState),
@@ -31,12 +33,12 @@ impl DiagnosticStorage {
             intent.journal_read = Some(journal.id);
             intent.original_read = Some(summary.id);
             intent.validating = true;
-            state.migration = Some(Box::new(intent));
+            state.data_mut()?.migration = Some(allocation.migration_intent(intent));
             id
         };
-        let decision = validator
-            .validate_recovery(operation.key, &journal_source, &summary_source)
-            .map_err(|cause| validation(operation.key, cause))?;
+        let decision = allocation::decode_callback(self, operation, context, |decode| {
+            validator.validate_recovery(decode, operation.key, &journal_source, &summary_source)
+        })?;
         let plan = decision.plan;
         {
             let mut state = self.check(operation, context)?;
@@ -156,15 +158,16 @@ impl DiagnosticStorage {
         } else {
             let expected = permit.plan.candidate_stage;
             let actual = state
-                .port
-                .reconcile_activation(
-                    DiagnosticObject::Summary(permit.plan.incident),
-                    DiagnosticPredecessor::Exact {
-                        file_identity: expected.identity,
-                        sha256: expected.sha256,
-                    },
-                    context,
-                )
+                .call_native(|port| {
+                    port.reconcile_activation(
+                        DiagnosticObject::Summary(permit.plan.incident),
+                        DiagnosticPredecessor::Exact {
+                            file_identity: expected.identity,
+                            sha256: expected.sha256,
+                        },
+                        context,
+                    )
+                })?
                 .map_err(|cause| native(operation.key, Code::ActivationUncertain, cause))?;
             if !expected.matches(actual) {
                 return Err(error(operation.key, Code::ChangedIdentity));
@@ -210,8 +213,9 @@ fn verify_conversion(
     let original = stage_by_id(storage, operation, original, context)?;
     let candidate = if let Some(id) = candidate {
         let native_live = {
-            let state = storage.check(operation, context)?;
-            state.stages[stage_index(&state, id, operation.key)?].native.is_some()
+            let mut state = storage.check(operation, context)?;
+            let index = stage_index(&mut state, id, operation.key)?;
+            state.data_mut()?.stages[index].native.is_some()
         };
         if native_live {
             stage_by_id(storage, operation, id, context)?
@@ -228,9 +232,15 @@ fn verify_conversion(
     {
         return Err(error(operation.key, Code::ChangedIdentity));
     }
-    validator
-        .validate_recovered_stages(operation.key, &permit.plan, &original, &candidate)
-        .map_err(|cause| validation(operation.key, cause))?;
+    allocation::decode_callback(storage, operation, context, |decode| {
+        validator.validate_recovered_stages(
+            decode,
+            operation.key,
+            &permit.plan,
+            &original,
+            &candidate,
+        )
+    })?;
     let mut state = storage.check(operation, context)?;
     revalidate(&mut state, &[&original, &candidate], operation.key, context)?;
     let intent = migration(&mut state, permit.id, operation.key)?;
@@ -254,5 +264,5 @@ pub(super) fn current_summary(
         let mut state = storage.check(operation, context)?;
         migration(&mut state, permit.id, operation.key)?.original_read = Some(lease.id);
     }
-    whole(storage, &mut lease, operation, context)
+    whole(&storage.shared, &mut lease, operation, context)
 }

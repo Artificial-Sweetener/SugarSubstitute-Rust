@@ -17,9 +17,10 @@ mod activity;
 mod attach;
 pub use attach::CaptureBootstrapRejection;
 mod loan;
+pub(crate) use loan::observe_registered_endpoint;
 mod submission;
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 mod work;
 
 type WatchJob = OwnedJob<ProcessExit, NativeObservationError>;
@@ -35,8 +36,8 @@ pub(crate) struct Shared {
     pub(crate) native: Mutex<NativeState>,
     pub(crate) attempts: Mutex<Option<Box<crate::capture_endpoint::Attempts>>>,
     pub(crate) owner: CoordinatorKey,
-    pub(crate) build: [u8; 64],
-    pub(crate) build_length: usize,
+    pub(crate) build: Mutex<Option<CaptureBuildIdentity>>,
+    execution: sugarsubstitute_execution::ExecutionClient,
     pub(crate) execution_id: sugarsubstitute_contracts::execution::ExecutionId,
     input: Mutex<Option<CaptureStartInput>>,
     permit: Mutex<Option<ProcessWatchPermit>>,
@@ -49,6 +50,7 @@ pub(crate) struct NativeState {
     watch: Option<WatchJob>,
     pub(crate) registered: bool,
     pub(crate) handler: Option<CaptureHandlerIdentity>,
+    creator: Option<CaptureCreator>,
     pub(crate) retired: bool,
     deadline: Option<Moment>,
     close_deadline: Option<Moment>,
@@ -242,5 +244,50 @@ impl WindowsCrashCapture {
         } else {
             self.omitted = self.omitted.saturating_add(1);
         }
+    }
+}
+
+/// Bounded facts copied from the actual selected release; this grants no native authority.
+#[derive(Clone, Copy, Debug)]
+pub struct CaptureBuildIdentity {
+    bytes: [u8; 64],
+    length: usize,
+}
+impl CaptureBuildIdentity {
+    /// Preserve the bounded actual selected text without heap allocation.
+    fn new(value: &str) -> Result<Self, CrashError> {
+        if value.is_empty() || value.len() > 64 {
+            return Err(CrashError::invalid(
+                sugarsubstitute_contracts::crash::CaptureOperation::Registration,
+            ));
+        }
+        let mut bytes = [0; 64];
+        bytes[..value.len()].copy_from_slice(value.as_bytes());
+        Ok(Self { bytes, length: value.len() })
+    }
+    /// Borrow only the already selected bounded build identity.
+    /// # Errors
+    /// Preserves invalid internal UTF8 as an observable registration failure.
+    pub fn as_str(&self) -> Result<&str, CrashError> {
+        std::str::from_utf8(&self.bytes[..self.length]).map_err(|cause| {
+            CrashError::new(sugarsubstitute_contracts::crash::CaptureOperation::Registration, cause)
+        })
+    }
+}
+impl WindowsCrashCapture {
+    /// Copy only cached genuine selected build facts after actual registration.
+    /// This observation does not prove current child readiness or source retirement.
+    pub fn registration_build(&self) -> Option<CaptureBuildIdentity> {
+        self.shared.as_ref().and_then(|shared| *lock(&shared.build))
+    }
+}
+
+/// Actual creator identity cached by the retained native registration owner.
+pub type CaptureCreator = sugarsubstitute_execution::windows_capture_attach::CaptureProcessFacts;
+impl WindowsCrashCapture {
+    /// Copy actual checked current-process PID/birth without a new kernel/provider call.
+    /// Data alone cannot replace the native attachment's retained process authentication.
+    pub fn creator_process(&self) -> Option<CaptureCreator> {
+        self.shared.as_ref().and_then(|shared| lock(&shared.native).creator)
     }
 }

@@ -295,9 +295,16 @@ impl EntryBootstrap {
             CleanupFailure::Native(cause) => Some(cause),
         }
     }
-    /// Borrow a retained stopped/panicked preparation outcome without erasing its memory guard.
-    pub(crate) fn failed_preparation(&self) -> Option<&PreparationCompletion> {
-        self.failed_preparation.as_ref()
+    /// Borrow the original factory's later control observation without separating custody.
+    pub(crate) fn post_control(&self) -> Option<&sugarsubstitute_execution::EntryPreparationError> {
+        let JobOutcome::Failure(failure) = &self.failed_preparation.as_ref()?.outcome else {
+            return None;
+        };
+        let sugarsubstitute_execution::EntryPreparationCause::Factory(cause) = failure.cause()
+        else {
+            return None;
+        };
+        cause.post_control()
     }
     /// Fence ordinary work and cancel actual outstanding preparation once.
     pub(crate) fn request_close(&mut self) {

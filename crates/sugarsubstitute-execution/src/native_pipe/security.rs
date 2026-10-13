@@ -3,10 +3,9 @@
 //! Verify bounded account/logon/session token facts and explicit local pipe access.
 use super::{NativePipeError, handles::*};
 use windows::Win32::Security::*;
-use windows::Win32::System::SystemServices::{SE_GROUP_LOGON_ID, SECURITY_DESCRIPTOR_REVISION};
+use windows::Win32::System::SystemServices::SE_GROUP_LOGON_ID;
 use windows::Win32::{
     Foundation::*,
-    Storage::FileSystem::*,
     System::{Pipes::ImpersonateNamedPipeClient, Threading::*},
 };
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -164,58 +163,8 @@ pub(crate) fn process_facts(
     }
     Ok((pid, birth))
 }
-pub(crate) struct Descriptor {
-    descriptor: SECURITY_DESCRIPTOR,
-    acl: Box<[u32; 128]>,
-}
-impl Descriptor {
-    pub(crate) fn new(identity: Identity) -> Result<Self, NativePipeError> {
-        let mut value =
-            Self { descriptor: SECURITY_DESCRIPTOR::default(), acl: Box::new([0; 128]) };
-        // SAFETY: descriptor and aligned ACL storage are fully owned through native object creation.
-        unsafe {
-            InitializeSecurityDescriptor(
-                PSECURITY_DESCRIPTOR((&mut value.descriptor as *mut SECURITY_DESCRIPTOR).cast()),
-                SECURITY_DESCRIPTOR_REVISION,
-            )?;
-            InitializeAcl(
-                value.acl.as_mut_ptr().cast(),
-                size_of_val(value.acl.as_ref()) as u32,
-                ACL_REVISION,
-            )?;
-            AddAccessAllowedAceEx(
-                value.acl.as_mut_ptr().cast(),
-                ACL_REVISION,
-                ACE_FLAGS(0),
-                FILE_READ_DATA.0
-                    | FILE_WRITE_DATA.0
-                    | FILE_READ_ATTRIBUTES.0
-                    | FILE_WRITE_ATTRIBUTES.0
-                    | SYNCHRONIZE.0,
-                PSID(identity.logon.bytes.as_ptr() as *mut _),
-            )?;
-            SetSecurityDescriptorDacl(
-                PSECURITY_DESCRIPTOR((&mut value.descriptor as *mut SECURITY_DESCRIPTOR).cast()),
-                true,
-                Some(value.acl.as_ptr().cast()),
-                false,
-            )?;
-            SetSecurityDescriptorControl(
-                PSECURITY_DESCRIPTOR((&mut value.descriptor as *mut SECURITY_DESCRIPTOR).cast()),
-                SE_DACL_PROTECTED,
-                SE_DACL_PROTECTED,
-            )?;
-        }
-        Ok(value)
-    }
-    pub(crate) fn attributes(&mut self) -> SECURITY_ATTRIBUTES {
-        SECURITY_ATTRIBUTES {
-            nLength: size_of::<SECURITY_ATTRIBUTES>() as u32,
-            lpSecurityDescriptor: (&mut self.descriptor as *mut SECURITY_DESCRIPTOR).cast(),
-            bInheritHandle: false.into(),
-        }
-    }
-}
+mod descriptor;
+pub(crate) use descriptor::{Descriptor, DescriptorPurpose};
 impl From<windows::core::Error> for NativePipeError {
     fn from(value: windows::core::Error) -> Self {
         error("pipe_security_descriptor", value)

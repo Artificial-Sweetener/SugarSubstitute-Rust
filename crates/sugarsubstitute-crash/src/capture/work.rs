@@ -11,6 +11,10 @@ pub(super) fn start(
     context: JobContext,
 ) -> Result<(), CrashError> {
     crate::native::check_deadline(&context)?;
+    let admission = shared
+        .execution
+        .capture_bundle_admission(&context)
+        .map_err(|cause| CrashError::new(CaptureOperation::Runtime, cause))?;
     let memory = context
         .memory()
         .claim(crate::capture_endpoint::SOURCE_BYTES)
@@ -18,20 +22,31 @@ pub(super) fn start(
     let attempts = crate::capture_endpoint::Attempts::new(owner, memory)
         .map_err(|cause| CrashError::new(CaptureOperation::Runtime, cause))?;
     *lock(&shared.attempts) = Some(attempts);
-    let lease = shared.port.create(context.memory())?;
+    let lease = shared.port.create(admission, shared.execution.clone())?;
     let mut loan = NativeLoan::install(shared.clone(), lease, context.deadline())?;
     let input = lock(&shared.input)
         .take()
         .ok_or_else(|| CrashError::invalid(CaptureOperation::Registration))?;
-    let result = loan.lease()?.start(&input, owner, &context);
-    let handler = loan.lease()?.handler();
+    let result = loan.lease()?.start(input, owner, &context);
     let mut first = result.err();
+    if let Some(cause) = &first {
+        lock(&shared.native).retain(cause.clone());
+    }
+    match loan.lease()?.build_identity().map(CaptureBuildIdentity::new).transpose() {
+        Ok(build) => *lock(&shared.build) = build,
+        Err(cause) => {
+            lock(&shared.native).retain(cause.clone());
+            if first.is_none() {
+                first = Some(cause);
+            }
+        }
+    }
+    let creator = loan.lease()?.creator();
+    let handler = loan.lease()?.handler();
     {
         let mut native = lock(&shared.native);
         native.handler = handler;
-        if let Some(cause) = &first {
-            native.retain(cause.clone());
-        }
+        native.creator = creator;
     }
     // Every external call is outside Shared locks; failed starts still bind their
     // actual retained process before interpreting healthy publication.

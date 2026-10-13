@@ -119,16 +119,7 @@ impl WindowsResourceClaims {
         spec: JobSpec,
         registry: &mut WindowsProcessRegistry,
     ) -> Result<JobId, ClaimAdmissionError> {
-        if self.open.load(Ordering::Acquire) || self.closed || self.initialization_pending {
-            return Err(ClaimAdmissionError::Closed);
-        }
-        self.validate_scope(scope)?;
-        if self.pending.iter().any(Option::is_some)
-            || self.resolutions.iter().any(Option::is_some)
-            || self.backends.iter().any(Option::is_some)
-        {
-            return Err(ClaimAdmissionError::Busy);
-        }
+        self.validate_close(scope)?;
         if let Some(owner) = self.owner {
             let identity = registry.claim_identity(owner).map_err(ClaimAdmissionError::Registry)?;
             if !self.registry.as_ref().is_some_and(|id| id.same_as(&identity)) {
@@ -139,6 +130,50 @@ impl WindowsResourceClaims {
                 return Err(ClaimAdmissionError::Busy);
             }
         }
+        self.admit_close(execution, scope, spec)
+    }
+
+    /// Retire actual partial initialization before any coordinator was acquired.
+    /// This requires closed admission and consumed finite work, no registry binding,
+    /// no acquired coordinator, and no live resolution/backend custody. Actual native
+    /// storage closes on the existing worker; only NativeClaimsClosed proves closure.
+    ///
+    /// # Errors
+    /// Rejects an acquired coordinator or registry, live work, invalid finite
+    /// specification/scope, and actual execution admission failures.
+    pub fn submit_close_unbound(
+        &mut self,
+        execution: &ExecutionClient,
+        scope: &Scope,
+        spec: JobSpec,
+    ) -> Result<JobId, ClaimAdmissionError> {
+        self.validate_close(scope)?;
+        if self.owner.is_some() || self.registry.is_some() {
+            return Err(ClaimAdmissionError::Identity);
+        }
+        self.admit_close(execution, scope, spec)
+    }
+
+    fn validate_close(&self, scope: &Scope) -> Result<(), ClaimAdmissionError> {
+        if self.open.load(Ordering::Acquire) || self.closed || self.initialization_pending {
+            return Err(ClaimAdmissionError::Closed);
+        }
+        self.validate_scope(scope)?;
+        if self.pending.iter().any(Option::is_some)
+            || self.resolutions.iter().any(Option::is_some)
+            || self.backends.iter().any(Option::is_some)
+        {
+            return Err(ClaimAdmissionError::Busy);
+        }
+        Ok(())
+    }
+
+    fn admit_close(
+        &mut self,
+        execution: &ExecutionClient,
+        scope: &Scope,
+        spec: JobSpec,
+    ) -> Result<JobId, ClaimAdmissionError> {
         let pending = self.admit_index(spec, false)?;
         let shared = self.root.clone();
         let port = self.port.clone();

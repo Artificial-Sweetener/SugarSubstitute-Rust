@@ -2,6 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 #include "sugarsubstitute/capture_bridge.h"
 #include "sugarsubstitute/owned_start.h"
+#include "sugarsubstitute/capture_source.h"
+#include "sugarsubstitute/capture_attach_boundary.h"
+#include "sugarsubstitute/capture_event.h"
 #include "client/crash_report_database.h"
 #include "client/crashpad_client.h"
 #include "client/crashpad_info.h"
@@ -18,8 +21,32 @@ namespace {
 crashpad::CrashpadClient client;
 crashpad::SimpleStringDictionary annotations;
 sugarsubstitute::OwnedStart retained;
+sugarsubstitute::CaptureSource source;
 std::atomic<bool> attempted{false};
-static_assert(sizeof(client) + sizeof(annotations) + sizeof(retained) <= 48 * 1024,
+sugarsubstitute::OwnedAttach captured;
+
+bool InitializeCaptured(sugarsubstitute::OwnedAttach* owner) {
+  annotations.SetKeyValue("product", "SugarSubstitute");
+  annotations.SetKeyValue("build", owner->build);
+  annotations.SetKeyValue("role", "desktop");
+  crashpad::CrashpadInfo::GetCrashpadInfo()->set_simple_annotations(&annotations);
+  return client.InitializeCapturedAttach(owner);
+}
+bool InspectCapturedEvent(sugarsubstitute::OwnedAttach* owner, size_t index) {
+  return sugarsubstitute::InspectCaptureEvent(owner->connection, owner->response_events[index],
+      owner->stopped ? &owner->cleanup_limit : nullptr);
+}
+bool CommitCaptured(sugarsubstitute::OwnedAttach* owner) {
+  return client.CommitCapturedEvents(owner);
+}
+bool InstallCaptured(sugarsubstitute::OwnedAttach* owner) {
+  return client.InstallCapturedHandlers(owner);
+}
+const sugarsubstitute::AttachRuntime captured_runtime = {
+  &InitializeCaptured, &InspectCapturedEvent, &CommitCaptured, &InstallCaptured
+};
+sugarsubstitute::CaptureAttachBoundary captured_boundary(captured, attempted, captured_runtime);
+static_assert(sizeof(client) + sizeof(annotations) + sizeof(retained) + sizeof(source) + sizeof(captured) + sizeof(captured_boundary) + sizeof(captured_runtime) + sizeof(attempted) <= 48 * 1024,
               "Pinned native callback objects exceed the reviewed storage bound");
 
 bool ValidPath(const uint16_t* value, size_t length) {
@@ -41,19 +68,19 @@ base::FilePath Path(const uint16_t* value, size_t length) {
   return base::FilePath(std::wstring(reinterpret_cast<const wchar_t*>(value), length));
 }
 void Facts(SsCaptureResult* result, bool registered) {
-  *result = {1, registered ? 1u : 0u, retained.error,
-             retained.cleanup_error, retained.pending ? 1u : 0u, 0,
+  *result = {1, registered ? 1u : 0u, retained.connection.error,
+             retained.connection.cleanup_error, retained.connection.pending ? 1u : 0u, 0,
              reinterpret_cast<uintptr_t>(retained.process),
              reinterpret_cast<uintptr_t>(retained.thread)};
   // Partial CreateProcess ownership crosses the ABI before status is interpreted.
   retained.process = nullptr;
   retained.thread = nullptr;
-  result->cleanup_count = static_cast<uint32_t>(retained.cleanup_count);
-  for (size_t i = 0; i < retained.cleanup_count; ++i)
-    result->cleanup_codes[i] = retained.cleanup_codes[i];
-  result->omitted_cleanup = retained.omitted_cleanup;
-  retained.cleanup_count = 0;
-  retained.omitted_cleanup = 0;
+  result->cleanup_count = static_cast<uint32_t>(retained.connection.cleanup_count);
+  for (size_t i = 0; i < retained.connection.cleanup_count; ++i)
+    result->cleanup_codes[i] = retained.connection.cleanup_codes[i];
+  result->omitted_cleanup = retained.connection.omitted_cleanup;
+  retained.connection.cleanup_count = 0;
+  retained.connection.omitted_cleanup = 0;
 }
 }  // namespace
 
@@ -68,9 +95,9 @@ void ss_capture_start_v1(const SsCaptureInput* input, SsCaptureResult* result) {
   LARGE_INTEGER frequency = {};
   if (!QueryPerformanceFrequency(&frequency) || frequency.QuadPart <= 0 ||
       input->counter_frequency != frequency.QuadPart) return;
-  retained.deadline_counter = input->deadline_counter;
-  retained.frequency = input->counter_frequency;
-  if (!sugarsubstitute::CheckDeadline(&retained)) { Facts(result, false); return; }
+  retained.connection.deadline_counter = input->deadline_counter;
+  retained.connection.frequency = input->counter_frequency;
+  if (!retained.connection.CheckDeadline()) { Facts(result, false); return; }
   bool expected = false;
   if (!attempted.compare_exchange_strong(expected, true)) {
     result->error = ERROR_ALREADY_INITIALIZED;
@@ -79,14 +106,12 @@ void ss_capture_start_v1(const SsCaptureInput* input, SsCaptureResult* result) {
   const auto database_path = Path(input->database, input->database_length);
   auto database = crashpad::CrashReportDatabase::Initialize(database_path);
   if (!database) {
-    retained.error = GetLastError();
-    if (!retained.error) retained.error = ERROR_GEN_FAILURE;
+    retained.connection.Fail(GetLastError());
     Facts(result, false);
     return;
   }
   if (!database->GetSettings()->SetUploadsEnabled(false)) {
-    retained.error = GetLastError();
-    if (!retained.error) retained.error = ERROR_GEN_FAILURE;
+    retained.connection.Fail(GetLastError());
     Facts(result, false);
     return;
   }
@@ -101,17 +126,48 @@ void ss_capture_start_v1(const SsCaptureInput* input, SsCaptureResult* result) {
       Path(input->handler, input->handler_length), database_path,
       Path(input->metrics, input->metrics_length),
       {{"product", "SugarSubstitute"}, {"build", build}}, &retained);
-  if (!registered && !retained.error) {
-    retained.error = GetLastError();
-    if (!retained.error) retained.error = ERROR_GEN_FAILURE;
+  if (!registered && !retained.connection.error) {
+    retained.connection.Fail(GetLastError());
   }
+  if (registered && !source.Publish(retained, client.GetHandlerIPCPipe()))
+    retained.connection.Fail(ERROR_INVALID_DATA);
   Facts(result, registered);
 }
 
 void ss_capture_retire_io_v1(SsCaptureResult* result) {
   if (!result) return;
+  if (captured.started) {
+    *result = {1, 0, ERROR_INVALID_STATE, 0, 0, 0, 0, 0};
+    return;
+  }
+  source.Revoke();
   const bool closed = sugarsubstitute::RetireRegistration(&retained);
   Facts(result, false);
   result->retired = closed ? 1u : 0u;
   if (!closed && !result->cleanup_error) result->cleanup_error = ERROR_IO_INCOMPLETE;
+}
+
+bool ss_capture_endpoint_v1(const SsCaptureEndpointExpectationV1* expected,
+                            SsCaptureEndpointV1* output) {
+  return source.Endpoint(expected, output);
+}
+bool ss_capture_source_identity_v1(SsCaptureSourceIdentityV1* output) {
+  return source.Identity(output);
+}
+
+void ss_capture_attach_v2(const SsCaptureAttachInputV2* input,
+                           SsCaptureAttachResultV2* output) {
+  captured_boundary.Start(input, output);
+}
+void ss_capture_attach_poll_v2(const SsCaptureAttachProgressV2* progress,
+                                SsCaptureAttachResultV2* output) {
+  captured_boundary.Poll(progress, output);
+}
+void ss_capture_attach_step_v2(const SsCaptureAttachStepV2* step,
+                                SsCaptureAttachResultV2* output) {
+  captured_boundary.Step(step, output);
+}
+void ss_capture_attach_retire_v2(const SsCaptureAttachProgressV2* progress,
+                                  SsCaptureAttachResultV2* output) {
+  captured_boundary.Retire(progress, output);
 }

@@ -27,36 +27,8 @@ impl From<CoordinatorKey> for OwnerRecord {
         Self { namespace: *owner.namespace.bytes(), epoch: *owner.epoch.bytes() }
     }
 }
-#[derive(Serialize, Deserialize)]
-#[serde(tag = "subject", rename_all = "snake_case", deny_unknown_fields)]
-pub(super) enum SubjectRecord {
-    Desktop { owner: OwnerRecord, instance: u64, generation: u64 },
-    Supervisor { owner: OwnerRecord },
-}
-impl SubjectRecord {
-    pub(super) fn into_key(self) -> Result<IncidentKey, IncidentStoreError> {
-        Ok(IncidentKey::new(match self {
-            Self::Supervisor { owner } => IncidentSubject::Supervisor(owner.into_owner()?),
-            Self::Desktop { owner, instance, generation } => IncidentSubject::Desktop(RunKey {
-                owner: owner.into_owner()?,
-                instance: InstanceId::new(instance)?,
-                generation: RunGeneration::new(generation)?,
-            }),
-        }))
-    }
-}
-impl From<IncidentKey> for SubjectRecord {
-    fn from(key: IncidentKey) -> Self {
-        match key.subject() {
-            IncidentSubject::Supervisor(owner) => Self::Supervisor { owner: owner.into() },
-            IncidentSubject::Desktop(run) => Self::Desktop {
-                owner: run.owner.into(),
-                instance: run.instance.get(),
-                generation: run.generation.get(),
-            },
-        }
-    }
-}
+mod subject;
+pub(super) use subject::SubjectRecord;
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct OperationRecord {

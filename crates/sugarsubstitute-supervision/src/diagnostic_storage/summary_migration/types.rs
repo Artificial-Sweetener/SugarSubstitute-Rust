@@ -149,6 +149,7 @@ pub trait DiagnosticSummaryMigrationValidator {
     /// Preserves strict decoding, conversion, identity and payload-reference causes.
     fn validate_preparation(
         &self,
+        decode: &mut DiagnosticRecoveryDecodeLoan,
         current: LogicalStoreOperationKey,
         plan: &DiagnosticSummaryMigrationPlan,
         original: &DiagnosticRecoverySource,
@@ -160,6 +161,7 @@ pub trait DiagnosticSummaryMigrationValidator {
     /// Rejects unknown/third generations and noncanonical historical intent bytes.
     fn validate_recovery(
         &self,
+        decode: &mut DiagnosticRecoveryDecodeLoan,
         current: LogicalStoreOperationKey,
         journal: &DiagnosticRecoverySource,
         summary: &DiagnosticRecoverySource,
@@ -169,6 +171,7 @@ pub trait DiagnosticSummaryMigrationValidator {
     /// Rejects any schema/domain/revision/payload-reference or byte discrepancy.
     fn validate_recovered_stages(
         &self,
+        decode: &mut DiagnosticRecoveryDecodeLoan,
         current: LogicalStoreOperationKey,
         plan: &DiagnosticSummaryMigrationPlan,
         original_stage: &DiagnosticRecoverySource,
@@ -180,6 +183,7 @@ pub trait DiagnosticSummaryMigrationValidator {
     /// Rejects inconsistent archived original or derived candidate facts.
     fn validate_archive_original(
         &self,
+        decode: &mut DiagnosticRecoveryDecodeLoan,
         current: LogicalStoreOperationKey,
         plan: &DiagnosticSummaryMigrationPlan,
         original_stage: &DiagnosticRecoverySource,
@@ -189,6 +193,7 @@ pub trait DiagnosticSummaryMigrationValidator {
     /// Rejects unknown schemas, noncanonical bytes or inconsistent complete facts.
     fn validate_archive(
         &self,
+        decode: &mut DiagnosticRecoveryDecodeLoan,
         current: LogicalStoreOperationKey,
         archive: &DiagnosticRecoverySource,
     ) -> Result<DiagnosticSummaryMigrationArchiveDecision, DiagnosticRecoveryValidationError>;

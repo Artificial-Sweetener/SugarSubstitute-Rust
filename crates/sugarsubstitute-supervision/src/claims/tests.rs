@@ -6,6 +6,7 @@ mod closure;
 mod entry;
 mod managed;
 mod support;
+mod unbound_close;
 use super::*;
 use support::*;
 type TestResult = Result<(), Box<dyn std::error::Error>>;

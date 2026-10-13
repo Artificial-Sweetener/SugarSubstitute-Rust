@@ -152,8 +152,8 @@ impl ElectionInitializationGuard<'_> {
             .join(crate::protected_storage::record_file::hex(self.proof.namespace.bytes()))
             .with_extension("record");
         if !file.is_locked()
-            || file.record_path != expected
-            || file.account_sid != self.proof.account_sid
+            || file.record_path.path()? != expected
+            || file.account_sid.bytes()? != self.proof.account_sid
         {
             return Err(ClaimError::invalid("entry_coordinator_exclusion_binding"));
         }

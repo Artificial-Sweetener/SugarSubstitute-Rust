@@ -14,7 +14,7 @@ pub(crate) fn check_predecessor(
     expected: &Record,
     context: &sugarsubstitute_contracts::execution::JobContext,
 ) -> Result<Option<[u8; 128]>, ClaimError> {
-    if file.account_sid != sid {
+    if file.account_sid.bytes()? != sid {
         return Err(ClaimError::invalid("claim_account_binding"));
     }
     let previous = match record_file::read_shape(file, context)? {

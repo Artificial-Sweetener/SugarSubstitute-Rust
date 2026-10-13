@@ -10,10 +10,14 @@
 pub mod backend_listener;
 #[cfg(windows)]
 pub mod installed_frontend;
+#[cfg(windows)]
+pub mod installed_release;
 
 mod arguments;
 mod command;
 mod errors;
+mod release_selection;
+pub use release_selection::{CaptureSelectionRequest, InstalledReleaseOwner};
 
 #[cfg(windows)]
 mod claim_error;

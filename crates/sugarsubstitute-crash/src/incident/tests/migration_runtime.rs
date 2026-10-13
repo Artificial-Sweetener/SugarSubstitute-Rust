@@ -3,7 +3,7 @@
 //! Validate real protected migration sources and report mutation fences without native effects.
 use super::{
     migration_runtime_fixture::*,
-    publication::{admitted, setup},
+    publication_fixture::{admitted, setup},
     *,
 };
 use sugarsubstitute_supervision::diagnostic_storage::*;
@@ -171,7 +171,12 @@ fn actual_legacy_unknown_field_retains_decoder_cause_and_all_partial_owners() ->
         let mut current: Option<&dyn Error> = Some(&failure);
         let mut retained = false;
         while let Some(cause) = current {
-            retained |= cause.to_string().contains("external_json_sentinel_secret");
+            assert!(!cause.to_string().contains("external_json_sentinel_secret"));
+            if let Some(json) = cause.downcast_ref::<serde_json::Error>() {
+                retained |= json.to_string().contains("Unknown incident field")
+                    && json.line() > 0
+                    && json.column() > 0;
+            }
             current = cause.source();
         }
         assert!(retained);

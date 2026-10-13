@@ -95,6 +95,8 @@ impl EffectContext {
 }
 
 pub(crate) struct ResourceRecord {
+    pub(crate) bundle_issued: bool,
+    pub(crate) reader_issued: bool,
     pub(crate) scope_id: ScopeId,
     pub(crate) observation: NativeHandleObservation,
 }

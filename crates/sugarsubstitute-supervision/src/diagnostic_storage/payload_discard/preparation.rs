@@ -18,31 +18,35 @@ impl DiagnosticStorage {
     ) -> Result<DiagnosticPayloadDiscardPreparation, DiagnosticStorageError> {
         pin(&self.shared, &original.shared, original.operation, operation)?;
         pin(&self.shared, &candidate.shared, candidate.operation, operation)?;
+        let preparation_allocation = {
+            let mut state = self.check(operation, context)?;
+            allocation::payload_preparation(&state.data_mut()?.allocation, operation.key)?
+        };
         let id = {
             let mut state = self.check(operation, context)?;
-            stage::mutation(&state, operation.key)?;
-            capacity(&state, operation.key)?;
-            if state.deletion.is_some()
+            stage::mutation(&mut state, operation.key)?;
+            capacity(&mut state, operation.key)?;
+            if state.data_mut()?.deletion.is_some()
                 || selection.incident.subject().coordinator().namespace
                     != operation.key.owner().namespace
             {
                 return Err(error(operation.key, Code::Busy));
             }
             let object = DiagnosticObject::Summary(selection.incident);
-            let index = stage_index(&state, candidate.id, operation.key)?;
-            if state.stages[index].object != object || state.stages[index].role.is_some()
-                || state.stages[index].flushed.is_none()
-                || state.reads.iter().any(|read| read.id != original.id && matches!(read.object, Some(DiagnosticObject::Summary(key) | DiagnosticObject::Payload(key, ..)) if key == selection.incident))
-                || state.reads.iter().find(|read| read.id == original.id).is_none_or(|read| read.object != Some(object) || read.facts != Some(original.facts))
+            let index = stage_index(&mut state, candidate.id, operation.key)?;
+            if state.data_mut()?.stages[index].object != object || state.data_mut()?.stages[index].role.is_some()
+                || state.data_mut()?.stages[index].flushed.is_none()
+                || state.data_mut()?.reads.iter().any(|read| read.id != original.id && matches!(read.object, Some(DiagnosticObject::Summary(key) | DiagnosticObject::Payload(key, ..)) if key == selection.incident))
+                || state.data_mut()?.reads.iter().find(|read| read.id == original.id).is_none_or(|read| read.object != Some(object) || read.facts != Some(original.facts))
             { return Err(error(operation.key, Code::InvalidIdentity)); }
+            let intent_allocation =
+                allocation::payload_intent(&state.data_mut()?.allocation, operation.key)?;
+            let reservation =
+                allocation::reservation(&state.data_mut()?.allocation, Some(operation.key))?;
             let mut victims = Vec::new();
-            victims.try_reserve_exact(MAX_ATTACHMENTS).map_err(|cause| {
-                native(
-                    operation.key,
-                    Code::Capacity,
-                    ClaimError::new("diagnostic_payload_slots", cause),
-                )
-            })?;
+            victims
+                .try_reserve_exact(MAX_ATTACHMENTS)
+                .map_err(|cause| reservation.failed(cause))?;
             for attachment in selection.attachments.entries() {
                 victims.push(RetainedVictim::new(DiagnosticObject::Payload(
                     selection.incident,
@@ -51,8 +55,8 @@ impl DiagnosticStorage {
                 )));
             }
             let id = next_lease(&mut state, operation.key)?;
-            state.stages[index].role = Some(stage::StageRole::PayloadCandidate);
-            state.payload = Some(Box::new(PayloadIntent {
+            state.data_mut()?.stages[index].role = Some(stage::StageRole::PayloadCandidate);
+            state.data_mut()?.payload = Some(intent_allocation.payload_intent(PayloadIntent {
                 id,
                 subject_digest: crate::protected_storage::record_file::diagnostic_subject_digest(
                     selection.incident,
@@ -73,7 +77,7 @@ impl DiagnosticStorage {
             }));
             id
         };
-        let original_source = whole(self, original, operation, context)?;
+        let original_source = whole(&self.shared, original, operation, context)?;
         let candidate_source = stage_by_id(self, operation, candidate.id, context)?;
         let mut state = self.check(operation, context)?;
         retained_source(&mut state, &original_source, operation.key, context)?;
@@ -88,8 +92,7 @@ impl DiagnosticStorage {
             check(&mut state, operation.key, context, false)?;
             let object = intent(&mut state, id, operation.key)?.victims[index].object;
             let (native_id, actual) = state
-                .port
-                .open(object, object.bound(), context)
+                .call_native(|port| port.open(object, object.bound(), context))?
                 .map_err(|cause| native(operation.key, Code::Read, cause))?;
             let victims = &mut intent(&mut state, id, operation.key)?.victims;
             victims[index].native = Some(native_id);
@@ -110,14 +113,12 @@ impl DiagnosticStorage {
             }
             check(&mut state, operation.key, context, false)?;
         }
+        let reservation =
+            allocation::reservation(&state.data_mut()?.allocation, Some(operation.key))?;
         let mut observations = Vec::new();
-        observations.try_reserve_exact(MAX_ATTACHMENTS).map_err(|cause| {
-            native(
-                operation.key,
-                Code::Capacity,
-                ClaimError::new("diagnostic_payload_observations", cause),
-            )
-        })?;
+        observations
+            .try_reserve_exact(MAX_ATTACHMENTS)
+            .map_err(|cause| reservation.failed(cause))?;
         let retained = intent(&mut state, id, operation.key)?;
         for victim in &retained.victims {
             observations.push(DiagnosticPayloadVictimObservation {
@@ -135,6 +136,7 @@ impl DiagnosticStorage {
             original: original_source.facts,
             candidate: candidate_source.facts,
             victims: observations,
+            _allocation: preparation_allocation,
         })
     }
     /// Validate actual sources outside the mutex and stage exact canonical Journal bytes.
@@ -179,8 +181,11 @@ impl DiagnosticStorage {
         };
         let original = read_by_id(self, operation, original, context)?;
         let candidate = stage_by_id(self, operation, candidate, context)?;
-        let decision = validator
-            .validate_preparation(
+        let destination = self.payload_decision(operation, context)?;
+        let decision = allocation::decode_callback(self, operation, context, |decode| {
+            validator.validate_preparation(
+                decode,
+                destination,
                 operation.key,
                 &preparation.selection,
                 canonical_journal,
@@ -188,12 +193,13 @@ impl DiagnosticStorage {
                 &candidate,
                 &preparation.victims,
             )
-            .map_err(|cause| validation(operation.key, cause))?;
+        })?;
         let mut state = self.check(operation, context)?;
         retained_source(&mut state, &original, operation.key, context)?;
         retained_source(&mut state, &candidate, operation.key, context)?;
         revalidate_victims(&mut state, preparation.id, operation.key, context)?;
-        if decision.selection != preparation.selection
+        if !decision._allocation.matches(operation)
+            || decision.selection != preparation.selection
             || decision.historical != operation.key
             || decision.case != DiagnosticPayloadDiscardCase::Original
             || !decision.original.matches(original.facts)
@@ -205,14 +211,12 @@ impl DiagnosticStorage {
         {
             return Err(error(operation.key, Code::ChangedIdentity));
         }
+        let reservation =
+            allocation::reservation(&state.data_mut()?.allocation, Some(operation.key))?;
         let mut bytes = Vec::new();
-        bytes.try_reserve_exact(canonical_journal.len()).map_err(|cause| {
-            native(
-                operation.key,
-                Code::Capacity,
-                ClaimError::new("diagnostic_payload_journal", cause),
-            )
-        })?;
+        bytes
+            .try_reserve_exact(canonical_journal.len())
+            .map_err(|cause| reservation.failed(cause))?;
         bytes.extend_from_slice(canonical_journal);
         let retained = intent(&mut state, preparation.id, operation.key)?;
         retained.journal_bytes = Some(bytes);

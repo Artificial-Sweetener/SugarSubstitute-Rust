@@ -77,7 +77,7 @@ pub(crate) fn original_stop(
     None
 }
 
-fn valid_main(spec: JobSpec) -> bool {
+pub(crate) fn valid_main(spec: JobSpec) -> bool {
     spec.operation == Operation::Infrastructure
         && spec.class == JobClass::InfrastructureOrdinary
         && spec.reservation_bytes == MAIN_BYTES

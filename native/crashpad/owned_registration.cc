@@ -2,168 +2,91 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 #include "sugarsubstitute/owned_start.h"
 
-#include <algorithm>
-#include <limits>
-
 namespace sugarsubstitute {
-namespace {
-const RegistrationApi system_api = {&QueryPerformanceCounter, &CloseHandle,
-    &GetLastError, &SetLastError, &CancelIoEx, &WaitForSingleObject,
-    &GetOverlappedResult, &CreateFileW,
-    &GetNamedPipeServerProcessId, &GetProcessId, &SetNamedPipeHandleState,
-    &CreateEventW, &TransactNamedPipe};
-const RegistrationApi& Api(OwnedStart* owner) {
-  return owner->api ? *owner->api : system_api;
-}
-bool Fail(OwnedStart* owner, DWORD error) {
-  if (!owner->error) owner->error = error;
-  Api(owner).set_error(error);
-  return false;
-}
-bool Close(HANDLE* value, HANDLE empty, OwnedStart* owner) {
-  if (*value == empty) return true;
-  if (!Api(owner).close(*value)) {
-    RecordCleanup(owner, Api(owner).last_error());
-    return false;
-  }
-  *value = empty;
-  return true;
-}
-DWORD Remaining(OwnedStart* owner) {
-  LARGE_INTEGER now = {};
-  if (!Api(owner).counter(&now)) {
-    Fail(owner, Api(owner).last_error());
-    return 0;
-  }
-  if (now.QuadPart < 0 || owner->frequency <= 0 ||
-      owner->frequency > std::numeric_limits<int64_t>::max() / 1000) {
-    Fail(owner, ERROR_INVALID_DATA);
-    return 0;
-  }
-  if (now.QuadPart >= owner->deadline_counter) return 0;
-  const uint64_t ticks = owner->deadline_counter - now.QuadPart;
-  const uint64_t frequency = owner->frequency;
-  if (ticks / frequency > 60) { Fail(owner, ERROR_INVALID_DATA); return 0; }
-  // Divide before multiplying, with checked remainder bounds. Flooring cannot
-  // extend the fixed original QPC deadline, including its final sub-millisecond.
-  const uint64_t milliseconds = (ticks / frequency) * 1000 +
-      ((ticks % frequency) * 1000) / frequency;
-  return static_cast<DWORD>(std::min<uint64_t>(
-      milliseconds, std::numeric_limits<DWORD>::max() - 1));
-}
-}  // namespace
-
-void RecordCleanup(OwnedStart* owner, DWORD error) {
-  if (!owner->cleanup_error) owner->cleanup_error = error;
-  if (owner->cleanup_count < 8) owner->cleanup_codes[owner->cleanup_count++] = error;
-  else if (owner->omitted_cleanup != std::numeric_limits<uint64_t>::max())
-    ++owner->omitted_cleanup;
-}
-bool CheckDeadline(OwnedStart* owner) {
-  return Remaining(owner) != 0 || Fail(owner, owner->error ? owner->error : ERROR_TIMEOUT);
-}
-
 bool RetireRegistration(OwnedStart* owner) {
-  if (owner->pending) {
-    // ERROR_NOT_FOUND permits querying completion but is not itself settlement.
-    if (!Api(owner).cancel(owner->pipe, &owner->overlapped)) {
-      const DWORD error = Api(owner).last_error();
-      if (error != ERROR_NOT_FOUND) RecordCleanup(owner, error);
-    }
-    const DWORD completed = Api(owner).wait(owner->event, 0);
-    if (completed != WAIT_OBJECT_0) {
-      if (completed == WAIT_FAILED) RecordCleanup(owner, Api(owner).last_error());
-      return false;
-    }
-    DWORD transferred = 0;
-    if (!Api(owner).result(owner->pipe, &owner->overlapped, &transferred, FALSE)) {
-      const DWORD error = Api(owner).last_error();
-      if (error != ERROR_OPERATION_ABORTED) {
-        if (error != ERROR_IO_INCOMPLETE) RecordCleanup(owner, error);
-        return false;
-      }
-    }
-    owner->pending = false;
-  }
-  const bool pipe_closed = Close(&owner->pipe, INVALID_HANDLE_VALUE, owner);
-  const bool event_closed = Close(&owner->event, nullptr, owner);
-  const bool initial_closed = Close(&owner->initial_pipe, nullptr, owner);
-  const bool bootstrap_closed = Close(&owner->bootstrap_process, nullptr, owner);
-  return pipe_closed && event_closed && initial_closed && bootstrap_closed;
+  const bool connection_closed = owner->connection.Retire(nullptr);
+  if (owner->connection.pending) return false;
+  const bool initial_closed = owner->connection.Close(&owner->initial_pipe, nullptr, nullptr);
+  const bool bootstrap_closed = owner->connection.Close(&owner->bootstrap_process, nullptr, nullptr);
+  return connection_closed && initial_closed && bootstrap_closed;
 }
 
 bool PrepareInheritedRegistration(const std::wstring& name, OwnedStart* owner) {
   if (owner->prepared || owner->process || !owner->initial_pipe ||
-      !owner->bootstrap_process || owner->pipe != INVALID_HANDLE_VALUE)
-    return Fail(owner, ERROR_INVALID_STATE);
-  if (!CheckDeadline(owner)) return false;
+      !owner->bootstrap_process || owner->connection.pipe != INVALID_HANDLE_VALUE)
+    return owner->connection.Fail(ERROR_INVALID_STATE);
+  if (!owner->connection.CheckDeadline()) return false;
   ULONG initial_pid = 0;
-  if (!Api(owner).server_id(owner->initial_pipe, &initial_pid))
-    return Fail(owner, Api(owner).last_error());
-  owner->creator_pid = Api(owner).process_id(owner->bootstrap_process);
-  if (!owner->creator_pid) return Fail(owner, Api(owner).last_error());
-  if (initial_pid != owner->creator_pid) return Fail(owner, ERROR_ACCESS_DENIED);
+  if (!owner->connection.Api().server_id(owner->initial_pipe, &initial_pid))
+    return owner->connection.Fail(owner->connection.Api().last_error());
+  owner->creator_pid = owner->connection.Api().process_id(owner->bootstrap_process);
+  if (!owner->creator_pid) return owner->connection.Fail(owner->connection.Api().last_error());
+  if (initial_pid != owner->creator_pid) return owner->connection.Fail(ERROR_ACCESS_DENIED);
+  if (!owner->connection.ProcessBirth(owner->bootstrap_process, &owner->creator_birth))
+    return false;
   // Connect before inheritance while the creator retains the first instance.
   // Confirmation uses this exact endpoint, never a later instance by name.
-  owner->pipe = Api(owner).open(name.c_str(), GENERIC_READ | GENERIC_WRITE, 0,
+  owner->connection.pipe = owner->connection.Api().open(name.c_str(), GENERIC_READ | GENERIC_WRITE, 0,
       nullptr, OPEN_EXISTING, FILE_FLAG_OVERLAPPED | SECURITY_SQOS_PRESENT |
       SECURITY_IDENTIFICATION, nullptr);
-  if (owner->pipe == INVALID_HANDLE_VALUE)
-    return Fail(owner, Api(owner).last_error());
+  if (owner->connection.pipe == INVALID_HANDLE_VALUE)
+    return owner->connection.Fail(owner->connection.Api().last_error());
   ULONG server_pid = 0;
-  if (!Api(owner).server_id(owner->pipe, &server_pid))
-    return Fail(owner, Api(owner).last_error());
-  if (server_pid != owner->creator_pid) return Fail(owner, ERROR_ACCESS_DENIED);
+  if (!owner->connection.Api().server_id(owner->connection.pipe, &server_pid))
+    return owner->connection.Fail(owner->connection.Api().last_error());
+  if (server_pid != owner->creator_pid) return owner->connection.Fail(ERROR_ACCESS_DENIED);
   DWORD mode = PIPE_READMODE_MESSAGE;
-  if (!Api(owner).mode(owner->pipe, &mode, nullptr, nullptr))
-    return Fail(owner, Api(owner).last_error());
-  if (!CheckDeadline(owner)) return false;
+  if (!owner->connection.Api().mode(owner->connection.pipe, &mode, nullptr, nullptr))
+    return owner->connection.Fail(owner->connection.Api().last_error());
+  if (!owner->connection.CheckDeadline()) return false;
   owner->prepared = true;
   return true;
 }
 
 bool ConfirmHandler(OwnedStart* owner) {
-  if (!owner->prepared || owner->pipe == INVALID_HANDLE_VALUE ||
-      !owner->initial_pipe || !owner->process || owner->completed || owner->pending)
-    return Fail(owner, ERROR_INVALID_STATE);
-  if (!CheckDeadline(owner)) return false;
-  const DWORD handler_pid = Api(owner).process_id(owner->process);
-  if (!handler_pid) return Fail(owner, Api(owner).last_error());
-  if (handler_pid == owner->creator_pid) return Fail(owner, ERROR_ACCESS_DENIED);
-  const DWORD before = Api(owner).wait(owner->process, 0);
+  if (!owner->prepared || owner->connection.pipe == INVALID_HANDLE_VALUE ||
+      !owner->initial_pipe || !owner->process || owner->completed || owner->connection.pending)
+    return owner->connection.Fail(ERROR_INVALID_STATE);
+  if (!owner->connection.CheckDeadline()) return false;
+  const DWORD handler_pid = owner->connection.Api().process_id(owner->process);
+  if (!handler_pid) return owner->connection.Fail(owner->connection.Api().last_error());
+  if (handler_pid == owner->creator_pid) return owner->connection.Fail(ERROR_ACCESS_DENIED);
+  if (!owner->connection.ProcessBirth(owner->process, &owner->handler_birth)) return false;
+  owner->handler_pid = handler_pid;
+  const DWORD before = owner->connection.Api().wait(owner->process, 0);
   if (before != WAIT_TIMEOUT)
-    return Fail(owner, before == WAIT_FAILED ? Api(owner).last_error() : ERROR_PROCESS_ABORTED);
-  owner->event = Api(owner).event(nullptr, TRUE, FALSE, nullptr);
-  if (!owner->event) return Fail(owner, Api(owner).last_error());
-  owner->overlapped.hEvent = owner->event;
-  owner->request.type = crashpad::ClientToServerMessage::kPing;
-  if (!CheckDeadline(owner)) return false;
+    return owner->connection.Fail(before == WAIT_FAILED ? owner->connection.Api().last_error() : ERROR_PROCESS_ABORTED);
+  owner->connection.event = owner->connection.Api().event(nullptr, TRUE, FALSE, nullptr);
+  if (!owner->connection.event) return owner->connection.Fail(owner->connection.Api().last_error());
+  owner->connection.overlapped.hEvent = owner->connection.event;
+  owner->connection.request.type = crashpad::ClientToServerMessage::kPing;
+  if (!owner->connection.CheckDeadline()) return false;
   DWORD transferred = 0;
-  if (!Api(owner).transact(owner->pipe, &owner->request, sizeof(owner->request),
-      &owner->response, sizeof(owner->response), &transferred, &owner->overlapped)) {
-    const DWORD error = Api(owner).last_error();
-    if (error != ERROR_IO_PENDING) return Fail(owner, error);
-    owner->pending = true;
-    const DWORD remaining = Remaining(owner);
-    const DWORD waited = Api(owner).wait(owner->event, remaining);
+  if (!owner->connection.Api().transact(owner->connection.pipe, &owner->connection.request, sizeof(owner->connection.request),
+      &owner->connection.response, sizeof(owner->connection.response), &transferred, &owner->connection.overlapped)) {
+    const DWORD error = owner->connection.Api().last_error();
+    if (error != ERROR_IO_PENDING) return owner->connection.Fail(error);
+    owner->connection.pending = true;
+    const DWORD remaining = owner->connection.Remaining();
+    const DWORD waited = owner->connection.Api().wait(owner->connection.event, remaining);
     if (waited != WAIT_OBJECT_0) {
-      const DWORD cause = waited == WAIT_TIMEOUT ? ERROR_TIMEOUT : Api(owner).last_error();
-      Fail(owner, cause);
+      const DWORD cause = waited == WAIT_TIMEOUT ? ERROR_TIMEOUT : owner->connection.Api().last_error();
+      owner->connection.Fail(cause);
       RetireRegistration(owner);
       return false;
     }
-    if (!Api(owner).result(owner->pipe, &owner->overlapped, &transferred, FALSE)) {
-      const DWORD cause = Api(owner).last_error();
-      if (cause == ERROR_OPERATION_ABORTED) owner->pending = false;
-      return Fail(owner, cause);
+    if (!owner->connection.Api().result(owner->connection.pipe, &owner->connection.overlapped, &transferred, FALSE)) {
+      const DWORD cause = owner->connection.Api().last_error();
+      if (cause == ERROR_OPERATION_ABORTED) owner->connection.pending = false;
+      return owner->connection.Fail(cause);
     }
-    owner->pending = false;
+    owner->connection.pending = false;
   }
-  if (transferred != sizeof(owner->response)) return Fail(owner, ERROR_INVALID_DATA);
-  const DWORD after = Api(owner).wait(owner->process, 0);
+  if (transferred != sizeof(owner->connection.response)) return owner->connection.Fail(ERROR_INVALID_DATA);
+  const DWORD after = owner->connection.Api().wait(owner->process, 0);
   if (after != WAIT_TIMEOUT)
-    return Fail(owner, after == WAIT_FAILED ? Api(owner).last_error() : ERROR_PROCESS_ABORTED);
-  if (!CheckDeadline(owner)) return false;
+    return owner->connection.Fail(after == WAIT_FAILED ? owner->connection.Api().last_error() : ERROR_PROCESS_ABORTED);
+  if (!owner->connection.CheckDeadline()) return false;
   owner->completed = true;
   return RetireRegistration(owner);
 }

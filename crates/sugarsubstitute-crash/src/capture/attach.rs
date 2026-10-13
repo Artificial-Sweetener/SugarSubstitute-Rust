@@ -99,10 +99,12 @@ impl WindowsCrashCapture {
             return Err(rejected(SourceFailure::Closing));
         }
         let shared = self.shared.as_ref().ok_or_else(|| rejected(SourceFailure::Closing))?;
+        let build =
+            lock(&shared.build).ok_or_else(|| rejected(SourceFailure::ForeignAssociation))?;
         if expected.owner() != self.owner
             || expected.run().owner != self.owner
             || scope.owner_id() != shared.execution_id
-            || expected.build_bytes() != &shared.build[..shared.build_length]
+            || expected.build_bytes() != &build.bytes[..build.length]
             || self.snapshot.handler.is_none_or(|handler| {
                 expected.handler().process_id() != handler.process_id
                     || expected.handler().creation_time_100ns() != handler.creation_time_100ns
@@ -112,7 +114,8 @@ impl WindowsCrashCapture {
         }
         {
             let native = lock(&shared.native);
-            if !native.registered
+            if native.creator != Some(expected.creator())
+                || !native.registered
                 || native.retired
                 || native.lease.is_none()
                 || native.handler != self.snapshot.handler

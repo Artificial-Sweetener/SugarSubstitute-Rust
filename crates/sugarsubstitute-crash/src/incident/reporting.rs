@@ -8,8 +8,8 @@ use sugarsubstitute_supervision::diagnostic_storage::*;
 /// Constructor-private acknowledgement backed by actual checked summary activation.
 /// The host authenticates the reporter separately before submitting its command.
 pub struct AcknowledgementCommit {
-    committed: IncidentCommit,
     at: IncidentUtc,
+    committed: IncidentCommit,
 }
 impl AcknowledgementCommit {
     /// Borrow the exact summary and its actual storage activation observation.
@@ -46,13 +46,18 @@ impl IncidentRepository {
             .checked_add(1)
             .ok_or(IncidentStoreError::Capacity)?;
         let reporting = ReportDisposition::new(attempts, Some(attempt))?;
+        let custody = self.storage.recovery_record(&self.operation, context)?;
         let updated = metadata_summary(
             &stored,
             current.revision().next()?,
             current.facts().retention(),
             reporting,
         )?;
-        self.commit_report_metadata(updated, facts, context)
+        self.commit_report_metadata(
+            super::allocation::RetainedSummary::new(updated, custody),
+            facts,
+            context,
+        )
     }
 
     /// Durably acknowledge an explicit authenticated dismissal at its expected revision.
@@ -87,13 +92,21 @@ impl IncidentRepository {
             (IncidentCommit { stored, operation: self.operation.key(), actual }, first)
         } else {
             let retention = RetentionFacts::new(current.facts().retention().occurred(), Some(at))?;
+            let custody = self.storage.recovery_record(&self.operation, context)?;
             let updated = metadata_summary(
                 &stored,
                 current.revision().next()?,
                 retention,
                 current.facts().reporting(),
             )?;
-            (self.commit_report_metadata(updated, facts, context)?, at)
+            (
+                self.commit_report_metadata(
+                    super::allocation::RetainedSummary::new(updated, custody),
+                    facts,
+                    context,
+                )?,
+                at,
+            )
         };
         Ok(AcknowledgementCommit { committed, at })
     }
@@ -102,8 +115,8 @@ impl IncidentRepository {
         &mut self,
         binding: ReportBinding,
         context: &JobContext,
-    ) -> Result<(StoredIncidentSummary, DiagnosticReadFacts), IncidentStoreError> {
-        if self.pending.is_some() {
+    ) -> Result<(super::allocation::RetainedSummary, DiagnosticReadFacts), IncidentStoreError> {
+        if self.pending.is_some() || self.preflight.is_some() {
             return Err(IncidentStoreError::RecoveryConflict);
         }
         let (stored, facts) = self
@@ -117,14 +130,14 @@ impl IncidentRepository {
 
     fn commit_report_metadata(
         &mut self,
-        stored: StoredIncidentSummary,
+        stored: super::allocation::RetainedSummary,
         previous: DiagnosticReadFacts,
         context: &JobContext,
     ) -> Result<IncidentCommit, IncidentStoreError> {
-        let encoded = super::encode_summary(&stored)?;
+        let encoded = self.encode_summary(&stored, context)?;
         let actual = self.activate_bytes(
             DiagnosticObject::Summary(stored.summary().seed().key()),
-            &encoded,
+            encoded.as_bytes(),
             super::repository::predecessor(previous),
             context,
         )?;

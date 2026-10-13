@@ -294,12 +294,12 @@ fn console_rejection_supersession_and_hide_preserve_exact_snapshot_custody()
         ))
     };
     let (shape, appearance, character, feedback) = input()?;
-    driver.request(shape, appearance, character, feedback, Some(store.snapshot_tail(1)?))?;
+    driver.request(shape, appearance, character, feedback, Some(store.snapshot_tail(1)?.into()))?;
     assert!(driver.active.is_none());
     assert!(driver.pending.is_some());
     let latest = store.snapshot_tail(1)?;
     assert!(matches!(store.snapshot_tail(1), Err(TranscriptError::SnapshotCapacity)));
-    driver.request(shape, appearance, character, feedback, Some(latest))?;
+    driver.request(shape, appearance, character, feedback, Some(latest.into()))?;
     let fourth = store.snapshot_tail(1)?;
     assert!(matches!(store.snapshot_tail(1), Err(TranscriptError::SnapshotCapacity)));
     driver.set_visible(false)?;
@@ -330,10 +330,10 @@ fn console_regression_preserves_current_gate_and_pending_request() -> Result<(),
     let appearance = Appearance::demo();
     let character = AnimationFrame::bootstrap();
     let feedback = ProgressFrame { completed: 0.0, activity: None };
-    driver.request(shape, appearance, character, feedback, Some(store.snapshot_tail(1)?))?;
+    driver.request(shape, appearance, character, feedback, Some(store.snapshot_tail(1)?.into()))?;
     let generation = driver.gate.state_generation();
     let identity = driver.pending.as_ref().ok_or("Pending absent")?.identity;
-    assert!(driver.request(shape, appearance, character, feedback, Some(older)).is_err());
+    assert!(driver.request(shape, appearance, character, feedback, Some(older.into())).is_err());
     assert_eq!(driver.gate.state_generation(), generation);
     assert_eq!(driver.pending.as_ref().ok_or("Pending replaced")?.identity, identity);
     let request = driver.pending.as_ref().ok_or("Pending absent")?.input.take()?;
@@ -358,12 +358,12 @@ fn console_resource_and_none_transitions_invalidate_actual_terminal_frames()
     let appearance = Appearance::demo();
     let character = AnimationFrame::bootstrap();
     let feedback = ProgressFrame { completed: 0.25, activity: None };
-    driver.request(shape, appearance, character, feedback, Some(first.snapshot_tail(1)?))?;
+    driver.request(shape, appearance, character, feedback, Some(first.snapshot_tail(1)?.into()))?;
     support::terminal(&driver, &wake)?;
     assert!(matches!(first.snapshot_tail(1), Err(TranscriptError::SnapshotCapacity)));
     let old =
         driver.active.as_ref().and_then(|active| active.identity).ok_or("Old identity absent")?;
-    driver.request(shape, appearance, character, feedback, Some(next.snapshot_tail(1)?))?;
+    driver.request(shape, appearance, character, feedback, Some(next.snapshot_tail(1)?.into()))?;
     assert_ne!(driver.gate.state_generation(), old.state_generation);
     assert!(support::poll(&mut driver)?.is_none());
     assert!(first.snapshot_tail(1).is_ok());
@@ -418,7 +418,7 @@ fn console_uninvoked_factory_keeps_pin_until_real_terminal_disposal() -> Result<
             Appearance::demo(),
             AnimationFrame::bootstrap(),
             ProgressFrame { completed: 0.0, activity: None },
-            Some(store.snapshot_tail(1)?),
+            Some(store.snapshot_tail(1)?.into()),
         )?;
         assert_eq!(
             driver.active.as_ref().ok_or("Active absent")?.job.status().phase,

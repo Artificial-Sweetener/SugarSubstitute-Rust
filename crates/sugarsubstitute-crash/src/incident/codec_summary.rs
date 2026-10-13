@@ -31,45 +31,10 @@ pub(super) struct SummaryRecord {
     reporting: ReportingRecord,
     symbols: SymbolsRecord,
 }
-#[derive(Serialize, Deserialize)]
-#[serde(tag = "subject", rename_all = "snake_case", deny_unknown_fields)]
-enum ExitRecord {
-    Desktop { kind: ExitKindRecord, status: i64 },
-    Supervisor { status: i64 },
-}
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-enum ExitKindRecord {
-    Normal,
-    StartupCancelled,
-    StartupFailed,
-    Unexpected,
-}
-#[derive(Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct ReportingRecord {
-    attempts: u64,
-    #[serde(deserialize_with = "super::codec::required_option")]
-    last: Option<AttemptRecord>,
-}
-#[derive(Serialize, Deserialize)]
-#[serde(tag = "result", rename_all = "snake_case", deny_unknown_fields)]
-enum AttemptRecord {
-    Presented {},
-    Failed { cause: ReportFailureRecord },
-}
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-enum ReportFailureRecord {
-    Launch,
-    Load,
-    Presentation,
-    UnexpectedExit,
-    Acknowledgement,
-    Export,
-    Retirement,
-}
-
+mod exit;
+use exit::{ExitKindRecord, ExitRecord};
+mod reporting;
+use reporting::{AttemptRecord, ReportFailureRecord, ReportingRecord};
 impl SummaryRecord {
     pub(super) fn into_summary(self) -> Result<IncidentSummary, IncidentStoreError> {
         let retention = RetentionFacts::new(
@@ -210,17 +175,22 @@ struct StoredRecord {
 /// # Errors
 /// Preserves encoding causes and rejects oversized complete records.
 pub fn encode_summary(summary: &StoredIncidentSummary) -> Result<Vec<u8>, IncidentStoreError> {
-    let bytes = serde_json::to_vec(&super::codec::Record {
-        schema_version: 2,
-        content: StoredRecord {
+    super::codec_encode::encode(2, StoredRecord::from(summary), super::codec::STATE_BOUND)
+}
+impl From<&StoredIncidentSummary> for StoredRecord {
+    fn from(summary: &StoredIncidentSummary) -> Self {
+        Self {
             summary: summary.summary().into(),
             payload_revision: summary.payload_revision().map(IncidentRevision::get),
-        },
-    })?;
-    if bytes.len() > super::codec::STATE_BOUND {
-        return Err(IncidentStoreError::RecordBound);
+        }
     }
-    Ok(bytes)
+}
+#[cfg(windows)]
+pub(super) fn write_summary<W: std::io::Write>(
+    summary: &StoredIncidentSummary,
+    output: W,
+) -> Result<(), IncidentStoreError> {
+    super::codec_encode::write(2, &StoredRecord::from(summary), output)
 }
 /// Decode only strict schema-two summary bytes; legacy conversion is explicit.
 /// # Errors
@@ -229,7 +199,7 @@ pub fn decode_summary(bytes: &[u8]) -> Result<StoredIncidentSummary, IncidentSto
     if bytes.len() > super::codec::STATE_BOUND {
         return Err(IncidentStoreError::RecordBound);
     }
-    let record: super::codec::Record<StoredRecord> = serde_json::from_slice(bytes)?;
+    let record: super::codec::Record<StoredRecord> = super::codec_parse::parse(bytes)?;
     if record.schema_version != 2 {
         return Err(IncidentStoreError::UnsupportedSchema(record.schema_version));
     }
@@ -248,7 +218,7 @@ pub fn migrate_summary_v1(bytes: &[u8]) -> Result<Vec<u8>, IncidentStoreError> {
     if bytes.len() > super::codec::STATE_BOUND {
         return Err(IncidentStoreError::RecordBound);
     }
-    let envelope: super::codec::Record<serde::de::IgnoredAny> = serde_json::from_slice(bytes)?;
+    let envelope: super::codec::Record<serde::de::IgnoredAny> = super::codec_parse::parse(bytes)?;
     match envelope.schema_version {
         1 => {
             let summary = super::codec::decode::<SummaryRecord>(bytes, super::codec::STATE_BOUND)?

@@ -27,44 +27,37 @@ impl StreamingPort {
             || Some(historical.owner().namespace) != self.namespace
             || expected.bytes() > DIAGNOSTIC_IO_BYTES as u64
         {
-            return Err(ClaimError::invalid("diagnostic_unbound_stage_recovery"));
+            return Err(self.reject());
         }
-        let namespace =
-            self.namespace.ok_or_else(|| ClaimError::invalid("diagnostic_unresolved"))?;
-        let prefix = format!(
-            "{}.{}.",
-            layout::leaf(object, namespace),
-            super::super::hex(&layout::operation(historical))
-        );
-        let mut matching = self.stage_candidates.iter().filter(|candidate| {
-            candidate.identity == expected.file_identity()
+        let namespace = self.namespace.ok_or_else(|| self.reject())?;
+        let prefix = leaf::Leaf::recovery_prefix(object, namespace, historical)
+            .map_err(|_| self.reject())?;
+        let prefix = prefix.text().map_err(|_| self.reject())?;
+        let scan = self.stage_candidates.as_ref().ok_or_else(|| self.reject())?;
+        let mut selected = None;
+        for (index, candidate) in scan.candidates.iter().enumerate() {
+            if candidate.identity == expected.file_identity()
                 && candidate.bytes == expected.bytes()
-                && candidate.leaf.starts_with(&prefix)
-        });
-        let leaf = matching
-            .next()
-            .ok_or_else(|| ClaimError::invalid("diagnostic_missing_recovery_stage"))?
-            .leaf
-            .clone();
-        if matching.next().is_some() {
-            return Err(ClaimError::invalid("diagnostic_ambiguous_recovery_stage"));
+                && candidate.leaf.starts_with(prefix)
+            {
+                if selected.is_some() {
+                    return Err(self.reject());
+                }
+                selected = Some(index);
+            }
         }
-        // OPEN_EXISTING adopts its output into this owner before identity/security/hash checks.
-        let path = self
-            .directory
-            .as_ref()
-            .ok_or_else(|| ClaimError::invalid("diagnostic_unresolved"))?
-            .join(leaf);
+        let candidate = &scan.candidates[selected.ok_or_else(|| self.reject())?];
+        let path = self.name(&candidate.leaf, context)?;
         let writable = access != StageRecoveryAccess::PreservedOriginal;
         let (id, actual) = self.open_file(path, expected.bytes(), false, writable, context)?;
         let index = self.index(id)?;
-        if expected.file_identity() != actual.file_identity()
-            || expected.sha256() != actual.sha256()
-            || expected.bytes() != actual.bytes()
+        if expected.file_identity() != actual.identity
+            || expected.sha256() != actual.sha256
+            || expected.bytes() != actual.bytes
         {
-            return Err(ClaimError::invalid("diagnostic_changed_recovery_stage"));
+            return Err(self.invalid("diagnostic_changed_recovery_stage"));
         }
-        self.files[index].stage = writable;
+        self.files[index].fields_mut()?.stage = writable;
         self.check(context)?;
         Ok((id, actual))
     }

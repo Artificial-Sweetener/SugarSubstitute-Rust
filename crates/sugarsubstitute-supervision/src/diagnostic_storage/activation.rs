@@ -33,16 +33,17 @@ impl DiagnosticStorage {
         context: &JobContext,
     ) -> Result<DiagnosticActivation, DiagnosticStorageError> {
         let mut state = self.check(operation, context)?;
-        stage::mutation(&state, operation.key)?;
-        if !Arc::ptr_eq(&self.shared, &stage.shared) || stage.operation != operation.key {
+        stage::mutation(&mut state, operation.key)?;
+        if !Shared::ptr_eq(&self.shared, &stage.shared) || stage.operation != operation.key {
             return Err(error(operation.key, Code::InvalidIdentity));
         }
         let index = state
+            .data_mut()?
             .stages
             .iter()
             .position(|value| value.id == stage.id)
             .ok_or_else(|| error(operation.key, Code::Closed))?;
-        let retained = &state.stages[index];
+        let retained = &state.data_mut()?.stages[index];
         if retained.recovery_predecessor.is_some_and(|original| original != expected) {
             return Err(error(operation.key, Code::InvalidIdentity));
         }
@@ -50,15 +51,14 @@ impl DiagnosticStorage {
         let object = retained.object;
         let id = retained.native.ok_or_else(|| error(operation.key, Code::Closed))?;
         let facts = state
-            .port
-            .activate(id, object, expected, context)
+            .call_native(|port| port.activate(id, object, expected, context))?
             .map_err(|cause| native(operation.key, Code::ActivationUncertain, cause))?;
         if facts != flushed {
             return Err(error(operation.key, Code::ChangedIdentity));
         }
         check(&mut state, operation.key, context, false)?;
-        state.stages.remove(index);
-        state.inventory_complete = false;
+        state.data_mut()?.stages.remove(index);
+        state.data_mut()?.inventory_complete = false;
         Ok(DiagnosticActivation {
             shared: self.shared.clone(),
             operation: operation.key,
@@ -77,16 +77,16 @@ impl DiagnosticStorage {
         context: &JobContext,
     ) -> Result<DiagnosticActivation, DiagnosticStorageError> {
         let mut state = self.check(operation, context)?;
-        stage::mutation(&state, operation.key)?;
+        stage::mutation(&mut state, operation.key)?;
         let DiagnosticPredecessor::Exact { file_identity, sha256 } = expected else {
             return Err(error(operation.key, Code::InvalidIdentity));
         };
-        if object.namespace().is_some_and(|value| Some(value) != state.namespace) {
+        let namespace = state.data_mut()?.namespace;
+        if object.namespace().is_some_and(|value| Some(value) != namespace) {
             return Err(error(operation.key, Code::InvalidIdentity));
         }
         let facts = state
-            .port
-            .reconcile_activation(object, expected, context)
+            .call_native(|port| port.reconcile_activation(object, expected, context))?
             .map_err(|cause| native(operation.key, Code::ActivationUncertain, cause))?;
         if facts.identity != file_identity || facts.sha256 != sha256 || facts.bytes > object.bound()
         {

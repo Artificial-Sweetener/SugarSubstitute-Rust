@@ -19,7 +19,7 @@ pub(in crate::diagnostic_storage) struct PayloadIntent {
     pub(super) journal_active: Option<DiagnosticReadFacts>,
     pub(super) candidate_active: Option<DiagnosticReadFacts>,
 }
-pub(super) struct RetainedVictim {
+pub(in crate::diagnostic_storage) struct RetainedVictim {
     pub(super) object: DiagnosticObject,
     pub(super) facts: Option<DiagnosticReadFacts>,
     pub(super) native: Option<NativeId>,
@@ -41,12 +41,13 @@ impl RetainedVictim {
         }
     }
 }
-pub(super) fn intent(
-    state: &mut State,
+pub(super) fn intent<'a>(
+    state: &'a mut StateAccess<'_>,
     id: u64,
     key: LogicalStoreOperationKey,
-) -> Result<&mut PayloadIntent, DiagnosticStorageError> {
+) -> Result<&'a mut PayloadIntent, DiagnosticStorageError> {
     state
+        .data_mut()?
         .payload
         .as_deref_mut()
         .filter(|intent| intent.id == id)
@@ -59,43 +60,45 @@ pub(super) fn pin(
     operation: &DiagnosticStorageOperation,
 ) -> Result<(), DiagnosticStorageError> {
     if current != operation.key
-        || !Arc::ptr_eq(shared, other)
-        || !Arc::ptr_eq(shared, &operation.shared)
+        || !Shared::ptr_eq(shared, other)
+        || !Shared::ptr_eq(shared, &operation.shared)
     {
         return Err(error(operation.key, Code::InvalidIdentity));
     }
     Ok(())
 }
-pub(super) fn validation(
-    key: LogicalStoreOperationKey,
-    cause: DiagnosticRecoveryValidationError,
-) -> DiagnosticStorageError {
-    native(key, Code::InvalidIdentity, ClaimError::new("diagnostic_payload_validation", cause))
-}
-pub(in crate::diagnostic_storage) fn pins_read(state: &State, id: u64) -> bool {
-    state.payload.as_ref().is_some_and(|intent| {
+pub(in crate::diagnostic_storage) fn pins_read(
+    state: &mut StateAccess<'_>,
+    id: u64,
+) -> Result<bool, DiagnosticStorageError> {
+    Ok(state.data_mut()?.payload.as_ref().is_some_and(|intent| {
         intent.original_read == Some(id) || intent.pending_journal_read == Some(id)
-    })
+    }))
 }
+
 pub(super) fn capacity(
-    state: &State,
+    state: &mut StateAccess<'_>,
     key: LogicalStoreOperationKey,
 ) -> Result<(), DiagnosticStorageError> {
     // The future Journal creation and readback overlap remain reserved while victims live.
-    if state.port.retained_files().checked_add(MAX_ATTACHMENTS + 2).is_none_or(|count| count > 16)
+    if state
+        .data_mut()?
+        .retained_files()
+        .checked_add(MAX_ATTACHMENTS + 2)
+        .is_none_or(|count| count > 16)
         || state
-            .port
+            .data_mut()?
             .live_handles()
             .checked_add(MAX_ATTACHMENTS + 2)
             .is_none_or(|count| count > DIAGNOSTIC_HANDLE_BOUND)
-        || state.stages.len() >= DIAGNOSTIC_STAGE_BOUND
+        || state.data_mut()?.stages.len() >= DIAGNOSTIC_STAGE_BOUND
     {
         return Err(error(key, Code::Capacity));
     }
     Ok(())
 }
 pub(super) fn revalidate_victims(
-    state: &mut State,
+    state: &mut StateAccess<'_>,
     id: u64,
     key: LogicalStoreOperationKey,
     context: &JobContext,
@@ -107,8 +110,7 @@ pub(super) fn revalidate_victims(
         let (native_id, facts) =
             (required(victim.native, key)?, victim.facts.ok_or_else(|| error(key, Code::Closed))?);
         let actual = state
-            .port
-            .observe_file(native_id, context)
+            .call_native(|port| port.observe_file(native_id, context))?
             .map_err(|cause| native(key, Code::Read, cause))?;
         check(state, key, context, false)?;
         if actual != facts {
@@ -119,11 +121,11 @@ pub(super) fn revalidate_victims(
 }
 
 pub(in crate::diagnostic_storage) fn admit_read(
-    state: &State,
+    state: &mut StateAccess<'_>,
     binding: (DiagnosticEntryClass, [u8; 32]),
     key: LogicalStoreOperationKey,
 ) -> Result<(), DiagnosticStorageError> {
-    let Some(intent) = &state.payload else {
+    let Some(intent) = &state.data_mut()?.payload else {
         return Ok(());
     };
     if matches!(
@@ -133,16 +135,17 @@ pub(in crate::diagnostic_storage) fn admit_read(
     {
         return Err(error(key, Code::Busy));
     }
+    let reserved_files = intent.reserved_files;
     if state
-        .port
+        .data_mut()?
         .retained_files()
-        .checked_add(intent.reserved_files)
+        .checked_add(reserved_files)
         .and_then(|count| count.checked_add(1))
         .is_none_or(|count| count > 16)
         || state
-            .port
+            .data_mut()?
             .live_handles()
-            .checked_add(intent.reserved_files)
+            .checked_add(reserved_files)
             .and_then(|count| count.checked_add(1))
             .is_none_or(|count| count > DIAGNOSTIC_HANDLE_BOUND)
     {

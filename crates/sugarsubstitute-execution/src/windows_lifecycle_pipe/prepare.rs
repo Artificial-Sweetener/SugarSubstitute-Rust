@@ -25,7 +25,8 @@ impl Lease {
             .map_err(|cause| error("pipe_handshake_deadline", cause))?;
         let binding = self.binding.ok_or_else(|| failure("pipe_server_binding"))?;
         let name = bootstrap::name(binding);
-        let mut descriptor = security::Descriptor::new(identity)?;
+        let mut descriptor =
+            security::Descriptor::new(identity, security::DescriptorPurpose::RestrictedEndpoint)?;
         let attributes = descriptor.attributes();
         self.pipe.reserve("pipe_create_local_server")?;
         // SAFETY: bounded NUL-terminated local name, explicit ACL, sole instance and overlapped mode.

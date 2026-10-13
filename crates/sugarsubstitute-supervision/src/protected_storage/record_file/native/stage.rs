@@ -6,9 +6,17 @@ pub(super) fn create<const N: usize>(
     file: &HeldFile<N>,
     value: &mut Stage<N>,
 ) -> Result<(), ClaimError> {
-    value.path = file.record_path.with_extension(format!("{}.stage", hex(&random()?)));
+    value.path = file.record_path.path()?.with_extension(format!(
+        "{}.stage",
+        hex(&random(&mut crate::protected_storage::native_phase::NativePhase::ordinary(
+            &file.handle.budget()
+        )?)?)
+    ));
     let wide = paths::wide(&value.path)?;
-    let descriptor = security::Descriptor::new(&file.account_sid)?;
+    let descriptor = security::Descriptor::new(
+        file.account_sid.bytes()?,
+        &mut crate::protected_storage::native_phase::NativePhase::ordinary(&file.handle.budget())?,
+    )?;
     let attributes = descriptor.attributes();
     // SAFETY: Bounded owned name and protected noninheritable descriptor remain live.
     let raw = unsafe {
@@ -51,11 +59,30 @@ pub(super) fn verify<const N: usize>(
     file: &HeldFile<N>,
     value: &mut Stage<N>,
 ) -> Result<(), ClaimError> {
-    paths::validate_regular(&value.handle, None)?;
-    security::verify(&value.handle, &file.account_sid)?;
-    let identity = paths::file_identity(&value.handle)?;
+    paths::validate_regular(
+        &value.handle,
+        None,
+        &mut crate::protected_storage::native_phase::NativePhase::ordinary(&value.handle.budget())?,
+    )?;
+    security::verify(
+        &value.handle,
+        file.account_sid.bytes()?,
+        &mut crate::protected_storage::native_phase::NativePhase::ordinary(&value.handle.budget())?,
+    )?;
+    let identity = paths::file_identity(
+        &value.handle,
+        &mut crate::protected_storage::native_phase::NativePhase::ordinary(&value.handle.budget())?,
+    )?;
     if value.identity.is_some_and(|previous| previous != identity)
-        || paths::final_path(&value.handle)? != value.path
+        || paths::final_path(
+            &value.handle,
+            &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+                &value.handle.budget(),
+            )?,
+            crate::protected_storage::native_name::NativeNameDestination::Ordinary,
+        )
+        .and_then(crate::protected_storage::native_name::NativeName::into_ordinary)?
+            != value.path
     {
         return Err(ClaimError::invalid("changed_claim_stage"));
     }
@@ -93,9 +120,13 @@ pub(super) fn activate<const N: usize>(
     file: &HeldFile<N>,
     value: &mut Stage<N>,
 ) -> Result<(), ClaimError> {
-    let target = file.record_path.clone();
-    let wide = paths::wide(&target)?;
-    rename(&value.handle, &wide, true)?;
+    let target = file.record_path.path()?.to_owned();
+    rename(
+        &value.handle,
+        &target,
+        true,
+        &mut crate::protected_storage::native_phase::NativePhase::ordinary(&value.handle.budget())?,
+    )?;
     value.path = target;
     value.activated = Some(value.encoded);
     Ok(())

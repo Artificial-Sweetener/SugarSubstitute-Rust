@@ -3,6 +3,27 @@
 //! Admit unrelated readers within retained native reservation while fencing selected files.
 use super::*;
 #[test]
+fn diagnostic_payload_decision_retains_destination_until_actual_data_drop() -> TestResult {
+    admitted(|context, _| {
+        let (mut storage, operation) = setup(&context, disk()?)?;
+        let (preparation, validator, original, candidate) =
+            prepare(&mut storage, &operation, &context)?;
+        let allocation = storage.payload_decision(&operation, &context)?;
+        assert_eq!(allocation.victims.capacity(), MAX_ATTACHMENTS);
+        let decision = validator.decision(allocation, DiagnosticPayloadDiscardCase::Original)?;
+        assert_eq!(decision.allocated_victim_capacity(), MAX_ATTACHMENTS);
+        storage.retire(&operation, &context)?;
+        drop((preparation, validator, original, candidate, operation, storage));
+        assert!(context.memory().claim(1).is_err());
+        drop(decision);
+        assert_eq!(
+            context.memory().claim(DIAGNOSTIC_STORAGE_BYTES)?.bytes(),
+            DIAGNOSTIC_STORAGE_BYTES
+        );
+        Ok(())
+    })
+}
+#[test]
 fn diagnostic_payload_discard_preflight_counts_unreturned_outputs_before_victim_effects()
 -> TestResult {
     admitted(|context, _| {

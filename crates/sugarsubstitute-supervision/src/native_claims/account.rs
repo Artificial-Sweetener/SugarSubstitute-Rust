@@ -24,7 +24,9 @@ pub(crate) fn initialize(
     root.directory = resolved.directory;
     let directory = &root.directory;
     let epoch = sugarsubstitute_contracts::lifecycle::CoordinatorEpoch::new(
-        crate::protected_storage::record_file::random()?,
+        crate::protected_storage::record_file::random(
+            &mut crate::protected_storage::native_phase::NativePhase::ordinary(&budget)?,
+        )?,
     )
     .map_err(|e| ClaimError::new("coordinator_epoch", e))?;
     let key = CoordinatorKey { namespace, epoch };
@@ -34,10 +36,11 @@ pub(crate) fn initialize(
         .join(crate::protected_storage::record_file::hex(namespace.bytes()));
     HeldFile::acquire_into(
         &mut root.coordinator,
-        &stem.with_extension("claim"),
-        stem.with_extension("record"),
-        &root.sid,
-        budget,
+        crate::protected_storage::native_name::NativeName::Ordinary(stem.with_extension("claim")),
+        crate::protected_storage::native_name::NativeName::Ordinary(stem.with_extension("record")),
+        crate::protected_storage::native_name::NativeSid::Ordinary(root.sid.clone()),
+        budget.clone(),
+        &mut crate::protected_storage::native_phase::NativePhase::ordinary(&budget)?,
     )?;
     let held = root.coordinator.as_ref().ok_or_else(|| ClaimError::invalid("missing_claim"))?;
     let record = Record::coordinator(key);
@@ -60,8 +63,15 @@ pub(crate) fn initialize(
             crate::coordinator_entry::election::ElectionRecordOrigin::Fresh(_)
         )
     {
-        let permission = guard
-            .publication(held, crate::protected_storage::paths::file_identity(&held.handle)?)?;
+        let permission = guard.publication(
+            held,
+            crate::protected_storage::paths::file_identity(
+                &held.handle,
+                &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+                    &held.handle.budget(),
+                )?,
+            )?,
+        )?;
         records::publish_fresh(held, record, &permission, context)?;
     } else {
         records::publish(held, record, context)?;

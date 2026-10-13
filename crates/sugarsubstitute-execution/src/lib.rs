@@ -3,8 +3,11 @@
 //! Own bounded application scheduling, cancellation, result delivery and worker teardown.
 
 mod admission;
+mod admission_liveness;
 mod admission_timing;
 mod blocking;
+mod blocking_input;
+pub use blocking_input::{BlockingInputError, ChargedBlockingInput};
 mod entry_preparation;
 #[cfg(windows)]
 mod windows_entry_environment;
@@ -31,8 +34,9 @@ mod desktop_capture;
 pub use desktop_capture::{
     DESKTOP_CAPTURE_NATIVE_WORKSPACE_BYTES, DesktopCaptureAdmissionRejection,
     DesktopCaptureAttached, DesktopCaptureControl, DesktopCaptureSession,
-    InheritedCaptureAttachInput, NativeCaptureDriver, NativeCaptureInput, NativeCaptureProgress,
-    NativeCaptureReply, NativeCaptureStep, ProcessLifetimeCapture,
+    DesktopCaptureTemporaryState, InheritedCaptureAttachInput, NativeCaptureDriver,
+    NativeCaptureInput, NativeCaptureProgress, NativeCaptureReply, NativeCaptureStep,
+    ProcessLifetimeCapture,
 };
 #[cfg(any(windows, test))]
 pub mod diagnostic_pipe;
@@ -45,6 +49,11 @@ mod lifecycle_pipe;
 mod mailbox;
 mod memory;
 mod native_resources;
+mod symbol_bundle;
+pub use symbol_bundle::{
+    CommittedReaderAdmission, CommittedReaderOrigin, CommittedReaderRetirement,
+    SymbolBundleAdmission, SymbolBundleOrigin, SymbolBundleRetirement,
+};
 mod symbol_admission;
 mod symbol_cleanup;
 pub use symbol_admission::{

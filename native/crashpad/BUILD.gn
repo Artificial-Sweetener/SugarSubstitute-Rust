@@ -3,7 +3,8 @@
 import("//build/crashpad_buildconfig.gni")
 
 loadable_module("sugarsubstitute_crashpad_client") {
-  sources = [ "capture_bridge.cc", "capture_bridge.h" ]
+  sources = [ "capture_bridge.cc", "capture_bridge.h", "capture_source.cc", "capture_source.h", "capture_endpoint.h", "capture_attach_boundary.cc", "capture_attach_boundary.h", "owned_attach.cc", "owned_attach_protocol.cc", "capture_attach_validation.cc", "capture_event.cc" ]
+  libs = [ "ntdll.lib" ]
   deps = [ "//client", ":finished_report_parser" ]
 }
 
@@ -12,9 +13,33 @@ group("capture_bundle") {
 }
 
 executable("owned_registration_tests") {
-  sources = [ "owned_registration.cc", "owned_registration_tests.cc" ]
+  sources = [ "owned_connection.cc", "owned_registration.cc", "owned_registration_tests.cc" ]
   include_dirs = [ "//" ]
   libs = [ "kernel32.lib", "advapi32.lib" ]
+  configs += [ ":capture_owner_test_exceptions" ]
+}
+
+executable("capture_source_tests") {
+  sources = [ "capture_source.cc", "capture_source_tests.cc" ]
+  include_dirs = [ "//" ]
+}
+
+executable("capture_attach_validation_tests") {
+  sources = [ "capture_attach_v2.h", "capture_attach_validation.h", "capture_attach_validation.cc", "capture_attach_validation_tests.cc" ]
+  include_dirs = [ "//" ]
+}
+
+executable("owned_attach_tests") {
+  sources = [ "owned_attach.h", "owned_attach.cc", "owned_attach_protocol.cc", "owned_attach_tests.cc", "owned_connection.cc", "capture_attach_validation.cc" ]
+  include_dirs = [ "//" ]
+  libs = [ "kernel32.lib" ]
+  configs += [ ":capture_owner_test_exceptions" ]
+}
+
+executable("capture_event_tests") {
+  sources = [ "capture_event.cc", "capture_event_tests.cc", "owned_connection.cc" ]
+  include_dirs = [ "//" ]
+  libs = [ "kernel32.lib", "ntdll.lib" ]
 }
 
 source_set("finished_report_parser") {
@@ -38,4 +63,36 @@ executable("incident_bridge_tests") {
 
 group("finished_parser_tests") {
   deps = [ ":bounded_metadata_tests", ":incident_bridge_tests" ]
+}
+
+# External CPU fakes exercise retained custody after unwind. The production DLL
+# preserves mini_chromium's pinned no-exceptions compiler configuration.
+config("capture_owner_test_exceptions") {
+  cflags_cc = [ "/EHsc", "/U_HAS_EXCEPTIONS", "/D_HAS_EXCEPTIONS=1" ]
+}
+
+executable("capture_attach_boundary_tests") {
+  sources = [ "capture_attach_boundary.cc", "capture_attach_boundary_tests.cc", "owned_connection.cc", "owned_attach.cc", "owned_attach_protocol.cc", "capture_attach_validation.cc" ]
+  include_dirs = [ "//" ]
+  libs = [ "kernel32.lib" ]
+  configs += [ ":capture_owner_test_exceptions" ]
+}
+
+action("capture_runtime_test_source") {
+  script = "capture_runtime_test_source.py"
+  inputs = [ "../client/crashpad_client_win.cc", "../util/win/critical_section_with_debug_info.cc" ]
+  outputs = [ "$target_gen_dir/capture_runtime_common.inc", "$target_gen_dir/capture_runtime_methods.inc", "$target_gen_dir/capture_runtime_helper.inc" ]
+  args = [ "--client", rebase_path(inputs[0], root_build_dir), "--helper", rebase_path(inputs[1], root_build_dir), "--output", rebase_path(target_gen_dir, root_build_dir) ]
+}
+
+executable("capture_runtime_tests") {
+  sources = [ "capture_runtime_tests.cc", "owned_connection.cc", "owned_attach.cc", "owned_attach_protocol.cc", "capture_attach_validation.cc" ]
+  deps = [ ":capture_runtime_test_source" ]
+  include_dirs = [ "//", target_gen_dir ]
+  libs = [ "kernel32.lib" ]
+  configs += [ ":capture_owner_test_exceptions" ]
+}
+
+group("capture_owner_tests") {
+  deps = [ ":owned_registration_tests", ":owned_attach_tests", ":capture_attach_boundary_tests", ":capture_runtime_tests", ":capture_attach_validation_tests", ":capture_event_tests", ":capture_source_tests" ]
 }

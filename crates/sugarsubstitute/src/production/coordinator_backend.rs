@@ -1,0 +1,392 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Artificial Sweetener and contributors
+//! Compose actual backend claims, process custody, installed sources and readiness.
+#[path = "coordinator_backend/activity.rs"]
+mod activity;
+#[path = "coordinator_backend/cleanup.rs"]
+mod cleanup;
+#[path = "coordinator_backend/preparation.rs"]
+mod preparation;
+#[cfg(test)]
+#[path = "coordinator_backend/tests.rs"]
+pub(crate) mod tests;
+
+use super::{coordinator_authority::CoordinatorAuthority, entry_runner::ScopeSequence};
+use crate::job_sequence::JobSequence;
+use std::error::Error;
+use sugarsubstitute_application::{
+    startup::{ConnectionBudget, ConnectionBudgetKind},
+    supervision::ResourceCoordinator,
+};
+use sugarsubstitute_comfy::{
+    readiness_campaign::{CampaignStep, ReadinessCampaign},
+    readiness_transport::{ReadinessProbeInput, VerifiedReadiness},
+};
+use sugarsubstitute_contracts::{
+    configuration::LoopbackOrigin,
+    execution::{
+        CompletionBatch, ExecutionPort, JobClass, JobCompletion, JobOutcome, JobSpec, MemoryClaim,
+        Moment, Operation, OwnedJob, Scope, ScopeSpec, TerminalKind,
+    },
+    lifecycle::*,
+};
+use sugarsubstitute_execution::{
+    ExecutionClient,
+    windows_output::{
+        AdmittedOutputBatch, MIN_WINDOWS_OUTPUT_BYTES, WindowsOutputReport, WindowsOutputSession,
+    },
+};
+use sugarsubstitute_supervision::{
+    CLAIM_OPERATION_BYTES, ClaimLaunchJobs, ClaimObservation, ClaimTarget, LaunchEnvironment,
+    LaunchTicket, RegistryObservation, ResolutionTicket,
+    installed_frontend::{
+        FRONTEND_SOURCE_BYTES, FrontendInstallationInput, FrontendSourceError,
+        InstalledFrontendLease, InstalledFrontendOwner,
+    },
+};
+
+type Result<T> = std::result::Result<T, Box<dyn Error + Send + Sync>>;
+
+/// Borrow the sole execution/identity sequences and the actual admitted authority.
+/// Native and cleanup scopes outlive finite preparation and every retained output.
+pub(crate) struct BackendResources<'a> {
+    pub(crate) client: &'a ExecutionClient,
+    pub(crate) native: &'a Scope,
+    pub(crate) cleanup: &'a Scope,
+    pub(crate) jobs: &'a JobSequence,
+    pub(crate) scopes: &'a ScopeSequence,
+    pub(crate) authority: &'a mut CoordinatorAuthority,
+}
+
+/// Retain trusted explicit installed paths and the original captured environment.
+/// Managed environment comes from the real entry producer, never ambient discovery.
+pub(crate) struct BackendPreparation {
+    pub(crate) source: FrontendInstallationInput,
+    pub(crate) environment: Option<LaunchEnvironment>,
+}
+
+struct Backend {
+    key: ResourceKey,
+    target: BackendTarget,
+    budget: ConnectionBudget,
+    resolved: Option<sugarsubstitute_contracts::configuration::LaunchConfiguration>,
+    ready_origin: Option<LoopbackOrigin>,
+    scope: Scope,
+    source: InstalledFrontendOwner,
+    source_job: bool,
+    source_lease: Option<InstalledFrontendLease>,
+    source_close: Option<OwnedJob<(), FrontendSourceError>>,
+    source_terminal: Option<JobCompletion<(), FrontendSourceError>>,
+    source_closed: bool,
+    environment: Option<LaunchEnvironment>,
+    resolution: Option<ResolutionTicket>,
+    resolution_pending: bool,
+    resolution_retiring: bool,
+    claim_pending: bool,
+    backend_admitted: bool,
+    claimed: bool,
+    release_pending: bool,
+    released: bool,
+    launch: Option<LaunchTicket>,
+    started: bool,
+    family_settled: bool,
+    output: Option<WindowsOutputSession>,
+    output_terminal: Option<
+        JobCompletion<
+            WindowsOutputReport,
+            sugarsubstitute_execution::windows::NativeObservationError,
+        >,
+    >,
+    output_observed: bool,
+    campaign: ReadinessCampaign,
+    readiness: Option<VerifiedReadiness>,
+    shutdown: Option<(ShutdownId, ShutdownBudget)>,
+    failure_published: bool,
+    settled: bool,
+    cleanup_failure: Option<Box<dyn Error + Send + Sync>>,
+}
+
+/// Own at most64 actual backend generations; attached processes never enter registry.
+/// The composing headless thread routes each immutable completion batch after the
+/// authority consumes its actual claims and registry jobs. This owner spawns nothing.
+pub(crate) struct CoordinatorBackend {
+    owner: CoordinatorKey,
+    policy: ResourceCoordinator,
+    records: Box<[Option<Backend>]>,
+    next_shutdown: u64,
+    undelivered: Option<ResourceTransition>,
+}
+/// Destroy the complete table and metadata allocations before returning their
+/// single original projection charge. No bare funded backend escapes construction.
+pub(crate) struct RetainedBackend {
+    pub(crate) backend: Box<CoordinatorBackend>,
+    _storage: MemoryClaim,
+}
+impl RetainedBackend {
+    /// Exact known retained table and heap metadata under the original projection job.
+    pub(crate) const fn required_storage_bytes() -> u64 {
+        (size_of::<CoordinatorBackend>() + 64 * size_of::<Option<Backend>>()) as u64
+    }
+    /// Construct only from an actually serving claims/registry association.
+    /// The caller preclaims the table and heap header from its unchanged original
+    /// projection reservation. Both allocations remain inseparable from that claim.
+    pub(crate) fn new(authority: &CoordinatorAuthority, storage: MemoryClaim) -> Result<Self> {
+        if !authority.serving() || authority.registry().is_none() {
+            return Err(Box::new(LifecycleRejection::WrongPhase));
+        }
+        let owner = authority.key().ok_or(LifecycleRejection::ForeignOwner)?;
+        if storage.bytes() < Self::required_storage_bytes() {
+            return Err(Box::new(LifecycleRejection::Overloaded));
+        }
+        let mut records = Vec::new();
+        records.try_reserve_exact(64)?;
+        records.resize_with(64, || None);
+        let backend = CoordinatorBackend {
+            owner,
+            policy: ResourceCoordinator::new(owner),
+            records: records.into_boxed_slice(),
+            next_shutdown: 0,
+            undelivered: None,
+        };
+        Ok(Self { backend: Box::new(backend), _storage: storage })
+    }
+}
+impl CoordinatorBackend {
+    /// Register facts authenticated by the existing native child owner.
+    pub(crate) fn register_run(&mut self, registration: ClientRegistration) -> Result<()> {
+        self.policy.register_run(registration)?;
+        Ok(())
+    }
+
+    /// Apply a connection-authenticated request and execute only its fresh effects.
+    /// Replayed/shared acquisitions leave `input` untouched. Native failures are
+    /// retained by policy and produce actual Failed replies plus checked cleanup.
+    pub(crate) fn request(
+        &mut self,
+        binding: ClientBinding,
+        request: ResourceRequest,
+        input: &mut Option<BackendPreparation>,
+        resources: &mut BackendResources<'_>,
+    ) -> Result<ResourceTransition> {
+        self.validate(resources)?;
+        if let ResourceCommand::Acquire(target) = &request.command
+            && !self.records.iter().flatten().any(|r| r.target == *target && !r.settled)
+            && input.is_none()
+        {
+            return Err(Box::new(LifecycleRejection::WrongPhase));
+        }
+        self.begin_delivery()?;
+        let mut transition = self.policy.request(binding, request)?;
+        self.retain_transition(&transition);
+        self.effects(&mut transition, input, None, resources)?;
+        Ok(self.undelivered.take().unwrap_or_default())
+    }
+
+    /// Release only this connection's leases; remaining clients keep shared backends.
+    pub(crate) fn disconnect(
+        &mut self,
+        run: RunKey,
+        connection: ConnectionId,
+        original: ShutdownBudget,
+        resources: &mut BackendResources<'_>,
+    ) -> Result<ResourceTransition> {
+        self.validate(resources)?;
+        if ShutdownBudget::new(original.started)? != original {
+            return Err(Box::new(LifecycleRejection::WrongPhase));
+        }
+        self.begin_delivery()?;
+        let mut transition = self.policy.disconnect_run(run, connection)?;
+        self.retain_transition(&transition);
+        self.effects(&mut transition, &mut None, Some(original), resources)?;
+        Ok(self.undelivered.take().unwrap_or_default())
+    }
+
+    /// Retire run/profile policy only after the actual desktop owner checked retirement.
+    /// Shared resources leased by other clients remain owned. A connected run or
+    /// unresolved last-client backend cleanup still rejects this same receipt.
+    pub(crate) fn settle_run(
+        &mut self,
+        retired: &super::entry_activation::retirement::RetiredDesktop,
+    ) -> Result<()> {
+        if retired.run().owner != self.owner {
+            return Err(Box::new(LifecycleRejection::ForeignOwner));
+        }
+        if retired.registered() {
+            self.policy.settle_run(retired.run())?;
+        }
+        Ok(())
+    }
+
+    /// A retained producer return fences another policy mutation before admission.
+    /// This is backpressure only, never native settlement or cancellation evidence.
+    pub(crate) fn delivery_pending(&self) -> bool {
+        self.undelivered.is_some()
+    }
+
+    /// Copy the fixed actual record identities for one bounded completion-pump pass.
+    pub(crate) fn resource_keys(&self) -> [Option<ResourceKey>; 64] {
+        std::array::from_fn(|at| self.records[at].as_ref().filter(|r| !r.settled).map(|r| r.key))
+    }
+
+    /// Report complete backend retirement; desktop/profile settlement remains with its owner.
+    pub(crate) fn settled(&self) -> bool {
+        self.policy.snapshot().resources == 0 && self.records.iter().flatten().all(|r| r.settled)
+    }
+
+    /// Recover actual replies/effects retained before a later adapter rejection.
+    /// Drain this after an error before another mutation; effects were owned here.
+    pub(crate) fn take_pending_transition(&mut self) -> Option<ResourceTransition> {
+        self.undelivered.take()
+    }
+
+    /// Borrow current verified readiness; a frontend caller must revalidate before use.
+    pub(crate) fn readiness(&self, key: ResourceKey) -> Option<&VerifiedReadiness> {
+        self.records.iter().flatten().find(|record| record.key == key)?.readiness.as_ref()
+    }
+
+    /// Borrow the origin accepted by actual readiness and the current resource policy.
+    /// Revalidates retained installed/listener custody before returning wire data.
+    pub(crate) fn ready_origin(&self, key: ResourceKey) -> Result<Option<LoopbackOrigin>> {
+        if self.policy.resource_phase(key)
+            != Some(sugarsubstitute_application::supervision::ResourcePhase::Ready)
+        {
+            return Ok(None);
+        }
+        let record = self.record(key)?;
+        let proof = record.readiness.as_ref().ok_or(LifecycleRejection::WrongPhase)?;
+        proof.validate_current()?;
+        Ok(record.ready_origin)
+    }
+
+    /// Borrow cleanup failure without releasing unresolved native ownership or its charge.
+    pub(crate) fn cleanup_failure(
+        &self,
+        key: ResourceKey,
+    ) -> Option<&(dyn Error + Send + Sync + 'static)> {
+        let record = self.record(key).ok()?;
+        if let Some(cause) = record.cleanup_failure.as_deref() {
+            return Some(cause);
+        }
+        record
+            .source_terminal
+            .as_ref()
+            .and_then(|completion| match &completion.outcome {
+                JobOutcome::Failure(cause) => Some(cause as &(dyn Error + Send + Sync + 'static)),
+                _ => None,
+            })
+            .or_else(|| {
+                record.output_terminal.as_ref().and_then(|completion| match &completion.outcome {
+                    JobOutcome::Failure(cause) => {
+                        Some(cause as &(dyn Error + Send + Sync + 'static))
+                    }
+                    _ => None,
+                })
+            })
+    }
+
+    /// Borrow the retained original preparation cause independently of current cleanup.
+    pub(crate) fn failure(&self, key: ResourceKey) -> Option<&LifecycleFailure> {
+        self.policy.failure(key)
+    }
+
+    /// Transfer one genuinely charged output guard; attached targets have no output owner.
+    pub(crate) fn take_output(&self, key: ResourceKey) -> Result<Option<AdmittedOutputBatch>> {
+        let record = self.record(key)?;
+        match &record.output {
+            Some(output) => Ok(output.control.take_batch()?),
+            None => Ok(None),
+        }
+    }
+
+    /// Return the next original campaign/cleanup deadline for the existing native pump.
+    pub(crate) fn next_deadline(&self) -> Option<Moment> {
+        self.records
+            .iter()
+            .flatten()
+            .filter(|record| !record.settled)
+            .filter_map(|record| {
+                record
+                    .shutdown
+                    .map(|(_, budget)| budget.settle_until)
+                    .or_else(|| record.campaign.next_deadline())
+                    .or_else(|| record.readiness.is_none().then_some(record.budget.until()))
+            })
+            .min()
+    }
+
+    fn validate(&self, resources: &BackendResources<'_>) -> Result<()> {
+        if resources.authority.key() != Some(self.owner)
+            || !resources.authority.serving()
+            || resources.authority.registry().is_none()
+        {
+            return Err(Box::new(LifecycleRejection::ForeignOwner));
+        }
+        Ok(())
+    }
+    fn index(&self, key: ResourceKey) -> Result<usize> {
+        self.records
+            .iter()
+            .position(|record| record.as_ref().is_some_and(|r| r.key == key))
+            .ok_or_else(|| Box::new(LifecycleRejection::StaleIdentity) as _)
+    }
+    fn record(&self, key: ResourceKey) -> Result<&Backend> {
+        self.records[self.index(key)?]
+            .as_ref()
+            .ok_or_else(|| Box::new(LifecycleRejection::StaleIdentity) as _)
+    }
+    fn spec(
+        resources: &BackendResources<'_>,
+        operation: Operation,
+        class: JobClass,
+        bytes: u64,
+        until: Option<Moment>,
+    ) -> Result<JobSpec> {
+        Ok(JobSpec {
+            id: resources.jobs.allocate()?,
+            operation,
+            class,
+            deadline: until,
+            reservation_bytes: bytes,
+            replacement: None,
+        })
+    }
+    fn merge(into: &mut ResourceTransition, mut next: ResourceTransition) {
+        into.replies.append(&mut next.replies);
+        into.effects.append(&mut next.effects);
+    }
+    fn observe(&mut self, observation: ResourceObservation) -> Result<ResourceTransition> {
+        let transition = self.policy.observe(observation).map_err(|rejected| {
+            Box::new(ObservationFailure(rejected)) as Box<dyn Error + Send + Sync>
+        })?;
+        self.retain_transition(&transition);
+        Ok(transition)
+    }
+    fn begin_delivery(&mut self) -> Result<()> {
+        if self.undelivered.is_some() {
+            return Err(Box::new(LifecycleRejection::WrongPhase));
+        }
+        self.undelivered = Some(ResourceTransition::default());
+        Ok(())
+    }
+    fn retain_transition(&mut self, transition: &ResourceTransition) {
+        if let Some(pending) = &mut self.undelivered {
+            Self::merge(pending, transition.clone());
+        }
+    }
+}
+
+#[derive(Debug)]
+struct ObservationFailure(Box<RejectedObservation<ResourceObservation>>);
+impl std::fmt::Display for ObservationFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.reason.fmt(f)
+    }
+}
+impl Error for ObservationFailure {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match &self.0.observation {
+            ResourceObservation::Failed { failure, .. } => Some(failure),
+            _ => Some(&self.0.reason),
+        }
+    }
+}

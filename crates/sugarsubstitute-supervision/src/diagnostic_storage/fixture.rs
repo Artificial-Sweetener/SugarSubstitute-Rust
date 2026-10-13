@@ -61,14 +61,13 @@ impl DiagnosticStorageFixture {
         &self,
         context: &JobContext,
     ) -> Result<DiagnosticStorage, DiagnosticStorageError> {
-        let memory = Arc::new(
-            context
-                .memory()
-                .claim(DIAGNOSTIC_STORAGE_BYTES)
-                .map_err(|cause| failure(ClaimError::new("diagnostic_fixture_claim", cause)))?,
-        );
-        self.filesystem.retain_claim(&memory).map_err(failure)?;
-        DiagnosticStorage::from_port(memory, Box::new(self.filesystem.clone()))
+        let memory = context
+            .memory()
+            .claim(DIAGNOSTIC_STORAGE_BYTES)
+            .map_err(|cause| failure(ClaimError::new("diagnostic_fixture_claim", cause)))?;
+        let allocation = allocation::owner(memory)?;
+        let filesystem = self.filesystem.retain_claim(&allocation).map_err(failure)?;
+        DiagnosticStorage::from_port(allocation, OwnedPort::new(Box::new(filesystem), None))
     }
     /// Observe a complete externally supplied file under its typed canonical name.
     /// Existing content at that name is replaced as an external observation.

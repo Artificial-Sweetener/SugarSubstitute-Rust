@@ -70,3 +70,29 @@ impl Drop for NativeLoan {
         state.borrowed = false;
     }
 }
+
+/// Borrow the identical registered native owner before its bounded endpoint call.
+/// Validation is cache-only; the trait/FFI call and unwind restoration run with no
+/// attempts, lifetime or Core guard held. An in-flight exclusive loan is retained.
+pub(crate) fn observe_registered_endpoint(
+    shared: &Arc<Shared>,
+    expected: sugarsubstitute_execution::windows_capture_attach::CaptureAttachExpectation,
+) -> Result<sugarsubstitute_execution::windows_capture_attach::CaptureEndpointObservation, CrashError>
+{
+    {
+        let native = lock(&shared.native);
+        let handler =
+            native.handler.ok_or_else(|| CrashError::invalid(CaptureOperation::Observation))?;
+        if !native.registered
+            || native.retired
+            || expected.handler().process_id() != handler.process_id
+            || expected.handler().creation_time_100ns() != handler.creation_time_100ns
+            || native.creator != Some(expected.creator())
+        {
+            return Err(CrashError::invalid(CaptureOperation::Observation));
+        }
+    }
+    let mut loan = NativeLoan::take(shared.clone(), CaptureOperation::Observation)?
+        .ok_or_else(|| CrashError::invalid(CaptureOperation::Observation))?;
+    loan.lease()?.endpoint(expected)
+}

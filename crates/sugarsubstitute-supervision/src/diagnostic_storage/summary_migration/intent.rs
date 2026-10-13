@@ -26,12 +26,13 @@ impl MigrationIntent {
         }
     }
 }
-pub(super) fn migration(
-    state: &mut State,
+pub(super) fn migration<'a>(
+    state: &'a mut StateAccess<'_>,
     id: u64,
     key: LogicalStoreOperationKey,
-) -> Result<&mut MigrationIntent, DiagnosticStorageError> {
+) -> Result<&'a mut MigrationIntent, DiagnosticStorageError> {
     state
+        .data_mut()?
         .migration
         .as_deref_mut()
         .filter(|intent| intent.id == id)
@@ -43,27 +44,21 @@ pub(super) fn pin(
     key: LogicalStoreOperationKey,
     operation: &DiagnosticStorageOperation,
 ) -> Result<(), DiagnosticStorageError> {
-    if !Arc::ptr_eq(shared, other)
-        || !Arc::ptr_eq(shared, &operation.shared)
+    if !Shared::ptr_eq(shared, other)
+        || !Shared::ptr_eq(shared, &operation.shared)
         || key != operation.key
     {
         return Err(error(operation.key, Code::InvalidIdentity));
     }
     Ok(())
 }
-pub(super) fn validation(
-    key: LogicalStoreOperationKey,
-    cause: DiagnosticRecoveryValidationError,
-) -> DiagnosticStorageError {
-    native(key, Code::InvalidIdentity, ClaimError::new("diagnostic_migration_validation", cause))
-}
 pub(super) fn revalidate(
-    state: &mut State,
+    state: &mut StateAccess<'_>,
     sources: &[&DiagnosticRecoverySource],
     key: LogicalStoreOperationKey,
     context: &JobContext,
 ) -> Result<(), DiagnosticStorageError> {
-    if !state.writer || state.namespace != Some(key.owner().namespace) {
+    if !state.data_mut()?.writer || state.data_mut()?.namespace != Some(key.owner().namespace) {
         return Err(error(key, Code::InvalidIdentity));
     }
     for source in sources {
@@ -71,23 +66,29 @@ pub(super) fn revalidate(
     }
     Ok(())
 }
-pub(in crate::diagnostic_storage) fn pins_read(state: &State, id: u64) -> bool {
-    state
+pub(in crate::diagnostic_storage) fn pins_read(
+    state: &mut StateAccess<'_>,
+    id: u64,
+) -> Result<bool, DiagnosticStorageError> {
+    Ok(state
+        .data_mut()?
         .migration
         .as_ref()
-        .is_some_and(|intent| intent.original_read == Some(id) || intent.journal_read == Some(id))
+        .is_some_and(|intent| intent.original_read == Some(id) || intent.journal_read == Some(id)))
 }
+
 pub(super) fn classified(
-    state: &State,
+    state: &mut StateAccess<'_>,
     key: LogicalStoreOperationKey,
 ) -> Result<(), DiagnosticStorageError> {
-    if !state.inventory_complete {
+    let data = state.data_mut()?;
+    if !data.inventory_complete {
         return Err(error(key, Code::InventoryIncomplete));
     }
-    for entry in &state.scan_entries {
+    for entry in &data.scan_entries {
         let recognized = match entry.class {
-            DiagnosticEntryClass::Stage => state.archives.iter().any(|archive| {
-                archive.generation == state.scan_generation
+            DiagnosticEntryClass::Stage => data.archives.iter().any(|archive| {
+                archive.generation == data.scan_generation
                     && archive.original.identity == entry.identity
                     && archive.original.bytes == entry.bytes
                     && crate::protected_storage::record_file::diagnostic_object_binding(
@@ -96,8 +97,8 @@ pub(super) fn classified(
                     )
                     .1 == entry.digest
             }),
-            DiagnosticEntryClass::Journal => state.archives.iter().any(|archive| {
-                archive.generation == state.scan_generation
+            DiagnosticEntryClass::Journal => data.archives.iter().any(|archive| {
+                archive.generation == data.scan_generation
                     && archive.archive.identity == entry.identity
                     && archive.archive.bytes == entry.bytes
                     && crate::protected_storage::record_file::diagnostic_object_binding(
@@ -115,7 +116,7 @@ pub(super) fn classified(
     Ok(())
 }
 pub(super) fn adopt_stage(
-    state: &mut State,
+    state: &mut StateAccess<'_>,
     object: DiagnosticObject,
     plan: &DiagnosticSummaryMigrationPlan,
     role: MigrationRole,
@@ -123,7 +124,7 @@ pub(super) fn adopt_stage(
     context: &JobContext,
 ) -> Result<u64, DiagnosticStorageError> {
     check(state, key, context, false)?;
-    if !state.inventory_complete {
+    if !state.data_mut()?.inventory_complete {
         return Err(error(key, Code::InventoryIncomplete));
     }
     let (expected, access) = match role {
@@ -131,48 +132,50 @@ pub(super) fn adopt_stage(
         MigrationRole::Candidate => (plan.candidate_stage, SummaryStageAccess::Candidate),
         _ => return Err(error(key, Code::InvalidIdentity)),
     };
-    if state.stages.iter().any(|stage| stage.recovered == Some(expected)) {
+    if state.data_mut()?.stages.iter().any(|stage| stage.recovered == Some(expected)) {
         return Err(error(key, Code::Busy));
     }
     let id = reserve_stage(state, object, stage::StageRole::Migration(role), 0, key)?;
     let index = stage_index(state, id, key)?;
-    state.stages[index].recovered = Some(expected);
-    state.stages[index].written = expected.bytes;
+    state.data_mut()?.stages[index].recovered = Some(expected);
+    state.data_mut()?.stages[index].written = expected.bytes;
     let (native_id, actual) = state
-        .port
-        .recover_summary_stage(object, plan.historical, expected, access, context)
+        .call_native(|port| {
+            port.recover_summary_stage(object, plan.historical, expected, access, context)
+        })?
         .map_err(|cause| native(key, Code::Read, cause))?;
-    state.stages[index].native = Some(native_id);
+    state.data_mut()?.stages[index].native = Some(native_id);
     if native_id == 0 || !expected.matches(actual) {
         return Err(error(key, Code::ChangedIdentity));
     }
     check(state, key, context, false)?;
-    state.stages[index].flushed = Some(actual);
+    state.data_mut()?.stages[index].flushed = Some(actual);
     Ok(id)
 }
 pub(super) fn reserve_archive(
-    state: &mut State,
+    state: &mut StateAccess<'_>,
     historical: LogicalStoreOperationKey,
     key: LogicalStoreOperationKey,
 ) -> Result<(), DiagnosticStorageError> {
-    if state.archives.iter().any(|archive| archive.historical == historical) {
+    if state.data_mut()?.archives.iter().any(|archive| archive.historical == historical) {
         return Ok(());
     }
-    if state.archives.len() >= DIAGNOSTIC_MIGRATION_ARCHIVE_BOUND {
+    if state.data_mut()?.archives.len() >= DIAGNOSTIC_MIGRATION_ARCHIVE_BOUND {
         return Err(error(key, Code::Capacity));
     }
-    state.archives.try_reserve_exact(1).map_err(|cause| {
-        native(key, Code::Capacity, ClaimError::new("diagnostic_archive_reservation", cause))
-    })
+    let reservation = allocation::reservation(&state.data_mut()?.allocation, Some(key))?;
+    state.data_mut()?.archives.try_reserve_exact(1).map_err(|cause| reservation.failed(cause))
 }
 pub(super) fn recognize(
-    state: &mut State,
+    state: &mut StateAccess<'_>,
     plan: DiagnosticSummaryMigrationPlan,
     archive: DiagnosticReadFacts,
     original: DiagnosticReadFacts,
     key: LogicalStoreOperationKey,
 ) -> Result<(), DiagnosticStorageError> {
-    if let Some(known) = state.archives.iter_mut().find(|known| known.historical == plan.historical)
+    let generation = state.data_mut()?.scan_generation;
+    if let Some(known) =
+        state.data_mut()?.archives.iter_mut().find(|known| known.historical == plan.historical)
     {
         if known.object != DiagnosticObject::Summary(plan.incident)
             || known.archive != archive
@@ -180,15 +183,15 @@ pub(super) fn recognize(
         {
             return Err(error(key, Code::ChangedIdentity));
         }
-        known.generation = state.scan_generation;
+        known.generation = generation;
     } else {
         reserve_archive(state, plan.historical, key)?;
-        state.archives.push(MigrationArchive {
+        state.data_mut()?.archives.push(MigrationArchive {
             historical: plan.historical,
             object: DiagnosticObject::Summary(plan.incident),
             archive,
             original,
-            generation: state.scan_generation,
+            generation,
         });
     }
     Ok(())

@@ -20,6 +20,40 @@ pub(crate) async fn run<T, E, M>(
     E: Send + 'static,
     M: FnOnce(JobContext) -> Result<T, E> + Send + 'static,
 {
+    run_with_priority(job, context, dispatched, factory, FailurePriority::StopFirst).await;
+}
+
+/// Source-owning factories preserve their actual returned failure after observing stop.
+pub(crate) async fn run_source_first<T, E, M>(
+    job: Arc<Job<T, E>>,
+    context: JobContext,
+    dispatched: Moment,
+    factory: M,
+) where
+    T: Send + 'static,
+    E: Send + 'static,
+    M: FnOnce(JobContext) -> Result<T, E> + Send + 'static,
+{
+    run_with_priority(job, context, dispatched, factory, FailurePriority::SourceFirst).await;
+}
+
+#[derive(Clone, Copy)]
+enum FailurePriority {
+    StopFirst,
+    SourceFirst,
+}
+
+async fn run_with_priority<T, E, M>(
+    job: Arc<Job<T, E>>,
+    context: JobContext,
+    dispatched: Moment,
+    factory: M,
+    priority: FailurePriority,
+) where
+    T: Send + 'static,
+    E: Send + 'static,
+    M: FnOnce(JobContext) -> Result<T, E> + Send + 'static,
+{
     let worker_context = context.clone();
     let handle = tokio::task::spawn_blocking(move || {
         let started = worker_context.now();
@@ -46,7 +80,13 @@ pub(crate) async fn run<T, E, M>(
         ),
         Ok((started, outcome)) => {
             let outcome = if !matches!(&outcome, JobOutcome::Panicked(_)) {
-                match stop_reason(&context) {
+                let stopped = stop_reason(&context);
+                match stopped {
+                    _ if matches!(priority, FailurePriority::SourceFirst)
+                        && matches!(&outcome, JobOutcome::Failure(_)) =>
+                    {
+                        outcome
+                    }
                     Some(reason) => match catch_unwind(AssertUnwindSafe(|| drop(outcome))) {
                         Ok(()) => stopped_outcome(reason),
                         Err(payload) => JobOutcome::Panicked(panic_cause(payload)),

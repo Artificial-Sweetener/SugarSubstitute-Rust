@@ -22,22 +22,12 @@ fn key() -> Result<CoordinatorKey> {
 }
 fn arguments() -> Vec<OsString> {
     [
-        "--client",
-        r"E:\bundle\client.dll",
-        "--handler",
-        r"E:\bundle\handler.exe",
         "--capture-root",
         r"D:\proof\protected",
-        "--client-sha256",
-        &"01".repeat(32),
-        "--handler-sha256",
-        &"02".repeat(32),
         "--namespace",
         &"03".repeat(32),
         "--epoch",
         &"04".repeat(16),
-        "--build",
-        "fixture-build",
         "--receipt",
         r"D:\proof\receipt.json",
     ]
@@ -46,14 +36,14 @@ fn arguments() -> Vec<OsString> {
     .collect()
 }
 #[test]
-fn exact_role_inputs_preserve_hashes_keys_and_bounded_build() -> Result {
+fn exact_role_inputs_preserve_keys_root_and_four_mebibyte_request() -> Result {
     let options = Options::parse(arguments())?;
-    assert_eq!(options.client_hash, [1; 32]);
-    assert_eq!(options.handler_hash, [2; 32]);
     assert_eq!(options.coordinator.namespace.bytes(), &[3; 32]);
     assert_eq!(options.coordinator.epoch.bytes(), &[4; 16]);
-    assert_eq!(options.build, "fixture-build");
-    assert!(options.build.capacity() <= 64);
+    assert_eq!(
+        options.input.as_ref().ok_or("Missing original input")?.required_reservation_bytes(),
+        4_194_304
+    );
     assert!(options.input.is_some());
     Ok(())
 }
@@ -61,10 +51,10 @@ fn exact_role_inputs_preserve_hashes_keys_and_bounded_build() -> Result {
 fn role_rejects_unknown_reordered_trailing_uppercase_and_foreign_receipt_drive() {
     for (index, value) in [
         (0, "--other"),
-        (6, "--handler-sha256"),
-        (7, "GG"),
-        (13, "00000000000000000000000000000000"),
-        (17, r"C:\receipt.json"),
+        (2, "--epoch"),
+        (3, "GG"),
+        (5, "00000000000000000000000000000000"),
+        (7, r"C:\receipt.json"),
     ] {
         let mut args = arguments();
         args[index] = value.into();
@@ -74,7 +64,7 @@ fn role_rejects_unknown_reordered_trailing_uppercase_and_foreign_receipt_drive()
     args.push("trailing".into());
     assert!(Options::parse(args).is_err());
     let mut args = arguments();
-    args[7] = "AB".repeat(32).into();
+    args[3] = "AB".repeat(32).into();
     assert!(Options::parse(args).is_err());
 }
 #[test]

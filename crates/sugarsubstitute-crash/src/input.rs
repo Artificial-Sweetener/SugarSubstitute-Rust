@@ -10,102 +10,47 @@ use std::{
 use std::{os::windows::ffi::OsStrExt, path::Prefix};
 use sugarsubstitute_contracts::crash::CaptureOperation;
 
-pub(crate) const STORAGE_BYTES: usize = 2 * 1024 * 1024;
+/// Actual original two-MiB capture owners plus the separately issued trusted bundle.
+#[cfg(test)]
+pub(crate) const BASE_STORAGE_BYTES: usize = 2 * 1024 * 1024;
+pub(crate) const STORAGE_BYTES: usize = 4 * 1024 * 1024;
 #[cfg(windows)]
 pub(crate) const SOURCE_STORAGE_BYTES: usize = 16 * 1024;
 #[cfg(windows)]
-pub(crate) const NATIVE_STORAGE_BYTES: usize =
-    STORAGE_BYTES - SOURCE_STORAGE_BYTES - 64 * 1024 - 1024 * 1024;
+pub(crate) const NATIVE_STORAGE_BYTES: usize = 966_656;
 pub(crate) const MAX_UNITS: usize = 32766;
 pub(crate) const MAX_ANCESTORS: usize = 128;
-
-/// Exact packaged capture files and an existing protected host-owned capture root.
-///
-/// This is trusted local composition, not an IPC authority grant. The native
-/// adapter pins non-reparse ancestors/targets and verifies exact file hashes.
-/// No argument, URL, environment, upload or cleanup-path override is accepted.
-/// Paths contain at most 32766 UTF-16 units/128 components and bounded capacities.
+/// Retain the protected root and an inert current-process installed-release request.
+/// Only genuine Core admission and the authenticated selector grant native effects.
+/// Caller paths, digests and build labels cannot select executable capture files.
 pub struct CaptureStartInput {
-    pub(crate) client: PathBuf,
-    pub(crate) handler: PathBuf,
     pub(crate) capture_root: PathBuf,
-    pub(crate) client_hash: [u8; 32],
-    pub(crate) handler_hash: [u8; 32],
-    pub(crate) build: String,
+    pub(crate) selection: Option<sugarsubstitute_supervision::CaptureSelectionRequest>,
 }
 impl CaptureStartInput {
-    /// Validate inputs without filesystem effects or cloning their owned paths.
-    ///
+    /// Retain the original root and inert request without allocating a trust projection.
     /// # Errors
-    /// Rejects non-local/relative, parent, NUL, oversized paths/capacities and
-    /// build identities outside 1..=64 ASCII alphanumeric/underscore/hyphen bytes.
+    /// Rejects non-local/relative, parent, NUL, oversized paths/capacities.
     pub fn new(
-        client: PathBuf,
-        handler: PathBuf,
         capture_root: PathBuf,
-        client_hash: [u8; 32],
-        handler_hash: [u8; 32],
-        build: &str,
+        selection: sugarsubstitute_supervision::CaptureSelectionRequest,
     ) -> Result<Self, CrashError> {
-        for path in [&client, &handler, &capture_root] {
-            if path.capacity() > MAX_UNITS * 3 {
-                return Err(CrashError::invalid(CaptureOperation::Runtime));
-            }
-            validate_path(path)?;
-        }
-        if build.is_empty()
-            || build.len() > 64
-            || !build
-                .bytes()
-                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
-        {
+        if capture_root.capacity() > MAX_UNITS * 3 {
             return Err(CrashError::invalid(CaptureOperation::Runtime));
         }
-        Ok(Self {
-            client,
-            handler,
-            capture_root,
-            client_hash,
-            handler_hash,
-            build: build.to_owned(),
-        })
+        validate_path(&capture_root)?;
+        Ok(Self { capture_root, selection: Some(selection) })
     }
-    /// Reserve first-party input/scratch/retained native storage before effects.
-    ///
-    /// The fixed 2MiB assigns 16KiB to registration-lifetime replay/source storage,
-    /// 966656 bytes to bounded input/native scratch, 64KiB to process-pinned
-    /// callbacks and 1MiB to protected generation storage. Native storage covers
-    /// three input path capacities, bounded UTF16/canonical conversion, 1028
-    /// retained ancestor/target/partial handles and hashing scratch.
-    /// Crashpad's vendored runtime allocations/mapped code are separate native
-    /// allocations; this value does not claim an OS working-set limit.
+    /// Reserve the original fixed claims and one actual two-MiB selected bundle claim.
+    /// The original claims remain16384 source,966656 native/input,65536 callback,
+    /// and1048576 protected root. Core alone issues the additional2097152 bundle.
+    /// Native code/mappings and upstream runtime allocation are separate physical storage.
     pub const fn required_reservation_bytes(&self) -> usize {
         STORAGE_BYTES
     }
-    /// Borrow the exact trusted bridge path; this data alone grants no filesystem trust.
-    pub fn client_path(&self) -> &Path {
-        &self.client
-    }
-    /// Borrow the exact packaged handler path.
-    pub fn handler_path(&self) -> &Path {
-        &self.handler
-    }
-    /// Borrow the existing protected host root; native resolution grants trust.
-    /// The owner exclusively creates this coordinator's database/metrics generation.
+    /// Borrow the actual host-owned protected root; lexical shape grants no file trust.
     pub fn capture_root_path(&self) -> &Path {
         &self.capture_root
-    }
-    /// Borrow the bounded ASCII build annotation.
-    pub fn build_identity(&self) -> &str {
-        &self.build
-    }
-    /// Return the trusted expected bridge content digest; equality is checked natively.
-    pub const fn client_sha256(&self) -> &[u8; 32] {
-        &self.client_hash
-    }
-    /// Return the trusted expected handler content digest; equality is checked natively.
-    pub const fn handler_sha256(&self) -> &[u8; 32] {
-        &self.handler_hash
     }
 }
 impl fmt::Debug for CaptureStartInput {

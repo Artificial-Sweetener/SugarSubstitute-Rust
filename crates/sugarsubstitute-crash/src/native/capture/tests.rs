@@ -121,7 +121,7 @@ fn diagnostic_panic_cannot_drop_irrevocably_retained_owner_or_actual_charge()
 }
 
 #[test]
-fn actual_source_native_callback_and_protected_claims_exactly_fit_two_mebibytes()
+fn actual_original_partitions_and_trusted_bundle_exactly_fit_four_mebibytes()
 -> Result<(), Box<dyn std::error::Error>> {
     use sugarsubstitute_contracts::lifecycle::{CoordinatorEpoch, CoordinatorKey, NamespaceId};
     let wake = Arc::new(WakeBoundary::default());
@@ -140,14 +140,18 @@ fn actual_source_native_callback_and_protected_claims_exactly_fit_two_mebibytes(
         namespace: NamespaceId::new([1; 32]),
         epoch: CoordinatorEpoch::new([2; 16])?,
     };
+    let capture_client = client.clone();
     let mut job = client.submit_blocking(&scope, request, move |context| {
+        let admission =
+            capture_client.capture_bundle_admission(&context).map_err(|cause| cause.to_string())?;
         let memory = context.memory();
         let source = memory
             .claim(crate::input::SOURCE_STORAGE_BYTES as u64)
             .map_err(|cause| cause.to_string())?;
         let ledger = crate::capture_endpoint::Attempts::new(key, source)
             .map_err(|cause| cause.to_string())?;
-        let capture = super::Capture::new(memory).map_err(|cause| cause.to_string())?;
+        let capture =
+            super::Capture::new(admission, capture_client).map_err(|cause| cause.to_string())?;
         let fields = capture.fields.as_ref().ok_or("Missing actual native owner")?;
         assert_eq!(fields._storage.bytes(), 966_656);
         assert_eq!(fields.pin_claim.as_ref().map(MemoryClaim::bytes), Some(65_536));
@@ -167,7 +171,9 @@ fn actual_source_native_callback_and_protected_claims_exactly_fit_two_mebibytes(
         // Empty allocation-only native owners have no unresolved kernel effects.
         // Their real Drop releases exactly the three distinct guarded claims.
         drop(capture);
-        let remaining = memory.claim(2_097_152 - 16_384).map_err(|cause| cause.to_string())?;
+        let remaining = memory
+            .claim(crate::input::STORAGE_BYTES as u64 - 16_384)
+            .map_err(|cause| cause.to_string())?;
         assert!(memory.claim(1).is_err());
         drop(remaining);
         Ok::<_, String>(ledger)
@@ -197,7 +203,7 @@ fn actual_source_native_callback_and_protected_claims_exactly_fit_two_mebibytes(
         return Err("Actual allocation job failed".into());
     };
     drop(completion.memory);
-    assert_eq!(scope.snapshot().reserved_bytes, 2_097_152);
+    assert_eq!(scope.snapshot().reserved_bytes, crate::input::STORAGE_BYTES as u64);
     drop(ledger);
     drop(job);
     drop(owner);

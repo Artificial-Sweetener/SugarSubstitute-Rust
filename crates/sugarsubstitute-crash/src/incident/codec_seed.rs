@@ -3,16 +3,14 @@
 //! Preserve seed identity, bounded build spelling and injected UTC without native authority.
 use super::{IncidentStoreError, codec_identity::SubjectRecord};
 use serde::{Deserialize, Serialize};
-use sugarsubstitute_contracts::incident::{
-    BuildIdentity, IncidentRevision, IncidentSeed, IncidentStage,
-};
+use sugarsubstitute_contracts::incident::{IncidentRevision, IncidentSeed, IncidentStage};
 
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct SeedRecord {
     key: SubjectRecord,
     revision: u64,
-    build: String,
+    build: super::codec_text::BuildRecord,
     created: u64,
     stage: StageRecord,
 }
@@ -30,7 +28,7 @@ impl SeedRecord {
         IncidentSeed::new(
             self.key.into_key()?,
             IncidentRevision::new(self.revision)?,
-            BuildIdentity::new(&self.build)?,
+            self.build.into_facts()?,
             super::codec::utc(self.created)?,
             match self.stage {
                 StageRecord::SupervisorInitialization => IncidentStage::SupervisorInitialization,
@@ -48,7 +46,7 @@ impl From<&IncidentSeed> for SeedRecord {
         Self {
             key: seed.key().into(),
             revision: seed.revision().get(),
-            build: seed.build().as_str().into(),
+            build: seed.build().into(),
             created: seed.created().unix_seconds(),
             stage: match seed.stage() {
                 IncidentStage::SupervisorInitialization => StageRecord::SupervisorInitialization,

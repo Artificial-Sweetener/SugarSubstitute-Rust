@@ -62,6 +62,7 @@ fn cancelled_before_native_dispatch_returns_unused_loan_without_physical_retirem
         tests::inert_driver(),
         tests::event,
     )?;
+    assert_eq!(session.control().temporary_settled(), DesktopCaptureTemporaryState::Pending);
     session.job().cancel();
     let (queued, wake) =
         core.take_native_at(now).ok_or("Cancelled child was not selected by native owner")?;
@@ -75,6 +76,10 @@ fn cancelled_before_native_dispatch_returns_unused_loan_without_physical_retirem
     metadata = active.metadata();
     active.progress(&core, now, true);
     assert!(active.completed());
+    assert_eq!(
+        session.control().temporary_settled(),
+        DesktopCaptureTemporaryState::UnissuedReturned
+    );
     assert_eq!(returned.load(Ordering::Acquire), 1);
     {
         let stage = lock(&custody.state);

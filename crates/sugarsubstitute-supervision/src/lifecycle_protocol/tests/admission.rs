@@ -58,7 +58,7 @@ fn payload_header_full_run_mismatch_leaves_storage_unchanged() -> TestResult {
     let context = GrantedContext { identity: foreign, ..context()? };
     let fragment = FolderFragment::new(foreign, 1, 0, RawWindowsUnits::from_units(&[69])?)?;
     for payload in [
-        WirePayload::Acquire { identity: foreign, target: &target },
+        WirePayload::Acquire { identity: foreign, target: (&target).into() },
         WirePayload::Reload { lease: lease()?, identity: foreign },
         WirePayload::RequestedProfileFolder(fragment),
         WirePayload::EnvironmentPrepared(fragment),

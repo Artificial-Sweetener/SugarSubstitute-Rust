@@ -10,6 +10,10 @@ use crate::{
     symbol_admission::SymbolSubmissionRejection,
     task::{Job, JobHandle, QueuedJob, Work},
 };
+mod reservation;
+#[cfg(test)]
+mod reservation_tests;
+
 use std::{
     sync::{Arc, Weak},
     time::Duration,
@@ -46,6 +50,10 @@ pub struct CleanupDeadline {
     deadline: Moment,
 }
 impl CleanupDeadline {
+    /// Match passive immutable token facts to its actual admitted cleanup record.
+    pub(crate) fn matches_actual(&self, owner: ExecutionId, scope: ScopeId, job: JobId) -> bool {
+        self.owner_id == owner && self.scope_id == scope && self.job_id == job
+    }
     /// Return the first cleanup observation, in original monotonic nanoseconds.
     pub const fn started(&self) -> Moment {
         self.started
@@ -120,53 +128,15 @@ impl ExecutionClient {
         E: Send + 'static,
         M: FnOnce(JobContext) -> Result<T, E> + Send + 'static,
     {
-        let main_owner = main_scope.owner_id();
-        if main_owner != self.core.id {
-            return Err(SymbolSubmissionRejection {
-                error: AdmissionError::ForeignScope {
-                    expected_owner: self.core.id,
-                    actual_owner: main_owner,
-                },
-                factory,
-            });
-        }
-        self.core
-            .admit_owned(
-                cleanup_scope,
-                cleanup_spec,
-                RequestKind::SymbolCleanup { main_scope: main_scope.spec(), main_spec },
-                factory,
-                |factory, context, cancel, timing| {
-                    let admitted = timing.admitted;
-                    let job = Job::new(
-                        cleanup_scope.id(),
-                        cleanup_spec,
-                        admitted,
-                        cancel,
-                        Arc::downgrade(&self.core),
-                    );
-                    let task_job = job.clone();
-                    let queued = QueuedJob {
-                        context,
-                        job: job.clone(),
-                        work: Work::BlockingHeld(Box::new(move |context, started| {
-                            Box::pin(crate::blocking::run(task_job, context, started, factory))
-                        })),
-                    };
-                    Ok((
-                        queued,
-                        SymbolCleanupPermit {
-                            job: Box::new(OwnedJob::new(
-                                cleanup_scope.id(),
-                                cleanup_spec,
-                                Box::new(JobHandle(job)),
-                            )),
-                            core: Arc::downgrade(&self.core),
-                        },
-                    ))
-                },
-            )
-            .map_err(|(error, factory)| SymbolSubmissionRejection { error, factory })
+        self.reserve_symbol_cleanup_construct(
+            cleanup_scope,
+            cleanup_spec,
+            main_scope,
+            main_spec,
+            factory,
+            |factory, _context| Ok((factory, ())),
+        )
+        .map(|(_source, permit)| permit)
     }
 
     /// Freeze the first independent cleanup deadline after successful paired main admission.

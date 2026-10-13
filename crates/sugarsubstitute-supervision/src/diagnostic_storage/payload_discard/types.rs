@@ -84,6 +84,7 @@ pub struct DiagnosticPayloadDiscardPreparation {
     pub(super) original: DiagnosticReadFacts,
     pub(super) candidate: DiagnosticReadFacts,
     pub(super) victims: Vec<DiagnosticPayloadVictimObservation>,
+    pub(super) _allocation: allocation::DiagnosticAllocationLoan,
 }
 impl DiagnosticPayloadDiscardPreparation {
     /// Borrow the exact selected generation and retention facts.
@@ -178,6 +179,7 @@ pub struct DiagnosticPayloadDiscardDecision {
     pub(super) victims: Vec<DiagnosticPayloadVictimExpectation>,
     pub(super) journal_sha256: [u8; 32],
     pub(super) case: DiagnosticPayloadDiscardCase,
+    pub(super) _allocation: DiagnosticPayloadDecisionAllocationLoan,
 }
 /// Validate strict canonical bytes over actual retained source observations.
 /// Callbacks run outside the owner mutex; returned data grants no native authority.
@@ -185,8 +187,14 @@ pub trait DiagnosticPayloadDiscardValidator {
     /// Prove exact candidate delta and canonical Journal for the selected sources.
     /// # Errors
     /// Rejects schema, identity, revision, attachment and unchanged-field discrepancies.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Validate one retained payload preparation under its original decode and decision custody"
+    )]
     fn validate_preparation(
         &self,
+        decode: &mut DiagnosticRecoveryDecodeLoan,
+        allocation: DiagnosticPayloadDecisionAllocationLoan,
         current: LogicalStoreOperationKey,
         selection: &DiagnosticPayloadDiscardSelection,
         journal_bytes: &[u8],
@@ -199,6 +207,8 @@ pub trait DiagnosticPayloadDiscardValidator {
     /// Rejects unknown tags, changed current Summary or noncanonical reconstruction.
     fn validate_recovery(
         &self,
+        decode: &mut DiagnosticRecoveryDecodeLoan,
+        allocation: DiagnosticPayloadDecisionAllocationLoan,
         current: LogicalStoreOperationKey,
         journal: &DiagnosticRecoverySource,
         summary: &DiagnosticRecoverySource,

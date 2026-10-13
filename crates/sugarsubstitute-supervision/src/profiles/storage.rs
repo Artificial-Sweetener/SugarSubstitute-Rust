@@ -131,7 +131,14 @@ impl ProfilePort for WindowsProfilePort {
         let budget = Budget::Protected(
             state.memory.as_ref().ok_or_else(|| ClaimError::invalid("profile_memory"))?.clone(),
         );
-        HeldFile::acquire_into(&mut state.file, &exclusion_path, record_path, sid, budget)?;
+        HeldFile::acquire_into(
+            &mut state.file,
+            crate::protected_storage::native_name::NativeName::Ordinary(exclusion_path),
+            crate::protected_storage::native_name::NativeName::Ordinary(record_path),
+            crate::protected_storage::native_name::NativeSid::Ordinary(sid.to_vec()),
+            budget.clone(),
+            &mut crate::protected_storage::native_phase::NativePhase::ordinary(&budget)?,
+        )?;
         check(context)?;
         let file = state.file.as_ref().ok_or_else(|| ClaimError::invalid("profile_exclusion"))?;
         let previous = match record_file::read_shape(file, context)? {
@@ -192,15 +199,35 @@ impl ProfilePort for WindowsProfilePort {
         retained
             .try_reserve_exact(1)
             .map_err(|e| ClaimError::new("profile_validation_handle", e))?;
-        let index = paths::open_retained(&path, true, true, file.handle.budget(), &mut retained)?;
+        let index = paths::open_retained(
+            &path,
+            true,
+            true,
+            file.handle.budget(),
+            &mut retained,
+            &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+                &(file.handle.budget()),
+            )?,
+        )?;
         let result = (|| {
-            let actual = paths::file_identity(&retained[index])?;
+            let actual = paths::file_identity(
+                &retained[index],
+                &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+                    &retained[index].budget(),
+                )?,
+            )?;
             let expected =
                 state.record.ok_or_else(|| ClaimError::invalid("profile_identity"))?.folder;
             if actual != expected {
                 return Err(ClaimError::invalid("profile_environment_mismatch"));
             }
-            crate::protected_storage::security::verify(&retained[index], &file.account_sid)?;
+            crate::protected_storage::security::verify(
+                &retained[index],
+                file.account_sid.bytes()?,
+                &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+                    &retained[index].budget(),
+                )?,
+            )?;
             check(context)
         })();
         let cleanup = retained[index].close();

@@ -6,20 +6,31 @@ use crate::{CaptureStartInput, CrashError, input::NATIVE_STORAGE_BYTES};
 use std::os::windows::io::{FromRawHandle, OwnedHandle};
 use sugarsubstitute_contracts::{
     crash::{CaptureHandlerIdentity, CaptureOperation},
-    execution::{JobContext, MemoryClaim, MemoryLease},
+    execution::{JobContext, MemoryClaim},
     lifecycle::CoordinatorKey,
 };
 use sugarsubstitute_execution::windows::ProcessWatchPermit;
 use windows::Win32::{
     Foundation::{DuplicateHandle, FILETIME, HANDLE, WAIT_OBJECT_0, WAIT_TIMEOUT},
-    System::{
-        Performance::{QueryPerformanceCounter, QueryPerformanceFrequency},
-        Threading::*,
-    },
+    System::Threading::*,
 };
+
+mod registration;
+mod retention;
+use retention::native_code;
 
 struct Fields {
     pins: pins::Pins,
+    execution: sugarsubstitute_execution::ExecutionClient,
+    admission: Option<sugarsubstitute_execution::CaptureBundleAdmission>,
+    original: Option<sugarsubstitute_execution::CaptureBundleOrigin>,
+    selected: Option<sugarsubstitute_supervision::installed_release::CaptureBundleOwner>,
+    lease: Option<sugarsubstitute_supervision::installed_release::CaptureBundleLease>,
+    creator: Option<crate::capture::CaptureCreator>,
+    parts: Option<Box<sugarsubstitute_supervision::installed_release::CaptureBundleParts>>,
+    input: Option<CaptureStartInput>,
+    build: [u8; 64],
+    build_length: usize,
     storage: sugarsubstitute_supervision::ProtectedStorageRoot,
     process: Option<usize>,
     process_exited: bool,
@@ -37,7 +48,15 @@ pub(super) struct Capture {
     fields: Option<Box<Fields>>,
 }
 impl Capture {
-    pub(super) fn new(memory: &MemoryLease) -> Result<Box<Self>, CrashError> {
+    pub(super) fn new(
+        admission: sugarsubstitute_execution::CaptureBundleAdmission,
+        execution: sugarsubstitute_execution::ExecutionClient,
+    ) -> Result<Box<Self>, CrashError> {
+        let context = admission
+            .original_context()
+            .map_err(|cause| CrashError::new(CaptureOperation::Runtime, cause))?
+            .clone();
+        let memory = context.memory();
         // The source owner already retains its separate 16KiB claim. These three
         // claims cover actual native owners before any allocation or effect.
         let storage = memory
@@ -62,6 +81,16 @@ impl Capture {
         Ok(Box::new(Self {
             fields: Some(Box::new(Fields {
                 pins: pins::Pins::new()?,
+                execution,
+                admission: Some(admission),
+                original: None,
+                selected: None,
+                lease: None,
+                creator: None,
+                parts: None,
+                input: None,
+                build: [0; 64],
+                build_length: 0,
                 storage: protected,
                 process: None,
                 process_exited: false,
@@ -83,39 +112,6 @@ impl Capture {
             .map(Box::as_mut)
             .ok_or_else(|| CrashError::invalid(CaptureOperation::Retirement))
     }
-}
-impl Fields {
-    fn retain(&mut self, cause: CrashError) {
-        if let Some(slot) = self.errors.iter_mut().find(|slot| slot.is_none()) {
-            *slot = Some(cause);
-        } else {
-            self.omitted = self.omitted.saturating_add(1);
-        }
-    }
-    fn close_report(&mut self, report: pins::CloseReport) -> Option<CrashError> {
-        let first = report.first;
-        if let Some(cause) = &first {
-            self.retain(cause.clone());
-        }
-        for cause in report.additional.into_iter().flatten() {
-            self.retain(cause);
-        }
-        self.omitted = self.omitted.saturating_add(report.omitted);
-        first
-    }
-    fn cleanup_codes(&mut self, output: &bridge::ResultValue) -> Result<(), CrashError> {
-        if output.cleanup_count > 8 {
-            return Err(CrashError::invalid(CaptureOperation::Retirement));
-        }
-        for code in &output.cleanup_codes[..output.cleanup_count as usize] {
-            self.retain(native_code(*code, CaptureOperation::Retirement));
-        }
-        self.omitted = self.omitted.saturating_add(output.omitted_cleanup);
-        Ok(())
-    }
-}
-fn native_code(code: u32, operation: CaptureOperation) -> CrashError {
-    CrashError::new(operation, std::io::Error::from_raw_os_error(code as i32))
 }
 fn identity(handle: HANDLE) -> Result<CaptureHandlerIdentity, CrashError> {
     // SAFETY: The primary actual CreateProcess output remains uniquely retained.
@@ -180,132 +176,20 @@ fn retire_io(fields: &mut Fields) -> Result<bool, CrashError> {
 impl CaptureLease for Capture {
     fn start(
         &mut self,
-        input: &CaptureStartInput,
+        input: CaptureStartInput,
         owner: CoordinatorKey,
         context: &JobContext,
     ) -> Result<(), CrashError> {
-        let fields = self.fields()?;
-        let (client, client_index) = fields.pins.resolve(&input.client, false, context)?;
-        fields.pins.verify(client_index, input.client_hash, context)?;
-        let (handler, handler_index) = fields.pins.resolve(&input.handler, false, context)?;
-        fields.pins.verify(handler_index, input.handler_hash, context)?;
-        fields
-            .storage
-            .resolve(&input.capture_root, context)
-            .map_err(|cause| CrashError::new(CaptureOperation::Runtime, cause))?;
-        fields
-            .storage
-            .create_capture_generation(owner, context)
-            .map_err(|cause| CrashError::new(CaptureOperation::Runtime, cause))?;
-        let generation = fields
-            .storage
-            .generation()
-            .ok_or_else(|| CrashError::invalid(CaptureOperation::Runtime))?;
-        let database = pins::wide(generation.database_path())?;
-        let metrics = pins::wide(generation.metrics_path())?;
-        pins::deadline(context)?;
-        let client = pins::wide(&client)?;
-        let claim = fields
-            .pin_claim
-            .take()
-            .ok_or_else(|| CrashError::invalid(CaptureOperation::Runtime))?;
-        let api = match bridge::load(&client, claim) {
-            Ok(api) => api,
-            Err((cause, claim)) => {
-                fields.pin_claim = claim;
-                return Err(cause);
-            }
-        };
-        fields.api = Some(api);
-        let handler = pins::wide(&handler)?;
-        let mut coordinator = [0u8; 96];
-        const HEX: &[u8; 16] = b"0123456789abcdef";
-        for (index, byte) in owner.namespace.bytes().iter().chain(owner.epoch.bytes()).enumerate() {
-            coordinator[index * 2] = HEX[(byte >> 4) as usize];
-            coordinator[index * 2 + 1] = HEX[(byte & 15) as usize];
-        }
-        let mut frequency = 0i64;
-        // SAFETY: Initialized integer metadata outputs have the exact QPF ABI.
-        unsafe { QueryPerformanceFrequency(&mut frequency) }
-            .map_err(|cause| CrashError::new(CaptureOperation::Registration, cause))?;
-        if frequency <= 0 || frequency > i64::MAX / 1000 {
-            return Err(CrashError::invalid(CaptureOperation::Registration));
-        }
-        let before = context.now();
-        let mut counter = 0i64;
-        // SAFETY: Initialized integer metadata output has the exact QPC ABI.
-        unsafe { QueryPerformanceCounter(&mut counter) }
-            .map_err(|cause| CrashError::new(CaptureOperation::Registration, cause))?;
-        let after = context.now();
-        if after < before || counter < 0 {
-            return Err(CrashError::invalid(CaptureOperation::Registration));
-        }
-        let remaining = context
-            .deadline()
-            .ok_or_else(|| CrashError::invalid(CaptureOperation::Registration))?
-            .checked_duration_since(after)
-            .map_err(|cause| CrashError::new(CaptureOperation::Registration, cause))?;
-        let ticks = i64::try_from(remaining.as_nanos() * frequency as u128 / 1_000_000_000)
-            .map_err(|cause| CrashError::new(CaptureOperation::Registration, cause))?;
-        let deadline_counter = counter
-            .checked_add(ticks)
-            .ok_or_else(|| CrashError::invalid(CaptureOperation::Registration))?;
-        pins::deadline(context)?;
-        let slots = fields.pins.reserve_outputs()?;
-        let output = api.start(&bridge::Input {
-            handler: handler.as_ptr(),
-            handler_length: handler.len() - 1,
-            database: database.as_ptr(),
-            database_length: database.len() - 1,
-            metrics: metrics.as_ptr(),
-            metrics_length: metrics.len() - 1,
-            build: input.build.as_ptr(),
-            build_length: input.build.len(),
-            coordinator: coordinator.as_ptr(),
-            coordinator_length: coordinator.len(),
-            deadline_counter,
-            counter_frequency: frequency,
-        });
-        // This precedes every ABI status/version/error check, including failure.
-        let adoption = fields.pins.retain_outputs(slots, [output.process, output.thread]);
-        if fields.pins.values[slots[0]].is_some() {
-            fields.process = Some(slots[0]);
-        }
-        fields.pins.release_unused_outputs();
-        adoption?;
-        let identity_error = if let Some(index) = fields.process {
-            match identity(fields.pins.handle(index)?) {
-                Ok(value) => {
-                    fields.handler = Some(value);
-                    None
-                }
-                Err(cause) => Some(cause),
-            }
-        } else {
-            None
-        };
-        if let Some(cause) = &identity_error {
-            fields.retain(cause.clone());
-        }
-        fields.cleanup_codes(&output)?;
-        if output.version != 1 || output.registered > 1 || output.pending_io > 1 {
-            return Err(CrashError::invalid(CaptureOperation::Registration));
-        }
-        fields.registered = output.registered == 1;
-        if output.error != 0 {
-            return Err(native_code(output.error, CaptureOperation::Registration));
-        }
-        if let Some(cause) = identity_error {
-            return Err(cause);
-        }
-        if output.cleanup_error != 0 {
-            return Err(native_code(output.cleanup_error, CaptureOperation::Retirement));
-        }
-        pins::deadline(context)?;
-        if !fields.registered || fields.handler.is_none() {
-            return Err(CrashError::invalid(CaptureOperation::Registration));
-        }
-        Ok(())
+        registration::register(self.fields()?, input, owner, context)
+    }
+    fn creator(&self) -> Option<crate::capture::CaptureCreator> {
+        self.fields.as_ref().and_then(|fields| fields.creator)
+    }
+    fn build_identity(&self) -> Option<&str> {
+        self.fields
+            .as_ref()
+            .and_then(|fields| std::str::from_utf8(&fields.build[..fields.build_length]).ok())
+            .filter(|value| !value.is_empty())
     }
     fn handler(&self) -> Option<CaptureHandlerIdentity> {
         self.fields.as_ref().and_then(|fields| fields.handler)
@@ -406,6 +290,47 @@ impl CaptureLease for Capture {
             .storage
             .retire(context)
             .map_err(|cause| CrashError::new(CaptureOperation::Retirement, cause))?;
+        if let Some(original) = fields.original.as_ref()
+            && (fields.selected.is_some() || fields.lease.is_some() || fields.parts.is_some())
+        {
+            let proof = fields
+                .execution
+                .capture_bundle_retirement(original, context)
+                .map_err(|cause| CrashError::new(CaptureOperation::Retirement, cause))?;
+            if let Some(owner) = fields.selected.take()
+                && let Err(failure) = owner.retire(&proof)
+            {
+                fields.selected = Some(failure.owner);
+                return Err(CrashError::new(CaptureOperation::Retirement, failure.cause));
+            }
+            if let Some(parts) = fields.parts.take() {
+                let sugarsubstitute_supervision::installed_release::CaptureBundleParts {
+                    retention,
+                    loaded,
+                    pinned,
+                } = *parts;
+                match retention.retire(&proof) {
+                    Ok(()) => {
+                        drop(loaded);
+                        drop(pinned);
+                    }
+                    Err(failure) => {
+                        fields.parts = Some(Box::new(
+                            sugarsubstitute_supervision::installed_release::CaptureBundleParts {
+                                retention: failure.retention,
+                                loaded,
+                                pinned,
+                            },
+                        ));
+                        return Err(CrashError::new(CaptureOperation::Retirement, failure.cause));
+                    }
+                }
+            }
+        }
+        if fields.lease.is_some() {
+            // A rejected consuming lease remains genuine held physical custody.
+            return Ok(false);
+        }
         // Preserve bounded errors until the owner drains them; closed handles and
         // scratch remain charged for this final delivery, independently of the PIN.
         fields.io_retired = true;
@@ -423,7 +348,10 @@ impl Drop for Capture {
         if let Some(fields) = self.fields.take() {
             // Only explicit admitted jobs perform bridge retirement/checked closure.
             // The existing durable state is retained without allocating or issuing FFI.
-            if !fields.pins.is_empty()
+            if fields.selected.is_some()
+                || fields.lease.is_some()
+                || fields.parts.is_some()
+                || !fields.pins.is_empty()
                 || (fields.api.is_some() && !fields.io_retired)
                 || !fields.storage.is_retired()
             {

@@ -3,6 +3,9 @@
 //! Exercise strict persisted records through actual codecs and domain constructors.
 mod capture_codec;
 mod codec;
+mod codec_allocation;
+mod codec_parse;
+mod codec_writer;
 mod migration;
 #[cfg(windows)]
 mod migration_recovery;
@@ -13,6 +16,14 @@ mod migration_runtime_fixture;
 #[cfg(windows)]
 mod publication;
 #[cfg(windows)]
+mod publication_fixture;
+#[cfg(windows)]
+mod publication_preflight;
+#[cfg(windows)]
+mod publication_preflight_retention;
+#[cfg(windows)]
+mod publication_successor;
+#[cfg(windows)]
 mod recovery;
 mod redaction;
 #[cfg(windows)]
@@ -20,6 +31,14 @@ mod reporting;
 #[cfg(windows)]
 mod reporting_fixture;
 mod retention;
+#[cfg(windows)]
+mod retention_fixture;
+#[cfg(windows)]
+mod retention_policy;
+#[cfg(windows)]
+mod retention_recovery;
+#[cfg(windows)]
+mod retention_runtime;
 mod summary_schema;
 use super::*;
 use std::error::Error;
@@ -59,3 +78,11 @@ fn summary() -> Result<IncidentSummary, Box<dyn Error>> {
         ),
     )?)
 }
+
+#[cfg(windows)]
+mod allocation_lifecycle;
+
+#[cfg(windows)]
+mod allocation_layout;
+
+mod allocation_validation;

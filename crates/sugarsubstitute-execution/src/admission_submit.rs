@@ -263,6 +263,8 @@ impl Core {
             state.symbol_resources.insert(
                 spec.id,
                 crate::native_resources::ResourceRecord {
+                    bundle_issued: false,
+                    reader_issued: false,
                     scope_id: scope.id(),
                     observation: lease.observation(),
                 },

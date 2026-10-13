@@ -3,9 +3,10 @@
 //! Verify closed migration/archive data while preserving exact existing record grammar.
 use super::*;
 
-fn journal() -> Result<SummaryMigrationJournal, Box<dyn Error>> {
+pub(super) fn journal() -> Result<SummaryMigrationJournal, Box<dyn Error>> {
     let summary = summary()?;
-    let original = super::super::codec::encode(
+    let original = super::super::codec_encode::encode(
+        1,
         super::super::codec_summary::SummaryRecord::from(&summary),
         65_536,
     )?;
@@ -260,6 +261,9 @@ fn migration_decoder_redacts_persisted_fields_and_preserves_original_cause()
     assert!(!format!("{error:?}").contains(sentinel));
     let source = error.source().ok_or("Original decoder cause lost")?;
     assert!(source.downcast_ref::<serde_json::Error>().is_some());
-    assert!(source.to_string().contains(sentinel));
+    assert!(source.to_string().contains("Unknown incident field"));
+    assert!(!source.to_string().contains(sentinel));
+    let json = source.downcast_ref::<serde_json::Error>().ok_or("JSON cause lost")?;
+    assert!(json.line() > 0 && json.column() > 0);
     Ok(())
 }

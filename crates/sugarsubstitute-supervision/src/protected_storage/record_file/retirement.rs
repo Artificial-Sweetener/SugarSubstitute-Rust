@@ -27,6 +27,9 @@ pub(crate) fn retire_with_boundary<const N: usize>(
     context: &JobContext,
     boundary: &mut dyn RecordBoundary<N>,
 ) -> Result<PublicationRetirement<N>, ClaimError> {
+    if !file.handle.budget().is_ordinary() {
+        return Err(file.handle.budget().rejection("fixed_record_ordinary_origin"));
+    }
     context::live(context)?;
     if !file.is_locked() || !(16..=1024).contains(&N) {
         return Err(ClaimError::invalid("retirement_without_exclusion"));

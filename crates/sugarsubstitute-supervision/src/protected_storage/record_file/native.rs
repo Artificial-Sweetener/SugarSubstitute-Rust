@@ -12,8 +12,20 @@ use windows::{
 pub(super) struct NativeRecordBoundary;
 impl<const N: usize> RecordBoundary<N> for NativeRecordBoundary {
     fn verify_exclusion(&mut self, file: &HeldFile<N>) -> Result<(), ClaimError> {
-        paths::validate_regular(&file.handle, Some(0))?;
-        security::verify(&file.handle, &file.account_sid)
+        paths::validate_regular(
+            &file.handle,
+            Some(0),
+            &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+                &file.handle.budget(),
+            )?,
+        )?;
+        security::verify(
+            &file.handle,
+            file.account_sid.bytes()?,
+            &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+                &file.handle.budget(),
+            )?,
+        )
     }
     fn read_shape(
         &mut self,
@@ -92,21 +104,41 @@ impl<const N: usize> RecordBoundary<N> for NativeRecordBoundary {
 /// Rename through the retained source handle to a bounded owned UTF16 target.
 /// # Errors
 /// Preserve source custody on invalid target shape or native activation failure.
-pub(crate) fn rename(handle: &Handle, target: &[u16], replace: bool) -> Result<(), ClaimError> {
-    let units = target.len().checked_sub(1).ok_or_else(|| ClaimError::invalid("record_target"))?;
+pub(crate) fn rename(
+    handle: &Handle,
+    target: &std::path::Path,
+    replace: bool,
+    phase: &mut crate::protected_storage::native_phase::NativePhase<'_>,
+) -> Result<(), ClaimError> {
+    use crate::claim_error::BoundedNativeCause;
+    phase.check_budget(&handle.budget())?;
+    let mut producing = phase.wide(target)?;
+    let units = producing.units().len() - 1;
     let offset = std::mem::offset_of!(FILE_RENAME_INFO, FileName);
-    let bytes = offset + target.len() * 2;
-    let mut buffer = vec![0_usize; bytes.div_ceil(size_of::<usize>())];
+    let bytes = offset + producing.units().len() * 2;
+    let count = bytes.div_ceil(size_of::<usize>());
+    let mut buffer = Vec::new();
+    buffer.try_reserve_exact(count).map_err(|cause| {
+        producing.error("record_rename_reservation", BoundedNativeCause::Reserve(cause))
+    })?;
+    if buffer.capacity() > count {
+        return Err(producing.error(
+            "record_rename_capacity",
+            BoundedNativeCause::RawIo(std::io::Error::from(std::io::ErrorKind::InvalidData)),
+        ));
+    }
+    buffer.resize(count, 0_usize);
+    producing.check()?;
     // SAFETY: Aligned owned buffer contains FILE_RENAME_INFO and the complete,
     // already bounded UTF16 destination. The stage's actual handle stays retained.
-    unsafe {
+    let result = unsafe {
         let information = buffer.as_mut_ptr().cast::<FILE_RENAME_INFO>();
         (*information).Anonymous.ReplaceIfExists = replace;
         (*information).FileNameLength = (units * 2) as u32;
         std::ptr::copy_nonoverlapping(
-            target.as_ptr(),
+            producing.units().as_ptr(),
             buffer.as_mut_ptr().cast::<u8>().add(offset).cast(),
-            target.len(),
+            producing.units().len(),
         );
         SetFileInformationByHandle(
             handle.raw(),
@@ -114,20 +146,26 @@ pub(crate) fn rename(handle: &Handle, target: &[u16], replace: bool) -> Result<(
             buffer.as_ptr().cast(),
             bytes as u32,
         )
-    }
-    .map_err(|e| ClaimError::new("activate_claim_record", e))
+    };
+    drop(buffer);
+    drop(producing);
+    // The caller adopts the actual new path before its unconditional post-control
+    // observation. A late return must not leave the retained owner at the old path.
+    result.map_err(|cause| phase.error("activate_claim_record", BoundedNativeCause::Windows(cause)))
 }
 /// Observe a checked nonzero cryptographic nonce for an owned staging name.
 /// # Errors
 /// Return the original native RNG failure or reject an all-zero nonce.
-pub(crate) fn random() -> Result<[u8; 16], ClaimError> {
+pub(crate) fn random(
+    phase: &mut crate::protected_storage::native_phase::NativePhase<'_>,
+) -> Result<[u8; 16], ClaimError> {
+    phase.check()?;
     let mut bytes = [0; 16];
     // SAFETY: The exact initialized writable slice belongs to this bounded nonce operation.
-    unsafe { BCryptGenRandom(None, &mut bytes, BCRYPT_USE_SYSTEM_PREFERRED_RNG) }
-        .ok()
-        .map_err(|e| ClaimError::new("claim_randomness", e))?;
+    let status = unsafe { BCryptGenRandom(None, &mut bytes, BCRYPT_USE_SYSTEM_PREFERRED_RNG) };
+    phase.ntstatus("claim_randomness", status)?;
     if bytes.iter().all(|byte| *byte == 0) {
-        return Err(ClaimError::invalid("claim_randomness"));
+        return Err(phase.invalid("claim_randomness"));
     }
     Ok(bytes)
 }

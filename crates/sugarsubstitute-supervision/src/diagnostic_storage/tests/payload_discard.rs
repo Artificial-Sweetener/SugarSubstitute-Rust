@@ -27,9 +27,11 @@ struct Validator {
 impl Validator {
     fn decision(
         &self,
+        allocation: DiagnosticPayloadDecisionAllocationLoan,
         case: DiagnosticPayloadDiscardCase,
     ) -> Result<DiagnosticPayloadDiscardDecision, DiagnosticRecoveryValidationError> {
         DiagnosticPayloadDiscardDecision::new(
+            allocation,
             self.selection.clone(),
             self.historical,
             self.original,
@@ -49,6 +51,8 @@ impl Validator {
 impl DiagnosticPayloadDiscardValidator for Validator {
     fn validate_preparation(
         &self,
+        _decode: &mut DiagnosticRecoveryDecodeLoan,
+        allocation: DiagnosticPayloadDecisionAllocationLoan,
         current: LogicalStoreOperationKey,
         selection: &DiagnosticPayloadDiscardSelection,
         journal: &[u8],
@@ -76,10 +80,12 @@ impl DiagnosticPayloadDiscardValidator for Validator {
             ));
         }
         self.invoke();
-        self.decision(DiagnosticPayloadDiscardCase::Original)
+        self.decision(allocation, DiagnosticPayloadDiscardCase::Original)
     }
     fn validate_recovery(
         &self,
+        _decode: &mut DiagnosticRecoveryDecodeLoan,
+        allocation: DiagnosticPayloadDecisionAllocationLoan,
         _: LogicalStoreOperationKey,
         journal: &DiagnosticRecoverySource,
         summary: &DiagnosticRecoverySource,
@@ -102,7 +108,7 @@ impl DiagnosticPayloadDiscardValidator for Validator {
             ));
         };
         self.invoke();
-        self.decision(case)
+        self.decision(allocation, case)
     }
 }
 fn recorded(

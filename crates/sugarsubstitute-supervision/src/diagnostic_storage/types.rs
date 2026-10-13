@@ -144,22 +144,49 @@ pub enum DiagnosticStorageFailureCode {
 #[derive(Clone)]
 pub struct DiagnosticStorageError {
     operation: Option<LogicalStoreOperationKey>,
-    code: DiagnosticStorageFailureCode,
-    cause: Option<ClaimError>,
+    detail: StorageFailureDetail,
+}
+#[derive(Clone)]
+enum StorageFailureDetail {
+    Rejected { code: DiagnosticStorageFailureCode, after: Option<DiagnosticStorageFailureCode> },
+    Native(ClaimError),
 }
 impl DiagnosticStorageError {
     pub(super) const fn rejected(
         operation: Option<LogicalStoreOperationKey>,
         code: DiagnosticStorageFailureCode,
     ) -> Self {
-        Self { operation, code, cause: None }
+        Self { operation, detail: StorageFailureDetail::Rejected { code, after: None } }
     }
     pub(super) fn native(
         operation: Option<LogicalStoreOperationKey>,
         code: DiagnosticStorageFailureCode,
         cause: ClaimError,
     ) -> Self {
-        Self { operation, code, cause: Some(cause) }
+        Self {
+            operation,
+            detail: StorageFailureDetail::Native(cause.with_storage_metadata(code, None)),
+        }
+    }
+    pub(super) fn with_post_control(mut self, failure: Option<Self>) -> Self {
+        let after = failure.map(|failure| failure.code());
+        self.detail = match self.detail {
+            StorageFailureDetail::Rejected { code, .. } => {
+                StorageFailureDetail::Rejected { code, after }
+            }
+            StorageFailureDetail::Native(cause) => {
+                let code = cause.storage_metadata().0;
+                StorageFailureDetail::Native(cause.with_storage_metadata(code, after))
+            }
+        };
+        self
+    }
+    /// Observe a simultaneous post-callback control rejection, preserving the primary cause.
+    pub const fn post_control_failure(&self) -> Option<DiagnosticStorageFailureCode> {
+        match &self.detail {
+            StorageFailureDetail::Rejected { after, .. } => *after,
+            StorageFailureDetail::Native(cause) => cause.storage_metadata().1,
+        }
     }
     /// Observe exact logical operation without exposing filenames.
     pub const fn operation(&self) -> Option<LogicalStoreOperationKey> {
@@ -167,24 +194,30 @@ impl DiagnosticStorageError {
     }
     /// Observe the actionable failure category.
     pub const fn code(&self) -> DiagnosticStorageFailureCode {
-        self.code
+        match &self.detail {
+            StorageFailureDetail::Rejected { code, .. } => *code,
+            StorageFailureDetail::Native(cause) => cause.storage_metadata().0,
+        }
     }
 }
 impl fmt::Debug for DiagnosticStorageError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("DiagnosticStorageError")
             .field("operation", &self.operation)
-            .field("code", &self.code)
+            .field("code", &self.code())
             .finish_non_exhaustive()
     }
 }
 impl fmt::Display for DiagnosticStorageError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Protected diagnostic storage failed: {:?}", self.code)
+        write!(f, "Protected diagnostic storage failed: {:?}", self.code())
     }
 }
 impl Error for DiagnosticStorageError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
-        self.cause.as_ref().map(|cause| cause as &dyn Error)
+        match &self.detail {
+            StorageFailureDetail::Rejected { .. } => None,
+            StorageFailureDetail::Native(cause) => Some(cause as &dyn Error),
+        }
     }
 }

@@ -49,10 +49,12 @@ impl<const N: usize> HeldFile<N> {
                 windows::Win32::Foundation::HANDLE::default(),
                 Budget::Protected(memory.clone()),
             ),
-            record_path,
+            record_path: NativeName::Ordinary(record_path),
+            exclusion_path: NativeName::Ordinary(PathBuf::new()),
+            causes: NativeCauseDestinations::ordinary(),
             locked: false,
             created: false,
-            account_sid,
+            account_sid: NativeSid::Ordinary(account_sid),
             temporary_handles: Mutex::new(Vec::new()),
             stage: Mutex::new(None),
             publication: Mutex::new(None),
@@ -68,7 +70,8 @@ impl<const N: usize> HeldFile<N> {
         let file = retained
             .as_mut()
             .ok_or_else(|| ClaimError::invalid("fixture_retained_exclusion_missing"))?;
-        let inode = boundary.adopt(memory, context, &file.record_path, &file.account_sid)?;
+        let inode =
+            boundary.adopt(memory, context, file.record_path.path()?, file.account_sid.bytes()?)?;
         let receipt = file
             .fixture_receipt
             .as_mut()

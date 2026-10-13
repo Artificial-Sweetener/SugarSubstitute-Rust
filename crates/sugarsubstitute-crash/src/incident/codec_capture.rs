@@ -254,12 +254,8 @@ impl StageRecord {
         Self { role, identity: file.identity, sha256: file.sha256, bytes: file.bytes }
     }
 }
-#[derive(Serialize, Deserialize)]
-#[serde(tag = "disposition", rename_all = "snake_case", deny_unknown_fields)]
-enum CompletionRecord {
-    Promoted { summary_file: FileRecord, payload_file: FileRecord },
-    Discarded { summary_file: FileRecord, reason: DiscardRecord, source_bytes: u64 },
-}
+mod completion;
+use completion::CompletionRecord;
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct CaptureJournalRecord {
@@ -268,7 +264,7 @@ pub(super) struct CaptureJournalRecord {
     incident_revision: u64,
     capture_generation: OwnerRecord,
     uuid: [u8; 16],
-    build: String,
+    build: super::codec_text::BuildRecord,
     database_identity: [u8; 24],
     metrics_identity: [u8; 24],
     source: FileRecord,
@@ -300,7 +296,7 @@ impl CaptureJournalRecord {
             IncidentRevision::new(self.incident_revision)?,
             self.capture_generation.into_owner()?,
             DumpId::new(self.uuid)?,
-            BuildIdentity::new(&self.build)?,
+            self.build.into_facts()?,
             self.database_identity,
             self.metrics_identity,
             self.source.into_facts()?,
@@ -334,7 +330,7 @@ impl From<&CaptureDispositionPlan> for CaptureJournalRecord {
             incident_revision: plan.incident_revision.get(),
             capture_generation: plan.capture_generation.into(),
             uuid: *plan.uuid.bytes(),
-            build: plan.build.as_str().into(),
+            build: (&plan.build).into(),
             database_identity: plan.database_identity,
             metrics_identity: plan.metrics_identity,
             source: plan.source.into(),

@@ -278,3 +278,49 @@ fn worker_first_actual_retirement_preserves_late_producer_commit_and_rejects_for
     drop(error);
     fixture.finish()
 }
+
+/// Actual endpoint acquisition keeps its retained loan while external work reenters Core.
+#[test]
+fn registered_endpoint_observation_releases_lifetime_and_source_guards() -> TestResult {
+    let fixture = Fixture::new()?;
+    let shared = Arc::downgrade(fixture.capture.shared.as_ref().ok_or("Missing actual owner")?);
+    let scope = fixture.rig.scope.clone();
+    let called = Arc::new(AtomicUsize::new(0));
+    let observed = called.clone();
+    *lock(&fixture.port.endpoint_probe) = Some(Box::new(move || {
+        let shared = shared.upgrade().ok_or_else(|| {
+            CrashError::invalid(sugarsubstitute_contracts::crash::CaptureOperation::Observation)
+        })?;
+        // These exact exclusive owners have no competing caller in this fixture.
+        // A locked result detects the old call topology without hanging on reentry.
+        let native = shared.native.try_lock().map_err(|_| {
+            CrashError::invalid(sugarsubstitute_contracts::crash::CaptureOperation::Observation)
+        })?;
+        assert!(native.borrowed && native.lease.is_none());
+        drop(native);
+        let attempts = shared.attempts.try_lock().map_err(|_| {
+            CrashError::invalid(sugarsubstitute_contracts::crash::CaptureOperation::Observation)
+        })?;
+        drop(attempts);
+        assert_eq!(scope.snapshot().reserved_bytes, crate::input::STORAGE_BYTES as u64 + 4096);
+        observed.fetch_add(1, Ordering::Release);
+        Ok(())
+    }));
+    let expected = fixture.expected()?;
+    let mut job = fixture
+        .capture
+        .request_attach_bootstrap(
+            &fixture.rig.client,
+            &fixture.rig.native_scope,
+            attach_spec(4)?,
+            expected,
+        )
+        .map_err(|cause| format!("{cause:?}"))?;
+    assert!(matches!(
+        fixture.rig.completion(&mut job)?.outcome,
+        JobOutcome::Failure(CaptureAttachFailure::Source(_))
+    ));
+    assert_eq!(called.load(Ordering::Acquire), 1);
+    drop(job);
+    fixture.finish()
+}

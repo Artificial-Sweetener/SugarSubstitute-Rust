@@ -15,8 +15,9 @@ pub(super) fn read_by_id(
     context: &JobContext,
 ) -> Result<DiagnosticRecoverySource, DiagnosticStorageError> {
     let facts = {
-        let state = storage.check(operation, context)?;
+        let mut state = storage.check(operation, context)?;
         state
+            .data_mut()?
             .reads
             .iter()
             .find(|read| read.id == id)
@@ -25,7 +26,7 @@ pub(super) fn read_by_id(
     };
     let mut lease =
         DiagnosticReadLease { shared: storage.shared.clone(), operation: operation.key, id, facts };
-    whole(storage, &mut lease, operation, context)
+    whole(&storage.shared, &mut lease, operation, context)
 }
 pub(super) fn stage_by_id(
     storage: &DiagnosticStorage,
@@ -35,6 +36,7 @@ pub(super) fn stage_by_id(
 ) -> Result<DiagnosticRecoverySource, DiagnosticStorageError> {
     let mut state = storage.check(operation, context)?;
     let retained = state
+        .data_mut()?
         .stages
         .iter()
         .find(|stage| stage.id == id)
@@ -45,19 +47,20 @@ pub(super) fn stage_by_id(
     if facts.bytes > DIAGNOSTIC_IO_BYTES as u64 {
         return Err(error(operation.key, Code::Capacity));
     }
+    let allocation = allocation::whole_source(&state.data_mut()?.allocation, operation.key)?;
     let target = state
-        .port
-        .stage_target(native_id, object, context)
+        .call_native(|port| port.stage_target(native_id, object, context))?
         .map_err(|cause| native(operation.key, Code::Read, cause))?;
     check(&mut state, operation.key, context, false)?;
+    let reservation = allocation::reservation_for_loan(&allocation, operation.key)?;
     let mut bytes = Vec::new();
-    bytes.try_reserve_exact(facts.bytes as usize).map_err(|cause| {
-        native(operation.key, Code::Capacity, ClaimError::new("diagnostic_source_bytes", cause))
-    })?;
+    bytes.try_reserve_exact(facts.bytes as usize).map_err(|cause| reservation.failed(cause))?;
+    if bytes.capacity() > DIAGNOSTIC_IO_BYTES {
+        return Err(error(operation.key, Code::Capacity));
+    }
     bytes.resize(facts.bytes as usize, 0);
     if state
-        .port
-        .read(native_id, 0, &mut bytes, context)
+        .call_native(|port| port.read(native_id, 0, &mut bytes, context))?
         .map_err(|cause| native(operation.key, Code::Read, cause))?
         != bytes.len()
         || <[u8; 32]>::from(Sha256::digest(&bytes)) != facts.sha256
@@ -65,7 +68,8 @@ pub(super) fn stage_by_id(
         return Err(error(operation.key, Code::ChangedIdentity));
     }
     check(&mut state, operation.key, context, false)?;
-    let namespace = state.namespace.ok_or_else(|| error(operation.key, Code::Closed))?;
+    let namespace =
+        state.data_mut()?.namespace.ok_or_else(|| error(operation.key, Code::Closed))?;
     let (active_class, name_digest) =
         crate::protected_storage::record_file::diagnostic_object_binding(object, namespace);
     if target.is_some_and(|actual| actual != facts) {
@@ -79,20 +83,24 @@ pub(super) fn stage_by_id(
         name_digest,
         origin: SourceOrigin::Stage(id),
         native: native_id,
+        _allocation: allocation,
     })
 }
 pub(super) fn whole(
-    storage: &DiagnosticStorage,
+    storage: &Shared,
     lease: &mut DiagnosticReadLease,
     operation: &DiagnosticStorageOperation,
     context: &JobContext,
 ) -> Result<DiagnosticRecoverySource, DiagnosticStorageError> {
-    if !Arc::ptr_eq(&storage.shared, &lease.shared) || lease.operation != operation.key {
+    if !Shared::ptr_eq(storage, &lease.shared) || lease.operation != operation.key {
         return Err(error(operation.key, Code::InvalidIdentity));
     }
     let (native_id, object, class, name_digest) = {
-        let state = storage.check(operation, context)?;
+        let mut state = storage.check(operation, context)?;
+        let namespace =
+            state.data_mut()?.namespace.ok_or_else(|| error(operation.key, Code::Closed))?;
         let retained = state
+            .data_mut()?
             .reads
             .iter()
             .find(|value| value.id == lease.id)
@@ -101,7 +109,7 @@ pub(super) fn whole(
         {
             return Err(error(operation.key, Code::ChangedIdentity));
         }
-        let namespace = state.namespace.ok_or_else(|| error(operation.key, Code::Closed))?;
+
         let binding = match (retained.object, retained.candidate) {
             (Some(object), candidate) => {
                 let actual = crate::protected_storage::record_file::diagnostic_object_binding(
@@ -124,10 +132,16 @@ pub(super) fn whole(
     };
     let size =
         usize::try_from(lease.facts().bytes).map_err(|_| error(operation.key, Code::Capacity))?;
+    let allocation = {
+        let mut state = storage.check(operation, context)?;
+        allocation::whole_source(&state.data_mut()?.allocation, operation.key)?
+    };
+    let reservation = allocation::reservation_for_loan(&allocation, operation.key)?;
     let mut bytes = Vec::new();
-    bytes.try_reserve_exact(size).map_err(|cause| {
-        native(operation.key, Code::Capacity, ClaimError::new("diagnostic_recovery_bytes", cause))
-    })?;
+    bytes.try_reserve_exact(size).map_err(|cause| reservation.failed(cause))?;
+    if bytes.capacity() > DIAGNOSTIC_IO_BYTES {
+        return Err(error(operation.key, Code::Capacity));
+    }
     bytes.resize(size, 0);
     if lease.read_chunk(0, &mut bytes, context)? != size
         || <[u8; 32]>::from(Sha256::digest(&bytes)) != lease.facts().sha256
@@ -142,6 +156,7 @@ pub(super) fn whole(
         name_digest,
         origin: SourceOrigin::Read(lease.id),
         native: native_id,
+        _allocation: allocation,
     })
 }
 pub(super) fn canonical(
@@ -154,15 +169,14 @@ pub(super) fn canonical(
             == crate::protected_storage::record_file::diagnostic_object_binding(object, namespace)
 }
 pub(super) fn retained_source(
-    state: &mut State,
+    state: &mut StateAccess<'_>,
     source: &DiagnosticRecoverySource,
     key: LogicalStoreOperationKey,
     context: &JobContext,
 ) -> Result<usize, DiagnosticStorageError> {
     check(state, key, context, false)?;
     let actual = state
-        .port
-        .observe_file(source.native, context)
+        .call_native(|port| port.observe_file(source.native, context))?
         .map_err(|cause| native(key, Code::Read, cause))?;
     if actual != source.facts {
         return Err(error(key, Code::ChangedIdentity));
@@ -172,8 +186,7 @@ pub(super) fn retained_source(
         SourceOrigin::Stage(id) => {
             let object = source.object.ok_or_else(|| error(key, Code::InvalidIdentity))?;
             let target = state
-                .port
-                .stage_target(source.native, object, context)
+                .call_native(|port| port.stage_target(source.native, object, context))?
                 .map_err(|cause| native(key, Code::Read, cause))?;
             check(state, key, context, false)?;
             let (active, digest) = crate::protected_storage::record_file::diagnostic_object_binding(
@@ -187,14 +200,14 @@ pub(super) fn retained_source(
             {
                 return Err(error(key, Code::ChangedIdentity));
             }
-            state.stages.iter().position(|value| {
+            state.data_mut()?.stages.iter().position(|value| {
                 value.id == id
                     && value.object == object
                     && value.native == Some(source.native)
                     && value.flushed == Some(source.facts)
             })
         }
-        SourceOrigin::Read(_) => state.reads.iter().position(|value| {
+        SourceOrigin::Read(_) => state.data_mut()?.reads.iter().position(|value| {
             source.origin == SourceOrigin::Read(value.id)
                 && value.native == Some(source.native)
                 && value.facts == Some(source.facts)

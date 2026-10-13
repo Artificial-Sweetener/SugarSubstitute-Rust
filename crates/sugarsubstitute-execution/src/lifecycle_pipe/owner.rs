@@ -18,6 +18,14 @@ pub(crate) enum Owner {
     Diagnostic(Arc<Job<DiagnosticPipeReport, LifecyclePipeFailure>>),
 }
 impl Owner {
+    /// Match the actual retained job allocation; IDs alone cannot associate a control.
+    pub(crate) fn matches_record(&self, record: &crate::admission::Record) -> bool {
+        let (scope, spec, erased): (_, _, Arc<dyn ErasedJob>) = match self {
+            Self::Desktop(job) => (job.scope_id, job.spec, job.clone()),
+            Self::Diagnostic(job) => (job.scope_id, job.spec, job.clone()),
+        };
+        record.scope_id == scope && record.spec == spec && Arc::ptr_eq(&record.job, &erased)
+    }
     pub(crate) fn cancel(&self) {
         match self {
             Self::Desktop(job) => job.cancel(),

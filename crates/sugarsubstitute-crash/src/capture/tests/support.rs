@@ -3,6 +3,8 @@
 //! Fake native mechanics; admission, cancellation, charge and delivery are real.
 use super::*;
 pub(super) type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
+/// One exclusive fake native callback; the production owner supplies the lock boundary.
+type EndpointProbe = Box<dyn FnOnce() -> Result<(), CrashError> + Send>;
 pub(super) fn coordinator() -> TestResult<CoordinatorKey> {
     use sugarsubstitute_contracts::lifecycle::{CoordinatorEpoch, NamespaceId};
     Ok(CoordinatorKey {
@@ -12,12 +14,8 @@ pub(super) fn coordinator() -> TestResult<CoordinatorKey> {
 }
 pub(super) fn input() -> Result<CaptureStartInput, CrashError> {
     CaptureStartInput::new(
-        r"E:\bundle\client.dll".into(),
-        r"E:\bundle\handler.exe".into(),
         r"D:\capture\root".into(),
-        [0; 32],
-        [0; 32],
-        "test-build",
+        sugarsubstitute_supervision::InstalledReleaseOwner::new().capture_selection(),
     )
 }
 pub(super) fn work_spec(id: u64, deadline: Moment) -> TestResult<JobSpec> {
@@ -201,7 +199,10 @@ pub(super) struct FakePort {
     pub(super) start_address: Arc<AtomicUsize>,
     pub(super) retire_address: Arc<AtomicUsize>,
     pub(super) start_probe: Arc<Mutex<Option<LeaseProbe>>>,
+    pub(super) build_probe: Arc<Mutex<Option<ClockCallback>>>,
+    pub(super) start_failure: Arc<Mutex<Option<CrashError>>>,
     pub(super) retire_probe: Arc<Mutex<Option<LeaseProbe>>>,
+    pub(super) endpoint_probe: Arc<Mutex<Option<EndpointProbe>>>,
     pub(super) endpoint_reads: Arc<AtomicUsize>,
     pub(super) endpoint_unavailable: Arc<AtomicUsize>,
     pub(super) created: AtomicUsize,
@@ -221,10 +222,14 @@ struct FakeLease {
     start_address: Arc<AtomicUsize>,
     retire_address: Arc<AtomicUsize>,
     start_probe: Arc<Mutex<Option<LeaseProbe>>>,
+    build_probe: Arc<Mutex<Option<ClockCallback>>>,
+    start_failure: Arc<Mutex<Option<CrashError>>>,
     retire_probe: Arc<Mutex<Option<LeaseProbe>>>,
+    endpoint_probe: Arc<Mutex<Option<EndpointProbe>>>,
     endpoint_reads: Arc<AtomicUsize>,
     endpoint_unavailable: Arc<AtomicUsize>,
     _memory: MemoryClaim,
+    _admission: sugarsubstitute_execution::CaptureBundleAdmission,
     dropped: Arc<AtomicUsize>,
     stopped: Arc<AtomicUsize>,
     fail_stop: Arc<AtomicUsize>,
@@ -238,23 +243,40 @@ struct FakeLease {
     cancelled_permits: Arc<Mutex<Vec<WatchJob>>>,
 }
 impl NativePort for FakePort {
-    fn create(&self, memory: &MemoryLease) -> Result<Box<dyn CaptureLease>, CrashError> {
+    fn create(
+        &self,
+        admission: sugarsubstitute_execution::CaptureBundleAdmission,
+        _execution: ExecutionClient,
+    ) -> Result<Box<dyn CaptureLease>, CrashError> {
+        let context = admission
+            .original_context()
+            .map_err(|cause| {
+                CrashError::new(sugarsubstitute_contracts::crash::CaptureOperation::Runtime, cause)
+            })?
+            .clone();
+        let memory = context.memory();
         self.created.fetch_add(1, Ordering::AcqRel);
         Ok(Box::new(FakeLease {
             start_address: self.start_address.clone(),
             retire_address: self.retire_address.clone(),
             start_probe: self.start_probe.clone(),
+            build_probe: self.build_probe.clone(),
+            start_failure: self.start_failure.clone(),
             retire_probe: self.retire_probe.clone(),
+            endpoint_probe: self.endpoint_probe.clone(),
             endpoint_reads: self.endpoint_reads.clone(),
             endpoint_unavailable: self.endpoint_unavailable.clone(),
             _memory: memory
-                .claim((crate::input::STORAGE_BYTES - crate::input::SOURCE_STORAGE_BYTES) as u64)
+                .claim(
+                    (crate::input::BASE_STORAGE_BYTES - crate::input::SOURCE_STORAGE_BYTES) as u64,
+                )
                 .map_err(|cause| {
                     CrashError::new(
                         sugarsubstitute_contracts::crash::CaptureOperation::Runtime,
                         cause,
                     )
                 })?,
+            _admission: admission,
             dropped: self.dropped.clone(),
             stopped: self.stopped.clone(),
             fail_stop: self.fail_stop.clone(),
@@ -272,7 +294,7 @@ impl NativePort for FakePort {
 impl CaptureLease for FakeLease {
     fn start(
         &mut self,
-        _: &CaptureStartInput,
+        _: CaptureStartInput,
         _: CoordinatorKey,
         context: &JobContext,
     ) -> Result<(), CrashError> {
@@ -288,10 +310,23 @@ impl CaptureLease for FakeLease {
         if self.healthy.load(Ordering::Acquire) != 0 {
             return Ok(());
         }
+        if let Some(cause) = lock(&self.start_failure).clone() {
+            return Err(cause);
+        }
         Err(CrashError::new(
             sugarsubstitute_contracts::crash::CaptureOperation::Registration,
             std::io::Error::other("controlled-registration-failure"),
         ))
+    }
+    fn creator(&self) -> Option<crate::capture::CaptureCreator> {
+        crate::capture::CaptureCreator::new(1, 11).ok()
+    }
+    fn build_identity(&self) -> Option<&str> {
+        let probe = lock(&self.build_probe).take();
+        if let Some(probe) = probe {
+            probe();
+        }
+        Some("test-build")
     }
     fn handler(&self) -> Option<CaptureHandlerIdentity> {
         (self.healthy.load(Ordering::Acquire) != 0)
@@ -311,6 +346,10 @@ impl CaptureLease for FakeLease {
         sugarsubstitute_execution::windows_capture_attach::CaptureEndpointObservation,
         CrashError,
     > {
+        let probe = lock(&self.endpoint_probe).take();
+        if let Some(probe) = probe {
+            probe()?;
+        }
         self.endpoint_reads.fetch_add(1, Ordering::AcqRel);
         if self.endpoint_unavailable.load(Ordering::Acquire) != 0 {
             return Err(CrashError::new(
@@ -373,4 +412,31 @@ impl Drop for FakeLease {
     fn drop(&mut self) {
         self.dropped.fetch_add(1, Ordering::AcqRel);
     }
+}
+
+/// Keep the actual execution owner outside module-output claims through test teardown.
+pub(crate) struct ModuleClaimFixture(Rig);
+impl ModuleClaimFixture {
+    /// Join the actual owner before asserting the original scope's release.
+    pub(crate) fn finish(self) -> u64 {
+        let scope = self.0.scope.clone();
+        drop(self.0);
+        scope.snapshot().reserved_bytes
+    }
+}
+/// Obtain a genuine finite-job context; the fixture never mints admission or trust facts.
+pub(crate) fn module_claim_context() -> TestResult<(ModuleClaimFixture, JobContext)> {
+    let rig = Rig::new()?;
+    let mut job = rig.client.submit_blocking(
+        &rig.scope,
+        work_spec(1, Moment::from_nanos(60_000_000_000))?,
+        |context| Ok::<_, std::io::Error>(context.clone()),
+    )?;
+    let completion = rig.completion(&mut job)?;
+    let JobOutcome::Success(context) = completion.outcome else {
+        return Err("Real module-claim context did not complete".into());
+    };
+    drop(completion.memory);
+    drop(job);
+    Ok((ModuleClaimFixture(rig), context))
 }

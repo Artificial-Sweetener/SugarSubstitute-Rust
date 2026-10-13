@@ -11,23 +11,38 @@ use sugarsubstitute_supervision::diagnostic_storage::*;
 pub struct IncidentRepository {
     pub(super) storage: DiagnosticStorage,
     pub(super) operation: DiagnosticStorageOperation,
-    pub(super) reads: Vec<DiagnosticReadLease>,
-    pub(super) stages: Vec<DiagnosticStage>,
+    pub(super) reads: super::allocation::OwnerSlots<DiagnosticReadLease, DIAGNOSTIC_READ_BOUND>,
+    pub(super) stages: super::allocation::OwnerSlots<DiagnosticStage, DIAGNOSTIC_STAGE_BOUND>,
     pub(super) pending: Option<super::publication::PendingPublication>,
+    pub(super) preflight: Option<super::publication_preflight::RetainedPreflight>,
+    pub(super) publication_identity: DiagnosticPublicationIdentity,
+    pub(super) retention_utc: Option<IncidentUtc>,
     pub(super) next_ticket: u64,
 }
 impl IncidentRepository {
     /// Consume real protected storage and its separately admitted current operation.
     /// Historical persisted operation identities cannot establish this authority.
-    pub fn new(storage: DiagnosticStorage, operation: DiagnosticStorageOperation) -> Self {
-        Self {
+    /// The original context admits the retained publication identity before allocation.
+    /// # Errors
+    /// Rejects foreign/expired context, exhausted original allocation capacity or a
+    /// retired operation. No replacement reservation or scheduling authority is created.
+    pub fn new(
+        mut storage: DiagnosticStorage,
+        operation: DiagnosticStorageOperation,
+        context: &JobContext,
+    ) -> Result<Self, IncidentStoreError> {
+        let publication_identity = storage.recovery_publication_identity(&operation, context)?;
+        Ok(Self {
             storage,
             operation,
-            reads: Vec::new(),
-            stages: Vec::new(),
+            reads: super::allocation::OwnerSlots::new(),
+            stages: super::allocation::OwnerSlots::new(),
             pending: None,
+            preflight: None,
+            publication_identity,
+            retention_utc: None,
             next_ticket: 1,
-        }
+        })
     }
     /// Return the current full matching identity without exposing native authority.
     pub const fn operation(&self) -> LogicalStoreOperationKey {
@@ -45,6 +60,7 @@ impl IncidentRepository {
         self.reads.clear();
         self.stages.clear();
         self.pending = None;
+        self.preflight = None;
         Ok(())
     }
     pub(super) fn namespace(&self, key: IncidentKey) -> Result<(), IncidentStoreError> {
@@ -67,20 +83,16 @@ impl IncidentRepository {
         &mut self,
         candidate: &DiagnosticInventoryEntry,
         context: &JobContext,
-    ) -> Result<(Vec<u8>, DiagnosticReadFacts, usize), IncidentStoreError> {
+    ) -> Result<(DiagnosticRecoverySource, DiagnosticReadFacts, usize), IncidentStoreError> {
         if self.reads.len() >= DIAGNOSTIC_READ_BOUND || candidate.bytes() > 65_536 {
             return Err(IncidentStoreError::Capacity);
         }
         let bound = if candidate.class() == DiagnosticEntryClass::Seed { 4096 } else { 65_536 };
         let lease = self.storage.read_inventory(candidate, bound, &self.operation, context)?;
         let index = self.reads.len();
-        self.reads.push(lease);
-        let facts = self.reads[index].facts();
-        let mut bytes = vec![0; facts.bytes() as usize];
-        let received = self.reads[index].read_chunk(0, &mut bytes, context)?;
-        if received != bytes.len() || digest(&bytes) != facts.sha256() {
-            return Err(IncidentStoreError::WrongDigest);
-        }
+        self.reads.push(lease)?;
+        let facts = self.reads.get_mut(index)?.facts();
+        let bytes = self.reads.get_mut(index)?.whole_source(context)?;
         Ok((bytes, facts, index))
     }
     pub(super) fn close_read(
@@ -88,8 +100,8 @@ impl IncidentRepository {
         index: usize,
         context: &JobContext,
     ) -> Result<(), IncidentStoreError> {
-        self.reads[index].retire(context)?;
-        self.reads.remove(index);
+        self.reads.get_mut(index)?.retire(context)?;
+        self.reads.remove(index)?;
         Ok(())
     }
     pub(super) fn activate_bytes(
@@ -109,22 +121,27 @@ impl IncidentRepository {
             bytes.len() as u64,
             &self.operation,
             context,
-        )?);
-        self.stages[index].write_chunk(bytes, context)?;
-        let flushed = self.stages[index].flush(context)?.read_facts();
+        )?)?;
+        self.stages.get_mut(index)?.write_chunk(bytes, context)?;
+        let flushed = self.stages.get_mut(index)?.flush(context)?.read_facts();
         if flushed.sha256() != digest(bytes) || flushed.bytes() != bytes.len() as u64 {
             return Err(IncidentStoreError::WrongDigest);
         }
-        let activation =
-            self.storage.activate(&mut self.stages[index], expected, &self.operation, context)?;
-        self.stages.remove(index);
+        let activation = self.storage.activate(
+            self.stages.get_mut(index)?,
+            expected,
+            &self.operation,
+            context,
+        )?;
+        self.stages.remove(index)?;
         Ok(activation)
     }
     pub(super) fn find_summary(
         &mut self,
         key: IncidentKey,
         context: &JobContext,
-    ) -> Result<Option<(StoredIncidentSummary, DiagnosticReadFacts)>, IncidentStoreError> {
+    ) -> Result<Option<(super::allocation::RetainedSummary, DiagnosticReadFacts)>, IncidentStoreError>
+    {
         self.namespace(key)?;
         let inventory = self.inventory(context)?;
         let mut found = None;
@@ -132,8 +149,13 @@ impl IncidentRepository {
             inventory.entries().filter(|entry| entry.class() == DiagnosticEntryClass::Summary)
         {
             let (bytes, facts, index) = self.read_candidate(candidate, context)?;
-            let summary = super::decode_summary(&bytes)?;
-            self.reads[index]
+            let custody = self.storage.recovery_record(&self.operation, context)?;
+            let mut decode = self.storage.recovery_decode(&self.operation, context)?;
+            let summary =
+                super::allocation::decode(&mut decode, || super::decode_summary(bytes.as_bytes()))?;
+            let summary = super::allocation::RetainedSummary::new(summary, custody);
+            self.reads
+                .get_mut(index)?
                 .bind_object(DiagnosticObject::Summary(summary.summary().seed().key()), context)?;
             if summary.summary().seed().key() == key {
                 if found.is_some() {
@@ -158,8 +180,12 @@ impl IncidentRepository {
                 return Err(IncidentStoreError::RecoveryConflict);
             }
             let (bytes, _, index) = self.read_candidate(candidate, context)?;
-            self.reads[index].bind_object(DiagnosticObject::StoreState, context)?;
-            let super::IncidentStoreState::Ledger(value) = super::decode_store_state(&bytes)?
+            self.reads.get_mut(index)?.bind_object(DiagnosticObject::StoreState, context)?;
+            let mut decode = self.storage.recovery_decode(&self.operation, context)?;
+            let super::IncidentStoreState::Ledger(value) =
+                super::allocation::decode(&mut decode, || {
+                    super::decode_store_state(bytes.as_bytes())
+                })?
             else {
                 return Err(IncidentStoreError::RecoveryConflict);
             };
@@ -192,8 +218,8 @@ impl IncidentRepository {
                 context,
             )?;
             let index = self.reads.len();
-            self.reads.push(lease);
-            let actual = self.reads[index].facts();
+            self.reads.push(lease)?;
+            let actual = self.reads.get_mut(index)?.facts();
             if actual.bytes() != fact.retained_bytes() || actual.sha256() != *fact.sha256() {
                 return Err(IncidentStoreError::WrongDigest);
             }

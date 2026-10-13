@@ -32,14 +32,15 @@ impl DiagnosticStorage {
         context: &JobContext,
     ) -> Result<DiagnosticReadLease, DiagnosticStorageError> {
         let mut state = self.check(operation, context)?;
-        if object.namespace().is_some_and(|value| Some(value) != state.namespace)
+        let namespace = state.data_mut()?.namespace;
+        if object.namespace().is_some_and(|value| Some(value) != namespace)
             || bound > object.bound()
             || bound == 0
         {
             return Err(error(operation.key, Code::InvalidIdentity));
         }
         payload_discard::intent::admit_read(
-            &state,
+            &mut state,
             crate::protected_storage::record_file::diagnostic_object_binding(
                 object,
                 operation.key.owner().namespace,
@@ -47,7 +48,7 @@ impl DiagnosticStorage {
             operation.key,
         )?;
         let id = reserve(&mut state, operation.key, Some(object), None)?;
-        let result = state.port.open(object, bound, context);
+        let result = state.call_native(|port| port.open(object, bound, context))?;
         finish(&mut state, &self.shared, operation.key, id, bound, result, context)
     }
     /// Read a constructor-private observed candidate before semantic codec validation.
@@ -62,7 +63,7 @@ impl DiagnosticStorage {
         context: &JobContext,
     ) -> Result<DiagnosticReadLease, DiagnosticStorageError> {
         let mut state = self.check(operation, context)?;
-        if !Arc::ptr_eq(&self.shared, &entry.shared)
+        if !Shared::ptr_eq(&self.shared, &entry.shared)
             || entry.namespace != operation.key.owner().namespace
             || !entry.observed.readable()
             || bound == 0
@@ -71,7 +72,7 @@ impl DiagnosticStorage {
             return Err(error(operation.key, Code::InvalidIdentity));
         }
         payload_discard::intent::admit_read(
-            &state,
+            &mut state,
             (entry.observed.class, entry.observed.digest),
             operation.key,
         )?;
@@ -81,29 +82,30 @@ impl DiagnosticStorage {
             None,
             Some((entry.observed.class, entry.observed.digest)),
         )?;
-        let result = state.port.open_inventory(&entry.observed, bound, context);
+        let result =
+            state.call_native(|port| port.open_inventory(&entry.observed, bound, context))?;
         finish(&mut state, &self.shared, operation.key, id, bound, result, context)
     }
 }
 fn reserve(
-    state: &mut State,
+    state: &mut StateAccess<'_>,
     key: LogicalStoreOperationKey,
     object: Option<DiagnosticObject>,
     candidate: Option<(DiagnosticEntryClass, [u8; 32])>,
 ) -> Result<u64, DiagnosticStorageError> {
-    if state.namespace.is_none() {
+    if state.data_mut()?.namespace.is_none() {
         return Err(error(key, Code::Closed));
     }
-    if state.reads.len() >= DIAGNOSTIC_READ_BOUND {
+    if state.data_mut()?.reads.len() >= DIAGNOSTIC_READ_BOUND {
         return Err(error(key, Code::Capacity));
     }
     let id = next_lease(state, key)?;
     // The retained slot exists before an external boundary can produce a handle.
-    state.reads.push(RetainedRead { id, native: None, object, facts: None, candidate });
+    state.data_mut()?.reads.push(RetainedRead { id, native: None, object, facts: None, candidate });
     Ok(id)
 }
 fn finish(
-    state: &mut State,
+    state: &mut StateAccess<'_>,
     shared: &Shared,
     key: LogicalStoreOperationKey,
     id: u64,
@@ -113,6 +115,7 @@ fn finish(
 ) -> Result<DiagnosticReadLease, DiagnosticStorageError> {
     let (native_id, facts) = result.map_err(|cause| native(key, Code::Read, cause))?;
     let retained = state
+        .data_mut()?
         .reads
         .iter_mut()
         .find(|value| value.id == id)
@@ -126,6 +129,31 @@ fn finish(
     Ok(DiagnosticReadLease { shared: shared.clone(), operation: key, id, facts })
 }
 impl DiagnosticReadLease {
+    /// Retain one charged complete source under the actual original file fence.
+    /// # Errors
+    /// Rejects changed identity, invalid context, saturation or incomplete read.
+    pub fn whole_source(
+        &mut self,
+        context: &JobContext,
+    ) -> Result<DiagnosticRecoverySource, DiagnosticStorageError> {
+        let deadline = {
+            let mut state = StateAccess::acquire(&self.shared, self.operation);
+            check(&mut state, self.operation, context, false)?;
+            state
+                .data_mut()?
+                .operation
+                .as_ref()
+                .ok_or_else(|| error(self.operation, Code::Closed))?
+                .deadline
+        };
+        let shared = self.shared.clone();
+        let operation = DiagnosticStorageOperation {
+            shared: self.shared.clone(),
+            key: self.operation,
+            deadline,
+        };
+        source::whole(&shared, self, &operation, context)
+    }
     /// Observe exact actual retained identity, content digest and byte length.
     pub const fn facts(&self) -> DiagnosticReadFacts {
         self.facts
@@ -142,18 +170,20 @@ impl DiagnosticReadLease {
         object: DiagnosticObject,
         context: &JobContext,
     ) -> Result<(), DiagnosticStorageError> {
-        let mut state = lock(&self.shared);
+        let mut state = StateAccess::acquire(&self.shared, self.operation);
         check(&mut state, self.operation, context, false)?;
-        let namespace = state.namespace.ok_or_else(|| error(self.operation, Code::Closed))?;
+        let namespace =
+            state.data_mut()?.namespace.ok_or_else(|| error(self.operation, Code::Closed))?;
         if object.namespace().is_some_and(|actual| actual != namespace) {
             return Err(error(self.operation, Code::InvalidIdentity));
         }
         let index = state
+            .data_mut()?
             .reads
             .iter()
             .position(|value| value.id == self.id)
             .ok_or_else(|| error(self.operation, Code::Closed))?;
-        let retained = &state.reads[index];
+        let retained = &state.data_mut()?.reads[index];
         if retained.native.is_none_or(|id| id == 0)
             || retained.facts != Some(self.facts)
             || retained.object.is_some_and(|actual| actual != object)
@@ -172,7 +202,7 @@ impl DiagnosticReadLease {
             return Err(error(self.operation, Code::InvalidIdentity));
         }
         check(&mut state, self.operation, context, false)?;
-        state.reads[index].object = Some(object);
+        state.data_mut()?.reads[index].object = Some(object);
         Ok(())
     }
     /// Read at most64KiB from the exact retained source at a checked byte offset.
@@ -185,12 +215,13 @@ impl DiagnosticReadLease {
         output: &mut [u8],
         context: &JobContext,
     ) -> Result<usize, DiagnosticStorageError> {
-        let mut state = lock(&self.shared);
+        let mut state = StateAccess::acquire(&self.shared, self.operation);
         check(&mut state, self.operation, context, false)?;
         if output.len() > DIAGNOSTIC_IO_BYTES || offset > self.facts.bytes {
             return Err(error(self.operation, Code::Capacity));
         }
         let retained = state
+            .data_mut()?
             .reads
             .iter()
             .find(|value| value.id == self.id)
@@ -202,8 +233,7 @@ impl DiagnosticReadLease {
         let available = usize::try_from((self.facts.bytes - offset).min(output.len() as u64))
             .map_err(|_| error(self.operation, Code::Capacity))?;
         let actual = state
-            .port
-            .read(id, offset, &mut output[..available], context)
+            .call_native(|port| port.read(id, offset, &mut output[..available], context))?
             .map_err(|cause| native(self.operation, Code::Read, cause))?;
         if actual != available {
             return Err(error(self.operation, Code::ChangedIdentity));
@@ -215,23 +245,23 @@ impl DiagnosticReadLease {
     /// # Errors
     /// Failed close/context validation retains both this pin and all native custody.
     pub fn retire(&mut self, context: &JobContext) -> Result<(), DiagnosticStorageError> {
-        let mut state = lock(&self.shared);
+        let mut state = StateAccess::acquire(&self.shared, self.operation);
         check(&mut state, self.operation, context, false)?;
-        let Some(index) = state.reads.iter().position(|value| value.id == self.id) else {
+        let Some(index) = state.data_mut()?.reads.iter().position(|value| value.id == self.id)
+        else {
             return Ok(());
         };
-        if summary_migration::intent::pins_read(&state, self.id)
-            || payload_discard::intent::pins_read(&state, self.id)
+        if summary_migration::intent::pins_read(&mut state, self.id)?
+            || payload_discard::intent::pins_read(&mut state, self.id)?
         {
             return Err(error(self.operation, Code::Busy));
         }
-        if let Some(id) = state.reads[index].native {
+        if let Some(id) = state.data_mut()?.reads[index].native {
             state
-                .port
-                .close(id, context)
+                .call_native(|port| port.close(id, context))?
                 .map_err(|cause| native(self.operation, Code::Retirement, cause))?;
         }
-        state.reads.remove(index);
+        state.data_mut()?.reads.remove(index);
         Ok(())
     }
 }

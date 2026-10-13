@@ -65,7 +65,10 @@ fn external_json_errors_redact_owner_output_and_preserve_original_cause()
             decode_summary(changed.as_bytes()).err().ok_or("Malformed JSON was accepted")?;
         let cause = error.source().ok_or("Original JSON cause was lost")?;
         assert!(cause.downcast_ref::<serde_json::Error>().is_some());
-        assert!(cause.to_string().contains(sentinel));
+        assert!(!cause.to_string().contains(sentinel));
+        assert!(cause.to_string().contains("Unknown incident"));
+        let json = cause.downcast_ref::<serde_json::Error>().ok_or("JSON type lost")?;
+        assert!(json.line() > 0 && json.column() > 0);
         assert!(!error.to_string().contains(sentinel));
         assert!(!format!("{error:?}").contains(sentinel));
         assert!(!format!("{error:#?}").contains(sentinel));

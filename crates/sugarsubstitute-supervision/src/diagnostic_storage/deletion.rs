@@ -55,14 +55,15 @@ impl DiagnosticStorage {
         {
             let mut state = self.check(operation, context)?;
             if stage.plan.operation != operation.key
-                || state.deletion.is_some()
-                || state.migration.is_some()
-                || state.payload.is_some()
-                || !Arc::ptr_eq(&stage.stage.shared, &self.shared)
+                || state.data_mut()?.deletion.is_some()
+                || state.data_mut()?.migration.is_some()
+                || state.data_mut()?.payload.is_some()
+                || !Shared::ptr_eq(&stage.stage.shared, &self.shared)
             {
                 return Err(error(operation.key, Code::InvalidIdentity));
             }
             let flushed = state
+                .data_mut()?
                 .stages
                 .iter()
                 .find(|value| value.id == stage.stage.id)
@@ -72,7 +73,7 @@ impl DiagnosticStorage {
                 return Err(error(operation.key, Code::ChangedIdentity));
             }
             let id = next_lease(&mut state, operation.key)?;
-            state.deletion = Some(RetainedDeletion {
+            state.data_mut()?.deletion = Some(RetainedDeletion {
                 id,
                 plan: stage.plan,
                 journal: None,
@@ -86,10 +87,13 @@ impl DiagnosticStorage {
         let active = self.activate(&mut stage.stage, expected, operation, context)?;
         let mut state = self.check(operation, context)?;
         let (id, facts) = state
-            .port
-            .open(active.object, 65536, context)
+            .call_native(|port| port.open(active.object, 65536, context))?
             .map_err(|cause| native(operation.key, Code::Read, cause))?;
-        let intent = state.deletion.as_mut().ok_or_else(|| error(operation.key, Code::Closed))?;
+        let intent = state
+            .data_mut()?
+            .deletion
+            .as_mut()
+            .ok_or_else(|| error(operation.key, Code::Closed))?;
         intent.journal = Some((id, facts));
         if facts != active.facts || id == 0 {
             return Err(error(operation.key, Code::ChangedIdentity));
@@ -112,35 +116,50 @@ impl DiagnosticStorage {
         context: &JobContext,
     ) -> Result<DiagnosticDeleteLease, DiagnosticStorageError> {
         let mut state = self.check(operation, context)?;
-        permit_check(&state, &self.shared, permit, operation.key)?;
-        stage::mutation(&state, operation.key)?;
-        let retained = state.deletion.as_ref().ok_or_else(|| error(operation.key, Code::Closed))?;
+        permit_check(&mut state, &self.shared, permit, operation.key)?;
+        stage::mutation(&mut state, operation.key)?;
+        let retained = state
+            .data_mut()?
+            .deletion
+            .as_ref()
+            .ok_or_else(|| error(operation.key, Code::Closed))?;
         let plan = retained.plan;
+        let missing_victim = retained.victim.is_none();
         if retained.lease_issued
             || retained.victim_settled
-            || state.reads.iter().any(|value| value.object == Some(plan.victim))
+            || state.data_mut()?.reads.iter().any(|value| value.object == Some(plan.victim))
         {
             return Err(error(operation.key, Code::Busy));
         }
-        if retained.victim.is_none() {
+        if missing_victim {
             let (id, facts) = state
-                .port
-                .open(plan.victim, plan.victim.bound(), context)
+                .call_native(|port| port.open(plan.victim, plan.victim.bound(), context))?
                 .map_err(|cause| native(operation.key, Code::Read, cause))?;
-            let retained =
-                state.deletion.as_mut().ok_or_else(|| error(operation.key, Code::Closed))?;
+            let retained = state
+                .data_mut()?
+                .deletion
+                .as_mut()
+                .ok_or_else(|| error(operation.key, Code::Closed))?;
             retained.victim = Some(id);
             retained.victim_facts = Some(facts);
         }
-        let retained = state.deletion.as_ref().ok_or_else(|| error(operation.key, Code::Closed))?;
+        let retained = state
+            .data_mut()?
+            .deletion
+            .as_ref()
+            .ok_or_else(|| error(operation.key, Code::Closed))?;
         if retained.victim == Some(0)
             || retained.victim_facts.is_none_or(|facts| !plan.facts.matches(facts))
         {
             return Err(error(operation.key, Code::ChangedIdentity));
         }
         check(&mut state, operation.key, context, false)?;
-        state.deletion.as_mut().ok_or_else(|| error(operation.key, Code::Closed))?.lease_issued =
-            true;
+        state
+            .data_mut()?
+            .deletion
+            .as_mut()
+            .ok_or_else(|| error(operation.key, Code::Closed))?
+            .lease_issued = true;
         Ok(DiagnosticDeleteLease {
             shared: self.shared.clone(),
             operation: operation.key,
@@ -159,15 +178,19 @@ impl DiagnosticStorage {
         context: &JobContext,
     ) -> Result<DiagnosticDeletion, DiagnosticStorageError> {
         let mut state = self.check(operation, context)?;
-        permit_check(&state, &self.shared, permit, operation.key)?;
-        stage::mutation(&state, operation.key)?;
-        if !Arc::ptr_eq(&self.shared, &lease.shared)
+        permit_check(&mut state, &self.shared, permit, operation.key)?;
+        stage::mutation(&mut state, operation.key)?;
+        if !Shared::ptr_eq(&self.shared, &lease.shared)
             || lease.operation != operation.key
             || lease.id != permit.id
         {
             return Err(error(operation.key, Code::InvalidIdentity));
         }
-        let retained = state.deletion.as_ref().ok_or_else(|| error(operation.key, Code::Closed))?;
+        let retained = state
+            .data_mut()?
+            .deletion
+            .as_ref()
+            .ok_or_else(|| error(operation.key, Code::Closed))?;
         let plan = retained.plan;
         let actual = retained.victim_facts.ok_or_else(|| error(operation.key, Code::Closed))?;
         if !plan.facts.matches(actual) {
@@ -176,26 +199,26 @@ impl DiagnosticStorage {
         if !retained.victim_settled {
             let id = retained.victim.ok_or_else(|| error(operation.key, Code::Closed))?;
             state
-                .port
-                .delete(id, plan.victim, actual, context)
+                .call_native(|port| port.delete(id, plan.victim, actual, context))?
                 .map_err(|cause| native(operation.key, Code::DeleteUncertain, cause))?;
             state
-                .port
-                .close(id, context)
+                .call_native(|port| port.close(id, context))?
                 .map_err(|cause| native(operation.key, Code::DeleteUncertain, cause))?;
             if !state
-                .port
-                .absent(plan.victim, context)
+                .call_native(|port| port.absent(plan.victim, context))?
                 .map_err(|cause| native(operation.key, Code::DeleteUncertain, cause))?
             {
                 return Err(error(operation.key, Code::DeleteUncertain));
             }
             check(&mut state, operation.key, context, false)?;
-            let retained =
-                state.deletion.as_mut().ok_or_else(|| error(operation.key, Code::Closed))?;
+            let retained = state
+                .data_mut()?
+                .deletion
+                .as_mut()
+                .ok_or_else(|| error(operation.key, Code::Closed))?;
             retained.victim = None;
             retained.victim_settled = true;
-            state.inventory_complete = false;
+            state.data_mut()?.inventory_complete = false;
         }
         Ok(DiagnosticDeletion { object: plan.victim, facts: actual })
     }
@@ -211,15 +234,19 @@ impl DiagnosticStorage {
         context: &JobContext,
     ) -> Result<DiagnosticDeletion, DiagnosticStorageError> {
         let mut state = self.check(operation, context)?;
-        permit_check(&state, &self.shared, permit, operation.key)?;
-        stage::mutation(&state, operation.key)?;
-        if !state.writer
-            || !Arc::ptr_eq(&completion.shared, &self.shared)
+        permit_check(&mut state, &self.shared, permit, operation.key)?;
+        stage::mutation(&mut state, operation.key)?;
+        if !state.data_mut()?.writer
+            || !Shared::ptr_eq(&completion.shared, &self.shared)
             || completion.operation != operation.key
         {
             return Err(error(operation.key, Code::InvalidIdentity));
         }
-        let retained = state.deletion.as_ref().ok_or_else(|| error(operation.key, Code::Closed))?;
+        let retained = state
+            .data_mut()?
+            .deletion
+            .as_ref()
+            .ok_or_else(|| error(operation.key, Code::Closed))?;
         let plan = retained.plan;
         if !retained.victim_settled
             || completion.object != plan.completion
@@ -231,35 +258,33 @@ impl DiagnosticStorage {
         let (id, facts) = retained.journal.ok_or_else(|| error(operation.key, Code::Closed))?;
         let object = DiagnosticObject::Journal(plan.operation);
         state
-            .port
-            .delete(id, object, facts, context)
+            .call_native(|port| port.delete(id, object, facts, context))?
             .map_err(|cause| native(operation.key, Code::DeleteUncertain, cause))?;
         state
-            .port
-            .close(id, context)
+            .call_native(|port| port.close(id, context))?
             .map_err(|cause| native(operation.key, Code::DeleteUncertain, cause))?;
         if !state
-            .port
-            .absent(object, context)
+            .call_native(|port| port.absent(object, context))?
             .map_err(|cause| native(operation.key, Code::DeleteUncertain, cause))?
         {
             return Err(error(operation.key, Code::DeleteUncertain));
         }
         check(&mut state, operation.key, context, false)?;
-        state.deletion = None;
-        state.inventory_complete = false;
+        state.data_mut()?.deletion = None;
+        state.data_mut()?.inventory_complete = false;
         Ok(DiagnosticDeletion { object, facts })
     }
 }
 pub(super) fn permit_check(
-    state: &State,
+    state: &mut StateAccess<'_>,
     shared: &Shared,
     permit: &DurableDeletionPermit,
     key: LogicalStoreOperationKey,
 ) -> Result<(), DiagnosticStorageError> {
-    if !Arc::ptr_eq(shared, &permit.shared)
+    if !Shared::ptr_eq(shared, &permit.shared)
         || permit.operation != key
         || state
+            .data_mut()?
             .deletion
             .as_ref()
             .is_none_or(|value| value.id != permit.id || value.journal.is_none())

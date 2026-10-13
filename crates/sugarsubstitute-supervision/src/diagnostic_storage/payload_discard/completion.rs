@@ -46,15 +46,16 @@ impl DiagnosticStorage {
             )?
         } else {
             state
-                .port
-                .reconcile_activation(
-                    object,
-                    DiagnosticPredecessor::Exact {
-                        file_identity: candidate.identity,
-                        sha256: candidate.sha256,
-                    },
-                    context,
-                )
+                .call_native(|port| {
+                    port.reconcile_activation(
+                        object,
+                        DiagnosticPredecessor::Exact {
+                            file_identity: candidate.identity,
+                            sha256: candidate.sha256,
+                        },
+                        context,
+                    )
+                })?
                 .map_err(|cause| native(operation.key, Code::ActivationUncertain, cause))?
         };
         if !candidate.matches(facts) {
@@ -89,7 +90,7 @@ impl DiagnosticStorage {
     }
 }
 pub(super) fn journal_check(
-    state: &mut State,
+    state: &mut StateAccess<'_>,
     id: u64,
     key: LogicalStoreOperationKey,
     context: &JobContext,
@@ -108,8 +109,7 @@ pub(super) fn journal_check(
         return Err(error(key, Code::ChangedIdentity));
     }
     let actual = state
-        .port
-        .observe_file(native_id, context)
+        .call_native(|port| port.observe_file(native_id, context))?
         .map_err(|cause| native(key, Code::Read, cause))?;
     if actual != facts {
         return Err(error(key, Code::ChangedIdentity));
@@ -117,7 +117,7 @@ pub(super) fn journal_check(
     check(state, key, context, false)
 }
 fn settle_victim(
-    state: &mut State,
+    state: &mut StateAccess<'_>,
     id: u64,
     index: usize,
     key: LogicalStoreOperationKey,
@@ -132,15 +132,13 @@ fn settle_victim(
         if !victim.issued {
             intent(state, id, key)?.victims[index].attempted = true;
             state
-                .port
-                .delete(native_id, object, facts, context)
+                .call_native(|port| port.delete(native_id, object, facts, context))?
                 .map_err(|cause| native(key, Code::DeleteUncertain, cause))?;
             intent(state, id, key)?.victims[index].issued = true;
             check(state, key, context, false)?;
         }
         state
-            .port
-            .close(native_id, context)
+            .call_native(|port| port.close(native_id, context))?
             .map_err(|cause| native(key, Code::DeleteUncertain, cause))?;
         let victim = &mut intent(state, id, key)?.victims[index];
         victim.closed = true;
@@ -149,14 +147,13 @@ fn settle_victim(
     }
     if !intent(state, id, key)?.victims[index].absent {
         if !state
-            .port
-            .absent(object, context)
+            .call_native(|port| port.absent(object, context))?
             .map_err(|cause| native(key, Code::DeleteUncertain, cause))?
         {
             return Err(error(key, Code::DeleteUncertain));
         }
         intent(state, id, key)?.victims[index].absent = true;
-        state.inventory_complete = false;
+        state.data_mut()?.inventory_complete = false;
         check(state, key, context, false)?;
     }
     Ok(())

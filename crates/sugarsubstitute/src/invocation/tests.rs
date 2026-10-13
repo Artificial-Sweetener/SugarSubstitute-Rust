@@ -367,22 +367,12 @@ fn native_capture_fixture_dispatch_requires_exact_role_and_complete_inputs()
 -> Result<(), Box<dyn Error>> {
     let arguments: Vec<OsString> = [
         "--internal-native-capture-fixture",
-        "--client",
-        r"E:\bundle\client.dll",
-        "--handler",
-        r"E:\bundle\handler.exe",
         "--capture-root",
         r"D:\proof\protected",
-        "--client-sha256",
-        &"01".repeat(32),
-        "--handler-sha256",
-        &"02".repeat(32),
         "--namespace",
         &"03".repeat(32),
         "--epoch",
         &"04".repeat(16),
-        "--build",
-        "fixture-build",
         "--receipt",
         r"D:\proof\receipt.json",
     ]

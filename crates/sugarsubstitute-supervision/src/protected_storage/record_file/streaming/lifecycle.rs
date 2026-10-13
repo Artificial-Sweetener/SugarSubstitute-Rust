@@ -2,15 +2,12 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Settle exact activation and by-handle disposition under retained exclusion.
 use super::*;
-use windows::{
-    Win32::{Foundation::ERROR_FILE_NOT_FOUND, Storage::FileSystem::*},
-    core::PCWSTR,
-};
+use windows::Win32::Storage::FileSystem::*;
 impl StreamingPort {
     fn writer_check(&self, context: &JobContext) -> Result<(), ClaimError> {
         self.check(context)?;
         if !self.writer.as_ref().is_some_and(HeldFile::is_locked) {
-            return Err(ClaimError::invalid("diagnostic_no_exclusion"));
+            return Err(self.reject());
         }
         Ok(())
     }
@@ -22,46 +19,61 @@ impl StreamingPort {
         context: &JobContext,
     ) -> Result<DiagnosticReadFacts, ClaimError> {
         self.writer_check(context)?;
-        let target = self.path(object)?;
+        let target = self.path(object, context)?;
         match expected {
             DiagnosticPredecessor::Absent => {
                 if !self.absent_owned(object, context)? {
-                    return Err(ClaimError::invalid("diagnostic_existing_predecessor"));
+                    return Err(self.invalid("diagnostic_existing_predecessor"));
                 }
             }
             DiagnosticPredecessor::Exact { file_identity, sha256 } => {
                 let (prior, facts) =
                     self.open_owned(target.clone(), object.bound(), false, context)?;
                 if facts.identity != file_identity || facts.sha256 != sha256 {
-                    return Err(ClaimError::invalid("diagnostic_changed_predecessor"));
+                    return Err(self.invalid("diagnostic_changed_predecessor"));
                 }
                 self.close(prior, context)?;
             }
         }
         let index = self.index(id)?;
-        if !self.files[index].stage || self.files[index].deleted {
-            return Err(ClaimError::invalid("diagnostic_nonstage_activation"));
+        let fields = self.files[index].fields()?;
+        if !fields.stage || fields.deleted {
+            return Err(self.reject());
         }
-        let prior = self.files[index]
-            .facts
-            .ok_or_else(|| ClaimError::invalid("diagnostic_unflushed_stage"))?;
+        let prior = fields.facts.ok_or_else(|| self.reject())?;
         if self.observe(index, context)? != prior {
-            return Err(ClaimError::invalid("diagnostic_changed_stage"));
+            return Err(self.invalid("diagnostic_changed_stage"));
         }
-        let units = paths::wide(&target)?;
-        self.check(context)?;
-        super::super::activate(
-            &self.files[index].handle,
-            &units,
+        let mut session = session::Session::path(&self.original, context)?;
+        let mut phase = session.phase(context);
+        let fields = self.files[index].fields_mut()?;
+        let result = super::super::native::rename(
+            &fields.handle,
+            target.path()?,
             matches!(expected, DiagnosticPredecessor::Exact { .. }),
-        )?;
-        self.files[index].path = target;
-        let actual = self.flush_owned(id, context)?;
-        if actual != prior
-            || paths::final_path(&self.files[index].handle)? != self.files[index].path
-        {
-            return Err(ClaimError::invalid("diagnostic_changed_activation"));
+            &mut phase,
+        );
+        if result.is_ok() {
+            fields.path = target;
         }
+        phase.post_context(result, context)?;
+
+        drop(session);
+        let actual = self.flush_owned(id, context)?;
+        if actual != prior {
+            return Err(self.invalid("diagnostic_changed_activation"));
+        }
+        let mut session = session::Session::path(&self.original, context)?;
+        let mut phase = session.phase(context);
+        let destination = phase.name_destination()?;
+        let actual_path =
+            paths::final_path(&self.files[index].fields()?.handle, &mut phase, destination)?;
+        if actual_path.path()? != self.files[index].fields()?.path.path()? {
+            return Err(phase.invalid("diagnostic_changed_activation_path"));
+        }
+        drop(actual_path);
+
+        drop(session);
         self.close(id, context)?;
         Ok(actual)
     }
@@ -73,33 +85,48 @@ impl StreamingPort {
     ) -> Result<DiagnosticReadFacts, ClaimError> {
         self.writer_check(context)?;
         let DiagnosticPredecessor::Exact { file_identity, sha256 } = expected else {
-            return Err(ClaimError::invalid("diagnostic_unchecked_reconcile"));
+            return Err(self.reject());
         };
-        let path = self.path(object)?;
-        let mut retained = self.files.iter().filter(|file| {
-            file.path == path && file.writable && !file.deleted && !file.handle.raw().0.is_null()
-        });
-        let id = retained.next().map(|file| file.id);
-        if retained.next().is_some() {
-            return Err(ClaimError::invalid("diagnostic_ambiguous_reconcile"));
-        }
-        let (id, facts) = if let Some(id) = id {
-            let index = self.index(id)?;
-            if paths::final_path(&self.files[index].handle)? != path {
-                return Err(ClaimError::invalid("diagnostic_changed_reconcile_path"));
+        let path = self.path(object, context)?;
+        let mut retained = None;
+        for file in &self.files {
+            let fields = file.fields()?;
+            if fields.path.path()? == path.path()?
+                && file.writable()?
+                && !fields.deleted
+                && file.has_output()
+            {
+                if retained.is_some() {
+                    return Err(self.reject());
+                }
+                retained = Some(fields.id);
             }
+        }
+        let (id, facts) = if let Some(id) = retained {
+            let index = self.index(id)?;
+            let mut session = session::Session::path(&self.original, context)?;
+            let mut phase = session.phase(context);
+            let destination = phase.name_destination()?;
+            let actual_path =
+                paths::final_path(&self.files[index].fields()?.handle, &mut phase, destination)?;
+            if actual_path.path()? != path.path()? {
+                return Err(phase.invalid("diagnostic_changed_reconcile_path"));
+            }
+            drop(actual_path);
+
+            drop(session);
             let facts = self.observe(index, context)?;
-            self.files[index].facts = Some(facts);
+            self.files[index].fields_mut()?.facts = Some(facts);
             (id, facts)
         } else {
             self.open_file(path, object.bound(), false, true, context)?
         };
         if facts.identity != file_identity || facts.sha256 != sha256 {
-            return Err(ClaimError::invalid("diagnostic_changed_reconcile"));
+            return Err(self.invalid("diagnostic_changed_reconcile"));
         }
         let actual = self.flush_owned(id, context)?;
         if actual != facts {
-            return Err(ClaimError::invalid("diagnostic_changed_reconcile"));
+            return Err(self.invalid("diagnostic_changed_reconcile"));
         }
         self.close(id, context)?;
         Ok(actual)
@@ -113,31 +140,37 @@ impl StreamingPort {
     ) -> Result<(), ClaimError> {
         self.writer_check(context)?;
         let index = self.index(id)?;
-        if self.files[index].path != self.path(object)? || self.files[index].facts != Some(expected)
-        {
-            return Err(ClaimError::invalid("diagnostic_changed_deletion"));
+        let target = self.path(object, context)?;
+        let fields = self.files[index].fields()?;
+        if fields.path.path()? != target.path()? || fields.facts != Some(expected) {
+            return Err(self.reject());
         }
-        if self.files[index].deleted {
+        if fields.deleted {
             return Ok(());
         }
         if self.observe(index, context)? != expected {
-            return Err(ClaimError::invalid("diagnostic_changed_deletion"));
+            return Err(self.invalid("diagnostic_changed_deletion"));
         }
+        let mut session = session::Session::path(&self.original, context)?;
+        let mut phase = session.phase(context);
         let information = FILE_DISPOSITION_INFO { DeleteFile: true };
-        self.check(context)?;
-        // SAFETY: The exact retained DELETE-capable file is validated immediately
-        // above. Initialized native disposition remains live through the call.
-        unsafe {
+        phase.context(context)?;
+        let fields = self.files[index].fields_mut()?;
+        // SAFETY: The exact retained DELETE-capable file and initialized disposition
+        // remain alive through the synchronous native result and its adoption.
+        let result = unsafe {
             SetFileInformationByHandle(
-                self.files[index].handle.raw(),
+                fields.handle.raw(),
                 FileDispositionInfo,
                 (&information as *const FILE_DISPOSITION_INFO).cast(),
                 size_of::<FILE_DISPOSITION_INFO>() as u32,
             )
         }
-        .map_err(|cause| ClaimError::new("diagnostic_disposition", cause))?;
-        self.files[index].deleted = true;
-        self.check(context)
+        .map_err(|cause| phase.error("diagnostic_disposition", BoundedNativeCause::Windows(cause)));
+        if result.is_ok() {
+            fields.deleted = true;
+        }
+        phase.post_context(result, context)
     }
     pub(super) fn absent_owned(
         &mut self,
@@ -145,51 +178,35 @@ impl StreamingPort {
         context: &JobContext,
     ) -> Result<bool, ClaimError> {
         self.check(context)?;
-        let path = self.path(object)?;
-        let units = paths::wide(&path)?;
-        let id = self.next;
-        self.next =
-            id.checked_add(1).ok_or_else(|| ClaimError::invalid("diagnostic_lease_exhausted"))?;
-        if self.files.len() >= FILE_SLOTS {
-            return Err(ClaimError::invalid("diagnostic_file_capacity"));
-        }
-        // SAFETY: The pinned protected directory and bounded canonical name stay
-        // retained; OPEN_EXISTING cannot create or mutate a missing target.
-        let result = unsafe {
-            CreateFileW(
-                PCWSTR(units.as_ptr()),
-                FILE_READ_ATTRIBUTES.0 | READ_CONTROL.0,
-                FILE_SHARE_READ,
-                None,
-                OPEN_EXISTING,
-                FILE_FLAG_OPEN_REPARSE_POINT,
-                None,
-            )
-        };
-        let raw = match result {
-            Err(cause) if cause.code() == ERROR_FILE_NOT_FOUND.to_hresult() => {
+        let path = self.path(object, context)?;
+        let mut session = session::Session::path(&self.original, context)?;
+        let index = self.reserve_file(path.clone(), 0, FileGrant::MetadataReadOnly, context)?;
+        let original = self.original_context.as_ref().ok_or_else(|| self.reject())?;
+        let sid = self.sid.as_ref().ok_or_else(|| self.reject())?.bytes()?;
+        let opened =
+            self.files[index].open(Some(sid), original, context, &mut session.phase(context));
+        if let Err(cause) = opened {
+            if self.files[index].missing_without_output(&cause) {
+                self.files.remove(index);
                 self.check(context)?;
-                self.files.retain(|file| {
-                    file.path != path || !file.deleted || !file.handle.raw().0.is_null()
-                });
+                let mut index = 0;
+                while index < self.files.len() {
+                    let fields = self.files[index].fields()?;
+                    if fields.path.path()? == path.path()?
+                        && fields.deleted
+                        && !self.files[index].has_output()
+                    {
+                        self.files.remove(index);
+                    } else {
+                        index += 1;
+                    }
+                }
                 return Ok(true);
             }
-            Err(cause) => return Err(ClaimError::new("diagnostic_absence", cause)),
-            Ok(raw) => raw,
-        };
-        let index = self.files.len();
-        self.files.push(NativeFile {
-            id,
-            handle: Handle::new(raw, Budget::Protected(self.memory.clone())),
-            path,
-            facts: None,
-            bound: 0,
-            stage: false,
-            writable: false,
-            deleted: false,
-        });
-        paths::validate_regular(&self.files[index].handle, None)?;
-        security::verify(&self.files[index].handle, &self.sid)?;
+            return Err(cause);
+        }
+        let id = self.files[index].fields()?.id;
+        drop(session);
         self.close(id, context)?;
         Ok(false)
     }

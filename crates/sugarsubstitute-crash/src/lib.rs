@@ -18,10 +18,13 @@ mod input;
 mod native;
 #[cfg(windows)]
 pub use capture::{
-    CaptureBootstrapRejection, CaptureSnapshot, CaptureUpdates, StartRejected, WindowsCrashCapture,
+    CaptureBootstrapRejection, CaptureBuildIdentity, CaptureCreator, CaptureSnapshot,
+    CaptureUpdates, StartRejected, WindowsCrashCapture,
 };
 pub use error::{CrashAdmissionError, CrashError};
 pub use input::CaptureStartInput;
+#[cfg(windows)]
+pub use native::desktop_driver::{DesktopCaptureDriverAlreadyCreated, desktop_capture_driver};
 
 pub mod incident;
 /// Format bounded charged redacted incident facts for native presentation.

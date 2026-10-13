@@ -9,7 +9,13 @@ import tarfile
 from prepare_source import PINNED, transform
 
 AUTHORED = frozenset({"BUILD.gn", "capture_bridge.h", "capture_bridge.cc", "owned_start.h",
-                     "owned_registration.cc", "owned_registration_tests.cc",
+                     "owned_registration.cc", "owned_registration_tests.cc", "owned_connection.h", "owned_connection.cc",
+                     "capture_endpoint.h", "capture_source.h", "capture_source.cc", "capture_source_tests.cc",
+                     "capture_attach_v2.h", "capture_attach_validation.h", "capture_attach_validation.cc", "capture_attach_validation_tests.cc",
+                     "owned_attach.h", "owned_attach.cc", "owned_attach_protocol.cc", "owned_attach_tests.cc",
+                     "capture_event.h", "capture_event.cc", "capture_event_tests.cc",
+                     "capture_attach_boundary.h", "capture_attach_boundary.cc", "capture_attach_boundary_tests.cc",
+                     "owned_attach_test_support.h", "capture_runtime_tests.cc", "capture_runtime_test_source.py",
                      "bounded_metadata.h", "bounded_metadata.cc", "bounded_metadata_tests.cc", "incident_bridge.h", "incident_bridge.cc", "incident_bridge_tests.cc"})
 PACKAGES = (
     ("crashpad", "60dd943f48d77dc8d05dabc04badbd8561d0b8c4", "96dfd1ecdf44095f1feaf893ce189d267707d11b5866f8f3474ee34188bdc2b8", "", "crashpad"),
@@ -35,7 +41,7 @@ def authored_inputs(authored):
     regular(authored)
     paths = list(authored.iterdir())
     if {path.name for path in paths} != AUTHORED:
-        raise ValueError("Authored native source inventory differs from reviewed twelve files")
+        raise ValueError("Authored native source inventory differs from reviewed exact source set")
     for path in paths:
         regular(path)
         if not path.is_file():
@@ -66,7 +72,7 @@ def archive_files(archive_path, prefix):
             if stream is None:
                 raise ValueError("Immutable archive member is unavailable")
             with stream:
-                # Only the four reviewed patch inputs need retained bytes.
+                # Only the reviewed patch inputs need retained bytes.
                 yield relative, stream
 
 

@@ -1,0 +1,308 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Artificial Sweetener and contributors
+//! Ingest actual coordinator output off the UI thread with one pull/frame/job in flight.
+//! The composing host owns channel authentication, scopes and execution shutdown.
+//! A wire reply grants matching data only. Delivery ACK advances only after the
+//! actual finite parser result is observed; EOF never establishes process retirement.
+mod errors;
+mod snapshot;
+mod state;
+mod worker;
+pub(crate) use errors::OutputError;
+pub(crate) use snapshot::OutputSnapshot;
+use std::num::NonZeroU64;
+use sugarsubstitute_contracts::{execution::*, lifecycle::*};
+use sugarsubstitute_execution::{ExecutionClient, windows_lifecycle_pipe::ReceivedLifecycleFrame};
+use sugarsubstitute_supervision::lifecycle_protocol::{
+    FrameCodec, LeaseReference, WireHeader, WireMessage, WirePayload,
+};
+/// Existing application's conservative transcript allocation bound; not a new cap.
+pub(crate) const SOURCE_BYTES: u64 =
+    sugarsubstitute_application::transcript::MAX_OWNER_ALLOCATION_BYTES as u64;
+/// One existing32KiB bounded batch copy, separately admitted before allocating it.
+pub(crate) const TRANSFER_BYTES: u64 =
+    sugarsubstitute_contracts::transcript::MAX_BATCH_BYTES as u64;
+/// Matching facts supplied after the composing channel/resource authorization.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct OutputBinding {
+    /// Exact transcript resource including coordinator and acquisition generation.
+    pub(crate) resource: ResourceKey,
+    /// Current registered child run.
+    pub(crate) run: RunKey,
+    /// Current authenticated channel connection.
+    pub(crate) connection: ConnectionId,
+    /// Exact managed lease whose output is being read.
+    pub(crate) lease: LeaseReference,
+}
+#[derive(Clone, Copy)]
+struct Pending {
+    header: WireHeader,
+    original: Moment,
+    admitted: bool,
+}
+/// Successful finite parser result; the original guard survives semantic consumption.
+pub(crate) struct AppliedOutput {
+    /// Exact original request to pass to the channel's consume_reply.
+    pub(crate) header: WireHeader,
+    /// Original source frame, retained until the composing owner finishes consumption.
+    pub(crate) frame: ReceivedLifecycleFrame,
+    /// Actual accepted transcript mutation, or no mutation for OutputIdle.
+    pub(crate) change: Option<sugarsubstitute_contracts::transcript::TranscriptChange>,
+    /// Bounded styled view with original source custody for presentation.
+    pub(crate) snapshot: Option<OutputSnapshot>,
+}
+/// Own one transcript source, one real frame and one finite parser job.
+/// Dropping while work is active keeps source/frame with the worker; the host must
+/// observe the actual job and scope/worker settlement before claiming shutdown.
+pub(crate) struct OutputOwner {
+    source: state::Source,
+    binding: OutputBinding,
+    pending: Option<Pending>,
+    acknowledged: Option<NonZeroU64>,
+    job: Option<OwnedJob<worker::Parsed, OutputError>>,
+    noticed: Option<TerminalKind>,
+    terminal: Option<JobCompletion<worker::Parsed, OutputError>>,
+    closed: bool,
+}
+impl OutputOwner {
+    /// Admit a finite constructor and claim16MiB before any transcript/control allocation.
+    /// The caller consumes its actual completion through the central routing owner.
+    /// # Errors
+    /// Preserves genuine admission/claim/control errors; no native operation occurs.
+    pub(crate) fn submit_new(
+        client: &ExecutionClient,
+        scope: &Scope,
+        job: JobId,
+        binding: OutputBinding,
+        original: Moment,
+    ) -> Result<OwnedJob<Self, OutputError>, AdmissionError> {
+        client.submit_blocking(scope, spec(job, original, SOURCE_BYTES), move |context| {
+            if binding.lease.resource != binding.resource.id
+                || binding.lease.generation != binding.resource.generation
+                || binding.run.owner != binding.resource.owner
+            {
+                return Err(OutputError::Identity);
+            }
+            Ok(Self {
+                source: state::Source::new(binding, &context)?,
+                binding,
+                pending: None,
+                acknowledged: None,
+                job: None,
+                noticed: None,
+                terminal: None,
+                closed: false,
+            })
+        })
+    }
+    /// Retain the channel's exact original pair before attempting its native send.
+    /// # Errors
+    /// Rejects duplicate/closed pulls or full run/connection/request mismatch.
+    pub(crate) fn prepare_pull(
+        &mut self,
+        header: WireHeader,
+        original: Moment,
+    ) -> Result<WireMessage<'static>, OutputError> {
+        if self.closed || self.pending.is_some() || self.job.is_some() || self.terminal.is_some() {
+            return Err(OutputError::Order);
+        }
+        if header.run != self.binding.run
+            || header.connection != Some(self.binding.connection)
+            || header.request.is_none()
+            || header.deadline_qpc <= 0
+        {
+            return Err(OutputError::Identity);
+        }
+        self.pending = Some(Pending { header, original, admitted: false });
+        Ok(WireMessage {
+            header,
+            payload: WirePayload::OutputPull {
+                lease: self.binding.lease,
+                acknowledged_delivery: self.acknowledged,
+            },
+        })
+    }
+    /// Reborrow the same prepared pull through transport contention, never renew deadlines.
+    pub(crate) fn pending_pull(&self) -> Option<(WireMessage<'static>, Moment)> {
+        self.pending.filter(|p| !p.admitted).map(|p| {
+            (
+                WireMessage {
+                    header: p.header,
+                    payload: WirePayload::OutputPull {
+                        lease: self.binding.lease,
+                        acknowledged_delivery: self.acknowledged,
+                    },
+                },
+                p.original,
+            )
+        })
+    }
+    /// Record only after the actual channel accepted the prepared request.
+    /// # Errors
+    /// Rejects duplicate/changed admission without releasing its original pair.
+    pub(crate) fn admitted_pull(&mut self, header: WireHeader) -> Result<(), OutputError> {
+        let pending = self.pending.as_mut().ok_or(OutputError::Order)?;
+        if pending.header != header || pending.admitted || self.closed {
+            return Err(OutputError::Order);
+        }
+        pending.admitted = true;
+        Ok(())
+    }
+    /// Move a genuine frame before admitting finite worker parsing; UI performs no text parsing.
+    /// # Errors
+    /// Rejection leaves the identical guard in the caller slot until adoption; after adoption
+    /// this owner retains it through actual worker settlement, including admission failure.
+    pub(crate) fn submit_frame(
+        &mut self,
+        client: &ExecutionClient,
+        scope: &Scope,
+        job: JobId,
+        frame: &mut Option<ReceivedLifecycleFrame>,
+    ) -> Result<(), OutputError> {
+        if self.closed
+            || self.job.is_some()
+            || self.terminal.is_some()
+            || !self.pending.is_some_and(|p| p.admitted)
+        {
+            return Err(OutputError::Order);
+        }
+        let Some(pending) = self.pending else {
+            return Err(OutputError::Order);
+        };
+        let mut state = match self.source.state.lock() {
+            Ok(s) => s,
+            Err(_) => {
+                return Err(OutputError::Poisoned);
+            }
+        };
+        if state.frame.is_some() {
+            return Err(OutputError::Order);
+        }
+        state.frame = Some(frame.take().ok_or(OutputError::Order)?);
+        drop(state);
+        let source = self.source.clone();
+        let binding = self.binding;
+        let acknowledged = self.acknowledged;
+        match client.submit_blocking(
+            scope,
+            spec(job, pending.original, TRANSFER_BYTES),
+            move |context| worker::parse(&source, binding, pending, acknowledged, &context),
+        ) {
+            Ok(job) => {
+                self.job = Some(job);
+                self.noticed = None;
+                Ok(())
+            }
+            Err(error) => Err(OutputError::Admission(error)),
+        }
+    }
+    /// Capture only actual matching completion notices; foreign jobs cannot consume this slot.
+    pub(crate) fn capture(&mut self, batch: &CompletionBatch) {
+        if let Some(job) = &self.job {
+            for n in &batch.notifications {
+                if (n.scope_id, n.job_id) == (job.scope_id(), job.spec().id) {
+                    self.noticed = Some(n.kind)
+                }
+            }
+        }
+    }
+    /// Consume one actual successful worker result before permitting a delivery ACK.
+    /// # Errors
+    /// Failed/cancelled/panicked/mismatched completions retain original frame and terminal data.
+    pub(crate) fn take_applied(&mut self) -> Result<Option<AppliedOutput>, OutputError> {
+        let Some(noticed) = self.noticed else { return Ok(None) };
+        let Some(job) = &mut self.job else { return Ok(None) };
+        let Some(completion) = job.try_take_completion() else { return Ok(None) };
+        let matching = completion.scope_id == job.scope_id()
+            && completion.spec == job.spec()
+            && completion.outcome.kind() == noticed;
+        self.job = None;
+        self.noticed = None;
+        if !matching || self.closed || completion.outcome.kind() != TerminalKind::Success {
+            let kind = completion.outcome.kind();
+            self.terminal = Some(completion);
+            self.closed = true;
+            return Err(if matching { OutputError::Terminal(kind) } else { OutputError::Identity });
+        }
+        let Some(pending) = self.pending else {
+            self.terminal = Some(completion);
+            self.closed = true;
+            return Err(OutputError::Order);
+        };
+        let frame = match self.source.state.lock() {
+            Ok(mut state) => state.frame.take(),
+            Err(_) => {
+                self.terminal = Some(completion);
+                self.closed = true;
+                return Err(OutputError::Poisoned);
+            }
+        };
+        let Some(frame) = frame else {
+            self.terminal = Some(completion);
+            self.closed = true;
+            return Err(OutputError::Order);
+        };
+        let JobOutcome::Success(parsed) = completion.outcome else {
+            self.closed = true;
+            return Err(OutputError::Identity);
+        };
+        self.pending = None;
+        if let Some(delivery) = parsed.delivery {
+            self.acknowledged = Some(delivery)
+        }
+        Ok(Some(AppliedOutput {
+            header: pending.header,
+            frame,
+            change: parsed.change,
+            snapshot: parsed.snapshot,
+        }))
+    }
+    /// Close admission and request actual job cancellation without claiming it has stopped.
+    pub(crate) fn close(&mut self) {
+        self.closed = true;
+        if let Some(job) = &self.job {
+            job.cancel();
+        }
+    }
+    /// Observe whether an actual parser job still needs its terminal completion.
+    pub(crate) const fn worker_pending(&self) -> bool {
+        self.job.is_some()
+    }
+    /// Borrow the exact retained failure/panic outcome for the composing failure owner.
+    pub(crate) fn failure(&self) -> Option<&OutputError> {
+        match self.terminal.as_ref().map(|c| &c.outcome) {
+            Some(JobOutcome::Failure(e)) => Some(e),
+            _ => None,
+        }
+    }
+    /// Borrow the actual bounded supervised panic without replacing its cause.
+    pub(crate) fn panic_cause(&self) -> Option<&PanicCause> {
+        match self.terminal.as_ref().map(|c| &c.outcome) {
+            Some(JobOutcome::Panicked(e)) => Some(e),
+            _ => None,
+        }
+    }
+    /// Transfer an unconsumed original frame only after the actual parser job ended.
+    /// # Errors
+    /// A live worker or poisoned retained state blocks transfer, preserving custody.
+    pub(crate) fn take_unparsed_frame(
+        &mut self,
+    ) -> Result<Option<ReceivedLifecycleFrame>, OutputError> {
+        if self.job.is_some() {
+            return Err(OutputError::Order);
+        }
+        Ok(self.source.state.lock().map_err(|_| OutputError::Poisoned)?.frame.take())
+    }
+}
+fn spec(id: JobId, deadline: Moment, bytes: u64) -> JobSpec {
+    JobSpec {
+        id,
+        operation: Operation::Infrastructure,
+        class: JobClass::InfrastructureOrdinary,
+        deadline: Some(deadline),
+        reservation_bytes: bytes,
+        replacement: None,
+    }
+}
+#[cfg(test)]
+mod tests;

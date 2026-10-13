@@ -1,0 +1,301 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Artificial Sweetener and contributors
+//! Project one original authenticated entry under its admitted finite allocation.
+#[cfg(test)]
+#[path = "projection_tests.rs"]
+mod tests;
+use std::{error::Error, ffi::OsString, fmt, os::windows::ffi::OsStringExt, path::PathBuf};
+use sugarsubstitute_contracts::{
+    configuration::{LaunchConfiguration, ProfileId},
+    coordinator_entry::{
+        EntryConnectionId, EntryConnectionView, EntryLaunchRequestView, EntryRequestId,
+        EntryWindowsPathView,
+    },
+    execution::{JobContext, MemoryClaim, MemoryClaimError, Moment},
+    lifecycle::BackendTarget,
+};
+use sugarsubstitute_execution::{
+    AuthenticatedEntryLaunch, ChargedBlockingInput, PreparedStartupSnapshot,
+};
+use sugarsubstitute_supervision::{
+    LaunchEnvironment, installed_frontend::FrontendInstallationInput,
+};
+
+/// Bound known projection buffers; the original frame keeps its own native loan.
+pub(super) const PROJECTION_BYTES: u64 = 4 * 1024 * 1024;
+// The other two MiB remain available for distinct funded parent lifecycle storage.
+const PROJECTION_DATA_BYTES: u64 = 2 * 1024 * 1024
+    - size_of::<super::Record>() as u64
+    - super::RetainedBackend::required_storage_bytes()
+    - super::delivery::TransitionDelivery::storage_bytes()
+    - size_of::<ProjectionInput>() as u64;
+
+/// Keep the real frame and configured inert capture location across admission rejection.
+pub(super) struct ProjectionInput {
+    request: Option<AuthenticatedEntryLaunch>,
+    snapshot: Option<PreparedStartupSnapshot>,
+    capture_root: PathBuf,
+    cause: ProjectionCause,
+    post: Option<ControlFailure>,
+    _charge: Option<MemoryClaim>,
+}
+impl ProjectionInput {
+    pub(super) fn new(request: AuthenticatedEntryLaunch, capture_root: PathBuf) -> Self {
+        Self {
+            request: Some(request),
+            snapshot: None,
+            capture_root,
+            cause: ProjectionCause::NotStarted,
+            post: None,
+            _charge: None,
+        }
+    }
+    pub(super) fn rejected_request(self) -> Option<AuthenticatedEntryLaunch> {
+        self.request
+    }
+}
+/// Keep all projected data and the original snapshot ahead of its retained charge.
+/// Paths remain lexical; frontend, claims and profile owners perform actual trust checks.
+pub(super) struct ProjectedEntry {
+    pub(super) snapshot: Option<PreparedStartupSnapshot>,
+    pub(super) until: Moment,
+    pub(super) entry_connection: EntryConnectionId,
+    pub(super) entry_request: EntryRequestId,
+    pub(super) capture_root: PathBuf,
+    pub(super) requested_profile: PathBuf,
+    pub(super) profile_units: Vec<u16>,
+    pub(super) profile: ProfileId,
+    pub(super) target: BackendTarget,
+    pub(super) frontend: Option<FrontendInstallationInput>,
+    pub(super) backend_environment: Option<LaunchEnvironment>,
+    pub(super) desktop_environment: Option<LaunchEnvironment>,
+    _charge: MemoryClaim,
+}
+
+/// Preserve the original failure and frame through late cancellation or rejection.
+pub(super) struct ProjectionFailure {
+    retained: ChargedBlockingInput<ProjectionInput>,
+}
+enum ProjectionCause {
+    NotStarted,
+    Claim(MemoryClaimError),
+    Operation(Box<dyn Error + Send + Sync>),
+}
+impl ProjectionCause {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::NotStarted => None,
+            Self::Claim(cause) => Some(cause),
+            Self::Operation(cause) => Some(cause.as_ref()),
+        }
+    }
+}
+impl fmt::Debug for ProjectionFailure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("EntryProjectionFailure")
+            .field("post_control", &self.retained.input().post)
+            .field("original_retained", &self.retained.input().request.is_some())
+            .finish_non_exhaustive()
+    }
+}
+impl fmt::Display for ProjectionFailure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("Authenticated entry preparation failed")
+    }
+}
+impl Error for ProjectionFailure {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        self.retained.input().cause.source()
+    }
+}
+#[derive(Debug)]
+pub(super) enum ControlFailure {
+    Cancelled,
+    Expired,
+    ClockRegression,
+}
+impl fmt::Display for ControlFailure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Entry projection control: {self:?}")
+    }
+}
+impl Error for ControlFailure {}
+fn check(context: &JobContext, received: Moment, until: Moment) -> Result<(), ControlFailure> {
+    let now = context.now();
+    if context.cancellation_requested() {
+        return Err(ControlFailure::Cancelled);
+    }
+    if now < received {
+        return Err(ControlFailure::ClockRegression);
+    }
+    if now >= until || context.deadline().is_none_or(|deadline| now >= deadline || deadline > until)
+    {
+        return Err(ControlFailure::Expired);
+    }
+    Ok(())
+}
+
+/// Execute only from the existing typed finite worker after its real admission.
+/// The caller retains this complete result/completion until all transferred data retire.
+pub(super) fn project(
+    mut input: ChargedBlockingInput<ProjectionInput>,
+    context: JobContext,
+) -> Result<ProjectedEntry, ProjectionFailure> {
+    let charge = match context.memory().claim(PROJECTION_DATA_BYTES) {
+        Ok(charge) => charge,
+        Err(cause) => {
+            input.input_mut().cause = ProjectionCause::Claim(cause);
+            if let Some(request) = &input.input().request {
+                let post = check(&context, request.received_at(), request.until()).err();
+                input.input_mut().post = post;
+            }
+            return Err(ProjectionFailure { retained: input });
+        }
+    };
+    input.input_mut()._charge = Some(charge);
+    let Some(request) = input.input_mut().request.take() else {
+        return Err(ProjectionFailure { retained: input });
+    };
+    let entry_connection = request.peer().connection();
+    let entry_request = request.request_id();
+    let received = request.received_at();
+    let until = request.until();
+    let outcome = check(&context, received, until)
+        .map_err(|cause| Box::new(cause) as _)
+        .and_then(|()| request.view().map_err(|cause| Box::new(cause) as _))
+        .and_then(|view| {
+            LaunchConfiguration::validate_path(&input.input().capture_root)?;
+            fields(view)
+        });
+    // The same preclaimed slot adopts the primary before any lazy provider.
+    let projected = match outcome {
+        Ok(fields) => Some(fields),
+        Err(cause) => {
+            input.input_mut().cause = ProjectionCause::Operation(cause);
+            None
+        }
+    };
+    let post = check(&context, received, until).err();
+    let fields = match (projected, post) {
+        (Some(fields), None) => fields,
+        (Some(_), Some(cause)) => {
+            input.input_mut().cause = ProjectionCause::Operation(Box::new(cause));
+            input.input_mut().request = Some(request);
+            return Err(ProjectionFailure { retained: input });
+        }
+        (None, post) => {
+            input.input_mut().post = post;
+            input.input_mut().request = Some(request);
+            return Err(ProjectionFailure { retained: input });
+        }
+    };
+    let snapshot = match request.into_startup_snapshot() {
+        Ok(snapshot) => snapshot,
+        Err(rejected) => {
+            input.input_mut().cause = ProjectionCause::Operation(Box::new(rejected.error));
+            input.input_mut().request = Some(rejected.launch);
+            input.input_mut().post = check(&context, received, until).err();
+            return Err(ProjectionFailure { retained: input });
+        }
+    };
+    // Both real claims were admitted before their allocations. The temporary
+    // source box drops before its metadata claim; transferred data keeps its claim.
+    let charge = match input.input_mut()._charge.take() {
+        Some(charge) => charge,
+        None => {
+            input.input_mut().snapshot = Some(snapshot);
+            return Err(ProjectionFailure { retained: input });
+        }
+    };
+    Ok(ProjectedEntry {
+        snapshot: Some(snapshot),
+        until,
+        entry_connection,
+        entry_request,
+        capture_root: std::mem::take(&mut input.input_mut().capture_root),
+        requested_profile: fields.requested_profile,
+        profile_units: fields.profile_units,
+        profile: fields.profile,
+        target: fields.target,
+        frontend: Some(fields.frontend),
+        backend_environment: fields.backend_environment,
+        desktop_environment: Some(fields.desktop_environment),
+        _charge: charge,
+    })
+}
+struct Fields {
+    requested_profile: PathBuf,
+    profile_units: Vec<u16>,
+    profile: ProfileId,
+    target: BackendTarget,
+    frontend: FrontendInstallationInput,
+    backend_environment: Option<LaunchEnvironment>,
+    desktop_environment: LaunchEnvironment,
+}
+fn fields(view: EntryLaunchRequestView<'_>) -> Result<Fields, Box<dyn Error + Send + Sync>> {
+    let profile_units = collect_units(view.profile_directory())?;
+    let requested_profile = PathBuf::from(OsString::from_wide(&profile_units));
+    LaunchConfiguration::validate_path(&requested_profile)?;
+    let profile = ProfileId::new(copy_string(view.profile())?)?;
+    let frontend = view.frontend();
+    let frontend = FrontendInstallationInput::new(
+        path(frontend.package_directory())?,
+        path(frontend.metadata_file())?,
+        path(frontend.cube_directory())?,
+        path(frontend.backend_script())?,
+    )?;
+    let target = match view.connection() {
+        EntryConnectionView::Attached(origin) => BackendTarget::Attached(origin),
+        EntryConnectionView::Managed { root, interpreter, arguments, port } => {
+            let mut owned = Vec::new();
+            owned.try_reserve_exact(arguments.len())?;
+            for argument in arguments.iter() {
+                owned.push(copy_string(argument)?);
+            }
+            BackendTarget::Managed(LaunchConfiguration::new(
+                path(root)?,
+                path(interpreter)?,
+                owned,
+                port.get(),
+            )?)
+        }
+    };
+    let mut environment = Vec::new();
+    environment.try_reserve_exact(view.environment().unit_len())?;
+    environment.extend(view.environment().units());
+    let desktop_environment = LaunchEnvironment::from_snapshot_utf16(&environment, &[])?;
+    let backend_environment = if matches!(target, BackendTarget::Managed(_)) {
+        Some(LaunchEnvironment::from_snapshot_utf16(&environment, &[])?)
+    } else {
+        None
+    };
+    Ok(Fields {
+        requested_profile,
+        profile_units,
+        profile,
+        target,
+        frontend,
+        backend_environment,
+        desktop_environment,
+    })
+}
+fn copy_string(value: &str) -> Result<String, std::collections::TryReserveError> {
+    let mut result = String::new();
+    result.try_reserve_exact(value.len())?;
+    result.push_str(value);
+    Ok(result)
+}
+fn collect_units(
+    value: EntryWindowsPathView<'_>,
+) -> Result<Vec<u16>, std::collections::TryReserveError> {
+    let mut units = Vec::new();
+    units.try_reserve_exact(value.unit_len())?;
+    units.extend(value.units());
+    Ok(units)
+}
+fn path(value: EntryWindowsPathView<'_>) -> Result<PathBuf, Box<dyn Error + Send + Sync>> {
+    let units = collect_units(value)?;
+    let result = PathBuf::from(OsString::from_wide(&units));
+    LaunchConfiguration::validate_path(&result)?;
+    Ok(result)
+}

@@ -23,7 +23,18 @@ def repair_text(text, source, output):
             path_position = line.startswith("build ") or line.startswith("include_dirs = ")
             script_position = line.startswith("  command = ") and "/write_buildflag_header.py " in line
             definition_position = line.startswith("  ldflags = ")
-            if not path_position and not script_position and not definition_position:
+            capture_position = line.startswith("  command = ") and "/sugarsubstitute/capture_runtime_test_source.py --client " in line
+            if capture_position:
+                tails = ["/sugarsubstitute/capture_runtime_test_source.py",
+                         "/client/crashpad_client_win.cc",
+                         "/util/win/critical_section_with_debug_info.cc"]
+                if len(matches) != 3 or [match["suffix"][len(root):] for match in matches] != tails:
+                    raise ValueError("Unexpected generated capture command source")
+                if (not line[matches[0].end():matches[1].start()] == " --client "
+                        or not line[matches[1].end():matches[2].start()] == " --helper "
+                        or line[matches[2].end():].rstrip("\r\n") != " --output gen/sugarsubstitute"):
+                    raise ValueError("Unexpected generated capture command arguments")
+            if not path_position and not script_position and not definition_position and not capture_position:
                 raise ValueError("Unexpected generated Ninja path position")
             for match in matches:
                 suffix = match["suffix"]

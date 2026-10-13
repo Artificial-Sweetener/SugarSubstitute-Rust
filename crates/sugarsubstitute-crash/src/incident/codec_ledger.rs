@@ -3,7 +3,7 @@
 //! Validate an exact eviction tombstone and its single checked ledger transition before effects.
 use super::{
     IncidentStoreError,
-    codec::{STATE_BOUND, decode, encode, required_option, utc},
+    codec::{STATE_BOUND, required_option, utc},
     codec_capture::{CaptureDispositionPlan, CaptureJournalRecord},
     codec_identity::{OperationRecord, SubjectRecord},
     codec_migration::{
@@ -168,16 +168,8 @@ pub enum IncidentStoreState {
     /// Exact summary replacement and immutable payload-generation reclamation intent.
     PayloadDiscard(Box<PayloadDiscardJournal>),
 }
-#[derive(Serialize, Deserialize)]
-#[serde(tag = "record", rename_all = "snake_case", deny_unknown_fields)]
-enum StoreRecord {
-    Ledger { ledger: LedgerRecord },
-    SummaryEviction { journal: Box<JournalRecord> },
-    CapturePromotion { journal: Box<CaptureJournalRecord> },
-    SummaryMigration(Box<MigrationRecord>),
-    SummaryMigrationArchive(Box<MigrationArchiveRecord>),
-    PayloadDiscard { journal: Box<PayloadDiscardRecord> },
-}
+mod record;
+use record::StoreRecord;
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct LedgerRecord {
@@ -280,7 +272,10 @@ struct JournalRecord {
 /// # Errors
 /// Returns strict encoding/bound errors; construction remains separate from durability.
 pub fn encode_store_state(state: &IncidentStoreState) -> Result<Vec<u8>, IncidentStoreError> {
-    encode(
+    super::codec_encode::encode(1, StoreRecord::from(state), STATE_BOUND)
+}
+impl From<&IncidentStoreState> for StoreRecord {
+    fn from(state: &IncidentStoreState) -> Self {
         match state {
             IncidentStoreState::Ledger(ledger) => StoreRecord::Ledger { ledger: (*ledger).into() },
             IncidentStoreState::SummaryEviction(journal) => StoreRecord::SummaryEviction {
@@ -308,15 +303,21 @@ pub fn encode_store_state(state: &IncidentStoreState) -> Result<Vec<u8>, Inciden
             IncidentStoreState::PayloadDiscard(journal) => {
                 StoreRecord::PayloadDiscard { journal: Box::new(journal.as_ref().into()) }
             }
-        },
-        STATE_BOUND,
-    )
+        }
+    }
+}
+#[cfg(windows)]
+pub(super) fn write_store_state<W: std::io::Write>(
+    state: &IncidentStoreState,
+    output: W,
+) -> Result<(), IncidentStoreError> {
+    super::codec_encode::write(1, &StoreRecord::from(state), output)
 }
 /// Decode strict schema-one store bytes and revalidate both ledger hashes and arithmetic.
 /// # Errors
 /// Rejects unknown variants/fields/versions, third states, overflow and identity mismatch.
 pub fn decode_store_state(bytes: &[u8]) -> Result<IncidentStoreState, IncidentStoreError> {
-    Ok(match decode::<StoreRecord>(bytes, STATE_BOUND)? {
+    Ok(match record::decode(bytes)? {
         StoreRecord::Ledger { ledger } => IncidentStoreState::Ledger(ledger.into_ledger()?),
         StoreRecord::SummaryMigration(journal) => {
             IncidentStoreState::SummaryMigration(Box::new(journal.into_journal()?))

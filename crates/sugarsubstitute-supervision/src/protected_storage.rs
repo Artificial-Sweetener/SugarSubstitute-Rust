@@ -10,19 +10,27 @@
 //! Crashpad database contents remain opaque preserved external authoritative data.
 
 pub(crate) mod account;
+mod diagnostic;
 mod directories;
 pub(crate) mod exclusion;
 mod generation;
 mod leaf;
+pub(crate) mod native_file;
+pub(crate) mod native_name;
+pub(crate) mod native_phase;
 pub(crate) mod paths;
 pub(crate) mod record_file;
+mod resolution;
 pub(crate) mod security;
 #[cfg(test)]
 mod tests;
 
 use crate::{
     ClaimError,
-    native_claims::files::{self, Handle},
+    diagnostic_storage::{
+        DiagnosticNativeAllocationFailure, DiagnosticNativeGrant, DiagnosticNativeOwnerLoan,
+    },
+    native_claims::files::{self, Budget, Handle},
 };
 use std::{
     path::{Path, PathBuf},
@@ -33,14 +41,17 @@ use sugarsubstitute_contracts::{
     lifecycle::CoordinatorKey,
 };
 
+use native_file::NativeCauseDestinations;
+use native_name::{NativeName, NativeSid};
 const STORAGE_BYTES: u64 = 1024 * 1024;
 const HANDLE_BOUND: usize = 260;
 
 struct State {
     handles: Vec<Handle>,
-    memory: Arc<MemoryClaim>,
-    sid: Vec<u8>,
-    root: Option<(PathBuf, [u8; 24], usize)>,
+    budget: Budget,
+    sid: NativeSid,
+    root: Option<(NativeName, [u8; 24], usize)>,
+    causes: NativeCauseDestinations,
     attempted: bool,
     generation: Option<ProtectedStorageGeneration>,
     profile_leaf: bool,
@@ -52,6 +63,12 @@ struct State {
 /// Own actual protected root/generation handles and their admitted storage.
 pub struct ProtectedStorageRoot {
     state: Option<Box<State>>,
+    allocation: Option<RootAllocation>,
+}
+/// Keep the root's actual fields/Vec storage charged until after destruction.
+enum RootAllocation {
+    Ordinary(Budget),
+    Diagnostic { original: DiagnosticNativeGrant, _allocation: DiagnosticNativeOwnerLoan },
 }
 
 /// Observe the newly created generation while its owning root remains retained.
@@ -76,6 +93,18 @@ impl ProtectedStorageGeneration {
     }
 }
 impl ProtectedStorageRoot {
+    /// Describe the actual root Box and its complete fixed native-output table.
+    pub(crate) fn diagnostic_owner_layout()
+    -> Result<files::NativeRoleLayout, files::NativeLayoutFailure> {
+        let cells = std::alloc::Layout::array::<Handle>(HANDLE_BOUND)
+            .map_err(|_| files::NativeLayoutFailure::Overflow)?
+            .size();
+        let bytes = std::alloc::Layout::new::<State>()
+            .size()
+            .checked_add(cells)
+            .ok_or(files::NativeLayoutFailure::Overflow)?;
+        Ok(files::NativeRoleLayout { retained: bytes, peak: bytes })
+    }
     /// Retain an actual claim before any native storage effect. Resolution requires 1MiB.
     /// # Errors
     /// Rejects a claim smaller than the fixed 1MiB storage allocation bound.
@@ -89,12 +118,39 @@ impl ProtectedStorageRoot {
         if memory.bytes() < STORAGE_BYTES {
             return Err(ClaimError::invalid("protected_storage_capacity"));
         }
-        Ok(Self {
+        let budget = Budget::Protected(memory);
+        Ok(Self::reserved(
+            budget.clone(),
+            NativeCauseDestinations::ordinary(),
+            RootAllocation::Ordinary(budget),
+        ))
+    }
+    /// Admit the closed root capsule before its Box or native-output vector allocates.
+    /// Allocation custody grants no filesystem authority; resolution uses the actual
+    /// original storage operation through the grant's concrete retained Binding.
+    pub(crate) fn from_diagnostic_grant(
+        original: DiagnosticNativeGrant,
+    ) -> Result<Self, DiagnosticNativeAllocationFailure> {
+        let allocation = original.root_owner()?;
+        let causes = NativeCauseDestinations::admit(&original)?;
+        Ok(Self::reserved(
+            Budget::Diagnostic(original.clone()),
+            causes,
+            RootAllocation::Diagnostic { original, _allocation: allocation },
+        ))
+    }
+    fn reserved(
+        budget: Budget,
+        causes: NativeCauseDestinations,
+        allocation: RootAllocation,
+    ) -> Self {
+        Self {
             state: Some(Box::new(State {
                 handles: Vec::new(),
-                memory,
-                sid: Vec::new(),
+                budget,
+                sid: NativeSid::Ordinary(Vec::new()),
                 root: None,
+                causes,
                 attempted: false,
                 generation: None,
                 profile_leaf: false,
@@ -102,79 +158,26 @@ impl ProtectedStorageRoot {
                 start_deadline: None,
                 close_deadline: None,
             })),
-        })
-    }
-    /// Pin the exact diagnostic namespace beneath the actual protected root.
-    /// # Errors
-    /// Preserves partial handles on context, protection, identity or path failure.
-    pub(crate) fn diagnostic_directory(
-        &mut self,
-        namespace: sugarsubstitute_contracts::lifecycle::NamespaceId,
-        context: &JobContext,
-    ) -> Result<(PathBuf, Vec<u8>), ClaimError> {
-        let state = self.state.as_mut().ok_or_else(|| ClaimError::invalid("retired_storage"))?;
-        bind_context(state, context, false)?;
-        let (mut path, _, mut parent) =
-            state.root.clone().ok_or_else(|| ClaimError::invalid("unresolved_storage"))?;
-        for child in [
-            "diagnostics".to_owned(),
-            "incident-v1".to_owned(),
-            record_file::hex(namespace.bytes()),
-        ] {
-            path.push(child);
-            parent = directories::open_relative(
-                state,
-                &path,
-                parent,
-                directories::Mode::OpenOrCreate,
-                context,
-            )?;
-            path = paths::final_path(&state.handles[parent])?;
+            allocation: Some(allocation),
         }
-        Ok((path, state.sid.clone()))
+    }
+    fn state_mut(&mut self) -> Result<&mut State, ClaimError> {
+        match (&mut self.state, &self.allocation) {
+            (Some(state), _) => Ok(state.as_mut()),
+            (None, Some(RootAllocation::Diagnostic { original, .. })) => {
+                Err(ClaimError::diagnostic_allocation(original.reject_native_state()))
+            }
+            (None, Some(RootAllocation::Ordinary(budget))) => {
+                Err(budget.rejection("retired_storage"))
+            }
+            (None, None) => Err(ClaimError::invalid("retired_storage")),
+        }
     }
     /// Count actual retained native outputs, including partially resolved custody.
     pub(crate) fn live_handles(&self) -> usize {
         self.state.as_ref().map_or(0, |state| {
             state.handles.iter().filter(|handle| !handle.raw().0.is_null()).count()
         })
-    }
-    /// Resolve and retain an existing local root with exact account/System protection.
-    ///
-    /// # Errors
-    /// Rejects repeated resolution, insufficient actual storage, cancellation/deadline,
-    /// uncertain account/path identity, reparses or foreign security. Partial native
-    /// outputs stay owned for later checked retirement in a fresh admitted cleanup job.
-    pub fn resolve(&mut self, path: &Path, context: &JobContext) -> Result<(), ClaimError> {
-        let state = self.state.as_mut().ok_or_else(|| ClaimError::invalid("retired_storage"))?;
-        bind_context(state, context, false)?;
-        check(context)?;
-        if state.memory.bytes() < STORAGE_BYTES || !state.handles.is_empty() || state.root.is_some()
-        {
-            return Err(ClaimError::invalid("storage_resolution_admission"));
-        }
-        paths::wide(path)?;
-        state
-            .handles
-            .try_reserve_exact(HANDLE_BOUND)
-            .map_err(|e| ClaimError::new("storage_handle_reservation", e))?;
-        let budget = files::Budget::Protected(state.memory.clone());
-        let current = account::resolve_current(
-            &mut state.handles,
-            budget.clone(),
-            account::PrimaryAccountAccess::Query,
-        )?;
-        state.sid = current.sid;
-        check(context)?;
-        let index = paths::open_retained(path, true, false, budget.clone(), &mut state.handles)?;
-        let canonical = paths::final_path(&state.handles[index])?;
-        let identity = paths::file_identity(&state.handles[index])?;
-        paths::pin_ancestors(&canonical, &mut state.handles, budget.clone())?;
-        paths::verify_pinned(&canonical, identity, &mut state.handles, true, budget)?;
-        security::verify(&state.handles[index], &state.sid)?;
-        check(context)?;
-        state.root = Some((canonical, identity, index));
-        Ok(())
     }
     /// Exclusively create this coordinator's capture/database/metrics generation.
     ///
@@ -205,6 +208,9 @@ impl ProtectedStorageRoot {
     /// Retrying requires another admitted cleanup operation; no elapsed budget is reset.
     pub fn retire(&mut self, context: &JobContext) -> Result<(), ClaimError> {
         if let Some(state) = &mut self.state {
+            if !state.budget.is_ordinary() {
+                return Err(state.budget.rejection("diagnostic_cleanup_requires_binding"));
+            }
             bind_context(state, context, true)?;
             check(context)?;
             for handle in state.handles.iter_mut().rev() {
@@ -214,6 +220,7 @@ impl ProtectedStorageRoot {
             state.handles.clear();
         }
         self.state = None;
+        self.allocation = None;
         Ok(())
     }
 }
@@ -221,10 +228,13 @@ impl Drop for ProtectedStorageRoot {
     fn drop(&mut self) {
         if let Some(state) = self.state.take() {
             // No handle closure, new allocation or scheduling on the observing thread.
-            if state.handles.is_empty() {
+            if !state.handles.iter().any(Handle::is_armed) {
                 drop(state);
             } else {
                 std::mem::forget(state);
+                if let Some(allocation) = self.allocation.take() {
+                    std::mem::forget(allocation);
+                }
             }
         }
     }
@@ -240,12 +250,12 @@ fn check(context: &JobContext) -> Result<(), ClaimError> {
 }
 fn bind_context(state: &mut State, context: &JobContext, cleanup: bool) -> Result<(), ClaimError> {
     if state.execution.is_some_and(|owner| owner != context.owner_id()) {
-        return Err(ClaimError::invalid("foreign_storage_execution"));
+        return Err(state.budget.rejection("foreign_storage_execution"));
     }
-    let deadline = context.deadline().ok_or_else(|| ClaimError::invalid("storage_deadline"))?;
+    let deadline = context.deadline().ok_or_else(|| state.budget.rejection("storage_deadline"))?;
     let latched = if cleanup { &mut state.close_deadline } else { &mut state.start_deadline };
     if latched.is_some_and(|old| deadline > old) {
-        return Err(ClaimError::invalid("renewed_storage_deadline"));
+        return Err(state.budget.rejection("renewed_storage_deadline"));
     }
     *latched = Some(latched.map_or(deadline, |old| old.min(deadline)));
     state.execution = Some(context.owner_id());

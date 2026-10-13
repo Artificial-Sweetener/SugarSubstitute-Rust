@@ -30,13 +30,10 @@ impl DiagnosticStorage {
                 .as_ref()
                 .ok_or_else(|| error(operation.key, Code::Closed))?
                 .candidate;
-            let native_id = required(
-                state.stages[stage_index(&state, candidate, operation.key)?].native,
-                operation.key,
-            )?;
+            let index = stage_index(&mut state, candidate, operation.key)?;
+            let native_id = required(state.data_mut()?.stages[index].native, operation.key)?;
             let actual = state
-                .port
-                .observe_file(native_id, context)
+                .call_native(|port| port.observe_file(native_id, context))?
                 .map_err(|cause| native(operation.key, Code::Read, cause))?;
             if !expected.matches(actual) {
                 return Err(error(operation.key, Code::ChangedIdentity));
@@ -52,7 +49,7 @@ impl DiagnosticStorage {
                 .as_ref()
                 .ok_or_else(|| error(operation.key, Code::Closed))?
                 .journal_sha256;
-            if stage_facts(&state, stage_id, operation.key)?.sha256 != expected {
+            if stage_facts(&mut state, stage_id, operation.key)?.sha256 != expected {
                 return Err(error(operation.key, Code::ChangedIdentity));
             }
             let facts = settle_stage(
@@ -75,7 +72,7 @@ impl DiagnosticStorage {
     }
 }
 pub(super) fn adopt_journal(
-    state: &mut State,
+    state: &mut StateAccess<'_>,
     id: u64,
     key: LogicalStoreOperationKey,
     context: &JobContext,
@@ -89,8 +86,7 @@ pub(super) fn adopt_journal(
     if intent(state, id, key)?.journal.as_ref().is_none_or(|journal| journal.native.is_none()) {
         check(state, key, context, false)?;
         let (native_id, facts) = state
-            .port
-            .open(object, DIAGNOSTIC_IO_BYTES as u64, context)
+            .call_native(|port| port.open(object, DIAGNOSTIC_IO_BYTES as u64, context))?
             .map_err(|cause| native(key, Code::Read, cause))?;
         let journal =
             intent(state, id, key)?.journal.as_mut().ok_or_else(|| error(key, Code::Closed))?;
@@ -116,8 +112,7 @@ pub(super) fn adopt_journal(
         return Err(error(key, Code::ChangedIdentity));
     }
     let actual = state
-        .port
-        .observe_file(native_id, context)
+        .call_native(|port| port.observe_file(native_id, context))?
         .map_err(|cause| native(key, Code::Read, cause))?;
     if actual != facts {
         return Err(error(key, Code::ChangedIdentity));

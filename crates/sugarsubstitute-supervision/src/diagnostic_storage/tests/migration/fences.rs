@@ -33,11 +33,11 @@ fn diagnostic_migration_callback_reentry_is_fenced_outside_owner_mutex() -> Test
             &context,
         )?;
         storage.retire(&operation, &context)?;
-        let weak = Arc::downgrade(&storage.shared);
         drop((storage, permit, candidate, operation, validator, original));
-        assert!(
-            weak.upgrade().is_none(),
-            "retired first-party state retained after every live facade is dropped"
+        assert_eq!(
+            context.memory().claim(DIAGNOSTIC_STORAGE_BYTES)?.bytes(),
+            DIAGNOSTIC_STORAGE_BYTES,
+            "retired first-party state retained its original claim after every facade dropped"
         );
         Ok(())
     })

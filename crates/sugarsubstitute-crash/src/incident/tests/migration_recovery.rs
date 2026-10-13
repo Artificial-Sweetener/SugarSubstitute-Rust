@@ -3,7 +3,7 @@
 //! Recover historical migration data under actual new protected operation custody.
 use super::{
     migration_runtime_fixture::*,
-    publication::{admitted, setup},
+    publication_fixture::{admitted, setup},
     *,
 };
 use sugarsubstitute_supervision::diagnostic_storage::{fixture::*, *};

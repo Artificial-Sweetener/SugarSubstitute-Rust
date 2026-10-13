@@ -7,7 +7,10 @@ impl<const N: usize> RecordBoundary<N> for Fake {
         let disk = lock(&self.0);
         let output =
             disk.exclusion.as_ref().ok_or_else(|| ClaimError::invalid("fake_exclusion_missing"))?;
-        if !file.is_locked() || output.path != file.record_path || output.sid != file.account_sid {
+        if !file.is_locked()
+            || output.path != file.record_path.path()?
+            || output.sid != file.account_sid.bytes()?
+        {
             return Err(ClaimError::invalid("fake_exclusion_changed"));
         }
         Ok(())
@@ -159,12 +162,12 @@ impl<const N: usize> RecordBoundary<N> for Fake {
                 .stage
                 .as_mut()
                 .ok_or_else(|| ClaimError::invalid("fake_rename_missing_stage"))?;
-            stage.path = file.record_path.clone();
+            stage.path = file.record_path.path()?.to_owned();
             let bytes = stage.bytes.clone();
             let identity = stage.identity;
             disk.target = Some(bytes);
             disk.target_identity = identity;
-            value.path = file.record_path.clone();
+            value.path = file.record_path.path()?.to_owned();
             value.activated = Some(value.encoded);
         }
         self.after(Effect::Activate)?;

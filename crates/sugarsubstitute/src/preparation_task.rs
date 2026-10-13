@@ -14,14 +14,47 @@ use sugarsubstitute_splash::{
     SplashRenderer,
 };
 
+/// Retain either an application's exclusive transcript or a complete charged output view.
+pub(crate) enum RenderConsole {
+    Owned(TranscriptSnapshot),
+    #[cfg(windows)]
+    Output(crate::production_output::OutputSnapshot),
+}
+impl sugarsubstitute_splash::TranscriptView for RenderConsole {
+    fn transcript(&self) -> &TranscriptSnapshot {
+        match self {
+            Self::Owned(view) => view,
+            #[cfg(windows)]
+            Self::Output(view) => view.transcript(),
+        }
+    }
+}
+impl std::ops::Deref for RenderConsole {
+    type Target = TranscriptSnapshot;
+    fn deref(&self) -> &Self::Target {
+        sugarsubstitute_splash::TranscriptView::transcript(self)
+    }
+}
+impl From<TranscriptSnapshot> for RenderConsole {
+    fn from(view: TranscriptSnapshot) -> Self {
+        Self::Owned(view)
+    }
+}
+#[cfg(windows)]
+impl From<crate::production_output::OutputSnapshot> for RenderConsole {
+    fn from(view: crate::production_output::OutputSnapshot) -> Self {
+        Self::Output(view)
+    }
+}
+
 /// Retain the actual non-clonable request across rejection or an uninvoked accepted factory.
 pub(crate) struct PendingPreparation {
     pub(crate) identity: FrameIdentity,
     pub(crate) bytes: u64,
-    pub(crate) input: PreparationTransfer<SplashRenderRequest>,
+    pub(crate) input: PreparationTransfer<SplashRenderRequest<RenderConsole>>,
 }
 impl PendingPreparation {
-    pub(crate) fn new(request: SplashRenderRequest) -> Self {
+    pub(crate) fn new(request: SplashRenderRequest<RenderConsole>) -> Self {
         Self {
             identity: request.identity,
             bytes: request.reservation_bytes(),
@@ -34,7 +67,7 @@ impl PendingPreparation {
 pub(crate) struct PreparationOutput {
     pub(crate) renderer: SplashRenderer,
     pub(crate) frame: PreparationFrame,
-    pub(crate) console: Option<TranscriptSnapshot>,
+    pub(crate) console: Option<RenderConsole>,
     pub(crate) console_clipped_rows: u8,
 }
 /// Distinguish initialization from an ordinarily completed frame without duplicating owned storage.
@@ -107,16 +140,16 @@ impl CpuTask<PreparationOutput, PreparationFailure> for InitializationPreparatio
 
 /// Own the admitted raster cursor or its original cache transfer failure.
 pub(crate) struct FramePreparation {
-    task: Result<SplashRenderTask, TransferError>,
+    task: Result<SplashRenderTask<RenderConsole>, TransferError>,
     // Retain actual input through CPU destruction when cache acquisition failed.
-    _failed_console: Option<TranscriptSnapshot>,
+    _failed_console: Option<RenderConsole>,
 }
 
 impl FramePreparation {
     /// Take cache ownership on the worker, never during UI-thread submission.
     pub(crate) fn new(
         transfer: PreparationTransfer<SplashRenderer>,
-        request: PreparationTransfer<SplashRenderRequest>,
+        request: PreparationTransfer<SplashRenderRequest<RenderConsole>>,
         bootstrap: bool,
         memory: MemoryLease,
     ) -> Self {

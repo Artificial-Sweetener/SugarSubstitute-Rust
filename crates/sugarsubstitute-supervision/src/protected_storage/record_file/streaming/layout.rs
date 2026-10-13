@@ -58,12 +58,17 @@ pub(crate) fn binding(
         DiagnosticObject::Payload(key, ..) => (DiagnosticEntryClass::Payload, subject(key)),
     }
 }
-pub(super) fn leaf(object: DiagnosticObject, namespace: NamespaceId) -> String {
+pub(super) fn write_leaf(
+    object: DiagnosticObject,
+    namespace: NamespaceId,
+    output: &mut impl std::fmt::Write,
+) -> std::fmt::Result {
+    use super::leaf::Hex;
     match object {
-        DiagnosticObject::Seed(key) => format!("{}.seed", super::super::hex(&subject(key))),
-        DiagnosticObject::Summary(key) => format!("{}.summary", super::super::hex(&subject(key))),
-        DiagnosticObject::StoreState => format!("{}.state", super::super::hex(namespace.bytes())),
-        DiagnosticObject::Journal(key) => format!("{}.journal", super::super::hex(&operation(key))),
+        DiagnosticObject::Seed(key) => write!(output, "{}.seed", Hex(&subject(key))),
+        DiagnosticObject::Summary(key) => write!(output, "{}.summary", Hex(&subject(key))),
+        DiagnosticObject::StoreState => write!(output, "{}.state", Hex(namespace.bytes())),
+        DiagnosticObject::Journal(key) => write!(output, "{}.journal", Hex(&operation(key))),
         DiagnosticObject::Payload(key, revision, kind) => {
             let kind = match kind {
                 AttachmentKind::Startup => 1,
@@ -73,7 +78,7 @@ pub(super) fn leaf(object: DiagnosticObject, namespace: NamespaceId) -> String {
                 AttachmentKind::SymbolizedFault => 5,
                 AttachmentKind::Minidump => 6,
             };
-            format!("{}.p-{:016x}-{kind}.payload", super::super::hex(&subject(key)), revision.get())
+            write!(output, "{}.p-{:016x}-{kind}.payload", Hex(&subject(key)), revision.get())
         }
     }
 }
@@ -97,6 +102,11 @@ mod tests {
         incident::IncidentOperationId,
         lifecycle::{CoordinatorEpoch, CoordinatorKey},
     };
+    fn leaf(object: DiagnosticObject, namespace: NamespaceId) -> Result<String, std::fmt::Error> {
+        let mut output = String::new();
+        write_leaf(object, namespace, &mut output)?;
+        Ok(output)
+    }
     #[test]
     fn diagnostic_generation_typed_groups_keep_original_leaf_and_subject_binding()
     -> Result<(), Box<dyn std::error::Error>> {
@@ -119,7 +129,7 @@ mod tests {
         );
         assert_eq!(binding(log, namespace), (DiagnosticEntryClass::Payload, subject(key)));
         assert_eq!(
-            leaf(log, namespace),
+            leaf(log, namespace)?,
             format!(
                 "{}.p-0000000000000007-4.payload",
                 crate::protected_storage::record_file::hex(&subject(key))
@@ -144,8 +154,8 @@ mod tests {
             IncidentOperationId::new(1)?,
         );
         assert_ne!(
-            leaf(DiagnosticObject::Journal(first), namespace),
-            leaf(DiagnosticObject::Journal(later), namespace)
+            leaf(DiagnosticObject::Journal(first), namespace)?,
+            leaf(DiagnosticObject::Journal(later), namespace)?
         );
         assert_ne!(
             leaf(
@@ -153,13 +163,13 @@ mod tests {
                     first.owner()
                 ))),
                 namespace
-            ),
+            )?,
             leaf(
                 DiagnosticObject::Seed(IncidentKey::new(IncidentSubject::Supervisor(
                     later.owner()
                 ))),
                 namespace
-            )
+            )?
         );
         Ok(())
     }

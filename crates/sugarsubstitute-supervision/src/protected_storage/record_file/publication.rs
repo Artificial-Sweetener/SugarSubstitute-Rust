@@ -129,6 +129,9 @@ pub(crate) fn publish_with_boundary<const N: usize>(
     validate_predecessor: impl FnOnce(&RecordRead<N>) -> Result<(), ClaimError>,
     boundary: &mut dyn RecordBoundary<N>,
 ) -> Result<(), ClaimError> {
+    if !file.handle.budget().is_ordinary() {
+        return Err(file.handle.budget().rejection("fixed_record_ordinary_origin"));
+    }
     if !file.is_locked() || !(16..=1024).contains(&N) {
         return Err(ClaimError::invalid("publication_without_exclusion"));
     }

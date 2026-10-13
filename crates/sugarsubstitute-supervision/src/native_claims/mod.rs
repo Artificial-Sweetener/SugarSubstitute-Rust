@@ -4,6 +4,7 @@
 //! Native handles are noninheritable. Finite workers retain this state before FFI;
 //! checked closure preserves failed handles and active records for explicit retry.
 mod account;
+mod backend_file;
 pub(crate) mod files;
 mod paths;
 mod records;
@@ -144,7 +145,7 @@ impl NativePort for SystemPort {
         directory: &Path,
         context: &sugarsubstitute_contracts::execution::JobContext,
     ) -> Result<(), ClaimError> {
-        files::acquire_backend(backend, directory, context)?;
+        backend_file::acquire_backend(backend, directory, context)?;
         self.publish(backend, RecordState::LaunchPending, 0, context)
     }
     fn publish(

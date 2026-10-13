@@ -20,8 +20,20 @@ pub const SPLASH_CACHE_RESERVATION_BYTES: u64 = 24 * 1024 * 1024;
 const GEOMETRY_SCRATCH: u64 = 1024 * 1024;
 const DECODER_AND_GLYPH_SCRATCH: u64 = 6 * 1024 * 1024;
 
+/// Borrow immutable transcript data while its complete external custody stays in the task.
+/// The implementation must keep the same snapshot alive through result disposal.
+pub trait TranscriptView: Send + 'static {
+    /// Borrow the bounded transcript without extracting its shared allocations.
+    fn transcript(&self) -> &TranscriptSnapshot;
+}
+impl TranscriptView for TranscriptSnapshot {
+    fn transcript(&self) -> &TranscriptSnapshot {
+        self
+    }
+}
+
 /// Capture one immutable view revision for a retained exclusive renderer.
-pub struct SplashRenderRequest {
+pub struct SplashRenderRequest<T = TranscriptSnapshot> {
     /// Validated tightly packed device-pixel shape; splash scale must additionally be >=0.5.
     pub shape: FrameShape,
     /// Surface/state generation and sequence for the host's stale-result checks.
@@ -36,9 +48,9 @@ pub struct SplashRenderRequest {
     pub bootstrap: bool,
     /// Actual immutable transcript pin, retained through validation and result disposal.
     /// Root verifies its resource against the current managed resource; presentation grants no authority.
-    pub console: Option<TranscriptSnapshot>,
+    pub console: Option<T>,
 }
-impl SplashRenderRequest {
+impl<T> SplashRenderRequest<T> {
     /// Bound output plus live scratch and the host's later RGBA/BGRA retained pair.
     ///
     /// At most two one-byte masks coexist, with fixed geometry overhead. PNG scratch
@@ -66,14 +78,14 @@ impl SplashRenderRequest {
     }
 }
 /// Return ordinary render failure with the same cache-owning renderer for the next revision.
-pub struct SplashPreparationResult {
+pub struct SplashPreparationResult<T = TranscriptSnapshot> {
     /// Exclusive owner recovered after actual job completion, including ordinary failures.
     pub renderer: SplashRenderer,
     /// Immutable prepared pixels or the original typed rendering error.
     pub frame: Result<PreparedFrame, RenderError>,
     /// Return the same original snapshot after task scratch/validation disposal.
     /// Keep it until the observed terminal result is published, rejected or discarded.
-    pub console: Option<TranscriptSnapshot>,
+    pub console: Option<T>,
     /// Actual rows clipped by projection bounds, from zero through ten.
     /// Bootstrap and absent-console requests report zero; full source text remains pinned.
     pub console_clipped_rows: u8,
@@ -116,7 +128,7 @@ impl CpuTask<Result<SplashRenderer, RenderError>, PreparationError> for SplashIn
 /// No UI operation, worker creation or background runtime occurs here. The execution
 /// adapter observes cancellation/deadlines between steps and owns actual task destruction.
 /// Renderer native resources are free-threaded but drawing is exclusively serialized.
-pub struct SplashRenderTask {
+pub struct SplashRenderTask<T = TranscriptSnapshot> {
     lease: Option<MemoryLease>,
     raster: Option<RenderStages>,
     validator: Option<FrameValidator>,
@@ -129,12 +141,12 @@ pub struct SplashRenderTask {
     output_claim: Option<MemoryClaim>,
     scratch_claim: Option<MemoryClaim>,
     // The original history pin releases last, after actual cursor/native/validation and claim disposal.
-    request: SplashRenderRequest,
+    request: SplashRenderRequest<T>,
 }
-impl SplashRenderTask {
+impl<T: TranscriptView> SplashRenderTask<T> {
     pub(super) fn new(
         renderer: SplashRenderer,
-        request: SplashRenderRequest,
+        request: SplashRenderRequest<T>,
         lease: MemoryLease,
     ) -> Self {
         Self {
@@ -185,7 +197,7 @@ impl SplashRenderTask {
             if !raster.step_admitted(
                 renderer,
                 Some(lease.clone()),
-                self.request.console.as_ref(),
+                self.request.console.as_ref().map(TranscriptView::transcript),
             )? {
                 return Ok(None);
             }
@@ -213,7 +225,7 @@ impl SplashRenderTask {
     fn complete(
         &mut self,
         frame: Result<PreparedFrame, RenderError>,
-    ) -> Result<CpuStep<SplashPreparationResult>, PreparationError> {
+    ) -> Result<CpuStep<SplashPreparationResult<T>>, PreparationError> {
         if let Some(raster) = &self.raster {
             self.console_clipped_rows = raster.console_clipped_rows();
         }
@@ -232,12 +244,14 @@ impl SplashRenderTask {
         }))
     }
 }
-impl CpuTask<SplashPreparationResult, PreparationError> for SplashRenderTask {
+impl<T: TranscriptView> CpuTask<SplashPreparationResult<T>, PreparationError>
+    for SplashRenderTask<T>
+{
     /// Yield between bounded raster/PNG/validation slices; ordinary failures preserve caches.
     fn step(
         &mut self,
         _context: &JobContext,
-    ) -> Result<CpuStep<SplashPreparationResult>, PreparationError> {
+    ) -> Result<CpuStep<SplashPreparationResult<T>>, PreparationError> {
         if self.terminal {
             return Err(PreparationError::InvalidTaskState);
         }

@@ -86,13 +86,25 @@ impl NativePort for SystemPort {
             .namespace
             .as_ref()
             .ok_or_else(|| ClaimError::invalid("entry_namespace_missing"))?;
-        if paths::file_identity(handle)? != inode {
+        if paths::file_identity(
+            handle,
+            &mut crate::protected_storage::native_phase::NativePhase::ordinary(&(handle).budget())?,
+        )? != inode
+        {
             return Err(ClaimError::invalid("entry_coordinator_exclusion_binding"));
         }
         check(context)?;
-        paths::validate_regular(handle, Some(0))?;
+        paths::validate_regular(
+            handle,
+            Some(0),
+            &mut crate::protected_storage::native_phase::NativePhase::ordinary(&(handle).budget())?,
+        )?;
         check(context)?;
-        security::verify(handle, &namespace.account_sid)?;
+        security::verify(
+            handle,
+            &namespace.account_sid,
+            &mut crate::protected_storage::native_phase::NativePhase::ordinary(&(handle).budget())?,
+        )?;
         check(context)
     }
 
@@ -105,11 +117,30 @@ impl NativePort for SystemPort {
         check(context)?;
         let held =
             state.election.as_ref().ok_or_else(|| ClaimError::invalid("entry_retired_election"))?;
-        if !held.is_locked() || paths::file_identity(&held.handle)? != proof.entry_inode {
+        if !held.is_locked()
+            || paths::file_identity(
+                &held.handle,
+                &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+                    &held.handle.budget(),
+                )?,
+            )? != proof.entry_inode
+        {
             return Err(ClaimError::invalid("entry_changed_native_election"));
         }
-        paths::validate_regular(&held.handle, Some(0))?;
-        security::verify(&held.handle, &proof.account_sid)?;
+        paths::validate_regular(
+            &held.handle,
+            Some(0),
+            &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+                &held.handle.budget(),
+            )?,
+        )?;
+        security::verify(
+            &held.handle,
+            &proof.account_sid,
+            &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+                &held.handle.budget(),
+            )?,
+        )?;
         check(context)
     }
     fn discover(
@@ -136,26 +167,88 @@ impl NativePort for SystemPort {
         let resolved =
             account::resolve_namespace(installation, &mut state.handles, budget.clone())?;
         check(context)?;
-        let installed =
-            paths::open_retained(installation, true, true, budget.clone(), &mut state.handles)?;
-        let installed_path = paths::final_path(&state.handles[installed])?;
-        if paths::file_identity(&state.handles[installed])? != resolved.installation_identity {
+        let installed = paths::open_retained(
+            installation,
+            true,
+            true,
+            budget.clone(),
+            &mut state.handles,
+            &mut crate::protected_storage::native_phase::NativePhase::ordinary(&(budget.clone()))?,
+        )?;
+        let installed_path = paths::final_path(
+            &state.handles[installed],
+            &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+                &state.handles[installed].budget(),
+            )?,
+            crate::protected_storage::native_name::NativeNameDestination::Ordinary,
+        )
+        .and_then(crate::protected_storage::native_name::NativeName::into_ordinary)?;
+        if paths::file_identity(
+            &state.handles[installed],
+            &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+                &state.handles[installed].budget(),
+            )?,
+        )? != resolved.installation_identity
+        {
             return Err(ClaimError::invalid("entry_changed_installation"));
         }
-        let expected =
-            paths::open_retained(executable, false, true, budget.clone(), &mut state.handles)?;
-        let expected_path = paths::final_path(&state.handles[expected])?;
+        let expected = paths::open_retained(
+            executable,
+            false,
+            true,
+            budget.clone(),
+            &mut state.handles,
+            &mut crate::protected_storage::native_phase::NativePhase::ordinary(&(budget.clone()))?,
+        )?;
+        let expected_path = paths::final_path(
+            &state.handles[expected],
+            &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+                &state.handles[expected].budget(),
+            )?,
+            crate::protected_storage::native_name::NativeNameDestination::Ordinary,
+        )
+        .and_then(crate::protected_storage::native_name::NativeName::into_ordinary)?;
         if !expected_path.starts_with(&installed_path) {
             return Err(ClaimError::invalid("entry_image_outside_installation"));
         }
-        let image = paths::file_identity(&state.handles[expected])?;
-        paths::pin_ancestors(&expected_path, &mut state.handles, budget.clone())?;
-        paths::verify_pinned(&expected_path, image, &mut state.handles, false, budget.clone())?;
+        let image = paths::file_identity(
+            &state.handles[expected],
+            &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+                &state.handles[expected].budget(),
+            )?,
+        )?;
+        paths::pin_ancestors(
+            &expected_path,
+            &mut state.handles,
+            budget.clone(),
+            &mut crate::protected_storage::native_phase::NativePhase::ordinary(&(budget.clone()))?,
+        )?;
+        paths::verify_pinned(
+            &expected_path,
+            image,
+            &mut state.handles,
+            false,
+            budget.clone(),
+            &mut crate::protected_storage::native_phase::NativePhase::ordinary(&(budget.clone()))?,
+        )?;
         // The actual running host independently binds the expected installed image.
         let current =
             std::env::current_exe().map_err(|e| ClaimError::new("entry_current_image", e))?;
-        let actual = paths::open_retained(&current, false, true, budget, &mut state.handles)?;
-        if paths::file_identity(&state.handles[actual])? != image {
+        let actual = paths::open_retained(
+            &current,
+            false,
+            true,
+            budget.clone(),
+            &mut state.handles,
+            &mut crate::protected_storage::native_phase::NativePhase::ordinary(&(budget))?,
+        )?;
+        if paths::file_identity(
+            &state.handles[actual],
+            &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+                &state.handles[actual].budget(),
+            )?,
+        )? != image
+        {
             return Err(ClaimError::invalid("entry_running_image_binding"));
         }
         check(context)?;
@@ -192,10 +285,19 @@ impl NativePort for SystemPort {
             .join(record_file::hex(resolved.namespace.bytes()));
         let acquired = HeldFile::acquire_into(
             &mut state.election,
-            &stem.with_extension("entry.claim"),
-            stem.with_extension("record"),
-            &resolved.account_sid,
-            Budget::Protected(memory),
+            crate::protected_storage::native_name::NativeName::Ordinary(
+                stem.with_extension("entry.claim"),
+            ),
+            crate::protected_storage::native_name::NativeName::Ordinary(
+                stem.with_extension("record"),
+            ),
+            crate::protected_storage::native_name::NativeSid::Ordinary(
+                resolved.account_sid.clone(),
+            ),
+            Budget::Protected(memory.clone()),
+            &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+                &Budget::Protected(memory),
+            )?,
         );
         if let Err(cause) = acquired {
             if is_contention(&cause) {
@@ -211,7 +313,12 @@ impl NativePort for SystemPort {
             .election
             .as_ref()
             .ok_or_else(|| ClaimError::invalid("entry_exclusion_missing"))?;
-        let inode = paths::file_identity(&held.handle)?;
+        let inode = paths::file_identity(
+            &held.handle,
+            &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+                &held.handle.budget(),
+            )?,
+        )?;
         let read = record_file::read_shape(held, context)?;
         check(context)?;
         let outcome = classify(read, resolved.namespace, Some(inode))?;

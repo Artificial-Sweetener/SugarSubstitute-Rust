@@ -19,7 +19,7 @@ fn inert_bootstrap_has_no_native_owner_or_original_execution_scope() -> TestResu
     assert!(bootstrap.owner_mut().is_none());
     assert!(bootstrap.failure_source().is_none());
     assert!(bootstrap.cleanup_failure().is_none());
-    assert!(bootstrap.failed_preparation().is_none());
+    assert!(bootstrap.failed_preparation.is_none());
     drop(bootstrap);
     files.finish()?;
     Ok(())
@@ -36,7 +36,7 @@ fn real_configuration_failure_retains_original_scope_completion_and_cause() -> T
     assert_eq!(runtime.failure(&mut bootstrap, &jobs)?, EntryBootstrapIssue::Preparation);
     assert!(bootstrap.owner().is_none());
     assert!(bootstrap.failure_source().is_some());
-    let original = bootstrap.failed_preparation().ok_or("Missing original preparation")?;
+    let original = bootstrap.failed_preparation.as_ref().ok_or("Missing original preparation")?;
     assert_eq!(original.scope_id, bootstrap.scope.as_ref().ok_or("Scope lost")?.id());
     assert_eq!(original.spec.deadline, Some(bootstrap.original.until()));
     assert_eq!(original.outcome.kind(), TerminalKind::Failure);

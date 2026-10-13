@@ -17,6 +17,9 @@ pub(super) fn create(
     coordinator: CoordinatorKey,
     context: &JobContext,
 ) -> Result<(), ClaimError> {
+    if !state.budget.is_ordinary() {
+        return Err(state.budget.rejection("capture_generation_origin"));
+    }
     bind_context(state, context, false)?;
     check(context)?;
     if state.attempted || state.profile_leaf {
@@ -25,18 +28,21 @@ pub(super) fn create(
     let (root, identity, root_index) =
         state.root.as_ref().ok_or_else(|| ClaimError::invalid("missing_protected_root"))?;
     let root_index = *root_index;
-    let directory = root.join(name(coordinator));
+    let directory = root.path()?.join(name(coordinator));
     let database = directory.join("database");
     let metrics = directory.join("metrics");
     for path in [&directory, &database, &metrics] {
         paths::wide(path)?;
     }
     paths::verify_pinned(
-        root,
+        root.path()?,
         *identity,
         &mut state.handles,
         true,
-        files::Budget::Protected(state.memory.clone()),
+        state.budget.clone(),
+        &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+            &(state.budget.clone()),
+        )?,
     )?;
     // Retain all intended generation paths before the first create-new effect.
     state.attempted = true;
@@ -47,14 +53,41 @@ pub(super) fn create(
         ready: false,
     });
     let parent = directories::open_relative(
-        state,
-        &directory,
-        root_index,
-        directories::Mode::CreateNew,
+        &mut state.handles,
+        state.sid.bytes()?,
+        state.budget.clone(),
+        directories::RelativeDirectory {
+            path: &directory,
+            parent: root_index,
+            mode: directories::Mode::CreateNew,
+        },
         context,
+        &mut crate::protected_storage::native_phase::NativePhase::ordinary(&state.budget)?,
     )?;
-    directories::open_relative(state, &database, parent, directories::Mode::CreateNew, context)?;
-    directories::open_relative(state, &metrics, parent, directories::Mode::CreateNew, context)?;
+    directories::open_relative(
+        &mut state.handles,
+        state.sid.bytes()?,
+        state.budget.clone(),
+        directories::RelativeDirectory {
+            path: &database,
+            parent,
+            mode: directories::Mode::CreateNew,
+        },
+        context,
+        &mut crate::protected_storage::native_phase::NativePhase::ordinary(&state.budget)?,
+    )?;
+    directories::open_relative(
+        &mut state.handles,
+        state.sid.bytes()?,
+        state.budget.clone(),
+        directories::RelativeDirectory {
+            path: &metrics,
+            parent,
+            mode: directories::Mode::CreateNew,
+        },
+        context,
+        &mut crate::protected_storage::native_phase::NativePhase::ordinary(&state.budget)?,
+    )?;
     state
         .generation
         .as_mut()

@@ -19,21 +19,25 @@ impl DiagnosticStorage {
         context: &JobContext,
     ) -> Result<DiagnosticStage, DiagnosticStorageError> {
         let mut state = self.check(operation, context)?;
-        deletion::permit_check(&state, &self.shared, permit, operation.key)?;
-        super::super::stage::mutation(&state, operation.key)?;
-        let intent = state.deletion.as_ref().ok_or_else(|| error(operation.key, Code::Closed))?;
+        deletion::permit_check(&mut state, &self.shared, permit, operation.key)?;
+        super::super::stage::mutation(&mut state, operation.key)?;
+        let intent = state
+            .data_mut()?
+            .deletion
+            .as_ref()
+            .ok_or_else(|| error(operation.key, Code::Closed))?;
         let (case, expected, original) =
             intent.recovery.ok_or_else(|| error(operation.key, Code::InvalidIdentity))?;
         let plan = intent.plan;
         if case != DiagnosticRecoveryLedgerCase::Original
             || !intent.victim_settled
-            || state.stages.len() >= DIAGNOSTIC_STAGE_BOUND
-            || state.stages.iter().any(|stage| stage.recovered == Some(expected))
+            || state.data_mut()?.stages.len() >= DIAGNOSTIC_STAGE_BOUND
+            || state.data_mut()?.stages.iter().any(|stage| stage.recovered == Some(expected))
         {
             return Err(error(operation.key, Code::Busy));
         }
         let id = next_lease(&mut state, operation.key)?;
-        state.stages.push(super::super::stage::RetainedStage {
+        state.data_mut()?.stages.push(super::super::stage::RetainedStage {
             id,
             native: None,
             object: plan.completion,
@@ -48,17 +52,18 @@ impl DiagnosticStorage {
                 sha256: original.sha256(),
             }),
         });
-        let index = state.stages.len() - 1;
+        let index = state.data_mut()?.stages.len() - 1;
         let (native_id, actual) = state
-            .port
-            .recover_stage(plan.completion, plan.operation, expected, context)
+            .call_native(|port| {
+                port.recover_stage(plan.completion, plan.operation, expected, context)
+            })?
             .map_err(|cause| native(operation.key, Code::Read, cause))?;
-        state.stages[index].native = Some(native_id);
+        state.data_mut()?.stages[index].native = Some(native_id);
         if native_id == 0 || !expected.matches(actual) {
             return Err(error(operation.key, Code::ChangedIdentity));
         }
         check(&mut state, operation.key, context, false)?;
-        state.stages[index].flushed = Some(actual);
+        state.data_mut()?.stages[index].flushed = Some(actual);
         Ok(DiagnosticStage { shared: self.shared.clone(), operation: operation.key, id })
     }
 }
