@@ -166,8 +166,9 @@ fn stopped_open(action: StopAtBoundary) -> TestResult {
     let _release_on_failure = Release(boundary.release.clone());
     let held = boundary.clone();
     let binding = binding()?;
+    let original_context = resources.original.as_ref().clone();
     let kind = crate::admission::RequestKind::SymbolNative {
-        original: resources.original.as_ref().clone(),
+        original: &original_context,
         handles: resources.handles.clone(),
     };
     let native_deadline = LifecyclePipeDeadline::new(1000, 1000)?;
@@ -182,15 +183,18 @@ fn stopped_open(action: StopAtBoundary) -> TestResult {
         },
         kind,
         resources,
-        |resources| {
-            Box::new(FiniteLease {
-                inner: Lease::diagnostic_client(
-                    DiagnosticRole::Symbolize,
-                    native_deadline,
-                    Some(resources),
-                ),
-                boundary: held,
-                binding,
+        |resources, _context| {
+            Ok(crate::lifecycle_pipe::PreparedPipeLease {
+                lease: Box::new(FiniteLease {
+                    inner: Lease::diagnostic_client(
+                        DiagnosticRole::Symbolize,
+                        native_deadline,
+                        Some(resources),
+                    ),
+                    boundary: held,
+                    binding,
+                }),
+                metadata: None,
             })
         },
     )

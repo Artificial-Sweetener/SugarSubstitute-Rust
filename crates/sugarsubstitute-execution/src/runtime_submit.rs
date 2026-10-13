@@ -82,10 +82,11 @@ impl ExecutionClient {
         &self,
         scope: &Scope,
         spec: JobSpec,
-        kind: RequestKind,
+        kind: RequestKind<'_>,
         work: impl FnOnce(Arc<Job<T, E>>) -> Work,
     ) -> Result<OwnedJob<T, E>, AdmissionError> {
-        self.core.admit(scope, spec, kind, |context, cancel, admitted| {
+        self.core.admit(scope, spec, kind, |context, cancel, timing| {
+            let admitted = timing.admitted;
             let job = Job::new(scope.id(), spec, admitted, cancel, Arc::downgrade(&self.core));
             let queued = QueuedJob { context, job: job.clone(), work: work(job.clone()) };
             (queued, OwnedJob::new(scope.id(), spec, Box::new(JobHandle(job))))

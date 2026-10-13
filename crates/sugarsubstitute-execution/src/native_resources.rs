@@ -8,6 +8,8 @@ use crate::{
     scope::lock,
 };
 use std::sync::Arc;
+mod original;
+pub(crate) use original::SymbolOriginalContext;
 use sugarsubstitute_contracts::execution::{
     JobId, MemoryClaim, MemoryLease, NativeHandleObservation, NativeHandleRelease, ScopeId,
 };
@@ -19,7 +21,7 @@ use sugarsubstitute_contracts::execution::CancelControl;
 #[derive(Clone)]
 pub(crate) struct EffectContext {
     core: std::sync::Weak<Core>,
-    original: sugarsubstitute_contracts::execution::JobContext,
+    original: SymbolOriginalContext,
     child: Option<sugarsubstitute_contracts::execution::JobContext>,
     handles: Arc<sugarsubstitute_contracts::execution::NativeHandleClaim>,
 }
@@ -28,7 +30,7 @@ impl EffectContext {
     pub(crate) fn new(reservation: &crate::SymbolTransportReservation) -> Self {
         Self {
             core: reservation.core.clone(),
-            original: reservation.original.as_ref().clone(),
+            original: reservation.original.clone(),
             child: None,
             handles: reservation.handles.clone(),
         }
@@ -119,12 +121,38 @@ impl NativeHandleRelease for Release {
     }
 }
 
+/// Original fixed metadata covers the real ledger, release, logical record and
+/// unique closed original-context control. Context/claim clones allocate nothing.
+pub(crate) const SYMBOL_METADATA_BYTES: u64 = 4096;
+
+/// Preflight each concrete covered allocation before the original metadata claim.
+pub(crate) const fn symbol_storage_bytes() -> usize {
+    #[repr(C)]
+    struct ClaimControl {
+        strong: std::sync::atomic::AtomicUsize,
+        weak: std::sync::atomic::AtomicUsize,
+        claim: sugarsubstitute_contracts::execution::NativeHandleClaim,
+    }
+    size_of::<Release>()
+        + size_of::<ResourceRecord>()
+        + sugarsubstitute_contracts::execution::NativeHandleLease::control_storage_bytes()
+        + size_of::<ClaimControl>()
+        + SymbolOriginalContext::control_storage_bytes()
+}
+
 pub(crate) fn release(
     core: Arc<Core>,
     job_id: JobId,
     memory: &MemoryLease,
 ) -> Result<Box<dyn NativeHandleRelease>, sugarsubstitute_contracts::execution::MemoryClaimError> {
-    Ok(Box::new(Release { core, job_id, _metadata: memory.claim(4096)? }))
+    let required = symbol_storage_bytes() as u64;
+    if required > SYMBOL_METADATA_BYTES {
+        return Err(sugarsubstitute_contracts::execution::MemoryClaimError {
+            requested_bytes: required,
+            available_bytes: SYMBOL_METADATA_BYTES,
+        });
+    }
+    Ok(Box::new(Release { core, job_id, _metadata: memory.claim(SYMBOL_METADATA_BYTES)? }))
 }
 
 /// Observe only passive counters; zero does not prove checked native retirement.

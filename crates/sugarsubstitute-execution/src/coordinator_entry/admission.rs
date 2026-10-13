@@ -171,7 +171,8 @@ fn reserve(
     EntryTransportAdmissionError,
 > {
     let Reservation { server, facts, original_preparation, input, lease } = reservation;
-    core.admit(scope, spec, RequestKind::Native, |context, cancel, admitted| {
+    core.admit(scope, spec, RequestKind::Native, |context, cancel, timing| {
+        let admitted = timing.admitted;
         let job = Job::new(scope.id(), spec, admitted, cancel, Arc::downgrade(core));
         let shared = Arc::new(Shared {
             server,

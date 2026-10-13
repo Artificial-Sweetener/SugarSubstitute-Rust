@@ -312,3 +312,39 @@ fn original_memory_observation_cannot_be_forged_outside_its_owners() -> Result<(
         "fn consume(observation: MemoryLeaseObservation, lease: &MemoryLease) { observation.matches_lease(lease); }")?.is_empty());
     Ok(())
 }
+
+/// Reject capture ledger/proof producers through qualified paths, aliases and macro tokens.
+#[test]
+fn capture_resource_producers_cannot_hide_outside_contract_or_execution_owners() -> Result<()> {
+    let fixture = Repository::new()?;
+    let policy = Policy { schema_version: 1, owner: None };
+    for source in [
+        "fn forged() { sugarsubstitute_contracts::execution::MemoryLeaseObservation::new(memory); }",
+        "use sugarsubstitute_contracts::execution::MemoryLeaseObservation as Identity; fn forged() { Identity::new(memory); }",
+        "type Identity = sugarsubstitute_contracts::execution::MemoryLeaseObservation; fn forged() { Identity::new(memory); }",
+        "fn forged() { sugarsubstitute_execution::CaptureBundleAdmission::new(); }",
+        "use sugarsubstitute_execution::CaptureBundleOrigin as Origin; fn forged() { Origin::new(); }",
+        "type Proof = sugarsubstitute_execution::CaptureBundleRetirement; fn forged() { Proof::new(); }",
+        "macro_rules! forged { () => { MemoryLeaseObservation::new(memory) }; }",
+        "macro_rules! forged { ($t:ident,$f:ident) => { $t::$f() }; } fn caller() { forged!(CaptureBundleOrigin,new); }",
+        "#[cfg(test)] mod tests { fn forged() { CaptureBundleRetirement::new(); } }",
+    ] {
+        assert!(
+            !crate::execution_source::resource_producer_findings(source)?.is_empty(),
+            "accepted {source}"
+        );
+        write(fixture.root(), "crates/host/src/capture.rs", source)?;
+        let rejected = check(fixture.root(), &policy, &fixture.architecture, &fixture.workspace)
+            .err()
+            .map(|cause| cause.to_string())
+            .unwrap_or_default();
+        assert!(
+            rejected.contains("outside the contract and execution owners"),
+            "unexpected result {rejected}"
+        );
+    }
+    assert!(crate::execution_source::resource_producer_findings(
+        "use sugarsubstitute_execution::CaptureBundleOrigin; fn consume(origin: &CaptureBundleOrigin) { origin.check_effect(); }"
+    )?.is_empty());
+    Ok(())
+}

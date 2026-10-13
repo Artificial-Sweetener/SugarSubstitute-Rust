@@ -227,7 +227,8 @@ pub(crate) fn reserve_child(
         ));
     }
     spec.deadline = Some(deadline);
-    core.admit(scope, spec, RequestKind::Native, |context: JobContext, cancel, admitted| {
+    core.admit(scope, spec, RequestKind::Native, |context: JobContext, cancel, timing| {
+        let admitted = timing.admitted;
         let job = Job::new(scope.id(), spec, admitted, cancel, Arc::downgrade(core));
         let binding =
             Arc::new(ChildBinding { lease: Mutex::new(None), ready: AtomicBool::new(false) });

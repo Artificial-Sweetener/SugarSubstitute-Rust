@@ -57,7 +57,26 @@ pub(crate) fn name(binding: PeerBinding) -> Vec<u16> {
     };
     value.encode_utf16().chain(Some(0)).collect()
 }
+/// Preserve the supported ordinary v1/v2 header and payload bytes.
 pub(crate) fn encode(data: &Data) -> Result<[u8; BOOTSTRAP_BYTES], LifecyclePipeFailure> {
+    let version = if matches!(data.binding, PeerBinding::Desktop(_)) { 1 } else { 2 };
+    encode_base(data, version, BOOTSTRAP_BYTES as u16)
+}
+/// Encode only the captured Desktop base using the same original payload owner.
+pub(in crate::windows_lifecycle_pipe) fn encode_captured_base(
+    data: &Data,
+) -> Result<[u8; BOOTSTRAP_BYTES], LifecyclePipeFailure> {
+    if !matches!(data.binding, PeerBinding::Desktop(_)) || data.capability == [0; 32] {
+        return Err(failure("captured_bootstrap_kind"));
+    }
+    encode_base(data, 3, 2048)
+}
+/// Encode common fields once; header selection remains with supported entry points.
+fn encode_base(
+    data: &Data,
+    version: u16,
+    header: u16,
+) -> Result<[u8; BOOTSTRAP_BYTES], LifecyclePipeFailure> {
     if matches!(data.binding, PeerBinding::Diagnostic(_)) && data.capability == [0; 32] {
         return Err(failure("pipe_bootstrap_capability"));
     }
@@ -66,14 +85,8 @@ pub(crate) fn encode(data: &Data) -> Result<[u8; BOOTSTRAP_BYTES], LifecyclePipe
     }
     let mut out = [0; BOOTSTRAP_BYTES];
     out[..4].copy_from_slice(b"SSLB");
-    out[4..6].copy_from_slice(
-        &(match data.binding {
-            PeerBinding::Desktop(_) => 1u16,
-            PeerBinding::Diagnostic(_) => 2u16,
-        })
-        .to_le_bytes(),
-    );
-    out[6..8].copy_from_slice(&(BOOTSTRAP_BYTES as u16).to_le_bytes());
+    out[4..6].copy_from_slice(&version.to_le_bytes());
+    out[6..8].copy_from_slice(&header.to_le_bytes());
     out[8..40].copy_from_slice(data.binding.owner().namespace.bytes());
     out[40..56].copy_from_slice(data.binding.owner().epoch.bytes());
     match data.binding {
@@ -105,19 +118,37 @@ fn number<const N: usize>(bytes: &[u8], start: usize) -> Result<[u8; N], Lifecyc
         .and_then(|v| v.try_into().ok())
         .ok_or_else(|| failure("pipe_bootstrap_field"))
 }
+/// Decode the exact supported ordinary schema through the sole base owner.
 pub(crate) fn decode(
     bytes: &[u8; BOOTSTRAP_BYTES],
     expected: LifecyclePipeDeadline,
     kind: Kind,
 ) -> Result<Data, LifecyclePipeFailure> {
+    let version = if matches!(kind, Kind::Desktop) { 1 } else { 2 };
+    decode_base(bytes, expected, kind, version, BOOTSTRAP_BYTES as u16)
+}
+/// Decode captured Desktop common fields without granting native authentication.
+pub(in crate::windows_lifecycle_pipe) fn decode_captured_base(
+    bytes: &[u8; BOOTSTRAP_BYTES],
+    expected: LifecyclePipeDeadline,
+) -> Result<Data, LifecyclePipeFailure> {
+    let data = decode_base(bytes, expected, Kind::Desktop, 3, 2048)?;
+    if data.capability == [0; 32] {
+        return Err(failure("captured_bootstrap_capability"));
+    }
+    Ok(data)
+}
+/// Reject common header, range, process and endpoint errors before native work.
+fn decode_base(
+    bytes: &[u8; BOOTSTRAP_BYTES],
+    expected: LifecyclePipeDeadline,
+    kind: Kind,
+    version: u16,
+    header: u16,
+) -> Result<Data, LifecyclePipeFailure> {
     if &bytes[..4] != b"SSLB"
-        || number::<2>(bytes, 4)?
-            != (match kind {
-                Kind::Desktop => 1u16,
-                Kind::Diagnostic(_) => 2u16,
-            })
-            .to_le_bytes()
-        || number::<2>(bytes, 6)? != (BOOTSTRAP_BYTES as u16).to_le_bytes()
+        || number::<2>(bytes, 4)? != version.to_le_bytes()
+        || number::<2>(bytes, 6)? != header.to_le_bytes()
         || bytes[138..144].iter().any(|b| *b != 0)
     {
         return Err(failure("pipe_bootstrap_version"));

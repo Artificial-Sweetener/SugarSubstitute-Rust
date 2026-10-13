@@ -28,9 +28,15 @@ impl Lease {
                 &mut self.message_token,
                 &mut self.observed_process,
             ] {
-                handle.attach(symbol.handles.clone(), original.clone());
+                handle.attach(crate::native_pipe::accounting::OutputAccounting::symbol(
+                    symbol.handles.clone(),
+                    original.clone(),
+                ));
             }
-            self.section.attach(symbol.handles.clone(), original);
+            self.section.attach(crate::native_pipe::accounting::OutputAccounting::symbol(
+                symbol.handles.clone(),
+                original,
+            ));
         }
     }
 }

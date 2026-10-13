@@ -17,7 +17,7 @@ pub(crate) struct Admission {
 /// Opaque passive identity for one admitted write. Drop does not revoke it.
 /// Revocation is thread-safe and never exposes native handles or scheduler access.
 pub struct NativeWriteAdmission {
-    pub(crate) shared: Arc<Shared>,
+    pub(crate) shared: SharedRef,
     pub(crate) operation: LifecyclePipeOperationId,
 }
 /// Distinguish a proven no-issue veto from historical native acceptance.

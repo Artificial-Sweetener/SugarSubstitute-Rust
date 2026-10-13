@@ -2,6 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Share bounded native pipe storage, callback retirement and token inspection.
 #[cfg(windows)]
+pub(crate) mod accounting;
+#[cfg(windows)]
 mod errors;
 #[cfg(windows)]
 pub(crate) mod event;

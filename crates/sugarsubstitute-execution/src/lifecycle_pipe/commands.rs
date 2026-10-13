@@ -4,8 +4,8 @@
 use super::*;
 use sugarsubstitute_contracts::execution::{JobOutcome, JobPhase};
 pub(crate) struct Control {
-    pub(crate) shared: Arc<Shared>,
     pub(crate) owner: Owner,
+    pub(crate) shared: SharedRef,
 }
 impl Control {
     /// Return the immutable admitted handshake deadline in this executor's epoch.
@@ -123,7 +123,7 @@ impl Control {
     ) -> Result<NativeWriteAdmission, LifecyclePipeWriteRejection> {
         let result = self.commit(|s, slots, now| {
             validate(s, operation, original_deadline, now)?;
-            if !Arc::ptr_eq(&buffer.shared, &self.shared)
+            if !buffer.shared.same_allocation(&self.shared)
                 || buffer.buffer.is_none()
                 || encoded_length == 0
                 || encoded_length > MAX_LIFECYCLE_MESSAGE_BYTES
@@ -252,7 +252,7 @@ pub(crate) fn retain_failure<T>(
 }
 
 pub(super) fn commit<R>(
-    shared: &Arc<Shared>,
+    shared: &SharedRef,
     owner: &Owner,
     change: impl FnOnce(&mut State, &mut Deadlines, Moment) -> Result<R, LifecyclePipeError>,
 ) -> Result<R, LifecyclePipeError> {

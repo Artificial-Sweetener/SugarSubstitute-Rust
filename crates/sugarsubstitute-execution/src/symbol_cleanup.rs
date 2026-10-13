@@ -136,7 +136,8 @@ impl ExecutionClient {
                 cleanup_spec,
                 RequestKind::SymbolCleanup { main_scope: main_scope.spec(), main_spec },
                 factory,
-                |factory, context, cancel, admitted| {
+                |factory, context, cancel, timing| {
+                    let admitted = timing.admitted;
                     let job = Job::new(
                         cleanup_scope.id(),
                         cleanup_spec,

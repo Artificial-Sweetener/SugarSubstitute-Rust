@@ -84,11 +84,14 @@ impl Active {
             }
         }
         let state = lock(&self.work.shared.state);
-        let retiring = state.stopped || (state.transferred && !state.pinned);
+        let stopped = state.stopped;
+        let retiring = stopped || (state.transferred && !state.pinned);
         let pinned = state.pinned;
         drop(state);
         if self.outcome.is_none() && retiring {
-            self.outcome = Some(if self.prepared {
+            // An explicit stop is distinct from the ordinary released launch pin.
+            // It may arrive after this iteration's initial cancellation observation.
+            self.outcome = Some(if self.prepared && !stopped {
                 JobOutcome::Success(FixtureForwardingReport {
                     correlation: self.work.correlation,
                     prepared: true,

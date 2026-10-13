@@ -130,7 +130,8 @@ pub(crate) fn reserve(
         scope,
         spec,
         RequestKind::CaptureAttach(expected.run()),
-        |context, cancel, admitted| {
+        |context, cancel, timing| {
+            let admitted = timing.admitted;
             let job = Job::new(scope.id(), spec, admitted, cancel, Arc::downgrade(core));
             let custody = Custody::new(core, spec.id, expected.run(), handshake);
             let shared = Arc::new(Shared {

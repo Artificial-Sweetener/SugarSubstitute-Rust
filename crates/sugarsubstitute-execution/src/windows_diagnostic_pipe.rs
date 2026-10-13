@@ -223,14 +223,24 @@ impl ExecutionClient {
             Ok(until) => until,
             Err(error) => return Err(DiagnosticPipeAdmissionRejection { error, resources }),
         };
-        let kind = match &resources {
-            crate::DiagnosticPipeResources::Standard => crate::admission::RequestKind::Native,
+        let original_context = match &resources {
+            crate::DiagnosticPipeResources::Standard => None,
             crate::DiagnosticPipeResources::Symbol(reservation) => {
+                Some(reservation.original.as_ref().clone())
+            }
+        };
+        let kind = match (&resources, &original_context) {
+            (crate::DiagnosticPipeResources::Standard, _) => crate::admission::RequestKind::Native,
+            (crate::DiagnosticPipeResources::Symbol(reservation), Some(original_context)) => {
                 crate::admission::RequestKind::SymbolNative {
-                    original: reservation.original.as_ref().clone(),
+                    original: original_context,
                     handles: reservation.handles.clone(),
                 }
             }
+            (crate::DiagnosticPipeResources::Symbol(_), None) => return Err(DiagnosticPipeAdmissionRejection {
+                error: LifecyclePipeAdmissionError::Admission(sugarsubstitute_contracts::execution::AdmissionError::InvalidSymbolAdmission),
+                resources,
+            }),
         };
         let (inner, completion) = lifecycle_pipe::admit_owned(
             &self.core,
@@ -243,15 +253,20 @@ impl ExecutionClient {
             },
             kind,
             resources,
-            |resources| {
-                Box::new(native::Lease::diagnostic_client(
-                    expected_role,
-                    original,
-                    match resources {
-                        crate::DiagnosticPipeResources::Standard => None,
-                        crate::DiagnosticPipeResources::Symbol(reservation) => Some(reservation),
-                    },
-                ))
+            |resources, _context| {
+                Ok(lifecycle_pipe::PreparedPipeLease {
+                    lease: Box::new(native::Lease::diagnostic_client(
+                        expected_role,
+                        original,
+                        match resources {
+                            crate::DiagnosticPipeResources::Standard => None,
+                            crate::DiagnosticPipeResources::Symbol(reservation) => {
+                                Some(reservation)
+                            }
+                        },
+                    )),
+                    metadata: None,
+                })
             },
         )
         .map_err(|(error, resources)| DiagnosticPipeAdmissionRejection {

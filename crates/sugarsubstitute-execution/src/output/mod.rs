@@ -174,7 +174,8 @@ pub(crate) fn reserve(
             minimum_bytes: MIN_WINDOWS_OUTPUT_BYTES,
         });
     }
-    core.admit(scope, spec, RequestKind::Native, |context, cancel, admitted| {
+    core.admit(scope, spec, RequestKind::Native, |context, cancel, timing| {
+        let admitted = timing.admitted;
         let job = Job::new(scope.id(), spec, admitted, cancel, Arc::downgrade(core));
         let shared = Arc::new(Shared {
             state: Mutex::new(State::new()),

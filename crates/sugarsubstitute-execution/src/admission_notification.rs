@@ -24,12 +24,12 @@ impl Core {
             record.job.cancellation().request();
         }
         #[cfg(any(windows, test))]
-        let custody = state.jobs.get(&id).and_then(|record| record.native_custody.clone());
+        let custody = state.jobs.get(&id).and_then(Record::native_custody_loan);
         drop(state);
         #[cfg(any(windows, test))]
         if let Some(custody) = custody {
             crate::capture_attach::control::request(
-                &custody,
+                &custody.custody,
                 crate::capture_attach::control::CleanupTrigger::Cancelled,
             );
         }
@@ -50,11 +50,11 @@ impl Core {
                     record.job.cancellation().is_requested()
                         || state.scopes.get(&record.scope_id).is_none_or(|scope| scope.closed)
                 })
-                .filter_map(|record| record.native_custody.clone())
+                .filter_map(Record::native_custody_loan)
                 .collect::<Vec<_>>()
         };
         for custody in capture {
-            crate::capture_attach::control::request(&custody, trigger);
+            crate::capture_attach::control::request(&custody.custody, trigger);
         }
     }
 

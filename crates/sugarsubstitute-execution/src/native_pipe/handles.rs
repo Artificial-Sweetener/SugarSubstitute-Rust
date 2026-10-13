@@ -3,46 +3,36 @@
 //! Keep every returned handle in a durable slot until checked close actually succeeds.
 use super::NativePipeError;
 use crate::native::NativeObservationError;
-use std::sync::Arc;
-use sugarsubstitute_contracts::execution::{NativeHandleClaim, NativeHandleOutput};
 use windows::Win32::Foundation::*;
 struct Owner {
     raw: usize,
-    claim: Option<Arc<NativeHandleClaim>>,
-    output: Option<NativeHandleOutput>,
-    original: Option<crate::native_resources::EffectContext>,
+    output: Option<super::accounting::OutputCredit>,
+    accounting: Option<super::accounting::OutputAccounting>,
     cause: Option<NativeObservationError>,
 }
 pub(crate) struct Handle {
     owner: Option<Box<Owner>>,
 }
 impl Handle {
+    /// Bound this actual value and its separately allocated durable owner cell.
+    pub(crate) const fn storage_bytes() -> usize {
+        size_of::<Self>() + size_of::<Owner>()
+    }
     pub(crate) fn new() -> Self {
         Self {
-            owner: Some(Box::new(Owner {
-                raw: 0,
-                claim: None,
-                output: None,
-                original: None,
-                cause: None,
-            })),
+            owner: Some(Box::new(Owner { raw: 0, output: None, accounting: None, cause: None })),
         }
     }
-    pub(crate) fn attach(
-        &mut self,
-        handles: Arc<NativeHandleClaim>,
-        original: crate::native_resources::EffectContext,
-    ) {
+    pub(crate) fn attach(&mut self, accounting: super::accounting::OutputAccounting) {
         if let Some(owner) = &mut self.owner {
-            owner.claim = Some(handles);
-            owner.original = Some(original);
+            owner.accounting = Some(accounting);
         }
     }
     pub(crate) fn value(&self) -> usize {
         self.owner.as_ref().map_or(0, |owner| owner.raw)
     }
     pub(crate) fn check(&self, stage: &'static str) -> Result<(), NativePipeError> {
-        if let Some(original) = self.owner.as_ref().and_then(|owner| owner.original.as_ref()) {
+        if let Some(original) = self.owner.as_ref().and_then(|owner| owner.accounting.as_ref()) {
             original.check().map_err(|cause| error(stage, cause))?;
         }
         Ok(())
@@ -59,8 +49,9 @@ impl Handle {
         if owner.raw != 0 || owner.output.is_some() {
             return Err(error(stage, std::io::Error::other("Native output slot already retained")));
         }
-        if let Some(claim) = &owner.claim {
-            owner.output = Some(claim.reserve_output().map_err(|cause| error(stage, cause))?);
+        if let Some(accounting) = &owner.accounting {
+            owner.output =
+                Some(accounting.reserve_output(stage).map_err(|cause| error(stage, cause))?);
         }
         Ok(())
     }

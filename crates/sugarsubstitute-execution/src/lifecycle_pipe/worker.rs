@@ -7,7 +7,7 @@ use sugarsubstitute_contracts::execution::{ExecutionError, JobOutcome, PanicCaus
 mod protocol;
 #[path = "write_revocation.rs"]
 mod write_revocation;
-pub(super) struct ActiveState {
+pub(crate) struct ActiveState {
     work: PipeWork,
     context: JobContext,
     started: Moment,
@@ -25,6 +25,16 @@ pub(super) struct ActiveState {
     native_retired: bool,
 }
 impl ActiveState {
+    /// Count the actual boxed worker and outside private shared/control metadata.
+    pub(crate) const fn storage_bytes() -> usize {
+        size_of::<Self>()
+            + shared::SharedRef::control_storage_bytes()
+            + metadata::Metadata::control_storage_bytes()
+            + 8 * size_of::<Observation>()
+            + size_of::<crate::task::Job<(), LifecyclePipeFailure>>()
+            + 2 * size_of::<std::sync::atomic::AtomicUsize>()
+            + size_of::<crate::task::JobHandle<(), LifecyclePipeFailure>>()
+    }
     pub(crate) fn new(
         mut work: PipeWork,
         context: JobContext,
@@ -142,7 +152,13 @@ impl ActiveState {
                 return;
             }
             let result = self.lease.as_mut().ok_or_else(|| failure("pipe_missing_lease")).and_then(
-                |lease| lease.prepare(self.signals.clone(), &self.context, self.work.handshake),
+                |lease| {
+                    lease.prepare(
+                        self.signals.clone(),
+                        &self.context,
+                        self.work.shared.original_deadline,
+                    )
+                },
             );
             match result {
                 Ok(inherited) => {
@@ -150,6 +166,9 @@ impl ActiveState {
                     let binding = self.lease.as_ref().and_then(|lease| lease.binding());
                     let deadline = self.lease.as_ref().and_then(|lease| lease.deadline());
                     let capability = self.lease.as_ref().and_then(|lease| lease.capability());
+                    #[cfg(windows)]
+                    let capture_inherited =
+                        self.lease.as_ref().and_then(|lease| lease.inherited_capture_processes());
                     let mut s = lock(&self.work.shared.state);
                     if binding.is_none() || (s.binding.is_some() && s.binding != binding) {
                         drop(s);
@@ -158,6 +177,10 @@ impl ActiveState {
                         return;
                     }
                     s.inherited = inherited;
+                    #[cfg(windows)]
+                    {
+                        s.capture_inherited = capture_inherited;
+                    }
                     s.binding = binding;
                     s.prepared = true;
                     s.deadline = deadline;
@@ -186,6 +209,11 @@ impl ActiveState {
         }
     }
     fn retirement(&mut self, core: &Core, now: Moment, clock_available: bool) {
+        #[cfg(windows)]
+        {
+            let captured = { lock(&self.work.shared.state).captured_startup.take() };
+            drop(captured);
+        }
         let (pinned, peer, abandoned, authentication, mut capability) = {
             let mut state = lock(&core.state);
             let mut s = lock(&self.work.shared.state);
@@ -306,10 +334,15 @@ impl ActiveState {
 /// Keep every buffer, lease and original cause together when settlement is unproved.
 pub(crate) struct Active {
     owner: Option<Box<ActiveState>>,
+    _metadata: metadata::Metadata,
 }
 impl Active {
     pub(crate) fn new(work: PipeWork, context: JobContext, core: &Arc<Core>, now: Moment) -> Self {
-        Self { owner: Some(Box::new(ActiveState::new(work, context, core, now))) }
+        let metadata = work.shared.metadata.clone();
+        Self {
+            owner: Some(Box::new(ActiveState::new(work, context, core, now))),
+            _metadata: metadata,
+        }
     }
     pub(crate) fn completed(&self) -> bool {
         self.owner.as_ref().is_some_and(|owner| owner.completed())
@@ -331,6 +364,7 @@ impl Drop for Active {
             && !owner.completed
         {
             let retained = Box::leak(owner);
+            std::mem::forget(self._metadata.clone());
             tracing::error!(
                 operation = "native_pipe_uncertain_drop",
                 job_id = retained.context.job_id().get(),

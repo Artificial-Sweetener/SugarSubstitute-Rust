@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Transfer the original authenticated entry allocation into captured startup custody.
+mod admission;
 use super::{AuthenticatedEntryLaunch, EntryTransportError, protocol};
+pub(crate) use admission::StartupAdmissionBinding;
 use std::ops::Range;
 
 /// Retain an original charged entry frame for one captured desktop startup.
@@ -63,5 +65,22 @@ impl std::fmt::Debug for PreparedStartupSnapshot {
             .field("request", &self.launch.request_id())
             .field("body_bytes", &self.body.len())
             .finish_non_exhaustive()
+    }
+}
+
+impl PreparedStartupSnapshot {
+    /// Borrow only the original admitted Launch body; no frame allocation is copied.
+    /// # Errors
+    /// Rejects missing original frame custody or an invalid retained body range.
+    pub(crate) fn body(&self) -> Result<&[u8], EntryTransportError> {
+        self.launch.frame.bytes().get(self.body.clone()).ok_or(EntryTransportError::Malformed)
+    }
+
+    /// Project inert matching facts for final Core-to-Entry admission validation.
+    /// The original body and connection loan remain solely in this snapshot.
+    /// # Errors
+    /// Rejects a missing frame or mismatched original SSCE1 correlation.
+    pub(crate) fn admission_binding(&self) -> Result<StartupAdmissionBinding, EntryTransportError> {
+        admission::project(self)
     }
 }

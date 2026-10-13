@@ -2,6 +2,12 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Return fixed admitted message buffers through passive guards, never native destructors.
 use super::*;
+
+/// Original captured metadata allowance, including the sole mapped startup section.
+pub(crate) const CAPTURED_METADATA_BYTES: usize = 131_072;
+/// Captured lifecycle allocation: original metadata plus two fixed message buffers.
+pub const MIN_CAPTURED_LIFECYCLE_PIPE_BYTES: u64 =
+    CAPTURED_METADATA_BYTES as u64 + 2 * MAX_LIFECYCLE_MESSAGE_BYTES as u64;
 use sugarsubstitute_contracts::execution::{MemoryClaim, MemoryLease};
 pub(crate) struct Buffer {
     pub(crate) bytes: Box<[u8]>,
@@ -19,7 +25,7 @@ impl Buffer {
 /// Drop returns storage and wakes its owner without closing any native handle.
 pub struct LifecyclePipeWriteBuffer {
     pub(crate) buffer: Option<Buffer>,
-    pub(crate) shared: Arc<Shared>,
+    pub(crate) shared: SharedRef,
 }
 impl LifecyclePipeWriteBuffer {
     /// Borrow writable fixed storage for the protocol owner's preflighted encoder.
@@ -44,7 +50,7 @@ impl Drop for LifecyclePipeWriteBuffer {
 pub struct ReceivedLifecycleFrame {
     pub(crate) buffer: Option<Buffer>,
     pub(crate) length: usize,
-    pub(crate) shared: Arc<Shared>,
+    pub(crate) shared: SharedRef,
 }
 impl ReceivedLifecycleFrame {
     /// Borrow exact observed bytes; decoding grants no peer or resource authority.

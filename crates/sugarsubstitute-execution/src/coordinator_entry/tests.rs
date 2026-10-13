@@ -43,3 +43,6 @@ mod retirement;
 mod startup_snapshot;
 #[path = "worker_tests.rs"]
 mod worker;
+
+#[path = "startup_snapshot/captured_admission_tests.rs"]
+mod captured_admission;

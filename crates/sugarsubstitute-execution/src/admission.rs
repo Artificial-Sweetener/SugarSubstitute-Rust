@@ -21,7 +21,10 @@ use sugarsubstitute_contracts::execution::{
 use tokio::sync::Notify;
 
 #[derive(Clone)]
-pub(crate) enum RequestKind {
+/// Identify construction without extending source ownership beyond synchronous admission.
+/// Captured and symbol inputs retain genuine original bindings outside Core while this request borrows them;
+/// validation and the factory share those original allocations without a new control.
+pub(crate) enum RequestKind<'a> {
     Async,
     Blocking,
     Cpu,
@@ -34,13 +37,17 @@ pub(crate) enum RequestKind {
         cleanup: JobId,
     },
     SymbolNative {
-        original: JobContext,
+        original: &'a JobContext,
         handles: Arc<sugarsubstitute_contracts::execution::NativeHandleClaim>,
     },
     #[cfg(any(windows, test))]
     Native,
     #[cfg(any(windows, test))]
+    CapturedLifecycle(&'a crate::lifecycle_pipe::captured_admission::AdmissionBinding),
+    #[cfg(any(windows, test))]
     CaptureAttach(sugarsubstitute_contracts::lifecycle::RunKey),
+    #[cfg(any(windows, test))]
+    DesktopCapture(sugarsubstitute_contracts::lifecycle::RunKey),
 }
 
 pub(crate) struct Record {
@@ -48,10 +55,21 @@ pub(crate) struct Record {
     pub(crate) entry_setup: Option<sugarsubstitute_contracts::coordinator_entry::EntrySetupBudget>,
     pub(crate) preparation_issued: bool,
     pub(crate) preparation: Option<Arc<crate::entry_preparation::slot::PreparationSlot>>,
+    pub(crate) capture_bundle_issued: bool,
+    #[cfg(any(windows, test))]
+    pub(crate) capture_event_issued: bool,
+    #[cfg(any(windows, test))]
+    pub(crate) capture_event_identity: Option<usize>,
     pub(crate) symbol_original: Option<JobId>,
     pub(crate) symbol_cleanup: Option<crate::symbol_cleanup::Binding>,
     #[cfg(any(windows, test))]
     pub(crate) native_custody: Option<Arc<crate::capture_attach::control::Custody>>,
+    #[cfg(any(windows, test))]
+    pub(crate) desktop_capture_custody:
+        Option<crate::desktop_capture::metadata::DesktopCaptureCustodyRef>,
+    #[cfg(any(windows, test))]
+    pub(crate) process_capture:
+        Option<crate::capture_bundle::desktop_transfer::ProcessCaptureAssociation>,
     #[cfg(any(windows, test))]
     pub(crate) native_deadlines: Option<crate::native_deadlines::Deadlines>,
     pub(crate) deadline: Option<Moment>,
@@ -65,6 +83,44 @@ pub(crate) struct Record {
 }
 
 impl Record {
+    /// Retain child metadata outside any cleanup callback borrowed by Core.
+    #[cfg(any(windows, test))]
+    pub(crate) fn native_custody_loan(
+        &self,
+    ) -> Option<crate::desktop_capture::metadata::NativeCustodyLoan> {
+        self.native_custody.as_ref().map(|custody| {
+            crate::desktop_capture::metadata::NativeCustodyLoan::new(
+                custody.clone(),
+                self.desktop_capture_custody.as_ref(),
+            )
+        })
+    }
+    pub(crate) fn desktop_capture_child(&self) -> bool {
+        #[cfg(any(windows, test))]
+        {
+            self.desktop_capture_custody.is_some()
+        }
+        #[cfg(not(any(windows, test)))]
+        {
+            false
+        }
+    }
+    pub(crate) fn process_lifetime_only(&self) -> bool {
+        #[cfg(any(windows, test))]
+        {
+            self.process_capture.as_ref().is_some_and(|capture| capture.capsule_identity != 0)
+                && self.acknowledged
+                && self.phase == JobPhase::Terminal(TerminalKind::Success)
+                && !self.retiring
+                && !self.job.cancellation().pending()
+                && self.native_custody.is_none()
+                && self.desktop_capture_custody.is_none()
+        }
+        #[cfg(not(any(windows, test)))]
+        {
+            false
+        }
+    }
     pub(crate) fn held_native(&self) -> bool {
         if self.preparation.as_ref().is_some_and(|slot| slot.held()) {
             return true;
@@ -142,7 +198,7 @@ pub(crate) struct State {
 
 impl State {
     pub(crate) fn settled(&self) -> bool {
-        self.jobs.is_empty()
+        self.jobs.values().all(Record::process_lifetime_only)
             && self.retired.is_empty()
             && self.notifications_inflight == 0
             && self.capacity_wakes_inflight == 0
@@ -228,16 +284,13 @@ impl Core {
             }
         }
         #[cfg(any(windows, test))]
-        let capture = state
-            .jobs
-            .values()
-            .filter_map(|record| record.native_custody.clone())
-            .collect::<Vec<_>>();
+        let capture =
+            state.jobs.values().filter_map(Record::native_custody_loan).collect::<Vec<_>>();
         drop(state);
         #[cfg(any(windows, test))]
         for custody in capture {
             crate::capture_attach::control::request(
-                &custody,
+                &custody.custody,
                 crate::capture_attach::control::CleanupTrigger::OwnerShutdown,
             );
         }
@@ -287,7 +340,8 @@ impl Core {
         let now = self.clock.retirement_now();
         let mut state = lock(&self.state);
         let index = state.queue.iter().position(|queued| {
-            accepts(queued.context.spec().class)
+            queued.factory_work()
+                && accepts(queued.context.spec().class)
                 && (stop_reason_at(&queued.context, now).is_some()
                     || (!matches!(queued.work, crate::task::Work::BlockingHeld(_))
                         && Self::has_capacity(&state, queued.context.spec().class)))

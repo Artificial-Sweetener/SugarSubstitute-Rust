@@ -15,13 +15,22 @@ pub(crate) struct Release {
 
 impl MemoryRelease for Release {
     fn release(&self, bytes: u64) {
-        let observation = {
+        let (observation, detached) = {
             let mut state = lock(&self.core.state);
-            state.jobs.get_mut(&self.job_id).and_then(|record| record.memory.take())
+            let observation =
+                state.jobs.get_mut(&self.job_id).and_then(|record| record.memory.take());
+            #[cfg(any(windows, test))]
+            let permanent =
+                state.jobs.get(&self.job_id).is_some_and(|record| record.process_capture.is_some());
+            #[cfg(not(any(windows, test)))]
+            let permanent = false;
+            let detached = if permanent { state.jobs.remove(&self.job_id) } else { None };
+            (observation, detached)
         };
         // The weak record cannot prolong its control storage beyond byte reclaim.
         // Dropping it outside Core invokes no provider or final admitted lease.
         drop(observation);
+        drop(detached);
         {
             let core = &self.core;
             let mut state = lock(&core.state);

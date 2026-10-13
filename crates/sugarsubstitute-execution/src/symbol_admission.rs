@@ -39,7 +39,7 @@ pub struct SymbolResourceRejection {
 /// Construction validates actual Core ledger identity; accounting grants no OS privilege.
 pub struct SymbolTransportReservation {
     pub(crate) handles: Arc<NativeHandleClaim>,
-    pub(crate) original: Box<JobContext>,
+    pub(crate) original: crate::native_resources::SymbolOriginalContext,
     pub(crate) core: std::sync::Weak<Core>,
 }
 
@@ -106,7 +106,7 @@ pub(crate) fn validate(
     state: &State,
     scope: &Scope,
     spec: JobSpec,
-    kind: &RequestKind,
+    kind: &RequestKind<'_>,
     now: Moment,
 ) -> Result<(), AdmissionError> {
     match kind {
@@ -223,7 +223,8 @@ impl ExecutionClient {
                 spec,
                 RequestKind::SymbolHelper { cleanup: cleanup.original_job_id() },
                 factory,
-                |factory, context, cancel, admitted| {
+                |factory, context, cancel, timing| {
+                    let admitted = timing.admitted;
                     let job =
                         Job::new(scope.id(), spec, admitted, cancel, Arc::downgrade(&self.core));
                     let task_job = job.clone();
@@ -256,11 +257,17 @@ impl ExecutionClient {
                 validate_context(&self.core, &state, context, &handles, now)
             });
         match decision {
-            Ok(()) => Ok(SymbolTransportReservation {
-                handles: Arc::new(handles),
-                original: Box::new(context.clone()),
-                core: Arc::downgrade(&self.core),
-            }),
+            Ok(()) => {
+                let handles = Arc::new(handles);
+                Ok(SymbolTransportReservation {
+                    original: crate::native_resources::SymbolOriginalContext::new(
+                        context,
+                        handles.clone(),
+                    ),
+                    handles,
+                    core: Arc::downgrade(&self.core),
+                })
+            }
             Err(error) => Err(SymbolResourceRejection { error, handles }),
         }
     }

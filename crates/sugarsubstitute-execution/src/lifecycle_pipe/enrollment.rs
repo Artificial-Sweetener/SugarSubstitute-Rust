@@ -4,16 +4,16 @@
 use super::*;
 
 pub(crate) struct Enrollment {
-    shared: Arc<Shared>,
     owner: Owner,
+    shared: SharedRef,
     active: bool,
 }
 impl Enrollment {
     pub(crate) fn binding(&self) -> Option<PeerBinding> {
         lock(&self.shared.state).binding
     }
-    pub(crate) fn matches(&self, shared: &Arc<Shared>) -> bool {
-        self.active && Arc::ptr_eq(&self.shared, shared)
+    pub(crate) fn matches(&self, shared: &SharedRef) -> bool {
+        self.active && self.shared.same_allocation(shared)
     }
     pub(crate) fn take(control: &Control) -> Result<Self, LifecyclePipeError> {
         control.commit(|s, _, _| {

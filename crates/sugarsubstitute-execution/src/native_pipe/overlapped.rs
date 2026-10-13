@@ -24,6 +24,10 @@ pub(crate) struct Operation {
 // never moves its boxed storage, and retirement proves I/O and callback quiescence.
 unsafe impl Send for Operation {}
 impl Operation {
+    /// Count the exact retained OVERLAPPED and event/wait owner allocations.
+    pub(crate) const fn storage_bytes() -> usize {
+        size_of::<Self>() + size_of::<OVERLAPPED>() + Event::storage_bytes() - size_of::<Event>()
+    }
     pub(crate) fn new(signal: Arc<Signal>) -> Self {
         Self {
             event: Event::new(signal),
@@ -33,12 +37,8 @@ impl Operation {
             completed: None,
         }
     }
-    pub(crate) fn attach(
-        &mut self,
-        handles: Arc<sugarsubstitute_contracts::execution::NativeHandleClaim>,
-        original: crate::native_resources::EffectContext,
-    ) {
-        self.event.attach(handles, original);
+    pub(crate) fn attach(&mut self, accounting: super::accounting::OutputAccounting) {
+        self.event.attach(accounting);
     }
     fn begin_reuse(&mut self) -> Result<(), NativePipeError> {
         if self.event.registered() || self.pending {

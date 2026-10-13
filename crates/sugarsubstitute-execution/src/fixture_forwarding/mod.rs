@@ -92,7 +92,8 @@ fn reserve_at(
     spec: JobSpec,
     correlation: NativeCorrelation,
 ) -> Result<FixtureForwardingPermit, FixtureChildAdmissionError> {
-    core.admit(scope, spec, RequestKind::Native, |context: JobContext, cancel, admitted: Moment| {
+    core.admit(scope, spec, RequestKind::Native, |context: JobContext, cancel, timing| {
+        let admitted = timing.admitted;
         let job = Job::new(scope.id(), spec, admitted, cancel, Arc::downgrade(core));
         let shared =
             Arc::new(Shared { state: Mutex::new(State::default()), core: Arc::downgrade(core) });

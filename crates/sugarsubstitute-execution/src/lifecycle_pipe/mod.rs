@@ -2,6 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Own closed lifecycle transport sessions and fixed command slots after real admission.
 mod admission;
+mod metadata;
+mod shared;
+pub(crate) use shared::SharedRef;
 mod binding;
 mod commands;
 mod owner;
@@ -24,7 +27,10 @@ use crate::{
     task::{Job, JobHandle, QueuedJob, Work},
 };
 pub use admission::{NativeWriteAdmission, NativeWriteRevocation};
-pub use buffers::{LifecyclePipeWriteBuffer, ReceivedLifecycleFrame};
+pub(crate) use buffers::CAPTURED_METADATA_BYTES;
+pub use buffers::{
+    LifecyclePipeWriteBuffer, MIN_CAPTURED_LIFECYCLE_PIPE_BYTES, ReceivedLifecycleFrame,
+};
 pub use control::{
     LifecyclePipeBootstrap, LifecyclePipeControl, LifecyclePipeSession, LifecyclePipeWriteRejection,
 };
@@ -34,10 +40,12 @@ use std::{
     sync::{Arc, Mutex, Weak},
 };
 use sugarsubstitute_contracts::{
-    execution::{AdmissionError, JobContext, JobSpec, MemoryClaim, Moment, OwnedJob, Scope},
+    execution::{AdmissionError, JobContext, JobSpec, Moment, OwnedJob, Scope},
     lifecycle::{ProcessKey, RunKey},
 };
 pub use types::*;
+mod startup_snapshot;
+pub use startup_snapshot::AuthenticatedStartupSnapshot;
 
 pub(crate) use crate::native_pipe::Progress;
 pub(crate) enum PeerInput {
@@ -48,6 +56,8 @@ pub(crate) enum PeerInput {
     #[cfg(test)]
     Simulated,
 }
+pub(crate) mod captured_admission;
+
 pub(crate) trait PipeLease: Send {
     fn adopt(&mut self, input: PeerInput) -> Result<(), (Box<LifecyclePipeFailure>, PeerInput)>;
     fn prepare(
@@ -74,6 +84,18 @@ pub(crate) trait PipeLease: Send {
     fn quiesce(&mut self, role: Role) -> Result<(), LifecyclePipeFailure>;
     fn verify_message(&mut self) -> Result<(), LifecyclePipeFailure>;
     fn authenticate(&mut self, candidate: &[u8; 32]) -> Result<VerifiedPeer, LifecyclePipeFailure>;
+    /// Transfer only already adopted actual v3 outputs; external adapters have none by default.
+    #[cfg(windows)]
+    fn inherited_capture_processes(&self) -> Option<[usize; 2]> {
+        None
+    }
+    /// Transfer already adopted paired output custody after actual native authentication.
+    #[cfg(windows)]
+    fn take_captured_startup(
+        &mut self,
+    ) -> Option<crate::windows_lifecycle_pipe::captured::child::CapturedStartup> {
+        None
+    }
     fn take_completed_write(&mut self) -> Option<u32>;
     fn retire(&mut self, launch_pinned: bool) -> Result<bool, LifecyclePipeFailure>;
 }
@@ -108,6 +130,11 @@ impl Drop for Authentication {
     }
 }
 pub(crate) struct State {
+    #[cfg(windows)]
+    pub(crate) capture_inherited: Option<[usize; 2]>,
+    #[cfg(windows)]
+    pub(crate) captured_startup:
+        Option<crate::windows_lifecycle_pipe::captured::child::CapturedStartup>,
     pub(crate) stopped: bool,
     pub(crate) prepared: bool,
     pub(crate) connected: bool,
@@ -141,6 +168,10 @@ pub(crate) struct State {
 impl State {
     fn new(binding: Option<PeerBinding>) -> Self {
         Self {
+            #[cfg(windows)]
+            capture_inherited: None,
+            #[cfg(windows)]
+            captured_startup: None,
             stopped: false,
             prepared: false,
             connected: false,
@@ -184,7 +215,6 @@ impl State {
 pub(crate) struct Shared {
     pub(crate) original_deadline: Moment,
     pub(crate) state: Mutex<State>,
-    pub(crate) memory: Mutex<Option<MemoryClaim>>,
     pub(crate) core: Weak<Core>,
     pub(crate) id: sugarsubstitute_contracts::execution::JobId,
 }
@@ -196,10 +226,9 @@ impl Shared {
     }
 }
 pub(crate) struct PipeWork {
-    pub(crate) shared: Arc<Shared>,
+    pub(crate) shared: SharedRef,
     pub(crate) owner: Owner,
     pub(crate) lease: Option<Box<dyn PipeLease>>,
-    pub(crate) handshake: Moment,
 }
 pub(crate) fn reserve(
     core: &Arc<Core>,
@@ -214,19 +243,24 @@ pub(crate) fn reserve(
     Ok(LifecyclePipeSession { control: LifecyclePipeControl { inner }, completion })
 }
 mod submission;
-pub(crate) use submission::{PipeAdmission, admit, admit_owned};
+pub(crate) use submission::{PipeAdmission, PreparedPipeLease, admit, admit_owned};
 pub(crate) fn failure(stage: &'static str) -> LifecyclePipeFailure {
     LifecyclePipeFailure::native(NativeObservationError::new(
         stage,
         std::io::Error::other("Lifecycle transport invariant rejected"),
     ))
 }
-pub(crate) fn allocate(context: &JobContext, shared: &Shared) -> Result<(), LifecyclePipeFailure> {
+pub(crate) fn allocate(
+    context: &JobContext,
+    shared: &SharedRef,
+) -> Result<(), LifecyclePipeFailure> {
     let memory = context.memory();
-    let meta = memory.claim(65_536).map_err(|e| {
-        LifecyclePipeFailure::native(NativeObservationError::new("pipe_metadata_claim", e))
-    })?;
-    *lock(&shared.memory) = Some(meta);
+    if !shared.metadata.installed() {
+        let meta = memory.claim(65_536).map_err(|e| {
+            LifecyclePipeFailure::native(NativeObservationError::new("pipe_metadata_claim", e))
+        })?;
+        shared.metadata.install(meta)?;
+    }
     let read = buffers::Buffer::new(memory)?;
     let write = buffers::Buffer::new(memory)?;
     let mut s = lock(&shared.state);
@@ -235,5 +269,5 @@ pub(crate) fn allocate(context: &JobContext, shared: &Shared) -> Result<(), Life
     Ok(())
 }
 pub(crate) fn initial_deadlines(work: &PipeWork) -> Deadlines {
-    Deadlines::handshake(work.handshake)
+    Deadlines::handshake(work.shared.original_deadline)
 }

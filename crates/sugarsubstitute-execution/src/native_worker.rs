@@ -108,6 +108,11 @@ impl ProcessActive {
     }
 }
 
+struct DesktopCaptureOwner {
+    active: Box<crate::desktop_capture::worker::DesktopCaptureActive>,
+    _metadata: crate::desktop_capture::metadata::ChildMetadata,
+}
+
 enum Active {
     Process(ProcessActive),
     Fixture(crate::fixture_session::worker::Active),
@@ -118,6 +123,7 @@ enum Active {
     Entry(crate::coordinator_entry::worker::Active),
     CaptureAttach(crate::capture_attach::worker::Active),
     Environment(crate::entry_preparation::retirement::EntryPreparationRetirement),
+    DesktopCapture(DesktopCaptureOwner),
 }
 impl Active {
     fn new(queued: QueuedJob, core: &Arc<Core>, now: Moment) -> Option<Self> {
@@ -144,6 +150,16 @@ impl Active {
             NativeWork::CaptureAttach(work) => Self::CaptureAttach(
                 crate::capture_attach::worker::Active::new(*work, queued.context, core, now),
             ),
+            NativeWork::DesktopCapture(work) => {
+                let active = crate::desktop_capture::worker::DesktopCaptureActive::new(
+                    *work,
+                    queued.context,
+                    core,
+                    now,
+                );
+                let metadata = active.metadata();
+                Self::DesktopCapture(DesktopCaptureOwner { active, _metadata: metadata })
+            }
             NativeWork::Output(work) => {
                 Self::Output(crate::output::worker::Active::new(work, queued.context, core, now))
             }
@@ -160,6 +176,7 @@ impl Active {
             Self::Entry(active) => active.fail_owner(cause),
             Self::CaptureAttach(active) => active.fail_owner(cause),
             Self::Environment(active) => active.fail_owner(cause),
+            Self::DesktopCapture(owner) => owner.active.fail_owner(cause),
         }
     }
     fn progress(&mut self, core: &Core, now: Moment, clock_available: bool) {
@@ -173,6 +190,7 @@ impl Active {
             Self::Entry(active) => active.progress(core, now, clock_available),
             Self::CaptureAttach(active) => active.progress(core, now, clock_available),
             Self::Environment(active) => active.progress(core),
+            Self::DesktopCapture(owner) => owner.active.progress(core, now, clock_available),
         }
     }
     fn completed(&self) -> bool {
@@ -186,6 +204,7 @@ impl Active {
             Self::Entry(active) => active.completed(),
             Self::CaptureAttach(active) => active.completed(),
             Self::Environment(active) => active.completed(),
+            Self::DesktopCapture(owner) => owner.active.completed(),
         }
     }
 }
@@ -196,12 +215,13 @@ pub(crate) struct NativeWorker {
 }
 impl NativeWorker {
     pub(crate) fn start(core: Arc<Core>) -> Result<Self, ExecutionError> {
-        // Native512 plus all existing nonnative48 held delivery credits bound this owner.
+        // NativeObservation held512 plus existing finite-infrastructure held48
+        // bound the shared worker's actual owners without changing admission caps.
         let mut active = Vec::new();
-        active.try_reserve_exact(560).map_err(crate::runtime::error)?;
-        if active.capacity() != 560 {
+        active.try_reserve_exact(NATIVE_ACTIVE_LIMIT).map_err(crate::runtime::error)?;
+        if active.capacity() != NATIVE_ACTIVE_LIMIT {
             return Err(crate::runtime::error(std::io::Error::other(
-                "Native owner storage exceeds derived held-credit bound",
+                "Native owner storage capacity differs from fixed credit bound",
             )));
         }
         let worker_core = core.clone();
@@ -256,6 +276,8 @@ fn owner_panicked(
     core.clock.retirement_now()
 }
 
+const NATIVE_ACTIVE_LIMIT: usize = 512 + 48;
+
 fn worker(core: Arc<Core>, mut active: Vec<Active>) {
     if core.native_thread.set(thread::current()).is_err() {
         core.mailbox.record_failure(crate::runtime::error(std::io::Error::other(
@@ -276,13 +298,13 @@ fn worker(core: Arc<Core>, mut active: Vec<Active>) {
                 Err(payload) => now = owner_panicked(&core, &mut fatal, payload),
             }
         }
-        while active.len() < active.capacity() {
+        while active.len() < NATIVE_ACTIVE_LIMIT && active.len() < active.capacity() {
             match core.take_environment_retirement() {
                 Some(retired) => active.push(Active::Environment(retired)),
                 None => break,
             }
         }
-        while active.len() < active.capacity() {
+        while active.len() < NATIVE_ACTIVE_LIMIT && active.len() < active.capacity() {
             let Some((queued, wake)) = core.take_native_at(now) else { break };
             // A job can be admitted after the iteration sample. Observe dispatch
             // after dequeue, retaining its bound resources outside the unwind.

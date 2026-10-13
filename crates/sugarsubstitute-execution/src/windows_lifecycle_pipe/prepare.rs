@@ -8,6 +8,9 @@ impl Lease {
         context: &JobContext,
         handshake: Moment,
     ) -> Result<usize, LifecyclePipeFailure> {
+        if let Some(parent) = &self.captured_parent {
+            parent.check(context)?;
+        }
         // SAFETY: The current-process pseudo handle remains valid and is never closed.
         let identity =
             security::process_identity(unsafe { GetCurrentProcess() }, &mut self.own_token)?;
@@ -61,16 +64,44 @@ impl Lease {
             capability,
             name,
         };
-        let bytes = bootstrap::encode(&data)?;
         self.data = Some(data);
-        self.section.publish(&mut descriptor, &bytes)?;
+        let data = self.data.as_ref().ok_or_else(|| failure("pipe_bootstrap_owner"))?;
+        if let Some(parent) = &self.captured_parent {
+            parent.check(context)?;
+            let source = crate::counter_deadline::encode_sampled(
+                crate::windows_counter::sample,
+                || Ok(context.now()),
+                parent.pin.shared.expected.attach_budget().until(),
+            )
+            .map_err(LifecyclePipeFailure::native)?;
+            let body =
+                parent.startup.body().map_err(|cause| error("captured_startup_body", cause))?;
+            self.section.publish_captured(
+                &mut descriptor,
+                data,
+                parent.endpoint,
+                parent.processes,
+                source,
+                body,
+            )?;
+        } else {
+            let bytes = bootstrap::encode(data)?;
+            self.section.publish(&mut descriptor, &bytes)?;
+        }
         Ok(self.section.inherited())
     }
-    pub(super) fn prepare_client(&mut self) -> Result<usize, LifecyclePipeFailure> {
+    pub(super) fn prepare_client(
+        &mut self,
+        context: &JobContext,
+    ) -> Result<usize, LifecyclePipeFailure> {
         let original = self.original.ok_or_else(|| failure("pipe_client_deadline"))?;
-        self.section.accept_input(&mut self.input);
-        let bytes = self.section.read()?;
-        self.data = Some(bootstrap::decode(&bytes, original, self.expected)?);
+        if self.captured_client {
+            self.prepare_captured_child(context)?;
+        } else {
+            self.section.accept_input(&mut self.input);
+            let bytes = self.section.read()?;
+            self.data = Some(bootstrap::decode(&bytes, original, self.expected)?);
+        }
         // SAFETY: The current-process pseudo handle remains valid and is never closed.
         let identity =
             security::process_identity(unsafe { GetCurrentProcess() }, &mut self.own_token)?;

@@ -177,14 +177,7 @@ impl CaptureEndpointObservation {
         if creator != expected.creator || handler != expected.handler {
             return Err(CaptureAttachDataError::IdentityMismatch);
         }
-        const PREFIX: [u16; 9] = [92, 92, 46, 92, 112, 105, 112, 101, 92];
-        if endpoint.len() <= PREFIX.len()
-            || endpoint.len() > 256
-            || !endpoint.starts_with(&PREFIX)
-            || !endpoint[PREFIX.len()..].iter().all(|unit| {
-                *unit <= 127 && (*unit as u8).is_ascii_alphanumeric() || [45, 95].contains(unit)
-            })
-        {
+        if !valid_endpoint(endpoint) {
             return Err(CaptureAttachDataError::InvalidEndpoint);
         }
         let mut fixed = [0; 256];
@@ -304,4 +297,16 @@ impl Error for CaptureAttachFailure {
             _ => None,
         }
     }
+}
+
+/// Validate only the same bounded generated local endpoint spelling.
+/// Matching syntax grants no named-pipe/process/installation authority.
+pub(crate) fn valid_endpoint(endpoint: &[u16]) -> bool {
+    const PREFIX: [u16; 9] = [92, 92, 46, 92, 112, 105, 112, 101, 92];
+    endpoint.len() > PREFIX.len()
+        && endpoint.len() <= 256
+        && endpoint.starts_with(&PREFIX)
+        && endpoint[PREFIX.len()..].iter().all(|unit| {
+            *unit <= 127 && (*unit as u8).is_ascii_alphanumeric() || [45, 95].contains(unit)
+        })
 }

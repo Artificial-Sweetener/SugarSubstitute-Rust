@@ -19,6 +19,20 @@ pub struct NativeOutputCustody {
     pub high_water: u16,
 }
 
+/// Permanent process-owned capture remains charged after temporary worker shutdown.
+/// These passive facts do not claim physical PIN/module/source retirement.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ProcessCaptureCustody {
+    /// Original genuine admitted scope.
+    pub scope_id: ScopeId,
+    /// Historical Registered job; its completion was acknowledged separately.
+    pub job_id: JobId,
+    /// Full run identity still excluded from another capture admission.
+    pub full_run: sugarsubstitute_contracts::lifecycle::RunKey,
+    /// Whole original reservation retained by the outside process capsule, in bytes.
+    pub reservation_bytes: u64,
+}
+
 /// Fixed capacity policy for the production execution owner.
 ///
 /// Lifecycle jobs can consume idle ordinary slots while ordinary submissions
@@ -120,6 +134,8 @@ pub enum EntryEnvironmentExtent {
 /// Observe shutdown while retaining work, untransferred results and cancellation callbacks.
 #[derive(Debug)]
 pub struct ShutdownProgress {
+    /// Genuine process-lifetime capture, separate from unresolved temporary native work.
+    pub process_capture_custody: Vec<ProcessCaptureCustody>,
     /// Original held environment allocations; terminal ACK cannot erase these observations.
     pub entry_environment_custody: Vec<EntryEnvironmentCustody>,
     /// Nonzero original symbol output custody retained independently of job ACK.

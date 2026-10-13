@@ -10,8 +10,12 @@ impl Core {
         self: &Arc<Self>,
         scope: &Scope,
         spec: JobSpec,
-        kind: RequestKind,
-        build: impl FnOnce(JobContext, Arc<Cancellation>, Moment) -> (QueuedJob, R),
+        kind: RequestKind<'_>,
+        build: impl FnOnce(
+            JobContext,
+            Arc<Cancellation>,
+            crate::admission_timing::AdmittedTiming,
+        ) -> (QueuedJob, R),
     ) -> Result<R, AdmissionError> {
         self.admit_owned(scope, spec, kind, build, |build, context, cancel, now| {
             Ok(build(context, cancel, now))
@@ -27,20 +31,26 @@ impl Core {
         self: &Arc<Self>,
         scope: &Scope,
         spec: JobSpec,
-        kind: RequestKind,
+        kind: RequestKind<'_>,
         input: M,
         build: impl FnOnce(
             M,
             JobContext,
             Arc<Cancellation>,
-            Moment,
+            crate::admission_timing::AdmittedTiming,
         ) -> Result<(QueuedJob, R), (AdmissionError, M)>,
     ) -> Result<R, (AdmissionError, M)> {
-        let symbol =
+        let fresh_metadata =
             matches!(&kind, RequestKind::SymbolCleanup { .. } | RequestKind::SymbolHelper { .. });
         #[cfg(any(windows, test))]
-        let symbol = symbol || matches!(&kind, RequestKind::SymbolNative { .. });
-        let now = if symbol || matches!(&kind, RequestKind::EntryPreparation(_)) {
+        let fresh_metadata = fresh_metadata
+            || matches!(
+                &kind,
+                RequestKind::SymbolNative { .. }
+                    | RequestKind::DesktopCapture(_)
+                    | RequestKind::CapturedLifecycle(_)
+            );
+        let now = if fresh_metadata || matches!(&kind, RequestKind::EntryPreparation(_)) {
             match self.clock.metadata() {
                 Ok(now) => now,
                 Err(cause) => return Err((AdmissionError::Unexpected(cause), input)),
@@ -64,6 +74,15 @@ impl Core {
             if let Some(deadline) = deadline.filter(|deadline| *deadline <= now) {
                 return Err(AdmissionError::DeadlineExpired { deadline, now });
             }
+            let timing = crate::admission_timing::validate(
+                self,
+                &state,
+                scope.id(),
+                spec,
+                &kind,
+                deadline,
+                now,
+            )?;
             let valid_method = matches!(
                 (&kind, spec.class),
                 (RequestKind::Async, JobClass::IoOrdinary | JobClass::IoLifecycle)
@@ -79,10 +98,11 @@ impl Core {
                     (&kind, spec.class),
                     (
                         RequestKind::Native
+                            | RequestKind::CapturedLifecycle(_)
                             | RequestKind::CaptureAttach(_)
                             | RequestKind::SymbolNative { .. },
                         JobClass::NativeObservation
-                    )
+                    ) | (RequestKind::DesktopCapture(_), JobClass::InfrastructureLifecycle)
                 );
             let valid_method = valid_method
                 || matches!(
@@ -94,6 +114,16 @@ impl Core {
                     (RequestKind::SymbolCleanup { .. }, JobClass::InfrastructureLifecycle)
                         | (RequestKind::SymbolHelper { .. }, JobClass::InfrastructureOrdinary)
                 );
+            #[cfg(any(windows, test))]
+            if matches!(&kind, RequestKind::DesktopCapture(_))
+                && (spec.operation
+                    != sugarsubstitute_contracts::execution::Operation::NativeLifecycle
+                    || spec.reservation_bytes != 4_194_304
+                    || spec.deadline.is_none()
+                    || spec.replacement.is_some())
+            {
+                return Err(AdmissionError::InvalidCaptureAdmission);
+            }
             if !valid_method || !spec.validates_class() {
                 return Err(AdmissionError::WrongClass {
                     operation: spec.operation,
@@ -123,12 +153,16 @@ impl Core {
                 });
             }
             #[cfg(any(windows, test))]
-            if let RequestKind::CaptureAttach(run) = &kind
+            if let RequestKind::CaptureAttach(run) | RequestKind::DesktopCapture(run) = &kind
                 && state.jobs.values().any(|record| {
                     record
                         .native_custody
                         .as_ref()
                         .is_some_and(|custody| custody.full_run == *run && custody.held())
+                        || record
+                            .process_capture
+                            .as_ref()
+                            .is_some_and(|capture| capture.full_run == *run)
                 })
             {
                 return Err(AdmissionError::ConflictingNativeRun(*run));
@@ -179,9 +213,9 @@ impl Core {
             }
             crate::symbol_admission::validate(self, &state, scope, spec, &kind, now)?;
             Self::check_capacity(&mut state, spec, replacement_index.is_some())?;
-            Ok((deadline, parent_cancel, replacement_index))
+            Ok((deadline, parent_cancel, replacement_index, timing))
         })();
-        let (deadline, parent_cancel, replacement_index) = match validated {
+        let (deadline, parent_cancel, replacement_index, timing) = match validated {
             Ok(validated) => validated,
             Err(error) => return Err((error, input)),
         };
@@ -217,7 +251,7 @@ impl Core {
         );
         // Declared before the Core guard so unwind also unlocks before final release.
         construction_guard = context.clone();
-        let (queued, result) = match build(input, context, cancel, now) {
+        let (queued, result) = match build(input, context, cancel, timing) {
             Ok(constructed) => constructed,
             Err(rejected) => {
                 drop(state);
@@ -253,6 +287,18 @@ impl Core {
                 },
                 preparation_issued: false,
                 preparation: None,
+                capture_bundle_issued: false,
+                #[cfg(any(windows, test))]
+                process_capture: None,
+                #[cfg(any(windows, test))]
+                capture_event_issued: false,
+                #[cfg(any(windows, test))]
+                capture_event_identity: None,
+                #[cfg(any(windows, test))]
+                desktop_capture_custody: match &queued.work {
+                    crate::task::Work::Native(work) => work.initial_desktop_custody(),
+                    _ => None,
+                },
                 symbol_original: match &kind {
                     RequestKind::SymbolNative { original, .. } => Some(original.job_id()),
                     _ => None,

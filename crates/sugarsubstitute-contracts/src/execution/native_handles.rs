@@ -93,6 +93,18 @@ impl NativeHandleLease {
         });
         Self(Arc::new(Reservation { owner, scope, job, counters, release }))
     }
+    /// Report both private counter/reservation control allocations in bytes.
+    /// This accounting fact creates no lease, partition, output or native authority.
+    /// It includes pinned Rust Arc headers and their actual payload alignment.
+    pub const fn control_storage_bytes() -> usize {
+        #[repr(C)]
+        struct Control<T> {
+            strong: std::sync::atomic::AtomicUsize,
+            weak: std::sync::atomic::AtomicUsize,
+            value: T,
+        }
+        size_of::<Control<Reservation>>() + size_of::<Control<Counters>>()
+    }
     /// Issue the named partition once across every cloned lease.
     ///
     /// # Errors

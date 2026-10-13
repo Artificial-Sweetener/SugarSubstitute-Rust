@@ -15,6 +15,18 @@ pub struct LifecyclePipeControl {
     pub(crate) inner: Control,
 }
 impl LifecyclePipeControl {
+    /// Transfer the actual authenticated v3 input and original immutable batch once.
+    /// Matching metadata and historical observations cannot substitute for this owner.
+    #[cfg(windows)]
+    pub fn take_captured_startup(
+        &self,
+    ) -> Option<crate::windows_lifecycle_pipe::captured::child::CapturedStartup> {
+        let mut state = lock(&self.inner.shared.state);
+        if state.stopped || !state.authenticated {
+            return None;
+        }
+        state.captured_startup.take()
+    }
     /// Observe the unchanged original handshake in the execution clock epoch.
     pub fn original_deadline(&self) -> Moment {
         self.inner.original_deadline()
@@ -101,7 +113,7 @@ impl std::fmt::Debug for LifecyclePipeWriteRejection {
 /// Pin one immutable read-only bootstrap handle through native launch attributes.
 /// Drop only releases the pin and wakes its execution owner; it performs no native close.
 pub struct LifecyclePipeBootstrap {
-    pub(crate) shared: Arc<Shared>,
+    pub(crate) shared: SharedRef,
 }
 impl Drop for LifecyclePipeBootstrap {
     fn drop(&mut self) {

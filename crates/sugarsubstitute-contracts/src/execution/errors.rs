@@ -136,6 +136,10 @@ pub enum AdmissionError {
     },
     /// A fixed symbol reservation or paired cleanup binding is invalid.
     InvalidSymbolAdmission,
+    /// Original capture ledger, sole issuance or close-only custody binding is invalid.
+    InvalidCaptureAdmission,
+    /// The actual child has requested cleanup and no longer accepts fresh effects.
+    CaptureRetiring,
     /// Native accounting does not belong to the actual original admission.
     NativeResources(super::NativeResourceError),
     /// Admission itself encountered an unexpected adapter failure.
@@ -150,6 +154,8 @@ impl fmt::Debug for AdmissionError {
             }
             Self::ShuttingDown => formatter.write_str("ShuttingDown"),
             Self::InvalidSymbolAdmission => formatter.write_str("InvalidSymbolAdmission"),
+            Self::InvalidCaptureAdmission => formatter.write_str("InvalidCaptureAdmission"),
+            Self::CaptureRetiring => formatter.write_str("CaptureRetiring"),
             Self::NativeResources(error) => {
                 formatter.debug_tuple("NativeResources").field(error).finish()
             }
@@ -286,6 +292,12 @@ impl fmt::Display for AdmissionError {
             Self::Unexpected(error) => fmt::Display::fmt(error, formatter),
             Self::InvalidSymbolAdmission => {
                 formatter.write_str("Invalid fixed symbol admission or cleanup binding")
+            }
+            Self::InvalidCaptureAdmission => {
+                formatter.write_str("Invalid original capture admission or cleanup custody")
+            }
+            Self::CaptureRetiring => {
+                formatter.write_str("Original capture is retiring and cannot accept fresh effects")
             }
             Self::NativeResources(error) => fmt::Display::fmt(error, formatter),
         }

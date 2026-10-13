@@ -24,11 +24,8 @@ struct Owner {
     handle: Option<usize>,
     callback: Box<Callback>,
     uncertain_registration: bool,
-    accounting: Option<(
-        Arc<sugarsubstitute_contracts::execution::NativeHandleClaim>,
-        crate::native_resources::EffectContext,
-    )>,
-    output: Option<sugarsubstitute_contracts::execution::NativeHandleOutput>,
+    accounting: Option<crate::native_pipe::accounting::OutputAccounting>,
+    output: Option<crate::native_pipe::accounting::OutputCredit>,
     cause: Option<NativeObservationError>,
     register_stage: &'static str,
     retire_stage: &'static str,
@@ -37,6 +34,10 @@ pub(crate) struct Wait {
     owner: Option<Box<Owner>>,
 }
 impl Wait {
+    /// Bound the actual wait owner and stable callback cells before allocating.
+    pub(crate) const fn storage_bytes() -> usize {
+        size_of::<Self>() + size_of::<Owner>() + size_of::<Callback>()
+    }
     pub(crate) fn new(signal: Arc<Signal>) -> Self {
         Self::for_operation(signal, "register_process_wait", "unregister_process_wait")
     }
@@ -58,13 +59,9 @@ impl Wait {
             })),
         }
     }
-    pub(crate) fn attach(
-        &mut self,
-        handles: Arc<sugarsubstitute_contracts::execution::NativeHandleClaim>,
-        context: crate::native_resources::EffectContext,
-    ) {
+    pub(crate) fn attach(&mut self, accounting: crate::native_pipe::accounting::OutputAccounting) {
         if let Some(owner) = &mut self.owner {
-            owner.accounting = Some((handles, context));
+            owner.accounting = Some(accounting);
         }
     }
     pub(crate) fn retained(&self) -> bool {
@@ -83,12 +80,8 @@ impl Wait {
             ));
         }
         owner.check()?;
-        if let Some((handles, _)) = &owner.accounting {
-            owner.output = Some(
-                handles
-                    .reserve_output()
-                    .map_err(|cause| NativeObservationError::new(owner.register_stage, cause))?,
-            );
+        if let Some(accounting) = &owner.accounting {
+            owner.output = Some(accounting.reserve_output(owner.register_stage)?);
         }
         let mut handle = HANDLE::default();
         let context = owner.callback.as_ref() as *const Callback;
@@ -130,6 +123,49 @@ impl Wait {
         self.owner.as_ref().is_some_and(|owner| owner.callback.timed_out.load(Ordering::Acquire))
     }
     pub(crate) fn retire(&mut self) -> Result<(), NativeObservationError> {
+        if self
+            .owner
+            .as_ref()
+            .and_then(|owner| owner.accounting.as_ref())
+            .is_some_and(|accounting| accounting.capture())
+        {
+            return Err(NativeObservationError::new(
+                "wait_capture_cleanup_proof",
+                std::io::Error::other("Child wait requires original sealed cleanup proof"),
+            ));
+        }
+        self.retire_native()
+    }
+    /// Check original child close-only authority before accepting one finite unregister.
+    /// Actual late successful return clears this same retained handle/credit first.
+    pub(crate) fn retire_capture(
+        &mut self,
+        proof: &crate::capture_bundle::CaptureBundleRetirement,
+    ) -> Result<(), NativeObservationError> {
+        let owner = self.owner.as_ref().ok_or_else(|| {
+            NativeObservationError::new(
+                "wait_capture_owner",
+                std::io::Error::other("Original wait owner missing"),
+            )
+        })?;
+        if owner.handle.is_none() && !owner.uncertain_registration {
+            return Ok(());
+        }
+        owner
+            .accounting
+            .as_ref()
+            .ok_or_else(|| {
+                NativeObservationError::new(
+                    "wait_capture_accounting",
+                    std::io::Error::other("Original child accounting missing"),
+                )
+            })?
+            .check_retirement(proof)
+            .map_err(|cause| NativeObservationError::new(owner.retire_stage, cause))?;
+        self.retire_native()
+    }
+    /// Invoke the existing sole unregister boundary after its caller accepted cleanup.
+    fn retire_native(&mut self) -> Result<(), NativeObservationError> {
         self.retire_with(|handle| {
             // SAFETY: the exact registration is exclusively retained, outside its callback;
             // the sentinel waits for actual callback completion before storage can be reclaimed.
@@ -165,7 +201,7 @@ impl Wait {
 }
 impl Owner {
     fn check(&self) -> Result<(), NativeObservationError> {
-        if let Some((_, context)) = &self.accounting {
+        if let Some(context) = &self.accounting {
             context
                 .check()
                 .map_err(|cause| NativeObservationError::new(self.register_stage, cause))?;

@@ -16,7 +16,7 @@ impl Core {
             if let Work::Native(work) = &queued.work {
                 work.ready()
                     && (stop_reason_at(&queued.context, now).is_some()
-                        || Self::has_capacity(&state, JobClass::NativeObservation))
+                        || Self::has_capacity(&state, queued.context.spec().class))
             } else {
                 false
             }

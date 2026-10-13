@@ -2,12 +2,19 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Transport native lifecycle messages through admitted local authenticated sessions.
 //! Codec, replay, resource policy and native UI-loop proof remain with their owners.
+pub(crate) mod captured;
+#[allow(unsafe_code)]
+mod startup_mapping;
+pub(crate) use startup_mapping::{StartupViewLoan, StartupViewRetention};
+mod captured_layout;
+pub use crate::lifecycle_pipe::MIN_CAPTURED_LIFECYCLE_PIPE_BYTES;
 pub use crate::lifecycle_pipe::{
-    LifecycleClientCapability, LifecyclePipeBootstrap, LifecyclePipeControl, LifecyclePipeDeadline,
-    LifecyclePipeError, LifecyclePipeFailure, LifecyclePipeObservation, LifecyclePipeOperationId,
-    LifecyclePipeReport, LifecyclePipeSession, LifecyclePipeWriteBuffer,
-    LifecyclePipeWriteRejection, MAX_LIFECYCLE_MESSAGE_BYTES, MIN_LIFECYCLE_PIPE_BYTES,
-    NativeWriteAdmission, NativeWriteRevocation, ReceivedLifecycleFrame, VerifiedLifecyclePeer,
+    AuthenticatedStartupSnapshot, LifecycleClientCapability, LifecyclePipeBootstrap,
+    LifecyclePipeControl, LifecyclePipeDeadline, LifecyclePipeError, LifecyclePipeFailure,
+    LifecyclePipeObservation, LifecyclePipeOperationId, LifecyclePipeReport, LifecyclePipeSession,
+    LifecyclePipeWriteBuffer, LifecyclePipeWriteRejection, MAX_LIFECYCLE_MESSAGE_BYTES,
+    MIN_LIFECYCLE_PIPE_BYTES, NativeWriteAdmission, NativeWriteRevocation, ReceivedLifecycleFrame,
+    VerifiedLifecyclePeer,
 };
 use crate::{
     ExecutionClient,
@@ -15,6 +22,8 @@ use crate::{
     native::NativeObservationError,
     scope::lock,
 };
+pub use captured::child::CapturedStartup;
+pub use captured::parent::CapturedLifecycleStart;
 use std::{
     fmt,
     os::windows::io::{BorrowedHandle, OwnedHandle},
@@ -131,6 +140,72 @@ impl Drop for LifecyclePipeClientPermit {
     }
 }
 impl ExecutionClient {
+    /// Reserve a v3 child transport before transferring its sole inherited section.
+    /// The actual native worker authenticates the full peer and two process capabilities;
+    /// decoded matching facts cannot produce startup or capture readiness.
+    pub fn reserve_captured_lifecycle_pipe_client(
+        &self,
+        scope: &Scope,
+        spec: JobSpec,
+        original: LifecyclePipeDeadline,
+    ) -> Result<LifecyclePipeClientPermit, LifecyclePipeAdmissionError> {
+        use sugarsubstitute_contracts::execution::{JobClass, Operation};
+        if spec.deadline.is_some() {
+            return Err(LifecyclePipeAdmissionError::ConflictingDeadline);
+        }
+        if spec.class != JobClass::NativeObservation
+            || spec.operation != Operation::NativeLifecycle
+            || spec.reservation_bytes != MIN_CAPTURED_LIFECYCLE_PIPE_BYTES
+            || spec.replacement.is_some()
+        {
+            return Err(LifecyclePipeAdmissionError::Admission(
+                AdmissionError::InvalidCaptureAdmission,
+            ));
+        }
+        let until = self.decode_lifecycle_deadline(original)?;
+        let layout = captured::parent::layout()
+            .map_err(|cause| LifecyclePipeAdmissionError::Clock(cause.native_cause().clone()))?;
+        let (inner, completion) = lifecycle_pipe::admit_owned(
+            &self.core,
+            scope,
+            spec,
+            lifecycle_pipe::PipeAdmission {
+                binding: None,
+                handshake: until,
+                owner: lifecycle_pipe::Owner::Desktop,
+            },
+            crate::admission::RequestKind::Native,
+            (),
+            |(), context| {
+                let native_claim =
+                    context.memory().claim(layout.native_bytes as u64).map_err(|cause| {
+                        (AdmissionError::Unexpected(crate::runtime::error(cause)), ())
+                    })?;
+                let map_claim =
+                    context.memory().claim(layout.map_bytes as u64).map_err(|cause| {
+                        (AdmissionError::Unexpected(crate::runtime::error(cause)), ())
+                    })?;
+                let mut lease = native::Lease::client(original);
+                lease.captured_client = true;
+                lease
+                    .install_captured_mapping(
+                        map_claim,
+                        crate::native::Signal::new(&self.core),
+                        layout.map_extent,
+                    )
+                    .map_err(|cause| {
+                        (AdmissionError::Unexpected(crate::runtime::error(cause)), ())
+                    })?;
+                Ok(lifecycle_pipe::PreparedPipeLease {
+                    lease: Box::new(lease),
+                    metadata: Some(native_claim),
+                })
+            },
+        )
+        .map_err(|(cause, ())| LifecyclePipeAdmissionError::Admission(cause))?;
+        let session = LifecyclePipeSession { control: LifecyclePipeControl { inner }, completion };
+        Ok(LifecyclePipeClientPermit { original_deadline: until, session: Some(session) })
+    }
     /// Admit one server before creating a pipe, bootstrap section or native wait.
     /// `run` is a trusted composing-owner fact, not installation/authentication proof.
     /// The native scope should have no deadline so cleanup survives policy expiry;
@@ -240,6 +315,8 @@ impl LifecyclePipeControl {
 pub struct LifecyclePipeInheritance<'a> {
     /// A fixed immutable section; no command/environment capability bytes are exposed.
     pub section: BorrowedHandle<'a>,
+    /// Actual retained creator/handler pins for captured startup, covered by the same launch pin.
+    pub capture_processes: Option<[BorrowedHandle<'a>; 2]>,
 }
 impl LifecyclePipeBootstrap {
     /// Return the exact original admitted run without granting authentication.
@@ -255,7 +332,15 @@ impl LifecyclePipeBootstrap {
     #[allow(unsafe_code)]
     pub fn borrow_inheritance(&self) -> LifecyclePipeInheritance<'_> {
         // SAFETY: the non-cloneable launch pin prevents checked section closure.
+        let capture_processes = lock(&self.shared.state).capture_inherited;
         LifecyclePipeInheritance {
+            // SAFETY: the same exclusive bootstrap pin and retained parent source prevent closure.
+            capture_processes: capture_processes.map(|handles| {
+                handles.map(|raw| {
+                    // SAFETY: the live bootstrap/source pin retains this inherited handle throughout the borrow.
+                    unsafe { BorrowedHandle::borrow_raw(raw as *mut _) }
+                })
+            }),
             // SAFETY: the live non-cloneable pin prevents native closure throughout this borrow.
             section: unsafe { BorrowedHandle::borrow_raw(self.handle() as *mut _) },
         }

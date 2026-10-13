@@ -175,7 +175,7 @@ pub(super) fn take_pin(
 }
 
 /// Release only controlled external boundaries if an assertion unwinds.
-pub(super) struct ReleaseBoundary {
+pub(crate) struct ReleaseBoundary {
     boundary: Arc<Boundary>,
     core: Arc<Core>,
 }
@@ -210,4 +210,43 @@ pub(super) fn take_retirement_report(
         }
         rig.wake.wait_after(previous)?;
     }
+}
+
+/// Obtain a launch pin only through the actual admitted capture owner.
+/// The returned boundary guard releases fake external retirement before runtime teardown.
+pub(crate) fn admitted_pin(
+    rig: &Rig,
+    run: RunKey,
+) -> TestResult<(
+    Scope,
+    OwnedJob<CaptureAttachLaunchPin, CaptureAttachFailure>,
+    CaptureAttachLaunchPin,
+    ReleaseBoundary,
+)> {
+    let scope = rig.client.create_native_scope(
+        ScopeSpec { id: ScopeId::new(3)?, deadline: None },
+        Some(&rig.scope),
+    )?;
+    let boundary = Arc::new(Boundary::default());
+    boundary.ready.store(true, Ordering::Release);
+    let release = ReleaseBoundary::new(&rig.client.core, &boundary);
+    let expected = CaptureAttachExpectation::new(
+        run.owner,
+        run,
+        &BuildIdentity::new("test-build")?,
+        CaptureProcessFacts::new(3, 4)?,
+        CaptureProcessFacts::new(5, 6)?,
+        CaptureBudget::new(Moment::from_nanos(0))?,
+    )?;
+    let mut job = admission::reserve(
+        &rig.client.core,
+        &scope,
+        attach_spec(5)?,
+        expected,
+        boundary.clone(),
+        Box::new(Lease(boundary)),
+    )
+    .map_err(|cause| format!("{cause:?}"))?;
+    let pin = take_pin(rig, &mut job)?;
+    Ok((scope, job, pin, release))
 }

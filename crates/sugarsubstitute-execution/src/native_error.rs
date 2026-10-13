@@ -17,7 +17,10 @@ pub struct NativeObservationError {
     owner_panic: Option<Arc<OwnerPanic>>,
 }
 impl NativeObservationError {
-    pub(crate) fn new(stage: &'static str, cause: impl Error + Send + Sync + 'static) -> Self {
+    /// Retain an external adapter's original owned cause without granting effects.
+    /// The adapter counts this error allocation within its original admitted storage.
+    /// No native call, provider or scheduling primitive is invoked.
+    pub fn new(stage: &'static str, cause: impl Error + Send + Sync + 'static) -> Self {
         Self {
             stage,
             cause: Arc::new(cause),

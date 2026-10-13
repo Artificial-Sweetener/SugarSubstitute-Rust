@@ -50,7 +50,8 @@ impl ExecutionClient {
                 spec,
                 RequestKind::EntryPreparation(setup),
                 factory,
-                |factory, context, cancel, admitted| {
+                |factory, context, cancel, timing| {
+                    let admitted = timing.admitted;
                     let job =
                         Job::new(scope.id(), spec, admitted, cancel, Arc::downgrade(&self.core));
                     let runner_job = job.clone();

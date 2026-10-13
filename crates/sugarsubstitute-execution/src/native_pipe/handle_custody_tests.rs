@@ -7,10 +7,10 @@ use crate::{runtime_test_support::TestResult, symbol_test_support::LiveSymbol};
 use windows::Win32::System::Threading::CreateEventW;
 fn event(live: &LiveSymbol, reservation: &crate::SymbolTransportReservation) -> TestResult<Handle> {
     let mut handle = Handle::new();
-    handle.attach(
+    handle.attach(crate::native_pipe::accounting::OutputAccounting::symbol(
         reservation.handles.clone(),
         crate::native_resources::EffectContext::new(reservation),
-    );
+    ));
     handle.reserve("symbol_event_create")?;
     // SAFETY: a unique private initially unsignalled event is immediately adopted by its durable slot.
     let raw = unsafe { CreateEventW(None, true, false, None) }?;
@@ -29,10 +29,10 @@ fn symbol_stopped_original_blocks_fresh_create_while_checked_retirement_releases
     assert_ne!(handle.value(), 0);
     assert_eq!(reservation.handles.in_custody(), 1);
     let mut refused = Handle::new();
-    refused.attach(
+    refused.attach(crate::native_pipe::accounting::OutputAccounting::symbol(
         reservation.handles.clone(),
         crate::native_resources::EffectContext::new(&reservation),
-    );
+    ));
     assert!(refused.reserve("symbol_new_event_after_expiry").is_err());
     assert_eq!(reservation.handles.in_custody(), 1);
     handle.close("symbol_retire_event")?;
@@ -83,10 +83,10 @@ fn symbol_actual_core_cancel_during_pre_effect_clock_returns_without_creation_or
     let live = LiveSymbol::new()?;
     let reservation = live.transport()?;
     let mut handle = Handle::new();
-    handle.attach(
+    handle.attach(crate::native_pipe::accounting::OutputAccounting::symbol(
         reservation.handles.clone(),
         crate::native_resources::EffectContext::new(&reservation),
-    );
+    ));
     let client = live.rig.client.clone();
     let job_id = live.context.job_id();
     live.rig.clock.on_next_current_thread_observation(Box::new(move || {
@@ -104,10 +104,10 @@ fn symbol_partial_output_is_adopted_before_failed_abi_status_and_retired_explici
     let live = LiveSymbol::new()?;
     let reservation = live.transport()?;
     let mut slot = Handle::new();
-    slot.attach(
+    slot.attach(crate::native_pipe::accounting::OutputAccounting::symbol(
         reservation.handles.clone(),
         crate::native_resources::EffectContext::new(&reservation),
-    );
+    ));
     slot.reserve("fixture_partial_output")?;
     // SAFETY: external-boundary fixture returns a real private output with failed ABI status.
     let raw = unsafe { CreateEventW(None, true, false, None) }?;

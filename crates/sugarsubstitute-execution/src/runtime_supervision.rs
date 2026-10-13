@@ -158,7 +158,8 @@ fn deadlines(state: &State, now: Moment) -> (Option<Moment>, bool) {
     let mut future = None;
     let mut expired_native = false;
     for record in state.jobs.values() {
-        let native = record.spec.class == JobClass::NativeObservation;
+        let native =
+            record.spec.class == JobClass::NativeObservation || record.desktop_capture_child();
         if record.phase != JobPhase::Queued && !(native && record.phase == JobPhase::Running) {
             continue;
         }

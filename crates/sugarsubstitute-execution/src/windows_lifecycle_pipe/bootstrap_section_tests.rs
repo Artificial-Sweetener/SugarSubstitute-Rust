@@ -10,10 +10,10 @@ fn symbol_post_map_cancel_retains_actual_view_and_handle_until_checked_retiremen
     let live = LiveSymbol::new()?;
     let reservation = live.transport()?;
     let mut section = SectionOwner::new();
-    section.master.attach(
+    section.master.attach(crate::native_pipe::accounting::OutputAccounting::symbol(
         reservation.handles.clone(),
         crate::native_resources::EffectContext::new(&reservation),
-    );
+    ));
     section.master.reserve("fixture_section_create")?;
     // SAFETY: private fixed page-file mapping is immediately adopted by its actual owner.
     let raw = unsafe {

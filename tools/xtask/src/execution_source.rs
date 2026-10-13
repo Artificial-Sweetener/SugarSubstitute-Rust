@@ -308,7 +308,7 @@ pub(crate) fn findings(source: &str) -> Result<Vec<String>> {
     filtered_findings(source, restricted_path, scheduling_fragments)
 }
 
-/// Reject original symbol reservation construction and producer ports outside their two owners.
+/// Reject original execution resource construction and producer ports outside their two owners.
 pub(crate) fn resource_producer_findings(source: &str) -> Result<Vec<String>> {
     filtered_findings(source, resource_producer_path, resource_fragments)
 }
@@ -321,6 +321,9 @@ fn resource_producer_path(path: &[String]) -> bool {
                     | "AdmittedJobResources"
                     | "NativeHandleLease"
                     | "MemoryLeaseObservation"
+                    | "CaptureBundleAdmission"
+                    | "CaptureBundleOrigin"
+                    | "CaptureBundleRetirement"
             ) && pair[1] == "new"
         })
 }
@@ -337,6 +340,9 @@ fn resource_fragments(names: &BTreeSet<String>) -> bool {
                         | "AdmittedJobResources"
                         | "NativeHandleLease"
                         | "MemoryLeaseObservation"
+                        | "CaptureBundleAdmission"
+                        | "CaptureBundleOrigin"
+                        | "CaptureBundleRetirement"
                 )
             })
 }

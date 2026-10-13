@@ -10,7 +10,6 @@ use crate::{
 use std::{
     panic::{AssertUnwindSafe, catch_unwind},
     sync::{Arc, Mutex, Weak},
-    time::Duration,
 };
 use sugarsubstitute_contracts::execution::{
     CancelControl, JobCompletion, JobContext, JobControl, JobId, JobOutcome, JobPhase, JobSpec,
@@ -41,6 +40,17 @@ pub(crate) struct QueuedJob {
     pub(crate) context: JobContext,
     pub(crate) job: Arc<dyn ErasedJob>,
     pub(crate) work: Work,
+}
+
+impl QueuedJob {
+    /// Keep actual native work on its sole worker independently of capacity class.
+    pub(crate) fn factory_work(&self) -> bool {
+        #[cfg(any(windows, test))]
+        if matches!(self.work, Work::Native(_)) {
+            return false;
+        }
+        true
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -107,6 +117,9 @@ pub(crate) struct Job<T, E> {
     cell: Mutex<Cell<T, E>>,
 }
 
+#[path = "task_completion.rs"]
+mod completion;
+
 impl<T: Send + 'static, E: Send + 'static> Job<T, E> {
     pub(crate) fn new(
         scope_id: ScopeId,
@@ -133,53 +146,6 @@ impl<T: Send + 'static, E: Send + 'static> Job<T, E> {
     ) {
         let ended = context.now();
         self.finish_at(context, started, ended, outcome);
-    }
-
-    /// Publish only after actual stop, using a previously observed owner clock sample.
-    pub(crate) fn finish_at(
-        &self,
-        context: &JobContext,
-        started: Option<Moment>,
-        ended: Moment,
-        outcome: JobOutcome<T, E>,
-    ) {
-        let start = started.unwrap_or(ended);
-        let duration = |later: Moment, earlier: Moment| -> Duration {
-            match later.checked_duration_since(earlier) {
-                Ok(duration) => duration,
-                Err(error) => {
-                    tracing::error!(operation = ?self.spec.operation, job_id = self.spec.id.get(), cause = %error, "Injected execution clock regressed");
-                    Duration::ZERO
-                }
-            }
-        };
-        let kind = outcome.kind();
-        let replacement = match &outcome {
-            JobOutcome::Coalesced { replacement } => Some(*replacement),
-            _ => None,
-        };
-        let mut completion = Some(JobCompletion {
-            scope_id: self.scope_id,
-            spec: self.spec,
-            queue_time: duration(start, self.admitted),
-            execution_time: duration(ended, start),
-            outcome,
-            memory: context.memory().clone(),
-            native_handles: context.native_handles().cloned(),
-        });
-        if let Some(core) = self.core.upgrade() {
-            let wake = core.terminal(self.spec.id, kind, replacement, || {
-                let mut cell = lock(&self.cell);
-                cell.phase = JobPhase::Terminal(kind);
-                cell.completion = completion.take();
-                !cell.abandoned
-            });
-            if wake {
-                core.mailbox.deliver_wake();
-            }
-            core.changed();
-        }
-        tracing::debug!(operation = ?self.spec.operation, execution_id = context.owner_id().get(), scope_id = self.scope_id.get(), job_id = self.spec.id.get(), terminal = ?kind, "Owned work stopped");
     }
 }
 

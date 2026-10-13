@@ -12,7 +12,7 @@ fn actual_table_capacity_and_identity_pin_retain_original_constructor_charge() -
     );
     assert_eq!(size_of::<SharedOwner>(), size_of::<Arc<Shared>>() + size_of::<RegistryIdentity>());
     if cfg!(target_pointer_width = "64") {
-        assert_eq!(bytes, 249600);
+        assert_eq!(bytes, 253792);
     }
 
     assert_eq!(h.registry.records.len(), 131);

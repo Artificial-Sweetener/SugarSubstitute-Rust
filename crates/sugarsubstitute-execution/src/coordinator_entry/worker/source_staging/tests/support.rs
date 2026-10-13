@@ -46,13 +46,13 @@ impl Fixture {
         let mut specification = spec(2, JobClass::NativeObservation, MIN_ENTRY_CLIENT_BYTES)?;
         specification.operation = Operation::NativeLifecycle;
         let session = reserve_client(&core, &client_scope, specification, input, Box::new(Lease))?;
-        let queued = core
-            .take(|class| class == JobClass::NativeObservation)
-            .ok_or("Actual client not dequeued")?;
+        let now = core.clock.metadata()?;
+        let (queued, wake) = core.take_native_at(now).ok_or("Actual client not dequeued")?;
+        core.deliver_capacity_wake(wake);
         let Work::Native(crate::native::NativeWork::CoordinatorEntry(work)) = queued.work else {
             return Err("Incorrect admitted native work".into());
         };
-        let active = Active::new(work, queued.context, &core, Moment::from_nanos(0));
+        let active = Active::new(work, queued.context, &core, now);
         Ok(Self { core, clock, original, parent, client_scope, prepared, active, session })
     }
     pub(super) fn retain_source(&mut self) {

@@ -32,7 +32,7 @@ static NEXT_OWNER: AtomicU64 = AtomicU64::new(1);
 mod policy;
 pub use policy::{
     EntryEnvironmentCustody, EntryEnvironmentExtent, ExecutionLimits, NativeOutputCustody,
-    ShutdownProgress, WorkerStatus,
+    ProcessCaptureCustody, ShutdownProgress, WorkerStatus,
 };
 
 /// Own runtime and CPU joins through teardown after the native event loop exits.
@@ -190,7 +190,12 @@ impl ExecutionOwner {
         }
         let now = self.core.clock.retirement_now();
         let state = lock(&self.core.state);
-        let mut unresolved_job_ids: Vec<_> = state.jobs.keys().copied().collect();
+        let mut unresolved_job_ids: Vec<_> = state
+            .jobs
+            .iter()
+            .filter(|(_, record)| !record.process_lifetime_only())
+            .map(|(id, _)| *id)
+            .collect();
         unresolved_job_ids.sort_unstable();
         let queued = state.jobs.values().filter(|record| record.phase == JobPhase::Queued).count();
         let running =
@@ -228,6 +233,22 @@ impl ExecutionOwner {
                 })
             })
             .collect::<Vec<_>>();
+        #[cfg(any(windows, test))]
+        let process_capture_custody = state
+            .jobs
+            .values()
+            .filter_map(|record| {
+                let capture = record.process_capture.as_ref()?;
+                Some(ProcessCaptureCustody {
+                    scope_id: record.scope_id,
+                    job_id: record.spec.id,
+                    full_run: capture.full_run,
+                    reservation_bytes: record.spec.reservation_bytes,
+                })
+            })
+            .collect();
+        #[cfg(not(any(windows, test)))]
+        let process_capture_custody = Vec::new();
         let native_output_custody = crate::native_resources::output_custody(&state);
         let settled = state.stopping
             && native_output_custody.is_empty()
@@ -237,6 +258,7 @@ impl ExecutionOwner {
             && workers.cpu_finished
             && workers.native_finished;
         Ok(ShutdownProgress {
+            process_capture_custody,
             native_output_custody,
             entry_environment_custody,
             settled,

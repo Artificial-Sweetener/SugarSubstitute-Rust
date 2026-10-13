@@ -16,13 +16,19 @@ fn symbol_failed_unregister_retains_callback_and_credit_until_actual_quiescence(
     let reservation = live.transport()?;
     let effect = crate::native_resources::EffectContext::new(&reservation);
     let mut event = Handle::new();
-    event.attach(reservation.handles.clone(), effect.clone());
+    event.attach(crate::native_pipe::accounting::OutputAccounting::symbol(
+        reservation.handles.clone(),
+        effect.clone(),
+    ));
     event.reserve("fixture_wait_event")?;
     // SAFETY: initially unsignalled private event is adopted immediately by its actual owner.
     let raw = unsafe { CreateEventW(None, true, false, None) }?;
     adopt(&mut event, raw, "fixture_wait_event")?;
     let mut wait = Wait::new(Signal::new(&live.rig.client.core));
-    wait.attach(reservation.handles.clone(), effect);
+    wait.attach(crate::native_pipe::accounting::OutputAccounting::symbol(
+        reservation.handles.clone(),
+        effect,
+    ));
     wait.register(event.raw())?;
     let callback = wait.owner.as_ref().map(|owner| owner.callback.as_ref() as *const Callback);
     assert!(wait.retained());

@@ -171,6 +171,14 @@ impl ActiveState {
                 .as_mut()
                 .ok_or_else(|| failure("pipe_missing_lease"))?
                 .authenticate(&authentication.candidate)?;
+            #[cfg(windows)]
+            let captured = self.lease.as_mut().and_then(|lease| lease.take_captured_startup());
+            // Adopt both outputs before the fresh stop/eligibility decision. On veto,
+            // shutdown returns their loans outside these fences before native closure.
+            #[cfg(windows)]
+            if let Some(captured) = captured {
+                lock(&self.work.shared.state).captured_startup = Some(captured);
+            }
             if self.stop(core, core.clock.now()) {
                 return Ok(());
             }

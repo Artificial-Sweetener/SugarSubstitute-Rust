@@ -125,3 +125,25 @@ fn output_counter_notification_is_passive_inside_actual_core_fence() -> TestResu
     drop(state);
     Ok(())
 }
+
+#[test]
+fn shared_original_context_clones_stay_inside_one_fixed_metadata_claim() -> TestResult {
+    let live = LiveSymbol::new()?;
+    let reservation = live.transport()?;
+    let original = crate::native_resources::EffectContext::new(&reservation);
+    let retained = original.clone();
+    drop(original);
+    drop(reservation);
+    retained.check()?;
+    assert!(
+        crate::native_resources::symbol_storage_bytes() as u64
+            <= crate::native_resources::SYMBOL_METADATA_BYTES
+    );
+    let remainder =
+        live.context.memory().claim(MAIN_BYTES - crate::native_resources::SYMBOL_METADATA_BYTES)?;
+    assert!(live.context.memory().claim(1).is_err());
+    assert_eq!(live.rig.scope.snapshot().native_reservations, 1);
+    drop(retained);
+    drop(remainder);
+    Ok(())
+}

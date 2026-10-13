@@ -81,7 +81,8 @@ pub(crate) fn reserve(
     if spec.deadline.is_none() {
         return Err(AdmissionError::DeadlineRequired);
     }
-    core.admit(scope, spec, RequestKind::Native, |context, cancel, admitted| {
+    core.admit(scope, spec, RequestKind::Native, |context, cancel, timing| {
+        let admitted = timing.admitted;
         let job = Job::new(scope.id(), spec, admitted, cancel, Arc::downgrade(core));
         let shared =
             Arc::new(Shared { state: Mutex::new(State::default()), core: Arc::downgrade(core) });

@@ -21,11 +21,11 @@ use windows::{
     core::PCWSTR,
 };
 #[path = "bootstrap.rs"]
-mod bootstrap;
+pub(super) mod bootstrap;
 #[path = "credentials.rs"]
 mod credentials;
 #[path = "peer.rs"]
-mod peer;
+pub(in crate::windows_lifecycle_pipe) mod peer;
 #[path = "prepare.rs"]
 mod prepare;
 #[path = "resource_binding.rs"]
@@ -42,22 +42,32 @@ pub(super) const CLIENT_ACCESS: u32 = FILE_READ_DATA.0
     | FILE_WRITE_ATTRIBUTES.0
     | SYNCHRONIZE.0;
 pub(crate) struct Lease {
+    pub(in crate::windows_lifecycle_pipe) captured_parent:
+        Option<super::captured::parent::ParentSource>,
+    pub(in crate::windows_lifecycle_pipe) captured_client: bool,
+    pub(in crate::windows_lifecycle_pipe) captured_facts:
+        Option<super::captured::codec::CapturedFacts>,
+    pub(in crate::windows_lifecycle_pipe) captured_until: Option<Moment>,
+    pub(in crate::windows_lifecycle_pipe) captured_ready:
+        Option<super::captured::child::CapturedStartup>,
+    pub(in crate::windows_lifecycle_pipe) capture_processes: [Handle; 2],
+    pub(in crate::windows_lifecycle_pipe) capture_tokens: [Handle; 2],
     symbol: Option<crate::SymbolTransportReservation>,
     server: bool,
     binding: Option<PeerBinding>,
-    original: Option<LifecyclePipeDeadline>,
+    pub(in crate::windows_lifecycle_pipe) original: Option<LifecyclePipeDeadline>,
     expected: bootstrap::Kind,
-    data: Option<bootstrap::Data>,
-    input: Handle,
+    pub(in crate::windows_lifecycle_pipe) data: Option<bootstrap::Data>,
+    pub(in crate::windows_lifecycle_pipe) input: Handle,
     process: Option<ProcessKey>,
     pipe: Handle,
-    section: bootstrap::Section,
-    own_token: Handle,
+    pub(in crate::windows_lifecycle_pipe) section: bootstrap::Section,
+    pub(in crate::windows_lifecycle_pipe) own_token: Handle,
     peer_token: Handle,
     observed_token: Handle,
     message_token: Handle,
     observed_process: Handle,
-    identity: Option<security::Identity>,
+    pub(in crate::windows_lifecycle_pipe) identity: Option<security::Identity>,
     operations: [Option<overlapped::Operation>; 3],
     read_completed: bool,
 }
@@ -69,6 +79,13 @@ impl Lease {
         expected: bootstrap::Kind,
     ) -> Self {
         Self {
+            captured_parent: None,
+            captured_client: false,
+            captured_facts: None,
+            captured_until: None,
+            captured_ready: None,
+            capture_processes: std::array::from_fn(|_| Handle::new()),
+            capture_tokens: std::array::from_fn(|_| Handle::new()),
             symbol: None,
             server,
             binding,
@@ -91,6 +108,28 @@ impl Lease {
     }
     pub(super) fn server(run: RunKey) -> Self {
         Self::new(true, Some(PeerBinding::Desktop(run)), None, bootstrap::Kind::Desktop)
+    }
+    /// Count this concrete native lease, separately boxed output owners and worker metadata.
+    pub(in crate::windows_lifecycle_pipe) const fn storage_bytes() -> usize {
+        size_of::<Self>()
+            + 11 * (Handle::storage_bytes() - size_of::<Handle>())
+            + bootstrap::Section::storage_bytes()
+            - size_of::<bootstrap::Section>()
+            + 3 * overlapped::Operation::storage_bytes()
+            + crate::lifecycle_pipe::worker::ActiveState::storage_bytes()
+            + 3 * (size_of::<Signal>() + 2 * size_of::<std::sync::atomic::AtomicUsize>())
+            + size_of::<security::Descriptor>()
+            + size_of::<[u32; 128]>()
+            + size_of::<bootstrap::Data>()
+    }
+    /// Install the original captured map/control claim before any mapping effect.
+    pub(in crate::windows_lifecycle_pipe) fn install_captured_mapping(
+        &mut self,
+        claim: sugarsubstitute_contracts::execution::MemoryClaim,
+        signal: Arc<Signal>,
+        extent: usize,
+    ) -> Result<(), LifecyclePipeFailure> {
+        self.section.install_mapping(claim, signal, extent)
     }
     pub(super) fn client(original: LifecyclePipeDeadline) -> Self {
         Self::new(false, None, Some(original), bootstrap::Kind::Desktop)
@@ -146,14 +185,18 @@ impl PipeLease for Lease {
         for (slot, signal) in self.operations.iter_mut().zip(signals) {
             let mut operation = overlapped::Operation::new(signal);
             if let Some(symbol) = &self.symbol {
-                operation.attach(
+                operation.attach(crate::native_pipe::accounting::OutputAccounting::symbol(
                     symbol.handles.clone(),
                     crate::native_resources::EffectContext::new(symbol).for_child(context),
-                );
+                ));
             }
             *slot = Some(operation);
         }
-        if self.server { self.prepare_server(context, handshake) } else { self.prepare_client() }
+        if self.server {
+            self.prepare_server(context, handshake)
+        } else {
+            self.prepare_client(context)
+        }
     }
     fn binding(&self) -> Option<PeerBinding> {
         self.binding
@@ -269,7 +312,16 @@ impl PipeLease for Lease {
         let peer = self.verified_kernel()?;
         let data = self.data.as_ref().ok_or_else(|| failure("pipe_bootstrap_owner"))?;
         peer::capability(candidate, &data.capability)?;
+        if self.captured_client {
+            self.authenticate_captured_child(peer)?;
+        }
         Ok(peer)
+    }
+    fn inherited_capture_processes(&self) -> Option<[usize; 2]> {
+        self.captured_parent.as_ref().map(|parent| parent.processes)
+    }
+    fn take_captured_startup(&mut self) -> Option<super::captured::child::CapturedStartup> {
+        self.captured_ready.take()
     }
     fn take_completed_write(&mut self) -> Option<u32> {
         self.operations[Role::Write.index()]
@@ -301,6 +353,8 @@ impl PipeLease for Lease {
             return Ok(false);
         }
         self.pipe.close("pipe_close_connection")?;
+        // Untaken authenticated loans return outside all internal owner locks.
+        drop(self.captured_ready.take());
         if !self.section.retire(pinned)? {
             return Ok(false);
         }
@@ -314,6 +368,9 @@ impl PipeLease for Lease {
         ] {
             handle.close("pipe_close_security_handle")?;
         }
+        for handle in self.capture_tokens.iter_mut().chain(self.capture_processes.iter_mut()) {
+            handle.close("captured_close_inherited_security_handle")?;
+        }
         if let Some(data) = &mut self.data {
             data.capability.fill(0);
         }
@@ -321,7 +378,7 @@ impl PipeLease for Lease {
     }
 }
 
-fn error(
+pub(in crate::windows_lifecycle_pipe) fn error(
     stage: &'static str,
     cause: impl std::error::Error + Send + Sync + 'static,
 ) -> LifecyclePipeFailure {

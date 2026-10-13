@@ -34,6 +34,8 @@ pub use control::{
 };
 pub use observation::EntryTransportObservation;
 pub(crate) use port::{EntryLease, KernelPeer, Progress};
+pub(crate) use protocol::launch_payload as startup_launch_payload;
+pub(crate) use startup_snapshot::StartupAdmissionBinding;
 pub use startup_snapshot::{PreparedStartupSnapshot, StartupSnapshotRejection};
 use state::{Command, Connection, Reply, RequestRoute, Shared, State};
 use std::sync::{Arc, Mutex, Weak};

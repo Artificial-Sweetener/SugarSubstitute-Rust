@@ -33,7 +33,10 @@ impl Core {
         let held = state
             .jobs
             .values()
-            .filter(|record| (record.spec.class == JobClass::NativeObservation) == native)
+            .filter(|record| {
+                !record.process_lifetime_only()
+                    && (record.spec.class == JobClass::NativeObservation) == native
+            })
             .count();
         let queued_ordinary = state
             .queue
@@ -46,8 +49,11 @@ impl Core {
             state.capacity_wait.queue[index] = true;
             return Err(AdmissionError::QueueSaturated { class: spec.class });
         }
-        let held_ordinary =
-            state.jobs.values().filter(|record| super::ordinary(record.spec.class)).count();
+        let held_ordinary = state
+            .jobs
+            .values()
+            .filter(|record| !record.process_lifetime_only() && super::ordinary(record.spec.class))
+            .count();
         if held >= if native { 512 } else { 48 } || (ordinary && held_ordinary >= 44) {
             state.capacity_wait.completion[index] = true;
             return Err(AdmissionError::CompletionSaturated);
@@ -84,8 +90,11 @@ impl Core {
         }
         let queued_ordinary =
             state.queue.iter().filter(|queued| ordinary(queued.context.spec().class)).count();
-        let held_ordinary =
-            state.jobs.values().filter(|record| ordinary(record.spec.class)).count();
+        let held_ordinary = state
+            .jobs
+            .values()
+            .filter(|record| !record.process_lifetime_only() && ordinary(record.spec.class))
+            .count();
         let wait = &mut state.capacity_wait;
         let mut ready = false;
         for index in 0..3 {
@@ -100,7 +109,10 @@ impl Core {
             let held_count = state
                 .jobs
                 .values()
-                .filter(|record| (record.spec.class == JobClass::NativeObservation) == native)
+                .filter(|record| {
+                    !record.process_lifetime_only()
+                        && (record.spec.class == JobClass::NativeObservation) == native
+                })
                 .count();
             if wait.queue[index]
                 && ready_count < if native { 384 } else { 32 }

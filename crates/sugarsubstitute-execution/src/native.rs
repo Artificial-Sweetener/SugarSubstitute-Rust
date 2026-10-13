@@ -182,6 +182,7 @@ pub(crate) enum NativeWork {
     Output(crate::output::OutputWork),
     CoordinatorEntry(crate::coordinator_entry::EntryWork),
     CaptureAttach(Box<crate::capture_attach::AttachWork>),
+    DesktopCapture(Box<crate::desktop_capture::work::DesktopCaptureWork>),
 }
 impl NativeWork {
     pub(crate) fn ready(&self) -> bool {
@@ -194,11 +195,21 @@ impl NativeWork {
             Self::Output(_) => true,
             Self::CoordinatorEntry(_) => true,
             Self::CaptureAttach(_) => true,
+            Self::DesktopCapture(_) => true,
         }
     }
     pub(crate) fn initial_custody(&self) -> Option<Arc<crate::capture_attach::control::Custody>> {
         match self {
             Self::CaptureAttach(work) => Some(work.shared.custody.clone()),
+            Self::DesktopCapture(work) => Some(work.shared.cleanup.clone()),
+            _ => None,
+        }
+    }
+    pub(crate) fn initial_desktop_custody(
+        &self,
+    ) -> Option<crate::desktop_capture::metadata::DesktopCaptureCustodyRef> {
+        match self {
+            Self::DesktopCapture(work) => Some(work.shared.clone()),
             _ => None,
         }
     }
@@ -208,6 +219,9 @@ impl NativeWork {
             Self::CoordinatorEntry(work) => Some(crate::coordinator_entry::initial_deadlines(work)),
             Self::CaptureAttach(work) => {
                 Some(crate::native_deadlines::Deadlines::handshake(work.handshake))
+            }
+            Self::DesktopCapture(work) => {
+                Some(crate::native_deadlines::Deadlines::handshake(work.original_until))
             }
             _ => None,
         }
@@ -220,7 +234,8 @@ pub(crate) fn reserve(
     spec: JobSpec,
     correlation: NativeCorrelation,
 ) -> Result<ProcessWatchPermit, AdmissionError> {
-    core.admit(scope, spec, RequestKind::Native, |context, cancel, admitted| {
+    core.admit(scope, spec, RequestKind::Native, |context, cancel, timing| {
+        let admitted = timing.admitted;
         let job = Job::new(scope.id(), spec, admitted, cancel, Arc::downgrade(core));
         let binding = Binding::new();
         let deadline = context.deadline();

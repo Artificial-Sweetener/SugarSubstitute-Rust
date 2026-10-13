@@ -11,14 +11,16 @@ impl Core {
         id: JobId,
         kind: TerminalKind,
         replacement: Option<JobId>,
+        validate: impl FnOnce(&mut State) -> Result<(), AdmissionError>,
         publish: impl FnOnce() -> bool,
-    ) -> bool {
+    ) -> Result<bool, AdmissionError> {
         let mut state = lock(&self.state);
+        validate(&mut state)?;
         let Some(record) = state.jobs.get_mut(&id) else {
-            return false;
+            return Ok(false);
         };
         if record.terminal_published {
-            return false;
+            return Ok(false);
         }
         record.terminal_published = true;
         record.phase = JobPhase::Terminal(kind);
@@ -26,7 +28,7 @@ impl Core {
             CompletionNotification { scope_id: record.scope_id, job_id: id, kind, replacement };
         if publish() {
             record.retiring = false;
-            self.mailbox.enqueue(notice)
+            Ok(self.mailbox.enqueue(notice))
         } else {
             record.phase = JobPhase::Queued;
             record.retiring = true;
@@ -34,7 +36,7 @@ impl Core {
                 let job = record.job.clone();
                 state.retired.push_back(Retirement::Outcome(job));
             }
-            false
+            Ok(false)
         }
     }
 
@@ -83,9 +85,20 @@ impl Core {
                 .jobs
                 .get(&id)
                 .is_some_and(|record| record.job.cancellation().pending() || record.held_native());
-            let removed = if deferred {
+            #[cfg(any(windows, test))]
+            let process_retained =
+                state.jobs.get(&id).is_some_and(|record| record.process_capture.is_some());
+            #[cfg(not(any(windows, test)))]
+            let process_retained = false;
+            let removed = if deferred || process_retained {
                 if let Some(record) = state.jobs.get_mut(&id) {
                     record.acknowledged = true;
+                    if process_retained && !deferred {
+                        // Actual result disposal/transfer has acknowledged the original
+                        // historical Success. No terminal notification is republished.
+                        record.phase = JobPhase::Terminal(TerminalKind::Success);
+                        record.retiring = false;
+                    }
                 }
                 None
             } else {

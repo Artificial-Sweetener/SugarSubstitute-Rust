@@ -3,6 +3,7 @@
 //! Own bounded application scheduling, cancellation, result delivery and worker teardown.
 
 mod admission;
+mod admission_timing;
 mod blocking;
 mod entry_preparation;
 #[cfg(windows)]
@@ -15,6 +16,8 @@ pub use entry_preparation::{
     EntryPreparationError, EntryPreparationFailure, EntryPreparationInputError,
     EntryPreparationSuccess, EntryRequestAdoptionRejection, EntryRequestInput,
 };
+mod capture_bundle;
+pub use capture_bundle::{CaptureBundleAdmission, CaptureBundleOrigin, CaptureBundleRetirement};
 #[cfg(any(windows, test))]
 mod capture_attach;
 mod clock;
@@ -22,6 +25,15 @@ mod clock_retirement;
 #[cfg(any(windows, test))]
 mod counter_deadline;
 mod cpu;
+#[cfg(any(windows, test))]
+mod desktop_capture;
+#[cfg(any(windows, test))]
+pub use desktop_capture::{
+    DESKTOP_CAPTURE_NATIVE_WORKSPACE_BYTES, DesktopCaptureAdmissionRejection,
+    DesktopCaptureAttached, DesktopCaptureControl, DesktopCaptureSession,
+    InheritedCaptureAttachInput, NativeCaptureDriver, NativeCaptureInput, NativeCaptureProgress,
+    NativeCaptureReply, NativeCaptureStep, ProcessLifetimeCapture,
+};
 #[cfg(any(windows, test))]
 pub mod diagnostic_pipe;
 #[cfg(any(windows, test))]
@@ -74,7 +86,7 @@ pub mod windows_output;
 pub use clock::MonotonicClock;
 pub use runtime::{
     EntryEnvironmentCustody, EntryEnvironmentExtent, ExecutionClient, ExecutionLimits,
-    ExecutionOwner, NativeOutputCustody, ShutdownProgress, WorkerStatus,
+    ExecutionOwner, NativeOutputCustody, ProcessCaptureCustody, ShutdownProgress, WorkerStatus,
 };
 
 #[cfg(test)]

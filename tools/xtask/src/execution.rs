@@ -75,7 +75,7 @@ pub(crate) fn check(
                 require(
                     producer.is_empty(),
                     format!(
-                        "execution: {} constructs original execution/symbol resources outside the contract and execution owners: {}",
+                        "execution: {} constructs original execution resources outside the contract and execution owners: {}",
                         path.strip_prefix(root).unwrap_or(&path).display(),
                         producer.join(", ")
                     ),
