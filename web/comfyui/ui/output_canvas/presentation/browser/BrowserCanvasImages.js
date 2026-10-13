@@ -25,6 +25,7 @@ export class BrowserCanvasImages {
     #wipe = null;
     #frame = null;
     #disposed = false;
+    #unpainted = false;
     /** Create scoped clipping layers beneath a separately mounted shared overlay. */
     constructor(element, clock) {
         this.clock = clock;
@@ -53,6 +54,7 @@ export class BrowserCanvasImages {
         }
         this.#primary = primary;
         this.#secondary = secondary;
+        this.#unpainted = true;
         this.#schedule();
     }
     /** Coalesce camera input without rebroadcasting catalog or source-tab state. */
@@ -65,6 +67,10 @@ export class BrowserCanvasImages {
             this.#frame = null;
             this.#primaryLayer.hidden = true;
             this.#secondaryLayer.hidden = true;
+        }
+        else if (this.#unpainted) {
+            this.#paint();
+            this.#unpainted = false;
         }
         else
             this.#schedule();

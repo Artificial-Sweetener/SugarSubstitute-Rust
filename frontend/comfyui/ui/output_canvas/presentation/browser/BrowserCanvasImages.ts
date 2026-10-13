@@ -35,6 +35,7 @@ export class BrowserCanvasImages {
   #wipe: BrowserCanvasWipe | null = null;
   #frame: (() => void) | null = null;
   #disposed = false;
+  #unpainted = false;
 
   /** Create scoped clipping layers beneath a separately mounted shared overlay. */
   constructor(
@@ -66,6 +67,7 @@ export class BrowserCanvasImages {
     }
     this.#primary = primary;
     this.#secondary = secondary;
+    this.#unpainted = true;
     this.#schedule();
   }
 
@@ -78,6 +80,9 @@ export class BrowserCanvasImages {
       this.#frame = null;
       this.#primaryLayer.hidden = true;
       this.#secondaryLayer.hidden = true;
+    } else if (this.#unpainted) {
+      this.#paint();
+      this.#unpainted = false;
     } else this.#schedule();
   }
 

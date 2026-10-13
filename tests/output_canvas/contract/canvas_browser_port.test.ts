@@ -27,7 +27,7 @@ import type {
 function fixture() {
   const initial = canvasSnapshot('browser-port');
   let current = true;
-  const apply = jest.fn<() => boolean>().mockReturnValue(true);
+  const apply = jest.fn<() => boolean | Promise<boolean>>().mockReturnValue(true);
   const geometry = jest.fn<(value: CanvasSurfaceGeometry) => void>();
   const release = jest.fn<() => void>();
   const report = jest.fn<(error: unknown, request: CanvasCommandRequest) => void>();
@@ -91,6 +91,28 @@ test('rejects duplicates, old revisions, foreign addresses, and unsupported/malf
   expect(f.apply).toHaveBeenCalledTimes(2);
   f.port.dispose();
 });
+
+test.each(['superseded', 'retired'] as const)(
+  'qualifies asynchronous command completion after it is %s',
+  async (reason) => {
+    const f = fixture();
+    let resolve: ((value: boolean) => void) | undefined;
+    f.apply.mockImplementationOnce(
+      () =>
+        new Promise<boolean>((complete) => {
+          resolve = complete;
+        }),
+    );
+    const pending = f.port.dispatch(f.request);
+    if (reason === 'superseded')
+      expect((await f.port.dispatch({ ...f.request, requestId: 2 })).status).toBe('applied');
+    else f.retire();
+    if (!resolve) throw new Error('Missing asynchronous command resolver');
+    resolve(true);
+    expect((await pending).status).toBe(reason === 'superseded' ? 'stale' : 'cancelled');
+    f.port.dispose();
+  },
+);
 
 test('rejects inactive workflow generations and reports original command failure context', async () => {
   const f = fixture();

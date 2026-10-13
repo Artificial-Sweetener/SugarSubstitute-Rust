@@ -21,6 +21,7 @@ export class CanvasImageResources {
     #slots = new Map();
     #measured = new Map();
     #previewDimensions = new Map();
+    #listeners = new Set();
     #wake = null;
     #active = true;
     #disposed = false;
@@ -29,18 +30,32 @@ export class CanvasImageResources {
     constructor(options) {
         this.options = options;
     }
+    /** Observe admission completion with explicit surface-owned teardown. */
+    subscribe(listener) {
+        this.#listeners.add(listener);
+        return () => {
+            this.#listeners.delete(listener);
+        };
+    }
+    /** Evaluate unique slot counts for visible and staged interests through one policy owner. */
+    slotsFit(images, preview = null) {
+        const named = new Set(images.map((image) => image.slot));
+        const additional = preview && !named.has(preview.slot) ? preview.role : null;
+        return (named.size === images.length &&
+            images.filter((image) => image.input.role === 'main').length +
+                Number(additional === 'main') <=
+                2 &&
+            images.filter((image) => image.input.role === 'thumbnail').length +
+                Number(additional === 'thumbnail') <=
+                8);
+    }
     /** Replace the complete visible interest set, retaining at most one queued input per slot. */
     update(images, retry = false, preview = null) {
         if (!this.#active || this.#disposed)
             return;
         const named = new Set(images.map((image) => image.slot));
         const additional = preview && !named.has(preview.slot) ? preview.role : null;
-        if (named.size !== images.length ||
-            images.filter((image) => image.input.role === 'main').length + Number(additional === 'main') >
-                2 ||
-            images.filter((image) => image.input.role === 'thumbnail').length +
-                Number(additional === 'thumbnail') >
-                8)
+        if (!this.slotsFit(images, preview))
             throw new RangeError('Canvas visible image slots exceed their bounds.');
         const retained = additional && preview ? this.#retainPreview(preview) : null;
         if (retained)
@@ -224,6 +239,7 @@ export class CanvasImageResources {
         this.#disposed = true;
         this.options.decodes.dispose();
         this.#measured.clear();
+        this.#listeners.clear();
     }
     /** Prefer selected final images over previews/thumbnails and schedule only finite queued work. */
     #pump() {
@@ -389,6 +405,18 @@ export class CanvasImageResources {
                 key: 'snapshot',
                 error,
             });
+        }
+        for (const listener of this.#listeners) {
+            try {
+                listener();
+            }
+            catch (error) {
+                this.options.logger.error('SugarCubes canvas resource subscriber failed.', {
+                    slot: 'subscriber',
+                    key: 'snapshot',
+                    error,
+                });
+            }
         }
     }
 }

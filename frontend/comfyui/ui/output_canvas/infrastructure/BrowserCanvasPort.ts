@@ -35,7 +35,7 @@ export interface BrowserCanvasPortOptions {
   /** Check both the attachment lease and the current workflow generation. */
   accepts(): boolean;
   /** Apply a validated intent through the owning navigation/camera/resource collaborator. */
-  apply(command: CanvasCommand): boolean;
+  apply(command: CanvasCommand): boolean | Promise<boolean>;
   /** Reconcile qualified client geometry through the attachment surface owner. */
   geometry(geometry: CanvasSurfaceGeometry): void;
   /** Release this exact surface and its pending work. */
@@ -105,7 +105,11 @@ export class BrowserCanvasPort implements CanvasViewPort {
       return { status: 'stale', revision };
     this.#request = request.requestId;
     try {
-      const applied = this.options.apply(request.command);
+      const applied = await this.options.apply(request.command);
+      if (this.#disposed || !this.options.accepts())
+        return { status: 'cancelled', revision: this.#snapshot.revision };
+      if (request.requestId !== this.#request)
+        return { status: 'stale', revision: this.#snapshot.revision };
       return { status: applied ? 'applied' : 'unsupported', revision: this.#snapshot.revision };
     } catch (error: unknown) {
       this.options.report(error, request);

@@ -63,6 +63,7 @@ export class CanvasImageResources<Payload, Handle> {
   readonly #slots = new Map<string, CanvasImageSlot<Payload, Handle>>();
   readonly #measured = new Map<string, ImageDimensions>();
   readonly #previewDimensions = new Map<string, ImageDimensions>();
+  readonly #listeners = new Set<() => void>();
   #wake: (() => void) | null = null;
   #active = true;
   #disposed = false;
@@ -70,6 +71,32 @@ export class CanvasImageResources<Payload, Handle> {
 
   /** Bind one attachment's admissions, elapsed time and presentation notification. */
   constructor(private readonly options: CanvasImageResourceOptions<Payload, Handle>) {}
+
+  /** Observe admission completion with explicit surface-owned teardown. */
+  subscribe(listener: () => void): () => void {
+    this.#listeners.add(listener);
+    return () => {
+      this.#listeners.delete(listener);
+    };
+  }
+
+  /** Evaluate unique slot counts for visible and staged interests through one policy owner. */
+  slotsFit(
+    images: readonly CanvasVisibleImage<Payload>[],
+    preview: CanvasRetainedPreview | null = null,
+  ): boolean {
+    const named = new Set(images.map((image) => image.slot));
+    const additional = preview && !named.has(preview.slot) ? preview.role : null;
+    return (
+      named.size === images.length &&
+      images.filter((image) => image.input.role === 'main').length +
+        Number(additional === 'main') <=
+        2 &&
+      images.filter((image) => image.input.role === 'thumbnail').length +
+        Number(additional === 'thumbnail') <=
+        8
+    );
+  }
 
   /** Replace the complete visible interest set, retaining at most one queued input per slot. */
   update(
@@ -80,14 +107,7 @@ export class CanvasImageResources<Payload, Handle> {
     if (!this.#active || this.#disposed) return;
     const named = new Set(images.map((image) => image.slot));
     const additional = preview && !named.has(preview.slot) ? preview.role : null;
-    if (
-      named.size !== images.length ||
-      images.filter((image) => image.input.role === 'main').length + Number(additional === 'main') >
-        2 ||
-      images.filter((image) => image.input.role === 'thumbnail').length +
-        Number(additional === 'thumbnail') >
-        8
-    )
+    if (!this.slotsFit(images, preview))
       throw new RangeError('Canvas visible image slots exceed their bounds.');
     const retained = additional && preview ? this.#retainPreview(preview) : null;
     if (retained) named.add(retained);
@@ -295,6 +315,7 @@ export class CanvasImageResources<Payload, Handle> {
     this.#disposed = true;
     this.options.decodes.dispose();
     this.#measured.clear();
+    this.#listeners.clear();
   }
 
   /** Prefer selected final images over previews/thumbnails and schedule only finite queued work. */
@@ -486,6 +507,17 @@ export class CanvasImageResources<Payload, Handle> {
         key: 'snapshot',
         error,
       });
+    }
+    for (const listener of this.#listeners) {
+      try {
+        listener();
+      } catch (error: unknown) {
+        this.options.logger.error('SugarCubes canvas resource subscriber failed.', {
+          slot: 'subscriber',
+          key: 'snapshot',
+          error,
+        });
+      }
     }
   }
 }

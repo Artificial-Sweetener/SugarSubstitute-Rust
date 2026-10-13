@@ -15,8 +15,11 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Route validated browser intents to the existing authoritative canvas owners. */
 /** Dispatch one operation without adding image, navigation, or camera policy to composition. */
-export function applyBrowserCanvasCommand(command, owners) {
+export async function applyBrowserCanvasCommand(command, owners) {
     const { plan, camera, resources, snapshot } = owners;
+    if (command.type === 'select-source')
+        return await owners.sources.select(command.selection);
+    owners.sources.cancel();
     switch (command.type) {
         case 'fit':
             return camera.fit();

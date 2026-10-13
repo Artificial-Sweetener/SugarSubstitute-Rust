@@ -16,7 +16,7 @@
 /** Describe actual displayed image fidelity and loading state for reusable overlay controls. */
 import { canvasComparisonAvailable } from '../../application/CanvasComparisonSelection.js';
 /** Project only lightweight status, keeping DOM handles out of the renderer-independent port. */
-export function browserCanvasSnapshot(address, plan, catalog, images, camera, connected, previewStarted, sources) {
+export function browserCanvasSnapshot(address, plan, catalog, images, camera, connected, previewStarted, sources, preparing) {
     const primary = images.find((slot) => slot.slot === 'primary');
     const secondary = images.find((slot) => slot.slot === 'secondary');
     const frame = primary?.frame;
@@ -56,6 +56,8 @@ export function browserCanvasSnapshot(address, plan, catalog, images, camera, co
         resource = { ...resource, message: `${resource.message} Showing B.` };
     if (plan.view.mode === 'overview')
         resource = status('empty', '');
+    if (preparing)
+        resource = status('loading', 'Loading workflow output…');
     return Object.freeze({
         schema: 1,
         address,
