@@ -1,7 +1,7 @@
 import {
   onBeforeUpdate,
   onUpdated
-} from "./chunk-LFPAN2S3.js";
+} from "./chunk-6PAJ5Y37.js";
 
 // frontend/comfyui/ui/surface/stack/vue/CubeStackFocus.ts
 function useCubeStackFocus(root) {

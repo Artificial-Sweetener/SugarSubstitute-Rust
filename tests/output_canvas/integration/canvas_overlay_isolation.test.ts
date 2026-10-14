@@ -51,7 +51,9 @@ async function choose(element: HTMLElement, label: string, text: string): Promis
   const anchor = element.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
   anchor.click();
   await nextTick();
-  const list = element.querySelector(`[role="listbox"][aria-label="${label} choices"]`)!;
+  const list = element.ownerDocument.querySelector(
+    `[role="listbox"][aria-label="${label} choices"]`,
+  )!;
   const row = [...list.querySelectorAll<HTMLButtonElement>('[role="option"]')].find(
     (item) => item.textContent === text,
   );
@@ -386,6 +388,20 @@ test('opens actions by keyboard only within the explicit interaction surface and
   expect(document.querySelector('[role="menu"]')).toBeNull();
   surface.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }));
   expect(document.querySelector('[role="menu"]')).toBeNull();
+});
+
+test('dismisses shared actions when clicking elsewhere on their originating canvas', () => {
+  const port = new CanvasPortFixture(canvasSnapshot('outside-menu'));
+  const element = root();
+  const surface = root();
+  const pixels = document.createElement('div');
+  surface.append(element, pixels);
+  const mounted = mountCanvasOverlay(element, port, jest.fn(), surface);
+  surface.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+  expect(document.querySelector('[role="menu"]')).not.toBeNull();
+  pixels.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+  expect(document.querySelector('[role="menu"]')).toBeNull();
+  mounted.dispose();
 });
 
 test('retains the context menu through camera updates without rebuilding catalog-bearing rows', async () => {

@@ -30,6 +30,7 @@ export interface FloatingSurfaceOptions {
   readonly anchor: FloatingAnchor;
   readonly dismiss: () => void;
   readonly containsTarget?: (target: Node) => boolean;
+  readonly maxHeight?: number;
 }
 
 /** Keep all popup kinds within the viewport while preferring their natural opening direction. */
@@ -105,8 +106,15 @@ export class FloatingSurface {
   /** Reconcile geometry when popup content changes without moving surrounding content. */
   reposition(): void {
     if (!this.#options) return;
-    const rect = this.element.getBoundingClientRect();
     const windowRef = this.#document.defaultView;
+    this.element.style.setProperty(
+      'max-height',
+      this.#options.maxHeight === undefined
+        ? 'calc(100vh - 8px)'
+        : `${Math.max(0, Math.min(this.#options.maxHeight, (windowRef?.innerHeight ?? this.#document.documentElement.clientHeight) - 8))}px`,
+      'important',
+    );
+    const rect = this.element.getBoundingClientRect();
     const position = floatingPosition(
       this.#options.anchor,
       rect.width,

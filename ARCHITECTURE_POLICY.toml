@@ -1,5 +1,13 @@
 schema = 1
 
+[menus]
+context_menu = "frontend/comfyui/ui/menus/ContextMenu.ts"
+floating_surface = "frontend/comfyui/ui/menus/FloatingSurface.ts"
+fluent_runtime = "frontend/comfyui/ui/menus/FluentMenuRuntime.ts"
+# The Add Cube search dialog presents selectable search results, not context actions.
+search_dialogs = ["frontend/comfyui/ui/picker/ComfyCubeAddMenuPresenter.ts"]
+choice_controls = ["frontend/comfyui/ui/output_canvas/presentation/vue/CanvasAnchoredPicker.ts"]
+
 [invalidation]
 document_observer_owners = [
   "frontend/comfyui/ui/core/HostSurfaceObserver.ts",

@@ -1,15 +1,15 @@
 import {
   CanvasSourceTabs
-} from "./chunk-N7VBIF5C.js";
+} from "./chunk-T26L5BHO.js";
 import {
   CanvasWipeSeparator
-} from "./chunk-7LFGLXDD.js";
+} from "./chunk-WIEFPHCO.js";
 import {
   CanvasComparisonNavigation
-} from "./chunk-DKQ6J2X7.js";
+} from "./chunk-CIRP6VLK.js";
 import {
   CanvasLoadingIndicator
-} from "./chunk-EUWDRPFN.js";
+} from "./chunk-Z66IIUOP.js";
 import {
   canvasNavigationSnapshot
 } from "./chunk-HDLA7PWP.js";
@@ -17,7 +17,7 @@ import {
   computed,
   defineComponent,
   h
-} from "./chunk-LFPAN2S3.js";
+} from "./chunk-6PAJ5Y37.js";
 
 // frontend/comfyui/ui/output_canvas/presentation/vue/CanvasOverlay.ts
 function resourceMessage(resource) {

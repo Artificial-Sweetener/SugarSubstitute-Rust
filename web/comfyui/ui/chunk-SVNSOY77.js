@@ -1,10 +1,10 @@
 import {
   CanvasAnchoredPicker
-} from "./chunk-LZQHJ4KN.js";
+} from "./chunk-5NVJVFWB.js";
 import {
   defineComponent,
   h
-} from "./chunk-LFPAN2S3.js";
+} from "./chunk-6PAJ5Y37.js";
 
 // frontend/comfyui/ui/output_canvas/presentation/vue/CanvasBatchPicker.ts
 var CanvasBatchPicker = defineComponent({

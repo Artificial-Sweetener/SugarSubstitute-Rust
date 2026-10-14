@@ -153,6 +153,13 @@ Engineering priority is maintainability, clear architecture, behavior safety dur
 - Every detached-parsing exception must include a short inline comment explaining why it is safe.
 - UI changes that render dynamic text should include regression coverage proving markup-like content is rendered literally rather than parsed as DOM.
 
+## Context Menu Rules
+
+- Route every SugarCubes context menu through `ContextMenu`. Features supply entries, icons, anchors and commands; the shared owner controls rendering, keyboard interaction, focus, exclusivity and dismissal.
+- Pointer context menus dismiss when the user presses anywhere outside the menu tree, including the originating canvas or card. Anchored action menus preserve their trigger for the owning toggle.
+- Browser popup transport belongs to `FloatingSurface`. `ARCHITECTURE_POLICY.toml` declares the exact menu, primitive and searchable-dialog owners; compiler audits enforce these boundaries in worktree and staged checks.
+- Context entries contributed to ComfyUI-owned menus use its host-facing contribution APIs. Do not construct an independent host menu for SugarCubes actions.
+
 ## Dialog and Feedback Rules
 
 - User-facing SugarCubes dialogs, confirmations, prompts, blocking errors, and fallback error displays must use the SugarCubes modal/dialog system.

@@ -146,7 +146,7 @@ test('collapses late source tabs into a usable chooser and restores tabs after w
     expect(host.querySelector('button[aria-label="Output source"]')).toBe(picker);
     picker.click();
     await nextTick();
-    host.querySelectorAll<HTMLButtonElement>('[role="option"]')[1]!.click();
+    host.ownerDocument.querySelectorAll<HTMLButtonElement>('[role="option"]')[1]!.click();
     expect(send).toHaveBeenCalledWith({
       type: 'select-source',
       selection: {

@@ -65,6 +65,17 @@ class DependencyRule:
 
 
 @dataclass(frozen=True, slots=True)
+class MenuPolicy:
+    """Declare exact owners for context actions, popup transport and searchable dialog rows."""
+
+    context_menu: str = "frontend/comfyui/ui/menus/ContextMenu.ts"
+    floating_surface: str = "frontend/comfyui/ui/menus/FloatingSurface.ts"
+    fluent_runtime: str = "frontend/comfyui/ui/menus/FluentMenuRuntime.ts"
+    search_dialogs: tuple[str, ...] = ()
+    choice_controls: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class ArchitecturePolicy:
     """Collect the repository's executable structural architecture contract."""
 
@@ -73,6 +84,7 @@ class ArchitecturePolicy:
     dependencies: tuple[DependencyRule, ...]
     mutation_observer_owners: tuple[str, ...] = ()
     document_observer_owners: tuple[str, ...] = ()
+    menus: MenuPolicy = MenuPolicy()
 
 
 @dataclass(frozen=True, slots=True)

@@ -16,8 +16,6 @@
 /** Enforce native observation ownership using resolved DOM types rather than spelling patterns. */
 import ts from 'typescript';
 import path from 'node:path';
-import { readFileSync } from 'node:fs';
-import { pathToFileURL } from 'node:url';
 
 export interface InvalidationDiagnostic {
   readonly path: string;
@@ -239,41 +237,3 @@ function isDomType(type: ts.Type, name: string): boolean {
     (type.isClassOrInterface() && (type.getBaseTypes() ?? []).some((base) => isDomType(base, name)))
   );
 }
-
-/** Audit the exact source and owner inventory supplied by the architecture snapshot owner. */
-function main(): void {
-  const root = path.resolve(process.argv[2] ?? process.cwd());
-  const input: unknown = JSON.parse(readFileSync(0, 'utf8'));
-  if (
-    !input ||
-    typeof input !== 'object' ||
-    !('files' in input) ||
-    !('owners' in input) ||
-    !('documentOwners' in input) ||
-    !Array.isArray(input.files) ||
-    !Array.isArray(input.owners) ||
-    !Array.isArray(input.documentOwners) ||
-    !input.files.every((value: unknown) => typeof value === 'string') ||
-    !input.owners.every((value: unknown) => typeof value === 'string') ||
-    !input.documentOwners.every((value: unknown) => typeof value === 'string')
-  )
-    throw new Error('Invalid observation policy inventory.');
-  const files: string[] = input.files;
-  const owners: string[] = input.owners;
-  const documentOwners: string[] = input.documentOwners;
-  const program = ts.createProgram(
-    files.map((file) => path.join(root, file)),
-    {
-      target: ts.ScriptTarget.ES2022,
-      module: ts.ModuleKind.NodeNext,
-      moduleResolution: ts.ModuleResolutionKind.NodeNext,
-      strict: true,
-      skipLibCheck: true,
-    },
-  );
-  process.stdout.write(
-    JSON.stringify(auditInvalidation(program, root, new Set(owners), new Set(documentOwners))),
-  );
-}
-
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();

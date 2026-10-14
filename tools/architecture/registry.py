@@ -28,6 +28,7 @@ from .model import (
     ArchitecturePolicy,
     ArchitectureWaiver,
     DependencyRule,
+    MenuPolicy,
     StructurePolicy,
     WaiverKind,
 )
@@ -123,7 +124,7 @@ def load_policy(path: Path) -> ArchitecturePolicy:
         root,
         context=str(path),
         required=frozenset({"schema", "structure", "dependency"}),
-        optional=frozenset({"invalidation"}),
+        optional=frozenset({"invalidation", "menus"}),
     )
     schema = _integer(root["schema"], "policy.schema")
     if schema != 1:
@@ -223,7 +224,40 @@ def load_policy(path: Path) -> ArchitecturePolicy:
         dependencies=tuple(dependencies),
         mutation_observer_owners=observer_owners,
         document_observer_owners=document_owners,
+        menus=_menu_policy(root.get("menus")),
     )
+
+
+def _menu_policy(value: object) -> MenuPolicy:
+    """Admit exact menu ownership without broad feature directories or duplicate search owners."""
+    if value is None:
+        return MenuPolicy()
+    table = _mapping(value, "menus")
+    _keys(
+        table,
+        context="menus",
+        required=frozenset(
+            {"context_menu", "floating_surface", "fluent_runtime", "search_dialogs"}
+        ),
+        optional=frozenset({"choice_controls"}),
+    )
+    return MenuPolicy(
+        context_menu=_string(table["context_menu"], "menus.context_menu"),
+        floating_surface=_string(table["floating_surface"], "menus.floating_surface"),
+        fluent_runtime=_string(table["fluent_runtime"], "menus.fluent_runtime"),
+        search_dialogs=_menu_owners(table["search_dialogs"], "menus.search_dialogs"),
+        choice_controls=_menu_owners(
+            table.get("choice_controls", []), "menus.choice_controls"
+        ),
+    )
+
+
+def _menu_owners(value: object, context: str) -> tuple[str, ...]:
+    """Permit no declared non-context owners while rejecting invalid or duplicate paths."""
+    owners = () if isinstance(value, list) and not value else _strings(value, context)
+    if len(set(owners)) != len(owners):
+        raise RegistryError(f"{context} owners must be unique")
+    return owners
 
 
 def load_debt(path: Path) -> tuple[ArchitectureDebt, ...]:

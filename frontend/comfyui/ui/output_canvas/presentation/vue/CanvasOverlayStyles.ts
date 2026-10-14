@@ -77,10 +77,10 @@ export function ensureCanvasOverlayStyles(document: Document): void {
       background:var(--sugarcubes-card-surface,var(--comfy-menu-bg,#202020)); box-shadow:0 4px 16px #0005;
       scrollbar-width:thin; display:flex; flex-direction:column; gap:2px; }
     .sc-output-picker-popup[popover]:not(:popover-open) { display:none; }
-    .sc-output-overlay .sc-output-picker-popup button { flex:0 0 28px; min-height:28px; width:100%;
+    .sc-output-picker-popup button { flex:0 0 28px; min-height:28px; width:100%;
       padding:0 14px; text-align:left; border:0; background:transparent; box-shadow:none; font-size:14px;
       overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
-    .sc-output-overlay .sc-output-picker-popup button[aria-selected="true"] {
+    .sc-output-picker-popup button[aria-selected="true"] {
       background:color-mix(in srgb,var(--fg-color,#fff) 12%,transparent); box-shadow:none; text-align:center; }
     .sc-output-picker-popup[data-centered="true"] button { text-align:center; }
     .sc-output-choice[data-centered="true"] .sc-output-segment,
