@@ -2,6 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise the actual bounded observer; faked notifications do not qualify WebView2 ordering.
 use super::*;
+#[cfg(feature = "k1-native-qualification")]
+#[path = "main_readiness_trace_tests.rs"]
+mod traces;
 use std::{
     error::Error,
     sync::{

@@ -50,6 +50,9 @@ impl MainActor {
                         .load_url(&url)
                         .map_err(|cause| DesktopError::new("navigate_main_frontend", cause))?;
                     self.navigations += 1;
+                    #[cfg(feature = "k1-native-qualification")]
+                    tracing::info!(operation="main_navigation_started", identity=?self.identity(),
+                        "Actual local frontend navigation dispatched after hooks");
                     Some(DesktopStartupObservation::NavigationStarted(self.identity()))
                 } else {
                     None

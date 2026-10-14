@@ -43,6 +43,19 @@ impl Error for PreviewError {
         }
     }
 }
+impl PreviewError {
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::State => "State",
+            Self::Identity => "Identity",
+            Self::Deadline => "Deadline",
+            Self::Capacity => "Capacity",
+            Self::Execution(_) => "Execution",
+            Self::Admission(_) => "Admission",
+            Self::JobIdentity(_) => "JobIdentity",
+        }
+    }
+}
 
 /// Retain the first typed original cause without an additional erased heap allocation.
 enum PreviewFailure {
@@ -54,6 +67,14 @@ impl fmt::Display for PreviewFailure {
         match self {
             Self::Native(cause) => fmt::Display::fmt(cause, formatter),
             Self::Host(cause) => fmt::Display::fmt(cause, formatter),
+        }
+    }
+}
+impl PreviewFailure {
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::Native(_) => "Native",
+            Self::Host(cause) => cause.kind(),
         }
     }
 }
@@ -197,6 +218,8 @@ impl Preview {
         let source_deadline = self.intent.as_ref().ok_or(PreviewError::State)?.deadline();
         self.requested = true;
         self.main = Some(identity);
+        tracing::info!(operation="main_preview_requested", identity=?identity,
+            until=?self.until, "Actual current Running Main preview requested under original campaign");
         Ok(Some(DesktopStartupCommand::CaptureMainPreview { identity, source_deadline }))
     }
 
@@ -356,6 +379,14 @@ impl Preview {
             }
         }
         if now >= self.until
+            && self.job.is_none()
+            && self.terminal.is_none()
+            && !self.closing
+            && !self.reported
+        {
+            self.record_failure(PreviewFailure::Host(PreviewError::Deadline));
+        }
+        if now >= self.until
             && let Some(job) = &self.job
         {
             job.cancel();
@@ -437,7 +468,7 @@ impl Preview {
     fn record_failure(&mut self, cause: PreviewFailure) {
         if self.failure.is_none() {
             tracing::warn!(operation="main_preview_qualification_failed", identity=?self.main,
-                cause=%cause, "Original optional preview failure retained");
+                cause_kind=cause.kind(), cause=%cause, "Original optional preview failure retained");
             self.failure = Some(cause);
         }
     }

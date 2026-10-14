@@ -267,6 +267,11 @@ impl MainReadiness {
         if !self.started || !succeeded {
             return self.reject(ReadinessFault::NativeNavigationFailed);
         }
+        #[cfg(feature = "k1-native-qualification")]
+        if !self.loaded {
+            tracing::info!(operation="main_navigation_completed", identity=?self.identity,
+                "Actual successful native Main navigation accepted");
+        }
         self.loaded = true;
         Ok(())
     }
@@ -357,6 +362,10 @@ impl MainReadiness {
         self.pending = None;
         self.completed = true;
         self.positive = matches!(receipt.outcome(), ReadinessOutcome::Ready { .. });
+        #[cfg(feature = "k1-native-qualification")]
+        tracing::info!(operation="main_frontend_receipt", identity=?self.identity,
+            ready=self.positive, probe_operation=target.operation,
+            "Actual current frontend receipt transferred after native completion barrier");
         Ok(receipt)
     }
 

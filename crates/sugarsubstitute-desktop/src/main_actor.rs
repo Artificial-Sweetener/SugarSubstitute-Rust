@@ -247,6 +247,9 @@ impl MainActor {
     ) -> Result<(), DesktopError> {
         self.admission.authorize_browser(identity)?;
         self.stage = ConstructionStage::Browser;
+        #[cfg(feature = "k1-native-qualification")]
+        tracing::info!(operation="main_browser_authorized", identity=?identity,
+            "Actual Main browser stage authorized");
         Ok(())
     }
 
@@ -280,6 +283,9 @@ impl MainActor {
         self.view()?.focus().map_err(|cause| DesktopError::new("focus_main_view", cause))?;
         self.confirm_visible()?;
         self.revealed = true;
+        #[cfg(feature = "k1-native-qualification")]
+        tracing::info!(operation="main_revealed", identity=?identity,
+            "Actual ready Main reveal completed after splash retirement");
         Ok(DesktopStartupObservation::MainRevealed(identity))
     }
 

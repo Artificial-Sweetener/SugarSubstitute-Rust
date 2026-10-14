@@ -62,11 +62,17 @@ pub(super) fn drain(
                 session.main = Some(MainActor::new(*request, proxy.clone())?);
             }
             DesktopStartupCommand::AuthorizeEnvironment(identity) => {
+                #[cfg(feature = "k1-native-qualification")]
+                tracing::info!(operation="main_command_dispatched", command="AuthorizeEnvironment", identity=?identity,
+                    "Actual creating-thread Main command dispatch; native acceptance remains separate");
                 main_operation(session, content, |owner| {
                     owner.authorize_environment(identity).map(|()| None)
                 })?
             }
             DesktopStartupCommand::AuthorizeBrowser(identity) => {
+                #[cfg(feature = "k1-native-qualification")]
+                tracing::info!(operation="main_command_dispatched", command="AuthorizeBrowser", identity=?identity,
+                    "Actual creating-thread Main command dispatch; native acceptance remains separate");
                 main_operation(session, content, |owner| {
                     owner.authorize_browser(identity).map(|()| None)
                 })?
@@ -102,10 +108,15 @@ pub(super) fn drain(
                         "actual splash retirement is missing",
                     ));
                 }
+                #[cfg(feature = "k1-native-qualification")]
+                tracing::info!(operation="main_command_dispatched", command="RevealMain", identity=?identity,
+                    "Actual creating-thread Main command dispatch; native acceptance remains separate");
                 main_operation(session, content, |owner| owner.reveal(identity).map(Some))?;
             }
             #[cfg(feature = "k1-native-qualification")]
             DesktopStartupCommand::CaptureMainPreview { identity, source_deadline } => {
+                tracing::info!(operation="main_command_dispatched", command="CaptureMainPreview", identity=?identity,
+                    "Actual creating-thread Main command dispatch; native acceptance remains separate");
                 main_operation(session, content, |owner| {
                     Ok(owner.capture_preview(identity, source_deadline))
                 })?;

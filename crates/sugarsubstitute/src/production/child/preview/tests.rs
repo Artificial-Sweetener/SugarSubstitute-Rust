@@ -11,6 +11,8 @@ use sugarsubstitute_contracts::{
     startup::{LaunchId, ReadinessReceipt, StartupEvent, StartupObservation},
 };
 use sugarsubstitute_execution::ExecutionOwner;
+#[path = "deadline_tests.rs"]
+mod deadline;
 
 type TestResult = Result<(), Box<dyn Error>>;
 struct Fixed;
