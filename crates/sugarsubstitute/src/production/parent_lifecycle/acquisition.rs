@@ -1,0 +1,187 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Artificial Sweetener and contributors
+//! Retain the current acquisition through its attempt lifetime, independently of replay history.
+use super::{ParentError, Reply};
+use sugarsubstitute_contracts::{
+    execution::Moment,
+    lifecycle::{ClientBinding, LeaseKey, RequestId, RequestOutcome},
+    startup::MainIdentity,
+};
+use sugarsubstitute_supervision::lifecycle_protocol::WireHeader;
+
+/// One original acquisition's copied correlation. Native lease, readiness, write and
+/// settlement authority remain with their actual owners; these facts manufacture none.
+pub(super) struct Acquisition {
+    pub(super) header: WireHeader,
+    pub(super) original: Moment,
+    original_identity: MainIdentity,
+    identity: MainIdentity,
+    lease: Option<LeaseKey>,
+    outcome: Option<RequestOutcome>,
+    disposition: Option<Disposition>,
+    sent: bool,
+}
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum Disposition {
+    Granted,
+    Failed(sugarsubstitute_contracts::lifecycle::LifecycleFailureCode),
+    Rejected(sugarsubstitute_contracts::lifecycle::LifecycleRejection),
+    Cancelled,
+}
+impl Acquisition {
+    /// Freeze the accepted Acquire before backend effects; no IO or allocation occurs.
+    pub(super) fn new(
+        binding: ClientBinding,
+        header: WireHeader,
+        identity: MainIdentity,
+        original: Moment,
+    ) -> Result<Self, ParentError> {
+        if header.run != binding.run
+            || header.connection != Some(binding.connection)
+            || identity.run != binding.run
+            || header.request.is_none()
+        {
+            return Err(ParentError::ForeignPeer);
+        }
+        Ok(Self {
+            header,
+            original,
+            original_identity: identity,
+            identity,
+            lease: None,
+            outcome: None,
+            disposition: None,
+            sent: false,
+        })
+    }
+    /// Retain only this original backend producer's outcome before fallible local routing.
+    /// Other request continuations remain with the replay owner.
+    pub(super) fn observe_backend(
+        &mut self,
+        header: WireHeader,
+        outcome: RequestOutcome,
+    ) -> Result<(), ParentError> {
+        if header.request != self.header.request {
+            return Ok(());
+        }
+        if header != self.header {
+            return Err(ParentError::ForeignPeer);
+        }
+        if self.outcome.is_some_and(|old| old != outcome)
+            && !matches!(outcome, RequestOutcome::Pending(_))
+        {
+            return Err(ParentError::ChangedDuplicate);
+        }
+        if let RequestOutcome::Pending(lease) | RequestOutcome::Granted(lease) = outcome {
+            if lease.run != self.header.run
+                || Some(lease.connection) != self.header.connection
+                || lease.resource.owner != lease.run.owner
+                || self.lease.is_some_and(|old| old != lease)
+                || (self.disposition.is_some() && self.lease != Some(lease))
+            {
+                return Err(ParentError::ForeignPeer);
+            }
+            self.lease = Some(lease);
+        }
+        if matches!(outcome, RequestOutcome::Pending(_)) {
+            return Ok(());
+        }
+        self.outcome = Some(outcome);
+        Ok(())
+    }
+    /// Retain a final reply only after its existing semantic owner accepted the producer.
+    pub(super) fn reply(&mut self, header: WireHeader, reply: Reply) -> Result<(), ParentError> {
+        if header.request != self.header.request {
+            return Ok(());
+        }
+        if header != self.header {
+            return Err(ParentError::ForeignPeer);
+        }
+        let disposition = match reply {
+            Reply::Granted { lease, identity }
+                if Some(lease) == self.lease
+                    && identity == self.original_identity
+                    && self.outcome == Some(RequestOutcome::Granted(lease)) =>
+            {
+                Disposition::Granted
+            }
+            Reply::Failed(code) => Disposition::Failed(code),
+            Reply::Rejected(code) => Disposition::Rejected(code),
+            Reply::Cancelled => Disposition::Cancelled,
+            _ => return Err(ParentError::WrongPhase),
+        };
+        if self.disposition.is_some_and(|old| old != disposition) {
+            return Err(ParentError::ChangedDuplicate);
+        }
+        self.disposition = Some(disposition);
+        Ok(())
+    }
+    /// Latch only the same final request after the actual write receipt completed.
+    pub(super) fn written(&mut self, header: WireHeader) -> Result<(), ParentError> {
+        if header.request != self.header.request {
+            return Ok(());
+        }
+        if header != self.header {
+            return Err(ParentError::ForeignPeer);
+        }
+        if self.disposition.is_none() {
+            return Err(ParentError::WrongPhase);
+        }
+        self.sent = true;
+        Ok(())
+    }
+    /// Match the exact original request and current attempt without replaying its effects.
+    /// Completed acquisition expiry never renews the original or cleanup budget.
+    pub(super) fn settlement_lease(
+        &self,
+        binding: ClientBinding,
+        identity: MainIdentity,
+        acquisition: RequestId,
+        current_lease: Option<LeaseKey>,
+        main_identity: Option<MainIdentity>,
+    ) -> Result<Option<LeaseKey>, ParentError> {
+        if self.header.request != Some(acquisition) {
+            return Err(ParentError::StaleRequest);
+        }
+        if self.header.run != binding.run
+            || self.header.connection != Some(binding.connection)
+            || self.identity != identity
+            || identity.run != binding.run
+            || self.original_identity.run != binding.run
+            || current_lease.is_some_and(|lease| self.lease != Some(lease))
+        {
+            return Err(ParentError::ForeignPeer);
+        }
+        if !self.sent
+            || self.disposition.is_none()
+            || (self.disposition == Some(Disposition::Granted)
+                && (current_lease != self.lease || main_identity != Some(self.identity)))
+            || (self.lease.is_none()
+                && !matches!(
+                    self.disposition,
+                    Some(Disposition::Failed(_) | Disposition::Rejected(_))
+                ))
+        {
+            return Err(ParentError::WrongPhase);
+        }
+        Ok(self.lease)
+    }
+    /// Advance identity only after the existing Main owner began a same-lease reload.
+    pub(super) fn reload(
+        &mut self,
+        identity: MainIdentity,
+        lease: LeaseKey,
+    ) -> Result<(), ParentError> {
+        if self.lease != Some(lease)
+            || self.disposition != Some(Disposition::Granted)
+            || !self.sent
+            || identity.run != self.identity.run
+            || identity.launch.get() <= self.identity.launch.get()
+            || identity.navigation.get() <= self.identity.navigation.get()
+        {
+            return Err(ParentError::ForeignPeer);
+        }
+        self.identity = identity;
+        Ok(())
+    }
+}

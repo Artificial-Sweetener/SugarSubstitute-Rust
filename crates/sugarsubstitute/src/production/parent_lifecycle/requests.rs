@@ -114,6 +114,8 @@ impl ParentLifecycle {
         match decoded.payload {
             DecodedPayload::Acquire { identity, target } => {
                 if self.cleanup.is_some()
+                    || self.acquisition.is_some()
+                    || self.attempt_cleanup.is_some()
                     || self.main.stage()
                         != sugarsubstitute_application::supervision::MainAuthorizationStage::Retired
                 {
@@ -123,6 +125,8 @@ impl ParentLifecycle {
                     return Err(ParentError::ForeignPeer.into());
                 }
                 self.requests.get_mut(index)?.identity = Some(identity);
+                self.acquisition =
+                    Some(super::acquisition::Acquisition::new(binding, header, identity, until)?);
                 self.backend_request(
                     binding,
                     ResourceRequest {
@@ -172,6 +176,10 @@ impl ParentLifecycle {
                     resources.execution.client.now()?,
                 )?;
                 self.main.begin(identity, lease, until.min(frontend.until()))?;
+                self.acquisition
+                    .as_mut()
+                    .ok_or(ParentError::WrongPhase)?
+                    .reload(identity, lease)?;
                 resources.profile.begin_main_attempt(identity)?;
                 self.folders.begin(identity);
             }

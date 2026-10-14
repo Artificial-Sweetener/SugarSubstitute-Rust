@@ -59,46 +59,74 @@ impl ParentLifecycle {
         until: Moment,
         resources: &mut ParentResources<'_, '_>,
     ) -> Result<()> {
-        if self.cleanup.is_some() || self.attempt_cleanup.is_some() {
+        let binding = self.binding()?;
+        let budget = self.prepare_attempt_cleanup(
+            index,
+            identity,
+            acquisition,
+            until,
+            resources.execution.client.now()?,
+            resources.profile.snapshot().pending,
+        )?;
+        let lease = self.attempt_cleanup.as_ref().ok_or(ParentError::WrongPhase)?.lease;
+        if let Some(lease) = lease {
+            let transition =
+                resources.backend.cleanup_attempt(binding, lease, budget, resources.execution)?;
+            self.backend_replies(transition, resources)?;
+        }
+        self.advance_attempt_cleanup(resources)
+    }
+    /// Retain the exact current acquisition before requesting backend effects. The caller
+    /// authenticates the channel; copied matching facts grant no backend/native authority.
+    /// Replay eviction cannot destroy this live attempt's original correlation.
+    pub(super) fn prepare_attempt_cleanup(
+        &mut self,
+        index: usize,
+        identity: MainIdentity,
+        acquisition: RequestId,
+        until: Moment,
+        now: Moment,
+        native_profile_pending: bool,
+    ) -> Result<ShutdownBudget> {
+        if self.closed || self.cleanup.is_some() || self.attempt_cleanup.is_some() {
             return Err(ParentError::WrongPhase.into());
         }
         if self.main.stage()
             != sugarsubstitute_application::supervision::MainAuthorizationStage::Retired
             || self.main_retirement.is_some()
             || self.profile_pending.is_some()
-            || resources.profile.snapshot().pending
+            || native_profile_pending
         {
             return Err(ParentError::WrongPhase.into());
         }
-        let budget = attempt_budget(until, resources.execution.client.now()?)?;
-        let original = self.requests.find(acquisition).ok_or(ParentError::StaleRequest)?;
-        let record = self.requests.get(original)?;
-        if record.identity != Some(identity) || identity.run != self.run || !record.sent {
-            return Err(ParentError::ForeignPeer.into());
-        }
-        let lease = self.requests.backend_lease(acquisition)?;
+        let budget = attempt_budget(until, now)?;
+        let original = self.acquisition.as_ref().ok_or(ParentError::StaleRequest)?;
+        let binding = sugarsubstitute_contracts::lifecycle::ClientBinding {
+            run: self.run,
+            connection: self.connection,
+        };
+        let lease = original.settlement_lease(
+            binding,
+            identity,
+            acquisition,
+            self.lease,
+            self.main.snapshot().identity,
+        )?;
+        let origin = original.header;
+        tracing::debug!(operation="startup_attempt_cleanup",request=?origin.request,run=?self.run,
+            original_acquisition_until=?original.original,identity=?identity,lease=?lease,
+            "Current acquisition retained independently of bounded replay history");
         let resource = lease.map(|lease| lease.resource);
         self.attempt_cleanup = Some(AttemptSettlement {
             index,
             resource,
             lease,
             until,
-            origin: record.header,
+            origin,
             identity,
             failed: None,
         });
-        if let Some(lease) = lease {
-            let transition = resources.backend.cleanup_attempt(
-                self.binding()?,
-                lease,
-                budget,
-                resources.execution,
-            )?;
-            self.backend_replies(transition, resources)?;
-        } else if !matches!(record.reply, Some(Reply::Failed(_) | Reply::Rejected(_))) {
-            return Err(ParentError::WrongPhase.into());
-        }
-        self.advance_attempt_cleanup(resources)
+        Ok(budget)
     }
     /// Retain expired correlation and all native owners while keeping the transport live.
     /// No reply may be admitted after its unchanged cutoff, even if native work settles later.
@@ -170,6 +198,7 @@ impl ParentLifecycle {
                     "Original preparation cause retained after checked settlement");
         }
         self.requests.get_mut(index)?.reply = Some(Reply::Acknowledged);
+        self.acquisition = None;
         self.lease = None;
         self.reset_output();
         self.backend_failure_seen = false;

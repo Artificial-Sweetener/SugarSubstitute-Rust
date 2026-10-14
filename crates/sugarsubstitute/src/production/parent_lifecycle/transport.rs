@@ -118,6 +118,9 @@ impl ParentLifecycle {
                 match write.purpose {
                     WritePurpose::Welcome => self.welcome = true,
                     WritePurpose::Reply(index) => {
+                        if let Some(acquisition) = &mut self.acquisition {
+                            acquisition.written(self.requests.get(index)?.header)?;
+                        }
                         self.requests.get_mut(index)?.sent = true;
                         if self.close_after_reply == Some(index) {
                             self.closed = true;

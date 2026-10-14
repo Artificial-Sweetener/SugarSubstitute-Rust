@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Route the actual authenticated desktop pipe through the existing native owners.
+#[path = "parent_lifecycle/acquisition.rs"]
+mod acquisition;
 #[path = "parent_lifecycle/attempt.rs"]
 mod attempt;
 #[path = "parent_lifecycle/backend.rs"]
@@ -74,6 +76,7 @@ pub(crate) struct ParentLifecycle {
     read: Option<u64>,
     write: Option<PendingWrite>,
     requests: Requests,
+    acquisition: Option<acquisition::Acquisition>,
     folders: Folders,
     main: MainAuthorizationSession,
     watchdog: Option<UiWatchdog>,
@@ -149,6 +152,7 @@ impl ParentLifecycle {
             read: None,
             write: None,
             requests: Requests::new(),
+            acquisition: None,
             folders: Folders::new(),
             main: MainAuthorizationSession::new(run),
             watchdog: None,

@@ -48,7 +48,7 @@ fn loaded(owner: &mut MainReadiness) -> Result<ProbeTarget> {
     owner.frame("root", "loader", None, "http://127.0.0.1:8188/")?;
     owner.context(7, "root", "http://127.0.0.1:8188", true)?;
     owner.navigation_completed(true)?;
-    Ok(owner.begin_probe()?.ok_or("Loaded probe target missing")?)
+    Ok(owner.poll_probe()?.ok_or("Loaded probe target missing")?)
 }
 fn positive(target: ProbeTarget) -> Result<ReadinessReceipt> {
     Ok(ReadinessReceipt::parse(format!(r#"{{"schema_version":1,"launch_id":{},"navigation_generation":{},"outcome":{{"status":"ready","evidence":{{"frontend_version":"1.47.11","sugarcubes_version":"0.15.0","app_graph_ready":true,"canvas_connected":true,"loading_finished":true,"sugarcubes_registered":true,"sugarcubes_ready":true}}}}}}"#,
@@ -66,7 +66,7 @@ fn positive_dom_waits_for_barrier_and_transfers_exactly_one_receipt() -> Result 
     assert!(owner.completed);
     assert!(owner.ready());
     assert_eq!(owner.barrier_complete(target), Err(ReadinessFault::StaleProbe));
-    assert!(owner.begin_probe()?.is_none());
+    assert!(owner.poll_probe()?.is_none());
     Ok(())
 }
 #[test]
@@ -85,7 +85,7 @@ fn late_caught_setup_error_defeats_positive_dom_and_barrier() -> Result {
         Err(ReadinessFault::SetupFailed)
     );
     assert_eq!(owner.barrier_complete(target), Err(ReadinessFault::SetupFailed));
-    assert_eq!(owner.begin_probe(), Err(ReadinessFault::SetupFailed));
+    assert_eq!(owner.poll_probe(), Err(ReadinessFault::SetupFailed));
     assert!(!owner.completed);
     Ok(())
 }
@@ -163,7 +163,7 @@ fn foreign_callback_target_leaves_current_pending_evaluation_available() -> Resu
     let mut foreign = target;
     foreign.identity.navigation = Generation::new(2)?;
     assert_eq!(owner.dom_result(foreign, None), Err(ReadinessFault::StaleProbe));
-    assert_eq!(owner.begin_probe(), Err(ReadinessFault::ProbeBusy));
+    assert!(owner.poll_probe()?.is_none());
     owner.dom_result(target, Some(positive(target)?))?;
     owner.barrier_complete(target)?;
     Ok(())
@@ -174,7 +174,7 @@ fn incomplete_dom_releases_slot_without_readiness_or_deadline_renewal() -> Resul
     let first = loaded(&mut owner)?;
     assert!(!owner.dom_result(first, None)?);
     assert!(!owner.completed);
-    let second = owner.begin_probe()?.ok_or("Second target missing")?;
+    let second = owner.poll_probe()?.ok_or("Second target missing")?;
     assert!(second.operation > first.operation);
     assert_eq!(second.identity, first.identity);
     assert_eq!(owner.dom_result(first, None), Err(ReadinessFault::StaleProbe));
@@ -261,7 +261,7 @@ fn operation_exhaustion_and_cancellation_do_not_reuse_a_callback_identity() -> R
     let first = loaded(&mut exhausted)?;
     exhausted.dom_result(first, None)?;
     exhausted.next_operation = u64::MAX;
-    assert_eq!(exhausted.begin_probe(), Err(ReadinessFault::IdentityExhausted));
+    assert_eq!(exhausted.poll_probe(), Err(ReadinessFault::IdentityExhausted));
     let mut cancelled = owner()?;
     let target = loaded(&mut cancelled)?;
     cancelled.invalidate(ReadinessFault::Cancelled);
@@ -282,7 +282,7 @@ fn initial_blank_context_clearing_is_not_loss_of_current_document_evidence() -> 
     owner.frame("root", "loader", None, "http://127.0.0.1:8188/")?;
     owner.context(7, "root", "http://127.0.0.1:8188", true)?;
     owner.navigation_completed(true)?;
-    let target = owner.begin_probe()?.ok_or("Current target missing")?;
+    let target = owner.poll_probe()?.ok_or("Current target missing")?;
     owner.dom_result(target, Some(positive(target)?))?;
     assert_eq!(owner.contexts_cleared(), Err(ReadinessFault::ContextLost));
     assert_eq!(owner.barrier_complete(target), Err(ReadinessFault::ContextLost));
@@ -318,3 +318,6 @@ fn child_detachment_preserves_attribution_until_context_retirement_and_root_deta
     assert_eq!(owner.barrier_complete(target), Err(ReadinessFault::ContextLost));
     Ok(())
 }
+
+#[path = "main_readiness_probe_tests.rs"]
+mod probe;

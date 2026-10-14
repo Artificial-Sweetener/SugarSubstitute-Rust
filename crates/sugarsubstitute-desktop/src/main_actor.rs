@@ -219,7 +219,7 @@ impl MainActor {
     /// Request one actual current document sample, preserving any pending sample's identity.
     pub(crate) fn probe(&mut self, identity: crate::MainIdentity) -> Result<(), DesktopError> {
         self.admission.frontend(identity)?;
-        if let Some(target) = self.readiness()?.begin_probe().map_err(readiness_error)? {
+        if let Some(target) = self.readiness()?.poll_probe().map_err(readiness_error)? {
             let parameters = evidence::probe_parameters(target, self.request()?)?;
             self.receivers()?.call(Command::Probe(target), "Runtime.evaluate", &parameters)?;
         }

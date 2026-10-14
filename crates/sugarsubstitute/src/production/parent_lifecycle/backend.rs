@@ -64,6 +64,10 @@ impl ParentLifecycle {
                     let index =
                         self.requests.find(original_request).ok_or(ParentError::StaleRequest)?;
                     self.requests.get_mut(index)?.reply = Some(Reply::Rejected(code));
+                    if let Some(acquisition) = &mut self.acquisition {
+                        acquisition
+                            .reply(self.requests.get(index)?.header, Reply::Rejected(code))?;
+                    }
                     self._attempt_failure = Some(cause);
                     self.forwarded = None;
                     return Ok(());
@@ -81,6 +85,9 @@ impl ParentLifecycle {
             if reply.run == self.run && matches!(reply.outcome, RequestOutcome::Pending(_)) {
                 let index = self.requests.find(reply.request).ok_or(ParentError::StaleRequest)?;
                 let _fresh = self.requests.observe_backend(index, reply.outcome)?;
+                if let Some(acquisition) = &mut self.acquisition {
+                    acquisition.observe_backend(self.requests.get(index)?.header, reply.outcome)?;
+                }
             }
         }
         Ok(())
@@ -147,6 +154,10 @@ impl ParentLifecycle {
             return Ok(());
         }
         let index = self.requests.find(reply.request).ok_or(ParentError::StaleRequest)?;
+        let header = self.requests.get(index)?.header;
+        if let Some(acquisition) = &mut self.acquisition {
+            acquisition.observe_backend(header, reply.outcome)?;
+        }
         if !self.requests.observe_backend(index, reply.outcome)? {
             return Ok(());
         }
@@ -182,6 +193,9 @@ impl ParentLifecycle {
                 Reply::Granted { lease, identity }
             }
             RequestOutcome::Released => {
+                if self.attempt_cleanup.is_none() {
+                    self.acquisition = None;
+                }
                 self.lease = None;
                 self.reset_output();
                 Reply::Released
@@ -197,6 +211,9 @@ impl ParentLifecycle {
             disposition=?reply.outcome,main_stage=?self.main.stage(),
             "Original final backend disposition retained by parent");
         self.requests.get_mut(index)?.reply = Some(final_reply);
+        if let Some(acquisition) = &mut self.acquisition {
+            acquisition.reply(header, final_reply)?;
+        }
         Ok(())
     }
 }

@@ -183,6 +183,7 @@ impl Requests {
     }
 
     /// Borrow only the lease retained from the actual original backend producer.
+    #[cfg(test)]
     pub(super) fn backend_lease(
         &self,
         request: RequestId,

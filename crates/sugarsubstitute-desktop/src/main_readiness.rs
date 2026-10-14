@@ -248,8 +248,21 @@ impl MainReadiness {
         Ok(())
     }
 
-    /// Admit at most one pending evaluation. Absence of a ready context is not successful evidence.
-    pub(crate) fn begin_probe(&mut self) -> Result<Option<ProbeTarget>, ReadinessFault> {
+    /// Poll this exact document without replacing an issued evaluation or its native barrier.
+    /// `None` preserves pending target/receipt custody and grants no readiness or renewed cutoff.
+    /// # Errors
+    /// Rejects unhealthy or stale pending document facts before coalescing a repeated poll.
+    pub(crate) fn poll_probe(&mut self) -> Result<Option<ProbeTarget>, ReadinessFault> {
+        self.check_health()?;
+        if let Some(pending) = &self.pending {
+            self.check_target(pending.target)?;
+            return Ok(None);
+        }
+        self.issue_probe()
+    }
+
+    /// Construct one new operation only when no actual evaluation or barrier is issued.
+    fn issue_probe(&mut self) -> Result<Option<ProbeTarget>, ReadinessFault> {
         self.check_health()?;
         if self.pending.is_some() {
             return Err(ReadinessFault::ProbeBusy);

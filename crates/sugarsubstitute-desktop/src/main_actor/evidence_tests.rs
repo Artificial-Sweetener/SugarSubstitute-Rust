@@ -73,7 +73,7 @@ fn actual_decoded_setup_failure_remains_sticky_through_later_positive_inputs()
     consume(&mut owner, Kind::Navigation { succeeded: true }, "")?;
     assert!(consume(&mut owner, Kind::Console,
         r#"{"type":"error","executionContextId":7,"args":[{"type":"string","value":"Error calling extension 'SugarCubes.UI' method 'setup'"}]}"#).is_err());
-    assert!(owner.begin_probe().is_err());
+    assert!(owner.poll_probe().is_err());
     assert!(!owner.ready());
     Ok(())
 }
