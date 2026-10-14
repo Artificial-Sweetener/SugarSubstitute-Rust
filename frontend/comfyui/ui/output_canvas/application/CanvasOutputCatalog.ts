@@ -19,11 +19,13 @@ import type { WorkflowOutputSource } from '../../execution/domain/WorkflowOutput
 import type { WorkflowResultSession } from '../../execution/domain/WorkflowResultSession.js';
 import type { CanvasCatalogEntry, CanvasCatalogSnapshot } from '../domain/CanvasCatalog.js';
 import { canvasSessionId } from '../domain/CanvasIdentity.js';
+import type { CanvasSelection } from '../domain/CanvasViewState.js';
 
 /** Retain displayed workflow media until the first visual hands over to the current Run. */
 export function canvasOutputCatalog(
   result: WorkflowResultSession,
   inventory: readonly WorkflowOutputSource[],
+  inspection: CanvasSelection | null = null,
 ): CanvasCatalogSnapshot {
   const presentedRun = result.outputs.reduce(
     (latest, output) =>
@@ -42,7 +44,10 @@ export function canvasOutputCatalog(
     );
     const items =
       output?.items.filter(
-        (item) => (input && presentedRun === 0) || item.provenance.runOrder === presentedRun,
+        (item) =>
+          (input && presentedRun === 0) ||
+          item.provenance.runOrder === presentedRun ||
+          source.id === inspection?.sourceId,
       ) ?? [];
     const preview = result.preview?.sourceId === source.id ? result.preview : null;
     if (!preview && !items.length) continue;
@@ -65,6 +70,7 @@ export function canvasOutputCatalog(
   return Object.freeze({
     sessionId: canvasSessionId(result.context.sessionId),
     generation: result.context.generation,
+    sources: inventory,
     entries: Object.freeze(qualifiedCaptions(entries)),
     result,
   });

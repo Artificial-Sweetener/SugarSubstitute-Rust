@@ -42,6 +42,7 @@ export async function applyBrowserCanvasCommand(
   owners: BrowserCanvasActionOwners,
 ): Promise<boolean> {
   const { plan, camera, resources, snapshot } = owners;
+  if (command.type === 'reveal') return await owners.sources.reveal(command.target);
   if (command.type === 'select-source') return await owners.sources.select(command.selection);
   owners.sources.cancel();
   switch (command.type) {

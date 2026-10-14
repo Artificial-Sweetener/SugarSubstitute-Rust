@@ -16,12 +16,14 @@
 /** Define the renderer-neutral preview model consumed by a Cube surface. */
 
 import type { CubeNode } from '../cube/node/ComfyCubeNodeFactory.js';
+import type { CanvasRevealTarget } from '../output_canvas/domain/CanvasReveal.js';
 
 export interface CubePreviewItem {
   key: string;
   url: string;
   label: string;
   sourceLocator?: string;
+  revealTarget?: CanvasRevealTarget;
 }
 
 export interface CubeOutputPreview {

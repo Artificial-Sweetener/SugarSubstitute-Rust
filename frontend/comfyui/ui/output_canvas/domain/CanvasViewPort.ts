@@ -20,6 +20,7 @@ import type { ImageDimensions, WorkflowOutputItem } from '../../execution/domain
 import type { CanvasCatalogEntry } from './CanvasCatalog.js';
 import type { CanvasAttachmentAddress } from './CanvasIdentity.js';
 import type { CanvasSelection, CanvasViewState } from './CanvasViewState.js';
+import type { CanvasRevealTarget } from './CanvasReveal.js';
 
 export interface CanvasSourceSummary {
   readonly id: OutputSourceId;
@@ -66,6 +67,7 @@ export interface CanvasViewSnapshot {
 }
 
 export type CanvasCommand =
+  | { readonly type: 'reveal'; readonly target: CanvasRevealTarget }
   | { readonly type: 'select'; readonly selection: CanvasSelection }
   | { readonly type: 'select-source'; readonly selection: CanvasSelection }
   | { readonly type: 'select-preview'; readonly sourceId: OutputSourceId }

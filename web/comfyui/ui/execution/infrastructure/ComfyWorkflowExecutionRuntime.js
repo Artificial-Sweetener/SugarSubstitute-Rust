@@ -136,6 +136,10 @@ export class ComfyWorkflowExecutionRuntime {
     get connected() {
         return this.#connected;
     }
+    /** Read submission intent through the shared run registry, including outstanding queue receipts. */
+    latestSubmissionOrder(session) {
+        return this.#runs.latestOrder(session);
+    }
     /** Refuse live-graph preparation when an observed construction now names another workflow or load. */
     assertCurrentPrompt(payload) {
         const captured = isRecord(payload) ? this.#contexts.read(payload) : null;

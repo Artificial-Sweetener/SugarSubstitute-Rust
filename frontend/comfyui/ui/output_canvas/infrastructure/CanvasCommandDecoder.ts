@@ -15,7 +15,11 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Validate versioned external intents against an explicitly authorized attachment. */
 
-import type { OutputSourceId } from '../../execution/domain/ExecutionIdentity.js';
+import type {
+  OutputSourceId,
+  OutputResultId,
+  WorkflowSessionId,
+} from '../../execution/domain/ExecutionIdentity.js';
 import { isRecord } from '../../types/common.js';
 import type {
   CanvasCapabilities,
@@ -23,6 +27,7 @@ import type {
   CanvasCommandRequest,
 } from '../domain/CanvasViewPort.js';
 import type { CanvasSelection } from '../domain/CanvasViewState.js';
+import type { CanvasRevealTarget } from '../domain/CanvasReveal.js';
 import { authorizeCanvasMessage, type CanvasMessageAuthority } from './CanvasMessageAuthority.js';
 
 export interface CanvasCommandAuthority extends CanvasMessageAuthority {
@@ -84,6 +89,10 @@ function decodeSelection(value: unknown): CanvasSelection | null {
 function decodeCommand(value: unknown): CanvasCommand | null {
   if (!isRecord(value)) return null;
   switch (value.type) {
+    case 'reveal': {
+      const target = decodeRevealTarget(value.target);
+      return target ? Object.freeze({ type: 'reveal', target }) : null;
+    }
     case 'fit':
     case 'native':
     case 'swap':
@@ -149,4 +158,46 @@ function decodeCommand(value: unknown): CanvasCommand | null {
     default:
       return null;
   }
+}
+
+/** Narrow external immutable-image identifiers before they reach selection or resource owners. */
+function decodeRevealTarget(value: unknown): CanvasRevealTarget | null {
+  if (
+    !isRecord(value) ||
+    !workflowIdentity(value.sessionId) ||
+    !resultIdentity(value.itemId) ||
+    !sourceIdentity(value.sourceId) ||
+    !nonnegativeInteger(value.generation) ||
+    !nonnegativeInteger(value.runOrder) ||
+    !nonnegativeInteger(value.batchIndex)
+  )
+    return null;
+  return Object.freeze({
+    sessionId: value.sessionId,
+    itemId: value.itemId,
+    sourceId: value.sourceId,
+    generation: value.generation,
+    runOrder: value.runOrder,
+    batchIndex: value.batchIndex,
+  });
+}
+
+/** Narrow a workflow token without trusting a browser-provided object or arbitrary cast. */
+function workflowIdentity(value: unknown): value is WorkflowSessionId {
+  return (
+    typeof value === 'string' &&
+    value.startsWith('workflow:') &&
+    value.length > 9 &&
+    value.length <= 4096
+  );
+}
+
+/** Bound an immutable result identity independently of its internal encoding. */
+function resultIdentity(value: unknown): value is OutputResultId {
+  return (
+    typeof value === 'string' &&
+    value.startsWith('result:') &&
+    value.length > 7 &&
+    value.length <= 16384
+  );
 }

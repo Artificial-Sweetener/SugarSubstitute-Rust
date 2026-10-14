@@ -32,6 +32,15 @@ export class CanvasPrimarySurface {
             resources: this.#current?.attachment.diagnostics() ?? null,
         };
     }
+    /** Return only the active attachment's renderer-neutral inspection destination. */
+    destination(view) {
+        this.reconcile();
+        const current = this.#current;
+        if (current?.view !== view || !current.attachment.reveal)
+            return null;
+        const reveal = current.attachment.reveal.bind(current.attachment);
+        return { reveal };
+    }
     /** Observe scoped catalog boundaries and document visibility without another execution event listener. */
     setup() {
         if (this.#stop || this.#disposed)

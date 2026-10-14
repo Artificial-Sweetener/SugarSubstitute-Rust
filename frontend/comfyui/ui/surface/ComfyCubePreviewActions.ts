@@ -19,6 +19,7 @@ import type { CubePreviewActions } from './CubePreviewActions.js';
 import type { CubePreviewItem } from './CubePreviewModel.js';
 import type { UnknownRecord } from '../types/common.js';
 import { ContextMenu } from '../menus/ContextMenu.js';
+import type { CanvasRevealTarget } from '../output_canvas/domain/CanvasReveal.js';
 
 export interface ComfyPreviewMenuOption {
   content: string;
@@ -32,12 +33,14 @@ export interface ComfyCubePreviewActionsOptions {
   fetchBlob(url: string): Promise<Blob>;
   showContextMenu(options: readonly ComfyPreviewMenuOption[], event: MouseEvent): void;
   reportError(message: string, error: unknown): void;
+  revealImage?(target: CanvasRevealTarget): Promise<boolean>;
 }
 
 export interface ComfyCubePreviewActionHost {
   document: Document;
   liteGraph: UnknownRecord;
   logger: Pick<Console, 'error' | 'warn'>;
+  revealImage?(target: CanvasRevealTarget): Promise<boolean>;
 }
 
 /** Reuse Comfy's image-action semantics on output media outside native node cards. */
@@ -51,6 +54,7 @@ export class ComfyCubePreviewActions implements CubePreviewActions {
     event: MouseEvent,
   ) => void;
   readonly #reportError: (message: string, error: unknown) => void;
+  readonly #revealImage: ComfyCubePreviewActionsOptions['revealImage'];
 
   /** Bind browser operations without coupling preview views to host globals. */
   constructor(options: ComfyCubePreviewActionsOptions) {
@@ -60,6 +64,7 @@ export class ComfyCubePreviewActions implements CubePreviewActions {
     this.#fetchBlob = options.fetchBlob;
     this.#showContextMenu = options.showContextMenu;
     this.#reportError = options.reportError;
+    this.#revealImage = options.revealImage;
   }
 
   /** Open the same image commands exposed by Comfy's native node menu. */
@@ -69,6 +74,9 @@ export class ComfyCubePreviewActions implements CubePreviewActions {
     const sourceUrl = resolveOriginalImageUrl(item.url, this.#document.baseURI);
     this.#showContextMenu(
       [
+        ...(item.revealTarget && this.#revealImage
+          ? [{ content: 'Show in output canvas', callback: () => this.reveal(item) }]
+          : []),
         {
           content: 'Open Image',
           callback: () => this.#openWindow(sourceUrl),
@@ -89,6 +97,14 @@ export class ComfyCubePreviewActions implements CubePreviewActions {
   /** Match Comfy's hover download action without retaining preview transforms. */
   download(item: CubePreviewItem): void {
     this.#saveImage(resolveOriginalImageUrl(item.url, this.#document.baseURI));
+  }
+
+  /** Inspect only a completed thumbnail's captured identity through the canvas authority. */
+  reveal(item: CubePreviewItem): void {
+    if (!item.revealTarget || !this.#revealImage) return;
+    void this.#revealImage(item.revealTarget).catch((error: unknown) =>
+      this.#reportError('SugarCubes could not reveal the output image.', error),
+    );
   }
 
   /** Copy one host image while preserving Comfy's asynchronous failure boundary. */
@@ -122,6 +138,7 @@ export function createComfyCubePreviewActions(
   if (!windowRef) throw new Error('Cube preview actions require a browser window.');
   return new ComfyCubePreviewActions({
     document: host.document,
+    ...(host.revealImage ? { revealImage: host.revealImage } : {}),
     openWindow: (url) => {
       windowRef.open(url, '_blank');
     },

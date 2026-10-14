@@ -28,6 +28,7 @@ import type {
 } from './CubePreviewModel.js';
 import type { WorkflowOutputSet, OutputFileReference } from '../execution/domain/WorkflowOutput.js';
 import { upstreamPreviewLocatorLayers } from './CubeOutputPreviewAncestry.js';
+import { canvasRevealTarget } from '../output_canvas/domain/CanvasReveal.js';
 
 export interface ComfyCubePreviewHost {
   getRootGraph?(): ComfyGraph;
@@ -188,6 +189,7 @@ export class ComfyCubePreviewCatalog implements CubePreviewCatalog {
                 url,
                 label,
                 sourceLocator: locator,
+                revealTarget: canvasRevealTarget(item),
               }
             : null;
         })

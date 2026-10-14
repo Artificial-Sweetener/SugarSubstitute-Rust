@@ -73,6 +73,7 @@ export function createComfyCubeRuntime(options) {
         document: options.document,
         liteGraph,
         logger: options.logger,
+        ...(options.revealImage ? { revealImage: options.revealImage } : {}),
     });
     const graph = requireRecord(app.graph, 'Comfy root graph');
     const canvas = requireRecord(app.canvas, 'Comfy canvas');

@@ -33,7 +33,7 @@ function fixture() {
   results.synchronize([seed.result.context]);
   let key = 0;
   const views = new CanvasViewRegistry(() => String(++key));
-  const selection = new CanvasSelectionController(views);
+  const selection = new CanvasSelectionController(views, { latestOrder: () => 0 });
   const view = views.create(seed.sessionId).viewId;
   /** Read only the workflow's authoritative retained results. */
   function catalog() {

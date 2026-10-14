@@ -189,6 +189,15 @@ export class ComfyLiteGraphCubeNodeInteraction {
     }
     const previewItem = findPreviewItem(item, point);
     if (
+      previewItem?.revealAction &&
+      this.#previewActions?.reveal &&
+      containsCubeCanvasPoint(previewItem.revealAction, point)
+    ) {
+      this.#consume(event);
+      this.#previewActions.reveal(previewItem.item);
+      return;
+    }
+    if (
       previewItem &&
       this.#previewActions &&
       containsCubeCanvasPoint(previewItem.downloadAction, point)
@@ -393,7 +402,11 @@ export class ComfyLiteGraphCubeNodeInteraction {
         return;
       }
       const previewItem = findPreviewItem(item, point);
-      if (previewItem && containsCubeCanvasPoint(previewItem.downloadAction, point)) {
+      if (
+        previewItem &&
+        (containsCubeCanvasPoint(previewItem.downloadAction, point) ||
+          (previewItem.revealAction && containsCubeCanvasPoint(previewItem.revealAction, point)))
+      ) {
         this.#canvas.canvas.style.cursor = 'pointer';
         this.#appliedCursor = 'pointer';
         return;

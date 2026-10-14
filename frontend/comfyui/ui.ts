@@ -254,6 +254,7 @@ function createCubeRuntime(): ComfyCubeRuntime {
     getWorkflowOutput: (path) => workflowExecution.outputs.output(path),
     getWorkflowPreview: (path) => workflowExecution.outputs.livePreview(path),
     subscribePreviewChanges: (listener) => workflowExecution.outputs.subscribe(listener),
+    revealImage: (target) => workflowWorkspace.canvas.reveal(target),
     presentationChanges: ui.workflowLibraryState,
     resolveIdentitySource: (metadata) => ui.workflowLibraryPresentation.resolveSource(metadata),
     onBoundaryGeometryChange: () =>

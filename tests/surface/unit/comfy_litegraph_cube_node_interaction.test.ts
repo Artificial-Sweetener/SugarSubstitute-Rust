@@ -312,7 +312,19 @@ describe('ComfyLiteGraphCubeNodeInteraction', () => {
     node.subgraph.outputs = [outputSlot];
     const layout = computeCubeCanvasLayout(node, createDefaultCubeSurfaceState(), 30);
     const firstItem = { key: 'proof-one', url: '/proof-one.png', label: 'image one' };
-    const secondItem = { key: 'proof-two', url: '/proof-two.png', label: 'image two' };
+    const secondItem = {
+      key: 'proof-two',
+      url: '/proof-two.png',
+      label: 'image two',
+      revealTarget: {
+        sessionId: 'workflow:proof' as const,
+        generation: 0,
+        sourceId: 'source:cube' as const,
+        runOrder: 1,
+        itemId: 'result:proof-two' as const,
+        batchIndex: 1,
+      },
+    };
     const preview = {
       outputs: [{ id: 'image', label: 'image', items: [firstItem, secondItem] }],
     };
@@ -323,6 +335,7 @@ describe('ComfyLiteGraphCubeNodeInteraction', () => {
     const previewActions: CubePreviewActions = {
       openContextMenu: jest.fn(),
       download: jest.fn(),
+      reveal: jest.fn(),
     };
     const canvasElement = interactionCanvas();
     const nativePointerDown = jest.fn();
@@ -338,6 +351,9 @@ describe('ComfyLiteGraphCubeNodeInteraction', () => {
     });
 
     clickCenter(canvasElement, secondLayout.downloadAction);
+    if (!secondLayout.revealAction) throw new Error('Missing exact-image reveal action');
+    clickCenter(canvasElement, secondLayout.revealAction);
+    expect(previewActions.reveal).toHaveBeenCalledWith(secondItem);
     const rightPointerEvent = pointer(
       'pointerdown',
       secondLayout.rect.x + secondLayout.rect.width / 2,

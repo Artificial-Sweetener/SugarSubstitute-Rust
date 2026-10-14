@@ -96,6 +96,7 @@ import {
 import { NativeCubeGeometryCoordinator } from './geometry/NativeCubeGeometryCoordinator.js';
 import { CubeEditorWorkspaceChromeAdapter } from '../surface/CubeEditorWorkspaceChromeAdapter.js';
 import { createComfyCubePreviewActions } from '../surface/ComfyCubePreviewActions.js';
+import type { CanvasRevealTarget } from '../output_canvas/domain/CanvasReveal.js';
 import { CubeEditorContextResolver } from '../surface/CubeEditorContextResolver.js';
 import { CubeStructuralOperationGuard } from '../affordance/CubeStructuralOperationGuard.js';
 import { CubeNodeProductIdentityPresenter } from '../affordance/CubeNodeProductIdentityPresenter.js';
@@ -130,6 +131,7 @@ export interface ComfyCubeRuntimeOptions {
   getWorkflowPreview(executionPath: string): readonly string[];
   boundaryResolver: NativeSubgraphBoundaryResolver;
   subscribePreviewChanges?(listener: () => void): () => void;
+  revealImage?(target: CanvasRevealTarget): Promise<boolean>;
   onBoundaryGeometryChange?(): void;
   editorMetadata?: CubeEditorMetadataHudActions;
   feedback?: { push?(severity: string, summary: string, detail?: string): unknown } | null;
@@ -176,6 +178,7 @@ export function createComfyCubeRuntime(options: ComfyCubeRuntimeOptions): ComfyC
     document: options.document,
     liteGraph,
     logger: options.logger,
+    ...(options.revealImage ? { revealImage: options.revealImage } : {}),
   });
   const graph = requireRecord(app.graph, 'Comfy root graph');
   const canvas = requireRecord(app.canvas, 'Comfy canvas');

@@ -1,3 +1,5 @@
+import { resolveCanvasReveal } from '../domain/CanvasReveal.js';
+import { canvasOutputCatalog } from '../application/CanvasOutputCatalog.js';
 import { canvasBatchGridCatalog, canvasSelectedItem, } from '../application/CanvasContentSelection.js';
 /** Keep source preparation fenced to the current workflow, run, and navigation. */
 export class BrowserCanvasSourceNavigation {
@@ -5,6 +7,32 @@ export class BrowserCanvasSourceNavigation {
     /** Bind the existing selection, layout, and resource authorities. */
     constructor(options) {
         this.options = options;
+    }
+    /** Prepare a single final image even from a grid or comparison, fencing every delayed completion. */
+    async reveal(target) {
+        const initial = this.options.read();
+        if (!initial)
+            return false;
+        const item = resolveCanvasReveal(initial.catalog, target);
+        if (!item)
+            return false;
+        const selection = { sourceId: target.sourceId, batchIndex: target.batchIndex };
+        const inspection = canvasOutputCatalog(initial.catalog.result, initial.catalog.sources, selection);
+        const lease = this.options.resources.prepareSource(selection, inspection, null);
+        const ready = lease ? await lease.ready : true;
+        const current = this.options.read();
+        if (!current ||
+            current.plan.signature !== initial.plan.signature ||
+            resolveCanvasReveal(current.catalog, target)?.id !== item.id) {
+            return false;
+        }
+        const apply = () => this.options.selection.apply(current.plan.view.viewId, current.catalog, {
+            type: 'reveal',
+            target,
+        });
+        if (!ready)
+            return lease?.unavailable ? apply() : false;
+        return lease ? lease.commit(apply) : apply();
     }
     /** Prepare a completed source, then commit its normal selection policy synchronously. */
     async select(selection) {

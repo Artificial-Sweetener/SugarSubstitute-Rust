@@ -32,6 +32,8 @@ import { CanvasPrimarySurface } from './CanvasPrimarySurface.js';
 import { ComfyCanvasToolbar } from './ComfyCanvasToolbar.js';
 import { comfyCanvasMediaUrl, openComfyCanvasMedia } from './ComfyCanvasMedia.js';
 import { ensureBrowserCanvasWorkspaceStyles } from './BrowserCanvasWorkspaceStyles.js';
+import { CanvasRevealCoordinator } from '../application/CanvasRevealCoordinator.js';
+import { ComfyImageRevealHost } from './ComfyImageRevealHost.js';
 /** Keep source, selection, resource, frame, settings, and execution ownership explicit in a thin composition. */
 export class ComfyCanvasHost {
     options;
@@ -41,6 +43,8 @@ export class ComfyCanvasHost {
     #workspace;
     #primary;
     #toolbar;
+    #reveal;
+    #imageActions;
     #stops = [];
     #started = false;
     #disposed = false;
@@ -69,7 +73,9 @@ export class ComfyCanvasHost {
             },
         };
         const views = new CanvasViewRegistry(nextKey);
-        const selection = new CanvasSelectionController(views);
+        const selection = new CanvasSelectionController(views, {
+            latestOrder: (session) => execution.latestSubmissionOrder(session),
+        });
         const inspections = new CanvasInspectionStore();
         const allowances = new CanvasImageAllowances();
         const inventory = new CanvasSourceInventory();
@@ -121,6 +127,29 @@ export class ComfyCanvasHost {
             },
         });
         this.#toolbar = new ComfyCanvasToolbar(document, () => this.toggle());
+        this.#reveal = new CanvasRevealCoordinator({
+            read: () => {
+                const viewId = this.#coordinator.active();
+                const catalog = viewId ? this.#coordinator.catalog(viewId) : null;
+                return viewId && catalog ? { viewId, catalog } : null;
+            },
+            open: (view) => {
+                this.#workspace.show();
+                return this.#primary.destination(view);
+            },
+        });
+        this.#imageActions = new ComfyImageRevealHost({
+            document,
+            app,
+            logger,
+            catalog: () => {
+                const view = this.#coordinator.active();
+                return view ? this.#coordinator.catalog(view) : null;
+            },
+            sources: () => this.#sources.nativeSources(),
+            subscribe: (listener) => this.#coordinator.subscribe(() => listener()),
+            reveal: (target) => this.reveal(target),
+        });
     }
     /** Supply the actual remaining workspace to masonry even while the output pane is collapsed. */
     get content() {
@@ -143,6 +172,7 @@ export class ComfyCanvasHost {
             this.#primary.setup();
             this.#workspace.setup();
             this.#toolbar.setup();
+            this.#imageActions.setup();
             this.#stops.push(this.options.execution.previews.subscribe(this.#primary), this.options.execution.subscribeConnection(() => this.#primary.reconcile()));
             this.options.document.defaultView?.addEventListener('pagehide', this.#pagehide);
         }
@@ -154,6 +184,12 @@ export class ComfyCanvasHost {
     /** Use the same command owner in graph and masonry presentation. */
     toggle() {
         this.#workspace.toggle();
+    }
+    /** Reveal a provenance-qualified completed thumbnail through the shared canvas authority. */
+    async reveal(target) {
+        if (this.#disposed || !this.#started)
+            return false;
+        return await this.#reveal.reveal(target);
     }
     /** Preserve qualified history pixels and retire primary resources before graph replacement. */
     beforeConfigureGraph() {
@@ -171,6 +207,7 @@ export class ComfyCanvasHost {
         this.#disposed = true;
         this.options.document.defaultView?.removeEventListener('pagehide', this.#pagehide);
         this.#primary.dispose();
+        this.#imageActions.dispose();
         this.#workspace.dispose();
         this.#toolbar.dispose();
         this.#coordinator.dispose();

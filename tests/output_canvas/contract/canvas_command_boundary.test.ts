@@ -26,6 +26,7 @@ const authority = {
   capabilities: {
     schema: 1 as const,
     commands: [
+      'reveal',
       'fit',
       'native',
       'select',
@@ -54,6 +55,17 @@ function request(command: unknown): unknown {
 }
 
 test.each<CanvasCommand>([
+  {
+    type: 'reveal',
+    target: {
+      sessionId: 'workflow:acceptance',
+      generation: 1,
+      sourceId: 'source:7:42',
+      runOrder: 2,
+      itemId: 'result:exact-final',
+      batchIndex: 2,
+    },
+  },
   { type: 'fit' },
   { type: 'native' },
   { type: 'swap' },
@@ -82,6 +94,39 @@ test.each<CanvasCommand>([
 });
 
 test.each([
+  {
+    type: 'reveal',
+    target: {
+      sessionId: 'other:acceptance',
+      generation: 1,
+      sourceId: 'source:7:42',
+      runOrder: 2,
+      itemId: 'result:exact-final',
+      batchIndex: 2,
+    },
+  },
+  {
+    type: 'reveal',
+    target: {
+      sessionId: 'workflow:acceptance',
+      generation: 1,
+      sourceId: 'source:7:42',
+      runOrder: 2,
+      itemId: 'blob:preview',
+      batchIndex: 2,
+    },
+  },
+  {
+    type: 'reveal',
+    target: {
+      sessionId: 'workflow:acceptance',
+      generation: 1,
+      sourceId: 'source:7:42',
+      runOrder: 2,
+      itemId: 'result:exact-final',
+      batchIndex: -1,
+    },
+  },
   { type: 'unknown' },
   { type: 'batch', index: -1 },
   { type: 'batch', index: 1.2 },

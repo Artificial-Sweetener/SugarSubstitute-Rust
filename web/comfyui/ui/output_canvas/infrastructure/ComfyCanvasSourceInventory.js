@@ -51,6 +51,13 @@ export class ComfyCanvasSourceInventory {
             sources: this.#authored.size,
         };
     }
+    /** Return cached native source handles without rediscovering graph topology from presentation activity. */
+    nativeSources() {
+        return [...this.#authored.values()].flatMap(({ source, nodes, output }) => {
+            const node = nodes.at(-1);
+            return node && !output ? [{ path: source.executionPath, node }] : [];
+        });
+    }
     /** Observe committed workflow activation and release cached handles during loading. */
     install() {
         if (this.#stop || this.#disposed)

@@ -59,6 +59,10 @@ function decodeCommand(value) {
     if (!isRecord(value))
         return null;
     switch (value.type) {
+        case 'reveal': {
+            const target = decodeRevealTarget(value.target);
+            return target ? Object.freeze({ type: 'reveal', target }) : null;
+        }
         case 'fit':
         case 'native':
         case 'swap':
@@ -124,4 +128,37 @@ function decodeCommand(value) {
         default:
             return null;
     }
+}
+/** Narrow external immutable-image identifiers before they reach selection or resource owners. */
+function decodeRevealTarget(value) {
+    if (!isRecord(value) ||
+        !workflowIdentity(value.sessionId) ||
+        !resultIdentity(value.itemId) ||
+        !sourceIdentity(value.sourceId) ||
+        !nonnegativeInteger(value.generation) ||
+        !nonnegativeInteger(value.runOrder) ||
+        !nonnegativeInteger(value.batchIndex))
+        return null;
+    return Object.freeze({
+        sessionId: value.sessionId,
+        itemId: value.itemId,
+        sourceId: value.sourceId,
+        generation: value.generation,
+        runOrder: value.runOrder,
+        batchIndex: value.batchIndex,
+    });
+}
+/** Narrow a workflow token without trusting a browser-provided object or arbitrary cast. */
+function workflowIdentity(value) {
+    return (typeof value === 'string' &&
+        value.startsWith('workflow:') &&
+        value.length > 9 &&
+        value.length <= 4096);
+}
+/** Bound an immutable result identity independently of its internal encoding. */
+function resultIdentity(value) {
+    return (typeof value === 'string' &&
+        value.startsWith('result:') &&
+        value.length > 7 &&
+        value.length <= 16384);
 }

@@ -109,6 +109,14 @@ export function layoutCubePreviewItems(area, items, gap = CUBE_PREVIEW_ITEM_GAP)
                 width: Math.min(CUBE_PREVIEW_ACTION_SIZE, rect.width),
                 height: Math.min(CUBE_PREVIEW_ACTION_SIZE, rect.height),
             },
+            revealAction: item.revealTarget
+                ? {
+                    x: rect.x + Math.max(0, rect.width - CUBE_PREVIEW_ACTION_SIZE * 2 - 6),
+                    y: rect.y + Math.min(6, Math.max(0, rect.height - 1)),
+                    width: Math.min(CUBE_PREVIEW_ACTION_SIZE, rect.width),
+                    height: Math.min(CUBE_PREVIEW_ACTION_SIZE, rect.height),
+                }
+                : null,
         };
     });
 }

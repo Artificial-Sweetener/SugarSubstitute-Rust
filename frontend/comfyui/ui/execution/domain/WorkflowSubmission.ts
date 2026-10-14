@@ -17,6 +17,12 @@
 
 import type { WorkflowSessionContext } from './WorkflowSession.js';
 import type { WorkflowOutputSource } from './WorkflowOutput.js';
+import type { WorkflowSessionId } from './ExecutionIdentity.js';
+
+export interface WorkflowSubmissionOrderSource {
+  /** Read reserved queue order even while its transport receipt is outstanding. */
+  latestOrder(session: WorkflowSessionId): number;
+}
 
 export interface WorkflowSubmissionContext {
   readonly session: WorkflowSessionContext;
