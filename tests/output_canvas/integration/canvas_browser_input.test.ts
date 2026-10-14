@@ -20,7 +20,7 @@ import { BrowserCanvasInput } from '../../../frontend/comfyui/ui/output_canvas/p
 import type { CanvasAnchor } from '../../../frontend/comfyui/ui/output_canvas/domain/CanvasCamera.js';
 
 /** Model browser pointer capture, the sole unavailable jsdom input boundary. */
-function fixture() {
+function fixture(outbound?: (event: MouseEvent) => boolean) {
   const element = document.createElement('div');
   document.body.append(element);
   const captures = new Set<number>();
@@ -50,6 +50,7 @@ function fixture() {
     pinch: jest.fn<(factor: number, anchor: CanvasAnchor, delta: CanvasAnchor) => void>(),
     doubleClick: jest.fn<(anchor: CanvasAnchor) => void>(),
     fit: jest.fn<() => void>(),
+    ...(outbound ? { outbound } : {}),
   };
   const input = new BrowserCanvasInput(element, gestures);
   return { element, captures, gestures, input };
@@ -98,6 +99,19 @@ describe('browser image input ownership', () => {
   afterEach(() => {
     document.body.replaceChildren();
     jest.restoreAllMocks();
+  });
+
+  test('leaves fitted mouse drags to the transfer owner while touch still pans', () => {
+    const f = fixture(() => true);
+    expect(pointer(f.element, 'pointerdown', 1, 100, 100).defaultPrevented).toBe(false);
+    pointer(f.element, 'pointermove', 1, 120, 110);
+    expect(f.captures.size).toBe(0);
+    expect(f.gestures.pan).not.toHaveBeenCalled();
+    expect(pointer(f.element, 'dragstart', 1, 100, 100).defaultPrevented).toBe(false);
+    expect(pointer(f.element, 'pointerdown', 2, 100, 100, true).defaultPrevented).toBe(true);
+    pointer(f.element, 'pointermove', 2, 120, 110, true);
+    expect(f.gestures.pan).toHaveBeenCalledWith({ x: 20, y: 10 });
+    f.input.dispose();
   });
 
   test('requires image engagement for wheel zoom and preserves modified browser gestures', () => {

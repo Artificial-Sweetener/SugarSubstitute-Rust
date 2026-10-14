@@ -63,7 +63,10 @@ export class BrowserCanvasInput {
             this.#engaged = true;
         });
         this.#listen('blur', () => this.cancel());
-        this.#listen('dragstart', (event) => event.preventDefault());
+        this.#listen('dragstart', (event) => {
+            if (!this.gestures.outbound?.(event))
+                event.preventDefault();
+        });
     }
     /** Release captured pointers and engagement when the attachment hides or input is interrupted. */
     cancel() {
@@ -99,11 +102,13 @@ export class BrowserCanvasInput {
             event.shiftKey ||
             !this.gestures.contains(point))
             return;
-        event.preventDefault();
-        event.stopPropagation();
         this.#engaged = true;
         this.element.focus({ preventScroll: true });
         this.gestures.interrupt();
+        if (event.pointerType !== 'touch' && this.gestures.outbound?.(event))
+            return;
+        event.preventDefault();
+        event.stopPropagation();
         this.#points.set(event.pointerId, point);
         this.element.setPointerCapture(event.pointerId);
         this.element.classList.add('sc-output-dragging');

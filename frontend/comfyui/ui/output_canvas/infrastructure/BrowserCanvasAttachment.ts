@@ -56,6 +56,11 @@ import type { BrowserCanvasImagePayload } from './BrowserCanvasImageLoader.js';
 import { applyBrowserCanvasCommand } from './BrowserCanvasActions.js';
 import { BrowserCanvasSourceNavigation } from './BrowserCanvasSourceNavigation.js';
 import { ensureBrowserCanvasStyles } from './BrowserCanvasStyles.js';
+import {
+  BrowserCanvasDrag,
+  type BrowserCanvasDragPayload,
+} from '../presentation/browser/BrowserCanvasDrag.js';
+import { BrowserCanvasDragSubjects } from './BrowserCanvasDragSubject.js';
 
 export interface BrowserCanvasAttachmentOptions {
   readonly address: CanvasAttachmentAddress;
@@ -79,6 +84,10 @@ export interface BrowserCanvasAttachmentOptions {
   open(item: WorkflowOutputItem): void;
   /** Copy a completed image through the platform's shared transfer adapter. */
   copy?(item: WorkflowOutputItem, accepts: () => boolean): Promise<boolean>;
+  /** Prepare one exact completed image for platform-owned outbound dragging. */
+  drag?(item: WorkflowOutputItem, signal: AbortSignal): Promise<BrowserCanvasDragPayload | null>;
+  /** Invalidate prepared transfers after an accepted shared preference change. */
+  transferChanged?(listener: () => void): () => void;
   /** Dispose platform loading after the resource owner has canceled every lease. */
   disposeLoader(): void;
   /** Report product feedback through the existing SugarCubes services. */
@@ -92,6 +101,8 @@ export class BrowserCanvasAttachment {
   readonly #images: BrowserCanvasImages;
   readonly #overview: BrowserCanvasOverview;
   readonly #input: BrowserCanvasInput;
+  readonly #drag: BrowserCanvasDrag;
+  readonly #stopTransfer: () => void;
   readonly #geometry: BrowserCanvasGeometry;
   readonly #camera: CanvasCameraController;
   readonly #browserResources: BrowserCanvasResources;
@@ -160,6 +171,23 @@ export class BrowserCanvasAttachment {
       options.allowances,
       options.url,
     );
+    const dragSubjects = new BrowserCanvasDragSubjects(
+      this.viewport,
+      this.#images,
+      this.#overview,
+      () => this.#plan,
+    );
+    this.#drag = new BrowserCanvasDrag(element, {
+      resolve: (target, event) => dragSubjects.resolve(target, event),
+      prepare: (key, signal) => {
+        const item = dragSubjects.item(key);
+        return item && options.drag ? options.drag(item, signal) : Promise.resolve(null);
+      },
+      accepts: () =>
+        !this.#disposed && this.#surface?.visible === true && options.accepts() && !!options.drag,
+      report: (error) => options.report(error, null),
+    });
+    this.#stopTransfer = options.transferChanged?.(() => this.#drag.invalidate()) ?? (() => {});
     this.#status = new CanvasStatusPublisher(options.clock, () => this.#publish());
     this.#camera = new CanvasCameraController({
       view: options.address.viewId,
@@ -169,6 +197,7 @@ export class BrowserCanvasAttachment {
         Boolean(document.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)').matches),
       present: (target) => {
         this.#images.camera(target);
+        this.#drag.reconcile();
         if (this.#ready) this.#status.changed();
       },
     });
@@ -238,6 +267,8 @@ export class BrowserCanvasAttachment {
       report: options.report,
     });
     const cleanup: (() => void)[] = [
+      () => this.#drag.dispose(),
+      this.#stopTransfer,
       () => this.#images.dispose(),
       () => this.#overview.dispose(),
       () => this.#browserResources.dispose(),
@@ -249,6 +280,7 @@ export class BrowserCanvasAttachment {
       this.#overlay = mountCanvasOverlay(overlay, this.port, options.report, element);
       cleanup.push(() => this.#overlay.dispose());
       this.#input = new BrowserCanvasInput(this.viewport, {
+        outbound: (event) => this.#drag.allows(event),
         contains: (point) => this.#images.contains(point),
         interrupt: () => this.#camera.interrupt(),
         pan: (delta) => {
@@ -318,6 +350,7 @@ export class BrowserCanvasAttachment {
       this.#sourceSignature = sourceSignature;
     }
     this.#plan = this.#displayPlan();
+    this.#drag.reconcile();
     this.#enroll();
     const linked = this.#plan.view.linked;
     if (linked !== this.#linked) {
@@ -387,6 +420,8 @@ export class BrowserCanvasAttachment {
     this.#status.dispose();
     this.port.dispose();
     this.#input.dispose();
+    this.#drag.dispose();
+    this.#stopTransfer();
     this.#geometry.dispose();
     this.#camera.dispose();
     this.#overlay.dispose();
@@ -432,6 +467,7 @@ export class BrowserCanvasAttachment {
     this.#overview.images(images);
     if (this.#plan.view.mode === 'overview') {
       this.#images.images(null, null);
+      this.#drag.reconcile();
       this.#input.cancel();
       this.#camera.suspend();
       this.#status.changed();
@@ -440,6 +476,7 @@ export class BrowserCanvasAttachment {
     const primary = images.find((slot) => slot.slot === 'primary')?.frame ?? null;
     const secondary = images.find((slot) => slot.slot === 'secondary')?.frame ?? null;
     this.#images.images(primary, secondary);
+    this.#drag.reconcile();
     const basis = primary ?? secondary;
     const surface = this.#surface;
     const geometry =
@@ -462,6 +499,7 @@ export class BrowserCanvasAttachment {
   /** Apply settled geometry while suspending all image admissions for zero-sized/hidden allocations. */
   #resize(surface: CanvasSurfaceGeometry): void {
     this.#surface = surface;
+    this.#drag.reconcile();
     this.#browserResources.active(surface.visible);
     this.#overview.resize();
     this.#resourcesChanged();

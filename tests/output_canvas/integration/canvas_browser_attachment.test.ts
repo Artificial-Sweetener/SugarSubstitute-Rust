@@ -132,6 +132,92 @@ describe('composed browser canvas attachment', () => {
   });
 
   test.each(['image', 'overview'] as const)(
+    'prepares the exact %s batch file and retires it before a changed run can expose old pixels',
+    async (mode) => {
+      const f = fixture();
+      const catalog = {
+        ...f.catalog,
+        entries: f.catalog.entries.map((entry) => ({
+          ...entry,
+          items: [0, 1, 2].map(
+            (batchIndex): WorkflowOutputItem => ({
+              ...entry.items[0]!,
+              id: `${entry.items[0]!.id}:${batchIndex}`,
+              batchIndex,
+            }),
+          ),
+        })),
+      };
+      f.replace(catalog);
+      f.views.update(f.view, (state) => ({
+        ...state,
+        mode,
+        selection: { sourceId: catalog.entries[0]!.source.id, batchIndex: 1 },
+      }));
+      const drag = jest
+        .fn<
+          (item: WorkflowOutputItem, signal: AbortSignal) => Promise<{ file: File; url: string }>
+        >()
+        .mockResolvedValue({
+          file: new File(['exact file'], 'batch-2.png', { type: 'image/png' }),
+          url: 'http://localhost/view?filename=batch-2.png',
+        });
+      let invalidate: (() => void) | undefined;
+      const stop = jest.fn();
+      const surface = new BrowserCanvasAttachment(f.root, {
+        ...f.options,
+        drag,
+        transferChanged: (listener) => {
+          invalidate = listener;
+          return stop;
+        },
+      });
+      const handles: HTMLImageElement[] = [];
+      for (let index = 0; index < (mode === 'overview' ? 3 : 1); index++)
+        handles.push(await f.loader.ready(index));
+      f.frames.advance(2);
+      f.clock.advance(100);
+      const image = handles[mode === 'overview' ? 1 : 0]!;
+      if (mode === 'image') expect(getComputedStyle(image).pointerEvents).toBe('auto');
+      const hover = () =>
+        image.dispatchEvent(
+          new MouseEvent('pointerover', {
+            bubbles: true,
+            clientX: 400,
+            clientY: 300,
+          }),
+        );
+      hover();
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(drag.mock.calls[0]?.[0]).toBe(catalog.entries[0]!.items[1]);
+      expect(image.draggable).toBe(true);
+      invalidate?.();
+      expect(image.draggable).toBe(false);
+      hover();
+      await Promise.resolve();
+      await Promise.resolve();
+      f.replace({
+        ...catalog,
+        entries: catalog.entries.map((entry) => ({
+          ...entry,
+          items: entry.items.map(
+            (item): WorkflowOutputItem => ({ ...item, id: `result:next-run:${item.id}` }),
+          ),
+        })),
+      });
+      surface.refresh();
+      expect(image.draggable).toBe(false);
+      const before = drag.mock.calls.length;
+      hover();
+      expect(drag).toHaveBeenCalledTimes(before);
+      surface.dispose();
+      expect(stop).toHaveBeenCalledTimes(1);
+      expect(f.errors).toEqual([]);
+    },
+  );
+
+  test.each(['image', 'overview'] as const)(
     'commits a prepared source and its %s pixels together without a blank intermediate presentation',
     async (mode) => {
       const f = fixture();

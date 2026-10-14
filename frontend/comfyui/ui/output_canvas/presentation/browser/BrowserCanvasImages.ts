@@ -108,6 +108,30 @@ export class BrowserCanvasImages {
     );
   }
 
+  /** Resolve only fitted completed pixels from the actual painted frame, respecting comparison clipping. */
+  draggable(
+    target: EventTarget | null,
+    point: CanvasAnchor,
+  ): CanvasImageFrame<HTMLImageElement> | null {
+    const inspection = this.#target;
+    if (!inspection || !this.contains(point)) return null;
+    const { camera, geometry } = inspection;
+    if (
+      geometry.image.width * camera.scale > geometry.viewport.width + 0.01 ||
+      geometry.image.height * camera.scale > geometry.viewport.height + 0.01
+    )
+      return null;
+    const wipe = this.#wipe;
+    const secondaryVisible =
+      this.#secondary &&
+      (!wipe ||
+        (wipe.orientation === 'vertical'
+          ? point.x <= geometry.viewport.width * wipe.split
+          : point.y <= geometry.viewport.height * wipe.split));
+    const frame = secondaryVisible ? this.#secondary : this.#primary;
+    return frame && !frame.preview && target === frame.handle ? frame : null;
+  }
+
   /** Expose owned rendering work without claiming control over the browser's frame scheduler. */
   get pendingFrames(): number {
     return this.#frame ? 1 : 0;

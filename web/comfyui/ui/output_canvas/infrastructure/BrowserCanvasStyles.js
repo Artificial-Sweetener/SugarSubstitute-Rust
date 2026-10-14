@@ -27,7 +27,7 @@ export function ensureBrowserCanvasStyles(document) {
     .sc-output-viewport:focus-visible { outline:2px solid var(--p-primary-color,var(--ring,#df258e)); outline-offset:-2px; }
     .sc-output-viewport.sc-output-dragging { cursor:grabbing; }
     .sc-output-image-layer { position:absolute; inset:0; overflow:hidden; pointer-events:none; }
-    .sc-output-image { position:absolute; left:0; top:0; display:block;
+    .sc-output-image { position:absolute; left:0; top:0; display:block; pointer-events:auto;
       max-width:none; max-height:none; object-fit:fill; user-select:none; }
     .sc-output-overview { position:absolute; inset:0; min-height:0; overflow:auto; overscroll-behavior:contain;
       color:var(--fg-color,#ddd); }

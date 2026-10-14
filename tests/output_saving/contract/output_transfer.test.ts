@@ -55,6 +55,48 @@ test('requests shared policy and copies exact selected bytes without reconstruct
   expect(write).toHaveBeenCalledWith(expect.any(Blob), 'image/jpeg');
 });
 
+test('prepares the preferred exact file and full-fidelity URL for synchronous outbound dragging', async () => {
+  const payload = { success: true, data: { file: jpeg, mime_type: 'image/jpeg' } };
+  const fetch = jest.fn<typeof globalThis.fetch>().mockResolvedValue(response(payload));
+  const write =
+    jest.fn<(blob: Blob, type: 'image/png' | 'image/jpeg' | 'image/webp') => Promise<void>>();
+  const transfer = new BrowserOutputTransfer('http://localhost:8189', fetch, { write });
+  const result = await transfer.drag(file, new AbortController().signal);
+  expect(result?.file.name).toBe('output.jpg');
+  expect(result?.file.type).toBe('image/jpeg');
+  expect(result?.file.size).toBe(new Blob(['image bytes']).size);
+  expect(result?.url).toBe(
+    'http://localhost:8189/view?filename=output.jpg&subfolder=__sugarcubes_managed__%2Fidentity&type=output',
+  );
+  expect(write).not.toHaveBeenCalled();
+  const controller = new AbortController();
+  controller.abort();
+  expect(await transfer.drag(file, controller.signal)).toBeNull();
+  expect(fetch).toHaveBeenCalledTimes(2);
+});
+
+test('propagates drag cancellation to finite HTTP work and rejects late bytes', async () => {
+  const controller = new AbortController();
+  const fetch = jest
+    .fn<typeof globalThis.fetch>()
+    .mockResolvedValueOnce(
+      response({ success: true, data: { file: jpeg, mime_type: 'image/jpeg' } }),
+    )
+    .mockImplementationOnce(async (_url, request) => {
+      controller.abort();
+      expect(request?.signal?.aborted).toBe(true);
+      return response({});
+    });
+  const write =
+    jest.fn<(blob: Blob, type: 'image/png' | 'image/jpeg' | 'image/webp') => Promise<void>>();
+  expect(
+    await new BrowserOutputTransfer('http://localhost:8189', fetch, { write }).drag(
+      file,
+      controller.signal,
+    ),
+  ).toBeNull();
+});
+
 test('refuses late bytes after a workflow switch or different selected output', async () => {
   let current = true;
   const fetch = jest
