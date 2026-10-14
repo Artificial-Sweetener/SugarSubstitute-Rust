@@ -43,6 +43,18 @@ RUNTIME_ROOTS = ("sugarcubes", "sugarcubes_model_roots")
 ROOT_RUNTIME_FILES = ("__init__.py", "prestartup_script.py", "load_model_roots.py")
 OPTIONAL_FALLBACK_CONTEXTS = {
     (
+        "sugarcubes/output_saving/infrastructure/native_prompt_hook.py",
+        ("NativeSavingPromptHook", "__call__"),
+    ),
+    (
+        "sugarcubes/output_saving/infrastructure/comfy_node_capabilities.py",
+        ("ComfySavingNodeCapabilities", "_image_inputs"),
+    ),
+    (
+        "sugarcubes/output_saving/infrastructure/queue_lifecycle.py",
+        ("SavingQueueLifecycle", "_snapshot"),
+    ),
+    (
         "sugarcubes/execution/coordinator.py",
         ("CubeExecutionCoordinator", "prepare"),
     ),

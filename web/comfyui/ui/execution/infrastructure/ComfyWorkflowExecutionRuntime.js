@@ -140,6 +140,10 @@ export class ComfyWorkflowExecutionRuntime {
     latestSubmissionOrder(session) {
         return this.#runs.latestOrder(session);
     }
+    /** Read immutable construction ownership without inferring identity from the currently active graph. */
+    submissionContext(payload) {
+        return isRecord(payload) ? this.#contexts.read(payload) : null;
+    }
     /** Refuse live-graph preparation when an observed construction now names another workflow or load. */
     assertCurrentPrompt(payload) {
         const captured = isRecord(payload) ? this.#contexts.read(payload) : null;

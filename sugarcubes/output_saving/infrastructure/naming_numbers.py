@@ -27,7 +27,7 @@ from ..domain.path_pattern import (
     run_bucket_pattern,
     validate_pattern,
 )
-from ..domain.run_plan import SavingTicket
+from ..domain.run_plan import SavingTicket, SourceKind
 from .ticket_journal import SavingTicketJournal
 
 _IMAGE_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".webp", ".bmp"})
@@ -53,7 +53,11 @@ class OutputNamingNumbers:
             source=source.label,
             cube=source.cube_alias,
             cube_number=source.cube_number,
-            seed=source.seed,
+            seed=(
+                run.generation_seed
+                if source.kind is SourceKind.CUBE and run.generation_seed is not None
+                else source.seed
+            ),
             started_at=run.started_at,
             width=width,
             height=height,

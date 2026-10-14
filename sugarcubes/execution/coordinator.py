@@ -215,6 +215,7 @@ class CubeExecutionCoordinator:
         )
         return PreparedCubeExecution(
             prompt=instrumented.prompt,
+            workflow=deepcopy(dict(workflow.payload)),
             node_definitions=inherited.node_definitions,
             node_owners=instrumented.node_owners,
             boundary_bindings=inherited.boundary_bindings,

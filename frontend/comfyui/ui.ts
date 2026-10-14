@@ -35,7 +35,8 @@ import { NativeSubgraphBoundaryResolver } from './ui/cube/graph/NativeSubgraphBo
 import { buildShiftedPlacementPayload } from './ui/import/PlacementPayload.js';
 import { CubeImportHostCoordinator } from './ui/import/CubeImportHostCoordinator.js';
 import { createPublicApi, getSugarCubesUI } from './ui/index.js';
-import { createHostSettingsController } from './ui/settings/HostSettingsController.js';
+import { createHostSettingsComposition } from './ui/settings/HostSettingsComposition.js';
+import { attachSavingRunContext } from './ui/output_saving/ComfySavingRunContext.js';
 import type { SettingsManager } from './ui/settings/HostSettingsController.js';
 import type { UnknownRecord } from './ui/types/common.js';
 import type { ComfyApplication } from './ui/types/graph.js';
@@ -118,13 +119,7 @@ const appRef = adapter.getApp() as SugarCubesHostApp | null;
 const windowRef = adapter.getWindow();
 const documentRef = adapter.getDocument();
 const consoleRef = adapter.getConsole();
-const logger = consoleRef || {
-  log() {},
-  warn() {},
-  error() {},
-  info() {},
-  debug() {},
-};
+const logger = consoleRef ?? console;
 const hostFeedback = new CubeHostFeedback({
   toast: toastService,
 });
@@ -183,7 +178,10 @@ const promptQueueBridge = createCubeHostExecution({
   prepareRelations: (payload) => {
     try {
       workflowExecution.assertCurrentPrompt(payload);
-      return workflowRelations.prepare(payload);
+      return attachSavingRunContext(
+        workflowRelations.prepare(payload),
+        workflowExecution.submissionContext(payload),
+      );
     } catch (error: unknown) {
       pushToastMessage('error', 'Workflow run not queued', readErrorMessage(error));
       throw error;
@@ -281,7 +279,7 @@ const readErrorMessage = (error: unknown): string => hostFeedback.readErrorMessa
 
 const pushToastMessage = hostFeedback.pushToast.bind(hostFeedback);
 
-const hostSettingsController = createHostSettingsController({
+const hostSettingsController = createHostSettingsComposition({
   adapter,
   appRef,
   cubeApi,

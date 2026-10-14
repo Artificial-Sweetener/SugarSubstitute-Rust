@@ -20,11 +20,14 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import replace
 from typing import Protocol
+from collections.abc import Mapping
 
-from sugarcubes.execution.models import ApiPrompt
+from ...execution.models import ApiPrompt
 
 from ..domain.run_plan import SavingRun, SavingSource, SourceKind
 from ..domain.source_policy import CubeSavingPolicy
+from ..domain.image_passthrough import bypass_image_sink_dependencies
+from ..domain.saver_contract import ImageSaverContract
 
 
 class SavingTicketWriter(Protocol):
@@ -50,8 +53,9 @@ class OutputSavingPromptPreparer:
         run: SavingRun,
         sources: tuple[SavingSource, ...],
         active_cube_ids: tuple[str, ...],
+        contracts: Mapping[str, ImageSaverContract],
     ) -> ApiPrompt:
-        """Preserve all upstream execution inputs while replacing supported saving sinks.
+        """Preserve graph semantics and upstream computations while projecting supported saving sinks.
 
         Fresh tickets invalidate output sinks without invalidating generators.
         Source inventory must already be qualified by the host adapter; unknown
@@ -75,8 +79,15 @@ class OutputSavingPromptPreparer:
             muted_cube_ids=muted,
         )
         for source in selected:
-            self._validate_sink(prompt, source)
+            self._validate_sink(prompt, source, contracts.get(source.node_id))
         result = deepcopy(prompt)
+        passthrough: dict[str, object] = {}
+        for source in selected:
+            node_inputs = prompt[source.node_id].get("inputs")
+            if isinstance(node_inputs, dict):
+                key = contracts[source.node_id].image_input
+                passthrough[source.node_id] = node_inputs[key]
+        bypass_image_sink_dependencies(result, passthrough)
         captured_sources: list[SavingSource] = []
         for source in selected:
             persist = (
@@ -90,17 +101,22 @@ class OutputSavingPromptPreparer:
             raise RuntimeError(
                 "Saving ticket issuer returned an incomplete source transaction."
             )
-        for source, ticket in zip(selected, tickets, strict=True):
+        for source, captured, ticket in zip(
+            selected, captured_sources, tickets, strict=True
+        ):
             node = result[source.node_id]
             inputs = node["inputs"]
             if not isinstance(inputs, dict):
                 raise ValueError("Saving sink inputs must be an object.")
-            if source.kind is SourceKind.CUBE:
-                inputs["save_outputs"] = cube_policy.saves(source.cube_id)
+            if contracts[source.node_id].class_type == "SugarCubes.CubeOutput":
+                inputs["save_outputs"] = captured.persist
                 inputs["save_ticket"] = ticket
             else:
                 node["class_type"] = "SugarCubes.ManagedImageOutput"
-                node["inputs"] = {"images": inputs["images"], "save_ticket": ticket}
+                node["inputs"] = {
+                    "images": inputs[contracts[source.node_id].image_input],
+                    "save_ticket": ticket,
+                }
         return result
 
     @staticmethod
@@ -113,23 +129,29 @@ class OutputSavingPromptPreparer:
         )
 
     @staticmethod
-    def _validate_sink(prompt: ApiPrompt, source: SavingSource) -> None:
+    def _validate_sink(
+        prompt: ApiPrompt, source: SavingSource, contract: ImageSaverContract | None
+    ) -> None:
         """Reject stale or unqualified source inventory before creating any tickets."""
         node = prompt.get(source.node_id)
         if node is None or not isinstance(node.get("inputs"), dict):
             raise ValueError("Saving source is missing from the execution prompt.")
-        expected = (
-            "SugarCubes.CubeOutput"
-            if source.kind is SourceKind.CUBE
-            else "PreviewImage" if source.kind is SourceKind.PREVIEW else "SaveImage"
+        expected_kinds = (
+            {SourceKind.SAVE, SourceKind.CUBE}
+            if source.kind is SourceKind.INTERNAL
+            else {source.kind}
         )
-        if node.get("class_type") != expected:
+        if (
+            contract is None
+            or contract.kind not in expected_kinds
+            or node.get("class_type") != contract.class_type
+        ):
             raise ValueError(
                 "Saving source inventory does not match its qualified node class."
             )
         inputs = node.get("inputs")
         if not isinstance(inputs, dict):
             raise ValueError("Saving source inputs must be an object.")
-        key = "value" if source.kind is SourceKind.CUBE else "images"
+        key = contract.image_input
         if key not in inputs:
             raise ValueError("Saving source has no image input.")

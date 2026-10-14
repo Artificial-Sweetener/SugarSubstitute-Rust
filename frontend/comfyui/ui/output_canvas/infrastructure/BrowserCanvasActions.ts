@@ -34,6 +34,8 @@ export interface BrowserCanvasActionOwners {
   readonly sources: BrowserCanvasSourceNavigation;
   /** Open the exact selected final through the host adapter. */
   open(item: WorkflowOutputItem): void;
+  /** Copy through the shared transfer authority when the platform provides that capability. */
+  copy?(item: WorkflowOutputItem): Promise<boolean>;
 }
 
 /** Dispatch one operation without adding image, navigation, or camera policy to composition. */
@@ -73,6 +75,10 @@ export async function applyBrowserCanvasCommand(
       if (!item) return false;
       owners.open(item);
       return true;
+    }
+    case 'copy-media': {
+      const item = command.target === 'primary' ? plan.primary?.item : plan.secondary?.item;
+      return item?.mediaKind === 'image' && owners.copy ? await owners.copy(item) : false;
     }
     case 'comparison':
       if (command.enabled && (snapshot.preview || snapshot.resource.state !== 'ready'))

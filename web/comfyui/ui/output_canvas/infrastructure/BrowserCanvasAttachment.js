@@ -137,6 +137,7 @@ export class BrowserCanvasAttachment {
                     'retry',
                     'admit-large-image',
                     'open-media',
+                    ...(options.copy ? ['copy-media'] : []),
                 ],
             },
             accepts: () => !this.#disposed && options.accepts(),
@@ -149,6 +150,13 @@ export class BrowserCanvasAttachment {
                 sources,
                 snapshot: command.type === 'comparison' ? this.#snapshot() : this.port.read(),
                 open: options.open,
+                ...(options.copy
+                    ? {
+                        copy: (item) => options.copy?.(item, () => !this.#disposed &&
+                            options.accepts() &&
+                            [this.#plan?.primary?.item?.id, this.#plan?.secondary?.item?.id].includes(item.id)) ?? Promise.resolve(false),
+                    }
+                    : {}),
             }),
             geometry: (geometry) => this.#resize(geometry),
             release: () => this.dispose(),

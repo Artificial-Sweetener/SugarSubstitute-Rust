@@ -35,6 +35,7 @@ def encode_run(run: SavingRun) -> dict[str, object]:
         "preferences": encode_preferences(run.preferences),
         "metadata": dict(run.metadata),
         "metadata_enabled": run.metadata_enabled,
+        "generation_seed": run.generation_seed,
     }
 
 
@@ -50,6 +51,9 @@ def decode_run(value: object) -> SavingRun:
     metadata_enabled = payload.get("metadata_enabled")
     if not isinstance(metadata_enabled, bool):
         raise ValueError("Saving run metadata flag must be a boolean.")
+    generation_seed = payload.get("generation_seed")
+    if generation_seed is not None and not isinstance(generation_seed, str):
+        raise ValueError("Saving run seed must be text or null.")
     return SavingRun(
         run_id=_text(payload.get("run_id"), allow_empty=False),
         root=_text(payload.get("root"), allow_empty=False),
@@ -58,6 +62,7 @@ def decode_run(value: object) -> SavingRun:
         preferences=decode_preferences(payload.get("preferences")),
         metadata=tuple((key, _text(item)) for key, item in metadata.items()),
         metadata_enabled=metadata_enabled,
+        generation_seed=generation_seed,
     )
 
 

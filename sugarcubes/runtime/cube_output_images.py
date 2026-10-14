@@ -20,11 +20,12 @@ from __future__ import annotations
 import logging
 import os
 import random
-from collections.abc import Iterator, Sequence
-from typing import Literal, Protocol, TypeGuard, runtime_checkable
-
-import numpy as np
-from numpy.typing import NDArray
+from typing import Literal
+from ..output_saving.infrastructure.image_tensors import (
+    ImageTensorBatch,
+    is_image_tensor_batch,
+    iter_tensor_images,
+)
 
 from . import CubeOutputArtifact
 
@@ -38,7 +39,7 @@ def build_image_output_preview(
 ) -> tuple[dict[str, object], tuple[CubeOutputArtifact, ...]]:
     """Create image artifacts under the workflow instance output policy."""
 
-    if not _looks_like_image_batch(value):
+    if not is_image_tensor_batch(value):
         return {}, ()
     try:
         return _save_preview_images(value, save_outputs=save_outputs)
@@ -59,28 +60,8 @@ def build_image_output_preview(
         return {}, ()
 
 
-def _looks_like_image_batch(value: object) -> TypeGuard[_ImageBatch]:
-    """Return whether a value resembles a Comfy IMAGE tensor batch."""
-
-    if not isinstance(value, _ImageBatch):
-        return False
-    shape = value.shape
-    if len(shape) != 4:
-        return False
-    try:
-        batch, height, width, channels = shape
-    except (TypeError, ValueError):
-        return False
-    return (
-        int(batch) > 0
-        and int(height) > 0
-        and int(width) > 0
-        and int(channels) in {1, 3, 4}
-    )
-
-
 def _save_preview_images(
-    images: _ImageBatch,
+    images: ImageTensorBatch,
     *,
     save_outputs: bool,
 ) -> tuple[dict[str, object], tuple[CubeOutputArtifact, ...]]:
@@ -88,7 +69,6 @@ def _save_preview_images(
 
     import folder_paths
     from comfy.cli_args import args
-    from PIL import Image
     from PIL.PngImagePlugin import PngInfo
 
     output_dir = (
@@ -110,10 +90,7 @@ def _save_preview_images(
     )
     ui_images: list[dict[str, object]] = []
     artifacts: list[CubeOutputArtifact] = []
-    for batch_number, image in enumerate(images):
-        image_array = _image_to_numpy(image)
-        scaled_image = np.multiply(image_array, 255.0)
-        pil_image = Image.fromarray(np.clip(scaled_image, 0, 255).astype(np.uint8))
+    for batch_number, pil_image in enumerate(iter_tensor_images(images)):
         metadata = None if args.disable_metadata else PngInfo()
         filename_with_batch_num = filename.replace("%batch_num%", str(batch_number))
         file_name = f"{filename_with_batch_num}_{counter:05}_.png"
@@ -141,35 +118,3 @@ def _save_preview_images(
         )
         counter += 1
     return {"images": ui_images}, tuple(artifacts)
-
-
-def _image_to_numpy(image: _ImageItem) -> NDArray[np.generic]:
-    """Convert a Comfy image tensor item to a NumPy-compatible array."""
-
-    return np.asarray(image.cpu().numpy())
-
-
-@runtime_checkable
-class _ImageItem(Protocol):
-    """Describe one tensor-like image item at the Comfy adapter boundary."""
-
-    shape: Sequence[int]
-
-    def cpu(self) -> _ImageItem:
-        """Return a CPU-backed tensor view."""
-
-    def numpy(self) -> object:
-        """Return the tensor's array representation."""
-
-
-@runtime_checkable
-class _ImageBatch(Protocol):
-    """Describe the tensor batch surface consumed by preview generation."""
-
-    shape: Sequence[int]
-
-    def __iter__(self) -> Iterator[_ImageItem]:
-        """Iterate image items."""
-
-    def __getitem__(self, index: int) -> _ImageItem:
-        """Return one image item."""

@@ -358,6 +358,7 @@ class PreparedCubeExecution:
     """Carry one derived queue candidate without retaining mutable source input."""
 
     prompt: ApiPrompt
+    workflow: Mapping[str, object]
     node_definitions: NodeDefinitions
     node_owners: Mapping[str, ExecutionNodeOwner]
     boundary_bindings: tuple[BoundaryBinding, ...]

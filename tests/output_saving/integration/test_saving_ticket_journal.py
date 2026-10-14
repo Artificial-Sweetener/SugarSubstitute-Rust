@@ -156,3 +156,17 @@ def test_terminal_run_cleanup_releases_metadata_without_resetting_shared_counter
     assert journal.read_ticket(second).run.run_id == "run-b"
     assert journal.run_number("run-b", "folder", lambda: 1) == 9
     journal.discard_run("run-a")
+
+
+def test_restart_retains_only_authoritatively_live_queue_snapshots(
+    tmp_path: Path,
+) -> None:
+    """Release abandoned metadata after a crash while retaining any recovered queued generation."""
+    journal = SavingTicketJournal(tmp_path / "saving.sqlite")
+    source = SavingSource("sink", "Result", SourceKind.CUBE)
+    abandoned = journal.issue_run(_run("abandoned"), (source,))[0]
+    live = journal.issue_run(_run("live"), (source,))[0]
+    journal.retain_runs(frozenset({"live"}))
+    with pytest.raises(ValueError):
+        journal.read_ticket(abandoned)
+    assert journal.read_ticket(live).run.run_id == "live"

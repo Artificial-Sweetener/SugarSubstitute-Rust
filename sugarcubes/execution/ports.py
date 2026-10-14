@@ -20,8 +20,15 @@
 from __future__ import annotations
 
 from typing import Protocol
+from collections.abc import Mapping
 
-from .models import ComfyQueueReceipt, PreparedCubeExecution
+from .models import (
+    ApiPrompt,
+    ComfyQueueReceipt,
+    ExecutionNodeOwner,
+    JsonValue,
+    PreparedCubeExecution,
+)
 
 
 class ComfyExecutionPort(Protocol):
@@ -29,3 +36,21 @@ class ComfyExecutionPort(Protocol):
 
     async def queue(self, prepared: PreparedCubeExecution) -> ComfyQueueReceipt:
         """Return Comfy's normalized acceptance or validation rejection."""
+
+
+class QueuedPromptPolicy(Protocol):
+    """Prepare immutable execution-only output policy before host validation."""
+
+    def prepare(
+        self,
+        prompt_id: str,
+        prompt: ApiPrompt,
+        *,
+        workflow: Mapping[str, object],
+        owners: Mapping[str, ExecutionNodeOwner],
+        extra_data: Mapping[str, JsonValue],
+    ) -> ApiPrompt:
+        """Capture run policy without modifying the canonical workflow or upstream computations."""
+
+    def discard(self, prompt_id: str) -> None:
+        """Retire rejected or terminal preparation state without overriding host queue outcomes."""
