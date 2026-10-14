@@ -50,14 +50,14 @@ impl Attempts {
     pub(super) fn new() -> Self {
         Self { fence: Arc::new(AtomicU64::new(0)), current: None, next: 1 }
     }
-    /// Advance both presentation components after matching prior retirement.
+    /// Advance this run's launch after matching retirement; navigation is scoped to its launch.
     pub(super) fn begin(&mut self, identity: MainIdentity) -> Result<(), ClaimAdmissionError> {
         if let Some(old) = &self.current {
             if old.phase != Phase::Retired {
                 return Err(ClaimAdmissionError::Busy);
             }
-            if identity.launch.get() <= old.binding.identity.launch.get()
-                || identity.navigation.get() <= old.binding.identity.navigation.get()
+            if identity.run != old.binding.identity.run
+                || identity.launch.get() <= old.binding.identity.launch.get()
             {
                 return Err(ClaimAdmissionError::Identity);
             }
@@ -146,7 +146,8 @@ impl Attempts {
 impl WindowsProfileLease {
     /// Begin an exact main attempt while retaining this run's exclusion and desktop family.
     /// # Errors
-    /// Rejects foreign/nonincreasing identities, closing/uncertain custody or unconsumed jobs.
+    /// Rejects foreign runs, nonincreasing launches, closing/uncertain custody or unconsumed jobs.
+    /// Navigation may restart within the new launch; it never revives an earlier launch's proofs.
     pub fn begin_main_attempt(
         &mut self,
         identity: MainIdentity,

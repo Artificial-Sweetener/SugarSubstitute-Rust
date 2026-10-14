@@ -213,17 +213,77 @@ fn browser_submission_slots_advance_only_after_exact_retirement_without_reviving
     assert!(attempts.begin(main(2)?).is_err());
     attempts.confirm(main(1)?)?;
     let mut unchanged = main(2)?;
-    unchanged.navigation = main(1)?.navigation;
-    assert!(attempts.begin(unchanged).is_err());
-    unchanged = main(2)?;
     unchanged.launch = main(1)?.launch;
     assert!(attempts.begin(unchanged).is_err());
-    attempts.begin(main(2)?)?;
-    let second = attempts.admit(main(2)?, deadline, attempt::ProofKind::Browser)?;
-    assert!(second.live(main(2)?));
+    let mut retry = main(2)?;
+    retry.navigation = main(1)?.navigation;
+    attempts.begin(retry)?;
+    let second = attempts.admit(retry, deadline, attempt::ProofKind::Browser)?;
+    assert!(second.live(retry));
     assert!(!first.live(main(1)?));
     assert!(!first.live(main(2)?));
     assert!(attempts.retire(main(1)?).is_err());
-    assert!(second.live(main(2)?));
+    assert!(second.live(retry));
+    Ok(())
+}
+
+#[test]
+fn retry_launch_resets_navigation_without_reviving_prior_lease_proofs() -> TestResult {
+    let mut h = Harness::new()?;
+    h.acquire()?;
+    let first = folder(&mut h, main(1)?)?;
+    let first_environment = environment(&mut h, main(1)?)?;
+    h.lease.retire_main_attempt(main(1)?)?;
+    h.lease.confirm_main_retired(main(1)?)?;
+    let mut retry = main(2)?;
+    retry.navigation = main(1)?.navigation;
+    h.lease.begin_main_attempt(retry)?;
+    let fresh = folder(&mut h, retry)?;
+    let fresh_environment = environment(&mut h, retry)?;
+    assert!(fresh.validates(&h.lease, retry));
+    assert!(fresh_environment.validates(&h.lease, retry));
+    assert!(!first.validates(&h.lease, main(1)?));
+    assert!(!first.validates(&h.lease, retry));
+    assert!(!first_environment.validates(&h.lease, main(1)?));
+    assert!(!first_environment.validates(&h.lease, retry));
+    assert!(!fresh.validates(&h.lease, main(1)?));
+    assert!(!fresh_environment.validates(&h.lease, main(1)?));
+    let spec = h.spec(100)?;
+    assert!(matches!(
+        h.lease.submit_folder_preparation(&h.client, &h.scope, spec, main(1)?),
+        Err(ClaimAdmissionError::Identity)
+    ));
+    assert_eq!(h.fake.acquires.load(Ordering::Acquire), 1);
+    assert_eq!(h.fake.releases.load(Ordering::Acquire), 0);
+    assert!(h.lease.snapshot().held);
+    Ok(())
+}
+
+#[test]
+fn reset_navigation_retry_requires_exact_retirement_and_strictly_newer_same_run_launch()
+-> TestResult {
+    let mut h = Harness::new()?;
+    h.acquire()?;
+    let mut retry = main(2)?;
+    retry.navigation = main(1)?.navigation;
+    assert!(matches!(h.lease.begin_main_attempt(retry), Err(ClaimAdmissionError::Busy)));
+    h.lease.retire_main_attempt(main(1)?)?;
+    assert!(matches!(h.lease.begin_main_attempt(retry), Err(ClaimAdmissionError::Busy)));
+    h.lease.confirm_main_retired(main(1)?)?;
+    let mut same_launch = main(2)?;
+    same_launch.launch = main(1)?.launch;
+    assert!(matches!(h.lease.begin_main_attempt(same_launch), Err(ClaimAdmissionError::Identity)));
+    let mut foreign = retry;
+    foreign.run.generation = sugarsubstitute_contracts::lifecycle::RunGeneration::new(2)?;
+    assert!(matches!(h.lease.begin_main_attempt(foreign), Err(ClaimAdmissionError::Identity)));
+    h.lease.begin_main_attempt(retry)?;
+    h.lease.retire_main_attempt(retry)?;
+    h.lease.confirm_main_retired(retry)?;
+    assert!(matches!(h.lease.begin_main_attempt(main(1)?), Err(ClaimAdmissionError::Identity)));
+    assert!(matches!(h.lease.begin_main_attempt(retry), Err(ClaimAdmissionError::Identity)));
+    let mut successor = main(3)?;
+    successor.navigation = main(1)?.navigation;
+    h.lease.begin_main_attempt(successor)?;
+    assert!(folder(&mut h, successor)?.validates(&h.lease, successor));
     Ok(())
 }
