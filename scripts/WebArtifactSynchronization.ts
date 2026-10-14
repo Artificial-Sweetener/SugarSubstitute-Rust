@@ -14,16 +14,13 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own generated-file synchronization and exact nonmutating deployment verification. */
-import {
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  lstatSync,
-} from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, lstatSync } from 'node:fs';
 import path from 'node:path';
+import { copyFile } from 'node:fs/promises';
+import { setTimeout as delay } from 'node:timers/promises';
+
+/** Describe the bounded external file-copy boundary used by publishing and its failure proofs. */
+export type ArtifactCopy = (source: string, destination: string) => Promise<void>;
 
 /** Inventory one compiler-owned tree without retaining file contents in memory. */
 export function walkArtifactFiles(root: string): string[] {
@@ -53,11 +50,12 @@ function artifactPath(root: string, file: string): string {
 }
 
 /** Synchronize the isolated generated tree or reject any missing, stale or unexpected runtime file. */
-export function synchronizeWebArtifacts(
+export async function synchronizeWebArtifacts(
   generatedRoot: string,
   runtimeRoot: string,
   checkOnly: boolean,
-): void {
+  copy: ArtifactCopy = copyFile,
+): Promise<void> {
   if (!path.isAbsolute(generatedRoot) || !path.isAbsolute(runtimeRoot))
     throw new Error('Artifact roots must be absolute paths.');
   const separation = path.relative(generatedRoot, runtimeRoot);
@@ -84,7 +82,7 @@ export function synchronizeWebArtifacts(
       if (existsSync(runtimePath) && readFileSync(generatedPath).equals(readFileSync(runtimePath)))
         continue;
       mkdirSync(path.dirname(runtimePath), { recursive: true });
-      copyFileSync(generatedPath, runtimePath);
+      await publishArtifact(copy, generatedPath, runtimePath);
     }
     return;
   }
@@ -102,6 +100,30 @@ export function synchronizeWebArtifacts(
   }
   if (failures.length > 0)
     throw new Error(`Generated web artifacts are not synchronized:\n${failures.join('\n')}`);
+}
+
+/** Permit a live Windows response to release its handle without hiding permanent filesystem failures. */
+async function publishArtifact(
+  copy: ArtifactCopy,
+  source: string,
+  destination: string,
+): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await copy(source, destination);
+      return;
+    } catch (error: unknown) {
+      if (
+        attempt >= 5 ||
+        typeof error !== 'object' ||
+        error === null ||
+        !('code' in error) ||
+        (error.code !== 'EBUSY' && error.code !== 'EPERM')
+      )
+        throw error;
+      await delay(100 * 2 ** attempt);
+    }
+  }
 }
 
 /** Verify a relative replacement stays beneath its explicit compiler-owned root. */
