@@ -19,10 +19,12 @@ import { isRecord, type UnknownRecord } from '../../types/common.js';
 import { outputSourceId } from '../domain/ExecutionIdentity.js';
 import type { WorkflowOutputSource } from '../domain/WorkflowOutput.js';
 import { buildCubeOutputExecutionId } from '../../cube/execution/CubeOutputExecutionIdentity.js';
+import { readWorkflowSourceSavingPreferences } from '../../output_saving/domain/SourceSavingPreferences.js';
 
 /** Inventory serialized topology once at a load/submission boundary, never during media or pointer events. */
 export function decodeComfyWorkflowSources(workflow: unknown): readonly WorkflowOutputSource[] {
   if (!record(workflow) || !Array.isArray(workflow.nodes)) return Object.freeze([]);
+  const preferences = readWorkflowSourceSavingPreferences(workflow);
   const definitions = new Map<string, UnknownRecord>();
   const declared =
     record(workflow.definitions) && Array.isArray(workflow.definitions.subgraphs)
@@ -63,7 +65,20 @@ export function decodeComfyWorkflowSources(workflow: unknown): readonly Workflow
       const path = segments.join(':');
       const definition = typeof node.type === 'string' ? definitions.get(node.type) : undefined;
       const nested = record(node.subgraph) ? node.subgraph : definition;
-      const label = text(node.title) || text(nested?.name) || text(node.type) || 'Output';
+      const cube = record(node.properties) && node.properties.sugarcubes_kind === 'cube';
+      const preference = preferences.get(path);
+      const label =
+        (!cube
+          ? preference
+            ? preference.label
+            : record(node.properties)
+              ? text(node.properties.sugarcubes_output_label)
+              : ''
+          : null) ||
+        text(node.title) ||
+        text(nested?.name) ||
+        text(node.type) ||
+        'Output';
       append(path, label, breadcrumb);
       const properties = record(node.properties) ? node.properties : null;
       if (nested && properties?.sugarcubes_kind === 'cube' && Array.isArray(nested.outputs))

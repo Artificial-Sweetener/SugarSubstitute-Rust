@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own one settings draft and its bounded live example within the SugarCubes modal lifecycle. */
 import { ModalShell, type ModalAdapter } from '../dialogs/ModalShell.js';
-import type { OutputSavingClient } from './OutputSavingClient.js';
+import type { OutputSavingCommands } from './OutputSavingConfiguration.js';
 import { OutputSavingForm } from './OutputSavingForm.js';
 import type { OutputSavingSnapshot } from './OutputSavingPreferences.js';
 
@@ -27,7 +27,7 @@ export class OutputSavingDialog {
   /** Receive transport and modal adapters independently of host graph or canvas state. */
   constructor(
     private readonly document: Document,
-    private readonly client: OutputSavingClient,
+    private readonly client: OutputSavingCommands,
     adapter: ModalAdapter,
   ) {
     this.#shell = new ModalShell({ adapter, dialogClassName: 'sugarcubes-output-saving-dialog' });

@@ -322,6 +322,7 @@ const extensionSetupLifecycle = new CubeExtensionSetupLifecycle({
 
 const workflowWorkspace = new ComfyWorkflowWorkspace(
   {
+    saving: hostSettingsController.outputSaving,
     app: appRef,
     document: documentRef ?? document,
     execution: workflowExecution,

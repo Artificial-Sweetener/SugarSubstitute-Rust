@@ -5,6 +5,7 @@ export class OutputSavingSettings {
     document;
     client;
     reportError;
+    manageSources;
     #dialog;
     #manager = null;
     #row = null;
@@ -15,10 +16,11 @@ export class OutputSavingSettings {
     #busy = false;
     #revision = 0;
     /** Bind existing modal, transport and feedback owners without introducing canvas policy. */
-    constructor(document, client, adapter, reportError) {
+    constructor(document, client, adapter, reportError, manageSources) {
         this.document = document;
         this.client = client;
         this.reportError = reportError;
+        this.manageSources = manageSources;
         this.#dialog = new OutputSavingDialog(document, client, adapter);
     }
     /** Register an action row whose controls read shared settings each time the panel is entered. */
@@ -47,7 +49,7 @@ export class OutputSavingSettings {
                         const value = await pickSubstituteSettings(this.document);
                         if (value !== null)
                             this.#value = await this.client.importSubstitute(value);
-                    }));
+                    }), ...(this.manageSources ? [this.#button('Workflow outputs…', this.manageSources)] : []));
                 }
                 this.show();
                 void this.refresh();

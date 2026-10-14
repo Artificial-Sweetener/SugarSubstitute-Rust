@@ -36,6 +36,7 @@ import { CanvasRevealCoordinator } from '../application/CanvasRevealCoordinator.
 import { ComfyImageRevealHost } from './ComfyImageRevealHost.js';
 import { BrowserOutputTransfer } from '../../output_saving/BrowserOutputTransfer.js';
 import { BrowserImageClipboard } from '../../output_saving/BrowserImageClipboard.js';
+import { NativeSourceSavingHost } from '../../output_saving/NativeSourceSavingHost.js';
 /** Keep source, selection, resource, frame, settings, and execution ownership explicit in a thin composition. */
 export class ComfyCanvasHost {
     options;
@@ -47,6 +48,7 @@ export class ComfyCanvasHost {
     #toolbar;
     #reveal;
     #imageActions;
+    #saving;
     #stops = [];
     #started = false;
     #disposed = false;
@@ -83,6 +85,14 @@ export class ComfyCanvasHost {
         const allowances = new CanvasImageAllowances();
         const inventory = new CanvasSourceInventory();
         this.#sources = new ComfyCanvasSourceInventory(execution.sessions, inventory, () => (isRecord(app) ? app.graph : null), logger);
+        this.#saving = options.saving
+            ? new NativeSourceSavingHost(options.saving, {
+                root: () => (isRecord(app) ? app.graph : null),
+                canvas: () => (isRecord(app) ? app.canvas : null),
+                scope: () => execution.sessions.read().active,
+                sources: () => this.#sources.savingSources(),
+            }, report, { document, subscribe: (listener) => this.#sources.subscribe(listener) })
+            : null;
         this.#coordinator = new CanvasSessionCoordinator(execution.sessions, execution.results, inventory, views, selection, this.#sources);
         this.#stops.push(this.#coordinator.onRetired((view) => {
             inspections.remove(view);
@@ -177,6 +187,7 @@ export class ComfyCanvasHost {
             this.#workspace.setup();
             this.#toolbar.setup();
             this.#imageActions.setup();
+            this.#saving?.setup();
             this.#stops.push(this.options.execution.previews.subscribe(this.#primary), this.options.execution.subscribeConnection(() => this.#primary.reconcile()));
             this.options.document.defaultView?.addEventListener('pagehide', this.#pagehide);
         }
@@ -212,6 +223,7 @@ export class ComfyCanvasHost {
         this.options.document.defaultView?.removeEventListener('pagehide', this.#pagehide);
         this.#primary.dispose();
         this.#imageActions.dispose();
+        this.#saving?.dispose();
         this.#workspace.dispose();
         this.#toolbar.dispose();
         this.#coordinator.dispose();

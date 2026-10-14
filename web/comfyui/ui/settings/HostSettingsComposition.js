@@ -17,17 +17,32 @@
 import { createHostSettingsController, } from './HostSettingsController.js';
 import { OutputSavingClient } from '../output_saving/OutputSavingClient.js';
 import { OutputSavingSettings } from '../output_saving/OutputSavingSettings.js';
+import { OutputSavingConfiguration } from '../output_saving/OutputSavingConfiguration.js';
+import { OutputSavingCapabilitiesClient } from '../output_saving/OutputSavingCapabilitiesClient.js';
+import { SourceSavingControls } from '../output_saving/SourceSavingControls.js';
+import { SourceSavingDialog } from '../output_saving/SourceSavingDialog.js';
 /** Preserve the host-facing settings lifecycle while delegating each feature to its authoritative controller. */
 export function createHostSettingsComposition(dependencies) {
     const repository = createHostSettingsController(dependencies);
     const document = dependencies.adapter.getDocument();
+    const configuration = new OutputSavingConfiguration(new OutputSavingClient(dependencies.cubeApi));
+    const controls = document
+        ? new SourceSavingControls(configuration, new SourceSavingDialog(document, dependencies.adapter))
+        : null;
+    const outputSaving = {
+        configuration,
+        controls,
+        capabilities: new OutputSavingCapabilitiesClient(dependencies.cubeApi),
+        adapter: dependencies.adapter,
+    };
     const saving = document
-        ? new OutputSavingSettings(document, new OutputSavingClient(dependencies.cubeApi), dependencies.adapter, (error) => {
+        ? new OutputSavingSettings(document, configuration, dependencies.adapter, (error) => {
             dependencies.logger.warn('SugarCubes output settings failed', { error });
             dependencies.pushToast('error', 'Output settings unavailable', dependencies.readErrorMessage(error));
-        })
+        }, controls ? () => controls.open() : null)
         : null;
     return {
+        outputSaving,
         register: () => {
             repository.register();
             const manager = dependencies.appRef?.ui?.settings;

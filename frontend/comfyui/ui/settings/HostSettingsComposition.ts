@@ -20,17 +20,39 @@ import {
 } from './HostSettingsController.js';
 import { OutputSavingClient } from '../output_saving/OutputSavingClient.js';
 import { OutputSavingSettings } from '../output_saving/OutputSavingSettings.js';
+import { OutputSavingConfiguration } from '../output_saving/OutputSavingConfiguration.js';
+import { OutputSavingCapabilitiesClient } from '../output_saving/OutputSavingCapabilitiesClient.js';
+import { SourceSavingControls } from '../output_saving/SourceSavingControls.js';
+import { SourceSavingDialog } from '../output_saving/SourceSavingDialog.js';
+import type { OutputSavingFeature } from '../output_saving/OutputSavingFeature.js';
+
+export interface HostSettingsComposition extends HostSettingsController {
+  readonly outputSaving: OutputSavingFeature;
+}
 
 /** Preserve the host-facing settings lifecycle while delegating each feature to its authoritative controller. */
 export function createHostSettingsComposition(
   dependencies: Parameters<typeof createHostSettingsController>[0],
-): HostSettingsController {
+): HostSettingsComposition {
   const repository = createHostSettingsController(dependencies);
   const document = dependencies.adapter.getDocument();
+  const configuration = new OutputSavingConfiguration(new OutputSavingClient(dependencies.cubeApi));
+  const controls = document
+    ? new SourceSavingControls(
+        configuration,
+        new SourceSavingDialog(document, dependencies.adapter),
+      )
+    : null;
+  const outputSaving: OutputSavingFeature = {
+    configuration,
+    controls,
+    capabilities: new OutputSavingCapabilitiesClient(dependencies.cubeApi),
+    adapter: dependencies.adapter,
+  };
   const saving = document
     ? new OutputSavingSettings(
         document,
-        new OutputSavingClient(dependencies.cubeApi),
+        configuration,
         dependencies.adapter,
         (error) => {
           dependencies.logger.warn('SugarCubes output settings failed', { error });
@@ -40,9 +62,11 @@ export function createHostSettingsComposition(
             dependencies.readErrorMessage(error),
           );
         },
+        controls ? () => controls.open() : null,
       )
     : null;
   return {
+    outputSaving,
     register: () => {
       repository.register();
       const manager = dependencies.appRef?.ui?.settings;
