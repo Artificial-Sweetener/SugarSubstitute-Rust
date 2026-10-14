@@ -22,6 +22,18 @@ impl ProductionChild {
                 self.shutdown
                     .queue(Control::Activity { revision: *revision, activity: *activity })?
             }
+            Some(DesktopStartupObservation::MainAbsent(identity)) => {
+                let observed = *identity;
+                let construction_pending = self.main_construction_pending();
+                let closing_profile = (self.attempt.is_some() || self.shutdown.closing())
+                    && self.main.profile().is_some();
+                self.shutdown.record_main_absence(
+                    self.identity,
+                    observed,
+                    construction_pending,
+                    closing_profile,
+                )?;
+            }
             Some(DesktopStartupObservation::MainRetired(identity))
                 if *identity == self.identity =>
             {

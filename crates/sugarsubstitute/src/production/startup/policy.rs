@@ -177,7 +177,8 @@ impl StartupPolicy {
             | DesktopStartupObservation::NavigationStarted(identity)
             | DesktopStartupObservation::FrontendReceipt { identity, .. }
             | DesktopStartupObservation::MainRevealed(identity)
-            | DesktopStartupObservation::MainRetired(identity) => {
+            | DesktopStartupObservation::MainRetired(identity)
+            | DesktopStartupObservation::MainAbsent(identity) => {
                 session.is_some_and(|session| *identity == self.identity(session))
             }
             DesktopStartupObservation::Failed { identity, .. } => identity.is_none_or(|identity| {

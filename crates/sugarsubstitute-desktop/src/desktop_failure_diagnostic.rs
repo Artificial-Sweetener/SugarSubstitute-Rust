@@ -2,6 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Observe the first retained native failure through closed metadata only.
 use std::{error::Error, io::ErrorKind};
+#[path = "desktop_failure_diagnostic/startup.rs"]
+mod startup;
 
 /// Project direct sealed native/CDP cause data without formatting opaque payloads.
 #[cfg(any(target_os = "windows", test))]
@@ -131,6 +133,9 @@ fn classify(operation: &'static str, cause: &(dyn Error + 'static)) -> Diagnosti
 /// Called only after actual DesktopError first-cause adoption. The cause is borrowed;
 /// its formatter/source callbacks are never invoked and no native authority is projected.
 pub(super) fn emit(operation: &'static str, cause: &(dyn Error + 'static)) {
+    if startup::emit(operation, cause) {
+        return;
+    }
     let actual = classify(operation, cause);
     tracing::warn!(operation = "desktop_failure_transition",
         boundary = ?actual.boundary, kind = ?actual.kind,

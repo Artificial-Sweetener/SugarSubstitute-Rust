@@ -3,6 +3,8 @@
 //! Exercise real request/folder owners without manufacturing a native peer or frame loan.
 #[path = "tests/acquisition_lifetime.rs"]
 mod acquisition_lifetime;
+#[path = "tests/acquisition_progress.rs"]
+mod acquisition_progress;
 #[path = "tests/attempt_cleanup.rs"]
 mod attempt_cleanup;
 #[path = "tests/ownership.rs"]

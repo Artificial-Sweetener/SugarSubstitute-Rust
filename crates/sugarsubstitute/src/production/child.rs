@@ -300,6 +300,10 @@ impl ProductionChild {
         self.failed |= result.is_err();
         result
     }
+    /// Borrow actual retained Main construction/input/jobs for native absence checks.
+    pub(in crate::production) fn main_construction_pending(&self) -> bool {
+        self.main.construction_pending()
+    }
     /// Borrow only the actual bounded source-custodied transcript view.
     pub(in crate::production) fn transcript(&self) -> Option<OutputSnapshot> {
         self.snapshot.clone()

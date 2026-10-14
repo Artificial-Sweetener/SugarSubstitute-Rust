@@ -4,6 +4,8 @@
 use super::*;
 #[path = "retirement/control.rs"]
 mod control;
+#[path = "retirement/diagnostic.rs"]
+mod diagnostic;
 #[path = "retirement/native.rs"]
 mod native;
 use std::{num::NonZeroU64, time::Duration};
@@ -44,6 +46,7 @@ pub(super) struct ChildShutdown {
     native_retired: bool,
     pub(in super::super) main_retired: bool,
     pub(in super::super) main_retirement_ack: bool,
+    pub(in super::super) main_absence_pending: bool,
     intent_done: bool,
     completed_done: bool,
     release_requested: bool,
@@ -54,6 +57,27 @@ pub(super) struct ChildShutdown {
     queued: [Option<Control>; 4],
 }
 impl ChildShutdown {
+    /// Accept only a requested current native absence fact after actual application
+    /// construction custody ended; this creates no native fact or settlement ACK.
+    fn record_main_absence(
+        &mut self,
+        expected: MainIdentity,
+        observed: MainIdentity,
+        construction_pending: bool,
+        closing_profile: bool,
+    ) -> Result<()> {
+        if expected != observed
+            || construction_pending
+            || self.main_retired
+            || !(self.main_absence_pending || closing_profile)
+        {
+            return Err("Native Main absence is foreign, unrequested or still constructing".into());
+        }
+        self.queue(Control::MainRetired(observed))?;
+        self.main_absence_pending = false;
+        self.main_retired = true;
+        Ok(())
+    }
     pub(super) fn new() -> Self {
         Self {
             budget: None,
@@ -61,6 +85,7 @@ impl ChildShutdown {
             native_retired: false,
             main_retired: false,
             main_retirement_ack: false,
+            main_absence_pending: false,
             intent_done: false,
             completed_done: false,
             release_requested: false,
@@ -253,3 +278,7 @@ impl ProductionChild {
 #[cfg(test)]
 #[path = "retirement/tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "retirement/absence_tests.rs"]
+mod absence_tests;

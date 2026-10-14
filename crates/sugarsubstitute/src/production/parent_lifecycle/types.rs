@@ -69,6 +69,7 @@ pub(super) enum Reply {
 pub(super) enum WritePurpose {
     Welcome,
     Reply(usize),
+    AcquisitionProgress(sugarsubstitute_supervision::lifecycle_protocol::WireHeader),
     Challenge(UiChallengeKey),
 }
 pub(super) struct PendingWrite {

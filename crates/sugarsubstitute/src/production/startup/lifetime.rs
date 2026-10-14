@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Keep actual child cleanup admission open until native/render ownership settles.
 use super::*;
+use sugarsubstitute_desktop::StartupCloseStage;
 
 impl ProductionStartup {
     /// Start the sole execution owner with the real wake, then transfer actual child scope custody.
@@ -54,21 +55,29 @@ impl ProductionStartup {
                     })
                     .map_err(|cause| Box::new(cause) as Box<dyn Error>)
                     .and_then(|prepared| self.child.apply(effect, prepared));
-                retain(&mut failure, applied);
+                retain(&mut failure, self.observed_close(StartupCloseStage::PolicyApply, applied));
             }
             Ok(None) => {}
-            Err(cause) => retain(&mut failure, Err(cause)),
+            Err(cause) => {
+                retain(&mut failure, Err(self.close_failure(StartupCloseStage::PolicyClose, cause)))
+            }
         }
         if let Some(render) = &mut self.preparation {
-            retain(&mut failure, render.request_retirement());
+            let retirement = render.request_retirement();
+            retain(
+                &mut failure,
+                self.observed_close(StartupCloseStage::RenderRetirement, retirement),
+            );
         }
-        retain(&mut failure, self.refresh_deadline());
+        let deadline = self.refresh_deadline();
+        retain(&mut failure, self.observed_close(StartupCloseStage::DeadlineRefresh, deadline));
         failure.map_or(Ok(()), Err)
     }
     /// Await the existing capture measurement before admitting authenticated exit intent.
     /// An absent capture permits exactly one local sample; pending capture never does.
     fn advance_shutdown_budget(&mut self) -> Result<(), Box<dyn Error>> {
         let initiated = self.child.begin_shutdown();
+        let initiated = self.observed_close(StartupCloseStage::CaptureObservation, initiated);
         let existing = self.child.shutdown_budget();
         let mut failure = None;
         let origin = match initiated {
@@ -93,17 +102,29 @@ impl ProductionStartup {
                     Ok(self.clock.now())
                 }
             }) {
-                Ok(Some(budget)) => retain(&mut failure, self.child.request_shutdown(budget)),
+                Ok(Some(budget)) => {
+                    let requested = self.child.request_shutdown(budget);
+                    retain(
+                        &mut failure,
+                        self.observed_close(StartupCloseStage::ExitIntent, requested),
+                    );
+                }
                 Ok(None) => {}
-                Err(cause) => retain(&mut failure, Err(cause)),
+                Err(cause) => retain(
+                    &mut failure,
+                    Err(self.close_failure(StartupCloseStage::ShutdownBudget, cause)),
+                ),
             }
         }
         self.shutdown.tighten(self.child.shutdown_budget());
         if let Ok(budget) = self.shutdown.budget() {
             self.execution.retain_shutdown_cutoff(budget.settle_until);
         }
-        retain(&mut failure, self.refresh_deadline());
-        failure.map_or(Ok(()), Err)
+        let deadline = self.refresh_deadline();
+        retain(&mut failure, self.observed_close(StartupCloseStage::DeadlineRefresh, deadline));
+        failure.map_or(Ok(()), |cause| {
+            Err(self.close_failure(StartupCloseStage::ShutdownBudget, cause))
+        })
     }
     /// Observe actual child/render settlement before closing global execution admission.
     /// # Errors

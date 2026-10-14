@@ -22,6 +22,8 @@ pub(super) struct AttemptSettlement {
     pub(super) identity: MainIdentity,
     pub(super) until: Moment,
     pub(super) failed: Option<AttemptCleanupFailure>,
+    pub(super) main_retirement_required: bool,
+    pub(super) retirement: Option<(WireHeader, bool)>,
 }
 /// Borrow the original producer cause and exact attempt/campaign correlation after settlement.
 /// Reporting consumes a semantic snapshot while this owner retains its native cause.
@@ -50,6 +52,40 @@ impl Error for SettledAttemptFailure {
         Some(&self.cause)
     }
 }
+impl AttemptSettlement {
+    /// Actual authenticated native retirement request; copied metadata is not a proof.
+    pub(super) fn observe_retirement(
+        &mut self,
+        identity: MainIdentity,
+        header: WireHeader,
+    ) -> std::result::Result<(), ParentError> {
+        if identity != self.identity {
+            return Err(ParentError::ForeignPeer);
+        }
+        if self.retirement.is_some_and(|(old, _)| old != header) {
+            return Err(ParentError::ChangedDuplicate);
+        }
+        self.retirement.get_or_insert((header, false));
+        Ok(())
+    }
+    /// Called only after the original actual write receipt validates full completion.
+    pub(super) fn retirement_written(&mut self, header: WireHeader) {
+        if let Some((original, written)) = &mut self.retirement
+            && *original == header
+        {
+            *written = true;
+        }
+    }
+    /// Settlement publication cannot overtake native/profile retirement or its actual ACK.
+    pub(super) fn main_retired(
+        &self,
+        stage: sugarsubstitute_application::supervision::MainAuthorizationStage,
+    ) -> bool {
+        stage == sugarsubstitute_application::supervision::MainAuthorizationStage::Retired
+            && (!self.main_retirement_required
+                || self.retirement.is_some_and(|(_, written)| written))
+    }
+}
 impl ParentLifecycle {
     pub(super) fn begin_attempt_cleanup(
         &mut self,
@@ -68,7 +104,12 @@ impl ParentLifecycle {
             resources.execution.client.now()?,
             resources.profile.snapshot().pending,
         )?;
-        let lease = self.attempt_cleanup.as_ref().ok_or(ParentError::WrongPhase)?.lease;
+        let attempt = self.attempt_cleanup.as_ref().ok_or(ParentError::WrongPhase)?;
+        let lease = attempt.lease;
+        if attempt.main_retirement_required {
+            self.main.retire(identity)?;
+            resources.profile.retire_main_attempt(identity)?;
+        }
         if let Some(lease) = lease {
             let transition =
                 resources.backend.cleanup_attempt(binding, lease, budget, resources.execution)?;
@@ -91,8 +132,11 @@ impl ParentLifecycle {
         if self.closed || self.cleanup.is_some() || self.attempt_cleanup.is_some() {
             return Err(ParentError::WrongPhase.into());
         }
-        if self.main.stage()
+        let main_retirement_required = self.main.stage()
+            == sugarsubstitute_application::supervision::MainAuthorizationStage::RequestedFolder;
+        if (self.main.stage()
             != sugarsubstitute_application::supervision::MainAuthorizationStage::Retired
+            && !main_retirement_required)
             || self.main_retirement.is_some()
             || self.profile_pending.is_some()
             || native_profile_pending
@@ -125,6 +169,8 @@ impl ParentLifecycle {
             origin,
             identity,
             failed: None,
+            main_retirement_required,
+            retirement: None,
         });
         Ok(budget)
     }
@@ -152,7 +198,7 @@ impl ParentLifecycle {
             return Ok(());
         }
         let attempt = self.attempt_cleanup.as_ref().ok_or(ParentError::WrongPhase)?;
-        if attempt.failed.is_some() {
+        if attempt.failed.is_some() || !attempt.main_retired(self.main.stage()) {
             return Ok(());
         }
         if attempt.resource.is_some_and(|key| resources.backend.cleanup_failure(key).is_some()) {

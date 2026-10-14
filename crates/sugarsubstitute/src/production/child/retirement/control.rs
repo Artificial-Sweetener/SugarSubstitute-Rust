@@ -11,6 +11,7 @@ impl ProductionChild {
             && let Some(header) = self.bootstrap.channel_mut().received_header()?
             && self.shutdown.pending.is_none_or(|pending| pending.header != header)
             && !self.output.owns_reply(header)
+            && self.acquire.is_none_or(|acquire| acquire.header != header)
         {
             let frame = self
                 .bootstrap

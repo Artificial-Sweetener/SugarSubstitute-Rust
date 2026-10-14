@@ -106,7 +106,7 @@ impl ParentLifecycle {
     }
 
     /// Route transitions once after the coordinator consumed its own actual jobs.
-    /// Pending remains internal; it is never transmitted as a completed request.
+    /// Pending may publish one data-only progress frame; final readiness remains independent.
     pub(crate) fn backend_transition(
         &mut self,
         transition: &ResourceTransition,
@@ -185,7 +185,7 @@ impl ParentLifecycle {
                 let frontend = sugarsubstitute_application::startup::FrontendBudget::new(
                     resources.execution.client.now()?,
                 )?;
-                self.begin_output_sequence()?;
+                self.begin_output_sequence(lease)?;
                 self.main.begin(identity, lease, frontend.until())?;
                 resources.profile.begin_main_attempt(identity)?;
                 self.folders.begin(identity);

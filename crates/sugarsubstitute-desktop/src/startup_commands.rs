@@ -3,8 +3,8 @@
 //! Admit bounded application commands exclusively while the actual native UI loop dispatches.
 
 use super::{
-    DesktopError, EventLoopProxy, MainActor, NativeAction, Session, StartupWindowContent, activity,
-    main, main_operation,
+    DesktopError, DesktopStartupObservation, EventLoopProxy, MainActor, NativeAction, Session,
+    StartupWindowContent, activity, main, main_operation,
 };
 use crate::DesktopStartupCommand;
 
@@ -25,6 +25,7 @@ pub(super) fn drain(
                 command,
                 DesktopStartupCommand::Close
                     | DesktopStartupCommand::RetireMain(_)
+                    | DesktopStartupCommand::ConfirmMainAbsent(_)
                     | DesktopStartupCommand::ProcessUiChallenge(_)
             )
         {
@@ -40,6 +41,7 @@ pub(super) fn drain(
                 }
             }
             DesktopStartupCommand::PrepareMain(request) => {
+                session.main_fence.prepare(request.identity(), content.main_identity())?;
                 if !session.splash.presented
                     || session.splash.retiring
                     || request.identity().launch != content.launch_id()
@@ -72,7 +74,16 @@ pub(super) fn drain(
             DesktopStartupCommand::ProbeFrontend(identity) => {
                 main_operation(session, content, |owner| owner.probe(identity).map(|()| None))?;
             }
-            DesktopStartupCommand::RetireMain(identity) => main(session)?.close(identity)?,
+            DesktopStartupCommand::RetireMain(identity) => {
+                if session.main.as_ref().is_some_and(|owner| owner.identity() == identity) {
+                    main(session)?.close(identity)?;
+                } else {
+                    confirm_main_absent(session, content, identity)?;
+                }
+            }
+            DesktopStartupCommand::ConfirmMainAbsent(identity) => {
+                confirm_main_absent(session, content, identity)?
+            }
             DesktopStartupCommand::RetireSplash(launch) => {
                 if launch != session.splash.launch || !session.splash.presented {
                     return Err(DesktopError::message(
@@ -97,4 +108,26 @@ pub(super) fn drain(
     proxy
         .send_event(NativeAction::Main)
         .map_err(|cause| DesktopError::new("rewake_startup_commands", cause))
+}
+
+/// Sample the actual creating-thread actor and application input/job custody before fencing.
+fn confirm_main_absent(
+    session: &mut Session,
+    content: &mut impl StartupWindowContent,
+    identity: crate::MainIdentity,
+) -> Result<(), DesktopError> {
+    let custody = match &session.main {
+        None => super::super::main_fence::MainCustody::Absent,
+        Some(main) if main.retired() => {
+            super::super::main_fence::MainCustody::CheckedRetired(main.identity())
+        }
+        Some(_) => super::super::main_fence::MainCustody::Outstanding,
+    };
+    session.main_fence.absent(
+        identity,
+        content.main_identity(),
+        content.main_construction_pending(),
+        custody,
+    )?;
+    session.observe(content, DesktopStartupObservation::MainAbsent(identity))
 }

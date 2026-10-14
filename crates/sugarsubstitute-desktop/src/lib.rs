@@ -48,7 +48,14 @@ mod startup_runtime;
 mod windows_main_receivers;
 #[cfg(target_os = "windows")]
 pub use startup_runtime::run_startup;
+mod startup_consume_failure;
+mod startup_failure;
+pub use startup_consume_failure::{StartupConsumeFailure, StartupConsumeStage};
 mod timing;
+pub use startup_failure::{
+    StartupBootstrapCause, StartupCaptureState, StartupCauseCode, StartupCloseFailure,
+    StartupCloseStage, StartupNativeCause, StartupRequestCause,
+};
 #[cfg(target_os = "windows")]
 #[allow(unsafe_code)]
 mod windows_animation_period;

@@ -33,7 +33,17 @@ impl ParentLifecycle {
         acknowledged: Option<NonZeroU64>,
         resources: &ParentResources<'_, '_>,
     ) -> Result<()> {
-        let lease = self.lease(reference)?;
+        if self.closed || self.cleanup.is_some() || self.attempt_cleanup.is_some() {
+            return Err(ParentError::WrongPhase.into());
+        }
+        let lease = self
+            .acquisition
+            .as_ref()
+            .ok_or(ParentError::WrongPhase)?
+            .output_lease(self.binding()?, reference)?;
+        if self.output_lease != Some(lease) {
+            return Err(ParentError::ForeignPeer.into());
+        }
         let current = self.output.as_ref().map(|delivery| (delivery.lease, delivery.id));
         if acknowledge_delivery(current, self.acknowledged_output, lease, acknowledged)? {
             self.acknowledged_output = acknowledged.map(|id| (lease, id));
@@ -91,19 +101,27 @@ fn acknowledge_delivery(
     }
 }
 impl ParentLifecycle {
-    /// Begin a newly granted transcript only after the previous delivery loan was consumed
-    /// or the prior lease was authoritatively retired. No live native loan is discarded.
-    pub(super) fn begin_output_sequence(&mut self) -> std::result::Result<(), ParentError> {
-        if self.output.is_some() {
+    /// Adopt the same provisional source through Grant; its live loan and ACK survive.
+    /// A different lease needs checked prior retirement before a fresh sequence begins.
+    pub(super) fn begin_output_sequence(
+        &mut self,
+        lease: LeaseKey,
+    ) -> std::result::Result<(), ParentError> {
+        if self.output_lease == Some(lease) {
+            return Ok(());
+        }
+        if self.output.is_some() || self.output_lease.is_some() {
             return Err(ParentError::WrongPhase);
         }
         self.reset_output();
+        self.output_lease = Some(lease);
         Ok(())
     }
     /// Reset only at checked lease release or settled acquisition cleanup. A fresh
     /// transcript starts at delivery one; retained reloads keep the same lease sequence.
     pub(super) fn reset_output(&mut self) {
         self.output = None;
+        self.output_lease = None;
         self.next_delivery = 0;
         self.acknowledged_output = None;
     }
@@ -207,7 +225,7 @@ mod tests {
         )?;
         parent.next_delivery = 1;
         parent.acknowledged_output = Some((old, id));
-        parent.begin_output_sequence()?;
+        parent.begin_output_sequence(new)?;
         assert_eq!(parent.next_delivery, 0);
         assert_eq!(parent.acknowledged_output, None);
         assert!(parent.output.is_none());

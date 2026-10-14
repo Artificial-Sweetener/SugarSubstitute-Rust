@@ -354,3 +354,5 @@ fn finite_domain_ingestion_preserves_independent_stream_gap_utf8_and_sequence() 
     assert!(view.transcript().records().any(|r| r.text() == "bad\u{fffd}"));
     Ok(())
 }
+
+mod pregrant;

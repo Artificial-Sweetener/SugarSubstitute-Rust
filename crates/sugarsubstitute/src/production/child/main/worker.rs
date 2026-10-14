@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Construct native request data centrally from the identical guarded input and grant frame.
 use super::*;
-use crate::production_output::OutputBinding;
 use std::{collections::TryReserveError, fmt, path::PathBuf};
 use sugarsubstitute_contracts::configuration::ProfileId;
 use sugarsubstitute_desktop::{MainRequestError, MainWindowRequest, ServedFrontendVersions};
@@ -13,8 +12,6 @@ pub(super) struct PreparedMain {
     pub(super) profile: ProfileTransaction,
     pub(super) frame: Option<ReceivedLifecycleFrame>,
     pub(super) header: WireHeader,
-    pub(super) original: Moment,
-    pub(super) binding: OutputBinding,
     pub(super) reusable_input: Option<PreparedMainInput>,
     _control: MemoryClaim,
 }
@@ -134,25 +131,13 @@ pub(super) fn submit(
                 let profile = ProfileTransaction::new(request, original, &context)
                     .map_err(MainError::Profile)?;
                 check(&context, original)?;
-                let binding = OutputBinding {
-                    resource: ResourceKey {
-                        owner: identity.run.owner,
-                        id: grant.lease.resource,
-                        generation: grant.lease.generation,
-                    },
-                    run: identity.run,
-                    connection: header.connection.ok_or(MainError::State)?,
-                    lease: grant.lease,
-                };
-                Ok::<_, MainError>((profile, binding, control))
+                Ok::<_, MainError>((profile, control))
             })();
             match result {
-                Ok((profile, binding, control)) => Ok(PreparedMain {
+                Ok((profile, control)) => Ok(PreparedMain {
                     profile,
                     frame,
                     header,
-                    original,
-                    binding,
                     reusable_input: Some(input),
                     _control: control,
                 }),

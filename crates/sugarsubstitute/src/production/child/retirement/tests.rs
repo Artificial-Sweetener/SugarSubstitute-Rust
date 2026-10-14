@@ -3,6 +3,62 @@
 //! Verify the real transaction queue and immutable cleanup budget without native authority fakes.
 use super::*;
 #[test]
+fn passive_startup_capture_diagnostic_classifies_original_snapshots_without_a_new_budget()
+-> Result<()> {
+    use sugarsubstitute_desktop::StartupCaptureState as State;
+    let budget = ShutdownBudget::new(Moment::from_nanos(50))?;
+    let cause = sugarsubstitute_execution::windows::NativeObservationError::new(
+        "counter_deadline_conversion",
+        std::io::Error::other("original private counter"),
+    );
+    for (snapshot, expected) in [
+        (None, State::Absent),
+        (Some(CaptureCleanupSnapshot::Dormant), State::Dormant),
+        (Some(CaptureCleanupSnapshot::Requested), State::Requested),
+        (
+            Some(CaptureCleanupSnapshot::Latched { budget, counter: Err(cause.clone()) }),
+            State::CounterFailed,
+        ),
+        (Some(CaptureCleanupSnapshot::ClockUnavailable(cause)), State::ClockUnavailable),
+    ] {
+        assert_eq!(diagnostic::capture_category(snapshot), expected);
+    }
+    assert_eq!(budget, ShutdownBudget::new(Moment::from_nanos(50))?);
+    Ok(())
+}
+
+#[test]
+fn direct_startup_close_causes_keep_sealed_native_and_request_categories_without_formatting()
+-> Result<()> {
+    use sugarsubstitute_desktop::{
+        StartupCauseCode as Code, StartupNativeCause as Native, StartupRequestCause as Request,
+    };
+    let known = sugarsubstitute_execution::windows::NativeObservationError::new(
+        "execution_qpc_counter",
+        std::io::Error::from_raw_os_error(233),
+    );
+    assert_eq!(diagnostic::cause_code(&known), Code::Native(Native::CounterQuery, Some(233)));
+    assert_eq!(
+        diagnostic::cause_code(&bootstrap::ChildBootstrapIssue::Transport),
+        Code::Bootstrap(sugarsubstitute_desktop::StartupBootstrapCause::Transport)
+    );
+    let private = sugarsubstitute_execution::windows::NativeObservationError::new(
+        "PRIVATE_UNREGISTERED_STAGE",
+        std::io::Error::other("PRIVATE_PAYLOAD"),
+    );
+    assert_eq!(diagnostic::cause_code(&private), Code::Native(Native::Other, None));
+    assert_eq!(
+        diagnostic::cause_code(&requests::RequestError::Deadline),
+        Code::Request(Request::Deadline)
+    );
+    assert_eq!(
+        diagnostic::cause_code(&std::io::Error::from(std::io::ErrorKind::TimedOut)),
+        Code::TimedOut
+    );
+    assert_eq!(known.stage(), "execution_qpc_counter");
+    Ok(())
+}
+#[test]
 fn earlier_native_budget_keeps_complete_start_grace_and_total() -> Result<()> {
     let first = ShutdownBudget::new(Moment::from_nanos(10))?;
     let later = ShutdownBudget::new(Moment::from_nanos(20))?;

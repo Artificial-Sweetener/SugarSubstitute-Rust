@@ -11,7 +11,10 @@ use sugarsubstitute_contracts::startup::MainIdentity;
 pub enum ReplyOutcome<'a> {
     /// Tag 1: the requested finite logical operation was acknowledged.
     Acknowledged,
-    /// Tag 2: lease reservation exists but readiness has not been established.
+    /// Tag2: nonfinal original Acquire progress reserving output access only.
+    /// Retain the original request and deadline until a final disposition. This copied
+    /// reservation grants neither Main/Profile readiness nor Release/Reload privileges.
+    /// A managed source adopts the same transcript and delivery sequence through Grant.
     Pending(LeaseReference),
     /// Tag 3: claimed matching ready lease and current main origin/versions.
     /// Native authentication and actual retained readiness/source proof remain separate.

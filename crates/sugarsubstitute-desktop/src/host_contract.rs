@@ -256,6 +256,9 @@ pub enum DesktopStartupCommand {
     RevealMain(MainIdentity),
     /// Retire the exact current native main lifetime before admitting another attempt.
     RetireMain(MainIdentity),
+    /// Fence creation and observe exact absence on the native thread. Outstanding
+    /// application construction or an unsettled actor prevents a positive observation.
+    ConfirmMainAbsent(MainIdentity),
     /// Close admission and begin the composing owner's actual shutdown.
     Close,
 }
@@ -309,6 +312,9 @@ pub enum DesktopStartupObservation {
     /// Complete native main/controller/callback retirement for the exact prior attempt.
     /// A failure observation or a requested COM close does not establish this fact.
     MainRetired(MainIdentity),
+    /// The native owner fenced this current attempt and observed no matching actor,
+    /// constructor, callback or handle custody. This is distinct from retiring a created actor.
+    MainAbsent(MainIdentity),
     /// Native close intent; the application chooses mode-appropriate cleanup.
     CloseRequested,
     /// Preserve a native cause independently of retained partial resource ownership.
@@ -357,6 +363,12 @@ pub trait StartupWindowContent: WindowContent {
     /// Return the current launch from the authoritative application startup session.
     /// Frame and navigation generations cannot substitute for this identity.
     fn launch_id(&self) -> LaunchId;
+    /// Exact current identity from authoritative application lifecycle state, absent
+    /// until that state exists. Render/presentation identity grants no native admission.
+    fn main_identity(&self) -> Option<MainIdentity>;
+    /// Observe retained original Main construction/input/jobs at the application owner.
+    /// False cannot establish native absence; the desktop joins its own actor custody.
+    fn main_construction_pending(&self) -> bool;
 
     /// Transfer one actual native observation into application startup policy.
     ///

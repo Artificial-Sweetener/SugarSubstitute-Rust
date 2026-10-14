@@ -20,6 +20,13 @@ pub(super) struct Acquisition {
     outcome: Option<RequestOutcome>,
     disposition: Option<Disposition>,
     sent: bool,
+    progress: Progress,
+}
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum Progress {
+    Unpublished,
+    Queued,
+    Written,
 }
 #[derive(Clone, Copy, Eq, PartialEq)]
 enum Disposition {
@@ -52,6 +59,7 @@ impl Acquisition {
             outcome: None,
             disposition: None,
             sent: false,
+            progress: Progress::Unpublished,
         })
     }
     /// Retain only this original backend producer's outcome before fallible local routing.
@@ -88,6 +96,59 @@ impl Acquisition {
         }
         self.outcome = Some(outcome);
         Ok(())
+    }
+    /// Retain incoming cancellation until the genuine final Grant write is checked.
+    pub(super) fn awaiting_grant_write(&self) -> bool {
+        self.disposition == Some(Disposition::Granted) && !self.sent
+    }
+    /// Borrow the authentic provisional source once; this is never a final disposition.
+    pub(super) fn progress(&self) -> Option<LeaseKey> {
+        (self.progress == Progress::Unpublished && self.disposition.is_none())
+            .then_some(self.lease)
+            .flatten()
+    }
+    /// Record actual native queue acceptance under the immutable original header.
+    pub(super) fn progress_queued(&mut self, header: WireHeader) -> Result<(), ParentError> {
+        if header != self.header || self.progress != Progress::Unpublished || self.lease.is_none() {
+            return Err(ParentError::WrongPhase);
+        }
+        self.progress = Progress::Queued;
+        Ok(())
+    }
+    /// Called only after the actual write receipt validates completion or revocation.
+    /// Neither outcome consumes the Acquire replay slot or publishes final readiness.
+    pub(super) fn progress_finished(
+        &mut self,
+        header: WireHeader,
+        written: bool,
+    ) -> Result<(), ParentError> {
+        if header != self.header || self.progress != Progress::Queued {
+            return Err(ParentError::WrongPhase);
+        }
+        self.progress = if written { Progress::Written } else { Progress::Unpublished };
+        Ok(())
+    }
+    /// Match data-only output access to the observed producer and current registered binding.
+    pub(super) fn output_lease(
+        &self,
+        binding: ClientBinding,
+        reference: sugarsubstitute_supervision::lifecycle_protocol::LeaseReference,
+    ) -> Result<LeaseKey, ParentError> {
+        let lease = self.lease.ok_or(ParentError::WrongPhase)?;
+        if self.header.run != binding.run
+            || self.header.connection != Some(binding.connection)
+            || lease.run != binding.run
+            || lease.connection != binding.connection
+            || super::replies::reference(lease) != reference
+        {
+            return Err(ParentError::ForeignPeer);
+        }
+        if self.progress != Progress::Written
+            && !(self.sent && self.disposition == Some(Disposition::Granted))
+        {
+            return Err(ParentError::WrongPhase);
+        }
+        Ok(lease)
     }
     /// Retain a final reply only after its existing semantic owner accepted the producer.
     pub(super) fn reply(&mut self, header: WireHeader, reply: Reply) -> Result<(), ParentError> {
@@ -152,8 +213,12 @@ impl Acquisition {
         {
             return Err(ParentError::ForeignPeer);
         }
-        if !self.sent
-            || self.disposition.is_none()
+        let provisional = self.disposition != Some(Disposition::Granted)
+            && self.progress == Progress::Written
+            && self.lease.is_some()
+            && current_lease.is_none()
+            && main_identity.is_none();
+        if (!self.sent || self.disposition.is_none()) && !provisional
             || (self.disposition == Some(Disposition::Granted)
                 && (current_lease != self.lease || main_identity != Some(self.identity)))
             || (self.lease.is_none()

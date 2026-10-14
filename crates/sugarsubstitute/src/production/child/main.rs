@@ -23,7 +23,7 @@ pub(super) struct MainPreparation {
     noticed: Option<TerminalKind>,
     unshared: Option<MainTerminal>,
     terminal: Option<MainTerminalOwner>,
-    request_consumed: bool,
+    pub(super) request_consumed: bool,
 }
 impl MainPreparation {
     pub(super) fn new(settings: MainWindowSettings) -> Self {
@@ -98,6 +98,19 @@ impl MainPreparation {
         }
         Err("Original reusable main input lost its successful owner".into())
     }
+    /// A native absence check also excludes original failed-admission input custody.
+    pub(super) fn construction_pending(&self) -> bool {
+        self.pending()
+            || self.input.as_ref().is_some_and(|input| input.frame.is_some())
+            || self.terminal.as_ref().is_some_and(|owner| {
+                match owner.get().map(|terminal| &terminal.outcome) {
+                    Some(JobOutcome::Success(value)) => value.frame.is_some(),
+                    Some(JobOutcome::Failure(value)) => value.frame_pending(),
+                    Some(_) => false,
+                    None => true,
+                }
+            })
+    }
     pub(super) fn pending(&self) -> bool {
         self.job.is_some() || self.unshared.is_some()
     }
@@ -110,6 +123,9 @@ impl MainPreparation {
         }
     }
     pub(super) fn release_frame(&mut self) -> Result<()> {
+        if self.pending() {
+            return Err("Original Main constructor has not retired".into());
+        }
         if let Some(input) = &mut self.input {
             input.frame = None;
         }
@@ -208,19 +224,6 @@ impl ProductionChild {
                 self.bootstrap.channel_mut().consume_reply(value.header)?;
                 self.main.request_consumed = true;
                 value.frame = None;
-                let binding = value.binding;
-                if self.connection_budget.is_some_and(|budget| {
-                    budget.kind()
-                        == sugarsubstitute_application::startup::ConnectionBudgetKind::Managed
-                }) {
-                    self.output.begin(
-                        self.client.as_ref().ok_or("Actual child client absent")?,
-                        self.bootstrap.scope().ok_or("Actual child scope absent")?,
-                        self.jobs.as_ref().ok_or("Actual job sequence absent")?.allocate()?,
-                        binding,
-                        value.original,
-                    )?;
-                }
             }
             Ok(())
         } else {

@@ -15,6 +15,8 @@ mod history;
 mod main;
 #[path = "parent_lifecycle/output.rs"]
 mod output;
+#[path = "parent_lifecycle/receive.rs"]
+mod receive;
 #[path = "parent_lifecycle/replies.rs"]
 mod replies;
 #[path = "parent_lifecycle/requests.rs"]
@@ -89,6 +91,7 @@ pub(crate) struct ParentLifecycle {
     attempt_cleanup: Option<attempt::AttemptSettlement>,
     output: Option<output::Delivery>,
     next_delivery: u64,
+    output_lease: Option<LeaseKey>,
     acknowledged_output: Option<(LeaseKey, std::num::NonZeroU64)>,
     challenge: Option<watchdog::Challenge>,
     retired_challenges: [Option<watchdog::Challenge>; history::SLOTS],
@@ -105,6 +108,7 @@ pub(crate) struct ParentLifecycle {
         Option<sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeRetirement>,
     terminal_failure_reported: bool,
     rejected_frame: Option<ReceivedLifecycleFrame>,
+    acquisition_receive: Option<(u64, ReceivedLifecycleFrame)>,
     failure: Option<Cause>,
     secondary: [Option<Cause>; 8],
     omitted_causes: u64,
@@ -165,6 +169,7 @@ impl ParentLifecycle {
             attempt_cleanup: None,
             output: None,
             next_delivery: 0,
+            output_lease: None,
             acknowledged_output: None,
             challenge: None,
             retired_challenges: [None; history::SLOTS],
@@ -180,6 +185,7 @@ impl ParentLifecycle {
             checked_retirement: None,
             terminal_failure_reported: false,
             rejected_frame: None,
+            acquisition_receive: None,
             failure: None,
             secondary: [const { None }; 8],
             omitted_causes: 0,
@@ -271,6 +277,7 @@ impl ParentLifecycle {
         // Retain the first semantic cause while releasing its immutable input loan
         // so the actual pipe worker can finish checked native retirement.
         self.rejected_frame = None;
+        self.acquisition_receive = None;
         self.output = None;
         if let Some(write) = &self.write {
             let _fact = write.admission.revoke();
@@ -317,6 +324,7 @@ impl ParentLifecycle {
             && self.read.is_none()
             && self.write.is_none()
             && self.rejected_frame.is_none()
+            && self.acquisition_receive.is_none()
             && self.output.is_none()
     }
 

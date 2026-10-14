@@ -7,6 +7,8 @@ use crate::shutdown as custody;
 mod admission;
 #[path = "startup_events.rs"]
 mod events;
+#[path = "startup_main_fence.rs"]
+mod main_fence;
 #[path = "native_activity.rs"]
 mod native_activity;
 #[path = "startup_preparation.rs"]
@@ -32,6 +34,7 @@ struct Session {
     observers: windows_activity::Observers,
     splash: surface::Splash,
     main: Option<MainActor>,
+    main_fence: main_fence::MainFence,
     closing: bool,
     failure: Option<DesktopError>,
     pointer: crate::Pointer,
@@ -87,7 +90,8 @@ impl Session {
         content: &mut impl StartupWindowContent,
         observation: DesktopStartupObservation,
     ) -> Result<(), DesktopError> {
-        content.observe(observation).map_err(|cause| DesktopError::boxed("observe_startup", cause))
+        let kind = DesktopError::startup_observation_kind(&observation);
+        content.observe(observation).map_err(|cause| DesktopError::observed_startup(kind, cause))
     }
 }
 
@@ -178,6 +182,7 @@ pub fn run_startup(
         observers: windows_activity::Observers::new(event_loop.create_proxy()),
         splash,
         main: None,
+        main_fence: main_fence::MainFence::new(),
         closing: false,
         failure: None,
         pointer: crate::Pointer::default(),

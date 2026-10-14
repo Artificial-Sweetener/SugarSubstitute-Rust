@@ -80,6 +80,66 @@ impl Drop for Source {
 }
 
 type RecordedEvent = Vec<(String, String)>;
+#[test]
+fn actual_startup_observation_enriches_one_generic_frame_and_preserves_opaque_cause()
+-> Result<(), Box<dyn Error>> {
+    use crate::{
+        DesktopStartupObservation, StartupCaptureState, StartupCauseCode, StartupCloseFailure,
+        StartupCloseStage, StartupNativeCause,
+    };
+    let formatted = Arc::new(AtomicUsize::new(0));
+    let inspected = Arc::new(AtomicUsize::new(0));
+    let dropped = Arc::new(AtomicUsize::new(0));
+    let source = Source {
+        formatted: formatted.clone(),
+        inspected: inspected.clone(),
+        dropped: dropped.clone(),
+    };
+    let cause = StartupCloseFailure::retain(
+        StartupCloseStage::CaptureObservation,
+        StartupCaptureState::CounterFailed,
+        StartupCauseCode::Native(StartupNativeCause::CounterConversion, None),
+        Box::new(source),
+    );
+    let kind = DesktopError::startup_observation_kind(&DesktopStartupObservation::CloseRequested);
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let mut first = None;
+    tracing::dispatcher::with_default(&tracing::Dispatch::new(Sink(events.clone())), || {
+        DesktopError::retain_first(&mut first, DesktopError::observed_startup(kind, cause));
+    });
+    let fields = events.lock().map_err(|_| std::io::Error::other("Sink poisoned"))?;
+    assert_eq!(fields.len(), 1);
+    for (name, value) in [
+        ("operation", "desktop_failure_transition"),
+        ("boundary", "ObserveStartup"),
+        ("kind", "Other"),
+        ("observation", "CloseRequested"),
+        ("close_stage", "CaptureObservation"),
+        ("capture_snapshot", "CounterFailed"),
+        ("code", "Native(CounterConversion)"),
+    ] {
+        assert!(fields[0].iter().any(|(key, actual)| key == name && actual == value));
+    }
+    assert!(
+        !fields[0]
+            .iter()
+            .any(|(_, value)| value.contains("PRIVATE") || value.contains("credential"))
+    );
+    assert_eq!(formatted.load(Ordering::SeqCst), 0);
+    assert_eq!(inspected.load(Ordering::SeqCst), 0);
+    assert_eq!(dropped.load(Ordering::SeqCst), 0);
+    let actual = first.as_ref().ok_or("Original cause absent")?;
+    let close = actual
+        .source()
+        .and_then(Error::source)
+        .and_then(|cause| cause.downcast_ref::<StartupCloseFailure>())
+        .ok_or("Typed close facts lost")?;
+    assert!(close.original().downcast_ref::<Source>().is_some());
+    assert_eq!(inspected.load(Ordering::SeqCst), 0);
+    drop(first);
+    assert_eq!(dropped.load(Ordering::SeqCst), 1);
+    Ok(())
+}
 #[derive(Clone)]
 struct Sink(Arc<Mutex<Vec<RecordedEvent>>>);
 struct Fields(RecordedEvent);
@@ -94,6 +154,7 @@ impl Visit for Fields {
 impl Subscriber for Sink {
     fn enabled(&self, meta: &Metadata<'_>) -> bool {
         meta.target().ends_with("contract::failure_diagnostic")
+            || meta.target().ends_with("contract::failure_diagnostic::startup")
     }
     fn new_span(&self, _: &Attributes<'_>) -> Id {
         Id::from_u64(1)
@@ -218,5 +279,101 @@ fn main_failure_observer_preserves_opaque_cause_through_actual_startup_transfer(
     assert!(!events[0].iter().any(|(_, v)| v.contains("PRIVATE") || v.contains("credential")));
     drop(failure);
     assert_eq!(dropped.load(Ordering::SeqCst), 1);
+    Ok(())
+}
+
+#[test]
+fn actual_poll_frame_consumer_failure_emits_one_closed_stage_without_inferred_observation_or_cause_callbacks()
+-> Result<(), Box<dyn Error>> {
+    let formatted = Arc::new(AtomicUsize::new(0));
+    let inspected = Arc::new(AtomicUsize::new(0));
+    let dropped = Arc::new(AtomicUsize::new(0));
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let original = Box::new(Source {
+        formatted: formatted.clone(),
+        inspected: inspected.clone(),
+        dropped: dropped.clone(),
+    });
+    let address = original.as_ref() as *const Source;
+    let cause = crate::StartupConsumeFailure::retain(
+        crate::StartupConsumeStage::ChildDelivery,
+        crate::StartupCauseCode::Bootstrap(crate::StartupBootstrapCause::Transport),
+        original,
+    );
+    let mut first = None;
+    tracing::dispatcher::with_default(&tracing::Dispatch::new(Sink(events.clone())), || {
+        DesktopError::retain_first(&mut first, DesktopError::boxed("poll_frame", cause));
+        DesktopError::retain_first(
+            &mut first,
+            DesktopError::new("observe_startup", std::io::Error::other("PRIVATE")),
+        );
+    });
+    let actual = first
+        .as_ref()
+        .ok_or("First cause absent")?
+        .cause
+        .downcast_ref::<crate::StartupConsumeFailure>()
+        .ok_or("Consumer cause absent")?;
+    assert!(std::ptr::eq(
+        address,
+        actual.original().downcast_ref::<Source>().ok_or("Original source absent")?
+    ));
+    let events = events.lock().map_err(|_| std::io::Error::other("Fixture lock"))?;
+    assert_eq!(events.len(), 1);
+    for (key, value) in [
+        ("operation", "desktop_failure_transition"),
+        ("boundary", "PollFrame"),
+        ("kind", "Other"),
+        ("consume_stage", "ChildDelivery"),
+        ("category", "Bootstrap(Transport)"),
+    ] {
+        assert!(events[0].iter().any(|(k, v)| k == key && v == value));
+    }
+    assert!(!events[0].iter().any(|(k, v)| k == "observation"
+        || k == "close_stage"
+        || k == "capture_snapshot"
+        || v.contains("PRIVATE")));
+    assert_eq!(formatted.load(Ordering::SeqCst), 0);
+    assert_eq!(inspected.load(Ordering::SeqCst), 0);
+    drop(events);
+    drop(first);
+    assert_eq!(dropped.load(Ordering::SeqCst), 1);
+    Ok(())
+}
+
+#[test]
+fn actual_main_absence_observation_tag_remains_distinct_from_retired_without_identity_projection()
+-> Result<(), Box<dyn Error>> {
+    use sugarsubstitute_contracts::{
+        execution::Generation,
+        lifecycle::{
+            CoordinatorEpoch, CoordinatorKey, InstanceId, NamespaceId, RunGeneration, RunKey,
+        },
+        startup::LaunchId,
+    };
+    let identity = crate::MainIdentity {
+        run: RunKey {
+            owner: CoordinatorKey {
+                namespace: NamespaceId::new([1; 32]),
+                epoch: CoordinatorEpoch::new([2; 16])?,
+            },
+            instance: InstanceId::new(1)?,
+            generation: RunGeneration::new(1)?,
+        },
+        launch: LaunchId::new(1)?,
+        navigation: Generation::new(1)?,
+    };
+    assert_eq!(
+        DesktopError::startup_observation_kind(&crate::DesktopStartupObservation::MainAbsent(
+            identity
+        )),
+        "MainAbsent"
+    );
+    assert_eq!(
+        DesktopError::startup_observation_kind(&crate::DesktopStartupObservation::MainRetired(
+            identity
+        )),
+        "MainRetired"
+    );
     Ok(())
 }

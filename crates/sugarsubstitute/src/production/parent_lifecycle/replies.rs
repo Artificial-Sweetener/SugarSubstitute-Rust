@@ -37,6 +37,31 @@ impl ParentLifecycle {
             )?;
             return Ok(());
         }
+        if matches!(
+            resources.target,
+            sugarsubstitute_contracts::lifecycle::BackendTarget::Managed(_)
+        ) && let Some(acquisition) = &self.acquisition
+            && let Some(lease) = acquisition.progress()
+        {
+            let (header, original) = (acquisition.header, acquisition.original);
+            if resources.execution.client.now()? >= original {
+                return Err(sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeError::DeadlineExpired.into());
+            }
+            self.begin_output_sequence(lease)?;
+            if self.write_message(
+                resources,
+                header,
+                WirePayload::Reply(ReplyOutcome::Pending(reference(lease))),
+                original,
+                WritePurpose::AcquisitionProgress(header),
+            )? {
+                self.acquisition
+                    .as_mut()
+                    .ok_or(ParentError::WrongPhase)?
+                    .progress_queued(header)?;
+            }
+            return Ok(());
+        }
         let Some(index) = self.requests.next_reply() else {
             self.send_challenge(resources)?;
             return Ok(());

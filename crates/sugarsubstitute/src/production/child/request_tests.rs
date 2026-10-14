@@ -273,3 +273,54 @@ fn prepared_withdrawal_cannot_erase_admitted_or_received_reply_custody() -> Test
     assert_eq!(requests.slots.iter().flatten().count(), 0);
     Ok(())
 }
+
+#[test]
+fn nonfinal_acquisition_keeps_original_slot_deadline_and_capacity_until_final() -> TestResult {
+    let mut requests = requests()?;
+    let until = Moment::from_nanos(1000);
+    let h = requests.prepare(until, CounterDeadline::new(2000, 100)?)?;
+    requests.acquisition(h)?;
+    requests.admitted(h)?;
+    requests.received(h, Moment::from_nanos(20))?;
+    requests.progress(h, Moment::from_nanos(21))?;
+    assert!(requests.consumed(h).is_err());
+    assert!(requests.outbound(h, until, Moment::from_nanos(22)).is_err());
+    assert!(requests.progress(h, Moment::from_nanos(22)).is_err());
+    for _ in 0..7 {
+        requests.prepare(until, CounterDeadline::new(2000, 100)?)?;
+    }
+    assert_eq!(
+        requests.prepare(until, CounterDeadline::new(2000, 100)?),
+        Err(RequestError::Capacity)
+    );
+    requests.received(h, Moment::from_nanos(23))?;
+    requests.consumed(h)?;
+    let next = requests.prepare(until, CounterDeadline::new(2000, 100)?)?;
+    assert!(next.request > h.request);
+    assert!(requests.received(h, Moment::from_nanos(24)).is_err());
+    Ok(())
+}
+#[test]
+fn progress_cannot_resume_foreign_nonacquire_expired_or_consumed_requests() -> TestResult {
+    let mut requests = requests()?;
+    let until = Moment::from_nanos(100);
+    let control = requests.prepare(until, CounterDeadline::new(2000, 100)?)?;
+    requests.admitted(control)?;
+    requests.received(control, Moment::from_nanos(20))?;
+    assert_eq!(requests.progress(control, Moment::from_nanos(21)), Err(RequestError::Order));
+    requests.consumed(control)?;
+    let h = requests.prepare(until, CounterDeadline::new(2000, 100)?)?;
+    requests.acquisition(h)?;
+    assert!(requests.acquisition(h).is_err());
+    requests.admitted(h)?;
+    requests.received(h, Moment::from_nanos(20))?;
+    assert_eq!(
+        requests
+            .progress(WireHeader { deadline_qpc: h.deadline_qpc + 1, ..h }, Moment::from_nanos(21)),
+        Err(RequestError::Identity)
+    );
+    assert_eq!(requests.progress(h, until), Err(RequestError::Deadline));
+    requests.consumed(h)?;
+    assert_eq!(requests.progress(h, Moment::from_nanos(21)), Err(RequestError::Identity));
+    Ok(())
+}

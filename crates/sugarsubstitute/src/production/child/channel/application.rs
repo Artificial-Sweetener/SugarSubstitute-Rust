@@ -81,6 +81,17 @@ impl ChildChannel {
         Ok(accepted)
     }
 
+    /// Mark the exact prepared Acquire before native admission; no payload authority is granted.
+    pub(in super::super) fn acquisition(&mut self, header: WireHeader) -> Result<()> {
+        self.requests.as_mut().ok_or("Original request ledger missing")?.acquisition(header)?;
+        Ok(())
+    }
+    /// Consume only validated nonfinal Acquire progress while preserving its original slot.
+    pub(in super::super) fn consume_progress(&mut self, header: WireHeader) -> Result<()> {
+        let now = self.client.as_ref().ok_or("Original lifecycle client missing")?.now()?;
+        self.requests.as_mut().ok_or("Original request ledger missing")?.progress(header, now)?;
+        Ok(())
+    }
     /// Release only matching metadata after the semantic owner handles the original reply.
     /// Frame/native custody and positive application readiness remain separate.
     /// # Errors

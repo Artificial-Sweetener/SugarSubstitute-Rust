@@ -34,6 +34,8 @@ fn expired_original_attempt_quarantines_reply_without_closing_or_acknowledging_t
         identity: id,
         until,
         failed: None,
+        main_retirement_required: false,
+        retirement: None,
     });
     assert!(
         !actor

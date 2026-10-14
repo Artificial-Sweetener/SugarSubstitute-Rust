@@ -2,8 +2,12 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Decode only complete closed preparation fields, discarding every other raw line.
 use sugarsubstitute_contracts::transcript::OutputStream;
+#[path = "diagnostic/consume.rs"]
+mod consume;
 #[path = "diagnostic/main.rs"]
 mod main;
+#[path = "diagnostic/startup.rs"]
+mod startup;
 pub(super) use main::MainFailure;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct Phase {
@@ -20,6 +24,8 @@ pub(super) struct Phase {
 pub(super) struct Failure {
     pub(super) boundary: &'static str,
     pub(super) kind: &'static str,
+    pub(super) startup: Option<startup::StartupFailureDetail>,
+    pub(super) consume: Option<consume::ConsumeFailureDetail>,
 }
 /// Closed wire progress cannot establish a backend grant or native readiness.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -233,6 +239,9 @@ fn parse(bytes: &[u8]) -> Option<Phase> {
 }
 /// Accept only one exact marker and complete closed fields, rejecting extra raw payloads.
 fn parse_failure(bytes: &[u8]) -> Option<Failure> {
+    if bytes.len() > 512 {
+        return None;
+    }
     let line = std::str::from_utf8(bytes).ok()?.trim_end_matches('\r');
     let (prefix, fields) = line.split_once("operation=\"desktop_failure_transition\" ")?;
     if prefix.contains("operation=") {
@@ -263,10 +272,19 @@ fn parse_failure(bytes: &[u8]) -> Option<Failure> {
         "Other" => "Other",
         _ => return None,
     };
-    if fields.next().is_some() {
-        return None;
-    }
-    Some(Failure { boundary, kind })
+    let (startup, consume) = if fields.clone().next().is_some() {
+        if kind != "Other" {
+            return None;
+        }
+        match boundary {
+            "ObserveStartup" => (Some(startup::parse(fields)?), None),
+            "PollFrame" => (None, Some(consume::parse(fields)?)),
+            _ => return None,
+        }
+    } else {
+        (None, None)
+    };
+    Some(Failure { boundary, kind, startup, consume })
 }
 fn boolean(field: &str, prefix: &str) -> Option<bool> {
     match field.strip_prefix(prefix)? {

@@ -22,6 +22,12 @@ impl MainPreparationFailure {
     ) -> Self {
         Self(Some(Arc::new(FailedMain { cause, frame: Mutex::new(frame), _input: input })))
     }
+    /// A busy/poisoned original guard blocks native absence rather than claiming empty custody.
+    pub(super) fn frame_pending(&self) -> bool {
+        self.0
+            .as_ref()
+            .is_some_and(|failure| failure.frame.try_lock().map_or(true, |frame| frame.is_some()))
+    }
     pub(super) fn release_frame(&self) -> Result<()> {
         if let Some(failure) = &self.0 {
             let frame = failure

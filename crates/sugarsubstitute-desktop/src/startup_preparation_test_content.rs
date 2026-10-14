@@ -137,6 +137,14 @@ impl StartupWindowContent for Content {
     fn launch_id(&self) -> LaunchId {
         self.launch
     }
+    fn main_identity(&self) -> Option<crate::MainIdentity> {
+        sugarsubstitute_contracts::execution::Generation::new(1).ok().map(|navigation| {
+            crate::MainIdentity { run: self.run, launch: self.launch, navigation }
+        })
+    }
+    fn main_construction_pending(&self) -> bool {
+        false
+    }
     fn observe(&mut self, observation: DesktopStartupObservation) -> Result<(), Box<dyn Error>> {
         match observation {
             DesktopStartupObservation::NativeRetired(run) if run == self.run => {

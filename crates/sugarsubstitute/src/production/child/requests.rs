@@ -55,6 +55,7 @@ struct Pending {
     header: WireHeader,
     original: Moment,
     phase: Phase,
+    acquire: bool,
 }
 
 /// Retain immutable matching facts separately from native transport/frame custody.
@@ -106,7 +107,7 @@ impl ClientRequests {
             request: Some(request),
             deadline_qpc: encoded.ticks(),
         };
-        *slot = Some(Pending { header, original, phase: Phase::Prepared });
+        *slot = Some(Pending { header, original, phase: Phase::Prepared, acquire: false });
         self.latest = latest;
         Ok(header)
     }
@@ -163,6 +164,28 @@ impl ClientRequests {
         Ok(())
     }
 
+    /// Designate only a never-admitted original Acquire as supporting schema4 progress.
+    pub(super) fn acquisition(&mut self, header: WireHeader) -> Result<(), RequestError> {
+        let pending = self.find_mut(header)?;
+        if pending.phase != Phase::Prepared || pending.acquire {
+            return Err(RequestError::Order);
+        }
+        pending.acquire = true;
+        Ok(())
+    }
+    /// Consume one validated nonfinal frame, retaining its original slot and cutoff.
+    /// This cannot reopen a final reply, foreign request, expired budget.
+    pub(super) fn progress(&mut self, header: WireHeader, now: Moment) -> Result<(), RequestError> {
+        let pending = self.find_mut(header)?;
+        if !pending.acquire || pending.phase != Phase::Received {
+            return Err(RequestError::Order);
+        }
+        if now >= pending.original {
+            return Err(RequestError::Deadline);
+        }
+        pending.phase = Phase::Admitted;
+        Ok(())
+    }
     /// Release correlation metadata after the semantic owner handles the original frame.
     /// This releases no native frame/lease or job and grants no settlement fact.
     /// # Errors

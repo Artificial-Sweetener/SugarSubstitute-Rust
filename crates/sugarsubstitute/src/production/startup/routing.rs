@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Route one real completion batch before driving current application effects.
+use super::consume_diagnostic::observe as observed_consume;
 use super::*;
 use policy::StartupRoute;
 use sugarsubstitute_contracts::startup::StartupEffect;
+use sugarsubstitute_desktop::StartupConsumeStage as ConsumeStage;
 
 impl ProductionStartup {
     /// Every recipient sees the same immutable bounded terminal batch exactly once.
@@ -18,24 +20,32 @@ impl ProductionStartup {
             return Ok(None);
         }
         if self.view.as_mut().is_some_and(|view| view.take_retry()) {
-            self.retry_owned()?;
+            let retried = self.retry_owned();
+            observed_consume(ConsumeStage::Retry, retried)?;
         }
-        let batch = self.execution.drain(maximum)?;
+        let batch = observed_consume(ConsumeStage::ExecutionDrain, self.execution.drain(maximum))?;
         let render = self.preparation.as_mut().map(|render| render.consume(&batch)).transpose();
         let cleanup_failed = self.child.cleanup_failed();
         let child = self.child.consume(&batch, self.startup.as_ref());
         self.invalidate(cleanup_failed != self.child.cleanup_failed());
-        let frame = super::delivery::resolve(render, child)?;
+        let frame = super::consume_diagnostic::delivery(render, child)?;
         for _ in 0..32 {
             let Some(startup) = &mut self.startup else { break };
-            let Some(event) = self.child.take_startup_event()? else {
+            let Some(event) =
+                observed_consume(ConsumeStage::StartupEvent, self.child.take_startup_event())?
+            else {
                 break;
             };
-            let route = self.policy.observe(event, startup.session_mut())?;
-            self.route(route)?;
+            let route = observed_consume(
+                ConsumeStage::PolicyObservation,
+                self.policy.observe(event, startup.session_mut()),
+            )?;
+            let dispatched = self.route(route);
+            observed_consume(ConsumeStage::EffectRouting, dispatched)?;
             self.invalidate(true);
         }
-        self.refresh_deadline()?;
+        let deadline = self.refresh_deadline();
+        observed_consume(ConsumeStage::DeadlineRefresh, deadline)?;
         Ok(frame.flatten().filter(|_| !self.closing))
     }
     /// Advance a user-requested retry only after the sole policy observed settlement.

@@ -113,15 +113,33 @@ impl ProductionChild {
             )
             .into());
         }
-        if self.main.pending()
-            || self.output.pending()
-            || (self.main.profile().is_some()
-                && (!self.shutdown.main_retired || !self.shutdown.main_retirement_ack))
-        {
+        if self.main.pending() || self.output.pending() {
             return Ok(());
         }
         self.main.release_frame()?;
         self.output.release_frame()?;
+        if let Some(header) = self.grant_header
+            && !self.main.request_consumed
+        {
+            self.bootstrap.channel_mut().consume_reply(header)?;
+            self.main.request_consumed = true;
+            self.grant = None;
+        }
+        if self.grant_header.is_some()
+            && self.main.profile().is_none()
+            && !self.shutdown.main_retired
+            && !self.shutdown.main_absence_pending
+        {
+            self.push_command(DesktopStartupCommand::ConfirmMainAbsent(self.identity))?;
+            self.shutdown.main_absence_pending = true;
+            return Ok(());
+        }
+        if self.shutdown.main_absence_pending
+            || ((self.main.profile().is_some() || self.shutdown.main_retired)
+                && (!self.shutdown.main_retired || !self.shutdown.main_retirement_ack))
+        {
+            return Ok(());
+        }
         if self.attempt.as_ref().is_some_and(|a| a.pending.is_none()) {
             let original = self.attempt.as_ref().ok_or("Attempt cleanup absent")?.original;
             let header = self.bootstrap.channel_mut().prepare_request(original)?;
@@ -164,6 +182,9 @@ impl ProductionChild {
                 self.failed_frame = None;
                 return self.retain_attempt_failure(Box::new(cause));
             }
+        }
+        if self.acquire.is_some() {
+            return Err("Original acquisition final reply remains unsettled".into());
         }
         if self.events.iter().all(Option::is_some) {
             return Err("Settlement event slots full".into());
@@ -227,6 +248,7 @@ impl ProductionChild {
         self.grant_header = None;
         self.shutdown.main_retired = false;
         self.shutdown.main_retirement_ack = false;
+        self.shutdown.main_absence_pending = false;
         self.main = main::MainPreparation::new(self.main.settings);
         self.output = output::ChildOutput::new();
         self.snapshot = None;

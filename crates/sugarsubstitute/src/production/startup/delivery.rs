@@ -28,6 +28,11 @@ impl Drop for DeliveryFailure {
         tracing::error!(operation="startup_delivery",cause=%self.child,"Additional owned child completion failure");
     }
 }
+/// Borrow only the known aggregate's first unchanged cause; arbitrary sources are never walked.
+pub(super) fn first_cause<'a>(cause: &'a (dyn Error + 'static)) -> &'a (dyn Error + 'static) {
+    cause.downcast_ref::<DeliveryFailure>().map_or(cause, |failure| failure.render.as_ref())
+}
+
 /// Resolve already-observed recipient outcomes without replacing their actual causes.
 /// The caller invokes both recipients before this function, even if one fails.
 pub(super) fn resolve<T>(

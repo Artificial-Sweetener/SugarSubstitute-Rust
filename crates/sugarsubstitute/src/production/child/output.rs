@@ -5,9 +5,15 @@ use super::*;
 use crate::production_output::{OutputBinding, OutputError};
 use std::time::Duration;
 use sugarsubstitute_supervision::lifecycle_protocol::FrameCodec;
+#[path = "output/acquisition.rs"]
+mod acquisition;
+#[path = "output/retirement.rs"]
+mod retirement;
 type Constructor = OwnedJob<OutputOwner, OutputError>;
 type Terminal = JobCompletion<OutputOwner, OutputError>;
 pub(super) struct ChildOutput {
+    pub(super) binding: Option<OutputBinding>,
+    acquisition_until: Option<Moment>,
     job: Option<Constructor>,
     notice: Option<TerminalKind>,
     terminal: Option<Terminal>,
@@ -20,6 +26,8 @@ pub(super) struct ChildOutput {
 impl ChildOutput {
     pub(super) fn new() -> Self {
         Self {
+            binding: None,
+            acquisition_until: None,
             job: None,
             notice: None,
             terminal: None,
@@ -38,9 +46,11 @@ impl ChildOutput {
         binding: OutputBinding,
         original: Moment,
     ) -> Result<()> {
-        if self.closed || self.job.is_some() || self.terminal.is_some() {
+        if self.closed || self.binding.is_some() || self.job.is_some() || self.terminal.is_some() {
             return Err("Managed output constructor duplicated".into());
         }
+        self.binding = Some(binding);
+        self.acquisition_until = Some(original);
         self.job = Some(OutputOwner::submit_new(client, scope, id, binding, original)?);
         Ok(())
     }
@@ -203,9 +213,6 @@ impl ProductionChild {
         if self.output.closed {
             return self.retire_output();
         }
-        if !self.main.profile().is_some_and(profile_transaction::ProfileTransaction::authorized) {
-            return Ok(());
-        }
         if let Some((header, _)) = self.output.pending
             && self.bootstrap.channel_mut().received_header()? == Some(header)
         {
@@ -227,6 +234,8 @@ impl ProductionChild {
         if self.output.pending.is_none() {
             let client = self.client()?.clone();
             let original = client.now()?.checked_add(Duration::from_secs(30))?;
+            let original =
+                self.output.acquisition_until.map_or(original, |cutoff| original.min(cutoff));
             let header = self.bootstrap.channel_mut().prepare_request(original)?;
             let Some(owner) = self.output.owner_mut() else { return Ok(()) };
             owner.prepare_pull(header, original)?;
@@ -245,80 +254,6 @@ impl ProductionChild {
     }
 }
 
-impl ProductionChild {
-    /// Drain only the original closed pull and actual ended parser; issue no jobs or new pulls.
-    fn retire_output(&mut self) -> Result<()> {
-        if self.output.job.is_some()
-            || self.output.owner_mut().is_some_and(|owner| owner.worker_pending())
-        {
-            return Ok(());
-        }
-        let Some((header, _original)) = self.output.pending else {
-            return Ok(());
-        };
-        let pending =
-            self.output.owner_mut().ok_or("Original output owner missing")?.retiring_pull();
-        if let Some((actual, _, false)) = pending {
-            if actual != header {
-                return Err("Retiring output header differs".into());
-            }
-            self.bootstrap.channel_mut().withdraw_prepared(header)?;
-            self.output
-                .owner_mut()
-                .ok_or("Original output owner missing")?
-                .finish_retiring_pull(header)?;
-            self.output.pending = None;
-            return Ok(());
-        }
-        if self.output.applied.is_none() && self.output.retiring_frame.is_none() {
-            self.output.retiring_frame = self
-                .output
-                .owner_mut()
-                .ok_or("Original output owner missing")?
-                .take_unparsed_frame()?;
-            if self.output.retiring_frame.is_none()
-                && self.failed_frame.as_ref().is_some_and(|frame| {
-                    FrameCodec::decode(frame.as_bytes())
-                        .is_ok_and(|message| message.header == header)
-                })
-            {
-                self.output.retiring_frame = self.failed_frame.take();
-            }
-            if self.output.retiring_frame.is_none()
-                && self.bootstrap.channel_mut().received_header()? == Some(header)
-            {
-                self.output.retiring_frame = self.bootstrap.channel_mut().take_frame();
-            }
-        }
-        if let Some(applied) = &self.output.applied {
-            if applied.header != header {
-                return Err("Applied output retirement header differs".into());
-            }
-        } else if let Some(frame) = &self.output.retiring_frame {
-            let bytes = frame.as_bytes();
-            let owner = match self.output.terminal.as_ref().map(|terminal| &terminal.outcome) {
-                Some(JobOutcome::Success(owner)) => owner,
-                _ => return Err("Original output source missing".into()),
-            };
-            if owner.validate_retiring_reply(bytes)? != header {
-                return Err("Retiring output reply differs".into());
-            }
-        } else {
-            return Ok(());
-        }
-        self.bootstrap.channel_mut().consume_reply(header)?;
-        self.output
-            .owner_mut()
-            .ok_or("Original output owner missing")?
-            .finish_retiring_pull(header)?;
-        self.output.pending = None;
-        self.output.applied = None;
-        self.output.retiring_frame = None;
-        tracing::info!(operation="closed_output_pull_retired",request=?header.request,run=?self.run,
-            "Original output reply consumed after actual parser retirement");
-        Ok(())
-    }
-}
 #[cfg(test)]
 mod tests {
     use super::*;

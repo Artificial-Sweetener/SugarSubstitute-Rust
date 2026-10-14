@@ -6,10 +6,14 @@
 //! authenticated bootstrap, capture, readiness and profile custody. Matching data,
 //! prepared pixels or an execution terminal cannot substitute for those capabilities.
 
+#[path = "startup/close_diagnostic.rs"]
+mod close_diagnostic;
 #[path = "startup/commands.rs"]
 mod commands;
 #[path = "startup/configuration.rs"]
 mod configuration;
+#[path = "startup/consume_diagnostic.rs"]
+mod consume_diagnostic;
 #[path = "startup/delivery.rs"]
 mod delivery;
 #[path = "startup/execution.rs"]
@@ -256,6 +260,12 @@ impl StartupWindowContent for ProductionStartup {
     }
     fn launch_id(&self) -> sugarsubstitute_contracts::startup::LaunchId {
         self.startup.as_ref().map_or(self.policy.launch(), |startup| startup.session().launch())
+    }
+    fn main_identity(&self) -> Option<sugarsubstitute_contracts::startup::MainIdentity> {
+        self.startup.as_ref().map(|startup| self.policy.identity(startup.session()))
+    }
+    fn main_construction_pending(&self) -> bool {
+        self.child.main_construction_pending()
     }
     fn observe(&mut self, observation: DesktopStartupObservation) -> Result<(), Box<dyn Error>> {
         let session = self.startup.as_mut().map(PreparedChildStartup::session_mut);

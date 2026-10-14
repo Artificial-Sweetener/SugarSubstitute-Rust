@@ -142,7 +142,12 @@ fn changing_diagnostics_remain_bounded_for_the_same_output_lifetime() {
     assert_eq!(seen.len(), 31);
     assert!(matches!(
         seen.last(),
-        Some(Observation::Failure(Failure { boundary: "PollFrame", kind: "Other" }))
+        Some(Observation::Failure(Failure {
+            boundary: "PollFrame",
+            kind: "Other",
+            startup: None,
+            consume: None
+        }))
     ));
     let main = b"operation=\"main_failure_transition\" failed_operation=\"decode_main_observation\" launch=1 navigation=1 observation=Frame code=JsonData\n";
     owner.feed(OutputStream::Stderr, 83, false, false, main, |v| seen.push(v));
@@ -150,9 +155,10 @@ fn changing_diagnostics_remain_bounded_for_the_same_output_lifetime() {
     assert_eq!(seen.len(), 32);
     assert!(matches!(seen.last(), Some(Observation::MainFailure(_))));
 }
-#[test]
-fn actual_production_text_formatter_with_writer_and_time_boundaries_preserves_closed_fields()
--> Result<(), Box<dyn std::error::Error>> {
+/// Use the production text formatter with deterministic external writer/time boundaries.
+pub(super) fn formatted_owner_diagnostics(
+    emit: impl FnOnce(),
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     use std::{
         io::Write,
         sync::{Arc, Mutex},
@@ -193,7 +199,16 @@ fn actual_production_text_formatter_with_writer_and_time_boundaries_preserves_cl
         .with_timer(Timestamp)
         .with_ansi(false)
         .finish();
-    tracing::dispatcher::with_default(&tracing::Dispatch::new(subscriber), || {
+    tracing::dispatcher::with_default(&tracing::Dispatch::new(subscriber), emit);
+    let actual =
+        bytes.lock().map_err(|_| std::io::Error::other("Writer fixture poisoned"))?.clone();
+    Ok(actual)
+}
+
+#[test]
+fn actual_production_text_formatter_with_writer_and_time_boundaries_preserves_closed_fields()
+-> Result<(), Box<dyn std::error::Error>> {
+    let bytes = formatted_owner_diagnostics(|| {
         tracing::info!(operation="child_preparation_transition",capture_admitted=true,capture=false,
             registered=false,configuration=false,original_failure=?None::<u8>,capture_failure=%"None",failure_retained=false,
             "Child pre-UI preparation conditions changed");
@@ -201,13 +216,15 @@ fn actual_production_text_formatter_with_writer_and_time_boundaries_preserves_cl
             tracing::info!(operation="child_connection_transition",stage=?stage,
                 "Original child connection request advanced");
         }
-        tracing::warn!(operation="desktop_failure_transition",boundary=%"PollFrame",kind=%"Other",
+        tracing::warn!(operation="desktop_failure_transition",boundary=%"ObserveStartup",kind=%"Other",
+            observation=%"CloseRequested",close_stage=?sugarsubstitute_desktop::StartupCloseStage::CaptureObservation,
+            capture_snapshot=?sugarsubstitute_desktop::StartupCaptureState::CounterFailed,
+            code=%sugarsubstitute_desktop::StartupCauseCode::Native(sugarsubstitute_desktop::StartupNativeCause::CounterConversion,Some(u32::MAX)),
             "First owned desktop failure retained");
         tracing::warn!(operation="main_failure_transition",failed_operation="decode_main_observation",
             launch=u64::MAX,navigation=u64::MAX,observation=%"Frame",code=?main::Code::Hresult(i32::MIN),
             "Original owned main failure transferred to startup policy");
-    });
-    let bytes = bytes.lock().map_err(|_| std::io::Error::other("Writer fixture poisoned"))?;
+    })?;
     assert!(bytes.starts_with(b"2026-10-13T"));
     let mut owner = Diagnostic::new();
     let mut seen = Vec::new();
@@ -225,7 +242,13 @@ fn actual_production_text_formatter_with_writer_and_time_boundaries_preserves_cl
     );
     assert!(matches!(
         seen[4],
-        Observation::Failure(Failure { boundary: "PollFrame", kind: "Other" })
+        Observation::Failure(Failure { boundary: "ObserveStartup", kind: "Other", startup: Some(detail), consume: None })
+            if detail == (startup::StartupFailureDetail {
+                observation: "CloseRequested",
+                stage: sugarsubstitute_desktop::StartupCloseStage::CaptureObservation,
+                capture: sugarsubstitute_desktop::StartupCaptureState::CounterFailed,
+                code: sugarsubstitute_desktop::StartupCauseCode::Native(sugarsubstitute_desktop::StartupNativeCause::CounterConversion,Some(u32::MAX)),
+            })
     ));
     assert_eq!(
         seen[5],
@@ -259,7 +282,10 @@ fn closed_desktop_failure_fields_reject_payloads_unknown_values_and_extra_operat
         for kind in ["TimedOut", "Disconnected", "Denied", "InvalidInput", "Io", "Other"] {
             let line =
                 format!("operation=\"desktop_failure_transition\" boundary={boundary} kind={kind}");
-            assert_eq!(parse_failure(line.as_bytes()), Some(Failure { boundary, kind }));
+            assert_eq!(
+                parse_failure(line.as_bytes()),
+                Some(Failure { boundary, kind, startup: None, consume: None })
+            );
         }
     }
     for line in [

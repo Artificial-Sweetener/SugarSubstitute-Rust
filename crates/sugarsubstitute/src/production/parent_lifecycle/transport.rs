@@ -72,26 +72,7 @@ impl ParentLifecycle {
                 }
             }
             LifecyclePipeObservation::Received { operation, frame } => {
-                if self.read != Some(operation.get()) || self.rejected_frame.is_some() {
-                    tracing::error!(operation="parent_received_native_operation_rejected",
-                        payload_kind=received_payload_kind(frame.as_bytes()),run=?self.run,
-                        native_operation=operation.get(),expected_operation=self.read,
-                        retained_frame=self.rejected_frame.is_some(),
-                        "Actual native receive correlation rejected; original frame retained");
-                    self.rejected_frame = Some(frame);
-                    return Err(ParentError::WrongPhase.into());
-                }
-                self.read = None;
-                if let Err(error) = self.receive(frame.as_bytes(), resources) {
-                    let payload_kind = received_payload_kind(frame.as_bytes());
-                    tracing::error!(operation="parent_received_payload_rejected",payload_kind,run=?self.run,
-                        native_operation=operation.get(),main_stage=?self.main.stage(),
-                        retained_delivery=self.output.as_ref().map(|delivery| delivery.id.get()),
-                        last_issued_delivery=self.next_delivery,
-                        "Actual received payload rejected; original frame and error retained");
-                    self.rejected_frame = Some(frame);
-                    return Err(error);
-                }
+                self.observe_received(operation, frame, resources)?
             }
             LifecyclePipeObservation::WriteIssued { operation, at } => {
                 let write = self.write.as_mut().ok_or(ParentError::WrongPhase)?;
@@ -109,7 +90,7 @@ impl ParentLifecycle {
                             resources.execution.client.now()?,
                         )?;
                     }
-                    WritePurpose::Welcome => {}
+                    WritePurpose::Welcome | WritePurpose::AcquisitionProgress(_) => {}
                 }
             }
             LifecyclePipeObservation::Written { operation, bytes } => {
@@ -121,15 +102,25 @@ impl ParentLifecycle {
                         if let Some(acquisition) = &mut self.acquisition {
                             acquisition.written(self.requests.get(index)?.header)?;
                         }
+                        if let Some(attempt) = &mut self.attempt_cleanup {
+                            attempt.retirement_written(self.requests.get(index)?.header);
+                        }
                         self.requests.get_mut(index)?.sent = true;
                         if self.close_after_reply == Some(index) {
                             self.closed = true;
                             resources.session.control.close();
                         }
                     }
+                    WritePurpose::AcquisitionProgress(header) => {
+                        self.acquisition
+                            .as_mut()
+                            .ok_or(ParentError::WrongPhase)?
+                            .progress_finished(header, true)?;
+                    }
                     WritePurpose::Challenge(_) => {}
                 }
                 self.write = None;
+                self.resume_acquisition_receive(resources)?;
             }
             LifecyclePipeObservation::WriteRevoked { operation, buffer } => {
                 self.write
@@ -142,39 +133,23 @@ impl ParentLifecycle {
                 {
                     self.challenge_revoked(challenge, operation.get())?;
                 }
+                if let WritePurpose::AcquisitionProgress(header) =
+                    self.write.as_ref().ok_or(ParentError::WrongPhase)?.purpose
+                {
+                    self.acquisition
+                        .as_mut()
+                        .ok_or(ParentError::WrongPhase)?
+                        .progress_finished(header, false)?;
+                }
                 drop(buffer);
                 self.write = None;
+                self.resume_acquisition_receive(resources)?;
             }
         }
         Ok(())
     }
 
-    pub(super) fn receive_next(&mut self, resources: &ParentResources<'_, '_>) -> Result<()> {
-        if self.read.is_some() || !self.connected || self.closed {
-            return Ok(());
-        }
-        if self.hello && (!self.welcome || self.peer.is_none()) {
-            return Ok(());
-        }
-        let next = self.next_operation()?;
-        let control = &resources.session.control;
-        let admitted = if self.registered {
-            control.read_passive(LifecyclePipeOperationId::new(next)?)
-        } else {
-            control.read(LifecyclePipeOperationId::new(next)?, control.original_deadline())
-        };
-        match admitted {
-            Ok(()) => {
-                self.latest_operation = next;
-                self.read = Some(next);
-            }
-            Err(LifecyclePipeError::Busy) => {}
-            Err(error) => return Err(error.into()),
-        }
-        Ok(())
-    }
-
-    fn next_operation(&self) -> Result<u64> {
+    pub(super) fn next_operation(&self) -> Result<u64> {
         self.latest_operation.checked_add(1).ok_or_else(|| ParentError::IdentityExhausted.into())
     }
 
@@ -327,33 +302,5 @@ impl ParentLifecycle {
             }
         }
         Ok(())
-    }
-}
-
-/// Classify borrowed frame shape only at a retained failure boundary. No payload,
-/// credential, path or capability bytes enter diagnostics; this grants no authority.
-fn received_payload_kind(bytes: &[u8]) -> &'static str {
-    use sugarsubstitute_supervision::lifecycle_protocol::DecodedPayload as Payload;
-    let Ok(message) = FrameCodec::decode(bytes) else { return "Malformed" };
-    match message.payload {
-        Payload::Hello(_) => "Hello",
-        Payload::Welcome { .. } => "Welcome",
-        Payload::Register => "Register",
-        Payload::Acquire { .. } => "Acquire",
-        Payload::Release(_) => "Release",
-        Payload::Reload { .. } => "Reload",
-        Payload::ExitIntent { .. } => "ExitIntent",
-        Payload::ExitCompleted(_) => "ExitCompleted",
-        Payload::UiChallenge(_) => "UiChallenge",
-        Payload::UiResponse(_) => "UiResponse",
-        Payload::Reply(_) => "Reply",
-        Payload::RequestedProfileFolder(_) => "RequestedProfileFolder",
-        Payload::EnvironmentPrepared(_) => "EnvironmentPrepared",
-        Payload::ControllerPrepared { .. } => "ControllerPrepared",
-        Payload::MainRetired(_) => "MainRetired",
-        Payload::NativeActivity { .. } => "NativeActivity",
-        Payload::OutputPull { .. } => "OutputPull",
-        Payload::MainFailed(_) => "MainFailed",
-        Payload::SettleAttempt { .. } => "SettleAttempt",
     }
 }

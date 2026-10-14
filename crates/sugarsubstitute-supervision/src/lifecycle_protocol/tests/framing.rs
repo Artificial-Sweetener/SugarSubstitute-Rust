@@ -8,7 +8,7 @@ fn exact_header_layout_and_large_integer_ticks_match_independent_goldens() -> Te
     let encoded = encoded(WirePayload::Register)?;
     let mut golden = Vec::new();
     golden.extend(b"SSLC");
-    golden.extend(3u16.to_le_bytes());
+    golden.extend(4u16.to_le_bytes());
     golden.extend(104u16.to_le_bytes());
     golden.extend(104u32.to_le_bytes());
     golden.extend(3u16.to_le_bytes());
@@ -131,5 +131,21 @@ fn failed_encode_preflight_leaves_caller_storage_unchanged() -> TestResult {
         WireMessage { header: header(2)?, payload: WirePayload::Welcome { qpc_frequency: 0 } };
     assert!(matches!(FrameCodec::encode(&message, &mut output), Err(ProtocolError::Clock)));
     assert_eq!(output, [0x72; 120]);
+    Ok(())
+}
+
+#[test]
+fn schema4_nonfinal_acquire_contract_rejects_earlier_and_future_peers() -> TestResult {
+    let original = encoded(WirePayload::Reply(ReplyOutcome::Pending(lease()?)))?;
+    assert_eq!(u16::from_le_bytes([original[4], original[5]]), 4);
+    assert!(matches!(
+        FrameCodec::decode(&original)?.payload,
+        DecodedPayload::Reply(ReplyOutcome::Pending(_))
+    ));
+    for version in [1u16, 2, 3, 5, u16::MAX] {
+        let mut frame = original.clone();
+        frame[4..6].copy_from_slice(&version.to_le_bytes());
+        assert!(FrameCodec::decode(&frame).is_err());
+    }
     Ok(())
 }

@@ -37,6 +37,21 @@ impl ShutdownTransaction {
     pub(super) const fn new() -> Self {
         Self { state: None }
     }
+    /// Borrow facts from this owner's actual first retained measurement cause only.
+    pub(super) fn failure_diagnostic(
+        &self,
+    ) -> Option<(
+        sugarsubstitute_desktop::StartupCloseStage,
+        sugarsubstitute_desktop::StartupCaptureState,
+        sugarsubstitute_desktop::StartupCauseCode,
+    )> {
+        match &self.state {
+            Some(State::Measured(Err(cause))) => {
+                super::close_diagnostic::measurement_diagnostic(cause.0.as_ref())
+            }
+            _ => None,
+        }
+    }
     /// Observe pending original capture measurement without granting settlement or a budget.
     pub(super) fn pending(&self) -> bool {
         matches!(self.state, Some(State::CapturePending))
@@ -106,6 +121,58 @@ impl ShutdownTransaction {
 mod tests {
     use super::*;
     use std::cell::Cell;
+    #[test]
+    fn retained_startup_close_diagnostic_survives_measurement_rejection_without_resampling()
+    -> Result<(), Box<dyn Error>> {
+        use sugarsubstitute_desktop::{
+            StartupCaptureState, StartupCauseCode, StartupCloseFailure, StartupCloseStage,
+            StartupNativeCause,
+        };
+        let mut transaction = ShutdownTransaction::new();
+        let original = sugarsubstitute_execution::windows::NativeObservationError::new(
+            "capture_cleanup_clock",
+            std::io::Error::other("private original boundary"),
+        );
+        let cause = StartupCloseFailure::retain(
+            StartupCloseStage::CaptureObservation,
+            StartupCaptureState::ClockUnavailable,
+            StartupCauseCode::Native(StartupNativeCause::CaptureClock, None),
+            Box::new(original),
+        );
+        let rejected = transaction.reject(cause);
+        assert_eq!(
+            transaction.failure_diagnostic(),
+            Some((
+                StartupCloseStage::CaptureObservation,
+                StartupCaptureState::ClockUnavailable,
+                StartupCauseCode::Native(StartupNativeCause::CaptureClock, None)
+            ))
+        );
+        let samples = Cell::new(0);
+        assert!(
+            transaction
+                .request(ShutdownInitiation::NoCapture, || {
+                    samples.set(samples.get() + 1);
+                    Ok(Moment::from_nanos(100))
+                })
+                .is_err()
+        );
+        assert_eq!(samples.get(), 0);
+        let close = rejected
+            .source()
+            .and_then(|cause| cause.downcast_ref::<StartupCloseFailure>())
+            .ok_or("Retained first stage absent")?;
+        assert_eq!(
+            close
+                .original()
+                .downcast_ref::<sugarsubstitute_execution::windows::NativeObservationError>()
+                .ok_or("Original native cause lost")?
+                .stage(),
+            "capture_cleanup_clock"
+        );
+        assert!(transaction.budget().is_err());
+        Ok(())
+    }
     #[test]
     fn first_partial_start_shutdown_uses_one_original_ten_fifteen_second_budget()
     -> Result<(), Box<dyn Error>> {

@@ -254,3 +254,64 @@ fn late_acquire_reply_cannot_transfer_matching_or_foreign_frame_at_or_after_cuto
     drop(owner);
     Ok(())
 }
+
+/// Inert external reply loans exercise the actual Acquire custody selector. No native
+/// peer/frame or successful write/readiness/retirement proof is constructed.
+#[test]
+fn retiring_acquire_retains_exact_original_loan_without_readmission_or_renewal()
+-> std::result::Result<(), Box<dyn Error>> {
+    let mut ledger = requests()?;
+    let original = Moment::from_nanos(1000);
+    let header = ledger.prepare(original, CounterDeadline::new(2000, 100)?)?;
+    ledger.acquisition(header)?;
+    ledger.outbound(header, original, Moment::from_nanos(10))?;
+    ledger.admitted(header)?;
+    let pending = PendingAcquire { header, original, admitted: true };
+    let mut grant = None;
+    let mut takes = 0;
+    let foreign = WireHeader { deadline_qpc: header.deadline_qpc + 1, ..header };
+    assert_eq!(
+        pending.retain_retiring(&mut grant, Some(foreign), || {
+            takes += 1;
+            Some([7_u8, 8])
+        })?,
+        RetiringAcquireFrame::Awaiting
+    );
+    assert!(grant.is_none());
+    assert_eq!(takes, 0);
+    ledger.received(header, Moment::from_nanos(20))?;
+    assert_eq!(
+        pending.retain_retiring(&mut grant, Some(header), || {
+            takes += 1;
+            Some([7_u8, 8])
+        })?,
+        RetiringAcquireFrame::Transferred
+    );
+    assert_eq!(grant, Some([7, 8]));
+    assert_eq!(
+        pending.retain_retiring(&mut grant, None, || {
+            takes += 1;
+            Some([9_u8, 10])
+        })?,
+        RetiringAcquireFrame::Retained
+    );
+    assert_eq!(takes, 1);
+    assert_eq!(grant, Some([7, 8]));
+    assert_eq!(pending.original, original);
+    ledger.progress(header, Moment::from_nanos(20))?;
+    assert!(ledger.consumed(header).is_err());
+    assert!(ledger.outbound(header, original, original).is_err());
+    assert_eq!(grant, Some([7, 8]));
+    assert_eq!(
+        pending.retain_retiring(&mut grant, Some(header), || None)?,
+        RetiringAcquireFrame::Retained
+    );
+    let mut absent: Option<[u8; 2]> = None;
+    assert!(pending.retain_retiring(&mut absent, Some(header), || None).is_err());
+    assert!(
+        PendingAcquire { admitted: false, ..pending }
+            .retain_retiring(&mut absent, Some(header), || Some([0, 0]))
+            .is_err()
+    );
+    Ok(())
+}

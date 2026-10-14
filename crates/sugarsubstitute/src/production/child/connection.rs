@@ -13,6 +13,14 @@ pub(super) struct PendingAcquire {
     pub(super) original: Moment,
     pub(super) admitted: bool,
 }
+/// The original acquire owner retains one reply through cancellation; matching metadata
+/// neither accepts its disposition nor grants output, Main or settlement authority.
+#[derive(Debug, Eq, PartialEq)]
+enum RetiringAcquireFrame {
+    Awaiting,
+    Retained,
+    Transferred,
+}
 /// Select progression without granting settlement or replacing any stored cutoff.
 #[derive(Debug, Eq, PartialEq)]
 pub(super) enum ActivityRoute {
@@ -56,6 +64,8 @@ pub(super) enum ConnectionStage {
     Admitted,
     /// The original matching frame transferred to its semantic owner.
     ReplyReceived,
+    /// The authentic nonfinal managed source was accepted without frontend readiness.
+    OutputReserved,
     /// The matching reply decoded a grant; transport metadata grants no native authority.
     Granted,
     /// The matching reply decoded the parent's original failure disposition.
@@ -71,6 +81,30 @@ impl ConnectionStage {
     }
 }
 impl PendingAcquire {
+    /// Retain the original reply in its existing acquisition slot. Cancellation does not
+    /// move it through a different owner's failure slot or replace an already retained loan.
+    /// The original ledger performs cutoff/disposition checks before actual consumption.
+    fn retain_retiring<T>(
+        self,
+        retained: &mut Option<T>,
+        observed: Option<WireHeader>,
+        take: impl FnOnce() -> Option<T>,
+    ) -> std::io::Result<RetiringAcquireFrame> {
+        if !self.admitted {
+            return Err(std::io::Error::other("Original acquire was not admitted"));
+        }
+        if retained.is_some() {
+            return Ok(RetiringAcquireFrame::Retained);
+        }
+        if observed != Some(self.header) {
+            return Ok(RetiringAcquireFrame::Awaiting);
+        }
+        *retained = take();
+        if retained.is_none() {
+            return Err(std::io::Error::other("Original retiring acquire frame disappeared"));
+        }
+        Ok(RetiringAcquireFrame::Transferred)
+    }
     /// Reject the unchanged original cutoff before wire effects or reply-loan transfer.
     fn check_current(self, now: Moment) -> std::io::Result<()> {
         if now >= self.original {
@@ -106,6 +140,7 @@ impl ProductionChild {
         let budget = ConnectionBudget::new(kind, self.client()?.now()?)?;
         self.connection_budget = Some(budget);
         let header = self.bootstrap.channel_mut().prepare_request(budget.until())?;
+        self.bootstrap.channel_mut().acquisition(header)?;
         self.acquire = Some(PendingAcquire { header, original: budget.until(), admitted: false });
         self.acquisition_header = Some(header);
         ConnectionStage::Queued.report();
@@ -166,17 +201,22 @@ impl ProductionChild {
                 if self.events.iter().all(Option::is_some) {
                     return Err("Startup event slots full before grant".into());
                 }
-                self.lease = Some(grant.lease);
-                self.grant_header = Some(frame.header);
-                let origin = grant.origin;
+                let (lease, origin) = (grant.lease, grant.origin);
+                self.adopt_output(lease, pending.original, true)?;
+                self.lease = Some(lease);
+                self.grant_header = Some(pending.header);
                 self.acquire = None;
                 self.push_event(StartupEvent::new(
                     self.identity.launch,
                     StartupObservation::ConnectionReady(origin),
                 ))
             }
-            DecodedPayload::Reply(ReplyOutcome::Pending(_)) => {
-                Err("Pending acquire has no final readiness grant".into())
+            DecodedPayload::Reply(ReplyOutcome::Pending(lease)) => {
+                self.adopt_output(lease, pending.original, false)?;
+                self.bootstrap.channel_mut().consume_progress(pending.header)?;
+                self.grant = None;
+                ConnectionStage::OutputReserved.report();
+                Ok(())
             }
             DecodedPayload::Reply(ReplyOutcome::Failed(code)) => {
                 self.acquire_failed(pending.header, attempt::AcquisitionFailure::Failed(code))
@@ -187,8 +227,78 @@ impl ProductionChild {
             _ => Err("Acquire reply is not the exact current grant".into()),
         }
     }
+    /// Drain the original nonfinal/final acquisition during cancellation without starting
+    /// output, publishing readiness or renewing its deadline. Errors retain the real frame.
+    fn retire_acquire(&mut self) -> Result<()> {
+        let Some(pending) = self.acquire else { return Ok(()) };
+        if !pending.admitted {
+            return Ok(());
+        }
+        let observed = if self.grant.is_some() {
+            None
+        } else {
+            self.bootstrap.channel_mut().received_header()?
+        };
+        let retained = pending.retain_retiring(&mut self.grant, observed, || {
+            self.bootstrap.channel_mut().take_frame()
+        })?;
+        if retained == RetiringAcquireFrame::Awaiting {
+            return Ok(());
+        }
+        let decoded = FrameCodec::decode(
+            self.grant.as_ref().ok_or("Original retiring acquire frame missing")?.as_bytes(),
+        )?;
+        if decoded.header != pending.header {
+            return Err("Original retiring acquisition header changed".into());
+        }
+        let DecodedPayload::Reply(reply) = decoded.payload else {
+            return Err("Original retiring acquisition reply changed".into());
+        };
+        match reply {
+            ReplyOutcome::Pending(lease) => {
+                if self.output.binding.is_some_and(|binding| {
+                    binding.lease != lease || retained != RetiringAcquireFrame::Retained
+                }) {
+                    return Err("Retiring provisional output source duplicated or changed".into());
+                }
+                self.output.binding = Some(crate::production_output::OutputBinding {
+                    resource: ResourceKey {
+                        owner: self.run.owner,
+                        id: lease.resource,
+                        generation: lease.generation,
+                    },
+                    run: self.run,
+                    connection: pending.header.connection.ok_or("Original connection missing")?,
+                    lease,
+                });
+                self.bootstrap.channel_mut().consume_progress(pending.header)?;
+            }
+            ReplyOutcome::Granted(grant) if grant.identity == self.identity => {
+                if self.output.binding.is_some_and(|binding| binding.lease != grant.lease) {
+                    return Err("Retiring final output source changed".into());
+                }
+                if self.main_construction_pending() || self.main.profile().is_some() {
+                    return Err("Late Grant still has original Main construction custody".into());
+                }
+                self.push_command(DesktopStartupCommand::ConfirmMainAbsent(self.identity))?;
+                self.shutdown.main_absence_pending = true;
+                self.bootstrap.channel_mut().consume_reply(pending.header)?;
+                self.main.request_consumed = true;
+                self.grant_header = Some(pending.header);
+                self.acquire = None;
+            }
+            ReplyOutcome::Failed(_) | ReplyOutcome::Rejected(_) | ReplyOutcome::Cancelled => {
+                self.bootstrap.channel_mut().consume_reply(pending.header)?;
+                self.acquire = None;
+            }
+            _ => return Err("Retiring acquisition has no final disposition".into()),
+        }
+        self.grant = None;
+        Ok(())
+    }
     pub(super) fn activity(&mut self, prepared: Option<&PreparedChildStartup>) -> Result<()> {
         if !self.shutdown.closing()
+            && self.attempt.is_none()
             && let Some(pending) = self.acquire
         {
             pending.check_current(self.client()?.now()?)?;
@@ -204,8 +314,12 @@ impl ProductionChild {
             self.frontend_budget,
             self.client()?.now()?,
         )? {
-            ActivityRoute::Shutdown => return self.advance_shutdown(),
+            ActivityRoute::Shutdown => {
+                self.retire_acquire()?;
+                return self.advance_shutdown();
+            }
             ActivityRoute::AttemptCleanup => {
+                self.retire_acquire()?;
                 self.advance_control()?;
                 return self.advance_attempt();
             }

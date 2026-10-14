@@ -97,6 +97,12 @@ impl ParentLifecycle {
         {
             until = until.min(budget.settle_until);
         }
+        if matches!(decoded.payload, DecodedPayload::OutputPull { .. }) && self.lease.is_none() {
+            until = until.min(self.acquisition.as_ref().ok_or(ParentError::WrongPhase)?.original);
+            if resources.execution.client.now()? >= until {
+                return Err(sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeError::DeadlineExpired.into());
+            }
+        }
         self.requests.get_mut(index)?.until = Some(until);
         if !self.registered {
             if !self.welcome
@@ -223,6 +229,9 @@ impl ParentLifecycle {
                 self.profile_effect(index, effect, until, resources)?;
             }
             DecodedPayload::MainRetired(identity) => {
+                if let Some(attempt) = &mut self.attempt_cleanup {
+                    attempt.observe_retirement(identity, header)?;
+                }
                 self.main.retire(identity)?;
                 resources.profile.retire_main_attempt(identity)?;
                 self.main.accept(
