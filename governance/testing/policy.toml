@@ -53,7 +53,7 @@ minimum_tests = 76
 package = "sugarsubstitute-desktop"
 root = "crates/sugarsubstitute-desktop"
 concern = "Nonblocking frame delivery, pre-Tao preparation, lossless wake handoff, bounded native dispatch, headless settlement, retained native storage, input and timing boundaries; current-view native reporter controls, explicit consent and inert save selection, clipboard transfer, bounded modal input and checked font/callback retirement"
-minimum_tests = 239
+minimum_tests = 244
 
 [[owners]]
 package = "sugarsubstitute-crash"

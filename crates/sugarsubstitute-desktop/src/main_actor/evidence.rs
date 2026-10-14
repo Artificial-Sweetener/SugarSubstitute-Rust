@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Decode bounded native observations outside callbacks and perform effects after queue borrowing ends.
 
+mod console;
 mod decode;
 mod probe;
 use super::*;

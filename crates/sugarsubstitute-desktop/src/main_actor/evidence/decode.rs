@@ -3,7 +3,7 @@
 //! Bind actual CDP frame/context identities and primitive diagnostics to the current native document.
 
 use super::*;
-use crate::main_readiness_types::{ConsoleArgument, ConsoleKind, ReadinessFault};
+use crate::main_readiness_types::ReadinessFault;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -44,20 +44,6 @@ struct Aux {
 #[serde(rename_all = "camelCase")]
 struct Destroyed {
     execution_context_id: i64,
-}
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct Console {
-    execution_context_id: i64,
-    #[serde(rename = "type")]
-    kind: String,
-    args: Vec<Argument>,
-}
-#[derive(Deserialize)]
-struct Argument {
-    #[serde(rename = "type")]
-    kind: String,
-    value: Option<serde_json::Value>,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -105,31 +91,7 @@ pub(super) fn consume(
             let _: serde_json::Value = parse(payload)?;
             owner.contexts_cleared()
         }
-        Kind::Console => {
-            let event: Console = parse(payload)?;
-            if event.args.len() > 32 {
-                return Err(readiness_error(ReadinessFault::ObservationOverflow));
-            }
-            let kind = match event.kind.as_str() {
-                "error" => ConsoleKind::Error,
-                "warning" => ConsoleKind::Warning,
-                _ => ConsoleKind::Other,
-            };
-            for arg in &event.args {
-                let argument = if arg.kind == "string" {
-                    arg.value
-                        .as_ref()
-                        .and_then(serde_json::Value::as_str)
-                        .map_or(ConsoleArgument::Other, ConsoleArgument::PrimitiveString)
-                } else {
-                    ConsoleArgument::Other
-                };
-                owner
-                    .console(event.execution_context_id, kind, argument)
-                    .map_err(readiness_error)?;
-            }
-            Ok(())
-        }
+        Kind::Console => return console::consume(owner, payload).map(|()| Effect::None),
         Kind::Exception | Kind::ProcessFailed { .. } => {
             owner.invalidate(ReadinessFault::SetupFailed);
             Err(ReadinessFault::SetupFailed)

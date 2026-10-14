@@ -3,6 +3,8 @@
 //! Characterize actual decoded frame/context/receipt failures with deterministic owner input.
 
 use super::*;
+#[path = "console_tests.rs"]
+mod console;
 use crate::{MainIdentity, ServedFrontendVersions};
 use std::error::Error;
 use sugarsubstitute_contracts::{
