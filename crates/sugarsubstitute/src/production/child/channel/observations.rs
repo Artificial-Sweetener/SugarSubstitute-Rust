@@ -48,17 +48,41 @@ impl PendingRead {
 }
 
 /// Retain the exact encoded byte count through native issuance and completion.
-pub(super) struct PendingWrite {
+pub(super) struct WriteReceipt {
     operation: LifecyclePipeOperationId,
     bytes: usize,
     issued: bool,
 }
-impl PendingWrite {
+impl WriteReceipt {
     /// Record the operation only after its existing native write queue accepts it.
     pub(super) const fn new(operation: LifecyclePipeOperationId, bytes: usize) -> Self {
         Self { operation, bytes, issued: false }
     }
 
+    /// Only a checked queued no-issue veto can precede actual returned native custody.
+    pub(super) fn permits_no_issue(
+        result: sugarsubstitute_execution::windows_lifecycle_pipe::NativeWriteRevocation,
+    ) -> bool {
+        use sugarsubstitute_execution::windows_lifecycle_pipe::NativeWriteRevocation::*;
+        matches!(result, RevokedBeforeIssue | AlreadyRevoked)
+    }
+    /// Borrow the exact known encoded extent of this original native write.
+    pub(super) const fn bytes(&self) -> usize {
+        self.bytes
+    }
+    /// Reject a revocation of any different or already-issued native write.
+    pub(super) fn revoked(
+        &self,
+        operation: LifecyclePipeOperationId,
+    ) -> Result<(), ObservationError> {
+        if self.operation != operation {
+            return Err(ObservationError::WriteIdentity);
+        }
+        if self.issued {
+            return Err(ObservationError::WriteOrder);
+        }
+        Ok(())
+    }
     /// Record one actual issuance; errors preserve the previous original state.
     pub(super) fn issued(
         pending: Option<&mut Self>,

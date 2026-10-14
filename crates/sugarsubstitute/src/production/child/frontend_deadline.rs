@@ -52,4 +52,4 @@ impl ProductionChild {
 }
 #[cfg(test)]
 #[path = "frontend_deadline_tests.rs"]
-mod tests;
+pub(super) mod tests;

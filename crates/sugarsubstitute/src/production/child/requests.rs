@@ -7,6 +7,12 @@
 //! Payload validation, output ingestion and actual native effects stay with their
 //! semantic owners; a matching reply never establishes readiness or retirement.
 use super::handshake::WireHandshake;
+#[path = "requests/retirement.rs"]
+mod retirement;
+pub(super) use retirement::WithdrawnRequest;
+#[path = "requests/expiry.rs"]
+mod expiry;
+pub(super) use expiry::RequestExpiry;
 use std::{error::Error, fmt};
 use sugarsubstitute_contracts::{
     execution::{CounterDeadline, Moment},
@@ -49,13 +55,23 @@ enum Phase {
     Prepared,
     Admitted,
     Received,
+    RetiringAdmitted,
+    RetiringReceived,
+    RetiringUnissued,
+}
+/// Classify only authored request owners; these facts grant no native effects.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum Purpose {
+    Other,
+    Acquisition,
+    OutputPull,
 }
 #[derive(Clone, Copy)]
 struct Pending {
     header: WireHeader,
     original: Moment,
     phase: Phase,
-    acquire: bool,
+    purpose: Purpose,
 }
 
 /// Retain immutable matching facts separately from native transport/frame custody.
@@ -107,7 +123,7 @@ impl ClientRequests {
             request: Some(request),
             deadline_qpc: encoded.ticks(),
         };
-        *slot = Some(Pending { header, original, phase: Phase::Prepared, acquire: false });
+        *slot = Some(Pending { header, original, phase: Phase::Prepared, purpose: Purpose::Other });
         self.latest = latest;
         Ok(header)
     }
@@ -164,20 +180,33 @@ impl ClientRequests {
         Ok(())
     }
 
+    /// Route an exact authenticated loan only to its already fenced retirement owner.
+    /// Ordinary replies keep every original admission/order/cutoff check unchanged.
+    pub(super) fn received_or_retiring(
+        &mut self,
+        header: WireHeader,
+        now: Moment,
+    ) -> Result<(), RequestError> {
+        if self.retiring(header)? {
+            self.received_retiring(header)
+        } else {
+            self.received(header, now)
+        }
+    }
     /// Designate only a never-admitted original Acquire as supporting schema4 progress.
     pub(super) fn acquisition(&mut self, header: WireHeader) -> Result<(), RequestError> {
         let pending = self.find_mut(header)?;
-        if pending.phase != Phase::Prepared || pending.acquire {
+        if pending.phase != Phase::Prepared || pending.purpose != Purpose::Other {
             return Err(RequestError::Order);
         }
-        pending.acquire = true;
+        pending.purpose = Purpose::Acquisition;
         Ok(())
     }
     /// Consume one validated nonfinal frame, retaining its original slot and cutoff.
     /// This cannot reopen a final reply, foreign request, expired budget.
     pub(super) fn progress(&mut self, header: WireHeader, now: Moment) -> Result<(), RequestError> {
         let pending = self.find_mut(header)?;
-        if !pending.acquire || pending.phase != Phase::Received {
+        if pending.purpose != Purpose::Acquisition || pending.phase != Phase::Received {
             return Err(RequestError::Order);
         }
         if now >= pending.original {
@@ -241,4 +270,4 @@ impl ClientRequests {
 
 #[cfg(test)]
 #[path = "request_tests.rs"]
-mod tests;
+pub(super) mod tests;

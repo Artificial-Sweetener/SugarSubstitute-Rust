@@ -27,12 +27,12 @@ impl Clock for FixedClock {
     }
 }
 #[derive(Default)]
-struct Wake {
+pub(super) struct Wake {
     ready: Mutex<bool>,
     changed: Condvar,
 }
 impl Wake {
-    fn wait(&self) -> Result<()> {
+    pub(super) fn wait(&self) -> Result<()> {
         let ready = self.ready.lock().map_err(|cause| std::io::Error::other(cause.to_string()))?;
         let (mut ready, timeout) = self
             .changed

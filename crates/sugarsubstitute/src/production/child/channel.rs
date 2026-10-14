@@ -31,17 +31,24 @@ mod application;
 mod challenge;
 #[path = "channel/commands.rs"]
 mod commands;
+#[path = "channel/expiry.rs"]
+pub(super) mod expiry;
 #[path = "channel/incoming.rs"]
 mod incoming;
 #[path = "channel/observations.rs"]
 mod observations;
+#[path = "channel/retirement.rs"]
+mod retirement;
 #[path = "channel/ui.rs"]
 mod ui;
 #[path = "channel/wire.rs"]
 mod wire;
 use admission::ChannelAdmission;
 use challenge::UiChallengeExchange;
-use observations::{PendingRead, PendingWrite};
+use observations::{PendingRead, WriteReceipt};
+#[path = "channel/write.rs"]
+pub(super) mod write;
+use write::PendingWrite;
 
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 type Terminal = JobCompletion<LifecyclePipeReport, LifecyclePipeFailure>;

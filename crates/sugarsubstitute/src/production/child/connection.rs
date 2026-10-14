@@ -12,11 +12,12 @@ pub(super) struct PendingAcquire {
     pub(super) header: WireHeader,
     pub(super) original: Moment,
     pub(super) admitted: bool,
+    pub(super) retiring: bool,
 }
 /// The original acquire owner retains one reply through cancellation; matching metadata
 /// neither accepts its disposition nor grants output, Main or settlement authority.
 #[derive(Debug, Eq, PartialEq)]
-enum RetiringAcquireFrame {
+pub(super) enum RetiringAcquireFrame {
     Awaiting,
     Retained,
     Transferred,
@@ -84,7 +85,7 @@ impl PendingAcquire {
     /// Retain the original reply in its existing acquisition slot. Cancellation does not
     /// move it through a different owner's failure slot or replace an already retained loan.
     /// The original ledger performs cutoff/disposition checks before actual consumption.
-    fn retain_retiring<T>(
+    pub(super) fn retain_retiring<T>(
         self,
         retained: &mut Option<T>,
         observed: Option<WireHeader>,
@@ -106,7 +107,7 @@ impl PendingAcquire {
         Ok(RetiringAcquireFrame::Transferred)
     }
     /// Reject the unchanged original cutoff before wire effects or reply-loan transfer.
-    fn check_current(self, now: Moment) -> std::io::Result<()> {
+    pub(super) fn check_current(self, now: Moment) -> std::io::Result<()> {
         if now >= self.original {
             Err(std::io::Error::new(
                 std::io::ErrorKind::TimedOut,
@@ -141,27 +142,45 @@ impl ProductionChild {
         self.connection_budget = Some(budget);
         let header = self.bootstrap.channel_mut().prepare_request(budget.until())?;
         self.bootstrap.channel_mut().acquisition(header)?;
-        self.acquire = Some(PendingAcquire { header, original: budget.until(), admitted: false });
+        self.acquire = Some(PendingAcquire {
+            header,
+            original: budget.until(),
+            admitted: false,
+            retiring: false,
+        });
         self.acquisition_header = Some(header);
         ConnectionStage::Queued.report();
         self.send_acquire(prepared)
     }
     pub(super) fn send_acquire(&mut self, prepared: &PreparedChildStartup) -> Result<()> {
         let Some(pending) = self.acquire else { return Ok(()) };
-        pending.check_current(self.client()?.now()?)?;
+        if pending.retiring {
+            return Ok(());
+        }
+        if self.expire_acquisition()? {
+            return Ok(());
+        }
         if pending.admitted {
             return Ok(());
         }
-        if self.bootstrap.channel_mut().try_send(
-            &WireMessage {
-                header: pending.header,
-                payload: WirePayload::Acquire {
-                    identity: self.identity,
-                    target: prepared.session().configuration().connection().into(),
+        if self
+            .bootstrap
+            .channel_mut()
+            .try_send(
+                &WireMessage {
+                    header: pending.header,
+                    payload: WirePayload::Acquire {
+                        identity: self.identity,
+                        target: prepared.session().configuration().connection().into(),
+                    },
                 },
-            },
-            pending.original,
-        )? {
+                pending.original,
+            )
+            .or_else(|cause| -> Result<bool> {
+                self.recover_acquisition_expiry(cause)?;
+                Ok(false)
+            })?
+        {
             self.acquire.as_mut().ok_or("Original acquire disappeared")?.admitted = true;
             ConnectionStage::Admitted.report();
         }
@@ -169,8 +188,13 @@ impl ProductionChild {
     }
     pub(super) fn receive_acquire(&mut self) -> Result<()> {
         let Some(pending) = self.acquire else { return Ok(()) };
+        if pending.retiring || self.expire_acquisition()? {
+            return Ok(());
+        }
         let now = self.client()?.now()?;
-        pending.check_current(now)?;
+        if let Err(cause) = pending.check_current(now) {
+            return self.publish_acquisition_expiry(Box::new(cause));
+        }
         if !pending.admitted {
             return Ok(());
         }
@@ -231,6 +255,9 @@ impl ProductionChild {
     /// output, publishing readiness or renewing its deadline. Errors retain the real frame.
     fn retire_acquire(&mut self) -> Result<()> {
         let Some(pending) = self.acquire else { return Ok(()) };
+        if pending.retiring {
+            return self.dispose_retiring_acquire(pending);
+        }
         if !pending.admitted {
             return Ok(());
         }
@@ -300,10 +327,16 @@ impl ProductionChild {
         if !self.shutdown.closing()
             && self.attempt.is_none()
             && let Some(pending) = self.acquire
+            && !pending.retiring
+            && self.expire_acquisition()?
         {
-            pending.check_current(self.client()?.now()?)?;
+            return Ok(());
         }
-        self.bootstrap.channel_mut().activity(NonZeroUsize::MIN.saturating_add(31))?;
+        if let Err(cause) =
+            self.bootstrap.channel_mut().activity(NonZeroUsize::MIN.saturating_add(31))
+        {
+            return self.recover_acquisition_expiry(cause);
+        }
         if self.output.closing() {
             self.advance_output()?;
         }
@@ -336,7 +369,13 @@ impl ProductionChild {
         if let Some(prepared) = prepared {
             self.send_acquire(prepared)?;
         }
+        if self.acquire.is_some_and(|p| p.retiring) {
+            return Ok(());
+        }
         self.receive_acquire()?;
+        if self.acquire.is_some_and(|p| p.retiring) {
+            return Ok(());
+        }
         self.advance_attempt()?;
         self.advance_control()?;
         self.advance_profile()?;

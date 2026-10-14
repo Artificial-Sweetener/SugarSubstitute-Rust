@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Compose the real captured child, authenticated lifecycle channel and native startup effects.
+#[path = "child/acquisition_retirement.rs"]
+mod acquisition_retirement;
 #[path = "child/attempt.rs"]
 mod attempt;
 #[path = "child/bootstrap.rs"]
@@ -205,6 +207,9 @@ impl ProductionChild {
             if let Err(cause) = bootstrap {
                 return Err(Box::new(cause));
             }
+            if self.expire_acquisition()? {
+                return Ok(());
+            }
             self.consume_main()?;
             self.consume_output()?;
             self.activity(prepared)
@@ -351,12 +356,13 @@ impl ProductionChild {
                 .then(|| self.bootstrap.original_deadline())
                 .flatten(),
             self.bootstrap.ui_deadline(),
-            self.acquire.map(|p| p.original),
-            self.main.deadline(),
-            self.output.deadline(),
+            self.acquire.filter(|p| !p.retiring).map(|p| p.original),
+            self.main.deadline().filter(|_| self.attempt.is_none()),
+            self.output.deadline().filter(|_| self.attempt.is_none()),
             self.shutdown.deadline(),
             self.attempt.as_ref().and_then(attempt::AttemptCleanup::deadline),
             self.frontend_budget
+                .filter(|_| self.attempt.is_none() && !self.frontend_timed_out)
                 .filter(|_| {
                     self.phase
                         == Some(sugarsubstitute_application::startup::StartupPhase::WebviewLoading)

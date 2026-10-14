@@ -8,6 +8,10 @@ use sugarsubstitute_contracts::{
 };
 use sugarsubstitute_supervision::lifecycle_protocol::WireHeader;
 
+#[path = "attempt/settlement_gate.rs"]
+mod settlement_gate;
+pub(super) use settlement_gate::BackendRetirement;
+
 /// Original terminal attempt classification; backend causes stay with their actual owner.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum AttemptCleanupFailure {
@@ -24,6 +28,7 @@ pub(super) struct AttemptSettlement {
     pub(super) failed: Option<AttemptCleanupFailure>,
     pub(super) main_retirement_required: bool,
     pub(super) retirement: Option<(WireHeader, bool)>,
+    pub(super) ready: bool,
 }
 /// Borrow the original producer cause and exact attempt/campaign correlation after settlement.
 /// Reporting consumes a semantic snapshot while this owner retains its native cause.
@@ -111,6 +116,10 @@ impl ParentLifecycle {
             resources.profile.retire_main_attempt(identity)?;
         }
         if let Some(lease) = lease {
+            // The authentic settlement request follows actual Child parser/frame
+            // retirement. Dispose this passive delivery loan without asserting ACK,
+            // EOF or native family closure; those owners still settle independently.
+            self.output = None;
             let transition =
                 resources.backend.cleanup_attempt(binding, lease, budget, resources.execution)?;
             self.backend_replies(transition, resources)?;
@@ -171,6 +180,7 @@ impl ParentLifecycle {
             failed: None,
             main_retirement_required,
             retirement: None,
+            ready: false,
         });
         Ok(budget)
     }
@@ -190,31 +200,24 @@ impl ParentLifecycle {
         &mut self,
         resources: &mut ParentResources<'_, '_>,
     ) -> Result<()> {
-        if self.attempt_cleanup.is_none() {
-            return Ok(());
-        }
         let now = resources.execution.client.now()?;
-        if self.expire_attempt(now)? {
+        let Some(index) = self.observe_attempt_retirement(now, |lease| {
+            let cleanup_failed = lease
+                .is_some_and(|lease| resources.backend.cleanup_failure(lease.resource).is_some());
+            let released = if cleanup_failed {
+                false
+            } else {
+                match lease {
+                    Some(lease) => resources.backend.attempt_released(lease)?,
+                    None => true,
+                }
+            };
+            Ok(BackendRetirement { cleanup_failed, released })
+        })?
+        else {
             return Ok(());
-        }
+        };
         let attempt = self.attempt_cleanup.as_ref().ok_or(ParentError::WrongPhase)?;
-        if attempt.failed.is_some() || !attempt.main_retired(self.main.stage()) {
-            return Ok(());
-        }
-        if attempt.resource.is_some_and(|key| resources.backend.cleanup_failure(key).is_some()) {
-            self.requests.get_mut(attempt.index)?.reply = Some(Reply::Failed(
-                sugarsubstitute_contracts::lifecycle::LifecycleFailureCode::Cleanup,
-            ));
-            self.attempt_cleanup.as_mut().ok_or(ParentError::WrongPhase)?.failed =
-                Some(AttemptCleanupFailure::Backend);
-            return Ok(());
-        }
-        if let Some(lease) = attempt.lease
-            && !resources.backend.attempt_released(lease)?
-        {
-            return Ok(());
-        }
-        let index = attempt.index;
         if let Some(resource) = attempt.resource
             && resources.backend.failure(resource).is_some()
             && self.settled_attempt_failures.iter().all(Option::is_some)
@@ -243,7 +246,27 @@ impl ParentLifecycle {
                     identity=?retained.identity,resource=?retained.resource,campaign_scope=?retained.campaign_scope,
                     "Original preparation cause retained after checked settlement");
         }
-        self.requests.get_mut(index)?.reply = Some(Reply::Acknowledged);
+        self.stage_settlement_reply(index)
+    }
+
+    /// Retire old semantic correlations only after the original actual settlement
+    /// ACK fully wrote. Ready metadata, cancellation or a queued ACK is insufficient.
+    pub(super) fn finish_attempt_write(&mut self, header: WireHeader, now: Moment) -> Result<()> {
+        if self.closed {
+            return Ok(());
+        }
+        let Some(attempt) = &self.attempt_cleanup else { return Ok(()) };
+        if self.requests.get(attempt.index)?.header != header {
+            return Ok(());
+        }
+        if self.expire_attempt(now)? {
+            return Ok(());
+        }
+        let attempt = self.attempt_cleanup.as_ref().ok_or(ParentError::WrongPhase)?;
+        if !attempt.ready || attempt.failed.is_some() || !self.requests.get(attempt.index)?.sent {
+            return Err(ParentError::WrongPhase.into());
+        }
+        self.requests.settle_abandoned(attempt.origin.request.ok_or(ParentError::WrongPhase)?);
         self.acquisition = None;
         self.lease = None;
         self.reset_output();

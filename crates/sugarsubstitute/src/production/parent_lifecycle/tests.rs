@@ -7,6 +7,8 @@ mod acquisition_lifetime;
 mod acquisition_progress;
 #[path = "tests/attempt_cleanup.rs"]
 mod attempt_cleanup;
+#[path = "tests/expiry_retirement.rs"]
+mod expiry_retirement;
 #[path = "tests/normal_close.rs"]
 mod normal_close;
 #[path = "tests/ownership.rs"]
@@ -26,6 +28,21 @@ use sugarsubstitute_supervision::lifecycle_protocol::{
 };
 
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
+
+/// Fake only native delivery facts through the actual original receipt/owner checks.
+fn complete_acquisition_write(
+    acquisition: &mut super::acquisition::Acquisition,
+    header: WireHeader,
+) -> Result<()> {
+    use super::acquisition::WriteObservation;
+    let mut receipt = super::write_receipt::WriteReceipt::new(7, 104);
+    acquisition.observe_write(header, WriteObservation::Queued)?;
+    receipt.issue(7)?;
+    acquisition.observe_write(header, WriteObservation::Issued)?;
+    receipt.complete(7, 104)?;
+    acquisition.observe_write(header, WriteObservation::Written)?;
+    Ok(())
+}
 #[test]
 fn pending_backend_failure_keeps_exact_observed_resource_without_granted_readiness() -> Result<()> {
     use sugarsubstitute_contracts::lifecycle::{

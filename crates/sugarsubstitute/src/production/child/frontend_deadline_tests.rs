@@ -10,7 +10,7 @@ use sugarsubstitute_application::startup::{SessionFailure, StartupSession};
 use sugarsubstitute_contracts::configuration::{
     ConnectionConfiguration, LoopbackOrigin, Presentation, ProfileId, StartupConfiguration, Theme,
 };
-struct Frozen(AtomicU64);
+pub(in crate::production::child) struct Frozen(pub(in crate::production::child) AtomicU64);
 impl Clock for Frozen {
     fn now(&self) -> Moment {
         Moment::from_nanos(self.0.load(Ordering::SeqCst))
@@ -25,7 +25,8 @@ impl CompletionWake for Wake {
         Ok(())
     }
 }
-fn child() -> Result<(ProductionChild, sugarsubstitute_execution::ExecutionOwner, Arc<Frozen>)> {
+pub(in crate::production::child) fn child()
+-> Result<(ProductionChild, sugarsubstitute_execution::ExecutionOwner, Arc<Frozen>)> {
     let run = RunKey {
         owner: CoordinatorKey {
             namespace: NamespaceId::new([7; 32]),
@@ -208,7 +209,10 @@ fn frontend_timeout_retry_preflight_rejects_unacknowledged_actual_cleanup_and_fo
     let original_event = c.take_startup_event()?.ok_or("Original timeout absent")?;
     let mut session = loading(&c)?;
     session.observe(original_event)?;
-    assert!(c.begin_attempt_cleanup().is_err());
+    c.begin_attempt_cleanup()?;
+    assert!(
+        matches!(c.take_command()?, Some(DesktopStartupCommand::ConfirmMainAbsent(id)) if id == c.identity)
+    );
     let original =
         c.attempt.as_ref().ok_or("Partial actual cleanup not retained")?.original_deadline();
     clock.0.store(original.as_nanos() + 1, Ordering::SeqCst);

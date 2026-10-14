@@ -7,12 +7,16 @@ mod acquisition;
 mod attempt;
 #[path = "parent_lifecycle/backend.rs"]
 mod backend;
+#[path = "parent_lifecycle/expiry.rs"]
+mod expiry;
 #[path = "parent_lifecycle/folders.rs"]
 mod folders;
 #[path = "parent_lifecycle/history.rs"]
 mod history;
 #[path = "parent_lifecycle/main.rs"]
 mod main;
+#[path = "parent_lifecycle/native_retirement.rs"]
+mod native_retirement;
 #[path = "parent_lifecycle/normal_close.rs"]
 mod normal_close;
 pub(crate) use normal_close::NormalCloseRequest;
@@ -235,6 +239,8 @@ impl ParentLifecycle {
         self.consume_profile(batch, resources)?;
         *step = "finish_main_retirement";
         self.finish_main_retirement(resources)?;
+        *step = "expire_acquisition";
+        self.expire_acquisition(resources.execution.client.now()?)?;
         while let Some(observation) = resources.session.control.take_observation() {
             *step = match &observation {
                 sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeObservation::Prepared => "observe_prepared",

@@ -37,6 +37,7 @@ impl ParentLifecycle {
             )?;
             return Ok(());
         }
+        self.expire_acquisition(resources.execution.client.now()?)?;
         if matches!(
             resources.target,
             sugarsubstitute_contracts::lifecycle::BackendTarget::Managed(_)
@@ -44,8 +45,10 @@ impl ParentLifecycle {
             && let Some(lease) = acquisition.progress()
         {
             let (header, original) = (acquisition.header, acquisition.original);
-            if resources.execution.client.now()? >= original {
-                return Err(sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeError::DeadlineExpired.into());
+            let now = resources.execution.client.now()?;
+            if now >= original {
+                self.expire_acquisition(now)?;
+                return Ok(());
             }
             self.begin_output_sequence(lease)?;
             if self.write_message(
@@ -62,7 +65,7 @@ impl ParentLifecycle {
             }
             return Ok(());
         }
-        let Some(index) = self.requests.next_reply() else {
+        let Some(index) = self.next_live_reply(resources.execution.client.now()?)? else {
             self.send_challenge(resources)?;
             return Ok(());
         };
@@ -70,7 +73,23 @@ impl ParentLifecycle {
         let record = self.requests.get(index)?;
         let header = record.header;
         let until = record.until.ok_or(ParentError::WrongPhase)?;
-        if resources.execution.client.now()? >= until {
+        let now = resources.execution.client.now()?;
+        if now >= until {
+            self.expire_acquisition(now)?;
+            if self.acquisition.as_ref().is_some_and(|acquisition| acquisition.retiring())
+                && self.requests.belongs_to(
+                    index,
+                    self.acquisition
+                        .as_ref()
+                        .ok_or(ParentError::WrongPhase)?
+                        .header
+                        .request
+                        .ok_or(ParentError::WrongPhase)?,
+                )?
+            {
+                self.requests.abandon(index)?;
+                return Ok(());
+            }
             return Err(sugarsubstitute_execution::windows_lifecycle_pipe::
                 LifecyclePipeError::DeadlineExpired.into());
         }

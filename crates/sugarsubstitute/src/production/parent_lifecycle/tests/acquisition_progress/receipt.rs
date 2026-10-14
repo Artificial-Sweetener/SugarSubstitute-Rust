@@ -3,7 +3,7 @@
 //! Inject native readiness/write/retirement facts only at pure policy boundaries; no capabilities.
 use super::*;
 use sugarsubstitute_application::supervision::MainAuthorizationObservation;
-fn unwritten_grant() -> Result<(ParentLifecycle, WireHeader, LeaseKey)> {
+pub(in super::super) fn unwritten_grant() -> Result<(ParentLifecycle, WireHeader, LeaseKey)> {
     let (mut parent, h, lease, mut coordinator) = pending()?;
     // These are external adapter-boundary facts for the pure coordinator. No kernel
     // handle, authenticated peer, readiness/source proof, frame or write admission exists.
@@ -40,7 +40,7 @@ fn unwritten_grant() -> Result<(ParentLifecycle, WireHeader, LeaseKey)> {
 fn immediate_grant_holds_receive_routing_until_checked_original_write_without_progress()
 -> Result<()> {
     let (mut parent, h, lease) = unwritten_grant()?;
-    assert!(parent.hold_acquisition_receive());
+    assert!(parent.hold_acquisition_receive().map_err(|e| e as Box<dyn Error>)?);
     assert!(
         parent
             .acquisition
@@ -50,11 +50,25 @@ fn immediate_grant_holds_receive_routing_until_checked_original_write_without_pr
             .is_err()
     );
     let mut receipt = super::super::super::write_receipt::WriteReceipt::new(8, 104);
+    parent
+        .acquisition
+        .as_mut()
+        .ok_or("Missing")?
+        .observe_write(h, super::super::super::acquisition::WriteObservation::Queued)?;
     assert!(receipt.complete(8, 104).is_err());
     receipt.issue(8)?;
+    parent
+        .acquisition
+        .as_mut()
+        .ok_or("Missing")?
+        .observe_write(h, super::super::super::acquisition::WriteObservation::Issued)?;
     receipt.complete(8, 104)?;
-    parent.acquisition.as_mut().ok_or("Missing")?.written(h)?;
-    assert!(!parent.hold_acquisition_receive());
+    parent
+        .acquisition
+        .as_mut()
+        .ok_or("Missing")?
+        .observe_write(h, super::super::super::acquisition::WriteObservation::Written)?;
+    assert!(!parent.hold_acquisition_receive().map_err(|e| e as Box<dyn Error>)?);
     assert_eq!(
         parent.acquisition.as_ref().ok_or("Missing")?.original,
         Moment::from_nanos(180_000_000_000)
@@ -65,7 +79,7 @@ fn immediate_grant_holds_receive_routing_until_checked_original_write_without_pr
 fn late_grant_cancellation_intention_waits_native_retirement_and_its_exact_checked_ack()
 -> Result<()> {
     let (mut parent, h, lease) = unwritten_grant()?;
-    parent.acquisition.as_mut().ok_or("Missing")?.written(h)?;
+    complete_acquisition_write(parent.acquisition.as_mut().ok_or("Missing")?, h)?;
     let until = Moment::from_nanos(20_000_000_000);
     let cleanup =
         WireHeader { request: Some(RequestId::new(4)?), deadline_qpc: 20_000_000_000, ..h };

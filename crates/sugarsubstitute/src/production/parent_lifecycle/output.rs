@@ -85,7 +85,7 @@ impl ParentLifecycle {
 
 /// Validate acknowledgement against the exact connection-bound lease, retaining consumed
 /// correlation across idle replies. Only the first matching ACK disposes a current native loan.
-fn acknowledge_delivery(
+pub(super) fn acknowledge_delivery(
     current: Option<(LeaseKey, NonZeroU64)>,
     consumed: Option<(LeaseKey, NonZeroU64)>,
     lease: LeaseKey,

@@ -9,6 +9,10 @@ use sugarsubstitute_contracts::{
 };
 use sugarsubstitute_supervision::lifecycle_protocol::WireHeader;
 
+#[path = "acquisition/write_state.rs"]
+mod write_state;
+pub(super) use write_state::WriteObservation;
+
 /// One original acquisition's copied correlation. Native lease, readiness, write and
 /// settlement authority remain with their actual owners; these facts manufacture none.
 pub(super) struct Acquisition {
@@ -21,6 +25,10 @@ pub(super) struct Acquisition {
     disposition: Option<Disposition>,
     sent: bool,
     progress: Progress,
+    final_write: write_state::OriginalWrite,
+    retiring: bool,
+    retirement: Option<(WireHeader, bool)>,
+    write_cutoff: Option<sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeError>,
 }
 #[derive(Clone, Copy, Eq, PartialEq)]
 enum Progress {
@@ -60,6 +68,10 @@ impl Acquisition {
             disposition: None,
             sent: false,
             progress: Progress::Unpublished,
+            final_write: write_state::OriginalWrite::new(),
+            retiring: false,
+            retirement: None,
+            write_cutoff: None,
         })
     }
     /// Retain only this original backend producer's outcome before fallible local routing.
@@ -99,11 +111,11 @@ impl Acquisition {
     }
     /// Retain incoming cancellation until the genuine final Grant write is checked.
     pub(super) fn awaiting_grant_write(&self) -> bool {
-        self.disposition == Some(Disposition::Granted) && !self.sent
+        self.disposition == Some(Disposition::Granted) && self.final_write.pending(self.retiring)
     }
     /// Borrow the authentic provisional source once; this is never a final disposition.
     pub(super) fn progress(&self) -> Option<LeaseKey> {
-        (self.progress == Progress::Unpublished && self.disposition.is_none())
+        (!self.retiring && self.progress == Progress::Unpublished && self.disposition.is_none())
             .then_some(self.lease)
             .flatten()
     }
@@ -178,18 +190,104 @@ impl Acquisition {
         Ok(())
     }
     /// Latch only the same final request after the actual write receipt completed.
-    pub(super) fn written(&mut self, header: WireHeader) -> Result<(), ParentError> {
-        if header.request != self.header.request {
-            return Ok(());
+    pub(super) fn observe_write(
+        &mut self,
+        header: WireHeader,
+        observation: WriteObservation,
+    ) -> Result<(), ParentError> {
+        if header.request == self.header.request {
+            if header != self.header {
+                return Err(ParentError::ForeignPeer);
+            }
+            if self.disposition.is_none() {
+                return Err(ParentError::WrongPhase);
+            }
+            if !self.final_write.written() {
+                self.final_write.observe(observation)?;
+            }
+            self.sent = self.final_write.written();
         }
-        if header != self.header {
-            return Err(ParentError::ForeignPeer);
+        if observation == WriteObservation::Written
+            && let Some((original, written)) = &mut self.retirement
+            && *original == header
+        {
+            *written = true;
         }
-        if self.disposition.is_none() {
+        Ok(())
+    }
+
+    /// Fence only an unfinished original acquisition at its unchanged cutoff.
+    /// A timely written Grant owns the running lease beyond acquisition expiry.
+    pub(super) fn expire(&mut self, now: Moment) -> bool {
+        if now < self.original
+            || (!self.retiring && self.disposition == Some(Disposition::Granted) && self.sent)
+        {
+            return false;
+        }
+        self.retiring = true;
+        self.final_write.withdraw_unqueued();
+        true
+    }
+
+    /// Closed semantic retirement does not dispose any native write or source loan.
+    pub(super) const fn retiring(&self) -> bool {
+        self.retiring
+    }
+
+    /// Retained queue/issue custody prevents classifying another operation as no-issue.
+    pub(super) fn write_active(&self) -> bool {
+        self.progress == Progress::Queued || !self.final_write.closed()
+    }
+
+    /// Retain the exact first direct rejection of an original never-issued write.
+    /// Actual returned allocation/correlation is validated by the containing sender.
+    pub(super) fn retain_write_cutoff(
+        &mut self,
+        cause: sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeError,
+    ) -> Result<(), ParentError> {
+        if !self.retiring || cause != sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeError::DeadlineExpired {
             return Err(ParentError::WrongPhase);
         }
-        self.sent = true;
+        self.write_cutoff.get_or_insert(cause);
         Ok(())
+    }
+
+    /// Borrow the original direct cutoff cause; no global failure is inferred.
+    #[cfg(test)]
+    pub(super) const fn write_cutoff(
+        &self,
+    ) -> Option<sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeError> {
+        self.write_cutoff
+    }
+
+    /// Retain a genuine native negative/retired observation under this exact attempt.
+    /// The caller authenticates its creating-thread producer and channel before this call.
+    pub(super) fn observe_retirement(
+        &mut self,
+        binding: ClientBinding,
+        identity: MainIdentity,
+        header: WireHeader,
+    ) -> Result<(), ParentError> {
+        if binding.run != self.header.run
+            || Some(binding.connection) != self.header.connection
+            || header.run != binding.run
+            || header.connection != Some(binding.connection)
+            || identity != self.identity
+            || header.request.is_none()
+            || header.request == self.header.request
+        {
+            return Err(ParentError::ForeignPeer);
+        }
+        if self.retirement.is_some_and(|(old, _)| old != header) {
+            return Err(ParentError::ChangedDuplicate);
+        }
+        self.retirement.get_or_insert((header, false));
+        Ok(())
+    }
+
+    /// Only a checked original native-retirement ACK permits expired semantic cleanup.
+    pub(super) fn retirement_written(&self) -> bool {
+        self.retirement.is_some_and(|(_, written)| written)
     }
     /// Match the exact original request and current attempt without replaying its effects.
     /// Completed acquisition expiry never renews the original or cleanup budget.
@@ -213,12 +311,17 @@ impl Acquisition {
         {
             return Err(ParentError::ForeignPeer);
         }
+        let old_main_retired = main_identity
+            .is_none_or(|old| old.run == identity.run && old.launch.get() < identity.launch.get());
         let provisional = self.disposition != Some(Disposition::Granted)
             && self.progress == Progress::Written
             && self.lease.is_some()
             && current_lease.is_none()
-            && main_identity.is_none();
-        if (!self.sent || self.disposition.is_none()) && !provisional
+            && old_main_retired;
+        let retired_original = self.retiring && self.retirement_written();
+        if ((!self.sent || self.disposition.is_none()) && !provisional && !retired_original)
+            || (self.retiring && !self.retirement_written())
+            || !self.final_write.closed()
             || (self.disposition == Some(Disposition::Granted)
                 && (current_lease != self.lease || main_identity != Some(self.identity)))
             || (self.lease.is_none()
@@ -247,6 +350,7 @@ impl Acquisition {
             return Err(ParentError::ForeignPeer);
         }
         self.identity = identity;
+        self.retirement = None;
         Ok(())
     }
 }

@@ -60,11 +60,13 @@ impl ChildChannel {
         }
         let now =
             self.client.as_ref().ok_or("Original lifecycle execution client missing")?.now()?;
-        self.requests.as_ref().ok_or("Original request ledger missing")?.outbound(
-            message.header,
-            original,
-            now,
-        )?;
+        let ledger = self.requests.as_ref().ok_or("Original request ledger missing")?;
+        if let Err(cause) = ledger.outbound(message.header, original, now) {
+            return Err(match ledger.expiry(message.header, cause) {
+                Ok(expiry) => Box::new(expiry),
+                Err(cause) => Box::new(cause),
+            });
+        }
         let accepted = Self::admit_write(
             self.session.as_ref().ok_or("Lifecycle application session missing")?,
             &mut self.latest,
@@ -122,10 +124,13 @@ impl ChildChannel {
                     .as_ref()
                     .ok_or("Original lifecycle execution client missing")?
                     .now()?;
-                self.requests
-                    .as_mut()
-                    .ok_or("Original request ledger missing")?
-                    .received(frame.header, now)?;
+                let ledger = self.requests.as_mut().ok_or("Original request ledger missing")?;
+                if let Err(cause) = ledger.received_or_retiring(frame.header, now) {
+                    return Err(match ledger.expiry(frame.header, cause) {
+                        Ok(expiry) => Box::new(expiry),
+                        Err(cause) => Box::new(cause),
+                    });
+                }
                 if self.ui.as_ref().is_some_and(|ui| ui.matches_reply(frame.header)) {
                     let sugarsubstitute_supervision::lifecycle_protocol::DecodedPayload::Reply(
                         outcome,

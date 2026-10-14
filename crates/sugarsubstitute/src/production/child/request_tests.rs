@@ -23,7 +23,12 @@ fn binding() -> Result<WireHandshake, Box<dyn Error>> {
     Ok(WireHandshake::new(run, CounterDeadline::new(500, 100)?))
 }
 fn requests() -> Result<ClientRequests, Box<dyn Error>> {
-    let mut binding = binding()?;
+    requests_for_run(binding()?.run())
+}
+pub(in crate::production::child) fn requests_for_run(
+    run: RunKey,
+) -> Result<ClientRequests, Box<dyn Error>> {
+    let mut binding = WireHandshake::new(run, CounterDeadline::new(500, 100)?);
     binding.hello_admitted()?;
     let header = WireHeader {
         run: binding.run(),
@@ -324,3 +329,6 @@ fn progress_cannot_resume_foreign_nonacquire_expired_or_consumed_requests() -> T
     assert_eq!(requests.progress(h, Moment::from_nanos(21)), Err(RequestError::Identity));
     Ok(())
 }
+
+#[path = "requests/retirement_tests.rs"]
+mod retirement_tests;

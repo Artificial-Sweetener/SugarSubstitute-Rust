@@ -404,3 +404,50 @@ fn non_unicode_managed_script_root_keeps_original_units_on_projection_rejection(
     assert_eq!(path_view(&root)?.units().collect::<Vec<_>>(), units);
     Ok(())
 }
+
+#[test]
+fn acquisition_retry_failed_main_input_transfer_preserves_both_original_claims_and_slots()
+-> TestResult {
+    let rig = Rig::new()?;
+    let original = Moment::from_nanos(100);
+    let mut job =
+        rig.client.submit_blocking(&rig.scope, request(JobId::new(1)?, original), |context| {
+            let current = main_input(&context)?;
+            let donor = main_input(&context)?;
+            let allocation = context.memory().claim(PROJECTION_BYTES)?;
+            let configuration = StartupConfiguration::new(
+                ConnectionConfiguration::Attach(LoopbackOrigin::parse(
+                    "http://127.0.0.1:8188",
+                    8188,
+                )?),
+                ProfileId::new("Profile_1".into())?,
+                Presentation::new("ja", Theme::Light, true)?,
+            );
+            Ok::<_, Box<dyn Error + Send + Sync>>((
+                PreparedChildConfiguration {
+                    configuration,
+                    main: current,
+                    source: None,
+                    _allocation: allocation,
+                },
+                Some(donor),
+            ))
+        })?;
+    let completion = rig.completion(&mut job)?;
+    let JobOutcome::Success((configuration, mut donor)) = completion.outcome else {
+        return Err("Actual owned input construction failed".into());
+    };
+    let mut current = configuration.into_startup((LaunchId::new(1)?, Generation::new(1)?));
+    let before = rig.scope.snapshot().reserved_bytes;
+    assert!(current.restore_main_input(&mut donor).is_err());
+    assert!(current.main.is_some() && donor.is_some());
+    assert_eq!(current.session.launch(), LaunchId::new(1)?);
+    assert_eq!(rig.scope.snapshot().reserved_bytes, before);
+    assert_eq!(job.spec().deadline, Some(original));
+    let held = current.take_main_input();
+    current.restore_main_input(&mut donor).map_err(|e| e.to_string())?;
+    assert!(current.main.is_some() && donor.is_none() && held.is_some());
+    drop((current, held, job, completion.memory, rig.owner));
+    assert_eq!(rig.scope.snapshot().reserved_bytes, 0);
+    Ok(())
+}

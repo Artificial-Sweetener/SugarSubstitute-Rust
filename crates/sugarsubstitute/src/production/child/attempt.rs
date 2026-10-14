@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Keep authenticated startup failure and attempt cleanup separate from process shutdown.
+#[path = "attempt/local.rs"]
+mod local;
+#[path = "attempt/retry.rs"]
+mod retry;
+use local::LocalAttemptRetirement;
 #[path = "attempt/reply.rs"]
 mod reply;
 use super::*;
@@ -34,6 +39,7 @@ pub(super) struct AttemptCleanup {
     original: Moment,
     pending: Option<(WireHeader, bool)>,
     acknowledged: bool,
+    local: Option<LocalAttemptRetirement>,
     settled: bool,
     failures: [Option<Box<dyn Error>>; 2],
     omitted_failures: u64,
@@ -43,8 +49,16 @@ impl AttemptCleanup {
     pub(super) fn original_deadline(&self) -> Moment {
         self.original
     }
+    #[cfg(test)]
+    pub(super) fn remote_state(&self) -> (bool, bool, bool) {
+        (self.acknowledged, self.settled, self.pending.is_some())
+    }
+    pub(super) fn complete(&self) -> bool {
+        (self.acknowledged && self.settled)
+            || self.local.as_ref().is_some_and(LocalAttemptRetirement::complete)
+    }
     pub(super) fn deadline(&self) -> Option<Moment> {
-        if self.settled || self.failures.iter().any(Option::is_some) {
+        if self.complete() || self.failures.iter().any(Option::is_some) {
             None
         } else {
             Some(self.original)
@@ -82,6 +96,7 @@ impl ProductionChild {
         let original = self.client()?.now()?.checked_add(Duration::from_secs(15))?;
         self.main.close();
         self.output.close();
+        self.fence_acquisition_retirement()?;
         if self.main.profile().is_some() && !self.shutdown.main_retired {
             let slot = self
                 .commands
@@ -101,6 +116,7 @@ impl ProductionChild {
             original,
             pending: None,
             acknowledged: false,
+            local: None,
             settled: false,
             failures: [None, None],
             omitted_failures: 0,
@@ -110,7 +126,7 @@ impl ProductionChild {
     /// Observe each actual finite owner before requesting the matching backend settlement.
     pub(super) fn advance_attempt(&mut self) -> Result<()> {
         let Some(attempt) = &self.attempt else { return Ok(()) };
-        if attempt.settled || attempt.failures.iter().any(Option::is_some) {
+        if attempt.complete() || attempt.failures.iter().any(Option::is_some) {
             return Ok(());
         }
         if self.client()?.now()? >= attempt.original {
@@ -120,19 +136,28 @@ impl ProductionChild {
             )
             .into());
         }
-        if self.main.pending() || self.output.pending() {
+        if self.main.pending()
+            || self.output.physical_pending()
+            || self.bootstrap.channel_mut().writes_pending()
+        {
             return Ok(());
         }
         self.main.release_frame()?;
-        self.output.release_frame()?;
+        if self.output.pending.is_none() {
+            self.output.release_frame()?;
+        }
+        if self.begin_local_retirement()? {
+            return self.advance_local_retirement();
+        }
         if let Some(header) = self.grant_header
             && !self.main.request_consumed
+            && self.acquire.is_none_or(|p| !p.retiring)
         {
             self.bootstrap.channel_mut().consume_reply(header)?;
             self.main.request_consumed = true;
             self.grant = None;
         }
-        if self.grant_header.is_some()
+        if self.acquisition_header.is_some()
             && self.main.profile().is_none()
             && !self.shutdown.main_retired
             && !self.shutdown.main_absence_pending
@@ -190,13 +215,31 @@ impl ProductionChild {
                 return self.retain_attempt_failure(Box::new(cause));
             }
         }
-        if self.acquire.is_some() {
-            return Err("Original acquisition final reply remains unsettled".into());
+        let acquisition = self.acquire.filter(|p| p.retiring && p.admitted).map(|p| p.header);
+        if self.acquire.is_some() && acquisition.is_none() {
+            return Err("Original acquisition lacks retirement admission".into());
+        }
+        let output = self.output.pending.map(|p| p.0);
+        if acquisition.is_some()
+            && (!self.shutdown.main_retired || !self.shutdown.main_retirement_ack)
+        {
+            return Err("Original acquisition lacks genuine native retirement ACK".into());
         }
         if self.events.iter().all(Option::is_some) {
             return Err("Settlement event slots full".into());
         }
-        self.bootstrap.channel_mut().consume_reply(header)?;
+        if acquisition.is_some() || output.is_some() {
+            self.bootstrap.channel_mut().settle_requests(
+                header,
+                self.failed_frame.as_ref().ok_or("Original settlement ACK missing")?,
+                acquisition,
+                output,
+            )?;
+            self.finish_settled_output()?;
+            self.acquire = None;
+        } else {
+            self.bootstrap.channel_mut().consume_reply(header)?;
+        }
         self.failed_frame = None;
         let attempt = self.attempt.as_mut().ok_or("Attempt cleanup absent")?;
         attempt.acknowledged = true;
@@ -219,55 +262,6 @@ impl ProductionChild {
         }
         Ok(())
     }
-    /// Inspect retained failure presentation only; this cannot establish settlement.
-    pub(in crate::production) fn cleanup_failed(&self) -> bool {
-        self.attempt.as_ref().is_some_and(|attempt| attempt.failures.iter().any(Option::is_some))
-    }
-    /// Reject foreign or unsettled custody before the application replaces its old failure.
-    /// This reads the same actual retained transaction; it grants no physical retirement.
-    pub(in crate::production) fn ensure_retry_ready(&self, identity: MainIdentity) -> Result<()> {
-        if identity.run != self.run
-            || identity.launch.get() <= self.identity.launch.get()
-            || self.attempt.as_ref().is_none_or(|a| !a.acknowledged || !a.settled)
-            || self.main.pending()
-            || self.output.pending()
-        {
-            return Err("Retry requires the exact original attempt settlement".into());
-        }
-        if self.failure.is_some() {
-            return Err("Unresolved original child infrastructure cause prevents retry".into());
-        }
-        Ok(())
-    }
-    /// Replace only a settled acquisition attempt without replacing capture or channel.
-    pub(in crate::production) fn retry_attempt(
-        &mut self,
-        identity: MainIdentity,
-        prepared: &mut PreparedChildStartup,
-    ) -> Result<()> {
-        self.ensure_retry_ready(identity)?;
-        let mut input = self.main.take_reusable_input()?;
-        if let Err(cause) = prepared.restore_main_input(&mut input) {
-            self.main.restore_reusable_input(&mut input)?;
-            return Err(cause);
-        }
-        self.failed = false;
-        self.identity = identity;
-        self.connection_budget = None;
-        self.frontend_budget = None;
-        self.frontend_timed_out = false;
-        self.acquire = None;
-        self.acquisition_header = None;
-        self.attempt = None;
-        self.grant_header = None;
-        self.shutdown.main_retired = false;
-        self.shutdown.main_retirement_ack = false;
-        self.shutdown.main_absence_pending = false;
-        self.main = main::MainPreparation::new(self.main.settings);
-        self.output = output::ChildOutput::new();
-        self.snapshot = None;
-        Ok(())
-    }
 }
 
 #[cfg(test)]
@@ -283,6 +277,7 @@ mod tests {
             original,
             pending: None,
             acknowledged: false,
+            local: None,
             settled: false,
             failures: [
                 Some(Box::new(std::io::Error::other("actual initiating boundary failure"))),
@@ -342,6 +337,7 @@ mod tests {
             original,
             pending: None,
             acknowledged: false,
+            local: None,
             settled: false,
             failures: [None, None],
             omitted_failures: 0,

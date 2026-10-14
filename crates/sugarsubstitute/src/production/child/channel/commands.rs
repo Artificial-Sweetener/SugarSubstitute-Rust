@@ -115,13 +115,27 @@ impl ChildChannel {
         let bytes = FrameCodec::encode(message, buffer.as_mut_bytes())?;
         match session.control.write(operation, original, buffer, bytes) {
             Ok(admission) => {
-                drop(admission);
                 *latest = next;
-                *pending = Some(PendingWrite::new(operation, bytes));
+                *pending =
+                    Some(PendingWrite::new(operation, bytes, message.header, original, admission));
                 Ok(true)
             }
-            Err(rejected) => {
+            Err(mut rejected) => {
                 let error = rejected.error;
+                if error == LifecyclePipeError::DeadlineExpired {
+                    let extent = rejected
+                        .buffer
+                        .as_mut_bytes()
+                        .get(..bytes)
+                        .ok_or("Original rejected write extent changed")?;
+                    let projected =
+                        expiry::NativeWriteExpiry::from_returned(message, original, error, extent);
+                    drop(rejected.buffer);
+                    return Err(match projected {
+                        Ok(cause) => Box::new(cause),
+                        Err(cause) => cause,
+                    });
+                }
                 drop(rejected.buffer);
                 if error == LifecyclePipeError::Busy { Ok(false) } else { Err(Box::new(error)) }
             }

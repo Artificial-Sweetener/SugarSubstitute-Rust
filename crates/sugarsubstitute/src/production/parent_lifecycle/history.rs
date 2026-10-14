@@ -21,6 +21,8 @@ pub(super) struct Record {
     backend_lease: Option<LeaseKey>,
     pub(super) sent: bool,
     abandoned: bool,
+    acquisition: Option<RequestId>,
+    retired: bool,
     pub(super) until: Option<sugarsubstitute_contracts::execution::Moment>,
     pub(super) output_bytes: Box<[u8]>,
 }
@@ -92,7 +94,7 @@ impl Requests {
                 .filter_map(|(index, record)| {
                     record
                         .as_ref()
-                        .filter(|record| record.sent)
+                        .filter(|record| record.sent || record.retired)
                         .map(|record| (index, record.header.request.map_or(0, RequestId::get)))
                 })
                 .min_by_key(|(_, id)| *id)
@@ -114,6 +116,8 @@ impl Requests {
             backend_lease: None,
             sent: false,
             abandoned: false,
+            acquisition: None,
+            retired: false,
             until: None,
             output_bytes: output_bytes.into_boxed_slice(),
         });
@@ -197,6 +201,39 @@ impl Requests {
     pub(super) fn abandon(&mut self, index: usize) -> Result<(), ParentError> {
         self.get_mut(index)?.abandoned = true;
         Ok(())
+    }
+
+    /// Correlate an ordinary acquire/output operation before any expiry fencing.
+    pub(super) fn acquisition(
+        &mut self,
+        index: usize,
+        original: RequestId,
+    ) -> Result<(), ParentError> {
+        let record = self.get_mut(index)?;
+        if record.acquisition.is_some_and(|old| old != original) {
+            return Err(ParentError::ChangedDuplicate);
+        }
+        record.acquisition = Some(original);
+        Ok(())
+    }
+
+    /// Borrow only the immutable acquisition association; this is no settlement fact.
+    pub(super) fn belongs_to(
+        &self,
+        index: usize,
+        original: RequestId,
+    ) -> Result<bool, ParentError> {
+        Ok(self.get(index)?.acquisition == Some(original))
+    }
+
+    /// Called only after the genuine settlement ACK write. Expired old requests become
+    /// replay-evictable without falsely marking their ordinary replies as written.
+    pub(super) fn settle_abandoned(&mut self, original: RequestId) {
+        for record in self.records.iter_mut().flatten() {
+            if record.acquisition == Some(original) && record.abandoned {
+                record.retired = true;
+            }
+        }
     }
 
     pub(super) fn next_reply(&self) -> Option<usize> {

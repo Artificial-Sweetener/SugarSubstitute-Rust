@@ -69,7 +69,7 @@ fn granted() -> Result<ParentLifecycle> {
     acquisition.reply(h, reply)?;
     // The native writer completion is an external boundary fact. This fixture creates
     // no peer, write admission, frame loan, readiness proof or backend release witness.
-    acquisition.written(h)?;
+    complete_acquisition_write(&mut acquisition, h)?;
     parent.requests.get_mut(index)?.reply = Some(reply);
     parent.requests.get_mut(index)?.sent = true;
     parent.acquisition = Some(acquisition);
@@ -190,9 +190,12 @@ fn cleanup_requires_original_checked_write_and_exact_counter_binding() -> Result
             .is_err()
     );
     let wrong = WireHeader { deadline_qpc: 180_000_000_001, ..acquisition_header()? };
-    assert_eq!(retained.written(wrong), Err(ParentError::ForeignPeer));
+    assert_eq!(
+        retained.observe_write(wrong, super::super::acquisition::WriteObservation::Written),
+        Err(ParentError::ForeignPeer)
+    );
     let foreign = ClientBinding { connection: ConnectionId::new(2)?, ..binding()? };
-    retained.written(acquisition_header()?)?;
+    complete_acquisition_write(&mut retained, acquisition_header()?)?;
     assert!(
         retained
             .settlement_lease(
@@ -231,7 +234,7 @@ fn cleanup_requires_original_checked_write_and_exact_counter_binding() -> Result
     let mut successor = Acquisition::new(binding()?, next_header, next_identity, moment(400))?;
     successor.observe_backend(next_header, RequestOutcome::Granted(next_lease))?;
     successor.reply(next_header, Reply::Granted { lease: next_lease, identity: next_identity })?;
-    successor.written(next_header)?;
+    complete_acquisition_write(&mut successor, next_header)?;
     assert_eq!(
         successor.settlement_lease(
             binding()?,
@@ -329,7 +332,7 @@ fn no_lease_denial_survives_replay_eviction_without_inventing_backend_retirement
     let h = acquisition_header()?;
     let mut retained = Acquisition::new(binding()?, h, identity()?, moment(180))?;
     retained.reply(h, Reply::Rejected(LifecycleRejection::WrongPhase))?;
-    retained.written(h)?;
+    complete_acquisition_write(&mut retained, h)?;
     parent.acquisition = Some(retained);
     let (index, _) = parent.requests.admit(h, b"original acquisition boundary bytes")?;
     parent.requests.get_mut(index)?.reply = Some(Reply::Rejected(LifecycleRejection::WrongPhase));
@@ -362,7 +365,7 @@ fn changed_producer_lease_and_final_denial_preserve_first_original() -> Result<(
         retained.reply(h, Reply::Rejected(LifecycleRejection::WrongPhase)),
         Err(ParentError::ChangedDuplicate)
     );
-    retained.written(h)?;
+    complete_acquisition_write(&mut retained, h)?;
     assert_eq!(
         retained.settlement_lease(binding()?, identity()?, RequestId::new(3)?, None, None)?,
         Some(lease()?)

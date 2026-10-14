@@ -10,8 +10,12 @@ use sugarsubstitute_contracts::{
 };
 use sugarsubstitute_supervision::lifecycle_protocol::{FrameCodec, WireMessage, WirePayload};
 
-fn pending() -> Result<(ParentLifecycle, WireHeader, LeaseKey, ResourceCoordinator)> {
-    let id = identity()?;
+pub(super) fn pending() -> Result<(ParentLifecycle, WireHeader, LeaseKey, ResourceCoordinator)> {
+    pending_for(identity()?)
+}
+pub(super) fn pending_for(
+    id: MainIdentity,
+) -> Result<(ParentLifecycle, WireHeader, LeaseKey, ResourceCoordinator)> {
     let binding = ClientBinding { run: id.run, connection: ConnectionId::new(1)? };
     let mut coordinator = ResourceCoordinator::new(id.run.owner);
     coordinator.register_run(ClientRegistration {
@@ -39,7 +43,7 @@ fn pending() -> Result<(ParentLifecycle, WireHeader, LeaseKey, ResourceCoordinat
     let RequestOutcome::Pending(lease) = reply.outcome else {
         return Err("Reservation not Pending".into());
     };
-    let h = WireHeader { deadline_qpc: 180_000_000_000, ..header(3)? };
+    let h = WireHeader { run: id.run, deadline_qpc: 180_000_000_000, ..header(3)? };
     let storage = crate::production::coordinator_backend::tests::storage_tests::claim(
         ParentLifecycle::storage_bytes(),
     )
@@ -56,6 +60,7 @@ fn pending() -> Result<(ParentLifecycle, WireHeader, LeaseKey, ResourceCoordinat
         storage,
     )?;
     let (index, _) = parent.requests.admit(h, b"original pending acquisition")?;
+    parent.requests.acquisition(index, h.request.ok_or("Origin absent")?)?;
     parent.requests.get_mut(index)?.until = Some(Moment::from_nanos(180_000_000_000));
     parent.requests.observe_backend(index, reply.outcome)?;
     let mut acquisition = Acquisition::new(binding, h, id, Moment::from_nanos(180_000_000_000))?;
@@ -63,12 +68,12 @@ fn pending() -> Result<(ParentLifecycle, WireHeader, LeaseKey, ResourceCoordinat
     parent.acquisition = Some(acquisition);
     Ok((parent, h, lease, coordinator))
 }
-fn copied_binding(lease: LeaseKey) -> ClientBinding {
+pub(super) fn copied_binding(lease: LeaseKey) -> ClientBinding {
     ClientBinding { run: lease.run, connection: lease.connection }
 }
 /// External issue/completion facts traverse the actual scalar receipt validator.
 /// This creates no native write admission, peer, frame, readiness or release witness.
-fn complete_progress(parent: &mut ParentLifecycle, h: WireHeader) -> Result<()> {
+pub(super) fn complete_progress(parent: &mut ParentLifecycle, h: WireHeader) -> Result<()> {
     parent.acquisition.as_mut().ok_or("Acquisition absent")?.progress_queued(h)?;
     let mut receipt = super::super::write_receipt::WriteReceipt::new(7, 129);
     assert!(receipt.complete(7, 129).is_err());
@@ -247,4 +252,4 @@ fn original_pending_settlement_requires_written_progress_and_exact_attempt() -> 
 mod failure;
 
 #[path = "acquisition_progress/receipt.rs"]
-mod receipt;
+pub(super) mod receipt;

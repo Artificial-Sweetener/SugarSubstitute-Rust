@@ -70,6 +70,24 @@ impl ParentLifecycle {
             self.requests.get_mut(index)?.sent = false;
             return Ok(());
         }
+        if let DecodedPayload::OutputPull { lease, acknowledged_delivery } = decoded.payload {
+            let supplied = resources.execution.client.decode_counter_deadline(
+                sugarsubstitute_contracts::execution::CounterDeadline::new(
+                    header.deadline_qpc,
+                    self.original.frequency(),
+                )?,
+            )?;
+            if self.retire_expired_output(
+                index,
+                self.request_binding(header)?,
+                lease,
+                acknowledged_delivery,
+                supplied,
+                resources.execution.client.now()?,
+            )? {
+                return Ok(());
+            }
+        }
         let mut until = if matches!(decoded.payload, DecodedPayload::UiResponse(_)) {
             resources.execution.client.decode_counter_deadline(
                 sugarsubstitute_contracts::execution::CounterDeadline::new(
@@ -131,6 +149,7 @@ impl ParentLifecycle {
                     return Err(ParentError::ForeignPeer.into());
                 }
                 self.requests.get_mut(index)?.identity = Some(identity);
+                self.requests.acquisition(index, request)?;
                 self.acquisition =
                     Some(super::acquisition::Acquisition::new(binding, header, identity, until)?);
                 self.backend_request(
@@ -229,21 +248,7 @@ impl ParentLifecycle {
                 self.profile_effect(index, effect, until, resources)?;
             }
             DecodedPayload::MainRetired(identity) => {
-                if let Some(attempt) = &mut self.attempt_cleanup {
-                    attempt.observe_retirement(identity, header)?;
-                }
-                self.main.retire(identity)?;
-                resources.profile.retire_main_attempt(identity)?;
-                self.main.accept(
-                    binding,
-                    request,
-                    Main::MainRetired { identity },
-                    resources.execution.client.now()?,
-                )?;
-                self.environment = None;
-                self.browser = None;
-                self.main_retirement = Some((index, identity));
-                self.finish_main_retirement(resources)?;
+                self.native_main_retired(index, identity, resources)?;
             }
             DecodedPayload::NativeActivity { revision, activity } => {
                 if revision.get() <= self.activity_revision {
@@ -284,6 +289,14 @@ impl ParentLifecycle {
                 self.close_after_reply = Some(index);
             }
             DecodedPayload::OutputPull { lease, acknowledged_delivery } => {
+                let original = self
+                    .acquisition
+                    .as_ref()
+                    .ok_or(ParentError::WrongPhase)?
+                    .header
+                    .request
+                    .ok_or(ParentError::WrongPhase)?;
+                self.requests.acquisition(index, original)?;
                 self.output_pull(index, lease, acknowledged_delivery, resources)?;
             }
             DecodedPayload::MainFailed(failure) => {

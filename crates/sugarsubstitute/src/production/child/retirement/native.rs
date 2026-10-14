@@ -27,6 +27,10 @@ impl ProductionChild {
                 let construction_pending = self.main_construction_pending();
                 let closing_profile = (self.attempt.is_some() || self.shutdown.closing())
                     && self.main.profile().is_some();
+                if self.record_local_main_absence(observed, construction_pending)? {
+                    self.observation = None;
+                    return self.advance_attempt();
+                }
                 self.shutdown.record_main_absence(
                     self.identity,
                     observed,

@@ -77,9 +77,20 @@ impl ChildChannel {
                 PendingWrite::written(self.write.as_ref(), operation, bytes)?;
                 self.write = None;
             }
-            LifecyclePipeObservation::WriteRevoked { operation: _, buffer } => {
-                drop(buffer);
-                return Err("Production lifecycle observed an unrequested write revocation".into());
+            LifecyclePipeObservation::WriteRevoked { operation, buffer } => {
+                let Some(write) = &mut self.write else {
+                    drop(buffer);
+                    return Err("Native write return has no original admitted owner".into());
+                };
+                write.revoked(operation, buffer)?;
+                let header = write.header();
+                self.requests
+                    .as_mut()
+                    .ok_or("Original ledger absent for revoked write")?
+                    .revoked_retiring(header)?;
+                if write.returned_acquisition()?.is_none() {
+                    self.write = None;
+                }
             }
             LifecyclePipeObservation::Received { operation, frame } => {
                 PendingRead::validate(self.read.as_ref(), operation)?;

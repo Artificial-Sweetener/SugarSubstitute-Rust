@@ -2,7 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Observe actual issue/byte-count/terminal facts before releasing request records.
 use super::types::{PendingWrite, WritePurpose};
-use super::{ParentError, ParentLifecycle, ParentResources, Result};
+use super::{ParentError, ParentLifecycle, ParentResources, Reply, Result};
+use sha2::{Digest, Sha256};
 use sugarsubstitute_application::supervision::UiWatchdog;
 use sugarsubstitute_contracts::{
     execution::{CompletionBatch, CounterDeadline, JobOutcome, Moment},
@@ -14,6 +15,9 @@ use sugarsubstitute_execution::windows_lifecycle_pipe::{
 use sugarsubstitute_supervision::lifecycle_protocol::{
     FrameCodec, WireHeader, WireMessage, WirePayload,
 };
+
+#[path = "transport/expiry.rs"]
+mod expiry;
 
 impl ParentLifecycle {
     pub(super) fn observe(
@@ -81,7 +85,29 @@ impl ParentLifecycle {
                     return Ok(());
                 }
                 match write.purpose {
-                    WritePurpose::Reply(index) => self.authorization_issued(index, resources)?,
+                    WritePurpose::Reply(index) => {
+                        if let Some(acquisition) = &mut self.acquisition {
+                            acquisition.observe_write(
+                                self.requests.get(index)?.header,
+                                super::acquisition::WriteObservation::Issued,
+                            )?;
+                        }
+                        if let Err(cause) = self.authorization_issued(index, resources) {
+                            let record = self.requests.get(index).ok();
+                            let reply_kind = match record.and_then(|record| record.reply) {
+                                Some(Reply::Environment(_)) => "Environment",
+                                Some(Reply::Browser { .. }) => "Browser",
+                                Some(_) => "Ordinary",
+                                None => "Unknown",
+                            };
+                            tracing::error!(operation="parent_issued_authorization_failed",
+                                native_operation=operation.get(),at=?at,reply_kind,
+                                request=?record.and_then(|record| record.header.request),
+                                deadline_qpc=record.map(|record| record.header.deadline_qpc),
+                                "Actual issued reply authorization rejected; original cause retained");
+                            return Err(cause);
+                        }
+                    }
                     WritePurpose::Challenge(challenge) => {
                         self.challenge_issued(
                             challenge,
@@ -100,12 +126,19 @@ impl ParentLifecycle {
                     WritePurpose::Welcome => self.welcome = true,
                     WritePurpose::Reply(index) => {
                         if let Some(acquisition) = &mut self.acquisition {
-                            acquisition.written(self.requests.get(index)?.header)?;
+                            acquisition.observe_write(
+                                self.requests.get(index)?.header,
+                                super::acquisition::WriteObservation::Written,
+                            )?;
                         }
                         if let Some(attempt) = &mut self.attempt_cleanup {
                             attempt.retirement_written(self.requests.get(index)?.header);
                         }
                         self.requests.get_mut(index)?.sent = true;
+                        self.finish_attempt_write(
+                            self.requests.get(index)?.header,
+                            resources.execution.client.now()?,
+                        )?;
                         if self.close_after_reply == Some(index) {
                             self.closed = true;
                             resources.session.control.close();
@@ -140,6 +173,17 @@ impl ParentLifecycle {
                         .as_mut()
                         .ok_or(ParentError::WrongPhase)?
                         .progress_finished(header, false)?;
+                }
+                if let WritePurpose::Reply(index) =
+                    self.write.as_ref().ok_or(ParentError::WrongPhase)?.purpose
+                {
+                    if let Some(acquisition) = &mut self.acquisition {
+                        acquisition.observe_write(
+                            self.requests.get(index)?.header,
+                            super::acquisition::WriteObservation::Revoked,
+                        )?;
+                    }
+                    self.requests.abandon(index)?;
                 }
                 drop(buffer);
                 self.write = None;
@@ -176,12 +220,16 @@ impl ParentLifecycle {
     pub(super) fn queue_encoded(
         &mut self,
         resources: &ParentResources<'_, '_>,
-        buffer: sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeWriteBuffer,
+        mut buffer: sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeWriteBuffer,
         bytes: usize,
         until: Moment,
         purpose: WritePurpose,
     ) -> Result<bool> {
         let next = self.next_operation()?;
+        let encoded: [u8; 32] = Sha256::digest(
+            buffer.as_mut_bytes().get(..bytes).ok_or(LifecyclePipeError::InvalidMessage)?,
+        )
+        .into();
         let control = &resources.session.control;
         match control.write(LifecyclePipeOperationId::new(next)?, until, buffer, bytes) {
             Ok(admission) => {
@@ -191,13 +239,51 @@ impl ParentLifecycle {
                     admission,
                     purpose,
                 });
+                if let WritePurpose::Reply(index) =
+                    self.write.as_ref().ok_or(ParentError::WrongPhase)?.purpose
+                    && let Some(acquisition) = &mut self.acquisition
+                {
+                    acquisition.observe_write(
+                        self.requests.get(index)?.header,
+                        super::acquisition::WriteObservation::Queued,
+                    )?;
+                }
                 Ok(true)
             }
             Err(rejection) if rejection.error == LifecyclePipeError::Busy => {
                 drop(rejection.buffer);
                 Ok(false)
             }
-            Err(rejection) => Err(rejection.error.into()),
+            Err(mut rejection) => {
+                if rejection.error != LifecyclePipeError::DeadlineExpired {
+                    return Err(rejection.error.into());
+                }
+                let now = resources.execution.client.now().map_err(|observation| {
+                    expiry::RejectionObservationFailure {
+                        rejected: rejection.error,
+                        observation: observation.into(),
+                    }
+                })?;
+                let Some(returned) = rejection.buffer.as_mut_bytes().get(..bytes) else {
+                    return Err(rejection.error.into());
+                };
+                if self.retire_unissued_expired_write(
+                    purpose,
+                    until,
+                    rejection.error,
+                    returned,
+                    encoded,
+                    now,
+                )? {
+                    tracing::info!(operation="parent_original_write_cutoff_retired",native_operation=next,issued=false,
+                        request=?self.acquisition.as_ref().and_then(|acquisition| acquisition.header.request),
+                        until=?until,cause=?rejection.error,
+                        "Original never-issued buffer returned at its unchanged cutoff; acquisition retained for real retirement");
+                    drop(rejection.buffer);
+                    return Ok(false);
+                }
+                Err(rejection.error.into())
+            }
         }
     }
 

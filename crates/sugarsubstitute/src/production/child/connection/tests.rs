@@ -65,7 +65,12 @@ fn activity_ack_before_acquire_grant_keeps_original_owner_and_cutoffs()
     requests.admitted(activity)?;
     requests.outbound(acquire, acquire_until, Moment::from_nanos(10))?;
     requests.admitted(acquire)?;
-    let pending = PendingAcquire { header: acquire, original: acquire_until, admitted: true };
+    let pending = PendingAcquire {
+        header: acquire,
+        original: acquire_until,
+        admitted: true,
+        retiring: false,
+    };
     let mut bytes = [0; 512];
     let count = FrameCodec::encode(
         &WireMessage { header: activity, payload: WirePayload::Reply(ReplyOutcome::Acknowledged) },
@@ -178,7 +183,7 @@ fn quiet_admitted_acquire_expires_without_transferring_or_replacing_original_req
     let header = requests.prepare(until, CounterDeadline::new(2000, 100)?)?;
     requests.outbound(header, until, client.now()?)?;
     requests.admitted(header)?;
-    let pending = PendingAcquire { header, original: until, admitted: true };
+    let pending = PendingAcquire { header, original: until, admitted: true, retiring: false };
     let mut effects = 0;
     assert!(
         pending
@@ -224,7 +229,7 @@ fn late_acquire_reply_cannot_transfer_matching_or_foreign_frame_at_or_after_cuto
     let header = requests.prepare(until, CounterDeadline::new(2000, 100)?)?;
     requests.outbound(header, until, client.now()?)?;
     requests.admitted(header)?;
-    let pending = PendingAcquire { header, original: until, admitted: true };
+    let pending = PendingAcquire { header, original: until, admitted: true, retiring: false };
     // Receive the original wire metadata before expiry; the semantic owner has not taken bytes.
     requests.received(header, client.now()?)?;
     let mut bytes = [0; 512];
@@ -266,7 +271,7 @@ fn retiring_acquire_retains_exact_original_loan_without_readmission_or_renewal()
     ledger.acquisition(header)?;
     ledger.outbound(header, original, Moment::from_nanos(10))?;
     ledger.admitted(header)?;
-    let pending = PendingAcquire { header, original, admitted: true };
+    let pending = PendingAcquire { header, original, admitted: true, retiring: false };
     let mut grant = None;
     let mut takes = 0;
     let foreign = WireHeader { deadline_qpc: header.deadline_qpc + 1, ..header };

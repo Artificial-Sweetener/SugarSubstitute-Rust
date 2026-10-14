@@ -63,6 +63,11 @@ impl ProductionChild {
         } else {
             return Ok(());
         }
+        if self.bootstrap.channel_mut().retiring_request(header)? {
+            self.output.applied = None;
+            self.output.retiring_frame = None;
+            return Ok(());
+        }
         self.bootstrap.channel_mut().consume_reply(header)?;
         self.output
             .owner_mut()

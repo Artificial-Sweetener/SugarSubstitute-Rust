@@ -17,7 +17,7 @@ pub(super) struct ChildOutput {
     job: Option<Constructor>,
     notice: Option<TerminalKind>,
     terminal: Option<Terminal>,
-    pending: Option<(WireHeader, Moment)>,
+    pub(super) pending: Option<(WireHeader, Moment)>,
     closed: bool,
     applied: Option<crate::production_output::AppliedOutput>,
     retiring_frame: Option<ReceivedLifecycleFrame>,
@@ -66,7 +66,7 @@ impl ChildOutput {
             owner.capture(batch)
         }
     }
-    fn owner_mut(&mut self) -> Option<&mut OutputOwner> {
+    pub(super) fn owner_mut(&mut self) -> Option<&mut OutputOwner> {
         match &mut self.terminal.as_mut()?.outcome {
             JobOutcome::Success(owner) => Some(owner),
             _ => None,
@@ -101,6 +101,16 @@ impl ChildOutput {
         }
         self.applied = None;
         Ok(())
+    }
+    /// Actual finite construction/parser/frame custody; correlation alone is not a worker.
+    pub(super) fn physical_pending(&self) -> bool {
+        self.job.is_some()
+            || self.applied.is_some()
+            || self.retiring_frame.is_some()
+            || match self.terminal.as_ref().map(|t| &t.outcome) {
+                Some(JobOutcome::Success(owner)) => owner.worker_pending(),
+                _ => false,
+            }
     }
     pub(super) fn pending(&self) -> bool {
         self.job.is_some()
@@ -147,12 +157,14 @@ impl ProductionChild {
                 return Ok(());
             };
             owner.close();
-            if let Err(cause) = owner.take_applied() {
-                if owner.expected_retirement_terminal(&cause) {
-                    return Ok(());
+            match owner.take_applied() {
+                Ok(Some(applied)) => self.output.applied = Some(applied),
+                Ok(None) => {}
+                Err(cause) if owner.expected_retirement_terminal(&cause) => return Ok(()),
+                Err(cause) => {
+                    self.output.retirement_error_reported = true;
+                    return Err(Box::new(cause));
                 }
-                self.output.retirement_error_reported = true;
-                return Err(Box::new(cause));
             }
             return Ok(());
         }
@@ -239,11 +251,17 @@ impl ProductionChild {
             let header = self.bootstrap.channel_mut().prepare_request(original)?;
             let Some(owner) = self.output.owner_mut() else { return Ok(()) };
             owner.prepare_pull(header, original)?;
+            self.bootstrap.channel_mut().output_pull(header)?;
             self.output.pending = Some((header, original));
         }
         let pending = self.output.owner_mut().and_then(|owner| owner.pending_pull());
         if let Some((message, original)) = pending
-            && self.bootstrap.channel_mut().try_send(&message, original)?
+            && self.bootstrap.channel_mut().try_send(&message, original).or_else(
+                |cause| -> Result<bool> {
+                    self.recover_acquisition_expiry(cause)?;
+                    Ok(false)
+                },
+            )?
         {
             self.output
                 .owner_mut()

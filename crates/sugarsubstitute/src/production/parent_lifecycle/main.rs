@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Authorize environment/browser replies from the actual retained Windows profile proofs.
+#[path = "main/issued.rs"]
+mod issued;
 use super::types::ProfilePending;
 use super::{ParentError, ParentLifecycle, ParentResources, Reply, Result};
 use sugarsubstitute_application::supervision::{
@@ -164,44 +166,6 @@ impl ParentLifecycle {
             self.requests.get_mut(pending.index)?.reply =
                 Some(Reply::Environment(pending.identity));
         }
-        Ok(())
-    }
-
-    pub(super) fn authorization_issued(
-        &mut self,
-        index: usize,
-        resources: &ParentResources<'_, '_>,
-    ) -> Result<()> {
-        let record = self.requests.get(index)?;
-        resources.session.control.validate_current_admission()?;
-        let observation =
-            match record.reply.ok_or(ParentError::WrongPhase)? {
-                Reply::Environment(identity) => {
-                    if self
-                        .environment
-                        .as_ref()
-                        .is_none_or(|proof| !proof.validates(resources.profile, identity))
-                    {
-                        return Err(ParentError::ForeignPeer.into());
-                    }
-                    Observation::EnvironmentAuthorizationIssued { identity }
-                }
-                Reply::Browser { identity, pid } => {
-                    if self.browser.as_ref().is_none_or(|proof| {
-                        !proof.validates(resources.profile, identity, pid.get())
-                    }) {
-                        return Err(ParentError::ForeignPeer.into());
-                    }
-                    Observation::BrowserAuthorizationIssued { identity, browser_process_id: pid }
-                }
-                _ => return Ok(()),
-            };
-        self.main.accept(
-            self.request_binding(record.header)?,
-            record.header.request.ok_or(ParentError::WrongPhase)?,
-            observation,
-            resources.execution.client.now()?,
-        )?;
         Ok(())
     }
 

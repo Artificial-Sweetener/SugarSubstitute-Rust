@@ -24,7 +24,7 @@ impl ParentLifecycle {
             return Err(ParentError::WrongPhase.into());
         }
         self.read = None;
-        if self.hold_acquisition_receive() {
+        if self.hold_acquisition_receive()? {
             if self.acquisition_receive.is_some() {
                 self.rejected_frame = Some(frame);
                 return Err(ParentError::WrongPhase.into());
@@ -50,12 +50,13 @@ impl ParentLifecycle {
     /// Retain the existing read loan while progress is writing, or while an original
     /// Grant must finish before cancellation can close its ready resource. No capability
     /// is admitted by this receipt-state check; full admission runs after the checked receipt.
-    pub(super) fn hold_acquisition_receive(&self) -> bool {
-        self.write.as_ref().is_some_and(|write| progress_write(&write.purpose))
+    pub(super) fn hold_acquisition_receive(&self) -> Result<bool> {
+        Ok(self.write.as_ref().is_some_and(|write| progress_write(&write.purpose))
             || self
                 .acquisition
                 .as_ref()
                 .is_some_and(super::acquisition::Acquisition::awaiting_grant_write)
+            || self.retiring_write_pending()?)
     }
     /// Reuse the same authentic read loan after the actual progress-write receipt. This
     /// preserves its header, bytes and original cutoff; no read or request queue is added.
@@ -63,9 +64,7 @@ impl ParentLifecycle {
         &mut self,
         resources: &mut ParentResources<'_, '_>,
     ) -> Result<()> {
-        if self.closed
-            || self.acquisition_receive.as_ref().is_some_and(|_| self.hold_acquisition_receive())
-        {
+        if self.closed || (self.acquisition_receive.is_some() && self.hold_acquisition_receive()?) {
             return Ok(());
         }
         let Some((operation, frame)) = self.acquisition_receive.take() else { return Ok(()) };
