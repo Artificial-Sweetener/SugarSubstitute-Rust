@@ -87,13 +87,7 @@ export class NativeNumericControls {
       usesSubstituteSlider(field) && !field.hasNativeSlider
         ? this.#createSlider(field.row.ownerDocument)
         : null;
-    const annotations = [
-      [field.spinner, 'data-sc-number-spinner'],
-      [field.input, 'data-sc-number-input'],
-      [field.increment, 'data-sc-number-increment'],
-      [field.decrement, 'data-sc-number-decrement'],
-    ] as const;
-    for (const [element, attribute] of annotations) element?.setAttribute(attribute, '');
+    const annotations = new Map<string, HTMLElement>();
     const gestureTargets = slider ? [field.spinner, slider] : [field.spinner];
     for (const target of gestureTargets)
       target.addEventListener('pointerdown', retainNumericGesture);
@@ -109,6 +103,7 @@ export class NativeNumericControls {
       field,
       slider,
       synchronize: () => {
+        synchronizeNumericAnnotations(binding.field, annotations);
         if (!slider) return;
         synchronizing = true;
         try {
@@ -126,7 +121,8 @@ export class NativeNumericControls {
         unsubscribe();
         for (const target of gestureTargets)
           target.removeEventListener('pointerdown', retainNumericGesture);
-        for (const [element, attribute] of annotations) element?.removeAttribute(attribute);
+        for (const [attribute, element] of annotations) element.removeAttribute(attribute);
+        annotations.clear();
         field.container.removeAttribute('data-sc-number-pair');
         slider?.removeEventListener('change', change);
         slider?.remove();
@@ -137,16 +133,40 @@ export class NativeNumericControls {
       slider.dataset.scNumberSlider = '';
       field.container.setAttribute('data-sc-number-pair', '');
       slider.addEventListener('change', change);
-      binding.synchronize();
       field.container.append(slider);
     }
     try {
+      binding.synchronize();
       if (slider) unsubscribe = field.subscribe(binding.synchronize);
     } catch (error: unknown) {
       binding.release();
       throw error;
     }
     return binding;
+  }
+}
+
+/** Follow late-mounted native buttons while retaining the numeric input and slider identities. */
+function synchronizeNumericAnnotations(
+  field: NativeNumericField,
+  annotations: Map<string, HTMLElement>,
+): void {
+  const targets = [
+    ['data-sc-number-spinner', field.spinner],
+    ['data-sc-number-input', field.input],
+    ['data-sc-number-increment', field.increment],
+    ['data-sc-number-decrement', field.decrement],
+    ['data-sc-native-number-fill', field.rangeFill],
+  ] as const;
+  for (const [attribute, element] of targets) {
+    const previous = annotations.get(attribute);
+    if (previous === element) continue;
+    previous?.removeAttribute(attribute);
+    annotations.delete(attribute);
+    if (element) {
+      element.setAttribute(attribute, '');
+      annotations.set(attribute, element);
+    }
   }
 }
 

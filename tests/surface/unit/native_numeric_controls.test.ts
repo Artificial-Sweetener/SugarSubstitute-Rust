@@ -142,6 +142,7 @@ function fixture(name = 'denoise', label = name, precision = 2) {
     increment,
     decrement,
     hasNativeSlider: false,
+    rangeFill: null,
     readValue: () => value,
     disabled: () => input.disabled || input.readOnly,
     writeValue: write,
@@ -292,6 +293,9 @@ test('adapts the live numeric component model and watcher while rejecting unknow
   field.input.setAttribute('role', 'spinbutton');
   field.increment?.setAttribute('data-testid', 'increment');
   field.decrement?.setAttribute('data-testid', 'decrement');
+  const rangeFill = document.createElement('div');
+  rangeFill.className = 'pointer-events-none absolute size-full';
+  field.spinner.prepend(rangeFill);
   const emit = jest.fn();
   const stop = jest.fn();
   const watch = jest.fn(() => stop);
@@ -320,6 +324,7 @@ test('adapts the live numeric component model and watcher while rejecting unknow
   if (!adapted) throw new Error('Native boundary missing');
   expect(adapted.label).toBe('Scale Factor');
   expect(adapted.maximum).toBe(5);
+  expect(adapted.rangeFill).toBe(rangeFill);
   adapted.writeValue(0.4);
   expect(emit).toHaveBeenCalledWith('update:modelValue', 0.4);
   const unsubscribe = adapted.subscribe(() => undefined);
@@ -328,4 +333,40 @@ test('adapts the live numeric component model and watcher while rejecting unknow
   expect(stop).toHaveBeenCalledTimes(1);
   numeric.type.__name = 'CustomNumberInput';
   expect(readNativeNumericField(field.row, widget)).toBeNull();
+});
+
+test('styles late-mounted and replaced native buttons without replacing the input or slider', () => {
+  const { root, field, controls } = fixture();
+  const input = field.input;
+  controls.reconcile(root, [{ ...field, increment: null, decrement: null }]);
+  const slider = root.querySelector('numeric-slider-fixture');
+  controls.reconcile(root, [field]);
+  expect(field.increment?.hasAttribute('data-sc-number-increment')).toBe(true);
+  expect(field.decrement?.hasAttribute('data-sc-number-decrement')).toBe(true);
+  const increment = document.createElement('button');
+  field.spinner.append(increment);
+  controls.reconcile(root, [{ ...field, increment }]);
+  expect(field.increment?.hasAttribute('data-sc-number-increment')).toBe(false);
+  expect(increment.hasAttribute('data-sc-number-increment')).toBe(true);
+  expect(root.querySelector('input')).toBe(input);
+  expect(root.querySelector('numeric-slider-fixture')).toBe(slider);
+  controls.clear();
+  expect(increment.hasAttribute('data-sc-number-increment')).toBe(false);
+  expect(input.hasAttribute('data-sc-number-input')).toBe(false);
+});
+
+test('suppresses only the recognized native range fill while Fluent presentation owns the field', () => {
+  const { root, field, controls } = fixture();
+  const style = document.createElement('style');
+  style.textContent = fluentNumericCss();
+  root.append(style);
+  const fill = document.createElement('div');
+  const custom = document.createElement('div');
+  field.spinner.prepend(fill, custom);
+  controls.reconcile(root, [{ ...field, rangeFill: fill }]);
+  expect(getComputedStyle(fill).display).toBe('none');
+  expect(custom.hasAttribute('data-sc-native-number-fill')).toBe(false);
+  controls.clear();
+  expect(fill.hasAttribute('data-sc-native-number-fill')).toBe(false);
+  expect(getComputedStyle(fill).display).toBe('block');
 });
