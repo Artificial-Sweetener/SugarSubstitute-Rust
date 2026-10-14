@@ -70,7 +70,7 @@ fn final_backend_replay_preserves_original_and_never_restarts_local_effects() ->
     Ok(())
 }
 
-fn identity() -> Result<MainIdentity> {
+pub(super) fn identity() -> Result<MainIdentity> {
     Ok(MainIdentity {
         run: RunKey {
             owner: CoordinatorKey {

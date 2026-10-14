@@ -174,6 +174,7 @@ impl ParentLifecycle {
                 let frontend = sugarsubstitute_application::startup::FrontendBudget::new(
                     resources.execution.client.now()?,
                 )?;
+                self.begin_output_sequence()?;
                 self.main.begin(identity, lease, frontend.until())?;
                 resources.profile.begin_main_attempt(identity)?;
                 self.folders.begin(identity);
@@ -182,7 +183,7 @@ impl ParentLifecycle {
             }
             RequestOutcome::Released => {
                 self.lease = None;
-                self.output = None;
+                self.reset_output();
                 Reply::Released
             }
             RequestOutcome::Reloaded(lease) => Reply::Reloaded(lease),

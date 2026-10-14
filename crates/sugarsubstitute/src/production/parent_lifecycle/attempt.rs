@@ -171,7 +171,7 @@ impl ParentLifecycle {
         }
         self.requests.get_mut(index)?.reply = Some(Reply::Acknowledged);
         self.lease = None;
-        self.output = None;
+        self.reset_output();
         self.backend_failure_seen = false;
         self.backend_failed_resource = None;
         self.attempt_cleanup = None;

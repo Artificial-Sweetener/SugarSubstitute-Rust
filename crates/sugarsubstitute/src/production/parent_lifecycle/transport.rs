@@ -73,11 +73,22 @@ impl ParentLifecycle {
             }
             LifecyclePipeObservation::Received { operation, frame } => {
                 if self.read != Some(operation.get()) || self.rejected_frame.is_some() {
+                    tracing::error!(operation="parent_received_native_operation_rejected",
+                        payload_kind=received_payload_kind(frame.as_bytes()),run=?self.run,
+                        native_operation=operation.get(),expected_operation=self.read,
+                        retained_frame=self.rejected_frame.is_some(),
+                        "Actual native receive correlation rejected; original frame retained");
                     self.rejected_frame = Some(frame);
                     return Err(ParentError::WrongPhase.into());
                 }
                 self.read = None;
                 if let Err(error) = self.receive(frame.as_bytes(), resources) {
+                    let payload_kind = received_payload_kind(frame.as_bytes());
+                    tracing::error!(operation="parent_received_payload_rejected",payload_kind,run=?self.run,
+                        native_operation=operation.get(),main_stage=?self.main.stage(),
+                        retained_delivery=self.output.as_ref().map(|delivery| delivery.id.get()),
+                        last_issued_delivery=self.next_delivery,
+                        "Actual received payload rejected; original frame and error retained");
                     self.rejected_frame = Some(frame);
                     return Err(error);
                 }
@@ -310,5 +321,33 @@ impl ParentLifecycle {
             }
         }
         Ok(())
+    }
+}
+
+/// Classify borrowed frame shape only at a retained failure boundary. No payload,
+/// credential, path or capability bytes enter diagnostics; this grants no authority.
+fn received_payload_kind(bytes: &[u8]) -> &'static str {
+    use sugarsubstitute_supervision::lifecycle_protocol::DecodedPayload as Payload;
+    let Ok(message) = FrameCodec::decode(bytes) else { return "Malformed" };
+    match message.payload {
+        Payload::Hello(_) => "Hello",
+        Payload::Welcome { .. } => "Welcome",
+        Payload::Register => "Register",
+        Payload::Acquire { .. } => "Acquire",
+        Payload::Release(_) => "Release",
+        Payload::Reload { .. } => "Reload",
+        Payload::ExitIntent { .. } => "ExitIntent",
+        Payload::ExitCompleted(_) => "ExitCompleted",
+        Payload::UiChallenge(_) => "UiChallenge",
+        Payload::UiResponse(_) => "UiResponse",
+        Payload::Reply(_) => "Reply",
+        Payload::RequestedProfileFolder(_) => "RequestedProfileFolder",
+        Payload::EnvironmentPrepared(_) => "EnvironmentPrepared",
+        Payload::ControllerPrepared { .. } => "ControllerPrepared",
+        Payload::MainRetired(_) => "MainRetired",
+        Payload::NativeActivity { .. } => "NativeActivity",
+        Payload::OutputPull { .. } => "OutputPull",
+        Payload::MainFailed(_) => "MainFailed",
+        Payload::SettleAttempt { .. } => "SettleAttempt",
     }
 }

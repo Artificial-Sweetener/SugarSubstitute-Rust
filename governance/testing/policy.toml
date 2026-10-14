@@ -23,7 +23,7 @@ minimum_tests = 87
 package = "sugarsubstitute"
 root = "crates/sugarsubstitute"
 concern = "Production desktop startup and retirement through actual execution, authenticated parent/child transport, shared backends, profiles and native window adapters; retained failures, captured startup, bounded console rendering and isolated qualification roles"
- minimum_tests = 407
+ minimum_tests = 410
 
 [[owners]]
 package = "sugarsubstitute-execution"

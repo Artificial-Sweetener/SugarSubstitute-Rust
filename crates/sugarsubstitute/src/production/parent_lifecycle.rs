@@ -86,6 +86,7 @@ pub(crate) struct ParentLifecycle {
     attempt_cleanup: Option<attempt::AttemptSettlement>,
     output: Option<output::Delivery>,
     next_delivery: u64,
+    acknowledged_output: Option<(LeaseKey, std::num::NonZeroU64)>,
     challenge: Option<(
         sugarsubstitute_contracts::lifecycle::UiChallengeKey,
         sugarsubstitute_supervision::lifecycle_protocol::WireHeader,
@@ -163,6 +164,7 @@ impl ParentLifecycle {
             attempt_cleanup: None,
             output: None,
             next_delivery: 0,
+            acknowledged_output: None,
             challenge: None,
             profile_pending: None,
             environment: None,
