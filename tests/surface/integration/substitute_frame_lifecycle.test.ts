@@ -20,6 +20,7 @@ import { SubstituteFrameHost } from '../../../frontend/comfyui/ui/surface/frame/
 import { WorkflowTabsView } from '../../../frontend/comfyui/ui/surface/frame/WorkflowTabsView.js';
 import { AppOrbView } from '../../../frontend/comfyui/ui/surface/frame/AppOrbView.js';
 import { SubstituteFrameView } from '../../../frontend/comfyui/ui/surface/frame/SubstituteFrameView.js';
+import { substituteFrameCss } from '../../../frontend/comfyui/ui/surface/frame/SubstituteFrameStyles.js';
 import { ContextMenu } from '../../../frontend/comfyui/ui/menus/ContextMenu.js';
 import { WorkflowSessionStore } from '../../../frontend/comfyui/ui/execution/application/WorkflowSessionStore.js';
 import { WorkflowOutputActivity } from '../../../frontend/comfyui/ui/execution/application/WorkflowOutputActivity.js';
@@ -139,8 +140,10 @@ test('literal titles and keyed tabs survive reorder and activity refresh without
     create: jest.fn(),
     report: jest.fn(),
   };
-  const view = new WorkflowTabsView(document, actions);
-  document.body.append(view.element);
+  const viewport = document.createElement('div');
+  const view = new WorkflowTabsView(document, actions, viewport);
+  viewport.append(view.element);
+  document.body.append(viewport);
   const tabs = [
     { id: a, title: '<img src=x onerror=bad()>', modified: false, selected: true },
     { id: b, title: 'B', modified: false, selected: false },
@@ -234,15 +237,21 @@ test('frame actions retain stack policy, settings access, override anchor and un
 
 test('overflow activation reveals the selected tab and activity preserves deliberate scrolling', async () => {
   const ids = ['a', 'b', 'c'].map(workflowSessionId);
-  const view = new WorkflowTabsView(document, {
-    activate: jest.fn(),
-    close: jest.fn(),
-    reorder: jest.fn(),
-    create: jest.fn(),
-    report: jest.fn(),
-  });
-  document.body.append(view.element);
-  Object.defineProperty(view.element, 'clientWidth', { configurable: true, value: 280 });
+  const viewport = document.createElement('div');
+  const view = new WorkflowTabsView(
+    document,
+    {
+      activate: jest.fn(),
+      close: jest.fn(),
+      reorder: jest.fn(),
+      create: jest.fn(),
+      report: jest.fn(),
+    },
+    viewport,
+  );
+  viewport.append(view.element);
+  document.body.append(viewport);
+  Object.defineProperty(viewport, 'clientWidth', { configurable: true, value: 280 });
   const tabs = ids.map((id, index) => ({
     id,
     title: String(index),
@@ -251,19 +260,79 @@ test('overflow activation reveals the selected tab and activity preserves delibe
   }));
   view.update(tabs, () => false);
   await settle();
-  expect(view.element.scrollLeft).toBe(260);
-  view.element.scrollLeft = 0;
+  expect(viewport.scrollLeft).toBe(260);
+  viewport.scrollLeft = 0;
   view.update(tabs, () => true);
-  expect(view.element.scrollLeft).toBe(0);
+  expect(viewport.scrollLeft).toBe(0);
   view.update(
     tabs.map((tab, index) => ({ ...tab, selected: index === 1 })),
     () => false,
   );
-  expect(view.element.scrollLeft).toBe(80);
+  expect(viewport.scrollLeft).toBe(80);
   view.update(
     tabs.map((tab, index) => ({ ...tab, selected: index === 0 })),
     () => false,
   );
-  expect(view.element.scrollLeft).toBe(0);
+  expect(viewport.scrollLeft).toBe(0);
+  view.dispose();
+});
+
+test('new-workflow control follows the tabs and overflow appears only when the strip does not fit', async () => {
+  jest.spyOn(AppOrbView.prototype, 'update').mockResolvedValue(undefined);
+  const style = document.createElement('style');
+  style.textContent = substituteFrameCss;
+  document.head.append(style);
+  const create = jest.fn();
+  const activate = jest.fn();
+  const view = new SubstituteFrameView(document, {
+    workflows: { activate, close: jest.fn(), reorder: jest.fn(), create, report: jest.fn() },
+    command: jest.fn(),
+    openOverrides: jest.fn(),
+    report: jest.fn(),
+    stack: {
+      compact: true,
+      toggleCompact: async () => undefined,
+      menu: () => [],
+      subscribe: () => () => undefined,
+    },
+  });
+  document.body.append(view.element);
+  let width = 1200;
+  Object.defineProperty(view.element, 'clientWidth', { configurable: true, get: () => width });
+  const tabs = ['a', 'b', 'c', 'd'].map((key, index) => ({
+    id: workflowSessionId(key),
+    title: key,
+    selected: index === 0,
+    modified: false,
+  }));
+  view.update(tabs, () => false);
+  await settle();
+  const add = view.element.querySelector<HTMLElement>('[aria-label="New workflow"]')!;
+  const overflow = view.element.querySelector<HTMLElement>('[aria-label="More workflows"]')!;
+  expect(overflow.hidden).toBe(true);
+  expect(getComputedStyle(add).width).toBe('32px');
+  expect(getComputedStyle(add).height).toBe('24px');
+  expect(getComputedStyle(add).minHeight).toBe('24px');
+  expect(add.previousElementSibling?.tagName.toLowerCase()).toBe('sc-workflow-tablist');
+  expect(add.parentElement?.classList.contains('sc-workflow-strip')).toBe(true);
+  add.click();
+  expect(create).toHaveBeenCalledTimes(1);
+  width = 500;
+  window.dispatchEvent(new Event('resize'));
+  await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+  expect(overflow.hidden).toBe(false);
+  overflow.click();
+  expect(document.querySelector('[role="menu"]')).not.toBeNull();
+  width = 1200;
+  window.dispatchEvent(new Event('resize'));
+  await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+  expect(overflow.hidden).toBe(true);
+  expect(document.querySelector('[role="menu"]')).toBeNull();
+  width = 500;
+  view.update(tabs.slice(0, 1), () => false);
+  expect(overflow.hidden).toBe(true);
+  view.update([], () => false);
+  expect(add.isConnected).toBe(true);
+  expect(overflow.hidden).toBe(true);
   view.dispose();
 });

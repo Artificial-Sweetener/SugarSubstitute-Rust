@@ -672,12 +672,12 @@ license_file = "third_party/licenses/sugarsubstitute.LICENSE.txt"
 source = "https://github.com/Artificial-Sweetener/SugarSubstitute"
 revision = "34ce6d9976c76ac708b1dbda3920e9311010006a"
 modifications = "Workflow tab geometry and unread-result painter adapted to official Microsoft Fluent web controls. Orb tint and PSD layer placement adapted to cached browser canvas composition; original PNG artwork is unmodified. Rail styling shares existing Cube stack behavior."
-runtime_files = ["web/comfyui/ui/surface/frame/WorkflowTabStyles.js","web/comfyui/ui/surface/frame/SubstituteFrameStyles.js","web/comfyui/ui/surface/frame/SubstituteFrameView.js","web/comfyui/ui/surface/frame/OrbTint.js","web/comfyui/ui/surface/frame/AppOrbRenderer.js"]
+runtime_files = ["web/comfyui/ui/surface/frame/WorkflowTabStyles.js","web/comfyui/ui/surface/frame/WorkflowTabStripLayout.js","web/comfyui/ui/surface/frame/SubstituteFrameStyles.js","web/comfyui/ui/surface/frame/SubstituteFrameView.js","web/comfyui/ui/surface/frame/OrbTint.js","web/comfyui/ui/surface/frame/AppOrbRenderer.js"]
 
 [[component.implementation]]
 source_path = "substitute/presentation/workflows/workflow_tabs_view.py"
 source_sha256 = "567d197f2c0b3bf448189ef91bf6fc3315367b7a27e74f9b50aff364ea8593e0"
-adapted_paths = ["frontend/comfyui/ui/surface/frame/WorkflowTabStyles.ts"]
+adapted_paths = ["frontend/comfyui/ui/surface/frame/WorkflowTabStyles.ts", "frontend/comfyui/ui/surface/frame/WorkflowTabStripLayout.ts"]
 
 [[component.implementation]]
 source_path = "substitute/presentation/shell/app_orb_renderer.py"

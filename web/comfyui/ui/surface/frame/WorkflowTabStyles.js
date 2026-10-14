@@ -42,8 +42,7 @@ export const workflowTablistCss = `
     background:var(--sc-frame-wash); pointer-events:none; z-index:1;
     clip-path:path('M0 4H8V0C8 2.2 4.4 4 0 4ZM188 0V4H196C191.6 4 188 2.2 188 0Z');
     mask-image:radial-gradient(circle 25px at calc(-9px - var(--sc-selected-offset) + var(--sc-tab-scroll)) -1px,transparent 24px,#000 25px); }
-  :host { height:30px; min-width:0; gap:0; flex:1; overflow-x:auto; overflow-y:hidden; scrollbar-width:none; }
-  :host::-webkit-scrollbar { display:none; }
+  :host { height:30px; min-width:0; width:var(--sc-workflow-tabs-width); gap:0; flex:0 0 auto; overflow:visible; }
   :host ::slotted([slot='tab']) { padding:0 8px 0 20px; }
   :host ::slotted([slot='tab'][data-orb-adjacent]) { padding-left:32px; }
   :host ::slotted([slot='tab'])::before { content:none; }
