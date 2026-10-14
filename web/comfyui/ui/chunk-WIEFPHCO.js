@@ -4,7 +4,7 @@ import {
   onBeforeUnmount,
   shallowRef,
   watch
-} from "./chunk-LFPAN2S3.js";
+} from "./chunk-6PAJ5Y37.js";
 
 // frontend/comfyui/ui/output_canvas/presentation/vue/CanvasWipeSeparator.ts
 var CanvasWipeSeparator = defineComponent({

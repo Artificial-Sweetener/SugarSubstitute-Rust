@@ -13,26 +13,28 @@
 #
 #    You should have received a copy of the GNU Affero General Public License
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""Run the TypeScript compiler audit against the exact architecture snapshot."""
+"""Run browser ownership compiler audits against the exact architecture snapshot."""
 
 from __future__ import annotations
 
 import json
 import shutil
 import subprocess
+from dataclasses import asdict
 from pathlib import Path
 
-from .model import Diagnostic, Severity
+from .model import Diagnostic, MenuPolicy, Severity
 
 
-def scan_invalidation(
+def scan_browser_ui(
     root: Path,
     tooling_root: Path,
     paths: tuple[str, ...],
     owners: tuple[str, ...],
     document_owners: tuple[str, ...] = (),
+    menus: MenuPolicy = MenuPolicy(),
 ) -> tuple[Diagnostic, ...]:
-    """Validate native observation ownership with fail-closed typed diagnostics."""
+    """Validate observation and menu ownership with fail-closed typed diagnostics."""
     files = tuple(
         path
         for path in paths
@@ -42,14 +44,19 @@ def scan_invalidation(
         return ()
     node = shutil.which("node")
     runtime = tooling_root / "node_modules/tsx/dist/cli.mjs"
-    audit = tooling_root / "scripts/invalidation-audit.ts"
+    audit = tooling_root / "scripts/browser-ui-audit.ts"
     if node is None or not runtime.is_file() or not audit.is_file():
-        return (_failure("TypeScript invalidation audit runtime is unavailable."),)
+        return (_failure("TypeScript browser UI audit runtime is unavailable."),)
     try:
         result = subprocess.run(  # noqa: S603
             [node, str(runtime), str(audit), str(root)],
             input=json.dumps(
-                {"files": files, "owners": owners, "documentOwners": document_owners}
+                {
+                    "files": files,
+                    "owners": owners,
+                    "documentOwners": document_owners,
+                    "menus": asdict(menus),
+                }
             ),
             capture_output=True,
             text=True,
@@ -60,22 +67,20 @@ def scan_invalidation(
         if result.returncode:
             return (
                 _failure(
-                    f"TypeScript invalidation audit failed: {result.stderr.strip()}"
+                    f"TypeScript browser UI audit failed: {result.stderr.strip()}"
                 ),
             )
         payload: object = json.loads(result.stdout)
         if not isinstance(payload, list):
             return (
-                _failure(
-                    "TypeScript invalidation audit returned malformed diagnostics."
-                ),
+                _failure("TypeScript browser UI audit returned malformed diagnostics."),
             )
         diagnostics: list[Diagnostic] = []
         for item in payload:
             if not isinstance(item, dict):
                 return (
                     _failure(
-                        "TypeScript invalidation audit returned a malformed diagnostic."
+                        "TypeScript browser UI audit returned a malformed diagnostic."
                     ),
                 )
             path, line, rule, message = (
@@ -89,7 +94,7 @@ def scan_invalidation(
             ):
                 return (
                     _failure(
-                        "TypeScript invalidation audit returned invalid diagnostic fields."
+                        "TypeScript browser UI audit returned invalid diagnostic fields."
                     ),
                 )
             diagnostics.append(
@@ -103,13 +108,13 @@ def scan_invalidation(
             )
         return tuple(diagnostics)
     except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError) as error:
-        return (_failure(f"TypeScript invalidation audit could not complete: {error}"),)
+        return (_failure(f"TypeScript browser UI audit could not complete: {error}"),)
 
 
 def _failure(message: str) -> Diagnostic:
     """Report unavailable verification as a blocking architecture failure."""
     return Diagnostic(
-        path="<invalidation>",
+        path="<browser-ui>",
         rule="UI_AUDIT_FAILURE",
         severity=Severity.ERROR,
         message=message,

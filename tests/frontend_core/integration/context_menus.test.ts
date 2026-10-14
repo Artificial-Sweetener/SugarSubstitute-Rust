@@ -122,3 +122,42 @@ test('reconciles checked choices without replacing the floating surface', () => 
   expect(document.activeElement?.getAttribute('aria-checked')).toBe('true');
   menu.close();
 });
+
+test('pointer context menus dismiss on the originating surface without consuming its next interaction', () => {
+  const surface = document.createElement('section');
+  const child = document.createElement('button');
+  surface.append(child);
+  document.body.append(surface);
+  const menu = new ContextMenu(document);
+  const closed = jest.fn();
+  menu.open({
+    label: 'Canvas',
+    trigger: surface,
+    anchor: { kind: 'pointer', x: 20, y: 20 },
+    entries: [{ label: 'Fit' }],
+    closed,
+  });
+  const event = new MouseEvent('pointerdown', { bubbles: true, cancelable: true });
+  child.dispatchEvent(event);
+  expect(menu.isOpen()).toBe(false);
+  expect(closed).toHaveBeenCalledTimes(1);
+  expect(event.defaultPrevented).toBe(false);
+  surface.remove();
+});
+
+test('anchored action menus leave their trigger available for the owning toggle', () => {
+  const trigger = document.createElement('button');
+  document.body.append(trigger);
+  const menu = new ContextMenu(document);
+  menu.open({
+    label: 'Choices',
+    trigger,
+    anchor: { kind: 'below', bounds: trigger.getBoundingClientRect() },
+    entries: [{ label: 'A' }],
+  });
+  trigger.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+  expect(menu.isOpen()).toBe(true);
+  document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+  expect(menu.isOpen()).toBe(false);
+  trigger.remove();
+});

@@ -263,6 +263,5 @@ function useModelContext(options, disabled, beforeFamily, session) {
 }
 
 export {
-  modelProviderPage,
   useModelContext
 };

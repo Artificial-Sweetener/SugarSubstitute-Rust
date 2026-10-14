@@ -15,14 +15,15 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Render Fluent choice rows with the selected row aligned over its canvas control. */
 
-import { defineComponent, h, nextTick, onBeforeUnmount, ref, type PropType } from 'vue';
+import { defineComponent, h, nextTick, onBeforeUnmount, ref, Teleport, type PropType } from 'vue';
+import { FloatingSurface } from '../../../menus/FloatingSurface.js';
 
 export interface CanvasPickerChoice {
   readonly value: string;
   readonly label: string;
 }
 
-/** Own one scoped popup's focus, placement and dismissal without retaining content selection. */
+/** Adapt choice focus and selected-row alignment to the shared floating transport. */
 export const CanvasAnchoredPicker = defineComponent({
   name: 'CanvasAnchoredPicker',
   props: {
@@ -40,34 +41,14 @@ export const CanvasAnchoredPicker = defineComponent({
     const opened = ref(false);
     const active = ref(0);
     const geometry = ref({ left: 0, top: 0, width: 0, height: 0 });
-    let nativePopup = false;
-    let listening: Document | null = null;
+    let surface: FloatingSurface | null = null;
 
-    /** Retire popup listeners and optionally return focus after a deliberate dismissal. */
+    /** Retire the shared surface and optionally return focus after deliberate dismissal. */
     function close(restoreFocus = false): void {
-      listening?.removeEventListener('pointerdown', outside, true);
-      listening?.defaultView?.removeEventListener('resize', resized);
-      listening = null;
-      if (nativePopup && popup.value) popup.value.hidePopover();
-      nativePopup = false;
+      surface?.close();
+      surface = null;
       opened.value = false;
       if (restoreFocus) anchor.value?.focus();
-    }
-
-    /** Dismiss only this popup when another surface receives pointer input. */
-    function outside(event: PointerEvent): void {
-      const target = event.target;
-      if (
-        target instanceof Node &&
-        !popup.value?.contains(target) &&
-        !anchor.value?.contains(target)
-      )
-        close();
-    }
-
-    /** Close at a changed viewport instead of chasing moving layout geometry. */
-    function resized(): void {
-      close();
     }
 
     /** Focus a concrete row and let the bounded scroll viewport reveal it. */
@@ -106,16 +87,15 @@ export const CanvasAnchoredPicker = defineComponent({
         height,
       };
       opened.value = true;
-      listening = button.ownerDocument;
-      listening.addEventListener('pointerdown', outside, true);
-      viewport.addEventListener('resize', resized);
       await nextTick();
       if (!opened.value || !popup.value) return;
-      // The top layer avoids clipping under either browser or native-overlay surface ancestors.
-      if (typeof popup.value.showPopover === 'function') {
-        popup.value.showPopover();
-        nativePopup = true;
-      }
+      surface = new FloatingSurface(popup.value);
+      surface.open({
+        anchor: { kind: 'pointer', x: geometry.value.left, y: geometry.value.top },
+        maxHeight: geometry.value.height,
+        dismiss: () => close(),
+        containsTarget: (target) => button.contains(target),
+      });
       popup.value.scrollTop = Math.max(0, (active.value - slot) * stride);
       focusRow();
     }
@@ -180,41 +160,42 @@ export const CanvasAnchoredPicker = defineComponent({
             props.text || props.items.find((item) => item.value === props.value)?.label || 'Output',
           ),
           opened.value
-            ? h(
-                'div',
-                {
-                  ref: popup,
-                  class: 'sc-output-picker-popup',
-                  popover: typeof anchor.value?.showPopover === 'function' ? 'manual' : undefined,
-                  role: 'listbox',
-                  'aria-label': `${props.label} choices`,
-                  'data-centered': props.centered ? 'true' : undefined,
-                  style: {
-                    left: `${geometry.value.left}px`,
-                    top: `${geometry.value.top}px`,
-                    width: `${geometry.value.width}px`,
-                    maxHeight: `${geometry.value.height}px`,
-                  },
-                  onKeydown: keydown,
-                },
-                props.items.map((item, index) =>
-                  h(
-                    'button',
-                    {
-                      key: item.value,
-                      type: 'button',
-                      role: 'option',
-                      'aria-selected': index === active.value,
-                      tabIndex: index === active.value ? 0 : -1,
-                      onFocus: () => {
-                        active.value = index;
-                      },
-                      onClick: () => select(index),
+            ? h(Teleport, { to: anchor.value?.ownerDocument.body }, [
+                h(
+                  'div',
+                  {
+                    ref: popup,
+                    class: 'sc-output-picker-popup',
+                    role: 'listbox',
+                    'aria-label': `${props.label} choices`,
+                    'data-centered': props.centered ? 'true' : undefined,
+                    style: {
+                      left: `${geometry.value.left}px`,
+                      top: `${geometry.value.top}px`,
+                      width: `${geometry.value.width}px`,
+                      maxHeight: `${geometry.value.height}px`,
                     },
-                    item.label,
+                    onKeydown: keydown,
+                  },
+                  props.items.map((item, index) =>
+                    h(
+                      'button',
+                      {
+                        key: item.value,
+                        type: 'button',
+                        role: 'option',
+                        'aria-selected': index === active.value,
+                        tabIndex: index === active.value ? 0 : -1,
+                        onFocus: () => {
+                          active.value = index;
+                        },
+                        onClick: () => select(index),
+                      },
+                      item.label,
+                    ),
                   ),
                 ),
-              )
+              ])
             : null,
         ],
       );

@@ -6,7 +6,7 @@ import {
 } from "./chunk-KJ2VRCYH.js";
 import {
   CivitaiCredentialLayer
-} from "./chunk-GFEHLP3Q.js";
+} from "./chunk-UBWFONUH.js";
 import {
   ModelBusyRing
 } from "./chunk-SYMYA4CE.js";

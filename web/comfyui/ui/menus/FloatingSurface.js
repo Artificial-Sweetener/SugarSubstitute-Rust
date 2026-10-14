@@ -83,8 +83,11 @@ export class FloatingSurface {
     reposition() {
         if (!this.#options)
             return;
-        const rect = this.element.getBoundingClientRect();
         const windowRef = this.#document.defaultView;
+        this.element.style.setProperty('max-height', this.#options.maxHeight === undefined
+            ? 'calc(100vh - 8px)'
+            : `${Math.max(0, Math.min(this.#options.maxHeight, (windowRef?.innerHeight ?? this.#document.documentElement.clientHeight) - 8))}px`, 'important');
+        const rect = this.element.getBoundingClientRect();
         const position = floatingPosition(this.#options.anchor, rect.width, rect.height, windowRef?.innerWidth ?? this.#document.documentElement.clientWidth, windowRef?.innerHeight ?? this.#document.documentElement.clientHeight);
         this.element.style.setProperty('left', `${String(position.left)}px`, 'important');
         this.element.style.setProperty('top', `${String(position.top)}px`, 'important');

@@ -1,12 +1,14 @@
 import {
+  Teleport,
   defineComponent,
   h,
   nextTick,
   onBeforeUnmount,
   ref
-} from "./chunk-LFPAN2S3.js";
+} from "./chunk-6PAJ5Y37.js";
 
 // frontend/comfyui/ui/output_canvas/presentation/vue/CanvasAnchoredPicker.ts
+import { FloatingSurface } from "./menus/FloatingSurface.js";
 var CanvasAnchoredPicker = defineComponent({
   name: "CanvasAnchoredPicker",
   props: {
@@ -24,24 +26,12 @@ var CanvasAnchoredPicker = defineComponent({
     const opened = ref(false);
     const active = ref(0);
     const geometry = ref({ left: 0, top: 0, width: 0, height: 0 });
-    let nativePopup = false;
-    let listening = null;
+    let surface = null;
     function close(restoreFocus = false) {
-      listening?.removeEventListener("pointerdown", outside, true);
-      listening?.defaultView?.removeEventListener("resize", resized);
-      listening = null;
-      if (nativePopup && popup.value) popup.value.hidePopover();
-      nativePopup = false;
+      surface?.close();
+      surface = null;
       opened.value = false;
       if (restoreFocus) anchor.value?.focus();
-    }
-    function outside(event) {
-      const target = event.target;
-      if (target instanceof Node && !popup.value?.contains(target) && !anchor.value?.contains(target))
-        close();
-    }
-    function resized() {
-      close();
     }
     function focusRow() {
       const row = popup.value?.querySelectorAll('[role="option"]')[active.value];
@@ -76,15 +66,15 @@ var CanvasAnchoredPicker = defineComponent({
         height
       };
       opened.value = true;
-      listening = button.ownerDocument;
-      listening.addEventListener("pointerdown", outside, true);
-      viewport.addEventListener("resize", resized);
       await nextTick();
       if (!opened.value || !popup.value) return;
-      if (typeof popup.value.showPopover === "function") {
-        popup.value.showPopover();
-        nativePopup = true;
-      }
+      surface = new FloatingSurface(popup.value);
+      surface.open({
+        anchor: { kind: "pointer", x: geometry.value.left, y: geometry.value.top },
+        maxHeight: geometry.value.height,
+        dismiss: () => close(),
+        containsTarget: (target) => button.contains(target)
+      });
       popup.value.scrollTop = Math.max(0, (active.value - slot) * stride);
       focusRow();
     }
@@ -133,41 +123,42 @@ var CanvasAnchoredPicker = defineComponent({
           },
           props.text || props.items.find((item) => item.value === props.value)?.label || "Output"
         ),
-        opened.value ? h(
-          "div",
-          {
-            ref: popup,
-            class: "sc-output-picker-popup",
-            popover: typeof anchor.value?.showPopover === "function" ? "manual" : void 0,
-            role: "listbox",
-            "aria-label": `${props.label} choices`,
-            "data-centered": props.centered ? "true" : void 0,
-            style: {
-              left: `${geometry.value.left}px`,
-              top: `${geometry.value.top}px`,
-              width: `${geometry.value.width}px`,
-              maxHeight: `${geometry.value.height}px`
-            },
-            onKeydown: keydown
-          },
-          props.items.map(
-            (item, index) => h(
-              "button",
-              {
-                key: item.value,
-                type: "button",
-                role: "option",
-                "aria-selected": index === active.value,
-                tabIndex: index === active.value ? 0 : -1,
-                onFocus: () => {
-                  active.value = index;
-                },
-                onClick: () => select(index)
+        opened.value ? h(Teleport, { to: anchor.value?.ownerDocument.body }, [
+          h(
+            "div",
+            {
+              ref: popup,
+              class: "sc-output-picker-popup",
+              role: "listbox",
+              "aria-label": `${props.label} choices`,
+              "data-centered": props.centered ? "true" : void 0,
+              style: {
+                left: `${geometry.value.left}px`,
+                top: `${geometry.value.top}px`,
+                width: `${geometry.value.width}px`,
+                maxHeight: `${geometry.value.height}px`
               },
-              item.label
+              onKeydown: keydown
+            },
+            props.items.map(
+              (item, index) => h(
+                "button",
+                {
+                  key: item.value,
+                  type: "button",
+                  role: "option",
+                  "aria-selected": index === active.value,
+                  tabIndex: index === active.value ? 0 : -1,
+                  onFocus: () => {
+                    active.value = index;
+                  },
+                  onClick: () => select(index)
+                },
+                item.label
+              )
             )
           )
-        ) : null
+        ]) : null
       ]
     );
   }

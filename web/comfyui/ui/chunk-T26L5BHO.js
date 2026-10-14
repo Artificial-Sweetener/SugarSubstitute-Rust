@@ -1,9 +1,9 @@
 import {
   CanvasSelectionPicker
-} from "./chunk-CNHJ3WOH.js";
+} from "./chunk-UEULIHLJ.js";
 import {
   CanvasBatchPicker
-} from "./chunk-QLIZ5IFY.js";
+} from "./chunk-SVNSOY77.js";
 import {
   defineComponent,
   h,
@@ -11,7 +11,7 @@ import {
   onMounted,
   onUpdated,
   ref
-} from "./chunk-LFPAN2S3.js";
+} from "./chunk-6PAJ5Y37.js";
 
 // frontend/comfyui/ui/output_canvas/presentation/vue/CanvasSourceTabs.ts
 var CanvasSourceTabs = defineComponent({

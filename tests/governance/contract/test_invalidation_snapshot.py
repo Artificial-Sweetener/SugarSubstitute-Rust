@@ -20,7 +20,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from tools.architecture.invalidation_policy import scan_invalidation
+from tools.architecture.browser_ui_policy import scan_browser_ui
 from tools.architecture.registry import load_policy
 from tools.architecture.snapshot import repository_snapshot
 
@@ -59,7 +59,7 @@ hard_lines = 500
         owners = load_policy(
             snapshot / "ARCHITECTURE_POLICY.toml"
         ).mutation_observer_owners
-        diagnostics = scan_invalidation(
+        diagnostics = scan_browser_ui(
             snapshot, PROJECT_ROOT, ("frontend/feature.ts",), owners
         )
     assert len(diagnostics) == 1
@@ -68,5 +68,5 @@ hard_lines = 500
 
 def test_missing_compiler_runtime_fails_closed(tmp_path: Path) -> None:
     """Keep the architecture gate blocking when typed observation checks cannot run."""
-    diagnostics = scan_invalidation(tmp_path, tmp_path, ("frontend/feature.ts",), ())
+    diagnostics = scan_browser_ui(tmp_path, tmp_path, ("frontend/feature.ts",), ())
     assert diagnostics[0].rule == "UI_AUDIT_FAILURE"

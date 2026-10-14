@@ -20,6 +20,7 @@ import { copyFileSync, mkdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { build } from 'esbuild';
 import { walkArtifactFiles, synchronizeWebArtifacts } from './WebArtifactSynchronization.js';
+import { browserSharedModulePlugin, publishBrowserBundle } from './BrowserSharedModules.js';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '..');
 const generatedRoot = path.join(repositoryRoot, '.generated', 'web');
@@ -60,10 +61,10 @@ function stageStaticAssets(): void {
   }
 }
 
-/** Bundle each isolated Vue surface with shared chunks and explicit host-facing externals. */
+/** Bundle Vue surfaces while preserving canonical shared-module identities across relocated chunks. */
 async function bundleVueSurface(
   relativeRoots: string | readonly string[],
-  external: string[],
+  sharedModules: readonly string[],
 ): Promise<void> {
   const sourceRoot = path.join(repositoryRoot, 'frontend/comfyui/ui');
   const roots = typeof relativeRoots === 'string' ? [relativeRoots] : relativeRoots;
@@ -71,18 +72,22 @@ async function bundleVueSurface(
     .flatMap((root) => walkArtifactFiles(path.join(sourceRoot, root)))
     .filter((filePath) => filePath.endsWith('.ts'));
   if (entries.length > 0) {
-    await build({
+    const outputRoot = path.join(
+      generatedRoot,
+      'comfyui/ui',
+      typeof relativeRoots === 'string' ? relativeRoots : '',
+    );
+    const sharedRoot = path.join(generatedRoot, 'comfyui/ui');
+    const result = await build({
       entryPoints: entries,
       outbase:
         typeof relativeRoots === 'string' ? path.join(sourceRoot, relativeRoots) : sourceRoot,
-      outdir: path.join(
-        generatedRoot,
-        'comfyui/ui',
-        typeof relativeRoots === 'string' ? relativeRoots : '',
-      ),
+      outdir: outputRoot,
       bundle: true,
       splitting: true,
-      external,
+      external: ['/scripts/*'],
+      plugins: [browserSharedModulePlugin(sourceRoot, sharedRoot, sharedModules)],
+      write: false,
       format: 'esm',
       platform: 'browser',
       target: 'es2022',
@@ -94,6 +99,7 @@ async function bundleVueSurface(
         'process.env.NODE_ENV': '"production"',
       },
     });
+    publishBrowserBundle(result.outputFiles, outputRoot, sharedRoot, sharedModules);
   }
 }
 
@@ -123,14 +129,14 @@ async function main(): Promise<void> {
     legalComments: 'inline',
   });
   await bundleVueSurface('model_library/vue', [
-    '/scripts/*',
-    '../ModelVersionDialog.js',
-    '../ModelDetectorDialog.js',
-    '../../menus/ContextMenu.js',
+    'model_library/ModelVersionDialog.js',
+    'model_library/ModelDetectorDialog.js',
+    'menus/ContextMenu.js',
+    'menus/FloatingSurface.js',
   ]);
   await bundleVueSurface(
     ['surface/stack/vue', 'picker/vue', 'output_canvas/presentation/vue'],
-    ['/scripts/*', '../../../menus/ContextMenu.js'],
+    ['menus/ContextMenu.js', 'menus/FloatingSurface.js'],
   );
   stageStaticAssets();
   await synchronizeWebArtifacts(generatedRoot, runtimeRoot, checkOnly);

@@ -59,7 +59,7 @@ test('aligns the active source row over its control and commits keyboard navigat
   try {
     anchor.click();
     await nextTick();
-    const popup = host.querySelector<HTMLElement>('[role="listbox"]')!;
+    const popup = document.querySelector<HTMLElement>('[role="listbox"]')!;
     expect(popup.style.left).toBe('192px');
     expect(popup.style.top).toBe('62px');
     expect(popup.style.width).toBe('136px');
@@ -76,7 +76,7 @@ test('aligns the active source row over its control and commits keyboard navigat
     expect(choose).toHaveBeenCalledTimes(1);
     expect(choose).toHaveBeenCalledWith('c');
     expect(forwarded).not.toHaveBeenCalled();
-    expect(host.querySelector('[role="listbox"]')).toBeNull();
+    expect(document.querySelector('[role="listbox"]')).toBeNull();
     expect(document.activeElement).toBe(anchor);
   } finally {
     document.body.removeEventListener('keydown', forwarded);
@@ -87,6 +87,7 @@ test('aligns the active source row over its control and commits keyboard navigat
 test('bounds long picker overflow and retires outside-input listeners with its overlay', async () => {
   const host = document.createElement('section');
   document.body.append(host);
+  const added = jest.spyOn(document, 'addEventListener');
   const removed = jest.spyOn(document, 'removeEventListener');
   const choose = jest.fn();
   const app = createApp({
@@ -117,7 +118,7 @@ test('bounds long picker overflow and retires outside-input listeners with its o
   });
   anchor.click();
   await nextTick();
-  const popup = host.querySelector<HTMLElement>('[role="listbox"]')!;
+  const popup = document.querySelector<HTMLElement>('[role="listbox"]')!;
   expect(parseFloat(popup.style.top)).toBeGreaterThanOrEqual(0);
   expect(parseFloat(popup.style.top) + parseFloat(popup.style.maxHeight)).toBeLessThanOrEqual(
     window.innerHeight,
@@ -125,7 +126,7 @@ test('bounds long picker overflow and retires outside-input listeners with its o
   expect(popup.scrollTop).toBeGreaterThan(0);
   document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
   await nextTick();
-  expect(host.querySelector('[role="listbox"]')).toBeNull();
+  expect(document.querySelector('[role="listbox"]')).toBeNull();
   anchor.click();
   await nextTick();
   document.activeElement?.dispatchEvent(
@@ -136,6 +137,8 @@ test('bounds long picker overflow and retires outside-input listeners with its o
   anchor.click();
   await nextTick();
   app.unmount();
-  expect(host.querySelector('[role="listbox"]')).toBeNull();
-  expect(removed.mock.calls.filter(([type]) => type === 'pointerdown')).toHaveLength(3);
+  expect(document.querySelector('[role="listbox"]')).toBeNull();
+  const registered = added.mock.calls.filter(([type]) => type === 'pointerdown');
+  expect(registered).toHaveLength(3);
+  for (const registration of registered) expect(removed.mock.calls).toContainEqual(registration);
 });

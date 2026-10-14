@@ -30,12 +30,24 @@ def test_canvas_uses_the_shared_menu_and_single_fluent_registration_owner() -> N
     pending = [runtime / "output_canvas/presentation/vue/CanvasOverlayRuntime.js"]
     visited: set[Path] = set()
     registration_owners: set[Path] = set()
+    menu_owners: set[Path] = set()
+    floating_owners: set[Path] = set()
     while pending:
         module = pending.pop().resolve()
         if module in visited:
             continue
         visited.add(module)
         source = module.read_text("utf-8")
+        if re.search(
+            r"\bclass ContextMenu\b|\b(?:var|let|const) _?ContextMenu\d*\s*=\s*class\b",
+            source,
+        ):
+            menu_owners.add(module)
+        if re.search(
+            r"\bclass FloatingSurface\b|\b(?:var|let|const) _?FloatingSurface\d*\s*=\s*class\b",
+            source,
+        ):
+            floating_owners.add(module)
         if "fluent-text-input" in source and "customElements.get" in source:
             registration_owners.add(module)
         for specifier in IMPORT.findall(source):
@@ -44,6 +56,8 @@ def test_canvas_uses_the_shared_menu_and_single_fluent_registration_owner() -> N
                 assert dependency.is_relative_to(ROOT / "web")
                 pending.append(dependency)
     assert (runtime / "menus/ContextMenu.js").resolve() in visited
+    assert menu_owners == {(runtime / "menus/ContextMenu.js").resolve()}
+    assert floating_owners == {(runtime / "menus/FloatingSurface.js").resolve()}
     assert registration_owners == {
         (runtime / "surface/appearance/FluentThemeRuntime.js").resolve()
     }

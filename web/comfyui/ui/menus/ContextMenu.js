@@ -83,7 +83,8 @@ export class ContextMenu {
             anchor,
             dismiss: this.close,
             containsTarget: (target) => this.#levels.some((level) => level.surface.element.contains(target)) ||
-                (this.#options?.trigger?.contains(target) ?? false),
+                (this.#options?.anchor.kind === 'below' &&
+                    (this.#options.trigger?.contains(target) ?? false)),
         });
     }
     /** Update checked choices without replacing the floating surface or losing its scroll position. */
