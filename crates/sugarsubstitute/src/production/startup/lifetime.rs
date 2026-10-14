@@ -35,38 +35,13 @@ impl ProductionStartup {
     /// Preserve first measurement/cleanup failure while attempting independent cancellation.
     pub(super) fn close_owned(&mut self) -> Result<(), Box<dyn Error>> {
         if self.closing {
-            return self.shutdown.budget().map(|_| ());
+            return self.advance_shutdown_budget();
         }
         self.closing = true;
         self.visible = false;
         self.commands.close();
         let mut failure = None;
-        let initiated = self.child.begin_shutdown();
-        let existing = self.child.shutdown_budget();
-        let budget = match initiated {
-            Ok(initiated) => self.shutdown.request(initiated.or(existing), || {
-                if self.execution.has_owner() {
-                    self.execution.now()
-                } else {
-                    use sugarsubstitute_contracts::execution::Clock;
-                    Ok(self.clock.now())
-                }
-            }),
-            Err(cause) if existing.is_some() => {
-                retain(&mut failure, Err(cause));
-                self.shutdown.request(existing, || {
-                    Err(std::io::Error::other("Actual child shutdown budget disappeared").into())
-                })
-            }
-            Err(cause) => self.shutdown.request(None, || Err(cause)),
-        };
-        let budget = match budget {
-            Ok(budget) => Some(budget),
-            Err(cause) => {
-                retain(&mut failure, Err(cause));
-                None
-            }
-        };
+        retain(&mut failure, self.advance_shutdown_budget());
         let policy =
             self.policy.close(self.startup.as_mut().map(PreparedChildStartup::session_mut));
         match policy {
@@ -87,8 +62,41 @@ impl ProductionStartup {
         if let Some(render) = &mut self.preparation {
             retain(&mut failure, render.request_retirement());
         }
-        if let Some(budget) = budget {
-            retain(&mut failure, self.child.request_shutdown(budget));
+        retain(&mut failure, self.refresh_deadline());
+        failure.map_or(Ok(()), Err)
+    }
+    /// Await the existing capture measurement before admitting authenticated exit intent.
+    /// An absent capture permits exactly one local sample; pending capture never does.
+    fn advance_shutdown_budget(&mut self) -> Result<(), Box<dyn Error>> {
+        let initiated = self.child.begin_shutdown();
+        let existing = self.child.shutdown_budget();
+        let mut failure = None;
+        let origin = match initiated {
+            Ok(origin) => {
+                Some(existing.map_or(origin, super::super::child::ShutdownInitiation::Captured))
+            }
+            Err(cause) if existing.is_some() => {
+                retain(&mut failure, Err(cause));
+                existing.map(super::super::child::ShutdownInitiation::Captured)
+            }
+            Err(cause) => {
+                retain(&mut failure, Err(self.shutdown.reject(cause)));
+                None
+            }
+        };
+        if let Some(origin) = origin {
+            match self.shutdown.request(origin, || {
+                if self.execution.has_owner() {
+                    self.execution.now()
+                } else {
+                    use sugarsubstitute_contracts::execution::Clock;
+                    Ok(self.clock.now())
+                }
+            }) {
+                Ok(Some(budget)) => retain(&mut failure, self.child.request_shutdown(budget)),
+                Ok(None) => {}
+                Err(cause) => retain(&mut failure, Err(cause)),
+            }
         }
         self.shutdown.tighten(self.child.shutdown_budget());
         if let Ok(budget) = self.shutdown.budget() {
@@ -106,6 +114,7 @@ impl ProductionStartup {
         }
         let mut failure = None;
         retain(&mut failure, self.consume(NonZeroUsize::MIN.saturating_add(31)).map(|_| ()));
+        retain(&mut failure, self.advance_shutdown_budget());
         let render = self.preparation.as_mut().map_or(Ok(true), PreparationDriver::poll_retirement);
         let child = self.child.poll_shutdown();
         let render = observe_settlement(&mut failure, render);
@@ -116,6 +125,7 @@ impl ProductionStartup {
                 self.execution.retain_shutdown_cutoff(budget.settle_until);
                 true
             }
+            Err(_) if self.shutdown.pending() => false,
             Err(cause) => {
                 retain(&mut failure, Err(cause));
                 false

@@ -15,6 +15,9 @@ mod cleanup_state;
 #[cfg(test)]
 #[path = "coordinator_backend/cutoff_tests.rs"]
 mod cutoff_tests;
+#[path = "coordinator_backend/failure.rs"]
+mod failure;
+use failure::{FailureKind, FailureObservation, OutputTerminalFailure, RootExit, Stopped};
 #[path = "coordinator_backend/preparation.rs"]
 mod preparation;
 #[cfg(test)]

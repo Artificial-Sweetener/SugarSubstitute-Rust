@@ -79,7 +79,7 @@ fn real_driver_factory_cancelled_scope_keeps_partial_custody_until_actual_native
     assert!(!child.bootstrap.channel_mut().admitted());
     assert!(child.take_prepared_startup().is_none());
     assert_eq!(jobs.allocate()?.get(), 1);
-    assert!(child.begin_shutdown()?.is_none());
+    assert_eq!(child.begin_shutdown()?, ShutdownInitiation::NoCapture);
     let budget = ShutdownBudget::new(Moment::from_nanos(0))?;
     child.request_shutdown(budget)?;
     assert!(!child.poll_shutdown()?);

@@ -71,7 +71,7 @@ fn inert_authority_cannot_construct_backend_driver() -> Result<()> {
 #[test]
 fn failed_resource_diagnostic_borrows_the_original_source_cause_after_policy_adoption() -> Result<()>
 {
-    use super::activity::{FailureKind, FailureObservation};
+    use super::failure::{FailureKind, FailureObservation};
     let mut retained = unadmitted_policy()?;
     let owner = retained.backend.as_mut();
     let run =
@@ -138,7 +138,7 @@ fn failed_resource_diagnostic_borrows_the_original_source_cause_after_policy_ado
 
 #[test]
 fn backend_failure_diagnostics_classify_campaign_without_formatting_unknown_causes() {
-    use super::activity::{FailureKind, FailureObservation};
+    use super::failure::{FailureKind, FailureObservation};
     use sugarsubstitute_comfy::readiness_campaign::{CampaignError, CampaignRejection};
     let campaign = LifecycleFailure::new(
         LifecycleFailureCode::Preparation,
@@ -146,14 +146,14 @@ fn backend_failure_diagnostics_classify_campaign_without_formatting_unknown_caus
     );
     assert_eq!(
         FailureObservation::retained(&campaign),
-        FailureObservation { kind: FailureKind::Campaign, stage: "campaign_rejected" }
+        FailureObservation::classified(FailureKind::Campaign, "campaign_rejected")
     );
     let unknown = LifecycleFailure::new(
         LifecycleFailureCode::Preparation,
         Box::new(std::io::Error::other("private/path/response/secret")),
     );
     let observation = FailureObservation::retained(&unknown);
-    assert_eq!(observation, FailureObservation { kind: FailureKind::Other, stage: "unclassified" });
+    assert_eq!(observation, FailureObservation::classified(FailureKind::Other, "unclassified"));
     assert!(!format!("{observation:?}").contains("secret"));
 }
 

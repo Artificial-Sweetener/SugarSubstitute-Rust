@@ -342,7 +342,8 @@ impl CoordinatorBackend {
                 tracing::info!(operation="backend_preparation_transition",resource=?key,stage="SourceTerminal",outcome="Error",
                     "Original backend preparation advanced");
             }
-            tracing::warn!(operation="backend_preparation_failure",resource=?key,kind=?observation.kind,stage=observation.stage,
+            tracing::warn!(operation="backend_preparation_failure",resource=?key,kind=?observation.kind,stage=observation.stage,terminal=?observation.terminal,exit_code=observation.exit_code,
+                native_operation=observation.native_operation,native_code=observation.native_code,
                 "Original backend preparation failure retained");
         }
         match self.begin_cleanup(key, None, resources) {
@@ -354,92 +355,5 @@ impl CoordinatorBackend {
                 .retain(cause),
         }
         Ok(transition)
-    }
-}
-
-/// Closed diagnostic classes derived from the already retained concrete owner error.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum FailureKind {
-    Source,
-    Readiness,
-    Campaign,
-    Other,
-}
-
-/// Borrow only sealed owners' static operation labels, never arbitrary cause text.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) struct FailureObservation {
-    pub(super) kind: FailureKind,
-    pub(super) stage: &'static str,
-}
-impl FailureObservation {
-    /// Inspect the one original cause adopted by the authoritative resource policy.
-    /// No recursive error callbacks, formatting, paths or response bytes are inspected.
-    pub(super) fn retained(failure: &LifecycleFailure) -> Self {
-        let Some(cause) = failure.source() else {
-            return Self { kind: FailureKind::Other, stage: "unclassified" };
-        };
-        if let Some(source) = cause.downcast_ref::<FrontendSourceError>() {
-            return Self { kind: FailureKind::Source, stage: source.stage() };
-        }
-        if let Some(transport) = cause
-            .downcast_ref::<sugarsubstitute_comfy::readiness_transport::ReadinessTransportError>(
-        ) {
-            return Self { kind: FailureKind::Readiness, stage: transport.stage() };
-        }
-        if let Some(campaign) =
-            cause.downcast_ref::<sugarsubstitute_comfy::readiness_campaign::CampaignError>()
-        {
-            use sugarsubstitute_comfy::readiness_campaign::CampaignError;
-            let stage = match campaign {
-                CampaignError::Transport(transport) => {
-                    return Self { kind: FailureKind::Readiness, stage: transport.stage() };
-                }
-                CampaignError::Rejected(_) => "campaign_rejected",
-                CampaignError::Budget(_) => "campaign_budget",
-                CampaignError::Time(_) => "campaign_time",
-                CampaignError::Clock(_) => "campaign_clock",
-                CampaignError::Admission(_) => "campaign_admission",
-                CampaignError::CleanupOutcome(_) => "campaign_cleanup_outcome",
-                CampaignError::CleanupPanicked(_) => "campaign_cleanup_panic",
-            };
-            return Self { kind: FailureKind::Campaign, stage };
-        }
-        Self { kind: FailureKind::Other, stage: "unclassified" }
-    }
-}
-
-#[derive(Debug)]
-struct Stopped(TerminalKind);
-impl std::fmt::Display for Stopped {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Backend preparation stopped: {:?}", self.0)
-    }
-}
-impl Error for Stopped {}
-#[derive(Debug)]
-struct RootExit(u32);
-impl std::fmt::Display for RootExit {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Owned backend root exited: {}", self.0)
-    }
-}
-impl Error for RootExit {}
-
-#[derive(Debug)]
-struct OutputTerminalFailure(
-    JobCompletion<WindowsOutputReport, sugarsubstitute_execution::windows::NativeObservationError>,
-);
-impl std::fmt::Display for OutputTerminalFailure {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Owned backend output stopped: {:?}", self.0.outcome.kind())
-    }
-}
-impl Error for OutputTerminalFailure {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match &self.0.outcome {
-            JobOutcome::Failure(cause) => Some(cause),
-            _ => None,
-        }
     }
 }

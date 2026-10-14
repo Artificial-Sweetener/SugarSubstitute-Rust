@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain the original full shutdown transaction, including failed clock measurement.
+use super::super::child::ShutdownInitiation;
 use std::{error::Error, fmt, rc::Rc};
 use sugarsubstitute_contracts::{execution::Moment, lifecycle::ShutdownBudget};
 
@@ -22,33 +23,69 @@ impl Error for MeasurementFailure {
         Some(self.0.as_ref())
     }
 }
-/// Keep one budget or one unresolved original measurement failure on the UI thread.
+/// Distinguish an in-flight external observation from its immutable measured result.
+enum State {
+    CapturePending,
+    Measured(Result<ShutdownBudget, MeasurementFailure>),
+}
+/// Keep one capture observation or original local-clock result on the UI thread.
 pub(super) struct ShutdownTransaction {
-    state: Option<Result<ShutdownBudget, MeasurementFailure>>,
+    state: Option<State>,
 }
 impl ShutdownTransaction {
     /// Keep the role inert until its first genuine shutdown transaction.
     pub(super) const fn new() -> Self {
         Self { state: None }
     }
+    /// Observe pending original capture measurement without granting settlement or a budget.
+    pub(super) fn pending(&self) -> bool {
+        matches!(self.state, Some(State::CapturePending))
+    }
     /// Adopt an actual earlier child transaction or sample the original configured clock once.
     /// A failed sample remains unresolved; later calls never replace it with a new deadline.
     pub(super) fn request(
         &mut self,
-        existing: Option<ShutdownBudget>,
+        origin: ShutdownInitiation,
         now: impl FnOnce() -> Result<Moment, Box<dyn Error>>,
-    ) -> Result<ShutdownBudget, Box<dyn Error>> {
-        if self.state.is_none() {
-            let measured =
-                existing.map_or_else(|| now().and_then(|now| Ok(ShutdownBudget::new(now)?)), Ok);
-            self.state = Some(measured.map_err(|cause| MeasurementFailure(Rc::from(cause))));
+    ) -> Result<Option<ShutdownBudget>, Box<dyn Error>> {
+        let existing = match origin {
+            ShutdownInitiation::Captured(budget) => Some(budget),
+            _ => None,
+        };
+        if self.state.is_none() || matches!(self.state, Some(State::CapturePending)) {
+            match origin {
+                ShutdownInitiation::CapturePending => {
+                    self.state = Some(State::CapturePending);
+                    return Ok(None);
+                }
+                ShutdownInitiation::NoCapture if self.state.is_some() => return Ok(None),
+                ShutdownInitiation::NoCapture => {
+                    let measured = now().and_then(|now| Ok(ShutdownBudget::new(now)?));
+                    self.state = Some(State::Measured(
+                        measured.map_err(|cause| MeasurementFailure(Rc::from(cause))),
+                    ));
+                }
+                ShutdownInitiation::Captured(budget) => {
+                    self.state = Some(State::Measured(Ok(budget)));
+                }
+            }
         }
         self.tighten(existing);
-        self.budget()
+        self.budget().map(Some)
+    }
+    /// Retain the actual failed capture observation; pending data is never sent here.
+    pub(super) fn reject(&mut self, cause: Box<dyn Error>) -> Box<dyn Error> {
+        if self.state.is_none() || matches!(self.state, Some(State::CapturePending)) {
+            let failure = MeasurementFailure(Rc::from(cause));
+            self.state = Some(State::Measured(Err(failure.clone())));
+            Box::new(failure)
+        } else {
+            cause
+        }
     }
     /// Retain a complete earlier actual child transaction without rebuilding grace or total.
     pub(super) fn tighten(&mut self, existing: Option<ShutdownBudget>) {
-        if let (Some(Ok(original)), Some(earlier)) = (&mut self.state, existing)
+        if let (Some(State::Measured(Ok(original))), Some(earlier)) = (&mut self.state, existing)
             && earlier.settle_until < original.settle_until
         {
             *original = earlier;
@@ -57,9 +94,9 @@ impl ShutdownTransaction {
     /// Borrow the latched decision through copied moments or the retained original cause.
     pub(super) fn budget(&self) -> Result<ShutdownBudget, Box<dyn Error>> {
         match &self.state {
-            Some(Ok(budget)) => Ok(*budget),
-            Some(Err(cause)) => Err(Box::new(cause.clone())),
-            None => {
+            Some(State::Measured(Ok(budget))) => Ok(*budget),
+            Some(State::Measured(Err(cause))) => Err(Box::new(cause.clone())),
+            None | Some(State::CapturePending) => {
                 Err(std::io::Error::other("Original startup shutdown transaction absent").into())
             }
         }
@@ -75,13 +112,13 @@ mod tests {
         let calls = Cell::new(0);
         let mut transaction = ShutdownTransaction::new();
         assert!(transaction.budget().is_err());
-        let budget = transaction.request(None, || {
+        let budget = transaction.request(ShutdownInitiation::NoCapture, || {
             calls.set(calls.get() + 1);
             Ok(Moment::from_nanos(50))
         })?;
-        assert_eq!(budget, ShutdownBudget::new(Moment::from_nanos(50))?);
+        assert_eq!(budget, Some(ShutdownBudget::new(Moment::from_nanos(50))?));
         assert_eq!(
-            transaction.request(None, || {
+            transaction.request(ShutdownInitiation::NoCapture, || {
                 calls.set(calls.get() + 1);
                 Ok(Moment::from_nanos(500))
             })?,
@@ -94,7 +131,9 @@ mod tests {
     fn earlier_actual_child_transaction_keeps_all_three_moments_and_later_cannot_renew()
     -> Result<(), Box<dyn Error>> {
         let mut transaction = ShutdownTransaction::new();
-        let original = transaction.request(None, || Ok(Moment::from_nanos(100)))?;
+        let original = transaction
+            .request(ShutdownInitiation::NoCapture, || Ok(Moment::from_nanos(100)))?
+            .ok_or("Original budget missing")?;
         let earlier = ShutdownBudget::new(Moment::from_nanos(50))?;
         transaction.tighten(Some(earlier));
         assert_eq!(transaction.budget()?, earlier);
@@ -102,8 +141,10 @@ mod tests {
         assert_eq!(transaction.budget()?, earlier);
         let mut adopted = ShutdownTransaction::new();
         assert_eq!(
-            adopted.request(Some(earlier), || Err("Unexpected clock sample".into()))?,
-            earlier
+            adopted.request(ShutdownInitiation::Captured(earlier), || Err(
+                "Unexpected clock sample".into()
+            ))?,
+            Some(earlier)
         );
         Ok(())
     }
@@ -113,7 +154,7 @@ mod tests {
         let calls = Cell::new(0);
         let mut transaction = ShutdownTransaction::new();
         let failure = transaction
-            .request(None, || {
+            .request(ShutdownInitiation::NoCapture, || {
                 calls.set(calls.get() + 1);
                 Err(Box::new(std::io::Error::other("first clock")))
             })
@@ -128,10 +169,13 @@ mod tests {
             "first clock"
         );
         let repeated = transaction
-            .request(Some(ShutdownBudget::new(Moment::from_nanos(1))?), || {
-                calls.set(calls.get() + 1);
-                Ok(Moment::from_nanos(5))
-            })
+            .request(
+                ShutdownInitiation::Captured(ShutdownBudget::new(Moment::from_nanos(1))?),
+                || {
+                    calls.set(calls.get() + 1);
+                    Ok(Moment::from_nanos(5))
+                },
+            )
             .err()
             .ok_or("Failure replaced")?;
         assert_eq!(
@@ -148,8 +192,89 @@ mod tests {
     #[test]
     fn overflow_is_unresolved_and_does_not_adopt_a_new_interval() -> Result<(), Box<dyn Error>> {
         let mut transaction = ShutdownTransaction::new();
-        assert!(transaction.request(None, || Ok(Moment::from_nanos(u64::MAX))).is_err());
-        assert!(transaction.request(None, || Ok(Moment::from_nanos(0))).is_err());
+        assert!(
+            transaction
+                .request(ShutdownInitiation::NoCapture, || Ok(Moment::from_nanos(u64::MAX)))
+                .is_err()
+        );
+        assert!(
+            transaction
+                .request(ShutdownInitiation::NoCapture, || Ok(Moment::from_nanos(0)))
+                .is_err()
+        );
+        Ok(())
+    }
+    #[test]
+    fn capture_pending_does_not_sample_another_clock_and_adopts_only_original_budget()
+    -> Result<(), Box<dyn Error>> {
+        let calls = Cell::new(0);
+        let mut transaction = ShutdownTransaction::new();
+        for origin in [ShutdownInitiation::CapturePending, ShutdownInitiation::NoCapture] {
+            assert_eq!(
+                transaction.request(origin, || {
+                    calls.set(calls.get() + 1);
+                    Err("A pending capture cannot sample the UI clock".into())
+                })?,
+                None
+            );
+            assert!(transaction.pending());
+            assert!(transaction.budget().is_err());
+        }
+        let original = ShutdownBudget::new(Moment::from_nanos(50))?;
+        assert_eq!(
+            transaction.request(ShutdownInitiation::Captured(original), || {
+                calls.set(calls.get() + 1);
+                Ok(Moment::from_nanos(1_000))
+            })?,
+            Some(original)
+        );
+        assert!(!transaction.pending());
+        assert_eq!(transaction.budget()?, original);
+        assert_eq!(
+            transaction.request(ShutdownInitiation::NoCapture, || {
+                calls.set(calls.get() + 1);
+                Ok(Moment::from_nanos(2_000))
+            })?,
+            Some(original)
+        );
+        assert_eq!(calls.get(), 0);
+        Ok(())
+    }
+    #[test]
+    fn actual_capture_clock_failure_after_pending_remains_original_and_cannot_renew()
+    -> Result<(), Box<dyn Error>> {
+        let mut transaction = ShutdownTransaction::new();
+        assert_eq!(
+            transaction.request(ShutdownInitiation::CapturePending, || {
+                Err("Pending capture cannot sample another clock".into())
+            })?,
+            None
+        );
+        let original = Box::new(std::io::Error::other("actual capture clock"));
+        let failure = transaction.reject(original);
+        let retained = failure
+            .source()
+            .and_then(|cause| cause.downcast_ref::<std::io::Error>())
+            .ok_or("Original clock type lost")?;
+        assert_eq!(retained.to_string(), "actual capture clock");
+        let address = std::ptr::from_ref(retained);
+        let repeated = transaction
+            .request(
+                ShutdownInitiation::Captured(ShutdownBudget::new(Moment::from_nanos(1))?),
+                || Err("Failed measurement cannot sample another clock".into()),
+            )
+            .err()
+            .ok_or("Actual failure replaced")?;
+        assert_eq!(
+            std::ptr::from_ref(
+                repeated
+                    .source()
+                    .and_then(|cause| cause.downcast_ref::<std::io::Error>())
+                    .ok_or("Retained failure type lost")?
+            ),
+            address
+        );
+        assert!(!transaction.pending());
         Ok(())
     }
 }

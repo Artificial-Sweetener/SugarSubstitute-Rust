@@ -65,6 +65,24 @@ impl ClaimError {
             ClaimState::Shared(state) => state.operation(),
         }
     }
+    /// Borrow only a concrete original Win32 leaf, retaining all cause ownership.
+    /// Unknown leaf callbacks, formatting and secondary causes are never inspected.
+    pub fn win32_code(&self) -> Option<u32> {
+        let cause = self.source()?;
+        if let Some(native) =
+            cause.downcast_ref::<sugarsubstitute_execution::windows::NativeObservationError>()
+        {
+            return native.win32_code();
+        }
+        if let Some(cause) = cause.downcast_ref::<std::io::Error>() {
+            return cause.raw_os_error().and_then(|code| u32::try_from(code).ok());
+        }
+        if let Some(cause) = cause.downcast_ref::<windows::core::Error>() {
+            let code = cause.code().0 as u32;
+            return (code & 0xffff_0000 == 0x8007_0000).then_some(code & 0xffff);
+        }
+        None
+    }
     /// Borrow an observed cleanup failure without replacing the primary cause.
     pub fn cleanup_cause(&self) -> Option<&Self> {
         match &self.state {
@@ -147,6 +165,70 @@ impl Error for ClaimAdmissionError {
             Self::Registry(cause) => Some(cause),
             Self::Native(cause) => Some(cause),
             _ => None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod diagnostic_tests {
+    use super::*;
+    struct Unknown(std::sync::atomic::AtomicUsize);
+    impl fmt::Debug for Unknown {
+        fn fmt(&self, _: &mut fmt::Formatter<'_>) -> fmt::Result {
+            assert_eq!(
+                self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
+                usize::MAX,
+                "unknown debug callback"
+            );
+            Ok(())
+        }
+    }
+    impl fmt::Display for Unknown {
+        fn fmt(&self, _: &mut fmt::Formatter<'_>) -> fmt::Result {
+            assert_eq!(
+                self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
+                usize::MAX,
+                "unknown display callback"
+            );
+            Ok(())
+        }
+    }
+    impl Error for Unknown {
+        fn source(&self) -> Option<&(dyn Error + 'static)> {
+            assert_eq!(
+                self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
+                usize::MAX,
+                "unknown source callback"
+            );
+            None
+        }
+    }
+    #[test]
+    fn win32_diagnostic_keeps_concrete_code_without_unknown_callbacks() {
+        let cause = ClaimError::new("original_operation", std::io::Error::from_raw_os_error(122));
+        assert_eq!(cause.win32_code(), Some(122));
+        assert_eq!(
+            cause
+                .source()
+                .and_then(|cause| cause.downcast_ref::<std::io::Error>())
+                .and_then(std::io::Error::raw_os_error),
+            Some(122)
+        );
+        let cause =
+            ClaimError::new("original_operation", Unknown(std::sync::atomic::AtomicUsize::new(0)));
+        assert_eq!(cause.win32_code(), None);
+        #[cfg(windows)]
+        {
+            let cause = ClaimError::new(
+                "original_operation",
+                windows::core::Error::from_hresult(windows::core::HRESULT::from_win32(5)),
+            );
+            assert_eq!(cause.win32_code(), Some(5));
+            let cause = ClaimError::new(
+                "original_operation",
+                windows::core::Error::from_hresult(windows::core::HRESULT(0x8000_4005u32 as i32)),
+            );
+            assert_eq!(cause.win32_code(), None);
         }
     }
 }

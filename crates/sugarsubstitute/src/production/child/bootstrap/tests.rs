@@ -170,7 +170,7 @@ fn quiet_pre_ui_owner_keeps_original_cutoff_until_ready_or_shutdown() -> TestRes
     assert_eq!(child.next_deadline(), None);
     child.prepared = false;
     assert_eq!(child.next_deadline(), Some(original));
-    assert!(child.begin_shutdown()?.is_none());
+    assert_eq!(child.begin_shutdown()?, crate::production::child::ShutdownInitiation::NoCapture);
     assert_eq!(child.next_deadline(), None);
     let budget = ShutdownBudget::new(Moment::from_nanos(200))?;
     child.request_shutdown(budget)?;

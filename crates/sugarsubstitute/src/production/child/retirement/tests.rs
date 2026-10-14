@@ -48,3 +48,32 @@ fn queued_exit_intent_and_completion_never_prove_acknowledgement_or_retirement()
     assert!(state.budget.is_none());
     Ok(())
 }
+
+#[test]
+fn pending_capture_is_unmeasured_and_actual_counter_failure_keeps_original_budget() -> Result<()> {
+    let mut shutdown = ChildShutdown::new();
+    assert_eq!(
+        shutdown.observe_capture(Some(CaptureCleanupSnapshot::Requested))?,
+        ShutdownInitiation::CapturePending
+    );
+    assert!(shutdown.budget.is_none());
+    let budget = ShutdownBudget::new(Moment::from_nanos(50))?;
+    let cause = sugarsubstitute_execution::windows::NativeObservationError::new(
+        "capture_cleanup_counter",
+        std::io::Error::other("original counter failure"),
+    );
+    let failure = shutdown
+        .observe_capture(Some(CaptureCleanupSnapshot::Latched { budget, counter: Err(cause) }))
+        .err()
+        .ok_or("Actual counter failure lost")?;
+    assert_eq!(shutdown.budget, Some(budget));
+    assert_eq!(
+        failure
+            .downcast_ref::<sugarsubstitute_execution::windows::NativeObservationError>()
+            .ok_or("Actual native type lost")?
+            .stage(),
+        "capture_cleanup_counter"
+    );
+    assert_eq!(shutdown.observe_capture(None)?, ShutdownInitiation::Captured(budget));
+    Ok(())
+}

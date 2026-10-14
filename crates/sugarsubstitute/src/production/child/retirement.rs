@@ -28,6 +28,16 @@ struct Pending {
     control: Control,
     admitted: bool,
 }
+/// Preserve pending capture clock observation separately from an absent capture owner.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::production) enum ShutdownInitiation {
+    /// No capture session was admitted; the composing owner measures its own clock once.
+    NoCapture,
+    /// The existing capture claimant is still observing its original clock.
+    CapturePending,
+    /// The genuine capture owner supplied its unchanged ten/fifteen-second transaction.
+    Captured(ShutdownBudget),
+}
 pub(super) struct ChildShutdown {
     budget: Option<ShutdownBudget>,
     closing: bool,
@@ -72,6 +82,31 @@ impl ChildShutdown {
             self.budget = Some(budget)
         }
     }
+    /// Classify the actual capture owner's passive observation without sampling a clock.
+    fn observe_capture(
+        &mut self,
+        snapshot: Option<CaptureCleanupSnapshot>,
+    ) -> Result<ShutdownInitiation> {
+        match snapshot {
+            Some(CaptureCleanupSnapshot::Latched { budget, counter }) => {
+                self.retain_budget(budget);
+                if let Err(cause) = counter {
+                    return Err(Box::new(cause));
+                }
+                Ok(ShutdownInitiation::Captured(
+                    self.budget.ok_or("Actual capture shutdown budget absent")?,
+                ))
+            }
+            Some(CaptureCleanupSnapshot::ClockUnavailable(cause)) => Err(Box::new(cause)),
+            Some(CaptureCleanupSnapshot::Requested) => Ok(ShutdownInitiation::CapturePending),
+            Some(CaptureCleanupSnapshot::Dormant) => {
+                Err("Capture cleanup did not fence its original owner".into())
+            }
+            None => {
+                Ok(self.budget.map_or(ShutdownInitiation::NoCapture, ShutdownInitiation::Captured))
+            }
+        }
+    }
     fn queue(&mut self, control: Control) -> Result<()> {
         let slot = self
             .queued
@@ -82,11 +117,12 @@ impl ChildShutdown {
         Ok(())
     }
 }
+
 impl ProductionChild {
     /// Latch capture cleanup first; absent capture permits the composing content's original clock.
     /// # Errors
     /// Keeps clock/counter failures and actual partial capture/source custody unchanged.
-    pub(in crate::production) fn begin_shutdown(&mut self) -> Result<Option<ShutdownBudget>> {
+    pub(in crate::production) fn begin_shutdown(&mut self) -> Result<ShutdownInitiation> {
         self.observe_bootstrap_failure();
         if !self.shutdown.closing {
             self.shutdown.closing = true;
@@ -94,20 +130,7 @@ impl ProductionChild {
             self.main.close();
             self.output.close();
         }
-        match self.bootstrap.capture_cleanup_snapshot() {
-            Some(CaptureCleanupSnapshot::Latched { budget, counter }) => {
-                self.shutdown.retain_budget(budget);
-                if let Err(cause) = counter {
-                    return Err(Box::new(cause));
-                }
-                Ok(self.shutdown.budget)
-            }
-            Some(CaptureCleanupSnapshot::ClockUnavailable(cause)) => Err(Box::new(cause)),
-            Some(CaptureCleanupSnapshot::Requested) => {
-                Err("Actual capture cleanup clock observation pending".into())
-            }
-            _ => Ok(self.shutdown.budget),
-        }
+        self.shutdown.observe_capture(self.bootstrap.capture_cleanup_snapshot())
     }
     /// Borrow the immutable actual transaction after independent capture reconciliation.
     pub(in crate::production) fn shutdown_budget(&self) -> Option<ShutdownBudget> {

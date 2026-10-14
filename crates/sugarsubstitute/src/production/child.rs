@@ -27,6 +27,7 @@ mod profile_transaction;
 mod requests;
 #[path = "child/retirement.rs"]
 mod retirement;
+pub(in crate::production) use retirement::ShutdownInitiation;
 #[cfg(test)]
 #[path = "child/test_support.rs"]
 mod test_support;
