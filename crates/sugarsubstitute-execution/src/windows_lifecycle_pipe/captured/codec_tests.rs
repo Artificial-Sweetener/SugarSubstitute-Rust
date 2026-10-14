@@ -25,7 +25,7 @@ fn fixtures() -> TestResult<(bootstrap::Data, CaptureEndpointObservation)> {
     let handler = CaptureProcessFacts::new(72, 100)?;
     let expected = CaptureAttachExpectation::new(
         owner,
-        run,
+        sugarsubstitute_contracts::crash::CaptureTarget::Desktop(run),
         &BuildIdentity::new("test_build")?,
         creator,
         handler,
@@ -63,7 +63,7 @@ fn captured_roundtrip_preserves_original_source_counter_payload_and_reserved_pre
 {
     let body = [1, 2, 3, 4];
     let (out, data) = bytes(&body)?;
-    let (base, facts) = decode(&out, data.deadline)?;
+    let (base, facts) = decode(&out, data.deadline, bootstrap::Kind::Desktop)?;
     assert_eq!(base.binding, data.binding);
     assert_eq!(base.deadline, data.deadline);
     assert_eq!(facts.processes, [81, 82]);
@@ -95,12 +95,15 @@ fn captured_strict_header_tail_and_each_authority_matching_slot_fail_closed() ->
             1056 | 1064 | 1072 | 1080 | 1088 => value[index..index + 8].fill(0),
             _ => value[index] ^= 0xff,
         }
-        assert!(decode(&value, data.deadline).is_err(), "Accepted malformed offset {index}");
+        assert!(
+            decode(&value, data.deadline, bootstrap::Kind::Desktop).is_err(),
+            "Accepted malformed offset {index}"
+        );
     }
     let mut trailing = valid.clone();
     trailing.push(0);
-    assert!(decode(&trailing, data.deadline).is_err());
-    assert!(decode(&valid[..valid.len() - 1], data.deadline).is_err());
+    assert!(decode(&trailing, data.deadline, bootstrap::Kind::Desktop).is_err());
+    assert!(decode(&valid[..valid.len() - 1], data.deadline, bootstrap::Kind::Desktop).is_err());
     assert!(
         bootstrap::decode(valid[..1024].try_into()?, data.deadline, bootstrap::Kind::Desktop)
             .is_err()
@@ -117,10 +120,10 @@ fn captured_bound_and_ordinary_versions_preserve_exact_extent_compatibility() ->
     }
     let (max, data) = bytes(&vec![1; MAX_PAYLOAD_BYTES])?;
     assert_eq!(max.len(), 67480);
-    assert!(decode(&max, data.deadline).is_ok());
+    assert!(decode(&max, data.deadline, bootstrap::Kind::Desktop).is_ok());
     let old = bootstrap::encode(&data)?;
     assert_eq!(&old[4..8], &[1, 0, 0, 4]);
     assert!(bootstrap::decode(&old, data.deadline, bootstrap::Kind::Desktop).is_ok());
-    assert!(decode(&old, data.deadline).is_err());
+    assert!(decode(&old, data.deadline, bootstrap::Kind::Desktop).is_err());
     Ok(())
 }

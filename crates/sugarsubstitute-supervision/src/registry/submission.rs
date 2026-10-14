@@ -63,7 +63,7 @@ impl WindowsProcessRegistry {
         )
     }
     #[allow(clippy::too_many_arguments)]
-    fn submit_owned(
+    pub(super) fn submit_owned(
         &mut self,
         execution: &ExecutionClient,
         creation_scope: &Scope,
@@ -74,6 +74,23 @@ impl WindowsProcessRegistry {
         input: &mut Option<WindowsLaunchInput>,
     ) -> Result<LaunchTicket, RegistryAdmissionError> {
         let original = input.as_ref().ok_or(RegistryAdmissionError::InvalidSpecification)?;
+        if let Some(source) = &original.managed_custody
+            && binding != FamilyBinding::Managed(source.resource())
+        {
+            return Err(RegistryAdmissionError::InvalidSpecification);
+        }
+        if let FamilyBinding::BackendCustody(key) = binding {
+            if original.backend_custody.as_ref().is_none_or(|launch| !launch.validates(key))
+                || original.diagnostic.is_some()
+                || original.lifecycle.is_some()
+                || original.output.is_some()
+                || original.fixture_events.is_some()
+            {
+                return Err(RegistryAdmissionError::InvalidSpecification);
+            }
+        } else if original.backend_custody.is_some() {
+            return Err(RegistryAdmissionError::InvalidSpecification);
+        }
         if let FamilyBinding::Diagnostic(key) = binding {
             if original.diagnostic.as_ref().is_none_or(|launch| !launch.validates(key))
                 || original.lifecycle.is_some()
@@ -134,6 +151,9 @@ impl WindowsProcessRegistry {
             (FamilyBinding::Diagnostic(old), FamilyBinding::Diagnostic(new)) => {
                 old.owner() == new.owner() && old.role() == new.role()
             }
+            (FamilyBinding::BackendCustody(old), FamilyBinding::BackendCustody(new)) => {
+                old.owner() == new.owner()
+            }
             _ => false,
         }) {
             return Err(RegistryAdmissionError::Busy);
@@ -160,6 +180,9 @@ impl WindowsProcessRegistry {
             Shared {
                 admission: AtomicU8::new(OPEN),
                 native: Mutex::new(NativeState {
+                    establishment: None,
+                    custody_destination: None,
+                    custody_release: None,
                     pending_input: input.take(),
                     family: None,
                     watch: None,
@@ -177,6 +200,8 @@ impl WindowsProcessRegistry {
         let ticket =
             LaunchTicket { process: ProcessKey { owner: self.owner, id: process_id }, binding };
         let mut record = Record {
+            establishment_job: None,
+            establishment_completion: None,
             ticket,
             shared: shared.clone(),
             native_scope,
@@ -206,13 +231,44 @@ impl WindowsProcessRegistry {
             unread: [false; 5],
         };
         self.next_process = next;
-        let job = execution.submit_blocking(creation_scope, creation, move |context| {
-            let input = lock(&shared.native)
-                .pending_input
-                .take()
-                .ok_or_else(|| RegistryError::invalid("creation_input_owner"))?;
-            create(shared, input, context, ticket)
-        });
+        let custodian = lock(&shared.native)
+            .pending_input
+            .as_ref()
+            .and_then(|input| input.managed_custody.as_ref())
+            .map(|source| source.parent().clone());
+        let job = if let Some(parent) = custodian {
+            let mut retained = Some(shared.clone());
+            let client = execution.clone();
+            execution
+                .submit_custodied_process(
+                    creation_scope,
+                    creation,
+                    parent.storage(),
+                    &mut retained,
+                    move |shared, context, memory| {
+                        let input = lock(&shared.native).pending_input.take().ok_or_else(|| {
+                            NativeObservationError::new(
+                                "custodied_input_owner",
+                                RegistryError::invalid("creation_input_owner"),
+                            )
+                        })?;
+                        custodied_creation::Driver::construct(
+                            shared, input, context, memory, client, ticket,
+                        )
+                    },
+                )
+                .map(CreationJob::Custodied)
+        } else {
+            execution
+                .submit_blocking(creation_scope, creation, move |context| {
+                    let input = lock(&shared.native)
+                        .pending_input
+                        .take()
+                        .ok_or_else(|| RegistryError::invalid("creation_input_owner"))?;
+                    create(shared, input, context, ticket)
+                })
+                .map(CreationJob::Blocking)
+        };
         match job {
             Ok(job) => record.creation = Some(job),
             Err(cause) => {
@@ -265,7 +321,7 @@ fn create(
     let claim =
         context.memory().claim(bytes).map_err(|cause| RegistryError::new("input_memory", cause))?;
     let mut charged = ChargedInput { input, _claim: claim };
-    let family = Family::new(context.memory())?;
+    let family = Family::allocate_owned(context.memory())?;
     let mut unwind = CreationOutputGuard { shared: shared.clone(), armed: true };
     let mut state = lock(&shared.native);
     state.family = Some(family);
@@ -293,6 +349,7 @@ fn create_owned(
     family.adopt_fixture_events(input)?;
     family.adopt_lifecycle(input)?;
     family.adopt_diagnostic(input)?;
+    family.adopt_backend_custody(input)?;
     family.adopt_output(input, ticket.binding)?;
     family.prepare_inheritance()?;
     let root = shared.port.create(family, input)?;
@@ -306,6 +363,9 @@ fn create_owned(
         FamilyBinding::Desktop(run) => shared.port.enroll_desktop(family, run, ticket.process)?,
         FamilyBinding::Diagnostic(key) => {
             shared.port.enroll_diagnostic(family, key, ticket.process)?
+        }
+        FamilyBinding::BackendCustody(key) => {
+            shared.port.enroll_backend_custody(family, key, ticket.process)?
         }
         FamilyBinding::Managed(_) => {}
     }

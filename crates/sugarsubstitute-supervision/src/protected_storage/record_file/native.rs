@@ -32,8 +32,9 @@ impl<const N: usize> RecordBoundary<N> for NativeRecordBoundary {
         file: &HeldFile<N>,
         expected: Option<[u8; 24]>,
         check: &mut dyn FnMut() -> Result<(), ClaimError>,
+        operation: &crate::protected_storage::exclusion::operation::Operation<'_>,
     ) -> Result<RecordRead<N>, ClaimError> {
-        read::shape(file, expected, check)
+        read::shape(file, expected, check, operation)
     }
     fn create_stage_into(
         &mut self,
@@ -79,6 +80,7 @@ impl<const N: usize> RecordBoundary<N> for NativeRecordBoundary {
         read::activated(&value.handle, expected, check)
     }
     fn flush_stage(&mut self, value: &mut Stage<N>) -> Result<(), ClaimError> {
+        value.handle.budget().check()?;
         // SAFETY: The actual retained writable owner remains armed through flush.
         unsafe { FlushFileBuffers(value.handle.raw()) }
             .map_err(|cause| ClaimError::new("flush_activated_claim", cause))
@@ -90,8 +92,12 @@ impl<const N: usize> RecordBoundary<N> for NativeRecordBoundary {
         &mut self,
         file: &HeldFile<N>,
         check: &mut dyn FnMut() -> Result<(), ClaimError>,
+        operation: &crate::protected_storage::exclusion::operation::Operation<'_>,
     ) -> Result<(), ClaimError> {
-        let mut handles = lock(&file.temporary_handles);
+        let mut handles = crate::protected_storage::exclusion::operation::Loan::take(
+            &file.temporary_handles,
+            operation,
+        );
         for handle in handles.iter_mut().rev() {
             check()?;
             let result = handle.close();

@@ -70,6 +70,10 @@ pub(crate) struct Signal {
     core: Weak<Core>,
 }
 impl Signal {
+    /// Compare actual original native owner without projecting its Weak Core.
+    pub(crate) fn matches_core(&self, core: &Weak<Core>) -> bool {
+        self.core.ptr_eq(core)
+    }
     pub(crate) fn new(core: &Arc<Core>) -> Arc<Self> {
         Arc::new(Self { completed: AtomicBool::new(false), core: Arc::downgrade(core) })
     }
@@ -183,6 +187,14 @@ pub(crate) enum NativeWork {
     CoordinatorEntry(crate::coordinator_entry::EntryWork),
     CaptureAttach(Box<crate::capture_attach::AttachWork>),
     DesktopCapture(Box<crate::desktop_capture::work::DesktopCaptureWork>),
+    CustodiedProcess(
+        Box<crate::backend_custody::process::worker::Work>,
+        crate::backend_custody::process::CustodiedProcessMemory,
+    ),
+    BackendCustody(
+        Box<crate::backend_custody::worker::Work>,
+        crate::backend_custody::BackendCustodyMemory,
+    ),
 }
 impl NativeWork {
     pub(crate) fn ready(&self) -> bool {
@@ -196,6 +208,8 @@ impl NativeWork {
             Self::CoordinatorEntry(_) => true,
             Self::CaptureAttach(_) => true,
             Self::DesktopCapture(_) => true,
+            Self::CustodiedProcess(_, _) => true,
+            Self::BackendCustody(work, _) => work.binding.ready(),
         }
     }
     pub(crate) fn initial_custody(&self) -> Option<Arc<crate::capture_attach::control::Custody>> {
@@ -215,6 +229,9 @@ impl NativeWork {
     }
     pub(crate) fn initial_deadlines(&self) -> Option<crate::native_deadlines::Deadlines> {
         match self {
+            Self::CustodiedProcess(work, _) => {
+                Some(crate::native_deadlines::Deadlines::handshake(work.until))
+            }
             Self::LifecyclePipe(work) => Some(crate::lifecycle_pipe::initial_deadlines(work)),
             Self::CoordinatorEntry(work) => Some(crate::coordinator_entry::initial_deadlines(work)),
             Self::CaptureAttach(work) => {

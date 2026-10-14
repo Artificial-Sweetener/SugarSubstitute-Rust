@@ -168,10 +168,12 @@ impl WindowsResourceClaims {
             resource,
             proof: proof.clone(),
             file: None,
+            custody_probe: None,
             record: None,
             original_released: None,
             claimed: false,
             released: false,
+            custodian: self.custodian.clone(),
         });
         let directory = lock(&self.root.value).directory.clone();
         let worker = shared.clone();

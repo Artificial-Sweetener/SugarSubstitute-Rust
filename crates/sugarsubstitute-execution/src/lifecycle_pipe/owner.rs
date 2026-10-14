@@ -4,6 +4,7 @@
 use super::*;
 use crate::task::ErasedJob;
 
+use crate::backend_custody::BackendCustodyPipeReport;
 use crate::diagnostic_pipe::DiagnosticPipeReport;
 use sugarsubstitute_contracts::execution::{CancelControl, JobOutcome};
 /// Copy only immutable retirement facts, releasing Shared before actual terminal delivery.
@@ -16,6 +17,7 @@ pub(crate) struct RetiredFacts {
 pub(crate) enum Owner {
     Desktop(Arc<Job<LifecyclePipeReport, LifecyclePipeFailure>>),
     Diagnostic(Arc<Job<DiagnosticPipeReport, LifecyclePipeFailure>>),
+    BackendCustody(Arc<Job<BackendCustodyPipeReport, LifecyclePipeFailure>>),
 }
 impl Owner {
     /// Match the actual retained job allocation; IDs alone cannot associate a control.
@@ -23,6 +25,7 @@ impl Owner {
         let (scope, spec, erased): (_, _, Arc<dyn ErasedJob>) = match self {
             Self::Desktop(job) => (job.scope_id, job.spec, job.clone()),
             Self::Diagnostic(job) => (job.scope_id, job.spec, job.clone()),
+            Self::BackendCustody(job) => (job.scope_id, job.spec, job.clone()),
         };
         record.scope_id == scope && record.spec == spec && Arc::ptr_eq(&record.job, &erased)
     }
@@ -30,12 +33,14 @@ impl Owner {
         match self {
             Self::Desktop(job) => job.cancel(),
             Self::Diagnostic(job) => job.cancel(),
+            Self::BackendCustody(job) => job.cancel(),
         }
     }
     pub(crate) fn cancellation_requested(&self) -> bool {
         match self {
             Self::Desktop(job) => job.cancel.is_requested(),
             Self::Diagnostic(job) => job.cancel.is_requested(),
+            Self::BackendCustody(job) => job.cancel.is_requested(),
         }
     }
     pub(crate) fn finish(
@@ -68,6 +73,19 @@ impl Owner {
                     outcome,
                     DiagnosticPipeReport {
                         key: facts.binding.and_then(PeerBinding::diagnostic),
+                        received_messages: facts.received,
+                        completed_writes: facts.written,
+                    },
+                ),
+            ),
+            Self::BackendCustody(job) => job.finish_at(
+                context,
+                Some(started),
+                ended,
+                project(
+                    outcome,
+                    BackendCustodyPipeReport {
+                        key: facts.binding.and_then(PeerBinding::backend_custody),
                         received_messages: facts.received,
                         completed_writes: facts.written,
                     },

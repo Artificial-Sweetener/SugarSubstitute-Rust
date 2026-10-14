@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Atomically activate bounded schema-one generations while exclusion is held.
+//! Preserve legacy generations and atomically publish authenticated backend custody records.
 use super::*;
 mod storage;
 #[cfg(test)]
@@ -24,6 +24,8 @@ pub(crate) enum RecordState {
 }
 #[derive(Clone, Debug)]
 pub(crate) struct Record {
+    pub(crate) version: u16,
+    pub(crate) custodian: u64,
     pub(crate) owner: CoordinatorKey,
     pub(crate) resource: u64,
     pub(crate) generation: u64,
@@ -34,6 +36,8 @@ pub(crate) struct Record {
 impl Record {
     pub(crate) fn coordinator(owner: CoordinatorKey) -> Self {
         Self {
+            version: 1,
+            custodian: 0,
             owner,
             resource: 0,
             generation: 0,
@@ -44,6 +48,8 @@ impl Record {
     }
     pub(crate) fn backend(resource: ResourceKey, digest: [u8; 32]) -> Self {
         Self {
+            version: 1,
+            custodian: 0,
             owner: resource.owner,
             resource: resource.id.get(),
             generation: resource.generation.get(),
@@ -55,7 +61,7 @@ impl Record {
     pub(crate) fn encode(&self) -> [u8; 128] {
         let mut bytes = [0; 128];
         bytes[..8].copy_from_slice(MAGIC);
-        bytes[8..10].copy_from_slice(&1_u16.to_le_bytes());
+        bytes[8..10].copy_from_slice(&self.version.to_le_bytes());
         bytes[10] = u8::from(self.resource != 0);
         bytes[11] = self.state as u8;
         bytes[12..44].copy_from_slice(self.owner.namespace.bytes());
@@ -64,13 +70,19 @@ impl Record {
         bytes[68..76].copy_from_slice(&self.generation.to_le_bytes());
         bytes[76..84].copy_from_slice(&self.process.to_le_bytes());
         bytes[84..116].copy_from_slice(&self.digest);
+        bytes[116..124].copy_from_slice(&self.custodian.to_le_bytes());
         bytes
     }
     pub(crate) fn decode(bytes: &[u8; 128]) -> Result<Self, ClaimError> {
-        if &bytes[..8] != MAGIC || bytes[8..10] != [1, 0] || bytes[116..].iter().any(|b| *b != 0) {
+        let version = u16::from_le_bytes([bytes[8], bytes[9]]);
+        if &bytes[..8] != MAGIC
+            || !(1..=2).contains(&version)
+            || bytes[124..].iter().any(|b| *b != 0)
+        {
             return Err(ClaimError::invalid("claim_record_schema"));
         }
         let number = |start| u64::from_le_bytes(std::array::from_fn(|i| bytes[start + i]));
+        let custodian = number(116);
         let resource = number(60);
         let generation = number(68);
         let process = number(76);
@@ -81,7 +93,10 @@ impl Record {
             4 => RecordState::Released,
             _ => return Err(ClaimError::invalid("claim_record_state")),
         };
-        if bytes[10] > 1
+        if (version == 1 && custodian != 0)
+            || (version == 2 && custodian == 0)
+            || bytes[10] > 1
+            || (version == 2 && bytes[10] != 1)
             || (bytes[10] == 0 && (resource != 0 || generation != 0 || process != 0))
             || (bytes[10] == 0 && !matches!(state, RecordState::Held | RecordState::Released))
             || (bytes[10] == 1 && (resource == 0 || generation == 0))
@@ -103,6 +118,8 @@ impl Record {
             return Err(ClaimError::invalid("claim_record_namespace"));
         }
         Ok(Self {
+            version,
+            custodian,
             owner,
             resource,
             generation,

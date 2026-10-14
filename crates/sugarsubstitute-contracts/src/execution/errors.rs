@@ -4,7 +4,7 @@
 //! Preserve admission decisions separately from unexpected adapter failures.
 
 use super::{ExecutionId, Generation, JobClass, JobId, Moment, Operation, ReplacementKey, ScopeId};
-use crate::lifecycle::RunKey;
+use crate::crash::CaptureTarget;
 use std::{error::Error, fmt};
 
 /// Preserve an unexpected adapter failure and its original owned cause.
@@ -99,9 +99,9 @@ pub enum AdmissionError {
     },
     /// Another native capture reservation still holds actual custody for this full run.
     /// This conflicts across scopes until physical/source retirement and sampling settle.
-    ConflictingNativeRun(
+    ConflictingNativeCaptureTarget(
         /// Exact coordinator, instance and generation whose custody remains held.
-        RunKey,
+        CaptureTarget,
     ),
     /// An accepted job identity must advance the executor's bounded high-water mark.
     JobIdentityOrder {
@@ -192,8 +192,8 @@ impl fmt::Debug for AdmissionError {
             Self::DuplicateJobId { job_id } => {
                 formatter.debug_struct("DuplicateJobId").field("job_id", job_id).finish()
             }
-            Self::ConflictingNativeRun(_) => {
-                formatter.write_str("ConflictingNativeRun { redacted }")
+            Self::ConflictingNativeCaptureTarget(_) => {
+                formatter.write_str("ConflictingNativeCaptureTarget { redacted }")
             }
             Self::JobIdentityOrder { latest } => {
                 formatter.debug_struct("JobIdentityOrder").field("latest", latest).finish()
@@ -267,8 +267,8 @@ impl fmt::Display for AdmissionError {
             Self::DuplicateJobId { job_id } => {
                 write!(formatter, "Job identity {} was already used", job_id.get())
             }
-            Self::ConflictingNativeRun(_) => {
-                formatter.write_str("Native capture run custody is already reserved")
+            Self::ConflictingNativeCaptureTarget(_) => {
+                formatter.write_str("Native capture target custody is already reserved")
             }
             Self::JobIdentityOrder { latest } => {
                 write!(formatter, "Job identity must advance {}", latest.get())
@@ -326,7 +326,7 @@ mod tests {
     fn native_run_conflict_preserves_full_matching_fact_and_redacts_diagnostics()
     -> Result<(), Box<dyn Error>> {
         use crate::lifecycle::{
-            CoordinatorEpoch, CoordinatorKey, InstanceId, NamespaceId, RunGeneration,
+            CoordinatorEpoch, CoordinatorKey, InstanceId, NamespaceId, RunGeneration, RunKey,
         };
         let run = RunKey {
             owner: CoordinatorKey {
@@ -336,10 +336,12 @@ mod tests {
             instance: InstanceId::new(2)?,
             generation: RunGeneration::new(3)?,
         };
-        let error = AdmissionError::ConflictingNativeRun(run);
-        assert!(matches!(error, AdmissionError::ConflictingNativeRun(actual) if actual == run));
-        assert_eq!(format!("{error:?}"), "ConflictingNativeRun { redacted }");
-        assert_eq!(error.to_string(), "Native capture run custody is already reserved");
+        let error = AdmissionError::ConflictingNativeCaptureTarget(CaptureTarget::Desktop(run));
+        assert!(
+            matches!(error, AdmissionError::ConflictingNativeCaptureTarget(actual) if actual == CaptureTarget::Desktop(run))
+        );
+        assert_eq!(format!("{error:?}"), "ConflictingNativeCaptureTarget { redacted }");
+        assert_eq!(error.to_string(), "Native capture target custody is already reserved");
         assert!(error.source().is_none());
         Ok(())
     }

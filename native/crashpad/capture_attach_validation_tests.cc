@@ -45,6 +45,18 @@ bool ExactLayouts() {
          sizeof(SsCaptureCleanupBudgetV1) == 48 && sizeof(SsCaptureSourceIdentityV1) == 40;
 }
 bool ExactInput() { return sugarsubstitute::ValidAttachInput(Input()); }
+bool SupervisorInputAccepted() {
+  auto input = Input(); input.subject = 2; input.instance = input.generation = 0;
+  return sugarsubstitute::ValidAttachInput(input);
+}
+bool SupervisorDesktopIdentityRejected() {
+  auto input = Input(); input.subject = 2;
+  if (!Reject(input)) return false;
+  input.instance = 0;
+  if (!Reject(input)) return false;
+  input.instance = 1; input.generation = 0;
+  return Reject(input);
+}
 bool Historical760Rejected() { auto input = Input(); input.byte_size = 760; return Reject(input); }
 bool WrongVersionRejected() { auto input = Input(); input.abi_version = 1; return Reject(input); }
 bool WrongPhysicalSizeRejected() {
@@ -53,7 +65,7 @@ bool WrongPhysicalSizeRejected() {
   input.byte_size = 777; return Reject(input);
 }
 bool ForeignSubjectProvenanceRejected() {
-  auto input = Input(); input.subject = 2;
+  auto input = Input(); input.subject = 3;
   if (!Reject(input)) return false;
   input.subject = 1; input.provenance = 2; return Reject(input);
 }
@@ -139,6 +151,8 @@ bool StepShapeNonceAndStageRejected() {
 int main() {
   const struct { const char* name; bool (*run)(); } cases[] = {
     {"ExactLayouts", ExactLayouts}, {"ExactInput", ExactInput},
+    {"SupervisorInputAccepted", SupervisorInputAccepted},
+    {"SupervisorDesktopIdentityRejected", SupervisorDesktopIdentityRejected},
     {"Historical760Rejected", Historical760Rejected}, {"WrongVersionRejected", WrongVersionRejected},
     {"WrongPhysicalSizeRejected", WrongPhysicalSizeRejected},
     {"ForeignSubjectProvenanceRejected", ForeignSubjectProvenanceRejected},
@@ -157,6 +171,6 @@ int main() {
     if (!test.run()) { fprintf(stderr, "FAIL %s\n", test.name); return 1; }
     printf("PASS %s\n", test.name);
   }
-  printf("PASS 17 inert ABI/layout boundary cases; no native identity authority\n");
+  printf("PASS 19 inert ABI/layout boundary cases; no native identity authority\n");
   return 0;
 }

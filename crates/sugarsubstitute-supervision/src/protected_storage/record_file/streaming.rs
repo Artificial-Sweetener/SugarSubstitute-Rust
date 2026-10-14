@@ -76,6 +76,7 @@ impl Port for StreamingPort {
         let sid = self.sid.as_ref().ok_or_else(|| self.reject())?.clone();
         let mut session = session::Session::path(&self.original, context)?;
         let result = HeldFile::acquire_into(
+            crate::protected_storage::exclusion::ExclusionOpen::CreateOrOpen,
             &mut self.writer,
             path,
             record_path,

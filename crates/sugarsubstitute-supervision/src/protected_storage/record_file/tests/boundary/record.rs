@@ -20,6 +20,7 @@ impl<const N: usize> RecordBoundary<N> for Fake {
         _: &HeldFile<N>,
         expected: Option<[u8; 24]>,
         _check: &mut dyn FnMut() -> Result<(), ClaimError>,
+        _operation: &crate::protected_storage::exclusion::operation::Operation<'_>,
     ) -> Result<RecordRead<N>, ClaimError> {
         let mut disk = lock(&self.0);
         if disk.stage.as_ref().is_some_and(|stage| {
@@ -210,6 +211,7 @@ impl<const N: usize> RecordBoundary<N> for Fake {
         &mut self,
         _: &HeldFile<N>,
         check: &mut dyn FnMut() -> Result<(), ClaimError>,
+        _operation: &crate::protected_storage::exclusion::operation::Operation<'_>,
     ) -> Result<(), ClaimError> {
         check()?;
         let mut disk = lock(&self.0);

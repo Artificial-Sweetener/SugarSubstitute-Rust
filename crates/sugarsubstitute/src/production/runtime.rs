@@ -24,6 +24,10 @@ pub(crate) fn execute<I: IntoIterator<Item = OsString>>(
     diagnostics: crate::diagnostics::DiagnosticHealth,
 ) -> Result<Option<impl Iterator<Item = OsString>>, Box<dyn Error>> {
     let mut arguments = arguments.into_iter().peekable();
+    if arguments.peek().is_some_and(|value| value == "--internal-backend-custody") {
+        super::backend_custody::run(arguments)?;
+        return Ok(None);
+    }
     if arguments.peek().is_some_and(|value| value == "--internal-production-desktop") {
         run_desktop(DesktopRole::parse(arguments)?, diagnostics)?;
         return Ok(None);

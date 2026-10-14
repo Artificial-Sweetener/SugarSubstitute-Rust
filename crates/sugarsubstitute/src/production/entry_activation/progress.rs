@@ -76,9 +76,12 @@ impl ProductionActivation {
         };
         let backend = retained_backend.backend.as_mut();
         let delivery = self.delivery.as_mut().ok_or("Actual backend delivery storage missing")?;
-        let mut failure = relay::route(&mut self.records, backend, resources).err();
+        let mut failure =
+            relay::route(&mut self.records, backend, self.capture.as_ref(), resources).err();
         delivery.capture_pending(|| backend.take_pending_transition());
-        if let Err(cause) = delivery.route(&mut self.records, backend, resources) {
+        if let Err(cause) =
+            delivery.route(&mut self.records, backend, self.capture.as_ref(), resources)
+        {
             failure.get_or_insert(cause);
         }
         if failure.is_none() && !delivery.pending() {
@@ -87,7 +90,10 @@ impl ProductionActivation {
                 let mut unrelated_observation = false;
                 let produced = delivery.produce(|| {
                     let (transition, unrelated) = backend
-                        .claim_observation(observation, &mut backend_resources(resources))
+                        .claim_observation(
+                            observation,
+                            &mut backend_resources(resources, self.capture.as_ref()),
+                        )
                         .map_err(outer)?;
                     unrelated_observation = unrelated.is_some();
                     Ok(transition)
@@ -99,7 +105,9 @@ impl ProductionActivation {
                 if let Err(cause) = produced {
                     failure.get_or_insert(cause);
                 }
-                if let Err(cause) = delivery.route(&mut self.records, backend, resources) {
+                if let Err(cause) =
+                    delivery.route(&mut self.records, backend, self.capture.as_ref(), resources)
+                {
                     failure.get_or_insert(cause);
                 }
                 if failure.is_some() || delivery.pending() {
@@ -110,7 +118,11 @@ impl ProductionActivation {
                 for key in backend.resource_keys().into_iter().flatten() {
                     let produced = delivery.produce(|| {
                         backend
-                            .activity(key, batch, &mut backend_resources(resources))
+                            .activity(
+                                key,
+                                batch,
+                                &mut backend_resources(resources, self.capture.as_ref()),
+                            )
                             .map_err(outer)
                     });
                     delivery.capture_pending(|| backend.take_pending_transition());
@@ -120,7 +132,9 @@ impl ProductionActivation {
                         }
                         failure.get_or_insert(cause);
                     }
-                    if let Err(cause) = delivery.route(&mut self.records, backend, resources) {
+                    if let Err(cause) =
+                        delivery.route(&mut self.records, backend, self.capture.as_ref(), resources)
+                    {
                         failure.get_or_insert(cause);
                     }
                     if failure.is_some() || delivery.pending() {
@@ -158,16 +172,21 @@ impl ProductionActivation {
                 && failure.is_none()
                 && !delivery.pending()
                 && let Some(budget) = Self::normal_role_budget(record)
-                && let Err(cause) = Self::close_record(record, backend, resources, budget)
+                && let Err(cause) =
+                    Self::close_record(record, backend, Some(capture), resources, budget)
             {
                 failure.get_or_insert(cause);
             }
         }
-        if let Err(cause) = relay::route(&mut self.records, backend, resources) {
+        if let Err(cause) =
+            relay::route(&mut self.records, backend, self.capture.as_ref(), resources)
+        {
             failure.get_or_insert(cause);
         }
         delivery.capture_pending(|| backend.take_pending_transition());
-        if let Err(cause) = delivery.route(&mut self.records, backend, resources) {
+        if let Err(cause) =
+            delivery.route(&mut self.records, backend, self.capture.as_ref(), resources)
+        {
             failure.get_or_insert(cause);
         }
         if let Some(cause) = failure {
@@ -198,6 +217,12 @@ impl ProductionActivation {
                 let storage = completion.memory.claim(RetainedBackend::required_storage_bytes())?;
                 self.backend =
                     Some(RetainedBackend::new(resources.authority, storage).map_err(outer)?);
+                self.backend
+                    .as_mut()
+                    .ok_or("Backend owner absent")?
+                    .backend
+                    .configure_custody(self.executable.clone(), self.working_directory.clone())
+                    .map_err(outer)?;
             }
             if self.delivery.is_none() && matches!(completion.outcome, JobOutcome::Success(_)) {
                 let storage =
@@ -234,7 +259,10 @@ impl ProductionActivation {
     }
 }
 
-pub(super) fn backend_resources<'a>(resources: &'a mut EntryResources<'_>) -> BackendResources<'a> {
+pub(super) fn backend_resources<'a>(
+    resources: &'a mut EntryResources<'_>,
+    capture: Option<&'a CaptureRegistration>,
+) -> BackendResources<'a> {
     BackendResources {
         client: resources.client,
         native: resources.native,
@@ -242,11 +270,13 @@ pub(super) fn backend_resources<'a>(resources: &'a mut EntryResources<'_>) -> Ba
         jobs: resources.jobs,
         scopes: resources.scopes,
         authority: resources.authority,
+        capture,
     }
 }
 pub(super) fn with_parent<T>(
     record: &mut Record,
     backend: &mut CoordinatorBackend,
+    capture: Option<&CaptureRegistration>,
     resources: &mut EntryResources<'_>,
     call: impl FnOnce(&mut ParentLifecycle, &mut ParentResources<'_, '_>) -> Result<T>,
 ) -> Result<T> {
@@ -259,7 +289,7 @@ pub(super) fn with_parent<T>(
     };
     let session = start.pipe.as_mut().ok_or("Actual captured lifecycle missing")?;
     let finite = resources.finite;
-    let mut execution = backend_resources(resources);
+    let mut execution = backend_resources(resources, capture);
     let mut borrowed = ParentResources {
         session,
         process,

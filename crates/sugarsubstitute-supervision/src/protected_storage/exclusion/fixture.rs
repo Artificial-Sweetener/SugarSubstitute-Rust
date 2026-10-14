@@ -45,6 +45,7 @@ impl<const N: usize> HeldFile<N> {
             .map_err(|cause| ClaimError::new("fixture_sid", cause))?;
         account_sid.extend_from_slice(sid);
         *retained = Some(Self {
+            operating: std::sync::atomic::AtomicBool::new(false),
             handle: Handle::new(
                 windows::Win32::Foundation::HANDLE::default(),
                 Budget::Protected(memory.clone()),

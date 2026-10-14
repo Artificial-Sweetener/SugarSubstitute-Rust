@@ -16,6 +16,7 @@ impl Family {
                 || self.output_pin.is_some()
                 || self.attributes_initialized
                 || self.diagnostic_bootstrap.is_some()
+                || self.backend_custody.is_some()
                 || !launch.validates(launch.key)
             {
                 return Err(RegistryError::invalid("diagnostic_inheritance_owner"));

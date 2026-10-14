@@ -17,6 +17,8 @@ use std::sync::{
 use sugarsubstitute_contracts::execution::{
     AdmissionError, JobClass, JobOutcome, Moment, Operation, ScopeId, ScopeSpec,
 };
+#[path = "target_substitution_tests.rs"]
+mod target_substitution;
 
 fn snapshot(
     rig: &Rig,
@@ -48,7 +50,10 @@ fn captured_parent_requires_its_actual_allocation_before_factory_and_preserves_p
     let startup = snapshot(&rig, &boundary, &session)?;
     let mut retirement = None;
     let (_capture_scope, capture_job, pin, release) =
-        crate::capture_attach::test_support::admitted_pin(&rig, run()?)?;
+        crate::capture_attach::test_support::admitted_pin(
+            &rig,
+            sugarsubstitute_contracts::crash::CaptureTarget::Desktop(run()?),
+        )?;
     retirement.replace(release);
     let original_handshake = Moment::from_nanos(25_000_000_000);
     let binding =
@@ -117,7 +122,10 @@ fn captured_parent_rejects_closed_receiving_ancestor_before_constructor_and_id_u
     let startup = snapshot(&rig, &boundary, &session)?;
     let mut retirement = None;
     let (_capture_scope, _capture_job, pin, release) =
-        crate::capture_attach::test_support::admitted_pin(&rig, run()?)?;
+        crate::capture_attach::test_support::admitted_pin(
+            &rig,
+            sugarsubstitute_contracts::crash::CaptureTarget::Desktop(run()?),
+        )?;
     retirement.replace(release);
     let binding = AdmissionBinding::project(
         run()?,
@@ -189,7 +197,10 @@ fn captured_parent_constructor_gets_narrowed_receiving_cutoff_with_persistent_de
     let startup = snapshot(&rig, &boundary, &session)?;
     let mut retirement = None;
     let (_capture_scope, _capture_job, pin, release) =
-        crate::capture_attach::test_support::admitted_pin(&rig, run()?)?;
+        crate::capture_attach::test_support::admitted_pin(
+            &rig,
+            sugarsubstitute_contracts::crash::CaptureTarget::Desktop(run()?),
+        )?;
     retirement.replace(release);
     let binding = AdmissionBinding::project(
         run()?,

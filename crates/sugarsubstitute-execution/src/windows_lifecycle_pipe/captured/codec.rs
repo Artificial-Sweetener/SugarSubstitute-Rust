@@ -41,10 +41,13 @@ pub(in crate::windows_lifecycle_pipe) fn encode(
     body: &[u8],
 ) -> Result<(), LifecyclePipeFailure> {
     let expected = endpoint.expectation();
-    if data.binding.desktop() != Some(expected.run())
+    if data.binding.capture_target() != Some(expected.target())
         || data.pid != expected.creator().process_id()
         || data.birth != expected.creator().creation_time_100ns()
-        || body.is_empty()
+        || (matches!(data.binding, crate::lifecycle_pipe::PeerBinding::Desktop(_))
+            && body.is_empty())
+        || (matches!(data.binding, crate::lifecycle_pipe::PeerBinding::BackendCustody(_))
+            && !body.is_empty())
         || body.len() > MAX_PAYLOAD_BYTES
         || destination.len() != BASE_BYTES + PREFIX_BYTES + body.len()
         || !valid_handles(processes)
@@ -56,7 +59,7 @@ pub(in crate::windows_lifecycle_pipe) fn encode(
     destination[1024..1028].copy_from_slice(b"SSCG");
     destination[1028..1030].copy_from_slice(&1u16.to_le_bytes());
     destination[1030..1032].copy_from_slice(&672u16.to_le_bytes());
-    put32(destination, 1032, 1);
+    put32(destination, 1032, if expected.target().backend_custody().is_some() { 2 } else { 1 });
     put32(destination, 1036, 1);
     put32(destination, 1040, expected.creator().process_id());
     put32(destination, 1044, expected.handler().process_id());
@@ -96,7 +99,7 @@ pub(in crate::windows_lifecycle_pipe) fn logical_bytes(
         return Err(failure("captured_startup_prefix"));
     }
     let length = u32::from_le_bytes(read(bytes, BASE_BYTES + 8)?) as usize;
-    if length == 0 || length > MAX_PAYLOAD_BYTES {
+    if length > MAX_PAYLOAD_BYTES {
         return Err(failure("captured_startup_bound"));
     }
     Ok(BASE_BYTES + PREFIX_BYTES + length)
@@ -106,6 +109,7 @@ pub(in crate::windows_lifecycle_pipe) fn logical_bytes(
 pub(in crate::windows_lifecycle_pipe) fn decode(
     bytes: &[u8],
     original: LifecyclePipeDeadline,
+    kind: bootstrap::Kind,
 ) -> Result<(bootstrap::Data, CapturedFacts), LifecyclePipeFailure> {
     let logical = logical_bytes(bytes)?;
     if logical != bytes.len() {
@@ -113,15 +117,27 @@ pub(in crate::windows_lifecycle_pipe) fn decode(
     }
     let base: &[u8; 1024] =
         bytes[..1024].try_into().map_err(|_| failure("captured_bootstrap_base"))?;
-    let data = bootstrap::decode_captured_base(base, original)?;
+    let data = bootstrap::decode_captured_base(base, original, kind)?;
     if &bytes[1024..1028] != b"SSCG"
         || read::<2>(bytes, 1028)? != 1u16.to_le_bytes()
         || read::<2>(bytes, 1030)? != 672u16.to_le_bytes()
-        || u32::from_le_bytes(read(bytes, 1032)?) != 1
+        || u32::from_le_bytes(read(bytes, 1032)?)
+            != if matches!(data.binding, crate::lifecycle_pipe::PeerBinding::BackendCustody(_)) {
+                2
+            } else {
+                1
+            }
         || u32::from_le_bytes(read(bytes, 1036)?) != 1
         || bytes[1096..1112].iter().chain(bytes[1696..2048].iter()).any(|value| *value != 0)
     {
         return Err(failure("captured_bootstrap_schema"));
+    }
+    if (matches!(data.binding, crate::lifecycle_pipe::PeerBinding::Desktop(_))
+        && logical == BASE_BYTES + PREFIX_BYTES)
+        || (matches!(data.binding, crate::lifecycle_pipe::PeerBinding::BackendCustody(_))
+            && logical != BASE_BYTES + PREFIX_BYTES)
+    {
+        return Err(failure("captured_startup_purpose_payload"));
     }
     let creator_pid = u32::from_le_bytes(read(bytes, 1040)?);
     let handler_pid = u32::from_le_bytes(read(bytes, 1044)?);

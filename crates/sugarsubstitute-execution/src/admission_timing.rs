@@ -29,10 +29,37 @@ pub(crate) fn validate(
     now: Moment,
 ) -> Result<AdmittedTiming, AdmissionError> {
     #[cfg(any(windows, test))]
+    if let RequestKind::BackendCustody { source, original } = kind {
+        crate::backend_custody::submission::validate_locked(core, state, source, original, now)?;
+        if receiving_cutoff(state, receiving_scope, now)?.is_some() || effective_deadline.is_some()
+        {
+            return Err(AdmissionError::NativeResources(
+                sugarsubstitute_contracts::execution::NativeResourceError::OriginalAdmissionRetired,
+            ));
+        }
+    }
+    #[cfg(any(windows, test))]
+    if let RequestKind::CustodiedProcess(parent) = kind {
+        parent.validate_locked(core, state, now)?;
+        let cutoff = crate::scope::earliest(
+            receiving_cutoff(state, receiving_scope, now)?,
+            effective_deadline,
+        );
+        if spec.operation != Operation::NativeLifecycle
+            || spec.class != JobClass::InfrastructureLifecycle
+            || cutoff.is_none()
+            || spec.replacement.is_some()
+        {
+            return Err(AdmissionError::NativeResources(
+                sugarsubstitute_contracts::execution::NativeResourceError::OriginalAdmissionRetired,
+            ));
+        }
+    }
+    #[cfg(any(windows, test))]
     let native_handshake = if let RequestKind::CapturedLifecycle(binding) = kind {
         if spec.class != JobClass::NativeObservation
             || spec.operation != Operation::NativeLifecycle
-            || spec.reservation_bytes != crate::lifecycle_pipe::MIN_CAPTURED_LIFECYCLE_PIPE_BYTES
+            || spec.reservation_bytes != binding.reservation_bytes()
             || spec.deadline.is_some()
             || effective_deadline.is_some()
             || spec.replacement.is_some()

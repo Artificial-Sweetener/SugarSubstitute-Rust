@@ -2,13 +2,15 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Route retained actual parent results before another request can overwrite them.
 use super::{
-    CoordinatorBackend, Result, RetainedRecord, forwarding::Forwarded, progress::with_parent,
+    CaptureRegistration, CoordinatorBackend, Result, RetainedRecord, forwarding::Forwarded,
+    progress::with_parent,
 };
 use crate::production::entry_runner::EntryResources;
 
 pub(super) fn route(
     records: &mut [Option<RetainedRecord>; 64],
     backend: &mut CoordinatorBackend,
+    capture: Option<&CaptureRegistration>,
     resources: &mut EntryResources<'_>,
 ) -> Result<()> {
     for source in 0..records.len() {
@@ -29,7 +31,7 @@ pub(super) fn route(
                     forwarded.retire(retired)?;
                 } else if destination.parent.is_some() && !destination.closed {
                     forwarded.deliver(destination.run, |transition| {
-                        with_parent(destination, backend, resources, |parent, borrowed| {
+                        with_parent(destination, backend, capture, resources, |parent, borrowed| {
                             Ok(parent.backend_transition(transition, borrowed)?)
                         })
                     })?;

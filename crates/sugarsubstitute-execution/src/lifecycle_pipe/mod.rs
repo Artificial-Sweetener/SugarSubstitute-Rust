@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Own closed lifecycle transport sessions and fixed command slots after real admission.
 mod admission;
-mod metadata;
+pub(crate) mod metadata;
 mod shared;
 pub(crate) use shared::SharedRef;
 mod binding;
@@ -15,7 +15,10 @@ pub(crate) use owner::Owner;
 pub use retirement::LifecyclePipeRetirement;
 mod buffers;
 mod control;
-mod current_admission;
+pub(crate) mod current_admission;
+pub(crate) use current_admission::validate as validate_current;
+pub(crate) use current_admission::validate_source as validate_current_source;
+pub(crate) use current_admission::validated as with_current_session;
 pub(crate) mod enrollment;
 mod issue;
 #[cfg(test)]
@@ -96,7 +99,7 @@ pub(crate) trait PipeLease: Send {
     #[cfg(windows)]
     fn take_captured_startup(
         &mut self,
-    ) -> Option<crate::windows_lifecycle_pipe::captured::child::CapturedStartup> {
+    ) -> Option<crate::windows_lifecycle_pipe::captured::child::CapturedInput> {
         None
     }
     fn take_completed_write(&mut self) -> Option<u32>;
@@ -133,16 +136,19 @@ impl Drop for Authentication {
     }
 }
 pub(crate) struct State {
+    pub(crate) custody_worker_permit_taken: bool,
+    pub(crate) custody_parent_storage_taken: bool,
     checked_retirement: Option<retirement::CheckedRetirement>,
     #[cfg(windows)]
     pub(crate) capture_inherited: Option<[usize; 2]>,
     #[cfg(windows)]
     pub(crate) captured_startup:
-        Option<crate::windows_lifecycle_pipe::captured::child::CapturedStartup>,
+        Option<crate::windows_lifecycle_pipe::captured::child::CapturedInput>,
     pub(crate) stopped: bool,
     pub(crate) prepared: bool,
     pub(crate) connected: bool,
     pub(crate) authenticated: bool,
+    pub(crate) authenticated_peer: Option<VerifiedPeer>,
     pub(crate) auth_busy: bool,
     pub(crate) binding: Option<PeerBinding>,
     pub(crate) peer: Option<PeerInput>,
@@ -172,6 +178,8 @@ pub(crate) struct State {
 impl State {
     fn new(binding: Option<PeerBinding>) -> Self {
         Self {
+            custody_worker_permit_taken: false,
+            custody_parent_storage_taken: false,
             checked_retirement: None,
             #[cfg(windows)]
             capture_inherited: None,
@@ -181,6 +189,7 @@ impl State {
             prepared: false,
             connected: false,
             authenticated: false,
+            authenticated_peer: None,
             auth_busy: false,
             binding,
             peer: None,
@@ -218,6 +227,8 @@ impl State {
     }
 }
 pub(crate) struct Shared {
+    pub(crate) child: bool,
+    pub(crate) captured: bool,
     pub(crate) original_deadline: Moment,
     pub(crate) state: Mutex<State>,
     pub(crate) core: Weak<Core>,
@@ -247,7 +258,11 @@ pub(crate) fn reserve(
         admit(core, scope, spec, run.map(PeerBinding::Desktop), handshake, lease, Owner::Desktop)?;
     Ok(LifecyclePipeSession { control: LifecyclePipeControl { inner }, completion })
 }
+#[cfg(windows)]
+mod persistent_scope;
 mod submission;
+#[cfg(windows)]
+pub(crate) use persistent_scope::validate_persistent_scope;
 pub(crate) use submission::{PipeAdmission, PreparedPipeLease, admit, admit_owned};
 pub(crate) fn failure(stage: &'static str) -> LifecyclePipeFailure {
     LifecyclePipeFailure::native(NativeObservationError::new(

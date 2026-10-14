@@ -12,6 +12,7 @@ pub(crate) trait RecordBoundary<const N: usize> {
         file: &HeldFile<N>,
         expected: Option<[u8; 24]>,
         check: &mut dyn FnMut() -> Result<(), ClaimError>,
+        operation: &crate::protected_storage::exclusion::operation::Operation<'_>,
     ) -> Result<RecordRead<N>, ClaimError>;
     fn create_stage_into(
         &mut self,
@@ -48,5 +49,6 @@ pub(crate) trait RecordBoundary<const N: usize> {
         &mut self,
         file: &HeldFile<N>,
         check: &mut dyn FnMut() -> Result<(), ClaimError>,
+        operation: &crate::protected_storage::exclusion::operation::Operation<'_>,
     ) -> Result<(), ClaimError>;
 }

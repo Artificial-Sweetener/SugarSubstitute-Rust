@@ -18,15 +18,15 @@ pub enum CaptureAttachAdmissionError {
     Admission(AdmissionError),
     /// Capture cleanup requires a persistent native scope with no ancestor deadline.
     ConflictingDeadline,
-    /// Exact run already holds native/source custody in this execution owner.
-    RunAlreadyReserved(sugarsubstitute_contracts::lifecycle::RunKey),
+    /// Exact target already holds native/source custody in this execution owner.
+    TargetAlreadyReserved(sugarsubstitute_contracts::crash::CaptureTarget),
 }
 impl fmt::Debug for CaptureAttachAdmissionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Admission(error) => error.fmt(f),
             Self::ConflictingDeadline => f.write_str("ConflictingDeadline"),
-            Self::RunAlreadyReserved(_) => f.write_str("RunAlreadyReserved { redacted }"),
+            Self::TargetAlreadyReserved(_) => f.write_str("TargetAlreadyReserved { redacted }"),
         }
     }
 }
@@ -39,7 +39,7 @@ impl std::error::Error for CaptureAttachAdmissionError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Admission(error) => Some(error),
-            Self::ConflictingDeadline | Self::RunAlreadyReserved(_) => None,
+            Self::ConflictingDeadline | Self::TargetAlreadyReserved(_) => None,
         }
     }
 }
@@ -129,11 +129,11 @@ pub(crate) fn reserve(
     core.admit(
         scope,
         spec,
-        RequestKind::CaptureAttach(expected.run()),
+        RequestKind::CaptureAttach(expected.target()),
         |context, cancel, timing| {
             let admitted = timing.admitted;
             let job = Job::new(scope.id(), spec, admitted, cancel, Arc::downgrade(core));
-            let custody = Custody::new(core, spec.id, expected.run(), handshake);
+            let custody = Custody::new(core, spec.id, expected.target(), handshake);
             let shared = Arc::new(Shared {
                 expected,
                 custody,
@@ -157,8 +157,8 @@ pub(crate) fn reserve(
     )
     .map_err(|error| {
         reject(match error {
-            AdmissionError::ConflictingNativeRun(run) => {
-                CaptureAttachAdmissionError::RunAlreadyReserved(run)
+            AdmissionError::ConflictingNativeCaptureTarget(run) => {
+                CaptureAttachAdmissionError::TargetAlreadyReserved(run)
             }
             error => CaptureAttachAdmissionError::Admission(error),
         })

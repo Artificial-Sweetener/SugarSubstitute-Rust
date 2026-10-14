@@ -14,6 +14,8 @@ mod enrollment;
 #[path = "test_support.rs"]
 mod kernel;
 use kernel::{Boundary, Lease};
+#[path = "backend_custody_tests.rs"]
+mod backend_custody;
 #[path = "clock_callback_tests.rs"]
 mod clock_callback;
 #[path = "current_admission_tests.rs"]

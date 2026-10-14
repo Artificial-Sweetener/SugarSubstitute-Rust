@@ -13,6 +13,9 @@ mod cleanup_lifetime_tests;
 #[path = "coordinator_backend/cleanup_state.rs"]
 mod cleanup_state;
 #[cfg(test)]
+#[path = "coordinator_backend/custody_capture_tests.rs"]
+mod custody_capture_tests;
+#[cfg(test)]
 #[path = "coordinator_backend/cutoff_tests.rs"]
 mod cutoff_tests;
 #[path = "coordinator_backend/failure.rs"]
@@ -58,7 +61,7 @@ use sugarsubstitute_supervision::{
     },
 };
 
-type Result<T> = std::result::Result<T, Box<dyn Error + Send + Sync>>;
+pub(super) type Result<T> = std::result::Result<T, Box<dyn Error + Send + Sync>>;
 
 /// Borrow the sole execution/identity sequences and the actual admitted authority.
 /// Native and cleanup scopes outlive finite preparation and every retained output.
@@ -69,6 +72,7 @@ pub(crate) struct BackendResources<'a> {
     pub(crate) jobs: &'a JobSequence,
     pub(crate) scopes: &'a ScopeSequence,
     pub(crate) authority: &'a mut CoordinatorAuthority,
+    pub(crate) capture: Option<&'a super::entry_activation::CaptureRegistration>,
 }
 
 /// Retain trusted explicit installed paths and the original captured environment.
@@ -123,6 +127,8 @@ struct Backend {
 /// The composing headless thread routes each immutable completion batch after the
 /// authority consumes its actual claims and registry jobs. This owner spawns nothing.
 pub(crate) struct CoordinatorBackend {
+    custody_options: Option<(std::path::PathBuf, std::path::PathBuf)>,
+    custody: Option<Box<super::coordinator_custody::CoordinatorCustody>>,
     owner: CoordinatorKey,
     policy: ResourceCoordinator,
     records: Box<[Option<Backend>]>,
@@ -136,9 +142,10 @@ pub(crate) struct RetainedBackend {
     _storage: MemoryClaim,
 }
 impl RetainedBackend {
-    /// Exact known retained table and heap metadata under the original projection job.
+    /// Cover the retained table and one MiB of bounded witness invocation metadata
+    /// inside the unchanged original sixteen-MiB projection reservation.
     pub(crate) const fn required_storage_bytes() -> u64 {
-        (size_of::<CoordinatorBackend>() + 64 * size_of::<Option<Backend>>()) as u64
+        (size_of::<CoordinatorBackend>() + 64 * size_of::<Option<Backend>>() + 1_048_576) as u64
     }
     /// Construct only from an actually serving claims/registry association.
     /// The caller preclaims the table and heap header from its unchanged original
@@ -155,6 +162,8 @@ impl RetainedBackend {
         records.try_reserve_exact(64)?;
         records.resize_with(64, || None);
         let backend = CoordinatorBackend {
+            custody_options: None,
+            custody: None,
             owner,
             policy: ResourceCoordinator::new(owner),
             records: records.into_boxed_slice(),
@@ -165,6 +174,21 @@ impl RetainedBackend {
     }
 }
 impl CoordinatorBackend {
+    /// Bind installed executable/namespace paths before the first managed request.
+    pub(crate) fn configure_custody(
+        &mut self,
+        executable: std::path::PathBuf,
+        installation: std::path::PathBuf,
+    ) -> Result<()> {
+        if self.custody_options.is_some()
+            || self.custody.is_some()
+            || self.records.iter().any(Option::is_some)
+        {
+            return Err(Box::new(LifecycleRejection::WrongPhase));
+        }
+        self.custody_options = Some((executable, installation));
+        Ok(())
+    }
     /// Register facts authenticated by the existing native child owner.
     pub(crate) fn register_run(&mut self, registration: ClientRegistration) -> Result<()> {
         self.policy.register_run(registration)?;
@@ -271,7 +295,27 @@ impl CoordinatorBackend {
 
     /// Report complete backend retirement; desktop/profile settlement remains with its owner.
     pub(crate) fn settled(&self) -> bool {
-        self.policy.snapshot().resources == 0 && self.records.iter().flatten().all(|r| r.settled)
+        self.policy.snapshot().resources == 0
+            && self.records.iter().flatten().all(|r| r.settled)
+            && self.custody.as_ref().is_none_or(|custody| custody.settled())
+    }
+    /// Close the witness once all writer claims and physical local families are closed.
+    pub(crate) fn close_custody(
+        &mut self,
+        budget: ShutdownBudget,
+        resources: &mut BackendResources<'_>,
+    ) -> Result<()> {
+        if self.records.iter().flatten().all(|record| {
+            !record.resolution_pending
+                && !record.claim_pending
+                && (!record.backend_admitted || record.released)
+                && (record.launch.is_none() || record.family_settled)
+                && record.shutdown.is_some()
+        }) && let Some(custody) = &mut self.custody
+        {
+            custody.close(budget, resources)?;
+        }
+        Ok(())
     }
 
     /// Recover actual replies/effects retained before a later adapter rejection.
@@ -352,6 +396,7 @@ impl CoordinatorBackend {
                     .next_deadline()
                     .or_else(|| record.readiness.is_none().then_some(record.budget.until())),
             })
+            .chain(self.custody.as_ref().and_then(|custody| custody.next_deadline()))
             .min()
     }
 

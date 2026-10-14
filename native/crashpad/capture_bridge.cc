@@ -11,6 +11,7 @@
 #include "client/settings.h"
 #include "client/simple_string_dictionary.h"
 
+#include <algorithm>
 #include <atomic>
 #include <map>
 #include <string>
@@ -25,10 +26,31 @@ sugarsubstitute::CaptureSource source;
 std::atomic<bool> attempted{false};
 sugarsubstitute::OwnedAttach captured;
 
+void HexBytes(const uint8_t* bytes, size_t count, char* output) {
+  constexpr char hex[] = "0123456789abcdef";
+  for (size_t i = 0; i < count; ++i) { output[2 * i] = hex[bytes[i] >> 4]; output[2 * i + 1] = hex[bytes[i] & 15]; }
+}
+void HexNumber(uint64_t value, char* output) {
+  constexpr char hex[] = "0123456789abcdef";
+  for (size_t i = 0; i < 16; ++i) { output[15 - i] = hex[value & 15]; value >>= 4; }
+}
 bool InitializeCaptured(sugarsubstitute::OwnedAttach* owner) {
+  // These are the exact accepted native attach owner fields, not inferred PID
+  // or endpoint spelling. The retained dictionary copies fixed string views.
+  char coordinator[97] = {}, subject[134] = {};
+  HexBytes(owner->coordinator_namespace, 32, coordinator);
+  HexBytes(owner->coordinator_epoch, 16, coordinator + 64);
+  memcpy(subject, owner->subject == 1 ? "d1:" : "s1:", 3);
+  memcpy(subject + 3, coordinator, 96);
+  if (owner->subject == 1) {
+    subject[99] = ':'; HexNumber(owner->instance, subject + 100);
+    subject[116] = ':'; HexNumber(owner->generation, subject + 117);
+  }
+  annotations.SetKeyValue("coordinator", coordinator);
+  annotations.SetKeyValue("subject", subject);
   annotations.SetKeyValue("product", "SugarSubstitute");
   annotations.SetKeyValue("build", owner->build);
-  annotations.SetKeyValue("role", "desktop");
+  annotations.SetKeyValue("role", owner->subject == 1 ? "desktop" : "supervisor");
   crashpad::CrashpadInfo::GetCrashpadInfo()->set_simple_annotations(&annotations);
   return client.InitializeCapturedAttach(owner);
 }
@@ -121,6 +143,13 @@ void ss_capture_start_v1(const SsCaptureInput* input, SsCaptureResult* result) {
   annotations.SetKeyValue("build", build);
   annotations.SetKeyValue("role", "supervisor");
   annotations.SetKeyValue("coordinator", coordinator);
+  if (coordinator.size() == 96 && std::all_of(coordinator.begin(), coordinator.end(), [](char c) {
+        return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
+      })) {
+    char subject[100] = {};
+    memcpy(subject, "s1:", 3); memcpy(subject + 3, coordinator.data(), 96);
+    annotations.SetKeyValue("subject", subject);
+  }
   crashpad::CrashpadInfo::GetCrashpadInfo()->set_simple_annotations(&annotations);
   const bool registered = client.StartHandlerOwned(
       Path(input->handler, input->handler_length), database_path,

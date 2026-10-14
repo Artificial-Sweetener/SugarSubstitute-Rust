@@ -132,7 +132,9 @@ impl ChildCapture {
             reservation_bytes: 4_194_304,
             replacement: None,
         };
-        let run = input.capture.run();
+        let Some(run) = input.capture.target().desktop() else {
+            return Err(ChildCaptureStartRejection::State(input));
+        };
         let Some(driver) = self.driver.take() else {
             return Err(ChildCaptureStartRejection::State(input));
         };
@@ -173,11 +175,11 @@ impl ChildCapture {
             if let Some(completion) = session.job().try_take_completion() {
                 let matches = correlation.completion(&completion)
                     && match &completion.outcome {
-                        JobOutcome::Success(attached) => correlation.attached(
-                            attached.run(),
-                            attached.execution(),
-                            attached.job(),
-                        ),
+                        JobOutcome::Success(attached) => {
+                            attached.target().desktop().is_some_and(|run| {
+                                correlation.attached(run, attached.execution(), attached.job())
+                            })
+                        }
                         _ => true,
                     };
                 self.terminal = Some(completion);

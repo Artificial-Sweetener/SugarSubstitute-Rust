@@ -17,7 +17,7 @@ pub(crate) fn expected() -> TestResult<CaptureAttachExpectation> {
     let run = RunKey { owner, instance: InstanceId::new(1)?, generation: RunGeneration::new(1)? };
     Ok(CaptureAttachExpectation::new(
         owner,
-        run,
+        sugarsubstitute_contracts::crash::CaptureTarget::Desktop(run),
         &BuildIdentity::new("test-build")?,
         CaptureProcessFacts::new(3, 4)?,
         CaptureProcessFacts::new(5, 6)?,
@@ -195,7 +195,7 @@ impl Drop for ReleaseBoundary {
         self.core.changed();
     }
 }
-pub(super) fn take_retirement_report(
+pub(crate) fn take_retirement_report(
     rig: &Rig,
     retirement: &mut CaptureAttachRetirement,
 ) -> TestResult<Result<CaptureAttachRetirementReport, CaptureAttachFailure>> {
@@ -216,7 +216,21 @@ pub(super) fn take_retirement_report(
 /// The returned boundary guard releases fake external retirement before runtime teardown.
 pub(crate) fn admitted_pin(
     rig: &Rig,
-    run: RunKey,
+    target: sugarsubstitute_contracts::crash::CaptureTarget,
+) -> TestResult<(
+    Scope,
+    OwnedJob<CaptureAttachLaunchPin, CaptureAttachFailure>,
+    CaptureAttachLaunchPin,
+    ReleaseBoundary,
+)> {
+    admitted_pin_for_creator(rig, target, CaptureProcessFacts::new(3, 4)?)
+}
+
+/// Bind a controlled external capture boundary to an actually observed creator when native preparation needs it.
+pub(crate) fn admitted_pin_for_creator(
+    rig: &Rig,
+    target: sugarsubstitute_contracts::crash::CaptureTarget,
+    creator: CaptureProcessFacts,
 ) -> TestResult<(
     Scope,
     OwnedJob<CaptureAttachLaunchPin, CaptureAttachFailure>,
@@ -231,10 +245,10 @@ pub(crate) fn admitted_pin(
     boundary.ready.store(true, Ordering::Release);
     let release = ReleaseBoundary::new(&rig.client.core, &boundary);
     let expected = CaptureAttachExpectation::new(
-        run.owner,
-        run,
+        target.owner(),
+        target,
         &BuildIdentity::new("test-build")?,
-        CaptureProcessFacts::new(3, 4)?,
+        creator,
         CaptureProcessFacts::new(5, 6)?,
         CaptureBudget::new(Moment::from_nanos(0))?,
     )?;

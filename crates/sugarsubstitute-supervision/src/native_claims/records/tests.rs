@@ -76,3 +76,31 @@ fn record_kind_process_generation_and_namespace_cannot_be_reinterpreted() -> Tes
     assert!(Record::decode(&wrong).is_err());
     Ok(())
 }
+
+#[test]
+fn custody_version_requires_original_positive_session_and_preserves_exact_legacy_bytes()
+-> TestResult {
+    let resource = ResourceKey {
+        owner: owner()?,
+        id: ResourceId::new(1)?,
+        generation: ResourceGeneration::new(1)?,
+    };
+    let legacy = Record::backend(resource, [3; 32]);
+    let original = legacy.encode();
+    let mut current = legacy.clone();
+    current.version = 2;
+    current.custodian = 19;
+    let decoded = Record::decode(&current.encode())?;
+    assert_eq!((decoded.version, decoded.custodian), (2, 19));
+    assert_eq!(Record::decode(&original)?.encode(), original);
+    current.custodian = 0;
+    assert!(Record::decode(&current.encode()).is_err());
+    current.custodian = 19;
+    current.version = 1;
+    assert!(Record::decode(&current.encode()).is_err());
+    current.version = 2;
+    let mut corrupt = current.encode();
+    corrupt[124] = 1;
+    assert!(Record::decode(&corrupt).is_err());
+    Ok(())
+}

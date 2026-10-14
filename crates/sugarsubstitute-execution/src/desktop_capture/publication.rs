@@ -39,7 +39,7 @@ pub(super) fn registered(
         ));
     }
     let result = super::types::DesktopCaptureAttached {
-        run: custody.cleanup.full_run,
+        target: custody.cleanup.full_target,
         execution: context.owner_id(),
         job: context.job_id(),
     };

@@ -102,7 +102,7 @@ impl WindowsCrashCapture {
         let build =
             lock(&shared.build).ok_or_else(|| rejected(SourceFailure::ForeignAssociation))?;
         if expected.owner() != self.owner
-            || expected.run().owner != self.owner
+            || expected.target().owner() != self.owner
             || scope.owner_id() != shared.execution_id
             || expected.build_bytes() != &build.bytes[..build.length]
             || self.snapshot.handler.is_none_or(|handler| {
@@ -123,7 +123,7 @@ impl WindowsCrashCapture {
                 return Err(rejected(SourceFailure::Closing));
             }
         }
-        RegisteredSource::reserve(shared, expected.run(), expected.attach_budget())
+        RegisteredSource::reserve(shared, expected.target(), expected.attach_budget())
             .map_err(rejected)
     }
 }

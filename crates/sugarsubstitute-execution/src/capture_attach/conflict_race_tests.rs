@@ -60,7 +60,7 @@ fn queued_capture_run_conflicts_across_scopes_before_any_source_factory_or_effec
     let entered = Arc::new(Gate::default());
     let release = Arc::new(Gate::default());
     let _release = ReleaseGate(release.clone());
-    let mut other_run = expected()?.run();
+    let mut other_run = expected()?.target().desktop().ok_or("Desktop fixture target absent")?;
     other_run.instance = InstanceId::new(2)?;
     let mut blocking = admission::reserve(
         &rig.client.core,
@@ -178,7 +178,7 @@ fn two_actual_blocking_factories_concurrently_admitting_same_run_have_one_atomic
             Err(rejection) => {
                 losers += 1;
                 assert!(
-                    matches!(rejection.error,admission::CaptureAttachAdmissionError::RunAlreadyReserved(run) if run==expected()?.run())
+                    matches!(rejection.error,admission::CaptureAttachAdmissionError::TargetAlreadyReserved(run) if run==expected()?.target())
                 );
                 assert!(Arc::ptr_eq(&rejection.source, &sources[side]));
                 assert_eq!(rejection.expected, expected()?);

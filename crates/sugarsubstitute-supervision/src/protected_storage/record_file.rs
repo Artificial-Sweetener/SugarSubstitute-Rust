@@ -10,10 +10,9 @@ mod streaming;
 #[cfg(test)]
 pub(crate) mod tests;
 use super::{exclusion::HeldFile, paths, security};
-use crate::{
-    ClaimError,
-    native_claims::{files::Handle, lock},
-};
+#[cfg(test)]
+use crate::native_claims::lock;
+use crate::{ClaimError, native_claims::files::Handle};
 use boundary::RecordBoundary;
 pub(crate) use native::random;
 pub(crate) use publication::{PublicationAuthority, PublicationBinding, Stage, publish};
@@ -50,15 +49,17 @@ pub(crate) fn read_with_boundary<const N: usize>(
     if !file.handle.budget().is_ordinary() {
         return Err(file.handle.budget().rejection("fixed_record_ordinary_origin"));
     }
-    let mut pending = lock(&file.publication);
+    let operation = super::exclusion::operation::Operation::begin(file)?;
+    let mut pending = super::exclusion::operation::Loan::take(&file.publication, &operation);
     let new_observation = pending.is_none();
     if new_observation {
-        *pending = Some(PublicationBinding::read(context)?);
+        *pending = Some(PublicationBinding::read(context, &file.handle.budget())?);
     }
     let binding =
         pending.as_mut().ok_or_else(|| ClaimError::invalid("missing_record_read_binding"))?;
     binding.context.validate(context)?;
-    let result = boundary.read_shape(file, None, &mut || binding.context.validate(context));
+    let result =
+        boundary.read_shape(file, None, &mut || binding.context.validate(context), &operation);
     let result = ClaimError::finish(result, binding.context.validate(context));
     if new_observation && result.is_ok() {
         *pending = None;

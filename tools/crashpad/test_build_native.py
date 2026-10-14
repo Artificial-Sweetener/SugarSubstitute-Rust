@@ -108,6 +108,30 @@ class BuildTests(unittest.TestCase):
         self.assertEqual(len(receipt["files"]), 4)
         self.assertEqual(self.runner.call_count, 2)
 
+    def test_arbitrary_d_source_is_rejected_before_native_build(self):
+        with self.assertRaisesRegex(ValueError, "authenticated bundle"):
+            build_native.admitted_source(Path(r"D:\foreign\crashpad"), self.root)
+        self.assertEqual(self.runner.call_count, 0)
+
+    def test_finished_owner_outputs_are_required_and_not_executed(self):
+        self.inventory(False)
+        with self.assertRaisesRegex(ValueError, "finished owner outputs"):
+            build_native.run(Source(), self.root, self.tools, 1, finished_tests=True)
+        self.assertIn("finished_owner_tests", self.runner.call_args_list[1].args[0])
+        self.assertFalse((self.root / "build-receipt.json").exists())
+
+    def test_same_drive_output_preserves_bytes_and_rejects_relative_drive_defect(self):
+        path = self.output / "test.ninja"
+        raw = b"build obj: cxx ../../prepared/crashpad/a.cc\n"
+        path.write_bytes(raw)
+        receipt = self.root / "same-drive.json"
+        build_native.verify_same_drive_output(self.output, receipt)
+        self.assertEqual(path.read_bytes(), raw)
+        self.assertEqual(json.loads(receipt.read_text())["changes"], [])
+        path.write_bytes(b"build obj: cxx ../../D:/escaped/a.cc\n")
+        with self.assertRaisesRegex(ValueError, "relative drive"):
+            build_native.verify_same_drive_output(self.output, receipt)
+
 
 if __name__ == "__main__":
     unittest.main()

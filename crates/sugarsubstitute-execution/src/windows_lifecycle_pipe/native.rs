@@ -9,6 +9,7 @@ use crate::{
 use std::{os::windows::io::IntoRawHandle, sync::Arc};
 use sugarsubstitute_contracts::execution::{JobContext, Moment};
 use sugarsubstitute_contracts::{
+    backend_custody::BackendCustodyKey,
     incident::{DiagnosticKey, DiagnosticRole},
     lifecycle::{ProcessKey, RunKey},
 };
@@ -49,14 +50,14 @@ pub(crate) struct Lease {
         Option<super::captured::codec::CapturedFacts>,
     pub(in crate::windows_lifecycle_pipe) captured_until: Option<Moment>,
     pub(in crate::windows_lifecycle_pipe) captured_ready:
-        Option<super::captured::child::CapturedStartup>,
+        Option<super::captured::child::CapturedInput>,
     pub(in crate::windows_lifecycle_pipe) capture_processes: [Handle; 2],
     pub(in crate::windows_lifecycle_pipe) capture_tokens: [Handle; 2],
     symbol: Option<crate::SymbolTransportReservation>,
     server: bool,
     binding: Option<PeerBinding>,
     pub(in crate::windows_lifecycle_pipe) original: Option<LifecyclePipeDeadline>,
-    expected: bootstrap::Kind,
+    pub(in crate::windows_lifecycle_pipe) expected: bootstrap::Kind,
     pub(in crate::windows_lifecycle_pipe) data: Option<bootstrap::Data>,
     pub(in crate::windows_lifecycle_pipe) input: Handle,
     process: Option<ProcessKey>,
@@ -110,7 +111,7 @@ impl Lease {
         Self::new(true, Some(PeerBinding::Desktop(run)), None, bootstrap::Kind::Desktop)
     }
     /// Count this concrete native lease, separately boxed output owners and worker metadata.
-    pub(in crate::windows_lifecycle_pipe) const fn storage_bytes() -> usize {
+    pub(crate) const fn storage_bytes() -> usize {
         size_of::<Self>()
             + 11 * (Handle::storage_bytes() - size_of::<Handle>())
             + bootstrap::Section::storage_bytes()
@@ -129,7 +130,7 @@ impl Lease {
         signal: Arc<Signal>,
         extent: usize,
     ) -> Result<(), LifecyclePipeFailure> {
-        self.section.install_mapping(claim, signal, extent)
+        self.section.install_mapping(claim, signal, extent, self.expected)
     }
     pub(super) fn client(original: LifecyclePipeDeadline) -> Self {
         Self::new(false, None, Some(original), bootstrap::Kind::Desktop)
@@ -151,6 +152,19 @@ impl Lease {
         lease.symbol = symbol;
         lease.bind_original_context();
         lease
+    }
+    /// Prepare the distinct custody endpoint with the existing pipe/security owner.
+    pub(crate) fn backend_custody_server(key: BackendCustodyKey) -> Self {
+        Self::new(
+            true,
+            Some(PeerBinding::BackendCustody(key)),
+            None,
+            bootstrap::Kind::BackendCustody,
+        )
+    }
+    /// Decode only a custody bootstrap before adopting any native peer operation.
+    pub(crate) fn backend_custody_client(original: LifecyclePipeDeadline) -> Self {
+        Self::new(false, None, Some(original), bootstrap::Kind::BackendCustody)
     }
     fn operation(
         &mut self,
@@ -320,7 +334,7 @@ impl PipeLease for Lease {
     fn inherited_capture_processes(&self) -> Option<[usize; 2]> {
         self.captured_parent.as_ref().map(|parent| parent.processes)
     }
-    fn take_captured_startup(&mut self) -> Option<super::captured::child::CapturedStartup> {
+    fn take_captured_startup(&mut self) -> Option<super::captured::child::CapturedInput> {
         self.captured_ready.take()
     }
     fn take_completed_write(&mut self) -> Option<u32> {

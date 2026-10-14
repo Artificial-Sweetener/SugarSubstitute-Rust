@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Publish one versioned immutable unnamed section without secret argv/environment material.
 use super::*;
+use sugarsubstitute_contracts::backend_custody::{BackendCustodyKey, BackendCustodySession};
 use sugarsubstitute_contracts::incident::{DiagnosticKey, DiagnosticRole, DiagnosticSessionId};
 use sugarsubstitute_contracts::lifecycle::{
     CoordinatorEpoch, CoordinatorKey, InstanceId, NamespaceId, RunGeneration,
@@ -30,6 +31,7 @@ fn hex(bytes: &[u8]) -> String {
 pub(crate) enum Kind {
     Desktop,
     Diagnostic(DiagnosticRole),
+    BackendCustody,
 }
 fn role_code(role: DiagnosticRole) -> u32 {
     match role {
@@ -54,22 +56,33 @@ pub(crate) fn name(binding: PeerBinding) -> Vec<u16> {
             role_code(key.role()),
             key.session().get()
         ),
+        PeerBinding::BackendCustody(key) => format!(
+            "\\\\.\\pipe\\SugarSubstitute.backend-custody.v1.{}.{}.{}",
+            hex(key.owner().namespace.bytes()),
+            hex(key.owner().epoch.bytes()),
+            key.session().get()
+        ),
     };
     value.encode_utf16().chain(Some(0)).collect()
 }
-/// Preserve the supported ordinary v1/v2 header and payload bytes.
+/// Preserve desktop/diagnostic bytes and identify the distinct custody purpose.
 pub(crate) fn encode(data: &Data) -> Result<[u8; BOOTSTRAP_BYTES], LifecyclePipeFailure> {
-    let version = if matches!(data.binding, PeerBinding::Desktop(_)) { 1 } else { 2 };
+    let version = match data.binding {
+        PeerBinding::Desktop(_) => 1,
+        PeerBinding::Diagnostic(_) => 2,
+        PeerBinding::BackendCustody(_) => 4,
+    };
     encode_base(data, version, BOOTSTRAP_BYTES as u16)
 }
 /// Encode only the captured Desktop base using the same original payload owner.
 pub(in crate::windows_lifecycle_pipe) fn encode_captured_base(
     data: &Data,
 ) -> Result<[u8; BOOTSTRAP_BYTES], LifecyclePipeFailure> {
-    if !matches!(data.binding, PeerBinding::Desktop(_)) || data.capability == [0; 32] {
+    if data.capability == [0; 32] || matches!(data.binding, PeerBinding::Diagnostic(_)) {
         return Err(failure("captured_bootstrap_kind"));
     }
-    encode_base(data, 3, 2048)
+    let version = if matches!(data.binding, PeerBinding::BackendCustody(_)) { 5 } else { 3 };
+    encode_base(data, version, 2048)
 }
 /// Encode common fields once; header selection remains with supported entry points.
 fn encode_base(
@@ -77,7 +90,7 @@ fn encode_base(
     version: u16,
     header: u16,
 ) -> Result<[u8; BOOTSTRAP_BYTES], LifecyclePipeFailure> {
-    if matches!(data.binding, PeerBinding::Diagnostic(_)) && data.capability == [0; 32] {
+    if !matches!(data.binding, PeerBinding::Desktop(_)) && data.capability == [0; 32] {
         return Err(failure("pipe_bootstrap_capability"));
     }
     if data.name.len() > 256 || data.name.last() != Some(&0) {
@@ -97,6 +110,10 @@ fn encode_base(
         PeerBinding::Diagnostic(key) => {
             out[56..60].copy_from_slice(&2u32.to_le_bytes());
             out[60..64].copy_from_slice(&role_code(key.role()).to_le_bytes());
+            out[64..72].copy_from_slice(&key.session().get().to_le_bytes());
+        }
+        PeerBinding::BackendCustody(key) => {
+            out[56..60].copy_from_slice(&4u32.to_le_bytes());
             out[64..72].copy_from_slice(&key.session().get().to_le_bytes());
         }
     }
@@ -124,15 +141,25 @@ pub(crate) fn decode(
     expected: LifecyclePipeDeadline,
     kind: Kind,
 ) -> Result<Data, LifecyclePipeFailure> {
-    let version = if matches!(kind, Kind::Desktop) { 1 } else { 2 };
+    let version = match kind {
+        Kind::Desktop => 1,
+        Kind::Diagnostic(_) => 2,
+        Kind::BackendCustody => 4,
+    };
     decode_base(bytes, expected, kind, version, BOOTSTRAP_BYTES as u16)
 }
 /// Decode captured Desktop common fields without granting native authentication.
 pub(in crate::windows_lifecycle_pipe) fn decode_captured_base(
     bytes: &[u8; BOOTSTRAP_BYTES],
     expected: LifecyclePipeDeadline,
+    kind: Kind,
 ) -> Result<Data, LifecyclePipeFailure> {
-    let data = decode_base(bytes, expected, Kind::Desktop, 3, 2048)?;
+    let version = match kind {
+        Kind::Desktop => 3,
+        Kind::BackendCustody => 5,
+        Kind::Diagnostic(_) => return Err(failure("captured_bootstrap_kind")),
+    };
+    let data = decode_base(bytes, expected, kind, version, 2048)?;
     if data.capability == [0; 32] {
         return Err(failure("captured_bootstrap_capability"));
     }
@@ -176,6 +203,14 @@ fn decode_base(
                 .map_err(|e| error("pipe_bootstrap_diagnostic_session", e))?;
             PeerBinding::Diagnostic(DiagnosticKey::new(owner, role, session))
         }
+        Kind::BackendCustody => {
+            if number::<4>(bytes, 56)? != 4u32.to_le_bytes() || number::<4>(bytes, 60)? != [0; 4] {
+                return Err(failure("pipe_bootstrap_custody_purpose"));
+            }
+            let session = BackendCustodySession::new(u64::from_le_bytes(number(bytes, 64)?))
+                .map_err(|cause| error("pipe_bootstrap_custody_session", cause))?;
+            PeerBinding::BackendCustody(BackendCustodyKey::new(owner, session))
+        }
     };
     let deadline = LifecyclePipeDeadline::new(
         i64::from_le_bytes(number(bytes, 88)?),
@@ -203,7 +238,7 @@ fn decode_base(
         return Err(failure("pipe_bootstrap_process"));
     }
     let capability = number(bytes, 104)?;
-    if matches!(kind, Kind::Diagnostic(_)) && capability == [0; 32] {
+    if !matches!(kind, Kind::Desktop) && capability == [0; 32] {
         return Err(failure("pipe_bootstrap_capability"));
     }
     Ok(Data {
@@ -216,6 +251,9 @@ fn decode_base(
         name,
     })
 }
+#[cfg(test)]
+#[path = "custody_bootstrap_tests.rs"]
+mod custody_tests;
 #[cfg(test)]
 #[path = "diagnostic_bootstrap_tests.rs"]
 mod diagnostic_tests;

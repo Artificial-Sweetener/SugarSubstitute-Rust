@@ -74,15 +74,27 @@ pub(super) async fn supervise(core: Arc<Core>) {
             });
         }
         let now = core.clock.retirement_now();
-        let (stopping, deadline, expired_native) = {
+        let (stopping, deadline, expired_native, custody_notice) = {
             let mut state = lock(&core.state);
             let timers_enabled = !state.stopping;
             let (mut deadline, mut expired_native) = deadlines(&state, now);
+            let mut custody_notice = false;
             #[cfg(any(windows, test))]
             for record in state.jobs.values_mut() {
+                if record.phase == JobPhase::Running
+                    && let Some(slots) = &mut record.custody_deadlines
+                {
+                    let (next, changed) = slots.scan(now);
+                    expired_native |= changed;
+                    custody_notice |= changed;
+                    if let Some(next) = next {
+                        deadline = Some(deadline.map_or(next, |old| old.min(next)));
+                    }
+                }
                 let commands =
                     timers_enabled && matches!(record.phase, JobPhase::Queued | JobPhase::Running);
-                let capture_cleanup = record.native_custody.is_some() && record.held_native();
+                let capture_cleanup = (record.native_custody.is_some() && record.held_native())
+                    || (record.custodied_process && record.phase == JobPhase::Running);
                 if let Some(slots) = &mut record.native_deadlines {
                     let (command_deadline, command_expired) =
                         if commands { slots.scan(now) } else { (None, false) };
@@ -107,8 +119,11 @@ pub(super) async fn supervise(core: Arc<Core>) {
                     }
                 }
             }
-            (state.stopping, deadline, expired_native)
+            (state.stopping, deadline, expired_native, custody_notice)
         };
+        if custody_notice && core.mailbox.signal_capacity() {
+            core.mailbox.deliver_wake();
+        }
         // A notification may win select and discard an already-ready deadline
         // future. Independently wake parked native ownership at the fresh scan;
         // notifying this supervisor again would repeatedly poll expired work.
@@ -158,8 +173,9 @@ fn deadlines(state: &State, now: Moment) -> (Option<Moment>, bool) {
     let mut future = None;
     let mut expired_native = false;
     for record in state.jobs.values() {
-        let native =
-            record.spec.class == JobClass::NativeObservation || record.desktop_capture_child();
+        let native = record.spec.class == JobClass::NativeObservation
+            || record.desktop_capture_child()
+            || record.native_deadlines.is_some();
         if record.phase != JobPhase::Queued && !(native && record.phase == JobPhase::Running) {
             continue;
         }

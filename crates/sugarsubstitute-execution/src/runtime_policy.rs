@@ -27,8 +27,8 @@ pub struct ProcessCaptureCustody {
     pub scope_id: ScopeId,
     /// Historical Registered job; its completion was acknowledged separately.
     pub job_id: JobId,
-    /// Full run identity still excluded from another capture admission.
-    pub full_run: sugarsubstitute_contracts::lifecycle::RunKey,
+    /// Full capture target still excluded from another capture admission.
+    pub full_target: sugarsubstitute_contracts::crash::CaptureTarget,
     /// Whole original reservation retained by the outside process capsule, in bytes.
     pub reservation_bytes: u64,
 }

@@ -35,7 +35,16 @@ impl ProductionActivation {
             && capture.capture.snapshot().state
                 == sugarsubstitute_contracts::crash::CaptureState::Registered
         {
-            record.attach = Some(capture.attach(record.run, resources)?);
+            record.attach = Some(
+                capture
+                    .attach(
+                        sugarsubstitute_contracts::crash::CaptureTarget::Desktop(record.run),
+                        resources.client,
+                        resources.native,
+                        resources.jobs,
+                    )
+                    .map_err(outer)?,
+            );
         }
         Self::adopt_attachment(record, resources, closing)?;
         let Some(start) = &mut record.start else { return Ok(()) };
@@ -98,11 +107,11 @@ impl ProductionActivation {
                     .ok_or("Actual process registry missing")?
                     .take_observation(ticket.process())?;
                 let Some(observation) = observation else { break };
-                with_parent(record, backend, resources, |parent, borrowed| {
+                with_parent(record, backend, Some(capture), resources, |parent, borrowed| {
                     Ok(parent.registry_observation(&observation, borrowed)?)
                 })?;
             }
-            with_parent(record, backend, resources, |parent, borrowed| {
+            with_parent(record, backend, Some(capture), resources, |parent, borrowed| {
                 Ok(parent.activity(batch, borrowed)?)
             })?;
             let suspected = record.parent.as_ref().is_some_and(|parent| parent.ui_suspected());

@@ -145,7 +145,7 @@ pub(crate) fn reserve(
     driver: Box<dyn NativeCaptureDriver>,
     event: super::event::EventFactory,
 ) -> Result<DesktopCaptureSession, DesktopCaptureAdmissionRejection> {
-    let run = input.run();
+    let target = input.target();
     let input = WorkInput { inherited: input, driver, event };
     let reject = |error, input: WorkInput| DesktopCaptureAdmissionRejection {
         error,
@@ -163,7 +163,7 @@ pub(crate) fn reserve(
     core.admit_owned(
         scope,
         spec,
-        RequestKind::DesktopCapture(run),
+        RequestKind::DesktopCapture(target),
         input,
         |input, context, cancel, timing| {
             let admitted = timing.admitted;

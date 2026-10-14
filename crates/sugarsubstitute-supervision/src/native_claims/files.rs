@@ -18,12 +18,41 @@ use windows::Win32::Foundation::{CloseHandle, HANDLE, INVALID_HANDLE_VALUE};
 #[derive(Clone)]
 pub(crate) enum Budget {
     Core(Arc<crate::claims::pool::Pool>),
+    CustodyCore(crate::native_claims::backend_custody::control::WitnessControl),
     Slot(Arc<SlotUse>),
+    Custody(crate::native_claims::backend_custody::pool::WitnessSlot),
     Protected(Arc<sugarsubstitute_contracts::execution::MemoryClaim>),
     Diagnostic(crate::diagnostic_storage::DiagnosticNativeGrant),
     SelectedRelease(crate::installed_release::AllocationOrigin),
 }
 impl Budget {
+    /// Restrict helper namespace creation to its actual authenticated source.
+    pub(crate) fn expected_namespace(
+        &self,
+    ) -> Option<sugarsubstitute_contracts::lifecycle::NamespaceId> {
+        match self {
+            Self::CustodyCore(original) => original.expected_namespace(),
+            _ => None,
+        }
+    }
+    /// Apply actual custody controls without changing ordinary owners' contracts.
+    pub(crate) fn check(&self) -> Result<(), ClaimError> {
+        match self {
+            Self::CustodyCore(original) => original.check(),
+            Self::Custody(slot) => slot.check(),
+            _ => Ok(()),
+        }
+    }
+    /// Require the same original custody allocation at borrowed file boundaries.
+    pub(crate) fn matches_custody(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::CustodyCore(a), Self::CustodyCore(b)) => a.same_allocation(b),
+            (Self::Custody(a), Self::Custody(b)) => a.same_allocation(b),
+            (Self::CustodyCore(_) | Self::Custody(_), _)
+            | (_, Self::CustodyCore(_) | Self::Custody(_)) => false,
+            _ => true,
+        }
+    }
     /// Restrict ordinary constructors to their three actual existing origins.
     pub(crate) fn is_ordinary(&self) -> bool {
         !matches!(self, Self::Diagnostic(_) | Self::SelectedRelease(_))
@@ -44,7 +73,9 @@ impl Budget {
     pub(crate) fn retain_failed(&self) {
         match self {
             Self::Core(value) => std::mem::forget(value.clone()),
+            Self::CustodyCore(value) => std::mem::forget(value.clone()),
             Self::Slot(value) => std::mem::forget(value.clone()),
+            Self::Custody(value) => std::mem::forget(value.clone()),
             Self::Protected(value) => std::mem::forget(value.clone()),
             Self::Diagnostic(value) => std::mem::forget(value.clone()),
             Self::SelectedRelease(value) => std::mem::forget(value.clone()),
@@ -163,6 +194,26 @@ impl Handle {
     pub(crate) fn raw(&self) -> HANDLE {
         HANDLE(self.value as *mut _)
     }
+    /// Transfer one actual uncounted custody output into its next durable native cell.
+    /// This private adapter seam accepts no numeric caller factory or raw projection.
+    pub(crate) fn take_custody_output(
+        &mut self,
+    ) -> Result<std::os::windows::io::OwnedHandle, ClaimError> {
+        if !matches!(self.budget, Budget::CustodyCore(_))
+            || self.credit.is_some()
+            || self.state != State::Adopted
+            || self.value == 0
+        {
+            return Err(self.budget.rejection("custody_transfer_output"));
+        }
+        let raw = std::mem::take(&mut self.value);
+        self.state = State::Closed;
+        // SAFETY: This cell uniquely owns the actual transferred output. Ownership
+        // moves to one immediately installed process/Job cell under the same source.
+        Ok(unsafe {
+            <std::os::windows::io::OwnedHandle as FromRawHandle>::from_raw_handle(raw as *mut _)
+        })
+    }
     /// Observe physical custody even while a File borrow temporarily owns raw0.
     pub(crate) fn is_armed(&self) -> bool {
         matches!(self.state, State::Adopted | State::Transferred)
@@ -195,6 +246,7 @@ impl Handle {
         if !self.budget.is_ordinary() {
             return Err(self.budget.rejection("native_close_requires_original_retirement"));
         }
+        self.budget.check()?;
         self.close_using(|raw| {
             // SAFETY: Unique actual ownership remains armed through checked closure.
             unsafe { CloseHandle(raw) }.map_err(|error| ClaimError::new("close_handle", error))
@@ -327,7 +379,9 @@ impl Drop for NativeFileBorrow<'_> {
 }
 impl Drop for Handle {
     fn drop(&mut self) {
-        if (self.credit.is_some() || !self.budget.is_ordinary())
+        if (self.credit.is_some()
+            || !self.budget.is_ordinary()
+            || matches!(self.budget, Budget::Custody(_) | Budget::CustodyCore(_)))
             && matches!(self.state, State::Adopted | State::Transferred)
         {
             let retained = Self {

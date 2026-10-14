@@ -4,8 +4,8 @@
 //! Report actual child registration without granting handle or retirement authority.
 
 use sugarsubstitute_contracts::{
+    crash::CaptureTarget,
     execution::{ExecutionId, JobId},
-    lifecycle::RunKey,
 };
 
 /// Historical genuine native registration, published under fresh original eligibility.
@@ -13,15 +13,15 @@ use sugarsubstitute_contracts::{
 /// This value proves neither temporary settlement nor process-exit retirement.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DesktopCaptureAttached {
-    pub(super) run: RunKey,
+    pub(super) target: CaptureTarget,
     pub(super) execution: ExecutionId,
     pub(super) job: JobId,
 }
 
 impl DesktopCaptureAttached {
-    /// Observe the exact run registered by the original admitted child job.
-    pub const fn run(self) -> RunKey {
-        self.run
+    /// Observe the exact capture target registered by the original admitted child job.
+    pub const fn target(self) -> CaptureTarget {
+        self.target
     }
 
     /// Observe the real execution owner identity; this grants no admission authority.

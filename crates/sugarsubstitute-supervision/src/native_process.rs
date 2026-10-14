@@ -53,6 +53,7 @@ pub(crate) struct Family {
     pub(crate) diagnostic_bootstrap: Option<DiagnosticPipeBootstrap>,
     pub(crate) diagnostic_enrollment: Option<DiagnosticEnrollment>,
     pub(crate) diagnostic_key: Option<DiagnosticKey>,
+    pub(crate) backend_custody: Option<crate::registry_input::backend_custody::CustodyLaunch>,
     pub(crate) output_pin: Option<OutputPin>,
     pub(crate) output_cancel: Option<OutputCancellation>,
     pub(crate) output_identity: Option<sugarsubstitute_execution::windows_output::OutputIdentity>,
@@ -64,14 +65,39 @@ pub(crate) struct Family {
     pub(crate) forced: bool,
     pub(crate) resumed: bool,
     pub(crate) closure_committed: bool,
-    _memory: MemoryClaim,
+    custody: Option<crate::native_claims::backend_custody::pool::WitnessSlot>,
+    creation_memory:
+        Option<sugarsubstitute_execution::backend_custody::process::CustodiedProcessMemory>,
+}
+/// Keep the complete native allocation before its unchanged original family claim.
+/// Custody families instead retain their already-funded slot outside this owner.
+pub(crate) struct FamilyStorage {
+    family: Box<Family>,
+    _memory: Option<MemoryClaim>,
+    _creation_memory:
+        Option<sugarsubstitute_execution::backend_custody::process::CustodiedProcessMemory>,
+}
+impl std::ops::Deref for FamilyStorage {
+    type Target = Family;
+    fn deref(&self) -> &Family {
+        &self.family
+    }
+}
+impl std::ops::DerefMut for FamilyStorage {
+    fn deref_mut(&mut self) -> &mut Family {
+        &mut self.family
+    }
 }
 impl Family {
     /// Claim the original fixed family budget before allocating bounded native storage.
-    pub(crate) fn new(memory: &MemoryLease) -> Result<Box<Self>, RegistryError> {
+    pub(crate) fn allocate_owned(memory: &MemoryLease) -> Result<FamilyStorage, RegistryError> {
         let claim = memory
             .claim(crate::registry_input::FAMILY_STORAGE_BYTES)
             .map_err(|cause| RegistryError::new("family_memory", cause))?;
+        Self::allocate(Some(claim))
+    }
+    /// Allocate the one native Family only under an existing original slot guard.
+    fn allocate(claim: Option<MemoryClaim>) -> Result<FamilyStorage, RegistryError> {
         let mut attributes = Vec::new();
         attributes
             .try_reserve_exact(2048)
@@ -85,40 +111,79 @@ impl Family {
         let actual = std::mem::size_of::<Self>()
             + crate::registry::family_shared_storage_bytes()
             + (attributes.capacity() + query.capacity()) * std::mem::size_of::<usize>();
-        if actual as u64 > claim.bytes() {
+        if actual as u64 > crate::registry_input::FAMILY_STORAGE_BYTES {
             return Err(RegistryError::invalid("family_capacity"));
         }
-        Ok(Box::new(Self {
-            job: None,
-            thread: None,
-            watch_duplicate: None,
-            members: std::array::from_fn(|_| None),
-            count: 0,
-            root: None,
-            attributes,
-            query,
-            attributes_initialized: false,
-            job_list: [0],
-            fixture_events: None,
-            lifecycle_bootstrap: None,
-            lifecycle_enrollment: None,
-            lifecycle_run: None,
-            diagnostic_bootstrap: None,
-            diagnostic_enrollment: None,
-            diagnostic_key: None,
-            output_pin: None,
-            output_cancel: None,
-            output_identity: None,
-            inherited_handles: [0; 6],
-            inherited_count: 0,
-            stdio_handles: [0; 3],
-            sealed: false,
-            incomplete: false,
-            forced: false,
-            resumed: false,
-            closure_committed: false,
+        Ok(FamilyStorage {
+            family: Box::new(Self {
+                job: None,
+                thread: None,
+                watch_duplicate: None,
+                members: std::array::from_fn(|_| None),
+                count: 0,
+                root: None,
+                attributes,
+                query,
+                attributes_initialized: false,
+                job_list: [0],
+                fixture_events: None,
+                lifecycle_bootstrap: None,
+                lifecycle_enrollment: None,
+                lifecycle_run: None,
+                diagnostic_bootstrap: None,
+                diagnostic_enrollment: None,
+                diagnostic_key: None,
+                backend_custody: None,
+                output_pin: None,
+                output_cancel: None,
+                output_identity: None,
+                inherited_handles: [0; 6],
+                inherited_count: 0,
+                stdio_handles: [0; 3],
+                sealed: false,
+                incomplete: false,
+                forced: false,
+                resumed: false,
+                closure_committed: false,
+                custody: None,
+                creation_memory: None,
+            }),
             _memory: claim,
-        }))
+            _creation_memory: None,
+        })
+    }
+    /// Allocate the identical native Family under its already-admitted creation claim.
+    pub(crate) fn custodied(
+        memory: &sugarsubstitute_execution::backend_custody::process::CustodiedProcessMemory,
+        consumer_bytes: usize,
+    ) -> Result<FamilyStorage, RegistryError> {
+        if Self::storage_bytes() + consumer_bytes > memory.bytes() as usize {
+            return Err(RegistryError::invalid("custodied_family_capacity"));
+        }
+        let mut family = Self::allocate(None)?;
+        family.creation_memory = Some(memory.clone());
+        family._creation_memory = Some(memory.clone());
+        Ok(family)
+    }
+    /// Count native Family storage before the same original fixed allocation.
+    pub(crate) const fn storage_bytes() -> usize {
+        size_of::<Self>()+2048*size_of::<usize>()+(MAX_MEMBERS+2)*size_of::<usize>()+size_of::<FamilyStorage>()
+            + sugarsubstitute_execution::backend_custody::process::CustodiedProcessMemory::control_storage_bytes()
+    }
+    /// End fresh creation checks only after actual resumed-family ownership transfers.
+    pub(crate) fn creation_transferred(&mut self) {
+        self.creation_memory = None;
+    }
+    /// Gate custody effects with the original slot; existing owners keep their control.
+    fn check_native(&self) -> Result<(), RegistryError> {
+        if let Some(memory) = &self.creation_memory {
+            memory
+                .check_effect()
+                .map_err(|cause| RegistryError::new("custodied_family_control", cause))?;
+        }
+        self.custody.as_ref().map_or(Ok(()), |slot| {
+            slot.check().map_err(|cause| RegistryError::new("custody_family_control", cause))
+        })
     }
     pub(crate) fn member(&self, index: usize) -> Result<&Member, RegistryError> {
         self.members
@@ -161,6 +226,8 @@ pub(crate) enum WatchInput {
 }
 /// Private native boundary; fakes replace external effects, never registry policy.
 pub(crate) trait NativePort: Send + Sync {
+    /// Prepare one actual empty Job before the acknowledged suspended root.
+    fn prepare_job(&self, family: &mut Family) -> Result<(), RegistryError>;
     fn create(
         &self,
         family: &mut Family,
@@ -178,6 +245,12 @@ pub(crate) trait NativePort: Send + Sync {
         &self,
         family: &mut Family,
         binding: DiagnosticKey,
+        key: ProcessKey,
+    ) -> Result<(), RegistryError>;
+    fn enroll_backend_custody(
+        &self,
+        family: &mut Family,
+        binding: sugarsubstitute_contracts::backend_custody::BackendCustodyKey,
         key: ProcessKey,
     ) -> Result<(), RegistryError>;
     fn seal(&self, family: &mut Family) -> Result<(), RegistryError>;
@@ -204,8 +277,11 @@ pub(crate) fn close_slot(
     }
     Ok(())
 }
+mod backend_custody;
 mod cleanup;
 mod creation;
+pub(crate) mod custody;
+pub(crate) mod custody_transfer;
 mod diagnostic;
 mod inheritance;
 mod lifecycle;

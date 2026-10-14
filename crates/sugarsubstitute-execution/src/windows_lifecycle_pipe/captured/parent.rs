@@ -39,12 +39,25 @@ impl CapturedLifecycleStart {
 /// Parent native lifetime retains both original owners until checked section/pipe retirement.
 pub(in crate::windows_lifecycle_pipe) struct ParentSource {
     pub(in crate::windows_lifecycle_pipe) pin: CaptureAttachLaunchPin,
-    pub(in crate::windows_lifecycle_pipe) startup: PreparedStartupSnapshot,
+    pub(in crate::windows_lifecycle_pipe) startup: Option<PreparedStartupSnapshot>,
     pub(in crate::windows_lifecycle_pipe) binding: AdmissionBinding,
     pub(in crate::windows_lifecycle_pipe) endpoint: CaptureEndpointObservation,
     pub(in crate::windows_lifecycle_pipe) processes: [usize; 2],
 }
 impl ParentSource {
+    pub(in crate::windows_lifecycle_pipe) fn body(
+        &self,
+    ) -> Result<&[u8], lifecycle_pipe::LifecyclePipeFailure> {
+        match &self.startup {
+            Some(startup) => startup.body().map_err(|cause| {
+                lifecycle_pipe::LifecyclePipeFailure::native(
+                    crate::native::NativeObservationError::new("captured_startup_body", cause),
+                )
+            }),
+            None => Ok(&[]),
+        }
+    }
+
     /// Revalidate original eligibility after the external clock callback, outside native locks.
     pub(in crate::windows_lifecycle_pipe) fn check(
         &self,
@@ -148,7 +161,8 @@ fn build<'a>(
     let Some((pin, startup)) = input.owners.take() else {
         return Err((AdmissionError::InvalidCaptureAdmission, input));
     };
-    lease.captured_parent = Some(ParentSource { pin, startup, binding, endpoint, processes });
+    lease.captured_parent =
+        Some(ParentSource { pin, startup: Some(startup), binding, endpoint, processes });
     Ok(PreparedPipeLease { lease: Box::new(lease), metadata: Some(native_claim) })
 }
 
@@ -160,6 +174,20 @@ pub(in crate::windows_lifecycle_pipe) fn layout()
     // SAFETY: the OS writes this live fixed output; no handles or borrowed callbacks escape.
     unsafe { windows::Win32::System::SystemInformation::GetSystemInfo(&mut facts) };
     CapturedLayout::new(
+        facts.dwPageSize as usize,
+        StartupMapping::control_storage_bytes(),
+        native::Lease::storage_bytes(),
+    )
+}
+
+/// Preflight the same native/map owners in the backend's unchanged192KiB envelope.
+#[allow(unsafe_code)]
+pub(in crate::windows_lifecycle_pipe) fn backend_layout()
+-> Result<CapturedLayout, lifecycle_pipe::LifecyclePipeFailure> {
+    let mut facts = windows::Win32::System::SystemInformation::SYSTEM_INFO::default();
+    // SAFETY: the OS writes only this fixed local page-size output.
+    unsafe { windows::Win32::System::SystemInformation::GetSystemInfo(&mut facts) };
+    CapturedLayout::backend(
         facts.dwPageSize as usize,
         StartupMapping::control_storage_bytes(),
         native::Lease::storage_bytes(),

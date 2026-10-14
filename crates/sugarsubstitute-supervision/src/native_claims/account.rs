@@ -47,6 +47,7 @@ pub(crate) fn initialize(
         guard.adopt_recovered_coordinator(&mut root.coordinator)?;
     } else {
         HeldFile::acquire_into(
+            crate::protected_storage::exclusion::ExclusionOpen::CreateOrOpen,
             &mut root.coordinator,
             crate::protected_storage::native_name::NativeName::Ordinary(
                 stem.with_extension("claim"),

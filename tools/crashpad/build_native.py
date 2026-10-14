@@ -8,8 +8,8 @@ import os
 from pathlib import Path
 import subprocess
 import sys
-from repair_ninja import repair_output
-from verify_source import verify
+from repair_ninja import repair_output, RELATIVE_DRIVE
+from verify_source import verify, regular
 
 VS = Path(r"C:\Program Files\Microsoft Visual Studio\2022\Community")
 MSVC = "14.43.34808"
@@ -36,13 +36,40 @@ def verify_environment(output, temporary):
         raise ValueError("Generated compiler executable path escaped the reviewed instance")
 
 
-def run(source, artifacts, tools, jobs, parser_tests=False):
+FINISHED_BUNDLE = Path(r"D:\SugarSubstitute-Rust\artifacts\k1\finished-native01")
+
+
+def admitted_source(source, artifacts):
+    if artifacts.resolve().drive.upper() != "D:":
+        raise ValueError("Build artifacts must remain on D:")
+    if source.resolve().drive.upper() == "E:":
+        return
+    expected = FINISHED_BUNDLE / "prepared/crashpad"
+    if source.resolve() != expected.resolve() or artifacts.resolve() != (FINISHED_BUNDLE / "native-build").resolve():
+        raise ValueError("Bulk native source escaped the exact authenticated bundle root")
+    for path in (FINISHED_BUNDLE, FINISHED_BUNDLE / "prepared", source, artifacts):
+        regular(path)
+
+
+def verify_same_drive_output(output, receipt):
+    files = []
+    for path in sorted(output.rglob("*.ninja")):
+        regular(path)
+        raw = path.read_bytes()
+        if RELATIVE_DRIVE.search(raw.decode("utf-8")):
+            raise ValueError("Unexpected relative drive in authenticated same-drive bundle")
+        files.append({"file": path.relative_to(output).as_posix(), "sha256": hashlib.sha256(raw).hexdigest()})
+    if not files:
+        raise ValueError("Generated Ninja inventory is empty")
+    receipt.write_text(json.dumps({"mode": "same-drive-no-rewrite", "files": files, "changes": []}, indent=2) + "\n", encoding="utf-8")
+
+
+def run(source, artifacts, tools, jobs, parser_tests=False, finished_tests=False):
     recipe_names = ("build_native.py", "prepare_source.py", "verify_source.py", "repair_ninja.py")
     recipe_hashes = {name: digest(Path(__file__).with_name(name)) for name in recipe_names}
     if sys.version_info[:2] != (3, 12):
         raise ValueError("The reviewed build requires explicit Python 3.12")
-    if source.resolve().drive.upper() != "E:" or artifacts.resolve().drive.upper() != "D:":
-        raise ValueError("Source must remain on E: and all generated build output on D:")
+    admitted_source(source, artifacts)
     if digest(tools / "gn.exe") != GN_SHA or digest(tools / "ninja.exe") != NINJA_SHA:
         raise ValueError("Immutable GN/Ninja binary mismatch")
     compiler = VS / "VC/Tools/MSVC" / MSVC / "bin/Hostx64/x64/cl.exe"
@@ -71,10 +98,15 @@ def run(source, artifacts, tools, jobs, parser_tests=False):
                 [str(tools / "ninja.exe"), "-C", str(output), "-j", str(jobs), "capture_bundle"]]
     if parser_tests:
         commands[1].append("finished_parser_tests")
+    if finished_tests:
+        commands[1].append("finished_owner_tests")
     for index, command in enumerate(commands):
         if index == 1:
             verify_environment(output, temporary)
-            repair_output(source, output, artifacts / "generated-ninja-repair.json")
+            if source.resolve().drive.upper() == "E:":
+                repair_output(source, output, artifacts / "generated-ninja-repair.json")
+            else:
+                verify_same_drive_output(output, artifacts / "generated-ninja-repair.json")
         with (artifacts / f"build-{index}.log").open("w", encoding="utf-8") as log:
             result = subprocess.run(command, cwd=source, env=env, stdout=log, stderr=subprocess.STDOUT)
         if result.returncode:
@@ -95,7 +127,12 @@ def run(source, artifacts, tools, jobs, parser_tests=False):
         "incident_bridge_tests.exe", "incident_bridge_tests.pdb")] if parser_tests else []
     if not all(path.is_file() for path in parser_files):
         raise ValueError("Selected parser test outputs are incomplete")
-    receipt = {"commands": commands, "python": sys.executable, "visual_studio": matching[0]["catalog"]["productDisplayVersion"],
+    finished_files = [output / name for name in (
+        "finished_report_tests.exe", "finished_report_tests.pdb", "finished_windows_tests.exe", "finished_windows_tests.pdb")] if finished_tests else []
+    if not all(path.is_file() for path in finished_files):
+        raise ValueError("Selected finished owner outputs are incomplete")
+    receipt = {"commands": commands, "finished_tests_selected": finished_tests, "finished_tests_executed": False,
+               "finished_test_files": [{"name": path.name, "bytes": path.stat().st_size, "sha256": digest(path)} for path in sorted(finished_files)], "python": sys.executable, "visual_studio": matching[0]["catalog"]["productDisplayVersion"],
                "msvc": MSVC, "sdk": SDK, "gn_sha256": GN_SHA, "ninja_sha256": NINJA_SHA,
                "source_inventory_before_sha256": digest(before_inventory),
                "source_inventory_after_sha256": digest(after_inventory),
@@ -113,5 +150,6 @@ if __name__ == "__main__":
     parser.add_argument("--tools", required=True, type=Path)
     parser.add_argument("--jobs", type=int, default=4, choices=range(1, 9))
     parser.add_argument("--parser-tests", action="store_true", help="Build both deterministic parser test executables without running them")
+    parser.add_argument("--finished-tests", action="store_true", help="Build deterministic finished owner and native file-port fixtures without running them")
     args = parser.parse_args()
-    run(args.source, args.artifacts, args.tools, args.jobs, args.parser_tests)
+    run(args.source, args.artifacts, args.tools, args.jobs, args.parser_tests, args.finished_tests)

@@ -22,6 +22,8 @@ struct SsCaptureIssueSourceV2 {
   uint32_t (__cdecl* request)(uintptr_t, uintptr_t, uint32_t, uint64_t);
 };
 struct SsCaptureAttachInputV2 {
+  // Subject1 is Desktop with positive instance/generation. Subject2 is Supervisor
+  // with both zero, including the independently identified backend custody helper.
   uint32_t abi_version, byte_size, subject, provenance;
   uint8_t coordinator_namespace[32], coordinator_epoch[16];
   uint64_t instance, generation;

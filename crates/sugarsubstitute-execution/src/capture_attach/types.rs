@@ -8,10 +8,10 @@ use std::{
     num::{NonZeroU32, NonZeroU64},
 };
 use sugarsubstitute_contracts::{
-    crash::CaptureBudget,
+    crash::{CaptureBudget, CaptureTarget},
     execution::JobContext,
     incident::BuildIdentity,
-    lifecycle::{CoordinatorKey, RunKey},
+    lifecycle::CoordinatorKey,
 };
 
 /// Reject malformed matching facts before native acquisition.
@@ -21,8 +21,8 @@ pub enum CaptureAttachDataError {
     InvalidProcess,
     /// Creator and handler must be distinct actual processes.
     SameProcess,
-    /// The complete desktop run must belong to the expected coordinator.
-    ForeignRun,
+    /// The complete capture target must belong to the expected coordinator.
+    ForeignTarget,
     /// Build spelling must satisfy the bounded annotation contract.
     InvalidBuild,
     /// Endpoint must be a bounded generated local named-pipe spelling.
@@ -70,11 +70,11 @@ pub enum CaptureEndpointProvenance {
     CreatorInherited,
 }
 
-/// Fixed immutable desktop capture expectation, containing no native capability.
+/// Fixed immutable capture expectation, containing no native capability.
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub struct CaptureAttachExpectation {
     owner: CoordinatorKey,
-    run: RunKey,
+    target: CaptureTarget,
     build: [u8; 64],
     build_length: u8,
     creator: CaptureProcessFacts,
@@ -82,20 +82,20 @@ pub struct CaptureAttachExpectation {
     attach: CaptureBudget,
 }
 impl CaptureAttachExpectation {
-    /// Bind the full desktop lifetime to exact build/process facts and original60s budget.
+    /// Bind the actual capture lifetime to exact build/process facts and original60s budget.
     /// Healthy attachment does not start a shutdown budget.
     /// # Errors
-    /// Rejects foreign runs, equal PIDs and invalid build annotation spelling.
+    /// Rejects foreign capture targets, equal PIDs and invalid build annotation spelling.
     pub fn new(
         owner: CoordinatorKey,
-        run: RunKey,
+        target: CaptureTarget,
         build: &BuildIdentity,
         creator: CaptureProcessFacts,
         handler: CaptureProcessFacts,
         attach: CaptureBudget,
     ) -> Result<Self, CaptureAttachDataError> {
-        if run.owner != owner {
-            return Err(CaptureAttachDataError::ForeignRun);
+        if target.owner() != owner {
+            return Err(CaptureAttachDataError::ForeignTarget);
         }
         if creator.process_id() == handler.process_id() {
             return Err(CaptureAttachDataError::SameProcess);
@@ -111,7 +111,7 @@ impl CaptureAttachExpectation {
         bytes[..value.len()].copy_from_slice(value);
         Ok(Self {
             owner,
-            run,
+            target,
             build: bytes,
             build_length: value.len() as u8,
             creator,
@@ -123,9 +123,9 @@ impl CaptureAttachExpectation {
     pub const fn owner(self) -> CoordinatorKey {
         self.owner
     }
-    /// Return the complete desktop run, including instance and generation.
-    pub const fn run(self) -> RunKey {
-        self.run
+    /// Return the complete capture target without projecting a different purpose.
+    pub const fn target(self) -> CaptureTarget {
+        self.target
     }
     /// Borrow the exact validated ASCII build annotation.
     pub fn build_bytes(&self) -> &[u8] {
@@ -147,7 +147,7 @@ impl CaptureAttachExpectation {
 impl fmt::Debug for CaptureAttachExpectation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("CaptureAttachExpectation")
-            .field("run", &self.run)
+            .field("target", &self.target)
             .field("creator", &self.creator)
             .field("handler", &self.handler)
             .field("attach", &self.attach)

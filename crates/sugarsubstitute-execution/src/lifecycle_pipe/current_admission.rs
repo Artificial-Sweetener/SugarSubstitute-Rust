@@ -28,59 +28,111 @@ impl LifecyclePipeControl {
     /// Retains the actual provider/admission cause or typed closed/not-ready rejection.
     /// Error allocation happens after all Core/Shared guards are released.
     pub fn validate_current_admission(&self) -> Result<(), NativeObservationError> {
-        let core = self
-            .inner
-            .shared
-            .core
-            .upgrade()
-            .ok_or_else(|| Rejection::Pipe(LifecyclePipeError::Closed).retain())?;
-        let now = core
-            .clock
-            .metadata()
-            .map_err(|cause| Rejection::Admission(AdmissionError::Unexpected(cause)).retain())?;
-        let checked = (|| {
-            let state = lock(&core.state);
-            let record = state
-                .jobs
-                .get(&self.inner.shared.id)
-                .ok_or(Rejection::Pipe(LifecyclePipeError::Closed))?;
-            if !self.inner.owner.matches_record(record)
-                || record.phase != JobPhase::Running
-                || record.retiring
-            {
-                return Err(Rejection::Pipe(LifecyclePipeError::Closed));
-            }
-            let cutoff = crate::admission_liveness::scope_deadline(&core, &state, record)
-                .map_err(Rejection::Admission)?;
-            if let Some(deadline) = cutoff.filter(|deadline| *deadline <= now) {
-                return Err(Rejection::Admission(AdmissionError::DeadlineExpired {
-                    deadline,
-                    now,
-                }));
-            }
-            let slots =
-                record.native_deadlines.ok_or(Rejection::Pipe(LifecyclePipeError::Closed))?;
-            if slots.stopped()
-                || crate::symbol_admission::original_stop(&state, self.inner.shared.id, now)
-                    .is_some()
-            {
-                return Err(Rejection::Pipe(LifecyclePipeError::Closed));
-            }
-            if let Some(deadline) = slots.expired_deadline(now) {
-                return Err(Rejection::Admission(AdmissionError::DeadlineExpired {
-                    deadline,
-                    now,
-                }));
-            }
-            let pipe = lock(&self.inner.shared.state);
-            if pipe.stopped {
-                return Err(Rejection::Pipe(LifecyclePipeError::Closed));
-            }
-            if !pipe.connected || !pipe.authenticated {
-                return Err(Rejection::Pipe(LifecyclePipeError::NotReady));
-            }
-            Ok(())
-        })();
-        checked.map_err(Rejection::retain)
+        validate(&self.inner)
     }
+}
+
+/// Apply one current-transport policy to every purpose-specific public projection.
+/// Clock sampling and error construction remain outside the Core/Shared fences.
+pub(crate) fn validate(control: &Control) -> Result<(), NativeObservationError> {
+    validate_source(&control.shared, &control.owner)
+}
+
+/// Borrow original session parts without constructing a cancelling control owner.
+pub(crate) fn validate_source(
+    shared: &SharedRef,
+    owner: &Owner,
+) -> Result<(), NativeObservationError> {
+    with_source(shared, owner, |_| Ok(()))
+}
+
+/// Apply a bounded metadata-only mutation under the final current-session fence.
+/// The supplied crate-private operation must invoke no provider/native callback.
+pub(crate) fn validated<T>(
+    control: &Control,
+    change: impl FnOnce(&mut State) -> Result<T, LifecyclePipeError>,
+) -> Result<T, NativeObservationError> {
+    with_source(&control.shared, &control.owner, change)
+}
+
+/// Retain the same final fence for metadata owners borrowing an original session.
+fn with_source<T>(
+    shared: &SharedRef,
+    owner: &Owner,
+    change: impl FnOnce(&mut State) -> Result<T, LifecyclePipeError>,
+) -> Result<T, NativeObservationError> {
+    let core = shared
+        .core
+        .upgrade()
+        .ok_or_else(|| Rejection::Pipe(LifecyclePipeError::Closed).retain())?;
+    let now = core
+        .clock
+        .metadata()
+        .map_err(|cause| Rejection::Admission(AdmissionError::Unexpected(cause)).retain())?;
+    let checked = (|| {
+        let state = lock(&core.state);
+        source_facts_locked(&core, &state, shared, owner, now)?;
+        let mut pipe = lock(&shared.state);
+        if pipe.stopped {
+            return Err(Rejection::Pipe(LifecyclePipeError::Closed));
+        }
+        if !pipe.connected || !pipe.authenticated {
+            return Err(Rejection::Pipe(LifecyclePipeError::NotReady));
+        }
+        change(&mut pipe).map_err(Rejection::Pipe)
+    })();
+    checked.map_err(Rejection::retain)
+}
+
+/// Revalidate original session facts under an existing final Core admission guard.
+/// This borrows the same source allocation and performs no provider or native call.
+pub(crate) fn source_locked(
+    core: &Core,
+    state: &crate::admission::State,
+    shared: &SharedRef,
+    owner: &Owner,
+    now: Moment,
+) -> Result<(), AdmissionError> {
+    use sugarsubstitute_contracts::execution::NativeResourceError;
+    source_facts_locked(core, state, shared, owner, now).map_err(|cause| match cause {
+        Rejection::Admission(cause) => cause,
+        Rejection::Pipe(_) => {
+            AdmissionError::NativeResources(NativeResourceError::OriginalAdmissionRetired)
+        }
+    })
+}
+
+/// Share the exact provider-free current-source policy with admission and observation.
+fn source_facts_locked(
+    core: &Core,
+    state: &crate::admission::State,
+    shared: &SharedRef,
+    owner: &Owner,
+    now: Moment,
+) -> Result<(), Rejection> {
+    let closed = || Rejection::Pipe(LifecyclePipeError::Closed);
+    let record = state.jobs.get(&shared.id).ok_or_else(closed)?;
+    if !owner.matches_record(record) || record.phase != JobPhase::Running || record.retiring {
+        return Err(closed());
+    }
+    let cutoff = crate::admission_liveness::scope_deadline(core, state, record)
+        .map_err(Rejection::Admission)?;
+    if let Some(deadline) = cutoff.filter(|deadline| *deadline <= now) {
+        return Err(Rejection::Admission(AdmissionError::DeadlineExpired { deadline, now }));
+    }
+    let slots = record.native_deadlines.ok_or_else(closed)?;
+    if slots.stopped() || crate::symbol_admission::original_stop(state, shared.id, now).is_some() {
+        return Err(closed());
+    }
+    if let Some(deadline) = slots.expired_deadline(now) {
+        return Err(Rejection::Admission(AdmissionError::DeadlineExpired { deadline, now }));
+    }
+    let pipe = lock(&shared.state);
+    if pipe.stopped {
+        return Err(closed());
+    }
+    if !pipe.connected || !pipe.authenticated {
+        return Err(Rejection::Pipe(LifecyclePipeError::NotReady));
+    }
+    Ok(())
 }

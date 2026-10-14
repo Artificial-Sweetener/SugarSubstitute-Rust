@@ -2,7 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Fund and retain one complete backend return before issuing another producer call.
 use super::{
-    CoordinatorBackend, Result, RetainedRecord, forwarding::Forwarded, progress::with_parent,
+    CaptureRegistration, CoordinatorBackend, Result, RetainedRecord, forwarding::Forwarded,
+    progress::with_parent,
 };
 use crate::production::entry_runner::EntryResources;
 use sugarsubstitute_contracts::{execution::MemoryClaim, lifecycle::ResourceTransition};
@@ -49,6 +50,7 @@ impl TransitionDelivery {
         &mut self,
         records: &mut [Option<RetainedRecord>; 64],
         backend: &mut CoordinatorBackend,
+        capture: Option<&CaptureRegistration>,
         resources: &mut EntryResources<'_>,
     ) -> Result<()> {
         self.deliver(|forwarded| {
@@ -57,7 +59,7 @@ impl TransitionDelivery {
                     forwarded.retire(retired)?;
                 } else if record.parent.is_some() && !record.closed {
                     forwarded.deliver(record.run, |transition| {
-                        with_parent(record, backend, resources, |parent, borrowed| {
+                        with_parent(record, backend, capture, resources, |parent, borrowed| {
                             Ok(parent.backend_transition(transition, borrowed)?)
                         })
                     })?;

@@ -161,20 +161,6 @@ fn release_input(control: &Control) {
     control.close();
 }
 impl ExecutionClient {
-    fn diagnostic_persistent_scope(
-        &self,
-        scope: &Scope,
-        spec: JobSpec,
-    ) -> Result<(), LifecyclePipeAdmissionError> {
-        if spec.deadline.is_some() {
-            return Err(LifecyclePipeAdmissionError::ConflictingDeadline);
-        }
-        let state = lock(&self.core.state);
-        if state.scopes.get(&scope.id()).is_some_and(|s| s.deadline.is_some()) {
-            return Err(LifecyclePipeAdmissionError::ConflictingDeadline);
-        }
-        Ok(())
-    }
     /// Admit one persistent server with a separate original finite handshake.
     /// The job and effective native scope must have no deadline so checked retirement survives expiry.
     /// Binding is trusted composing-owner input; facts alone grant no incident/storage authority.
@@ -185,7 +171,7 @@ impl ExecutionClient {
         key: DiagnosticKey,
         original_handshake: Moment,
     ) -> Result<DiagnosticPipeSession, LifecyclePipeAdmissionError> {
-        self.diagnostic_persistent_scope(scope, spec)?;
+        lifecycle_pipe::validate_persistent_scope(&self.core, scope, spec)?;
         let (inner, completion) = lifecycle_pipe::admit(
             &self.core,
             scope,
@@ -209,16 +195,17 @@ impl ExecutionClient {
         original: LifecyclePipeDeadline,
         resources: crate::DiagnosticPipeResources,
     ) -> Result<DiagnosticPipeClientPermit, DiagnosticPipeAdmissionRejection> {
-        let preflight = self.diagnostic_persistent_scope(scope, spec).and_then(|()| {
-            if matches!(&resources, crate::DiagnosticPipeResources::Symbol(_))
-                && expected_role != DiagnosticRole::Symbolize
-            {
-                return Err(LifecyclePipeAdmissionError::Admission(
+        let preflight = lifecycle_pipe::validate_persistent_scope(&self.core, scope, spec)
+            .and_then(|()| {
+                if matches!(&resources, crate::DiagnosticPipeResources::Symbol(_))
+                    && expected_role != DiagnosticRole::Symbolize
+                {
+                    return Err(LifecyclePipeAdmissionError::Admission(
                     sugarsubstitute_contracts::execution::AdmissionError::InvalidSymbolAdmission,
                 ));
-            }
-            self.decode_lifecycle_deadline(original)
-        });
+                }
+                self.decode_lifecycle_deadline(original)
+            });
         let until = match preflight {
             Ok(until) => until,
             Err(error) => return Err(DiagnosticPipeAdmissionRejection { error, resources }),

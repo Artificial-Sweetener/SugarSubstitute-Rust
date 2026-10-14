@@ -4,6 +4,7 @@
 use crate::{LaunchEnvironment, RegistryInputError, WindowsLaunchBuffers, WindowsLaunchCommand};
 use std::fmt;
 use sugarsubstitute_execution::windows_fixture::FixtureChildEvents;
+pub(crate) mod backend_custody;
 mod diagnostic;
 mod lifecycle;
 pub(crate) mod output;
@@ -17,11 +18,13 @@ pub(crate) const FAMILY_STORAGE_BYTES: u64 = 131_072;
 /// Own explicit executable/cwd/argv/environment for one admitted creation operation.
 /// Values establish input shape only; a trusted native caller supplies ownership.
 pub struct WindowsLaunchInput {
+    pub(crate) managed_custody: Option<crate::claims::managed_custody::ManagedCustodySource>,
     pub(crate) command: WindowsLaunchBuffers,
     pub(crate) environment: LaunchEnvironment,
     pub(crate) fixture_events: Option<FixtureChildEvents>,
     pub(crate) lifecycle: Option<DesktopLaunch>,
     pub(crate) diagnostic: Option<DiagnosticLaunch>,
+    pub(crate) backend_custody: Option<backend_custody::CustodyLaunch>,
     pub(crate) output: Option<output::OutputLaunch>,
     required: u64,
 }
@@ -52,11 +55,13 @@ impl WindowsLaunchInput {
             .checked_add(environment.allocated_bytes().map_err(RegistryInputError::Environment)?)
             .ok_or(RegistryInputError::Capacity)?;
         Ok(Self {
+            managed_custody: None,
             command,
             environment,
             fixture_events: None,
             lifecycle: None,
             diagnostic: None,
+            backend_custody: None,
             output: None,
             required,
         })

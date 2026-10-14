@@ -25,7 +25,15 @@ impl LifecyclePipeControl {
         if state.stopped || !state.authenticated {
             return None;
         }
-        state.captured_startup.take()
+        match state.captured_startup.take()? {
+            crate::windows_lifecycle_pipe::captured::child::CapturedInput::Desktop(input) => {
+                Some(input)
+            }
+            other => {
+                state.captured_startup = Some(other);
+                None
+            }
+        }
     }
     /// Observe the unchanged original handshake in the execution clock epoch.
     pub fn original_deadline(&self) -> Moment {

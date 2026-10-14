@@ -43,14 +43,25 @@ pub(crate) enum RequestKind<'a> {
     #[cfg(any(windows, test))]
     Native,
     #[cfg(any(windows, test))]
+    CustodiedProcess(&'a crate::backend_custody::BackendCustodyParentStorage),
+    #[cfg(any(windows, test))]
+    BackendCustody {
+        source: &'a crate::lifecycle_pipe::SharedRef,
+        original: &'a crate::lifecycle_pipe::Owner,
+    },
+    #[cfg(any(windows, test))]
     CapturedLifecycle(&'a crate::lifecycle_pipe::captured_admission::AdmissionBinding),
     #[cfg(any(windows, test))]
-    CaptureAttach(sugarsubstitute_contracts::lifecycle::RunKey),
+    CaptureAttach(sugarsubstitute_contracts::crash::CaptureTarget),
     #[cfg(any(windows, test))]
-    DesktopCapture(sugarsubstitute_contracts::lifecycle::RunKey),
+    DesktopCapture(sugarsubstitute_contracts::crash::CaptureTarget),
 }
 
 pub(crate) struct Record {
+    #[cfg(any(windows, test))]
+    pub(crate) custodied_process: bool,
+    #[cfg(any(windows, test))]
+    pub(crate) custody_deadlines: Option<Box<crate::backend_custody::deadlines::Deadlines>>,
     pub(crate) memory: Option<sugarsubstitute_contracts::execution::MemoryLeaseObservation>,
     pub(crate) entry_setup: Option<sugarsubstitute_contracts::coordinator_entry::EntrySetupBudget>,
     pub(crate) preparation_issued: bool,

@@ -67,7 +67,7 @@ impl ProcessWatchPermit {
 
 #[allow(unsafe_code)]
 #[path = "windows_process.rs"]
-mod process;
+pub(crate) mod process;
 
 #[cfg(test)]
 #[allow(unsafe_code)]

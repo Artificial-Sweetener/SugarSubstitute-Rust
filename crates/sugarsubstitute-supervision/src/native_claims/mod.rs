@@ -4,6 +4,7 @@
 //! Native handles are noninheritable. Finite workers retain this state before FFI;
 //! checked closure preserves failed handles and active records for explicit retry.
 mod account;
+pub(crate) mod backend_custody;
 mod backend_file;
 pub(crate) mod files;
 mod paths;
@@ -85,9 +86,11 @@ impl Resolution {
     }
 }
 pub(crate) struct Backend {
+    pub(crate) custodian: Option<crate::BackendCustodyParent>,
     pub(crate) resource: ResourceKey,
     pub(crate) proof: Arc<Resolution>,
     pub(crate) file: Option<HeldFile>,
+    pub(crate) custody_probe: Option<HeldFile>,
     pub(crate) record: Option<Record>,
     pub(crate) original_released: Option<[u8; 128]>,
     pub(crate) claimed: bool,
@@ -183,6 +186,10 @@ impl NativePort for SystemPort {
             )?;
         }
         check_close_context(context)?;
+        if let Some(probe) = &mut backend.custody_probe {
+            probe.close()?;
+        }
+        backend.custody_probe = None;
         if let Some(file) = &mut backend.file {
             file.close()?;
         }

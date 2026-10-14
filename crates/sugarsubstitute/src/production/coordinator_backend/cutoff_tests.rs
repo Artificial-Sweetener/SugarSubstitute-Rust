@@ -156,6 +156,7 @@ fn existing_shared_join_and_replay_emit_no_fresh_creator_preparation() -> Result
         jobs: &jobs,
         scopes: &scopes,
         authority: &mut authority,
+        capture: None,
     };
     let joining_request = request(joining, 1, ResourceCommand::Acquire(target()?))?;
     for until in [50, 150] {

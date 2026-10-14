@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Own explicit startup intake, admitted configuration and retained real entry sessions.
+#[path = "production/backend_custody.rs"]
+mod backend_custody;
 #[path = "production/child.rs"]
 mod child;
 #[path = "production/configuration.rs"]
@@ -9,6 +11,7 @@ mod configuration;
 mod coordinator_authority;
 #[path = "production/coordinator_backend.rs"]
 mod coordinator_backend;
+mod coordinator_custody;
 #[path = "production/dispatch.rs"]
 mod dispatch;
 #[path = "production/entry.rs"]

@@ -18,6 +18,10 @@ pub enum RegistryInputError {
     DiagnosticProvenance,
     /// Diagnostic channel ownership conflicts with another inherited native role.
     DiagnosticConflict,
+    /// Custody bootstrap/enrollment is absent or belongs to another actual session.
+    BackendCustodyProvenance,
+    /// Custody helper inheritance conflicts with another native role.
+    BackendCustodyConflict,
     /// Checked capacity accounting overflowed or exceeded supported storage.
     Capacity,
     /// Retained storage could not be allocated.
@@ -37,6 +41,8 @@ impl Error for RegistryInputError {
             | Self::LifecycleProvenance
             | Self::DiagnosticProvenance
             | Self::DiagnosticConflict
+            | Self::BackendCustodyProvenance
+            | Self::BackendCustodyConflict
             | Self::OutputBinding
             | Self::OutputProvenance
             | Self::OutputConflict => None,

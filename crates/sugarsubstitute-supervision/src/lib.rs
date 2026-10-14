@@ -68,6 +68,13 @@ pub use errors::LaunchCommandError;
 #[cfg(windows)]
 pub use claim_error::{ClaimAdmissionError, ClaimError};
 #[cfg(windows)]
+mod backend_custody_parent;
+#[cfg(windows)]
+pub use backend_custody_parent::{
+    BackendCustodyAcknowledgement, BackendCustodyParent, BackendCustodyParentFailure,
+    BackendCustodyParentInputError,
+};
+#[cfg(windows)]
 pub use claim_types::{
     CLAIM_POOL_BYTES, ClaimLaunchJobs, ClaimObservation, ClaimTarget, ManagedLaunchInput,
     ResolutionTicket,
@@ -78,6 +85,9 @@ pub use claims::{CLAIM_OPERATION_BYTES, WindowsResourceClaims};
 pub use environment::{EnvironmentOverride, LaunchEnvironment, LaunchEnvironmentError};
 #[cfg(windows)]
 pub use managed_output::RejectedManagedOutputLaunch;
+pub use native_claims::backend_custody::{
+    BackendCustodyDriverInputError, BackendCustodyFailure, BackendCustodySource,
+};
 #[cfg(windows)]
 pub use registry::WindowsProcessRegistry;
 #[cfg(windows)]

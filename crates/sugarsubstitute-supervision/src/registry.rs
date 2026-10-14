@@ -18,7 +18,12 @@ use std::sync::{
     atomic::{AtomicU8, Ordering},
 };
 pub(crate) use submission::validate_blocking;
+mod creation_job;
+mod custodied_creation;
+mod custody_establishment;
+mod custody_retirement;
 mod shared_owner;
+use creation_job::CreationJob;
 use shared_owner::SharedOwner;
 use sugarsubstitute_contracts::{
     execution::{CompletionBatch, ExecutionPort, JobContext, JobId, JobSpec, OwnedJob, Scope},
@@ -46,8 +51,11 @@ struct Shared {
     permit: Mutex<Option<ProcessWatchPermit>>,
 }
 struct NativeState {
+    establishment: Option<Box<custody_establishment::Establishment>>,
+    custody_destination: Option<native_process::custody_transfer::CustodyDestination>,
+    custody_release: Option<crate::BackendCustodyAcknowledgement>,
     pending_input: Option<WindowsLaunchInput>,
-    family: Option<Box<Family>>,
+    family: Option<native_process::FamilyStorage>,
     watch: Option<WatchJob>,
     creation: Option<CreationFacts>,
     cleanup: Option<CleanupFacts>,
@@ -76,6 +84,9 @@ impl Drop for NativeState {
 pub(crate) fn family_shared_storage_bytes() -> usize {
     std::mem::size_of::<Shared>() + 2 * std::mem::size_of::<usize>()
 }
+pub(crate) fn custody_establishment_storage_bytes() -> usize {
+    size_of::<custody_establishment::Establishment>()
+}
 #[derive(Clone, Copy)]
 struct CreationFacts {
     root: Identity,
@@ -90,11 +101,18 @@ struct CleanupFacts {
     closed: bool,
 }
 struct Record {
+    establishment_job: Option<OwnedJob<custody_establishment::EstablishmentResult, RegistryError>>,
+    establishment_completion: Option<
+        sugarsubstitute_contracts::execution::JobCompletion<
+            custody_establishment::EstablishmentResult,
+            RegistryError,
+        >,
+    >,
     ticket: LaunchTicket,
     shared: SharedOwner,
     native_scope: Scope,
     rejected_launch: bool,
-    creation: Option<OwnedJob<(), RegistryError>>,
+    creation: Option<CreationJob>,
     root_spec: (sugarsubstitute_contracts::execution::ScopeId, JobId),
     root_watch: Option<WatchJob>,
     root_notice: bool,
@@ -119,6 +137,13 @@ struct Record {
     unread: [bool; 5],
 }
 impl Record {
+    fn custody_retirement_pending(&self) -> bool {
+        if self.creation.is_some() || self.establishment_job.is_some() || self.cleanup.is_some() {
+            return true;
+        }
+        let state = lock(&self.shared.native);
+        state.custody_destination.is_some() || state.establishment.is_some()
+    }
     fn fail(&mut self, error: RegistryError) {
         match &mut self.error {
             Some(first) => first.retain(error),
@@ -130,7 +155,7 @@ impl Record {
         RegistrySnapshot {
             process: self.ticket.process,
             binding: self.ticket.binding,
-            creation_pending: self.creation.is_some(),
+            creation_pending: self.creation.is_some() || self.establishment_job.is_some(),
             started: self.started,
             launch_closed: self.shared.admission.load(Ordering::Acquire) == CLOSED,
             root_exit: self.root_exit.map(|exit| exit.exit_code),
@@ -260,7 +285,13 @@ impl WindowsProcessRegistry {
     pub fn retire_settled(&mut self, key: ProcessKey) -> Result<(), RegistryAdmissionError> {
         let index = self.index(key)?;
         let record = self.records[index].as_ref().ok_or(RegistryAdmissionError::Stale)?;
-        if !record.settled || record.unread.iter().any(|unread| *unread) {
+        if !record.settled
+            || record.unread.iter().any(|unread| *unread)
+            || record.cleanup.is_some()
+            || record.establishment_job.is_some()
+            || lock(&record.shared.native).custody_destination.is_some()
+            || lock(&record.shared.native).establishment.is_some()
+        {
             return Err(RegistryAdmissionError::Busy);
         }
         self.records[index] = None;
@@ -280,6 +311,9 @@ impl Drop for WindowsProcessRegistry {
             if let Some(job) = &record.creation {
                 job.cancel();
             }
+            if let Some(job) = &record.establishment_job {
+                job.cancel();
+            }
             if let Some(job) = &record.cleanup {
                 job.cancel();
             }
@@ -296,6 +330,7 @@ mod claim_identity;
 mod cleanup;
 mod construction;
 pub(crate) use claim_identity::RegistryIdentity;
+mod backend_custody;
 mod completion;
 mod observation_retirement;
 mod submission;

@@ -39,6 +39,7 @@ bool OwnedAttach::Begin(const SsCaptureAttachInputV2& input) {
   memcpy(coordinator_epoch, input.coordinator_epoch, sizeof(coordinator_epoch));
   instance = input.instance;
   generation = input.generation;
+  subject = input.subject;
   connection.deadline_counter = input.attach_counter;
   connection.frequency = input.counter_frequency;
   connection.event = reinterpret_cast<HANDLE>(input.borrowed_completion_event);

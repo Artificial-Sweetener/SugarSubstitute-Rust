@@ -46,8 +46,11 @@ impl WindowsResourceClaims {
             &arguments,
         )
         .map_err(|e| ClaimAdmissionError::Native(ClaimError::new("managed_command", e)))?;
-        let input = WindowsLaunchInput::new(command, environment)
+        let mut input = WindowsLaunchInput::new(command, environment)
             .map_err(|e| ClaimAdmissionError::Native(ClaimError::new("managed_input", e)))?;
+        if let Some(parent) = &self.custodian {
+            input.managed_custody = Some(managed_custody::ManagedCustodySource::new(entry, parent));
+        }
         entry.prepared.store(1, Ordering::Release);
         Ok(ManagedLaunchInput {
             resource,

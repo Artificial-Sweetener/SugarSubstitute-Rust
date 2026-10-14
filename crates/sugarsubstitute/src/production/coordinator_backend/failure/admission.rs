@@ -21,7 +21,7 @@ impl FailureObservation {
             AdmissionError::NativeScopeRequired => "admission_native_scope",
             AdmissionError::NativeReservationTooSmall { .. } => "admission_native_reservation",
             AdmissionError::DuplicateJobId { .. } => "admission_duplicate_job",
-            AdmissionError::ConflictingNativeRun(_) => "admission_conflicting_run",
+            AdmissionError::ConflictingNativeCaptureTarget(_) => "admission_conflicting_capture",
             AdmissionError::JobIdentityOrder { .. } => "admission_job_order",
             AdmissionError::ForeignScope { .. } => "admission_foreign_scope",
             AdmissionError::StaleReplacement { .. } => "admission_stale_replacement",

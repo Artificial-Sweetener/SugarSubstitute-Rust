@@ -5,7 +5,7 @@
 
 use super::native_abi::{CleanupSource, IssueSource, NativeCaptureInput};
 use crate::{capture_bundle::CaptureBundleRetirement, native::NativeObservationError};
-use sugarsubstitute_contracts::{execution::Moment, lifecycle::RunKey};
+use sugarsubstitute_contracts::{crash::CaptureTarget, execution::Moment};
 
 /// Native-owned actual read-only map/process capabilities, not caller-supplied facts.
 /// The concrete native producer validates child self/kernel/peer/capability first.
@@ -50,7 +50,7 @@ pub struct InheritedCaptureAttachInput {
 
 /// Its actual producer preclaims this complete allocation in the original map-control partition.
 struct InheritedCaptureFields {
-    run: RunKey,
+    target: CaptureTarget,
     until: Moment,
     lease: Box<dyn InheritedCaptureLease>,
 }
@@ -60,13 +60,13 @@ impl InheritedCaptureAttachInput {
     /// Both covered boxes deallocate before this nonclone loan/charge can return.
     #[cfg(windows)]
     pub(crate) fn authenticated(
-        run: RunKey,
+        target: CaptureTarget,
         until: Moment,
         lease: Box<dyn InheritedCaptureLease>,
         mapping: crate::windows_lifecycle_pipe::StartupViewLoan,
     ) -> Self {
         Self {
-            fields: Box::new(InheritedCaptureFields { run, until, lease }),
+            fields: Box::new(InheritedCaptureFields { target, until, lease }),
             _mapping: Some(mapping.into_retention()),
         }
     }
@@ -74,9 +74,9 @@ impl InheritedCaptureAttachInput {
     pub(crate) const fn storage_bytes() -> usize {
         size_of::<InheritedCaptureFields>() + size_of::<Self>()
     }
-    /// Observe original run cache without invoking the external lease/provider.
-    pub fn run(&self) -> RunKey {
-        self.fields.run
+    /// Observe original target cache without invoking the external lease/provider.
+    pub fn target(&self) -> CaptureTarget {
+        self.fields.target
     }
     /// Observe unchanged local counter-converted cutoff, in nanoseconds.
     pub fn original_deadline(&self) -> Moment {
@@ -93,12 +93,12 @@ impl InheritedCaptureAttachInput {
     #[cfg(test)]
     /// Fake only the external inherited boundary; actual admission/custody stays unchanged.
     pub(super) fn simulated(
-        run: RunKey,
+        target: CaptureTarget,
         until: Moment,
         lease: Box<dyn InheritedCaptureLease>,
     ) -> Self {
         Self {
-            fields: Box::new(InheritedCaptureFields { run, until, lease }),
+            fields: Box::new(InheritedCaptureFields { target, until, lease }),
             #[cfg(windows)]
             _mapping: None,
         }

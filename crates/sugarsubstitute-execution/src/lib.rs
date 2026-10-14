@@ -39,6 +39,8 @@ pub use desktop_capture::{
     ProcessLifetimeCapture,
 };
 #[cfg(any(windows, test))]
+pub mod backend_custody;
+#[cfg(any(windows, test))]
 pub mod diagnostic_pipe;
 #[cfg(any(windows, test))]
 mod fixture_forwarding;
@@ -80,6 +82,8 @@ mod windows_fixture_forwarding;
 
 #[cfg(windows)]
 pub mod windows;
+#[cfg(windows)]
+pub mod windows_backend_custody;
 #[cfg(windows)]
 #[allow(unsafe_code)]
 pub mod windows_capture_attach;

@@ -6,6 +6,7 @@ pub mod boundary_fixture;
 mod completion;
 pub(crate) mod entry;
 mod launch;
+pub(crate) mod managed_custody;
 pub(crate) mod pool;
 mod release;
 mod submission;
@@ -134,6 +135,7 @@ pub struct WindowsResourceClaims {
     next_resolution: u64,
     owner: Option<CoordinatorKey>,
     registry: Option<RegistryIdentity>,
+    custodian: Option<crate::BackendCustodyParent>,
     execution_owner: Option<sugarsubstitute_contracts::execution::ExecutionId>,
     initial_scope: Option<sugarsubstitute_contracts::execution::ScopeId>,
     resolutions: [Option<ResolutionEntry>; 64],
@@ -161,6 +163,7 @@ impl WindowsResourceClaims {
             next_resolution: 1,
             owner: None,
             registry: None,
+            custodian: None,
             execution_owner: None,
             initial_scope: None,
             resolutions: std::array::from_fn(|_| None),
@@ -186,6 +189,32 @@ impl WindowsResourceClaims {
         let owner = self.owner.ok_or(ClaimAdmissionError::Identity)?;
         let identity = registry.claim_identity(owner).map_err(ClaimAdmissionError::Registry)?;
         self.registry = Some(identity);
+        Ok(())
+    }
+    /// Bind one actual authenticated witness before any backend generation is acquired.
+    /// Matching IDs alone cannot bind another execution's transport or renew this source.
+    /// Existing pending/owned generations prevent changing their original custodian.
+    /// # Errors
+    /// Preserves original admission/provider failures and rejects foreign or repeated sources.
+    pub fn bind_backend_custodian(
+        &mut self,
+        execution: &ExecutionClient,
+        scope: &Scope,
+        parent: &crate::BackendCustodyParent,
+    ) -> Result<(), ClaimAdmissionError> {
+        self.usable()?;
+        self.validate_scope(scope)?;
+        if self.custodian.is_some()
+            || self.backends.iter().any(Option::is_some)
+            || self.owner != Some(parent.key().owner())
+            || !parent.matches_execution(execution)
+        {
+            return Err(ClaimAdmissionError::Identity);
+        }
+        parent.check().map_err(|cause| {
+            ClaimAdmissionError::Native(ClaimError::new("custodian_binding", cause))
+        })?;
+        self.custodian = Some(parent.clone());
         Ok(())
     }
     /// Transfer a cached actual observation; this method performs no native work.

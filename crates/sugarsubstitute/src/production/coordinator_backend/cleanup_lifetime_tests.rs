@@ -63,6 +63,7 @@ fn later_cleanup_failures_preserve_original_policy_cause_and_original_scope_budg
         jobs: &jobs,
         scopes: &scopes,
         authority: &mut authority,
+        capture: None,
     };
     backend.begin_delivery()?;
     let first = Box::new(std::io::Error::from_raw_os_error(122));
@@ -175,6 +176,7 @@ fn late_original_grace_admission_progresses_actual_inert_cleanup_without_another
             jobs: &jobs,
             scopes: &scopes,
             authority: &mut authority,
+            capture: None,
         };
         let original = ShutdownBudget::new(Moment::from_nanos(0))?;
         let transition = backend.begin_cleanup(key, Some(original), &mut resources)?;

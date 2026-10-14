@@ -35,6 +35,7 @@ struct OwnedAttach {
   char build[65] = {};
   uint8_t coordinator_namespace[32] = {}, coordinator_epoch[16] = {};
   uint64_t instance = 0, generation = 0;
+  uint32_t subject = 0;
   HANDLE response_events[3] = {};
   ResponseEvent response_custody[3] = {};
   const AttachRuntime* runtime = nullptr;

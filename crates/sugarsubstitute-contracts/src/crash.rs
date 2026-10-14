@@ -141,3 +141,6 @@ mod tests {
         Ok(())
     }
 }
+
+mod target;
+pub use target::CaptureTarget;

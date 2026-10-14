@@ -313,7 +313,11 @@ pub(crate) fn resource_producer_findings(source: &str) -> Result<Vec<String>> {
     filtered_findings(source, resource_producer_path, resource_fragments)
 }
 fn resource_producer_path(path: &[String]) -> bool {
-    path.last().is_some_and(|name| name == "NativeHandleRelease")
+    path.windows(2).any(|pair| {
+        (pair[0] == "InheritedCaptureAttachInput"
+            && matches!(pair[1].as_str(), "authenticated" | "simulated"))
+            || (pair[0] == "NativeCaptureInput" && pair[1] == "from_captured")
+    }) || path.last().is_some_and(|name| name == "NativeHandleRelease")
         || path.windows(2).any(|pair| {
             matches!(
                 pair[0].as_str(),
@@ -331,7 +335,10 @@ fn scheduling_fragments(names: &BTreeSet<String>) -> bool {
     names.contains("std") && (names.contains("thread") || names.contains("mpsc"))
 }
 fn resource_fragments(names: &BTreeSet<String>) -> bool {
-    names.contains("NativeHandleRelease")
+    (names.contains("InheritedCaptureAttachInput")
+        && (names.contains("authenticated") || names.contains("simulated")))
+        || (names.contains("NativeCaptureInput") && names.contains("from_captured"))
+        || names.contains("NativeHandleRelease")
         || names.contains("new")
             && names.iter().any(|name| {
                 matches!(

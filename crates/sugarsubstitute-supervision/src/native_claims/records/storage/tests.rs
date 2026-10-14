@@ -43,6 +43,32 @@ fn unknown_released_digest_or_kind_is_never_replaced() -> TestResult {
     assert!(!permits_replacement(&Record::decode(&old.encode())?, &expected));
     Ok(())
 }
+
+#[test]
+fn only_checked_released_legacy_claim_can_advance_to_an_authenticated_custody_generation()
+-> TestResult {
+    let old = record()?;
+    let original = old.encode();
+    let mut current = old.clone();
+    current.version = 2;
+    current.custodian = 19;
+    for state in [RecordState::Held, RecordState::LaunchPending, RecordState::Owned] {
+        let mut active = old.clone();
+        active.state = state;
+        active.process = if state == RecordState::Owned { 7 } else { 0 };
+        assert!(!permits_replacement(&active, &current));
+    }
+    let mut released = old.clone();
+    released.state = RecordState::Released;
+    assert!(permits_replacement(&released, &current));
+    assert_eq!(old.encode(), original);
+    assert!(!permits_replacement(&current, &old));
+    let mut foreign = current.clone();
+    foreign.custodian = 20;
+    assert!(!permits_replacement(&current, &foreign));
+    assert!(permits_replacement(&current, &current));
+    Ok(())
+}
 #[test]
 fn activated_matching_retry_preserves_fact_on_failure_and_finishes_without_new_activation()
 -> TestResult {

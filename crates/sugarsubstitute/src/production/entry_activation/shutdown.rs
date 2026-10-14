@@ -25,8 +25,14 @@ impl ProductionActivation {
         };
         let backend = retained_backend.backend.as_mut();
         for record in self.records.iter_mut().flatten().map(|retained| retained.record.as_mut()) {
-            Self::close_record(record, backend, resources, budget)?;
+            Self::close_record(record, backend, self.capture.as_ref(), resources, budget)?;
         }
+        backend
+            .close_custody(
+                budget,
+                &mut progress::backend_resources(resources, self.capture.as_ref()),
+            )
+            .map_err(outer)?;
         Ok(())
     }
     /// Settle one actual role through existing pipe, profile, registry and backend owners.
@@ -34,6 +40,7 @@ impl ProductionActivation {
     pub(super) fn close_record(
         record: &mut Record,
         backend: &mut CoordinatorBackend,
+        capture: Option<&CaptureRegistration>,
         resources: &mut EntryResources<'_>,
         budget: ShutdownBudget,
     ) -> Result<()> {
@@ -51,7 +58,8 @@ impl ProductionActivation {
             }
             match &record.attach_retirement {
                 Some(Ok(actual))
-                    if actual.run() == record.run
+                    if actual.target()
+                        == sugarsubstitute_contracts::crash::CaptureTarget::Desktop(record.run)
                         && actual.execution_id() == resources.native.owner_id()
                         && actual.job_id() == released.spec.id => {}
                 Some(Err(cause)) => return Err(Box::new(cause.clone())),
@@ -62,7 +70,7 @@ impl ProductionActivation {
             }
         }
         if record.retired.is_some() {
-            progress::with_parent(record, backend, resources, |parent, borrowed| {
+            progress::with_parent(record, backend, capture, resources, |parent, borrowed| {
                 Ok(parent.request_cleanup(parent.cleanup_budget(budget), borrowed)?)
             })?;
             let retired = record.retired.as_ref().ok_or("Actual retirement receipt missing")?;
@@ -75,7 +83,7 @@ impl ProductionActivation {
             return Ok(());
         }
         if record.parent.is_some() {
-            progress::with_parent(record, backend, resources, |parent, borrowed| {
+            progress::with_parent(record, backend, capture, resources, |parent, borrowed| {
                 Ok(parent.request_cleanup(parent.cleanup_budget(budget), borrowed)?)
             })?;
         }

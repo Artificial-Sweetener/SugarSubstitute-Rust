@@ -14,6 +14,7 @@ impl Family {
             || self.lifecycle_bootstrap.is_some()
             || self.diagnostic_bootstrap.is_some()
             || self.diagnostic_enrollment.is_some()
+            || self.backend_custody.is_some()
             || self.output_pin.is_some()
     }
     pub(crate) fn adopt_fixture_events(
@@ -38,7 +39,8 @@ impl Family {
         if let Some(output) = &input.output
             && (!output.validates(binding)
                 || self.fixture_events.is_some()
-                || self.diagnostic_bootstrap.is_some())
+                || self.diagnostic_bootstrap.is_some()
+                || self.backend_custody.is_some())
         {
             return Err(RegistryError::invalid("output_inheritance_binding"));
         }
@@ -62,6 +64,14 @@ impl Family {
         } else {
             None
         };
+        if self.backend_custody.is_some()
+            && (self.lifecycle_bootstrap.is_some()
+                || self.diagnostic_bootstrap.is_some()
+                || self.fixture_events.is_some()
+                || self.output_pin.is_some())
+        {
+            return Err(RegistryError::invalid("custody_inheritance_conflict"));
+        }
         if self.diagnostic_bootstrap.is_some()
             && (self.lifecycle_bootstrap.is_some()
                 || self.fixture_events.is_some()
@@ -69,21 +79,22 @@ impl Family {
         {
             return Err(RegistryError::invalid("diagnostic_inheritance_conflict"));
         }
-        let section = self
+        let bootstrap = self
             .lifecycle_bootstrap
             .as_ref()
-            .map(|bootstrap| bootstrap.borrow_inheritance().section.as_raw_handle() as usize)
+            .map(LifecyclePipeBootstrap::borrow_inheritance)
             .or_else(|| {
+                self.backend_custody.as_ref().map(|launch| launch.bootstrap.borrow_inheritance())
+            });
+        let section =
+            bootstrap.as_ref().map(|view| view.section.as_raw_handle() as usize).or_else(|| {
                 self.diagnostic_bootstrap.as_ref().map(|bootstrap| {
                     bootstrap.borrow_inheritance().section.as_raw_handle() as usize
                 })
             });
-        let captured = self.lifecycle_bootstrap.as_ref().and_then(|bootstrap| {
-            bootstrap
-                .borrow_inheritance()
-                .capture_processes
-                .map(|handles| handles.map(|handle| handle.as_raw_handle() as usize))
-        });
+        let captured = bootstrap
+            .and_then(|view| view.capture_processes)
+            .map(|handles| handles.map(|handle| handle.as_raw_handle() as usize));
         let stdio = if let Some(pin) = &self.output_pin {
             let identity =
                 self.output_identity.ok_or_else(|| RegistryError::invalid("output_identity"))?;
@@ -136,6 +147,7 @@ impl Family {
         drop(self.fixture_events.take());
         drop(self.lifecycle_bootstrap.take());
         drop(self.diagnostic_bootstrap.take());
+        drop(self.backend_custody.take());
         if let Some(pin) = self.output_pin.take() {
             self.output_cancel = Some(pin.release());
         }

@@ -132,6 +132,7 @@ impl ProfilePort for WindowsProfilePort {
             state.memory.as_ref().ok_or_else(|| ClaimError::invalid("profile_memory"))?.clone(),
         );
         HeldFile::acquire_into(
+            crate::protected_storage::exclusion::ExclusionOpen::CreateOrOpen,
             &mut state.file,
             crate::protected_storage::native_name::NativeName::Ordinary(exclusion_path),
             crate::protected_storage::native_name::NativeName::Ordinary(record_path),

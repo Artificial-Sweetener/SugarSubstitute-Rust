@@ -93,7 +93,7 @@ impl Shared {
     }
 }
 
-/// Retain verified process/source custody for exactly one captured desktop launch.
+/// Retain verified process/source custody for exactly one captured process launch.
 /// Construction is private to successful execution-owned native preparation.
 /// Drop requests the original cleanup transaction and performs no native operation.
 #[must_use = "Transfer the capture pin into the captured lifecycle session or release it"]
@@ -102,6 +102,11 @@ pub struct CaptureAttachLaunchPin {
     pub(crate) released: bool,
 }
 impl CaptureAttachLaunchPin {
+    /// Return cache-only exact original target facts; these grant no native operation.
+    pub fn target(&self) -> sugarsubstitute_contracts::crash::CaptureTarget {
+        self.shared.expected.target()
+    }
+
     /// Release the exclusive borrow and observe actual retirement separately.
     /// The single first cleanup deadline is latched by the original execution owner.
     pub fn release(mut self) -> CaptureAttachRetirement {
@@ -140,3 +145,6 @@ pub(crate) struct AttachWork {
     pub(crate) lease: Box<dyn AttachLease>,
     pub(crate) handshake: Moment,
 }
+
+#[cfg(all(test, windows))]
+mod backend_tests;

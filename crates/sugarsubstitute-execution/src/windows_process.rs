@@ -20,7 +20,7 @@ use crate::native::wait;
 
 // Integer handle identities permit moving unique ownership between threads.
 // No borrowed HANDLE or callback pointer escapes this adapter.
-pub(super) struct Lease {
+pub(crate) struct Lease {
     original: Option<usize>,
     duplicate: Option<usize>,
     wait: Option<wait::Wait>,
@@ -29,7 +29,14 @@ pub(super) struct Lease {
     creation: u64,
 }
 impl Lease {
-    pub(super) fn new(input: OwnedHandle) -> Self {
+    /// Complete custody observation peak including callback and distinct signal allocation.
+    pub(crate) fn storage_bytes() -> usize {
+        size_of::<Self>()
+            + wait::Wait::storage_bytes()
+            + size_of::<Signal>()
+            + 2 * size_of::<usize>()
+    }
+    pub(crate) fn new(input: OwnedHandle) -> Self {
         Self {
             original: Some(input.into_raw_handle() as usize),
             duplicate: None,
@@ -61,11 +68,14 @@ impl Lease {
         Ok(())
     }
 }
-impl ProcessLease for Lease {
-    fn start(
+impl Lease {
+    /// Check the closed original custody control before each fresh process effect.
+    pub(crate) fn start_checked(
         &mut self,
         correlation: NativeCorrelation,
         signal: Arc<Signal>,
+        expected: Option<(u32, u64)>,
+        mut check: impl FnMut() -> Result<(), NativeObservationError>,
     ) -> Result<(), NativeObservationError> {
         self.correlation = Some(correlation);
         self.wait = Some(wait::Wait::new(signal));
@@ -75,6 +85,7 @@ impl ProcessLease for Lease {
                 std::io::Error::other("Owned process input missing"),
             )
         })?;
+        check()?;
         let mut duplicate = HANDLE::default();
         // SAFETY: current-process pseudo handles are borrowed, input is uniquely
         // owned, and output remains in this durable lease before later failures.
@@ -93,8 +104,10 @@ impl ProcessLease for Lease {
             self.duplicate = Some(duplicate.0 as usize);
         }
         copied.map_err(|cause| NativeObservationError::new("duplicate_process_handle", cause))?;
+        check()?;
         let process = self.process()?;
         let mut flags = 0;
+        check()?;
         // SAFETY: duplicate is retained by this worker through all queries and retirement.
         unsafe { GetHandleInformation(process, &mut flags) }
             .map_err(|cause| NativeObservationError::new("process_handle_flags", cause))?;
@@ -104,6 +117,7 @@ impl ProcessLease for Lease {
                 std::io::Error::other("Process duplicate is inheritable"),
             ));
         }
+        check()?;
         // SAFETY: wrong object types fail this query; original error is read immediately.
         self.pid = unsafe { GetProcessId(process) };
         if self.pid == 0 {
@@ -111,6 +125,7 @@ impl ProcessLease for Lease {
         }
         let (mut creation, mut exit, mut kernel, mut user) =
             (FILETIME::default(), FILETIME::default(), FILETIME::default(), FILETIME::default());
+        check()?;
         // SAFETY: all output FILETIMEs are owned stack values, handle remains alive.
         unsafe { GetProcessTimes(process, &mut creation, &mut exit, &mut kernel, &mut user) }
             .map_err(|cause| NativeObservationError::new("process_creation_time", cause))?;
@@ -122,7 +137,15 @@ impl ProcessLease for Lease {
                 std::io::Error::other("Process creation timestamp is zero"),
             ));
         }
+        if expected.is_some_and(|expected| expected != (self.pid, self.creation)) {
+            return Err(NativeObservationError::new(
+                "process_original_identity",
+                std::io::Error::other("Process differs from its original native source"),
+            ));
+        }
+        check()?;
         Self::close(&mut self.original, "close_process_input")?;
+        check()?;
         match &mut self.wait {
             Some(wait) => wait.register(process),
             None => Err(NativeObservationError::new(
@@ -130,6 +153,38 @@ impl ProcessLease for Lease {
                 std::io::Error::other("Wait owner missing"),
             )),
         }
+    }
+    /// Borrow actual validated kernel identity without another query.
+    pub(crate) const fn identity(&self) -> (u32, u64) {
+        (self.pid, self.creation)
+    }
+    /// Gate unregister and each close independently; adopt late successful returns first.
+    pub(crate) fn retire_checked(
+        &mut self,
+        mut check: impl FnMut() -> Result<(), NativeObservationError>,
+    ) -> Result<(), NativeObservationError> {
+        if let Some(wait) = &mut self.wait {
+            check()?;
+            wait.retire()?;
+        }
+        if self.duplicate.is_some() {
+            check()?;
+            Self::close(&mut self.duplicate, "close_process_duplicate")?;
+        }
+        if self.original.is_some() {
+            check()?;
+            Self::close(&mut self.original, "close_process_input")?;
+        }
+        Ok(())
+    }
+}
+impl ProcessLease for Lease {
+    fn start(
+        &mut self,
+        correlation: NativeCorrelation,
+        signal: Arc<Signal>,
+    ) -> Result<(), NativeObservationError> {
+        self.start_checked(correlation, signal, None, || Ok(()))
     }
     fn read_exit(&mut self) -> Result<ProcessExit, NativeObservationError> {
         if self.wait.as_ref().is_some_and(wait::Wait::timed_out) {

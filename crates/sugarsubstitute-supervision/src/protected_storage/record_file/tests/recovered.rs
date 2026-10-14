@@ -45,7 +45,7 @@ fn recovered_initializer_moves_same_charged_exclusion_and_keeps_entry_guard_thro
         coordinator.observe_coordinator(inode);
         let permission=guard.publication(file,inode)?;
         publication_core::publish_with_boundary(file,&desired,PublicationAuthority::ElectedCoordinator(&permission),&context,|old|permission.validate(file,old),&mut fake)?;
-        assert!(matches!(fake.read_shape(file,None,&mut||Ok(()))?,RecordRead::Present(bytes) if bytes==desired));
+        assert!(matches!(fake.read_shape(file,None,&mut||Ok(()), &crate::protected_storage::exclusion::operation::Operation::begin(file)?)?,RecordRead::Present(bytes) if bytes==desired));
                 assert!(initialization_guard_held(&proof));
         assert!(lock(&file.stage).is_none());
         drop(permission);

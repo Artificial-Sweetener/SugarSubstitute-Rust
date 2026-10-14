@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain stable exclusion files independently of each owner's record policy.
+pub(crate) mod operation;
 use super::{
     native_file::NativeCauseDestinations,
     native_name::{NativeName, NativeSid},
@@ -30,6 +31,7 @@ use windows::{
 };
 
 pub(crate) struct HeldFile<const N: usize = 128> {
+    operating: std::sync::atomic::AtomicBool,
     pub(crate) handle: Handle,
     pub(crate) record_path: NativeName,
     exclusion_path: NativeName,
@@ -43,12 +45,20 @@ pub(crate) struct HeldFile<const N: usize = 128> {
     #[cfg(test)]
     fixture_receipt: Option<fixture::FixtureReceipt>,
 }
+/// Preserve ordinary creation or reopen only an independently pinned original inode.
+pub(crate) enum ExclusionOpen {
+    /// A new owner may create its protected zero-byte exclusion.
+    CreateOrOpen,
+    /// Recovery must open the identical existing writer exclusion without recreation.
+    Existing([u8; 24]),
+}
 impl<const N: usize> HeldFile<N> {
     pub(crate) fn is_locked(&self) -> bool {
         self.locked
     }
 
     pub(crate) fn acquire_into(
+        mode: ExclusionOpen,
         retained: &mut Option<Self>,
         path: NativeName,
         record_path: NativeName,
@@ -76,6 +86,7 @@ impl<const N: usize> HeldFile<N> {
             _ => return Err(budget.rejection("exclusion_ordinary_origin")),
         };
         *retained = Some(Self {
+            operating: std::sync::atomic::AtomicBool::new(false),
             handle: Handle::new(windows::Win32::Foundation::HANDLE::default(), budget),
             record_path,
             exclusion_path: path,
@@ -90,11 +101,15 @@ impl<const N: usize> HeldFile<N> {
             fixture_receipt: None,
         });
         let held = retained.as_mut().ok_or_else(|| phase.invalid("missing_claim"))?;
-        let result = held.acquire(phase);
+        let result = held.acquire(phase, mode);
         phase.post_current_for(result, &mut held.causes)
     }
 
-    fn acquire(&mut self, phase: &mut NativePhase<'_>) -> Result<(), ClaimError> {
+    fn acquire(
+        &mut self,
+        phase: &mut NativePhase<'_>,
+        mode: ExclusionOpen,
+    ) -> Result<(), ClaimError> {
         let mut phase = phase.for_causes(&mut self.causes)?;
         let producing =
             phase.open_buffers(self.exclusion_path.path()?, Some(self.account_sid.bytes()?))?;
@@ -108,7 +123,10 @@ impl<const N: usize> HeldFile<N> {
                 FILE_GENERIC_READ.0 | FILE_GENERIC_WRITE.0,
                 FILE_SHARE_READ | FILE_SHARE_WRITE,
                 attributes.as_ref().map(std::ptr::from_ref),
-                OPEN_ALWAYS,
+                match mode {
+                    ExclusionOpen::CreateOrOpen => OPEN_ALWAYS,
+                    ExclusionOpen::Existing(_) => OPEN_EXISTING,
+                },
                 FILE_FLAG_OPEN_REPARSE_POINT,
                 None,
             )
@@ -125,6 +143,11 @@ impl<const N: usize> HeldFile<N> {
         })?;
         paths::validate_regular(&self.handle, Some(0), &mut phase)?;
         security::verify(&self.handle, self.account_sid.bytes()?, &mut phase)?;
+        if let ExclusionOpen::Existing(original) = mode
+            && paths::file_identity(&self.handle, &mut phase)? != original
+        {
+            return Err(phase.invalid("changed_original_exclusion_inode"));
+        }
         phase.check()?;
         self.handle.borrow_file()?.try_lock().map_err(|cause| {
             phase.error("claim_exclusion", crate::claim_error::BoundedNativeCause::Lock(cause))
@@ -179,11 +202,15 @@ impl<const N: usize> HeldFile<N> {
         if self.locked && self.handle.raw().0.is_null() {
             return Err(ClaimError::invalid("missing_locked_exclusion_handle"));
         }
-        close_all(&mut lock(&self.temporary_handles))?;
-        if let Some(stage) = lock(&self.stage).as_mut() {
+        let operation = operation::Operation::acquire(&self.operating, &self.handle.budget())?;
+        let mut temporary = operation::Loan::take(&self.temporary_handles, &operation);
+        let mut stage = operation::Loan::take(&self.stage, &operation);
+        close_all(&mut temporary)?;
+        if let Some(stage) = stage.as_mut() {
             stage.handle.close()?;
         }
         if self.locked {
+            self.handle.budget().check()?;
             let result = self.handle.borrow_file()?.unlock();
             result.map_err(|e| ClaimError::new("unlock_claim", e))?;
             self.locked = false;
@@ -193,9 +220,12 @@ impl<const N: usize> HeldFile<N> {
 }
 impl<const N: usize> Drop for HeldFile<N> {
     fn drop(&mut self) {
-        if !self.handle.budget().is_ordinary() {
+        if !self.handle.budget().is_ordinary()
+            || matches!(self.handle.budget(), Budget::Custody(_) | Budget::CustodyCore(_))
+        {
             if self.has_output() {
                 let empty = Self {
+                    operating: std::sync::atomic::AtomicBool::new(false),
                     handle: Handle::new(
                         windows::Win32::Foundation::HANDLE::default(),
                         self.handle.budget(),

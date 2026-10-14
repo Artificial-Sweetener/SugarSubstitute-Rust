@@ -74,17 +74,28 @@ impl NativeCaptureInput {
         cleanup: CleanupSource,
         issue: IssueSource,
         completion_event: usize,
-    ) -> Self {
-        let (facts, run) = binding.facts();
-        Self {
+    ) -> Result<Self, crate::native::NativeObservationError> {
+        let (facts, target) = binding.facts();
+        let subject = target.capture_subject().map_err(|cause| {
+            crate::native::NativeObservationError::new("capture_target_subject", cause)
+        })?;
+        let (subject_code, owner, instance, generation) = match subject {
+            sugarsubstitute_contracts::incident::IncidentSubject::Desktop(run) => {
+                (1, run.owner, run.instance.get(), run.generation.get())
+            }
+            sugarsubstitute_contracts::incident::IncidentSubject::Supervisor(owner) => {
+                (2, owner, 0, 0)
+            }
+        };
+        Ok(Self {
             version: 2,
             size: size_of::<Self>() as u32,
-            subject: 1,
+            subject: subject_code,
             provenance: 1,
-            namespace: *run.owner.namespace.bytes(),
-            epoch: *run.owner.epoch.bytes(),
-            instance: run.instance.get(),
-            generation: run.generation.get(),
+            namespace: *owner.namespace.bytes(),
+            epoch: *owner.epoch.bytes(),
+            instance,
+            generation,
             creator_pid: facts.creator_pid,
             handler_pid: facts.handler_pid,
             creator_birth: facts.creator_birth,
@@ -102,7 +113,7 @@ impl NativeCaptureInput {
             cleanup,
             issue,
             completion_event,
-        }
+        })
     }
 }
 /// Private fixed48-byte progress input with per-call borrowed callback sources.

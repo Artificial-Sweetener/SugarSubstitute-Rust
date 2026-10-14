@@ -48,7 +48,7 @@ class SourceTests(unittest.TestCase):
 
     def test_complete_inventory_hashes_actual_immutable_and_authored_files(self):
         result = self.check()
-        self.assertEqual(len(result["files"]), 36)
+        self.assertEqual(len(result["files"]), 48)
         self.assertEqual(json.loads(self.receipt.read_text()), result)
         self.assertEqual(result, self.check())
 
@@ -87,6 +87,16 @@ class SourceTests(unittest.TestCase):
     def test_each_new_parser_authored_input_is_required(self):
         for name in ("bounded_metadata.h", "bounded_metadata.cc", "bounded_metadata_tests.cc",
                      "incident_bridge.h", "incident_bridge.cc", "incident_bridge_tests.cc"):
+            with self.subTest(name=name):
+                path = self.authored / name
+                original = path.read_bytes()
+                path.unlink()
+                with self.assertRaisesRegex(ValueError, "reviewed exact source set"):
+                    authored_inputs(self.authored)
+                path.write_bytes(original)
+
+    def test_each_finished_owner_input_is_required(self):
+        for name in ("finished_report_abi.h", "finished_report.h", "finished_report.cc", "finished_io.h", "finished_io.cc", "finished_digest.h", "finished_digest.cc", "finished_query.cc", "finished_disposition.cc", "finished_retirement.cc", "finished_report_tests.cc", "finished_windows_tests.cc"):
             with self.subTest(name=name):
                 path = self.authored / name
                 original = path.read_bytes()

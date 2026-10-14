@@ -116,7 +116,7 @@ impl DesktopCaptureWork {
         let cleanup = Custody::new(
             core,
             context.job_id(),
-            input.inherited.run(),
+            input.inherited.target(),
             input.inherited.original_deadline(),
         );
         let shared = DesktopCaptureCustody::with_metadata(cleanup, metadata.clone());

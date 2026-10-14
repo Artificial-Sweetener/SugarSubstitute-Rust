@@ -67,6 +67,7 @@ pub(crate) fn admit_owned<T: Send + 'static, M>(
             input,
         ));
     }
+    let captured = matches!(&kind, RequestKind::CapturedLifecycle(_));
     core.admit_owned(scope, spec, kind, input, |input, context, cancel, timing| {
         let admitted = timing.admitted;
         let handshake = timing
@@ -77,6 +78,8 @@ pub(crate) fn admit_owned<T: Send + 'static, M>(
         let job = Job::new(scope.id(), spec, admitted, cancel, Arc::downgrade(core));
         let shared = SharedRef::new(
             Shared {
+                child: admission.binding.is_none(),
+                captured,
                 original_deadline: handshake,
                 state: Mutex::new(State::new(admission.binding)),
                 core: Arc::downgrade(core),

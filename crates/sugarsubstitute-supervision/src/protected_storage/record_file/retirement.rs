@@ -30,13 +30,19 @@ pub(crate) fn retire_with_boundary<const N: usize>(
     if !file.handle.budget().is_ordinary() {
         return Err(file.handle.budget().rejection("fixed_record_ordinary_origin"));
     }
-    context::live(context)?;
+    if matches!(file.handle.budget(), crate::native_claims::files::Budget::Custody(_)) {
+        file.handle.budget().check()?;
+    } else {
+        context::live(context)?;
+    }
     if !file.is_locked() || !(16..=1024).contains(&N) {
         return Err(ClaimError::invalid("retirement_without_exclusion"));
     }
-    let mut pending = lock(&file.publication);
+    let operation = crate::protected_storage::exclusion::operation::Operation::begin(file)?;
+    let mut pending =
+        crate::protected_storage::exclusion::operation::Loan::take(&file.publication, &operation);
     if pending.is_none() {
-        *pending = Some(PublicationBinding::cleanup(expected, context)?);
+        *pending = Some(PublicationBinding::cleanup(expected, context, &file.handle.budget())?);
     }
     let binding =
         pending.as_mut().ok_or_else(|| ClaimError::invalid("missing_publication_binding"))?;
@@ -48,25 +54,31 @@ pub(crate) fn retire_with_boundary<const N: usize>(
         }};
     }
     binding.context.validate_cleanup(context)?;
-    let mut retained = lock(&file.stage);
+    let mut retained =
+        crate::protected_storage::exclusion::operation::Loan::take(&file.stage, &operation);
     if let Some(stage) = retained.as_ref()
         && stage.activated.is_some()
         && stage.activated.as_ref() != expected
     {
         return Err(ClaimError::invalid("changed_retirement_generation"));
     }
-    step!(boundary.close_temporary(file, &mut || binding.context.validate_cleanup(context)));
+    step!(boundary.close_temporary(
+        file,
+        &mut || binding.context.validate_cleanup(context),
+        &operation
+    ));
     step!(boundary.verify_exclusion(file));
     let outcome = match retained.as_mut() {
-        None => {
-            PublicationRetirement::Preserved(step!(
-                boundary.read_shape(file, None, &mut || binding.context.validate_cleanup(context))
-            ))
-        }
+        None => PublicationRetirement::Preserved(step!(boundary.read_shape(
+            file,
+            None,
+            &mut || binding.context.validate_cleanup(context),
+            &operation
+        ))),
         Some(stage) if stage.activated.is_some() => {
             let actual =
                 stage.activated.ok_or_else(|| ClaimError::invalid("missing_stage_activation"))?;
-            publication::settle_activation(file, stage, boundary, || {
+            publication::settle_activation(file, stage, boundary, &operation, || {
                 binding.context.validate_cleanup(context)
             })?;
             PublicationRetirement::Activated(actual)
@@ -76,9 +88,12 @@ pub(crate) fn retire_with_boundary<const N: usize>(
                 step!(boundary.verify_stage(file, stage));
             }
             step!(boundary.close_stage(stage));
-            PublicationRetirement::Preserved(step!(
-                boundary.read_shape(file, None, &mut || binding.context.validate_cleanup(context))
-            ))
+            PublicationRetirement::Preserved(step!(boundary.read_shape(
+                file,
+                None,
+                &mut || binding.context.validate_cleanup(context),
+                &operation
+            )))
         }
     };
     *retained = None;

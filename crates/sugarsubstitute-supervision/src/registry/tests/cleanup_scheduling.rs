@@ -2,6 +2,33 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! An owned member observation cannot block the finite force step at original grace.
 use super::*;
+/// Always release the controlled external effect before the actual owner joins.
+struct ReleaseCreation(Arc<Fake>);
+impl Drop for ReleaseCreation {
+    fn drop(&mut self) {
+        self.0.release();
+    }
+}
+#[test]
+fn custody_retirement_hint_returns_while_actual_native_creation_holds_its_state() -> TestResult {
+    let mut h = Harness::new()?;
+    let release = ReleaseCreation(h.fake.clone());
+    h.fake.hold_create.store(true, Ordering::Release);
+    let ticket = h.launch(1)?;
+    h.fake.entered()?;
+    assert!(h.registry.custody_retirement_pending(ticket.process())?);
+    assert!(h.registry.snapshot(ticket.process())?.creation_pending);
+    assert_eq!(h.fake.resumes.load(Ordering::Acquire), 0);
+    assert!(!lock(&h.fake.state).1);
+    h.fake.release();
+    h.created(ticket.process())?;
+    assert!(!h.registry.custody_retirement_pending(ticket.process())?);
+    h.stop(ticket.process())?;
+    h.fake.root_alive.store(false, Ordering::Release);
+    h.cleanup(ticket.process())?;
+    drop(release);
+    Ok(())
+}
 #[test]
 fn retained_member_watch_allows_finite_force_at_original_grace_without_an_exit_proof() -> TestResult
 {

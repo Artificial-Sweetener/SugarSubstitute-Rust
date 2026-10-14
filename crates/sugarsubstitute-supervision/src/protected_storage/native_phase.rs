@@ -85,7 +85,9 @@ impl<'origin> NativePhase<'origin> {
     pub(crate) fn check_budget(&self, budget: &Budget) -> Result<(), ClaimError> {
         match (self, budget) {
             (Self::Ordinary { budget: original }, current)
-                if original.is_ordinary() && current.is_ordinary() =>
+                if original.is_ordinary()
+                    && current.is_ordinary()
+                    && original.matches_custody(current) =>
             {
                 Ok(())
             }
@@ -123,7 +125,7 @@ impl<'origin> NativePhase<'origin> {
                     Err(cause) => Err(causes.selected_control(cause, false)),
                 }
             }
-            Self::Ordinary { budget } if budget.is_ordinary() => Ok(()),
+            Self::Ordinary { budget } if budget.is_ordinary() => budget.check(),
             Self::Ordinary { budget } => Err(budget.rejection("native_phase_ordinary_origin")),
             Self::Diagnostic { original, current, causes, .. } => {
                 original.check(current).map_err(ClaimError::diagnostic_allocation)?;

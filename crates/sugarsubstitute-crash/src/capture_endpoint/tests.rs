@@ -122,28 +122,28 @@ fn actual_source_and_all_sixty_four_view_layouts_fit_the_unchanged_claim() -> Te
 #[test]
 fn full_run_replay_cannot_renew_budget_after_job_or_view_retirement() -> TestResult {
     let mut harness = Harness::new()?;
-    let first = harness.attempts.reserve(run(1, 1)?, budget(0)?)?;
+    let first = harness.attempts.reserve(CaptureTarget::Desktop(run(1, 1)?), budget(0)?)?;
     let (execution, job) = binding(1)?;
     harness.attempts.commit(first, execution, job)?;
     harness.attempts.release(first);
     assert!(matches!(
-        harness.attempts.reserve(run(1, 1)?, budget(10)?),
+        harness.attempts.reserve(CaptureTarget::Desktop(run(1, 1)?), budget(10)?),
         Err(SourceFailure::Replay)
     ));
     // Physical retirement alone cannot replace an outstanding source view.
-    let second = harness.attempts.reserve(run(2, 1)?, budget(0)?)?;
+    let second = harness.attempts.reserve(CaptureTarget::Desktop(run(2, 1)?), budget(0)?)?;
     harness.attempts.commit(second, execution, JobId::new(2)?)?;
     harness.attempts.retire(second, execution, JobId::new(2)?)?;
     assert!(matches!(
-        harness.attempts.reserve(run(2, 2)?, budget(10)?),
+        harness.attempts.reserve(CaptureTarget::Desktop(run(2, 2)?), budget(10)?),
         Err(SourceFailure::Replay)
     ));
     harness.attempts.release(second);
-    let next = harness.attempts.reserve(run(2, 2)?, budget(10)?)?;
+    let next = harness.attempts.reserve(CaptureTarget::Desktop(run(2, 2)?), budget(10)?)?;
     assert_eq!(next.budget, budget(10)?);
     harness.attempts.release(next);
     assert!(matches!(
-        harness.attempts.reserve(run(2, 1)?, budget(10)?),
+        harness.attempts.reserve(CaptureTarget::Desktop(run(2, 1)?), budget(10)?),
         Err(SourceFailure::Replay)
     ));
     Ok(())
@@ -152,21 +152,21 @@ fn full_run_replay_cannot_renew_budget_after_job_or_view_retirement() -> TestRes
 fn rejected_pending_admission_restores_retired_generation_and_exact_retry() -> TestResult {
     let mut harness = Harness::new()?;
     let (execution, job) = binding(1)?;
-    let first = harness.attempts.reserve(run(1, 1)?, budget(0)?)?;
+    let first = harness.attempts.reserve(CaptureTarget::Desktop(run(1, 1)?), budget(0)?)?;
     harness.attempts.commit(first, execution, job)?;
     harness.attempts.retire(first, execution, job)?;
     harness.attempts.release(first);
-    let pending = harness.attempts.reserve(run(1, 2)?, budget(20)?)?;
+    let pending = harness.attempts.reserve(CaptureTarget::Desktop(run(1, 2)?), budget(20)?)?;
     assert!(matches!(
-        harness.attempts.reserve(run(1, 2)?, budget(30)?),
+        harness.attempts.reserve(CaptureTarget::Desktop(run(1, 2)?), budget(30)?),
         Err(SourceFailure::Replay)
     ));
     harness.attempts.release(pending);
     assert!(matches!(
-        harness.attempts.reserve(run(1, 1)?, budget(30)?),
+        harness.attempts.reserve(CaptureTarget::Desktop(run(1, 1)?), budget(30)?),
         Err(SourceFailure::Replay)
     ));
-    let retry = harness.attempts.reserve(run(1, 2)?, budget(20)?)?;
+    let retry = harness.attempts.reserve(CaptureTarget::Desktop(run(1, 2)?), budget(20)?)?;
     assert!(retry.sequence > pending.sequence);
     assert_eq!(retry.budget, pending.budget);
     assert!(matches!(
@@ -180,7 +180,7 @@ fn rejected_pending_admission_restores_retired_generation_and_exact_retry() -> T
 fn exact_late_producer_commit_preserves_already_retired_binding() -> TestResult {
     let mut harness = Harness::new()?;
     let (execution, job) = binding(1)?;
-    let view = harness.attempts.reserve(run(1, 1)?, budget(0)?)?;
+    let view = harness.attempts.reserve(CaptureTarget::Desktop(run(1, 1)?), budget(0)?)?;
     harness.attempts.commit(view, execution, job)?;
     harness.attempts.retire(view, execution, job)?;
     harness.attempts.commit(view, execution, job)?;
@@ -205,32 +205,34 @@ fn bounded_eviction_requires_retirement_and_restores_rejected_victim() -> TestRe
     let (execution, _) = binding(1)?;
     let mut views = Vec::new();
     for instance in 1..=64 {
-        let view = harness.attempts.reserve(run(instance, 1)?, budget(0)?)?;
+        let view =
+            harness.attempts.reserve(CaptureTarget::Desktop(run(instance, 1)?), budget(0)?)?;
         harness.attempts.commit(view, execution, JobId::new(instance)?)?;
         harness.attempts.retire(view, execution, JobId::new(instance)?)?;
         views.push(view);
     }
     assert!(matches!(
-        harness.attempts.reserve(run(65, 1)?, budget(0)?),
+        harness.attempts.reserve(CaptureTarget::Desktop(run(65, 1)?), budget(0)?),
         Err(SourceFailure::Overloaded)
     ));
     harness.attempts.release(views[0]);
-    let pending = harness.attempts.reserve(run(65, 1)?, budget(0)?)?;
+    let pending = harness.attempts.reserve(CaptureTarget::Desktop(run(65, 1)?), budget(0)?)?;
     harness.attempts.release(pending);
     assert_eq!(harness.attempts.slots[0].map(|slot| slot.instance), Some(1));
-    let retry = harness.attempts.reserve(run(65, 1)?, budget(0)?)?;
+    let retry = harness.attempts.reserve(CaptureTarget::Desktop(run(65, 1)?), budget(0)?)?;
     harness.attempts.commit(retry, execution, JobId::new(65)?)?;
     harness.attempts.retire(retry, execution, JobId::new(65)?)?;
     harness.attempts.release(retry);
     assert!(matches!(
-        harness.attempts.reserve(run(1, 2)?, budget(100)?),
+        harness.attempts.reserve(CaptureTarget::Desktop(run(1, 2)?), budget(100)?),
         Err(SourceFailure::Replay)
     ));
     for view in &views[1..] {
         harness.attempts.release(*view);
     }
     for instance in 66..=600 {
-        let view = harness.attempts.reserve(run(instance, 1)?, budget(0)?)?;
+        let view =
+            harness.attempts.reserve(CaptureTarget::Desktop(run(instance, 1)?), budget(0)?)?;
         harness.attempts.commit(view, execution, JobId::new(instance)?)?;
         harness.attempts.retire(view, execution, JobId::new(instance)?)?;
         harness.attempts.release(view);
@@ -245,15 +247,15 @@ fn complete_owner_closing_and_exhaustion_fences_preserve_original_authority() ->
     let mut foreign = run(1, 1)?;
     foreign.owner.epoch = CoordinatorEpoch::new([3; 16])?;
     assert!(matches!(
-        harness.attempts.reserve(foreign, budget(0)?),
+        harness.attempts.reserve(CaptureTarget::Desktop(foreign), budget(0)?),
         Err(SourceFailure::ForeignOwner)
     ));
-    let view = harness.attempts.reserve(run(1, 1)?, budget(0)?)?;
+    let view = harness.attempts.reserve(CaptureTarget::Desktop(run(1, 1)?), budget(0)?)?;
     let (execution, job) = binding(1)?;
     harness.attempts.commit(view, execution, job)?;
     harness.attempts.close();
     assert!(matches!(
-        harness.attempts.reserve(run(2, 1)?, budget(0)?),
+        harness.attempts.reserve(CaptureTarget::Desktop(run(2, 1)?), budget(0)?),
         Err(SourceFailure::Closing)
     ));
     assert!(harness.attempts.has_unretired());
@@ -263,10 +265,70 @@ fn complete_owner_closing_and_exhaustion_fences_preserve_original_authority() ->
     let mut second = Harness::new()?;
     second.attempts.sequence = u64::MAX;
     assert!(matches!(
-        second.attempts.reserve(run(1, 1)?, budget(0)?),
+        second.attempts.reserve(CaptureTarget::Desktop(run(1, 1)?), budget(0)?),
         Err(SourceFailure::Exhausted)
     ));
     assert!(second.attempts.slots.iter().all(Option::is_none));
     assert_eq!(second.attempts.sequence, u64::MAX);
+    Ok(())
+}
+
+fn backend_target(session: u64) -> TestResult<CaptureTarget> {
+    use sugarsubstitute_contracts::backend_custody::{BackendCustodyKey, BackendCustodySession};
+    Ok(CaptureTarget::BackendCustody(BackendCustodyKey::new(
+        coordinator()?,
+        BackendCustodySession::new(session)?,
+    )))
+}
+#[test]
+fn desktop_and_backend_targets_share_the_original_sixty_four_slot_capacity() -> TestResult {
+    let mut harness = Harness::new()?;
+    let helper = harness.attempts.reserve(backend_target(1)?, budget(0)?)?;
+    for instance in 1..64 {
+        harness.attempts.reserve(CaptureTarget::Desktop(run(instance, 1)?), budget(0)?)?;
+    }
+    assert_eq!(harness.attempts.slots.iter().flatten().count(), 64);
+    assert!(matches!(
+        harness.attempts.reserve(backend_target(2)?, budget(0)?),
+        Err(SourceFailure::Overloaded)
+    ));
+    assert!(matches!(
+        harness.attempts.reserve(CaptureTarget::Desktop(run(64, 1)?), budget(0)?),
+        Err(SourceFailure::Overloaded)
+    ));
+    let (execution, job) = binding(3)?;
+    harness.attempts.commit(helper, execution, job)?;
+    harness.attempts.retire(helper, execution, job)?;
+    harness.attempts.release(helper);
+    assert!(matches!(
+        harness.attempts.reserve(backend_target(1)?, budget(1)?),
+        Err(SourceFailure::Replay)
+    ));
+    harness.attempts.reserve(backend_target(2)?, budget(0)?)?;
+    assert_eq!(harness.attempts._memory.bytes(), 16_384);
+    Ok(())
+}
+#[test]
+fn helper_target_highwater_and_retirement_preserve_the_original_identity() -> TestResult {
+    let mut harness = Harness::new()?;
+    let helper = harness.attempts.reserve(backend_target(100)?, budget(0)?)?;
+    let desktop = harness.attempts.reserve(CaptureTarget::Desktop(run(1, 1)?), budget(0)?)?;
+    let (execution, job) = binding(3)?;
+    harness.attempts.commit(helper, execution, job)?;
+    assert_eq!(harness.attempts.backend_highwater, 100);
+    assert_eq!(harness.attempts.instance_highwater, 0);
+    assert!(harness.attempts.has_unretired());
+    harness.attempts.retire(helper, execution, job)?;
+    harness.attempts.release(helper);
+    assert!(matches!(
+        harness.attempts.reserve(backend_target(99)?, budget(0)?),
+        Err(SourceFailure::Replay)
+    ));
+    harness.attempts.commit(desktop, execution, JobId::new(4)?)?;
+    assert_eq!(harness.attempts.instance_highwater, 1);
+    harness.attempts.retire(desktop, execution, JobId::new(4)?)?;
+    harness.attempts.release(desktop);
+    assert!(!harness.attempts.has_unretired());
+    harness.attempts.reserve(CaptureTarget::Desktop(run(1, 2)?), budget(0)?)?;
     Ok(())
 }

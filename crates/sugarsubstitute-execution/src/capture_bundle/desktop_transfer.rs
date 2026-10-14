@@ -12,13 +12,13 @@ use crate::{
     scope::lock,
 };
 use std::sync::Arc;
-use sugarsubstitute_contracts::{execution::AdmissionError, lifecycle::RunKey};
+use sugarsubstitute_contracts::{crash::CaptureTarget, execution::AdmissionError};
 
 /// Only a successful actual capsule transfer installs these inert conflict facts.
 /// No origin, context, claim, Arc/Weak capsule, native pointer or release port is retained.
 /// The original outside capsule continues to own all four MiB and permanent source.
 pub(crate) struct ProcessCaptureAssociation {
-    pub(crate) full_run: RunKey,
+    pub(crate) full_target: CaptureTarget,
     pub(crate) capsule_identity: usize,
 }
 
@@ -75,7 +75,7 @@ impl Core {
                 return Err(AdmissionError::InvalidCaptureAdmission);
             }
             let association = ProcessCaptureAssociation {
-                full_run: custody.cleanup.full_run,
+                full_target: custody.cleanup.full_target,
                 capsule_identity: settled.capsule_identity(),
             };
             let record =

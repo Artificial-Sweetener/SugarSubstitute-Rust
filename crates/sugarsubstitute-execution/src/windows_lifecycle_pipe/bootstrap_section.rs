@@ -164,6 +164,7 @@ impl SectionOwner {
     fn read_captured(
         &mut self,
         original: LifecyclePipeDeadline,
+        kind: super::Kind,
     ) -> Result<
         (crate::windows_lifecycle_pipe::captured::codec::CapturedFacts, Data),
         LifecyclePipeFailure,
@@ -188,7 +189,7 @@ impl SectionOwner {
         // SAFETY: no loan exists yet; the same worker owns physical view and storage.
         let bytes = unsafe { std::slice::from_raw_parts(self.view as *const u8, length) };
         let (data, facts) =
-            crate::windows_lifecycle_pipe::captured::codec::decode(bytes, original)?;
+            crate::windows_lifecycle_pipe::captured::codec::decode(bytes, original, kind)?;
         Ok((facts, data))
     }
     pub(crate) fn retire(&mut self, pinned: bool) -> Result<bool, LifecyclePipeFailure> {
@@ -208,18 +209,30 @@ impl Section {
     pub(crate) fn new() -> Self {
         Self { owner: Some(Box::new(SectionOwner::new())) }
     }
-    /// Install the genuine original map claim before allocating mapped-control storage.
+    /// Install the original map claim against the native lease's sealed bootstrap purpose.
+    /// Desktop retains its full payload minimum; the empty backend purpose retains its prefix.
     pub(crate) fn install_mapping(
         &mut self,
         claim: sugarsubstitute_contracts::execution::MemoryClaim,
         signal: Arc<Signal>,
         extent: usize,
+        kind: super::Kind,
     ) -> Result<(), LifecyclePipeFailure> {
         let owner = self.owner.as_mut().ok_or_else(|| failure("pipe_mapping_owner"))?;
         if owner.startup.is_some() {
             return Err(failure("captured_mapping_duplicate"));
         }
-        if extent < crate::windows_lifecycle_pipe::captured::codec::MAX_LOGICAL_BYTES {
+        let minimum = match kind {
+            super::Kind::Desktop => {
+                crate::windows_lifecycle_pipe::captured::codec::MAX_LOGICAL_BYTES
+            }
+            super::Kind::BackendCustody => {
+                crate::windows_lifecycle_pipe::captured::codec::BASE_BYTES
+                    + crate::windows_lifecycle_pipe::captured::codec::PREFIX_BYTES
+            }
+            super::Kind::Diagnostic(_) => return Err(failure("captured_mapping_purpose")),
+        };
+        if extent < minimum {
             return Err(failure("captured_mapping_extent"));
         }
         owner.map_limit = extent;
@@ -258,11 +271,15 @@ impl Section {
     pub(crate) fn read_captured(
         &mut self,
         original: LifecyclePipeDeadline,
+        kind: super::Kind,
     ) -> Result<
         (crate::windows_lifecycle_pipe::captured::codec::CapturedFacts, Data),
         LifecyclePipeFailure,
     > {
-        self.owner.as_mut().ok_or_else(|| failure("pipe_mapping_owner"))?.read_captured(original)
+        self.owner
+            .as_mut()
+            .ok_or_else(|| failure("pipe_mapping_owner"))?
+            .read_captured(original, kind)
     }
     /// Issue one of the actual two preclaimed native-owner mapping loans.
     pub(crate) fn loan(

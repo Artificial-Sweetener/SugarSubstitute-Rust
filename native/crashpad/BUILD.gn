@@ -5,7 +5,7 @@ import("//build/crashpad_buildconfig.gni")
 loadable_module("sugarsubstitute_crashpad_client") {
   sources = [ "capture_bridge.cc", "capture_bridge.h", "capture_source.cc", "capture_source.h", "capture_endpoint.h", "capture_attach_boundary.cc", "capture_attach_boundary.h", "owned_attach.cc", "owned_attach_protocol.cc", "capture_attach_validation.cc", "capture_event.cc" ]
   libs = [ "ntdll.lib" ]
-  deps = [ "//client", ":finished_report_parser" ]
+  deps = [ "//client", ":finished_report_parser", ":finished_report_owner" ]
 }
 
 group("capture_bundle") {
@@ -95,4 +95,21 @@ executable("capture_runtime_tests") {
 
 group("capture_owner_tests") {
   deps = [ ":owned_registration_tests", ":owned_attach_tests", ":capture_attach_boundary_tests", ":capture_runtime_tests", ":capture_attach_validation_tests", ":capture_event_tests", ":capture_source_tests" ]
+}
+
+source_set("finished_report_owner") {
+  sources = [ "finished_report_abi.h", "finished_report.h", "finished_report.cc", "finished_io.h", "finished_io.cc", "finished_digest.h", "finished_digest.cc", "finished_query.cc", "finished_disposition.cc", "finished_retirement.cc" ]
+  deps = [ ":finished_report_parser" ]
+  libs = [ "kernel32.lib", "advapi32.lib", "ntdll.lib", "bcrypt.lib" ]
+}
+executable("finished_report_tests") {
+  sources = [ "finished_report_tests.cc" ]
+  deps = [ ":finished_report_owner" ]
+}
+executable("finished_windows_tests") {
+  sources = [ "finished_windows_tests.cc" ]
+  deps = [ ":finished_report_owner" ]
+}
+group("finished_owner_tests") {
+  deps = [ ":finished_report_tests", ":finished_windows_tests" ]
 }

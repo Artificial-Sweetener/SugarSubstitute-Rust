@@ -47,6 +47,8 @@ pub(super) fn unadmitted_policy() -> Result<RetainedBackend> {
     records.try_reserve_exact(64)?;
     records.resize_with(64, || None);
     let backend = CoordinatorBackend {
+        custody_options: None,
+        custody: None,
         owner,
         policy: ResourceCoordinator::new(owner),
         records: records.into_boxed_slice(),
@@ -194,6 +196,7 @@ fn unavailable_authority_preserves_input_and_both_identity_sequences() -> Result
         jobs: &jobs,
         scopes: &scopes,
         authority: &mut authority,
+        capture: None,
     };
     assert!(
         owner
@@ -359,6 +362,7 @@ fn partial_backend_cleanup_keeps_actual_parent_budget_across_later_clock_and_rep
         jobs: &jobs,
         scopes: &scopes,
         authority: &mut authority,
+        capture: None,
     };
     let original = ShutdownBudget::new(Moment::from_nanos(1_000_000_000))?;
     let transition = owner.begin_cleanup(key, Some(original), &mut resources)?;

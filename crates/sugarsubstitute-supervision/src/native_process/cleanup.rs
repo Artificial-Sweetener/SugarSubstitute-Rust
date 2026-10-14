@@ -13,6 +13,7 @@ impl WindowsPort {
     fn seal_native(&self, family: &mut Family) -> Result<(), RegistryError> {
         let job = handle(family.job, "seal_job")?;
         let mut limits = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+        family.check_native()?;
         // SAFETY: exact live Job handle and complete initialized native output.
         unsafe {
             QueryInformationJobObject(
@@ -26,6 +27,7 @@ impl WindowsPort {
         .map_err(|cause| RegistryError::new("query_job_limits", cause))?;
         limits.BasicLimitInformation.LimitFlags |= JOB_OBJECT_LIMIT_ACTIVE_PROCESS;
         limits.BasicLimitInformation.ActiveProcessLimit = 0;
+        family.check_native()?;
         // SAFETY: all previously queried fields/flags are preserved except the explicit seal.
         unsafe {
             SetInformationJobObject(
@@ -37,6 +39,7 @@ impl WindowsPort {
         }
         .map_err(|cause| RegistryError::new("seal_job_limits", cause))?;
         let mut verified = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+        family.check_native()?;
         // SAFETY: readback uses the same exact live Job and a complete output structure.
         unsafe {
             QueryInformationJobObject(
@@ -70,13 +73,22 @@ impl WindowsPort {
         };
         // Closing the Job first is the authorized owned-family owner-loss safety boundary.
         // During normal settlement complete empty membership was already established.
+        family.check_native()?;
         keep(close_slot(&mut family.job, "close_job"));
+        family.check_native()?;
         keep(close_slot(&mut family.thread, "close_primary_thread"));
+        family.check_native()?;
         keep(close_slot(&mut family.watch_duplicate, "close_watch_duplicate"));
         drop(family.lifecycle_enrollment.take());
         drop(family.diagnostic_enrollment.take());
-        for member in family.members.iter_mut().flatten() {
-            keep(close_slot(&mut member.handle, "close_member_process"));
+        if let Some(launch) = &mut family.backend_custody {
+            drop(launch.enrollment.take());
+        }
+        for index in 0..family.count {
+            family.check_native()?;
+            if let Some(member) = &mut family.members[index] {
+                keep(close_slot(&mut member.handle, "close_member_process"));
+            }
         }
         match failure {
             Some(cause) => Err(cause),
@@ -85,11 +97,17 @@ impl WindowsPort {
     }
 }
 impl NativePort for WindowsPort {
+    fn prepare_job(&self, family: &mut Family) -> Result<(), RegistryError> {
+        self.prepare_job_native(family)
+    }
     fn create(
         &self,
         family: &mut Family,
         input: &mut WindowsLaunchInput,
     ) -> Result<Identity, RegistryError> {
+        if family.job.is_none() {
+            self.prepare_job_native(family)?;
+        }
         self.create_native(family, input)
     }
     fn resume(&self, family: &mut Family) -> Result<(), RegistryError> {
@@ -114,6 +132,14 @@ impl NativePort for WindowsPort {
     ) -> Result<(), RegistryError> {
         self.enroll_diagnostic_native(family, binding, key)
     }
+    fn enroll_backend_custody(
+        &self,
+        family: &mut Family,
+        binding: sugarsubstitute_contracts::backend_custody::BackendCustodyKey,
+        key: ProcessKey,
+    ) -> Result<(), RegistryError> {
+        self.enroll_backend_custody_native(family, binding, key)
+    }
     fn seal(&self, family: &mut Family) -> Result<(), RegistryError> {
         let result = self.seal_native(family);
         if result.is_err() {
@@ -129,6 +155,7 @@ impl NativePort for WindowsPort {
         result
     }
     fn terminate(&self, family: &mut Family) -> Result<(), RegistryError> {
+        family.check_native()?;
         // SAFETY: registry owns this exact Job and stop was authorized; no PID/global lookup.
         unsafe { TerminateJobObject(handle(family.job, "terminate_job")?, 1) }
             .map_err(|cause| RegistryError::new("terminate_job", cause))?;

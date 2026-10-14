@@ -200,6 +200,7 @@ impl ActiveState {
                 }
                 s.auth_busy = false;
                 s.authenticated = true;
+                s.authenticated_peer = Some(peer);
                 s.observations.push_back(Observation::Authenticated(peer));
             }
             core.changed();

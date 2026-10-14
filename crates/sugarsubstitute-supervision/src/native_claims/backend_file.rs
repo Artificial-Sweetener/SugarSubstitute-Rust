@@ -11,9 +11,16 @@ pub(crate) fn acquire_backend(
     directory: &Path,
     context: &sugarsubstitute_contracts::execution::JobContext,
 ) -> Result<(), ClaimError> {
+    if let Some(parent) = &backend.custodian {
+        if parent.key().owner() != backend.resource.owner {
+            return Err(ClaimError::invalid("backend_custodian_owner"));
+        }
+        parent.check().map_err(|cause| ClaimError::new("backend_custodian_current", cause))?;
+    }
     let digest = crate::protected_storage::record_file::hex(&backend.proof.digest);
     let stem = directory.join("backends").join(digest);
     HeldFile::acquire_into(
+        crate::protected_storage::exclusion::ExclusionOpen::CreateOrOpen,
         &mut backend.file,
         crate::protected_storage::native_name::NativeName::Ordinary(stem.with_extension("claim")),
         crate::protected_storage::native_name::NativeName::Ordinary(stem.with_extension("record")),
@@ -25,12 +32,37 @@ pub(crate) fn acquire_backend(
             backend.proof.slot.clone(),
         ))?,
     )?;
+    // Every successor must exclude an independent surviving witness, including
+    // legacy callers. Keep both outputs on failure; neither lock proves release.
+    HeldFile::acquire_into(
+        crate::protected_storage::exclusion::ExclusionOpen::CreateOrOpen,
+        &mut backend.custody_probe,
+        crate::protected_storage::native_name::NativeName::Ordinary(stem.with_extension("custody")),
+        crate::protected_storage::native_name::NativeName::Ordinary(stem.with_extension("record")),
+        crate::protected_storage::native_name::NativeSid::Ordinary(
+            backend.proof.account_sid.clone(),
+        ),
+        Budget::Slot(backend.proof.slot.clone()),
+        &mut crate::protected_storage::native_phase::NativePhase::ordinary(&Budget::Slot(
+            backend.proof.slot.clone(),
+        ))?,
+    )?;
     let file = backend.file.as_ref().ok_or_else(|| ClaimError::invalid("missing_claim"))?;
-    let record = Record::backend(backend.resource, backend.proof.digest);
+    let mut record = Record::backend(backend.resource, backend.proof.digest);
+    if let Some(parent) = &backend.custodian {
+        record.version = 2;
+        record.custodian = parent.key().session().get();
+    }
     backend.original_released =
         records::check_predecessor(file, &backend.proof.account_sid, &record, context)?;
     backend.record = Some(record.clone());
     records::publish(file, &record, context)?;
     backend.claimed = true;
+    backend
+        .custody_probe
+        .as_mut()
+        .ok_or_else(|| ClaimError::invalid("missing_custody_probe"))?
+        .close()?;
+    backend.custody_probe = None;
     Ok(())
 }

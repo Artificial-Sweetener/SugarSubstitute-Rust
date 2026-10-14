@@ -1,16 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain the actual trusted capture registration and typed child pin admissions.
+use crate::job_sequence::JobSequence;
 use crate::production::entry_runner::EntryResources;
 use std::{error::Error, path::Path};
 use sugarsubstitute_contracts::{
-    crash::{CaptureBudget, CaptureState},
-    execution::{CompletionBatch, JobClass, JobSpec, Moment, Operation, OwnedJob},
+    crash::{CaptureBudget, CaptureState, CaptureTarget},
+    execution::{CompletionBatch, JobClass, JobSpec, Moment, Operation, OwnedJob, Scope},
     incident::BuildIdentity,
-    lifecycle::{CoordinatorKey, RunKey, ShutdownBudget},
+    lifecycle::{CoordinatorKey, ShutdownBudget},
 };
 use sugarsubstitute_crash::{CaptureStartInput, StartRejected, WindowsCrashCapture};
 use sugarsubstitute_execution::{
+    ExecutionClient,
     windows::{NativeCorrelation, NativeObservationError, ProcessExit},
     windows_capture_attach::{
         CaptureAttachExpectation, CaptureAttachFailure, CaptureAttachLaunchPin, CaptureProcessFacts,
@@ -19,7 +21,7 @@ use sugarsubstitute_execution::{
 use sugarsubstitute_supervision::InstalledReleaseOwner;
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 /// Own one actual process-lifetime registration; unavailable trust remains a real failure.
-pub(super) struct CaptureRegistration {
+pub(in crate::production) struct CaptureRegistration {
     pub(super) capture: WindowsCrashCapture,
     rejected: Option<StartRejected>,
     unbound_watch: Option<OwnedJob<ProcessExit, NativeObservationError>>,
@@ -109,13 +111,23 @@ impl CaptureRegistration {
             || actual.handler.is_none()
             || actual.handler_exit.is_some()
     }
+    /// Inspect the retained registration before attempting real attachment admission.
+    pub(in crate::production) fn registration_ready(&self) -> bool {
+        self.capture.snapshot().state == CaptureState::Registered
+            && self.capture.snapshot().handler_exit.is_none()
+    }
     /// Mint an attachment expectation exclusively from actual retained registration facts.
-    pub(super) fn attach(
+    pub(in crate::production) fn attach(
         &self,
-        run: RunKey,
-        resources: &EntryResources<'_>,
-    ) -> Result<OwnedJob<CaptureAttachLaunchPin, CaptureAttachFailure>> {
-        if self.capture.snapshot().owner != run.owner
+        target: CaptureTarget,
+        client: &ExecutionClient,
+        native: &Scope,
+        jobs: &JobSequence,
+    ) -> std::result::Result<
+        OwnedJob<CaptureAttachLaunchPin, CaptureAttachFailure>,
+        Box<dyn Error + Send + Sync>,
+    > {
+        if self.capture.snapshot().owner != target.owner()
             || self.capture.snapshot().state != CaptureState::Registered
         {
             return Err("Actual capture registration is not available".into());
@@ -127,23 +139,24 @@ impl CaptureRegistration {
             self.capture.creator_process().ok_or("Actual retained creator identity missing")?;
         let handler = self.capture.snapshot().handler.ok_or("Actual retained handler missing")?;
         let handler = CaptureProcessFacts::new(handler.process_id, handler.creation_time_100ns)?;
-        let budget = CaptureBudget::new(resources.client.now()?)?;
-        let expected =
-            CaptureAttachExpectation::new(run.owner, run, &build, creator, handler, budget)?;
+        let budget = CaptureBudget::new(client.now()?)?;
+        let expected = CaptureAttachExpectation::new(
+            target.owner(),
+            target,
+            &build,
+            creator,
+            handler,
+            budget,
+        )?;
         let spec = JobSpec {
-            id: resources.jobs.allocate()?,
+            id: jobs.allocate()?,
             operation: Operation::NativeLifecycle,
             class: JobClass::NativeObservation,
             deadline: None,
             reservation_bytes: 16384,
             replacement: None,
         };
-        Ok(self.capture.request_attach_bootstrap(
-            resources.client,
-            resources.native,
-            spec,
-            expected,
-        )?)
+        Ok(self.capture.request_attach_bootstrap(client, native, spec, expected)?)
     }
     /// Close only after all actual desktop source pins/handlers may retire.
     /// Keep the same original shutdown budget and every uncertain owner.

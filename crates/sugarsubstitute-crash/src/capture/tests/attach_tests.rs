@@ -4,6 +4,7 @@
 //! Exercise the real registered producer, replay source and central rejection ownership.
 use super::*;
 use crate::capture::attach::commit_admitted;
+use sugarsubstitute_contracts::crash::CaptureTarget;
 use sugarsubstitute_contracts::{incident::BuildIdentity, lifecycle::*};
 use sugarsubstitute_execution::windows_capture_attach::*;
 
@@ -75,7 +76,7 @@ impl Fixture {
             RunKey { owner, instance: InstanceId::new(1)?, generation: RunGeneration::new(1)? };
         Ok(CaptureAttachExpectation::new(
             owner,
-            run,
+            CaptureTarget::Desktop(run),
             &BuildIdentity::new("test-build")?,
             CaptureProcessFacts::new(1, 11)?,
             CaptureProcessFacts::new(17, 23)?,
@@ -119,7 +120,11 @@ fn dormant_registration_cannot_mint_a_source_or_admit_capture_work() -> TestResu
     let owner = coordinator()?;
     let expected = CaptureAttachExpectation::new(
         owner,
-        RunKey { owner, instance: InstanceId::new(1)?, generation: RunGeneration::new(1)? },
+        CaptureTarget::Desktop(RunKey {
+            owner,
+            instance: InstanceId::new(1)?,
+            generation: RunGeneration::new(1)?,
+        }),
         &BuildIdentity::new("test-build")?,
         CaptureProcessFacts::new(1, 11)?,
         CaptureProcessFacts::new(17, 23)?,
@@ -143,12 +148,12 @@ fn actual_registered_owner_validates_identity_and_returns_exact_unadmitted_view(
     let owner = expected.owner();
     let mut foreign = owner;
     foreign.epoch = CoordinatorEpoch::new([77; 16])?;
-    let mut foreign_run = expected.run();
+    let mut foreign_run = expected.target().desktop().ok_or("Fixture desktop target absent")?;
     foreign_run.owner = foreign;
     for invalid in [
         CaptureAttachExpectation::new(
             foreign,
-            foreign_run,
+            CaptureTarget::Desktop(foreign_run),
             &BuildIdentity::new("test-build")?,
             expected.creator(),
             expected.handler(),
@@ -156,7 +161,7 @@ fn actual_registered_owner_validates_identity_and_returns_exact_unadmitted_view(
         )?,
         CaptureAttachExpectation::new(
             owner,
-            expected.run(),
+            expected.target(),
             &BuildIdentity::new("foreign-build")?,
             expected.creator(),
             expected.handler(),
@@ -164,7 +169,7 @@ fn actual_registered_owner_validates_identity_and_returns_exact_unadmitted_view(
         )?,
         CaptureAttachExpectation::new(
             owner,
-            expected.run(),
+            expected.target(),
             &BuildIdentity::new("test-build")?,
             expected.creator(),
             CaptureProcessFacts::new(19, 23)?,
@@ -257,7 +262,7 @@ fn worker_first_actual_retirement_preserves_late_producer_commit_and_rejects_for
     let mut later = expected;
     later = CaptureAttachExpectation::new(
         later.owner(),
-        later.run(),
+        later.target(),
         &BuildIdentity::new("test-build")?,
         later.creator(),
         later.handler(),

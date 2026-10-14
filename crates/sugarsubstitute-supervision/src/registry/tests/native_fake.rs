@@ -79,6 +79,13 @@ impl Fake {
 pub(super) const ROOT: Identity = Identity { pid: 123, birth: 456 };
 pub(super) const LEAF: Identity = Identity { pid: 124, birth: 457 };
 impl NativePort for Fake {
+    fn prepare_job(&self, family: &mut Family) -> Result<(), RegistryError> {
+        if family.job.is_some() {
+            return Err(RegistryError::invalid("fake_prepared_job_already_owned"));
+        }
+        family.job = Some(10);
+        Ok(())
+    }
     fn create(
         &self,
         family: &mut Family,
@@ -177,6 +184,24 @@ impl NativePort for Fake {
             return Err(RegistryError::invalid("fake_diagnostic_enrollment_order"));
         }
         self.enrollment()
+    }
+    fn enroll_backend_custody(
+        &self,
+        family: &mut Family,
+        binding: sugarsubstitute_contracts::backend_custody::BackendCustodyKey,
+        key: ProcessKey,
+    ) -> Result<(), RegistryError> {
+        if family.root.is_none()
+            || family.resumed
+            || key.owner != binding.owner()
+            || family.backend_custody.as_ref().is_none_or(|launch| !launch.validates(binding))
+        {
+            return Err(RegistryError::invalid("fake_custody_enrollment_order"));
+        }
+        if let Some(launch) = &mut family.backend_custody {
+            drop(launch.enrollment.take());
+        }
+        Ok(())
     }
     fn seal(&self, family: &mut Family) -> Result<(), RegistryError> {
         self.seals.fetch_add(1, Ordering::AcqRel);

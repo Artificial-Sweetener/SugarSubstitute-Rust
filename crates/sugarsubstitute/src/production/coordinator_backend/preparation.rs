@@ -76,6 +76,23 @@ impl CoordinatorBackend {
             return Err(Box::new(LifecycleRejection::WrongPhase));
         }
         budget.probe_until(resources.client.now()?)?;
+        if matches!(target, BackendTarget::Managed(_))
+            && self.custody.is_none()
+            && let Some((executable, installation)) = &self.custody_options
+        {
+            let environment =
+                original.environment.as_ref().ok_or(LifecycleRejection::WrongPhase)?;
+            let captured = LaunchEnvironment::from_snapshot_utf16(environment.as_utf16(), &[])?;
+            self.custody =
+                Some(Box::new(super::super::coordinator_custody::CoordinatorCustody::new(
+                    self.owner,
+                    executable.clone(),
+                    installation.clone(),
+                    captured,
+                    budget.until(),
+                    resources,
+                )?));
+        }
         let campaign = ReadinessCampaign::new(target.clone(), budget)?;
         let scope = resources.client.create_scope(
             ScopeSpec { id: resources.scopes.allocate()?, deadline: Some(budget.until()) },
@@ -160,6 +177,43 @@ impl CoordinatorBackend {
             tracing::info!(operation="backend_preparation_transition",resource=?key,stage="ResolutionSubmitted",
                 "Original backend preparation advanced");
         }
+        Ok(())
+    }
+    /// Submit the resolved generation only after actual configured custody is ready.
+    pub(super) fn claim_resolved(
+        &mut self,
+        at: usize,
+        resources: &mut BackendResources<'_>,
+    ) -> Result<()> {
+        let record = self.records[at].as_mut().ok_or(LifecycleRejection::StaleIdentity)?;
+        if record.shutdown.is_some()
+            || record.resolution_pending
+            || record.backend_admitted
+            || record.resolution.is_none()
+        {
+            return Ok(());
+        }
+        record.budget.probe_until(resources.client.now()?)?;
+        let ticket = record.resolution.as_ref().ok_or(LifecycleRejection::StaleIdentity)?;
+        let spec = Self::spec(
+            resources,
+            Operation::NativeLifecycle,
+            JobClass::InfrastructureLifecycle,
+            CLAIM_OPERATION_BYTES,
+            Some(record.budget.until()),
+        )?;
+        resources.authority.claims_mut().submit_backend_claim(
+            resources.client,
+            &record.scope,
+            spec,
+            record.key,
+            ticket,
+        )?;
+        record.resolution = None;
+        record.claim_pending = true;
+        record.backend_admitted = true;
+        tracing::info!(operation="backend_preparation_transition",resource=?record.key,stage="ClaimSubmitted",
+            "Original backend preparation advanced");
         Ok(())
     }
     pub(super) fn launch(&mut self, at: usize, resources: &mut BackendResources<'_>) -> Result<()> {

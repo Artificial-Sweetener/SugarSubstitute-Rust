@@ -228,7 +228,7 @@ impl Active {
             }
         }
         let report = CaptureAttachRetirementReport {
-            run: self.work.shared.custody.full_run,
+            target: self.work.shared.custody.full_target,
             execution: self.work.shared.custody.execution,
             job: self.work.shared.custody.job,
         };

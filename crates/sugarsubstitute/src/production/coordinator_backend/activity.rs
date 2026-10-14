@@ -55,25 +55,6 @@ impl CoordinatorBackend {
                         record.budget,
                     )?;
                     record.resolved = Some(resolved);
-                    let spec = Self::spec(
-                        resources,
-                        Operation::NativeLifecycle,
-                        JobClass::InfrastructureLifecycle,
-                        CLAIM_OPERATION_BYTES,
-                        Some(record.budget.until()),
-                    )?;
-                    resources.authority.claims_mut().submit_backend_claim(
-                        resources.client,
-                        &record.scope,
-                        spec,
-                        key,
-                        ticket,
-                    )?;
-                    record.resolution = None;
-                    record.claim_pending = true;
-                    record.backend_admitted = true;
-                    tracing::info!(operation="backend_preparation_transition",resource=?key,stage="ClaimSubmitted",
-                        "Original backend preparation advanced");
                 }
             }
             ClaimObservation::BackendClaimed(_) => {
@@ -218,6 +199,13 @@ impl CoordinatorBackend {
         batch: &CompletionBatch,
         resources: &mut BackendResources<'_>,
     ) -> Result<ResourceTransition> {
+        let custody_ready = match &mut self.custody {
+            Some(custody) => custody.advance(resources)?,
+            None => self.custody_options.is_none(),
+        };
+        if custody_ready {
+            self.claim_resolved(at, resources)?;
+        }
         let record = self.records[at].as_mut().ok_or(LifecycleRejection::StaleIdentity)?;
         if record.source_job {
             match record.source.take_inspection() {

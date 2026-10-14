@@ -40,8 +40,9 @@ bool ValidAttachInput(const SsCaptureAttachInputV2& input) {
   bool epoch = false;
   for (uint8_t value : input.coordinator_epoch) epoch |= value != 0;
   return input.abi_version == 2 && input.byte_size == sizeof(input) &&
-         input.subject == 1 && input.provenance == 1 && epoch &&
-         input.instance && input.generation && input.creator_pid && input.handler_pid &&
+         ((input.subject == 1 && input.instance && input.generation) ||
+          (input.subject == 2 && input.instance == 0 && input.generation == 0)) &&
+         input.provenance == 1 && epoch && input.creator_pid && input.handler_pid &&
          input.creator_pid != input.handler_pid && input.creator_birth && input.handler_birth &&
          Handle(input.creator_process) && Handle(input.handler_process) &&
          input.creator_process != input.handler_process &&

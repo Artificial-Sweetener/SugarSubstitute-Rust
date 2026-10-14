@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Define owned application contracts independently of desktop and execution adapters.
 
+pub mod backend_custody;
 pub mod configuration;
 /// Bound independent invocation facts without native coordinator authority.
 pub mod coordinator_entry;

@@ -23,8 +23,9 @@ impl PublicationAuthority<'_> {
         &self,
         encoded: &[u8; N],
         current: &JobContext,
+        budget: &crate::native_claims::files::Budget,
     ) -> Result<PublicationBinding<N>, ClaimError> {
-        let context = context::PublicationContext::new(current)?;
+        let context = context::PublicationContext::new(current, budget)?;
         let elected = match self {
             Self::Ordinary => None,
             Self::ElectedCoordinator(proof) => Some(proof.binding()?),
@@ -61,19 +62,23 @@ impl PublicationAuthority<'_> {
 }
 impl<const N: usize> PublicationBinding<N> {
     /// Retain an observation's ports while a failed source close remains owned.
-    pub(super) fn read(current: &JobContext) -> Result<Self, ClaimError> {
+    pub(super) fn read(
+        current: &JobContext,
+        budget: &crate::native_claims::files::Budget,
+    ) -> Result<Self, ClaimError> {
         Ok(Self {
             elected: None,
             encoded: None,
-            context: context::PublicationContext::new(current)?,
+            context: context::PublicationContext::new(current, budget)?,
         })
     }
     /// Retain cleanup ports before a retirement read can leave a partial output.
     pub(super) fn cleanup(
         expected: Option<&[u8; N]>,
         current: &JobContext,
+        budget: &crate::native_claims::files::Budget,
     ) -> Result<Self, ClaimError> {
-        let mut context = context::PublicationContext::new(current)?;
+        let mut context = context::PublicationContext::new(current, budget)?;
         context.validate_cleanup(current)?;
         Ok(Self { elected: None, encoded: expected.copied(), context })
     }
@@ -139,9 +144,11 @@ pub(crate) fn publish_with_boundary<const N: usize>(
     if !file.is_locked() || !(16..=1024).contains(&N) {
         return Err(ClaimError::invalid("publication_without_exclusion"));
     }
-    let mut pending = lock(&file.publication);
+    let operation = crate::protected_storage::exclusion::operation::Operation::begin(file)?;
+    let mut pending =
+        crate::protected_storage::exclusion::operation::Loan::take(&file.publication, &operation);
     if pending.is_none() {
-        *pending = Some(authority.bind(encoded, context)?);
+        *pending = Some(authority.bind(encoded, context, &file.handle.budget())?);
     }
     let binding =
         pending.as_mut().ok_or_else(|| ClaimError::invalid("missing_publication_binding"))?;
@@ -153,7 +160,8 @@ pub(crate) fn publish_with_boundary<const N: usize>(
         }};
     }
     step!(boundary.verify_exclusion(file));
-    let mut retained = lock(&file.stage);
+    let mut retained =
+        crate::protected_storage::exclusion::operation::Loan::take(&file.stage, &operation);
     if let Some(stage) = retained.as_mut() {
         if stage.encoded != *encoded {
             return Err(ClaimError::invalid("changed_publication_generation"));
@@ -161,7 +169,7 @@ pub(crate) fn publish_with_boundary<const N: usize>(
         if stage.activated.is_some() {
             let mut activated = stage.activated;
             finish_activation(&mut activated, encoded, || {
-                settle_activation(file, stage, boundary, || {
+                settle_activation(file, stage, boundary, &operation, || {
                     binding.validate(file, &authority, encoded, context)
                 })
             })?;
@@ -171,10 +179,12 @@ pub(crate) fn publish_with_boundary<const N: usize>(
             return Ok(());
         }
     }
-    let old = step!(
-        boundary
-            .read_shape(file, None, &mut || binding.validate(file, &authority, encoded, context))
-    );
+    let old = step!(boundary.read_shape(
+        file,
+        None,
+        &mut || binding.validate(file, &authority, encoded, context),
+        &operation
+    ));
     if let Err(cause) = authority.validate(file, &old).and_then(|()| validate_predecessor(&old)) {
         if retained.is_none() {
             *pending = None;
@@ -208,7 +218,7 @@ pub(crate) fn publish_with_boundary<const N: usize>(
     step!(boundary.activate_stage(file, stage));
     let mut activated = stage.activated;
     finish_activation(&mut activated, encoded, || {
-        settle_activation(file, stage, boundary, || {
+        settle_activation(file, stage, boundary, &operation, || {
             binding.validate(file, &authority, encoded, context)
         })
     })?;
@@ -221,6 +231,7 @@ pub(super) fn settle_activation<const N: usize>(
     file: &HeldFile<N>,
     stage: &mut Stage<N>,
     boundary: &mut dyn RecordBoundary<N>,
+    operation: &crate::protected_storage::exclusion::operation::Operation<'_>,
     mut check: impl FnMut() -> Result<(), ClaimError>,
 ) -> Result<(), ClaimError> {
     let actual = stage.activated.ok_or_else(|| ClaimError::invalid("missing_stage_activation"))?;
@@ -239,7 +250,7 @@ pub(super) fn settle_activation<const N: usize>(
     }
     let identity =
         stage.identity.ok_or_else(|| ClaimError::invalid("missing_activated_identity"))?;
-    if !matches!(step!(boundary.read_shape(file,Some(identity), &mut check)),RecordRead::Present(bytes) if bytes==actual)
+    if !matches!(step!(boundary.read_shape(file,Some(identity), &mut check, operation)),RecordRead::Present(bytes) if bytes==actual)
     {
         return Err(ClaimError::invalid("changed_activated_record"));
     }

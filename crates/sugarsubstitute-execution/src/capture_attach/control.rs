@@ -4,8 +4,9 @@
 use crate::{admission::Core, native::NativeObservationError, scope::lock};
 use std::sync::{Arc, Mutex, Weak};
 use sugarsubstitute_contracts::{
+    crash::CaptureTarget,
     execution::{ExecutionError, ExecutionId, JobId, MemoryClaim, Moment, Operation},
-    lifecycle::{RunKey, ShutdownBudget},
+    lifecycle::ShutdownBudget,
 };
 
 /// Checked native counter facts for one original cleanup transaction.
@@ -102,7 +103,7 @@ impl CleanupState {
 }
 
 pub(crate) struct Custody {
-    pub(crate) full_run: RunKey,
+    pub(crate) full_target: CaptureTarget,
     pub(crate) attach_until: Moment,
     pub(crate) execution: ExecutionId,
     pub(crate) job: JobId,
@@ -115,11 +116,11 @@ impl Custody {
     pub(crate) fn new(
         core: &Arc<Core>,
         job: JobId,
-        full_run: RunKey,
+        full_target: CaptureTarget,
         attach_until: Moment,
     ) -> Arc<Self> {
         Arc::new(Self {
-            full_run,
+            full_target,
             attach_until,
             execution: core.id,
             job,
@@ -290,14 +291,14 @@ fn encode(
 /// Constructor-private proof of actual capture pin and temporary I/O retirement.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct CaptureAttachRetirementReport {
-    pub(crate) run: RunKey,
+    pub(crate) target: CaptureTarget,
     pub(crate) execution: ExecutionId,
     pub(crate) job: JobId,
 }
 impl CaptureAttachRetirementReport {
-    /// Return the complete desktop lifetime whose actual custody retired.
-    pub const fn run(self) -> RunKey {
-        self.run
+    /// Return the complete capture target whose actual custody retired.
+    pub const fn target(self) -> CaptureTarget {
+        self.target
     }
     /// Return the exact executor associated with that native lifetime.
     pub const fn execution_id(self) -> ExecutionId {

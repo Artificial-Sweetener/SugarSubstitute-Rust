@@ -19,8 +19,43 @@ fn actual_table_capacity_and_identity_pin_retain_original_constructor_charge() -
         // Each pre-reserved Shared retains one inline pending launch input. Its
         // output identity now distinguishes a desktop Run from a managed resource.
         let output_growth = size_of::<OutputIdentity>() - size_of::<ResourceKey>();
-        assert_eq!(bytes, 253_792 + 131 * output_growth as u64);
-        assert_eq!(bytes, 254_840);
+        let custody_input =
+            size_of::<Option<crate::registry_input::backend_custody::CustodyLaunch>>();
+        assert_eq!(custody_input, 224);
+        let family_guards =
+            size_of::<Option<native_process::FamilyStorage>>() - size_of::<Option<Box<Family>>>();
+        assert_eq!(family_guards, 32);
+        // Every original table slot pre-funds its pending input, including the
+        // actual bootstrap/enrollment pins. Family and helper counts stay fixed.
+        let custody_owners =
+            size_of::<Option<crate::claims::managed_custody::ManagedCustodySource>>()
+                + size_of::<Option<Box<super::super::custody_establishment::Establishment>>>()
+                + size_of::<Option<native_process::custody_transfer::CustodyDestination>>()
+                + size_of::<Option<crate::BackendCustodyAcknowledgement>>()
+                + size_of::<
+                    Option<
+                        OwnedJob<
+                            super::super::custody_establishment::EstablishmentResult,
+                            RegistryError,
+                        >,
+                    >,
+                >()
+                + size_of::<
+                    Option<
+                        sugarsubstitute_contracts::execution::JobCompletion<
+                            super::super::custody_establishment::EstablishmentResult,
+                            RegistryError,
+                        >,
+                    >,
+                >()
+                + size_of::<Option<super::super::CreationJob>>()
+                - size_of::<Option<OwnedJob<(), RegistryError>>>();
+        assert_eq!(custody_owners, 624);
+        assert_eq!(
+            bytes,
+            253_792 + 131 * (output_growth + custody_input + family_guards + custody_owners) as u64
+        );
+        assert_eq!(bytes, 370_120);
         // The boxed native family's own identity growth remains covered by its
         // original fixed claim and actual production capacity preflight.
         let family_peak = size_of::<Family>()

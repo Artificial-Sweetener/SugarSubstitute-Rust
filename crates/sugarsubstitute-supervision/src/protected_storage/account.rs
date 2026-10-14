@@ -166,6 +166,9 @@ pub(crate) fn resolve_namespace(
         &mut crate::protected_storage::native_phase::NativePhase::ordinary(&(budget.clone()))?,
     )?;
     let namespace = namespace_identity(account.sid.bytes()?, &installation_identity);
+    if budget.expected_namespace().is_some_and(|expected| expected != namespace) {
+        return Err(ClaimError::invalid("custody_installation_namespace"));
+    }
     // SAFETY: Retained QUERY|IMPERSONATE token and static known-folder GUID remain valid.
     let raw =
         unsafe { SHGetKnownFolderPath(&FOLDERID_LocalAppData, KNOWN_FOLDER_FLAG(0), Some(token)) }

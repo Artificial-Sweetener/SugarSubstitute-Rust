@@ -16,7 +16,10 @@ AUTHORED = frozenset({"BUILD.gn", "capture_bridge.h", "capture_bridge.cc", "owne
                      "capture_event.h", "capture_event.cc", "capture_event_tests.cc",
                      "capture_attach_boundary.h", "capture_attach_boundary.cc", "capture_attach_boundary_tests.cc",
                      "owned_attach_test_support.h", "capture_runtime_tests.cc", "capture_runtime_test_source.py",
-                     "bounded_metadata.h", "bounded_metadata.cc", "bounded_metadata_tests.cc", "incident_bridge.h", "incident_bridge.cc", "incident_bridge_tests.cc"})
+                     "bounded_metadata.h", "bounded_metadata.cc", "bounded_metadata_tests.cc", "incident_bridge.h", "incident_bridge.cc", "incident_bridge_tests.cc",
+                     "finished_report_abi.h", "finished_report.h", "finished_report.cc", "finished_io.h", "finished_io.cc",
+                     "finished_digest.h", "finished_digest.cc", "finished_query.cc", "finished_disposition.cc", "finished_retirement.cc",
+                     "finished_report_tests.cc", "finished_windows_tests.cc"})
 PACKAGES = (
     ("crashpad", "60dd943f48d77dc8d05dabc04badbd8561d0b8c4", "96dfd1ecdf44095f1feaf893ce189d267707d11b5866f8f3474ee34188bdc2b8", "", "crashpad"),
     ("mini_chromium", "e5169551c51f3a52eee36b3b03f219cefe380237", "e35ed2d041232fde0bbfbc1517431c3902890526c696d64ee062dc370baf2b9d", "third_party/mini_chromium/mini_chromium", "mini_chromium"),

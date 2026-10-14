@@ -18,6 +18,7 @@ pub(super) fn create<const N: usize>(
         &mut crate::protected_storage::native_phase::NativePhase::ordinary(&file.handle.budget())?,
     )?;
     let attributes = descriptor.attributes();
+    file.handle.budget().check()?;
     // SAFETY: Bounded owned name and protected noninheritable descriptor remain live.
     let raw = unsafe {
         CreateFileW(
@@ -39,6 +40,7 @@ pub(super) fn reopen<const N: usize>(
     value: &mut Stage<N>,
 ) -> Result<(), ClaimError> {
     let wide = paths::wide(&value.path)?;
+    file.handle.budget().check()?;
     // SAFETY: Only the exact retained stage path is opened; output is adopted before checks.
     let raw = unsafe {
         CreateFileW(

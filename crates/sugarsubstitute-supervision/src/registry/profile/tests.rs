@@ -64,6 +64,13 @@ struct Fake {
     clock: Arc<TestClock>,
 }
 impl NativePort for Fake {
+    fn prepare_job(&self, family: &mut Family) -> Result<(), RegistryError> {
+        if family.job.is_some() {
+            return Err(RegistryError::invalid("fake_prepared_job_already_owned"));
+        }
+        family.job = Some(10);
+        Ok(())
+    }
     fn create(
         &self,
         family: &mut Family,
@@ -99,6 +106,14 @@ impl NativePort for Fake {
         _: ProcessKey,
     ) -> Result<(), RegistryError> {
         Err(RegistryError::invalid("profile_fixture_diagnostic_role"))
+    }
+    fn enroll_backend_custody(
+        &self,
+        _: &mut Family,
+        _: sugarsubstitute_contracts::backend_custody::BackendCustodyKey,
+        _: ProcessKey,
+    ) -> Result<(), RegistryError> {
+        Err(RegistryError::invalid("profile_fixture_custody_role"))
     }
     fn seal(&self, family: &mut Family) -> Result<(), RegistryError> {
         family.sealed = true;

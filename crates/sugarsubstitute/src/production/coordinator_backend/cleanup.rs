@@ -199,6 +199,41 @@ impl CoordinatorBackend {
             && (!record.backend_admitted || record.released)
             && (record.launch.is_none() || record.family_settled)
         {
+            if let Some(custody) = &self.custody
+                && let Some(ticket) = record.launch
+            {
+                if !custody.release(record.key, budget_of(record)?, resources)? {
+                    return Ok(ResourceTransition::default());
+                }
+                let registry =
+                    resources.authority.registry_mut().ok_or(LifecycleRejection::WrongPhase)?;
+                registry.observe_backend_custody_release(custody.parent()?, ticket)?;
+                if registry.custody_retirement_pending(ticket.process())? {
+                    if !registry.snapshot(ticket.process())?.cleanup_step_pending
+                        && resources.client.now()? < budget_of(record)?.settle_until
+                    {
+                        let spec = Self::spec(
+                            resources,
+                            Operation::NativeLifecycle,
+                            JobClass::InfrastructureLifecycle,
+                            4096,
+                            Some(budget_of(record)?.settle_until),
+                        )?;
+                        resources
+                            .authority
+                            .registry_mut()
+                            .ok_or(LifecycleRejection::WrongPhase)?
+                            .submit_cleanup_step(
+                            resources.client,
+                            ticket.process(),
+                            resources.cleanup,
+                            spec,
+                            None,
+                        )?;
+                    }
+                    return Ok(ResourceTransition::default());
+                }
+            }
             if let Some(ticket) = record.launch {
                 resources
                     .authority
@@ -213,4 +248,7 @@ impl CoordinatorBackend {
         }
         Ok(ResourceTransition::default())
     }
+}
+fn budget_of(record: &Backend) -> Result<ShutdownBudget> {
+    Ok(record.shutdown.ok_or(LifecycleRejection::WrongPhase)?.1)
 }

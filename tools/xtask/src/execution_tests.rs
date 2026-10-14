@@ -348,3 +348,28 @@ fn capture_resource_producers_cannot_hide_outside_contract_or_execution_owners()
     )?.is_empty());
     Ok(())
 }
+
+/// Authenticated native capture inputs cannot be manufactured by nonowners or macro aliases.
+#[test]
+fn authenticated_capture_input_producers_reject_nonowners_and_allow_owned_consumption() -> Result<()>
+{
+    let fixture = Repository::new()?;
+    let policy = Policy { schema_version: 1, owner: None };
+    for source in [
+        "fn forge() { InheritedCaptureAttachInput::authenticated(); }",
+        "use sugarsubstitute_execution::InheritedCaptureAttachInput as I; fn forge() { I::authenticated(); }",
+        "type I = sugarsubstitute_execution::NativeCaptureInput; fn forge() { I::from_captured(); }",
+        "macro_rules! forge { () => { NativeCaptureInput::from_captured() }; }",
+        "macro_rules! forge { ($t:ident,$f:ident) => { $t::$f() }; } fn x() { forge!(InheritedCaptureAttachInput,authenticated); }",
+        "#[cfg(test)] fn forge() { InheritedCaptureAttachInput::simulated(); }",
+    ] {
+        assert!(
+            !crate::execution_source::resource_producer_findings(source)?.is_empty(),
+            "accepted {source}"
+        );
+        write(fixture.root(), "crates/host/src/capture_input.rs", source)?;
+        assert!(check(fixture.root(), &policy, &fixture.architecture, &fixture.workspace).is_err());
+    }
+    assert!(crate::execution_source::resource_producer_findings("fn consume(input: InheritedCaptureAttachInput) { input.target(); input.original_deadline(); }")?.is_empty());
+    Ok(())
+}

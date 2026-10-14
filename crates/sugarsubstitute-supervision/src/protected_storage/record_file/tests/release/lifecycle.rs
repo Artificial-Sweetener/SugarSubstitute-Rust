@@ -196,7 +196,7 @@ pub(super) fn interrupted(
                     result?;
                 }
             }
-            *lock(&output) = Some(fake.read_shape(file, None, &mut || Ok(()))?);
+            *lock(&output) = Some(fake.read_shape(file, None, &mut || Ok(()), &crate::protected_storage::exclusion::operation::Operation::begin(file)?)?);
             file.retire_fixture([11; 24], &mut fake, &context)?;
             coordinator.close_coordinator();
             *slot = None;

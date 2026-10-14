@@ -18,12 +18,26 @@ impl WindowsProcessRegistry {
             for record in self.records.iter_mut().flatten() {
                 let identity = (notification.scope_id, notification.job_id);
                 if record
+                    .establishment_job
+                    .as_ref()
+                    .is_some_and(|job| (job.scope_id(), job.spec().id) == identity)
+                {
+                    if let Some(completion) =
+                        record.establishment_job.as_mut().and_then(OwnedJob::try_take_completion)
+                    {
+                        record.establishment_completion = Some(completion);
+                        drop(record.establishment_job.take());
+                    }
+                    matched += 1;
+                    break;
+                }
+                if record
                     .creation
                     .as_ref()
                     .is_some_and(|job| (job.scope_id(), job.spec().id) == identity)
                 {
                     if let Some(completion) =
-                        record.creation.as_mut().and_then(OwnedJob::try_take_completion)
+                        record.creation.as_mut().and_then(CreationJob::try_take_completion)
                     {
                         drop(record.creation.take());
                         creation(record, completion);
@@ -60,7 +74,10 @@ impl WindowsProcessRegistry {
         for record in self.records.iter_mut().flatten() {
             // Shared native state is acquired only after its finite worker job
             // actually returned; metadata cannot make the UI wait on native FFI.
-            if record.creation.is_none() && record.cleanup.is_none() {
+            if record.creation.is_none()
+                && record.establishment_job.is_none()
+                && record.cleanup.is_none()
+            {
                 if record.root_notice
                     && let Some(completion) =
                         record.root_watch.as_mut().and_then(OwnedJob::try_take_completion)
@@ -90,6 +107,7 @@ impl WindowsProcessRegistry {
             if !record.settled
                 && record.closed_native
                 && record.creation.is_none()
+                && record.establishment_job.is_none()
                 && record.cleanup.is_none()
                 && record.root_watch.is_none()
                 && record.member_watch.is_none()

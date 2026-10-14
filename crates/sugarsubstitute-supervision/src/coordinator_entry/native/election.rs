@@ -43,6 +43,7 @@ impl NativeBoundary<'_> {
             if entry { &mut self.state.election } else { &mut self.state.recovery_coordinator };
         let budget = Budget::Protected(memory);
         let acquired = HeldFile::acquire_into(
+            crate::protected_storage::exclusion::ExclusionOpen::CreateOrOpen,
             slot,
             crate::protected_storage::native_name::NativeName::Ordinary(
                 stem.with_extension(if entry { "entry.claim" } else { "claim" }),

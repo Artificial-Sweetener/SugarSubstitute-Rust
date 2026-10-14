@@ -42,7 +42,7 @@ fn twenty_second_preparation_retains_acknowledged_native_capacity_until_checked_
     boundary.settle()?;
     boundary.source_retired.wait()?;
     let report = take_retirement_report(&rig, &mut retirement)??;
-    assert_eq!(report.run(), expected()?.run());
+    assert_eq!(report.target(), expected()?.target());
     assert_eq!(report.job_id(), JobId::new(1)?);
     assert!(retirement.try_take_report().is_none());
     drop(job);
@@ -264,8 +264,8 @@ fn first_cleanup_claim_retains_charge_and_cause_when_native_retirement_wins_samp
     .err()
     .ok_or("Sampling custody admitted the same run")?;
     assert!(
-        matches!(rejection.error, admission::CaptureAttachAdmissionError::RunAlreadyReserved(run)
-        if run == expected()?.run())
+        matches!(rejection.error, admission::CaptureAttachAdmissionError::TargetAlreadyReserved(run)
+        if run == expected()?.target())
     );
     assert!(Arc::ptr_eq(&rejection.source, &duplicate_source));
     assert_eq!(rejection.expected, expected()?);

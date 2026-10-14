@@ -75,8 +75,7 @@ impl Lease {
                 parent.pin.shared.expected.attach_budget().until(),
             )
             .map_err(LifecyclePipeFailure::native)?;
-            let body =
-                parent.startup.body().map_err(|cause| error("captured_startup_body", cause))?;
+            let body = parent.body()?;
             self.section.publish_captured(
                 &mut descriptor,
                 data,

@@ -12,7 +12,7 @@ pub(super) fn expectation(run: RunKey) -> TestResult<CaptureAttachExpectation> {
     let original = expected()?;
     Ok(CaptureAttachExpectation::new(
         run.owner,
-        run,
+        sugarsubstitute_contracts::crash::CaptureTarget::Desktop(run),
         &BuildIdentity::new("test-build")?,
         original.creator(),
         original.handler(),
@@ -46,7 +46,7 @@ pub(super) fn rejected(
     .err()
     .ok_or("Duplicate run was admitted")?;
     assert!(
-        matches!(rejection.error, admission::CaptureAttachAdmissionError::RunAlreadyReserved(run) if run == original.run())
+        matches!(rejection.error, admission::CaptureAttachAdmissionError::TargetAlreadyReserved(run) if run == original.target())
     );
     assert_eq!(rejection.expected, original);
     assert!(Arc::ptr_eq(&rejection.source, &source));
@@ -55,7 +55,7 @@ pub(super) fn rejected(
     assert_eq!(boundary.observations.load(Ordering::Acquire), 0);
     assert_eq!(boundary.starts.load(Ordering::Acquire), 0);
     assert_eq!(boundary.retirements.load(Ordering::Acquire), 0);
-    assert_eq!(format!("{:?}", rejection.error), "RunAlreadyReserved { redacted }");
+    assert_eq!(format!("{:?}", rejection.error), "TargetAlreadyReserved { redacted }");
     assert!(std::error::Error::source(&rejection.error).is_none());
     Ok(())
 }
@@ -143,7 +143,7 @@ fn conflict_matches_complete_namespace_epoch_instance_and_generation() -> TestRe
     boundary.ready.store(true, Ordering::Release);
     let mut job = submit(&rig, &first, &boundary)?;
     let pin = take_pin(&rig, &mut job)?;
-    let original = expected()?.run();
+    let original = expected()?.target().desktop().ok_or("Desktop fixture target absent")?;
     let mut namespace = original;
     namespace.owner.namespace = NamespaceId::new([99; 32]);
     let mut epoch = original;
@@ -209,7 +209,7 @@ fn physical_close_does_not_release_conflict_before_actual_source_retirement() ->
     boundary.source_blocked.store(false, Ordering::Release);
     boundary.signal()?;
     boundary.source_retired.wait()?;
-    assert_eq!(take_retirement_report(&rig, &mut retirement)??.run(), expected()?.run());
+    assert_eq!(take_retirement_report(&rig, &mut retirement)??.target(), expected()?.target());
     assert!(!shared.custody.held());
     drop(job);
     drop(rig.owner);

@@ -14,6 +14,14 @@ use windows::Win32::{
 };
 
 pub(super) fn identity(process: HANDLE) -> Result<Identity, RegistryError> {
+    identity_checked(process, &mut || Ok(()))
+}
+/// Query one retained process with a separate original check before each effect.
+pub(super) fn identity_checked(
+    process: HANDLE,
+    check: &mut dyn FnMut() -> Result<(), RegistryError>,
+) -> Result<Identity, RegistryError> {
+    check()?;
     // SAFETY: caller retains this process handle for the complete query sequence.
     let pid = unsafe { GetProcessId(process) };
     if pid == 0 {
@@ -21,6 +29,7 @@ pub(super) fn identity(process: HANDLE) -> Result<Identity, RegistryError> {
     }
     let (mut birth, mut exit, mut kernel, mut user) =
         (FILETIME::default(), FILETIME::default(), FILETIME::default(), FILETIME::default());
+    check()?;
     // SAFETY: all outputs are initialized stack values; process ownership remains live.
     unsafe { GetProcessTimes(process, &mut birth, &mut exit, &mut kernel, &mut user) }
         .map_err(|cause| RegistryError::new("process_birth", cause))?;
@@ -30,7 +39,13 @@ pub(super) fn identity(process: HANDLE) -> Result<Identity, RegistryError> {
     }
     Ok(Identity { pid, birth })
 }
-pub(super) fn verify_job(process: HANDLE, job: HANDLE) -> Result<(), RegistryError> {
+/// Require original control before exact retained Job membership observation.
+pub(super) fn verify_job_checked(
+    process: HANDLE,
+    job: HANDLE,
+    check: &mut dyn FnMut() -> Result<(), RegistryError>,
+) -> Result<(), RegistryError> {
+    check()?;
     let mut member = windows::core::BOOL::default();
     // SAFETY: exact retained process and Job handles, initialized output.
     unsafe { IsProcessInJob(process, Some(job), &mut member) }
@@ -46,6 +61,7 @@ impl WindowsPort {
         family.query.fill(0);
         let capacity = family.query.len() * std::mem::size_of::<usize>();
         let mut returned = 0;
+        family.check_native()?;
         // SAFETY: aligned fixed storage covers the two u32 counts plus all256 ULONG_PTR identities.
         let result = unsafe {
             QueryInformationJobObject(
@@ -83,17 +99,18 @@ impl WindowsPort {
                 family.members.iter().flatten().find(|member| member.identity.pid == pid)
             {
                 let process = handle(member.handle, "retained_member")?;
-                if identity(process)? != member.identity {
+                if identity_checked(process, &mut || family.check_native())? != member.identity {
                     family.incomplete = true;
                     return Err(RegistryError::invalid("retained_member_birth"));
                 }
-                verify_job(process, job)?;
+                verify_job_checked(process, job, &mut || family.check_native())?;
                 continue;
             }
             if family.count == MAX_MEMBERS {
                 family.incomplete = true;
                 return Err(RegistryError::invalid("retained_inventory_overflow"));
             }
+            family.check_native()?;
             // SAFETY: PID is only a query result; opening alone conveys no authority.
             // The returned handle is adopted before birth/membership checks and never used for termination.
             let process = unsafe {
@@ -110,8 +127,8 @@ impl WindowsPort {
                 exited: false,
             });
             family.count += 1;
-            let verified = identity(process)?;
-            verify_job(process, job)?;
+            let verified = identity_checked(process, &mut || family.check_native())?;
+            verify_job_checked(process, job, &mut || family.check_native())?;
             if let Some(member) = &mut family.members[index] {
                 member.identity = verified;
             }

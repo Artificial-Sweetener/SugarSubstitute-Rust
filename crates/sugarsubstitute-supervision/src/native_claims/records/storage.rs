@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Claims alone decide schema-one predecessor and replacement compatibility.
+//! Claims own exact predecessor compatibility and released legacy backend upgrades.
 use super::*;
 use crate::protected_storage::record_file;
 #[cfg(test)]
@@ -24,7 +24,7 @@ pub(crate) fn check_predecessor(
     };
     match previous {
         Some((record, bytes))
-            if record.state == RecordState::Released && same_claim(&record, expected) =>
+            if record.state == RecordState::Released && permits_replacement(&record, expected) =>
         {
             Ok(Some(bytes))
         }
@@ -56,12 +56,22 @@ pub(crate) fn publish(
 fn same_claim(old: &Record, new: &Record) -> bool {
     old.digest == new.digest && (old.resource == 0) == (new.resource == 0)
 }
+/// Accept the forward v1->v2 backend upgrade only from exact Released bytes.
+/// Active legacy records remain intact and unresolved. Publication preserves the
+/// original predecessor until its checked atomic activation; new custody records
+/// also require the independent exclusion acquired by the claim owner.
 pub(crate) fn permits_replacement(old: &Record, new: &Record) -> bool {
     same_claim(old, new)
+        && (old.version == new.version
+            || (old.version == 1
+                && new.version == 2
+                && old.resource != 0
+                && old.state == RecordState::Released))
         && (old.state == RecordState::Released
             || (old.owner == new.owner
                 && old.resource == new.resource
-                && old.generation == new.generation))
+                && old.generation == new.generation
+                && old.custodian == new.custodian))
 }
 
 /// Publish only under the retained election permission and its exact predecessor comparison.
@@ -143,7 +153,9 @@ pub(crate) fn prepare_coordinator_release(
     }
     let own =
         expected.as_ref().ok_or_else(|| ClaimError::invalid("missing_retirement_generation"))?;
-    if actual.owner != own.owner
+    if actual.custodian != own.custodian
+        || actual.version != own.version
+        || actual.owner != own.owner
         || actual.resource != own.resource
         || actual.generation != own.generation
         || actual.digest != own.digest
@@ -214,7 +226,9 @@ pub(crate) fn prepare_backend_release(
     }
     let own =
         expected.as_ref().ok_or_else(|| ClaimError::invalid("backend_retirement_generation"))?;
-    if actual.owner != own.owner
+    if actual.custodian != own.custodian
+        || actual.version != own.version
+        || actual.owner != own.owner
         || actual.resource != own.resource
         || actual.resource == 0
         || actual.generation != own.generation

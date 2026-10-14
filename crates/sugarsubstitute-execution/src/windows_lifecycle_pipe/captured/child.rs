@@ -14,14 +14,14 @@ use crate::{
     native_pipe::security,
     windows_lifecycle_pipe::{native::Lease, native::peer},
 };
-use sugarsubstitute_contracts::{execution::JobContext, lifecycle::RunKey};
+use sugarsubstitute_contracts::{crash::CaptureTarget, execution::JobContext};
 use windows::Win32::{Foundation::*, System::Threading::*};
 
 /// These private facts are constructed only by actual kernel/capability/full-run authentication.
 /// The child self observation is retained separately from creator and handler facts.
 pub(crate) struct CapturedChildBinding {
     facts: CapturedFacts,
-    run: RunKey,
+    target: CaptureTarget,
     child_pid: u32,
     child_birth: u64,
 }
@@ -35,6 +35,11 @@ pub struct CapturedStartup {
     pub startup: AuthenticatedStartupSnapshot,
 }
 
+/// Exactly one native-authenticated purpose-specific input in the existing shared slot.
+pub(crate) enum CapturedInput {
+    Desktop(CapturedStartup),
+    BackendCustody(InheritedCaptureAttachInput),
+}
 /// Cache-only borrower; no native handle, scheduler, source retirement or renewed budget is owned.
 struct InputLease {
     binding: CapturedChildBinding,
@@ -53,7 +58,7 @@ impl InheritedCaptureLease for InputLease {
                 std::io::Error::other("Inherited input borrow returned"),
             ));
         }
-        Ok(NativeCaptureInput::from_captured(&self.binding, cleanup, issue, event))
+        NativeCaptureInput::from_captured(&self.binding, cleanup, issue, event)
     }
     fn return_unissued(&mut self) -> Result<(), NativeObservationError> {
         self.returned = true;
@@ -74,8 +79,8 @@ impl InheritedCaptureLease for InputLease {
 }
 impl CapturedChildBinding {
     /// Borrow immutable actual authenticated data only for the private ABI constructor.
-    pub(crate) fn facts(&self) -> (&CapturedFacts, RunKey) {
-        (&self.facts, self.run)
+    pub(crate) fn facts(&self) -> (&CapturedFacts, CaptureTarget) {
+        (&self.facts, self.target)
     }
 }
 
@@ -88,7 +93,7 @@ impl Lease {
     ) -> Result<(), LifecyclePipeFailure> {
         let original = self.original.ok_or_else(|| failure("captured_client_deadline"))?;
         self.section.accept_input(&mut self.input);
-        let (facts, data) = self.section.read_captured(original)?;
+        let (facts, data) = self.section.read_captured(original, self.expected)?;
         self.captured_until = Some(
             crate::counter_deadline::decode_sampled(
                 || Ok(context.now()),
@@ -141,22 +146,30 @@ impl Lease {
             return Err(failure("captured_child_self_alias"));
         }
         let data = self.data.as_ref().ok_or_else(|| failure("captured_child_base"))?;
-        let run = data.binding.desktop().ok_or_else(|| failure("captured_child_run"))?;
+        let target =
+            data.binding.capture_target().ok_or_else(|| failure("captured_child_target"))?;
         let until = self.captured_until.ok_or_else(|| failure("captured_child_original_until"))?;
         // Both loans are installed in this retained native output before eligibility is published.
         let input_loan = self.section.loan(0..super::codec::BASE_BYTES)?;
-        let startup_loan = self.section.loan(facts.payload.clone())?;
+        let startup_loan = if target.desktop().is_some() {
+            Some(self.section.loan(facts.payload.clone())?)
+        } else {
+            None
+        };
         let facts = self.captured_facts.take().ok_or_else(|| failure("captured_child_facts"))?;
-        let binding = CapturedChildBinding { facts, run, child_pid, child_birth };
+        let binding = CapturedChildBinding { facts, target, child_pid, child_birth };
         let capture = InheritedCaptureAttachInput::authenticated(
-            run,
+            target,
             until,
             Box::new(InputLease { binding, returned: false }),
             input_loan,
         );
-        self.captured_ready = Some(CapturedStartup {
-            capture,
-            startup: AuthenticatedStartupSnapshot::from_authenticated_loan(startup_loan),
+        self.captured_ready = Some(match startup_loan {
+            Some(startup) => CapturedInput::Desktop(CapturedStartup {
+                capture,
+                startup: AuthenticatedStartupSnapshot::from_authenticated_loan(startup),
+            }),
+            None => CapturedInput::BackendCustody(capture),
         });
         Ok(())
     }

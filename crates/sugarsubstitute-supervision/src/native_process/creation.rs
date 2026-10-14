@@ -22,11 +22,12 @@ use windows::{
 };
 
 impl WindowsPort {
-    pub(super) fn create_native(
-        &self,
-        family: &mut Family,
-        input: &mut WindowsLaunchInput,
-    ) -> Result<Identity, RegistryError> {
+    /// Create the original empty containment Job before remote adoption or root creation.
+    pub(super) fn prepare_job_native(&self, family: &mut Family) -> Result<(), RegistryError> {
+        if family.job.is_some() {
+            return Err(RegistryError::invalid("prepared_job_already_owned"));
+        }
+        family.check_native()?;
         // SAFETY: unnamed, non-inheritable Job is immediately adopted before any later fallible operation.
         let job = unsafe { CreateJobObjectW(None, PCWSTR::null()) }
             .map_err(|cause| RegistryError::new("create_job", cause))?;
@@ -34,6 +35,7 @@ impl WindowsPort {
         family.job_list[0] = job.0 as usize;
         let mut limits = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
         limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        family.check_native()?;
         // SAFETY: exact owned Job and initialized structure; no ordinary process-count limit or breakaway is set.
         unsafe {
             SetInformationJobObject(
@@ -44,9 +46,18 @@ impl WindowsPort {
             )
         }
         .map_err(|cause| RegistryError::new("job_containment_limits", cause))?;
+        Ok(())
+    }
+    pub(super) fn create_native(
+        &self,
+        family: &mut Family,
+        input: &mut WindowsLaunchInput,
+    ) -> Result<Identity, RegistryError> {
+        let job = handle(family.job, "prepared_creation_job")?;
         let inherited = family.inherited_count != 0;
         let attribute_count = if inherited { 2 } else { 1 };
         let mut bytes = 0;
+        family.check_native()?;
         // SAFETY: sizing query has no list; the documented insufficient-buffer result supplies its required size.
         let sized =
             unsafe { InitializeProcThreadAttributeList(None, attribute_count, None, &mut bytes) };
@@ -59,10 +70,12 @@ impl WindowsPort {
             return Err(RegistryError::invalid("attribute_size"));
         }
         let list = LPPROC_THREAD_ATTRIBUTE_LIST(family.attributes.as_mut_ptr().cast());
+        family.check_native()?;
         // SAFETY: preclaimed aligned storage covers queried bytes and remains durable until list deletion.
         unsafe { InitializeProcThreadAttributeList(Some(list), attribute_count, None, &mut bytes) }
             .map_err(|cause| RegistryError::new("initialize_attributes", cause))?;
         family.attributes_initialized = true;
+        family.check_native()?;
         // SAFETY: stable boxed family owns the one Job handle value through DeleteProcThreadAttributeList.
         unsafe {
             UpdateProcThreadAttribute(
@@ -77,6 +90,7 @@ impl WindowsPort {
         }
         .map_err(|cause| RegistryError::new("job_at_creation_attribute", cause))?;
         if inherited {
+            family.check_native()?;
             // SAFETY: exactly the verified initialized prefix of one stable family
             // array is pinned through actual attribute deletion. No ambient handles.
             unsafe {
@@ -97,10 +111,14 @@ impl WindowsPort {
         startup.lpAttributeList = list;
         family.configure_stdio(&mut startup.StartupInfo);
         let mut process = PROCESS_INFORMATION::default();
-        // SAFETY: validated explicit mutable argv, application/cwd/environment live through the call.
-        // Ordinary launches inherit no handles; explicit output alone sets stdio.
-        // One checked HANDLE_LIST covers exactly fixture4, bootstrap1, stdio3,
-        // or bootstrap+stdio4. Pins remain live through actual attribute deletion.
+        family.check_native()?;
+        let independent = if family.backend_custody.is_some() {
+            CREATE_BREAKAWAY_FROM_JOB
+        } else {
+            PROCESS_CREATION_FLAGS(0)
+        };
+        // SAFETY: Validated explicit argv, cwd and environment live through the call.
+        // The exact HANDLE_LIST pins remain live through attribute deletion.
         let created = unsafe {
             CreateProcessW(
                 PCWSTR(input.command.application_name.as_ptr()),
@@ -108,7 +126,10 @@ impl WindowsPort {
                 None,
                 None,
                 inherited,
-                EXTENDED_STARTUPINFO_PRESENT | CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT,
+                EXTENDED_STARTUPINFO_PRESENT
+                    | CREATE_SUSPENDED
+                    | CREATE_UNICODE_ENVIRONMENT
+                    | independent,
                 Some(input.environment.as_utf16().as_ptr().cast()),
                 PCWSTR(input.command.working_directory.as_ptr()),
                 &startup.StartupInfo,
@@ -127,9 +148,15 @@ impl WindowsPort {
             family.thread = Some(process.hThread.0 as usize);
         }
         created.map_err(|cause| RegistryError::new("create_process", cause))?;
-        let identity =
-            super::membership::identity(handle(family.member(0)?.handle, "root_handle")?)?;
-        super::membership::verify_job(handle(family.member(0)?.handle, "root_handle")?, job)?;
+        let identity = super::membership::identity_checked(
+            handle(family.member(0)?.handle, "root_handle")?,
+            &mut || family.check_native(),
+        )?;
+        super::membership::verify_job_checked(
+            handle(family.member(0)?.handle, "root_handle")?,
+            job,
+            &mut || family.check_native(),
+        )?;
         if let Some(member) = &mut family.members[0] {
             member.identity = identity;
         }
@@ -137,6 +164,7 @@ impl WindowsPort {
         Ok(identity)
     }
     pub(super) fn resume_native(&self, family: &mut Family) -> Result<(), RegistryError> {
+        family.check_native()?;
         // SAFETY: exact primary thread was created suspended and is retained across failure.
         let previous = unsafe { ResumeThread(handle(family.thread, "primary_thread")?) };
         if previous == u32::MAX {
@@ -165,6 +193,7 @@ impl WindowsPort {
         }
         let original = handle(family.member(index)?.handle, "member_handle")?;
         let mut duplicate = HANDLE::default();
+        family.check_native()?;
         // SAFETY: original remains retained, current process pseudo handles are borrowed;
         // every noninvalid output is adopted even if native duplication reports failure.
         let copied = unsafe {

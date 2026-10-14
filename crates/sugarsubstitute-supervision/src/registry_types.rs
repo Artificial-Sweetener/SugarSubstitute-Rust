@@ -19,6 +19,8 @@ pub enum FamilyBinding {
     Managed(ResourceKey),
     /// Trusted helper role/session; matching facts confer no incident or storage authority.
     Diagnostic(DiagnosticKey),
+    /// Authenticated dedicated backend-custody helper session; shares the helper quota.
+    BackendCustody(sugarsubstitute_contracts::backend_custody::BackendCustodyKey),
 }
 impl FamilyBinding {
     pub(crate) const fn owner(self) -> CoordinatorKey {
@@ -26,6 +28,7 @@ impl FamilyBinding {
             Self::Desktop(run) => run.owner,
             Self::Managed(resource) => resource.owner,
             Self::Diagnostic(key) => key.owner(),
+            Self::BackendCustody(key) => key.owner(),
         }
     }
     /// Select the independently bounded retained family table partition.
@@ -33,7 +36,7 @@ impl FamilyBinding {
         match self {
             Self::Desktop(_) => FamilyKind::Desktop,
             Self::Managed(_) => FamilyKind::Managed,
-            Self::Diagnostic(_) => FamilyKind::Diagnostic,
+            Self::Diagnostic(_) | Self::BackendCustody(_) => FamilyKind::Helper,
         }
     }
 }
@@ -42,14 +45,14 @@ impl FamilyBinding {
 pub(crate) enum FamilyKind {
     Desktop,
     Managed,
-    Diagnostic,
+    Helper,
 }
 impl FamilyKind {
     /// Bound every live, pending, or uncertain record in this partition.
     pub(crate) const fn capacity(self) -> usize {
         match self {
             Self::Desktop | Self::Managed => 64,
-            Self::Diagnostic => 3,
+            Self::Helper => 3,
         }
     }
 }

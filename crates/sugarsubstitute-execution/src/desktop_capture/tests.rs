@@ -283,7 +283,7 @@ pub(crate) fn input() -> TestResult<InheritedCaptureAttachInput> {
         generation: sugarsubstitute_contracts::lifecycle::RunGeneration::new(1)?,
     };
     Ok(InheritedCaptureAttachInput::simulated(
-        run,
+        sugarsubstitute_contracts::crash::CaptureTarget::Desktop(run),
         Moment::from_nanos(100_000_000_000),
         Box::new(Input),
     ))

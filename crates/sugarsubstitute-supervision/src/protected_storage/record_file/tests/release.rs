@@ -178,7 +178,7 @@ fn fixed_record_release_corrupt_or_foreign_observation_never_publishes_released(
                 assert!(prepare_coordinator_release(actual, &mut expected, None).is_err());
                 assert_eq!(expected.as_ref().map(Record::encode), Some(expected_record.encode()));
                 assert!(lock(&fake.0).effects.is_empty());
-                assert!(matches!(fake.read_shape(file, None, &mut || Ok(()))?, RecordRead::Present(actual) if actual == bytes));
+                assert!(matches!(fake.read_shape(file, None, &mut || Ok(()), &crate::protected_storage::exclusion::operation::Operation::begin(file)?)?, RecordRead::Present(actual) if actual == bytes));
                 file.retire_fixture(inode, &mut fake, &context)?;
                 coordinator.close_coordinator();
                 *slot = None;

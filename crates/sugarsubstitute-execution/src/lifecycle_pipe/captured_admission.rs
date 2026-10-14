@@ -9,6 +9,7 @@ use crate::{
 };
 use std::sync::Arc;
 use sugarsubstitute_contracts::{
+    crash::CaptureTarget,
     execution::{AdmissionError, CancelControl, JobPhase, Moment, TerminalKind},
     lifecycle::RunKey,
 };
@@ -18,12 +19,19 @@ use sugarsubstitute_contracts::{
 /// No caller can construct this binding from PID/endpoint/build matching facts.
 #[derive(Clone)]
 pub(crate) struct AdmissionBinding {
-    run: RunKey,
+    target: CaptureTarget,
     original_handshake: Moment,
     capture: Arc<Shared>,
-    startup: StartupAdmissionBinding,
+    startup: Option<StartupAdmissionBinding>,
 }
 impl AdmissionBinding {
+    /// Return the exact original reservation for this sealed target's native purpose.
+    pub(crate) const fn reservation_bytes(&self) -> u64 {
+        match self.target {
+            CaptureTarget::Desktop(_) => crate::lifecycle_pipe::MIN_CAPTURED_LIFECYCLE_PIPE_BYTES,
+            CaptureTarget::BackendCustody(_) => crate::lifecycle_pipe::MIN_LIFECYCLE_PIPE_BYTES,
+        }
+    }
     /// Borrow already genuine parent owners without moving or allocating payloads.
     pub(crate) fn project(
         run: RunKey,
@@ -31,7 +39,25 @@ impl AdmissionBinding {
         pin: &crate::capture_attach::CaptureAttachLaunchPin,
         startup: StartupAdmissionBinding,
     ) -> Self {
-        Self { run, original_handshake, capture: pin.shared.clone(), startup }
+        Self {
+            target: CaptureTarget::Desktop(run),
+            original_handshake,
+            capture: pin.shared.clone(),
+            startup: Some(startup),
+        }
+    }
+    /// Borrow the same actual pin before purpose-specific backend server admission.
+    pub(crate) fn backend(
+        key: sugarsubstitute_contracts::backend_custody::BackendCustodyKey,
+        original_handshake: Moment,
+        pin: &crate::capture_attach::CaptureAttachLaunchPin,
+    ) -> Self {
+        Self {
+            target: CaptureTarget::BackendCustody(key),
+            original_handshake,
+            capture: pin.shared.clone(),
+            startup: None,
+        }
     }
     /// Return only the original phase-specific handshake under the actual Core guard.
     /// Persistent raw JobSpec/context deadlines remain unchanged; real authentication
@@ -45,8 +71,8 @@ impl AdmissionBinding {
         let invalid = AdmissionError::InvalidCaptureAdmission;
         let custody = &self.capture.custody;
         if custody.execution != core.id
-            || custody.full_run != self.run
-            || self.capture.expected.run() != self.run
+            || custody.full_target != self.target
+            || self.capture.expected.target() != self.target
             || custody.attach_until != self.capture.expected.attach_budget().until()
             || custody.core.upgrade().is_none_or(|actual| !Arc::ptr_eq(core, &actual))
         {
@@ -81,10 +107,13 @@ impl AdmissionBinding {
             }
             parent = scope.parent;
         }
-        let entry_until = self
-            .startup
-            .validate_current_locked(core, state, self.run, now)
-            .map_err(|cause| AdmissionError::Unexpected(crate::runtime::error(cause)))?;
+        let entry_until = match (self.target, &self.startup) {
+            (CaptureTarget::Desktop(run), Some(startup)) => startup
+                .validate_current_locked(core, state, run, now)
+                .map_err(|cause| AdmissionError::Unexpected(crate::runtime::error(cause)))?,
+            (CaptureTarget::BackendCustody(_), None) => until,
+            _ => return Err(AdmissionError::InvalidCaptureAdmission),
+        };
         let cleanup = lock(&custody.state);
         let pin = lock(&self.capture.state);
         if cleanup.stopped

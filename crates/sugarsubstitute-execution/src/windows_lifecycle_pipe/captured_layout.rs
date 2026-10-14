@@ -24,17 +24,40 @@ impl CapturedLayout {
         map_storage: usize,
         native_storage: usize,
     ) -> Result<Self, LifecyclePipeFailure> {
+        Self::with_limits(
+            page,
+            map_storage,
+            native_storage,
+            STARTUP_LOGICAL_BYTES,
+            CAPTURED_METADATA_BYTES,
+        )
+    }
+    /// Preflight the backend's empty payload against its unchanged original64KiB metadata.
+    pub(super) fn backend(
+        page: usize,
+        map_storage: usize,
+        native_storage: usize,
+    ) -> Result<Self, LifecyclePipeFailure> {
+        Self::with_limits(page, map_storage, native_storage, 2064, 65536)
+    }
+    fn with_limits(
+        page: usize,
+        map_storage: usize,
+        native_storage: usize,
+        logical: usize,
+        metadata: usize,
+    ) -> Result<Self, LifecyclePipeFailure> {
         if !page.is_power_of_two() || map_storage > MAP_CONTROL_BYTES {
             return Err(failure("captured_mapping_layout"));
         }
-        let map_extent = STARTUP_LOGICAL_BYTES
+        let map_extent = logical
             .checked_add(page - 1)
             .map(|n| n & !(page - 1))
             .ok_or_else(|| failure("captured_mapping_layout"))?;
         let map_bytes = map_extent
             .checked_add(MAP_CONTROL_BYTES)
             .ok_or_else(|| failure("captured_mapping_layout"))?;
-        let native_bytes = CAPTURED_METADATA_BYTES
+        let native_bytes = metadata
             .checked_sub(map_bytes)
             .filter(|n| *n >= native_storage)
             .ok_or_else(|| failure("captured_native_layout"))?;

@@ -2,29 +2,48 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Distinguish complete admitted transport bindings and actual kernel observations.
 use super::*;
+use sugarsubstitute_contracts::backend_custody::BackendCustodyKey;
 use sugarsubstitute_contracts::{incident::DiagnosticKey, lifecycle::CoordinatorKey};
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum PeerBinding {
     Desktop(RunKey),
     Diagnostic(DiagnosticKey),
+    BackendCustody(BackendCustodyKey),
 }
 impl PeerBinding {
+    pub(crate) fn capture_target(self) -> Option<sugarsubstitute_contracts::crash::CaptureTarget> {
+        use sugarsubstitute_contracts::crash::CaptureTarget;
+        match self {
+            Self::Desktop(run) => Some(CaptureTarget::Desktop(run)),
+            Self::BackendCustody(key) => Some(CaptureTarget::BackendCustody(key)),
+            Self::Diagnostic(_) => None,
+        }
+    }
+
     pub(crate) fn owner(self) -> CoordinatorKey {
         match self {
             Self::Desktop(run) => run.owner,
             Self::Diagnostic(key) => key.owner(),
+            Self::BackendCustody(key) => key.owner(),
         }
     }
     pub(crate) fn desktop(self) -> Option<RunKey> {
         match self {
             Self::Desktop(run) => Some(run),
-            Self::Diagnostic(_) => None,
+            Self::Diagnostic(_) | Self::BackendCustody(_) => None,
         }
     }
     pub(crate) fn diagnostic(self) -> Option<DiagnosticKey> {
         match self {
             Self::Diagnostic(key) => Some(key),
-            Self::Desktop(_) => None,
+            Self::Desktop(_) | Self::BackendCustody(_) => None,
+        }
+    }
+    /// Return immutable custody matching facts, without process or file authority.
+    pub(crate) fn backend_custody(self) -> Option<BackendCustodyKey> {
+        match self {
+            Self::BackendCustody(key) => Some(key),
+            Self::Desktop(_) | Self::Diagnostic(_) => None,
         }
     }
 }
@@ -82,6 +101,30 @@ impl Observation {
             Self::Connected => Out::Connected,
             Self::Authenticated(peer) => Out::Authenticated(VerifiedDiagnosticPeer {
                 key: peer.binding.diagnostic()?,
+                process: peer.process,
+                pid: peer.pid,
+                birth: peer.birth,
+                session: peer.session,
+            }),
+            Self::ReadPending { operation } => Out::ReadPending { operation },
+            Self::Received { operation, frame } => Out::Received { operation, frame },
+            Self::WriteIssued { operation, at } => Out::WriteIssued { operation, at },
+            Self::WriteRevoked { operation, buffer } => Out::WriteRevoked { operation, buffer },
+            Self::Written { operation, bytes } => Out::Written { operation, bytes },
+        })
+    }
+    /// Project only the actual admitted custody session's bounded transport facts.
+    pub(crate) fn backend_custody(
+        self,
+    ) -> Option<crate::backend_custody::BackendCustodyPipeObservation> {
+        use crate::backend_custody::{
+            BackendCustodyPipeObservation as Out, VerifiedBackendCustodyPeer,
+        };
+        Some(match self {
+            Self::Prepared => Out::Prepared,
+            Self::Connected => Out::Connected,
+            Self::Authenticated(peer) => Out::Authenticated(VerifiedBackendCustodyPeer {
+                key: peer.binding.backend_custody()?,
                 process: peer.process,
                 pid: peer.pid,
                 birth: peer.birth,

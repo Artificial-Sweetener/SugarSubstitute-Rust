@@ -37,6 +37,7 @@ impl WindowsLaunchInput {
         enrollment: &mut Option<DiagnosticEnrollment>,
     ) -> Result<(), RegistryInputError> {
         if self.diagnostic.is_some()
+            || self.backend_custody.is_some()
             || self.lifecycle.is_some()
             || self.output.is_some()
             || self.fixture_events.is_some()

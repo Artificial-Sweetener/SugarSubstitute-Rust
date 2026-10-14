@@ -7,6 +7,7 @@ use sugarsubstitute_contracts::execution::{JobContext, Moment};
 /// Retain original cancellation, clock and memory even after the task returns.
 pub(super) struct PublicationContext {
     original: JobContext,
+    custody: Option<crate::native_claims::files::Budget>,
     deadline: Moment,
     cleanup: Option<CleanupContext>,
 }
@@ -16,12 +17,27 @@ struct CleanupContext {
 }
 impl PublicationContext {
     /// Bind before any record read or stage may return a retained output.
-    pub(super) fn new(context: &JobContext) -> Result<Self, ClaimError> {
+    pub(super) fn new(
+        context: &JobContext,
+        budget: &crate::native_claims::files::Budget,
+    ) -> Result<Self, ClaimError> {
+        if matches!(budget, crate::native_claims::files::Budget::Custody(_)) {
+            budget.check()?;
+            return Ok(Self {
+                original: context.clone(),
+                custody: Some(budget.clone()),
+                deadline: Moment::from_nanos(u64::MAX),
+                cleanup: None,
+            });
+        }
         let deadline = live(context)?;
-        Ok(Self { original: context.clone(), deadline, cleanup: None })
+        Ok(Self { original: context.clone(), custody: None, deadline, cleanup: None })
     }
     /// Tighten retry deadlines without replacing original capability ports.
     pub(super) fn validate(&mut self, current: &JobContext) -> Result<(), ClaimError> {
+        if let Some(original) = &self.custody {
+            return original.check();
+        }
         if self.cleanup.is_some() {
             return Err(ClaimError::invalid("publication_retirement_started"));
         }
@@ -39,6 +55,9 @@ impl PublicationContext {
     }
     /// Check retained original ports around inner native write primitives.
     pub(super) fn check_original(&self) -> Result<(), ClaimError> {
+        if let Some(original) = &self.custody {
+            return original.check();
+        }
         if self.original.cancellation_requested() || self.original.now() >= self.deadline {
             Err(ClaimError::invalid("publication_context_expired"))
         } else {
@@ -47,6 +66,9 @@ impl PublicationContext {
     }
     /// Latch a separate bounded cleanup lifetime within the original executor.
     pub(super) fn validate_cleanup(&mut self, current: &JobContext) -> Result<(), ClaimError> {
+        if let Some(original) = &self.custody {
+            return original.check();
+        }
         if current.owner_id() != self.original.owner_id() {
             return Err(ClaimError::invalid("foreign_publication_cleanup"));
         }

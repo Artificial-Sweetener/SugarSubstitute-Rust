@@ -49,6 +49,8 @@ impl Core {
                 RequestKind::SymbolNative { .. }
                     | RequestKind::DesktopCapture(_)
                     | RequestKind::CapturedLifecycle(_)
+                    | RequestKind::BackendCustody { .. }
+                    | RequestKind::CustodiedProcess(_)
             );
         let now = if fresh_metadata || matches!(&kind, RequestKind::EntryPreparation(_)) {
             match self.clock.metadata() {
@@ -98,11 +100,15 @@ impl Core {
                     (&kind, spec.class),
                     (
                         RequestKind::Native
+                            | RequestKind::BackendCustody { .. }
                             | RequestKind::CapturedLifecycle(_)
                             | RequestKind::CaptureAttach(_)
                             | RequestKind::SymbolNative { .. },
                         JobClass::NativeObservation
-                    ) | (RequestKind::DesktopCapture(_), JobClass::InfrastructureLifecycle)
+                    ) | (
+                        RequestKind::DesktopCapture(_) | RequestKind::CustodiedProcess(_),
+                        JobClass::InfrastructureLifecycle
+                    )
                 );
             let valid_method = valid_method
                 || matches!(
@@ -158,14 +164,14 @@ impl Core {
                     record
                         .native_custody
                         .as_ref()
-                        .is_some_and(|custody| custody.full_run == *run && custody.held())
+                        .is_some_and(|custody| custody.full_target == *run && custody.held())
                         || record
                             .process_capture
                             .as_ref()
-                            .is_some_and(|capture| capture.full_run == *run)
+                            .is_some_and(|capture| capture.full_target == *run)
                 })
             {
-                return Err(AdmissionError::ConflictingNativeRun(*run));
+                return Err(AdmissionError::ConflictingNativeCaptureTarget(*run));
             }
             if state.jobs.contains_key(&spec.id) {
                 return Err(AdmissionError::DuplicateJobId { job_id: spec.id });
@@ -282,6 +288,14 @@ impl Core {
         state.jobs.insert(
             spec.id,
             Record {
+                #[cfg(any(windows, test))]
+                custodied_process: matches!(&kind, RequestKind::CustodiedProcess(_)),
+                #[cfg(any(windows, test))]
+                custody_deadlines: if matches!(&kind, RequestKind::BackendCustody { .. }) {
+                    Some(Box::new(crate::backend_custody::deadlines::Deadlines::new()))
+                } else {
+                    None
+                },
                 memory: Some(memory),
                 entry_setup: match &kind {
                     RequestKind::EntryPreparation(setup) => Some(*setup),

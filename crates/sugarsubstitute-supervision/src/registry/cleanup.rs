@@ -39,7 +39,11 @@ impl WindowsProcessRegistry {
             return Err(RegistryAdmissionError::ForeignOwner);
         }
         let (_, budget) = record.stop.ok_or(RegistryAdmissionError::Closed)?;
-        if record.creation.is_some() || record.cleanup.is_some() || record.settled {
+        if record.creation.is_some()
+            || record.establishment_job.is_some()
+            || record.cleanup.is_some()
+            || (record.settled && !record.custody_retirement_pending())
+        {
             return Err(RegistryAdmissionError::Busy);
         }
         let candidate = if record.member_watch.is_none() { record.next } else { None };
@@ -159,6 +163,7 @@ fn cleanup_step(
     force_attempted: &mut bool,
 ) -> Result<(), RegistryError> {
     let Some(family) = state.family.as_mut() else {
+        retire_custody_metadata(state, context)?;
         state.cleanup =
             Some(CleanupFacts { retained: 0, root: None, next: None, watched: None, closed: true });
         return Ok(());
@@ -173,6 +178,7 @@ fn cleanup_step(
         family.closure_committed = true;
         shared.port.close(family)?;
         state.family = None;
+        retire_custody_metadata(state, context)?;
         state.cleanup =
             Some(CleanupFacts { retained: 0, root: None, next: None, watched: None, closed: true });
         return Ok(());
@@ -215,6 +221,7 @@ fn cleanup_step(
         family.closure_committed = true;
         shared.port.close(family)?;
         state.family = None;
+        retire_custody_metadata(state, context)?;
     }
     state.cleanup = Some(CleanupFacts { retained: inventory.count, root, next, watched, closed });
     Ok(())
@@ -233,4 +240,42 @@ fn force_after_failure(
     {
         cause.retain(next);
     }
+}
+/// Physical local family absence precedes retirement of escaped destination outputs.
+fn retire_custody_metadata(
+    state: &mut NativeState,
+    context: &JobContext,
+) -> Result<(), RegistryError> {
+    if state.custody_destination.is_none() && state.establishment.is_none() {
+        return Ok(());
+    }
+    if context.cancellation_requested()
+        || context.deadline().is_none_or(|until| context.now() >= until)
+    {
+        return Err(RegistryError::invalid("custody_retirement_cutoff"));
+    }
+    if let Some(destination) = &mut state.custody_destination {
+        if let Some(ack) = &state.custody_release {
+            let sugarsubstitute_contracts::backend_custody::BackendCustodyReceipt::Released(
+                resource,
+            ) = ack.receipt()
+            else {
+                return Err(RegistryError::invalid("custody_retirement_receipt"));
+            };
+            destination.close_released(ack, resource)?;
+        } else {
+            // A living helper may still own an unacknowledged output. Local family
+            // absence permits writer retirement while preserving this exact capsule.
+            if !destination.close_after_exit()? {
+                return Ok(());
+            }
+        }
+        state.custody_destination = None;
+    }
+    if let Some(establishment) = &mut state.establishment {
+        establishment.close_after_exit()?;
+        state.establishment = None;
+    }
+    state.custody_release = None;
+    Ok(())
 }

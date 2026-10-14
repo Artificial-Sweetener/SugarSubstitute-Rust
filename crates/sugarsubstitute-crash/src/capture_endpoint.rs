@@ -4,15 +4,18 @@
 use crate::capture::{Shared, lock};
 use std::{error::Error, fmt, sync::Arc};
 use sugarsubstitute_contracts::{
-    crash::CaptureBudget,
+    crash::{CaptureBudget, CaptureTarget},
     execution::{ExecutionId, JobClass, JobContext, JobId, MemoryClaim, Operation},
-    lifecycle::{CoordinatorKey, RunKey},
+    lifecycle::CoordinatorKey,
 };
 use sugarsubstitute_execution::windows_capture_attach::{
     CaptureAttachExpectation, CaptureAttachRetirementReport, CaptureEndpointObservation,
     CaptureEndpointSource, CaptureEndpointSourceError,
 };
 
+#[path = "capture_endpoint/target_identity.rs"]
+mod target_identity;
+use target_identity::TargetIdentity;
 const SLOTS: usize = 64;
 pub(crate) const SOURCE_BYTES: u64 = crate::input::SOURCE_STORAGE_BYTES as u64;
 
@@ -47,6 +50,7 @@ pub(super) struct Attempts {
     owner: CoordinatorKey,
     slots: [Option<Slot>; SLOTS],
     instance_highwater: u64,
+    backend_highwater: u64,
     sequence: u64,
     closing: bool,
     _memory: MemoryClaim,
@@ -97,6 +101,7 @@ impl Attempts {
             owner,
             slots: [None; SLOTS],
             instance_highwater: 0,
+            backend_highwater: 0,
             sequence: 0,
             closing: false,
             _memory: memory,
@@ -104,24 +109,27 @@ impl Attempts {
     }
     fn reserve(
         &mut self,
-        run: RunKey,
+        target: CaptureTarget,
         budget: CaptureBudget,
     ) -> Result<Reservation, SourceFailure> {
-        if run.owner != self.owner {
+        if target.owner() != self.owner {
             return Err(SourceFailure::ForeignOwner);
         }
         if self.closing {
             return Err(SourceFailure::Closing);
         }
-        let instance = run.instance.get();
-        let generation = run.generation.get();
-        let found = self.slots.iter().position(|slot| slot.is_some_and(|s| s.instance == instance));
+        let identity = TargetIdentity::new(target);
+        let instance = identity.instance;
+        let generation = identity.generation;
+        let found = self.slots.iter().position(|slot| {
+            slot.is_some_and(|s| s.instance == instance && (s.generation == 0) == (generation == 0))
+        });
         let (index, previous) = if let Some(index) = found {
             let old = self.slots[index].ok_or(SourceFailure::ForeignAssociation)?;
             let Phase::NativeRetired(execution, job) = old.phase else {
                 return Err(SourceFailure::Replay);
             };
-            if old.borrowed || generation <= old.generation {
+            if old.borrowed || generation == 0 || generation <= old.generation {
                 return Err(SourceFailure::Replay);
             }
             (
@@ -142,12 +150,15 @@ impl Attempts {
                 .flatten()
                 .filter(|slot| {
                     slot.phase == Phase::Pending
+                        && (slot.generation == 0) == (generation == 0)
                         && slot.previous.is_none_or(|old| old.instance != slot.instance)
                 })
                 .map(|slot| slot.instance)
                 .max()
                 .unwrap_or(0);
-            if instance <= self.instance_highwater.max(pending_highwater) {
+            let committed_highwater =
+                if generation == 0 { self.backend_highwater } else { self.instance_highwater };
+            if instance <= committed_highwater.max(pending_highwater) {
                 return Err(SourceFailure::Replay);
             }
             let index = self
@@ -221,7 +232,12 @@ impl Attempts {
                 if old_execution == execution && old_job == job => {}
             _ => return Err(SourceFailure::ForeignAssociation),
         }
-        self.instance_highwater = self.instance_highwater.max(reservation.instance);
+        let highwater = if reservation.generation == 0 {
+            &mut self.backend_highwater
+        } else {
+            &mut self.instance_highwater
+        };
+        *highwater = (*highwater).max(reservation.instance);
         Ok(())
     }
     fn retire(
@@ -270,11 +286,13 @@ impl Attempts {
 impl RegisteredSource {
     pub(super) fn reserve(
         shared: &Arc<Shared>,
-        run: RunKey,
+        target: CaptureTarget,
         budget: CaptureBudget,
     ) -> Result<Arc<Self>, SourceFailure> {
-        let reservation =
-            lock(&shared.attempts).as_mut().ok_or(SourceFailure::Closing)?.reserve(run, budget)?;
+        let reservation = lock(&shared.attempts)
+            .as_mut()
+            .ok_or(SourceFailure::Closing)?
+            .reserve(target, budget)?;
         Ok(Arc::new(Self { shared: shared.clone(), reservation }))
     }
     pub(super) fn commit(&self, execution: ExecutionId, job: JobId) -> Result<(), SourceFailure> {
@@ -286,8 +304,8 @@ impl RegisteredSource {
     }
     fn matches(&self, expected: CaptureAttachExpectation) -> bool {
         expected.owner() == self.shared.owner
-            && expected.run().instance.get() == self.reservation.instance
-            && expected.run().generation.get() == self.reservation.generation
+            && TargetIdentity::new(expected.target())
+                .matches(self.reservation.instance, self.reservation.generation)
             && expected.attach_budget() == self.reservation.budget
             && lock(&self.shared.build).as_ref().is_some_and(|actual| {
                 actual.as_str().is_ok_and(|build| expected.build_bytes() == build.as_bytes())
@@ -346,9 +364,9 @@ impl CaptureEndpointSource for RegisteredSource {
         &self,
         actual: &CaptureAttachRetirementReport,
     ) -> Result<(), CaptureEndpointSourceError> {
-        if actual.run().owner != self.shared.owner
-            || actual.run().instance.get() != self.reservation.instance
-            || actual.run().generation.get() != self.reservation.generation
+        if actual.target().owner() != self.shared.owner
+            || !TargetIdentity::new(actual.target())
+                .matches(self.reservation.instance, self.reservation.generation)
         {
             return Err(source_error(SourceFailure::ForeignAssociation));
         }

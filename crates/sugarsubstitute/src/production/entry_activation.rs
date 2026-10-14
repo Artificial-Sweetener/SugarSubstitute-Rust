@@ -41,7 +41,7 @@ use super::{
     entry_runner::{EntryActivation, EntryResources},
     parent_lifecycle::{ParentLifecycle, ParentResources},
 };
-use capture::CaptureRegistration;
+pub(in crate::production) use capture::CaptureRegistration;
 use launch::DesktopStart;
 use projection::{ProjectedEntry, ProjectionFailure, ProjectionInput};
 use std::{error::Error, path::PathBuf, time::Instant};

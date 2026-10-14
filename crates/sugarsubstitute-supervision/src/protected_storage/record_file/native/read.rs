@@ -6,9 +6,13 @@ pub(super) fn shape<const N: usize>(
     file: &HeldFile<N>,
     expected: Option<[u8; 24]>,
     check: &mut dyn FnMut() -> Result<(), ClaimError>,
+    operation: &crate::protected_storage::exclusion::operation::Operation<'_>,
 ) -> Result<RecordRead<N>, ClaimError> {
     let path = paths::wide(file.record_path.path()?)?;
-    let mut handles = lock(&file.temporary_handles);
+    let mut handles = crate::protected_storage::exclusion::operation::Loan::take(
+        &file.temporary_handles,
+        operation,
+    );
     if handles.len() >= 16 || !(16..=1024).contains(&N) {
         return Err(ClaimError::invalid("temporary_handle_bound"));
     }

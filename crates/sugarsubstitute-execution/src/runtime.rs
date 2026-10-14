@@ -242,7 +242,7 @@ impl ExecutionOwner {
                 Some(ProcessCaptureCustody {
                     scope_id: record.scope_id,
                     job_id: record.spec.id,
-                    full_run: capture.full_run,
+                    full_target: capture.full_target,
                     reservation_bytes: record.spec.reservation_bytes,
                 })
             })

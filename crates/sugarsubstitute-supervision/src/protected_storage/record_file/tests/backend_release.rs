@@ -127,7 +127,8 @@ fn rejected_backend_acquisition_retires_own_outputs_without_rewriting_predecesso
             assert!(expected.is_none());
             assert_eq!(fake.target_identity(), inode);
             assert_eq!(fake.effect_count(), effects);
-            let observed = fake.read_shape(file, None, &mut || Ok(()))?;
+            let operation = crate::protected_storage::exclusion::operation::Operation::begin(file)?;
+            let observed = fake.read_shape(file, None, &mut || Ok(()), &operation)?;
             assert!(matches!(observed, RecordRead::Present(bytes) if bytes == original));
             Ok(())
         })?;
@@ -158,7 +159,8 @@ fn activated_backend_generation_requires_its_original_expected_owner_during_reti
         let mut missing_owner = None;
         assert!(prepare_backend_release(actual, &mut missing_owner, None).is_err());
         assert!(missing_owner.is_none());
-        let observed = fake.read_shape(file, None, &mut || Ok(()))?;
+        let operation = crate::protected_storage::exclusion::operation::Operation::begin(file)?;
+        let observed = fake.read_shape(file, None, &mut || Ok(()), &operation)?;
         assert!(matches!(observed, RecordRead::Present(bytes) if bytes == held.encode()));
         Ok(())
     })
