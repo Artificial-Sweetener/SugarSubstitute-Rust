@@ -97,6 +97,8 @@ test('cancels pending work and rejects a late preparation after the displayed ba
     report: jest.fn(),
   });
   image.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+  expect(image.draggable).toBe(false);
+  expect(owner.allows(new MouseEvent('pointerdown'))).toBe(false);
   expect(drag(image).event.defaultPrevented).toBe(true);
   current = 'second';
   owner.reconcile();
@@ -107,6 +109,38 @@ test('cancels pending work and rejects a late preparation after the displayed ba
   });
   await settled();
   expect(drag(image).event.defaultPrevented).toBe(true);
+  owner.dispose();
+});
+
+test('admits outbound navigation only after full image bytes are ready for that exact element', async () => {
+  const root = document.createElement('div');
+  const image = document.createElement('img');
+  root.append(image);
+  let finish: ((value: { file: File; url: string }) => void) | undefined;
+  const owner = new BrowserCanvasDrag(root, {
+    resolve: (target) => (target === image ? { key: 'batch-3', element: image } : null),
+    prepare: () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    accepts: () => true,
+    report: jest.fn(),
+  });
+  const press = new MouseEvent('pointerdown');
+  Object.defineProperty(press, 'target', { value: image });
+  image.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+  expect(image.draggable).toBe(false);
+  expect(owner.allows(press)).toBe(false);
+  finish?.({
+    file: new File(['full image'], 'batch-3.png', { type: 'image/png' }),
+    url: 'http://localhost/full.png',
+  });
+  await settled();
+  expect(image.draggable).toBe(true);
+  expect(owner.allows(press)).toBe(true);
+  owner.invalidate();
+  expect(owner.allows(press)).toBe(false);
+  expect(image.draggable).toBe(false);
   owner.dispose();
 });
 

@@ -131,9 +131,13 @@ describe('composed browser canvas attachment', () => {
     jest.restoreAllMocks();
   });
 
-  test.each(['image', 'overview'] as const)(
-    'prepares the exact %s batch file and retires it before a changed run can expose old pixels',
-    async (mode) => {
+  test.each(
+    (['image', 'overview'] as const).flatMap((mode) =>
+      [0, 1, 2].map((batchIndex) => [mode, batchIndex] as const),
+    ),
+  )(
+    'prepares the exact %s batch file at index %s and retires it before a changed run can expose old pixels',
+    async (mode, batchIndex) => {
       const f = fixture();
       const catalog = {
         ...f.catalog,
@@ -152,7 +156,7 @@ describe('composed browser canvas attachment', () => {
       f.views.update(f.view, (state) => ({
         ...state,
         mode,
-        selection: { sourceId: catalog.entries[0]!.source.id, batchIndex: 1 },
+        selection: { sourceId: catalog.entries[0]!.source.id, batchIndex },
       }));
       const drag = jest
         .fn<
@@ -177,7 +181,7 @@ describe('composed browser canvas attachment', () => {
         handles.push(await f.loader.ready(index));
       f.frames.advance(2);
       f.clock.advance(100);
-      const image = handles[mode === 'overview' ? 1 : 0]!;
+      const image = handles[mode === 'overview' ? batchIndex : 0]!;
       if (mode === 'image') expect(getComputedStyle(image).pointerEvents).toBe('auto');
       const hover = () =>
         image.dispatchEvent(
@@ -190,7 +194,7 @@ describe('composed browser canvas attachment', () => {
       hover();
       await Promise.resolve();
       await Promise.resolve();
-      expect(drag.mock.calls[0]?.[0]).toBe(catalog.entries[0]!.items[1]);
+      expect(drag.mock.calls[0]?.[0]).toBe(catalog.entries[0]!.items[batchIndex]);
       expect(image.draggable).toBe(true);
       invalidate?.();
       expect(image.draggable).toBe(false);

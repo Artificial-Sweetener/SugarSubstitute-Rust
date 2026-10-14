@@ -14,9 +14,13 @@ export class BrowserCanvasDrag {
         root.addEventListener('dragstart', this.#start);
         root.addEventListener('dragend', this.#leave);
     }
-    /** Let fitted mouse presses use native dragging while touch and enlarged images retain navigation. */
+    /** Admit native dragging only when the current fitted image's complete file is ready. */
     allows(event) {
-        return !this.#disposed && this.options.accepts() && !!this.options.resolve(event.target, event);
+        if (this.#disposed || !this.options.accepts() || !this.#preparation?.payload)
+            return false;
+        const subject = this.options.resolve(event.target, event);
+        return (subject?.key === this.#preparation.subject.key &&
+            subject.element === this.#preparation.subject.element);
     }
     /** Invalidate bytes when their displayed identity or fitted footprint changes. */
     reconcile() {
@@ -66,7 +70,7 @@ export class BrowserCanvasDrag {
             payload: null,
         };
         this.#preparation = preparation;
-        subject.element.draggable = true;
+        subject.element.draggable = false;
         void this.#prepare(preparation);
     };
     /** Fence asynchronous success and failure to the single current image lease. */
@@ -74,8 +78,10 @@ export class BrowserCanvasDrag {
         try {
             const payload = await this.options.prepare(preparation.subject.key, preparation.controller.signal);
             this.reconcile();
-            if (this.#preparation === preparation && !preparation.controller.signal.aborted)
+            if (this.#preparation === preparation && !preparation.controller.signal.aborted) {
                 preparation.payload = payload;
+                preparation.subject.element.draggable = payload !== null;
+            }
         }
         catch (error) {
             this.reconcile();
