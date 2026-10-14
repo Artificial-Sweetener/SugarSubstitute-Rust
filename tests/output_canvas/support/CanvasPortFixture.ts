@@ -87,6 +87,7 @@ export function canvasSnapshot(key: string): CanvasViewSnapshot {
     secondaryResource: null,
     runStatus: 'idle',
     connected: true,
+    mediaActions: null,
   };
 }
 

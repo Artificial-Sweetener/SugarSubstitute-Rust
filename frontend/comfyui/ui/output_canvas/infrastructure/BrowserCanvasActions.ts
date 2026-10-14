@@ -16,6 +16,7 @@
 /** Route validated browser intents to the existing authoritative canvas owners. */
 
 import type { WorkflowOutputItem } from '../../execution/domain/WorkflowOutput.js';
+import type { BrowserCanvasMediaActions } from './BrowserCanvasMediaActions.js';
 import type { CanvasCameraController } from '../application/CanvasCameraController.js';
 import type { CanvasDisplayPlan } from '../application/CanvasDisplayPlan.js';
 import type { CanvasSelectionController } from '../application/CanvasSelectionController.js';
@@ -34,8 +35,7 @@ export interface BrowserCanvasActionOwners {
   readonly sources: BrowserCanvasSourceNavigation;
   /** Open the exact selected final through the host adapter. */
   open(item: WorkflowOutputItem): void;
-  /** Copy through the shared transfer authority when the platform provides that capability. */
-  copy?(item: WorkflowOutputItem): Promise<boolean>;
+  readonly media: BrowserCanvasMediaActions;
 }
 
 /** Dispatch one operation without adding image, navigation, or camera policy to composition. */
@@ -77,9 +77,10 @@ export async function applyBrowserCanvasCommand(
       return true;
     }
     case 'copy-media': {
-      const item = command.target === 'primary' ? plan.primary?.item : plan.secondary?.item;
-      return item?.mediaKind === 'image' && owners.copy ? await owners.copy(item) : false;
+      return await owners.media.run(command);
     }
+    case 'file-media':
+      return await owners.media.run(command);
     case 'comparison':
       if (command.enabled && (snapshot.preview || snapshot.resource.state !== 'ready'))
         return false;

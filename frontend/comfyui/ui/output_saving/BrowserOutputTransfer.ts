@@ -16,6 +16,10 @@
 /** Materialize one deliberate transfer without retaining image data or duplicating format policy. */
 import type { OutputFileReference } from '../execution/domain/WorkflowOutput.js';
 import type { OutputImageClipboard } from './BrowserImageClipboard.js';
+import type { OutputImageDownload } from './BrowserImageDownload.js';
+import type { OutputCopyFormat, OutputMediaProfile } from './domain/OutputMedia.js';
+import { OutputMediaClient } from './OutputMediaClient.js';
+import { OutputMediaProfileSource } from './OutputMediaProfileSource.js';
 import {
   OutputTransferClient,
   outputTransferUrl,
@@ -25,22 +29,67 @@ import {
 /** Coordinate the shared file selection with browser-owned transport and clipboard boundaries. */
 export class BrowserOutputTransfer {
   readonly #client: OutputTransferClient;
+  readonly #media: OutputMediaClient;
+  readonly #profile: OutputMediaProfileSource;
+  #disposed = false;
 
   /** Bind platform collaborators explicitly so native canvases can use the same selection endpoint. */
   constructor(
     private readonly origin: string,
     private readonly fetch: typeof globalThis.fetch,
     private readonly clipboard: OutputImageClipboard,
+    private readonly download: OutputImageDownload,
   ) {
     this.#client = new OutputTransferClient(fetch);
+    this.#media = new OutputMediaClient(origin, fetch);
+    this.#profile = new OutputMediaProfileSource(() => this.#media.profile());
+  }
+
+  /** Expose a conservative cached profile without network work when a context menu opens. */
+  profile(): OutputMediaProfile {
+    return this.#profile.read();
+  }
+
+  /** Observe accepted profile changes independently of canvas or image resource identity. */
+  subscribe(listener: () => void): () => void {
+    return this.#profile.subscribe(listener);
+  }
+
+  /** Refresh only on setup or accepted preference changes, refusing superseded responses. */
+  refresh(): Promise<void> {
+    return this.#profile.refresh();
   }
 
   /** Copy exact preferred bytes only while the originating output remains current. */
-  async copy(file: OutputFileReference, accepts: () => boolean): Promise<boolean> {
-    const image = await this.#read(file, accepts);
-    if (!image || !accepts()) return false;
-    await this.clipboard.write(image.blob, image.selection.mimeType);
+  async copy(
+    file: OutputFileReference,
+    accepts: () => boolean,
+    format: OutputCopyFormat,
+    signal?: AbortSignal,
+  ): Promise<boolean> {
+    if (this.#disposed || signal?.aborted || !accepts()) return false;
+    const image = await this.#media.image(file, format, signal);
+    if (this.#disposed || signal?.aborted || !accepts()) return false;
+    await this.clipboard.write(image.blob, image.mimeType);
     return true;
+  }
+
+  /** Reveal through the local backend or start the remote browser download without rendering another image. */
+  async fileAction(
+    file: OutputFileReference,
+    accepts: () => boolean,
+    signal?: AbortSignal,
+  ): Promise<boolean> {
+    if (this.#disposed || signal?.aborted || !accepts()) return false;
+    if (this.#profile.read().fileAction === 'reveal') await this.#media.reveal(file, signal);
+    else this.download.start(this.#media.downloadUrl(file));
+    return true;
+  }
+
+  /** Retire profile listeners and refuse late clipboard writes after the browser host is torn down. */
+  dispose(): void {
+    this.#disposed = true;
+    this.#profile.dispose();
   }
 
   /** Prepare exact preferred file bytes for a synchronous browser drag without retaining them here. */
@@ -69,7 +118,7 @@ export class BrowserOutputTransfer {
     readonly selection: OutputTransferSelection;
     readonly url: string;
   } | null> {
-    if (!accepts()) return null;
+    if (this.#disposed || !accepts()) return null;
     const controller = new AbortController();
     const abort = () => controller.abort();
     signal?.addEventListener('abort', abort, { once: true });
@@ -77,14 +126,14 @@ export class BrowserOutputTransfer {
     const timer = setTimeout(() => controller.abort(), 20000);
     try {
       const selection = await this.#client.choose(file, controller.signal);
-      if (!accepts() || controller.signal.aborted) return null;
+      if (this.#disposed || !accepts() || controller.signal.aborted) return null;
       const url = outputTransferUrl(this.origin, selection);
       const response = await this.fetch(url, {
         signal: controller.signal,
       });
       if (!response.ok) throw new Error('The output image could not be read for transfer.');
       const blob = await response.blob();
-      if (!accepts() || controller.signal.aborted) return null;
+      if (this.#disposed || !accepts() || controller.signal.aborted) return null;
       if (blob.type !== selection.mimeType || !blob.size)
         throw new Error('The output transfer returned invalid image bytes.');
       return { blob, selection, url };

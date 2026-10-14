@@ -16,6 +16,7 @@
 /** Project renderer-independent inspection intents into the shared transient menu. */
 
 import type { ContextMenuEntry } from '../../../menus/ContextMenu.js';
+import { canvasMediaItem, type CanvasMediaTarget } from '../../domain/CanvasMedia.js';
 import type {
   CanvasCapabilities,
   CanvasCommand,
@@ -27,6 +28,7 @@ export function canvasContextActions(
   snapshot: CanvasViewSnapshot,
   capabilities: CanvasCapabilities,
   send: (command: CanvasCommand) => void,
+  target: CanvasMediaTarget = 'primary',
 ): ContextMenuEntry[] {
   const entries: ContextMenuEntry[] = [];
   const state = snapshot.view;
@@ -46,20 +48,29 @@ export function canvasContextActions(
       select: () => send(command),
     });
   }
-  action(
-    'Copy image',
-    { type: 'copy-media', target: 'primary' },
-    snapshot.preview ||
-      !snapshot.selected ||
-      snapshot.selected.mediaKind !== 'image' ||
-      state.mode === 'overview',
-  );
-  if (comparison)
+  const available = canvasMediaItem(snapshot, target) !== null;
+  if (snapshot.mediaActions)
     action(
-      'Copy comparison image',
-      { type: 'copy-media', target: 'secondary' },
-      !snapshot.secondary || snapshot.secondary.mediaKind !== 'image',
+      snapshot.mediaActions.fileAction === 'reveal' ? 'Reveal in folder' : 'Download',
+      { type: 'file-media', target },
+      !available,
     );
+  /** Present the shared preferred format first and the explicit alternate format second. */
+  function copies(itemTarget: CanvasMediaTarget, label: string, alternateLabel: string): void {
+    const disabled = canvasMediaItem(snapshot, itemTarget) === null;
+    action(label, { type: 'copy-media', target: itemTarget, format: 'preferred' }, disabled);
+    if (snapshot.mediaActions) {
+      const format = snapshot.mediaActions.preferredCopyFormat === 'jpeg' ? 'png' : 'jpeg';
+      action(
+        `${alternateLabel} .${format === 'jpeg' ? 'jpg' : 'png'}`,
+        { type: 'copy-media', target: itemTarget, format },
+        disabled,
+      );
+    }
+  }
+  copies(target, 'Copy', 'Copy');
+  if (comparison && target === 'primary')
+    copies('secondary', 'Copy comparison image', 'Copy comparison');
   action(
     'Compare outputs',
     { type: 'comparison', enabled: !comparison },

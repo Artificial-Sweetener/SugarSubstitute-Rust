@@ -168,7 +168,7 @@ export class OutputSavingForm {
             control.disabled = this.#busy;
         this.previews.disabled ||= !this.management.checked;
         this.jpegMode.disabled ||= !this.jpeg.checked;
-        this.quality.disabled ||= !this.jpeg.checked || this.jpegMode.value !== 'quality';
+        // JPEG copy renditions use this retained quality even when companions use target sizing or are disabled.
         this.targetSize.disabled ||= !this.jpeg.checked || this.jpegMode.value !== 'target_size';
         this.transfer.disabled ||= !this.jpeg.checked;
     }

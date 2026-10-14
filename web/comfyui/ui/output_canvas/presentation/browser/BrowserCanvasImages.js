@@ -118,6 +118,16 @@ export class BrowserCanvasImages {
     get pendingFrames() {
         return this.#frame ? 1 : 0;
     }
+    /** Identify the clicked comparison layer without restricting menus to fitted drag gestures. */
+    contextTarget(target) {
+        if (this.#disposed)
+            return null;
+        if (this.#secondary && !this.#secondary.preview && target === this.#secondary.handle)
+            return 'secondary';
+        if (this.#primary && !this.#primary.preview && target === this.#primary.handle)
+            return 'primary';
+        return null;
+    }
     /** Remove presentation and scheduled work without releasing another owner's image handles. */
     dispose() {
         if (this.#disposed)

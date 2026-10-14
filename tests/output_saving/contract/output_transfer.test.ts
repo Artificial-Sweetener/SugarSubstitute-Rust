@@ -33,7 +33,12 @@ function response(
   value: unknown,
   blob = new Blob(['image bytes'], { type: 'image/jpeg' }),
 ): Response {
-  return { ok: true, json: async () => value, blob: async () => blob } as Response;
+  return {
+    ok: true,
+    json: async () => value,
+    blob: async () => blob,
+    headers: { get: (name: string) => (name === 'X-SugarCubes-Filename' ? 'output.jpg' : null) },
+  } as Response;
 }
 
 test('requests shared policy and copies exact selected bytes without reconstructing preferences', async () => {
@@ -43,15 +48,15 @@ test('requests shared policy and copies exact selected bytes without reconstruct
     .fn<(blob: Blob, type: 'image/png' | 'image/jpeg' | 'image/webp') => Promise<void>>()
     .mockResolvedValue(undefined);
   expect(
-    await new BrowserOutputTransfer('http://localhost:8189', fetch, { write }).copy(
-      file,
-      () => true,
-    ),
+    await new BrowserOutputTransfer(
+      'http://localhost:8189',
+      fetch,
+      { write },
+      { start: jest.fn() },
+    ).copy(file, () => true, 'preferred'),
   ).toBe(true);
-  expect(fetch.mock.calls[0]?.[1]?.body).toBe(JSON.stringify(file));
-  expect(fetch.mock.calls[1]?.[0]).toBe(
-    'http://localhost:8189/view?filename=output.jpg&subfolder=__sugarcubes_managed__%2Fidentity&type=output',
-  );
+  expect(fetch.mock.calls[0]?.[1]?.body).toBe(JSON.stringify({ file, format: 'preferred' }));
+  expect(fetch.mock.calls[0]?.[0]).toBe('/sugarcubes/output-saving/image');
   expect(write).toHaveBeenCalledWith(expect.any(Blob), 'image/jpeg');
 });
 
@@ -60,7 +65,12 @@ test('prepares the preferred exact file and full-fidelity URL for synchronous ou
   const fetch = jest.fn<typeof globalThis.fetch>().mockResolvedValue(response(payload));
   const write =
     jest.fn<(blob: Blob, type: 'image/png' | 'image/jpeg' | 'image/webp') => Promise<void>>();
-  const transfer = new BrowserOutputTransfer('http://localhost:8189', fetch, { write });
+  const transfer = new BrowserOutputTransfer(
+    'http://localhost:8189',
+    fetch,
+    { write },
+    { start: jest.fn() },
+  );
   const result = await transfer.drag(file, new AbortController().signal);
   expect(result?.file.name).toBe('output.jpg');
   expect(result?.file.type).toBe('image/jpeg');
@@ -90,10 +100,12 @@ test('propagates drag cancellation to finite HTTP work and rejects late bytes', 
   const write =
     jest.fn<(blob: Blob, type: 'image/png' | 'image/jpeg' | 'image/webp') => Promise<void>>();
   expect(
-    await new BrowserOutputTransfer('http://localhost:8189', fetch, { write }).drag(
-      file,
-      controller.signal,
-    ),
+    await new BrowserOutputTransfer(
+      'http://localhost:8189',
+      fetch,
+      { write },
+      { start: jest.fn() },
+    ).drag(file, controller.signal),
   ).toBeNull();
 });
 
@@ -116,9 +128,14 @@ test.each(['image/png', 'image/jpeg'] as const)(
             new Blob([bytes], { type: mimeType }),
           ),
         );
-      const result = await new BrowserOutputTransfer('http://localhost:8189', fetch, {
-        write,
-      }).drag(selected, new AbortController().signal);
+      const result = await new BrowserOutputTransfer(
+        'http://localhost:8189',
+        fetch,
+        {
+          write,
+        },
+        { start: jest.fn() },
+      ).drag(selected, new AbortController().signal);
       expect(result?.file.name).toBe(selected.filename);
       expect(result?.file.type).toBe(mimeType);
       expect(result?.file.size).toBe(bytes.length);
@@ -141,22 +158,19 @@ test.each(['image/png', 'image/jpeg'] as const)(
 
 test('refuses late bytes after a workflow switch or different selected output', async () => {
   let current = true;
-  const fetch = jest
-    .fn<typeof globalThis.fetch>()
-    .mockResolvedValueOnce(
-      response({ success: true, data: { file: jpeg, mime_type: 'image/jpeg' } }),
-    )
-    .mockImplementationOnce(async () => {
-      current = false;
-      return response({});
-    });
+  const fetch = jest.fn<typeof globalThis.fetch>().mockImplementationOnce(async () => {
+    current = false;
+    return response({});
+  });
   const write =
     jest.fn<(blob: Blob, type: 'image/png' | 'image/jpeg' | 'image/webp') => Promise<void>>();
   expect(
-    await new BrowserOutputTransfer('http://localhost:8189', fetch, { write }).copy(
-      file,
-      () => current,
-    ),
+    await new BrowserOutputTransfer(
+      'http://localhost:8189',
+      fetch,
+      { write },
+      { start: jest.fn() },
+    ).copy(file, () => current, 'jpeg'),
   ).toBe(false);
   expect(write).not.toHaveBeenCalled();
 });

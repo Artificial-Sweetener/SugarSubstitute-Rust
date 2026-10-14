@@ -31,14 +31,18 @@ export class BrowserImageClipboard implements OutputImageClipboard {
     if (!clipboard || typeof ClipboardItem !== 'function')
       throw new Error('Image copying is unavailable in this browser.');
     const representations: Record<string, Blob | Promise<Blob>> = {};
-    if (ClipboardItem.supports(mimeType)) representations[mimeType] = blob;
+    const supports = (type: string): boolean =>
+      typeof ClipboardItem.supports === 'function'
+        ? ClipboardItem.supports(type)
+        : type === 'image/png';
+    if (supports(mimeType)) representations[mimeType] = blob;
     else {
       const customType = 'web ' + mimeType;
-      if (!ClipboardItem.supports(customType))
-        throw new Error('The browser cannot copy the selected image format.');
-      representations[customType] = blob;
+      if (supports(customType)) representations[customType] = blob;
     }
     if (mimeType !== 'image/png') representations['image/png'] = this.#png(blob);
+    if (!Object.keys(representations).length)
+      throw new Error('The browser cannot copy the selected image format.');
     await clipboard.write([new ClipboardItem(representations)]);
   }
 

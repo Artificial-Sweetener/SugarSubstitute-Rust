@@ -35,6 +35,7 @@ import { BrowserCanvasSourceNavigation } from './BrowserCanvasSourceNavigation.j
 import { ensureBrowserCanvasStyles } from './BrowserCanvasStyles.js';
 import { BrowserCanvasDrag, } from '../presentation/browser/BrowserCanvasDrag.js';
 import { BrowserCanvasDragSubjects } from './BrowserCanvasDragSubject.js';
+import { BrowserCanvasMediaActions, } from './BrowserCanvasMediaActions.js';
 /** Keep composition thin: navigation, cameras, admissions, input, and DOM each retain their own owner. */
 export class BrowserCanvasAttachment {
     element;
@@ -45,6 +46,7 @@ export class BrowserCanvasAttachment {
     #overview;
     #input;
     #drag;
+    #media;
     #stopTransfer;
     #geometry;
     #camera;
@@ -108,7 +110,12 @@ export class BrowserCanvasAttachment {
             accepts: () => !this.#disposed && this.#surface?.visible === true && options.accepts() && !!options.drag,
             report: (error) => options.report(error, null),
         });
-        this.#stopTransfer = options.transferChanged?.(() => this.#drag.invalidate()) ?? (() => { });
+        this.#stopTransfer =
+            options.transferChanged?.(() => {
+                this.#drag.invalidate();
+                if (this.#ready)
+                    this.#publish();
+            }) ?? (() => { });
         this.#status = new CanvasStatusPublisher(options.clock, () => this.#publish());
         this.#camera = new CanvasCameraController({
             view: options.address.viewId,
@@ -129,6 +136,13 @@ export class BrowserCanvasAttachment {
             cells: (catalog) => this.#overview.cells(catalog),
         });
         this.#navigation = sources;
+        this.#media = new BrowserCanvasMediaActions({
+            read: () => this.#snapshot(),
+            accepts: () => !this.#disposed && options.accepts(),
+            ...(options.copy ? { copy: options.copy } : {}),
+            ...(options.fileAction ? { fileAction: options.fileAction } : {}),
+            ...(options.mediaProfile ? { profile: options.mediaProfile } : {}),
+        });
         this.port = new BrowserCanvasPort(this.#snapshot(), {
             origin: document.location.origin,
             capabilities: {
@@ -153,7 +167,7 @@ export class BrowserCanvasAttachment {
                     'retry',
                     'admit-large-image',
                     'open-media',
-                    ...(options.copy ? ['copy-media'] : []),
+                    ...this.#media.commands(),
                 ],
             },
             accepts: () => !this.#disposed && options.accepts(),
@@ -166,13 +180,7 @@ export class BrowserCanvasAttachment {
                 sources,
                 snapshot: command.type === 'comparison' ? this.#snapshot() : this.port.read(),
                 open: options.open,
-                ...(options.copy
-                    ? {
-                        copy: (item) => options.copy?.(item, () => !this.#disposed &&
-                            options.accepts() &&
-                            [this.#plan?.primary?.item?.id, this.#plan?.secondary?.item?.id].includes(item.id)) ?? Promise.resolve(false),
-                    }
-                    : {}),
+                media: this.#media,
             }),
             geometry: (geometry) => this.#resize(geometry),
             release: () => this.dispose(),
@@ -180,6 +188,7 @@ export class BrowserCanvasAttachment {
         });
         const cleanup = [
             () => this.#drag.dispose(),
+            () => this.#media.dispose(),
             this.#stopTransfer,
             () => this.#images.dispose(),
             () => this.#overview.dispose(),
@@ -189,7 +198,7 @@ export class BrowserCanvasAttachment {
             () => this.port.dispose(),
         ];
         try {
-            this.#overlay = mountCanvasOverlay(overlay, this.port, options.report, element);
+            this.#overlay = mountCanvasOverlay(overlay, this.port, options.report, element, (target) => this.#overview.contextTarget(target) ?? this.#images.contextTarget(target) ?? 'primary');
             cleanup.push(() => this.#overlay.dispose());
             this.#input = new BrowserCanvasInput(this.viewport, {
                 outbound: (event) => this.#drag.allows(event),
@@ -332,6 +341,7 @@ export class BrowserCanvasAttachment {
         this.port.dispose();
         this.#input.dispose();
         this.#drag.dispose();
+        this.#media.dispose();
         this.#stopTransfer();
         this.#geometry.dispose();
         this.#camera.dispose();
@@ -399,11 +409,13 @@ export class BrowserCanvasAttachment {
     }
     /** Publish the current actual display at bounded cadence, without graph access. */
     #publish() {
-        if (this.#ready && !this.#disposed)
+        if (this.#ready && !this.#disposed) {
+            this.#media.reconcile();
             this.port.publish(this.#snapshot());
+        }
     }
     /** Report actual camera/fidelity rather than the incoming selection's unshown dimensions. */
     #snapshot() {
-        return browserCanvasSnapshot(this.options.address, this.#plan, this.#catalog, this.#browserResources.resources.read(), this.#camera.read(), this.options.connected(), this.#browserResources.previewStarted, this.#sources, this.#browserResources.preparing);
+        return browserCanvasSnapshot(this.options.address, this.#plan, this.#catalog, this.#browserResources.resources.read(), this.#camera.read(), this.options.connected(), this.#browserResources.previewStarted, this.#sources, this.#browserResources.preparing, this.#media.profile());
     }
 }

@@ -122,13 +122,31 @@ function decodeCommand(value) {
                 ? Object.freeze({ type: 'wipe', orientation: value.orientation, split: value.split })
                 : null;
         case 'open-media':
-        case 'copy-media':
             return value.target === 'primary' || value.target === 'secondary'
                 ? Object.freeze({ type: value.type, target: value.target })
                 : null;
+        case 'copy-media': {
+            const target = decodeMediaTarget(value.target);
+            const format = value.format === undefined ? 'preferred' : value.format;
+            return target && (format === 'preferred' || format === 'png' || format === 'jpeg')
+                ? Object.freeze({ type: 'copy-media', target, format })
+                : null;
+        }
+        case 'file-media': {
+            const target = decodeMediaTarget(value.target);
+            return target ? Object.freeze({ type: 'file-media', target }) : null;
+        }
         default:
             return null;
     }
+}
+/** Admit immutable output identities without accepting arbitrary paths or recycled batch positions. */
+function decodeMediaTarget(value) {
+    if (value === 'primary' || value === 'secondary')
+        return value;
+    return isRecord(value) && sourceIdentity(value.sourceId) && resultIdentity(value.itemId)
+        ? Object.freeze({ sourceId: value.sourceId, itemId: value.itemId })
+        : null;
 }
 /** Narrow external immutable-image identifiers before they reach selection or resource owners. */
 function decodeRevealTarget(value) {

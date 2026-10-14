@@ -54,9 +54,10 @@ export async function applyBrowserCanvasCommand(command, owners) {
             return true;
         }
         case 'copy-media': {
-            const item = command.target === 'primary' ? plan.primary?.item : plan.secondary?.item;
-            return item?.mediaKind === 'image' && owners.copy ? await owners.copy(item) : false;
+            return await owners.media.run(command);
         }
+        case 'file-media':
+            return await owners.media.run(command);
         case 'comparison':
             if (command.enabled && (snapshot.preview || snapshot.resource.state !== 'ready'))
                 return false;
