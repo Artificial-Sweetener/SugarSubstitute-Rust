@@ -6,7 +6,7 @@ use super::{ParentError, ParentLifecycle, ParentResources, Result};
 use sugarsubstitute_application::supervision::UiWatchdog;
 use sugarsubstitute_contracts::{
     execution::{CompletionBatch, CounterDeadline, JobOutcome, Moment},
-    lifecycle::{ClientRegistration, UiWatchdogObservation},
+    lifecycle::ClientRegistration,
 };
 use sugarsubstitute_execution::windows_lifecycle_pipe::{
     LifecyclePipeError, LifecyclePipeObservation, LifecyclePipeOperationId,
@@ -102,14 +102,12 @@ impl ParentLifecycle {
                 match write.purpose {
                     WritePurpose::Reply(index) => self.authorization_issued(index, resources)?,
                     WritePurpose::Challenge(challenge) => {
-                        let watchdog = self.watchdog.as_mut().ok_or(ParentError::WrongPhase)?;
-                        if watchdog.snapshot().pending == Some(challenge) {
-                            watchdog.observe(
-                                self.run,
-                                UiWatchdogObservation::Dispatched { challenge, at },
-                                resources.execution.client.now()?,
-                            )?;
-                        }
+                        self.challenge_issued(
+                            challenge,
+                            operation.get(),
+                            at,
+                            resources.execution.client.now()?,
+                        )?;
                     }
                     WritePurpose::Welcome => {}
                 }
@@ -136,6 +134,11 @@ impl ParentLifecycle {
                     .ok_or(ParentError::WrongPhase)?
                     .receipt
                     .revoked(operation.get())?;
+                if let WritePurpose::Challenge(challenge) =
+                    self.write.as_ref().ok_or(ParentError::WrongPhase)?.purpose
+                {
+                    self.challenge_revoked(challenge, operation.get())?;
+                }
                 drop(buffer);
                 self.write = None;
             }

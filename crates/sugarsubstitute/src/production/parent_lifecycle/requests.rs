@@ -232,11 +232,7 @@ impl ParentLifecycle {
                 if revision.get() <= self.activity_revision {
                     return Err(ParentError::StaleRequest.into());
                 }
-                self.watchdog.as_mut().ok_or(ParentError::WrongPhase)?.set_activity(
-                    self.run,
-                    activity,
-                    resources.execution.client.now()?,
-                )?;
+                self.ui_activity(activity, resources.execution.client.now()?)?;
                 self.activity_revision = revision.get();
                 if let Some(write) = &self.write
                     && matches!(write.purpose, super::types::WritePurpose::Challenge(_))

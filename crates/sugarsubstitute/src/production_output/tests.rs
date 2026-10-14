@@ -5,6 +5,7 @@ use super::*;
 use std::error::Error;
 use sugarsubstitute_contracts::transcript::*;
 use sugarsubstitute_supervision::lifecycle_protocol::OutputDelivery;
+mod retirement;
 mod support;
 use support::*;
 type TestResult<T = ()> = Result<T, Box<dyn Error + Send + Sync>>;

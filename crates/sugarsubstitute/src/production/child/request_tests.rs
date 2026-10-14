@@ -240,3 +240,36 @@ fn exhausted_sequence_never_wraps_or_overwrites_a_slot() -> TestResult {
     assert_eq!(requests.slots.iter().flatten().count(), 1);
     Ok(())
 }
+
+#[test]
+fn closed_prepared_withdrawal_keeps_exact_identity_and_nonwrapping_highwater() -> TestResult {
+    let mut requests = requests()?;
+    let first = prepare(&mut requests)?;
+    let second = prepare(&mut requests)?;
+    requests.close();
+    let foreign = WireHeader { deadline_qpc: first.deadline_qpc + 1, ..first };
+    assert_eq!(requests.withdraw_prepared(foreign), Err(RequestError::Identity));
+    assert_eq!(requests.find(first)?.phase, Phase::Prepared);
+    requests.withdraw_prepared(first)?;
+    assert_eq!(requests.withdraw_prepared(first), Err(RequestError::Identity));
+    assert_eq!(requests.find(second)?.phase, Phase::Prepared);
+    assert_eq!(requests.latest, second.request.ok_or("Request absent")?.get());
+    assert_eq!(requests.slots.iter().flatten().count(), 1);
+    Ok(())
+}
+
+#[test]
+fn prepared_withdrawal_cannot_erase_admitted_or_received_reply_custody() -> TestResult {
+    let mut requests = requests()?;
+    let first = prepare(&mut requests)?;
+    requests.admitted(first)?;
+    assert_eq!(requests.withdraw_prepared(first), Err(RequestError::Order));
+    assert_eq!(requests.find(first)?.phase, Phase::Admitted);
+    requests.received(first, Moment::from_nanos(100))?;
+    requests.close();
+    assert_eq!(requests.withdraw_prepared(first), Err(RequestError::Order));
+    assert_eq!(requests.find(first)?.phase, Phase::Received);
+    requests.consumed(first)?;
+    assert_eq!(requests.slots.iter().flatten().count(), 0);
+    Ok(())
+}

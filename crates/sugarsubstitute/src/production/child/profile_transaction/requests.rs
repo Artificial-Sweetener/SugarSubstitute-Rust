@@ -8,8 +8,9 @@ use sugarsubstitute_supervision::lifecycle_protocol::{
 impl ProfileTransaction {
     /// Admit at most one request. False retains the same prepared header and original cutoff.
     /// Native writes remain with the actual channel owner; no UI callback copies folder bytes.
+    /// Completed and closed transactions remain inert while their original custody is retained.
     /// # Errors
-    /// Preserves channel/codec causes and rejects closed, expired or mismatched transactions.
+    /// Preserves channel/codec causes and rejects expired or mismatched active transactions.
     pub(in super::super) fn activity(
         &mut self,
         channel: &mut ChildChannel,

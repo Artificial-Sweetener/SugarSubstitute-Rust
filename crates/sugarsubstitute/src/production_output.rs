@@ -180,20 +180,21 @@ impl OutputOwner {
         }
         state.frame = Some(frame.take().ok_or(OutputError::Order)?);
         drop(state);
-        let source = self.source.clone();
+        let mut source = Some(self.source.clone());
         let binding = self.binding;
         let acknowledged = self.acknowledged;
-        match client.submit_blocking(
+        match client.submit_blocking_owned_input(
             scope,
             spec(job, pending.original, TRANSFER_BYTES),
-            move |context| worker::parse(&source, binding, pending, acknowledged, &context),
+            &mut source,
+            move |source, context| worker::parse(&source, binding, pending, acknowledged, &context),
         ) {
             Ok(job) => {
                 self.job = Some(job);
                 self.noticed = None;
                 Ok(())
             }
-            Err(error) => Err(OutputError::Admission(error)),
+            Err(error) => Err(OutputError::Input(error)),
         }
     }
     /// Capture only actual matching completion notices; foreign jobs cannot consume this slot.
@@ -256,6 +257,65 @@ impl OutputOwner {
             change: parsed.change,
             snapshot: parsed.snapshot,
         }))
+    }
+    /// Inspect the original pull during retirement; copied facts grant no native authority.
+    pub(crate) fn retiring_pull(&self) -> Option<(WireHeader, Moment, bool)> {
+        self.closed.then(|| self.pending.map(|p| (p.header, p.original, p.admitted))).flatten()
+    }
+    /// Classify only an actually observed terminal caused by intentional close. Successful
+    /// closed work remains retained, and genuine failures/panics are never expected cancellation.
+    pub(crate) fn expected_retirement_terminal(&self, cause: &OutputError) -> bool {
+        if !self.closed || self.job.is_some() {
+            return false;
+        }
+        let Some(terminal) = &self.terminal else { return false };
+        matches!(
+            (cause, &terminal.outcome),
+            (OutputError::Terminal(TerminalKind::Success), JobOutcome::Success(_))
+                | (OutputError::Terminal(TerminalKind::Cancelled), JobOutcome::Cancelled)
+                | (
+                    OutputError::Terminal(TerminalKind::Failure),
+                    JobOutcome::Failure(OutputError::Cancelled)
+                )
+        )
+    }
+    /// Validate one original retiring reply without text parsing, jobs, publication or a
+    /// delivery ACK. The composing channel has already authenticated its actual frame.
+    pub(crate) fn validate_retiring_reply(&self, bytes: &[u8]) -> Result<WireHeader, OutputError> {
+        use sugarsubstitute_supervision::lifecycle_protocol::{DecodedPayload, ReplyOutcome};
+        if !self.closed || self.job.is_some() {
+            return Err(OutputError::Order);
+        }
+        let pending = self.pending.filter(|p| p.admitted).ok_or(OutputError::Order)?;
+        let message = FrameCodec::decode(bytes)?;
+        if message.header != pending.header {
+            return Err(OutputError::Identity);
+        }
+        match message.payload {
+            DecodedPayload::Reply(ReplyOutcome::OutputIdle(lease))
+                if lease == self.binding.lease => {}
+            DecodedPayload::Reply(ReplyOutcome::OutputDelivery(delivery))
+                if delivery.lease == self.binding.lease
+                    && Some(delivery.delivery_id.get())
+                        == self.acknowledged.map_or(Some(1), |id| id.get().checked_add(1)) => {}
+            _ => return Err(OutputError::Identity),
+        }
+        Ok(message.header)
+    }
+    /// Retire only exact pull metadata after the channel withdrew an unadmitted request or
+    /// consumed its actual reply. Native frame disposal remains with the composing owner.
+    pub(crate) fn finish_retiring_pull(&mut self, header: WireHeader) -> Result<(), OutputError> {
+        if !self.closed || self.job.is_some() {
+            return Err(OutputError::Order);
+        }
+        if self.pending.is_some_and(|pending| pending.header != header) {
+            return Err(OutputError::Identity);
+        }
+        if self.source.state.lock().map_err(|_| OutputError::Poisoned)?.frame.is_some() {
+            return Err(OutputError::Order);
+        }
+        self.pending = None;
+        Ok(())
     }
     /// Close admission and request actual job cancellation without claiming it has stopped.
     pub(crate) fn close(&mut self) {

@@ -145,3 +145,78 @@ fn actual_first_cause_is_owned_before_one_closed_event_without_formatting_or_sou
     assert_eq!(dropped.load(Ordering::SeqCst), 1);
     Ok(())
 }
+
+#[test]
+fn main_failure_codes_preserve_direct_native_and_cdp_classifications() -> Result<(), Box<dyn Error>>
+{
+    use crate::main_readiness_types::ReadinessFault;
+    assert_eq!(
+        main_code(&ReadinessFault::WrongOrigin),
+        MainCode::Readiness(ReadinessFault::WrongOrigin)
+    );
+    assert_eq!(main_code(&std::io::Error::from_raw_os_error(233)), MainCode::Os(233));
+    assert_eq!(main_code(&std::io::Error::from(ErrorKind::TimedOut)), MainCode::Io(Kind::TimedOut));
+    let invalid =
+        serde_json::from_str::<u32>("\"PRIVATE\"").err().ok_or("Missing actual JSON error")?;
+    assert_eq!(main_code(&invalid), MainCode::JsonData);
+    #[cfg(target_os = "windows")]
+    assert_eq!(
+        main_code(&windows::core::Error::from(windows::Win32::Foundation::E_POINTER)),
+        MainCode::Hresult(windows::Win32::Foundation::E_POINTER.0)
+    );
+    Ok(())
+}
+
+#[test]
+fn main_failure_observer_preserves_opaque_cause_through_actual_startup_transfer()
+-> Result<(), Box<dyn Error>> {
+    use sugarsubstitute_contracts::{
+        execution::Generation,
+        lifecycle::{
+            CoordinatorEpoch, CoordinatorKey, InstanceId, NamespaceId, RunGeneration, RunKey,
+        },
+        startup::{LaunchId, StartupFailure, StartupFailureCode},
+    };
+    let formatted = Arc::new(AtomicUsize::new(0));
+    let inspected = Arc::new(AtomicUsize::new(0));
+    let dropped = Arc::new(AtomicUsize::new(0));
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let actual = DesktopError::new(
+        "decode_main_observation",
+        Source {
+            formatted: formatted.clone(),
+            inspected: inspected.clone(),
+            dropped: dropped.clone(),
+        },
+    );
+    let identity = crate::MainIdentity {
+        run: RunKey {
+            owner: CoordinatorKey {
+                namespace: NamespaceId::new([1; 32]),
+                epoch: CoordinatorEpoch::new([2; 16])?,
+            },
+            instance: InstanceId::new(1)?,
+            generation: RunGeneration::new(1)?,
+        },
+        launch: LaunchId::new(3)?,
+        navigation: Generation::new(4)?,
+    };
+    tracing::dispatcher::with_default(&tracing::Dispatch::new(Sink(events.clone())), || {
+        actual.observe_main_failure(identity, "Frame");
+    });
+    let failure = StartupFailure::new(StartupFailureCode::Presentation, Box::new(actual));
+    assert_eq!(formatted.load(Ordering::SeqCst), 0);
+    assert_eq!(inspected.load(Ordering::SeqCst), 0);
+    assert_eq!(dropped.load(Ordering::SeqCst), 0);
+    let events = events.lock().map_err(|_| std::io::Error::other("Sink poisoned"))?;
+    assert_eq!(events.len(), 1);
+    assert!(events[0].iter().any(|(k, v)| k == "operation" && v == "main_failure_transition"));
+    assert!(
+        events[0].iter().any(|(k, v)| k == "failed_operation" && v == "decode_main_observation")
+    );
+    assert!(events[0].iter().any(|(k, v)| k == "code" && v == "Opaque"));
+    assert!(!events[0].iter().any(|(_, v)| v.contains("PRIVATE") || v.contains("credential")));
+    drop(failure);
+    assert_eq!(dropped.load(Ordering::SeqCst), 1);
+    Ok(())
+}

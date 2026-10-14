@@ -3,7 +3,7 @@
 //! Preserve the genuine executor, wire and transcript causes behind bounded categories.
 use std::{error::Error, fmt};
 use sugarsubstitute_contracts::{
-    execution::{AdmissionError, MemoryClaimError, TerminalKind},
+    execution::{MemoryClaimError, TerminalKind},
     transcript::TranscriptError,
 };
 use sugarsubstitute_supervision::lifecycle_protocol::ProtocolError;
@@ -11,7 +11,7 @@ use sugarsubstitute_supervision::lifecycle_protocol::ProtocolError;
 #[derive(Debug)]
 pub(crate) enum OutputError {
     /// Central finite-job admission failed before the parser ran.
-    Admission(AdmissionError),
+    Input(sugarsubstitute_execution::BlockingInputError),
     /// Original job reservation cannot fund the declared source/scratch bound.
     Claim(MemoryClaimError),
     /// Genuine closed wire decoding failed.
@@ -42,7 +42,7 @@ impl fmt::Display for OutputError {
 impl Error for OutputError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            Self::Admission(e) => Some(e),
+            Self::Input(e) => Some(e),
             Self::Claim(e) => Some(e),
             Self::Protocol(e) => Some(e),
             Self::Transcript(e) => Some(e),

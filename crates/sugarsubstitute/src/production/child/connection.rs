@@ -13,6 +13,40 @@ pub(super) struct PendingAcquire {
     pub(super) original: Moment,
     pub(super) admitted: bool,
 }
+/// Select progression without granting settlement or replacing any stored cutoff.
+#[derive(Debug, Eq, PartialEq)]
+pub(super) enum ActivityRoute {
+    Shutdown,
+    AttemptCleanup,
+    Startup,
+}
+impl ActivityRoute {
+    /// An existing cleanup owns its original budget; an expired startup budget must
+    /// not prevent actual control/attempt retirement after the initiating failure.
+    pub(super) fn select(
+        closing: bool,
+        attempt: Option<&attempt::AttemptCleanup>,
+        phase: Option<sugarsubstitute_application::startup::StartupPhase>,
+        frontend: Option<FrontendBudget>,
+        now: Moment,
+    ) -> std::io::Result<Self> {
+        if closing {
+            return Ok(Self::Shutdown);
+        }
+        if attempt.is_some() {
+            return Ok(Self::AttemptCleanup);
+        }
+        if phase == Some(sugarsubstitute_application::startup::StartupPhase::WebviewLoading)
+            && frontend.is_some_and(|budget| now >= budget.until())
+        {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "Original frontend loading budget expired",
+            ));
+        }
+        Ok(Self::Startup)
+    }
+}
 /// Closed progress facts describe wire ownership, never backend or grant authority.
 #[derive(Clone, Copy, Debug)]
 pub(super) enum ConnectionStage {
@@ -160,18 +194,22 @@ impl ProductionChild {
             pending.check_current(self.client()?.now()?)?;
         }
         self.bootstrap.channel_mut().activity(NonZeroUsize::MIN.saturating_add(31))?;
-        if self.shutdown.closing() {
-            return self.advance_shutdown();
+        if self.output.closing() {
+            self.advance_output()?;
         }
-        if self.phase == Some(sugarsubstitute_application::startup::StartupPhase::WebviewLoading)
-            && let Some(budget) = self.frontend_budget
-            && self.client()?.now()? >= budget.until()
-        {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::TimedOut,
-                "Original frontend loading budget expired",
-            )
-            .into());
+        match ActivityRoute::select(
+            self.shutdown.closing(),
+            self.attempt.as_ref(),
+            self.phase,
+            self.frontend_budget,
+            self.client()?.now()?,
+        )? {
+            ActivityRoute::Shutdown => return self.advance_shutdown(),
+            ActivityRoute::AttemptCleanup => {
+                self.advance_control()?;
+                return self.advance_attempt();
+            }
+            ActivityRoute::Startup => {}
         }
         if let Some(prepared) = prepared {
             self.send_acquire(prepared)?;

@@ -238,12 +238,14 @@ fn fail_main(
 ) -> Result<(), DesktopError> {
     let owner = main(session)?;
     let identity = owner.identity();
+    let observation = owner.failure_observation();
     owner.close(identity)?;
     if session.main_failures_reported {
         session.retain(cause);
         Ok(())
     } else {
         session.main_failures_reported = true;
+        cause.observe_main_failure(identity, observation);
         session.observe(
             content,
             DesktopStartupObservation::Failed {

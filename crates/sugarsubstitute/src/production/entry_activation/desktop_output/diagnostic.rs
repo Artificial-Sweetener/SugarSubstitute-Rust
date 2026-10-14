@@ -2,6 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Decode only complete closed preparation fields, discarding every other raw line.
 use sugarsubstitute_contracts::transcript::OutputStream;
+#[path = "diagnostic/main.rs"]
+mod main;
+pub(super) use main::MainFailure;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct Phase {
     pub(super) capture_admitted: bool,
@@ -40,6 +43,7 @@ pub(super) enum Observation {
     Preparation(Phase),
     Failure(Failure),
     Connection(Connection),
+    MainFailure(MainFailure),
 }
 /// Fixed source scratch is covered by the containing Record's original metadata
 /// claim. Loss, oversized input and EOF invalidate partial lines; stdout is opaque.
@@ -52,6 +56,7 @@ pub(super) struct Diagnostic {
     connection: Option<Connection>,
     emitted: u8,
     failure_seen: bool,
+    main_failure_seen: bool,
 }
 impl Diagnostic {
     pub(super) const fn new() -> Self {
@@ -64,6 +69,7 @@ impl Diagnostic {
             connection: None,
             emitted: 0,
             failure_seen: false,
+            main_failure_seen: false,
         }
     }
     /// The authenticated output owner validates Run before these inert byte facts.
@@ -92,10 +98,16 @@ impl Diagnostic {
         for &byte in bytes {
             if byte == b'\n' {
                 if !self.discard {
-                    if let Some(failure) = parse_failure(&self.bytes[..self.length]) {
+                    if let Some(failure) = main::parse(&self.bytes[..self.length]) {
+                        if !self.main_failure_seen && self.emitted < 32 {
+                            self.main_failure_seen = true;
+                            self.emitted += 1;
+                            emit(Observation::MainFailure(failure));
+                        }
+                    } else if let Some(failure) = parse_failure(&self.bytes[..self.length]) {
                         if !self.failure_seen {
                             self.failure_seen = true;
-                            if self.emitted < 32 {
+                            if self.emitted < 32 && (self.main_failure_seen || self.emitted < 31) {
                                 self.emitted += 1;
                                 emit(Observation::Failure(failure));
                             }
@@ -118,7 +130,7 @@ impl Diagnostic {
                         if next == Some(connection) {
                             self.connection = Some(connection);
                             // All nonfailure observations share the original cap and reserve.
-                            if self.emitted < 31 {
+                            if self.emitted < 30 {
                                 self.emitted += 1;
                                 emit(Observation::Connection(connection));
                             }
@@ -127,8 +139,8 @@ impl Diagnostic {
                         && self.latest != Some(phase)
                     {
                         self.latest = Some(phase);
-                        // Keep one of the unchanged32 observations for the first owned failure.
-                        if self.emitted < 31 {
+                        // Reserve the final two unchanged32 slots for generic and main failures.
+                        if self.emitted < 30 {
                             self.emitted += 1;
                             emit(Observation::Preparation(phase));
                         }

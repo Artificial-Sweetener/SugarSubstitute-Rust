@@ -181,6 +181,20 @@ impl ClientRequests {
         Ok(())
     }
 
+    /// Withdraw only a never-admitted original request, preserving identity high-water.
+    /// This proves no native retirement and cannot discard an admitted or received reply.
+    pub(super) fn withdraw_prepared(&mut self, header: WireHeader) -> Result<(), RequestError> {
+        if self.find(header)?.phase != Phase::Prepared {
+            return Err(RequestError::Order);
+        }
+        let slot = self
+            .slots
+            .iter_mut()
+            .find(|slot| slot.as_ref().is_some_and(|pending| pending.header == header))
+            .ok_or(RequestError::Identity)?;
+        *slot = None;
+        Ok(())
+    }
     /// Fence new preparation/send without erasing original pending reply evidence.
     pub(super) fn close(&mut self) {
         self.closed = true;

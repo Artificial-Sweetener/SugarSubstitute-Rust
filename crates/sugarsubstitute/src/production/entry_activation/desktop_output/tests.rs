@@ -135,15 +135,20 @@ fn changing_diagnostics_remain_bounded_for_the_same_output_lifetime() {
             |v| seen.push(v),
         );
     }
-    assert_eq!(seen.len(), 31);
+    assert_eq!(seen.len(), 30);
     let failure = b"operation=\"desktop_failure_transition\" boundary=PollFrame kind=Other\n";
     owner.feed(OutputStream::Stderr, 81, false, false, failure, |v| seen.push(v));
     owner.feed(OutputStream::Stderr, 82, false, false, failure, |v| seen.push(v));
-    assert_eq!(seen.len(), 32);
+    assert_eq!(seen.len(), 31);
     assert!(matches!(
         seen.last(),
         Some(Observation::Failure(Failure { boundary: "PollFrame", kind: "Other" }))
     ));
+    let main = b"operation=\"main_failure_transition\" failed_operation=\"decode_main_observation\" launch=1 navigation=1 observation=Frame code=JsonData\n";
+    owner.feed(OutputStream::Stderr, 83, false, false, main, |v| seen.push(v));
+    owner.feed(OutputStream::Stderr, 84, false, false, main, |v| seen.push(v));
+    assert_eq!(seen.len(), 32);
+    assert!(matches!(seen.last(), Some(Observation::MainFailure(_))));
 }
 #[test]
 fn actual_production_text_formatter_with_writer_and_time_boundaries_preserves_closed_fields()
@@ -198,13 +203,17 @@ fn actual_production_text_formatter_with_writer_and_time_boundaries_preserves_cl
         }
         tracing::warn!(operation="desktop_failure_transition",boundary=%"PollFrame",kind=%"Other",
             "First owned desktop failure retained");
+        tracing::warn!(operation="main_failure_transition",failed_operation="decode_main_observation",
+            launch=u64::MAX,navigation=u64::MAX,observation=%"Frame",code=?main::Code::Hresult(i32::MIN),
+            "Original owned main failure transferred to startup policy");
     });
     let bytes = bytes.lock().map_err(|_| std::io::Error::other("Writer fixture poisoned"))?;
     assert!(bytes.starts_with(b"2026-10-13T"));
     let mut owner = Diagnostic::new();
     let mut seen = Vec::new();
     owner.feed(OutputStream::Stderr, 1, false, false, &bytes, |v| seen.push(v));
-    assert_eq!(seen.len(), 5);
+    assert_eq!(seen.len(), 6);
+    assert!(bytes.split(|byte| *byte == b'\n').all(|line| line.len() <= 512));
     assert_eq!(parse(LINE.as_bytes()).map(Observation::Preparation), seen.first().copied());
     assert_eq!(
         &seen[1..4],
@@ -215,9 +224,19 @@ fn actual_production_text_formatter_with_writer_and_time_boundaries_preserves_cl
         ]
     );
     assert!(matches!(
-        seen.last(),
-        Some(Observation::Failure(Failure { boundary: "PollFrame", kind: "Other" }))
+        seen[4],
+        Observation::Failure(Failure { boundary: "PollFrame", kind: "Other" })
     ));
+    assert_eq!(
+        seen[5],
+        Observation::MainFailure(MainFailure {
+            launch: u64::MAX,
+            navigation: u64::MAX,
+            operation: "decode_main_observation",
+            observation: "Frame",
+            code: main::Code::Hresult(i32::MIN),
+        })
+    );
     Ok(())
 }
 
@@ -328,7 +347,7 @@ fn connection_chunks_share_original_diagnostic_cap_and_cannot_stitch_gaps() {
         b"operation=\"desktop_failure_transition\" boundary=PollFrame kind=TimedOut\n",
         |v| seen.push(v),
     );
-    assert_eq!(seen.len(), 32);
+    assert_eq!(seen.len(), 31);
     assert!(matches!(seen.last(), Some(Observation::Failure(Failure { kind: "TimedOut", .. }))));
 }
 

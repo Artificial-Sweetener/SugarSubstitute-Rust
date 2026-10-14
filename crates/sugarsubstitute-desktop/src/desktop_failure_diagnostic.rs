@@ -3,6 +3,64 @@
 //! Observe the first retained native failure through closed metadata only.
 use std::{error::Error, io::ErrorKind};
 
+/// Project direct sealed native/CDP cause data without formatting opaque payloads.
+#[cfg(any(target_os = "windows", test))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum MainCode {
+    #[cfg(target_os = "windows")]
+    Hresult(i32),
+    Os(i32),
+    Io(Kind),
+    Readiness(crate::main_readiness_types::ReadinessFault),
+    JsonIo,
+    JsonSyntax,
+    JsonData,
+    JsonEof,
+    Opaque,
+}
+
+/// Inspect only known direct concrete causes; preserve the original error and all callbacks.
+#[cfg(any(target_os = "windows", test))]
+fn main_code(cause: &(dyn Error + 'static)) -> MainCode {
+    #[cfg(target_os = "windows")]
+    if let Some(native) = cause.downcast_ref::<windows::core::Error>() {
+        return MainCode::Hresult(native.code().0);
+    }
+    if let Some(readiness) = cause.downcast_ref::<crate::main_readiness_types::ReadinessFault>() {
+        return MainCode::Readiness(*readiness);
+    }
+    if let Some(io) = cause.downcast_ref::<std::io::Error>() {
+        return io.raw_os_error().map_or_else(|| MainCode::Io(classify("", io).kind), MainCode::Os);
+    }
+    if let Some(json) = cause.downcast_ref::<serde_json::Error>() {
+        return match json.classify() {
+            serde_json::error::Category::Io => MainCode::JsonIo,
+            serde_json::error::Category::Syntax => MainCode::JsonSyntax,
+            serde_json::error::Category::Data => MainCode::JsonData,
+            serde_json::error::Category::Eof => MainCode::JsonEof,
+        };
+    }
+    MainCode::Opaque
+}
+
+#[cfg(any(target_os = "windows", test))]
+impl super::DesktopError {
+    /// Observe the exact owned main failure before its transfer to startup policy.
+    /// Authored static operation labels and direct closed cause codes carry no native authority.
+    /// This never formats the original cause or invokes its arbitrary source callback.
+    pub(crate) fn observe_main_failure(
+        &self,
+        identity: crate::MainIdentity,
+        observation: &'static str,
+    ) {
+        let code = main_code(self.cause.as_ref());
+        tracing::warn!(operation = "main_failure_transition", failed_operation = self.operation,
+            launch = identity.launch.get(), navigation = identity.navigation.get(),
+            observation = %observation, code = ?code,
+            "Original owned main failure transferred to startup policy");
+    }
+}
+
 /// Project only known native/content boundaries without copying arbitrary operation text.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Boundary {

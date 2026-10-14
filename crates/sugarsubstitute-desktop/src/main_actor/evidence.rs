@@ -25,7 +25,13 @@ impl MainActor {
         let mut effect = Effect::None;
         // The pure decoder/readiness owner performs no native calls while queue storage is borrowed.
         let consumed = events.consume(|observation| {
-            effect = decode::consume(self.readiness()?, observation)?;
+            match decode_observation(self.readiness()?, observation) {
+                Ok(decoded) => effect = decoded,
+                Err((cause, kind)) => {
+                    self.failure_observation = kind;
+                    return Err(cause);
+                }
+            }
             Ok(())
         })?;
         if !consumed {
@@ -69,6 +75,38 @@ impl MainActor {
         };
         events.rewake();
         Ok(result)
+    }
+}
+
+/// Preserve the actual callback kind together with the unchanged decoder failure.
+fn decode_observation(
+    owner: &mut MainReadiness,
+    observation: Observation<'_>,
+) -> Result<Effect, (DesktopError, &'static str)> {
+    let kind = observation_kind(observation.kind, observation.command);
+    decode::consume(owner, observation).map_err(|cause| (cause, kind))
+}
+
+/// Map actual queued callback identities without retaining any native payload.
+fn observation_kind(kind: Kind, command: Option<Command>) -> &'static str {
+    match kind {
+        Kind::Frame => "Frame",
+        Kind::FrameDetached => "FrameDetached",
+        Kind::Context => "Context",
+        Kind::ContextDestroyed => "ContextDestroyed",
+        Kind::ContextsCleared => "ContextsCleared",
+        Kind::Console => "Console",
+        Kind::Exception => "Exception",
+        Kind::NavigationStarting => "NavigationStarting",
+        Kind::Navigation { .. } => "Navigation",
+        Kind::ProcessFailed { .. } => "ProcessFailed",
+        Kind::Command => match command {
+            Some(Command::Runtime) => "Runtime",
+            Some(Command::Page) => "Page",
+            Some(Command::Probe(_)) => "Probe",
+            Some(Command::Barrier(_)) => "Barrier",
+            None => "Command",
+        },
     }
 }
 

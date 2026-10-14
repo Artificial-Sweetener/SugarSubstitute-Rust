@@ -10,6 +10,7 @@ impl ProductionChild {
         if self.shutdown.closing
             && let Some(header) = self.bootstrap.channel_mut().received_header()?
             && self.shutdown.pending.is_none_or(|pending| pending.header != header)
+            && !self.output.owns_reply(header)
         {
             let frame = self
                 .bootstrap
@@ -68,6 +69,8 @@ impl ProductionChild {
                 } else {
                     budget.settle_until
                 }
+            } else if matches!(control, Control::MainRetired(_)) && self.attempt.is_some() {
+                self.attempt.as_ref().ok_or("Original attempt absent")?.original_deadline()
             } else {
                 self.client()?.now()?.checked_add(Duration::from_secs(30))?
             };

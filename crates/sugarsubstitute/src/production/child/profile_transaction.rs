@@ -90,7 +90,7 @@ impl ProfileTransaction {
         self.progress.phase = Phase::Closed;
     }
     fn activity_required(&self) -> Result<bool, ProfileError> {
-        if self.authorized() {
+        if matches!(self.progress.phase, Phase::Authorized | Phase::Closed) {
             return Ok(false);
         }
         self.check()?;

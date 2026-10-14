@@ -35,6 +35,45 @@ pub(super) struct Rig {
     wake: Arc<Wake>,
 }
 impl Rig {
+    /// Check settlement and all real worker joins after the owned terminal is disposed.
+    pub(super) fn finish(&mut self) -> TestResult {
+        self.owner.request_shutdown(Moment::from_nanos(100));
+        loop {
+            let count = self.wake.count.lock().map_err(|_| "Wake poisoned")?;
+            self.client.drain_completions(NonZeroUsize::MIN.saturating_add(63))?;
+            if self.owner.poll_shutdown()?.settled {
+                drop(count);
+                return Ok(self.owner.finish_shutdown()?);
+            }
+            let next = self
+                .wake
+                .changed
+                .wait_timeout(count, Duration::from_secs(10))
+                .map_err(|_| "Wake poisoned")?;
+            if next.1.timed_out() && !self.owner.poll_shutdown()?.settled {
+                return Err("Actual executor retirement did not arrive".into());
+            }
+        }
+    }
+    /// Observe the actual owner's completion notice without taking its terminal custody.
+    pub(super) fn notice(&self, output: &mut OutputOwner) -> TestResult {
+        loop {
+            let count = self.wake.count.lock().map_err(|_| "Wake poisoned")?;
+            let batch = self.client.drain_completions(NonZeroUsize::MIN.saturating_add(63))?;
+            output.capture(&batch);
+            if output.noticed.is_some() {
+                return Ok(());
+            }
+            let next = self
+                .wake
+                .changed
+                .wait_timeout(count, Duration::from_secs(10))
+                .map_err(|_| "Wake poisoned")?;
+            if next.1.timed_out() {
+                return Err("Actual output completion did not arrive".into());
+            }
+        }
+    }
     pub(super) fn new() -> TestResult<Self> {
         let wake = Arc::new(Wake::default());
         let owner = sugarsubstitute_execution::ExecutionOwner::new(Arc::new(Clock), wake.clone())?;

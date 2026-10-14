@@ -90,6 +90,14 @@ impl ChildChannel {
         Ok(())
     }
 
+    /// Withdraw only this ledger's never-admitted request; no write or native loan is retired.
+    pub(in super::super) fn withdraw_prepared(&mut self, header: WireHeader) -> Result<()> {
+        self.requests
+            .as_mut()
+            .ok_or("Original request ledger missing")?
+            .withdraw_prepared(header)?;
+        Ok(())
+    }
     /// Handle one actual server frame without copying its charged payload.
     /// True transfers it to the application; false completes inline watchdog handling.
     /// The caller retains the original read guard on every semantic failure.

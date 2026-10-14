@@ -245,7 +245,43 @@ fn completed_transaction_stays_idle_after_its_original_startup_cutoff() -> TestR
     assert!(!transaction.awaiting_reply());
     assert_eq!(transaction.original_deadline(), Moment::from_nanos(100));
     transaction.close();
-    assert!(matches!(transaction.activity_required(), Err(ProfileError::Closed)));
+    assert!(!transaction.activity_required()?);
+    assert!(!transaction.authorized());
+    assert!(matches!(transaction.check(), Err(ProfileError::Closed)));
+    Ok(())
+}
+
+#[test]
+fn closed_profile_activity_keeps_pending_custody_without_retrying_authorization() -> TestResult {
+    let rig = Rig::new()?;
+    let mut transaction = transaction(&rig)?;
+    let original = pending(transaction.identity(), 2)?;
+    transaction.pending = Some(original);
+    transaction.progress.phase = Phase::Browser;
+    transaction.browser = NonZeroU32::new(73);
+    transaction.close();
+    rig.expire();
+    assert!(!transaction.activity_required()?);
+    assert!(!transaction.awaiting_reply());
+    assert!(!transaction.expects_reply(original.header));
+    assert_eq!(transaction.pending, Some(original));
+    assert!(matches!(
+        transaction.progress.reply(
+            original,
+            original.header,
+            ReplyOutcome::BrowserAuthorized {
+                identity: transaction.identity(),
+                browser_process_id: NonZeroU32::new(73).ok_or("Zero PID")?,
+            },
+            transaction.browser,
+        ),
+        Err(ProfileError::Closed)
+    ));
+    assert_eq!(transaction.original_deadline(), Moment::from_nanos(100));
+    assert_eq!(rig.scope.snapshot().reserved_bytes, MainWindowRequest::KNOWN_STORAGE_BYTES);
+    drop(transaction);
+    drop(rig.owner);
+    assert_eq!(rig.scope.snapshot().reserved_bytes, 0);
     Ok(())
 }
 

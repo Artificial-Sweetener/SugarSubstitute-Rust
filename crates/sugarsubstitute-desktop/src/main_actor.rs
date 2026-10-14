@@ -56,6 +56,7 @@ pub(crate) struct MainActor {
     material: Option<NativeMaterial>,
     pointer: crate::Pointer,
     native_storage: Option<sugarsubstitute_contracts::execution::MemoryClaim>,
+    failure_observation: &'static str,
 }
 
 impl MainActor {
@@ -100,6 +101,7 @@ impl MainActor {
             material: None,
             pointer: crate::Pointer::default(),
             native_storage: Some(native_storage),
+            failure_observation: "None",
         })
     }
 
@@ -108,6 +110,10 @@ impl MainActor {
     }
     pub(crate) fn retired(&self) -> bool {
         self.retired
+    }
+    /// Return only the closed kind of the actual failed native observation.
+    pub(crate) fn failure_observation(&self) -> &'static str {
+        self.failure_observation
     }
     /// Borrow this exact owned native surface only while its admission remains live.
     /// The activity adapter retains its own callback/window custody before observing HWND facts.

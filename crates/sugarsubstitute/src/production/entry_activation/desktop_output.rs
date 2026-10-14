@@ -179,6 +179,13 @@ impl DesktopOutput {
                         tracing::info!(operation="desktop_child_connection",run=?self.run,stage=?stage,
                             "Observed owned child's closed connection progress");
                     }
+                    diagnostic::Observation::MainFailure(failure) => {
+                        tracing::warn!(operation="desktop_child_main_failure",run=?self.run,
+                            launch=failure.launch,navigation=failure.navigation,
+                            failed_operation=%failure.operation,observation=%failure.observation,
+                            code=?failure.code,
+                            "Observed original main failure within its owned desktop output");
+                    }
                 }
             });
             // Return the sole real delivery slot before taking another batch.

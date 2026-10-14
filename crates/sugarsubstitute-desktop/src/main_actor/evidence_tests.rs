@@ -84,3 +84,28 @@ fn empty_and_foreign_completion_metadata_cannot_publish_receipt() -> Result<(), 
     assert!(!owner.ready());
     Ok(())
 }
+
+#[test]
+fn malformed_frame_keeps_actual_observation_kind_and_original_decode_cause()
+-> Result<(), Box<dyn Error>> {
+    let mut owner = owner()?;
+    owner.navigation_started()?;
+    let Err((cause, kind)) = decode_observation(
+        &mut owner,
+        Observation {
+            kind: Kind::Frame,
+            command: None,
+            payload: r#"{"frame":{"id":"root","url":"http://127.0.0.1:8188/"}}"#,
+        },
+    ) else {
+        return Err("Missing actual native frame decoder failure".into());
+    };
+    assert_eq!(kind, "Frame");
+    let json = cause
+        .source()
+        .and_then(|source| source.downcast_ref::<serde_json::Error>())
+        .ok_or("Original native JSON cause lost")?;
+    assert_eq!(json.classify(), serde_json::error::Category::Data);
+    assert!(!owner.ready());
+    Ok(())
+}

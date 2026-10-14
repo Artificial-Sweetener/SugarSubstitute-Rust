@@ -39,6 +39,10 @@ pub(super) struct AttemptCleanup {
     omitted_failures: u64,
 }
 impl AttemptCleanup {
+    /// Original cleanup cutoff, retained independently of failure/timer presentation.
+    pub(super) fn original_deadline(&self) -> Moment {
+        self.original
+    }
     pub(super) fn deadline(&self) -> Option<Moment> {
         if self.settled || self.failures.iter().any(Option::is_some) {
             None
@@ -234,6 +238,45 @@ impl ProductionChild {
 mod tests {
     use super::*;
     #[test]
+    fn expired_frontend_routes_existing_cleanup_without_renewing_or_erasing_failure() -> Result<()>
+    {
+        use super::super::connection::ActivityRoute;
+        let frontend = FrontendBudget::new(Moment::from_nanos(0))?;
+        let original = frontend.until().checked_add(Duration::from_secs(15))?;
+        let cleanup = AttemptCleanup {
+            original,
+            pending: None,
+            acknowledged: false,
+            settled: false,
+            failures: [
+                Some(Box::new(std::io::Error::other("actual initiating boundary failure"))),
+                None,
+            ],
+            omitted_failures: 0,
+        };
+        let phase = Some(sugarsubstitute_application::startup::StartupPhase::WebviewLoading);
+        let now = frontend.until();
+        assert_eq!(
+            ActivityRoute::select(false, Some(&cleanup), phase, Some(frontend), now)?,
+            ActivityRoute::AttemptCleanup
+        );
+        assert_eq!(
+            ActivityRoute::select(false, None, phase, Some(frontend), now)
+                .err()
+                .map(|cause| cause.kind()),
+            Some(std::io::ErrorKind::TimedOut)
+        );
+        assert_eq!(
+            ActivityRoute::select(true, Some(&cleanup), phase, Some(frontend), now)?,
+            ActivityRoute::Shutdown
+        );
+        assert_eq!(cleanup.original_deadline(), original);
+        assert!(cleanup.failures[0].as_ref().is_some_and(|cause| cause.is::<std::io::Error>()));
+        assert!(cleanup.pending.is_none() && !cleanup.acknowledged && !cleanup.settled);
+        assert_eq!(frontend.until(), now);
+        Ok(())
+    }
+    #[test]
     fn authenticated_disposition_retains_typed_failure_and_rejection_classifications() {
         assert_eq!(
             AcquisitionFailure::Failed(LifecycleFailureCode::Preparation).classification(),
@@ -272,6 +315,7 @@ mod tests {
             Some(Box::new(std::io::Error::other("actual cleanup boundary failure")));
         assert_eq!(attempt.deadline(), None);
         assert_eq!(attempt.original, original);
+        assert_eq!(attempt.original_deadline(), original);
         assert!(!attempt.acknowledged && !attempt.settled);
         assert!(attempt.failures[0].as_ref().is_some_and(|cause| cause.is::<std::io::Error>()));
     }
