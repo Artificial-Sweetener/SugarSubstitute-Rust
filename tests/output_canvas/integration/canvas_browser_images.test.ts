@@ -41,6 +41,33 @@ function frame(key: string, width = 3840, height = 2160): CanvasImageFrame<HTMLI
 }
 
 describe('browser image presentation', () => {
+  test('exports only fitted completed pixels and respects the visible comparison side', () => {
+    const root = document.createElement('div');
+    const clock = new CanvasFrameFixture();
+    const surface = new BrowserCanvasImages(root, clock);
+    const a = frame('a');
+    const b = frame('b');
+    const geometry = canvasCameraGeometry(a.dimensions, { width: 800, height: 600 }, 1)!;
+    surface.images(a, b);
+    const target = {
+      previewLane: null,
+      selection: a.selection,
+      geometry,
+      camera: centeredCanvasCamera(geometry),
+    };
+    surface.camera(target);
+    surface.wipe({ split: 0.5, orientation: 'vertical' });
+    expect(surface.draggable(b.handle, { x: 200, y: 300 })).toBe(b);
+    expect(surface.draggable(a.handle, { x: 600, y: 300 })).toBe(a);
+    expect(surface.draggable(a.handle, { x: 200, y: 300 })).toBeNull();
+    expect(surface.draggable(a.handle, { x: 600, y: 5 })).toBeNull();
+    surface.camera({ ...target, camera: { scale: 1, x: 0, y: 0, mode: 'native' } });
+    expect(surface.draggable(a.handle, { x: 600, y: 300 })).toBeNull();
+    surface.images({ ...a, preview: true }, null);
+    surface.camera(target);
+    expect(surface.draggable(a.handle, { x: 600, y: 300 })).toBeNull();
+    surface.dispose();
+  });
   test('coalesces transforms into one frame and renders the admitted handle without a second source', () => {
     const root = document.createElement('div');
     const clock = new CanvasFrameFixture();

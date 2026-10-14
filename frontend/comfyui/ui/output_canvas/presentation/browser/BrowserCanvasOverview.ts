@@ -21,7 +21,10 @@ import {
 } from '../../application/CanvasOverviewWindow.js';
 import type { CanvasFrameClock } from '../../application/CanvasCameraTransition.js';
 import type { CanvasCatalogSnapshot } from '../../domain/CanvasCatalog.js';
-import type { CanvasImageSlotSnapshot } from '../../domain/CanvasImageResource.js';
+import type {
+  CanvasImageSlotSnapshot,
+  CanvasImageFrame,
+} from '../../domain/CanvasImageResource.js';
 import type { ImageDimensions } from '../../../execution/domain/WorkflowOutput.js';
 
 interface OverviewCellElements {
@@ -115,6 +118,22 @@ export class BrowserCanvasOverview {
   images(images: readonly CanvasImageSlotSnapshot<HTMLImageElement>[]): void {
     this.#images = images;
     if (this.#active) this.#render(false);
+  }
+
+  /** Qualify the exact rendered batch item without admitting latent previews or pending replacements. */
+  draggable(target: EventTarget | null): CanvasImageFrame<HTMLImageElement> | null {
+    if (!this.#active || this.#disposed) return null;
+    for (const [key, elements] of this.#cells) {
+      const frame = this.#images.find((image) => image.slot === key)?.frame;
+      if (
+        frame &&
+        !frame.preview &&
+        target === frame.handle &&
+        frame.key === elements.cell.item?.id
+      )
+        return frame;
+    }
+    return null;
   }
 
   /** Stop finite scroll/resize work and detach this gallery's controls and image references. */

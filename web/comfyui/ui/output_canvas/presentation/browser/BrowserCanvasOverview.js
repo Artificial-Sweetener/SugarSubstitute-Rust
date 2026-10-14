@@ -92,6 +92,20 @@ export class BrowserCanvasOverview {
         if (this.#active)
             this.#render(false);
     }
+    /** Qualify the exact rendered batch item without admitting latent previews or pending replacements. */
+    draggable(target) {
+        if (!this.#active || this.#disposed)
+            return null;
+        for (const [key, elements] of this.#cells) {
+            const frame = this.#images.find((image) => image.slot === key)?.frame;
+            if (frame &&
+                !frame.preview &&
+                target === frame.handle &&
+                frame.key === elements.cell.item?.id)
+                return frame;
+        }
+        return null;
+    }
     /** Stop finite scroll/resize work and detach this gallery's controls and image references. */
     dispose() {
         if (this.#disposed)

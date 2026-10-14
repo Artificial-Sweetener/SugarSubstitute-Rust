@@ -70,7 +70,7 @@ export class ComfyCanvasHost {
 
   /** Allocate lightweight owners immediately and defer public host access until extension setup. */
   constructor(private readonly options: ComfyCanvasHostOptions) {
-    const { document, execution, app, logger, report } = options;
+    const { document, execution, app, logger, report, saving } = options;
     const window = document.defaultView;
     if (!window) throw new Error('Output canvas window is unavailable.');
     const transfers = new BrowserOutputTransfer(
@@ -181,6 +181,12 @@ export class ComfyCanvasHost {
           url: (item) => comfyCanvasMediaUrl(document.location.origin, item),
           open: (item) => openComfyCanvasMedia(window, item),
           copy: (item, accepts) => transfers.copy(item.file, accepts),
+          drag: (item, signal) => transfers.drag(item.file, signal),
+          ...(saving
+            ? {
+                transferChanged: (listener: () => void) => saving.configuration.subscribe(listener),
+              }
+            : {}),
           disposeLoader: () => loader.dispose(),
           report: (error) => report(error),
         });

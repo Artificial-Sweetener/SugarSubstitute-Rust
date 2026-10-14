@@ -16,7 +16,11 @@
 /** Materialize one deliberate transfer without retaining image data or duplicating format policy. */
 import type { OutputFileReference } from '../execution/domain/WorkflowOutput.js';
 import type { OutputImageClipboard } from './BrowserImageClipboard.js';
-import { OutputTransferClient, outputTransferUrl } from './OutputTransferClient.js';
+import {
+  OutputTransferClient,
+  outputTransferUrl,
+  type OutputTransferSelection,
+} from './OutputTransferClient.js';
 
 /** Coordinate the shared file selection with browser-owned transport and clipboard boundaries. */
 export class BrowserOutputTransfer {
@@ -33,23 +37,60 @@ export class BrowserOutputTransfer {
 
   /** Copy exact preferred bytes only while the originating output remains current. */
   async copy(file: OutputFileReference, accepts: () => boolean): Promise<boolean> {
+    const image = await this.#read(file, accepts);
+    if (!image || !accepts()) return false;
+    await this.clipboard.write(image.blob, image.selection.mimeType);
+    return true;
+  }
+
+  /** Prepare exact preferred file bytes for a synchronous browser drag without retaining them here. */
+  async drag(
+    file: OutputFileReference,
+    signal: AbortSignal,
+  ): Promise<{ readonly file: File; readonly url: string } | null> {
+    const image = await this.#read(file, () => !signal.aborted, signal);
+    return image
+      ? {
+          file: new File([image.blob], image.selection.file.filename, {
+            type: image.selection.mimeType,
+          }),
+          url: image.url,
+        }
+      : null;
+  }
+
+  /** Share bounded validation and byte transport between Copy and outbound dragging. */
+  async #read(
+    file: OutputFileReference,
+    accepts: () => boolean,
+    signal?: AbortSignal,
+  ): Promise<{
+    readonly blob: Blob;
+    readonly selection: OutputTransferSelection;
+    readonly url: string;
+  } | null> {
+    if (!accepts()) return null;
     const controller = new AbortController();
+    const abort = () => controller.abort();
+    signal?.addEventListener('abort', abort, { once: true });
+    if (signal?.aborted) abort();
     const timer = setTimeout(() => controller.abort(), 20000);
     try {
       const selection = await this.#client.choose(file, controller.signal);
-      if (!accepts()) return false;
-      const response = await this.fetch(outputTransferUrl(this.origin, selection), {
+      if (!accepts() || controller.signal.aborted) return null;
+      const url = outputTransferUrl(this.origin, selection);
+      const response = await this.fetch(url, {
         signal: controller.signal,
       });
-      if (!response.ok) throw new Error('The output image could not be read for copying.');
+      if (!response.ok) throw new Error('The output image could not be read for transfer.');
       const blob = await response.blob();
-      if (!accepts()) return false;
+      if (!accepts() || controller.signal.aborted) return null;
       if (blob.type !== selection.mimeType || !blob.size)
         throw new Error('The output transfer returned invalid image bytes.');
-      await this.clipboard.write(blob, selection.mimeType);
-      return true;
+      return { blob, selection, url };
     } finally {
       clearTimeout(timer);
+      signal?.removeEventListener('abort', abort);
     }
   }
 }
