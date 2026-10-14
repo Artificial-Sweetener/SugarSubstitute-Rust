@@ -4,23 +4,6 @@
 
 use super::*;
 
-fn loaded() -> Result<MainReadiness, Box<dyn Error>> {
-    let mut owner = owner()?;
-    owner.navigation_started()?;
-    consume(
-        &mut owner,
-        Kind::Frame,
-        r#"{"frame":{"id":"root","loaderId":"loader","url":"http://127.0.0.1:8188/"}}"#,
-    )?;
-    consume(
-        &mut owner,
-        Kind::Context,
-        r#"{"context":{"id":7,"origin":"http://127.0.0.1:8188","auxData":{"frameId":"root","isDefault":true}}}"#,
-    )?;
-    consume(&mut owner, Kind::Navigation { succeeded: true }, "")?;
-    Ok(owner)
-}
-
 fn metadata() -> serde_json::Value {
     let frames: Vec<_> = (0..48).map(|index| serde_json::json!({
         "functionName":"frontend callback", "scriptId":"9", "url":"http://127.0.0.1:8188/assets/ui.js",

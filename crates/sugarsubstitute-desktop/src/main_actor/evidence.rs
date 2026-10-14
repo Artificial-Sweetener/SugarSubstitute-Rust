@@ -97,7 +97,6 @@ fn observation_kind(kind: Kind, command: Option<Command>) -> &'static str {
         Kind::ContextDestroyed => "ContextDestroyed",
         Kind::ContextsCleared => "ContextsCleared",
         Kind::Console => "Console",
-        Kind::Exception => "Exception",
         Kind::NavigationStarting => "NavigationStarting",
         Kind::Navigation { .. } => "Navigation",
         Kind::ProcessFailed { .. } => "ProcessFailed",

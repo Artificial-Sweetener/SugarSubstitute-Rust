@@ -92,7 +92,7 @@ pub(super) fn consume(
             owner.contexts_cleared()
         }
         Kind::Console => return console::consume(owner, payload).map(|()| Effect::None),
-        Kind::Exception | Kind::ProcessFailed { .. } => {
+        Kind::ProcessFailed { .. } => {
             owner.invalidate(ReadinessFault::SetupFailed);
             Err(ReadinessFault::SetupFailed)
         }

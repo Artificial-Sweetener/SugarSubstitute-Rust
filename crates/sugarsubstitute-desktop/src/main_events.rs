@@ -31,7 +31,6 @@ pub(crate) enum Kind {
     ContextDestroyed,
     ContextsCleared,
     Console,
-    Exception,
     NavigationStarting,
     Navigation { succeeded: bool },
     ProcessFailed { kind: i32 },

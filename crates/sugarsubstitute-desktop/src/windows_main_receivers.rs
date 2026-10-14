@@ -20,14 +20,13 @@ use windows::{
     core::{HSTRING, Interface, PWSTR},
 };
 
-const SOURCES: [(&str, Kind); 7] = [
+const SOURCES: [(&str, Kind); 6] = [
     ("Page.frameNavigated", Kind::Frame),
     ("Page.frameDetached", Kind::FrameDetached),
     ("Runtime.executionContextCreated", Kind::Context),
     ("Runtime.executionContextDestroyed", Kind::ContextDestroyed),
     ("Runtime.executionContextsCleared", Kind::ContextsCleared),
     ("Runtime.consoleAPICalled", Kind::Console),
-    ("Runtime.exceptionThrown", Kind::Exception),
 ];
 
 struct Subscription {
@@ -35,6 +34,10 @@ struct Subscription {
     token: Option<i64>,
     uncertain: bool,
 }
+
+#[cfg(test)]
+#[path = "windows_main_receivers/source_tests.rs"]
+mod source_tests;
 
 /// Own a returned CoTaskMem string immediately, including failed native getters.
 pub(super) struct NativeString(pub(super) PWSTR);

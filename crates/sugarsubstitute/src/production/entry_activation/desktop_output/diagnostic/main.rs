@@ -113,7 +113,6 @@ const OBSERVATIONS: &[&str] = &[
     "ContextDestroyed",
     "ContextsCleared",
     "Console",
-    "Exception",
     "NavigationStarting",
     "Navigation",
     "ProcessFailed",

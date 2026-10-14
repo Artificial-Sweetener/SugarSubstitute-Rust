@@ -5,6 +5,8 @@
 use super::*;
 #[path = "console_tests.rs"]
 mod console;
+#[path = "exception_tests.rs"]
+mod exceptions;
 use crate::{MainIdentity, ServedFrontendVersions};
 use std::error::Error;
 use sugarsubstitute_contracts::{
@@ -39,6 +41,24 @@ fn owner() -> Result<MainReadiness, Box<dyn Error>> {
 }
 fn consume(owner: &mut MainReadiness, kind: Kind, payload: &str) -> Result<Effect, DesktopError> {
     decode::consume(owner, Observation { kind, command: None, payload })
+}
+
+/// Admit actual decoded root/context/navigation facts for all evidence owner regressions.
+fn loaded() -> Result<MainReadiness, Box<dyn Error>> {
+    let mut owner = owner()?;
+    owner.navigation_started()?;
+    consume(
+        &mut owner,
+        Kind::Frame,
+        r#"{"frame":{"id":"root","loaderId":"loader","url":"http://127.0.0.1:8188/"}}"#,
+    )?;
+    consume(
+        &mut owner,
+        Kind::Context,
+        r#"{"context":{"id":7,"origin":"http://127.0.0.1:8188","auxData":{"frameId":"root","isDefault":true}}}"#,
+    )?;
+    consume(&mut owner, Kind::Navigation { succeeded: true }, "")?;
+    Ok(owner)
 }
 #[test]
 fn native_json_bounds_reject_deep_and_large_structure_before_decoding() {

@@ -36,6 +36,7 @@ fn main_grammar_rejects_unknown_extensions_noncanonical_identities_and_native_co
     for bad in [
         LINE.replace("decode_main_observation", "PRIVATE"),
         LINE.replace("observation=Frame", "observation=Unknown"),
+        LINE.replace("observation=Frame", "observation=Exception"),
         LINE.replace("launch=1", "launch=0"),
         LINE.replace("launch=1", "launch=01"),
         LINE.replace("launch=1", "launch=18446744073709551616"),
